@@ -1,0 +1,78 @@
+name: Core HIL (hardware-in-the-loop)
+
+# Runs the silicon-anchored oracle bank (the _hw/_diff tests) on real boards
+# attached to self-hosted runners, so the "silicon-verified" anchor is continuous
+# instead of a one-off bench snapshot.
+#
+# INERT UNTIL DEPLOYED: this workflow only triggers on manual dispatch and only
+# runs on self-hosted runners labelled `hil` + the board's `runner_label`. Until
+# such a runner is registered (see hil/README.md), dispatched jobs simply queue —
+# nothing here touches the hosted PR/CI path. Flip on the `schedule` trigger once
+# at least one runner is live.
+on:
+  workflow_dispatch:
+    inputs:
+      board:
+        description: "Board id from hil/boards.json, or 'all'"
+        default: all
+        type: string
+  # Enable once a runner is live so the anchor stays fresh:
+  # schedule:
+  #   - cron: "0 6 * * *"
+
+concurrency:
+  group: core-hil-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Read hil/boards.json on a hosted runner and emit the matrix of ACTIVE boards.
+  # Planned boards are listed in the manifest for visibility but make no jobs.
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set.outputs.matrix }}
+      count: ${{ steps.set.outputs.count }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: set
+        name: Build board matrix from hil/boards.json
+        run: |
+          python3 - "${{ inputs.board }}" <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os, sys
+          want = sys.argv[1] if len(sys.argv) > 1 else "all"
+          boards = json.load(open("hil/boards.json"))["boards"]
+          active = [b for b in boards
+                    if b.get("status") == "active" and want in ("all", b["id"])]
+          inc = [{"id": b["id"], "runner_label": b["runner_label"]} for b in active]
+          print("matrix=" + json.dumps({"include": inc}))
+          print("count=" + str(len(inc)))
+          PY
+
+  hil:
+    needs: prepare
+    if: needs.prepare.outputs.count != '0'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    # The board's runner must carry both the shared `hil` label and its own
+    # board label (e.g. `stm32f103`). See hil/README.md.
+    runs-on: ["self-hosted", "hil", "${{ matrix.runner_label }}"]
+    steps:
+      - uses: actions/checkout@v4
+
+      # The self-hosted runner is expected to have a persistent Rust toolchain;
+      # this is a cheap no-op if rustup is already present, and a guard otherwise.
+      - name: Verify toolchain
+        run: |
+          rustc --version
+          cargo --version
+
+      - name: Run HIL oracle bank for ${{ matrix.id }}
+        run: bash hil/run-hil.sh "${{ matrix.id }}"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "### HIL — ${{ matrix.id }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- runner: \`${{ matrix.runner_label }}\` (+ \`hil\`)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- result: ${{ job.status }}" >> "$GITHUB_STEP_SUMMARY"

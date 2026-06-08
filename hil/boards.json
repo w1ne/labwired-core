@@ -1,0 +1,58 @@
+{
+  "_comment": [
+    "HIL (hardware-in-the-loop) board registry. Each board maps to a self-hosted",
+    "GitHub Actions runner labelled with the shared `hil` label plus its own",
+    "`runner_label`, and to the oracle test bank that exercises it on real silicon.",
+    "Adding a board here AND bringing up a runner with the matching labels puts that",
+    "board under continuous HIL — the _hw/_diff oracle tests run on every push so the",
+    "'silicon-verified' anchor stops decaying. See hil/README.md for runner setup.",
+    "Set `status` to `active` once a runner exists; `planned` boards are listed for",
+    "visibility but produce no CI jobs."
+  ],
+  "boards": [
+    {
+      "id": "stm32f103-bluepill",
+      "status": "active",
+      "arch": "arm-cortex-m3",
+      "probe": "st-link-v2",
+      "runner_label": "stm32f103",
+      "env": { "STM32_TARGET": "stm32f1x" },
+      "test": "stm32f1_exec_oracle",
+      "features": "hw-oracle-stm32",
+      "notes": "Blue Pill on ST-Link V2.1 (0483:374b). 11-oracle exec bank."
+    },
+    {
+      "id": "esp32s3-devkit",
+      "status": "planned",
+      "arch": "xtensa-lx7",
+      "probe": "usb-jtag",
+      "runner_label": "esp32s3",
+      "env": { "ESP32_S3_ONLYCPU": "1" },
+      "test": "oracles",
+      "features": "hw-oracle",
+      "notes": "ESP32-S3 instruction + GDMA oracle bank (ledger #4)."
+    },
+    {
+      "id": "esp32c3-devkit",
+      "status": "planned",
+      "arch": "riscv32imc",
+      "probe": "usb-jtag",
+      "runner_label": "esp32c3",
+      "env": {},
+      "test": "riscv_oracles",
+      "features": "hw-oracle-c3",
+      "notes": "ESP32-C3 RV32IMC oracle bank (ledger #5/#7, board TBD)."
+    },
+    {
+      "id": "nrf52840-dk",
+      "status": "planned",
+      "arch": "arm-cortex-m4",
+      "probe": "j-link",
+      "runner_label": "nrf52840",
+      "env": {},
+      "test": "nrf52_mmio_diff",
+      "features": "hw-oracle-nrf52",
+      "notes": "nRF52840 MMIO-diff bank over SWD."
+    }
+  ]
+}
