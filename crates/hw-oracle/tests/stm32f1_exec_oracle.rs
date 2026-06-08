@@ -85,6 +85,14 @@ const CRC_CR: u32 = CRC_BASE + 0x08; // control (RESET = bit 0)
 const RCC_APB2ENR_AFIOEN: u32 = 1 << 0;
 const AFIO_MAPR: u32 = 0x4001_0004;
 
+/// IWDG (RM0008 §19): independent watchdog. PR/RLR are write-protected until KR
+/// receives the 0x5555 unlock code; this oracle pins that they stay at reset
+/// without it. NB: never write the 0xCCCC start key — it arms the watchdog,
+/// which then resets the chip and cannot be stopped except by a power cycle.
+const IWDG_BASE: u32 = 0x4000_3000;
+const IWDG_PR: u32 = IWDG_BASE + 0x04; // prescaler (write-protected)
+const IWDG_RLR: u32 = IWDG_BASE + 0x08; // reload (write-protected)
+
 /// EXTI (RM0008 §10): software-interrupt + pending registers.
 const EXTI_BASE: u32 = 0x4001_0400;
 const EXTI_IMR: u32 = EXTI_BASE + 0x00; // interrupt mask
@@ -431,5 +439,34 @@ fn afio_mapr_reserved_bits_read_zero() -> ThumbOracleCase {
                 0x0000_0004,
                 "AFIO_MAPR reserved bits must read 0 (got 0x{mapr:08X})"
             );
+        })
+}
+
+// ── 7. IWDG write-protected PR/RLR ──────────────────────────────────────────────
+//
+// IWDG_PR and IWDG_RLR are write-protected: writes are dropped unless KR has
+// first received the 0x5555 unlock code (RM0008 §19.4). This oracle pins the
+// protection — a PR/RLR write WITHOUT the key leaves them at their reset values
+// (PR=0, RLR=0xFFF). Silicon-confirmed on the bench F103.
+//
+// (Only the negative path is pinned. The positive path — PR/RLR latching after
+// the 0x5555 unlock — additionally needs the IWDG clock domain running, which
+// on F103 means starting the watchdog (KR=0xCCCC, which then resets the chip)
+// or enabling the LSI first; not worth arming a watchdog reset to assert. The
+// 0xCCCC start key is never written here.)
+#[thumb_oracle_test]
+fn iwdg_pr_rlr_write_protected_without_key() -> ThumbOracleCase {
+    let mut prog: Vec<Thumb> = Vec::new();
+    prog.extend(load_addr(0, IWDG_PR));
+    prog.extend(store_imm32(0x5)); // protected — no prior 0x5555
+    prog.extend(load_addr(0, IWDG_RLR));
+    prog.extend(store_imm32(0x123)); // protected — no prior 0x5555
+
+    ThumbOracleCase::mixed(&prog)
+        .sim_bus(f103_bus)
+        .capture_mem(&[IWDG_PR, IWDG_RLR])
+        .expect(|st| {
+            st.assert_mem(IWDG_PR, 0x0); // write dropped → reset value
+            st.assert_mem(IWDG_RLR, 0xFFF); // write dropped → reset value
         })
 }
