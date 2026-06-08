@@ -45,9 +45,30 @@ const RCC_APB1ENR_TIM2EN: u32 = 1 << 0;
 /// RCC APB2 clock-enable (RCC + 0x18) and the GPIOA enable bit (IOPAEN).
 const RCC_APB2ENR: u32 = 0x4002_1018;
 const RCC_APB2ENR_IOPAEN: u32 = 1 << 2;
-/// RCC AHB clock-enable (RCC + 0x14) and the CRC enable bit (CRCEN).
+/// RCC AHB clock-enable (RCC + 0x14) and the CRC/DMA1 enable bits.
 const RCC_AHBENR: u32 = 0x4002_1014;
 const RCC_AHBENR_CRCEN: u32 = 1 << 6;
+const RCC_AHBENR_DMA1EN: u32 = 1 << 0;
+
+/// DMA1 (RM0008 §13): controller + channel-1 register block.
+const DMA1_BASE: u32 = 0x4002_0000;
+const DMA1_ISR: u32 = DMA1_BASE + 0x00; // interrupt status (GIF/TCIF/HTIF/TEIF ×7)
+const DMA1_CCR1: u32 = DMA1_BASE + 0x08; // channel-1 config
+const DMA1_CNDTR1: u32 = DMA1_BASE + 0x0C; // channel-1 transfer count
+const DMA1_CPAR1: u32 = DMA1_BASE + 0x10; // channel-1 "peripheral" address
+const DMA1_CMAR1: u32 = DMA1_BASE + 0x14; // channel-1 "memory" address
+
+/// Channel-1 CCR bits used by the mem-to-mem oracle.
+const CCR_EN: u32 = 1 << 0;
+const CCR_DIR: u32 = 1 << 4; // read-from-memory (required with MEM2MEM)
+const CCR_PINC: u32 = 1 << 6;
+const CCR_MINC: u32 = 1 << 7;
+const CCR_MEM2MEM: u32 = 1 << 14;
+
+/// SRAM scratch buffers for the DMA copy (well clear of the program at
+/// PROG_BASE_HW=0x2000_2000 and the stack growing down from INIT_SP).
+const DMA_SRC: u32 = 0x2000_0100;
+const DMA_DST: u32 = 0x2000_0200;
 
 /// GPIOA (RM0008): output-data + atomic set/reset registers.
 const GPIOA_BASE: u32 = 0x4001_0800;
@@ -265,3 +286,67 @@ fn crc32_two_words() -> ThumbOracleCase {
 /// (0xFFFFFFFF). Pinned from the model and cross-checked against bench F103
 /// silicon by `crc32_two_words_diff`.
 const CRC32_TWO_WORDS: u32 = 0x7D24_A31B;
+
+// ── 4. DMA1 memory-to-memory transfer ───────────────────────────────────────────
+//
+// The first oracle to exercise an *autonomous* engine: the program arms a DMA
+// mem-to-mem copy and stops; the DMA then moves the bytes on its own. On
+// silicon it runs concurrently and finishes long before the breakpoint halt;
+// in sim the harness's `settle_ticks` advances the engine (one byte/tick) to
+// completion after the program settles.
+//
+// Program:
+//   1. RCC_AHBENR |= DMA1EN          — ungate the DMA1 clock (RMW)
+//   2. fill DMA_SRC with two known words; zero DMA_DST (so a no-op copy is
+//      detectable, not a stale match)
+//   3. CCR1 = 0                       — disable the channel before reconfig
+//   4. CMAR1 = DMA_SRC               — memory (source) address
+//   5. CPAR1 = DMA_DST              — "peripheral" (destination) address
+//   6. CNDTR1 = 8                    — eight byte-elements
+//   7. CCR1 = MEM2MEM|MINC|PINC|DIR|EN — arm an 8-bit mem-to-mem copy
+//
+// After settle, DMA_DST must equal DMA_SRC, CNDTR1 must read 0 (all elements
+// moved), and ISR must show GIF1|TCIF1|HTIF1 (0x7) for channel 1.
+#[thumb_oracle_test]
+fn dma1_mem_to_mem() -> ThumbOracleCase {
+    const W0: u32 = 0xDEAD_BEEF;
+    const W1: u32 = 0xCAFE_B0BA;
+    const CCR_CFG: u32 = CCR_MEM2MEM | CCR_MINC | CCR_PINC | CCR_DIR | CCR_EN;
+
+    let mut prog: Vec<Thumb> = Vec::new();
+    // 1. enable DMA1 clock
+    prog.extend(enable_clock_bit(RCC_AHBENR, RCC_AHBENR_DMA1EN));
+    // 2. fill source, zero destination
+    prog.extend(load_addr(0, DMA_SRC));
+    prog.extend(store_imm32(W0));
+    prog.extend(load_addr(0, DMA_SRC + 4));
+    prog.extend(store_imm32(W1));
+    prog.extend(load_addr(0, DMA_DST));
+    prog.extend(store_imm32(0));
+    prog.extend(load_addr(0, DMA_DST + 4));
+    prog.extend(store_imm32(0));
+    // 3. disable channel before reconfiguring
+    prog.extend(load_addr(0, DMA1_CCR1));
+    prog.extend(store_imm32(0));
+    // 4-6. addresses + count
+    prog.extend(load_addr(0, DMA1_CMAR1));
+    prog.extend(store_imm32(DMA_SRC));
+    prog.extend(load_addr(0, DMA1_CPAR1));
+    prog.extend(store_imm32(DMA_DST));
+    prog.extend(load_addr(0, DMA1_CNDTR1));
+    prog.extend(store_imm32(8));
+    // 7. arm the transfer
+    prog.extend(load_addr(0, DMA1_CCR1));
+    prog.extend(store_imm32(CCR_CFG));
+
+    ThumbOracleCase::mixed(&prog)
+        .sim_bus(f103_bus)
+        .settle_ticks(16) // > 8 elements; extra ticks are no-ops once idle
+        .capture_mem(&[DMA_DST, DMA_DST + 4, DMA1_CNDTR1, DMA1_ISR])
+        .expect(|st| {
+            st.assert_mem(DMA_DST, W0); // engine copied word 0
+            st.assert_mem(DMA_DST + 4, W1); // engine copied word 1
+            st.assert_mem(DMA1_CNDTR1, 0); // all 8 elements moved
+            st.assert_mem(DMA1_ISR, 0x0000_0007); // GIF1 | TCIF1 | HTIF1
+        })
+}
