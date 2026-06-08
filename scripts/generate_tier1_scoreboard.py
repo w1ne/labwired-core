@@ -8,8 +8,15 @@ import argparse
 import json
 from pathlib import Path
 
-ICONS = {"pass": "✅", "partial": "🟡", "blocked": "⛔", "na": "—", "unrecorded": "·"}
-RUBRIC = ["clock", "gpio", "uart", "timer", "dma", "irq"]
+ICONS = {"pass": "✅", "partial": "🟡", "blocked": "⛔", "na": "🚧", "unrecorded": "·"}
+# Overview column set = the 12 universal subsystems (bring-up six + typical
+# peripherals). Every listed part has all of these in silicon, so a non-green
+# cell is an honest model gap. Chip-specific peripherals (e.g. ESP32 RMT) are
+# excluded from the overview — they relocate to the per-chip detail report.
+UNIVERSAL = [
+    "clock", "gpio", "uart", "timer", "dma", "irq",
+    "i2c", "spi", "adc", "pwm", "wdt", "rtc",
+]
 
 # Proper part names for display (row keys stay the stable chip ids that name
 # blobs/yamls). Source: each chip yaml's documented reference part.
@@ -33,9 +40,8 @@ DISPLAY_NAMES = {
 
 
 def render(matrix: dict) -> str:
-    # Column set = rubric order, then any extra classes seen (e.g. S3 beachhead).
-    extras = sorted({c for row in matrix.values() for c in row if c not in RUBRIC})
-    classes = RUBRIC + extras
+    # Overview is universal-only; chip-specific classes live in the detail report.
+    classes = UNIVERSAL
     lines = [
         "# Tier-1 Validation Matrix",
         "",
@@ -45,6 +51,11 @@ def render(matrix: dict) -> str:
         "the simulator's peripheral models on real firmware. Silicon-anchored",
         "verification (hardware-in-the-loop capture replay) is a separate tier",
         "that arrives with the HIL workstream; no cell currently claims it.",
+        "",
+        "**Legend:** ✅ passed · 🟡 partial · ⛔ modeled but failing · 🚧 not",
+        "modeled yet · · no check written. Every column here is a subsystem that",
+        "exists in silicon on all listed parts, so 🚧 is an honest model gap, not",
+        "an \"N/A\".",
         "",
         "| chip | " + " | ".join(classes) + " |",
         "|---|" + "---|" * len(classes),
