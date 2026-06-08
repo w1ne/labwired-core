@@ -37,6 +37,7 @@ pub mod radio;
 pub mod rcc;
 pub mod rng;
 pub mod rtc;
+pub mod rtc_f1;
 pub mod sai;
 pub mod scb;
 pub mod sdmmc;
