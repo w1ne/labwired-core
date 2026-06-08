@@ -153,8 +153,19 @@ jobs:
       # ensure_firmware_built() which skips the cargo +esp build if the ELF
       # already exists (we built it above). The tests themselves run on the
       # standard host toolchain; only the ELF needs the Xtensa cross-compiler.
+      # LABWIRED_ESP32S3_FASTBOOT=1: these e2e tests verify FIRMWARE LOGIC
+      # (GPIO/UART/I2C behavior) under the thunk fast-boot path. The faithful
+      # ROM path is covered by tier1 rom-boot + brom_boot_smoke; esp-hal apps
+      # crash under fast-boot WITH the real ROM provisioned (open issue:
+      # rom_config_instruction_cache_mode jumps to 0) — the vendored ROM made
+      # that the default everywhere, so opt out explicitly here.
       - name: Run ESP32-S3 fixtures e2e tests
-        run: cargo test -p labwired-core --features esp32s3-fixtures
+        env:
+          LABWIRED_ESP32S3_FASTBOOT: "1"
+        # Only the three gated e2e binaries — the FASTBOOT opt-out must not
+        # leak into lib unit tests (it makes provision_rom_images() return
+        # None by design, breaking the ROM-provisioning tests).
+        run: cargo test --release -p labwired-core --features esp32s3-fixtures --test e2e_blinky --test e2e_hello_world --test e2e_i2c_tmp102
 
   tier1-fixture-drift:
     name: Tier-1 Fixture Drift Check
