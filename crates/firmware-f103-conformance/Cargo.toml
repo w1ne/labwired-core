@@ -1,0 +1,21 @@
+# LabWired - Firmware Simulation Platform
+# SPDX-License-Identifier: MIT
+#
+# Conformance firmware: a bare-metal STM32F103 program that drives every
+# peripheral through a realistic sequence and writes an observable-state digest
+# to a fixed RAM block. The same ELF runs on the simulator (full-chip Machine)
+# and on real silicon; the harness diffs the two digests to measure modeling
+# quality. See crates/hw-oracle/tests/f103_conformance.rs.
+[package]
+name = "firmware-f103-conformance"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+
+[[bin]]
+name = "firmware-f103-conformance"
+path = "src/main.rs"
+test = false
+bench = false

@@ -99,9 +99,28 @@ Generalize the ESP32-S3 JTAG-Unity self-reporting pattern: firmware computes and
 reports results over UART/RTT while running, no debugger halt. Closes the
 halt-mode epistemic gap.
 
-### P5 — Firmware-level differential
-Run real HAL examples / an RTOS tick on sim and silicon; diff observable
-**traces** (UART bytes, GPIO toggles, timing), not registers.
+### P5 — Firmware-level differential — *v1 landed*
+`firmware-f103-conformance` is one bare-metal firmware that drives every
+peripheral through a realistic sequence and writes an observable-state **digest**
+to a fixed RAM block; `crates/hw-oracle/tests/f103_conformance.rs` runs the same
+ELF on the full-chip `Machine` and on silicon (openocd flash + run) and diffs the
+digests, reporting a conformance % + a per-field gap report, baseline-gated.
+
+First run measured **10/11 (91%)** and already paid off — it found gaps the
+register-poke oracles structurally can't, because real firmware drives registers
+back-to-back and hits hardware access latencies the sim doesn't model:
+- **CRC reset latency** — feeding DR immediately after CR.RESET lost the first
+  word on silicon; a settle() between them fixed it.
+- **TIM2 status-latch latency** — reading SR one instruction after EGR.UG read 0
+  on silicon; the compare-match flags need a cycle to latch.
+- residual: exti_pr (firmware-context re-pending of EXTI line 0 from the
+  GPIO-driven PA0 — the isolated EXTI oracle confirms the sim value is correct,
+  so this is a hardware artifact, not a modeling gap).
+
+Meta-finding: **the sim models no peripheral access/latch latency**, so tightly-
+coded firmware that works in sim can fail on silicon — a modeling-quality
+dimension invisible to hand-spaced micro-oracles. Next: widen the firmware to
+SPI/I2C/USART/ADC/RTC/PWR, and grow into the v2 checkpoint register-file diff.
 
 ### P6 — Breadth
 Other cores (extend the existing Xtensa/RISC-V/nRF oracle banks under HIL),
