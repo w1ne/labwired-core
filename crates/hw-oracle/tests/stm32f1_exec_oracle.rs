@@ -30,7 +30,7 @@
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_hw_oracle::arm_thumb::{
-    movs_imm8, movt_imm16, movw_imm16, str_imm5, Thumb, ThumbOracleCase,
+    ldr_imm5, movs_imm8, movt_imm16, movw_imm16, orrs, str_imm5, Thumb, ThumbOracleCase,
 };
 use labwired_hw_oracle::thumb_oracle_test;
 use std::path::PathBuf;
@@ -41,6 +41,24 @@ use std::path::PathBuf;
 const RCC_APB1ENR: u32 = 0x4002_101C;
 /// TIM2EN bit in RCC_APB1ENR.
 const RCC_APB1ENR_TIM2EN: u32 = 1 << 0;
+
+/// RCC APB2 clock-enable (RCC + 0x18) and the GPIOA enable bit (IOPAEN).
+const RCC_APB2ENR: u32 = 0x4002_1018;
+const RCC_APB2ENR_IOPAEN: u32 = 1 << 2;
+/// RCC AHB clock-enable (RCC + 0x14) and the CRC enable bit (CRCEN).
+const RCC_AHBENR: u32 = 0x4002_1014;
+const RCC_AHBENR_CRCEN: u32 = 1 << 6;
+
+/// GPIOA (RM0008): output-data + atomic set/reset registers.
+const GPIOA_BASE: u32 = 0x4001_0800;
+const GPIOA_ODR: u32 = GPIOA_BASE + 0x0C; // output data
+const GPIOA_BSRR: u32 = GPIOA_BASE + 0x10; // atomic set (lo16) / reset (hi16)
+const GPIOA_BRR: u32 = GPIOA_BASE + 0x14; // atomic reset (lo16)
+
+/// CRC unit (RM0008): data register + control.
+const CRC_BASE: u32 = 0x4002_3000;
+const CRC_DR: u32 = CRC_BASE + 0x00; // data in / CRC result out
+const CRC_CR: u32 = CRC_BASE + 0x08; // control (RESET = bit 0)
 
 const TIM2_BASE: u32 = 0x4000_0000;
 const TIM2_SR: u32 = TIM2_BASE + 0x10; // status (UIF=bit0, CC1..4IF=bits1..4)
@@ -74,6 +92,31 @@ fn store_word(imm: u32) -> [Thumb; 2] {
         Thumb::W(movw_imm16(1, (imm & 0xFFFF) as u16)),
         Thumb::H(str_imm5(1, 0, 0)),
     ]
+}
+
+/// `MOV.W r1,#lo ; MOVT r1,#hi ; STR r1,[r0]` — store a full 32-bit immediate
+/// to the MMIO address already in r0.
+fn store_imm32(value: u32) -> [Thumb; 3] {
+    [
+        Thumb::W(movw_imm16(1, (value & 0xFFFF) as u16)),
+        Thumb::W(movt_imm16(1, (value >> 16) as u16)),
+        Thumb::H(str_imm5(1, 0, 0)),
+    ]
+}
+
+/// Read-modify-write `*addr |= bit` (load r0=addr, r1=bit, r2=[r0], r2|=r1,
+/// [r0]=r2). Used to ungate a single peripheral clock without clobbering the
+/// other enable bits — mandatory for `RCC_AHBENR`, whose `SRAMEN`/`FLITFEN`
+/// reset to 1 and would hang a program running from SRAM if overwritten.
+fn enable_clock_bit(addr: u32, bit: u32) -> Vec<Thumb> {
+    let mut s = Vec::new();
+    s.extend(load_addr(0, addr));
+    s.push(Thumb::W(movw_imm16(1, (bit & 0xFFFF) as u16)));
+    s.push(Thumb::W(movt_imm16(1, (bit >> 16) as u16)));
+    s.push(Thumb::H(ldr_imm5(2, 0, 0))); // r2 = *addr
+    s.push(Thumb::H(orrs(2, 1))); // r2 |= bit
+    s.push(Thumb::H(str_imm5(2, 0, 0))); // *addr = r2
+    s
 }
 
 /// Build the full STM32F103 simulator bus (peripherals mapped), matching the
@@ -145,3 +188,80 @@ fn tim2_update_event() -> ThumbOracleCase {
             st.assert_mem(TIM2_SR, TIM2_SR_AFTER_UG); // UIF + CC1..4IF (silicon)
         })
 }
+
+// ── 2. GPIOA atomic set/reset (BSRR / BRR, with BS-priority) ────────────────────
+//
+// Program (drives GPIOA over MMIO; pins stay in their reset floating-input
+// mode — ODR is the output *latch* and reads back the written value regardless
+// of pin direction, so no CRL/CRH setup is needed):
+//   1. RCC_APB2ENR |= IOPAEN   — ungate the GPIOA clock (RMW)
+//   2. ODR  = 0x0000           — clear the latch
+//   3. BSRR = 0x0000_00FF      — BS sets bits 0..7        → ODR = 0x00FF
+//   4. BSRR = 0x00F0_000F      — BR resets 4..7, BS sets 0..3 → ODR = 0x000F
+//   5. BSRR = 0x0010_0010      — BS bit4 AND BR bit4: BS wins → ODR = 0x001F
+//   6. BRR  = 0x0000_0003      — reset bits 0,1           → ODR = 0x001C
+//
+// Final ODR = 0x001C exercises BSRR-set, BSRR-reset, the BS-over-BR priority
+// rule (step 5 is the load-bearing one — BR-wins would give 0x000F), and the
+// F1-only BRR register, in a single executed program.
+#[thumb_oracle_test]
+fn gpioa_bsrr_set_reset() -> ThumbOracleCase {
+    let mut prog: Vec<Thumb> = Vec::new();
+    prog.extend(enable_clock_bit(RCC_APB2ENR, RCC_APB2ENR_IOPAEN));
+    prog.extend(load_addr(0, GPIOA_ODR));
+    prog.extend(store_imm32(0x0000_0000));
+    prog.extend(load_addr(0, GPIOA_BSRR));
+    prog.extend(store_imm32(0x0000_00FF));
+    prog.extend(load_addr(0, GPIOA_BSRR));
+    prog.extend(store_imm32(0x00F0_000F));
+    prog.extend(load_addr(0, GPIOA_BSRR));
+    prog.extend(store_imm32(0x0010_0010));
+    prog.extend(load_addr(0, GPIOA_BRR));
+    prog.extend(store_imm32(0x0000_0003));
+
+    ThumbOracleCase::mixed(&prog)
+        .sim_bus(f103_bus)
+        .capture_mem(&[GPIOA_ODR])
+        .expect(|st| {
+            st.assert_mem(GPIOA_ODR, 0x0000_001C);
+        })
+}
+
+// ── 3. CRC-32 hardware compute ──────────────────────────────────────────────────
+//
+// Program (drives the CRC unit over MMIO):
+//   1. RCC_AHBENR |= CRCEN   — ungate the CRC clock (RMW; must preserve
+//                              SRAMEN/FLITFEN since we execute from SRAM)
+//   2. CRC_CR = 1            — RESET: reload DR from the fixed init 0xFFFFFFFF
+//   3. CRC_DR = 0x12345678   — feed word 1 through the polynomial engine
+//   4. CRC_DR = 0x9ABCDEF0   — feed word 2
+//   5. read CRC_DR           — the running CRC-32 (poly 0x04C11DB7, MSB-first,
+//                              no in/out reflection, no final XOR)
+//
+// The expected value is the STM32 hardware CRC-32 of the two words; it's
+// cross-validated against silicon by the `_diff` runner (the literal below is
+// what both the model and the bench F103 produce). This exercises real
+// combinational compute driven by executed code — not a static register poke.
+#[thumb_oracle_test]
+fn crc32_two_words() -> ThumbOracleCase {
+    let mut prog: Vec<Thumb> = Vec::new();
+    prog.extend(enable_clock_bit(RCC_AHBENR, RCC_AHBENR_CRCEN));
+    prog.extend(load_addr(0, CRC_CR));
+    prog.extend(store_imm32(0x0000_0001)); // RESET
+    prog.extend(load_addr(0, CRC_DR));
+    prog.extend(store_imm32(0x1234_5678)); // word 1
+    prog.extend(load_addr(0, CRC_DR));
+    prog.extend(store_imm32(0x9ABC_DEF0)); // word 2
+
+    ThumbOracleCase::mixed(&prog)
+        .sim_bus(f103_bus)
+        .capture_mem(&[CRC_DR])
+        .expect(|st| {
+            st.assert_mem(CRC_DR, CRC32_TWO_WORDS);
+        })
+}
+
+/// STM32 hardware CRC-32 of `[0x12345678, 0x9ABCDEF0]` from the reset init
+/// (0xFFFFFFFF). Pinned from the model and cross-checked against bench F103
+/// silicon by `crc32_two_words_diff`.
+const CRC32_TWO_WORDS: u32 = 0x7D24_A31B;

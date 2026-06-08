@@ -275,6 +275,23 @@ impl crate::Peripheral for GpioPort {
         Ok(())
     }
 
+    fn read_u32(&self, offset: u64) -> SimResult<u32> {
+        Ok(self.read_reg(offset & !3))
+    }
+
+    fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        // GPIO data registers are word-access. BSRR (atomic set/reset) only
+        // behaves correctly when the whole 32-bit word is presented at once:
+        // the default byte-decomposition would split BSRR's set half (low 16)
+        // from its reset half (high 16) into separate write_reg calls, so a
+        // pin named in both halves loses the BS-over-BR priority rule (set
+        // wins). Silicon performs the STR as one 32-bit transaction; mirror
+        // that by handing write_reg the full word. Silicon-verified on the
+        // bench STM32F103 (stm32f1_exec_oracle::gpioa_bsrr_set_reset).
+        self.write_reg(offset & !3, value);
+        Ok(())
+    }
+
     fn snapshot(&self) -> serde_json::Value {
         // Serialize the active family's register struct directly (flat), so the
         // snapshot keeps registers like `odr` at top level (no variant tag) —
@@ -340,6 +357,26 @@ mod tests {
         gpio.write(0x0D, 0xFF).unwrap(); // ODR = 0xFFFF
         gpio.write(0x12, 0x01).unwrap(); // BSRR high half: reset pin 0
         assert_eq!(rd32(&gpio, 0x0C) & 0xFFFF, 0xFFFE);
+    }
+
+    #[test]
+    fn test_gpio_bsrr_word_write_is_atomic_bs_priority() {
+        // A whole-word BSRR write that names the same pin in both the set
+        // (low 16) and reset (high 16) halves must apply BS-over-BR priority:
+        // the pin ends up SET. The default byte-decomposition path would split
+        // the two halves and let the reset clobber the set — silicon performs
+        // one 32-bit transaction, so write_u32 must too.
+        // Verified on bench STM32F103 (stm32f1_exec_oracle::gpioa_bsrr_set_reset).
+        let mut gpio = GpioPort::new();
+        // BSRR = 0x0010_0010 from ODR=0: BS pin4 + BR pin4 → pin4 SET.
+        gpio.write_u32(0x10, 0x0010_0010).unwrap();
+        assert_eq!(gpio.read_u32(0x0C).unwrap() & 0xFFFF, 0x0010);
+
+        // BSRR = 0x00F0_000F from ODR=0x00FF: BR resets 4..7, BS sets 0..3.
+        let mut g2 = GpioPort::new();
+        g2.write_u32(0x10, 0x0000_00FF).unwrap(); // ODR = 0x00FF
+        g2.write_u32(0x10, 0x00F0_000F).unwrap(); // → 0x000F
+        assert_eq!(g2.read_u32(0x0C).unwrap() & 0xFFFF, 0x000F);
     }
 
     #[test]

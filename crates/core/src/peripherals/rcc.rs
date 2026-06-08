@@ -103,6 +103,11 @@ impl F1Rcc {
         //   here (HSIRDY already set, no HSE/PLL).
         Self {
             cr: classic_cr_ready(0x0000_4A83),
+            // AHBENR reset = 0x14 (SRAMEN bit2 + FLITFEN bit4 enabled out of
+            // reset). Silicon-verified on the bench STM32F103: a read-back of
+            // RCC_AHBENR after ORing CRCEN returned 0x54 = 0x14 | (1<<6)
+            // (stm32f1_exec_oracle::crc32_two_words). RM0008 §7.3.6.
+            ahbenr: 0x0000_0014,
             ..Default::default()
         }
     }
