@@ -81,7 +81,11 @@ const CHIPS: &[ChipEntry] = &[
         "configs/chips/stm32g474re.yaml",
         Some("tests/fixtures/real_world/stm32g474.svd"),
     ),
-    ("stm32h563", "configs/chips/stm32h563.yaml", None),
+    (
+        "stm32h563",
+        "configs/chips/stm32h563.yaml",
+        Some("tests/fixtures/real_world/stm32h563.svd"),
+    ),
     (
         "stm32l073",
         "configs/chips/stm32l073.yaml",
@@ -92,8 +96,16 @@ const CHIPS: &[ChipEntry] = &[
         "configs/chips/stm32l476.yaml",
         Some("tests/fixtures/real_world/stm32l476.svd"),
     ),
-    ("stm32wb55", "configs/chips/stm32wb55.yaml", None),
-    ("stm32wba52", "configs/chips/stm32wba52.yaml", None),
+    (
+        "stm32wb55",
+        "configs/chips/stm32wb55.yaml",
+        Some("tests/fixtures/real_world/stm32wb55.svd"),
+    ),
+    (
+        "stm32wba52",
+        "configs/chips/stm32wba52.yaml",
+        Some("tests/fixtures/real_world/stm32wba52.svd"),
+    ),
 ];
 
 /// Repo root (core/), resolved from this crate's manifest dir (core/crates/core).
