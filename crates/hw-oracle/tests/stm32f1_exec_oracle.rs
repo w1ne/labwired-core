@@ -29,6 +29,7 @@
 
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
+use labwired_core::system::cortex_m::configure_cortex_m;
 use labwired_hw_oracle::arm_thumb::{
     ldr_imm5, movs_imm8, movt_imm16, movw_imm16, orrs, str_imm5, Thumb, ThumbOracleCase,
 };
@@ -181,7 +182,14 @@ fn f103_bus() -> SystemBus {
     let anchored = system_path.parent().unwrap().join(&manifest.chip);
     manifest.chip = anchored.to_str().unwrap().to_string();
 
-    SystemBus::from_config(&chip, &manifest).unwrap_or_else(|e| panic!("build F103 sim bus: {e}"))
+    let mut bus = SystemBus::from_config(&chip, &manifest)
+        .unwrap_or_else(|e| panic!("build F103 sim bus: {e}"));
+    // Wire the Cortex-M system block (NVIC @ 0xE000E100, SCB @ 0xE000ED00,
+    // DWT @ 0xE000_1000) so oracles can drive those over MMIO. Idempotent and
+    // at addresses no other oracle touches; the returned cpu/nvic are unused
+    // here (run_capture builds the CPU).
+    let _ = configure_cortex_m(&mut bus);
+    bus
 }
 
 // ── 1. TIM2 update-generation (UG) event ───────────────────────────────────────
@@ -560,4 +568,32 @@ fn dbgmcu_cr_round_trip() -> ThumbOracleCase {
         .sim_bus(f103_bus)
         .capture_mem(&[DBGMCU_CR])
         .expect(|st| st.assert_mem(DBGMCU_CR, 0x0000_001F)) // bits 3,4 stick on silicon
+}
+
+// ── 12. NVIC ISER/ICER set-enable / clear-enable ────────────────────────────────
+//
+// The NVIC interrupt-enable bank uses banked set/clear registers (ARMv7-M B3.4):
+// ISERx (write 1 = enable, write 0 = ignored, read = current enable state) and
+// ICERx (write 1 = disable). This pins that pair — the enable machinery that
+// real interrupt delivery rides on — without yet taking an interrupt.
+//
+// Program: enable IRQ6 (EXTI0) + IRQ28 (TIM2) via ISER0, then disable only IRQ6
+// via ICER0. ISER0 must read back with IRQ28 still enabled, IRQ6 cleared.
+#[thumb_oracle_test]
+fn nvic_iser_icer_enable_disable() -> ThumbOracleCase {
+    const NVIC_ISER0: u32 = 0xE000_E100;
+    const NVIC_ICER0: u32 = 0xE000_E180;
+    const IRQ6: u32 = 1 << 6; // EXTI0
+    const IRQ28: u32 = 1 << 28; // TIM2
+
+    let mut prog: Vec<Thumb> = Vec::new();
+    prog.extend(load_addr(0, NVIC_ISER0));
+    prog.extend(store_imm32(IRQ6 | IRQ28)); // enable both
+    prog.extend(load_addr(0, NVIC_ICER0));
+    prog.extend(store_imm32(IRQ6)); // clear-enable IRQ6 only
+
+    ThumbOracleCase::mixed(&prog)
+        .sim_bus(f103_bus)
+        .capture_mem(&[NVIC_ISER0])
+        .expect(|st| st.assert_mem(NVIC_ISER0, IRQ28)) // IRQ28 enabled, IRQ6 cleared
 }
