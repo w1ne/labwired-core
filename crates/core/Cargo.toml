@@ -65,3 +65,5 @@ event-scheduler = []
 
 [dev-dependencies]
 labwired-loader = { path = "../loader" }
+svd-ingestor = { path = "../svd-ingestor" }
+svd-parser = "0.14"

@@ -1,0 +1,22 @@
+{
+  "esp32c3": {
+    "modeled": 330,
+    "total": 2606
+  },
+  "esp32s3": {
+    "modeled": 3321,
+    "total": 4283
+  },
+  "nrf52832": {
+    "modeled": 2,
+    "total": 1690
+  },
+  "rp2040": {
+    "modeled": 67,
+    "total": 1182
+  },
+  "stm32f401": {
+    "modeled": 46,
+    "total": 660
+  }
+}
