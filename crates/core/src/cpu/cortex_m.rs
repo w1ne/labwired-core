@@ -1490,37 +1490,41 @@ impl CortexM {
                     // leaking flags here would corrupt the remaining block
                     // conditions (Tier-1 H563/WBA52 gpio-check regression).
                     if !it_block_instruction {
-                        self.update_nz(res);
+                        // LSL #n (n>0) sets C to the last bit shifted out:
+                        // Rm[32-n]. LSL #0 is a move and leaves C unchanged.
+                        // (Verified against STM32F103 silicon via thumb_oracles.)
+                        if imm == 0 {
+                            self.update_nz(res);
+                        } else {
+                            let carry = (val >> (32 - imm as u32)) & 1 == 1;
+                            self.update_nzcv(res, carry, self.get_overflow());
+                        }
                     }
-                    // Note: Carry out not fully implemented for shifts yet
                 }
                 Instruction::Lsr { rd, rm, imm } => {
                     let val = self.read_reg(rm);
-                    let res = if imm == 0 {
-                        0
-                    } else {
-                        val.wrapping_shr(imm as u32)
-                    };
-                    // Actually LSR imm=0 is 32 in some contexts, but Thumb T1 usually:
-                    // imm5=0 for LSL is imm=0. imm5=0 for LSR is imm=32.
-                    // For MVP, letting wrapping_shr handle basics.
+                    // Thumb T1: imm5 == 0 encodes a shift of 32.
+                    let n = if imm == 0 { 32 } else { imm as u32 };
+                    let res = if n >= 32 { 0 } else { val.wrapping_shr(n) };
                     self.write_reg(rd, res);
-                    // T1 shift-immediate: setflags = !InITBlock().
+                    // T1 shift-immediate: setflags = !InITBlock(). LSR #n sets C
+                    // to Rm[n-1], the last bit shifted out (silicon-verified).
                     if !it_block_instruction {
-                        self.update_nz(res);
+                        let carry = (val >> (n - 1)) & 1 == 1;
+                        self.update_nzcv(res, carry, self.get_overflow());
                     }
                 }
                 Instruction::Asr { rd, rm, imm } => {
-                    let val = self.read_reg(rm) as i32;
-                    let res = (if imm == 0 {
-                        val >> 31
-                    } else {
-                        val >> (imm as u32)
-                    }) as u32;
+                    let val = self.read_reg(rm);
+                    // Thumb T1: imm5 == 0 encodes a shift of 32.
+                    let n = if imm == 0 { 32 } else { imm as u32 };
+                    let res = ((val as i32) >> n.min(31)) as u32;
                     self.write_reg(rd, res);
-                    // T1 shift-immediate: setflags = !InITBlock().
+                    // T1 shift-immediate: setflags = !InITBlock(). ASR #n sets C
+                    // to Rm[n-1], the last bit shifted out (silicon-verified).
                     if !it_block_instruction {
-                        self.update_nz(res);
+                        let carry = (val >> (n - 1)) & 1 == 1;
+                        self.update_nzcv(res, carry, self.get_overflow());
                     }
                 }
                 Instruction::LslReg { rd, rm } => {
