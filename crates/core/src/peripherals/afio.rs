@@ -53,10 +53,13 @@ impl Afio {
             // stored value to the readable remap field. Silicon-verified on the
             // bench STM32F103 (stm32f1_exec_oracle::afio_mapr_reserved_bits...).
             0x04 => self.mapr = value & 0x001F_FFFF,
-            0x08 => self.exticr[0] = value,
-            0x0C => self.exticr[1] = value,
-            0x10 => self.exticr[2] = value,
-            0x14 => self.exticr[3] = value,
+            // Each EXTICR holds four 4-bit line-source fields in bits [15:0];
+            // bits [31:16] are reserved and read 0 (RM0008 §9.4.3). Silicon-
+            // verified on the bench F103 (afio_exticr1_upper_half_reads_zero).
+            0x08 => self.exticr[0] = value & 0xFFFF,
+            0x0C => self.exticr[1] = value & 0xFFFF,
+            0x10 => self.exticr[2] = value & 0xFFFF,
+            0x14 => self.exticr[3] = value & 0xFFFF,
             0x1C => self.mapr2 = value,
             _ => {}
         }
@@ -119,5 +122,16 @@ mod tests {
         let mut b = Afio::new();
         b.write_u32(0x04, 0xFFFF_FFFF).unwrap();
         assert_eq!(rd32(&b, 0x04), 0x001F_FFFF); // only the 21 remap bits
+    }
+
+    #[test]
+    fn exticr_upper_half_reads_zero() {
+        // EXTICR1..4 implement four 4-bit fields in [15:0]; [31:16] reserved → 0.
+        // Silicon-verified on F103 (stm32f1_exec_oracle::afio_exticr1_upper...).
+        let mut a = Afio::new();
+        for off in [0x08u64, 0x0C, 0x10, 0x14] {
+            a.write_u32(off, 0xFFFF_FFFF).unwrap();
+            assert_eq!(rd32(&a, off), 0x0000_FFFF, "EXTICR @ 0x{off:02X}");
+        }
     }
 }
