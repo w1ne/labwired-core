@@ -81,6 +81,10 @@ const CRC_BASE: u32 = 0x4002_3000;
 const CRC_DR: u32 = CRC_BASE + 0x00; // data in / CRC result out
 const CRC_CR: u32 = CRC_BASE + 0x08; // control (RESET = bit 0)
 
+/// AFIO (RM0008 §9): the remap register. AFIOEN is APB2ENR bit 0.
+const RCC_APB2ENR_AFIOEN: u32 = 1 << 0;
+const AFIO_MAPR: u32 = 0x4001_0004;
+
 /// EXTI (RM0008 §10): software-interrupt + pending registers.
 const EXTI_BASE: u32 = 0x4001_0400;
 const EXTI_IMR: u32 = EXTI_BASE + 0x00; // interrupt mask
@@ -385,5 +389,47 @@ fn exti_swier_sets_and_clears_pr() -> ThumbOracleCase {
         .expect(|st| {
             st.assert_mem(EXTI_PR, 0x0000_0004); // line 2 still pending
             st.assert_mem(EXTI_SWIER, 0x0000_0004); // SWIER bit0 cleared with PR bit0
+        })
+}
+
+// ── 6. AFIO MAPR reserved-bit masking ───────────────────────────────────────────
+//
+// AFIO_MAPR has implemented remap bits [20:0], a write-only SWJ_CFG field
+// [26:24], and reserved bits elsewhere. Silicon reads reserved bits back as 0;
+// a naive model that stores the written word verbatim does not.
+//
+// Program:
+//   1. RCC_APB2ENR |= AFIOEN          — ungate the AFIO clock (RMW)
+//   2. MAPR = 0x0820_0004             — set reserved bits 27 and 21, plus the
+//                                       USART1_REMAP bit (2). **SWJ_CFG [26:24]
+//                                       is left 0** (full SWJ / SWD stays up —
+//                                       writing 0b111 there would disable SWD
+//                                       and drop the debugger).
+//
+// Read back (masking out the write-only/undefined SWJ_CFG field): the reserved
+// bits must read 0 and only the remap bit survive → 0x0000_0004.
+#[thumb_oracle_test]
+fn afio_mapr_reserved_bits_read_zero() -> ThumbOracleCase {
+    // Reserved bits 27 (0x0800_0000) and 21 (0x0020_0000) + USART1_REMAP (bit 2).
+    // Deliberately NO bits in 24..26 (SWJ_CFG) — see the safety note above.
+    const MAPR_WRITE: u32 = 0x0820_0004;
+    // SWJ_CFG [26:24] reads "undefined" (RM0008); exclude it from the check.
+    const SWJ_CFG: u32 = 0x0700_0000;
+
+    let mut prog: Vec<Thumb> = Vec::new();
+    prog.extend(enable_clock_bit(RCC_APB2ENR, RCC_APB2ENR_AFIOEN));
+    prog.extend(load_addr(0, AFIO_MAPR));
+    prog.extend(store_imm32(MAPR_WRITE));
+
+    ThumbOracleCase::mixed(&prog)
+        .sim_bus(f103_bus)
+        .capture_mem(&[AFIO_MAPR])
+        .expect(|st| {
+            let mapr = st.read_mem(AFIO_MAPR);
+            assert_eq!(
+                mapr & !SWJ_CFG,
+                0x0000_0004,
+                "AFIO_MAPR reserved bits must read 0 (got 0x{mapr:08X})"
+            );
         })
 }

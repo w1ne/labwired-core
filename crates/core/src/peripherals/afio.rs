@@ -47,7 +47,12 @@ impl Afio {
     fn write_reg(&mut self, offset: u64, value: u32) {
         match offset {
             0x00 => self.evcr = value,
-            0x04 => self.mapr = value,
+            // MAPR implements remap bits [20:0]; bits [23:21] and [31:27] are
+            // reserved and the write-only SWJ_CFG field [26:24] reads back
+            // undefined. Silicon returns 0 for the reserved bits, so mask the
+            // stored value to the readable remap field. Silicon-verified on the
+            // bench STM32F103 (stm32f1_exec_oracle::afio_mapr_reserved_bits...).
+            0x04 => self.mapr = value & 0x001F_FFFF,
             0x08 => self.exticr[0] = value,
             0x0C => self.exticr[1] = value,
             0x10 => self.exticr[2] = value,
@@ -88,5 +93,31 @@ impl Peripheral for Afio {
 
     fn snapshot(&self) -> serde_json::Value {
         serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Afio;
+    use crate::Peripheral;
+
+    fn rd32(a: &Afio, off: u64) -> u32 {
+        (0..4).fold(0u32, |acc, i| {
+            acc | ((a.read(off + i).unwrap() as u32) << (i * 8))
+        })
+    }
+
+    #[test]
+    fn mapr_reserved_bits_read_zero() {
+        // Implemented remap bits [20:0] stick; reserved bits [23:21]/[31:27] and
+        // the write-only SWJ_CFG [26:24] read back 0. Silicon-verified on the
+        // bench STM32F103 (stm32f1_exec_oracle::afio_mapr_reserved_bits...).
+        let mut a = Afio::new();
+        a.write_u32(0x04, 0x0820_0004).unwrap(); // reserved 27,21 + USART1_REMAP
+        assert_eq!(rd32(&a, 0x04), 0x0000_0004);
+
+        let mut b = Afio::new();
+        b.write_u32(0x04, 0xFFFF_FFFF).unwrap();
+        assert_eq!(rd32(&b, 0x04), 0x001F_FFFF); // only the 21 remap bits
     }
 }
