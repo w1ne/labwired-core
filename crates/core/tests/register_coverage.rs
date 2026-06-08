@@ -3,20 +3,17 @@
 
 //! Register-modeling coverage vs the vendor SVD.
 //!
-//! For each chip with an in-tree SVD, this enumerates every register the
-//! datasheet defines (via `svd-ingestor`) and probes the simulator's bus to
-//! measure how many are actually modeled. It is a **measurement**, not a gate
-//! (`#[ignore]`); run it with:
-//!
-//! ```text
-//! cargo test -p labwired-core --test register_coverage -- --ignored --nocapture
-//! ```
+//! For each supported chip with an in-tree SVD, this enumerates every register
+//! the datasheet defines (via `svd-ingestor`) and probes the simulator's bus to
+//! measure how many are actually modeled. It runs in CI as a **ratchet gate**
+//! (`register_coverage_ratchet`): a chip's modeled count may never regress.
+//! Chips whose newest-silicon SVDs aren't public yet are listed "SVD pending".
 //!
 //! Per register we record three signals from the live bus:
-//!   * `mapped`     — a read succeeds (the address lands in a modeled peripheral)
-//!   * `reset_ok`   — the read value equals the SVD reset value
-//!   * `responsive` — writing 0xFFFF_FFFF then 0 yields different read-backs
-//!                    (the register stores state — definitive proof of modeling)
+//!   * `mapped` — a read succeeds (the address lands in a modeled peripheral)
+//!   * `reset_ok` — the read value equals the SVD reset value
+//!   * `responsive` — writing 0xFFFF_FFFF then 0 yields different read-backs,
+//!     i.e. the register stores state (definitive proof of modeling)
 //!
 //! Headline `modeled` is the conservative union: `responsive || (reset_ok &&
 //! reset != 0)`. It under-counts write-only and read-only-reset-0 registers
@@ -28,33 +25,75 @@ use labwired_core::bus::SystemBus;
 use labwired_core::{system, Machine};
 use std::path::PathBuf;
 
-/// (chip name, chip yaml, in-tree SVD).
-const CHIPS: &[(&str, &str, &str)] = &[
+/// All supported chips: (name, chip yaml, optional in-tree SVD).
+///
+/// `None` = no public vendor SVD available yet (the newest STM32 parts);
+/// those are listed as "SVD pending" rather than silently dropped.
+type ChipEntry = (&'static str, &'static str, Option<&'static str>);
+const CHIPS: &[ChipEntry] = &[
     (
-        "stm32f401",
-        "configs/chips/stm32f401.yaml",
-        "tests/fixtures/real_world/stm32f401.svd",
+        "esp32",
+        "configs/chips/esp32.yaml",
+        Some("tests/fixtures/real_world/esp32.svd"),
     ),
     (
         "esp32c3",
         "configs/chips/esp32c3.yaml",
-        "tests/fixtures/real_world/esp32c3.svd",
-    ),
-    (
-        "nrf52832",
-        "configs/chips/nrf52832.yaml",
-        "tests/fixtures/real_world/nrf52832.svd",
-    ),
-    (
-        "rp2040",
-        "configs/chips/rp2040.yaml",
-        "tests/fixtures/real_world/rp2040.svd",
+        Some("tests/fixtures/real_world/esp32c3.svd"),
     ),
     (
         "esp32s3",
         "configs/chips/esp32s3.yaml",
-        "tests/fixtures/svd/esp32s3.svd",
+        Some("tests/fixtures/svd/esp32s3.svd"),
     ),
+    (
+        "nrf52832",
+        "configs/chips/nrf52832.yaml",
+        Some("tests/fixtures/real_world/nrf52832.svd"),
+    ),
+    (
+        "nrf52840",
+        "configs/chips/nrf52840.yaml",
+        Some("tests/fixtures/real_world/nrf52840.svd"),
+    ),
+    (
+        "rp2040",
+        "configs/chips/rp2040.yaml",
+        Some("tests/fixtures/real_world/rp2040.svd"),
+    ),
+    (
+        "stm32f103",
+        "configs/chips/stm32f103.yaml",
+        Some("tests/fixtures/real_world/stm32f103.svd"),
+    ),
+    (
+        "stm32f401",
+        "configs/chips/stm32f401.yaml",
+        Some("tests/fixtures/real_world/stm32f401.svd"),
+    ),
+    (
+        "stm32f407",
+        "configs/chips/stm32f407.yaml",
+        Some("tests/fixtures/real_world/stm32f407.svd"),
+    ),
+    (
+        "stm32g474re",
+        "configs/chips/stm32g474re.yaml",
+        Some("tests/fixtures/real_world/stm32g474.svd"),
+    ),
+    ("stm32h563", "configs/chips/stm32h563.yaml", None),
+    (
+        "stm32l073",
+        "configs/chips/stm32l073.yaml",
+        Some("tests/fixtures/real_world/stm32l073.svd"),
+    ),
+    (
+        "stm32l476",
+        "configs/chips/stm32l476.yaml",
+        Some("tests/fixtures/real_world/stm32l476.svd"),
+    ),
+    ("stm32wb55", "configs/chips/stm32wb55.yaml", None),
+    ("stm32wba52", "configs/chips/stm32wba52.yaml", None),
 ];
 
 /// Repo root (core/), resolved from this crate's manifest dir (core/crates/core).
@@ -100,9 +139,10 @@ fn probe_register(bus: &mut SystemBus, addr: u64, reset: u32) -> Probe {
 }
 
 /// Enumerate every SVD register as (absolute address, reset value).
-fn svd_registers(svd_path: &str) -> Vec<(u64, u32)> {
-    let xml = std::fs::read_to_string(root(svd_path)).expect("read SVD");
-    let device = svd_parser::parse(&xml).expect("parse SVD");
+/// Returns `None` if the SVD is missing or svd-parser cannot read it.
+fn svd_registers(svd_path: &str) -> Option<Vec<(u64, u32)>> {
+    let xml = std::fs::read_to_string(root(svd_path)).ok()?;
+    let device = svd_parser::parse(&xml).ok()?;
     let mut out = Vec::new();
     for peripheral in &device.peripherals {
         let base = peripheral.base_address;
@@ -114,7 +154,7 @@ fn svd_registers(svd_path: &str) -> Vec<(u64, u32)> {
             out.push((base + reg.address_offset, reg.reset_value));
         }
     }
-    out
+    Some(out)
 }
 
 fn probe_all(bus: &mut SystemBus, regs: &[(u64, u32)]) -> (usize, usize, usize) {
@@ -134,11 +174,12 @@ fn probe_all(bus: &mut SystemBus, regs: &[(u64, u32)]) -> (usize, usize, usize) 
     (mapped, reset_ok, modeled)
 }
 
-/// One chip's measured coverage: (total SVD registers, mapped, reset_ok, modeled).
-fn measure_chip(yaml: &str, svd: &str) -> (usize, usize, usize, usize) {
-    let regs = svd_registers(svd);
+/// One chip's measured coverage: (total SVD registers, mapped, reset_ok,
+/// modeled). `None` if the SVD cannot be parsed.
+fn measure_chip(yaml: &str, svd: &str) -> Option<(usize, usize, usize, usize)> {
+    let regs = svd_registers(svd)?;
     let total = regs.len();
-    let chip = ChipDescriptor::from_file(&root(yaml)).expect("chip yaml");
+    let chip = ChipDescriptor::from_file(root(yaml)).expect("chip yaml");
     let mut bus = SystemBus::from_config(&chip, &dummy_manifest(yaml)).expect("bus");
     let (mapped, reset_ok, modeled) = match chip.arch {
         Arch::Arm => {
@@ -162,7 +203,7 @@ fn measure_chip(yaml: &str, svd: &str) -> (usize, usize, usize, usize) {
         }
         Arch::Unknown => (0, 0, 0),
     };
-    (total, mapped, reset_ok, modeled)
+    Some((total, mapped, reset_ok, modeled))
 }
 
 /// CI gate: per-chip register-modeling coverage may never regress.
@@ -187,7 +228,17 @@ fn register_coverage_ratchet() {
     );
     println!("{}", "-".repeat(50));
     for &(name, yaml, svd) in CHIPS {
-        let (total, mapped, reset_ok, modeled) = measure_chip(yaml, svd);
+        let measured = svd.and_then(|s| measure_chip(yaml, s));
+        let Some((total, mapped, reset_ok, modeled)) = measured else {
+            let why = if svd.is_none() {
+                "no public vendor SVD yet"
+            } else {
+                "SVD not parseable"
+            };
+            println!("{name:<11} {:>6}   (SVD pending — {why})", "-");
+            current.insert(name.to_string(), serde_json::json!({"svd_pending": true}));
+            continue;
+        };
         let pct = if total > 0 {
             modeled as f64 * 100.0 / total as f64
         } else {
@@ -219,7 +270,10 @@ fn register_coverage_ratchet() {
 
     let mut regressions = Vec::new();
     for (name, cur) in &current {
-        let cur_modeled = cur["modeled"].as_u64().unwrap();
+        // SVD-pending chips have no measurement to ratchet.
+        let Some(cur_modeled) = cur["modeled"].as_u64() else {
+            continue;
+        };
         let base_modeled = baseline[name]["modeled"].as_u64().unwrap_or(0);
         if cur_modeled < base_modeled {
             regressions.push(format!(

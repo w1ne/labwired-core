@@ -1,4 +1,8 @@
 {
+  "esp32": {
+    "modeled": 2330,
+    "total": 2997
+  },
   "esp32c3": {
     "modeled": 330,
     "total": 2606
@@ -11,12 +15,44 @@
     "modeled": 2,
     "total": 1690
   },
+  "nrf52840": {
+    "svd_pending": true
+  },
   "rp2040": {
     "modeled": 67,
     "total": 1182
   },
+  "stm32f103": {
+    "modeled": 211,
+    "total": 722
+  },
   "stm32f401": {
     "modeled": 46,
     "total": 660
+  },
+  "stm32f407": {
+    "modeled": 89,
+    "total": 1540
+  },
+  "stm32g474re": {
+    "modeled": 80,
+    "total": 1585
+  },
+  "stm32h563": {
+    "svd_pending": true
+  },
+  "stm32l073": {
+    "modeled": 296,
+    "total": 524
+  },
+  "stm32l476": {
+    "modeled": 724,
+    "total": 1485
+  },
+  "stm32wb55": {
+    "svd_pending": true
+  },
+  "stm32wba52": {
+    "svd_pending": true
   }
 }
