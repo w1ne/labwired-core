@@ -54,7 +54,7 @@ coverage, exactly like Unicorn-AFL / Fuzzware.
 
 ## Phases
 
-### Phase 0 — Target + oracle (days)
+### Phase 0 — Target + oracle (days) — ✅ DONE 2026-06-09
 - Target firmware: a **UART command/protocol parser** on F103 (clean external-input
   surface, plant one known bug for the demo). Board already on the bench.
 - Crash oracle: HardFault/BusFault/UsageFault/MemManage, core lockup, IWDG/WWDG
@@ -62,6 +62,12 @@ coverage, exactly like Unicorn-AFL / Fuzzware.
 - Injection point: firmware UART `DR` reads return successive fuzz bytes; stream
   end → terminate run.
 - **Exit:** agreed target + crash definition + injection contract.
+- **Done:** `firmware-f103-fuzztarget` (parser w/ planted overflow) + `f103_fuzz_phase0.rs`
+  prove clean→DONE / overflow→FAULT in sim AND on the bench F103 (same crash input
+  reproduces on real silicon). Injection = RAM buffer (openocd-replayable), not UART.
+  **Finding:** the sim surfaces a CPU fault as a step `Err` rather than vectoring to
+  the HardFault handler like silicon — Phase-1 fidelity item (recovering handlers
+  would diverge).
 
 ### Phase 1 — Sim fuzzing primitives (≈1 wk)
 - **Coverage:** AFL edge map (`map[(prev_pc>>1) ^ cur_pc]++`) emitted from the CPU
