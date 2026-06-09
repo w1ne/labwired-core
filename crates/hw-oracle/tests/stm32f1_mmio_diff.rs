@@ -58,6 +58,7 @@ const RCC_CFGR: u32 = RCC_BASE + 0x04;
 const RCC_AHBENR: u32 = RCC_BASE + 0x14; // DMA1/CRC
 const RCC_APB2ENR: u32 = RCC_BASE + 0x18; // AFIO/GPIO/ADC/TIM1/SPI1/USART1
 const RCC_APB1ENR: u32 = RCC_BASE + 0x1C; // TIM2-4/SPI2/USART2-3/I2C1-2
+const RCC_CIR: u32 = RCC_BASE + 0x08; // clock-interrupt flags/enables
 
 // AHBENR bits
 const DMA1EN: u32 = 1 << 0;
@@ -139,9 +140,22 @@ const ADC1_CR1: u32 = ADC1_BASE + 0x04;
 const ADC1_CR2: u32 = ADC1_BASE + 0x08;
 
 // ── EXTI (0x4001_0400 — always clocked) ──────────────────────────────────────
+// AFIO (0x4001_0000, RM0008 §9) — F1-only alternate-function I/O remapping.
+const AFIO_BASE: u32 = 0x4001_0000;
+const AFIOEN: u32 = 1 << 0; // RCC APB2ENR
+const AFIO_EVCR: u32 = AFIO_BASE + 0x00;
+const AFIO_MAPR: u32 = AFIO_BASE + 0x04;
+const AFIO_EXTICR1: u32 = AFIO_BASE + 0x08;
+const AFIO_EXTICR2: u32 = AFIO_BASE + 0x0C;
+const AFIO_EXTICR3: u32 = AFIO_BASE + 0x10;
+const AFIO_EXTICR4: u32 = AFIO_BASE + 0x14;
+const AFIO_MAPR2: u32 = AFIO_BASE + 0x1C;
+
 const EXTI_BASE: u32 = 0x4001_0400;
 const EXTI_IMR: u32 = EXTI_BASE + 0x00;
+const EXTI_EMR: u32 = EXTI_BASE + 0x04;
 const EXTI_RTSR: u32 = EXTI_BASE + 0x08;
+const EXTI_FTSR: u32 = EXTI_BASE + 0x0C;
 
 // ── DBGMCU identity (Cortex-M3: APB @ 0xE004_2000) ───────────────────────────
 const DBGMCU_IDCODE: u32 = 0xE004_2000;
@@ -179,6 +193,10 @@ const DMA1_ISR: u32 = DMA1_BASE + 0x00; // interrupt status
 const DMA1_CCR1: u32 = DMA1_BASE + 0x08; // channel-1 config
 const DMA1_CNDTR1: u32 = DMA1_BASE + 0x0C; // channel-1 count
 const DMA1_CPAR1: u32 = DMA1_BASE + 0x10; // channel-1 peripheral addr
+const DMA1_CMAR1: u32 = DMA1_BASE + 0x14; // channel-1 memory addr
+const DMA1_CNDTR2: u32 = DMA1_BASE + 0x20; // channel-2 count
+const DMA1_CPAR2: u32 = DMA1_BASE + 0x24; // channel-2 peripheral addr
+const DMA1_CMAR2: u32 = DMA1_BASE + 0x28; // channel-2 memory addr
 
 // ── RTC (0x4000_2800 — F1 backup-domain RTC) ─────────────────────────────────
 // Register access needs the PWR + BKP APB1 clocks; the CRH/CNT values below are
@@ -851,6 +869,139 @@ const SWEEP_CASES: &[SweepCase] = &[
         prep: &[(RCC_APB1ENR, I2C1EN)],
         addr: I2C1_CR1,
         write: 0x0000_2CFB,
+    },
+    // ── DMA1 channel 1+2 data registers (CCR excluded: reserved PSIZE/MSIZE
+    //    encoding clamps under an all-ones write; needs a dedicated test). With
+    //    CCR unswept the channel stays disabled, so CNDTR/CPAR/CMAR are writable.
+    SweepCase {
+        label: "DMA1.CNDTR1",
+        prep: &[(RCC_AHBENR, DMA1EN)],
+        addr: DMA1_CNDTR1,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "DMA1.CPAR1",
+        prep: &[(RCC_AHBENR, DMA1EN)],
+        addr: DMA1_CPAR1,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "DMA1.CMAR1",
+        prep: &[(RCC_AHBENR, DMA1EN)],
+        addr: DMA1_CMAR1,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "DMA1.CNDTR2",
+        prep: &[(RCC_AHBENR, DMA1EN)],
+        addr: DMA1_CNDTR2,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "DMA1.CPAR2",
+        prep: &[(RCC_AHBENR, DMA1EN)],
+        addr: DMA1_CPAR2,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "DMA1.CMAR2",
+        prep: &[(RCC_AHBENR, DMA1EN)],
+        addr: DMA1_CMAR2,
+        write: 0xFFFF_FFFF,
+    },
+    // ── AFIO. SELF-DESTRUCT GUARD: MAPR[26:24]=SWJ_CFG; 0b111 disables SWD and
+    //    drops the bench, so MAPR is probed with those 3 bits held 0 (0xF8FF_FFFF).
+    SweepCase {
+        label: "AFIO.EVCR",
+        prep: &[(RCC_APB2ENR, AFIOEN)],
+        addr: AFIO_EVCR,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "AFIO.MAPR (SWJ_CFG held 0)",
+        prep: &[(RCC_APB2ENR, AFIOEN)],
+        addr: AFIO_MAPR,
+        write: 0xF8FF_FFFF,
+    },
+    SweepCase {
+        label: "AFIO.EXTICR1",
+        prep: &[(RCC_APB2ENR, AFIOEN)],
+        addr: AFIO_EXTICR1,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "AFIO.EXTICR2",
+        prep: &[(RCC_APB2ENR, AFIOEN)],
+        addr: AFIO_EXTICR2,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "AFIO.EXTICR3",
+        prep: &[(RCC_APB2ENR, AFIOEN)],
+        addr: AFIO_EXTICR3,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "AFIO.EXTICR4",
+        prep: &[(RCC_APB2ENR, AFIOEN)],
+        addr: AFIO_EXTICR4,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "AFIO.MAPR2",
+        prep: &[(RCC_APB2ENR, AFIOEN)],
+        addr: AFIO_MAPR2,
+        write: 0xFFFF_FFFF,
+    },
+    // ── EXTI mask registers (SWIER/PR excluded: trigger/clear side effects).
+    SweepCase {
+        label: "EXTI.IMR",
+        prep: &[],
+        addr: EXTI_IMR,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "EXTI.EMR",
+        prep: &[],
+        addr: EXTI_EMR,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "EXTI.RTSR",
+        prep: &[],
+        addr: EXTI_RTSR,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "EXTI.FTSR",
+        prep: &[],
+        addr: EXTI_FTSR,
+        write: 0xFFFF_FFFF,
+    },
+    // ── RCC (safe subset: NO CR/CFGR clock-switch, NO RSTR resets).
+    SweepCase {
+        label: "RCC.CIR",
+        prep: &[],
+        addr: RCC_CIR,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "RCC.AHBENR",
+        prep: &[],
+        addr: RCC_AHBENR,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "RCC.APB2ENR",
+        prep: &[],
+        addr: RCC_APB2ENR,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "RCC.APB1ENR",
+        prep: &[],
+        addr: RCC_APB1ENR,
+        write: 0xFFFF_FFFF,
     },
 ];
 

@@ -109,14 +109,23 @@ fn route_bank1_irqs(active1: u32, irqs: &mut Vec<u32>) {
     }
 }
 
-// ── STM32F1 / F4: single 20-line bank ────────────────────────────────────────
-#[derive(Debug, Default, serde::Serialize)]
+// ── STM32F1 / F4: single bank ────────────────────────────────────────────────
+// The implemented-line count is part-specific (F103 = 19 lines, F4-class = more),
+// so the mask is per-instance, set from the chip config's `lines` field. Default
+// is the historical 20-line value for parts not yet silicon-pinned.
+#[derive(Debug, serde::Serialize)]
 pub struct F1Exti {
     bank1: ExtiBank,
+    line_mask: u32,
 }
 
-impl F1Exti {
-    const MASK: u32 = 0x000F_FFFF; // 20 lines
+impl Default for F1Exti {
+    fn default() -> Self {
+        Self {
+            bank1: ExtiBank::default(),
+            line_mask: 0x000F_FFFF, // 20 lines
+        }
+    }
 }
 
 // ── STM32L4: two banks (bank 2 = lines 32..39) ───────────────────────────────
@@ -150,8 +159,17 @@ impl Exti {
     }
 
     pub fn new_with_layout(layout: ExtiRegisterLayout) -> Self {
+        Self::new_with_layout_lines(layout, 0x000F_FFFF)
+    }
+
+    /// Like [`new_with_layout`] but with an explicit F1 implemented-line mask
+    /// (e.g. `0x0007_FFFF` for the STM32F103's 19 lines). Ignored for L4.
+    pub fn new_with_layout_lines(layout: ExtiRegisterLayout, line_mask: u32) -> Self {
         match layout {
-            ExtiRegisterLayout::Stm32F1 => Self::Stm32F1(F1Exti::default()),
+            ExtiRegisterLayout::Stm32F1 => Self::Stm32F1(F1Exti {
+                line_mask,
+                ..Default::default()
+            }),
             ExtiRegisterLayout::Stm32L4 => Self::Stm32L4(L4Exti::default()),
         }
     }
@@ -191,7 +209,8 @@ impl Exti {
         match self {
             Self::Stm32F1(e) => {
                 if (0x00..=0x14).contains(&offset) {
-                    e.bank1.write(offset, value, F1Exti::MASK);
+                    let mask = e.line_mask;
+                    e.bank1.write(offset, value, mask);
                 }
             }
             Self::Stm32L4(e) => match offset {

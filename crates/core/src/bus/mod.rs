@@ -1150,7 +1150,22 @@ impl SystemBus {
                 "exti" => {
                     let layout: crate::peripherals::exti::ExtiRegisterLayout =
                         Self::parse_profile_or_default(p_cfg, "EXTI")?;
-                    Box::new(crate::peripherals::exti::Exti::new_with_layout(layout))
+                    // Implemented-line count is part-specific (F103 = 19). YAML:
+                    // `config: { lines: 19 }`; default 20 for back-compat.
+                    let lines: u32 = p_cfg
+                        .config
+                        .get("lines")
+                        .and_then(|v| v.as_u64())
+                        .map(|n| n as u32)
+                        .unwrap_or(20);
+                    let line_mask = if lines >= 32 {
+                        0xFFFF_FFFF
+                    } else {
+                        (1u32 << lines) - 1
+                    };
+                    Box::new(crate::peripherals::exti::Exti::new_with_layout_lines(
+                        layout, line_mask,
+                    ))
                 }
                 "afio" => Box::new(crate::peripherals::afio::Afio::new()),
                 "dma" | "stm32dma" => Box::new(crate::peripherals::dma::Dma1::new()),

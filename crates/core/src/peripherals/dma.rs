@@ -98,7 +98,11 @@ impl Dma1 {
                     match reg_off {
                         0x00 => {
                             let old_en = (self.channels[chan_idx].ccr & 1) != 0;
-                            self.channels[chan_idx].ccr = value;
+                            // CCR writable bits are [14:0]; [31:15] reserved read
+                            // 0 (silicon-confirmed on F103). The reserved PSIZE/
+                            // MSIZE=0b11 encoding clamps on silicon — a value
+                            // detail beyond this flat mask.
+                            self.channels[chan_idx].ccr = value & 0x0000_7FFF;
                             let new_en = (value & 1) != 0;
                             if !old_en && new_en {
                                 let chan = &mut self.channels[chan_idx];

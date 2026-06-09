@@ -87,6 +87,7 @@ trait RccModel: std::fmt::Debug {
 pub struct F1Rcc {
     cr: u32,
     cfgr: u32,     // 0x04
+    cir: u32,      // 0x08
     ahbenr: u32,   // 0x14
     apb2enr: u32,  // 0x18
     apb1enr: u32,  // 0x1C
@@ -118,6 +119,7 @@ impl RccModel for F1Rcc {
         match offset {
             0x00 => self.cr,
             0x04 => self.cfgr,
+            0x08 => self.cir,
             0x0C => self.apb2rstr,
             0x10 => self.apb1rstr,
             0x14 => self.ahbenr,
@@ -128,14 +130,20 @@ impl RccModel for F1Rcc {
         }
     }
     fn write_reg(&mut self, offset: u64, value: u32) {
+        // ENR / CIR writable masks silicon-confirmed on the bench F103 via the
+        // address sweep. F103 is the only F1 chip, so these are exact (no other
+        // density shares F1Rcc). The clear/flag bits of CIR (write-only 23:16,
+        // read-only flags 7:0) carry no persistent state — only the interrupt-
+        // enable bits 12:8 (0x1F00) read back.
         match offset {
             0x00 => self.cr = classic_cr_ready(value),
             0x04 => self.cfgr = cfgr_with_optimistic_sws(value),
+            0x08 => self.cir = value & 0x0000_1F00,
             0x0C => self.apb2rstr = value,
             0x10 => self.apb1rstr = value,
-            0x14 => self.ahbenr = value,
-            0x18 => self.apb2enr = value,
-            0x1C => self.apb1enr = value,
+            0x14 => self.ahbenr = value & 0x0000_0055, // DMA1/SRAM/FLITF/CRC
+            0x18 => self.apb2enr = value & 0x0000_5E7D,
+            0x1C => self.apb1enr = value & 0x1AE6_4807,
             0x28 => self.ahbrstr = value,
             _ => {}
         }
@@ -551,13 +559,15 @@ mod tests {
 
     #[test]
     fn test_rcc_f1_offsets() {
+        // Offset round-trip with mask-valid bits (the ENR writable masks are
+        // silicon-pinned: AHBENR 0x55, APB2ENR 0x5E7D, APB1ENR 0x1AE64807).
         let mut rcc = Rcc::new_with_layout(RccRegisterLayout::Stm32F1);
-        rcc.write(0x14, 0x11).unwrap();
-        rcc.write(0x18, 0xAA).unwrap();
-        rcc.write(0x1C, 0x55).unwrap();
+        rcc.write(0x14, 0x11).unwrap(); // AHBENR: DMA1EN|FLITFEN (in 0x55)
+        rcc.write(0x18, 0x04).unwrap(); // APB2ENR: IOPAEN bit2 (in 0x5E7D)
+        rcc.write(0x1C, 0x01).unwrap(); // APB1ENR: TIM2EN bit0 (in 0x1AE64807)
         assert_eq!(rcc.read(0x14).unwrap(), 0x11);
-        assert_eq!(rcc.read(0x18).unwrap(), 0xAA);
-        assert_eq!(rcc.read(0x1C).unwrap(), 0x55);
+        assert_eq!(rcc.read(0x18).unwrap(), 0x04);
+        assert_eq!(rcc.read(0x1C).unwrap(), 0x01);
     }
 
     #[test]

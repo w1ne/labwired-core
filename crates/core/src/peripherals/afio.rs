@@ -45,22 +45,24 @@ impl Afio {
     }
 
     fn write_reg(&mut self, offset: u64, value: u32) {
+        // Writable masks silicon-confirmed on the bench F103 via the address
+        // sweep (stm32f1_mmio_diff). AFIO is an F1-only peripheral (F4+ use
+        // SYSCFG) and F103 is the only F1 chip, so these are exact, not gated.
         match offset {
-            0x00 => self.evcr = value,
-            // MAPR implements remap bits [20:0]; bits [23:21] and [31:27] are
-            // reserved and the write-only SWJ_CFG field [26:24] reads back
-            // undefined. Silicon returns 0 for the reserved bits, so mask the
-            // stored value to the readable remap field. Silicon-verified on the
-            // bench STM32F103 (stm32f1_exec_oracle::afio_mapr_reserved_bits...).
-            0x04 => self.mapr = value & 0x001F_FFFF,
-            // Each EXTICR holds four 4-bit line-source fields in bits [15:0];
-            // bits [31:16] are reserved and read 0 (RM0008 §9.4.3). Silicon-
-            // verified on the bench F103 (afio_exticr1_upper_half_reads_zero).
-            0x08 => self.exticr[0] = value & 0xFFFF,
-            0x0C => self.exticr[1] = value & 0xFFFF,
-            0x10 => self.exticr[2] = value & 0xFFFF,
-            0x14 => self.exticr[3] = value & 0xFFFF,
-            0x1C => self.mapr2 = value,
+            // EVCR: PIN[3:0]/PORT[6:4]/EVOE(7) = 0xFF.
+            0x00 => self.evcr = value & 0x0000_00FF,
+            // MAPR: the remap field readable on F103-medium is the low 16 bits;
+            // the ADC-ETRG remap bits [20:16], the reserved [23:21]/[31:27], and
+            // the write-only SWJ_CFG [26:24] all read back 0 here.
+            0x04 => self.mapr = value & 0x0000_FFFF,
+            // EXTICR: four 4-bit line-source fields; bit 15 (the 4th port-select
+            // bit of the top field) and [31:16] read 0 → 0x7FFF.
+            0x08 => self.exticr[0] = value & 0x7FFF,
+            0x0C => self.exticr[1] = value & 0x7FFF,
+            0x10 => self.exticr[2] = value & 0x7FFF,
+            0x14 => self.exticr[3] = value & 0x7FFF,
+            // MAPR2 is not implemented on F103 medium-density — reads 0.
+            0x1C => self.mapr2 = 0,
             _ => {}
         }
     }
@@ -121,7 +123,9 @@ mod tests {
 
         let mut b = Afio::new();
         b.write_u32(0x04, 0xFFFF_FFFF).unwrap();
-        assert_eq!(rd32(&b, 0x04), 0x001F_FFFF); // only the 21 remap bits
+        // The address sweep on the bench F103 returned 0xFFFF for the remap
+        // field (bits [20:16] read 0 on this part, with SWJ_CFG held 0).
+        assert_eq!(rd32(&b, 0x04), 0x0000_FFFF);
     }
 
     #[test]
@@ -131,7 +135,8 @@ mod tests {
         let mut a = Afio::new();
         for off in [0x08u64, 0x0C, 0x10, 0x14] {
             a.write_u32(off, 0xFFFF_FFFF).unwrap();
-            assert_eq!(rd32(&a, off), 0x0000_FFFF, "EXTICR @ 0x{off:02X}");
+            // Bench F103 sweep: bit 15 (top of the 4th field) also reads 0 → 0x7FFF.
+            assert_eq!(rd32(&a, off), 0x0000_7FFF, "EXTICR @ 0x{off:02X}");
         }
     }
 }

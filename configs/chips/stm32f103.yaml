@@ -72,6 +72,10 @@ peripherals:
     type: "exti"
     base_address: 0x40010400
     size: "1KB"
+    # F103 implements 19 EXTI lines (0-18): 16 GPIO + PVD + RTC alarm + USB
+    # wakeup. Silicon-confirmed writable mask 0x0007FFFF on the bench F103.
+    config:
+      lines: 19
   - id: "dma1"
     type: "dma"
     base_address: 0x40020000
