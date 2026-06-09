@@ -184,12 +184,22 @@ impl OpenOcd {
         // the driver, so it is spliced in right after `interface/stlink.cfg`.
         let mut full_args: Vec<String> = Vec::new();
         let stlink_serial = std::env::var("LABWIRED_STLINK_SERIAL").ok();
+        // LABWIRED_STLINK_LOCATION selects the probe by USB bus-port (e.g.
+        // "1-1"). Necessary when several ST-Links share an indistinguishable or
+        // garbage serial — common with clone ST-Link/V2 dongles, where
+        // `adapter serial` cannot disambiguate them. Find the location with
+        // `cat /sys/bus/usb/devices/*/{busnum,devpath}` for the 0483:374x device.
+        let stlink_location = std::env::var("LABWIRED_STLINK_LOCATION").ok();
         for a in args {
             full_args.push((*a).to_string());
-            if let Some(serial) = &stlink_serial {
-                if *a == "interface/stlink.cfg" {
+            if *a == "interface/stlink.cfg" {
+                if let Some(serial) = &stlink_serial {
                     full_args.push("-c".to_string());
                     full_args.push(format!("adapter serial {serial}"));
+                }
+                if let Some(location) = &stlink_location {
+                    full_args.push("-c".to_string());
+                    full_args.push(format!("adapter usb location {location}"));
                 }
             }
         }
