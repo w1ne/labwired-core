@@ -1,0 +1,107 @@
+Open On-Chip Debugger 0.12.0
+Licensed under GNU GPL v2
+For bug reports, read
+	http://openocd.org/doc/doxygen/bugs.html
+Info : auto-selecting first available session transport "hla_swd". To override use 'transport select <transport>'.
+Info : The selected transport took over low-level target control. The results might differ compared to plain JTAG/SWD
+
+nRF52 device has a CTRL-AP dedicated to recover the device from AP lock.
+A high level adapter (like a ST-Link) you are currently using cannot access
+the CTRL-AP so 'nrf52_recover' command will not work.
+Do not enable UICR APPROTECT.
+
+Info : clock speed 1000 kHz
+Info : STLINK V2J37S7 (API v2) VID:PID 0483:3748
+Info : Target voltage: 3.302024
+Info : [nrf52.cpu] Cortex-M4 r0p1 processor detected
+Info : [nrf52.cpu] target has 6 breakpoints, 4 watchpoints
+Info : starting gdb server for nrf52.cpu on 3333
+Info : Listening on port 3333 for gdb connections
+[nrf52.cpu] halted due to breakpoint, current mode: Thread 
+xPSR: 0x21000000 pc: 0x000004de msp: 0x2003fff0
+[nrf52.cpu] halted due to debug-request, current mode: Thread 
+xPSR: 0x01000000 pc: 0x00000400 msp: 0x20040000
+"INFO.PART": "0x10000100"
+0x10000100: 00052840 
+
+"INFO.VARIANT": "0x10000104"
+0x10000104: 41414430 
+
+"DEVICEID[0]": "0x10000060"
+0x10000060: 707dc298 
+
+"DEVICEID[1]": "0x10000064"
+0x10000064: 940d8a73 
+
+"SCB_VTOR": "0xE000ED08"
+0xe000ed08: 00000000 
+
+"SysTick_CTRL": "0xE000E010"
+0xe000e010: 00000004 
+
+"TIMER0_BITMODE": "0x40008508"
+0x40008508: 00000000 
+
+"TIMER0_PRESCALER": "0x40008510"
+0x40008510: 00000004 
+
+"RTC0_PRESCALER": "0x40011508"
+0x40011508: 00000000 
+
+"WDT_RUNSTATUS": "0x40010400"
+0x40010400: 00000001 
+
+"WDT_CRV": "0x40010504"
+0x40010504: ffffffff 
+
+"RNG_CONFIG": "0x4000D504"
+0x4000d504: 00000000 
+
+"PWM0_COUNTERTOP": "0x4001C548"
+0x4001c548: 00000001 
+
+"SAADC_RESOLUTION": "0x40007510"
+0x40007510: 00000000 
+
+"QSPI_IFCONFIG0": "0x40029544"
+0x40029544: 00000000 
+
+"COMP_TH": "0x40013530"
+0x40013530: 00000000 
+
+"QDEC_SAMPLEPER": "0x40012508"
+0x40012508: 00000000 
+
+"PDM_PDMCLKCTRL": "0x4001D540"
+0x4001d540: ffffffff 
+
+"GPIO0_OUT": "0x50000504"
+0x50000504: 00000000 
+
+"GPIO0_DIR": "0x50000514"
+0x50000514: 00000000 
+
+"GPIO1_OUT": "0x50000804"
+0x50000804: 00000000 
+
+"GPIO1_DIR": "0x50000814"
+0x50000814: 00000000 
+
+"UART0_ENABLE": "0x40002500"
+0x40002500: 00000000 
+
+"SPIM0_ENABLE": "0x40003500"
+0x40003500: 00000000 
+
+"NVMC_READY": "0x4001E400"
+0x4001e400: 00000001 
+
+"USBD_ENABLE": "0x40027500"
+0x40027500: 00000000 
+
+"RADIO_FREQUENCY": "0x40001508"
+0x40001508: 00000002 
+
+"RADIO_MODE": "0x40001510"
+0x40001510: 00000000 
+

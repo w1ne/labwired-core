@@ -1,0 +1,1 @@
+core/scripts/hw-capture-nrf52840.sh: line 35: st-info: command not found
