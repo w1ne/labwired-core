@@ -24,6 +24,7 @@ path = "src/bin/gen_peripherals_manifest.rs"
 labwired-core = { path = "../core" }
 labwired-loader = { path = "../loader" }
 labwired-config = { path = "../config" }
+labwired-fuzz = { path = "../labwired-fuzz" }
 labwired-gdbstub = { path = "../gdbstub" }
 labwired-codegen = { path = "../codegen" }
 labwired-ir = { path = "../ir", features = ["svd"] }

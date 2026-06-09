@@ -125,6 +125,81 @@ enum Commands {
 
     /// Run the Tier-1 chip × peripheral validation matrix and export it.
     Tier1Matrix(Tier1MatrixArgs),
+
+    /// Coverage-guided fuzz a firmware in the silicon-validated simulator.
+    ///
+    /// Mutates an input byte stream injected into the firmware's RAM buffer,
+    /// drives execution with AFL-style edge coverage, and reports crashes. The
+    /// target firmware follows a small contract (length+data buffer, a verdict
+    /// word with DONE/FAULT markers) so any crash found here is replayable on
+    /// real silicon (`--features hw-oracle-stm32` HIL-confirm) — silicon-true
+    /// findings, not emulation false positives. Exits non-zero if a crash is
+    /// found (CI-friendly).
+    Fuzz(FuzzArgs),
+}
+
+#[derive(Parser, Debug)]
+pub struct FuzzArgs {
+    /// Path to the chip descriptor YAML.
+    #[arg(long)]
+    pub chip: PathBuf,
+
+    /// Path to the system manifest YAML.
+    #[arg(long)]
+    pub system: PathBuf,
+
+    /// Path to the firmware ELF (must follow the fuzz contract below).
+    #[arg(long)]
+    pub firmware: PathBuf,
+
+    /// Max fuzzing iterations before giving up.
+    #[arg(long, default_value = "200000")]
+    pub max_iters: usize,
+
+    /// Max simulator steps per run (a run past this is a hang).
+    #[arg(long, default_value = "1000000")]
+    pub max_steps: usize,
+
+    /// RNG seed — fuzzing is deterministic for a fixed seed.
+    #[arg(long, default_value = "3735928559")]
+    pub seed: u64,
+
+    /// Seed input as hex bytes (e.g. `5000` for [0x50,0x00]). Repeatable.
+    #[arg(long = "seed-input", value_name = "HEX")]
+    pub seed_input: Vec<String>,
+
+    /// Collect up to N distinct crashes instead of stopping at the first.
+    #[arg(long)]
+    pub collect: Option<usize>,
+
+    /// Write the crashing input(s) as a JSON array of byte arrays to this path.
+    #[arg(long = "crashes-out")]
+    pub crashes_out: Option<PathBuf>,
+
+    /// Contract: address of the u32 input-length word.
+    #[arg(long, value_parser = parse_hex_u32, default_value = "0x20002800")]
+    pub input_len_addr: u32,
+
+    /// Contract: address of the input data buffer.
+    #[arg(long, value_parser = parse_hex_u32, default_value = "0x20002804")]
+    pub input_data_addr: u32,
+
+    /// Contract: address of the u32 verdict word.
+    #[arg(long, value_parser = parse_hex_u32, default_value = "0x20003000")]
+    pub verdict_addr: u32,
+
+    /// Contract: verdict value the firmware writes on clean completion.
+    #[arg(long, value_parser = parse_hex_u32, default_value = "0xC0DEF022")]
+    pub done_magic: u32,
+
+    /// Contract: verdict value a fault/panic handler writes on a crash.
+    #[arg(long, value_parser = parse_hex_u32, default_value = "0xDEADFA17")]
+    pub fault_magic: u32,
+}
+
+fn parse_hex_u32(s: &str) -> Result<u32, String> {
+    let t = s.trim_start_matches("0x").trim_start_matches("0X");
+    u32::from_str_radix(t, 16).map_err(|e| format!("invalid hex u32 `{s}`: {e}"))
 }
 
 #[derive(Parser, Debug)]
@@ -729,6 +804,7 @@ fn main() -> ExitCode {
         Some(Commands::Snapshot(args)) => run_snapshot(args),
         Some(Commands::Coverage(args)) => run_coverage(args),
         Some(Commands::Tier1Matrix(args)) => run_tier1_matrix(args),
+        Some(Commands::Fuzz(args)) => run_fuzz(args),
         None => run_interactive(cli),
     }
 }
@@ -1364,6 +1440,133 @@ fn run_coverage(args: CoverageArgs) -> ExitCode {
             ExitCode::from(EXIT_CONFIG_ERROR)
         }
     }
+}
+
+fn run_fuzz(args: FuzzArgs) -> ExitCode {
+    use labwired_fuzz::{fuzz, fuzz_collect, Contract, Target, Verdict};
+
+    let contract = Contract {
+        input_len: args.input_len_addr,
+        input_data: args.input_data_addr,
+        verdict: args.verdict_addr,
+        done_magic: args.done_magic,
+        fault_magic: args.fault_magic,
+    };
+
+    // Seeds: parse `--seed-input` hex bytes; empty means the engine self-seeds.
+    let mut seeds: Vec<Vec<u8>> = Vec::new();
+    for s in &args.seed_input {
+        let t = s.trim_start_matches("0x");
+        if t.len() % 2 != 0 {
+            eprintln!("error: --seed-input `{s}` must be an even number of hex digits");
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+        let mut bytes = Vec::with_capacity(t.len() / 2);
+        for i in (0..t.len()).step_by(2) {
+            match u8::from_str_radix(&t[i..i + 2], 16) {
+                Ok(b) => bytes.push(b),
+                Err(e) => {
+                    eprintln!("error: --seed-input `{s}`: {e}");
+                    return ExitCode::from(EXIT_CONFIG_ERROR);
+                }
+            }
+        }
+        seeds.push(bytes);
+    }
+
+    let target = match Target::from_elf(
+        &args.chip,
+        &args.system,
+        &args.firmware,
+        contract,
+        args.max_steps,
+    ) {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("error: {e:#}");
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    };
+
+    eprintln!(
+        "fuzzing {} (max_iters={}, seed={:#x}) ...",
+        args.firmware.display(),
+        args.max_iters,
+        args.seed
+    );
+
+    // Collect-N mode gathers distinct crashes (feeds HIL-confirm); default mode
+    // stops at the first crash.
+    let crashes: Vec<Vec<u8>> = if let Some(n) = args.collect {
+        fuzz_collect(&target, seeds, args.max_iters, args.seed, n)
+    } else {
+        match fuzz(&target, seeds, args.max_iters, args.seed) {
+            r @ labwired_fuzz::FuzzReport { crash: None, .. } => {
+                println!(
+                    "no crash in {} iters (corpus {}, {} edges)",
+                    r.iterations, r.corpus_size, r.edges_hit
+                );
+                return ExitCode::SUCCESS;
+            }
+            labwired_fuzz::FuzzReport {
+                crash: Some(c),
+                iterations,
+                corpus_size,
+                edges_hit,
+            } => {
+                println!(
+                    "CRASH in {iterations} iters (corpus {corpus_size}, {edges_hit} edges): {:02X?}",
+                    c
+                );
+                vec![c]
+            }
+        }
+    };
+
+    if crashes.is_empty() {
+        println!("no crash found in {} iters", args.max_iters);
+        return ExitCode::SUCCESS;
+    }
+
+    if args.collect.is_some() {
+        println!("found {} distinct crash(es):", crashes.len());
+        for c in &crashes {
+            println!("  {c:02X?}");
+        }
+    }
+
+    // Reproduce + report the first crash's verdict for clarity.
+    let mut cov = labwired_fuzz::CovMap::new();
+    let verdict = target.run(&crashes[0], &mut cov);
+    let label = match verdict {
+        Verdict::Crash => "crash (fault/panic marker)",
+        Verdict::Hang => "hang (step budget exhausted)",
+        Verdict::Clean => "clean (non-deterministic?)",
+    };
+    eprintln!("first crash reproduces as: {label}");
+
+    if let Some(out) = &args.crashes_out {
+        match serde_json::to_string_pretty(&crashes) {
+            Ok(json) => {
+                if let Err(e) = std::fs::write(out, json) {
+                    eprintln!("error: write {}: {e}", out.display());
+                    return ExitCode::FAILURE;
+                }
+                eprintln!(
+                    "wrote {} crash input(s) to {}",
+                    crashes.len(),
+                    out.display()
+                );
+            }
+            Err(e) => {
+                eprintln!("error: serialize crashes: {e}");
+                return ExitCode::FAILURE;
+            }
+        }
+    }
+
+    // A crash is a finding — non-zero exit so CI fails the build.
+    ExitCode::FAILURE
 }
 
 fn run_tier1_matrix(args: Tier1MatrixArgs) -> ExitCode {
