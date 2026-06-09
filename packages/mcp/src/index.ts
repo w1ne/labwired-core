@@ -155,7 +155,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       name: 'labwired_simulate',
       description:
         'Run firmware against the LabWired deterministic simulator. ' +
-        'Identical inputs always produce identical outputs (cycle-accurate). ' +
+        'Identical inputs always produce identical outputs (deterministic, silicon-validated). ' +
         'Returns result.json (assertions, exit status, cycles consumed) and the captured UART log. ' +
         'Use this to verify firmware behaviour, reproduce bugs, or check whether a fix works.',
       inputSchema: {

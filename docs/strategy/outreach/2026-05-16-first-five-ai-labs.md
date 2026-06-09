@@ -29,7 +29,7 @@ surface, a comment there is fair game.
 Hi — writing to the Devin engineering team because I could not identify the
 right named owner from public info, and would rather not guess.
 
-I am building LabWired: a cycle-accurate, deterministic firmware simulator for
+I am building LabWired: a silicon-validated, deterministic firmware simulator for
 ARM Cortex-M, RISC-V, and Xtensa MCUs. Open-source Rust core, MIT. Determinism
 is enforced by a CI gate that SHA-256-compares five runs of the same firmware
 plus manifest plus script — identical `result.json`, or the release fails.
@@ -71,13 +71,13 @@ technical, short pitches on X. Founder-direct is appropriate here because
 Cursor has no published agent-team email and the company is still small enough
 that the founders own the agent roadmap.
 
-**Subject:** Cycle-accurate firmware oracle for Cursor's agent
+**Subject:** Silicon-validated firmware oracle for Cursor's agent
 
 **Body:**
 
 Aman — short pitch on a primitive I think Cursor's agent is missing.
 
-LabWired: cycle-accurate, deterministic firmware simulator for Cortex-M,
+LabWired: silicon-validated, deterministic firmware simulator for Cortex-M,
 RISC-V, Xtensa. Open-source Rust core, MIT. Determinism is CI-enforced — five
 runs of the same inputs SHA-256 to the same `result.json`, or the release
 fails.
@@ -123,7 +123,7 @@ is a parallel surface.
 Nate and Ty — Continue is the most natural first integration target for what
 I am building, so leading with you.
 
-LabWired: cycle-accurate, deterministic firmware simulator for Cortex-M,
+LabWired: silicon-validated, deterministic firmware simulator for Cortex-M,
 RISC-V, Xtensa. Open-source Rust core, MIT. Determinism is enforced — five
 runs of the same firmware plus manifest plus script produce identical
 `result.json`, verified by the `determinism-proof` gate in `core-ci.yml`.
@@ -169,7 +169,7 @@ will route or ignore.
 Hi — writing to the Replit Agent team. Could not identify the current product
 owner from public info, so addressing the team rather than guessing a name.
 
-LabWired: cycle-accurate, deterministic firmware simulator for ARM Cortex-M,
+LabWired: silicon-validated, deterministic firmware simulator for ARM Cortex-M,
 RISC-V, and Xtensa MCUs. Open-source Rust core, MIT. Determinism enforced by
 a CI gate that SHA-256-compares five runs of identical inputs — same
 `result.json`, every time, on any host.
@@ -231,7 +231,7 @@ Andrii
 `<NAME>` — `<SHARED CONTEXT LINE>`.
 
 Quick update on the thing I have been building. LabWired is now an actual
-working product: cycle-accurate, deterministic firmware simulator for
+working product: silicon-validated, deterministic firmware simulator for
 Cortex-M, RISC-V, Xtensa. Rust core, MIT. The piece that finally made it
 useful to other people shipped this week — `@labwired/mcp`, a Node.js MCP
 server that drops into Claude Code, Cursor, or Continue with one config line.

@@ -29,7 +29,7 @@ outcomes cap how far an agent can go on embedded, IoT, and robotics work.
 
 ## What LabWired is
 
-A cycle-accurate, deterministic firmware simulator for ARM Cortex-M, RISC-V,
+A silicon-validated, deterministic firmware simulator for ARM Cortex-M, RISC-V,
 and Xtensa MCUs — STM32, RP2040, ESP32, nRF52 families. Open-source Rust core,
 MIT licensed.
 

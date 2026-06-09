@@ -14,7 +14,7 @@ Cursor / other MCP clients: see [Other clients](#install-in-cursor) below.
 
 ---
 
-LabWired runs ARM Cortex-M / RISC-V / Xtensa firmware against a cycle-accurate, deterministic simulator. This MCP server lets your agent (Claude Code, Cursor, Continue, etc.) **verify firmware behaviour without lying to itself** — same inputs always produce the same outputs, so the agent can iterate against a real oracle.
+LabWired runs ARM Cortex-M / RISC-V / Xtensa firmware against a silicon-validated, deterministic simulator. This MCP server lets your agent (Claude Code, Cursor, Continue, etc.) **verify firmware behaviour without lying to itself** — same inputs always produce the same outputs, so the agent can iterate against a real oracle.
 
 ## What it gives your agent
 
