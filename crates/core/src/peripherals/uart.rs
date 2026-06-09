@@ -138,6 +138,11 @@ pub struct Uart {
     cr2: u32,
     brr: u32,
     gtpr: u32,
+    /// CR3 writable mask — a per-part delta on the shared F1 USART map. The F1
+    /// USART implements bits [10:0] (`0x07FF`); the F4 USART adds bit 11
+    /// (ONEBIT, one-sample-bit mode) → `0x0FFF`, silicon-confirmed on the bench
+    /// F103 (0x07FF) and F407 (0x0FFF). Set from the chip config's `cr3_mask`.
+    cr3_mask: u32,
     dma_tx_pending: bool,
     /// Stream devices attached to the RX path (e.g. GPS modules).
     #[serde(skip)]
@@ -177,6 +182,12 @@ impl Uart {
     }
 
     pub fn new_with_layout(layout: UartRegisterLayout) -> Self {
+        Self::new_with_layout_cr3(layout, 0x0000_07FF)
+    }
+
+    /// Like [`new_with_layout`] but with an explicit CR3 writable mask — the
+    /// per-part delta on the shared F1 map (F1 `0x07FF`, F4 `0x0FFF`).
+    pub fn new_with_layout_cr3(layout: UartRegisterLayout, cr3_mask: u32) -> Self {
         Self {
             layout,
             sink: None,
@@ -187,6 +198,7 @@ impl Uart {
             cr2: 0,
             brr: 0,
             gtpr: 0,
+            cr3_mask,
             dma_tx_pending: false,
             attached_streams: Vec::new(),
             trace: VecDeque::new(),
@@ -298,11 +310,17 @@ impl Uart {
     }
 
     /// Masked read-back byte for an F1 config register, or `None` if `offset` is
-    /// not one. F1 layout only.
+    /// not one. F1 layout only. CR3 uses the per-part `cr3_mask` (F1 0x07FF / F4
+    /// 0x0FFF) rather than the const, since it's the one register that differs.
     fn f1_config_byte(&self, offset: u64) -> Option<u8> {
-        for (base, mask) in Self::F1_CONFIG {
+        for (base, const_mask) in Self::F1_CONFIG {
             let bo = offset.wrapping_sub(base);
             if bo < 4 {
+                let mask = if base == 0x14 {
+                    self.cr3_mask
+                } else {
+                    const_mask
+                };
                 return Some((((self.f1_config_value(base) & mask) >> (bo * 8)) & 0xFF) as u8);
             }
         }

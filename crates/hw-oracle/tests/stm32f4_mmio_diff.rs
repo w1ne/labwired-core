@@ -48,6 +48,7 @@ const USART2_BASE: u32 = 0x4000_4400;
 const USART2_BRR: u32 = USART2_BASE + 0x08;
 const USART2_CR1: u32 = USART2_BASE + 0x0C;
 const USART2_CR2: u32 = USART2_BASE + 0x10;
+const USART2_CR3: u32 = USART2_BASE + 0x14;
 const USART2_GTPR: u32 = USART2_BASE + 0x18;
 
 // ── I2C1 (0x4000_5400 — APB1, legacy F1I2c) ──────────────────────────────────
@@ -91,16 +92,16 @@ struct SweepCase {
 /// uses a non-destructive probe (0x2CFB) since writing SWRST (bit 15) resets
 /// the peripheral.
 ///
-/// Deliberately EXCLUDED, found divergent on the bench and deferred to per-part
-/// model gating (the workstream in docs/plans/2026-06-09-register-coverage-
-/// part-specific-tier.md):
-///   * USART2.CR3 — F4 silicon `0xFFF`, F1 model `0x7FF`: F4 adds bit 11
-///     (ONEBIT, one-sample-bit mode), absent on the F1 USART. The shared F1
-///     layout under-models F4's CR3 by one bit.
-///   * RCC AHB1ENR/APB1ENR/APB2ENR — silicon `0x7E7411FF` / `0x36FEC9FF` /
-///     `0x00075F33`: the implemented-peripheral set is part-specific, and
-///     `F4Rcc` is shared with the smaller STM32F401, so these need per-part
-///     gating (no F401 bench yet).
+/// USART2.CR3 is the F4 per-part delta — the F1 USART map masks it to `0x07FF`,
+/// the F4 adds bit 11 (ONEBIT) → `0x0FFF`, set via the chip config's `cr3_mask`
+/// and silicon-confirmed here. (The pattern the user asked for: one shared map,
+/// the differing bit separated per part.)
+///
+/// Still EXCLUDED, deferred to per-part gating (docs/plans/2026-06-09-register-
+/// coverage-part-specific-tier.md): RCC AHB1ENR/APB1ENR/APB2ENR — silicon
+/// `0x7E7411FF` / `0x36FEC9FF` / `0x00075F33`. The implemented-peripheral set is
+/// part-specific and `F4Rcc` is shared with the smaller STM32F401, so they need
+/// the same per-part mask field (no F401 bench yet to pin F401's set).
 const SWEEP_CASES: &[SweepCase] = &[
     // USART2 — shared F1 USART layout.
     SweepCase {
@@ -113,6 +114,13 @@ const SWEEP_CASES: &[SweepCase] = &[
         label: "USART2.CR2",
         prep: &[(RCC_APB1ENR, USART2EN)],
         addr: USART2_CR2,
+        write: 0xFFFF_FFFF,
+    },
+    // CR3: per-part delta — F4 mask 0x0FFF (ONEBIT bit 11) via the chip config.
+    SweepCase {
+        label: "USART2.CR3 (F4: ONEBIT)",
+        prep: &[(RCC_APB1ENR, USART2EN)],
+        addr: USART2_CR3,
         write: 0xFFFF_FFFF,
     },
     SweepCase {

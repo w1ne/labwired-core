@@ -966,7 +966,18 @@ impl SystemBus {
                         } else {
                             Self::parse_profile_or_default(p_cfg, "UART")?
                         };
-                    Box::new(crate::peripherals::uart::Uart::new_with_layout(layout))
+                    // CR3 writable mask is a per-part delta on the shared F1 map:
+                    // F1 implements [10:0] (0x07FF), F4 adds bit 11 ONEBIT (0x0FFF).
+                    // YAML: `config: { cr3_mask: 0xFFF }`; default F1.
+                    let cr3_mask: u32 = p_cfg
+                        .config
+                        .get("cr3_mask")
+                        .and_then(|v| v.as_u64())
+                        .map(|n| n as u32)
+                        .unwrap_or(0x0000_07FF);
+                    Box::new(crate::peripherals::uart::Uart::new_with_layout_cr3(
+                        layout, cr3_mask,
+                    ))
                 }
                 "systick" | "arm_generictimer" => {
                     Box::new(crate::peripherals::systick::Systick::new())

@@ -54,6 +54,10 @@ peripherals:
     base_address: 0x40004400
     size: "1KB"
     irq: 38
+    # F4 USART CR3 adds bit 11 (ONEBIT) over the shared F1 map → 0xFFF.
+    # Silicon-confirmed on the bench F407 (stm32f4_mmio_diff).
+    config:
+      cr3_mask: 0xFFF
   - id: "i2c1"
     type: "i2c"
     base_address: 0x40005400
