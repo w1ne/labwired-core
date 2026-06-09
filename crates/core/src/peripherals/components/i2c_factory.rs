@@ -20,7 +20,7 @@ pub fn build_i2c_device(
     config: &HashMap<String, serde_yaml::Value>,
 ) -> Option<Box<dyn I2cDevice>> {
     match type_str.to_ascii_lowercase().as_str() {
-        "tmp102" => Some(Box::new(crate::peripherals::esp32s3::tmp102::Tmp102::new())),
+        "tmp102" => Some(Box::new(crate::peripherals::components::tmp102::Tmp102::new())),
         "mpu6050" => {
             let address = config
                 .get("i2c_address")

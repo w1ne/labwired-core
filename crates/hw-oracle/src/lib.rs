@@ -729,7 +729,7 @@ fn capture_sim_state(case: &OracleCase) -> OracleState {
     // address (e.g. 0x50).
     {
         use labwired_core::peripherals::esp32s3::i2c::{Esp32s3I2c, I2C0_BASE, I2C0_SIZE};
-        use labwired_core::peripherals::esp32s3::tmp102::Tmp102;
+        use labwired_core::peripherals::components::tmp102::Tmp102;
         let mut i2c0 = Esp32s3I2c::new();
         i2c0.attach_slave(Box::new(Tmp102::new()));
         bus.add_peripheral(

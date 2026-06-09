@@ -765,7 +765,7 @@ mod tests {
         assert_eq!(r.explicit_irqs, Some(vec![I2C1_INTR_SOURCE_ID]));
     }
 
-    use crate::peripherals::esp32s3::tmp102::Tmp102;
+    use crate::peripherals::components::tmp102::Tmp102;
 
     #[test]
     fn write_read_drives_attached_tmp102() {

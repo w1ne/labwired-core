@@ -23,6 +23,7 @@ pub mod shm_i2c;
 pub mod sn74hc165;
 pub mod ssd1306;
 pub mod ssd1680_tricolor_290;
+pub mod tmp102;
 pub mod uc8151d_tricolor_290;
 
 pub use adxl345::Adxl345;
@@ -46,4 +47,5 @@ pub use shm_i2c::ShmI2c;
 pub use sn74hc165::Sn74hc165;
 pub use ssd1306::Ssd1306;
 pub use ssd1680_tricolor_290::Ssd1680Tricolor290;
+pub use tmp102::Tmp102;
 pub use uc8151d_tricolor_290::Uc8151dTricolor290;

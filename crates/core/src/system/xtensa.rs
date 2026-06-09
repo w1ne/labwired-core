@@ -19,7 +19,7 @@ use crate::peripherals::esp32s3::io_mux::Esp32s3IoMux;
 use crate::peripherals::esp32s3::rom_thunks::{self, RomThunkBank};
 use crate::peripherals::esp32s3::system_stub::{EfuseStub, RtcCntlStub, SystemStub};
 use crate::peripherals::esp32s3::systimer::Systimer;
-use crate::peripherals::esp32s3::tmp102::Tmp102;
+use crate::peripherals::components::tmp102::Tmp102;
 use crate::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag;
 use crate::Bus;
 use crate::Cpu;

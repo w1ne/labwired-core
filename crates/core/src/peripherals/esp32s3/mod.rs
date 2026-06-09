@@ -35,7 +35,6 @@ pub mod system;
 pub mod system_stub;
 pub mod systimer;
 pub mod timer_group;
-pub mod tmp102;
 pub mod twai;
 pub mod uart;
 pub mod usb_otg;
