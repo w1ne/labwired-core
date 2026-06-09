@@ -24,6 +24,7 @@ LabWired runs ARM Cortex-M / RISC-V / Xtensa firmware against a silicon-validate
 |---|---|
 | `labwired_list_boards` | High-level: list pre-wired boards (chip + peripherals + demo firmware). Start here. |
 | `labwired_run_lab` | High-level: run an ELF on a board by id. Synthesizes the test script, returns cycles + serial + a `snapshot_id`. |
+| `labwired_fuzz` | Coverage-guided fuzz a firmware ELF and return the crashing inputs. Silicon-validated sim → crashes are replayable on real hardware (HIL-confirm), not emulation false positives. Deterministic for a fixed seed. |
 | `labwired_inspect_run` | Fetch detail from a prior `snapshot_id` — `summary`, `serial`, `gpio`, `raw`. 10-min TTL. |
 | `labwired_catalog` | Low-level: list raw chip descriptors. |
 | `labwired_simulate` | Low-level: run firmware against a custom System Manifest + test script YAML. Full control. |
@@ -102,6 +103,7 @@ Shipped:
 - **v0.2** — high-level board-centric workflow: `labwired_list_boards` / `labwired_run_lab` / `labwired_inspect_run`. ELF-in only — agents compile locally.
 - **v0.3** — live agent → browser bridge: `labwired_create_session` / `labwired_set_diagram` / `labwired_set_source` / `labwired_end_session`. Runs stream over WebSocket to `https://app.labwired.com/?watch=<id>`.
 - **v0.4** — `labwired_validate_diagram` with machine-readable diagnostics (pin/wire/bus errors + suggested fixes).
+- **v0.5** — `labwired_fuzz`: coverage-guided firmware fuzzing in the silicon-validated sim; crashes are HIL-replayable, not emulation false positives.
 
 Next:
 

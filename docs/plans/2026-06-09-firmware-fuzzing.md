@@ -107,11 +107,23 @@ coverage, exactly like Unicorn-AFL / Fuzzware.
   silicon, 0% false positives.** (The planted firmware has one real bug, so 0% FP
   is correct; the classifier exercises the full silicon-confirm path either way.)
 
-### Phase 4 — Package + story (days)
+### Phase 4 — Package + story (days) — ✅ DONE 2026-06-09
 - `labwired fuzz` CLI subcommand + MCP tool (`fuzz_firmware`) + a CI-action variant.
 - Demo + write-up: "coverage-guided firmware fuzzing, silicon-confirmed, zero false
   positives" — contrasted with Unicorn-AFL/Fuzzware FP pain.
 - **Exit:** a runnable `labwired fuzz` and a reproducible demo.
+- **Done** (core: `labwired fuzz` subcommand; MCP `labwired_fuzz` tool v0.5.0):
+  - `labwired fuzz --chip --system --firmware [--seed-input H] [--collect N]
+    [--crashes-out F] [contract addr flags]` — runs the coverage-guided engine,
+    writes crashing inputs as JSON, **exits non-zero on a crash (CI gate)**.
+    Contract addresses/markers default to the F103 fuzz target, all overridable.
+  - `@labwired/mcp` `labwired_fuzz` tool (board_id + ELF → distinct crashes,
+    hex + raw bytes; isError=false since a found crash is a finding, not a tool
+    error). README + version bumped to v0.5.0.
+  - Write-up: `docs/guides/firmware-fuzzing.md` (contract table, CLI usage,
+    HIL-confirm, copy-paste GitHub Actions gate, MCP usage).
+  - Input surface = RAM buffer (SWD-replayable, no UART adapter). UART/DMA input
+    surfaces are the post-thesis generalization (see Risks).
 
 ## Risks / unknowns
 

@@ -6,13 +6,19 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
-import { listChips, runSimulation, validateSystem, runLab } from './cli.js';
-import { listBoards, getBoard, readBoardYamls, boardSystemYamlPath } from './boards.js';
+import { listChips, runSimulation, validateSystem, runLab, fuzzFirmware } from './cli.js';
+import {
+  listBoards,
+  getBoard,
+  readBoardYamls,
+  boardSystemYamlPath,
+  boardChipYamlPath,
+} from './boards.js';
 import { putSnapshot, getSnapshot } from './snapshots.js';
 import { diagnoseDiagram, type ValidateDiagram } from './diagnostics.js';
 
 const SERVER_NAME = '@labwired/mcp';
-const SERVER_VERSION = '0.4.0';
+const SERVER_VERSION = '0.5.0';
 
 // ─── Session API (Worker-backed) ───────────────────────────────────────────
 // Optional: agent calls labwired_create_session(), gets a watch URL, and any
@@ -92,6 +98,35 @@ const RunLabInput = z.object({
     .max(100_000_000)
     .optional()
     .describe('Cycle budget (default 10M, hard cap 100M).'),
+});
+
+const FuzzInput = z.object({
+  board_id: z
+    .string()
+    .describe('Board id from labwired_list_boards (resolves chip + system YAML).'),
+  elf_base64: z
+    .string()
+    .describe(
+      'Base64-encoded fuzz-target ELF. Must follow the fuzz contract: read input ' +
+        'length+bytes from RAM, write DONE/FAULT to a verdict word. Agent compiles locally.',
+    ),
+  max_iters: z.number().int().positive().max(10_000_000).optional()
+    .describe('Max fuzzing iterations (default 200k).'),
+  seed: z.number().int().optional().describe('RNG seed — fuzzing is deterministic for a fixed seed.'),
+  collect: z.number().int().positive().max(64).optional()
+    .describe('Collect up to N distinct crashes (default 8).'),
+  seed_inputs_hex: z.array(z.string()).optional()
+    .describe('Seed inputs as hex byte strings, e.g. ["5000"]. Optional.'),
+  contract: z
+    .object({
+      input_len_addr: z.string().optional(),
+      input_data_addr: z.string().optional(),
+      verdict_addr: z.string().optional(),
+      done_magic: z.string().optional(),
+      fault_magic: z.string().optional(),
+    })
+    .optional()
+    .describe('Override the fuzz contract addresses/markers (hex). Defaults match the F103 fuzz target.'),
 });
 
 const InspectRunInput = z.object({
@@ -239,6 +274,63 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           max_cycles: {
             type: 'integer',
             description: 'Cycle budget (default 10M, hard cap 100M).',
+          },
+        },
+      },
+    },
+    {
+      name: 'labwired_fuzz',
+      description:
+        'Coverage-guided fuzz a firmware ELF in the silicon-validated simulator and return the ' +
+        'crashing inputs. AFL-style edge coverage drives mutation; a crash is a CPU fault or the ' +
+        "firmware's FAULT marker. Because the sim is silicon-validated, crashes found here are " +
+        'replayable on real hardware (HIL-confirm) — silicon-true findings, not emulation false ' +
+        'positives. The target firmware must follow the fuzz contract (RAM length+data input ' +
+        'buffer, a verdict word with DONE/FAULT markers). Deterministic for a fixed seed. Returns ' +
+        'the distinct crashing inputs (as byte arrays) you can replay or minimize.',
+      inputSchema: {
+        type: 'object',
+        required: ['board_id', 'elf_base64'],
+        properties: {
+          board_id: {
+            type: 'string',
+            description: 'Board id from labwired_list_boards (resolves chip + system YAML).',
+          },
+          elf_base64: {
+            type: 'string',
+            description:
+              'Base64-encoded fuzz-target ELF following the fuzz contract. Agent compiles locally.',
+          },
+          max_iters: {
+            type: 'integer',
+            description: 'Max fuzzing iterations (default 200000).',
+          },
+          seed: {
+            type: 'integer',
+            description: 'RNG seed — fuzzing is deterministic for a fixed seed.',
+          },
+          collect: {
+            type: 'integer',
+            description: 'Collect up to N distinct crashes (default 8).',
+          },
+          seed_inputs_hex: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Seed inputs as hex byte strings, e.g. ["5000"].',
+          },
+          contract: {
+            type: 'object',
+            description:
+              'Override the fuzz contract (hex strings). Defaults match the F103 fuzz target: ' +
+              'input_len_addr 0x20002800, input_data_addr 0x20002804, verdict_addr 0x20003000, ' +
+              'done_magic 0xC0DEF022, fault_magic 0xDEADFA17.',
+            properties: {
+              input_len_addr: { type: 'string' },
+              input_data_addr: { type: 'string' },
+              verdict_addr: { type: 'string' },
+              done_magic: { type: 'string' },
+              fault_magic: { type: 'string' },
+            },
           },
         },
       },
@@ -512,6 +604,108 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           },
         ],
         isError: run.exit_code !== 0,
+      };
+    }
+
+    if (name === 'labwired_fuzz') {
+      const input = FuzzInput.parse(args ?? {});
+      const board = getBoard(input.board_id);
+      if (!board) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                {
+                  error: 'INVALID_BOARD',
+                  message: `Unknown board_id "${input.board_id}". Call labwired_list_boards to see available ids.`,
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      const firmware = Buffer.from(input.elf_base64, 'base64');
+      if (firmware.length < 4 || firmware.subarray(0, 4).toString('hex') !== '7f454c46') {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                {
+                  error: 'INVALID_ELF',
+                  message: 'Decoded firmware is not an ELF file (missing 0x7F454C46 magic).',
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      let run;
+      try {
+        run = await fuzzFirmware({
+          chipYamlPath: boardChipYamlPath(board),
+          systemYamlPath: boardSystemYamlPath(board),
+          firmware,
+          maxIters: input.max_iters,
+          seed: input.seed,
+          collect: input.collect,
+          seedInputsHex: input.seed_inputs_hex,
+          contract: input.contract && {
+            inputLenAddr: input.contract.input_len_addr,
+            inputDataAddr: input.contract.input_data_addr,
+            verdictAddr: input.contract.verdict_addr,
+            doneMagic: input.contract.done_magic,
+            faultMagic: input.contract.fault_magic,
+          },
+        });
+      } catch (e) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                {
+                  error: 'FUZZ_FAILED',
+                  message: e instanceof Error ? e.message : String(e),
+                  hint: 'The MCP server needs the labwired repo on disk to resolve board YAMLs. Set LABWIRED_REPO_ROOT.',
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      const summary = {
+        crashed: run.crashed,
+        crash_count: run.crashes.length,
+        // Crashes as hex strings for readability + raw byte arrays for replay.
+        crashes_hex: run.crashes.map((c) =>
+          c.map((b) => b.toString(16).padStart(2, '0')).join(''),
+        ),
+        crashes: run.crashes,
+        note: run.crashed
+          ? 'Crashes are silicon-true: replay any input on the F103 via the HIL-confirm harness to confirm.'
+          : 'No crash found within the iteration budget.',
+        stdout_excerpt: run.stdout.slice(0, 2000),
+        stderr_excerpt: run.stderr.slice(0, 2000),
+      };
+      return {
+        content: [{ type: 'text', text: JSON.stringify(summary, null, 2) }],
+        // A found crash is a finding, not a tool error — surface it as content,
+        // not isError (which signals the tool itself failed).
+        isError: false,
       };
     }
 

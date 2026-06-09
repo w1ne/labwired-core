@@ -104,6 +104,80 @@ export async function runSimulation(opts: {
   }
 }
 
+export interface FuzzContract {
+  inputLenAddr?: string;
+  inputDataAddr?: string;
+  verdictAddr?: string;
+  doneMagic?: string;
+  faultMagic?: string;
+}
+
+export interface FuzzRun {
+  exitCode: number;
+  crashed: boolean;
+  crashes: number[][];
+  stdout: string;
+  stderr: string;
+}
+
+/**
+ * Coverage-guided fuzz a firmware ELF in the simulator. The firmware must follow
+ * the fuzz contract (RAM length+data buffer, a verdict word). Returns the
+ * distinct crashing inputs found — replayable on real silicon (HIL-confirm).
+ */
+export async function fuzzFirmware(opts: {
+  chipYamlPath: string;
+  systemYamlPath: string;
+  firmware: Buffer;
+  maxIters?: number;
+  seed?: number;
+  collect?: number;
+  seedInputsHex?: string[];
+  contract?: FuzzContract;
+}): Promise<FuzzRun> {
+  const work = await mkdtemp(join(tmpdir(), 'labwired-fuzz-'));
+  try {
+    const firmwarePath = join(work, 'firmware.elf');
+    const crashesPath = join(work, 'crashes.json');
+    await writeFile(firmwarePath, opts.firmware);
+
+    const args = [
+      'fuzz',
+      '--chip',
+      opts.chipYamlPath,
+      '--system',
+      opts.systemYamlPath,
+      '--firmware',
+      firmwarePath,
+      '--collect',
+      String(opts.collect ?? 8),
+      '--crashes-out',
+      crashesPath,
+      '--max-iters',
+      String(opts.maxIters ?? 200_000),
+    ];
+    if (opts.seed !== undefined) args.push('--seed', String(opts.seed));
+    for (const h of opts.seedInputsHex ?? []) args.push('--seed-input', h);
+    const c = opts.contract ?? {};
+    if (c.inputLenAddr) args.push('--input-len-addr', c.inputLenAddr);
+    if (c.inputDataAddr) args.push('--input-data-addr', c.inputDataAddr);
+    if (c.verdictAddr) args.push('--verdict-addr', c.verdictAddr);
+    if (c.doneMagic) args.push('--done-magic', c.doneMagic);
+    if (c.faultMagic) args.push('--fault-magic', c.faultMagic);
+
+    const { stdout, stderr, exitCode } = await runCli(args);
+    let crashes: number[][] = [];
+    try {
+      crashes = JSON.parse(await readFile(crashesPath, 'utf-8'));
+    } catch {
+      /* no crashes file = no crash found */
+    }
+    return { exitCode, crashed: crashes.length > 0, crashes, stdout, stderr };
+  } finally {
+    await rm(work, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
 export async function validateSystem(systemYaml: string): Promise<CliResult> {
   const work = await mkdtemp(join(tmpdir(), 'labwired-mcp-validate-'));
   try {
