@@ -24,7 +24,7 @@
     "total": 1182
   },
   "stm32f103": {
-    "modeled": 211,
+    "modeled": 210,
     "total": 722
   },
   "stm32f401": {
@@ -44,11 +44,11 @@
     "total": 4426
   },
   "stm32l073": {
-    "modeled": 296,
+    "modeled": 295,
     "total": 524
   },
   "stm32l476": {
-    "modeled": 724,
+    "modeled": 723,
     "total": 1485
   },
   "stm32wb55": {

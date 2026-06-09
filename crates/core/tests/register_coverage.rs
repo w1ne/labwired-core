@@ -19,6 +19,13 @@
 //! reset != 0)`. It under-counts write-only and read-only-reset-0 registers
 //! that are modeled but indistinguishable from an unhandled-offset default, so
 //! treat it as a lower bound; `mapped` is the upper bound.
+//!
+//! It also under-counts **write-protected** registers whose reset value is 0:
+//! the probe writes without any unlock sequence, so a register that correctly
+//! refuses the write (e.g. IWDG_PR after #199 gated PR/RLR on the 0x5555 key,
+//! RM0008 §19.4) reads back its reset 0 and looks unresponsive — even though it
+//! is faithfully modeled. A fidelity fix that adds such gating therefore *lowers*
+//! this proxy by design; re-baseline (see below), it is not a coverage loss.
 
 use labwired_config::{Arch, ChipDescriptor};
 use labwired_core::bus::SystemBus;
