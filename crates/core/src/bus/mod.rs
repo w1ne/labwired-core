@@ -243,7 +243,7 @@ impl SystemBus {
         if t == "nrf52840_qspi" || t == "nrf52_qspi" {
             return "nrf52_qspi".to_string();
         }
-        // SPIS / TWIS must be intercepted before the generic "contains(spi)"
+        // SPIS / TWIS / TWIM must be intercepted before the generic "contains(spi)"
         // and "contains(i2c)" / "ends_with(_twi)" matchers, otherwise they
         // would be mis-routed to the STM32 SPI / I2C models.
         if t == "nrf52840_spis" || t == "nrf52_spis" {
@@ -251,6 +251,15 @@ impl SystemBus {
         }
         if t == "nrf52840_twis" || t == "nrf52_twis" {
             return "nrf52840_twis".to_string();
+        }
+        // TWIM / TWI master: nRF52 I²C master with EasyDMA. Must precede the
+        // generic "contains(i2c)" / "ends_with(_twi)" fuzzy matchers.
+        if t == "nrf52840_i2c"
+            || t == "nrf52840_twim"
+            || t == "nrf52_twim"
+            || t == "nrf52_i2c"
+        {
+            return "nrf52840_twim".to_string();
         }
         // UARTE: nRF52 UART with EasyDMA — must be intercepted before the
         // generic "contains(uart)" matcher, which would coerce it to the
@@ -1309,6 +1318,43 @@ impl SystemBus {
                 }
                 "nrf52840_twis" | "nrf52_twis" => {
                     Box::new(crate::peripherals::nrf52::twis::Nrf52Twis::new())
+                }
+                // TWIM (I²C master with EasyDMA) — nRF52840 PS §6.31.
+                // `nrf52840_i2c` is the canonical chip-YAML type; `nrf52840_twim`
+                // and `nrf52_twim` are also accepted so firmware configs that
+                // name it more precisely still resolve here.
+                "nrf52840_twim" | "nrf52_twim" => {
+                    let mut twim =
+                        crate::peripherals::nrf52::twim::Nrf52Twim::new();
+                    for ext in &manifest.external_devices {
+                        if ext.connection != p_cfg.id {
+                            continue;
+                        }
+                        match crate::peripherals::components::build_i2c_device(
+                            &ext.r#type,
+                            &ext.config,
+                        ) {
+                            Some(device) => {
+                                tracing::info!(
+                                    "twim attach: '{}' (type={}) -> '{}'",
+                                    ext.id,
+                                    ext.r#type,
+                                    p_cfg.id
+                                );
+                                twim.attach(device);
+                            }
+                            None => {
+                                tracing::warn!(
+                                    "twim attach skipped: unknown device type '{}' \
+                                     for external id '{}' on bus '{}'",
+                                    ext.r#type,
+                                    ext.id,
+                                    p_cfg.id
+                                );
+                            }
+                        }
+                    }
+                    Box::new(twim)
                 }
                 // ESP32-family Timer Group (TIMG0/TIMG1) — the same IP block is
                 // used by the classic ESP32, S3, and C3.  All share the register

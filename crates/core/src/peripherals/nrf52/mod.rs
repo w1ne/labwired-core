@@ -37,6 +37,7 @@ pub mod saadc;
 pub mod spis;
 pub mod temp;
 pub mod timer;
+pub mod twim;
 pub mod twis;
 pub mod uarte;
 pub mod uicr;
