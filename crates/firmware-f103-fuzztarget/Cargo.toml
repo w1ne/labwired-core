@@ -1,0 +1,19 @@
+# LabWired - Firmware Simulation Platform
+# SPDX-License-Identifier: MIT
+#
+# Fuzz target: a bare-metal STM32F103 binary command parser that reads its input
+# from a fixed RAM buffer (filled by the fuzz harness in sim, by openocd on the
+# HIL bench) so a crash can be replayed on real silicon. It has normal command
+# paths (coverage structure) plus one planted `unsafe` stack overflow. See
+# docs/plans/2026-06-09-firmware-fuzzing.md (Phase 0).
+[package]
+name = "firmware-f103-fuzztarget"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[[bin]]
+name = "firmware-f103-fuzztarget"
+path = "src/main.rs"
+test = false
+bench = false
