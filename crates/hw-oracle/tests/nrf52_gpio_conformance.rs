@@ -88,8 +88,11 @@ const EXPECTED_PART: u32 = 0x0005_2840; // nRF52840
 // nRF52840 PIN_CNF reset value
 const PIN_CNF_RESET: u32 = 0x0000_0002;
 
-// Test pins (safe on both P0 and P1; avoiding P0.0/1 which are crystal pins on XIAO).
-const TEST_PINS: &[u32] = &[3, 14, 28];
+// Test pins for P0 (safe on P0; avoiding P0.0/1 which are crystal pins on XIAO).
+const TEST_PINS_P0: &[u32] = &[3, 14, 28];
+
+// Test pins for P1 (P1 has only 16 pins: 0..15; use pins 3, 10, 14 instead of 28).
+const TEST_PINS_P1: &[u32] = &[3, 10, 14];
 
 // Additional P0-only pins (the XIAO RGB LED pins) for the multi-pin mask test.
 const P0_LED_PINS: &[u32] = &[6, 26, 30];
@@ -259,6 +262,7 @@ fn run_port_tests(
     sim: &mut SystemBus,
     oc: &mut OpenOcd,
     p1: bool,
+    test_pins: &[u32],
     extra_pins: &[u32],
 ) -> PortStats {
     let port = port_name(p1);
@@ -270,7 +274,7 @@ fn run_port_tests(
     let mut stats = PortStats::new();
 
     // ── Case 1: DIRSET / DIRCLR ──────────────────────────────────────────────
-    for &k in TEST_PINS {
+    for &k in test_pins {
         let bit = 1u32 << k;
 
         // 1a. DIRSET k → DIR has bit k set
@@ -297,7 +301,7 @@ fn run_port_tests(
     }
 
     // ── Case 2: OUTSET / OUTCLR (pin configured as output) ──────────────────
-    for &k in TEST_PINS {
+    for &k in test_pins {
         let bit = 1u32 << k;
         let cnf_reg = reg(off_pin_cnf(k));
 
@@ -333,7 +337,7 @@ fn run_port_tests(
     // ── Case 3: IN tracks driven output ──────────────────────────────────────
     // Drive pin HIGH (DIRSET + OUTSET); read IN — should see bit = 1 because the
     // output driver feeds back through the input buffer.
-    for &k in TEST_PINS {
+    for &k in test_pins {
         let bit = 1u32 << k;
         let cnf_reg = reg(off_pin_cnf(k));
 
@@ -358,7 +362,7 @@ fn run_port_tests(
     // ── Case 4: PIN_CNF round-trip ────────────────────────────────────────────
     // Write 0x0000_0001 (DIR=output, INPUT=connected, no pull, drive S0S1, no sense).
     // Read back must equal the written value in all 32 bits (all fields defined).
-    for &k in TEST_PINS {
+    for &k in test_pins {
         let cnf_reg = reg(off_pin_cnf(k));
         let test_val: u32 = 0x0000_0001;
 
@@ -374,10 +378,10 @@ fn run_port_tests(
     }
 
     // ── Case 5: Multi-pin OUTSET → whole OUT register readback ───────────────
-    // OUTSET with a bitmask covering all TEST_PINS + extra_pins; read OUT.
+    // OUTSET with a bitmask covering all test_pins + extra_pins; read OUT.
     {
         let mut all_bits: u32 = 0;
-        for &k in TEST_PINS.iter().chain(extra_pins.iter()) {
+        for &k in test_pins.iter().chain(extra_pins.iter()) {
             all_bits |= 1 << k;
             write_split(sim, oc, reg(off_pin_cnf(k)), 0x0000_0001); // output
         }
@@ -453,6 +457,24 @@ fn run_port_tests(
         record(&mut stats, &label2, out2);
     }
 
+    // ── Case 8 (P1 only): Boundary case — P1 pin 28 absent (16-pin port) ──────
+    // P1 GPIO1 has only 16 pins (0..15); pin 28 does not exist.
+    // Write DIRSET for bit 28, then read DIR: expect bit 28 = 0 on both sim and HW.
+    if p1 {
+        let k = 28;
+        let bit = 1u32 << k;
+
+        let label = format!("{port} pin {k} absent (16-pin port) → DIR bit stays 0");
+        let out = probe(
+            sim, oc, &label,
+            &[(reg(OFF_DIRCLR), bit)],          // prep: try to clear (no-op)
+            (reg(OFF_DIRSET), bit),             // write: try to set bit 28
+            reg(OFF_DIR),                       // read: DIR
+            bit, 0,                             // mask/expect: bit 28 must be 0
+        );
+        record(&mut stats, &label, out);
+    }
+
     stats
 }
 
@@ -526,24 +548,30 @@ fn nrf52840_gpio_conformance() {
 
     // ── P0 ───────────────────────────────────────────────────────────────────
     println!("=== P0 (GPIO0) ===");
-    let p0_stats = run_port_tests(&mut sim, &mut oc, false, P0_LED_PINS);
+    let p0_stats = run_port_tests(&mut sim, &mut oc, false, TEST_PINS_P0, P0_LED_PINS);
     println!("{:-<90}", "");
 
     // ── P1 ───────────────────────────────────────────────────────────────────
     println!("=== P1 (GPIO1, sim@0x5000_1000, hw@0x5000_0300) ===");
-    let p1_stats = run_port_tests(&mut sim, &mut oc, true, &[]);
+    let p1_stats = run_port_tests(&mut sim, &mut oc, true, TEST_PINS_P1, &[]);
     println!("{:-<90}", "");
 
     // ── Restore touched pins ─────────────────────────────────────────────────
     println!("Restoring pins to reset state...");
     {
-        let all_p0: Vec<u32> = TEST_PINS
+        let all_p0: Vec<u32> = TEST_PINS_P0
             .iter()
             .chain(P0_LED_PINS.iter())
             .copied()
             .collect();
         restore_port(&mut sim, &mut oc, false, &all_p0);
-        restore_port(&mut sim, &mut oc, true, TEST_PINS);
+        // P1 restore includes pin 28 (the boundary case) even though we don't drive it.
+        let all_p1: Vec<u32> = TEST_PINS_P1
+            .iter()
+            .chain(&[28])
+            .copied()
+            .collect();
+        restore_port(&mut sim, &mut oc, true, &all_p1);
     }
     println!("Pin restore complete.");
     println!("{:-<90}", "");
