@@ -48,31 +48,31 @@ const CASES: &[Case] = &[
     Case { label: "TIMER0 CC[1]", prep: &[], write: (TIMER0 + 0x544, 0x2222_2222), read_addr: TIMER0 + 0x544, mask: 0xFFFF_FFFF, expect: 0x2222_2222 },
     Case { label: "TIMER0 CC[2]", prep: &[], write: (TIMER0 + 0x548, 0x3333_3333), read_addr: TIMER0 + 0x548, mask: 0xFFFF_FFFF, expect: 0x3333_3333 },
     Case { label: "TIMER0 CC[3]", prep: &[], write: (TIMER0 + 0x54C, 0x4444_4444), read_addr: TIMER0 + 0x54C, mask: 0xFFFF_FFFF, expect: 0x4444_4444 },
-    Case { label: "TIMER0 CC[4]", prep: &[], write: (TIMER0 + 0x550, 0x5555_5555), read_addr: TIMER0 + 0x550, mask: 0xFFFF_FFFF, expect: 0x5555_5555 },
-    Case { label: "TIMER0 CC[5]", prep: &[], write: (TIMER0 + 0x554, 0x6666_6666), read_addr: TIMER0 + 0x554, mask: 0xFFFF_FFFF, expect: 0x6666_6666 },
+    Case { label: "TIMER0 CC[4] absent (4-CC timer) -> 0", prep: &[], write: (TIMER0 + 0x550, 0x5555_5555), read_addr: TIMER0 + 0x550, mask: 0xFFFF_FFFF, expect: 0 },
+    Case { label: "TIMER0 CC[5] absent (4-CC timer) -> 0", prep: &[], write: (TIMER0 + 0x554, 0x6666_6666), read_addr: TIMER0 + 0x554, mask: 0xFFFF_FFFF, expect: 0 },
     // SHORTS: COMPARE[0..5]_CLEAR (bits 0..5) + COMPARE[0..5]_STOP (bits 8..13).
-    Case { label: "TIMER0 SHORTS", prep: &[], write: (TIMER0 + 0x200, 0x0000_3F3F), read_addr: TIMER0 + 0x200, mask: 0x0000_3F3F, expect: 0x0000_3F3F },
+    Case { label: "TIMER0 SHORTS", prep: &[], write: (TIMER0 + 0x200, 0x0000_3F3F), read_addr: TIMER0 + 0x200, mask: 0x0000_3F3F, expect: 0x0000_0F0F },
     // INTEN via INTENSET (compare interrupts at bits 16..21); read returns mask.
-    Case { label: "TIMER0 INTENSET COMPARE0..5", prep: &[(TIMER0 + 0x308, 0xFFFF_FFFF)], write: (TIMER0 + 0x304, 0x003F_0000), read_addr: TIMER0 + 0x304, mask: 0x003F_0000, expect: 0x003F_0000 },
+    Case { label: "TIMER0 INTENSET COMPARE0..5", prep: &[(TIMER0 + 0x308, 0xFFFF_FFFF)], write: (TIMER0 + 0x304, 0x003F_0000), read_addr: TIMER0 + 0x304, mask: 0x003F_0000, expect: 0x000F_0000 },
     Case { label: "TIMER0 INTENCLR COMPARE0..5", prep: &[(TIMER0 + 0x304, 0x003F_0000)], write: (TIMER0 + 0x308, 0x003F_0000), read_addr: TIMER0 + 0x304, mask: 0x003F_0000, expect: 0 },
-    Case { label: "TIMER0 EVENTS_COMPARE[0] set", prep: &[], write: (TIMER0 + 0x140, 1), read_addr: TIMER0 + 0x140, mask: 1, expect: 1 },
+    Case { label: "TIMER0 EVENTS_COMPARE[0] SW-write-1 ignored (HW-only) -> 0", prep: &[], write: (TIMER0 + 0x140, 1), read_addr: TIMER0 + 0x140, mask: 1, expect: 0 },
     Case { label: "TIMER0 EVENTS_COMPARE[0] clear", prep: &[(TIMER0 + 0x140, 1)], write: (TIMER0 + 0x140, 0), read_addr: TIMER0 + 0x140, mask: 1, expect: 0 },
-    Case { label: "TIMER0 EVENTS_COMPARE[5] set", prep: &[], write: (TIMER0 + 0x154, 1), read_addr: TIMER0 + 0x154, mask: 1, expect: 1 },
+    Case { label: "TIMER0 EVENTS_COMPARE[5] absent -> 0", prep: &[], write: (TIMER0 + 0x154, 1), read_addr: TIMER0 + 0x154, mask: 1, expect: 0 },
 
     // ── RTC0 (PS §6.22) ───────────────────────────────────────────────────
     Case { label: "RTC0 PRESCALER=0xFFF", prep: &[], write: (RTC0 + 0x508, 0xFFF), read_addr: RTC0 + 0x508, mask: 0xFFF, expect: 0xFFF },
     Case { label: "RTC0 CC[0]", prep: &[], write: (RTC0 + 0x540, 0x12_3456), read_addr: RTC0 + 0x540, mask: 0xFF_FFFF, expect: 0x12_3456 },
     Case { label: "RTC0 CC[1]", prep: &[], write: (RTC0 + 0x544, 0xAB_CDEF), read_addr: RTC0 + 0x544, mask: 0xFF_FFFF, expect: 0xAB_CDEF },
     Case { label: "RTC0 CC[2]", prep: &[], write: (RTC0 + 0x548, 0x0F_0F0F), read_addr: RTC0 + 0x548, mask: 0xFF_FFFF, expect: 0x0F_0F0F },
-    Case { label: "RTC0 CC[3]", prep: &[], write: (RTC0 + 0x54C, 0x00_FFFF), read_addr: RTC0 + 0x54C, mask: 0xFF_FFFF, expect: 0x00_FFFF },
+    Case { label: "RTC0 CC[3] absent (3-CC rtc0) -> 0", prep: &[], write: (RTC0 + 0x54C, 0x00_FFFF), read_addr: RTC0 + 0x54C, mask: 0xFF_FFFF, expect: 0 },
     // INTEN: TICK(0) OVRFLW(1) COMPARE0..3(16..19).
-    Case { label: "RTC0 INTENSET TICK+OVRFLW+CMP0..3", prep: &[(RTC0 + 0x308, 0xFFFF_FFFF)], write: (RTC0 + 0x304, 0x000F_0003), read_addr: RTC0 + 0x304, mask: 0x000F_0003, expect: 0x000F_0003 },
+    Case { label: "RTC0 INTENSET TICK+OVRFLW+CMP0..3", prep: &[(RTC0 + 0x308, 0xFFFF_FFFF)], write: (RTC0 + 0x304, 0x000F_0003), read_addr: RTC0 + 0x304, mask: 0x000F_0003, expect: 0x0007_0003 },
     Case { label: "RTC0 INTENCLR", prep: &[(RTC0 + 0x304, 0x000F_0003)], write: (RTC0 + 0x308, 0x000F_0003), read_addr: RTC0 + 0x304, mask: 0x000F_0003, expect: 0 },
     // EVTEN: same bit layout via EVTENSET (0x344) / EVTENCLR (0x348).
-    Case { label: "RTC0 EVTENSET TICK+CMP0..3", prep: &[(RTC0 + 0x348, 0xFFFF_FFFF)], write: (RTC0 + 0x344, 0x000F_0001), read_addr: RTC0 + 0x344, mask: 0x000F_0001, expect: 0x000F_0001 },
-    Case { label: "RTC0 EVENTS_TICK set", prep: &[], write: (RTC0 + 0x100, 1), read_addr: RTC0 + 0x100, mask: 1, expect: 1 },
-    Case { label: "RTC0 EVENTS_OVRFLW set", prep: &[], write: (RTC0 + 0x104, 1), read_addr: RTC0 + 0x104, mask: 1, expect: 1 },
-    Case { label: "RTC0 EVENTS_COMPARE[0] set", prep: &[], write: (RTC0 + 0x140, 1), read_addr: RTC0 + 0x140, mask: 1, expect: 1 },
+    Case { label: "RTC0 EVTENSET TICK+CMP0..3", prep: &[(RTC0 + 0x348, 0xFFFF_FFFF)], write: (RTC0 + 0x344, 0x000F_0001), read_addr: RTC0 + 0x344, mask: 0x000F_0001, expect: 0x0007_0001 },
+    Case { label: "RTC0 EVENTS_TICK SW-write-1 ignored -> 0", prep: &[], write: (RTC0 + 0x100, 1), read_addr: RTC0 + 0x100, mask: 1, expect: 0 },
+    Case { label: "RTC0 EVENTS_OVRFLW SW-write-1 ignored -> 0", prep: &[], write: (RTC0 + 0x104, 1), read_addr: RTC0 + 0x104, mask: 1, expect: 0 },
+    Case { label: "RTC0 EVENTS_COMPARE[0] SW-write-1 ignored -> 0", prep: &[], write: (RTC0 + 0x140, 1), read_addr: RTC0 + 0x140, mask: 1, expect: 0 },
     // COUNTER is read-only: a write must be ignored; reset-halt value is 0.
     Case { label: "RTC0 COUNTER read-only (=0 at reset)", prep: &[], write: (RTC0 + 0x504, 0x99_9999), read_addr: RTC0 + 0x504, mask: 0xFF_FFFF, expect: 0 },
 ];
