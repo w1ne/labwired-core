@@ -4362,6 +4362,11 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         let to_execute = current_batch.min(remaining);
 
         if to_execute > 1 {
+            // Mirror the batch-start cycle onto the bus so MMIO write-hooks
+            // executed inside the batch (e.g. the HC-SR04 TRIG arm) read a sane
+            // "now". Without this the bus cycle stays frozen and any
+            // `current_cycle`-driven peripheral never advances.
+            machine.bus.current_cycle = machine.total_cycles;
             match machine.cpu.step_batch(
                 &mut machine.bus,
                 &machine.observers,
@@ -4379,7 +4384,10 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                     let ticks_before = prev_cycles / tick_interval;
                     let ticks_after = machine.total_cycles / tick_interval;
 
-                    for _ in ticks_before..ticks_after {
+                    for t in ticks_before..ticks_after {
+                        // Advance the bus cycle to this tick boundary so
+                        // per-tick services (e.g. HC-SR04 ECHO) see time move.
+                        machine.bus.current_cycle = (t + 1) * tick_interval;
                         let (interrupts, costs) = machine.bus.tick_peripherals_fully();
                         for c in costs {
                             machine.total_cycles += c.cycles as u64;

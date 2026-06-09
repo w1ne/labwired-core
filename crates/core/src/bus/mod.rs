@@ -390,6 +390,40 @@ impl SystemBus {
         Some((format!("gpio{port}"), num))
     }
 
+    /// Parse an nRF-style pin label `P<port>.<num>` (or `P<port>_<num>`) like
+    /// "P0.4" / "P1_31" into `("gpio0", 4)` / `("gpio1", 31)`. The nRF52 has two
+    /// 32-bit GPIO ports (P0, P1) which the chip yaml declares as `gpio0` /
+    /// `gpio1`. Unambiguous against [`parse_stm32_pin`]: STM32 labels have an
+    /// alphabetic port (`PB10`), nRF labels a numeric one (`P1.10`).
+    fn parse_nrf_pin(pin: &str) -> Option<(String, u8)> {
+        let s = pin.trim();
+        let bytes = s.as_bytes();
+        // Shortest valid label is "P0.0" (4 chars).
+        if bytes.len() < 4 || !bytes[0].eq_ignore_ascii_case(&b'P') {
+            return None;
+        }
+        let port = (bytes[1] as char).to_digit(10)?;
+        if port > 1 {
+            return None;
+        }
+        match bytes[2] {
+            b'.' | b'_' => {}
+            _ => return None,
+        }
+        let num: u8 = s[3..].parse().ok()?;
+        if num > 31 {
+            return None;
+        }
+        Some((format!("gpio{port}"), num))
+    }
+
+    /// Resolve a GPIO pin label across supported families (STM32 `PB10`, nRF
+    /// `P1.10`) to its GPIO peripheral id + bit. The two label grammars are
+    /// disjoint, so trying STM32 first then nRF never misclassifies.
+    fn parse_gpio_pin(pin: &str) -> Option<(String, u8)> {
+        Self::parse_stm32_pin(pin).or_else(|| Self::parse_nrf_pin(pin))
+    }
+
     /// Resolve an STM32 pin label to its `(ODR address, bit)` so a display's
     /// D/C line can be sampled directly from the driving GPIO's output register.
     /// Public wrapper exposed via [`AttachCtx::resolve_pin_odr`] so kits can
@@ -399,7 +433,7 @@ impl SystemBus {
     }
 
     fn resolve_pin_odr(bus: &SystemBus, pin: &str) -> Option<(u64, u8)> {
-        let (port_name, bit) = Self::parse_stm32_pin(pin)?;
+        let (port_name, bit) = Self::parse_gpio_pin(pin)?;
         let idx = bus.find_peripheral_index_by_name(&port_name)?;
         let base = bus.peripherals[idx].base;
         let odr_off = bus.peripherals[idx]
@@ -413,7 +447,7 @@ impl SystemBus {
     /// Resolve an STM32 pin label to its `(IDR address, bit)` so a sensor can
     /// drive an MCU input line (e.g. the HC-SR04 ECHO pin).
     fn resolve_pin_idr(bus: &SystemBus, pin: &str) -> Option<(u64, u8)> {
-        let (port_name, bit) = Self::parse_stm32_pin(pin)?;
+        let (port_name, bit) = Self::parse_gpio_pin(pin)?;
         let idx = bus.find_peripheral_index_by_name(&port_name)?;
         let base = bus.peripherals[idx].base;
         let idr_off = bus.peripherals[idx]
@@ -2377,6 +2411,42 @@ mod tests {
     use super::*;
     use labwired_config::{ChipDescriptor, SystemManifest};
     use std::path::PathBuf;
+
+    #[test]
+    fn parse_nrf_pin_maps_ports_and_bits() {
+        assert_eq!(
+            SystemBus::parse_nrf_pin("P0.4"),
+            Some(("gpio0".to_string(), 4))
+        );
+        assert_eq!(
+            SystemBus::parse_nrf_pin("P1.5"),
+            Some(("gpio1".to_string(), 5))
+        );
+        // separator may be '.' or '_'; nRF ports are 32-bit (0..=31).
+        assert_eq!(
+            SystemBus::parse_nrf_pin("P1_31"),
+            Some(("gpio1".to_string(), 31))
+        );
+        // rejects: out-of-range bit, non-existent port, STM32 form, bare port.
+        assert_eq!(SystemBus::parse_nrf_pin("P0.32"), None);
+        assert_eq!(SystemBus::parse_nrf_pin("P2.0"), None);
+        assert_eq!(SystemBus::parse_nrf_pin("PB10"), None);
+        assert_eq!(SystemBus::parse_nrf_pin("P0"), None);
+    }
+
+    #[test]
+    fn parse_gpio_pin_dispatches_both_families() {
+        // STM32 labels keep resolving unchanged...
+        assert_eq!(
+            SystemBus::parse_gpio_pin("PB10"),
+            Some(("gpiob".to_string(), 10))
+        );
+        // ...and nRF labels now resolve too.
+        assert_eq!(
+            SystemBus::parse_gpio_pin("P1.5"),
+            Some(("gpio1".to_string(), 5))
+        );
+    }
 
     /// Minimal fixed-value peripheral for routing tests: reads return a
     /// constant tag byte, writes are ignored.

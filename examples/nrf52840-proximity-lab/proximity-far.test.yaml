@@ -1,0 +1,14 @@
+# Target at 30 cm (300 mm) — outside the firmware's 150 mm threshold.
+# Same firmware; only `distance_cm` in the system manifest changed. ALARM stays
+# low, proving the threshold decision tracks the consumed sensor timing.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-nrf52840-proximity"
+  system: "system-far.yaml"
+limits:
+  max_steps: 6000000
+assertions:
+  - expected_stop_reason: "max_steps"
+  - memory_value: { address: 0x20000004, expected_value: 0, size: 32 }
+  - memory_value: { address: 0x20000000, expected_value: 299, size: 32 }
+  - memory_value: { address: 0x50000504, expected_value: 0x00, mask: 0x40, size: 32 }

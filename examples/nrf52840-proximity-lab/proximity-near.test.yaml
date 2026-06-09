@@ -1,0 +1,17 @@
+# Target at 10 cm (100 mm) — inside the firmware's 150 mm threshold.
+# Proves the firmware consumed the HC-SR04 ECHO timing through the modeled nRF
+# GPIO registers, computed the distance, and raised the ALARM output.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-nrf52840-proximity"
+  system: "system.yaml"
+limits:
+  max_steps: 6000000
+assertions:
+  - expected_stop_reason: "max_steps"
+  # IN_RANGE flag (RAM) == 1
+  - memory_value: { address: 0x20000004, expected_value: 1, size: 32 }
+  # DISTANCE_MM (RAM) == 100 mm
+  - memory_value: { address: 0x20000000, expected_value: 100, size: 32 }
+  # ALARM output: nRF P0 OUT register, bit 6 (P0.06) set
+  - memory_value: { address: 0x50000504, expected_value: 0x40, mask: 0x40, size: 32 }
