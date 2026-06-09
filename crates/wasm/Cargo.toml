@@ -1,8 +1,12 @@
 [package]
 name = "labwired-wasm"
-version.workspace = true
+# Pinned to literals (not `*.workspace = true`) so the playground deploy's
+# wasm-pack — which parses this manifest directly and doesn't resolve cargo
+# workspace inheritance — can read license/version. Keep in sync with the
+# workspace [workspace.package] values.
+version = "0.15.0"
 edition = "2021"
-license.workspace = true
+license = "MIT"
 publish = false
 
 [lib]
