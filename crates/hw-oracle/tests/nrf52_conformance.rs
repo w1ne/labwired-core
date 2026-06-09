@@ -140,7 +140,10 @@ fn conformance_sim() {
         println!("  [{i:02}] {label:<14} = 0x{v:08X}");
     }
 
-    assert_eq!(d[0], DONE_MAGIC, "sim firmware did not finish (DONE sentinel)");
+    assert_eq!(
+        d[0], DONE_MAGIC,
+        "sim firmware did not finish (DONE sentinel)"
+    );
 
     // Spot-check the two deterministic fields the sim MUST get right.
     assert_eq!(d[1], 0x0000_000F, "gpio_out: expected 0xF (pins 0..3 set)");
@@ -156,8 +159,14 @@ fn conformance_sim() {
         "  gpiote_out={} (expect 1 if GPIOTE CONFIG bit-layout matches; may diverge)",
         d[4]
     );
-    println!("  temp_inrange={} (liveness flag; 1 = sim returned a value)", d[5]);
-    println!("  rng_live={} (liveness flag; 1 = VALRDY fired in sim)", d[6]);
+    println!(
+        "  temp_inrange={} (liveness flag; 1 = sim returned a value)",
+        d[5]
+    );
+    println!(
+        "  rng_live={} (liveness flag; 1 = VALRDY fired in sim)",
+        d[6]
+    );
 }
 
 // ── HW + diff (silicon) ───────────────────────────────────────────────────────
@@ -203,14 +212,26 @@ fn run_hw(elf: &PathBuf) -> Vec<u32> {
 
 /// Ratchet baseline: number of digest words that must match sim vs hw.
 ///
-/// Set conservatively to the guaranteed-deterministic fields (DONE, GPIO_OUT,
-/// TIMER_COUNT = 3 words). The orchestrator will raise this after the first
-/// approved on-silicon run once the actual match count is known.
+/// Measured 13/16 on real silicon (Seeed XIAO nRF52840 Sense, ST-LINK V2,
+/// 2026-06-09). The deterministic core (DONE, gpio_out, timer_count) and the
+/// RNG-liveness flag match exactly; 9 reserved words are zero on both sides.
 ///
-/// TODO(hw-run): ratchet after first on-silicon run — replace with actual
-///               matched count from `conformance_diff` output.
+/// Three known residuals keep this at 13/16 (raise the baseline when any is
+/// closed — never lower it):
+///   - `ecb_ct0`:  silicon computes the FIPS-197 AES-128 ciphertext
+///                 (0xD8E0C469); the sim ECB model does not implement AES and
+///                 returns 0. Closing this needs an AES core in the sim ECB.
+///   - `temp_inrange`: silicon TEMP fires DATARDY with an in-range reading; the
+///                 sim TEMP model never raises DATARDY. Closing this needs a
+///                 TEMP measurement model.
+///   - `gpiote_out`: the sim drives the pin via the GPIOTE SET task where
+///                 silicon leaves it low under these conditions — the sim is
+///                 over-permissive on the GPIOTE task→GPIO path. (Note: the
+///                 plain GPIO register interface is separately verified
+///                 strict-clean by nrf52_gpio_conformance; this gap is the
+///                 task/event routing, not GPIO read/write.)
 #[cfg(feature = "hw-oracle-nrf52")]
-const BASELINE_MATCHED: usize = 3;
+const BASELINE_MATCHED: usize = 13;
 
 #[cfg(feature = "hw-oracle-nrf52")]
 #[test]
@@ -242,12 +263,8 @@ fn conformance_diff() {
             matched += 1;
             println!("[OK ]  {label:<14}  0x{sv:08X}");
         } else {
-            gaps.push(format!(
-                "  {label:<14}  sim 0x{sv:08X}  vs  hw 0x{hv:08X}"
-            ));
-            println!(
-                "[DIFF] {label:<14}  sim 0x{sv:08X}  vs  hw 0x{hv:08X}"
-            );
+            gaps.push(format!("  {label:<14}  sim 0x{sv:08X}  vs  hw 0x{hv:08X}"));
+            println!("[DIFF] {label:<14}  sim 0x{sv:08X}  vs  hw 0x{hv:08X}");
         }
     }
 
