@@ -38,6 +38,7 @@ pub mod spis;
 pub mod temp;
 pub mod timer;
 pub mod twis;
+pub mod uarte;
 pub mod uicr;
 pub mod usbd;
 pub mod usbregulator;

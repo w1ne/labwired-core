@@ -252,6 +252,12 @@ impl SystemBus {
         if t == "nrf52840_twis" || t == "nrf52_twis" {
             return "nrf52840_twis".to_string();
         }
+        // UARTE: nRF52 UART with EasyDMA — must be intercepted before the
+        // generic "contains(uart)" matcher, which would coerce it to the
+        // STM32-style generic Uart model and lose PSEL/BAUDRATE/CONFIG.
+        if t == "nrf52840_uart" || t == "nrf52_uart" || t == "nrf52_uarte" {
+            return "nrf52840_uart".to_string();
+        }
 
         // Specific mappers first — must come before fuzzy matchers so e.g.
         // "quadspi" doesn't get swallowed by the generic "contains(spi)" rule.
@@ -964,6 +970,10 @@ impl SystemBus {
             }
 
             let dev: Box<dyn Peripheral> = match canonical_type.as_str() {
+                // nRF52 UARTE: full register surface including PSEL/BAUDRATE/CONFIG/DMA.
+                "nrf52840_uart" => {
+                    Box::new(crate::peripherals::nrf52::uarte::Nrf52Uarte::new())
+                }
                 "uart" | "stm32_uart" | "stm32f1_uart" | "stm32f2_uart" | "stm32f4_uart"
                 | "stm32f7_usart" | "stm32h5_usart" | "efm32_uart" | "nxp_lpuart" | "ns16550"
                 | "pl011" | "gaislerapbuart" => {
