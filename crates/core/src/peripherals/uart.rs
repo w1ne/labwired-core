@@ -131,6 +131,13 @@ pub struct Uart {
     /// CR1 register (tracks TXEIE and TE bits for interrupt-driven TX simulation).
     cr1: u32,
     cr3: u32,
+    /// F1-layout config registers, captured for read-back fidelity (BRR/CR2/GTPR
+    /// have no behavioural effect in this instruction-level model, but firmware
+    /// reads them back). Masked to the silicon writable bits on read. Unused by
+    /// the V2 layout, whose register map differs.
+    cr2: u32,
+    brr: u32,
+    gtpr: u32,
     dma_tx_pending: bool,
     /// Stream devices attached to the RX path (e.g. GPS modules).
     #[serde(skip)]
@@ -177,6 +184,9 @@ impl Uart {
             echo_stdout: true,
             cr1: 0,
             cr3: 0,
+            cr2: 0,
+            brr: 0,
+            gtpr: 0,
             dma_tx_pending: false,
             attached_streams: Vec::new(),
             trace: VecDeque::new(),
@@ -264,6 +274,63 @@ impl Uart {
     fn cr3_offset(&self) -> u64 {
         self.layout.regmap().cr3
     }
+
+    /// F1-layout config registers as `(base offset, silicon writable mask)`.
+    /// Masks silicon-confirmed on the bench F103 (RM0008 §27.6): BRR 0xFFFF,
+    /// CR1 0x3FFD, CR2 0x7F6F, CR3 0x07FF, GTPR 0xFFFF.
+    const F1_CONFIG: [(u64, u32); 5] = [
+        (0x08, 0x0000_FFFF), // BRR
+        (0x0C, 0x0000_3FFD), // CR1
+        (0x10, 0x0000_7F6F), // CR2
+        (0x14, 0x0000_07FF), // CR3
+        (0x18, 0x0000_FFFF), // GTPR
+    ];
+
+    fn f1_config_value(&self, base: u64) -> u32 {
+        match base {
+            0x08 => self.brr,
+            0x0C => self.cr1,
+            0x10 => self.cr2,
+            0x14 => self.cr3,
+            0x18 => self.gtpr,
+            _ => 0,
+        }
+    }
+
+    /// Masked read-back byte for an F1 config register, or `None` if `offset` is
+    /// not one. F1 layout only.
+    fn f1_config_byte(&self, offset: u64) -> Option<u8> {
+        for (base, mask) in Self::F1_CONFIG {
+            let bo = offset.wrapping_sub(base);
+            if bo < 4 {
+                return Some((((self.f1_config_value(base) & mask) >> (bo * 8)) & 0xFF) as u8);
+            }
+        }
+        None
+    }
+
+    /// Accumulate one written byte into an F1 config register. Returns true if
+    /// `offset` belonged to one. F1 layout only.
+    fn f1_config_write(&mut self, offset: u64, value: u8) -> bool {
+        for (base, _mask) in Self::F1_CONFIG {
+            let bo = offset.wrapping_sub(base);
+            if bo < 4 {
+                let shift = bo * 8;
+                let set =
+                    |reg: &mut u32| *reg = (*reg & !(0xFF << shift)) | ((value as u32) << shift);
+                match base {
+                    0x08 => set(&mut self.brr),
+                    0x0C => set(&mut self.cr1),
+                    0x10 => set(&mut self.cr2),
+                    0x14 => set(&mut self.cr3),
+                    0x18 => set(&mut self.gtpr),
+                    _ => {}
+                }
+                return true;
+            }
+        }
+        false
+    }
     /// Offset of the CR1 register. `None` for layouts without a CR1 interrupt concept.
     fn cr1_offset(&self) -> Option<u64> {
         self.layout.regmap().cr1
@@ -344,6 +411,12 @@ impl crate::Peripheral for Uart {
             }
             return Ok(0x00);
         }
+        // F1 config registers (BRR/CR1/CR2/CR3/GTPR), masked read-back.
+        if matches!(self.layout, UartRegisterLayout::Stm32F1) {
+            if let Some(b) = self.f1_config_byte(offset) {
+                return Ok(b);
+            }
+        }
         if offset == self.cr3_offset() {
             return Ok(self.cr3 as u8);
         }
@@ -364,6 +437,14 @@ impl crate::Peripheral for Uart {
         if offset == self.tx_offset() || is_legacy_tx_alias {
             self.push_tx(value);
             // If DMAT bit is set, we might be in a DMA sequence.
+            if (self.cr3 & (1 << 7)) != 0 {
+                self.dma_tx_pending = true;
+            }
+        } else if matches!(self.layout, UartRegisterLayout::Stm32F1)
+            && self.f1_config_write(offset, value)
+        {
+            // F1 config register (BRR/CR1/CR2/CR3/GTPR) captured. CR3.DMAT
+            // (bit 7) still gates DMA-driven TX.
             if (self.cr3 & (1 << 7)) != 0 {
                 self.dma_tx_pending = true;
             }
@@ -451,6 +532,11 @@ impl crate::Peripheral for Uart {
                 return Some(*guard.front().unwrap_or(&0x00));
             }
             return Some(0x00);
+        }
+        if matches!(self.layout, UartRegisterLayout::Stm32F1) {
+            if let Some(b) = self.f1_config_byte(offset) {
+                return Some(b);
+            }
         }
         if offset == self.cr3_offset() {
             return Some(self.cr3 as u8);
