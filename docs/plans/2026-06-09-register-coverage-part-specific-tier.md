@@ -1,6 +1,13 @@
 # Register-coverage: the part-specific tier (DMA / AFIO / EXTI / RCC)
 
-**Status:** scoped, not started. Blocked on multi-board bench access.
+**Status:** **P0 + P1 (F103) DONE** (labwired-core #217) — DMA1/AFIO/EXTI/RCC
+silicon-pinned on the bench F103, address sweep `diverge=0` (match=102). Key
+unblocker: F103 is the *only* F1-family chip config, so AFIO (F1-only) and
+`F1Rcc` are F103-exclusive — exact masks, no per-density gating. Only EXTI is
+shared (F103/F401/L073), so its line count is a per-instance `config: {lines}`
+field (F103=19, default 20). The multi-board probe-by-serial issue (below) was
+the real blocker, not part-specificity. **P2 (F407) / P3 (F105/107) remain** —
+blocked on those boards.
 **Predecessor:** the per-family tier (TIM2 / USART2 / SPI1 / I2C1) is **done** —
 18 silicon-validated mask/register fixes, F103 register-modeling coverage
 210→221 (labwired-core PRs #214, #215, #216). Methodology:
