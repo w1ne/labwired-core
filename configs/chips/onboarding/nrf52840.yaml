@@ -38,11 +38,15 @@ peripherals:
   bus: sysbus
   base_address: 1073811456
   irq: 17
+  config:
+    num_cc: 4
 - id: rtc2
   type: nrf52840_rtc
   bus: sysbus
   base_address: 1073889280
   irq: 36
+  config:
+    num_cc: 4
 - id: wdt
   type: nrf52840_watchdog
   bus: sysbus
@@ -113,11 +117,15 @@ peripherals:
   bus: sysbus
   base_address: 1073848320
   irq: 26
+  config:
+    num_cc: 6
 - id: timer4
   type: nrf52840_timer
   bus: sysbus
   base_address: 1073852416
   irq: 27
+  config:
+    num_cc: 6
 - id: i2s
   type: nrf52840_i2s
   bus: sysbus
