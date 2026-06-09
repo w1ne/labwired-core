@@ -145,3 +145,62 @@ LABWIRED_STLINK_SERIAL=<nrf-stlink-serial> \
   read at offset `0x00`/`0x04` did `offset - 0x08`); fixed in
   `crates/core/src/peripherals/dma.rs`.
 - **Manual silicon re-check:** the two hardware diff banks above.
+
+## Full onboarding — F103 parity (2026-06-09, ST-LINK V2 + OpenOCD 0.12.0)
+
+Brought nRF52840 to the STM32F103 conformance bar: every notable peripheral
+swept against silicon, promoted into the production chip descriptor, and locked
+behind a ratcheted gate. FICR `INFO.PART = 0x00052840` confirmed.
+
+### Results (live silicon)
+
+| Harness | Scope | Result |
+|---------|-------|--------|
+| `nrf52_mmio_diff` | production GPIO0/UART0/SPIM0 | 16/16 match |
+| `nrf52_onboarding_diff` | 22 peripherals | 22/22 MODELLED |
+| `nrf52_gpio_conformance` | full GPIO register set, both ports | P0 22/0, P1 23/0 (strict) |
+| `nrf52_conformance` | behavioral digest (firmware sim vs silicon) | 13/16 |
+
+### Bugs found and fixed (silicon caught them)
+
+1. **WDT CRV** — sim accepted a CRV write that silicon rejects: the WDT is
+   started by the UF2 bootloader (RUNSTATUS=1), which locks config registers at
+   their reset value (CRV=0xFFFFFFFF). Model now reset-inits CRV and enforces
+   the running-lock.
+2. **GPIO DETECTMODE (0x524)** — not modeled (read/write fell through to 0);
+   silicon stores it. Added the register on both ports.
+3. **GPIO1 pin count** — modeled as 32-pin; silicon P1 has only 16 pins
+   (P1.0–P1.15), pins ≥16 discarded. Added `num_pins` (P1=16) with write
+   masking + an explicit boundary test.
+4. **TEMP cal array / QSPI psel array** — latent index-out-of-bounds panics
+   uncovered when those peripherals became reachable from the production yaml
+   (`cal [17]→[21]`, `psel [6]→[7]`).
+
+### Promotion
+
+`configs/chips/nrf52840.yaml`: 4 → 47 peripherals, using the silicon-verified
+`nrf52840_*` types (same models the sweep proved), with provenance comments.
+Coverage ratchet rebased 95 → 1108 modeled registers.
+
+### Known residuals (conformance 13/16 — not regressions, documented gaps)
+
+- ECB AES-128 not modeled (silicon returns FIPS-197 ciphertext, sim returns 0).
+- TEMP measurement/DATARDY not modeled.
+- GPIOTE task→GPIO over-permissive (sim drives pin where silicon doesn't).
+
+### Truth-set
+
+Reset-state capture committed to the **private** repo at
+`validation/silicon/nrf52840/hw-capture-20260609-131244/`
+(script: `scripts/hw-capture-nrf52840.sh`, public). Flashing the conformance
+firmware again overwrote the XIAO UF2 bootloader (bare-metal SWD flash at 0x0);
+re-flash the Seeed bootloader to restore USB-UF2.
+
+### Reproduce
+```bash
+for t in nrf52_mmio_diff nrf52_onboarding_diff nrf52_gpio_conformance nrf52_conformance; do
+  LABWIRED_STLINK_SERIAL=<nrf-stlink-serial> \
+    cargo test --release -p labwired-hw-oracle --test $t \
+      --features hw-oracle-nrf52 -- --ignored --nocapture
+done
+```
