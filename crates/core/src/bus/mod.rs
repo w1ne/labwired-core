@@ -1121,7 +1121,17 @@ impl SystemBus {
                         } else {
                             Self::parse_profile_or_default(p_cfg, "SPI")?
                         };
-                    Box::new(crate::peripherals::spi::Spi::new_with_layout(layout))
+                    // Classic-SPI CR2 mask is a per-part delta: F1 0xE7, F4 adds
+                    // FRF bit 4 → 0xF7. YAML: `config: { cr2_mask: 0xF7 }`.
+                    let cr2_mask: u32 = p_cfg
+                        .config
+                        .get("cr2_mask")
+                        .and_then(|v| v.as_u64())
+                        .map(|n| n as u32)
+                        .unwrap_or(0x0000_00E7);
+                    Box::new(crate::peripherals::spi::Spi::new_with_layout_cr2(
+                        layout, cr2_mask,
+                    ))
                 }
                 "pwr" => Box::new(crate::peripherals::pwr::Pwr::new()),
                 "flash" | "flash_iface" => {

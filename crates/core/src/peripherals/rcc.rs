@@ -160,11 +160,14 @@ impl RccModel for F1Rcc {
 #[derive(Debug, Default, serde::Serialize)]
 pub struct F4Rcc {
     cr: u32,
-    cfgr: u32,     // 0x04 (see note)
+    pllcfgr: u32,  // 0x04 (real F4 map — was wrongly conflated with CFGR)
+    cfgr: u32,     // 0x08
+    cir: u32,      // 0x0C
     ahbenr: u32,   // AHB1ENR 0x30
+    ahb2enr: u32,  // 0x34
     apb1enr: u32,  // 0x40
     apb2enr: u32,  // 0x44
-    ahbrstr: u32,  // 0x10
+    ahbrstr: u32,  // AHB1RSTR 0x10
     apb1rstr: u32, // 0x20
     apb2rstr: u32, // 0x24
 }
@@ -173,6 +176,9 @@ impl F4Rcc {
     fn new() -> Self {
         Self {
             cr: classic_cr_ready(1 << 0),
+            // PLLCFGR reset = 0x24003010 (RM0090 §6.3.2) — the factory default
+            // PLL config word; firmware reads it back before reconfiguring.
+            pllcfgr: 0x2400_3010,
             ..Default::default()
         }
     }
@@ -182,11 +188,14 @@ impl RccModel for F4Rcc {
     fn read_reg(&self, offset: u64) -> u32 {
         match offset {
             0x00 => self.cr,
-            0x04 => self.cfgr,
+            0x04 => self.pllcfgr,
+            0x08 => self.cfgr,
+            0x0C => self.cir,
             0x10 => self.ahbrstr,
             0x20 => self.apb1rstr,
             0x24 => self.apb2rstr,
             0x30 => self.ahbenr,
+            0x34 => self.ahb2enr,
             0x40 => self.apb1enr,
             0x44 => self.apb2enr,
             _ => 0,
@@ -195,11 +204,20 @@ impl RccModel for F4Rcc {
     fn write_reg(&mut self, offset: u64, value: u32) {
         match offset {
             0x00 => self.cr = classic_cr_ready(value),
-            0x04 => self.cfgr = cfgr_with_optimistic_sws(value),
+            // PLLCFGR writable = PLLM/PLLN/PLLP/PLLSRC/PLLQ = 0x7F43_7FFF
+            // (silicon-confirmed on F407). Reserved bits read 0.
+            0x04 => self.pllcfgr = value & 0x7F43_7FFF,
+            // CFGR at 0x08 on F4 (not 0x04). The optimistic SW->SWS fake lets
+            // firmware that switches SYSCLK to PLL/HSE see the switch complete.
+            0x08 => self.cfgr = cfgr_with_optimistic_sws(value),
+            // CIR interrupt-enable bits 13:8 = 0x3F00 (F4 adds PLLI2SRDYIE bit
+            // 13 over the F1's 5 bits) — silicon-confirmed on F407.
+            0x0C => self.cir = value & 0x0000_3F00,
             0x10 => self.ahbrstr = value,
             0x20 => self.apb1rstr = value,
             0x24 => self.apb2rstr = value,
             0x30 => self.ahbenr = value,
+            0x34 => self.ahb2enr = value,
             0x40 => self.apb1enr = value,
             0x44 => self.apb2enr = value,
             _ => {}

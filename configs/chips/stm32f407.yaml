@@ -63,6 +63,105 @@ peripherals:
     base_address: 0x40005400
     size: "1KB"
     irq: 31
+  - id: "gpioe"
+    type: "stm32f4_gpio"
+    base_address: 0x40021000
+    size: "1KB"
+  - id: "tim1"
+    type: "timer"
+    base_address: 0x40010000
+    size: "1KB"
+    irq: 27
+    config:
+      advanced: true
+  - id: "tim2"
+    type: "timer"
+    base_address: 0x40000000
+    size: "1KB"
+    irq: 28
+    config:
+      width: 32
+  - id: "tim3"
+    type: "timer"
+    base_address: 0x40000400
+    size: "1KB"
+    irq: 29
+  - id: "tim4"
+    type: "timer"
+    base_address: 0x40000800
+    size: "1KB"
+    irq: 30
+  - id: "tim5"
+    type: "timer"
+    base_address: 0x40000C00
+    size: "1KB"
+    irq: 50
+    config:
+      width: 32
+  - id: "usart1"
+    type: "uart"
+    base_address: 0x40011000
+    size: "1KB"
+    irq: 37
+    config:
+      cr3_mask: 0xFFF
+  - id: "usart3"
+    type: "uart"
+    base_address: 0x40004800
+    size: "1KB"
+    irq: 39
+    config:
+      cr3_mask: 0xFFF
+  - id: "usart6"
+    type: "uart"
+    base_address: 0x40011400
+    size: "1KB"
+    irq: 71
+    config:
+      cr3_mask: 0xFFF
+  - id: "spi1"
+    type: "spi"
+    base_address: 0x40013000
+    size: "1KB"
+    irq: 35
+    # F4 classic SPI CR2 adds bit 4 (FRF/TI-mode) over the F1 map → 0xF7.
+    config:
+      cr2_mask: 0xF7
+  - id: "spi2"
+    type: "spi"
+    base_address: 0x40003800
+    size: "1KB"
+    irq: 36
+    config:
+      cr2_mask: 0xF7
+  - id: "spi3"
+    type: "spi"
+    base_address: 0x40003C00
+    size: "1KB"
+    irq: 51
+    config:
+      cr2_mask: 0xF7
+  - id: "i2c2"
+    type: "i2c"
+    base_address: 0x40005800
+    size: "1KB"
+    irq: 33
+  - id: "i2c3"
+    type: "i2c"
+    base_address: 0x40005C00
+    size: "1KB"
+    irq: 72
+  - id: "adc1"
+    type: "adc"
+    base_address: 0x40012000
+    size: "1KB"
+    irq: 18
+  - id: "exti"
+    type: "exti"
+    base_address: 0x40013C00
+    size: "1KB"
+    config:
+      lines: 23
   - id: "dbgmcu"
     type: "dbgmcu"
     base_address: 0xE0042000

@@ -64,6 +64,39 @@ const I2C1_TRISE: u32 = I2C1_BASE + 0x20;
 const DBGMCU_IDCODE: u32 = 0xE004_2000;
 const F407_IDCODE: u32 = 0x1001_6413; // DEV_ID 0x413, REV_ID 0x1001
 
+// ── EXTI (0x4001_3C00 on F4 — 23 lines, set via config: {lines: 23}) ──────────
+const EXTI_BASE: u32 = 0x4001_3C00;
+const EXTI_IMR: u32 = EXTI_BASE + 0x00;
+const EXTI_EMR: u32 = EXTI_BASE + 0x04;
+const EXTI_RTSR: u32 = EXTI_BASE + 0x08;
+const EXTI_FTSR: u32 = EXTI_BASE + 0x0C;
+
+// ── RCC extra registers (F4 map) + clock-enable bits used as sweep prep ───────
+const RCC_PLLCFGR: u32 = RCC_BASE + 0x04;
+const RCC_CIR: u32 = RCC_BASE + 0x0C;
+const RCC_AHB1ENR: u32 = RCC_BASE + 0x30;
+const RCC_APB2ENR: u32 = RCC_BASE + 0x44;
+const PLLCFGR_RESET: u32 = 0x2400_3010; // RM0090 §6.3.2 factory default
+const GPIOCEN: u32 = 1 << 2; // AHB1ENR
+const SPI1EN: u32 = 1 << 12; // APB2ENR
+
+// ── GPIOC (0x4002_0800) — swept instead of GPIOA (avoids SWD pins PA13/PA14) ──
+const GPIOC_BASE: u32 = 0x4002_0800;
+const GPIOC_MODER: u32 = GPIOC_BASE + 0x00;
+const GPIOC_OTYPER: u32 = GPIOC_BASE + 0x04;
+const GPIOC_OSPEEDR: u32 = GPIOC_BASE + 0x08;
+const GPIOC_PUPDR: u32 = GPIOC_BASE + 0x0C;
+const GPIOC_AFRL: u32 = GPIOC_BASE + 0x20;
+const GPIOC_AFRH: u32 = GPIOC_BASE + 0x24;
+
+// ── SPI1 (0x4001_3000 — APB2, classic SPI) ───────────────────────────────────
+const SPI1_BASE: u32 = 0x4001_3000;
+const SPI1_CR1: u32 = SPI1_BASE + 0x00;
+const SPI1_CR2: u32 = SPI1_BASE + 0x04;
+const SPI1_CRCPR: u32 = SPI1_BASE + 0x10;
+const SPI1_I2SCFGR: u32 = SPI1_BASE + 0x1C;
+const SPI1_I2SPR: u32 = SPI1_BASE + 0x20;
+
 struct ResetCase {
     label: &'static str,
     read_addr: u32,
@@ -71,12 +104,20 @@ struct ResetCase {
     expect: u32,
 }
 
-const RESET_CASES: &[ResetCase] = &[ResetCase {
-    label: "DBGMCU IDCODE = 0x10016413 (DEV_ID 0x413)",
-    read_addr: DBGMCU_IDCODE,
-    mask: 0x0FFF_FFFF, // REV_ID upper bits vary by die; pin DEV_ID + low rev
-    expect: F407_IDCODE & 0x0FFF_FFFF,
-}];
+const RESET_CASES: &[ResetCase] = &[
+    ResetCase {
+        label: "DBGMCU IDCODE = 0x10016413 (DEV_ID 0x413)",
+        read_addr: DBGMCU_IDCODE,
+        mask: 0x0FFF_FFFF, // REV_ID upper bits vary by die; pin DEV_ID + low rev
+        expect: F407_IDCODE & 0x0FFF_FFFF,
+    },
+    ResetCase {
+        label: "RCC.PLLCFGR reset = 0x24003010 (F4 map @0x04)",
+        read_addr: RCC_PLLCFGR,
+        mask: 0xFFFF_FFFF,
+        expect: PLLCFGR_RESET,
+    },
+];
 
 struct SweepCase {
     label: &'static str,
@@ -171,6 +212,112 @@ const SWEEP_CASES: &[SweepCase] = &[
         prep: &[(RCC_APB1ENR, I2C1EN)],
         addr: I2C1_CR1,
         write: 0x0000_2CFB,
+    },
+    // ── RCC F4 config registers (PLLCFGR, CIR) — first F4 validation. ─────────
+    SweepCase {
+        label: "RCC.PLLCFGR",
+        prep: &[],
+        addr: RCC_PLLCFGR,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "RCC.CIR",
+        prep: &[],
+        addr: RCC_CIR,
+        write: 0xFFFF_FFFF,
+    },
+    // ── GPIOC (stm32f4_gpio) — first F4 GPIO validation. ─────────────────────
+    SweepCase {
+        label: "GPIOC.MODER",
+        prep: &[(RCC_AHB1ENR, GPIOCEN)],
+        addr: GPIOC_MODER,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "GPIOC.OTYPER",
+        prep: &[(RCC_AHB1ENR, GPIOCEN)],
+        addr: GPIOC_OTYPER,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "GPIOC.OSPEEDR",
+        prep: &[(RCC_AHB1ENR, GPIOCEN)],
+        addr: GPIOC_OSPEEDR,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "GPIOC.PUPDR",
+        prep: &[(RCC_AHB1ENR, GPIOCEN)],
+        addr: GPIOC_PUPDR,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "GPIOC.AFRL",
+        prep: &[(RCC_AHB1ENR, GPIOCEN)],
+        addr: GPIOC_AFRL,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "GPIOC.AFRH",
+        prep: &[(RCC_AHB1ENR, GPIOCEN)],
+        addr: GPIOC_AFRH,
+        write: 0xFFFF_FFFF,
+    },
+    // ── SPI1 (classic SPI) — cross-validates the shared masks on F4. ──────────
+    SweepCase {
+        label: "SPI1.CR2",
+        prep: &[(RCC_APB2ENR, SPI1EN)],
+        addr: SPI1_CR2,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "SPI1.CRCPR",
+        prep: &[(RCC_APB2ENR, SPI1EN)],
+        addr: SPI1_CRCPR,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "SPI1.I2SCFGR",
+        prep: &[(RCC_APB2ENR, SPI1EN)],
+        addr: SPI1_I2SCFGR,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "SPI1.I2SPR",
+        prep: &[(RCC_APB2ENR, SPI1EN)],
+        addr: SPI1_I2SPR,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "SPI1.CR1 (last: SPE)",
+        prep: &[(RCC_APB2ENR, SPI1EN)],
+        addr: SPI1_CR1,
+        write: 0xFFFF_FFFF,
+    },
+    // ── EXTI mask registers — F4 base 0x40013C00, 23 lines (0x7FFFFF). ────────
+    SweepCase {
+        label: "EXTI.IMR (23 lines)",
+        prep: &[],
+        addr: EXTI_IMR,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "EXTI.EMR",
+        prep: &[],
+        addr: EXTI_EMR,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "EXTI.RTSR",
+        prep: &[],
+        addr: EXTI_RTSR,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "EXTI.FTSR",
+        prep: &[],
+        addr: EXTI_FTSR,
+        write: 0xFFFF_FFFF,
     },
 ];
 
