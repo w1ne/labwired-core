@@ -12,7 +12,7 @@
 // (genuinely shared behaviour), so the public API (`attach`, `set_loopback`,
 // `as_any`) is unchanged. The chip-yaml `profile` selects the variant.
 
-use crate::SimResult;
+use crate::{Bus, SimResult};
 use std::any::Any;
 use std::str::FromStr;
 
@@ -151,71 +151,172 @@ impl Stm32SpiRegs {
 }
 
 /// Nordic nRF52 SPIM (EasyDMA) register file — Nordic-only state.
+///
+/// Register offsets follow nRF52840 PS rev 1.7 §6.30 (SPIM).
+///
+/// TASKS:
+///   0x010  TASKS_START  — write 1 arms EasyDMA; handled via needs_bus_tick/tick_with_bus
+///   0x014  TASKS_STOP   — write 1 requests a graceful stop
+///
+/// EVENTS:
+///   0x104  EVENTS_STOPPED  — peripheral stopped
+///   0x110  EVENTS_ENDRX    — last byte clocked into RXD buffer (HW-set only)
+///   0x118  EVENTS_END      — all RXD+TXD transfers complete (HW-set only)
+///   0x120  EVENTS_ENDTX    — last byte clocked out of TXD buffer (HW-set only)
+///
+/// EVENTS write-semantics (silicon-verified for TIMER/RTC, applied uniformly):
+///   SW writes of 1 are ignored — only HW sets EVENTS registers.
+///   SW writes of 0 clear the event.
+///
+/// CONFIG:
+///   0x554  CONFIG  — ORDER (bit 0), CPHA (bit 1), CPOL (bit 2)
+///
+/// EasyDMA:
+///   0x534  RXD.PTR     — base address for received bytes
+///   0x538  RXD.MAXCNT  — max bytes to receive
+///   0x53C  RXD.AMOUNT  — bytes actually received (HW-updated, PS §6.30.4D0)
+///   0x544  TXD.PTR     — base address for bytes to transmit
+///   0x548  TXD.MAXCNT  — number of bytes to transmit
+///   0x54C  TXD.AMOUNT  — bytes actually transmitted (HW-updated, PS §6.30.4D8)
+///   0x5C0  ORC         — over-read character (sent when TXD exhausted but RXD still running)
 #[derive(Debug, Clone, Default, serde::Serialize)]
 struct Nrf52SpiRegs {
-    events_end: u32,
+    // EVENTS — HW-set only; SW may only write 0 to clear
     events_stopped: u32,
+    events_endrx: u32,
+    events_end: u32,
+    events_endtx: u32,
+
+    // INTEN — bit-field enabling each event's IRQ
+    inten: u32,
+
+    // Config / pin-select / mode
     enable: u32,
     psel_sck: u32,
     psel_mosi: u32,
     psel_miso: u32,
     frequency: u32,
     config: u32,
+
+    // EasyDMA descriptors
     rxd_ptr: u32,
     rxd_maxcnt: u32,
     rxd_amount: u32,
     txd_ptr: u32,
     txd_maxcnt: u32,
     txd_amount: u32,
+
+    // Over-read character (low 8 bits, rest reserved)
+    orc: u32,
 }
+
+/// INTEN bit positions (PS §6.30 INTEN register).
+/// STOPPED=1, ENDRX=4, END=6, ENDTX=8.
+const INTEN_STOPPED: u32 = 1 << 1;
+const INTEN_ENDRX: u32 = 1 << 4;
+const INTEN_END: u32 = 1 << 6;
+const INTEN_ENDTX: u32 = 1 << 8;
 
 impl Nrf52SpiRegs {
     fn read_reg(&self, offset: u64) -> u32 {
         match offset {
+            // TASKS read as 0 (write-only strobes on silicon)
+            0x010 | 0x014 => 0,
+            // EVENTS
             0x104 => self.events_stopped,
+            0x110 => self.events_endrx,
             0x118 => self.events_end,
+            0x120 => self.events_endtx,
+            // INTEN / INTENSET / INTENCLR all mirror the inten value
+            0x300 | 0x304 | 0x308 => self.inten,
+            // Config
             0x500 => self.enable,
             0x508 => self.psel_sck,
             0x50C => self.psel_mosi,
             0x510 => self.psel_miso,
             0x524 => self.frequency,
+            0x554 => self.config,
+            // EasyDMA descriptors
             0x534 => self.rxd_ptr,
             0x538 => self.rxd_maxcnt,
             0x53C => self.rxd_amount,
             0x544 => self.txd_ptr,
             0x548 => self.txd_maxcnt,
             0x54C => self.txd_amount,
-            0x554 => self.config,
+            // ORC
+            0x5C0 => self.orc & 0xFF,
             _ => 0,
         }
     }
 
-    fn write_reg(&mut self, offset: u64, value: u32) {
+    /// Handle MMIO writes for the nRF52 SPIM register file.
+    ///
+    /// Returns `true` when TASKS_START was triggered (so the caller can set
+    /// `pending_start`). TASKS_STOP returns `false` (handled here).
+    ///
+    /// EVENTS write semantics: SW write of 1 is a no-op (only HW sets events);
+    /// SW write of 0 clears the event.
+    fn write_reg(&mut self, offset: u64, value: u32) -> bool {
         match offset {
-            0x010 if value != 0 => {
-                self.events_end = 1;
-                self.txd_amount = self.txd_maxcnt;
-                self.rxd_amount = self.rxd_maxcnt;
+            // TASKS — trigger on non-zero write
+            0x010 => return value != 0, // TASKS_START: signal caller
+            0x014 => {
+                // TASKS_STOP: no state needed; events_stopped set by HW
             }
-            0x014 if value != 0 => {
-                self.events_stopped = 1;
+
+            // EVENTS — SW write of 1 ignored; SW write of 0 clears
+            0x104 => {
+                if value == 0 {
+                    self.events_stopped = 0;
+                }
             }
-            0x104 => self.events_stopped = value,
-            0x118 => self.events_end = value,
+            0x110 => {
+                if value == 0 {
+                    self.events_endrx = 0;
+                }
+            }
+            0x118 => {
+                if value == 0 {
+                    self.events_end = 0;
+                }
+            }
+            0x120 => {
+                if value == 0 {
+                    self.events_endtx = 0;
+                }
+            }
+
+            // INTEN (direct write)
+            0x300 => self.inten = value,
+            // INTENSET (set bits)
+            0x304 => self.inten |= value,
+            // INTENCLR (clear bits)
+            0x308 => self.inten &= !value,
+
+            // Config / pin-select
             0x500 => self.enable = value,
             0x508 => self.psel_sck = value,
             0x50C => self.psel_mosi = value,
             0x510 => self.psel_miso = value,
             0x524 => self.frequency = value,
+            0x554 => self.config = value,
+
+            // EasyDMA descriptors (AMOUNT registers are HW-written; firmware
+            // should not write them, but the model accepts writes so firmware
+            // that does an initialising clear doesn't get confused)
             0x534 => self.rxd_ptr = value,
             0x538 => self.rxd_maxcnt = value,
             0x53C => self.rxd_amount = value,
             0x544 => self.txd_ptr = value,
             0x548 => self.txd_maxcnt = value,
             0x54C => self.txd_amount = value,
-            0x554 => self.config = value,
+
+            // ORC (only low 8 bits are meaningful)
+            0x5C0 => self.orc = value & 0xFF,
+
             _ => {}
         }
+        false
     }
 }
 
@@ -248,6 +349,11 @@ pub struct Spi {
     /// When true, completed transfers also load `transfer_buffer` into the RX
     /// path (`dr` + RXNE), as if MOSI were jumpered to MISO. Defaults false.
     loopback: bool,
+
+    /// nRF52 SPIM: set when TASKS_START is written; cleared after
+    /// `tick_with_bus` completes the EasyDMA transfer.
+    #[serde(skip)]
+    nrf52_pending_start: bool,
 
     #[serde(skip)]
     pub attached_devices: Vec<Box<dyn SpiDevice>>,
@@ -414,8 +520,13 @@ impl crate::Peripheral for Spi {
             };
             let mask: u32 = 0xFF << (byte_offset * 8);
             let new = (cur & !mask) | ((value as u32) << (byte_offset * 8));
-            if let SpiRegs::Nrf52(r) = &mut self.regs {
-                r.write_reg(reg_offset, new);
+            let start_triggered = if let SpiRegs::Nrf52(r) = &mut self.regs {
+                r.write_reg(reg_offset, new)
+            } else {
+                false
+            };
+            if start_triggered {
+                self.nrf52_pending_start = true;
             }
             return Ok(());
         }
@@ -429,6 +540,34 @@ impl crate::Peripheral for Spi {
         let mask: u32 = 0xFF << (byte_offset * 8);
         let new = (cur & !mask) | ((value as u32) << (byte_offset * 8));
         self.write_stm32_reg(reg_offset, new as u16);
+        Ok(())
+    }
+
+    /// For nRF52 SPIM, 32-bit register writes must be handled atomically so
+    /// that INTENSET / INTENCLR (set/clear bitmask registers) receive the full
+    /// 32-bit value rather than a read-modify-write merge of individual bytes.
+    /// The byte-merge in the default `write_u32` would incorrectly OR in bits
+    /// from the current register state and cause INTENCLR to clear more bits
+    /// than intended. Firmware on Cortex-M always uses STR (32-bit) for
+    /// nRF register accesses — this override matches that behaviour.
+    fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        if let SpiRegs::Nrf52(_) = &self.regs {
+            let reg_offset = offset & !3;
+            let start_triggered = if let SpiRegs::Nrf52(r) = &mut self.regs {
+                r.write_reg(reg_offset, value)
+            } else {
+                false
+            };
+            if start_triggered {
+                self.nrf52_pending_start = true;
+            }
+            return Ok(());
+        }
+        // STM32 default: four byte writes.
+        self.write(offset, (value & 0xFF) as u8)?;
+        self.write(offset + 1, ((value >> 8) & 0xFF) as u8)?;
+        self.write(offset + 2, ((value >> 16) & 0xFF) as u8)?;
+        self.write(offset + 3, ((value >> 24) & 0xFF) as u8)?;
         Ok(())
     }
 
@@ -460,38 +599,6 @@ impl crate::Peripheral for Spi {
         self.write(offset, (value & 0xFF) as u8)?;
         self.write(offset + 1, ((value >> 8) & 0xFF) as u8)?;
         Ok(())
-    }
-
-    fn tick(&mut self) -> crate::PeripheralTickResult {
-        let mut irq = false;
-        if self.transfer_in_progress {
-            self.transfer_cycles_remaining = self.transfer_cycles_remaining.saturating_sub(1);
-            if self.transfer_cycles_remaining == 0 {
-                self.transfer_in_progress = false;
-                let deliver_rx = self.loopback || !self.attached_devices.is_empty();
-                let buf = self.transfer_buffer;
-                if let SpiRegs::Stm32(r) = &mut self.regs {
-                    r.sr &= !0x0080; // Clear BSY
-                    r.sr |= 0x0002; // Set TXE
-                    if deliver_rx {
-                        // A wired slave drove its byte onto MISO (already in
-                        // `transfer_buffer`); loopback mirrors MOSI. Either way
-                        // the firmware sees RXNE high with the received byte.
-                        r.dr = buf as u16;
-                        r.sr |= 0x0001; // RXNE
-                    }
-                    if (r.cr2 & (1 << 7)) != 0 {
-                        irq = true; // TXEIE
-                    }
-                }
-            }
-        }
-
-        crate::PeripheralTickResult {
-            irq,
-            cycles: 0,
-            ..Default::default()
-        }
     }
 
     fn uses_scheduler(&self) -> bool {
@@ -534,6 +641,153 @@ impl crate::Peripheral for Spi {
             }
         }
         res
+    }
+
+    /// nRF52 SPIM EasyDMA needs bus access to read/write RAM buffers.
+    fn needs_bus_tick(&self) -> bool {
+        self.nrf52_pending_start
+    }
+
+    /// nRF52 SPIM EasyDMA transfer engine.
+    ///
+    /// Reads TXD.MAXCNT bytes from RAM at TXD.PTR, clocks each through the
+    /// attached `SpiDevice` (or uses ORC when TXD is exhausted but RXD still
+    /// has capacity), writes received bytes to RAM at RXD.PTR up to
+    /// RXD.MAXCNT, then sets EVENTS_ENDTX / EVENTS_ENDRX / EVENTS_END and
+    /// updates TXD.AMOUNT / RXD.AMOUNT.
+    fn tick_with_bus(&mut self, bus: &mut dyn Bus) {
+        if !self.nrf52_pending_start {
+            return;
+        }
+        self.nrf52_pending_start = false;
+
+        let (txd_ptr, txd_maxcnt, rxd_ptr, rxd_maxcnt, orc) =
+            if let SpiRegs::Nrf52(r) = &self.regs {
+                (
+                    r.txd_ptr as u64,
+                    r.txd_maxcnt as usize,
+                    r.rxd_ptr as u64,
+                    r.rxd_maxcnt as usize,
+                    (r.orc & 0xFF) as u8,
+                )
+            } else {
+                return;
+            };
+
+        // Determine the total number of byte-cycles to run: whichever
+        // descriptor is larger drives the clock count; the smaller one
+        // pads with ORC (TX side) or discards (RX side that is full).
+        let n_clocks = txd_maxcnt.max(rxd_maxcnt);
+
+        let mut txd_amount: u32 = 0;
+        let mut rxd_amount: u32 = 0;
+
+        for i in 0..n_clocks {
+            // Read MOSI byte: TX buffer while available, else ORC.
+            let mosi: u8 = if i < txd_maxcnt {
+                bus.read_u8(txd_ptr + i as u64).unwrap_or(0)
+            } else {
+                orc
+            };
+
+            if i < txd_maxcnt {
+                txd_amount += 1;
+            }
+
+            // Clock the byte through the attached device (or loopback /
+            // no-device — mirrors MOSI back).
+            let miso: u8 = if !self.attached_devices.is_empty() {
+                let mut resp: u8 = 0;
+                for dev in &mut self.attached_devices {
+                    let r = dev.transfer(mosi);
+                    if r != 0 {
+                        resp = r;
+                    }
+                }
+                resp
+            } else if self.loopback {
+                mosi
+            } else {
+                0
+            };
+
+            // Write MISO byte to RX buffer if there is still capacity.
+            if i < rxd_maxcnt {
+                let _ = bus.write_u8(rxd_ptr + i as u64, miso);
+                rxd_amount += 1;
+            }
+        }
+
+        // Update AMOUNT registers and fire completion events.
+        if let SpiRegs::Nrf52(r) = &mut self.regs {
+            r.txd_amount = txd_amount;
+            r.rxd_amount = rxd_amount;
+            // HW fires ENDTX, ENDRX, then END (PS §6.30 sequence).
+            r.events_endtx = 1;
+            r.events_endrx = 1;
+            r.events_end = 1;
+        }
+    }
+
+    fn tick(&mut self) -> crate::PeripheralTickResult {
+        let mut irq = false;
+        let mut fired: Vec<u32> = Vec::new();
+
+        // ── nRF52 SPIM: raise IRQ for any enabled+pending EVENTS ─────────────
+        if let SpiRegs::Nrf52(r) = &self.regs {
+            // Check each event against its INTEN bit.
+            if r.events_stopped != 0 && r.inten & INTEN_STOPPED != 0 {
+                irq = true;
+                fired.push(0x104);
+            }
+            if r.events_endrx != 0 && r.inten & INTEN_ENDRX != 0 {
+                irq = true;
+                fired.push(0x110);
+            }
+            if r.events_end != 0 && r.inten & INTEN_END != 0 {
+                irq = true;
+                fired.push(0x118);
+            }
+            if r.events_endtx != 0 && r.inten & INTEN_ENDTX != 0 {
+                irq = true;
+                fired.push(0x120);
+            }
+            return crate::PeripheralTickResult {
+                irq,
+                fired_events: fired,
+                ..Default::default()
+            };
+        }
+
+        // ── STM32 SPI: cycle-counted shift-register transfer ─────────────────
+        if self.transfer_in_progress {
+            self.transfer_cycles_remaining = self.transfer_cycles_remaining.saturating_sub(1);
+            if self.transfer_cycles_remaining == 0 {
+                self.transfer_in_progress = false;
+                let deliver_rx = self.loopback || !self.attached_devices.is_empty();
+                let buf = self.transfer_buffer;
+                if let SpiRegs::Stm32(r) = &mut self.regs {
+                    r.sr &= !0x0080; // Clear BSY
+                    r.sr |= 0x0002; // Set TXE
+                    if deliver_rx {
+                        // A wired slave drove its byte onto MISO (already in
+                        // `transfer_buffer`); loopback mirrors MOSI. Either way
+                        // the firmware sees RXNE high with the received byte.
+                        r.dr = buf as u16;
+                        r.sr |= 0x0001; // RXNE
+                    }
+                    if (r.cr2 & (1 << 7)) != 0 {
+                        irq = true; // TXEIE
+                    }
+                }
+            }
+        }
+
+        crate::PeripheralTickResult {
+            irq,
+            cycles: 0,
+            ..Default::default()
+        }
     }
 
     fn snapshot(&self) -> serde_json::Value {
@@ -648,5 +902,385 @@ mod tests {
         // No slave wired → no MISO data → RXNE stays clear, DR reads 0.
         assert_eq!(sr & 0x01, 0, "RXNE NOT set without a slave");
         assert_eq!(spi.read(0x0C).unwrap(), 0x00, "DR=0 with no MISO data");
+    }
+
+    // ── nRF52 SPIM EasyDMA unit tests ─────────────────────────────────────────
+
+    use crate::{Bus, DmaRequest, SimulationConfig};
+    use std::collections::HashMap;
+
+    /// Minimal flat-RAM bus for unit tests — no peripherals, just byte array.
+    struct FlatRamBus {
+        mem: HashMap<u64, u8>,
+        config: SimulationConfig,
+    }
+
+    impl FlatRamBus {
+        fn new() -> Self {
+            Self {
+                mem: HashMap::new(),
+                config: SimulationConfig::default(),
+            }
+        }
+
+        fn write_slice(&mut self, base: u64, data: &[u8]) {
+            for (i, &b) in data.iter().enumerate() {
+                self.mem.insert(base + i as u64, b);
+            }
+        }
+
+        fn read_slice(&self, base: u64, len: usize) -> Vec<u8> {
+            (0..len).map(|i| *self.mem.get(&(base + i as u64)).unwrap_or(&0)).collect()
+        }
+    }
+
+    impl Bus for FlatRamBus {
+        fn read_u8(&self, addr: u64) -> crate::SimResult<u8> {
+            Ok(*self.mem.get(&addr).unwrap_or(&0))
+        }
+        fn write_u8(&mut self, addr: u64, value: u8) -> crate::SimResult<()> {
+            self.mem.insert(addr, value);
+            Ok(())
+        }
+        fn tick_peripherals(&mut self) -> Vec<u32> {
+            Vec::new()
+        }
+        fn execute_dma(&mut self, _requests: &[DmaRequest]) -> crate::SimResult<()> {
+            Ok(())
+        }
+        fn config(&self) -> &SimulationConfig {
+            &self.config
+        }
+    }
+
+    /// Helper: write a u32 to nRF SPIM registers as a single word write
+    /// (matches Cortex-M STR instruction semantics used by real firmware).
+    fn nrf_write_u32(spi: &mut Spi, offset: u64, value: u32) {
+        spi.write_u32(offset, value).unwrap();
+    }
+
+    /// Helper: read a u32 from nRF SPIM registers via 4x byte reads.
+    fn nrf_read_u32(spi: &Spi, offset: u64) -> u32 {
+        let b0 = spi.read(offset).unwrap() as u32;
+        let b1 = spi.read(offset + 1).unwrap() as u32;
+        let b2 = spi.read(offset + 2).unwrap() as u32;
+        let b3 = spi.read(offset + 3).unwrap() as u32;
+        b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)
+    }
+
+    /// Full EasyDMA transfer with no attached device and no loopback:
+    /// TXD bytes are read from RAM, MISO is 0 everywhere.
+    /// After tick_with_bus: EVENTS_END/ENDTX/ENDRX all 1,
+    /// TXD.AMOUNT == TXD.MAXCNT, RXD.AMOUNT == RXD.MAXCNT,
+    /// RXD RAM contains zeros (no device, no loopback).
+    #[test]
+    fn nrf52_spim_easydma_no_device_txd_and_rxd_amount() {
+        let mut spi = Spi::new_with_layout(SpiRegisterLayout::Nrf52Spim);
+        let mut bus = FlatRamBus::new();
+
+        let tx_base: u64 = 0x2000_0000;
+        let rx_base: u64 = 0x2000_0100;
+        let tx_data: [u8; 4] = [0xDE, 0xAD, 0xBE, 0xEF];
+        bus.write_slice(tx_base, &tx_data);
+
+        // Configure SPIM: ENABLE=7, TXD.PTR/MAXCNT, RXD.PTR/MAXCNT.
+        nrf_write_u32(&mut spi, 0x500, 7);            // ENABLE = 7
+        nrf_write_u32(&mut spi, 0x544, tx_base as u32); // TXD.PTR
+        nrf_write_u32(&mut spi, 0x548, 4);            // TXD.MAXCNT = 4
+        nrf_write_u32(&mut spi, 0x534, rx_base as u32); // RXD.PTR
+        nrf_write_u32(&mut spi, 0x538, 4);            // RXD.MAXCNT = 4
+
+        // TASKS_START — must not have fired events yet.
+        nrf_write_u32(&mut spi, 0x010, 1);
+        assert_eq!(nrf_read_u32(&spi, 0x118), 0, "EVENTS_END must not be set before tick");
+        assert!(spi.needs_bus_tick(), "pending_start must be set");
+
+        // Run EasyDMA.
+        spi.tick_with_bus(&mut bus);
+
+        // Completion events.
+        assert_eq!(nrf_read_u32(&spi, 0x118), 1, "EVENTS_END must be 1 after transfer");
+        assert_eq!(nrf_read_u32(&spi, 0x120), 1, "EVENTS_ENDTX must be 1");
+        assert_eq!(nrf_read_u32(&spi, 0x110), 1, "EVENTS_ENDRX must be 1");
+
+        // AMOUNT registers.
+        assert_eq!(nrf_read_u32(&spi, 0x54C), 4, "TXD.AMOUNT must be 4");
+        assert_eq!(nrf_read_u32(&spi, 0x53C), 4, "RXD.AMOUNT must be 4");
+
+        // No device/loopback → MISO is all zeros.
+        let rx = bus.read_slice(rx_base, 4);
+        assert_eq!(rx, vec![0, 0, 0, 0], "RXD RAM must be zeros with no device");
+
+        // needs_bus_tick must be clear after completion.
+        assert!(!spi.needs_bus_tick(), "pending_start must be cleared after tick_with_bus");
+    }
+
+    /// Full EasyDMA transfer with loopback (MOSI → MISO mirror):
+    /// RXD RAM should contain the same bytes that were transmitted.
+    #[test]
+    fn nrf52_spim_easydma_loopback_rxd_mirrors_txd() {
+        let mut spi = Spi::new_with_layout(SpiRegisterLayout::Nrf52Spim);
+        spi.set_loopback(true);
+        let mut bus = FlatRamBus::new();
+
+        let tx_base: u64 = 0x2000_0200;
+        let rx_base: u64 = 0x2000_0300;
+        let tx_data: [u8; 5] = [0x11, 0x22, 0x33, 0x44, 0x55];
+        bus.write_slice(tx_base, &tx_data);
+
+        nrf_write_u32(&mut spi, 0x500, 7);
+        nrf_write_u32(&mut spi, 0x544, tx_base as u32);
+        nrf_write_u32(&mut spi, 0x548, 5);
+        nrf_write_u32(&mut spi, 0x534, rx_base as u32);
+        nrf_write_u32(&mut spi, 0x538, 5);
+
+        nrf_write_u32(&mut spi, 0x010, 1); // TASKS_START
+        spi.tick_with_bus(&mut bus);
+
+        // With loopback, each MISO byte is the same as the MOSI byte.
+        let rx = bus.read_slice(rx_base, 5);
+        assert_eq!(rx, tx_data.to_vec(), "loopback: RXD == TXD");
+        assert_eq!(nrf_read_u32(&spi, 0x54C), 5, "TXD.AMOUNT");
+        assert_eq!(nrf_read_u32(&spi, 0x53C), 5, "RXD.AMOUNT");
+        assert_eq!(nrf_read_u32(&spi, 0x118), 1, "EVENTS_END");
+    }
+
+    /// Attached SpiDevice (echo slave): every MOSI byte is returned as-is.
+    /// RXD RAM should contain the transmitted bytes.
+    #[test]
+    fn nrf52_spim_easydma_echo_device_rxd_contains_mosi() {
+        struct EchoSlave;
+        impl SpiDevice for EchoSlave {
+            fn transfer(&mut self, mosi: u8) -> u8 {
+                mosi
+            }
+            fn cs_pin(&self) -> &str {
+                ""
+            }
+        }
+
+        let mut spi = Spi::new_with_layout(SpiRegisterLayout::Nrf52Spim);
+        spi.attach(Box::new(EchoSlave));
+        let mut bus = FlatRamBus::new();
+
+        let tx_base: u64 = 0x2000_0400;
+        let rx_base: u64 = 0x2000_0500;
+        let tx_data: [u8; 3] = [0xA1, 0xB2, 0xC3];
+        bus.write_slice(tx_base, &tx_data);
+
+        nrf_write_u32(&mut spi, 0x500, 7);
+        nrf_write_u32(&mut spi, 0x544, tx_base as u32);
+        nrf_write_u32(&mut spi, 0x548, 3);
+        nrf_write_u32(&mut spi, 0x534, rx_base as u32);
+        nrf_write_u32(&mut spi, 0x538, 3);
+        nrf_write_u32(&mut spi, 0x010, 1);
+        spi.tick_with_bus(&mut bus);
+
+        let rx = bus.read_slice(rx_base, 3);
+        assert_eq!(rx, tx_data.to_vec(), "echo device: RXD == TXD (MISO mirrors MOSI)");
+        assert_eq!(nrf_read_u32(&spi, 0x118), 1, "EVENTS_END");
+        assert_eq!(nrf_read_u32(&spi, 0x54C), 3, "TXD.AMOUNT == 3");
+        assert_eq!(nrf_read_u32(&spi, 0x53C), 3, "RXD.AMOUNT == 3");
+    }
+
+    /// RXD.MAXCNT < TXD.MAXCNT: RXD fills up, remaining MISO bytes are discarded.
+    /// TXD.AMOUNT == TXD.MAXCNT, RXD.AMOUNT == RXD.MAXCNT.
+    #[test]
+    fn nrf52_spim_easydma_rxd_maxcnt_limits_rxd_amount() {
+        let mut spi = Spi::new_with_layout(SpiRegisterLayout::Nrf52Spim);
+        spi.set_loopback(true);
+        let mut bus = FlatRamBus::new();
+
+        let tx_base: u64 = 0x2000_0600;
+        let rx_base: u64 = 0x2000_0700;
+        bus.write_slice(tx_base, &[0x01, 0x02, 0x03, 0x04, 0x05, 0x06]);
+
+        nrf_write_u32(&mut spi, 0x544, tx_base as u32);
+        nrf_write_u32(&mut spi, 0x548, 6);  // TXD.MAXCNT = 6
+        nrf_write_u32(&mut spi, 0x534, rx_base as u32);
+        nrf_write_u32(&mut spi, 0x538, 3);  // RXD.MAXCNT = 3 (less)
+        nrf_write_u32(&mut spi, 0x010, 1);
+        spi.tick_with_bus(&mut bus);
+
+        assert_eq!(nrf_read_u32(&spi, 0x54C), 6, "TXD.AMOUNT == 6");
+        assert_eq!(nrf_read_u32(&spi, 0x53C), 3, "RXD.AMOUNT == 3 (clamped)");
+        // Only first 3 bytes written to RX buffer.
+        let rx = bus.read_slice(rx_base, 3);
+        assert_eq!(rx, vec![0x01, 0x02, 0x03], "first 3 bytes received");
+    }
+
+    /// ORC (over-read character): when TXD.MAXCNT < RXD.MAXCNT, the ORC byte
+    /// is clocked out for the extra cycles. With loopback, those ORC bytes
+    /// end up in the RXD buffer.
+    #[test]
+    fn nrf52_spim_easydma_orc_pads_extra_rx_cycles() {
+        let mut spi = Spi::new_with_layout(SpiRegisterLayout::Nrf52Spim);
+        spi.set_loopback(true);
+        let mut bus = FlatRamBus::new();
+
+        let tx_base: u64 = 0x2000_0800;
+        let rx_base: u64 = 0x2000_0900;
+        bus.write_slice(tx_base, &[0xAA, 0xBB]); // 2 TX bytes
+
+        nrf_write_u32(&mut spi, 0x5C0, 0xFF);    // ORC = 0xFF
+        nrf_write_u32(&mut spi, 0x544, tx_base as u32);
+        nrf_write_u32(&mut spi, 0x548, 2);        // TXD.MAXCNT = 2
+        nrf_write_u32(&mut spi, 0x534, rx_base as u32);
+        nrf_write_u32(&mut spi, 0x538, 4);        // RXD.MAXCNT = 4 (2 extra)
+        nrf_write_u32(&mut spi, 0x010, 1);
+        spi.tick_with_bus(&mut bus);
+
+        // TXD.AMOUNT counts actual TX bytes, not ORC clocks.
+        assert_eq!(nrf_read_u32(&spi, 0x54C), 2, "TXD.AMOUNT == 2 (not 4)");
+        assert_eq!(nrf_read_u32(&spi, 0x53C), 4, "RXD.AMOUNT == 4");
+        let rx = bus.read_slice(rx_base, 4);
+        // Loopback: first 2 = TXD bytes, last 2 = ORC (0xFF).
+        assert_eq!(rx, vec![0xAA, 0xBB, 0xFF, 0xFF], "ORC fills extra RX slots");
+    }
+
+    /// EVENTS write semantics: SW writing 1 to an EVENTS register must NOT set it.
+    /// Only SW writing 0 clears it.
+    #[test]
+    fn nrf52_spim_events_write_1_ignored() {
+        let mut spi = Spi::new_with_layout(SpiRegisterLayout::Nrf52Spim);
+        let mut bus = FlatRamBus::new();
+
+        nrf_write_u32(&mut spi, 0x500, 7);
+        nrf_write_u32(&mut spi, 0x548, 2);
+        nrf_write_u32(&mut spi, 0x544, 0x2000_0000_u32);
+        nrf_write_u32(&mut spi, 0x538, 2);
+        nrf_write_u32(&mut spi, 0x534, 0x2000_0100_u32);
+
+        // Arm and run transfer.
+        nrf_write_u32(&mut spi, 0x010, 1);
+        spi.tick_with_bus(&mut bus);
+        assert_eq!(nrf_read_u32(&spi, 0x118), 1, "EVENTS_END set by HW");
+        assert_eq!(nrf_read_u32(&spi, 0x120), 1, "EVENTS_ENDTX set by HW");
+        assert_eq!(nrf_read_u32(&spi, 0x110), 1, "EVENTS_ENDRX set by HW");
+
+        // SW write of 1 must be ignored (silicon-verified rule).
+        nrf_write_u32(&mut spi, 0x118, 1); // attempt to SET EVENTS_END — must be ignored
+        assert_eq!(nrf_read_u32(&spi, 0x118), 1, "EVENTS_END unchanged by SW write of 1");
+
+        // SW write of 0 clears it.
+        nrf_write_u32(&mut spi, 0x118, 0);
+        assert_eq!(nrf_read_u32(&spi, 0x118), 0, "EVENTS_END cleared by SW write of 0");
+        nrf_write_u32(&mut spi, 0x120, 0);
+        assert_eq!(nrf_read_u32(&spi, 0x120), 0, "EVENTS_ENDTX cleared by SW write of 0");
+        nrf_write_u32(&mut spi, 0x110, 0);
+        assert_eq!(nrf_read_u32(&spi, 0x110), 0, "EVENTS_ENDRX cleared by SW write of 0");
+    }
+
+    /// TASKS_START before tick_with_bus: EVENTS must not be set immediately.
+    /// They should only appear after tick_with_bus runs.
+    #[test]
+    fn nrf52_spim_events_not_set_before_tick_with_bus() {
+        let mut spi = Spi::new_with_layout(SpiRegisterLayout::Nrf52Spim);
+
+        nrf_write_u32(&mut spi, 0x500, 7);
+        nrf_write_u32(&mut spi, 0x548, 1);
+        nrf_write_u32(&mut spi, 0x544, 0x2000_0000_u32);
+
+        // Before TASKS_START: no events.
+        assert_eq!(nrf_read_u32(&spi, 0x118), 0, "EVENTS_END initially 0");
+        assert_eq!(nrf_read_u32(&spi, 0x120), 0, "EVENTS_ENDTX initially 0");
+        assert_eq!(nrf_read_u32(&spi, 0x110), 0, "EVENTS_ENDRX initially 0");
+
+        // After TASKS_START but BEFORE tick_with_bus: still 0.
+        nrf_write_u32(&mut spi, 0x010, 1);
+        assert_eq!(nrf_read_u32(&spi, 0x118), 0, "EVENTS_END must not fire before tick");
+        assert_eq!(nrf_read_u32(&spi, 0x120), 0, "EVENTS_ENDTX before tick");
+        assert_eq!(nrf_read_u32(&spi, 0x110), 0, "EVENTS_ENDRX before tick");
+    }
+
+    /// INTENSET / INTENCLR round-trip.
+    #[test]
+    fn nrf52_spim_intenset_intenclr_round_trip() {
+        let mut spi = Spi::new_with_layout(SpiRegisterLayout::Nrf52Spim);
+
+        // INTENSET: bit 6 = INTEN_END, bit 8 = INTEN_ENDTX.
+        nrf_write_u32(&mut spi, 0x304, (1 << 6) | (1 << 8));
+        assert_eq!(nrf_read_u32(&spi, 0x304), (1 << 6) | (1 << 8), "INTENSET sets bits");
+
+        // INTENCLR: clear bit 6 only.
+        nrf_write_u32(&mut spi, 0x308, 1 << 6);
+        assert_eq!(nrf_read_u32(&spi, 0x308), 1 << 8, "INTENCLR clears bit 6");
+    }
+
+    /// ORC register stores only the low 8 bits.
+    #[test]
+    fn nrf52_spim_orc_masks_to_8_bits() {
+        let mut spi = Spi::new_with_layout(SpiRegisterLayout::Nrf52Spim);
+        nrf_write_u32(&mut spi, 0x5C0, 0xFFFF_FFAB);
+        assert_eq!(nrf_read_u32(&spi, 0x5C0), 0xAB, "ORC retains only low 8 bits");
+    }
+
+    /// ENABLE register round-trip.
+    #[test]
+    fn nrf52_spim_enable_round_trip() {
+        let mut spi = Spi::new_with_layout(SpiRegisterLayout::Nrf52Spim);
+        nrf_write_u32(&mut spi, 0x500, 7);
+        assert_eq!(nrf_read_u32(&spi, 0x500), 7, "ENABLE round-trips");
+    }
+
+    /// TASKS registers read back as 0 (write-only strobes on silicon).
+    #[test]
+    fn nrf52_spim_tasks_read_as_zero() {
+        let mut spi = Spi::new_with_layout(SpiRegisterLayout::Nrf52Spim);
+        nrf_write_u32(&mut spi, 0x010, 1); // TASKS_START
+        assert_eq!(nrf_read_u32(&spi, 0x010), 0, "TASKS_START reads as 0");
+    }
+
+    /// Second TASKS_START after a completed transfer re-arms the engine.
+    #[test]
+    fn nrf52_spim_easydma_second_start_reruns_transfer() {
+        let mut spi = Spi::new_with_layout(SpiRegisterLayout::Nrf52Spim);
+        spi.set_loopback(true);
+        let mut bus = FlatRamBus::new();
+
+        let tx_base: u64 = 0x2000_0A00;
+        let rx_base: u64 = 0x2000_0B00;
+        bus.write_slice(tx_base, &[0x01, 0x02]);
+
+        nrf_write_u32(&mut spi, 0x544, tx_base as u32);
+        nrf_write_u32(&mut spi, 0x548, 2);
+        nrf_write_u32(&mut spi, 0x534, rx_base as u32);
+        nrf_write_u32(&mut spi, 0x538, 2);
+        nrf_write_u32(&mut spi, 0x010, 1);
+        spi.tick_with_bus(&mut bus);
+        assert_eq!(nrf_read_u32(&spi, 0x54C), 2);
+
+        // Update TX buffer and run a second transfer.
+        bus.write_slice(tx_base, &[0x55, 0x66]);
+        nrf_write_u32(&mut spi, 0x118, 0); // clear EVENTS_END
+        nrf_write_u32(&mut spi, 0x120, 0); // clear EVENTS_ENDTX
+        nrf_write_u32(&mut spi, 0x110, 0); // clear EVENTS_ENDRX
+        nrf_write_u32(&mut spi, 0x010, 1);
+        spi.tick_with_bus(&mut bus);
+
+        let rx = bus.read_slice(rx_base, 2);
+        assert_eq!(rx, vec![0x55, 0x66], "second transfer sees new TX data");
+        assert_eq!(nrf_read_u32(&spi, 0x118), 1, "EVENTS_END after second transfer");
+    }
+
+    /// tick_with_bus with TXD.MAXCNT == 0 and RXD.MAXCNT == 0: completes
+    /// immediately with AMOUNT == 0 and all events fired.
+    #[test]
+    fn nrf52_spim_easydma_zero_length_transfer() {
+        let mut spi = Spi::new_with_layout(SpiRegisterLayout::Nrf52Spim);
+        let mut bus = FlatRamBus::new();
+
+        nrf_write_u32(&mut spi, 0x544, 0x2000_0000);
+        nrf_write_u32(&mut spi, 0x548, 0); // TXD.MAXCNT = 0
+        nrf_write_u32(&mut spi, 0x534, 0x2000_0100);
+        nrf_write_u32(&mut spi, 0x538, 0); // RXD.MAXCNT = 0
+        nrf_write_u32(&mut spi, 0x010, 1);
+        spi.tick_with_bus(&mut bus);
+
+        assert_eq!(nrf_read_u32(&spi, 0x54C), 0, "TXD.AMOUNT == 0");
+        assert_eq!(nrf_read_u32(&spi, 0x53C), 0, "RXD.AMOUNT == 0");
+        assert_eq!(nrf_read_u32(&spi, 0x118), 1, "EVENTS_END fires even for zero-length");
+        assert_eq!(nrf_read_u32(&spi, 0x120), 1, "EVENTS_ENDTX fires");
+        assert_eq!(nrf_read_u32(&spi, 0x110), 1, "EVENTS_ENDRX fires");
     }
 }
