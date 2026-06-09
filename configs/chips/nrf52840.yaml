@@ -32,3 +32,227 @@ peripherals:
     size: "4KB"
     config:
       profile: "nrf52"
+  # nRF52840 peripherals — reset values verified against nRF52840 silicon
+  # (Seeed XIAO nRF52840 Sense, ST-LINK V2, 2026-06-09). Verified via the
+  # nrf52_onboarding_diff register sweep (21 MODELLED + WDT). Addresses are
+  # the sim memory map (P1/gpio1 remapped to 0x50001000 to avoid GPIO0's 4KB window).
+  - id: "uart1"
+    type: "nrf52840_uart"
+    base_address: 0x40028000
+    size: "4KB"
+    irq: 40
+  - id: "rtc0"
+    type: "nrf52840_rtc"
+    base_address: 0x4000b000
+    size: "4KB"
+    irq: 11
+  - id: "rtc1"
+    type: "nrf52840_rtc"
+    base_address: 0x40011000
+    size: "4KB"
+    irq: 17
+  - id: "rtc2"
+    type: "nrf52840_rtc"
+    base_address: 0x40024000
+    size: "4KB"
+    irq: 36
+  - id: "wdt"
+    type: "nrf52840_watchdog"
+    base_address: 0x40010000
+    size: "4KB"
+    irq: 16
+  - id: "ppi"
+    type: "nrf52840_ppi"
+    base_address: 0x4001f000
+    size: "4KB"
+  - id: "clock"
+    type: "nrf_clock"
+    base_address: 0x40000000
+    size: "4KB"
+    irq: 0
+  - id: "spi2"
+    type: "nrf52840_spi"
+    base_address: 0x40023000
+    size: "4KB"
+    irq: 35
+  - id: "gpiote"
+    type: "nrf52840_gpiotasksevents"
+    base_address: 0x40006000
+    size: "4KB"
+    irq: 6
+  - id: "twi1"
+    type: "nrf52840_i2c"
+    base_address: 0x40004000
+    size: "4KB"
+    irq: 4
+  - id: "timer0"
+    type: "nrf52840_timer"
+    base_address: 0x40008000
+    size: "4KB"
+    irq: 8
+  - id: "timer1"
+    type: "nrf52840_timer"
+    base_address: 0x40009000
+    size: "4KB"
+    irq: 9
+  - id: "timer2"
+    type: "nrf52840_timer"
+    base_address: 0x4000a000
+    size: "4KB"
+    irq: 10
+  - id: "timer3"
+    type: "nrf52840_timer"
+    base_address: 0x4001a000
+    size: "4KB"
+    irq: 26
+  - id: "timer4"
+    type: "nrf52840_timer"
+    base_address: 0x4001b000
+    size: "4KB"
+    irq: 27
+  - id: "i2s"
+    type: "nrf52840_i2s"
+    base_address: 0x40025000
+    size: "4KB"
+    irq: 37
+  - id: "pdm"
+    type: "nrf52840_pdm"
+    base_address: 0x4001d000
+    size: "4KB"
+    irq: 31
+  - id: "radio"
+    type: "nrf52840_radio"
+    base_address: 0x40001000
+    size: "4KB"
+    irq: 1
+  - id: "rng"
+    type: "nrf52840_rng"
+    base_address: 0x4000d000
+    size: "4KB"
+    irq: 13
+  - id: "ecb"
+    type: "nrf52840_ecb"
+    base_address: 0x4000e000
+    size: "4KB"
+    irq: 14
+  - id: "temp"
+    type: "nrf52840_temp"
+    base_address: 0x4000c000
+    size: "4KB"
+    irq: 12
+  - id: "saadc"
+    type: "nrf52840_saadc"
+    base_address: 0x40007000
+    size: "4KB"
+    irq: 7
+  - id: "pwm0"
+    type: "nrf52840_pwm"
+    base_address: 0x4001c000
+    size: "4KB"
+    irq: 28
+  - id: "pwm1"
+    type: "nrf52840_pwm"
+    base_address: 0x40021000
+    size: "4KB"
+    irq: 29
+  - id: "pwm2"
+    type: "nrf52840_pwm"
+    base_address: 0x40022000
+    size: "4KB"
+    irq: 30
+  - id: "pwm3"
+    type: "nrf52840_pwm"
+    base_address: 0x4002d000
+    size: "4KB"
+    irq: 45
+  - id: "qspi"
+    type: "nrf52840_qspi"
+    base_address: 0x40029000
+    size: "4KB"
+    irq: 41
+  - id: "nfct"
+    type: "nrf52840_nfct"
+    base_address: 0x40005000
+    size: "4KB"
+    irq: 5
+  - id: "ficr"
+    type: "nrf52840_ficr"
+    base_address: 0x10000000
+    size: "4KB"
+  - id: "uicr"
+    type: "nrf52840_uicr"
+    base_address: 0x10001000
+    size: "4KB"
+  - id: "nvmc"
+    type: "nrf52840_nvmc"
+    base_address: 0x4001e000
+    size: "4KB"
+  - id: "comp"
+    type: "nrf52840_comp"
+    base_address: 0x40013000
+    size: "4KB"
+    irq: 19
+  - id: "qdec"
+    type: "nrf52840_qdec"
+    base_address: 0x40012000
+    size: "4KB"
+    irq: 18
+  - id: "egu0"
+    type: "nrf52840_egu"
+    base_address: 0x40014000
+    size: "4KB"
+    irq: 20
+  - id: "egu1"
+    type: "nrf52840_egu"
+    base_address: 0x40015000
+    size: "4KB"
+    irq: 21
+  - id: "egu2"
+    type: "nrf52840_egu"
+    base_address: 0x40016000
+    size: "4KB"
+    irq: 22
+  - id: "egu3"
+    type: "nrf52840_egu"
+    base_address: 0x40017000
+    size: "4KB"
+    irq: 23
+  - id: "egu4"
+    type: "nrf52840_egu"
+    base_address: 0x40018000
+    size: "4KB"
+    irq: 24
+  - id: "egu5"
+    type: "nrf52840_egu"
+    base_address: 0x40019000
+    size: "4KB"
+    irq: 25
+  - id: "mwu"
+    type: "nrf52840_mwu"
+    base_address: 0x40020000
+    size: "4KB"
+    irq: 32
+  - id: "aar"
+    type: "nrf52840_aar"
+    base_address: 0x4000f000
+    size: "4KB"
+    irq: 15
+  - id: "usbd"
+    type: "nrf52840_usbd"
+    base_address: 0x40027000
+    size: "4KB"
+    irq: 39
+  - id: "usbregulator"
+    type: "nrf52840_usbregulator"
+    base_address: 0x40037000
+    size: "4KB"
+  - id: "acl"
+    type: "nrf52840_acl"
+    base_address: 0x4002f000
+    size: "4KB"
+    irq: 30
+  - id: "cryptocell"
+    type: "nrf52840_cryptocell"
+    base_address: 0x5002a000
+    size: "4KB"
+    irq: 42

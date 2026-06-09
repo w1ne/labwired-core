@@ -61,7 +61,7 @@ pub struct Nrf52Qspi {
     write_cnt: u32,
     erase_ptr: u32,
     erase_len: u32,
-    psel: [u32; 6],
+    psel: [u32; 7], // PSEL.SCK/CSN/IO0/IO1/IO2/IO3 at 0x524..0x538, plus 0x53C pad
     xipoffset: u32,
     ifconfig0: u32,
     ifconfig1: u32,

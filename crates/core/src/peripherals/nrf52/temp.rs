@@ -25,7 +25,7 @@ pub struct Nrf52Temp {
     events_datardy: u32,
     inten: u32,
     temp: u32, // signed 32-bit; firmware reads as i32
-    cal: [u32; 17],
+    cal: [u32; 21], // 0x520..=0x570 step 4: A0-A5, gap, B0-B5, gap, T0-T4
 }
 
 impl Nrf52Temp {
