@@ -261,6 +261,12 @@ fn run_case(sim: &mut SystemBus, oc: &mut OpenOcd, case: &MmioCase) -> Outcome {
     }
     write_both(sim, oc, case.write.0, case.write.1);
 
+    // Let async peripherals (EasyDMA: SPIM/TWIM/ECB/CCM) process the work the
+    // write kicked off, so their completion events become observable — the
+    // faithful models set e.g. EVENTS_END via the bus-tick hook, not
+    // synchronously in the register write. Silicon completes it autonomously.
+    let _ = sim.tick_peripherals_fully();
+
     let sim_val = match sim.read_u32(case.read_addr as u64) {
         Ok(v) => v,
         Err(e) => return Outcome::SimError(format!("{e:?}")),
