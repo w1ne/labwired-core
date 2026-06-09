@@ -1,0 +1,17 @@
+# LabWired - Firmware Simulation Platform
+# SPDX-License-Identifier: MIT
+#
+# Firmware fuzzing engine: runs a firmware in the silicon-validated simulator
+# with edge-coverage capture + a crash oracle, and a minimal coverage-guided
+# loop. See docs/plans/2026-06-09-firmware-fuzzing.md.
+[package]
+name = "labwired-fuzz"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+labwired-core = { path = "../core" }
+labwired-config = { path = "../config" }
+labwired-loader = { path = "../loader" }
+anyhow = { workspace = true }

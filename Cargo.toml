@@ -20,6 +20,7 @@ members = [
     "crates/firmware-f401-demo",
     "crates/firmware-f103-conformance",
     "crates/firmware-f103-fuzztarget",
+    "crates/labwired-fuzz",
     "crates/firmware-f401cdu6-blackpill-demo",
     "crates/firmware-f407-demo",
     "crates/firmware-h563-demo",
@@ -82,7 +83,7 @@ exclude = [
     "examples/tier1-fixture/esp32s3",
     "examples/tier1-fixture/esp32",
 ]
-default-members = ["crates/cli", "crates/core", "crates/dap", "crates/loader"]
+default-members = ["crates/cli", "crates/core", "crates/dap", "crates/loader", "crates/labwired-fuzz"]
 
 [workspace.package]
 version = "0.15.0"
