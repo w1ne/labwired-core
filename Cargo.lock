@@ -1440,6 +1440,7 @@ dependencies = [
  "labwired-codegen",
  "labwired-config",
  "labwired-core",
+ "labwired-fuzz",
  "labwired-gdbstub",
  "labwired-ir",
  "labwired-loader",
