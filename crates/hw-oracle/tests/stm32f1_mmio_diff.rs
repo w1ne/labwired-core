@@ -161,6 +161,11 @@ const WWDGEN: u32 = 1 << 11; // RCC APB1ENR
 const USART2_BASE: u32 = 0x4000_4400;
 const USART2_SR: u32 = USART2_BASE + 0x00;
 const USART2_SR_RESET: u32 = 0x0000_00C0; // TXE | TC set out of reset
+const USART2_BRR: u32 = USART2_BASE + 0x08;
+const USART2_CR1: u32 = USART2_BASE + 0x0C;
+const USART2_CR2: u32 = USART2_BASE + 0x10;
+const USART2_CR3: u32 = USART2_BASE + 0x14;
+const USART2_GTPR: u32 = USART2_BASE + 0x18;
 
 // ── DMA1 (0x4002_0000 — AHB, 7-channel controller) ───────────────────────────
 const DMA1_BASE: u32 = 0x4002_0000;
@@ -733,6 +738,38 @@ const SWEEP_CASES: &[SweepCase] = &[
         label: "TIM2.CR1 (last: sets CEN)",
         prep: &[(RCC_APB1ENR, TIM2EN)],
         addr: TIM2_CR1,
+        write: 0xFFFF_FFFF,
+    },
+    // ── USART2 config registers ──────────────────────────────────────────────
+    // SR/DR excluded (status / data with side effects). CR1 last (sets UE).
+    SweepCase {
+        label: "USART2.BRR",
+        prep: &[(RCC_APB1ENR, USART2EN)],
+        addr: USART2_BRR,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "USART2.CR2",
+        prep: &[(RCC_APB1ENR, USART2EN)],
+        addr: USART2_CR2,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "USART2.CR3",
+        prep: &[(RCC_APB1ENR, USART2EN)],
+        addr: USART2_CR3,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "USART2.GTPR",
+        prep: &[(RCC_APB1ENR, USART2EN)],
+        addr: USART2_GTPR,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "USART2.CR1 (last: sets UE)",
+        prep: &[(RCC_APB1ENR, USART2EN)],
+        addr: USART2_CR1,
         write: 0xFFFF_FFFF,
     },
 ];
