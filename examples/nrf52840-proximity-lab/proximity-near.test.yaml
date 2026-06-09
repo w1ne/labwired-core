@@ -15,3 +15,5 @@ assertions:
   - memory_value: { address: 0x20000000, expected_value: 100, size: 32 }
   # ALARM output: nRF P0 OUT register, bit 6 (P0.06) set
   - memory_value: { address: 0x50000504, expected_value: 0x40, mask: 0x40, size: 32 }
+  # TX_DONE_COUNT: BLE RADIO completed this many full transmit handshakes
+  - memory_value: { address: 0x20000010, expected_value: 234, size: 32 }
