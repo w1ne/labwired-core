@@ -1,6 +1,6 @@
 # Hardware Interaction Guide: DMA and Interrupts
 
-This guide explains how LabWired achieves cycle-accurate, deterministic simulation of complex hardware events like DMA transfers and interrupt propagation.
+This guide explains how LabWired achieves silicon-validated, deterministic simulation of complex hardware events like DMA transfers and interrupt propagation.
 
 ## The Problem: Non-Deterministic Simulation
 In many simulators, peripherals run in separate threads or use real-world timers. This leads to "Heisenbugs"—interrupts that fire at different times on every run, making it impossible to reproduce rare race conditions.
