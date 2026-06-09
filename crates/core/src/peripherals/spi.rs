@@ -312,7 +312,10 @@ impl Spi {
         match offset {
             0x00 => {
                 if let SpiRegs::Stm32(r) = &mut self.regs {
-                    r.cr1 = value;
+                    // Classic SPI CR1 writable mask 0xEFFF (CRCNEXT bit 12 reads
+                    // 0) — silicon-confirmed on F103 SPI1. The FIFO variant
+                    // (L4/F7/H5) has a different CR1 bit map, so leave it verbatim.
+                    r.cr1 = if r.fifo { value } else { value & 0xEFFF };
                 }
             }
             0x04 => {
@@ -330,7 +333,9 @@ impl Spi {
                             value
                         };
                     } else {
-                        r.cr2 = value;
+                        // Classic SPI CR2 writable mask 0xE7 (RXDMAEN/TXDMAEN/
+                        // SSOE/ERRIE/RXNEIE/TXEIE) — silicon-confirmed on F103.
+                        r.cr2 = value & 0x00E7;
                     }
                 }
             }
@@ -338,6 +343,13 @@ impl Spi {
                 // SR is mostly read-only; allow clearing OVR if modelled.
                 if let SpiRegs::Stm32(r) = &mut self.regs {
                     r.sr = value & 0xFFBF;
+                }
+            }
+            0x10 => {
+                // CRCPR: 16-bit CRC polynomial, plain R/W (the model previously
+                // dropped writes). Silicon-confirmed writable 0xFFFF on F103.
+                if let SpiRegs::Stm32(r) = &mut self.regs {
+                    r.crcpr = value;
                 }
             }
             0x0C => {

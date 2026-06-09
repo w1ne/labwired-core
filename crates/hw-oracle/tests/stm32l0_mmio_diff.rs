@@ -330,16 +330,18 @@ const PARITY_REGS: &[ParityReg] = &[
         addr: GPIOB_BASE + 0x24,
         mask: 0xFFFF_FFFF,
     },
-    // SPI1 control registers — classic SPI (CR2 has no DS; mask its R/W bits).
+    // SPI1 control registers — classic SPI. Writable masks corrected to the
+    // silicon-validated F103 values (same classic-SPI peripheral): CR1 0xEFFF
+    // (CRCNEXT bit 12 reads 0), CR2 0xE7 (no DS).
     ParityReg {
         label: "SPI1 CR1",
         addr: SPI1_BASE + 0x00,
-        mask: 0x0000_FFFF,
+        mask: 0x0000_EFFF,
     },
     ParityReg {
         label: "SPI1 CR2",
         addr: SPI1_BASE + 0x04,
-        mask: 0x0000_00F7,
+        mask: 0x0000_00E7,
     },
     // TIM2 (32-bit) data registers; CEN never set so CNT is stable.
     ParityReg {

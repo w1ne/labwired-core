@@ -147,7 +147,10 @@ impl F1I2c {
     fn write_reg(&mut self, offset: u64, value: u16) {
         match offset {
             0x00 => {
-                self.cr1 = value as u32;
+                // CR1 writable mask 0xBFFB (bits 2,14 reserved) — silicon-
+                // confirmed on F103. SWRST (bit 15) resets the peripheral on
+                // real silicon; that side effect is not modelled here.
+                self.cr1 = (value as u32) & 0xBFFB;
                 if (value & 0x0100) != 0 && self.state == I2cState::Idle {
                     self.state = I2cState::StartPending;
                     self.cycles_remaining = 1;
@@ -169,9 +172,11 @@ impl F1I2c {
                     }
                 }
             }
-            0x04 => self.cr2 = value as u32,
-            0x08 => self.oar1 = value as u32,
-            0x0C => self.oar2 = value as u32,
+            // Writable masks silicon-confirmed on F103 (RM0008 §26.6):
+            // CR2 0x1F3F, OAR1 0xC3FF, OAR2 0x00FF.
+            0x04 => self.cr2 = (value as u32) & 0x1F3F,
+            0x08 => self.oar1 = (value as u32) & 0xC3FF,
+            0x0C => self.oar2 = (value as u32) & 0x00FF,
             0x10 => {
                 self.dr = (value & 0xFF) as u32;
                 if self.state == I2cState::Idle {
@@ -202,8 +207,10 @@ impl F1I2c {
             }
             0x14 => self.sr1 = value as u32,
             0x18 => self.sr2 = value as u32,
-            0x1C => self.ccr = value as u32,
-            0x20 => self.trise = value as u32,
+            // CCR 0xCFFF (12-bit divider + DUTY + F/S), TRISE 0x3F (6-bit) —
+            // silicon-confirmed on F103.
+            0x1C => self.ccr = (value as u32) & 0xCFFF,
+            0x20 => self.trise = (value as u32) & 0x3F,
             _ => {}
         }
     }

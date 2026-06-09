@@ -100,10 +100,16 @@ const PB5: u32 = 1 << 5;
 const SPI1_BASE: u32 = 0x4001_3000;
 const SPI1_CR1: u32 = SPI1_BASE + 0x00;
 const SPI1_CR2: u32 = SPI1_BASE + 0x04;
+const SPI1_CRCPR: u32 = SPI1_BASE + 0x10;
+const SPI1_I2SCFGR: u32 = SPI1_BASE + 0x1C;
+const SPI1_I2SPR: u32 = SPI1_BASE + 0x20;
 
 // ── I2C1 (0x4000_5400, RM0008 §26) ───────────────────────────────────────────
 const I2C1_BASE: u32 = 0x4000_5400;
+const I2C1_CR1: u32 = I2C1_BASE + 0x00;
 const I2C1_CR2: u32 = I2C1_BASE + 0x04;
+const I2C1_OAR1: u32 = I2C1_BASE + 0x08;
+const I2C1_OAR2: u32 = I2C1_BASE + 0x0C;
 const I2C1_CCR: u32 = I2C1_BASE + 0x1C;
 const I2C1_TRISE: u32 = I2C1_BASE + 0x20;
 const I2C_TRISE_RESET: u32 = 0x0002; // silicon-confirmed (RM0008 §26.6.9)
@@ -772,6 +778,80 @@ const SWEEP_CASES: &[SweepCase] = &[
         addr: USART2_CR1,
         write: 0xFFFF_FFFF,
     },
+    // ── SPI1 config registers ────────────────────────────────────────────────
+    // SR/DR/RXCRCR/TXCRCR excluded. CR1 last (sets SPE).
+    SweepCase {
+        label: "SPI1.CR2",
+        prep: &[(RCC_APB2ENR, SPI1EN)],
+        addr: SPI1_CR2,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "SPI1.CRCPR",
+        prep: &[(RCC_APB2ENR, SPI1EN)],
+        addr: SPI1_CRCPR,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "SPI1.I2SCFGR",
+        prep: &[(RCC_APB2ENR, SPI1EN)],
+        addr: SPI1_I2SCFGR,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "SPI1.I2SPR",
+        prep: &[(RCC_APB2ENR, SPI1EN)],
+        addr: SPI1_I2SPR,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "SPI1.CR1 (last: sets SPE)",
+        prep: &[(RCC_APB2ENR, SPI1EN)],
+        addr: SPI1_CR1,
+        write: 0xFFFF_FFFF,
+    },
+    // ── I2C1 config registers ────────────────────────────────────────────────
+    // SR1/SR2/DR excluded. CR1 last (sets PE; CCR/TRISE/CR2.FREQ need PE=0).
+    SweepCase {
+        label: "I2C1.CR2",
+        prep: &[(RCC_APB1ENR, I2C1EN)],
+        addr: I2C1_CR2,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "I2C1.OAR1",
+        prep: &[(RCC_APB1ENR, I2C1EN)],
+        addr: I2C1_OAR1,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "I2C1.OAR2",
+        prep: &[(RCC_APB1ENR, I2C1EN)],
+        addr: I2C1_OAR2,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "I2C1.CCR",
+        prep: &[(RCC_APB1ENR, I2C1EN)],
+        addr: I2C1_CCR,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "I2C1.TRISE",
+        prep: &[(RCC_APB1ENR, I2C1EN)],
+        addr: I2C1_TRISE,
+        write: 0xFFFF_FFFF,
+    },
+    // I2C1.CR1 probed with a non-destructive value: bit 15 (SWRST) resets the
+    // peripheral and bits 8/9 (START/STOP) are transient, so 0xFFFF_FFFF can't
+    // characterise the stable config mask. 0x2CFB exercises the persistent
+    // config bits (PE/SMBUS/SMBTYPE/ENARP/ENPEC/ENGC/NOSTRETCH/ACK/POS/ALERT).
+    SweepCase {
+        label: "I2C1.CR1 (stable bits, no SWRST)",
+        prep: &[(RCC_APB1ENR, I2C1EN)],
+        addr: I2C1_CR1,
+        write: 0x0000_2CFB,
+    },
 ];
 
 // ── Register parity sweep (GPIOB config + SPI1 + TIM2 — no SWD pins) ───────────
@@ -807,16 +887,17 @@ const PARITY_REGS: &[ParityReg] = &[
         addr: GPIOB_BASE + GPIO_ODR,
         mask: 0x0000_FFFF,
     },
-    // SPI1 control registers — classic SPI (CR2 has no DS; mask its R/W bits).
+    // SPI1 control registers — classic SPI. Writable masks silicon-confirmed on
+    // F103 (the sweep): CR1 0xEFFF (CRCNEXT bit 12 reads 0), CR2 0xE7 (no DS).
     ParityReg {
         label: "SPI1 CR1",
         addr: SPI1_BASE + 0x00,
-        mask: 0x0000_FFFF,
+        mask: 0x0000_EFFF,
     },
     ParityReg {
         label: "SPI1 CR2",
         addr: SPI1_BASE + 0x04,
-        mask: 0x0000_00F7,
+        mask: 0x0000_00E7,
     },
     // TIM2 (16-bit) data registers; CEN never set so CNT is stable.
     ParityReg {
