@@ -1008,7 +1008,24 @@ impl SystemBus {
                 }
                 "rcc" => {
                     let layout: RccRegisterLayout = Self::parse_profile_or_default(p_cfg, "RCC")?;
-                    Box::new(crate::peripherals::rcc::Rcc::new_with_layout(layout))
+                    let mut rcc = crate::peripherals::rcc::Rcc::new_with_layout(layout);
+                    // F4 ENR writable masks are per-part (implemented-peripheral
+                    // set). YAML: `config: { rcc_ahb1enr_mask, rcc_apb1enr_mask,
+                    // rcc_apb2enr_mask }`; default unmasked (0xFFFF_FFFF).
+                    let m = |k: &str| -> u32 {
+                        p_cfg
+                            .config
+                            .get(k)
+                            .and_then(|v| v.as_u64())
+                            .map(|n| n as u32)
+                            .unwrap_or(0xFFFF_FFFF)
+                    };
+                    rcc.set_f4_enr_masks(
+                        m("rcc_ahb1enr_mask"),
+                        m("rcc_apb1enr_mask"),
+                        m("rcc_apb2enr_mask"),
+                    );
+                    Box::new(rcc)
                 }
                 "dbgmcu" => {
                     // Pull IDCODE from YAML config (`idcode: "0x10076415"` or

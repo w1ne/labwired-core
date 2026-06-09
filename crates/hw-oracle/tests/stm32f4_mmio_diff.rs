@@ -138,11 +138,11 @@ struct SweepCase {
 /// and silicon-confirmed here. (The pattern the user asked for: one shared map,
 /// the differing bit separated per part.)
 ///
-/// Still EXCLUDED, deferred to per-part gating (docs/plans/2026-06-09-register-
-/// coverage-part-specific-tier.md): RCC AHB1ENR/APB1ENR/APB2ENR — silicon
-/// `0x7E7411FF` / `0x36FEC9FF` / `0x00075F33`. The implemented-peripheral set is
-/// part-specific and `F4Rcc` is shared with the smaller STM32F401, so they need
-/// the same per-part mask field (no F401 bench yet to pin F401's set).
+/// RCC AHB1ENR/APB1ENR/APB2ENR (silicon `0x7E7411FF` / `0x36FEC9FF` /
+/// `0x00075F33`) are the F407 implemented-peripheral set — part-specific, since
+/// `F4Rcc` is shared with the smaller STM32F401. Pinned here via the per-part
+/// `rcc_*enr_mask` config fields (F4Rcc per-instance masks); F401 keeps the
+/// unmasked default until it is benched.
 const SWEEP_CASES: &[SweepCase] = &[
     // USART2 — shared F1 USART layout.
     SweepCase {
@@ -317,6 +317,25 @@ const SWEEP_CASES: &[SweepCase] = &[
         label: "EXTI.FTSR",
         prep: &[],
         addr: EXTI_FTSR,
+        write: 0xFFFF_FFFF,
+    },
+    // ── RCC ENR — per-part masks (F407 implemented-peripheral set, via config). ─
+    SweepCase {
+        label: "RCC.AHB1ENR",
+        prep: &[],
+        addr: RCC_AHB1ENR,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "RCC.APB1ENR",
+        prep: &[],
+        addr: RCC_APB1ENR,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "RCC.APB2ENR",
+        prep: &[],
+        addr: RCC_APB2ENR,
         write: 0xFFFF_FFFF,
     },
 ];

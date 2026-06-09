@@ -30,6 +30,12 @@ peripherals:
     size: "1KB"
     config:
       profile: "stm32f4"
+      # ENR writable masks = the F407's implemented-peripheral set, silicon-
+      # confirmed on the bench F407 (stm32f4_mmio_diff). Per-part: the smaller
+      # F401 sharing F4Rcc keeps the default (unmasked) until benched.
+      rcc_ahb1enr_mask: 0x7E7411FF
+      rcc_apb1enr_mask: 0x36FEC9FF
+      rcc_apb2enr_mask: 0x00075F33
   - id: "gpioa"
     type: "stm32f4_gpio"
     base_address: 0x40020000
