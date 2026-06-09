@@ -91,13 +91,21 @@ coverage, exactly like Unicorn-AFL / Fuzzware.
 - Seed corpus + crash dir + dedup by coverage.
 - **Exit:** `afl-fuzz` driving LabWired **finds the planted bug**; coverage climbs.
 
-### Phase 3 — HIL crash-confirm (the wedge) (≈1 wk)
+### Phase 3 — HIL crash-confirm (the wedge) (≈1 wk) — ✅ DONE 2026-06-09
 - For each unique sim crash: flash F103, replay the input over real UART, detect a
   fault on silicon (SWD fault status / watchdog reset / no-response).
 - Classify **CONFIRMED** (real, exploitable on hardware) vs **SIM-ONLY** (false
   positive → a model gap to feed back into the validation corpus).
 - **Exit:** a triage report (sim crashes, silicon-confirmed subset, FP rate) on the
   bench F103. This is the demo that no competitor can run.
+- **Done** (core #210): `labwired-fuzz::fuzz_collect()` gathers N distinct crashes;
+  `hw-oracle/tests/f103_fuzz_hil_confirm.rs` fuzzes in sim → flashes once → replays
+  each crash on the F103 (input region zeroed both sides → over-read crash is
+  deterministic) → classifies CONFIRMED vs SIM-ONLY + FP rate. Replay = SWD
+  RAM-inject (no UART adapter wired). Silicon-clean = reaches DONE; fault marker or
+  hang = confirmed. **Bench result: 8 distinct sim crashes, 8/8 confirmed on
+  silicon, 0% false positives.** (The planted firmware has one real bug, so 0% FP
+  is correct; the classifier exercises the full silicon-confirm path either way.)
 
 ### Phase 4 — Package + story (days)
 - `labwired fuzz` CLI subcommand + MCP tool (`fuzz_firmware`) + a CI-action variant.
