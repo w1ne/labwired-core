@@ -70,6 +70,26 @@ wrote 5 crash input(s) to crashes.json
 
 Fuzzing is deterministic for a fixed `--seed`, so a crash always reproduces.
 
+## Fuzzing engine: built-in or LibAFL
+
+By default `labwired fuzz` uses a small built-in coverage-guided loop — fast to
+build, no heavy dependencies, deterministic. For serious campaigns, build with
+the `fuzz-libafl` feature to swap in a full [LibAFL] fuzzer (havoc/splice
+mutators, a map-feedback queue scheduler, crash objectives):
+
+```bash
+cargo build --release -p labwired-cli --features fuzz-libafl
+```
+
+The simulator is wrapped as a LibAFL in-process executor: `Target::run` fills the
+edge bitmap a `StdMapObserver` watches, and a sim CPU fault (or the firmware
+FAULT marker) is reported as `ExitKind::Crash` and routed into the solutions
+corpus by `CrashFeedback`. Both engines find the same bugs; LibAFL explores a
+richer input space (it discovers multi-frame inputs the built-in mutator
+doesn't) and scales better. The CLI prints which engine it used.
+
+[LibAFL]: https://github.com/AFLplusplus/LibAFL
+
 ## Confirm on silicon (HIL)
 
 With a board on the bench (ST-Link over SWD), the HIL-confirm harness fuzzes,

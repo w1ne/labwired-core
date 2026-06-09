@@ -85,11 +85,21 @@ coverage, exactly like Unicorn-AFL / Fuzzware.
   input, so the harness must zero the input region on sim AND silicon for a crash
   to reproduce identically. Phase 2 swaps the toy loop for AFL++/LibAFL.
 
-### Phase 2 — AFL++ integration (≈1 wk)
-- Drive with **AFL++** via the shared-memory coverage map + forkserver/persistent
-  harness (AFL++ custom executor, Unicorn-mode-style). Reuse its mutation engine.
+### Phase 2 — Real fuzzer integration (≈1 wk) — ✅ DONE 2026-06-09
+- Drive with a production fuzzing engine, reusing its mutation engine + scheduler.
 - Seed corpus + crash dir + dedup by coverage.
-- **Exit:** `afl-fuzz` driving LabWired **finds the planted bug**; coverage climbs.
+- **Exit:** the real engine driving LabWired **finds the planted bug**; coverage climbs.
+- **Done** (core: `labwired-fuzz` `libafl` feature; CLI `fuzz-libafl` feature):
+  chose **LibAFL** over AFL++ — our engine is already Rust and `Target::run` is a
+  natural in-process executor, so no forkserver/shmem glue. `src/libafl_engine.rs`
+  wraps the sim as a LibAFL `InProcessExecutor`: `StdMapObserver` over the AFL edge
+  bitmap, `MaxMapFeedback` + `QueueScheduler`, `havoc_mutations` via
+  `HavocScheduledMutator`, `CrashFeedback` → solutions corpus. `fuzz()` /
+  `fuzz_collect()` delegate to it when the feature is on; the built-in loop stays
+  the dependency-free default (keeps CI + the HIL test light). Both find the
+  planted overflow; LibAFL explores a richer space (discovers multi-frame inputs
+  the built-in mutator never produces). Feature-gated because LibAFL is a large
+  dependency tree — `cargo build -p labwired-cli --features fuzz-libafl`.
 
 ### Phase 3 — HIL crash-confirm (the wedge) (≈1 wk) — ✅ DONE 2026-06-09
 - For each unique sim crash: flash F103, replay the input over real UART, detect a
