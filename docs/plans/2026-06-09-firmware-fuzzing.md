@@ -69,7 +69,7 @@ coverage, exactly like Unicorn-AFL / Fuzzware.
   the HardFault handler like silicon — Phase-1 fidelity item (recovering handlers
   would diverge).
 
-### Phase 1 — Sim fuzzing primitives (≈1 wk)
+### Phase 1 — Sim fuzzing primitives (≈1 wk) — ✅ DONE 2026-06-09
 - **Coverage:** AFL edge map (`map[(prev_pc>>1) ^ cur_pc]++`) emitted from the CPU
   step loop, behind a `fuzz` feature so normal/JIT runs are unaffected.
 - **Input injection:** a fuzz source feeding the UART RX model from a `&[u8]`.
@@ -77,6 +77,13 @@ coverage, exactly like Unicorn-AFL / Fuzzware.
 - **Fast reset:** snapshot the post-boot machine once; restore per iteration.
 - **Exit:** `labwired fuzz-run <fw> <input>` → (coverage, verdict), deterministic,
   **≥1k execs/sec** on the interpreter. (Interpreter only — coverage fights the JIT.)
+- **Done:** `crates/labwired-fuzz` — edge coverage read from the CPU PC each step
+  (no core changes), `Target::run` → `(CovMap, Verdict)`, + a minimal coverage-
+  guided loop. It **finds the planted overflow in 239 iterations** from a benign
+  seed (`finds_planted_bug` test). Fast-reset = fresh machine per run (snapshot is
+  a perf follow-up). **Insight for Phase 3:** the crash over-reads RAM past the
+  input, so the harness must zero the input region on sim AND silicon for a crash
+  to reproduce identically. Phase 2 swaps the toy loop for AFL++/LibAFL.
 
 ### Phase 2 — AFL++ integration (≈1 wk)
 - Drive with **AFL++** via the shared-memory coverage map + forkserver/persistent
