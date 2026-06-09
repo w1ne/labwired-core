@@ -18,6 +18,11 @@ use labwired_core::{Cpu, Machine};
 use labwired_loader::load_elf;
 use std::path::Path;
 
+#[cfg(feature = "libafl")]
+mod libafl_engine;
+#[cfg(feature = "libafl")]
+pub use libafl_engine::{fuzz_collect_libafl, fuzz_libafl};
+
 /// Edge-coverage map size (AFL default — a power of two).
 pub const MAP_SIZE: usize = 1 << 16;
 
@@ -217,6 +222,21 @@ pub fn fuzz_collect(
     seed: u64,
     max_crashes: usize,
 ) -> Vec<Vec<u8>> {
+    #[cfg(feature = "libafl")]
+    return libafl_engine::fuzz_collect_libafl(target, seeds, max_iters, seed, max_crashes);
+    #[cfg(not(feature = "libafl"))]
+    fuzz_collect_builtin(target, seeds, max_iters, seed, max_crashes)
+}
+
+/// Built-in (no-LibAFL) crash-collecting loop. See [`fuzz_collect`].
+#[cfg_attr(feature = "libafl", allow(dead_code))]
+fn fuzz_collect_builtin(
+    target: &Target,
+    seeds: Vec<Vec<u8>>,
+    max_iters: usize,
+    seed: u64,
+    max_crashes: usize,
+) -> Vec<Vec<u8>> {
     let mut corpus: Vec<Vec<u8>> = if seeds.is_empty() {
         vec![vec![0u8]]
     } else {
@@ -256,6 +276,21 @@ pub fn fuzz_collect(
 /// Minimal coverage-guided fuzzer: mutate corpus inputs, keep ones that hit new
 /// edges, stop on the first crash. Deterministic for a given `seed`.
 pub fn fuzz(target: &Target, seeds: Vec<Vec<u8>>, max_iters: usize, seed: u64) -> FuzzReport {
+    #[cfg(feature = "libafl")]
+    return FuzzReport {
+        crash: libafl_engine::fuzz_libafl(target, seeds, max_iters, seed),
+        // LibAFL owns the loop; per-iteration bookkeeping isn't surfaced here.
+        iterations: 0,
+        corpus_size: 0,
+        edges_hit: 0,
+    };
+    #[cfg(not(feature = "libafl"))]
+    fuzz_builtin(target, seeds, max_iters, seed)
+}
+
+/// Built-in (no-LibAFL) coverage-guided loop. See [`fuzz`].
+#[cfg_attr(feature = "libafl", allow(dead_code))]
+fn fuzz_builtin(target: &Target, seeds: Vec<Vec<u8>>, max_iters: usize, seed: u64) -> FuzzReport {
     let mut corpus: Vec<Vec<u8>> = if seeds.is_empty() {
         vec![vec![0u8]]
     } else {

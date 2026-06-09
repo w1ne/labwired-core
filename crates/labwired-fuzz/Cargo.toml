@@ -15,3 +15,14 @@ labwired-core = { path = "../core" }
 labwired-config = { path = "../config" }
 labwired-loader = { path = "../loader" }
 anyhow = { workspace = true }
+
+# The `libafl` feature swaps the built-in coverage-guided loop for a real
+# LibAFL fuzzer (havoc/splice mutators, map-feedback scheduler, crash
+# objectives). Off by default so the workspace/CI build stays light — LibAFL is
+# a large dependency tree. Build the CLI with `--features fuzz-libafl` to use it.
+libafl = { version = "0.15", default-features = false, features = ["std", "derive", "rand_trait"], optional = true }
+libafl_bolts = { version = "0.15", default-features = false, features = ["std", "serdeany_autoreg"], optional = true }
+
+[features]
+default = []
+libafl = ["dep:libafl", "dep:libafl_bolts"]

@@ -47,3 +47,7 @@ default = []
 # feature. Build with `cargo build --release -p labwired-cli --features
 # jit-core` to enable wasmtime-backed JIT for the fillScreen body block.
 jit-core = ["labwired-core/jit"]
+# Swap the built-in fuzzing loop for the LibAFL engine (havoc/splice mutators,
+# map-feedback scheduler, crash objectives). Heavy dependency tree, so opt-in:
+# `cargo build --release -p labwired-cli --features fuzz-libafl`.
+fuzz-libafl = ["labwired-fuzz/libafl"]
