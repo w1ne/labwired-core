@@ -243,6 +243,15 @@ impl SystemBus {
         if t == "nrf52840_qspi" || t == "nrf52_qspi" {
             return "nrf52_qspi".to_string();
         }
+        // SPIS / TWIS must be intercepted before the generic "contains(spi)"
+        // and "contains(i2c)" / "ends_with(_twi)" matchers, otherwise they
+        // would be mis-routed to the STM32 SPI / I2C models.
+        if t == "nrf52840_spis" || t == "nrf52_spis" {
+            return "nrf52840_spis".to_string();
+        }
+        if t == "nrf52840_twis" || t == "nrf52_twis" {
+            return "nrf52840_twis".to_string();
+        }
 
         // Specific mappers first — must come before fuzzy matchers so e.g.
         // "quadspi" doesn't get swallowed by the generic "contains(spi)" rule.
@@ -1284,6 +1293,12 @@ impl SystemBus {
                 }
                 "nrf52840_usbregulator" | "nrf52_usbregulator" => {
                     Box::new(crate::peripherals::nrf52::usbregulator::Nrf52UsbRegulator::new())
+                }
+                "nrf52840_spis" | "nrf52_spis" => {
+                    Box::new(crate::peripherals::nrf52::spis::Nrf52Spis::new())
+                }
+                "nrf52840_twis" | "nrf52_twis" => {
+                    Box::new(crate::peripherals::nrf52::twis::Nrf52Twis::new())
                 }
                 // ESP32-family Timer Group (TIMG0/TIMG1) — the same IP block is
                 // used by the classic ESP32, S3, and C3.  All share the register
