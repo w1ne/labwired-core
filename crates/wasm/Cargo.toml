@@ -12,6 +12,13 @@ publish = false
 [lib]
 crate-type = ["cdylib"]
 
+# The playground deploy auto-downloads a wasm-opt whose version can't parse the
+# wasm rustc emits here ("Fatal: error in parsing input"). Skip wasm-opt — the
+# module stays correct, just unoptimized. Local/CI builds with a matching
+# wasm-opt are unaffected.
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
+
 [dependencies]
 wasm-bindgen = "0.2.92"
 # #124 Phase 4: js-sys exposes `js_sys::WebAssembly::{Module, Instance}` used
