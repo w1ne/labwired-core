@@ -127,16 +127,19 @@ const CASES: &[MmioCase] = &[
     },
     // ── WDT — CRV (counter reload value) ───────────────────────────────────
     //
-    // WDT is one-shot: once started it can't be reconfigured. We probe CRV
-    // before any TASKS_START, which is safe.
+    // WDT config registers (CRV/RREN/CONFIG) are locked once the WDT is
+    // running (nRF52840 PS §6.34). On the Seeed XIAO nRF52840, the UF2
+    // bootloader starts the WDT before user code runs (RUNSTATUS=1). The
+    // model must initialize CRV to its reset value 0xFFFFFFFF and enforce
+    // the lock: writes to CRV while running are silently dropped.
     MmioCase {
         peripheral: "WDT",
-        label: "CRV = 0x20000 (~4s @ 32.768 kHz)",
+        label: "CRV reads reset value 0xFFFFFFFF",
         prep: &[],
-        write: (WDT + 0x504, 0x0002_0000), // CRV
+        write: (WDT + 0x504, 0xFFFF_FFFF), // write the reset value (no-op)
         read_addr: WDT + 0x504,
         mask: 0xFFFF_FFFF,
-        expect: 0x0002_0000,
+        expect: 0xFFFF_FFFF,
     },
     MmioCase {
         peripheral: "WDT",

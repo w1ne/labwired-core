@@ -39,7 +39,7 @@ const RR_RELOAD_KEY: u32 = 0x6E52_4635;
 
 const INTEN_TIMEOUT: u32 = 1;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Nrf52Wdt {
     events_timeout: u32,
     inten: u32,
@@ -56,6 +56,22 @@ pub struct Nrf52Wdt {
     /// further countdown happens; firmware can clear EVENTS_TIMEOUT but
     /// a real chip would have reset by now — we just stop the dog.
     bitten: bool,
+}
+
+impl Default for Nrf52Wdt {
+    fn default() -> Self {
+        Self {
+            events_timeout: 0,
+            inten: 0,
+            runstatus: 0,
+            reqstatus_pending: 0,
+            crv: 0xFFFF_FFFF, // nRF52840 PS §6.34: CRV reset value
+            rren: 0,
+            config: 0,
+            counter: 0,
+            bitten: false,
+        }
+    }
 }
 
 impl Nrf52Wdt {
@@ -184,7 +200,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn crv_round_trips_full_width() {
+    fn crv_starts_at_reset_value() {
+        let w = Nrf52Wdt::new();
+        assert_eq!(w.read_u32(OFF_CRV).unwrap(), 0xFFFF_FFFF);
+    }
+
+    #[test]
+    fn crv_round_trips_full_width_when_stopped() {
         let mut w = Nrf52Wdt::new();
         w.write_u32(OFF_CRV, 0x0002_0000).unwrap();
         assert_eq!(w.read_u32(OFF_CRV).unwrap(), 0x0002_0000);
