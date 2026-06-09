@@ -1556,6 +1556,7 @@ dependencies = [
  "goblin",
  "labwired-config",
  "labwired-core",
+ "labwired-fuzz",
  "labwired-hw-oracle-macros",
  "labwired-loader",
  "libc",

@@ -45,3 +45,6 @@ hw-oracle-stm32 = []
 # Gates nRF52 (Cortex-M4) MMIO diff harness over ST-Link SWD.
 # Sim-side is always built; this gate only wires the hardware tests.
 hw-oracle-nrf52 = []
+
+[dev-dependencies]
+labwired-fuzz = { path = "../labwired-fuzz" }

@@ -206,6 +206,53 @@ pub struct FuzzReport {
     pub edges_hit: usize,
 }
 
+/// Coverage-guided campaign that **collects up to `max_crashes` distinct crash
+/// inputs** (deduped by bytes) rather than stopping at the first. Feeds the
+/// HIL-confirm step that separates real silicon bugs from sim-only false
+/// positives.
+pub fn fuzz_collect(
+    target: &Target,
+    seeds: Vec<Vec<u8>>,
+    max_iters: usize,
+    seed: u64,
+    max_crashes: usize,
+) -> Vec<Vec<u8>> {
+    let mut corpus: Vec<Vec<u8>> = if seeds.is_empty() {
+        vec![vec![0u8]]
+    } else {
+        seeds
+    };
+    let mut global = CovMap::new();
+    for inp in &corpus {
+        let mut cov = CovMap::new();
+        target.run(inp, &mut cov);
+        global.merge_new(&cov);
+    }
+    let mut crashes: Vec<Vec<u8>> = Vec::new();
+    let mut rng = Rng::new(seed);
+    for _ in 0..max_iters {
+        if crashes.len() >= max_crashes {
+            break;
+        }
+        let base = corpus[rng.below(corpus.len())].clone();
+        let input = mutate(&base, &mut rng);
+        let mut cov = CovMap::new();
+        match target.run(&input, &mut cov) {
+            Verdict::Crash => {
+                if !crashes.contains(&input) {
+                    crashes.push(input);
+                }
+            }
+            _ => {
+                if global.merge_new(&cov) {
+                    corpus.push(input);
+                }
+            }
+        }
+    }
+    crashes
+}
+
 /// Minimal coverage-guided fuzzer: mutate corpus inputs, keep ones that hit new
 /// edges, stop on the first crash. Deterministic for a given `seed`.
 pub fn fuzz(target: &Target, seeds: Vec<Vec<u8>>, max_iters: usize, seed: u64) -> FuzzReport {
