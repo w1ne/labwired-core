@@ -51,12 +51,14 @@ export interface GlobalNavProps {
   className?: string;
   onToolsClick?: () => void;
   toolsSlot?: ReactNode;
+  /** Nav items to hide on this surface (e.g. the playground app hides Validation). */
+  exclude?: NavId[];
 }
 
-export function GlobalNav({ active, variant = 'light', className, onToolsClick, toolsSlot }: GlobalNavProps) {
+export function GlobalNav({ active, variant = 'light', className, onToolsClick, toolsSlot, exclude }: GlobalNavProps) {
   return (
     <nav className={clsx('flex items-center', variant === 'dark' ? 'gap-1' : 'gap-5 text-[14px]', className)}>
-      {NAV_ITEMS.filter((item) => item.id !== active).map((item) => {
+      {NAV_ITEMS.filter((item) => item.id !== active && !(exclude ?? []).includes(item.id)).map((item) => {
         if (item.id === 'tools' && toolsSlot) {
           return <div key={item.id}>{toolsSlot}</div>;
         }

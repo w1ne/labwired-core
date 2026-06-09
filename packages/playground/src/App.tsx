@@ -235,6 +235,27 @@ function makeStarterDiagram(config: BoardConfig): Diagram {
     };
   }
 
+  if (config.boardId === 'nrf52840-proximity-lab') {
+    // nRF52840 + HC-SR04 ultrasonic proximity, all on P0. The 'ultrasonic'
+    // part id matches the lab's external_device id so the distance setter
+    // resolves; the LED on P0.06 lights when the firmware raises ALARM.
+    return {
+      ...createEmptyDiagram(config.chipId),
+      parts: [
+        mcu,
+        { id: 'ultrasonic', type: 'ultrasonic', x: 520, y: 80, rotate: 0, attrs: { distance: '10' } },
+        { id: 'alarm_led', type: 'led', x: 520, y: 300, rotate: 0, scale: 1.5, attrs: { color: 'red' } },
+      ],
+      wires: [
+        { from: { part: 'mcu', pin: 'VDD' }, to: { part: 'ultrasonic', pin: 'VCC' }, color: '#FF6B6B' },
+        { from: { part: 'mcu', pin: 'GND' }, to: { part: 'ultrasonic', pin: 'GND' }, color: '#888888' },
+        { from: { part: 'mcu', pin: 'P0.04' }, to: { part: 'ultrasonic', pin: 'TRIG' }, color: '#06D6A0' },
+        { from: { part: 'mcu', pin: 'P0.05' }, to: { part: 'ultrasonic', pin: 'ECHO' }, color: '#118AB2' },
+        { from: { part: 'mcu', pin: 'P0.06' }, to: { part: 'alarm_led', pin: 'A' }, color: '#EF476F' },
+      ],
+    };
+  }
+
   if (config.boardId === 'al2205-iolink-dido') {
     // STM32L476 IO-Link DI device. Part ids match the lab's external_device
     // ids ('di_shifter', 'iolink_master') so the 74HC165 input toggles and the

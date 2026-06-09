@@ -19,6 +19,7 @@ import systemEsp32c3Devkit from '../../../core/configs/systems/esp32c3-devkit.ya
 import systemEsp32s3Zero from '../../../core/configs/systems/esp32s3-zero.yaml?raw';
 import systemNrf52840Dk from '../../../core/configs/systems/nrf52840-dk.yaml?raw';
 import systemNrf52840Onboarding from '../../../core/configs/systems/onboarding/nrf52840.yaml?raw';
+import systemNrf52840Proximity from '../../../core/examples/nrf52840-proximity-lab/system.yaml?raw';
 import systemNucleoF401re from '../../../core/configs/systems/nucleo-f401re.yaml?raw';
 import systemNucleoH563zi from '../../../core/configs/systems/nucleo-h563zi-demo.yaml?raw';
 import systemRp2040Pico from '../../../core/configs/systems/rp2040-pico.yaml?raw';
@@ -45,6 +46,7 @@ import sourceBme280 from '../../../core/examples/bme280-weather-lab/src/main.rs?
 import sourceMax31855 from '../../../core/examples/max31855-thermocouple-lab/src/main.rs?raw';
 import sourceSsd1306 from '../../../core/examples/ssd1306-hello-lab/src/main.rs?raw';
 import sourceNokia5110Invaders from '../../../core/examples/nokia5110-invaders-lab/src/main.rs?raw';
+import sourceNrf52840Proximity from '../../../core/crates/firmware-nrf52840-proximity/src/main.rs?raw';
 import sourceNeo6mGps from '../../../core/examples/neo6m-gps-lab/src/main.rs?raw';
 import sourceQuectelBg770a from '../../../core/examples/quectel-bg770a-lab/src/main.rs?raw';
 import sourceNtcThermistor from '../../../core/examples/ntc-thermistor-lab/src/main.rs?raw';
@@ -476,6 +478,22 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     mcuComponentType: 'nrf52840-dk',
     kind: 'lab',
     runHint: 'Run the Sensor, then click the Collector and Run it too — open the Analyzer (toolbar) to watch frames.',
+  },
+  {
+    boardId: 'nrf52840-proximity-lab',
+    chipId: 'nrf52840',
+    name: 'nRF52840 Proximity + BLE',
+    description:
+      'Nordic nRF52840 reading an HC-SR04 ultrasonic sensor over GPIO (TRIG P0.04, ECHO P1.05), raising an ALARM LED on P0.06 when the target is within 150 mm, and broadcasting {distance, in-range} over the BLE 1 Mbit PHY. Drag Distance (cm) and watch the LED and the BLE packets follow. The same .elf flashes to real nRF silicon.',
+    arch: 'ARM Cortex-M4',
+    chipYaml: chipNrf52840,
+    systemYaml: systemNrf52840Proximity,
+    demoFirmwarePath: `${BASE}wasm/demo-nrf52840-proximity.elf`,
+    mcuComponentType: 'nrf52840-dk',
+    sourceCode: sourceNrf52840Proximity,
+    sourceFilename: 'firmware-nrf52840-proximity/src/main.rs',
+    kind: 'lab',
+    runHint: 'Run, then drag Distance (cm): under 15 cm the ALARM LED lights. Open the Analyzer (toolbar) to see the distance broadcast over BLE.',
   },
 ];
 

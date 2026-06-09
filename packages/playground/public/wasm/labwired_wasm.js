@@ -761,6 +761,14 @@ export class WasmSimulator {
         wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
         return v1;
     }
+    /**
+     * Non-consuming UART trace snapshot for instruments such as the logic analyzer.
+     * @returns {any}
+     */
+    uart_trace_snapshot() {
+        const ret = wasm.wasmsimulator_uart_trace_snapshot(this.__wbg_ptr);
+        return ret;
+    }
 }
 if (Symbol.dispose) WasmSimulator.prototype[Symbol.dispose] = WasmSimulator.prototype.free;
 function __wbg_get_imports() {
@@ -874,8 +882,8 @@ function __wbg_get_imports() {
             console.warn(getStringFromWasm0(arg0, arg1));
         },
         __wbindgen_cast_0000000000000001: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [I32], shim_idx: 1816, ret: I32, inner_ret: Some(I32) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__hd749741175e04d09);
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [I32], shim_idx: 1986, ret: I32, inner_ret: Some(I32) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h78b2ba27b68b9c3b);
             return ret;
         },
         __wbindgen_cast_0000000000000002: function(arg0) {
@@ -914,8 +922,8 @@ function __wbg_get_imports() {
     };
 }
 
-function wasm_bindgen__convert__closures_____invoke__hd749741175e04d09(arg0, arg1, arg2) {
-    const ret = wasm.wasm_bindgen__convert__closures_____invoke__hd749741175e04d09(arg0, arg1, arg2);
+function wasm_bindgen__convert__closures_____invoke__h78b2ba27b68b9c3b(arg0, arg1, arg2) {
+    const ret = wasm.wasm_bindgen__convert__closures_____invoke__h78b2ba27b68b9c3b(arg0, arg1, arg2);
     return ret;
 }
 
