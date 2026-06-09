@@ -1488,8 +1488,13 @@ fn run_fuzz(args: FuzzArgs) -> ExitCode {
         }
     };
 
+    let engine = if cfg!(feature = "fuzz-libafl") {
+        "LibAFL"
+    } else {
+        "built-in"
+    };
     eprintln!(
-        "fuzzing {} (max_iters={}, seed={:#x}) ...",
+        "fuzzing {} with the {engine} engine (max_iters={}, seed={:#x}) ...",
         args.firmware.display(),
         args.max_iters,
         args.seed
