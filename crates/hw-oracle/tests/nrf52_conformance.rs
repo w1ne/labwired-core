@@ -155,8 +155,11 @@ fn conformance_sim() {
         "\n  ecb_ct0=0x{:08X} (expect 0xD8E0_C469 if sim models AES; may diverge)",
         d[3]
     );
+    // gpiote_out reads GPIO0.OUT after a GPIOTE TASKS_SET.  Silicon leaves OUT=0
+    // (GPIOTE drives the pad/IN, not OUT).  After the silicon-fidelity fix the
+    // sim also produces 0 here.
     println!(
-        "  gpiote_out={} (expect 1 if GPIOTE CONFIG bit-layout matches; may diverge)",
+        "  gpiote_out={} (expect 0 — GPIOTE drives pad/IN, not GPIO.OUT; silicon=0)",
         d[4]
     );
     println!(
@@ -213,10 +216,10 @@ fn run_hw(elf: &PathBuf) -> Vec<u32> {
 /// Ratchet baseline: number of digest words that must match sim vs hw.
 ///
 /// Measured 13/16 on real silicon (Seeed XIAO nRF52840 Sense, ST-LINK V2,
-/// 2026-06-09). The deterministic core (DONE, gpio_out, timer_count) and the
-/// RNG-liveness flag match exactly; 9 reserved words are zero on both sides.
+/// 2026-06-09). Raised to 14/16 after closing the `gpiote_out` gap:
+/// GPIOTE task now drives pad/IN (not OUT), matching silicon.
 ///
-/// Three known residuals keep this at 13/16 (raise the baseline when any is
+/// Two known residuals keep this at 14/16 (raise the baseline when any is
 /// closed — never lower it):
 ///   - `ecb_ct0`:  silicon computes the FIPS-197 AES-128 ciphertext
 ///                 (0xD8E0C469); the sim ECB model does not implement AES and
@@ -224,14 +227,8 @@ fn run_hw(elf: &PathBuf) -> Vec<u32> {
 ///   - `temp_inrange`: silicon TEMP fires DATARDY with an in-range reading; the
 ///                 sim TEMP model never raises DATARDY. Closing this needs a
 ///                 TEMP measurement model.
-///   - `gpiote_out`: the sim drives the pin via the GPIOTE SET task where
-///                 silicon leaves it low under these conditions — the sim is
-///                 over-permissive on the GPIOTE task→GPIO path. (Note: the
-///                 plain GPIO register interface is separately verified
-///                 strict-clean by nrf52_gpio_conformance; this gap is the
-///                 task/event routing, not GPIO read/write.)
 #[cfg(feature = "hw-oracle-nrf52")]
-const BASELINE_MATCHED: usize = 13;
+const BASELINE_MATCHED: usize = 14;
 
 #[cfg(feature = "hw-oracle-nrf52")]
 #[test]
