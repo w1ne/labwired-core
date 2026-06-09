@@ -192,9 +192,28 @@ def main() -> int:
         docs_dir = REPO_ROOT / "docs" / "boards"
         docs_dir.mkdir(parents=True, exist_ok=True)
         report_file = docs_dir / f"{target_name}.md"
-        
+        generated_header = f"# Validation Report: {target_name}"
+
+        # Don't clobber a human-curated board doc. If docs/boards/<target>.md
+        # exists and was NOT produced by this generator (its first line isn't
+        # our header), it's hand-maintained (e.g. a silicon-conformance fidelity
+        # table) — write the auto-generated report to a sidecar instead and
+        # leave the curated doc untouched.
+        existing_first_line = (
+            report_file.read_text(encoding="utf-8").lstrip().splitlines()[:1]
+            if report_file.exists()
+            else None
+        )
+        is_curated = existing_first_line not in (None, [generated_header])
+        if is_curated:
+            report_file = docs_dir / f"{target_name}.validation.md"
+            print(
+                f"  curated docs/boards/{target_name}.md preserved; "
+                f"writing generated report to docs/boards/{report_file.name}"
+            )
+
         report_lines = [
-            f"# Validation Report: {target_name}",
+            generated_header,
             "",
             f"**Architecture:** {architecture if architecture else 'Unknown'}",
             "",
@@ -223,8 +242,8 @@ def main() -> int:
             report_lines.append(coverage)
             
         report_file.write_text("\n".join(report_lines), encoding="utf-8")
-        
-        board_artifacts_url = f"https://github.com/w1ne/labwired-core/blob/main/docs/boards/{target_name}.md"
+
+        board_artifacts_url = f"https://github.com/w1ne/labwired-core/blob/main/docs/boards/{report_file.name}"
         
         if "sample_trace" in model and model["sample_trace"].startswith("traces/"):
             del model["sample_trace"]
