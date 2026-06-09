@@ -89,6 +89,11 @@ const GPIOC_PUPDR: u32 = GPIOC_BASE + 0x0C;
 const GPIOC_AFRL: u32 = GPIOC_BASE + 0x20;
 const GPIOC_AFRH: u32 = GPIOC_BASE + 0x24;
 
+const GPIOC_MODER_OUT5: u32 = 0x0000_0400; // PC5 = general-purpose output (01)
+const GPIOC_ODR: u32 = GPIOC_BASE + 0x14;
+const GPIOC_BSRR: u32 = GPIOC_BASE + 0x18;
+const PC5: u32 = 1 << 5;
+
 // ── SPI1 (0x4001_3000 — APB2, classic SPI) ───────────────────────────────────
 const SPI1_BASE: u32 = 0x4001_3000;
 const SPI1_CR1: u32 = SPI1_BASE + 0x00;
@@ -96,6 +101,17 @@ const SPI1_CR2: u32 = SPI1_BASE + 0x04;
 const SPI1_CRCPR: u32 = SPI1_BASE + 0x10;
 const SPI1_I2SCFGR: u32 = SPI1_BASE + 0x1C;
 const SPI1_I2SPR: u32 = SPI1_BASE + 0x20;
+
+// ── TIM2 (0x4000_0000 — APB1, 32-bit GP timer) for behavioural checks ─────────
+const TIM2_BASE: u32 = 0x4000_0000;
+const TIM2_SR: u32 = TIM2_BASE + 0x10;
+const TIM2_EGR: u32 = TIM2_BASE + 0x14;
+const TIM2_CNT: u32 = TIM2_BASE + 0x24;
+const TIM2_PSC: u32 = TIM2_BASE + 0x28;
+const TIM2_ARR: u32 = TIM2_BASE + 0x2C;
+const TIM2EN: u32 = 1 << 0; // APB1ENR
+const TIM_UG: u32 = 1 << 0; // EGR update-generation
+const TIM_UIF: u32 = 1 << 0; // SR update-interrupt flag
 
 struct ResetCase {
     label: &'static str,
@@ -340,6 +356,72 @@ const SWEEP_CASES: &[SweepCase] = &[
     },
 ];
 
+/// Behavioural (depth) checks — beyond register masks, these drive a register
+/// **sequence** that triggers peripheral *logic*, then read the resulting state
+/// and compare sim vs silicon AND vs the expected behaviour. Validates that the
+/// F4 GPIO/timer models reproduce the real silicon's behaviour, not just its
+/// register layout.
+struct BehaviorCase {
+    label: &'static str,
+    steps: &'static [(u32, u32)],
+    read_addr: u32,
+    mask: u32,
+    expect: u32,
+}
+
+const BEHAVIOR_CASES: &[BehaviorCase] = &[
+    // GPIO BSRR atomic set: BS5 sets ODR.5.
+    BehaviorCase {
+        label: "GPIOC.BSRR set PC5 → ODR.5 = 1",
+        steps: &[
+            (RCC_AHB1ENR, 1 << 2), // GPIOCEN
+            (GPIOC_MODER, GPIOC_MODER_OUT5),
+            (GPIOC_BSRR, PC5), // BS5
+        ],
+        read_addr: GPIOC_ODR,
+        mask: PC5,
+        expect: PC5,
+    },
+    // GPIO BSRR atomic reset: BR5 (bit 21) clears ODR.5 set just before.
+    BehaviorCase {
+        label: "GPIOC.BSRR reset PC5 → ODR.5 = 0",
+        steps: &[
+            (RCC_AHB1ENR, 1 << 2),
+            (GPIOC_MODER, GPIOC_MODER_OUT5),
+            (GPIOC_BSRR, PC5),       // set
+            (GPIOC_BSRR, PC5 << 16), // BR5 reset
+        ],
+        read_addr: GPIOC_ODR,
+        mask: PC5,
+        expect: 0,
+    },
+    // Timer update event: writing EGR.UG reloads CNT to 0 and latches SR.UIF.
+    BehaviorCase {
+        label: "TIM2.EGR.UG → SR.UIF latched",
+        steps: &[
+            (RCC_APB1ENR, TIM2EN),
+            (TIM2_ARR, 0x0000_FFFF),
+            (TIM2_PSC, 0),
+            (TIM2_EGR, TIM_UG),
+        ],
+        read_addr: TIM2_SR,
+        mask: TIM_UIF,
+        expect: TIM_UIF,
+    },
+    BehaviorCase {
+        label: "TIM2.EGR.UG → CNT reloads to 0",
+        steps: &[
+            (RCC_APB1ENR, TIM2EN),
+            (TIM2_ARR, 0x0000_FFFF),
+            (TIM2_PSC, 0),
+            (TIM2_EGR, TIM_UG),
+        ],
+        read_addr: TIM2_CNT,
+        mask: 0xFFFF_FFFF,
+        expect: 0,
+    },
+];
+
 fn build_sim_bus() -> SystemBus {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let chip_path = dir.join("../../configs/chips/stm32f407.yaml");
@@ -380,6 +462,24 @@ fn f4_sweep_sim_only() {
             .unwrap_or_else(|e| panic!("sim write {} 0x{:08X}: {e:?}", case.label, case.addr));
         sim.read_u32(case.addr as u64)
             .unwrap_or_else(|e| panic!("sim read {} 0x{:08X}: {e:?}", case.label, case.addr));
+    }
+}
+
+/// Sim-only behavioural gate (runs in CI): the modeled F407 reproduces the
+/// expected peripheral *logic* (GPIO BSRR set/reset, timer UG event). The bench
+/// then confirms the silicon does the same in the `hw` module.
+#[test]
+fn f4_behavior_sim_only() {
+    for case in BEHAVIOR_CASES {
+        let mut sim = build_sim_bus();
+        for &(addr, val) in case.steps {
+            sim.write_u32(addr as u64, val)
+                .unwrap_or_else(|e| panic!("sim step 0x{addr:08X}: {e:?}"));
+        }
+        let v = sim
+            .read_u32(case.read_addr as u64)
+            .unwrap_or_else(|e| panic!("sim read {}: {e:?}", case.label));
+        assert_eq!(v & case.mask, case.expect, "{}", case.label);
     }
 }
 
@@ -450,6 +550,34 @@ mod hw {
         }
     }
 
+    /// Behavioural case: a fresh reset, drive the register sequence on both
+    /// sides, then read the resulting state. `Match` requires sim == hw AND both
+    /// == the expected behaviour (so it catches a model that silently agrees
+    /// with silicon on the wrong value too).
+    fn run_behavior_case(oc: &mut OpenOcd, case: &BehaviorCase) -> Outcome {
+        oc.reset_halt().expect("reset halt");
+        oc.halt().expect("halt");
+        let mut sim = build_sim_bus();
+        for &(addr, val) in case.steps {
+            write_both(&mut sim, oc, addr, val);
+        }
+        let sim_val = match sim.read_u32(case.read_addr as u64) {
+            Ok(v) => v,
+            Err(e) => return Outcome::SimError(format!("{e:?}")),
+        };
+        let hw_val = oc
+            .read_memory(case.read_addr, 1)
+            .unwrap_or_else(|e| panic!("hw read 0x{:08X}: {e}", case.read_addr))[0];
+        if (sim_val & case.mask) == case.expect && (hw_val & case.mask) == case.expect {
+            Outcome::Match
+        } else {
+            Outcome::Diverge {
+                sim: sim_val & case.mask,
+                hw: hw_val & case.mask,
+            }
+        }
+    }
+
     #[test]
     #[ignore = "hw-oracle: requires connected STM32F407 (LABWIRED_STLINK_LOCATION)"]
     fn f4_mmio_diff() {
@@ -458,9 +586,10 @@ mod hw {
 
         println!();
         println!(
-            "STM32F407 MMIO diff — {} reset + {} sweep cases",
+            "STM32F407 MMIO diff — {} reset + {} sweep + {} behaviour cases",
             RESET_CASES.len(),
-            SWEEP_CASES.len()
+            SWEEP_CASES.len(),
+            BEHAVIOR_CASES.len()
         );
         println!("{:-<70}", "");
 
@@ -495,8 +624,14 @@ mod hw {
             tally(&o, case.label);
         }
 
+        println!("-- behaviour (depth: drive a sequence, check the logic) --");
+        for case in BEHAVIOR_CASES {
+            let o = run_behavior_case(&mut oc, case);
+            tally(&o, case.label);
+        }
+
         println!("{:-<70}", "");
-        let total = RESET_CASES.len() + SWEEP_CASES.len();
+        let total = RESET_CASES.len() + SWEEP_CASES.len() + BEHAVIOR_CASES.len();
         println!("summary: match={matched} diverge={diverged} sim_err={sim_err} total={total}");
         oc.shutdown().ok();
 
