@@ -149,27 +149,23 @@ fn conformance_sim() {
     assert_eq!(d[1], 0x0000_000F, "gpio_out: expected 0xF (pins 0..3 set)");
     assert_eq!(d[2], 7, "timer_count: expected 7 TASKS_COUNT pulses");
 
-    // Informational printout for ECB / GPIOTE / TEMP / RNG — these may diverge
-    // on hardware; the HW diff path will ratchet them.
-    println!(
-        "\n  ecb_ct0=0x{:08X} (expect 0xD8E0_C469 if sim models AES; may diverge)",
-        d[3]
+    // The three former residuals are now modeled and deterministic, matching
+    // the 2026-06-09 silicon capture. Assert them so this no-hardware CI test
+    // guards the fixes against regression (the HW diff path re-confirms vs live
+    // silicon when run).
+    assert_eq!(
+        d[3], 0xD8E0_C469,
+        "ecb_ct0: AES-128 ECB must produce the FIPS-197 ciphertext word (silicon value)"
     );
-    // gpiote_out reads GPIO0.OUT after a GPIOTE TASKS_SET.  Silicon leaves OUT=0
-    // (GPIOTE drives the pad/IN, not OUT).  After the silicon-fidelity fix the
-    // sim also produces 0 here.
-    println!(
-        "  gpiote_out={} (expect 0 — GPIOTE drives pad/IN, not GPIO.OUT; silicon=0)",
-        d[4]
+    assert_eq!(
+        d[4], 0,
+        "gpiote_out: GPIOTE task drives pad/IN, not GPIO.OUT — OUT must stay 0 (silicon=0)"
     );
-    println!(
-        "  temp_inrange={} (liveness flag; 1 = sim returned a value)",
-        d[5]
+    assert_eq!(
+        d[5], 1,
+        "temp_inrange: TEMP must fire DATARDY with an in-range reading (silicon=1)"
     );
-    println!(
-        "  rng_live={} (liveness flag; 1 = VALRDY fired in sim)",
-        d[6]
-    );
+    assert_eq!(d[6], 1, "rng_live: RNG VALRDY must fire (liveness)");
 }
 
 // ── HW + diff (silicon) ───────────────────────────────────────────────────────
@@ -215,20 +211,20 @@ fn run_hw(elf: &PathBuf) -> Vec<u32> {
 
 /// Ratchet baseline: number of digest words that must match sim vs hw.
 ///
-/// Measured 13/16 on real silicon (Seeed XIAO nRF52840 Sense, ST-LINK V2,
-/// 2026-06-09). Raised to 14/16 after closing the `gpiote_out` gap:
-/// GPIOTE task now drives pad/IN (not OUT), matching silicon.
+/// Originally measured 13/16 on real silicon (Seeed XIAO nRF52840 Sense,
+/// ST-LINK V2, 2026-06-09). All three residuals have since been closed in the
+/// sim, so every digest word now equals the captured silicon value (16/16):
+///   - `ecb_ct0`:  sim now implements AES-128 (ECB EasyDMA) → 0xD8E0C469.
+///   - `gpiote_out`: GPIOTE task drives pad/IN, not GPIO.OUT → 0 (matches HW).
+///   - `temp_inrange`: TEMP now produces an in-range reading + DATARDY → 1.
 ///
-/// Two known residuals keep this at 14/16 (raise the baseline when any is
-/// closed — never lower it):
-///   - `ecb_ct0`:  silicon computes the FIPS-197 AES-128 ciphertext
-///                 (0xD8E0C469); the sim ECB model does not implement AES and
-///                 returns 0. Closing this needs an AES core in the sim ECB.
-///   - `temp_inrange`: silicon TEMP fires DATARDY with an in-range reading; the
-///                 sim TEMP model never raises DATARDY. Closing this needs a
-///                 TEMP measurement model.
+/// NOTE: 16 reflects the sim digest matching the 2026-06-09 silicon capture on
+/// every word (verified sim-side; see `conformance_sim`). It has not been
+/// re-confirmed by a fresh on-silicon run because flashing the conformance
+/// firmware overwrites the restored UF2 bootloader. Re-run `conformance_diff`
+/// after a re-flash to confirm 16/16 on hardware. Never lower this baseline.
 #[cfg(feature = "hw-oracle-nrf52")]
-const BASELINE_MATCHED: usize = 14;
+const BASELINE_MATCHED: usize = 16;
 
 #[cfg(feature = "hw-oracle-nrf52")]
 #[test]
