@@ -111,8 +111,20 @@ const I2C_TRISE_RESET: u32 = 0x0002; // silicon-confirmed (RM0008 §26.6.9)
 // ── TIM2 (0x4000_0000, 16-bit GP timer) ──────────────────────────────────────
 const TIM2_BASE: u32 = 0x4000_0000;
 const TIM2_CR1: u32 = TIM2_BASE + 0x00;
+const TIM2_CR2: u32 = TIM2_BASE + 0x04;
+const TIM2_SMCR: u32 = TIM2_BASE + 0x08;
+const TIM2_DIER: u32 = TIM2_BASE + 0x0C;
+const TIM2_CCMR1: u32 = TIM2_BASE + 0x18;
+const TIM2_CCMR2: u32 = TIM2_BASE + 0x1C;
+const TIM2_CCER: u32 = TIM2_BASE + 0x20;
+const TIM2_CNT: u32 = TIM2_BASE + 0x24;
 const TIM2_PSC: u32 = TIM2_BASE + 0x28;
 const TIM2_ARR: u32 = TIM2_BASE + 0x2C;
+const TIM2_CCR1: u32 = TIM2_BASE + 0x34;
+const TIM2_CCR2: u32 = TIM2_BASE + 0x38;
+const TIM2_CCR3: u32 = TIM2_BASE + 0x3C;
+const TIM2_CCR4: u32 = TIM2_BASE + 0x40;
+const TIM2_DCR: u32 = TIM2_BASE + 0x48;
 const TIM2_ARR_RESET: u32 = 0x0000_FFFF; // silicon-confirmed (16-bit reload)
 
 // ── ADC1 (0x4001_2400, RM0008 §11) ───────────────────────────────────────────
@@ -596,6 +608,135 @@ const CASES: &[MmioCase] = &[
     },
 ];
 
+// ── Address-only sweep cases ──────────────────────────────────────────────────
+//
+// The cheap-model-friendly oracle shape: supply ONLY an address (+ the clock-
+// enable prep) and a probe write. The harness writes it to sim AND silicon,
+// reads both back, and diffs them — **silicon is the expected value, discovered
+// not asserted**. A divergence directly reveals the true silicon writable mask,
+// so there is no hand-written `mask`/`expect` for a model (or an LLM drafting
+// the table) to get wrong. Use this to grind register coverage: enumerate a
+// peripheral's register addresses from the SVD, sweep, fix any DIFF in the model.
+struct SweepCase {
+    label: &'static str,
+    /// RCC clock-enables (and any other safe preamble) applied to both sides.
+    prep: &'static [(u32, u32)],
+    addr: u32,
+    /// Probe value. 0xFFFF_FFFF discovers the writable-bit mask.
+    write: u32,
+}
+
+/// TIM2 general-purpose register file. SR/EGR are excluded (status / write-only
+/// event, not plain read-write). Addresses enumerated from RM0008 §15; masks are
+/// NOT asserted — the silicon diff discovers them.
+///
+/// Order matters — determinism guards learned from the bench (each is a real
+/// silicon write-protection interlock that a naive write-everything sweep trips):
+///   * **CCRx before CCMRx.** Writing CCMRx sets the CCxS input-capture bits,
+///     which flips CCRx to read-only (it then holds a capture value). Probe CCRx
+///     while CCMRx is still at its output-mode reset.
+///   * **CCMRx before CCER.** CCER.CCxE write-protects the CCxS channel-select
+///     bits — set CCxE first and CCMRx bits 0,1,8,9 stop latching. Probe CCMRx
+///     while CCxE is still clear.
+///   * **CR1 last.** Writing it sets CR1.CEN, starting the real timer, after
+///     which a CNT read would race (HW counts, sim doesn't).
+///
+/// DMAR is intentionally excluded: it is not a plain register but a DCR-windowed
+/// alias into the register file, so a flat write→read does not characterise it.
+const SWEEP_CASES: &[SweepCase] = &[
+    SweepCase {
+        label: "TIM2.CR2",
+        prep: &[(RCC_APB1ENR, TIM2EN)],
+        addr: TIM2_CR2,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "TIM2.SMCR",
+        prep: &[(RCC_APB1ENR, TIM2EN)],
+        addr: TIM2_SMCR,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "TIM2.DIER",
+        prep: &[(RCC_APB1ENR, TIM2EN)],
+        addr: TIM2_DIER,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "TIM2.CNT",
+        prep: &[(RCC_APB1ENR, TIM2EN)],
+        addr: TIM2_CNT,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "TIM2.PSC",
+        prep: &[(RCC_APB1ENR, TIM2EN)],
+        addr: TIM2_PSC,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "TIM2.ARR",
+        prep: &[(RCC_APB1ENR, TIM2EN)],
+        addr: TIM2_ARR,
+        write: 0xFFFF_FFFF,
+    },
+    // CCRx (output mode) → CCMRx (CCxE still clear) → CCER (sets CCxE). See note.
+    SweepCase {
+        label: "TIM2.CCR1",
+        prep: &[(RCC_APB1ENR, TIM2EN)],
+        addr: TIM2_CCR1,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "TIM2.CCR2",
+        prep: &[(RCC_APB1ENR, TIM2EN)],
+        addr: TIM2_CCR2,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "TIM2.CCR3",
+        prep: &[(RCC_APB1ENR, TIM2EN)],
+        addr: TIM2_CCR3,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "TIM2.CCR4",
+        prep: &[(RCC_APB1ENR, TIM2EN)],
+        addr: TIM2_CCR4,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "TIM2.CCMR1",
+        prep: &[(RCC_APB1ENR, TIM2EN)],
+        addr: TIM2_CCMR1,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "TIM2.CCMR2",
+        prep: &[(RCC_APB1ENR, TIM2EN)],
+        addr: TIM2_CCMR2,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "TIM2.CCER",
+        prep: &[(RCC_APB1ENR, TIM2EN)],
+        addr: TIM2_CCER,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "TIM2.DCR",
+        prep: &[(RCC_APB1ENR, TIM2EN)],
+        addr: TIM2_DCR,
+        write: 0xFFFF_FFFF,
+    },
+    SweepCase {
+        label: "TIM2.CR1 (last: sets CEN)",
+        prep: &[(RCC_APB1ENR, TIM2EN)],
+        addr: TIM2_CR1,
+        write: 0xFFFF_FFFF,
+    },
+];
+
 // ── Register parity sweep (GPIOB config + SPI1 + TIM2 — no SWD pins) ───────────
 const PARITY_PATTERNS: &[u32] = &[0x0000_0000, 0xFFFF_FFFF, 0xA5A5_A5A5, 0x5A5A_5A5A];
 
@@ -788,6 +929,27 @@ fn f1_parity_sim_only() {
     );
 }
 
+/// Wellformedness gate for the address sweep (runs in normal CI): every sweep
+/// case must write + read cleanly against the modeled bus. This catches a typo'd
+/// address (which would sim-error) before it ever reaches the bench; the actual
+/// model-vs-silicon comparison happens in the `hw` module's diff.
+#[test]
+fn f1_sweep_sim_only() {
+    let mut sim = build_sim_bus();
+    for case in SWEEP_CASES {
+        for &(addr, val) in case.prep {
+            sim.write_u32(addr as u64, val)
+                .unwrap_or_else(|e| panic!("sim prep 0x{addr:08X}: {e:?}"));
+        }
+        sim.write_u32(case.addr as u64, case.write)
+            .unwrap_or_else(|e| {
+                panic!("sim sweep write {} 0x{:08X}: {e:?}", case.label, case.addr)
+            });
+        sim.read_u32(case.addr as u64)
+            .unwrap_or_else(|e| panic!("sim sweep read {} 0x{:08X}: {e:?}", case.label, case.addr));
+    }
+}
+
 // ── Sim-vs-hardware diff (requires connected STM32F103) ─────────────────────────
 
 #[cfg(feature = "hw-oracle-stm32")]
@@ -868,6 +1030,31 @@ mod hw {
         classify(sim_val & case.mask, hw_val & case.mask, case.expect)
     }
 
+    /// Address-only sweep: write the probe, read both sides, diff. Silicon is
+    /// the ground truth — `Match` means the model's writable mask agrees with
+    /// the chip; `Diverge` prints both so the real mask is revealed.
+    fn run_sweep_case(sim: &mut SystemBus, oc: &mut OpenOcd, case: &SweepCase) -> Outcome {
+        for &(addr, val) in case.prep {
+            write_both(sim, oc, addr, val);
+        }
+        write_both(sim, oc, case.addr, case.write);
+        let sim_val = match sim.read_u32(case.addr as u64) {
+            Ok(v) => v,
+            Err(e) => return Outcome::SimError(format!("{e:?}")),
+        };
+        let hw_val = oc
+            .read_memory(case.addr, 1)
+            .unwrap_or_else(|e| panic!("hw read 0x{:08X}: {e}", case.addr))[0];
+        if sim_val == hw_val {
+            Outcome::Match
+        } else {
+            Outcome::Diverge {
+                sim: sim_val,
+                hw: hw_val,
+            }
+        }
+    }
+
     #[test]
     #[ignore = "hw-oracle: requires connected STM32F103"]
     fn f1_mmio_diff() {
@@ -877,9 +1064,10 @@ mod hw {
 
         println!();
         println!(
-            "STM32F103 MMIO diff — {} reset + {} R/W cases",
+            "STM32F103 MMIO diff — {} reset + {} R/W + {} sweep cases",
             RESET_CASES.len(),
-            CASES.len()
+            CASES.len(),
+            SWEEP_CASES.len()
         );
         println!("{:-<90}", "");
 
@@ -920,8 +1108,14 @@ mod hw {
             tally(&o, case.label);
         }
 
+        println!("-- address sweep (silicon = truth) --");
+        for case in SWEEP_CASES {
+            let o = run_sweep_case(&mut sim, &mut oc, case);
+            tally(&o, case.label);
+        }
+
         println!("{:-<90}", "");
-        let total = RESET_CASES.len() + CASES.len();
+        let total = RESET_CASES.len() + CASES.len() + SWEEP_CASES.len();
         println!(
             "summary: match={matched} diverge={diverged} both_disagree={disagree} sim_err={sim_err} total={total}"
         );

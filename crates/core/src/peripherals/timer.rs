@@ -183,9 +183,27 @@ impl Timer {
     fn write_reg(&mut self, offset: u64, value: u32) {
         match offset {
             0x00 => self.cr1 = value & 0x3FF,
-            0x04 => self.cr2 = value & 0x00FF_FFFB,
-            0x08 => self.smcr = value & 0xFFFF_FFF7,
-            0x0C => self.dier = value & 0x7FFF,
+            // CR2 writable bits differ by layout. General-purpose (TIM2-5):
+            // CCDS(3)+MMS(6:4)+TI1S(7) = 0xF8, silicon-confirmed on F103 TIM2.
+            // Advanced (TIM1) adds CCPC/CCUS/OISx — left at the wider mask
+            // pending a TIM1 sweep to pin it.
+            0x04 => {
+                let mask = if self.advanced {
+                    0x00FF_FFFB
+                } else {
+                    0x0000_00F8
+                };
+                self.cr2 = value & mask;
+            }
+            // SMCR is 16-bit on every layout (bit 3 reserved): 0xFFF7,
+            // silicon-confirmed on F103 TIM2.
+            0x08 => self.smcr = value & 0x0000_FFF7,
+            // DIER: general-purpose has no COMIE(5)/BIE(7)/COMDE(13) — 0x5F5F,
+            // silicon-confirmed on F103 TIM2. Advanced (TIM1) exposes them (0x7FFF).
+            0x0C => {
+                let mask = if self.advanced { 0x7FFF } else { 0x5F5F };
+                self.dier = value & mask;
+            }
             // TIMx_SR is rc_w0 for status flags: writing 0 clears, writing 1 keeps current.
             0x10 => self.sr &= value & 0x1FFFF,
             // TIMx_EGR: only UG (bit 0) drives state — but advanced timers
@@ -225,8 +243,10 @@ impl Timer {
                     } // BIF (break)
                 }
             }
-            0x18 => self.ccmr1 = value,
-            0x1C => self.ccmr2 = value,
+            // CCMR1/2 are 16-bit on every layout: 0xFFFF, silicon-confirmed on
+            // F103 TIM2 (the model previously stored the full 32 bits).
+            0x18 => self.ccmr1 = value & 0xFFFF,
+            0x1C => self.ccmr2 = value & 0xFFFF,
             0x20 => {
                 // CCER mask: general-purpose timers expose CCxE (bit 0) +
                 // CCxP (bit 1) per channel — 4 channels = 0x3333.
