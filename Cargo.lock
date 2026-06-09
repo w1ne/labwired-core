@@ -1524,6 +1524,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "labwired-fuzz"
+version = "0.15.0"
+dependencies = [
+ "anyhow",
+ "labwired-config",
+ "labwired-core",
+ "labwired-loader",
+]
+
+[[package]]
 name = "labwired-gdbstub"
 version = "0.15.0"
 dependencies = [
