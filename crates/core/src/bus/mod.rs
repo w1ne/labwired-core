@@ -980,7 +980,20 @@ impl SystemBus {
                     } else {
                         Self::parse_profile_or_default(p_cfg, "GPIO")?
                     };
-                    Box::new(crate::peripherals::gpio::GpioPort::new_with_layout(layout))
+                    // For nRF52 ports, an optional `num_pins` config key caps the
+                    // valid-pin range (e.g. 16 for nRF52840 P1 which has P1.0–P1.15).
+                    // Writes outside that range are discarded; reads return 0.
+                    if layout == GpioRegisterLayout::Nrf52 {
+                        let num_pins: u32 = p_cfg
+                            .config
+                            .get("num_pins")
+                            .and_then(|v| v.as_u64())
+                            .map(|n| n as u32)
+                            .unwrap_or(32);
+                        Box::new(crate::peripherals::gpio::GpioPort::new_nrf52(num_pins))
+                    } else {
+                        Box::new(crate::peripherals::gpio::GpioPort::new_with_layout(layout))
+                    }
                 }
                 "rcc" => {
                     let layout: RccRegisterLayout = Self::parse_profile_or_default(p_cfg, "RCC")?;

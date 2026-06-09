@@ -81,6 +81,8 @@ peripherals:
   type: nrf52840_gpio
   bus: sysbus
   base_address: 1342181376  # 0x50001000
+  config:
+    num_pins: 16
 - id: gpiote
   type: nrf52840_gpiotasksevents
   bus: sysbus

@@ -32,6 +32,7 @@ peripherals:
     size: "4KB"
     config:
       profile: "nrf52"
+      num_pins: 16
   # nRF52840 peripherals — reset values verified against nRF52840 silicon
   # (Seeed XIAO nRF52840 Sense, ST-LINK V2, 2026-06-09). Verified via the
   # nrf52_onboarding_diff register sweep (21 MODELLED + WDT). Addresses are

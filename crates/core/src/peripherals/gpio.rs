@@ -149,15 +149,47 @@ impl V2Gpio {
 }
 
 // ── nRF52 (DIR / OUT / IN / PIN_CNF) ──────────────────────────────────────────
-#[derive(Debug, Default, serde::Serialize)]
+#[derive(Debug, serde::Serialize)]
 pub struct Nrf52Gpio {
-    odr: u32, // OUT 0x504
-    idr: u32, // IN  0x510 (latched input)
-    dir: u32, // DIR 0x514
+    odr: u32,         // OUT        0x504
+    idr: u32,         // IN         0x510 (latched input)
+    dir: u32,         // DIR        0x514
+    detectmode: u32,  // DETECTMODE 0x524
     pin_cnf: [u32; 32],
+    /// Number of physical pins on this port.  nRF52840 P0 = 32, P1 = 16.
+    /// Writes to pins >= num_pins are discarded; reads return 0.
+    num_pins: u32,
+}
+
+impl Default for Nrf52Gpio {
+    fn default() -> Self {
+        Self {
+            odr: 0,
+            idr: 0,
+            dir: 0,
+            detectmode: 0,
+            pin_cnf: [0u32; 32],
+            num_pins: 32,
+        }
+    }
 }
 
 impl Nrf52Gpio {
+    /// Build a port with a non-default pin count (e.g. 16 for nRF52840 P1).
+    fn with_num_pins(num_pins: u32) -> Self {
+        Self { num_pins, ..Self::default() }
+    }
+
+    /// Bitmask covering the valid pins for this port.
+    #[inline]
+    fn pin_mask(&self) -> u32 {
+        if self.num_pins >= 32 {
+            0xFFFF_FFFF
+        } else {
+            (1u32 << self.num_pins) - 1
+        }
+    }
+
     fn read_reg(&self, offset: u64) -> u32 {
         match offset {
             0x504 => self.odr,
@@ -165,21 +197,30 @@ impl Nrf52Gpio {
             // OUT; input pins return the latched IDR. (Nordic PS §6.10.)
             0x510 => (self.odr & self.dir) | (self.idr & !self.dir),
             0x514 => self.dir,
-            0x700..=0x77C if offset % 4 == 0 => self.pin_cnf[((offset - 0x700) / 4) as usize],
+            0x524 => self.detectmode,
+            0x700..=0x77C if offset % 4 == 0 => {
+                let k = ((offset - 0x700) / 4) as usize;
+                if k < self.num_pins as usize { self.pin_cnf[k] } else { 0 }
+            }
             _ => 0,
         }
     }
     fn write_reg(&mut self, offset: u64, value: u32) {
+        let mask = self.pin_mask();
         match offset {
-            0x504 => self.odr = value,
-            0x508 => self.odr |= value,
-            0x50C => self.odr &= !value,
+            0x504 => self.odr = value & mask,
+            0x508 => self.odr |= value & mask,
+            0x50C => self.odr &= !(value & mask),
             0x510 => self.idr = value,
-            0x514 => self.dir = value,
-            0x518 => self.dir |= value,
-            0x51C => self.dir &= !value,
+            0x514 => self.dir = value & mask,
+            0x518 => self.dir |= value & mask,
+            0x51C => self.dir &= !(value & mask),
+            0x524 => self.detectmode = value,
             0x700..=0x77C if offset % 4 == 0 => {
-                self.pin_cnf[((offset - 0x700) / 4) as usize] = value;
+                let k = ((offset - 0x700) / 4) as usize;
+                if k < self.num_pins as usize {
+                    self.pin_cnf[k] = value;
+                }
             }
             _ => {}
         }
@@ -211,6 +252,12 @@ impl GpioPort {
             GpioRegisterLayout::Stm32V2 => Self::Stm32V2(V2Gpio::default()),
             GpioRegisterLayout::Nrf52 => Self::Nrf52(Nrf52Gpio::default()),
         }
+    }
+
+    /// Build an nRF52-layout GPIO port with an explicit pin count.
+    /// Use this when the port has fewer than 32 physical pins (e.g. P1 = 16).
+    pub fn new_nrf52(num_pins: u32) -> Self {
+        Self::Nrf52(Nrf52Gpio::with_num_pins(num_pins))
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
