@@ -115,9 +115,24 @@ across replugs. Always pin the target by serial:
   F103 row from the table above; gate the model masks on it; re-sweep → diverge=0;
   land. Bumps F103 coverage further (the BRR/CR2/GTPR-style "missing register"
   wins: RCC `CIR` storage, AFIO masks).
-- **P2 — F407 (Cortex-M4):** bench an F407 (Nucleo-F407 or Discovery); fill its
-  row (EXTI 23 lines, F4 RCC ENR, etc.); validate the shared-model masks don't
-  regress vs F103.
+- **P2 — F407 (Cortex-M4): UNBLOCKED, on the bench (2026-06-09).** Scope refined
+  after inspecting the chip: **F407 models only RCC / GPIO×4 / SysTick / UART /
+  I2C — NO EXTI/DMA/AFIO**, so the "tier" registers don't apply to it. The real
+  P2 value is therefore: (a) give F407 its **first** silicon oracle (it has
+  none), (b) **cross-validate the shared UART (F1 USART layout) + I2C (`F1I2c`)
+  masks on F4 silicon** — proving the per-family fixes are universal F1→F4, and
+  (c) first-validate **F4Rcc** (known approximation: CFGR modelled at 0x04, real
+  F4 has PLLCFGR@0x04 / CFGR@0x08 — the sweep will catch it) + `stm32f4_gpio`.
+  Needs a **new `stm32f4_mmio_diff.rs`** (F4 memory map: RCC 0x40023800 with
+  AHB1ENR@0x30/APB1ENR@0x40/APB2ENR@0x44, GPIO 0x40020000, USART2 0x40004400,
+  I2C1 0x40005400, DBGMCU 0xE0042000).
+  - **Bench access (done):** the F407 enumerates as a **garbage-serial clone
+    ST-Link/V2 at USB location `1-1`** (the nRF52840 is the other clone dongle at
+    `1-2`). Serial selection can't disambiguate them → added
+    **`LABWIRED_STLINK_LOCATION`** (labwired-core #218). Confirmed F407 alive and
+    readable on 1-1: `pc=0x08000040` (flash), `msp=0x20020000`, RCC_CR
+    `0x00008283`, GPIOA_MODER `0xa8000000`. Connect with `stm32f4x.cfg`; its
+    flash firmware runs but peripheral reads work after `reset halt`.
 - **P3 — F105/F107 (connectivity):** AFIO MAPR2, the extra RCC enables. Lowest
   priority (least common parts).
 
