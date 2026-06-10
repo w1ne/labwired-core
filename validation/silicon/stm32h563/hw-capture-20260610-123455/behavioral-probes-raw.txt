@@ -1,0 +1,28 @@
+Open On-Chip Debugger 0.12.0
+Licensed under GNU GPL v2
+For bug reports, read
+	http://openocd.org/doc/doxygen/bugs.html
+srst_only separate srst_nogate srst_open_drain connect_deassert_srst
+
+Info : STLINK V3J13M4 (API v3) VID:PID 0483:374E
+Info : Target voltage: 3.288770
+Info : clock speed 1000 kHz
+Info : stlink_dap_op_connect(connect)
+Info : SWD DPIDR 0x6ba02477
+Info : [stm32h563.cpu] Cortex-M33 r0p4 processor detected
+Info : [stm32h563.cpu] target has 8 breakpoints, 4 watchpoints
+Info : starting gdb server for stm32h563.cpu on 3333
+Info : Listening on port 3333 for gdb connections
+[stm32h563.cpu] halted due to debug-request, current mode: Thread 
+xPSR: 0xf9000000 pc: 0x08000400 msp: 0x200a0000
+== T1 CFGR1 SW=001 (CSI is OFF) -> does SWS mirror? ==
+== T2 CSION then SW=001 -> SWS? ==
+== T3 back to HSI (SW=000) ==
+== T4 HSICFGR trim write 0x55 (cal must stay RO) ==
+== T5 CSICFGR trim write 0x15 ==
+== T6 HSEON alone, then HSEON+HSEBYP (board feeds HSE from STLINK MCO) ==
+== T7 AHB2ENR round-trip on top of reset, then restore ==
+== T8 APB1HENR / APB3ENR round-trip ==
+== T9 GPIOA PA0 MODER analog->output->restore (clock on first) ==
+== T10 SysTick CALIB write must be ignored (RO) ==
+== T11 RSR before/after RMVF ==
