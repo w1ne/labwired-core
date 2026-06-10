@@ -966,7 +966,18 @@ impl SystemBus {
                         } else {
                             Self::parse_profile_or_default(p_cfg, "UART")?
                         };
-                    Box::new(crate::peripherals::uart::Uart::new_with_layout(layout))
+                    // CR3 writable mask is a per-part delta on the shared F1 map:
+                    // F1 implements [10:0] (0x07FF), F4 adds bit 11 ONEBIT (0x0FFF).
+                    // YAML: `config: { cr3_mask: 0xFFF }`; default F1.
+                    let cr3_mask: u32 = p_cfg
+                        .config
+                        .get("cr3_mask")
+                        .and_then(|v| v.as_u64())
+                        .map(|n| n as u32)
+                        .unwrap_or(0x0000_07FF);
+                    Box::new(crate::peripherals::uart::Uart::new_with_layout_cr3(
+                        layout, cr3_mask,
+                    ))
                 }
                 "systick" | "arm_generictimer" => {
                     Box::new(crate::peripherals::systick::Systick::new())
@@ -997,7 +1008,24 @@ impl SystemBus {
                 }
                 "rcc" => {
                     let layout: RccRegisterLayout = Self::parse_profile_or_default(p_cfg, "RCC")?;
-                    Box::new(crate::peripherals::rcc::Rcc::new_with_layout(layout))
+                    let mut rcc = crate::peripherals::rcc::Rcc::new_with_layout(layout);
+                    // F4 ENR writable masks are per-part (implemented-peripheral
+                    // set). YAML: `config: { rcc_ahb1enr_mask, rcc_apb1enr_mask,
+                    // rcc_apb2enr_mask }`; default unmasked (0xFFFF_FFFF).
+                    let m = |k: &str| -> u32 {
+                        p_cfg
+                            .config
+                            .get(k)
+                            .and_then(|v| v.as_u64())
+                            .map(|n| n as u32)
+                            .unwrap_or(0xFFFF_FFFF)
+                    };
+                    rcc.set_f4_enr_masks(
+                        m("rcc_ahb1enr_mask"),
+                        m("rcc_apb1enr_mask"),
+                        m("rcc_apb2enr_mask"),
+                    );
+                    Box::new(rcc)
                 }
                 "dbgmcu" => {
                     // Pull IDCODE from YAML config (`idcode: "0x10076415"` or
@@ -1117,7 +1145,17 @@ impl SystemBus {
                         } else {
                             Self::parse_profile_or_default(p_cfg, "SPI")?
                         };
-                    Box::new(crate::peripherals::spi::Spi::new_with_layout(layout))
+                    // Classic-SPI CR2 mask is a per-part delta: F1 0xE7, F4 adds
+                    // FRF bit 4 → 0xF7. YAML: `config: { cr2_mask: 0xF7 }`.
+                    let cr2_mask: u32 = p_cfg
+                        .config
+                        .get("cr2_mask")
+                        .and_then(|v| v.as_u64())
+                        .map(|n| n as u32)
+                        .unwrap_or(0x0000_00E7);
+                    Box::new(crate::peripherals::spi::Spi::new_with_layout_cr2(
+                        layout, cr2_mask,
+                    ))
                 }
                 "pwr" => Box::new(crate::peripherals::pwr::Pwr::new()),
                 "flash" | "flash_iface" => {

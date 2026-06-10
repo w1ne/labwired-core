@@ -249,6 +249,12 @@ pub struct Spi {
     /// path (`dr` + RXNE), as if MOSI were jumpered to MISO. Defaults false.
     loopback: bool,
 
+    /// Classic-SPI CR2 writable mask — a per-part delta on the shared classic
+    /// layout. F1 implements 0xE7; F4 adds bit 4 (FRF, TI-mode) → 0xF7,
+    /// silicon-confirmed on the bench F103 (0xE7) and F407 (0xF7). Set from the
+    /// chip config's `cr2_mask`. Ignored by the FIFO layout (its own CR2 logic).
+    cr2_mask: u32,
+
     #[serde(skip)]
     pub attached_devices: Vec<Box<dyn SpiDevice>>,
 }
@@ -270,6 +276,12 @@ impl Spi {
     }
 
     pub fn new_with_layout(layout: SpiRegisterLayout) -> Self {
+        Self::new_with_layout_cr2(layout, 0x0000_00E7)
+    }
+
+    /// Like [`new_with_layout`] but with an explicit classic-SPI CR2 writable
+    /// mask — the per-part delta (F1 `0xE7`, F4 `0xF7` for the FRF bit).
+    pub fn new_with_layout_cr2(layout: SpiRegisterLayout, cr2_mask: u32) -> Self {
         let regs = match layout {
             // CR2 reset is silicon-verified over SWD:
             //   FIFO SPI (L4/F7/H5): CR2 = 0x0700 (DS=0b0111 8-bit + FRXTH).
@@ -290,6 +302,7 @@ impl Spi {
         };
         Self {
             regs,
+            cr2_mask,
             ..Default::default()
         }
     }
@@ -323,7 +336,9 @@ impl Spi {
                 // frame size. Values below 0b0011 are reserved and hardware
                 // forces them to 0b0111 (8-bit) on FIFO parts — verified on
                 // NUCLEO-L476RG (CR2=0x0000 reads back 0x0700). Classic SPI
-                // has no DS field, so it stores the value verbatim.
+                // has no DS field; its writable mask is the per-part `cr2_mask`
+                // (F1 0xE7, F4 0xF7 for the FRF bit).
+                let cr2_mask = self.cr2_mask as u16;
                 if let SpiRegs::Stm32(r) = &mut self.regs {
                     if r.fifo {
                         let ds = (value >> 8) & 0xF;
@@ -333,9 +348,7 @@ impl Spi {
                             value
                         };
                     } else {
-                        // Classic SPI CR2 writable mask 0xE7 (RXDMAEN/TXDMAEN/
-                        // SSOE/ERRIE/RXNEIE/TXEIE) — silicon-confirmed on F103.
-                        r.cr2 = value & 0x00E7;
+                        r.cr2 = value & cr2_mask;
                     }
                 }
             }

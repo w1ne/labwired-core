@@ -15,6 +15,6 @@ validation:
     system_manifest: true
     chip_descriptor: true
     simulation: true
-  timestamp_utc: '2026-06-07T00:22:46.217955+00:00'
-  run_url: https://github.com/w1ne/labwired-core/actions/runs/27077875750/attempts/1
+  timestamp_utc: '2026-06-09T13:16:42.333537+00:00'
+  run_url: https://github.com/w1ne/labwired-core/actions/runs/27208642377/attempts/1
   artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/eos-s3-quickfeather.md
