@@ -1,7 +1,8 @@
 // Shared top-level navigation for every LabWired page. One source of
-// truth for the five nav links — Playground, Library, Tools, For CI,
-// Validation — plus the LabWired wordmark that links back to the
-// marketing domain.
+// truth for the nav links — Playground, Library, Tools, For CI,
+// Validation, Blog, About — plus the LabWired wordmark that links back
+// to the marketing domain. Mirrors components/header.html in the
+// landing_page repo; change both together.
 //
 // Used by:
 //   * studio/TopChrome.tsx                (playground, dark variant)
@@ -38,6 +39,8 @@ export const NAV_ITEMS = [
   { id: 'tools', label: 'Tools', href: '/?tools=1' },
   { id: 'ci', label: 'For CI', href: 'https://labwired.com/ci.html', external: true },
   { id: 'validation', label: 'Validation', href: '/validation.html' },
+  { id: 'blog', label: 'Blog', href: 'https://labwired.com/blog/', external: true },
+  { id: 'about', label: 'About', href: 'https://labwired.com/about.html', external: true },
 ] as const;
 
 export type NavId = (typeof NAV_ITEMS)[number]['id'];

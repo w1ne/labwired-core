@@ -82,7 +82,7 @@ export function TopChrome({ boardName, onOpenCommand, onShare, onUploadFirmware,
         <GlobalNav
           active="playground"
           variant="dark"
-          exclude={['validation']}
+          exclude={['validation', 'blog', 'about']}
           onToolsClick={onOpenTools}
           toolsSlot={
             tools.length > 0 ? (

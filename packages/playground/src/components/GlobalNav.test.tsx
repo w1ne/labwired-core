@@ -6,7 +6,15 @@ afterEach(() => cleanup());
 
 describe('GlobalNav', () => {
   it('exposes Tools between Library and For CI', () => {
-    expect(NAV_ITEMS.map((item) => item.label)).toEqual(['Playground', 'Library', 'Tools', 'For CI', 'Validation']);
+    expect(NAV_ITEMS.map((item) => item.label)).toEqual([
+      'Playground',
+      'Library',
+      'Tools',
+      'For CI',
+      'Validation',
+      'Blog',
+      'About',
+    ]);
     expect(NAV_ITEMS.find((item) => item.id === 'tools')).toMatchObject({ href: '/?tools=1' });
   });
 
