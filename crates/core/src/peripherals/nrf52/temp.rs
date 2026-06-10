@@ -24,7 +24,7 @@ const OFF_CAL_LAST: u64 = 0x570;
 pub struct Nrf52Temp {
     events_datardy: u32,
     inten: u32,
-    temp: u32, // signed 32-bit; firmware reads as i32
+    temp: u32,      // signed 32-bit; firmware reads as i32
     cal: [u32; 21], // 0x520..=0x570 step 4: A0-A5, gap, B0-B5, gap, T0-T4
 }
 
@@ -105,7 +105,7 @@ mod tests {
         // TEMP must contain an in-range value (25 °C = 100).
         let raw = t.read_u32(OFF_TEMP).unwrap() as i32;
         assert_eq!(raw, 100);
-        assert!(raw >= -200 && raw <= 400, "expected in-range TEMP value");
+        assert!((-200..=400).contains(&raw), "expected in-range TEMP value");
     }
 
     #[test]

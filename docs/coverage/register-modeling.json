@@ -16,7 +16,7 @@
     "total": 1690
   },
   "nrf52840": {
-    "modeled": 1108,
+    "modeled": 1054,
     "total": 2142
   },
   "rp2040": {
@@ -28,11 +28,11 @@
     "total": 722
   },
   "stm32f401": {
-    "modeled": 49,
+    "modeled": 52,
     "total": 660
   },
   "stm32f407": {
-    "modeled": 92,
+    "modeled": 254,
     "total": 1540
   },
   "stm32g474re": {

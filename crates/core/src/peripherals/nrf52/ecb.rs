@@ -93,13 +93,21 @@ fn key_expand(key: &[u8; 16]) -> [[u8; 16]; 11] {
             // RotWord
             temp = [temp[1], temp[2], temp[3], temp[0]];
             // SubWord
-            temp = [SBOX[temp[0] as usize], SBOX[temp[1] as usize],
-                    SBOX[temp[2] as usize], SBOX[temp[3] as usize]];
+            temp = [
+                SBOX[temp[0] as usize],
+                SBOX[temp[1] as usize],
+                SBOX[temp[2] as usize],
+                SBOX[temp[3] as usize],
+            ];
             // XOR with Rcon
             temp[0] ^= RCON[i / 4];
         }
-        w[i] = [w[i-4][0] ^ temp[0], w[i-4][1] ^ temp[1],
-                w[i-4][2] ^ temp[2], w[i-4][3] ^ temp[3]];
+        w[i] = [
+            w[i - 4][0] ^ temp[0],
+            w[i - 4][1] ^ temp[1],
+            w[i - 4][2] ^ temp[2],
+            w[i - 4][3] ^ temp[3],
+        ];
     }
 
     // Pack into 11 × 16-byte round keys.
@@ -130,11 +138,11 @@ pub fn aes128_encrypt(plaintext: &[u8; 16], key: &[u8; 16]) -> [u8; 16] {
     add_round_key(&mut state, &rk[0]);
 
     // Rounds 1..9 with MixColumns.
-    for r in 1..10 {
+    for rk_round in &rk[1..10] {
         sub_bytes(&mut state);
         shift_rows(&mut state);
         mix_columns(&mut state);
-        add_round_key(&mut state, &rk[r]);
+        add_round_key(&mut state, rk_round);
     }
 
     // Round 10: no MixColumns.
@@ -172,25 +180,34 @@ fn shift_rows(state: &mut [[u8; 4]; 4]) {
     // Row 0: no shift.
     // Row 1: left shift by 1.
     let r1 = [state[0][1], state[1][1], state[2][1], state[3][1]];
-    state[0][1] = r1[1]; state[1][1] = r1[2]; state[2][1] = r1[3]; state[3][1] = r1[0];
+    state[0][1] = r1[1];
+    state[1][1] = r1[2];
+    state[2][1] = r1[3];
+    state[3][1] = r1[0];
     // Row 2: left shift by 2.
     let r2 = [state[0][2], state[1][2], state[2][2], state[3][2]];
-    state[0][2] = r2[2]; state[1][2] = r2[3]; state[2][2] = r2[0]; state[3][2] = r2[1];
+    state[0][2] = r2[2];
+    state[1][2] = r2[3];
+    state[2][2] = r2[0];
+    state[3][2] = r2[1];
     // Row 3: left shift by 3.
     let r3 = [state[0][3], state[1][3], state[2][3], state[3][3]];
-    state[0][3] = r3[3]; state[1][3] = r3[0]; state[2][3] = r3[1]; state[3][3] = r3[2];
+    state[0][3] = r3[3];
+    state[1][3] = r3[0];
+    state[2][3] = r3[1];
+    state[3][3] = r3[2];
 }
 
 fn mix_columns(state: &mut [[u8; 4]; 4]) {
-    for col in 0..4 {
-        let s0 = state[col][0];
-        let s1 = state[col][1];
-        let s2 = state[col][2];
-        let s3 = state[col][3];
-        state[col][0] = gmul(0x02, s0) ^ gmul(0x03, s1) ^ s2 ^ s3;
-        state[col][1] = s0 ^ gmul(0x02, s1) ^ gmul(0x03, s2) ^ s3;
-        state[col][2] = s0 ^ s1 ^ gmul(0x02, s2) ^ gmul(0x03, s3);
-        state[col][3] = gmul(0x03, s0) ^ s1 ^ s2 ^ gmul(0x02, s3);
+    for col in state.iter_mut() {
+        let s0 = col[0];
+        let s1 = col[1];
+        let s2 = col[2];
+        let s3 = col[3];
+        col[0] = gmul(0x02, s0) ^ gmul(0x03, s1) ^ s2 ^ s3;
+        col[1] = s0 ^ gmul(0x02, s1) ^ gmul(0x03, s2) ^ s3;
+        col[2] = s0 ^ s1 ^ gmul(0x02, s2) ^ gmul(0x03, s3);
+        col[3] = gmul(0x03, s0) ^ s1 ^ s2 ^ gmul(0x02, s3);
     }
 }
 
@@ -265,22 +282,22 @@ impl Peripheral for Nrf52Ecb {
 
         // Read 16-byte key (bytes 0..16) from ECBDATAPTR.
         let mut key = [0u8; 16];
-        for i in 0..16 {
-            key[i] = bus.read_u8(base + i as u64).unwrap_or(0);
+        for (i, byte) in key.iter_mut().enumerate() {
+            *byte = bus.read_u8(base + i as u64).unwrap_or(0);
         }
 
         // Read 16-byte cleartext (bytes 16..32) from ECBDATAPTR+16.
         let mut cleartext = [0u8; 16];
-        for i in 0..16 {
-            cleartext[i] = bus.read_u8(base + 16 + i as u64).unwrap_or(0);
+        for (i, byte) in cleartext.iter_mut().enumerate() {
+            *byte = bus.read_u8(base + 16 + i as u64).unwrap_or(0);
         }
 
         // Compute AES-128-ECB encrypt.
         let ciphertext = aes128_encrypt(&cleartext, &key);
 
         // Write 16-byte ciphertext to ECBDATAPTR+32.
-        for i in 0..16 {
-            let _ = bus.write_u8(base + 32 + i as u64, ciphertext[i]);
+        for (i, byte) in ciphertext.iter().enumerate() {
+            let _ = bus.write_u8(base + 32 + i as u64, *byte);
         }
 
         // Signal completion.
@@ -313,16 +330,16 @@ mod tests {
     #[test]
     fn fips197_appendix_b() {
         let key: [u8; 16] = [
-            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-            0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
+            0x0e, 0x0f,
         ];
         let plaintext: [u8; 16] = [
-            0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
-            0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff,
+            0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd,
+            0xee, 0xff,
         ];
         let expected: [u8; 16] = [
-            0x69, 0xc4, 0xe0, 0xd8, 0x6a, 0x7b, 0x04, 0x30,
-            0xd8, 0xcd, 0xb7, 0x80, 0x70, 0xb4, 0xc5, 0x5a,
+            0x69, 0xc4, 0xe0, 0xd8, 0x6a, 0x7b, 0x04, 0x30, 0xd8, 0xcd, 0xb7, 0x80, 0x70, 0xb4,
+            0xc5, 0x5a,
         ];
         let ct = aes128_encrypt(&plaintext, &key);
         assert_eq!(ct, expected, "AES-128 FIPS-197 vector mismatch");
