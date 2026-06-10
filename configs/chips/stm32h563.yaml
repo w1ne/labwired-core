@@ -14,11 +14,17 @@
 #   GPIO MODER/OSPEEDR/PUPDR, RCC (profile h5) and SysTick CALIB below carry
 #   the captured values.
 #
-# Known divergence from silicon: `dma1` wires the generic 7-channel STM32 DMA
-# model at 0x40020000, but the real H5 has a GPDMA at that address with a
-# different register layout. The sim-side DMA remains useful for firmware
-# written against the sim; treat it as NOT silicon-conformant until a GPDMA
-# model lands.
+# Known divergences from silicon (bench-probed 2026-06-10):
+# - `dma1` wires the generic 7-channel STM32 DMA model at 0x40020000, but the
+#   real H5 has a GPDMA at that address with a different register layout. The
+#   sim-side DMA remains useful for firmware written against the sim; treat it
+#   as NOT silicon-conformant until a GPDMA model lands.
+# - IWDG: silicon commits PR/RLR writes only after LSI-domain sync (SR.PVU/RVU
+#   clear; with LSI off they never commit). The sim commits instantly and
+#   keeps SR at 0, so PVU/RVU polling loops exit immediately.
+# - RNG: silicon resets CR to 0x00800D00 and flags SR clock errors (0x22) when
+#   the rng_ker_ck kernel clock is absent; the sim assumes a clocked, seeded
+#   RNG with CR reset 0.
 
 name: "stm32h563zi"
 arch: "arm"
@@ -108,3 +114,91 @@ peripherals:
     type: "dma"
     base_address: 0x40020000
     size: "1KB"
+  - id: "tim1"
+    type: "timer"
+    base_address: 0x40012C00
+    size: "1KB"
+    irq: 42
+    config:
+      advanced: true
+  - id: "tim2"
+    type: "timer"
+    base_address: 0x40000000
+    size: "1KB"
+    irq: 45
+    config:
+      width: 32
+  - id: "tim3"
+    type: "timer"
+    base_address: 0x40000400
+    size: "1KB"
+    irq: 46
+  - id: "tim6"
+    type: "timer"
+    base_address: 0x40001000
+    size: "1KB"
+    irq: 49
+    config:
+      basic: true
+  - id: "i2c1"
+    type: "i2c"
+    base_address: 0x40005400
+    size: "1KB"
+    irq: 51
+    config:
+      profile: "h5"
+  - id: "i2c2"
+    type: "i2c"
+    base_address: 0x40005800
+    size: "1KB"
+    irq: 53
+    config:
+      profile: "h5"
+  - id: "uart1"
+    type: "uart"
+    base_address: 0x40013800
+    size: "1KB"
+    irq: 58
+    config:
+      profile: "stm32v2"
+  - id: "uart2"
+    type: "uart"
+    base_address: 0x40004400
+    size: "1KB"
+    irq: 59
+    config:
+      profile: "stm32v2"
+  - id: "lpuart1"
+    type: "uart"
+    base_address: 0x44002400
+    size: "1KB"
+    irq: 63
+    config:
+      profile: "stm32v2"
+  - id: "wwdg"
+    type: "wwdg"
+    base_address: 0x40002C00
+    size: "1KB"
+    irq: 0
+  - id: "iwdg"
+    type: "iwdg"
+    base_address: 0x40003000
+    size: "1KB"
+  # RNG_CR resets to 0x00800D00 on silicon (NIST-config default); the generic
+  # model resets it to 0 — divergence documented, CR not pinned in conformance.
+  - id: "rng"
+    type: "rng"
+    base_address: 0x420C0800
+    size: "1KB"
+    irq: 114
+  - id: "crc"
+    type: "crc"
+    base_address: 0x40023000
+    size: "1KB"
+    config:
+      idr_width: 32
+  - id: "lptim1"
+    type: "lptim"
+    base_address: 0x44004400
+    size: "1KB"
+    irq: 64

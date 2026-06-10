@@ -462,7 +462,19 @@ impl RccModel for H5Rcc {
             0xA0 => self.apb1henr = value,
             0xA4 => self.apb2enr = value,
             0xA8 => self.apb3enr = value,
-            0xF0 => self.bdcr = value,
+            // BDCR ready rule mirrors CR: LSEON bit0 → LSERDY bit1,
+            // LSION bit26 → LSIRDY bit27 (RM0481 §11.8.41).
+            0xF0 => {
+                let mut bdcr = value;
+                for (on, rdy) in [(0u32, 1u32), (26, 27)] {
+                    if bdcr & (1 << on) != 0 {
+                        bdcr |= 1 << rdy;
+                    } else {
+                        bdcr &= !(1 << rdy);
+                    }
+                }
+                self.bdcr = bdcr;
+            }
             // RSR: reset-cause flags are hardware-set; software write only
             // clears them via RMVF (bit 23, silicon-probed) — other writes
             // fall through to the no-op default.
@@ -858,6 +870,11 @@ mod tests {
         assert_eq!(rcc.read_u32(0xA0).unwrap(), 0x0000_0020);
         rcc.write_u32(0xA8, 0x0020_0840).unwrap();
         assert_eq!(rcc.read_u32(0xA8).unwrap(), 0x0020_0840);
+        // BDCR: LSION (bit 26) latches LSIRDY (bit 27), dropped on clear.
+        rcc.write_u32(0xF0, 1 << 26).unwrap();
+        assert_ne!(rcc.read_u32(0xF0).unwrap() & (1 << 27), 0);
+        rcc.write_u32(0xF0, 0).unwrap();
+        assert_eq!(rcc.read_u32(0xF0).unwrap(), 0);
     }
 
     #[test]

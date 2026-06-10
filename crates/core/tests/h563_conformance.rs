@@ -80,6 +80,62 @@ fn gpio_reset_state_matches_silicon() {
 }
 
 #[test]
+fn peripheral_estate_reset_state_matches_silicon() {
+    let bus = h563_bus();
+    let rd = |addr: u64| bus.read_u32(addr).unwrap();
+    // Timers: ARR resets full-scale per counter width; everything else 0.
+    assert_eq!(rd(0x4001_2C00 + 0x2C), 0xFFFF, "TIM1_ARR");
+    assert_eq!(rd(0x4000_0000 + 0x2C), 0xFFFF_FFFF, "TIM2_ARR (32-bit)");
+    assert_eq!(rd(0x4000_0400 + 0x2C), 0xFFFF, "TIM3_ARR");
+    assert_eq!(rd(0x4000_1000 + 0x2C), 0xFFFF, "TIM6_ARR");
+    for (base, name) in [
+        (0x4001_2C00u64, "TIM1"),
+        (0x4000_0000, "TIM2"),
+        (0x4000_0400, "TIM3"),
+        (0x4000_1000, "TIM6"),
+    ] {
+        assert_eq!(rd(base), 0, "{name}_CR1");
+        assert_eq!(rd(base + 0x10), 0, "{name}_SR");
+        assert_eq!(rd(base + 0x24), 0, "{name}_CNT");
+        assert_eq!(rd(base + 0x28), 0, "{name}_PSC");
+    }
+    // I2C (v2 IP): ISR resets to TXE.
+    assert_eq!(rd(0x4000_5400 + 0x18), 0x0001, "I2C1_ISR");
+    assert_eq!(rd(0x4000_5800 + 0x18), 0x0001, "I2C2_ISR");
+    assert_eq!(rd(0x4000_5400 + 0x08), 0, "I2C1_OAR1");
+    // Extra UARTs: ISR resets to TXE|TC like USART3.
+    assert_eq!(rd(0x4001_3800 + 0x1C), 0xC0, "USART1_ISR");
+    assert_eq!(rd(0x4000_4400 + 0x1C), 0xC0, "USART2_ISR");
+    assert_eq!(rd(0x4400_2400 + 0x1C), 0xC0, "LPUART1_ISR");
+    // Watchdogs. WWDG CR is not pinned: on silicon the T counter decrements
+    // as soon as the APB clock is on (captured mid-count at 0x4D with WDGA
+    // clear) — only CFR is a stable reset value.
+    assert_eq!(rd(0x4000_2C00 + 0x04), 0x7F, "WWDG_CFR");
+    assert_eq!(rd(0x4000_3000), 0, "IWDG_KR");
+    assert_eq!(rd(0x4000_3000 + 0x08), 0xFFF, "IWDG_RLR");
+    // CRC.
+    assert_eq!(rd(0x4002_3000), 0xFFFF_FFFF, "CRC_DR");
+    assert_eq!(rd(0x4002_3000 + 0x04), 0, "CRC_IDR");
+    // RNG: SR only — silicon resets CR to 0x00800D00 (NIST-config default),
+    // which the generic model does not carry; documented in the chip yaml.
+    assert_eq!(rd(0x420C_0800 + 0x04), 0, "RNG_SR");
+    // LPTIM1: whole captured block is zero at reset.
+    for off in [0u64, 0x0C, 0x10, 0x14] {
+        assert_eq!(rd(0x4400_4400 + off), 0, "LPTIM1 @ +{off:#X}");
+    }
+}
+
+#[test]
+fn crc_compute_matches_silicon() {
+    // Bench oracle: feeding 0x12345678 to the H563's CRC unit (reset state)
+    // returned 0xDF8A8A2B over SWD. The sim must compute the same word.
+    let mut bus = h563_bus();
+    bus.write_u32(0x4002_3008, 1).unwrap(); // CR.RESET
+    bus.write_u32(0x4002_3000, 0x1234_5678).unwrap();
+    assert_eq!(bus.read_u32(0x4002_3000).unwrap(), 0xDF8A_8A2B, "CRC_DR");
+}
+
+#[test]
 fn systick_and_usart_reset_state_match_silicon() {
     let bus = h563_bus();
     assert_eq!(
