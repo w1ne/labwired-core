@@ -28,6 +28,9 @@ pub enum RccRegisterLayout {
     Stm32F1,
     Stm32F4,
     Stm32V2,
+    /// STM32H5 family (RM0481). Register offsets and reset values verified on
+    /// NUCLEO-H563ZI silicon over SWD (`scripts/hw-capture-stm32h563.sh`).
+    Stm32H5,
     /// STM32L4 family (RM0351). Verified on NUCLEO-L476RG over SWD.
     Stm32L4,
     /// STM32L0 family (RM0367). Verified on NUCLEO-L073RZ over SWD.
@@ -42,11 +45,12 @@ impl FromStr for RccRegisterLayout {
         match v.as_str() {
             "stm32f1" | "f1" | "legacy" => Ok(Self::Stm32F1),
             "stm32f4" | "f4" => Ok(Self::Stm32F4),
-            "stm32v2" | "v2" | "modern" | "stm32-modern" | "h5" | "stm32h5" => Ok(Self::Stm32V2),
+            "stm32v2" | "v2" | "modern" | "stm32-modern" => Ok(Self::Stm32V2),
+            "h5" | "stm32h5" => Ok(Self::Stm32H5),
             "stm32l4" | "l4" => Ok(Self::Stm32L4),
             "stm32l0" | "l0" => Ok(Self::Stm32L0),
             _ => Err(format!(
-                "unsupported RCC register layout '{}'; supported: stm32f1, stm32f4, stm32v2, stm32l4, stm32l0",
+                "unsupported RCC register layout '{}'; supported: stm32f1, stm32f4, stm32v2, stm32h5, stm32l4, stm32l0",
                 value
             )),
         }
@@ -295,6 +299,161 @@ impl RccModel for V2Rcc {
     }
 }
 
+// ── STM32H5 ─────────────────────────────────────────────────────────────────
+// Register offsets per RM0481; every reset value below was captured from a
+// NUCLEO-H563ZI (DBGMCU_IDCODE 0x10016484, Cortex-M33 r0p4) at reset halt via
+// `scripts/hw-capture-stm32h563.sh` on 2026-06-10.
+#[derive(Debug, serde::Serialize)]
+pub struct H5Rcc {
+    cr: u32,           // 0x00 — reset 0x0000002B (HSION|HSIRDY|HSIDIV=÷2|HSIDIVF)
+    hsicfgr: u32,      // 0x10 — reset 0x004004F7 (HSITRIM=0x40, HSICAL factory)
+    csicfgr: u32,      // 0x18 — reset 0x00200087 (CSITRIM=0x20, CSICAL factory)
+    cfgr1: u32,        // 0x1C — SW[2:0] → SWS[5:3]
+    cfgr2: u32,        // 0x20
+    pllcfgr: [u32; 3], // 0x28 / 0x2C / 0x30
+    ahb1rstr: u32,     // 0x60
+    ahb2rstr: u32,     // 0x64
+    apb1lrstr: u32,    // 0x74
+    apb1hrstr: u32,    // 0x78
+    apb2rstr: u32,     // 0x7C
+    apb3rstr: u32,     // 0x80
+    ahb1enr: u32,      // 0x88 — reset 0xD0000100
+    ahb2enr: u32,      // 0x8C — reset 0xC0000000 (SRAM2EN|SRAM3EN)
+    apb1lenr: u32,     // 0x9C
+    apb1henr: u32,     // 0xA0
+    apb2enr: u32,      // 0xA4
+    apb3enr: u32,      // 0xA8
+    bdcr: u32,         // 0xF0
+    rsr: u32,          // 0xF4 — reset 0x0C000000 (PINRST|BORRST)
+}
+
+/// HSITRIM[22:16] is the only software-writable field of HSICFGR; HSICAL is
+/// factory calibration and read-only. Same shape for CSICFGR (CSITRIM[21:16]).
+const H5_HSICFGR_W: u32 = 0x007F_0000;
+const H5_CSICFGR_W: u32 = 0x003F_0000;
+
+impl H5Rcc {
+    fn new() -> Self {
+        Self {
+            cr: h5_cr_ready(0x0000_0029),
+            hsicfgr: 0x0040_04F7,
+            csicfgr: 0x0020_0087,
+            cfgr1: 0,
+            cfgr2: 0,
+            pllcfgr: [0; 3],
+            ahb1rstr: 0,
+            ahb2rstr: 0,
+            apb1lrstr: 0,
+            apb1hrstr: 0,
+            apb2rstr: 0,
+            apb3rstr: 0,
+            ahb1enr: 0xD000_0100,
+            ahb2enr: 0xC000_0000,
+            apb1lenr: 0,
+            apb1henr: 0,
+            apb2enr: 0,
+            apb3enr: 0,
+            bdcr: 0,
+            rsr: 0x0C00_0000,
+        }
+    }
+}
+
+/// H5 CR ready rule: each oscillator/PLL ON bit auto-sets its RDY bit —
+/// HSI 0→1, CSI 8→9, HSI48 12→13, HSE 16→17, PLL1 24→25, PLL2 26→27,
+/// PLL3 28→29. HSIDIVF (bit 5) tracks HSION: the divider update is
+/// instantaneous in the model.
+fn h5_cr_ready(mut cr: u32) -> u32 {
+    for &(on, rdy) in &[
+        (0u32, 1u32),
+        (8, 9),
+        (12, 13),
+        (16, 17),
+        (24, 25),
+        (26, 27),
+        (28, 29),
+    ] {
+        if cr & (1 << on) != 0 {
+            cr |= 1 << rdy;
+        } else {
+            cr &= !(1 << rdy);
+        }
+    }
+    if cr & 1 != 0 {
+        cr |= 1 << 5;
+    } else {
+        cr &= !(1 << 5);
+    }
+    cr
+}
+
+impl RccModel for H5Rcc {
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x00 => self.cr,
+            0x10 => self.hsicfgr,
+            0x18 => self.csicfgr,
+            0x1C => self.cfgr1,
+            0x20 => self.cfgr2,
+            0x28 => self.pllcfgr[0],
+            0x2C => self.pllcfgr[1],
+            0x30 => self.pllcfgr[2],
+            0x60 => self.ahb1rstr,
+            0x64 => self.ahb2rstr,
+            0x74 => self.apb1lrstr,
+            0x78 => self.apb1hrstr,
+            0x7C => self.apb2rstr,
+            0x80 => self.apb3rstr,
+            0x88 => self.ahb1enr,
+            0x8C => self.ahb2enr,
+            0x9C => self.apb1lenr,
+            0xA0 => self.apb1henr,
+            0xA4 => self.apb2enr,
+            0xA8 => self.apb3enr,
+            0xF0 => self.bdcr,
+            0xF4 => self.rsr,
+            _ => 0,
+        }
+    }
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            0x00 => self.cr = h5_cr_ready(value),
+            0x10 => self.hsicfgr = (self.hsicfgr & !H5_HSICFGR_W) | (value & H5_HSICFGR_W),
+            0x18 => self.csicfgr = (self.csicfgr & !H5_CSICFGR_W) | (value & H5_CSICFGR_W),
+            // SW[2:0] → SWS[5:3]: the switch completes immediately in the model.
+            0x1C => self.cfgr1 = (value & !(0x7 << 3)) | ((value & 0x7) << 3),
+            0x20 => self.cfgr2 = value,
+            0x28 => self.pllcfgr[0] = value,
+            0x2C => self.pllcfgr[1] = value,
+            0x30 => self.pllcfgr[2] = value,
+            0x60 => self.ahb1rstr = value,
+            0x64 => self.ahb2rstr = value,
+            0x74 => self.apb1lrstr = value,
+            0x78 => self.apb1hrstr = value,
+            0x7C => self.apb2rstr = value,
+            0x80 => self.apb3rstr = value,
+            0x88 => self.ahb1enr = value,
+            0x8C => self.ahb2enr = value,
+            0x9C => self.apb1lenr = value,
+            0xA0 => self.apb1henr = value,
+            0xA4 => self.apb2enr = value,
+            0xA8 => self.apb3enr = value,
+            0xF0 => self.bdcr = value,
+            // RSR: reset-cause flags are hardware-set; software write only
+            // clears them via RMVF (bit 16).
+            0xF4 => {
+                if value & (1 << 16) != 0 {
+                    self.rsr = 0;
+                }
+            }
+            _ => {}
+        }
+    }
+    fn snapshot(&self) -> serde_json::Value {
+        serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+}
+
 // ── STM32L4 ─────────────────────────────────────────────────────────────────
 #[derive(Debug, Default, serde::Serialize)]
 pub struct L4Rcc {
@@ -511,6 +670,7 @@ pub enum Rcc {
     Stm32F1(F1Rcc),
     Stm32F4(F4Rcc),
     Stm32V2(V2Rcc),
+    Stm32H5(H5Rcc),
     Stm32L4(L4Rcc),
     Stm32L0(L0Rcc),
 }
@@ -531,6 +691,7 @@ impl Rcc {
             RccRegisterLayout::Stm32F1 => Self::Stm32F1(F1Rcc::new()),
             RccRegisterLayout::Stm32F4 => Self::Stm32F4(F4Rcc::new()),
             RccRegisterLayout::Stm32V2 => Self::Stm32V2(V2Rcc::new()),
+            RccRegisterLayout::Stm32H5 => Self::Stm32H5(H5Rcc::new()),
             RccRegisterLayout::Stm32L4 => Self::Stm32L4(L4Rcc::new()),
             RccRegisterLayout::Stm32L0 => Self::Stm32L0(L0Rcc::new()),
         }
@@ -552,6 +713,7 @@ impl Rcc {
             Self::Stm32F1(r) => r,
             Self::Stm32F4(r) => r,
             Self::Stm32V2(r) => r,
+            Self::Stm32H5(r) => r,
             Self::Stm32L4(r) => r,
             Self::Stm32L0(r) => r,
         }
@@ -562,6 +724,7 @@ impl Rcc {
             Self::Stm32F1(r) => r,
             Self::Stm32F4(r) => r,
             Self::Stm32V2(r) => r,
+            Self::Stm32H5(r) => r,
             Self::Stm32L4(r) => r,
             Self::Stm32L0(r) => r,
         }
@@ -621,6 +784,47 @@ mod tests {
         assert_eq!(rcc.read(0x30).unwrap(), 0x12);
         assert_eq!(rcc.read(0x44).unwrap(), 0x34);
         assert_eq!(rcc.read(0x40).unwrap(), 0x56);
+    }
+
+    #[test]
+    fn test_rcc_h5_reset_values() {
+        // Reset values captured from NUCLEO-H563ZI silicon at reset halt
+        // (scripts/hw-capture-stm32h563.sh, 2026-06-10).
+        let rcc = Rcc::new_with_layout(RccRegisterLayout::Stm32H5);
+        assert_eq!(rcc.read_u32(0x00).unwrap(), 0x0000_002B); // CR
+        assert_eq!(rcc.read_u32(0x10).unwrap(), 0x0040_04F7); // HSICFGR
+        assert_eq!(rcc.read_u32(0x18).unwrap(), 0x0020_0087); // CSICFGR
+        assert_eq!(rcc.read_u32(0x1C).unwrap(), 0x0000_0000); // CFGR1
+        assert_eq!(rcc.read_u32(0x88).unwrap(), 0xD000_0100); // AHB1ENR
+        assert_eq!(rcc.read_u32(0x8C).unwrap(), 0xC000_0000); // AHB2ENR
+        assert_eq!(rcc.read_u32(0xF4).unwrap(), 0x0C00_0000); // RSR
+    }
+
+    #[test]
+    fn test_rcc_h5_behaviour() {
+        let mut rcc = Rcc::new_with_layout(RccRegisterLayout::Stm32H5);
+        // HSEON (bit 16) latches HSERDY (bit 17); dropping it clears RDY.
+        let cr = rcc.read_u32(0x00).unwrap();
+        rcc.write_u32(0x00, cr | (1 << 16)).unwrap();
+        assert_ne!(rcc.read_u32(0x00).unwrap() & (1 << 17), 0);
+        rcc.write_u32(0x00, cr).unwrap();
+        assert_eq!(rcc.read_u32(0x00).unwrap() & (1 << 17), 0);
+        // CFGR1: SW[2:0] mirrors into SWS[5:3].
+        rcc.write_u32(0x1C, 0x3).unwrap();
+        assert_eq!((rcc.read_u32(0x1C).unwrap() >> 3) & 0x7, 0x3);
+        // HSICFGR: HSITRIM[22:16] writable, HSICAL[11:0] fixed.
+        rcc.write_u32(0x10, 0x0055_0000).unwrap();
+        assert_eq!(rcc.read_u32(0x10).unwrap(), 0x0055_04F7);
+        // RSR: flags clear only via RMVF (bit 16).
+        rcc.write_u32(0xF4, 0).unwrap();
+        assert_eq!(rcc.read_u32(0xF4).unwrap(), 0x0C00_0000);
+        rcc.write_u32(0xF4, 1 << 16).unwrap();
+        assert_eq!(rcc.read_u32(0xF4).unwrap(), 0);
+        // APB1HENR / APB3ENR round-trip at H5 offsets.
+        rcc.write_u32(0xA0, 0x0000_0020).unwrap();
+        assert_eq!(rcc.read_u32(0xA0).unwrap(), 0x0000_0020);
+        rcc.write_u32(0xA8, 0x0020_0840).unwrap();
+        assert_eq!(rcc.read_u32(0xA8).unwrap(), 0x0020_0840);
     }
 
     #[test]

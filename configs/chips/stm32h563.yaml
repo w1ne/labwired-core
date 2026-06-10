@@ -9,6 +9,16 @@
 #   https://github.com/STMicroelectronics/cmsis-device-h5/blob/main/Include/stm32h563xx.h
 # - NUCLEO-H563ZI board BSP mapping (LEDs, COM port):
 #   https://github.com/STMicroelectronics/stm32h5xx-nucleo-bsp/blob/main/stm32h5xx_nucleo.h
+# - Reset values verified on NUCLEO-H563ZI silicon (DBGMCU_IDCODE 0x10016484,
+#   Cortex-M33 r0p4) over SWD: scripts/hw-capture-stm32h563.sh, 2026-06-10.
+#   GPIO MODER/OSPEEDR/PUPDR, RCC (profile h5) and SysTick CALIB below carry
+#   the captured values.
+#
+# Known divergence from silicon: `dma1` wires the generic 7-channel STM32 DMA
+# model at 0x40020000, but the real H5 has a GPDMA at that address with a
+# different register layout. The sim-side DMA remains useful for firmware
+# written against the sim; treat it as NOT silicon-conformant until a GPDMA
+# model lands.
 
 name: "stm32h563zi"
 arch: "arm"
@@ -26,52 +36,67 @@ peripherals:
     base_address: 0x44020C00
     size: "1KB"
     config:
-      profile: "stm32v2"
+      profile: "h5"
   - id: "gpioa"
     type: "gpio"
     base_address: 0x42020000
     size: "1KB"
     config:
       profile: "stm32v2"
+      # PA13/PA14 SWD pins + PA15 JTDI keep port A off the all-analog default.
+      reset_moder: 0xABFFFFFF
+      reset_ospeedr: 0x0C000000
+      reset_pupdr: 0x64000000
   - id: "gpiob"
     type: "gpio"
     base_address: 0x42020400
     size: "1KB"
     config:
       profile: "stm32v2"
+      # PB3 JTDO/SWO and PB4 NJTRST debug defaults.
+      reset_moder: 0xFFFFFEBF
+      reset_ospeedr: 0x000000C0
+      reset_pupdr: 0x00000100
   - id: "gpioc"
     type: "gpio"
     base_address: 0x42020800
     size: "1KB"
     config:
       profile: "stm32v2"
+      reset_moder: 0xFFFFFFFF
   - id: "gpiod"
     type: "gpio"
     base_address: 0x42020C00
     size: "1KB"
     config:
       profile: "stm32v2"
+      reset_moder: 0xFFFFFFFF
   - id: "gpioe"
     type: "gpio"
     base_address: 0x42021000
     size: "1KB"
     config:
       profile: "stm32v2"
+      reset_moder: 0xFFFFFFFF
   - id: "gpiof"
     type: "gpio"
     base_address: 0x42021400
     size: "1KB"
     config:
       profile: "stm32v2"
+      reset_moder: 0xFFFFFFFF
   - id: "gpiog"
     type: "gpio"
     base_address: 0x42021800
     size: "1KB"
     config:
       profile: "stm32v2"
+      reset_moder: 0xFFFFFFFF
   - id: "systick"
     type: "systick"
     base_address: 0xE000E010
+    config:
+      calib: 0x001003E8
   - id: "uart3"
     type: "uart"
     base_address: 0x40004800

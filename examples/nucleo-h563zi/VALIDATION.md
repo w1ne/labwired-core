@@ -95,6 +95,35 @@ Pass criteria:
 2. `out/unsupported-audit/nucleo-h563zi/report.md` exists
 3. unsupported counts are reviewed and tracked (or zero)
 
+## H) Silicon Reset-State Capture + Smoke Conformance
+
+Reset-state register capture from the real board (ground truth for the chip
+model's reset values; pinned by `crates/core/tests/h563_conformance.rs`):
+
+```bash
+bash scripts/hw-capture-stm32h563.sh
+```
+
+Digital-twin smoke: one ELF on both targets, identical UART bytes expected.
+
+```bash
+# Build
+(cd examples/nucleo-h563zi/silicon-smoke && cargo build --release --target thumbv7m-none-eabi)
+ELF=examples/nucleo-h563zi/silicon-smoke/target/thumbv7m-none-eabi/release/h563-silicon-smoke
+# Simulator
+cargo run -p labwired-cli -- -f $ELF -s configs/systems/nucleo-h563zi-demo.yaml --max-steps 200000
+# Real board (probe-rs, STLINK-V3 on-board)
+probe-rs download --chip STM32H563ZITx $ELF && \
+  stty -F /dev/ttyACM0 115200 raw -echo && \
+  (timeout 8 cat /dev/ttyACM0 &) && sleep 1 && probe-rs reset --chip STM32H563ZITx
+```
+
+Pass criteria:
+1. both targets print the same two lines:
+   `H563-SMOKE CR=0000002B MODERA=ABFFFFFF CALIB=001003E8` and
+   `H563-SMOKE done`
+2. green LED PB0 blinks on the board
+
 ## Troubleshooting
 
 1. `openocd` transport errors: use defaults from script (`stlink-dap` + `dapdirect_swd`).

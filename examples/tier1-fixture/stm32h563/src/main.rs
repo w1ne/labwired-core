@@ -102,9 +102,10 @@ fn report(class: &[u8], result: Result<(), &'static [u8]>) {
 
 // ── Checks ──────────────────────────────────────────────────────────────────
 
-/// clock: V2 (H5-style) RCC. HSI is on+ready out of reset; HSEON (bit 16)
-/// must latch HSERDY (bit 17); SW→SWS mirrors in CFGR @ 0x04; AHB2ENR @
-/// 0x8C round-trips GPIO port enables.
+/// clock: H5 RCC (RM0481 layout, offsets verified on NUCLEO-H563ZI silicon).
+/// HSI is on+ready out of reset; HSEON (bit 16) must latch HSERDY (bit 17);
+/// SW[2:0]→SWS[5:3] mirrors in CFGR1 @ 0x1C; AHB2ENR @ 0x8C round-trips
+/// GPIO port enables.
 fn check_clock() -> Result<(), &'static [u8]> {
     if rd32(RCC_BASE) & (1 << 1) == 0 {
         return Err(b"clock-hsirdy");
@@ -118,16 +119,19 @@ fn check_clock() -> Result<(), &'static [u8]> {
     if rd32(RCC_BASE) & (1 << 17) != 0 {
         return Err(b"clock-hserdy-stuck");
     }
-    // CFGR SW=01 → SWS must mirror.
-    wr32(RCC_BASE + 0x04, 0x1);
-    if (rd32(RCC_BASE + 0x04) >> 2) & 0x3 != 0x1 {
+    // CFGR1 SW=001 → SWS must mirror.
+    wr32(RCC_BASE + 0x1C, 0x1);
+    if (rd32(RCC_BASE + 0x1C) >> 3) & 0x7 != 0x1 {
         return Err(b"clock-sws");
     }
-    // AHB2ENR round-trip: GPIOA..GPIOG enables.
-    wr32(RCC_BASE + 0x8C, 0x7F);
-    if rd32(RCC_BASE + 0x8C) != 0x7F {
+    // AHB2ENR round-trip: GPIOA..GPIOG enables on top of the reset value
+    // (SRAM2EN|SRAM3EN stay up), restored afterwards.
+    let enr = rd32(RCC_BASE + 0x8C);
+    wr32(RCC_BASE + 0x8C, enr | 0x7F);
+    if rd32(RCC_BASE + 0x8C) & 0x7F != 0x7F {
         return Err(b"clock-enr");
     }
+    wr32(RCC_BASE + 0x8C, enr);
     Ok(())
 }
 
