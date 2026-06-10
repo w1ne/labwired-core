@@ -55,12 +55,7 @@ const ENABLE_MASK: u32 = 0xF;
 
 // INTEN valid bits per PS §6.29 — STOPPED(1) ERROR(9) RXSTARTED(19)
 // TXSTARTED(20) WRITE(25) READ(26).
-const INTEN_MASK: u32 = (1 << 1)
-    | (1 << 9)
-    | (1 << 19)
-    | (1 << 20)
-    | (1 << 25)
-    | (1 << 26);
+const INTEN_MASK: u32 = (1 << 1) | (1 << 9) | (1 << 19) | (1 << 20) | (1 << 25) | (1 << 26);
 
 // ERRORSRC valid bits: OVERFLOW(0) DNACK(2) OVERREAD(3) — W1C.
 const ERRORSRC_MASK: u32 = (1 << 0) | (1 << 2) | (1 << 3);
@@ -127,10 +122,7 @@ impl Peripheral for Nrf52Twis {
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
         Ok(match offset {
             // TASKS: read-as-zero.
-            OFF_TASKS_STOP
-            | OFF_TASKS_SUSPEND
-            | OFF_TASKS_RESUME
-            | OFF_TASKS_PREPARERX
+            OFF_TASKS_STOP | OFF_TASKS_SUSPEND | OFF_TASKS_RESUME | OFF_TASKS_PREPARERX
             | OFF_TASKS_PREPARETX => 0,
             // EVENTS.
             OFF_EVENTS_STOPPED => self.events_stopped,
@@ -166,42 +158,15 @@ impl Peripheral for Nrf52Twis {
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         match offset {
             // TASKS: write-only strobes.
-            OFF_TASKS_STOP
-            | OFF_TASKS_SUSPEND
-            | OFF_TASKS_RESUME
-            | OFF_TASKS_PREPARERX
+            OFF_TASKS_STOP | OFF_TASKS_SUSPEND | OFF_TASKS_RESUME | OFF_TASKS_PREPARERX
             | OFF_TASKS_PREPARETX => {}
             // EVENTS: hardware-generated; SW write-1 ignored, write-0 clears.
-            OFF_EVENTS_STOPPED => {
-                if value == 0 {
-                    self.events_stopped = 0;
-                }
-            }
-            OFF_EVENTS_ERROR => {
-                if value == 0 {
-                    self.events_error = 0;
-                }
-            }
-            OFF_EVENTS_RXSTARTED => {
-                if value == 0 {
-                    self.events_rxstarted = 0;
-                }
-            }
-            OFF_EVENTS_TXSTARTED => {
-                if value == 0 {
-                    self.events_txstarted = 0;
-                }
-            }
-            OFF_EVENTS_WRITE => {
-                if value == 0 {
-                    self.events_write = 0;
-                }
-            }
-            OFF_EVENTS_READ => {
-                if value == 0 {
-                    self.events_read = 0;
-                }
-            }
+            OFF_EVENTS_STOPPED if value == 0 => self.events_stopped = 0,
+            OFF_EVENTS_ERROR if value == 0 => self.events_error = 0,
+            OFF_EVENTS_RXSTARTED if value == 0 => self.events_rxstarted = 0,
+            OFF_EVENTS_TXSTARTED if value == 0 => self.events_txstarted = 0,
+            OFF_EVENTS_WRITE if value == 0 => self.events_write = 0,
+            OFF_EVENTS_READ if value == 0 => self.events_read = 0,
             // INTEN / INTENSET / INTENCLR.
             OFF_INTEN => self.inten = value & INTEN_MASK,
             OFF_INTENSET => self.inten |= value & INTEN_MASK,
@@ -258,7 +223,12 @@ mod tests {
             OFF_EVENTS_READ,
         ] {
             t.write_u32(off, 1).unwrap();
-            assert_eq!(t.read_u32(off).unwrap(), 0, "write-1 at offset 0x{:03X} must be ignored", off);
+            assert_eq!(
+                t.read_u32(off).unwrap(),
+                0,
+                "write-1 at offset 0x{:03X} must be ignored",
+                off
+            );
         }
     }
 
@@ -267,7 +237,7 @@ mod tests {
         let mut t = Nrf52Twis::new();
         // Seed ERRORSRC (would be HW-set on silicon).
         t.errorsrc = 0x7; // OVERFLOW|DNACK|OVERREAD — all 3 valid bits
-        // Clear OVERFLOW (bit 0) and OVERREAD (bit 3).
+                          // Clear OVERFLOW (bit 0) and OVERREAD (bit 3).
         t.write_u32(OFF_ERRORSRC, 0x9).unwrap();
         assert_eq!(t.read_u32(OFF_ERRORSRC).unwrap(), 0x4); // only DNACK remains
     }
@@ -336,10 +306,7 @@ mod tests {
         t.write_u32(OFF_INTENSET, 0xFFFF_FFFF).unwrap();
         assert_eq!(t.read_u32(OFF_INTENSET).unwrap(), bits);
         t.write_u32(OFF_INTENCLR, 1 << 9).unwrap();
-        assert_eq!(
-            t.read_u32(OFF_INTENSET).unwrap(),
-            bits & !(1 << 9)
-        );
+        assert_eq!(t.read_u32(OFF_INTENSET).unwrap(), bits & !(1 << 9));
     }
 
     #[test]
@@ -353,7 +320,12 @@ mod tests {
             OFF_TASKS_PREPARETX,
         ] {
             t.write_u32(off, 1).unwrap();
-            assert_eq!(t.read_u32(off).unwrap(), 0, "TASK at 0x{:03X} must read zero", off);
+            assert_eq!(
+                t.read_u32(off).unwrap(),
+                0,
+                "TASK at 0x{:03X} must read zero",
+                off
+            );
         }
     }
 

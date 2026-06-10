@@ -171,7 +171,10 @@ fn nrf52_spim0_easydma_swd_triggered() {
     println!();
     println!("nRF52840 SPIM0 EasyDMA silicon sweep (SWD-triggered, CPU halted)");
     println!("  TX addr: 0x{TX_RAM_ADDR:08X}, RX addr: 0x{RX_RAM_ADDR:08X}");
-    println!("  TXD.MAXCNT = {TRANSFER_LEN}, payload = 0x{:08X}", TX_PAYLOAD[0]);
+    println!(
+        "  TXD.MAXCNT = {TRANSFER_LEN}, payload = 0x{:08X}",
+        TX_PAYLOAD[0]
+    );
     println!("{:-<72}", "");
 
     let mut oc = OpenOcd::spawn_nrf52().expect("openocd spawn_nrf52 failed");

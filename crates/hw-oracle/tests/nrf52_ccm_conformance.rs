@@ -35,48 +35,120 @@
 
 #![cfg(feature = "hw-oracle-nrf52")]
 
-use labwired_hw_oracle::openocd::OpenOcd;
 use labwired_core::peripherals::nrf52::ccm::Nrf52Ccm;
 use labwired_core::Peripheral;
+use labwired_hw_oracle::openocd::OpenOcd;
 
 // ── CCM base address (PS rev 1.7 §6.4) ───────────────────────────────────────
 const CCM_BASE: u32 = 0x4000_F000;
 
 // ── CCM register offsets ──────────────────────────────────────────────────────
-const OFF_ENABLE:        u32 = 0x500;
-const OFF_MODE:          u32 = 0x504;
-const OFF_CNFPTR:        u32 = 0x508;
-const OFF_INPTR:         u32 = 0x50C;
-const OFF_OUTPTR:        u32 = 0x510;
-const OFF_SCRATCHPTR:    u32 = 0x514;
+const OFF_ENABLE: u32 = 0x500;
+const OFF_MODE: u32 = 0x504;
+const OFF_CNFPTR: u32 = 0x508;
+const OFF_INPTR: u32 = 0x50C;
+const OFF_OUTPTR: u32 = 0x510;
+const OFF_SCRATCHPTR: u32 = 0x514;
 const OFF_MAXPACKETSIZE: u32 = 0x518;
-const OFF_RATEOVERRIDE:  u32 = 0x51C;
-const OFF_INTENSET:      u32 = 0x304;
-const OFF_INTENCLR:      u32 = 0x308;
+const OFF_RATEOVERRIDE: u32 = 0x51C;
+const OFF_INTENSET: u32 = 0x304;
+const OFF_INTENCLR: u32 = 0x308;
 
 // ── Test case ─────────────────────────────────────────────────────────────────
 
 struct RegCase {
-    label:     &'static str,
-    offset:    u32,
+    label: &'static str,
+    offset: u32,
     write_val: u32,
-    mask:      u32,
-    expect:    u32,
+    mask: u32,
+    expect: u32,
 }
 
 const CASES: &[RegCase] = &[
-    RegCase { label: "ENABLE = 2 (CCM on)",    offset: OFF_ENABLE,        write_val: 2,          mask: 0x3,         expect: 2 },
-    RegCase { label: "ENABLE = 0 (disabled)",  offset: OFF_ENABLE,        write_val: 0,          mask: 0x3,         expect: 0 },
-    RegCase { label: "MODE = 0 (encrypt)",     offset: OFF_MODE,          write_val: 0,          mask: 0x1,         expect: 0 },
-    RegCase { label: "MODE = 1 (decrypt)",     offset: OFF_MODE,          write_val: 1,          mask: 0x1,         expect: 1 },
-    RegCase { label: "CNFPTR = 0x2000_0400",   offset: OFF_CNFPTR,        write_val: 0x2000_0400,mask: 0xFFFF_FFFF, expect: 0x2000_0400 },
-    RegCase { label: "INPTR = 0x2000_0500",    offset: OFF_INPTR,         write_val: 0x2000_0500,mask: 0xFFFF_FFFF, expect: 0x2000_0500 },
-    RegCase { label: "OUTPTR = 0x2000_0600",   offset: OFF_OUTPTR,        write_val: 0x2000_0600,mask: 0xFFFF_FFFF, expect: 0x2000_0600 },
-    RegCase { label: "SCRATCHPTR = 0x2001_0000",offset: OFF_SCRATCHPTR,   write_val: 0x2001_0000,mask: 0xFFFF_FFFF, expect: 0x2001_0000 },
-    RegCase { label: "MAXPACKETSIZE = 251",    offset: OFF_MAXPACKETSIZE, write_val: 0xFB,       mask: 0xFF,        expect: 0xFB },
-    RegCase { label: "MAXPACKETSIZE = 27 (min)",offset: OFF_MAXPACKETSIZE,write_val: 0x1B,       mask: 0xFF,        expect: 0x1B },
-    RegCase { label: "RATEOVERRIDE = 2",       offset: OFF_RATEOVERRIDE,  write_val: 2,          mask: 0xF,         expect: 2 },
-    RegCase { label: "INTENSET bit0 (ENDKSGEN)",offset: OFF_INTENSET,     write_val: 1,          mask: 0x3,         expect: 1 },
+    RegCase {
+        label: "ENABLE = 2 (CCM on)",
+        offset: OFF_ENABLE,
+        write_val: 2,
+        mask: 0x3,
+        expect: 2,
+    },
+    RegCase {
+        label: "ENABLE = 0 (disabled)",
+        offset: OFF_ENABLE,
+        write_val: 0,
+        mask: 0x3,
+        expect: 0,
+    },
+    RegCase {
+        label: "MODE = 0 (encrypt)",
+        offset: OFF_MODE,
+        write_val: 0,
+        mask: 0x1,
+        expect: 0,
+    },
+    RegCase {
+        label: "MODE = 1 (decrypt)",
+        offset: OFF_MODE,
+        write_val: 1,
+        mask: 0x1,
+        expect: 1,
+    },
+    RegCase {
+        label: "CNFPTR = 0x2000_0400",
+        offset: OFF_CNFPTR,
+        write_val: 0x2000_0400,
+        mask: 0xFFFF_FFFF,
+        expect: 0x2000_0400,
+    },
+    RegCase {
+        label: "INPTR = 0x2000_0500",
+        offset: OFF_INPTR,
+        write_val: 0x2000_0500,
+        mask: 0xFFFF_FFFF,
+        expect: 0x2000_0500,
+    },
+    RegCase {
+        label: "OUTPTR = 0x2000_0600",
+        offset: OFF_OUTPTR,
+        write_val: 0x2000_0600,
+        mask: 0xFFFF_FFFF,
+        expect: 0x2000_0600,
+    },
+    RegCase {
+        label: "SCRATCHPTR = 0x2001_0000",
+        offset: OFF_SCRATCHPTR,
+        write_val: 0x2001_0000,
+        mask: 0xFFFF_FFFF,
+        expect: 0x2001_0000,
+    },
+    RegCase {
+        label: "MAXPACKETSIZE = 251",
+        offset: OFF_MAXPACKETSIZE,
+        write_val: 0xFB,
+        mask: 0xFF,
+        expect: 0xFB,
+    },
+    RegCase {
+        label: "MAXPACKETSIZE = 27 (min)",
+        offset: OFF_MAXPACKETSIZE,
+        write_val: 0x1B,
+        mask: 0xFF,
+        expect: 0x1B,
+    },
+    RegCase {
+        label: "RATEOVERRIDE = 2",
+        offset: OFF_RATEOVERRIDE,
+        write_val: 2,
+        mask: 0xF,
+        expect: 2,
+    },
+    RegCase {
+        label: "INTENSET bit0 (ENDKSGEN)",
+        offset: OFF_INTENSET,
+        write_val: 1,
+        mask: 0x3,
+        expect: 1,
+    },
 ];
 
 /// Sim-side: apply the same write and read the register from the CCM model.
@@ -94,7 +166,10 @@ fn nrf52840_ccm_register_surface() {
     oc.halt().expect("halt");
 
     println!();
-    println!("nRF52840 CCM register-surface conformance — {} cases", CASES.len());
+    println!(
+        "nRF52840 CCM register-surface conformance — {} cases",
+        CASES.len()
+    );
     println!("{:-<90}", "");
     println!(
         "{:<40}  {:>10}  {:>10}  {:>10}  {}",
@@ -113,21 +188,32 @@ fn nrf52840_ccm_register_surface() {
             .expect("write to silicon");
 
         // Read back from silicon.
-        let hw_raw = oc.read_memory(addr, 1)
-            .expect("read from silicon")[0];
+        let hw_raw = oc.read_memory(addr, 1).expect("read from silicon")[0];
         let hw_val = hw_raw & case.mask;
 
         // Read from sim model.
         let sim_val = sim_read(case.offset, case.write_val, case.mask);
 
-        let hw_ok  = hw_val  == case.expect;
+        let hw_ok = hw_val == case.expect;
         let sim_ok = sim_val == case.expect;
 
         let verdict = match (hw_ok, sim_ok) {
-            (true,  true)  => { total_ok += 1; "OK" },
-            (true,  false) => { total_fail += 1; "SIM_WRONG" },
-            (false, true)  => { total_fail += 1; "HW_UNEXPECTED" },
-            (false, false) => { total_fail += 1; "BOTH_WRONG" },
+            (true, true) => {
+                total_ok += 1;
+                "OK"
+            }
+            (true, false) => {
+                total_fail += 1;
+                "SIM_WRONG"
+            }
+            (false, true) => {
+                total_fail += 1;
+                "HW_UNEXPECTED"
+            }
+            (false, false) => {
+                total_fail += 1;
+                "BOTH_WRONG"
+            }
         };
 
         println!(
@@ -142,6 +228,9 @@ fn nrf52840_ccm_register_surface() {
     oc.shutdown().ok();
 
     if std::env::var("NRF52_STRICT").is_ok() {
-        assert_eq!(total_fail, 0, "CCM register surface: {total_fail} failure(s)");
+        assert_eq!(
+            total_fail, 0,
+            "CCM register surface: {total_fail} failure(s)"
+        );
     }
 }
