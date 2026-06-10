@@ -1,0 +1,4 @@
+Info : STLINK V3J13M4 (API v3) VID:PID 0483:374E
+Info : Target voltage: 3.288770
+Info : SWD DPIDR 0x6ba02477
+Info : [stm32h563.cpu] Cortex-M33 r0p4 processor detected
