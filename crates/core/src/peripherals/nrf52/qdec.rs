@@ -111,11 +111,11 @@ impl Peripheral for Nrf52Qdec {
             OFF_TASKS_START | OFF_TASKS_STOP | OFF_TASKS_READCLRACC | OFF_TASKS_RDCLRACC
             | OFF_TASKS_RDCLRDBL => {}
             // EVENTS_*: hardware-generated. SW write-1 ignored; write-0 clears.
-            OFF_EVENTS_SAMPLERDY => { if value == 0 { self.events_samplerdy = 0; } }
-            OFF_EVENTS_REPORTRDY => { if value == 0 { self.events_reportrdy = 0; } }
-            OFF_EVENTS_ACCOF => { if value == 0 { self.events_accof = 0; } }
-            OFF_EVENTS_DBLRDY => { if value == 0 { self.events_dblrdy = 0; } }
-            OFF_EVENTS_STOPPED => { if value == 0 { self.events_stopped = 0; } }
+            OFF_EVENTS_SAMPLERDY if value == 0 => self.events_samplerdy = 0,
+            OFF_EVENTS_REPORTRDY if value == 0 => self.events_reportrdy = 0,
+            OFF_EVENTS_ACCOF if value == 0 => self.events_accof = 0,
+            OFF_EVENTS_DBLRDY if value == 0 => self.events_dblrdy = 0,
+            OFF_EVENTS_STOPPED if value == 0 => self.events_stopped = 0,
             OFF_SHORTS => self.shorts = value & 0x3,
             OFF_INTENSET => self.inten |= value & 0x1F,
             OFF_INTENCLR => self.inten &= !value,

@@ -87,10 +87,10 @@ impl Peripheral for Nrf52Comp {
         match offset {
             OFF_TASKS_START | OFF_TASKS_STOP | OFF_TASKS_SAMPLE => {}
             // EVENTS_*: hardware-generated. SW write-1 ignored; write-0 clears.
-            OFF_EVENTS_READY => { if value == 0 { self.events_ready = 0; } }
-            OFF_EVENTS_DOWN => { if value == 0 { self.events_down = 0; } }
-            OFF_EVENTS_UP => { if value == 0 { self.events_up = 0; } }
-            OFF_EVENTS_CROSS => { if value == 0 { self.events_cross = 0; } }
+            OFF_EVENTS_READY if value == 0 => self.events_ready = 0,
+            OFF_EVENTS_DOWN if value == 0 => self.events_down = 0,
+            OFF_EVENTS_UP if value == 0 => self.events_up = 0,
+            OFF_EVENTS_CROSS if value == 0 => self.events_cross = 0,
             OFF_SHORTS => self.shorts = value & 0xF,
             OFF_INTEN => self.inten = value & 0xF,
             OFF_INTENSET => self.inten |= value & 0xF,

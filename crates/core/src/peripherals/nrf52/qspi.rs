@@ -125,7 +125,7 @@ impl Peripheral for Nrf52Qspi {
             OFF_TASKS_ACTIVATE | OFF_TASKS_READSTART | OFF_TASKS_WRITESTART
             | OFF_TASKS_ERASESTART | OFF_TASKS_DEACTIVATE => {}
             // EVENTS_READY: hardware-generated. SW write-1 ignored; write-0 clears.
-            OFF_EVENTS_READY => { if value == 0 { self.events_ready = 0; } }
+            OFF_EVENTS_READY if value == 0 => self.events_ready = 0,
             OFF_INTEN => self.inten = value,
             OFF_INTENSET => self.inten |= value,
             OFF_INTENCLR => self.inten &= !value,

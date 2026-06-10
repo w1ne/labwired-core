@@ -70,9 +70,9 @@ impl Peripheral for Nrf52Aar {
         match offset {
             OFF_TASKS_START | OFF_TASKS_STOP => {}
             // EVENTS_*: hardware-generated. SW write-1 ignored; write-0 clears.
-            OFF_EVENTS_END => { if value == 0 { self.events_end = 0; } }
-            OFF_EVENTS_RESOLVED => { if value == 0 { self.events_resolved = 0; } }
-            OFF_EVENTS_NOTRESOLVED => { if value == 0 { self.events_notresolved = 0; } }
+            OFF_EVENTS_END if value == 0 => self.events_end = 0,
+            OFF_EVENTS_RESOLVED if value == 0 => self.events_resolved = 0,
+            OFF_EVENTS_NOTRESOLVED if value == 0 => self.events_notresolved = 0,
             OFF_INTENSET => self.inten |= value & 0x7,
             OFF_INTENCLR => self.inten &= !value,
             OFF_ENABLE => self.enable = value & 0x3,

@@ -87,12 +87,10 @@ impl Peripheral for Nrf52Mwu {
         match offset {
             // Tasks: write-only trigger, no state change for reg-surface model
             0x000..=0x0FC if offset.is_multiple_of(4) => {}
-            // EVENTS: SW write-1 ignored, write-0 clears
-            OFF_EVENTS_FIRST..=OFF_EVENTS_LAST if offset.is_multiple_of(4) => {
-                if value == 0 {
-                    self.events.remove(&offset);
-                }
-                // write-1 silently ignored
+            // EVENTS: SW write-1 ignored (falls through to the no-op default),
+            // write-0 clears.
+            OFF_EVENTS_FIRST..=OFF_EVENTS_LAST if offset.is_multiple_of(4) && value == 0 => {
+                self.events.remove(&offset);
             }
             // Interrupts
             OFF_INTEN => self.inten = value,

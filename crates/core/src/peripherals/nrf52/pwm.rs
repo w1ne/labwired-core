@@ -120,13 +120,13 @@ impl Peripheral for Nrf52Pwm {
             OFF_TASKS_STOP | OFF_TASKS_SEQSTART0 | OFF_TASKS_SEQSTART1 | OFF_TASKS_NEXTSTEP => {}
 
             // EVENTS_*: hardware-generated. SW write-1 is ignored; SW write-0 clears.
-            OFF_EVENTS_STOPPED => { if value == 0 { self.events_stopped = 0; } }
-            OFF_EVENTS_SEQSTARTED0 => { if value == 0 { self.events_seqstarted[0] = 0; } }
-            OFF_EVENTS_SEQSTARTED1 => { if value == 0 { self.events_seqstarted[1] = 0; } }
-            OFF_EVENTS_SEQEND0 => { if value == 0 { self.events_seqend[0] = 0; } }
-            OFF_EVENTS_SEQEND1 => { if value == 0 { self.events_seqend[1] = 0; } }
-            OFF_EVENTS_PWMPERIODEND => { if value == 0 { self.events_pwmperiodend = 0; } }
-            OFF_EVENTS_LOOPSDONE => { if value == 0 { self.events_loopsdone = 0; } }
+            OFF_EVENTS_STOPPED if value == 0 => self.events_stopped = 0,
+            OFF_EVENTS_SEQSTARTED0 if value == 0 => self.events_seqstarted[0] = 0,
+            OFF_EVENTS_SEQSTARTED1 if value == 0 => self.events_seqstarted[1] = 0,
+            OFF_EVENTS_SEQEND0 if value == 0 => self.events_seqend[0] = 0,
+            OFF_EVENTS_SEQEND1 if value == 0 => self.events_seqend[1] = 0,
+            OFF_EVENTS_PWMPERIODEND if value == 0 => self.events_pwmperiodend = 0,
+            OFF_EVENTS_LOOPSDONE if value == 0 => self.events_loopsdone = 0,
 
             OFF_SHORTS => self.shorts = value,
             OFF_INTEN => self.inten = value,

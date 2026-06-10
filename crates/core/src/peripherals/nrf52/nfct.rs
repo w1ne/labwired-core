@@ -67,7 +67,6 @@ pub struct Nrf52Nfct {
     txd_amount: u32,
     rxd_frameconfig: u32,
     rxd_amount: u32,
-    sensres: u32,
     selres: u32,
     nfcid1_last: u32,
     nfcid1_2nd_last: u32,
@@ -81,7 +80,6 @@ impl Nrf52Nfct {
             framedelaymax: 0x1000, // PS table 80 reset
             framedelaymode: 1,
             maxlen: 0xFF,
-            sensres: 0,
             selres: 0,
             autocolresconfig: 0,
             ..Self::default()
@@ -179,7 +177,7 @@ impl Peripheral for Nrf52Nfct {
             OFF_TXD_AMOUNT => self.txd_amount = value & 0x1FFF,
             OFF_RXD_FRAMECONFIG => self.rxd_frameconfig = value & 0x1F,
             OFF_RXD_AMOUNT => {} // RO per PS
-            OFF_SENSRES => {} // RO per silicon — hardware-driven by anti-collision
+            OFF_SENSRES => {}    // RO per silicon — hardware-driven by anti-collision
             OFF_SELRES => self.selres = value & 0x7F,
             OFF_NFCID1_LAST => self.nfcid1_last = value,
             OFF_NFCID1_2ND_LAST => self.nfcid1_2nd_last = value & 0xFFFFFF,

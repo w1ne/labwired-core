@@ -114,16 +114,15 @@ impl Peripheral for Nrf52Saadc {
         match offset {
             OFF_TASKS_START | OFF_TASKS_SAMPLE | OFF_TASKS_STOP | OFF_TASKS_CALIBRATEOFFSET => {}
             // EVENTS_*: hardware-generated. SW write-1 is ignored; SW write-0 clears.
-            OFF_EVENTS_STARTED => { if value == 0 { self.events_started = 0; } }
-            OFF_EVENTS_END => { if value == 0 { self.events_end = 0; } }
-            OFF_EVENTS_DONE => { if value == 0 { self.events_done = 0; } }
-            OFF_EVENTS_RESULTDONE => { if value == 0 { self.events_resultdone = 0; } }
-            OFF_EVENTS_CALIBRATEDONE => { if value == 0 { self.events_calibratedone = 0; } }
-            OFF_EVENTS_STOPPED => { if value == 0 { self.events_stopped = 0; } }
-            OFF_EVENTS_CH_FIRST..=OFF_EVENTS_CH_LAST if offset.is_multiple_of(4) => {
-                if value == 0 {
-                    self.events_ch[((offset - OFF_EVENTS_CH_FIRST) / 4) as usize] = 0;
-                }
+            OFF_EVENTS_STARTED if value == 0 => self.events_started = 0,
+            OFF_EVENTS_END if value == 0 => self.events_end = 0,
+            OFF_EVENTS_DONE if value == 0 => self.events_done = 0,
+            OFF_EVENTS_RESULTDONE if value == 0 => self.events_resultdone = 0,
+            OFF_EVENTS_CALIBRATEDONE if value == 0 => self.events_calibratedone = 0,
+            OFF_EVENTS_STOPPED if value == 0 => self.events_stopped = 0,
+            // write-1 falls through to the no-op default (ignored).
+            OFF_EVENTS_CH_FIRST..=OFF_EVENTS_CH_LAST if offset.is_multiple_of(4) && value == 0 => {
+                self.events_ch[((offset - OFF_EVENTS_CH_FIRST) / 4) as usize] = 0;
             }
             OFF_INTEN => self.inten = value,
             OFF_INTENSET => self.inten |= value,

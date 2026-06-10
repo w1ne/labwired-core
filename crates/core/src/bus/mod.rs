@@ -254,11 +254,7 @@ impl SystemBus {
         }
         // TWIM / TWI master: nRF52 I²C master with EasyDMA. Must precede the
         // generic "contains(i2c)" / "ends_with(_twi)" fuzzy matchers.
-        if t == "nrf52840_i2c"
-            || t == "nrf52840_twim"
-            || t == "nrf52_twim"
-            || t == "nrf52_i2c"
-        {
+        if t == "nrf52840_i2c" || t == "nrf52840_twim" || t == "nrf52_twim" || t == "nrf52_i2c" {
             return "nrf52840_twim".to_string();
         }
         // UARTE: nRF52 UART with EasyDMA — must be intercepted before the
@@ -980,9 +976,7 @@ impl SystemBus {
 
             let dev: Box<dyn Peripheral> = match canonical_type.as_str() {
                 // nRF52 UARTE: full register surface including PSEL/BAUDRATE/CONFIG/DMA.
-                "nrf52840_uart" => {
-                    Box::new(crate::peripherals::nrf52::uarte::Nrf52Uarte::new())
-                }
+                "nrf52840_uart" => Box::new(crate::peripherals::nrf52::uarte::Nrf52Uarte::new()),
                 "uart" | "stm32_uart" | "stm32f1_uart" | "stm32f2_uart" | "stm32f4_uart"
                 | "stm32f7_usart" | "stm32h5_usart" | "efm32_uart" | "nxp_lpuart" | "ns16550"
                 | "pl011" | "gaislerapbuart" => {
@@ -1366,8 +1360,7 @@ impl SystemBus {
                 // and `nrf52_twim` are also accepted so firmware configs that
                 // name it more precisely still resolve here.
                 "nrf52840_twim" | "nrf52_twim" => {
-                    let mut twim =
-                        crate::peripherals::nrf52::twim::Nrf52Twim::new();
+                    let mut twim = crate::peripherals::nrf52::twim::Nrf52Twim::new();
                     for ext in &manifest.external_devices {
                         if ext.connection != p_cfg.id {
                             continue;

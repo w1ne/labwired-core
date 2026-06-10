@@ -173,17 +173,17 @@ impl Peripheral for Nrf52Uarte {
             OFF_TASKS_STARTRX | OFF_TASKS_STOPRX | OFF_TASKS_STARTTX | OFF_TASKS_STOPTX
             | OFF_TASKS_FLUSHRX => {}
             // EVENTS: hardware-generated; SW write-1 ignored, write-0 clears
-            OFF_EVENTS_CTS => { if value == 0 { self.events_cts = 0; } }
-            OFF_EVENTS_NCTS => { if value == 0 { self.events_ncts = 0; } }
-            OFF_EVENTS_RXDRDY => { if value == 0 { self.events_rxdrdy = 0; } }
-            OFF_EVENTS_ENDRX => { if value == 0 { self.events_endrx = 0; } }
-            OFF_EVENTS_TXDRDY => { if value == 0 { self.events_txdrdy = 0; } }
-            OFF_EVENTS_ENDTX => { if value == 0 { self.events_endtx = 0; } }
-            OFF_EVENTS_ERROR => { if value == 0 { self.events_error = 0; } }
-            OFF_EVENTS_RXTO => { if value == 0 { self.events_rxto = 0; } }
-            OFF_EVENTS_RXSTARTED => { if value == 0 { self.events_rxstarted = 0; } }
-            OFF_EVENTS_TXSTARTED => { if value == 0 { self.events_txstarted = 0; } }
-            OFF_EVENTS_TXSTOPPED => { if value == 0 { self.events_txstopped = 0; } }
+            OFF_EVENTS_CTS if value == 0 => self.events_cts = 0,
+            OFF_EVENTS_NCTS if value == 0 => self.events_ncts = 0,
+            OFF_EVENTS_RXDRDY if value == 0 => self.events_rxdrdy = 0,
+            OFF_EVENTS_ENDRX if value == 0 => self.events_endrx = 0,
+            OFF_EVENTS_TXDRDY if value == 0 => self.events_txdrdy = 0,
+            OFF_EVENTS_ENDTX if value == 0 => self.events_endtx = 0,
+            OFF_EVENTS_ERROR if value == 0 => self.events_error = 0,
+            OFF_EVENTS_RXTO if value == 0 => self.events_rxto = 0,
+            OFF_EVENTS_RXSTARTED if value == 0 => self.events_rxstarted = 0,
+            OFF_EVENTS_TXSTARTED if value == 0 => self.events_txstarted = 0,
+            OFF_EVENTS_TXSTOPPED if value == 0 => self.events_txstopped = 0,
             // Interrupts
             OFF_INTEN => self.inten = value,
             OFF_INTENSET => self.inten |= value,
@@ -208,7 +208,9 @@ impl Peripheral for Nrf52Uarte {
             OFF_TXD_AMOUNT => {} // RO
             // CONFIG
             OFF_CONFIG => self.config = value & 0x1F,
-            _ => { self.extra.insert(offset, value); }
+            _ => {
+                self.extra.insert(offset, value);
+            }
         }
         Ok(())
     }

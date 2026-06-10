@@ -98,12 +98,8 @@ const INTEN_RXSTARTED: u32 = 1 << 19;
 const INTEN_TXSTARTED: u32 = 1 << 20;
 const INTEN_LASTRX: u32 = 1 << 23;
 const INTEN_LASTTX: u32 = 1 << 24;
-const INTEN_MASK: u32 = INTEN_STOPPED
-    | INTEN_ERROR
-    | INTEN_RXSTARTED
-    | INTEN_TXSTARTED
-    | INTEN_LASTRX
-    | INTEN_LASTTX;
+const INTEN_MASK: u32 =
+    INTEN_STOPPED | INTEN_ERROR | INTEN_RXSTARTED | INTEN_TXSTARTED | INTEN_LASTRX | INTEN_LASTTX;
 
 // ── ERRORSRC bits ─────────────────────────────────────────────────────────────
 const ERRORSRC_ANACK: u32 = 1 << 1;
@@ -329,10 +325,7 @@ impl Peripheral for Nrf52Twim {
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
         Ok(match offset {
             // TASKs: read as 0 (write-only strobes on silicon).
-            OFF_TASKS_STARTRX
-            | OFF_TASKS_STARTTX
-            | OFF_TASKS_STOP
-            | OFF_TASKS_RESUME
+            OFF_TASKS_STARTRX | OFF_TASKS_STARTTX | OFF_TASKS_STOP | OFF_TASKS_RESUME
             | OFF_TASKS_SUSPEND => 0,
 
             // EVENTS.
@@ -382,13 +375,12 @@ impl Peripheral for Nrf52Twim {
             OFF_TASKS_STARTTX if value != 0 => {
                 self.pending = PENDING_TX;
             }
-            OFF_TASKS_STOP if value != 0 => {
-                if self.pending == PENDING_NONE {
-                    // Immediate stop with no pending transfer.
-                    self.pending = PENDING_STOP;
-                }
-                // If a transfer is in flight we let it complete first and then
-                // add STOPPED in tick_with_bus.
+            // Immediate stop with no pending transfer. If a transfer is in
+            // flight this arm does not match (the write lands in the no-op
+            // task arm below) and STOPPED is added in tick_with_bus once the
+            // transfer completes.
+            OFF_TASKS_STOP if value != 0 && self.pending == PENDING_NONE => {
+                self.pending = PENDING_STOP;
             }
             OFF_TASKS_RESUME | OFF_TASKS_SUSPEND => {}
             OFF_TASKS_STARTRX | OFF_TASKS_STARTTX | OFF_TASKS_STOP => {
@@ -396,36 +388,12 @@ impl Peripheral for Nrf52Twim {
             }
 
             // ── EVENTS — SW write-1 ignored; SW write-0 clears ───────────────
-            OFF_EVENTS_STOPPED => {
-                if value == 0 {
-                    self.events_stopped = 0;
-                }
-            }
-            OFF_EVENTS_ERROR => {
-                if value == 0 {
-                    self.events_error = 0;
-                }
-            }
-            OFF_EVENTS_RXSTARTED => {
-                if value == 0 {
-                    self.events_rxstarted = 0;
-                }
-            }
-            OFF_EVENTS_TXSTARTED => {
-                if value == 0 {
-                    self.events_txstarted = 0;
-                }
-            }
-            OFF_EVENTS_LASTRX => {
-                if value == 0 {
-                    self.events_lastrx = 0;
-                }
-            }
-            OFF_EVENTS_LASTTX => {
-                if value == 0 {
-                    self.events_lasttx = 0;
-                }
-            }
+            OFF_EVENTS_STOPPED if value == 0 => self.events_stopped = 0,
+            OFF_EVENTS_ERROR if value == 0 => self.events_error = 0,
+            OFF_EVENTS_RXSTARTED if value == 0 => self.events_rxstarted = 0,
+            OFF_EVENTS_TXSTARTED if value == 0 => self.events_txstarted = 0,
+            OFF_EVENTS_LASTRX if value == 0 => self.events_lastrx = 0,
+            OFF_EVENTS_LASTTX if value == 0 => self.events_lasttx = 0,
 
             // ── SHORTS ────────────────────────────────────────────────────────
             OFF_SHORTS => self.shorts = value & SHORTS_MASK,
@@ -515,8 +483,16 @@ impl Peripheral for Nrf52Twim {
         let events: &[(&u32, u32, u64)] = &[
             (&self.events_stopped, INTEN_STOPPED, OFF_EVENTS_STOPPED),
             (&self.events_error, INTEN_ERROR, OFF_EVENTS_ERROR),
-            (&self.events_rxstarted, INTEN_RXSTARTED, OFF_EVENTS_RXSTARTED),
-            (&self.events_txstarted, INTEN_TXSTARTED, OFF_EVENTS_TXSTARTED),
+            (
+                &self.events_rxstarted,
+                INTEN_RXSTARTED,
+                OFF_EVENTS_RXSTARTED,
+            ),
+            (
+                &self.events_txstarted,
+                INTEN_TXSTARTED,
+                OFF_EVENTS_TXSTARTED,
+            ),
             (&self.events_lastrx, INTEN_LASTRX, OFF_EVENTS_LASTRX),
             (&self.events_lasttx, INTEN_LASTTX, OFF_EVENTS_LASTTX),
         ];
@@ -679,12 +655,7 @@ mod tests {
             write32(&mut t, off, 1);
             // Reset pending so we don't contaminate subsequent task checks.
             t.pending = PENDING_NONE;
-            assert_eq!(
-                read32(&t, off),
-                0,
-                "TASK at 0x{:03X} must read zero",
-                off
-            );
+            assert_eq!(read32(&t, off), 0, "TASK at 0x{:03X} must read zero", off);
         }
     }
 
@@ -764,7 +735,11 @@ mod tests {
         let mut t = Nrf52Twim::new();
         let bits = INTEN_STOPPED | INTEN_LASTTX | INTEN_LASTRX;
         write32(&mut t, OFF_INTENSET, 0xFFFF_FFFF);
-        assert_eq!(read32(&t, OFF_INTENSET), INTEN_MASK, "INTENSET masks to valid bits");
+        assert_eq!(
+            read32(&t, OFF_INTENSET),
+            INTEN_MASK,
+            "INTENSET masks to valid bits"
+        );
         write32(&mut t, OFF_INTENCLR, bits);
         assert_eq!(
             read32(&t, OFF_INTENCLR),
@@ -822,14 +797,26 @@ mod tests {
 
         // TASKS_STARTTX — must not have fired events yet.
         write32(&mut t, OFF_TASKS_STARTTX, 1);
-        assert_eq!(read32(&t, OFF_EVENTS_LASTTX), 0, "LASTTX not set before tick");
+        assert_eq!(
+            read32(&t, OFF_EVENTS_LASTTX),
+            0,
+            "LASTTX not set before tick"
+        );
         assert!(t.needs_bus_tick(), "pending_start must be set");
 
         // Run EasyDMA.
         t.tick_with_bus(&mut bus);
 
-        assert_eq!(read32(&t, OFF_EVENTS_LASTTX), 1, "EVENTS_LASTTX must be 1 after TX");
-        assert_eq!(read32(&t, OFF_TXD_AMOUNT), 3, "TXD.AMOUNT must equal MAXCNT");
+        assert_eq!(
+            read32(&t, OFF_EVENTS_LASTTX),
+            1,
+            "EVENTS_LASTTX must be 1 after TX"
+        );
+        assert_eq!(
+            read32(&t, OFF_TXD_AMOUNT),
+            3,
+            "TXD.AMOUNT must equal MAXCNT"
+        );
         assert!(!t.needs_bus_tick(), "pending cleared after tick");
         assert_eq!(read32(&t, OFF_ERRORSRC), 0, "no error on present device");
     }
@@ -849,10 +836,18 @@ mod tests {
         write32(&mut t, OFF_TASKS_STARTTX, 1);
         t.tick_with_bus(&mut bus);
 
-        assert_eq!(read32(&t, OFF_ERRORSRC) & ERRORSRC_ANACK, ERRORSRC_ANACK, "ANACK set");
+        assert_eq!(
+            read32(&t, OFF_ERRORSRC) & ERRORSRC_ANACK,
+            ERRORSRC_ANACK,
+            "ANACK set"
+        );
         assert_eq!(read32(&t, OFF_EVENTS_ERROR), 1, "EVENTS_ERROR set");
         assert_eq!(read32(&t, OFF_TXD_AMOUNT), 0, "TXD.AMOUNT = 0 on NACK");
-        assert_eq!(read32(&t, OFF_EVENTS_LASTTX), 1, "LASTTX still fires on NACK");
+        assert_eq!(
+            read32(&t, OFF_EVENTS_LASTTX),
+            1,
+            "LASTTX still fires on NACK"
+        );
     }
 
     /// TX: bytes delivered to device are exactly the bytes from RAM.
@@ -873,7 +868,9 @@ mod tests {
         t.tick_with_bus(&mut bus);
 
         let dev = t.attached_devices[0].borrow();
-        let dev_any = dev.as_any().expect("RecordingDevice has no as_any — check impl");
+        let dev_any = dev
+            .as_any()
+            .expect("RecordingDevice has no as_any — check impl");
         let rec = dev_any.downcast_ref::<RecordingDevice>().unwrap();
         assert_eq!(rec.written, tx_data.to_vec(), "bytes delivered to device");
     }
@@ -897,13 +894,25 @@ mod tests {
 
         // TASKS_STARTRX — must not have fired events yet.
         write32(&mut t, OFF_TASKS_STARTRX, 1);
-        assert_eq!(read32(&t, OFF_EVENTS_LASTRX), 0, "LASTRX not set before tick");
+        assert_eq!(
+            read32(&t, OFF_EVENTS_LASTRX),
+            0,
+            "LASTRX not set before tick"
+        );
         assert!(t.needs_bus_tick());
 
         t.tick_with_bus(&mut bus);
 
-        assert_eq!(read32(&t, OFF_EVENTS_LASTRX), 1, "EVENTS_LASTRX must be 1 after RX");
-        assert_eq!(read32(&t, OFF_RXD_AMOUNT), 4, "RXD.AMOUNT must equal MAXCNT");
+        assert_eq!(
+            read32(&t, OFF_EVENTS_LASTRX),
+            1,
+            "EVENTS_LASTRX must be 1 after RX"
+        );
+        assert_eq!(
+            read32(&t, OFF_RXD_AMOUNT),
+            4,
+            "RXD.AMOUNT must equal MAXCNT"
+        );
         assert!(!t.needs_bus_tick(), "pending cleared");
 
         let rx = bus.read_slice(rx_base, 4);
@@ -927,9 +936,17 @@ mod tests {
 
         assert_eq!(read32(&t, OFF_ERRORSRC) & ERRORSRC_ANACK, ERRORSRC_ANACK);
         assert_eq!(read32(&t, OFF_EVENTS_ERROR), 1);
-        assert_eq!(read32(&t, OFF_RXD_AMOUNT), 3, "amount = MAXCNT even on NACK");
+        assert_eq!(
+            read32(&t, OFF_RXD_AMOUNT),
+            3,
+            "amount = MAXCNT even on NACK"
+        );
         let rx = bus.read_slice(rx_base, 3);
-        assert_eq!(rx, vec![0xFF, 0xFF, 0xFF], "no-device: RAM filled with 0xFF");
+        assert_eq!(
+            rx,
+            vec![0xFF, 0xFF, 0xFF],
+            "no-device: RAM filled with 0xFF"
+        );
     }
 
     // ── SHORTS chaining tests ─────────────────────────────────────────────────
@@ -952,7 +969,11 @@ mod tests {
         t.tick_with_bus(&mut bus);
 
         assert_eq!(read32(&t, OFF_EVENTS_LASTTX), 1, "LASTTX fired");
-        assert_eq!(read32(&t, OFF_EVENTS_STOPPED), 1, "STOPPED auto-fired via SHORT");
+        assert_eq!(
+            read32(&t, OFF_EVENTS_STOPPED),
+            1,
+            "STOPPED auto-fired via SHORT"
+        );
         assert!(!t.needs_bus_tick(), "no further pending transfer");
     }
 
@@ -973,7 +994,11 @@ mod tests {
         t.tick_with_bus(&mut bus);
 
         assert_eq!(read32(&t, OFF_EVENTS_LASTRX), 1, "LASTRX fired");
-        assert_eq!(read32(&t, OFF_EVENTS_STOPPED), 1, "STOPPED auto-fired via SHORT");
+        assert_eq!(
+            read32(&t, OFF_EVENTS_STOPPED),
+            1,
+            "STOPPED auto-fired via SHORT"
+        );
     }
 
     /// SHORT LASTTX_STARTRX: TX completes and chains automatically into RX
@@ -996,11 +1021,7 @@ mod tests {
         write32(&mut t, OFF_RXD_PTR, rx_base as u32);
         write32(&mut t, OFF_RXD_MAXCNT, 2);
         // LASTTX→STARTRX; then LASTRX→STOP to close.
-        write32(
-            &mut t,
-            OFF_SHORTS,
-            SHORT_LASTTX_STARTRX | SHORT_LASTRX_STOP,
-        );
+        write32(&mut t, OFF_SHORTS, SHORT_LASTTX_STARTRX | SHORT_LASTRX_STOP);
         write32(&mut t, OFF_TASKS_STARTTX, 1);
 
         // First tick: TX completes, LASTTX fired, PENDING_RX armed.
@@ -1016,7 +1037,11 @@ mod tests {
         // Second tick: RX completes, LASTRX fired, STOPPED via SHORT.
         t.tick_with_bus(&mut bus);
         assert_eq!(read32(&t, OFF_EVENTS_LASTRX), 1, "LASTRX after second tick");
-        assert_eq!(read32(&t, OFF_EVENTS_STOPPED), 1, "STOPPED after RX via SHORT");
+        assert_eq!(
+            read32(&t, OFF_EVENTS_STOPPED),
+            1,
+            "STOPPED after RX via SHORT"
+        );
         assert!(!t.needs_bus_tick(), "done");
 
         let rx = bus.read_slice(rx_base, 2);
@@ -1041,11 +1066,7 @@ mod tests {
         write32(&mut t, OFF_TXD_PTR, tx_base as u32);
         write32(&mut t, OFF_TXD_MAXCNT, 2);
         // LASTRX→STARTTX; LASTTX→STOP to finish.
-        write32(
-            &mut t,
-            OFF_SHORTS,
-            SHORT_LASTRX_STARTTX | SHORT_LASTTX_STOP,
-        );
+        write32(&mut t, OFF_SHORTS, SHORT_LASTRX_STARTTX | SHORT_LASTTX_STOP);
         write32(&mut t, OFF_TASKS_STARTRX, 1);
 
         // First tick: RX completes, chains TX.
@@ -1071,7 +1092,11 @@ mod tests {
         write32(&mut t, OFF_TASKS_STOP, 1);
         assert!(t.needs_bus_tick());
         t.tick_with_bus(&mut bus);
-        assert_eq!(read32(&t, OFF_EVENTS_STOPPED), 1, "STOPPED fires after TASKS_STOP");
+        assert_eq!(
+            read32(&t, OFF_EVENTS_STOPPED),
+            1,
+            "STOPPED fires after TASKS_STOP"
+        );
     }
 
     /// EVENTS write-1 is ignored (silicon rule) — applied even AFTER a
@@ -1121,8 +1146,16 @@ mod tests {
         write32(&mut t, OFF_TASKS_STARTTX, 1);
         t.tick_with_bus(&mut bus);
 
-        assert_eq!(read32(&t, OFF_TXD_AMOUNT), 0, "TXD.AMOUNT = 0 for zero-length TX");
-        assert_eq!(read32(&t, OFF_EVENTS_LASTTX), 1, "LASTTX fires for zero-length");
+        assert_eq!(
+            read32(&t, OFF_TXD_AMOUNT),
+            0,
+            "TXD.AMOUNT = 0 for zero-length TX"
+        );
+        assert_eq!(
+            read32(&t, OFF_EVENTS_LASTTX),
+            1,
+            "LASTTX fires for zero-length"
+        );
     }
 
     /// Zero-length RX: AMOUNT=0, LASTRX fires.
@@ -1139,8 +1172,16 @@ mod tests {
         write32(&mut t, OFF_TASKS_STARTRX, 1);
         t.tick_with_bus(&mut bus);
 
-        assert_eq!(read32(&t, OFF_RXD_AMOUNT), 0, "RXD.AMOUNT = 0 for zero-length RX");
-        assert_eq!(read32(&t, OFF_EVENTS_LASTRX), 1, "LASTRX fires for zero-length");
+        assert_eq!(
+            read32(&t, OFF_RXD_AMOUNT),
+            0,
+            "RXD.AMOUNT = 0 for zero-length RX"
+        );
+        assert_eq!(
+            read32(&t, OFF_EVENTS_LASTRX),
+            1,
+            "LASTRX fires for zero-length"
+        );
     }
 
     /// IRQ raised when INTEN bit is set and event fires.
@@ -1162,7 +1203,10 @@ mod tests {
         t.tick_with_bus(&mut bus);
 
         let result = t.tick();
-        assert!(result.irq, "IRQ must be raised when INTEN_LASTTX set and event fires");
+        assert!(
+            result.irq,
+            "IRQ must be raised when INTEN_LASTTX set and event fires"
+        );
         assert!(
             result.fired_events.contains(&(OFF_EVENTS_LASTTX as u32)),
             "fired_events must contain LASTTX"
