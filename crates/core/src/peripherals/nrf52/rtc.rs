@@ -179,8 +179,8 @@ impl Peripheral for Nrf52Rtc {
                     self.counter = 0x00FF_FFF0;
                 }
             // EVENTS_TICK/OVRFLW: hardware-generated; SW may only clear (write 0).
-            OFF_EVENTS_TICK => { if value == 0 { self.events_tick = 0; } }
-            OFF_EVENTS_OVRFLW => { if value == 0 { self.events_ovrflw = 0; } }
+            OFF_EVENTS_TICK if value == 0 => self.events_tick = 0,
+            OFF_EVENTS_OVRFLW if value == 0 => self.events_ovrflw = 0,
             // EVENTS_COMPARE[i]: write-1 ignored; write-0 clears within num_cc.
             OFF_EVENTS_COMPARE0..=OFF_EVENTS_COMPARE3 if offset.is_multiple_of(4) => {
                 let i = ((offset - OFF_EVENTS_COMPARE0) / 4) as usize;
