@@ -32,11 +32,11 @@
     "source_rev": "7e05c41010f68f5c0a918513f6ed4630e09ae3ae"
   },
   "stm32f401.elf": {
-    "sha256": "b4b22699b32b7fbe2f631a2bf3cce9170b5a8803ff65cc80c9363500da0e83f3",
+    "sha256": "98aa05d190c898f5564f26d495f9d30c52093564a02353237b8004c14fea3069",
     "source_rev": "7e05c41010f68f5c0a918513f6ed4630e09ae3ae"
   },
   "stm32f407.elf": {
-    "sha256": "668cbc65fb6afea33dc3288bbae8d90b324855ded83c181a0681413bedd791f2",
+    "sha256": "ca90867533cd5cda5a2226a78f71b2e30a031eee478a3eb9f4aa7a217bb2429d",
     "source_rev": "7e05c41010f68f5c0a918513f6ed4630e09ae3ae"
   },
   "stm32g474re.elf": {

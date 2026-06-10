@@ -80,13 +80,13 @@ struct EcbData {
 static mut ECB_BUF: EcbData = EcbData {
     // NIST FIPS-197 Appendix B key: 00 01 02 ... 0f
     key: [
-        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
-        0x0e, 0x0f,
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e,
+        0x0f,
     ],
     // Plaintext: 00 11 22 33 44 55 66 77 88 99 aa bb cc dd ee ff
     cleartext: [
-        0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd,
-        0xee, 0xff,
+        0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee,
+        0xff,
     ],
     // Expected ciphertext (big-endian bytes): 69 c4 e0 d8  6a 7b 04 30  d8 cd b7 80  70 b4 c5 5a
     // Pre-fill so the struct has concrete size; overwritten by ECB hw.
@@ -186,7 +186,7 @@ unsafe fn test_ecb() {
     wr(ECB_BASE + 0x504, ptr); // ECBDATAPTR
     wr(ECB_BASE + 0x100, 0); // clear EVENTS_ENDECB
     wr(ECB_BASE + 0x000, 1); // TASKS_STARTECB
-    // Bounded wait on EVENTS_ENDECB.
+                             // Bounded wait on EVENTS_ENDECB.
     let mut guard: u32 = 0;
     while rd(ECB_BASE + 0x100) == 0 && guard < 2_000_000 {
         guard += 1;
@@ -228,7 +228,7 @@ unsafe fn test_gpiote() {
         | (8 << 8)               // PSEL = pin 8
         | (0 << 13)              // PORT = GPIO0
         | (1 << 16)              // POLARITY = LoToHi (SET task → pin high)
-        | (0 << 20);             // OUTINIT = low
+        | (0 << 20); // OUTINIT = low
     wr(GPIOTE_BASE + 0x510, config); // CONFIG[0]
     settle();
 

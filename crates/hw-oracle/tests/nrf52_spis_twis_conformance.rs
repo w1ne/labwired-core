@@ -313,7 +313,6 @@ const CASES: &[Case] = &[
         mask: 0x0000_0004,
         expect: 0x0000_0004,
     },
-
     // ── TWIS1: ENABLE selector ────────────────────────────────────────────────
     Case {
         label: "TWIS1 ENABLE=9 (TWIS mode)",
@@ -515,12 +514,7 @@ const CASES: &[Case] = &[
 // we build them directly and route read/write_u32 calls by subtracting the
 // base address to obtain the register offset.
 
-fn sim_read(
-    spis: &Nrf52Spis,
-    twis: &Nrf52Twis,
-    base: u32,
-    addr: u32,
-) -> Result<u32, String> {
+fn sim_read(spis: &Nrf52Spis, twis: &Nrf52Twis, base: u32, addr: u32) -> Result<u32, String> {
     let offset = (addr - base) as u64;
     if base == SPIS0_BASE {
         spis.read_u32(offset).map_err(|e| format!("{e:?}"))
@@ -529,13 +523,7 @@ fn sim_read(
     }
 }
 
-fn sim_write(
-    spis: &mut Nrf52Spis,
-    twis: &mut Nrf52Twis,
-    base: u32,
-    addr: u32,
-    val: u32,
-) {
+fn sim_write(spis: &mut Nrf52Spis, twis: &mut Nrf52Twis, base: u32, addr: u32, val: u32) {
     let offset = (addr - base) as u64;
     if base == SPIS0_BASE {
         spis.write_u32(offset, val)
@@ -546,12 +534,7 @@ fn sim_write(
     }
 }
 
-fn run_case(
-    spis: &mut Nrf52Spis,
-    twis: &mut Nrf52Twis,
-    oc: &mut OpenOcd,
-    case: &Case,
-) -> Outcome {
+fn run_case(spis: &mut Nrf52Spis, twis: &mut Nrf52Twis, oc: &mut OpenOcd, case: &Case) -> Outcome {
     // Prep writes (both sim + hw).
     for &(addr, val) in case.prep {
         sim_write(spis, twis, case.base, addr, val);
@@ -561,7 +544,12 @@ fn run_case(
     // Main write.
     sim_write(spis, twis, case.base, case.write.0, case.write.1);
     oc.write_memory(case.write.0, &[case.write.1])
-        .unwrap_or_else(|e| panic!("hw write 0x{:08X}=0x{:08X}: {e}", case.write.0, case.write.1));
+        .unwrap_or_else(|e| {
+            panic!(
+                "hw write 0x{:08X}=0x{:08X}: {e}",
+                case.write.0, case.write.1
+            )
+        });
     // Read back.
     let sim_val = match sim_read(spis, twis, case.base, case.read_addr) {
         Ok(v) => v,
@@ -581,7 +569,10 @@ fn run_case(
             Outcome::BothDisagreeWithExpect { both: sim_m }
         }
     } else {
-        Outcome::Diverge { sim: sim_m, hw: hw_m }
+        Outcome::Diverge {
+            sim: sim_m,
+            hw: hw_m,
+        }
     }
 }
 
@@ -600,22 +591,20 @@ fn nrf52840_spis_twis_conformance() {
         "nRF52840 SPIS0+TWIS1 register-surface conformance — {} cases",
         CASES.len()
     );
-    println!(
-        "  SPIS0 base: 0x{SPIS0_BASE:08X} (shared with SPIM0; ENABLE=2 selects SPIS)",
-    );
-    println!(
-        "  TWIS1 base: 0x{TWIS1_BASE:08X} (shared with TWIM1; ENABLE=9 selects TWIS)",
-    );
-    println!(
-        "  Note: SPIS0/TWIS0 both live at 0x40003000; this sweep uses TWIS1 at 0x40004000",
-    );
+    println!("  SPIS0 base: 0x{SPIS0_BASE:08X} (shared with SPIM0; ENABLE=2 selects SPIS)",);
+    println!("  TWIS1 base: 0x{TWIS1_BASE:08X} (shared with TWIM1; ENABLE=9 selects TWIS)",);
+    println!("  Note: SPIS0/TWIS0 both live at 0x40003000; this sweep uses TWIS1 at 0x40004000",);
     println!("{:-<92}", "");
 
     let mut by_periph: std::collections::BTreeMap<&str, (u32, u32, u32, u32)> =
         std::collections::BTreeMap::new();
 
     for case in CASES {
-        let periph = if case.base == SPIS0_BASE { "SPIS0" } else { "TWIS1" };
+        let periph = if case.base == SPIS0_BASE {
+            "SPIS0"
+        } else {
+            "TWIS1"
+        };
         let b = by_periph.entry(periph).or_insert((0, 0, 0, 0));
         match run_case(&mut spis, &mut twis, &mut oc, case) {
             Outcome::Match => {
@@ -663,6 +652,9 @@ fn nrf52840_spis_twis_conformance() {
     oc.shutdown().ok();
 
     if std::env::var("NRF52_STRICT").is_ok() {
-        assert_eq!(total_div, 0, "SPIS/TWIS diff: {total_div} register(s) diverged");
+        assert_eq!(
+            total_div, 0,
+            "SPIS/TWIS diff: {total_div} register(s) diverged"
+        );
     }
 }

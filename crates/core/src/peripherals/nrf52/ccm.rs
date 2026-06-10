@@ -69,29 +69,29 @@
 //! via `nrf52_onboarding_diff` (hw-oracle).  The crypto itself is therefore
 //! marked sim/unit-verified only.
 
-use crate::{Bus, Peripheral, PeripheralTickResult, SimResult};
 use super::ecb::aes128_encrypt;
+use crate::{Bus, Peripheral, PeripheralTickResult, SimResult};
 
 // ── Register offsets ──────────────────────────────────────────────────────────
 
-const OFF_TASKS_KSGEN:     u64 = 0x000;
-const OFF_TASKS_CRYPT:     u64 = 0x004;
-const OFF_TASKS_STOP:      u64 = 0x008;
+const OFF_TASKS_KSGEN: u64 = 0x000;
+const OFF_TASKS_CRYPT: u64 = 0x004;
+const OFF_TASKS_STOP: u64 = 0x008;
 const OFF_EVENTS_ENDKSGEN: u64 = 0x100;
 const OFF_EVENTS_ENDCRYPT: u64 = 0x104;
-const OFF_EVENTS_ERROR:    u64 = 0x108;
-const OFF_SHORTS:          u64 = 0x200;
-const OFF_INTENSET:        u64 = 0x304;
-const OFF_INTENCLR:        u64 = 0x308;
-const OFF_MICSTATUS:       u64 = 0x400;
-const OFF_ENABLE:          u64 = 0x500;
-const OFF_MODE:            u64 = 0x504;
-const OFF_CNFPTR:          u64 = 0x508;
-const OFF_INPTR:           u64 = 0x50C;
-const OFF_OUTPTR:          u64 = 0x510;
-const OFF_SCRATCHPTR:      u64 = 0x514;
-const OFF_MAXPACKETSIZE:   u64 = 0x518;
-const OFF_RATEOVERRIDE:    u64 = 0x51C;
+const OFF_EVENTS_ERROR: u64 = 0x108;
+const OFF_SHORTS: u64 = 0x200;
+const OFF_INTENSET: u64 = 0x304;
+const OFF_INTENCLR: u64 = 0x308;
+const OFF_MICSTATUS: u64 = 0x400;
+const OFF_ENABLE: u64 = 0x500;
+const OFF_MODE: u64 = 0x504;
+const OFF_CNFPTR: u64 = 0x508;
+const OFF_INPTR: u64 = 0x50C;
+const OFF_OUTPTR: u64 = 0x510;
+const OFF_SCRATCHPTR: u64 = 0x514;
+const OFF_MAXPACKETSIZE: u64 = 0x518;
+const OFF_RATEOVERRIDE: u64 = 0x51C;
 
 // ── Interrupt enable bits ─────────────────────────────────────────────────────
 
@@ -274,7 +274,9 @@ pub fn ccm_decrypt(
 
 /// Read `n` bytes from `bus` starting at `addr`.
 fn read_bytes(bus: &dyn Bus, addr: u32, n: usize) -> Vec<u8> {
-    (0..n).map(|i| bus.read_u8(addr as u64 + i as u64).unwrap_or(0)).collect()
+    (0..n)
+        .map(|i| bus.read_u8(addr as u64 + i as u64).unwrap_or(0))
+        .collect()
 }
 
 /// Write a byte slice to `bus` starting at `addr`.
@@ -331,9 +333,9 @@ impl Nrf52Ccm {
         // Read CCM config struct from CNFPTR.
         let cnf = self.cnfptr;
         let key_bytes = read_bytes(bus, cnf, 16);
-        let pc_bytes  = read_bytes(bus, cnf + 16, 5);
-        let dir_byte  = bus.read_u8(cnf as u64 + 21).unwrap_or(0);
-        let iv_bytes  = read_bytes(bus, cnf + 22, 8);
+        let pc_bytes = read_bytes(bus, cnf + 16, 5);
+        let dir_byte = bus.read_u8(cnf as u64 + 21).unwrap_or(0);
+        let iv_bytes = read_bytes(bus, cnf + 22, 8);
 
         let mut key = [0u8; 16];
         key.copy_from_slice(&key_bytes);
@@ -347,7 +349,7 @@ impl Nrf52Ccm {
         // Read input packet: byte0=S0, byte1=LENGTH, byte2=S1/RFU, then payload.
         let inp = self.inptr;
         let s0_byte = bus.read_u8(inp as u64).unwrap_or(0);
-        let length  = bus.read_u8(inp as u64 + 1).unwrap_or(0) as usize;
+        let length = bus.read_u8(inp as u64 + 1).unwrap_or(0) as usize;
         // byte2 (S1/RFU) is carried through unchanged.
         let s1_byte = bus.read_u8(inp as u64 + 2).unwrap_or(0);
 
@@ -410,19 +412,19 @@ impl Peripheral for Nrf52Ccm {
             OFF_TASKS_KSGEN | OFF_TASKS_CRYPT | OFF_TASKS_STOP => 0,
             OFF_EVENTS_ENDKSGEN => self.events_endksgen,
             OFF_EVENTS_ENDCRYPT => self.events_endcrypt,
-            OFF_EVENTS_ERROR    => self.events_error,
-            OFF_SHORTS          => self.shorts,
+            OFF_EVENTS_ERROR => self.events_error,
+            OFF_SHORTS => self.shorts,
             OFF_INTENSET | OFF_INTENCLR => self.inten,
-            OFF_MICSTATUS       => self.micstatus & 1,
-            OFF_ENABLE          => self.enable & 0x3,
-            OFF_MODE            => self.mode,
-            OFF_CNFPTR          => self.cnfptr,
-            OFF_INPTR           => self.inptr,
-            OFF_OUTPTR          => self.outptr,
-            OFF_SCRATCHPTR      => self.scratchptr,
-            OFF_MAXPACKETSIZE   => self.maxpacketsize & 0xFF,
-            OFF_RATEOVERRIDE    => self.rateoverride & 0xF,
-            _                   => 0,
+            OFF_MICSTATUS => self.micstatus & 1,
+            OFF_ENABLE => self.enable & 0x3,
+            OFF_MODE => self.mode,
+            OFF_CNFPTR => self.cnfptr,
+            OFF_INPTR => self.inptr,
+            OFF_OUTPTR => self.outptr,
+            OFF_SCRATCHPTR => self.scratchptr,
+            OFF_MAXPACKETSIZE => self.maxpacketsize & 0xFF,
+            OFF_RATEOVERRIDE => self.rateoverride & 0xF,
+            _ => 0,
         })
     }
 
@@ -441,33 +443,21 @@ impl Peripheral for Nrf52Ccm {
                 self.pending_crypt = false;
             }
             // Events: SW write-1 is ignored (silicon rule), write-0 clears.
-            OFF_EVENTS_ENDKSGEN => {
-                if value == 0 {
-                    self.events_endksgen = 0;
-                }
-            }
-            OFF_EVENTS_ENDCRYPT => {
-                if value == 0 {
-                    self.events_endcrypt = 0;
-                }
-            }
-            OFF_EVENTS_ERROR => {
-                if value == 0 {
-                    self.events_error = 0;
-                }
-            }
-            OFF_SHORTS        => self.shorts = value,
-            OFF_INTENSET      => self.inten |= value,
-            OFF_INTENCLR      => self.inten &= !value,
-            OFF_ENABLE        => self.enable = value & 0x3,
-            OFF_MODE          => self.mode = value,
-            OFF_CNFPTR        => self.cnfptr = value,
-            OFF_INPTR         => self.inptr = value,
-            OFF_OUTPTR        => self.outptr = value,
-            OFF_SCRATCHPTR    => self.scratchptr = value,
+            OFF_EVENTS_ENDKSGEN if value == 0 => self.events_endksgen = 0,
+            OFF_EVENTS_ENDCRYPT if value == 0 => self.events_endcrypt = 0,
+            OFF_EVENTS_ERROR if value == 0 => self.events_error = 0,
+            OFF_SHORTS => self.shorts = value,
+            OFF_INTENSET => self.inten |= value,
+            OFF_INTENCLR => self.inten &= !value,
+            OFF_ENABLE => self.enable = value & 0x3,
+            OFF_MODE => self.mode = value,
+            OFF_CNFPTR => self.cnfptr = value,
+            OFF_INPTR => self.inptr = value,
+            OFF_OUTPTR => self.outptr = value,
+            OFF_SCRATCHPTR => self.scratchptr = value,
             OFF_MAXPACKETSIZE => self.maxpacketsize = value & 0xFF,
-            OFF_RATEOVERRIDE  => self.rateoverride = value & 0xF,
-            _                 => {}
+            OFF_RATEOVERRIDE => self.rateoverride = value & 0xF,
+            _ => {}
         }
         Ok(())
     }
@@ -497,8 +487,12 @@ impl Peripheral for Nrf52Ccm {
         let endcrypt_irq = self.events_endcrypt != 0 && self.inten & INTEN_ENDCRYPT != 0;
         if endksgen_irq || endcrypt_irq {
             let mut fired = Vec::new();
-            if endksgen_irq { fired.push(OFF_EVENTS_ENDKSGEN as u32); }
-            if endcrypt_irq { fired.push(OFF_EVENTS_ENDCRYPT as u32); }
+            if endksgen_irq {
+                fired.push(OFF_EVENTS_ENDKSGEN as u32);
+            }
+            if endcrypt_irq {
+                fired.push(OFF_EVENTS_ENDCRYPT as u32);
+            }
             return PeripheralTickResult {
                 irq: true,
                 cycles: 1,
@@ -527,7 +521,10 @@ mod tests {
 
     impl FlatRamBus {
         fn new() -> Self {
-            Self { mem: HashMap::new(), config: SimulationConfig::default() }
+            Self {
+                mem: HashMap::new(),
+                config: SimulationConfig::default(),
+            }
         }
         fn write_slice(&mut self, base: u64, data: &[u8]) {
             for (i, &b) in data.iter().enumerate() {
@@ -535,7 +532,9 @@ mod tests {
             }
         }
         fn read_slice(&self, base: u64, len: usize) -> Vec<u8> {
-            (0..len).map(|i| *self.mem.get(&(base + i as u64)).unwrap_or(&0)).collect()
+            (0..len)
+                .map(|i| *self.mem.get(&(base + i as u64)).unwrap_or(&0))
+                .collect()
         }
     }
 
@@ -547,9 +546,15 @@ mod tests {
             self.mem.insert(addr, value);
             Ok(())
         }
-        fn tick_peripherals(&mut self) -> Vec<u32> { Vec::new() }
-        fn execute_dma(&mut self, _r: &[DmaRequest]) -> crate::SimResult<()> { Ok(()) }
-        fn config(&self) -> &SimulationConfig { &self.config }
+        fn tick_peripherals(&mut self) -> Vec<u32> {
+            Vec::new()
+        }
+        fn execute_dma(&mut self, _r: &[DmaRequest]) -> crate::SimResult<()> {
+            Ok(())
+        }
+        fn config(&self) -> &SimulationConfig {
+            &self.config
+        }
     }
 
     // ── BLE CCM* sample vector ────────────────────────────────────────────────
@@ -581,8 +586,8 @@ mod tests {
 
     /// The session key from the BLE sample.
     const SK: [u8; 16] = [
-        0x99, 0xad, 0x1b, 0x52, 0x26, 0xa3, 0x7e, 0x3e,
-        0x05, 0x8e, 0x3b, 0x8e, 0x27, 0xc2, 0xc6, 0x66,
+        0x99, 0xad, 0x1b, 0x52, 0x26, 0xa3, 0x7e, 0x3e, 0x05, 0x8e, 0x3b, 0x8e, 0x27, 0xc2, 0xc6,
+        0x66,
     ];
     /// IV (big-endian representation from BLE spec; stored in CCM struct LE).
     const IV: [u8; 8] = [0x24, 0xab, 0xdc, 0xba, 0xab, 0xcd, 0xab, 0xcd];
@@ -594,8 +599,8 @@ mod tests {
     const HDR: u8 = 0x0f;
     /// Plaintext payload (17 bytes).
     const PT: [u8; 17] = [
-        0x17, 0x07, 0x01, 0xbe, 0xee, 0xf3, 0x9d, 0x7e,
-        0xae, 0xae, 0x57, 0x59, 0x99, 0x96, 0xd5, 0xf8, 0x0a,
+        0x17, 0x07, 0x01, 0xbe, 0xee, 0xf3, 0x9d, 0x7e, 0xae, 0xae, 0x57, 0x59, 0x99, 0x96, 0xd5,
+        0xf8, 0x0a,
     ];
 
     // ── Sub-step AES verification (hand-computed) ─────────────────────────────
@@ -627,8 +632,8 @@ mod tests {
         // Verify CTR block generation with a known-AES-key input.
         // A_0 = 0x01 || nonce(13) || 0x00 || 0x00
         let fips_key: [u8; 16] = [
-            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-            0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
+            0x0e, 0x0f,
         ];
         let nonce = [0u8; 13];
         // Build A_0 manually and compute expected output.
@@ -637,7 +642,10 @@ mod tests {
         // nonce[0..13] = zeros, counter = 0 → bytes 14-15 = 0
         let expected = aes128_encrypt(&a0, &fips_key);
         let got = ccm_ctr_block(&fips_key, &nonce, 0);
-        assert_eq!(got, expected, "CTR block 0 matches hand-computed AES output");
+        assert_eq!(
+            got, expected,
+            "CTR block 0 matches hand-computed AES output"
+        );
     }
 
     #[test]
@@ -669,7 +677,10 @@ mod tests {
         let (ct, mic) = ccm_encrypt(&SK, &nonce, HDR, &PT);
         let (pt_recovered, mic_ok) = ccm_decrypt(&SK, &nonce, HDR, &ct, &mic);
         assert!(mic_ok, "round-trip: MIC must pass");
-        assert_eq!(pt_recovered, PT, "round-trip: decrypted plaintext must match");
+        assert_eq!(
+            pt_recovered, PT,
+            "round-trip: decrypted plaintext must match"
+        );
     }
 
     #[test]
@@ -724,9 +735,9 @@ mod tests {
 
     #[test]
     fn peripheral_encrypt_easydma() {
-        const CNF_BASE:  u64 = 0x2000_0000;
-        const INP_BASE:  u64 = 0x2000_0100;
-        const OUT_BASE:  u64 = 0x2000_0200;
+        const CNF_BASE: u64 = 0x2000_0000;
+        const INP_BASE: u64 = 0x2000_0100;
+        const OUT_BASE: u64 = 0x2000_0200;
 
         let mut bus = FlatRamBus::new();
 
@@ -743,21 +754,24 @@ mod tests {
 
         // Set up CCM peripheral.
         let mut ccm = Nrf52Ccm::new();
-        ccm.write_u32(OFF_ENABLE,  2).unwrap(); // enable
-        ccm.write_u32(OFF_MODE,    0).unwrap(); // encrypt
-        ccm.write_u32(OFF_CNFPTR,  CNF_BASE as u32).unwrap();
-        ccm.write_u32(OFF_INPTR,   INP_BASE as u32).unwrap();
-        ccm.write_u32(OFF_OUTPTR,  OUT_BASE as u32).unwrap();
+        ccm.write_u32(OFF_ENABLE, 2).unwrap(); // enable
+        ccm.write_u32(OFF_MODE, 0).unwrap(); // encrypt
+        ccm.write_u32(OFF_CNFPTR, CNF_BASE as u32).unwrap();
+        ccm.write_u32(OFF_INPTR, INP_BASE as u32).unwrap();
+        ccm.write_u32(OFF_OUTPTR, OUT_BASE as u32).unwrap();
 
         // Trigger KSGEN with SHORT to CRYPT.
-        ccm.write_u32(OFF_SHORTS,      SHORT_KSGEN_CRYPT).unwrap();
+        ccm.write_u32(OFF_SHORTS, SHORT_KSGEN_CRYPT).unwrap();
         ccm.write_u32(OFF_TASKS_KSGEN, 1).unwrap();
         assert!(ccm.needs_bus_tick(), "should need bus tick after KSGEN");
         ccm.tick_with_bus(&mut bus);
 
         // Verify EVENTS_ENDCRYPT is set.
-        assert_eq!(ccm.read_u32(OFF_EVENTS_ENDCRYPT).unwrap(), 1,
-            "EVENTS_ENDCRYPT must be set after CRYPT");
+        assert_eq!(
+            ccm.read_u32(OFF_EVENTS_ENDCRYPT).unwrap(),
+            1,
+            "EVENTS_ENDCRYPT must be set after CRYPT"
+        );
 
         // Read output packet.
         let out_s0 = bus.read_slice(OUT_BASE, 1)[0];
@@ -777,14 +791,17 @@ mod tests {
         let nonce = build_nonce(&PC, DIR, &IV);
         let (pt_check, mic_ok) = ccm_decrypt(&SK, &nonce, HDR, ct_got, &mic_got);
         assert!(mic_ok, "EasyDMA encrypt output: decrypt MIC must pass");
-        assert_eq!(pt_check, PT, "EasyDMA encrypt output: recovered plaintext correct");
+        assert_eq!(
+            pt_check, PT,
+            "EasyDMA encrypt output: recovered plaintext correct"
+        );
     }
 
     #[test]
     fn peripheral_decrypt_easydma_micstatus_pass() {
-        const CNF_BASE:  u64 = 0x2000_1000;
-        const INP_BASE:  u64 = 0x2000_1100;
-        const OUT_BASE:  u64 = 0x2000_1200;
+        const CNF_BASE: u64 = 0x2000_1000;
+        const INP_BASE: u64 = 0x2000_1100;
+        const OUT_BASE: u64 = 0x2000_1200;
 
         let mut bus = FlatRamBus::new();
 
@@ -805,17 +822,25 @@ mod tests {
         bus.write_slice(INP_BASE + 3 + ct.len() as u64, &mic);
 
         let mut ccm = Nrf52Ccm::new();
-        ccm.write_u32(OFF_ENABLE,  2).unwrap();
-        ccm.write_u32(OFF_MODE,    1).unwrap(); // decrypt
-        ccm.write_u32(OFF_CNFPTR,  CNF_BASE as u32).unwrap();
-        ccm.write_u32(OFF_INPTR,   INP_BASE as u32).unwrap();
-        ccm.write_u32(OFF_OUTPTR,  OUT_BASE as u32).unwrap();
+        ccm.write_u32(OFF_ENABLE, 2).unwrap();
+        ccm.write_u32(OFF_MODE, 1).unwrap(); // decrypt
+        ccm.write_u32(OFF_CNFPTR, CNF_BASE as u32).unwrap();
+        ccm.write_u32(OFF_INPTR, INP_BASE as u32).unwrap();
+        ccm.write_u32(OFF_OUTPTR, OUT_BASE as u32).unwrap();
 
         ccm.write_u32(OFF_TASKS_CRYPT, 1).unwrap();
         ccm.tick_with_bus(&mut bus);
 
-        assert_eq!(ccm.read_u32(OFF_MICSTATUS).unwrap(), 1, "MICSTATUS must be 1 (pass)");
-        assert_eq!(ccm.read_u32(OFF_EVENTS_ENDCRYPT).unwrap(), 1, "EVENTS_ENDCRYPT set");
+        assert_eq!(
+            ccm.read_u32(OFF_MICSTATUS).unwrap(),
+            1,
+            "MICSTATUS must be 1 (pass)"
+        );
+        assert_eq!(
+            ccm.read_u32(OFF_EVENTS_ENDCRYPT).unwrap(),
+            1,
+            "EVENTS_ENDCRYPT set"
+        );
 
         let out_len = bus.read_slice(OUT_BASE + 1, 1)[0] as usize;
         let pt_got = bus.read_slice(OUT_BASE + 3, out_len);
@@ -824,9 +849,9 @@ mod tests {
 
     #[test]
     fn peripheral_decrypt_easydma_micstatus_fail() {
-        const CNF_BASE:  u64 = 0x2000_2000;
-        const INP_BASE:  u64 = 0x2000_2100;
-        const OUT_BASE:  u64 = 0x2000_2200;
+        const CNF_BASE: u64 = 0x2000_2000;
+        const INP_BASE: u64 = 0x2000_2100;
+        const OUT_BASE: u64 = 0x2000_2200;
 
         let mut bus = FlatRamBus::new();
 
@@ -846,16 +871,20 @@ mod tests {
         bus.write_slice(INP_BASE + 3 + ct.len() as u64, &mic);
 
         let mut ccm = Nrf52Ccm::new();
-        ccm.write_u32(OFF_ENABLE,  2).unwrap();
-        ccm.write_u32(OFF_MODE,    1).unwrap(); // decrypt
-        ccm.write_u32(OFF_CNFPTR,  CNF_BASE as u32).unwrap();
-        ccm.write_u32(OFF_INPTR,   INP_BASE as u32).unwrap();
-        ccm.write_u32(OFF_OUTPTR,  OUT_BASE as u32).unwrap();
+        ccm.write_u32(OFF_ENABLE, 2).unwrap();
+        ccm.write_u32(OFF_MODE, 1).unwrap(); // decrypt
+        ccm.write_u32(OFF_CNFPTR, CNF_BASE as u32).unwrap();
+        ccm.write_u32(OFF_INPTR, INP_BASE as u32).unwrap();
+        ccm.write_u32(OFF_OUTPTR, OUT_BASE as u32).unwrap();
 
         ccm.write_u32(OFF_TASKS_CRYPT, 1).unwrap();
         ccm.tick_with_bus(&mut bus);
 
-        assert_eq!(ccm.read_u32(OFF_MICSTATUS).unwrap(), 0, "MICSTATUS must be 0 (fail) on tampered data");
+        assert_eq!(
+            ccm.read_u32(OFF_MICSTATUS).unwrap(),
+            0,
+            "MICSTATUS must be 0 (fail) on tampered data"
+        );
     }
 
     // ── Register surface tests ────────────────────────────────────────────────
@@ -886,19 +915,29 @@ mod tests {
         assert_eq!(c.read_u32(OFF_EVENTS_ENDKSGEN).unwrap(), 1);
         // Write 1 — must be ignored (event stays 1).
         c.write_u32(OFF_EVENTS_ENDKSGEN, 1).unwrap();
-        assert_eq!(c.read_u32(OFF_EVENTS_ENDKSGEN).unwrap(), 1,
-            "write-1 to event must not clear it");
+        assert_eq!(
+            c.read_u32(OFF_EVENTS_ENDKSGEN).unwrap(),
+            1,
+            "write-1 to event must not clear it"
+        );
         // Write 0 — must clear.
         c.write_u32(OFF_EVENTS_ENDKSGEN, 0).unwrap();
-        assert_eq!(c.read_u32(OFF_EVENTS_ENDKSGEN).unwrap(), 0,
-            "write-0 to event clears it");
+        assert_eq!(
+            c.read_u32(OFF_EVENTS_ENDKSGEN).unwrap(),
+            0,
+            "write-0 to event clears it"
+        );
     }
 
     #[test]
     fn intenset_intenclr() {
         let mut c = Nrf52Ccm::new();
-        c.write_u32(OFF_INTENSET, INTEN_ENDKSGEN | INTEN_ENDCRYPT).unwrap();
-        assert_eq!(c.read_u32(OFF_INTENSET).unwrap(), INTEN_ENDKSGEN | INTEN_ENDCRYPT);
+        c.write_u32(OFF_INTENSET, INTEN_ENDKSGEN | INTEN_ENDCRYPT)
+            .unwrap();
+        assert_eq!(
+            c.read_u32(OFF_INTENSET).unwrap(),
+            INTEN_ENDKSGEN | INTEN_ENDCRYPT
+        );
         c.write_u32(OFF_INTENCLR, INTEN_ENDKSGEN).unwrap();
         assert_eq!(c.read_u32(OFF_INTENSET).unwrap(), INTEN_ENDCRYPT);
     }
@@ -933,16 +972,24 @@ mod tests {
         bus.write_slice(INP, &[HDR, 0, 0x00]); // empty payload
 
         let mut c = Nrf52Ccm::new();
-        c.write_u32(OFF_ENABLE,  2).unwrap();
-        c.write_u32(OFF_MODE,    0).unwrap();
-        c.write_u32(OFF_CNFPTR,  CNF as u32).unwrap();
-        c.write_u32(OFF_INPTR,   INP as u32).unwrap();
-        c.write_u32(OFF_OUTPTR,  OUT as u32).unwrap();
-        c.write_u32(OFF_SHORTS,  SHORT_KSGEN_CRYPT).unwrap();
+        c.write_u32(OFF_ENABLE, 2).unwrap();
+        c.write_u32(OFF_MODE, 0).unwrap();
+        c.write_u32(OFF_CNFPTR, CNF as u32).unwrap();
+        c.write_u32(OFF_INPTR, INP as u32).unwrap();
+        c.write_u32(OFF_OUTPTR, OUT as u32).unwrap();
+        c.write_u32(OFF_SHORTS, SHORT_KSGEN_CRYPT).unwrap();
         c.write_u32(OFF_TASKS_KSGEN, 1).unwrap();
         c.tick_with_bus(&mut bus);
 
-        assert_eq!(c.read_u32(OFF_EVENTS_ENDKSGEN).unwrap(), 1, "ENDKSGEN set via SHORT");
-        assert_eq!(c.read_u32(OFF_EVENTS_ENDCRYPT).unwrap(), 1, "ENDCRYPT set via SHORT");
+        assert_eq!(
+            c.read_u32(OFF_EVENTS_ENDKSGEN).unwrap(),
+            1,
+            "ENDKSGEN set via SHORT"
+        );
+        assert_eq!(
+            c.read_u32(OFF_EVENTS_ENDCRYPT).unwrap(),
+            1,
+            "ENDCRYPT set via SHORT"
+        );
     }
 }

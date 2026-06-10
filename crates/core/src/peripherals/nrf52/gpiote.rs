@@ -128,8 +128,16 @@ impl Nrf52Gpiote {
     fn queue_pin_action(&mut self, channel: usize, high: bool) {
         let cfg = self.config[channel];
         let pin = (cfg >> CONFIG_PSEL_SHIFT) & CONFIG_PSEL_MASK;
-        let port_idx = if cfg & CONFIG_PORT_BIT != 0 { 1usize } else { 0usize };
-        let port_base = if port_idx == 1 { GPIO1_BASE } else { GPIO0_BASE };
+        let port_idx = if cfg & CONFIG_PORT_BIT != 0 {
+            1usize
+        } else {
+            0usize
+        };
+        let port_base = if port_idx == 1 {
+            GPIO1_BASE
+        } else {
+            GPIO0_BASE
+        };
         let bit_mask = 1u32 << pin;
         // Read-modify-write against the per-port idr shadow so we drive only
         // the target pin; other pins (including those driven by other GPIOTE
@@ -355,10 +363,7 @@ mod tests {
         // Now CLR: idr_shadow[1] has bit 5 set → clearing should produce 0.
         g.write_u32(OFF_TASKS_CLR_0 + 4, 1).unwrap();
         let res = g.tick();
-        assert_eq!(
-            res.mmio_writes,
-            vec![(GPIO1_BASE + GPIO_IN_OFFSET, 0)]
-        );
+        assert_eq!(res.mmio_writes, vec![(GPIO1_BASE + GPIO_IN_OFFSET, 0)]);
     }
 
     #[test]
@@ -378,10 +383,7 @@ mod tests {
 
         g.write_u32(OFF_TASKS_OUT_0, 1).unwrap();
         let res2 = g.tick();
-        assert_eq!(
-            res2.mmio_writes,
-            vec![(GPIO0_BASE + GPIO_IN_OFFSET, 0)]
-        );
+        assert_eq!(res2.mmio_writes, vec![(GPIO0_BASE + GPIO_IN_OFFSET, 0)]);
 
         g.write_u32(OFF_TASKS_OUT_0, 1).unwrap();
         let res3 = g.tick();
@@ -412,10 +414,7 @@ mod tests {
         g.write_u32(OFF_TASKS_OUT_0, 1).unwrap();
         let res = g.tick();
         // POLARITY=LoToHi forces high on TASKS_OUT: GPIO0.IN bit 7 set.
-        assert_eq!(
-            res.mmio_writes,
-            vec![(GPIO0_BASE + GPIO_IN_OFFSET, 1 << 7)]
-        );
+        assert_eq!(res.mmio_writes, vec![(GPIO0_BASE + GPIO_IN_OFFSET, 1 << 7)]);
     }
 
     #[test]
@@ -429,9 +428,6 @@ mod tests {
         g.write_u32(OFF_TASKS_OUT_0, 1).unwrap();
         let res = g.tick();
         // Pin 2 cleared: new_in = 0 & !4 = 0 (shadow was 0, bit 2 already 0).
-        assert_eq!(
-            res.mmio_writes,
-            vec![(GPIO0_BASE + GPIO_IN_OFFSET, 0)]
-        );
+        assert_eq!(res.mmio_writes, vec![(GPIO0_BASE + GPIO_IN_OFFSET, 0)]);
     }
 }

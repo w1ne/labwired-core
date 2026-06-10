@@ -101,7 +101,7 @@ impl Nrf52Rtc {
     /// Construct with an explicit CC count. Use `num_cc: 4` for RTC1/RTC2.
     pub fn new_with_cc(num_cc: usize) -> Self {
         Self {
-            num_cc: num_cc.min(4).max(1),
+            num_cc: num_cc.clamp(1, 4),
             ..Self::default()
         }
     }
@@ -130,18 +130,28 @@ impl Peripheral for Nrf52Rtc {
             // EVENTS_COMPARE[i]: return 0 for i >= num_cc.
             OFF_EVENTS_COMPARE0..=OFF_EVENTS_COMPARE3 if offset.is_multiple_of(4) => {
                 let i = ((offset - OFF_EVENTS_COMPARE0) / 4) as usize;
-                if i < self.num_cc { self.events_compare[i] } else { 0 }
+                if i < self.num_cc {
+                    self.events_compare[i]
+                } else {
+                    0
+                }
             }
             // INTENSET/INTENCLR: mask to valid compare bits + TICK + OVRFLW.
             OFF_INTENSET | OFF_INTENCLR => self.inten & (EN_TICK | EN_OVRFLW | self.compare_mask()),
             // EVTEN/EVTENSET/EVTENCLR: same mask.
-            OFF_EVTEN | OFF_EVTENSET | OFF_EVTENCLR => self.evten & (EN_TICK | EN_OVRFLW | self.compare_mask()),
+            OFF_EVTEN | OFF_EVTENSET | OFF_EVTENCLR => {
+                self.evten & (EN_TICK | EN_OVRFLW | self.compare_mask())
+            }
             OFF_COUNTER => self.counter & COUNTER_MASK,
             OFF_PRESCALER => self.prescaler,
             // CC[i]: return 0 for i >= num_cc.
             OFF_CC0..=OFF_CC3 if offset.is_multiple_of(4) => {
                 let i = ((offset - OFF_CC0) / 4) as usize;
-                if i < self.num_cc { self.cc[i] } else { 0 }
+                if i < self.num_cc {
+                    self.cc[i]
+                } else {
+                    0
+                }
             }
             _ => 0,
         })
@@ -169,8 +179,8 @@ impl Peripheral for Nrf52Rtc {
                     self.counter = 0x00FF_FFF0;
                 }
             // EVENTS_TICK/OVRFLW: hardware-generated; SW may only clear (write 0).
-            OFF_EVENTS_TICK => { if value == 0 { self.events_tick = 0; } }
-            OFF_EVENTS_OVRFLW => { if value == 0 { self.events_ovrflw = 0; } }
+            OFF_EVENTS_TICK if value == 0 => self.events_tick = 0,
+            OFF_EVENTS_OVRFLW if value == 0 => self.events_ovrflw = 0,
             // EVENTS_COMPARE[i]: write-1 ignored; write-0 clears within num_cc.
             OFF_EVENTS_COMPARE0..=OFF_EVENTS_COMPARE3 if offset.is_multiple_of(4) => {
                 let i = ((offset - OFF_EVENTS_COMPARE0) / 4) as usize;
@@ -307,11 +317,23 @@ mod tests {
     fn events_write_one_ignored() {
         let mut r = Nrf52Rtc::new();
         r.write_u32(OFF_EVENTS_TICK, 1).unwrap();
-        assert_eq!(r.read_u32(OFF_EVENTS_TICK).unwrap(), 0, "EVENTS_TICK write-1 must be no-op");
+        assert_eq!(
+            r.read_u32(OFF_EVENTS_TICK).unwrap(),
+            0,
+            "EVENTS_TICK write-1 must be no-op"
+        );
         r.write_u32(OFF_EVENTS_OVRFLW, 1).unwrap();
-        assert_eq!(r.read_u32(OFF_EVENTS_OVRFLW).unwrap(), 0, "EVENTS_OVRFLW write-1 must be no-op");
+        assert_eq!(
+            r.read_u32(OFF_EVENTS_OVRFLW).unwrap(),
+            0,
+            "EVENTS_OVRFLW write-1 must be no-op"
+        );
         r.write_u32(OFF_EVENTS_COMPARE0, 1).unwrap();
-        assert_eq!(r.read_u32(OFF_EVENTS_COMPARE0).unwrap(), 0, "EVENTS_COMPARE write-1 must be no-op");
+        assert_eq!(
+            r.read_u32(OFF_EVENTS_COMPARE0).unwrap(),
+            0,
+            "EVENTS_COMPARE write-1 must be no-op"
+        );
     }
 
     #[test]
@@ -321,9 +343,17 @@ mod tests {
         r.write_u32(OFF_EVTENSET, EN_TICK).unwrap();
         r.write_u32(OFF_TASKS_START, 1).unwrap();
         r.tick();
-        assert_eq!(r.read_u32(OFF_EVENTS_TICK).unwrap(), 1, "HW must set EVENTS_TICK");
+        assert_eq!(
+            r.read_u32(OFF_EVENTS_TICK).unwrap(),
+            1,
+            "HW must set EVENTS_TICK"
+        );
         r.write_u32(OFF_EVENTS_TICK, 0).unwrap();
-        assert_eq!(r.read_u32(OFF_EVENTS_TICK).unwrap(), 0, "write-0 must clear EVENTS_TICK");
+        assert_eq!(
+            r.read_u32(OFF_EVENTS_TICK).unwrap(),
+            0,
+            "write-0 must clear EVENTS_TICK"
+        );
     }
 
     #[test]

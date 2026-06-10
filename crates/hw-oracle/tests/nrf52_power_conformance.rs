@@ -81,7 +81,6 @@ const CASES: &[Case] = &[
         mask: 0xFF,
         expect: 0x00,
     },
-
     // ── GPREGRET2 (0x520): 8-bit R/W ─────────────────────────────────────
     Case {
         label: "GPREGRET2 write 0x5A read back",
@@ -99,7 +98,6 @@ const CASES: &[Case] = &[
         mask: 0xFF,
         expect: 0x00,
     },
-
     // ── DCDCEN (0x578): bit0 R/W ──────────────────────────────────────────
     Case {
         label: "DCDCEN write 1 read back",
@@ -117,7 +115,6 @@ const CASES: &[Case] = &[
         mask: 0x1,
         expect: 0,
     },
-
     // ── POFCON (0x510): bits[5:0] R/W ────────────────────────────────────
     // Write a value with all defined bits set; mask to 0x3F.
     Case {
@@ -200,7 +197,10 @@ fn run_case(sim: &mut SystemBus, oc: &mut OpenOcd, case: &Case) -> Outcome {
             Outcome::BothDisagreeWithExpect { both: sim_m }
         }
     } else {
-        Outcome::Diverge { sim: sim_m, hw: hw_m }
+        Outcome::Diverge {
+            sim: sim_m,
+            hw: hw_m,
+        }
     }
 }
 
@@ -344,7 +344,11 @@ fn nrf52840_power_conformance() {
             name,
             sv & 0xFF,
             hv & 0xFF,
-            if (sv & 0xFF) == 0 && (hv & 0xFF) == 0 { "OK" } else { "WARN: not zero!" }
+            if (sv & 0xFF) == 0 && (hv & 0xFF) == 0 {
+                "OK"
+            } else {
+                "WARN: not zero!"
+            }
         );
     }
     // DCDCEN: also a retention-adjacent register; restore to 0.
@@ -354,7 +358,11 @@ fn nrf52840_power_conformance() {
         "[RESTORE] DCDCEN    → sim=0x{:02X} hw=0x{:02X} {}",
         sv & 0x1,
         hv & 0x1,
-        if (sv & 1) == 0 && (hv & 1) == 0 { "OK" } else { "WARN: not zero!" }
+        if (sv & 1) == 0 && (hv & 1) == 0 {
+            "OK"
+        } else {
+            "WARN: not zero!"
+        }
     );
 
     println!("{:-<80}", "");

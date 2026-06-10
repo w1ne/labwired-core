@@ -165,21 +165,9 @@ impl Peripheral for Nrf52Spis {
                 // TASKS_RELEASE: firmware releases semaphore.
             }
             // EVENTS: hardware-generated; SW write-1 ignored, write-0 clears.
-            OFF_EVENTS_END => {
-                if value == 0 {
-                    self.events_end = 0;
-                }
-            }
-            OFF_EVENTS_ENDRX => {
-                if value == 0 {
-                    self.events_endrx = 0;
-                }
-            }
-            OFF_EVENTS_ACQUIRED => {
-                if value == 0 {
-                    self.events_acquired = 0;
-                }
-            }
+            OFF_EVENTS_END if value == 0 => self.events_end = 0,
+            OFF_EVENTS_ENDRX if value == 0 => self.events_endrx = 0,
+            OFF_EVENTS_ACQUIRED if value == 0 => self.events_acquired = 0,
             // SHORTS.
             OFF_SHORTS => self.shorts = value & SHORTS_MASK,
             // INTENSET / INTENCLR.

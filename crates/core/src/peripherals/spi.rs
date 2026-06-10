@@ -265,26 +265,10 @@ impl Nrf52SpiRegs {
             }
 
             // EVENTS — SW write of 1 ignored; SW write of 0 clears
-            0x104 => {
-                if value == 0 {
-                    self.events_stopped = 0;
-                }
-            }
-            0x110 => {
-                if value == 0 {
-                    self.events_endrx = 0;
-                }
-            }
-            0x118 => {
-                if value == 0 {
-                    self.events_end = 0;
-                }
-            }
-            0x120 => {
-                if value == 0 {
-                    self.events_endtx = 0;
-                }
-            }
+            0x104 if value == 0 => self.events_stopped = 0,
+            0x110 if value == 0 => self.events_endrx = 0,
+            0x118 if value == 0 => self.events_end = 0,
+            0x120 if value == 0 => self.events_endtx = 0,
 
             // INTEN (direct write)
             0x300 => self.inten = value,
@@ -355,6 +339,12 @@ pub struct Spi {
     #[serde(skip)]
     nrf52_pending_start: bool,
 
+    /// Classic-SPI CR2 writable mask — a per-part delta on the shared classic
+    /// layout. F1 implements 0xE7; F4 adds bit 4 (FRF, TI-mode) → 0xF7,
+    /// silicon-confirmed on the bench F103 (0xE7) and F407 (0xF7). Set from the
+    /// chip config's `cr2_mask`. Ignored by the FIFO layout (its own CR2 logic).
+    cr2_mask: u32,
+
     #[serde(skip)]
     pub attached_devices: Vec<Box<dyn SpiDevice>>,
 }
@@ -376,6 +366,12 @@ impl Spi {
     }
 
     pub fn new_with_layout(layout: SpiRegisterLayout) -> Self {
+        Self::new_with_layout_cr2(layout, 0x0000_00E7)
+    }
+
+    /// Like [`new_with_layout`] but with an explicit classic-SPI CR2 writable
+    /// mask — the per-part delta (F1 `0xE7`, F4 `0xF7` for the FRF bit).
+    pub fn new_with_layout_cr2(layout: SpiRegisterLayout, cr2_mask: u32) -> Self {
         let regs = match layout {
             // CR2 reset is silicon-verified over SWD:
             //   FIFO SPI (L4/F7/H5): CR2 = 0x0700 (DS=0b0111 8-bit + FRXTH).
@@ -396,6 +392,7 @@ impl Spi {
         };
         Self {
             regs,
+            cr2_mask,
             ..Default::default()
         }
     }
@@ -429,7 +426,9 @@ impl Spi {
                 // frame size. Values below 0b0011 are reserved and hardware
                 // forces them to 0b0111 (8-bit) on FIFO parts — verified on
                 // NUCLEO-L476RG (CR2=0x0000 reads back 0x0700). Classic SPI
-                // has no DS field, so it stores the value verbatim.
+                // has no DS field; its writable mask is the per-part `cr2_mask`
+                // (F1 0xE7, F4 0xF7 for the FRF bit).
+                let cr2_mask = self.cr2_mask as u16;
                 if let SpiRegs::Stm32(r) = &mut self.regs {
                     if r.fifo {
                         let ds = (value >> 8) & 0xF;
@@ -439,9 +438,7 @@ impl Spi {
                             value
                         };
                     } else {
-                        // Classic SPI CR2 writable mask 0xE7 (RXDMAEN/TXDMAEN/
-                        // SSOE/ERRIE/RXNEIE/TXEIE) — silicon-confirmed on F103.
-                        r.cr2 = value & 0x00E7;
+                        r.cr2 = value & cr2_mask;
                     }
                 }
             }
@@ -661,18 +658,18 @@ impl crate::Peripheral for Spi {
         }
         self.nrf52_pending_start = false;
 
-        let (txd_ptr, txd_maxcnt, rxd_ptr, rxd_maxcnt, orc) =
-            if let SpiRegs::Nrf52(r) = &self.regs {
-                (
-                    r.txd_ptr as u64,
-                    r.txd_maxcnt as usize,
-                    r.rxd_ptr as u64,
-                    r.rxd_maxcnt as usize,
-                    (r.orc & 0xFF) as u8,
-                )
-            } else {
-                return;
-            };
+        let (txd_ptr, txd_maxcnt, rxd_ptr, rxd_maxcnt, orc) = if let SpiRegs::Nrf52(r) = &self.regs
+        {
+            (
+                r.txd_ptr as u64,
+                r.txd_maxcnt as usize,
+                r.rxd_ptr as u64,
+                r.rxd_maxcnt as usize,
+                (r.orc & 0xFF) as u8,
+            )
+        } else {
+            return;
+        };
 
         // Determine the total number of byte-cycles to run: whichever
         // descriptor is larger drives the clock count; the smaller one
@@ -930,7 +927,9 @@ mod tests {
         }
 
         fn read_slice(&self, base: u64, len: usize) -> Vec<u8> {
-            (0..len).map(|i| *self.mem.get(&(base + i as u64)).unwrap_or(&0)).collect()
+            (0..len)
+                .map(|i| *self.mem.get(&(base + i as u64)).unwrap_or(&0))
+                .collect()
         }
     }
 
@@ -984,22 +983,30 @@ mod tests {
         bus.write_slice(tx_base, &tx_data);
 
         // Configure SPIM: ENABLE=7, TXD.PTR/MAXCNT, RXD.PTR/MAXCNT.
-        nrf_write_u32(&mut spi, 0x500, 7);            // ENABLE = 7
+        nrf_write_u32(&mut spi, 0x500, 7); // ENABLE = 7
         nrf_write_u32(&mut spi, 0x544, tx_base as u32); // TXD.PTR
-        nrf_write_u32(&mut spi, 0x548, 4);            // TXD.MAXCNT = 4
+        nrf_write_u32(&mut spi, 0x548, 4); // TXD.MAXCNT = 4
         nrf_write_u32(&mut spi, 0x534, rx_base as u32); // RXD.PTR
-        nrf_write_u32(&mut spi, 0x538, 4);            // RXD.MAXCNT = 4
+        nrf_write_u32(&mut spi, 0x538, 4); // RXD.MAXCNT = 4
 
         // TASKS_START — must not have fired events yet.
         nrf_write_u32(&mut spi, 0x010, 1);
-        assert_eq!(nrf_read_u32(&spi, 0x118), 0, "EVENTS_END must not be set before tick");
+        assert_eq!(
+            nrf_read_u32(&spi, 0x118),
+            0,
+            "EVENTS_END must not be set before tick"
+        );
         assert!(spi.needs_bus_tick(), "pending_start must be set");
 
         // Run EasyDMA.
         spi.tick_with_bus(&mut bus);
 
         // Completion events.
-        assert_eq!(nrf_read_u32(&spi, 0x118), 1, "EVENTS_END must be 1 after transfer");
+        assert_eq!(
+            nrf_read_u32(&spi, 0x118),
+            1,
+            "EVENTS_END must be 1 after transfer"
+        );
         assert_eq!(nrf_read_u32(&spi, 0x120), 1, "EVENTS_ENDTX must be 1");
         assert_eq!(nrf_read_u32(&spi, 0x110), 1, "EVENTS_ENDRX must be 1");
 
@@ -1012,7 +1019,10 @@ mod tests {
         assert_eq!(rx, vec![0, 0, 0, 0], "RXD RAM must be zeros with no device");
 
         // needs_bus_tick must be clear after completion.
-        assert!(!spi.needs_bus_tick(), "pending_start must be cleared after tick_with_bus");
+        assert!(
+            !spi.needs_bus_tick(),
+            "pending_start must be cleared after tick_with_bus"
+        );
     }
 
     /// Full EasyDMA transfer with loopback (MOSI → MISO mirror):
@@ -1077,7 +1087,11 @@ mod tests {
         spi.tick_with_bus(&mut bus);
 
         let rx = bus.read_slice(rx_base, 3);
-        assert_eq!(rx, tx_data.to_vec(), "echo device: RXD == TXD (MISO mirrors MOSI)");
+        assert_eq!(
+            rx,
+            tx_data.to_vec(),
+            "echo device: RXD == TXD (MISO mirrors MOSI)"
+        );
         assert_eq!(nrf_read_u32(&spi, 0x118), 1, "EVENTS_END");
         assert_eq!(nrf_read_u32(&spi, 0x54C), 3, "TXD.AMOUNT == 3");
         assert_eq!(nrf_read_u32(&spi, 0x53C), 3, "RXD.AMOUNT == 3");
@@ -1096,9 +1110,9 @@ mod tests {
         bus.write_slice(tx_base, &[0x01, 0x02, 0x03, 0x04, 0x05, 0x06]);
 
         nrf_write_u32(&mut spi, 0x544, tx_base as u32);
-        nrf_write_u32(&mut spi, 0x548, 6);  // TXD.MAXCNT = 6
+        nrf_write_u32(&mut spi, 0x548, 6); // TXD.MAXCNT = 6
         nrf_write_u32(&mut spi, 0x534, rx_base as u32);
-        nrf_write_u32(&mut spi, 0x538, 3);  // RXD.MAXCNT = 3 (less)
+        nrf_write_u32(&mut spi, 0x538, 3); // RXD.MAXCNT = 3 (less)
         nrf_write_u32(&mut spi, 0x010, 1);
         spi.tick_with_bus(&mut bus);
 
@@ -1122,11 +1136,11 @@ mod tests {
         let rx_base: u64 = 0x2000_0900;
         bus.write_slice(tx_base, &[0xAA, 0xBB]); // 2 TX bytes
 
-        nrf_write_u32(&mut spi, 0x5C0, 0xFF);    // ORC = 0xFF
+        nrf_write_u32(&mut spi, 0x5C0, 0xFF); // ORC = 0xFF
         nrf_write_u32(&mut spi, 0x544, tx_base as u32);
-        nrf_write_u32(&mut spi, 0x548, 2);        // TXD.MAXCNT = 2
+        nrf_write_u32(&mut spi, 0x548, 2); // TXD.MAXCNT = 2
         nrf_write_u32(&mut spi, 0x534, rx_base as u32);
-        nrf_write_u32(&mut spi, 0x538, 4);        // RXD.MAXCNT = 4 (2 extra)
+        nrf_write_u32(&mut spi, 0x538, 4); // RXD.MAXCNT = 4 (2 extra)
         nrf_write_u32(&mut spi, 0x010, 1);
         spi.tick_with_bus(&mut bus);
 
@@ -1160,15 +1174,31 @@ mod tests {
 
         // SW write of 1 must be ignored (silicon-verified rule).
         nrf_write_u32(&mut spi, 0x118, 1); // attempt to SET EVENTS_END — must be ignored
-        assert_eq!(nrf_read_u32(&spi, 0x118), 1, "EVENTS_END unchanged by SW write of 1");
+        assert_eq!(
+            nrf_read_u32(&spi, 0x118),
+            1,
+            "EVENTS_END unchanged by SW write of 1"
+        );
 
         // SW write of 0 clears it.
         nrf_write_u32(&mut spi, 0x118, 0);
-        assert_eq!(nrf_read_u32(&spi, 0x118), 0, "EVENTS_END cleared by SW write of 0");
+        assert_eq!(
+            nrf_read_u32(&spi, 0x118),
+            0,
+            "EVENTS_END cleared by SW write of 0"
+        );
         nrf_write_u32(&mut spi, 0x120, 0);
-        assert_eq!(nrf_read_u32(&spi, 0x120), 0, "EVENTS_ENDTX cleared by SW write of 0");
+        assert_eq!(
+            nrf_read_u32(&spi, 0x120),
+            0,
+            "EVENTS_ENDTX cleared by SW write of 0"
+        );
         nrf_write_u32(&mut spi, 0x110, 0);
-        assert_eq!(nrf_read_u32(&spi, 0x110), 0, "EVENTS_ENDRX cleared by SW write of 0");
+        assert_eq!(
+            nrf_read_u32(&spi, 0x110),
+            0,
+            "EVENTS_ENDRX cleared by SW write of 0"
+        );
     }
 
     /// TASKS_START before tick_with_bus: EVENTS must not be set immediately.
@@ -1188,7 +1218,11 @@ mod tests {
 
         // After TASKS_START but BEFORE tick_with_bus: still 0.
         nrf_write_u32(&mut spi, 0x010, 1);
-        assert_eq!(nrf_read_u32(&spi, 0x118), 0, "EVENTS_END must not fire before tick");
+        assert_eq!(
+            nrf_read_u32(&spi, 0x118),
+            0,
+            "EVENTS_END must not fire before tick"
+        );
         assert_eq!(nrf_read_u32(&spi, 0x120), 0, "EVENTS_ENDTX before tick");
         assert_eq!(nrf_read_u32(&spi, 0x110), 0, "EVENTS_ENDRX before tick");
     }
@@ -1200,7 +1234,11 @@ mod tests {
 
         // INTENSET: bit 6 = INTEN_END, bit 8 = INTEN_ENDTX.
         nrf_write_u32(&mut spi, 0x304, (1 << 6) | (1 << 8));
-        assert_eq!(nrf_read_u32(&spi, 0x304), (1 << 6) | (1 << 8), "INTENSET sets bits");
+        assert_eq!(
+            nrf_read_u32(&spi, 0x304),
+            (1 << 6) | (1 << 8),
+            "INTENSET sets bits"
+        );
 
         // INTENCLR: clear bit 6 only.
         nrf_write_u32(&mut spi, 0x308, 1 << 6);
@@ -1212,7 +1250,11 @@ mod tests {
     fn nrf52_spim_orc_masks_to_8_bits() {
         let mut spi = Spi::new_with_layout(SpiRegisterLayout::Nrf52Spim);
         nrf_write_u32(&mut spi, 0x5C0, 0xFFFF_FFAB);
-        assert_eq!(nrf_read_u32(&spi, 0x5C0), 0xAB, "ORC retains only low 8 bits");
+        assert_eq!(
+            nrf_read_u32(&spi, 0x5C0),
+            0xAB,
+            "ORC retains only low 8 bits"
+        );
     }
 
     /// ENABLE register round-trip.
@@ -1260,7 +1302,11 @@ mod tests {
 
         let rx = bus.read_slice(rx_base, 2);
         assert_eq!(rx, vec![0x55, 0x66], "second transfer sees new TX data");
-        assert_eq!(nrf_read_u32(&spi, 0x118), 1, "EVENTS_END after second transfer");
+        assert_eq!(
+            nrf_read_u32(&spi, 0x118),
+            1,
+            "EVENTS_END after second transfer"
+        );
     }
 
     /// tick_with_bus with TXD.MAXCNT == 0 and RXD.MAXCNT == 0: completes
@@ -1279,7 +1325,11 @@ mod tests {
 
         assert_eq!(nrf_read_u32(&spi, 0x54C), 0, "TXD.AMOUNT == 0");
         assert_eq!(nrf_read_u32(&spi, 0x53C), 0, "RXD.AMOUNT == 0");
-        assert_eq!(nrf_read_u32(&spi, 0x118), 1, "EVENTS_END fires even for zero-length");
+        assert_eq!(
+            nrf_read_u32(&spi, 0x118),
+            1,
+            "EVENTS_END fires even for zero-length"
+        );
         assert_eq!(nrf_read_u32(&spi, 0x120), 1, "EVENTS_ENDTX fires");
         assert_eq!(nrf_read_u32(&spi, 0x110), 1, "EVENTS_ENDRX fires");
     }
