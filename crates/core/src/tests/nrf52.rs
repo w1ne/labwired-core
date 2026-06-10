@@ -358,13 +358,17 @@ fn nrf52840_onboarding_gpiote_event_in_fires_on_edge() {
 }
 
 /// End-to-end PPI test: TIMER0 EVENTS_COMPARE[0] → PPI CH[0] →
-/// GPIOTE TASKS_OUT[0] → GPIO0.OUTSET pin 26.
+/// GPIOTE TASKS_OUT[0] → GPIO0 pin 26.
 ///
 /// This is the canonical "hardware-driven LED toggle" pattern in nRF SDK
-/// firmware. Exercises every link in the cross-peripheral chain we just
-/// added: TIMER fires fired_events, PPI routes them, GPIOTE produces
-/// mmio_writes, bus applies them to GPIO0 — all without any CPU
-/// instruction execution.
+/// firmware. Exercises every link in the cross-peripheral chain:
+/// TIMER fires fired_events, PPI routes them, GPIOTE produces mmio_writes,
+/// bus applies them to GPIO0 — all without any CPU instruction execution.
+///
+/// Silicon behaviour: GPIOTE Task mode drives the **pad** level, which is
+/// observable in `GPIO.IN` (0x510), not in `GPIO.OUT` (0x504).  The OUT
+/// register is only modified by CPU writes to OUTSET/OUTCLR; GPIOTE does
+/// not touch it.  We therefore observe transitions on GPIO0.IN bit 26.
 #[test]
 fn nrf52840_onboarding_ppi_routes_timer_to_gpiote_pin() {
     let mut chip_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -397,7 +401,9 @@ fn nrf52840_onboarding_ppi_routes_timer_to_gpiote_pin() {
     const PPI_CH0_TEP: u64 = PPI + 0x514;
     const PPI_CHENSET: u64 = PPI + 0x504;
 
-    const GPIO0_OUT: u64 = 0x5000_0504;
+    // Observe GPIO0.IN (0x510): GPIOTE drives the pad level here.
+    // GPIO0.OUT (0x504) is untouched by GPIOTE tasks (silicon-faithful).
+    const GPIO0_IN: u64 = 0x5000_0510;
     const LED_RED_PIN: u32 = 26;
 
     // 1. GPIOTE channel 0: Task mode, port 0, pin 26, polarity = Toggle.
@@ -422,7 +428,8 @@ fn nrf52840_onboarding_ppi_routes_timer_to_gpiote_pin() {
     bus.write_u32(TIMER0_TASKS_START, 1).unwrap();
 
     // 4. Run the bus enough cycles for several compares to fire.
-    let mut prior_out = bus.read_u32(GPIO0_OUT).unwrap();
+    //    Track transitions on GPIO0.IN bit 26 (pad level driven by GPIOTE).
+    let mut prior_in = bus.read_u32(GPIO0_IN).unwrap();
     let mut transitions = 0;
     let mut compare_observed_at: Vec<usize> = Vec::new();
     for tick in 0usize..200 {
@@ -432,19 +439,27 @@ fn nrf52840_onboarding_ppi_routes_timer_to_gpiote_pin() {
         {
             compare_observed_at.push(tick);
         }
-        let now_out = bus.read_u32(GPIO0_OUT).unwrap();
-        if (now_out & (1 << LED_RED_PIN)) != (prior_out & (1 << LED_RED_PIN)) {
+        let now_in = bus.read_u32(GPIO0_IN).unwrap();
+        if (now_in & (1 << LED_RED_PIN)) != (prior_in & (1 << LED_RED_PIN)) {
             transitions += 1;
-            prior_out = now_out;
+            prior_in = now_in;
         }
     }
 
-    let last_out = bus.read_u32(GPIO0_OUT).unwrap();
+    let last_in = bus.read_u32(GPIO0_IN).unwrap();
+    // Confirm GPIO0.OUT was NOT modified by GPIOTE (silicon fidelity).
+    let last_out = bus.read_u32(0x5000_0504u64).unwrap();
+    assert_eq!(
+        last_out & (1 << LED_RED_PIN),
+        0,
+        "GPIO0.OUT must NOT be modified by GPIOTE tasks (GPIOTE drives pad/IN only); \
+         got OUT = 0x{last_out:08X}"
+    );
     assert!(
         transitions >= 4,
-        "expected ≥4 GPIO0 pin {LED_RED_PIN} transitions in 200 ticks, got {transitions}. \
-         TIMER0 EVENTS_COMPARE[0] observed at ticks {compare_observed_at:?}; \
-         final GPIO0.OUT = 0x{last_out:08X}"
+        "expected >=4 GPIO0 pin {LED_RED_PIN} transitions in GPIO0.IN in 200 ticks, \
+         got {transitions}. TIMER0 EVENTS_COMPARE[0] observed at ticks {compare_observed_at:?}; \
+         final GPIO0.IN = 0x{last_in:08X}"
     );
 }
 

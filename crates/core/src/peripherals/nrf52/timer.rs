@@ -8,10 +8,21 @@
 //!
 //! Models TIMER0..TIMER4 in Timer mode (`MODE=0`): runs on a 16 MHz base
 //! clock divided by `2^PRESCALER` (1..=9), counter width set by BITMODE
-//! (8/16/24/32 bits), CC[0..5] comparators each raising EVENTS_COMPARE[i]
-//! when matched and pending the peripheral's NVIC IRQ when the
-//! corresponding INTEN bit is set. SHORTS provides auto-CLEAR and
-//! auto-STOP on compare match (PS table 161).
+//! (8/16/24/32 bits), CC[0..num_cc-1] comparators each raising
+//! EVENTS_COMPARE[i] when matched and pending the peripheral's NVIC IRQ
+//! when the corresponding INTEN bit is set. SHORTS provides auto-CLEAR
+//! and auto-STOP on compare match (PS table 161).
+//!
+//! Instance-specific CC count (PS §6.30, table 152):
+//!   TIMER0/1/2 — 4 CC registers (CC[0..3])
+//!   TIMER3/4   — 6 CC registers (CC[0..5])
+//! Accesses to CC[i] where i >= num_cc are silently ignored on write and
+//! return 0 on read. SHORTS, INTEN, and TASKS_CAPTURE are similarly masked
+//! to the active CC count.
+//!
+//! EVENTS_* semantics: hardware-generated only. Writes of 1 are ignored;
+//! only writes of 0 clear the event register. HW sets events via compare
+//! match in tick().
 //!
 //! Counter mode (`MODE=1` / `MODE=2`) increments only on TASKS_COUNT and
 //! is supported by the register surface but not auto-driven by `tick()`.
@@ -55,8 +66,11 @@ const INTEN_COMPARE_SHIFT: u32 = 16;
 // MODE values (PS table 161): 0=Timer, 1=Counter, 2=LowPowerCounter.
 const MODE_TIMER: u32 = 0;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Nrf52Timer {
+    /// Number of CC/EVENTS_COMPARE/TASKS_CAPTURE channels present on this
+    /// instance. TIMER0/1/2 = 4; TIMER3/4 = 6. Default: 4.
+    num_cc: usize,
     events_compare: [u32; 6],
     shorts: u32,
     inten: u32,
@@ -71,9 +85,48 @@ pub struct Nrf52Timer {
     prescaler_accum: u32,
 }
 
+impl Default for Nrf52Timer {
+    fn default() -> Self {
+        Self {
+            num_cc: 4,
+            events_compare: [0u32; 6],
+            shorts: 0,
+            inten: 0,
+            mode: 0,
+            bitmode: 0,
+            prescaler: 0,
+            cc: [0u32; 6],
+            running: false,
+            counter: 0,
+            prescaler_accum: 0,
+        }
+    }
+}
+
 impl Nrf52Timer {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Construct with an explicit CC count. Use `num_cc: 6` for TIMER3/4.
+    pub fn new_with_cc(num_cc: usize) -> Self {
+        Self {
+            num_cc: num_cc.clamp(1, 6),
+            ..Self::default()
+        }
+    }
+
+    /// SHORTS writable mask: COMPARE[0..num_cc)_CLEAR (bits 0..num_cc) +
+    /// COMPARE[0..num_cc)_STOP (bits 8..8+num_cc).
+    fn shorts_mask(&self) -> u32 {
+        let low = (1u32 << self.num_cc) - 1;
+        low | (low << 8)
+    }
+
+    /// INTEN writable mask: COMPARE[0..num_cc) at bits 16..16+num_cc.
+    fn inten_mask(&self) -> u32 {
+        let bits = (1u32 << self.num_cc) - 1;
+        bits << INTEN_COMPARE_SHIFT
     }
 
     /// Mask the counter to the active BITMODE width.
@@ -101,21 +154,38 @@ impl Peripheral for Nrf52Timer {
         let val = match offset {
             OFF_TASKS_START | OFF_TASKS_STOP | OFF_TASKS_COUNT | OFF_TASKS_CLEAR
             | OFF_TASKS_SHUTDOWN => 0,
+
+            // TASKS_CAPTURE[0..5] — read-as-zero.
             OFF_TASKS_CAPTURE0..=OFF_TASKS_CAPTURE5 if offset.is_multiple_of(4) => 0,
 
+            // EVENTS_COMPARE[i]: return 0 for i >= num_cc (register absent).
             OFF_EVENTS_COMPARE0..=OFF_EVENTS_COMPARE5 if offset.is_multiple_of(4) => {
-                self.events_compare[((offset - OFF_EVENTS_COMPARE0) / 4) as usize]
+                let i = ((offset - OFF_EVENTS_COMPARE0) / 4) as usize;
+                if i < self.num_cc {
+                    self.events_compare[i]
+                } else {
+                    0
+                }
             }
 
-            OFF_SHORTS => self.shorts,
+            // SHORTS readback is masked to valid bits for this instance.
+            OFF_SHORTS => self.shorts & self.shorts_mask(),
 
-            OFF_INTENSET | OFF_INTENCLR => self.inten,
+            // INTENSET/INTENCLR readback masked to valid compare bits.
+            OFF_INTENSET | OFF_INTENCLR => self.inten & self.inten_mask(),
 
             OFF_MODE => self.mode,
             OFF_BITMODE => self.bitmode,
             OFF_PRESCALER => self.prescaler,
+
+            // CC[i]: return 0 for i >= num_cc.
             OFF_CC0..=OFF_CC5 if offset.is_multiple_of(4) => {
-                self.cc[((offset - OFF_CC0) / 4) as usize]
+                let i = ((offset - OFF_CC0) / 4) as usize;
+                if i < self.num_cc {
+                    self.cc[i]
+                } else {
+                    0
+                }
             }
 
             _ => 0,
@@ -143,29 +213,43 @@ impl Peripheral for Nrf52Timer {
                     self.counter = 0;
                     self.prescaler_accum = 0;
                 }
+            // TASKS_CAPTURE[i]: only valid for i < num_cc.
             OFF_TASKS_CAPTURE0..=OFF_TASKS_CAPTURE5 if offset.is_multiple_of(4)
                 && value & 1 != 0 => {
                     let i = ((offset - OFF_TASKS_CAPTURE0) / 4) as usize;
-                    self.cc[i] = self.counter;
+                    if i < self.num_cc {
+                        self.cc[i] = self.counter;
+                    }
                 }
 
+            // EVENTS_COMPARE: hardware-generated; SW may only clear (write 0).
+            // Writes of 1 are silently ignored — the HW sets these on compare
+            // match in tick(). Only writes of 0 that fall within num_cc clear.
             OFF_EVENTS_COMPARE0..=OFF_EVENTS_COMPARE5 if offset.is_multiple_of(4) => {
                 let i = ((offset - OFF_EVENTS_COMPARE0) / 4) as usize;
-                self.events_compare[i] = value & 1;
+                if i < self.num_cc && value == 0 {
+                    self.events_compare[i] = 0;
+                }
             }
 
-            OFF_SHORTS => self.shorts = value,
+            // SHORTS: accept only bits valid for this instance.
+            OFF_SHORTS => self.shorts = value & self.shorts_mask(),
 
-            OFF_INTENSET => self.inten |= value,
+            // INTENSET/INTENCLR: mask to valid compare bits.
+            OFF_INTENSET => self.inten |= value & self.inten_mask(),
             OFF_INTENCLR => self.inten &= !value,
 
             OFF_MODE => self.mode = value & 0x3,
             OFF_BITMODE => self.bitmode = value & 0x3,
             OFF_PRESCALER => self.prescaler = value & 0xF,
 
+            // CC[i]: only valid for i < num_cc; masked to counter width.
             OFF_CC0..=OFF_CC5 if offset.is_multiple_of(4) => {
                 let i = ((offset - OFF_CC0) / 4) as usize;
-                self.cc[i] = value & self.counter_mask();
+                if i < self.num_cc {
+                    let mask = self.counter_mask();
+                    self.cc[i] = value & mask;
+                }
             }
 
             _ => {}
@@ -196,7 +280,7 @@ impl Peripheral for Nrf52Timer {
 
         let mut irq = false;
         let mut fired_events = Vec::new();
-        for i in 0..6 {
+        for i in 0..self.num_cc {
             if self.counter == (self.cc[i] & mask) {
                 // Per PS §6.30.5: the compare-match pulse re-arms on every
                 // hardware tick — PPI and NVIC see it whether or not the
@@ -250,7 +334,9 @@ mod tests {
 
     #[test]
     fn cc_array_full_width() {
-        let mut t = Nrf52Timer::new();
+        // Default instance has 4 CCs (TIMER0/1/2). Use new_with_cc(6) to
+        // exercise the full 6-CC path (TIMER3/4).
+        let mut t = Nrf52Timer::new_with_cc(6);
         // BITMODE=3 (32-bit) so the full value survives CC masking.
         t.write_u32(OFF_BITMODE, 3).unwrap();
         for i in 0..6u64 {
@@ -263,13 +349,81 @@ mod tests {
     }
 
     #[test]
-    fn intenset_intenclr_alias_inten() {
+    fn cc_above_num_cc_reads_zero() {
+        // TIMER0/1/2 have 4 CCs; CC[4] and CC[5] are absent.
+        let mut t = Nrf52Timer::new(); // default num_cc=4
+        t.write_u32(OFF_BITMODE, 3).unwrap();
+        t.write_u32(OFF_CC0 + 4 * 4, 0xDEAD_BEEF).unwrap(); // CC[4] — ignored
+        t.write_u32(OFF_CC0 + 5 * 4, 0xCAFE_BABE).unwrap(); // CC[5] — ignored
+        assert_eq!(t.read_u32(OFF_CC0 + 4 * 4).unwrap(), 0); // absent
+        assert_eq!(t.read_u32(OFF_CC0 + 5 * 4).unwrap(), 0); // absent
+    }
+
+    #[test]
+    fn shorts_masked_to_num_cc() {
+        let mut t4 = Nrf52Timer::new(); // 4 CC
+        t4.write_u32(OFF_SHORTS, 0x3F3F).unwrap();
+        // Only bits 0..4 (CLEAR) + 8..12 (STOP) survive: 0x0F0F.
+        assert_eq!(t4.read_u32(OFF_SHORTS).unwrap(), 0x0F0F);
+
+        let mut t6 = Nrf52Timer::new_with_cc(6); // 6 CC
+        t6.write_u32(OFF_SHORTS, 0x3F3F).unwrap();
+        assert_eq!(t6.read_u32(OFF_SHORTS).unwrap(), 0x3F3F);
+    }
+
+    #[test]
+    fn inten_masked_to_num_cc() {
+        let mut t4 = Nrf52Timer::new(); // 4 CC
+        t4.write_u32(OFF_INTENSET, 0x003F_0000).unwrap();
+        // Only bits 16..20 survive: 0x000F_0000.
+        assert_eq!(t4.read_u32(OFF_INTENSET).unwrap(), 0x000F_0000);
+
+        let mut t6 = Nrf52Timer::new_with_cc(6); // 6 CC
+        t6.write_u32(OFF_INTENSET, 0x003F_0000).unwrap();
+        assert_eq!(t6.read_u32(OFF_INTENSET).unwrap(), 0x003F_0000);
+    }
+
+    #[test]
+    fn events_write_one_ignored() {
+        // Silicon: EVENTS_* are hardware-generated; SW write of 1 is a no-op.
         let mut t = Nrf52Timer::new();
-        t.write_u32(OFF_INTENSET, 0b0111).unwrap();
-        assert_eq!(t.read_u32(OFF_INTENSET).unwrap(), 0b0111);
-        assert_eq!(t.read_u32(OFF_INTENCLR).unwrap(), 0b0111);
-        t.write_u32(OFF_INTENCLR, 0b0010).unwrap();
-        assert_eq!(t.read_u32(OFF_INTENSET).unwrap(), 0b0101);
+        t.write_u32(OFF_EVENTS_COMPARE0, 1).unwrap();
+        assert_eq!(
+            t.read_u32(OFF_EVENTS_COMPARE0).unwrap(),
+            0,
+            "write-1 must be ignored"
+        );
+        // Write 0 is the clear path (from firmware ISR ack).
+        // Seed it via tick() compare match, then clear.
+        t.write_u32(OFF_BITMODE, 3).unwrap();
+        t.write_u32(OFF_PRESCALER, 0).unwrap();
+        t.write_u32(OFF_CC0, 1).unwrap();
+        t.write_u32(OFF_TASKS_START, 1).unwrap();
+        t.tick();
+        assert_eq!(
+            t.read_u32(OFF_EVENTS_COMPARE0).unwrap(),
+            1,
+            "tick compare must set event"
+        );
+        t.write_u32(OFF_EVENTS_COMPARE0, 0).unwrap();
+        assert_eq!(
+            t.read_u32(OFF_EVENTS_COMPARE0).unwrap(),
+            0,
+            "write-0 must clear event"
+        );
+    }
+
+    #[test]
+    fn intenset_intenclr_alias_inten() {
+        // Compare-interrupt bits are 16..16+num_cc. Use the correct bit positions
+        // (PS §6.30.13, table 160): COMPARE[0..3] at bits 16..19 for a 4-CC instance.
+        let mut t = Nrf52Timer::new(); // num_cc=4
+        let bits = 0b0111_u32 << 16; // COMPARE[0..2] → bits 16, 17, 18
+        t.write_u32(OFF_INTENSET, bits).unwrap();
+        assert_eq!(t.read_u32(OFF_INTENSET).unwrap(), bits);
+        assert_eq!(t.read_u32(OFF_INTENCLR).unwrap(), bits);
+        t.write_u32(OFF_INTENCLR, 0b0010_u32 << 16).unwrap(); // clear bit 17
+        assert_eq!(t.read_u32(OFF_INTENSET).unwrap(), 0b0101_u32 << 16);
     }
 
     #[test]

@@ -52,11 +52,15 @@ peripherals:
     base_address: 0x40011000
     size: "4KB"
     irq: 17
+    config:
+      num_cc: 4
   - id: "rtc2"
     type: "nrf52840_rtc"
     base_address: 0x40024000
     size: "4KB"
     irq: 36
+    config:
+      num_cc: 4
   - id: "wdt"
     type: "nrf52840_watchdog"
     base_address: 0x40010000
@@ -106,11 +110,15 @@ peripherals:
     base_address: 0x4001a000
     size: "4KB"
     irq: 26
+    config:
+      num_cc: 6
   - id: "timer4"
     type: "nrf52840_timer"
     base_address: 0x4001b000
     size: "4KB"
     irq: 27
+    config:
+      num_cc: 6
   - id: "i2s"
     type: "nrf52840_i2s"
     base_address: 0x40025000

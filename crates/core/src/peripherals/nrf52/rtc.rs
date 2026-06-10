@@ -7,6 +7,15 @@
 //! 32.768 kHz LFCLK; 24-bit counter with a 12-bit prescaler:
 //! f_RTC = 32_768 / (PRESCALER + 1) Hz.
 //!
+//! Instance-specific CC count (PS §6.21, table 97):
+//!   RTC0       — 3 CC registers (CC[0..2])
+//!   RTC1, RTC2 — 4 CC registers (CC[0..3])
+//! Accesses to CC[i] where i >= num_cc are silently ignored on write and
+//! return 0 on read. INTEN and EVTEN compare bits are masked to num_cc.
+//!
+//! EVENTS_* semantics: hardware-generated only. Writes of 1 are ignored;
+//! only writes of 0 clear the event register. HW sets events via tick().
+//!
 //! `tick()` advances the prescaler accumulator once per call. When it
 //! reaches PRESCALER+1, the counter ticks up. EVENTS_TICK fires on every
 //! counter increment (gated by EVTEN.TICK); EVENTS_OVRFLW fires when the
@@ -47,8 +56,11 @@ const EN_COMPARE_SHIFT: u32 = 16;
 const COUNTER_MASK: u32 = 0x00FF_FFFF;
 const PRESCALER_MASK: u32 = 0xFFF;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Nrf52Rtc {
+    /// Number of CC/EVENTS_COMPARE channels present on this instance.
+    /// RTC0 = 3; RTC1/RTC2 = 4. Default: 3.
+    num_cc: usize,
     events_tick: u32,
     events_ovrflw: u32,
     events_compare: [u32; 4],
@@ -63,9 +75,41 @@ pub struct Nrf52Rtc {
     prescaler_accum: u32,
 }
 
+impl Default for Nrf52Rtc {
+    fn default() -> Self {
+        Self {
+            num_cc: 3,
+            events_tick: 0,
+            events_ovrflw: 0,
+            events_compare: [0u32; 4],
+            inten: 0,
+            evten: 0,
+            counter: 0,
+            prescaler: 0,
+            cc: [0u32; 4],
+            running: false,
+            prescaler_accum: 0,
+        }
+    }
+}
+
 impl Nrf52Rtc {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Construct with an explicit CC count. Use `num_cc: 4` for RTC1/RTC2.
+    pub fn new_with_cc(num_cc: usize) -> Self {
+        Self {
+            num_cc: num_cc.clamp(1, 4),
+            ..Self::default()
+        }
+    }
+
+    /// INTEN/EVTEN compare-bit mask: bits 16..16+num_cc.
+    fn compare_mask(&self) -> u32 {
+        let bits = (1u32 << self.num_cc) - 1;
+        bits << EN_COMPARE_SHIFT
     }
 }
 
@@ -83,15 +127,31 @@ impl Peripheral for Nrf52Rtc {
             OFF_TASKS_START | OFF_TASKS_STOP | OFF_TASKS_CLEAR | OFF_TASKS_TRIGOVRFLW => 0,
             OFF_EVENTS_TICK => self.events_tick,
             OFF_EVENTS_OVRFLW => self.events_ovrflw,
+            // EVENTS_COMPARE[i]: return 0 for i >= num_cc.
             OFF_EVENTS_COMPARE0..=OFF_EVENTS_COMPARE3 if offset.is_multiple_of(4) => {
-                self.events_compare[((offset - OFF_EVENTS_COMPARE0) / 4) as usize]
+                let i = ((offset - OFF_EVENTS_COMPARE0) / 4) as usize;
+                if i < self.num_cc {
+                    self.events_compare[i]
+                } else {
+                    0
+                }
             }
-            OFF_INTENSET | OFF_INTENCLR => self.inten,
-            OFF_EVTEN | OFF_EVTENSET | OFF_EVTENCLR => self.evten,
+            // INTENSET/INTENCLR: mask to valid compare bits + TICK + OVRFLW.
+            OFF_INTENSET | OFF_INTENCLR => self.inten & (EN_TICK | EN_OVRFLW | self.compare_mask()),
+            // EVTEN/EVTENSET/EVTENCLR: same mask.
+            OFF_EVTEN | OFF_EVTENSET | OFF_EVTENCLR => {
+                self.evten & (EN_TICK | EN_OVRFLW | self.compare_mask())
+            }
             OFF_COUNTER => self.counter & COUNTER_MASK,
             OFF_PRESCALER => self.prescaler,
+            // CC[i]: return 0 for i >= num_cc.
             OFF_CC0..=OFF_CC3 if offset.is_multiple_of(4) => {
-                self.cc[((offset - OFF_CC0) / 4) as usize]
+                let i = ((offset - OFF_CC0) / 4) as usize;
+                if i < self.num_cc {
+                    self.cc[i]
+                } else {
+                    0
+                }
             }
             _ => 0,
         })
@@ -118,16 +178,22 @@ impl Peripheral for Nrf52Rtc {
                 if value & 1 != 0 => {
                     self.counter = 0x00FF_FFF0;
                 }
-            OFF_EVENTS_TICK => self.events_tick = value & 1,
-            OFF_EVENTS_OVRFLW => self.events_ovrflw = value & 1,
+            // EVENTS_TICK/OVRFLW: hardware-generated; SW may only clear (write 0).
+            OFF_EVENTS_TICK if value == 0 => self.events_tick = 0,
+            OFF_EVENTS_OVRFLW if value == 0 => self.events_ovrflw = 0,
+            // EVENTS_COMPARE[i]: write-1 ignored; write-0 clears within num_cc.
             OFF_EVENTS_COMPARE0..=OFF_EVENTS_COMPARE3 if offset.is_multiple_of(4) => {
                 let i = ((offset - OFF_EVENTS_COMPARE0) / 4) as usize;
-                self.events_compare[i] = value & 1;
+                if i < self.num_cc && value == 0 {
+                    self.events_compare[i] = 0;
+                }
             }
-            OFF_INTENSET => self.inten |= value,
+            // INTENSET/INTENCLR: mask to valid bits.
+            OFF_INTENSET => self.inten |= value & (EN_TICK | EN_OVRFLW | self.compare_mask()),
             OFF_INTENCLR => self.inten &= !value,
-            OFF_EVTEN => self.evten = value,
-            OFF_EVTENSET => self.evten |= value,
+            // EVTEN/EVTENSET/EVTENCLR: mask to valid bits.
+            OFF_EVTEN => self.evten = value & (EN_TICK | EN_OVRFLW | self.compare_mask()),
+            OFF_EVTENSET => self.evten |= value & (EN_TICK | EN_OVRFLW | self.compare_mask()),
             OFF_EVTENCLR => self.evten &= !value,
             // COUNTER is RO.
             OFF_COUNTER => {}
@@ -136,9 +202,12 @@ impl Peripheral for Nrf52Rtc {
                 if !self.running => {
                     self.prescaler = value & PRESCALER_MASK;
                 }
+            // CC[i]: only valid for i < num_cc.
             OFF_CC0..=OFF_CC3 if offset.is_multiple_of(4) => {
                 let i = ((offset - OFF_CC0) / 4) as usize;
-                self.cc[i] = value & COUNTER_MASK;
+                if i < self.num_cc {
+                    self.cc[i] = value & COUNTER_MASK;
+                }
             }
             _ => {}
         }
@@ -189,7 +258,7 @@ impl Peripheral for Nrf52Rtc {
             }
         }
 
-        for i in 0..4 {
+        for i in 0..self.num_cc {
             if self.counter == (self.cc[i] & COUNTER_MASK) {
                 let bit = EN_COMPARE_SHIFT + i as u32;
                 if self.evten & (1 << bit) != 0 {
@@ -220,6 +289,71 @@ mod tests {
         let mut r = Nrf52Rtc::new();
         r.write_u32(OFF_PRESCALER, 0xFFFF_FFFF).unwrap();
         assert_eq!(r.read_u32(OFF_PRESCALER).unwrap(), 0xFFF);
+    }
+
+    #[test]
+    fn cc_above_num_cc_reads_zero() {
+        // RTC0 has 3 CCs; CC[3] is absent.
+        let mut r = Nrf52Rtc::new(); // default num_cc=3
+        r.write_u32(OFF_CC0 + 3 * 4, 0x00_FFFF).unwrap(); // CC[3] — ignored
+        assert_eq!(r.read_u32(OFF_CC0 + 3 * 4).unwrap(), 0);
+    }
+
+    #[test]
+    fn inten_masked_to_num_cc() {
+        // RTC0 (3 CC): bits 16/17/18 valid; bit 19 must be masked out.
+        let mut r = Nrf52Rtc::new();
+        r.write_u32(OFF_INTENSET, 0x000F_0003).unwrap();
+        // Bit 19 (CC[3]) should be dropped; bits 16..18 + TICK + OVRFLW remain.
+        assert_eq!(r.read_u32(OFF_INTENSET).unwrap(), 0x0007_0003);
+
+        // RTC1/2 (4 CC): bits 16..19 all valid.
+        let mut r4 = Nrf52Rtc::new_with_cc(4);
+        r4.write_u32(OFF_INTENSET, 0x000F_0003).unwrap();
+        assert_eq!(r4.read_u32(OFF_INTENSET).unwrap(), 0x000F_0003);
+    }
+
+    #[test]
+    fn events_write_one_ignored() {
+        let mut r = Nrf52Rtc::new();
+        r.write_u32(OFF_EVENTS_TICK, 1).unwrap();
+        assert_eq!(
+            r.read_u32(OFF_EVENTS_TICK).unwrap(),
+            0,
+            "EVENTS_TICK write-1 must be no-op"
+        );
+        r.write_u32(OFF_EVENTS_OVRFLW, 1).unwrap();
+        assert_eq!(
+            r.read_u32(OFF_EVENTS_OVRFLW).unwrap(),
+            0,
+            "EVENTS_OVRFLW write-1 must be no-op"
+        );
+        r.write_u32(OFF_EVENTS_COMPARE0, 1).unwrap();
+        assert_eq!(
+            r.read_u32(OFF_EVENTS_COMPARE0).unwrap(),
+            0,
+            "EVENTS_COMPARE write-1 must be no-op"
+        );
+    }
+
+    #[test]
+    fn events_tick_set_by_hw_cleared_by_sw() {
+        let mut r = Nrf52Rtc::new();
+        r.write_u32(OFF_PRESCALER, 0).unwrap();
+        r.write_u32(OFF_EVTENSET, EN_TICK).unwrap();
+        r.write_u32(OFF_TASKS_START, 1).unwrap();
+        r.tick();
+        assert_eq!(
+            r.read_u32(OFF_EVENTS_TICK).unwrap(),
+            1,
+            "HW must set EVENTS_TICK"
+        );
+        r.write_u32(OFF_EVENTS_TICK, 0).unwrap();
+        assert_eq!(
+            r.read_u32(OFF_EVENTS_TICK).unwrap(),
+            0,
+            "write-0 must clear EVENTS_TICK"
+        );
     }
 
     #[test]

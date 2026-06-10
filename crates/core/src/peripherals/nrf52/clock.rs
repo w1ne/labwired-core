@@ -104,10 +104,12 @@ pub struct Nrf52Clock {
 
 impl Nrf52Clock {
     pub fn new() -> Self {
-        // Reset value of RAMSTATUS = 0xFFFF_FFFF (all RAM blocks on).
+        // RAMSTATUS: nRF52840 has 8 RAM sections; RAMSTATUS exposes bits[3:0]
+        // (one bit per 64 KB block pair).  At reset, all RAM blocks are on
+        // (PS §6.16.13 table 85): value = 0x0000_000F.
         Self {
-            power_ramstatus: 0xFFFF_FFFF,
-            // RESETREAS is sticky; assume power-on reset.
+            power_ramstatus: 0x0000_000F,
+            // RESETREAS is sticky; assume power-on reset (bit 0 = RESETPIN/POR).
             power_resetreas: 0x0000_0001,
             ..Self::default()
         }
@@ -201,13 +203,16 @@ impl Peripheral for Nrf52Clock {
             OFF_HFXODEBOUNCE => self.hfxodebounce = value & 0xFF,
             OFF_LFRCMODE => self.lfrcmode = value & 0x1,
 
-            // POWER writes (RESETREAS / RAMSTATUS are write-1-to-clear on real silicon;
-            // for sim correctness we honor that).
+            // POWER writes.
+            // RESETREAS is W1C (write 1 to clear the corresponding reason bit).
             OFF_POWER_RESETREAS => self.power_resetreas &= !value,
-            OFF_POWER_RAMSTATUS => self.power_ramstatus &= !value,
+            // RAMSTATUS is read-only: writes are silently ignored.
+            OFF_POWER_RAMSTATUS => {}
             OFF_POWER_USBREGSTATUS => self.power_usbregstatus = value,
             OFF_POWER_SYSTEMOFF => {} // not modeled; firmware won't recover anyway
-            OFF_POWER_POFCON => self.power_pofcon = value,
+            // POFCON: bit0 = POF enable, bits[4:1] = THRESHOLD, bit5 = COMPPOF.
+            // Writable mask 0x0000_003F covers all defined fields (PS §6.16.13).
+            OFF_POWER_POFCON => self.power_pofcon = value & 0x0000_003F,
             OFF_POWER_GPREGRET => self.power_gpregret = value & 0xFF,
             OFF_POWER_GPREGRET2 => self.power_gpregret2 = value & 0xFF,
             OFF_POWER_DCDCEN => self.power_dcdcen = value & 1,
@@ -288,5 +293,50 @@ mod tests {
         let mut c = Nrf52Clock::new();
         c.write_u32(OFF_POWER_GPREGRET, 0xA5).unwrap();
         assert_eq!(c.read_u32(OFF_POWER_GPREGRET).unwrap(), 0xA5);
+    }
+
+    #[test]
+    fn power_gpregret2_round_trips_with_byte_mask() {
+        let mut c = Nrf52Clock::new();
+        c.write_u32(OFF_POWER_GPREGRET2, 0x5A).unwrap();
+        assert_eq!(c.read_u32(OFF_POWER_GPREGRET2).unwrap(), 0x5A);
+        // writes beyond 8 bits are masked out
+        c.write_u32(OFF_POWER_GPREGRET2, 0x1234_005A).unwrap();
+        assert_eq!(c.read_u32(OFF_POWER_GPREGRET2).unwrap(), 0x5A);
+    }
+
+    #[test]
+    fn power_ramstatus_is_read_only() {
+        let mut c = Nrf52Clock::new();
+        // nRF52840: 4 RAM section bits all on at reset.
+        let initial = c.read_u32(OFF_POWER_RAMSTATUS).unwrap();
+        assert_eq!(initial, 0x0000_000F);
+        // Any write must be ignored.
+        c.write_u32(OFF_POWER_RAMSTATUS, 0x0000_0000).unwrap();
+        assert_eq!(c.read_u32(OFF_POWER_RAMSTATUS).unwrap(), initial);
+        c.write_u32(OFF_POWER_RAMSTATUS, 0xFFFF_FFFF).unwrap();
+        assert_eq!(c.read_u32(OFF_POWER_RAMSTATUS).unwrap(), initial);
+    }
+
+    #[test]
+    fn power_dcdcen_masks_to_bit0() {
+        let mut c = Nrf52Clock::new();
+        c.write_u32(OFF_POWER_DCDCEN, 1).unwrap();
+        assert_eq!(c.read_u32(OFF_POWER_DCDCEN).unwrap(), 1);
+        c.write_u32(OFF_POWER_DCDCEN, 0).unwrap();
+        assert_eq!(c.read_u32(OFF_POWER_DCDCEN).unwrap(), 0);
+        // upper bits masked
+        c.write_u32(OFF_POWER_DCDCEN, 0xFFFF_FFFE).unwrap();
+        assert_eq!(c.read_u32(OFF_POWER_DCDCEN).unwrap(), 0);
+    }
+
+    #[test]
+    fn power_pofcon_masks_to_6bits() {
+        let mut c = Nrf52Clock::new();
+        c.write_u32(OFF_POWER_POFCON, 0x0000_003F).unwrap();
+        assert_eq!(c.read_u32(OFF_POWER_POFCON).unwrap(), 0x3F);
+        // bits above 5 are masked away
+        c.write_u32(OFF_POWER_POFCON, 0xFFFF_FFFF).unwrap();
+        assert_eq!(c.read_u32(OFF_POWER_POFCON).unwrap(), 0x3F);
     }
 }

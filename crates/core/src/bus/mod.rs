@@ -1063,7 +1063,16 @@ impl SystemBus {
                         // Nordic TIMER is task/event-driven and shares no
                         // register layout with the STM32 TIMx family —
                         // route to the dedicated nRF52 model.
-                        Box::new(crate::peripherals::nrf52::timer::Nrf52Timer::new())
+                        // TIMER3/4 have 6 CC; TIMER0/1/2 have 4 (default).
+                        let num_cc: usize = p_cfg
+                            .config
+                            .get("num_cc")
+                            .and_then(|v| v.as_u64())
+                            .map(|n| n as usize)
+                            .unwrap_or(4);
+                        Box::new(crate::peripherals::nrf52::timer::Nrf52Timer::new_with_cc(
+                            num_cc,
+                        ))
                     } else {
                         // Width selector for 32-bit TIM2/TIM5 (STM32L4 etc).
                         // YAML: `config: { width: 32 }`. Defaults to 16 for
@@ -1222,7 +1231,16 @@ impl SystemBus {
                 // Nordic peripherals — register-surface models cross-validated
                 // by hw-oracle::nrf52_onboarding_diff. See peripherals/nrf52/.
                 "nrf52840_rtc" | "nrf52_rtc" => {
-                    Box::new(crate::peripherals::nrf52::rtc::Nrf52Rtc::new())
+                    // RTC1/RTC2 have 4 CC; RTC0 has 3 (default).
+                    let num_cc: usize = p_cfg
+                        .config
+                        .get("num_cc")
+                        .and_then(|v| v.as_u64())
+                        .map(|n| n as usize)
+                        .unwrap_or(3);
+                    Box::new(crate::peripherals::nrf52::rtc::Nrf52Rtc::new_with_cc(
+                        num_cc,
+                    ))
                 }
                 "nrf52840_rng" | "nrf52_rng" => {
                     Box::new(crate::peripherals::nrf52::rng::Nrf52Rng::new())

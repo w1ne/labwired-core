@@ -11,11 +11,15 @@
 //!
 //! - **Register surface**: all task/event/CONFIG/INTEN registers
 //!   round-trip per spec (cross-validated by hw-oracle).
-//! - **Task → pin drive**: writing TASKS_OUT/SET/CLR[i] looks up
-//!   CONFIG[i].PORT/PSEL/POLARITY/OUTINIT and emits a single MMIO write
-//!   to the matching GPIO port's OUTSET or OUTCLR through the bus's
-//!   cross-peripheral channel. This makes the PPI → GPIOTE → GPIO
-//!   pattern observable (firmware sees GPIO0.OUT bit flip).
+//! - **Task → pad drive**: writing TASKS_OUT/SET/CLR[i] looks up
+//!   CONFIG[i].PORT/PSEL/POLARITY/OUTINIT and drives the target pin's
+//!   **physical pad level**, reflected in `GPIO.IN` (offset 0x510 / `idr`).
+//!   This matches silicon: when a pin is in GPIOTE Task mode the GPIOTE
+//!   peripheral owns the pad; the GPIO peripheral's `OUT` register (0x504)
+//!   is **not modified** by GPIOTE tasks.  The driven level is therefore
+//!   observable at `GPIO.IN`, not `GPIO.OUT`.  The implementation performs
+//!   a read-modify-write on the port's `idr` (0x510) to set or clear only
+//!   the target pin's bit while leaving all other bits unchanged.
 //! - **Event observation**: EVENTS_IN is *not* driven from GPIO input
 //!   changes (no input-pin model yet). Firmware that polls EVENTS_IN
 //!   without PPI seeing edges will never see them fire.
@@ -63,8 +67,9 @@ const POLARITY_TOGGLE: u32 = 3;
 // GPIO port bases on nRF52840 (PS §6.10).
 const GPIO0_BASE: u32 = 0x5000_0000;
 const GPIO1_BASE: u32 = 0x5000_0300;
-const GPIO_OUTSET_OFFSET: u32 = 0x508;
-const GPIO_OUTCLR_OFFSET: u32 = 0x50C;
+/// Offset of the IN register within a GPIO port (nRF52840 PS §6.10).
+/// GPIOTE drives the pad level here; GPIO.OUT (0x504) is left untouched.
+const GPIO_IN_OFFSET: u32 = 0x510;
 
 #[derive(Debug, Default)]
 pub struct Nrf52Gpiote {
@@ -96,6 +101,13 @@ pub struct Nrf52Gpiote {
     /// Set to true on every GPIOTE channel that asserted EVENTS_IN since
     /// the last tick.  tick() returns irq:true if any bit overlaps INTEN.
     pending_in_mask: u32,
+
+    /// Shadow of the `idr` word GPIOTE has written into each GPIO port's
+    /// IN register (0x510).  Index 0 = GPIO0, index 1 = GPIO1.
+    /// Used for read-modify-write when a task drives a single pin: we only
+    /// flip the target bit and leave all other pad-driven bits unchanged.
+    /// `GPIO.OUT` (0x504) is never touched by GPIOTE tasks.
+    idr_shadow: [u32; 2],
 }
 
 impl Nrf52Gpiote {
@@ -103,24 +115,42 @@ impl Nrf52Gpiote {
         Self::default()
     }
 
-    /// Compute the GPIO target write for a channel given the new output
-    /// level (high=true → OUTSET, low=false → OUTCLR).
+    /// Drive the target pin's pad level (reflected in `GPIO.IN` at offset 0x510).
+    ///
+    /// Silicon behaviour: when a pin is in GPIOTE Task mode the GPIOTE peripheral
+    /// drives the physical pad; the GPIO `OUT` register (0x504) is **not touched**.
+    ///
+    /// We queue a full-word write to `GPIO.IN` (0x510 / `idr`) with the target
+    /// pin's bit set or cleared.  Because `Nrf52Gpio::write_reg(0x510, v)` stores
+    /// the whole word into `idr`, we maintain a per-port shadow of the idr value
+    /// we have driven so that each successive task only flips the one pin it owns
+    /// while leaving all other bits intact.  `GPIO.OUT` (0x504) is never written.
     fn queue_pin_action(&mut self, channel: usize, high: bool) {
         let cfg = self.config[channel];
         let pin = (cfg >> CONFIG_PSEL_SHIFT) & CONFIG_PSEL_MASK;
-        let port_base = if cfg & CONFIG_PORT_BIT != 0 {
+        let port_idx = if cfg & CONFIG_PORT_BIT != 0 {
+            1usize
+        } else {
+            0usize
+        };
+        let port_base = if port_idx == 1 {
             GPIO1_BASE
         } else {
             GPIO0_BASE
         };
         let bit_mask = 1u32 << pin;
-        let target_offset = if high {
-            GPIO_OUTSET_OFFSET
+        // Read-modify-write against the per-port idr shadow so we drive only
+        // the target pin; other pins (including those driven by other GPIOTE
+        // channels) are left at their last written value.
+        let prev_in = self.idr_shadow[port_idx];
+        let new_in = if high {
+            prev_in | bit_mask
         } else {
-            GPIO_OUTCLR_OFFSET
+            prev_in & !bit_mask
         };
+        self.idr_shadow[port_idx] = new_in;
         self.pending_gpio_writes
-            .push((port_base + target_offset, bit_mask));
+            .push((port_base + GPIO_IN_OFFSET, new_in));
         self.channel_out_level[channel] = high as u32;
     }
 
@@ -299,38 +329,48 @@ mod tests {
         assert_eq!(g.read_u32(OFF_CONFIG_0).unwrap() & 0x0007_1F03, 0x0003_0D03);
     }
 
+    // ── silicon-faithful task-drive tests ────────────────────────────────────
+    // GPIOTE tasks write to GPIO.IN (0x510 / idr), NOT GPIO.OUTSET/OUTCLR.
+    // The mmio_write target is (port_base + 0x510) with the full idr word
+    // (only the target pin bit set or cleared; all others zero since idr_shadow
+    // starts at 0 and we do read-modify-write).
+
     #[test]
-    fn task_set_queues_outset_write_to_correct_port() {
+    fn task_set_drives_in_register_not_out() {
         let mut g = Nrf52Gpiote::new();
-        // Channel 0: pin 26, port 0 (LED_RED on XIAO).
+        // Channel 0: pin 26, port 0 — TASKS_SET should drive GPIO0.IN bit 26 high.
         g.write_u32(OFF_CONFIG_0, cfg_task(26, 0, POLARITY_NONE, 0))
             .unwrap();
         g.write_u32(OFF_TASKS_SET_0, 1).unwrap();
         let res = g.tick();
+        // Target: GPIO0.IN (0x510) written with bit 26 set; OUT (0x504/0x508/0x50C) untouched.
         assert_eq!(
             res.mmio_writes,
-            vec![(GPIO0_BASE + GPIO_OUTSET_OFFSET, 1 << 26)]
+            vec![(GPIO0_BASE + GPIO_IN_OFFSET, 1 << 26)]
         );
     }
 
     #[test]
-    fn task_clr_queues_outclr_write_on_port1() {
+    fn task_clr_drives_in_register_low_on_port1() {
         let mut g = Nrf52Gpiote::new();
-        // Channel 1: pin 5, port 1.
+        // Channel 1: pin 5, port 1 — start with bit 5 high in the shadow, then CLR.
+        // First SET to put the pin high.
         g.write_u32(OFF_CONFIG_0 + 4, cfg_task(5, 1, POLARITY_NONE, 0))
             .unwrap();
+        g.write_u32(OFF_TASKS_SET_0 + 4, 1).unwrap();
+        let _ = g.tick(); // drains the SET write
+
+        // Now CLR: idr_shadow[1] has bit 5 set → clearing should produce 0.
         g.write_u32(OFF_TASKS_CLR_0 + 4, 1).unwrap();
         let res = g.tick();
-        assert_eq!(
-            res.mmio_writes,
-            vec![(GPIO1_BASE + GPIO_OUTCLR_OFFSET, 1 << 5)]
-        );
+        assert_eq!(res.mmio_writes, vec![(GPIO1_BASE + GPIO_IN_OFFSET, 0)]);
     }
 
     #[test]
-    fn task_out_toggle_alternates_outset_outclr() {
+    fn task_out_toggle_alternates_in_register() {
         let mut g = Nrf52Gpiote::new();
         // Channel 0: pin 13, port 0, POLARITY=TOGGLE, OUTINIT=0.
+        // Shadow starts at 0. Toggles: 0→1→0→1.
         g.write_u32(OFF_CONFIG_0, cfg_task(13, 0, POLARITY_TOGGLE, 0))
             .unwrap();
 
@@ -338,21 +378,18 @@ mod tests {
         let res1 = g.tick();
         assert_eq!(
             res1.mmio_writes,
-            vec![(GPIO0_BASE + GPIO_OUTSET_OFFSET, 1 << 13)]
+            vec![(GPIO0_BASE + GPIO_IN_OFFSET, 1 << 13)]
         );
 
         g.write_u32(OFF_TASKS_OUT_0, 1).unwrap();
         let res2 = g.tick();
-        assert_eq!(
-            res2.mmio_writes,
-            vec![(GPIO0_BASE + GPIO_OUTCLR_OFFSET, 1 << 13)]
-        );
+        assert_eq!(res2.mmio_writes, vec![(GPIO0_BASE + GPIO_IN_OFFSET, 0)]);
 
         g.write_u32(OFF_TASKS_OUT_0, 1).unwrap();
         let res3 = g.tick();
         assert_eq!(
             res3.mmio_writes,
-            vec![(GPIO0_BASE + GPIO_OUTSET_OFFSET, 1 << 13)]
+            vec![(GPIO0_BASE + GPIO_IN_OFFSET, 1 << 13)]
         );
     }
 
@@ -370,29 +407,27 @@ mod tests {
     }
 
     #[test]
-    fn task_with_polarity_lo_to_hi_drives_outset() {
+    fn task_with_polarity_lo_to_hi_drives_in_high() {
         let mut g = Nrf52Gpiote::new();
         g.write_u32(OFF_CONFIG_0, cfg_task(7, 0, POLARITY_LO_TO_HI, 0))
             .unwrap();
         g.write_u32(OFF_TASKS_OUT_0, 1).unwrap();
         let res = g.tick();
-        assert_eq!(
-            res.mmio_writes,
-            vec![(GPIO0_BASE + GPIO_OUTSET_OFFSET, 1 << 7)]
-        );
+        // POLARITY=LoToHi forces high on TASKS_OUT: GPIO0.IN bit 7 set.
+        assert_eq!(res.mmio_writes, vec![(GPIO0_BASE + GPIO_IN_OFFSET, 1 << 7)]);
     }
 
     #[test]
     fn outinit_seeds_initial_toggle_direction() {
         let mut g = Nrf52Gpiote::new();
-        // OUTINIT=1 → channel starts high, first Toggle goes low.
+        // OUTINIT=1 → channel_out_level starts at 1, first Toggle goes low.
+        // idr_shadow[0] starts at 0 (default) but channel_out_level is 1.
+        // Toggle: current level = 1 → new level = 0.  idr_shadow[0] stays 0 after clear.
         g.write_u32(OFF_CONFIG_0, cfg_task(2, 0, POLARITY_TOGGLE, 1))
             .unwrap();
         g.write_u32(OFF_TASKS_OUT_0, 1).unwrap();
         let res = g.tick();
-        assert_eq!(
-            res.mmio_writes,
-            vec![(GPIO0_BASE + GPIO_OUTCLR_OFFSET, 1 << 2)]
-        );
+        // Pin 2 cleared: new_in = 0 & !4 = 0 (shadow was 0, bit 2 already 0).
+        assert_eq!(res.mmio_writes, vec![(GPIO0_BASE + GPIO_IN_OFFSET, 0)]);
     }
 }
