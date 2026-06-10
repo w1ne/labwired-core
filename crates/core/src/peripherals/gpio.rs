@@ -151,10 +151,10 @@ impl V2Gpio {
 // ── nRF52 (DIR / OUT / IN / PIN_CNF) ──────────────────────────────────────────
 #[derive(Debug, serde::Serialize)]
 pub struct Nrf52Gpio {
-    odr: u32,         // OUT        0x504
-    idr: u32,         // IN         0x510 (latched input)
-    dir: u32,         // DIR        0x514
-    detectmode: u32,  // DETECTMODE 0x524
+    odr: u32,        // OUT        0x504
+    idr: u32,        // IN         0x510 (latched input)
+    dir: u32,        // DIR        0x514
+    detectmode: u32, // DETECTMODE 0x524
     pin_cnf: [u32; 32],
     /// Number of physical pins on this port.  nRF52840 P0 = 32, P1 = 16.
     /// Writes to pins >= num_pins are discarded; reads return 0.
@@ -177,7 +177,10 @@ impl Default for Nrf52Gpio {
 impl Nrf52Gpio {
     /// Build a port with a non-default pin count (e.g. 16 for nRF52840 P1).
     fn with_num_pins(num_pins: u32) -> Self {
-        Self { num_pins, ..Self::default() }
+        Self {
+            num_pins,
+            ..Self::default()
+        }
     }
 
     /// Bitmask covering the valid pins for this port.
@@ -200,7 +203,11 @@ impl Nrf52Gpio {
             0x524 => self.detectmode,
             0x700..=0x77C if offset % 4 == 0 => {
                 let k = ((offset - 0x700) / 4) as usize;
-                if k < self.num_pins as usize { self.pin_cnf[k] } else { 0 }
+                if k < self.num_pins as usize {
+                    self.pin_cnf[k]
+                } else {
+                    0
+                }
             }
             _ => 0,
         }

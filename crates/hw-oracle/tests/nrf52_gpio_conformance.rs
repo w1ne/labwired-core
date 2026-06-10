@@ -108,10 +108,16 @@ struct RegAddr {
 
 impl RegAddr {
     fn p0(off: u32) -> Self {
-        Self { sim: P0_SIM_BASE + off, hw: P0_HW_BASE + off }
+        Self {
+            sim: P0_SIM_BASE + off,
+            hw: P0_HW_BASE + off,
+        }
     }
     fn p1(off: u32) -> Self {
-        Self { sim: P1_SIM_BASE + off, hw: P1_HW_BASE + off }
+        Self {
+            sim: P1_SIM_BASE + off,
+            hw: P1_HW_BASE + off,
+        }
     }
 }
 
@@ -135,8 +141,7 @@ enum Outcome {
 fn build_sim_bus() -> SystemBus {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let chip_path = manifest_dir.join("../../configs/chips/nrf52840.yaml");
-    let system_path =
-        manifest_dir.join("../../configs/systems/seeed-xiao-nrf52840-sense.yaml");
+    let system_path = manifest_dir.join("../../configs/systems/seeed-xiao-nrf52840-sense.yaml");
 
     let chip = ChipDescriptor::from_file(&chip_path)
         .unwrap_or_else(|e| panic!("load chip {chip_path:?}: {e}"));
@@ -161,9 +166,7 @@ fn write_split(sim: &mut SystemBus, oc: &mut OpenOcd, addr: RegAddr, val: u32) {
 
 /// Read from `addr.sim` in sim, `addr.hw` on HW.
 fn read_split(sim: &mut SystemBus, oc: &mut OpenOcd, addr: RegAddr) -> (Result<u32, String>, u32) {
-    let sim_result = sim
-        .read_u32(addr.sim as u64)
-        .map_err(|e| format!("{e:?}"));
+    let sim_result = sim.read_u32(addr.sim as u64).map_err(|e| format!("{e:?}"));
     let hw_val = oc
         .read_memory(addr.hw, 1)
         .unwrap_or_else(|e| panic!("hw read 0x{:08X}: {e}", addr.hw))[0];
@@ -203,10 +206,16 @@ fn probe(
         if sim_m == (expect & mask) {
             Outcome::Match
         } else {
-            Outcome::BothDisagreeWithExpect { both: sim_m, expect: expect & mask }
+            Outcome::BothDisagreeWithExpect {
+                both: sim_m,
+                expect: expect & mask,
+            }
         }
     } else {
-        Outcome::Diverge { sim: sim_m, hw: hw_m }
+        Outcome::Diverge {
+            sim: sim_m,
+            hw: hw_m,
+        }
     }
 }
 
@@ -221,7 +230,12 @@ struct PortStats {
 
 impl PortStats {
     fn new() -> Self {
-        Self { matched: 0, diverged: 0, both_disagree: 0, sim_errors: 0 }
+        Self {
+            matched: 0,
+            diverged: 0,
+            both_disagree: 0,
+            sim_errors: 0,
+        }
     }
 
     fn total(&self) -> usize {
@@ -251,7 +265,11 @@ fn record(stats: &mut PortStats, label: &str, out: Outcome) {
 }
 
 fn port_name(p1: bool) -> &'static str {
-    if p1 { "P1" } else { "P0" }
+    if p1 {
+        "P1"
+    } else {
+        "P0"
+    }
 }
 
 /// Run the full GPIO test suite for one port.
@@ -269,7 +287,10 @@ fn run_port_tests(
     let base_sim = if p1 { P1_SIM_BASE } else { P0_SIM_BASE };
     let base_hw = if p1 { P1_HW_BASE } else { P0_HW_BASE };
 
-    let reg = |off: u32| RegAddr { sim: base_sim + off, hw: base_hw + off };
+    let reg = |off: u32| RegAddr {
+        sim: base_sim + off,
+        hw: base_hw + off,
+    };
 
     let mut stats = PortStats::new();
 
@@ -280,22 +301,28 @@ fn run_port_tests(
         // 1a. DIRSET k → DIR has bit k set
         let label = format!("{port} DIRSET pin {k} → DIR bit set");
         let out = probe(
-            sim, oc, &label,
-            &[(reg(OFF_DIRCLR), bit)],         // prep: clear first
-            (reg(OFF_DIRSET), bit),             // write: set
-            reg(OFF_DIR),                       // read: DIR
-            bit, bit,                           // mask/expect
+            sim,
+            oc,
+            &label,
+            &[(reg(OFF_DIRCLR), bit)], // prep: clear first
+            (reg(OFF_DIRSET), bit),    // write: set
+            reg(OFF_DIR),              // read: DIR
+            bit,
+            bit, // mask/expect
         );
         record(&mut stats, &label, out);
 
         // 1b. DIRCLR k → DIR has bit k clear
         let label = format!("{port} DIRCLR pin {k} → DIR bit clear");
         let out = probe(
-            sim, oc, &label,
-            &[(reg(OFF_DIRSET), bit)],          // prep: set first
-            (reg(OFF_DIRCLR), bit),             // write: clear
-            reg(OFF_DIR),                       // read: DIR
-            bit, 0,                             // mask/expect
+            sim,
+            oc,
+            &label,
+            &[(reg(OFF_DIRSET), bit)], // prep: set first
+            (reg(OFF_DIRCLR), bit),    // write: clear
+            reg(OFF_DIR),              // read: DIR
+            bit,
+            0, // mask/expect
         );
         record(&mut stats, &label, out);
     }
@@ -308,28 +335,34 @@ fn run_port_tests(
         // 2a. OUTSET k → OUT bit k set
         let label = format!("{port} pin {k} output OUTSET → OUT bit set");
         let out = probe(
-            sim, oc, &label,
+            sim,
+            oc,
+            &label,
             &[
-                (cnf_reg, 0x0000_0001),         // DIR=output
-                (reg(OFF_OUTCLR), bit),         // OUT=0 first
+                (cnf_reg, 0x0000_0001), // DIR=output
+                (reg(OFF_OUTCLR), bit), // OUT=0 first
             ],
-            (reg(OFF_OUTSET), bit),             // write: set
+            (reg(OFF_OUTSET), bit), // write: set
             reg(OFF_OUT),
-            bit, bit,
+            bit,
+            bit,
         );
         record(&mut stats, &label, out);
 
         // 2b. OUTCLR k → OUT bit k clear
         let label = format!("{port} pin {k} output OUTCLR → OUT bit clear");
         let out = probe(
-            sim, oc, &label,
+            sim,
+            oc,
+            &label,
             &[
-                (cnf_reg, 0x0000_0001),         // DIR=output
-                (reg(OFF_OUTSET), bit),         // OUT=1 first
+                (cnf_reg, 0x0000_0001), // DIR=output
+                (reg(OFF_OUTSET), bit), // OUT=1 first
             ],
-            (reg(OFF_OUTCLR), bit),             // write: clear
+            (reg(OFF_OUTCLR), bit), // write: clear
             reg(OFF_OUT),
-            bit, 0,
+            bit,
+            0,
         );
         record(&mut stats, &label, out);
     }
@@ -343,7 +376,9 @@ fn run_port_tests(
 
         let label = format!("{port} pin {k} driven HIGH → IN bit 1");
         let out = probe(
-            sim, oc, &label,
+            sim,
+            oc,
+            &label,
             &[
                 // Configure as output (DIR=out, INPUT connected).
                 // PIN_CNF = bit[0]=DIR(output) | bit[1]=INPUT(connect=0→connected).
@@ -354,7 +389,8 @@ fn run_port_tests(
             // "Write" is a dummy second OUTSET to keep the probe structure.
             (reg(OFF_OUTSET), bit),
             reg(OFF_IN),
-            bit, bit,
+            bit,
+            bit,
         );
         record(&mut stats, &label, out);
     }
@@ -368,11 +404,14 @@ fn run_port_tests(
 
         let label = format!("{port} PIN_CNF[{k}] round-trip write 0x{test_val:08X}");
         let out = probe(
-            sim, oc, &label,
+            sim,
+            oc,
+            &label,
             &[],
             (cnf_reg, test_val),
             cnf_reg,
-            0xFFFF_FFFF, test_val,
+            0xFFFF_FFFF,
+            test_val,
         );
         record(&mut stats, &label, out);
     }
@@ -407,10 +446,19 @@ fn run_port_tests(
             let sim_m = sim_raw & all_bits;
             let hw_m = hw_raw & all_bits;
             let out = if sim_m == hw_m {
-                if sim_m == all_bits { Outcome::Match }
-                else { Outcome::BothDisagreeWithExpect { both: sim_m, expect: all_bits } }
+                if sim_m == all_bits {
+                    Outcome::Match
+                } else {
+                    Outcome::BothDisagreeWithExpect {
+                        both: sim_m,
+                        expect: all_bits,
+                    }
+                }
             } else {
-                Outcome::Diverge { sim: sim_m, hw: hw_m }
+                Outcome::Diverge {
+                    sim: sim_m,
+                    hw: hw_m,
+                }
             };
             record(&mut stats, &label, out);
         }
@@ -422,11 +470,14 @@ fn run_port_tests(
     {
         let label = format!("{port} LATCH W1C: write 0xFFFF_FFFF → read 0x0");
         let out = probe(
-            sim, oc, &label,
+            sim,
+            oc,
+            &label,
             &[],
             (reg(OFF_LATCH), 0xFFFF_FFFF),
             reg(OFF_LATCH),
-            0xFFFF_FFFF, 0x0000_0000,
+            0xFFFF_FFFF,
+            0x0000_0000,
         );
         record(&mut stats, &label, out);
     }
@@ -437,22 +488,28 @@ fn run_port_tests(
     {
         let label = format!("{port} DETECTMODE write 1 → readback 1");
         let out = probe(
-            sim, oc, &label,
-            &[(reg(OFF_DETECTMODE), 0)],        // prep: clear
+            sim,
+            oc,
+            &label,
+            &[(reg(OFF_DETECTMODE), 0)], // prep: clear
             (reg(OFF_DETECTMODE), 1),
             reg(OFF_DETECTMODE),
-            0x1, 0x1,
+            0x1,
+            0x1,
         );
         record(&mut stats, &label, out);
 
         // Also verify it can be cleared.
         let label2 = format!("{port} DETECTMODE write 0 → readback 0");
         let out2 = probe(
-            sim, oc, &label2,
-            &[(reg(OFF_DETECTMODE), 1)],        // prep: set
+            sim,
+            oc,
+            &label2,
+            &[(reg(OFF_DETECTMODE), 1)], // prep: set
             (reg(OFF_DETECTMODE), 0),
             reg(OFF_DETECTMODE),
-            0x1, 0x0,
+            0x1,
+            0x0,
         );
         record(&mut stats, &label2, out2);
     }
@@ -466,11 +523,14 @@ fn run_port_tests(
 
         let label = format!("{port} pin {k} absent (16-pin port) → DIR bit stays 0");
         let out = probe(
-            sim, oc, &label,
-            &[(reg(OFF_DIRCLR), bit)],          // prep: try to clear (no-op)
-            (reg(OFF_DIRSET), bit),             // write: try to set bit 28
-            reg(OFF_DIR),                       // read: DIR
-            bit, 0,                             // mask/expect: bit 28 must be 0
+            sim,
+            oc,
+            &label,
+            &[(reg(OFF_DIRCLR), bit)], // prep: try to clear (no-op)
+            (reg(OFF_DIRSET), bit),    // write: try to set bit 28
+            reg(OFF_DIR),              // read: DIR
+            bit,
+            0, // mask/expect: bit 28 must be 0
         );
         record(&mut stats, &label, out);
     }
@@ -483,15 +543,13 @@ fn run_port_tests(
 /// Restore every touched pin to nRF52840 reset state on both sim and HW.
 ///
 /// Reset state: OUTCLR(bit) + PIN_CNF[k]=0x0002 + DIRCLR(bit).
-fn restore_port(
-    sim: &mut SystemBus,
-    oc: &mut OpenOcd,
-    p1: bool,
-    pins: &[u32],
-) {
+fn restore_port(sim: &mut SystemBus, oc: &mut OpenOcd, p1: bool, pins: &[u32]) {
     let base_sim = if p1 { P1_SIM_BASE } else { P0_SIM_BASE };
     let base_hw = if p1 { P1_HW_BASE } else { P0_HW_BASE };
-    let reg = |off: u32| RegAddr { sim: base_sim + off, hw: base_hw + off };
+    let reg = |off: u32| RegAddr {
+        sim: base_sim + off,
+        hw: base_hw + off,
+    };
 
     let port = port_name(p1);
     let mut mask: u32 = 0;
@@ -542,7 +600,10 @@ fn nrf52840_gpio_conformance() {
     let _p1_out = oc
         .read_memory(p1_out_hw_addr, 1)
         .unwrap_or_else(|e| panic!("P1 OUT sanity read at 0x{p1_out_hw_addr:08X}: {e}"));
-    println!("P1 OUT sanity read @ 0x{p1_out_hw_addr:08X}: 0x{:08X} (OK)", _p1_out[0]);
+    println!(
+        "P1 OUT sanity read @ 0x{p1_out_hw_addr:08X}: 0x{:08X} (OK)",
+        _p1_out[0]
+    );
 
     println!("{:-<90}", "");
 
@@ -566,11 +627,7 @@ fn nrf52840_gpio_conformance() {
             .collect();
         restore_port(&mut sim, &mut oc, false, &all_p0);
         // P1 restore includes pin 28 (the boundary case) even though we don't drive it.
-        let all_p1: Vec<u32> = TEST_PINS_P1
-            .iter()
-            .chain(&[28])
-            .copied()
-            .collect();
+        let all_p1: Vec<u32> = TEST_PINS_P1.iter().chain(&[28]).copied().collect();
         restore_port(&mut sim, &mut oc, true, &all_p1);
     }
     println!("Pin restore complete.");
@@ -579,13 +636,19 @@ fn nrf52840_gpio_conformance() {
     // ── Summary ──────────────────────────────────────────────────────────────
     println!(
         "P0: match={} diverge={} both_disagree={} sim_err={} total={}",
-        p0_stats.matched, p0_stats.diverged, p0_stats.both_disagree,
-        p0_stats.sim_errors, p0_stats.total()
+        p0_stats.matched,
+        p0_stats.diverged,
+        p0_stats.both_disagree,
+        p0_stats.sim_errors,
+        p0_stats.total()
     );
     println!(
         "P1: match={} diverge={} both_disagree={} sim_err={} total={}",
-        p1_stats.matched, p1_stats.diverged, p1_stats.both_disagree,
-        p1_stats.sim_errors, p1_stats.total()
+        p1_stats.matched,
+        p1_stats.diverged,
+        p1_stats.both_disagree,
+        p1_stats.sim_errors,
+        p1_stats.total()
     );
 
     oc.shutdown().ok();

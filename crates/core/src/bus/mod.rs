@@ -1070,7 +1070,9 @@ impl SystemBus {
                             .and_then(|v| v.as_u64())
                             .map(|n| n as usize)
                             .unwrap_or(4);
-                        Box::new(crate::peripherals::nrf52::timer::Nrf52Timer::new_with_cc(num_cc))
+                        Box::new(crate::peripherals::nrf52::timer::Nrf52Timer::new_with_cc(
+                            num_cc,
+                        ))
                     } else {
                         // Width selector for 32-bit TIM2/TIM5 (STM32L4 etc).
                         // YAML: `config: { width: 32 }`. Defaults to 16 for
@@ -1236,7 +1238,9 @@ impl SystemBus {
                         .and_then(|v| v.as_u64())
                         .map(|n| n as usize)
                         .unwrap_or(3);
-                    Box::new(crate::peripherals::nrf52::rtc::Nrf52Rtc::new_with_cc(num_cc))
+                    Box::new(crate::peripherals::nrf52::rtc::Nrf52Rtc::new_with_cc(
+                        num_cc,
+                    ))
                 }
                 "nrf52840_rng" | "nrf52_rng" => {
                     Box::new(crate::peripherals::nrf52::rng::Nrf52Rng::new())

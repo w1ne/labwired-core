@@ -111,7 +111,7 @@ impl Nrf52Timer {
     /// Construct with an explicit CC count. Use `num_cc: 6` for TIMER3/4.
     pub fn new_with_cc(num_cc: usize) -> Self {
         Self {
-            num_cc: num_cc.min(6).max(1),
+            num_cc: num_cc.clamp(1, 6),
             ..Self::default()
         }
     }
@@ -141,7 +141,6 @@ impl Nrf52Timer {
     }
 }
 
-
 impl Peripheral for Nrf52Timer {
     fn read(&self, _offset: u64) -> SimResult<u8> {
         Ok(0)
@@ -162,7 +161,11 @@ impl Peripheral for Nrf52Timer {
             // EVENTS_COMPARE[i]: return 0 for i >= num_cc (register absent).
             OFF_EVENTS_COMPARE0..=OFF_EVENTS_COMPARE5 if offset.is_multiple_of(4) => {
                 let i = ((offset - OFF_EVENTS_COMPARE0) / 4) as usize;
-                if i < self.num_cc { self.events_compare[i] } else { 0 }
+                if i < self.num_cc {
+                    self.events_compare[i]
+                } else {
+                    0
+                }
             }
 
             // SHORTS readback is masked to valid bits for this instance.
@@ -178,7 +181,11 @@ impl Peripheral for Nrf52Timer {
             // CC[i]: return 0 for i >= num_cc.
             OFF_CC0..=OFF_CC5 if offset.is_multiple_of(4) => {
                 let i = ((offset - OFF_CC0) / 4) as usize;
-                if i < self.num_cc { self.cc[i] } else { 0 }
+                if i < self.num_cc {
+                    self.cc[i]
+                } else {
+                    0
+                }
             }
 
             _ => 0,
@@ -381,7 +388,11 @@ mod tests {
         // Silicon: EVENTS_* are hardware-generated; SW write of 1 is a no-op.
         let mut t = Nrf52Timer::new();
         t.write_u32(OFF_EVENTS_COMPARE0, 1).unwrap();
-        assert_eq!(t.read_u32(OFF_EVENTS_COMPARE0).unwrap(), 0, "write-1 must be ignored");
+        assert_eq!(
+            t.read_u32(OFF_EVENTS_COMPARE0).unwrap(),
+            0,
+            "write-1 must be ignored"
+        );
         // Write 0 is the clear path (from firmware ISR ack).
         // Seed it via tick() compare match, then clear.
         t.write_u32(OFF_BITMODE, 3).unwrap();
@@ -389,9 +400,17 @@ mod tests {
         t.write_u32(OFF_CC0, 1).unwrap();
         t.write_u32(OFF_TASKS_START, 1).unwrap();
         t.tick();
-        assert_eq!(t.read_u32(OFF_EVENTS_COMPARE0).unwrap(), 1, "tick compare must set event");
+        assert_eq!(
+            t.read_u32(OFF_EVENTS_COMPARE0).unwrap(),
+            1,
+            "tick compare must set event"
+        );
         t.write_u32(OFF_EVENTS_COMPARE0, 0).unwrap();
-        assert_eq!(t.read_u32(OFF_EVENTS_COMPARE0).unwrap(), 0, "write-0 must clear event");
+        assert_eq!(
+            t.read_u32(OFF_EVENTS_COMPARE0).unwrap(),
+            0,
+            "write-0 must clear event"
+        );
     }
 
     #[test]
