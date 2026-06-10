@@ -21,9 +21,8 @@
 //! The `uart` class is implicit: receiving `TIER1 done` over the UART is
 //! itself the proof of a working UART path, so no `uart` line is printed.
 //!
-//! `timer` and `irq` are NOT reported: the H563 yaml declares no
-//! TIM/NVIC-class peripheral ids (systick does not count as a `timer`
-//! class marker), so the matrix renders those cells `na`.
+//! `irq` is NOT reported: the H563 yaml declares no NVIC-class peripheral
+//! id (systick does not count), so the matrix renders that cell `na`.
 //!
 //! Every poll is bounded by a fixed iteration count (the simulator is
 //! deterministic — no wall-clock timeouts). Register offsets follow the
@@ -220,11 +219,126 @@ fn check_dma() -> Result<(), &'static [u8]> {
     Ok(())
 }
 
+/// timer: TIM2 (32-bit). PSC/ARR write+readback, EGR.UG latches SR.UIF,
+/// write-0 clears it, CEN makes CNT advance, CEN off freezes it. State
+/// restored (ARR back to full-scale, CNT 0).
+fn check_timer() -> Result<(), &'static [u8]> {
+    const TIM2: u32 = 0x4000_0000;
+    wr32(TIM2 + 0x28, 7); // PSC
+    if rd32(TIM2 + 0x28) != 7 {
+        return Err(b"tim-psc");
+    }
+    wr32(TIM2 + 0x2C, 0x0001_0000); // ARR beyond 16 bits — counter is 32-bit
+    if rd32(TIM2 + 0x2C) != 0x0001_0000 {
+        return Err(b"tim-arr32");
+    }
+    wr32(TIM2 + 0x14, 0x1); // EGR.UG
+    if rd32(TIM2 + 0x10) & 0x1 == 0 {
+        return Err(b"tim-uif");
+    }
+    wr32(TIM2 + 0x10, 0); // clear UIF
+    if rd32(TIM2 + 0x10) & 0x1 != 0 {
+        return Err(b"tim-uif-clear");
+    }
+    wr32(TIM2 + 0x00, 0x1); // CR1.CEN
+    spin(2_000);
+    let cnt = rd32(TIM2 + 0x24);
+    if cnt == 0 {
+        return Err(b"tim-cnt-stuck");
+    }
+    wr32(TIM2 + 0x00, 0x0); // CEN off
+    let frozen = rd32(TIM2 + 0x24);
+    spin(2_000);
+    if rd32(TIM2 + 0x24) != frozen {
+        return Err(b"tim-cnt-runs");
+    }
+    wr32(TIM2 + 0x24, 0);
+    wr32(TIM2 + 0x28, 0);
+    wr32(TIM2 + 0x2C, 0xFFFF_FFFF);
+    Ok(())
+}
+
+/// i2c: I2C1 (v2 IP). ISR resets to TXE; OAR1/TIMINGR round-trip; CR1.PE
+/// set + clear. State restored.
+fn check_i2c() -> Result<(), &'static [u8]> {
+    const I2C1: u32 = 0x4000_5400;
+    if rd32(I2C1 + 0x18) & 0x1 == 0 {
+        return Err(b"i2c-txe");
+    }
+    wr32(I2C1 + 0x08, 0x8000_0052); // OAR1: OA1EN | addr 0x29<<1
+    if rd32(I2C1 + 0x08) & 0xFFFF != 0x0052 {
+        return Err(b"i2c-oar1");
+    }
+    wr32(I2C1 + 0x10, 0x0070_3031); // TIMINGR
+    if rd32(I2C1 + 0x10) != 0x0070_3031 {
+        return Err(b"i2c-timingr");
+    }
+    wr32(I2C1 + 0x00, 0x1); // CR1.PE
+    if rd32(I2C1 + 0x00) & 0x1 == 0 {
+        return Err(b"i2c-pe");
+    }
+    wr32(I2C1 + 0x00, 0x0);
+    wr32(I2C1 + 0x08, 0x0);
+    wr32(I2C1 + 0x10, 0x0);
+    Ok(())
+}
+
+/// wdt: IWDG register-access protocol — PR/RLR writes only take effect after
+/// KR=0x5555 AND only once the LSI-domain sync completes (bench-probed: with
+/// LSI off, SR.PVU stays 1 and the writes never commit). The check brings LSI
+/// up via RCC_BDCR first and polls SR between steps, so it is faithful to
+/// real silicon. The watchdog is never started (KR=0xCCCC is not written).
+fn check_wdt() -> Result<(), &'static [u8]> {
+    const IWDG: u32 = 0x4000_3000;
+    const RCC_BDCR: u32 = RCC_BASE + 0xF0;
+    if rd32(IWDG + 0x08) != 0xFFF {
+        return Err(b"wdt-rlr-reset");
+    }
+    // LSI on (BDCR bit 26 → LSIRDY bit 27).
+    let bdcr = rd32(RCC_BDCR);
+    wr32(RCC_BDCR, bdcr | (1 << 26));
+    for _ in 0..10_000 {
+        if rd32(RCC_BDCR) & (1 << 27) != 0 {
+            break;
+        }
+    }
+    if rd32(RCC_BDCR) & (1 << 27) == 0 {
+        return Err(b"wdt-lsirdy");
+    }
+    wr32(IWDG + 0x00, 0x5555); // enable register access
+    wr32(IWDG + 0x04, 0x2); // PR
+    for _ in 0..100_000 {
+        if rd32(IWDG + 0x0C) & 0x1 == 0 {
+            break; // PVU cleared — prescaler committed
+        }
+    }
+    if rd32(IWDG + 0x04) != 0x2 {
+        return Err(b"wdt-pr");
+    }
+    wr32(IWDG + 0x08, 0xABC);
+    for _ in 0..100_000 {
+        if rd32(IWDG + 0x0C) & 0x2 == 0 {
+            break; // RVU cleared — reload committed
+        }
+    }
+    if rd32(IWDG + 0x08) != 0xABC {
+        return Err(b"wdt-rlr");
+    }
+    wr32(IWDG + 0x08, 0xFFF);
+    wr32(IWDG + 0x04, 0x0);
+    wr32(IWDG + 0x00, 0x0);
+    wr32(RCC_BDCR, bdcr);
+    Ok(())
+}
+
 #[entry]
 fn main() -> ! {
     report(b"clock", check_clock());
     report(b"gpio", check_gpio());
     report(b"dma", check_dma());
+    report(b"timer", check_timer());
+    report(b"i2c", check_i2c());
+    report(b"wdt", check_wdt());
     puts(b"TIER1 done\n");
 
     loop {
