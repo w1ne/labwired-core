@@ -119,11 +119,31 @@ fn check_clock() -> Result<(), &'static [u8]> {
     if rd32(RCC_BASE) & (1 << 17) != 0 {
         return Err(b"clock-hserdy-stuck");
     }
-    // CFGR1 SW=001 → SWS must mirror.
+    // SW→SWS is gated on the source's ready bit (silicon-verified): SW=001
+    // (CSI) with CSI off must NOT switch; after CSION+CSIRDY it must.
+    wr32(RCC_BASE + 0x1C, 0x1);
+    if (rd32(RCC_BASE + 0x1C) >> 3) & 0x7 != 0x0 {
+        return Err(b"clock-sws-gate");
+    }
+    wr32(RCC_BASE, cr | (1 << 8)); // CSION
+    for _ in 0..10_000 {
+        if rd32(RCC_BASE) & (1 << 9) != 0 {
+            break;
+        }
+    }
+    if rd32(RCC_BASE) & (1 << 9) == 0 {
+        return Err(b"clock-csirdy");
+    }
     wr32(RCC_BASE + 0x1C, 0x1);
     if (rd32(RCC_BASE + 0x1C) >> 3) & 0x7 != 0x1 {
         return Err(b"clock-sws");
     }
+    // Back to HSI, CSI off.
+    wr32(RCC_BASE + 0x1C, 0x0);
+    if (rd32(RCC_BASE + 0x1C) >> 3) & 0x7 != 0x0 {
+        return Err(b"clock-sws-back");
+    }
+    wr32(RCC_BASE, cr);
     // AHB2ENR round-trip: GPIOA..GPIOG enables on top of the reset value
     // (SRAM2EN|SRAM3EN stay up), restored afterwards.
     let enr = rd32(RCC_BASE + 0x8C);

@@ -327,11 +327,6 @@ pub struct H5Rcc {
     rsr: u32,          // 0xF4 — reset 0x0C000000 (PINRST|BORRST)
 }
 
-/// HSITRIM[22:16] is the only software-writable field of HSICFGR; HSICAL is
-/// factory calibration and read-only. Same shape for CSICFGR (CSITRIM[21:16]).
-const H5_HSICFGR_W: u32 = 0x007F_0000;
-const H5_CSICFGR_W: u32 = 0x003F_0000;
-
 impl H5Rcc {
     fn new() -> Self {
         Self {
@@ -418,10 +413,39 @@ impl RccModel for H5Rcc {
     fn write_reg(&mut self, offset: u64, value: u32) {
         match offset {
             0x00 => self.cr = h5_cr_ready(value),
-            0x10 => self.hsicfgr = (self.hsicfgr & !H5_HSICFGR_W) | (value & H5_HSICFGR_W),
-            0x18 => self.csicfgr = (self.csicfgr & !H5_CSICFGR_W) | (value & H5_CSICFGR_W),
-            // SW[2:0] → SWS[5:3]: the switch completes immediately in the model.
-            0x1C => self.cfgr1 = (value & !(0x7 << 3)) | ((value & 0x7) << 3),
+            // HSICFGR / CSICFGR: TRIM is the only writable field, and CAL
+            // tracks it linearly — silicon-probed on the bench H563: HSITRIM
+            // 0x40→0x55 moved HSICAL 0x4F7→0x50C (+0x15), CSITRIM 0x20→0x15
+            // moved CSICAL 0x87→0x7C (-0xB). CAL base values are this part's
+            // factory calibration at the default trim.
+            0x10 => {
+                let trim = (value >> 16) & 0x7F;
+                self.hsicfgr = (trim << 16) | ((0x4F7 + trim - 0x40) & 0xFFF);
+            }
+            0x18 => {
+                let trim = (value >> 16) & 0x3F;
+                self.csicfgr = (trim << 16) | ((0x87 + trim - 0x20) & 0xFF);
+            }
+            // SW[2:0] → SWS[5:3] only when the requested source is ready in
+            // CR (silicon-probed: SW=CSI with CSI off leaves SWS unchanged;
+            // setting CSION first completes the switch). Source→RDY bit:
+            // HSI→1, CSI→9, HSE→17, PLL1→25.
+            0x1C => {
+                let sw = value & 0x7;
+                let ready = match sw {
+                    0 => self.cr & (1 << 1) != 0,
+                    1 => self.cr & (1 << 9) != 0,
+                    2 => self.cr & (1 << 17) != 0,
+                    3 => self.cr & (1 << 25) != 0,
+                    _ => false, // reserved encodings never switch
+                };
+                let sws = if ready {
+                    sw << 3
+                } else {
+                    self.cfgr1 & (0x7 << 3)
+                };
+                self.cfgr1 = (value & !(0x7 << 3)) | sws;
+            }
             0x20 => self.cfgr2 = value,
             0x28 => self.pllcfgr[0] = value,
             0x2C => self.pllcfgr[1] = value,
@@ -440,12 +464,9 @@ impl RccModel for H5Rcc {
             0xA8 => self.apb3enr = value,
             0xF0 => self.bdcr = value,
             // RSR: reset-cause flags are hardware-set; software write only
-            // clears them via RMVF (bit 16).
-            0xF4 => {
-                if value & (1 << 16) != 0 {
-                    self.rsr = 0;
-                }
-            }
+            // clears them via RMVF (bit 23, silicon-probed) — other writes
+            // fall through to the no-op default.
+            0xF4 if value & (1 << 23) != 0 => self.rsr = 0,
             _ => {}
         }
     }
@@ -809,16 +830,28 @@ mod tests {
         assert_ne!(rcc.read_u32(0x00).unwrap() & (1 << 17), 0);
         rcc.write_u32(0x00, cr).unwrap();
         assert_eq!(rcc.read_u32(0x00).unwrap() & (1 << 17), 0);
-        // CFGR1: SW[2:0] mirrors into SWS[5:3].
-        rcc.write_u32(0x1C, 0x3).unwrap();
-        assert_eq!((rcc.read_u32(0x1C).unwrap() >> 3) & 0x7, 0x3);
-        // HSICFGR: HSITRIM[22:16] writable, HSICAL[11:0] fixed.
+        // CFGR1: SW→SWS is gated on the source's CR ready bit. Silicon-probed:
+        // SW=CSI with CSI off leaves SWS at the current source; CSION first
+        // completes the switch.
+        rcc.write_u32(0x1C, 0x1).unwrap();
+        assert_eq!((rcc.read_u32(0x1C).unwrap() >> 3) & 0x7, 0x0, "CSI off");
+        let cr = rcc.read_u32(0x00).unwrap();
+        rcc.write_u32(0x00, cr | (1 << 8)).unwrap(); // CSION → CSIRDY
+        rcc.write_u32(0x1C, 0x1).unwrap();
+        assert_eq!(rcc.read_u32(0x1C).unwrap(), 0x9, "CSI ready → SWS=001");
+        rcc.write_u32(0x1C, 0x0).unwrap();
+        rcc.write_u32(0x00, cr).unwrap();
+        // HSICFGR: HSITRIM writable, HSICAL tracks trim linearly
+        // (silicon-probed: trim 0x55 → cal 0x50C on the bench part).
         rcc.write_u32(0x10, 0x0055_0000).unwrap();
-        assert_eq!(rcc.read_u32(0x10).unwrap(), 0x0055_04F7);
-        // RSR: flags clear only via RMVF (bit 16).
-        rcc.write_u32(0xF4, 0).unwrap();
-        assert_eq!(rcc.read_u32(0xF4).unwrap(), 0x0C00_0000);
+        assert_eq!(rcc.read_u32(0x10).unwrap(), 0x0055_050C);
+        rcc.write_u32(0x10, 0x0040_0000).unwrap();
+        assert_eq!(rcc.read_u32(0x10).unwrap(), 0x0040_04F7);
+        // RSR: flags clear only via RMVF (bit 23, silicon-probed — bit 16
+        // writes are ignored).
         rcc.write_u32(0xF4, 1 << 16).unwrap();
+        assert_eq!(rcc.read_u32(0xF4).unwrap(), 0x0C00_0000);
+        rcc.write_u32(0xF4, 1 << 23).unwrap();
         assert_eq!(rcc.read_u32(0xF4).unwrap(), 0);
         // APB1HENR / APB3ENR round-trip at H5 offsets.
         rcc.write_u32(0xA0, 0x0000_0020).unwrap();
