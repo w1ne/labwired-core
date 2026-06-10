@@ -29,13 +29,15 @@ fn test_chip_config_validation() {
     let val = bus.read_u32(0x4001100C).expect("Failed to read from GPIOC");
     assert_eq!(val, 0x1234);
 
-    // Try writing to I2C1_OAR1 (offset 0x08) which is a simple data register
+    // Try writing to I2C1_OAR1 (offset 0x08) which is a simple data register.
+    // Bits 13:10 are reserved on F1 silicon and read back as 0, so the
+    // silicon-faithful model echoes 0x55AA as 0x41AA.
     bus.write_u32(0x40005408, 0x55AA)
         .expect("Failed to write to I2C1_OAR1");
     let oar1 = bus
         .read_u32(0x40005408)
         .expect("Failed to read from I2C1_OAR1");
-    assert_eq!(oar1 & 0xFFFF, 0x55AA);
+    assert_eq!(oar1 & 0xFFFF, 0x41AA);
 
     println!("SUCCESS: Chip configuration validated for GPIOC and I2C1");
 }
