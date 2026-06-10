@@ -1,0 +1,30 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+# Standalone crate (own [workspace]) so it builds out-of-workspace with an
+# explicit --target, mirroring examples/tier1-fixture/stm32h563.
+[workspace]
+members = []
+
+[package]
+name = "h563-silicon-smoke"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "NUCLEO-H563ZI smoke firmware that runs identically on real silicon and in the simulator: full USART3 bring-up (clocks, PD8/PD9 AF7, BRR) and a register self-report over the VCP."
+
+[dependencies]
+cortex-m-rt = "0.7"
+panic-halt = "0.2"
+
+[[bin]]
+name = "h563-silicon-smoke"
+path = "src/main.rs"
+test = false
+bench = false
+
+[profile.release]
+debug = true   # keep DWARF so the simulator can resolve symbols

@@ -26,6 +26,15 @@ impl Systick {
         }
     }
 
+    /// CALIB is implementation-defined per chip (TENMS/SKEW/NOREF). The chip
+    /// yaml can supply the silicon value via `config: { calib: ... }`.
+    pub fn with_calib(calib: u32) -> Self {
+        Self {
+            calib,
+            ..Self::new()
+        }
+    }
+
     fn read_reg(&self, offset: u64) -> u32 {
         match offset {
             0x00 => self.csr,

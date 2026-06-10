@@ -267,6 +267,20 @@ impl GpioPort {
         Self::Nrf52(Nrf52Gpio::with_num_pins(num_pins))
     }
 
+    /// Build a V2-layout GPIO port with explicit MODER/OSPEEDR/PUPDR reset
+    /// values. On real silicon these are per-port (debug pins keep port A off
+    /// the all-analog default; B carries the JTDO pull config; C..G reset to
+    /// 0xFFFFFFFF analog). The chip yaml supplies them via
+    /// `config: { reset_moder / reset_ospeedr / reset_pupdr }`.
+    pub fn new_stm32v2_with_resets(moder: u32, ospeedr: u32, pupdr: u32) -> Self {
+        Self::Stm32V2(V2Gpio {
+            moder,
+            ospeedr,
+            pupdr,
+            ..Default::default()
+        })
+    }
+
     fn read_reg(&self, offset: u64) -> u32 {
         match self {
             Self::Stm32F1(g) => g.read_reg(offset),

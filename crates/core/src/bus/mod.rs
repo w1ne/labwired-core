@@ -980,7 +980,14 @@ impl SystemBus {
                     ))
                 }
                 "systick" | "arm_generictimer" => {
-                    Box::new(crate::peripherals::systick::Systick::new())
+                    // CALIB is implementation-defined per chip; the yaml can
+                    // supply the silicon value via `config: { calib: ... }`.
+                    match p_cfg.config.get("calib").and_then(|v| v.as_u64()) {
+                        Some(calib) => Box::new(crate::peripherals::systick::Systick::with_calib(
+                            calib as u32,
+                        )),
+                        None => Box::new(crate::peripherals::systick::Systick::new()),
+                    }
                 }
                 "gpio" | "stm32_gpioport" | "stm32f4_gpio" | "efmgpioport" | "npcx_gpio"
                 | "imxrt_gpio" => {
@@ -1002,6 +1009,24 @@ impl SystemBus {
                             .map(|n| n as u32)
                             .unwrap_or(32);
                         Box::new(crate::peripherals::gpio::GpioPort::new_nrf52(num_pins))
+                    } else if layout == GpioRegisterLayout::Stm32V2
+                        && p_cfg.config.contains_key("reset_moder")
+                    {
+                        // Per-port silicon reset values (MODER/OSPEEDR/PUPDR)
+                        // supplied by the chip yaml; missing keys default to 0.
+                        let cfg_u32 = |key: &str| -> u32 {
+                            p_cfg
+                                .config
+                                .get(key)
+                                .and_then(|v| v.as_u64())
+                                .map(|n| n as u32)
+                                .unwrap_or(0)
+                        };
+                        Box::new(crate::peripherals::gpio::GpioPort::new_stm32v2_with_resets(
+                            cfg_u32("reset_moder"),
+                            cfg_u32("reset_ospeedr"),
+                            cfg_u32("reset_pupdr"),
+                        ))
                     } else {
                         Box::new(crate::peripherals::gpio::GpioPort::new_with_layout(layout))
                     }
