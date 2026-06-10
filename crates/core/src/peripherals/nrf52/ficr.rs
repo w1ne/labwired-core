@@ -76,7 +76,7 @@ impl Default for Nrf52Ficr {
             deviceaddrtype: 0, // public address
             deviceaddr: [0x1122_3344, 0x0000_5566],
             info_part: 0x0005_2840,
-            info_variant: 0x4141_4641, // "AAFA"
+            info_variant: 0x4141_4430, // "AAD0" — confirmed on bench silicon (DK rev3)
             info_package: 0x0000_2004, // QIAA
             info_ram: 256,             // KiB
             info_flash: 1024,          // KiB

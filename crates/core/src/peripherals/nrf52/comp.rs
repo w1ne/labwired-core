@@ -76,7 +76,7 @@ impl Peripheral for Nrf52Comp {
             OFF_REFSEL => self.refsel & 0x7,
             OFF_EXTREFSEL => self.extrefsel & 0x7,
             OFF_TH => self.th & 0x3F3F,
-            OFF_MODE => self.mode & 0x303,
+            OFF_MODE => self.mode & 0x101,
             OFF_HYST => self.hyst & 0x1,
             OFF_ISOURCE => self.isource & 0x3,
             _ => 0,
@@ -86,10 +86,11 @@ impl Peripheral for Nrf52Comp {
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         match offset {
             OFF_TASKS_START | OFF_TASKS_STOP | OFF_TASKS_SAMPLE => {}
-            OFF_EVENTS_READY => self.events_ready = value & 1,
-            OFF_EVENTS_DOWN => self.events_down = value & 1,
-            OFF_EVENTS_UP => self.events_up = value & 1,
-            OFF_EVENTS_CROSS => self.events_cross = value & 1,
+            // EVENTS_*: hardware-generated. SW write-1 ignored; write-0 clears.
+            OFF_EVENTS_READY if value == 0 => self.events_ready = 0,
+            OFF_EVENTS_DOWN if value == 0 => self.events_down = 0,
+            OFF_EVENTS_UP if value == 0 => self.events_up = 0,
+            OFF_EVENTS_CROSS if value == 0 => self.events_cross = 0,
             OFF_SHORTS => self.shorts = value & 0xF,
             OFF_INTEN => self.inten = value & 0xF,
             OFF_INTENSET => self.inten |= value & 0xF,
@@ -99,7 +100,7 @@ impl Peripheral for Nrf52Comp {
             OFF_REFSEL => self.refsel = value & 0x7,
             OFF_EXTREFSEL => self.extrefsel = value & 0x7,
             OFF_TH => self.th = value & 0x3F3F,
-            OFF_MODE => self.mode = value & 0x303,
+            OFF_MODE => self.mode = value & 0x101,
             OFF_HYST => self.hyst = value & 0x1,
             OFF_ISOURCE => self.isource = value & 0x3,
             _ => {}

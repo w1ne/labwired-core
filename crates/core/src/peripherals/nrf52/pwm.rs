@@ -119,13 +119,14 @@ impl Peripheral for Nrf52Pwm {
         match offset {
             OFF_TASKS_STOP | OFF_TASKS_SEQSTART0 | OFF_TASKS_SEQSTART1 | OFF_TASKS_NEXTSTEP => {}
 
-            OFF_EVENTS_STOPPED => self.events_stopped = value & 1,
-            OFF_EVENTS_SEQSTARTED0 => self.events_seqstarted[0] = value & 1,
-            OFF_EVENTS_SEQSTARTED1 => self.events_seqstarted[1] = value & 1,
-            OFF_EVENTS_SEQEND0 => self.events_seqend[0] = value & 1,
-            OFF_EVENTS_SEQEND1 => self.events_seqend[1] = value & 1,
-            OFF_EVENTS_PWMPERIODEND => self.events_pwmperiodend = value & 1,
-            OFF_EVENTS_LOOPSDONE => self.events_loopsdone = value & 1,
+            // EVENTS_*: hardware-generated. SW write-1 is ignored; SW write-0 clears.
+            OFF_EVENTS_STOPPED if value == 0 => self.events_stopped = 0,
+            OFF_EVENTS_SEQSTARTED0 if value == 0 => self.events_seqstarted[0] = 0,
+            OFF_EVENTS_SEQSTARTED1 if value == 0 => self.events_seqstarted[1] = 0,
+            OFF_EVENTS_SEQEND0 if value == 0 => self.events_seqend[0] = 0,
+            OFF_EVENTS_SEQEND1 if value == 0 => self.events_seqend[1] = 0,
+            OFF_EVENTS_PWMPERIODEND if value == 0 => self.events_pwmperiodend = 0,
+            OFF_EVENTS_LOOPSDONE if value == 0 => self.events_loopsdone = 0,
 
             OFF_SHORTS => self.shorts = value,
             OFF_INTEN => self.inten = value,

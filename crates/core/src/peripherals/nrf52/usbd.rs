@@ -93,6 +93,9 @@ impl Peripheral for Nrf52Usbd {
         // Task registers always read 0 per PS.
         match offset {
             0x000..=0x0FC if offset.is_multiple_of(4) => return Ok(0),
+            // USBPULLUP/EPINEN/EPOUTEN are effectively write-only on silicon —
+            // the USB PHY state machine owns the actual state; reads return 0.
+            OFF_USBPULLUP | OFF_EPINEN | OFF_EPOUTEN => return Ok(0),
             _ => {}
         }
         Ok(self.regs.get(&offset).copied().unwrap_or(0))
@@ -120,8 +123,18 @@ impl Peripheral for Nrf52Usbd {
                 }
             }
             OFF_ENABLE => {
-                self.regs.insert(OFF_ENABLE, value & 1);
-                if value & 1 != 0 {
+                // Silicon: writing 0 to ENABLE is ignored when VBUS is present
+                // (BUSSTATE.BUSVALID == 1). The USB controller stays enabled
+                // while the bus is powered.
+                let busvalid = self.regs.get(&OFF_BUSSTATE).copied().unwrap_or(0) & 1;
+                let new_enable = if value & 1 == 0 && busvalid != 0 {
+                    // VBUS present — cannot disable; leave ENABLE=1
+                    1
+                } else {
+                    value & 1
+                };
+                self.regs.insert(OFF_ENABLE, new_enable);
+                if new_enable != 0 {
                     // EVENTCAUSE.READY = bit 0 (per PS table 273) so init
                     // loops poll-and-clear successfully.
                     self.regs.insert(OFF_EVENTCAUSE, 1);
@@ -140,6 +153,14 @@ impl Peripheral for Nrf52Usbd {
             OFF_INTENCLR => {
                 let cur = self.regs.get(&OFF_INTEN).copied().unwrap_or(0);
                 self.regs.insert(OFF_INTEN, cur & !value);
+            }
+            // EVENTS_*: hardware-generated. SW write-1 is ignored per silicon;
+            // write-0 clears. EVENTS live in 0x100..0x1FC.
+            0x100..=0x1FC if offset.is_multiple_of(4) => {
+                if value == 0 {
+                    self.regs.insert(offset, 0);
+                }
+                // write-1 silently ignored
             }
             _ => {
                 self.regs.insert(offset, value);
@@ -177,9 +198,11 @@ mod tests {
     }
 
     #[test]
-    fn usbpullup_round_trips() {
+    fn usbpullup_write_only_reads_zero() {
+        // USBPULLUP is write-only on silicon — the write is accepted but the
+        // register reads back 0 (confirmed by nrf52_full_register_conformance).
         let mut u = Nrf52Usbd::new();
         u.write_u32(OFF_USBPULLUP, 1).unwrap();
-        assert_eq!(u.read_u32(OFF_USBPULLUP).unwrap(), 1);
+        assert_eq!(u.read_u32(OFF_USBPULLUP).unwrap(), 0);
     }
 }

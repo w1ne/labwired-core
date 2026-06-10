@@ -177,8 +177,10 @@ const CLASS_MARKERS: &[(&str, &str)] = &[
     ("rcc", "clock"),
     ("clk", "clock"),
     ("rtc_cntl", "clock"),
+    ("clock", "clock"), // nRF CLOCK block (id `clock` / type `nrf_clock`)
     ("system", "clock"),
     ("i2c", "i2c"),
+    ("twi", "i2c"), // Nordic naming: TWI/TWIM/TWIS are the I²C blocks
     ("spi", "spi"),
     ("sar_adc", "adc"),
     ("adc", "adc"),
@@ -197,6 +199,8 @@ const CLASS_MARKERS: &[(&str, &str)] = &[
 #[derive(Deserialize)]
 struct ChipYamlPeripheral {
     id: String,
+    #[serde(default)]
+    r#type: String,
 }
 
 #[derive(Deserialize)]
@@ -205,16 +209,24 @@ struct ChipYamlDoc {
     peripherals: Vec<ChipYamlPeripheral>,
 }
 
-/// Which tier1 classes a chip YAML declares, by peripheral-id heuristics.
+/// Which tier1 classes a chip YAML declares, by peripheral heuristics.
+///
+/// Both the instance `id` and the model `type` are matched: instance ids
+/// follow chip-vendor naming that the marker table can't enumerate (`twi1`
+/// is the nRF I²C, `clock` the nRF CLOCK), while the `type` field carries
+/// the family-qualified model name (`nrf52840_i2c`, `nrf_clock`) that the
+/// markers reliably hit. Matching only ids made whole modeled subsystems
+/// render as "not modeled" in the public matrix.
 pub fn declared_classes_from_yaml(yaml: &str) -> Result<BTreeSet<String>, String> {
     let doc: ChipYamlDoc = serde_yaml::from_str(yaml).map_err(|e| e.to_string())?;
     let mut classes = BTreeSet::new();
     for p in &doc.peripherals {
-        let id = p.id.to_lowercase();
-        for (marker, class) in CLASS_MARKERS {
-            if id.contains(marker) {
-                classes.insert(class.to_string());
-                break;
+        for name in [p.id.to_lowercase(), p.r#type.to_lowercase()] {
+            for (marker, class) in CLASS_MARKERS {
+                if name.contains(marker) {
+                    classes.insert(class.to_string());
+                    break;
+                }
             }
         }
     }

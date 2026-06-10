@@ -772,18 +772,20 @@ impl Peripheral for Nrf52Radio {
             OFF_TASKS_RSSISTOP | OFF_TASKS_EDSTART | OFF_TASKS_EDSTOP | OFF_TASKS_CCASTART
             | OFF_TASKS_CCASTOP => {}
 
-            OFF_EVENTS_READY => self.events_ready = value & 1,
-            OFF_EVENTS_ADDRESS => self.events_address = value & 1,
-            OFF_EVENTS_PAYLOAD => self.events_payload = value & 1,
-            OFF_EVENTS_END => self.events_end = value & 1,
-            OFF_EVENTS_DISABLED => self.events_disabled = value & 1,
-            OFF_EVENTS_CRCOK => self.events_crcok = value & 1,
-            OFF_EVENTS_TXREADY => self.events_txready = value & 1,
-            OFF_EVENTS_RXREADY => self.events_rxready = value & 1,
-            OFF_EVENTS_PHYEND => self.events_phyend = value & 1,
-            OFF_EVENTS_DEVMATCH => self.events_devmatch = value & 1,
-            OFF_EVENTS_DEVMISS => self.events_devmiss = value & 1,
-            OFF_EVENTS_BCMATCH => self.events_bcmatch = value & 1,
+            // EVENTS_*: hardware-generated. SW write-1 is ignored per silicon;
+            // SW write-0 clears the event latch (firmware ISR ack path).
+            OFF_EVENTS_READY if value == 0 => self.events_ready = 0,
+            OFF_EVENTS_ADDRESS if value == 0 => self.events_address = 0,
+            OFF_EVENTS_PAYLOAD if value == 0 => self.events_payload = 0,
+            OFF_EVENTS_END if value == 0 => self.events_end = 0,
+            OFF_EVENTS_DISABLED if value == 0 => self.events_disabled = 0,
+            OFF_EVENTS_CRCOK if value == 0 => self.events_crcok = 0,
+            OFF_EVENTS_TXREADY if value == 0 => self.events_txready = 0,
+            OFF_EVENTS_RXREADY if value == 0 => self.events_rxready = 0,
+            OFF_EVENTS_PHYEND if value == 0 => self.events_phyend = 0,
+            OFF_EVENTS_DEVMATCH if value == 0 => self.events_devmatch = 0,
+            OFF_EVENTS_DEVMISS if value == 0 => self.events_devmiss = 0,
+            OFF_EVENTS_BCMATCH if value == 0 => self.events_bcmatch = 0,
 
             OFF_SHORTS => self.shorts = value,
             OFF_INTENSET => self.inten |= value,

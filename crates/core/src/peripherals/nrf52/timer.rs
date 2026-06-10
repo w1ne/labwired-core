@@ -243,12 +243,15 @@ impl Peripheral for Nrf52Timer {
             OFF_BITMODE => self.bitmode = value & 0x3,
             OFF_PRESCALER => self.prescaler = value & 0xF,
 
-            // CC[i]: only valid for i < num_cc; masked to counter width.
+            // CC[i]: only valid for i < num_cc.
+            // Silicon stores the full 32-bit value; the BITMODE mask is applied
+            // only at compare time (counter & bitmode_mask == cc & bitmode_mask),
+            // not at register write time. Masking at write would cause readback
+            // to differ from silicon for the upper bytes when BITMODE < 32.
             OFF_CC0..=OFF_CC5 if offset.is_multiple_of(4) => {
                 let i = ((offset - OFF_CC0) / 4) as usize;
                 if i < self.num_cc {
-                    let mask = self.counter_mask();
-                    self.cc[i] = value & mask;
+                    self.cc[i] = value;
                 }
             }
 

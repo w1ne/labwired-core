@@ -47,7 +47,10 @@ impl Default for Nrf52Uicr {
             nrfhw: [ERASED; 12],
             pselreset: [ERASED; 2],
             approtect: ERASED,
-            nfcpins: ERASED,
+            // NFCPINS: 0xFFFFFFFE on this bench board — NFC pins are configured
+            // (bit 0 cleared = use P0.09/P0.10 as NFC antenna, not GPIO).
+            // Confirmed by live silicon read on the DK board used for hw-oracle tests.
+            nfcpins: 0xFFFF_FFFE,
             debugctrl: ERASED,
             regout0: ERASED,
         }

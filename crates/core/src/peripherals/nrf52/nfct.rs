@@ -67,7 +67,6 @@ pub struct Nrf52Nfct {
     txd_amount: u32,
     rxd_frameconfig: u32,
     rxd_amount: u32,
-    sensres: u32,
     selres: u32,
     nfcid1_last: u32,
     nfcid1_2nd_last: u32,
@@ -81,7 +80,6 @@ impl Nrf52Nfct {
             framedelaymax: 0x1000, // PS table 80 reset
             framedelaymode: 1,
             maxlen: 0xFF,
-            sensres: 0,
             selres: 0,
             autocolresconfig: 0,
             ..Self::default()
@@ -133,7 +131,7 @@ impl Peripheral for Nrf52Nfct {
             OFF_TXD_AMOUNT => self.txd_amount & 0x1FFF,
             OFF_RXD_FRAMECONFIG => self.rxd_frameconfig & 0x1F,
             OFF_RXD_AMOUNT => self.rxd_amount & 0x1FFF,
-            OFF_SENSRES => self.sensres & 0xFFFF,
+            OFF_SENSRES => 0, // RO, hardware-driven; reads 0 at reset
             OFF_SELRES => self.selres & 0x7F,
             OFF_NFCID1_LAST => self.nfcid1_last,
             OFF_NFCID1_2ND_LAST => self.nfcid1_2nd_last & 0xFFFFFF,
@@ -154,10 +152,11 @@ impl Peripheral for Nrf52Nfct {
             | OFF_TASKS_GOIDLE
             | OFF_TASKS_GOSLEEP => {}
 
+            // EVENTS_*: hardware-generated. SW write-1 ignored; write-0 clears.
             OFF_EVENTS_FIRST..=OFF_EVENTS_LAST if offset.is_multiple_of(4) => {
                 let idx = ((offset - OFF_EVENTS_FIRST) / 4) as usize;
-                if idx < 21 {
-                    self.events[idx] = value & 1;
+                if idx < 21 && value == 0 {
+                    self.events[idx] = 0;
                 }
             }
 
@@ -178,7 +177,7 @@ impl Peripheral for Nrf52Nfct {
             OFF_TXD_AMOUNT => self.txd_amount = value & 0x1FFF,
             OFF_RXD_FRAMECONFIG => self.rxd_frameconfig = value & 0x1F,
             OFF_RXD_AMOUNT => {} // RO per PS
-            OFF_SENSRES => self.sensres = value & 0xFFFF,
+            OFF_SENSRES => {}    // RO per silicon — hardware-driven by anti-collision
             OFF_SELRES => self.selres = value & 0x7F,
             OFF_NFCID1_LAST => self.nfcid1_last = value,
             OFF_NFCID1_2ND_LAST => self.nfcid1_2nd_last = value & 0xFFFFFF,

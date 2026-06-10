@@ -935,6 +935,9 @@ fn nrf52840_arduino_blink_toggles_gpio() {
     );
 }
 
+/// SPIM0 EasyDMA: TASKS_START arms the DMA engine; the transfer completes
+/// during the next `tick_peripherals` bus phase that calls `tick_with_bus`.
+/// After the tick: EVENTS_END/ENDTX/ENDRX all 1, AMOUNT registers match.
 #[test]
 fn xiao_nrf52840_spim0_start_sets_end_event_and_amount() {
     let mut chip_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -950,11 +953,36 @@ fn xiao_nrf52840_spim0_start_sets_end_event_and_amount() {
 
     let mut bus = SystemBus::from_config(&chip, &manifest).expect("Failed to build XIAO bus");
 
+    // ENABLE = 7 (SPIM mode), TXD.PTR = 0x2000_0000, TXD.MAXCNT = 4.
     bus.write_u32(0x4000_3500, 7).unwrap();
     bus.write_u32(0x4000_3544, 0x2000_0000).unwrap();
     bus.write_u32(0x4000_3548, 4).unwrap();
+    // TASKS_START — sets nrf52_pending_start; EasyDMA runs on next tick.
     bus.write_u32(0x4000_3010, 1).unwrap();
 
-    assert_eq!(bus.read_u32(0x4000_3118).unwrap(), 1);
-    assert_eq!(bus.read_u32(0x4000_354C).unwrap(), 4);
+    // EasyDMA runs during the bus-tick phase (tick_with_bus).
+    bus.tick_peripherals_fully();
+
+    assert_eq!(
+        bus.read_u32(0x4000_3118).unwrap(),
+        1,
+        "EVENTS_END must be 1 after tick"
+    );
+    assert_eq!(
+        bus.read_u32(0x4000_354C).unwrap(),
+        4,
+        "TXD.AMOUNT must equal TXD.MAXCNT"
+    );
+    // EVENTS_ENDTX (0x120) and EVENTS_ENDRX (0x110) also fired.
+    assert_eq!(
+        bus.read_u32(0x4000_3120).unwrap(),
+        1,
+        "EVENTS_ENDTX must be 1 after tick"
+    );
+    // RXD.MAXCNT was 0 so RXD.AMOUNT should be 0 (RXD.AMOUNT = base + 0x53C).
+    assert_eq!(
+        bus.read_u32(0x4000_353C).unwrap(),
+        0,
+        "RXD.AMOUNT should be 0 when RXD.MAXCNT=0"
+    );
 }

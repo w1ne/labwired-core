@@ -69,9 +69,10 @@ impl Peripheral for Nrf52Aar {
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         match offset {
             OFF_TASKS_START | OFF_TASKS_STOP => {}
-            OFF_EVENTS_END => self.events_end = value & 1,
-            OFF_EVENTS_RESOLVED => self.events_resolved = value & 1,
-            OFF_EVENTS_NOTRESOLVED => self.events_notresolved = value & 1,
+            // EVENTS_*: hardware-generated. SW write-1 ignored; write-0 clears.
+            OFF_EVENTS_END if value == 0 => self.events_end = 0,
+            OFF_EVENTS_RESOLVED if value == 0 => self.events_resolved = 0,
+            OFF_EVENTS_NOTRESOLVED if value == 0 => self.events_notresolved = 0,
             OFF_INTENSET => self.inten |= value & 0x7,
             OFF_INTENCLR => self.inten &= !value,
             OFF_ENABLE => self.enable = value & 0x3,
