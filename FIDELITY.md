@@ -100,6 +100,18 @@ real peripheral: `slc` (SDIO host), `sdmmc_host`. The rest (`iram`, `dram`,
 (though empty `brom_*` is a content gap). Also see
 `crates/core/src/peripherals/stub.rs` and `esp32s3/system_stub.rs`.
 
+### E2. DC reads low at framebuffer-write time — blank e-paper render (OPEN BUG)
+The real ereader firmware fully renders its text and clocks the framebuffer over
+SPI (verified: 9518 `0x00` black bytes of 19033 captured), but the SSD1680 panel
+renders **blank**. Root cause: the SSD1680 model routes command-vs-data by the
+latched DC GPIO, and DC (GPIO17) reads **low** at the moment the `0x24` data
+stream is clocked — so every framebuffer byte is mis-routed to `command_byte`
+and dropped. GxEPD2's `_writeData` only toggles CS and relies on DC being left
+HIGH by the preceding `_writeCommand(0x24)`; in sim that high state isn't present
+at data-write time. Needs a correlated GPIO-write + SPI-write trace at the
+framebuffer-write point to pin the exact mechanism. Diagnostic: run the cli with
+`LABWIRED_DUMP_SPI=<path>` to dump the full captured wire stream.
+
 ### E. Display command/data inference — the two e-paper panels
 `uc8151d_tricolor_290.rs`, `ssd1680_tricolor_290.rs`: when no DC pin is wired,
 `transfer()` guesses command-vs-data from protocol state. INFER. The live ESP32

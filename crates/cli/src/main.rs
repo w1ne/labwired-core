@@ -1747,7 +1747,7 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     if let Some(spi3_idx) = bus.find_peripheral_index_by_name("spi3") {
         if let Some(any) = bus.peripherals[spi3_idx].dev.as_any_mut() {
             if let Some(spi3) = any.downcast_mut::<Esp32Spi>() {
-                spi3.enable_byte_capture(512);
+                spi3.enable_byte_capture(65536);
             }
         }
     }
@@ -2516,6 +2516,15 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     if let Some(idx) = machine.bus.find_peripheral_index_by_name("spi3") {
         if let Some(any) = machine.bus.peripherals[idx].dev.as_any() {
             if let Some(spi3) = any.downcast_ref::<Esp32Spi>() {
+                // Diagnostic: dump the full captured wire stream when asked, so
+                // we can inspect the 0x24/0x26 RAM-write payloads end-to-end.
+                if let Ok(path) = std::env::var("LABWIRED_DUMP_SPI") {
+                    let _ = std::fs::write(&path, spi3.captured_bytes());
+                    eprintln!(
+                        "labwired-cli snapshot: dumped {} captured spi3 bytes to {path}",
+                        spi3.captured_bytes().len()
+                    );
+                }
                 eprintln!(
                     "labwired-cli snapshot: spi3 transactions={}",
                     spi3.transactions(),
