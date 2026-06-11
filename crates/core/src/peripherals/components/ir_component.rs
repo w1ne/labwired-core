@@ -2,72 +2,41 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! Deterministic interpreter executing an [`labwired_ir::component::IrComponent`]
-//! as an [`I2cDevice`]. Pure state machine over the spec: no host time, no
-//! randomness, no I/O — determinism is preserved by construction.
+//! I2C **binding adapter** over the bus-agnostic [`IrCore`] engine.
+//!
+//! This type holds only the I2C binding (the device address) and translates
+//! the [`I2cDevice`] protocol onto `IrCore`'s bus-neutral primitives
+//! (`reset_frame` / `write` / `read`). All device *behavior* lives in
+//! [`IrCore`]; see that module for the engine and the generic design.
 
+use crate::peripherals::components::ir_core::IrCore;
 use crate::peripherals::i2c::I2cDevice;
-use labwired_ir::component::{
-    IrAutoIncrement, IrComponent, IrComponentInterface, IrObservableValue, IrUpdateAction,
-    IrUpdateTrigger,
-};
+use labwired_ir::component::{IrComponent, IrComponentInterface};
 
-/// Interpreter state for one component instance.
+/// An [`IrComponent`] bound to an I2C bus.
 pub struct IrI2cComponent {
-    spec: IrComponent,
+    core: IrCore,
     addr: u8,
-    regs: Vec<u8>,
-    wide: Vec<u16>, // parallel to spec.wide_registers; raw 16-bit register image
-    pointer: u8,
-    read_phase: u8, // 0 = MSB next (wide reads); reset on START
-    writes_since_start: u32,
 }
 
 impl IrI2cComponent {
-    /// Build an interpreter from a validated spec. `address_override` comes
-    /// from the manifest's `i2c_address` config when present.
+    /// Build from a spec with an `i2c` interface. `address_override` comes from
+    /// the manifest's `i2c_address` config when present. Returns `Err` if the
+    /// spec is not I2C-bound or fails validation.
     pub fn new(spec: IrComponent, address_override: Option<u8>) -> Result<Self, String> {
-        let diags = spec.validate();
-        if !diags.is_empty() {
-            return Err(diags
-                .iter()
-                .map(|d| format!("{}: {}", d.code, d.message))
-                .collect::<Vec<_>>()
-                .join("; "));
-        }
-        let IrComponentInterface::I2c { default_address } = &spec.interface;
-        let default_address = *default_address;
-        let mut regs = vec![0u8; spec.register_file.size];
-        for (&off, &v) in &spec.register_file.reset {
-            regs[off as usize] = v;
-        }
-        let wide = spec.wide_registers.iter().map(|w| w.reset).collect();
-        Ok(Self {
-            addr: address_override.unwrap_or(default_address),
-            regs,
-            wide,
-            pointer: 0,
-            read_phase: 0,
-            writes_since_start: 0,
-            spec,
-        })
+        let IrComponentInterface::I2c { default_address } = &spec.interface else {
+            return Err("IrI2cComponent requires an i2c interface".to_string());
+        };
+        let addr = address_override.unwrap_or(*default_address);
+        let core = IrCore::new(spec)?;
+        Ok(Self { core, addr })
     }
 
-    fn auto_increment_enabled(&self) -> bool {
-        match self.spec.pointer.as_ref().map(|p| &p.auto_increment) {
-            Some(IrAutoIncrement::Always) => true,
-            Some(IrAutoIncrement::WhenFieldSet { reg, mask }) => {
-                self.regs[*reg as usize] & mask != 0
-            }
-            Some(IrAutoIncrement::Never) | None => false,
-        }
-    }
-
-    fn wide_index(&self, pointer: u8) -> Option<usize> {
-        self.spec
-            .wide_registers
-            .iter()
-            .position(|w| w.pointer == pointer)
+    /// Read a named observable for a specific channel. Delegates to
+    /// [`IrCore::observable`]; returns `None` for an unknown name, an
+    /// out-of-range channel, or a `none_when_raw_zero` observable reading 0.
+    pub fn observable(&self, name: &str, channel: u8) -> Option<f32> {
+        self.core.observable(name, channel)
     }
 }
 
@@ -77,58 +46,15 @@ impl I2cDevice for IrI2cComponent {
     }
 
     fn start(&mut self) {
-        self.writes_since_start = 0;
-        self.read_phase = 0;
+        self.core.reset_frame();
     }
 
     fn write(&mut self, data: u8) {
-        let pointered = self
-            .spec
-            .pointer
-            .as_ref()
-            .map(|p| p.first_write_after_start_sets_pointer)
-            .unwrap_or(false);
-        if pointered && self.writes_since_start == 0 {
-            let mask = self.spec.pointer.as_ref().unwrap().pointer_mask;
-            self.pointer = data & mask;
-        } else if self.wide_index(self.pointer).is_some() {
-            // Absorb: the current pointer selects a wide (multi-byte) register.
-            // Wide registers have no writable byte representation; data writes
-            // after the pointer-select are silently discarded, matching the
-            // reference behavior for read-only wide-register devices (e.g. TMP102
-            // config register: the host may send config bytes that the simulator
-            // ignores, preserving the reset value intact).
-        } else {
-            let idx = self.pointer as usize % self.regs.len();
-            self.regs[idx] = data;
-            if self.auto_increment_enabled() {
-                self.pointer = self.pointer.wrapping_add(1);
-            }
-        }
-        self.writes_since_start = self.writes_since_start.saturating_add(1);
+        self.core.write(data);
     }
 
     fn read(&mut self) -> u8 {
-        if let Some(wi) = self.wide_index(self.pointer) {
-            let value = self.wide[wi];
-            let byte = if self.read_phase == 0 {
-                (value >> 8) as u8
-            } else {
-                (value & 0xFF) as u8
-            };
-            self.read_phase ^= 1;
-            if self.read_phase == 0 {
-                let ptr = self.pointer;
-                self.apply_updates_on_wide_read_complete(ptr);
-            }
-            return byte;
-        }
-        let idx = self.pointer as usize % self.regs.len();
-        let v = self.regs[idx];
-        if self.auto_increment_enabled() {
-            self.pointer = self.pointer.wrapping_add(1);
-        }
-        v
+        self.core.read()
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {
@@ -137,76 +63,6 @@ impl I2cDevice for IrI2cComponent {
 
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
-    }
-}
-
-impl IrI2cComponent {
-    /// Read a named observable for a specific channel.
-    ///
-    /// Returns `None` when:
-    /// - `name` does not match any declared observable,
-    /// - `channel` is out of range for the observable's `channels` count,
-    /// - the observable's map has `none_when_raw_zero` set and the raw value is 0.
-    ///
-    /// Otherwise returns the mapped engineering value (or the raw value as `f32`
-    /// if no `map` is declared).
-    pub fn observable(&self, name: &str, channel: u8) -> Option<f32> {
-        let obs = self.spec.observables.iter().find(|o| o.name == name)?;
-        if channel >= obs.channels {
-            return None;
-        }
-        let base = obs.base as usize + obs.stride as usize * channel as usize;
-        let IrObservableValue::U12Compose {
-            lo_rel,
-            hi_rel,
-            hi_mask,
-        } = obs.value;
-        let lo = self.regs[base + lo_rel as usize];
-        let hi = self.regs[base + hi_rel as usize] & hi_mask;
-        let raw = ((hi as u16) << 8) | lo as u16;
-        if let Some(map) = &obs.map {
-            if map.none_when_raw_zero && raw == 0 {
-                return None;
-            }
-            let eng = raw as f32 * map.linear.scale + map.linear.offset;
-            let eng = if let Some((lo_clamp, hi_clamp)) = map.linear.clamp {
-                eng.clamp(lo_clamp, hi_clamp)
-            } else {
-                eng
-            };
-            Some(eng)
-        } else {
-            Some(raw as f32)
-        }
-    }
-
-    fn apply_updates_on_wide_read_complete(&mut self, pointer: u8) {
-        // Collect first to satisfy the borrow checker; specs are small.
-        let actions: Vec<IrUpdateAction> = self
-            .spec
-            .updates
-            .iter()
-            .filter(|u| {
-                matches!(u.trigger, IrUpdateTrigger::WideReadComplete { pointer: p } if p == pointer)
-            })
-            .map(|u| u.action.clone())
-            .collect();
-        if actions.is_empty() {
-            return;
-        }
-        let wi = self.wide_index(pointer).expect("validated");
-        for a in actions {
-            let IrUpdateAction::AddWrap { add, max, reset } = a;
-            // Storage is the raw 16-bit register image; AddWrap is defined as
-            // signed per the IR doc ("signed compare, as i16"), so the signed
-            // view exists only here — registers with bit 15 set remain
-            // well-defined (e.g. reset=0xE700 stays negative after wrapping add).
-            let mut v = (self.wide[wi] as i16).wrapping_add(add);
-            if v > max {
-                v = reset;
-            }
-            self.wide[wi] = v as u16;
-        }
     }
 }
 
