@@ -48,20 +48,27 @@ export function mcuBoardKey(ctx: ErcContext, part: Part): string {
   return PIN_MAPS[part.type] ? part.type : ctx.diagram.board;
 }
 
+/** Strip a trailing `.N` multi-instance suffix from a pin name (e.g. `GND.2` → `GND`).
+ *  The raw name is preserved in diagnostics/subjects; only the lookup key is normalised. */
+function stripPinSuffix(pin: string): string {
+  return pin.replace(/\.\d+$/, '');
+}
+
 /** Effective electrical pin info for a member; null = legacy/unknown (skip pin rules). */
 export function effectivePin(ctx: ErcContext, member: PinRef): EffectivePin | null {
   const part = ctx.partsById.get(member.part);
   if (!part) return null;
+  const normalPin = stripPinSuffix(member.pin);
   if (isMcuPart(ctx, part)) {
-    const el = getPinEtype(mcuBoardKey(ctx, part), member.pin);
+    const el = getPinEtype(mcuBoardKey(ctx, part), normalPin);
     if (!el) return null;
-    const fn = getPinMapping(mcuBoardKey(ctx, part), member.pin);
+    const fn = getPinMapping(mcuBoardKey(ctx, part), normalPin);
     // Role from the pin map's declared functions, when unambiguous.
     const role = roleFromFunctions(fn);
     return { etype: el.etype, internalPullup: el.internalPullup, ...(role ? { role } : {}) };
   }
   const cat: CatalogPart | undefined = getCatalogPart(part.type);
-  const decl: PinDecl | undefined = cat?.pins?.find((p) => p.name === member.pin);
+  const decl: PinDecl | undefined = cat?.pins?.find((p) => p.name === normalPin);
   if (!decl) return null;
   return { etype: decl.etype, ...(decl.role ? { role: decl.role } : {}), ...(decl.required ? { required: true } : {}) };
 }
