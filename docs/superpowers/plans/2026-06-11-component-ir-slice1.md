@@ -68,7 +68,7 @@ observables:
     value:
       u12_compose: { lo_rel: 2, hi_rel: 3, hi_mask: 0x0F }
     map:
-      linear: { scale: 0.46291754, offset: -47.368423, clamp: [0.0, 180.0] }
+      linear: { scale: 0.46258224, offset: -47.368423, clamp: [0.0, 180.0] }
       none_when_raw_zero: true
 "#;
         let spec: IrComponent = serde_yaml::from_str(yaml).expect("parse");
@@ -809,7 +809,7 @@ Append to tests in `ir_component.rs`:
   stride: 4
   value: { u12_compose: { lo_rel: 2, hi_rel: 3, hi_mask: 0x0F } }
   map:
-    linear: { scale: 0.46291754, offset: -47.368423, clamp: [0.0, 180.0] }
+    linear: { scale: 0.46258224, offset: -47.368423, clamp: [0.0, 180.0] }
     none_when_raw_zero: true
 "#,
         )
@@ -890,7 +890,7 @@ Add to the second `impl IrI2cComponent` block:
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `cd core && cargo test -p labwired-core ir_component`
-Expected: PASS (7 tests). The linear coefficients derive from the firmware mapping: `deg = (raw/4096*20000 − 500)/1900*180` ⇒ `scale = 20000/4096/1900*180 ≈ 0.46291754`, `offset = −500/1900*180 ≈ −47.368423`.
+Expected: PASS (7 tests). The linear coefficients derive from the firmware mapping: `deg = (raw/4096*20000 − 500)/1900*180` ⇒ `scale = 20000/4096/1900*180 ≈ 0.46258224`, `offset = −500/1900*180 ≈ −47.368423`.
 
 - [ ] **Step 5: Commit**
 
@@ -938,7 +938,7 @@ observables:
     value:
       u12_compose: { lo_rel: 2, hi_rel: 3, hi_mask: 0x0F }   # OFF_L/OFF_H
     map:
-      linear: { scale: 0.46291754, offset: -47.368423, clamp: [0.0, 180.0] }
+      linear: { scale: 0.46258224, offset: -47.368423, clamp: [0.0, 180.0] }
       none_when_raw_zero: true
 ```
 

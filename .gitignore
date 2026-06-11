@@ -35,3 +35,6 @@ foundry/backend/server.log
 
 # agent-defined component specs (workspace-local)
 .labwired/
+
+# git worktrees
+.worktrees/
