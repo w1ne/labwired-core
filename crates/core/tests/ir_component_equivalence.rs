@@ -210,7 +210,8 @@ fn tmp102_temperature_reads_and_drift_are_byte_equivalent() {
     let mut ir = ir_tmp102();
     assert_eq!(rust.address(), ir.address());
     // 60 full temperature reads: crosses the 35 °C wrap at least once
-    // ((0x2300 - 0x1900) / 0x80 = 20 reads to first wrap; 60 reads = 3 cycles).
+    // ((0x2300 - 0x1900) / 0x80 = 20 reads to first wrap; 60 reads crosses the wrap twice
+    // (first at read 20, then every 31 reads)).
     for i in 0..60 {
         rust.start();
         ir.start();
@@ -229,4 +230,19 @@ fn tmp102_temperature_reads_and_drift_are_byte_equivalent() {
         assert_eq!(rust.read(), ir.read(), "ptr {ptr} MSB");
         assert_eq!(rust.read(), ir.read(), "ptr {ptr} LSB");
     }
+    // Config-write cross-validation: write pointer 0x01, write a data byte (0x55)
+    // — absorbed by both models; then read back config (MSB + LSB) and assert
+    // byte equality. Proves absorb-and-ignore is byte-identical, not just by-construction.
+    rust.start();
+    ir.start();
+    rust.write(0x01); // pointer → config register
+    ir.write(0x01);
+    rust.write(0x55); // absorbed/ignored by both models
+    ir.write(0x55);
+    rust.start();
+    ir.start();
+    rust.write(0x01);
+    ir.write(0x01);
+    assert_eq!(rust.read(), ir.read(), "config MSB after write(0x55)");
+    assert_eq!(rust.read(), ir.read(), "config LSB after write(0x55)");
 }

@@ -56,7 +56,13 @@ pub fn build_i2c_device(
             )))
         }
         "ir" => {
-            let spec_path = config.get("spec_path").and_then(|v| v.as_str())?;
+            let spec_path = match config.get("spec_path").and_then(|v| v.as_str()) {
+                Some(p) => p,
+                None => {
+                    eprintln!("ir component: missing required 'spec_path' in config");
+                    return None;
+                }
+            };
             let yaml = match std::fs::read_to_string(spec_path) {
                 Ok(y) => y,
                 Err(e) => {
