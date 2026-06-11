@@ -150,3 +150,41 @@ fn systick_and_usart_reset_state_match_silicon() {
         "USART3_ISR"
     );
 }
+
+#[test]
+fn class_model_reset_state_matches_silicon() {
+    // SPI1/SPI2 (stm32h5 profile), ADC1 (stm32l4 layout), RTC (rtc_v3) and
+    // GPDMA1 reset values, all pinned to the 2026-06-11 NUCLEO-H563ZI
+    // capture (validation corpus probe-20260611).
+    let bus = h563_bus();
+    let rd = |addr: u64| bus.read_u32(addr).unwrap();
+
+    // SPI1 @ 0x4001_3000 / SPI2 @ 0x4000_3800.
+    for base in [0x4001_3000u64, 0x4000_3800] {
+        assert_eq!(rd(base), 0, "SPI CR1 @ {base:#X}");
+        assert_eq!(rd(base + 0x08), 0x0007_0007, "SPI CFG1 @ {base:#X}");
+        assert_eq!(rd(base + 0x0C), 0, "SPI CFG2 @ {base:#X}");
+        assert_eq!(rd(base + 0x14), 0x0000_1002, "SPI SR @ {base:#X}");
+        assert_eq!(rd(base + 0x40), 0x0000_0107, "SPI CRCPOLY @ {base:#X}");
+    }
+
+    // ADC1 @ 0x4202_8000: deep power-down + JQDIS out of reset.
+    assert_eq!(rd(0x4202_8000), 0, "ADC1_ISR");
+    assert_eq!(rd(0x4202_8008), 0x2000_0000, "ADC1_CR");
+    assert_eq!(rd(0x4202_800C), 0x8000_0000, "ADC1_CFGR");
+
+    // RTC @ 0x4400_7800 (fresh backup domain).
+    assert_eq!(rd(0x4400_7800), 0, "RTC_TR");
+    assert_eq!(rd(0x4400_7804), 0x0000_2101, "RTC_DR");
+    assert_eq!(rd(0x4400_780C), 0x0000_0007, "RTC_ICSR");
+    assert_eq!(rd(0x4400_7810), 0x007F_00FF, "RTC_PRER");
+    assert_eq!(rd(0x4400_7814), 0x0000_FFFF, "RTC_WUTR");
+    assert_eq!(rd(0x4400_7818), 0, "RTC_CR");
+
+    // GPDMA1 @ 0x4002_0000: every channel idles with IDLEF.
+    assert_eq!(rd(0x4002_0000), 0, "GPDMA1_SECCFGR");
+    for ch in 0..8u64 {
+        let csr = 0x4002_0000 + 0x60 + ch * 0x80;
+        assert_eq!(rd(csr), 0x1, "GPDMA1_C{ch}SR");
+    }
+}

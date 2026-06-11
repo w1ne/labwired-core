@@ -44,8 +44,8 @@
     "source_rev": "7e05c41010f68f5c0a918513f6ed4630e09ae3ae"
   },
   "stm32h563.elf": {
-    "sha256": "ec11035190a939c93e2569ee030e79a534ed74217e6dab9b2efa4d14cd56638a",
-    "source_rev": "19768ed1a194bc91b3184d8c9b1c9ab17d67cd0b"
+    "sha256": "0d85d9e8084df2c3f5cba1ee248ec5858dfb10cea19db8d209ff0a16b08e0358",
+    "source_rev": "2822bece2299579bc006462600f47a33c489d84e"
   },
   "stm32l073.elf": {
     "sha256": "ccde5651b202c2c6797b0b3e9f23c3798b879070d1b85a23f28c683e1558c447",

@@ -86,7 +86,10 @@ const PG4: u32 = 1 << 4;
 
 /// A single MMIO probe: optional prep writes (clock enables / pin
 /// pre-state), the write under test, then a masked readback that must match
-/// `expect` on both sim and hardware.
+/// `expect` on both sim and hardware. `settle_ticks` runs the sim's
+/// peripheral tick loop after the write so autonomous engines (GPDMA,
+/// running timers) make progress — silicon runs free while the debugger
+/// round-trips, so the hardware side needs no equivalent.
 struct MmioCase {
     label: &'static str,
     prep: &'static [(u32, u32)],
@@ -94,6 +97,7 @@ struct MmioCase {
     read_addr: u32,
     mask: u32,
     expect: u32,
+    settle_ticks: u32,
 }
 
 const CASES: &[MmioCase] = &[
@@ -105,6 +109,7 @@ const CASES: &[MmioCase] = &[
         read_addr: RCC_AHB2ENR,
         mask: GPIOBEN,
         expect: GPIOBEN,
+        settle_ticks: 0,
     },
     // ── GPIOB output data path (PB0 / LD1) — word writes at 0x4202_0414/18/28.
     // A bit-band-translating bus would shadow all of these (rewrite them into
@@ -116,6 +121,7 @@ const CASES: &[MmioCase] = &[
         read_addr: GPIOB_ODR,
         mask: PB0,
         expect: PB0,
+        settle_ticks: 0,
     },
     MmioCase {
         label: "GPIOB BSRR set PB0 -> ODR bit0",
@@ -124,6 +130,7 @@ const CASES: &[MmioCase] = &[
         read_addr: GPIOB_ODR,
         mask: PB0,
         expect: PB0,
+        settle_ticks: 0,
     },
     MmioCase {
         label: "GPIOB BSRR reset PB0 (high half) -> ODR bit0=0",
@@ -132,6 +139,7 @@ const CASES: &[MmioCase] = &[
         read_addr: GPIOB_ODR,
         mask: PB0,
         expect: 0,
+        settle_ticks: 0,
     },
     MmioCase {
         label: "GPIOB BRR reset PB0 -> ODR bit0=0",
@@ -140,6 +148,7 @@ const CASES: &[MmioCase] = &[
         read_addr: GPIOB_ODR,
         mask: PB0,
         expect: 0,
+        settle_ticks: 0,
     },
     // BSRR carries set+reset for the same pin in one 32-bit word: BS wins
     // (RM0481 §12.4.7). Only an atomic word-level write models this — the
@@ -151,6 +160,7 @@ const CASES: &[MmioCase] = &[
         read_addr: GPIOB_ODR,
         mask: PB0,
         expect: PB0,
+        settle_ticks: 0,
     },
     // ── GPIOF / GPIOG data path (LD2 / LD3) — the io-smoke pins that were
     // shadowed before ee1133c.
@@ -161,6 +171,7 @@ const CASES: &[MmioCase] = &[
         read_addr: GPIOF_ODR,
         mask: PF4,
         expect: PF4,
+        settle_ticks: 0,
     },
     MmioCase {
         label: "GPIOG BSRR set PG4 -> ODR bit4",
@@ -169,6 +180,7 @@ const CASES: &[MmioCase] = &[
         read_addr: GPIOG_ODR,
         mask: PG4,
         expect: PG4,
+        settle_ticks: 0,
     },
 ];
 
@@ -255,6 +267,493 @@ const PARITY_REGS: &[ParityReg] = &[
     },
 ];
 
+// ── Class-model cases: SPI / ADC / RTC / GPDMA / TIM1-PWM / NVIC ─────────────
+//
+// Sequential probe of every model added for the spi/adc/pwm/rtc/irq/dma
+// tier1 classes, mirroring the 2026-06-11 bench captures (validation
+// corpus probe-20260611). Cases run in order on ONE sim bus and ONE halted
+// board — state deliberately carries from case to case, exactly like the
+// original capture scripts.
+
+const RCC_AHB1ENR: u32 = RCC_BASE + 0x88;
+const RCC_APB2ENR: u32 = RCC_BASE + 0xA4;
+const RCC_APB3ENR: u32 = RCC_BASE + 0xA8;
+const RCC_BDCR: u32 = RCC_BASE + 0xF0;
+/// AHB1ENR reset (capture: 0xD000_0100) + GPDMA1EN(0).
+const AHB1_GPDMA: u32 = 0xD000_0101;
+const APB2_TIM1_SPI1: u32 = (1 << 11) | (1 << 12);
+
+const SPI1: u32 = 0x4001_3000;
+const SPI1_CR1: u32 = SPI1;
+const SPI1_CR2: u32 = SPI1 + 0x04;
+const SPI1_CFG1: u32 = SPI1 + 0x08;
+const SPI1_CFG2: u32 = SPI1 + 0x0C;
+const SPI1_SR: u32 = SPI1 + 0x14;
+const SPI1_IFCR: u32 = SPI1 + 0x18;
+const SPI1_TXDR: u32 = SPI1 + 0x20;
+const SPI1_CRCPOLY: u32 = SPI1 + 0x40;
+const SSI: u32 = 1 << 12;
+const SPE: u32 = 1;
+const CSTART: u32 = 1 << 9;
+const MASTER_SSM: u32 = (1 << 22) | (1 << 26);
+
+const ADC1: u32 = 0x4202_8000;
+const ADC1_ISR: u32 = ADC1;
+const ADC1_CR: u32 = ADC1 + 0x08;
+
+const RTC: u32 = 0x4400_7800;
+const RTC_TR: u32 = RTC;
+const RTC_DR: u32 = RTC + 0x04;
+const RTC_ICSR: u32 = RTC + 0x0C;
+const RTC_PRER: u32 = RTC + 0x10;
+const RTC_CR: u32 = RTC + 0x18;
+const RTC_WPR: u32 = RTC + 0x24;
+const PWR_DBPCR: u32 = 0x4402_0824;
+
+const GPDMA_C0FCR: u32 = 0x4002_005C;
+const GPDMA_C0SR: u32 = 0x4002_0060;
+const GPDMA_C0CR: u32 = 0x4002_0064;
+const GPDMA_C0TR1: u32 = 0x4002_0090;
+const GPDMA_C0TR2: u32 = 0x4002_0094;
+const GPDMA_C0BR1: u32 = 0x4002_0098;
+const GPDMA_C0SAR: u32 = 0x4002_009C;
+const GPDMA_C0DAR: u32 = 0x4002_00A0;
+const DMA_SRC: u32 = 0x2000_1000;
+const DMA_DST: u32 = 0x2000_1100;
+
+const TIM1: u32 = 0x4001_2C00;
+
+const NVIC_ISER0: u32 = 0xE000_E100;
+const NVIC_ICER0: u32 = 0xE000_E180;
+
+const CLASS_CASES: &[MmioCase] = &[
+    // ── SPI1 (stm32h5 IP) ──
+    MmioCase {
+        label: "SPI1 CFG1 reset",
+        prep: &[],
+        write: (RCC_APB2ENR, APB2_TIM1_SPI1),
+        read_addr: SPI1_CFG1,
+        mask: 0xFFFF_FFFF,
+        expect: 0x0007_0007,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "SPI1 SR reset (TXP|TXC)",
+        prep: &[],
+        write: (RCC_APB2ENR, APB2_TIM1_SPI1),
+        read_addr: SPI1_SR,
+        mask: 0xFFFF_FFFF,
+        expect: 0x0000_1002,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "SPI1 CRCPOLY reset",
+        prep: &[],
+        write: (RCC_APB2ENR, APB2_TIM1_SPI1),
+        read_addr: SPI1_CRCPOLY,
+        mask: 0xFFFF_FFFF,
+        expect: 0x0000_0107,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "SPI1 CFG1 round-trip",
+        prep: &[],
+        write: (SPI1_CFG1, 0x7000_0007),
+        read_addr: SPI1_CFG1,
+        mask: 0xFFFF_FFFF,
+        expect: 0x7000_0007,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "SPI1 CFG1 reserved bits read zero",
+        prep: &[],
+        write: (SPI1_CFG1, 0x5555_AAAA),
+        read_addr: SPI1_CFG1,
+        mask: 0xFFFF_FFFF,
+        expect: 0x5055_82AA,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "SPI1 MASTER refused while SS low (SSM, SSI=0)",
+        prep: &[(SPI1_CR1, 0), (SPI1_CFG1, 0x0007_0007)],
+        write: (SPI1_CFG2, MASTER_SSM),
+        read_addr: SPI1_CFG2,
+        mask: 0xFFFF_FFFF,
+        expect: 1 << 26,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        // Attempt SPE with the internal SS still low: the enable is refused
+        // and MODF stands in SR (capture round 1: SR read 0x1202 after the
+        // refused SPE).
+        label: "SPI1 MODF latched in SR after refused SPE",
+        prep: &[],
+        write: (SPI1_CR1, SPE),
+        read_addr: SPI1_SR,
+        mask: 1 << 9,
+        expect: 1 << 9,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "SPI1 IFCR clears MODF",
+        prep: &[],
+        write: (SPI1_IFCR, 0xFFFF_FFFF),
+        read_addr: SPI1_SR,
+        mask: 1 << 9,
+        expect: 0,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "SPI1 MASTER sticks with SSI high",
+        prep: &[(SPI1_CR1, SSI), (SPI1_CFG2, 0)],
+        write: (SPI1_CFG2, MASTER_SSM),
+        read_addr: SPI1_CFG2,
+        mask: 0xFFFF_FFFF,
+        expect: MASTER_SSM,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "SPI1 SPE loads CTSIZE, drops TXC",
+        prep: &[(SPI1_CR2, 2)],
+        write: (SPI1_CR1, SSI | SPE),
+        read_addr: SPI1_SR,
+        mask: 0xFFFF_1002,
+        expect: 0x0002_0002,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "SPI1 CFG2 locked while SPE",
+        prep: &[],
+        write: (SPI1_CFG2, 0),
+        read_addr: SPI1_CFG2,
+        mask: 0xFFFF_FFFF,
+        expect: MASTER_SSM,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "SPI1 TXDR sets TXTF",
+        prep: &[(SPI1_CR1, SSI | SPE | CSTART)],
+        write: (SPI1_TXDR, 0xA5),
+        read_addr: SPI1_SR,
+        mask: 1 << 4,
+        expect: 1 << 4,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "SPI1 IFCR clears TXTF",
+        prep: &[],
+        write: (SPI1_IFCR, 0xFFFF_FFFF),
+        read_addr: SPI1_SR,
+        mask: 1 << 4,
+        expect: 0,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "SPI1 disable restores TXC",
+        prep: &[],
+        write: (SPI1_CR1, SSI),
+        read_addr: SPI1_SR,
+        mask: 1 << 12,
+        expect: 1 << 12,
+        settle_ticks: 0,
+    },
+    // ── ADC1 power-up handshake ──
+    MmioCase {
+        label: "ADC1 CR resets to DEEPPWD",
+        prep: &[(SPI1_CR1, 0), (SPI1_CFG2, 0), (SPI1_CR2, 0)],
+        write: (RCC_AHB2ENR, AHB2ENR_RESET | (1 << 10)),
+        read_addr: ADC1_CR,
+        mask: 0xFFFF_FFFF,
+        expect: 0x2000_0000,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "ADC1 DEEPPWD clears",
+        prep: &[],
+        write: (ADC1_CR, 0),
+        read_addr: ADC1_CR,
+        mask: 0xFFFF_FFFF,
+        expect: 0,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "ADC1 ADVREGEN",
+        prep: &[],
+        write: (ADC1_CR, 1 << 28),
+        read_addr: ADC1_CR,
+        mask: 0xFFFF_FFFF,
+        expect: 1 << 28,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "ADC1 ADEN raises ADRDY",
+        prep: &[],
+        write: (ADC1_CR, (1 << 28) | 1),
+        read_addr: ADC1_ISR,
+        mask: 0x1,
+        expect: 0x1,
+        settle_ticks: 0,
+    },
+    // ── RTC v3 bring-up (DBP -> LSI -> RTCEN -> WPR -> init) ──
+    // RTCSEL is write-once until a backup-domain reset; the bench board
+    // already carries RTCSEL=LSI from the onboarding probes, so the BDCR
+    // writes below are idempotent there and first-time on the sim.
+    MmioCase {
+        label: "RCC BDCR LSION -> LSIRDY",
+        prep: &[
+            (ADC1_ISR, 0x1),
+            (ADC1_CR, 0x2000_0000),
+            (RCC_APB3ENR, 1 << 21),
+            (PWR_DBPCR, 1),
+        ],
+        write: (RCC_BDCR, 1 << 26),
+        read_addr: RCC_BDCR,
+        mask: 1 << 27,
+        expect: 1 << 27,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "RCC BDCR RTCSEL=LSI + RTCEN",
+        prep: &[],
+        write: (RCC_BDCR, (1 << 26) | (0x2 << 8) | (1 << 15)),
+        read_addr: RCC_BDCR,
+        mask: 1 << 15,
+        expect: 1 << 15,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "RTC WPR unlock + CR.BYPSHAD",
+        prep: &[(RTC_WPR, 0xCA), (RTC_WPR, 0x53)],
+        write: (RTC_CR, 1 << 5),
+        read_addr: RTC_CR,
+        mask: 0xFFFF_FFFF,
+        expect: 1 << 5,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "RTC INIT -> INITF",
+        prep: &[],
+        write: (RTC_ICSR, 1 << 7),
+        read_addr: RTC_ICSR,
+        mask: 0xC0,
+        expect: 0xC0,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "RTC TR write in init mode",
+        prep: &[],
+        write: (RTC_TR, 0x0012_3456),
+        read_addr: RTC_TR,
+        mask: 0xFFFF_FFFF,
+        expect: 0x0012_3456,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "RTC DR write in init mode",
+        prep: &[],
+        write: (RTC_DR, 0x0026_0611),
+        read_addr: RTC_DR,
+        mask: 0x00FF_FF3F,
+        expect: 0x0026_0611 & 0x00FF_FF3F,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "RTC PRER round-trip",
+        prep: &[],
+        write: (RTC_PRER, 0x007F_00FF),
+        read_addr: RTC_PRER,
+        mask: 0xFFFF_FFFF,
+        expect: 0x007F_00FF,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "RTC exit init -> INITS, INITF clear",
+        prep: &[],
+        write: (RTC_ICSR, 0),
+        read_addr: RTC_ICSR,
+        mask: 0x50,
+        expect: 0x10,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "RTC calendar holds written time after relock",
+        prep: &[(RTC_WPR, 0xFF)],
+        write: (RTC_TR, 0), // locked write — must be dropped on both sides
+        read_addr: RTC_TR,
+        mask: 0x00FF_FF00,
+        expect: 0x0012_3400,
+        settle_ticks: 0,
+    },
+    // ── GPDMA1 channel 0 mem-to-mem (autonomous engine on silicon) ──
+    MmioCase {
+        label: "GPDMA C0SR idles with IDLEF",
+        prep: &[],
+        write: (RCC_AHB1ENR, AHB1_GPDMA),
+        read_addr: GPDMA_C0SR,
+        mask: 0xFFFF_FFFF,
+        expect: 0x1,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "GPDMA mem-to-mem completes (TCF|HTF|IDLEF)",
+        prep: &[
+            (DMA_SRC, 0x1122_3344),
+            (DMA_SRC + 4, 0x5566_7788),
+            (DMA_SRC + 8, 0x99AA_BBCC),
+            (DMA_SRC + 12, 0xDDEE_FF00),
+            (DMA_DST, 0),
+            (DMA_DST + 4, 0),
+            (DMA_DST + 8, 0),
+            (DMA_DST + 12, 0),
+            (GPDMA_C0FCR, 0xFFFF_FFFF),
+            (GPDMA_C0TR1, (1 << 3) | (1 << 19)),
+            (GPDMA_C0TR2, 1 << 9),
+            (GPDMA_C0BR1, 16),
+            (GPDMA_C0SAR, DMA_SRC),
+            (GPDMA_C0DAR, DMA_DST),
+        ],
+        write: (GPDMA_C0CR, 0x1),
+        read_addr: GPDMA_C0SR,
+        mask: 0xFFFF_FFFF,
+        expect: 0x301,
+        settle_ticks: 64,
+    },
+    MmioCase {
+        label: "GPDMA BNDT drained to 0",
+        prep: &[],
+        write: (RCC_AHB1ENR, AHB1_GPDMA),
+        read_addr: GPDMA_C0BR1,
+        mask: 0xFFFF,
+        expect: 0,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "GPDMA SAR advanced by block",
+        prep: &[],
+        write: (RCC_AHB1ENR, AHB1_GPDMA),
+        read_addr: GPDMA_C0SAR,
+        mask: 0xFFFF_FFFF,
+        expect: DMA_SRC + 16,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "GPDMA dest word 0",
+        prep: &[],
+        write: (RCC_AHB1ENR, AHB1_GPDMA),
+        read_addr: DMA_DST,
+        mask: 0xFFFF_FFFF,
+        expect: 0x1122_3344,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "GPDMA dest word 3",
+        prep: &[],
+        write: (RCC_AHB1ENR, AHB1_GPDMA),
+        read_addr: DMA_DST + 12,
+        mask: 0xFFFF_FFFF,
+        expect: 0xDDEE_FF00,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "GPDMA EN auto-clears at TC",
+        prep: &[],
+        write: (RCC_AHB1ENR, AHB1_GPDMA),
+        read_addr: GPDMA_C0CR,
+        mask: 0x1,
+        expect: 0,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "GPDMA CFCR clears flags back to idle",
+        prep: &[],
+        write: (GPDMA_C0FCR, 0xFFFF_FFFF),
+        read_addr: GPDMA_C0SR,
+        mask: 0xFFFF_FFFF,
+        expect: 0x1,
+        settle_ticks: 0,
+    },
+    // ── TIM1 PWM surface + run (timer free-runs on silicon while halted) ──
+    MmioCase {
+        label: "TIM1 CCMR1 PWM mode 1 round-trip",
+        prep: &[],
+        write: (TIM1 + 0x18, 0x0068),
+        read_addr: TIM1 + 0x18,
+        mask: 0xFFFF,
+        expect: 0x0068,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "TIM1 CCER CC1E round-trip",
+        prep: &[],
+        write: (TIM1 + 0x20, 0x0001),
+        read_addr: TIM1 + 0x20,
+        mask: 0xFFFF,
+        expect: 0x0001,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "TIM1 BDTR MOE round-trip",
+        prep: &[],
+        write: (TIM1 + 0x44, 0x8000),
+        read_addr: TIM1 + 0x44,
+        mask: 0x8000,
+        expect: 0x8000,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "TIM1 PWM run latches UIF+CC1..4IF+CC5/6IF",
+        prep: &[
+            (TIM1 + 0x28, 0),   // PSC
+            (TIM1 + 0x2C, 100), // ARR
+            (TIM1 + 0x34, 50),  // CCR1
+            (TIM1 + 0x14, 1),   // EGR.UG
+            (TIM1 + 0x10, 0),   // clear SR
+        ],
+        write: (TIM1, 0x1), // CEN
+        read_addr: TIM1 + 0x10,
+        mask: 0x0003_001F,
+        expect: 0x0003_001F,
+        settle_ticks: 300,
+    },
+    MmioCase {
+        label: "TIM1 stop + SR clear",
+        prep: &[(TIM1, 0), (TIM1 + 0x10, 0), (TIM1 + 0x2C, 0xFFFF)],
+        write: (TIM1 + 0x24, 0), // CNT
+        read_addr: TIM1 + 0x24,
+        mask: 0xFFFF_FFFF,
+        expect: 0,
+        settle_ticks: 0,
+    },
+    // ── NVIC enable machinery (M33 side of the F103-anchored oracle) ──
+    MmioCase {
+        label: "NVIC ISER0 set-enable",
+        prep: &[(NVIC_ICER0, 0xFFFF_FFFF)],
+        write: (NVIC_ISER0, (1 << 27) | (1 << 5)),
+        read_addr: NVIC_ISER0,
+        mask: 0xFFFF_FFFF,
+        expect: (1 << 27) | (1 << 5),
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "NVIC ICER0 clear-enable is selective",
+        prep: &[],
+        write: (NVIC_ICER0, 1 << 5),
+        read_addr: NVIC_ISER0,
+        mask: 0xFFFF_FFFF,
+        expect: 1 << 27,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "NVIC ICER0 full clear",
+        prep: &[],
+        write: (NVIC_ICER0, 0xFFFF_FFFF),
+        read_addr: NVIC_ISER0,
+        mask: 0xFFFF_FFFF,
+        expect: 0,
+        settle_ticks: 0,
+    },
+];
+
 // ── Sim bus construction ──────────────────────────────────────────────────────
 
 fn build_sim_bus() -> SystemBus {
@@ -272,7 +771,12 @@ fn build_sim_bus() -> SystemBus {
         peripherals: vec![],
         memory_overrides: Default::default(),
     };
-    SystemBus::from_config(&chip, &manifest).unwrap_or_else(|e| panic!("build sim bus: {e}"))
+    let mut bus =
+        SystemBus::from_config(&chip, &manifest).unwrap_or_else(|e| panic!("build sim bus: {e}"));
+    // Wire the real Cortex-M system block (NVIC/SCB/DWT) — the class cases
+    // probe NVIC ISER/ICER, which the raw bus constructor stubs out.
+    let _ = labwired_core::system::cortex_m::configure_cortex_m(&mut bus);
+    bus
 }
 
 /// Apply a case's prep + write to the sim bus and return the masked readback.
@@ -288,6 +792,9 @@ fn sim_masked_read(sim: &mut SystemBus, case: &MmioCase) -> u32 {
                 case.write.0, case.write.1
             )
         });
+    for _ in 0..case.settle_ticks {
+        sim.tick_peripherals_fully();
+    }
     let v = sim
         .read_u32(case.read_addr as u64)
         .unwrap_or_else(|e| panic!("sim read 0x{:08X}: {e:?}", case.read_addr));
@@ -359,6 +866,31 @@ fn h563_parity_sim_only() {
     );
 }
 
+/// Class-model sequence (SPI/ADC/RTC/GPDMA/TIM1/NVIC) against the sim alone.
+/// State carries across cases by design — run them in order on one bus.
+#[test]
+fn h563_class_sim_only() {
+    let mut sim = build_sim_bus();
+    let mut failures = Vec::new();
+
+    for case in CLASS_CASES {
+        let got = sim_masked_read(&mut sim, case);
+        if got != case.expect {
+            failures.push(format!(
+                "  [FAIL] {}: sim=0x{:08X} expected=0x{:08X} (mask=0x{:08X})",
+                case.label, got, case.expect, case.mask
+            ));
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "H563 sim class-model sequence diverged from silicon spec in {} case(s):\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
+}
+
 // ── Sim-vs-hardware diff (requires connected NUCLEO-H563ZI) ───────────────────
 
 #[cfg(feature = "hw-oracle-stm32")]
@@ -391,6 +923,12 @@ mod hw {
             write_both(sim, oc, addr, val);
         }
         write_both(sim, oc, case.write.0, case.write.1);
+        // Settle: the sim ticks its peripheral engines; silicon has been
+        // running free since the write (each TCL round-trip is ~ms), so a
+        // matching settle on the hardware side is implicit.
+        for _ in 0..case.settle_ticks {
+            sim.tick_peripherals_fully();
+        }
 
         let sim_val = match sim.read_u32(case.read_addr as u64) {
             Ok(v) => v,
@@ -534,6 +1072,68 @@ mod hw {
                 diverged, 0,
                 "parity sweep: {diverged} register-pattern(s) diverged"
             );
+        }
+    }
+
+    /// Class-model sequence (SPI/ADC/RTC/GPDMA/TIM1/NVIC), sim vs silicon.
+    /// Same ordered, state-carrying flow as the 2026-06-11 capture scripts —
+    /// including the autonomous GPDMA mem-to-mem block copy verified through
+    /// SRAM contents on both sides.
+    #[test]
+    #[ignore = "hw-oracle: requires connected NUCLEO-H563ZI"]
+    fn h563_class_diff() {
+        let _guard = HW_LOCK.lock().unwrap();
+
+        let mut sim = build_sim_bus();
+        let mut oc = OpenOcd::spawn_stm32h563().expect("openocd spawn_stm32h563");
+        oc.reset_halt().expect("reset halt failed");
+        oc.halt().expect("halt failed");
+
+        println!();
+        println!("STM32H563 class-model diff — {} cases", CLASS_CASES.len());
+        println!("{:-<90}", "");
+
+        let (mut matched, mut diverged, mut disagree, mut sim_err) = (0, 0, 0, 0);
+        for case in CLASS_CASES {
+            match run_case(&mut sim, &mut oc, case) {
+                Outcome::Match => {
+                    matched += 1;
+                    println!("[OK ]  {}", case.label);
+                }
+                Outcome::Diverge { sim, hw } => {
+                    diverged += 1;
+                    println!(
+                        "[DIFF] {}  sim=0x{:08X} hw=0x{:08X} (mask=0x{:08X})",
+                        case.label, sim, hw, case.mask
+                    );
+                }
+                Outcome::BothDisagreeWithExpect { both } => {
+                    disagree += 1;
+                    println!(
+                        "[BOTH] {}  both=0x{:08X} expected=0x{:08X}",
+                        case.label, both, case.expect
+                    );
+                }
+                Outcome::SimError(msg) => {
+                    sim_err += 1;
+                    println!("[SIM!] {}  sim error: {}", case.label, msg);
+                }
+            }
+        }
+
+        println!("{:-<90}", "");
+        println!(
+            "summary: match={matched} diverge={diverged} both_disagree={disagree} \
+             sim_err={sim_err} total={}",
+            CLASS_CASES.len()
+        );
+
+        oc.shutdown().ok();
+
+        if std::env::var("H563_STRICT").is_ok() {
+            assert_eq!(diverged, 0, "class diff: {diverged} register(s) diverged");
+            assert_eq!(disagree, 0, "class diff: {disagree} both-disagree case(s)");
+            assert_eq!(sim_err, 0, "class diff: {sim_err} sim error(s)");
         }
     }
 }
