@@ -84,12 +84,17 @@ pub trait SpiDevice: Send {
 pub enum SpiRegisterLayout {
     #[default]
     Stm32,
-    /// STM32 families with a TX/RX FIFO + CR2.DS data-size field (L4/F7/H5/
-    /// G4/…). Identical register layout to `Stm32`, but a **16-bit DR write at
+    /// STM32 families with a TX/RX FIFO + CR2.DS data-size field (L4/F7/G4/…).
+    /// Identical register layout to `Stm32`, but a **16-bit DR write at
     /// DS≤8 packs two frames** (RM0351 §40.4.9 data packing) — modelled so
     /// firmware that wrongly uses a 16-bit DR access at 8-bit data size
     /// mis-renders in the sim exactly as it does on silicon.
     Stm32Fifo,
+    /// STM32H5/H7 "SPI v3" IP (RM0481 §41) — a different peripheral from the
+    /// classic/FIFO map: 32-bit registers, split CFG1/CFG2 configuration,
+    /// write-1-to-clear IFCR, CR2.TSIZE frame counting with SR.CTSIZE, and a
+    /// CR1.CSTART-gated transfer engine. See [`Stm32H5SpiRegs`].
+    Stm32H5,
     Nrf52Spim,
 }
 
@@ -100,10 +105,12 @@ impl FromStr for SpiRegisterLayout {
         let v = value.trim().to_ascii_lowercase();
         match v.as_str() {
             "stm32" | "stm32f1" | "stm32f4" | "stm32v2" => Ok(Self::Stm32),
-            "stm32_fifo" | "stm32l4" | "stm32f7" | "stm32h5" | "stm32g4" => Ok(Self::Stm32Fifo),
+            "stm32_fifo" | "stm32l4" | "stm32f7" | "stm32g4" => Ok(Self::Stm32Fifo),
+            // H5 carries the H7-lineage "SPI v3" IP, not the L4/F7 FIFO map.
+            "stm32h5" => Ok(Self::Stm32H5),
             "nrf52" | "nrf52_spim" | "nrf_spim" | "nordic" => Ok(Self::Nrf52Spim),
             _ => Err(format!(
-                "unsupported SPI register layout '{}'; supported: stm32, stm32_fifo, nrf52",
+                "unsupported SPI register layout '{}'; supported: stm32, stm32_fifo, stm32h5, nrf52",
                 value
             )),
         }
@@ -114,8 +121,9 @@ impl FromStr for SpiRegisterLayout {
 /// single kind of scheduled wakeup, so the value is arbitrary).
 const SPI_DONE_TOKEN: u32 = 0;
 
-/// STM32 SPI register file (F1/F4/L0 classic and L4/F7/H5 FIFO share this map;
-/// `fifo` selects the FIFO DS/data-packing behaviour).
+/// STM32 SPI register file (F1/F4/L0 classic and L4/F7/G4 FIFO share this map;
+/// `fifo` selects the FIFO DS/data-packing behaviour). H5/H7 use the separate
+/// "SPI v3" map in [`Stm32H5SpiRegs`].
 #[derive(Debug, Clone, Default, serde::Serialize)]
 struct Stm32SpiRegs {
     fifo: bool,
@@ -145,6 +153,123 @@ impl Stm32SpiRegs {
             0x18 => self.txcrcr,
             0x1C => self.i2scfgr,
             0x20 => self.i2spr,
+            _ => 0,
+        }
+    }
+}
+
+/// STM32H5/H7 "SPI v3" register file (RM0481 §41) — H5-only state.
+///
+/// Register map (RM0481 / CMSIS stm32h563xx.h):
+///   0x00 CR1, 0x04 CR2, 0x08 CFG1, 0x0C CFG2, 0x10 IER, 0x14 SR,
+///   0x18 IFCR (write-only, reads 0), 0x20 TXDR (write-only),
+///   0x30 RXDR (read-only), 0x40 CRCPOLY, 0x44 TXCRC, 0x48 RXCRC,
+///   0x4C UDRDR, 0x50 I2SCFGR.
+///
+/// Reset values, write masks and the mode-fault/SPE-lock machinery are pinned
+/// by silicon capture 2026-06-11 (NUCLEO-H563ZI), probed over SWD.
+///
+/// ── Known divergence from the bench capture ────────────────────────────────
+/// The bench part had no SPI kernel clock configured, so real frames never
+/// shifted: TXDR writes set TXTF but CTSIZE never moved. The sim is always
+/// clocked, so with SPE+CSTART in master mode each TXDR write transmits one
+/// frame and decrements CTSIZE (same class of divergence as the RNG
+/// kernel-clock note in the chip yaml). RX is not modelled yet: the engine is
+/// TX-only and RXDR always reads 0.
+#[derive(Debug, Clone, Default, serde::Serialize)]
+struct Stm32H5SpiRegs {
+    cr1: u32,
+    cr2: u32,
+    cfg1: u32,
+    cfg2: u32,
+    ier: u32,
+    /// SR flag bits [15:0]; the CTSIZE field [31:16] lives in `ctsize`.
+    sr: u32,
+    /// SR.CTSIZE — remaining-frame count, loaded from CR2.TSIZE at SPE set.
+    ctsize: u32,
+    crcpoly: u32,
+    txcrc: u32,
+    rxcrc: u32,
+    udrdr: u32,
+    i2scfgr: u32,
+}
+
+// ── STM32H5 SPI bit positions (RM0481 §41.4) ────────────────────────────────
+/// CR1: peripheral enable.
+const H5_CR1_SPE: u32 = 1 << 0;
+/// CR1: master transfer start; HW-cleared when CTSIZE reaches 0.
+const H5_CR1_CSTART: u32 = 1 << 9;
+/// CR1: internal SS level when CFG2.SSM=1.
+const H5_CR1_SSI: u32 = 1 << 12;
+/// CR1 writable bits: SPE(0), MASRX(8), CSTART(9), HDDIR(11), SSI(12),
+/// CRC33_17(13), RCRCINI(14), TCRCINI(15), IOLOCK(16). CSUSP(10) is a
+/// write-only strobe and reads 0.
+const H5_CR1_WRITABLE: u32 = 0x0001_FB01;
+
+/// SR: TX-packet space available — always set (sim TX path is bottomless).
+const H5_SR_TXP: u32 = 1 << 1;
+/// SR: end of transfer (CTSIZE reached 0).
+const H5_SR_EOT: u32 = 1 << 3;
+/// SR: transmission of TxFIFO filled.
+const H5_SR_TXTF: u32 = 1 << 4;
+/// SR: mode fault.
+const H5_SR_MODF: u32 = 1 << 9;
+/// SR: transmission complete.
+const H5_SR_TXC: u32 = 1 << 12;
+/// SR reset value = TXP|TXC — silicon capture 2026-06-11 (NUCLEO-H563ZI).
+const H5_SR_RESET: u32 = H5_SR_TXP | H5_SR_TXC;
+
+/// CFG1 reserved bits, read as 0. Derived from the silicon round-trip triple
+/// 0x70000007 / 0x00080008 / 0x5555AAAA→0x505582AA — capture 2026-06-11
+/// (NUCLEO-H563ZI).
+const H5_CFG1_RESERVED: u32 = 0x0500_2800;
+/// CFG1 reset = MBR /8, CRCSIZE 8-bit, DSIZE 8-bit — silicon capture
+/// 2026-06-11 (NUCLEO-H563ZI).
+const H5_CFG1_RESET: u32 = 0x0007_0007;
+
+/// CFG2: master mode select.
+const H5_CFG2_MASTER: u32 = 1 << 22;
+/// CFG2: software SS management.
+const H5_CFG2_SSM: u32 = 1 << 26;
+
+/// IER writable bits [10:0] (RXPIE..TSERFIE).
+const H5_IER_WRITABLE: u32 = 0x0000_07FF;
+
+/// IFCR write-1-to-clear mask: EOTC(3), TXTFC(4), UDRC(5), OVRC(6), CRCEC(7),
+/// TIFREC(8), MODFC(9), SUSPC(11).
+const H5_IFCR_W1C: u32 = 0x0000_0BF8;
+
+/// CRCPOLY reset (CRC-8 x^8+x^2+x+1) — silicon capture 2026-06-11
+/// (NUCLEO-H563ZI).
+const H5_CRCPOLY_RESET: u32 = 0x0000_0107;
+
+impl Stm32H5SpiRegs {
+    fn reset() -> Self {
+        Self {
+            cfg1: H5_CFG1_RESET,
+            sr: H5_SR_RESET,
+            crcpoly: H5_CRCPOLY_RESET,
+            ..Default::default()
+        }
+    }
+
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x00 => self.cr1,
+            0x04 => self.cr2,
+            0x08 => self.cfg1,
+            0x0C => self.cfg2,
+            0x10 => self.ier,
+            // SR[31:16] = CTSIZE remaining-frame count, flags below.
+            0x14 => (self.ctsize << 16) | self.sr,
+            // IFCR (0x18) and TXDR (0x20) are write-only and read 0; RXDR
+            // (0x30) reads 0 in the TX-only model (see struct docs).
+            0x18 | 0x20 | 0x30 => 0,
+            0x40 => self.crcpoly,
+            0x44 => self.txcrc,
+            0x48 => self.rxcrc,
+            0x4C => self.udrdr,
+            0x50 => self.i2scfgr,
             _ => 0,
         }
     }
@@ -309,6 +434,7 @@ impl Nrf52SpiRegs {
 #[derive(Debug, Clone, serde::Serialize)]
 enum SpiRegs {
     Stm32(Stm32SpiRegs),
+    Stm32H5(Stm32H5SpiRegs),
     Nrf52(Nrf52SpiRegs),
 }
 
@@ -374,7 +500,7 @@ impl Spi {
     pub fn new_with_layout_cr2(layout: SpiRegisterLayout, cr2_mask: u32) -> Self {
         let regs = match layout {
             // CR2 reset is silicon-verified over SWD:
-            //   FIFO SPI (L4/F7/H5): CR2 = 0x0700 (DS=0b0111 8-bit + FRXTH).
+            //   FIFO SPI (L4/F7): CR2 = 0x0700 (DS=0b0111 8-bit + FRXTH).
             //   Classic SPI (F1/F4/L0): CR2 = 0x0000 (no DS field).
             SpiRegisterLayout::Stm32 => SpiRegs::Stm32(Stm32SpiRegs {
                 fifo: false,
@@ -388,6 +514,7 @@ impl Spi {
                 sr: 0x0002,
                 ..Default::default()
             }),
+            SpiRegisterLayout::Stm32H5 => SpiRegs::Stm32H5(Stm32H5SpiRegs::reset()),
             SpiRegisterLayout::Nrf52Spim => SpiRegs::Nrf52(Nrf52SpiRegs::default()),
         };
         Self {
@@ -422,7 +549,7 @@ impl Spi {
                 }
             }
             0x04 => {
-                // STM32L4/F7/H5 SPI CR2: DS[3:0] (bits 11:8) select the data
+                // STM32L4/F7 SPI CR2: DS[3:0] (bits 11:8) select the data
                 // frame size. Values below 0b0011 are reserved and hardware
                 // forces them to 0b0111 (8-bit) on FIFO parts — verified on
                 // NUCLEO-L476RG (CR2=0x0000 reads back 0x0700). Classic SPI
@@ -490,6 +617,154 @@ impl Spi {
             _ => {}
         }
     }
+
+    /// STM32H5 ("SPI v3") register write with transfer-engine side effects.
+    /// Only called on the `Stm32H5` variant. Behavioural rules pinned by
+    /// silicon capture 2026-06-11 (NUCLEO-H563ZI) unless noted otherwise.
+    fn write_stm32h5_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            0x00 => {
+                // CR1
+                if let SpiRegs::Stm32H5(r) = &mut self.regs {
+                    let prev = r.cr1;
+                    let mut v = value & H5_CR1_WRITABLE;
+                    // While the mode-fault condition stands (SR.MODF latched),
+                    // setting SPE is refused: CR1 = SPE|SSI after a fault
+                    // reads back 0x1000.
+                    if r.sr & H5_SR_MODF != 0 {
+                        v &= !H5_CR1_SPE;
+                    }
+                    // CSTART latches while a transfer is active: SW may only
+                    // set it (and only under SPE); HW clears it at EOT
+                    // (RM0481 §41.4.10).
+                    let cstart = (prev & H5_CR1_CSTART != 0)
+                        || (value & H5_CR1_CSTART != 0 && v & H5_CR1_SPE != 0);
+                    v = (v & !H5_CR1_CSTART) | if cstart { H5_CR1_CSTART } else { 0 };
+                    if prev & H5_CR1_SPE == 0 && v & H5_CR1_SPE != 0 {
+                        // SPE 0→1: load CTSIZE from CR2.TSIZE; a nonzero
+                        // frame count is a pending transfer, so TXC drops
+                        // (SR = 0x00020002 with TSIZE=2 on the bench).
+                        r.ctsize = r.cr2 & 0xFFFF;
+                        if r.ctsize > 0 {
+                            r.sr &= !H5_SR_TXC;
+                        }
+                    } else if prev & H5_CR1_SPE != 0 && v & H5_CR1_SPE == 0 {
+                        // SPE 1→0: TXC comes back, CTSIZE is retained
+                        // (SR = 0x00021002 on the bench) and the start
+                        // request is dropped.
+                        r.sr |= H5_SR_TXC;
+                        v &= !H5_CR1_CSTART;
+                    }
+                    r.cr1 = v;
+                }
+            }
+            0x04 => {
+                // CR2: TSIZE[15:0] (write 0x10 → reads 0x10 on the bench).
+                if let SpiRegs::Stm32H5(r) = &mut self.regs {
+                    r.cr2 = value & 0xFFFF;
+                }
+            }
+            0x08 => {
+                // CFG1: ignored while SPE=1 (config lock); reserved bits
+                // read as 0.
+                if let SpiRegs::Stm32H5(r) = &mut self.regs {
+                    if r.cr1 & H5_CR1_SPE == 0 {
+                        r.cfg1 = value & !H5_CFG1_RESERVED;
+                    }
+                }
+            }
+            0x0C => {
+                // CFG2: ignored while SPE=1. A MASTER request while the
+                // internal SS level is low (SSM=1 && CR1.SSI=0) mode-faults:
+                // MASTER is refused and SR.MODF latches (CFG2 write
+                // 0x04400000 with SSI=0 → reads 0x04000000, SR 0x1202).
+                if let SpiRegs::Stm32H5(r) = &mut self.regs {
+                    if r.cr1 & H5_CR1_SPE == 0 {
+                        let mut v = value;
+                        if v & H5_CFG2_MASTER != 0
+                            && v & H5_CFG2_SSM != 0
+                            && r.cr1 & H5_CR1_SSI == 0
+                        {
+                            v &= !H5_CFG2_MASTER;
+                            r.sr |= H5_SR_MODF;
+                        }
+                        r.cfg2 = v;
+                    }
+                }
+            }
+            0x10 => {
+                // IER (write 0x209 → reads 0x209 on the bench).
+                if let SpiRegs::Stm32H5(r) = &mut self.regs {
+                    r.ier = value & H5_IER_WRITABLE;
+                }
+            }
+            0x18 => {
+                // IFCR: write-1-to-clear for the clearable SR flags.
+                if let SpiRegs::Stm32H5(r) = &mut self.regs {
+                    r.sr &= !(value & H5_IFCR_W1C);
+                }
+            }
+            0x20 => {
+                // TXDR — the TX-only data engine (spec-derived; the bench
+                // part had no SPI kernel clock, see Stm32H5SpiRegs docs).
+                let (spe, started, master) = match &self.regs {
+                    SpiRegs::Stm32H5(r) => (
+                        r.cr1 & H5_CR1_SPE != 0,
+                        r.cr1 & H5_CR1_CSTART != 0,
+                        r.cfg2 & H5_CFG2_MASTER != 0,
+                    ),
+                    _ => return,
+                };
+                if !spe {
+                    return;
+                }
+                if let SpiRegs::Stm32H5(r) = &mut self.regs {
+                    // Any enabled TXDR write fills the TxFIFO → TXTF; TXP
+                    // stays set (sim TX path is bottomless).
+                    r.sr |= H5_SR_TXTF;
+                }
+                if started && master {
+                    // One frame per TXDR access. DSIZE (CFG1[4:0]) is stored
+                    // but not consumed by the TX-only engine: the low byte is
+                    // broadcast, matching the v1 byte-wide device routing.
+                    let mosi = (value & 0xFF) as u8;
+                    for dev in &mut self.attached_devices {
+                        dev.transfer(mosi);
+                    }
+                    if let SpiRegs::Stm32H5(r) = &mut self.regs {
+                        if r.ctsize > 0 {
+                            r.ctsize -= 1;
+                            if r.ctsize == 0 {
+                                // Frame count exhausted: EOT|TXC, start
+                                // request HW-cleared. TSIZE=0 (endless mode)
+                                // never reaches this — no EOT.
+                                r.sr |= H5_SR_EOT | H5_SR_TXC;
+                                r.cr1 &= !H5_CR1_CSTART;
+                            }
+                        }
+                    }
+                }
+            }
+            0x40 => {
+                if let SpiRegs::Stm32H5(r) = &mut self.regs {
+                    r.crcpoly = value;
+                }
+            }
+            0x4C => {
+                if let SpiRegs::Stm32H5(r) = &mut self.regs {
+                    r.udrdr = value;
+                }
+            }
+            0x50 => {
+                if let SpiRegs::Stm32H5(r) = &mut self.regs {
+                    r.i2scfgr = value;
+                }
+            }
+            // SR (0x14) is read-only (flags clear via IFCR); TXCRC/RXCRC
+            // (0x44/0x48) are HW-computed and read-only.
+            _ => {}
+        }
+    }
 }
 
 impl crate::Peripheral for Spi {
@@ -498,6 +773,7 @@ impl crate::Peripheral for Spi {
         let byte_offset = (offset % 4) as u32;
         let reg_val = match &self.regs {
             SpiRegs::Nrf52(r) => r.read_reg(reg_offset),
+            SpiRegs::Stm32H5(r) => r.read_reg(reg_offset),
             // Widen u16→u32 before the shift: byte accesses at offsets 2/3 read
             // the upper byte of the next halfword; `(u16 as u32) >> 16` is 0
             // without an overflow panic under the CI release profile.
@@ -525,6 +801,22 @@ impl crate::Peripheral for Spi {
             if start_triggered {
                 self.nrf52_pending_start = true;
             }
+            return Ok(());
+        }
+
+        // STM32H5: 32-bit registers — read-modify-write merge the byte, then
+        // hand the full word to the register handler. The write-only registers
+        // (TXDR, IFCR) read back 0, so the merge degenerates to the bare byte
+        // shifted into place — a byte write to TXDR is one 8-bit frame, which
+        // matches RM0481 §41.4.13 (TXDR access size = frame size).
+        if let SpiRegs::Stm32H5(_) = &self.regs {
+            let cur = match &self.regs {
+                SpiRegs::Stm32H5(r) => r.read_reg(reg_offset),
+                _ => 0,
+            };
+            let mask: u32 = 0xFF << (byte_offset * 8);
+            let new = (cur & !mask) | ((value as u32) << (byte_offset * 8));
+            self.write_stm32h5_reg(reg_offset, new);
             return Ok(());
         }
 
@@ -560,6 +852,13 @@ impl crate::Peripheral for Spi {
             }
             return Ok(());
         }
+        // STM32H5: 32-bit registers must be written atomically — a word write
+        // to TXDR is ONE frame (byte-splitting would transmit four), and IFCR
+        // (write-1-to-clear) must see the full mask in a single access.
+        if let SpiRegs::Stm32H5(_) = &self.regs {
+            self.write_stm32h5_reg(offset & !3, value);
+            return Ok(());
+        }
         // STM32 default: four byte writes.
         self.write(offset, (value & 0xFF) as u8)?;
         self.write(offset + 1, ((value >> 8) & 0xFF) as u8)?;
@@ -572,6 +871,18 @@ impl crate::Peripheral for Spi {
         if self.is_nrf() {
             self.write(offset, (value & 0xFF) as u8)?;
             self.write(offset + 1, ((value >> 8) & 0xFF) as u8)?;
+            return Ok(());
+        }
+        // STM32H5: a halfword TXDR access is ONE 16-bit frame (RM0481
+        // §41.4.13) — byte-splitting would transmit two frames. The classic
+        // 0x0C special-case below must not run either: 0x0C is CFG2 on H5.
+        if let SpiRegs::Stm32H5(_) = &self.regs {
+            if (offset & !3) == 0x20 {
+                self.write_stm32h5_reg(0x20, value as u32);
+            } else {
+                self.write(offset, (value & 0xFF) as u8)?;
+                self.write(offset + 1, ((value >> 8) & 0xFF) as u8)?;
+            }
             return Ok(());
         }
         // SPI DR (offset 0x0C) MUST be atomic — a Thumb `strh` is one bus
@@ -1332,5 +1643,224 @@ mod tests {
         );
         assert_eq!(nrf_read_u32(&spi, 0x120), 1, "EVENTS_ENDTX fires");
         assert_eq!(nrf_read_u32(&spi, 0x110), 1, "EVENTS_ENDRX fires");
+    }
+
+    // ── STM32H5 ("SPI v3", RM0481) unit tests ────────────────────────────────
+    // Register-level expectations pinned by silicon capture 2026-06-11
+    // (NUCLEO-H563ZI), probed over SWD. The TX data engine is spec-derived
+    // (the bench part had no SPI kernel clock — see Stm32H5SpiRegs docs).
+
+    fn h5() -> Spi {
+        Spi::new_with_layout(SpiRegisterLayout::Stm32H5)
+    }
+
+    fn h5_read(spi: &Spi, offset: u64) -> u32 {
+        spi.read_u32(offset).unwrap()
+    }
+
+    fn h5_write(spi: &mut Spi, offset: u64, value: u32) {
+        spi.write_u32(offset, value).unwrap();
+    }
+
+    /// Master-mode bring-up: CR1.SSI=1, then CFG2 = MASTER|SSM, CR2.TSIZE.
+    fn h5_master(tsize: u32) -> Spi {
+        let mut spi = h5();
+        h5_write(&mut spi, 0x00, 1 << 12); // CR1.SSI = 1 (internal SS high)
+        h5_write(&mut spi, 0x0C, (1 << 22) | (1 << 26)); // CFG2 = MASTER|SSM
+        h5_write(&mut spi, 0x04, tsize); // CR2.TSIZE
+        spi
+    }
+
+    /// The chip-yaml token "stm32h5" selects the v3 layout, NOT the L4/F7
+    /// FIFO map it used to alias.
+    #[test]
+    fn stm32h5_from_str_selects_v3_layout() {
+        assert_eq!(
+            "stm32h5".parse::<SpiRegisterLayout>().unwrap(),
+            SpiRegisterLayout::Stm32H5
+        );
+        assert_eq!(
+            "stm32l4".parse::<SpiRegisterLayout>().unwrap(),
+            SpiRegisterLayout::Stm32Fifo,
+            "L4/F7/G4 stay on the FIFO layout"
+        );
+    }
+
+    /// Reset values — silicon capture 2026-06-11 (NUCLEO-H563ZI).
+    #[test]
+    fn stm32h5_reset_values_match_silicon() {
+        let spi = h5();
+        assert_eq!(h5_read(&spi, 0x00), 0, "CR1");
+        assert_eq!(h5_read(&spi, 0x04), 0, "CR2");
+        assert_eq!(h5_read(&spi, 0x08), 0x0007_0007, "CFG1");
+        assert_eq!(h5_read(&spi, 0x0C), 0, "CFG2");
+        assert_eq!(h5_read(&spi, 0x10), 0, "IER");
+        assert_eq!(h5_read(&spi, 0x14), 0x0000_1002, "SR = TXP|TXC");
+        assert_eq!(h5_read(&spi, 0x18), 0, "IFCR is write-only, reads 0");
+        assert_eq!(h5_read(&spi, 0x20), 0, "TXDR is write-only, reads 0");
+        assert_eq!(h5_read(&spi, 0x30), 0, "RXDR");
+        assert_eq!(h5_read(&spi, 0x40), 0x0000_0107, "CRCPOLY");
+        assert_eq!(h5_read(&spi, 0x44), 0, "TXCRC");
+        assert_eq!(h5_read(&spi, 0x48), 0, "RXCRC");
+        assert_eq!(h5_read(&spi, 0x4C), 0, "UDRDR");
+        assert_eq!(h5_read(&spi, 0x50), 0, "I2SCFGR");
+    }
+
+    /// CFG1 writable mask — all three silicon round-trip pairs.
+    #[test]
+    fn stm32h5_cfg1_reserved_bits_masked() {
+        let mut spi = h5();
+        h5_write(&mut spi, 0x08, 0x7000_0007);
+        assert_eq!(h5_read(&spi, 0x08), 0x7000_0007);
+        h5_write(&mut spi, 0x08, 0x0008_0008);
+        assert_eq!(h5_read(&spi, 0x08), 0x0008_0008);
+        h5_write(&mut spi, 0x08, 0x5555_AAAA);
+        assert_eq!(
+            h5_read(&spi, 0x08),
+            0x5055_82AA,
+            "reserved bits 0x05002800 read as 0"
+        );
+    }
+
+    /// CR2.TSIZE, CRCPOLY and IER round-trip the silicon-probed values.
+    #[test]
+    fn stm32h5_config_round_trips() {
+        let mut spi = h5();
+        h5_write(&mut spi, 0x04, 0x10);
+        assert_eq!(h5_read(&spi, 0x04), 0x10, "CR2.TSIZE");
+        h5_write(&mut spi, 0x40, 0xA5A5);
+        assert_eq!(h5_read(&spi, 0x40), 0xA5A5, "CRCPOLY");
+        h5_write(&mut spi, 0x10, 0x209);
+        assert_eq!(h5_read(&spi, 0x10), 0x209, "IER");
+    }
+
+    /// MASTER is accepted when the internal SS level is high (SSM=1, SSI=1).
+    #[test]
+    fn stm32h5_cfg2_master_accepted_when_ssi_high() {
+        let mut spi = h5();
+        h5_write(&mut spi, 0x00, 1 << 12); // CR1.SSI = 1 first
+        h5_write(&mut spi, 0x0C, (1 << 22) | (1 << 26));
+        assert_eq!(h5_read(&spi, 0x0C), 0x0440_0000);
+        assert_eq!(h5_read(&spi, 0x14), 0x0000_1002, "no MODF");
+    }
+
+    /// Mode fault: MASTER requested with SSM=1 while SSI=0 → MASTER refused,
+    /// SR.MODF latches, SPE is refused until IFCR clears MODF.
+    #[test]
+    fn stm32h5_mode_fault_refuses_master_and_blocks_spe() {
+        let mut spi = h5();
+        // SSI is 0 at reset: the MASTER|SSM request mode-faults.
+        h5_write(&mut spi, 0x0C, 0x0440_0000);
+        assert_eq!(h5_read(&spi, 0x0C), 0x0400_0000, "MASTER stored as 0");
+        assert_eq!(h5_read(&spi, 0x14), 0x0000_1202, "SR = TXP|MODF|TXC");
+        // SPE refused while the fault stands.
+        h5_write(&mut spi, 0x00, (1 << 0) | (1 << 12)); // SPE|SSI
+        assert_eq!(h5_read(&spi, 0x00), 0x0000_1000, "SPE refused, SSI kept");
+        // IFCR bit 9 clears MODF; MASTER and SPE then go through.
+        h5_write(&mut spi, 0x18, 1 << 9);
+        assert_eq!(h5_read(&spi, 0x14), 0x0000_1002, "MODF cleared via IFCR");
+        h5_write(&mut spi, 0x0C, 0x0440_0000);
+        assert_eq!(h5_read(&spi, 0x0C), 0x0440_0000, "MASTER accepted (SSI=1)");
+        h5_write(&mut spi, 0x00, (1 << 0) | (1 << 12));
+        assert_eq!(h5_read(&spi, 0x00) & 1, 1, "SPE accepted after clear");
+    }
+
+    /// While SPE=1 the configuration registers are locked: CFG1/CFG2 writes
+    /// are ignored.
+    #[test]
+    fn stm32h5_spe_locks_cfg1_and_cfg2() {
+        let mut spi = h5_master(2);
+        h5_write(&mut spi, 0x00, (1 << 0) | (1 << 12)); // SPE|SSI
+        h5_write(&mut spi, 0x0C, 0x0440_0000 | (1 << 29));
+        assert_eq!(h5_read(&spi, 0x0C), 0x0440_0000, "CFG2 locked under SPE");
+        h5_write(&mut spi, 0x08, 0x7000_0007);
+        assert_eq!(h5_read(&spi, 0x08), 0x0007_0007, "CFG1 locked under SPE");
+    }
+
+    /// Setting SPE loads SR.CTSIZE from CR2.TSIZE and clears TXC (a transfer
+    /// is pending).
+    #[test]
+    fn stm32h5_spe_loads_ctsize_and_clears_txc() {
+        let mut spi = h5_master(2);
+        h5_write(&mut spi, 0x00, (1 << 0) | (1 << 12)); // SPE|SSI
+        assert_eq!(h5_read(&spi, 0x14), 0x0002_0002, "CTSIZE=2, TXP, TXC off");
+    }
+
+    /// CR1.CSTART latches while a transfer is active and cannot be cleared by
+    /// software (HW clears it at EOT — RM0481 §41.4.10).
+    #[test]
+    fn stm32h5_cstart_latches_while_transfer_active() {
+        let mut spi = h5_master(2);
+        h5_write(&mut spi, 0x00, (1 << 0) | (1 << 9) | (1 << 12)); // SPE|CSTART|SSI
+        assert_eq!(h5_read(&spi, 0x00), 0x0000_1201, "CSTART latched");
+        h5_write(&mut spi, 0x00, (1 << 0) | (1 << 12)); // try to drop CSTART
+        assert_eq!(h5_read(&spi, 0x00), 0x0000_1201, "CSTART not SW-clearable");
+    }
+
+    /// The bench TXDR/IFCR/SPE-clear sequence. CSTART is left clear so no
+    /// frame shifts and CTSIZE stays put — exactly the unclocked-silicon
+    /// behaviour captured on the bench.
+    #[test]
+    fn stm32h5_txdr_txtf_ifcr_and_spe_clear_sequence() {
+        let mut spi = h5_master(2);
+        h5_write(&mut spi, 0x00, (1 << 0) | (1 << 12)); // SPE|SSI
+        h5_write(&mut spi, 0x20, 0xAB); // TXDR
+        assert_eq!(h5_read(&spi, 0x14), 0x0002_0012, "TXP|TXTF, CTSIZE=2");
+        h5_write(&mut spi, 0x18, 0xFFFF_FFFF); // IFCR: clear all clearables
+        assert_eq!(h5_read(&spi, 0x14), 0x0002_0002, "TXTF cleared");
+        h5_write(&mut spi, 0x00, 1 << 12); // SPE → 0
+        assert_eq!(h5_read(&spi, 0x14), 0x0002_1002, "TXC set, CTSIZE kept");
+    }
+
+    /// Sim-side TX engine: with SPE+CSTART in master mode each TXDR write
+    /// transmits one frame and decrements CTSIZE; at 0 → EOT|TXC, CSTART
+    /// HW-cleared. RXDR stays 0 (TX-only model).
+    #[test]
+    fn stm32h5_tx_engine_transmits_and_completes() {
+        let mut spi = h5_master(2);
+        spi.attach(Box::new(Capture { rx: Vec::new() }));
+        h5_write(&mut spi, 0x00, (1 << 0) | (1 << 9) | (1 << 12)); // SPE|CSTART|SSI
+        h5_write(&mut spi, 0x20, 0x11);
+        assert_eq!(h5_read(&spi, 0x14), 0x0001_0012, "CTSIZE 2→1, TXP|TXTF");
+        h5_write(&mut spi, 0x20, 0x22);
+        assert_eq!(captured(&spi), vec![0x11, 0x22], "both frames on the bus");
+        assert_eq!(h5_read(&spi, 0x14), 0x0000_101A, "EOT|TXC at CTSIZE=0");
+        assert_eq!(h5_read(&spi, 0x00), 0x0000_1001, "CSTART HW-cleared");
+        assert_eq!(h5_read(&spi, 0x30), 0, "RXDR TX-only: reads 0");
+    }
+
+    /// TXDR writes are inert while SPE=0: no TXTF, nothing transmitted.
+    #[test]
+    fn stm32h5_txdr_ignored_when_disabled() {
+        let mut spi = h5_master(2);
+        spi.attach(Box::new(Capture { rx: Vec::new() }));
+        h5_write(&mut spi, 0x20, 0xAB);
+        assert_eq!(h5_read(&spi, 0x14), 0x0000_1002, "SR untouched");
+        assert!(captured(&spi).is_empty(), "nothing transmitted");
+    }
+
+    /// TXDR byte/halfword accesses are each ONE frame (RM0481 §41.4.13:
+    /// access size = frame size). TSIZE=0 = endless mode: CTSIZE stays 0,
+    /// no EOT, CSTART stays latched.
+    #[test]
+    fn stm32h5_byte_and_halfword_txdr_access_is_one_frame() {
+        let mut spi = h5_master(0); // TSIZE=0: endless
+        spi.attach(Box::new(Capture { rx: Vec::new() }));
+        h5_write(&mut spi, 0x00, (1 << 0) | (1 << 9) | (1 << 12));
+        spi.write(0x20, 0x5A).unwrap(); // byte access → one 8-bit frame
+        spi.write_u16(0x20, 0x1234).unwrap(); // halfword access → one frame
+        assert_eq!(captured(&spi), vec![0x5A, 0x34], "low byte per frame");
+        assert_eq!(h5_read(&spi, 0x14) >> 16, 0, "CTSIZE stays 0");
+        assert_eq!(h5_read(&spi, 0x14) & (1 << 3), 0, "no EOT in endless mode");
+        assert_eq!(h5_read(&spi, 0x00), 0x0000_1201, "CSTART stays latched");
+    }
+
+    /// Config registers are 32-bit with byte-merge semantics on the byte path.
+    #[test]
+    fn stm32h5_byte_writes_merge_into_32bit_registers() {
+        let mut spi = h5();
+        spi.write(0x40, 0xA5).unwrap(); // CRCPOLY low byte (reset 0x107)
+        spi.write(0x41, 0x5A).unwrap(); // CRCPOLY byte 1
+        assert_eq!(h5_read(&spi, 0x40), 0x0000_5AA5, "bytes merged in place");
     }
 }

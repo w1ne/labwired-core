@@ -165,7 +165,19 @@ impl Adc {
             // ISR is rc_w1 — a write clears matched flags; firmware can't SET it.
             0x00 => r.isr &= !value,
             0x04 => r.ier = value,
-            0x08 => r.cr = value, // latch verbatim (ADCAL/ADEN self-clear not modelled)
+            0x08 => {
+                r.cr = value; // latch verbatim (ADCAL self-clear not modelled)
+                              // ADEN with the voltage regulator up (ADVREGEN set, DEEPPWD
+                              // clear) raises ISR.ADRDY. Silicon-verified on STM32H563
+                              // ADC1 (2026-06-11): DEEPPWD=0 -> ADVREGEN=1 -> ADEN=1 reads
+                              // back CR=0x10000001 with ISR=0x00000001.
+                let aden = value & 0x1 != 0;
+                let advregen = value & (1 << 28) != 0;
+                let deeppwd = value & (1 << 29) != 0;
+                if aden && advregen && !deeppwd {
+                    r.isr |= 0x1;
+                }
+            }
             0x0C => r.cfgr = value,
             0x10 => r.cfgr2 = value,
             0x14 => r.smpr1 = value,
@@ -355,5 +367,23 @@ mod tests {
         assert_eq!(cr, 0x2000_0000);
         let cfgr = (adc.read(0x0C).unwrap() as u32) | (adc.read(0x0F).unwrap() as u32) << 24;
         assert_eq!(cfgr & 0x8000_0000, 0x8000_0000);
+    }
+
+    #[test]
+    fn test_adc_l4_aden_raises_adrdy() {
+        // Power-up sequence, silicon-verified on STM32H563 ADC1 (2026-06-11):
+        // clear DEEPPWD, set ADVREGEN, then ADEN -> ISR.ADRDY rises.
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32L4);
+        adc.write_u32(0x08, 0).unwrap(); // DEEPPWD = 0
+        adc.write_u32(0x08, 1 << 28).unwrap(); // ADVREGEN
+        assert_eq!(adc.read_u32(0x00).unwrap() & 0x1, 0, "no ADRDY before ADEN");
+        adc.write_u32(0x08, (1 << 28) | 1).unwrap(); // ADEN
+        assert_eq!(adc.read_u32(0x08).unwrap(), 0x1000_0001);
+        assert_eq!(adc.read_u32(0x00).unwrap() & 0x1, 0x1, "ADRDY after ADEN");
+
+        // ADEN while still in deep power-down must NOT ready the ADC.
+        let mut cold = Adc::new_with_layout(AdcRegisterLayout::Stm32L4);
+        cold.write_u32(0x08, (1 << 29) | 1).unwrap();
+        assert_eq!(cold.read_u32(0x00).unwrap() & 0x1, 0);
     }
 }

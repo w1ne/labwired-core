@@ -1,0 +1,24 @@
+# LabWired — nRF52840 + HC-SR04 ultrasonic proximity lab.
+#
+# A bare nRF52840 with one HC-SR04 ultrasonic sensor wired to GPIO:
+#   TRIG  P0.04  (MCU output)
+#   ECHO  P0.05  (sensor -> MCU input)
+# The ALARM output the firmware raises is P0.06 (no external device; it's just
+# an MCU output line you can scope / wire to an LED or buzzer).
+#
+# `distance_cm` is the host-controlled "hand position" — change it to move the
+# target nearer/farther and watch the firmware's ALARM flag follow. 10 cm
+# (100 mm) is inside the firmware's 150 mm threshold, so ALARM is HIGH here.
+name: "nrf52840-proximity-lab"
+chip: "../../configs/chips/nrf52840.yaml"
+external_devices:
+  - id: "ultrasonic"
+    type: "hc-sr04"
+    # HC-SR04 is GPIO-wired (no I2C/SPI bus); `connection` is unused for this
+    # device type but the schema requires a value.
+    connection: "gpio0"
+    config:
+      trig_pin: "P0.04"
+      echo_pin: "P0.05"
+      distance_cm: 10.0
+      cpu_hz: 64000000

@@ -31,6 +31,61 @@ peripherals:
     base_address: 0x600C2000
     config:
       path: "../peripherals/esp32c3/interrupt_core0.yaml"
+  # --- Blocks onboarded 2026-06-11: descriptors silicon-corroborated against a
+  # --- live ESP32-C3 (rev v0.4) reset-state capture (366/423 reg reset values
+  # --- matched; the rest are ROM-touched/dynamic). See examples/esp32c3/VALIDATION.md.
+  - id: "uart1"
+    type: "uart"
+    base_address: 0x60010000
+    size: "512B"
+  - id: "timg1"
+    type: "esp32_timg"
+    base_address: 0x60020000
+  - id: "system"
+    type: "declarative"
+    base_address: 0x600C0000
+    config:
+      path: "../peripherals/esp32c3/system.yaml"
+  - id: "rtc_cntl"
+    type: "declarative"
+    base_address: 0x60008000
+    config:
+      path: "../peripherals/esp32c3/rtc_cntl.yaml"
+  - id: "apb_ctrl"
+    type: "declarative"
+    base_address: 0x60026000
+    config:
+      path: "../peripherals/esp32c3/apb_ctrl.yaml"
+  - id: "systimer"
+    type: "declarative"
+    base_address: 0x60023000
+    config:
+      path: "../peripherals/esp32c3/systimer.yaml"
+  - id: "io_mux"
+    type: "declarative"
+    base_address: 0x60009000
+    config:
+      path: "../peripherals/esp32c3/io_mux.yaml"
+  - id: "i2c0"
+    type: "declarative"
+    base_address: 0x60013000
+    config:
+      path: "../peripherals/esp32c3/i2c0.yaml"
+  - id: "spi2"
+    type: "declarative"
+    base_address: 0x60024000
+    config:
+      path: "../peripherals/esp32c3/spi2.yaml"
+  - id: "ledc"
+    type: "declarative"
+    base_address: 0x60019000
+    config:
+      path: "../peripherals/esp32c3/ledc.yaml"
+  - id: "rmt"
+    type: "declarative"
+    base_address: 0x60016000
+    config:
+      path: "../peripherals/esp32c3/rmt.yaml"
   - id: "rom"
     type: "declarative"
     base_address: 0x40000000
