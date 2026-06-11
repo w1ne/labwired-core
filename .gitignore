@@ -32,3 +32,6 @@ foundry/backend/*.db-wal
 foundry/backend/key*.txt
 foundry/backend/server
 foundry/backend/server.log
+
+# agent-defined component specs (workspace-local)
+.labwired/

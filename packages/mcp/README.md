@@ -96,7 +96,7 @@ LabWired is bit-accurate and reproducible by design: the same firmware + same sy
 
 ## Status
 
-v0.6 — twelve tools, stdio transport, no auth required for local use (the simulator runs on your machine).
+v0.6 — fourteen tools (thirteen plus the `labwired_search_tools` meta-tool), stdio transport, no auth required for local use (the simulator runs on your machine).
 
 Shipped:
 

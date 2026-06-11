@@ -15,7 +15,9 @@ The local MCP server shells out to the `labwired` CLI. Set `LABWIRED_CLI` or `LA
 
 ## Define missing components
 
-If a part is not in `labwired_list_components`, define it yourself with
+If a part is not in the board catalog (`labwired_list_boards` /
+`labwired_catalog`; the hosted connector also offers `labwired_list_components`),
+define it yourself with
 `labwired_define_component`: submit a declarative IR spec (register file,
 pointer rule, observables) derived from the part's datasheet. The tool
 validates the spec (stable `ICOMP_*` diagnostic codes with hints) and returns
