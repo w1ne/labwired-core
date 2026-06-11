@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Component Model IR**: agents define off-chip I2C devices declaratively (`labwired_define_component`, `labwired asset validate-component`, `type: ir` manifest devices); PCA9685 and TMP102 reference specs gated by byte-equivalence tests.
 - **Web Playground**: `packages/playground` — interactive browser-based simulator with Monaco code editor, board canvas, sim controls, register inspector, serial monitor, and instruction trace. Ships with pre-compiled Arduino demo firmwares (STM32F103 Nucleo blinky, STM32F401RE Nucleo LED+button).
 - **Playground Demo UX**: First-load STM32 starter now opens as a visibly wired circuit, can auto-run once on clean loads, shows inline demo guidance, and exposes a one-click `Reset Demo` recovery path.
 - **Circuit-Aware Wiring UX**: STM32 board models now expose usable `PA/PB/PC` pins; the editor validates functional connections, highlights valid wiring targets while drawing, and surfaces inline canvas errors for rejected circuits.

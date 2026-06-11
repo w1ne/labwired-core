@@ -12,3 +12,14 @@ Use LabWired as a deterministic virtual hardware lab for firmware work.
 8. Iterate until serial, GPIO, cycle counts, and stop reasons match the intended behavior.
 
 The local MCP server shells out to the `labwired` CLI. Set `LABWIRED_CLI` or `LABWIRED_REPO_ROOT` when running outside a checkout.
+
+## Define missing components
+
+If a part is not in `labwired_list_components`, define it yourself with
+`labwired_define_component`: submit a declarative IR spec (register file,
+pointer rule, observables) derived from the part's datasheet. The tool
+validates the spec (stable `ICOMP_*` diagnostic codes with hints) and returns
+a `spec_path` plus the exact `external_devices` manifest entry to use
+(`type: ir`, `config.spec_path`). Reference specs:
+`core/configs/components/pca9685.yaml` (pointer + auto-increment + observables)
+and `core/configs/components/tmp102.yaml` (16-bit phased reads + update rules).

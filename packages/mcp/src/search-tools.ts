@@ -15,7 +15,7 @@ export const SEARCH_TOOLS_TOOL_NAME = 'labwired_search_tools';
 export const SEARCH_TOOLS_TOOL: ToolLike = {
   name: SEARCH_TOOLS_TOOL_NAME,
   description:
-    'Search the LabWired MCP tool catalog by keyword and return relevant tool definitions. Use this to find board discovery, diagram validation, firmware simulation, fuzzing, snapshots, live watch session, define component, ir spec, custom device, sensor model tools.',
+    'Search the LabWired MCP tool catalog by keyword and return relevant tool definitions. Use this to find board discovery, diagram validation, firmware simulation, fuzzing, snapshots, and live watch session tools.',
   inputSchema: {
     type: 'object',
     required: ['query'],
