@@ -10,6 +10,6 @@ export type { Connection, DiagramV2, NetDecl, NetKind, NetProtocol, PinRef } fro
 export { resolveNets } from './normalize';
 export type { ResolvedNet } from './normalize';
 export { CATALOG, getCatalogPart } from './catalog';
-export type { CatalogPart, PinDecl, PinEtype } from './catalog';
+export type { CatalogPart, DeviceClass, PinDecl, PinEtype } from './catalog';
 export { getPinEtype } from './pin-mapping';
 export type { PinElectrical } from './pin-mapping';

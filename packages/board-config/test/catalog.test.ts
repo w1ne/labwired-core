@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CATALOG, getCatalogPart, type PinDecl } from '../src/catalog';
 import { COMPONENT_META } from '../src/component-meta';
 
+
 describe('catalog', () => {
   it('every legacy COMPONENT_META key exists in the catalog with the same boardIoKind', () => {
     for (const [type, meta] of Object.entries(COMPONENT_META)) {
@@ -39,5 +40,22 @@ describe('catalog', () => {
 
   it('unknown type returns undefined', () => {
     expect(getCatalogPart('definitely-not-a-part')).toBeUndefined();
+  });
+});
+
+describe('deviceClass', () => {
+  it('classifies the key part families', () => {
+    expect(getCatalogPart('esp32-s3-zero')!.deviceClass).toBe('mcu');
+    expect(getCatalogPart('pca9685')!.deviceClass).toBe('i2c_device');
+    expect(getCatalogPart('bme280')!.deviceClass).toBe('i2c_device');
+    expect(getCatalogPart('resistor')!.deviceClass).toBe('passive');
+    expect(getCatalogPart('led')!.deviceClass).toBe('board_io');
+    expect(getCatalogPart('button')!.deviceClass).toBe('board_io');
+    expect(getCatalogPart('neo6m-gps')!.deviceClass).toBe('uart_device');
+  });
+  it('every catalog entry has a deviceClass', () => {
+    for (const [type, part] of Object.entries(CATALOG)) {
+      expect(part.deviceClass, type).toBeDefined();
+    }
   });
 });
