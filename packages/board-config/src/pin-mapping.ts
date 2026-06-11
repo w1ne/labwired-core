@@ -338,6 +338,7 @@ const ESP32_PINS: Record<string, PinMapping> = {
  *  per the ESP32-S3 TRM; I2C and SPI defaults follow ESP-IDF v5 conventions. */
 const ESP32S3_PINS: Record<string, PinMapping> = {
   '3V3': { gpio: { peripheral: 'gpio', pin: 0 }, functions: [] },
+  '5V':  { gpio: { peripheral: 'gpio', pin: 0 }, functions: [] },
   'GND': { gpio: { peripheral: 'gpio', pin: 0 }, functions: [] },
   ...Object.fromEntries(
     [
@@ -410,18 +411,17 @@ export interface PinElectrical {
   internalPullup: boolean;
 }
 
+/** Shared power-rail overrides for ESP32-S3 variants (includes 5 V rail). */
+const ESP32S3_POWER_OVERRIDES: Record<string, PinElectrical> = {
+  '3V3': { etype: 'power_out', internalPullup: false },
+  '5V':  { etype: 'power_out', internalPullup: false },
+  GND:   { etype: 'power_out', internalPullup: false },
+};
+
 /** Per-board pin-level overrides; pins absent here use the default rule. */
 const PIN_ELECTRICAL_OVERRIDES: Record<string, Record<string, PinElectrical>> = {
-  'esp32-s3-zero': {
-    '3V3': { etype: 'power_out', internalPullup: false },
-    '5V': { etype: 'power_out', internalPullup: false },
-    GND: { etype: 'power_out', internalPullup: false },
-  },
-  esp32s3: {
-    '3V3': { etype: 'power_out', internalPullup: false },
-    '5V': { etype: 'power_out', internalPullup: false },
-    GND: { etype: 'power_out', internalPullup: false },
-  },
+  'esp32-s3-zero': ESP32S3_POWER_OVERRIDES,
+  esp32s3:         ESP32S3_POWER_OVERRIDES,
   esp32: {
     '3V3': { etype: 'power_out', internalPullup: false },
     GND: { etype: 'power_out', internalPullup: false },

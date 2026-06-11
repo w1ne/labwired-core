@@ -20,6 +20,21 @@ describe('pin map electrical extension', () => {
     });
   });
 
+  it('5V pin is mapped and resolves to power_out for S3 boards', () => {
+    // getPinMapping must return non-null (pin exists in the map)
+    expect(getPinMapping('esp32-s3-zero', '5V')).not.toBeNull();
+    expect(getPinMapping('esp32s3', '5V')).not.toBeNull();
+    // getPinEtype must resolve to power_out (not null, not bidirectional)
+    expect(getPinEtype('esp32-s3-zero', '5V')).toEqual({
+      etype: 'power_out',
+      internalPullup: false,
+    });
+    expect(getPinEtype('esp32s3', '5V')).toEqual({
+      etype: 'power_out',
+      internalPullup: false,
+    });
+  });
+
   it('unknown pin or board returns null', () => {
     expect(getPinEtype('esp32-s3-zero', 'NOPE')).toBeNull();
     expect(getPinEtype('not-a-board', 'GPIO8')).toBeNull();

@@ -21,7 +21,15 @@ export interface ResolvedNet {
 
 const key = (m: PinRef) => `${m.part}:${m.pin}`;
 
-/** Resolve declared nets + legacy wires into the canonical net set. */
+/**
+ * Resolve declared nets + legacy wires into the canonical net set.
+ *
+ * Output order: declared nets appear first in the order they appear in
+ * `diagram.nets`; synthetic (wire-only) nets follow, sorted by their
+ * generated name (i.e. lexicographic order of the smallest member key).
+ * Net membership itself is order-independent; callers must not rely on
+ * member array order beyond the per-net sort by "part:pin".
+ */
 export function resolveNets(diagram: DiagramV2): ResolvedNet[] {
   // Union-find over pin keys, seeded so that pins bound to a declared net
   // belong to that net's component and components of two declared nets are
