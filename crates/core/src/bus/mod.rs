@@ -941,7 +941,30 @@ impl SystemBus {
         let mut extra_mem = Vec::with_capacity(chip.memory_regions.len());
         for region in &chip.memory_regions {
             let size = parse_size(&region.size)?;
-            extra_mem.push(LinearMemory::new(size as usize, region.base));
+            let mut mem = LinearMemory::new(size as usize, region.base);
+            // Optionally preload a raw binary image (e.g. a dumped mask ROM)
+            // from a path given by an env var. Copyrighted vendor blobs are not
+            // committed, so a missing image just leaves the region zero-filled.
+            if let Some(env) = &region.image_env {
+                if let Ok(path) = std::env::var(env) {
+                    match std::fs::read(&path) {
+                        Ok(bytes) => {
+                            let n = bytes.len().min(mem.data.len());
+                            mem.data[..n].copy_from_slice(&bytes[..n]);
+                            tracing::info!(
+                                "loaded {n} bytes into '{}' region @ {:#010x} from {path}",
+                                region.name,
+                                region.base
+                            );
+                        }
+                        Err(e) => tracing::warn!(
+                            "region '{}' image {path} (${env}) unreadable: {e}",
+                            region.name
+                        ),
+                    }
+                }
+            }
+            extra_mem.push(mem);
         }
 
         let mut bus = Self {
