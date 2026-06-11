@@ -71,6 +71,11 @@ pub struct NamedMemoryRange {
     #[serde(deserialize_with = "deserialize_u64_lax")]
     pub base: u64,
     pub size: String,
+    /// Optional env var naming a path to a raw binary loaded into this region at
+    /// `base` (e.g. a chip's mask ROM dump). Used for copyrighted vendor blobs
+    /// that can't be committed — the region stays zero-filled if unset/missing.
+    #[serde(default)]
+    pub image_env: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
