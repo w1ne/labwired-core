@@ -392,12 +392,23 @@ impl SystemBus {
         }
     }
 
-    /// Parse an STM32 pin label like "PC7" into `("gpioc", 7)`.
+    /// Parse a pin label into `(gpio peripheral id, bit)`. Accepts the STM32
+    /// form "PC7" -> `("gpioc", 7)` and the Nordic form "P0.04" / "P1.15" ->
+    /// `("gpio0", 4)` / `("gpio1", 15)`.
     fn parse_stm32_pin(pin: &str) -> Option<(String, u8)> {
         let s = pin.trim();
         let bytes = s.as_bytes();
         if bytes.len() < 3 || !bytes[0].eq_ignore_ascii_case(&b'P') {
             return None;
+        }
+        // Nordic ports are numbered and dot-separated; nRF52840 P0 has 32 pins.
+        if let Some((port, num)) = s[1..].split_once('.') {
+            let port: u8 = port.parse().ok()?;
+            let num: u8 = num.parse().ok()?;
+            if num > 31 {
+                return None;
+            }
+            return Some((format!("gpio{port}"), num));
         }
         let port = (bytes[1] as char).to_ascii_lowercase();
         if !port.is_ascii_alphabetic() {
@@ -2543,6 +2554,27 @@ mod tests {
     /// access touched a broad-window-only address (which seeds the hint
     /// cache with the broad entry — containment alone must not let it
     /// short-circuit the canonical last-start-wins search).
+    #[test]
+    fn pin_labels_parse_for_both_vendor_forms() {
+        // STM32 letter ports.
+        assert_eq!(
+            SystemBus::parse_stm32_pin("PC7"),
+            Some(("gpioc".to_string(), 7))
+        );
+        assert_eq!(SystemBus::parse_stm32_pin("PA16"), None); // STM32 ports stop at 15
+                                                              // Nordic numbered ports: nRF52840 P0.00-P0.31, P1.00-P1.15.
+        assert_eq!(
+            SystemBus::parse_stm32_pin("P0.04"),
+            Some(("gpio0".to_string(), 4))
+        );
+        assert_eq!(
+            SystemBus::parse_stm32_pin("P1.15"),
+            Some(("gpio1".to_string(), 15))
+        );
+        assert_eq!(SystemBus::parse_stm32_pin("P0.32"), None);
+        assert_eq!(SystemBus::parse_stm32_pin("P0."), None);
+    }
+
     #[test]
     fn overlapping_windows_route_history_independently() {
         let mut bus = SystemBus::new();
