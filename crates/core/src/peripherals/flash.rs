@@ -237,8 +237,11 @@ impl Flash {
         if matches!(self.layout, FlashRegisterLayout::Stm32H5) {
             if offset == 0x00 {
                 // ACR writable bits: LATENCY[3:0], WRHIGHFREQ[5:4],
-                // PRFTEN(8). Round-trips silicon-pinned (0x11/0x23/0x02).
-                self.acr = value & 0x0000_0133;
+                // PRFTEN(8) = mask 0x13F. Round-trips silicon-pinned
+                // (0x11/0x23/0x02/0x25/0x13F — capture6+9; the original
+                // 0x133 mask dropped LATENCY bits 2:3 and broke HAL's
+                // latency-5 read-back check at 250 MHz).
+                self.acr = value & 0x0000_013F;
             }
             return;
         }

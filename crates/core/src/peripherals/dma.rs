@@ -191,6 +191,7 @@ impl Peripheral for Dma1 {
                     addr: dst as u64,
                     val: 0,
                     direction,
+                    transform: None,
                 });
 
                 chan.cndtr -= 1;

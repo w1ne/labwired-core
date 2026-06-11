@@ -78,6 +78,30 @@ pub struct DmaRequest {
     pub addr: u64,
     pub val: u8,
     pub direction: DmaDirection,
+    /// Unit-level reshape for engines that convert between source and
+    /// destination data widths (STM32H5 GPDMA CTR1 PAM / SBX / DBX / DHX).
+    /// `None` keeps the classic single-byte semantics.
+    pub transform: Option<DmaUnitTransform>,
+}
+
+/// One source-data-unit -> destination-data-unit transform descriptor.
+/// Semantics follow RM0481 §15 and are pinned by the DMA_DataHandling
+/// HAL example's expected-result vectors (sim) and its on-board run.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct DmaUnitTransform {
+    /// Source data width in bytes (1, 2 or 4).
+    pub src_width: u8,
+    /// Destination data width in bytes (1, 2 or 4).
+    pub dst_width: u8,
+    /// CTR1.PAM[0]: 0 = right-align zero-pad (narrow->wide) / left-truncate
+    /// keep-LSBs (wide->narrow); 1 = sign-extend / right-truncate keep-MSBs.
+    pub pam: u8,
+    /// CTR1.SBX — exchange the two middle bytes of a word-width source.
+    pub sbx: bool,
+    /// CTR1.DBX — swap bytes within each destination half-word.
+    pub dbx: bool,
+    /// CTR1.DHX — swap the half-words of a word-width destination.
+    pub dhx: bool,
 }
 
 #[derive(Debug, Clone, Default)]

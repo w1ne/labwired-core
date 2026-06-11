@@ -121,8 +121,12 @@ peripherals:
   - id: "gpdma1"
     type: "gpdma"
     base_address: 0x40020000
-    size: "1KB"
+    # 8 channels x 0x80 + 0x50 base = 0x450 of register space: channel 7's
+    # CTR1/CBR1/CSAR/CDAR live above 1KB, so the window must be 2KB.
+    size: "2KB"
     irq: 27
+    config:
+      irq_base: 27  # per-channel NVIC lines 27..34 (ch7 TCIE silicon-probed)
   # TIM1 is the advanced-control PWM timer; the `_pwm` id suffix declares the
   # tier1 pwm class alongside timer (CLASS_MARKERS match on id substrings).
   - id: "tim1_pwm"

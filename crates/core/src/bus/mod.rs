@@ -1284,7 +1284,16 @@ impl SystemBus {
                 }
                 "afio" => Box::new(crate::peripherals::afio::Afio::new()),
                 "dma" | "stm32dma" => Box::new(crate::peripherals::dma::Dma1::new()),
-                "gpdma" => Box::new(crate::peripherals::gpdma::Gpdma::new()),
+                "gpdma" => {
+                    // `config: { irq_base: N }` routes channel n to NVIC
+                    // line N + n (H563 GPDMA1: 27..34). Without it the
+                    // block's single `irq:` line serves every channel.
+                    let g = crate::peripherals::gpdma::Gpdma::new();
+                    match p_cfg.config.get("irq_base").and_then(|v| v.as_u64()) {
+                        Some(base) => Box::new(g.with_irq_base(base as u32)),
+                        None => Box::new(g),
+                    }
+                }
                 "adc" => {
                     let layout: crate::peripherals::adc::AdcRegisterLayout =
                         Self::parse_profile_or_default(p_cfg, "ADC")?;
@@ -2081,6 +2090,68 @@ impl SystemBus {
         }
     }
 
+    /// One DMA source-unit -> destination-unit copy with the STM32H5 GPDMA
+    /// data-handling semantics (RM0481 §15): width conversion via PAM
+    /// (zero-pad / sign-extend / left- or right-truncate) and the SBX / DBX /
+    /// DHX byte / half-word exchanges. Pinned by the DMA_DataHandling HAL
+    /// example's expected-result vectors and its on-board run.
+    fn dma_copy_unit(
+        &mut self,
+        src: u64,
+        dst: u64,
+        t: crate::DmaUnitTransform,
+    ) -> crate::SimResult<()> {
+        let sw = (t.src_width.max(1) as usize).min(4);
+        let dw = (t.dst_width.max(1) as usize).min(4);
+
+        let mut unit = [0u8; 4];
+        for (k, b) in unit.iter_mut().enumerate().take(sw) {
+            *b = self.read_u8(src + k as u64)?;
+        }
+        // SBX: exchange the two middle bytes of a word-width source.
+        if t.sbx && sw == 4 {
+            unit.swap(1, 2);
+        }
+
+        let mut out = [0u8; 4];
+        if dw >= sw {
+            // Narrow -> wide: right-aligned (LSBs hold the source unit);
+            // upper bytes zero-padded (PAM=0) or sign-extended (PAM=1).
+            out[..sw].copy_from_slice(&unit[..sw]);
+            let fill = if t.pam & 1 != 0 && unit[sw - 1] & 0x80 != 0 {
+                0xFF
+            } else {
+                0
+            };
+            for b in out.iter_mut().take(dw).skip(sw) {
+                *b = fill;
+            }
+        } else {
+            // Wide -> narrow: PAM=0 keeps the LSBs (right-aligned,
+            // left-truncated); PAM=1 keeps the MSBs (left-aligned,
+            // right-truncated).
+            let from = if t.pam & 1 != 0 { sw - dw } else { 0 };
+            out[..dw].copy_from_slice(&unit[from..from + dw]);
+        }
+        // DBX: swap bytes within each destination half-word.
+        if t.dbx && dw >= 2 {
+            out.swap(0, 1);
+            if dw == 4 {
+                out.swap(2, 3);
+            }
+        }
+        // DHX: swap the half-words of a word-width destination.
+        if t.dhx && dw == 4 {
+            out.swap(0, 2);
+            out.swap(1, 3);
+        }
+
+        for (k, b) in out.iter().enumerate().take(dw) {
+            self.write_u8(dst + k as u64, *b)?;
+        }
+        Ok(())
+    }
+
     fn collect_enabled_nvic_interrupts(&self, interrupts: &mut Vec<u32>) {
         if let Some(nvic) = &self.nvic {
             for idx in 0..8 {
@@ -2135,7 +2206,9 @@ impl SystemBus {
                     tracing::trace!("DMA Write: {:#x} <- {:#x}", req.addr, req.val);
                 }
                 crate::DmaDirection::Copy => {
-                    if let Ok(val) = self.read_u8(req.src_addr) {
+                    if let Some(t) = req.transform {
+                        let _ = self.dma_copy_unit(req.src_addr, req.addr, t);
+                    } else if let Ok(val) = self.read_u8(req.src_addr) {
                         let _ = self.write_u8(req.addr, val);
                         tracing::trace!(
                             "DMA Copy: {:#x} -> {:#x} ({:#x})",
@@ -2473,8 +2546,12 @@ impl crate::Bus for SystemBus {
                     self.write_u8(req.addr, req.val)?;
                 }
                 crate::DmaDirection::Copy => {
-                    let val = self.read_u8(req.src_addr)?;
-                    self.write_u8(req.addr, val)?;
+                    if let Some(t) = req.transform {
+                        self.dma_copy_unit(req.src_addr, req.addr, t)?;
+                    } else {
+                        let val = self.read_u8(req.src_addr)?;
+                        self.write_u8(req.addr, val)?;
+                    }
                 }
             }
         }
@@ -3168,6 +3245,7 @@ peripherals:
             addr: 0x2000_0020,
             val: 0,
             direction: crate::DmaDirection::Copy,
+            transform: None,
         };
         bus.execute_dma(&[req]).unwrap();
 

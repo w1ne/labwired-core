@@ -79,6 +79,10 @@ fn probe_foreign_firmware() {
         std::fs::write(out, lines.join("\n")).unwrap();
     }
 
+    println!(
+        "cpu: primask={} active_exception={} pending={:?}",
+        machine.cpu.primask, machine.cpu.active_exception, machine.cpu.pending_exceptions
+    );
     use labwired_core::Bus;
     for (label, addr) in [
         ("TIM12 CR1", 0x4000_1800u64),
@@ -106,11 +110,19 @@ fn probe_foreign_firmware() {
         ("USART3 ISR", 0x4000_481C),
         ("NVIC ISER1b", 0xE000_E104),
         ("SCB ICSR", 0xE000_ED04),
+        ("VEC50", 0x0800_00C8),
+        ("VEC49", 0x0800_00C4),
+        ("GPDMA C7SR", 0x4002_03E0),
+        ("GPDMA C7CR", 0x4002_03E4),
+        ("GPDMA C7BR1", 0x4002_0418),
         ("NVIC ISER3", 0xE000_E10C),
         ("NVIC ISPR3", 0xE000_E20C),
         ("NVIC ISER1", 0xE000_E104),
         ("NVIC ISPR1", 0xE000_E204),
         ("GPIOB ODR", 0x4202_0414),
+        ("GPIOG ODR", 0x4202_1814),
+        ("RCC CR", 0x4402_0C00),
+        ("RCC CFGR1", 0x4402_0C1C),
     ] {
         println!(
             "  {label:<11} = {:#010x}",

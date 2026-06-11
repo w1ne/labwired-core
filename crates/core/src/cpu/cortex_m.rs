@@ -621,6 +621,15 @@ impl CortexM {
                 // Jump to ISR handler
                 let vtor = self.vtor.load(Ordering::SeqCst);
                 let vector_addr = vtor + (exception_num * 4);
+                if std::env::var("LABWIRED_TRACE_EXC").is_ok() {
+                    eprintln!(
+                        "EXC take num={} vtor=0x{:08X} vec=0x{:08X} fetch={:?}",
+                        exception_num,
+                        vtor,
+                        vector_addr,
+                        bus.read_u32(vector_addr as u64)
+                    );
+                }
                 if let Ok(handler) = bus.read_u32(vector_addr as u64) {
                     self.pc = handler & !1;
                     tracing::debug!(
@@ -1116,7 +1125,7 @@ impl CortexM {
                             }
                             _ => {}
                         }
-                        if matches!(sz, 0xC | 0xD | 0xE) {
+                        if matches!(sz, 0xC..=0xE) {
                             let rd = (h2 & 0xF) as u8;
                             self.set_register(rd, 0); // success
                         }

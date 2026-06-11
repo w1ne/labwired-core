@@ -72,6 +72,13 @@ const CSR_HTF: u32 = 1 << 9;
 
 const CTR1_SINC: u32 = 1 << 3;
 const CTR1_DINC: u32 = 1 << 19;
+// Data-handling fields (RM0481 §15) — widths, padding/alignment, exchanges.
+const CTR1_SDW_SHIFT: u32 = 0; // SDW_LOG2[1:0]
+const CTR1_DDW_SHIFT: u32 = 16; // DDW_LOG2[17:16]
+const CTR1_PAM_SHIFT: u32 = 11; // PAM[12:11]
+const CTR1_SBX: u32 = 1 << 13;
+const CTR1_DBX: u32 = 1 << 26;
+const CTR1_DHX: u32 = 1 << 27;
 
 const CTR2_SWREQ: u32 = 1 << 9;
 
@@ -118,6 +125,10 @@ pub struct Gpdma {
     privcfgr: u32,
     rcfglockr: u32,
     channels: [GpdmaChannel; NUM_CHANNELS],
+    /// Per-channel NVIC routing base (channel n pends irq_base + n via
+    /// `explicit_irqs`); `None` falls back to the single configured line.
+    #[serde(default)]
+    irq_base: Option<u32>,
 }
 
 impl Gpdma {
@@ -125,15 +136,35 @@ impl Gpdma {
         Self::default()
     }
 
+    /// First NVIC position of the per-channel interrupt lines. On the
+    /// STM32H563, GPDMA1 channels 0..7 sit on contiguous IRQs 27..34
+    /// (stm32h563xx.h); the yaml sets it via `config: { irq_base: 27 }`.
+    pub fn with_irq_base(mut self, irq_base: u32) -> Self {
+        self.irq_base = Some(irq_base);
+        self
+    }
+
     fn read_reg(&self, offset: u64) -> u32 {
         match offset {
             0x00 => self.seccfgr,
             0x04 => self.privcfgr,
             0x08 => self.rcfglockr,
-            // MISR / SMISR: OR of per-channel flag & interrupt-enable.
-            // KISS: reads 0 (see module docs); per-channel CSR carries
-            // the flags firmware actually polls.
-            0x0C | 0x10 => 0,
+            // MISR: bit n mirrors (channel n CSR flags & CCR interrupt
+            // enables) != 0, live — silicon-pinned 2026-06-11 (capture11):
+            // ch7 TCF+TCIE reads 0x80, drops when TCIE clears, returns when
+            // re-enabled, clears with CFCR. HAL_DMA_IRQHandler gates on it.
+            // Flag bits [14:8] of CSR pair with enable bits [14:8] of CCR.
+            0x0C => {
+                let mut misr = 0u32;
+                for (n, ch) in self.channels.iter().enumerate() {
+                    if (ch.flags >> 8) & (ch.ccr >> 8) & 0x7F != 0 {
+                        misr |= 1 << n;
+                    }
+                }
+                misr
+            }
+            // SMISR: secure view — TrustZone off, reads 0.
+            0x10 => 0,
             _ if offset >= CHAN_BASE => {
                 let chan_idx = ((offset - CHAN_BASE) / CHAN_STRIDE) as usize;
                 let reg_off = (offset - CHAN_BASE) % CHAN_STRIDE;
@@ -246,8 +277,20 @@ impl Peripheral for Gpdma {
     fn tick(&mut self) -> PeripheralTickResult {
         let mut dma_requests = None;
         let mut irq = false;
+        let mut explicit_irqs: Option<Vec<u32>> = None;
+        let irq_base = self.irq_base;
+        // Real GPDMA wires one NVIC line per channel (H563: 27 + n,
+        // silicon-pinned via the ch7 TCIE probe). With `irq_base` set,
+        // channel n pends its own line; otherwise the block's single
+        // configured line is used (legacy behavior).
+        let mut pend = |ch_idx: usize, irq_flag: &mut bool| match irq_base {
+            Some(base) => explicit_irqs
+                .get_or_insert_with(Vec::new)
+                .push(base + ch_idx as u32),
+            None => *irq_flag = true,
+        };
 
-        for ch in self.channels.iter_mut() {
+        for (ch_idx, ch) in self.channels.iter_mut().enumerate() {
             if !ch.active {
                 continue;
             }
@@ -257,14 +300,27 @@ impl Peripheral for Gpdma {
                 continue;
             }
 
-            // One byte per tick (mirrors the classic-DMA pacing). The bus
-            // executes the Copy request after this tick: it reads a byte
-            // at src_addr and writes it to addr.
+            // One source data unit per tick (a byte-width unit mirrors the
+            // classic-DMA byte pacing). The bus executes the Copy after
+            // this tick, applying the CTR1 data-handling transform: width
+            // conversion (PAM zero-pad / sign-extend / truncate) and the
+            // SBX / DBX / DHX exchanges — pinned by the DMA_DataHandling
+            // HAL example's expected vectors + its on-board run.
+            let src_w = 1u32 << ((ch.ctr1 >> CTR1_SDW_SHIFT) & 0x3).min(2);
+            let dst_w = 1u32 << ((ch.ctr1 >> CTR1_DDW_SHIFT) & 0x3).min(2);
             dma_requests.get_or_insert_with(Vec::new).push(DmaRequest {
                 src_addr: ch.csar as u64,
                 addr: ch.cdar as u64,
                 val: 0,
                 direction: DmaDirection::Copy,
+                transform: Some(crate::DmaUnitTransform {
+                    src_width: src_w as u8,
+                    dst_width: dst_w as u8,
+                    pam: ((ch.ctr1 >> CTR1_PAM_SHIFT) & 0x3) as u8,
+                    sbx: ch.ctr1 & CTR1_SBX != 0,
+                    dbx: ch.ctr1 & CTR1_DBX != 0,
+                    dhx: ch.ctr1 & CTR1_DHX != 0,
+                }),
             });
 
             // Pinned: the H5 GPDMA advances the user-visible CSAR / CDAR
@@ -272,13 +328,14 @@ impl Peripheral for Gpdma {
             // for a 16-byte block) — unlike the classic STM32 DMA, which
             // keeps CPAR / CMAR at the programmed base.
             if ch.ctr1 & CTR1_SINC != 0 {
-                ch.csar = ch.csar.wrapping_add(1);
+                ch.csar = ch.csar.wrapping_add(src_w);
             }
             if ch.ctr1 & CTR1_DINC != 0 {
-                ch.cdar = ch.cdar.wrapping_add(1);
+                ch.cdar = ch.cdar.wrapping_add(dst_w);
             }
 
-            let bndt = bndt - 1;
+            // BNDT counts SOURCE bytes (RM0481): one unit drains src_w.
+            let bndt = bndt.saturating_sub(src_w);
             ch.cbr1 = (ch.cbr1 & !BNDT_MASK) | bndt;
 
             // HTF: latches at the half-transfer point and remains set
@@ -286,7 +343,7 @@ impl Peripheral for Gpdma {
             if ch.bndt_initial >= 2 && bndt <= ch.bndt_initial / 2 && ch.flags & CSR_HTF == 0 {
                 ch.flags |= CSR_HTF;
                 if ch.ccr & CCR_HTIE != 0 {
-                    irq = true;
+                    pend(ch_idx, &mut irq);
                 }
             }
 
@@ -298,7 +355,7 @@ impl Peripheral for Gpdma {
                 ch.ccr &= !CCR_EN;
                 ch.active = false;
                 if ch.ccr & CCR_TCIE != 0 {
-                    irq = true;
+                    pend(ch_idx, &mut irq);
                 }
             }
         }
@@ -307,6 +364,7 @@ impl Peripheral for Gpdma {
             irq,
             cycles: if dma_requests.is_none() { 0 } else { 1 },
             dma_requests,
+            explicit_irqs,
             ..Default::default()
         }
     }
@@ -635,5 +693,81 @@ mod tests {
         assert!(!interrupts.contains(&GPDMA_IRQ), "no IRQ before TC");
         let (interrupts, _) = bus.tick_peripherals_fully();
         assert!(interrupts.contains(&GPDMA_IRQ), "TCIE should pend the IRQ");
+    }
+
+    // ---- Data-handling tests (RM0481 §15) ----
+    //
+    // Vectors lifted verbatim from ST's DMA_DataHandling NUCLEO-H563ZI HAL
+    // example (expected-result buffers): source = B0..B7, eight bytes. The
+    // same firmware passes on the bench board, so these are silicon-anchored.
+
+    const HAL_SRC: [u8; 8] = [0xB0, 0xB1, 0xB2, 0xB3, 0xB4, 0xB5, 0xB6, 0xB7];
+
+    fn run_handling(ctr1_extra: u32, src_w: u32, dst_w: u32, bndt: u32) -> Vec<u8> {
+        let mut bus = bus_with_gpdma();
+        for (i, b) in HAL_SRC.iter().enumerate() {
+            bus.write_u8(SRC + i as u64, *b).unwrap();
+        }
+        for i in 0..16u64 {
+            bus.write_u8(DST + i, 0).unwrap();
+        }
+        let sdw = src_w.trailing_zeros();
+        let ddw = dst_w.trailing_zeros();
+        bus.write_u32(
+            CH0_CTR1,
+            CTR1_SINC | CTR1_DINC | (sdw << CTR1_SDW_SHIFT) | (ddw << CTR1_DDW_SHIFT) | ctr1_extra,
+        )
+        .unwrap();
+        bus.write_u32(CH0_CTR2, CTR2_SWREQ).unwrap();
+        bus.write_u32(CH0_CBR1, bndt).unwrap();
+        bus.write_u32(CH0_CSAR, SRC as u32).unwrap();
+        bus.write_u32(CH0_CDAR, DST as u32).unwrap();
+        bus.write_u32(CH0_CCR, CCR_EN).unwrap();
+        for _ in 0..32 {
+            bus.tick_peripherals_fully();
+        }
+        (0..8u64).map(|i| bus.read_u8(DST + i).unwrap()).collect()
+    }
+
+    #[test]
+    fn test_handling_byte_to_half_zero_pad() {
+        let out = run_handling(0, 1, 2, 4);
+        assert_eq!(out, [0xB0, 0x00, 0xB1, 0x00, 0xB2, 0x00, 0xB3, 0x00]);
+    }
+
+    #[test]
+    fn test_handling_byte_to_half_sign_extend() {
+        let out = run_handling(1 << CTR1_PAM_SHIFT, 1, 2, 4);
+        assert_eq!(out, [0xB0, 0xFF, 0xB1, 0xFF, 0xB2, 0xFF, 0xB3, 0xFF]);
+    }
+
+    #[test]
+    fn test_handling_half_to_byte_left_trunc() {
+        let out = run_handling(0, 2, 1, 8);
+        assert_eq!(out, [0xB0, 0xB2, 0xB4, 0xB6, 0x00, 0x00, 0x00, 0x00]);
+    }
+
+    #[test]
+    fn test_handling_half_to_byte_right_trunc() {
+        let out = run_handling(1 << CTR1_PAM_SHIFT, 2, 1, 8);
+        assert_eq!(out, [0xB1, 0xB3, 0xB5, 0xB7, 0x00, 0x00, 0x00, 0x00]);
+    }
+
+    #[test]
+    fn test_handling_src_byte_exchange() {
+        let out = run_handling(CTR1_SBX, 4, 4, 8);
+        assert_eq!(out, [0xB0, 0xB2, 0xB1, 0xB3, 0xB4, 0xB6, 0xB5, 0xB7]);
+    }
+
+    #[test]
+    fn test_handling_dest_byte_exchange() {
+        let out = run_handling(CTR1_DBX, 4, 4, 8);
+        assert_eq!(out, [0xB1, 0xB0, 0xB3, 0xB2, 0xB5, 0xB4, 0xB7, 0xB6]);
+    }
+
+    #[test]
+    fn test_handling_dest_halfword_exchange() {
+        let out = run_handling(CTR1_DHX, 4, 4, 8);
+        assert_eq!(out, [0xB2, 0xB3, 0xB0, 0xB1, 0xB6, 0xB7, 0xB4, 0xB5]);
     }
 }
