@@ -535,6 +535,20 @@ impl IrComponent {
                     ));
                 }
             }
+            // The masked pointer can select offsets 0..=pointer_mask; if
+            // pointer_mask >= size then a datasheet-faithful device cannot exist
+            // entirely within this register file (the interpreter would have to
+            // alias/wrap silently).
+            if p.pointer_mask as u64 >= size {
+                out.push(IrComponentDiag::new(
+                    "ICOMP_POINTER_MASK_RANGE",
+                    format!(
+                        "pointer_mask {:#x} can select offsets outside the register file (size {size:#x})",
+                        p.pointer_mask
+                    ),
+                    "Reduce pointer_mask or grow register_file.size so every selectable pointer is in range",
+                ));
+            }
         }
         for w in &self.wide_registers {
             if w.bits != 16 {
@@ -563,7 +577,13 @@ impl IrComponent {
         for o in &self.observables {
             let IrObservableValue::U12Compose { lo_rel, hi_rel, .. } = o.value;
             let span = lo_rel.max(hi_rel);
-            let last = o.base + o.stride * (o.channels.max(1) as u64 - 1) + span;
+            // channels.max(1): treat a zero-channel observable like one channel
+            // so the out-of-range check is still enforced on the base block.
+            let last = o
+                .base
+                .checked_add(o.stride.saturating_mul(o.channels.max(1) as u64 - 1))
+                .and_then(|v| v.checked_add(span))
+                .unwrap_or(u64::MAX);
             if last >= size {
                 out.push(IrComponentDiag::new(
                     "ICOMP_OBS_OUT_OF_RANGE",
@@ -718,5 +738,104 @@ register_file: { size: 256 }
         });
         let d = s.validate();
         assert!(d.iter().any(|d| d.code == "ICOMP_UPDATE_DANGLING"), "{d:?}");
+    }
+
+    // --- Fix 1: register_file.size boundary ---
+
+    #[test]
+    fn regfile_size_zero_is_diagnosed() {
+        let mut s = minimal_spec();
+        s.register_file.size = 0;
+        let d = s.validate();
+        assert!(d.iter().any(|d| d.code == "ICOMP_REGFILE_SIZE"), "{d:?}");
+    }
+
+    #[test]
+    fn regfile_size_too_large_is_diagnosed() {
+        let mut s = minimal_spec();
+        s.register_file.size = 70000;
+        let d = s.validate();
+        assert!(d.iter().any(|d| d.code == "ICOMP_REGFILE_SIZE"), "{d:?}");
+    }
+
+    // --- Fix 1: overflow-safe observable bounds (no panic on huge values) ---
+
+    #[test]
+    fn observable_huge_base_does_not_panic_and_is_diagnosed() {
+        let mut s = minimal_spec();
+        s.observables.push(IrObservable {
+            name: "huge".into(),
+            channels: 1,
+            base: u64::MAX - 1,
+            stride: 0,
+            value: IrObservableValue::U12Compose {
+                lo_rel: 0,
+                hi_rel: 1,
+                hi_mask: 0xFF,
+            },
+            map: None,
+        });
+        // Must not panic; must emit ICOMP_OBS_OUT_OF_RANGE.
+        let d = s.validate();
+        assert!(
+            d.iter().any(|d| d.code == "ICOMP_OBS_OUT_OF_RANGE"),
+            "{d:?}"
+        );
+    }
+
+    // --- Fix 2: pointer_mask range validation ---
+
+    #[test]
+    fn pointer_mask_wider_than_register_file_is_diagnosed() {
+        // Default pointer_mask = 0xFF; size = 16 → 0xFF >= 16 → error.
+        let mut s = minimal_spec();
+        s.register_file.size = 16;
+        s.pointer = Some(IrPointerRule {
+            first_write_after_start_sets_pointer: true,
+            pointer_mask: 0xFF, // default
+            auto_increment: IrAutoIncrement::Never,
+        });
+        let d = s.validate();
+        assert!(
+            d.iter().any(|d| d.code == "ICOMP_POINTER_MASK_RANGE"),
+            "{d:?}"
+        );
+    }
+
+    #[test]
+    fn tmp102_shaped_spec_pointer_mask_is_valid() {
+        // TMP102: size 4, pointer_mask 0x03 → mask (3) < size (4): no error.
+        let mut s = minimal_spec();
+        s.register_file.size = 4;
+        s.pointer = Some(IrPointerRule {
+            first_write_after_start_sets_pointer: true,
+            pointer_mask: 0x03,
+            auto_increment: IrAutoIncrement::Never,
+        });
+        let d = s.validate();
+        assert!(
+            !d.iter().any(|d| d.code == "ICOMP_POINTER_MASK_RANGE"),
+            "TMP102-shaped spec should not trigger ICOMP_POINTER_MASK_RANGE: {d:?}"
+        );
+    }
+
+    // --- Multiple diagnostics accumulate in a single validate() pass ---
+
+    #[test]
+    fn multiple_diagnostics_accumulate() {
+        // wasm kind + a reset offset that is out of range → at least 2 entries.
+        let mut s = minimal_spec();
+        s.kind = IrComponentKind::Wasm;
+        s.register_file.reset.insert(300, 1); // 300 >= 256
+        let d = s.validate();
+        assert!(
+            d.iter().any(|d| d.code == "ICOMP_WASM_UNSUPPORTED"),
+            "expected ICOMP_WASM_UNSUPPORTED in {d:?}"
+        );
+        assert!(
+            d.iter().any(|d| d.code == "ICOMP_RESET_OUT_OF_RANGE"),
+            "expected ICOMP_RESET_OUT_OF_RANGE in {d:?}"
+        );
+        assert!(d.len() >= 2, "expected at least 2 diagnostics, got: {d:?}");
     }
 }
