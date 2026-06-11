@@ -1217,7 +1217,16 @@ impl SystemBus {
                         layout, cr2_mask,
                     ))
                 }
-                "pwr" => Box::new(crate::peripherals::pwr::Pwr::new()),
+                "pwr" => {
+                    // `config: { profile: stm32h5 }` selects the H5 layout
+                    // (VOSCR/VOSSR voltage scaling); default stays L4.
+                    match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
+                        Some("stm32h5") | Some("h5") => {
+                            Box::new(crate::peripherals::pwr::PwrH5::new())
+                        }
+                        _ => Box::new(crate::peripherals::pwr::Pwr::new()),
+                    }
+                }
                 "flash" | "flash_iface" => {
                     // Layout selected via `config: { profile: stm32f1 | stm32l4 }`
                     // in the chip yaml. Missing/unknown profile keeps the L4

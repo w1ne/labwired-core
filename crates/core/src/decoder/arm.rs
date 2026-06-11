@@ -1015,11 +1015,13 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
     // as each pattern has a unique h1/h2 mask.
     // ------------------------------------------------------------------
 
-    // DMB / DSB / ISB — ARMv7-M A7.7.31/30/37.
-    //   h1 = 0xF3BF, h2 = 0x8F_<func>_<option>, func ∈ {4,5,6}.
+    // DMB / DSB / ISB — ARMv7-M A7.7.31/30/37. CLREX (func = 2) clears the
+    // exclusive monitor, which this sim models as always-succeeding — all
+    // four are architectural no-ops here.
+    //   h1 = 0xF3BF, h2 = 0x8F_<func>_<option>, func ∈ {2, 4, 5, 6}.
     if h1 == 0xF3BF && (h2 & 0xFF00) == 0x8F00 {
         let func = (h2 >> 4) & 0xF;
-        if (4..=6).contains(&func) {
+        if func == 2 || (4..=6).contains(&func) {
             return Instruction::Barrier;
         }
     }

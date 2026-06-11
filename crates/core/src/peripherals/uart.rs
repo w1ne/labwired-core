@@ -97,13 +97,21 @@ impl UartRegisterLayout {
                 txeie_mask: 1 << 7, // TXEIE
                 tcie_mask: 1 << 6,  // TCIE
             },
+            // CR1 bit 3 is TE (transmitter enable) on the v2 USART — NOT an
+            // interrupt enable; TXEIE/TXFNFIE lives at bit 7. The mask
+            // previously said `1 << 3`, so any firmware that turned the
+            // transmitter on held a phantom TX interrupt — invisible until
+            // foreign firmware enabled the NVIC line and spun in its default
+            // handler. Silicon-pinned on the bench NUCLEO-H563ZI
+            // (2026-06-11): CR1=FIFOEN|TE|RE|UE pends nothing; adding TXEIE
+            // (bit 7) pends the USART3 NVIC line (TXFNF high at idle).
             UartRegisterLayout::Stm32V2 => UartRegMap {
                 status: 0x1C, // ISR
                 tx: 0x28,     // TDR
                 rx: 0x24,     // RDR
                 cr3: 0x08,
                 cr1: Some(0x00),
-                txeie_mask: 1 << 3, // TXEIE/TXFNFIE
+                txeie_mask: 1 << 7, // TXEIE/TXFNFIE
                 tcie_mask: 1 << 6,  // TCIE
             },
             UartRegisterLayout::Nrf52 => UartRegMap {
@@ -758,5 +766,26 @@ mod tests {
         assert_eq!(trace[1].byte, 0x33);
         assert_eq!(sink.lock().unwrap().as_slice(), &[0x42]);
         assert_eq!(uart.read(0x04).unwrap(), 0x33);
+    }
+}
+
+#[cfg(test)]
+mod v2_irq_gating_tests {
+    use super::*;
+    use crate::Peripheral;
+
+    /// CR1.TE (bit 3) must not raise the UART interrupt on the v2 layout —
+    /// only TXEIE (bit 7) / TCIE (bit 6) do. Silicon-pinned on the bench
+    /// NUCLEO-H563ZI (2026-06-11).
+    #[test]
+    fn v2_te_does_not_raise_irq_txeie_does() {
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::Stm32V2);
+        // FIFOEN | TE | RE | UE — the embassy blocking-mode CR1.
+        uart.write_u32(0x00, 0x2000_000D).unwrap();
+        assert!(!uart.tick().irq, "TE alone must not pend");
+        uart.write_u32(0x00, 0x2000_008D).unwrap(); // + TXEIE
+        assert!(uart.tick().irq, "TXEIE must pend");
+        uart.write_u32(0x00, 0x2000_004D).unwrap(); // TCIE instead
+        assert!(uart.tick().irq, "TCIE must pend");
     }
 }

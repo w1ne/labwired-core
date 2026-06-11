@@ -312,8 +312,13 @@ impl crate::Peripheral for Timer {
     }
 
     fn tick(&mut self) -> crate::PeripheralTickResult {
-        // Keep IRQ level high while UIF is latched and UIE is enabled.
-        if (self.sr & 1) != 0 && (self.dier & 1) != 0 {
+        // Keep the IRQ level high while any enabled status flag is latched:
+        // UIF/UIE (bit 0) and the compare-match pairs CC1..4IF/CC1..4IE
+        // (bits 1..4). Compare interrupts drive alarm-style time drivers
+        // (CCR written ahead of CNT, CCxIE set, wake on match) — exercised
+        // by foreign STM32H563 firmware and silicon-verified on the bench
+        // TIM2 (2026-06-11): CC1IF pends the NVIC line with the CPU halted.
+        if (self.sr & self.dier & 0x1F) != 0 {
             return crate::PeripheralTickResult {
                 irq: true,
                 cycles: 1,

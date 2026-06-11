@@ -45,6 +45,10 @@ pub struct ArmCpuSnapshot {
     pub xpsr: u32,
     pub primask: bool,
     pub pending_exceptions: u64,
+    /// Exceptions 64..255 (words 1..3 of the widened bitmask). Optional so
+    /// pre-widening snapshots still deserialize.
+    #[serde(default)]
+    pub pending_exceptions_hi: Vec<u64>,
     pub vtor: u32,
 }
 

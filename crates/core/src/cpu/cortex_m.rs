@@ -38,10 +38,14 @@ pub struct CortexM {
     pub lr: u32, // R14
     pub pc: u32, // R15
     pub xpsr: u32,
-    pub pending_exceptions: u64, // Bitmask — u64 to support exceptions up to 63 (IRQ 47+)
-    pub primask: bool,           // Interrupt mask (true = disabled)
-    pub vtor: Arc<AtomicU32>,    // Shared Vector Table Offset Register
-    pub it_state: u8,            // Thumb IT block state
+    /// Pending-exception bitmask, 4x64 = exceptions 0..255. The H5-class
+    /// parts wire external interrupts past IRQ 47 (STM32H563 TIM12 = IRQ
+    /// 120 -> exception 136), which a single u64 silently dropped —
+    /// caught by foreign firmware whose time driver never ticked.
+    pub pending_exceptions: [u64; 4],
+    pub primask: bool,        // Interrupt mask (true = disabled)
+    pub vtor: Arc<AtomicU32>, // Shared Vector Table Offset Register
+    pub it_state: u8,         // Thumb IT block state
     /// Currently active exception number (0 = thread mode). Used to prevent re-entry
     /// of the same or lower-priority exception while one is already being serviced.
     pub active_exception: u32,
@@ -92,7 +96,7 @@ impl Default for CortexM {
             lr: 0,
             pc: 0,
             xpsr: 0x01000000, // Typical reset state (Thumb bit set)
-            pending_exceptions: 0,
+            pending_exceptions: [0; 4],
             primask: false,
             vtor: Arc::new(AtomicU32::new(0)),
             it_state: 0,
@@ -182,19 +186,18 @@ impl CortexM {
     /// priority (lowest numeric value). Ties break by exception number
     /// (lower number wins, per ARMv7-M B1.5.4).
     fn highest_priority_pending(&self) -> Option<u32> {
-        if self.pending_exceptions == 0 {
-            return None;
-        }
-        let mut mask = self.pending_exceptions;
         let mut best: Option<(i32, u32)> = None;
-        while mask != 0 {
-            let exc = mask.trailing_zeros();
-            mask &= !(1u64 << exc);
-            let prio = self.exception_priority(exc);
-            best = Some(match best {
-                Some((bp, be)) if bp <= prio => (bp, be),
-                _ => (prio, exc),
-            });
+        for (word_idx, &word) in self.pending_exceptions.iter().enumerate() {
+            let mut mask = word;
+            while mask != 0 {
+                let exc = (word_idx as u32) * 64 + mask.trailing_zeros();
+                mask &= mask - 1;
+                let prio = self.exception_priority(exc);
+                best = Some(match best {
+                    Some((bp, be)) if bp <= prio => (bp, be),
+                    _ => (prio, exc),
+                });
+            }
         }
         best.map(|(_, e)| e)
     }
@@ -364,7 +367,7 @@ impl Cpu for CortexM {
     fn reset(&mut self, bus: &mut dyn Bus) -> SimResult<()> {
         self.pc = 0x0000_0000;
         self.sp = 0x2000_0000;
-        self.pending_exceptions = 0;
+        self.pending_exceptions = [0; 4];
         self.set_active_exception(0);
         self.decode_cache.fill(None);
 
@@ -392,8 +395,8 @@ impl Cpu for CortexM {
         if std::env::var("LABWIRED_TRACE_EXC").is_ok() {
             eprintln!("EXC pend num={} pc=0x{:08X}", exception_num, self.pc);
         }
-        if exception_num < 64 {
-            self.pending_exceptions |= 1u64 << exception_num;
+        if exception_num < 256 {
+            self.pending_exceptions[(exception_num / 64) as usize] |= 1u64 << (exception_num % 64);
         }
     }
 
@@ -414,7 +417,8 @@ impl Cpu for CortexM {
             pc: self.pc,
             xpsr: self.xpsr,
             primask: self.primask,
-            pending_exceptions: self.pending_exceptions,
+            pending_exceptions: self.pending_exceptions[0],
+            pending_exceptions_hi: self.pending_exceptions[1..].to_vec(),
             vtor: self.vtor.load(Ordering::Relaxed),
         })
     }
@@ -441,7 +445,11 @@ impl Cpu for CortexM {
             }
             self.xpsr = s.xpsr;
             self.primask = s.primask;
-            self.pending_exceptions = s.pending_exceptions;
+            self.pending_exceptions = [0; 4];
+            self.pending_exceptions[0] = s.pending_exceptions;
+            for (i, w) in s.pending_exceptions_hi.iter().take(3).enumerate() {
+                self.pending_exceptions[i + 1] = *w;
+            }
             self.vtor.store(s.vtor, Ordering::Relaxed);
         }
     }
@@ -510,7 +518,7 @@ impl Cpu for CortexM {
                 // Break the batch only when a takeable exception is pending:
                 // its priority must be strictly higher (smaller number) than
                 // the currently-active one (or 256 = thread mode baseline).
-                if self.pending_exceptions != 0 && !self.primask {
+                if self.pending_exceptions.iter().any(|&w| w != 0) && !self.primask {
                     if let Some(exc) = self.highest_priority_pending() {
                         let active_prio = self.exception_priority(self.active_exception);
                         if self.exception_priority(exc) < active_prio {
@@ -528,7 +536,7 @@ impl Cpu for CortexM {
             }
         } else {
             while executed < max_count {
-                if self.pending_exceptions != 0 && !self.primask {
+                if self.pending_exceptions.iter().any(|&w| w != 0) && !self.primask {
                     if let Some(exc) = self.highest_priority_pending() {
                         let active_prio = self.exception_priority(self.active_exception);
                         if self.exception_priority(exc) < active_prio {
@@ -566,13 +574,14 @@ impl CortexM {
         // FreeRTOS PendSV-driven context switches behave correctly —
         // PendSV at priority 0xFF only runs when no other ISR is active.
         let exception_num = self.highest_priority_pending().unwrap_or(0);
-        if self.pending_exceptions != 0 && !self.primask && exception_num != 0 {
+        if self.pending_exceptions.iter().any(|&w| w != 0) && !self.primask && exception_num != 0 {
             let take_prio = self.exception_priority(exception_num);
             let active_prio = self.exception_priority(self.active_exception);
             let can_take = take_prio < active_prio;
 
             if can_take {
-                self.pending_exceptions &= !(1u64 << exception_num);
+                self.pending_exceptions[(exception_num / 64) as usize] &=
+                    !(1u64 << (exception_num % 64));
 
                 // Clear NVIC ISPR for this exception so it isn't immediately re-pended.
                 // On real ARM hardware this happens automatically when the exception is taken.
@@ -1060,6 +1069,57 @@ impl CortexM {
                         let _ = bus.write_u32(addr as u64, val);
                         // Rd = 0 → success.
                         self.set_register(rd, 0);
+                        pc_increment = 4;
+                    } else if (h1 & 0xFFF0) == 0xE8D0 && (h2 & 0x0F0F) == 0x0F0F {
+                        // Load-acquire family (ARMv8-M mainline, also on the
+                        // M33 with TrustZone off): LDAB/LDAH/LDA and
+                        // LDAEXB/LDAEXH/LDAEX.
+                        //   h1 = 0xE8D0 | Rn, h2 = Rt<<12 | 0xF<<8 | sz<<4 | 0xF
+                        //   sz: 8=B, 9=H, A=word (acquire), C=EXB, D=EXH, E=EX
+                        // Acquire ordering and the exclusive monitor are
+                        // no-ops in this single-threaded sim (same rationale
+                        // as LDREX above). Rust atomics on thumbv8m compile
+                        // to these — embassy's executor run-queue lives on
+                        // LDAEX/STLEX.
+                        let rn = (h1 & 0xF) as u8;
+                        let rt = ((h2 >> 12) & 0xF) as u8;
+                        let addr = self.get_register(rn) as u64;
+                        let loaded = match (h2 >> 4) & 0xF {
+                            0x8 | 0xC => bus.read_u8(addr).ok().map(|v| v as u32),
+                            0x9 | 0xD => bus.read_u16(addr).ok().map(|v| v as u32),
+                            0xA | 0xE => bus.read_u32(addr).ok(),
+                            _ => None,
+                        };
+                        if let Some(val) = loaded {
+                            self.set_register(rt, val);
+                        }
+                        pc_increment = 4;
+                    } else if (h1 & 0xFFF0) == 0xE8C0 && (h2 & 0x0F00) == 0x0F00 {
+                        // Store-release family: STLB/STLH/STL ([3:0]=0xF, no
+                        // status register) and STLEXB/STLEXH/STLEX ([3:0]=Rd,
+                        // always-success monitor → Rd = 0).
+                        //   h1 = 0xE8C0 | Rn, h2 = Rt<<12 | 0xF<<8 | sz<<4 | Rd/0xF
+                        let rn = (h1 & 0xF) as u8;
+                        let rt = ((h2 >> 12) & 0xF) as u8;
+                        let addr = self.get_register(rn) as u64;
+                        let val = self.get_register(rt);
+                        let sz = (h2 >> 4) & 0xF;
+                        match sz {
+                            0x8 | 0xC => {
+                                let _ = bus.write_u8(addr, val as u8);
+                            }
+                            0x9 | 0xD => {
+                                let _ = bus.write_u16(addr, val as u16);
+                            }
+                            0xA | 0xE => {
+                                let _ = bus.write_u32(addr, val);
+                            }
+                            _ => {}
+                        }
+                        if matches!(sz, 0xC | 0xD | 0xE) {
+                            let rd = (h2 & 0xF) as u8;
+                            self.set_register(rd, 0); // success
+                        }
                         pc_increment = 4;
                     } else if (h1 & 0xFE00) == 0xE800 {
                         // Table branch, load/store multiple etc — not yet
@@ -2758,7 +2818,7 @@ mod tests {
 
         // PendSV pending while SysTick is active — must NOT be takeable.
         cpu.active_exception = 15;
-        cpu.pending_exceptions = 1u64 << 14;
+        cpu.pending_exceptions[0] = 1u64 << 14;
         assert_eq!(cpu.highest_priority_pending(), Some(14));
         let active_prio = cpu.exception_priority(cpu.active_exception);
         let pend_prio = cpu.exception_priority(14);
@@ -2869,7 +2929,7 @@ mod tests {
         assert_eq!(cpu.exception_priority(16), 0xC0); // IRQ0 → exc 16
         assert_eq!(cpu.exception_priority(17), 0x40); // IRQ1 → exc 17
 
-        cpu.pending_exceptions = (1u64 << 16) | (1u64 << 17);
+        cpu.pending_exceptions[0] = (1u64 << 16) | (1u64 << 17);
         assert_eq!(
             cpu.highest_priority_pending(),
             Some(17),

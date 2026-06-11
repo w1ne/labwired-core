@@ -144,6 +144,13 @@ peripherals:
     base_address: 0x40000400
     size: "1KB"
     irq: 46
+  # TIM12 (2ch GP) — embassy's time-driver-any pick on this part; reset +
+  # PSC/CCR/DIER round-trips + free-running CNT bench-probed 2026-06-11.
+  - id: "tim12"
+    type: "timer"
+    base_address: 0x40001800
+    size: "1KB"
+    irq: 120
   - id: "tim6"
     type: "timer"
     base_address: 0x40001000
@@ -256,9 +263,27 @@ peripherals:
     type: "nvic"
     base_address: 0xE000E100
     size: "1KB"
-  # PWR (AHB3). Generic model — only used so DBP-style backup-domain pokes
-  # have a landing zone; H5-specific VOS/BDCR fields are not modeled.
+  # PWR (AHB3), H5 layout — VOSCR/VOSSR voltage scaling silicon-pinned
+  # (foreign firmware polls VOSSR.VOSRDY before any PLL work).
   - id: "pwr"
     type: "pwr"
     base_address: 0x44020800
     size: "1KB"
+    config:
+      profile: "stm32h5"
+  # FLASH interface registers (RM0481) — ACR latency/WRHIGHFREQ read-back
+  # for clock bring-up; program/erase not modeled.
+  - id: "flash_iface"
+    type: "flash"
+    base_address: 0x40022000
+    size: "1KB"
+    config:
+      profile: "stm32h5"
+  # DBGMCU (RM0481) — IDCODE captured off the bench part 2026-06-10;
+  # CR bits [4:3] are plain R/W storage on silicon (cf. the F103 finding).
+  - id: "dbgmcu"
+    type: "dbgmcu"
+    base_address: 0x44024000
+    size: "1KB"
+    config:
+      idcode: 0x10016484

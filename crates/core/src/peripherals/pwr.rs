@@ -174,3 +174,128 @@ impl crate::Peripheral for Pwr {
         serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
     }
 }
+
+/// PWR — STM32H5 layout (RM0481 §10).
+///
+/// Register surface and reset values pinned to a NUCLEO-H563ZI SWD probe
+/// (silicon capture 2026-06-11): PMCR=0x0C, VOSSR=0x2008
+/// (ACTVOSRDY|VOSRDY, ACTVOS=Scale3), SCCR=0x100, VMSR bit 20 set, all
+/// other registers 0. Voltage scaling completes instantly in the sim:
+/// `VOSSR = (VOSCR.VOS << 14) | ACTVOSRDY | VOSRDY` tracks every VOSCR
+/// write — silicon-probed across Scale3 -> Scale0 -> Scale2 -> Scale3
+/// (VOSSR read 0x2008 / 0xE008 / 0x6008 / 0x2008). Foreign H5 firmware
+/// (HAL and embassy alike) polls VOSSR.VOSRDY before touching the PLL.
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
+pub struct PwrH5 {
+    pmcr: u32,
+    voscr: u32,
+    bdcr: u32,
+    dbpcr: u32,
+    ucpdr: u32,
+    sccr: u32,
+    vmcr: u32,
+    usbscr: u32,
+    wucr: u32,
+    ioretr: u32,
+    seccfgr: u32,
+    privcfgr: u32,
+}
+
+impl PwrH5 {
+    pub fn new() -> Self {
+        Self {
+            pmcr: 0x0000_000C,
+            sccr: 0x0000_0100,
+            ..Default::default()
+        }
+    }
+
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x00 => self.pmcr,
+            0x04 => 0, // PMSR
+            0x10 => self.voscr,
+            // VOSSR: ACTVOS mirrors the requested VOS, both ready bits up.
+            0x14 => (((self.voscr >> 4) & 0x3) << 14) | (1 << 13) | (1 << 3),
+            0x20 => self.bdcr,
+            0x24 => self.dbpcr,
+            0x28 => 0, // BDSR
+            0x2C => self.ucpdr,
+            0x30 => self.sccr,
+            0x34 => self.vmcr,
+            0x38 => self.usbscr,
+            0x3C => 0x0010_0000, // VMSR (silicon-pinned static status)
+            0x44 => 0,           // WUSR
+            0x48 => self.wucr,
+            0x50 => self.ioretr,
+            0x100 => self.seccfgr,
+            0x104 => self.privcfgr,
+            _ => 0,
+        }
+    }
+
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            0x00 => self.pmcr = value,
+            0x10 => self.voscr = value & 0x30, // VOS[5:4]
+            0x20 => self.bdcr = value,
+            0x24 => self.dbpcr = value & 0x1,
+            0x2C => self.ucpdr = value,
+            0x30 => self.sccr = value,
+            0x34 => self.vmcr = value,
+            0x38 => self.usbscr = value,
+            0x40 => {} // WUSCR w1c into WUSR (always 0 here)
+            0x48 => self.wucr = value,
+            0x50 => self.ioretr = value,
+            0x100 => self.seccfgr = value,
+            0x104 => self.privcfgr = value,
+            _ => {}
+        }
+    }
+}
+
+impl crate::Peripheral for PwrH5 {
+    fn read(&self, offset: u64) -> SimResult<u8> {
+        let reg = offset & !3;
+        let byte = (offset % 4) as u32;
+        Ok(((self.read_reg(reg) >> (byte * 8)) & 0xFF) as u8)
+    }
+    fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        let reg = offset & !3;
+        let byte = (offset % 4) as u32;
+        let mut v = self.read_reg(reg);
+        let mask: u32 = 0xFF << (byte * 8);
+        v = (v & !mask) | ((value as u32) << (byte * 8));
+        self.write_reg(reg, v);
+        Ok(())
+    }
+    fn snapshot(&self) -> serde_json::Value {
+        serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+}
+
+#[cfg(test)]
+mod h5_tests {
+    use super::PwrH5;
+    use crate::Peripheral;
+
+    #[test]
+    fn pwr_h5_reset_and_vos_tracking_match_silicon() {
+        // Silicon capture 2026-06-11 (NUCLEO-H563ZI).
+        let mut pwr = PwrH5::new();
+        assert_eq!(pwr.read_u32(0x00).unwrap(), 0x0000_000C, "PMCR");
+        assert_eq!(pwr.read_u32(0x14).unwrap(), 0x0000_2008, "VOSSR reset");
+        assert_eq!(pwr.read_u32(0x30).unwrap(), 0x0000_0100, "SCCR");
+        assert_eq!(pwr.read_u32(0x3C).unwrap(), 0x0010_0000, "VMSR");
+
+        pwr.write_u32(0x10, 0x30).unwrap(); // VOS = Scale0
+        assert_eq!(pwr.read_u32(0x14).unwrap(), 0x0000_E008, "VOSSR scale0");
+        pwr.write_u32(0x10, 0x10).unwrap(); // VOS = Scale2
+        assert_eq!(pwr.read_u32(0x14).unwrap(), 0x0000_6008, "VOSSR scale2");
+        pwr.write_u32(0x10, 0).unwrap();
+        assert_eq!(pwr.read_u32(0x14).unwrap(), 0x0000_2008, "VOSSR scale3");
+
+        pwr.write_u32(0x24, 0x1).unwrap(); // DBP
+        assert_eq!(pwr.read_u32(0x24).unwrap(), 0x1, "DBPCR");
+    }
+}

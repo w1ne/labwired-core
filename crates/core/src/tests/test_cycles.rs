@@ -39,6 +39,7 @@ impl Cpu for MockCpu {
             xpsr: 0,
             primask: false,
             pending_exceptions: 0,
+            pending_exceptions_hi: Vec::new(),
             vtor: 0,
         })
     } // Dummy

@@ -47,6 +47,13 @@ pub enum FlashRegisterLayout {
     /// register file is shorter (KEYR@0x04, SR@0x0C, CR@0x10, OBR@0x1C,
     /// WRPR@0x20). No ECCR / OPTR / PCROP / WRP1..2.
     Stm32F1,
+    /// STM32H5 (RM0481 §7). Interface registers only — program/erase is not
+    /// modeled. ACR (LATENCY/WRHIGHFREQ/PRFTEN) reads back what firmware
+    /// wrote, which is what HAL/embassy clock bring-up polls. Reset values
+    /// pinned to a NUCLEO-H563ZI SWD probe (silicon capture 2026-06-11):
+    /// ACR=0x13, OPTCR=1, NSCR=1, OPTSR_CUR=0x2D30EDF8 (this part's option
+    /// bytes, representative).
+    Stm32H5,
 }
 
 impl FromStr for FlashRegisterLayout {
@@ -55,6 +62,7 @@ impl FromStr for FlashRegisterLayout {
         match value.trim().to_ascii_lowercase().as_str() {
             "stm32l4" | "l4" => Ok(Self::Stm32L4),
             "stm32f1" | "f1" | "legacy" => Ok(Self::Stm32F1),
+            "stm32h5" | "h5" => Ok(Self::Stm32H5),
             _ => Err(format!(
                 "unsupported FLASH register layout '{}'; supported: stm32l4, stm32f1",
                 value
@@ -114,6 +122,8 @@ impl Flash {
         let (acr_reset, cr_reset, optr_reset) = match layout {
             FlashRegisterLayout::Stm32L4 => (0x0000_0600u32, 0xC000_0000u32, 0xFFEF_F8AAu32),
             FlashRegisterLayout::Stm32F1 => (0x0000_0030u32, 0x0000_0080u32, 0x0000_0000u32),
+            // NSCR (the only modeled control reg) reset 0x1; OPTSR_CUR via optr.
+            FlashRegisterLayout::Stm32H5 => (0x0000_0013u32, 0x0000_0001u32, 0x2D30_EDF8u32),
         };
         Self {
             layout,
@@ -187,6 +197,19 @@ impl Flash {
                 _ => 0,
             };
         }
+        // ─── H5 layout (isolated; interface regs only) ──────────────────
+        if matches!(self.layout, FlashRegisterLayout::Stm32H5) {
+            return match offset {
+                0x00 => self.acr,
+                0x14 => 0,         // OPSR
+                0x1C => 0x1,       // OPTCR (silicon reset; option flows not modeled)
+                0x20 => self.sr,   // NSSR
+                0x28 => self.cr,   // NSCR
+                0x30 => 0,         // NSCCR
+                0x50 => self.optr, // OPTSR_CUR
+                _ => 0,
+            };
+        }
         // ─── L4 layout (untouched) ──────────────────────────────────────
         match offset {
             0x00 => self.acr,
@@ -210,6 +233,15 @@ impl Flash {
     }
 
     fn write_reg(&mut self, offset: u64, value: u32) {
+        // ─── H5 layout (isolated) ───────────────────────────────────────
+        if matches!(self.layout, FlashRegisterLayout::Stm32H5) {
+            if offset == 0x00 {
+                // ACR writable bits: LATENCY[3:0], WRHIGHFREQ[5:4],
+                // PRFTEN(8). Round-trips silicon-pinned (0x11/0x23/0x02).
+                self.acr = value & 0x0000_0133;
+            }
+            return;
+        }
         // ─── F1 layout (isolated; no fall-through to L4) ────────────────
         if matches!(self.layout, FlashRegisterLayout::Stm32F1) {
             match offset {
