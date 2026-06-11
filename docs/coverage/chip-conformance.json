@@ -79,9 +79,9 @@
   },
   {
     "behavior": true,
-    "level": 1,
+    "level": 2,
     "name": "stm32l073",
-    "reg_match": 0
+    "reg_match": 49
   },
   {
     "behavior": true,

@@ -125,7 +125,7 @@ const CHIPS: &[ChipConf] = &[
     ChipConf {
         name: "stm32l073",
         yaml: "configs/chips/stm32l073.yaml",
-        reset_oracle: None,
+        reset_oracle: Some("scripts/hw-oracle/captures/stm32l073/reg_oracle.json"),
         behavior_gate: Some("firmware_survival::test_nucleo_l073rz_smoke_survival"),
     },
     ChipConf {

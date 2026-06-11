@@ -38,6 +38,18 @@ for w in json.load(open('$TARGET'))['windows']: print(w['id'], w['base'], w['cou
       echo "capture attempt $attempt: examination flaky, retrying"; sleep 1
     done
     ;;
+  openocd-stlink)
+    oocd=$(python3 -c "import json;print(json.load(open('$TARGET'))['transport'].get('openocd','openocd'))")
+    icfg=$(python3 -c "import json;print(json.load(open('$TARGET'))['transport']['interface_cfg'])")
+    tcfg=$(python3 -c "import json;print(json.load(open('$TARGET'))['transport']['target_cfg'])")
+    cmds="init; reset halt;"
+    while read -r id base count; do
+      cmds+=" echo {@@$id $base}; echo [capture {mdw $base $count}];"
+    done < <(python3 -c "import json
+for w in json.load(open('$TARGET'))['windows']: print(w['id'], w['base'], w['count'])")
+    cmds+=" exit"
+    "$oocd" -f "$icfg" -f "$tcfg" -c "$cmds" > "$OUT/openocd.log" 2>&1
+    ;;
   *)
     echo "transport '$tool' not yet implemented — add a branch in hw_conform.sh"; exit 2;;
 esac
