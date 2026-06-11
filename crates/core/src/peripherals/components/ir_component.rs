@@ -35,7 +35,9 @@ impl IrI2cComponent {
                 .collect::<Vec<_>>()
                 .join("; "));
         }
-        let IrComponentInterface::I2c { default_address } = &spec.interface;
+        let IrComponentInterface::I2c { default_address } = &spec.interface else {
+            return Err("IrI2cComponent requires an i2c interface".to_string());
+        };
         let default_address = *default_address;
         let mut regs = vec![0u8; spec.register_file.size];
         for (&off, &v) in &spec.register_file.reset {

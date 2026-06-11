@@ -28,9 +28,12 @@ pub struct IrComponent {
     /// validation until the WASM slice ships.
     #[serde(default)]
     pub kind: IrComponentKind,
-    /// Bus interface. I2C only in Slice 1.
+    /// Bus interface. I2C (register-backed) or SPI (read-only response word).
     pub interface: IrComponentInterface,
-    /// Backing register file.
+    /// Backing register file. Required for I2C devices; omitted (defaults to
+    /// empty) for read-only SPI devices, which describe their output via
+    /// [`response`](IrComponent::response) instead.
+    #[serde(default)]
     pub register_file: IrRegisterFile,
     /// Pointer (control-register) semantics. Optional: pointerless devices.
     #[serde(default)]
@@ -44,6 +47,11 @@ pub struct IrComponent {
     /// Named values derived from register state, readable by tests/run loop.
     #[serde(default)]
     pub observables: Vec<IrObservable>,
+    /// Read-only SPI response framing. Required for — and only valid on — the
+    /// `spi` interface. The device clocks this word out MSB-first on every
+    /// CS-framed transaction (e.g. MAX31855, MAX6675, MCP3xxx).
+    #[serde(default)]
+    pub response: Option<IrResponse>,
 }
 
 /// Execution kind for a component spec.
@@ -80,6 +88,12 @@ pub enum IrComponentInterface {
         /// 7-bit address when the manifest does not override it.
         default_address: u8,
     },
+    /// Read-only SPI target device.
+    Spi {
+        /// Chip-select pin label when the manifest does not override it,
+        /// e.g. "PA4".
+        default_cs_pin: String,
+    },
 }
 
 /// Serde helper for [`IrComponentInterface`].
@@ -87,6 +101,8 @@ pub enum IrComponentInterface {
 struct IrComponentInterfaceHelper {
     #[serde(skip_serializing_if = "Option::is_none")]
     i2c: Option<I2cFields>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    spi: Option<SpiFields>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -94,42 +110,93 @@ struct I2cFields {
     default_address: u8,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SpiFields {
+    default_cs_pin: String,
+}
+
 impl Serialize for IrComponentInterface {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        match self {
-            IrComponentInterface::I2c { default_address } => {
-                let helper = IrComponentInterfaceHelper {
-                    i2c: Some(I2cFields {
-                        default_address: *default_address,
-                    }),
-                };
-                helper.serialize(serializer)
-            }
-        }
+        let helper = match self {
+            IrComponentInterface::I2c { default_address } => IrComponentInterfaceHelper {
+                i2c: Some(I2cFields {
+                    default_address: *default_address,
+                }),
+                spi: None,
+            },
+            IrComponentInterface::Spi { default_cs_pin } => IrComponentInterfaceHelper {
+                i2c: None,
+                spi: Some(SpiFields {
+                    default_cs_pin: default_cs_pin.clone(),
+                }),
+            },
+        };
+        helper.serialize(serializer)
     }
 }
 
 impl<'de> Deserialize<'de> for IrComponentInterface {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let helper = IrComponentInterfaceHelper::deserialize(deserializer)?;
-        if let Some(i2c) = helper.i2c {
-            Ok(IrComponentInterface::I2c {
+        match (helper.i2c, helper.spi) {
+            (Some(i2c), None) => Ok(IrComponentInterface::I2c {
                 default_address: i2c.default_address,
-            })
-        } else {
-            Err(serde::de::Error::missing_field("i2c"))
+            }),
+            (None, Some(spi)) => Ok(IrComponentInterface::Spi {
+                default_cs_pin: spi.default_cs_pin,
+            }),
+            (Some(_), Some(_)) => Err(serde::de::Error::custom(
+                "interface declares both 'i2c' and 'spi'; choose exactly one",
+            )),
+            (None, None) => Err(serde::de::Error::missing_field("i2c' or 'spi")),
         }
     }
 }
 
 /// Flat byte-addressed register file.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+///
+/// Defaults to empty (`size: 0`) so read-only SPI specs may omit it; the
+/// validator enforces a non-zero size for the I2C interface only.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct IrRegisterFile {
     /// Number of 8-bit registers (1..=65536).
+    #[serde(default)]
     pub size: usize,
     /// Sparse non-zero reset values, keyed by register offset.
     #[serde(default)]
     pub reset: BTreeMap<u64, u8>,
+}
+
+/// Read-only SPI response word: a fixed-width big-endian value clocked out
+/// MSB-first across [`bytes`](IrResponse::bytes) SPI transfers while CS is
+/// asserted, composed from named bit-fields. Models read-only SPI sensors and
+/// ADCs whose every CS-framed transaction returns the same status word.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct IrResponse {
+    /// Word width in bytes (1..=8), clocked MSB-first.
+    pub bytes: u8,
+    /// Bit-fields packed into the word.
+    #[serde(default)]
+    pub fields: Vec<IrResponseField>,
+}
+
+/// One bit-field packed into an [`IrResponse`] word.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct IrResponseField {
+    /// Field name; host stimulus addresses fields by name.
+    pub name: String,
+    /// LSB position of the field within the word.
+    pub shift: u8,
+    /// Field width in bits (1..=32).
+    pub bits: u8,
+    /// Whether the stored value is two's-complement signed. Affects only how a
+    /// host-set value is masked into the word; the clocked-out bits are the
+    /// low `bits` bits of the value either way.
+    #[serde(default)]
+    pub signed: bool,
+    /// Power-on default value in field units (raw, pre-mask).
+    #[serde(default)]
+    pub reset: i64,
 }
 
 /// Write-pointer (control register) semantics.
@@ -503,6 +570,14 @@ impl IrComponent {
                 "Use kind: declarative",
             ));
         }
+        // SPI (read-only response word) is validated on its own path; the
+        // register-file / pointer / wide / observable checks below are
+        // I2C-only and would mis-fire on the empty register file of an SPI
+        // spec (e.g. size 0).
+        if let IrComponentInterface::Spi { default_cs_pin } = &self.interface {
+            self.validate_spi(default_cs_pin, &mut out);
+            return out;
+        }
         let size = self.register_file.size as u64;
         if self.register_file.size == 0 || self.register_file.size > 65536 {
             out.push(IrComponentDiag::new(
@@ -595,7 +670,94 @@ impl IrComponent {
                 ));
             }
         }
+        if self.response.is_some() {
+            out.push(IrComponentDiag::new(
+                "ICOMP_RESPONSE_ON_I2C",
+                "response: is only valid on the spi interface".into(),
+                "Remove the response block, or switch interface to spi",
+            ));
+        }
         out
+    }
+
+    /// Validate a read-only SPI spec. The `response` block is required; the
+    /// register-file / pointer / wide / observable / update sections are
+    /// I2C-only and rejected here so a spec cannot silently mix the two
+    /// execution models.
+    fn validate_spi(&self, default_cs_pin: &str, out: &mut Vec<IrComponentDiag>) {
+        if default_cs_pin.trim().is_empty() {
+            out.push(IrComponentDiag::new(
+                "ICOMP_SPI_CS_EMPTY",
+                "spi.default_cs_pin is empty".into(),
+                "Set the chip-select pin label, e.g. default_cs_pin: PA4",
+            ));
+        }
+        let Some(resp) = &self.response else {
+            out.push(IrComponentDiag::new(
+                "ICOMP_SPI_NO_RESPONSE",
+                "spi interface requires a response: block".into(),
+                "Add response: { bytes: N, fields: [...] }",
+            ));
+            return;
+        };
+        if resp.bytes == 0 || resp.bytes > 8 {
+            out.push(IrComponentDiag::new(
+                "ICOMP_SPI_RESPONSE_BYTES",
+                format!("response.bytes {} outside 1..=8", resp.bytes),
+                "Use the device's word width in bytes (MAX31855 = 4)",
+            ));
+        }
+        let word_bits = (resp.bytes as u32) * 8;
+        for f in &resp.fields {
+            if f.bits == 0 || f.bits > 32 {
+                out.push(IrComponentDiag::new(
+                    "ICOMP_SPI_FIELD_BITS",
+                    format!(
+                        "response field '{}' has bits={} outside 1..=32",
+                        f.name, f.bits
+                    ),
+                    "Use the field's real width in bits",
+                ));
+                continue;
+            }
+            if f.shift as u32 + f.bits as u32 > word_bits {
+                out.push(IrComponentDiag::new(
+                    "ICOMP_SPI_FIELD_RANGE",
+                    format!(
+                        "response field '{}' (shift {} + bits {}) overflows the {word_bits}-bit word",
+                        f.name, f.shift, f.bits
+                    ),
+                    "Reduce shift/bits or grow response.bytes",
+                ));
+            }
+        }
+        // Reject I2C-only sections on an SPI device.
+        let mut reject = |present: bool, code: &str, what: &str| {
+            if present {
+                out.push(IrComponentDiag::new(
+                    code,
+                    format!("{what} is not valid on the spi interface"),
+                    "Remove it; SPI devices describe output via response:",
+                ));
+            }
+        };
+        reject(
+            self.register_file.size != 0 || !self.register_file.reset.is_empty(),
+            "ICOMP_SPI_HAS_REGFILE",
+            "register_file",
+        );
+        reject(self.pointer.is_some(), "ICOMP_SPI_HAS_POINTER", "pointer");
+        reject(
+            !self.wide_registers.is_empty(),
+            "ICOMP_SPI_HAS_WIDE",
+            "wide_registers",
+        );
+        reject(
+            !self.observables.is_empty(),
+            "ICOMP_SPI_HAS_OBSERVABLES",
+            "observables",
+        );
+        reject(!self.updates.is_empty(), "ICOMP_SPI_HAS_UPDATES", "updates");
     }
 }
 
@@ -634,7 +796,9 @@ observables:
 "#;
         let spec: IrComponent = serde_yaml::from_str(yaml).expect("parse");
         assert_eq!(spec.name, "PCA9685");
-        let IrComponentInterface::I2c { default_address } = &spec.interface;
+        let IrComponentInterface::I2c { default_address } = &spec.interface else {
+            panic!("expected i2c interface, got {:?}", spec.interface);
+        };
         assert_eq!(*default_address, 0x40);
         assert_eq!(spec.register_file.size, 256);
         assert_eq!(spec.register_file.reset.get(&0x00), Some(&0x11));
@@ -837,5 +1001,115 @@ register_file: { size: 256 }
             "expected ICOMP_RESET_OUT_OF_RANGE in {d:?}"
         );
         assert!(d.len() >= 2, "expected at least 2 diagnostics, got: {d:?}");
+    }
+
+    // ── SPI interface (read-only response word) ───────────────────────────────
+
+    fn spi_spec() -> IrComponent {
+        serde_yaml::from_str(
+            r#"
+name: MAX31855
+interface: { spi: { default_cs_pin: PA4 } }
+response:
+  bytes: 4
+  fields:
+    - { name: tc_temp, shift: 18, bits: 14, signed: true, reset: 100 }
+    - { name: fault, shift: 16, bits: 1, reset: 0 }
+    - { name: internal_temp, shift: 4, bits: 12, signed: true, reset: 352 }
+"#,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn valid_spi_spec_has_no_diagnostics() {
+        assert!(
+            spi_spec().validate().is_empty(),
+            "{:?}",
+            spi_spec().validate()
+        );
+    }
+
+    #[test]
+    fn spi_interface_round_trips_yaml() {
+        let spec = spi_spec();
+        let IrComponentInterface::Spi { default_cs_pin } = &spec.interface else {
+            panic!("expected spi interface");
+        };
+        assert_eq!(default_cs_pin, "PA4");
+        let re: IrComponent = serde_yaml::from_str(&serde_yaml::to_string(&spec).unwrap()).unwrap();
+        assert_eq!(re, spec, "spi spec did not round-trip");
+    }
+
+    #[test]
+    fn interface_with_both_i2c_and_spi_is_rejected() {
+        let err = serde_yaml::from_str::<IrComponent>(
+            r#"
+name: ambiguous
+interface: { i2c: { default_address: 0x40 }, spi: { default_cs_pin: PA4 } }
+"#,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(err.contains("both"), "got: {err}");
+    }
+
+    #[test]
+    fn spi_without_response_is_diagnosed() {
+        let mut s = spi_spec();
+        s.response = None;
+        let d = s.validate();
+        assert!(
+            d.iter().any(|d| d.code == "ICOMP_SPI_NO_RESPONSE"),
+            "expected ICOMP_SPI_NO_RESPONSE in {d:?}"
+        );
+    }
+
+    #[test]
+    fn spi_field_overflowing_word_is_diagnosed() {
+        let mut s = spi_spec();
+        // shift 30 + bits 14 = 44 > 32-bit word.
+        s.response.as_mut().unwrap().fields[0].shift = 30;
+        let d = s.validate();
+        assert!(
+            d.iter().any(|d| d.code == "ICOMP_SPI_FIELD_RANGE"),
+            "expected ICOMP_SPI_FIELD_RANGE in {d:?}"
+        );
+    }
+
+    #[test]
+    fn spi_response_bytes_out_of_range_is_diagnosed() {
+        let mut s = spi_spec();
+        s.response.as_mut().unwrap().bytes = 9;
+        let d = s.validate();
+        assert!(
+            d.iter().any(|d| d.code == "ICOMP_SPI_RESPONSE_BYTES"),
+            "expected ICOMP_SPI_RESPONSE_BYTES in {d:?}"
+        );
+    }
+
+    #[test]
+    fn spi_with_i2c_only_sections_is_diagnosed() {
+        let mut s = spi_spec();
+        s.register_file.size = 8; // I2C-only section on an SPI device
+        let d = s.validate();
+        assert!(
+            d.iter().any(|d| d.code == "ICOMP_SPI_HAS_REGFILE"),
+            "expected ICOMP_SPI_HAS_REGFILE in {d:?}"
+        );
+    }
+
+    #[test]
+    fn response_on_i2c_interface_is_diagnosed() {
+        let mut s = minimal_spec();
+        s.response = Some(IrResponse {
+            bytes: 4,
+            fields: vec![],
+        });
+        let d = s.validate();
+        assert!(
+            d.iter().any(|d| d.code == "ICOMP_RESPONSE_ON_I2C"),
+            "expected ICOMP_RESPONSE_ON_I2C in {d:?}"
+        );
     }
 }
