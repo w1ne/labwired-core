@@ -61,6 +61,18 @@ pub struct MemoryRange {
     pub size: String, // e.g. "128KB"
 }
 
+/// An additional named RAM/ROM-backed memory window beyond the primary
+/// `flash`/`ram`. Needed by SoCs that expose several CPU-visible memory windows
+/// (e.g. the ESP32-C3's separate IRAM `0x4037C000` and flash-DROM `0x3C000000`
+/// views), which real firmware links code/rodata into.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct NamedMemoryRange {
+    pub name: String,
+    #[serde(deserialize_with = "deserialize_u64_lax")]
+    pub base: u64,
+    pub size: String,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PeripheralConfig {
     pub id: String,
@@ -90,6 +102,10 @@ pub struct ChipDescriptor {
     pub core: Option<String>,
     pub flash: MemoryRange,
     pub ram: MemoryRange,
+    /// Extra CPU-visible memory windows beyond `flash`/`ram` (e.g. ESP32 IRAM
+    /// and flash-DROM). Empty for chips with a simple two-region map.
+    #[serde(default)]
+    pub memory_regions: Vec<NamedMemoryRange>,
     pub peripherals: Vec<PeripheralConfig>,
 }
 
@@ -475,6 +491,7 @@ impl From<labwired_ir::IrDevice> for ChipDescriptor {
             core,
             flash,
             ram,
+            memory_regions: Vec::new(),
             peripherals: ir
                 .peripherals
                 .into_values()

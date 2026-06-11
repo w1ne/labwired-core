@@ -13,6 +13,19 @@ flash:
 ram:
   base: 0x3FC80000
   size: "400KB"
+# Additional CPU-visible memory windows real IDF apps link into. On silicon the
+# C3's 400KB SRAM is reachable via both the data bus (the `ram` window above,
+# 0x3FC80000) and the instruction bus (IRAM, 0x4037C000); flash is cached at
+# both the IROM window (`flash`, 0x42000000, code) and the DROM window
+# (0x3C000000, rodata). Without these, an IDF app's entry (IRAM) and rodata
+# (DROM) segments fall outside the memory map and never load.
+memory_regions:
+  - name: "iram"
+    base: 0x4037C000
+    size: "384KB"
+  - name: "drom"
+    base: 0x3C000000
+    size: "8MB"
 peripherals:
   - id: "uart0"
     type: "uart"

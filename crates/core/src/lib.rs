@@ -770,6 +770,15 @@ impl<C: Cpu> Machine<C> {
             if self.bus.ram.load_from_segment(segment) {
                 continue;
             }
+            // 2b. Try extra CPU-visible memory windows (ESP32 IRAM/DROM, etc).
+            if self
+                .bus
+                .extra_mem
+                .iter_mut()
+                .any(|m| m.load_from_segment(segment))
+            {
+                continue;
+            }
             // 3. Fall back to peripheral-backed memory (ESP32 IRAM /
             //    flash XIP, RP2040 SRAM, etc — anything registered as a
             //    Peripheral rather than living in bus.flash/bus.ram).

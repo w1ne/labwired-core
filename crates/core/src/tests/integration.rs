@@ -404,6 +404,7 @@ pub mod integration_tests {
                 base: 0x2000_0000,
                 size: "20KB".to_string(),
             },
+            memory_regions: Vec::new(),
             peripherals: vec![
                 PeripheralConfig {
                     id: "uart1".to_string(),
@@ -506,6 +507,7 @@ pub mod integration_tests {
                 base: 0x2000_0000,
                 size: "20KB".to_string(),
             },
+            memory_regions: Vec::new(),
             peripherals: vec![
                 PeripheralConfig {
                     id: "systick".to_string(),
@@ -573,6 +575,7 @@ pub mod integration_tests {
                 base: 0x2000_0000,
                 size: "20KB".to_string(),
             },
+            memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "uart1".to_string(),
                 r#type: "uart".to_string(),
@@ -625,6 +628,7 @@ pub mod integration_tests {
                 base: 0x2000_0000,
                 size: "20KB".to_string(),
             },
+            memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "gpioa".to_string(),
                 r#type: "gpio".to_string(),
@@ -683,6 +687,7 @@ pub mod integration_tests {
                 base: 0x2000_0000,
                 size: "20KB".to_string(),
             },
+            memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "uart3".to_string(),
                 r#type: "uart".to_string(),
@@ -738,6 +743,7 @@ pub mod integration_tests {
                 base: 0x2000_0000,
                 size: "20KB".to_string(),
             },
+            memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "rcc".to_string(),
                 r#type: "rcc".to_string(),
@@ -793,6 +799,7 @@ pub mod integration_tests {
                 base: 0x2000_0000,
                 size: "20KB".to_string(),
             },
+            memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "rcc".to_string(),
                 r#type: "rcc".to_string(),
@@ -848,6 +855,7 @@ pub mod integration_tests {
                 base: 0x2000_0000,
                 size: "20KB".to_string(),
             },
+            memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "gpioa".to_string(),
                 r#type: "gpio".to_string(),
@@ -2016,6 +2024,7 @@ pub mod integration_tests {
                 base: 0x3FC8_0000,
                 size: "400KB".to_string(),
             },
+            memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "timg0".to_string(),
                 r#type: "esp32_timg".to_string(),

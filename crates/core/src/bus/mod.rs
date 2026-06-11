@@ -131,6 +131,10 @@ pub struct PeripheralEntry {
 pub struct SystemBus {
     pub flash: LinearMemory,
     pub ram: LinearMemory,
+    /// Extra CPU-visible RAM/ROM windows beyond `flash`/`ram` (e.g. ESP32 IRAM
+    /// `0x4037C000` and flash-DROM `0x3C000000`), from the chip's
+    /// `memory_regions`. Checked after `ram`/`flash`, before peripherals.
+    pub extra_mem: Vec<LinearMemory>,
     pub peripherals: Vec<PeripheralEntry>,
     pub nvic: Option<Arc<NvicState>>,
     pub observers: Vec<Arc<dyn crate::SimulationObserver>>,
@@ -665,6 +669,7 @@ impl SystemBus {
             flash_thunks: std::collections::HashMap::new(),
             flash: LinearMemory::new(1024 * 1024, 0x0),
             ram: LinearMemory::new(1024 * 1024, 0x2000_0000),
+            extra_mem: Vec::new(),
             peripherals: vec![
                 PeripheralEntry {
                     name: "uart1".to_string(),
@@ -731,6 +736,7 @@ impl SystemBus {
             flash_thunks: std::collections::HashMap::new(),
             flash: LinearMemory::new(0, 0),
             ram: LinearMemory::new(0, 0),
+            extra_mem: Vec::new(),
             peripherals: Vec::new(),
             nvic: None,
             observers: Vec::new(),
@@ -932,10 +938,17 @@ impl SystemBus {
         let flash_size = parse_size(&chip.flash.size)?;
         let ram_size = parse_size(&chip.ram.size)?;
 
+        let mut extra_mem = Vec::with_capacity(chip.memory_regions.len());
+        for region in &chip.memory_regions {
+            let size = parse_size(&region.size)?;
+            extra_mem.push(LinearMemory::new(size as usize, region.base));
+        }
+
         let mut bus = Self {
             flash_thunks: std::collections::HashMap::new(),
             flash: LinearMemory::new(flash_size as usize, chip.flash.base),
             ram: LinearMemory::new(ram_size as usize, chip.ram.base),
+            extra_mem,
             peripherals: Vec::new(),
             nvic: None,
             observers: Vec::new(),
@@ -1695,6 +1708,11 @@ impl SystemBus {
             if let Some(val) = self.flash.read_u32(addr) {
                 return Ok(val);
             }
+            for mem in &self.extra_mem {
+                if let Some(val) = mem.read_u32(addr) {
+                    return Ok(val);
+                }
+            }
             // Boot alias handle
             if self.flash.base_addr != 0 {
                 let alias_end = self.flash.data.len() as u64;
@@ -1721,6 +1739,13 @@ impl SystemBus {
     pub fn write_u32(&mut self, addr: u64, value: u32) -> SimResult<()> {
         if self.config.optimized_bus_access && self.ram.write_u32(addr, value) {
             return Ok(());
+        }
+        if self.config.optimized_bus_access {
+            for mem in &mut self.extra_mem {
+                if mem.write_u32(addr, value) {
+                    return Ok(());
+                }
+            }
         }
         // Flash is read-only via bus writes usually, but let's stick to the behavior of write_u8
         // which would likely fail or do nothing if it's flash.
@@ -1753,6 +1778,11 @@ impl SystemBus {
             }
             if let Some(val) = self.flash.read_u16(addr) {
                 return Ok(val);
+            }
+            for mem in &self.extra_mem {
+                if let Some(val) = mem.read_u16(addr) {
+                    return Ok(val);
+                }
             }
             // Boot alias handle
             if self.flash.base_addr != 0 {
@@ -2213,6 +2243,11 @@ impl crate::Bus for SystemBus {
         if let Some(val) = self.flash.read_u8(addr) {
             return Ok(val);
         }
+        for mem in &self.extra_mem {
+            if let Some(val) = mem.read_u8(addr) {
+                return Ok(val);
+            }
+        }
         // Cortex-M boot alias: address 0x0000_0000 mirrors flash start on many STM32 parts.
         // This lets reset-vector fetch work when flash is configured at 0x0800_0000.
         if self.flash.base_addr != 0 {
@@ -2249,6 +2284,7 @@ impl crate::Bus for SystemBus {
             .read_u8(addr)
             .or_else(|| self.flash.read_u8(addr))
             .or(flash_alias_old)
+            .or_else(|| self.extra_mem.iter().find_map(|m| m.read_u8(addr)))
             .or_else(|| {
                 self.find_peripheral_index(addr).and_then(|idx| {
                     let p = &self.peripherals[idx];
@@ -2264,6 +2300,7 @@ impl crate::Bus for SystemBus {
         let res = if self.ram.write_u8(addr, value)
             || self.flash.write_u8(addr, value)
             || flash_alias_write
+            || self.extra_mem.iter_mut().any(|m| m.write_u8(addr, value))
         {
             Ok(())
         } else {

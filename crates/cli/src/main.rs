@@ -867,15 +867,35 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
         return ExitCode::from(EXIT_RUNTIME_ERROR);
     }
 
+    // Fast-boot skips the ROM/2nd-stage bootloader that normally sets the stack
+    // pointer before jumping to the app, so SP=0 and the app's first prologue
+    // store faults near 0xffffffff. Seed SP at the top of DRAM (16-byte aligned,
+    // RISC-V ABI) so real IDF apps can boot.
+    let sp_top = (chip.ram.base + labwired_config::parse_size(&chip.ram.size).unwrap_or(0)) as u32;
+    machine.cpu.set_sp(sp_top & !0xF);
+
+    let break_at: Vec<u32> = args
+        .break_at
+        .iter()
+        .filter_map(|s| u32::from_str_radix(s.trim_start_matches("0x"), 16).ok())
+        .collect();
+    let mut break_hit = vec![false; break_at.len()];
     let limit = args.max_steps.unwrap_or(u64::MAX);
     for i in 0..limit {
+        let pc = machine.cpu.get_pc();
+        if let Some(bi) = break_at.iter().position(|&b| b == pc) {
+            if !break_hit[bi] {
+                break_hit[bi] = true;
+                eprintln!("[break] step {i} pc={pc:#010x}");
+            }
+        }
         if let Err(e) = machine.step() {
-            tracing::debug!(
-                "labwired-riscv: step {} pc={:#010x} halt: {}",
-                i,
-                machine.cpu.get_pc(),
-                e
-            );
+            // Surface the halt (was a silent debug log): the fault PC + reason is
+            // the key signal when bringing real firmware up on the sim.
+            tracing::debug!("labwired-riscv: step {i} pc={pc:#010x} halt: {e}");
+            if !break_at.is_empty() {
+                eprintln!("[halt] step {i} pc={pc:#010x} err={e}");
+            }
             break;
         }
     }
