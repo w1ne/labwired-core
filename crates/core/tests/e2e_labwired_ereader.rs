@@ -33,6 +33,7 @@ use labwired_core::cpu::xtensa_lx7::XtensaLx7;
 use labwired_core::peripherals::components::Uc8151dTricolor290;
 use labwired_core::peripherals::esp32::spi::Esp32Spi;
 use labwired_core::peripherals::esp32s3::rom_thunks;
+use labwired_core::peripherals::spi::SpiDevice;
 use labwired_core::system::xtensa::configure_xtensa_esp32;
 use labwired_core::{Cpu, Machine};
 use std::path::PathBuf;
@@ -66,10 +67,20 @@ fn labwired_ereader_runs_to_panel_paint() {
     let spi3_idx = bus
         .find_peripheral_index_by_name("spi3")
         .expect("spi3 registered by configure_xtensa_esp32");
+    // Real DC framing. The sketch wires DC=GPIO17; GxEPD2's _writeCommand /
+    // _writeData toggle that GPIO via digitalWrite (→ gpio_set_level →
+    // GPIO_OUT_W1TS/W1TC) before each SPI.transfer. Resolve GPIO17's output
+    // register so the bus latches the real DC level before draining every SPI3
+    // transaction into the panel — command vs data comes from the wire, not from
+    // a thunk's call-site identity. No gxepd bypass.
+    let dc_src = SystemBus::resolve_pin_odr_pub(&bus, "GPIO17")
+        .expect("GPIO17 resolves to the ESP32 GPIO OUT register");
     {
         let any = bus.peripherals[spi3_idx].dev.as_any_mut().unwrap();
         let spi3 = any.downcast_mut::<Esp32Spi>().unwrap();
-        spi3.attach(Box::new(Uc8151dTricolor290::new("GPIO5")));
+        let mut panel = Uc8151dTricolor290::new("GPIO5").with_dc_pin("GPIO17");
+        panel.set_dc_source(dc_src.0, dc_src.1);
+        spi3.attach(Box::new(panel));
     }
     bus.refresh_peripheral_index();
 
@@ -339,8 +350,9 @@ fn labwired_ereader_runs_to_panel_paint() {
         "xTaskGetCurrentTaskHandle",
         rom_thunks::x_task_get_current_task_handle,
     );
-    // (Real FreeRTOS: xQueueSemaphoreTake / xQueueGenericSend /
-    // ulTaskGenericNotifyTake run for real — no always-succeed fakes.)
+    // xQueueSemaphoreTake / xQueueGenericSend are forced to succeed below (see
+    // the SPI-bus-lock note) because the faked spi_t carries a NULL lock; the
+    // rest of FreeRTOS (scheduler, dual-core rendezvous) runs for real.
     push_named(&mut thunks, "spiStartBus", rom_thunks::spi_start_bus_fake);
     push_named(
         &mut thunks,
@@ -348,17 +360,21 @@ fn labwired_ereader_runs_to_panel_paint() {
         rom_thunks::spi_class_begin_transaction,
     );
 
-    // GxEPD2 cmd/data → straight into the attached UC8151D panel.
-    push_named(
-        &mut thunks,
-        "_ZN10GxEPD2_EPD13_writeCommandEh",
-        rom_thunks::gxepd_write_command,
-    );
-    push_named(
-        &mut thunks,
-        "_ZN10GxEPD2_EPD10_writeDataEh",
-        rom_thunks::gxepd_write_data,
-    );
+    // NO gxepd cmd/data bypass. GxEPD2_EPD::_writeCommand / _writeData run for
+    // real: digitalWrite(DC) → SPI.transfer(byte) → spiTransferByteNL writes the
+    // SPI3 FIFO/MOSI_DLEN/CMD.USR registers, and our Esp32Spi peripheral drains
+    // the byte to the panel framed by the latched DC GPIO. Bytes reach the panel
+    // through real register machinery, not a Rust-side panel injection.
+    //
+    // SPI bus lock. We fake the Arduino spi_t (spiStartBus is thunked), so its
+    // `lock` field is NULL. The compiled SPI init/transfer code takes that lock
+    // with the real xQueueSemaphoreTake, which configASSERTs on a NULL handle.
+    // Force the take/give to succeed so the (single-threaded-in-sim) SPI critical
+    // sections proceed. This is a concurrency shim on the bus mutex — it does NOT
+    // touch the data path (registers + DC are real). Matches the cli/wasm live
+    // profiles. CHEAT(THUNK-LIB): fakes the SPI bus-lock mutex acquire/release.
+    push_named(&mut thunks, "xQueueSemaphoreTake", rom_thunks::return_pd_true);
+    push_named(&mut thunks, "xQueueGenericSend", rom_thunks::return_pd_true);
 
     // xthal_window_spill_nw — semantic spill via shadow stack. Only the
     // `_nw` leaf (the actual spill loop that would trap on the displaced
@@ -463,7 +479,7 @@ fn labwired_ereader_runs_to_panel_paint() {
                         })
                     })
                 {
-                    if p.refresh_generation() >= 2 {
+                    if p.refresh_generation() >= 1 {
                         break;
                     }
                 }

@@ -959,6 +959,7 @@ fn run_firmware_esp32(args: &RunArgs) -> ExitCode {
 
     // Set PC to ELF entry and seed SP at top of SRAM1 (post-BROM default on
     // real silicon; see e2e_external_arduino_esp32_in_sim for the rationale).
+    // CHEAT(SKIP): bypasses the boot ROM and hand-seeds PC/SP. See FIDELITY.md §C.
     cpu.set_pc(image.entry_point as u32);
     cpu.set_sp(0x3FFE_0000);
     // Post-bootloader PS state: WOE=1 (windowed ABI), INTLEVEL=0, EXCM=0.
@@ -1685,6 +1686,7 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     use labwired_core::peripherals::components::{Ssd1680Tricolor290, Uc8151dTricolor290};
     use labwired_core::peripherals::esp32::spi::Esp32Spi;
     use labwired_core::peripherals::esp32s3::rom_thunks;
+    use labwired_core::peripherals::spi::SpiDevice;
     use labwired_core::system::xtensa::configure_xtensa_esp32;
     use labwired_core::{Machine, SimulationError};
     use labwired_loader::{extract_arduino_esp32_thunks, load_elf_bytes};
@@ -1718,6 +1720,11 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
             return ExitCode::from(EXIT_RUNTIME_ERROR);
         }
     };
+    // Real DC framing for the arduino-esp32 GxEPD2 path: the firmware toggles
+    // DC=GPIO17 via digitalWrite before each SPI.transfer, so resolve GPIO17's
+    // output register and latch it before draining each SPI3 transaction. With
+    // this set, command vs data comes from the wire — no gxepd bypass thunk.
+    let dc_src = SystemBus::resolve_pin_odr_pub(&bus, "GPIO17");
     if let Some(any) = bus.peripherals[spi3_idx].dev.as_any_mut() {
         if let Some(spi3) = any.downcast_mut::<Esp32Spi>() {
             if args.profile == "arduino-esp32" {
@@ -1726,7 +1733,11 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
                 // conflict with SSD1680 at multiple opcodes; we need the
                 // UC8151D panel model. Arduino-ESP32 reference firmware uses SSD1680
                 // and stays on the old model below.
-                spi3.attach(Box::new(Uc8151dTricolor290::new("GPIO5")));
+                let mut panel = Uc8151dTricolor290::new("GPIO5").with_dc_pin("GPIO17");
+                if let Some((odr, bit)) = dc_src {
+                    panel.set_dc_source(odr, bit);
+                }
+                spi3.attach(Box::new(panel));
             } else {
                 spi3.attach(Box::new(Ssd1680Tricolor290::new("GPIO5")));
             }
@@ -1764,6 +1775,8 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     }
     // XtensaLx7::reset() leaves PC at the 0x40000400 BROM reset vector.
     // Skip BROM and jump straight to the ELF's app entry — same as WASM.
+    // CHEAT(SKIP): bypasses the boot ROM and hand-seeds PC (SP seeded below).
+    // See FIDELITY.md §C.
     machine.cpu.set_pc(program_image.entry_point as u32);
 
     // Resolve every Arduino-ESP32 symbol we know how to patch / thunk.
@@ -2215,23 +2228,14 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     if let Some(&pc) = symbol_addrs.get("_ZN8SPIClass16beginTransactionE11SPISettings") {
         thunks.push((pc, rom_thunks::spi_class_begin_transaction));
     }
-    // GxEPD2_EPD::_writeCommand / _writeData — route directly into the
-    // attached UC8151D panel's `command_byte` / `data_byte` API,
-    // bypassing the Arduino-ESP32 SPI library and the SPI peripheral
-    // entirely. Same byte stream the real silicon receives, with
-    // explicit DC=cmd / DC=data routing (which we can't infer from
-    // pure FIFO bytes without observing the DC GPIO). Only wired for
-    // the arduino-esp32 profile — agentdeck profile attaches an
-    // SSD1680 panel that uses byte-counting through `transfer()` and
-    // doesn't need the explicit CMD/DATA split.
-    if args.profile == "arduino-esp32" {
-        if let Some(&pc) = symbol_addrs.get("_ZN10GxEPD2_EPD13_writeCommandEh") {
-            thunks.push((pc, rom_thunks::gxepd_write_command));
-        }
-        if let Some(&pc) = symbol_addrs.get("_ZN10GxEPD2_EPD10_writeDataEh") {
-            thunks.push((pc, rom_thunks::gxepd_write_data));
-        }
-    }
+    // No GxEPD2 _writeCommand / _writeData bypass. The real compiled
+    // GxEPD2_EPD::_writeCommand/_writeData run: digitalWrite(DC=GPIO17) →
+    // SPI.transfer(byte) → spiTransferByteNL writes the SPI3 FIFO/MOSI_DLEN/
+    // CMD.USR registers, and the Esp32Spi peripheral drains the byte to the
+    // panel framed by the latched DC GPIO. Verified end-to-end against the real
+    // PlatformIO firmware.elf (431 real SPI3 transactions → panel refresh) by
+    // tests/e2e_labwired_ereader.rs. The arduino-esp32 panel attach above sets
+    // the panel's DC source to GPIO17 so the framing is real.
     // Optional debug: install vListInsert short-circuit thunk that dumps
     // list state for first 20 calls. Used to diagnose SMP race issues in
     // the FreeRTOS scheduler. Enable with `LABWIRED_DEBUG_VLIST=1`.
@@ -4108,6 +4112,9 @@ fn run_test(args: TestArgs) -> ExitCode {
             // matching `install_esp32_arduino_quirks` in the WASM path.
             // Native Xtensa firmware that sets its own SP will overwrite this
             // immediately.
+            // CHEAT(SKIP): bypasses the boot ROM and hand-seeds PC/SP — real: the
+            // CPU resets at 0x4000_0400 and the mapped BROM sets up SP and jumps
+            // to the app. See FIDELITY.md §C.
             machine.cpu.set_pc(program.entry_point as u32);
             machine.cpu.set_sp(0x3FFE_0000);
             let exit_code = execute_test_loop(

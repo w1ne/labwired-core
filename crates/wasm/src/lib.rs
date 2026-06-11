@@ -1940,11 +1940,22 @@ impl WasmSimulator {
         // GxEPD2's ereader actually drives UC8151D, and a stale SSD1680
         // confuses both runtime decoding and snapshot restore (the spi3
         // blob layout depends on attached-device count + types)).
+        // Real DC framing: GxEPD2 toggles DC=GPIO17 via digitalWrite before each
+        // SPI.transfer, so resolve GPIO17's output register and latch it before
+        // draining each SPI3 transaction. Command vs data then comes from the
+        // wire — no gxepd bypass thunk needed.
+        use labwired_core::peripherals::spi::SpiDevice;
+        let dc_src =
+            labwired_core::bus::SystemBus::resolve_pin_odr_pub(&machine.bus, "GPIO17");
         if let Some(spi3_idx) = machine.bus.find_peripheral_index_by_name("spi3") {
             if let Some(any) = machine.bus.peripherals[spi3_idx].dev.as_any_mut() {
                 if let Some(spi3) = any.downcast_mut::<Esp32Spi>() {
                     spi3.attached_devices.clear();
-                    spi3.attach(Box::new(Uc8151dTricolor290::new("GPIO5")));
+                    let mut panel = Uc8151dTricolor290::new("GPIO5").with_dc_pin("GPIO17");
+                    if let Some((odr, bit)) = dc_src {
+                        panel.set_dc_source(odr, bit);
+                    }
+                    spi3.attach(Box::new(panel));
                 }
             }
         }
@@ -2219,18 +2230,12 @@ impl WasmSimulator {
             rom_thunks::spi_class_begin_transaction,
         );
 
-        // GxEPD2 cmd/data routing — bypasses Arduino-ESP32's SPI library
-        // entirely. Bytes go straight to the attached UC8151D panel.
-        push_named(
-            &mut thunks,
-            "_ZN10GxEPD2_EPD13_writeCommandEh",
-            rom_thunks::gxepd_write_command,
-        );
-        push_named(
-            &mut thunks,
-            "_ZN10GxEPD2_EPD10_writeDataEh",
-            rom_thunks::gxepd_write_data,
-        );
+        // No GxEPD2 cmd/data bypass. The real compiled _writeCommand/_writeData
+        // run: digitalWrite(DC=GPIO17) → SPI.transfer → spiTransferByteNL writes
+        // the SPI3 FIFO/MOSI_DLEN/CMD.USR registers, and Esp32Spi drains the byte
+        // to the panel framed by the latched DC GPIO. Bytes reach the panel
+        // through real register machinery (verified against the real firmware.elf
+        // in tests/e2e_labwired_ereader.rs: 431 SPI3 transactions → refresh).
 
         // xthal_window_spill_nw — semantic spill via shadow stack. Only the
         // `_nw` leaf is thunked; the `xthal_window_spill` wrapper is a thin

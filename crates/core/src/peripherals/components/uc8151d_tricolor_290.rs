@@ -23,19 +23,18 @@
 //! ## Cmd / Data routing
 //!
 //! Real silicon multiplexes cmd vs data via a sideband D/C GPIO pin.
-//! The simulator's normal byte-stream `transfer()` path doesn't see DC
-//! transitions — for the SSD1680 model we use byte-counting on the
-//! command's fixed param count. UC8151D's DTM1/DTM2 streams are
-//! unbounded (they end when the next CMD arrives), so byte-counting
-//! doesn't work. Instead this model exposes `command_byte(u8)` and
-//! `data_byte(u8)` as separate APIs; the
-//! [`crate::peripherals::esp32s3::rom_thunks::spi_class_transfer`]
-//! thunk distinguishes cmd vs data by the caller PC
-//! (`_writeCommand` vs `_writeData`) and routes accordingly.
+//! This model reads that pin for real: set a `dc_source` (the resolved
+//! GPIO output register + bit, via [`crate::peripherals::spi::SpiDevice::set_dc_source`])
+//! and the SPI bus latches the DC level from the GPIO output register
+//! before each `transfer()`, so DC=low bytes route to `command_byte(u8)`
+//! and DC=high bytes to `data_byte(u8)`. The firmware's own
+//! `digitalWrite(DC, …)` drives that GPIO — no thunk, no caller-PC
+//! inference. This is what GxEPD2 does on hardware, and what the real
+//! compiled firmware exercises in tests/e2e_labwired_ereader.rs.
 //!
-//! The `transfer()` impl falls back to "all bytes are data" so this
-//! model still slots into the generic SPI bus without breaking, just
-//! without UC8151D protocol decoding.
+//! When no `dc_source` is wired, `transfer()` falls back to "all bytes
+//! are data" so the model still slots into a generic SPI bus without
+//! breaking, just without full UC8151D protocol decoding.
 
 use crate::peripherals::spi::SpiDevice;
 use std::any::Any;
@@ -83,6 +82,19 @@ pub struct Uc8151dTricolor290 {
 
     #[serde(skip_serializing)]
     state: ProtoState,
+
+    /// Data/Command (D/C) GPIO label, if wired (e.g. "GPIO17"). When set, the
+    /// bus latches that pin's output level via [`SpiDevice::set_dc_level`]
+    /// before each transfer, so command/data framing comes from the real GPIO
+    /// exactly like silicon — no library thunk, no calling-identity guess.
+    #[serde(skip)]
+    dc_pin: Option<String>,
+    /// Latched D/C level (low = command, high = data), pushed by the bus.
+    #[serde(skip)]
+    dc_level: bool,
+    /// Resolved `(GPIO output reg address, bit)` for the D/C line.
+    #[serde(skip)]
+    dc_source: Option<(u64, u8)>,
 }
 
 impl Default for Uc8151dTricolor290 {
@@ -105,7 +117,18 @@ impl Uc8151dTricolor290 {
             red_plane: vec![0xFF; PLANE_BYTES],
             refresh_generation: 0,
             state: ProtoState::Idle,
+            dc_pin: None,
+            dc_level: false,
+            dc_source: None,
         }
+    }
+
+    /// Wire a Data/Command GPIO line (e.g. "GPIO17"). With a D/C pin the panel
+    /// frames command vs data from the real GPIO level (silicon-accurate);
+    /// without one `transfer()` cannot distinguish the two.
+    pub fn with_dc_pin(mut self, dc_pin: impl Into<String>) -> Self {
+        self.dc_pin = Some(dc_pin.into());
+        self
     }
 
     pub fn dimensions(&self) -> (usize, usize) {
@@ -324,13 +347,39 @@ impl SpiDevice for Uc8151dTricolor290 {
     }
 
     fn transfer(&mut self, mosi: u8) -> u8 {
-        // Fallback path for callers that don't go through the
-        // `spi_class_transfer` thunk. Treat the byte as data (we can't
-        // distinguish cmd vs data without DC pin visibility). This makes
-        // the panel mostly useless for true byte-stream input, but at
-        // least keeps the SPI bus broadcaster happy.
-        self.data_byte(mosi);
+        // Silicon-accurate framing: when a D/C line is wired the bus has
+        // latched the real GPIO level (low = command, high = data) before
+        // this transfer, so we route correctly with no thunk. Without a D/C
+        // pin we genuinely can't tell cmd from data over the raw byte stream,
+        // so we treat it as data (legacy fallback) and keep the bus happy.
+        if self.dc_source.is_some() {
+            if self.dc_level {
+                self.data_byte(mosi);
+            } else {
+                self.command_byte(mosi);
+            }
+        } else {
+            // CHEAT(INFER): no D/C line wired — can't tell command from data, so
+            // treat every byte as data — real: sample the D/C GPIO. FIDELITY.md §E.
+            self.data_byte(mosi);
+        }
         0
+    }
+
+    fn dc_pin(&self) -> Option<&str> {
+        self.dc_pin.as_deref()
+    }
+
+    fn set_dc_level(&mut self, level: bool) {
+        self.dc_level = level;
+    }
+
+    fn dc_source(&self) -> Option<(u64, u8)> {
+        self.dc_source
+    }
+
+    fn set_dc_source(&mut self, odr_addr: u64, bit: u8) {
+        self.dc_source = Some((odr_addr, bit));
     }
 
     fn as_any(&self) -> Option<&dyn Any> {

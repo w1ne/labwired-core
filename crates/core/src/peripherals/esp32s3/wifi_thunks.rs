@@ -5,6 +5,12 @@
 //! WiFi + lwIP socket thunks — the firmware-reachability layer of the ESP32
 //! WiFi functional model (simulated endpoints).
 //!
+//! CHEAT(THUNK-LIB): every fn here short-circuits the WiFi/lwIP stack to a
+//! canned functional outcome (WL_CONNECTED, fake sockets) instead of running it.
+//! Unlike most cheats this is partly unavoidable — the WiFi MAC/PHY is a closed
+//! RF-coprocessor blob with no executable image — but the lwIP/socket layer
+//! above it is real compiled code we skip. See FIDELITY.md §A.
+//!
 //! The ESP32 WiFi MAC/PHY is a closed binary blob on an RF coprocessor, so
 //! we never run it. Instead we intercept the firmware's calls at two layers
 //! and emulate the *functional* outcome:
