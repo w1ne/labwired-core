@@ -17,6 +17,7 @@ use tracing::{error, info};
 
 mod api_client;
 mod asset_validation;
+mod component_validation;
 use labwired_cli::coverage;
 mod gpio_observer;
 mod size_limited_writer;
@@ -337,6 +338,9 @@ pub enum AssetCommands {
 
     /// Verify an AI-generated peripheral model using a simulator loopback.
     Verify(VerifyArgs),
+
+    /// Validate an off-chip component IR spec (YAML).
+    ValidateComponent(component_validation::ValidateComponentArgs),
 }
 
 #[derive(Parser, Debug)]
@@ -2593,6 +2597,7 @@ fn run_asset(args: AssetArgs) -> ExitCode {
         AssetCommands::ListChips(a) => asset_validation::run_list_chips(a),
         AssetCommands::Create(a) => run_asset_create(a),
         AssetCommands::Verify(a) => run_asset_verify(a),
+        AssetCommands::ValidateComponent(a) => component_validation::run_validate_component(a),
     }
 }
 
