@@ -8,7 +8,7 @@ import {
   ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
-import { mkdtemp, writeFile, rm, mkdir } from 'node:fs/promises';
+import { mkdtemp, writeFile, rm, mkdir, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { listChips, runSimulation, validateSystem, runLab, fuzzFirmware, runCli } from './cli.js';
@@ -148,6 +148,14 @@ const InspectRunInput = z.object({
 const DefineComponentInput = z.object({
   spec_yaml: z.string().describe('IrComponent spec as YAML'),
   name: z.string().optional().describe('Override file name (defaults to spec name, kebab-cased)'),
+});
+
+const IngestSvdInput = z.object({
+  svd_content: z.string().describe('Full contents of the CMSIS-SVD XML file to ingest.'),
+  filter: z
+    .string()
+    .optional()
+    .describe('Comma-separated peripheral names to ingest (default: all peripherals).'),
 });
 
 const CreateSessionInput = z.object({});
@@ -480,6 +488,31 @@ function localTools() {
           name: {
             type: 'string',
             description: 'Override file name (defaults to spec name, kebab-cased)',
+          },
+        },
+      },
+    },
+    {
+      name: 'labwired_ingest_svd',
+      description:
+        'Ingest a CMSIS-SVD file into runnable declarative PeripheralDescriptor YAML — the ' +
+        'one-step path from a silicon-vendor SVD to a working chip, with no codegen and no ' +
+        'recompile. Writes descriptors under .labwired/peripherals/<name>.yaml and returns each ' +
+        'peripheral with its descriptor YAML, base address, and register count, plus a ' +
+        'paste-ready chip-yaml peripherals block (type: declarative) to drop straight into a ' +
+        'chip descriptor. Use this to model any MCU peripheral from its vendor SVD. ' +
+        'Keywords: svd import, declarative peripheral, chip from svd, register map.',
+      inputSchema: {
+        type: 'object',
+        required: ['svd_content'],
+        properties: {
+          svd_content: {
+            type: 'string',
+            description: 'Full CMSIS-SVD XML contents.',
+          },
+          filter: {
+            type: 'string',
+            description: 'Comma-separated peripheral names to ingest (default: all).',
           },
         },
       },
@@ -956,6 +989,119 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     config: { spec_path: absSpecPath },
                   },
                 },
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+      };
+    }
+
+    if (name === 'labwired_ingest_svd') {
+      const { svd_content, filter } = IngestSvdInput.parse(args ?? {});
+
+      const workspaceRoot = resolveWorkspaceRoot();
+      const peripheralDir = join(workspaceRoot, '.labwired', 'peripherals');
+      await mkdir(peripheralDir, { recursive: true });
+
+      type IngestReport = {
+        output_dir: string;
+        peripheral_count: number;
+        peripherals: Array<{
+          name: string;
+          descriptor_path: string;
+          register_count: number;
+          base_address: string;
+        }>;
+      };
+
+      const work = await mkdtemp(join(tmpdir(), 'labwired-mcp-svd-'));
+      let report: IngestReport;
+      try {
+        const tmpSvd = join(work, 'in.svd');
+        await writeFile(tmpSvd, svd_content);
+
+        const cliArgs = [
+          'asset',
+          'ingest-svd',
+          '--input',
+          tmpSvd,
+          '--output-dir',
+          peripheralDir,
+          '--json',
+        ];
+        if (filter) cliArgs.push('--filter', filter);
+
+        const { stdout, stderr, exitCode } = await runCli(cliArgs);
+        try {
+          report = JSON.parse(stdout) as IngestReport;
+        } catch {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  { error: 'CLI_PARSE_ERROR', stdout, stderr, exit_code: exitCode },
+                  null,
+                  2,
+                ),
+              },
+            ],
+            isError: true,
+          };
+        }
+        if (exitCode !== 0 || report.peripheral_count === 0) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  { error: 'INGEST_FAILED', stderr, exit_code: exitCode, ...report },
+                  null,
+                  2,
+                ),
+              },
+            ],
+            isError: true,
+          };
+        }
+      } finally {
+        await rm(work, { recursive: true, force: true }).catch(() => {});
+      }
+
+      // Read back each descriptor and build a paste-ready chip-yaml block.
+      const peripherals = [];
+      for (const p of report.peripherals) {
+        const absPath = resolve(p.descriptor_path);
+        const descriptor_yaml = await readFile(absPath, 'utf8').catch(() => '');
+        peripherals.push({ ...p, descriptor_path: absPath, descriptor_yaml });
+      }
+
+      const manifest_snippet = ['peripherals:']
+        .concat(
+          peripherals.map((p) =>
+            [
+              `  - id: ${p.name.toLowerCase()}`,
+              `    type: declarative`,
+              `    base_address: ${p.base_address}`,
+              `    config:`,
+              `      path: ${p.descriptor_path}`,
+            ].join('\n'),
+          ),
+        )
+        .join('\n');
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                ok: true,
+                peripheral_count: report.peripheral_count,
+                peripherals,
+                manifest_snippet,
               },
               null,
               2,
