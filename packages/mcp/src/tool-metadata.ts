@@ -17,6 +17,9 @@ const READ_ONLY_TOOLS = new Set([
   'labwired_validate_diagram',
 ]);
 
+// labwired_define_component is intentionally absent from READ_ONLY_TOOLS:
+// it writes a spec file to .labwired/components/.
+
 const TITLES: Record<string, string> = {
   labwired_catalog: 'Catalog',
   labwired_simulate: 'Simulate',
@@ -31,6 +34,7 @@ const TITLES: Record<string, string> = {
   labwired_set_source: 'Set Source',
   labwired_validate_diagram: 'Validate Diagram',
   labwired_search_tools: 'Search Tools',
+  labwired_define_component: 'Define Component',
 };
 
 export function toolTitle(name: string): string {
