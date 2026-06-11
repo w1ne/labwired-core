@@ -4,6 +4,8 @@ import { diagramToConfig, COMPONENT_META } from '@labwired/board-config';
 import { builderRun } from './builder-client.js';
 import { getWorkspaceRecord, maybeResetMtdCycles, writeWorkspaceRecord } from '../keys.js';
 import { trackUsage } from '../usage.js';
+import { SEARCH_TOOLS_TOOL, SEARCH_TOOLS_TOOL_NAME, rankTools } from './search-tools.js';
+import { decorateTools } from './tool-metadata.js';
 
 interface HostedDiagnostic {
   severity: 'error' | 'warning';
@@ -50,6 +52,7 @@ interface HostedDiagram {
 }
 
 const hostedTools: McpTool[] = [
+  SEARCH_TOOLS_TOOL,
   {
     name: 'labwired_start_playground_lab',
     description:
@@ -126,7 +129,7 @@ const hostedTools: McpTool[] = [
 ];
 
 export function listHostedTools(): McpTool[] {
-  return hostedTools;
+  return decorateTools(hostedTools);
 }
 
 export async function callHostedTool(
@@ -162,6 +165,17 @@ async function dispatchHostedTool(
   env: Env,
   identity: HostedMcpIdentity,
 ): Promise<McpToolResult> {
+
+  if (name === SEARCH_TOOLS_TOOL_NAME) {
+    const input = (parsed?.arguments ?? {}) as { query?: unknown; limit?: unknown };
+    const query = typeof input.query === 'string' ? input.query : '';
+    const limit = typeof input.limit === 'number' && Number.isFinite(input.limit)
+      ? Math.trunc(input.limit)
+      : 8;
+    return {
+      content: [textContent({ query, tools: rankTools(query, listHostedTools(), limit) })],
+    };
+  }
 
   if (name === 'labwired_start_playground_lab') {
     return startPlaygroundLab(parsed?.arguments, env, identity);

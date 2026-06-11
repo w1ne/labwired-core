@@ -27,11 +27,18 @@ export type JsonRpcResponse = JsonRpcSuccess | JsonRpcFailure;
 
 export interface McpTool {
   name: string;
+  title?: string;
   description: string;
   inputSchema: {
     type: 'object';
     properties?: Record<string, unknown>;
     required?: string[];
+  };
+  annotations?: {
+    title: string;
+    readOnlyHint: boolean;
+    destructiveHint: boolean;
+    openWorldHint?: boolean;
   };
 }
 

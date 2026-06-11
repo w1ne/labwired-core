@@ -4,9 +4,14 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
+  ListResourcesRequestSchema,
+  ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
-import { listChips, runSimulation, validateSystem, runLab, fuzzFirmware } from './cli.js';
+import { mkdtemp, writeFile, rm, mkdir } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { listChips, runSimulation, validateSystem, runLab, fuzzFirmware, runCli } from './cli.js';
 import {
   listBoards,
   getBoard,
@@ -16,6 +21,9 @@ import {
 } from './boards.js';
 import { putSnapshot, getSnapshot } from './snapshots.js';
 import { diagnoseDiagram, type ValidateDiagram } from './diagnostics.js';
+import { SEARCH_TOOLS_TOOL, SEARCH_TOOLS_TOOL_NAME, rankTools } from './search-tools.js';
+import { decorateTools } from './tool-metadata.js';
+import { RESOURCES, getResource } from './resources.js';
 
 const SERVER_NAME = '@labwired/mcp';
 const SERVER_VERSION = '0.5.0';
@@ -137,6 +145,11 @@ const InspectRunInput = z.object({
     .describe('summary | serial | gpio | raw. Default summary.'),
 });
 
+const DefineComponentInput = z.object({
+  spec_yaml: z.string().describe('IrComponent spec as YAML'),
+  name: z.string().optional().describe('Override file name (defaults to spec name, kebab-cased)'),
+});
+
 const CreateSessionInput = z.object({});
 const EndSessionInput = z.object({});
 
@@ -163,13 +176,43 @@ const ValidateDiagramInput = z.object({
     .describe('Diagram JSON: { board, parts: [{id, type, ...}], wires: [{from, to}] }.'),
 });
 
+// ─── Workspace root (mirrors boards.ts resolution logic) ──────────────────
+// Checked in order: LABWIRED_REPO_ROOT env, then walk up from __dirname.
+import { existsSync } from 'node:fs';
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+function resolveWorkspaceRoot(): string {
+  const fromEnv = process.env.LABWIRED_REPO_ROOT;
+  if (fromEnv) return resolve(fromEnv);
+
+  let cursor = dirname(fileURLToPath(import.meta.url));
+  for (let i = 0; i < 8; i++) {
+    if (existsSync(join(cursor, 'core/configs/chips'))) return cursor;
+    const parent = dirname(cursor);
+    if (parent === cursor) break;
+    cursor = parent;
+  }
+  // Fall back to cwd when repo root cannot be detected
+  return process.cwd();
+}
+
+/** Convert any string to a safe kebab-case file stem. */
+function toKebabCase(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
 const server = new Server(
   { name: SERVER_NAME, version: SERVER_VERSION },
-  { capabilities: { tools: {} } },
+  { capabilities: { tools: {}, resources: {} } },
 );
 
-server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [
+function localTools() {
+  return [
+    SEARCH_TOOLS_TOOL,
     {
       name: 'labwired_catalog',
       description:
@@ -417,13 +460,62 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         },
       },
     },
-  ],
+    {
+      name: 'labwired_define_component',
+      description:
+        'Define a new off-chip device from a declarative IR spec (YAML). Validates the spec ' +
+        '(stable ICOMP_* diagnostic codes with hints), persists it under ' +
+        '.labwired/components/<name>.yaml, and returns the exact manifest external_devices ' +
+        'entry (type: ir, spec_path) needed to wire the device into a system manifest. ' +
+        'Use this to model any custom sensor, driver, or expander before simulation. ' +
+        'Keywords: define component, ir spec, custom device, sensor model.',
+      inputSchema: {
+        type: 'object',
+        required: ['spec_yaml'],
+        properties: {
+          spec_yaml: {
+            type: 'string',
+            description: 'IrComponent spec as YAML',
+          },
+          name: {
+            type: 'string',
+            description: 'Override file name (defaults to spec name, kebab-cased)',
+          },
+        },
+      },
+    },
+  ];
+}
+
+server.setRequestHandler(ListToolsRequestSchema, async () => ({
+  tools: decorateTools(localTools()),
 }));
+
+server.setRequestHandler(ListResourcesRequestSchema, async () => ({
+  resources: RESOURCES,
+}));
+
+server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+  const resource = getResource(request.params.uri);
+  if (!resource) throw new Error(`Unknown resource: ${request.params.uri}`);
+  return { contents: [resource] };
+});
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
   try {
+    if (name === SEARCH_TOOLS_TOOL_NAME) {
+      const input = (args ?? {}) as { query?: unknown; limit?: unknown };
+      const query = typeof input.query === 'string' ? input.query : '';
+      const limit = typeof input.limit === 'number' && Number.isFinite(input.limit)
+        ? Math.trunc(input.limit)
+        : 8;
+      return {
+        content: [{ type: 'text', text: JSON.stringify({ query, tools: rankTools(query, decorateTools(localTools()), limit) }) }],
+      };
+    }
+
     if (name === 'labwired_catalog') {
       const { filter } = CatalogInput.parse(args ?? {});
       const chips = await listChips(filter);
@@ -801,6 +893,75 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           },
         ],
         isError: errors > 0,
+      };
+    }
+
+    if (name === 'labwired_define_component') {
+      const { spec_yaml, name: nameOverride } = DefineComponentInput.parse(args ?? {});
+
+      // Write spec to a temp file for CLI validation
+      const work = await mkdtemp(join(tmpdir(), 'labwired-mcp-comp-'));
+      let report: { ok: boolean; name: string | null; diagnostics: unknown[] };
+      try {
+        const tmpSpec = join(work, 'spec.yaml');
+        await writeFile(tmpSpec, spec_yaml);
+
+        const { stdout, exitCode } = await runCli(['asset', 'validate-component', tmpSpec, '--json']);
+
+        try {
+          report = JSON.parse(stdout) as typeof report;
+        } catch {
+          return {
+            content: [{ type: 'text', text: JSON.stringify({ error: 'CLI_PARSE_ERROR', stdout, exit_code: exitCode }, null, 2) }],
+            isError: true,
+          };
+        }
+      } finally {
+        await rm(work, { recursive: true, force: true }).catch(() => {});
+      }
+
+      if (!report.ok) {
+        return {
+          content: [{ type: 'text', text: JSON.stringify(report, null, 2) }],
+          isError: true,
+        };
+      }
+
+      // Compute file name: explicit override, else spec name kebab-cased
+      const stem = nameOverride
+        ? toKebabCase(nameOverride)
+        : toKebabCase(report.name ?? 'component');
+      const fileName = `${stem}.yaml`;
+
+      const workspaceRoot = resolveWorkspaceRoot();
+      const componentDir = join(workspaceRoot, '.labwired', 'components');
+      await mkdir(componentDir, { recursive: true });
+      const specPath = join(componentDir, fileName);
+      await writeFile(specPath, spec_yaml);
+
+      const absSpecPath = resolve(specPath);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                ok: true,
+                name: report.name,
+                spec_path: absSpecPath,
+                usage: {
+                  manifest_external_device: {
+                    type: 'ir',
+                    connection: '<i2c peripheral id>',
+                    config: { spec_path: absSpecPath },
+                  },
+                },
+              },
+              null,
+              2,
+            ),
+          },
+        ],
       };
     }
 
