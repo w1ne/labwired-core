@@ -1,0 +1,19 @@
+{
+  "chip": "esp32-c3",
+  "schema": "labwired-hw-oracle/esp32c3-regs/v1",
+  "transport": {
+    "tool": "openocd-esp32",
+    "openocd_home": "/private/tmp/openocd-esp32",
+    "board_cfg": "board/esp32c3-builtin.cfg",
+    "adapter_speed": 4000,
+    "command_timeout_sec": 10
+  },
+  "windows": [
+    {"id": "uart0", "base": "0x60000000", "count": 48},
+    {"id": "system", "base": "0x600c0000", "count": 32},
+    {"id": "spi2", "base": "0x60024000", "count": 32},
+    {"id": "i2c0", "base": "0x60013000", "count": 16},
+    {"id": "wifi_mac", "base": "0x60033000", "count": 64},
+    {"id": "radio_fe", "base": "0x60006000", "count": 16}
+  ]
+}
