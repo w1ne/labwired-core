@@ -15,3 +15,5 @@ export { getPinEtype } from './pin-mapping';
 export type { PinElectrical } from './pin-mapping';
 export { erc } from './erc';
 export type { Diagnostic, Severity } from './erc';
+export { compile } from './compile';
+export type { CompileResult } from './compile';
