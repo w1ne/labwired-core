@@ -1926,39 +1926,17 @@ impl WasmSimulator {
     /// that GxEPD2_290_C90c / Z13c emits).
     #[wasm_bindgen]
     pub fn install_arduino_esp32_quirks(&mut self, elf_bytes: &[u8]) -> Result<(), JsValue> {
-        use labwired_core::peripherals::components::Uc8151dTricolor290;
-        use labwired_core::peripherals::esp32::spi::Esp32Spi;
         use labwired_core::peripherals::esp32s3::rom_thunks;
         let machine = self
             .machine
             .as_mut()
             .ok_or_else(|| JsValue::from_str("no machine"))?;
 
-        // Attach the UC8151D panel to spi3. Replace any pre-attached
-        // device (the system YAML may have wired an SSD1680 placeholder
-        // from when the ereader board's panel class was misidentified —
-        // GxEPD2's ereader actually drives UC8151D, and a stale SSD1680
-        // confuses both runtime decoding and snapshot restore (the spi3
-        // blob layout depends on attached-device count + types)).
-        // Real DC framing: GxEPD2 toggles DC=GPIO17 via digitalWrite before each
-        // SPI.transfer, so resolve GPIO17's output register and latch it before
-        // draining each SPI3 transaction. Command vs data then comes from the
-        // wire — no gxepd bypass thunk needed.
-        use labwired_core::peripherals::spi::SpiDevice;
-        let dc_src =
-            labwired_core::bus::SystemBus::resolve_pin_odr_pub(&machine.bus, "GPIO17");
-        if let Some(spi3_idx) = machine.bus.find_peripheral_index_by_name("spi3") {
-            if let Some(any) = machine.bus.peripherals[spi3_idx].dev.as_any_mut() {
-                if let Some(spi3) = any.downcast_mut::<Esp32Spi>() {
-                    spi3.attached_devices.clear();
-                    let mut panel = Uc8151dTricolor290::new("GPIO5").with_dc_pin("GPIO17");
-                    if let Some((odr, bit)) = dc_src {
-                        panel.set_dc_source(odr, bit);
-                    }
-                    spi3.attach(Box::new(panel));
-                }
-            }
-        }
+        // NO hardcoded peripheral here. The panel (and any other external device)
+        // is attached from the board manifest by attach_esp32_external_devices
+        // during system load — the single source of truth for peripheral wiring,
+        // model, CS and DC pins. This method only installs the firmware-boot
+        // thunks + CPU seed below.
 
         // Seed SP — call_start_cpu0 expects BROM to have placed SP near
         // top of DRAM. We skip BROM.

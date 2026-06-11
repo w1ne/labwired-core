@@ -30,10 +30,9 @@
 
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::xtensa_lx7::XtensaLx7;
-use labwired_core::peripherals::components::Uc8151dTricolor290;
+use labwired_core::peripherals::components::Ssd1680Tricolor290;
 use labwired_core::peripherals::esp32::spi::Esp32Spi;
 use labwired_core::peripherals::esp32s3::rom_thunks;
-use labwired_core::peripherals::spi::SpiDevice;
 use labwired_core::system::xtensa::configure_xtensa_esp32;
 use labwired_core::{Cpu, Machine};
 use std::path::PathBuf;
@@ -58,30 +57,32 @@ fn labwired_ereader_runs_to_panel_paint() {
     let elf_bytes = std::fs::read(&elf_path).expect("read ELF");
     let image = labwired_loader::load_elf(&elf_path).expect("parse ELF");
 
-    // ── 1. Bring up an ESP32-classic and attach the UC8151D tri-color
-    //       panel to spi3 (same as install_arduino_esp32_quirks). The
-    //       default configure step doesn't attach a panel.
+    // ── 1. Bring up an ESP32-classic and attach the panel from the board
+    //       manifest via the generic attach_esp32_external_devices factory —
+    //       the SAME path cli/wasm use. No peripheral is hardcoded here. The
+    //       GxEPD2_290_C90c panel is an SSD1680 controller (see the GxEPD2 driver
+    //       header); the factory maps the gxepd2_290_c90c alias to the SSD1680
+    //       model, wires CS=GPIO5 and latches DC=GPIO17 (the GPIO GxEPD2 toggles
+    //       via digitalWrite before each SPI.transfer — real wire framing).
     let mut bus = SystemBus::new();
     let cpu = configure_xtensa_esp32(&mut bus);
 
-    let spi3_idx = bus
-        .find_peripheral_index_by_name("spi3")
-        .expect("spi3 registered by configure_xtensa_esp32");
-    // Real DC framing. The sketch wires DC=GPIO17; GxEPD2's _writeCommand /
-    // _writeData toggle that GPIO via digitalWrite (→ gpio_set_level →
-    // GPIO_OUT_W1TS/W1TC) before each SPI.transfer. Resolve GPIO17's output
-    // register so the bus latches the real DC level before draining every SPI3
-    // transaction into the panel — command vs data comes from the wire, not from
-    // a thunk's call-site identity. No gxepd bypass.
-    let dc_src = SystemBus::resolve_pin_odr_pub(&bus, "GPIO17")
-        .expect("GPIO17 resolves to the ESP32 GPIO OUT register");
-    {
-        let any = bus.peripherals[spi3_idx].dev.as_any_mut().unwrap();
-        let spi3 = any.downcast_mut::<Esp32Spi>().unwrap();
-        let mut panel = Uc8151dTricolor290::new("GPIO5").with_dc_pin("GPIO17");
-        panel.set_dc_source(dc_src.0, dc_src.1);
-        spi3.attach(Box::new(panel));
-    }
+    let manifest: labwired_config::SystemManifest = serde_yaml::from_str(
+        r#"
+name: esp32-epaper-ereader
+chip: esp32
+external_devices:
+  - id: epd
+    type: gxepd2_290_c90c
+    connection: spi3
+    config:
+      cs_pin: GPIO5
+      dc_pin: GPIO17
+"#,
+    )
+    .expect("parse inline ereader board manifest");
+    labwired_core::system::xtensa::attach_esp32_external_devices(&mut bus, &manifest)
+        .expect("attach e-paper panel from manifest");
     bus.refresh_peripheral_index();
 
     // Real dual-core: attach a second LX6 as APP_CPU (PRID 0xABAB →
@@ -466,7 +467,7 @@ fn labwired_ereader_runs_to_panel_paint() {
                     .and_then(|spi| {
                         spi.attached_devices.iter().find_map(|d| {
                             d.as_any()
-                                .and_then(|a| a.downcast_ref::<Uc8151dTricolor290>())
+                                .and_then(|a| a.downcast_ref::<Ssd1680Tricolor290>())
                         })
                     })
                 {
@@ -490,7 +491,7 @@ fn labwired_ereader_runs_to_panel_paint() {
         .iter()
         .find_map(|d| {
             d.as_any()
-                .and_then(|a| a.downcast_ref::<Uc8151dTricolor290>())
+                .and_then(|a| a.downcast_ref::<Ssd1680Tricolor290>())
         })
         .expect("panel attached");
     let refresh_gen = panel.refresh_generation();

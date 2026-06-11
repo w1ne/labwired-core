@@ -137,14 +137,18 @@ pub fn attach_esp32_external_devices(
         // are SpiDevices driven over the real SPI3 peripheral; the only block-
         // specific bit is which controller's command set the model decodes.
         let mut panel: Box<dyn SpiDevice> = match ext.r#type.as_str() {
-            "uc8151d_tricolor_290" | "epd-2in9-uc8151d" | "gxepd2_290_c90c" => {
+            "uc8151d_tricolor_290" | "epd-2in9-uc8151d" => {
                 let mut p = crate::peripherals::components::Uc8151dTricolor290::new(cs_pin.clone());
                 if let Some(dc) = &dc_pin {
                     p = p.with_dc_pin(dc.clone());
                 }
                 Box::new(p)
             }
-            "ssd1680_tricolor_290" | "epd-2in9-tricolor" => {
+            // GxEPD2_290_C90c (GDEY029Z90c / Waveshare 2.9" 3-color) is an
+            // SSD1680-controller panel — see the GxEPD2 driver header
+            // "Controller: SSD1680". It drives SSD1680 opcodes, so it maps to the
+            // SSD1680 model, NOT UC8151D.
+            "ssd1680_tricolor_290" | "epd-2in9-tricolor" | "gxepd2_290_c90c" => {
                 let mut p = crate::peripherals::components::Ssd1680Tricolor290::new(cs_pin.clone());
                 if let Some(dc) = &dc_pin {
                     p = p.with_dc_pin(dc.clone());

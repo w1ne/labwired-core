@@ -253,6 +253,12 @@ pub struct SnapshotCaptureArgs {
     #[arg(long)]
     pub output: PathBuf,
 
+    /// Board manifest (SystemManifest YAML) declaring the external peripherals
+    /// to attach (panel, sensors, …). Peripherals are NEVER hardcoded; they come
+    /// from this manifest via the generic attach_esp32_external_devices factory.
+    #[arg(long)]
+    pub system: Option<PathBuf>,
+
     /// Firmware profile to use. Currently only `agentdeck` is supported —
     /// installs the Arduino-ESP32 / ESP32-classic bootstrap (heap-caps
     /// thunks, dual-core handshake fakery, IPI bridge, image header,
@@ -1686,7 +1692,6 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     use labwired_core::peripherals::components::{Ssd1680Tricolor290, Uc8151dTricolor290};
     use labwired_core::peripherals::esp32::spi::Esp32Spi;
     use labwired_core::peripherals::esp32s3::rom_thunks;
-    use labwired_core::peripherals::spi::SpiDevice;
     use labwired_core::system::xtensa::configure_xtensa_esp32;
     use labwired_core::{Machine, SimulationError};
     use labwired_loader::{extract_arduino_esp32_thunks, load_elf_bytes};
@@ -1711,37 +1716,39 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     let mut bus = SystemBus::new();
     let cpu = configure_xtensa_esp32(&mut bus);
 
-    // Attach an SSD1680 2.9" tri-color panel to spi3, cs=GPIO5 — the
-    // the reference firmware wiring. Identical to `e2e_external_arduino_esp32_in_sim`.
-    let spi3_idx = match bus.find_peripheral_index_by_name("spi3") {
-        Some(i) => i,
-        None => {
-            eprintln!("error: configure_xtensa_esp32 did not register spi3");
-            return ExitCode::from(EXIT_RUNTIME_ERROR);
-        }
-    };
-    // Real DC framing for the arduino-esp32 GxEPD2 path: the firmware toggles
-    // DC=GPIO17 via digitalWrite before each SPI.transfer, so resolve GPIO17's
-    // output register and latch it before draining each SPI3 transaction. With
-    // this set, command vs data comes from the wire — no gxepd bypass thunk.
-    let dc_src = SystemBus::resolve_pin_odr_pub(&bus, "GPIO17");
-    if let Some(any) = bus.peripherals[spi3_idx].dev.as_any_mut() {
-        if let Some(spi3) = any.downcast_mut::<Esp32Spi>() {
-            if args.profile == "arduino-esp32" {
-                // GxEPD2_290_C90c / Z13c firmware drives the panel with
-                // UC8151D commands (PSR/PWR/PON/DTM1/DTM2/DRF/…) which
-                // conflict with SSD1680 at multiple opcodes; we need the
-                // UC8151D panel model. Arduino-ESP32 reference firmware uses SSD1680
-                // and stays on the old model below.
-                let mut panel = Uc8151dTricolor290::new("GPIO5").with_dc_pin("GPIO17");
-                if let Some((odr, bit)) = dc_src {
-                    panel.set_dc_source(odr, bit);
+    // Peripherals come from the board manifest, never hardcoded here. The
+    // generic attach_esp32_external_devices factory wires every declared
+    // external device (panel, etc.) onto its bus with the right model, CS and
+    // DC pins. --system points at the board manifest (e.g. the ereader's
+    // board.yaml declaring the SSD1680 e-paper on spi3, CS=GPIO5, DC=GPIO17).
+    if let Some(sys_path) = &args.system {
+        match labwired_config::SystemManifest::from_file(sys_path) {
+            Ok(manifest) => {
+                if let Err(e) =
+                    labwired_core::system::xtensa::attach_esp32_external_devices(&mut bus, &manifest)
+                {
+                    eprintln!("error: attaching external devices from {sys_path:?}: {e}");
+                    return ExitCode::from(EXIT_CONFIG_ERROR);
                 }
-                spi3.attach(Box::new(panel));
-            } else {
-                spi3.attach(Box::new(Ssd1680Tricolor290::new("GPIO5")));
             }
-            spi3.enable_byte_capture(512);
+            Err(e) => {
+                eprintln!("error: cannot load system manifest {sys_path:?}: {e}");
+                return ExitCode::from(EXIT_CONFIG_ERROR);
+            }
+        }
+    } else {
+        eprintln!(
+            "warning: no --system manifest; no external peripherals attached \
+             (firmware that drives a panel will not render)"
+        );
+    }
+    // Enable wire-byte capture on spi3 for snapshot diagnostics (a capture
+    // concern, not a device wiring concern).
+    if let Some(spi3_idx) = bus.find_peripheral_index_by_name("spi3") {
+        if let Some(any) = bus.peripherals[spi3_idx].dev.as_any_mut() {
+            if let Some(spi3) = any.downcast_mut::<Esp32Spi>() {
+                spi3.enable_byte_capture(512);
+            }
         }
     }
     bus.refresh_peripheral_index();
