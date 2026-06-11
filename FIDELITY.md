@@ -100,14 +100,19 @@ real peripheral: `slc` (SDIO host), `sdmmc_host`. The rest (`iram`, `dram`,
 (though empty `brom_*` is a content gap). Also see
 `crates/core/src/peripherals/stub.rs` and `esp32s3/system_stub.rs`.
 
-### E2. DC reads low at framebuffer-write time — blank e-paper render (OPEN BUG)
-The real ereader firmware fully renders its text and clocks the framebuffer over
-SPI, but the SSD1680 model renders **blank**. Root cause: the SSD1680 model
-routes command-vs-data by the latched DC GPIO, and DC (GPIO17) reads **low** at
-the moment the `0x24` data stream is clocked — so every framebuffer byte is
-mis-routed to `command_byte` and dropped. GxEPD2's `_writeData` only toggles CS
-and relies on DC being left HIGH by the preceding `_writeCommand(0x24)`; in sim
-that high state isn't present at data-write time.
+### E2. DC reads low at framebuffer-write time — blank e-paper render (FIXED)
+**Root cause (FIXED):** `Esp32Gpio` had no `write_u32`, so the firmware's 32-bit
+`s32i` store to GPIO_OUT_W1TC (write-1-to-clear) fell back to the default
+byte-split read-modify-write — and `read_word(0x0C)` returns the whole `OUT`
+value, so a `digitalWrite(CS, LOW)` (`W1TC = 1<<5`) reconstructed a clear-mask
+from the *current* OUT and wiped every set bit, including DC (GPIO17). GxEPD2's
+`_writeData` only toggles CS and leaves DC alone, so after the first per-byte CS
+toggle in the `0x24` stream, DC was gone and the framebuffer bytes were
+mis-routed to `command_byte` and dropped → blank render. Fix: `Esp32Gpio` now
+implements atomic `write_u32`/`write_u16` that go straight to `write_word`
+(no RMW). Regression test: `gpio::tests::w1tc_via_word_store_clears_only_target_bit`.
+After the fix the real firmware renders its text (black-plane 1429/4736 ink
+bytes; `e2e_labwired_ereader` asserts a non-blank plane).
 
 **Silicon cross-check (2026-06-12, ESP32-D0WDQ6 over UART, instrumented GxEPD2
 tap of `(digitalRead(_dc), byte)`):** the sim is **byte-for-byte identical** to

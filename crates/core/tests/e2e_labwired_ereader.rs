@@ -522,10 +522,21 @@ external_devices:
         eprintln!("    step {s:>10}: pc=0x{p:08x}");
     }
 
-    // ── 6. Verdict. Painting = at least one refresh().
+    // ── 6. Verdict. Painting = at least one refresh AND a non-blank framebuffer.
+    // A refresh with an all-white black plane is a false positive (the DC line
+    // was mis-latched and the 0x24 RAM stream was dropped); the real firmware
+    // renders text, so the black plane must carry ink.
+    let black_ink = panel.black_plane().iter().filter(|&&b| b != 0xFF).count();
+    eprintln!("[ereader-sim] black-plane ink bytes: {black_ink}");
     assert!(
         refresh_gen >= 1,
         "labwired-ereader did not reach a panel refresh in {step_count} cycles \
          (final PC=0x{final_pc:08x}, refresh_gen={refresh_gen}, stalled={stalled})"
+    );
+    assert!(
+        black_ink > 0,
+        "labwired-ereader refreshed but rendered a BLANK black plane \
+         ({black_ink} non-0xFF bytes) — the 0x24 framebuffer stream was dropped \
+         (DC mis-latched?). The real firmware draws text, so this must be > 0."
     );
 }
