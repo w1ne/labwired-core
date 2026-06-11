@@ -19,11 +19,15 @@ const USART3_CR1: *mut u32 = 0x4000_4800 as *mut u32;
 const USART3_CR3: *mut u32 = 0x4000_4808 as *mut u32;
 const USART3_BRR: *mut u32 = 0x4000_480C as *mut u32;
 
-const DMA1_ISR: *mut u32 = 0x4002_0000 as *mut u32;
-const DMA1_CCR1: *mut u32 = 0x4002_0008 as *mut u32;
-const DMA1_CPAR1: *mut u32 = 0x4002_0010 as *mut u32;
-const DMA1_CMAR1: *mut u32 = 0x4002_0014 as *mut u32;
-const DMA1_CNDTR1: *mut u32 = 0x4002_000C as *mut u32;
+// GPDMA1 channel 0 (RM0481 — the real H5 DMA engine; the generic DMA1
+// layout this firmware used previously was a documented sim-only stand-in).
+const GPDMA_C0SR: *mut u32 = 0x4002_0060 as *mut u32;
+const GPDMA_C0CR: *mut u32 = 0x4002_0064 as *mut u32;
+const GPDMA_C0TR1: *mut u32 = 0x4002_0090 as *mut u32;
+const GPDMA_C0TR2: *mut u32 = 0x4002_0094 as *mut u32;
+const GPDMA_C0BR1: *mut u32 = 0x4002_0098 as *mut u32;
+const GPDMA_C0SAR: *mut u32 = 0x4002_009C as *mut u32;
+const GPDMA_C0DAR: *mut u32 = 0x4002_00A0 as *mut u32;
 
 const STRESS_BUFFER_SIZE: usize = 256;
 static mut STRESS_BUFFER: [u8; STRESS_BUFFER_SIZE] = [0; STRESS_BUFFER_SIZE];
@@ -73,20 +77,25 @@ fn uart3_write_str(s: &str) {
     }
 }
 
-fn dma1_init() {
+fn gpdma_init() {
     unsafe {
-        // AHB1ENR: Enable DMA1
+        // AHB1ENR: Enable GPDMA1
         core::ptr::write_volatile(
             RCC_AHB1ENR,
             core::ptr::read_volatile(RCC_AHB1ENR) | (1 << 0),
         );
 
-        // Program DMA1 Channel 1
-        core::ptr::write_volatile(DMA1_CPAR1, USART3_TDR as u32);
-        core::ptr::write_volatile(DMA1_CMAR1, core::ptr::addr_of_mut!(STRESS_BUFFER) as u32);
-        core::ptr::write_volatile(DMA1_CNDTR1, STRESS_BUFFER_SIZE as u32);
-        // CCR: MINC(1<<7), DIR(1<<4), TCIE(1<<1), EN(1<<0)
-        core::ptr::write_volatile(DMA1_CCR1, (1 << 7) | (1 << 4) | (1 << 1) | (1 << 0));
+        // GPDMA1 channel 0: memory -> USART3 TDR, byte elements, source
+        // increments, destination fixed. Software request (CTR2.SWREQ)
+        // streams the block without TXE pacing — fine for the stress sim;
+        // real-silicon UART TX would select the usart3_tx hardware request
+        // instead (peripheral-request mode).
+        core::ptr::write_volatile(GPDMA_C0TR1, 1 << 3); // SINC, DINC=0
+        core::ptr::write_volatile(GPDMA_C0TR2, 1 << 9); // SWREQ
+        core::ptr::write_volatile(GPDMA_C0BR1, STRESS_BUFFER_SIZE as u32);
+        core::ptr::write_volatile(GPDMA_C0SAR, core::ptr::addr_of_mut!(STRESS_BUFFER) as u32);
+        core::ptr::write_volatile(GPDMA_C0DAR, USART3_TDR as u32);
+        core::ptr::write_volatile(GPDMA_C0CR, 1 << 0); // EN
     }
 }
 
@@ -98,15 +107,14 @@ fn main() -> ! {
         }
 
         uart3_init();
-        dma1_init();
+        gpdma_init();
 
         // Signal start
         core::ptr::write_volatile(GPIOB_BSRR, 1 << 0); // PB0 ON
         uart3_write_str("HIL Stress Test Started\r\n");
 
-        // Wait for TCIF1 (Transfer Complete Interrupt Flag) in ISR
-        // ISR bit index for Channel 1 TCIF is 1 (if following standard STM32 DMA layout)
-        while (core::ptr::read_volatile(DMA1_ISR) & (1 << 1)) == 0 {}
+        // Wait for transfer complete: GPDMA C0SR.TCF (bit 8).
+        while (core::ptr::read_volatile(GPDMA_C0SR) & (1 << 8)) == 0 {}
 
         uart3_write_str("HIL Stress Test Passed\r\n");
         core::ptr::write_volatile(GPIOB_BSRR, 1 << 16); // PB0 OFF

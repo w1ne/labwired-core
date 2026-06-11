@@ -20,18 +20,19 @@ void uart3_init(void) {
     USART3->CR1 = USART_CR1_TE | USART_CR1_UE;
 }
 
-void dma1_init(void) {
-    RCC->AHB1ENR |= RCC_AHB1ENR_DMA1EN;
-    
-    // Program DMA1 Channel 1 for UART3 TX
-    // CPAR = USART3->TDR
-    // CMAR = stress_buffer
-    // CNDTR = STRESS_BUFFER_SIZE
-    // CCR: MINC, DIR=1 (mem-to-periph), EN
-    DMA1_Channel1->CPAR = (uint32_t)&USART3->TDR;
-    DMA1_Channel1->CMAR = (uint32_t)stress_buffer;
-    DMA1_Channel1->CNDTR = STRESS_BUFFER_SIZE;
-    DMA1_Channel1->CCR = DMA_CCR_MINC | DMA_CCR_DIR | DMA_CCR_TCIE | DMA_CCR_EN;
+void gpdma_init(void) {
+    RCC->AHB1ENR |= RCC_AHB1ENR_GPDMA1EN;
+
+    // GPDMA1 channel 0: memory -> USART3 TDR, byte elements, source
+    // increments, destination fixed. Software request streams the block
+    // without TXE pacing (sim stress flow); real-silicon UART TX would
+    // select the usart3_tx hardware request instead.
+    GPDMA1_Channel0->CTR1 = DMA_CTR1_SINC;
+    GPDMA1_Channel0->CTR2 = DMA_CTR2_SWREQ;
+    GPDMA1_Channel0->CBR1 = STRESS_BUFFER_SIZE;
+    GPDMA1_Channel0->CSAR = (uint32_t)stress_buffer;
+    GPDMA1_Channel0->CDAR = (uint32_t)&USART3->TDR;
+    GPDMA1_Channel0->CCR  = DMA_CCR_EN;
 }
 
 void uart3_write_str(const char *s) {
@@ -48,14 +49,14 @@ int main(void) {
     }
 
     uart3_init();
-    dma1_init();
+    gpdma_init();
 
     // Signal start of stress test
     GPIOB->BSRR = (1UL << 0); // LED Green ON
     uart3_write_str("HIL Stress Test Started\r\n");
 
-    // Wait for DMA transfer complete (TCIF1)
-    while(!(DMA1->ISR & DMA_ISR_TCIF1)) {
+    // Wait for GPDMA transfer complete (C0SR.TCF)
+    while(!(GPDMA1_Channel0->CSR & DMA_CSR_TCF)) {
         // High-stress loop: if this takes more cycles than expected (regression), 
         // LabWired will catch it.
     }
