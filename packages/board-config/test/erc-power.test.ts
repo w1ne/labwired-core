@@ -58,4 +58,31 @@ describe('power rules', () => {
     };
     expect(erc(d).filter((x) => x.severity === 'error')).toEqual([]);
   });
+
+  it('PWR_NO_GROUND: wire-grounded diagram must NOT warn — bme280 GND reaches mcu GND via legacy wire only', () => {
+    // v1-migrated diagrams carry ground via wires, not declared 0V nets.
+    // The synthetic net has no voltage, so the old groundNets filter misses it
+    // and every wire-grounded diagram spuriously warns PWR_NO_GROUND.
+    const d: DiagramV2 = {
+      version: 2, board: 'esp32-s3-zero',
+      parts: [{ id: 'mcu', type: 'esp32-s3-zero' }, { id: 'b1', type: 'bme280' }],
+      nets: [{ name: 'V3', kind: 'power', voltage: 3.3 }],
+      connections: [['b1:VCC', 'V3'], ['mcu:3V3', 'V3']],
+      // Ground routed purely via legacy wire — no declared 0V net.
+      wires: [{ from: { part: 'b1', pin: 'GND' }, to: { part: 'mcu', pin: 'GND' } }],
+    };
+    expect(codesOf(d)).not.toContain('PWR_NO_GROUND');
+  });
+
+  it('PWR_NO_GROUND: trigger still fires when part has no ground connection at all', () => {
+    // No wire and no 0V net touching bme280 GND → still warns.
+    const d: DiagramV2 = {
+      version: 2, board: 'esp32-s3-zero',
+      parts: [{ id: 'mcu', type: 'esp32-s3-zero' }, { id: 'b1', type: 'bme280' }],
+      nets: [{ name: 'V3', kind: 'power', voltage: 3.3 }],
+      connections: [['b1:VCC', 'V3'], ['mcu:3V3', 'V3']],
+      wires: [],
+    };
+    expect(codesOf(d)).toContain('PWR_NO_GROUND');
+  });
 });

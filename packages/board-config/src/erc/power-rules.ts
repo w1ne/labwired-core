@@ -36,9 +36,29 @@ export function powerRules(ctx: ErcContext): Diagnostic[] {
 
   // PWR_NO_GROUND: a part with declared power_in pins and an operating range
   // must touch a 0V net somewhere.
+  //
+  // A net counts as ground when either:
+  //   (a) it is a declared power net with voltage === 0, OR
+  //   (b) any member resolves to etype === 'power_out' AND its stripped pin
+  //       name is 'GND' — the name carries the 0V meaning; power_out alone
+  //       is not enough because 3V3/5V rails are also power_out.
+  //
+  // Rule (b) handles v1-wire-migrated diagrams where the ground path is a
+  // synthetic net (no declared voltage) formed by wiring b1:GND → mcu:GND.
   const groundNets = new Set(
     ctx.nets.filter((n) => n.kind === 'power' && n.voltage === 0).map((n) => n.name),
   );
+  // Augment with synthetic/undeclared nets whose members include a GND power_out pin.
+  for (const net of ctx.nets) {
+    if (groundNets.has(net.name)) continue;
+    const hasGndPowerOut = net.members.some((m) => {
+      const stripped = m.pin.replace(/\.\d+$/, '');
+      if (stripped.toUpperCase() !== 'GND') return false;
+      const ep = effectivePin(ctx, m);
+      return ep?.etype === 'power_out';
+    });
+    if (hasGndPowerOut) groundNets.add(net.name);
+  }
 
   for (const part of ctx.diagram.parts) {
     const cat = getCatalogPart(part.type);

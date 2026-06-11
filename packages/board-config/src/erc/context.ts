@@ -58,17 +58,24 @@ function stripPinSuffix(pin: string): string {
 export function effectivePin(ctx: ErcContext, member: PinRef): EffectivePin | null {
   const part = ctx.partsById.get(member.part);
   if (!part) return null;
-  const normalPin = stripPinSuffix(member.pin);
+  const rawPin = member.pin;
+  const strippedPin = stripPinSuffix(rawPin);
   if (isMcuPart(ctx, part)) {
-    const el = getPinEtype(mcuBoardKey(ctx, part), normalPin);
+    const boardKey = mcuBoardKey(ctx, part);
+    // Try the raw pin name first so that real dotted names (e.g. nRF52840's
+    // P0.00..P1.15) are found before the suffix-strip is applied.
+    // Fall back to the stripped name so `GND.2` → `GND` disambiguation works.
+    const el = getPinEtype(boardKey, rawPin) ?? getPinEtype(boardKey, strippedPin);
     if (!el) return null;
-    const fn = getPinMapping(mcuBoardKey(ctx, part), normalPin);
+    const fn = getPinMapping(boardKey, rawPin) ?? getPinMapping(boardKey, strippedPin);
     // Role from the pin map's declared functions, when unambiguous.
     const role = roleFromFunctions(fn);
     return { etype: el.etype, internalPullup: el.internalPullup, ...(role ? { role } : {}) };
   }
   const cat: CatalogPart | undefined = getCatalogPart(part.type);
-  const decl: PinDecl | undefined = cat?.pins?.find((p) => p.name === normalPin);
+  // Try raw pin name first, then stripped, for the same reason as the MCU path.
+  const decl: PinDecl | undefined =
+    cat?.pins?.find((p) => p.name === rawPin) ?? cat?.pins?.find((p) => p.name === strippedPin);
   if (!decl) return null;
   return { etype: decl.etype, ...(decl.role ? { role: decl.role } : {}), ...(decl.required ? { required: true } : {}) };
 }
