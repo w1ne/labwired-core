@@ -4,6 +4,8 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
+  ListResourcesRequestSchema,
+  ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import { listChips, runSimulation, validateSystem, runLab, fuzzFirmware } from './cli.js';
@@ -16,6 +18,9 @@ import {
 } from './boards.js';
 import { putSnapshot, getSnapshot } from './snapshots.js';
 import { diagnoseDiagram, type ValidateDiagram } from './diagnostics.js';
+import { SEARCH_TOOLS_TOOL, SEARCH_TOOLS_TOOL_NAME, rankTools } from './search-tools.js';
+import { decorateTools } from './tool-metadata.js';
+import { RESOURCES, getResource } from './resources.js';
 
 const SERVER_NAME = '@labwired/mcp';
 const SERVER_VERSION = '0.5.0';
@@ -165,11 +170,12 @@ const ValidateDiagramInput = z.object({
 
 const server = new Server(
   { name: SERVER_NAME, version: SERVER_VERSION },
-  { capabilities: { tools: {} } },
+  { capabilities: { tools: {}, resources: {} } },
 );
 
-server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [
+function localTools() {
+  return [
+    SEARCH_TOOLS_TOOL,
     {
       name: 'labwired_catalog',
       description:
@@ -417,13 +423,38 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         },
       },
     },
-  ],
+  ];
+}
+
+server.setRequestHandler(ListToolsRequestSchema, async () => ({
+  tools: decorateTools(localTools()),
 }));
+
+server.setRequestHandler(ListResourcesRequestSchema, async () => ({
+  resources: RESOURCES,
+}));
+
+server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+  const resource = getResource(request.params.uri);
+  if (!resource) throw new Error(`Unknown resource: ${request.params.uri}`);
+  return { contents: [resource] };
+});
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
   try {
+    if (name === SEARCH_TOOLS_TOOL_NAME) {
+      const input = (args ?? {}) as { query?: unknown; limit?: unknown };
+      const query = typeof input.query === 'string' ? input.query : '';
+      const limit = typeof input.limit === 'number' && Number.isFinite(input.limit)
+        ? Math.trunc(input.limit)
+        : 8;
+      return {
+        content: [{ type: 'text', text: JSON.stringify({ query, tools: rankTools(query, decorateTools(localTools()), limit) }) }],
+      };
+    }
+
     if (name === 'labwired_catalog') {
       const { filter } = CatalogInput.parse(args ?? {});
       const chips = await listChips(filter);

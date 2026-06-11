@@ -352,9 +352,10 @@ describe('OAuth discovery for /mcp', () => {
     expect(body.authorization_servers).toContain('https://clerk.labwired.com');
   });
 
-  it('omits authorization_servers when the env var is unset (the prod bug)', async () => {
+  it('fails closed in production when the authorization server env var is unset', async () => {
     const env = makeEnv(makeKvStub(), makeKvStub(), makeKvStub());
     delete (env as any).MCP_AUTHORIZATION_SERVER;
+    (env as any).ENVIRONMENT = 'production';
 
     const req = new Request(
       'https://api.labwired.com/.well-known/oauth-protected-resource/mcp',
@@ -362,9 +363,8 @@ describe('OAuth discovery for /mcp', () => {
     );
     const resp = await worker.default.fetch(req, env as any);
     const body = (await resp.json()) as any;
-    // Reproduces production: the handler ships, but with the var unset the
-    // array is absent and discovery dead-ends. Setting the var is the fix.
-    expect(body.authorization_servers).toBeUndefined();
+    expect(resp.status).toBe(500);
+    expect(body.error).toBe('MCP_AUTHORIZATION_SERVER_MISSING');
   });
 
   it('POST /mcp without a token returns 401 with the full OAuth challenge', async () => {
@@ -402,6 +402,7 @@ describe('OAuth discovery for /mcp', () => {
     expect(init.status).toBe(200);
     const initBody = (await init.json()) as any;
     expect(initBody.result.serverInfo).toBeTruthy();
+    expect(initBody.result.capabilities.resources).toEqual({});
 
     const list = await worker.default.fetch(
       new Request('https://api.labwired.com/mcp', {
@@ -414,6 +415,53 @@ describe('OAuth discovery for /mcp', () => {
     const listBody = (await list.json()) as any;
     expect(Array.isArray(listBody.result.tools)).toBe(true);
     expect(listBody.result.tools.length).toBeGreaterThan(0);
+  });
+
+  it('POST /mcp with a valid token handles resources/list + resources/read', async () => {
+    const env = makeEnv(makeKvStub(), makeKvStub(), makeKvStub());
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer test_user:user_abc',
+    };
+
+    const list = await worker.default.fetch(
+      new Request('https://api.labwired.com/mcp', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'resources/list' }),
+      }),
+      env as any,
+    );
+    expect(list.status).toBe(200);
+    const listBody = (await list.json()) as any;
+    expect(listBody.result.resources).toContainEqual(
+      expect.objectContaining({
+        uri: 'labwired://guides/agent-hardware-loop',
+        name: 'labwired-agent-hardware-loop',
+        mimeType: 'text/markdown',
+      }),
+    );
+
+    const read = await worker.default.fetch(
+      new Request('https://api.labwired.com/mcp', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 2,
+          method: 'resources/read',
+          params: { uri: 'labwired://guides/agent-hardware-loop' },
+        }),
+      }),
+      env as any,
+    );
+    expect(read.status).toBe(200);
+    const readBody = (await read.json()) as any;
+    expect(readBody.result.contents[0]).toMatchObject({
+      uri: 'labwired://guides/agent-hardware-loop',
+      mimeType: 'text/markdown',
+    });
+    expect(readBody.result.contents[0].text).toContain('LabWired agent hardware loop');
   });
 });
 

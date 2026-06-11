@@ -2,12 +2,29 @@ import { describe, it, expect } from 'vitest';
 import { listHostedTools, callHostedTool } from '../src/mcp/tools.js';
 
 describe('expanded MCP tools', () => {
-  it('advertises run, list_components, list_boards but NOT compile', () => {
+  it('advertises run, list_components, list_boards, search but NOT compile', () => {
     const names = listHostedTools().map((t) => t.name);
     expect(names).toContain('labwired_run');
     expect(names).toContain('labwired_list_components');
     expect(names).toContain('labwired_list_boards');
+    expect(names).toContain('labwired_search_tools');
     expect(names).not.toContain('labwired_compile');
+  });
+
+  it('adds MCP titles and risk annotations to every hosted tool', () => {
+    for (const tool of listHostedTools()) {
+      expect(tool.title, tool.name).toBeTypeOf('string');
+      expect(tool.title, tool.name).not.toHaveLength(0);
+      expect(tool.annotations, tool.name).toMatchObject({
+        title: tool.title,
+        destructiveHint: false,
+      });
+      expect(tool.annotations?.readOnlyHint, tool.name).toBeTypeOf('boolean');
+    }
+    const run = listHostedTools().find((t) => t.name === 'labwired_run');
+    expect(run?.annotations).toMatchObject({ readOnlyHint: false, openWorldHint: true });
+    const listBoards = listHostedTools().find((t) => t.name === 'labwired_list_boards');
+    expect(listBoards?.annotations).toMatchObject({ readOnlyHint: true });
   });
 
   it('labwired_run rejects a target/board mismatch', async () => {
@@ -29,5 +46,19 @@ describe('expanded MCP tools', () => {
     const payload = JSON.parse(res.content[0].text);
     expect(Array.isArray(payload.components)).toBe(true);
     expect(payload.components.length).toBeGreaterThan(0);
+  });
+
+  it('labwired_search_tools finds diagram validation capability', async () => {
+    const env = { BUILDER_URL: 'https://b', BUILDER_SECRET: 'k', ENVIRONMENT: 'test' } as any;
+    const res = await callHostedTool(
+      { name: 'labwired_search_tools', arguments: { query: 'diagram validation', limit: 3 } },
+      env,
+      { userId: 'u' },
+    );
+    const payload = JSON.parse(res.content[0].text);
+    expect(payload.query).toBe('diagram validation');
+    expect(payload.tools.map((tool: { name: string }) => tool.name)).toContain('labwired_validate_diagram');
+    expect(payload.tools[0]).toHaveProperty('title');
+    expect(payload.tools[0]).toHaveProperty('inputSchema');
   });
 });

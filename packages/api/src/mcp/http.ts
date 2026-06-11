@@ -2,6 +2,7 @@ import type { Env } from '../types.js';
 import { authenticateHostedMcpRequest } from './auth.js';
 import { callHostedTool, listHostedTools } from './tools.js';
 import type { JsonRpcFailure, JsonRpcRequest, JsonRpcResponse } from './types.js';
+import { RESOURCES, getResource } from './resources.js';
 
 const JSON_HEADERS = {
   'Content-Type': 'application/json',
@@ -37,7 +38,7 @@ export async function handleHostedMcp(request: Request, env: Env): Promise<Respo
       id: rpc.id ?? null,
       result: {
         protocolVersion: '2025-06-18',
-        capabilities: { tools: {} },
+        capabilities: { tools: {}, resources: {} },
         serverInfo: { name: '@labwired/hosted-mcp', version: '0.1.0' },
       },
     } satisfies JsonRpcResponse);
@@ -54,6 +55,26 @@ export async function handleHostedMcp(request: Request, env: Env): Promise<Respo
   if (rpc.method === 'tools/call') {
     const result = await callHostedTool(rpc.params, env, identity);
     return json({ jsonrpc: '2.0', id: rpc.id ?? null, result } satisfies JsonRpcResponse);
+  }
+
+  if (rpc.method === 'resources/list') {
+    return json({
+      jsonrpc: '2.0',
+      id: rpc.id ?? null,
+      result: { resources: RESOURCES },
+    } satisfies JsonRpcResponse);
+  }
+
+  if (rpc.method === 'resources/read') {
+    const params = (rpc.params ?? {}) as { uri?: unknown };
+    const uri = typeof params.uri === 'string' ? params.uri : '';
+    const resource = getResource(uri);
+    if (!resource) return json(error(rpc.id, -32004, `Unknown resource: ${uri}`), 404);
+    return json({
+      jsonrpc: '2.0',
+      id: rpc.id ?? null,
+      result: { contents: [resource] },
+    } satisfies JsonRpcResponse);
   }
 
   if (rpc.method.startsWith('notifications/')) {

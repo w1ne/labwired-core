@@ -19,7 +19,7 @@ function rpcRoundTrip(messages: object[]): Promise<string> {
 }
 
 describe('@labwired/mcp stdio server', () => {
-  it('responds to initialize + tools/list with 3 tool definitions', async () => {
+  it('responds with annotated tools, search, and the agent guide resource', async () => {
     const out = await rpcRoundTrip([
       {
         jsonrpc: '2.0',
@@ -33,9 +33,29 @@ describe('@labwired/mcp stdio server', () => {
       },
       { jsonrpc: '2.0', method: 'notifications/initialized' },
       { jsonrpc: '2.0', id: 2, method: 'tools/list' },
+      { jsonrpc: '2.0', id: 3, method: 'resources/list' },
+      {
+        jsonrpc: '2.0',
+        id: 4,
+        method: 'resources/read',
+        params: { uri: 'labwired://guides/agent-hardware-loop' },
+      },
+      {
+        jsonrpc: '2.0',
+        id: 5,
+        method: 'tools/call',
+        params: { name: 'labwired_search_tools', arguments: { query: 'diagram validation', limit: 3 } },
+      },
     ]);
     expect(out).toContain('"name":"labwired_catalog"');
     expect(out).toContain('"name":"labwired_simulate"');
     expect(out).toContain('"name":"labwired_validate_system"');
+    expect(out).toContain('"name":"labwired_search_tools"');
+    expect(out).toContain('"title":"Run Lab"');
+    expect(out).toContain('"annotations"');
+    expect(out).toContain('"readOnlyHint":true');
+    expect(out).toContain('"uri":"labwired://guides/agent-hardware-loop"');
+    expect(out).toContain('LabWired agent hardware loop');
+    expect(out).toContain('labwired_validate_diagram');
   });
 });

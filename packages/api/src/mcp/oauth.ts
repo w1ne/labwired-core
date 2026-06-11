@@ -21,6 +21,23 @@ export function hostedMcpAuthenticateHeader(request: Request): string {
 }
 
 export function handleMcpProtectedResourceMetadata(request: Request, env: Env): Response {
+  if (!env.MCP_AUTHORIZATION_SERVER && env.ENVIRONMENT !== 'test') {
+    return Response.json(
+      {
+        error: 'MCP_AUTHORIZATION_SERVER_MISSING',
+        message: 'Set MCP_AUTHORIZATION_SERVER to the Clerk authorization server origin for hosted MCP OAuth discovery.',
+      },
+      {
+        status: 500,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization, MCP-Protocol-Version',
+        },
+      },
+    );
+  }
+
   const body: {
     resource: string;
     resource_name: string;
