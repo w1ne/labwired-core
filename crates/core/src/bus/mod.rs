@@ -224,10 +224,10 @@ impl SystemBus {
         // Keep explicit core types as-is.
         match t.as_str() {
             "uart" | "gpio" | "rcc" | "systick" | "timer" | "i2c" | "spi" | "exti" | "afio"
-            | "dma" | "adc" | "pio" | "declarative" | "strict_ir" | "strict_ir_internal"
-            | "pwr" | "flash" | "rng" | "crc" | "rtc" | "rtc_f1" | "iwdg" | "wwdg" | "dac"
-            | "dbgmcu" | "lptim" | "quadspi" | "sai" | "usb_otg" | "bxcan" | "sdmmc" | "comp"
-            | "tsc" | "fmc" => {
+            | "dma" | "gpdma" | "adc" | "pio" | "declarative" | "strict_ir"
+            | "strict_ir_internal" | "pwr" | "flash" | "rng" | "crc" | "rtc" | "rtc_f1"
+            | "rtc_v3" | "iwdg" | "wwdg" | "dac" | "dbgmcu" | "lptim" | "quadspi" | "sai"
+            | "usb_otg" | "bxcan" | "sdmmc" | "comp" | "tsc" | "fmc" => {
                 return t;
             }
             _ => {}
@@ -1240,6 +1240,7 @@ impl SystemBus {
                 }
                 "rtc" => Box::new(crate::peripherals::rtc::Rtc::new()),
                 "rtc_f1" => Box::new(crate::peripherals::rtc_f1::RtcF1::new()),
+                "rtc_v3" => Box::new(crate::peripherals::rtc_v3::RtcV3::new()),
                 "iwdg" => Box::new(crate::peripherals::iwdg::Iwdg::new()),
                 "wwdg" => Box::new(crate::peripherals::wwdg::Wwdg::new()),
                 "dac" => Box::new(crate::peripherals::dac::Dac::new()),
@@ -1274,6 +1275,7 @@ impl SystemBus {
                 }
                 "afio" => Box::new(crate::peripherals::afio::Afio::new()),
                 "dma" | "stm32dma" => Box::new(crate::peripherals::dma::Dma1::new()),
+                "gpdma" => Box::new(crate::peripherals::gpdma::Gpdma::new()),
                 "adc" => {
                     let layout: crate::peripherals::adc::AdcRegisterLayout =
                         Self::parse_profile_or_default(p_cfg, "ADC")?;

@@ -139,6 +139,17 @@ impl Timer {
                 self.sr |= 1 << bit;
             }
         }
+        // Advanced timers carry the output-only internal channels 5/6 whose
+        // compare flags live at SR bits 16/17. Silicon-verified on STM32H563
+        // TIM1 (2026-06-11): a bare UG with CCR5/CCR6 at reset reads SR with
+        // CC5IF|CC6IF set on top of the channel-1..4 latch.
+        if self.advanced {
+            for (ccr, bit) in [(self.ccr5, 16u32), (self.ccr6, 17)] {
+                if (ccr & mask) == self.cnt {
+                    self.sr |= 1 << bit;
+                }
+            }
+        }
     }
 
     fn cnt_mask(&self) -> u32 {
@@ -327,6 +338,9 @@ impl crate::Peripheral for Timer {
             if self.cnt > self.arr {
                 self.cnt = 0;
                 self.sr |= 1; // Set UIF (Update Interrupt Flag)
+                if !self.basic {
+                    self.latch_compare_match_flags();
+                }
 
                 // Return true if Update Interrupt Enable (UIE) is set
                 return crate::PeripheralTickResult {
@@ -335,6 +349,13 @@ impl crate::Peripheral for Timer {
                     dma_signals: None,
                     ..Default::default()
                 };
+            }
+            // Output-compare match while counting: CCxIF latches the moment
+            // CNT reaches CCRx. Silicon-verified on STM32H563 TIM1
+            // (2026-06-11): CC1IF rises once the running CNT crosses CCR1 in
+            // PWM mode 1.
+            if !self.basic {
+                self.latch_compare_match_flags();
             }
         }
 
@@ -386,6 +407,21 @@ mod tests {
         tim.write_reg(0x34, 0x20); // CCR1 = 0x20 (!= 0)
         tim.write(0x14, 0x01).unwrap(); // EGR.UG again
         assert_eq!(tim.read_reg(0x10), 0x1F & !0x2); // CC1IF (bit1) now clear
+    }
+
+    #[test]
+    fn test_egr_ug_latches_cc5_cc6_on_advanced() {
+        // Advanced timers also latch the internal output-only channels 5/6
+        // at SR bits 16/17. Silicon-verified on STM32H563 TIM1 (2026-06-11):
+        // SR read 0x0003001F while running from reset-zero CCR5/CCR6.
+        let mut tim = Timer::new_with_layout(16, true);
+        tim.write_reg(0x14, 0x01); // EGR.UG
+        assert_eq!(tim.read_reg(0x10), 0x0003_001F);
+
+        // A general-purpose instance must NOT grow the advanced-only bits.
+        let mut gp = Timer::new();
+        gp.write_reg(0x14, 0x01);
+        assert_eq!(gp.read_reg(0x10), 0x1F);
     }
 
     #[test]

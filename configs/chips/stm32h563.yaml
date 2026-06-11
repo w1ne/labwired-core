@@ -15,10 +15,16 @@
 #   the captured values.
 #
 # Known divergences from silicon (bench-probed 2026-06-10):
-# - `dma1` wires the generic 7-channel STM32 DMA model at 0x40020000, but the
-#   real H5 has a GPDMA at that address with a different register layout. The
-#   sim-side DMA remains useful for firmware written against the sim; treat it
-#   as NOT silicon-conformant until a GPDMA model lands.
+# - SPI1/2/3: register surface + flag machinery are silicon-pinned, but real
+#   frames only shift when the spi_ker_ck kernel clock is configured; the
+#   bench part had none, so the sim's always-clocked TX engine (EOT/TXC on
+#   TSIZE exhaustion) is spec-derived, not silicon-pinned.
+# - ADC1: reset state + the DEEPPWD/ADVREGEN/ADEN->ADRDY power-up path are
+#   silicon-pinned; conversions are sim-modeled. ADC2 (0x42028100) shares the
+#   1KB window but is NOT separately modeled (its offsets read as ADC1 holes).
+# - RTC: calendar/init/WPR machinery silicon-pinned (BYPSHAD=1 path). The
+#   sim calendar is always clocked; silicon needs DBP + LSI/LSE + BDCR.RTCEN
+#   before anything ticks. Sub-second (SSR) granularity is approximate.
 # - IWDG: silicon commits PR/RLR writes only after LSI-domain sync (SR.PVU/RVU
 #   clear; with LSI off they never commit). The sim commits instantly and
 #   keeps SR at 0, so PVU/RVU polling loops exit immediately.
@@ -110,11 +116,16 @@ peripherals:
     irq: 60
     config:
       profile: "stm32v2"
-  - id: "dma1"
-    type: "dma"
+  # GPDMA1 (RM0481): 8 channels at 0x50 + n*0x80. Mem-to-mem (CTR2.SWREQ)
+  # silicon-verified 2026-06-11; linked-list mode not modeled.
+  - id: "gpdma1"
+    type: "gpdma"
     base_address: 0x40020000
     size: "1KB"
-  - id: "tim1"
+    irq: 27
+  # TIM1 is the advanced-control PWM timer; the `_pwm` id suffix declares the
+  # tier1 pwm class alongside timer (CLASS_MARKERS match on id substrings).
+  - id: "tim1_pwm"
     type: "timer"
     base_address: 0x40012C00
     size: "1KB"
@@ -202,3 +213,52 @@ peripherals:
     base_address: 0x44004400
     size: "1KB"
     irq: 64
+  - id: "spi1"
+    type: "spi"
+    base_address: 0x40013000
+    size: "1KB"
+    irq: 55
+    config:
+      profile: "stm32h5"
+  - id: "spi2"
+    type: "spi"
+    base_address: 0x40003800
+    size: "1KB"
+    irq: 56
+    config:
+      profile: "stm32h5"
+  - id: "spi3"
+    type: "spi"
+    base_address: 0x40003C00
+    size: "1KB"
+    irq: 57
+    config:
+      profile: "stm32h5"
+  # 1KB window covers ADC1 (0x000) and the common block (0x300). ADC2 at
+  # 0x100 is not separately modeled — see the divergence note up top.
+  - id: "adc1"
+    type: "adc"
+    base_address: 0x42028000
+    size: "1KB"
+    irq: 37
+    config:
+      profile: "stm32l4"
+  # RTC v3 calendar (RM0481). Silicon needs DBP + LSI + BDCR.RTCEN first;
+  # the sim calendar is always clocked.
+  - id: "rtc"
+    type: "rtc_v3"
+    base_address: 0x44007800
+    size: "1KB"
+    irq: 2
+  # NVIC is wired unconditionally for Cortex-M machines (system/cortex_m.rs);
+  # this entry declares the tier1 irq class and pins the canonical base.
+  - id: "nvic"
+    type: "nvic"
+    base_address: 0xE000E100
+    size: "1KB"
+  # PWR (AHB3). Generic model — only used so DBP-style backup-domain pokes
+  # have a landing zone; H5-specific VOS/BDCR fields are not modeled.
+  - id: "pwr"
+    type: "pwr"
+    base_address: 0x44020800
+    size: "1KB"

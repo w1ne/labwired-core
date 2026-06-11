@@ -158,10 +158,13 @@ impl ParsedTier1 {
     }
 }
 
-/// peripheral-id substring → tier1 class. First match wins; currently no pair
-/// is order-sensitive — keep it that way or document the pair explicitly if one
-/// is added.
+/// peripheral-id substring → tier1 class. First match wins. Order-sensitive
+/// pair: `"_pwm"` must precede `"tim"` — STM32 advanced-control timers declare
+/// the pwm class via an `_pwm` id suffix (e.g. `tim1_pwm`), which would
+/// otherwise be swallowed by the `tim`→timer marker. (The timer class itself
+/// comes from the plain `timN` instances.)
 const CLASS_MARKERS: &[(&str, &str)] = &[
+    ("_pwm", "pwm"),
     ("uart", "uart"),
     ("usart", "uart"),      // STM32 naming: usart1 does not substring-match "uart"
     ("usb_serial", "uart"), // S3 console can be USB-Serial-JTAG
