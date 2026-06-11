@@ -214,6 +214,27 @@ peripherals:
     base_address: 0x600CE000
     config:
       path: "../peripherals/esp32c3/assist_debug.yaml"
+  # --- Radio (WiFi/BT) register-backed model, REVERSE-ENGINEERED from live
+  # --- silicon (not SVD/TRM). See docs/esp32c3_radio_reverse_engineering.md.
+  # --- Layer 1: config windows are register-backed so driver writes succeed
+  # --- instead of faulting. reset_value = cold (pre-phy_enable) silicon read.
+  # --- (Behavioral MAC status/DMA = layer 2, separate.)
+  - id: "radio_fe"
+    type: "declarative"
+    base_address: 0x60006000
+    config:
+      path: "../peripherals/esp32c3/radio_fe.yaml"
+  - id: "radio_nrx"
+    type: "declarative"
+    base_address: 0x6001CC00
+    config:
+      path: "../peripherals/esp32c3/radio_nrx.yaml"
+  - id: "wifi_mac"
+    type: "declarative"
+    base_address: 0x60033000
+    size: "12KB"
+    config:
+      path: "../peripherals/esp32c3/wifi_mac.yaml"
   - id: "rom"
     type: "declarative"
     base_address: 0x40000000

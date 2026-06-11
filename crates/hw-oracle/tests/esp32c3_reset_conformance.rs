@@ -156,6 +156,26 @@ const RESET_VALUES: &[(&str, u64, u32)] = &[
     ("HMAC (idle)", 0x6003_E000, 0x0000_0000),
     ("GDMA (idle)", 0x6003_F000, 0x0000_0000),
     ("I2S0 (idle)", 0x6002_D000, 0x0000_0000),
+    // --- Radio (WiFi/BT) register-backed model, REVERSE-ENGINEERED from live
+    // --- silicon (docs/esp32c3_radio_reverse_engineering.md), not SVD. These
+    // --- windows reset cold (pre-phy_enable); assert they map + return cold
+    // --- state. The WiFi MAC carries 12 non-zero hardware reset defaults.
+    ("RADIO_FE (cold)", 0x6000_6000, 0x0000_0000),
+    ("RADIO_NRX (cold)", 0x6001_CC00, 0x0000_0000),
+    ("WIFI_MAC base (cold)", 0x6003_3000, 0x0000_0000),
+    // WiFi MAC non-zero cold-reset defaults (silicon-corroborated)
+    ("WIFI_MAC 0x60035000", 0x6003_5000, 0x000C_9858),
+    ("WIFI_MAC 0x60035024", 0x6003_5024, 0x024E_01FF),
+    ("WIFI_MAC 0x60035028", 0x6003_5028, 0xB000_0000),
+    ("WIFI_MAC 0x6003502C", 0x6003_502C, 0x0000_0002),
+    ("WIFI_MAC 0x60035030", 0x6003_5030, 0x0000_0064),
+    ("WIFI_MAC 0x6003503C", 0x6003_503C, 0x0000_0064),
+    ("WIFI_MAC 0x60035048", 0x6003_5048, 0x0000_0064),
+    ("WIFI_MAC 0x60035054", 0x6003_5054, 0x0000_0064),
+    ("WIFI_MAC 0x6003507C", 0x6003_507C, 0x7D9A_D8A3),
+    ("WIFI_MAC 0x60035080", 0x6003_5080, 0x0000_07FF),
+    ("WIFI_MAC 0x60035084", 0x6003_5084, 0x0000_3202),
+    ("WIFI_MAC 0x60035094", 0x6003_5094, 0x0000_0004),
 ];
 
 fn build_sim_bus() -> SystemBus {
