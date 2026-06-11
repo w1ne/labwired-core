@@ -9,7 +9,7 @@ silicon-anchored tier with the HIL workstream).
 
 | # | Model change | PR/commit | HW verification recipe | Board | Status |
 |---|---|---|---|---|---|
-| 1 | Bit-band translation gated on core (M3/M4 only); H5/WBA GPIO un-shadowed | `ee1133c` | MMIO capture of GPIO word-writes at 0x4202_xxxx on silicon, replayed via the hw-oracle diff harness (pattern: `l476_mmio_diff`) | NUCLEO-H563ZI | open |
+| 1 | Bit-band translation gated on core (M3/M4 only); H5/WBA GPIO un-shadowed | `ee1133c` | New `h563_mmio_diff` oracle (pattern: `l476_mmio_diff`): GPIO word-writes at 0x4202_xxxx — ODR/BSRR/BRR data path on PB0/PF4/PG4 incl. one-word BS-over-BR priority, plus a 4-pattern parity sweep over the GPIOE/GPIOF config surface — sim vs silicon over the AP1 dapdirect recipe (`OpenOcd::spawn_stm32h563`). 8/8 cases + 48/48 register-patterns byte-exact under `H563_STRICT=1`. | NUCLEO-H563ZI | ✅ **silicon-verified 2026-06-11** |
 | 2 | T1 shift-immediate flags suppressed inside IT blocks | `60445bd` | Instruction-level oracle: IT-block sequences with T1 LSL/LSR/ASR, APSR captured on silicon (extend `thumb_oracles`) | STM32F103 (bench) | ✅ **silicon-verified 2026-06-08** — `it_block_shift_preserves_flags` passes hw+diff on the bench F103 (PR #191) |
 | 3 | Thumb-1 STRH/LDRSB/LDRH/LDRSH register-offset decode | `4ebed86` | Same `thumb_oracles` extension: loaded/stored values + sign-extension vs silicon | STM32F103 (bench) | ✅ **silicon-verified 2026-06-08** — `strh_ldrh_reg_offset` / `ldrsb` / `ldrsh` pass hw+diff (PR #191) |
 | 4 | GDMA descriptor-walk mem-to-mem (ESP32-S3) | `fa292bd` | JTAG Unity run on the bench S3: same descriptor sequence on silicon, byte-compare (recipe: `HW_ORACLE_RESULT.md` in the platformio demo) | bench ESP32-S3 (proven setup) | open |
