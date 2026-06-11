@@ -1080,6 +1080,7 @@ mod tests {
             name: "test".to_string(),
             arch: labwired_config::Arch::Arm,
             core: None,
+            memory_regions: Vec::new(),
             flash: labwired_config::MemoryRange {
                 base: 0x0800_0000,
                 size: "128KB".to_string(),
@@ -1132,6 +1133,7 @@ mod tests {
             name: "test".to_string(),
             arch: labwired_config::Arch::Arm,
             core: None,
+            memory_regions: Vec::new(),
             flash: labwired_config::MemoryRange {
                 base: 0x0800_0000,
                 size: "128KB".to_string(),
@@ -1197,6 +1199,7 @@ mod tests {
             name: "test".to_string(),
             arch: labwired_config::Arch::Arm,
             core: None,
+            memory_regions: Vec::new(),
             flash: labwired_config::MemoryRange {
                 base: 0x0800_0000,
                 size: "128KB".to_string(),
