@@ -12,6 +12,7 @@ pub mod bmp280;
 pub mod i2c_factory;
 pub mod ili9341;
 pub mod iolink_master;
+pub mod ir_component;
 pub mod max31855;
 pub mod mpu6050;
 pub mod neo6m;
@@ -35,6 +36,7 @@ pub use ili9341::Ili9341;
 pub use iolink_master::{
     IolinkComSpeed, IolinkFrameKind, IolinkLinkState, IolinkMaster, IolinkXfer,
 };
+pub use ir_component::IrI2cComponent;
 pub use max31855::Max31855;
 pub use mpu6050::Mpu6050;
 pub use neo6m::Neo6mGps;
