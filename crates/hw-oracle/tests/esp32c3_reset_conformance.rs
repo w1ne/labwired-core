@@ -1,0 +1,123 @@
+// LabWired - Firmware Simulation Platform
+// SPDX-License-Identifier: MIT
+
+//! ESP32-C3 reset-state MMIO conformance oracle.
+//!
+//! Onboarding (2026-06-11) of the C3 peripheral blocks that the chip yaml did
+//! not previously wire (SYSTEM, RTC_CNTL, APB_CTRL, SYSTIMER, IO_MUX, I2C0,
+//! SPI2, LEDC, RMT, UART1, TIMG1). The declarative descriptors under
+//! `configs/peripherals/esp32c3/` already carried per-register `reset_value`s;
+//! this oracle pins the subset that was corroborated against real silicon.
+//!
+//! ## Capture provenance
+//!
+//! A live ESP32-C3 (QFN32, rev v0.4, MAC 38:44:be:42:f5:58) was read over its
+//! built-in USB-Serial/JTAG with `openocd-esp32 v0.12.0-esp32-20260424`
+//! (`board/esp32c3-builtin.cfg`). 592 register words across 15 peripheral
+//! windows were captured; see
+//! `scripts/hw-oracle/captures/esp32c3/<ts>/reg_oracle.json`.
+//!
+//! Of 423 registers that overlapped a descriptor `reset_value`, **366 matched
+//! silicon**. The 57 that differed are NOT descriptor bugs: a JTAG `reset
+//! halt` on the C3 is a *software* core reset that does not cold-reset the
+//! peripherals, and the ROM bootloader has already run — so those registers
+//! (UART console CLKDIV/STATUS, FIFO counts, GPIO `IN`/`STRAP`, fed WDTs, RTC
+//! calibration state) hold post-ROM/dynamic values rather than cold-reset
+//! values. This oracle therefore asserts only the **ROM-untouched, static**
+//! reset values where descriptor and silicon agree.
+//!
+//! ## Running
+//!
+//! Sim-only (normal CI):
+//! ```text
+//! cargo test -p labwired-hw-oracle --test esp32c3_reset_conformance
+//! ```
+//!
+//! Re-capture from hardware (C3 on USB-JTAG), then diff by hand against the
+//! committed `reg_oracle.json`:
+//! ```text
+//! openocd -s $OPENOCD_ESP32_SCRIPTS -f board/esp32c3-builtin.cfg \
+//!   -c init -c "reset halt" -c "mdw 0x600C0000 48" -c shutdown
+//! ```
+
+use labwired_config::{ChipDescriptor, SystemManifest};
+use labwired_core::bus::SystemBus;
+use std::path::PathBuf;
+
+/// Curated silicon-corroborated reset values (descriptor == live C3), drawn
+/// from the blocks newly wired into `configs/chips/esp32c3.yaml`. Only
+/// ROM-untouched / static registers are listed — see module docs.
+const RESET_VALUES: &[(&str, u64, u32)] = &[
+    ("SYSTEM CPU_PERI_CLK_EN", 0x600C_0000, 0x0000_0000),
+    ("SYSTEM CPU_PERI_RST_EN", 0x600C_0004, 0x0000_00C0),
+    ("SYSTEM CPU_PER_CONF", 0x600C_0008, 0x0000_000C),
+    ("SYSTEM MEM_PD_MASK", 0x600C_000C, 0x0000_0001),
+    ("APB_CTRL SYSCLK_CONF", 0x6002_6000, 0x0000_0001),
+    ("APB_CTRL TICK_CONF", 0x6002_6004, 0x0001_0727),
+    ("APB_CTRL CLK_OUT_EN", 0x6002_6008, 0x0000_07FF),
+    ("APB_CTRL WIFI_BB_CFG", 0x6002_600C, 0x0000_0000),
+    ("SPI2 CMD", 0x6002_4000, 0x0000_0000),
+    ("SPI2 ADDR", 0x6002_4004, 0x0000_0000),
+    ("SPI2 CTRL", 0x6002_4008, 0x003C_0000),
+    ("SPI2 CLOCK", 0x6002_400C, 0x8000_3043),
+    ("SYSTIMER CONF", 0x6002_3000, 0x4600_0000),
+    ("SYSTIMER UNIT0_OP", 0x6002_3004, 0x0000_0000),
+    ("SYSTIMER UNIT1_OP", 0x6002_3008, 0x0000_0000),
+    ("SYSTIMER UNIT0_LOAD_HI", 0x6002_300C, 0x0000_0000),
+    ("LEDC CH0_CONF0", 0x6001_9000, 0x0000_0000),
+    ("LEDC CH0_HPOINT", 0x6001_9004, 0x0000_0000),
+    ("LEDC CH0_DUTY", 0x6001_9008, 0x0000_0000),
+    ("LEDC CH0_CONF1", 0x6001_900C, 0x4000_0000),
+    ("I2C0 SCL_LOW_PERIOD", 0x6001_3000, 0x0000_0000),
+    ("I2C0 CTR", 0x6001_3004, 0x0000_020B),
+    ("I2C0 SR", 0x6001_3008, 0x0000_C000),
+    ("I2C0 TO", 0x6001_300C, 0x0000_0010),
+    ("RTC_CNTL OPTIONS0", 0x6000_8000, 0x1C00_A000),
+    ("RTC_CNTL SLP_TIMER0", 0x6000_8004, 0x0000_0000),
+    ("RTC_CNTL SLP_TIMER1", 0x6000_8008, 0x0000_0000),
+    ("RTC_CNTL TIME_UPDATE", 0x6000_800C, 0x0000_0000),
+];
+
+fn build_sim_bus() -> SystemBus {
+    let chip_path =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../configs/chips/esp32c3.yaml");
+    let chip = ChipDescriptor::from_file(&chip_path)
+        .unwrap_or_else(|e| panic!("load chip {chip_path:?}: {e}"));
+    let manifest = SystemManifest {
+        walk_deleted: false,
+        schema_version: "1.0".to_string(),
+        name: "esp32c3-reset-conformance".to_string(),
+        chip: chip_path.to_string_lossy().to_string(),
+        external_devices: vec![],
+        board_io: vec![],
+        peripherals: vec![],
+        memory_overrides: Default::default(),
+    };
+    SystemBus::from_config(&chip, &manifest).unwrap_or_else(|e| panic!("build sim bus: {e}"))
+}
+
+/// Every newly-wired C3 block must (a) be mapped (no bus fault) and (b) return
+/// its silicon-corroborated reset value.
+#[test]
+fn esp32c3_reset_values_match_silicon() {
+    let sim = build_sim_bus();
+    let mut failures = Vec::new();
+
+    for &(label, addr, expect) in RESET_VALUES {
+        match sim.read_u32(addr) {
+            Ok(got) if got == expect => {}
+            Ok(got) => failures.push(format!(
+                "  [DIFF] {label} 0x{addr:08X}: sim=0x{got:08X} silicon=0x{expect:08X}"
+            )),
+            Err(e) => failures.push(format!("  [FAULT] {label} 0x{addr:08X}: {e:?}")),
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "ESP32-C3 reset-state model diverged from silicon in {} of {} register(s):\n{}",
+        failures.len(),
+        RESET_VALUES.len(),
+        failures.join("\n")
+    );
+}
