@@ -42,12 +42,39 @@ fn probe_foreign_firmware() {
     let image = load_elf(PathBuf::from(&elf).as_path()).expect("load firmware ELF");
     machine.load_firmware(&image).expect("map firmware");
 
+    let watch: Option<u64> = std::env::var("FOREIGN_WATCH")
+        .ok()
+        .and_then(|v| u64::from_str_radix(v.trim_start_matches("0x"), 16).ok());
     let mut pc_hist: HashMap<u32, u64> = HashMap::new();
+    let mut last_csr: Option<(u32, u32, u32)> = None;
     let mut executed = 0u64;
     let mut stop = None;
     for _ in 0..steps {
         let pc = machine.cpu.get_pc();
         *pc_hist.entry(pc).or_insert(0) += 1;
+        if std::env::var("FOREIGN_CSRTRACE").is_ok() {
+            use labwired_core::Bus;
+            let csr = machine.bus.read_u32(0x4002_03E0).unwrap_or(0);
+            let cbr1 = machine.bus.read_u32(0x4002_0418).unwrap_or(0);
+            let cllr = machine.bus.read_u32(0x4002_044C).unwrap_or(0);
+            let key = (csr, cbr1, cllr);
+            if Some(key) != last_csr {
+                eprintln!("step {executed}: CSR={csr:#010x} CBR1={cbr1:#06x} CLLR={cllr:#010x} pc={pc:#010x}");
+                last_csr = Some(key);
+            }
+        }
+        if let Some(w) = watch {
+            use labwired_core::Bus;
+            if machine.bus.read_u32(w).unwrap_or(0) != 0 {
+                use labwired_core::Cpu;
+                println!(
+                    "WATCH {w:#x} nonzero at step {executed}, pc {pc:#010x}, lr {:#010x}, active_exc {}",
+                    machine.cpu.get_register(14),
+                    machine.cpu.active_exception
+                );
+                break;
+            }
+        }
         match machine.step() {
             Ok(_) => executed += 1,
             Err(e) => {
@@ -113,6 +140,15 @@ fn probe_foreign_firmware() {
         ("VEC50", 0x0800_00C8),
         ("VEC49", 0x0800_00C4),
         ("GPDMA C7SR", 0x4002_03E0),
+        ("XFER_CPLT", 0x2000_00EC),
+        ("CB_CPLT", 0x2000_0150),
+        ("CB_HALF", 0x2000_0154),
+        ("CB_ERR", 0x2000_0158),
+        ("XFER_ERR", 0x2000_00E8),
+        ("C7LLR", 0x4002_044C),
+        ("C7LBAR", 0x4002_03D0),
+        ("C7TR2", 0x4002_0414),
+        ("C7SAR", 0x4002_041C),
         ("GPDMA C7CR", 0x4002_03E4),
         ("GPDMA C7BR1", 0x4002_0418),
         ("NVIC ISER3", 0xE000_E10C),
