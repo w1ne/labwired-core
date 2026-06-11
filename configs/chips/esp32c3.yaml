@@ -26,6 +26,21 @@ memory_regions:
   - name: "drom"
     base: 0x3C000000
     size: "8MB"
+  # Mask ROM (the C3 calls ROM routines during early boot). The dump is the
+  # chip's copyrighted mask ROM, so it's loaded from a path in
+  # LABWIRED_ESP32C3_ROM rather than committed; region stays zero if unset.
+  # Dump it from live silicon: openocd dump_image rom.bin 0x40000000 0x60000.
+  - name: "rom"
+    base: 0x40000000
+    size: "384KB"
+    image_env: "LABWIRED_ESP32C3_ROM"
+  # ROM constant data (jump tables, function-pointer tables the ROM code reads).
+  # Without it, ROM jump tables read zeros and the ROM jumps to garbage.
+  # Dump: openocd dump_image rom_data.bin 0x3FF00000 0x20000.
+  - name: "rom_data"
+    base: 0x3FF00000
+    size: "128KB"
+    image_env: "LABWIRED_ESP32C3_ROM_DATA"
 peripherals:
   - id: "uart0"
     type: "uart"
@@ -248,9 +263,5 @@ peripherals:
     size: "12KB"
     config:
       path: "../peripherals/esp32c3/wifi_mac.yaml"
-  - id: "rom"
-    type: "declarative"
-    base_address: 0x40000000
-    size: "384KB"
-    config:
-      path: "../peripherals/esp32c3/rom.yaml"
+  # (ROM is now a real memory_region above, loaded from LABWIRED_ESP32C3_ROM,
+  # so the C3's actual mask-ROM routines execute during boot.)

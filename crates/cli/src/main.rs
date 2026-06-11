@@ -909,8 +909,18 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
         .collect();
     let mut break_hit = vec![false; break_at.len()];
     let limit = args.max_steps.unwrap_or(u64::MAX);
+    // Recent-PC trail for boot debugging — only maintained when --break-at is in
+    // use, so the normal hot loop pays nothing.
+    let debug = !break_at.is_empty();
+    let mut recent = std::collections::VecDeque::with_capacity(17);
     for i in 0..limit {
         let pc = machine.cpu.get_pc();
+        if debug {
+            if recent.len() == 16 {
+                recent.pop_front();
+            }
+            recent.push_back(pc);
+        }
         if let Some(bi) = break_at.iter().position(|&b| b == pc) {
             if !break_hit[bi] {
                 break_hit[bi] = true;
@@ -923,6 +933,8 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
             tracing::debug!("labwired-riscv: step {i} pc={pc:#010x} halt: {e}");
             if !break_at.is_empty() {
                 eprintln!("[halt] step {i} pc={pc:#010x} err={e}");
+                let trail: Vec<String> = recent.iter().map(|p| format!("{p:#010x}")).collect();
+                eprintln!("[trail] {}", trail.join(" -> "));
             }
             break;
         }
