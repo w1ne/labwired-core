@@ -102,15 +102,23 @@ real peripheral: `slc` (SDIO host), `sdmmc_host`. The rest (`iram`, `dram`,
 
 ### E2. DC reads low at framebuffer-write time — blank e-paper render (OPEN BUG)
 The real ereader firmware fully renders its text and clocks the framebuffer over
-SPI (verified: 9518 `0x00` black bytes of 19033 captured), but the SSD1680 panel
-renders **blank**. Root cause: the SSD1680 model routes command-vs-data by the
-latched DC GPIO, and DC (GPIO17) reads **low** at the moment the `0x24` data
-stream is clocked — so every framebuffer byte is mis-routed to `command_byte`
-and dropped. GxEPD2's `_writeData` only toggles CS and relies on DC being left
-HIGH by the preceding `_writeCommand(0x24)`; in sim that high state isn't present
-at data-write time. Needs a correlated GPIO-write + SPI-write trace at the
-framebuffer-write point to pin the exact mechanism. Diagnostic: run the cli with
-`LABWIRED_DUMP_SPI=<path>` to dump the full captured wire stream.
+SPI, but the SSD1680 model renders **blank**. Root cause: the SSD1680 model
+routes command-vs-data by the latched DC GPIO, and DC (GPIO17) reads **low** at
+the moment the `0x24` data stream is clocked — so every framebuffer byte is
+mis-routed to `command_byte` and dropped. GxEPD2's `_writeData` only toggles CS
+and relies on DC being left HIGH by the preceding `_writeCommand(0x24)`; in sim
+that high state isn't present at data-write time.
+
+**Silicon cross-check (2026-06-12, ESP32-D0WDQ6 over UART, instrumented GxEPD2
+tap of `(digitalRead(_dc), byte)`):** the sim is **byte-for-byte identical** to
+real silicon — all **19033/19033** SPI transfers match exactly. The lone
+divergence is the DC line: silicon holds **DC=1 for all 18998 data bytes** (35
+commands at DC=0; the first `0x24` is followed by 300/300 transfers at DC=1),
+while the sim reads DC=0 across that region. So the fix target is exact: the sim
+must hold GPIO17 high across the data stream as the firmware does. Diagnostic:
+cli `LABWIRED_DUMP_SPI=<path>` dumps the full wire stream; reproduce the silicon
+trace by patching `GxEPD2_EPD.cpp` `_writeCommand`/`_writeData` to call an
+`epd_tap(digitalRead(_dc), byte)` logger.
 
 ### E. Display command/data inference — the two e-paper panels
 `uc8151d_tricolor_290.rs`, `ssd1680_tricolor_290.rs`: when no DC pin is wired,
