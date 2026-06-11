@@ -143,6 +143,36 @@ impl OpenOcd {
         Self::spawn_jlink_stm32("stm32l4x")
     }
 
+    /// Spawn OpenOCD for the STM32H563 (NUCLEO-H563ZI) over its on-board
+    /// STLINK-V3.
+    ///
+    /// OpenOCD 0.12 ships no `target/stm32h5x.cfg`, and its hla transport
+    /// cannot select a debug AP > 0 while the H5's Cortex-M33 sits behind
+    /// AP1. The working recipe (same as `scripts/hw-capture-stm32h563.sh`,
+    /// verified on a NUCLEO-H563ZI / STLINK V3J13M4) is the stlink-dap
+    /// interface + `dapdirect_swd` + a hand-rolled `cortex_m` target on
+    /// `-ap-num 1`. DP IDCODE 0x6ba02477 (Cortex-M33 SW-DP).
+    pub fn spawn_stm32h563() -> Result<Self> {
+        Self::spawn_with_args(&[
+            "-f",
+            "interface/stlink-dap.cfg",
+            "-c",
+            "transport select dapdirect_swd",
+            "-f",
+            "target/swj-dp.tcl",
+            "-c",
+            "adapter speed 1000",
+            "-c",
+            "swj_newdap stm32h563 cpu -expected-id 0x6ba02477",
+            "-c",
+            "dap create stm32h563.dap -chain-position stm32h563.cpu",
+            "-c",
+            "target create stm32h563.cpu cortex_m -dap stm32h563.dap -ap-num 1",
+            "-c",
+            "reset_config srst_only srst_nogate",
+        ])
+    }
+
     /// Spawn OpenOCD for nRF52 (Cortex-M4) over ST-Link SWD.
     ///
     /// Equivalent to:
