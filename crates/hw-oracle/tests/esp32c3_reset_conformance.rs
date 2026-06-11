@@ -3,19 +3,28 @@
 
 //! ESP32-C3 reset-state MMIO conformance oracle.
 //!
-//! Onboarding (2026-06-11) of the C3 peripheral blocks that the chip yaml did
-//! not previously wire (SYSTEM, RTC_CNTL, APB_CTRL, SYSTIMER, IO_MUX, I2C0,
-//! SPI2, LEDC, RMT, UART1, TIMG1). The declarative descriptors under
-//! `configs/peripherals/esp32c3/` already carried per-register `reset_value`s;
-//! this oracle pins the subset that was corroborated against real silicon.
+//! Full-estate onboarding (2026-06-11) of the ESP32-C3. The chip yaml now wires
+//! every SVD-documented peripheral block the silicon exposes; this oracle pins
+//! the subset of their descriptor `reset_value`s that was corroborated against
+//! real silicon. It covers two onboarding passes:
+//!   1. the control blocks first wired into the chip (SYSTEM, RTC_CNTL,
+//!      APB_CTRL, SYSTIMER, IO_MUX, I2C0, SPI2, LEDC, RMT, UART1, TIMG1), and
+//!   2. the estate completion (SPI0/1, GPIO_SD, EFUSE, UHCI0/1, BB, TWAI0,
+//!      I2S0, AES, SHA, RSA, DS, HMAC, GDMA, APB_SARADC, USB_DEVICE, SENSITIVE,
+//!      EXTMEM, XTS_AES, ASSIST_DEBUG).
 //!
 //! ## Capture provenance
 //!
 //! A live ESP32-C3 (QFN32, rev v0.4, MAC 38:44:be:42:f5:58) was read over its
 //! built-in USB-Serial/JTAG with `openocd-esp32 v0.12.0-esp32-20260424`
-//! (`board/esp32c3-builtin.cfg`). 592 register words across 15 peripheral
-//! windows were captured; see
-//! `scripts/hw-oracle/captures/esp32c3/<ts>/reg_oracle.json`.
+//! (`board/esp32c3-builtin.cfg`), `mdw` reads wrapped in tcl `capture {}`. Two
+//! capture sets are committed under
+//! `scripts/hw-oracle/captures/esp32c3/<ts>/reg_oracle.json` (the original
+//! 15-window control-block set and the 21-window estate-completion set). In the
+//! estate pass, 94 non-zero descriptor reset values matched silicon exactly
+//! (SPI0/1 config, SAR-ADC, the SENSITIVE PMS estate, EXTMEM cache/flash
+//! windows, GPIO_SD, USB_DEVICE, XTS_AES); the crypto/DMA accelerators read
+//! all-zero idle, matching their descriptors.
 //!
 //! Of 423 registers that overlapped a descriptor `reset_value`, **366 matched
 //! silicon**. The 57 that differed are NOT descriptor bugs: a JTAG `reset
@@ -76,6 +85,77 @@ const RESET_VALUES: &[(&str, u64, u32)] = &[
     ("RTC_CNTL SLP_TIMER0", 0x6000_8004, 0x0000_0000),
     ("RTC_CNTL SLP_TIMER1", 0x6000_8008, 0x0000_0000),
     ("RTC_CNTL TIME_UPDATE", 0x6000_800C, 0x0000_0000),
+    // --- Estate completion (2026-06-11): the SVD-documented blocks the chip
+    // --- yaml did not previously wire. Each value below was read back from the
+    // --- live C3 and equals the descriptor reset_value (capture estate-* set).
+    // SPI1 (flash controller) config defaults
+    ("SPI1 CTRL", 0x6000_2008, 0x002C_A000),
+    ("SPI1 CTRL1", 0x6000_200C, 0x0000_0FFC),
+    ("SPI1 CLOCK", 0x6000_2014, 0x0003_0103),
+    ("SPI1 USER", 0x6000_2018, 0x8000_0000),
+    ("SPI1 USER1", 0x6000_201C, 0x5C00_0007),
+    ("SPI1 USER2", 0x6000_2020, 0x7000_0000),
+    ("SPI1 MISC", 0x6000_2034, 0x0000_0002),
+    ("SPI1 CLOCK_GATE", 0x6000_20DC, 0x0000_0001),
+    // SPI0 (cache/PSRAM controller) config defaults
+    ("SPI0 CTRL", 0x6000_3008, 0x002C_2000),
+    ("SPI0 CTRL2", 0x6000_3010, 0x0000_0021),
+    ("SPI0 CLOCK", 0x6000_3014, 0x0003_0103),
+    ("SPI0 USER1", 0x6000_301C, 0x5C00_0007),
+    ("SPI0 USER2", 0x6000_3020, 0x7000_0000),
+    ("SPI0 CLOCK_GATE", 0x6000_30DC, 0x0000_0001),
+    // GPIO sigma-delta: 8-bit defaults + version stamp
+    ("GPIO_SD SIGMADELTA0", 0x6000_4F00, 0x0000_FF00),
+    ("GPIO_SD VERSION", 0x6000_4F28, 0x0200_6230),
+    // SAR ADC full config estate
+    ("APB_SARADC CTRL", 0x6004_0000, 0x4003_8240),
+    ("APB_SARADC CTRL2", 0x6004_0004, 0x0000_A1FE),
+    ("APB_SARADC FSM_WAIT", 0x6004_000C, 0x00FF_0808),
+    ("APB_SARADC ONETIME_SAMPLE", 0x6004_0020, 0x1A00_0000),
+    ("APB_SARADC ARB_CTRL", 0x6004_0024, 0x0000_0900),
+    ("APB_SARADC DMA_CONF", 0x6004_0050, 0x0000_00FF),
+    ("APB_SARADC CLKM_CONF", 0x6004_0054, 0x0000_0004),
+    ("APB_SARADC CALI", 0x6004_0060, 0x0000_8000),
+    // USB Serial/JTAG config + date stamp
+    ("USB_DEVICE CONF0", 0x6004_3018, 0x0000_4200),
+    ("USB_DEVICE MEM_CONF", 0x6004_3048, 0x0000_0002),
+    ("USB_DEVICE DATE", 0x6004_3080, 0x0200_7300),
+    // SENSITIVE permission/PMS estate (security defaults)
+    (
+        "SENSITIVE APB_PERIPHERAL_ACCESS_1",
+        0x600C_1014,
+        0x0000_0001,
+    ),
+    ("SENSITIVE INTERNAL_SRAM_USAGE_1", 0x600C_101C, 0x0000_000F),
+    ("SENSITIVE SPI2_PMS_CONSTRAIN_1", 0x600C_103C, 0x000F_F0FF),
+    (
+        "SENSITIVE CORE_X_IRAM0_PMS_CONSTRAIN_1",
+        0x600C_10AC,
+        0x001C_7FFF,
+    ),
+    (
+        "SENSITIVE CORE_0_PIF_PMS_CONSTRAIN_2",
+        0x600C_10E0,
+        0xFCC3_0CF3,
+    ),
+    // EXTMEM cache config + flash/PSRAM virtual address windows
+    ("EXTMEM ICACHE_CTRL1", 0x600C_4004, 0x0000_0003),
+    ("EXTMEM IBUS_TO_FLASH_START_VADDR", 0x600C_4054, 0x4200_0000),
+    ("EXTMEM IBUS_TO_FLASH_END_VADDR", 0x600C_4058, 0x427F_FFFF),
+    ("EXTMEM DBUS_TO_FLASH_START_VADDR", 0x600C_405C, 0x3C00_0000),
+    ("EXTMEM DBUS_TO_FLASH_END_VADDR", 0x600C_4060, 0x3C7F_FFFF),
+    ("EXTMEM CACHE_STATE", 0x600C_40B0, 0x0000_0001),
+    // Flash XTS-AES date stamp
+    ("XTS_AES DATE", 0x600C_C05C, 0x2020_0623),
+    // Crypto/DMA blocks idle at reset: assert the window maps and reads 0 (not a
+    // bus fault) — proves correct wiring of the accelerator estate.
+    ("AES (idle)", 0x6003_A000, 0x0000_0000),
+    ("SHA MODE (idle)", 0x6003_B000, 0x0000_0000),
+    ("RSA (idle)", 0x6003_C000, 0x0000_0000),
+    ("DS (idle)", 0x6003_D000, 0x0000_0000),
+    ("HMAC (idle)", 0x6003_E000, 0x0000_0000),
+    ("GDMA (idle)", 0x6003_F000, 0x0000_0000),
+    ("I2S0 (idle)", 0x6002_D000, 0x0000_0000),
 ];
 
 fn build_sim_bus() -> SystemBus {

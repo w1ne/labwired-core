@@ -86,6 +86,134 @@ peripherals:
     base_address: 0x60016000
     config:
       path: "../peripherals/esp32c3/rmt.yaml"
+  # --- Estate completion 2026-06-11: the remaining SVD-documented blocks the
+  # --- ESP32-C3 silicon exposes. Bases are authoritative from the ESP32-C3 SVD
+  # --- (tests/fixtures/real_world/esp32c3.svd). Reset values silicon-validated
+  # --- against the live C3 (rev v0.4, MAC 38:44:be:42:f5:58); see
+  # --- examples/esp32c3/VALIDATION.md and the reset-conformance test.
+  # Flash/PSRAM SPI controllers
+  - id: "spi1"
+    type: "declarative"
+    base_address: 0x60002000
+    config:
+      path: "../peripherals/esp32c3/spi1.yaml"
+  - id: "spi0"
+    type: "declarative"
+    base_address: 0x60003000
+    config:
+      path: "../peripherals/esp32c3/spi0.yaml"
+  # GPIO sigma-delta (narrow window inside the GPIO range)
+  - id: "gpio_sd"
+    type: "declarative"
+    base_address: 0x60004F00
+    config:
+      path: "../peripherals/esp32c3/gpio_sd.yaml"
+  # eFuse controller
+  - id: "efuse"
+    type: "declarative"
+    base_address: 0x60008800
+    config:
+      path: "../peripherals/esp32c3/efuse.yaml"
+  # UART DMA bridges
+  - id: "uhci1"
+    type: "declarative"
+    base_address: 0x6000C000
+    config:
+      path: "../peripherals/esp32c3/uhci1.yaml"
+  - id: "uhci0"
+    type: "declarative"
+    base_address: 0x60014000
+    config:
+      path: "../peripherals/esp32c3/uhci0.yaml"
+  # Radio baseband control block (documented control path; WiFi/BT MAC remains
+  # thunk-backed — Espressif does not publish those registers).
+  - id: "bb"
+    type: "declarative"
+    base_address: 0x6001D000
+    config:
+      path: "../peripherals/esp32c3/bb.yaml"
+  # TWAI / CAN controller
+  - id: "twai0"
+    type: "declarative"
+    base_address: 0x6002B000
+    config:
+      path: "../peripherals/esp32c3/twai0.yaml"
+  # I2S
+  - id: "i2s0"
+    type: "declarative"
+    base_address: 0x6002D000
+    config:
+      path: "../peripherals/esp32c3/i2s0.yaml"
+  # (Hardware RNG is not a separate window: RNG_DATA lives at APB_CTRL+0xB0,
+  # already modeled as apb_ctrl's RND_DATA register.)
+  # Crypto accelerator estate
+  - id: "aes"
+    type: "declarative"
+    base_address: 0x6003A000
+    config:
+      path: "../peripherals/esp32c3/aes.yaml"
+  - id: "sha"
+    type: "declarative"
+    base_address: 0x6003B000
+    config:
+      path: "../peripherals/esp32c3/sha.yaml"
+  - id: "rsa"
+    type: "declarative"
+    base_address: 0x6003C000
+    config:
+      path: "../peripherals/esp32c3/rsa.yaml"
+  - id: "ds"
+    type: "declarative"
+    base_address: 0x6003D000
+    config:
+      path: "../peripherals/esp32c3/ds.yaml"
+  - id: "hmac"
+    type: "declarative"
+    base_address: 0x6003E000
+    config:
+      path: "../peripherals/esp32c3/hmac.yaml"
+  # GDMA (general DMA)
+  - id: "dma"
+    type: "declarative"
+    base_address: 0x6003F000
+    config:
+      path: "../peripherals/esp32c3/dma.yaml"
+  # SAR ADC
+  - id: "apb_saradc"
+    type: "declarative"
+    base_address: 0x60040000
+    config:
+      path: "../peripherals/esp32c3/apb_saradc.yaml"
+  # USB Serial/JTAG (the on-chip debug/console port)
+  - id: "usb_device"
+    type: "declarative"
+    base_address: 0x60043000
+    config:
+      path: "../peripherals/esp32c3/usb_device.yaml"
+  # Security / permission control
+  - id: "sensitive"
+    type: "declarative"
+    base_address: 0x600C1000
+    config:
+      path: "../peripherals/esp32c3/sensitive.yaml"
+  # External memory / cache controller
+  - id: "extmem"
+    type: "declarative"
+    base_address: 0x600C4000
+    config:
+      path: "../peripherals/esp32c3/extmem.yaml"
+  # Flash XTS-AES encryption
+  - id: "xts_aes"
+    type: "declarative"
+    base_address: 0x600CC000
+    config:
+      path: "../peripherals/esp32c3/xts_aes.yaml"
+  # Debug assist
+  - id: "assist_debug"
+    type: "declarative"
+    base_address: 0x600CE000
+    config:
+      path: "../peripherals/esp32c3/assist_debug.yaml"
   - id: "rom"
     type: "declarative"
     base_address: 0x40000000
