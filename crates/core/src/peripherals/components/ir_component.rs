@@ -8,7 +8,8 @@
 
 use crate::peripherals::i2c::I2cDevice;
 use labwired_ir::component::{
-    IrAutoIncrement, IrComponent, IrComponentInterface, IrUpdateAction, IrUpdateTrigger,
+    IrAutoIncrement, IrComponent, IrComponentInterface, IrObservableValue, IrUpdateAction,
+    IrUpdateTrigger,
 };
 
 /// Interpreter state for one component instance.
@@ -140,6 +141,45 @@ impl I2cDevice for IrI2cComponent {
 }
 
 impl IrI2cComponent {
+    /// Read a named observable for a specific channel.
+    ///
+    /// Returns `None` when:
+    /// - `name` does not match any declared observable,
+    /// - `channel` is out of range for the observable's `channels` count,
+    /// - the observable's map has `none_when_raw_zero` set and the raw value is 0.
+    ///
+    /// Otherwise returns the mapped engineering value (or the raw value as `f32`
+    /// if no `map` is declared).
+    pub fn observable(&self, name: &str, channel: u8) -> Option<f32> {
+        let obs = self.spec.observables.iter().find(|o| o.name == name)?;
+        if channel >= obs.channels {
+            return None;
+        }
+        let base = obs.base as usize + obs.stride as usize * channel as usize;
+        let IrObservableValue::U12Compose {
+            lo_rel,
+            hi_rel,
+            hi_mask,
+        } = obs.value;
+        let lo = self.regs[base + lo_rel as usize];
+        let hi = self.regs[base + hi_rel as usize] & hi_mask;
+        let raw = ((hi as u16) << 8) | lo as u16;
+        if let Some(map) = &obs.map {
+            if map.none_when_raw_zero && raw == 0 {
+                return None;
+            }
+            let eng = raw as f32 * map.linear.scale + map.linear.offset;
+            let eng = if let Some((lo_clamp, hi_clamp)) = map.linear.clamp {
+                eng.clamp(lo_clamp, hi_clamp)
+            } else {
+                eng
+            };
+            Some(eng)
+        } else {
+            Some(raw as f32)
+        }
+    }
+
     fn apply_updates_on_wide_read_complete(&mut self, pointer: u8) {
         // Collect first to satisfy the borrow checker; specs are small.
         let actions: Vec<IrUpdateAction> = self
@@ -375,5 +415,91 @@ updates:
             (0xE7, 0x80),
             "second read wrong (signed wrap check): {b2:#04x} {b3:#04x}"
         );
+    }
+
+    // ── Part A: observable() ──────────────────────────────────────────────────
+
+    /// PCA9685-shaped spec with servo_angle observable.
+    fn pca_like_with_observable() -> IrComponent {
+        serde_yaml::from_str(
+            r#"
+name: PCA-obs
+interface: { i2c: { default_address: 0x40 } }
+register_file:
+  size: 256
+  reset: { 0x00: 0x11 }
+pointer:
+  first_write_after_start_sets_pointer: true
+  auto_increment:
+    when_field_set: { reg: 0x00, mask: 0x20 }
+observables:
+  - name: servo_angle
+    channels: 16
+    base: 0x06
+    stride: 4
+    value:
+      u12_compose: { lo_rel: 2, hi_rel: 3, hi_mask: 0x0F }
+    map:
+      linear: { scale: 0.46291754, offset: -47.368423, clamp: [0.0, 180.0] }
+      none_when_raw_zero: true
+"#,
+        )
+        .unwrap()
+    }
+
+    /// Write a 12-bit ON_TIME=0, OFF_TIME=raw to channel `ch` of a PCA9685-like
+    /// device (registers at base=0x06, stride=4: OFF_L at +2, OFF_H at +3).
+    fn ir_set_angle(d: &mut IrI2cComponent, ch: u8, raw: u16) {
+        // Enable AI in MODE1 first (bit 5).
+        d.start();
+        d.write(0x00); // pointer
+        d.write(0xA1); // MODE1: ALLCALL | AI
+                       // Write all 4 bytes of the channel block.
+        let base = 0x06u8 + ch * 4;
+        d.start();
+        d.write(base);
+        d.write(0x00); // ON_L
+        d.write(0x00); // ON_H
+        d.write((raw & 0xFF) as u8); // OFF_L  (+2)
+        d.write(((raw >> 8) & 0x0F) as u8); // OFF_H  (+3, hi_mask=0x0F)
+    }
+
+    #[test]
+    fn observable_none_before_write_then_tracks_angle() {
+        let mut d = IrI2cComponent::new(pca_like_with_observable(), None).unwrap();
+        d.start();
+        // Before any write, channel 0 regs are 0 → none_when_raw_zero → None.
+        assert_eq!(d.observable("servo_angle", 0), None);
+
+        // Write a specific raw value for channel 0.
+        // raw 135 → angle = 135 * 0.46291754 + (-47.368423) ≈ 62.394 - 47.368 ≈ 15.026°
+        ir_set_angle(&mut d, 0, 135);
+        let angle = d
+            .observable("servo_angle", 0)
+            .expect("should be Some after write");
+        assert!((angle - 15.0).abs() < 1.5, "expected ~15°, got {angle:.3}");
+
+        // Other channels still None.
+        assert_eq!(d.observable("servo_angle", 1), None);
+
+        // Last channel (15) also independent.
+        ir_set_angle(&mut d, 15, 135);
+        let angle15 = d
+            .observable("servo_angle", 15)
+            .expect("ch15 should be Some");
+        assert!(
+            (angle15 - 15.0).abs() < 1.5,
+            "ch15 expected ~15°, got {angle15:.3}"
+        );
+    }
+
+    #[test]
+    fn observable_unknown_name_or_channel_is_none() {
+        let mut d = IrI2cComponent::new(pca_like_with_observable(), None).unwrap();
+        ir_set_angle(&mut d, 0, 135);
+        // Unknown name.
+        assert_eq!(d.observable("no_such", 0), None);
+        // Out-of-range channel (channels=16, so 16 is invalid).
+        assert_eq!(d.observable("servo_angle", 16), None);
     }
 }
