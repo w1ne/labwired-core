@@ -350,31 +350,22 @@ fn labwired_ereader_runs_to_panel_paint() {
         "xTaskGetCurrentTaskHandle",
         rom_thunks::x_task_get_current_task_handle,
     );
-    // xQueueSemaphoreTake / xQueueGenericSend are forced to succeed below (see
-    // the SPI-bus-lock note) because the faked spi_t carries a NULL lock; the
-    // rest of FreeRTOS (scheduler, dual-core rendezvous) runs for real.
-    push_named(&mut thunks, "spiStartBus", rom_thunks::spi_start_bus_fake);
-    push_named(
-        &mut thunks,
-        "_ZN8SPIClass16beginTransactionE11SPISettings",
-        rom_thunks::spi_class_begin_transaction,
-    );
+    // NO SPI init shims. GxEPD2_EPD::init() calls SPI.begin() → the real
+    // compiled spiStartBus runs: it creates a real recursive bus mutex via
+    // xQueueCreateMutex (real, IRAM-resident, backed by the real heap),
+    // enables the SPI3 peripheral clock through DPORT, sets USER.USR_MOSI/
+    // USR_MISO, and zeroes the FIFO. SPIClass::beginTransaction then takes that
+    // real mutex. So spi_start_bus_fake, spi_class_begin_transaction, and the
+    // xQueueSemaphoreTake/Send "force pdTRUE" lock shims are all GONE — the bus
+    // mutex is a genuine FreeRTOS object and the SPI critical sections run for
+    // real. xQueueCreateMutexStatic is still echoed (idle-task static mutex);
+    // the SPI bus uses the dynamic xQueueCreateMutex, which is real.
 
     // NO gxepd cmd/data bypass. GxEPD2_EPD::_writeCommand / _writeData run for
     // real: digitalWrite(DC) → SPI.transfer(byte) → spiTransferByteNL writes the
     // SPI3 FIFO/MOSI_DLEN/CMD.USR registers, and our Esp32Spi peripheral drains
     // the byte to the panel framed by the latched DC GPIO. Bytes reach the panel
     // through real register machinery, not a Rust-side panel injection.
-    //
-    // SPI bus lock. We fake the Arduino spi_t (spiStartBus is thunked), so its
-    // `lock` field is NULL. The compiled SPI init/transfer code takes that lock
-    // with the real xQueueSemaphoreTake, which configASSERTs on a NULL handle.
-    // Force the take/give to succeed so the (single-threaded-in-sim) SPI critical
-    // sections proceed. This is a concurrency shim on the bus mutex — it does NOT
-    // touch the data path (registers + DC are real). Matches the cli/wasm live
-    // profiles. CHEAT(THUNK-LIB): fakes the SPI bus-lock mutex acquire/release.
-    push_named(&mut thunks, "xQueueSemaphoreTake", rom_thunks::return_pd_true);
-    push_named(&mut thunks, "xQueueGenericSend", rom_thunks::return_pd_true);
 
     // xthal_window_spill_nw — semantic spill via shadow stack. Only the
     // `_nw` leaf (the actual spill loop that would trap on the displaced

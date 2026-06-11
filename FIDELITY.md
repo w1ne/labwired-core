@@ -53,11 +53,24 @@ RAM/flash regions correctly modeled as backing store. Real register models
   `rom_cpu_freq_240mhz`/`esp_clk_cpu_freq_240mhz`/`rom_xtal_freq_40mhz`,
   `esp_rom_route_intr_matrix`, `xtos_set_intlevel`/`xtos_restore_intlevel`.
   → ROM functions; emulating is reasonable but is not executing real ROM.
-- **THUNK-LIB (real cheat — skips compiled firmware, ~12):**
-  `esp_idf_heap_caps_init/malloc/calloc/free/realloc`,
-  `x_queue_create_mutex_static_echo`, `x_task_get_current_task_handle`,
-  `spi_class_begin_transaction`, `spi_start_bus_fake`, `getreent_dram_fake_ptr`,
+- **THUNK-LIB (real cheat — skips compiled firmware):**
+  `esp_idf_heap_caps_init/malloc/calloc/free/realloc` (bump allocator that
+  returns REAL DRAM — memory backing, not a behaviour fake),
+  `x_queue_create_mutex_static_echo` (idle-task static mutex),
+  `x_task_get_current_task_handle`, `getreent_dram_fake_ptr`,
   `esp_chip_info_stub`, `xthal_window_spill_thunk`.
+  - **RETIRED in the canonical proof harness** (`tests/e2e_labwired_ereader.rs`):
+    `spi_start_bus_fake`, `spi_class_begin_transaction`, and the SPI bus-lock
+    `xQueueSemaphoreTake/xQueueGenericSend → pdTRUE`. The real compiled
+    `SPIClass::begin → spiStartBus` runs: it creates a **real** recursive bus
+    mutex via `xQueueCreateMutex` (real, IRAM, backed by the heap bump pool),
+    enables the SPI3 clock through real DPORT, and sets `USER.USR_MOSI`. Real
+    `beginTransaction` then takes that real mutex. Whole SPI stack — bus init,
+    mutex, peripheral config, data path — is real compiled firmware against real
+    register models; panel still refreshes. The `spi_start_bus_fake` /
+    `spi_class_begin_transaction` functions remain in `rom_thunks.rs` only
+    because the cli/wasm single-core delivery wrappers still install them
+    (pending boot-to-paint validation of the real path there — see priority #2).
 - **BYPASS (real cheat, 0 — RETIRED):** `gxepd_write_command`, `gxepd_write_data`
   (wrote straight into the panel, bypassing SPI3) and `spi_class_transfer` (wrote
   SPI registers from Rust) are **deleted**. The real compiled GxEPD2 firmware now
@@ -102,13 +115,13 @@ source — not on the proven ereader path.
 1. ~~**Drop the GxEPD2 BYPASS thunks** (A.BYPASS)~~ — **DONE.** The real compiled
    firmware drives the panel over the real SPI3 peripheral + real DC GPIO (431
    SPI3 transactions → refresh against the real ELF). Bypass thunks deleted.
-2. **Complete the ESP32 SPI library path** so the remaining `spi_class_*` /
-   `spi_start_bus_fake` THUNK-LIB init shims die. These no longer touch the data
-   path (registers + DC are real); what's left is one-time bus init: faking the
-   `spi_t` (so `_spi->dev`/`USER.USR_MOSI` are set) and short-circuiting the SPI
-   bus-lock mutex (NULL lock in the faked `spi_t`). Retiring them means running
-   the real `spiStartBus` (DPORT clock-enable + GPIO matrix + a real FreeRTOS
-   mutex) instead of the fake.
+2. ~~**Complete the ESP32 SPI library path**~~ — **DONE in the e2e proof harness:**
+   real `spiStartBus` + real `xQueueCreateMutex` + real `beginTransaction` run
+   against the DPORT/heap/SPI models; the SPI fakes are removed there. **Remaining:**
+   apply the same removal to the cli (`arduino-esp32`) and wasm delivery wrappers,
+   which still stub `xQueueCreateMutex`→NULL + `spiStartBus`/`beginTransaction` +
+   the bus-lock `pdTRUE` for their single-core snapshot boot. Needs cli/wasm
+   boot-to-paint validation (the cli binary can boot the ELF; wasm runs in-browser).
 3. **Model `slc`/`sdmmc_host`** instead of RAM stubs, or prove the firmware never
    needs them.
 4. **Real boot ROM** — execute a mapped ROM image to kill the THUNK-ROM set and
