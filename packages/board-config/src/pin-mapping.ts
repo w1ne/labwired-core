@@ -3,6 +3,8 @@
  * Used by diagramToConfig to auto-detect connection types from wires.
  */
 
+import type { PinEtype } from './catalog';
+
 export interface PinFunction {
   type: 'gpio' | 'adc' | 'i2c' | 'spi' | 'timer' | 'uart';
   peripheral: string;
@@ -330,6 +332,41 @@ const ESP32_PINS: Record<string, PinMapping> = {
   ),
 };
 
+/** ESP32-S3 pin mappings (GPIO0-GPIO21, GPIO26-GPIO48 + power rails).
+ *  The S3 has a contiguous-ish GPIO bank: 0-21 and 26-48 (22-25 are strapping/
+ *  USB/JTAG pins not brought out on most modules). UART0 is on GPIO43(TX)/GPIO44(RX)
+ *  per the ESP32-S3 TRM; I2C and SPI defaults follow ESP-IDF v5 conventions. */
+const ESP32S3_PINS: Record<string, PinMapping> = {
+  '3V3': { gpio: { peripheral: 'gpio', pin: 0 }, functions: [] },
+  'GND': { gpio: { peripheral: 'gpio', pin: 0 }, functions: [] },
+  ...Object.fromEntries(
+    [
+      ...Array.from({ length: 22 }, (_, i) => i),          // 0-21
+      ...Array.from({ length: 23 }, (_, i) => i + 26),     // 26-48
+    ].map((n) => {
+      const uart: PinFunction[] =
+        n === 43 || n === 44
+          ? [{ type: 'uart', peripheral: 'uart0', role: n === 43 ? 'tx' : 'rx' }]
+          : [];
+      const i2c: PinFunction[] =
+        n === 8 || n === 9
+          ? [{ type: 'i2c', peripheral: 'i2c0', role: n === 8 ? 'sda' : 'scl' }]
+          : [];
+      const spi: PinFunction[] =
+        n === 11 || n === 12 || n === 13
+          ? [{ type: 'spi', peripheral: 'spi2', role: n === 11 ? 'mosi' : n === 12 ? 'sck' : 'miso' }]
+          : [];
+      return [
+        `GPIO${n}`,
+        {
+          gpio: { peripheral: 'gpio', pin: n },
+          functions: [...uart, ...i2c, ...spi],
+        },
+      ];
+    }),
+  ),
+};
+
 export const PIN_MAPS: Record<string, Record<string, PinMapping>> = {
   stm32f103: STM32F103_PINS,
   stm32f401: STM32F103_PINS, // Similar enough for now
@@ -341,10 +378,8 @@ export const PIN_MAPS: Record<string, Record<string, PinMapping>> = {
   'nrf52840-onboarding': NRF52840_PINS, // Full-peripheral onboarding variant — identical GPIO bank layout
   esp32: ESP32_PINS,
   esp32c3: ESP32C3_PINS,
-  // ESP32-S3 has 45 usable GPIOs (0-21, 26-48) vs classic ESP32's non-contiguous set;
-  // ESP32_PINS covers the overlapping range well enough to stop false "pin not available"
-  // errors. A dedicated ESP32S3_PINS with the full 45-pin set is a TODO.
-  esp32s3: ESP32_PINS,
+  esp32s3: ESP32S3_PINS,        // Updated from ESP32_PINS to the correct S3 GPIO range
+  'esp32-s3-zero': ESP32S3_PINS, // Waveshare ESP32-S3-Zero module — same S3 GPIO bank
 };
 
 /**
@@ -367,4 +402,43 @@ export function findPinFunction(
   const mapping = getPinMapping(board, pinLabel);
   if (!mapping) return null;
   return mapping.functions.find((f) => f.type === type) ?? null;
+}
+
+/** Electrical characteristics of an MCU pin. */
+export interface PinElectrical {
+  etype: PinEtype;
+  internalPullup: boolean;
+}
+
+/** Per-board pin-level overrides; pins absent here use the default rule. */
+const PIN_ELECTRICAL_OVERRIDES: Record<string, Record<string, PinElectrical>> = {
+  'esp32-s3-zero': {
+    '3V3': { etype: 'power_out', internalPullup: false },
+    '5V': { etype: 'power_out', internalPullup: false },
+    GND: { etype: 'power_out', internalPullup: false },
+  },
+  esp32s3: {
+    '3V3': { etype: 'power_out', internalPullup: false },
+    '5V': { etype: 'power_out', internalPullup: false },
+    GND: { etype: 'power_out', internalPullup: false },
+  },
+  esp32: {
+    '3V3': { etype: 'power_out', internalPullup: false },
+    GND: { etype: 'power_out', internalPullup: false },
+  },
+  // Other boards use the bidirectional+pullup default for all mapped pins.
+};
+
+/**
+ * Electrical type of an MCU pin. Any mapped GPIO-capable pin defaults to
+ * `bidirectional` with `internalPullup: true` (all MCUs in PIN_MAPS have
+ * per-pin configurable pullups). Power pins are expressed via per-board
+ * overrides. Returns null for unknown pin or board.
+ */
+export function getPinEtype(board: string, pinLabel: string): PinElectrical | null {
+  const override = PIN_ELECTRICAL_OVERRIDES[board]?.[pinLabel];
+  if (override) return override;
+  const mapping = getPinMapping(board, pinLabel);
+  if (!mapping) return null;
+  return { etype: 'bidirectional', internalPullup: true };
 }
