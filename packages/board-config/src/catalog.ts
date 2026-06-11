@@ -123,6 +123,19 @@ export const CATALOG: Record<string, CatalogPart> = {
     operatingVoltage: { min: 4.5, max: 5.5 },
   },
 
+  // --- IR transceivers (I2C interface; SPI-interface variants are future work) ---
+  ir: {
+    type: 'ir',
+    deviceClass: 'i2c_device',
+    boardIoKind: 'i2c_device',
+    pins: [
+      p('VCC', 'power_in'),
+      p('GND', 'power_in'),
+      p('SDA', 'open_drain', 'i2c_sda'),
+      p('SCL', 'open_drain', 'i2c_scl'),
+    ],
+  },
+
   // --- Legacy parts: boardIoKind carried over verbatim, no pins yet ---
   'rgb-led': { type: 'rgb-led', deviceClass: 'board_io', boardIoKind: 'led' },
   buzzer: { type: 'buzzer', deviceClass: 'board_io', boardIoKind: 'pwm_output' },

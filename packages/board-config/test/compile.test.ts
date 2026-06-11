@@ -190,6 +190,52 @@ describe('compile()', () => {
     });
   });
 
+  describe('ir part compilation', () => {
+    /** IR device wired to dispenser buses with spec_path + i2c_address. */
+    function irFixture(): DiagramV2 {
+      const d = dispenserFixture();
+      d.parts.push({ id: 'ir1', type: 'ir', attrs: { spec_path: '/x/y.yaml', i2c_address: '0x77' } });
+      d.nets.push({ name: 'VCC_IR', kind: 'power', voltage: 3.3 });
+      d.connections.push(
+        ['ir1:VCC', 'V3'],
+        ['ir1:GND', 'GND'],
+        ['ir1:SDA', 'SDA'],
+        ['ir1:SCL', 'SCL'],
+      );
+      return d;
+    }
+
+    it('ir part with spec_path compiles to ok:true', () => {
+      const result = compile(irFixture());
+      expect(result.ok).toBe(true);
+    });
+
+    it('systemYaml contains type: ir for ir part', () => {
+      const result = compile(irFixture());
+      expect(result.systemYaml).toContain('type: "ir"');
+    });
+
+    it('systemYaml contains spec_path for ir part', () => {
+      const result = compile(irFixture());
+      expect(result.systemYaml).toContain('spec_path: "/x/y.yaml"');
+    });
+
+    it('systemYaml contains connection i2c0 for ir part', () => {
+      const result = compile(irFixture());
+      expect(result.systemYaml).toContain('connection: "i2c0"');
+    });
+
+    it('ir part without spec_path emits COMPILE_IR_NO_SPEC error', () => {
+      const d = irFixture();
+      const irPart = d.parts.find((p) => p.id === 'ir1')!;
+      delete irPart.attrs!.spec_path;
+      const result = compile(d);
+      expect(result.ok).toBe(false);
+      const codes = result.diagnostics.map((x) => x.code);
+      expect(codes).toContain('COMPILE_IR_NO_SPEC');
+    });
+  });
+
   describe('diagramToConfig() still works (delegation)', () => {
     it('emits a system.yaml with the LED as a board_io led on gpioa pin 5', () => {
       const diagram: Diagram = {

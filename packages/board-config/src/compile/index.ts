@@ -185,15 +185,25 @@ export function compile(input: Diagram | DiagramV2): CompileResult {
       if (part.type === 'ir') {
         // IR parts: emit type:ir with spec_path config
         const specPath = part.attrs?.spec_path;
+        if (!specPath) {
+          compileDiags.push(diag(
+            'COMPILE_IR_NO_SPEC',
+            'error',
+            `Part "${part.id}" (ir) is missing required attrs.spec_path`,
+            'Set attrs.spec_path to the path of the IR spec YAML (labwired_define_component)',
+            [part.id],
+          ));
+          continue;
+        }
         const addrStr = address !== undefined ? `0x${address.toString(16)}` : undefined;
         externalDeviceEntries.push(`  - id: "${part.id}"
     type: "ir"
     connection: "${connection}"${addrStr ? `
     config:
       spec_path: "${specPath}"
-      i2c_address: ${addrStr}` : specPath ? `
+      i2c_address: ${addrStr}` : `
     config:
-      spec_path: "${specPath}"` : ''}`);
+      spec_path: "${specPath}"`}`);
       } else if (legacyAddress !== undefined) {
         // Legacy I2C device (adxl345, mpu6050, bme280, oled-ssd1306)
         const { externalDevice, boardIo } = emitLegacyI2cDevice(
