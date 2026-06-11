@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// Top-level declarative component spec.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct IrComponent {
     /// Part number, e.g. "PCA9685".
     pub name: String,
@@ -60,7 +60,20 @@ pub enum IrComponentKind {
 /// Bus interface binding.
 ///
 /// Serializes/deserializes as `{ i2c: { default_address: N } }`.
-#[derive(Debug, Clone)]
+///
+/// # Serde strategy
+///
+/// All enum types in this module use **manual** `Serialize`/`Deserialize`
+/// impls backed by plain-map helpers rather than `#[serde(untagged)]` or
+/// `#[serde(tag = …)]`.  Under serde_yaml 0.9 the derive macros emit and
+/// expect `!tag` YAML tag syntax, which is unreadable in hand-authored specs.
+/// Manual impls keep the plain-map form (`{ i2c: { … } }`,
+/// `{ when_field_set: { … } }`, etc.) and, critically, produce **strict,
+/// targeted parse errors** for agent-facing diagnostics — an `#[serde(untagged)]`
+/// approach would collapse every mismatch to "data did not match any variant"
+/// and would silently accept typos such as `nevr` via a bare-string variant.
+/// Do **not** replace these impls with `#[serde(untagged)]`.
+#[derive(Debug, Clone, PartialEq)]
 pub enum IrComponentInterface {
     /// I2C target device.
     I2c {
@@ -110,7 +123,7 @@ impl<'de> Deserialize<'de> for IrComponentInterface {
 }
 
 /// Flat byte-addressed register file.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct IrRegisterFile {
     /// Number of 8-bit registers (1..=65536).
     pub size: usize,
@@ -120,7 +133,7 @@ pub struct IrRegisterFile {
 }
 
 /// Write-pointer (control register) semantics.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct IrPointerRule {
     /// The first byte written after START selects the register pointer.
     pub first_write_after_start_sets_pointer: bool,
@@ -185,6 +198,10 @@ impl Serialize for IrAutoIncrement {
     }
 }
 
+// IrAutoIncrement is the only enum here that routes through `serde_yaml::Value`
+// because it uniquely accepts both a bare string ("never"/"always") and a map
+// form ({ when_field_set: { … } }) — two structurally different YAML forms that
+// cannot be unified by a single typed helper struct.
 impl<'de> Deserialize<'de> for IrAutoIncrement {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         use serde::de::Error;
@@ -219,7 +236,7 @@ impl<'de> Deserialize<'de> for IrAutoIncrement {
 
 /// A logical register wider than 8 bits, read big-endian over phased reads.
 /// The read phase resets to MSB on START.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct IrWideRegister {
     /// Pointer value that selects this register.
     pub pointer: u8,
@@ -231,7 +248,7 @@ pub struct IrWideRegister {
 }
 
 /// A deterministic state update fired by bus activity.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct IrUpdateRule {
     /// What fires the rule.
     pub trigger: IrUpdateTrigger,
@@ -240,7 +257,7 @@ pub struct IrUpdateRule {
 }
 
 /// Update triggers.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum IrUpdateTrigger {
     /// A full read of the wide register selected by this pointer completed
     /// (both bytes of a 16-bit value were read).
@@ -287,7 +304,7 @@ impl<'de> Deserialize<'de> for IrUpdateTrigger {
 }
 
 /// Update actions.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum IrUpdateAction {
     /// `value = value.wrapping_add(add); if value > max { value = reset }`
     /// applied to the triggering wide register (signed compare, as i16).
@@ -348,7 +365,7 @@ impl<'de> Deserialize<'de> for IrUpdateAction {
 }
 
 /// A named, channel-indexed value derived from the register file.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct IrObservable {
     /// Observable name, e.g. "servo_angle".
     pub name: String,
@@ -366,7 +383,7 @@ pub struct IrObservable {
 }
 
 /// Raw-value composition.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum IrObservableValue {
     /// `((regs[base+hi_rel] & hi_mask) << 8) | regs[base+lo_rel]`
     U12Compose {
@@ -430,7 +447,7 @@ impl<'de> Deserialize<'de> for IrObservableValue {
 }
 
 /// Raw → engineering-units mapping.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct IrObservableMap {
     /// `eng = clamp(raw * scale + offset)`.
     pub linear: IrLinearMap,
@@ -440,7 +457,7 @@ pub struct IrObservableMap {
 }
 
 /// Linear map coefficients.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct IrLinearMap {
     /// Multiplier.
     pub scale: f32,
@@ -492,9 +509,12 @@ observables:
         assert_eq!(spec.register_file.reset.get(&0x00), Some(&0x11));
         let obs = &spec.observables[0];
         assert_eq!(obs.channels, 16);
-        // Round-trip: serialize and re-parse equal.
+        // Round-trip: serialize and re-parse; assert whole-struct equality to
+        // cover all enum-carrying fields (interface, pointer.auto_increment,
+        // observables[0].value).  IrLinearMap contains f32 fields — if YAML
+        // serialization loses precision the assertion below will fail; fall
+        // back to the field-level assertions in that case.
         let re: IrComponent = serde_yaml::from_str(&serde_yaml::to_string(&spec).unwrap()).unwrap();
-        assert_eq!(re.name, spec.name);
-        assert_eq!(re.register_file.reset, spec.register_file.reset);
+        assert_eq!(re, spec);
     }
 }
