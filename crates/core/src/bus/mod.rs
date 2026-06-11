@@ -1226,9 +1226,38 @@ impl SystemBus {
                         .and_then(|v| v.as_u64())
                         .map(|n| n as u32)
                         .unwrap_or(0x0000_00E7);
-                    Box::new(crate::peripherals::spi::Spi::new_with_layout_cr2(
-                        layout, cr2_mask,
-                    ))
+                    let mut spi =
+                        crate::peripherals::spi::Spi::new_with_layout_cr2(layout, cr2_mask);
+                    // Declarative IR SPI devices (`type: ir`) attach here,
+                    // mirroring the I2C path. Hand-written SPI devices attach via
+                    // the PeripheralKit registry pass, which ignores `type: ir`,
+                    // so the two dispatch paths never double-attach the same bus.
+                    for ext in &manifest.external_devices {
+                        if ext.connection != p_cfg.id || !ext.r#type.eq_ignore_ascii_case("ir") {
+                            continue;
+                        }
+                        match crate::peripherals::components::build_spi_device(
+                            &ext.r#type,
+                            &ext.config,
+                        ) {
+                            Some(device) => {
+                                tracing::info!(
+                                    "spi attach: '{}' (type=ir) -> '{}'",
+                                    ext.id,
+                                    p_cfg.id
+                                );
+                                spi.attach(device);
+                            }
+                            None => {
+                                tracing::warn!(
+                                    "spi attach skipped: invalid ir spec for external id '{}' on bus '{}'",
+                                    ext.id,
+                                    p_cfg.id
+                                );
+                            }
+                        }
+                    }
+                    Box::new(spi)
                 }
                 "pwr" => {
                     // `config: { profile: stm32h5 }` selects the H5 layout
@@ -2839,6 +2868,7 @@ mod tests {
             name: "stm32f103-test".to_string(),
             arch: Arch::Arm,
             core: None,
+            memory_regions: Vec::new(),
             flash: MemoryRange {
                 base: 0x0800_0000,
                 size: "64KB".to_string(),
@@ -3005,6 +3035,7 @@ peripherals:
             name: "stm32f103-test".to_string(),
             arch: Arch::Arm,
             core: None,
+            memory_regions: Vec::new(),
             flash: MemoryRange {
                 base: 0x0800_0000,
                 size: "64KB".to_string(),
@@ -3193,6 +3224,7 @@ peripherals:
         let mut bus = SystemBus {
             flash: LinearMemory::new(256, 0x0800_0000),
             ram: LinearMemory::new(256, 0x2000_0000),
+            extra_mem: Vec::new(),
             peripherals: Vec::new(),
             nvic: None,
             observers: Vec::new(),
@@ -3227,6 +3259,7 @@ peripherals:
         let mut bus = SystemBus {
             flash: LinearMemory::new(256, 0x0800_0000),
             ram: LinearMemory::new(256, 0x2000_0000),
+            extra_mem: Vec::new(),
             peripherals: vec![
                 PeripheralEntry {
                     name: "high".to_string(),
@@ -3294,6 +3327,7 @@ peripherals:
         let mut bus = SystemBus {
             flash: LinearMemory::new(256, 0x0800_0000),
             ram: LinearMemory::new(256, 0x2000_0000),
+            extra_mem: Vec::new(),
             peripherals: vec![PeripheralEntry {
                 name: "dma1".to_string(),
                 base: 0x4002_0000,
