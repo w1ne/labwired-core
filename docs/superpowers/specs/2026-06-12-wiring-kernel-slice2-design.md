@@ -19,7 +19,7 @@ All wiring knowledge consolidates into `packages/board-config` (already the leas
 
 - `schema` — Diagram v2 types, version field, pure lossless v1→v2 migration.
 - `catalog` — the single declarative part catalog: every part type declares its pins (typed, see Section 3), device class, and attrs schema. Replaces both `packages/mcp/src/component-meta.ts` and the registry duplicated in `packages/ui/src/editor/components/index.ts` (UI keeps its render components; their metadata moves here).
-- `pins` — MCU pin maps **generated at build time from `core/configs/chips/*.yaml`** by a codegen script checked into board-config. Hand-written pin tables are deleted. A chip present in core but absent from the generated maps is a build error; a diagram referencing an unknown chip is a diagnostic, never a silent fallback.
+- `pins` — MCU pin maps stay declaratively authored in board-config as the **single canonical source**, extended with electrical types and `internal_pullup` capability. (Amended 2026-06-12: the original intent was codegen from `core/configs/chips/*.yaml`, but those YAMLs carry peripherals and memory maps only — no pin tables exist in core today. Upstreaming pin tables into core YAML and generating from them is future work, see Non-goals.) A diagram referencing a board absent from the maps is a diagnostic, never a silent fallback.
 - `normalize` — deterministic wires→nets closure (stable net naming derived from sorted member pins; same input always yields same nets).
 - `erc` — the rule engine of Section 4. Pure function: `erc(diagramV2, catalog, pinMaps) → Diagnostic[]`.
 - `compile` — Section 5. Pure function returning manifest YAML + diagnostics.
@@ -114,6 +114,7 @@ Surfaces: `labwired_validate_diagram` upgraded on local MCP **and** hosted API (
 
 ## Non-goals
 
+- Pin-table codegen from core chip YAMLs (blocked: core YAMLs carry no pin data; upstreaming pin tables into core is a separate workstream).
 - UI editor net-authoring UX (rail bars, net inspector) — UI stays read-compatible only.
 - Core-side pin mux / GPIO matrix modeling.
 - Current/drive-strength budgeting and analog behavior.
