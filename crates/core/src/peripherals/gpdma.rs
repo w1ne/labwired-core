@@ -873,7 +873,7 @@ mod tests {
         bus.write_u32(CH0_CDAR, DST as u32).unwrap();
         // CLLR: UT1|UT2|UB1|USA|UDA|ULL + LA of the node.
         let ull: u32 = (0x1F << 27) | (1 << 16) | ((node as u32) & 0xFFFC);
-        bus.write_u32(GPDMA_BASE as u64 + 0xCC, ull).unwrap();
+        bus.write_u32(GPDMA_BASE + 0xCC, ull).unwrap();
         bus.write_u32(CH0_CCR, CCR_EN | CCR_TCIE).unwrap();
 
         for _ in 0..40 {
@@ -888,7 +888,7 @@ mod tests {
                 "block B"
             );
         }
-        assert_eq!(bus.read_u32(GPDMA_BASE as u64 + 0xCC).unwrap(), 0, "CLLR");
+        assert_eq!(bus.read_u32(GPDMA_BASE + 0xCC).unwrap(), 0, "CLLR");
         assert_eq!(bus.read_u32(CH0_CBR1).unwrap() & 0xFFFF, 0, "BNDT");
         assert_eq!(bus.read_u32(CH0_CSR).unwrap(), 0x301, "CSR");
         assert_eq!(
