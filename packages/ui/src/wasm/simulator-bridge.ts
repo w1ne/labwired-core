@@ -92,6 +92,18 @@ export interface UartTraceSnapshot {
   events: UartTraceEvent[];
 }
 
+export interface FdcanTraceFrame {
+  seq: number;
+  peripheral: string;
+  direction: 'tx' | 'rx';
+  id: number;
+  data: number[];
+  extended: boolean;
+  fd: boolean;
+  bitrate_switch: boolean;
+  remote: boolean;
+}
+
 /** Live state of the IO-Link master peer (the AL2205-style DI demo). */
 export interface IolinkMasterState {
   link_state: 'startup' | 'operate';
@@ -198,6 +210,7 @@ export interface WasmSimulatorInstance {
   drain_uart_output(): Uint8Array;
   feed_uart_input(data: Uint8Array): void;
   uart_trace_snapshot(): UartTraceSnapshot[];
+  fdcan_trace_snapshot(): FdcanTraceFrame[];
 
   // ADC / Analog
   set_adc_value(peripheral_name: string, value: number): void;
@@ -467,6 +480,13 @@ export class SimulatorBridge {
   uartTraceSnapshot(): UartTraceSnapshot[] {
     const raw = this.sim.uart_trace_snapshot() as unknown[] | null;
     return (raw ?? []).map((snapshot) => asPlainObject<UartTraceSnapshot>(snapshot));
+  }
+
+  fdcanTraceSnapshot(): FdcanTraceFrame[] {
+    const snapshot = (this.sim as unknown as { fdcan_trace_snapshot?: () => unknown[] | null }).fdcan_trace_snapshot;
+    if (typeof snapshot !== 'function') return [];
+    const raw = snapshot.call(this.sim) as unknown[] | null;
+    return (raw ?? []).map((frame) => asPlainObject<FdcanTraceFrame>(frame));
   }
 
   setAdcValue(peripheral: string, value: number): void {

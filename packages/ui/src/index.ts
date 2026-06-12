@@ -48,6 +48,7 @@ export type {
   UartDeviceStateNeo6mGps,
   UartTraceEvent,
   UartTraceSnapshot,
+  FdcanTraceFrame,
   AdcDeviceState,
   AdcDeviceStateNtcThermistor,
   PeripheralInfo,
