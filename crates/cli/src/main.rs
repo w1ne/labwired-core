@@ -4551,6 +4551,10 @@ fn execute_test_loop<C: labwired_core::Cpu>(
     let batch_size = if machine.config.batch_mode_enabled
         && args.breakpoint.is_empty()
         && detect_stuck.is_none()
+        // Cycle-tight GPIO-timing devices (e.g. HC-SR04 ECHO pulse) only behave
+        // correctly when peripherals tick between every instruction; instruction
+        // batching freezes them across the batch and the firmware measures 0.
+        && !machine.bus.requires_cycle_accurate()
     {
         10000.min(max_steps)
     } else {
@@ -4715,19 +4719,26 @@ fn execute_test_loop<C: labwired_core::Cpu>(
             TestAssertion::UartRegex(a) => simple_regex_is_match(&a.uart_regex, &uart_text),
             TestAssertion::ExpectedStopReason(a) => a.expected_stop_reason == stop_reason,
             TestAssertion::MemoryValue(a) => {
+                // `size` is the value width. Accept either bytes (1/2/4) or
+                // bits (8/16/32) — both name the same u8/u16/u32 reads — so a
+                // natural "4 bytes" guess for a u32 RAM word works as well as
+                // the historical bit-width form. Defaults to a 32-bit (u32) word.
                 let size = a.memory_value.size.unwrap_or(32);
                 let result = match size {
-                    8 => machine
+                    1 | 8 => machine
                         .bus
                         .read_u8(a.memory_value.address)
                         .map(|v| v as u32),
-                    16 => machine
+                    2 | 16 => machine
                         .bus
                         .read_u16(a.memory_value.address)
                         .map(|v| v as u32),
-                    32 => machine.bus.read_u32(a.memory_value.address),
+                    4 | 32 => machine.bus.read_u32(a.memory_value.address),
                     _ => {
-                        error!("Unsupported memory assertion size: {}", size);
+                        error!(
+                            "Unsupported memory assertion size: {} — use 1/2/4 (bytes) or 8/16/32 (bits)",
+                            size
+                        );
                         Err(labwired_core::SimulationError::Other("Invalid size".into()))
                     }
                 };

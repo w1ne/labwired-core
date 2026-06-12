@@ -585,6 +585,9 @@ pub struct MemoryValueDetails {
     pub expected_value: u64,
     #[serde(default)]
     pub mask: Option<u64>,
+    /// Value width to read at `address`. Accepts bytes (1/2/4) or the
+    /// equivalent bit width (8/16/32); both map to a u8/u16/u32 read.
+    /// Defaults to a 32-bit (u32) word.
     #[serde(default)]
     pub size: Option<u8>,
 }
