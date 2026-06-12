@@ -34,7 +34,9 @@
 //! | 0x00   | CMD          | bit24 `SPI_USR` start: set → launch, auto-clears;   |
 //! |        |              | bit23 `SPI_UPDATE` self-clears (config sync)        |
 //! | 0x1C   | MS_DLEN      | `SPI_MS_DATA_BITLEN`[17:0] = transfer bits-1        |
-//! | 0x30   | DMA_CONF     | AFIFO reset bits 29/30/31 self-clear                |
+//! | 0x30   | DMA_CONF     | AFIFO reset bits 29/30/31 self-clear; bit 27       |
+//! |        |              | `SPI_DMA_RX_ENA` / bit 28 `SPI_DMA_TX_ENA` select  |
+//! |        |              | the GDMA-coupled transaction path (see below)       |
 //! | 0x34   | DMA_INT_ENA  | interrupt enable mask                               |
 //! | 0x38   | DMA_INT_CLR  | WO, W1C — clears latched raw bits                   |
 //! | 0x3C   | DMA_INT_RAW  | R/WTC — write-1-to-clear latched raw bits           |
@@ -61,10 +63,24 @@
 //! The MISO region length is taken from `SPI_MS_DLEN` (`SPI_MS_DATA_BITLEN`+1
 //! bits, rounded up to whole bytes, capped at the 64-byte W buffer).
 //!
+//! ## DMA-mode transactions (GDMA-coupled)
+//!
+//! When `SPI_CMD.USR` is kicked while `SPI_DMA_TX_ENA` (DMA_CONF bit 28)
+//! and/or `SPI_DMA_RX_ENA` (bit 27) are set — the ESP-IDF `spi_master`
+//! driver's DMA path — the controller does NOT complete immediately:
+//! `USR` stays set and a [`SpiDmaPending`] records the transaction. The
+//! GDMA peripheral's SPI pump (gdma.rs) then supplies MOSI bytes from its
+//! OUT descriptor chain and collects MISO bytes into its IN chain via
+//! [`Esp32s3Spi::dma_transfer`] (attached-device response, or 0xFF with no
+//! device), and finally calls [`Esp32s3Spi::dma_complete`] which clears
+//! `USR` and latches `SPI_TRANS_DONE`. The W0..W15 buffer is untouched in
+//! DMA mode; the non-DMA CPU path below is byte-identical to before.
+//!
 //! `tick()` emits the controller's intr-matrix source while `INT_ST != 0`,
 //! mirroring the UART/systimer pattern; the bus routes it through the per-core
 //! interrupt matrix.
 
+use crate::peripherals::spi::SpiDevice;
 use crate::{Peripheral, PeripheralTickResult, SimResult};
 
 const CMD: u64 = 0x00;
@@ -107,6 +123,15 @@ const MS_DATA_BITLEN: u32 = 0x0003_FFFF;
 /// `SPI_DMA_AFIFO_RST`/`SPI_BUF_AFIFO_RST`/`SPI_RX_AFIFO_RST` in `DMA_CONF`
 /// (bits 31/30/29) — self-clearing FIFO reset strobes.
 const AFIFO_RST_BITS: u32 = 0xE000_0000;
+/// `SPI_DMA_TX_ENA` in `DMA_CONF` — "Set this bit to enable SPI DMA
+/// controlled send data mode." Verified against ESP-IDF
+/// `soc/esp32s3/register/soc/spi_reg.h`: `SPI_DMA_TX_ENA : R/W ;bitpos:[28]`.
+const SPI_DMA_TX_ENA: u32 = 1 << 28;
+/// `SPI_DMA_RX_ENA` in `DMA_CONF` — "Set this bit to enable SPI DMA
+/// controlled receive data mode." Verified against ESP-IDF
+/// `soc/esp32s3/register/soc/spi_reg.h`: `SPI_DMA_RX_ENA : R/W ;bitpos:[27]`.
+/// (Bits 18..21 are the slave seg-trans fields, NOT the DMA enables.)
+const SPI_DMA_RX_ENA: u32 = 1 << 27;
 /// `SPI_SOFT_RESET` in `SLAVE` (bitpos 27, WT) — self-clearing.
 const SOFT_RESET_BIT: u32 = 1 << 27;
 
@@ -145,6 +170,25 @@ const fn spec(word: usize) -> Option<(u32, u32)> {
     }
 }
 
+/// Pending DMA transaction state, set when `SPI_CMD.USR` is written with
+/// `SPI_DMA_TX_ENA` or `SPI_DMA_RX_ENA` set in `DMA_CONF`. GDMA's coupled
+/// pump peeks this each tick to know how many wire bytes remain, exchanges
+/// up to a per-tick budget via [`Esp32s3Spi::dma_transfer`], and calls
+/// [`Esp32s3Spi::dma_complete`] once `transferred` reaches `total_bytes`.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct SpiDmaPending {
+    /// Total wire bytes in the transaction (`SPI_MS_DLEN` bits, rounded up
+    /// to whole bytes — NOT capped at the 64-byte W buffer: that cap is a
+    /// CPU-path artefact and DMA exists precisely to exceed it).
+    pub(crate) total_bytes: usize,
+    /// Wire bytes already exchanged (advanced by `dma_transfer`).
+    pub(crate) transferred: usize,
+    /// `SPI_DMA_TX_ENA` was set: GDMA's OUT chain supplies MOSI bytes.
+    pub(crate) tx_ena: bool,
+    /// `SPI_DMA_RX_ENA` was set: GDMA's IN chain receives MISO bytes.
+    pub(crate) rx_ena: bool,
+}
+
 pub struct Esp32s3Spi {
     /// Interrupt-matrix source ID (SPI2=21, SPI3=22).
     source_id: u32,
@@ -154,16 +198,25 @@ pub struct Esp32s3Spi {
     /// Latched raw interrupt bits (`SPI_DMA_INT_RAW`); W1C via INT_CLR /
     /// write-1-to-clear on INT_RAW itself; W1S via INT_SET.
     int_raw: u32,
+    /// Set by `launch_transaction` when DMA mode is active; cleared by
+    /// `dma_complete`. GDMA's SPI pump peeks this each tick.
+    pending_dma: Option<SpiDmaPending>,
+    /// Devices on this controller's bus (same model as `Esp32Spi` /
+    /// the shared `Spi`): transfers broadcast to every device, first
+    /// non-zero MISO byte wins (single-device labs in practice).
+    attached_devices: Vec<Box<dyn SpiDevice>>,
 }
 
 impl std::fmt::Debug for Esp32s3Spi {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Esp32s3Spi(src={}, int_raw=0x{:08x}, int_ena=0x{:08x})",
+            "Esp32s3Spi(src={}, int_raw=0x{:08x}, int_ena=0x{:08x}, pending_dma={:?}, attached={})",
             self.source_id,
             self.int_raw,
             self.reg(DMA_INT_ENA),
+            self.pending_dma,
+            self.attached_devices.len(),
         )
     }
 }
@@ -185,7 +238,15 @@ impl Esp32s3Spi {
             source_id,
             regs,
             int_raw: 0,
+            pending_dma: None,
+            attached_devices: Vec::new(),
         }
+    }
+
+    /// Attach a simulated device to this controller's bus (same surface as
+    /// `Esp32Spi::attach`, used by the e-paper wiring in `system/xtensa.rs`).
+    pub fn attach(&mut self, device: Box<dyn SpiDevice>) {
+        self.attached_devices.push(device);
     }
 
     fn reg(&self, off: u64) -> u32 {
@@ -228,11 +289,36 @@ impl Esp32s3Spi {
         (bits.div_ceil(8)).min(64)
     }
 
-    /// Launch the user transaction: with no device attached, fill the MISO
-    /// region of W0..W15 with 0xFF per byte (idle pulled-high MISO), clear the
-    /// `USR` start bit so the firmware's completion poll exits, and latch
-    /// `SPI_TRANS_DONE`.
+    /// Launch the user transaction.
+    ///
+    /// In DMA mode (`SPI_DMA_TX_ENA` or `SPI_DMA_RX_ENA` set in `DMA_CONF`):
+    /// defer byte movement to GDMA. Keep `USR` set (in-progress) and record
+    /// the pending transaction; GDMA's SPI pump exchanges bytes via
+    /// `dma_transfer` and calls `dma_complete` when the wire count is done.
+    ///
+    /// In non-DMA (W-buffer) mode: fill the MISO region of W0..W15 with 0xFF
+    /// per byte (idle pulled-high MISO), clear the `USR` start bit so the
+    /// firmware's completion poll exits, and latch `SPI_TRANS_DONE`.
     fn launch_transaction(&mut self) {
+        let dma_conf = self.reg(DMA_CONF);
+        let tx_ena = dma_conf & SPI_DMA_TX_ENA != 0;
+        let rx_ena = dma_conf & SPI_DMA_RX_ENA != 0;
+        if tx_ena || rx_ena {
+            // DMA mode: defer byte movement to GDMA. Keep USR set
+            // (in-progress) so the firmware's completion poll spins until
+            // GDMA finishes the descriptor walk — exactly the silicon
+            // ordering the ESP-IDF spi_master ISR depends on. The W buffer
+            // is NOT touched in this mode (it is the CPU data path).
+            let bits = (self.reg(MS_DLEN) & MS_DATA_BITLEN) as usize + 1;
+            self.pending_dma = Some(SpiDmaPending {
+                total_bytes: bits.div_ceil(8),
+                transferred: 0,
+                tx_ena,
+                rx_ena,
+            });
+            return;
+        }
+        // Non-DMA (W-buffer) mode: existing logic unchanged.
         let bytes = self.miso_bytes();
         for w in 0..bytes.div_ceil(4) {
             let off = W0 + (w as u64) * 4;
@@ -251,6 +337,50 @@ impl Esp32s3Spi {
         self.set_reg_raw(CMD, cmd);
         // Latch transaction-done.
         self.int_raw |= TRANS_DONE;
+    }
+
+    /// Peek the pending DMA transaction, if any (GDMA's pump polls this).
+    pub(crate) fn dma_pending(&self) -> Option<SpiDmaPending> {
+        self.pending_dma
+    }
+
+    /// Exchange one burst of wire bytes for the in-flight DMA transaction:
+    /// each MOSI byte is broadcast to the attached devices (first non-zero
+    /// MISO byte wins — the shared `SpiDevice` v1 routing policy); with no
+    /// device attached the MISO line floats high, so every byte reads 0xFF.
+    /// Advances `pending_dma.transferred` by the burst length.
+    pub(crate) fn dma_transfer(&mut self, mosi: &[u8]) -> Vec<u8> {
+        let mut miso = Vec::with_capacity(mosi.len());
+        for &m in mosi {
+            let byte = if self.attached_devices.is_empty() {
+                0xFF
+            } else {
+                let mut winner = 0u8;
+                for dev in &mut self.attached_devices {
+                    let resp = dev.transfer(m);
+                    if winner == 0 {
+                        winner = resp;
+                    }
+                }
+                winner
+            };
+            miso.push(byte);
+        }
+        if let Some(p) = &mut self.pending_dma {
+            p.transferred += mosi.len();
+        }
+        miso
+    }
+
+    /// Complete a DMA-mode transaction: clear the `USR` bit (firmware's
+    /// completion poll exits) and latch `SPI_TRANS_DONE`. The W buffer is
+    /// deliberately untouched — DMA-mode data lives in the descriptor
+    /// buffers, not the CPU-path W0..W15 window.
+    pub(crate) fn dma_complete(&mut self) {
+        let cmd = self.reg(CMD) & !USR_BIT;
+        self.set_reg_raw(CMD, cmd);
+        self.int_raw |= TRANS_DONE;
+        self.pending_dma = None;
     }
 }
 
@@ -555,5 +685,81 @@ mod tests {
         let mut s = Esp32s3Spi::new(SPI3_SOURCE);
         s.write_u32(DMA_INT_ST, 0xFFFF_FFFF).unwrap();
         assert_eq!(s.read_u32(DMA_INT_ST).unwrap(), 0, "INT_ST ignores writes");
+    }
+
+    // ── DMA-mode (GDMA-coupled) transaction tests ─────────────────────────
+
+    #[test]
+    fn dma_mode_usr_defers_completion_and_leaves_w_buffer_untouched() {
+        let mut s = Esp32s3Spi::new(SPI3_SOURCE);
+        s.write_u32(W0, 0x1234_5678).unwrap();
+        // 200-byte transaction with both DMA directions enabled.
+        s.write_u32(DMA_CONF, SPI_DMA_TX_ENA | SPI_DMA_RX_ENA)
+            .unwrap();
+        s.write_u32(MS_DLEN, 200 * 8 - 1).unwrap();
+        s.write_u32(CMD, USR_BIT).unwrap();
+        // USR stays set (in-progress) and TRANS_DONE is NOT latched yet.
+        assert_ne!(
+            s.read_u32(CMD).unwrap() & USR_BIT,
+            0,
+            "USR held in DMA mode"
+        );
+        assert_eq!(
+            s.read_u32(DMA_INT_RAW).unwrap() & TRANS_DONE,
+            0,
+            "TRANS_DONE deferred to GDMA"
+        );
+        // The pending record carries the FULL (uncapped) byte count.
+        let p = s.dma_pending().expect("pending_dma set");
+        assert_eq!(p.total_bytes, 200);
+        assert_eq!(p.transferred, 0);
+        assert!(p.tx_ena && p.rx_ena);
+        // W buffer untouched — DMA mode bypasses the CPU data path.
+        assert_eq!(s.read_u32(W0).unwrap(), 0x1234_5678, "W0 untouched");
+    }
+
+    #[test]
+    fn dma_transfer_advances_and_dma_complete_finishes() {
+        let mut s = Esp32s3Spi::new(SPI2_SOURCE);
+        s.write_u32(DMA_CONF, SPI_DMA_TX_ENA).unwrap();
+        s.write_u32(MS_DLEN, 8 * 8 - 1).unwrap();
+        s.write_u32(CMD, USR_BIT).unwrap();
+        // No device attached → MISO floats high (0xFF per byte).
+        let miso = s.dma_transfer(&[0xAA, 0x55, 0x00]);
+        assert_eq!(miso, vec![0xFF, 0xFF, 0xFF]);
+        assert_eq!(s.dma_pending().unwrap().transferred, 3);
+        s.dma_complete();
+        assert_eq!(s.read_u32(CMD).unwrap() & USR_BIT, 0, "USR cleared");
+        assert_ne!(
+            s.read_u32(DMA_INT_RAW).unwrap() & TRANS_DONE,
+            0,
+            "TRANS_DONE latched"
+        );
+        assert!(s.dma_pending().is_none(), "pending cleared");
+    }
+
+    #[test]
+    fn dma_transfer_routes_bytes_through_attached_device() {
+        struct Xor(Vec<u8>);
+        impl crate::peripherals::spi::SpiDevice for Xor {
+            fn transfer(&mut self, mosi: u8) -> u8 {
+                self.0.push(mosi);
+                mosi ^ 0xA5
+            }
+            fn cs_pin(&self) -> &str {
+                "GPIO10"
+            }
+        }
+        let mut s = Esp32s3Spi::new(SPI3_SOURCE);
+        s.attach(Box::new(Xor(Vec::new())));
+        s.write_u32(DMA_CONF, SPI_DMA_TX_ENA | SPI_DMA_RX_ENA)
+            .unwrap();
+        s.write_u32(MS_DLEN, 4 * 8 - 1).unwrap();
+        s.write_u32(CMD, USR_BIT).unwrap();
+        let miso = s.dma_transfer(&[0x01, 0x02, 0x03, 0x04]);
+        assert_eq!(
+            miso,
+            vec![0x01 ^ 0xA5, 0x02 ^ 0xA5, 0x03 ^ 0xA5, 0x04 ^ 0xA5]
+        );
     }
 }

@@ -85,9 +85,10 @@
 //!
 //! **Coupled set** (`Spi2`, `Spi3`, `Uhci0`, `I2s0`, `I2s1`): the direction
 //! is marked `pending_coupled`; `needs_bus_tick` returns `true`; byte movement
-//! runs inside `tick_with_bus` when the peripheral pump is implemented (Tasks
-//! 2–4 of the Slice 3A plan). Until then EOF stays **unlatched** — a coupled
-//! transfer without a pump visibly hangs rather than silently auto-completing.
+//! runs inside `tick_with_bus` via the peripheral pumps (UART and SPI2/3 are
+//! implemented; I2S is Task 4 of the Slice 3A plan). For a coupled peripheral
+//! without a pump EOF stays **unlatched** — the transfer visibly hangs rather
+//! than silently auto-completing.
 //!
 //! **Fallback set** (everything else, including `AES`, `SHA`, `ADC_DAC`,
 //! `RMT`, `LCD_CAM`, `Unknown`, and the reset / unbound value `0x3F`): the
@@ -96,7 +97,27 @@
 //! latches `IN_SUC_EOF + IN_DONE` — without actual byte movement. Firmware
 //! that never writes `PERI_SEL` gets `0x3F` (unbound → `Unknown`) and falls
 //! through here, preserving full backwards compatibility.
+//!
+//! ## SPI2/3 coupling mechanism — design decision
+//!
+//! GDMA and the GP-SPI controllers are separate peripherals on the bus and
+//! the byte handoff cannot ride MMIO: the SPI `W0..W15` buffer is the CPU
+//! (non-DMA) data path, and the GP-SPI block has no FIFO data-port register
+//! (unlike UART0's FIFO at offset 0x00 that the UHCI0 pump uses above).
+//! `PeripheralTickResult::dma_requests` (the STM32 DMA pattern) was
+//! evaluated first and rejected: it expresses flat src→dst byte copies
+//! issued from a bus-less `tick()` and executed afterwards by the bus, so
+//! it can neither walk descriptor chains (which needs bus reads mid-walk)
+//! nor obtain MISO bytes from the SPI's attached-device model. Instead the
+//! SPI pump uses the same temporary-swap idiom the bus itself uses to lend
+//! `&mut self` into `tick_with_bus` (see `bus/mod.rs`): downcast the bus to
+//! `SystemBus`, swap the `Esp32s3Spi` instance out behind a stub, exchange
+//! one burst of wire bytes via `Esp32s3Spi::dma_transfer`, swap it back.
+//! TX and RX may be bound on *different* GDMA channels (ESP-IDF's
+//! `gdma_new_channel` allocates them independently), so the pump pairs the
+//! OUT and IN directions by PERI_SEL value, not by channel index.
 
+use crate::peripherals::esp32s3::gpspi::Esp32s3Spi;
 use crate::{Bus, Peripheral, PeripheralTickResult, SimResult};
 
 /// Number of GDMA channels on the ESP32-S3.
@@ -278,6 +299,12 @@ const UART_TXFIFO_CNT_MASK: u32 = 0x3FF; // 10-bit field
 /// RXFIFO_OVF just like silicon).
 #[allow(dead_code)]
 const UART_FIFO_LEN: u32 = 128;
+
+// ── SPI2/3 coupled DMA constants ─────────────────────────────────────────
+/// Registered name for GP-SPI2 in the system bus (real base `0x6002_4000`).
+const SPI2_S3_NAME: &str = "spi2_s3";
+/// Registered name for GP-SPI3 in the system bus (real base `0x6002_5000`).
+const SPI3_S3_NAME: &str = "spi3_s3";
 
 /// Maximum bytes transferred per `tick_with_bus` call for a coupled channel.
 ///
@@ -792,6 +819,228 @@ impl Esp32s3Gdma {
         (eof, in_done)
     }
 
+    /// Read up to `budget` bytes from an OUT (TX) descriptor chain, resuming
+    /// from `dir.coupled_desc_ptr` / `coupled_buf_offset`. Each fully
+    /// consumed descriptor gets its owner bit written back to CPU (0).
+    /// `coupled_desc_ptr` becomes 0 at end-of-chain (next == 0 or a
+    /// CPU-owned descriptor). May return fewer bytes than `budget` when the
+    /// chain is exhausted.
+    fn coupled_out_collect(dir: &mut DmaDir, bus: &mut dyn Bus, budget: usize) -> Vec<u8> {
+        let mut out = Vec::with_capacity(budget);
+        while out.len() < budget {
+            let addr = dir.coupled_desc_ptr;
+            if addr == 0 {
+                break;
+            }
+            let dw0 = bus.read_u32(addr).unwrap_or(0);
+            if dw0 & DESC_OWNER_BIT == 0 {
+                // CPU-owned: chain halted here.
+                dir.coupled_desc_ptr = 0;
+                break;
+            }
+            let length = (dw0 >> 12) & 0xFFF; // bits [23:12]
+            let buf_ptr = bus.read_u32(addr + 4).unwrap_or(0) as u64;
+            let next_ptr = bus.read_u32(addr + 8).unwrap_or(0) as u64;
+
+            let remaining = length.saturating_sub(dir.coupled_buf_offset) as usize;
+            let to_read = remaining.min(budget - out.len());
+            for i in 0..to_read {
+                out.push(
+                    bus.read_u8(buf_ptr + dir.coupled_buf_offset as u64 + i as u64)
+                        .unwrap_or(0),
+                );
+            }
+            dir.coupled_buf_offset += to_read as u32;
+
+            if dir.coupled_buf_offset >= length {
+                // Descriptor fully consumed: return it to the CPU.
+                let _ = bus.write_u32(addr, dw0 & !DESC_OWNER_BIT);
+                dir.coupled_buf_offset = 0;
+                dir.coupled_desc_ptr = if next_ptr == 0 { 0 } else { next_ptr };
+            }
+            // else: budget exhausted mid-descriptor; resume next tick.
+        }
+        out
+    }
+
+    /// Write `bytes` into an IN (RX) descriptor chain, resuming from
+    /// `dir.coupled_desc_ptr` / `coupled_buf_offset`. Each filled descriptor
+    /// gets owner cleared and the length field [23:12] set to its capacity.
+    /// Bytes beyond the end of the chain are dropped (the chain was
+    /// under-provisioned; real silicon raises a descriptor-empty error —
+    /// not modelled).
+    fn coupled_in_write(dir: &mut DmaDir, bus: &mut dyn Bus, bytes: &[u8]) {
+        let mut written = 0usize;
+        while written < bytes.len() {
+            let addr = dir.coupled_desc_ptr;
+            if addr == 0 {
+                break;
+            }
+            let dw0 = bus.read_u32(addr).unwrap_or(0);
+            if dw0 & DESC_OWNER_BIT == 0 {
+                dir.coupled_desc_ptr = 0;
+                break;
+            }
+            let size = dw0 & 0xFFF; // bits [11:0] = capacity
+            let buf_ptr = bus.read_u32(addr + 4).unwrap_or(0) as u64;
+            let next_ptr = bus.read_u32(addr + 8).unwrap_or(0) as u64;
+
+            let cap = size.saturating_sub(dir.coupled_buf_offset) as usize;
+            let n = cap.min(bytes.len() - written);
+            for i in 0..n {
+                let _ = bus.write_u8(
+                    buf_ptr + dir.coupled_buf_offset as u64 + i as u64,
+                    bytes[written + i],
+                );
+            }
+            written += n;
+            dir.coupled_buf_offset += n as u32;
+
+            if dir.coupled_buf_offset >= size {
+                // Capacity filled: owner back to CPU, received length = size.
+                let _ = bus.write_u32(
+                    addr,
+                    (dw0 & !(DESC_OWNER_BIT | DESC_LEN_MASK)) | (size << 12),
+                );
+                dir.coupled_buf_offset = 0;
+                dir.coupled_desc_ptr = if next_ptr == 0 { 0 } else { next_ptr };
+            }
+            // else: out of bytes mid-descriptor; resume next tick (or
+            // finalize with a partial-length writeback at transaction end).
+        }
+    }
+
+    /// Finalize an IN direction at transaction end: if the last descriptor
+    /// is partially filled, write back owner=0 with the partial length so
+    /// drivers polling the owner bit / length field see the real count.
+    fn coupled_in_finalize(dir: &mut DmaDir, bus: &mut dyn Bus) {
+        if dir.coupled_desc_ptr != 0 && dir.coupled_buf_offset > 0 {
+            let addr = dir.coupled_desc_ptr;
+            let dw0 = bus.read_u32(addr).unwrap_or(0);
+            if dw0 & DESC_OWNER_BIT != 0 {
+                let _ = bus.write_u32(
+                    addr,
+                    (dw0 & !(DESC_OWNER_BIT | DESC_LEN_MASK)) | (dir.coupled_buf_offset << 12),
+                );
+            }
+        }
+    }
+
+    /// Service the in-flight DMA transaction (if any) of one GP-SPI
+    /// controller. See the module-level "SPI2/3 coupling mechanism" section
+    /// for the design rationale.
+    ///
+    /// Per tick, up to `COUPLED_BYTES_PER_TICK` wire bytes are exchanged:
+    /// MOSI bytes come from the OUT chain of whichever channel has
+    /// `OUT_PERI_SEL == peri` pending (0xFF idle-high filler when TX-DMA is
+    /// disabled or the chain under-runs); each byte is exchanged with the
+    /// SPI's attached devices via `dma_transfer`; MISO bytes land in the IN
+    /// chain of whichever channel has `IN_PERI_SEL == peri` pending. The
+    /// pump stalls (no progress, state retained) until every DMA-enabled
+    /// direction has its GDMA link started — firmware may kick `USR` and
+    /// the links in either order.
+    ///
+    /// On the tick that completes the transaction: the SPI latches
+    /// TRANS_DONE (`dma_complete`), the TX channel latches
+    /// `OUT_EOF | OUT_TOTAL_EOF | OUT_DONE`, the RX channel latches
+    /// `IN_SUC_EOF | IN_DONE`, and both directions clear `pending_coupled`.
+    fn pump_spi(&mut self, bus: &mut dyn Bus, peri: DmaPeripheral, spi_name: &str) {
+        use crate::bus::SystemBus;
+        use crate::peripherals::stub::StubPeripheral;
+
+        let tx_idx = self
+            .channels
+            .iter()
+            .position(|c| c.tx.pending_coupled && DmaPeripheral::from_sel(c.tx.peri_sel) == peri);
+        let rx_idx = self
+            .channels
+            .iter()
+            .position(|c| c.rx.pending_coupled && DmaPeripheral::from_sel(c.rx.peri_sel) == peri);
+        if tx_idx.is_none() && rx_idx.is_none() {
+            return;
+        }
+
+        let Some(sys_bus) = bus.as_any_mut().and_then(|a| a.downcast_mut::<SystemBus>()) else {
+            return;
+        };
+        let Some(spi_idx) = sys_bus.find_peripheral_index_by_name(spi_name) else {
+            return;
+        };
+
+        // Swap the SPI out from behind a stub — the same dance the bus uses
+        // to lend itself into `tick_with_bus` — so we can hold `&mut` to the
+        // SPI and still route descriptor reads/writes through the bus.
+        let placeholder: Box<dyn Peripheral> = Box::new(StubPeripheral::new(0));
+        let mut spi_dev = std::mem::replace(&mut sys_bus.peripherals[spi_idx].dev, placeholder);
+
+        'work: {
+            let Some(spi) = spi_dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<Esp32s3Spi>())
+            else {
+                break 'work;
+            };
+            let Some(pending) = spi.dma_pending() else {
+                // GDMA links started but firmware hasn't kicked SPI_CMD.USR
+                // yet — stall, keep pending_coupled so we revisit next tick.
+                break 'work;
+            };
+            // Stall until every DMA-enabled direction has its link started.
+            if (pending.tx_ena && tx_idx.is_none()) || (pending.rx_ena && rx_idx.is_none()) {
+                break 'work;
+            }
+
+            let k = COUPLED_BYTES_PER_TICK.min(pending.total_bytes - pending.transferred);
+            let mosi = match tx_idx {
+                Some(i) if pending.tx_ena => {
+                    let mut m =
+                        Self::coupled_out_collect(&mut self.channels[i].tx, &mut *sys_bus, k);
+                    // OUT chain under-provisioned: the TX FIFO under-runs and
+                    // the line idles high for the rest of the burst.
+                    m.resize(k, 0xFF);
+                    m
+                }
+                // RX-only DMA transaction: nothing drives MOSI — idle high.
+                _ => vec![0xFF; k],
+            };
+            let miso = spi.dma_transfer(&mosi);
+            if let Some(i) = rx_idx {
+                if pending.rx_ena {
+                    Self::coupled_in_write(&mut self.channels[i].rx, &mut *sys_bus, &miso);
+                }
+            }
+
+            if pending.transferred + k >= pending.total_bytes {
+                // Transaction complete this tick. Only the directions the
+                // transaction actually enabled latch EOF — a started link
+                // the SPI never used stays pending (visible hang, matching
+                // the module's coupled-without-pump philosophy).
+                if let Some(i) = rx_idx {
+                    if pending.rx_ena {
+                        Self::coupled_in_finalize(&mut self.channels[i].rx, &mut *sys_bus);
+                        let rx = &mut self.channels[i].rx;
+                        rx.int_raw |= IN_SUC_EOF_BIT | IN_DONE_BIT;
+                        rx.pending_coupled = false;
+                        rx.coupled_desc_ptr = 0;
+                        rx.coupled_buf_offset = 0;
+                    }
+                }
+                if let Some(i) = tx_idx {
+                    if pending.tx_ena {
+                        let tx = &mut self.channels[i].tx;
+                        tx.int_raw |= OUT_EOF_BIT | OUT_TOTAL_EOF_BIT | OUT_DONE_BIT;
+                        tx.pending_coupled = false;
+                        tx.coupled_desc_ptr = 0;
+                        tx.coupled_buf_offset = 0;
+                    }
+                }
+                spi.dma_complete();
+            }
+        }
+
+        sys_bus.peripherals[spi_idx].dev = spi_dev;
+    }
+
     /// Execute all pending descriptor walks and coupled-mode ticks.
     ///
     /// For each channel with `pending_m2m` set:
@@ -809,9 +1058,18 @@ impl Esp32s3Gdma {
     ///   latched when the chain is fully written or the FIFO idles after
     ///   ≥1 byte moved; `pending_coupled` is cleared on EOF.
     ///
-    /// Channels with a non-UART coupled peripheral retain `pending_coupled`
-    /// (byte movement for SPI/I2S is implemented in Tasks 3–4).
+    /// For SPI2/SPI3 coupled channels, `pump_spi` exchanges up to
+    /// `COUPLED_BYTES_PER_TICK` wire bytes per tick with the GP-SPI
+    /// controller (see its doc comment for the EOF / TRANS_DONE contract).
+    ///
+    /// Channels with a non-pumped coupled peripheral (I2S, Task 4) retain
+    /// `pending_coupled`.
     fn do_tick_with_bus(&mut self, bus: &mut dyn Bus) {
+        // SPI pumps run outside the per-channel loop: a transaction's TX and
+        // RX directions may live on different channels (paired by PERI_SEL).
+        self.pump_spi(bus, DmaPeripheral::Spi2, SPI2_S3_NAME);
+        self.pump_spi(bus, DmaPeripheral::Spi3, SPI3_S3_NAME);
+
         for (ch_idx, c) in self.channels.iter_mut().enumerate() {
             // ── UHCI0 (UART) coupled OUT (TX) ────────────────────────────
             if c.tx.pending_coupled
@@ -918,8 +1176,8 @@ impl Peripheral for Esp32s3Gdma {
     /// pending coupled-mode transfer.
     ///
     /// Coupled channels with `pending_coupled` set keep the engine visiting
-    /// `tick_with_bus` so the peripheral pump (Tasks 2–4) can make progress.
-    /// Cleared per-direction when the transfer completes.
+    /// `tick_with_bus` so the peripheral pumps (UART, SPI2/3; I2S in Task 4)
+    /// can make progress. Cleared per-direction when the transfer completes.
     fn needs_bus_tick(&self) -> bool {
         self.channels
             .iter()
@@ -2157,5 +2415,504 @@ mod tests {
             rx_data.len(),
             "RX descriptor length field must equal bytes received"
         );
+    }
+
+    // ── SPI2/3 DMA coupling tests ─────────────────────────────────────────
+
+    // SPI register offsets and bits — mirrors gpspi.rs / ESP-IDF
+    // `soc/esp32s3/register/soc/spi_reg.h`.
+    const SPI_CMD_REG: u64 = 0x00;
+    const SPI_MS_DLEN_REG: u64 = 0x1C;
+    const SPI_DMA_CONF_REG: u64 = 0x30;
+    const SPI_DMA_INT_RAW_REG: u64 = 0x3C;
+    const SPI_USR_BIT: u32 = 1 << 24;
+    const SPI_TRANS_DONE_BIT: u32 = 1 << 12;
+    /// `SPI_DMA_TX_ENA : R/W ;bitpos:[28]` (spi_reg.h).
+    const SPI_DMA_TX_ENA_BIT: u32 = 1 << 28;
+    /// `SPI_DMA_RX_ENA : R/W ;bitpos:[27]` (spi_reg.h).
+    const SPI_DMA_RX_ENA_BIT: u32 = 1 << 27;
+
+    const SPI3_BASE: u64 = 0x6002_5000;
+    const SPI2_BASE: u64 = 0x6002_4000;
+
+    /// Test device following the `Recorder` pattern from `esp32/spi.rs`
+    /// tests, with a non-trivial MISO (`mosi ^ 0xA5`) so full-duplex
+    /// byte pairing is actually verified.
+    struct XorDevice {
+        seen: std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
+    }
+    impl crate::peripherals::spi::SpiDevice for XorDevice {
+        fn transfer(&mut self, mosi: u8) -> u8 {
+            self.seen.lock().unwrap().push(mosi);
+            mosi ^ 0xA5
+        }
+        fn cs_pin(&self) -> &str {
+            "GPIO10"
+        }
+    }
+
+    /// Build a composite `SystemBus` with DRAM at 0x3FC8_8000 and SPI3 at
+    /// its real base. Optionally attaches an `XorDevice`; returns the
+    /// shared MOSI log when one is attached.
+    fn spi3_test_bus(
+        with_device: bool,
+    ) -> (SystemBus, Option<std::sync::Arc<std::sync::Mutex<Vec<u8>>>>) {
+        let mut bus = bus_with_dram();
+        let mut spi = Esp32s3Spi::new(22);
+        let log = if with_device {
+            let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+            spi.attach(Box::new(XorDevice { seen: seen.clone() }));
+            Some(seen)
+        } else {
+            None
+        };
+        bus.add_peripheral("spi3_s3", SPI3_BASE, 0x100, None, Box::new(spi));
+        (bus, log)
+    }
+
+    fn spi_write_u32(bus: &mut SystemBus, base: u64, reg_off: u64, val: u32) {
+        bus.write_u32(base + reg_off, val).unwrap();
+    }
+
+    fn spi_read_u32(bus: &mut SystemBus, base: u64, reg_off: u64) -> u32 {
+        bus.read_u32(base + reg_off).unwrap()
+    }
+
+    /// Kick a DMA-mode SPI transaction of `n` bytes (TX+RX enabled).
+    fn kick_spi_dma(bus: &mut SystemBus, base: u64, n: usize) {
+        spi_write_u32(
+            bus,
+            base,
+            SPI_DMA_CONF_REG,
+            SPI_DMA_TX_ENA_BIT | SPI_DMA_RX_ENA_BIT,
+        );
+        spi_write_u32(bus, base, SPI_MS_DLEN_REG, (n as u32) * 8 - 1);
+        spi_write_u32(bus, base, SPI_CMD_REG, SPI_USR_BIT);
+    }
+
+    /// Drive `tick_with_bus` until the GDMA goes idle (bounded).
+    fn tick_until_idle(g: &mut Esp32s3Gdma, bus: &mut SystemBus, max_ticks: usize) -> usize {
+        for t in 0..max_ticks {
+            if !g.needs_bus_tick() {
+                return t;
+            }
+            g.tick_with_bus(bus);
+        }
+        max_ticks
+    }
+
+    /// SPI3 DMA with an attached device: descriptor-fed MOSI bytes reach
+    /// the device byte-for-byte; device-fed MISO bytes land in the IN
+    /// descriptor buffer; TRANS_DONE + OUT_EOF + IN_SUC_EOF all latch.
+    #[test]
+    fn spi3_dma_device_mosi_miso_roundtrip() {
+        let (mut bus, log) = spi3_test_bus(true);
+        let n: usize = 8;
+        let payload: Vec<u8> = vec![0x01, 0x80, 0xFF, 0x00, 0x5A, 0xA5, 0x10, 0x7E];
+        let tx_buf: u64 = 0x3FC8_8000;
+        let rx_buf: u64 = 0x3FC8_9000;
+        let tx_desc: u64 = 0x3FC8_A000;
+        let rx_desc: u64 = 0x3FC8_B000;
+
+        for (i, &b) in payload.iter().enumerate() {
+            bus.write_u8(tx_buf + i as u64, b).unwrap();
+        }
+        write_desc(&mut bus, tx_desc, tx_dw0(n as u32), tx_buf, 0);
+        write_desc(&mut bus, rx_desc, rx_dw0(n as u32), rx_buf, 0);
+
+        kick_spi_dma(&mut bus, SPI3_BASE, n);
+        // USR held + TRANS_DONE deferred until GDMA services the transaction.
+        assert_ne!(
+            spi_read_u32(&mut bus, SPI3_BASE, SPI_CMD_REG) & SPI_USR_BIT,
+            0,
+            "USR must stay set while DMA pending"
+        );
+        assert_eq!(
+            spi_read_u32(&mut bus, SPI3_BASE, SPI_DMA_INT_RAW_REG) & SPI_TRANS_DONE_BIT,
+            0,
+            "TRANS_DONE must wait for GDMA"
+        );
+
+        let mut g = Esp32s3Gdma::new(IN_CH0_SRC);
+        let b = ch_base(0);
+        g.write_word(b + OUT_PERI_SEL, 1); // SPI3
+        g.write_word(b + IN_PERI_SEL, 1); // SPI3
+        g.write_word(
+            b + OUT_LINK,
+            OUT_LINK_START_BIT | (tx_desc as u32 & OUT_LINK_ADDR_MASK),
+        );
+        g.write_word(
+            b + IN_LINK,
+            IN_LINK_START_BIT | (rx_desc as u32 & IN_LINK_ADDR_MASK),
+        );
+        assert!(g.needs_bus_tick(), "coupled SPI3 transfer pending");
+
+        let ticks = tick_until_idle(&mut g, &mut bus, 8);
+        assert_eq!(ticks, 1, "8-byte transfer completes in one tick");
+
+        // MOSI reached the device byte-for-byte.
+        assert_eq!(
+            *log.as_ref().unwrap().lock().unwrap(),
+            payload,
+            "device must see the descriptor bytes in order"
+        );
+        // Device MISO (mosi ^ 0xA5) landed in the IN buffer.
+        for (i, &b) in payload.iter().enumerate() {
+            assert_eq!(
+                bus.read_u8(rx_buf + i as u64).unwrap(),
+                b ^ 0xA5,
+                "MISO byte [{i}]"
+            );
+        }
+        // SPI completion: TRANS_DONE latched, USR cleared.
+        assert_ne!(
+            spi_read_u32(&mut bus, SPI3_BASE, SPI_DMA_INT_RAW_REG) & SPI_TRANS_DONE_BIT,
+            0,
+            "TRANS_DONE latched"
+        );
+        assert_eq!(
+            spi_read_u32(&mut bus, SPI3_BASE, SPI_CMD_REG) & SPI_USR_BIT,
+            0,
+            "USR cleared"
+        );
+        // GDMA completion: both EOFs latched.
+        let out_raw = g.read_word(b + OUT_INT_RAW);
+        assert_eq!(out_raw & OUT_EOF_BIT, OUT_EOF_BIT, "OUT_EOF");
+        assert_eq!(
+            out_raw & OUT_TOTAL_EOF_BIT,
+            OUT_TOTAL_EOF_BIT,
+            "OUT_TOTAL_EOF"
+        );
+        assert_eq!(out_raw & OUT_DONE_BIT, OUT_DONE_BIT, "OUT_DONE");
+        let in_raw = g.read_word(b + IN_INT_RAW);
+        assert_eq!(in_raw & IN_SUC_EOF_BIT, IN_SUC_EOF_BIT, "IN_SUC_EOF");
+        assert_eq!(in_raw & IN_DONE_BIT, IN_DONE_BIT, "IN_DONE");
+    }
+
+    /// >64-byte multi-descriptor transaction: 200 bytes over two OUT and two
+    /// IN descriptors, pumped incrementally (64 bytes/tick → 4 ticks), with
+    /// owner-bit writeback and IN length fields verified on every descriptor.
+    #[test]
+    fn spi3_dma_multi_descriptor_200_bytes_multi_tick() {
+        let (mut bus, log) = spi3_test_bus(true);
+        let n: usize = 200;
+        let payload: Vec<u8> = (0..n).map(|i| (i % 251) as u8).collect();
+        let tx_buf1: u64 = 0x3FC8_8000;
+        let tx_buf2: u64 = 0x3FC8_8100;
+        let rx_buf1: u64 = 0x3FC8_9000;
+        let rx_buf2: u64 = 0x3FC8_9100;
+        let tx_d1: u64 = 0x3FC8_A000;
+        let tx_d2: u64 = 0x3FC8_A010;
+        let rx_d1: u64 = 0x3FC8_B000;
+        let rx_d2: u64 = 0x3FC8_B010;
+
+        // OUT chain: 120 + 80 bytes.
+        for (i, &b) in payload[..120].iter().enumerate() {
+            bus.write_u8(tx_buf1 + i as u64, b).unwrap();
+        }
+        for (i, &b) in payload[120..].iter().enumerate() {
+            bus.write_u8(tx_buf2 + i as u64, b).unwrap();
+        }
+        write_desc(
+            &mut bus,
+            tx_d1,
+            (1 << 31) | (120 << 12) | 120,
+            tx_buf1,
+            tx_d2,
+        );
+        write_desc(&mut bus, tx_d2, tx_dw0(80), tx_buf2, 0);
+        // IN chain: 128 + 128 capacity (200 bytes → second ends partial at 72).
+        write_desc(&mut bus, rx_d1, rx_dw0(128), rx_buf1, rx_d2);
+        write_desc(&mut bus, rx_d2, rx_dw0(128), rx_buf2, 0);
+
+        kick_spi_dma(&mut bus, SPI3_BASE, n);
+
+        let mut g = Esp32s3Gdma::new(IN_CH0_SRC);
+        let b = ch_base(2);
+        g.write_word(b + OUT_PERI_SEL, 1); // SPI3
+        g.write_word(b + IN_PERI_SEL, 1); // SPI3
+        g.write_word(
+            b + OUT_LINK,
+            OUT_LINK_START_BIT | (tx_d1 as u32 & OUT_LINK_ADDR_MASK),
+        );
+        g.write_word(
+            b + IN_LINK,
+            IN_LINK_START_BIT | (rx_d1 as u32 & IN_LINK_ADDR_MASK),
+        );
+
+        // Incremental: after one tick (64 bytes) the transaction must NOT
+        // be complete — USR still set, no EOF, engine still pending.
+        g.tick_with_bus(&mut bus);
+        assert!(g.needs_bus_tick(), "200-byte transfer needs >1 tick");
+        assert_ne!(
+            spi_read_u32(&mut bus, SPI3_BASE, SPI_CMD_REG) & SPI_USR_BIT,
+            0,
+            "USR still set mid-transfer"
+        );
+        assert_eq!(
+            g.read_word(b + OUT_INT_RAW) & OUT_EOF_BIT,
+            0,
+            "no OUT_EOF mid-transfer"
+        );
+
+        // 200 bytes at 64/tick → 3 more ticks.
+        let extra = tick_until_idle(&mut g, &mut bus, 16);
+        assert_eq!(extra, 3, "deterministic 4-tick total for 200 bytes");
+
+        // Device saw all 200 descriptor bytes in order.
+        assert_eq!(*log.as_ref().unwrap().lock().unwrap(), payload);
+        // MISO landed across both IN buffers.
+        for i in 0..128usize {
+            assert_eq!(
+                bus.read_u8(rx_buf1 + i as u64).unwrap(),
+                payload[i] ^ 0xA5,
+                "rx_buf1[{i}]"
+            );
+        }
+        for i in 0..72usize {
+            assert_eq!(
+                bus.read_u8(rx_buf2 + i as u64).unwrap(),
+                payload[128 + i] ^ 0xA5,
+                "rx_buf2[{i}]"
+            );
+        }
+        // Owner-bit writeback on every consumed descriptor.
+        for (name, d) in [
+            ("tx_d1", tx_d1),
+            ("tx_d2", tx_d2),
+            ("rx_d1", rx_d1),
+            ("rx_d2", rx_d2),
+        ] {
+            assert_eq!(
+                bus.read_u32(d).unwrap() & DESC_OWNER_BIT,
+                0,
+                "{name} owner must be 0"
+            );
+        }
+        // IN length fields: full first descriptor, partial second.
+        assert_eq!(
+            (bus.read_u32(rx_d1).unwrap() >> 12) & 0xFFF,
+            128,
+            "rx_d1 len"
+        );
+        assert_eq!(
+            (bus.read_u32(rx_d2).unwrap() >> 12) & 0xFFF,
+            72,
+            "rx_d2 len"
+        );
+        // Completion flags.
+        assert_ne!(
+            spi_read_u32(&mut bus, SPI3_BASE, SPI_DMA_INT_RAW_REG) & SPI_TRANS_DONE_BIT,
+            0
+        );
+        assert_ne!(g.read_word(b + OUT_INT_RAW) & OUT_EOF_BIT, 0);
+        assert_ne!(g.read_word(b + IN_INT_RAW) & IN_SUC_EOF_BIT, 0);
+    }
+
+    /// TX and RX bound on DIFFERENT channels (ESP-IDF allocates them
+    /// independently): the pump pairs directions by PERI_SEL, and each
+    /// channel latches its own EOF.
+    #[test]
+    fn spi3_dma_tx_rx_on_different_channels() {
+        let (mut bus, _) = spi3_test_bus(false);
+        let n: usize = 4;
+        let tx_buf: u64 = 0x3FC8_8000;
+        let rx_buf: u64 = 0x3FC8_9000;
+        let tx_desc: u64 = 0x3FC8_A000;
+        let rx_desc: u64 = 0x3FC8_B000;
+        for i in 0..n {
+            bus.write_u8(tx_buf + i as u64, 0x40 + i as u8).unwrap();
+        }
+        write_desc(&mut bus, tx_desc, tx_dw0(n as u32), tx_buf, 0);
+        write_desc(&mut bus, rx_desc, rx_dw0(n as u32), rx_buf, 0);
+
+        kick_spi_dma(&mut bus, SPI3_BASE, n);
+
+        let mut g = Esp32s3Gdma::new(IN_CH0_SRC);
+        let b_tx = ch_base(1);
+        let b_rx = ch_base(3);
+        g.write_word(b_tx + OUT_PERI_SEL, 1); // SPI3 OUT on ch1
+        g.write_word(b_rx + IN_PERI_SEL, 1); // SPI3 IN on ch3
+        g.write_word(
+            b_tx + OUT_LINK,
+            OUT_LINK_START_BIT | (tx_desc as u32 & OUT_LINK_ADDR_MASK),
+        );
+        g.write_word(
+            b_rx + IN_LINK,
+            IN_LINK_START_BIT | (rx_desc as u32 & IN_LINK_ADDR_MASK),
+        );
+
+        let ticks = tick_until_idle(&mut g, &mut bus, 8);
+        assert_eq!(ticks, 1);
+        // No device → MISO floats high.
+        for i in 0..n {
+            assert_eq!(bus.read_u8(rx_buf + i as u64).unwrap(), 0xFF);
+        }
+        assert_ne!(
+            g.read_word(b_tx + OUT_INT_RAW) & OUT_EOF_BIT,
+            0,
+            "ch1 OUT_EOF"
+        );
+        assert_ne!(
+            g.read_word(b_rx + IN_INT_RAW) & IN_SUC_EOF_BIT,
+            0,
+            "ch3 IN_SUC_EOF"
+        );
+        assert_ne!(
+            spi_read_u32(&mut bus, SPI3_BASE, SPI_DMA_INT_RAW_REG) & SPI_TRANS_DONE_BIT,
+            0
+        );
+    }
+
+    /// SPI2 routes through PERI_SEL value 0 to the `spi2_s3` instance.
+    #[test]
+    fn spi2_dma_routes_by_peri_sel_zero() {
+        let mut bus = bus_with_dram();
+        bus.add_peripheral(
+            "spi2_s3",
+            SPI2_BASE,
+            0x100,
+            None,
+            Box::new(Esp32s3Spi::new(21)),
+        );
+        let n: usize = 4;
+        let tx_buf: u64 = 0x3FC8_8000;
+        let tx_desc: u64 = 0x3FC8_A000;
+        write_desc(&mut bus, tx_desc, tx_dw0(n as u32), tx_buf, 0);
+
+        // TX-only DMA transaction.
+        spi_write_u32(&mut bus, SPI2_BASE, SPI_DMA_CONF_REG, SPI_DMA_TX_ENA_BIT);
+        spi_write_u32(&mut bus, SPI2_BASE, SPI_MS_DLEN_REG, (n as u32) * 8 - 1);
+        spi_write_u32(&mut bus, SPI2_BASE, SPI_CMD_REG, SPI_USR_BIT);
+
+        let mut g = Esp32s3Gdma::new(IN_CH0_SRC);
+        let b = ch_base(0);
+        g.write_word(b + OUT_PERI_SEL, 0); // SPI2
+        g.write_word(
+            b + OUT_LINK,
+            OUT_LINK_START_BIT | (tx_desc as u32 & OUT_LINK_ADDR_MASK),
+        );
+
+        let ticks = tick_until_idle(&mut g, &mut bus, 8);
+        assert_eq!(ticks, 1);
+        assert_ne!(g.read_word(b + OUT_INT_RAW) & OUT_EOF_BIT, 0, "OUT_EOF");
+        assert_ne!(
+            spi_read_u32(&mut bus, SPI2_BASE, SPI_DMA_INT_RAW_REG) & SPI_TRANS_DONE_BIT,
+            0,
+            "SPI2 TRANS_DONE"
+        );
+        assert_eq!(
+            bus.read_u32(tx_desc).unwrap() & DESC_OWNER_BIT,
+            0,
+            "TX descriptor returned to CPU"
+        );
+    }
+
+    /// Order independence: kicking SPI_CMD.USR BEFORE the GDMA links stalls
+    /// the pump; starting the links afterwards completes the transaction.
+    #[test]
+    fn spi3_dma_usr_before_links_stalls_then_completes() {
+        let (mut bus, _) = spi3_test_bus(false);
+        let n: usize = 4;
+        let tx_desc: u64 = 0x3FC8_A000;
+        let rx_desc: u64 = 0x3FC8_B000;
+        write_desc(&mut bus, tx_desc, tx_dw0(n as u32), 0x3FC8_8000, 0);
+        write_desc(&mut bus, rx_desc, rx_dw0(n as u32), 0x3FC8_9000, 0);
+
+        kick_spi_dma(&mut bus, SPI3_BASE, n);
+
+        let mut g = Esp32s3Gdma::new(IN_CH0_SRC);
+        let b = ch_base(0);
+        g.write_word(b + OUT_PERI_SEL, 1);
+        g.write_word(b + IN_PERI_SEL, 1);
+        // Only the OUT link started: RX is DMA-enabled but has no chain yet,
+        // so the pump must stall without consuming the transaction.
+        g.write_word(
+            b + OUT_LINK,
+            OUT_LINK_START_BIT | (tx_desc as u32 & OUT_LINK_ADDR_MASK),
+        );
+        g.tick_with_bus(&mut bus);
+        assert_ne!(
+            spi_read_u32(&mut bus, SPI3_BASE, SPI_CMD_REG) & SPI_USR_BIT,
+            0,
+            "stalled: USR still set with IN link missing"
+        );
+        assert!(g.needs_bus_tick(), "still pending while stalled");
+
+        // Now start the IN link → completes.
+        g.write_word(
+            b + IN_LINK,
+            IN_LINK_START_BIT | (rx_desc as u32 & IN_LINK_ADDR_MASK),
+        );
+        let ticks = tick_until_idle(&mut g, &mut bus, 8);
+        assert_eq!(ticks, 1);
+        assert_eq!(
+            spi_read_u32(&mut bus, SPI3_BASE, SPI_CMD_REG) & SPI_USR_BIT,
+            0,
+            "USR cleared after both links started"
+        );
+    }
+
+    /// SPI3 DMA: TRANS_DONE and OUT_EOF/IN_SUC_EOF all latched on the
+    /// completion tick.
+    #[test]
+    fn spi3_dma_trans_done_and_eof_ordering() {
+        let (mut bus, _) = spi3_test_bus(false);
+        let n: usize = 4;
+        let tx_desc: u64 = 0x3FC8_A000;
+        let rx_desc: u64 = 0x3FC8_B000;
+        write_desc(&mut bus, tx_desc, tx_dw0(n as u32), 0x3FC8_8000, 0);
+        write_desc(&mut bus, rx_desc, rx_dw0(n as u32), 0x3FC8_9000, 0);
+
+        kick_spi_dma(&mut bus, SPI3_BASE, n);
+
+        let mut g = Esp32s3Gdma::new(IN_CH0_SRC);
+        let b = ch_base(0);
+        g.write_word(b + OUT_PERI_SEL, 1);
+        g.write_word(b + IN_PERI_SEL, 1);
+        g.write_word(
+            b + OUT_LINK,
+            OUT_LINK_START_BIT | (tx_desc as u32 & OUT_LINK_ADDR_MASK),
+        );
+        g.write_word(
+            b + IN_LINK,
+            IN_LINK_START_BIT | (rx_desc as u32 & IN_LINK_ADDR_MASK),
+        );
+
+        g.tick_with_bus(&mut bus);
+
+        assert_ne!(
+            spi_read_u32(&mut bus, SPI3_BASE, SPI_DMA_INT_RAW_REG) & SPI_TRANS_DONE_BIT,
+            0,
+            "SPI TRANS_DONE"
+        );
+        assert_ne!(g.read_word(b + OUT_INT_RAW) & OUT_EOF_BIT, 0, "OUT_EOF");
+        assert_ne!(
+            g.read_word(b + IN_INT_RAW) & IN_SUC_EOF_BIT,
+            0,
+            "IN_SUC_EOF"
+        );
+        assert!(!g.needs_bus_tick(), "idle after completion");
+    }
+
+    /// Non-DMA regression: USR with the DMA enables clear keeps the
+    /// immediate W-buffer completion path byte-identical.
+    #[test]
+    fn spi3_non_dma_regression() {
+        let (mut bus, _) = spi3_test_bus(false);
+        spi_write_u32(&mut bus, SPI3_BASE, SPI_MS_DLEN_REG, 32 - 1);
+        spi_write_u32(&mut bus, SPI3_BASE, SPI_CMD_REG, SPI_USR_BIT);
+        assert_eq!(
+            spi_read_u32(&mut bus, SPI3_BASE, SPI_CMD_REG) & SPI_USR_BIT,
+            0,
+            "non-DMA USR auto-clears immediately"
+        );
+        assert_ne!(
+            spi_read_u32(&mut bus, SPI3_BASE, SPI_DMA_INT_RAW_REG) & SPI_TRANS_DONE_BIT,
+            0,
+            "non-DMA TRANS_DONE latches immediately"
+        );
+        // MISO region = 0xFF in the W buffer (CPU path).
+        assert_eq!(bus.read_u32(SPI3_BASE + 0x98).unwrap(), 0xFFFF_FFFF, "W0");
     }
 }
