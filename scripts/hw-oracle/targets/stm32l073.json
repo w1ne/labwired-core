@@ -1,0 +1,17 @@
+{
+  "chip": "stm32l073",
+  "schema": "labwired-hw-oracle/stm32l073-regs/v1",
+  "transport": {
+    "tool": "openocd-stlink",
+    "openocd": "/opt/homebrew/bin/openocd",
+    "interface_cfg": "interface/stlink.cfg",
+    "target_cfg": "target/stm32l0.cfg"
+  },
+  "windows": [
+    {"id": "rcc", "base": "0x40021000", "count": 16},
+    {"id": "pwr", "base": "0x40007000", "count": 8},
+    {"id": "gpioa", "base": "0x50000000", "count": 12},
+    {"id": "uart2", "base": "0x40004400", "count": 8},
+    {"id": "tim2", "base": "0x40000000", "count": 16}
+  ]
+}

@@ -1323,6 +1323,11 @@ impl SystemBus {
                         Some("stm32h5") | Some("h5") => {
                             Box::new(crate::peripherals::pwr::PwrH5::new())
                         }
+                        // L0 has a two-register surface (CR/CSR), not the L4
+                        // CR1..CR4 / PUCRx set — a distinct reset shape.
+                        Some("stm32l0") | Some("l0") => {
+                            Box::new(crate::peripherals::pwr::PwrL0::new())
+                        }
                         _ => Box::new(crate::peripherals::pwr::Pwr::new()),
                     }
                 }

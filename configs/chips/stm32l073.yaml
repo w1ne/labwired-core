@@ -57,6 +57,8 @@ peripherals:
     type: "pwr"
     base_address: 0x40007000
     size: "1KB"
+    config:
+      profile: "stm32l0"
 
   - id: "flash"
     type: "flash"
@@ -74,6 +76,12 @@ peripherals:
     size: "1KB"
     config:
       profile: "stm32v2"
+      # Silicon-verified cold reset (NUCLEO-L073RZ SWD, 2026-06-11): PA13/PA14
+      # power up in SWD alternate-function mode, so MODER/OSPEEDR/PUPDR are
+      # non-zero out of reset. Other ports stay clock-gated (read 0) at reset.
+      reset_moder: 0xEBFFFCFF
+      reset_ospeedr: 0x0C000000
+      reset_pupdr: 0x24000000
 
   - id: "gpiob"
     type: "gpio"

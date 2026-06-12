@@ -274,6 +274,86 @@ impl crate::Peripheral for PwrH5 {
     }
 }
 
+/// PWR — STM32L0 layout (RM0367 §6.4).
+///
+/// The L0 power controller is just two registers — CR @0x00 and CSR @0x04 —
+/// not the wide CR1..CR4 / PUCRx surface of the L4 model. Reset values pinned
+/// to a NUCLEO-L073RZ SWD probe (2026-06-11): CR = 0x0000_1000 (VOS = Range 2,
+/// the power-on default), CSR = 0, and every higher offset reads 0 (the L4
+/// PUCRx/PDCRx registers do not exist here). Modeling L0 with the L4 struct
+/// made CR read 0x0200 and surfaced phantom CR3/SR2 bits at 0x08/0x14.
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
+pub struct PwrL0 {
+    cr: u32,
+    csr: u32,
+}
+
+impl PwrL0 {
+    pub fn new() -> Self {
+        Self {
+            cr: 0x0000_1000,
+            csr: 0,
+        }
+    }
+
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x00 => self.cr,
+            0x04 => self.csr,
+            _ => 0,
+        }
+    }
+
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            // CR writable bits [15:0]: LPSDSR, PDDS, CWUF, CSBF, PVDE,
+            // PLS[2:0], DBP, ULP, FWU, VOS[1:0], DS_EE_KOFF, LPRUN.
+            0x00 => self.cr = value & 0x0000_FFFF,
+            // CSR: status is read-only (WUF/SBF clear via CR.CWUF/CSBF);
+            // only the EWUP1..3 enables (bits [10:8]) are writable here.
+            0x04 => self.csr = (self.csr & !0x0000_0700) | (value & 0x0000_0700),
+            _ => {}
+        }
+    }
+}
+
+impl crate::Peripheral for PwrL0 {
+    fn read(&self, offset: u64) -> SimResult<u8> {
+        let reg = offset & !3;
+        let byte = (offset % 4) as u32;
+        Ok(((self.read_reg(reg) >> (byte * 8)) & 0xFF) as u8)
+    }
+    fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        let reg = offset & !3;
+        let byte = (offset % 4) as u32;
+        let mut v = self.read_reg(reg);
+        let mask: u32 = 0xFF << (byte * 8);
+        v = (v & !mask) | ((value as u32) << (byte * 8));
+        self.write_reg(reg, v);
+        Ok(())
+    }
+    fn snapshot(&self) -> serde_json::Value {
+        serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+}
+
+#[cfg(test)]
+mod l0_tests {
+    use super::PwrL0;
+    use crate::Peripheral;
+
+    #[test]
+    fn pwr_l0_reset_matches_silicon() {
+        // Silicon capture 2026-06-11 (NUCLEO-L073RZ, ST-Link/V2).
+        let pwr = PwrL0::new();
+        assert_eq!(pwr.read_u32(0x00).unwrap(), 0x0000_1000, "CR reset");
+        assert_eq!(pwr.read_u32(0x04).unwrap(), 0x0000_0000, "CSR reset");
+        // The L4 PUCRx/SR surface does not exist on L0 — must read 0.
+        assert_eq!(pwr.read_u32(0x08).unwrap(), 0, "no register at 0x08");
+        assert_eq!(pwr.read_u32(0x14).unwrap(), 0, "no register at 0x14");
+    }
+}
+
 #[cfg(test)]
 mod h5_tests {
     use super::PwrH5;
