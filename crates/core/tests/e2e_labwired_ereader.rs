@@ -30,7 +30,7 @@
 
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::xtensa_lx7::XtensaLx7;
-use labwired_core::peripherals::components::Uc8151dTricolor290;
+use labwired_core::peripherals::components::Ssd1680Tricolor290;
 use labwired_core::peripherals::esp32::spi::Esp32Spi;
 use labwired_core::peripherals::esp32s3::rom_thunks;
 use labwired_core::system::xtensa::configure_xtensa_esp32;
@@ -57,20 +57,32 @@ fn labwired_ereader_runs_to_panel_paint() {
     let elf_bytes = std::fs::read(&elf_path).expect("read ELF");
     let image = labwired_loader::load_elf(&elf_path).expect("parse ELF");
 
-    // ── 1. Bring up an ESP32-classic and attach the UC8151D tri-color
-    //       panel to spi3 (same as install_arduino_esp32_quirks). The
-    //       default configure step doesn't attach a panel.
+    // ── 1. Bring up an ESP32-classic and attach the panel from the board
+    //       manifest via the generic attach_esp32_external_devices factory —
+    //       the SAME path cli/wasm use. No peripheral is hardcoded here. The
+    //       GxEPD2_290_C90c panel is an SSD1680 controller (see the GxEPD2 driver
+    //       header); the factory maps the gxepd2_290_c90c alias to the SSD1680
+    //       model, wires CS=GPIO5 and latches DC=GPIO17 (the GPIO GxEPD2 toggles
+    //       via digitalWrite before each SPI.transfer — real wire framing).
     let mut bus = SystemBus::new();
     let cpu = configure_xtensa_esp32(&mut bus);
 
-    let spi3_idx = bus
-        .find_peripheral_index_by_name("spi3")
-        .expect("spi3 registered by configure_xtensa_esp32");
-    {
-        let any = bus.peripherals[spi3_idx].dev.as_any_mut().unwrap();
-        let spi3 = any.downcast_mut::<Esp32Spi>().unwrap();
-        spi3.attach(Box::new(Uc8151dTricolor290::new("GPIO5")));
-    }
+    let manifest: labwired_config::SystemManifest = serde_yaml::from_str(
+        r#"
+name: esp32-epaper-ereader
+chip: esp32
+external_devices:
+  - id: epd
+    type: gxepd2_290_c90c
+    connection: spi3
+    config:
+      cs_pin: GPIO5
+      dc_pin: GPIO17
+"#,
+    )
+    .expect("parse inline ereader board manifest");
+    labwired_core::system::xtensa::attach_esp32_external_devices(&mut bus, &manifest)
+        .expect("attach e-paper panel from manifest");
     bus.refresh_peripheral_index();
 
     // Real dual-core: attach a second LX6 as APP_CPU (PRID 0xABAB →
@@ -339,26 +351,22 @@ fn labwired_ereader_runs_to_panel_paint() {
         "xTaskGetCurrentTaskHandle",
         rom_thunks::x_task_get_current_task_handle,
     );
-    // (Real FreeRTOS: xQueueSemaphoreTake / xQueueGenericSend /
-    // ulTaskGenericNotifyTake run for real — no always-succeed fakes.)
-    push_named(&mut thunks, "spiStartBus", rom_thunks::spi_start_bus_fake);
-    push_named(
-        &mut thunks,
-        "_ZN8SPIClass16beginTransactionE11SPISettings",
-        rom_thunks::spi_class_begin_transaction,
-    );
+    // NO SPI init shims. GxEPD2_EPD::init() calls SPI.begin() → the real
+    // compiled spiStartBus runs: it creates a real recursive bus mutex via
+    // xQueueCreateMutex (real, IRAM-resident, backed by the real heap),
+    // enables the SPI3 peripheral clock through DPORT, sets USER.USR_MOSI/
+    // USR_MISO, and zeroes the FIFO. SPIClass::beginTransaction then takes that
+    // real mutex. So spi_start_bus_fake, spi_class_begin_transaction, and the
+    // xQueueSemaphoreTake/Send "force pdTRUE" lock shims are all GONE — the bus
+    // mutex is a genuine FreeRTOS object and the SPI critical sections run for
+    // real. xQueueCreateMutexStatic is still echoed (idle-task static mutex);
+    // the SPI bus uses the dynamic xQueueCreateMutex, which is real.
 
-    // GxEPD2 cmd/data → straight into the attached UC8151D panel.
-    push_named(
-        &mut thunks,
-        "_ZN10GxEPD2_EPD13_writeCommandEh",
-        rom_thunks::gxepd_write_command,
-    );
-    push_named(
-        &mut thunks,
-        "_ZN10GxEPD2_EPD10_writeDataEh",
-        rom_thunks::gxepd_write_data,
-    );
+    // NO gxepd cmd/data bypass. GxEPD2_EPD::_writeCommand / _writeData run for
+    // real: digitalWrite(DC) → SPI.transfer(byte) → spiTransferByteNL writes the
+    // SPI3 FIFO/MOSI_DLEN/CMD.USR registers, and our Esp32Spi peripheral drains
+    // the byte to the panel framed by the latched DC GPIO. Bytes reach the panel
+    // through real register machinery, not a Rust-side panel injection.
 
     // xthal_window_spill_nw — semantic spill via shadow stack. Only the
     // `_nw` leaf (the actual spill loop that would trap on the displaced
@@ -459,11 +467,11 @@ fn labwired_ereader_runs_to_panel_paint() {
                     .and_then(|spi| {
                         spi.attached_devices.iter().find_map(|d| {
                             d.as_any()
-                                .and_then(|a| a.downcast_ref::<Uc8151dTricolor290>())
+                                .and_then(|a| a.downcast_ref::<Ssd1680Tricolor290>())
                         })
                     })
                 {
-                    if p.refresh_generation() >= 2 {
+                    if p.refresh_generation() >= 1 {
                         break;
                     }
                 }
@@ -483,7 +491,7 @@ fn labwired_ereader_runs_to_panel_paint() {
         .iter()
         .find_map(|d| {
             d.as_any()
-                .and_then(|a| a.downcast_ref::<Uc8151dTricolor290>())
+                .and_then(|a| a.downcast_ref::<Ssd1680Tricolor290>())
         })
         .expect("panel attached");
     let refresh_gen = panel.refresh_generation();
@@ -514,10 +522,21 @@ fn labwired_ereader_runs_to_panel_paint() {
         eprintln!("    step {s:>10}: pc=0x{p:08x}");
     }
 
-    // ── 6. Verdict. Painting = at least one refresh().
+    // ── 6. Verdict. Painting = at least one refresh AND a non-blank framebuffer.
+    // A refresh with an all-white black plane is a false positive (the DC line
+    // was mis-latched and the 0x24 RAM stream was dropped); the real firmware
+    // renders text, so the black plane must carry ink.
+    let black_ink = panel.black_plane().iter().filter(|&&b| b != 0xFF).count();
+    eprintln!("[ereader-sim] black-plane ink bytes: {black_ink}");
     assert!(
         refresh_gen >= 1,
         "labwired-ereader did not reach a panel refresh in {step_count} cycles \
          (final PC=0x{final_pc:08x}, refresh_gen={refresh_gen}, stalled={stalled})"
+    );
+    assert!(
+        black_ink > 0,
+        "labwired-ereader refreshed but rendered a BLANK black plane \
+         ({black_ink} non-0xFF bytes) — the 0x24 framebuffer stream was dropped \
+         (DC mis-latched?). The real firmware draws text, so this must be > 0."
     );
 }
