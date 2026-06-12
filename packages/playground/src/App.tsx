@@ -4,7 +4,6 @@ import type { ProjectRecord } from './studio/useProjects';
 import { CommandPalette } from './studio/CommandPalette';
 import { useCommandPaletteItems } from './studio/useCommandPaletteItems';
 import {
-  SimControls,
   RegisterGrid,
   MemoryInspector,
   InstructionTrace,
@@ -17,7 +16,6 @@ import {
   ThermistorControl,
   useSimulationLoop,
   EditorCanvas,
-  ComponentPalette,
   PropertyPanel,
   CodeEditor,
   compileCode,
@@ -40,7 +38,6 @@ import {
 } from '@labwired/ui';
 import { BOARD_CONFIGS, pickerBoards, type BoardConfig } from './bundled-configs';
 import { resolveBoardForPart } from './board-resolve';
-import { fetchCatalog, type CatalogEntry } from './catalog-client';
 import { useUser, useClerk } from '@clerk/clerk-react';
 import { resolveRunSystemConfig } from './run-config';
 import { versionRuntimeAssetUrl } from './runtime-assets';
@@ -69,17 +66,10 @@ import { ComponentInspector } from './multi-mcu/ComponentInspector';
 import { renderComponentRuntimeControl } from './multi-mcu/componentRuntimeControls';
 import { PartActions } from './multi-mcu/PartActions';
 import { type PaletteComponent, type PaletteCategory } from './studio/PaletteDrawer';
-import { BoardPicker } from './BoardPicker';
 import { trackUsage } from './usage';
 import { syncSensorAttributeToSimulator } from './sensor-attribute-sync';
-import {
-  CheckIcon, UploadIcon, CodeIcon, PanelBottomIcon,
-  ShareIcon, ExportIcon, ImportIcon, UndoIcon, RedoIcon,
-  StopIcon, SidebarLeftIcon, SidebarRightIcon,
-  ChevronLeftIcon, ChevronRightIcon,
-} from './Icons';
+import { ChevronLeftIcon } from './Icons';
 
-type BottomTab = 'output' | 'serial' | 'registers' | 'trace' | 'memory';
 type WorkspaceKind = 'diagram' | 'source';
 type ActiveSimulationConfig = {
   systemYaml: string;
@@ -689,7 +679,7 @@ export function App() {
   const [bridge, setBridge] = useState<SimulatorBridge | null>(null);
   const [activeSimulationConfig, setActiveSimulationConfig] = useState<ActiveSimulationConfig | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const traceRef = useRef<TraceEntry[]>([]);
   const [traceEntries, setTraceEntries] = useState<TraceEntry[]>([]);
@@ -697,7 +687,6 @@ export function App() {
   const [invalidPins, setInvalidPins] = useState<Array<{ part: string; pin: string }>>([]);
 
   // Board selection (from catalog + bundled configs)
-  const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
   const [selectedBoard, setSelectedBoard] = useState<BoardConfig>(() => {
     // URL params ?lab=<boardId> / ?board=<boardId> override saved state —
     // lets gallery cards deep-link. Both names accepted; `lab=` is the
@@ -721,12 +710,9 @@ export function App() {
   // Code editor state
   const [source, setSource] = useState(() => loadBoardWorkspace(selectedBoard).source);
   const [compileErrors, setCompileErrors] = useState<CompileError[]>([]);
-  const [compileOutput, setCompileOutput] = useState('');
+  const [, setCompileOutput] = useState('');
   const [compiling, setCompiling] = useState(false);
-  const [bottomTab, setBottomTab] = useState<BottomTab>('output');
-  const [showCode, setShowCode] = useState(false);
-  const [showBottomPanel, setShowBottomPanel] = useState(true);
-  const [showLeftSidebar, setShowLeftSidebar] = useState(true);
+  const [showCode] = useState(false);
   const [projectsModalOpen, setProjectsModalOpen] = useState(false);
   // Tracks the currently-loaded cloud project (null if the canvas is from
   // a board starter or unsaved). When set, "Save" overwrites this project.
@@ -748,12 +734,9 @@ export function App() {
     loadBoardWorkspace(selectedBoard).diagram,
   );
 
-  // Whether simulation has been loaded (bridge exists)
-  const simActive = !!bridge;
 
   // Fetch catalog on mount
   useEffect(() => {
-    fetchCatalog().then(setCatalog);
     trackUsage('app_loaded');
   }, []);
 
@@ -843,8 +826,6 @@ export function App() {
     setRunning(true);
     traceRef.current = [];
     setTraceEntries([]);
-    setBottomTab('serial');
-    setShowBottomPanel(true);
   }, [loadWasm]);
 
   // Compile source code
@@ -855,8 +836,6 @@ export function App() {
       setInvalidPins([]);
       setCompileErrors([]);
       setCompileOutput(`Wiring error: ${diagramErrors[0]}`);
-      setBottomTab('output');
-      setShowBottomPanel(true);
       return null;
     }
 
@@ -865,8 +844,6 @@ export function App() {
     setCompiling(true);
     setCompileOutput('Compiling...\n');
     setCompileErrors([]);
-    setBottomTab('output');
-    setShowBottomPanel(true);
     try {
       const result = await compileCode({
         source,
@@ -968,11 +945,6 @@ export function App() {
     }
   }, [handleCompile, launchSimulation, selectedBoard, editor.state.diagram, editor.state.selectedIds]);
 
-  // Stop simulation
-  const handleStop = useCallback(() => {
-    setRunning(false);
-    setBridge(null);
-  }, []);
 
   // Build the display-device list from the diagram so the loop knows what
   // to poll. Filter to types that have a known wasm framebuffer accessor.
@@ -1071,8 +1043,6 @@ export function App() {
       setCanvasValidationMessage(errorMessage);
       setInvalidPins([editor.state.wireInProgress, endpoint]);
       setCompileOutput(`Wiring error: ${errorMessage}`);
-      setBottomTab('output');
-      setShowBottomPanel(true);
       return;
     }
     setCanvasValidationMessage(null);
@@ -1261,19 +1231,6 @@ export function App() {
     [bridge],
   );
 
-  // Editor: add part from palette
-  const handleAddPartFromPalette = useCallback(
-    (type: string) => {
-      const def = COMPONENT_REGISTRY.get(type);
-      if (!def) return;
-      const part: Part = {
-        id: nextPartId(type), type, x: 400, y: 200, rotate: 0,
-        attrs: { ...def.defaultAttrs },
-      };
-      editor.addPart(part);
-    },
-    [editor],
-  );
 
   const handleDropPart = useCallback(
     (type: string, x: number, y: number) => {
@@ -1642,43 +1599,6 @@ export function App() {
     },
     [editor],
   );
-  const currentExample = EXAMPLE_SKETCHES.find((sketch) => sketch.source === source) ?? null;
-  const boardSummary = useMemo(() => {
-    const componentCount = Math.max(editor.state.diagram.parts.length - 1, 0);
-    const wireCount = editor.state.diagram.wires.length;
-    // Boards may carry a hand-crafted summary in BoardConfig — use it
-    // verbatim. `nextStepRunning` (optional) is swapped in when the sim
-    // is active. Falls through to a generic "Click Run" hint otherwise.
-    if (selectedBoard.summary) {
-      const s = selectedBoard.summary;
-      return {
-        title: s.title,
-        description: s.description,
-        nextStep: simActive ? (s.nextStepRunning ?? s.nextStep) : s.nextStep,
-      };
-    }
-    if (selectedBoard.boardId === 'stm32f103-blinky') {
-      return {
-        title: 'STM32 demo circuit',
-        description: 'PA5 drives the onboard LED. Upload runs the bundled blinky immediately.',
-        nextStep: simActive ? 'Simulation is running. Watch the LED state and serial pane.' : 'Click Run Demo to boot the bundled STM32 blinky.',
-      };
-    }
-    if (selectedBoard.boardId === 'nucleo-f401re') {
-      return {
-        title: 'LED + button starter',
-        description: 'PA5 drives the LED and PC13 is wired to the user button.',
-        nextStep: simActive ? 'Simulation is running. Press the button component to interact.' : 'Click Run Demo to boot the starter circuit.',
-      };
-    }
-    return {
-      title: `${selectedBoard.name} starter`,
-      description: `${componentCount} components and ${wireCount} wires on the canvas.`,
-      nextStep: selectedBoard.demoFirmwarePath
-        ? 'Click Run Demo to boot the bundled firmware.'
-        : 'Wire a circuit, compile the sketch, then run it.',
-    };
-  }, [editor.state.diagram.parts.length, editor.state.diagram.wires.length, selectedBoard, simActive]);
 
   // Load from URL hash (sharing) or localStorage
   useEffect(() => {
@@ -1746,53 +1666,8 @@ export function App() {
     localStorage.setItem(getWorkspaceStorageKey(selectedBoard.boardId, 'source'), source);
   }, [source, selectedBoard]);
 
-  // Export/Import
-  const handleExport = useCallback(() => {
-    const data = { diagram: editor.state.diagram, source };
-    const json = JSON.stringify(data, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'project.json'; a.click();
-    URL.revokeObjectURL(url);
-  }, [editor.state.diagram, source]);
 
-  const handleImport = useCallback(() => {
-    const input = document.createElement('input');
-    input.type = 'file'; input.accept = '.json';
-    input.onchange = async () => {
-      const file = input.files?.[0];
-      if (!file) return;
-      const text = await file.text();
-      try {
-        const data = JSON.parse(text);
-        if (data.diagram) {
-          editor.loadDiagram(data.diagram as Diagram);
-          if (data.source) setSource(data.source);
-        } else {
-          editor.loadDiagram(data as Diagram);
-        }
-      } catch { alert('Invalid project file'); }
-    };
-    input.click();
-  }, [editor]);
 
-  const handleResetDemo = useCallback(() => {
-    const starter = makeStarterDiagram(selectedBoard);
-    localStorage.removeItem(getWorkspaceStorageKey(selectedBoard.boardId, 'diagram'));
-    localStorage.removeItem(getWorkspaceStorageKey(selectedBoard.boardId, 'source'));
-    editor.loadDiagram(starter);
-    setSource(getDefaultSource(selectedBoard));
-    setCanvasValidationMessage(null);
-    setInvalidPins([]);
-    setCompileErrors([]);
-    setCompileOutput(`Restored ${selectedBoard.name} demo workspace.`);
-    setBottomTab('output');
-    setShowBottomPanel(true);
-    setRunning(false);
-    setBridge(null);
-    setActiveSimulationConfig(null);
-  }, [editor, selectedBoard]);
 
   // Studio-shell toast (transient, auto-dismisses)
   const [toast, setToast] = useState<string | null>(null);
@@ -1918,21 +1793,6 @@ export function App() {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  // Bottom tab content
-  const bottomContent = () => {
-    switch (bottomTab) {
-      case 'output':
-        return <pre className="compile-output">{compileOutput || 'Ready to compile.'}</pre>;
-      case 'serial':
-        return <SerialMonitor output={simState.uartOutput} onClear={clearUart} style={{ height: '100%' }} />;
-      case 'registers':
-        return <RegisterGrid registers={registers} style={{ maxHeight: '100%', overflow: 'auto' }} />;
-      case 'trace':
-        return <InstructionTrace entries={traceEntries} style={{ maxHeight: '100%', overflow: 'auto' }} />;
-      case 'memory':
-        return <MemoryInspector data={stackMemory} baseAddress={stackBase} style={{ maxHeight: '100%', overflow: 'auto' }} />;
-    }
-  };
 
   // Bridge so the command palette (defined here, outside the
   // ChipsProvider tree) can drop a new MCU through the ⌘K flow.
@@ -2263,221 +2123,10 @@ export function App() {
     >
     <AccountPanel open={accountOpen} onClose={() => setAccountOpen(false)} />
     <div data-legacy-shell="true" className={`playground${showCode ? ' code-open' : ''}`}>
-      {/* ===== Header ===== */}
-      {!embed && (
-        <div className="playground-header">
-          {/* --- Project group --- */}
-          <div className="toolbar-group">
-            <span className="logo">LabWired</span>
-            <BoardPicker
-              catalog={catalog}
-              selectedBoardId={selectedBoard.boardId}
-              onSelect={(cfg) => {
-                // Switching board breaks the link to the loaded project.
-                setActiveProjectId(null);
-                setActiveProjectName(null);
-                handleBoardSelect(cfg);
-              }}
-            />
-            <button
-              className="project-selector"
-              onClick={() => setProjectsModalOpen(true)}
-              title="Open My Projects"
-            >
-              {activeProjectName ? `📂 ${activeProjectName}` : '📂 My Projects'}
-            </button>
-            <select
-              className="project-selector"
-              value={currentExample?.name ?? ''}
-              onChange={(e) => {
-                const sketch = EXAMPLE_SKETCHES.find((s) => s.name === e.target.value);
-                if (sketch) setSource(sketch.source);
-              }}
-            >
-              <option value="" disabled>Examples...</option>
-              {EXAMPLE_SKETCHES.map((s) => (
-                <option key={s.name} value={s.name}>{s.name}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="header-separator" />
-
-          {/* --- Build group --- */}
-          <div className="toolbar-group">
-            <button className="toolbar-btn toolbar-btn-primary toolbar-btn-verify" onClick={handleCompile} disabled={compiling}>
-              <CheckIcon size={14} /> {compiling ? 'Checking...' : 'Check Wiring'}
-            </button>
-            <button className="toolbar-btn toolbar-btn-primary" onClick={() => requireAuth(handleRun)} disabled={compiling || loading}>
-              <UploadIcon size={14} /> {selectedBoard.demoFirmwarePath ? 'Run Demo' : 'Run Circuit'}
-            </button>
-            <button
-              className="toolbar-btn toolbar-btn-primary"
-              onClick={() => {
-                // Self-serve path: open GitHub's "Create from template"
-                // page with the lab name pre-filled. The template repo
-                // (w1ne/labwired-lab-template) ships a CI workflow that
-                // runs the LabWired simulator on every push — same
-                // firmware that paints the panel here paints in CI too.
-                const repoName = `labwired-${selectedBoard.boardId}`.toLowerCase().replace(/[^a-z0-9-]+/g, '-');
-                const url = `https://github.com/new?template_owner=w1ne&template_name=labwired-lab-template&name=${encodeURIComponent(repoName)}&description=${encodeURIComponent(`${selectedBoard.name} lab gated by the LabWired simulator in CI`)}`;
-                window.open(url, '_blank', 'noopener,noreferrer');
-              }}
-              title="Create a GitHub repo from the LabWired CI template — runs the simulator on every push as a merge gate"
-            >
-              <UploadIcon size={14} /> Deploy to CI
-            </button>
-            <button
-              className="toolbar-btn toolbar-btn-ghost"
-              onClick={() => {
-                // Consulting path: existing repo / custom firmware
-                // build / custom assertions. Books a call with the
-                // LabWired team to wire CI into the user's existing
-                // GitHub repo. Same Calendly link the /ci landing page
-                // uses for enterprise inquiries.
-                window.open('https://cal.com/andriishylenko/30min', '_blank', 'noopener,noreferrer');
-              }}
-              title="Already have a repo? Book 30 min — we wire LabWired CI into your existing pipeline."
-            >
-              Connect existing repo →
-            </button>
-            <button className="toolbar-btn toolbar-btn-ghost" onClick={handleResetDemo} title="Reset starter workspace">
-              Reset Demo
-            </button>
-          </div>
-
-          {/* --- Sim controls (inline when active) --- */}
-          {simActive && (
-            <>
-              <div className="header-separator" />
-              <div className="toolbar-group">
-                <SimControls
-                  variant="dark"
-                  running={running}
-                  onPlay={() => requireAuth(handlePlay)}
-                  onPause={handlePause}
-                  onStep={() => requireAuth(handleStep)}
-                  onReset={handleReset}
-                  pc={simState.pc}
-                  cycles={simState.cycles}
-                />
-                <button className="toolbar-btn toolbar-btn-ghost toolbar-btn-stop" onClick={handleStop} title="Stop simulation">
-                  <StopIcon size={14} />
-                </button>
-              </div>
-            </>
-          )}
-
-          <div className="header-spacer" />
-
-          {/* --- View group --- */}
-          <div className="toolbar-group">
-            <button
-              className={`toolbar-btn toolbar-btn-ghost ${showCode ? 'active' : ''}`}
-              onClick={() => setShowCode(!showCode)}
-              title="Toggle code editor"
-            >
-              <CodeIcon size={14} />
-            </button>
-            <button
-              className={`toolbar-btn toolbar-btn-ghost ${showBottomPanel ? 'active' : ''}`}
-              onClick={() => setShowBottomPanel(!showBottomPanel)}
-              title="Toggle bottom panel"
-            >
-              <PanelBottomIcon size={14} />
-            </button>
-            <button
-              className={`toolbar-btn toolbar-btn-ghost ${showLeftSidebar ? 'active' : ''}`}
-              onClick={() => setShowLeftSidebar(!showLeftSidebar)}
-              title="Toggle components panel"
-            >
-              <SidebarLeftIcon size={14} />
-            </button>
-            <button
-              className={`toolbar-btn toolbar-btn-ghost ${showRightSidebar ? 'active' : ''}`}
-              onClick={() => setShowRightSidebar(!showRightSidebar)}
-              title="Toggle properties panel"
-            >
-              <SidebarRightIcon size={14} />
-            </button>
-          </div>
-
-          <div className="header-separator" />
-
-          {/* --- File group --- */}
-          <div className="toolbar-group">
-            <button className="toolbar-btn toolbar-btn-ghost" onClick={handleShare} title="Share project">
-              <ShareIcon size={14} />
-            </button>
-            <button className="toolbar-btn toolbar-btn-ghost" onClick={handleExport} title="Export project">
-              <ExportIcon size={14} />
-            </button>
-            <button className="toolbar-btn toolbar-btn-ghost" onClick={handleImport} title="Import project">
-              <ImportIcon size={14} />
-            </button>
-          </div>
-
-          <div className="header-separator" />
-
-          {/* --- History group --- */}
-          <div className="toolbar-group">
-            <button
-              className="toolbar-btn toolbar-btn-ghost"
-              onClick={editor.undo}
-              disabled={editor.state.undoStack.length === 0}
-              title="Undo (Ctrl+Z)"
-            >
-              <UndoIcon size={14} />
-            </button>
-            <button
-              className="toolbar-btn toolbar-btn-ghost"
-              onClick={editor.redo}
-              disabled={editor.state.redoStack.length === 0}
-              title="Redo (Ctrl+Shift+Z)"
-            >
-              <RedoIcon size={14} />
-            </button>
-          </div>
-
-          {error && <span className="header-error">{error}</span>}
-        </div>
-      )}
-
       {/* ===== Unified Layout ===== */}
       <div className="editor-layout">
-        {/* Component palette (left sidebar) */}
-        {showLeftSidebar && (
-          <div className="editor-sidebar-left">
-            <ComponentPalette onAddPart={handleAddPartFromPalette} />
-          </div>
-        )}
-
-        {/* Collapsed left sidebar tab */}
-        {!showLeftSidebar && (
-          <button
-            className="sidebar-toggle sidebar-toggle-left"
-            onClick={() => setShowLeftSidebar(true)}
-            title="Show components"
-          >
-            <ChevronRightIcon size={12} />
-          </button>
-        )}
-
         {/* Main content area */}
         <div className="editor-center">
-          <div className="demo-banner">
-            <div className="demo-banner-copy">
-              <span className="demo-banner-kicker">{boardSummary.title}</span>
-              <strong>{selectedBoard.name}</strong>
-              <span>{boardSummary.description}</span>
-              <span className="demo-banner-next">{boardSummary.nextStep}</span>
-            </div>
-            <div className="demo-banner-stats">
-              <span className="demo-stat"><strong>{Math.max(editor.state.diagram.parts.length - 1, 0)}</strong> parts</span>
-              <span className="demo-stat"><strong>{editor.state.diagram.wires.length}</strong> wires</span>
-              <span className={`demo-stat ${simActive ? 'live' : ''}`}><strong>{simActive ? 'Live' : 'Idle'}</strong> sim</span>
-            </div>
-          </div>
           <div className="editor-top-split">
             {/* Code editor (left pane) */}
             {showCode && (
@@ -2527,38 +2176,6 @@ export function App() {
             </div>
           </div>
 
-          {/* Bottom panel — tabbed: output / serial / registers / trace / memory */}
-          {showBottomPanel && (
-            <div className="editor-bottom-pane">
-              <div className="bottom-tabs">
-                {(['output', 'serial', 'registers', 'trace', 'memory'] as BottomTab[]).map((tab) => (
-                  <button
-                    key={tab}
-                    className={`bottom-tab ${bottomTab === tab ? 'active' : ''} ${
-                      !simActive && tab !== 'output' && tab !== 'serial' ? 'disabled' : ''
-                    }`}
-                    onClick={() => setBottomTab(tab)}
-                    disabled={!simActive && tab !== 'output' && tab !== 'serial'}
-                  >
-                    {tab === 'output' ? 'Output' :
-                     tab === 'serial' ? 'Serial' :
-                     tab === 'registers' ? 'Registers' :
-                     tab === 'trace' ? 'Trace' : 'Memory'}
-                  </button>
-                ))}
-                <button
-                  className="bottom-tab bottom-tab-close"
-                  onClick={() => setShowBottomPanel(false)}
-                  title="Hide panel"
-                >
-                  &times;
-                </button>
-              </div>
-              <div className="bottom-content">
-                {bottomContent()}
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Property panel (right sidebar) */}
