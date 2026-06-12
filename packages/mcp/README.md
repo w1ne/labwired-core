@@ -30,6 +30,7 @@ LabWired runs ARM Cortex-M / RISC-V / Xtensa firmware against a silicon-validate
 | `labwired_simulate` | Low-level: run firmware against a custom System Manifest + test script YAML. Full control. |
 | `labwired_validate_system` | Validate a System Manifest YAML before simulating. Fast schema check. |
 | `labwired_validate_diagram` | Structurally validate a wired diagram (parts + wires) before running. Returns machine-readable diagnostics (`PIN_NOT_ON_CHIP`, `PIN_LACKS_I2C`, `BOARDIO_NOT_TO_MCU`, `NO_MCU`, `COMPONENT_DANGLING`, …) with suggested fixes. |
+| `labwired_compile_diagram` | Compile a validated diagram to a runnable board manifest (ERC-gated; net-derived I2C bus binding). Persists the manifest to `.labwired/boards/<name>.yaml` and returns `board_path` + `system_yaml`. Errors abort with diagnostics; warnings are included in the response. |
 | `labwired_define_component` | Define a new off-chip device from a declarative IR spec; validated, persisted, ready to wire into a manifest. |
 
 **Live agent → browser bridge** (optional — for showing humans what the agent is doing):
@@ -96,7 +97,7 @@ LabWired is bit-accurate and reproducible by design: the same firmware + same sy
 
 ## Status
 
-v0.6 — fourteen tools (thirteen plus the `labwired_search_tools` meta-tool), stdio transport, no auth required for local use (the simulator runs on your machine).
+v0.7 — sixteen tools (fifteen plus the `labwired_search_tools` meta-tool), stdio transport, no auth required for local use (the simulator runs on your machine).
 
 Shipped:
 
@@ -106,10 +107,11 @@ Shipped:
 - **v0.4** — `labwired_validate_diagram` with machine-readable diagnostics (pin/wire/bus errors + suggested fixes).
 - **v0.5** — `labwired_fuzz`: coverage-guided firmware fuzzing in the silicon-validated sim; crashes are HIL-replayable, not emulation false positives.
 - **v0.6** — `labwired_define_component`: agent-authored declarative IR specs for off-chip I2C devices; `type: ir` manifest integration; PCA9685 and TMP102 reference specs gated by byte-equivalence tests.
+- **v0.7** — Wiring kernel: named nets, electrical rule checks (ERC), and ERC-gated diagram compilation on both MCP surfaces. `labwired_validate_diagram` upgraded with full kernel ERC (I2C bus rules, driver conflicts, voltage mismatches, IRQ ordinal validation). New `labwired_compile_diagram` compiles a diagram to a runnable board manifest with net-derived I2C bus binding.
 
 Next:
 
-- **v0.7** — Worker-side metering for hosted runs.
+- **v0.8** — Worker-side metering for hosted runs.
 
 Issues / requests: <https://github.com/w1ne/labwired/issues>.
 
