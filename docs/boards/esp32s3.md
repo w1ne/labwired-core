@@ -30,7 +30,7 @@ There are two chip yamls for ESP32-S3 today:
 
 | Peripheral       | Base       | Status              | Notes                                                                          |
 |------------------|------------|---------------------|--------------------------------------------------------------------------------|
-| Xtensa LX7       | —          | ✅ modeled (1 core) | Second LX7 core not modeled; FPU coprocessor not modeled                       |
+| Xtensa LX7       | —          | ✅ modeled (dual)   | PRO_CPU + APP_CPU round-robin (`Machine::with_secondary_cpu`); FPU coprocessor not modeled |
 | IRAM             | 0x40370000 | ✅ ram region       | 512 KiB                                                                        |
 | ROM thunks       | 0x40000000 | ✅ thunk bank       | 384 KiB internal ROM call sites                                                |
 | Flash (I-cache)  | 0x42000000 | ✅ XIP mapping      | 4 MiB                                                                          |
@@ -41,6 +41,15 @@ There are two chip yamls for ESP32-S3 today:
 | RTC_CNTL         | 0x60008000 | ⚙ stub             | 4 KiB                                                                          |
 | eFuse            | 0x60007000 | ⚙ stub             | 4 KiB                                                                          |
 | I²C0             | 0x60013000 | ✅ modeled          | 4 KiB — round-trip exercised in [`esp32s3-i2c-tmp102`](../../examples/esp32s3-i2c-tmp102/) |
+| GDMA             | 0x6003F000 | ✅ modeled          | 5 channels; M2M descriptor walks **and** peripheral-coupled byte movement (see below) |
+| SPI2 / SPI3      | 0x60024000 / 0x60025000 | ✅ modeled | GP-SPI master: CPU W-buffer path + GDMA-coupled DMA transactions; device attach surface (e-paper e2e) |
+| I²S0 / I²S1      | 0x6000F000 / 0x6002D000 | ✅ modeled | Config/control twin + GDMA-coupled sample streaming (`RXEOF_NUM` byte semantics) |
+| UART0/1/2        | 0x60000000 / 0x60010000 / 0x6002E000 | ✅ modeled | FIFO + STATUS + baud-paced drain; UART0 doubles as the UHCI0 DMA endpoint |
+
+The authoritative wiring (`configure_xtensa_esp32s3`) additionally registers
+LEDC, RMT, PCNT, TIMG0/1, SAR-ADC, TWAI, AES, SHA, RSA, HMAC, DS, MCPWM0/1,
+SD/MMC, LCD_CAM and USB-OTG models — see
+`crates/core/src/system/xtensa.rs` for the full list and fidelity notes.
 
 The plain `esp32s3.yaml` (used by older examples) is a strict subset:
 UART0 @ 0x60000000 + the declarative GPIO/TIMG0/INTERRUPT_CORE0 peripherals
@@ -48,15 +57,28 @@ under [`configs/peripherals/esp32s3/`](../../configs/peripherals/esp32s3/).
 See [`docs/declarative_registers.md`](../declarative_registers.md) for
 how declarative peripheral descriptors work.
 
+## DMA (GDMA)
+
+The GDMA model (`crates/core/src/peripherals/esp32s3/gdma.rs`) moves real
+bytes:
+
+- **Memory-to-memory** (`MEM_TRANS_EN`): full descriptor-chain walks with
+  owner-bit writeback.
+- **Peripheral-coupled mode** (routed by `IN_PERI_SEL` / `OUT_PERI_SEL`):
+  UART (UHCI0), SPI2, SPI3, I²S0 and I²S1 transfer real bytes between
+  descriptor chains and the peripheral models — incremental 64-byte-per-tick
+  pumps, per-descriptor owner/length writeback, per-direction EOF
+  interrupts (sources 66–75).
+- Other peripheral ids (AES, SHA, ADC, RMT, LCD_CAM, unknown/unbound) keep
+  an auto-complete fallback: EOF latches without byte movement so polling
+  firmware progresses. LCD_CAM coupling is deferred by design.
+
 ## Not yet modeled (commonly expected on ESP32-S3)
 
-Neither yaml declares: **second LX7 core**, **WIFI / BT controller**,
-**RTC_IO**, **SPI0/1/2/3** (cache + general purpose), **I²C1**, **UART1/2**,
-**LEDC**, **RMT**, **DMA / GDMA**, **AES / SHA / RSA / HMAC / DS / XTS_AES**,
-**ADC1/2**, **TEMP_SENSOR**, **USB-OTG**, **I²S0/1**, **LCD_CAM**,
-**MCPWM0/1**, **PCNT**, **TIMG1**, **APB_CTRL**, **PSRAM cache controller**,
+Still absent from the model: **WIFI / BT controller**, **RTC_IO**,
+**XTS_AES**, **TEMP_SENSOR**, **APB_CTRL**, **PSRAM cache controller**,
 **FPU coprocessor**.
 
-Firmware that touches any of these registers will hit
+Firmware that touches unmapped registers will hit
 `MemoryAccessViolation` or stall in a polling loop. See
 [`docs/getting_started_firmware.md`](../getting_started_firmware.md).

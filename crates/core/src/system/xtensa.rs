@@ -197,16 +197,23 @@ pub fn attach_esp32_external_devices(
                 ext.connection
             )
         })?;
-        let spi = any
-            .downcast_mut::<crate::peripherals::esp32::spi::Esp32Spi>()
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "External device '{}' connection '{}' is not an ESP32 SPI peripheral",
-                    ext.id,
-                    ext.connection
-                )
-            })?;
-        spi.attach(panel);
+        // ESP32-classic buses register `Esp32Spi` controllers (spi2/spi3);
+        // ESP32-S3 buses register the GP-SPI model `Esp32s3Spi`
+        // (spi2_s3/spi3_s3). Both expose the same `attach` surface, so a
+        // manifest can wire an external device to either family's SPI.
+        if let Some(spi) = any.downcast_mut::<crate::peripherals::esp32::spi::Esp32Spi>() {
+            spi.attach(panel);
+        } else if let Some(spi) =
+            any.downcast_mut::<crate::peripherals::esp32s3::gpspi::Esp32s3Spi>()
+        {
+            spi.attach(panel);
+        } else {
+            anyhow::bail!(
+                "External device '{}' connection '{}' is not an ESP32 SPI peripheral",
+                ext.id,
+                ext.connection
+            );
+        }
     }
     Ok(())
 }
@@ -1435,8 +1442,10 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
 
     // ── More twins (GDMA / I2S0 / I2S1 / TWAI) ───────────────────────────
     // After the catch-alls; *_s3 names for i2s avoid the classic-ESP32 i2s0/i2s1
-    // stub name collision in the snapshot. GDMA models registers + EOF
-    // completion (descriptor-walking memory movement is a documented follow-up).
+    // stub name collision in the snapshot. GDMA moves real bytes: M2M
+    // descriptor walks plus peripheral-coupled transfers (UART/UHCI0, SPI2/3,
+    // I2S0/1 — routed by PERI_SEL); unmodeled peripheral ids keep the
+    // auto-complete fallback (see gdma.rs module doc for the full contract).
     bus.add_peripheral(
         "gdma",
         0x6003_F000,
@@ -2144,6 +2153,65 @@ mod tests {
         assert_eq!(
             panel_count, 1,
             "exactly one Ssd1680Tricolor290 should be attached to spi3"
+        );
+    }
+
+    /// S3 config wiring: `attach_esp32_external_devices` must also handle the
+    /// ESP32-S3 GP-SPI model (`Esp32s3Spi`) — an S3 manifest wiring a device
+    /// to `spi3_s3` previously errored with "not an ESP32 SPI peripheral"
+    /// because only the classic `Esp32Spi` downcast was attempted.
+    #[test]
+    fn attach_esp32_external_devices_attaches_to_s3_gpspi() {
+        use labwired_config::{ExternalDevice, SystemManifest};
+        use std::collections::HashMap;
+
+        let mut config = HashMap::new();
+        config.insert(
+            "cs_pin".to_string(),
+            serde_yaml::Value::String("GPIO10".to_string()),
+        );
+        let manifest = SystemManifest {
+            walk_deleted: false,
+            schema_version: "1.0".to_string(),
+            name: "test-esp32s3-epaper".to_string(),
+            chip: "esp32s3.yaml".to_string(),
+            memory_overrides: std::collections::HashMap::new(),
+            peripherals: vec![],
+            external_devices: vec![ExternalDevice {
+                id: "epaper".to_string(),
+                r#type: "ssd1680_tricolor_290".to_string(),
+                connection: "spi3_s3".to_string(),
+                config,
+            }],
+            board_io: vec![],
+        };
+
+        // Register spi3_s3 exactly as the production S3 bring-up does
+        // (configure_xtensa_esp32s3: Esp32s3Spi::new(22) @ 0x6002_5000),
+        // without the full heavyweight S3 bus construction.
+        let mut bus = SystemBus::new();
+        bus.add_peripheral(
+            "spi3_s3",
+            0x6002_5000,
+            0x100,
+            None,
+            Box::new(crate::peripherals::esp32s3::gpspi::Esp32s3Spi::new(22)),
+        );
+
+        attach_esp32_external_devices(&mut bus, &manifest)
+            .expect("attach must succeed for an Esp32s3Spi connection");
+
+        let idx = bus.find_peripheral_index_by_name("spi3_s3").unwrap();
+        let spi = bus.peripherals[idx]
+            .dev
+            .as_any()
+            .unwrap()
+            .downcast_ref::<crate::peripherals::esp32s3::gpspi::Esp32s3Spi>()
+            .expect("spi3_s3 is Esp32s3Spi");
+        assert_eq!(
+            spi.attached_device_count(),
+            1,
+            "exactly one panel attached to the S3 GP-SPI controller"
         );
     }
 
