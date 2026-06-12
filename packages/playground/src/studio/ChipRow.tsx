@@ -25,6 +25,7 @@ export const STARTER_LABS: StarterLab[] = [
   { id: 'nrf52840-ble-lab', name: 'nRF BLE Lab', icon: '📶', locked: false },
   { id: 'nrf52840-proximity-lab', name: 'nRF Proximity + BLE', icon: '📏', locked: false },
   { id: 'al2205-iolink-dido', name: 'IO-Link DI (AL2205)', icon: '🔌', locked: false },
+  { id: 'stm32h5-uds-ecu', name: 'STM32H5 UDS ECU', icon: '🧪', locked: false },
   { id: 'epaper-tricolor-lab', name: 'Tri-Color E-Paper', icon: '📰', locked: false },
   { id: 'esp32-epaper-lab', name: 'ESP32 E-Paper', icon: '📋', locked: false },
 ];

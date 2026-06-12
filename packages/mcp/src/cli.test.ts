@@ -1,11 +1,101 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { rm } from 'node:fs/promises';
-import { existsSync, readFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 
 
 const DIST = join(import.meta.dirname, '..', 'dist', 'index.js');
+let mockCliDir: string | undefined;
+
+beforeAll(() => {
+  mockCliDir = mkdtempSync(join(tmpdir(), 'labwired-mcp-cli-'));
+  const mockCli = join(mockCliDir, 'labwired');
+  writeFileSync(
+    mockCli,
+    `#!/usr/bin/env node
+const fs = require('node:fs');
+const path = require('node:path');
+const args = process.argv.slice(2);
+
+if (args[0] !== 'asset') process.exit(2);
+
+if (args[1] === 'validate-component') {
+  const spec = fs.readFileSync(args[2], 'utf8');
+  if (/kind:\\s*wasm/.test(spec)) {
+    console.log(JSON.stringify({ ok: false, name: null, diagnostics: [{ code: 'ICOMP_WASM_UNSUPPORTED' }] }));
+  } else {
+    const name = spec.match(/^name:\\s*([^\\n]+)/m)?.[1]?.trim() ?? 'Component';
+    console.log(JSON.stringify({ ok: true, name, diagnostics: [] }));
+  }
+  process.exit(0);
+}
+
+if (args[1] === 'ingest-svd') {
+  const outputDir = args[args.indexOf('--output-dir') + 1];
+  fs.mkdirSync(outputDir, { recursive: true });
+  const descriptor = path.resolve(outputDir, 'gpioa.yaml');
+  fs.writeFileSync(descriptor, [
+    'peripheral: GPIOA',
+    'base_address: 0x40010800',
+    'registers:',
+    '  - name: CRL',
+    '    offset: 0x00',
+    '',
+  ].join('\\n'));
+  console.log(JSON.stringify({
+    output_dir: outputDir,
+    peripheral_count: 1,
+    peripherals: [{ name: 'GPIOA', descriptor_path: descriptor, register_count: 1, base_address: '0x40010800' }],
+  }));
+  process.exit(0);
+}
+
+process.exit(2);
+`,
+  );
+  chmodSync(mockCli, 0o755);
+  process.env.LABWIRED_CLI = mockCli;
+});
+
+afterAll(() => {
+  if (mockCliDir) {
+    rmSync(mockCliDir, { recursive: true, force: true });
+  }
+});
+
+const TEST_DEVICE_SVD = `<?xml version="1.0" encoding="utf-8"?>
+<device schemaVersion="1.3">
+  <name>STM32F103</name>
+  <version>1.0</version>
+  <description>STM32F103xx</description>
+  <addressUnitBits>8</addressUnitBits>
+  <width>32</width>
+  <size>32</size>
+  <resetValue>0x00000000</resetValue>
+  <resetMask>0xFFFFFFFF</resetMask>
+  <peripherals>
+    <peripheral>
+      <name>GPIOA</name>
+      <baseAddress>0x40010800</baseAddress>
+      <registers>
+        <register>
+          <name>CRL</name>
+          <addressOffset>0x00</addressOffset>
+          <size>32</size>
+          <fields>
+            <field>
+              <name>MODE0</name>
+              <bitOffset>0</bitOffset>
+              <bitWidth>2</bitWidth>
+            </field>
+          </fields>
+        </register>
+      </registers>
+    </peripheral>
+  </peripherals>
+</device>`;
 
 const INIT_MESSAGES = [
   {
@@ -243,7 +333,6 @@ describe('labwired_define_component', () => {
 describe('labwired_ingest_svd', () => {
   const repoRoot = process.env.LABWIRED_REPO_ROOT ?? join(import.meta.dirname, '..', '..', '..');
   const peripheralDir = join(repoRoot, '.labwired', 'peripherals');
-  const svdPath = join(repoRoot, 'core', 'tests', 'fixtures', 'test_device.svd');
 
   afterEach(async () => {
     const artifact = join(peripheralDir, 'gpioa.yaml');
@@ -258,8 +347,7 @@ describe('labwired_ingest_svd', () => {
   });
 
   it('ingests an SVD into descriptors + a paste-ready declarative snippet', async () => {
-    const svd = readFileSync(svdPath, 'utf8');
-    const result = await callToolViaStdio('labwired_ingest_svd', { svd_content: svd });
+    const result = await callToolViaStdio('labwired_ingest_svd', { svd_content: TEST_DEVICE_SVD });
     expect(result.isError).toBeFalsy();
     const body = JSON.parse(result.content[0].text);
     expect(body.ok).toBe(true);

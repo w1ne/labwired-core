@@ -38,8 +38,10 @@ import systemIli9341TftLab from '../../../core/examples/ili9341-tft-lab/system.y
 import systemEpaperTricolorLab from '../../../core/examples/epaper-tricolor-lab/system.yaml?raw';
 import systemEsp32EpaperLab from '../../../core/examples/esp32-epaper-lab/system.yaml?raw';
 import systemAl2205IolinkDido from '../../../core/examples/al2205-iolink-dido/system.yaml?raw';
+import systemH563UdsEcu from '../../../core/examples/h563-uds-ecu/system.yaml?raw';
 import sourceBlinky from '../../../core/examples/demo-blinky/src/main.rs?raw';
 import sourceAl2205IolinkDido from '../../../core/examples/al2205-iolink-dido/firmware/main.c?raw';
+import sourceH563UdsEcu from '../../../core/examples/h563-uds-ecu/firmware/main.c?raw';
 import sourceAdxl345 from '../../../core/examples/adxl345-sensor-lab/src/main.rs?raw';
 import sourceMpu6050 from '../../../core/examples/mpu6050-sensor-lab/src/main.rs?raw';
 import sourceBme280 from '../../../core/examples/bme280-weather-lab/src/main.rs?raw';
@@ -208,6 +210,28 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     sourceCode: sourceAl2205IolinkDido,
     sourceFilename: 'al2205-iolink-dido/firmware/main.c',
     kind: 'lab',
+  },
+  {
+    boardId: 'stm32h5-uds-ecu',
+    chipId: 'stm32h563',
+    name: 'STM32H5 UDS ECU',
+    description:
+      'STM32H5 ECU example on the H563 model: FDCAN loopback, UDSLib ISO-TP over CAN-FD, and ReadDataByIdentifier 0xF190.',
+    arch: 'ARM Cortex-M33',
+    chipYaml: chipStm32h563,
+    systemYaml: systemH563UdsEcu,
+    demoFirmwarePath: `${BASE}wasm/demo-stm32h5-uds-ecu.elf`,
+    mcuComponentType: 'nucleo-h563zi',
+    sourceCode: sourceH563UdsEcu,
+    sourceFilename: 'h563-uds-ecu/firmware/main.c',
+    kind: 'lab',
+    summary: {
+      title: 'STM32H5 UDS ECU',
+      description: 'A minimal diagnostic ECU: FDCAN internal loopback, UDSLib ISO-TP CAN-FD, and VIN DID 0xF190.',
+      nextStep: 'Click Run to issue the UDS 0x22 F190 request and watch the UART report the positive response.',
+      nextStepRunning: 'Running UDS over FDCAN loopback.',
+    },
+    runHint: 'Click Run — the firmware sends 0x22 F190 over FDCAN loopback and prints UDS_OK.',
   },
   {
     boardId: 'bme280-weather-lab',

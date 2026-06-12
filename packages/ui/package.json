@@ -18,7 +18,7 @@
   ],
   "scripts": {
     "dev": "vite build --watch",
-    "build": "tsc -b && vite build",
+    "build": "npm --prefix ../board-config run build && tsc -b && vite build",
     "test": "vitest run --config vitest.config.ts",
     "test:watch": "vitest --config vitest.config.ts"
   },

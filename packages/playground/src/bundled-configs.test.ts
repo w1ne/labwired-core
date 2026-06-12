@@ -109,6 +109,18 @@ describe('BOARD_CONFIGS', () => {
     expect(adxl345?.demoFirmwarePath).toContain('demo-adxl345-sensor-lab.elf');
   });
 
+  it('bundles the STM32H5 FDCAN UDS ECU lab for the playground', () => {
+    const uds = BOARD_CONFIGS.find((config) => config.boardId === 'stm32h5-uds-ecu');
+
+    expect(uds).toBeDefined();
+    expect(uds?.chipId).toBe('stm32h563');
+    expect(uds?.systemYaml).toContain('name: "h563-uds-ecu"');
+    expect(uds?.chipYaml).toContain('type: "fdcan"');
+    expect(uds?.demoFirmwarePath).toContain('demo-stm32h5-uds-ecu.elf');
+    expect(uds?.sourceCode).toContain('LABWIRED-H563-UDS');
+    expect(uds?.kind).toBe('lab');
+  });
+
   it('pickerBoards() contains no kind:"lab" entries — labs belong in Examples, not Boards', () => {
     const labsInPicker = pickerBoards().filter((b) => b.kind === 'lab');
     expect(
