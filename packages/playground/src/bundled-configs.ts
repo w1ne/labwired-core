@@ -216,7 +216,7 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     chipId: 'stm32h563',
     name: 'STM32H5 UDS ECU',
     description:
-      'STM32H5 ECU example on the H563 model: FDCAN loopback, UDSLib ISO-TP over CAN-FD, and ReadDataByIdentifier 0xF190.',
+      'STM32H5 ECU example on the H563 model: virtual diagnostic tester, reusable CAN transceiver block, UDSLib ISO-TP over CAN-FD, and ReadDataByIdentifier 0xF190.',
     arch: 'ARM Cortex-M33',
     chipYaml: chipStm32h563,
     systemYaml: systemH563UdsEcu,
@@ -227,11 +227,11 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     kind: 'lab',
     summary: {
       title: 'STM32H5 UDS ECU',
-      description: 'A minimal diagnostic ECU: FDCAN internal loopback, UDSLib ISO-TP CAN-FD, and VIN DID 0xF190.',
-      nextStep: 'Click Run to issue the UDS 0x22 F190 request and watch the UART report the positive response.',
-      nextStepRunning: 'Running UDS over FDCAN loopback.',
+      description: 'A minimal diagnostic ECU driven by a reusable virtual CAN diagnostic tester over the FDCAN model.',
+      nextStep: 'Click Run to let the tester send UDS 0x22 F190 and watch the logic analyzer decode CAN_H/CAN_L traffic.',
+      nextStepRunning: 'Running UDS over the simulated CAN bus.',
     },
-    runHint: 'Click Run — the firmware sends 0x22 F190 over FDCAN loopback and prints UDS_OK.',
+    runHint: 'Click Run - the virtual tester sends 0x22 F190 and the ECU answers with VIN DID 0xF190.',
   },
   {
     boardId: 'bme280-weather-lab',

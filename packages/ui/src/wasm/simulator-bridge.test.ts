@@ -83,3 +83,43 @@ describe('SimulatorBridge cycle accounting', () => {
     expect(bridge.totalCycles).toBe(250_000);
   });
 });
+
+describe('SimulatorBridge FDCAN trace normalization', () => {
+  it('converts FDCAN trace entries into plain objects', () => {
+    const bridge = bridgeWith({
+      fdcan_trace_snapshot: () => [
+        new Map<string, unknown>([
+          ['seq', 1],
+          ['peripheral', 'fdcan1'],
+          ['direction', 'tx'],
+          ['id', 0x7e0],
+          ['data', [0x03, 0x22, 0xf1, 0x90]],
+          ['extended', false],
+          ['fd', false],
+          ['bitrate_switch', false],
+          ['remote', false],
+        ]),
+      ],
+    });
+
+    const frames = bridge.fdcanTraceSnapshot();
+    expect(frames).toEqual([
+      {
+        seq: 1,
+        peripheral: 'fdcan1',
+        direction: 'tx',
+        id: 0x7e0,
+        data: [0x03, 0x22, 0xf1, 0x90],
+        extended: false,
+        fd: false,
+        bitrate_switch: false,
+        remote: false,
+      },
+    ]);
+    expect(frames[0].data[1]).toBe(0x22);
+  });
+
+  it('returns an empty trace when the local wasm bundle is older than the bridge API', () => {
+    expect(bridgeWith({}).fdcanTraceSnapshot()).toEqual([]);
+  });
+});

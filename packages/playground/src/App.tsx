@@ -291,9 +291,9 @@ export function makeStarterDiagram(config: BoardConfig): Diagram {
   }
 
   if (config.boardId === 'stm32h5-uds-ecu') {
-    // STM32H563 UDS ECU. The firmware currently exercises FDCAN1 internal
-    // loopback; the reusable CAN blocks make the intended diagnostic bus
-    // explicit while the UDS decoder reads the firmware's trace markers.
+    // STM32H563 UDS ECU with a reusable diagnostic tester on the CAN bus.
+    // The logic analyzer decodes the simulator's FDCAN frame trace for the
+    // probed CAN_H/CAN_L net.
     return {
       ...createEmptyDiagram(config.chipId),
       parts: [
