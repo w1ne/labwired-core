@@ -193,6 +193,10 @@ const CLASS_MARKERS: &[(&str, &str)] = &[
     ("iwdg", "wdt"),
     ("wwdg", "wdt"),
     ("wdt", "wdt"),
+    // Deliberately "fdcan", not "can": bxCAN instances (stm32f103
+    // `bxcan1`, stm32l476 `can1`) must not declare the class until
+    // their fixtures actually check it.
+    ("fdcan", "can"),
     // NOTE: "rtc_cntl" -> clock is matched FIRST (listed above); bare "rtc"
     // ids map to the rtc class.
     ("rtc", "rtc"),
@@ -316,6 +320,14 @@ const fn fast_boot(chip: &'static str, chip_yaml: &'static str, elf: &'static st
     }
 }
 
+impl Tier1Target {
+    /// Beachhead classes on top of a `fast_boot` shape.
+    const fn with_extra_classes(mut self, extra: &'static [&'static str]) -> Self {
+        self.extra_classes = extra;
+        self
+    }
+}
+
 // One row per SILICON — board variants share their chip's row
 // (esp32s3-zero → esp32s3, stm32f401cdu6 → stm32f401).
 // Targets whose fixture ELF is not committed yet appear in the matrix as
@@ -381,7 +393,8 @@ pub const TIER1_TARGETS: &[Tier1Target] = &[
         "stm32h563",
         "configs/chips/stm32h563.yaml",
         "tests/fixtures/tier1/stm32h563.elf",
-    ),
+    )
+    .with_extra_classes(&["can"]),
     fast_boot(
         "stm32l073",
         "configs/chips/stm32l073.yaml",

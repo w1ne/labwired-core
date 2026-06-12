@@ -19,6 +19,7 @@ pub mod dwt;
 pub mod esp32;
 pub mod esp32s3;
 pub mod exti;
+pub mod fdcan;
 pub mod flash;
 pub mod fmc;
 pub mod gpdma;
