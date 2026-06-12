@@ -29,17 +29,11 @@
     border-radius: var(--lw-radius-card);
   }
 
-  /* Hide every legacy chrome surface the Studio shell replaces. Keep only the canvas + right-side wire/board inspector. */
-  [data-legacy-shell] .playground-header,
-  [data-legacy-shell] .playground-footer,
-  [data-legacy-shell] .sim-controls-bar,
-  [data-legacy-shell] .editor-sidebar-left,
-  [data-legacy-shell] .editor-bottom-pane,
-  [data-legacy-shell] .bottom-tabs,
-  [data-legacy-shell] .demo-banner,
+  /* The Studio shell renders its own top chrome, palette, sim controls and
+     dev drawer; the playground tree below it keeps only the canvas + the
+     right-side inspector. The right-sidebar toggle and the code pane stay
+     hidden here (the code pane is revealed in code-open mode below). */
   [data-legacy-shell] .sidebar-toggle,
-  [data-legacy-shell] .header-separator,
-  [data-legacy-shell] .toolbar-group,
   [data-legacy-shell] .editor-code-pane {
     display: none !important;
   }
