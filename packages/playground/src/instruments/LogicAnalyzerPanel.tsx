@@ -8,6 +8,7 @@ import {
   getDecoderAvailability,
   type LogicAnalyzerSample,
 } from './logicAnalyzerCapture';
+import { canSamplesFromTrace, maxTraceSeq } from './canWaveform';
 import {
   getIolinkDecoderBinding,
   getLogicAnalyzerChannelBindings,
@@ -46,6 +47,7 @@ export function LogicAnalyzerPanel({
 }: LogicAnalyzerPanelProps) {
   const [armed, setArmed] = useState(true);
   const [samples, setSamples] = useState<LogicAnalyzerSample[]>([]);
+  const [canSamples, setCanSamples] = useState<LogicAnalyzerSample[]>([]);
   const bindings = getLogicAnalyzerChannelBindings(diagram, analyzerId);
   const iolink = getIolinkDecoderBinding(diagram, analyzerId);
   const uart = getUartDecoderBinding(diagram, analyzerId);
@@ -71,13 +73,71 @@ export function LogicAnalyzerPanel({
       setSamples((prev) => [...prev.slice(-(MAX_SAMPLES - 1)), sample]);
     };
 
-    if (!running || !armed) return;
+    if (!running || !armed || uds.connected) return;
     capture();
     const id = window.setInterval(capture, pollMs);
     return () => window.clearInterval(id);
-  }, [analyzerId, armed, diagram, pollMs, running, bridge]);
+  }, [analyzerId, armed, diagram, pollMs, running, bridge, uds.connected]);
 
-  const latest = samples[samples.length - 1] ?? null;
+  // CAN_H/CAN_L channels are not GPIO — their waveform is reconstructed bit-for-bit
+  // from the real FDCAN frame trace (see canWire.ts), so RAW shows genuine bus edges.
+  const udsKey = uds.channels.map((c) => `${c.channel}:${c.pin}:${c.peripheral}`).join('|');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const canChannels = useMemo(() => uds.channels.map((c) => ({ channel: c.channel, pin: c.pin })), [udsKey]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const canPeripherals = useMemo(() => new Set(uds.channels.map((c) => c.peripheral)), [udsKey]);
+
+  // Frames at or below this seq are hidden — set by Clear so the CAN view can be
+  // emptied even though it derives from the persistent FDCAN trace.
+  const clearedSeqRef = useRef(-1);
+
+  useEffect(() => {
+    setCanSamples([]);
+    clearedSeqRef.current = -1;
+  }, [analyzerId, diagram]);
+
+  useEffect(() => {
+    // Guard first: when stopped (or no CAN/idle sim) we don't poll, so the
+    // waveform genuinely freezes instead of repopulating from the trace.
+    if (!uds.connected || !running || !armed) return;
+    const poll = () => {
+      const b = bridgeRef.current;
+      if (!b) return;
+      try {
+        const trace = b.fdcanTraceSnapshot();
+        // A re-run resets the trace (seq restarts) — drop a stale Clear baseline
+        // so fresh traffic reappears instead of staying hidden.
+        if (maxTraceSeq(trace, canPeripherals) < clearedSeqRef.current) clearedSeqRef.current = -1;
+        setCanSamples(
+          canSamplesFromTrace({
+            trace,
+            canChannels,
+            peripherals: canPeripherals,
+            clearedSeq: clearedSeqRef.current,
+          }),
+        );
+      } catch {
+        /* bridge may be mid-teardown between Run/Stop; ignore one tick */
+      }
+    };
+    poll();
+    const id = window.setInterval(poll, pollMs);
+    return () => window.clearInterval(id);
+  }, [uds.connected, running, armed, pollMs, bridge, canChannels, canPeripherals]);
+
+  const handleClear = () => {
+    if (uds.connected) {
+      const b = bridgeRef.current;
+      // Hide everything captured so far; only frames after this point reappear.
+      clearedSeqRef.current = b ? maxTraceSeq(b.fdcanTraceSnapshot(), canPeripherals) : -1;
+      setCanSamples([]);
+    } else {
+      setSamples([]);
+    }
+  };
+
+  const displaySamples = uds.connected ? canSamples : samples;
+  const latest = displaySamples[displaySamples.length - 1] ?? null;
   const sampleRate = useMemo(() => {
     if (samples.length < 2) return '0 Sa/s';
     const dt = samples[samples.length - 1].t - samples[0].t;
@@ -87,7 +147,7 @@ export function LogicAnalyzerPanel({
 
   const copyCsv = () => {
     const header = ['t_ms', 'CH0', 'CH1', 'CH2', 'CH3'].join(',');
-    const body = samples
+    const body = displaySamples
       .map((sample) => [
         sample.t.toFixed(1),
         ...['CH0', 'CH1', 'CH2', 'CH3'].map((channel) => {
@@ -140,8 +200,8 @@ export function LogicAnalyzerPanel({
         </div>
         <div className="flex items-center gap-2 font-mono text-[11px]">
           <span className={armed ? 'text-green-500' : 'text-fg-tertiary'}>{armed ? 'ARMED' : 'STOPPED'}</span>
-          <span className="text-fg-tertiary">{samples.length} samples</span>
-          <span className="text-fg-tertiary">{sampleRate}</span>
+          <span className="text-fg-tertiary">{displaySamples.length} {uds.connected ? 'bits' : 'samples'}</span>
+          <span className="text-fg-tertiary">{uds.connected ? 'CAN bus' : sampleRate}</span>
           <button
             type="button"
             className="h-7 rounded border border-border px-2 text-fg-secondary hover:text-fg-primary"
@@ -152,7 +212,7 @@ export function LogicAnalyzerPanel({
           <button
             type="button"
             className="h-7 rounded border border-border px-2 text-fg-secondary hover:text-fg-primary"
-            onClick={() => setSamples([])}
+            onClick={handleClear}
           >
             Clear
           </button>
@@ -191,7 +251,14 @@ export function LogicAnalyzerPanel({
       </div>
 
       {decoderId === 'raw' ? (
-        <RawWaveform samples={samples} />
+        <>
+          {uds.connected ? (
+            <div className="border-b border-border px-3 py-1.5 font-mono text-[11px] text-fg-secondary">
+              CAN_H/CAN_L bits reconstructed from the FDCAN frame trace ({displaySamples.length} bits).
+            </div>
+          ) : null}
+          <RawWaveform samples={displaySamples} />
+        </>
       ) : decoderId === 'iolink' && iolink.connected ? (
         <>
           <div className="flex items-center justify-between border-b border-border px-3 py-1.5 font-mono text-[11px] text-fg-secondary">
