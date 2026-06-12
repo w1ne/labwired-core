@@ -1,6 +1,7 @@
 import type { Diagram, SimulatorBridge } from '@labwired/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { IoLinkAnalyzer } from './IoLinkAnalyzer';
+import { UdsAnalyzer } from './UdsAnalyzer';
 import { UartAnalyzer } from './UartAnalyzer';
 import {
   captureLogicAnalyzerSample,
@@ -10,6 +11,7 @@ import {
 import {
   getIolinkDecoderBinding,
   getLogicAnalyzerChannelBindings,
+  getUdsDecoderBinding,
   getUartDecoderBinding,
 } from './logicAnalyzerConnections';
 
@@ -27,6 +29,7 @@ const DECODERS = [
   { id: 'raw', label: 'Raw' },
   { id: 'iolink', label: 'IO-Link' },
   { id: 'uart', label: 'UART' },
+  { id: 'uds', label: 'UDS' },
   { id: 'spi', label: 'SPI' },
 ] as const;
 
@@ -46,6 +49,7 @@ export function LogicAnalyzerPanel({
   const bindings = getLogicAnalyzerChannelBindings(diagram, analyzerId);
   const iolink = getIolinkDecoderBinding(diagram, analyzerId);
   const uart = getUartDecoderBinding(diagram, analyzerId);
+  const uds = getUdsDecoderBinding(diagram, analyzerId);
   const availability = getDecoderAvailability(diagram, analyzerId);
   const decoderId = DECODERS.some((candidate) => candidate.id === decoder) ? decoder : 'raw';
   const bridgeRef = useRef(bridge);
@@ -111,7 +115,9 @@ export function LogicAnalyzerPanel({
                   ? availability.iolink
                   : candidate.id === 'uart'
                     ? availability.uart
-                    : availability.spi;
+                    : candidate.id === 'uds'
+                      ? availability.uds
+                      : availability.spi;
             return (
               <button
                 key={candidate.id}
@@ -210,11 +216,23 @@ export function LogicAnalyzerPanel({
             <UartAnalyzer bridge={bridge} running={running && armed} binding={uart} />
           </div>
         </>
+      ) : decoderId === 'uds' && uds.connected ? (
+        <>
+          <div className="flex items-center justify-between border-b border-border px-3 py-1.5 font-mono text-[11px] text-fg-secondary">
+            <span>UDS decoder armed</span>
+            <span>{uds.channels.map((channel) => `${channel.channel}:${channel.part}.${channel.pin}`).join('  ')}</span>
+          </div>
+          <div className="min-h-0 flex-1">
+            <UdsAnalyzer bridge={bridge} running={running && armed} binding={uds} />
+          </div>
+        </>
       ) : (
         <div className="flex flex-1 items-center justify-center px-6 text-center text-[12px] text-fg-tertiary">
           {decoderId === 'iolink'
             ? 'Connect a channel to the IO-Link TX or RX net to decode traffic.'
-            : 'This decoder needs core bitstream traces before it can decode selected lines.'}
+            : decoderId === 'uds'
+              ? 'Connect a channel to the diagnostic CAN_H or CAN_L net to decode the H563 UDS exchange.'
+              : 'This decoder needs core bitstream traces before it can decode selected lines.'}
         </div>
       )}
     </div>

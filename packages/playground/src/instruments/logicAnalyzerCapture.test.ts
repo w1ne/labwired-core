@@ -59,6 +59,7 @@ describe('logic analyzer capture', () => {
       raw: true,
       iolink: true,
       uart: true,
+      uds: false,
       spi: false,
     });
   });

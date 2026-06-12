@@ -145,7 +145,7 @@ function resolveBindingPartId(diagram: Diagram, binding: BoardIoBinding): string
   return binding.id;
 }
 
-function makeStarterDiagram(config: BoardConfig): Diagram {
+export function makeStarterDiagram(config: BoardConfig): Diagram {
   const mcu: Part = {
     id: 'mcu',
     type: config.mcuComponentType,
@@ -286,6 +286,33 @@ function makeStarterDiagram(config: BoardConfig): Diagram {
         // Logic Analyzer probes: CH0 on the master TX, CH1 on the master RX.
         { from: { part: 'iolink_probe', pin: 'CH0' }, to: { part: 'iolink_master', pin: 'TX' }, color: '#F5B642' },
         { from: { part: 'iolink_probe', pin: 'CH1' }, to: { part: 'iolink_master', pin: 'RX' }, color: '#F5B642' },
+      ],
+    };
+  }
+
+  if (config.boardId === 'stm32h5-uds-ecu') {
+    // STM32H563 UDS ECU. The firmware currently exercises FDCAN1 internal
+    // loopback; the reusable CAN blocks make the intended diagnostic bus
+    // explicit while the UDS decoder reads the firmware's trace markers.
+    return {
+      ...createEmptyDiagram(config.chipId),
+      parts: [
+        mcu,
+        { id: 'can_xcvr', type: 'can-transceiver', x: 500, y: 210, rotate: 0, attrs: {} },
+        { id: 'uds_tester', type: 'can-diagnostic-tool', x: 680, y: 205, rotate: 0, attrs: {} },
+        { id: 'uds_probe', type: 'logic-analyzer', x: 880, y: 196, rotate: 0, attrs: { decoder: 'uds' } },
+      ],
+      wires: [
+        { from: { part: 'mcu', pin: 'PD1' }, to: { part: 'can_xcvr', pin: 'TXD' }, color: '#06D6A0' },
+        { from: { part: 'mcu', pin: 'PD0' }, to: { part: 'can_xcvr', pin: 'RXD' }, color: '#118AB2' },
+        { from: { part: 'mcu', pin: 'VCC' }, to: { part: 'can_xcvr', pin: 'VCC' }, color: '#FF6B6B' },
+        { from: { part: 'mcu', pin: 'GND' }, to: { part: 'can_xcvr', pin: 'GND' }, color: '#888888' },
+        { from: { part: 'can_xcvr', pin: 'CAN_H' }, to: { part: 'uds_tester', pin: 'CAN_H' }, color: '#06D6A0' },
+        { from: { part: 'can_xcvr', pin: 'CAN_L' }, to: { part: 'uds_tester', pin: 'CAN_L' }, color: '#118AB2' },
+        { from: { part: 'can_xcvr', pin: 'GND' }, to: { part: 'uds_tester', pin: 'GND' }, color: '#888888' },
+        { from: { part: 'uds_probe', pin: 'CH0' }, to: { part: 'uds_tester', pin: 'CAN_H' }, color: '#F5B642' },
+        { from: { part: 'uds_probe', pin: 'CH1' }, to: { part: 'uds_tester', pin: 'CAN_L' }, color: '#F5B642' },
+        { from: { part: 'uds_probe', pin: 'GND' }, to: { part: 'uds_tester', pin: 'GND' }, color: '#888888' },
       ],
     };
   }

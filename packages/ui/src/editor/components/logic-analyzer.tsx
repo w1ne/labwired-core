@@ -28,7 +28,7 @@ export const logicAnalyzerComponent: ComponentDef = {
       key: 'decoder',
       label: 'Decoder',
       type: 'select',
-      options: ['raw', 'iolink', 'uart', 'spi'],
+      options: ['raw', 'iolink', 'uart', 'uds', 'spi'],
       defaultValue: 'raw',
     },
   ],

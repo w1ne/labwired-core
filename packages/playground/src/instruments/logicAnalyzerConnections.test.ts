@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { Diagram, Wire } from '@labwired/ui';
-import { getIolinkDecoderBinding, getLogicAnalyzerChannelBindings } from './logicAnalyzerConnections';
+import {
+  getIolinkDecoderBinding,
+  getLogicAnalyzerChannelBindings,
+  getUdsDecoderBinding,
+} from './logicAnalyzerConnections';
 
 const w = (fromPart: string, fromPin: string, toPart: string, toPin: string): Wire => ({
   from: { part: fromPart, pin: fromPin },
@@ -41,6 +45,37 @@ describe('logic analyzer connection inference', () => {
       channels: [
         { channel: 'CH0', pin: 'RX' },
         { channel: 'CH1', pin: 'TX' },
+      ],
+    });
+  });
+
+  it('arms the UDS decoder when a channel taps the diagnostic CAN tool bus', () => {
+    const udsDiagram: Diagram = {
+      version: 1,
+      board: 'stm32h563',
+      parts: [
+        { id: 'mcu', type: 'nucleo-h563zi', x: 0, y: 0, rotate: 0, attrs: {} },
+        { id: 'can_xcvr', type: 'can-transceiver', x: 360, y: 170, rotate: 0, attrs: {} },
+        { id: 'uds_tester', type: 'can-diagnostic-tool', x: 520, y: 170, rotate: 0, attrs: {} },
+        { id: 'uds_probe', type: 'logic-analyzer', x: 760, y: 170, rotate: 0, attrs: { decoder: 'uds' } },
+      ],
+      wires: [
+        w('mcu', 'PD1', 'can_xcvr', 'TXD'),
+        w('mcu', 'PD0', 'can_xcvr', 'RXD'),
+        w('can_xcvr', 'CAN_H', 'uds_tester', 'CAN_H'),
+        w('can_xcvr', 'CAN_L', 'uds_tester', 'CAN_L'),
+        w('uds_probe', 'CH0', 'uds_tester', 'CAN_H'),
+        w('uds_probe', 'CH1', 'uds_tester', 'CAN_L'),
+      ],
+    };
+
+    expect(getUdsDecoderBinding(udsDiagram, 'uds_probe')).toEqual({
+      connected: true,
+      channels: [
+        { channel: 'CH0', part: 'can_xcvr', pin: 'CAN_H' },
+        { channel: 'CH0', part: 'uds_tester', pin: 'CAN_H' },
+        { channel: 'CH1', part: 'can_xcvr', pin: 'CAN_L' },
+        { channel: 'CH1', part: 'uds_tester', pin: 'CAN_L' },
       ],
     });
   });

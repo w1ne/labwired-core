@@ -2,6 +2,7 @@ import { getPinMapping, type Diagram, type WireEndpoint } from '@labwired/ui';
 import {
   getIolinkDecoderBinding,
   getLogicAnalyzerChannelBindings,
+  getUdsDecoderBinding,
   getUartDecoderBinding,
 } from './logicAnalyzerConnections';
 
@@ -22,6 +23,7 @@ export interface DecoderAvailability {
   raw: true;
   iolink: boolean;
   uart: boolean;
+  uds: boolean;
   spi: boolean;
 }
 
@@ -128,6 +130,7 @@ export function getDecoderAvailability(diagram: Diagram, analyzerId: string): De
     raw: true,
     iolink: iolinkConnected,
     uart: getUartDecoderBinding(diagram, analyzerId).connected,
+    uds: getUdsDecoderBinding(diagram, analyzerId).connected,
     spi: false,
   };
 }

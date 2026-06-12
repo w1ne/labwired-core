@@ -29,6 +29,8 @@ function generatePins(): PinDef[] {
 
   pins.push({ id: 'VCC', x: W / 2 - 20, y: H, side: 'bottom', label: '3V3' });
   pins.push({ id: 'GND', x: W / 2 + 20, y: H, side: 'bottom', label: 'GND' });
+  pins.push({ id: 'PD0', x: W, y: PIN_START_Y + 16 * PIN_SPACING, side: 'right', label: 'PD0' });
+  pins.push({ id: 'PD1', x: W, y: PIN_START_Y + 17 * PIN_SPACING, side: 'right', label: 'PD1' });
 
   return pins;
 }
