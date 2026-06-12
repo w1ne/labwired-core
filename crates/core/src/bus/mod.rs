@@ -579,7 +579,7 @@ impl SystemBus {
     /// for SPI peripherals with no D/C-observing device (one cheap downcast).
     fn maybe_latch_dc(&mut self, idx: usize) {
         use crate::peripherals::esp32::spi::Esp32Spi;
-        use crate::peripherals::spi::{SpiDevice, Spi};
+        use crate::peripherals::spi::{Spi, SpiDevice};
 
         // Borrow the attached-device list off whichever SPI peripheral kind
         // this is (generic `Spi` for STM32/Nordic, `Esp32Spi` for ESP32).
@@ -597,7 +597,9 @@ impl SystemBus {
                 return any.downcast_mut::<Spi>().map(|s| &mut s.attached_devices);
             }
             if any.is::<Esp32Spi>() {
-                return any.downcast_mut::<Esp32Spi>().map(|s| &mut s.attached_devices);
+                return any
+                    .downcast_mut::<Esp32Spi>()
+                    .map(|s| &mut s.attached_devices);
             }
             None
         }

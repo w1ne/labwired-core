@@ -1724,9 +1724,9 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     if let Some(sys_path) = &args.system {
         match labwired_config::SystemManifest::from_file(sys_path) {
             Ok(manifest) => {
-                if let Err(e) =
-                    labwired_core::system::xtensa::attach_esp32_external_devices(&mut bus, &manifest)
-                {
+                if let Err(e) = labwired_core::system::xtensa::attach_esp32_external_devices(
+                    &mut bus, &manifest,
+                ) {
                     eprintln!("error: attaching external devices from {sys_path:?}: {e}");
                     return ExitCode::from(EXIT_CONFIG_ERROR);
                 }
@@ -4144,6 +4144,44 @@ fn run_test(args: TestArgs) -> ExitCode {
                 &firmware_path,
                 system_path.as_ref(),
             );
+            // Device-block render readout. Surfaces the attached panel block's
+            // REAL render state — refresh_gen AND black-plane ink — so a generic
+            // verify (e.g. proto.cat's device loop) can judge whether the
+            // device-block actually PAINTED, not merely refreshed. A refresh with
+            // a blank plane is a false positive (the DC-latch class of bug; see
+            // FIDELITY.md §E2). Emitted to stderr alongside the boot logs.
+            {
+                use labwired_core::peripherals::components::{
+                    Ssd1680Tricolor290, Uc8151dTricolor290,
+                };
+                use labwired_core::peripherals::esp32::spi::Esp32Spi;
+                if let Some(idx) = machine.bus.find_peripheral_index_by_name("spi3") {
+                    if let Some(any) = machine.bus.peripherals[idx].dev.as_any() {
+                        if let Some(spi3) = any.downcast_ref::<Esp32Spi>() {
+                            for dev in &spi3.attached_devices {
+                                let Some(a) = dev.as_any() else { continue };
+                                if let Some(p) = a.downcast_ref::<Ssd1680Tricolor290>() {
+                                    let ink =
+                                        p.black_plane().iter().filter(|&&b| b != 0xFF).count();
+                                    eprintln!(
+                                        "[device-block] ssd1680_tricolor_290 refresh_gen={} black_ink={}",
+                                        p.refresh_generation(),
+                                        ink
+                                    );
+                                } else if let Some(p) = a.downcast_ref::<Uc8151dTricolor290>() {
+                                    let ink =
+                                        p.black_plane().iter().filter(|&&b| b != 0xFF).count();
+                                    eprintln!(
+                                        "[device-block] uc8151d_tricolor_290 refresh_gen={} black_ink={}",
+                                        p.refresh_generation(),
+                                        ink
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             if let Some(ref key) = api_key_opt {
                 use sha2::{Digest, Sha256};
                 let mut hasher = Sha256::new();
