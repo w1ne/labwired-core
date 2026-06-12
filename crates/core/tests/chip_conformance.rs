@@ -157,26 +157,78 @@ const CHIPS: &[ChipConf] = &[
 fn dynamic_excludes(name: &str) -> &'static [(u64, u64, &'static str)] {
     match name {
         "stm32l073" => &[
-            (0x40021004, 0x40021004, "RCC_ICSCR: per-die HSI16 factory calibration"),
-            (0x40021008, 0x40021008, "RCC: clock tree configured before reset_halt (warm)"),
-            (0x40021030, 0x40021030, "RCC: warm peripheral-enable / clock-ready state"),
-            (0x4002103c, 0x4002103c, "RCC_CSR: reset-cause flags latched by power-on"),
-            (0x4000002c, 0x4000002c, "TIM2_ARR: timer clock-gated at reset (APB1 off → reads 0)"),
+            (
+                0x40021004,
+                0x40021004,
+                "RCC_ICSCR: per-die HSI16 factory calibration",
+            ),
+            (
+                0x40021008,
+                0x40021008,
+                "RCC: clock tree configured before reset_halt (warm)",
+            ),
+            (
+                0x40021030,
+                0x40021030,
+                "RCC: warm peripheral-enable / clock-ready state",
+            ),
+            (
+                0x4002103c,
+                0x4002103c,
+                "RCC_CSR: reset-cause flags latched by power-on",
+            ),
+            (
+                0x4000002c,
+                0x4000002c,
+                "TIM2_ARR: timer clock-gated at reset (APB1 off → reads 0)",
+            ),
         ],
         "esp32c3" => &[
-            (0x60000000, 0x6000007f, "UART0: ROM-driven boot console — warm post-bootloader state"),
-            (0x60004038, 0x6000403f, "GPIO: strapping / input pin levels (board state)"),
-            (0x60008018, 0x60008018, "RTC_CNTL: dynamic reset/clock state"),
+            (
+                0x60000000,
+                0x6000007f,
+                "UART0: ROM-driven boot console — warm post-bootloader state",
+            ),
+            (
+                0x60004038,
+                0x6000403f,
+                "GPIO: strapping / input pin levels (board state)",
+            ),
+            (
+                0x60008018,
+                0x60008018,
+                "RTC_CNTL: dynamic reset/clock state",
+            ),
             (0x60008038, 0x60008038, "RTC_CNTL: dynamic clock state"),
             (0x60008044, 0x60008044, "RTC_CNTL: dynamic state"),
             (0x60008090, 0x60008090, "RTC_CNTL: dynamic timer state"),
-            (0x600080a8, 0x600080b3, "RTC_CNTL: per-die analog calibration"),
-            (0x600080bc, 0x600080cf, "RTC_CNTL: XTAL / sensor calibration"),
-            (0x60009004, 0x6000903f, "IO_MUX: ROM reconfigured pad pull-up/drive per function (warm)"),
-            (0x60016000, 0x600160ff, "RMT: clock-gated at reset (silicon reads 0)"),
+            (
+                0x600080a8,
+                0x600080b3,
+                "RTC_CNTL: per-die analog calibration",
+            ),
+            (
+                0x600080bc,
+                0x600080cf,
+                "RTC_CNTL: XTAL / sensor calibration",
+            ),
+            (
+                0x60009004,
+                0x6000903f,
+                "IO_MUX: ROM reconfigured pad pull-up/drive per function (warm)",
+            ),
+            (
+                0x60016000,
+                0x600160ff,
+                "RMT: clock-gated at reset (silicon reads 0)",
+            ),
             (0x6001301c, 0x6001301c, "I2C0: dynamic bus/FSM status"),
             (0x600c0040, 0x600c00ff, "SYSTEM: dynamic status"),
-            (0x600c2040, 0x600c20ff, "INTERRUPT_CORE: dynamic pending/status"),
+            (
+                0x600c2040,
+                0x600c20ff,
+                "INTERRUPT_CORE: dynamic pending/status",
+            ),
         ],
         _ => &[],
     }
