@@ -36,6 +36,7 @@ const TITLES: Record<string, string> = {
   labwired_search_tools: 'Search Tools',
   labwired_define_component: 'Define Component',
   labwired_compile_diagram: 'Compile Diagram',
+  labwired_ingest_svd: 'Ingest SVD',
 };
 
 export function toolTitle(name: string): string {

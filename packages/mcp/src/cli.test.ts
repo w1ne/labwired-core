@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { rm } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 
 const DIST = join(import.meta.dirname, '..', 'dist', 'index.js');
@@ -237,5 +237,39 @@ describe('labwired_define_component', () => {
     expect(body.ok).toBe(true);
     expect(body.spec_path).toMatch(/\.labwired\/components\/tca9999\.yaml$/);
     expect(body.usage.manifest_external_device.type).toBe('ir');
+  });
+});
+
+describe('labwired_ingest_svd', () => {
+  const repoRoot = process.env.LABWIRED_REPO_ROOT ?? join(import.meta.dirname, '..', '..', '..');
+  const peripheralDir = join(repoRoot, '.labwired', 'peripherals');
+  const svdPath = join(repoRoot, 'core', 'tests', 'fixtures', 'test_device.svd');
+
+  afterEach(async () => {
+    const artifact = join(peripheralDir, 'gpioa.yaml');
+    if (existsSync(artifact)) {
+      await rm(artifact, { force: true });
+    }
+  });
+
+  it('is advertised in tools/list', async () => {
+    const tools = await listToolsViaStdio();
+    expect(tools.find((t: any) => t.name === 'labwired_ingest_svd')).toBeDefined();
+  });
+
+  it('ingests an SVD into descriptors + a paste-ready declarative snippet', async () => {
+    const svd = readFileSync(svdPath, 'utf8');
+    const result = await callToolViaStdio('labwired_ingest_svd', { svd_content: svd });
+    expect(result.isError).toBeFalsy();
+    const body = JSON.parse(result.content[0].text);
+    expect(body.ok).toBe(true);
+    expect(body.peripheral_count).toBe(1);
+    expect(body.peripherals[0].name).toBe('GPIOA');
+    expect(body.peripherals[0].descriptor_yaml).toContain('peripheral: GPIOA');
+    expect(body.peripherals[0].base_address).toMatch(/^0x[0-9A-F]{8}$/);
+    // Paste-ready chip-yaml block.
+    expect(body.manifest_snippet).toContain('type: declarative');
+    expect(body.manifest_snippet).toContain('base_address:');
+    expect(body.manifest_snippet).toContain('- id: gpioa');
   });
 });
