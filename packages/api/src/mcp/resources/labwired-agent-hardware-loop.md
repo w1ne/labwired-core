@@ -7,7 +7,7 @@ Use LabWired as a deterministic virtual hardware lab for firmware work.
 3. Build or update the diagram with an MCU, components, and wires.
 4. Validate the diagram with `labwired_validate_diagram` before running.
 5. Compile firmware outside hosted MCP using the documented scaffold and target flags.
-6. Run the ELF with `labwired_run`.
+6. Run the ELF with `labwired_run`, passing `elf_base64`, `target`, and `diagram`. The hosted connector compiles the diagram internally — pass the diagram object directly, not a system YAML. Use `labwired_compile_diagram` separately if you need to inspect or download the compiled `system_yaml`.
 7. Inspect serial output, cycle counts, stop reasons, and hardware diagnosis.
 8. Iterate on firmware or wiring until simulator evidence matches the intended behavior.
 

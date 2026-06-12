@@ -5,11 +5,12 @@ Use LabWired as a deterministic virtual hardware lab for firmware work.
 1. Choose a board with `labwired_list_boards`.
 2. Validate custom system YAML with `labwired_validate_system`.
 3. Build or update the diagram and validate it with `labwired_validate_diagram`.
-4. Compile firmware locally and pass the ELF as base64.
-5. Run with `labwired_run_lab` for a preconfigured board or `labwired_simulate` for raw YAML control.
-6. Inspect snapshots with `labwired_inspect_run`.
-7. Use `labwired_fuzz` when firmware exposes the fuzz contract.
-8. Iterate until serial, GPIO, cycle counts, and stop reasons match the intended behavior.
+4. Compile the diagram to a board manifest with `labwired_compile_diagram`. On success, the tool persists the manifest to `.labwired/boards/<name>.yaml` and returns a `board_path`. Use that path as the `--system` argument for `labwired_simulate`, or pass the returned `system_yaml` directly. Warnings are included in the response; errors abort compilation.
+5. Compile firmware locally and pass the ELF as base64.
+6. Run with `labwired_run_lab` for a preconfigured board or `labwired_simulate` for raw YAML control.
+7. Inspect snapshots with `labwired_inspect_run`.
+8. Use `labwired_fuzz` when firmware exposes the fuzz contract.
+9. Iterate until serial, GPIO, cycle counts, and stop reasons match the intended behavior.
 
 The local MCP server shells out to the `labwired` CLI. Set `LABWIRED_CLI` or `LABWIRED_REPO_ROOT` when running outside a checkout.
 

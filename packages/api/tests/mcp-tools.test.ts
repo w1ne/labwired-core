@@ -2,12 +2,13 @@ import { describe, it, expect } from 'vitest';
 import { listHostedTools, callHostedTool } from '../src/mcp/tools.js';
 
 describe('expanded MCP tools', () => {
-  it('advertises run, list_components, list_boards, search but NOT compile', () => {
+  it('advertises run, list_components, list_boards, search, and compile_diagram', () => {
     const names = listHostedTools().map((t) => t.name);
     expect(names).toContain('labwired_run');
     expect(names).toContain('labwired_list_components');
     expect(names).toContain('labwired_list_boards');
     expect(names).toContain('labwired_search_tools');
+    expect(names).toContain('labwired_compile_diagram');
     expect(names).not.toContain('labwired_compile');
   });
 
@@ -25,6 +26,39 @@ describe('expanded MCP tools', () => {
     expect(run?.annotations).toMatchObject({ readOnlyHint: false, openWorldHint: true });
     const listBoards = listHostedTools().find((t) => t.name === 'labwired_list_boards');
     expect(listBoards?.annotations).toMatchObject({ readOnlyHint: true });
+  });
+
+  it('labwired_compile_diagram has readOnlyHint false and title "Compile Diagram"', () => {
+    const compileTool = listHostedTools().find((t) => t.name === 'labwired_compile_diagram');
+    expect(compileTool).toBeDefined();
+    expect(compileTool!.title).toBe('Compile Diagram');
+    expect(compileTool!.annotations?.readOnlyHint).toBe(false);
+  });
+
+  it('labwired_compile_diagram compiles a clean dispenser diagram', async () => {
+    const env = { BUILDER_URL: 'https://b', BUILDER_SECRET: 'k', ENVIRONMENT: 'test' } as any;
+    const res = await callHostedTool({
+      name: 'labwired_compile_diagram',
+      arguments: {
+        diagram: {
+          board: 'esp32-s3-zero',
+          parts: [
+            { id: 'mcu', type: 'esp32-s3-zero' },
+            { id: 'pca1', type: 'pca9685', attrs: { i2c_address: '0x40' } },
+          ],
+          wires: [
+            { from: { part: 'mcu', pin: 'GPIO8' }, to: { part: 'pca1', pin: 'SDA' } },
+            { from: { part: 'mcu', pin: 'GPIO9' }, to: { part: 'pca1', pin: 'SCL' } },
+            { from: { part: 'mcu', pin: '3V3' }, to: { part: 'pca1', pin: 'VCC' } },
+            { from: { part: 'mcu', pin: 'GND' }, to: { part: 'pca1', pin: 'GND' } },
+          ],
+        },
+      },
+    }, env, { userId: 'u' });
+    expect(res.isError).toBeFalsy();
+    const body = JSON.parse(res.content[0].text);
+    expect(body.ok).toBe(true);
+    expect(body.system_yaml).toContain('i2c');
   });
 
   it('labwired_run rejects a target/board mismatch', async () => {

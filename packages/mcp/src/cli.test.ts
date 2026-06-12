@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { rm } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
 
+
 const DIST = join(import.meta.dirname, '..', 'dist', 'index.js');
 
 const INIT_MESSAGES = [
@@ -99,6 +100,96 @@ describe('@labwired/mcp stdio server', () => {
     expect(out).toContain('"uri":"labwired://guides/agent-hardware-loop"');
     expect(out).toContain('LabWired agent hardware loop');
     expect(out).toContain('labwired_validate_diagram');
+  });
+});
+
+describe('labwired_compile_diagram', () => {
+  const repoRoot = process.env.LABWIRED_REPO_ROOT ?? join(import.meta.dirname, '..', '..', '..');
+  const boardsDir = join(repoRoot, '.labwired', 'boards');
+
+  afterEach(async () => {
+    // Clean up persisted board artifacts
+    for (const file of ['esp32-s3-zero.yaml', 'test-board.yaml']) {
+      const artifact = join(boardsDir, file);
+      if (existsSync(artifact)) {
+        await rm(artifact, { force: true });
+      }
+    }
+  });
+
+  it('is advertised with title "Compile Diagram" and readOnlyHint false', async () => {
+    const tools = await listToolsViaStdio();
+    const tool = tools.find((t: any) => t.name === 'labwired_compile_diagram');
+    expect(tool).toBeDefined();
+    expect(tool.title).toBe('Compile Diagram');
+    expect(tool.annotations.readOnlyHint).toBe(false);
+  });
+
+  it('returns isError for a diagram with an unknown component type', async () => {
+    const result = await callToolViaStdio('labwired_compile_diagram', {
+      diagram: {
+        board: 'esp32-s3-zero',
+        parts: [
+          { id: 'mcu', type: 'esp32-s3-zero' },
+          { id: 'bad1', type: 'totally_unknown_part_xyz' },
+        ],
+        wires: [],
+      },
+    });
+    // UNKNOWN_COMPONENT is an error that should abort compile
+    expect(result.isError).toBe(true);
+  });
+
+  it('compiles a clean dispenser diagram → ok, board_path, i2c in yaml', async () => {
+    const result = await callToolViaStdio('labwired_compile_diagram', {
+      diagram: {
+        board: 'esp32-s3-zero',
+        parts: [
+          { id: 'mcu', type: 'esp32-s3-zero' },
+          { id: 'pca1', type: 'pca9685', attrs: { i2c_address: '0x40' } },
+        ],
+        wires: [
+          { from: { part: 'mcu', pin: 'GPIO8' }, to: { part: 'pca1', pin: 'SDA' } },
+          { from: { part: 'mcu', pin: 'GPIO9' }, to: { part: 'pca1', pin: 'SCL' } },
+          { from: { part: 'mcu', pin: '3V3' }, to: { part: 'pca1', pin: 'VCC' } },
+          { from: { part: 'mcu', pin: 'GND' }, to: { part: 'pca1', pin: 'GND' } },
+        ],
+      },
+    });
+    expect(result.isError).toBeFalsy();
+    const body = JSON.parse(result.content[0].text);
+    expect(body.ok).toBe(true);
+    expect(body.board_path).toMatch(/\.labwired\/boards\/.*\.yaml$/);
+    expect(body.system_yaml).toContain('i2c');
+  });
+});
+
+describe('labwired_validate_diagram (kernel codes)', () => {
+  it('reports kernel I2C_ADDR_CONFLICT when two devices share the same address', async () => {
+    // Two pca9685 at same address 0x40 on same bus
+    const result = await callToolViaStdio('labwired_validate_diagram', {
+      diagram: {
+        board: 'esp32-s3-zero',
+        parts: [
+          { id: 'mcu', type: 'esp32-s3-zero' },
+          { id: 'pca1', type: 'pca9685', attrs: { i2c_address: '0x40' } },
+          { id: 'pca2', type: 'pca9685', attrs: { i2c_address: '0x40' } },
+        ],
+        wires: [
+          { from: { part: 'mcu', pin: 'GPIO8' }, to: { part: 'pca1', pin: 'SDA' } },
+          { from: { part: 'mcu', pin: 'GPIO9' }, to: { part: 'pca1', pin: 'SCL' } },
+          { from: { part: 'mcu', pin: 'GPIO8' }, to: { part: 'pca2', pin: 'SDA' } },
+          { from: { part: 'mcu', pin: 'GPIO9' }, to: { part: 'pca2', pin: 'SCL' } },
+          { from: { part: 'mcu', pin: '3V3' }, to: { part: 'pca1', pin: 'VCC' } },
+          { from: { part: 'mcu', pin: 'GND' }, to: { part: 'pca1', pin: 'GND' } },
+          { from: { part: 'mcu', pin: '3V3' }, to: { part: 'pca2', pin: 'VCC' } },
+          { from: { part: 'mcu', pin: 'GND' }, to: { part: 'pca2', pin: 'GND' } },
+        ],
+      },
+    });
+    const body = JSON.parse(result.content[0].text);
+    const codes = (body.diagnostics as any[]).map((d: any) => d.code);
+    expect(codes).toContain('I2C_ADDR_CONFLICT');
   });
 });
 

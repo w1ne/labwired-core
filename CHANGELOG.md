@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Wiring Kernel**: named nets, electrical rule checks (ERC), and ERC-gated diagram compilation on both MCP surfaces. `labwired_validate_diagram` upgraded with full kernel ERC (I2C bus rules, driver conflicts, voltage mismatches, IRQ source ordinal validation for ESP32-S3). New `labwired_compile_diagram` compiles a diagram to a runnable board manifest with net-derived I2C bus binding; local surface persists to `.labwired/boards/`; hosted surface returns manifest inline.
 - **Component Model IR**: agents define off-chip I2C devices declaratively (`labwired_define_component`, `labwired asset validate-component`, `type: ir` manifest devices); PCA9685 and TMP102 reference specs gated by byte-equivalence tests.
 - **Web Playground**: `packages/playground` — interactive browser-based simulator with Monaco code editor, board canvas, sim controls, register inspector, serial monitor, and instruction trace. Ships with pre-compiled Arduino demo firmwares (STM32F103 Nucleo blinky, STM32F401RE Nucleo LED+button).
 - **Playground Demo UX**: First-load STM32 starter now opens as a visibly wired circuit, can auto-run once on clean loads, shows inline demo guidance, and exposes a one-click `Reset Demo` recovery path.

@@ -1,55 +1,12 @@
 import type { Env } from '../types.js';
 import type { HostedMcpIdentity, McpTool, McpToolResult } from './types.js';
-import { diagramToConfig, COMPONENT_META } from '@labwired/board-config';
+import { diagramToConfig, COMPONENT_META, composeDiagnostics, compile } from '@labwired/board-config';
+import type { ValidateDiagram } from '@labwired/board-config';
 import { builderRun } from './builder-client.js';
 import { getWorkspaceRecord, maybeResetMtdCycles, writeWorkspaceRecord } from '../keys.js';
 import { trackUsage } from '../usage.js';
 import { SEARCH_TOOLS_TOOL, SEARCH_TOOLS_TOOL_NAME, rankTools } from './search-tools.js';
 import { decorateTools } from './tool-metadata.js';
-
-interface HostedDiagnostic {
-  severity: 'error' | 'warning';
-  code:
-    | 'DIAGRAM_MALFORMED'
-    | 'UNKNOWN_COMPONENT'
-    | 'WIRE_INVALID_PART'
-    | 'WIRE_SELF_LOOP'
-    | 'PIN_NOT_ON_CHIP'
-    | 'BOARDIO_MULTIPLE_WIRES'
-    | 'NO_MCU'
-    | 'COMPONENT_DANGLING';
-  message: string;
-  location?: { part_id?: string; pin?: string };
-  fix?: string;
-}
-
-interface HostedValidationResult {
-  ok: boolean;
-  error_count: number;
-  warning_count: number;
-  diagnostics: HostedDiagnostic[];
-}
-
-interface DiagramPart {
-  id: string;
-  type: string;
-}
-
-interface WireEndpoint {
-  part: string;
-  pin: string;
-}
-
-interface DiagramWire {
-  from: WireEndpoint;
-  to: WireEndpoint;
-}
-
-interface HostedDiagram {
-  board: string;
-  parts: DiagramPart[];
-  wires: DiagramWire[];
-}
 
 const hostedTools: McpTool[] = [
   SEARCH_TOOLS_TOOL,
@@ -124,6 +81,28 @@ const hostedTools: McpTool[] = [
     inputSchema: {
       type: 'object',
       properties: {},
+    },
+  },
+  {
+    name: 'labwired_compile_diagram',
+    description:
+      'Compile a wired diagram into a LabWired System Manifest YAML. ' +
+      'Runs ERC first — errors abort compilation. Returns system_yaml inline ' +
+      '(no filesystem persistence in hosted mode). Use after labwired_validate_diagram. ' +
+      'Keywords: compile diagram, diagram to manifest, build board.',
+    inputSchema: {
+      type: 'object',
+      required: ['diagram'],
+      properties: {
+        diagram: {
+          type: 'object',
+          description: 'Diagram JSON with board, parts, and wires.',
+        },
+        name: {
+          type: 'string',
+          description: 'Optional name for the output (informational only in hosted mode).',
+        },
+      },
     },
   },
 ];
@@ -201,10 +180,39 @@ async function dispatchHostedTool(
   }
 
   if (name === 'labwired_validate_diagram') {
-    const validation = validateHostedDiagram(parsed?.arguments);
+    const args = (parsed?.arguments ?? {}) as { diagram?: unknown };
+    const diagram = args.diagram;
+    if (!diagram || typeof diagram !== 'object' || Array.isArray(diagram)) {
+      return {
+        content: [textContent({ ok: false, error_count: 1, warning_count: 0, diagnostics: [{ severity: 'error', code: 'DIAGRAM_MALFORMED', message: 'Diagram must be an object with board, parts, and wires.' }] })],
+        isError: true,
+      };
+    }
+    const validation = composeDiagnostics(diagram as unknown as ValidateDiagram);
     return {
       content: [textContent(validation)],
       isError: validation.error_count > 0 || undefined,
+    };
+  }
+
+  if (name === 'labwired_compile_diagram') {
+    const input = (parsed?.arguments ?? {}) as { diagram?: unknown; name?: unknown };
+    const diagram = input.diagram;
+    if (!diagram || typeof diagram !== 'object' || Array.isArray(diagram)) {
+      return {
+        content: [textContent({ error: 'INVALID_ARGS', detail: 'diagram is required and must be an object' })],
+        isError: true,
+      };
+    }
+    const result = compile(diagram as Parameters<typeof compile>[0]);
+    if (!result.ok) {
+      return {
+        content: [textContent({ ok: false, diagnostics: result.diagnostics })],
+        isError: true,
+      };
+    }
+    return {
+      content: [textContent({ ok: true, system_yaml: result.systemYaml, diagnostics: result.diagnostics })],
     };
   }
 
@@ -312,7 +320,7 @@ async function startPlaygroundLab(
   const watchUrl = `https://app.labwired.com/?watch=${encodeURIComponent(sessionId)}`;
   const stub = env.SESSIONS.get(env.SESSIONS.idFromName(sessionId));
   const diagram = starterDiagram(board);
-  const validation = validateDiagramValue(diagram);
+  const validation = composeDiagnostics(diagram as unknown as ValidateDiagram);
   if (!validation.ok) {
     return {
       content: [textContent({ error: 'STARTER_DIAGRAM_INVALID', validation })],
@@ -406,255 +414,3 @@ function starterDiagram(labId: string): Record<string, unknown> {
   };
 }
 
-function validateHostedDiagram(args: unknown): HostedValidationResult {
-  const input = (args ?? {}) as { diagram?: unknown };
-  return validateDiagramValue(input.diagram);
-}
-
-function validateDiagramValue(value: unknown): HostedValidationResult {
-  const parsed = parseHostedDiagram(value);
-  if ('result' in parsed) return parsed.result;
-  return summarizeDiagnostics(diagnoseHostedDiagram(parsed.diagram));
-}
-
-function parseHostedDiagram(value: unknown): { diagram: HostedDiagram } | { result: HostedValidationResult } {
-  const diagnostics: HostedDiagnostic[] = [];
-  if (!isRecord(value)) {
-    return {
-      result: summarizeDiagnostics([
-        {
-          severity: 'error',
-          code: 'DIAGRAM_MALFORMED',
-          message: 'Diagram must be an object with board, parts, and wires.',
-        },
-      ]),
-    };
-  }
-
-  if (typeof value.board !== 'string' || value.board.trim() === '') {
-    diagnostics.push({
-      severity: 'error',
-      code: 'DIAGRAM_MALFORMED',
-      message: 'Diagram board must be a non-empty string.',
-    });
-  }
-  if (!Array.isArray(value.parts)) {
-    diagnostics.push({
-      severity: 'error',
-      code: 'DIAGRAM_MALFORMED',
-      message: 'Diagram parts must be an array.',
-    });
-  }
-  if (!Array.isArray(value.wires)) {
-    diagnostics.push({
-      severity: 'error',
-      code: 'DIAGRAM_MALFORMED',
-      message: 'Diagram wires must be an array.',
-    });
-  }
-  if (diagnostics.length > 0) {
-    return { result: summarizeDiagnostics(diagnostics) };
-  }
-
-  const parts = parseParts(value.parts);
-  const wires = parseWires(value.wires);
-  diagnostics.push(...parts.diagnostics, ...wires.diagnostics);
-  if (diagnostics.length > 0) {
-    return { result: summarizeDiagnostics(diagnostics) };
-  }
-
-  return {
-    diagram: {
-      // Validated as a non-empty string above (DIAGRAM_MALFORMED guard).
-      board: (value.board as string).trim(),
-      parts: parts.parts,
-      wires: wires.wires,
-    },
-  };
-}
-
-function parseParts(value: unknown): { parts: DiagramPart[]; diagnostics: HostedDiagnostic[] } {
-  const parts: DiagramPart[] = [];
-  const diagnostics: HostedDiagnostic[] = [];
-  for (const [index, part] of (value as unknown[]).entries()) {
-    if (!isRecord(part) || typeof part.id !== 'string' || typeof part.type !== 'string') {
-      diagnostics.push({
-        severity: 'error',
-        code: 'DIAGRAM_MALFORMED',
-        message: `Diagram part at index ${index} must include string id and type.`,
-      });
-      continue;
-    }
-    parts.push({ id: part.id, type: part.type });
-  }
-  return { parts, diagnostics };
-}
-
-function parseWires(value: unknown): { wires: DiagramWire[]; diagnostics: HostedDiagnostic[] } {
-  const wires: DiagramWire[] = [];
-  const diagnostics: HostedDiagnostic[] = [];
-  for (const [index, wire] of (value as unknown[]).entries()) {
-    if (!isRecord(wire) || !isEndpoint(wire.from) || !isEndpoint(wire.to)) {
-      diagnostics.push({
-        severity: 'error',
-        code: 'DIAGRAM_MALFORMED',
-        message: `Diagram wire at index ${index} must include from/to endpoints with string part and pin.`,
-      });
-      continue;
-    }
-    wires.push({ from: wire.from, to: wire.to });
-  }
-  return { wires, diagnostics };
-}
-
-function diagnoseHostedDiagram(diagram: HostedDiagram): HostedDiagnostic[] {
-  const diagnostics: HostedDiagnostic[] = [];
-  const partsById = new Map(diagram.parts.map((part) => [part.id, part]));
-  const componentMcuWireCount = new Map<string, number>();
-  const mcuPins = pinsForBoard(diagram.board);
-
-  for (const part of diagram.parts) {
-    if (!componentKind(part)) {
-      diagnostics.push({
-        severity: 'error',
-        code: 'UNKNOWN_COMPONENT',
-        message: `Component type "${part.type}" is not available in the hosted validator.`,
-        location: { part_id: part.id },
-      });
-    }
-  }
-
-  for (const wire of diagram.wires) {
-    const fromPart = partsById.get(wire.from.part);
-    const toPart = partsById.get(wire.to.part);
-    if (!fromPart || !toPart) {
-      diagnostics.push({
-        severity: 'error',
-        code: 'WIRE_INVALID_PART',
-        message: `Wire endpoint references unknown part: ${!fromPart ? wire.from.part : wire.to.part}.`,
-      });
-      continue;
-    }
-    if (fromPart.id === toPart.id) {
-      diagnostics.push({
-        severity: 'error',
-        code: 'WIRE_SELF_LOOP',
-        message: 'A component cannot be wired to itself.',
-        location: { part_id: fromPart.id },
-      });
-      continue;
-    }
-
-    const mcuEndpoint = isMcuPart(fromPart) ? wire.from : isMcuPart(toPart) ? wire.to : null;
-    const componentEndpoint = mcuEndpoint === wire.from ? wire.to : mcuEndpoint === wire.to ? wire.from : null;
-    if (!mcuEndpoint || !componentEndpoint) continue;
-
-    const component = partsById.get(componentEndpoint.part);
-    const kind = component ? componentKind(component) : null;
-    if (!kind || kind === 'mcu') continue;
-
-    componentMcuWireCount.set(componentEndpoint.part, (componentMcuWireCount.get(componentEndpoint.part) ?? 0) + 1);
-    if (!isPowerPin(mcuEndpoint.pin) && !mcuPins.has(mcuEndpoint.pin.toUpperCase())) {
-      diagnostics.push({
-        severity: 'error',
-        code: 'PIN_NOT_ON_CHIP',
-        message: `Pin ${mcuEndpoint.pin} is not available on this board model.`,
-        location: { part_id: componentEndpoint.part, pin: mcuEndpoint.pin },
-        fix: 'Pick a pin that exists on the selected board.',
-      });
-    }
-  }
-
-  for (const [partId, count] of componentMcuWireCount) {
-    const part = partsById.get(partId);
-    const kind = part ? componentKind(part) : null;
-    if (count > 1 && (kind === 'led' || kind === 'button')) {
-      diagnostics.push({
-        severity: 'error',
-        code: 'BOARDIO_MULTIPLE_WIRES',
-        message: `${part?.type ?? partId} has ${count} MCU connections; expected exactly one hosted board_io wire.`,
-        location: { part_id: partId },
-      });
-    }
-  }
-
-  if (!diagram.parts.some(isMcuPart)) {
-    diagnostics.push({
-      severity: 'error',
-      code: 'NO_MCU',
-      message: 'Diagram has no MCU. Add a board before simulating.',
-    });
-  }
-
-  for (const part of diagram.parts) {
-    const kind = componentKind(part);
-    if ((kind === 'led' || kind === 'button') && (componentMcuWireCount.get(part.id) ?? 0) === 0) {
-      diagnostics.push({
-        severity: 'warning',
-        code: 'COMPONENT_DANGLING',
-        message: `${part.type} has no MCU connection; it will not be simulated.`,
-        location: { part_id: part.id },
-      });
-    }
-  }
-
-  return diagnostics;
-}
-
-function summarizeDiagnostics(diagnostics: HostedDiagnostic[]): HostedValidationResult {
-  const errorCount = diagnostics.filter((diag) => diag.severity === 'error').length;
-  const warningCount = diagnostics.filter((diag) => diag.severity === 'warning').length;
-  return {
-    ok: errorCount === 0,
-    error_count: errorCount,
-    warning_count: warningCount,
-    diagnostics,
-  };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function isEndpoint(value: unknown): value is WireEndpoint {
-  return isRecord(value) && typeof value.part === 'string' && typeof value.pin === 'string';
-}
-
-function componentKind(part: DiagramPart): 'mcu' | 'led' | 'button' | null {
-  if (part.id === 'mcu' || part.type === 'mcu' || part.type === 'stm32-dev') return 'mcu';
-  if (part.type === 'led' || part.type === 'rgb-led') return 'led';
-  if (part.type === 'button' || part.type === 'slide-switch') return 'button';
-  return null;
-}
-
-function isMcuPart(part: DiagramPart): boolean {
-  return componentKind(part) === 'mcu';
-}
-
-function pinsForBoard(board: string): Set<string> {
-  if (board.startsWith('stm32l476')) {
-    return new Set([
-      'PA0', 'PA1', 'PA2', 'PA3', 'PA4', 'PA5', 'PA6', 'PA7', 'PA8', 'PA9', 'PA10', 'PA11',
-      'PA12', 'PA13', 'PA14', 'PA15', 'PB0', 'PB1', 'PB2', 'PB3', 'PB4', 'PB5', 'PB6', 'PB7',
-      'PB8', 'PB9', 'PB10', 'PB11', 'PB12', 'PB13', 'PB14', 'PB15', 'PC0', 'PC1', 'PC2', 'PC3',
-      'PC4', 'PC5', 'PC6', 'PC7', 'PC8', 'PC9', 'PC10', 'PC11', 'PC12', 'PC13', 'PC14', 'PC15',
-      'PD0', 'PD1', 'PD2', 'PD3', 'PD4', 'PD5', 'PD6', 'PD7', 'PD8', 'PD9', 'PD10', 'PD11',
-      'PD12', 'PD13', 'PD14', 'PD15', 'PE0', 'PE1', 'PE2', 'PE3', 'PE4', 'PE5', 'PE6', 'PE7',
-      'PE8', 'PE9', 'PE10', 'PE11', 'PE12', 'PE13', 'PE14', 'PE15',
-    ]);
-  }
-  if (board.startsWith('stm32f103')) {
-    return new Set([
-      'PA0', 'PA1', 'PA2', 'PA3', 'PA4', 'PA5', 'PA6', 'PA7', 'PA8', 'PA9', 'PA10', 'PA11',
-      'PA12', 'PA13', 'PA14', 'PA15', 'PB0', 'PB1', 'PB3', 'PB4', 'PB5', 'PB6', 'PB7', 'PB8',
-      'PB9', 'PB10', 'PB11', 'PB12', 'PB13', 'PB14', 'PB15', 'PC0', 'PC1', 'PC2', 'PC3',
-      'PC4', 'PC5', 'PC6', 'PC7', 'PC8', 'PC9', 'PC10', 'PC11', 'PC12', 'PC13', 'PC14',
-      'PC15',
-    ]);
-  }
-  return new Set();
-}
-
-function isPowerPin(pin: string): boolean {
-  return ['VCC', 'GND', '3V3', '5V', 'VIN', 'VBUS', 'VDD', 'VSS'].includes(pin.toUpperCase());
-}

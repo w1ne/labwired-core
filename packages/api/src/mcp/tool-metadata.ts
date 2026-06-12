@@ -14,6 +14,7 @@ const TITLES: Record<string, string> = {
   labwired_run: 'Run Firmware',
   labwired_list_components: 'List Components',
   labwired_search_tools: 'Search Tools',
+  labwired_compile_diagram: 'Compile Diagram',
 };
 
 export function toolTitle(name: string): string {
