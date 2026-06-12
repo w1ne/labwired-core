@@ -54,7 +54,7 @@ export function buildContext(diagram: DiagramV2): ErcContext {
  * peripheral parts, causing power-rail pins to resolve via the catalog (no catalog
  * pins → null) rather than via the board's pin map.
  */
-export function isMcuPart(ctx: ErcContext, part: Part): boolean {
+export function isMcuPart(_ctx: ErcContext, part: Part): boolean {
   if (part.type === 'mcu') return true;
   if (PIN_MAPS[part.type] !== undefined) return true;
   return getCatalogPart(part.type)?.deviceClass === 'mcu';
@@ -112,4 +112,3 @@ function roleFromFunctions(fn: ReturnType<typeof getPinMapping>): NetProtocol | 
   }
   return undefined;
 }
-

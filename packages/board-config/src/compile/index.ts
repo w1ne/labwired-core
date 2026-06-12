@@ -15,7 +15,6 @@ import { getCatalogPart } from '../catalog';
 import { findPinFunction } from '../pin-mapping';
 import { CHIP_YAMLS } from '../chip-yamls';
 import { diag } from '../erc/diagnostic';
-import type { Part } from '../types';
 import { ESP32S3_IRQ_SOURCES } from './irq-ordinals';
 import { parseAddr } from '../attrs';
 import {
@@ -30,8 +29,6 @@ import {
   emitNeo6mGps,
   emitBoardIoFromWires,
   buildSystemYaml,
-  spiPeripheralForPart,
-  uartPeripheralForPart,
 } from './emitters';
 
 export type { Diagnostic } from '../erc';
