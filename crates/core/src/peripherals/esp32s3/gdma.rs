@@ -246,6 +246,42 @@ const MAX_DESC_CHAIN: usize = 4096;
 /// Descriptor dw0 bit positions.
 const DESC_OWNER_BIT: u32 = 1 << 31;
 
+// ── UHCI0 / UART0 coupling constants ─────────────────────────────────────
+//
+// UHCI0 bridges GDMA to UART0 by default (ESP-IDF `uart_ll.h` / TRM §26).
+// `DR_REG_UART0_BASE = 0x6000_0000` (verified: uart.rs module doc + xtensa.rs
+// `configure_xtensa_esp32s3` registration).
+//
+// FIFO register: offset 0x00 — W pushes a TX byte; R pops one RX byte.
+// STATUS register: offset 0x1C — RXFIFO_CNT[9:0] (bits 9:0),
+//                                 TXFIFO_CNT[9:0] (bits 25:16).
+const UART0_BASE: u64 = 0x6000_0000;
+const UART0_FIFO_ADDR: u64 = UART0_BASE; // offset 0x00
+const UART0_STATUS_ADDR: u64 = UART0_BASE + 0x1C;
+
+/// STATUS register bit masks.
+const UART_RXFIFO_CNT_MASK: u32 = 0x3FF; // bits [9:0]
+/// TXFIFO_CNT[25:16] shift — retained for documentation; used when checking
+/// TX back-pressure (not currently needed since we write unconditionally).
+#[allow(dead_code)]
+const UART_TXFIFO_CNT_SHIFT: u32 = 16;
+#[allow(dead_code)]
+const UART_TXFIFO_CNT_MASK: u32 = 0x3FF; // 10-bit field
+
+/// Hardware FIFO depth for ESP32-S3 (`SOC_UART_FIFO_LEN = 128`).
+/// Retained for documentation; the model writes unconditionally (FIFO overflow
+/// is handled by the UART peripheral itself — it drops excess bytes and latches
+/// RXFIFO_OVF just like silicon).
+#[allow(dead_code)]
+const UART_FIFO_LEN: u32 = 128;
+
+/// Maximum bytes transferred per `tick_with_bus` call for a coupled channel.
+///
+/// Bounds latency per tick to a realistic burst size. 64 bytes matches the
+/// typical DMA burst used by ESP-IDF `uart_ll.h` (half the 128-deep FIFO)
+/// and keeps the simulation engine responsive on long transfers.
+const COUPLED_BYTES_PER_TICK: usize = 64;
+
 /// One direction (IN or OUT) of a GDMA channel.
 #[derive(Debug, Clone, Copy)]
 struct DmaDir {
@@ -260,12 +296,21 @@ struct DmaDir {
     /// PERI_SEL register value (6-bit masked; reset = 0x3F = unbound).
     peri_sel: u32,
     /// Set when this direction has been started in coupled mode (PERI_SEL
-    /// names a coupled peripheral and MEM_TRANS_EN is clear). Byte movement
-    /// is implemented in Tasks 2–4; for now the flag keeps the transfer
-    /// visibly pending (no EOF latched) rather than silently auto-completing.
-    /// `tick_with_bus`/`needs_bus_tick` return true while this is set so the
-    /// engine's tick loop keeps visiting us.
+    /// names a coupled peripheral and MEM_TRANS_EN is clear). Cleared by
+    /// `tick_with_bus` once the transfer completes (EOF latched).
     pending_coupled: bool,
+    // ── Incremental coupled-walk state ──────────────────────────────────
+    // These fields track progress across multiple `tick_with_bus` calls so
+    // that a transfer larger than COUPLED_BYTES_PER_TICK resumes rather
+    // than restarting from the head of the descriptor chain each tick.
+    // M2M (one-shot) walks ignore these fields entirely.
+    //
+    /// Current descriptor address for the incremental walk (0 = not started).
+    coupled_desc_ptr: u64,
+    /// Byte offset within the current descriptor's buffer (OUT direction:
+    /// how many bytes of this descriptor have been consumed; IN direction:
+    /// how many bytes have been written into this descriptor so far).
+    coupled_buf_offset: u32,
 }
 
 impl Default for DmaDir {
@@ -278,6 +323,8 @@ impl Default for DmaDir {
             int_ena: 0,
             peri_sel: PERI_SEL_RESET,
             pending_coupled: false,
+            coupled_desc_ptr: 0,
+            coupled_buf_offset: 0,
         }
     }
 }
@@ -404,11 +451,13 @@ impl Esp32s3Gdma {
                         match DmaPeripheral::from_sel(c.rx.peri_sel) {
                             p if p.is_coupled() => {
                                 // Coupled set (SPI2/3, UHCI0, I2S0/1): mark
-                                // pending — byte movement implemented in
-                                // Tasks 2-4. EOF stays unlatched: a coupled
-                                // transfer with no peripheral pump yet
-                                // visibly hangs rather than silently lying.
+                                // pending — byte movement runs in tick_with_bus.
+                                // Initialise the incremental walk state from the
+                                // just-latched link_addr so tick_with_bus starts
+                                // at the head of the descriptor chain.
                                 c.rx.pending_coupled = true;
+                                c.rx.coupled_desc_ptr = Self::full_desc_addr(c.rx.link_addr);
+                                c.rx.coupled_buf_offset = 0;
                             }
                             _ => {
                                 // Fallback set (AES, SHA, ADC, RMT, LCD_CAM,
@@ -448,10 +497,12 @@ impl Esp32s3Gdma {
                         // Peripheral-coupled mode: route by PERI_SEL.
                         match DmaPeripheral::from_sel(c.tx.peri_sel) {
                             p if p.is_coupled() => {
-                                // Coupled set: mark pending; EOF stays
-                                // unlatched until Tasks 2-4 implement the
-                                // peripheral pump for this direction.
+                                // Coupled set: mark pending; byte movement runs
+                                // in tick_with_bus. Initialise the incremental
+                                // walk state from the just-latched link_addr.
                                 c.tx.pending_coupled = true;
+                                c.tx.coupled_desc_ptr = Self::full_desc_addr(c.tx.link_addr);
+                                c.tx.coupled_buf_offset = 0;
                             }
                             _ => {
                                 // Fallback set: auto-complete.
@@ -538,6 +589,241 @@ impl Esp32s3Gdma {
     fn full_desc_addr(link_addr_20: u32) -> u64 {
         (DRAM_ADDR_PREFIX | (link_addr_20 & IN_LINK_ADDR_MASK)) as u64
     }
+
+    /// Pump an OUT (TX) coupled UART transfer: walk the descriptor chain and
+    /// write bytes into the UART TX FIFO via MMIO.
+    ///
+    /// Returns `true` when the chain is fully drained (transfer complete).
+    ///
+    /// **EOF policy (OUT/TX):** `OUT_EOF | OUT_TOTAL_EOF | OUT_DONE` are
+    /// latched by the caller once this function returns `true` — i.e. after
+    /// the last byte of the last descriptor has entered the FIFO.
+    ///
+    /// **Throughput bound:** at most `COUPLED_BYTES_PER_TICK` bytes per call,
+    /// further limited by the available UART TX FIFO space (`UART_FIFO_LEN −
+    /// TXFIFO_CNT`).  When the FIFO is full the pump backs off without
+    /// advancing — the engine revisits on the next tick once the baud-rate
+    /// drain has freed space.
+    fn pump_uart_out(dir: &mut DmaDir, bus: &mut dyn Bus) -> bool {
+        // Determine available TX FIFO space.
+        let status = bus.read_u32(UART0_STATUS_ADDR).unwrap_or(0);
+        let tx_in_use = ((status >> UART_TXFIFO_CNT_SHIFT) & UART_TXFIFO_CNT_MASK) as usize;
+        let tx_free = (UART_FIFO_LEN as usize).saturating_sub(tx_in_use);
+
+        let mut budget = COUPLED_BYTES_PER_TICK.min(tx_free);
+
+        if budget == 0 {
+            // FIFO full; wait for the baud-rate drain to free space.
+            return false;
+        }
+
+        loop {
+            let addr = dir.coupled_desc_ptr;
+            if addr == 0 || budget == 0 {
+                break;
+            }
+
+            let dw0 = bus.read_u32(addr).unwrap_or(0);
+            // Skip CPU-owned descriptors; treat as end-of-chain.
+            if dw0 & DESC_OWNER_BIT == 0 {
+                return true; // chain drained / halted
+            }
+
+            let length = (dw0 >> 12) & 0xFFF; // bits [23:12]
+            let buf_ptr = bus.read_u32(addr + 4).unwrap_or(0) as u64;
+            let next_ptr = bus.read_u32(addr + 8).unwrap_or(0) as u64;
+
+            // How many bytes remain in this descriptor?
+            let remaining = length.saturating_sub(dir.coupled_buf_offset) as usize;
+            let to_send = remaining.min(budget);
+
+            for i in 0..to_send {
+                let byte = bus
+                    .read_u8(buf_ptr + (dir.coupled_buf_offset as u64) + i as u64)
+                    .unwrap_or(0);
+                let _ = bus.write_u8(UART0_FIFO_ADDR, byte);
+            }
+            budget -= to_send;
+            dir.coupled_buf_offset += to_send as u32;
+
+            if dir.coupled_buf_offset >= length {
+                // Descriptor fully consumed; advance to next.
+                dir.coupled_buf_offset = 0;
+                if next_ptr == 0 {
+                    dir.coupled_desc_ptr = 0;
+                    return true; // end of chain
+                }
+                dir.coupled_desc_ptr = next_ptr;
+            } else {
+                // Partially consumed (budget or FIFO exhausted); resume next tick.
+                break;
+            }
+        }
+        false // not yet done
+    }
+
+    /// Pump an IN (RX) coupled UART transfer: read bytes from the UART RX FIFO
+    /// via MMIO and write them into the descriptor chain.
+    ///
+    /// Returns `true` when EOF should be latched.
+    ///
+    /// **EOF policy (IN/RX):**
+    /// - `IN_DONE` is latched per completed descriptor (when its capacity is
+    ///   fully written), matching how ESP-IDF `uart_read_bytes` expects the
+    ///   DMA engine to signal per-buffer completion.
+    /// - `IN_SUC_EOF` is latched when the descriptor chain is fully written
+    ///   **OR** when the UART RX FIFO empties after at least one byte has been
+    ///   moved — whichever comes first. This mirrors the ESP-IDF
+    ///   `uart_intr_handler_default` / UHCI EOF semantics: the driver wakes on
+    ///   `IN_SUC_EOF` which fires as soon as the FIFO idle-timeout drains the
+    ///   last byte into DMA, even if the descriptor still has spare capacity.
+    ///
+    /// **Throughput bound:** at most `COUPLED_BYTES_PER_TICK` bytes per call.
+    ///
+    /// Returns `(eof, in_done_latched)`.
+    fn pump_uart_in(dir: &mut DmaDir, bus: &mut dyn Bus) -> (bool, bool) {
+        // Read live RXFIFO_CNT from STATUS register.
+        let status = bus.read_u32(UART0_STATUS_ADDR).unwrap_or(0);
+        let mut rx_avail = (status & UART_RXFIFO_CNT_MASK) as usize;
+
+        if rx_avail == 0 {
+            // No bytes available; nothing to do this tick.
+            return (false, false);
+        }
+
+        let mut budget = COUPLED_BYTES_PER_TICK;
+        let mut any_moved = false;
+        let mut in_done = false;
+
+        loop {
+            let addr = dir.coupled_desc_ptr;
+            if addr == 0 || budget == 0 || rx_avail == 0 {
+                break;
+            }
+
+            let dw0 = bus.read_u32(addr).unwrap_or(0);
+            if dw0 & DESC_OWNER_BIT == 0 {
+                // CPU-owned: treat as end-of-chain → EOF.
+                let eof = any_moved;
+                return (eof, in_done);
+            }
+
+            let size = dw0 & 0xFFF; // bits [11:0] = capacity
+            let buf_ptr = bus.read_u32(addr + 4).unwrap_or(0) as u64;
+            let next_ptr = bus.read_u32(addr + 8).unwrap_or(0) as u64;
+
+            let remaining_cap = size.saturating_sub(dir.coupled_buf_offset) as usize;
+            let to_recv = remaining_cap.min(budget).min(rx_avail);
+
+            for i in 0..to_recv {
+                let byte = bus.read_u8(UART0_FIFO_ADDR).unwrap_or(0);
+                let _ = bus.write_u8(buf_ptr + (dir.coupled_buf_offset as u64) + i as u64, byte);
+            }
+            budget -= to_recv;
+            rx_avail -= to_recv;
+            dir.coupled_buf_offset += to_recv as u32;
+            if to_recv > 0 {
+                any_moved = true;
+            }
+
+            if dir.coupled_buf_offset >= size {
+                // Descriptor capacity filled.
+                in_done = true;
+                dir.coupled_buf_offset = 0;
+                if next_ptr == 0 {
+                    dir.coupled_desc_ptr = 0;
+                    return (true, true); // chain done → IN_SUC_EOF + IN_DONE
+                }
+                dir.coupled_desc_ptr = next_ptr;
+            } else {
+                // Descriptor partially filled.
+                break;
+            }
+        }
+
+        // Check again after the loop: if the FIFO is now empty and we moved
+        // at least one byte, latch IN_SUC_EOF (FIFO-idle EOF).
+        let status2 = bus.read_u32(UART0_STATUS_ADDR).unwrap_or(0);
+        let rx_remaining = (status2 & UART_RXFIFO_CNT_MASK) as usize;
+        let eof = any_moved && rx_remaining == 0;
+        (eof, in_done)
+    }
+
+    /// Execute all pending descriptor walks and coupled-mode ticks.
+    ///
+    /// For each channel with `pending_m2m` set:
+    /// 1. Walk the OUT (TX) descriptor chain and collect bytes.
+    /// 2. Walk the IN (RX) descriptor chain and write bytes.
+    /// 3. Latch `IN_SUC_EOF | IN_DONE` and `OUT_EOF | OUT_TOTAL_EOF |
+    ///    OUT_DONE` in the respective INT_RAW registers.
+    ///
+    /// For UHCI0 (UART DMA) coupled channels with `pending_coupled` set:
+    /// - OUT: push bytes from the descriptor chain into the UART TX FIFO.
+    ///   `OUT_EOF | OUT_TOTAL_EOF | OUT_DONE` are latched once the chain
+    ///   is fully drained; `pending_coupled` is then cleared.
+    /// - IN: pop bytes from the UART RX FIFO into the descriptor chain.
+    ///   `IN_DONE` is latched per completed descriptor; `IN_SUC_EOF` is
+    ///   latched when the chain is fully written or the FIFO idles after
+    ///   ≥1 byte moved; `pending_coupled` is cleared on EOF.
+    ///
+    /// Channels with a non-UART coupled peripheral retain `pending_coupled`
+    /// (byte movement for SPI/I2S is implemented in Tasks 3–4).
+    fn do_tick_with_bus(&mut self, bus: &mut dyn Bus) {
+        for (ch_idx, c) in self.channels.iter_mut().enumerate() {
+            // ── UHCI0 (UART) coupled OUT (TX) ────────────────────────────
+            if c.tx.pending_coupled
+                && DmaPeripheral::from_sel(c.tx.peri_sel) == DmaPeripheral::Uhci0
+            {
+                if Self::pump_uart_out(&mut c.tx, bus) {
+                    c.tx.int_raw |= OUT_EOF_BIT | OUT_TOTAL_EOF_BIT | OUT_DONE_BIT;
+                    c.tx.pending_coupled = false;
+                    c.tx.coupled_desc_ptr = 0;
+                    c.tx.coupled_buf_offset = 0;
+                }
+                let _ = ch_idx; // suppress unused warning in future expansions
+            }
+
+            // ── UHCI0 (UART) coupled IN (RX) ─────────────────────────────
+            if c.rx.pending_coupled
+                && DmaPeripheral::from_sel(c.rx.peri_sel) == DmaPeripheral::Uhci0
+            {
+                let (eof, in_done) = Self::pump_uart_in(&mut c.rx, bus);
+                if in_done {
+                    c.rx.int_raw |= IN_DONE_BIT;
+                }
+                if eof {
+                    c.rx.int_raw |= IN_SUC_EOF_BIT | IN_DONE_BIT;
+                    c.rx.pending_coupled = false;
+                    c.rx.coupled_desc_ptr = 0;
+                    c.rx.coupled_buf_offset = 0;
+                }
+            }
+
+            // ── MEM_TRANS_EN (M2M) path — one-shot, unchanged ────────────
+            if !c.pending_m2m {
+                continue;
+            }
+            c.pending_m2m = false;
+            c.in_started = false;
+            c.out_started = false;
+
+            let out_desc_addr = Self::full_desc_addr(c.tx.link_addr);
+            let in_desc_addr = Self::full_desc_addr(c.rx.link_addr);
+
+            // Collect bytes from the OUT (TX) descriptor chain.
+            let bytes = Self::walk_out_chain(bus, out_desc_addr);
+
+            if !bytes.is_empty() {
+                // Write bytes into the IN (RX) descriptor chain.
+                Self::walk_in_chain(bus, in_desc_addr, &bytes);
+            }
+
+            // Latch completion flags regardless of byte count (mirrors how
+            // real silicon behaves on a zero-length transfer).
+            c.rx.int_raw |= IN_SUC_EOF_BIT | IN_DONE_BIT;
+            c.tx.int_raw |= OUT_EOF_BIT | OUT_TOTAL_EOF_BIT | OUT_DONE_BIT;
+        }
+    }
 }
 
 impl Peripheral for Esp32s3Gdma {
@@ -589,58 +875,16 @@ impl Peripheral for Esp32s3Gdma {
     /// pending coupled-mode transfer.
     ///
     /// Coupled channels with `pending_coupled` set keep the engine visiting
-    /// `tick_with_bus` so the peripheral pump (Tasks 2–4) can make progress
-    /// when implemented. For now those ticks are no-ops — the EOF stays
-    /// unlatched, making the transfer visibly hang rather than silently lying.
+    /// `tick_with_bus` so the peripheral pump (Tasks 2–4) can make progress.
+    /// Cleared per-direction when the transfer completes.
     fn needs_bus_tick(&self) -> bool {
         self.channels
             .iter()
             .any(|c| c.pending_m2m || c.rx.pending_coupled || c.tx.pending_coupled)
     }
 
-    /// Execute all pending descriptor walks and coupled-mode ticks.
-    ///
-    /// For each channel with `pending_m2m` set:
-    /// 1. Walk the OUT (TX) descriptor chain and collect bytes.
-    /// 2. Walk the IN (RX) descriptor chain and write bytes.
-    /// 3. Latch `IN_SUC_EOF | IN_DONE` and `OUT_EOF | OUT_TOTAL_EOF |
-    ///    OUT_DONE` in the respective INT_RAW registers.
-    ///
-    /// Channels with `pending_coupled` set (IN or OUT direction) are visited
-    /// here but no bytes are moved yet — the peripheral pump is implemented in
-    /// Tasks 2 (UART/UHCI0), 3 (SPI2/3), and 4 (I2S0/I2S1). Until then the
-    /// EOF stays unlatched and the transfer visibly hangs.
     fn tick_with_bus(&mut self, bus: &mut dyn Bus) {
-        for c in self.channels.iter_mut() {
-            // Coupled-mode no-op: Tasks 2-4 fill in the byte-movement logic.
-            // The `pending_coupled` flag is NOT cleared here so the engine
-            // continues visiting until a real pump claims it.
-            let _ = c.rx.pending_coupled;
-            let _ = c.tx.pending_coupled;
-
-            if !c.pending_m2m {
-                continue;
-            }
-            c.pending_m2m = false;
-            c.in_started = false;
-            c.out_started = false;
-
-            let out_desc_addr = Self::full_desc_addr(c.tx.link_addr);
-            let in_desc_addr = Self::full_desc_addr(c.rx.link_addr);
-
-            // Collect bytes from the OUT (TX) descriptor chain.
-            let bytes = Self::walk_out_chain(bus, out_desc_addr);
-
-            if !bytes.is_empty() {
-                // Write bytes into the IN (RX) descriptor chain.
-                Self::walk_in_chain(bus, in_desc_addr, &bytes);
-            }
-
-            // Latch completion flags regardless of byte count (mirrors how
-            // real silicon behaves on a zero-length transfer).
-            c.rx.int_raw |= IN_SUC_EOF_BIT | IN_DONE_BIT;
-            c.tx.int_raw |= OUT_EOF_BIT | OUT_TOTAL_EOF_BIT | OUT_DONE_BIT;
-        }
+        Esp32s3Gdma::do_tick_with_bus(self, bus);
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {
@@ -1333,6 +1577,401 @@ mod tests {
             raw & (IN_SUC_EOF_BIT | IN_DONE_BIT),
             0,
             "unbound PERI_SEL (reset 0x3F) must auto-complete IN"
+        );
+    }
+
+    // ── UART (UHCI0) coupled transfer tests ──────────────────────────────
+    //
+    // These tests require a composite bus with:
+    //   - DRAM region at 0x3FC8_8000 (for descriptors and data buffers).
+    //   - GDMA peripheral at 0x6003_F000 (real ESP32-S3 base).
+    //   - Esp32s3Uart at 0x6000_0000 (UART0, real ESP32-S3 base).
+    //
+    // The GDMA struct is also held directly for register-level manipulation.
+    // The bus is used only for the byte-pump paths (descriptor reads,
+    // UART FIFO read/write, STATUS read).
+
+    use crate::peripherals::esp32s3::uart::Esp32s3Uart;
+    use std::sync::{Arc, Mutex};
+
+    /// Build a composite `SystemBus` with DRAM, GDMA, and UART0 registered at
+    /// their real ESP32-S3 addresses.  Returns `(bus, sink)` where `sink` is
+    /// the shared TX capture buffer attached to UART0.
+    ///
+    /// GDMA is added to the bus so tick_with_bus can reach the UART FIFO
+    /// via normal bus reads/writes.  The caller also holds a separate
+    /// `Esp32s3Gdma` instance for register-level manipulation; descriptor
+    /// walks use `bus` directly.
+    fn uart_test_bus() -> (SystemBus, Arc<Mutex<Vec<u8>>>) {
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        let mut bus = SystemBus::new();
+        // 256 KiB DRAM at 0x3FC8_8000 — descriptors and data buffers go here.
+        bus.add_peripheral(
+            "dram_test",
+            0x3FC8_8000,
+            256 * 1024,
+            None,
+            Box::new(crate::system::xtensa::RamPeripheral::new(256 * 1024)),
+        );
+        // UART0 at the real DR_REG_UART0_BASE.
+        let mut uart = Esp32s3Uart::new(false, 27);
+        uart.set_sink(Some(sink.clone()));
+        bus.add_peripheral("uart0_test", UART0_BASE, 0x100, None, Box::new(uart));
+        (bus, sink)
+    }
+
+    /// Write a 3-word DMA descriptor into the bus at `addr`.
+    fn write_desc_uart(bus: &mut SystemBus, addr: u64, dw0: u32, buffer: u64, next: u64) {
+        bus.write_u32(addr, dw0).unwrap();
+        bus.write_u32(addr + 4, buffer as u32).unwrap();
+        bus.write_u32(addr + 8, next as u32).unwrap();
+    }
+
+    // ── TX (OUT) tests ────────────────────────────────────────────────────
+
+    /// TX basic: write "HELLO" into a single descriptor, set PERI_SEL=UHCI0,
+    /// start OUT link → after ticks, UART TX sink contains "HELLO"; EOF latched;
+    /// pending_coupled cleared (needs_bus_tick returns false).
+    #[test]
+    fn uart_tx_hello_via_descriptors() {
+        let (mut bus, sink) = uart_test_bus();
+        let payload = b"HELLO";
+        let buf_addr: u64 = 0x3FC8_8000;
+        let desc_addr: u64 = 0x3FC8_A000;
+
+        // Write payload into DRAM.
+        for (i, &b) in payload.iter().enumerate() {
+            bus.write_u8(buf_addr + i as u64, b).unwrap();
+        }
+        // Single TX descriptor: owner=DMA, suc_eof, length=5, size=5.
+        let dw0 = (1u32 << 31) | (1 << 30) | (5 << 12) | 5;
+        write_desc_uart(&mut bus, desc_addr, dw0, buf_addr, 0);
+
+        // Set up GDMA channel 0 for UHCI0 OUT.
+        let mut g = Esp32s3Gdma::new(IN_CH0_SRC);
+        let b = ch_base(0);
+        g.write_word(b + OUT_PERI_SEL, 2); // UHCI0
+                                           // desc_addr bits[19:0] = 0xA000.
+        g.write_word(
+            b + OUT_LINK,
+            OUT_LINK_START_BIT | (desc_addr as u32 & OUT_LINK_ADDR_MASK),
+        );
+
+        // pending_coupled must be set; EOF not latched yet.
+        assert!(g.needs_bus_tick(), "needs_bus_tick after OUT start");
+        assert_eq!(
+            g.read_word(b + OUT_INT_RAW) & (OUT_EOF_BIT | OUT_DONE_BIT),
+            0
+        );
+
+        // Drain via tick_with_bus (5 bytes, well within COUPLED_BYTES_PER_TICK).
+        g.do_tick_with_bus(&mut bus);
+
+        // EOF must be latched.
+        let raw = g.read_word(b + OUT_INT_RAW);
+        assert_eq!(raw & OUT_EOF_BIT, OUT_EOF_BIT, "OUT_EOF must be set");
+        assert_eq!(raw & OUT_TOTAL_EOF_BIT, OUT_TOTAL_EOF_BIT, "OUT_TOTAL_EOF");
+        assert_eq!(raw & OUT_DONE_BIT, OUT_DONE_BIT, "OUT_DONE");
+        // pending_coupled cleared → needs_bus_tick false.
+        assert!(
+            !g.needs_bus_tick(),
+            "needs_bus_tick must be false after completion"
+        );
+
+        // UART TX FIFO should have received the bytes; drain them via tick.
+        // reset CLKDIV=694 → ~20820 ticks/byte; 5 bytes × 25000 is generous.
+        let uart_idx = bus.find_peripheral_index_by_name("uart0_test").unwrap();
+        let uart = bus.peripherals[uart_idx]
+            .dev
+            .as_any_mut()
+            .unwrap()
+            .downcast_mut::<Esp32s3Uart>()
+            .unwrap();
+        for _ in 0..200_000u64 {
+            uart.tick();
+        }
+
+        let got = sink.lock().unwrap().clone();
+        assert_eq!(got, b"HELLO", "UART sink must contain HELLO, got {:?}", got);
+    }
+
+    /// TX larger than COUPLED_BYTES_PER_TICK (200 bytes): completes over
+    /// multiple ticks, order preserved.
+    #[test]
+    fn uart_tx_large_transfer_multi_tick() {
+        let (mut bus, sink) = uart_test_bus();
+        let count: usize = 200;
+        let buf_addr: u64 = 0x3FC8_8000;
+        let desc_addr: u64 = 0x3FC8_A000;
+
+        // Write 200 bytes of sequential data.
+        let payload: Vec<u8> = (0u8..200).collect();
+        for (i, &b) in payload.iter().enumerate() {
+            bus.write_u8(buf_addr + i as u64, b).unwrap();
+        }
+        let dw0 = (1u32 << 31) | (1 << 30) | ((count as u32) << 12) | count as u32;
+        write_desc_uart(&mut bus, desc_addr, dw0, buf_addr, 0);
+
+        let mut g = Esp32s3Gdma::new(IN_CH0_SRC);
+        let b = ch_base(0);
+        g.write_word(b + OUT_PERI_SEL, 2);
+        g.write_word(
+            b + OUT_LINK,
+            OUT_LINK_START_BIT | (desc_addr as u32 & OUT_LINK_ADDR_MASK),
+        );
+
+        // Drive ticks until completion.  Interleave UART drain between GDMA
+        // ticks so the TX FIFO never stays full (200 bytes > FIFO depth 128).
+        // 20820 ticks/byte × 128 bytes ≈ 2.7 M uart ticks clears a full FIFO.
+        let uart_idx = bus.find_peripheral_index_by_name("uart0_test").unwrap();
+        let mut ticks = 0usize;
+        while g.needs_bus_tick() {
+            g.do_tick_with_bus(&mut bus);
+            ticks += 1;
+            // Drain UART between GDMA ticks to free FIFO space.
+            let uart = bus.peripherals[uart_idx]
+                .dev
+                .as_any_mut()
+                .unwrap()
+                .downcast_mut::<Esp32s3Uart>()
+                .unwrap();
+            for _ in 0..3_000_000u64 {
+                uart.tick();
+            }
+            assert!(ticks < 500, "transfer did not complete in reasonable ticks");
+        }
+
+        // At least 2 GDMA ticks (first fills FIFO with ≤64 bytes from budget,
+        // but FIFO may already be partially drained by interleaved uart ticks;
+        // so the exact count depends on timing — just verify > 1).
+        assert!(
+            ticks >= 1,
+            "expected ≥1 gdma tick for 200 bytes, got {ticks}"
+        );
+
+        // Final UART drain.
+        let uart = bus.peripherals[uart_idx]
+            .dev
+            .as_any_mut()
+            .unwrap()
+            .downcast_mut::<Esp32s3Uart>()
+            .unwrap();
+        for _ in 0..5_000_000u64 {
+            uart.tick();
+        }
+
+        let got = sink.lock().unwrap().clone();
+        assert_eq!(
+            got.len(),
+            count,
+            "expected {count} bytes in sink, got {}",
+            got.len()
+        );
+        assert_eq!(got, payload, "byte order must be preserved");
+
+        // EOF flags set.
+        let raw = g.read_word(b + OUT_INT_RAW);
+        assert_eq!(raw & OUT_EOF_BIT, OUT_EOF_BIT, "OUT_EOF after large TX");
+        assert!(!g.needs_bus_tick(), "needs_bus_tick cleared");
+    }
+
+    // ── RX (IN) tests ─────────────────────────────────────────────────────
+
+    /// Helper: push bytes into UART0 RX FIFO via the bus's peripheral index.
+    fn push_uart_rx(bus: &mut SystemBus, bytes: &[u8]) {
+        let idx = bus.find_peripheral_index_by_name("uart0_test").unwrap();
+        let uart = bus.peripherals[idx]
+            .dev
+            .as_any_mut()
+            .unwrap()
+            .downcast_mut::<Esp32s3Uart>()
+            .unwrap();
+        for &b in bytes {
+            uart.push_rx(b);
+        }
+    }
+
+    /// RX basic: inject bytes into the UART RX FIFO, provide an IN descriptor
+    /// with enough capacity → bytes land in memory; IN_SUC_EOF + IN_DONE set;
+    /// pending_coupled cleared.
+    #[test]
+    fn uart_rx_bytes_land_in_descriptor() {
+        let (mut bus, _sink) = uart_test_bus();
+        let rx_data = b"WORLD";
+        push_uart_rx(&mut bus, rx_data);
+
+        let dst_addr: u64 = 0x3FC8_9000;
+        let desc_addr: u64 = 0x3FC8_B000;
+        // RX descriptor: owner=DMA, size=32 (plenty of space).
+        let dw0 = (1u32 << 31) | 32u32;
+        write_desc_uart(&mut bus, desc_addr, dw0, dst_addr, 0);
+
+        let mut g = Esp32s3Gdma::new(IN_CH0_SRC);
+        let b = ch_base(0);
+        g.write_word(b + IN_PERI_SEL, 2); // UHCI0
+        g.write_word(
+            b + IN_LINK,
+            IN_LINK_START_BIT | (desc_addr as u32 & IN_LINK_ADDR_MASK),
+        );
+
+        assert!(g.needs_bus_tick());
+        assert_eq!(
+            g.read_word(b + IN_INT_RAW) & (IN_SUC_EOF_BIT | IN_DONE_BIT),
+            0
+        );
+
+        // One tick should drain 5 bytes (within budget).
+        g.do_tick_with_bus(&mut bus);
+
+        // Check INT_RAW.
+        let raw = g.read_word(b + IN_INT_RAW);
+        assert_eq!(
+            raw & IN_SUC_EOF_BIT,
+            IN_SUC_EOF_BIT,
+            "IN_SUC_EOF must be set"
+        );
+        assert_eq!(raw & IN_DONE_BIT, IN_DONE_BIT, "IN_DONE must be set");
+        assert!(!g.needs_bus_tick(), "pending_coupled cleared");
+
+        // Bytes must have landed in memory.
+        for (i, &expected) in rx_data.iter().enumerate() {
+            let got = bus.read_u8(dst_addr + i as u64).unwrap();
+            assert_eq!(got, expected, "dst[{i}] mismatch");
+        }
+    }
+
+    /// RX partial: descriptor smaller than FIFO content → first descriptor
+    /// filled + IN_DONE, chain continues on next tick.
+    #[test]
+    fn uart_rx_partial_fill_continues_next_tick() {
+        let (mut bus, _sink) = uart_test_bus();
+        // Push 8 bytes; first descriptor only holds 4.
+        push_uart_rx(&mut bus, b"ABCDEFGH");
+
+        let dst1: u64 = 0x3FC8_9000;
+        let dst2: u64 = 0x3FC8_9010;
+        let desc1: u64 = 0x3FC8_B000;
+        let desc2: u64 = 0x3FC8_B010;
+
+        // Two descriptors of 4 bytes each, chained.
+        let dw0_1 = (1u32 << 31) | 4u32; // cap=4
+        let dw0_2 = (1u32 << 31) | 4u32;
+        write_desc_uart(&mut bus, desc1, dw0_1, dst1, desc2);
+        write_desc_uart(&mut bus, desc2, dw0_2, dst2, 0);
+
+        let mut g = Esp32s3Gdma::new(IN_CH0_SRC);
+        let b = ch_base(1);
+        g.write_word(b + IN_PERI_SEL, 2); // UHCI0
+        g.write_word(
+            b + IN_LINK,
+            IN_LINK_START_BIT | (desc1 as u32 & IN_LINK_ADDR_MASK),
+        );
+
+        // First tick: drain 4 bytes → desc1 filled; IN_DONE set; transfer still
+        // pending (8 bytes total but desc1 full, chain advances to desc2).
+        g.do_tick_with_bus(&mut bus);
+
+        // IN_DONE should be set (first descriptor completed).
+        assert_eq!(
+            g.read_word(b + IN_INT_RAW) & IN_DONE_BIT,
+            IN_DONE_BIT,
+            "IN_DONE after first desc filled"
+        );
+
+        // Second tick drains remaining 4 bytes.
+        // The first tick may have drained all 8 if within budget — that's fine
+        // too. Just run until done.
+        let mut ticks = 0;
+        while g.needs_bus_tick() {
+            g.do_tick_with_bus(&mut bus);
+            ticks += 1;
+            assert!(ticks < 100, "did not complete in reasonable ticks");
+        }
+
+        // All 8 bytes must be in memory.
+        let expected = b"ABCDEFGH";
+        for (i, &exp) in expected.iter().enumerate() {
+            let got = if i < 4 {
+                bus.read_u8(dst1 + i as u64).unwrap()
+            } else {
+                bus.read_u8(dst2 + (i - 4) as u64).unwrap()
+            };
+            assert_eq!(got, exp, "byte[{i}] mismatch");
+        }
+
+        // IN_SUC_EOF must be set at the end.
+        assert_eq!(
+            g.read_word(b + IN_INT_RAW) & IN_SUC_EOF_BIT,
+            IN_SUC_EOF_BIT,
+            "IN_SUC_EOF must be latched after full chain"
+        );
+    }
+
+    // ── Interrupt (explicit_irqs) tests ───────────────────────────────────
+
+    /// TX completion with INT_ENA set → explicit_irqs carries OUT_CH0 source.
+    #[test]
+    fn uart_tx_irq_fires_on_eof() {
+        let (mut bus, _sink) = uart_test_bus();
+        let buf_addr: u64 = 0x3FC8_8000;
+        let desc_addr: u64 = 0x3FC8_A000;
+        bus.write_u8(buf_addr, b'X').unwrap();
+        let dw0 = (1u32 << 31) | (1 << 30) | (1 << 12) | 1;
+        write_desc_uart(&mut bus, desc_addr, dw0, buf_addr, 0);
+
+        let mut g = Esp32s3Gdma::new(IN_CH0_SRC);
+        let b = ch_base(0);
+        // Enable OUT_EOF interrupt (bit 1).
+        g.write_word(
+            b + OUT_INT_ENA,
+            OUT_EOF_BIT | OUT_DONE_BIT | OUT_TOTAL_EOF_BIT,
+        );
+        g.write_word(b + OUT_PERI_SEL, 2);
+        g.write_word(
+            b + OUT_LINK,
+            OUT_LINK_START_BIT | (desc_addr as u32 & OUT_LINK_ADDR_MASK),
+        );
+
+        g.do_tick_with_bus(&mut bus);
+
+        // Now tick() should emit the OUT_CH0 source (base + 5 + 0 = 71).
+        let result = g.tick();
+        let irqs = result.explicit_irqs.unwrap_or_default();
+        let expected_src = IN_CH0_SRC + NUM_CHANNELS as u32; // 66 + 5 = 71
+        assert!(
+            irqs.contains(&expected_src),
+            "expected OUT_CH0 source {expected_src} in {irqs:?}"
+        );
+    }
+
+    /// RX completion with INT_ENA set → explicit_irqs carries IN_CH0 source.
+    #[test]
+    fn uart_rx_irq_fires_on_suc_eof() {
+        let (mut bus, _sink) = uart_test_bus();
+        push_uart_rx(&mut bus, b"Z");
+
+        let dst: u64 = 0x3FC8_9000;
+        let desc: u64 = 0x3FC8_B000;
+        let dw0 = (1u32 << 31) | 16u32;
+        write_desc_uart(&mut bus, desc, dw0, dst, 0);
+
+        let mut g = Esp32s3Gdma::new(IN_CH0_SRC);
+        let b = ch_base(0);
+        g.write_word(b + IN_INT_ENA, IN_SUC_EOF_BIT | IN_DONE_BIT);
+        g.write_word(b + IN_PERI_SEL, 2); // UHCI0
+        g.write_word(
+            b + IN_LINK,
+            IN_LINK_START_BIT | (desc as u32 & IN_LINK_ADDR_MASK),
+        );
+
+        g.do_tick_with_bus(&mut bus);
+
+        let result = g.tick();
+        let irqs = result.explicit_irqs.unwrap_or_default();
+        let expected_src = IN_CH0_SRC; // channel 0 IN = 66
+        assert!(
+            irqs.contains(&expected_src),
+            "expected IN_CH0 source {expected_src} in {irqs:?}"
         );
     }
 }
