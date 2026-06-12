@@ -245,6 +245,10 @@ const MAX_DESC_CHAIN: usize = 4096;
 
 /// Descriptor dw0 bit positions.
 const DESC_OWNER_BIT: u32 = 1 << 31;
+/// Descriptor dw0 "length" field (bits [23:12]) — bytes valid in the buffer.
+/// On IN (RX) descriptors the hardware writes this field on completion; the
+/// writeback must CLEAR it first so stale CPU-seeded values don't OR in.
+const DESC_LEN_MASK: u32 = 0xFFF << 12;
 
 // ── UHCI0 / UART0 coupling constants ─────────────────────────────────────
 //
@@ -523,7 +527,11 @@ impl Esp32s3Gdma {
     ///
     /// Stops at the first descriptor whose `owner` bit is 0 (CPU-owned),
     /// at `next == 0` (end-of-list), or after `MAX_DESC_CHAIN` hops.
-    fn walk_out_chain(bus: &dyn Bus, desc_addr: u64) -> Vec<u8> {
+    ///
+    /// After consuming each descriptor, writes back `dw0 & !DESC_OWNER_BIT`
+    /// to the descriptor address so the CPU sees `owner=0` (descriptor
+    /// returned to CPU) — matching the ESP32-S3 TRM §3.4 hardware behaviour.
+    fn walk_out_chain(bus: &mut dyn Bus, desc_addr: u64) -> Vec<u8> {
         let mut bytes = Vec::new();
         let mut addr = desc_addr;
         for _ in 0..MAX_DESC_CHAIN {
@@ -543,6 +551,9 @@ impl Esp32s3Gdma {
                 bytes.push(bus.read_u8(buf_ptr + i as u64).unwrap_or(0));
             }
 
+            // Write back dw0 with owner bit cleared (descriptor returned to CPU).
+            let _ = bus.write_u32(addr, dw0 & !DESC_OWNER_BIT);
+
             if next_ptr == 0 {
                 break;
             }
@@ -552,8 +563,12 @@ impl Esp32s3Gdma {
     }
 
     /// Walk an IN (RX) descriptor chain starting at `desc_addr` and write
-    /// `bytes` into the data buffers. Sets `IN_SUC_EOF` on the last
-    /// descriptor it fills.
+    /// `bytes` into the data buffers.
+    ///
+    /// After writing `to_write` bytes into each descriptor, writes back dw0
+    /// with the owner bit cleared and bits [23:12] set to `to_write` so the
+    /// CPU sees `owner=0` and the actual received byte count — matching the
+    /// ESP32-S3 TRM §3.4 hardware behaviour.
     fn walk_in_chain(bus: &mut dyn Bus, desc_addr: u64, bytes: &[u8]) {
         let mut remaining = bytes;
         let mut addr = desc_addr;
@@ -575,6 +590,12 @@ impl Esp32s3Gdma {
                 let _ = bus.write_u8(buf_ptr + i as u64, b);
             }
             remaining = &remaining[to_write..];
+
+            // Write back dw0: owner bit cleared, length field set to bytes written.
+            let _ = bus.write_u32(
+                addr,
+                (dw0 & !(DESC_OWNER_BIT | DESC_LEN_MASK)) | ((to_write as u32) << 12),
+            );
 
             if next_ptr == 0 || remaining.is_empty() {
                 break;
@@ -647,7 +668,9 @@ impl Esp32s3Gdma {
             dir.coupled_buf_offset += to_send as u32;
 
             if dir.coupled_buf_offset >= length {
-                // Descriptor fully consumed; advance to next.
+                // Descriptor fully consumed; write back owner bit cleared.
+                let _ = bus.write_u32(addr, dw0 & !DESC_OWNER_BIT);
+                // Advance to next.
                 dir.coupled_buf_offset = 0;
                 if next_ptr == 0 {
                     dir.coupled_desc_ptr = 0;
@@ -727,7 +750,11 @@ impl Esp32s3Gdma {
             }
 
             if dir.coupled_buf_offset >= size {
-                // Descriptor capacity filled.
+                // Descriptor capacity filled; write back owner bit cleared and length set.
+                let _ = bus.write_u32(
+                    addr,
+                    (dw0 & !(DESC_OWNER_BIT | DESC_LEN_MASK)) | (size << 12),
+                );
                 in_done = true;
                 dir.coupled_buf_offset = 0;
                 if next_ptr == 0 {
@@ -746,6 +773,22 @@ impl Esp32s3Gdma {
         let status2 = bus.read_u32(UART0_STATUS_ADDR).unwrap_or(0);
         let rx_remaining = (status2 & UART_RXFIFO_CNT_MASK) as usize;
         let eof = any_moved && rx_remaining == 0;
+        // If we produced EOF on a partially-filled descriptor (FIFO-idle path),
+        // write back the descriptor dw0 with owner cleared and partial length.
+        // `coupled_buf_offset > 0` guards the case where the moved bytes
+        // exactly filled the previous descriptor: the current one received
+        // nothing and must stay DMA-owned (silicon leaves it untouched).
+        if eof && dir.coupled_desc_ptr != 0 && dir.coupled_buf_offset > 0 {
+            let addr = dir.coupled_desc_ptr;
+            let dw0 = bus.read_u32(addr).unwrap_or(0);
+            if dw0 & DESC_OWNER_BIT != 0 {
+                let partial_len = dir.coupled_buf_offset;
+                let _ = bus.write_u32(
+                    addr,
+                    (dw0 & !(DESC_OWNER_BIT | DESC_LEN_MASK)) | (partial_len << 12),
+                );
+            }
+        }
         (eof, in_done)
     }
 
@@ -1972,6 +2015,147 @@ mod tests {
         assert!(
             irqs.contains(&expected_src),
             "expected IN_CH0 source {expected_src} in {irqs:?}"
+        );
+    }
+
+    // ── Owner-bit writeback tests ─────────────────────────────────────────
+
+    /// M2M: after tick_with_bus, TX descriptor dw0 must have owner bit cleared.
+    #[test]
+    fn m2m_tx_owner_bit_cleared_after_walk() {
+        let mut bus = bus_with_dram();
+        let src_addr: u64 = 0x3FC8_8000;
+        let dst_addr: u64 = 0x3FC8_9000;
+        let tx_desc: u64 = 0x3FC8_A000;
+        let rx_desc: u64 = 0x3FC8_B000;
+        bus.write_u8(src_addr, 0xAB).unwrap();
+        write_desc(&mut bus, tx_desc, tx_dw0(1), src_addr, 0);
+        write_desc(&mut bus, rx_desc, rx_dw0(1), dst_addr, 0);
+
+        let mut g = Esp32s3Gdma::new(IN_CH0_SRC);
+        let b = ch_base(0);
+        g.write_word(b + IN_CONF0, MEM_TRANS_EN_BIT);
+        g.write_word(
+            b + IN_LINK,
+            ((rx_desc as u32) & IN_LINK_ADDR_MASK) | IN_LINK_START_BIT,
+        );
+        g.write_word(
+            b + OUT_LINK,
+            ((tx_desc as u32) & OUT_LINK_ADDR_MASK) | OUT_LINK_START_BIT,
+        );
+        g.tick_with_bus(&mut bus);
+
+        let dw0_after = bus.read_u32(tx_desc).unwrap();
+        assert_eq!(
+            dw0_after & DESC_OWNER_BIT,
+            0,
+            "TX descriptor owner bit must be cleared after M2M walk"
+        );
+    }
+
+    /// M2M: after tick_with_bus, RX descriptor dw0 must have owner bit cleared
+    /// and bits [23:12] must contain the received byte count.
+    #[test]
+    fn m2m_rx_owner_bit_cleared_and_length_set() {
+        let mut bus = bus_with_dram();
+        let src_addr: u64 = 0x3FC8_8000;
+        let dst_addr: u64 = 0x3FC8_9000;
+        let tx_desc: u64 = 0x3FC8_A000;
+        let rx_desc: u64 = 0x3FC8_B000;
+        let len = 7u32;
+        for i in 0..len {
+            bus.write_u8(src_addr + i as u64, i as u8).unwrap();
+        }
+        write_desc(&mut bus, tx_desc, tx_dw0(len), src_addr, 0);
+        write_desc(&mut bus, rx_desc, rx_dw0(len), dst_addr, 0);
+
+        let mut g = Esp32s3Gdma::new(IN_CH0_SRC);
+        let b = ch_base(0);
+        g.write_word(b + IN_CONF0, MEM_TRANS_EN_BIT);
+        g.write_word(
+            b + IN_LINK,
+            ((rx_desc as u32) & IN_LINK_ADDR_MASK) | IN_LINK_START_BIT,
+        );
+        g.write_word(
+            b + OUT_LINK,
+            ((tx_desc as u32) & OUT_LINK_ADDR_MASK) | OUT_LINK_START_BIT,
+        );
+        g.tick_with_bus(&mut bus);
+
+        let dw0_after = bus.read_u32(rx_desc).unwrap();
+        assert_eq!(
+            dw0_after & DESC_OWNER_BIT,
+            0,
+            "RX descriptor owner bit must be cleared"
+        );
+        let written_len = (dw0_after >> 12) & 0xFFF;
+        assert_eq!(
+            written_len, len,
+            "RX descriptor length field must equal bytes written"
+        );
+    }
+
+    /// UART TX: after coupled OUT completes, TX descriptor dw0 owner bit = 0.
+    #[test]
+    fn uart_tx_owner_bit_cleared_on_completion() {
+        let (mut bus, _sink) = uart_test_bus();
+        let buf_addr: u64 = 0x3FC8_8000;
+        let desc_addr: u64 = 0x3FC8_A000;
+        bus.write_u8(buf_addr, b'X').unwrap();
+        let dw0 = (1u32 << 31) | (1 << 30) | (1 << 12) | 1;
+        write_desc_uart(&mut bus, desc_addr, dw0, buf_addr, 0);
+
+        let mut g = Esp32s3Gdma::new(IN_CH0_SRC);
+        let b = ch_base(0);
+        g.write_word(b + OUT_PERI_SEL, 2); // UHCI0
+        g.write_word(
+            b + OUT_LINK,
+            OUT_LINK_START_BIT | (desc_addr as u32 & OUT_LINK_ADDR_MASK),
+        );
+        g.do_tick_with_bus(&mut bus);
+
+        let dw0_after = bus.read_u32(desc_addr).unwrap();
+        assert_eq!(
+            dw0_after & DESC_OWNER_BIT,
+            0,
+            "UART TX descriptor owner bit must be cleared after completion"
+        );
+    }
+
+    /// UART RX: after coupled IN completes, RX descriptor dw0 owner bit = 0
+    /// and bits [23:12] contain the received byte count.
+    #[test]
+    fn uart_rx_owner_bit_cleared_and_received_length_set() {
+        let (mut bus, _sink) = uart_test_bus();
+        let rx_data = b"ABCDE";
+        push_uart_rx(&mut bus, rx_data);
+
+        let dst_addr: u64 = 0x3FC8_9000;
+        let desc_addr: u64 = 0x3FC8_B000;
+        let cap = 16u32;
+        let dw0 = (1u32 << 31) | cap;
+        write_desc_uart(&mut bus, desc_addr, dw0, dst_addr, 0);
+
+        let mut g = Esp32s3Gdma::new(IN_CH0_SRC);
+        let b = ch_base(0);
+        g.write_word(b + IN_PERI_SEL, 2); // UHCI0
+        g.write_word(
+            b + IN_LINK,
+            IN_LINK_START_BIT | (desc_addr as u32 & IN_LINK_ADDR_MASK),
+        );
+        g.do_tick_with_bus(&mut bus);
+
+        let dw0_after = bus.read_u32(desc_addr).unwrap();
+        assert_eq!(
+            dw0_after & DESC_OWNER_BIT,
+            0,
+            "UART RX descriptor owner bit must be cleared"
+        );
+        let written_len = (dw0_after >> 12) & 0xFFF;
+        assert_eq!(
+            written_len as usize,
+            rx_data.len(),
+            "RX descriptor length field must equal bytes received"
         );
     }
 }
