@@ -10,6 +10,13 @@
 //! these.  Rather than emulate the whole BROM, we register Rust thunks at
 //! the addresses the firmware calls.
 //!
+//! CHEAT(THUNK): every fn in this module fakes a function instead of executing
+//! real code. Two kinds (see FIDELITY.md §A): THUNK-ROM (boot-ROM helpers we
+//! have no binary to run — math, memcpy, cache, printf — reasonable to emulate)
+//! and THUNK-LIB / BYPASS / NOP (firmware library code that IS in the ELF but we
+//! skip — heap_caps, FreeRTOS, the SPI/GxEPD path — genuine fidelity debt).
+//! Individual cheats below carry their own CHEAT(...) marker.
+//!
 //! ## Dispatch mechanism
 //!
 //! When the simulator constructs a `RomThunkBank`, it pre-fills the bank's
@@ -570,149 +577,18 @@ pub fn esp_rom_route_intr_matrix(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimR
 /// Generic NOP thunk that returns 0. Useful for ROM functions whose
 /// behaviour we don't model but whose return value the caller needs to
 /// pass through (e.g. cache config, frequency update, busy-wait).
+// CHEAT(NOP): swallows the call and returns 0 — real: execute the function's
+// actual effect. Installed at ~25 ROM/IDF addresses. See FIDELITY.md §A.
 pub fn nop_return_zero(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
     RomThunkBank::return_with(cpu, 0);
     Ok(())
 }
 
-/// Thunk for `GxEPD2_EPD::_writeCommand(uint8_t)`.
-///
-/// Reaches directly into the [`Uc8151dTricolor290`] panel attached to
-/// `spi3` and calls `command_byte(byte)`. This bypasses the full
-/// firmware-side path through the Arduino-ESP32 SPI library, which on
-/// our sim's incomplete `_spi` struct produces wrong MOSI_DLEN values
-/// that mangle the SSD1680/UC8151D protocol stream. Routing CMD vs
-/// DATA at the GxEPD2 entry point is the cleanest place to inject DC
-/// state — real silicon uses the DC GPIO pin; we use the calling
-/// function identity.
-pub fn gxepd_write_command(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
-    let callinc = cpu.ps.callinc();
-    let n = callinc * 4;
-    let byte = (cpu.regs.read_logical(n + 3) & 0xFF) as u8;
-    if let Some(bus_any) = bus.as_any_mut() {
-        if let Some(sys_bus) = bus_any.downcast_mut::<crate::bus::SystemBus>() {
-            if let Some(spi3_idx) = sys_bus.find_peripheral_index_by_name("spi3") {
-                if let Some(any) = sys_bus.peripherals[spi3_idx].dev.as_any_mut() {
-                    if let Some(spi3) =
-                        any.downcast_mut::<crate::peripherals::esp32::spi::Esp32Spi>()
-                    {
-                        for attached in &mut spi3.attached_devices {
-                            if let Some(panel_any) = attached.as_any_mut() {
-                                if let Some(panel) = panel_any.downcast_mut::<
-                                    crate::peripherals::components::Uc8151dTricolor290,
-                                >() {
-                                    panel.command_byte(byte);
-                                }
-                            }
-                        }
-                        // Record the byte in capture for diagnostics.
-                        spi3.push_captured_byte(byte);
-                    }
-                }
-            }
-        }
-    }
-    RomThunkBank::return_with(cpu, 0);
-    Ok(())
-}
-
-/// Thunk for `GxEPD2_EPD::_writeData(uint8_t)`. See
-/// [`gxepd_write_command`] for context — same routing, but invokes
-/// `panel.data_byte(byte)` for the DC=high path.
-pub fn gxepd_write_data(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
-    let callinc = cpu.ps.callinc();
-    let n = callinc * 4;
-    let byte = (cpu.regs.read_logical(n + 3) & 0xFF) as u8;
-    if let Some(bus_any) = bus.as_any_mut() {
-        if let Some(sys_bus) = bus_any.downcast_mut::<crate::bus::SystemBus>() {
-            if let Some(spi3_idx) = sys_bus.find_peripheral_index_by_name("spi3") {
-                if let Some(any) = sys_bus.peripherals[spi3_idx].dev.as_any_mut() {
-                    if let Some(spi3) =
-                        any.downcast_mut::<crate::peripherals::esp32::spi::Esp32Spi>()
-                    {
-                        for attached in &mut spi3.attached_devices {
-                            if let Some(panel_any) = attached.as_any_mut() {
-                                if let Some(panel) = panel_any.downcast_mut::<
-                                    crate::peripherals::components::Uc8151dTricolor290,
-                                >() {
-                                    panel.data_byte(byte);
-                                }
-                            }
-                        }
-                        spi3.push_captured_byte(byte);
-                    }
-                }
-            }
-        }
-    }
-    RomThunkBank::return_with(cpu, 0);
-    Ok(())
-}
-
-/// Thunk for `SPIClass::transfer(uint8_t)` (and the underlying
-/// `spiTransferByteNL` / `spiTransferByte`).
-///
-/// In real Arduino-ESP32 the call chain is:
-///   `SPIClass::transfer(byte)` →
-///   `spiTransferByteNL(spi, byte)` →
-///   writes `MOSI_DLEN = 7`, writes byte to W0, sets `CMD.USR = 1`,
-///   spins on `CMD.USR`, reads back W0 as the received byte.
-///
-/// In sim, the firmware's `_spi` struct is populated by our
-/// [`spi_class_begin_transaction`] thunk but doesn't carry every field
-/// the real library expects (`_spi->lock`, `_spi->cur_freq`, …). When
-/// `spiTransferByteNL` reads from `_spi->dev` and finds a fake-but-
-/// well-aligned peripheral base address, it computes a `MOSI_DLEN`
-/// value from data we never populated and the resulting bytes-on-the-
-/// wire don't match what the panel expects (`01 28 50 77 04` instead
-/// of `01 27 01 00` for `DRIVER_OUTPUT_CONTROL`).
-///
-/// Cleanest fix: intercept at `SPIClass::transfer(byte)` and write the
-/// byte directly to the right `Esp32Spi` peripheral's registers using
-/// the bus. We use the same offsets the real library would (MOSI_DLEN
-/// = 7, W0 = byte, CMD.USR = 1) — our peripheral then drains the byte
-/// to the attached SSD1680 model exactly as if the firmware's driver
-/// had done it correctly.
-///
-/// Argument convention: a2 = `this` (`SPIClass*`), a3 = byte (low 8
-/// bits). The thunk reads `_spi` (at `this+4`) → `dev` (at `_spi+0`)
-/// to find the peripheral base, defaulting to SPI3 (0x3FF6_5000) when
-/// the firmware hasn't populated `_spi` yet (some code paths reach
-/// `transfer` before `beginTransaction`).
-///
-/// Returns 0 (the SSD1680 protocol is write-only on the panel-render
-/// path; GxEPD2 ignores the byte read back from `SPI.transfer`).
-pub fn spi_class_transfer(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
-    use crate::peripherals::esp32::spi::{REG_USER, USER_USR_MOSI_BIT};
-    const REG_CMD: u64 = 0x00;
-    const REG_MOSI_DLEN: u64 = 0x28;
-    const FIFO_W0: u64 = 0x80;
-    const CMD_USR_BIT: u32 = 1 << 18;
-
-    let callinc = cpu.ps.callinc();
-    let n = callinc * 4;
-    let this = cpu.regs.read_logical(n + 2);
-    let byte = cpu.regs.read_logical(n + 3) & 0xFF;
-
-    // Resolve SPI peripheral base. Prefer firmware's `_spi->dev` when
-    // populated; fall back to SPI3 (the bus our SSD1680 model is
-    // attached to) when `_spi` is NULL or unmapped.
-    let spi_t_ptr = bus.read_u32(this as u64 + 4).unwrap_or(0);
-    let dev_base = if spi_t_ptr != 0 {
-        bus.read_u32(spi_t_ptr as u64).unwrap_or(0x3FF6_5000)
-    } else {
-        0x3FF6_5000
-    };
-    let dev = dev_base as u64;
-
-    bus.write_u32(dev + REG_MOSI_DLEN, 7)?; // 8 bits = 1 byte
-    bus.write_u32(dev + FIFO_W0, byte)?;
-    bus.write_u32(dev + REG_USER, USER_USR_MOSI_BIT)?;
-    bus.write_u32(dev + REG_CMD, CMD_USR_BIT)?; // kick — peripheral drains synchronously
-
-    RomThunkBank::return_with(cpu, 0);
-    Ok(())
-}
+// RETIRED: gxepd_write_command / gxepd_write_data / spi_class_transfer (the
+// GxEPD2 panel-bypass and SPI register-shim thunks) were deleted once the real
+// compiled firmware was proven to paint through real SPI3 registers + real DC
+// GPIO (tests/e2e_labwired_ereader.rs: 431 SPI3 transactions → refresh, no
+// per-byte thunk). Do not reinstate — the data path is real now. See FIDELITY.md §A.
 
 /// Custom thunk for `xthal_window_spill_nw` / `xthal_window_spill`.
 ///
@@ -736,6 +612,8 @@ pub fn spi_class_transfer(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<(
 /// terminal `0x0d 0xf0`. We ignore PS.CALLINC because some firmware code
 /// paths reach this routine via `j` (jump) rather than CALL{n}, leaving
 /// CALLINC stale from an unrelated outer frame.
+// CHEAT(THUNK-ROM): emulates xthal_window_spill (flush windowed regs to stack)
+// in Rust — real: the ROM routine spills via ENTRY/RETW. See FIDELITY.md §A.
 pub fn xthal_window_spill_thunk(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
     let ws = cpu.regs.windowstart();
     let shadows = cpu.regs.shadow_stacks().clone();
@@ -788,6 +666,8 @@ pub fn xthal_window_spill_thunk(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimRe
 /// Instead, halt the calling CPU and print the assertion arguments so the
 /// operator sees what blew up.  The caller never re-runs, so the loop
 /// breaks.  The OTHER CPU (if dual-core) keeps running.
+// CHEAT(NOP): halts the sim on abort() instead of running the real abort path
+// (which would print a backtrace via the panic handler). See FIDELITY.md §A.
 pub fn abort_halt(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
     use core::sync::atomic::{AtomicU32, Ordering};
     static FIRST_PRINT: AtomicU32 = AtomicU32::new(0);
@@ -813,6 +693,9 @@ pub fn abort_halt(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
 /// buffer (an identity cast). Returning 0 makes `esp_newlib_locks_init`'s
 /// "got the static handle back" assertion fire. We echo arg 1 (the
 /// caller-allocated buffer pointer).
+// CHEAT(THUNK-LIB): echoes the static buffer back as the queue handle instead
+// of running xQueueCreateMutexStatic — real: FreeRTOS initializes the queue
+// structure. See FIDELITY.md §A.
 pub fn x_queue_create_mutex_static_echo(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
     let n = cpu.ps.callinc() * 4;
     let static_buf = cpu.regs.read_logical(n + 3);
@@ -832,6 +715,8 @@ pub fn x_queue_create_mutex_static_echo(cpu: &mut XtensaLx7, _bus: &mut dyn Bus)
 /// auto-discovered symbol resolves on the Arduino-ESP32 profile. Without
 /// the symbol (preset-PC profile, stripped ELF), we fall back to returning
 /// 0 to preserve the previous behaviour.
+// CHEAT(THUNK-LIB): returns a fabricated current-task handle — real: the
+// compiled FreeRTOS scheduler tracks pxCurrentTCB. See FIDELITY.md §A.
 pub fn x_task_get_current_task_handle(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
     let core_id = (cpu.sr.read(crate::cpu::xtensa_sr::PRID) >> 13) & 1;
     let pxcurrenttcb_addr = PX_CURRENT_TCB_ADDR.with(|s| s.get()).unwrap_or(0);
@@ -863,6 +748,8 @@ thread_local! {
 /// Emits a one-time `tracing::warn!` on first call so silent activation is
 /// loud in logs; this stub will hide future regressions where a take
 /// *should* block (e.g. when a second consumer is added).
+// CHEAT(NOP): returns pdTRUE unconditionally — real: the wrapped FreeRTOS call
+// computes its result. See FIDELITY.md §A.
 pub fn return_pd_true(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
     use std::sync::atomic::{AtomicBool, Ordering};
     static WARNED: AtomicBool = AtomicBool::new(false);
@@ -893,6 +780,9 @@ pub fn return_pd_true(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> 
 ///   3 → VSPI/SPI3 (0x3FF65000) — the default Arduino `SPI` instance
 ///
 /// The `spi_t` blob is per-num and lives in DRAM at a reserved address.
+// CHEAT(THUNK-LIB): fakes the Arduino spiStartBus() so later transfers find a
+// "bus up" — real: the compiled IDF/Arduino SPI bus-init code runs against the
+// SPI peripheral + GPIO matrix. See FIDELITY.md §A.
 pub fn spi_start_bus_fake(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
     let n = cpu.ps.callinc() * 4;
     let spi_num = cpu.regs.read_logical(n + 2) & 0xFF;
@@ -943,6 +833,9 @@ fn fake_spi_for_num(spi_num: u32) -> (u32, u32) {
 ///
 /// After ensuring _spi is non-NULL, we return pdTRUE to satisfy the
 /// caller's `bnei a10, 1, retry` check (it expects a take to succeed).
+// CHEAT(THUNK-LIB): fakes SPIClass::beginTransaction (populates _spi->dev so
+// transfer finds SPI3) — real: the compiled Arduino code configures clock/mode
+// on the SPI peripheral. See FIDELITY.md §A.
 pub fn spi_class_begin_transaction(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
     use crate::peripherals::esp32::spi::{REG_USER, USER_USR_MOSI_BIT};
 
@@ -1016,6 +909,8 @@ pub fn vlist_insert_debug(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<(
 /// the flash dcache window we populate with the app-image header). Used
 /// for functions that must return a non-NULL "found it" pointer to avoid
 /// upstream NULL-assert panics, but whose contents we don't actually use.
+// CHEAT(NOP): returns a fabricated non-null pointer so the caller proceeds —
+// real: the function allocates/returns a genuine structure. See FIDELITY.md §A.
 pub fn nop_return_fake_ptr(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
     RomThunkBank::return_with(cpu, 0x3F40_0100);
     Ok(())
@@ -1030,6 +925,8 @@ pub fn nop_return_fake_ptr(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult
 /// `_REENT_INIT_ZERO` — `errno` reads as 0, all FILE* slots are null,
 /// no allocator state. Adequate for sketches that don't actually use
 /// stdio/errno on the panel-render path.
+// CHEAT(NOP): returns a fixed DRAM address as the per-task reent struct — real:
+// __getreent returns the running task's _reent. See FIDELITY.md §A.
 pub fn getreent_dram_fake_ptr(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
     RomThunkBank::return_with(cpu, 0x3FFB_F000);
     Ok(())
@@ -1064,6 +961,8 @@ thread_local! {
 /// similar 32-bit time-source readers. Returns an ever-increasing value
 /// (steps of 1000 per call) so callers polling for timeout deadlines
 /// actually make progress instead of looping forever.
+// CHEAT(THUNK-LIB): returns an incrementing counter as a fake timestamp — real:
+// the IDF reads a hardware timer (systimer/CCOUNT). See FIDELITY.md §A.
 pub fn monotonic_counter_32(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
     static MONOTONIC_TICKS: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
     let v = MONOTONIC_TICKS.fetch_add(1000, core::sync::atomic::Ordering::Relaxed);
@@ -1083,6 +982,8 @@ pub fn monotonic_counter_32(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResul
 ///
 /// Args (Xtensa C ABI, pre-ENTRY caller view so the first arg is at
 /// a[CALLINC*4 + 2]): out_ptr.
+// CHEAT(THUNK-LIB): writes a canned esp_chip_info_t — real: reads eFuse/DPORT
+// to report cores/features/revision. See FIDELITY.md §A.
 pub fn esp_chip_info_stub(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
     let n = cpu.ps.callinc() * 4;
     let out_ptr = cpu.regs.read_logical(n + 2);
@@ -1313,6 +1214,9 @@ const HEAP_BUMP_END: u32 = 0x3FFE_0000; // 64 KiB pool, top of SRAM2
 /// Args (Xtensa C-ABI post-rotation):
 ///   a[n+2] = size, a[n+3] = caps  (caps ignored)
 /// Return: a[n+2] = pointer (or 0 on OOM)
+// CHEAT(THUNK-LIB): bump-allocates from a Rust-side arena instead of running
+// the compiled heap_caps allocator — real: the IDF allocator manages the heap
+// regions. (Sibling thunks: init/calloc/free/realloc.) See FIDELITY.md §A.
 pub fn esp_idf_heap_caps_malloc(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
     let n = cpu.ps.callinc() * 4;
     let size = cpu.regs.read_logical(n + 2);
