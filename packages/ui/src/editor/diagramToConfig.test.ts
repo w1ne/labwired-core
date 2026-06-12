@@ -82,6 +82,30 @@ describe('diagramToConfig', () => {
     expect(systemYaml).toContain('com: "COM2"');
   });
 
+  it('emits CAN diagnostic tester devices from wired H563 CAN blocks', () => {
+    const diagram: Diagram = {
+      version: 1,
+      board: 'stm32h563',
+      parts: [
+        { id: 'mcu', type: 'nucleo-h563zi', x: 0, y: 0, rotate: 0, attrs: {} },
+        { id: 'can_xcvr', type: 'can-transceiver', x: 300, y: 100, rotate: 0, attrs: {} },
+        { id: 'uds_tester', type: 'can-diagnostic-tool', x: 500, y: 100, rotate: 0, attrs: {} },
+      ],
+      wires: [
+        { from: { part: 'mcu', pin: 'PD1' }, to: { part: 'can_xcvr', pin: 'TXD' }, color: '#06D6A0' },
+        { from: { part: 'mcu', pin: 'PD0' }, to: { part: 'can_xcvr', pin: 'RXD' }, color: '#118AB2' },
+        { from: { part: 'can_xcvr', pin: 'CAN_H' }, to: { part: 'uds_tester', pin: 'CAN_H' }, color: '#06D6A0' },
+        { from: { part: 'can_xcvr', pin: 'CAN_L' }, to: { part: 'uds_tester', pin: 'CAN_L' }, color: '#118AB2' },
+      ],
+    };
+
+    const { systemYaml } = diagramToConfig(diagram, 'name: "stm32h563-test"\n');
+
+    expect(systemYaml).toContain('id: "uds_tester"');
+    expect(systemYaml).toContain('type: "can-diagnostic-tester"');
+    expect(systemYaml).toContain('connection: "fdcan1"');
+  });
+
   it('maps the Nokia 5110 lab diagram into reusable external device contracts', () => {
     const diagram: Diagram = {
       version: 1,

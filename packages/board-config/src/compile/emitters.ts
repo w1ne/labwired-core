@@ -71,6 +71,53 @@ export function mcuPinForPartPin(
   return null;
 }
 
+function endpointKey(endpoint: { part: string; pin: string }): string {
+  return `${endpoint.part}:${endpoint.pin}`;
+}
+
+function connectedEndpoints(
+  diagram: Diagram,
+  start: { part: string; pin: string },
+): { part: string; pin: string }[] {
+  const byKey = new Map<string, { part: string; pin: string }[]>();
+  const addEdge = (a: { part: string; pin: string }, b: { part: string; pin: string }) => {
+    const key = endpointKey(a);
+    const next = byKey.get(key) ?? [];
+    next.push(b);
+    byKey.set(key, next);
+  };
+
+  for (const wire of diagram.wires) {
+    addEdge(wire.from, wire.to);
+    addEdge(wire.to, wire.from);
+  }
+
+  const out: { part: string; pin: string }[] = [];
+  const seen = new Set<string>();
+  const queue = [start];
+  while (queue.length > 0) {
+    const endpoint = queue.shift()!;
+    const key = endpointKey(endpoint);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(endpoint);
+    for (const next of byKey.get(key) ?? []) {
+      if (!seen.has(endpointKey(next))) queue.push(next);
+    }
+  }
+  return out;
+}
+
+function mcuPinsOnNet(
+  diagram: Diagram,
+  partId: string,
+  pinId: string,
+): string[] {
+  return connectedEndpoints(diagram, { part: partId, pin: pinId })
+    .filter((endpoint) => endpoint.part === 'mcu')
+    .map((endpoint) => endpoint.pin);
+}
+
 export function spiPeripheralForPart(diagram: Diagram, partId: string): string | null {
   const spiPins = ['CLK', 'SCK', 'DIN', 'MOSI'];
   for (const pinId of spiPins) {
@@ -78,6 +125,37 @@ export function spiPeripheralForPart(diagram: Diagram, partId: string): string |
     if (!mcuPin) continue;
     const spi = findPinFunction(diagram.board, mcuPin, 'spi');
     if (spi) return spi.peripheral;
+  }
+  return null;
+}
+
+export function canPeripheralForTransceiver(diagram: Diagram, partId: string): string | null {
+  const peripheralFor = (pinId: 'TXD' | 'RXD', role: 'tx' | 'rx'): string | null => {
+    const matches = new Set<string>();
+    for (const mcuPin of mcuPinsOnNet(diagram, partId, pinId)) {
+      const fn = findPinFunction(diagram.board, mcuPin, 'can');
+      if (fn?.role === role) matches.add(fn.peripheral);
+    }
+    return matches.size === 1 ? [...matches][0] : null;
+  };
+
+  const tx = peripheralFor('TXD', 'tx');
+  const rx = peripheralFor('RXD', 'rx');
+  if (tx && rx && tx === rx) {
+    return tx;
+  }
+  return null;
+}
+
+export function canPeripheralForDiagnosticTool(diagram: Diagram, partId: string): string | null {
+  for (const pinId of ['CAN_H', 'CAN_L']) {
+    for (const endpoint of connectedEndpoints(diagram, { part: partId, pin: pinId })) {
+      const part = diagram.parts.find((candidate) => candidate.id === endpoint.part);
+      if (part?.type !== 'can-transceiver') continue;
+      if (endpoint.pin !== 'CAN_H' && endpoint.pin !== 'CAN_L') continue;
+      const peripheral = canPeripheralForTransceiver(diagram, endpoint.part);
+      if (peripheral) return peripheral;
+    }
   }
   return null;
 }
@@ -276,6 +354,27 @@ export function emitNeo6mGps(
   };
 }
 
+/** Emit an off-board CAN diagnostic tester from a wired CAN_H/CAN_L tool block. */
+export function emitCanDiagnosticTool(
+  diagram: Diagram,
+  partId: string,
+): { externalDevice?: string; boardIo?: string } {
+  const part = diagram.parts.find((p) => p.id === partId);
+  if (!part) return {};
+  const connection = canPeripheralForDiagnosticTool(diagram, partId);
+  if (!connection) return {};
+  const requestId = String(part.attrs?.request_id ?? '0x7E0');
+  const requestData = String(part.attrs?.request_data ?? '03 22 F1 90');
+  return {
+    externalDevice: `  - id: "${partId}"
+    type: "can-diagnostic-tester"
+    connection: "${connection}"
+    config:
+      request_id: "${requestId}"
+      request_data: "${requestData}"`,
+  };
+}
+
 /**
  * Emit board_io entries for point-to-point wires from legacy diagrams
  * (handles led, button, pwm_output, adc_input etc. via COMPONENT_META).
@@ -285,6 +384,7 @@ export function emitBoardIoFromWires(diagram: Diagram): string[] {
   const entries: string[] = [];
   const skipTypes = new Set([
     'ultrasonic', 'pcd8544', 'sn74hc165', 'iolink-master', 'neo6m-gps',
+    'can-transceiver', 'can-diagnostic-tool',
   ]);
 
   for (const wire of diagram.wires) {
@@ -344,6 +444,7 @@ export const EMITTED_PART_TYPES: readonly string[] = [
   'sn74hc165',
   'iolink-master',
   'neo6m-gps',
+  'can-diagnostic-tool',
   ...Object.keys(I2C_DEVICE_ADDRESSES),
   ...Array.from(SPI_DEVICE_TYPES),
 ];

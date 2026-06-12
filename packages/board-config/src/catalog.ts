@@ -9,7 +9,7 @@ import type { NetProtocol } from './schema';
 
 /** Compiler/ERC dispatch class. */
 export type DeviceClass =
-  | 'mcu' | 'board_io' | 'i2c_device' | 'spi_device' | 'uart_device' | 'passive';
+  | 'mcu' | 'board_io' | 'i2c_device' | 'spi_device' | 'uart_device' | 'passive' | 'tool';
 
 /** KiCad-vocabulary pin electrical types. */
 export type PinEtype =
@@ -83,6 +83,27 @@ export const CATALOG: Record<string, CatalogPart> = {
     type: 'resistor',
     deviceClass: 'passive',
     pins: [p('1', 'passive'), p('2', 'passive')],
+  },
+  'can-transceiver': {
+    type: 'can-transceiver',
+    deviceClass: 'passive',
+    pins: [
+      p('TXD', 'input'),
+      p('RXD', 'output'),
+      p('VCC', 'power_in'),
+      p('GND', 'power_in'),
+      p('CAN_H', 'passive'),
+      p('CAN_L', 'passive'),
+    ],
+  },
+  'can-diagnostic-tool': {
+    type: 'can-diagnostic-tool',
+    deviceClass: 'tool',
+    pins: [
+      p('CAN_H', 'passive'),
+      p('CAN_L', 'passive'),
+      p('GND', 'power_in'),
+    ],
   },
   servo: {
     type: 'servo',

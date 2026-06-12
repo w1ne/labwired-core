@@ -6,7 +6,7 @@
 import type { PinEtype } from './catalog';
 
 export interface PinFunction {
-  type: 'gpio' | 'adc' | 'i2c' | 'spi' | 'timer' | 'uart';
+  type: 'gpio' | 'adc' | 'i2c' | 'spi' | 'timer' | 'uart' | 'can';
   peripheral: string;
   channel?: number;
   role?: string; // 'scl' | 'sda' | 'mosi' | 'miso' | 'sck' | 'nss' | 'tx' | 'rx'
@@ -256,8 +256,12 @@ const STM32L476_PINS: Record<string, PinMapping> = {
 /** STM32H563 pin mappings (extends F103 with additional GPIO ports D-G). */
 const STM32H563_PINS: Record<string, PinMapping> = {
   ...STM32F103_PINS,
-  PD0: { gpio: { peripheral: 'gpiod', pin: 0 }, functions: [] },
-  PD1: { gpio: { peripheral: 'gpiod', pin: 1 }, functions: [] },
+  PD0: { gpio: { peripheral: 'gpiod', pin: 0 }, functions: [
+    { type: 'can', peripheral: 'fdcan1', role: 'rx' },
+  ] },
+  PD1: { gpio: { peripheral: 'gpiod', pin: 1 }, functions: [
+    { type: 'can', peripheral: 'fdcan1', role: 'tx' },
+  ] },
   PE0: { gpio: { peripheral: 'gpioe', pin: 0 }, functions: [] },
   PF4: { gpio: { peripheral: 'gpiof', pin: 4 }, functions: [] },
   PG4: { gpio: { peripheral: 'gpiog', pin: 4 }, functions: [] },

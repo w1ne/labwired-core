@@ -1,4 +1,4 @@
-import { getPinMapping, type Diagram, type WireEndpoint } from '@labwired/ui';
+import { findPinFunction, getPinMapping, type Diagram, type WireEndpoint } from '@labwired/ui';
 
 export interface LogicAnalyzerChannelBinding {
   channel: string;
@@ -17,7 +17,7 @@ export interface UartDecoderBinding {
 
 export interface UdsDecoderBinding {
   connected: boolean;
-  channels: { channel: string; part: string; pin: 'CAN_H' | 'CAN_L' }[];
+  channels: { channel: string; part: string; pin: 'CAN_H' | 'CAN_L'; peripheral: string }[];
 }
 
 const ANALYZER_TYPE = 'logic-analyzer';
@@ -147,6 +147,42 @@ export function getUartDecoderBinding(diagram: Diagram, analyzerId: string): Uar
 export function getUdsDecoderBinding(diagram: Diagram, analyzerId: string): UdsDecoderBinding {
   const channels: UdsDecoderBinding['channels'] = [];
 
+  const canPeripheralForTransceiver = (partId: string): string | null => {
+    const peripheralFor = (pin: 'TXD' | 'RXD', role: 'tx' | 'rx'): string | null => {
+      const matches = new Set<string>();
+      for (const endpoint of connectedEndpoints(diagram, { part: partId, pin })) {
+        if (endpoint.part !== 'mcu') continue;
+        const fn = findPinFunction(diagram.board, endpoint.pin, 'can');
+        if (fn?.role === role) matches.add(fn.peripheral);
+      }
+      return matches.size === 1 ? [...matches][0] : null;
+    };
+
+    const tx = peripheralFor('TXD', 'tx');
+    const rx = peripheralFor('RXD', 'rx');
+    if (tx && rx && tx === rx) {
+      return tx;
+    }
+    return null;
+  };
+
+  const canPeripheralForEndpoint = (endpoint: WireEndpoint): string | null => {
+    const part = diagram.parts.find((candidate) => candidate.id === endpoint.part);
+    if (part?.type === 'can-transceiver') {
+      return canPeripheralForTransceiver(endpoint.part);
+    }
+
+    if (part?.type !== 'can-diagnostic-tool') return null;
+    for (const peer of connectedEndpoints(diagram, endpoint)) {
+      const peerPart = diagram.parts.find((candidate) => candidate.id === peer.part);
+      if (peerPart?.type !== 'can-transceiver') continue;
+      if (peer.pin !== 'CAN_H' && peer.pin !== 'CAN_L') continue;
+      const peripheral = canPeripheralForTransceiver(peer.part);
+      if (peripheral) return peripheral;
+    }
+    return null;
+  };
+
   for (const binding of getLogicAnalyzerChannelBindings(diagram, analyzerId)) {
     for (const endpoint of binding.endpoints) {
       const part = diagram.parts.find((candidate) => candidate.id === endpoint.part);
@@ -156,11 +192,14 @@ export function getUdsDecoderBinding(diagram: Diagram, analyzerId: string): UdsD
         part?.type === 'can-transceiver' && (endpoint.pin === 'CAN_H' || endpoint.pin === 'CAN_L');
 
       if (!isDiagnosticToolCanPin && !isTransceiverCanPin) continue;
+      const peripheral = canPeripheralForEndpoint(endpoint);
+      if (!peripheral) continue;
 
       channels.push({
         channel: binding.channel,
         part: endpoint.part,
         pin: endpoint.pin as 'CAN_H' | 'CAN_L',
+        peripheral,
       });
     }
   }
@@ -171,14 +210,16 @@ export function getUdsDecoderBinding(diagram: Diagram, analyzerId: string): UdsD
         (candidate) =>
           candidate.channel === channel.channel &&
           candidate.part === channel.part &&
-          candidate.pin === channel.pin,
+          candidate.pin === channel.pin &&
+          candidate.peripheral === channel.peripheral,
       ) === index,
   );
 
   unique.sort((a, b) =>
     a.channel.localeCompare(b.channel)
     || a.pin.localeCompare(b.pin)
-    || a.part.localeCompare(b.part),
+    || a.part.localeCompare(b.part)
+    || a.peripheral.localeCompare(b.peripheral),
   );
 
   return { connected: unique.length > 0, channels: unique };

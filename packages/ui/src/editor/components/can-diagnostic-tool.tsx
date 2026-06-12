@@ -14,7 +14,10 @@ export const canDiagnosticToolComponent: ComponentDef = {
     { id: 'CAN_L', x: 0, y: 54, side: 'left', label: 'CAN_L' },
     { id: 'GND', x: 0, y: 74, side: 'left', label: 'GND' },
   ],
-  defaultAttrs: {},
+  defaultAttrs: {
+    request_id: '0x7E0',
+    request_data: '03 22 F1 90',
+  },
   render: (_attrs, state) => {
     const selected = !!state?.selected;
     const uid = state?.id ?? 'uds-tester';
