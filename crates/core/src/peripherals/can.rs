@@ -61,10 +61,7 @@ impl Peripheral for CanController {
             0x04 => self.tx_data = (self.tx_data & !mask) | val_shifted,
             0x08 => {
                 if value == 1 {
-                    let frame = CanFrame {
-                        id: self.tx_id,
-                        data: self.tx_data.to_le_bytes().to_vec(),
-                    };
+                    let frame = CanFrame::classic(self.tx_id, self.tx_data.to_le_bytes().to_vec());
                     let _ = self.tx.send(frame);
                 } else if value == 2 {
                     self.rx_pending = false;

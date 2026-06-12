@@ -20,6 +20,27 @@ pub trait Interconnect: Send {
 pub struct CanFrame {
     pub id: u32,
     pub data: Vec<u8>,
+    /// 29-bit extended identifier (XTD) rather than 11-bit standard.
+    pub extended: bool,
+    /// CAN-FD frame format (FDF/EDL).
+    pub fd: bool,
+    /// CAN-FD bitrate switch flag (BRS).
+    pub bitrate_switch: bool,
+    /// Remote-transmission-request frame.
+    pub remote: bool,
+}
+
+impl CanFrame {
+    pub fn classic(id: u32, data: Vec<u8>) -> Self {
+        Self {
+            id,
+            data,
+            extended: false,
+            fd: false,
+            bitrate_switch: false,
+            remote: false,
+        }
+    }
 }
 
 pub struct CanBus {

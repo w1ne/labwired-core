@@ -1,0 +1,5 @@
+name: "h563-uds-ecu"
+chip: "../../configs/chips/stm32h563.yaml"
+external_devices: []
+board_io: []
+

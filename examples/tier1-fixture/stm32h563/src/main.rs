@@ -45,6 +45,8 @@ const SPI1_BASE: u32 = 0x4001_3000; // type spi, profile stm32h5
 const ADC1_BASE: u32 = 0x4202_8000; // type adc, stm32l4 layout
 const RTC_BASE: u32 = 0x4400_7800; // type rtc_v3
 const TIM1_BASE: u32 = 0x4001_2C00; // type timer, advanced (id tim1_pwm)
+const FDCAN1_BASE: u32 = 0x4000_A400; // type fdcan (M_CAN, fixed RAM layout)
+const SRAMCAN_BASE: u32 = 0x4000_AC00; // FDCAN message RAM (window +0x800)
 
 // NVIC (installed for every Cortex-M chip; declared in the yaml as `nvic`).
 const NVIC_ISER0: u32 = 0xE000_E100;
@@ -557,6 +559,95 @@ fn check_rtc() -> Result<(), &'static [u8]> {
 
 static mut IRQ_HITS: u32 = 0;
 
+/// can: FDCAN1 internal loopback (CCCR.TEST + MON, TEST.LBCK) — TX buffer 0
+/// to RX FIFO0 through the fixed SRAMCAN layout. Replays silicon capture13
+/// (2026-06-12, NUCLEO-H563ZI) register-for-register, so the same ELF is
+/// bench-replayable; no transceiver needed.
+fn check_can() -> Result<(), &'static [u8]> {
+    // Bus clock, then kernel clock: FDCANSEL resets to 00 = HSE, and the
+    // Nucleo's HSE is the ST-LINK 8 MHz MCO — digital bypass
+    // (HSEON | HSEBYP | HSEEXT).
+    wr32(RCC_BASE + 0xA0, rd32(RCC_BASE + 0xA0) | (1 << 9));
+    wr32(RCC_BASE, rd32(RCC_BASE) | 0x0015_0000);
+    for _ in 0..50_000 {
+        if rd32(RCC_BASE) & (1 << 17) != 0 {
+            break;
+        }
+    }
+    if rd32(FDCAN1_BASE + 0x04) != 0x8765_4321 {
+        return Err(b"can-endn");
+    }
+    // INIT | CCE unlocks config; TEST + MON arm internal loopback.
+    wr32(FDCAN1_BASE + 0x18, 0x3);
+    if rd32(FDCAN1_BASE + 0x18) & 0x3 != 0x3 {
+        return Err(b"can-cce");
+    }
+    wr32(FDCAN1_BASE + 0x18, 0xA3);
+    wr32(FDCAN1_BASE + 0x10, 1 << 4); // TEST.LBCK
+    if rd32(FDCAN1_BASE + 0x10) & (1 << 4) == 0 {
+        return Err(b"can-lbck");
+    }
+    // TX buffer 0 (SRAMCAN + 0x278): std ID 0x123, DLC 8.
+    wr32(SRAMCAN_BASE + 0x278, 0x123 << 18);
+    wr32(SRAMCAN_BASE + 0x27C, 8 << 16);
+    wr32(SRAMCAN_BASE + 0x280, 0xDEAD_BEEF);
+    wr32(SRAMCAN_BASE + 0x284, 0xCAFE_BABE);
+    // Blank the RX element so stale RAM can't fake the compare below.
+    wr32(SRAMCAN_BASE + 0xB0, 0);
+    wr32(SRAMCAN_BASE + 0xB4, 0);
+    wr32(SRAMCAN_BASE + 0xB8, 0);
+    wr32(SRAMCAN_BASE + 0xBC, 0);
+    // Leave INIT (CCE drops with it — silicon: write 0xA2, read 0xA0).
+    wr32(FDCAN1_BASE + 0x18, 0xA2);
+    for _ in 0..50_000 {
+        if rd32(FDCAN1_BASE + 0x18) & 0x1 == 0 {
+            break;
+        }
+    }
+    if rd32(FDCAN1_BASE + 0x18) & 0x1 != 0 {
+        return Err(b"can-init-stuck");
+    }
+    wr32(FDCAN1_BASE + 0xCC, 0x1); // TXBAR: fire buffer 0
+    let mut received = false;
+    for _ in 0..50_000 {
+        if rd32(FDCAN1_BASE + 0x90) & 0x7F != 0 {
+            received = true;
+            break;
+        }
+    }
+    if !received {
+        return Err(b"can-rx-timeout");
+    }
+    if rd32(FDCAN1_BASE + 0xD4) & 0x1 == 0 {
+        return Err(b"can-txbto");
+    }
+    if rd32(FDCAN1_BASE + 0x50) & 0x1 == 0 {
+        return Err(b"can-ir-rf0n");
+    }
+    // RX element 0 at SRAMCAN + 0xB0. Silicon leaves R0[17:0] undefined
+    // for standard IDs — compare the masked field only.
+    if (rd32(SRAMCAN_BASE + 0xB0) >> 18) & 0x7FF != 0x123 {
+        return Err(b"can-rx-id");
+    }
+    if (rd32(SRAMCAN_BASE + 0xB4) >> 16) & 0xF != 8 {
+        return Err(b"can-rx-dlc");
+    }
+    if rd32(SRAMCAN_BASE + 0xB8) != 0xDEAD_BEEF || rd32(SRAMCAN_BASE + 0xBC) != 0xCAFE_BABE {
+        return Err(b"can-rx-data");
+    }
+    // IR is rc_w1; acking RXF0 element 0 must drop the fill level.
+    let ir = rd32(FDCAN1_BASE + 0x50);
+    wr32(FDCAN1_BASE + 0x50, ir);
+    if rd32(FDCAN1_BASE + 0x50) != 0 {
+        return Err(b"can-ir-w1c");
+    }
+    wr32(FDCAN1_BASE + 0x94, 0);
+    if rd32(FDCAN1_BASE + 0x90) & 0x7F != 0 {
+        return Err(b"can-ack");
+    }
+    Ok(())
+}
+
 /// irq: NVIC delivery round-trip. Enable TEST_IRQ in ISER0, software-pend
 /// it via ISPR0, and require the vector to actually run (DefaultHandler
 /// counts it and disarms itself).
@@ -599,6 +690,7 @@ fn main() -> ! {
     report(b"adc", check_adc());
     report(b"pwm", check_pwm());
     report(b"rtc", check_rtc());
+    report(b"can", check_can());
     report(b"irq", check_irq());
     puts(b"TIER1 done\n");
 
