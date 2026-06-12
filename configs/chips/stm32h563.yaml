@@ -127,6 +127,17 @@ peripherals:
     irq: 27
     config:
       irq_base: 27  # per-channel NVIC lines 27..34 (ch7 TCIE silicon-probed)
+  # FDCAN1 (RM0481 §60, Bosch M_CAN with the fixed message-RAM layout).
+  # Internal-loopback TX -> RX FIFO0 silicon-verified 2026-06-12
+  # (capture13). The window spans the whole FDCAN estate relative to the
+  # FDCAN1 base: M_CAN regs at +0x000, FDCAN_CONFIG at +0x100, SRAMCAN at
+  # +0x800 (0x4000AC00). FDCAN2 (regs at +0x400, present on silicon) is
+  # not modeled and reads 0 — divergence documented.
+  - id: "fdcan1"
+    type: "fdcan"
+    base_address: 0x4000A400
+    size: "4KB"
+    irq: 39  # FDCAN1_IT0; line 1 (IT1 = 40) routing via ILS not modeled
   # TIM1 is the advanced-control PWM timer; the `_pwm` id suffix declares the
   # tier1 pwm class alongside timer (CLASS_MARKERS match on id substrings).
   - id: "tim1_pwm"

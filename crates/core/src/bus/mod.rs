@@ -231,7 +231,7 @@ impl SystemBus {
             | "dma" | "gpdma" | "adc" | "pio" | "declarative" | "strict_ir"
             | "strict_ir_internal" | "pwr" | "flash" | "rng" | "crc" | "rtc" | "rtc_f1"
             | "rtc_v3" | "iwdg" | "wwdg" | "dac" | "dbgmcu" | "lptim" | "quadspi" | "sai"
-            | "usb_otg" | "bxcan" | "sdmmc" | "comp" | "tsc" | "fmc" => {
+            | "usb_otg" | "bxcan" | "fdcan" | "sdmmc" | "comp" | "tsc" | "fmc" => {
                 return t;
             }
             _ => {}
@@ -1362,6 +1362,7 @@ impl SystemBus {
                 "sai" => Box::new(crate::peripherals::sai::Sai::new()),
                 "usb_otg" => Box::new(crate::peripherals::usb_otg::UsbOtg::new()),
                 "bxcan" => Box::new(crate::peripherals::bxcan::BxCan::new()),
+                "fdcan" => Box::new(crate::peripherals::fdcan::Fdcan::new()),
                 "sdmmc" => Box::new(crate::peripherals::sdmmc::Sdmmc::new()),
                 "comp" => Box::new(crate::peripherals::comp::Comp::new()),
                 "tsc" => Box::new(crate::peripherals::tsc::Tsc::new()),
