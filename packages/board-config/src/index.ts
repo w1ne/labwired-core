@@ -17,3 +17,7 @@ export { erc } from './erc';
 export type { Diagnostic, Severity } from './erc';
 export { compile } from './compile';
 export type { CompileResult } from './compile';
+export { diagnoseDiagram } from './legacy-diagnostics';
+export type { DiagnosticSeverity, DiagnosticCode, Diagnostic as LegacyDiagnostic, ValidateDiagram, DiagramPart, DiagramWire, WireEndpoint as LegacyWireEndpoint } from './legacy-diagnostics';
+export { composeDiagnostics } from './compose';
+export type { ComposedDiagnostic, ComposeDiagnosticsResult } from './compose';

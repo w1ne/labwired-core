@@ -20,7 +20,8 @@ import {
   boardChipYamlPath,
 } from './boards.js';
 import { putSnapshot, getSnapshot } from './snapshots.js';
-import { diagnoseDiagram, type ValidateDiagram } from './diagnostics.js';
+import { compile, composeDiagnostics } from '@labwired/board-config';
+import type { ValidateDiagram } from '@labwired/board-config';
 import { SEARCH_TOOLS_TOOL, SEARCH_TOOLS_TOOL_NAME, rankTools } from './search-tools.js';
 import { decorateTools } from './tool-metadata.js';
 import { RESOURCES, getResource } from './resources.js';
@@ -484,6 +485,30 @@ function localTools() {
         },
       },
     },
+    {
+      name: 'labwired_compile_diagram',
+      description:
+        'Compile a wired diagram into a runnable LabWired System Manifest YAML. ' +
+        'Runs electrical rule checks (ERC) first — any error aborts compilation. ' +
+        'On success, persists the manifest to <repoRoot>/.labwired/boards/<name>.yaml ' +
+        'and returns the board_path, system_yaml, and any warnings. ' +
+        'Use this after labwired_validate_diagram to produce the manifest for labwired_simulate. ' +
+        'Keywords: compile diagram, diagram to manifest, build board.',
+      inputSchema: {
+        type: 'object',
+        required: ['diagram'],
+        properties: {
+          diagram: {
+            type: 'object',
+            description: 'Diagram JSON: { board, parts: [{id, type, ...}], wires: [{from, to}] }',
+          },
+          name: {
+            type: 'string',
+            description: 'Optional name for the output file (defaults to board name). Kebab-cased.',
+          },
+        },
+      },
+    },
   ];
 }
 
@@ -873,26 +898,68 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     if (name === 'labwired_validate_diagram') {
       const { diagram } = ValidateDiagramInput.parse(args ?? {});
-      const diagnostics = diagnoseDiagram(diagram as unknown as ValidateDiagram);
-      const errors = diagnostics.filter((d) => d.severity === 'error').length;
-      const warnings = diagnostics.filter((d) => d.severity === 'warning').length;
+      const result = composeDiagnostics(diagram as unknown as ValidateDiagram);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+        isError: result.error_count > 0,
+      };
+    }
+
+    if (name === 'labwired_compile_diagram') {
+      const input = (args ?? {}) as { diagram?: unknown; name?: unknown };
+      const diagram = input.diagram;
+      const nameOverride = typeof input.name === 'string' ? input.name : undefined;
+
+      if (!diagram || typeof diagram !== 'object') {
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ error: 'INVALID_ARGS', detail: 'diagram is required' }, null, 2) }],
+          isError: true,
+        };
+      }
+
+      const result = compile(diagram as Parameters<typeof compile>[0]);
+
+      if (!result.ok) {
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ ok: false, diagnostics: result.diagnostics }, null, 2) }],
+          isError: true,
+        };
+      }
+
+      // Persist to .labwired/boards/<name>.yaml
+      const diagramAny = diagram as Record<string, unknown>;
+      const boardName = typeof diagramAny.board === 'string' ? diagramAny.board : 'board';
+      const stem = nameOverride ? toKebabCase(nameOverride) : toKebabCase(boardName);
+      const fileName = `${stem}.yaml`;
+
+      const workspaceRoot = resolveWorkspaceRoot();
+      const boardsDir = join(workspaceRoot, '.labwired', 'boards');
+      await mkdir(boardsDir, { recursive: true });
+      const boardPath = join(boardsDir, fileName);
+      await writeFile(boardPath, result.systemYaml ?? '');
+      const absBoardPath = resolve(boardPath);
+
       return {
         content: [
           {
             type: 'text',
             text: JSON.stringify(
               {
-                ok: errors === 0,
-                error_count: errors,
-                warning_count: warnings,
-                diagnostics,
+                ok: true,
+                board_path: absBoardPath,
+                system_yaml: result.systemYaml,
+                diagnostics: result.diagnostics,
               },
               null,
               2,
             ),
           },
         ],
-        isError: errors > 0,
       };
     }
 
