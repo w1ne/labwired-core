@@ -1926,28 +1926,17 @@ impl WasmSimulator {
     /// that GxEPD2_290_C90c / Z13c emits).
     #[wasm_bindgen]
     pub fn install_arduino_esp32_quirks(&mut self, elf_bytes: &[u8]) -> Result<(), JsValue> {
-        use labwired_core::peripherals::components::Uc8151dTricolor290;
-        use labwired_core::peripherals::esp32::spi::Esp32Spi;
         use labwired_core::peripherals::esp32s3::rom_thunks;
         let machine = self
             .machine
             .as_mut()
             .ok_or_else(|| JsValue::from_str("no machine"))?;
 
-        // Attach the UC8151D panel to spi3. Replace any pre-attached
-        // device (the system YAML may have wired an SSD1680 placeholder
-        // from when the ereader board's panel class was misidentified —
-        // GxEPD2's ereader actually drives UC8151D, and a stale SSD1680
-        // confuses both runtime decoding and snapshot restore (the spi3
-        // blob layout depends on attached-device count + types)).
-        if let Some(spi3_idx) = machine.bus.find_peripheral_index_by_name("spi3") {
-            if let Some(any) = machine.bus.peripherals[spi3_idx].dev.as_any_mut() {
-                if let Some(spi3) = any.downcast_mut::<Esp32Spi>() {
-                    spi3.attached_devices.clear();
-                    spi3.attach(Box::new(Uc8151dTricolor290::new("GPIO5")));
-                }
-            }
-        }
+        // NO hardcoded peripheral here. The panel (and any other external device)
+        // is attached from the board manifest by attach_esp32_external_devices
+        // during system load — the single source of truth for peripheral wiring,
+        // model, CS and DC pins. This method only installs the firmware-boot
+        // thunks + CPU seed below.
 
         // Seed SP — call_start_cpu0 expects BROM to have placed SP near
         // top of DRAM. We skip BROM.
@@ -2219,18 +2208,12 @@ impl WasmSimulator {
             rom_thunks::spi_class_begin_transaction,
         );
 
-        // GxEPD2 cmd/data routing — bypasses Arduino-ESP32's SPI library
-        // entirely. Bytes go straight to the attached UC8151D panel.
-        push_named(
-            &mut thunks,
-            "_ZN10GxEPD2_EPD13_writeCommandEh",
-            rom_thunks::gxepd_write_command,
-        );
-        push_named(
-            &mut thunks,
-            "_ZN10GxEPD2_EPD10_writeDataEh",
-            rom_thunks::gxepd_write_data,
-        );
+        // No GxEPD2 cmd/data bypass. The real compiled _writeCommand/_writeData
+        // run: digitalWrite(DC=GPIO17) → SPI.transfer → spiTransferByteNL writes
+        // the SPI3 FIFO/MOSI_DLEN/CMD.USR registers, and Esp32Spi drains the byte
+        // to the panel framed by the latched DC GPIO. Bytes reach the panel
+        // through real register machinery (verified against the real firmware.elf
+        // in tests/e2e_labwired_ereader.rs: 431 SPI3 transactions → refresh).
 
         // xthal_window_spill_nw — semantic spill via shadow stack. Only the
         // `_nw` leaf is thunked; the `xthal_window_spill` wrapper is a thin

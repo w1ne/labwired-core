@@ -253,6 +253,12 @@ pub struct SnapshotCaptureArgs {
     #[arg(long)]
     pub output: PathBuf,
 
+    /// Board manifest (SystemManifest YAML) declaring the external peripherals
+    /// to attach (panel, sensors, …). Peripherals are NEVER hardcoded; they come
+    /// from this manifest via the generic attach_esp32_external_devices factory.
+    #[arg(long)]
+    pub system: Option<PathBuf>,
+
     /// Firmware profile to use. Currently only `agentdeck` is supported —
     /// installs the Arduino-ESP32 / ESP32-classic bootstrap (heap-caps
     /// thunks, dual-core handshake fakery, IPI bridge, image header,
@@ -959,6 +965,7 @@ fn run_firmware_esp32(args: &RunArgs) -> ExitCode {
 
     // Set PC to ELF entry and seed SP at top of SRAM1 (post-BROM default on
     // real silicon; see e2e_external_arduino_esp32_in_sim for the rationale).
+    // CHEAT(SKIP): bypasses the boot ROM and hand-seeds PC/SP. See FIDELITY.md §C.
     cpu.set_pc(image.entry_point as u32);
     cpu.set_sp(0x3FFE_0000);
     // Post-bootloader PS state: WOE=1 (windowed ABI), INTLEVEL=0, EXCM=0.
@@ -1709,28 +1716,39 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     let mut bus = SystemBus::new();
     let cpu = configure_xtensa_esp32(&mut bus);
 
-    // Attach an SSD1680 2.9" tri-color panel to spi3, cs=GPIO5 — the
-    // the reference firmware wiring. Identical to `e2e_external_arduino_esp32_in_sim`.
-    let spi3_idx = match bus.find_peripheral_index_by_name("spi3") {
-        Some(i) => i,
-        None => {
-            eprintln!("error: configure_xtensa_esp32 did not register spi3");
-            return ExitCode::from(EXIT_RUNTIME_ERROR);
-        }
-    };
-    if let Some(any) = bus.peripherals[spi3_idx].dev.as_any_mut() {
-        if let Some(spi3) = any.downcast_mut::<Esp32Spi>() {
-            if args.profile == "arduino-esp32" {
-                // GxEPD2_290_C90c / Z13c firmware drives the panel with
-                // UC8151D commands (PSR/PWR/PON/DTM1/DTM2/DRF/…) which
-                // conflict with SSD1680 at multiple opcodes; we need the
-                // UC8151D panel model. Arduino-ESP32 reference firmware uses SSD1680
-                // and stays on the old model below.
-                spi3.attach(Box::new(Uc8151dTricolor290::new("GPIO5")));
-            } else {
-                spi3.attach(Box::new(Ssd1680Tricolor290::new("GPIO5")));
+    // Peripherals come from the board manifest, never hardcoded here. The
+    // generic attach_esp32_external_devices factory wires every declared
+    // external device (panel, etc.) onto its bus with the right model, CS and
+    // DC pins. --system points at the board manifest (e.g. the ereader's
+    // board.yaml declaring the SSD1680 e-paper on spi3, CS=GPIO5, DC=GPIO17).
+    if let Some(sys_path) = &args.system {
+        match labwired_config::SystemManifest::from_file(sys_path) {
+            Ok(manifest) => {
+                if let Err(e) = labwired_core::system::xtensa::attach_esp32_external_devices(
+                    &mut bus, &manifest,
+                ) {
+                    eprintln!("error: attaching external devices from {sys_path:?}: {e}");
+                    return ExitCode::from(EXIT_CONFIG_ERROR);
+                }
             }
-            spi3.enable_byte_capture(512);
+            Err(e) => {
+                eprintln!("error: cannot load system manifest {sys_path:?}: {e}");
+                return ExitCode::from(EXIT_CONFIG_ERROR);
+            }
+        }
+    } else {
+        eprintln!(
+            "warning: no --system manifest; no external peripherals attached \
+             (firmware that drives a panel will not render)"
+        );
+    }
+    // Enable wire-byte capture on spi3 for snapshot diagnostics (a capture
+    // concern, not a device wiring concern).
+    if let Some(spi3_idx) = bus.find_peripheral_index_by_name("spi3") {
+        if let Some(any) = bus.peripherals[spi3_idx].dev.as_any_mut() {
+            if let Some(spi3) = any.downcast_mut::<Esp32Spi>() {
+                spi3.enable_byte_capture(65536);
+            }
         }
     }
     bus.refresh_peripheral_index();
@@ -1764,6 +1782,8 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     }
     // XtensaLx7::reset() leaves PC at the 0x40000400 BROM reset vector.
     // Skip BROM and jump straight to the ELF's app entry — same as WASM.
+    // CHEAT(SKIP): bypasses the boot ROM and hand-seeds PC (SP seeded below).
+    // See FIDELITY.md §C.
     machine.cpu.set_pc(program_image.entry_point as u32);
 
     // Resolve every Arduino-ESP32 symbol we know how to patch / thunk.
@@ -2215,23 +2235,14 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     if let Some(&pc) = symbol_addrs.get("_ZN8SPIClass16beginTransactionE11SPISettings") {
         thunks.push((pc, rom_thunks::spi_class_begin_transaction));
     }
-    // GxEPD2_EPD::_writeCommand / _writeData — route directly into the
-    // attached UC8151D panel's `command_byte` / `data_byte` API,
-    // bypassing the Arduino-ESP32 SPI library and the SPI peripheral
-    // entirely. Same byte stream the real silicon receives, with
-    // explicit DC=cmd / DC=data routing (which we can't infer from
-    // pure FIFO bytes without observing the DC GPIO). Only wired for
-    // the arduino-esp32 profile — agentdeck profile attaches an
-    // SSD1680 panel that uses byte-counting through `transfer()` and
-    // doesn't need the explicit CMD/DATA split.
-    if args.profile == "arduino-esp32" {
-        if let Some(&pc) = symbol_addrs.get("_ZN10GxEPD2_EPD13_writeCommandEh") {
-            thunks.push((pc, rom_thunks::gxepd_write_command));
-        }
-        if let Some(&pc) = symbol_addrs.get("_ZN10GxEPD2_EPD10_writeDataEh") {
-            thunks.push((pc, rom_thunks::gxepd_write_data));
-        }
-    }
+    // No GxEPD2 _writeCommand / _writeData bypass. The real compiled
+    // GxEPD2_EPD::_writeCommand/_writeData run: digitalWrite(DC=GPIO17) →
+    // SPI.transfer(byte) → spiTransferByteNL writes the SPI3 FIFO/MOSI_DLEN/
+    // CMD.USR registers, and the Esp32Spi peripheral drains the byte to the
+    // panel framed by the latched DC GPIO. Verified end-to-end against the real
+    // PlatformIO firmware.elf (431 real SPI3 transactions → panel refresh) by
+    // tests/e2e_labwired_ereader.rs. The arduino-esp32 panel attach above sets
+    // the panel's DC source to GPIO17 so the framing is real.
     // Optional debug: install vListInsert short-circuit thunk that dumps
     // list state for first 20 calls. Used to diagnose SMP race issues in
     // the FreeRTOS scheduler. Enable with `LABWIRED_DEBUG_VLIST=1`.
@@ -2505,6 +2516,15 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     if let Some(idx) = machine.bus.find_peripheral_index_by_name("spi3") {
         if let Some(any) = machine.bus.peripherals[idx].dev.as_any() {
             if let Some(spi3) = any.downcast_ref::<Esp32Spi>() {
+                // Diagnostic: dump the full captured wire stream when asked, so
+                // we can inspect the 0x24/0x26 RAM-write payloads end-to-end.
+                if let Ok(path) = std::env::var("LABWIRED_DUMP_SPI") {
+                    let _ = std::fs::write(&path, spi3.captured_bytes());
+                    eprintln!(
+                        "labwired-cli snapshot: dumped {} captured spi3 bytes to {path}",
+                        spi3.captured_bytes().len()
+                    );
+                }
                 eprintln!(
                     "labwired-cli snapshot: spi3 transactions={}",
                     spi3.transactions(),
@@ -4108,6 +4128,9 @@ fn run_test(args: TestArgs) -> ExitCode {
             // matching `install_esp32_arduino_quirks` in the WASM path.
             // Native Xtensa firmware that sets its own SP will overwrite this
             // immediately.
+            // CHEAT(SKIP): bypasses the boot ROM and hand-seeds PC/SP — real: the
+            // CPU resets at 0x4000_0400 and the mapped BROM sets up SP and jumps
+            // to the app. See FIDELITY.md §C.
             machine.cpu.set_pc(program.entry_point as u32);
             machine.cpu.set_sp(0x3FFE_0000);
             let exit_code = execute_test_loop(
@@ -4121,6 +4144,44 @@ fn run_test(args: TestArgs) -> ExitCode {
                 &firmware_path,
                 system_path.as_ref(),
             );
+            // Device-block render readout. Surfaces the attached panel block's
+            // REAL render state — refresh_gen AND black-plane ink — so a generic
+            // verify (e.g. proto.cat's device loop) can judge whether the
+            // device-block actually PAINTED, not merely refreshed. A refresh with
+            // a blank plane is a false positive (the DC-latch class of bug; see
+            // FIDELITY.md §E2). Emitted to stderr alongside the boot logs.
+            {
+                use labwired_core::peripherals::components::{
+                    Ssd1680Tricolor290, Uc8151dTricolor290,
+                };
+                use labwired_core::peripherals::esp32::spi::Esp32Spi;
+                if let Some(idx) = machine.bus.find_peripheral_index_by_name("spi3") {
+                    if let Some(any) = machine.bus.peripherals[idx].dev.as_any() {
+                        if let Some(spi3) = any.downcast_ref::<Esp32Spi>() {
+                            for dev in &spi3.attached_devices {
+                                let Some(a) = dev.as_any() else { continue };
+                                if let Some(p) = a.downcast_ref::<Ssd1680Tricolor290>() {
+                                    let ink =
+                                        p.black_plane().iter().filter(|&&b| b != 0xFF).count();
+                                    eprintln!(
+                                        "[device-block] ssd1680_tricolor_290 refresh_gen={} black_ink={}",
+                                        p.refresh_generation(),
+                                        ink
+                                    );
+                                } else if let Some(p) = a.downcast_ref::<Uc8151dTricolor290>() {
+                                    let ink =
+                                        p.black_plane().iter().filter(|&&b| b != 0xFF).count();
+                                    eprintln!(
+                                        "[device-block] uc8151d_tricolor_290 refresh_gen={} black_ink={}",
+                                        p.refresh_generation(),
+                                        ink
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             if let Some(ref key) = api_key_opt {
                 use sha2::{Digest, Sha256};
                 let mut hasher = Sha256::new();
