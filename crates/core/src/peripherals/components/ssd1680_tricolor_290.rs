@@ -87,6 +87,20 @@ pub struct Ssd1680Tricolor290 {
 
     #[serde(skip_serializing)]
     state: ProtoState,
+
+    /// Data/Command (D/C) GPIO label, if wired (e.g. "GPIO17"). When set, the
+    /// bus latches that pin's output level via [`SpiDevice::set_dc_level`]
+    /// before each transfer, so framing is driven by the real GPIO exactly
+    /// like silicon — no protocol-state inference, no library thunk.
+    #[serde(skip)]
+    dc_pin: Option<String>,
+    /// Latched D/C level (low = command, high = data), pushed by the bus.
+    #[serde(skip)]
+    dc_level: bool,
+    /// Resolved `(GPIO output reg address, bit)` for the D/C line; set by the
+    /// bus at attach time so it knows where to sample the level from.
+    #[serde(skip)]
+    dc_source: Option<(u64, u8)>,
 }
 
 impl Default for Ssd1680Tricolor290 {
@@ -114,7 +128,18 @@ impl Ssd1680Tricolor290 {
             red_plane: vec![0xFF; PLANE_BYTES],
             refresh_generation: 0,
             state: ProtoState::Idle,
+            dc_pin: None,
+            dc_level: false,
+            dc_source: None,
         }
+    }
+
+    /// Wire a Data/Command GPIO line (e.g. "GPIO17"). With a D/C pin the panel
+    /// frames command vs data from the real GPIO level (silicon-accurate);
+    /// without one it falls back to protocol-state inference.
+    pub fn with_dc_pin(mut self, dc_pin: impl Into<String>) -> Self {
+        self.dc_pin = Some(dc_pin.into());
+        self
     }
 
     pub fn dimensions(&self) -> (usize, usize) {
@@ -135,6 +160,64 @@ impl Ssd1680Tricolor290 {
 
     pub fn power_on(&self) -> bool {
         self.power_on
+    }
+
+    /// Process one command byte (DC=low on real hardware). Mirrors
+    /// [`Uc8151dTricolor290::command_byte`] so the ESP32/GxEPD2 thunk path —
+    /// which knows the DC line from the calling function identity — can drive
+    /// the panel without going through the SPI peripheral. Drives the same
+    /// datasheet dispatch the real SPI `transfer()` path uses.
+    pub fn command_byte(&mut self, cmd: u8) {
+        self.handle_command(cmd);
+    }
+
+    /// Process one data byte (DC=high on real hardware). Routes to the active
+    /// param accumulator or pixel-plane stream set up by the last command.
+    /// Spurious data with no active command is ignored.
+    pub fn data_byte(&mut self, byte: u8) {
+        match self.state {
+            ProtoState::AwaitingParams {
+                cmd,
+                mut params,
+                mut have,
+                want,
+            } => {
+                params[have as usize] = byte;
+                have += 1;
+                if have >= want {
+                    self.handle_params_complete(cmd, &params);
+                    self.state = ProtoState::Idle;
+                } else {
+                    self.state = ProtoState::AwaitingParams {
+                        cmd,
+                        params,
+                        have,
+                        want,
+                    };
+                }
+            }
+            ProtoState::StreamingBlack { remaining } => {
+                self.write_plane_byte(PlaneKind::Black, byte);
+                let left = remaining.saturating_sub(1);
+                self.state = if left == 0 {
+                    ProtoState::Idle
+                } else {
+                    ProtoState::StreamingBlack { remaining: left }
+                };
+            }
+            ProtoState::StreamingRed { remaining } => {
+                self.write_plane_byte(PlaneKind::Red, byte);
+                let left = remaining.saturating_sub(1);
+                self.state = if left == 0 {
+                    ProtoState::Idle
+                } else {
+                    ProtoState::StreamingRed { remaining: left }
+                };
+            }
+            ProtoState::Idle => {
+                // Data byte with no active command — nothing to consume.
+            }
+        }
     }
 
     // ---- Command dispatch ----
@@ -386,52 +469,46 @@ impl SpiDevice for Ssd1680Tricolor290 {
     }
 
     fn transfer(&mut self, mosi: u8) -> u8 {
-        let state = self.state;
-        match state {
-            ProtoState::Idle => self.handle_command(mosi),
-            ProtoState::AwaitingParams {
-                cmd,
-                mut params,
-                mut have,
-                want,
-            } => {
-                params[have as usize] = mosi;
-                have += 1;
-                if have >= want {
-                    self.handle_params_complete(cmd, &params);
-                    self.state = ProtoState::Idle;
-                } else {
-                    self.state = ProtoState::AwaitingParams {
-                        cmd,
-                        params,
-                        have,
-                        want,
-                    };
-                }
+        // Silicon-accurate framing when a D/C line is wired: the bus has
+        // latched the real GPIO level (low = command, high = data) before
+        // this transfer. With no D/C pin (e.g. the STM32 lab), fall back to
+        // protocol-state inference: a byte in Idle is a command, otherwise a
+        // param/stream byte for the command in flight.
+        if self.dc_source.is_some() {
+            if self.dc_level {
+                self.data_byte(mosi);
+            } else {
+                self.command_byte(mosi);
             }
-            ProtoState::StreamingBlack { remaining } => {
-                self.write_plane_byte(PlaneKind::Black, mosi);
-                let left = remaining.saturating_sub(1);
-                self.state = if left == 0 {
-                    ProtoState::Idle
-                } else {
-                    ProtoState::StreamingBlack { remaining: left }
-                };
-            }
-            ProtoState::StreamingRed { remaining } => {
-                self.write_plane_byte(PlaneKind::Red, mosi);
-                let left = remaining.saturating_sub(1);
-                self.state = if left == 0 {
-                    ProtoState::Idle
-                } else {
-                    ProtoState::StreamingRed { remaining: left }
-                };
+        } else {
+            // CHEAT(INFER): no D/C line wired — guess command vs data from
+            // protocol state — real: sample the D/C GPIO. See FIDELITY.md §E.
+            if matches!(self.state, ProtoState::Idle) {
+                self.command_byte(mosi);
+            } else {
+                self.data_byte(mosi);
             }
         }
         // Tri-color e-paper is write-only over SPI (BUSY is a sideband GPIO,
         // not MISO). Return 0 so the bus broadcaster doesn't see us as a
         // MISO source if other devices share the bus.
         0
+    }
+
+    fn dc_pin(&self) -> Option<&str> {
+        self.dc_pin.as_deref()
+    }
+
+    fn set_dc_level(&mut self, level: bool) {
+        self.dc_level = level;
+    }
+
+    fn dc_source(&self) -> Option<(u64, u8)> {
+        self.dc_source
+    }
+
+    fn set_dc_source(&mut self, odr_addr: u64, bit: u8) {
+        self.dc_source = Some((odr_addr, bit));
     }
 
     fn as_any(&self) -> Option<&dyn Any> {

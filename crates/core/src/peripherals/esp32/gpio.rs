@@ -212,6 +212,38 @@ impl Peripheral for Esp32Gpio {
         Ok(())
     }
 
+    /// Word-granular writes MUST go straight to `write_word` — the W1TS (0x08)
+    /// and W1TC (0x0C) registers are write-1-to-set / write-1-to-clear, not
+    /// plain storage. The default byte-split path read-modifies-writes against
+    /// `read_word`, which returns `self.out` for those offsets, so a 32-bit
+    /// `digitalWrite(pin, LOW)` (W1TC = 1<<pin) would reconstruct a clear-mask
+    /// from the *current* OUT value and wipe every set bit (not just `pin`).
+    /// Real ESP32 GPIO drivers always issue full 32-bit `s32i` stores here.
+    fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        if offset & 3 == 0 {
+            self.write_word(offset, value);
+            Ok(())
+        } else {
+            for i in 0..4 {
+                self.write(offset + i, ((value >> (i * 8)) & 0xFF) as u8)?;
+            }
+            Ok(())
+        }
+    }
+
+    fn write_u16(&mut self, offset: u64, value: u16) -> SimResult<()> {
+        // 16-bit stores to a W1TS/W1TC half-word carry the same hazard; route
+        // aligned ones straight to write_word with the upper half preserved.
+        if offset & 3 == 0 {
+            let cur = self.read_word(offset) & 0xFFFF_0000;
+            self.write_word(offset, cur | value as u32);
+            Ok(())
+        } else {
+            self.write(offset, (value & 0xFF) as u8)?;
+            self.write(offset + 1, (value >> 8) as u8)
+        }
+    }
+
     fn snapshot(&self) -> serde_json::Value {
         // ODR-shaped snapshot lets the WasmSimulator board_io polling path
         // read GPIO output state via the same {"odr": <bits>} contract used
@@ -285,6 +317,25 @@ mod tests {
         assert_eq!(g.out & (1 << 5), 1 << 5);
         let events = obs.events.lock().unwrap();
         assert!(events.iter().any(|&(p, f, t, _)| p == 5 && !f && t));
+    }
+
+    #[test]
+    fn w1tc_via_word_store_clears_only_target_bit() {
+        // Regression for the blank e-paper render: a 32-bit digitalWrite(pin, LOW)
+        // (W1TC = 1<<pin) must clear ONLY that pin, not every currently-high OUT
+        // bit. Before Esp32Gpio gained write_u32, the byte-split RMW read OUT
+        // back through read_word(0x0C) and turned the whole OUT value into the
+        // clear mask — so toggling CS (GPIO5) low wiped DC (GPIO17) and the
+        // panel saw DC=command for the framebuffer stream.
+        let mut g = Esp32Gpio::new();
+        // Drive CS(5), RST(16), DC(17) high via a 32-bit W1TS store.
+        g.write_u32(0x08, (1 << 5) | (1 << 16) | (1 << 17)).unwrap();
+        assert_eq!(g.out, (1 << 5) | (1 << 16) | (1 << 17));
+        // digitalWrite(CS=5, LOW): 32-bit W1TC of just bit 5.
+        g.write_u32(0x0C, 1 << 5).unwrap();
+        assert_eq!(g.out & (1 << 5), 0, "CS bit must clear");
+        assert_eq!(g.out & (1 << 16), 1 << 16, "RST must survive");
+        assert_eq!(g.out & (1 << 17), 1 << 17, "DC must survive the CS toggle");
     }
 
     #[test]

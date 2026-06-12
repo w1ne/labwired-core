@@ -19,6 +19,7 @@ external_devices:
     connection: "spi3"
     config:
       cs_pin: "GPIO5"
+      dc_pin: "GPIO17"
 board_io:
   - id: "epaper"
     kind: "spi_device"

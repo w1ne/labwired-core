@@ -118,43 +118,42 @@ pub fn attach_esp32_external_devices(
     bus: &mut SystemBus,
     manifest: &labwired_config::SystemManifest,
 ) -> anyhow::Result<()> {
+    use crate::peripherals::spi::SpiDevice;
+
     for ext in &manifest.external_devices {
-        match ext.r#type.as_str() {
-            "ssd1680_tricolor_290" | "epd-2in9-tricolor" => {
-                let cs_pin = ext
-                    .config
-                    .get("cs_pin")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("GPIO5")
-                    .to_string();
-                let idx = bus
-                    .find_peripheral_index_by_name(&ext.connection)
-                    .ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "External device '{}' references missing connection '{}'",
-                            ext.id,
-                            ext.connection
-                        )
-                    })?;
-                let any = bus.peripherals[idx].dev.as_any_mut().ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "External device '{}' connection '{}' cannot be downcast",
-                        ext.id,
-                        ext.connection
-                    )
-                })?;
-                let spi = any
-                    .downcast_mut::<crate::peripherals::esp32::spi::Esp32Spi>()
-                    .ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "External device '{}' connection '{}' is not an ESP32 SPI peripheral",
-                            ext.id,
-                            ext.connection
-                        )
-                    })?;
-                spi.attach(Box::new(
-                    crate::peripherals::components::Ssd1680Tricolor290::new(cs_pin),
-                ));
+        let cs_pin = ext
+            .config
+            .get("cs_pin")
+            .and_then(|v| v.as_str())
+            .unwrap_or("GPIO5")
+            .to_string();
+        let dc_pin = ext
+            .config
+            .get("dc_pin")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        // Build the panel for this block type. Both tri-color e-paper models
+        // are SpiDevices driven over the real SPI3 peripheral; the only block-
+        // specific bit is which controller's command set the model decodes.
+        let mut panel: Box<dyn SpiDevice> = match ext.r#type.as_str() {
+            "uc8151d_tricolor_290" | "epd-2in9-uc8151d" => {
+                let mut p = crate::peripherals::components::Uc8151dTricolor290::new(cs_pin.clone());
+                if let Some(dc) = &dc_pin {
+                    p = p.with_dc_pin(dc.clone());
+                }
+                Box::new(p)
+            }
+            // GxEPD2_290_C90c (GDEY029Z90c / Waveshare 2.9" 3-color) is an
+            // SSD1680-controller panel — see the GxEPD2 driver header
+            // "Controller: SSD1680". It drives SSD1680 opcodes, so it maps to the
+            // SSD1680 model, NOT UC8151D.
+            "ssd1680_tricolor_290" | "epd-2in9-tricolor" | "gxepd2_290_c90c" => {
+                let mut p = crate::peripherals::components::Ssd1680Tricolor290::new(cs_pin.clone());
+                if let Some(dc) = &dc_pin {
+                    p = p.with_dc_pin(dc.clone());
+                }
+                Box::new(p)
             }
             other => {
                 tracing::warn!(
@@ -162,8 +161,52 @@ pub fn attach_esp32_external_devices(
                     other,
                     ext.id
                 );
+                continue;
+            }
+        };
+
+        // Resolve the D/C GPIO to its (output-register address, bit) so the bus
+        // can latch the real pin level before each transfer — silicon-accurate
+        // command/data framing, no GxEPD2 thunk. Immutable bus borrow first.
+        if let Some(dc) = &dc_pin {
+            if let Some((odr_addr, bit)) = crate::bus::SystemBus::resolve_pin_odr_pub(bus, dc) {
+                panel.set_dc_source(odr_addr, bit);
+            } else {
+                tracing::warn!(
+                    "ESP32 external_devices: dc_pin '{}' on '{}' did not resolve to a GPIO; \
+                     framing falls back to protocol-state inference",
+                    dc,
+                    ext.id
+                );
             }
         }
+
+        let idx = bus
+            .find_peripheral_index_by_name(&ext.connection)
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "External device '{}' references missing connection '{}'",
+                    ext.id,
+                    ext.connection
+                )
+            })?;
+        let any = bus.peripherals[idx].dev.as_any_mut().ok_or_else(|| {
+            anyhow::anyhow!(
+                "External device '{}' connection '{}' cannot be downcast",
+                ext.id,
+                ext.connection
+            )
+        })?;
+        let spi = any
+            .downcast_mut::<crate::peripherals::esp32::spi::Esp32Spi>()
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "External device '{}' connection '{}' is not an ESP32 SPI peripheral",
+                    ext.id,
+                    ext.connection
+                )
+            })?;
+        spi.attach(panel);
     }
     Ok(())
 }
@@ -231,6 +274,8 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     // don't model SDIO; plain RAM stubs catch the writes, and HOST_SLC
     // uses a smart stub that auto-sets its FSM-done bit so the BROM's
     // poll loop on offset 0x40 exits on the first read.
+    // CHEAT(STUB): SDIO SLC peripheral faked as plain RAM — real: model the SLC
+    // registers/DMA. (host_slc below is a smarter FSM stub.) See FIDELITY.md §D.
     bus.add_peripheral(
         "slc",
         0x3FF4_B000,
@@ -245,6 +290,8 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         None,
         Box::new(crate::peripherals::esp32::sdio_stub::HostSlc::new()),
     );
+    // CHEAT(STUB): SDMMC host peripheral faked as plain RAM — real: model the
+    // SDMMC controller registers. See FIDELITY.md §D.
     bus.add_peripheral(
         "sdmmc_host",
         0x3FF5_5000,
