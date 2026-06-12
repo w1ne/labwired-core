@@ -15,6 +15,11 @@ export interface UartDecoderBinding {
   channels: { channel: string; peripheral: string; role: 'tx' | 'rx'; pin: string }[];
 }
 
+export interface UdsDecoderBinding {
+  connected: boolean;
+  channels: { channel: string; part: string; pin: 'CAN_H' | 'CAN_L' }[];
+}
+
 const ANALYZER_TYPE = 'logic-analyzer';
 const CHANNELS = ['CH0', 'CH1', 'CH2', 'CH3'];
 
@@ -134,6 +139,46 @@ export function getUartDecoderBinding(diagram: Diagram, analyzerId: string): Uar
           candidate.role === channel.role &&
           candidate.pin === channel.pin,
       ) === index,
+  );
+
+  return { connected: unique.length > 0, channels: unique };
+}
+
+export function getUdsDecoderBinding(diagram: Diagram, analyzerId: string): UdsDecoderBinding {
+  const channels: UdsDecoderBinding['channels'] = [];
+
+  for (const binding of getLogicAnalyzerChannelBindings(diagram, analyzerId)) {
+    for (const endpoint of binding.endpoints) {
+      const part = diagram.parts.find((candidate) => candidate.id === endpoint.part);
+      const isDiagnosticToolCanPin =
+        part?.type === 'can-diagnostic-tool' && (endpoint.pin === 'CAN_H' || endpoint.pin === 'CAN_L');
+      const isTransceiverCanPin =
+        part?.type === 'can-transceiver' && (endpoint.pin === 'CAN_H' || endpoint.pin === 'CAN_L');
+
+      if (!isDiagnosticToolCanPin && !isTransceiverCanPin) continue;
+
+      channels.push({
+        channel: binding.channel,
+        part: endpoint.part,
+        pin: endpoint.pin as 'CAN_H' | 'CAN_L',
+      });
+    }
+  }
+
+  const unique = channels.filter(
+    (channel, index) =>
+      channels.findIndex(
+        (candidate) =>
+          candidate.channel === channel.channel &&
+          candidate.part === channel.part &&
+          candidate.pin === channel.pin,
+      ) === index,
+  );
+
+  unique.sort((a, b) =>
+    a.channel.localeCompare(b.channel)
+    || a.pin.localeCompare(b.pin)
+    || a.part.localeCompare(b.part),
   );
 
   return { connected: unique.length > 0, channels: unique };

@@ -43,6 +43,8 @@ import { transistorComponent } from './transistor';
 import { shiftRegister74hc595Component } from './shift-register-74hc595';
 import { sn74hc165Component } from './sn74hc165';
 import { iolinkMasterComponent } from './iolink-master';
+import { canTransceiverComponent } from './can-transceiver';
+import { canDiagnosticToolComponent } from './can-diagnostic-tool';
 import { motorDriverL293dComponent } from './motor-driver-l293d';
 // Tools
 import { logicAnalyzerComponent } from './logic-analyzer';
@@ -117,6 +119,8 @@ export const COMPONENT_REGISTRY: Map<string, ComponentDef> = new Map([
   [shiftRegister74hc595Component.type, shiftRegister74hc595Component],
   [sn74hc165Component.type, sn74hc165Component],
   [iolinkMasterComponent.type, iolinkMasterComponent],
+  [canTransceiverComponent.type, canTransceiverComponent],
+  [canDiagnosticToolComponent.type, canDiagnosticToolComponent],
   [motorDriverL293dComponent.type, motorDriverL293dComponent],
   // Tools
   [logicAnalyzerComponent.type, logicAnalyzerComponent],
