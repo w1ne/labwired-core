@@ -12,6 +12,10 @@
 //!   read-as-zero, write-accept.
 //! * `EfuseStub` — EFUSE at 0x6000_7000. Returns canned MAC + chip-rev for
 //!   the few fields esp-hal reads at boot.
+//!
+//! CHEAT(STUB): SYSTEM/RTC_CNTL/EFUSE are register stubs — read-as-zero /
+//! write-accept with a few round-tripped or canned fields, no real behavior.
+//! Real: model the register semantics (clock tree, RTC, eFuse). FIDELITY.md §D.
 
 use crate::{Peripheral, SimResult};
 use std::collections::HashMap;

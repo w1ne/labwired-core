@@ -434,15 +434,53 @@ impl SystemBus {
     }
 
     fn resolve_pin_odr(bus: &SystemBus, pin: &str) -> Option<(u64, u8)> {
-        let (port_name, bit) = Self::parse_stm32_pin(pin)?;
-        let idx = bus.find_peripheral_index_by_name(&port_name)?;
-        let base = bus.peripherals[idx].base;
-        let odr_off = bus.peripherals[idx]
-            .dev
-            .as_any()
-            .and_then(|a| a.downcast_ref::<crate::peripherals::gpio::GpioPort>())
-            .map(|g| g.odr_offset())?;
-        Some((base + odr_off, bit))
+        // STM32/Nordic: "PA5" / "P0.13" → per-port GpioPort with an ODR offset.
+        if let Some((port_name, bit)) = Self::parse_stm32_pin(pin) {
+            if let Some(idx) = bus.find_peripheral_index_by_name(&port_name) {
+                let base = bus.peripherals[idx].base;
+                if let Some(odr_off) = bus.peripherals[idx]
+                    .dev
+                    .as_any()
+                    .and_then(|a| a.downcast_ref::<crate::peripherals::gpio::GpioPort>())
+                    .map(|g| g.odr_offset())
+                {
+                    return Some((base + odr_off, bit));
+                }
+            }
+        }
+        // ESP32: "GPIO17" → the single "gpio" peripheral, GPIO_OUT_REG at
+        // base + 0x04 (TRM §4.10, bit = pin number for GPIO0..31).
+        if let Some(bit) = Self::parse_esp32_gpio_pin(pin) {
+            let idx = bus.find_peripheral_index_by_name("gpio")?;
+            let is_esp32 = bus.peripherals[idx]
+                .dev
+                .as_any()
+                .map(|a| {
+                    a.downcast_ref::<crate::peripherals::esp32::gpio::Esp32Gpio>()
+                        .is_some()
+                })
+                .unwrap_or(false);
+            if is_esp32 {
+                const GPIO_OUT_REG_OFFSET: u64 = 0x04;
+                return Some((bus.peripherals[idx].base + GPIO_OUT_REG_OFFSET, bit));
+            }
+        }
+        None
+    }
+
+    /// Parse an ESP32 GPIO label ("GPIO17", "gpio17", "IO17", or a bare "17")
+    /// into its bit number in GPIO_OUT_REG. Only the low bank (0..31) is
+    /// modeled, matching [`Esp32Gpio`](crate::peripherals::esp32::gpio::Esp32Gpio).
+    fn parse_esp32_gpio_pin(pin: &str) -> Option<u8> {
+        let s = pin.trim();
+        let digits = s
+            .trim_start_matches(|c: char| c.is_ascii_alphabetic())
+            .trim();
+        let num: u8 = digits.parse().ok()?;
+        if num > 31 {
+            return None;
+        }
+        Some(num)
     }
 
     /// Resolve an STM32 pin label to its `(IDR address, bit)` so a sensor can
@@ -540,16 +578,41 @@ impl SystemBus {
     /// by reading the driving GPIO's output bit. No-op for non-SPI writes and
     /// for SPI peripherals with no D/C-observing device (one cheap downcast).
     fn maybe_latch_dc(&mut self, idx: usize) {
+        use crate::peripherals::esp32::spi::Esp32Spi;
+        use crate::peripherals::spi::{Spi, SpiDevice};
+
+        // Borrow the attached-device list off whichever SPI peripheral kind
+        // this is (generic `Spi` for STM32/Nordic, `Esp32Spi` for ESP32).
+        fn attached_ref(any: &dyn std::any::Any) -> Option<&Vec<Box<dyn SpiDevice>>> {
+            if let Some(s) = any.downcast_ref::<Spi>() {
+                return Some(&s.attached_devices);
+            }
+            if let Some(s) = any.downcast_ref::<Esp32Spi>() {
+                return Some(&s.attached_devices);
+            }
+            None
+        }
+        fn attached_mut(any: &mut dyn std::any::Any) -> Option<&mut Vec<Box<dyn SpiDevice>>> {
+            if any.is::<Spi>() {
+                return any.downcast_mut::<Spi>().map(|s| &mut s.attached_devices);
+            }
+            if any.is::<Esp32Spi>() {
+                return any
+                    .downcast_mut::<Esp32Spi>()
+                    .map(|s| &mut s.attached_devices);
+            }
+            None
+        }
+
         // Phase 1: collect (attached_index, odr_addr, bit) — immutable borrow.
         let sources: Vec<(usize, u64, u8)> = {
             let Some(any) = self.peripherals[idx].dev.as_any() else {
                 return;
             };
-            let Some(spi) = any.downcast_ref::<crate::peripherals::spi::Spi>() else {
+            let Some(devs) = attached_ref(any) else {
                 return;
             };
-            spi.attached_devices
-                .iter()
+            devs.iter()
                 .enumerate()
                 .filter_map(|(i, d)| d.dc_source().map(|(a, b)| (i, a, b)))
                 .collect()
@@ -569,9 +632,9 @@ impl SystemBus {
             .collect();
         // Phase 3: push the latched levels into the devices — mutable borrow.
         if let Some(any) = self.peripherals[idx].dev.as_any_mut() {
-            if let Some(spi) = any.downcast_mut::<crate::peripherals::spi::Spi>() {
+            if let Some(devs) = attached_mut(any) {
                 for (i, lvl) in levels {
-                    if let Some(d) = spi.attached_devices.get_mut(i) {
+                    if let Some(d) = devs.get_mut(i) {
                         d.set_dc_level(lvl);
                     }
                 }

@@ -1,0 +1,21 @@
+# Board manifest for the ESP32-WROOM-32 e-paper ereader.
+#
+# Declares the hardware as composable blocks: an ESP32-classic chip plus the
+# Waveshare 2.9" tri-color e-paper panel wired to its VSPI (spi3) bus. The
+# simulator attaches the panel through the generic `attach_esp32_external_devices`
+# factory — no peripheral is hardcoded in any entry point.
+#
+# Pin map matches src/main.cpp: CS=GPIO5 DC=GPIO17 RST=GPIO16 BUSY=GPIO4
+# SCK=GPIO18 MOSI=GPIO23.
+name: esp32-epaper-ereader
+chip: esp32
+
+external_devices:
+  - id: epd
+    # GxEPD2_290_C90c (GDEY029Z90c) — SSD1680 controller. The factory maps this
+    # alias to the SSD1680 model.
+    type: gxepd2_290_c90c
+    connection: spi3
+    config:
+      cs_pin: GPIO5
+      dc_pin: GPIO17
