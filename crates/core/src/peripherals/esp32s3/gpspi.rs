@@ -251,8 +251,10 @@ impl Esp32s3Spi {
         self.attached_devices.push(device);
     }
 
-    /// Number of attached devices (used by the system-wiring tests).
-    pub fn attached_device_count(&self) -> usize {
+    /// Number of attached devices (used by the system-wiring tests; test-only,
+    /// so it is compiled out of non-test builds).
+    #[cfg(test)]
+    pub(crate) fn attached_device_count(&self) -> usize {
         self.attached_devices.len()
     }
 

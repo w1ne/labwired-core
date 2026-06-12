@@ -111,12 +111,17 @@
 //!   move per `tick_with_bus` call per transfer. Larger transfers resume
 //!   across ticks from per-direction walk state (`coupled_desc_ptr`,
 //!   `coupled_buf_offset`, `coupled_bytes_moved`) rather than restarting.
-//! - **Owner / LEN writeback:** on completing a descriptor (and in the
-//!   one-shot M2M walks above) the engine writes dw0 back with the owner
-//!   bit cleared, returning the descriptor to the CPU. IN (RX) descriptors
-//!   additionally get dw0[23:12] replaced with the actual received byte
-//!   count (stale CPU-seeded values are cleared first); OUT (TX)
-//!   descriptors keep their CPU-seeded length.
+//! - **Owner / LEN writeback:** on completing an IN (RX) descriptor (and
+//!   in the one-shot M2M walks above) the engine unconditionally writes
+//!   dw0 back with the owner bit cleared and dw0[23:12] replaced with the
+//!   actual received byte count (stale CPU-seeded values are cleared
+//!   first). OUT (TX) descriptors keep their CPU-seeded length and get the
+//!   owner-clearing writeback **only when `OUT_AUTO_WRBACK` (bit 2 of
+//!   `OUT_CONF0`) is set** — matching silicon, where IN writeback is
+//!   always-on but OUT-side owner clearing is opt-in. With the bit clear
+//!   (the reset value) a completed OUT chain keeps owner=1 everywhere, so
+//!   firmware may legally re-kick OUTLINK_START on the same pre-armed
+//!   chain without rewriting dw0.
 //! - **Coupling mechanism per peripheral:** UART (UHCI0) couples through
 //!   UART0's real MMIO FIFO at offset 0x00 — DMA-written bytes take the
 //!   identical path as CPU writes, so serial output, STATUS counts, and
@@ -229,6 +234,20 @@ const OUT_LINK_PARK_BIT: u32 = 1 << 23;
 /// MEM_TRANS_EN (bit 4): selects memory-to-memory mode on this channel.
 const MEM_TRANS_EN_BIT: u32 = 1 << 4;
 
+// ── OUT_CONF0 bit positions ──
+/// OUT_AUTO_WRBACK (bit 2): when set, the engine clears the owner bit on
+/// each fully consumed OUT (TX) descriptor; when clear (the reset value)
+/// OUT descriptors are left untouched, so firmware may re-kick
+/// OUTLINK_START on the same pre-armed chain. Bit index verified against
+/// the vendored ESP-IDF headers (PlatformIO
+/// `framework-arduinoespressif32-libs/esp32s3/include/soc/esp32s3/register/soc/`):
+/// `gdma_reg.h` `GDMA_OUT_AUTO_WRBACK_CHn` = `BIT(2)`, R/W, default 0, and
+/// `gdma_struct.h` `out.conf0.out_auto_wrback` at bitpos [2]; ESP-IDF
+/// drivers enable it via `gdma_ll_tx_enable_auto_write_back`
+/// (`hal/gdma_ll.h`). IN (RX) writeback has no such gate on silicon and
+/// stays unconditional in the model.
+const OUT_AUTO_WRBACK_BIT: u32 = 1 << 2;
+
 /// 6-bit mask for PERI_SEL fields; bits [31:6] are reserved.
 const PERI_SEL_MASK: u32 = 0x3F;
 
@@ -329,18 +348,15 @@ const UART0_STATUS_ADDR: u64 = UART0_BASE + 0x1C;
 
 /// STATUS register bit masks.
 const UART_RXFIFO_CNT_MASK: u32 = 0x3FF; // bits [9:0]
-/// TXFIFO_CNT[25:16] shift — retained for documentation; used when checking
-/// TX back-pressure (not currently needed since we write unconditionally).
-#[allow(dead_code)]
+/// TXFIFO_CNT[25:16] shift — `pump_uart_out` reads this field to compute
+/// the available TX FIFO space (back-pressure).
 const UART_TXFIFO_CNT_SHIFT: u32 = 16;
-#[allow(dead_code)]
 const UART_TXFIFO_CNT_MASK: u32 = 0x3FF; // 10-bit field
 
 /// Hardware FIFO depth for ESP32-S3 (`SOC_UART_FIFO_LEN = 128`).
-/// Retained for documentation; the model writes unconditionally (FIFO overflow
-/// is handled by the UART peripheral itself — it drops excess bytes and latches
-/// RXFIFO_OVF just like silicon).
-#[allow(dead_code)]
+/// `pump_uart_out` caps each tick's writes at `UART_FIFO_LEN - TXFIFO_CNT`
+/// so the TX FIFO never overflows; when it is full the pump backs off
+/// until the baud-rate drain frees space.
 const UART_FIFO_LEN: u32 = 128;
 
 // ── SPI2/3 coupled DMA constants ─────────────────────────────────────────
@@ -403,7 +419,9 @@ impl Desc {
     /// behaviour. RX (IN) descriptors additionally replace the LEN field
     /// [23:12] with the received byte count (`rx_len = Some(n)`, clearing
     /// stale CPU-seeded values first); TX (OUT) descriptors keep their
-    /// CPU-seeded length (`rx_len = None`).
+    /// CPU-seeded length (`rx_len = None`). Callers gate the TX (OUT)
+    /// writeback on `OUT_AUTO_WRBACK` (see `OUT_AUTO_WRBACK_BIT`); the
+    /// RX (IN) writeback is unconditional, as on silicon.
     fn write_back_owner(&self, bus: &mut dyn Bus, addr: u64, rx_len: Option<u32>) {
         let dw0 = match rx_len {
             Some(n) => (self.dw0 & !(DESC_OWNER_BIT | DESC_LEN_MASK)) | (n << 12),
@@ -665,10 +683,17 @@ impl Esp32s3Gdma {
     /// Stops at the first descriptor whose `owner` bit is 0 (CPU-owned),
     /// at `next == 0` (end-of-list), or after `MAX_DESC_CHAIN` hops.
     ///
-    /// After consuming each descriptor, writes back `dw0 & !DESC_OWNER_BIT`
-    /// to the descriptor address so the CPU sees `owner=0` (descriptor
-    /// returned to CPU) — matching the ESP32-S3 TRM §3.4 hardware behaviour.
-    fn walk_out_chain(bus: &mut dyn Bus, desc_addr: u64) -> Vec<u8> {
+    /// After consuming each descriptor, if `auto_wrback` is set (the
+    /// channel's `OUT_AUTO_WRBACK`, bit 2 of `OUT_CONF0`), writes back
+    /// `dw0 & !DESC_OWNER_BIT` to the descriptor address so the CPU sees
+    /// `owner=0` — matching the ESP32-S3 TRM §3.4 hardware behaviour. With
+    /// `auto_wrback` clear the descriptors are left untouched (silicon
+    /// gates OUT-side owner clearing on this bit), so a re-kicked walk
+    /// over the same chain transfers the same bytes again. Loop
+    /// termination never depended on the owner writeback: the walk stops
+    /// at `next == 0`, and the `MAX_DESC_CHAIN` hop bound caps circular
+    /// chains (e.g. `next == self`) in both modes.
+    fn walk_out_chain(bus: &mut dyn Bus, desc_addr: u64, auto_wrback: bool) -> Vec<u8> {
         let mut bytes = Vec::new();
         let mut addr = desc_addr;
         for _ in 0..MAX_DESC_CHAIN {
@@ -685,8 +710,11 @@ impl Esp32s3Gdma {
                 bytes.push(bus.read_u8(d.buf + i as u64).unwrap_or(0));
             }
 
-            // Descriptor returned to CPU (owner cleared).
-            d.write_back_owner(bus, addr, None);
+            // Descriptor returned to CPU (owner cleared) — only when the
+            // channel opted in via OUT_AUTO_WRBACK.
+            if auto_wrback {
+                d.write_back_owner(bus, addr, None);
+            }
 
             if d.next == 0 {
                 break;
@@ -753,6 +781,12 @@ impl Esp32s3Gdma {
     /// TXFIFO_CNT`).  When the FIFO is full the pump backs off without
     /// advancing — the engine revisits on the next tick once the baud-rate
     /// drain has freed space.
+    ///
+    /// **Owner writeback:** gated on the channel's `OUT_AUTO_WRBACK`
+    /// (`dir.conf0` bit 2); with the bit clear consumed descriptors stay
+    /// DMA-owned so firmware may re-kick the same chain. The walk advances
+    /// via `coupled_desc_ptr`, never via the owner bit, so progress and
+    /// termination are unchanged either way.
     fn pump_uart_out(dir: &mut DmaDir, bus: &mut dyn Bus) -> bool {
         // Determine available TX FIFO space.
         let status = bus.read_u32(UART0_STATUS_ADDR).unwrap_or(0);
@@ -793,8 +827,11 @@ impl Esp32s3Gdma {
             dir.coupled_buf_offset += to_send as u32;
 
             if dir.coupled_buf_offset >= d.len {
-                // Descriptor fully consumed; returned to CPU (owner cleared).
-                d.write_back_owner(bus, addr, None);
+                // Descriptor fully consumed; returned to CPU (owner
+                // cleared) only when OUT_AUTO_WRBACK is set.
+                if dir.conf0 & OUT_AUTO_WRBACK_BIT != 0 {
+                    d.write_back_owner(bus, addr, None);
+                }
                 // Advance to next.
                 dir.coupled_buf_offset = 0;
                 if d.next == 0 {
@@ -909,10 +946,14 @@ impl Esp32s3Gdma {
 
     /// Read up to `budget` bytes from an OUT (TX) descriptor chain, resuming
     /// from `dir.coupled_desc_ptr` / `coupled_buf_offset`. Each fully
-    /// consumed descriptor gets its owner bit written back to CPU (0).
-    /// `coupled_desc_ptr` becomes 0 at end-of-chain (next == 0 or a
-    /// CPU-owned descriptor). May return fewer bytes than `budget` when the
-    /// chain is exhausted.
+    /// consumed descriptor gets its owner bit written back to CPU (0) —
+    /// but only when the channel's `OUT_AUTO_WRBACK` (`dir.conf0` bit 2)
+    /// is set; with the bit clear descriptors stay DMA-owned so firmware
+    /// may re-kick the same chain. `coupled_desc_ptr` becomes 0 at
+    /// end-of-chain (next == 0 or a CPU-owned descriptor); the walk
+    /// advances via `coupled_desc_ptr`, never via the owner bit, and the
+    /// `MAX_DESC_CHAIN` hop bound caps circular chains in both modes. May
+    /// return fewer bytes than `budget` when the chain is exhausted.
     fn coupled_out_collect(dir: &mut DmaDir, bus: &mut dyn Bus, budget: usize) -> Vec<u8> {
         let mut out = Vec::with_capacity(budget);
         // Hop bound guards against corrupted (e.g. circular) chains.
@@ -942,8 +983,11 @@ impl Esp32s3Gdma {
             dir.coupled_buf_offset += to_read as u32;
 
             if dir.coupled_buf_offset >= d.len {
-                // Descriptor fully consumed: return it to the CPU.
-                d.write_back_owner(bus, addr, None);
+                // Descriptor fully consumed: return it to the CPU — only
+                // when OUT_AUTO_WRBACK is set.
+                if dir.conf0 & OUT_AUTO_WRBACK_BIT != 0 {
+                    d.write_back_owner(bus, addr, None);
+                }
                 dir.coupled_buf_offset = 0;
                 dir.coupled_desc_ptr = if d.next == 0 { 0 } else { d.next };
             }
@@ -1328,8 +1372,10 @@ impl Esp32s3Gdma {
             let out_desc_addr = Self::full_desc_addr(c.tx.link_addr);
             let in_desc_addr = Self::full_desc_addr(c.rx.link_addr);
 
-            // Collect bytes from the OUT (TX) descriptor chain.
-            let bytes = Self::walk_out_chain(bus, out_desc_addr);
+            // Collect bytes from the OUT (TX) descriptor chain. Owner
+            // writeback is gated on this channel's OUT_AUTO_WRBACK.
+            let bytes =
+                Self::walk_out_chain(bus, out_desc_addr, c.tx.conf0 & OUT_AUTO_WRBACK_BIT != 0);
 
             if !bytes.is_empty() {
                 // Write bytes into the IN (RX) descriptor chain.
@@ -2543,7 +2589,9 @@ mod tests {
 
     // ── Owner-bit writeback tests ─────────────────────────────────────────
 
-    /// M2M: after tick_with_bus, TX descriptor dw0 must have owner bit cleared.
+    /// M2M with OUT_AUTO_WRBACK set (as ESP-IDF drivers do via
+    /// `gdma_ll_tx_enable_auto_write_back`): after tick_with_bus, the TX
+    /// descriptor dw0 must have its owner bit cleared.
     #[test]
     fn m2m_tx_owner_bit_cleared_after_walk() {
         let mut bus = bus_with_dram();
@@ -2558,6 +2606,7 @@ mod tests {
         let mut g = Esp32s3Gdma::new(IN_CH0_SRC);
         let b = ch_base(0);
         g.write_word(b + IN_CONF0, MEM_TRANS_EN_BIT);
+        g.write_word(b + OUT_CONF0, OUT_AUTO_WRBACK_BIT);
         g.write_word(
             b + IN_LINK,
             ((rx_desc as u32) & IN_LINK_ADDR_MASK) | IN_LINK_START_BIT,
@@ -2618,7 +2667,8 @@ mod tests {
         );
     }
 
-    /// UART TX: after coupled OUT completes, TX descriptor dw0 owner bit = 0.
+    /// UART TX with OUT_AUTO_WRBACK set: after coupled OUT completes, TX
+    /// descriptor dw0 owner bit = 0.
     #[test]
     fn uart_tx_owner_bit_cleared_on_completion() {
         let (mut bus, _sink) = uart_test_bus();
@@ -2630,6 +2680,7 @@ mod tests {
 
         let mut g = Esp32s3Gdma::new(IN_CH0_SRC);
         let b = ch_base(0);
+        g.write_word(b + OUT_CONF0, OUT_AUTO_WRBACK_BIT);
         g.write_word(b + OUT_PERI_SEL, 2); // UHCI0
         g.write_word(
             b + OUT_LINK,
@@ -2679,6 +2730,159 @@ mod tests {
             written_len as usize,
             rx_data.len(),
             "RX descriptor length field must equal bytes received"
+        );
+    }
+
+    /// M2M with OUT_AUTO_WRBACK clear (the reset value): the completed walk
+    /// leaves the OUT descriptor DMA-owned (owner=1) while the IN
+    /// descriptor is written back unconditionally (owner=0, length set) —
+    /// the IN side is unaffected by the OUT-side bit. A second
+    /// OUTLINK_START on the same UNTOUCHED OUT chain (no CPU rewrite of
+    /// dw0 — legal on silicon) then transfers the same bytes again.
+    #[test]
+    fn m2m_auto_wrback_clear_preserves_out_owner_and_rekick_repeats() {
+        let mut bus = bus_with_dram();
+        let src_addr: u64 = 0x3FC8_8000;
+        let dst_addr: u64 = 0x3FC8_9000;
+        let tx_desc: u64 = 0x3FC8_A000;
+        let rx_desc: u64 = 0x3FC8_B000;
+        let payload = b"REKICK";
+        let len = payload.len() as u32;
+        for (i, &x) in payload.iter().enumerate() {
+            bus.write_u8(src_addr + i as u64, x).unwrap();
+        }
+        write_desc(&mut bus, tx_desc, tx_dw0(len), src_addr, 0);
+        write_desc(&mut bus, rx_desc, rx_dw0(len), dst_addr, 0);
+
+        let mut g = Esp32s3Gdma::new(IN_CH0_SRC);
+        let b = ch_base(0);
+        // OUT_CONF0 left at reset → OUT_AUTO_WRBACK clear.
+        g.write_word(b + IN_CONF0, MEM_TRANS_EN_BIT);
+        g.write_word(
+            b + IN_LINK,
+            ((rx_desc as u32) & IN_LINK_ADDR_MASK) | IN_LINK_START_BIT,
+        );
+        g.write_word(
+            b + OUT_LINK,
+            ((tx_desc as u32) & OUT_LINK_ADDR_MASK) | OUT_LINK_START_BIT,
+        );
+        g.tick_with_bus(&mut bus);
+
+        // OUT descriptor stays DMA-owned; IN writeback is unconditional.
+        assert_eq!(
+            bus.read_u32(tx_desc).unwrap() & DESC_OWNER_BIT,
+            DESC_OWNER_BIT,
+            "OUT owner must stay 1 with OUT_AUTO_WRBACK clear"
+        );
+        let rx_dw0_after = bus.read_u32(rx_desc).unwrap();
+        assert_eq!(
+            rx_dw0_after & DESC_OWNER_BIT,
+            0,
+            "IN owner cleared regardless of OUT_AUTO_WRBACK"
+        );
+        assert_eq!((rx_dw0_after >> 12) & 0xFFF, len, "IN length still set");
+        for (i, &x) in payload.iter().enumerate() {
+            assert_eq!(
+                bus.read_u8(dst_addr + i as u64).unwrap(),
+                x,
+                "first pass dst[{i}]"
+            );
+        }
+
+        // CPU re-arms ONLY the RX side (IN descriptors were consumed, as on
+        // silicon) and clears the destination; the OUT chain is
+        // deliberately left untouched.
+        write_desc(&mut bus, rx_desc, rx_dw0(len), dst_addr, 0);
+        for i in 0..len as u64 {
+            bus.write_u8(dst_addr + i, 0).unwrap();
+        }
+        g.write_word(b + IN_INT_CLR, 0xFFFF_FFFF);
+        g.write_word(b + OUT_INT_CLR, 0xFFFF_FFFF);
+        g.write_word(
+            b + IN_LINK,
+            ((rx_desc as u32) & IN_LINK_ADDR_MASK) | IN_LINK_START_BIT,
+        );
+        g.write_word(
+            b + OUT_LINK,
+            ((tx_desc as u32) & OUT_LINK_ADDR_MASK) | OUT_LINK_START_BIT,
+        );
+        g.tick_with_bus(&mut bus);
+
+        assert_ne!(
+            g.read_word(b + IN_INT_RAW) & IN_SUC_EOF_BIT,
+            0,
+            "second pass must complete (no halt at a CPU-owned descriptor)"
+        );
+        for (i, &x) in payload.iter().enumerate() {
+            assert_eq!(
+                bus.read_u8(dst_addr + i as u64).unwrap(),
+                x,
+                "second pass dst[{i}] — same bytes moved again"
+            );
+        }
+    }
+
+    /// Coupled UART OUT with OUT_AUTO_WRBACK clear: the consumed descriptor
+    /// stays DMA-owned after completion, and a second OUTLINK_START on the
+    /// same untouched chain pushes the same bytes into the UART again.
+    #[test]
+    fn uart_tx_auto_wrback_clear_preserves_owner_and_rekick_repeats() {
+        let (mut bus, sink) = uart_test_bus();
+        let payload = b"AGAIN";
+        let buf_addr: u64 = 0x3FC8_8000;
+        let desc_addr: u64 = 0x3FC8_A000;
+        for (i, &x) in payload.iter().enumerate() {
+            bus.write_u8(buf_addr + i as u64, x).unwrap();
+        }
+        write_desc_uart(
+            &mut bus,
+            desc_addr,
+            tx_dw0(payload.len() as u32),
+            buf_addr,
+            0,
+        );
+
+        let mut g = Esp32s3Gdma::new(IN_CH0_SRC);
+        let b = ch_base(0);
+        // OUT_CONF0 left at reset → OUT_AUTO_WRBACK clear.
+        g.write_word(b + OUT_PERI_SEL, 2); // UHCI0
+        g.write_word(
+            b + OUT_LINK,
+            OUT_LINK_START_BIT | (desc_addr as u32 & OUT_LINK_ADDR_MASK),
+        );
+        g.tick_with_bus(&mut bus);
+        assert_ne!(g.read_word(b + OUT_INT_RAW) & OUT_EOF_BIT, 0, "pass 1 EOF");
+        assert!(!g.needs_bus_tick(), "pass 1 complete");
+        assert_eq!(
+            bus.read_u32(desc_addr).unwrap() & DESC_OWNER_BIT,
+            DESC_OWNER_BIT,
+            "owner must stay 1 with OUT_AUTO_WRBACK clear"
+        );
+
+        // Re-kick the SAME untouched chain (no CPU rewrite of dw0).
+        g.write_word(b + OUT_INT_CLR, 0xFFFF_FFFF);
+        g.write_word(
+            b + OUT_LINK,
+            OUT_LINK_START_BIT | (desc_addr as u32 & OUT_LINK_ADDR_MASK),
+        );
+        g.tick_with_bus(&mut bus);
+        assert_ne!(g.read_word(b + OUT_INT_RAW) & OUT_EOF_BIT, 0, "pass 2 EOF");
+
+        // Drain the UART: both passes' bytes reach the sink.
+        let uart_idx = bus.find_peripheral_index_by_name("uart0_test").unwrap();
+        let uart = bus.peripherals[uart_idx]
+            .dev
+            .as_any_mut()
+            .unwrap()
+            .downcast_mut::<Esp32s3Uart>()
+            .unwrap();
+        for _ in 0..500_000u64 {
+            uart.tick();
+        }
+        assert_eq!(
+            *sink.lock().unwrap(),
+            b"AGAINAGAIN".to_vec(),
+            "same bytes transferred twice"
         );
     }
 
@@ -2894,6 +3098,9 @@ mod tests {
 
         let mut g = Esp32s3Gdma::new(IN_CH0_SRC);
         let b = ch_base(2);
+        // OUT_AUTO_WRBACK set (ESP-IDF driver default for owner-managed
+        // chains) — the owner assertions below pin the writeback.
+        g.write_word(b + OUT_CONF0, OUT_AUTO_WRBACK_BIT);
         g.write_word(b + OUT_PERI_SEL, 1); // SPI3
         g.write_word(b + IN_PERI_SEL, 1); // SPI3
         g.write_word(
@@ -3052,6 +3259,7 @@ mod tests {
 
         let mut g = Esp32s3Gdma::new(IN_CH0_SRC);
         let b = ch_base(0);
+        g.write_word(b + OUT_CONF0, OUT_AUTO_WRBACK_BIT);
         g.write_word(b + OUT_PERI_SEL, 0); // SPI2
         g.write_word(
             b + OUT_LINK,
@@ -3070,6 +3278,61 @@ mod tests {
             bus.read_u32(tx_desc).unwrap() & DESC_OWNER_BIT,
             0,
             "TX descriptor returned to CPU"
+        );
+    }
+
+    /// Coupled SPI OUT with OUT_AUTO_WRBACK clear: the consumed descriptor
+    /// stays DMA-owned, and a second SPI transaction + OUTLINK_START on the
+    /// same untouched chain feeds the device the same bytes again (pins the
+    /// gate in `coupled_out_collect`).
+    #[test]
+    fn spi3_tx_auto_wrback_clear_preserves_owner_and_rekick_repeats() {
+        let (mut bus, log) = spi3_test_bus(true);
+        let n: usize = 4;
+        let payload: Vec<u8> = vec![0xDE, 0xAD, 0xBE, 0xEF];
+        let tx_buf: u64 = 0x3FC8_8000;
+        let tx_desc: u64 = 0x3FC8_A000;
+        for (i, &x) in payload.iter().enumerate() {
+            bus.write_u8(tx_buf + i as u64, x).unwrap();
+        }
+        write_desc(&mut bus, tx_desc, tx_dw0(n as u32), tx_buf, 0);
+
+        let mut g = Esp32s3Gdma::new(IN_CH0_SRC);
+        let b = ch_base(0);
+        // OUT_CONF0 left at reset → OUT_AUTO_WRBACK clear.
+        g.write_word(b + OUT_PERI_SEL, 1); // SPI3
+
+        for pass in 1..=2u32 {
+            // TX-only DMA transaction.
+            spi_write_u32(&mut bus, SPI3_BASE, SPI_DMA_CONF_REG, SPI_DMA_TX_ENA_BIT);
+            spi_write_u32(&mut bus, SPI3_BASE, SPI_MS_DLEN_REG, (n as u32) * 8 - 1);
+            spi_write_u32(&mut bus, SPI3_BASE, SPI_CMD_REG, SPI_USR_BIT);
+            // Same untouched descriptor chain both times.
+            g.write_word(b + OUT_INT_CLR, 0xFFFF_FFFF);
+            g.write_word(
+                b + OUT_LINK,
+                OUT_LINK_START_BIT | (tx_desc as u32 & OUT_LINK_ADDR_MASK),
+            );
+            let ticks = tick_until_idle(&mut g, &mut bus, 8);
+            assert_eq!(ticks, 1, "pass {pass} completes in one tick");
+            assert_ne!(
+                g.read_word(b + OUT_INT_RAW) & OUT_EOF_BIT,
+                0,
+                "pass {pass} OUT_EOF"
+            );
+            assert_eq!(
+                bus.read_u32(tx_desc).unwrap() & DESC_OWNER_BIT,
+                DESC_OWNER_BIT,
+                "pass {pass}: owner must stay 1 with OUT_AUTO_WRBACK clear"
+            );
+        }
+
+        // The device saw the payload twice — the re-kicked chain replayed.
+        let expected: Vec<u8> = payload.iter().chain(payload.iter()).copied().collect();
+        assert_eq!(
+            *log.as_ref().unwrap().lock().unwrap(),
+            expected,
+            "device must see the same descriptor bytes on both passes"
         );
     }
 
@@ -3318,6 +3581,7 @@ mod tests {
 
         let mut g = Esp32s3Gdma::new(IN_CH0_SRC);
         let b = ch_base(0);
+        g.write_word(b + OUT_CONF0, OUT_AUTO_WRBACK_BIT);
         g.write_word(b + OUT_PERI_SEL, 3); // I2S0
         g.write_word(
             b + OUT_LINK,
@@ -3619,6 +3883,7 @@ mod tests {
 
         let mut g = Esp32s3Gdma::new(IN_CH0_SRC);
         let b = ch_base(4);
+        g.write_word(b + OUT_CONF0, OUT_AUTO_WRBACK_BIT);
         g.write_word(b + OUT_PERI_SEL, 4); // I2S1
         g.write_word(
             b + OUT_LINK,
