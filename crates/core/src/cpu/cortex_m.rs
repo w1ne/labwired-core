@@ -1022,7 +1022,13 @@ impl CortexM {
                 Instruction::Tbb { rn, rm } => {
                     let mut base = self.read_reg(rn);
                     if rn == 15 {
-                        base = (self.pc & !3).wrapping_add(4);
+                        // ARMv7-M: the table base is the in-execution PC
+                        // (insn address + 4) — NOT word-aligned. The old
+                        // Align(PC,4) read the table 2 bytes early whenever
+                        // the TBB sat at a 2-mod-4 address; ST's
+                        // HAL_DMA_RegisterCallback dispatched every
+                        // callback ID into the same slot because of it.
+                        base = self.pc.wrapping_add(4);
                     }
                     let index = self.read_reg(rm);
                     let addr = base.wrapping_add(index);
@@ -1035,7 +1041,8 @@ impl CortexM {
                 Instruction::Tbh { rn, rm } => {
                     let mut base = self.read_reg(rn);
                     if rn == 15 {
-                        base = (self.pc & !3).wrapping_add(4);
+                        // Same unaligned PC+4 base rule as TBB above.
+                        base = self.pc.wrapping_add(4);
                     }
                     let index = self.read_reg(rm);
                     let addr = base.wrapping_add(index << 1);

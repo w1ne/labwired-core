@@ -1329,7 +1329,8 @@ impl SystemBus {
                     // `config: { irq_base: N }` routes channel n to NVIC
                     // line N + n (H563 GPDMA1: 27..34). Without it the
                     // block's single `irq:` line serves every channel.
-                    let g = crate::peripherals::gpdma::Gpdma::new();
+                    let g = crate::peripherals::gpdma::Gpdma::new()
+                        .with_base(p_cfg.base_address as u32);
                     match p_cfg.config.get("irq_base").and_then(|v| v.as_u64()) {
                         Some(base) => Box::new(g.with_irq_base(base as u32)),
                         None => Box::new(g),
@@ -2864,6 +2865,7 @@ mod tests {
 
         let chip = ChipDescriptor {
             schema_version: "1.0".to_string(),
+            memory_regions: Vec::new(),
             name: "stm32f103-test".to_string(),
             arch: Arch::Arm,
             core: None,
@@ -2875,7 +2877,6 @@ mod tests {
                 base: 0x2000_0000,
                 size: "20KB".to_string(),
             },
-            memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "i2c1".to_string(),
                 r#type: "i2c".to_string(),
@@ -3031,6 +3032,7 @@ peripherals:
 
         labwired_config::ChipDescriptor {
             schema_version: "1.0".to_string(),
+            memory_regions: Vec::new(),
             name: "stm32f103-test".to_string(),
             arch: Arch::Arm,
             core: None,
@@ -3042,7 +3044,6 @@ peripherals:
                 base: 0x2000_0000,
                 size: "20KB".to_string(),
             },
-            memory_regions: Vec::new(),
             peripherals: vec![
                 PeripheralConfig {
                     id: "i2c1".to_string(),
