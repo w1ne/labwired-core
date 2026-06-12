@@ -1260,6 +1260,11 @@ impl SystemBus {
                         Some("stm32h5") | Some("h5") => {
                             Box::new(crate::peripherals::pwr::PwrH5::new())
                         }
+                        // L0 has a two-register surface (CR/CSR), not the L4
+                        // CR1..CR4 / PUCRx set — a distinct reset shape.
+                        Some("stm32l0") | Some("l0") => {
+                            Box::new(crate::peripherals::pwr::PwrL0::new())
+                        }
                         _ => Box::new(crate::peripherals::pwr::Pwr::new()),
                     }
                 }
@@ -2870,6 +2875,7 @@ mod tests {
                 base: 0x2000_0000,
                 size: "20KB".to_string(),
             },
+            memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "i2c1".to_string(),
                 r#type: "i2c".to_string(),
@@ -3036,6 +3042,7 @@ peripherals:
                 base: 0x2000_0000,
                 size: "20KB".to_string(),
             },
+            memory_regions: Vec::new(),
             peripherals: vec![
                 PeripheralConfig {
                     id: "i2c1".to_string(),
@@ -3216,6 +3223,7 @@ peripherals:
         let mut bus = SystemBus {
             flash: LinearMemory::new(256, 0x0800_0000),
             ram: LinearMemory::new(256, 0x2000_0000),
+            extra_mem: Vec::new(),
             peripherals: Vec::new(),
             nvic: None,
             observers: Vec::new(),
@@ -3250,6 +3258,7 @@ peripherals:
         let mut bus = SystemBus {
             flash: LinearMemory::new(256, 0x0800_0000),
             ram: LinearMemory::new(256, 0x2000_0000),
+            extra_mem: Vec::new(),
             peripherals: vec![
                 PeripheralEntry {
                     name: "high".to_string(),
@@ -3317,6 +3326,7 @@ peripherals:
         let mut bus = SystemBus {
             flash: LinearMemory::new(256, 0x0800_0000),
             ram: LinearMemory::new(256, 0x2000_0000),
+            extra_mem: Vec::new(),
             peripherals: vec![PeripheralEntry {
                 name: "dma1".to_string(),
                 base: 0x4002_0000,
