@@ -129,6 +129,9 @@ pub struct Gpdma {
     /// `explicit_irqs`); `None` falls back to the single configured line.
     #[serde(default)]
     irq_base: Option<u32>,
+    /// Own bus base address (for linked-list node-fetch self-copies).
+    #[serde(default)]
+    base: u32,
 }
 
 impl Gpdma {
@@ -141,6 +144,14 @@ impl Gpdma {
     /// (stm32h563xx.h); the yaml sets it via `config: { irq_base: 27 }`.
     pub fn with_irq_base(mut self, irq_base: u32) -> Self {
         self.irq_base = Some(irq_base);
+        self
+    }
+
+    /// The block's own bus base address — needed by linked-list mode,
+    /// whose node fetches are modeled as memory -> own-register DMA
+    /// copies (the bus routes them back through `write_reg`).
+    pub fn with_base(mut self, base: u32) -> Self {
+        self.base = base;
         self
     }
 
@@ -232,14 +243,25 @@ impl Gpdma {
                         // starts the transfer immediately. SWREQ = 0
                         // (peripheral-request mode) is not yet modeled —
                         // the channel stays idle (CSR = IDLEF).
-                        if !old_en && new_en && ch.ctr2 & CTR2_SWREQ != 0 {
+                        // Start on EN rise for software-request transfers
+                        // and for linked-list starts (CLLR set, the first
+                        // node delivers CTR2/CBR1 from memory).
+                        if !old_en && new_en && (ch.ctr2 & CTR2_SWREQ != 0 || ch.cllr != 0) {
                             ch.active = true;
                             ch.bndt_initial = ch.cbr1 & BNDT_MASK;
                         }
                     }
                     OFF_CTR1 => ch.ctr1 = value,
                     OFF_CTR2 => ch.ctr2 = value,
-                    OFF_CBR1 => ch.cbr1 = value,
+                    OFF_CBR1 => {
+                        ch.cbr1 = value;
+                        // A linked-list node fetch rewrites CBR1 while the
+                        // channel is live: the new block's HTF midpoint
+                        // derives from the fetched size.
+                        if ch.active {
+                            ch.bndt_initial = value & BNDT_MASK;
+                        }
+                    }
                     OFF_CSAR => ch.csar = value,
                     OFF_CDAR => ch.cdar = value,
                     OFF_CTR3 => ch.ctr3 = value,
@@ -296,7 +318,48 @@ impl Peripheral for Gpdma {
             }
             let bndt = ch.cbr1 & BNDT_MASK;
             if bndt == 0 {
-                ch.active = false;
+                if ch.cllr != 0 {
+                    // Linked-list: fetch the next node. The node lives at
+                    // {CLBAR[31:16], CLLR.LA[15:2]} and holds, in register
+                    // order, one word per update flag (UT1 CTR1, UT2 CTR2,
+                    // UB1 CBR1, USA CSAR, UDA CDAR, UT3 CTR3, UB2 CBR2,
+                    // ULL CLLR). Modeled as memory -> own-register copies
+                    // the bus executes after this tick; the channel stays
+                    // enabled and resumes once the fetched CBR1 lands.
+                    // Silicon-pinned (capture12): a 2-block chain copies
+                    // both blocks byte-exact, leaves CLLR = 0, BNDT = 0,
+                    // CSR = 0x301, and CCR keeps TCIE with EN cleared at
+                    // the end of the list.
+                    let node = ((ch.clbar & 0xFFFF_0000) | (ch.cllr & 0xFFFC)) as u64;
+                    let regs: [(u32, u64); 8] = [
+                        (1 << 31, OFF_CTR1),
+                        (1 << 30, OFF_CTR2),
+                        (1 << 29, OFF_CBR1),
+                        (1 << 28, OFF_CSAR),
+                        (1 << 27, OFF_CDAR),
+                        (1 << 26, OFF_CTR3),
+                        (1 << 25, OFF_CBR2),
+                        (1 << 16, OFF_CLLR),
+                    ];
+                    let ch_base = self.base as u64 + CHAN_BASE + ch_idx as u64 * CHAN_STRIDE;
+                    let mut word = 0u64;
+                    for (flag, reg_off) in regs {
+                        if ch.cllr & flag != 0 {
+                            for k in 0..4u64 {
+                                dma_requests.get_or_insert_with(Vec::new).push(DmaRequest {
+                                    src_addr: node + word * 4 + k,
+                                    addr: ch_base + reg_off + k,
+                                    val: 0,
+                                    direction: DmaDirection::Copy,
+                                    transform: None,
+                                });
+                            }
+                            word += 1;
+                        }
+                    }
+                } else {
+                    ch.active = false;
+                }
                 continue;
             }
 
@@ -348,15 +411,22 @@ impl Peripheral for Gpdma {
             }
 
             if bndt == 0 {
-                // Transfer complete: TCF set, EN auto-clears (pinned:
-                // CCR reads 0 after TC for an EN-only programming),
-                // channel returns to idle (IDLEF).
+                // Block complete: TCF latches per block (CTR2.TCEM default
+                // "at each linked-list item").
                 ch.flags |= CSR_TCF;
-                ch.ccr &= !CCR_EN;
-                ch.active = false;
                 if ch.ccr & CCR_TCIE != 0 {
                     pend(ch_idx, &mut irq);
                 }
+                if ch.cllr == 0 {
+                    // End of list (or plain single-block transfer): EN
+                    // auto-clears (interrupt enables retained — pinned:
+                    // CCR reads 0x100 after a TCIE|EN list), channel
+                    // returns to idle (IDLEF).
+                    ch.ccr &= !CCR_EN;
+                    ch.active = false;
+                }
+                // CLLR != 0: stay enabled — the next tick's empty-BNDT
+                // path fetches the node.
             }
         }
 
@@ -413,7 +483,7 @@ mod tests {
             GPDMA_BASE,
             0x1000,
             Some(GPDMA_IRQ),
-            Box::new(Gpdma::new()),
+            Box::new(Gpdma::new().with_base(GPDMA_BASE as u32)),
         );
         bus
     }
@@ -769,5 +839,62 @@ mod tests {
     fn test_handling_dest_halfword_exchange() {
         let out = run_handling(CTR1_DHX, 4, 4, 8);
         assert_eq!(out, [0xB2, 0xB3, 0xB0, 0xB1, 0xB6, 0xB7, 0xB4, 0xB5]);
+    }
+
+    /// Two-block linked-list chain, mirroring the 2026-06-12 silicon probe
+    /// (capture12): block A copies 8 bytes, then the node at CLBAR|LA
+    /// rewrites CTR1/CTR2/CBR1/CSAR/CDAR/CLLR and block B copies 8 more.
+    /// Final state pinned: both destinations byte-exact, CLLR = 0,
+    /// BNDT = 0, CSR = 0x301, CCR keeps TCIE with EN cleared.
+    #[test]
+    fn test_linked_list_two_block_chain_matches_silicon() {
+        let mut bus = bus_with_gpdma();
+        for i in 0..8u64 {
+            bus.write_u8(SRC + i, 0x10 + i as u8).unwrap();
+            bus.write_u8(SRC + 0x40 + i, 0x30 + i as u8).unwrap();
+            bus.write_u8(DST + i, 0).unwrap();
+            bus.write_u8(DST + 0x40 + i, 0).unwrap();
+        }
+        // Node at SRC + 0x200: CTR1, CTR2, CBR1, CSAR, CDAR, CLLR(=0).
+        let node = SRC + 0x200;
+        bus.write_u32(node, CTR1_SINC | CTR1_DINC).unwrap();
+        bus.write_u32(node + 4, CTR2_SWREQ).unwrap();
+        bus.write_u32(node + 8, 8).unwrap();
+        bus.write_u32(node + 12, (SRC + 0x40) as u32).unwrap();
+        bus.write_u32(node + 16, (DST + 0x40) as u32).unwrap();
+        bus.write_u32(node + 20, 0).unwrap();
+
+        bus.write_u32(GPDMA_BASE + 0x50, (SRC & 0xFFFF_0000) as u32)
+            .unwrap(); // CLBAR
+        bus.write_u32(CH0_CTR1, CTR1_SINC | CTR1_DINC).unwrap();
+        bus.write_u32(CH0_CTR2, CTR2_SWREQ).unwrap();
+        bus.write_u32(CH0_CBR1, 8).unwrap();
+        bus.write_u32(CH0_CSAR, SRC as u32).unwrap();
+        bus.write_u32(CH0_CDAR, DST as u32).unwrap();
+        // CLLR: UT1|UT2|UB1|USA|UDA|ULL + LA of the node.
+        let ull: u32 = (0x1F << 27) | (1 << 16) | ((node as u32) & 0xFFFC);
+        bus.write_u32(GPDMA_BASE + 0xCC, ull).unwrap();
+        bus.write_u32(CH0_CCR, CCR_EN | CCR_TCIE).unwrap();
+
+        for _ in 0..40 {
+            bus.tick_peripherals_fully();
+        }
+
+        for i in 0..8u64 {
+            assert_eq!(bus.read_u8(DST + i).unwrap(), 0x10 + i as u8, "block A");
+            assert_eq!(
+                bus.read_u8(DST + 0x40 + i).unwrap(),
+                0x30 + i as u8,
+                "block B"
+            );
+        }
+        assert_eq!(bus.read_u32(GPDMA_BASE + 0xCC).unwrap(), 0, "CLLR");
+        assert_eq!(bus.read_u32(CH0_CBR1).unwrap() & 0xFFFF, 0, "BNDT");
+        assert_eq!(bus.read_u32(CH0_CSR).unwrap(), 0x301, "CSR");
+        assert_eq!(
+            bus.read_u32(CH0_CCR).unwrap(),
+            CCR_TCIE,
+            "CCR keeps TCIE, EN cleared at list end"
+        );
     }
 }
