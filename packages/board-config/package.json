@@ -9,6 +9,14 @@
       "default": "./src/index.ts"
     }
   },
-  "scripts": { "build": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.mjs --packages=external && cp dist/index.mjs dist/index.js", "test": "vitest run", "typecheck": "tsc --noEmit" },
-  "devDependencies": { "typescript": "~5.9.3", "vitest": "~3.2.0" }
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.mjs --packages=external && cp dist/index.mjs dist/index.js",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.3",
+    "typescript": "~5.9.3",
+    "vitest": "~3.2.0"
+  }
 }

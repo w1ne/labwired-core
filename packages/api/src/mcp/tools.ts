@@ -188,7 +188,7 @@ async function dispatchHostedTool(
         isError: true,
       };
     }
-    const validation = composeDiagnostics(diagram as ValidateDiagram);
+    const validation = composeDiagnostics(diagram as unknown as ValidateDiagram);
     return {
       content: [textContent(validation)],
       isError: validation.error_count > 0 || undefined,
@@ -320,7 +320,7 @@ async function startPlaygroundLab(
   const watchUrl = `https://app.labwired.com/?watch=${encodeURIComponent(sessionId)}`;
   const stub = env.SESSIONS.get(env.SESSIONS.idFromName(sessionId));
   const diagram = starterDiagram(board);
-  const validation = composeDiagnostics(diagram as ValidateDiagram);
+  const validation = composeDiagnostics(diagram as unknown as ValidateDiagram);
   if (!validation.ok) {
     return {
       content: [textContent({ error: 'STARTER_DIAGRAM_INVALID', validation })],

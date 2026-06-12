@@ -333,6 +333,21 @@ export function emitBoardIoFromWires(diagram: Diagram): string[] {
   return entries;
 }
 
+/**
+ * Part types that have a dedicated emitter function (special-cased in compile/
+ * and emitBoardIoFromWires skipList). Every entry here must exist in CATALOG;
+ * catalog-emitter-coverage.test.ts enforces this.
+ */
+export const EMITTED_PART_TYPES: readonly string[] = [
+  'ultrasonic',
+  'pcd8544',
+  'sn74hc165',
+  'iolink-master',
+  'neo6m-gps',
+  ...Object.keys(I2C_DEVICE_ADDRESSES),
+  ...Array.from(SPI_DEVICE_TYPES),
+];
+
 /** Assemble the system YAML string from collected fragment arrays. */
 export function buildSystemYaml(
   externalDeviceEntries: string[],

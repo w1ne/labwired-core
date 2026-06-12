@@ -1,5 +1,38 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { composeDiagnostics } from '../src/compose';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// ---------------------------------------------------------------------------
+// Delegation drift-tripwire: verify that both MCP adapter surfaces import
+// composeDiagnostics from @labwired/board-config (not from a local copy).
+// Crude text-search is intentional — it catches future accidental re-forks
+// without requiring a build step.
+// ---------------------------------------------------------------------------
+describe('delegation drift-tripwire', () => {
+  it('packages/mcp/src/index.ts delegates composeDiagnostics to @labwired/board-config', () => {
+    const src = readFileSync(
+      resolve(__dirname, '../../../packages/mcp/src/index.ts'),
+      'utf8',
+    );
+    // Must call composeDiagnostics (proves it uses the function, not a local copy)
+    expect(src).toMatch('composeDiagnostics(');
+    // Must import it from the canonical package (not a local path)
+    expect(src).toMatch("from '@labwired/board-config'");
+  });
+
+  it('packages/api/src/mcp/tools.ts delegates composeDiagnostics to @labwired/board-config', () => {
+    const src = readFileSync(
+      resolve(__dirname, '../../../packages/api/src/mcp/tools.ts'),
+      'utf8',
+    );
+    expect(src).toMatch('composeDiagnostics(');
+    expect(src).toMatch("from '@labwired/board-config'");
+  });
+});
 
 describe('surface parity (both adapters delegate to composeDiagnostics)', () => {
   const cleanDispenser = {

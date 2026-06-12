@@ -151,7 +151,7 @@ export const CATALOG: Record<string, CatalogPart> = {
   adxl345: { type: 'adxl345', deviceClass: 'i2c_device', boardIoKind: 'i2c_device' },
   max31855: { type: 'max31855', deviceClass: 'spi_device', boardIoKind: 'spi_device' },
   mpu6050: { type: 'mpu6050', deviceClass: 'i2c_device', boardIoKind: 'i2c_device' },
-  'neo6m-gps': { type: 'neo6m-gps', deviceClass: 'uart_device' },
+  'neo6m-gps': { type: 'neo6m-gps', deviceClass: 'uart_device', boardIoKind: 'uart_device' },
   'ntc-thermistor': { type: 'ntc-thermistor', deviceClass: 'passive', boardIoKind: 'adc_input' },
   'seven-segment': { type: 'seven-segment', deviceClass: 'spi_device', boardIoKind: 'spi_device' },
   lcd1602: { type: 'lcd1602', deviceClass: 'i2c_device', boardIoKind: 'i2c_device' },
@@ -165,6 +165,8 @@ export const CATALOG: Record<string, CatalogPart> = {
   diode: { type: 'diode', deviceClass: 'passive' },
   transistor: { type: 'transistor', deviceClass: 'passive' },
   '74hc595': { type: '74hc595', deviceClass: 'spi_device', boardIoKind: 'spi_device' },
+  sn74hc165: { type: 'sn74hc165', deviceClass: 'spi_device', boardIoKind: 'spi_device' },
+  'iolink-master': { type: 'iolink-master', deviceClass: 'uart_device', boardIoKind: 'uart_device' },
   l293d: { type: 'l293d', deviceClass: 'board_io', boardIoKind: 'pwm_output' },
 };
 
