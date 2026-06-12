@@ -7,6 +7,7 @@ export const wasmsimulator_apply_agentdeck_quirks: (a: number) => [number, numbe
 export const wasmsimulator_apply_runtime_snapshot: (a: number, b: number, c: number) => [number, number];
 export const wasmsimulator_bench_jit: (a: number, b: number) => [number, number, number];
 export const wasmsimulator_drain_uart_output: (a: number) => [number, number];
+export const wasmsimulator_fdcan_trace_snapshot: (a: number) => any;
 export const wasmsimulator_feed_uart_input: (a: number, b: number, c: number) => void;
 export const wasmsimulator_gdb_process_packet: (a: number, b: number, c: number) => [number, number];
 export const wasmsimulator_get_adc_device_states: (a: number) => any;

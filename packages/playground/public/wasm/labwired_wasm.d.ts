@@ -42,6 +42,10 @@ export class WasmSimulator {
      */
     drain_uart_output(): Uint8Array;
     /**
+     * Non-consuming FDCAN frame trace snapshot for CAN/UDS instruments.
+     */
+    fdcan_trace_snapshot(): any;
+    /**
      * Push bytes into all UART RX buffers (bidirectional serial input).
      */
     feed_uart_input(data: Uint8Array): void;
@@ -347,6 +351,7 @@ export interface InitOutput {
     readonly wasmsimulator_apply_runtime_snapshot: (a: number, b: number, c: number) => [number, number];
     readonly wasmsimulator_bench_jit: (a: number, b: number) => [number, number, number];
     readonly wasmsimulator_drain_uart_output: (a: number) => [number, number];
+    readonly wasmsimulator_fdcan_trace_snapshot: (a: number) => any;
     readonly wasmsimulator_feed_uart_input: (a: number, b: number, c: number) => void;
     readonly wasmsimulator_gdb_process_packet: (a: number, b: number, c: number) => [number, number];
     readonly wasmsimulator_get_adc_device_states: (a: number) => any;
