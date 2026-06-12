@@ -2,13 +2,7 @@ import { diag, type Diagnostic } from './diagnostic';
 import { effectivePin, type ErcContext } from './context';
 import { getCatalogPart } from '../catalog';
 import type { PinRef } from '../schema';
-
-/** Parse "0x40"/"64" to a number; undefined when absent/invalid. */
-function parseAddr(s: string | undefined): number | undefined {
-  if (!s) return undefined;
-  const n = s.trim().toLowerCase().startsWith('0x') ? parseInt(s, 16) : parseInt(s, 10);
-  return Number.isFinite(n) ? n : undefined;
-}
+import { parseAddr } from '../attrs';
 
 export function busRules(ctx: ErcContext): Diagnostic[] {
   const out: Diagnostic[] = [];

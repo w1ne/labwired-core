@@ -17,6 +17,7 @@ import { CHIP_YAMLS } from '../chip-yamls';
 import { diag } from '../erc/diagnostic';
 import type { Part } from '../types';
 import { ESP32S3_IRQ_SOURCES } from './irq-ordinals';
+import { parseAddr } from '../attrs';
 import {
   I2C_DEVICE_ADDRESSES,
   SPI_DEVICE_TYPES,
@@ -180,7 +181,7 @@ export function compile(input: Diagram | DiagramV2): CompileResult {
       const legacyAddress = I2C_DEVICE_ADDRESSES[part.type];
       const address = legacyAddress !== undefined
         ? legacyAddress
-        : (part.attrs?.i2c_address ? parseInt(String(part.attrs.i2c_address), 16) : undefined);
+        : parseAddr(part.attrs?.i2c_address ? String(part.attrs.i2c_address) : undefined);
 
       if (part.type === 'ir') {
         // IR parts: emit type:ir with spec_path config
@@ -227,6 +228,16 @@ export function compile(input: Diagram | DiagramV2): CompileResult {
     active_high: true
     i2c_address: ${addr}
     device_type: "${part.type}"`);
+      } else {
+        // No address available — neither a legacy fixed address nor attrs.i2c_address.
+        // Emit a diagnostic instead of silently dropping the device from the manifest.
+        compileDiags.push(diag(
+          'COMPILE_NO_ADDRESS',
+          'error',
+          `Part "${part.id}" (${part.type}) has no I2C address; set attrs.i2c_address (e.g. "0x40")`,
+          'Set attrs.i2c_address on the part to its hardware address',
+          [part.id],
+        ));
       }
       processedPartIds.add(part.id);
       continue;

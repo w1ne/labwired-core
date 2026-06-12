@@ -166,15 +166,16 @@ const ValidateDiagramInput = z.object({
     .object({
       board: z.string(),
       parts: z.array(z.object({ id: z.string(), type: z.string() }).passthrough()),
+      // wires is optional: v2 diagrams may use only connections/nets
       wires: z.array(
         z.object({
           from: z.object({ part: z.string(), pin: z.string() }),
           to: z.object({ part: z.string(), pin: z.string() }),
         }),
-      ),
+      ).optional(),
     })
     .passthrough()
-    .describe('Diagram JSON: { board, parts: [{id, type, ...}], wires: [{from, to}] }.'),
+    .describe('Diagram JSON: { board, parts: [{id, type, ...}], wires?: [{from, to}] }.'),
 });
 
 // ─── Workspace root (mirrors boards.ts resolution logic) ──────────────────

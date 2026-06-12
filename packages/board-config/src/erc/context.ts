@@ -5,6 +5,7 @@ import { getCatalogPart, type CatalogPart, type PinDecl, type PinEtype } from '.
 import type { NetProtocol } from '../schema';
 import { getPinEtype, getPinMapping, PIN_MAPS } from '../pin-mapping';
 import type { Part } from '../types';
+// getCatalogPart is imported above; used in isMcuPart for catalog-declared MCU types.
 
 /** Everything a rule needs, resolved once. */
 export interface ErcContext {
@@ -38,9 +39,25 @@ export function buildContext(diagram: DiagramV2): ErcContext {
   return { diagram, nets, partsById, netsByPin };
 }
 
-/** True when the part is the MCU (its type has a pin map, or it is 'mcu'). */
+/**
+ * True when the part is the MCU.
+ *
+ * A part counts as the MCU when:
+ *   (a) its type is the literal string 'mcu', OR
+ *   (b) its type directly keys a PIN_MAPS entry (e.g. 'esp32-s3-zero'), OR
+ *   (c) its catalog entry has deviceClass === 'mcu' (e.g. 'stm32-dev', 'nucleo-f401re',
+ *       'nrf52840-dk', 'rpi-pico', etc.) — in which case pin lookups fall back to
+ *       ctx.diagram.board via mcuBoardKey().
+ *
+ * Case (c) was previously missed: catalog-typed MCU boards whose type string is
+ * NOT itself a PIN_MAPS key (e.g. 'stm32-dev' vs 'stm32f103') were treated as
+ * peripheral parts, causing power-rail pins to resolve via the catalog (no catalog
+ * pins → null) rather than via the board's pin map.
+ */
 export function isMcuPart(ctx: ErcContext, part: Part): boolean {
-  return part.type === 'mcu' || PIN_MAPS[part.type] !== undefined;
+  if (part.type === 'mcu') return true;
+  if (PIN_MAPS[part.type] !== undefined) return true;
+  return getCatalogPart(part.type)?.deviceClass === 'mcu';
 }
 
 /** Board key used for pin lookups of an MCU part. */

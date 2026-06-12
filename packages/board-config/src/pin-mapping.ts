@@ -19,6 +19,11 @@ export interface PinMapping {
 
 /** STM32F103 pin alternate functions. */
 const STM32F103_PINS: Record<string, PinMapping> = {
+  // Power rails — present on every STM32 dev board (Nucleo / Blue Pill / etc.).
+  // Exposed here so power-rail wires (mcu:VCC → peripheral:VCC) are recognized
+  // by the ERC and the name-based power_out rule fires correctly.
+  VCC: { gpio: { peripheral: 'gpio', pin: 0 }, functions: [] },
+  GND: { gpio: { peripheral: 'gpio', pin: 0 }, functions: [] },
   PA0: { gpio: { peripheral: 'gpioa', pin: 0 }, functions: [
     { type: 'adc', peripheral: 'adc1', channel: 0 },
     { type: 'timer', peripheral: 'tim2', channel: 1 },
@@ -259,20 +264,29 @@ const STM32H563_PINS: Record<string, PinMapping> = {
 };
 
 /** RP2040 pin mappings (GP0-GP28). */
-const RP2040_PINS: Record<string, PinMapping> = Object.fromEntries(
-  Array.from({ length: 29 }, (_, i) => [
-    `GP${i}`,
-    {
-      gpio: { peripheral: 'gpio', pin: i },
-      functions: i <= 3
-        ? [{ type: 'uart' as const, peripheral: 'uart0', role: i % 2 === 0 ? 'tx' : 'rx' }]
-        : [],
-    },
-  ]),
-);
+const RP2040_PINS: Record<string, PinMapping> = {
+  // Power rails exposed on the Pico board header.
+  '3V3': { gpio: { peripheral: 'gpio', pin: 0 }, functions: [] },
+  GND:   { gpio: { peripheral: 'gpio', pin: 0 }, functions: [] },
+  VBUS:  { gpio: { peripheral: 'gpio', pin: 0 }, functions: [] },
+  ...Object.fromEntries(
+    Array.from({ length: 29 }, (_, i) => [
+      `GP${i}`,
+      {
+        gpio: { peripheral: 'gpio', pin: i },
+        functions: i <= 3
+          ? [{ type: 'uart' as const, peripheral: 'uart0', role: i % 2 === 0 ? 'tx' : 'rx' }]
+          : [],
+      },
+    ]),
+  ),
+};
 
 /** nRF52840 pin mappings (P0.00-P0.31, P1.00-P1.15). */
 const NRF52840_PINS: Record<string, PinMapping> = {
+  // Power rails — nRF52840 DK exposes VDD (3V3) and GND on its header.
+  VDD: { gpio: { peripheral: 'gpio', pin: 0 }, functions: [] },
+  GND: { gpio: { peripheral: 'gpio', pin: 0 }, functions: [] },
   ...Object.fromEntries(
     Array.from({ length: 32 }, (_, i) => [
       `P0.${String(i).padStart(2, '0')}`,
@@ -288,17 +302,22 @@ const NRF52840_PINS: Record<string, PinMapping> = {
 };
 
 /** ESP32-C3 pin mappings (GPIO0-GPIO21). */
-const ESP32C3_PINS: Record<string, PinMapping> = Object.fromEntries(
-  Array.from({ length: 22 }, (_, i) => [
-    `GPIO${i}`,
-    {
-      gpio: { peripheral: 'gpio', pin: i },
-      functions: i <= 1
-        ? [{ type: 'uart' as const, peripheral: 'uart0', role: i === 0 ? 'tx' : 'rx' }]
-        : [],
-    },
-  ]),
-);
+const ESP32C3_PINS: Record<string, PinMapping> = {
+  // Power rails exposed on the Super Mini board header.
+  '3V3': { gpio: { peripheral: 'gpio', pin: 0 }, functions: [] },
+  GND:   { gpio: { peripheral: 'gpio', pin: 0 }, functions: [] },
+  ...Object.fromEntries(
+    Array.from({ length: 22 }, (_, i) => [
+      `GPIO${i}`,
+      {
+        gpio: { peripheral: 'gpio', pin: i },
+        functions: i <= 1
+          ? [{ type: 'uart' as const, peripheral: 'uart0', role: i === 0 ? 'tx' : 'rx' }]
+          : [],
+      },
+    ]),
+  ),
+};
 
 /** ESP32-classic pin mappings (GPIO0-GPIO39 + power rails).
  *  VSPI default pinmux puts SCK on GPIO18, MOSI on GPIO23, MISO on GPIO19,
@@ -418,7 +437,8 @@ const ESP32S3_POWER_OVERRIDES: Record<string, PinElectrical> = {
   GND:   { etype: 'power_out', internalPullup: false },
 };
 
-/** Per-board pin-level overrides; pins absent here use the default rule. */
+/** Per-board pin-level overrides; pins absent here fall through to the
+ *  name-based default rule in getPinEtype(). These take highest precedence. */
 const PIN_ELECTRICAL_OVERRIDES: Record<string, Record<string, PinElectrical>> = {
   'esp32-s3-zero': ESP32S3_POWER_OVERRIDES,
   esp32s3:         ESP32S3_POWER_OVERRIDES,
@@ -426,18 +446,64 @@ const PIN_ELECTRICAL_OVERRIDES: Record<string, Record<string, PinElectrical>> = 
     '3V3': { etype: 'power_out', internalPullup: false },
     GND: { etype: 'power_out', internalPullup: false },
   },
-  // Other boards use the bidirectional+pullup default for all mapped pins.
+  // Other boards use the name-based default rule for power pins.
 };
 
 /**
- * Electrical type of an MCU pin. Any mapped GPIO-capable pin defaults to
- * `bidirectional` with `internalPullup: true` (all MCUs in PIN_MAPS have
- * per-pin configurable pullups). Power pins are expressed via per-board
- * overrides. Returns null for unknown pin or board.
+ * Name-based default rule for power-rail pins.
+ *
+ * Pin labels matching common power-supply patterns are resolved to
+ * `power_out` regardless of board, so that STM32/nRF/RP2040 boards (which
+ * lack explicit entries in PIN_ELECTRICAL_OVERRIDES) don't default to
+ * `bidirectional` and falsely trigger PWR_RAIL_UNDRIVEN in the ERC.
+ *
+ * Rules (case-insensitive, optional ".N" multi-instance suffix stripped):
+ *   - /^(3V3|5V|VCC|VDD|VBUS|3\.3V)(\.\d+)?$/i  → power_out
+ *   - /^(GND|VSS|AGND)(\.\d+)?$/i                → power_out
+ *
+ * Returns null when the label doesn't match any power pattern (caller
+ * falls through to the bidirectional+pullup default).
+ */
+function powerPinDefaultEtype(pinLabel: string): PinElectrical | null {
+  const stripped = pinLabel.replace(/\.\d+$/, '');
+  if (/^(3V3|5V|VCC|VDD|VBUS|3\.3V)$/i.test(stripped)) {
+    return { etype: 'power_out', internalPullup: false };
+  }
+  if (/^(GND|VSS|AGND)$/i.test(stripped)) {
+    return { etype: 'power_out', internalPullup: false };
+  }
+  return null;
+}
+
+/**
+ * Electrical type of an MCU pin.
+ *
+ * Resolution order (first match wins):
+ *   1. Per-board override table (PIN_ELECTRICAL_OVERRIDES) — escape hatch.
+ *   2. Name-based default rule (powerPinDefaultEtype) — covers all boards.
+ *   3. Mapped GPIO-capable pin → bidirectional + internalPullup:true.
+ *
+ * Returns null for unknown pin or board.
  */
 export function getPinEtype(board: string, pinLabel: string): PinElectrical | null {
+  // 1. Per-board override takes highest precedence.
   const override = PIN_ELECTRICAL_OVERRIDES[board]?.[pinLabel];
   if (override) return override;
+
+  // 2. Name-based power-rail default (works across all boards).
+  const powerDefault = powerPinDefaultEtype(pinLabel);
+  if (powerDefault) {
+    // Only apply if the pin actually exists in the board's map (or the board
+    // has no map — treat it as known when the board itself is unknown and
+    // we'd return null from getPinMapping anyway).
+    const mapping = getPinMapping(board, pinLabel);
+    if (mapping) return powerDefault;
+    // Pin name looks like power but is not in this board's map → return null
+    // so that getPinMapping(board, pinLabel) == null callers still get null.
+    return null;
+  }
+
+  // 3. Generic GPIO pin default.
   const mapping = getPinMapping(board, pinLabel);
   if (!mapping) return null;
   return { etype: 'bidirectional', internalPullup: true };

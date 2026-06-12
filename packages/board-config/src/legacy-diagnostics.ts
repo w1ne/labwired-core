@@ -280,8 +280,10 @@ function diagnoseWireEndpoints(
 export function diagnoseDiagram(diagram: ValidateDiagram): Diagnostic[] {
   const out: Diagnostic[] = [];
   const seenWireKey = new Set<string>();
+  // Default wires to [] so diagrams without wires don't throw.
+  const wires = diagram.wires ?? [];
 
-  for (const wire of diagram.wires) {
+  for (const wire of wires) {
     const key = `${wire.from.part}:${wire.from.pin}->${wire.to.part}:${wire.to.pin}`;
     const reverseKey = `${wire.to.part}:${wire.to.pin}->${wire.from.part}:${wire.from.pin}`;
     if (seenWireKey.has(key) || seenWireKey.has(reverseKey)) {
@@ -299,7 +301,7 @@ export function diagnoseDiagram(diagram: ValidateDiagram): Diagnostic[] {
 
   const mcuPinAssignments = new Map<string, string>();
   const componentMcuWireCount = new Map<string, number>();
-  for (const wire of diagram.wires) {
+  for (const wire of wires) {
     const mcuEndpoint = getRole(diagram, wire.from).isMcu
       ? wire.from
       : getRole(diagram, wire.to).isMcu
