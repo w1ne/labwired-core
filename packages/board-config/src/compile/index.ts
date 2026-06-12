@@ -27,6 +27,7 @@ import {
   emitLegacyI2cDevice,
   emitSpiDevice,
   emitNeo6mGps,
+  emitCanDiagnosticTool,
   emitBoardIoFromWires,
   buildSystemYaml,
 } from './emitters';
@@ -119,6 +120,23 @@ export function compile(input: Diagram | DiagramV2): CompileResult {
   for (const part of v2.parts) {
     const cat = getCatalogPart(part.type);
     const deviceClass = cat?.deviceClass;
+
+    if (part.type === 'can-diagnostic-tool') {
+      const { externalDevice } = emitCanDiagnosticTool(diagramLike, part.id);
+      if (externalDevice) {
+        externalDeviceEntries.push(externalDevice);
+      } else {
+        compileDiags.push(diag(
+          'COMPILE_CAN_UNBOUND',
+          'error',
+          `Part "${part.id}" (can-diagnostic-tool) is not bound to any FDCAN peripheral`,
+          'Wire CAN_H or CAN_L to a CAN transceiver whose TXD/RXD pins connect to MCU FDCAN pins',
+          [part.id],
+        ));
+      }
+      processedPartIds.add(part.id);
+      continue;
+    }
 
     if (deviceClass === 'mcu') {
       // MCU chip YAML selection handled below

@@ -11,7 +11,13 @@ export interface UdsAnalyzerProps {
 }
 
 export function UdsAnalyzer({ bridge, running, binding, pollMs = 200 }: UdsAnalyzerProps) {
-  const [frames, setFrames] = useState<FdcanTraceFrame[]>(() => bridge?.fdcanTraceSnapshot() ?? []);
+  const tracedPeripherals = useMemo(
+    () => new Set(binding.channels.map((channel) => channel.peripheral)),
+    [binding.channels],
+  );
+  const filterFrames = (trace: FdcanTraceFrame[]) =>
+    trace.filter((frame) => tracedPeripherals.has(frame.peripheral));
+  const [frames, setFrames] = useState<FdcanTraceFrame[]>(() => filterFrames(bridge?.fdcanTraceSnapshot() ?? []));
   const bridgeRef = useRef(bridge);
   bridgeRef.current = bridge;
 
@@ -21,7 +27,7 @@ export function UdsAnalyzer({ bridge, running, binding, pollMs = 200 }: UdsAnaly
       const b = bridgeRef.current;
       if (!b) return;
       try {
-        const trace = b.fdcanTraceSnapshot();
+        const trace = filterFrames(b.fdcanTraceSnapshot());
         if (!cancelled) setFrames(trace);
       } catch {
         /* bridge may be mid-teardown between Run/Stop; ignore one tick */
@@ -35,7 +41,7 @@ export function UdsAnalyzer({ bridge, running, binding, pollMs = 200 }: UdsAnaly
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [running, pollMs, bridge]);
+  }, [running, pollMs, bridge, tracedPeripherals]);
 
   const rows = useMemo(() => rowsForUdsTrace(frames), [frames]);
   const channelLabel = binding.channels

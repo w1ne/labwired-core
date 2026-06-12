@@ -17,6 +17,7 @@ import {
   emitLegacyI2cDevice,
   emitSpiDevice,
   emitNeo6mGps,
+  emitCanDiagnosticTool,
   emitBoardIoFromWires,
   buildSystemYaml,
   i2cPeripheralForPartWire,
@@ -92,6 +93,13 @@ export function diagramToConfig(
     const { externalDevice, boardIo } = emitNeo6mGps(diagram, part.id);
     if (externalDevice) externalDeviceEntries.push(externalDevice);
     if (boardIo) boardIoEntries.push(boardIo);
+  }
+
+  // CAN diagnostic tester
+  for (const part of diagram.parts) {
+    if (part.type !== 'can-diagnostic-tool') continue;
+    const { externalDevice } = emitCanDiagnosticTool(diagram, part.id);
+    if (externalDevice) externalDeviceEntries.push(externalDevice);
   }
 
   // Wire-based board_io for all remaining part types
