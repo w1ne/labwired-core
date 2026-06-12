@@ -28,6 +28,7 @@ labwired-fuzz = { path = "../labwired-fuzz" }
 labwired-gdbstub = { path = "../gdbstub" }
 labwired-codegen = { path = "../codegen" }
 labwired-ir = { path = "../ir", features = ["svd"] }
+svd-ingestor = { path = "../svd-ingestor" }
 human-size = { workspace = true }
 svd-parser = "0.14"
 anyhow = { workspace = true }
