@@ -277,6 +277,12 @@ const PARITY_REGS: &[ParityReg] = &[
 
 const RCC_AHB1ENR: u32 = RCC_BASE + 0x88;
 const RCC_APB2ENR: u32 = RCC_BASE + 0xA4;
+const RCC_APB1HENR: u32 = RCC_BASE + 0xA0;
+const RCC_CR: u32 = RCC_BASE;
+
+// ── FDCAN1 (0x4000_A400, M_CAN with fixed message-RAM layout) ──────────────
+const FDCAN1: u32 = 0x4000_A400;
+const SRAMCAN: u32 = 0x4000_AC00;
 const RCC_APB3ENR: u32 = RCC_BASE + 0xA8;
 const RCC_BDCR: u32 = RCC_BASE + 0xF0;
 /// AHB1ENR reset (capture: 0xD000_0100) + GPDMA1EN(0).
@@ -750,6 +756,225 @@ const CLASS_CASES: &[MmioCase] = &[
         read_addr: NVIC_ISER0,
         mask: 0xFFFF_FFFF,
         expect: 0,
+        settle_ticks: 0,
+    },
+    // ── FDCAN1 internal loopback (capture13, 2026-06-12) ──
+    // Sequence replays the bench probe register-for-register: clocks,
+    // reset identity, config unlock, test mode, TX buffer 0 through the
+    // fixed SRAMCAN layout into RX FIFO0.
+    MmioCase {
+        label: "FDCAN1 bus+kernel clock (HSE digital bypass ready)",
+        prep: &[(RCC_APB1HENR, 1 << 9)],
+        // HSEON | HSEBYP | HSEEXT on top of the reset HSI bits.
+        write: (RCC_CR, 0x0015_002B),
+        read_addr: RCC_CR,
+        mask: 1 << 17,
+        expect: 1 << 17,
+        settle_ticks: 4,
+    },
+    MmioCase {
+        label: "FDCAN1 ENDN identity",
+        prep: &[],
+        write: (FDCAN1 + 0x54, 0), // IE: benign
+        read_addr: FDCAN1 + 0x04,
+        mask: 0xFFFF_FFFF,
+        expect: 0x8765_4321,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "FDCAN1 CREL identity",
+        prep: &[],
+        write: (FDCAN1 + 0x54, 0),
+        read_addr: FDCAN1,
+        mask: 0xFFFF_FFFF,
+        expect: 0x3214_1218,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "FDCAN1 XIDAM reset (fixed-layout map: 0x84 is XIDAM)",
+        prep: &[],
+        write: (FDCAN1 + 0x54, 0),
+        read_addr: FDCAN1 + 0x84,
+        mask: 0xFFFF_FFFF,
+        expect: 0x1FFF_FFFF,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "FDCAN1 TXFQS reset (3 free slots)",
+        prep: &[],
+        write: (FDCAN1 + 0x54, 0),
+        read_addr: FDCAN1 + 0xC4,
+        mask: 0xFFFF_FFFF,
+        expect: 0x0000_0003,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "FDCAN1 CCCR INIT|CCE unlock",
+        prep: &[],
+        write: (FDCAN1 + 0x18, 0x3),
+        read_addr: FDCAN1 + 0x18,
+        mask: 0xFF,
+        expect: 0x03,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "FDCAN1 test mode + monitoring armed",
+        prep: &[],
+        write: (FDCAN1 + 0x18, 0xA3),
+        read_addr: FDCAN1 + 0x18,
+        mask: 0xFF,
+        expect: 0xA3,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "FDCAN1 TEST.LBCK sticks",
+        prep: &[],
+        write: (FDCAN1 + 0x10, 1 << 4),
+        read_addr: FDCAN1 + 0x10,
+        mask: 0xFF,
+        expect: 0x10,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        // TX element 0 staged in SRAMCAN, RX element 0 blanked so stale
+        // RAM can't fake the compares below; leaving INIT drops CCE
+        // with it (silicon: write 0xA2, read 0xA0).
+        label: "FDCAN1 leave INIT (CCE auto-clears)",
+        prep: &[
+            (SRAMCAN + 0x278, 0x123 << 18), // T0: std ID
+            (SRAMCAN + 0x27C, 8 << 16),     // T1: DLC 8
+            (SRAMCAN + 0x280, 0xDEAD_BEEF),
+            (SRAMCAN + 0x284, 0xCAFE_BABE),
+            (SRAMCAN + 0xB0, 0),
+            (SRAMCAN + 0xB4, 0),
+            (SRAMCAN + 0xB8, 0),
+            (SRAMCAN + 0xBC, 0),
+        ],
+        write: (FDCAN1 + 0x18, 0xA2),
+        read_addr: FDCAN1 + 0x18,
+        mask: 0xFF,
+        expect: 0xA0,
+        settle_ticks: 4,
+    },
+    MmioCase {
+        label: "FDCAN1 TXBAR completes buffer 0 (TXBTO)",
+        prep: &[],
+        write: (FDCAN1 + 0xCC, 0x1),
+        read_addr: FDCAN1 + 0xD4,
+        mask: 0x1,
+        expect: 0x1,
+        settle_ticks: 4,
+    },
+    MmioCase {
+        // RF0N | TFE; TC (bit 7) stays clear because TXBTIE = 0 — the
+        // per-buffer enable gates IR.TC, not the completion itself.
+        label: "FDCAN1 IR after loopback = RF0N|TFE (TC gated by TXBTIE)",
+        prep: &[],
+        write: (FDCAN1 + 0x54, 0),
+        read_addr: FDCAN1 + 0x50,
+        mask: 0xFFFF_FFFF,
+        expect: 0x0000_0201,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "FDCAN1 RXF0S one frame (F0PI=1, F0FL=1)",
+        prep: &[],
+        write: (FDCAN1 + 0x54, 0),
+        read_addr: FDCAN1 + 0x90,
+        mask: 0xFFFF_FFFF,
+        expect: 0x0001_0001,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "FDCAN1 TXFQS after one TX (indices advanced, 3 free)",
+        prep: &[],
+        write: (FDCAN1 + 0x54, 0),
+        read_addr: FDCAN1 + 0xC4,
+        mask: 0xFFFF_FFFF,
+        expect: 0x0001_0103,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        // Silicon leaves R0[17:0] undefined for standard IDs (capture13
+        // read 0x048C0246) — mask to the ID field.
+        label: "FDCAN1 RX element R0 standard ID",
+        prep: &[],
+        write: (FDCAN1 + 0x54, 0),
+        read_addr: SRAMCAN + 0xB0,
+        mask: 0x1FFC_0000,
+        expect: 0x123 << 18,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "FDCAN1 RX element R1 DLC + ANMF",
+        prep: &[],
+        write: (FDCAN1 + 0x54, 0),
+        read_addr: SRAMCAN + 0xB4,
+        mask: 0x800F_0000,
+        expect: 0x8008_0000,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "FDCAN1 RX payload word 0",
+        prep: &[],
+        write: (FDCAN1 + 0x54, 0),
+        read_addr: SRAMCAN + 0xB8,
+        mask: 0xFFFF_FFFF,
+        expect: 0xDEAD_BEEF,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "FDCAN1 RX payload word 1",
+        prep: &[],
+        write: (FDCAN1 + 0x54, 0),
+        read_addr: SRAMCAN + 0xBC,
+        mask: 0xFFFF_FFFF,
+        expect: 0xCAFE_BABE,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "FDCAN1 PSR after traffic (LEC=0, ACT=idle)",
+        prep: &[],
+        write: (FDCAN1 + 0x54, 0),
+        read_addr: FDCAN1 + 0x44,
+        mask: 0xFFFF_FFFF,
+        expect: 0x0000_0708,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "FDCAN1 IR write-1-to-clear",
+        prep: &[],
+        write: (FDCAN1 + 0x50, 0xFFFF_FFFF),
+        read_addr: FDCAN1 + 0x50,
+        mask: 0xFFFF_FFFF,
+        expect: 0,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "FDCAN1 RXF0A ack advances get index, drops fill",
+        prep: &[],
+        write: (FDCAN1 + 0x94, 0),
+        read_addr: FDCAN1 + 0x90,
+        mask: 0xFFFF_FFFF,
+        expect: 0x0001_0100,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "FDCAN_CONFIG VERR identity",
+        prep: &[],
+        write: (FDCAN1 + 0x54, 0),
+        read_addr: FDCAN1 + 0x3F4,
+        mask: 0xFFFF_FFFF,
+        expect: 0x0000_0010,
+        settle_ticks: 0,
+    },
+    MmioCase {
+        label: "FDCAN_CONFIG SIDR identity",
+        prep: &[],
+        write: (FDCAN1 + 0x54, 0),
+        read_addr: FDCAN1 + 0x3FC,
+        mask: 0xFFFF_FFFF,
+        expect: 0xA3C5_DD01,
         settle_ticks: 0,
     },
 ];

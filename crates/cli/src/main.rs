@@ -347,6 +347,34 @@ pub enum AssetCommands {
 
     /// Validate an off-chip component IR spec (YAML).
     ValidateComponent(component_validation::ValidateComponentArgs),
+
+    /// Ingest an SVD into runnable declarative PeripheralDescriptor YAML.
+    ///
+    /// Unlike `import-svd` (Strict IR → codegen → Rust, needs a rebuild), this
+    /// emits descriptors the simulator runs directly as `type: declarative`
+    /// peripherals — no codegen, no recompile. The one-step path from a vendor
+    /// SVD to a working chip.
+    IngestSvd(IngestSvdArgs),
+}
+
+#[derive(Parser, Debug)]
+pub struct IngestSvdArgs {
+    /// Path to the input SVD file.
+    #[arg(short, long)]
+    pub input: PathBuf,
+
+    /// Directory to write `<peripheral>.yaml` descriptors into.
+    #[arg(short, long)]
+    pub output_dir: PathBuf,
+
+    /// Only ingest these peripherals (comma-separated names). Default: all.
+    #[arg(long)]
+    pub filter: Option<String>,
+
+    /// Emit a machine-readable JSON summary on stdout (paths + register counts)
+    /// instead of a human table. Used by the MCP agent surface.
+    #[arg(long)]
+    pub json: bool,
 }
 
 #[derive(Parser, Debug)]
@@ -2650,6 +2678,7 @@ fn run_asset(args: AssetArgs) -> ExitCode {
         AssetCommands::Create(a) => run_asset_create(a),
         AssetCommands::Verify(a) => run_asset_verify(a),
         AssetCommands::ValidateComponent(a) => component_validation::run_validate_component(a),
+        AssetCommands::IngestSvd(a) => run_ingest_svd(a),
     }
 }
 
@@ -3059,6 +3088,110 @@ fn run_import_svd(args: ImportSvdArgs) -> ExitCode {
     }
 
     info!("Successfully wrote Strict IR to {:?}", args.output);
+    ExitCode::from(EXIT_PASS)
+}
+
+fn run_ingest_svd(args: IngestSvdArgs) -> ExitCode {
+    // Keep stdout pure JSON in --json mode (the MCP agent surface parses it);
+    // the progress line is only useful for the human table mode.
+    if !args.json {
+        info!(
+            "Ingesting SVD {:?} -> declarative descriptors in {:?}",
+            args.input, args.output_dir
+        );
+    }
+
+    let xml = match std::fs::read_to_string(&args.input) {
+        Ok(s) => s,
+        Err(e) => {
+            error!("Failed to read SVD file: {}", e);
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    };
+    let device = match svd_parser::parse(&xml) {
+        Ok(d) => d,
+        Err(e) => {
+            error!("Failed to parse SVD XML: {}", e);
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    };
+    if let Err(e) = std::fs::create_dir_all(&args.output_dir) {
+        error!("Failed to create output directory: {}", e);
+        return ExitCode::from(EXIT_CONFIG_ERROR);
+    }
+
+    let filter: Option<Vec<String>> = args.filter.as_ref().map(|s| {
+        s.split(',')
+            .map(|t| t.trim().to_string())
+            .filter(|t| !t.is_empty())
+            .collect()
+    });
+
+    let mut summary: Vec<serde_json::Value> = Vec::new();
+    let mut errors = 0usize;
+    for peripheral in &device.peripherals {
+        if let Some(ref f) = filter {
+            if !f.iter().any(|n| n.eq_ignore_ascii_case(&peripheral.name)) {
+                continue;
+            }
+        }
+        match svd_ingestor::process_peripheral(&device, peripheral) {
+            Ok(desc) => {
+                if let Err(e) = svd_ingestor::save_descriptor(&desc, &args.output_dir) {
+                    error!("Failed to save descriptor for {}: {}", peripheral.name, e);
+                    errors += 1;
+                    continue;
+                }
+                let path = args
+                    .output_dir
+                    .join(format!("{}.yaml", desc.peripheral.to_lowercase()));
+                summary.push(serde_json::json!({
+                    "name": desc.peripheral,
+                    "descriptor_path": path.to_string_lossy(),
+                    "register_count": desc.registers.len(),
+                    "base_address": format!("0x{:08X}", peripheral.base_address),
+                }));
+            }
+            Err(e) => {
+                error!("Failed to process peripheral {}: {}", peripheral.name, e);
+                errors += 1;
+            }
+        }
+    }
+
+    if args.json {
+        let out = serde_json::json!({
+            "output_dir": args.output_dir.to_string_lossy(),
+            "peripheral_count": summary.len(),
+            "peripherals": summary,
+        });
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&out).unwrap_or_else(|_| "{}".into())
+        );
+    } else {
+        println!(
+            "Ingested {} peripheral(s) into {}:",
+            summary.len(),
+            args.output_dir.display()
+        );
+        for p in &summary {
+            println!(
+                "  {:<16} {:>4} registers -> {}",
+                p["name"].as_str().unwrap_or("?"),
+                p["register_count"].as_u64().unwrap_or(0),
+                p["descriptor_path"].as_str().unwrap_or("?")
+            );
+        }
+    }
+
+    if summary.is_empty() {
+        error!("No peripherals ingested (check --filter against the SVD's peripheral names)");
+        return ExitCode::from(EXIT_CONFIG_ERROR);
+    }
+    if errors > 0 {
+        return ExitCode::from(EXIT_CONFIG_ERROR);
+    }
     ExitCode::from(EXIT_PASS)
 }
 

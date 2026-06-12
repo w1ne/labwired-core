@@ -1,0 +1,10 @@
+name: "h563-uds-ecu"
+chip: "../../configs/chips/stm32h563.yaml"
+external_devices:
+  - id: "uds_tester"
+    type: "can-diagnostic-tester"
+    connection: "fdcan1"
+    config:
+      request_id: "0x7E0"
+      request_data: "03 22 F1 90"
+board_io: []

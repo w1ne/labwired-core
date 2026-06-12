@@ -701,6 +701,33 @@ impl WasmSimulator {
         serde_wasm_bindgen::to_value(&snapshots).unwrap_or(JsValue::NULL)
     }
 
+    /// Non-consuming FDCAN frame trace snapshot for CAN/UDS instruments.
+    #[wasm_bindgen]
+    pub fn fdcan_trace_snapshot(&self) -> JsValue {
+        let Some(machine) = self.machine.as_ref() else {
+            return serde_wasm_bindgen::to_value(&Vec::<serde_json::Value>::new())
+                .unwrap_or(JsValue::NULL);
+        };
+
+        let snapshots = machine
+            .bus
+            .peripherals
+            .iter()
+            .flat_map(|p| {
+                let Some(any) = p.dev.as_any() else {
+                    return Vec::new();
+                };
+                let Some(fdcan) = any.downcast_ref::<labwired_core::peripherals::fdcan::Fdcan>()
+                else {
+                    return Vec::new();
+                };
+                fdcan.trace_snapshot(&p.name)
+            })
+            .collect::<Vec<_>>();
+
+        serde_wasm_bindgen::to_value(&snapshots).unwrap_or(JsValue::NULL)
+    }
+
     /// Execute up to max_cycles steps, returning the number actually executed.
     #[wasm_bindgen]
     pub fn step_batch(&mut self, max_cycles: u32) -> Result<u32, JsValue> {

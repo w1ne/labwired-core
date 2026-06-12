@@ -1,6 +1,12 @@
 name: Core Onboarding Smoke
 
 on:
+  # Post-merge: run the full matrix on every push to main so all tests run
+  # after merge even when a PR only touched core crates (the fast PR gate does
+  # not block on this).
+  push:
+    branches:
+      - main
   pull_request:
     branches:
       - main
