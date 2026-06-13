@@ -945,6 +945,20 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
                 ),
             ),
         );
+        // SPIMEM0 (0x6000_3000) — the cache's auto-fetch MSPI controller. Back
+        // it with the same flash image too, in case the BROM's bootloader load
+        // path issues commands here rather than on SPIMEM1.
+        bus.add_peripheral(
+            "spimem0_flash",
+            0x6000_3000,
+            0x100,
+            None,
+            Box::new(
+                labwired_core::peripherals::esp32s3::spi_mem_flash::SpiMemFlash::new(
+                    backing.clone(),
+                ),
+            ),
+        );
         // Flash cache MMU: the 2nd-stage bootloader programs the virtual→flash
         // page table at 0x600C_5000, then runs the app from the XIP windows
         // (IROM 0x4200_0000, DROM 0x3C00_0000). Model the real MMU table shared
