@@ -192,10 +192,65 @@ controller + flash chip, clock/RTC tree, `esp_timer` hardware, the real heap ove
 faithful RAM, and a mapped boot ROM. This is an SoC-model build (comparable to
 the esp32c3 rom-boot effort, ×dual-core), sequenced below.
 
+## DE-THUNK ROADMAP — arduino-esp32 IDF-runtime cluster (6-subagent synthesis, 2026-06-13)
+
+Goal: eliminate the per-firmware thunk profile so the real HW binary runs. ~126
+thunks. Validate every step against the oracle: `spi3 transactions=19033, ink=1429/4736`
+(`tests/e2e_labwired_ereader.rs`); board `/dev/cu.usbserial-0001` for real reg values.
+
+**THE KEYSTONE (most thunks gate on this): real heap → real FreeRTOS queues.**
+`xQueueCreateMutex`→NULL, `xQueueSemaphoreTake`/`xQueueGenericSend`→pdTRUE are faked
+because real mutex creation needs `malloc`→`heap_caps_malloc`→`registered_heaps`
+(0x3FFC54F4), which is only filled by `heap_caps_init` (0x400de11c, currently nop'd +
+BROM skipped). Fix heap first, then the FreeRTOS object layer runs real, which unblocks
+IPC, the SPI bus-lock, loopTask-on-APP_CPU, and the log mutex.
+
+**BATCH A — quick wins, NO heap needed, oracle must stay 19033/1429 (~15 thunks):**
+- clk: seed `g_ticks_per_us_pro=240` @0x3FFE01E0 + drop `esp_clk_cpu_freq` thunk (the tick
+  mechanism CCOUNT/CCOMPARE0→int6 is ALREADY real; only the divisor global was missing).
+  Un-thunk `esp_perip_clk_init` (already nop-equivalent — clock gating not enforced). Drop
+  the redundant RTC_APB_FREQ write in main.rs (rtc_cntl seeds it).
+- misc: un-thunk `esp_cpu_unstall` (real DPORT write, harmless), `core_intr_matrix_clear`
+  (route_intr already real), model classic RNG → `esp_random`/`esp_fill_random` real;
+  reclassify `_esp_error_check_failed` nop→`abort_halt`.
+- FreeRTOS: `xQueueCreateMutexStatic` real (caller buffer, no heap), `xTaskGetCurrentTaskHandle`
+  real (already reads real pxCurrentTCB under live SMP).
+- flash Group A (~12: `esp_mspi_pin_init`, `spi_flash_init_chip_state`, `spi_flash_chip_generic_probe`,
+  `esp_flash_app_*`, `spi_flash_init`, `bootloader_*`, io-mode set) — zero-MMIO bring-up.
+
+**BATCH B — the keystone:** map missing IRAM regions (0x40070000-0x40080000) → un-thunk
+`heap_caps_init`→`malloc`/`calloc`→`free`/`realloc` (risk: `xPortEnterCriticalTimeout`
+spinlock). Then `xQueueCreateMutex`/`SemaphoreTake`/`GenericSend` real. NOTE the SPI bus-lock
+handle (`SPIClass+28`) is created by `SPI.begin()` which is currently bypassed by the
+`spi_class_begin_transaction`/`spi_start_bus_fake` thunks → couple this with the SPI subsystem
+(let real Arduino SPI bus-init create the real lock). Render path is single-task (loopTask
+repinned core 0) so the real mutex is uncontended → byte-exact.
+
+**BATCH C — unlocked by B:** `esp_ipc_init`/`isr_init`, `esp_dport_access_stall_other_cpu_*`,
+and drop the loopTask repin (let loopTask run on APP_CPU for real). All gate on real queues.
+
+**BATCH D — core/peripheral modeling (independent):**
+- `xthal_window_spill_nw` is a REAL CPU-MODEL BUG (shadow-spill leaves WindowStart bits
+  inconsistent). Fix: clear/restore WS bit on shadow push/pop (`xtensa_lx7.rs` spill_shadow_on_call
+  / RETW), OR flip classic ESP32 to `faithful_windows=true`. Then the thunk dies.
+- LACT timer model in `timg.rs` (offsets 0x60-0x80) → un-thunk `esp_timer_impl_get_counter_reg`,
+  then `esp_timer_init`.
+- ESP32 UART register layout (uart0 currently uses STM32 layout!) → un-thunk HardwareSerial/uartWrite
+  (~10 thunks). LOW priority — logging never touches the render.
+
+**KEEP STUBBED (legitimately, by the oracle test — never touch the render):**
+- abort_halt family (`panic_abort`/`__assert_func`/`abort`/`__cxa_*`) — correct fault handlers.
+- All esp_log/newlib-stdio/printf (~32) — pure output; de-thunking buys only "purity", needs full
+  UART+reent+log-mutex, coupled to the FreeRTOS-queue decision. Not worth it for the oracle.
+- `esp_pthread_*` (no TLS model), `esp_task_wdt_*` (a real WDT only ever aborts).
+
+Recommended order: Batch A (cheap, builds confidence) → Batch B (the keystone) → C → D.
+Per-agent detail captured in the session; this is the consolidated spine.
+
 ## Tightening priority (highest fidelity payoff first)
 
-0. **Dual-core handshake** (C1) — pre-seed proven non-load-bearing; finish
-   cross-firmware validation, then delete it. Cheap, near-done.
+0. **Dual-core handshake** (C1) — DONE: APP_CPU runs for real by default, pre-seed
+   retired to a `LABWIRED_NO_DUALCORE` fallback (core commit `3f763d66`).
 
 1. ~~**Drop the GxEPD2 BYPASS thunks** (A.BYPASS)~~ — **DONE.** The real compiled
    firmware drives the panel over the real SPI3 peripheral + real DC GPIO (431
