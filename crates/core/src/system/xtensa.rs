@@ -1668,11 +1668,74 @@ pub(crate) const ESP32S3_PERIPHERALS: &[(&str, &str, u64, u64, Option<u32>)] = &
     ("uart2_s3",        "esp32s3_uart",            0x6002_E000, 0x0100, Some(29)),
 ];
 
+/// Canonical `(id, factory type, window base, window size, irq source)` for the
+/// classic ESP32 (Xtensa LX6) peripheral models that `configure_xtensa_esp32`
+/// installs by hand. The `peripherals::esp32::factory` source of truth, parallel
+/// to [`ESP32S3_PERIPHERALS`]; proven equivalent to the hand-wired path by
+/// `esp32_factory_descriptors_match_hardwired`.
+#[allow(dead_code)]
+#[rustfmt::skip]
+pub(crate) const ESP32_PERIPHERALS: &[(&str, &str, u64, u64, Option<u32>)] = &[
+    ("uart0",    "esp32_uart",     0x3FF4_0000, 0x0100, Some(34)),
+    ("uart1",    "esp32_uart",     0x3FF5_0000, 0x0100, Some(35)),
+    ("uart2",    "esp32_uart",     0x3FF6_E000, 0x0100, Some(36)),
+    ("spi0",     "esp32_spi",      0x3FF4_3000, 0x1000, None),
+    ("spi1",     "esp32_spi",      0x3FF4_2000, 0x1000, None),
+    ("spi3",     "esp32_spi",      0x3FF6_5000, 0x1000, None),
+    ("gpio",     "esp32_gpio",     0x3FF4_4000, 0x1000, None),
+    ("dport",    "esp32_dport",    0x3FF0_0000, 0x1000, None),
+    ("sha",      "esp32_sha",      0x3FF0_3000, 0x0100, None),
+    ("rtc_cntl", "esp32_rtc_cntl", 0x3FF4_8000, 0x0200, None),
+    ("timg0",    "esp32_timg",     0x3FF5_F000, 0x1000, None),
+    ("timg1",    "esp32_timg",     0x3FF6_0000, 0x1000, None),
+    ("efuse",    "esp32_efuse",    0x3FF5_A000, 0x1000, None),
+    ("syscon",   "esp32_syscon",   0x3FF6_6000, 0x0100, None),
+    ("ledc",     "esp32_ledc",     0x3FF5_9000, 0x1000, None),
+    ("twai",     "esp32_twai",     0x3FF6_B000, 0x1000, None),
+    ("mcpwm0",   "esp32_mcpwm",    0x3FF5_E000, 0x1000, None),
+    ("host_slc", "esp32_sdio",     0x3FF5_8000, 0x1000, None),
+];
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::Bus;
     use crate::Peripheral;
+
+    /// The esp32 (LX6) factory + ESP32_PERIPHERALS table must build each
+    /// peripheral with the same window (base, size) as the hand-wired
+    /// `configure_xtensa_esp32`. That builder also registers memory regions and
+    /// catch-all stubs, so this checks the table's peripherals by name rather
+    /// than comparing whole buses. Pins the factory path as equivalent before it
+    /// replaces the hand-wired registrations.
+    #[test]
+    fn esp32_factory_descriptors_match_hardwired() {
+        use labwired_config::PeripheralConfig;
+        use std::collections::HashMap;
+
+        let mut hw = SystemBus::new();
+        let _ = configure_xtensa_esp32(&mut hw);
+
+        for &(id, ty, base, size, irq) in ESP32_PERIPHERALS {
+            let cfg = PeripheralConfig {
+                id: id.to_string(),
+                r#type: ty.to_string(),
+                base_address: base,
+                size: None,
+                irq,
+                config: HashMap::new(),
+            };
+            assert!(
+                crate::peripherals::esp32::factory::try_build(ty, &cfg).is_some(),
+                "esp32 factory missing type {ty} for {id}"
+            );
+            let idx = hw
+                .find_peripheral_index_by_name(id)
+                .unwrap_or_else(|| panic!("hand-wired esp32 bus missing {id}"));
+            let p = &hw.peripherals[idx];
+            assert_eq!((p.base, p.size), (base, size), "window mismatch for {id}");
+        }
+    }
 
     /// The esp32s3 factory + canonical descriptor table must place exactly the
     /// same peripheral windows (name, base, size) as the hand-wired

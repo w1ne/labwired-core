@@ -16,6 +16,7 @@
 
 pub mod dport;
 pub mod efuse;
+pub mod factory;
 pub mod gpio;
 pub mod ledc;
 pub mod mcpwm;
