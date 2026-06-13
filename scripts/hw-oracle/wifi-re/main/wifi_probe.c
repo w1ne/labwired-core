@@ -10,9 +10,44 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "lwip/sockets.h"
 #include <string.h>
 
 static const char *TAG = "probe";
+
+// Virtual-AP / UDP-echo server the LabWired bridge hosts.
+#define AP_IP_STR   "192.168.4.1"
+#define UDP_PORT    9999
+
+// After GOT IP, prove real bidirectional socket data over the simulated WiFi:
+// send a UDP datagram to the AP's echo port and wait for the echo back.
+static void udp_echo_task(void *arg)
+{
+    int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    struct sockaddr_in dst = { 0 };
+    dst.sin_family = AF_INET;
+    dst.sin_port = htons(UDP_PORT);
+    dst.sin_addr.s_addr = inet_addr(AP_IP_STR);
+    struct timeval tv = { .tv_sec = 5, .tv_usec = 0 };
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+
+    const char *msg = "hello from c3";
+    for (int seq = 0; ; seq++) {
+        sendto(sock, msg, strlen(msg), 0, (struct sockaddr *)&dst, sizeof(dst));
+        ESP_LOGI(TAG, "UDP TX -> %s:%d '%s' (seq %d)", AP_IP_STR, UDP_PORT, msg, seq);
+        char rx[64];
+        struct sockaddr_in src;
+        socklen_t sl = sizeof(src);
+        int n = recvfrom(sock, rx, sizeof(rx) - 1, 0, (struct sockaddr *)&src, &sl);
+        if (n > 0) {
+            rx[n] = 0;
+            ESP_LOGI(TAG, "UDP RX <- echo '%s' (%d bytes)", rx, n);
+        } else {
+            ESP_LOGI(TAG, "UDP RX timeout");
+        }
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+}
 
 #define PROBE_SSID "labwired-ap"
 // OPEN auth (no password) — the bridge's first comms milestone associates with
@@ -40,7 +75,9 @@ static void wifi_event_handler(void *arg, esp_event_base_t base,
         ESP_LOGI(TAG, "sta disconnected -> retry");
         esp_wifi_connect();
     } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
-        ESP_LOGI(TAG, "GOT IP");
+        ip_event_got_ip_t *evt = (ip_event_got_ip_t *)data;
+        ESP_LOGI(TAG, "GOT IP " IPSTR, IP2STR(&evt->ip_info.ip));
+        xTaskCreate(udp_echo_task, "udp_echo", 4096, NULL, 5, NULL);
     }
 }
 

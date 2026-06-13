@@ -1164,9 +1164,87 @@ fn ap_respond(tx: &[u8]) -> Vec<(Vec<u8>, &'static str)> {
             if oper == 1 && tpa != STA_IP {
                 out.push((build_arp_reply(tpa, STA_IP), "arp-req->reply"));
             }
+        } else if let Some(echo) = build_udp_echo(tx, UDP_ECHO_PORT) {
+            // A tiny UDP echo server at AP_IP:UDP_ECHO_PORT — proves real
+            // bidirectional socket data over the simulated WiFi.
+            out.push((echo, "udp->echo"));
         }
     }
     out
+}
+
+/// UDP echo-server port the bridge hosts at AP_IP (matches the firmware probe).
+const UDP_ECHO_PORT: u16 = 9999;
+
+/// If the captured TX frame is a UDP datagram from the STA to the AP's echo
+/// port, build the echoed reply (same payload) as an AP→STA 802.11 data frame.
+fn build_udp_echo(frame: &[u8], echo_port: u16) -> Option<Vec<u8>> {
+    if frame.len() < 2 || (frame[0] >> 2) & 3 != 2 {
+        return None;
+    }
+    let hdr = if frame[0] & 0x80 != 0 { 26 } else { 24 };
+    let snap = hdr + 8;
+    let ip = snap;
+    if frame.len() < ip + 20 || frame[ip] >> 4 != 4 || frame[ip + 9] != 17 {
+        return None; // not IPv4/UDP
+    }
+    let ihl = (frame[ip] & 0xF) as usize * 4;
+    let udp = ip + ihl;
+    if frame.len() < udp + 8 {
+        return None;
+    }
+    let sport = u16::from_be_bytes([frame[udp], frame[udp + 1]]);
+    let dport = u16::from_be_bytes([frame[udp + 2], frame[udp + 3]]);
+    if dport != echo_port {
+        return None;
+    }
+    let ulen = u16::from_be_bytes([frame[udp + 4], frame[udp + 5]]) as usize;
+    if ulen < 8 || frame.len() < udp + ulen {
+        return None;
+    }
+    let payload = &frame[udp + 8..udp + ulen];
+
+    // Echo: UDP src=echo_port → dst=sport, same payload, checksum 0.
+    let udp_len = (8 + payload.len()) as u16;
+    let mut u = Vec::new();
+    u.extend_from_slice(&echo_port.to_be_bytes());
+    u.extend_from_slice(&sport.to_be_bytes());
+    u.extend_from_slice(&udp_len.to_be_bytes());
+    u.extend_from_slice(&[0, 0]);
+    u.extend_from_slice(payload);
+
+    let ip_total = (20 + u.len()) as u16;
+    let mut iph = vec![
+        0x45,
+        0x00,
+        (ip_total >> 8) as u8,
+        ip_total as u8,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x40,
+        0x11,
+        0x00,
+        0x00,
+    ];
+    iph.extend_from_slice(&AP_IP);
+    iph.extend_from_slice(&STA_IP);
+    let cks = inet_checksum(&iph);
+    iph[10] = (cks >> 8) as u8;
+    iph[11] = cks as u8;
+    iph.extend_from_slice(&u);
+
+    let mut f = Vec::new();
+    f.extend_from_slice(&[0x08, 0x02]); // data, from-DS
+    f.extend_from_slice(&[0x00, 0x00]);
+    f.extend_from_slice(&BRIDGE_STA); // addr1 = DA (STA)
+    f.extend_from_slice(&BRIDGE_BSSID); // addr2 = BSSID
+    f.extend_from_slice(&BRIDGE_BSSID); // addr3 = SA
+    f.extend_from_slice(&[0x00, 0x00]);
+    f.extend_from_slice(&[0xAA, 0xAA, 0x03, 0x00, 0x00, 0x00, 0x08, 0x00]); // LLC/SNAP IPv4
+    f.extend_from_slice(&iph);
+    Some(f)
 }
 
 /// Short human label for a captured STA TX frame, for bridge tracing.
