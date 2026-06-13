@@ -878,6 +878,44 @@ fn build_open_beacon(ssid: &str, channel: u8) -> Vec<u8> {
     f
 }
 
+/// Virtual-AP BSSID and the STA's MAC (eFuse MAC reads 00:00:00:00:00:00 in sim,
+/// so management responses are addressed to all-zeros).
+const BRIDGE_BSSID: [u8; 6] = [0x02, 0x00, 0x00, 0x00, 0x00, 0x01];
+const BRIDGE_STA: [u8; 6] = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+
+/// 802.11 mgmt header (24 bytes) for an AP→STA management frame of the given
+/// subtype (in the high nibble of the frame-control byte).
+fn mgmt_hdr(subtype_fc0: u8) -> Vec<u8> {
+    let mut f = Vec::new();
+    f.extend_from_slice(&[subtype_fc0, 0x00]); // frame control
+    f.extend_from_slice(&[0x00, 0x00]); // duration
+    f.extend_from_slice(&BRIDGE_STA); // addr1 = DA (the STA)
+    f.extend_from_slice(&BRIDGE_BSSID); // addr2 = SA (AP)
+    f.extend_from_slice(&BRIDGE_BSSID); // addr3 = BSSID
+    f.extend_from_slice(&[0x00, 0x00]); // seq/frag
+    f
+}
+
+/// OPEN-system authentication response (algorithm 0, transaction seq 2, status
+/// 0 = success). Frame-control subtype 11 (auth) → FC byte 0xB0.
+fn build_auth_resp() -> Vec<u8> {
+    let mut f = mgmt_hdr(0xB0);
+    f.extend_from_slice(&[0x00, 0x00]); // auth algorithm = open
+    f.extend_from_slice(&[0x02, 0x00]); // auth transaction seq = 2
+    f.extend_from_slice(&[0x00, 0x00]); // status = success
+    f
+}
+
+/// Association response (status 0 = success, AID 1). FC subtype 1 → 0x10.
+fn build_assoc_resp() -> Vec<u8> {
+    let mut f = mgmt_hdr(0x10);
+    f.extend_from_slice(&[0x01, 0x00]); // capability info (ESS)
+    f.extend_from_slice(&[0x00, 0x00]); // status = success
+    f.extend_from_slice(&[0x01, 0xC0]); // AID = 1 (top 2 bits set per spec)
+    f.extend_from_slice(&[0x01, 0x08, 0x82, 0x84, 0x8b, 0x96, 0x0c, 0x12, 0x18, 0x24]); // rates
+    f
+}
+
 fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
     use labwired_core::bus::SystemBus;
 
@@ -1277,12 +1315,16 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
                         .downcast_mut::<labwired_core::peripherals::esp32c3::wifi_mac::Esp32c3WifiMac>(
                         )
                     {
-                        // Inject the beacon on several channels so it matches
-                        // wherever the scan currently dwells.
+                        // Inject beacon (so the scan finds the AP) plus the
+                        // OPEN auth + assoc responses, so the driver finds each
+                        // one waiting as it advances init→auth→assoc→run. The
+                        // driver ignores responses it isn't expecting.
                         for ch in [1u8, 6, 11] {
                             mac.queue_rx_frame(build_open_beacon("labwired-ap", ch));
                         }
-                        eprintln!("[bridge] injected beacon(s) at step {i}");
+                        mac.queue_rx_frame(build_auth_resp());
+                        mac.queue_rx_frame(build_assoc_resp());
+                        eprintln!("[bridge] injected beacon+auth+assoc at step {i}");
                     }
                 }
             }
