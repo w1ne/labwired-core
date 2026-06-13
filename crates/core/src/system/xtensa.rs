@@ -13,14 +13,11 @@ use crate::bus::SystemBus;
 use crate::cpu::xtensa_lx7::XtensaLx7;
 use crate::peripherals::esp32s3::flash_xip::{new_mmu_table, Esp32s3MmuTable, FlashXipPeripheral};
 use crate::peripherals::esp32s3::gpio::{Esp32s3Gpio, GpioObserver};
-use crate::peripherals::esp32s3::i2c::{Esp32s3I2c, I2C0_BASE, I2C0_INTR_SOURCE_ID, I2C0_SIZE};
+use crate::peripherals::esp32s3::i2c::{Esp32s3I2c, I2C0_BASE, I2C0_SIZE};
 use crate::peripherals::esp32s3::intmatrix::Esp32s3IntMatrix;
-use crate::peripherals::esp32s3::io_mux::Esp32s3IoMux;
 use crate::peripherals::esp32s3::rom_thunks::{self, RomThunkBank};
 use crate::peripherals::esp32s3::system_stub::{EfuseStub, RtcCntlStub, SystemStub};
-use crate::peripherals::esp32s3::systimer::Systimer;
 use crate::peripherals::esp32s3::tmp102::Tmp102;
-use crate::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag;
 use crate::Bus;
 use crate::Cpu;
 use std::sync::{Arc, Mutex};
@@ -1283,328 +1280,65 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
 /// data-driven path the Cortex-M and RISC-V chips use). Each model is also
 /// reachable by type string via `peripherals::esp32s3::factory::try_build`.
 fn register_esp32s3_peripherals(bus: &mut SystemBus, opts: &Esp32s3Opts) {
-    // ── USB_SERIAL_JTAG ───────────────────────────────────────────────────
-    bus.add_peripheral(
-        "usb_serial_jtag",
-        0x6003_8000,
-        0x1000,
-        None,
-        Box::new(UsbSerialJtag::new()),
-    );
-    // ── SYSTIMER ──────────────────────────────────────────────────────────
-    bus.add_peripheral(
-        "systimer",
-        0x6002_3000,
-        0x1000,
-        None,
-        Box::new(Systimer::new(opts.cpu_clock_hz)),
-    );
-    bus.add_peripheral(
-        "gpio",
-        0x6000_4000,
-        0x800,
-        None,
-        Box::new(Esp32s3Gpio::new()),
-    );
-    bus.add_peripheral(
-        "io_mux",
-        0x6000_9000,
-        0x100,
-        None,
-        Box::new(Esp32s3IoMux::new()),
-    );
-    // ── SENS (DR_REG_SENS_BASE, 0x6000_8800) ─────────────────────────────
-    // Faithful register file for the RTC-domain SAR-ADC / touch / TSENS
-    // controller + immediate SAR1/SAR2 oneshot completion (the IDF oneshot
-    // ADC driver busy-polls MEAS*_DONE_SAR). Registered AFTER the broad
-    // round-tripping `rtc_cntl` stub above: by the bus router's
-    // greatest-start-wins containment lookup this narrower window takes the
-    // SENS block while the stub keeps serving the rest of the RTC range.
-    // The window is exactly 0x400 — the gap up to RTC_I2C @ 0x6000_8C00 —
-    // so the neighbouring RTC_IO / RTC_I2C blocks stay on the stub.
-    bus.add_peripheral(
-        "sens_s3",
-        0x6000_8800,
-        0x400,
-        None,
-        Box::new(crate::peripherals::esp32s3::sens::Esp32s3Sens::new()),
-    );
-    // ── RNG data register (WDEV_RND_REG, 0x6003_507C) ────────────────────
-    // Must register BEFORE the mmio_rest catch-all (which would return a
-    // constant). The 2nd-stage bootloader reads this for entropy and retries
-    // until it gets a non-zero random value; a constant makes that loop spin
-    // forever. Modeled with a deterministic PRNG (reproducible per LabWired).
-    bus.add_peripheral(
-        "rng",
-        0x6003_5000,
-        0x100,
-        None,
-        Box::new(crate::peripherals::esp32s3::rng::Esp32s3Rng::new()),
-    );
-    // ── SHA accelerator (DR_REG_SHA_BASE, 0x6003_B000) ───────────────────
-    // Real SHA-256 (sha2::compress256) so the boot ROM / bootloader can verify
-    // the app image's appended hash. Without it the digest reads 0xFF and every
-    // image is rejected. Registered before the mmio_rest catch-all.
-    bus.add_peripheral(
-        "sha",
-        0x6003_B000,
-        0x100,
-        None,
-        Box::new(crate::peripherals::esp32s3::sha::Esp32s3Sha::new()),
-    );
-    // ── Peripheral digital twins (PCNT / LEDC / TIMG0 / TIMG1) ───────────
-    // Registered AFTER the low_mmio/mmio_rest catch-alls so they win their
-    // own (higher-base) windows via the bus's last-start lookup — same
-    // discipline as the UARTs. Uniquely named (*_s3) so they never collide
-    // with the classic-ESP32 timg0/timg1 in the name-keyed snapshot. The TIMG
-    // twins model RTCCALICFG auto-RDY, which the bootloader's RTC-clock
-    // calibration busy-polls (a plain stub leaves RDY clear and hangs boot).
-    bus.add_peripheral(
-        "pcnt",
-        0x6001_7000,
-        0x1000,
-        None,
-        Box::new(crate::peripherals::esp32s3::pcnt::Esp32s3Pcnt::new(41)),
-    );
-    bus.add_peripheral(
-        "ledc",
-        0x6001_9000,
-        0x1000,
-        None,
-        Box::new(crate::peripherals::esp32s3::ledc::Esp32s3Ledc::new()),
-    );
-    bus.add_peripheral(
-        "timg0_s3",
-        0x6001_F000,
-        0x1000,
-        None,
-        Box::new(crate::peripherals::esp32s3::timer_group::Esp32s3TimerGroup::new(50, 240_000_000)),
-    );
-    bus.add_peripheral(
-        "timg1_s3",
-        0x6002_0000,
-        0x1000,
-        None,
-        Box::new(crate::peripherals::esp32s3::timer_group::Esp32s3TimerGroup::new(53, 240_000_000)),
-    );
+    use crate::peripherals::esp32s3::factory;
+    use labwired_config::PeripheralConfig;
+    use std::collections::HashMap;
 
-    // ── More twins (SAR-ADC / RMT / GP-SPI2 / GP-SPI3) ───────────────────
-    // Same registration discipline (after the catch-alls, *_s3 names so they
-    // never collide with the classic-ESP32 rmt/sar_adc/spi3 stubs in the
-    // name-keyed snapshot). SAR-ADC is touched by the 2nd-stage bootloader's
-    // RNG entropy enable, so its twin round-trips those writes + auto-completes
-    // any conversion-done bit (never blocks boot).
-    bus.add_peripheral(
-        "rmt_s3",
-        0x6001_6000,
-        0x1000,
-        None,
-        Box::new(crate::peripherals::esp32s3::rmt::Esp32s3Rmt::new(40)),
-    );
-    bus.add_peripheral(
-        "spi2_s3",
-        0x6002_4000,
-        0x1000,
-        None,
-        Box::new(crate::peripherals::esp32s3::gpspi::Esp32s3Spi::new(21)),
-    );
-    bus.add_peripheral(
-        "spi3_s3",
-        0x6002_5000,
-        0x1000,
-        None,
-        Box::new(crate::peripherals::esp32s3::gpspi::Esp32s3Spi::new(22)),
-    );
-    bus.add_peripheral(
-        "sar_adc_s3",
-        0x6004_0000,
-        0x1000,
-        None,
-        Box::new(crate::peripherals::esp32s3::sar_adc::Esp32s3SarAdc::new(64)),
-    );
+    // Data-driven: build every ESP32-S3 peripheral from the canonical
+    // ESP32S3_PERIPHERALS table through the esp32s3 factory. Behaviour matches
+    // the former hand-wired registrations (pinned by
+    // factory_descriptors_match_hardwired_peripherals). Per-model rationale
+    // lives in the model modules under peripherals/esp32s3/. Routing is
+    // address-pure (greatest-start-wins), and this runs after the core catch-all
+    // stubs, so the same-base UART windows still win.
+    for &(id, ty, base, size, irq) in ESP32S3_PERIPHERALS {
+        if id == "i2c0" {
+            // Built below with its board I2C slaves attached.
+            continue;
+        }
+        let mut config: HashMap<String, serde_yaml::Value> = HashMap::new();
+        match id {
+            // systimer ticks at the configured CPU clock (not the timer-group's
+            // fixed 240 MHz), so thread opts.cpu_clock_hz through as config.
+            "systimer" => {
+                config.insert(
+                    "cpu_clock_hz".to_string(),
+                    serde_yaml::Value::Number((opts.cpu_clock_hz as u64).into()),
+                );
+            }
+            // uart0 echoes TX to the host console; uart1/2 are capture-only.
+            "uart1_s3" | "uart2_s3" => {
+                config.insert("echo_stdout".to_string(), serde_yaml::Value::Bool(false));
+            }
+            _ => {}
+        }
+        let cfg = PeripheralConfig {
+            id: id.to_string(),
+            r#type: ty.to_string(),
+            base_address: base,
+            size: None,
+            irq,
+            config,
+        };
+        let dev = factory::try_build(ty, &cfg)
+            .unwrap_or_else(|| panic!("esp32s3 factory missing type {ty} for {id}"));
+        // Bus-entry irq stays None; the source id is baked into the model by the
+        // factory via cfg.irq.
+        bus.add_peripheral(id, base, size, None, dev);
+    }
 
-    // ── More twins (GDMA / I2S0 / I2S1 / TWAI) ───────────────────────────
-    // After the catch-alls; *_s3 names for i2s avoid the classic-ESP32 i2s0/i2s1
-    // stub name collision in the snapshot. GDMA moves real bytes: M2M
-    // descriptor walks plus peripheral-coupled transfers (UART/UHCI0, SPI2/3,
-    // I2S0/1 — routed by PERI_SEL); unmodeled peripheral ids keep the
-    // auto-complete fallback (see gdma.rs module doc for the full contract).
-    bus.add_peripheral(
-        "gdma",
-        0x6003_F000,
-        0x1000,
-        None,
-        Box::new(crate::peripherals::esp32s3::gdma::Esp32s3Gdma::new(66)),
-    );
-    bus.add_peripheral(
-        "i2s0_s3",
-        0x6000_F000,
-        0x1000,
-        None,
-        Box::new(crate::peripherals::esp32s3::i2s::Esp32s3I2s::new(25)),
-    );
-    bus.add_peripheral(
-        "i2s1_s3",
-        0x6002_D000,
-        0x1000,
-        None,
-        Box::new(crate::peripherals::esp32s3::i2s::Esp32s3I2s::new(26)),
-    );
-    bus.add_peripheral(
-        "twai",
-        0x6002_B000,
-        0x1000,
-        None,
-        Box::new(crate::peripherals::esp32s3::twai::Esp32s3Twai::new(37)),
-    );
-    // AES accelerator (DR_REG_AES_BASE, 0x6003_A000) — functionally-exact
-    // FIPS-197 Rijndael (ECB block), ETS_AES_INTR_SOURCE = 77.
-    bus.add_peripheral(
-        "aes",
-        0x6003_A000,
-        0x1000,
-        None,
-        Box::new(crate::peripherals::esp32s3::aes::Esp32s3Aes::new(77)),
-    );
-    // RSA accelerator (DR_REG_RSA_BASE, 0x6003_C000) — functionally-exact
-    // bignum modular exponentiation, ETS_RSA_INTR_SOURCE = 76.
-    bus.add_peripheral(
-        "rsa",
-        0x6003_C000,
-        0x1000,
-        None,
-        Box::new(crate::peripherals::esp32s3::rsa::Esp32s3Rsa::new(76)),
-    );
-    // HMAC accelerator (DR_REG_HMAC_BASE, 0x6003_E000) — HMAC-SHA256 over a
-    // modeled efuse key; firmware polls QUERY_BUSY, so no interrupt source.
-    bus.add_peripheral(
-        "hmac",
-        0x6003_E000,
-        0x1000,
-        None,
-        Box::new(crate::peripherals::esp32s3::hmac::Esp32s3Hmac::new(0)),
-    );
-    // Digital Signature (DR_REG_DIGITAL_SIGNATURE_BASE, 0x6003_D000) — polled
-    // RSA-signature engine over modeled key params; no interrupt source.
-    bus.add_peripheral(
-        "ds",
-        0x6003_D000,
-        0x1000,
-        None,
-        Box::new(crate::peripherals::esp32s3::ds::Esp32s3Ds::new(0)),
-    );
-    // MCPWM0 / MCPWM1 (DR_REG_PWM0/1_BASE) — motor-control PWM, two units.
-    // ETS_PWM0_INTR_SOURCE = 38, ETS_PWM1_INTR_SOURCE = 39.
-    bus.add_peripheral(
-        "mcpwm0",
-        0x6001_E000,
-        0x1000,
-        None,
-        Box::new(crate::peripherals::esp32s3::mcpwm::Esp32s3Mcpwm::new(38)),
-    );
-    bus.add_peripheral(
-        "mcpwm1",
-        0x6002_C000,
-        0x1000,
-        None,
-        Box::new(crate::peripherals::esp32s3::mcpwm::Esp32s3Mcpwm::new(39)),
-    );
-    // SD/MMC host (DR_REG_SDMMC_BASE, 0x6002_8000). ETS_SDIO_HOST_INTR_SOURCE
-    // = 36. Liveness model of the register handshake (no physical card).
-    bus.add_peripheral(
-        "sdmmc",
-        0x6002_8000,
-        0x1000,
-        None,
-        Box::new(crate::peripherals::esp32s3::sdmmc::Esp32s3Sdmmc::new(36)),
-    );
-    // LCD_CAM (DR_REG_LCD_CAM_BASE, 0x6004_1000). ETS_LCD_CAM_INTR_SOURCE = 24.
-    bus.add_peripheral(
-        "lcd_cam",
-        0x6004_1000,
-        0x1000,
-        None,
-        Box::new(crate::peripherals::esp32s3::lcd_cam::Esp32s3LcdCam::new(24)),
-    );
-    // USB-OTG (DWC_otg core, DR_REG_USB_BASE, 0x6008_0000). ETS_USB_INTR_SOURCE
-    // = 23. Liveness model of the DWC2 register interface (no host/PHY attached).
-    bus.add_peripheral(
-        "usb_otg",
-        0x6008_0000,
-        0x1000,
-        None,
-        Box::new(crate::peripherals::esp32s3::usb_otg::Esp32s3UsbOtg::new(23)),
-    );
-
-    // ── I²C0 + attached slaves ───────────────────────────────────────────
-    // TMP102 @ 0x48 (Plan 4 demo). Opt-in PCA9685 @ 0x40 for the SpiceDispenser
-    // board (LABWIRED_ESP32S3_PCA9685=1): the two servos hang off its PWM
-    // channels, so attaching it lets the unmodified firmware's I²C dispense
-    // path ACK and drive the servos instead of erroring on an empty bus.
+    // I2C0 carries board-specific I2C slaves the factory does not model: TMP102
+    // always, plus an opt-in PCA9685 (LABWIRED_ESP32S3_PCA9685) for the
+    // SpiceDispenser servos. Built directly so the slaves are attached.
     let mut i2c0 = Esp32s3I2c::new();
     i2c0.attach_slave(Box::new(Tmp102::new()));
     if std::env::var("LABWIRED_ESP32S3_PCA9685").is_ok() {
         i2c0.attach_slave(Box::new(
             crate::peripherals::components::pca9685::Pca9685::new(),
         ));
-        eprintln!("configure_xtensa_esp32s3: attached PCA9685 @ 0x40 on I²C0");
+        eprintln!("configure_xtensa_esp32s3: attached PCA9685 @ 0x40 on I2C0");
     }
     bus.add_peripheral("i2c0", I2C0_BASE as u64, I2C0_SIZE, None, Box::new(i2c0));
-    // Bind the I²C0 source ID through the intmatrix helper so esp-hal's
-    // poll-then-read driver path doesn't depend on routing existing yet —
-    // routing is firmware-controlled, this just leaves the source visible.
-    let _ = I2C0_INTR_SOURCE_ID;
-    // ── I²C1 ─────────────────────────────────────────────────────────────
-    // Second controller, same faithful model, no slaves attached (an empty
-    // bus NACKs every address, exactly like real hardware with nothing
-    // wired to the I2C1 pins). Asserts ETS_I2C_EXT1_INTR_SOURCE (43).
-    bus.add_peripheral(
-        "i2c1",
-        crate::peripherals::esp32s3::i2c::I2C1_BASE as u64,
-        crate::peripherals::esp32s3::i2c::I2C1_SIZE,
-        None,
-        Box::new(Esp32s3I2c::with_intr_source(
-            crate::peripherals::esp32s3::i2c::I2C1_INTR_SOURCE_ID,
-        )),
-    );
-    // ── UART0/1/2 — real ESP32-S3 layout (soc/uart_reg.h) ────────────────
-    // FIFO @0x0, STATUS @0x1C (TXFIFO_CNT[25:16]=0 → always room), CONF0 @0x20,
-    // interrupt regs @0x04..0x10 (TXFIFO_EMPTY/TX_DONE level-source). Bases
-    // DR_REG_UART{,1,2}_BASE = 0x6000_0000 / 0x6001_0000 / 0x6002_E000.
-    // MUST register AFTER the wide low_mmio (0x6000_0000+0x7000) and mmio_rest
-    // (0x6001_0000+0x40000) stubs: peripheral lookup resolves an overlap to the
-    // LAST range whose start ≤ addr, so these narrower, same-start UART windows
-    // only win when registered last. A separate, self-contained type from the
-    // STM32 `Uart`, so the S3 layout never perturbs the ARM UART model. UART0
-    // echoes TX to the host console (ESP-IDF / Arduino `Serial`); UART1/2 are
-    // capture-only.
-    bus.add_peripheral(
-        "uart0_s3",
-        0x6000_0000,
-        0x100,
-        None,
-        Box::new(crate::peripherals::esp32s3::uart::Esp32s3Uart::new(
-            true, 27,
-        )),
-    );
-    bus.add_peripheral(
-        "uart1_s3",
-        0x6001_0000,
-        0x100,
-        None,
-        Box::new(crate::peripherals::esp32s3::uart::Esp32s3Uart::new(
-            false, 28,
-        )),
-    );
-    bus.add_peripheral(
-        "uart2_s3",
-        0x6002_E000,
-        0x100,
-        None,
-        Box::new(crate::peripherals::esp32s3::uart::Esp32s3Uart::new(
-            false, 29,
-        )),
-    );
 }
 
 /// Register the default thunk set for esp-hal hello-world boot.
@@ -1873,8 +1607,6 @@ impl crate::Peripheral for RamPeripheral {
 /// ETS interrupt source id (a constructor argument; the bus-entry irq stays
 /// `None`). Proven equivalent to the hand-wired path by the test
 /// `factory_descriptors_match_hardwired_peripherals`.
-// Consumed by the parity test now; by register_esp32s3_peripherals in Stage 3b.
-#[allow(dead_code)]
 #[rustfmt::skip]
 pub(crate) const ESP32S3_PERIPHERALS: &[(&str, &str, u64, u64, Option<u32>)] = &[
     ("usb_serial_jtag", "esp32s3_usb_serial_jtag", 0x6003_8000, 0x1000, None),
