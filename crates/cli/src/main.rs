@@ -929,6 +929,12 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
             flash_path
         );
         let backing = Arc::new(Mutex::new(flash_bytes));
+        // Route reads through peripherals first: the fast path checks the
+        // chip's `flash`/`drom` memory-regions (zero-filled in rom-boot) before
+        // peripherals, which would shadow the FlashXip windows we install at the
+        // same XIP addresses. Disabling it lets the MMU-translating FlashXip
+        // serve 0x4200_0000 / 0x3C00_0000 from the real flash image.
+        bus.config.optimized_bus_access = false;
         // SPIMEM1 flash-command controller (0x6000_2000) backed by the real
         // image, overriding the declarative stub — a narrower, later-registered
         // window wins, so the BROM's READ/RDID/RDSR commands return real bytes.

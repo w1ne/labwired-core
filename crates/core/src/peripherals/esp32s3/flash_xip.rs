@@ -185,13 +185,21 @@ impl FlashXipPeripheral {
 
 impl Peripheral for FlashXipPeripheral {
     fn read(&self, offset: u64) -> SimResult<u8> {
-        match self.translate(offset) {
+        let r = match self.translate(offset) {
             Some(phys) => {
                 let backing = self.backing.lock().unwrap();
-                Ok(*backing.get(phys as usize).unwrap_or(&0))
+                *backing.get(phys as usize).unwrap_or(&0)
             }
-            None => Ok(0), // unmapped page reads as 0
+            None => 0, // unmapped page reads as 0
+        };
+        if offset < 0x40 && std::env::var("LABWIRED_XIP_DEBUG").is_ok() {
+            eprintln!(
+                "xip: base=0x{:08x} off=0x{offset:x} -> phys={:?} = 0x{r:02x}",
+                self.base,
+                self.translate(offset)
+            );
         }
+        Ok(r)
     }
 
     fn write(&mut self, offset: u64, _value: u8) -> SimResult<()> {
@@ -254,6 +262,9 @@ impl Peripheral for Esp32s3MmuTable {
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         if let Some(i) = Self::entry_index(offset & !3) {
+            if std::env::var("LABWIRED_XIP_DEBUG").is_ok() {
+                eprintln!("mmu: entry[{i}] <- 0x{value:08x}");
+            }
             self.table.lock().unwrap()[i] = value;
         }
         Ok(())
