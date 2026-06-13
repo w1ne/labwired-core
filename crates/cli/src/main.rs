@@ -995,13 +995,15 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
         );
         // Analog I²C master / ANA_CONFIG block (0x6000_E000, DR_REG_RTC_I2C_BASE):
         // rom_i2c_writeReg drives it (read-modify-write of ANA_CONFIG regs) during
-        // PHY/clock bring-up. Register-backed read-back keeps that path mapped.
+        // PHY/clock bring-up; the libphy full RF calibration also touches regs up
+        // past 0x6000_E130, so the window spans 0x400. Register-backed read-back
+        // keeps that path mapped.
         bus.add_peripheral(
             "rtc_i2c_ana",
             0x6000_E000,
-            0x100,
+            0x400,
             None,
-            Box::new(labwired_core::peripherals::esp32c3::reg_block::Esp32c3RegBlock::new(0x100)),
+            Box::new(labwired_core::peripherals::esp32c3::reg_block::Esp32c3RegBlock::new(0x400)),
         );
         // Hardware RNG data register (WDEV_RND_REG, 0x6002_60B0): yields a fresh
         // word per read. bootloader_fill_random XORs successive reads and
@@ -1075,7 +1077,15 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
             0x6002_3000,
             0x100,
             None,
-            Box::new(labwired_core::peripherals::esp32s3::systimer::Systimer::new(160_000_000)),
+            // C3 SYSTIMER_TARGET0 routes through the interrupt matrix on source
+            // 37 (TARGET1/2 at 38/39), unlike the S3's 57; the FreeRTOS tick
+            // alarm fires on that source.
+            Box::new(
+                labwired_core::peripherals::esp32s3::systimer::Systimer::new_with_source(
+                    160_000_000,
+                    37,
+                ),
+            ),
         );
         // RTC_CNTL main timer (0x6000_8000): the free-running slow-clock counter
         // the IDF reads via rtc_time_get (set TIME_UPDATE @0x0C bit31 to latch,

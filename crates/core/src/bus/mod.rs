@@ -2339,13 +2339,10 @@ impl SystemBus {
             (0x600C_0034, 53),
         ];
 
-        // NOTE: peripheral `explicit_irqs` (e.g. the reused S3 SYSTIMER model,
-        // which emits S3 source 57) are NOT routed here yet — the C3 SYSTIMER
-        // source is 37, so the S3 IDs don't match the C3 matrix. Only the
-        // FROM_CPU IPI sources (the FreeRTOS yield mechanism) are routed, which
-        // is all that's needed to reach the first context switch / app_main.
-        let _ = source_ids;
-        let mut asserted: Vec<u32> = Vec::new();
+        // Route peripheral `explicit_irqs` (e.g. the SYSTIMER tick alarm, which
+        // the C3 wiring configures to emit matrix source 37) plus the FROM_CPU
+        // IPI sources (the FreeRTOS yield mechanism).
+        let mut asserted: Vec<u32> = source_ids.to_vec();
         for (addr, src) in FROM_CPU {
             if self.read_u32(addr).map(|v| v & 1 != 0).unwrap_or(false) {
                 asserted.push(src);
