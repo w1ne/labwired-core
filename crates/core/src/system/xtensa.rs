@@ -1062,43 +1062,11 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
         shared_flash_backing,
     } = configure_esp32s3_memmap(bus, opts);
 
-    // ── USB_SERIAL_JTAG ───────────────────────────────────────────────────
-    bus.add_peripheral(
-        "usb_serial_jtag",
-        0x6003_8000,
-        0x1000,
-        None,
-        Box::new(UsbSerialJtag::new()),
-    );
-
-    // ── SYSTIMER ──────────────────────────────────────────────────────────
-    bus.add_peripheral(
-        "systimer",
-        0x6002_3000,
-        0x1000,
-        None,
-        Box::new(Systimer::new(opts.cpu_clock_hz)),
-    );
-
-    // ── GPIO / IO_MUX / Interrupt Matrix (Plan 3) ────────────────────────
-    // These three specific peripherals MUST register BEFORE the catch-all
-    // stubs below. SystemBus does first-match-wins iteration in
-    // read_u8/write_u8, so a catch-all covering 0x600C_0000..0x600D_0000
-    // (system) registered first would shadow intmatrix at 0x600C_2000.
-    bus.add_peripheral(
-        "gpio",
-        0x6000_4000,
-        0x800,
-        None,
-        Box::new(Esp32s3Gpio::new()),
-    );
-    bus.add_peripheral(
-        "io_mux",
-        0x6000_9000,
-        0x100,
-        None,
-        Box::new(Esp32s3IoMux::new()),
-    );
+    // ── Interrupt Matrix (Plan 3) ────────────────────────────────────────
+    // Core SMP wiring; GPIO and IO_MUX are peripheral models and now live in
+    // register_esp32s3_peripherals. Routing is address-pure (greatest-start-
+    // wins, see bus::find_peripheral_index), so intmatrix at 0x600C_2000 wins
+    // its window over the broad 0x600C_0000 "system" stub regardless of order.
     // CORE0 map table at +0x000, CORE1 map table at +0x800 (both on the
     // shared interrupt base) — widened to 0x1000 so the APP_CPU's interrupt
     // routing (e.g. FROM_CPU_1, source 80, at +0x940) lands in the matrix
@@ -1279,22 +1247,6 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
         None,
         Box::new(RtcCntlStub::new()),
     );
-    // ── SENS (DR_REG_SENS_BASE, 0x6000_8800) ─────────────────────────────
-    // Faithful register file for the RTC-domain SAR-ADC / touch / TSENS
-    // controller + immediate SAR1/SAR2 oneshot completion (the IDF oneshot
-    // ADC driver busy-polls MEAS*_DONE_SAR). Registered AFTER the broad
-    // round-tripping `rtc_cntl` stub above: by the bus router's
-    // greatest-start-wins containment lookup this narrower window takes the
-    // SENS block while the stub keeps serving the rest of the RTC range.
-    // The window is exactly 0x400 — the gap up to RTC_I2C @ 0x6000_8C00 —
-    // so the neighbouring RTC_IO / RTC_I2C blocks stay on the stub.
-    bus.add_peripheral(
-        "sens_s3",
-        0x6000_8800,
-        0x400,
-        None,
-        Box::new(crate::peripherals::esp32s3::sens::Esp32s3Sens::new()),
-    );
     bus.add_peripheral(
         "efuse",
         0x6000_7000,
@@ -1314,31 +1266,6 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
         0x7000,
         None,
         Box::new(SystemStub::new()),
-    );
-
-    // ── RNG data register (WDEV_RND_REG, 0x6003_507C) ────────────────────
-    // Must register BEFORE the mmio_rest catch-all (which would return a
-    // constant). The 2nd-stage bootloader reads this for entropy and retries
-    // until it gets a non-zero random value; a constant makes that loop spin
-    // forever. Modeled with a deterministic PRNG (reproducible per LabWired).
-    bus.add_peripheral(
-        "rng",
-        0x6003_5000,
-        0x100,
-        None,
-        Box::new(crate::peripherals::esp32s3::rng::Esp32s3Rng::new()),
-    );
-
-    // ── SHA accelerator (DR_REG_SHA_BASE, 0x6003_B000) ───────────────────
-    // Real SHA-256 (sha2::compress256) so the boot ROM / bootloader can verify
-    // the app image's appended hash. Without it the digest reads 0xFF and every
-    // image is rejected. Registered before the mmio_rest catch-all.
-    bus.add_peripheral(
-        "sha",
-        0x6003_B000,
-        0x100,
-        None,
-        Box::new(crate::peripherals::esp32s3::sha::Esp32s3Sha::new()),
     );
 
     // Catch-all for the rest of the high-MMIO range that esp-hal / the boot
@@ -1400,7 +1327,7 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
     // ESP32-S3 peripheral models. Factored into a separate unit so Stage 3 can
     // build them from a chip YAML via `SystemBus::from_config` instead. Called
     // after the catch-all stubs so each twin wins its own (higher-base) window.
-    register_esp32s3_peripherals(bus);
+    register_esp32s3_peripherals(bus, opts);
 
     // Power-on register state the real boot ROM checks before booting from
     // flash. Values captured from silicon over JTAG: without them the ROM reads
@@ -1427,7 +1354,76 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
 /// build these from a chip YAML through `SystemBus::from_config` (the same
 /// data-driven path the Cortex-M and RISC-V chips use). Each model is also
 /// reachable by type string via `peripherals::esp32s3::factory::try_build`.
-fn register_esp32s3_peripherals(bus: &mut SystemBus) {
+fn register_esp32s3_peripherals(bus: &mut SystemBus, opts: &Esp32s3Opts) {
+    // ── USB_SERIAL_JTAG ───────────────────────────────────────────────────
+    bus.add_peripheral(
+        "usb_serial_jtag",
+        0x6003_8000,
+        0x1000,
+        None,
+        Box::new(UsbSerialJtag::new()),
+    );
+    // ── SYSTIMER ──────────────────────────────────────────────────────────
+    bus.add_peripheral(
+        "systimer",
+        0x6002_3000,
+        0x1000,
+        None,
+        Box::new(Systimer::new(opts.cpu_clock_hz)),
+    );
+    bus.add_peripheral(
+        "gpio",
+        0x6000_4000,
+        0x800,
+        None,
+        Box::new(Esp32s3Gpio::new()),
+    );
+    bus.add_peripheral(
+        "io_mux",
+        0x6000_9000,
+        0x100,
+        None,
+        Box::new(Esp32s3IoMux::new()),
+    );
+    // ── SENS (DR_REG_SENS_BASE, 0x6000_8800) ─────────────────────────────
+    // Faithful register file for the RTC-domain SAR-ADC / touch / TSENS
+    // controller + immediate SAR1/SAR2 oneshot completion (the IDF oneshot
+    // ADC driver busy-polls MEAS*_DONE_SAR). Registered AFTER the broad
+    // round-tripping `rtc_cntl` stub above: by the bus router's
+    // greatest-start-wins containment lookup this narrower window takes the
+    // SENS block while the stub keeps serving the rest of the RTC range.
+    // The window is exactly 0x400 — the gap up to RTC_I2C @ 0x6000_8C00 —
+    // so the neighbouring RTC_IO / RTC_I2C blocks stay on the stub.
+    bus.add_peripheral(
+        "sens_s3",
+        0x6000_8800,
+        0x400,
+        None,
+        Box::new(crate::peripherals::esp32s3::sens::Esp32s3Sens::new()),
+    );
+    // ── RNG data register (WDEV_RND_REG, 0x6003_507C) ────────────────────
+    // Must register BEFORE the mmio_rest catch-all (which would return a
+    // constant). The 2nd-stage bootloader reads this for entropy and retries
+    // until it gets a non-zero random value; a constant makes that loop spin
+    // forever. Modeled with a deterministic PRNG (reproducible per LabWired).
+    bus.add_peripheral(
+        "rng",
+        0x6003_5000,
+        0x100,
+        None,
+        Box::new(crate::peripherals::esp32s3::rng::Esp32s3Rng::new()),
+    );
+    // ── SHA accelerator (DR_REG_SHA_BASE, 0x6003_B000) ───────────────────
+    // Real SHA-256 (sha2::compress256) so the boot ROM / bootloader can verify
+    // the app image's appended hash. Without it the digest reads 0xFF and every
+    // image is rejected. Registered before the mmio_rest catch-all.
+    bus.add_peripheral(
+        "sha",
+        0x6003_B000,
+        0x100,
+        None,
+        Box::new(crate::peripherals::esp32s3::sha::Esp32s3Sha::new()),
+    );
     // ── Peripheral digital twins (PCNT / LEDC / TIMG0 / TIMG1) ───────────
     // Registered AFTER the low_mmio/mmio_rest catch-alls so they win their
     // own (higher-base) windows via the bus's last-start lookup — same
