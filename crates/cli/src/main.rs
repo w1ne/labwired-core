@@ -1045,6 +1045,22 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
                 ),
             ),
         );
+        // WiFi MAC-ready status (WIFI_MAC 0x6003_3000 + 0xD14, bit0): the MAC
+        // HAL init (hal_init) busy-polls this bit for the MAC clock/reset to
+        // come ready before mac_txrx_init. Force-assert it over that one word
+        // (the declarative wifi_mac window stays intact elsewhere).
+        bus.add_peripheral(
+            "wifi_mac_ready",
+            0x6003_3D14,
+            0x4,
+            None,
+            Box::new(
+                labwired_core::peripherals::esp32c3::forced_status::Esp32c3ForcedStatus::new(
+                    0x4,
+                    vec![(0x0, 1 << 0)],
+                ),
+            ),
+        );
         // Hardware RNG data register (WDEV_RND_REG, 0x6002_60B0): yields a fresh
         // word per read. bootloader_fill_random XORs successive reads and
         // process_segments refills ram_obfs_value until non-zero — a constant
