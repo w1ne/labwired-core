@@ -74,14 +74,17 @@ pub const RTC_APB_FREQ_40MHZ: u32 = 0x0050_0050;
 /// defensive `ILL.N` sentinel.
 pub const RTC_CNTL_OPTIONS0_SW_SYS_RST_BIT: u32 = 1 << 31;
 
-// Reset cause field width per CPU (3 bits in classic ESP32; we mask to 4
-// bits to leave room for the ESP32-S series extension without changing
-// shape). Bit packing in `RESET_STATE`:
-//   bits[3:0]  = PROCPU_RESET_CAUSE
-//   bits[7:4]  = APPCPU_RESET_CAUSE
+// Reset-cause field layout in `RESET_STATE`, matching the ESP32 BROM
+// `rtc_get_reset_reason` decode (`extui a2, a2, 0, 6` for PRO_CPU and
+// `extui a2, a2, 6, 6` for APP_CPU — verified against the real BROM ELF):
+//   bits[5:0]   = PROCPU_RESET_CAUSE  (6-bit field)
+//   bits[11:6]  = APPCPU_RESET_CAUSE  (6-bit field)
+// The earlier 4-bit packing put the APP_CPU cause at bit 4, so POWERON on
+// both cores read back as 0x11 (=17) through the BROM's 6-bit PRO_CPU
+// extract — an out-of-range boot index that traps `main` at ets_main.c:404.
 const RESET_CAUSE_PROCPU_SHIFT: u32 = 0;
-const RESET_CAUSE_APPCPU_SHIFT: u32 = 4;
-const RESET_CAUSE_MASK: u32 = 0xF;
+const RESET_CAUSE_APPCPU_SHIFT: u32 = 6;
+const RESET_CAUSE_MASK: u32 = 0x3F;
 
 /// Reset-cause enum values (ESP-IDF `esp_rom_rtc_get_reset_reason`).
 pub const POWERON_RESET: u32 = 1;

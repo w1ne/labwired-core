@@ -2053,6 +2053,13 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     //   * `arduino-esp32` profile — resolve s_resume_cores / s_cpu_up /
     //     s_cpu_inited / s_system_inited / s_other_cpu_startup_done from
     //     the ELF symbol table and write 0x01 to both bytes of each.
+    // De-thunk #0 (FIDELITY.md §C1): the dual-core handshake pre-seed +
+    // 10k-cycle keep-alive is OFF by default — the real APP_CPU, released via
+    // the legitimate `ets_set_appcpu_boot_addr` ROM entry, sets s_cpu_up/etc
+    // itself. Proven byte-identical (refresh_gen=1, ink=756/4736, same end PC)
+    // on the demo e-paper ELF. Escape hatch kept for the cross-firmware soak;
+    // hard-delete this block + the keep-alive once ≥2 more builds confirm.
+    let preseed_handshake = std::env::var("LABWIRED_PRESEED_HANDSHAKE").is_ok();
     let (s_resume_cores, s_cpu_up, s_cpu_inited, s_system_inited, s_other_cpu_startup_done);
     if args.profile == "agentdeck" {
         s_resume_cores = 0;
@@ -2060,68 +2067,72 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
         s_cpu_inited = 0;
         s_system_inited = 0;
         s_other_cpu_startup_done = 0;
-        let _ = machine.bus.write_u8(0x3FFC_6F04, 0x01); // s_cpu_up[1]
-        let _ = machine.bus.write_u8(0x3FFC_6F01, 0x01); // s_cpu_inited[0]
-        let _ = machine.bus.write_u8(0x3FFC_6F02, 0x01); // s_cpu_inited[1]
-        let _ = machine.bus.write_u8(0x3FFC_6FFD, 0x01); // s_system_inited[0]
-        let _ = machine.bus.write_u8(0x3FFC_6FFE, 0x01); // s_system_inited[1]
-        let _ = machine.bus.write_u8(0x3FFC_7190, 0x01); // s_other_cpu_startup_done
-        let _ = machine.bus.write_u8(0x400E_90DE, 0x08); // loopTask -> PRO_CPU
-                                                         // Re-assert the same flags the instant PRO_CPU releases APP_CPU
-                                                         // (models APP_CPU bring-up; see rom_thunks::ets_set_appcpu_boot_addr).
-        rom_thunks::set_appcpu_up_flags(vec![
-            0x3FFC_6F04,
-            0x3FFC_6F01,
-            0x3FFC_6F02,
-            0x3FFC_6FFD,
-            0x3FFC_6FFE,
-            0x3FFC_7190,
-        ]);
+        if preseed_handshake {
+            let _ = machine.bus.write_u8(0x3FFC_6F04, 0x01); // s_cpu_up[1]
+            let _ = machine.bus.write_u8(0x3FFC_6F01, 0x01); // s_cpu_inited[0]
+            let _ = machine.bus.write_u8(0x3FFC_6F02, 0x01); // s_cpu_inited[1]
+            let _ = machine.bus.write_u8(0x3FFC_6FFD, 0x01); // s_system_inited[0]
+            let _ = machine.bus.write_u8(0x3FFC_6FFE, 0x01); // s_system_inited[1]
+            let _ = machine.bus.write_u8(0x3FFC_7190, 0x01); // s_other_cpu_startup_done
+            let _ = machine.bus.write_u8(0x400E_90DE, 0x08); // loopTask -> PRO_CPU
+                                                             // Re-assert the same flags the instant PRO_CPU releases APP_CPU
+                                                             // (models APP_CPU bring-up; see rom_thunks::ets_set_appcpu_boot_addr).
+            rom_thunks::set_appcpu_up_flags(vec![
+                0x3FFC_6F04,
+                0x3FFC_6F01,
+                0x3FFC_6F02,
+                0x3FFC_6FFD,
+                0x3FFC_6FFE,
+                0x3FFC_7190,
+            ]);
+        }
     } else {
         s_resume_cores = resolve_data("s_resume_cores", 0);
         s_cpu_up = resolve_data("s_cpu_up", 0);
         s_cpu_inited = resolve_data("s_cpu_inited", 0);
         s_system_inited = resolve_data("s_system_inited", 0);
         s_other_cpu_startup_done = resolve_data("s_other_cpu_startup_done", 0);
-        if s_resume_cores != 0 {
-            let _ = machine.bus.write_u8(s_resume_cores as u64, 0x01);
-        }
-        if s_cpu_up != 0 {
-            let _ = machine.bus.write_u8(s_cpu_up as u64, 0x01);
-            let _ = machine.bus.write_u8(s_cpu_up as u64 + 1, 0x01);
-        }
-        if s_cpu_inited != 0 {
-            let _ = machine.bus.write_u8(s_cpu_inited as u64, 0x01);
-            let _ = machine.bus.write_u8(s_cpu_inited as u64 + 1, 0x01);
-        }
-        if s_system_inited != 0 {
-            let _ = machine.bus.write_u8(s_system_inited as u64, 0x01);
-            let _ = machine.bus.write_u8(s_system_inited as u64 + 1, 0x01);
-        }
-        if s_other_cpu_startup_done != 0 {
-            let _ = machine.bus.write_u8(s_other_cpu_startup_done as u64, 0x01);
-        }
-        // Re-assert these flags the instant PRO_CPU releases APP_CPU, so
-        // newer arduino-esp32 cores (whose `start_other_core` spin-waits
-        // with a tight timeout) see APP_CPU "up" without depending on the
-        // coarse 10k-cycle keep-alive below. Models APP_CPU bring-up; see
-        // rom_thunks::ets_set_appcpu_boot_addr.
-        let mut appcpu_up_flags: Vec<u32> = Vec::new();
-        for (base, two_byte) in [
-            (s_cpu_up, true),
-            (s_cpu_inited, true),
-            (s_system_inited, true),
-            (s_resume_cores, false),
-            (s_other_cpu_startup_done, false),
-        ] {
-            if base != 0 {
-                appcpu_up_flags.push(base);
-                if two_byte {
-                    appcpu_up_flags.push(base + 1);
+        if preseed_handshake {
+            if s_resume_cores != 0 {
+                let _ = machine.bus.write_u8(s_resume_cores as u64, 0x01);
+            }
+            if s_cpu_up != 0 {
+                let _ = machine.bus.write_u8(s_cpu_up as u64, 0x01);
+                let _ = machine.bus.write_u8(s_cpu_up as u64 + 1, 0x01);
+            }
+            if s_cpu_inited != 0 {
+                let _ = machine.bus.write_u8(s_cpu_inited as u64, 0x01);
+                let _ = machine.bus.write_u8(s_cpu_inited as u64 + 1, 0x01);
+            }
+            if s_system_inited != 0 {
+                let _ = machine.bus.write_u8(s_system_inited as u64, 0x01);
+                let _ = machine.bus.write_u8(s_system_inited as u64 + 1, 0x01);
+            }
+            if s_other_cpu_startup_done != 0 {
+                let _ = machine.bus.write_u8(s_other_cpu_startup_done as u64, 0x01);
+            }
+            // Re-assert these flags the instant PRO_CPU releases APP_CPU, so
+            // newer arduino-esp32 cores (whose `start_other_core` spin-waits
+            // with a tight timeout) see APP_CPU "up" without depending on the
+            // coarse 10k-cycle keep-alive below. Models APP_CPU bring-up; see
+            // rom_thunks::ets_set_appcpu_boot_addr.
+            let mut appcpu_up_flags: Vec<u32> = Vec::new();
+            for (base, two_byte) in [
+                (s_cpu_up, true),
+                (s_cpu_inited, true),
+                (s_system_inited, true),
+                (s_resume_cores, false),
+                (s_other_cpu_startup_done, false),
+            ] {
+                if base != 0 {
+                    appcpu_up_flags.push(base);
+                    if two_byte {
+                        appcpu_up_flags.push(base + 1);
+                    }
                 }
             }
+            rom_thunks::set_appcpu_up_flags(appcpu_up_flags);
         }
-        rom_thunks::set_appcpu_up_flags(appcpu_up_flags);
     }
     // RTC XTAL-freq probe = 40 MHz.
     let _ = machine.bus.write_u32(0x3FF4_80B0, 0x0050_0050);
@@ -2586,7 +2597,7 @@ fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
         // "up." preset-PC path: byte-for-byte mirror of the original
         // install_esp32_arduino_quirks. Auto-discovery path: write to
         // each resolved symbol's [0]+[1] slots.
-        if i.is_multiple_of(10_000) {
+        if preseed_handshake && i.is_multiple_of(10_000) {
             if args.profile == "agentdeck" {
                 let _ = machine.bus.write_u8(0x3FFC_6F04, 0x01);
                 let _ = machine.bus.write_u8(0x3FFC_6F01, 0x01);
