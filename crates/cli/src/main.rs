@@ -1003,6 +1003,17 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
             None,
             Box::new(labwired_core::peripherals::esp32c3::reg_block::Esp32c3RegBlock::new(0x100)),
         );
+        // Hardware RNG data register (WDEV_RND_REG, 0x6002_60B0): yields a fresh
+        // word per read. bootloader_fill_random XORs successive reads and
+        // process_segments refills ram_obfs_value until non-zero — a constant
+        // RNG gives 0 and spins forever. Override the SYSCON stub at this word.
+        bus.add_peripheral(
+            "wdev_rnd",
+            0x6002_60B0,
+            0x4,
+            None,
+            Box::new(labwired_core::peripherals::esp32c3::rng::Esp32c3Rng::new()),
+        );
         bus.add_peripheral(
             "flash_irom_xip",
             0x4200_0000,
