@@ -352,11 +352,18 @@ pub fn decode_rv32c(inst: u16) -> Instruction {
             // Quadrant 0
             match funct3 {
                 0 => {
-                    // C.ADDI4SPN
-                    let imm = ((inst >> 7) & 0x30) << 4 | // imm[5:4]
-                              ((inst >> 1) & 0x3C0) |      // imm[9:6]
-                              ((inst >> 4) & 0x4) |       // imm[2]
-                              ((inst >> 2) & 0x8); // imm[3]
+                    // C.ADDI4SPN (CIW): rd' = sp + zero-ext nzuimm, scaled. The
+                    // previous extraction mis-placed imm[5:4] at bits[9:8]
+                    // (decoded `addi4spn a0,sp,28` as 268), so stack-relative
+                    // buffers landed 240 bytes high — e.g. the C3 BROM staged
+                    // the bootloader header at sp+268 while validating sp+28,
+                    // looping forever on "invalid header". Correct CIW layout:
+                    //   inst[12:11]=imm[5:4] inst[10:7]=imm[9:6]
+                    //   inst[6]=imm[2]       inst[5]=imm[3]
+                    let imm = (((inst >> 11) & 0x3) << 4)  // imm[5:4]
+                              | (((inst >> 7) & 0xF) << 6)   // imm[9:6]
+                              | (((inst >> 6) & 0x1) << 2)   // imm[2]
+                              | (((inst >> 5) & 0x1) << 3); // imm[3]
                     let rd = (((inst >> 2) & 0x7) + 8) as u8;
                     Instruction::CAddi4spn {
                         rd,
@@ -687,6 +694,21 @@ mod compressed_jump_tests {
                 assert_eq!(imm, -498, "c.jal offset");
             }
             other => panic!("expected Jal, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn c_addi4spn_immediate_real_rom_instruction() {
+        // 0x0868 @ 0x40049dbe is `addi a0,sp,28` (CIW). The old decode mis-placed
+        // imm[5:4] at bits[9:8] and produced 268, so the C3 BROM staged the
+        // bootloader header at sp+268 while validating sp+28 — "invalid header"
+        // forever. a0 = x10 → rd field decodes to 10.
+        match decode_rv32c(0x0868) {
+            Instruction::CAddi4spn { rd, imm } => {
+                assert_eq!(rd, 10, "rd' = a0");
+                assert_eq!(imm, 28, "addi4spn offset");
+            }
+            other => panic!("expected CAddi4spn, got {other:?}"),
         }
     }
 
