@@ -78,6 +78,21 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         "esp32s3_system_stub" => Box::new(system_stub::SystemStub::new()),
         "esp32s3_core1_control" => Box::new(core1_control::Esp32s3Core1Control::new()),
         "esp32s3_crosscore_ipi" => Box::new(crosscore_ipi::Esp32s3CrossCoreIpi::new()),
+        "esp32s3_gpio" => Box::new(gpio::Esp32s3Gpio::new()),
+        "esp32s3_io_mux" => Box::new(io_mux::Esp32s3IoMux::new()),
+        "esp32s3_usb_serial_jtag" => Box::new(usb_serial_jtag::UsbSerialJtag::new()),
+        "esp32s3_systimer" => {
+            let cpu_clock_hz = p_cfg
+                .config
+                .get("cpu_clock_hz")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(240_000_000) as u32;
+            Box::new(systimer::Systimer::new(cpu_clock_hz))
+        }
+        // I2C0 default source 42, I2C1 = 43 (ETS_I2C_EXT{0,1}_INTR_SOURCE). The
+        // built controller has no I²C slaves attached; board-specific slaves
+        // (e.g. TMP102) are attached by the caller after construction.
+        "esp32s3_i2c" => Box::new(i2c::Esp32s3I2c::with_intr_source(src(42))),
         _ => return None,
     };
     Some(dev)
@@ -112,6 +127,11 @@ pub const SUPPORTED_TYPES: &[&str] = &[
     "esp32s3_system_stub",
     "esp32s3_core1_control",
     "esp32s3_crosscore_ipi",
+    "esp32s3_gpio",
+    "esp32s3_io_mux",
+    "esp32s3_usb_serial_jtag",
+    "esp32s3_systimer",
+    "esp32s3_i2c",
 ];
 
 #[cfg(test)]
