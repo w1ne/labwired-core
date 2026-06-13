@@ -854,6 +854,30 @@ fn main() -> ExitCode {
 /// point, and runs the step loop up to `max_steps`. UART output is echoed to
 /// stdout, which is how the Tier-1 harness reads protocol lines
 /// (`TIER1 <class> PASS|FAIL` / `TIER1 done`).
+/// Build a minimal OPEN 802.11 beacon frame (no rx-control prefix; the C3 MAC
+/// RX buffer holds the raw 802.11 frame from offset 0). Used by the WiFi bridge
+/// to advertise a virtual AP the firmware's scan can find. BSSID 02:00:00:00:00:01.
+fn build_open_beacon(ssid: &str, channel: u8) -> Vec<u8> {
+    let bssid = [0x02u8, 0x00, 0x00, 0x00, 0x00, 0x01];
+    let mut f = Vec::new();
+    f.extend_from_slice(&[0x80, 0x00]); // frame control: mgmt / beacon
+    f.extend_from_slice(&[0x00, 0x00]); // duration
+    f.extend_from_slice(&[0xFF; 6]); // addr1 = broadcast
+    f.extend_from_slice(&bssid); // addr2 = BSSID
+    f.extend_from_slice(&bssid); // addr3 = BSSID
+    f.extend_from_slice(&[0x00, 0x00]); // seq/frag
+    f.extend_from_slice(&[0u8; 8]); // timestamp
+    f.extend_from_slice(&[0x64, 0x00]); // beacon interval (100 TU)
+    f.extend_from_slice(&[0x01, 0x00]); // capability: ESS, no privacy (OPEN)
+    f.push(0x00); // SSID element id
+    f.push(ssid.len() as u8);
+    f.extend_from_slice(ssid.as_bytes());
+    // Supported rates: 1,2,5.5,11,6,9,12,18 Mbps.
+    f.extend_from_slice(&[0x01, 0x08, 0x82, 0x84, 0x8b, 0x96, 0x0c, 0x12, 0x18, 0x24]);
+    f.extend_from_slice(&[0x03, 0x01, channel]); // DS param: current channel
+    f
+}
+
 fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
     use labwired_core::bus::SystemBus;
 
@@ -1221,14 +1245,14 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
     };
     let trail_cap = 600;
     let mut recent = std::collections::VecDeque::with_capacity(trail_cap + 1);
-    // WiFi bridge RX-header RE harness (env-gated): once, after the MAC is up,
-    // inject a frame whose byte[i]=i into the driver's RX ring so the RX-buffer
-    // read-trace (LABWIRED_RXBUF_TRACE) reveals which offsets the driver's RX
-    // callback parses — i.e. the rx-control header layout. The read value at a
-    // traced offset equals the source offset, mapping reads → header fields.
-    let bridge_re = std::env::var("LABWIRED_WIFI_BRIDGE_RE").is_ok();
-    let bridge_inject_at: u64 = 25_000_000;
-    // Find the BEHAVIORAL wifi_mac model by type (the declarative chip-yaml
+    // WiFi bridge (env-gated LABWIRED_WIFI_BRIDGE): inject an OPEN beacon for
+    // "labwired-ap" into the real MAC's RX ring periodically after the MAC is
+    // up, so the driver's scan finds the AP and proceeds to auth/assoc — the
+    // first comms milestone over the real MAC. Repeated injection covers the
+    // scan's channel hopping. A frame-level VirtualAp will subsume this.
+    let bridge = std::env::var("LABWIRED_WIFI_BRIDGE").is_ok()
+        || std::env::var("LABWIRED_WIFI_BRIDGE_RE").is_ok();
+    // Find the behavioral wifi_mac model by type (the declarative chip-yaml
     // "wifi_mac" shares the name; routing uses ours via greatest-start-wins, but
     // name lookup would return the declarative one).
     let wifi_mac_idx = machine.bus.peripherals.iter().position(|p| {
@@ -1239,25 +1263,26 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
             })
             .is_some()
     });
-    let mut bridge_injected = false;
-    if bridge_re {
-        eprintln!(
-            "[bridge] RE mode on; wifi_mac_idx={wifi_mac_idx:?} inject_at={bridge_inject_at}"
-        );
+    let mut next_beacon_at: u64 = 14_000_000;
+    if bridge {
+        eprintln!("[bridge] on; wifi_mac_idx={wifi_mac_idx:?}");
     }
 
     for i in 0..limit {
-        if bridge_re && !bridge_injected && i >= bridge_inject_at {
+        if bridge && i >= next_beacon_at {
+            next_beacon_at = i + 2_000_000;
             if let Some(idx) = wifi_mac_idx {
                 if let Some(any) = machine.bus.peripherals[idx].dev.as_any_mut() {
                     if let Some(mac) = any
                         .downcast_mut::<labwired_core::peripherals::esp32c3::wifi_mac::Esp32c3WifiMac>(
                         )
                     {
-                        let frame: Vec<u8> = (0..320u32).map(|b| (b & 0xFF) as u8).collect();
-                        mac.queue_rx_frame(frame);
-                        eprintln!("[bridge] injected RX-RE frame at step {i}");
-                        bridge_injected = true;
+                        // Inject the beacon on several channels so it matches
+                        // wherever the scan currently dwells.
+                        for ch in [1u8, 6, 11] {
+                            mac.queue_rx_frame(build_open_beacon("labwired-ap", ch));
+                        }
+                        eprintln!("[bridge] injected beacon(s) at step {i}");
                     }
                 }
             }

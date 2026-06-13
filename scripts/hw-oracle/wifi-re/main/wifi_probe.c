@@ -15,7 +15,9 @@
 static const char *TAG = "probe";
 
 #define PROBE_SSID "labwired-ap"
-#define PROBE_PASS "labwired123"
+// OPEN auth (no password) — the bridge's first comms milestone associates with
+// an OPEN AP, avoiding the WPA2 4-way handshake.
+#define PROBE_PASS ""
 
 // Trace anchors — set JTAG/sim breakpoints on these symbols.
 void __attribute__((noinline)) probe_before_init(void) { __asm__ volatile("nop"); }
