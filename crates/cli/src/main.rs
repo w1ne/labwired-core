@@ -854,6 +854,30 @@ fn main() -> ExitCode {
 /// point, and runs the step loop up to `max_steps`. UART output is echoed to
 /// stdout, which is how the Tier-1 harness reads protocol lines
 /// (`TIER1 <class> PASS|FAIL` / `TIER1 done`).
+/// Build a minimal OPEN 802.11 beacon frame (no rx-control prefix; the C3 MAC
+/// RX buffer holds the raw 802.11 frame from offset 0). Used by the WiFi bridge
+/// to advertise a virtual AP the firmware's scan can find. BSSID 02:00:00:00:00:01.
+fn build_open_beacon(ssid: &str, channel: u8) -> Vec<u8> {
+    let bssid = [0x02u8, 0x00, 0x00, 0x00, 0x00, 0x01];
+    let mut f = Vec::new();
+    f.extend_from_slice(&[0x80, 0x00]); // frame control: mgmt / beacon
+    f.extend_from_slice(&[0x00, 0x00]); // duration
+    f.extend_from_slice(&[0xFF; 6]); // addr1 = broadcast
+    f.extend_from_slice(&bssid); // addr2 = BSSID
+    f.extend_from_slice(&bssid); // addr3 = BSSID
+    f.extend_from_slice(&[0x00, 0x00]); // seq/frag
+    f.extend_from_slice(&[0u8; 8]); // timestamp
+    f.extend_from_slice(&[0x64, 0x00]); // beacon interval (100 TU)
+    f.extend_from_slice(&[0x01, 0x00]); // capability: ESS, no privacy (OPEN)
+    f.push(0x00); // SSID element id
+    f.push(ssid.len() as u8);
+    f.extend_from_slice(ssid.as_bytes());
+    // Supported rates: 1,2,5.5,11,6,9,12,18 Mbps.
+    f.extend_from_slice(&[0x01, 0x08, 0x82, 0x84, 0x8b, 0x96, 0x0c, 0x12, 0x18, 0x24]);
+    f.extend_from_slice(&[0x03, 0x01, channel]); // DS param: current channel
+    f
+}
+
 fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
     use labwired_core::bus::SystemBus;
 
@@ -993,15 +1017,69 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
             None,
             Box::new(labwired_core::peripherals::esp32c3::cache::Esp32c3Cache::new()),
         );
-        // Analog I²C master / ANA_CONFIG block (0x6000_E000, DR_REG_RTC_I2C_BASE):
+        // Analog I²C master / ANA_CONFIG block (0x6000_E000, DR_REG_I2C_ANA_MST_BASE):
         // rom_i2c_writeReg drives it (read-modify-write of ANA_CONFIG regs) during
-        // PHY/clock bring-up. Register-backed read-back keeps that path mapped.
+        // PHY/clock bring-up; the libphy full RF calibration also touches regs up
+        // past 0x6000_E130, so the window spans 0x400. The model reports the
+        // master FSM status (0x50 bits[26:24]=7, idle/done) so the ROM's
+        // transaction busy-poll exits; all other regs are register-backed.
         bus.add_peripheral(
             "rtc_i2c_ana",
             0x6000_E000,
-            0x100,
+            0x400,
             None,
-            Box::new(labwired_core::peripherals::esp32c3::reg_block::Esp32c3RegBlock::new(0x100)),
+            Box::new(labwired_core::peripherals::esp32c3::ana_i2c::Esp32c3AnaI2c::new()),
+        );
+        // FE/PHY register block (0x6001_1000): libphy's set_rx_gain_table also
+        // writes gain/FE config into the gap between uart1 (0x6001_0000) and
+        // i2c0 (0x6001_3000). Register-backed storage for those RF tables.
+        bus.add_peripheral(
+            "wifi_fe",
+            0x6001_1000,
+            0x2000,
+            None,
+            Box::new(labwired_core::peripherals::esp32c3::reg_block::Esp32c3RegBlock::new(0x2000)),
+        );
+        // Baseband/RF register block (0x6001_C000): libphy writes the RX gain
+        // table and other BB/RF config here (set_rx_gain_table). Unmapped, the
+        // gain-table store faults. Register-backed window up to the declarative
+        // peripheral at 0x6001_CC00. (RF air-gap: storage is enough — there's
+        // no real RF that would act on these values.)
+        bus.add_peripheral(
+            "wifi_bb",
+            0x6001_C000,
+            0xC00,
+            None,
+            Box::new(labwired_core::peripherals::esp32c3::reg_block::Esp32c3RegBlock::new(0xC00)),
+        );
+        // Radio front-end PLL-lock status (RADIO_FE 0x6000_6000 + 0x174, bit16):
+        // the libphy pll_cal launches the BBPLL/RF PLL then busy-polls this bit
+        // for lock; without real RF it never sets and pll_cal spins/retries
+        // ("pll_cal exceeds 2ms!!!"). Force-assert it (RF air-gap cut) over just
+        // that one word, leaving the declarative radio_fe descriptors intact.
+        bus.add_peripheral(
+            "radio_fe_pll_lock",
+            0x6000_6174,
+            0x4,
+            None,
+            Box::new(
+                labwired_core::peripherals::esp32c3::forced_status::Esp32c3ForcedStatus::new(
+                    0x4,
+                    vec![(0x0, 1 << 16)],
+                ),
+            ),
+        );
+        // WiFi MAC (WIFI_MAC 0x6003_3000, 12 KiB) — behavioral model for the
+        // MAC <-> SimNet bridge: register-backed bring-up, MAC-ready bit (0xD14
+        // b0, polled by hal_init), RX descriptor-ring DMA + RX-frame injection,
+        // and MAC interrupt (matrix source 0) on RX-done. Overrides the
+        // declarative wifi_mac window. See docs/esp32c3_wifi_mac_bridge.md.
+        bus.add_peripheral(
+            "wifi_mac",
+            0x6003_3000,
+            0x3000,
+            None,
+            Box::new(labwired_core::peripherals::esp32c3::wifi_mac::Esp32c3WifiMac::new()),
         );
         // Hardware RNG data register (WDEV_RND_REG, 0x6002_60B0): yields a fresh
         // word per read. bootloader_fill_random XORs successive reads and
@@ -1048,6 +1126,60 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
                 MMU_FMT_C3,
             )),
         );
+        // SAR ADC (APB_SARADC, 0x6004_0000): the IDF's adc_hal_self_calibration
+        // triggers single conversions and polls a data-valid flag (0x44 bit31/
+        // bit30) before reading the result; the declarative stub never asserts
+        // it, so read_cal_channel spins forever after spi_flash init. Model
+        // conversions as instant (valid flags set, mid-scale sample) so the
+        // bounded cal search converges and boot continues.
+        bus.add_peripheral(
+            "apb_saradc",
+            0x6004_0000,
+            0x100,
+            None,
+            Box::new(labwired_core::peripherals::esp32c3::sar_adc::Esp32c3SarAdc::new()),
+        );
+        // SYSTIMER (0x6002_3000): the 16 MHz free-running counter behind
+        // esp_timer and the FreeRTOS tick. systimer_hal_get_counter_value sets
+        // UNITx_OP bit30 (UPDATE) then polls bit29 (VALUE_VALID) before reading
+        // the snapshot; the declarative stub never asserts VALUE_VALID, so the
+        // counter read spins forever right after heap_init. The C3 SYSTIMER is
+        // the same IP as the S3 (identical register layout), so the S3 model
+        // drops in: it asserts VALUE_VALID, advances the counter, and supports
+        // the alarm/IRQ path FreeRTOS needs. Clocked relative to the 160 MHz
+        // CPU (10 CPU cycles per 16 MHz tick).
+        bus.add_peripheral(
+            "systimer",
+            0x6002_3000,
+            0x100,
+            None,
+            // C3 SYSTIMER_TARGET0 routes through the interrupt matrix on source
+            // 37 (TARGET1/2 at 38/39), unlike the S3's 57; the FreeRTOS tick
+            // alarm fires on that source.
+            Box::new(
+                labwired_core::peripherals::esp32s3::systimer::Systimer::new_with_source(
+                    160_000_000,
+                    37,
+                ),
+            ),
+        );
+        // RTC_CNTL main timer (0x6000_8000): the free-running slow-clock counter
+        // the IDF reads via rtc_time_get (set TIME_UPDATE @0x0C bit31 to latch,
+        // read TIME0 @0x10 / TIME1 @0x14). A frozen counter makes every
+        // RTC-deadline wait spin forever — most notably calibrate_ocode, which
+        // polls a regi2c comparator that never settles without real RF and
+        // relies on a ~10 ms RTC timeout to give up and continue. A real
+        // advancing timer lets that loop (and other RTC delays) reach the
+        // timeout exactly as silicon does. Overrides the declarative RTC_CNTL
+        // stub for this window; non-timer regs stay register-backed so the
+        // reset-cause seed at 0x38 below still reads back.
+        bus.add_peripheral(
+            "rtc_cntl_timer",
+            0x6000_8000,
+            0x100,
+            None,
+            Box::new(labwired_core::peripherals::esp32c3::rtc_timer::Esp32c3RtcTimer::new()),
+        );
         // Seed the power-on hardware reset state the BROM reads to decide it's a
         // normal flash boot (silicon has this at reset; the sim starts zeroed):
         //   * RTC_CNTL reset-cause (0x6000_8038, bits[5:0]) = 1 (POWERON_RESET).
@@ -1062,8 +1194,17 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
         //     C3 is v0.4; without it eFuse reads v0.0 and the 2nd-stage
         //     bootloader rejects the app ("requires chip rev >= v0.3").
         let _ = bus.write_u32(0x6000_8850, 0x0010_0000);
+        // Enable C3 RISC-V interrupt routing: the bus routes asserted peripheral
+        // sources + the SYSTEM FROM_CPU IPI registers through the INTERRUPT_CORE0
+        // matrix into the CPU's external interrupt lines. FreeRTOS's first
+        // context switch (vPortYield → FROM_CPU SW interrupt) depends on this.
+        bus.esp32c3_irq_routing = true;
         let mut cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
         cpu.set_pc(0x4000_0000);
+        // Disable the internal CLINT timer: the C3 has no standard MTIP — its
+        // 31 interrupt lines (incl. line 7) are ESP matrix lines, so a
+        // self-pending MTIP would collide. mtimecmp=MAX keeps mip bit7 clear.
+        cpu.mtimecmp = u64::MAX;
         labwired_core::Machine::new(cpu, bus)
     } else {
         let cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
@@ -1104,7 +1245,48 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
     };
     let trail_cap = 600;
     let mut recent = std::collections::VecDeque::with_capacity(trail_cap + 1);
+    // WiFi bridge (env-gated LABWIRED_WIFI_BRIDGE): inject an OPEN beacon for
+    // "labwired-ap" into the real MAC's RX ring periodically after the MAC is
+    // up, so the driver's scan finds the AP and proceeds to auth/assoc — the
+    // first comms milestone over the real MAC. Repeated injection covers the
+    // scan's channel hopping. A frame-level VirtualAp will subsume this.
+    let bridge = std::env::var("LABWIRED_WIFI_BRIDGE").is_ok()
+        || std::env::var("LABWIRED_WIFI_BRIDGE_RE").is_ok();
+    // Find the behavioral wifi_mac model by type (the declarative chip-yaml
+    // "wifi_mac" shares the name; routing uses ours via greatest-start-wins, but
+    // name lookup would return the declarative one).
+    let wifi_mac_idx = machine.bus.peripherals.iter().position(|p| {
+        p.dev
+            .as_any()
+            .and_then(|a| {
+                a.downcast_ref::<labwired_core::peripherals::esp32c3::wifi_mac::Esp32c3WifiMac>()
+            })
+            .is_some()
+    });
+    let mut next_beacon_at: u64 = 14_000_000;
+    if bridge {
+        eprintln!("[bridge] on; wifi_mac_idx={wifi_mac_idx:?}");
+    }
+
     for i in 0..limit {
+        if bridge && i >= next_beacon_at {
+            next_beacon_at = i + 2_000_000;
+            if let Some(idx) = wifi_mac_idx {
+                if let Some(any) = machine.bus.peripherals[idx].dev.as_any_mut() {
+                    if let Some(mac) = any
+                        .downcast_mut::<labwired_core::peripherals::esp32c3::wifi_mac::Esp32c3WifiMac>(
+                        )
+                    {
+                        // Inject the beacon on several channels so it matches
+                        // wherever the scan currently dwells.
+                        for ch in [1u8, 6, 11] {
+                            mac.queue_rx_frame(build_open_beacon("labwired-ap", ch));
+                        }
+                        eprintln!("[bridge] injected beacon(s) at step {i}");
+                    }
+                }
+            }
+        }
         let pc = machine.cpu.get_pc();
         if debug {
             if recent.len() == trail_cap {

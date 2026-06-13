@@ -544,6 +544,18 @@ pub trait Bus {
     /// Plan 3: clear the pending bit for cpu IRQ `slot` on `core_id`.
     fn clear_cpu_irq_pending(&mut self, _core_id: u8, _slot: u8) {}
 
+    /// ESP32-C3 (RISC-V) external-interrupt delivery: the level-sensitive
+    /// bitmask of CPU interrupt lines (1..31) currently asserted, after the bus
+    /// has routed asserted peripheral sources (and the SYSTEM FROM_CPU IPI
+    /// registers) through the INTERRUPT_CORE0 matrix MAP registers. The RISC-V
+    /// core ORs this into `mip` when deciding whether to trap, so a source that
+    /// de-asserts (e.g. the FROM_CPU yield register cleared by the ISR) drops
+    /// its line on the next tick — no latching. Default 0 for buses that don't
+    /// model it (the line stays low and nothing changes).
+    fn external_irq_lines(&self) -> u32 {
+        0
+    }
+
     /// Plan 2: deliver a coherent 32-bit value to peripherals after the
     /// four byte writes that compose a write_u32 have been dispatched.
     /// Default: no-op for buses that don't route to peripherals.

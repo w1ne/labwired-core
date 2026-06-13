@@ -205,6 +205,16 @@ pub struct SystemBus {
     /// running, so ECU examples can be driven by a virtual off-board tester
     /// instead of self-loopback firmware.
     pub can_diagnostic_testers: Vec<CanDiagnosticTester>,
+    /// ESP32-C3 (RISC-V) interrupt routing: when true, each tick the bus routes
+    /// asserted peripheral sources and the SYSTEM FROM_CPU IPI registers
+    /// (0x600C0028..0x34) through the INTERRUPT_CORE0 matrix MAP registers into
+    /// `riscv_irq_lines`. Set by the C3 rom-boot setup; false everywhere else
+    /// so no other architecture's bus is affected.
+    pub esp32c3_irq_routing: bool,
+    /// ESP32-C3 level-sensitive bitmask of asserted CPU interrupt lines (1..31),
+    /// recomputed every tick by `aggregate_esp32c3_irqs`. Read by the RISC-V
+    /// core via `Bus::external_irq_lines`. 0 when `esp32c3_irq_routing` is false.
+    pub riscv_irq_lines: u32,
 }
 
 pub struct CanDiagnosticTester {
@@ -884,6 +894,8 @@ impl SystemBus {
             legacy_walk_disabled: false,
             hcsr04: Vec::new(),
             can_diagnostic_testers: Vec::new(),
+            esp32c3_irq_routing: false,
+            riscv_irq_lines: 0,
         };
         bus.rebuild_peripheral_ranges();
         bus
@@ -915,6 +927,8 @@ impl SystemBus {
             legacy_walk_disabled: false,
             hcsr04: Vec::new(),
             can_diagnostic_testers: Vec::new(),
+            esp32c3_irq_routing: false,
+            riscv_irq_lines: 0,
         };
         bus.rebuild_peripheral_ranges();
         bus
@@ -1157,6 +1171,8 @@ impl SystemBus {
             legacy_walk_disabled: false,
             hcsr04: Vec::new(),
             can_diagnostic_testers: Vec::new(),
+            esp32c3_irq_routing: false,
+            riscv_irq_lines: 0,
         };
 
         let mut merged_peripherals = chip.peripherals.clone();
@@ -2305,6 +2321,79 @@ impl SystemBus {
     /// pushes the per-source assertion bitmap into the intmatrix's
     /// PRO_INTR_STATUS_REG_n mirror via `set_pending_sources`. No-op for buses
     /// without an intmatrix peripheral.
+    /// ESP32-C3 (RISC-V) interrupt routing. Each tick, build the level-sensitive
+    /// bitmask of asserted CPU interrupt lines from the SYSTEM FROM_CPU IPI
+    /// registers (0x600C0028..0x34, bit0) — the mechanism FreeRTOS `vPortYield`
+    /// uses to request a context switch. Each asserted source is routed to a CPU
+    /// line via its INTERRUPT_CORE0 MAP register (0x600C2000 + source*4, low 5
+    /// bits), gated by CPU_INT_ENABLE and per-line priority vs CPU_INT_THRESH.
+    /// The result lands in `riscv_irq_lines`, which the core ORs into `mip`.
+    /// No-op unless `esp32c3_irq_routing` is set (only the C3 rom-boot path sets
+    /// it). Peripheral `explicit_irqs` (e.g. the reused S3 SYSTIMER model) are
+    /// not routed yet — their source IDs don't match the C3 matrix.
+    fn aggregate_esp32c3_irqs(&mut self, source_ids: &[u32]) {
+        if !self.esp32c3_irq_routing {
+            return;
+        }
+        const INTMATRIX_BASE: u64 = 0x600C_2000;
+        // SYSTEM FROM_CPU IPI registers → source IDs 50..53 (matching the
+        // INTERRUPT_CORE0 CPU_INTR_FROM_CPU_n_MAP offsets at 200..212).
+        const FROM_CPU: [(u64, u32); 4] = [
+            (0x600C_0028, 50),
+            (0x600C_002C, 51),
+            (0x600C_0030, 52),
+            (0x600C_0034, 53),
+        ];
+
+        // Route peripheral `explicit_irqs` (e.g. the SYSTIMER tick alarm, which
+        // the C3 wiring configures to emit matrix source 37) plus the FROM_CPU
+        // IPI sources (the FreeRTOS yield mechanism).
+        let mut asserted: Vec<u32> = source_ids.to_vec();
+        for (addr, src) in FROM_CPU {
+            if self.read_u32(addr).map(|v| v & 1 != 0).unwrap_or(false) {
+                asserted.push(src);
+            }
+        }
+
+        // INTC control registers (offsets verified against interrupt_core0.yaml):
+        //   CPU_INT_ENABLE 0x104, CPU_INT_PRI_n 0x114+n*4, CPU_INT_THRESH 0x194.
+        // A line fires only while it is enabled AND its priority >= threshold —
+        // the C3 enables/masks via these INTC registers, NOT the RISC-V `mie`
+        // CSR (FreeRTOS critical sections raise the threshold to mask).
+        let enable = self.read_u32(INTMATRIX_BASE + 0x104).unwrap_or(0);
+        let thresh = self.read_u32(INTMATRIX_BASE + 0x194).unwrap_or(0) & 0xF;
+
+        let mut mask = 0u32;
+        for src in asserted {
+            // MAP register holds the destination CPU interrupt line (1..31).
+            let line = self
+                .read_u32(INTMATRIX_BASE + (src as u64) * 4)
+                .map(|v| v & 0x1F)
+                .unwrap_or(0);
+            let pri = self
+                .read_u32(INTMATRIX_BASE + 0x114 + (line as u64) * 4)
+                .unwrap_or(0)
+                & 0xF;
+            if src == 0 && std::env::var("LABWIRED_RXBUF_TRACE").is_ok() {
+                use std::sync::atomic::{AtomicU32, Ordering};
+                static N: AtomicU32 = AtomicU32::new(0);
+                if N.fetch_add(1, Ordering::Relaxed) < 3 {
+                    eprintln!(
+                        "[macirq] src0 line={line} enable_bit={} pri={pri} thresh={thresh}",
+                        (enable >> line) & 1
+                    );
+                }
+            }
+            if line == 0 || (enable & (1 << line)) == 0 {
+                continue;
+            }
+            if pri >= thresh {
+                mask |= 1u32 << line;
+            }
+        }
+        self.riscv_irq_lines = mask;
+    }
+
     fn aggregate_esp32s3_explicit_irqs(&mut self, source_ids: &[u32]) {
         // Rebuild the per-core routed pending bitmap as a faithful LEVEL
         // reflection of the sources asserting THIS tick — set while a source
@@ -2457,6 +2546,7 @@ impl SystemBus {
         // Plan 3: route ESP32-S3 source IDs through the intmatrix and update
         // the pending cpu IRQ bitmap + intmatrix INTR_STATUS mirror.
         self.aggregate_esp32s3_explicit_irqs(&explicit_source_ids);
+        self.aggregate_esp32c3_irqs(&explicit_source_ids);
         self.collect_enabled_nvic_interrupts(&mut interrupts);
 
         (interrupts, costs, dma_requests)
@@ -2467,6 +2557,7 @@ impl SystemBus {
             self.tick_peripherals_phase1();
         // Plan 3: route ESP32-S3 source IDs through the intmatrix.
         self.aggregate_esp32s3_explicit_irqs(&explicit_source_ids);
+        self.aggregate_esp32c3_irqs(&explicit_source_ids);
 
         // Phase 1.5: Route DMA signals
         for (source_name, request_id) in dma_signals {
@@ -2738,6 +2829,22 @@ impl crate::Bus for SystemBus {
     }
 
     fn read_u32(&self, addr: u64) -> SimResult<u32> {
+        // Debug (env-gated): trace the driver's reads of a freshly-injected RX
+        // buffer, to RE the rx-control header format the RX callback parses.
+        if std::env::var("LABWIRED_RXBUF_TRACE").is_ok() {
+            let base = crate::peripherals::esp32c3::wifi_mac::RX_DBG_BUF
+                .load(std::sync::atomic::Ordering::Relaxed) as u64;
+            // Trace from 0x100 BEFORE the buffer (to catch the descriptor-list
+            // reads, e.g. the descriptor at buf-0x7c) through the buffer.
+            if base != 0 && (base.saturating_sub(0x100)..base + 512).contains(&addr) {
+                use std::sync::atomic::{AtomicU32, Ordering};
+                static N: AtomicU32 = AtomicU32::new(0);
+                if N.fetch_add(1, Ordering::Relaxed) < 200 {
+                    let v = self.ram.read_u32(addr).unwrap_or(0);
+                    eprintln!("[rxrd] +{:#05x} ({addr:#010x}) = {v:#010x}", addr - base);
+                }
+            }
+        }
         // Cortex-M bit-band alias: return 0 or 1 based on the physical bit.
         if self.bit_band_enabled {
             if let Some((phys_byte, bit)) = Self::bit_band_translate(addr) {
@@ -2816,6 +2923,15 @@ impl crate::Bus for SystemBus {
     }
 
     fn write_u32(&mut self, addr: u64, value: u32) -> SimResult<()> {
+        // Debug: trace WiFi MAC-window writes (env-gated) to RE the TX path.
+        if (0x6003_3000..0x6003_6000).contains(&addr) && std::env::var("LABWIRED_MAC_TRACE").is_ok()
+        {
+            use std::sync::atomic::{AtomicU32, Ordering};
+            static N: AtomicU32 = AtomicU32::new(0);
+            if N.fetch_add(1, Ordering::Relaxed) < 600 {
+                eprintln!("[macw] {addr:#010x} <= {value:#010x}");
+            }
+        }
         // Cortex-M bit-band alias translation (peripheral: 0x42000000-0x43FFFFFF,
         // SRAM: 0x22000000-0x23FFFFFF).  Each alias word maps to one bit of the
         // physical address.  Writing 1 sets the bit; writing 0 clears it.
@@ -2912,6 +3028,10 @@ impl crate::Bus for SystemBus {
 
     fn config(&self) -> &crate::SimulationConfig {
         &self.config
+    }
+
+    fn external_irq_lines(&self) -> u32 {
+        self.riscv_irq_lines
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {
@@ -3597,6 +3717,8 @@ peripherals:
             legacy_walk_disabled: false,
             hcsr04: Vec::new(),
             can_diagnostic_testers: Vec::new(),
+            esp32c3_irq_routing: false,
+            riscv_irq_lines: 0,
         };
 
         bus.flash.write_u8(0x0800_0000, 0x12);
@@ -3652,6 +3774,8 @@ peripherals:
             legacy_walk_disabled: false,
             hcsr04: Vec::new(),
             can_diagnostic_testers: Vec::new(),
+            esp32c3_irq_routing: false,
+            riscv_irq_lines: 0,
         };
 
         bus.rebuild_peripheral_ranges();
@@ -3710,6 +3834,8 @@ peripherals:
             legacy_walk_disabled: false,
             hcsr04: Vec::new(),
             can_diagnostic_testers: Vec::new(),
+            esp32c3_irq_routing: false,
+            riscv_irq_lines: 0,
         };
         bus.rebuild_peripheral_ranges();
 
