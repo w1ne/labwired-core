@@ -1100,6 +1100,21 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
         if debug && i > 0 && i % 20_000_000 == 0 {
             eprintln!("[progress] step {i} pc={pc:#010x}");
         }
+        // Diag: catch the header memcpy in ets_run_flash_bootloader (memcpy
+        // @0x400587ba called with ra=0x40049dc4) and log dst/src/len — src is
+        // the flash-mapped header address that's reading back as zero.
+        if debug && pc == 0x4005_87ba && machine.cpu.x[1] == 0x4004_9dc4 {
+            let (dst, src, len) = (machine.cpu.x[10], machine.cpu.x[11], machine.cpu.x[12]);
+            let b0 = machine.bus.read_u8(src as u64).unwrap_or(0xAA);
+            let w = machine.bus.read_u32(src as u64).unwrap_or(0);
+            eprintln!("[hdrcpy] dst={dst:#010x} src={src:#010x} len={len} src[0]={b0:#04x} src_u32={w:#010x}");
+        }
+        // At the "invalid header" print (fmt=0x3ff1bf40), read the header
+        // buffer the memcpy filled (0x3fcde66c) to see if the copy landed.
+        if debug && pc == 0x4004_86d4 && machine.cpu.x[10] == 0x3ff1_bf40 {
+            let w = machine.bus.read_u32(0x3fcde66c).unwrap_or(0);
+            eprintln!("[hdrbuf] 0x3fcde66c = {w:#010x} (header; expects low byte 0xe9)");
+        }
         if let Err(e) = machine.step() {
             // Surface the halt (was a silent debug log): the fault PC + reason is
             // the key signal when bringing real firmware up on the sim.

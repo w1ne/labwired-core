@@ -47,6 +47,25 @@ impl RiscV {
         }
     }
 
+    /// Bring-up trace (LABWIRED_READ0_TRACE): log loads that return 0 from a
+    /// flash-XIP DROM page or the ROM-data window — addresses that should hold
+    /// real flash/ROM bytes, so a 0 there is a missing/unmapped read. Cached env
+    /// lookup keeps the hot path cheap.
+    #[inline]
+    fn trace_zero_load(pc: u32, addr: u32, val: u32) {
+        use std::sync::OnceLock;
+        static ON: OnceLock<bool> = OnceLock::new();
+        if *ON.get_or_init(|| std::env::var("LABWIRED_READ0_TRACE").is_ok())
+            && val == 0
+            // DRAM (where the BROM stages the image header it validates)
+            && (0x3FC8_0000..0x3FD0_0000).contains(&addr)
+            // only from the loader/boot code region, not the printf/string libs
+            && (0x4004_9000..0x4005_C000).contains(&pc)
+        {
+            eprintln!("read0: pc=0x{pc:08x} addr=0x{addr:08x}");
+        }
+    }
+
     fn write_reg(&mut self, n: u8, val: u32) {
         if n != 0 {
             self.x[n as usize] = val;
@@ -188,26 +207,31 @@ impl Cpu for RiscV {
             Instruction::Lb { rd, rs1, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm as u32);
                 let val = bus.read_u8(addr as u64)? as i8;
+                Self::trace_zero_load(self.pc, addr, val as u32 & 0xFF);
                 self.write_reg(rd, val as i32 as u32);
             }
             Instruction::Lh { rd, rs1, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm as u32);
                 let val = bus.read_u16(addr as u64)? as i16;
+                Self::trace_zero_load(self.pc, addr, val as u32 & 0xFFFF);
                 self.write_reg(rd, val as i32 as u32);
             }
             Instruction::Lw { rd, rs1, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm as u32);
                 let val = bus.read_u32(addr as u64)?;
+                Self::trace_zero_load(self.pc, addr, val);
                 self.write_reg(rd, val);
             }
             Instruction::Lbu { rd, rs1, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm as u32);
                 let val = bus.read_u8(addr as u64)?;
+                Self::trace_zero_load(self.pc, addr, val as u32);
                 self.write_reg(rd, val as u32);
             }
             Instruction::Lhu { rd, rs1, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm as u32);
                 let val = bus.read_u16(addr as u64)?;
+                Self::trace_zero_load(self.pc, addr, val as u32);
                 self.write_reg(rd, val as u32);
             }
             Instruction::Sb { rs1, rs2, imm } => {
@@ -488,6 +512,7 @@ impl Cpu for RiscV {
             Instruction::CLw { rd, rs1, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm);
                 let val = bus.read_u32(addr as u64)?;
+                Self::trace_zero_load(self.pc, addr, val);
                 self.write_reg(rd, val);
             }
             Instruction::CSw { rs2, rs1, imm } => {
