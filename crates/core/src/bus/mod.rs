@@ -2563,32 +2563,57 @@ impl SystemBus {
 
 impl crate::Bus for SystemBus {
     fn read_u8(&self, addr: u64) -> SimResult<u8> {
+        // RAM is always first (hot path, never overlaps a peripheral window).
         if let Some(val) = self.ram.read_u8(addr) {
             return Ok(val);
         }
-        if let Some(val) = self.flash.read_u8(addr) {
-            return Ok(val);
-        }
-        for mem in &self.extra_mem {
-            if let Some(val) = mem.read_u8(addr) {
+        // Cortex-M boot alias: 0x0000_0000 mirrors flash start on many STM32
+        // parts so reset-vector fetch works with flash at 0x0800_0000.
+        let flash_alias = |s: &Self| -> Option<u8> {
+            if s.flash.base_addr != 0 {
+                let alias_end = s.flash.data.len() as u64;
+                if addr < alias_end {
+                    return s.flash.read_u8(s.flash.base_addr + addr);
+                }
+            }
+            None
+        };
+        if self.config.optimized_bus_access {
+            // Fast path: flash/extra_mem before peripherals.
+            if let Some(val) = self.flash.read_u8(addr) {
                 return Ok(val);
             }
-        }
-        // Cortex-M boot alias: address 0x0000_0000 mirrors flash start on many STM32 parts.
-        // This lets reset-vector fetch work when flash is configured at 0x0800_0000.
-        if self.flash.base_addr != 0 {
-            let alias_end = self.flash.data.len() as u64;
-            if addr < alias_end {
-                if let Some(val) = self.flash.read_u8(self.flash.base_addr + addr) {
+            for mem in &self.extra_mem {
+                if let Some(val) = mem.read_u8(addr) {
                     return Ok(val);
                 }
             }
-        }
-
-        // Dynamic Peripherals
-        if let Some(idx) = self.find_peripheral_index(addr) {
-            let p = &self.peripherals[idx];
-            return p.dev.read(addr - p.base);
+            if let Some(val) = flash_alias(self) {
+                return Ok(val);
+            }
+            if let Some(idx) = self.find_peripheral_index(addr) {
+                let p = &self.peripherals[idx];
+                return p.dev.read(addr - p.base);
+            }
+        } else {
+            // Peripherals first so an MMU-translating FlashXip window overrides a
+            // plain flash/extra_mem region claiming the same XIP address; flash/
+            // extra_mem remain the fallback for addresses no peripheral covers.
+            if let Some(idx) = self.find_peripheral_index(addr) {
+                let p = &self.peripherals[idx];
+                return p.dev.read(addr - p.base);
+            }
+            if let Some(val) = self.flash.read_u8(addr) {
+                return Ok(val);
+            }
+            for mem in &self.extra_mem {
+                if let Some(val) = mem.read_u8(addr) {
+                    return Ok(val);
+                }
+            }
+            if let Some(val) = flash_alias(self) {
+                return Ok(val);
+            }
         }
 
         if std::env::var("LABWIRED_TRACE_VIOLATIONS").is_ok() {
