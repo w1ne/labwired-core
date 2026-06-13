@@ -994,7 +994,7 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
             || (0x4037_0000..0x403E_0000).contains(&pc) // IRAM
             || (0x4200_0000..0x4400_0000).contains(&pc) // flash IROM (XIP)
     };
-    let trail_cap = 64;
+    let trail_cap = 600;
     let mut recent = std::collections::VecDeque::with_capacity(trail_cap + 1);
     for i in 0..limit {
         let pc = machine.cpu.get_pc();
@@ -1004,7 +1004,12 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
             }
             recent.push_back(pc);
             if i > 0 && !is_exec(pc) {
-                eprintln!("[badjump] step {i}: PC entered non-exec region {pc:#010x}");
+                let c = &machine.cpu;
+                eprintln!(
+                    "[badjump] step {i}: PC entered non-exec region {pc:#010x} \
+                     ra={:#010x} sp={:#010x} a0={:#010x}",
+                    c.x[1], c.x[2], c.x[10]
+                );
                 let trail: Vec<String> = recent.iter().map(|p| format!("{p:#010x}")).collect();
                 eprintln!("[trail] {}", trail.join(" -> "));
                 break;
@@ -1013,7 +1018,11 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
         if let Some(bi) = break_at.iter().position(|&b| b == pc) {
             if !break_hit[bi] {
                 break_hit[bi] = true;
-                eprintln!("[break] step {i} pc={pc:#010x}");
+                let c = &machine.cpu;
+                eprintln!(
+                    "[break] step {i} pc={pc:#010x} ra={:#010x} sp={:#010x} a0={:#010x}",
+                    c.x[1], c.x[2], c.x[10]
+                );
             }
         }
         if let Err(e) = machine.step() {

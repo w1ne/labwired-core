@@ -451,12 +451,19 @@ pub fn decode_rv32c(inst: u16) -> Instruction {
                 3 => {
                     let rd = ((inst >> 7) & 0x1F) as u8;
                     if rd == 2 {
-                        // C.ADDI16SP
-                        let imm = ((inst >> 3) & 0x180) | // imm[8:7]
-                                  ((inst >> 2) & 0x40) |  // imm[6]
-                                  ((inst >> 1) & 0x20) |  // imm[5]
-                                  ((inst >> 4) & 0x10) |  // imm[4]
-                                  (((inst >> 12) & 1) << 9); // imm[9]
+                        // C.ADDI16SP — nzimm[9:4], scaled by 16. The previous
+                        // extraction mis-sourced imm[4/5/7/8] (decoded
+                        // `addi sp,sp,-288` as -432), unbalancing every stack
+                        // frame that uses it and corrupting saved return
+                        // addresses. Correct CI-for-sp layout:
+                        //   inst[12]=imm[9] inst[6]=imm[4] inst[5]=imm[6]
+                        //   inst[4]=imm[8]  inst[3]=imm[7] inst[2]=imm[5]
+                        let imm = (((inst >> 12) & 1) << 9)  // imm[9]
+                                  | (((inst >> 4) & 1) << 8)   // imm[8]
+                                  | (((inst >> 3) & 1) << 7)   // imm[7]
+                                  | (((inst >> 5) & 1) << 6)   // imm[6]
+                                  | (((inst >> 2) & 1) << 5)   // imm[5]
+                                  | (((inst >> 6) & 1) << 4); // imm[4]
                         let signed_imm = if (imm & 0x200) != 0 {
                             (imm as i32) | !0x3FF
                         } else {
