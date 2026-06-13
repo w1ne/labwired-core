@@ -916,6 +916,155 @@ fn build_assoc_resp() -> Vec<u8> {
     f
 }
 
+// Virtual-AP IPv4 config for the bridge DHCP responder.
+const AP_IP: [u8; 4] = [192, 168, 4, 1];
+const STA_IP: [u8; 4] = [192, 168, 4, 2];
+const NETMASK: [u8; 4] = [255, 255, 255, 0];
+
+/// One's-complement Internet checksum over a byte slice.
+fn inet_checksum(data: &[u8]) -> u16 {
+    let mut sum = 0u32;
+    let mut i = 0;
+    while i + 1 < data.len() {
+        sum += u16::from_be_bytes([data[i], data[i + 1]]) as u32;
+        i += 2;
+    }
+    if i < data.len() {
+        sum += (data[i] as u32) << 8;
+    }
+    while sum >> 16 != 0 {
+        sum = (sum & 0xFFFF) + (sum >> 16);
+    }
+    !(sum as u16)
+}
+
+/// Parse a captured TX frame; if it's a DHCP discover (1) or request (3) from
+/// the STA, return (xid[4], dhcp_message_type). The captured frame is raw
+/// 802.11: [data hdr 24/26][LLC/SNAP 8][IPv4][UDP][DHCP].
+fn parse_dhcp_request(frame: &[u8]) -> Option<([u8; 4], u8)> {
+    if frame.len() < 2 || (frame[0] >> 2) & 3 != 2 {
+        return None; // not a data frame
+    }
+    let hdr = if frame[0] & 0x80 != 0 { 26 } else { 24 };
+    let snap = hdr + 8;
+    let ip = snap; // IPv4 header start
+    if frame.len() < ip + 20 || frame[ip] >> 4 != 4 {
+        return None;
+    }
+    let ihl = (frame[ip] & 0xF) as usize * 4;
+    if frame[ip + 9] != 17 {
+        return None; // not UDP
+    }
+    let udp = ip + ihl;
+    if frame.len() < udp + 8 {
+        return None;
+    }
+    let dport = u16::from_be_bytes([frame[udp + 2], frame[udp + 3]]);
+    if dport != 67 {
+        return None; // not DHCP server port
+    }
+    let dhcp = udp + 8;
+    if frame.len() < dhcp + 240 {
+        return None;
+    }
+    let xid = [
+        frame[dhcp + 4],
+        frame[dhcp + 5],
+        frame[dhcp + 6],
+        frame[dhcp + 7],
+    ];
+    // DHCP options start after the 236-byte fixed part + 4-byte magic cookie.
+    let mut o = dhcp + 240;
+    let mut msg_type = 0u8;
+    while o + 1 < frame.len() {
+        let opt = frame[o];
+        if opt == 255 {
+            break;
+        }
+        if opt == 0 {
+            o += 1;
+            continue;
+        }
+        let l = frame[o + 1] as usize;
+        if opt == 53 && l >= 1 {
+            msg_type = frame[o + 2];
+        }
+        o += 2 + l;
+    }
+    Some((xid, msg_type))
+}
+
+/// Build a DHCP reply (offer if !ack, ack if ack) for the captured request,
+/// fully encapsulated as an AP→STA 802.11 data frame ready for RX injection.
+fn build_dhcp_reply(xid: [u8; 4], ack: bool) -> Vec<u8> {
+    // ── DHCP payload ──
+    let mut dhcp = Vec::new();
+    dhcp.push(0x02); // op = BOOTREPLY
+    dhcp.extend_from_slice(&[0x01, 0x06, 0x00]); // htype=eth, hlen=6, hops=0
+    dhcp.extend_from_slice(&xid);
+    dhcp.extend_from_slice(&[0x00, 0x00, 0x80, 0x00]); // secs=0, flags=broadcast
+    dhcp.extend_from_slice(&[0, 0, 0, 0]); // ciaddr
+    dhcp.extend_from_slice(&STA_IP); // yiaddr
+    dhcp.extend_from_slice(&AP_IP); // siaddr (next server)
+    dhcp.extend_from_slice(&[0, 0, 0, 0]); // giaddr
+    dhcp.extend_from_slice(&BRIDGE_STA); // chaddr (6)
+    dhcp.extend_from_slice(&[0u8; 10]); // chaddr padding to 16
+    dhcp.extend_from_slice(&[0u8; 64]); // sname
+    dhcp.extend_from_slice(&[0u8; 128]); // file
+    dhcp.extend_from_slice(&[0x63, 0x82, 0x53, 0x63]); // magic cookie
+    dhcp.extend_from_slice(&[53, 1, if ack { 5 } else { 2 }]); // msg type: ACK/OFFER
+    dhcp.extend_from_slice(&[54, 4, AP_IP[0], AP_IP[1], AP_IP[2], AP_IP[3]]); // server id
+    dhcp.extend_from_slice(&[51, 4, 0x00, 0x01, 0x51, 0x80]); // lease 86400s
+    dhcp.extend_from_slice(&[1, 4, NETMASK[0], NETMASK[1], NETMASK[2], NETMASK[3]]); // subnet
+    dhcp.extend_from_slice(&[3, 4, AP_IP[0], AP_IP[1], AP_IP[2], AP_IP[3]]); // router
+    dhcp.extend_from_slice(&[6, 4, AP_IP[0], AP_IP[1], AP_IP[2], AP_IP[3]]); // dns
+    dhcp.push(255); // end
+
+    // ── UDP (src 67 → dst 68), checksum 0 (optional for IPv4) ──
+    let udp_len = (8 + dhcp.len()) as u16;
+    let mut udp = Vec::new();
+    udp.extend_from_slice(&67u16.to_be_bytes());
+    udp.extend_from_slice(&68u16.to_be_bytes());
+    udp.extend_from_slice(&udp_len.to_be_bytes());
+    udp.extend_from_slice(&[0, 0]); // checksum 0
+    udp.extend_from_slice(&dhcp);
+
+    // ── IPv4 (AP → 255.255.255.255 broadcast) ──
+    let ip_total = (20 + udp.len()) as u16;
+    let mut ip = vec![
+        0x45,
+        0x00, // ver/ihl, dscp
+        (ip_total >> 8) as u8,
+        ip_total as u8,
+        0x00,
+        0x00,
+        0x00,
+        0x00, // id, flags/frag
+        0x40,
+        0x11, // ttl=64, proto=UDP
+        0x00,
+        0x00, // checksum (filled below)
+    ];
+    ip.extend_from_slice(&AP_IP);
+    ip.extend_from_slice(&[255, 255, 255, 255]); // dst broadcast
+    let cks = inet_checksum(&ip);
+    ip[10] = (cks >> 8) as u8;
+    ip[11] = cks as u8;
+    ip.extend_from_slice(&udp);
+
+    // ── 802.11 data frame, from-DS (AP→STA): FC 0x08 0x02 ──
+    let mut f = Vec::new();
+    f.extend_from_slice(&[0x08, 0x02]); // data, from-DS
+    f.extend_from_slice(&[0x00, 0x00]); // duration
+    f.extend_from_slice(&BRIDGE_STA); // addr1 = DA (STA)
+    f.extend_from_slice(&BRIDGE_BSSID); // addr2 = BSSID
+    f.extend_from_slice(&BRIDGE_BSSID); // addr3 = SA (server)
+    f.extend_from_slice(&[0x00, 0x00]); // seq/frag
+    f.extend_from_slice(&[0xAA, 0xAA, 0x03, 0x00, 0x00, 0x00, 0x08, 0x00]); // LLC/SNAP, IPv4
+    f.extend_from_slice(&ip);
+    f
+}
+
 fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
     use labwired_core::bus::SystemBus;
 
@@ -1302,6 +1451,24 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
             .is_some()
     });
     let mut next_beacon_at: u64 = 14_000_000;
+    // 802.11 sequence counter for AP→STA frames: real APs increment it, and the
+    // receiver dedups by (transmitter, seq) — without it, every frame after the
+    // first (all seq 0) is dropped as a retransmission.
+    let mut ap_seq: u16 = 0;
+    // Stamp the next sequence number into a frame's seq-control field (bytes
+    // 22..23 = seq<<4 | frag) and queue it for RX injection.
+    macro_rules! inject {
+        ($mac:expr, $frame:expr) => {{
+            let mut fr = $frame;
+            if fr.len() >= 24 {
+                let sc = (ap_seq & 0xFFF) << 4;
+                fr[22] = sc as u8;
+                fr[23] = (sc >> 8) as u8;
+                ap_seq = ap_seq.wrapping_add(1);
+            }
+            $mac.queue_rx_frame(fr);
+        }};
+    }
     if bridge {
         eprintln!("[bridge] on; wifi_mac_idx={wifi_mac_idx:?}");
     }
@@ -1320,11 +1487,36 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
                         // one waiting as it advances init→auth→assoc→run. The
                         // driver ignores responses it isn't expecting.
                         for ch in [1u8, 6, 11] {
-                            mac.queue_rx_frame(build_open_beacon("labwired-ap", ch));
+                            inject!(mac, build_open_beacon("labwired-ap", ch));
                         }
-                        mac.queue_rx_frame(build_auth_resp());
-                        mac.queue_rx_frame(build_assoc_resp());
+                        inject!(mac, build_auth_resp());
+                        inject!(mac, build_assoc_resp());
                         eprintln!("[bridge] injected beacon+auth+assoc at step {i}");
+                    }
+                }
+            }
+        }
+        // Drain captured TX frames frequently and answer DHCP (offer/ack) so the
+        // associated STA gets an IP. Cheap when there's no TX.
+        if bridge && i % 200_000 == 0 {
+            if let Some(idx) = wifi_mac_idx {
+                if let Some(any) = machine.bus.peripherals[idx].dev.as_any_mut() {
+                    if let Some(mac) = any
+                        .downcast_mut::<labwired_core::peripherals::esp32c3::wifi_mac::Esp32c3WifiMac>(
+                        )
+                    {
+                        for tx in mac.take_tx_frames() {
+                            if let Some((xid, mtype)) = parse_dhcp_request(&tx) {
+                                // discover(1) → offer; request(3) → ack.
+                                let reply = build_dhcp_reply(xid, mtype == 3);
+                                inject!(mac, reply);
+                                eprintln!(
+                                    "[bridge] DHCP {} -> {} at step {i}",
+                                    if mtype == 3 { "request" } else { "discover" },
+                                    if mtype == 3 { "ack" } else { "offer" }
+                                );
+                            }
+                        }
                     }
                 }
             }
