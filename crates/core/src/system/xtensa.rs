@@ -1397,6 +1397,37 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
         )),
     );
 
+    // ESP32-S3 peripheral models. Factored into a separate unit so Stage 3 can
+    // build them from a chip YAML via `SystemBus::from_config` instead. Called
+    // after the catch-all stubs so each twin wins its own (higher-base) window.
+    register_esp32s3_peripherals(bus);
+
+    // Power-on register state the real boot ROM checks before booting from
+    // flash. Values captured from silicon over JTAG: without them the ROM reads
+    // reset-reason = 0 ("invalid reset") and boot-strap = 0 (DOWNLOAD mode) and
+    // never boots from flash (it traps at ets_main.c:691). Needed for --rom-boot;
+    // harmless for the fast-boot/thunk path (those don't read these regs).
+    let _ = bus.write_u32(0x6000_4038, 0x0000_0008); // GPIO_STRAP = SPI_FAST_FLASH_BOOT
+    let _ = bus.write_u32(0x6000_8038, 0x0000_f30c); // RTC_CNTL_RESET_STATE = valid reset cause
+
+    let mut cpu = XtensaLx7::new();
+    cpu.reset(bus).expect("xtensa reset");
+
+    Esp32s3Wiring {
+        cpu,
+        icache_backing,
+        dcache_backing,
+        boot_mode,
+    }
+}
+
+/// Register the ESP32-S3 peripheral models on `bus`.
+///
+/// Split out of [`configure_xtensa_esp32s3`] so the migration's Stage 3 can
+/// build these from a chip YAML through `SystemBus::from_config` (the same
+/// data-driven path the Cortex-M and RISC-V chips use). Each model is also
+/// reachable by type string via `peripherals::esp32s3::factory::try_build`.
+fn register_esp32s3_peripherals(bus: &mut SystemBus) {
     // ── Peripheral digital twins (PCNT / LEDC / TIMG0 / TIMG1) ───────────
     // Registered AFTER the low_mmio/mmio_rest catch-alls so they win their
     // own (higher-base) windows via the bus's last-start lookup — same
@@ -1580,24 +1611,6 @@ pub fn configure_xtensa_esp32s3(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp3
         None,
         Box::new(crate::peripherals::esp32s3::usb_otg::Esp32s3UsbOtg::new(23)),
     );
-
-    // Power-on register state the real boot ROM checks before booting from
-    // flash. Values captured from silicon over JTAG: without them the ROM reads
-    // reset-reason = 0 ("invalid reset") and boot-strap = 0 (DOWNLOAD mode) and
-    // never boots from flash (it traps at ets_main.c:691). Needed for --rom-boot;
-    // harmless for the fast-boot/thunk path (those don't read these regs).
-    let _ = bus.write_u32(0x6000_4038, 0x0000_0008); // GPIO_STRAP = SPI_FAST_FLASH_BOOT
-    let _ = bus.write_u32(0x6000_8038, 0x0000_f30c); // RTC_CNTL_RESET_STATE = valid reset cause
-
-    let mut cpu = XtensaLx7::new();
-    cpu.reset(bus).expect("xtensa reset");
-
-    Esp32s3Wiring {
-        cpu,
-        icache_backing,
-        dcache_backing,
-        boot_mode,
-    }
 }
 
 /// Register the default thunk set for esp-hal hello-world boot.
