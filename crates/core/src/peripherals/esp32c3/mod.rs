@@ -4,6 +4,7 @@
 
 //! ESP32-C3 (RISC-V) specific peripheral models.
 
+pub mod ana_i2c;
 pub mod cache;
 pub mod reg_block;
 pub mod rng;
