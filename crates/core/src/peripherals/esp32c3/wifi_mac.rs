@@ -152,7 +152,7 @@ impl Esp32c3WifiMac {
         let len = Self::tx_frame_len(&raw);
         raw.truncate(len);
         if std::env::var("LABWIRED_MAC_TRACE").is_ok() {
-            let head: Vec<String> = raw.iter().take(40).map(|b| format!("{b:02x}")).collect();
+            let head: Vec<String> = raw.iter().take(72).map(|b| format!("{b:02x}")).collect();
             eprintln!(
                 "[tx] ac={ac} buf={bufptr:#010x} len={len}: {}",
                 head.join(" ")
