@@ -244,8 +244,6 @@ pub fn attach_esp32_external_devices(
 /// STM32F1-layout `peripherals::uart::Uart`, which only suited the demo
 /// firmware that wrote to the STM32 DR offset.)
 pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
-    use crate::peripherals::esp32::uart::Esp32Uart;
-
     // Same rationale as configure_xtensa_esp32s3: drop the seeded STM32
     // peripherals and disable Cortex-M bit-band — neither applies to Xtensa.
     bus.peripherals.clear();
@@ -286,13 +284,6 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         0x1000,
         None,
         Box::new(RamPeripheral::new(0x1000)),
-    );
-    bus.add_peripheral(
-        "host_slc",
-        0x3FF5_8000,
-        0x1000,
-        None,
-        Box::new(crate::peripherals::esp32::sdio_stub::HostSlc::new()),
     );
     // CHEAT(STUB): SDMMC host peripheral faked as plain RAM — real: model the
     // SDMMC controller registers. See FIDELITY.md §D.
@@ -513,27 +504,6 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     // UART0 — STM32F1 layout for now (see caveat above).
     // UART0 (Serial) echoes to the host console; UART1/2 are capture-only.
     // Interrupt-matrix sources: ETS_UART{0,1,2}_INTR_SOURCE = 34/35/36.
-    bus.add_peripheral(
-        "uart0",
-        0x3FF4_0000,
-        0x100,
-        None,
-        Box::new(Esp32Uart::new(true, 34)),
-    );
-    bus.add_peripheral(
-        "uart1",
-        0x3FF5_0000,
-        0x100,
-        None,
-        Box::new(Esp32Uart::new(false, 35)),
-    );
-    bus.add_peripheral(
-        "uart2",
-        0x3FF6_E000,
-        0x100,
-        None,
-        Box::new(Esp32Uart::new(false, 36)),
-    );
 
     // SPI0 / SPI1 — flash SPI controllers used by the BROM during boot.
     // Sim doesn't model the flash MMU, but Arduino-ESP32's
@@ -543,42 +513,14 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     // semantics, even with no attached devices — bytes streamed into
     // the FIFO just go nowhere, which is fine since we don't model
     // flash content reads.
-    bus.add_peripheral(
-        "spi0",
-        0x3FF4_3000,
-        0x1000,
-        None,
-        Box::new(crate::peripherals::esp32::spi::Esp32Spi::new()),
-    );
-    bus.add_peripheral(
-        "spi1",
-        0x3FF4_2000,
-        0x1000,
-        None,
-        Box::new(crate::peripherals::esp32::spi::Esp32Spi::new()),
-    );
 
     // GPIO controller (TRM §4.10). The e-paper lab routes CS/RST/DC/BUSY
     // through this peripheral; SCK/MOSI flow through SPI3 below.
-    bus.add_peripheral(
-        "gpio",
-        0x3FF4_4000,
-        0x1000,
-        None,
-        Box::new(crate::peripherals::esp32::gpio::Esp32Gpio::new()),
-    );
 
     // SPI3 / VSPI (TRM §7). Default pinmux puts SCK on GPIO18, MOSI on
     // GPIO23, CS on GPIO5 — matches the Waveshare e-paper module wiring.
     // We don't model the IO_MUX/GPIO matrix routing; bytes flowing through
     // the SPI3 controller go straight to its attached devices.
-    bus.add_peripheral(
-        "spi3",
-        0x3FF6_5000,
-        0x1000,
-        None,
-        Box::new(crate::peripherals::esp32::spi::Esp32Spi::new()),
-    );
 
     // DPORT (TRM v5.0 §6 + §7). Real ESP32-classic peripheral — seeds
     // PERIP_CLK_EN with all bits set (we treat every peripheral as live;
@@ -600,26 +542,12 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     // MUST register BEFORE the analog-AHB catch-all stub below: SystemBus
     // dispatches by first-registered-wins on overlapping ranges, and we
     // want the 4 KiB DPORT window to win over any wider stub.
-    bus.add_peripheral(
-        "dport",
-        crate::peripherals::esp32::dport::Dport::BASE as u64,
-        crate::peripherals::esp32::dport::Dport::SIZE as u64,
-        None,
-        Box::new(crate::peripherals::esp32::dport::Dport::new()),
-    );
 
     // SHA hardware accelerator (TRM §24) at 0x3FF0_3000. Real FIPS-180-4
     // SHA-1/SHA-256 block compression so firmware digests match silicon
     // instead of round-tripping zeros through the analog-AHB catch-all.
     // MUST register BEFORE dport_analog_ahb (first-registered-wins; the
     // 0x3FF0_1000..0x3FF1_FFFF stub would otherwise shadow this window).
-    bus.add_peripheral(
-        "sha",
-        crate::peripherals::esp32::sha::Sha::BASE as u64,
-        crate::peripherals::esp32::sha::Sha::SIZE as u64,
-        None,
-        Box::new(crate::peripherals::esp32::sha::Sha::new()),
-    );
 
     // Analog AHB / reserved region immediately above DPORT
     // (0x3FF0_1000..0x3FF1_FFFF, 60 KiB). Arduino-ESP32's startup touches
@@ -657,13 +585,6 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     // Size 0x200 covers the documented register window 0x3FF4_8000..0x3FF4_80FC
     // plus the OPTIONS alias range up to 0x3FF4_8200. RTC_IO at 0x3FF4_8400
     // is registered separately by the catch-all stub block below.
-    bus.add_peripheral(
-        "rtc_cntl",
-        0x3FF4_8000,
-        0x200,
-        None,
-        Box::new(crate::peripherals::esp32::rtc_cntl::RtcCntl::new()),
-    );
 
     // TIMG0 / TIMG1 — ESP32-classic Timer Group (TRM §16). Per-group
     // 64-bit T0/T1 general-purpose counters, watchdog, RTC calibration.
@@ -671,20 +592,6 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     // so `rtc_clk_wait_for_slow_cycle` still completes in one iteration,
     // and adds monotonic counter reads so ESP-IDF's timer-state probes
     // see forward progress. Interrupt firing is intentionally deferred.
-    bus.add_peripheral(
-        "timg0",
-        0x3FF5_F000,
-        0x1000,
-        None,
-        Box::new(crate::peripherals::esp32::timg::Timg::new(0x3FF5_F000)),
-    );
-    bus.add_peripheral(
-        "timg1",
-        0x3FF6_0000,
-        0x1000,
-        None,
-        Box::new(crate::peripherals::esp32::timg::Timg::new(0x3FF6_0000)),
-    );
 
     // EFUSE — ESP32 BROM and esp-hal read BLK0 (MAC + chip_revision)
     // during reset-handler init. Returning a coherent rev3 + non-zero
@@ -695,13 +602,12 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     // standard 4 KiB peripheral page — BROM probes beyond 0x100 and
     // a smaller size triggers a "memory access violation". Keep the
     // full 4 KiB so unmapped offsets read as 0 (== unblown fuse).
-    bus.add_peripheral(
-        "efuse",
-        0x3FF5_A000,
-        0x1000,
-        None,
-        Box::new(crate::peripherals::esp32::efuse::Efuse::new()),
-    );
+
+    // Classic-ESP32 peripheral models, built from the ESP32_PERIPHERALS
+    // table via the esp32 factory (data-driven, mirrors esp32s3). syscon is
+    // kept hand-wired below because it shares base 0x3FF6_6000 with the
+    // apb_ctrl catch-all and must preserve that registration order.
+    register_esp32_peripherals(bus);
 
     // SYSCON (TRM §13.2) — system controller. Owns SYSCLK_CONF, TICK_CONF,
     // SARADC_CTRL, FRONT_END_MEM_PD, and the RND_DATA TRNG output the BROM
@@ -736,42 +642,17 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     // ledc_get_duty()/ledcRead() read back the committed duty, derived duty
     // fraction + frequency. (PWM-edge emission to GPIO deferred.) Registered
     // before the catch-all loop below so its window wins (first-registered).
-    bus.add_peripheral(
-        "ledc",
-        crate::peripherals::esp32::ledc::Ledc::BASE as u64,
-        0x1000,
-        None,
-        Box::new(crate::peripherals::esp32::ledc::Ledc::new(
-            crate::peripherals::esp32::ledc::Ledc::BASE,
-        )),
-    );
 
     // TWAI / CAN controller (TRM §27) at 0x3FF6_B000. SJA1000-derived:
     // reset-mode handshake, single-shot TX completion + IRQ, SELF_RX, and
     // the read-and-clear interrupt register so twai_driver_install()/
     // twai_start() make forward progress instead of faulting.
-    bus.add_peripheral(
-        "twai",
-        0x3FF6_B000,
-        0x1000,
-        None,
-        Box::new(crate::peripherals::esp32::twai::Esp32Twai::new()),
-    );
 
     // MCPWM0 — Motor Control PWM (TRM §16) at 0x3FF5_E000. Real model of the
     // PWM-generation path: per-timer period/prescale → frequency, per-operator
     // compare-A → duty, so mcpwm_get_duty()/mcpwm_get_frequency() read back
     // what was set and a bound actuator (servo/ESC) tracks the live duty.
     // Registered before the catch-all so its window wins over the pwm0 stub.
-    bus.add_peripheral(
-        "mcpwm0",
-        crate::peripherals::esp32::mcpwm::Mcpwm::BASE as u64,
-        0x1000,
-        None,
-        Box::new(crate::peripherals::esp32::mcpwm::Mcpwm::new(
-            crate::peripherals::esp32::mcpwm::Mcpwm::BASE,
-        )),
-    );
 
     // Catch-all stubs for the rest of the APB peripheral block
     // (0x3FF4A000–0x3FF6FFFF). ESP32 packs ~30 peripherals here
@@ -860,6 +741,37 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     bus.legacy_walk_disabled = true;
 
     XtensaLx7::new()
+}
+
+/// Register the classic-ESP32 (LX6) peripheral models on `bus` from the
+/// canonical [`ESP32_PERIPHERALS`] table via `peripherals::esp32::factory`.
+/// Excludes `syscon`, which `configure_xtensa_esp32` keeps hand-wired so it
+/// retains its registration order against the same-base `apb_ctrl` stub.
+fn register_esp32_peripherals(bus: &mut SystemBus) {
+    use crate::peripherals::esp32::factory;
+    use labwired_config::PeripheralConfig;
+    use std::collections::HashMap;
+    for &(id, ty, base, size, irq) in ESP32_PERIPHERALS {
+        if id == "syscon" {
+            continue;
+        }
+        let mut config: HashMap<String, serde_yaml::Value> = HashMap::new();
+        // uart0 echoes TX to the host console; uart1/2 are capture-only.
+        if matches!(id, "uart1" | "uart2") {
+            config.insert("echo_stdout".to_string(), serde_yaml::Value::Bool(false));
+        }
+        let cfg = PeripheralConfig {
+            id: id.to_string(),
+            r#type: ty.to_string(),
+            base_address: base,
+            size: None,
+            irq,
+            config,
+        };
+        let dev = factory::try_build(ty, &cfg)
+            .unwrap_or_else(|| panic!("esp32 factory missing type {ty} for {id}"));
+        bus.add_peripheral(id, base, size, None, dev);
+    }
 }
 
 /// Outputs of [`configure_esp32s3_memmap`]: the boot mode plus the flash
