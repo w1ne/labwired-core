@@ -8,6 +8,16 @@ use crate::decoder::riscv::{decode_rv32, Instruction};
 use crate::{Bus, Cpu, SimResult, SimulationObserver};
 use std::sync::Arc;
 
+/// Estimated CPU clocks per interpreted instruction, used to scale the
+/// free-running cycle/perf-counter CSRs (0x802/0x7E2/0xC00). Firmware busy-wait
+/// delays compute a target in CPU clocks (e.g. `us * cpu_freq_mhz`); reporting
+/// the cycle counter as `mtime * CYCLE_SCALE` lets those delays elapse in
+/// ~1/CYCLE_SCALE the interpreted instructions instead of one-per-clock. Sim
+/// delays only need to complete, not match wall-clock, so a coarse value is
+/// correct here. Kept a power of two; tuned so the C3 bootloader's entropy fill
+/// drops from ~380M instructions to a few million.
+const CYCLE_SCALE: u64 = 256;
+
 #[derive(Debug, Default)]
 pub struct RiscV {
     pub x: [u32; 32], // x0..x31. x0 is correctly hardwired to 0 in logic.
@@ -67,13 +77,19 @@ impl RiscV {
             0xB00 => (self.mtime & 0xFFFFFFFF) as u32,
             0xB80 => (self.mtime >> 32) as u32,
             // Free-running cycle counters. 0xC00/0xC80 = standard cycle[h];
-            // 0x802 is the ESP32-C3 machine cycle CSR that `ets_delay_us`
-            // busy-reads (while now-start < target_cycles). Without an advancing
-            // value the delay spins forever. Back them with the per-step mtime.
-            // 0x7E2 is the C3 machine performance counter (PCCR), which
-            // bootloader_fill_random reads as an entropy/timing delta.
-            0xC00 | 0x802 | 0x7E2 => (self.mtime & 0xFFFFFFFF) as u32,
-            0xC80 => (self.mtime >> 32) as u32,
+            // 0x802 is the ESP32-C3 machine cycle CSR (`ets_delay_us` busy-reads
+            // it as while(now-start < target_cycles)); 0x7E2 is the C3 perf
+            // counter PCCR (bootloader_fill_random reads it as an entropy delta).
+            //
+            // These are reported as mtime * CYCLE_SCALE so that cycle-budget
+            // delays (which the firmware computes in CPU clocks, e.g. µs*freq)
+            // elapse in ~1/CYCLE_SCALE as many interpreted instructions. Without
+            // it the bootloader's entropy fill alone burns ~380M instructions of
+            // pure delay. Delay loops only need to *complete*, not match wall
+            // time, so a coarse cycle estimate is correct in sim; the real-time
+            // CLINT timer (mtime vs mtimecmp, CSR 0xB00) stays unscaled.
+            0xC00 | 0x802 | 0x7E2 => (self.mtime.wrapping_mul(CYCLE_SCALE) & 0xFFFFFFFF) as u32,
+            0xC80 => (self.mtime.wrapping_mul(CYCLE_SCALE) >> 32) as u32,
             _ => 0,
         }
     }

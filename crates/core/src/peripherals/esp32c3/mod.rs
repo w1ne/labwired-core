@@ -6,3 +6,4 @@
 
 pub mod cache;
 pub mod reg_block;
+pub mod rng;
