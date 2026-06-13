@@ -1048,6 +1048,52 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
                 MMU_FMT_C3,
             )),
         );
+        // SAR ADC (APB_SARADC, 0x6004_0000): the IDF's adc_hal_self_calibration
+        // triggers single conversions and polls a data-valid flag (0x44 bit31/
+        // bit30) before reading the result; the declarative stub never asserts
+        // it, so read_cal_channel spins forever after spi_flash init. Model
+        // conversions as instant (valid flags set, mid-scale sample) so the
+        // bounded cal search converges and boot continues.
+        bus.add_peripheral(
+            "apb_saradc",
+            0x6004_0000,
+            0x100,
+            None,
+            Box::new(labwired_core::peripherals::esp32c3::sar_adc::Esp32c3SarAdc::new()),
+        );
+        // SYSTIMER (0x6002_3000): the 16 MHz free-running counter behind
+        // esp_timer and the FreeRTOS tick. systimer_hal_get_counter_value sets
+        // UNITx_OP bit30 (UPDATE) then polls bit29 (VALUE_VALID) before reading
+        // the snapshot; the declarative stub never asserts VALUE_VALID, so the
+        // counter read spins forever right after heap_init. The C3 SYSTIMER is
+        // the same IP as the S3 (identical register layout), so the S3 model
+        // drops in: it asserts VALUE_VALID, advances the counter, and supports
+        // the alarm/IRQ path FreeRTOS needs. Clocked relative to the 160 MHz
+        // CPU (10 CPU cycles per 16 MHz tick).
+        bus.add_peripheral(
+            "systimer",
+            0x6002_3000,
+            0x100,
+            None,
+            Box::new(labwired_core::peripherals::esp32s3::systimer::Systimer::new(160_000_000)),
+        );
+        // RTC_CNTL main timer (0x6000_8000): the free-running slow-clock counter
+        // the IDF reads via rtc_time_get (set TIME_UPDATE @0x0C bit31 to latch,
+        // read TIME0 @0x10 / TIME1 @0x14). A frozen counter makes every
+        // RTC-deadline wait spin forever — most notably calibrate_ocode, which
+        // polls a regi2c comparator that never settles without real RF and
+        // relies on a ~10 ms RTC timeout to give up and continue. A real
+        // advancing timer lets that loop (and other RTC delays) reach the
+        // timeout exactly as silicon does. Overrides the declarative RTC_CNTL
+        // stub for this window; non-timer regs stay register-backed so the
+        // reset-cause seed at 0x38 below still reads back.
+        bus.add_peripheral(
+            "rtc_cntl_timer",
+            0x6000_8000,
+            0x100,
+            None,
+            Box::new(labwired_core::peripherals::esp32c3::rtc_timer::Esp32c3RtcTimer::new()),
+        );
         // Seed the power-on hardware reset state the BROM reads to decide it's a
         // normal flash boot (silicon has this at reset; the sim starts zeroed):
         //   * RTC_CNTL reset-cause (0x6000_8038, bits[5:0]) = 1 (POWERON_RESET).

@@ -7,4 +7,6 @@
 pub mod cache;
 pub mod reg_block;
 pub mod rng;
+pub mod rtc_timer;
+pub mod sar_adc;
 pub mod sha;
