@@ -701,6 +701,36 @@ impl WasmSimulator {
         serde_wasm_bindgen::to_value(&snapshots).unwrap_or(JsValue::NULL)
     }
 
+    /// Non-consuming WiFi 802.11 frame-trace snapshot for the network analyzer
+    /// (the WiFi analog of `air_trace_snapshot`). Returns, per ESP32-C3 WiFi MAC,
+    /// the recently captured TX/RX frames (most-recent first); the analyzer UI
+    /// decodes 802.11 type/addresses and the L3 payload (DHCP/ARP/IP).
+    #[wasm_bindgen]
+    pub fn wifi_trace_snapshot(&self) -> JsValue {
+        let Some(machine) = self.machine.as_ref() else {
+            return serde_wasm_bindgen::to_value(&Vec::<serde_json::Value>::new())
+                .unwrap_or(JsValue::NULL);
+        };
+
+        let snapshots = machine
+            .bus
+            .peripherals
+            .iter()
+            .filter_map(|p| {
+                let any = p.dev.as_any()?;
+                let mac = any
+                    .downcast_ref::<labwired_core::peripherals::esp32c3::wifi_mac::Esp32c3WifiMac>(
+                    )?;
+                Some(serde_json::json!({
+                    "peripheral": p.name,
+                    "frames": mac.trace_snapshot(),
+                }))
+            })
+            .collect::<Vec<_>>();
+
+        serde_wasm_bindgen::to_value(&snapshots).unwrap_or(JsValue::NULL)
+    }
+
     /// Non-consuming FDCAN frame trace snapshot for CAN/UDS instruments.
     #[wasm_bindgen]
     pub fn fdcan_trace_snapshot(&self) -> JsValue {
