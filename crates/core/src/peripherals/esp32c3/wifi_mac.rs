@@ -172,6 +172,20 @@ impl Esp32c3WifiMac {
         self.pending_rx.push_back(frame);
     }
 
+    /// Queue a frame at the FRONT of the RX backlog so it is delivered before
+    /// any already-queued frames. Used for unicast responses (auth/assoc resp,
+    /// DHCP offer/ack, ARP reply) that must reach the driver inside its per-state
+    /// timeout window — they must not sit behind a backlog of periodic beacons.
+    pub fn queue_rx_priority(&mut self, frame: Vec<u8>) {
+        self.pending_rx.push_front(frame);
+    }
+
+    /// Number of RX frames waiting to be delivered. The bridge uses this to avoid
+    /// flooding the backlog with beacons (which would delay real responses).
+    pub fn pending_rx_len(&self) -> usize {
+        self.pending_rx.len()
+    }
+
     /// Drain frames the real MAC transmitted (captured on TX kick).
     pub fn take_tx_frames(&mut self) -> Vec<Vec<u8>> {
         self.tx_out.drain(..).collect()

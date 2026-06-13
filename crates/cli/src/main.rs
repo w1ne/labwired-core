@@ -1065,6 +1065,171 @@ fn build_dhcp_reply(xid: [u8; 4], ack: bool) -> Vec<u8> {
     f
 }
 
+/// Probe response: like a beacon but unicast to the STA (subtype 5 → FC 0x50),
+/// answering an active scan's probe request.
+fn build_probe_resp(ssid: &str, channel: u8) -> Vec<u8> {
+    let mut f = build_open_beacon(ssid, channel);
+    f[0] = 0x50; // mgmt subtype 5 = probe response
+    f[4..10].copy_from_slice(&BRIDGE_STA); // addr1 = the scanning STA (unicast)
+    f
+}
+
+/// Parse a captured TX data frame as ARP: returns (oper, sender_ip, target_ip)
+/// if it carries an ARP packet (ethertype 0x0806 after LLC/SNAP).
+fn parse_arp(frame: &[u8]) -> Option<(u16, [u8; 4], [u8; 4])> {
+    if frame.len() < 2 || (frame[0] >> 2) & 3 != 2 {
+        return None; // not a data frame
+    }
+    let hdr = if frame[0] & 0x80 != 0 { 26 } else { 24 };
+    let snap = hdr + 8;
+    // LLC/SNAP ethertype is the 2 bytes just before the payload.
+    if frame.len() < snap + 28 {
+        return None;
+    }
+    let ethertype = u16::from_be_bytes([frame[snap - 2], frame[snap - 1]]);
+    if ethertype != 0x0806 {
+        return None;
+    }
+    let a = snap; // ARP packet start
+    let oper = u16::from_be_bytes([frame[a + 6], frame[a + 7]]);
+    let mut spa = [0u8; 4];
+    spa.copy_from_slice(&frame[a + 14..a + 18]);
+    let mut tpa = [0u8; 4];
+    tpa.copy_from_slice(&frame[a + 24..a + 28]);
+    Some((oper, spa, tpa))
+}
+
+/// ARP reply (oper 2): "`who_ip` is at the AP's BSSID", addressed to the STA.
+/// Wrapped as an AP→STA 802.11 from-DS data frame with LLC/SNAP ethertype 0x0806.
+fn build_arp_reply(who_ip: [u8; 4], target_ip: [u8; 4]) -> Vec<u8> {
+    let mut arp = Vec::new();
+    arp.extend_from_slice(&[0x00, 0x01]); // htype = Ethernet
+    arp.extend_from_slice(&[0x08, 0x00]); // ptype = IPv4
+    arp.extend_from_slice(&[0x06, 0x04]); // hlen, plen
+    arp.extend_from_slice(&[0x00, 0x02]); // oper = reply
+    arp.extend_from_slice(&BRIDGE_BSSID); // sender hw = AP
+    arp.extend_from_slice(&who_ip); // sender proto = the resolved IP
+    arp.extend_from_slice(&BRIDGE_STA); // target hw = STA
+    arp.extend_from_slice(&target_ip); // target proto = STA's IP
+
+    let mut f = Vec::new();
+    f.extend_from_slice(&[0x08, 0x02]); // data, from-DS
+    f.extend_from_slice(&[0x00, 0x00]); // duration
+    f.extend_from_slice(&BRIDGE_STA); // addr1 = DA (STA)
+    f.extend_from_slice(&BRIDGE_BSSID); // addr2 = BSSID
+    f.extend_from_slice(&BRIDGE_BSSID); // addr3 = SA
+    f.extend_from_slice(&[0x00, 0x00]); // seq/frag
+    f.extend_from_slice(&[0xAA, 0xAA, 0x03, 0x00, 0x00, 0x00, 0x08, 0x06]); // LLC/SNAP, ARP
+    f.extend_from_slice(&arp);
+    f
+}
+
+/// Event-driven virtual-AP logic: given one frame the STA just transmitted,
+/// return the frames the AP should inject in response (each with a short label
+/// for logging). This is the single place that models AP behaviour, so the same
+/// STA TX always produces the same response regardless of sim timing — which is
+/// what makes association + DHCP deterministic rather than flaky.
+fn ap_respond(tx: &[u8]) -> Vec<(Vec<u8>, &'static str)> {
+    if tx.len() < 2 {
+        return Vec::new();
+    }
+    let ftype = (tx[0] >> 2) & 3; // 0=mgmt, 2=data
+    let subtype = tx[0] >> 4;
+    let mut out: Vec<(Vec<u8>, &'static str)> = Vec::new();
+    if ftype == 0 {
+        // Management.
+        match subtype {
+            0x4 => out.push((build_probe_resp("labwired-ap", 1), "probe-req->resp")),
+            0xB => out.push((build_auth_resp(), "auth-req->resp")),
+            0x0 | 0x2 => out.push((build_assoc_resp(), "assoc-req->resp")),
+            _ => {}
+        }
+        return out;
+    }
+    if ftype == 2 {
+        // Data: DHCP or ARP.
+        if let Some((xid, mtype)) = parse_dhcp_request(tx) {
+            // discover(1) → offer; request(3) → ack.
+            let label = if mtype == 3 {
+                "dhcp-request->ack"
+            } else {
+                "dhcp-discover->offer"
+            };
+            out.push((build_dhcp_reply(xid, mtype == 3), label));
+        } else if let Some((oper, _spa, tpa)) = parse_arp(tx) {
+            // Only answer ARP *requests* (oper 1). Crucially, do NOT answer the
+            // DHCP CHECKING self-probe (target == STA's own offered IP) — that
+            // would trigger lwIP dhcp_arp_reply→dhcp_decline and abort the bind.
+            // Answer the gateway ARP (target == AP_IP) so post-bind traffic flows.
+            if oper == 1 && tpa != STA_IP {
+                out.push((build_arp_reply(tpa, STA_IP), "arp-req->reply"));
+            }
+        }
+    }
+    out
+}
+
+/// Short human label for a captured STA TX frame, for bridge tracing.
+fn tx_kind(tx: &[u8]) -> String {
+    if tx.len() < 2 {
+        return "runt".into();
+    }
+    let ftype = (tx[0] >> 2) & 3;
+    let subtype = tx[0] >> 4;
+    match (ftype, subtype) {
+        (0, 0x4) => "mgmt/probe-req".into(),
+        (0, 0xB) => "mgmt/auth".into(),
+        (0, 0x0) => "mgmt/assoc-req".into(),
+        (0, 0x2) => "mgmt/reassoc-req".into(),
+        (0, s) => format!("mgmt/sub{s:#x}"),
+        (1, _) => "ctrl".into(),
+        (2, _) => {
+            if let Some((_x, mt)) = parse_dhcp_request(tx) {
+                format!("data/dhcp(type={mt})")
+            } else if let Some((op, spa, tpa)) = parse_arp(tx) {
+                format!(
+                    "data/arp(op={op} {}.{}.{}.{}→{}.{}.{}.{})",
+                    spa[0], spa[1], spa[2], spa[3], tpa[0], tpa[1], tpa[2], tpa[3]
+                )
+            } else {
+                // Decode the LLC/SNAP ethertype + a payload preview so unknown
+                // data frames (post-bind traffic, declines, etc.) are identifiable.
+                let hdr = if tx[0] & 0x80 != 0 { 26 } else { 24 };
+                let snap = hdr + 8;
+                if tx.len() >= snap + 4 {
+                    let et = u16::from_be_bytes([tx[snap - 2], tx[snap - 1]]);
+                    let prev: Vec<String> = tx[snap..(snap + 24).min(tx.len())]
+                        .iter()
+                        .map(|b| format!("{b:02x}"))
+                        .collect();
+                    // For IPv4, surface proto + dst port so UDP services (mDNS,
+                    // DNS, NTP) and TCP are obvious.
+                    if et == 0x0800 && tx.len() >= snap + 20 {
+                        let proto = tx[snap + 9];
+                        let ihl = (tx[snap] & 0xF) as usize * 4;
+                        let l4 = snap + ihl;
+                        let dport = if tx.len() >= l4 + 4 {
+                            u16::from_be_bytes([tx[l4 + 2], tx[l4 + 3]])
+                        } else {
+                            0
+                        };
+                        let dst = &tx[snap + 16..snap + 20];
+                        format!(
+                            "data/ipv4(proto={proto} dport={dport} dst={}.{}.{}.{})",
+                            dst[0], dst[1], dst[2], dst[3]
+                        )
+                    } else {
+                        format!("data/other(et={et:#06x} {})", prev.join(" "))
+                    }
+                } else {
+                    "data/other".into()
+                }
+            }
+        }
+        _ => "?".into(),
+    }
+}
+
 fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
     use labwired_core::bus::SystemBus;
 
@@ -1439,6 +1604,7 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
     // scan's channel hopping. A frame-level VirtualAp will subsume this.
     let bridge = std::env::var("LABWIRED_WIFI_BRIDGE").is_ok()
         || std::env::var("LABWIRED_WIFI_BRIDGE_RE").is_ok();
+    let dhcp_trace = std::env::var("LABWIRED_DHCP_TRACE").is_ok();
     // Find the behavioral wifi_mac model by type (the declarative chip-yaml
     // "wifi_mac" shares the name; routing uses ours via greatest-start-wins, but
     // name lookup would return the declarative one).
@@ -1457,16 +1623,31 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
     let mut ap_seq: u16 = 0;
     // Stamp the next sequence number into a frame's seq-control field (bytes
     // 22..23 = seq<<4 | frag) and queue it for RX injection.
+    macro_rules! stamp_seq {
+        ($fr:expr) => {{
+            if $fr.len() >= 24 {
+                let sc = (ap_seq & 0xFFF) << 4;
+                $fr[22] = sc as u8;
+                $fr[23] = (sc >> 8) as u8;
+                ap_seq = ap_seq.wrapping_add(1);
+            }
+        }};
+    }
+    // Beacons go on the back of the RX queue (best-effort, droppable).
     macro_rules! inject {
         ($mac:expr, $frame:expr) => {{
             let mut fr = $frame;
-            if fr.len() >= 24 {
-                let sc = (ap_seq & 0xFFF) << 4;
-                fr[22] = sc as u8;
-                fr[23] = (sc >> 8) as u8;
-                ap_seq = ap_seq.wrapping_add(1);
-            }
+            stamp_seq!(fr);
             $mac.queue_rx_frame(fr);
+        }};
+    }
+    // Unicast responses jump to the FRONT so they reach the driver inside its
+    // per-state timeout window rather than queuing behind backlogged beacons.
+    macro_rules! inject_priority {
+        ($mac:expr, $frame:expr) => {{
+            let mut fr = $frame;
+            stamp_seq!(fr);
+            $mac.queue_rx_priority(fr);
         }};
     }
     if bridge {
@@ -1474,6 +1655,7 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
     }
 
     for i in 0..limit {
+        // Periodic beacon so the STA's scan finds the AP (real APs beacon ~always).
         if bridge && i >= next_beacon_at {
             next_beacon_at = i + 2_000_000;
             if let Some(idx) = wifi_mac_idx {
@@ -1482,39 +1664,38 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
                         .downcast_mut::<labwired_core::peripherals::esp32c3::wifi_mac::Esp32c3WifiMac>(
                         )
                     {
-                        // Inject beacon (so the scan finds the AP) plus the
-                        // OPEN auth + assoc responses, so the driver finds each
-                        // one waiting as it advances init→auth→assoc→run. The
-                        // driver ignores responses it isn't expecting.
-                        for ch in [1u8, 6, 11] {
-                            inject!(mac, build_open_beacon("labwired-ap", ch));
+                        // Only beacon when the RX backlog is drained, so periodic
+                        // beacons never delay a pending unicast response.
+                        if mac.pending_rx_len() == 0 {
+                            for ch in [1u8, 6, 11] {
+                                inject!(mac, build_open_beacon("labwired-ap", ch));
+                            }
                         }
-                        inject!(mac, build_auth_resp());
-                        inject!(mac, build_assoc_resp());
-                        eprintln!("[bridge] injected beacon+auth+assoc at step {i}");
                     }
                 }
             }
         }
-        // Drain captured TX frames frequently and answer DHCP (offer/ack) so the
-        // associated STA gets an IP. Cheap when there's no TX.
-        if bridge && i % 200_000 == 0 {
+        // Event-driven virtual AP: drain everything the STA transmits and answer
+        // each frame by type (probe/auth/assoc → mgmt resp, DHCP → DORA, ARP →
+        // reply for the gateway). Responding to the STA's actual TX — rather than
+        // blind-injecting on a timer — keeps association + DHCP deterministic and
+        // lets a connected STA re-auth cleanly. Drained often so responses land
+        // inside the driver's per-state timeout windows.
+        if bridge && i % 20_000 == 0 {
             if let Some(idx) = wifi_mac_idx {
                 if let Some(any) = machine.bus.peripherals[idx].dev.as_any_mut() {
                     if let Some(mac) = any
                         .downcast_mut::<labwired_core::peripherals::esp32c3::wifi_mac::Esp32c3WifiMac>(
                         )
                     {
-                        for tx in mac.take_tx_frames() {
-                            if let Some((xid, mtype)) = parse_dhcp_request(&tx) {
-                                // discover(1) → offer; request(3) → ack.
-                                let reply = build_dhcp_reply(xid, mtype == 3);
-                                inject!(mac, reply);
-                                eprintln!(
-                                    "[bridge] DHCP {} -> {} at step {i}",
-                                    if mtype == 3 { "request" } else { "discover" },
-                                    if mtype == 3 { "ack" } else { "offer" }
-                                );
+                        let txs = mac.take_tx_frames();
+                        for tx in txs {
+                            if std::env::var("LABWIRED_BRIDGE_TRACE").is_ok() {
+                                eprintln!("[bridge] STA TX {} at step {i}", tx_kind(&tx));
+                            }
+                            for (reply, label) in ap_respond(&tx) {
+                                inject_priority!(mac, reply);
+                                eprintln!("[bridge] {label} at step {i}");
                             }
                         }
                     }
@@ -1522,6 +1703,23 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
             }
         }
         let pc = machine.cpu.get_pc();
+        // DHCP function-entry watch (env LABWIRED_DHCP_TRACE): logs each time the
+        // CPU enters a key lwIP DHCP routine, to see whether the 500ms fine timer
+        // fires (dhcp_fine_tmr/dhcp_timeout) and whether dhcp_bind is reached.
+        if dhcp_trace {
+            let name = match pc {
+                0x42059298 => Some("dhcp_check"),
+                0x420592fc => Some("dhcp_bind"),
+                0x4205a186 => Some("dhcp_timeout"),
+                0x4205a216 => Some("dhcp_fine_tmr"),
+                0x420598c8 => Some("dhcp_handle_ack"),
+                0x42059a04 => Some("dhcp_recv"),
+                _ => None,
+            };
+            if let Some(n) = name {
+                eprintln!("[dhcp] {n} at step {i}");
+            }
+        }
         if debug {
             if recent.len() == trail_cap {
                 recent.pop_front();
