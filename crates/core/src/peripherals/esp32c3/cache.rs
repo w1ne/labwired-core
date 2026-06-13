@@ -34,11 +34,14 @@ const NUM_REGS: usize = 0x100;
 ///   0x028 ICACHE_SYNC_CTRL     SYNC_DONE     = BIT(1)
 ///   0x034 ICACHE_PRELOAD_CTRL  PRELOAD_DONE  = BIT(1)
 ///   0x040 ICACHE_AUTOLOAD_CTRL AUTOLOAD_DONE = BIT(3)
-const DONE_BITS: [(usize, u32); 4] = [
+///   0x0B0 CACHE_STATE       ICACHE_STATE[11:0] rests at 0x1 (idle); the ROM
+///                           cache enable/disable routines spin until state==1.
+const DONE_BITS: [(usize, u32); 5] = [
     (0x01C, 1 << 2),
     (0x028, 1 << 1),
     (0x034, 1 << 1),
     (0x040, 1 << 3),
+    (0x0B0, 1 << 0), // CACHE_STATE = idle (0x1)
 ];
 
 /// `(byte_offset, request_mask, ack_mask)` — *level* handshakes where firmware

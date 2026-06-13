@@ -66,6 +66,12 @@ impl RiscV {
             // Timer CSR stubs (Standard RISC-V shadow non-privileged? No, these are machine mode)
             0xB00 => (self.mtime & 0xFFFFFFFF) as u32,
             0xB80 => (self.mtime >> 32) as u32,
+            // Free-running cycle counters. 0xC00/0xC80 = standard cycle[h];
+            // 0x802 is the ESP32-C3 machine cycle CSR that `ets_delay_us`
+            // busy-reads (while now-start < target_cycles). Without an advancing
+            // value the delay spins forever. Back them with the per-step mtime.
+            0xC00 | 0x802 => (self.mtime & 0xFFFFFFFF) as u32,
+            0xC80 => (self.mtime >> 32) as u32,
             _ => 0,
         }
     }
