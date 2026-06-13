@@ -993,17 +993,69 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
             None,
             Box::new(labwired_core::peripherals::esp32c3::cache::Esp32c3Cache::new()),
         );
-        // Analog I²C master / ANA_CONFIG block (0x6000_E000, DR_REG_RTC_I2C_BASE):
+        // Analog I²C master / ANA_CONFIG block (0x6000_E000, DR_REG_I2C_ANA_MST_BASE):
         // rom_i2c_writeReg drives it (read-modify-write of ANA_CONFIG regs) during
         // PHY/clock bring-up; the libphy full RF calibration also touches regs up
-        // past 0x6000_E130, so the window spans 0x400. Register-backed read-back
-        // keeps that path mapped.
+        // past 0x6000_E130, so the window spans 0x400. The model reports the
+        // master FSM status (0x50 bits[26:24]=7, idle/done) so the ROM's
+        // transaction busy-poll exits; all other regs are register-backed.
         bus.add_peripheral(
             "rtc_i2c_ana",
             0x6000_E000,
             0x400,
             None,
-            Box::new(labwired_core::peripherals::esp32c3::reg_block::Esp32c3RegBlock::new(0x400)),
+            Box::new(labwired_core::peripherals::esp32c3::ana_i2c::Esp32c3AnaI2c::new()),
+        );
+        // FE/PHY register block (0x6001_1000): libphy's set_rx_gain_table also
+        // writes gain/FE config into the gap between uart1 (0x6001_0000) and
+        // i2c0 (0x6001_3000). Register-backed storage for those RF tables.
+        bus.add_peripheral(
+            "wifi_fe",
+            0x6001_1000,
+            0x2000,
+            None,
+            Box::new(labwired_core::peripherals::esp32c3::reg_block::Esp32c3RegBlock::new(0x2000)),
+        );
+        // Baseband/RF register block (0x6001_C000): libphy writes the RX gain
+        // table and other BB/RF config here (set_rx_gain_table). Unmapped, the
+        // gain-table store faults. Register-backed window up to the declarative
+        // peripheral at 0x6001_CC00. (RF air-gap: storage is enough — there's
+        // no real RF that would act on these values.)
+        bus.add_peripheral(
+            "wifi_bb",
+            0x6001_C000,
+            0xC00,
+            None,
+            Box::new(labwired_core::peripherals::esp32c3::reg_block::Esp32c3RegBlock::new(0xC00)),
+        );
+        // Radio front-end PLL-lock status (RADIO_FE 0x6000_6000 + 0x174, bit16):
+        // the libphy pll_cal launches the BBPLL/RF PLL then busy-polls this bit
+        // for lock; without real RF it never sets and pll_cal spins/retries
+        // ("pll_cal exceeds 2ms!!!"). Force-assert it (RF air-gap cut) over just
+        // that one word, leaving the declarative radio_fe descriptors intact.
+        bus.add_peripheral(
+            "radio_fe_pll_lock",
+            0x6000_6174,
+            0x4,
+            None,
+            Box::new(
+                labwired_core::peripherals::esp32c3::forced_status::Esp32c3ForcedStatus::new(
+                    0x4,
+                    vec![(0x0, 1 << 16)],
+                ),
+            ),
+        );
+        // WiFi MAC (WIFI_MAC 0x6003_3000, 12 KiB) — behavioral model for the
+        // MAC <-> SimNet bridge: register-backed bring-up, MAC-ready bit (0xD14
+        // b0, polled by hal_init), RX descriptor-ring DMA + RX-frame injection,
+        // and MAC interrupt (matrix source 0) on RX-done. Overrides the
+        // declarative wifi_mac window. See docs/esp32c3_wifi_mac_bridge.md.
+        bus.add_peripheral(
+            "wifi_mac",
+            0x6003_3000,
+            0x3000,
+            None,
+            Box::new(labwired_core::peripherals::esp32c3::wifi_mac::Esp32c3WifiMac::new()),
         );
         // Hardware RNG data register (WDEV_RND_REG, 0x6002_60B0): yields a fresh
         // word per read. bootloader_fill_random XORs successive reads and
