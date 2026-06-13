@@ -92,6 +92,23 @@ wire are the same path.
 Lines ~924/927, ~1729-1761, ~4061-4075: skip the boot ROM, `set_pc(entry)`,
 `set_sp(0x3FFE_0000)`. SKIP. (Mirrored in `crates/wasm/src/lib.rs`.)
 
+### C1. Dual-core handshake pre-seed + keep-alive — REMOVABLE (validated 2026-06-13)
+`run_snapshot_capture` pre-seeded the SMP bring-up flags (`s_cpu_up`,
+`s_cpu_inited`, `s_system_inited`, `s_resume_cores`, `s_other_cpu_startup_done`)
+to 0x01 at boot, registered them with `set_appcpu_up_flags`, AND re-stamped them
+every 10k cycles — so `start_other_core`/`do_other_cpu_settings` always saw
+APP_CPU "up". This was a CHEAT(NOP) on the inter-core protocol.
+**Finding:** gated behind `LABWIRED_NO_PRESEED=1`, the demo ESP32 e-paper ELF
+(`demo-esp32-epaper-lab.elf`) runs **byte-identical** — `spi3 transactions=328`,
+same end `pc=0x400d1fc2` at 20M cycles — with the pre-seed AND keep-alive fully
+off. So the real APP_CPU bring-up (released via the legitimate
+`ets_set_appcpu_boot_addr` ROM entry at 0x4000_689c, which unhalts the second
+core at the firmware-supplied vector) already completes the handshake itself;
+the pre-seed is not load-bearing. **Next:** verify across ≥2 more Arduino-ESP32
+builds, then flip the default off and delete the pre-seed + keep-alive. Note the
+arduino-esp32-profile comment about newer cores' tight spin-wait — confirm those
+too before removing the safety net.
+
 ### D. Peripheral-as-RAM stubs — `crates/core/src/system/xtensa.rs`
 Of 16 `RamPeripheral` installs, the **cheats** are the ones standing in for a
 real peripheral: `slc` (SDIO host), `sdmmc_host`. The rest (`iram`, `dram`,
@@ -135,7 +152,20 @@ source — not on the proven ereader path.
 
 ---
 
+## North star: boot an ARBITRARY ESP32 binary
+Every thunk below is located by **ELF symbol or a hardcoded PC**. A stripped /
+arbitrary firmware has neither, so today only the one hand-curated `agentdeck`
+build and symbol-bearing `arduino-esp32` builds boot. "Run any ESP32 binary like
+real silicon" therefore is not a patch — it requires the firmware to **execute**
+these paths natively, which means modeling the silicon behind them: SPI-flash
+controller + flash chip, clock/RTC tree, `esp_timer` hardware, the real heap over
+faithful RAM, and a mapped boot ROM. This is an SoC-model build (comparable to
+the esp32c3 rom-boot effort, ×dual-core), sequenced below.
+
 ## Tightening priority (highest fidelity payoff first)
+
+0. **Dual-core handshake** (C1) — pre-seed proven non-load-bearing; finish
+   cross-firmware validation, then delete it. Cheap, near-done.
 
 1. ~~**Drop the GxEPD2 BYPASS thunks** (A.BYPASS)~~ — **DONE.** The real compiled
    firmware drives the panel over the real SPI3 peripheral + real DC GPIO (431
@@ -150,6 +180,20 @@ source — not on the proven ereader path.
 3. **Model `slc`/`sdmmc_host`** instead of RAM stubs, or prove the firmware never
    needs them.
 4. **Real boot ROM** — execute a mapped ROM image to kill the THUNK-ROM set and
-   the BROM SKIP at once.
+   the BROM SKIP at once. PROGRESS (2026-06-13):
+   - **FIXED — boot-index trap.** Real BROM (`tests/fixtures/esp32_brom.elf`) used
+     to run 12,948 instrs then spin at PC=0x40007bcc ("ets_main.c:404"). RE'd it:
+     `main` calls `rtc_get_reset_reason()` (0x400081d4), which returns
+     `RESET_STATE[5:0]` — that value (17) was the out-of-range boot index. Root
+     cause: `rtc_cntl.rs` packed the reset-cause fields as 4-bit (APP_CPU at bit 4),
+     but the BROM decodes 6-bit fields (PRO=`[5:0]`, APP=`[11:6]`; verified by
+     `extui 0,6` / `extui 6,6`). With both causes=POWERON(1) the model produced
+     0x11=17. Fix: `RESET_CAUSE_APPCPU_SHIFT 4→6`, `MASK 0xF→0x3F`. BROM now runs
+     **1,000,000+ instrs, no fatal stall** (was 12,948). All 18 rtc_cntl tests pass;
+     e-paper still paints (756 ink). Silicon-accurate, benefits any reset-reason reader.
+   - **NEXT stall:** the BROM proceeds toward loading the app from SPI flash
+     (`ets_unpack_flash_code`). To boot-to-app the smoke test needs a flash image +
+     the SPI-flash controller / MMU model. Then TIMG/RTC clock. Phased,
+     board-validatable.
 5. **heap_caps / FreeRTOS** — let the real allocator + scheduler run once the
    memory map + timers are faithful.
