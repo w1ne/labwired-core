@@ -104,6 +104,73 @@ export async function runSimulation(opts: {
   }
 }
 
+export interface DeviceRunResult {
+  exit_code: number;
+  /** Did the panel actually paint? (refresh happened AND ink reached the panel) */
+  painted: boolean;
+  panel: string | null;          // 'ssd1680' | 'uc8151d' | null
+  refresh_generation: number;
+  ink_bytes: number;             // black-plane non-FF bytes
+  total_bytes: number;
+  readout: string;               // the raw panel-state line, for the agent
+  stderr_excerpt: string;
+}
+
+/**
+ * Run an Arduino-ESP32 firmware ELF against the hardware declared in the system
+ * manifest (the panel + its CS/DC pins are attached via `--system`). Boots the
+ * firmware and reports what the attached device actually did — e.g. an e-paper
+ * panel's refresh generation and how much ink reached it (the deterministic
+ * HARDWARE ORACLE). Uses the generic `arduino-esp32` path, which works for ANY
+ * symbol-bearing Arduino-ESP32 build (the agent's compiled firmware always has
+ * symbols) — NOT the `agentdeck` preset, whose hardcoded addresses fit only one
+ * firmware. (Profiles are a transitional thunk-selector; the end state is "load
+ * the binary for the chip and run real" with no profile at all.)
+ */
+export async function runDeviceCapture(opts: {
+  firmwareBase64: string;
+  systemYaml: string;
+  steps?: number;
+  profile?: string;
+}): Promise<DeviceRunResult> {
+  const work = await mkdtemp(join(tmpdir(), 'labwired-mcp-dev-'));
+  try {
+    const firmwarePath = join(work, 'firmware.elf');
+    const systemPath = join(work, 'system.yaml');
+    const outPath = join(work, 'snap.lwrs');
+    await writeFile(firmwarePath, Buffer.from(opts.firmwareBase64, 'base64'));
+    await writeFile(systemPath, opts.systemYaml);
+    const steps = Math.min(opts.steps ?? 45_000_000, 50_000_000);
+    const { stderr, exitCode } = await runCli([
+      'snapshot', 'capture',
+      '--firmware', firmwarePath,
+      '--system', systemPath,
+      '--profile', opts.profile ?? 'arduino-esp32',
+      '--steps', String(steps),
+      '--output', outPath,
+      '--progress-every', '0',
+    ]);
+    // "labwired-cli snapshot: panel (ssd1680|uc8151d) state — refresh_generation=N, power_on=B, black-plane non-FF bytes=M/T"
+    const m = stderr.match(
+      /panel \((ssd1680|uc8151d)\) state[^\n]*refresh_generation=(\d+)[^\n]*black-plane non-FF bytes=(\d+)\/(\d+)/,
+    );
+    const refresh_generation = m ? parseInt(m[2], 10) : 0;
+    const ink_bytes = m ? parseInt(m[3], 10) : 0;
+    return {
+      exit_code: exitCode,
+      painted: refresh_generation >= 1 && ink_bytes > 0,
+      panel: m ? m[1] : null,
+      refresh_generation,
+      ink_bytes,
+      total_bytes: m ? parseInt(m[4], 10) : 0,
+      readout: m ? m[0] : '(no panel readout — firmware may not drive a display)',
+      stderr_excerpt: stderr.slice(-3000),
+    };
+  } finally {
+    await rm(work, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
 export interface FuzzContract {
   inputLenAddr?: string;
   inputDataAddr?: string;

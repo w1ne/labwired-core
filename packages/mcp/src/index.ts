@@ -11,7 +11,7 @@ import { z } from 'zod';
 import { mkdtemp, writeFile, rm, mkdir, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { listChips, runSimulation, validateSystem, runLab, fuzzFirmware, runCli } from './cli.js';
+import { listChips, runSimulation, validateSystem, runLab, fuzzFirmware, runCli, runDeviceCapture } from './cli.js';
 import {
   listBoards,
   getBoard,
@@ -269,6 +269,26 @@ function localTools() {
             type: 'integer',
             description: 'Optional override for max cycles.',
           },
+        },
+      },
+    },
+    {
+      name: 'labwired_run_device',
+      description:
+        'Boot an Arduino-ESP32 firmware ELF on simulated ESP32 hardware and report what the attached ' +
+        'device actually did. The peripherals (e.g. an SSD1680/UC8151D e-paper panel and its CS/DC ' +
+        'pins) are attached from the system_yaml manifest. Works for ANY symbol-bearing Arduino-ESP32 ' +
+        'build (agent-compiled firmware always has symbols). Use this for real firmware driving a ' +
+        'display — labwired_simulate runs the bare test path which does NOT boot Arduino-ESP32 and will ' +
+        'fault. Returns whether the panel painted, its refresh generation, and how much ink reached it ' +
+        '(the deterministic hardware oracle, byte-exact to silicon).',
+      inputSchema: {
+        type: 'object',
+        required: ['firmware_base64', 'system_yaml'],
+        properties: {
+          firmware_base64: { type: 'string', description: 'Base64-encoded Arduino-ESP32 (Xtensa) ELF.' },
+          system_yaml: { type: 'string', description: 'System Manifest YAML — chip + connected peripherals (e.g. an e-paper panel on spi3 with CS/DC pins).' },
+          steps: { type: 'integer', description: 'Cycles to run (default 45,000,000; max 50,000,000).' },
         },
       },
     },
@@ -601,6 +621,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return {
         content: [{ type: 'text', text: JSON.stringify(summary, null, 2) }],
         isError: run.exitCode !== 0,
+      };
+    }
+
+    if (name === 'labwired_run_device') {
+      const a = (args ?? {}) as { firmware_base64?: string; system_yaml?: string; steps?: number };
+      if (!a.firmware_base64 || !a.system_yaml) {
+        return { content: [{ type: 'text', text: JSON.stringify({ error: 'firmware_base64 and system_yaml are required' }) }], isError: true };
+      }
+      const run = await runDeviceCapture({ firmwareBase64: a.firmware_base64, systemYaml: a.system_yaml, steps: a.steps });
+      return {
+        content: [{ type: 'text', text: JSON.stringify(run, null, 2) }],
+        isError: !run.painted,
       };
     }
 
