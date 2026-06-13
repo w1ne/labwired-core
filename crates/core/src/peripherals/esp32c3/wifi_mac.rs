@@ -31,6 +31,13 @@
 
 use crate::{Bus, Peripheral, PeripheralTickResult, SimResult};
 use std::collections::VecDeque;
+use std::sync::atomic::AtomicU32;
+
+/// Debug: base address of the RX buffer the model most recently delivered a
+/// frame into. The bus's `LABWIRED_RXBUF_TRACE` read-trace reads this to log
+/// the driver's reads relative to the buffer (RE'ing the rx-control header
+/// format). 0 = no delivery yet.
+pub static RX_DBG_BUF: AtomicU32 = AtomicU32::new(0);
 
 const MAC_READY: u64 = 0xD14; // bit0 polled by hal_init
 const RX_RING_BASE: u64 = 0x88; // driver writes the RX descriptor-list head here
@@ -39,8 +46,12 @@ const EVENT_CLR: u64 = 0xC40; // hal_mac_interrupt_clr_event writes (W1C)
 
 /// RX-success event bits `wDev_ProcessFiq` routes to `lmacProcessRxSucData`.
 const EVENT_RX_DONE: u32 = 0x0100_4000;
-/// Descriptor word0 owner bit (HW may fill the buffer).
+// RX descriptor word0 is an ESP `lldesc_t`: size[11:0], length[23:12],
+// offset[28:24], sosf[29], eof[30], owner[31]. An empty (HW-owned) descriptor
+// reads e.g. 0x80640640 (owner=1, length=size=1600); after the MAC fills it the
+// driver expects owner=0, eof=1, length=actual-rx-bytes, size preserved.
 const DESC_OWNER: u32 = 1 << 31;
+const DESC_EOF: u32 = 1 << 30;
 /// Interrupt-matrix source ID for the WiFi MAC (MAC_INTR_MAP @ offset 0).
 const MAC_INTR_SOURCE: u32 = 0;
 
@@ -105,17 +116,24 @@ impl Esp32c3WifiMac {
             let w0 = bus.read_u32(desc as u64).unwrap_or(0);
             let buf = bus.read_u32(desc as u64 + 4).unwrap_or(0);
             let next = bus.read_u32(desc as u64 + 8).unwrap_or(0);
-            let cap = (w0 & 0xFFFF) as usize;
+            let cap = (w0 & 0xFFF) as usize; // lldesc size field (buffer capacity)
             if w0 & DESC_OWNER != 0 && buf != 0 && cap > 0 {
                 let frame = self.pending_rx.pop_front().unwrap();
                 let n = frame.len().min(cap);
                 for (i, b) in frame.iter().take(n).enumerate() {
                     let _ = bus.write_u8(buf as u64 + i as u64, *b);
                 }
-                // Write back word0: received length in low 16, owner cleared.
-                let new_w0 = (w0 & !0xFFFF & !DESC_OWNER) | (n as u32 & 0xFFFF);
+                // Write back the lldesc the way HW does on RX completion: owner
+                // cleared, eof set, length[23:12] = received bytes, size[11:0]
+                // preserved. (Putting the length in the wrong field made the
+                // driver's RX callback skip the descriptor.)
+                let new_w0 = DESC_EOF | (((n as u32) & 0xFFF) << 12) | (w0 & 0xFFF);
                 let _ = bus.write_u32(desc as u64, new_w0);
                 self.set_event(EVENT_RX_DONE);
+                RX_DBG_BUF.store(buf, std::sync::atomic::Ordering::Relaxed);
+                if std::env::var("LABWIRED_RXBUF_TRACE").is_ok() {
+                    eprintln!("[rxinj] desc={desc:#010x} buf={buf:#010x} len={n}");
+                }
                 return true;
             }
             desc = next;
@@ -253,10 +271,13 @@ mod tests {
         mac.queue_rx_frame(frame.clone());
         mac.tick_with_bus(&mut bus);
 
-        // Descriptor word0: owner cleared, length = 4.
+        // Descriptor word0 (lldesc): owner cleared, eof set, length[23:12]=4,
+        // size[11:0]=1600 preserved.
         let w0 = bus.read_u32(desc as u64).unwrap();
         assert_eq!(w0 & DESC_OWNER, 0, "owner cleared after RX");
-        assert_eq!(w0 & 0xFFFF, 4, "received length written");
+        assert_ne!(w0 & DESC_EOF, 0, "eof set");
+        assert_eq!((w0 >> 12) & 0xFFF, 4, "rx length in length field");
+        assert_eq!(w0 & 0xFFF, 1600, "buffer size preserved");
         // Frame bytes DMA'd into the buffer.
         for (i, b) in frame.iter().enumerate() {
             assert_eq!(bus.read_u8(buf as u64 + i as u64).unwrap(), *b);

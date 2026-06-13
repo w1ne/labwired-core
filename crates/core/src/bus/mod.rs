@@ -2364,13 +2364,23 @@ impl SystemBus {
                 .read_u32(INTMATRIX_BASE + (src as u64) * 4)
                 .map(|v| v & 0x1F)
                 .unwrap_or(0);
-            if line == 0 || (enable & (1 << line)) == 0 {
-                continue;
-            }
             let pri = self
                 .read_u32(INTMATRIX_BASE + 0x114 + (line as u64) * 4)
                 .unwrap_or(0)
                 & 0xF;
+            if src == 0 && std::env::var("LABWIRED_RXBUF_TRACE").is_ok() {
+                use std::sync::atomic::{AtomicU32, Ordering};
+                static N: AtomicU32 = AtomicU32::new(0);
+                if N.fetch_add(1, Ordering::Relaxed) < 3 {
+                    eprintln!(
+                        "[macirq] src0 line={line} enable_bit={} pri={pri} thresh={thresh}",
+                        (enable >> line) & 1
+                    );
+                }
+            }
+            if line == 0 || (enable & (1 << line)) == 0 {
+                continue;
+            }
             if pri >= thresh {
                 mask |= 1u32 << line;
             }
@@ -2813,6 +2823,22 @@ impl crate::Bus for SystemBus {
     }
 
     fn read_u32(&self, addr: u64) -> SimResult<u32> {
+        // Debug (env-gated): trace the driver's reads of a freshly-injected RX
+        // buffer, to RE the rx-control header format the RX callback parses.
+        if std::env::var("LABWIRED_RXBUF_TRACE").is_ok() {
+            let base = crate::peripherals::esp32c3::wifi_mac::RX_DBG_BUF
+                .load(std::sync::atomic::Ordering::Relaxed) as u64;
+            // Trace from 0x100 BEFORE the buffer (to catch the descriptor-list
+            // reads, e.g. the descriptor at buf-0x7c) through the buffer.
+            if base != 0 && (base.saturating_sub(0x100)..base + 512).contains(&addr) {
+                use std::sync::atomic::{AtomicU32, Ordering};
+                static N: AtomicU32 = AtomicU32::new(0);
+                if N.fetch_add(1, Ordering::Relaxed) < 200 {
+                    let v = self.ram.read_u32(addr).unwrap_or(0);
+                    eprintln!("[rxrd] +{:#05x} ({addr:#010x}) = {v:#010x}", addr - base);
+                }
+            }
+        }
         // Cortex-M bit-band alias: return 0 or 1 based on the physical bit.
         if self.bit_band_enabled {
             if let Some((phys_byte, bit)) = Self::bit_band_translate(addr) {

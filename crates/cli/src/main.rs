@@ -1221,7 +1221,47 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
     };
     let trail_cap = 600;
     let mut recent = std::collections::VecDeque::with_capacity(trail_cap + 1);
+    // WiFi bridge RX-header RE harness (env-gated): once, after the MAC is up,
+    // inject a frame whose byte[i]=i into the driver's RX ring so the RX-buffer
+    // read-trace (LABWIRED_RXBUF_TRACE) reveals which offsets the driver's RX
+    // callback parses — i.e. the rx-control header layout. The read value at a
+    // traced offset equals the source offset, mapping reads → header fields.
+    let bridge_re = std::env::var("LABWIRED_WIFI_BRIDGE_RE").is_ok();
+    let bridge_inject_at: u64 = 25_000_000;
+    // Find the BEHAVIORAL wifi_mac model by type (the declarative chip-yaml
+    // "wifi_mac" shares the name; routing uses ours via greatest-start-wins, but
+    // name lookup would return the declarative one).
+    let wifi_mac_idx = machine.bus.peripherals.iter().position(|p| {
+        p.dev
+            .as_any()
+            .and_then(|a| {
+                a.downcast_ref::<labwired_core::peripherals::esp32c3::wifi_mac::Esp32c3WifiMac>()
+            })
+            .is_some()
+    });
+    let mut bridge_injected = false;
+    if bridge_re {
+        eprintln!(
+            "[bridge] RE mode on; wifi_mac_idx={wifi_mac_idx:?} inject_at={bridge_inject_at}"
+        );
+    }
+
     for i in 0..limit {
+        if bridge_re && !bridge_injected && i >= bridge_inject_at {
+            if let Some(idx) = wifi_mac_idx {
+                if let Some(any) = machine.bus.peripherals[idx].dev.as_any_mut() {
+                    if let Some(mac) = any
+                        .downcast_mut::<labwired_core::peripherals::esp32c3::wifi_mac::Esp32c3WifiMac>(
+                        )
+                    {
+                        let frame: Vec<u8> = (0..320u32).map(|b| (b & 0xFF) as u8).collect();
+                        mac.queue_rx_frame(frame);
+                        eprintln!("[bridge] injected RX-RE frame at step {i}");
+                        bridge_injected = true;
+                    }
+                }
+            }
+        }
         let pc = machine.cpu.get_pc();
         if debug {
             if recent.len() == trail_cap {

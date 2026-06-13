@@ -55,8 +55,17 @@ brings WiFi up and starts a scan:
 - Other config seen: `0x6003_3c60`/`c64`/`c6c` (a second ring/EOF pointer at
   `0x6003_3c64` ← `0x3fc00000`, zeroed), `0x6003_3d04`, `0x6003_3084`.
 
-**RX-completion (still to confirm):** how `lmacProcessRxSucData` reads back the
-received length / owner from word0 — needed so an injected frame is accepted.
+**RX descriptor is an ESP `lldesc_t`** (CONFIRMED by tracing the driver's reads
+of an injected descriptor): word0 = `size[11:0] | length[23:12] | offset[28:24]
+| sosf[29] | eof[30] | owner[31]`. Empty/HW-owned reads `0x80640640`
+(owner=1, length=size=1600). On RX completion HW writes `owner=0, eof=1,
+length=actual-rx-bytes, size preserved` (e.g. `0x40140640` for a 320-byte
+frame). **VALIDATED end-to-end:** with that writeback, the real driver's RX
+callback follows word1 (buffer ptr) and reads the injected frame bytes out of
+the buffer, then recycles the descriptor (`owner` re-set to `0xc0140640`). The
+RX inject path (queue → DMA → lldesc → MAC IRQ → `wDev_ProcessFiq` →
+`lmacProcessRxSucData` → driver reads frame) works against the real firmware.
+The 802.11 frame starts at buffer offset 0 (no rx-control prefix in the buffer).
 
 **TX ring (still to RE):** the scan probe-request TX path hadn't queued a TX
 descriptor within the traced window; needs a longer trace / break on the lmac
