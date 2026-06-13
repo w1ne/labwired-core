@@ -70,7 +70,9 @@ impl RiscV {
             // 0x802 is the ESP32-C3 machine cycle CSR that `ets_delay_us`
             // busy-reads (while now-start < target_cycles). Without an advancing
             // value the delay spins forever. Back them with the per-step mtime.
-            0xC00 | 0x802 => (self.mtime & 0xFFFFFFFF) as u32,
+            // 0x7E2 is the C3 machine performance counter (PCCR), which
+            // bootloader_fill_random reads as an entropy/timing delta.
+            0xC00 | 0x802 | 0x7E2 => (self.mtime & 0xFFFFFFFF) as u32,
             0xC80 => (self.mtime >> 32) as u32,
             _ => 0,
         }
