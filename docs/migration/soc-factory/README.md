@@ -15,13 +15,20 @@ oracle (no behavior change until Stage 3):
 - **Stage 1 — pre-stock the factory.** `peripherals/esp32s3/factory.rs::try_build`
   hosts the 26 ESP32-S3 peripheral types; `from_config` delegates to it before
   the generic match. Pure addition — no chip YAML references these types yet, so
-  behavior is unchanged (regression identical to Stage 0). **← current**
-- **Stage 2 — extract the Xtensa core overlay.** Carve the genuinely
-  shared-CPU-state wiring (interrupt matrix, interconnect, boot ROM, RAM banks)
-  out of `configure_xtensa_esp32s3` into `configure_xtensa_core`, ~150 lines.
-- **Stage 3 — flip esp32s3 to `from_config`.** Complete `esp32s3.yaml` (all ~35
-  peripherals), build via `from_config` + `configure_xtensa_core`, diff against
-  the golden, then delete the per-peripheral body of `configure_xtensa_esp32s3`.
+  behavior is unchanged (regression identical to Stage 0).
+- **Stage 2 — separate core from peripherals.** `configure_xtensa_esp32s3` is now
+  three parts: `configure_esp32s3_memmap` (RAM/flash-XIP/MMU/ROM), the 12 core
+  registrations inline (intmatrix, crosscore_ipi, core1_control, extmem, spimem1,
+  system/system_regs/system_regs_hi, rtc_cntl, efuse, low_mmio, mmio_rest), and
+  `register_esp32s3_peripherals` (all peripheral models — the unit Stage 3
+  deletes). Done in verbatim, behavior-preserving moves; routing is address-pure
+  (greatest-start-wins), with UARTs kept after the catch-alls for the one
+  same-base tie. Verified each step against brom_boot_smoke + firmware_survival.
+  **← current**
+- **Stage 3 — flip esp32s3 to `from_config`.** Complete `esp32s3.yaml` (all
+  peripherals, using the `esp32s3_*` type strings + per-instance `irq`), build the
+  peripherals via `from_config`, keep the core inline as a `configure_xtensa_core`
+  overlay, diff against the golden, then delete `register_esp32s3_peripherals`.
 - **Stage 4 — repeat for esp32 / esp32c3.**
 - **Stage 5 — feature-gate families** (`cortex-m`/`xtensa`/`esp32`/`nrf52`) so
   the wasm build and CI fixtures compile only what they need.
