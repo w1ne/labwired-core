@@ -1045,21 +1045,17 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
                 ),
             ),
         );
-        // WiFi MAC-ready status (WIFI_MAC 0x6003_3000 + 0xD14, bit0): the MAC
-        // HAL init (hal_init) busy-polls this bit for the MAC clock/reset to
-        // come ready before mac_txrx_init. Force-assert it over that one word
-        // (the declarative wifi_mac window stays intact elsewhere).
+        // WiFi MAC (WIFI_MAC 0x6003_3000, 12 KiB) — behavioral model for the
+        // MAC <-> SimNet bridge: register-backed bring-up, MAC-ready bit (0xD14
+        // b0, polled by hal_init), RX descriptor-ring DMA + RX-frame injection,
+        // and MAC interrupt (matrix source 0) on RX-done. Overrides the
+        // declarative wifi_mac window. See docs/esp32c3_wifi_mac_bridge.md.
         bus.add_peripheral(
-            "wifi_mac_ready",
-            0x6003_3D14,
-            0x4,
+            "wifi_mac",
+            0x6003_3000,
+            0x3000,
             None,
-            Box::new(
-                labwired_core::peripherals::esp32c3::forced_status::Esp32c3ForcedStatus::new(
-                    0x4,
-                    vec![(0x0, 1 << 0)],
-                ),
-            ),
+            Box::new(labwired_core::peripherals::esp32c3::wifi_mac::Esp32c3WifiMac::new()),
         );
         // Hardware RNG data register (WDEV_RND_REG, 0x6002_60B0): yields a fresh
         // word per read. bootloader_fill_random XORs successive reads and

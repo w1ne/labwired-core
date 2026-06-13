@@ -2891,6 +2891,15 @@ impl crate::Bus for SystemBus {
     }
 
     fn write_u32(&mut self, addr: u64, value: u32) -> SimResult<()> {
+        // Debug: trace WiFi MAC-window writes (env-gated) to RE the TX path.
+        if (0x6003_3000..0x6003_6000).contains(&addr) && std::env::var("LABWIRED_MAC_TRACE").is_ok()
+        {
+            use std::sync::atomic::{AtomicU32, Ordering};
+            static N: AtomicU32 = AtomicU32::new(0);
+            if N.fetch_add(1, Ordering::Relaxed) < 600 {
+                eprintln!("[macw] {addr:#010x} <= {value:#010x}");
+            }
+        }
         // Cortex-M bit-band alias translation (peripheral: 0x42000000-0x43FFFFFF,
         // SRAM: 0x22000000-0x23FFFFFF).  Each alias word maps to one bit of the
         // physical address.  Writing 1 sets the bit; writing 0 clears it.

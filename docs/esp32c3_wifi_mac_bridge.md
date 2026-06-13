@@ -38,6 +38,30 @@ between (802.11 ↔ Ethernet ↔ the existing L4 SimNet), not a socket shim.
   already model — so raising it delivers to `wDev_ProcessFiq` via the normal
   trap path.
 
+## MAC DMA registers (RE'd from the live connect run, `LABWIRED_MAC_TRACE`)
+
+Captured by tracing writes to the `0x6003_3000` MAC window while the real driver
+brings WiFi up and starts a scan:
+
+- **RX descriptor ring base**: `0x6003_3088` ← a DRAM pointer (e.g. `0x3fca4904`).
+- **RX descriptor format** (linked list, 3 words each):
+  | word | meaning |
+  |---|---|
+  | 0 | flags/len — `0x8064_0640`: **bit31 = owner** (HW may fill), low 16 = buffer size (`0x640` = 1600 = the "static rx buffer" size) |
+  | 1 | buffer pointer (DRAM, the 1600-byte frame buffer) |
+  | 2 | next-descriptor pointer (ring is a singly-linked list) |
+- **Trigger / handshake**: `0x6003_3084` bit31 (written `0x8000_0000` to kick;
+  the prior session's "handshake" scratch bit).
+- Other config seen: `0x6003_3c60`/`c64`/`c6c` (a second ring/EOF pointer at
+  `0x6003_3c64` ← `0x3fc00000`, zeroed), `0x6003_3d04`, `0x6003_3084`.
+
+**RX-completion (still to confirm):** how `lmacProcessRxSucData` reads back the
+received length / owner from word0 — needed so an injected frame is accepted.
+
+**TX ring (still to RE):** the scan probe-request TX path hadn't queued a TX
+descriptor within the traced window; needs a longer trace / break on the lmac
+TX path to find the TX-kick register + descriptor.
+
 ## RX-inject mechanism (target design)
 
 1. Place the received 802.11 frame into the next free RX DMA descriptor's

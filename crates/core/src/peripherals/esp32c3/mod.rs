@@ -12,3 +12,4 @@ pub mod rng;
 pub mod rtc_timer;
 pub mod sar_adc;
 pub mod sha;
+pub mod wifi_mac;
