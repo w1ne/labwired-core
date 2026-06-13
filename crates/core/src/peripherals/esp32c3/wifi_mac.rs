@@ -41,6 +41,12 @@ pub static RX_DBG_BUF: AtomicU32 = AtomicU32::new(0);
 
 const MAC_READY: u64 = 0xD14; // bit0 polled by hal_init
 const RX_RING_BASE: u64 = 0x88; // driver writes the RX descriptor-list head here
+/// RX descriptor-reload handshake (`hal_mac_rx_*_dscr_reload`): the driver sets
+/// bit0 to hand a descriptor back to the MAC and spins until the MAC clears it.
+const RX_DSCR_RELOAD: u64 = 0x84;
+/// HW rx-control header bytes the MAC DMAs ahead of the 802.11 frame (CSI off).
+/// The driver reads the frame at buf+48 and rssi/rate from header bytes 44/45.
+const RX_CTRL_HDR_LEN: usize = 48;
 const EVENT_GET: u64 = 0xC3C; // hal_mac_interrupt_get_event reads
 const EVENT_CLR: u64 = 0xC40; // hal_mac_interrupt_clr_event writes (W1C)
 
@@ -119,20 +125,48 @@ impl Esp32c3WifiMac {
             let cap = (w0 & 0xFFF) as usize; // lldesc size field (buffer capacity)
             if w0 & DESC_OWNER != 0 && buf != 0 && cap > 0 {
                 let frame = self.pending_rx.pop_front().unwrap();
-                let n = frame.len().min(cap);
-                for (i, b) in frame.iter().take(n).enumerate() {
+                // HW DMA layout: a RX_CTRL_HDR_LEN-byte rx-control header, then
+                // the 802.11 frame (CSI off → no CSI block). The driver reads
+                // the frame at buf + 48 and rssi/rate from header bytes 44/45.
+                let total = (RX_CTRL_HDR_LEN + frame.len()).min(cap);
+                let mut hdr = [0u8; RX_CTRL_HDR_LEN];
+                // word@0: bit28 (0x1000_0000) = "frame matched an enabled vif"
+                // (the STA interface). wDev_ProcessRxSucData's acceptance gate
+                // (`word0 & 0x30000000 != 0` and the bit28 check) drops the
+                // frame to wDev_DiscardFrame without it.
+                hdr[0..4].copy_from_slice(&0x1000_0000u32.to_le_bytes());
+                // word@4: EOF/valid bit27 (0x0800_0000) + length[19:8] = total
+                // DMA bytes (header + frame); the driver re-packs this.
+                let w4 = 0x0800_0000u32 | (((total as u32) & 0xFFF) << 8);
+                hdr[4..8].copy_from_slice(&w4.to_le_bytes());
+                hdr[44] = 0xC4; // rssi ≈ -60 dBm (signed)
+                hdr[45] = 0x0B; // rate (11 Mbps CCK)
+                                // hdr[47] left 0 (the driver special-cases 0xF5).
+                for (i, b) in hdr.iter().enumerate() {
                     let _ = bus.write_u8(buf as u64 + i as u64, *b);
                 }
-                // Write back the lldesc the way HW does on RX completion: owner
-                // cleared, eof set, length[23:12] = received bytes, size[11:0]
-                // preserved. (Putting the length in the wrong field made the
-                // driver's RX callback skip the descriptor.)
-                let new_w0 = DESC_EOF | (((n as u32) & 0xFFF) << 12) | (w0 & 0xFFF);
+                for (i, b) in frame.iter().take(total - RX_CTRL_HDR_LEN).enumerate() {
+                    let _ = bus.write_u8(buf as u64 + (RX_CTRL_HDR_LEN + i) as u64, *b);
+                }
+                // Write back the lldesc as HW does on RX completion: owner
+                // cleared, eof set, length[23:12] = TOTAL DMA bytes (the driver
+                // subtracts the 48-byte header to get the 802.11 length), size
+                // preserved.
+                let new_w0 = DESC_EOF | (((total as u32) & 0xFFF) << 12) | (w0 & 0xFFF);
                 let _ = bus.write_u32(desc as u64, new_w0);
+                // RX status registers the driver reads to locate the filled
+                // descriptor: 0x90 = last-filled (low 20 bits) + 0xc64 upper,
+                // 0x8c = next descriptor (HW's write head).
+                self.regs[(0x90 / 4) as usize] = desc & 0x000F_FFFF;
+                self.regs[(0xc64 / 4) as usize] = desc & 0xFFF0_0000;
+                self.regs[(0x8c / 4) as usize] = next;
                 self.set_event(EVENT_RX_DONE);
                 RX_DBG_BUF.store(buf, std::sync::atomic::Ordering::Relaxed);
                 if std::env::var("LABWIRED_RXBUF_TRACE").is_ok() {
-                    eprintln!("[rxinj] desc={desc:#010x} buf={buf:#010x} len={n}");
+                    eprintln!(
+                        "[rxinj] desc={desc:#010x} buf={buf:#010x} total={total} (hdr48+frame{})",
+                        frame.len()
+                    );
                 }
                 return true;
             }
@@ -173,6 +207,13 @@ impl Peripheral for Esp32c3WifiMac {
                 }
                 if let Some(slot) = self.regs.get_mut((offset / 4) as usize) {
                     *slot = value;
+                }
+            }
+            RX_DSCR_RELOAD => {
+                // The MAC consumes/reloads the descriptor instantly: clear the
+                // bit0 the driver set, so its spin-until-clear loop exits.
+                if let Some(slot) = self.regs.get_mut((offset / 4) as usize) {
+                    *slot = value & !1;
                 }
             }
             RX_RING_BASE => {
@@ -271,16 +312,27 @@ mod tests {
         mac.queue_rx_frame(frame.clone());
         mac.tick_with_bus(&mut bus);
 
-        // Descriptor word0 (lldesc): owner cleared, eof set, length[23:12]=4,
+        // Descriptor word0 (lldesc): owner cleared, eof set, length[23:12] =
+        // total DMA bytes (48-byte rx-control header + 4-byte frame = 52),
         // size[11:0]=1600 preserved.
         let w0 = bus.read_u32(desc as u64).unwrap();
         assert_eq!(w0 & DESC_OWNER, 0, "owner cleared after RX");
         assert_ne!(w0 & DESC_EOF, 0, "eof set");
-        assert_eq!((w0 >> 12) & 0xFFF, 4, "rx length in length field");
+        assert_eq!(
+            (w0 >> 12) & 0xFFF,
+            (RX_CTRL_HDR_LEN as u32) + 4,
+            "length field = header + frame bytes"
+        );
         assert_eq!(w0 & 0xFFF, 1600, "buffer size preserved");
-        // Frame bytes DMA'd into the buffer.
+        // rssi/rate in the rx-control header; 802.11 frame at buf + 48.
+        assert_eq!(bus.read_u8(buf as u64 + 44).unwrap(), 0xC4, "rssi byte");
         for (i, b) in frame.iter().enumerate() {
-            assert_eq!(bus.read_u8(buf as u64 + i as u64).unwrap(), *b);
+            assert_eq!(
+                bus.read_u8(buf as u64 + RX_CTRL_HDR_LEN as u64 + i as u64)
+                    .unwrap(),
+                *b,
+                "frame byte at header+offset"
+            );
         }
         // RX event set → MAC IRQ asserted.
         assert_ne!(mac.event() & EVENT_RX_DONE, 0);
