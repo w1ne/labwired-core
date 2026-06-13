@@ -9,6 +9,7 @@ pub mod core1_control;
 pub mod crosscore_ipi;
 pub mod ds;
 pub mod extmem;
+pub mod factory;
 pub mod flash_xip;
 pub mod gdma;
 pub mod gpio;

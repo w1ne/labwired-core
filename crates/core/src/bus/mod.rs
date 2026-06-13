@@ -1120,6 +1120,30 @@ impl SystemBus {
         }
     }
 
+    /// Place a built peripheral on the bus using the descriptor's window size
+    /// (default 4KB) and IRQ. Shared by the per-family factory dispatch and the
+    /// generic-match path in [`Self::from_config`] so both stay in lockstep.
+    fn push_peripheral(
+        &mut self,
+        p_cfg: &labwired_config::PeripheralConfig,
+        dev: Box<dyn Peripheral>,
+    ) -> anyhow::Result<()> {
+        let size = match &p_cfg.size {
+            Some(size) => parse_size(size)?,
+            None => 0x1000,
+        };
+        self.peripherals.push(PeripheralEntry {
+            name: p_cfg.id.clone(),
+            base: p_cfg.base_address,
+            size,
+            irq: p_cfg.irq,
+            dev,
+            ticks_remaining: 0,
+            generation: 0,
+        });
+        Ok(())
+    }
+
     pub fn from_config(chip: &ChipDescriptor, manifest: &SystemManifest) -> anyhow::Result<Self> {
         let flash_size = parse_size(&chip.flash.size)?;
         let ram_size = parse_size(&chip.ram.size)?;
@@ -1208,6 +1232,16 @@ impl SystemBus {
                     canonical_type,
                     p_cfg.id
                 );
+            }
+
+            // Per-family factories own their peripheral arms in their own modules,
+            // so this central match stops growing (and shrinks as families migrate
+            // out). Try them first; unmigrated families fall through to the match.
+            if let Some(dev) =
+                crate::peripherals::esp32s3::factory::try_build(&canonical_type, p_cfg)
+            {
+                bus.push_peripheral(p_cfg, dev)?;
+                continue;
             }
 
             let dev: Box<dyn Peripheral> = match canonical_type.as_str() {
@@ -1832,28 +1866,7 @@ impl SystemBus {
                 }
             };
 
-            // Map peripheral window size + IRQ from descriptor when provided.
-            // Defaults keep older descriptors working.
-            let size = if let Some(size) = &p_cfg.size {
-                parse_size(size)?
-            } else {
-                0x1000 // Default 4KB page
-            };
-
-            // SysTick raises its IRQ via PeripheralTickResult::system_exception,
-            // not via the NVIC IRQ position field — leave its irq as None
-            // unless the yaml explicitly sets one.
-            let irq = p_cfg.irq;
-
-            bus.peripherals.push(PeripheralEntry {
-                name: p_cfg.id.clone(),
-                base: p_cfg.base_address,
-                size,
-                irq,
-                dev,
-                ticks_remaining: 0,
-                generation: 0,
-            });
+            bus.push_peripheral(p_cfg, dev)?;
         }
 
         for ext in &manifest.external_devices {
