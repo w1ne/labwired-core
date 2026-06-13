@@ -125,6 +125,41 @@ Raw capture logs aren't committed (see the repo-root `fixtures/` ignore);
 regenerate with `trace_poll.sh` (reads) and `WP_TYPE=w trace_poll.sh` (writes) on
 a live C3 — both runs above reproduced the deterministic bands byte-for-byte.
 
+## The real blocker is the boot path, not the MAC (diagnosed 2026-06-13)
+
+Booting the real IDF `wifi_probe.elf` in the C3 sim shows the WiFi MAC can't even
+be reached yet — the firmware dies in boot:
+
+* **fast-boot, no ROM image:** runs 196,613 instructions of IDF C startup, then PC
+  slides off the end of the zero-filled ROM region at `0x40060000` (it *called* a
+  C3 ROM function and there was nothing there).
+* **fast-boot, real ROM dumped from silicon** (`openocd dump_image 0x40000000
+  0x60000` → `LABWIRED_ESP32C3_ROM`, `0x3FF00000 0x20000` → `_ROM_DATA`): crashes
+  at step ~6596 inside `rom_i2c_writeReg_Mask`:
+
+  ```
+  40039234: lw a5, 1464(a5)   # a5 = *(0x3fcdf5b8)  = rom_phyFuns  (DRAM global)
+  40039240: lw a5, 428(a5)    # a5 = phyFuns->fn[107]
+  40039256: jalr a5           # → 0xfe38d096 (garbage) → fault
+  ```
+
+  `rom_phyFuns` (`0x3fcdf5b8`) is a ROM **function-pointer table in DRAM** that the
+  BROM reset handler initializes on silicon. Fast-boot jumps straight to the app
+  ELF entry (`0x403802dc`) and **skips the BROM reset sequence**, so the ROM's DRAM
+  globals are never set up and the indirect call goes to garbage. (Symbols mapped
+  against `~/.espressif/tools/esp-rom-elfs/.../esp32c3_rev3_rom.elf`.)
+
+Fix, the faithful way (run the binary, don't thunk it): **RISC-V rom-boot** — reset
+the CPU to the BROM vector `0x40000400`, back the XIP/flash windows with the real
+flash image (`LABWIRED_ESP32C3_FLASH` = bootloader+ptable+app), and let the real
+ROM run: it initializes its own DRAM globals (`rom_phyFuns` et al.), loads the
+2nd-stage bootloader + app through the flash path, and jumps to `app_main` exactly
+like silicon. Today `--rom-boot` is implemented only for Xtensa
+(`configure_xtensa_esp32s3`, `LABWIRED_ESP32S3_FLASH`); C3 (RISC-V) only fast-boots.
+That's the one remaining task (#18) gating real WiFi-in-sim — once IDF apps reach
+`esp_wifi_start`, the MAC is mostly register-backed scratch (above) plus the DMA
+ring → SimNet bridge (#10).
+
 ## Reproduce
 
 ```text
