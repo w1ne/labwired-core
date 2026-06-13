@@ -1,9 +1,36 @@
 # ESP32-C3 WiFi MAC ↔ SimNet bridge (design + RE notes)
 
-Status: **in progress.** Boot brings WiFi fully up in sim (see
-`esp32c3_rom_boot.md`); this doc covers the next phase — making the **real** MAC
-move packets to/from the in-sim virtual network, *without* the `wifi_thunks`
-shortcut the ESP32-S3 used.
+Status: **bidirectional + associated.** An unmodified C3 IDF binary boots, brings
+WiFi up, and **associates with a virtual AP over the real MAC** (no
+`wifi_thunks`): `init → auth → assoc → run → STA CONNECTED`. The bridge injects
+RX frames (beacon/auth-resp/assoc-resp) and **captures the MAC's TX** (the STA's
+probe/auth/assoc requests and a real broadcast **IPv4/UDP DHCP-discover**).
+Remaining: an IP/DHCP responder that turns captured TX into injected RX replies
+so the STA gets an IP and exchanges app traffic.
+
+## Bidirectional summary (implemented in `esp32c3::wifi_mac` + cli bridge)
+
+- **RX inject** (`queue_rx_frame`): write `[48-byte rx-control header][802.11
+  frame]` into an owner-held lldesc RX descriptor, set the lldesc (owner=0,
+  eof=1, length=total), set RX event `0x01004000`, raise MAC IRQ (matrix src 0).
+  Header must have **word@0 bit28** (matched-vif), word@4 = `0x08000000 |
+  len<<8`, byte44=rssi, byte45=rate.
+- **TX capture** (`take_tx_frames`): on a write of `0xC000_0000` to per-AC PLCP0
+  `0x60033D08-AC*8`, follow the low-20-bit pointer → TX lldesc → word1 = frame
+  buffer (DRAM), read the 802.11 frame, then signal TX-complete (per-queue done
+  state `0xCB0` + event bit `0x80`) since TX is fire-and-forget.
+- **Virtual AP** (cli `build_open_beacon`/`build_auth_resp`/`build_assoc_resp`,
+  BSSID `02:00:00:00:00:01`, STA `00:00:00:00:00:00`, OPEN auth).
+
+## The remaining DHCP/IP final mile
+
+The captured DHCP-discover (802.11 data, to-DS, LLC/SNAP ethertype 0x0800,
+IPv4/UDP) must be answered: parse it, build a DHCP-offer then DHCP-ack (assign
+e.g. 192.168.4.2, gw 192.168.4.1), wrap in UDP/IPv4 (IPv4 header checksum
+required; UDP checksum may be 0)/LLC-SNAP/802.11-data (from-DS: addr1=STA,
+addr2=BSSID, addr3=server), and `queue_rx_frame` it. Then the STA reaches
+`IP_EVENT_STA_GOT_IP`; subsequent TCP/UDP payloads relay to the existing L4
+`SimNet` servers. (Original phase notes below.)
 
 ## Why this is its own phase (the impedance mismatch)
 
