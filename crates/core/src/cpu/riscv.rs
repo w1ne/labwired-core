@@ -142,13 +142,17 @@ impl Cpu for RiscV {
             }
             Instruction::Jal { rd, imm } => {
                 let target = self.pc.wrapping_add(imm as u32);
-                self.write_reg(rd, self.pc.wrapping_add(4));
+                // Link address is the NEXT instruction: pc + inst_len. The
+                // decoder maps the 2-byte C.JAL to Jal, so a hardcoded +4 would
+                // set ra 2 bytes too far and corrupt every compressed call's
+                // return — use inst_len so c.jal links pc+2 and jal links pc+4.
+                self.write_reg(rd, self.pc.wrapping_add(inst_len));
                 next_pc = target;
             }
             Instruction::Jalr { rd, rs1, imm } => {
                 let base = self.read_reg(rs1);
                 let target = base.wrapping_add(imm as u32) & !1;
-                self.write_reg(rd, self.pc.wrapping_add(4));
+                self.write_reg(rd, self.pc.wrapping_add(inst_len));
                 next_pc = target;
             }
             Instruction::Beq { rs1, rs2, imm } => {

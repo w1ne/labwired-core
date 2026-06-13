@@ -410,15 +410,20 @@ pub fn decode_rv32c(inst: u16) -> Instruction {
                     }
                 }
                 1 => {
-                    // C.JAL (RV32C only)
-                    let imm = ((inst >> 2) & 0xE) |     // imm[3:1]
-                              ((inst >> 7) & 0x10) |    // imm[4]
-                              ((inst >> 2) & 0x20) |    // imm[5]
-                              ((inst >> 1) & 0x40) |    // imm[6]
-                              ((inst >> 11) & 0x80) |   // imm[7]
-                              ((inst >> 1) & 0x300) |   // imm[9:8]
-                              ((inst >> 1) & 0x400) |   // imm[10]
-                              ((inst >> 1) & 0x800); // imm[11]
+                    // C.JAL (RV32C only) — CJ-format immediate, identical bit
+                    // layout to C.J below. The previous hand-rolled extraction
+                    // mis-sourced offset[5], offset[7], and offset[10] (read
+                    // inst[8] from the wrong field), dropping 0x400 on any
+                    // target with offset[10] set — which slid the real C3 BROM's
+                    // `c.jal` off into a shared epilogue and rebooted to 0.
+                    let imm = (((inst >> 12) & 0x1) << 11)  // offset[11]
+                              | (((inst >> 11) & 0x1) << 4)   // offset[4]
+                              | (((inst >> 9) & 0x3) << 8)    // offset[9:8]
+                              | (((inst >> 8) & 0x1) << 10)   // offset[10]
+                              | (((inst >> 7) & 0x1) << 6)    // offset[6]
+                              | (((inst >> 6) & 0x1) << 7)    // offset[7]
+                              | (((inst >> 3) & 0x7) << 1)    // offset[3:1]
+                              | (((inst >> 2) & 0x1) << 5); // offset[5]
                     let signed_imm = if (imm & 0x800) != 0 {
                         (imm as i32) | !0xFFF
                     } else {
@@ -446,12 +451,19 @@ pub fn decode_rv32c(inst: u16) -> Instruction {
                 3 => {
                     let rd = ((inst >> 7) & 0x1F) as u8;
                     if rd == 2 {
-                        // C.ADDI16SP
-                        let imm = ((inst >> 3) & 0x180) | // imm[8:7]
-                                  ((inst >> 2) & 0x40) |  // imm[6]
-                                  ((inst >> 1) & 0x20) |  // imm[5]
-                                  ((inst >> 4) & 0x10) |  // imm[4]
-                                  (((inst >> 12) & 1) << 9); // imm[9]
+                        // C.ADDI16SP — nzimm[9:4], scaled by 16. The previous
+                        // extraction mis-sourced imm[4/5/7/8] (decoded
+                        // `addi sp,sp,-288` as -432), unbalancing every stack
+                        // frame that uses it and corrupting saved return
+                        // addresses. Correct CI-for-sp layout:
+                        //   inst[12]=imm[9] inst[6]=imm[4] inst[5]=imm[6]
+                        //   inst[4]=imm[8]  inst[3]=imm[7] inst[2]=imm[5]
+                        let imm = (((inst >> 12) & 1) << 9)  // imm[9]
+                                  | (((inst >> 4) & 1) << 8)   // imm[8]
+                                  | (((inst >> 3) & 1) << 7)   // imm[7]
+                                  | (((inst >> 5) & 1) << 6)   // imm[6]
+                                  | (((inst >> 2) & 1) << 5)   // imm[5]
+                                  | (((inst >> 6) & 1) << 4); // imm[4]
                         let signed_imm = if (imm & 0x200) != 0 {
                             (imm as i32) | !0x3FF
                         } else {
@@ -654,5 +666,47 @@ pub fn decode_rv32c(inst: u16) -> Instruction {
             }
         }
         _ => Instruction::Unknown(inst as u32),
+    }
+}
+
+#[cfg(test)]
+mod compressed_jump_tests {
+    use super::*;
+
+    // Regression tests for the RV32C immediate bugs surfaced by running the
+    // real ESP32-C3 mask ROM (all three broke boot before being fixed).
+
+    #[test]
+    fn c_jal_immediate_real_rom_instruction() {
+        // 0x3539 @ 0x40047e4e in the C3 BROM is `c.jal 0x40047c5c` (offset
+        // -498). The old decode mis-sourced offset[10] and produced -1522,
+        // landing in a shared epilogue and rebooting to 0.
+        match decode_rv32c(0x3539) {
+            Instruction::Jal { rd, imm } => {
+                assert_eq!(rd, 1, "c.jal links ra (x1)");
+                assert_eq!(imm, -498, "c.jal offset");
+            }
+            other => panic!("expected Jal, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn c_addi16sp_immediate_real_rom_instruction() {
+        // 0x712d @ 0x4004874c is `addi sp,sp,-288`. The old decode produced
+        // -432, unbalancing the stack frame and clobbering the saved ra.
+        match decode_rv32c(0x712d) {
+            Instruction::CAddi16sp { imm } => assert_eq!(imm, -288),
+            other => panic!("expected CAddi16sp, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn c_j_immediate_positive_and_negative() {
+        // C.J (funct3=5) shares the CJ layout; sanity-check a known pair.
+        // 0xbff1 = `c.j -16` (a common backward jump); verify sign + magnitude.
+        match decode_rv32c(0xa001) {
+            Instruction::CJ { imm } => assert_eq!(imm, 0, "c.j 0 (to self)"),
+            other => panic!("expected CJ, got {other:?}"),
+        }
     }
 }

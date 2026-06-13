@@ -29,9 +29,10 @@ const PAGE_TABLE_ENTRIES: usize = 64;
 /// ESP32-S3 hardware MMU constants (soc/esp32s3 `ext_mem_defs.h`). The flash
 /// cache MMU has 512 entries of 64 KiB each, covering a 32 MiB linear window
 /// shared by the D-bus (0x3C00_0000) and I-bus (0x4200_0000) cache regions.
-const SOC_MMU_VADDR_MASK: u32 = 0x1FF_FFFF; // 32 MiB linear span
-const SOC_MMU_INVALID: u32 = 1 << 14; // entry-invalid flag
-const SOC_MMU_VALID_VAL_MASK: u32 = 0x3FFF; // physical page-number field
+/// The per-entry valid/invalid + page-number layout now lives in [`MmuFmt`]
+/// (see [`MMU_FMT_S3`]/[`MMU_FMT_C3`]); only the reset/invalid flag and the
+/// table length are needed here to allocate and reset a fresh table.
+const SOC_MMU_INVALID: u32 = 1 << 14; // S3 entry-invalid flag (reset state)
 pub const SOC_MMU_ENTRY_NUM: usize = 512;
 
 /// A flash-cache MMU table shared between the MMU-register peripheral (which
@@ -45,6 +46,33 @@ pub fn new_mmu_table() -> SharedMmuTable {
     Arc::new(Mutex::new(vec![SOC_MMU_INVALID; SOC_MMU_ENTRY_NUM]))
 }
 
+/// Per-chip flash-cache MMU entry format. The MMU table register block is the
+/// same (`0x600C_5000`) and the entries are u32, but the valid/invalid flag and
+/// physical-page-number field differ by SoC (soc/<chip>/ext_mem_defs.h).
+#[derive(Debug, Clone, Copy)]
+pub struct MmuFmt {
+    /// Bit that marks an entry invalid (S3: BIT(14); C3: BIT(8)).
+    pub invalid_bit: u32,
+    /// Mask of the physical-page-number field (S3: 0x3FFF; C3: 0xFF).
+    pub valid_val_mask: u32,
+    /// Linear virtual-address span mask (entry_num*64KiB - 1).
+    pub vaddr_mask: u32,
+}
+
+/// ESP32-S3 MMU format: 512 × 64 KiB entries, invalid = BIT(14).
+pub const MMU_FMT_S3: MmuFmt = MmuFmt {
+    invalid_bit: 1 << 14,
+    valid_val_mask: 0x3FFF,
+    vaddr_mask: 0x1FF_FFFF, // 32 MiB
+};
+
+/// ESP32-C3 MMU format: 128 × 64 KiB entries, invalid = BIT(8), 8 MiB span.
+pub const MMU_FMT_C3: MmuFmt = MmuFmt {
+    invalid_bit: 1 << 8,
+    valid_val_mask: 0xFF,
+    vaddr_mask: 0x7F_FFFF, // 8 MiB
+};
+
 #[derive(Debug, Clone)]
 pub struct FlashXipPeripheral {
     backing: Arc<Mutex<Vec<u8>>>,
@@ -55,6 +83,8 @@ pub struct FlashXipPeripheral {
     /// Proper-model translation: when present, reads translate through the
     /// real hardware MMU table the firmware programs, exactly as silicon does.
     mmu_table: Option<SharedMmuTable>,
+    /// MMU entry format for this chip (defaults to S3).
+    fmt: MmuFmt,
     base: u32,
 }
 
@@ -67,6 +97,24 @@ impl FlashXipPeripheral {
             backing,
             page_table: [None; PAGE_TABLE_ENTRIES],
             mmu_table: None,
+            fmt: MMU_FMT_S3,
+            base,
+        }
+    }
+
+    /// Proper-model constructor with an explicit chip MMU format (e.g.
+    /// [`MMU_FMT_C3`]). Use for chips whose entry layout isn't the S3 default.
+    pub fn new_mmu_fmt(
+        backing: Arc<Mutex<Vec<u8>>>,
+        base: u32,
+        mmu_table: SharedMmuTable,
+        fmt: MmuFmt,
+    ) -> Self {
+        Self {
+            backing,
+            page_table: [None; PAGE_TABLE_ENTRIES],
+            mmu_table: Some(mmu_table),
+            fmt,
             base,
         }
     }
@@ -80,6 +128,7 @@ impl FlashXipPeripheral {
             backing,
             page_table: [None; PAGE_TABLE_ENTRIES],
             mmu_table: Some(mmu_table),
+            fmt: MMU_FMT_S3,
             base,
         }
     }
@@ -112,15 +161,15 @@ impl FlashXipPeripheral {
         // Proper-model path: translate through the real hardware MMU table.
         if let Some(mmu) = &self.mmu_table {
             let vaddr = self.base.wrapping_add(offset as u32);
-            // entry_id = (vaddr & SOC_MMU_VADDR_MASK) >> 16  (mmu_ll_get_entry_id)
-            let entry_id = ((vaddr & SOC_MMU_VADDR_MASK) >> 16) as usize;
+            // entry_id = (vaddr & vaddr_mask) >> 16  (mmu_ll_get_entry_id)
+            let entry_id = ((vaddr & self.fmt.vaddr_mask) >> 16) as usize;
             let in_page = (vaddr & (PAGE_SIZE - 1)) as u64;
             let table = mmu.lock().unwrap();
             let entry = *table.get(entry_id)?;
-            if entry & SOC_MMU_INVALID != 0 {
+            if entry & self.fmt.invalid_bit != 0 {
                 return None; // unmapped MMU entry
             }
-            let phys_page = (entry & SOC_MMU_VALID_VAL_MASK) as u64;
+            let phys_page = (entry & self.fmt.valid_val_mask) as u64;
             return Some(phys_page * PAGE_SIZE as u64 + in_page);
         }
         // Fast-boot static mapping.
@@ -272,9 +321,9 @@ mod tests {
         let backing = Arc::new(Mutex::new(flash));
         let mmu = new_mmu_table();
         // Map D-bus virtual 0x3C80_0000 (entry 128) → physical page 128 (valid).
-        let entry_id = ((0x3C80_0000u32 & SOC_MMU_VADDR_MASK) >> 16) as usize;
+        let entry_id = ((0x3C80_0000u32 & MMU_FMT_S3.vaddr_mask) >> 16) as usize;
         assert_eq!(entry_id, 128);
-        mmu.lock().unwrap()[entry_id] = 128 & SOC_MMU_VALID_VAL_MASK; // VALID (bit14=0)
+        mmu.lock().unwrap()[entry_id] = 128 & MMU_FMT_S3.valid_val_mask; // VALID (bit14=0)
         let d = FlashXipPeripheral::new_mmu(backing, 0x3C00_0000, mmu);
         // Read at the window offset for vaddr 0x3C80_0000.
         assert_eq!(d.read(0x80_0000).unwrap(), 0xDE);
