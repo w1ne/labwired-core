@@ -88,9 +88,7 @@ impl RiscV {
             // pure delay. Delay loops only need to *complete*, not match wall
             // time, so a coarse cycle estimate is correct in sim; the real-time
             // CLINT timer (mtime vs mtimecmp, CSR 0xB00) stays unscaled.
-            0xC00 | 0x802 | 0x7E2 => {
-                (self.mtime.wrapping_mul(CYCLE_SCALE) & 0xFFFFFFFF) as u32
-            }
+            0xC00 | 0x802 | 0x7E2 => (self.mtime.wrapping_mul(CYCLE_SCALE) & 0xFFFFFFFF) as u32,
             0xC80 => (self.mtime.wrapping_mul(CYCLE_SCALE) >> 32) as u32,
             _ => 0,
         }
