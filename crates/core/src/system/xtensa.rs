@@ -850,14 +850,15 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         Box::new(RamPeripheral::new(0x10000)),
     );
 
-    // Phase 2B.3c (issue #192): every peripheral registered above is either
-    // migrated to the event scheduler (uart0, gpio, rtc_cntl, timg0/1) or
-    // inert (esp32 spi, efuse, syscon, and the SystemStub batch). So under the
-    // `event-scheduler` feature the per-cycle peripheral walk is skipped
-    // entirely — the ~2.4x throughput win. Verified: the full ESP32-classic
-    // test suite passes with the walk disabled (e2e renders byte-perfect).
-    // No effect with the feature off (the flag is only read there).
-    bus.legacy_walk_disabled = true;
+    // NOTE: the #192 per-cycle-walk optimization (`legacy_walk_disabled = true`)
+    // is intentionally NOT set here. It assumed every peripheral was either
+    // event-scheduler-migrated or inert, but the real ESP32 UART model
+    // (`esp32::uart::Esp32Uart`) shifts TX bytes out in `tick()` and is not
+    // scheduler-aware — under the `event-scheduler` feature, disabling the walk
+    // left UART0's FIFO undrained (no console output). Keeping the walk is
+    // correct for the tick-driven model; making the UART schedule its own drain
+    // events (to reclaim the ~2.4x) is a follow-up. With the feature off the
+    // walk always runs, so this changes only the event-scheduler lane.
 
     XtensaLx7::new()
 }
