@@ -993,17 +993,18 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
             None,
             Box::new(labwired_core::peripherals::esp32c3::cache::Esp32c3Cache::new()),
         );
-        // Analog I²C master / ANA_CONFIG block (0x6000_E000, DR_REG_RTC_I2C_BASE):
+        // Analog I²C master / ANA_CONFIG block (0x6000_E000, DR_REG_I2C_ANA_MST_BASE):
         // rom_i2c_writeReg drives it (read-modify-write of ANA_CONFIG regs) during
         // PHY/clock bring-up; the libphy full RF calibration also touches regs up
-        // past 0x6000_E130, so the window spans 0x400. Register-backed read-back
-        // keeps that path mapped.
+        // past 0x6000_E130, so the window spans 0x400. The model reports the
+        // master FSM status (0x50 bits[26:24]=7, idle/done) so the ROM's
+        // transaction busy-poll exits; all other regs are register-backed.
         bus.add_peripheral(
             "rtc_i2c_ana",
             0x6000_E000,
             0x400,
             None,
-            Box::new(labwired_core::peripherals::esp32c3::reg_block::Esp32c3RegBlock::new(0x400)),
+            Box::new(labwired_core::peripherals::esp32c3::ana_i2c::Esp32c3AnaI2c::new()),
         );
         // Hardware RNG data register (WDEV_RND_REG, 0x6002_60B0): yields a fresh
         // word per read. bootloader_fill_random XORs successive reads and
