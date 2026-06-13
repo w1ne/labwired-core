@@ -74,8 +74,8 @@ impl Esp32c3Sha {
     fn compress(&mut self) {
         let mut w = [0u32; 64];
         // Schedule words are the big-endian message words = bswap(TEXT[i]).
-        for i in 0..16 {
-            w[i] = self.text[i].swap_bytes();
+        for (wi, ti) in w.iter_mut().zip(self.text.iter()) {
+            *wi = ti.swap_bytes();
         }
         for i in 16..64 {
             let s0 = w[i - 15].rotate_right(7) ^ w[i - 15].rotate_right(18) ^ (w[i - 15] >> 3);
@@ -106,8 +106,8 @@ impl Esp32c3Sha {
             v[1] = v[0];
             v[0] = t1.wrapping_add(t2);
         }
-        for i in 0..8 {
-            self.h[i] = self.h[i].wrapping_add(v[i]);
+        for (hi, vi) in self.h.iter_mut().zip(v.iter()) {
+            *hi = hi.wrapping_add(*vi);
         }
     }
 }
