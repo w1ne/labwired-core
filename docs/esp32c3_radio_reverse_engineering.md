@@ -89,12 +89,40 @@ diffing the two runs separates deterministic config from live state:
 | `0x60033158`–`0x6003316c` | stable `ffff…`/`ff`  | BSSID / multicast filter masks (cold = all-ones) |
 
 The block read `0x60033000`–`0x6003302c` (6× from PC `0x42049456`) is a register-
-bank readback loop (MAC ID / cal), not a busy-wait. The genuine handshake is
-`0x60033084` b31. These values are the behavioral model's ground truth: the
-model flips `0x60033084` b31 in response to the driver's command writes, exposes
-`0x60033088+` as a counter, and routes the DMA descriptor rings (lldesc, reused
-from `gdma.rs`) to `network::WirelessPacket`. Raw capture logs aren't committed
-(see the repo-root `fixtures/` ignore); regenerate them with `trace_poll.sh` on
+bank readback loop (MAC ID / cal), not a busy-wait.
+
+### Write surface: the handshake is driver-managed scratch, not HW
+
+A second pass with `WP_TYPE=w` (write-watchpoint over the same bracket, 99 hits)
+recovers the command order, and it overturns the original "behavioral handshake"
+assumption. `0x60033084` b31 is written by *firmware*, not the MAC:
+
+```
+pc=0x4202f4ca  0x084 <- 80000000   # bulk-init of the 0x080-9c block (memcpy)
+pc=0x420490dc  0x084 <- 00000000   # driver clears b31 (begin sequence)
+   ... driver does setup; seeds TSF counter 0x088/08c <- 000a49cc ...
+pc=0x42049396  0x084 <- 80000000   # driver sets b31 back (done)
+```
+
+The driver writes `0x60033084` (and the whole `0x080`–`0x09c` block) then reads
+its own values back — it's using MMIO as scratch state, **not** polling a bit the
+hardware flips. A plain register-backed model (what Layer 1 already is) therefore
+reproduces this faithfully with zero behavioral logic. The only genuinely
+HW-sourced state is:
+
+* `0x600330a8`–`0x600330d4` — RNG / RX-FIFO data port (must vary on read);
+* `0x60033088`–`0x6003309c` — TSF/timer counter (seeded by driver, then HW-advanced).
+
+So **#9 is far narrower than first scoped**: not a status-handshake state machine,
+but (a) a varying RNG/data port and a monotonic counter, and (b) the DMA descriptor
+rings (lldesc, reused from `gdma.rs`) bridged to `network::WirelessPacket` (#10).
+The decisive next step is empirical — boot `wifi_probe.elf` in the C3 sim (the
+register-backed Layer 1 model + real ROM) and find the exact PC where it stalls;
+that pinpoints which of the above the firmware actually requires to advance,
+instead of modeling speculatively.
+
+Raw capture logs aren't committed (see the repo-root `fixtures/` ignore);
+regenerate with `trace_poll.sh` (reads) and `WP_TYPE=w trace_poll.sh` (writes) on
 a live C3 — both runs above reproduced the deterministic bands byte-for-byte.
 
 ## Reproduce

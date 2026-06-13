@@ -20,6 +20,10 @@ OUT="${2:?need out dir}"; mkdir -p "$OUT"
 # The C3 MAC window headlined in the RE doc; 0x60033000..0x60035000 (~46 regs).
 MAC_BASE="${3:-0x60033000}"
 MAC_WORDS="${4:-128}"   # 128 words = 0x200 bytes; covers the dense status block.
+# Watchpoint access type: r=reads (poll surface, default), w=writes (command
+# surface), a=both. Capturing w and r separately and correlating by PC recovers
+# the driver's write-command -> poll-done handshake protocol.
+WP_TYPE="${WP_TYPE:-r}"
 
 OOCD=/private/tmp/openocd-esp32/bin/openocd
 SCRIPTS=/private/tmp/openocd-esp32/share/openocd/scripts
@@ -55,7 +59,7 @@ MAX_HITS="${MAX_HITS:-400}"
   # Arm a fresh read watchpoint over the window. Each trace_poll.sh run is its
   # own openocd process, so there's no stale wp to remove first (a speculative
   # `rwp` would error on "no watchpoint found" and abort the whole -c batch).
-  echo "wp $MAC_BASE $pow2 r"               # read watchpoint over the window
+  echo "wp $MAC_BASE $pow2 $WP_TYPE"         # watchpoint over the window (r/w/a)
   echo "echo {##DONE_ADDR $A_DONE}"
   # One TCL for-loop emitted as a single line: bash-unrolling would put `break`
   # outside any TCL loop (error), and `tr '\n' ';'` would shatter a multi-line
