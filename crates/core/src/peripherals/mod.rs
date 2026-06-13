@@ -24,6 +24,7 @@ pub mod exti;
 pub mod fdcan;
 pub mod flash;
 pub mod fmc;
+pub mod generic_factory;
 pub mod gpdma;
 pub mod gpio;
 pub mod hc_sr04;
