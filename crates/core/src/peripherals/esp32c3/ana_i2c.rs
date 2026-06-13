@@ -23,6 +23,10 @@ use crate::{Peripheral, SimResult};
 /// Status/command-FSM register; bits[26:24] = master state (7 = idle/done).
 const STATUS: u64 = 0x50;
 const STATE_DONE: u32 = 0x7 << 24;
+/// A second command/cal register (offset 0x4C): the libphy RF calibration
+/// (`txdc_cal`) launches a transaction here then busy-polls bit24 for "done".
+const CAL_CMD: u64 = 0x4C;
+const CAL_DONE: u32 = 1 << 24;
 
 #[derive(Debug)]
 pub struct Esp32c3AnaI2c {
@@ -58,12 +62,15 @@ impl Peripheral for Esp32c3AnaI2c {
 
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
         let stored = *self.regs.get((offset / 4) as usize).unwrap_or(&0);
-        Ok(if offset == STATUS {
+        Ok(match offset {
             // Report the analog-master FSM as idle/done so the ROM's
             // busy-poll (`(reg>>24)&7 == 7`) exits immediately.
-            (stored & !STATE_DONE) | STATE_DONE
-        } else {
-            stored
+            STATUS => (stored & !STATE_DONE) | STATE_DONE,
+            // Report the calibration transaction as complete (bit24) so the
+            // libphy txdc_cal busy-poll exits — the RF air-gap cut: we don't
+            // model physical RF, so each cal completes instantaneously.
+            CAL_CMD => stored | CAL_DONE,
+            _ => stored,
         })
     }
 
