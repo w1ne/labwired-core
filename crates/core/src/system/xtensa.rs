@@ -1864,11 +1864,107 @@ impl crate::Peripheral for RamPeripheral {
     }
 }
 
+/// Canonical `(id, factory type, window base, window size, irq source)` for
+/// every ESP32-S3 peripheral that [`register_esp32s3_peripherals`] installs.
+///
+/// This is the Stage-3 source of truth — the data destined for `esp32s3.yaml`
+/// so the peripheral set is built through the esp32s3 factory / `from_config`
+/// instead of hand-wired `add_peripheral` calls. The irq column is the model's
+/// ETS interrupt source id (a constructor argument; the bus-entry irq stays
+/// `None`). Proven equivalent to the hand-wired path by the test
+/// `factory_descriptors_match_hardwired_peripherals`.
+// Consumed by the parity test now; by register_esp32s3_peripherals in Stage 3b.
+#[allow(dead_code)]
+#[rustfmt::skip]
+pub(crate) const ESP32S3_PERIPHERALS: &[(&str, &str, u64, u64, Option<u32>)] = &[
+    ("usb_serial_jtag", "esp32s3_usb_serial_jtag", 0x6003_8000, 0x1000, None),
+    ("systimer",        "esp32s3_systimer",        0x6002_3000, 0x1000, None),
+    ("gpio",            "esp32s3_gpio",            0x6000_4000, 0x0800, None),
+    ("io_mux",          "esp32s3_io_mux",          0x6000_9000, 0x0100, None),
+    ("sens_s3",         "esp32s3_sens",            0x6000_8800, 0x0400, None),
+    ("rng",             "esp32s3_rng",             0x6003_5000, 0x0100, None),
+    ("sha",             "esp32s3_sha",             0x6003_B000, 0x0100, None),
+    ("pcnt",            "esp32s3_pcnt",            0x6001_7000, 0x1000, Some(41)),
+    ("ledc",            "esp32s3_ledc",            0x6001_9000, 0x1000, None),
+    ("timg0_s3",        "esp32s3_timer_group",     0x6001_F000, 0x1000, Some(50)),
+    ("timg1_s3",        "esp32s3_timer_group",     0x6002_0000, 0x1000, Some(53)),
+    ("rmt_s3",          "esp32s3_rmt",             0x6001_6000, 0x1000, Some(40)),
+    ("spi2_s3",         "esp32s3_spi",             0x6002_4000, 0x1000, Some(21)),
+    ("spi3_s3",         "esp32s3_spi",             0x6002_5000, 0x1000, Some(22)),
+    ("sar_adc_s3",      "esp32s3_sar_adc",         0x6004_0000, 0x1000, Some(64)),
+    ("gdma",            "esp32s3_gdma",            0x6003_F000, 0x1000, Some(66)),
+    ("i2s0_s3",         "esp32s3_i2s",             0x6000_F000, 0x1000, Some(25)),
+    ("i2s1_s3",         "esp32s3_i2s",             0x6002_D000, 0x1000, Some(26)),
+    ("twai",            "esp32s3_twai",            0x6002_B000, 0x1000, Some(37)),
+    ("aes",             "esp32s3_aes",             0x6003_A000, 0x1000, Some(77)),
+    ("rsa",             "esp32s3_rsa",             0x6003_C000, 0x1000, Some(76)),
+    ("hmac",            "esp32s3_hmac",            0x6003_E000, 0x1000, Some(0)),
+    ("ds",              "esp32s3_ds",              0x6003_D000, 0x1000, Some(0)),
+    ("mcpwm0",          "esp32s3_mcpwm",           0x6001_E000, 0x1000, Some(38)),
+    ("mcpwm1",          "esp32s3_mcpwm",           0x6002_C000, 0x1000, Some(39)),
+    ("sdmmc",           "esp32s3_sdmmc",           0x6002_8000, 0x1000, Some(36)),
+    ("lcd_cam",         "esp32s3_lcd_cam",         0x6004_1000, 0x1000, Some(24)),
+    ("usb_otg",         "esp32s3_usb_otg",         0x6008_0000, 0x1000, Some(23)),
+    ("i2c0",            "esp32s3_i2c",             0x6001_3000, 0x1000, Some(42)),
+    ("i2c1",            "esp32s3_i2c",             0x6002_7000, 0x1000, Some(43)),
+    ("uart0_s3",        "esp32s3_uart",            0x6000_0000, 0x0100, Some(27)),
+    ("uart1_s3",        "esp32s3_uart",            0x6001_0000, 0x0100, Some(28)),
+    ("uart2_s3",        "esp32s3_uart",            0x6002_E000, 0x0100, Some(29)),
+];
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::Bus;
     use crate::Peripheral;
+
+    /// The esp32s3 factory + canonical descriptor table must place exactly the
+    /// same peripheral windows (name, base, size) as the hand-wired
+    /// `register_esp32s3_peripherals`. This pins the Stage-3 data-driven path as
+    /// equivalent before it replaces the hand-wired one. (i2c0's TMP102 slave is
+    /// internal model state, not a window, so it does not affect this check.)
+    #[test]
+    fn factory_descriptors_match_hardwired_peripherals() {
+        use labwired_config::PeripheralConfig;
+        use std::collections::HashMap;
+
+        let mut hw = SystemBus::new();
+        hw.peripherals.clear();
+        register_esp32s3_peripherals(&mut hw, &Esp32s3Opts::default());
+
+        let mut fac = SystemBus::new();
+        fac.peripherals.clear();
+        for &(id, ty, base, size, irq) in ESP32S3_PERIPHERALS {
+            let cfg = PeripheralConfig {
+                id: id.to_string(),
+                r#type: ty.to_string(),
+                base_address: base,
+                size: None,
+                irq,
+                config: HashMap::new(),
+            };
+            let dev = crate::peripherals::esp32s3::factory::try_build(ty, &cfg)
+                .unwrap_or_else(|| panic!("esp32s3 factory missing type {ty}"));
+            // Bus-entry irq is None on both paths; the source id is baked into
+            // the model by the factory via cfg.irq.
+            fac.add_peripheral(id, base, size, None, dev);
+        }
+
+        let windows = |b: &SystemBus| {
+            let mut v: Vec<(String, u64, u64, Option<u32>)> = b
+                .peripherals
+                .iter()
+                .map(|p| (p.name.clone(), p.base, p.size, p.irq))
+                .collect();
+            v.sort();
+            v
+        };
+        assert_eq!(
+            windows(&hw),
+            windows(&fac),
+            "factory/table path must place the same peripheral windows as the hand-wired path"
+        );
+    }
 
     #[test]
     fn configure_registers_all_peripherals() {
