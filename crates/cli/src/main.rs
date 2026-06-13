@@ -993,6 +993,16 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
             None,
             Box::new(labwired_core::peripherals::esp32c3::cache::Esp32c3Cache::new()),
         );
+        // Analog I²C master / ANA_CONFIG block (0x6000_E000, DR_REG_RTC_I2C_BASE):
+        // rom_i2c_writeReg drives it (read-modify-write of ANA_CONFIG regs) during
+        // PHY/clock bring-up. Register-backed read-back keeps that path mapped.
+        bus.add_peripheral(
+            "rtc_i2c_ana",
+            0x6000_E000,
+            0x100,
+            None,
+            Box::new(labwired_core::peripherals::esp32c3::reg_block::Esp32c3RegBlock::new(0x100)),
+        );
         bus.add_peripheral(
             "flash_irom_xip",
             0x4200_0000,
@@ -1026,6 +1036,11 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
         //     Xtensa rom-boot strap).
         let _ = bus.write_u32(0x6000_8038, 0x0000_0001);
         let _ = bus.write_u32(0x6000_4038, 0x0000_0008);
+        //   * eFuse wafer version (EFUSE_RD_MAC_SPI_SYS_3 @ 0x6000_8850,
+        //     WAFER_VERSION_MINOR_LO bits[20:18]) = 4 → chip rev v0.4. The real
+        //     C3 is v0.4; without it eFuse reads v0.0 and the 2nd-stage
+        //     bootloader rejects the app ("requires chip rev >= v0.3").
+        let _ = bus.write_u32(0x6000_8850, 0x0010_0000);
         let mut cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
         cpu.set_pc(0x4000_0000);
         labwired_core::Machine::new(cpu, bus)

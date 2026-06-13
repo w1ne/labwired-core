@@ -5,3 +5,4 @@
 //! ESP32-C3 (RISC-V) specific peripheral models.
 
 pub mod cache;
+pub mod reg_block;
