@@ -182,7 +182,7 @@ mod tests {
         block[0..3].copy_from_slice(b"abc");
         block[3] = 0x80;
         block[63] = 24; // message length in bits, big-endian (fits one byte)
-        // Write the block as the CPU would (little-endian words) to TEXT.
+                        // Write the block as the CPU would (little-endian words) to TEXT.
         for i in 0..16 {
             let w = u32::from_le_bytes([
                 block[i * 4],
