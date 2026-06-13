@@ -61,6 +61,19 @@ const DESC_EOF: u32 = 1 << 30;
 /// Interrupt-matrix source ID for the WiFi MAC (MAC_INTR_MAP @ offset 0).
 const MAC_INTR_SOURCE: u32 = 0;
 
+// TX path (RE'd): per-AC PLCP0 register at 0x60033D08 - AC*8 holds the TX buffer
+// pointer (low 20 bits, the frame is in DRAM 0x3FC#####) plus flags; writing
+// bits 0xC000_0000 kicks transmission. TX is fire-and-forget — the driver does
+// not block, so the model captures the frame and asynchronously signals
+// TX-complete (event bit 0x80 + per-queue done state) so lmacProcessTxComplete
+// runs. Offsets relative to the 0x60033000 base.
+const PLCP0_AC0: u64 = 0xD08; // AC1=0xD00, AC2=0xCF8, AC3=0xCF0
+const TX_KICK_BITS: u32 = 0xC000_0000;
+const EVENT_TX_DONE: u32 = 0x80;
+const TXQ_DONE_STATE: u64 = 0xCB0; // hal_mac_get_txq_state mode2 reads &0xF here
+/// DRAM window the low-20-bit TX buffer pointer resolves into.
+const DRAM_BASE: u32 = 0x3FC0_0000;
+
 #[derive(Debug)]
 pub struct Esp32c3WifiMac {
     regs: Vec<u32>,
@@ -70,6 +83,10 @@ pub struct Esp32c3WifiMac {
     pending_rx: VecDeque<Vec<u8>>,
     /// Frames the real MAC transmitted (captured TX), for the bridge to drain.
     tx_out: VecDeque<Vec<u8>>,
+    /// Pending TX kicks: (access category, PLCP0 register value) recorded on the
+    /// 0xC000_0000 write; processed (frame captured + TX-complete signaled) on
+    /// the next bus tick, which has bus access to read the frame from DRAM.
+    pending_tx: VecDeque<(u8, u32)>,
 }
 
 impl Default for Esp32c3WifiMac {
@@ -85,7 +102,68 @@ impl Esp32c3WifiMac {
             rx_ring: 0,
             pending_rx: VecDeque::new(),
             tx_out: VecDeque::new(),
+            pending_tx: VecDeque::new(),
         }
+    }
+
+    /// Length of the 802.11 frame in a captured TX buffer: parse the MAC header,
+    /// LLC/SNAP, and IP total-length when it's a data frame; otherwise return the
+    /// whole buffer. (The HW length lives in a separate per-AC register we don't
+    /// decode; parsing the frame is robust enough for the bridge.)
+    fn tx_frame_len(buf: &[u8]) -> usize {
+        if buf.len() < 2 {
+            return buf.len();
+        }
+        let fc0 = buf[0];
+        let ftype = (fc0 >> 2) & 0x3;
+        if ftype == 2 {
+            // Data frame: [hdr 24, +2 if QoS][LLC/SNAP 8][IP...]. ethertype is
+            // the last 2 bytes of SNAP; if IPv4 (0x0800), use IP total length.
+            let hdr = if (fc0 & 0x80) != 0 { 26 } else { 24 };
+            let snap = hdr + 8;
+            if buf.len() >= snap {
+                let ethertype = u16::from_be_bytes([buf[snap - 2], buf[snap - 1]]);
+                if ethertype == 0x0800 && buf.len() >= snap + 4 {
+                    let ip_total = u16::from_be_bytes([buf[snap + 2], buf[snap + 3]]) as usize;
+                    return (snap + ip_total).min(buf.len());
+                }
+            }
+        }
+        buf.len()
+    }
+
+    /// Process one pending TX kick: read the transmitted 802.11 frame from DRAM,
+    /// stash it for the bridge, and signal TX-complete (success) to the driver.
+    fn process_tx(&mut self, bus: &mut dyn Bus) {
+        let Some((ac, plcp0)) = self.pending_tx.pop_front() else {
+            return;
+        };
+        // PLCP0 low-20 bits point at a TX lldesc (word0=flags, word1=buffer
+        // pointer, word2=next), not the frame itself. Follow word1 to the frame.
+        let desc = DRAM_BASE | (plcp0 & 0x000F_FFFF);
+        let bufptr = bus.read_u32(desc as u64 + 4).unwrap_or(0);
+        if !(DRAM_BASE..DRAM_BASE + 0x10_0000).contains(&bufptr) {
+            return; // not a resolvable DRAM frame pointer
+        }
+        let mut raw = vec![0u8; 1600];
+        for (i, b) in raw.iter_mut().enumerate() {
+            *b = bus.read_u8(bufptr as u64 + i as u64).unwrap_or(0);
+        }
+        let len = Self::tx_frame_len(&raw);
+        raw.truncate(len);
+        if std::env::var("LABWIRED_MAC_TRACE").is_ok() {
+            let head: Vec<String> = raw.iter().take(40).map(|b| format!("{b:02x}")).collect();
+            eprintln!(
+                "[tx] ac={ac} buf={bufptr:#010x} len={len}: {}",
+                head.join(" ")
+            );
+        }
+        self.tx_out.push_back(raw);
+        // Signal TX-complete: set the per-queue done state (mode2 reads &0xF at
+        // 0xCB0) and the TX-done event bit, then the level-sensitive MAC IRQ
+        // runs lmacProcessTxComplete.
+        self.regs[(TXQ_DONE_STATE / 4) as usize] |= 1 << (ac & 0xF);
+        self.set_event(EVENT_TX_DONE);
     }
 
     /// Queue an 802.11 frame received from the virtual network; delivered to the
@@ -222,6 +300,19 @@ impl Peripheral for Esp32c3WifiMac {
                     *slot = value;
                 }
             }
+            // Per-AC PLCP0 registers (0xD08, 0xD00, 0xCF8, 0xCF0): a write with
+            // the kick bits (0xC000_0000) starts transmission of the frame the
+            // low 20 bits point at. Record it; the frame is captured + acked on
+            // the next bus tick.
+            0xCF0 | 0xCF8 | 0xD00 | 0xD08 => {
+                if let Some(slot) = self.regs.get_mut((offset / 4) as usize) {
+                    *slot = value;
+                }
+                if value & TX_KICK_BITS == TX_KICK_BITS {
+                    let ac = ((PLCP0_AC0 - offset) / 8) as u8;
+                    self.pending_tx.push_back((ac, value));
+                }
+            }
             _ => {
                 if let Some(slot) = self.regs.get_mut((offset / 4) as usize) {
                     *slot = value;
@@ -236,7 +327,9 @@ impl Peripheral for Esp32c3WifiMac {
     }
 
     fn tick_with_bus(&mut self, bus: &mut dyn Bus) {
-        // Deliver at most one queued RX frame per tick into the descriptor ring.
+        // Capture any transmitted frame + signal TX-complete, then deliver one
+        // queued RX frame into the descriptor ring.
+        self.process_tx(bus);
         self.deliver_one_rx(bus);
     }
 
