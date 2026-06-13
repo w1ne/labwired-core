@@ -157,8 +157,10 @@ pub struct SystemBus {
     /// `bus.flash_thunks.insert(pc, thunk)`. The CPU's BREAK 1,14
     /// dispatcher (xtensa_lx7.rs) calls `bus.get_rom_thunk(pc)` which
     /// checks both this table and any `RomThunkBank` peripherals.
-    pub flash_thunks:
-        std::collections::HashMap<u32, crate::peripherals::esp32s3::rom_thunks::RomThunkFn>,
+    pub flash_thunks: std::collections::HashMap<
+        u32,
+        crate::peripherals::esp_xtensa_common::rom_thunks::RomThunkFn,
+    >,
     peripheral_ranges: Vec<PeripheralRange>,
     peripheral_hint: Cell<Option<usize>>,
     /// Cached index of the classic-ESP32 DPORT peripheral, if one is
@@ -979,7 +981,7 @@ impl SystemBus {
     pub fn get_rom_thunk(
         &self,
         pc: u32,
-    ) -> Option<crate::peripherals::esp32s3::rom_thunks::RomThunkFn> {
+    ) -> Option<crate::peripherals::esp_xtensa_common::rom_thunks::RomThunkFn> {
         // First check the Bus-level flash thunk table (for thunks installed
         // outside any RomThunkBank's range — typically firmware functions
         // resident in flash that we want to intercept).
@@ -992,7 +994,7 @@ impl SystemBus {
             if pc >= base && pc < end {
                 if let Some(any) = p.dev.as_any() {
                     if let Some(bank) =
-                        any.downcast_ref::<crate::peripherals::esp32s3::rom_thunks::RomThunkBank>()
+                        any.downcast_ref::<crate::peripherals::esp_xtensa_common::rom_thunks::RomThunkBank>()
                     {
                         return bank.get(pc);
                     }
@@ -1010,9 +1012,9 @@ impl SystemBus {
     pub fn install_flash_thunk(
         &mut self,
         pc: u32,
-        thunk: crate::peripherals::esp32s3::rom_thunks::RomThunkFn,
+        thunk: crate::peripherals::esp_xtensa_common::rom_thunks::RomThunkFn,
     ) -> SimResult<()> {
-        let bytes = crate::peripherals::esp32s3::rom_thunks::ROM_THUNK_BREAK_BYTES;
+        let bytes = crate::peripherals::esp_xtensa_common::rom_thunks::ROM_THUNK_BREAK_BYTES;
         for (i, b) in bytes.iter().enumerate() {
             self.write_u8(pc as u64 + i as u64, *b)?;
         }
@@ -1063,14 +1065,20 @@ impl SystemBus {
     ///
     /// When `echo_stdout` is false, UART writes will no longer be printed to stdout.
     pub fn attach_uart_tx_sink(&mut self, sink: Arc<Mutex<Vec<u8>>>, echo_stdout: bool) {
+        use crate::peripherals::esp32::uart::Esp32Uart;
         for p in &mut self.peripherals {
             let Some(any) = p.dev.as_any_mut() else {
                 continue;
             };
-            let Some(uart) = any.downcast_mut::<Uart>() else {
+            // STM32-layout generic UART.
+            if let Some(uart) = any.downcast_mut::<Uart>() {
+                uart.set_sink(Some(sink.clone()), echo_stdout);
                 continue;
-            };
-            uart.set_sink(Some(sink.clone()), echo_stdout);
+            }
+            // Real ESP32-classic UART (echo is fixed at construction time).
+            if let Some(uart) = any.downcast_mut::<Esp32Uart>() {
+                uart.set_sink(Some(sink.clone()));
+            }
         }
     }
 
@@ -3070,7 +3078,7 @@ impl crate::Bus for SystemBus {
     fn get_rom_thunk(
         &self,
         pc: u32,
-    ) -> Option<crate::peripherals::esp32s3::rom_thunks::RomThunkFn> {
+    ) -> Option<crate::peripherals::esp_xtensa_common::rom_thunks::RomThunkFn> {
         SystemBus::get_rom_thunk(self, pc)
     }
 

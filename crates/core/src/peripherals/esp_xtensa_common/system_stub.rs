@@ -272,7 +272,7 @@ impl Peripheral for RtcCntlStub {
                 eprintln!("rtc_cntl: SW_CPU_STALL write -> 0x{w:08x} (C1=0x{c1:02x})");
             }
             if c1 != APPCPU_STALL_C1 {
-                crate::peripherals::esp32s3::rom_thunks::APPCPU_RESET_RELEASED
+                crate::peripherals::esp_xtensa_common::rom_thunks::APPCPU_RESET_RELEASED
                     .with(|s| s.set(true));
             }
         }

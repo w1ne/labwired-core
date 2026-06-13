@@ -75,7 +75,9 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         "esp32s3_sens" => Box::new(sens::Esp32s3Sens::new()),
         "esp32s3_extmem" => Box::new(extmem::Esp32s3Extmem::new()),
         "esp32s3_system" => Box::new(system::Esp32s3System::new()),
-        "esp32s3_system_stub" => Box::new(system_stub::SystemStub::new()),
+        "esp32s3_system_stub" => {
+            Box::new(crate::peripherals::esp_xtensa_common::system_stub::SystemStub::new())
+        }
         "esp32s3_core1_control" => Box::new(core1_control::Esp32s3Core1Control::new()),
         "esp32s3_crosscore_ipi" => Box::new(crosscore_ipi::Esp32s3CrossCoreIpi::new()),
         "esp32s3_gpio" => Box::new(gpio::Esp32s3Gpio::new()),

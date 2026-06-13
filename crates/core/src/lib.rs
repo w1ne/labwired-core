@@ -570,7 +570,7 @@ pub trait Bus {
     fn get_rom_thunk(
         &self,
         _pc: u32,
-    ) -> Option<crate::peripherals::esp32s3::rom_thunks::RomThunkFn> {
+    ) -> Option<crate::peripherals::esp_xtensa_common::rom_thunks::RomThunkFn> {
         None
     }
 
@@ -877,7 +877,8 @@ impl<C: Cpu> Machine<C> {
             // the secondary CPU's PC, and unhalt so the next round-robin
             // tick starts executing from that address.
             if let Some(boot_addr) =
-                crate::peripherals::esp32s3::rom_thunks::APPCPU_BOOT_ADDR.with(|s| s.take())
+                crate::peripherals::esp_xtensa_common::rom_thunks::APPCPU_BOOT_ADDR
+                    .with(|s| s.take())
             {
                 cpu1.set_pc(boot_addr);
                 cpu1.unhalt();

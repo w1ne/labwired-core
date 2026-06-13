@@ -726,7 +726,9 @@ impl XtensaLx7 {
                 self.pc = self.pc.wrapping_add(len);
             }
             Break { imm_s, imm_t } => {
-                use crate::peripherals::esp32s3::rom_thunks::{ROM_THUNK_IMM_S, ROM_THUNK_IMM_T};
+                use crate::peripherals::esp_xtensa_common::rom_thunks::{
+                    ROM_THUNK_IMM_S, ROM_THUNK_IMM_T,
+                };
                 if imm_s == ROM_THUNK_IMM_S && imm_t == ROM_THUNK_IMM_T {
                     let pc = self.pc;
                     if let Some(thunk) = bus.get_rom_thunk(pc) {

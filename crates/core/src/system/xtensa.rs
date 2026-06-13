@@ -15,9 +15,9 @@ use crate::peripherals::esp32s3::flash_xip::{new_mmu_table, Esp32s3MmuTable, Fla
 use crate::peripherals::esp32s3::gpio::{Esp32s3Gpio, GpioObserver};
 use crate::peripherals::esp32s3::i2c::{Esp32s3I2c, I2C0_BASE, I2C0_SIZE};
 use crate::peripherals::esp32s3::intmatrix::Esp32s3IntMatrix;
-use crate::peripherals::esp32s3::rom_thunks::{self, RomThunkBank};
-use crate::peripherals::esp32s3::system_stub::{EfuseStub, RtcCntlStub, SystemStub};
 use crate::peripherals::esp32s3::tmp102::Tmp102;
+use crate::peripherals::esp_xtensa_common::rom_thunks::{self, RomThunkBank};
+use crate::peripherals::esp_xtensa_common::system_stub::{EfuseStub, RtcCntlStub, SystemStub};
 use crate::Bus;
 use crate::Cpu;
 use std::sync::{Arc, Mutex};
@@ -236,15 +236,15 @@ pub fn attach_esp32_external_devices(
 ///     SPI0/SPI1/SPI2/SPI3, I²C0/I²C1, TIMG0/TIMG1, second LX6 core,
 ///     ULP coprocessor, hardware crypto.
 ///
-/// UART0 caveat: the existing `peripherals::uart::Uart` defaults to
-/// the STM32F1 register layout (SR @ 0x00, DR @ 0x04).  Real ESP32
-/// UART places its TX/RX FIFO at offset 0x00, not 0x04.  The demo
-/// firmware in `firmware-esp32-demo` writes to the STM32F1 DR offset
-/// so the simulator's UART model emits cleanly; a dedicated
-/// `UartRegisterLayout::Esp32` variant is the follow-up that would
-/// let unmodified Espressif firmware run.
+/// UART0/1/2 use the real ESP32 register layout (`peripherals::esp32::uart`):
+/// TX/RX FIFO at offset 0x00, STATUS FIFO counts at `[7:0]`/`[23:16]`, the full
+/// INT_RAW/ST/ENA/CLR set, and interrupt-matrix sources 34/35/36 — so
+/// unmodified Espressif firmware (`uart_hal`, `HardwareSerial`, `ets_printf`)
+/// runs against modeled registers instead of a thunk. (Was previously the
+/// STM32F1-layout `peripherals::uart::Uart`, which only suited the demo
+/// firmware that wrote to the STM32 DR offset.)
 pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
-    use crate::peripherals::uart::Uart;
+    use crate::peripherals::esp32::uart::Esp32Uart;
 
     // Same rationale as configure_xtensa_esp32s3: drop the seeded STM32
     // peripherals and disable Cortex-M bit-band — neither applies to Xtensa.
@@ -511,7 +511,29 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     rom_bank.register(0x4005_db1c, rom_thunks::nop_return_zero); // esp_rom_md5_final
     bus.add_peripheral("rom", 0x4000_0000, 0x70000, None, Box::new(rom_bank));
     // UART0 — STM32F1 layout for now (see caveat above).
-    bus.add_peripheral("uart0", 0x3FF4_0000, 0x100, None, Box::new(Uart::new()));
+    // UART0 (Serial) echoes to the host console; UART1/2 are capture-only.
+    // Interrupt-matrix sources: ETS_UART{0,1,2}_INTR_SOURCE = 34/35/36.
+    bus.add_peripheral(
+        "uart0",
+        0x3FF4_0000,
+        0x100,
+        None,
+        Box::new(Esp32Uart::new(true, 34)),
+    );
+    bus.add_peripheral(
+        "uart1",
+        0x3FF5_0000,
+        0x100,
+        None,
+        Box::new(Esp32Uart::new(false, 35)),
+    );
+    bus.add_peripheral(
+        "uart2",
+        0x3FF6_E000,
+        0x100,
+        None,
+        Box::new(Esp32Uart::new(false, 36)),
+    );
 
     // SPI0 / SPI1 — flash SPI controllers used by the BROM during boot.
     // Sim doesn't model the flash MMU, but Arduino-ESP32's
@@ -609,7 +631,7 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         0x3FF0_1000,
         0x1_F000,
         None,
-        Box::new(crate::peripherals::esp32s3::system_stub::SystemStub::new()),
+        Box::new(crate::peripherals::esp_xtensa_common::system_stub::SystemStub::new()),
     );
 
     // IO_MUX (TRM §4.11). Firmware configures pin function + drive strength
@@ -621,7 +643,7 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         0x3FF4_9000,
         0x1000,
         None,
-        Box::new(crate::peripherals::esp32s3::system_stub::SystemStub::new()),
+        Box::new(crate::peripherals::esp_xtensa_common::system_stub::SystemStub::new()),
     );
 
     // RTC_CNTL (TRM §13). Real ESP32-classic peripheral — seeds POWERON_RESET
@@ -704,7 +726,9 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         0x3FF6_6000,
         0x1000,
         None,
-        Box::new(crate::peripherals::esp32s3::system_stub::SystemStub::with_unwritten_ones()),
+        Box::new(
+            crate::peripherals::esp_xtensa_common::system_stub::SystemStub::with_unwritten_ones(),
+        ),
     );
 
     // LEDC — LED PWM controller (TRM §14) at 0x3FF5_9000. Real model: 8 HS +
@@ -775,7 +799,7 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
             base,
             0x1000,
             None,
-            Box::new(crate::peripherals::esp32s3::system_stub::SystemStub::new()),
+            Box::new(crate::peripherals::esp_xtensa_common::system_stub::SystemStub::new()),
         );
     }
 
@@ -799,7 +823,7 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         0x6000_0000,
         0x4_3000,
         None,
-        Box::new(crate::peripherals::esp32s3::system_stub::SystemStub::new()),
+        Box::new(crate::peripherals::esp_xtensa_common::system_stub::SystemStub::new()),
     );
 
     // RTC fast memory (8 KiB at 0x3FF8_0000) — alias for instruction view.

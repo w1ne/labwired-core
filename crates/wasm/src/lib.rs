@@ -1842,7 +1842,7 @@ impl WasmSimulator {
     // ──────────────────────────────────────────────────────────────────────
     #[wasm_bindgen]
     pub fn install_esp32_arduino_quirks(&mut self) -> Result<(), JsValue> {
-        use labwired_core::peripherals::esp32s3::rom_thunks;
+        use labwired_core::peripherals::esp_xtensa_common::rom_thunks;
         let machine = self
             .machine
             .as_mut()
@@ -1953,7 +1953,7 @@ impl WasmSimulator {
     /// that GxEPD2_290_C90c / Z13c emits).
     #[wasm_bindgen]
     pub fn install_arduino_esp32_quirks(&mut self, elf_bytes: &[u8]) -> Result<(), JsValue> {
-        use labwired_core::peripherals::esp32s3::rom_thunks;
+        use labwired_core::peripherals::esp_xtensa_common::rom_thunks;
         let machine = self
             .machine
             .as_mut()
@@ -2002,7 +2002,7 @@ impl WasmSimulator {
         // depending on the coarse 10k-cycle keep-alive in
         // step_with_esp32_aids. Models APP_CPU bring-up; see
         // labwired_core rom_thunks::ets_set_appcpu_boot_addr.
-        labwired_core::peripherals::esp32s3::rom_thunks::set_appcpu_up_flags(
+        labwired_core::peripherals::esp_xtensa_common::rom_thunks::set_appcpu_up_flags(
             handshake_bytes.clone(),
         );
 

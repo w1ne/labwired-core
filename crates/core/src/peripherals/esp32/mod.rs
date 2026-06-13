@@ -26,3 +26,4 @@ pub mod spi;
 pub mod syscon;
 pub mod timg;
 pub mod twai;
+pub mod uart;

@@ -32,7 +32,7 @@ use labwired_core::bus::SystemBus;
 use labwired_core::cpu::xtensa_lx7::XtensaLx7;
 use labwired_core::peripherals::components::Ssd1680Tricolor290;
 use labwired_core::peripherals::esp32::spi::Esp32Spi;
-use labwired_core::peripherals::esp32s3::rom_thunks;
+use labwired_core::peripherals::esp_xtensa_common::rom_thunks;
 use labwired_core::system::xtensa::configure_xtensa_esp32;
 use labwired_core::{Cpu, Machine};
 use std::path::PathBuf;

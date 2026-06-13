@@ -83,7 +83,7 @@
 //! | 0x0A0  | COMB_PVT_ERR_HVT_SITE3           (RO)    | 0x0000_0000  | 0x0000_0000  |
 //! | 0xFFC  | DATE                                 ✓ | 0x0210_1220  | 0x0FFF_FFFF  |
 
-use crate::peripherals::esp32s3::rom_thunks::APPCPU_RESET_RELEASED;
+use crate::peripherals::esp_xtensa_common::rom_thunks::APPCPU_RESET_RELEASED;
 use crate::{Peripheral, SimResult};
 
 /// The window this model covers: `[0x600C_0000, 0x600C_1000)`. DATE at 0xFFC is
