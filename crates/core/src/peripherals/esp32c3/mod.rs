@@ -6,6 +6,7 @@
 
 pub mod ana_i2c;
 pub mod cache;
+pub mod forced_status;
 pub mod reg_block;
 pub mod rng;
 pub mod rtc_timer;
