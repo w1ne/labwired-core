@@ -1108,8 +1108,17 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
         //     C3 is v0.4; without it eFuse reads v0.0 and the 2nd-stage
         //     bootloader rejects the app ("requires chip rev >= v0.3").
         let _ = bus.write_u32(0x6000_8850, 0x0010_0000);
+        // Enable C3 RISC-V interrupt routing: the bus routes asserted peripheral
+        // sources + the SYSTEM FROM_CPU IPI registers through the INTERRUPT_CORE0
+        // matrix into the CPU's external interrupt lines. FreeRTOS's first
+        // context switch (vPortYield → FROM_CPU SW interrupt) depends on this.
+        bus.esp32c3_irq_routing = true;
         let mut cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
         cpu.set_pc(0x4000_0000);
+        // Disable the internal CLINT timer: the C3 has no standard MTIP — its
+        // 31 interrupt lines (incl. line 7) are ESP matrix lines, so a
+        // self-pending MTIP would collide. mtimecmp=MAX keeps mip bit7 clear.
+        cpu.mtimecmp = u64::MAX;
         labwired_core::Machine::new(cpu, bus)
     } else {
         let cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
