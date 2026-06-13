@@ -1,0 +1,4 @@
+# ESP-IDF build outputs — regenerate with `idf.py set-target esp32c3 build`
+/build/
+/sdkconfig
+/sdkconfig.old

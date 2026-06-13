@@ -60,14 +60,42 @@ Two layers, by register character:
    instead of faulting on an unmapped window.
 2. **WiFi MAC (`0x60033000`–`0x60035000`, ~46 regs) — behavioral.** Descriptor
    rings, TX/RX, and IRQ need real semantics, bridged to **SimNet** for the data
-   path. This requires one more RE pass: trace the driver's **status-poll**
-   reads (the bits it busy-waits on during `esp_wifi_start`) so the model can
-   flip them and let bring-up complete in sim. The phase trace here captured
-   the *write* surface; the poll surface is the next capture.
+   path. The model must flip the bits the driver busy-waits on during
+   `esp_wifi_start` so bring-up completes in sim. `trace_radio.sh` captured the
+   *write* surface; the *poll* surface is captured by `trace_poll.sh` (below).
 
 Until layer 2 lands, the WiFi/BT data path stays on the existing thunks
 (`wifi_thunks.rs` + SimNet); layer 1 removes the unmapped-window faults so radio
 firmware runs through configuration.
+
+## Poll surface — captured & reproduced (live C3 v0.4)
+
+`trace_poll.sh` arms a HW read-watchpoint over the MAC window across a tight
+`esp_wifi_start()` bracket and logs every load the driver issues while bringing
+the MAC + DMA up. Two runs (94 / 65 watchpoint hits, both reaching
+`probe_after_start`) classify the `0x60033000` window by register *character* —
+diffing the two runs separates deterministic config from live state:
+
+| Offset band            | Character (run-to-run) | Reading |
+|------------------------|------------------------|---------|
+| `0x60033084`           | stable `0x80000000`    | **b31 = MAC command busy/done** — toggles `80000000→0→80000000`; prime handshake/ready bit the driver spins on |
+| `0x60033088`–`0x6003309c` | **differs**         | free-running TSF/timer counter (`0x000a49xx`) — model as monotonic, not fixed |
+| `0x600330a8`–`0x600330d4` | **differs (random)**| RNG / RX-FIFO data port (`0xd4b5bab8`, `0x6a2c46bf`…) — live data, never a poll bit |
+| `0x600330d8`–`0x600330e4` | stable               | state words settling `0x7960→0x7940→0x7945→0x7045` |
+| `0x60033100`/`0x60033104` | stable `0x05000000` | MAC control/status |
+| `0x60033110`           | stable `0xa0100000`    | control |
+| `0x6003311c`–`0x60033150` | stable               | config burst written right before `esp_wifi_start` returns |
+| `0x60033148`/`0x6003314c` | stable `4400 4300` / `4300 4400` | MAC-address / filter bytes |
+| `0x60033158`–`0x6003316c` | stable `ffff…`/`ff`  | BSSID / multicast filter masks (cold = all-ones) |
+
+The block read `0x60033000`–`0x6003302c` (6× from PC `0x42049456`) is a register-
+bank readback loop (MAC ID / cal), not a busy-wait. The genuine handshake is
+`0x60033084` b31. These values are the behavioral model's ground truth: the
+model flips `0x60033084` b31 in response to the driver's command writes, exposes
+`0x60033088+` as a counter, and routes the DMA descriptor rings (lldesc, reused
+from `gdma.rs`) to `network::WirelessPacket`. Raw capture logs aren't committed
+(see the repo-root `fixtures/` ignore); regenerate them with `trace_poll.sh` on
+a live C3 — both runs above reproduced the deterministic bands byte-for-byte.
 
 ## Reproduce
 
@@ -77,6 +105,22 @@ firmware runs through configuration.
 cd scripts/hw-oracle/wifi-re && idf.py set-target esp32c3 build
 idf.py -p /dev/cu.usbmodemXXXX flash
 
-# trace the radio register surface
+# trace the radio register surface (write surface, by phase)
 ./trace_radio.sh build/wifi_probe.elf /tmp/radio-trace
+
+# trace the MAC poll surface (status bits the driver busy-waits on)
+./trace_poll.sh build/wifi_probe.elf /tmp/c3-poll
+python3 poll_surface_to_table.py /tmp/c3-poll/poll_trace.log
+```
+
+Flashing over JTAG (port-unambiguous when several boards are attached, since the
+board cfg locks onto the C3's USB-JTAG PID `0x1001`):
+
+```text
+openocd -s $SCRIPTS -f board/esp32c3-builtin.cfg \
+  -c "init; reset halt" \
+  -c "program_esp build/bootloader/bootloader.bin 0x0 verify" \
+  -c "program_esp build/partition_table/partition-table.bin 0x8000 verify" \
+  -c "program_esp build/wifi_probe.bin 0x10000 verify" \
+  -c "reset halt; shutdown"
 ```

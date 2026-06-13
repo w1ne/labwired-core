@@ -52,17 +52,17 @@ MAX_HITS="${MAX_HITS:-400}"
   [ -n "$A_DONE" ] && echo "bp $A_DONE 2 hw"
   echo "resume; wait_halt 30000"          # run up to probe_start_enter
   echo "echo {##BRACKET enter}"
-  echo "rwp $MAC_BASE"                      # remove any stale rwp at base
+  # Arm a fresh read watchpoint over the window. Each trace_poll.sh run is its
+  # own openocd process, so there's no stale wp to remove first (a speculative
+  # `rwp` would error on "no watchpoint found" and abort the whole -c batch).
   echo "wp $MAC_BASE $pow2 r"               # read watchpoint over the window
-  for i in $(seq 1 "$MAX_HITS"); do
-    echo "resume; wait_halt 5000"
-    echo "echo {##HIT $i}"
-    echo "echo [capture {reg pc}]"
-    echo "echo [capture {mdw $MAC_BASE $MAC_WORDS}]"
-    # Stop early once we've run past the bracket: if pc is at probe_after_start
-    # the spin is done. (Offline tool also trims at the ##BRACKET done marker.)
-  done
-  echo "rwp $MAC_BASE"
+  echo "echo {##DONE_ADDR $A_DONE}"
+  # One TCL for-loop emitted as a single line: bash-unrolling would put `break`
+  # outside any TCL loop (error), and `tr '\n' ';'` would shatter a multi-line
+  # for{}{}{}{} into bad syntax. \$i stays literal for TCL; catch{} lets a
+  # wait_halt timeout (spin stopped touching MAC) end the capture cleanly.
+  echo "for {set i 1} {\$i <= $MAX_HITS} {incr i} {if {[catch {resume; wait_halt 10000}]} {echo {##HALT_TIMEOUT}; break}; echo \"##HIT \$i\"; echo [capture {reg pc}]; echo [capture {mdw $MAC_BASE $MAC_WORDS}]}"
+  echo "catch {rwp $MAC_BASE}"
   echo "echo {##BRACKET done}"
   echo "exit"
 } | tr '\n' ';' > "$OUT/poll_cmds.tcl"
