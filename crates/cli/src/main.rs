@@ -945,6 +945,58 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
                 ),
             ),
         );
+        // Flash cache MMU: the 2nd-stage bootloader programs the virtual→flash
+        // page table at 0x600C_5000, then runs the app from the XIP windows
+        // (IROM 0x4200_0000, DROM 0x3C00_0000). Model the real MMU table shared
+        // with two FlashXip windows that translate through it (C3 entry format:
+        // invalid=BIT(8), 0xFF page field, 8 MiB span) over the flash image —
+        // so the app executes from flash exactly like silicon.
+        use labwired_core::peripherals::esp32s3::flash_xip::{
+            new_mmu_table, Esp32s3MmuTable, FlashXipPeripheral, MMU_FMT_C3,
+        };
+        let mmu_table = new_mmu_table();
+        bus.add_peripheral(
+            "mmu_table",
+            0x600C_5000,
+            0x800,
+            None,
+            Box::new(Esp32s3MmuTable::new(mmu_table.clone())),
+        );
+        // EXTMEM cache controller (0x600C_4000): auto-completes the cache
+        // invalidate/sync launch→done handshake the ROM busy-polls (offset 0x28,
+        // launch bit0 / done bit1). Overrides the declarative stub, which never
+        // asserts done and spins Cache_Invalidate_ICache_Items forever.
+        bus.add_peripheral(
+            "extmem_cache",
+            0x600C_4000,
+            0x400,
+            None,
+            Box::new(labwired_core::peripherals::esp32c3::cache::Esp32c3Cache::new()),
+        );
+        bus.add_peripheral(
+            "flash_irom_xip",
+            0x4200_0000,
+            0x80_0000, // 8 MiB I-cache window
+            None,
+            Box::new(FlashXipPeripheral::new_mmu_fmt(
+                backing.clone(),
+                0x4200_0000,
+                mmu_table.clone(),
+                MMU_FMT_C3,
+            )),
+        );
+        bus.add_peripheral(
+            "flash_drom_xip",
+            0x3C00_0000,
+            0x80_0000, // 8 MiB D-cache window
+            None,
+            Box::new(FlashXipPeripheral::new_mmu_fmt(
+                backing.clone(),
+                0x3C00_0000,
+                mmu_table.clone(),
+                MMU_FMT_C3,
+            )),
+        );
         // Seed the power-on hardware reset state the BROM reads to decide it's a
         // normal flash boot (silicon has this at reset; the sim starts zeroed):
         //   * RTC_CNTL reset-cause (0x6000_8038, bits[5:0]) = 1 (POWERON_RESET).
@@ -1024,6 +1076,9 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
                     c.x[1], c.x[2], c.x[10]
                 );
             }
+        }
+        if debug && i > 0 && i % 20_000_000 == 0 {
+            eprintln!("[progress] step {i} pc={pc:#010x}");
         }
         if let Err(e) = machine.step() {
             // Surface the halt (was a silent debug log): the fault PC + reason is
