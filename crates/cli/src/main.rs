@@ -1014,6 +1014,16 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
             None,
             Box::new(labwired_core::peripherals::esp32c3::rng::Esp32c3Rng::new()),
         );
+        // SHA accelerator (0x6003_B000): the 2nd-stage bootloader verifies the
+        // app image's appended SHA-256 with it; an unmodelled (zero) digest
+        // makes it reject the image. Real SHA-256 block compression here.
+        bus.add_peripheral(
+            "sha",
+            0x6003_B000,
+            0x100,
+            None,
+            Box::new(labwired_core::peripherals::esp32c3::sha::Esp32c3Sha::new()),
+        );
         bus.add_peripheral(
             "flash_irom_xip",
             0x4200_0000,
