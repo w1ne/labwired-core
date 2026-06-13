@@ -894,19 +894,86 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
         }
     };
 
-    let cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
-    let mut machine = labwired_core::Machine::new(cpu, bus);
-    if let Err(e) = machine.load_firmware(&program) {
-        eprintln!("error: firmware load failed: {e}");
-        return ExitCode::from(EXIT_RUNTIME_ERROR);
-    }
+    let mut machine = if args.rom_boot {
+        // ── Faithful RISC-V ROM boot (ESP32-C3) ──────────────────────────
+        // Reset to the BROM vector 0x4000_0000 (RISC-V `_start`, which jumps to
+        // the BROM startup at 0x40001e90) and let the real mask ROM run:
+        // it initializes the ROM's own DRAM globals (rom_phyFuns &c.) — which
+        // fast-boot skips, causing the rom_i2c_writeReg_Mask indirect-call
+        // crash — then loads the 2nd-stage bootloader + app from the flash
+        // image through the SPI-flash controller and jumps to app_main, exactly
+        // like silicon. "Run the binary, don't thunk it." Requires the real ROM
+        // (LABWIRED_ESP32C3_ROM[_DATA], loaded into the chip's rom regions by
+        // from_config) and the flash image (LABWIRED_ESP32C3_FLASH).
+        use std::sync::{Arc, Mutex};
+        let flash_path = match std::env::var("LABWIRED_ESP32C3_FLASH") {
+            Ok(p) => p,
+            Err(_) => {
+                eprintln!(
+                    "error: --rom-boot needs LABWIRED_ESP32C3_FLASH set (the flash image: \
+                     bootloader@0x0 + partition-table@0x8000 + app@0x10000)"
+                );
+                return ExitCode::from(EXIT_CONFIG_ERROR);
+            }
+        };
+        let flash_bytes = match std::fs::read(&flash_path) {
+            Ok(b) => b,
+            Err(e) => {
+                eprintln!("error: cannot read flash image {flash_path}: {e}");
+                return ExitCode::from(EXIT_RUNTIME_ERROR);
+            }
+        };
+        eprintln!(
+            "labwired-riscv: rom-boot from reset vector 0x40000000 (flash image {} bytes from {})",
+            flash_bytes.len(),
+            flash_path
+        );
+        let backing = Arc::new(Mutex::new(flash_bytes));
+        // SPIMEM1 flash-command controller (0x6000_2000) backed by the real
+        // image, overriding the declarative stub — a narrower, later-registered
+        // window wins, so the BROM's READ/RDID/RDSR commands return real bytes.
+        // The C3's SPI1 shares the S3's SPIMEM register layout, so the S3 model
+        // drops in unchanged.
+        bus.add_peripheral(
+            "spimem1_flash",
+            0x6000_2000,
+            0x100,
+            None,
+            Box::new(
+                labwired_core::peripherals::esp32s3::spi_mem_flash::SpiMemFlash::new(
+                    backing.clone(),
+                ),
+            ),
+        );
+        // Seed the power-on hardware reset state the BROM reads to decide it's a
+        // normal flash boot (silicon has this at reset; the sim starts zeroed):
+        //   * RTC_CNTL reset-cause (0x6000_8038, bits[5:0]) = 1 (POWERON_RESET).
+        //     rtc_get_reset_reason returns this; BROM main treats reset_reason 0
+        //     as an error and bails (ret to 0) — 1 lets it continue to flash.
+        //   * GPIO_STRAP (0x6000_4038) bit3 = SPI fast-flash-boot (matches the
+        //     Xtensa rom-boot strap).
+        let _ = bus.write_u32(0x6000_8038, 0x0000_0001);
+        let _ = bus.write_u32(0x6000_4038, 0x0000_0008);
+        let mut cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
+        cpu.set_pc(0x4000_0000);
+        labwired_core::Machine::new(cpu, bus)
+    } else {
+        let cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
+        let mut machine = labwired_core::Machine::new(cpu, bus);
+        if let Err(e) = machine.load_firmware(&program) {
+            eprintln!("error: firmware load failed: {e}");
+            return ExitCode::from(EXIT_RUNTIME_ERROR);
+        }
 
-    // Fast-boot skips the ROM/2nd-stage bootloader that normally sets the stack
-    // pointer before jumping to the app, so SP=0 and the app's first prologue
-    // store faults near 0xffffffff. Seed SP at the top of DRAM (16-byte aligned,
-    // RISC-V ABI) so real IDF apps can boot.
-    let sp_top = (chip.ram.base + labwired_config::parse_size(&chip.ram.size).unwrap_or(0)) as u32;
-    machine.cpu.set_sp(sp_top & !0xF);
+        // Fast-boot skips the ROM/2nd-stage bootloader that normally sets the
+        // stack pointer before jumping to the app, so SP=0 and the app's first
+        // prologue store faults near 0xffffffff. Seed SP at the top of DRAM
+        // (16-byte aligned, RISC-V ABI) so real IDF apps can boot.
+        let sp_top =
+            (chip.ram.base + labwired_config::parse_size(&chip.ram.size).unwrap_or(0)) as u32;
+        machine.cpu.set_sp(sp_top & !0xF);
+        machine
+    };
 
     let break_at: Vec<u32> = args
         .break_at
@@ -918,14 +985,30 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
     // Recent-PC trail for boot debugging — only maintained when --break-at is in
     // use, so the normal hot loop pays nothing.
     let debug = !break_at.is_empty();
-    let mut recent = std::collections::VecDeque::with_capacity(17);
+    // Executable address windows for C3 (ROM, IRAM, flash IROM XIP). A PC
+    // outside all of these means a bad jump (truncated pointer, garbage return
+    // address); trap it immediately so the trail still shows the jumper instead
+    // of 64 instructions of slide through unmapped memory.
+    let is_exec = |pc: u32| -> bool {
+        (0x4000_0000..0x4006_0000).contains(&pc)      // mask ROM
+            || (0x4037_0000..0x403E_0000).contains(&pc) // IRAM
+            || (0x4200_0000..0x4400_0000).contains(&pc) // flash IROM (XIP)
+    };
+    let trail_cap = 64;
+    let mut recent = std::collections::VecDeque::with_capacity(trail_cap + 1);
     for i in 0..limit {
         let pc = machine.cpu.get_pc();
         if debug {
-            if recent.len() == 16 {
+            if recent.len() == trail_cap {
                 recent.pop_front();
             }
             recent.push_back(pc);
+            if i > 0 && !is_exec(pc) {
+                eprintln!("[badjump] step {i}: PC entered non-exec region {pc:#010x}");
+                let trail: Vec<String> = recent.iter().map(|p| format!("{p:#010x}")).collect();
+                eprintln!("[trail] {}", trail.join(" -> "));
+                break;
+            }
         }
         if let Some(bi) = break_at.iter().position(|&b| b == pc) {
             if !break_hit[bi] {

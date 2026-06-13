@@ -410,15 +410,20 @@ pub fn decode_rv32c(inst: u16) -> Instruction {
                     }
                 }
                 1 => {
-                    // C.JAL (RV32C only)
-                    let imm = ((inst >> 2) & 0xE) |     // imm[3:1]
-                              ((inst >> 7) & 0x10) |    // imm[4]
-                              ((inst >> 2) & 0x20) |    // imm[5]
-                              ((inst >> 1) & 0x40) |    // imm[6]
-                              ((inst >> 11) & 0x80) |   // imm[7]
-                              ((inst >> 1) & 0x300) |   // imm[9:8]
-                              ((inst >> 1) & 0x400) |   // imm[10]
-                              ((inst >> 1) & 0x800); // imm[11]
+                    // C.JAL (RV32C only) — CJ-format immediate, identical bit
+                    // layout to C.J below. The previous hand-rolled extraction
+                    // mis-sourced offset[5], offset[7], and offset[10] (read
+                    // inst[8] from the wrong field), dropping 0x400 on any
+                    // target with offset[10] set — which slid the real C3 BROM's
+                    // `c.jal` off into a shared epilogue and rebooted to 0.
+                    let imm = (((inst >> 12) & 0x1) << 11)  // offset[11]
+                              | (((inst >> 11) & 0x1) << 4)   // offset[4]
+                              | (((inst >> 9) & 0x3) << 8)    // offset[9:8]
+                              | (((inst >> 8) & 0x1) << 10)   // offset[10]
+                              | (((inst >> 7) & 0x1) << 6)    // offset[6]
+                              | (((inst >> 6) & 0x1) << 7)    // offset[7]
+                              | (((inst >> 3) & 0x7) << 1)    // offset[3:1]
+                              | (((inst >> 2) & 0x1) << 5); // offset[5]
                     let signed_imm = if (imm & 0x800) != 0 {
                         (imm as i32) | !0xFFF
                     } else {
