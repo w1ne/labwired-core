@@ -2696,17 +2696,35 @@ impl crate::Bus for SystemBus {
         if let Some(val) = self.ram.read_u16(addr) {
             return Ok(val);
         }
-        if let Some(val) = self.flash.read_u16(addr) {
-            return Ok(val);
-        }
-        if self.flash.base_addr != 0 && addr + 1 < self.flash.data.len() as u64 {
-            if let Some(val) = self.flash.read_u16(self.flash.base_addr + addr) {
+        // See read_u32: with optimized_bus_access off, peripherals (FlashXip)
+        // win over the plain flash region at the same XIP address.
+        let flash_and_alias = |s: &Self| -> Option<u16> {
+            if let Some(val) = s.flash.read_u16(addr) {
+                return Some(val);
+            }
+            if s.flash.base_addr != 0 && addr + 1 < s.flash.data.len() as u64 {
+                return s.flash.read_u16(s.flash.base_addr + addr);
+            }
+            None
+        };
+        if self.config.optimized_bus_access {
+            if let Some(val) = flash_and_alias(self) {
                 return Ok(val);
             }
-        }
-        if let Some(idx) = self.find_peripheral_index(addr) {
-            let p = &self.peripherals[idx];
-            return p.dev.read_u16(addr - p.base);
+            if let Some(idx) = self.find_peripheral_index(addr) {
+                return self.peripherals[idx]
+                    .dev
+                    .read_u16(addr - self.peripherals[idx].base);
+            }
+        } else {
+            if let Some(idx) = self.find_peripheral_index(addr) {
+                return self.peripherals[idx]
+                    .dev
+                    .read_u16(addr - self.peripherals[idx].base);
+            }
+            if let Some(val) = flash_and_alias(self) {
+                return Ok(val);
+            }
         }
         let b0 = self.read_u8(addr)? as u16;
         let b1 = self.read_u8(addr + 1)? as u16;
@@ -2725,17 +2743,39 @@ impl crate::Bus for SystemBus {
         if let Some(val) = self.ram.read_u32(addr) {
             return Ok(val);
         }
-        if let Some(val) = self.flash.read_u32(addr) {
-            return Ok(val);
-        }
-        if self.flash.base_addr != 0 && addr + 3 < self.flash.data.len() as u64 {
-            if let Some(val) = self.flash.read_u32(self.flash.base_addr + addr) {
+        // Flash region + boot alias, and peripherals. With optimized_bus_access
+        // off (C3 rom-boot) peripherals win over the plain flash region so an
+        // MMU-translating FlashXip window overrides the zero-filled flash at the
+        // same XIP address — otherwise a 4-byte instruction fetch at an XIP
+        // address reads 0, misdecodes as 2-byte and the PC drifts (mirrors the
+        // read_u8 fix). The fallback to per-byte read_u8 covers either order.
+        let flash_and_alias = |s: &Self| -> Option<u32> {
+            if let Some(val) = s.flash.read_u32(addr) {
+                return Some(val);
+            }
+            if s.flash.base_addr != 0 && addr + 3 < s.flash.data.len() as u64 {
+                return s.flash.read_u32(s.flash.base_addr + addr);
+            }
+            None
+        };
+        if self.config.optimized_bus_access {
+            if let Some(val) = flash_and_alias(self) {
                 return Ok(val);
             }
-        }
-        if let Some(idx) = self.find_peripheral_index(addr) {
-            let p = &self.peripherals[idx];
-            return p.dev.read_u32(addr - p.base);
+            if let Some(idx) = self.find_peripheral_index(addr) {
+                return self.peripherals[idx]
+                    .dev
+                    .read_u32(addr - self.peripherals[idx].base);
+            }
+        } else {
+            if let Some(idx) = self.find_peripheral_index(addr) {
+                return self.peripherals[idx]
+                    .dev
+                    .read_u32(addr - self.peripherals[idx].base);
+            }
+            if let Some(val) = flash_and_alias(self) {
+                return Ok(val);
+            }
         }
         let b0 = self.read_u8(addr)? as u32;
         let b1 = self.read_u8(addr + 1)? as u32;
