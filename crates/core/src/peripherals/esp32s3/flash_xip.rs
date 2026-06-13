@@ -29,9 +29,10 @@ const PAGE_TABLE_ENTRIES: usize = 64;
 /// ESP32-S3 hardware MMU constants (soc/esp32s3 `ext_mem_defs.h`). The flash
 /// cache MMU has 512 entries of 64 KiB each, covering a 32 MiB linear window
 /// shared by the D-bus (0x3C00_0000) and I-bus (0x4200_0000) cache regions.
-const SOC_MMU_VADDR_MASK: u32 = 0x1FF_FFFF; // 32 MiB linear span
-const SOC_MMU_INVALID: u32 = 1 << 14; // entry-invalid flag
-const SOC_MMU_VALID_VAL_MASK: u32 = 0x3FFF; // physical page-number field
+/// The per-entry valid/invalid + page-number layout now lives in [`MmuFmt`]
+/// (see [`MMU_FMT_S3`]/[`MMU_FMT_C3`]); only the reset/invalid flag and the
+/// table length are needed here to allocate and reset a fresh table.
+const SOC_MMU_INVALID: u32 = 1 << 14; // S3 entry-invalid flag (reset state)
 pub const SOC_MMU_ENTRY_NUM: usize = 512;
 
 /// A flash-cache MMU table shared between the MMU-register peripheral (which
@@ -320,9 +321,9 @@ mod tests {
         let backing = Arc::new(Mutex::new(flash));
         let mmu = new_mmu_table();
         // Map D-bus virtual 0x3C80_0000 (entry 128) → physical page 128 (valid).
-        let entry_id = ((0x3C80_0000u32 & SOC_MMU_VADDR_MASK) >> 16) as usize;
+        let entry_id = ((0x3C80_0000u32 & MMU_FMT_S3.vaddr_mask) >> 16) as usize;
         assert_eq!(entry_id, 128);
-        mmu.lock().unwrap()[entry_id] = 128 & SOC_MMU_VALID_VAL_MASK; // VALID (bit14=0)
+        mmu.lock().unwrap()[entry_id] = 128 & MMU_FMT_S3.valid_val_mask; // VALID (bit14=0)
         let d = FlashXipPeripheral::new_mmu(backing, 0x3C00_0000, mmu);
         // Read at the window offset for vaddr 0x3C80_0000.
         assert_eq!(d.read(0x80_0000).unwrap(), 0xDE);

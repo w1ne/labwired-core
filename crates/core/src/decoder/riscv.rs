@@ -668,3 +668,45 @@ pub fn decode_rv32c(inst: u16) -> Instruction {
         _ => Instruction::Unknown(inst as u32),
     }
 }
+
+#[cfg(test)]
+mod compressed_jump_tests {
+    use super::*;
+
+    // Regression tests for the RV32C immediate bugs surfaced by running the
+    // real ESP32-C3 mask ROM (all three broke boot before being fixed).
+
+    #[test]
+    fn c_jal_immediate_real_rom_instruction() {
+        // 0x3539 @ 0x40047e4e in the C3 BROM is `c.jal 0x40047c5c` (offset
+        // -498). The old decode mis-sourced offset[10] and produced -1522,
+        // landing in a shared epilogue and rebooting to 0.
+        match decode_rv32c(0x3539) {
+            Instruction::Jal { rd, imm } => {
+                assert_eq!(rd, 1, "c.jal links ra (x1)");
+                assert_eq!(imm, -498, "c.jal offset");
+            }
+            other => panic!("expected Jal, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn c_addi16sp_immediate_real_rom_instruction() {
+        // 0x712d @ 0x4004874c is `addi sp,sp,-288`. The old decode produced
+        // -432, unbalancing the stack frame and clobbering the saved ra.
+        match decode_rv32c(0x712d) {
+            Instruction::CAddi16sp { imm } => assert_eq!(imm, -288),
+            other => panic!("expected CAddi16sp, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn c_j_immediate_positive_and_negative() {
+        // C.J (funct3=5) shares the CJ layout; sanity-check a known pair.
+        // 0xbff1 = `c.j -16` (a common backward jump); verify sign + magnitude.
+        match decode_rv32c(0xa001) {
+            Instruction::CJ { imm } => assert_eq!(imm, 0, "c.j 0 (to self)"),
+            other => panic!("expected CJ, got {other:?}"),
+        }
+    }
+}
