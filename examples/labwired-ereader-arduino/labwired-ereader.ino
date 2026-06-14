@@ -24,6 +24,11 @@
 GxEPD2_3C<GxEPD2_290_C90c, GxEPD2_290_C90c::HEIGHT> display(
     GxEPD2_290_C90c(/*CS=*/5, /*DC=*/17, /*RST=*/16, /*BUSY=*/4));
 
+// Forward declaration: the Arduino IDE auto-generates prototypes, but tools that
+// compile the .ino straight as a .cpp (e.g. the proto.cat compile service) don't
+// — so without this, setup()'s call to drawPage() fails to compile.
+void drawPage();
+
 void setup() {
   Serial.begin(115200);
   delay(200);
