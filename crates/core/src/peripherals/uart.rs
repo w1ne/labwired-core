@@ -136,6 +136,16 @@ pub struct Uart {
     #[serde(skip)]
     rx_buf: Arc<Mutex<VecDeque<u8>>>,
     echo_stdout: bool,
+    /// Optional prefix emitted at the start of each echoed line (used to label
+    /// per-device output when several machines share one stdout, e.g. the
+    /// two-C3 WiFi run). `None` = no prefix.
+    #[serde(skip)]
+    stdout_prefix: Option<String>,
+    /// Per-line accumulator used when `stdout_prefix` is set: bytes buffer here
+    /// until a newline, then the whole `prefix + line` is printed in one call —
+    /// so two machines sharing stdout produce atomic, non-interleaved lines.
+    #[serde(skip)]
+    stdout_line_buf: String,
     /// CR1 register (tracks TXEIE and TE bits for interrupt-driven TX simulation).
     cr1: u32,
     cr3: u32,
@@ -201,6 +211,8 @@ impl Uart {
             sink: None,
             rx_buf: Arc::new(Mutex::new(VecDeque::new())),
             echo_stdout: true,
+            stdout_prefix: None,
+            stdout_line_buf: String::new(),
             cr1: 0,
             cr3: 0,
             cr2: 0,
@@ -389,7 +401,17 @@ impl Uart {
 
         if self.echo_stdout {
             #[allow(unused_must_use)]
-            {
+            if let Some(prefix) = &self.stdout_prefix {
+                // Line-buffer so each machine's lines print atomically (no
+                // byte-level interleaving when several machines share stdout).
+                if value == b'\n' {
+                    println!("{prefix}{}", self.stdout_line_buf);
+                    self.stdout_line_buf.clear();
+                    io::stdout().flush();
+                } else if value != b'\r' {
+                    self.stdout_line_buf.push(value as char);
+                }
+            } else {
                 print!("{}", value as char);
                 io::stdout().flush();
             }
@@ -415,6 +437,12 @@ impl Uart {
 
     pub fn trace_snapshot(&self) -> Vec<UartTraceEvent> {
         self.trace.iter().cloned().collect()
+    }
+
+    /// Set a prefix emitted before each echoed stdout line, to label this UART's
+    /// output when multiple machines share one stdout (e.g. the two-C3 WiFi run).
+    pub fn set_stdout_prefix(&mut self, prefix: impl Into<String>) {
+        self.stdout_prefix = Some(prefix.into());
     }
 }
 

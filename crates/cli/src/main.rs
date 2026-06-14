@@ -1630,7 +1630,7 @@ fn run_two_c3_wifi(
     virtual_wifi::reset();
     eprintln!("[dual] two-C3 WiFi over shared VirtualWifi: station A=02:00:00:00:00:02, B=02:00:00:00:00:03");
 
-    let mut build =
+    let build =
         |mac: [u8; 6]| -> Result<labwired_core::Machine<labwired_core::cpu::RiscV>, ExitCode> {
             let bus = match SystemBus::from_config(chip, manifest) {
                 Ok(b) => b,
@@ -1650,14 +1650,18 @@ fn run_two_c3_wifi(
         Err(c) => return c,
     };
     // Attach each station's WiFi MAC to the shared medium (enables medium mode:
-    // TX → medium, medium inbox → RX, self-beacon, learn-own-MAC).
-    for m in [&mut a, &mut b] {
+    // TX → medium, medium inbox → RX, self-beacon, learn-own-MAC), and label
+    // each station's UART output so the shared stdout is readable.
+    for (m, label) in [(&mut a, "[A] "), (&mut b, "[B] ")] {
         for p in m.bus.peripherals.iter_mut() {
-            if let Some(any) = p.dev.as_any_mut() {
-                if let Some(mac) = any.downcast_mut::<Esp32c3WifiMac>() {
-                    mac.attach_to_medium();
-                    break;
-                }
+            let Some(any) = p.dev.as_any_mut() else {
+                continue;
+            };
+            if let Some(mac) = any.downcast_mut::<Esp32c3WifiMac>() {
+                mac.attach_to_medium();
+            } else if let Some(uart) = any.downcast_mut::<labwired_core::peripherals::uart::Uart>()
+            {
+                uart.set_stdout_prefix(label);
             }
         }
     }
