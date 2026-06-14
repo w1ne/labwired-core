@@ -849,6 +849,371 @@ fn main() -> ExitCode {
     }
 }
 
+/// Build an ESP32-C3 ROM-boot machine; `efuse_mac` programs a distinct factory
+/// MAC so multiple instances are distinguishable on the shared VirtualWifi air.
+fn build_c3_rom_boot_machine(
+    mut bus: labwired_core::bus::SystemBus,
+    efuse_mac: Option<[u8; 6]>,
+) -> Result<labwired_core::Machine<labwired_core::cpu::RiscV>, ExitCode> {
+    // ── Faithful RISC-V ROM boot (ESP32-C3) ──────────────────────────
+    // Reset to the BROM vector 0x4000_0000 (RISC-V `_start`, which jumps to
+    // the BROM startup at 0x40001e90) and let the real mask ROM run:
+    // it initializes the ROM's own DRAM globals (rom_phyFuns &c.) — which
+    // fast-boot skips, causing the rom_i2c_writeReg_Mask indirect-call
+    // crash — then loads the 2nd-stage bootloader + app from the flash
+    // image through the SPI-flash controller and jumps to app_main, exactly
+    // like silicon. "Run the binary, don't thunk it." Requires the real ROM
+    // (LABWIRED_ESP32C3_ROM[_DATA], loaded into the chip's rom regions by
+    // from_config) and the flash image (LABWIRED_ESP32C3_FLASH).
+    use std::sync::{Arc, Mutex};
+    let flash_path = match std::env::var("LABWIRED_ESP32C3_FLASH") {
+        Ok(p) => p,
+        Err(_) => {
+            eprintln!(
+                "error: --rom-boot needs LABWIRED_ESP32C3_FLASH set (the flash image: \
+                     bootloader@0x0 + partition-table@0x8000 + app@0x10000)"
+            );
+            return Err(ExitCode::from(EXIT_CONFIG_ERROR));
+        }
+    };
+    let flash_bytes = match std::fs::read(&flash_path) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("error: cannot read flash image {flash_path}: {e}");
+            return Err(ExitCode::from(EXIT_RUNTIME_ERROR));
+        }
+    };
+    eprintln!(
+        "labwired-riscv: rom-boot from reset vector 0x40000000 (flash image {} bytes from {})",
+        flash_bytes.len(),
+        flash_path
+    );
+    let backing = Arc::new(Mutex::new(flash_bytes));
+    // Route reads through peripherals first: the fast path checks the
+    // chip's `flash`/`drom` memory-regions (zero-filled in rom-boot) before
+    // peripherals, which would shadow the FlashXip windows we install at the
+    // same XIP addresses. Disabling it lets the MMU-translating FlashXip
+    // serve 0x4200_0000 / 0x3C00_0000 from the real flash image.
+    bus.config.optimized_bus_access = false;
+    // SPIMEM1 flash-command controller (0x6000_2000) backed by the real
+    // image, overriding the declarative stub — a narrower, later-registered
+    // window wins, so the BROM's READ/RDID/RDSR commands return real bytes.
+    // The C3's SPI1 shares the S3's SPIMEM register layout, so the S3 model
+    // drops in unchanged.
+    bus.add_peripheral(
+        "spimem1_flash",
+        0x6000_2000,
+        0x100,
+        None,
+        Box::new(
+            labwired_core::peripherals::esp32s3::spi_mem_flash::SpiMemFlash::new(backing.clone()),
+        ),
+    );
+    // SPIMEM0 (0x6000_3000) — the cache's auto-fetch MSPI controller. Back
+    // it with the same flash image too, in case the BROM's bootloader load
+    // path issues commands here rather than on SPIMEM1.
+    bus.add_peripheral(
+        "spimem0_flash",
+        0x6000_3000,
+        0x100,
+        None,
+        Box::new(
+            labwired_core::peripherals::esp32s3::spi_mem_flash::SpiMemFlash::new(backing.clone()),
+        ),
+    );
+    // Flash cache MMU: the 2nd-stage bootloader programs the virtual→flash
+    // page table at 0x600C_5000, then runs the app from the XIP windows
+    // (IROM 0x4200_0000, DROM 0x3C00_0000). Model the real MMU table shared
+    // with two FlashXip windows that translate through it (C3 entry format:
+    // invalid=BIT(8), 0xFF page field, 8 MiB span) over the flash image —
+    // so the app executes from flash exactly like silicon.
+    use labwired_core::peripherals::esp32s3::flash_xip::{
+        new_mmu_table, Esp32s3MmuTable, FlashXipPeripheral, MMU_FMT_C3,
+    };
+    let mmu_table = new_mmu_table();
+    bus.add_peripheral(
+        "mmu_table",
+        0x600C_5000,
+        0x800,
+        None,
+        Box::new(Esp32s3MmuTable::new(mmu_table.clone())),
+    );
+    // EXTMEM cache controller (0x600C_4000): auto-completes the cache
+    // invalidate/sync launch→done handshake the ROM busy-polls (offset 0x28,
+    // launch bit0 / done bit1). Overrides the declarative stub, which never
+    // asserts done and spins Cache_Invalidate_ICache_Items forever.
+    bus.add_peripheral(
+        "extmem_cache",
+        0x600C_4000,
+        0x400,
+        None,
+        Box::new(labwired_core::peripherals::esp32c3::cache::Esp32c3Cache::new()),
+    );
+    // Analog I²C master / ANA_CONFIG block (0x6000_E000, DR_REG_I2C_ANA_MST_BASE):
+    // rom_i2c_writeReg drives it (read-modify-write of ANA_CONFIG regs) during
+    // PHY/clock bring-up; the libphy full RF calibration also touches regs up
+    // past 0x6000_E130, so the window spans 0x400. The model reports the
+    // master FSM status (0x50 bits[26:24]=7, idle/done) so the ROM's
+    // transaction busy-poll exits; all other regs are register-backed.
+    bus.add_peripheral(
+        "rtc_i2c_ana",
+        0x6000_E000,
+        0x400,
+        None,
+        Box::new(labwired_core::peripherals::esp32c3::ana_i2c::Esp32c3AnaI2c::new()),
+    );
+    // FE/PHY register block (0x6001_1000): libphy's set_rx_gain_table also
+    // writes gain/FE config into the gap between uart1 (0x6001_0000) and
+    // i2c0 (0x6001_3000). Register-backed storage for those RF tables.
+    bus.add_peripheral(
+        "wifi_fe",
+        0x6001_1000,
+        0x2000,
+        None,
+        Box::new(labwired_core::peripherals::esp32c3::reg_block::Esp32c3RegBlock::new(0x2000)),
+    );
+    // Baseband/RF register block (0x6001_C000): libphy writes the RX gain
+    // table and other BB/RF config here (set_rx_gain_table). Unmapped, the
+    // gain-table store faults. Register-backed window up to the declarative
+    // peripheral at 0x6001_CC00. (RF air-gap: storage is enough — there's
+    // no real RF that would act on these values.)
+    bus.add_peripheral(
+        "wifi_bb",
+        0x6001_C000,
+        0xC00,
+        None,
+        Box::new(labwired_core::peripherals::esp32c3::reg_block::Esp32c3RegBlock::new(0xC00)),
+    );
+    // Radio front-end PLL-lock status (RADIO_FE 0x6000_6000 + 0x174, bit16):
+    // the libphy pll_cal launches the BBPLL/RF PLL then busy-polls this bit
+    // for lock; without real RF it never sets and pll_cal spins/retries
+    // ("pll_cal exceeds 2ms!!!"). Force-assert it (RF air-gap cut) over just
+    // that one word, leaving the declarative radio_fe descriptors intact.
+    bus.add_peripheral(
+        "radio_fe_pll_lock",
+        0x6000_6174,
+        0x4,
+        None,
+        Box::new(
+            labwired_core::peripherals::esp32c3::forced_status::Esp32c3ForcedStatus::new(
+                0x4,
+                vec![(0x0, 1 << 16)],
+            ),
+        ),
+    );
+    // WiFi MAC (WIFI_MAC 0x6003_3000, 12 KiB) — behavioral model for the
+    // MAC <-> SimNet bridge: register-backed bring-up, MAC-ready bit (0xD14
+    // b0, polled by hal_init), RX descriptor-ring DMA + RX-frame injection,
+    // and MAC interrupt (matrix source 0) on RX-done. Overrides the
+    // declarative wifi_mac window. See docs/esp32c3_wifi_mac_bridge.md.
+    bus.add_peripheral(
+        "wifi_mac",
+        0x6003_3000,
+        0x3000,
+        None,
+        Box::new(labwired_core::peripherals::esp32c3::wifi_mac::Esp32c3WifiMac::new()),
+    );
+    // Hardware RNG data register (WDEV_RND_REG, 0x6002_60B0): yields a fresh
+    // word per read. bootloader_fill_random XORs successive reads and
+    // process_segments refills ram_obfs_value until non-zero — a constant
+    // RNG gives 0 and spins forever. Override the SYSCON stub at this word.
+    bus.add_peripheral(
+        "wdev_rnd",
+        0x6002_60B0,
+        0x4,
+        None,
+        Box::new(labwired_core::peripherals::esp32c3::rng::Esp32c3Rng::new()),
+    );
+    // SHA accelerator (0x6003_B000): the 2nd-stage bootloader verifies the
+    // app image's appended SHA-256 with it; an unmodelled (zero) digest
+    // makes it reject the image. Real SHA-256 block compression here.
+    bus.add_peripheral(
+        "sha",
+        0x6003_B000,
+        0x100,
+        None,
+        Box::new(labwired_core::peripherals::esp32c3::sha::Esp32c3Sha::new()),
+    );
+    bus.add_peripheral(
+        "flash_irom_xip",
+        0x4200_0000,
+        0x80_0000, // 8 MiB I-cache window
+        None,
+        Box::new(FlashXipPeripheral::new_mmu_fmt(
+            backing.clone(),
+            0x4200_0000,
+            mmu_table.clone(),
+            MMU_FMT_C3,
+        )),
+    );
+    bus.add_peripheral(
+        "flash_drom_xip",
+        0x3C00_0000,
+        0x80_0000, // 8 MiB D-cache window
+        None,
+        Box::new(FlashXipPeripheral::new_mmu_fmt(
+            backing.clone(),
+            0x3C00_0000,
+            mmu_table.clone(),
+            MMU_FMT_C3,
+        )),
+    );
+    // SAR ADC (APB_SARADC, 0x6004_0000): the IDF's adc_hal_self_calibration
+    // triggers single conversions and polls a data-valid flag (0x44 bit31/
+    // bit30) before reading the result; the declarative stub never asserts
+    // it, so read_cal_channel spins forever after spi_flash init. Model
+    // conversions as instant (valid flags set, mid-scale sample) so the
+    // bounded cal search converges and boot continues.
+    bus.add_peripheral(
+        "apb_saradc",
+        0x6004_0000,
+        0x100,
+        None,
+        Box::new(labwired_core::peripherals::esp32c3::sar_adc::Esp32c3SarAdc::new()),
+    );
+    // SYSTIMER (0x6002_3000): the 16 MHz free-running counter behind
+    // esp_timer and the FreeRTOS tick. systimer_hal_get_counter_value sets
+    // UNITx_OP bit30 (UPDATE) then polls bit29 (VALUE_VALID) before reading
+    // the snapshot; the declarative stub never asserts VALUE_VALID, so the
+    // counter read spins forever right after heap_init. The C3 SYSTIMER is
+    // the same IP as the S3 (identical register layout), so the S3 model
+    // drops in: it asserts VALUE_VALID, advances the counter, and supports
+    // the alarm/IRQ path FreeRTOS needs. Clocked relative to the 160 MHz
+    // CPU (10 CPU cycles per 16 MHz tick).
+    bus.add_peripheral(
+        "systimer",
+        0x6002_3000,
+        0x100,
+        None,
+        // C3 SYSTIMER_TARGET0 routes through the interrupt matrix on source
+        // 37 (TARGET1/2 at 38/39), unlike the S3's 57; the FreeRTOS tick
+        // alarm fires on that source.
+        Box::new(
+            labwired_core::peripherals::esp32s3::systimer::Systimer::new_with_source(
+                160_000_000,
+                37,
+            ),
+        ),
+    );
+    // RTC_CNTL main timer (0x6000_8000): the free-running slow-clock counter
+    // the IDF reads via rtc_time_get (set TIME_UPDATE @0x0C bit31 to latch,
+    // read TIME0 @0x10 / TIME1 @0x14). A frozen counter makes every
+    // RTC-deadline wait spin forever — most notably calibrate_ocode, which
+    // polls a regi2c comparator that never settles without real RF and
+    // relies on a ~10 ms RTC timeout to give up and continue. A real
+    // advancing timer lets that loop (and other RTC delays) reach the
+    // timeout exactly as silicon does. Overrides the declarative RTC_CNTL
+    // stub for this window; non-timer regs stay register-backed so the
+    // reset-cause seed at 0x38 below still reads back.
+    bus.add_peripheral(
+        "rtc_cntl_timer",
+        0x6000_8000,
+        0x100,
+        None,
+        Box::new(labwired_core::peripherals::esp32c3::rtc_timer::Esp32c3RtcTimer::new()),
+    );
+    // Seed the power-on hardware reset state the BROM reads to decide it's a
+    // normal flash boot (silicon has this at reset; the sim starts zeroed):
+    //   * RTC_CNTL reset-cause (0x6000_8038, bits[5:0]) = 1 (POWERON_RESET).
+    //     rtc_get_reset_reason returns this; BROM main treats reset_reason 0
+    //     as an error and bails (ret to 0) — 1 lets it continue to flash.
+    //   * GPIO_STRAP (0x6000_4038) bit3 = SPI fast-flash-boot (matches the
+    //     Xtensa rom-boot strap).
+    let _ = bus.write_u32(0x6000_8038, 0x0000_0001);
+    let _ = bus.write_u32(0x6000_4038, 0x0000_0008);
+    //   * eFuse wafer version (EFUSE_RD_MAC_SPI_SYS_3 @ 0x6000_8850,
+    //     WAFER_VERSION_MINOR_LO bits[20:18]) = 4 → chip rev v0.4. The real
+    //     C3 is v0.4; without it eFuse reads v0.0 and the 2nd-stage
+    //     bootloader rejects the app ("requires chip rev >= v0.3").
+    let _ = bus.write_u32(0x6000_8850, 0x0010_0000);
+    // Enable C3 RISC-V interrupt routing: the bus routes asserted peripheral
+    // sources + the SYSTEM FROM_CPU IPI registers through the INTERRUPT_CORE0
+    // matrix into the CPU's external interrupt lines. FreeRTOS's first
+    // context switch (vPortYield → FROM_CPU SW interrupt) depends on this.
+    bus.esp32c3_irq_routing = true;
+    if let Some(mac) = efuse_mac {
+        let lo =
+            mac[5] as u32 | (mac[4] as u32) << 8 | (mac[3] as u32) << 16 | (mac[2] as u32) << 24;
+        let hi = mac[1] as u32 | (mac[0] as u32) << 8;
+        let _ = bus.write_u32(0x6000_8844, lo);
+        let _ = bus.write_u32(0x6000_8848, hi);
+    }
+    let mut cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
+    cpu.set_pc(0x4000_0000);
+    // Disable the internal CLINT timer: the C3 has no standard MTIP — its
+    // 31 interrupt lines (incl. line 7) are ESP matrix lines, so a
+    // self-pending MTIP would collide. mtimecmp=MAX keeps mip bit7 clear.
+    cpu.mtimecmp = u64::MAX;
+    Ok(labwired_core::Machine::new(cpu, bus))
+}
+
+/// Two-station WiFi run: boot two ESP32-C3 instances with distinct factory MACs
+/// onto the shared [`virtual_wifi`] medium. Each is a full real firmware over its
+/// own real MAC; the medium is the AP + the air between them. They associate, get
+/// distinct DHCP leases (192.168.4.2 / .3), and exchange routed IP traffic.
+fn run_two_c3_wifi(
+    args: &RunArgs,
+    chip: &labwired_config::ChipDescriptor,
+    manifest: &labwired_config::SystemManifest,
+) -> ExitCode {
+    use labwired_core::bus::SystemBus;
+    use labwired_core::peripherals::esp32c3::{virtual_wifi, wifi_mac::Esp32c3WifiMac};
+
+    virtual_wifi::reset();
+    eprintln!(
+        "[dual] two-C3 WiFi over shared VirtualWifi: A=02:00:00:00:00:02, B=02:00:00:00:00:03"
+    );
+
+    let build =
+        |mac: [u8; 6]| -> Result<labwired_core::Machine<labwired_core::cpu::RiscV>, ExitCode> {
+            let bus = match SystemBus::from_config(chip, manifest) {
+                Ok(b) => b,
+                Err(e) => {
+                    eprintln!("error: failed to build system bus: {e:#}");
+                    return Err(ExitCode::from(EXIT_CONFIG_ERROR));
+                }
+            };
+            build_c3_rom_boot_machine(bus, Some(mac))
+        };
+    let mut a = match build([0x02, 0, 0, 0, 0, 0x02]) {
+        Ok(m) => m,
+        Err(c) => return c,
+    };
+    let mut b = match build([0x02, 0, 0, 0, 0, 0x03]) {
+        Ok(m) => m,
+        Err(c) => return c,
+    };
+    // Attach each station's WiFi MAC to the medium (medium mode), and label each
+    // station's UART output so the shared stdout is readable.
+    for (m, label) in [(&mut a, "[A] "), (&mut b, "[B] ")] {
+        for p in m.bus.peripherals.iter_mut() {
+            let Some(any) = p.dev.as_any_mut() else {
+                continue;
+            };
+            if let Some(mac) = any.downcast_mut::<Esp32c3WifiMac>() {
+                mac.attach_to_medium();
+            } else if let Some(uart) = any.downcast_mut::<labwired_core::peripherals::uart::Uart>()
+            {
+                uart.set_stdout_prefix(label);
+            }
+        }
+    }
+
+    let limit = args.max_steps.unwrap_or(u64::MAX);
+    for i in 0..limit {
+        if let Err(e) = a.step() {
+            eprintln!("[dual] station A halted at step {i}: {e}");
+            break;
+        }
+        if let Err(e) = b.step() {
+            eprintln!("[dual] station B halted at step {i}: {e}");
+            break;
+        }
+    }
+    eprintln!("[dual] run complete");
+    ExitCode::SUCCESS
+}
+
 fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
     use labwired_core::bus::SystemBus;
 
@@ -873,6 +1238,13 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
         walk_deleted: false,
     };
 
+    // Two-station WiFi run (env LABWIRED_WIFI_DUAL): boot two C3 instances with
+    // distinct MACs onto the shared VirtualWifi medium so they associate, get
+    // distinct DHCP leases, and exchange traffic over one virtual AP.
+    if args.rom_boot && std::env::var("LABWIRED_WIFI_DUAL").is_ok() {
+        return run_two_c3_wifi(&args, &chip, &manifest);
+    }
+
     let mut bus = match SystemBus::from_config(&chip, &manifest) {
         Ok(b) => b,
         Err(e) => {
@@ -890,293 +1262,10 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
     };
 
     let mut machine = if args.rom_boot {
-        // ── Faithful RISC-V ROM boot (ESP32-C3) ──────────────────────────
-        // Reset to the BROM vector 0x4000_0000 (RISC-V `_start`, which jumps to
-        // the BROM startup at 0x40001e90) and let the real mask ROM run:
-        // it initializes the ROM's own DRAM globals (rom_phyFuns &c.) — which
-        // fast-boot skips, causing the rom_i2c_writeReg_Mask indirect-call
-        // crash — then loads the 2nd-stage bootloader + app from the flash
-        // image through the SPI-flash controller and jumps to app_main, exactly
-        // like silicon. "Run the binary, don't thunk it." Requires the real ROM
-        // (LABWIRED_ESP32C3_ROM[_DATA], loaded into the chip's rom regions by
-        // from_config) and the flash image (LABWIRED_ESP32C3_FLASH).
-        use std::sync::{Arc, Mutex};
-        let flash_path = match std::env::var("LABWIRED_ESP32C3_FLASH") {
-            Ok(p) => p,
-            Err(_) => {
-                eprintln!(
-                    "error: --rom-boot needs LABWIRED_ESP32C3_FLASH set (the flash image: \
-                     bootloader@0x0 + partition-table@0x8000 + app@0x10000)"
-                );
-                return ExitCode::from(EXIT_CONFIG_ERROR);
-            }
-        };
-        let flash_bytes = match std::fs::read(&flash_path) {
-            Ok(b) => b,
-            Err(e) => {
-                eprintln!("error: cannot read flash image {flash_path}: {e}");
-                return ExitCode::from(EXIT_RUNTIME_ERROR);
-            }
-        };
-        eprintln!(
-            "labwired-riscv: rom-boot from reset vector 0x40000000 (flash image {} bytes from {})",
-            flash_bytes.len(),
-            flash_path
-        );
-        let backing = Arc::new(Mutex::new(flash_bytes));
-        // Route reads through peripherals first: the fast path checks the
-        // chip's `flash`/`drom` memory-regions (zero-filled in rom-boot) before
-        // peripherals, which would shadow the FlashXip windows we install at the
-        // same XIP addresses. Disabling it lets the MMU-translating FlashXip
-        // serve 0x4200_0000 / 0x3C00_0000 from the real flash image.
-        bus.config.optimized_bus_access = false;
-        // SPIMEM1 flash-command controller (0x6000_2000) backed by the real
-        // image, overriding the declarative stub — a narrower, later-registered
-        // window wins, so the BROM's READ/RDID/RDSR commands return real bytes.
-        // The C3's SPI1 shares the S3's SPIMEM register layout, so the S3 model
-        // drops in unchanged.
-        bus.add_peripheral(
-            "spimem1_flash",
-            0x6000_2000,
-            0x100,
-            None,
-            Box::new(
-                labwired_core::peripherals::esp32s3::spi_mem_flash::SpiMemFlash::new(
-                    backing.clone(),
-                ),
-            ),
-        );
-        // SPIMEM0 (0x6000_3000) — the cache's auto-fetch MSPI controller. Back
-        // it with the same flash image too, in case the BROM's bootloader load
-        // path issues commands here rather than on SPIMEM1.
-        bus.add_peripheral(
-            "spimem0_flash",
-            0x6000_3000,
-            0x100,
-            None,
-            Box::new(
-                labwired_core::peripherals::esp32s3::spi_mem_flash::SpiMemFlash::new(
-                    backing.clone(),
-                ),
-            ),
-        );
-        // Flash cache MMU: the 2nd-stage bootloader programs the virtual→flash
-        // page table at 0x600C_5000, then runs the app from the XIP windows
-        // (IROM 0x4200_0000, DROM 0x3C00_0000). Model the real MMU table shared
-        // with two FlashXip windows that translate through it (C3 entry format:
-        // invalid=BIT(8), 0xFF page field, 8 MiB span) over the flash image —
-        // so the app executes from flash exactly like silicon.
-        use labwired_core::peripherals::esp32s3::flash_xip::{
-            new_mmu_table, Esp32s3MmuTable, FlashXipPeripheral, MMU_FMT_C3,
-        };
-        let mmu_table = new_mmu_table();
-        bus.add_peripheral(
-            "mmu_table",
-            0x600C_5000,
-            0x800,
-            None,
-            Box::new(Esp32s3MmuTable::new(mmu_table.clone())),
-        );
-        // EXTMEM cache controller (0x600C_4000): auto-completes the cache
-        // invalidate/sync launch→done handshake the ROM busy-polls (offset 0x28,
-        // launch bit0 / done bit1). Overrides the declarative stub, which never
-        // asserts done and spins Cache_Invalidate_ICache_Items forever.
-        bus.add_peripheral(
-            "extmem_cache",
-            0x600C_4000,
-            0x400,
-            None,
-            Box::new(labwired_core::peripherals::esp32c3::cache::Esp32c3Cache::new()),
-        );
-        // Analog I²C master / ANA_CONFIG block (0x6000_E000, DR_REG_I2C_ANA_MST_BASE):
-        // rom_i2c_writeReg drives it (read-modify-write of ANA_CONFIG regs) during
-        // PHY/clock bring-up; the libphy full RF calibration also touches regs up
-        // past 0x6000_E130, so the window spans 0x400. The model reports the
-        // master FSM status (0x50 bits[26:24]=7, idle/done) so the ROM's
-        // transaction busy-poll exits; all other regs are register-backed.
-        bus.add_peripheral(
-            "rtc_i2c_ana",
-            0x6000_E000,
-            0x400,
-            None,
-            Box::new(labwired_core::peripherals::esp32c3::ana_i2c::Esp32c3AnaI2c::new()),
-        );
-        // FE/PHY register block (0x6001_1000): libphy's set_rx_gain_table also
-        // writes gain/FE config into the gap between uart1 (0x6001_0000) and
-        // i2c0 (0x6001_3000). Register-backed storage for those RF tables.
-        bus.add_peripheral(
-            "wifi_fe",
-            0x6001_1000,
-            0x2000,
-            None,
-            Box::new(labwired_core::peripherals::esp32c3::reg_block::Esp32c3RegBlock::new(0x2000)),
-        );
-        // Baseband/RF register block (0x6001_C000): libphy writes the RX gain
-        // table and other BB/RF config here (set_rx_gain_table). Unmapped, the
-        // gain-table store faults. Register-backed window up to the declarative
-        // peripheral at 0x6001_CC00. (RF air-gap: storage is enough — there's
-        // no real RF that would act on these values.)
-        bus.add_peripheral(
-            "wifi_bb",
-            0x6001_C000,
-            0xC00,
-            None,
-            Box::new(labwired_core::peripherals::esp32c3::reg_block::Esp32c3RegBlock::new(0xC00)),
-        );
-        // Radio front-end PLL-lock status (RADIO_FE 0x6000_6000 + 0x174, bit16):
-        // the libphy pll_cal launches the BBPLL/RF PLL then busy-polls this bit
-        // for lock; without real RF it never sets and pll_cal spins/retries
-        // ("pll_cal exceeds 2ms!!!"). Force-assert it (RF air-gap cut) over just
-        // that one word, leaving the declarative radio_fe descriptors intact.
-        bus.add_peripheral(
-            "radio_fe_pll_lock",
-            0x6000_6174,
-            0x4,
-            None,
-            Box::new(
-                labwired_core::peripherals::esp32c3::forced_status::Esp32c3ForcedStatus::new(
-                    0x4,
-                    vec![(0x0, 1 << 16)],
-                ),
-            ),
-        );
-        // WiFi MAC (WIFI_MAC 0x6003_3000, 12 KiB) — behavioral model for the
-        // MAC <-> SimNet bridge: register-backed bring-up, MAC-ready bit (0xD14
-        // b0, polled by hal_init), RX descriptor-ring DMA + RX-frame injection,
-        // and MAC interrupt (matrix source 0) on RX-done. Overrides the
-        // declarative wifi_mac window. See docs/esp32c3_wifi_mac_bridge.md.
-        bus.add_peripheral(
-            "wifi_mac",
-            0x6003_3000,
-            0x3000,
-            None,
-            Box::new(labwired_core::peripherals::esp32c3::wifi_mac::Esp32c3WifiMac::new()),
-        );
-        // Hardware RNG data register (WDEV_RND_REG, 0x6002_60B0): yields a fresh
-        // word per read. bootloader_fill_random XORs successive reads and
-        // process_segments refills ram_obfs_value until non-zero — a constant
-        // RNG gives 0 and spins forever. Override the SYSCON stub at this word.
-        bus.add_peripheral(
-            "wdev_rnd",
-            0x6002_60B0,
-            0x4,
-            None,
-            Box::new(labwired_core::peripherals::esp32c3::rng::Esp32c3Rng::new()),
-        );
-        // SHA accelerator (0x6003_B000): the 2nd-stage bootloader verifies the
-        // app image's appended SHA-256 with it; an unmodelled (zero) digest
-        // makes it reject the image. Real SHA-256 block compression here.
-        bus.add_peripheral(
-            "sha",
-            0x6003_B000,
-            0x100,
-            None,
-            Box::new(labwired_core::peripherals::esp32c3::sha::Esp32c3Sha::new()),
-        );
-        bus.add_peripheral(
-            "flash_irom_xip",
-            0x4200_0000,
-            0x80_0000, // 8 MiB I-cache window
-            None,
-            Box::new(FlashXipPeripheral::new_mmu_fmt(
-                backing.clone(),
-                0x4200_0000,
-                mmu_table.clone(),
-                MMU_FMT_C3,
-            )),
-        );
-        bus.add_peripheral(
-            "flash_drom_xip",
-            0x3C00_0000,
-            0x80_0000, // 8 MiB D-cache window
-            None,
-            Box::new(FlashXipPeripheral::new_mmu_fmt(
-                backing.clone(),
-                0x3C00_0000,
-                mmu_table.clone(),
-                MMU_FMT_C3,
-            )),
-        );
-        // SAR ADC (APB_SARADC, 0x6004_0000): the IDF's adc_hal_self_calibration
-        // triggers single conversions and polls a data-valid flag (0x44 bit31/
-        // bit30) before reading the result; the declarative stub never asserts
-        // it, so read_cal_channel spins forever after spi_flash init. Model
-        // conversions as instant (valid flags set, mid-scale sample) so the
-        // bounded cal search converges and boot continues.
-        bus.add_peripheral(
-            "apb_saradc",
-            0x6004_0000,
-            0x100,
-            None,
-            Box::new(labwired_core::peripherals::esp32c3::sar_adc::Esp32c3SarAdc::new()),
-        );
-        // SYSTIMER (0x6002_3000): the 16 MHz free-running counter behind
-        // esp_timer and the FreeRTOS tick. systimer_hal_get_counter_value sets
-        // UNITx_OP bit30 (UPDATE) then polls bit29 (VALUE_VALID) before reading
-        // the snapshot; the declarative stub never asserts VALUE_VALID, so the
-        // counter read spins forever right after heap_init. The C3 SYSTIMER is
-        // the same IP as the S3 (identical register layout), so the S3 model
-        // drops in: it asserts VALUE_VALID, advances the counter, and supports
-        // the alarm/IRQ path FreeRTOS needs. Clocked relative to the 160 MHz
-        // CPU (10 CPU cycles per 16 MHz tick).
-        bus.add_peripheral(
-            "systimer",
-            0x6002_3000,
-            0x100,
-            None,
-            // C3 SYSTIMER_TARGET0 routes through the interrupt matrix on source
-            // 37 (TARGET1/2 at 38/39), unlike the S3's 57; the FreeRTOS tick
-            // alarm fires on that source.
-            Box::new(
-                labwired_core::peripherals::esp32s3::systimer::Systimer::new_with_source(
-                    160_000_000,
-                    37,
-                ),
-            ),
-        );
-        // RTC_CNTL main timer (0x6000_8000): the free-running slow-clock counter
-        // the IDF reads via rtc_time_get (set TIME_UPDATE @0x0C bit31 to latch,
-        // read TIME0 @0x10 / TIME1 @0x14). A frozen counter makes every
-        // RTC-deadline wait spin forever — most notably calibrate_ocode, which
-        // polls a regi2c comparator that never settles without real RF and
-        // relies on a ~10 ms RTC timeout to give up and continue. A real
-        // advancing timer lets that loop (and other RTC delays) reach the
-        // timeout exactly as silicon does. Overrides the declarative RTC_CNTL
-        // stub for this window; non-timer regs stay register-backed so the
-        // reset-cause seed at 0x38 below still reads back.
-        bus.add_peripheral(
-            "rtc_cntl_timer",
-            0x6000_8000,
-            0x100,
-            None,
-            Box::new(labwired_core::peripherals::esp32c3::rtc_timer::Esp32c3RtcTimer::new()),
-        );
-        // Seed the power-on hardware reset state the BROM reads to decide it's a
-        // normal flash boot (silicon has this at reset; the sim starts zeroed):
-        //   * RTC_CNTL reset-cause (0x6000_8038, bits[5:0]) = 1 (POWERON_RESET).
-        //     rtc_get_reset_reason returns this; BROM main treats reset_reason 0
-        //     as an error and bails (ret to 0) — 1 lets it continue to flash.
-        //   * GPIO_STRAP (0x6000_4038) bit3 = SPI fast-flash-boot (matches the
-        //     Xtensa rom-boot strap).
-        let _ = bus.write_u32(0x6000_8038, 0x0000_0001);
-        let _ = bus.write_u32(0x6000_4038, 0x0000_0008);
-        //   * eFuse wafer version (EFUSE_RD_MAC_SPI_SYS_3 @ 0x6000_8850,
-        //     WAFER_VERSION_MINOR_LO bits[20:18]) = 4 → chip rev v0.4. The real
-        //     C3 is v0.4; without it eFuse reads v0.0 and the 2nd-stage
-        //     bootloader rejects the app ("requires chip rev >= v0.3").
-        let _ = bus.write_u32(0x6000_8850, 0x0010_0000);
-        // Enable C3 RISC-V interrupt routing: the bus routes asserted peripheral
-        // sources + the SYSTEM FROM_CPU IPI registers through the INTERRUPT_CORE0
-        // matrix into the CPU's external interrupt lines. FreeRTOS's first
-        // context switch (vPortYield → FROM_CPU SW interrupt) depends on this.
-        bus.esp32c3_irq_routing = true;
-        let mut cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
-        cpu.set_pc(0x4000_0000);
-        // Disable the internal CLINT timer: the C3 has no standard MTIP — its
-        // 31 interrupt lines (incl. line 7) are ESP matrix lines, so a
-        // self-pending MTIP would collide. mtimecmp=MAX keeps mip bit7 clear.
-        cpu.mtimecmp = u64::MAX;
-        labwired_core::Machine::new(cpu, bus)
+        match build_c3_rom_boot_machine(bus, None) {
+            Ok(m) => m,
+            Err(code) => return code,
+        }
     } else {
         let cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
         let mut machine = labwired_core::Machine::new(cpu, bus);
