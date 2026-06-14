@@ -111,13 +111,18 @@ pub struct Esp32c3WifiMac {
     trace: VecDeque<WifiFrameTrace>,
     /// Next capture sequence number.
     trace_seq: u64,
-    /// When `Some(mac)`, this MAC is attached to the shared [`virtual_wifi`]
-    /// medium with the given station MAC: transmitted frames are submitted to
-    /// the medium and frames the medium queues for this MAC are pulled into the
-    /// RX ring each tick. When `None`, the model uses the `tx_out`/`queue_rx_*`
-    /// path driven by the CLI bridge (single-device runs). Medium mode is what
-    /// lets two C3 instances (each a distinct MAC) talk over one virtual AP.
-    medium: Option<[u8; 6]>,
+    /// When true, this MAC is attached to the shared [`virtual_wifi`] medium:
+    /// transmitted frames are submitted to it and the medium's per-station inbox
+    /// is pulled into the RX ring each tick. When false, the model uses the
+    /// `tx_out`/`queue_rx_*` path driven by the CLI bridge (single-device runs).
+    /// Medium mode is what lets two C3 instances talk over one virtual AP.
+    medium_mode: bool,
+    /// This station's own MAC, learned from the `addr2` (SA) of the first frame
+    /// it transmits — so we needn't predict the eFuse byte order. Used to pull
+    /// this station's medium inbox and to beacon it.
+    medium_mac: Option<[u8; 6]>,
+    /// Tick counter for periodic beacon injection in medium mode.
+    medium_beacon_ctr: u32,
 }
 
 impl Default for Esp32c3WifiMac {
@@ -136,16 +141,18 @@ impl Esp32c3WifiMac {
             pending_tx: VecDeque::new(),
             trace: VecDeque::new(),
             trace_seq: 0,
-            medium: None,
+            medium_mode: false,
+            medium_mac: None,
+            medium_beacon_ctr: 0,
         }
     }
 
-    /// Attach this MAC to the shared [`virtual_wifi`] medium with `mac` as its
-    /// station address (must match the eFuse MAC the firmware reads). Enables
-    /// medium mode: TX is submitted to the medium and the medium's inbox is
-    /// pulled into the RX ring each tick.
-    pub fn attach_to_medium(&mut self, mac: [u8; 6]) {
-        self.medium = Some(mac);
+    /// Attach this MAC to the shared [`virtual_wifi`] medium. Enables medium
+    /// mode: TX frames are submitted to the medium (which learns this station's
+    /// MAC from the frame's SA), and the medium's inbox is pulled into the RX
+    /// ring each tick. Two C3 instances both attached share one virtual AP.
+    pub fn attach_to_medium(&mut self) {
+        self.medium_mode = true;
     }
 
     /// Record a captured frame in the analyzer ring buffer (oldest dropped at
@@ -228,10 +235,18 @@ impl Esp32c3WifiMac {
             );
         }
         self.trace_push("tx", &raw, 0);
-        if let Some(mac) = self.medium {
-            // Medium mode: hand the frame to the shared virtual AP, which
-            // responds / routes it to the destination station.
-            super::virtual_wifi::submit(mac, &raw);
+        if self.medium_mode {
+            // Medium mode: learn our own MAC from the frame's SA (addr2, bytes
+            // 10..16) and hand the frame to the shared virtual AP, which responds
+            // / routes it to the destination station.
+            if raw.len() >= 16 {
+                let mut sa = [0u8; 6];
+                sa.copy_from_slice(&raw[10..16]);
+                if self.medium_mac.is_none() && sa != [0u8; 6] {
+                    self.medium_mac = Some(sa);
+                }
+                super::virtual_wifi::submit(sa, &raw);
+            }
         } else {
             self.tx_out.push_back(raw);
         }
@@ -422,9 +437,16 @@ impl Peripheral for Esp32c3WifiMac {
         // submits to the shared AP), then in medium mode pull any frames the AP
         // queued for this station, then deliver one queued RX frame into the ring.
         self.process_tx(bus);
-        if let Some(mac) = self.medium {
-            for frame in super::virtual_wifi::take_inbox(mac) {
-                self.pending_rx.push_back(frame);
+        if self.medium_mode {
+            if let Some(mac) = self.medium_mac {
+                // Periodic beacon so the scanning station keeps seeing the AP.
+                self.medium_beacon_ctr = self.medium_beacon_ctr.wrapping_add(1);
+                if self.medium_beacon_ctr % 2_000_000 == 0 {
+                    super::virtual_wifi::queue_beacon(mac, 1);
+                }
+                for frame in super::virtual_wifi::take_inbox(mac) {
+                    self.pending_rx.push_back(frame);
+                }
             }
         }
         self.deliver_one_rx(bus);

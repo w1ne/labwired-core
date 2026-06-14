@@ -31,6 +31,8 @@ const NETMASK: [u8; 4] = [255, 255, 255, 0];
 const AP_SSID: &str = "labwired-ap";
 /// First DHCP-assignable host octet (192.168.4.2, .3, …).
 const FIRST_HOST: u8 = 2;
+/// UDP echo-server port the AP hosts (matches the firmware probe).
+const UDP_ECHO_PORT: u16 = 9999;
 
 /// Per-station state the AP tracks.
 #[derive(Debug, Default)]
@@ -180,7 +182,12 @@ impl VirtualWifi {
         // IPv4: route to the destination station if we know it, else drop.
         if let Some((dst_ip, _proto)) = parse_ipv4_dst(frame) {
             if dst_ip == AP_IP {
-                return; // traffic to the AP itself (no services beyond DHCP/ARP)
+                // The AP hosts a UDP echo server on UDP_ECHO_PORT (proves an
+                // app-data round-trip); other traffic to the AP is dropped.
+                if let Some(echo) = build_udp_echo(src, frame) {
+                    self.enqueue(src, echo);
+                }
+                return;
             }
             if let Some(dst_mac) = self.mac_for_ip(dst_ip) {
                 // Re-frame as a from-DS data frame to the destination station,
@@ -407,6 +414,63 @@ fn build_arp_reply(da: [u8; 6], who_mac: [u8; 6], who_ip: [u8; 4], target_ip: [u
     arp.extend_from_slice(&da);
     arp.extend_from_slice(&target_ip);
     data_frame(da, 0x0806, &arp)
+}
+
+/// If `frame` is a UDP datagram to the AP's echo port, build the echoed reply
+/// (same payload, src/dst swapped) as a from-DS data frame to the sender `da`.
+fn build_udp_echo(da: [u8; 6], frame: &[u8]) -> Option<Vec<u8>> {
+    let ip = snap_off(frame);
+    if frame.len() < ip + 20 || frame[ip] >> 4 != 4 || frame[ip + 9] != 17 {
+        return None;
+    }
+    let udp = ip + (frame[ip] & 0xF) as usize * 4;
+    if frame.len() < udp + 8 {
+        return None;
+    }
+    let sport = u16::from_be_bytes([frame[udp], frame[udp + 1]]);
+    let dport = u16::from_be_bytes([frame[udp + 2], frame[udp + 3]]);
+    if dport != UDP_ECHO_PORT {
+        return None;
+    }
+    let ulen = u16::from_be_bytes([frame[udp + 4], frame[udp + 5]]) as usize;
+    if ulen < 8 || frame.len() < udp + ulen {
+        return None;
+    }
+    // Sender's source IP (reply destination).
+    let mut src_ip = [0u8; 4];
+    src_ip.copy_from_slice(&frame[ip + 12..ip + 16]);
+    let payload = &frame[udp + 8..udp + ulen];
+
+    let udp_len = (8 + payload.len()) as u16;
+    let mut u = Vec::new();
+    u.extend_from_slice(&UDP_ECHO_PORT.to_be_bytes());
+    u.extend_from_slice(&sport.to_be_bytes());
+    u.extend_from_slice(&udp_len.to_be_bytes());
+    u.extend_from_slice(&[0, 0]);
+    u.extend_from_slice(payload);
+
+    let ip_total = (20 + u.len()) as u16;
+    let mut iph = vec![
+        0x45,
+        0x00,
+        (ip_total >> 8) as u8,
+        ip_total as u8,
+        0,
+        0,
+        0,
+        0,
+        0x40,
+        0x11,
+        0,
+        0,
+    ];
+    iph.extend_from_slice(&AP_IP);
+    iph.extend_from_slice(&src_ip);
+    let cks = inet_checksum(&iph);
+    iph[10] = (cks >> 8) as u8;
+    iph[11] = cks as u8;
+    iph.extend_from_slice(&u);
+    Some(data_frame(da, 0x0800, &iph))
 }
 
 /// Re-wrap a station-transmitted IPv4 data frame as a from-DS frame to the
