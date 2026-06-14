@@ -111,6 +111,13 @@ pub struct Esp32c3WifiMac {
     trace: VecDeque<WifiFrameTrace>,
     /// Next capture sequence number.
     trace_seq: u64,
+    /// When `Some(mac)`, this MAC is attached to the shared [`virtual_wifi`]
+    /// medium with the given station MAC: transmitted frames are submitted to
+    /// the medium and frames the medium queues for this MAC are pulled into the
+    /// RX ring each tick. When `None`, the model uses the `tx_out`/`queue_rx_*`
+    /// path driven by the CLI bridge (single-device runs). Medium mode is what
+    /// lets two C3 instances (each a distinct MAC) talk over one virtual AP.
+    medium: Option<[u8; 6]>,
 }
 
 impl Default for Esp32c3WifiMac {
@@ -129,7 +136,16 @@ impl Esp32c3WifiMac {
             pending_tx: VecDeque::new(),
             trace: VecDeque::new(),
             trace_seq: 0,
+            medium: None,
         }
+    }
+
+    /// Attach this MAC to the shared [`virtual_wifi`] medium with `mac` as its
+    /// station address (must match the eFuse MAC the firmware reads). Enables
+    /// medium mode: TX is submitted to the medium and the medium's inbox is
+    /// pulled into the RX ring each tick.
+    pub fn attach_to_medium(&mut self, mac: [u8; 6]) {
+        self.medium = Some(mac);
     }
 
     /// Record a captured frame in the analyzer ring buffer (oldest dropped at
@@ -212,7 +228,13 @@ impl Esp32c3WifiMac {
             );
         }
         self.trace_push("tx", &raw, 0);
-        self.tx_out.push_back(raw);
+        if let Some(mac) = self.medium {
+            // Medium mode: hand the frame to the shared virtual AP, which
+            // responds / routes it to the destination station.
+            super::virtual_wifi::submit(mac, &raw);
+        } else {
+            self.tx_out.push_back(raw);
+        }
         // Signal TX-complete: set the per-queue done state (mode2 reads &0xF at
         // 0xCB0) and the TX-done event bit, then the level-sensitive MAC IRQ
         // runs lmacProcessTxComplete.
@@ -396,9 +418,15 @@ impl Peripheral for Esp32c3WifiMac {
     }
 
     fn tick_with_bus(&mut self, bus: &mut dyn Bus) {
-        // Capture any transmitted frame + signal TX-complete, then deliver one
-        // queued RX frame into the descriptor ring.
+        // Capture any transmitted frame + signal TX-complete (in medium mode this
+        // submits to the shared AP), then in medium mode pull any frames the AP
+        // queued for this station, then deliver one queued RX frame into the ring.
         self.process_tx(bus);
+        if let Some(mac) = self.medium {
+            for frame in super::virtual_wifi::take_inbox(mac) {
+                self.pending_rx.push_back(frame);
+            }
+        }
         self.deliver_one_rx(bus);
     }
 
