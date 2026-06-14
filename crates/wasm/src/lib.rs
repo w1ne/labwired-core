@@ -653,11 +653,6 @@ impl WasmSimulator {
         serde_wasm_bindgen::to_value(&states).unwrap_or(JsValue::NULL)
     }
 
-
-
-
-
-
     /// Execute up to max_cycles steps, returning the number actually executed.
     #[wasm_bindgen]
     pub fn step_batch(&mut self, max_cycles: u32) -> Result<u32, JsValue> {
@@ -1696,8 +1691,6 @@ impl WasmSimulator {
         }
         JsValue::NULL
     }
-
-
 
     // ──────────────────────────────────────────────────────────────────────
     //  Arduino-ESP32 bootstrap glue. Call after constructing the WasmSimulator
