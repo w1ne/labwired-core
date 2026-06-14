@@ -115,6 +115,30 @@ jobs:
           git commit -m "chore(tier1): nightly matrix refresh with run evidence"
           git push
 
+      # The chip-conformance scoreboard (estate / level / reg-match% / behavior
+      # gate) regenerates from the chip YAMLs every run, but nothing committed
+      # it — so the markdown drifted (peripheral counts/levels went stale)
+      # whenever a chip was rewired between manual re-baselines. Running the test
+      # rewrites docs/coverage/chip-conformance.md AND ratchets against the
+      # committed JSON baseline, so a real regression fails this step instead of
+      # being laundered in. We auto-commit only the regenerated markdown.
+      - name: Refresh chip-conformance scoreboard
+        run: cargo test --release -p labwired-core --test chip_conformance -- --nocapture
+
+      - name: Commit and push chip-conformance scoreboard
+        if: github.ref == 'refs/heads/main'
+        run: |
+          if git diff --quiet -- docs/coverage/chip-conformance.md; then
+            echo "No chip-conformance changes"
+            exit 0
+          fi
+
+          git config user.name "LabWired CI"
+          git config user.email "ci@labwired.com"
+          git add docs/coverage/chip-conformance.md
+          git commit -m "chore(conformance): nightly chip-conformance scoreboard refresh"
+          git push
+
   esp32s3-fixtures-e2e:
     name: ESP32-S3 Fixtures E2E (espup)
     runs-on: ubuntu-latest

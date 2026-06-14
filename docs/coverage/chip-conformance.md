@@ -18,7 +18,7 @@ Reg match = verifiable cold-reset registers reproduced. "Excluded" = registers a
 | stm32f401 | **L1** | ✓ | 7 | — | — | firmware_survival::test_stm32f401_blinky_survival |
 | stm32f407 | **L1** | ✓ | 25 | — | — | firmware_survival::test_nucleo_f407_smoke_survival |
 | stm32g474re | **L0** | ✓ | 7 | — | — | — |
-| stm32h563 | **L1** | ✓ | 35 | — | — | firmware_survival::test_stm32h563_demo_survival |
+| stm32h563 | **L1** | ✓ | 36 | — | — | firmware_survival::test_stm32h563_demo_survival |
 | stm32l073 | **L2** | ✓ | 42 | 55/55 (100%) | 5 | firmware_survival::test_nucleo_l073rz_smoke_survival |
 | stm32l476 | **L1** | ✓ | 58 | — | — | firmware_survival::test_nucleo_l476rg_demo_survival |
 | stm32wb55 | **L0** | ✓ | 7 | — | — | — |
