@@ -108,6 +108,8 @@ nav:
     - Verification Audit: labwired_audit_protocol.md
     - Supported Devices: supported_devices.md
     - Coverage Scoreboard: coverage_scoreboard.md
+    - Chip Conformance (live): coverage/chip-conformance.md
+    - Tier-1 Matrix (live): coverage/tier1-scoreboard.md
     - Safety & Guardrails: safety.md
     - Demos: demos.md
     - Case Study (STM32): case_study_stm32.md

@@ -7,6 +7,9 @@ external YAML descriptors under `configs/peripherals/esp32c3/`.
 
 ## Status at a glance
 
+
+> **Live status:** the table below is a hand-maintained snapshot. For the authoritative, auto-generated view see the [chip conformance scoreboard](../coverage/chip-conformance.md) (level · modelled peripherals · register-match vs silicon) and the [tier-1 matrix](../coverage/tier1-scoreboard.md) (per-peripheral pass/fail).
+
 | Aspect              | Status                                                                            |
 |---------------------|-----------------------------------------------------------------------------------|
 | Chip yaml           | [`configs/chips/esp32c3.yaml`](../../configs/chips/esp32c3.yaml)                  |

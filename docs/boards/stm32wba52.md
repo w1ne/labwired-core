@@ -11,6 +11,9 @@ For build/run instructions, see
 
 ## Status at a glance
 
+
+> **Live status:** the table below is a hand-maintained snapshot. For the authoritative, auto-generated view see the [chip conformance scoreboard](../coverage/chip-conformance.md) (level · modelled peripherals · register-match vs silicon) and the [tier-1 matrix](../coverage/tier1-scoreboard.md) (per-peripheral pass/fail).
+
 | Aspect              | Status                                                                          |
 |---------------------|---------------------------------------------------------------------------------|
 | Chip yaml           | [`configs/chips/stm32wba52.yaml`](../../configs/chips/stm32wba52.yaml)          |
