@@ -223,12 +223,21 @@ impl SystemBus {
                                 i2c.attach(device);
                             }
                             None => {
-                                tracing::warn!(
-                                    "i2c attach skipped: unknown device type '{}' for external id '{}' on bus '{}'",
-                                    ext.r#type,
-                                    ext.id,
-                                    p_cfg.id
-                                );
+                                // Devices migrated to the PeripheralKit contract
+                                // are attached by the kit pass below (see the
+                                // `registry::lookup` loop), not by this legacy
+                                // inline factory — so their absence here is
+                                // expected, not an error. Only warn for types
+                                // that no path will handle.
+                                if crate::peripherals::kit::registry::lookup(&ext.r#type).is_none()
+                                {
+                                    tracing::warn!(
+                                        "i2c attach skipped: unknown device type '{}' for external id '{}' on bus '{}'",
+                                        ext.r#type,
+                                        ext.id,
+                                        p_cfg.id
+                                    );
+                                }
                             }
                         }
                     }
