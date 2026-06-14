@@ -11,32 +11,29 @@ external YAML descriptors under `configs/peripherals/esp32c3/`.
 |---------------------|-----------------------------------------------------------------------------------|
 | Chip yaml           | [`configs/chips/esp32c3.yaml`](../../configs/chips/esp32c3.yaml)                  |
 | System yaml         | [`configs/systems/esp32c3-devkit.yaml`](../../configs/systems/esp32c3-devkit.yaml) |
-| Reference firmware  | `examples/esp32c3/` (see folder)                                                  |
-| Validation          | No `VALIDATION.md` checked in                                                     |
-| Tier                | structural — declarative peripheral models only                                   |
+| Reference firmware  | [`crates/firmware-esp32c3-demo/`](../../crates/firmware-esp32c3-demo/) (RISC-V `riscv32imc` demo) |
+| Validation          | reset-state conformance vs silicon — see [`docs/esp32c3_reset_conformance_audit.md`](../esp32c3_reset_conformance_audit.md) |
+| WiFi/lwIP           | full association → DHCP → UDP over the register-level MAC — see [`docs/esp32c3_wifi_mac_bridge.md`](../esp32c3_wifi_mac_bridge.md) |
+| Tier                | full documented SVD estate wired + reset-state validated                          |
 
 ## Peripherals (from chip yaml)
 
-| Peripheral       | Base       | Status              | Notes                                                                           |
-|------------------|------------|---------------------|---------------------------------------------------------------------------------|
-| RV32IMC core     | —          | ✅ modeled          | Single core, RISC-V                                                             |
-| UART0            | 0x60000000 | ✅ modeled          | 512-byte window, RISC-V (not stm32v2) profile                                   |
-| GPIO             | 0x60004000 | ⚙ declarative      | `configs/peripherals/esp32c3/gpio.yaml`                                         |
-| TIMG0            | 0x6001F000 | ⚙ declarative      | `configs/peripherals/esp32c3/timg0.yaml`                                        |
-| INTERRUPT_CORE0  | 0x600C2000 | ⚙ declarative      | `configs/peripherals/esp32c3/interrupt_core0.yaml`                              |
-| ROM              | 0x40000000 | ⚙ declarative      | 384 KB internal ROM (`configs/peripherals/esp32c3/rom.yaml`)                    |
+The chip yaml now wires the **full documented SVD estate** — ~35 peripheral
+descriptors. Behaviorally modeled blocks (RV32IMC core, UART0/1, GPIO, the WiFi
+MAC + radio front-end) drive real firmware; the remainder are declarative
+register windows validated for reset-state conformance and clean mapping (no
+bus faults). Wired blocks include:
 
-See [`docs/declarative_registers.md`](../declarative_registers.md) for
-how declarative peripheral descriptors work.
+- **Core / console:** RV32IMC core, UART0/1, GPIO + `io_mux`, `gpio_sd`
+- **Timers / clocks:** TIMG0/1, `systimer`, `system`, `apb_ctrl`, `rtc_cntl`
+- **Buses:** SPI0/1/2, I²C0, I²S0, `rmt`, `ledc`, `twai0`, `uhci0/1`, GDMA (`dma`)
+- **Radio:** `wifi_mac`, `radio_fe`, `radio_nrx`, `bb` (register-level MAC; see WiFi link above)
+- **Crypto / security:** AES, SHA, RSA, HMAC, DS, XTS-AES, `sensitive`, `assist_debug`
+- **Misc:** `efuse`, `apb_saradc`, `usb_device` (USB-Serial/JTAG), `extmem`
 
-## Not yet modeled (commonly expected on ESP32-C3)
-
-The chip yaml does not declare: **WIFI / BT controller**, **RTC_CNTL**,
-**RTC_IO**, **SYSTEM (clock + reset)**, **SPI0/1/2** (cache + general
-purpose), **I²C0/1**, **UART1**, **LEDC**, **RMT**, **DMA**, **AES /
-SHA / RSA / HMAC / DS / XTS_AES**, **ADC1/2**, **TEMP_SENSOR**, **USB
-Serial/JTAG**, **TIMG1**, **SYSTIMER**, **GDMA**, **APB_CTRL**.
-
-Firmware that touches any of these registers will hit
-`MemoryAccessViolation` or stall in a polling loop. See
-[`docs/getting_started_firmware.md`](../getting_started_firmware.md).
+Authoritative bases come from the ESP32-C3 SVD
+(`tests/fixtures/real_world/esp32c3.svd`); see
+[`docs/esp32c3_reset_conformance_audit.md`](../esp32c3_reset_conformance_audit.md)
+for the silicon oracle diff and which registers are static vs ROM-configured.
+See [`docs/declarative_registers.md`](../declarative_registers.md) for how
+declarative peripheral descriptors work.

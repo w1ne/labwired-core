@@ -3,7 +3,7 @@
 Onboarding of the ESP32-C3 peripheral blocks that were present as declarative
 descriptors under `configs/peripherals/esp32c3/` but **not wired** into
 `configs/chips/esp32c3.yaml`. Validated against real silicon per
-[`docs/peripheral_onboarding_playbook.md`](../../docs/peripheral_onboarding_playbook.md).
+[`docs/peripheral_onboarding_playbook.md`](peripheral_onboarding_playbook.md).
 
 ## Hardware
 
@@ -97,14 +97,16 @@ cargo test -p labwired-hw-oracle --test esp32c3_reset_conformance
 # -> ok. 1 passed
 ```
 
-## Not yet done
+> **Scope of this audit.** This is the *reset-state* onboarding trail: it
+> validated the documented SVD estate maps cleanly and matches silicon at reset.
+> Items listed below as "follow-ups" at the time of writing have since landed.
 
-- **WiFi/BT MAC** register modeling. The documented radio baseband control block
-  (`bb` @ `0x6001D000`) is now wired, but the WiFi/BT MAC register map is not
-  published by Espressif and is not in the SVD, so it stays thunk-backed
-  (`wifi_thunks.rs` + SimNet). Register-modeling it (playbook §4) means capturing
-  the MAC windows from a running radio rather than from the SVD — a large
-  follow-up.
-- Behavioral (running-firmware PC-trace) oracle for C3 (needs a per-peripheral
-  probe firmware); this pass validated reset-state fidelity + clean mapping for
-  the full documented estate.
+## Since this audit
+
+- **WiFi/BT MAC** register modeling — **done**. The MAC windows were captured
+  from a running radio (the map is not in the SVD) and modeled at register level,
+  retiring the thunk-backed path. See
+  [`docs/esp32c3_wifi_mac_bridge.md`](esp32c3_wifi_mac_bridge.md).
+- Behavioral (running-firmware PC-trace) oracle for C3 — this audit covered
+  reset-state fidelity + clean mapping for the full documented estate; the
+  running-firmware oracle is exercised by the WiFi/lwIP bring-up above.
