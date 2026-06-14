@@ -2,3 +2,4 @@
 
 pub mod asset;
 pub mod snapshot;
+pub mod test;
