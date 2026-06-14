@@ -51,7 +51,6 @@ members = [
     "crates/riscv-ci-fixture",
     "crates/svd-ingestor",
     "crates/wasm",
-    "examples/arm-cortex-m0",
     "examples/demo-blinky",
     "examples/nucleo-f407-i2c",
     "examples/riscv-virt",
