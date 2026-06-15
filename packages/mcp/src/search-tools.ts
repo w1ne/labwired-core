@@ -1,4 +1,4 @@
-import { toolTitle } from './tool-metadata.js';
+import { toolAnnotations, toolTitle } from './tool-metadata.js';
 
 interface ToolLike {
   name: string;
@@ -11,6 +11,14 @@ interface ToolLike {
 }
 
 export const SEARCH_TOOLS_TOOL_NAME = 'labwired_search_tools';
+export const AGENT_HARDWARE_LOOP_GUIDE_URI = 'labwired://guides/agent-hardware-loop';
+export const LOCAL_AGENT_WORKFLOW = [
+  'labwired_list_boards',
+  'labwired_validate_diagram',
+  'labwired_compile_diagram',
+  'labwired_simulate',
+  'labwired_inspect_run',
+] as const;
 
 export const SEARCH_TOOLS_TOOL: ToolLike = {
   name: SEARCH_TOOLS_TOOL_NAME,
@@ -102,6 +110,7 @@ function toRanked(tools: readonly ToolLike[]) {
     name: tool.name,
     title: toolTitle(tool.name),
     description: tool.description,
+    annotations: toolAnnotations(tool.name),
     inputSchema: tool.inputSchema,
   }));
 }

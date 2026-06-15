@@ -47,6 +47,22 @@ export function toolTitle(name: string): string {
     .join(' ');
 }
 
+export function toolAnnotations(name: string): {
+  title: string;
+  readOnlyHint: boolean;
+  destructiveHint: boolean;
+  openWorldHint?: boolean;
+} {
+  const title = toolTitle(name);
+  const readOnly = READ_ONLY_TOOLS.has(name);
+  return {
+    title,
+    readOnlyHint: readOnly,
+    destructiveHint: false,
+    ...(readOnly ? {} : { openWorldHint: true }),
+  };
+}
+
 export function decorateTools<T extends ToolLike>(tools: readonly T[]): Array<T & {
   title: string;
   annotations: {
@@ -58,16 +74,10 @@ export function decorateTools<T extends ToolLike>(tools: readonly T[]): Array<T 
 }> {
   return tools.map((tool) => {
     const title = toolTitle(tool.name);
-    const readOnly = READ_ONLY_TOOLS.has(tool.name);
     return {
       ...tool,
       title,
-      annotations: {
-        title,
-        readOnlyHint: readOnly,
-        destructiveHint: false,
-        ...(readOnly ? {} : { openWorldHint: true }),
-      },
+      annotations: toolAnnotations(tool.name),
     };
   });
 }

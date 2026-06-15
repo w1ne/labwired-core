@@ -1,7 +1,15 @@
 import type { McpTool } from './types.js';
-import { toolTitle } from './tool-metadata.js';
+import { toolAnnotations, toolTitle } from './tool-metadata.js';
 
 export const SEARCH_TOOLS_TOOL_NAME = 'labwired_search_tools';
+export const AGENT_HARDWARE_LOOP_GUIDE_URI = 'labwired://guides/agent-hardware-loop';
+export const HOSTED_AGENT_WORKFLOW = [
+  'labwired_list_boards',
+  'labwired_list_components',
+  'labwired_validate_diagram',
+  'labwired_compile_diagram',
+  'labwired_run',
+] as const;
 
 export const SEARCH_TOOLS_TOOL: McpTool = {
   name: SEARCH_TOOLS_TOOL_NAME,
@@ -29,6 +37,7 @@ export interface RankedTool {
   name: string;
   title: string;
   description: string;
+  annotations: NonNullable<McpTool['annotations']>;
   inputSchema: McpTool['inputSchema'];
 }
 
@@ -100,6 +109,7 @@ function toRanked(tools: readonly McpTool[]): RankedTool[] {
     name: tool.name,
     title: toolTitle(tool.name),
     description: tool.description,
+    annotations: toolAnnotations(tool.name),
     inputSchema: tool.inputSchema,
   }));
 }

@@ -22,7 +22,13 @@ import {
 import { putSnapshot, getSnapshot } from './snapshots.js';
 import { compile, composeDiagnostics } from '@labwired/board-config';
 import type { ValidateDiagram } from '@labwired/board-config';
-import { SEARCH_TOOLS_TOOL, SEARCH_TOOLS_TOOL_NAME, rankTools } from './search-tools.js';
+import {
+  AGENT_HARDWARE_LOOP_GUIDE_URI,
+  LOCAL_AGENT_WORKFLOW,
+  SEARCH_TOOLS_TOOL,
+  SEARCH_TOOLS_TOOL_NAME,
+  rankTools,
+} from './search-tools.js';
 import { decorateTools } from './tool-metadata.js';
 import { RESOURCES, getResource } from './resources.js';
 
@@ -591,7 +597,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         ? Math.trunc(input.limit)
         : 8;
       return {
-        content: [{ type: 'text', text: JSON.stringify({ query, tools: rankTools(query, decorateTools(localTools()), limit) }) }],
+        content: [{ type: 'text', text: JSON.stringify({
+          query,
+          guide_uri: AGENT_HARDWARE_LOOP_GUIDE_URI,
+          workflow: LOCAL_AGENT_WORKFLOW,
+          tools: rankTools(query, decorateTools(localTools()), limit),
+        }) }],
       };
     }
 

@@ -5,7 +5,13 @@ import type { ValidateDiagram } from '@labwired/board-config';
 import { builderRun } from './builder-client.js';
 import { getWorkspaceRecord, maybeResetMtdCycles, writeWorkspaceRecord } from '../keys.js';
 import { trackUsage } from '../usage.js';
-import { SEARCH_TOOLS_TOOL, SEARCH_TOOLS_TOOL_NAME, rankTools } from './search-tools.js';
+import {
+  AGENT_HARDWARE_LOOP_GUIDE_URI,
+  HOSTED_AGENT_WORKFLOW,
+  SEARCH_TOOLS_TOOL,
+  SEARCH_TOOLS_TOOL_NAME,
+  rankTools,
+} from './search-tools.js';
 import { decorateTools } from './tool-metadata.js';
 
 const hostedTools: McpTool[] = [
@@ -152,7 +158,12 @@ async function dispatchHostedTool(
       ? Math.trunc(input.limit)
       : 8;
     return {
-      content: [textContent({ query, tools: rankTools(query, listHostedTools(), limit) })],
+      content: [textContent({
+        query,
+        guide_uri: AGENT_HARDWARE_LOOP_GUIDE_URI,
+        workflow: HOSTED_AGENT_WORKFLOW,
+        tools: rankTools(query, listHostedTools(), limit),
+      })],
     };
   }
 
@@ -413,4 +424,3 @@ function starterDiagram(labId: string): Record<string, unknown> {
     ],
   };
 }
-

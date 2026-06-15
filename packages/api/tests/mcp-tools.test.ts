@@ -95,4 +95,25 @@ describe('expanded MCP tools', () => {
     expect(payload.tools[0]).toHaveProperty('title');
     expect(payload.tools[0]).toHaveProperty('inputSchema');
   });
+
+  it('labwired_search_tools returns guide and workflow hints for agents', async () => {
+    const env = { BUILDER_URL: 'https://b', BUILDER_SECRET: 'k', ENVIRONMENT: 'test' } as any;
+    const res = await callHostedTool(
+      { name: 'labwired_search_tools', arguments: { query: 'build hardware run firmware inspect evidence', limit: 4 } },
+      env,
+      { userId: 'u' },
+    );
+    const payload = JSON.parse(res.content[0].text);
+    expect(payload.guide_uri).toBe('labwired://guides/agent-hardware-loop');
+    expect(payload.workflow).toEqual([
+      'labwired_list_boards',
+      'labwired_list_components',
+      'labwired_validate_diagram',
+      'labwired_compile_diagram',
+      'labwired_run',
+    ]);
+    expect(payload.tools[0].annotations).toMatchObject({
+      destructiveHint: false,
+    });
+  });
 });

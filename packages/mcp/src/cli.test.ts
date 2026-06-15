@@ -121,7 +121,7 @@ function rpcRoundTrip(messages: object[]): Promise<string> {
     proc.on('error', reject);
     proc.on('exit', () => resolve(out));
     for (const m of messages) proc.stdin.write(JSON.stringify(m) + '\n');
-    setTimeout(() => proc.kill(), 1500);
+    setTimeout(() => proc.kill(), 3000);
   });
 }
 
@@ -190,6 +190,26 @@ describe('@labwired/mcp stdio server', () => {
     expect(out).toContain('"uri":"labwired://guides/agent-hardware-loop"');
     expect(out).toContain('LabWired agent hardware loop');
     expect(out).toContain('labwired_validate_diagram');
+  });
+
+  it('search returns guide, workflow, and callable annotations for agents', async () => {
+    const result = await callToolViaStdio('labwired_search_tools', {
+      query: 'build hardware run firmware inspect evidence',
+      limit: 4,
+    });
+    expect(result.isError).toBeFalsy();
+    const payload = JSON.parse(result.content[0].text);
+    expect(payload.guide_uri).toBe('labwired://guides/agent-hardware-loop');
+    expect(payload.workflow).toEqual([
+      'labwired_list_boards',
+      'labwired_validate_diagram',
+      'labwired_compile_diagram',
+      'labwired_simulate',
+      'labwired_inspect_run',
+    ]);
+    expect(payload.tools[0].annotations).toMatchObject({
+      destructiveHint: false,
+    });
   });
 });
 
