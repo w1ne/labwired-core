@@ -92,7 +92,8 @@ export default {
       if (
         method === 'GET' &&
         (pathname === '/.well-known/oauth-authorization-server' ||
-          pathname === '/.well-known/oauth-authorization-server/mcp')
+          pathname === '/.well-known/oauth-authorization-server/mcp' ||
+          pathname === '/.well-known/openid-configuration')
       ) {
         return handleHostedMcpAuthorizationServerMetadata(request, env);
       }

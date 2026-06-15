@@ -8,6 +8,10 @@ export interface VerifiedClerk {
   claims: Record<string, unknown>;
 }
 
+function clerkAuthorizationServer(env: Env): string {
+  return env.MCP_AUTHORIZATION_SERVER ?? 'https://clerk.labwired.com';
+}
+
 export async function verifyClerkRequest(
   request: Request,
   env: Env,
@@ -39,5 +43,39 @@ export async function verifyClerkRequest(
     userId: auth.userId,
     sessionId: auth.sessionId,
     claims: (auth.sessionClaims ?? {}) as Record<string, unknown>,
+  };
+}
+
+export async function verifyClerkOAuthAccessToken(
+  token: string,
+  env: Env,
+): Promise<VerifiedClerk | null> {
+  if (!token) return null;
+
+  let response: Response;
+  try {
+    response = await fetch(`${clerkAuthorizationServer(env)}/oauth/userinfo`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch {
+    return null;
+  }
+
+  if (!response.ok) return null;
+
+  let claims: Record<string, unknown>;
+  try {
+    claims = (await response.json()) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+
+  const subject = claims.sub;
+  if (typeof subject !== 'string' || !subject) return null;
+
+  return {
+    userId: subject,
+    sessionId: 'oauth',
+    claims,
   };
 }

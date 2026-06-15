@@ -1,4 +1,4 @@
-import { verifyClerkRequest } from '../clerk.js';
+import { verifyClerkOAuthAccessToken, verifyClerkRequest } from '../clerk.js';
 import { getWorkspaceIdByClerkUserId, getKeyRecord, touchKeyLastUsed } from '../keys.js';
 import type { Env } from '../types.js';
 import type { HostedMcpIdentity } from './types.js';
@@ -44,7 +44,7 @@ export async function authenticateHostedMcpRequest(
     return { userId: `key:${record.workspace_id}`, workspaceId: record.workspace_id };
   }
 
-  const clerk = await verifyClerkRequest(request, env);
+  const clerk = (await verifyClerkRequest(request, env)) ?? (await verifyClerkOAuthAccessToken(token, env));
   if (!clerk) return unauthorized(request);
 
   const workspaceId = await getWorkspaceIdByClerkUserId(env, clerk.userId);

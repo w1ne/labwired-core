@@ -7,6 +7,9 @@ import type { Env, KeyRecord } from '../src/types.js';
 
 // Control the Clerk mock's auth state so we can exercise the OAuth fall-through.
 let mockAuthState: { isAuthenticated: boolean; userId?: string } = { isAuthenticated: false };
+let mockUserinfo:
+  | { status: number; body: Record<string, unknown>; authorization?: string }
+  | undefined;
 vi.mock('@clerk/backend', () => ({
   createClerkClient: () => ({
     authenticateRequest: vi.fn(async () =>
@@ -19,6 +22,31 @@ vi.mock('@clerk/backend', () => ({
     ),
   }),
 }));
+
+const originalFetch = globalThis.fetch;
+beforeEach(() => {
+  mockUserinfo = undefined;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      if (url === 'https://clerk.labwired.com/oauth/userinfo' && mockUserinfo) {
+        mockUserinfo.authorization =
+          input instanceof Request
+            ? input.headers.get('authorization') ?? undefined
+            : (init?.headers as Record<string, string> | undefined)?.Authorization;
+        return Response.json(mockUserinfo.body, { status: mockUserinfo.status });
+      }
+      return originalFetch(input as RequestInfo, init);
+    }),
+  );
+});
+
+afterEach(() => {
+  mockAuthState = { isAuthenticated: false };
+  mockUserinfo = undefined;
+  vi.unstubAllGlobals();
+});
 
 const { authenticateHostedMcpRequest } = await import('../src/mcp/auth.js');
 
@@ -55,6 +83,7 @@ function makeEnv(kvKeys: KvStub = makeKvStub()): Env {
     // these cases — the API-key path is real, environment-independent behaviour.
     ENVIRONMENT: 'production',
     CLERK_JWT_KEY: '-----BEGIN PUBLIC KEY-----\nx\n-----END PUBLIC KEY-----',
+    MCP_AUTHORIZATION_SERVER: 'https://clerk.labwired.com',
   } as unknown as Env;
 }
 
@@ -122,7 +151,23 @@ describe('authenticateHostedMcpRequest — OAuth/Clerk path stays working', () =
     const res = await authenticateHostedMcpRequest(req('Bearer eyJ.fake.jwt'), makeEnv());
     expect(res).not.toBeInstanceOf(Response);
     expect(res).toMatchObject({ userId: 'user_clerk_1' });
+  });
+
+  it('authenticates Clerk OAuth access tokens via userinfo when session JWT auth rejects them', async () => {
     mockAuthState = { isAuthenticated: false };
+    mockUserinfo = {
+      status: 200,
+      body: {
+        sub: 'user_oauth_1',
+        email: 'agent@example.com',
+      },
+    };
+
+    const res = await authenticateHostedMcpRequest(req('Bearer oauth_access_token'), makeEnv());
+
+    expect(res).not.toBeInstanceOf(Response);
+    expect(res).toMatchObject({ userId: 'user_oauth_1' });
+    expect(mockUserinfo.authorization).toBe('Bearer oauth_access_token');
   });
 
   it('returns 401 when Clerk rejects the token', async () => {

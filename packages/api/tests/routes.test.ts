@@ -372,6 +372,23 @@ describe('OAuth discovery for /mcp', () => {
     expect(body.scopes_supported).not.toContain('openid');
   });
 
+  it('serves OpenID configuration as an alias for hosted authorization metadata', async () => {
+    const env = makeEnv(makeKvStub(), makeKvStub(), makeKvStub());
+
+    const resp = await worker.default.fetch(
+      new Request('https://api.labwired.com/.well-known/openid-configuration', {
+        method: 'GET',
+      }),
+      env as any,
+    );
+
+    expect(resp.status).toBe(200);
+    const body = (await resp.json()) as any;
+    expect(body.issuer).toBe('https://api.labwired.com');
+    expect(body.token_endpoint).toBe('https://clerk.labwired.com/oauth/token');
+    expect(body.scopes_supported).toEqual(['email', 'offline_access', 'profile']);
+  });
+
   it('hosted dynamic client registration strips openid before proxying to Clerk', async () => {
     const env = makeEnv(makeKvStub(), makeKvStub(), makeKvStub());
     const originalFetch = globalThis.fetch;
