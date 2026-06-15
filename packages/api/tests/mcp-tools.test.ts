@@ -98,6 +98,9 @@ describe('expanded MCP tools', () => {
     expect(res.isError).toBeFalsy();
     expect(res.structuredContent).toMatchObject({
       ok: true,
+      inline_component_uri: 'ui://labwired/hardware-lab.html',
+      studio_url: expect.stringContaining('https://app.labwired.com/'),
+      share_url: expect.stringContaining('https://app.labwired.com/'),
       watch_url: expect.stringContaining('https://app.labwired.com/'),
       template_uri: 'ui://labwired/hardware-lab.html',
       scene: {
@@ -108,6 +111,12 @@ describe('expanded MCP tools', () => {
     });
     expect(res._meta).toMatchObject({
       'openai/outputTemplate': 'ui://labwired/hardware-lab.html',
+    });
+    const text = JSON.parse(res.content[0].text);
+    expect(text).toMatchObject({
+      inline_component_uri: 'ui://labwired/hardware-lab.html',
+      studio_url: expect.stringContaining('https://app.labwired.com/'),
+      share_url: expect.stringContaining('https://app.labwired.com/'),
     });
   });
 

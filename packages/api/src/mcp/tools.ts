@@ -56,7 +56,7 @@ const hostedTools: McpTool[] = [
     name: 'labwired_open_hardware_lab',
     description:
       'Open an embeddable visual hardware lab for an agent-generated board diagram. ' +
-      'Returns a browser watch URL plus structured scene data; ChatGPT-capable clients can render the bundled hardware lab component inline.',
+      'Returns both an inline component URI for agent-side inspection and a shareable LabWired Studio URL for the full device session.',
     _meta: {
       ...hardwareLabToolMeta(),
     },
@@ -75,9 +75,12 @@ const hostedTools: McpTool[] = [
     },
     outputSchema: {
       type: 'object',
-      required: ['ok', 'watch_url', 'template_uri', 'scene'],
+      required: ['ok', 'inline_component_uri', 'studio_url', 'share_url', 'watch_url', 'template_uri', 'scene'],
       properties: {
         ok: { type: 'boolean' },
+        inline_component_uri: { type: 'string' },
+        studio_url: { type: 'string' },
+        share_url: { type: 'string' },
         watch_url: { type: 'string' },
         template_uri: { type: 'string' },
         scene: { type: 'object' },
@@ -447,6 +450,8 @@ async function startPlaygroundLab(
     content: [
       textContent({
         watch_url: watchUrl,
+        studio_url: watchUrl,
+        share_url: watchUrl,
         summary: 'Created a virtual STM32 LED circuit in the Playground and validated the starter wiring.',
         board_id: board,
         validation,
@@ -473,6 +478,9 @@ async function openHardwareLab(
   const structuredContent = {
     ok: true,
     title: typeof input.title === 'string' && input.title ? input.title : 'LabWired Hardware Lab',
+    inline_component_uri: HARDWARE_LAB_TEMPLATE_URI,
+    studio_url: watchUrl,
+    share_url: watchUrl,
     watch_url: watchUrl,
     template_uri: HARDWARE_LAB_TEMPLATE_URI,
     scene,
@@ -493,8 +501,11 @@ async function openHardwareLab(
     content: [
       textContent({
         watch_url: watchUrl,
+        studio_url: watchUrl,
+        share_url: watchUrl,
+        inline_component_uri: HARDWARE_LAB_TEMPLATE_URI,
         template_uri: HARDWARE_LAB_TEMPLATE_URI,
-        summary: 'Opened an embeddable LabWired hardware lab for the current diagram.',
+        summary: 'Opened an inline LabWired hardware viewer and a shareable LabWired Studio session for the full device.',
       }),
     ],
   };
