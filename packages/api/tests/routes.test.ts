@@ -384,6 +384,20 @@ describe('OAuth discovery for /mcp', () => {
     expect(challenge).not.toContain('scope="labwired:mcp"');
   });
 
+  it('GET /mcp without a token returns the OAuth challenge for connector URL probes', async () => {
+    const env = makeEnv(makeKvStub(), makeKvStub(), makeKvStub());
+
+    const resp = await worker.default.fetch(
+      new Request('https://api.labwired.com/mcp', { method: 'GET' }),
+      env as any,
+    );
+
+    expect(resp.status).toBe(401);
+    const challenge = resp.headers.get('WWW-Authenticate') ?? '';
+    expect(challenge).toContain('realm="LabWired MCP"');
+    expect(challenge).toContain('resource_metadata=');
+  });
+
   it('OPTIONS /mcp allows MCP protocol headers for browser clients', async () => {
     const env = makeEnv(makeKvStub(), makeKvStub(), makeKvStub());
 

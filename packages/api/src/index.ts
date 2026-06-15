@@ -85,7 +85,7 @@ export default {
       ) {
         return handleMcpProtectedResourceMetadata(request, env);
       }
-      if (method === 'POST' && pathname === '/mcp') {
+      if ((method === 'POST' || method === 'GET') && pathname === '/mcp') {
         return handleHostedMcp(request, env);
       }
 
