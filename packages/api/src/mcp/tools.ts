@@ -448,7 +448,6 @@ async function startPlaygroundLab(
   return {
     content: [
       textContent({
-        watch_url: watchUrl,
         studio_url: watchUrl,
         share_url: watchUrl,
         summary: 'Created a virtual STM32 LED circuit in the Playground and validated the starter wiring.',

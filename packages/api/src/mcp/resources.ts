@@ -53,7 +53,7 @@ const HARDWARE_LAB_TEMPLATE_TEXT = `<!doctype html>
           <h1>LabWired Hardware Lab</h1>
           <div class="muted">Embedded hardware view for agent-generated diagrams.</div>
         </div>
-        <a id="watch" target="_blank" rel="noreferrer">Open live lab</a>
+        <a id="watch" target="_blank" rel="noreferrer" aria-disabled="true">Waiting for lab link</a>
       </header>
       <section class="frame-shell" aria-label="LabWired embedded hardware lab">
         <iframe
@@ -66,15 +66,40 @@ const HARDWARE_LAB_TEMPLATE_TEXT = `<!doctype html>
       <pre id="json"></pre>
     </main>
     <script>
-      const data = window.openai?.toolOutput ?? window.openai?.structuredContent ?? {};
-      const scene = data.scene ?? {};
       const frame = document.getElementById('labwired-frame');
       const json = document.getElementById('json');
       const watch = document.getElementById('watch');
-      const frameUrl = data.inline_frame_url ?? data.studio_url ?? data.share_url ?? data.watch_url ?? 'https://app.labwired.com/';
-      frame.src = frameUrl;
-      watch.href = data.studio_url ?? frameUrl;
-      json.textContent = JSON.stringify({ inline_frame_url: frameUrl, board: scene.board, parts: scene.parts ?? [], wires: scene.wires ?? [], evidence: data.evidence ?? {} }, null, 2);
+      function toolData(value) {
+        if (!value || typeof value !== 'object') return {};
+        if (value.structuredContent && typeof value.structuredContent === 'object') return value.structuredContent;
+        if (value.toolOutput && typeof value.toolOutput === 'object') return value.toolOutput;
+        return value;
+      }
+      function render(value) {
+        const data = toolData(value);
+        const scene = data.scene ?? {};
+        const frameUrl = data.inline_frame_url ?? data.studio_url ?? data.share_url ?? '';
+        if (frameUrl) {
+          if (frame.src !== frameUrl) frame.src = frameUrl;
+          watch.href = data.studio_url ?? frameUrl;
+          watch.textContent = 'Open in LabWired Studio';
+          watch.setAttribute('aria-disabled', 'false');
+        } else {
+          frame.removeAttribute('src');
+          watch.removeAttribute('href');
+          watch.textContent = 'Waiting for lab link';
+          watch.setAttribute('aria-disabled', 'true');
+        }
+        json.textContent = JSON.stringify({ inline_frame_url: frameUrl, board: scene.board, parts: scene.parts ?? [], wires: scene.wires ?? [], evidence: data.evidence ?? {} }, null, 2);
+      }
+      render(window.openai?.toolOutput ?? window.openai?.structuredContent);
+      window.addEventListener('message', (event) => {
+        const message = event.data;
+        if (!message || typeof message !== 'object') return;
+        if (message.method === 'ui/notifications/tool-result') {
+          render(message.params);
+        }
+      });
     </script>
   </body>
 </html>`;

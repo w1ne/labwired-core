@@ -83,7 +83,36 @@ describe('expanded MCP tools', () => {
     });
   });
 
-  it('labwired_open_hardware_lab returns a watch url, scene shell, and component template hint', async () => {
+  it('labwired_start_playground_lab returns Studio links without legacy watch_url', async () => {
+    const env = {
+      ENVIRONMENT: 'test',
+      SESSIONS: {
+        idFromName: (name: string) => name,
+        get: () => ({
+          fetch: async (req: Request) => {
+            if (req.url.endsWith('/__init')) {
+              return Response.json({ owner_token: 'owner_test' });
+            }
+            return new Response(null, { status: 204 });
+          },
+        }),
+      },
+    } as any;
+    const res = await callHostedTool({
+      name: 'labwired_start_playground_lab',
+      arguments: {},
+    }, env, { userId: 'user_abc' });
+
+    expect(res.isError).toBeFalsy();
+    const text = JSON.parse(res.content[0].text);
+    expect(text).toMatchObject({
+      studio_url: expect.stringContaining('https://app.labwired.com/?watch='),
+      share_url: expect.stringContaining('https://app.labwired.com/?watch='),
+    });
+    expect(text).not.toHaveProperty('watch_url');
+  });
+
+  it('labwired_open_hardware_lab returns Studio links, scene shell, and component template hint', async () => {
     const env = { BUILDER_URL: 'https://b', BUILDER_SECRET: 'k', ENVIRONMENT: 'test' } as any;
     const res = await callHostedTool({
       name: 'labwired_open_hardware_lab',
