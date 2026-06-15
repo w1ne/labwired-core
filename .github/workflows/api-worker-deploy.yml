@@ -23,7 +23,17 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: packages/api/package-lock.json
+          cache-dependency-path: |
+            packages/api/package-lock.json
+            packages/board-config/package-lock.json
+
+      - name: Install board-config dependencies
+        working-directory: packages/board-config
+        run: npm ci --ignore-scripts
+
+      - name: Build board-config
+        working-directory: packages/board-config
+        run: npm run build
 
       - name: Install dependencies
         working-directory: packages/api
