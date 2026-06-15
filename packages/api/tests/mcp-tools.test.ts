@@ -9,6 +9,7 @@ describe('expanded MCP tools', () => {
     expect(names).toContain('labwired_list_boards');
     expect(names).toContain('labwired_search_tools');
     expect(names).toContain('labwired_compile_diagram');
+    expect(names).toContain('labwired_open_hardware_lab');
     expect(names).not.toContain('labwired_compile');
   });
 
@@ -47,6 +48,44 @@ describe('expanded MCP tools', () => {
     expect(compileTool).toBeDefined();
     expect(compileTool!.title).toBe('Compile Diagram');
     expect(compileTool!.annotations?.readOnlyHint).toBe(false);
+  });
+
+  it('labwired_open_hardware_lab advertises an embedded ChatGPT component', () => {
+    const tool = listHostedTools().find((t) => t.name === 'labwired_open_hardware_lab');
+    expect(tool).toBeDefined();
+    expect(tool!.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false, openWorldHint: true });
+    expect(tool!._meta).toMatchObject({
+      'openai/outputTemplate': 'ui://labwired/hardware-lab.html',
+      'openai/widgetAccessible': true,
+    });
+  });
+
+  it('labwired_open_hardware_lab returns a watch url, scene shell, and component template hint', async () => {
+    const env = { BUILDER_URL: 'https://b', BUILDER_SECRET: 'k', ENVIRONMENT: 'test' } as any;
+    const res = await callHostedTool({
+      name: 'labwired_open_hardware_lab',
+      arguments: {
+        diagram: {
+          board: 'stm32l476',
+          parts: [{ id: 'mcu', type: 'stm32l476' }],
+          wires: [],
+        },
+      },
+    }, env, { userId: 'user_abc' });
+    expect(res.isError).toBeFalsy();
+    expect(res.structuredContent).toMatchObject({
+      ok: true,
+      watch_url: expect.stringContaining('https://app.labwired.com/'),
+      template_uri: 'ui://labwired/hardware-lab.html',
+      scene: {
+        board: 'stm32l476',
+        parts: [{ id: 'mcu', type: 'stm32l476' }],
+        wires: [],
+      },
+    });
+    expect(res._meta).toMatchObject({
+      'openai/outputTemplate': 'ui://labwired/hardware-lab.html',
+    });
   });
 
   it('labwired_compile_diagram compiles a clean dispenser diagram', async () => {

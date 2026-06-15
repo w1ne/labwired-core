@@ -458,6 +458,13 @@ describe('OAuth discovery for /mcp', () => {
         mimeType: 'text/markdown',
       }),
     );
+    expect(listBody.result.resources).toContainEqual(
+      expect.objectContaining({
+        uri: 'ui://labwired/hardware-lab.html',
+        name: 'labwired-hardware-lab',
+        mimeType: 'text/html',
+      }),
+    );
 
     const read = await worker.default.fetch(
       new Request('https://api.labwired.com/mcp', {
@@ -479,6 +486,27 @@ describe('OAuth discovery for /mcp', () => {
       mimeType: 'text/markdown',
     });
     expect(readBody.result.contents[0].text).toContain('LabWired agent hardware loop');
+
+    const html = await worker.default.fetch(
+      new Request('https://api.labwired.com/mcp', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 3,
+          method: 'resources/read',
+          params: { uri: 'ui://labwired/hardware-lab.html' },
+        }),
+      }),
+      env as any,
+    );
+    expect(html.status).toBe(200);
+    const htmlBody = (await html.json()) as any;
+    expect(htmlBody.result.contents[0]).toMatchObject({
+      uri: 'ui://labwired/hardware-lab.html',
+      mimeType: 'text/html',
+    });
+    expect(htmlBody.result.contents[0].text).toContain('LabWired Hardware Lab');
   });
 });
 

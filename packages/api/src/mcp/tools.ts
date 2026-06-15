@@ -13,6 +13,7 @@ import {
   rankTools,
 } from './search-tools.js';
 import { decorateTools } from './tool-metadata.js';
+import { HARDWARE_LAB_TEMPLATE_URI } from './resources.js';
 
 const hostedTools: McpTool[] = [
   SEARCH_TOOLS_TOOL,
@@ -35,6 +36,40 @@ const hostedTools: McpTool[] = [
           type: 'boolean',
           description: 'Whether to start from a runnable demo lab. Defaults to true.',
         },
+      },
+    },
+  },
+  {
+    name: 'labwired_open_hardware_lab',
+    description:
+      'Open an embeddable visual hardware lab for an agent-generated board diagram. ' +
+      'Returns a browser watch URL plus structured scene data; ChatGPT-capable clients can render the bundled hardware lab component inline.',
+    _meta: {
+      'openai/outputTemplate': HARDWARE_LAB_TEMPLATE_URI,
+      'openai/widgetAccessible': true,
+    },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        diagram: {
+          type: 'object',
+          description: 'Optional diagram JSON with board, parts, and wires. Defaults to a starter STM32 LED lab.',
+        },
+        title: {
+          type: 'string',
+          description: 'Optional display title for the visual lab.',
+        },
+      },
+    },
+    outputSchema: {
+      type: 'object',
+      required: ['ok', 'watch_url', 'template_uri', 'scene'],
+      properties: {
+        ok: { type: 'boolean' },
+        watch_url: { type: 'string' },
+        template_uri: { type: 'string' },
+        scene: { type: 'object' },
+        evidence: { type: 'object' },
       },
     },
   },
@@ -169,6 +204,10 @@ async function dispatchHostedTool(
 
   if (name === 'labwired_start_playground_lab') {
     return startPlaygroundLab(parsed?.arguments, env, identity);
+  }
+
+  if (name === 'labwired_open_hardware_lab') {
+    return openHardwareLab(parsed?.arguments, env, identity);
   }
 
   if (name === 'labwired_list_boards') {
@@ -403,6 +442,104 @@ async function startPlaygroundLab(
       }),
     ],
   };
+}
+
+async function openHardwareLab(
+  args: unknown,
+  env: Env,
+  identity: HostedMcpIdentity,
+): Promise<McpToolResult> {
+  const input = (args ?? {}) as { diagram?: unknown; title?: unknown };
+  const diagram = diagramOrStarter(input.diagram);
+  const sessionId = `mcp_${randomHex(8)}`;
+  const watchUrl = `https://app.labwired.com/?watch=${encodeURIComponent(sessionId)}`;
+  const scene = sceneFromDiagram(diagram);
+  const evidence = {
+    status: 'ready',
+    diagnostics: composeDiagnostics(diagram as unknown as ValidateDiagram).diagnostics,
+  };
+  const structuredContent = {
+    ok: true,
+    title: typeof input.title === 'string' && input.title ? input.title : 'LabWired Hardware Lab',
+    watch_url: watchUrl,
+    template_uri: HARDWARE_LAB_TEMPLATE_URI,
+    scene,
+    evidence,
+  };
+
+  await seedHardwareLabSession(env, identity, sessionId, structuredContent).catch(() => {
+    // Embedding still works without the live browser session; the watch URL is best-effort.
+  });
+
+  return {
+    structuredContent,
+    _meta: {
+      'openai/outputTemplate': HARDWARE_LAB_TEMPLATE_URI,
+      scene,
+      evidence,
+    },
+    content: [
+      textContent({
+        watch_url: watchUrl,
+        template_uri: HARDWARE_LAB_TEMPLATE_URI,
+        summary: 'Opened an embeddable LabWired hardware lab for the current diagram.',
+      }),
+    ],
+  };
+}
+
+function diagramOrStarter(diagram: unknown): Record<string, unknown> {
+  if (diagram && typeof diagram === 'object' && !Array.isArray(diagram)) {
+    return diagram as Record<string, unknown>;
+  }
+  return starterDiagram('stm32l476-blinky');
+}
+
+function sceneFromDiagram(diagram: Record<string, unknown>): Record<string, unknown> {
+  return {
+    board: typeof diagram.board === 'string' ? diagram.board : 'stm32l476',
+    parts: Array.isArray(diagram.parts) ? diagram.parts : [],
+    wires: Array.isArray(diagram.wires) ? diagram.wires : [],
+    nets: Array.isArray(diagram.nets) ? diagram.nets : [],
+  };
+}
+
+async function seedHardwareLabSession(
+  env: Env,
+  identity: HostedMcpIdentity,
+  sessionId: string,
+  structuredContent: Record<string, unknown>,
+): Promise<void> {
+  const sessions = (env as { SESSIONS?: Env['SESSIONS'] }).SESSIONS;
+  if (!sessions) return;
+
+  const stub = sessions.get(sessions.idFromName(sessionId));
+  const initResp = await stub.fetch(new Request('https://session/__init', {
+    method: 'POST',
+    body: JSON.stringify({
+      session_id: sessionId,
+      clerk_user_id: identity.userId,
+    }),
+    headers: { 'Content-Type': 'application/json' },
+  }));
+  if (!initResp.ok) return;
+
+  const init = (await initResp.json().catch(() => null)) as { owner_token?: string } | null;
+  if (!init?.owner_token) return;
+
+  await stub.fetch(new Request(`https://session/sessions/${sessionId}/state`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${init.owner_token}`,
+    },
+    body: JSON.stringify({
+      owner_user_id: identity.userId,
+      status: 'ready',
+      diagram: structuredContent.scene,
+      last_sim_state: structuredContent.evidence,
+    }),
+  }));
 }
 
 function boardChipForLabId(labId: string): string {

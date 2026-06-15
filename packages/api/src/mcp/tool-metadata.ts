@@ -20,6 +20,7 @@ const TITLES: Record<string, string> = {
   labwired_list_components: 'List Components',
   labwired_search_tools: 'Search Tools',
   labwired_compile_diagram: 'Compile Diagram',
+  labwired_open_hardware_lab: 'Open Hardware Lab',
 };
 
 export function toolTitle(name: string): string {

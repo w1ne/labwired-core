@@ -57,5 +57,7 @@ export interface McpTextContent {
 
 export interface McpToolResult {
   content: McpTextContent[];
+  structuredContent?: unknown;
+  _meta?: Record<string, unknown>;
   isError?: boolean;
 }
