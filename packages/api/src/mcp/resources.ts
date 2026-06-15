@@ -36,14 +36,13 @@ const HARDWARE_LAB_TEMPLATE_TEXT = `<!doctype html>
     <style>
       :root { color-scheme: light dark; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
       body { margin: 0; background: #0f172a; color: #e5e7eb; }
-      main { display: grid; gap: 16px; padding: 18px; }
+      main { display: grid; grid-template-rows: auto minmax(420px, 1fr) auto; gap: 12px; min-height: 100vh; padding: 14px; box-sizing: border-box; }
       header { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
       h1 { font-size: 18px; margin: 0; font-weight: 650; }
       a { color: #67e8f9; }
-      .board { min-height: 320px; border: 1px solid #334155; border-radius: 8px; background: #111827; position: relative; overflow: hidden; }
-      .part { position: absolute; min-width: 96px; padding: 10px 12px; border: 1px solid #64748b; border-radius: 6px; background: #1f2937; color: #f8fafc; font-size: 13px; }
-      .wire { position: absolute; height: 2px; background: #38bdf8; transform-origin: left center; opacity: .85; }
-      pre { margin: 0; overflow: auto; background: #020617; border: 1px solid #334155; border-radius: 8px; padding: 12px; max-height: 180px; }
+      .frame-shell { min-height: 420px; border: 1px solid #334155; border-radius: 8px; background: #020617; overflow: hidden; }
+      iframe { display: block; width: 100%; height: 100%; min-height: 420px; border: 0; background: #020617; }
+      pre { margin: 0; overflow: auto; background: #020617; border: 1px solid #334155; border-radius: 8px; padding: 12px; max-height: 160px; }
       .muted { color: #94a3b8; font-size: 12px; }
     </style>
   </head>
@@ -56,26 +55,26 @@ const HARDWARE_LAB_TEMPLATE_TEXT = `<!doctype html>
         </div>
         <a id="watch" target="_blank" rel="noreferrer">Open live lab</a>
       </header>
-      <section class="board" id="board" aria-label="Hardware board preview"></section>
+      <section class="frame-shell" aria-label="LabWired embedded hardware lab">
+        <iframe
+          id="labwired-frame"
+          title="LabWired Studio live device"
+          sandbox="allow-scripts allow-same-origin"
+          referrerpolicy="no-referrer"
+        ></iframe>
+      </section>
       <pre id="json"></pre>
     </main>
     <script>
       const data = window.openai?.toolOutput ?? window.openai?.structuredContent ?? {};
       const scene = data.scene ?? {};
-      const board = document.getElementById('board');
+      const frame = document.getElementById('labwired-frame');
       const json = document.getElementById('json');
       const watch = document.getElementById('watch');
-      watch.href = data.watch_url ?? 'https://app.labwired.com/';
-      const parts = Array.isArray(scene.parts) ? scene.parts : [];
-      parts.forEach((part, index) => {
-        const el = document.createElement('div');
-        el.className = 'part';
-        el.style.left = \`\${24 + (index % 4) * 140}px\`;
-        el.style.top = \`\${28 + Math.floor(index / 4) * 92}px\`;
-        el.textContent = \`\${part.id ?? 'part'} - \${part.type ?? 'component'}\`;
-        board.appendChild(el);
-      });
-      json.textContent = JSON.stringify({ board: scene.board, parts: scene.parts ?? [], wires: scene.wires ?? [], evidence: data.evidence ?? {} }, null, 2);
+      const frameUrl = data.inline_frame_url ?? data.studio_url ?? data.share_url ?? data.watch_url ?? 'https://app.labwired.com/';
+      frame.src = frameUrl;
+      watch.href = data.studio_url ?? frameUrl;
+      json.textContent = JSON.stringify({ inline_frame_url: frameUrl, board: scene.board, parts: scene.parts ?? [], wires: scene.wires ?? [], evidence: data.evidence ?? {} }, null, 2);
     </script>
   </body>
 </html>`;

@@ -644,6 +644,9 @@ describe('OAuth discovery for /mcp', () => {
       },
     });
     expect(htmlBody.result.contents[0].text).toContain('LabWired Hardware Lab');
+    expect(htmlBody.result.contents[0].text).toContain('id="labwired-frame"');
+    expect(htmlBody.result.contents[0].text).toContain('LabWired Studio live device');
+    expect(htmlBody.result.contents[0].text).not.toContain("className = 'part'");
   });
 });
 
