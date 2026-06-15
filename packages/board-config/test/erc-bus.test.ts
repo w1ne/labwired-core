@@ -53,6 +53,26 @@ describe('bus rules', () => {
       expect(codesOf(internal)).not.toContain('I2C_NO_PULLUP');
     });
 
+    it('accepts internal_pullups as an agent-supplied array', () => {
+      const internal = i2cPair();
+      internal.parts = internal.parts.map((p) =>
+        p.id === 'mcu'
+          ? { ...p, attrs: { internal_pullups: ['GPIO8', 'GPIO9'] } as unknown as Record<string, string> }
+          : p,
+      );
+      expect(codesOf(internal)).not.toContain('I2C_NO_PULLUP');
+    });
+
+    it('matches STM32-style internal pullup pin aliases against GPIO pin names', () => {
+      const internal = i2cPair();
+      internal.parts = internal.parts.map((p) =>
+        p.id === 'mcu'
+          ? { ...p, attrs: { internal_pullups: ['PB8', 'PB9'] } as unknown as Record<string, string> }
+          : p,
+      );
+      expect(codesOf(internal)).not.toContain('I2C_NO_PULLUP');
+    });
+
     it('is satisfied by physical pull-up resistors bridging I2C nets to a power rail', () => {
       const resistored = i2cPair();
       resistored.parts.push({ id: 'r1', type: 'resistor' }, { id: 'r2', type: 'resistor' });

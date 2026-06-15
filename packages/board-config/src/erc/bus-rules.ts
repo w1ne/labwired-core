@@ -144,9 +144,22 @@ function hasPullPath(
     // MCU internal pullup, opted in via attrs
     const p = effectivePin(ctx, m);
     if (p?.internalPullup) {
-      const list = (part.attrs?.internal_pullups ?? '').split(',').map((s) => s.trim());
-      if (list.includes(m.pin)) return true;
+      const list = internalPullupPins(part.attrs?.internal_pullups);
+      if (list.some((pin) => pinsMatch(pin, m.pin))) return true;
     }
   }
   return false;
+}
+
+function internalPullupPins(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean);
+  if (typeof value === 'string') return value.split(',').map((item) => item.trim()).filter(Boolean);
+  return [];
+}
+
+function pinsMatch(configured: string, actual: string): boolean {
+  if (configured === actual) return true;
+  const configuredNumber = configured.match(/\d+$/)?.[0];
+  const actualNumber = actual.match(/\d+$/)?.[0];
+  return !!configuredNumber && configuredNumber === actualNumber;
 }
