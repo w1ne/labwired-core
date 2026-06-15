@@ -8,6 +8,7 @@ const JSON_HEADERS = {
   'Content-Type': 'application/json',
   'Access-Control-Allow-Origin': '*',
 };
+const MCP_ALLOW_HEADER = 'POST, OPTIONS';
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
@@ -20,6 +21,13 @@ function error(id: JsonRpcRequest['id'], code: number, message: string): JsonRpc
 export async function handleHostedMcp(request: Request, env: Env): Promise<Response> {
   const identity = await authenticateHostedMcpRequest(request, env);
   if (identity instanceof Response) return identity;
+
+  if (request.method.toUpperCase() !== 'POST') {
+    return new Response(JSON.stringify(error(null, -32000, 'Method not allowed')), {
+      status: 405,
+      headers: { ...JSON_HEADERS, Allow: MCP_ALLOW_HEADER },
+    });
+  }
 
   let rpc: JsonRpcRequest;
   try {

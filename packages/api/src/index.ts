@@ -47,7 +47,7 @@ export { SessionDO } from './SessionDO.js';
 // ── CORS headers for browser-facing endpoints ──────────────────────────────
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, HEAD, POST, PUT, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, MCP-Protocol-Version',
 };
 
@@ -85,7 +85,7 @@ export default {
       ) {
         return handleMcpProtectedResourceMetadata(request, env);
       }
-      if ((method === 'POST' || method === 'GET') && pathname === '/mcp') {
+      if ((method === 'POST' || method === 'GET' || method === 'HEAD') && pathname === '/mcp') {
         return handleHostedMcp(request, env);
       }
 

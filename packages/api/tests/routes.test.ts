@@ -332,7 +332,7 @@ describe('OAuth discovery for /mcp', () => {
     expect(Array.isArray(body.authorization_servers)).toBe(true);
     expect(body.authorization_servers).toContain('https://clerk.labwired.com');
     expect(body.resource).toBe('https://api.labwired.com/mcp');
-    expect(body.scopes_supported).toBeUndefined();
+    expect(body.scopes_supported).toEqual(['openid', 'profile', 'email', 'offline_access']);
     expect(body.bearer_methods_supported).toContain('header');
     // Browser-facing discovery → must be CORS-reachable.
     expect(resp.headers.get('Access-Control-Allow-Origin')).toBe('*');
@@ -381,7 +381,7 @@ describe('OAuth discovery for /mcp', () => {
     const challenge = resp.headers.get('WWW-Authenticate') ?? '';
     expect(challenge).toContain('realm="LabWired MCP"');
     expect(challenge).toContain('resource_metadata=');
-    expect(challenge).not.toContain('scope="labwired:mcp"');
+    expect(challenge).toContain('scope="openid profile email offline_access"');
   });
 
   it('GET /mcp without a token returns the OAuth challenge for connector URL probes', async () => {
@@ -396,6 +396,37 @@ describe('OAuth discovery for /mcp', () => {
     const challenge = resp.headers.get('WWW-Authenticate') ?? '';
     expect(challenge).toContain('realm="LabWired MCP"');
     expect(challenge).toContain('resource_metadata=');
+  });
+
+  it('HEAD /mcp without a token returns the OAuth challenge for URL validators', async () => {
+    const env = makeEnv(makeKvStub(), makeKvStub(), makeKvStub());
+
+    const resp = await worker.default.fetch(
+      new Request('https://api.labwired.com/mcp', { method: 'HEAD' }),
+      env as any,
+    );
+
+    expect(resp.status).toBe(401);
+    const challenge = resp.headers.get('WWW-Authenticate') ?? '';
+    expect(challenge).toContain('realm="LabWired MCP"');
+    expect(challenge).toContain('resource_metadata=');
+  });
+
+  it('GET /mcp with a valid token returns method guidance instead of a parse error', async () => {
+    const env = makeEnv(makeKvStub(), makeKvStub(), makeKvStub());
+
+    const resp = await worker.default.fetch(
+      new Request('https://api.labwired.com/mcp', {
+        method: 'GET',
+        headers: { Authorization: 'Bearer test_user:user_abc' },
+      }),
+      env as any,
+    );
+
+    expect(resp.status).toBe(405);
+    expect(resp.headers.get('Allow')).toBe('POST, OPTIONS');
+    const body = (await resp.json()) as any;
+    expect(body.error.message).toBe('Method not allowed');
   });
 
   it('OPTIONS /mcp allows MCP protocol headers for browser clients', async () => {

@@ -1,5 +1,7 @@
 import type { Env } from '../types.js';
 
+export const HOSTED_MCP_OAUTH_SCOPES = ['openid', 'profile', 'email', 'offline_access'] as const;
+
 function originFromRequest(request: Request): string {
   const url = new URL(request.url);
   return url.origin;
@@ -17,6 +19,7 @@ export function hostedMcpAuthenticateHeader(request: Request): string {
   return [
     'Bearer realm="LabWired MCP"',
     `resource_metadata="${protectedResourceMetadataUrl(request)}"`,
+    `scope="${HOSTED_MCP_OAUTH_SCOPES.join(' ')}"`,
   ].join(', ');
 }
 
@@ -43,12 +46,14 @@ export function handleMcpProtectedResourceMetadata(request: Request, env: Env): 
     resource_name: string;
     bearer_methods_supported: string[];
     resource_documentation: string;
+    scopes_supported: string[];
     authorization_servers?: string[];
   } = {
     resource: hostedMcpResourceUrl(request),
     resource_name: 'LabWired Engine MCP',
     bearer_methods_supported: ['header'],
     resource_documentation: 'https://labwired.com/#agent-harness',
+    scopes_supported: [...HOSTED_MCP_OAUTH_SCOPES],
   };
 
   if (env.MCP_AUTHORIZATION_SERVER) {
