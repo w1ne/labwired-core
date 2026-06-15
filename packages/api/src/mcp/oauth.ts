@@ -1,6 +1,6 @@
 import type { Env } from '../types.js';
 
-export const HOSTED_MCP_OAUTH_SCOPES = ['openid', 'profile', 'email', 'offline_access'] as const;
+export const HOSTED_MCP_OAUTH_SCOPES = ['email', 'offline_access', 'profile'] as const;
 
 function originFromRequest(request: Request): string {
   const url = new URL(request.url);
