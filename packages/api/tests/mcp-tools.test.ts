@@ -86,17 +86,6 @@ describe('expanded MCP tools', () => {
   it('labwired_start_playground_lab returns Studio links without legacy watch_url', async () => {
     const env = {
       ENVIRONMENT: 'test',
-      SESSIONS: {
-        idFromName: (name: string) => name,
-        get: () => ({
-          fetch: async (req: Request) => {
-            if (req.url.endsWith('/__init')) {
-              return Response.json({ owner_token: 'owner_test' });
-            }
-            return new Response(null, { status: 204 });
-          },
-        }),
-      },
     } as any;
     const res = await callHostedTool({
       name: 'labwired_start_playground_lab',
@@ -106,9 +95,10 @@ describe('expanded MCP tools', () => {
     expect(res.isError).toBeFalsy();
     const text = JSON.parse(res.content[0].text);
     expect(text).toMatchObject({
-      studio_url: expect.stringContaining('https://app.labwired.com/?watch='),
-      share_url: expect.stringContaining('https://app.labwired.com/?watch='),
+      studio_url: expect.stringContaining('https://app.labwired.com/?lab=stm32l476-blinky&run=1'),
+      share_url: expect.stringContaining('https://app.labwired.com/?lab=stm32l476-blinky&run=1'),
     });
+    expect(text.studio_url).not.toContain('?watch=');
     expect(text).not.toHaveProperty('watch_url');
   });
 
@@ -128,7 +118,7 @@ describe('expanded MCP tools', () => {
     expect(res.structuredContent).toMatchObject({
       ok: true,
       inline_component_uri: 'ui://labwired/hardware-lab-v2.html',
-      inline_frame_url: expect.stringContaining('https://app.labwired.com/?watch='),
+      inline_frame_url: expect.stringContaining('https://app.labwired.com/?embed=true#'),
       studio_url: expect.stringContaining('https://app.labwired.com/'),
       share_url: expect.stringContaining('https://app.labwired.com/'),
       scene: {
@@ -143,10 +133,13 @@ describe('expanded MCP tools', () => {
     const text = JSON.parse(res.content[0].text);
     expect(text).toMatchObject({
       inline_component_uri: 'ui://labwired/hardware-lab-v2.html',
-      inline_frame_url: expect.stringContaining('https://app.labwired.com/?watch='),
+      inline_frame_url: expect.stringContaining('https://app.labwired.com/?embed=true#'),
       studio_url: expect.stringContaining('https://app.labwired.com/'),
       share_url: expect.stringContaining('https://app.labwired.com/'),
     });
+    expect(res.structuredContent.inline_frame_url).not.toContain('?watch=');
+    expect(res.structuredContent.studio_url).not.toContain('?watch=');
+    expect(res.structuredContent.share_url).not.toContain('?watch=');
     expect(res.structuredContent).not.toHaveProperty('watch_url');
     expect(res.structuredContent).not.toHaveProperty('template_uri');
     expect(text).not.toHaveProperty('watch_url');

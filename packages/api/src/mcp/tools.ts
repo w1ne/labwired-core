@@ -33,7 +33,7 @@ const hostedTools: McpTool[] = [
   {
     name: 'labwired_start_playground_lab',
     description:
-      'Zero-friction first run: create a Playground watch session, build a starter virtual hardware lab, validate it, and return a watch URL.',
+      'Zero-friction first run: build a starter virtual hardware lab, validate it, and return a LabWired Playground URL.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -375,14 +375,12 @@ function randomHex(bytes: number): string {
 
 async function startPlaygroundLab(
   args: unknown,
-  env: Env,
-  identity: HostedMcpIdentity,
+  _env: Env,
+  _identity: HostedMcpIdentity,
 ): Promise<McpToolResult> {
-  const input = (args ?? {}) as { goal?: unknown; board?: unknown; run?: unknown };
+  const input = (args ?? {}) as { goal?: unknown; board?: unknown };
   const board = typeof input.board === 'string' && input.board ? input.board : 'stm32l476-blinky';
-  const sessionId = `mcp_${randomHex(8)}`;
-  const watchUrl = `https://app.labwired.com/?watch=${encodeURIComponent(sessionId)}`;
-  const stub = env.SESSIONS.get(env.SESSIONS.idFromName(sessionId));
+  const playgroundUrl = `https://app.labwired.com/?lab=${encodeURIComponent(board)}&run=1`;
   const diagram = starterDiagram(board);
   const validation = composeDiagnostics(diagram as unknown as ValidateDiagram);
   if (!validation.ok) {
@@ -392,64 +390,11 @@ async function startPlaygroundLab(
     };
   }
 
-  const initResp = await stub.fetch(new Request('https://session/__init', {
-    method: 'POST',
-    body: JSON.stringify({
-      session_id: sessionId,
-      clerk_user_id: identity.userId,
-    }),
-    headers: { 'Content-Type': 'application/json' },
-  }));
-  if (!initResp.ok) {
-    return {
-      content: [textContent({ error: 'SESSION_INIT_FAILED', status: initResp.status })],
-      isError: true,
-    };
-  }
-
-  const init = (await initResp.json().catch(() => null)) as { owner_token?: string } | null;
-  if (!init?.owner_token) {
-    return {
-      content: [textContent({ error: 'SESSION_INIT_FAILED', detail: 'missing owner token' })],
-      isError: true,
-    };
-  }
-
-  const sessionUpdate: Record<string, unknown> = {
-    board_id: board,
-    diagram,
-    owner_user_id: identity.userId,
-    status: input.run === false ? 'idle' : 'completed',
-    last_sim_state: {
-      exit_reason: 'demo_ready',
-      final_cycles: 0,
-      serial_tail: 'Hosted LabWired connector created a validated starter lab.',
-    },
-  };
-  if (identity.workspaceId) {
-    sessionUpdate.workspace_id = identity.workspaceId;
-  }
-
-  const stateResp = await stub.fetch(new Request(`https://session/sessions/${sessionId}/state`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${init.owner_token}`,
-    },
-    body: JSON.stringify(sessionUpdate),
-  }));
-  if (!stateResp.ok) {
-    return {
-      content: [textContent({ error: 'SESSION_UPDATE_FAILED', status: stateResp.status })],
-      isError: true,
-    };
-  }
-
   return {
     content: [
       textContent({
-        studio_url: watchUrl,
-        share_url: watchUrl,
+        studio_url: playgroundUrl,
+        share_url: playgroundUrl,
         summary: 'Created a virtual STM32 LED circuit in the Playground and validated the starter wiring.',
         board_id: board,
         validation,
@@ -461,13 +406,12 @@ async function startPlaygroundLab(
 
 async function openHardwareLab(
   args: unknown,
-  env: Env,
-  identity: HostedMcpIdentity,
+  _env: Env,
+  _identity: HostedMcpIdentity,
 ): Promise<McpToolResult> {
   const input = (args ?? {}) as { diagram?: unknown; title?: unknown };
   const diagram = diagramOrStarter(input.diagram);
-  const sessionId = `mcp_${randomHex(8)}`;
-  const watchUrl = `https://app.labwired.com/?watch=${encodeURIComponent(sessionId)}`;
+  const urls = playgroundUrls(diagram);
   const scene = sceneFromDiagram(diagram);
   const evidence = {
     status: 'ready',
@@ -477,16 +421,12 @@ async function openHardwareLab(
     ok: true,
     title: typeof input.title === 'string' && input.title ? input.title : 'LabWired Hardware Lab',
     inline_component_uri: HARDWARE_LAB_TEMPLATE_URI,
-    inline_frame_url: watchUrl,
-    studio_url: watchUrl,
-    share_url: watchUrl,
+    inline_frame_url: urls.embedUrl,
+    studio_url: urls.studioUrl,
+    share_url: urls.studioUrl,
     scene,
     evidence,
   };
-
-  await seedHardwareLabSession(env, identity, sessionId, structuredContent).catch(() => {
-    // Embedding still works without the live browser session; the watch URL is best-effort.
-  });
 
   return {
     structuredContent,
@@ -497,13 +437,21 @@ async function openHardwareLab(
     },
     content: [
       textContent({
-        studio_url: watchUrl,
-        share_url: watchUrl,
+        studio_url: urls.studioUrl,
+        share_url: urls.studioUrl,
         inline_component_uri: HARDWARE_LAB_TEMPLATE_URI,
-        inline_frame_url: watchUrl,
-        summary: 'Opened an inline LabWired hardware viewer and a shareable LabWired Studio session for the full device.',
+        inline_frame_url: urls.embedUrl,
+        summary: 'Opened an inline LabWired Playground viewer and a shareable LabWired Studio project for the full device.',
       }),
     ],
+  };
+}
+
+function playgroundUrls(diagram: Record<string, unknown>): { studioUrl: string; embedUrl: string } {
+  const encoded = `r${btoa(JSON.stringify({ d: diagram, s: '' }))}`;
+  return {
+    studioUrl: `https://app.labwired.com/#${encoded}`,
+    embedUrl: `https://app.labwired.com/?embed=true#${encoded}`,
   };
 }
 
@@ -521,44 +469,6 @@ function sceneFromDiagram(diagram: Record<string, unknown>): Record<string, unkn
     wires: Array.isArray(diagram.wires) ? diagram.wires : [],
     nets: Array.isArray(diagram.nets) ? diagram.nets : [],
   };
-}
-
-async function seedHardwareLabSession(
-  env: Env,
-  identity: HostedMcpIdentity,
-  sessionId: string,
-  structuredContent: Record<string, unknown>,
-): Promise<void> {
-  const sessions = (env as { SESSIONS?: Env['SESSIONS'] }).SESSIONS;
-  if (!sessions) return;
-
-  const stub = sessions.get(sessions.idFromName(sessionId));
-  const initResp = await stub.fetch(new Request('https://session/__init', {
-    method: 'POST',
-    body: JSON.stringify({
-      session_id: sessionId,
-      clerk_user_id: identity.userId,
-    }),
-    headers: { 'Content-Type': 'application/json' },
-  }));
-  if (!initResp.ok) return;
-
-  const init = (await initResp.json().catch(() => null)) as { owner_token?: string } | null;
-  if (!init?.owner_token) return;
-
-  await stub.fetch(new Request(`https://session/sessions/${sessionId}/state`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${init.owner_token}`,
-    },
-    body: JSON.stringify({
-      owner_user_id: identity.userId,
-      status: 'ready',
-      diagram: structuredContent.scene,
-      last_sim_state: structuredContent.evidence,
-    }),
-  }));
 }
 
 function boardChipForLabId(labId: string): string {
