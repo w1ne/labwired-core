@@ -588,7 +588,7 @@ describe('OAuth discovery for /mcp', () => {
     );
     expect(listBody.result.resources).toContainEqual(
       expect.objectContaining({
-        uri: 'ui://labwired/hardware-lab.html',
+        uri: 'ui://labwired/hardware-lab-v2.html',
         name: 'labwired-hardware-lab',
         mimeType: 'text/html;profile=mcp-app',
       }),
@@ -623,7 +623,7 @@ describe('OAuth discovery for /mcp', () => {
           jsonrpc: '2.0',
           id: 3,
           method: 'resources/read',
-          params: { uri: 'ui://labwired/hardware-lab.html' },
+          params: { uri: 'ui://labwired/hardware-lab-v2.html' },
         }),
       }),
       env as any,
@@ -631,7 +631,7 @@ describe('OAuth discovery for /mcp', () => {
     expect(html.status).toBe(200);
     const htmlBody = (await html.json()) as any;
     expect(htmlBody.result.contents[0]).toMatchObject({
-      uri: 'ui://labwired/hardware-lab.html',
+      uri: 'ui://labwired/hardware-lab-v2.html',
       mimeType: 'text/html;profile=mcp-app',
       _meta: {
         ui: {

@@ -1,7 +1,7 @@
 export const AGENT_HARDWARE_LOOP_URI = 'labwired://guides/agent-hardware-loop';
 export const AGENT_HARDWARE_LOOP_NAME = 'labwired-agent-hardware-loop';
 export const AGENT_HARDWARE_LOOP_MIME = 'text/markdown';
-export const HARDWARE_LAB_TEMPLATE_URI = 'ui://labwired/hardware-lab.html';
+export const HARDWARE_LAB_TEMPLATE_URI = 'ui://labwired/hardware-lab-v2.html';
 export const HARDWARE_LAB_TEMPLATE_NAME = 'labwired-hardware-lab';
 export const HARDWARE_LAB_TEMPLATE_MIME = 'text/html;profile=mcp-app';
 export const HARDWARE_LAB_WIDGET_DOMAIN = 'https://labwired.com';

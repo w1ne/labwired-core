@@ -55,10 +55,10 @@ describe('expanded MCP tools', () => {
     expect(tool).toBeDefined();
     expect(tool!.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false, openWorldHint: true });
     expect(tool!._meta).toMatchObject({
-      'openai/outputTemplate': 'ui://labwired/hardware-lab.html',
+      'openai/outputTemplate': 'ui://labwired/hardware-lab-v2.html',
       'openai/widgetAccessible': true,
       ui: {
-        resourceUri: 'ui://labwired/hardware-lab.html',
+        resourceUri: 'ui://labwired/hardware-lab-v2.html',
       },
       widgetAccessible: true,
       invoking: expect.any(String),
@@ -74,9 +74,9 @@ describe('expanded MCP tools', () => {
     }, env, { userId: 'user_abc' });
 
     expect(res._meta).toMatchObject({
-      'openai/outputTemplate': 'ui://labwired/hardware-lab.html',
+      'openai/outputTemplate': 'ui://labwired/hardware-lab-v2.html',
       ui: {
-        resourceUri: 'ui://labwired/hardware-lab.html',
+        resourceUri: 'ui://labwired/hardware-lab-v2.html',
       },
       'openai/widgetAccessible': true,
       widgetAccessible: true,
@@ -127,7 +127,7 @@ describe('expanded MCP tools', () => {
     expect(res.isError).toBeFalsy();
     expect(res.structuredContent).toMatchObject({
       ok: true,
-      inline_component_uri: 'ui://labwired/hardware-lab.html',
+      inline_component_uri: 'ui://labwired/hardware-lab-v2.html',
       inline_frame_url: expect.stringContaining('https://app.labwired.com/?watch='),
       studio_url: expect.stringContaining('https://app.labwired.com/'),
       share_url: expect.stringContaining('https://app.labwired.com/'),
@@ -138,11 +138,11 @@ describe('expanded MCP tools', () => {
       },
     });
     expect(res._meta).toMatchObject({
-      'openai/outputTemplate': 'ui://labwired/hardware-lab.html',
+      'openai/outputTemplate': 'ui://labwired/hardware-lab-v2.html',
     });
     const text = JSON.parse(res.content[0].text);
     expect(text).toMatchObject({
-      inline_component_uri: 'ui://labwired/hardware-lab.html',
+      inline_component_uri: 'ui://labwired/hardware-lab-v2.html',
       inline_frame_url: expect.stringContaining('https://app.labwired.com/?watch='),
       studio_url: expect.stringContaining('https://app.labwired.com/'),
       share_url: expect.stringContaining('https://app.labwired.com/'),
