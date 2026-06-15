@@ -636,10 +636,18 @@ describe('OAuth discovery for /mcp', () => {
       _meta: {
         ui: {
           domain: 'https://labwired.com',
-          csp: expect.any(Object),
+          csp: expect.objectContaining({
+            connectDomains: expect.arrayContaining(['https://app.labwired.com']),
+            frameDomains: expect.arrayContaining(['https://app.labwired.com']),
+            resourceDomains: expect.arrayContaining(['https://app.labwired.com']),
+          }),
         },
         'openai/widgetDescription': expect.any(String),
-        'openai/widgetCSP': expect.any(Object),
+        'openai/widgetCSP': expect.objectContaining({
+          connectDomains: expect.arrayContaining(['https://app.labwired.com']),
+          frameDomains: expect.arrayContaining(['https://app.labwired.com']),
+          resourceDomains: expect.arrayContaining(['https://app.labwired.com']),
+        }),
         'openai/widgetDomain': 'https://labwired.com',
       },
     });
@@ -647,6 +655,8 @@ describe('OAuth discovery for /mcp', () => {
     expect(htmlBody.result.contents[0].text).toContain('id="labwired-frame"');
     expect(htmlBody.result.contents[0].text).toContain('LabWired Studio live device');
     expect(htmlBody.result.contents[0].text).toContain('ui/notifications/tool-result');
+    expect(htmlBody.result.contents[0].text).toContain('setOpenInAppUrl');
+    expect(htmlBody.result.contents[0].text).toContain('redirectUrl: false');
     expect(htmlBody.result.contents[0].text).not.toContain('data.watch_url');
     expect(htmlBody.result.contents[0].text).not.toContain("'https://app.labwired.com/'");
     expect(htmlBody.result.contents[0].text).not.toContain("className = 'part'");

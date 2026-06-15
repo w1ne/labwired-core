@@ -7,8 +7,9 @@ export const HARDWARE_LAB_TEMPLATE_MIME = 'text/html;profile=mcp-app';
 export const HARDWARE_LAB_WIDGET_DOMAIN = 'https://labwired.com';
 
 export const HARDWARE_LAB_WIDGET_CSP = {
-  connect_domains: ['https://app.labwired.com', 'https://api.labwired.com'],
-  resource_domains: ['https://labwired.com', 'https://app.labwired.com'],
+  connectDomains: ['https://app.labwired.com', 'https://api.labwired.com'],
+  frameDomains: ['https://app.labwired.com'],
+  resourceDomains: ['https://labwired.com', 'https://app.labwired.com'],
 };
 
 const AGENT_HARDWARE_LOOP_TEXT = `# LabWired agent hardware loop
@@ -84,6 +85,9 @@ const HARDWARE_LAB_TEMPLATE_TEXT = `<!doctype html>
           watch.href = data.studio_url ?? frameUrl;
           watch.textContent = 'Open in LabWired Studio';
           watch.setAttribute('aria-disabled', 'false');
+          if (window.openai?.setOpenInAppUrl) {
+            window.openai.setOpenInAppUrl({ href: data.studio_url ?? frameUrl });
+          }
         } else {
           frame.removeAttribute('src');
           watch.removeAttribute('href');
@@ -93,6 +97,13 @@ const HARDWARE_LAB_TEMPLATE_TEXT = `<!doctype html>
         json.textContent = JSON.stringify({ inline_frame_url: frameUrl, board: scene.board, parts: scene.parts ?? [], wires: scene.wires ?? [], evidence: data.evidence ?? {} }, null, 2);
       }
       render(window.openai?.toolOutput ?? window.openai?.structuredContent);
+      watch.addEventListener('click', (event) => {
+        if (!watch.href) return;
+        if (window.openai?.openExternal) {
+          event.preventDefault();
+          window.openai.openExternal({ href: watch.href, redirectUrl: false });
+        }
+      });
       window.addEventListener('message', (event) => {
         const message = event.data;
         if (!message || typeof message !== 'object') return;
