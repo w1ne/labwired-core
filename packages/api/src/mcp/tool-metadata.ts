@@ -1,5 +1,10 @@
 import type { McpTool } from './types.js';
 
+const HOSTED_SECURITY_SCHEMES = [
+  { type: 'oauth2', scopes: [] },
+  { type: 'http', scheme: 'bearer' },
+] as const;
+
 const READ_ONLY_TOOLS = new Set([
   'labwired_search_tools',
   'labwired_list_boards',
@@ -41,6 +46,13 @@ export function decorateTool(tool: McpTool): McpTool {
   return {
     ...tool,
     title,
+    securitySchemes: [...HOSTED_SECURITY_SCHEMES],
+    _meta: {
+      ...(tool._meta ?? {}),
+      securitySchemes: [...HOSTED_SECURITY_SCHEMES],
+      'openai/toolInvocation/invoking': `${title} running`,
+      'openai/toolInvocation/invoked': `${title} finished`,
+    },
     annotations: toolAnnotations(tool.name),
   };
 }

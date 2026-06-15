@@ -29,11 +29,14 @@ export interface McpTool {
   name: string;
   title?: string;
   description: string;
+  securitySchemes?: Array<Record<string, unknown>>;
+  _meta?: Record<string, unknown>;
   inputSchema: {
     type: 'object';
     properties?: Record<string, unknown>;
     required?: string[];
   };
+  outputSchema?: Record<string, unknown>;
   annotations?: {
     title: string;
     readOnlyHint: boolean;

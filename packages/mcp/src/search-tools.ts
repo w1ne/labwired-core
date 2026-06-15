@@ -8,6 +8,7 @@ interface ToolLike {
     properties?: Record<string, unknown>;
     required?: string[];
   };
+  outputSchema?: Record<string, unknown>;
 }
 
 export const SEARCH_TOOLS_TOOL_NAME = 'labwired_search_tools';
@@ -112,5 +113,9 @@ function toRanked(tools: readonly ToolLike[]) {
     description: tool.description,
     annotations: toolAnnotations(tool.name),
     inputSchema: tool.inputSchema,
+    outputSchema: tool.outputSchema ?? {
+      type: 'object',
+      additionalProperties: true,
+    },
   }));
 }

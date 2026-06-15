@@ -207,6 +207,9 @@ describe('@labwired/mcp stdio server', () => {
       'labwired_simulate',
       'labwired_inspect_run',
     ]);
+    expect(payload.tools[0].outputSchema).toMatchObject({
+      type: 'object',
+    });
     expect(payload.tools[0].annotations).toMatchObject({
       destructiveHint: false,
     });

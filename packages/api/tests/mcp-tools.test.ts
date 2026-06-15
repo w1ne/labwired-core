@@ -28,6 +28,20 @@ describe('expanded MCP tools', () => {
     expect(listBoards?.annotations).toMatchObject({ readOnlyHint: true });
   });
 
+  it('advertises ChatGPT-compatible security schemes on every hosted tool', () => {
+    for (const tool of listHostedTools()) {
+      expect(tool.securitySchemes, tool.name).toEqual([
+        { type: 'oauth2', scopes: [] },
+        { type: 'http', scheme: 'bearer' },
+      ]);
+      expect(tool._meta, tool.name).toMatchObject({
+        securitySchemes: tool.securitySchemes,
+        'openai/toolInvocation/invoking': expect.any(String),
+        'openai/toolInvocation/invoked': expect.any(String),
+      });
+    }
+  });
+
   it('labwired_compile_diagram has readOnlyHint false and title "Compile Diagram"', () => {
     const compileTool = listHostedTools().find((t) => t.name === 'labwired_compile_diagram');
     expect(compileTool).toBeDefined();
@@ -94,6 +108,7 @@ describe('expanded MCP tools', () => {
     expect(payload.tools.map((tool: { name: string }) => tool.name)).toContain('labwired_validate_diagram');
     expect(payload.tools[0]).toHaveProperty('title');
     expect(payload.tools[0]).toHaveProperty('inputSchema');
+    expect(payload.tools[0]).toHaveProperty('outputSchema');
   });
 
   it('labwired_search_tools returns guide and workflow hints for agents', async () => {

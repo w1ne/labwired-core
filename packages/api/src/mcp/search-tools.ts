@@ -39,6 +39,7 @@ export interface RankedTool {
   description: string;
   annotations: NonNullable<McpTool['annotations']>;
   inputSchema: McpTool['inputSchema'];
+  outputSchema: Record<string, unknown>;
 }
 
 function tokenize(text: string): string[] {
@@ -111,5 +112,9 @@ function toRanked(tools: readonly McpTool[]): RankedTool[] {
     description: tool.description,
     annotations: toolAnnotations(tool.name),
     inputSchema: tool.inputSchema,
+    outputSchema: tool.outputSchema ?? {
+      type: 'object',
+      additionalProperties: true,
+    },
   }));
 }
