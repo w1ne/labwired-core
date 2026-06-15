@@ -384,6 +384,23 @@ describe('OAuth discovery for /mcp', () => {
     expect(challenge).not.toContain('scope="labwired:mcp"');
   });
 
+  it('OPTIONS /mcp allows MCP protocol headers for browser clients', async () => {
+    const env = makeEnv(makeKvStub(), makeKvStub(), makeKvStub());
+
+    const resp = await worker.default.fetch(
+      new Request('https://api.labwired.com/mcp', {
+        method: 'OPTIONS',
+        headers: {
+          'Access-Control-Request-Headers': 'Content-Type, Authorization, MCP-Protocol-Version',
+        },
+      }),
+      env as any,
+    );
+
+    expect(resp.status).toBe(204);
+    expect(resp.headers.get('Access-Control-Allow-Headers')).toContain('MCP-Protocol-Version');
+  });
+
   it('POST /mcp with a valid token handles initialize + tools/list', async () => {
     const env = makeEnv(makeKvStub(), makeKvStub(), makeKvStub());
     const headers = {

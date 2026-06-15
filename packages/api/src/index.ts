@@ -48,7 +48,7 @@ export { SessionDO } from './SessionDO.js';
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, MCP-Protocol-Version',
 };
 
 function corsResponse(body: unknown, status = 200): Response {
