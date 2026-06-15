@@ -57,6 +57,29 @@ describe('expanded MCP tools', () => {
     expect(tool!._meta).toMatchObject({
       'openai/outputTemplate': 'ui://labwired/hardware-lab.html',
       'openai/widgetAccessible': true,
+      ui: {
+        resourceUri: 'ui://labwired/hardware-lab.html',
+      },
+      widgetAccessible: true,
+      invoking: expect.any(String),
+      invoked: expect.any(String),
+    });
+  });
+
+  it('labwired_open_hardware_lab returns current Apps SDK component metadata', async () => {
+    const env = { BUILDER_URL: 'https://b', BUILDER_SECRET: 'k', ENVIRONMENT: 'test' } as any;
+    const res = await callHostedTool({
+      name: 'labwired_open_hardware_lab',
+      arguments: {},
+    }, env, { userId: 'user_abc' });
+
+    expect(res._meta).toMatchObject({
+      'openai/outputTemplate': 'ui://labwired/hardware-lab.html',
+      ui: {
+        resourceUri: 'ui://labwired/hardware-lab.html',
+      },
+      'openai/widgetAccessible': true,
+      widgetAccessible: true,
     });
   });
 

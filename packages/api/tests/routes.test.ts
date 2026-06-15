@@ -590,7 +590,7 @@ describe('OAuth discovery for /mcp', () => {
       expect.objectContaining({
         uri: 'ui://labwired/hardware-lab.html',
         name: 'labwired-hardware-lab',
-        mimeType: 'text/html',
+        mimeType: 'text/html;profile=mcp-app',
       }),
     );
 
@@ -632,7 +632,16 @@ describe('OAuth discovery for /mcp', () => {
     const htmlBody = (await html.json()) as any;
     expect(htmlBody.result.contents[0]).toMatchObject({
       uri: 'ui://labwired/hardware-lab.html',
-      mimeType: 'text/html',
+      mimeType: 'text/html;profile=mcp-app',
+      _meta: {
+        ui: {
+          domain: 'https://labwired.com',
+          csp: expect.any(Object),
+        },
+        'openai/widgetDescription': expect.any(String),
+        'openai/widgetCSP': expect.any(Object),
+        'openai/widgetDomain': 'https://labwired.com',
+      },
     });
     expect(htmlBody.result.contents[0].text).toContain('LabWired Hardware Lab');
   });

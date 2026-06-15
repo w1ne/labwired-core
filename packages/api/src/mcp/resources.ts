@@ -3,7 +3,13 @@ export const AGENT_HARDWARE_LOOP_NAME = 'labwired-agent-hardware-loop';
 export const AGENT_HARDWARE_LOOP_MIME = 'text/markdown';
 export const HARDWARE_LAB_TEMPLATE_URI = 'ui://labwired/hardware-lab.html';
 export const HARDWARE_LAB_TEMPLATE_NAME = 'labwired-hardware-lab';
-export const HARDWARE_LAB_TEMPLATE_MIME = 'text/html';
+export const HARDWARE_LAB_TEMPLATE_MIME = 'text/html;profile=mcp-app';
+export const HARDWARE_LAB_WIDGET_DOMAIN = 'https://labwired.com';
+
+export const HARDWARE_LAB_WIDGET_CSP = {
+  connect_domains: ['https://app.labwired.com', 'https://api.labwired.com'],
+  resource_domains: ['https://labwired.com', 'https://app.labwired.com'],
+};
 
 const AGENT_HARDWARE_LOOP_TEXT = `# LabWired agent hardware loop
 
@@ -79,12 +85,27 @@ export interface McpResourceDescriptor {
   name: string;
   mimeType: string;
   description: string;
+  _meta?: Record<string, unknown>;
 }
 
 export interface McpResourceContent {
   uri: string;
   mimeType: string;
   text: string;
+  _meta?: Record<string, unknown>;
+}
+
+export function hardwareLabComponentMeta(): Record<string, unknown> {
+  return {
+    ui: {
+      domain: HARDWARE_LAB_WIDGET_DOMAIN,
+      csp: HARDWARE_LAB_WIDGET_CSP,
+    },
+    'openai/widgetDescription': 'Interactive LabWired hardware board, firmware state, and simulator evidence.',
+    'openai/widgetCSP': HARDWARE_LAB_WIDGET_CSP,
+    'openai/widgetDomain': HARDWARE_LAB_WIDGET_DOMAIN,
+    'openai/widgetPrefersBorder': true,
+  };
 }
 
 export const RESOURCES: readonly McpResourceDescriptor[] = [
@@ -99,6 +120,7 @@ export const RESOURCES: readonly McpResourceDescriptor[] = [
     name: HARDWARE_LAB_TEMPLATE_NAME,
     mimeType: HARDWARE_LAB_TEMPLATE_MIME,
     description: 'Embeddable hardware lab UI for ChatGPT/Claude-capable MCP clients.',
+    _meta: hardwareLabComponentMeta(),
   },
 ];
 
@@ -115,6 +137,7 @@ export function getResource(uri: string): McpResourceContent | null {
       uri,
       mimeType: HARDWARE_LAB_TEMPLATE_MIME,
       text: HARDWARE_LAB_TEMPLATE_TEXT,
+      _meta: hardwareLabComponentMeta(),
     };
   }
   return null;

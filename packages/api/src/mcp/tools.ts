@@ -15,6 +15,19 @@ import {
 import { decorateTools } from './tool-metadata.js';
 import { HARDWARE_LAB_TEMPLATE_URI } from './resources.js';
 
+function hardwareLabToolMeta(): Record<string, unknown> {
+  return {
+    'openai/outputTemplate': HARDWARE_LAB_TEMPLATE_URI,
+    'openai/widgetAccessible': true,
+    ui: {
+      resourceUri: HARDWARE_LAB_TEMPLATE_URI,
+    },
+    widgetAccessible: true,
+    invoking: 'Opening hardware lab',
+    invoked: 'Hardware lab opened',
+  };
+}
+
 const hostedTools: McpTool[] = [
   SEARCH_TOOLS_TOOL,
   {
@@ -45,8 +58,7 @@ const hostedTools: McpTool[] = [
       'Open an embeddable visual hardware lab for an agent-generated board diagram. ' +
       'Returns a browser watch URL plus structured scene data; ChatGPT-capable clients can render the bundled hardware lab component inline.',
     _meta: {
-      'openai/outputTemplate': HARDWARE_LAB_TEMPLATE_URI,
-      'openai/widgetAccessible': true,
+      ...hardwareLabToolMeta(),
     },
     inputSchema: {
       type: 'object',
@@ -474,7 +486,7 @@ async function openHardwareLab(
   return {
     structuredContent,
     _meta: {
-      'openai/outputTemplate': HARDWARE_LAB_TEMPLATE_URI,
+      ...hardwareLabToolMeta(),
       scene,
       evidence,
     },
