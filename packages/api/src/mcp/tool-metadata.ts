@@ -2,7 +2,6 @@ import type { McpTool } from './types.js';
 
 const HOSTED_SECURITY_SCHEMES = [
   { type: 'oauth2', scopes: [] },
-  { type: 'http', scheme: 'bearer' },
 ] as const;
 
 const READ_ONLY_TOOLS = new Set([

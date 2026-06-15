@@ -33,8 +33,8 @@ describe('expanded MCP tools', () => {
     for (const tool of listHostedTools()) {
       expect(tool.securitySchemes, tool.name).toEqual([
         { type: 'oauth2', scopes: [] },
-        { type: 'http', scheme: 'bearer' },
       ]);
+      expect(tool.securitySchemes, tool.name).not.toContainEqual(expect.objectContaining({ type: 'http' }));
       expect(tool._meta, tool.name).toMatchObject({
         securitySchemes: tool.securitySchemes,
         'openai/toolInvocation/invoking': expect.any(String),
