@@ -102,8 +102,6 @@ describe('expanded MCP tools', () => {
       inline_frame_url: expect.stringContaining('https://app.labwired.com/?watch='),
       studio_url: expect.stringContaining('https://app.labwired.com/'),
       share_url: expect.stringContaining('https://app.labwired.com/'),
-      watch_url: expect.stringContaining('https://app.labwired.com/'),
-      template_uri: 'ui://labwired/hardware-lab.html',
       scene: {
         board: 'stm32l476',
         parts: [{ id: 'mcu', type: 'stm32l476' }],
@@ -120,6 +118,10 @@ describe('expanded MCP tools', () => {
       studio_url: expect.stringContaining('https://app.labwired.com/'),
       share_url: expect.stringContaining('https://app.labwired.com/'),
     });
+    expect(res.structuredContent).not.toHaveProperty('watch_url');
+    expect(res.structuredContent).not.toHaveProperty('template_uri');
+    expect(text).not.toHaveProperty('watch_url');
+    expect(text).not.toHaveProperty('template_uri');
   });
 
   it('labwired_compile_diagram compiles a clean dispenser diagram', async () => {

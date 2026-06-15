@@ -75,15 +75,13 @@ const hostedTools: McpTool[] = [
     },
     outputSchema: {
       type: 'object',
-      required: ['ok', 'inline_component_uri', 'inline_frame_url', 'studio_url', 'share_url', 'watch_url', 'template_uri', 'scene'],
+      required: ['ok', 'inline_component_uri', 'inline_frame_url', 'studio_url', 'share_url', 'scene'],
       properties: {
         ok: { type: 'boolean' },
         inline_component_uri: { type: 'string' },
         inline_frame_url: { type: 'string' },
         studio_url: { type: 'string' },
         share_url: { type: 'string' },
-        watch_url: { type: 'string' },
-        template_uri: { type: 'string' },
         scene: { type: 'object' },
         evidence: { type: 'object' },
       },
@@ -483,8 +481,6 @@ async function openHardwareLab(
     inline_frame_url: watchUrl,
     studio_url: watchUrl,
     share_url: watchUrl,
-    watch_url: watchUrl,
-    template_uri: HARDWARE_LAB_TEMPLATE_URI,
     scene,
     evidence,
   };
@@ -502,12 +498,10 @@ async function openHardwareLab(
     },
     content: [
       textContent({
-        watch_url: watchUrl,
         studio_url: watchUrl,
         share_url: watchUrl,
         inline_component_uri: HARDWARE_LAB_TEMPLATE_URI,
         inline_frame_url: watchUrl,
-        template_uri: HARDWARE_LAB_TEMPLATE_URI,
         summary: 'Opened an inline LabWired hardware viewer and a shareable LabWired Studio session for the full device.',
       }),
     ],
