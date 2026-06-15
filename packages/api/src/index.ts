@@ -39,7 +39,11 @@ import {
   handleDeleteSession,
   handleSessionWebSocket,
 } from './sessions.js';
-import { handleMcpProtectedResourceMetadata } from './mcp/oauth.js';
+import {
+  handleHostedMcpAuthorizationServerMetadata,
+  handleHostedMcpDynamicClientRegistration,
+  handleMcpProtectedResourceMetadata,
+} from './mcp/oauth.js';
 import { handleHostedMcp } from './mcp/http.js';
 import { handleTrackEvent } from './usage.js';
 export { SessionDO } from './SessionDO.js';
@@ -84,6 +88,16 @@ export default {
           pathname === '/.well-known/oauth-protected-resource/mcp')
       ) {
         return handleMcpProtectedResourceMetadata(request, env);
+      }
+      if (
+        method === 'GET' &&
+        (pathname === '/.well-known/oauth-authorization-server' ||
+          pathname === '/.well-known/oauth-authorization-server/mcp')
+      ) {
+        return handleHostedMcpAuthorizationServerMetadata(request, env);
+      }
+      if (method === 'POST' && pathname === '/oauth/register') {
+        return handleHostedMcpDynamicClientRegistration(request, env);
       }
       if ((method === 'POST' || method === 'GET' || method === 'HEAD') && pathname === '/mcp') {
         return handleHostedMcp(request, env);

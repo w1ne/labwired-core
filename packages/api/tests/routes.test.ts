@@ -330,7 +330,7 @@ describe('OAuth discovery for /mcp', () => {
     // The bug being guarded against: this array used to be missing entirely,
     // which dead-ended OAuth discovery and forced a manual API key.
     expect(Array.isArray(body.authorization_servers)).toBe(true);
-    expect(body.authorization_servers).toContain('https://clerk.labwired.com');
+    expect(body.authorization_servers).toContain('https://api.labwired.com');
     expect(body.resource).toBe('https://api.labwired.com/mcp');
     expect(body.scopes_supported).toEqual(['email', 'offline_access', 'profile']);
     expect(body.bearer_methods_supported).toContain('header');
@@ -349,7 +349,73 @@ describe('OAuth discovery for /mcp', () => {
 
     expect(resp.status).toBe(200);
     const body = (await resp.json()) as any;
-    expect(body.authorization_servers).toContain('https://clerk.labwired.com');
+    expect(body.authorization_servers).toContain('https://api.labwired.com');
+  });
+
+  it('hosted authorization metadata advertises only Clerk-granted scopes', async () => {
+    const env = makeEnv(makeKvStub(), makeKvStub(), makeKvStub());
+
+    const resp = await worker.default.fetch(
+      new Request('https://api.labwired.com/.well-known/oauth-authorization-server', {
+        method: 'GET',
+      }),
+      env as any,
+    );
+
+    expect(resp.status).toBe(200);
+    const body = (await resp.json()) as any;
+    expect(body.issuer).toBe('https://api.labwired.com');
+    expect(body.authorization_endpoint).toBe('https://clerk.labwired.com/oauth/authorize');
+    expect(body.token_endpoint).toBe('https://clerk.labwired.com/oauth/token');
+    expect(body.registration_endpoint).toBe('https://api.labwired.com/oauth/register');
+    expect(body.scopes_supported).toEqual(['email', 'offline_access', 'profile']);
+    expect(body.scopes_supported).not.toContain('openid');
+  });
+
+  it('hosted dynamic client registration strips openid before proxying to Clerk', async () => {
+    const env = makeEnv(makeKvStub(), makeKvStub(), makeKvStub());
+    const originalFetch = globalThis.fetch;
+    const clerkRequestBodies: any[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      expect(url).toBe('https://clerk.labwired.com/oauth/register');
+      const bodyText =
+        input instanceof Request ? await input.clone().text() : (init?.body as string | undefined);
+      clerkRequestBodies.push(JSON.parse(bodyText ?? '{}'));
+      return Response.json(
+        {
+          client_id: 'client_123',
+          scope: 'email offline_access profile',
+          redirect_uris: ['https://chatgpt.com/connector/oauth/test'],
+          grant_types: ['authorization_code'],
+          response_types: ['code'],
+          token_endpoint_auth_method: 'none',
+        },
+        { status: 201 },
+      );
+    }));
+
+    try {
+      const resp = await worker.default.fetch(
+        new Request('https://api.labwired.com/oauth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            client_name: 'ChatGPT',
+            redirect_uris: ['https://chatgpt.com/connector/oauth/test'],
+            scope: 'openid email offline_access profile',
+          }),
+        }),
+        env as any,
+      );
+
+      expect(resp.status).toBe(201);
+      expect(clerkRequestBodies[0].scope).toBe('email offline_access profile');
+      const body = (await resp.json()) as any;
+      expect(body.scope).toBe('email offline_access profile');
+    } finally {
+      vi.stubGlobal('fetch', originalFetch);
+    }
   });
 
   it('fails closed in production when the authorization server env var is unset', async () => {
