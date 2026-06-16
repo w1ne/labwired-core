@@ -588,7 +588,7 @@ describe('OAuth discovery for /mcp', () => {
     );
     expect(listBody.result.resources).toContainEqual(
       expect.objectContaining({
-        uri: 'ui://labwired/hardware-lab-v2.html',
+        uri: 'ui://widget/labwired-hardware-lab-v6.html',
         name: 'labwired-hardware-lab',
         mimeType: 'text/html;profile=mcp-app',
       }),
@@ -623,7 +623,7 @@ describe('OAuth discovery for /mcp', () => {
           jsonrpc: '2.0',
           id: 3,
           method: 'resources/read',
-          params: { uri: 'ui://labwired/hardware-lab-v2.html' },
+          params: { uri: 'ui://widget/labwired-hardware-lab-v6.html' },
         }),
       }),
       env as any,
@@ -631,11 +631,11 @@ describe('OAuth discovery for /mcp', () => {
     expect(html.status).toBe(200);
     const htmlBody = (await html.json()) as any;
     expect(htmlBody.result.contents[0]).toMatchObject({
-      uri: 'ui://labwired/hardware-lab-v2.html',
+      uri: 'ui://widget/labwired-hardware-lab-v6.html',
       mimeType: 'text/html;profile=mcp-app',
       _meta: {
         ui: {
-          domain: 'https://labwired.com',
+          prefersBorder: true,
           csp: expect.objectContaining({
             connectDomains: expect.arrayContaining(['https://app.labwired.com']),
             frameDomains: expect.arrayContaining(['https://app.labwired.com']),
@@ -644,22 +644,90 @@ describe('OAuth discovery for /mcp', () => {
         },
         'openai/widgetDescription': expect.any(String),
         'openai/widgetCSP': expect.objectContaining({
-          connectDomains: expect.arrayContaining(['https://app.labwired.com']),
-          frameDomains: expect.arrayContaining(['https://app.labwired.com']),
-          resourceDomains: expect.arrayContaining(['https://app.labwired.com']),
+          connect_domains: expect.arrayContaining(['https://app.labwired.com']),
+          frame_domains: expect.arrayContaining(['https://app.labwired.com']),
+          resource_domains: expect.arrayContaining(['https://app.labwired.com']),
+          redirect_domains: expect.arrayContaining(['https://app.labwired.com']),
         }),
-        'openai/widgetDomain': 'https://labwired.com',
       },
     });
     expect(htmlBody.result.contents[0].text).toContain('LabWired Hardware Lab');
-    expect(htmlBody.result.contents[0].text).toContain('id="labwired-frame"');
-    expect(htmlBody.result.contents[0].text).toContain('LabWired Studio live device');
+    expect(htmlBody.result.contents[0].text).toContain('id="labwired-scene"');
+    expect(htmlBody.result.contents[0].text).toContain('renderScene');
     expect(htmlBody.result.contents[0].text).toContain('ui/notifications/tool-result');
+    expect(htmlBody.result.contents[0].text).toContain('openai:set_globals');
     expect(htmlBody.result.contents[0].text).toContain('setOpenInAppUrl');
     expect(htmlBody.result.contents[0].text).toContain('redirectUrl: false');
     expect(htmlBody.result.contents[0].text).not.toContain('data.watch_url');
     expect(htmlBody.result.contents[0].text).not.toContain("'https://app.labwired.com/'");
     expect(htmlBody.result.contents[0].text).not.toContain("className = 'part'");
+  });
+
+  it('POST /mcp exposes static app resources without auth for component fetches', async () => {
+    const env = makeEnv(makeKvStub(), makeKvStub(), makeKvStub());
+
+    const list = await worker.default.fetch(
+      new Request('https://api.labwired.com/mcp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'resources/list' }),
+      }),
+      env as any,
+    );
+    expect(list.status).toBe(200);
+    const listBody = (await list.json()) as any;
+    expect(listBody.result.resources).toContainEqual(
+      expect.objectContaining({
+        uri: 'ui://widget/labwired-hardware-lab-v6.html',
+        mimeType: 'text/html;profile=mcp-app',
+      }),
+    );
+
+    const read = await worker.default.fetch(
+      new Request('https://api.labwired.com/mcp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 2,
+          method: 'resources/read',
+          params: { uri: 'ui://widget/labwired-hardware-lab-v6.html' },
+        }),
+      }),
+      env as any,
+    );
+    expect(read.status).toBe(200);
+    const readBody = (await read.json()) as any;
+    expect(readBody.result.contents[0]).toMatchObject({
+      uri: 'ui://widget/labwired-hardware-lab-v6.html',
+      mimeType: 'text/html;profile=mcp-app',
+    });
+    expect(readBody.result.contents[0].text).toContain('LabWired Hardware Lab');
+  });
+
+  it('POST /mcp serves legacy app template URIs for cached ChatGPT descriptors', async () => {
+    const env = makeEnv(makeKvStub(), makeKvStub(), makeKvStub());
+
+    const read = await worker.default.fetch(
+      new Request('https://api.labwired.com/mcp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'resources/read',
+          params: { uri: 'ui://labwired/hardware-lab.html' },
+        }),
+      }),
+      env as any,
+    );
+    expect(read.status).toBe(200);
+    const body = (await read.json()) as any;
+    expect(body.result.contents[0]).toMatchObject({
+      uri: 'ui://labwired/hardware-lab.html',
+      mimeType: 'text/html;profile=mcp-app',
+    });
+    expect(body.result.contents[0].text).toContain('LabWired Hardware Lab');
   });
 });
 

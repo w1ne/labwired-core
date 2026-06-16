@@ -52,6 +52,22 @@ describe('composeDiagnostics() totality', () => {
     expect(() => composeDiagnostics(diagramNoWires as never)).not.toThrow();
     // Should process without throwing — outcome depends on content
   });
+
+  it('agent-generated wires with missing pin fields return diagnostics instead of throwing', () => {
+    const diagram = {
+      board: 'stm32l476',
+      parts: [{ id: 'mcu', type: 'mcu' }],
+      wires: [
+        { from: { part: 'mcu', pin: 'PA5' }, to: { part: 'led1' } },
+        { from: { part: 'mcu' }, to: { part: 'led1', pin: 'A' } },
+      ],
+    } as unknown as DiagramV2;
+
+    expect(() => composeDiagnostics(diagram as never)).not.toThrow();
+    const result = composeDiagnostics(diagram as never);
+    expect(result.ok).toBe(false);
+    expect(result.error_count).toBeGreaterThan(0);
+  });
 });
 
 describe('erc() totality', () => {

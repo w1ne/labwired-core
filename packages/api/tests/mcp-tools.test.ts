@@ -55,14 +55,26 @@ describe('expanded MCP tools', () => {
     expect(tool).toBeDefined();
     expect(tool!.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false, openWorldHint: true });
     expect(tool!._meta).toMatchObject({
-      'openai/outputTemplate': 'ui://labwired/hardware-lab-v2.html',
+      'openai/outputTemplate': 'ui://widget/labwired-hardware-lab-v6.html',
       'openai/widgetAccessible': true,
       ui: {
-        resourceUri: 'ui://labwired/hardware-lab-v2.html',
+        resourceUri: 'ui://widget/labwired-hardware-lab-v6.html',
       },
       widgetAccessible: true,
       invoking: expect.any(String),
       invoked: expect.any(String),
+    });
+  });
+
+  it('labwired_start_playground_lab advertises the same embedded component', () => {
+    const tool = listHostedTools().find((t) => t.name === 'labwired_start_playground_lab');
+    expect(tool).toBeDefined();
+    expect(tool!._meta).toMatchObject({
+      'openai/outputTemplate': 'ui://widget/labwired-hardware-lab-v6.html',
+      'openai/widgetAccessible': true,
+      ui: {
+        resourceUri: 'ui://widget/labwired-hardware-lab-v6.html',
+      },
     });
   });
 
@@ -74,16 +86,16 @@ describe('expanded MCP tools', () => {
     }, env, { userId: 'user_abc' });
 
     expect(res._meta).toMatchObject({
-      'openai/outputTemplate': 'ui://labwired/hardware-lab-v2.html',
+      'openai/outputTemplate': 'ui://widget/labwired-hardware-lab-v6.html',
       ui: {
-        resourceUri: 'ui://labwired/hardware-lab-v2.html',
+        resourceUri: 'ui://widget/labwired-hardware-lab-v6.html',
       },
       'openai/widgetAccessible': true,
       widgetAccessible: true,
     });
   });
 
-  it('labwired_start_playground_lab returns Studio links without legacy watch_url', async () => {
+  it('labwired_start_playground_lab returns Studio links and an inline component without legacy watch_url', async () => {
     const env = {
       ENVIRONMENT: 'test',
     } as any;
@@ -93,12 +105,28 @@ describe('expanded MCP tools', () => {
     }, env, { userId: 'user_abc' });
 
     expect(res.isError).toBeFalsy();
+    expect(res.structuredContent).toMatchObject({
+      ok: true,
+      inline_component_uri: 'ui://widget/labwired-hardware-lab-v6.html',
+      inline_frame_url: expect.stringContaining('https://app.labwired.com/?embed=true#'),
+      studio_url: expect.stringContaining('https://app.labwired.com/#'),
+      share_url: expect.stringContaining('https://app.labwired.com/#'),
+      scene: {
+        board: 'stm32l476',
+      },
+    });
+    expect(res._meta).toMatchObject({
+      'openai/outputTemplate': 'ui://widget/labwired-hardware-lab-v6.html',
+    });
     const text = JSON.parse(res.content[0].text);
     expect(text).toMatchObject({
-      studio_url: expect.stringContaining('https://app.labwired.com/?lab=stm32l476-blinky&run=1'),
-      share_url: expect.stringContaining('https://app.labwired.com/?lab=stm32l476-blinky&run=1'),
+      studio_url: expect.stringContaining('https://app.labwired.com/#'),
+      share_url: expect.stringContaining('https://app.labwired.com/#'),
+      inline_component_uri: 'ui://widget/labwired-hardware-lab-v6.html',
+      inline_frame_url: expect.stringContaining('https://app.labwired.com/?embed=true#'),
     });
     expect(text.studio_url).not.toContain('?watch=');
+    expect(text.studio_url).not.toContain('?lab=');
     expect(text).not.toHaveProperty('watch_url');
   });
 
@@ -117,7 +145,7 @@ describe('expanded MCP tools', () => {
     expect(res.isError).toBeFalsy();
     expect(res.structuredContent).toMatchObject({
       ok: true,
-      inline_component_uri: 'ui://labwired/hardware-lab-v2.html',
+      inline_component_uri: 'ui://widget/labwired-hardware-lab-v6.html',
       inline_frame_url: expect.stringContaining('https://app.labwired.com/?embed=true#'),
       studio_url: expect.stringContaining('https://app.labwired.com/'),
       share_url: expect.stringContaining('https://app.labwired.com/'),
@@ -128,11 +156,11 @@ describe('expanded MCP tools', () => {
       },
     });
     expect(res._meta).toMatchObject({
-      'openai/outputTemplate': 'ui://labwired/hardware-lab-v2.html',
+      'openai/outputTemplate': 'ui://widget/labwired-hardware-lab-v6.html',
     });
     const text = JSON.parse(res.content[0].text);
     expect(text).toMatchObject({
-      inline_component_uri: 'ui://labwired/hardware-lab-v2.html',
+      inline_component_uri: 'ui://widget/labwired-hardware-lab-v6.html',
       inline_frame_url: expect.stringContaining('https://app.labwired.com/?embed=true#'),
       studio_url: expect.stringContaining('https://app.labwired.com/'),
       share_url: expect.stringContaining('https://app.labwired.com/'),

@@ -11,7 +11,7 @@ ExecStart=/usr/bin/node --import tsx src/server.ts
 # Entrypoint guard — server.ts only starts listening when BUILDER_ENTRY=1
 # Without this the process exits immediately.
 Environment=BUILDER_ENTRY=1
-Environment=PORT=8080
+Environment=PORT=18080
 Environment=MAX_CONCURRENT=2
 Environment=LABWIRED_BIN=/usr/local/bin/labwired
 

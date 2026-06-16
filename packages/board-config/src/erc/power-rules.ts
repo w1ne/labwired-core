@@ -52,6 +52,7 @@ export function powerRules(ctx: ErcContext): Diagnostic[] {
   for (const net of ctx.nets) {
     if (groundNets.has(net.name)) continue;
     const hasGndPowerOut = net.members.some((m) => {
+      if (typeof m.pin !== 'string') return false;
       const stripped = m.pin.replace(/\.\d+$/, '');
       if (stripped.toUpperCase() !== 'GND') return false;
       const ep = effectivePin(ctx, m);

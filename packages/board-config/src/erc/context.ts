@@ -67,7 +67,8 @@ export function mcuBoardKey(ctx: ErcContext, part: Part): string {
 
 /** Strip a trailing `.N` multi-instance suffix from a pin name (e.g. `GND.2` → `GND`).
  *  The raw name is preserved in diagnostics/subjects; only the lookup key is normalised. */
-function stripPinSuffix(pin: string): string {
+function stripPinSuffix(pin: unknown): string {
+  if (typeof pin !== 'string') return '';
   return pin.replace(/\.\d+$/, '');
 }
 
@@ -76,6 +77,7 @@ export function effectivePin(ctx: ErcContext, member: PinRef): EffectivePin | nu
   const part = ctx.partsById.get(member.part);
   if (!part) return null;
   const rawPin = member.pin;
+  if (typeof rawPin !== 'string') return null;
   const strippedPin = stripPinSuffix(rawPin);
   if (isMcuPart(ctx, part)) {
     const boardKey = mcuBoardKey(ctx, part);

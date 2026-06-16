@@ -80,7 +80,8 @@ sudo journalctl -u labwired-builder -n 30
 Key `Environment=` lines in the unit (see `labwired-builder.service`):
 - `BUILDER_ENTRY=1` — without this the server.ts process exits immediately
   (the entrypoint guard at the bottom of server.ts checks for this var).
-- `PORT=8080` — listens on loopback only (cloudflared proxies it).
+- `PORT=18080` — listens on the host only (cloudflared proxies it). `europa`
+  already uses `127.0.0.1:8080` for another service.
 - `MAX_CONCURRENT=2` — limits parallel run jobs.
 - `LABWIRED_BIN=/usr/local/bin/labwired` — path to the simulator binary.
 - `EnvironmentFile=/etc/labwired-builder.env` — loads `BUILDER_SECRET`.
@@ -112,6 +113,10 @@ sudo cp /opt/labwired-builder/deploy/cloudflared-config.yml \
 
 # Create the DNS CNAME (points builder.labwired.com → the tunnel):
 cloudflared tunnel route dns labwired-builder builder.labwired.com
+
+# If `cloudflared tunnel route dns` is unavailable locally, create the same
+# proxied CNAME in Cloudflare DNS:
+#   builder.labwired.com → <tunnel-id>.cfargotunnel.com
 
 # Install as a system service:
 sudo cloudflared service install

@@ -34,6 +34,9 @@ const hostedTools: McpTool[] = [
     name: 'labwired_start_playground_lab',
     description:
       'Zero-friction first run: build a starter virtual hardware lab, validate it, and return a LabWired Playground URL.',
+    _meta: {
+      ...hardwareLabToolMeta(),
+    },
     inputSchema: {
       type: 'object',
       properties: {
@@ -49,6 +52,19 @@ const hostedTools: McpTool[] = [
           type: 'boolean',
           description: 'Whether to start from a runnable demo lab. Defaults to true.',
         },
+      },
+    },
+    outputSchema: {
+      type: 'object',
+      required: ['ok', 'inline_component_uri', 'inline_frame_url', 'studio_url', 'share_url', 'scene'],
+      properties: {
+        ok: { type: 'boolean' },
+        inline_component_uri: { type: 'string' },
+        inline_frame_url: { type: 'string' },
+        studio_url: { type: 'string' },
+        share_url: { type: 'string' },
+        scene: { type: 'object' },
+        evidence: { type: 'object' },
       },
     },
   },
@@ -380,7 +396,6 @@ async function startPlaygroundLab(
 ): Promise<McpToolResult> {
   const input = (args ?? {}) as { goal?: unknown; board?: unknown };
   const board = typeof input.board === 'string' && input.board ? input.board : 'stm32l476-blinky';
-  const playgroundUrl = `https://app.labwired.com/?lab=${encodeURIComponent(board)}&run=1`;
   const diagram = starterDiagram(board);
   const validation = composeDiagnostics(diagram as unknown as ValidateDiagram);
   if (!validation.ok) {
@@ -389,12 +404,36 @@ async function startPlaygroundLab(
       isError: true,
     };
   }
+  const urls = playgroundUrls(diagram);
+  const scene = sceneFromDiagram(diagram);
+  const evidence = {
+    status: 'ready',
+    diagnostics: validation.diagnostics,
+  };
+  const structuredContent = {
+    ok: true,
+    title: 'LabWired Starter Lab',
+    inline_component_uri: HARDWARE_LAB_TEMPLATE_URI,
+    inline_frame_url: urls.embedUrl,
+    studio_url: urls.studioUrl,
+    share_url: urls.studioUrl,
+    scene,
+    evidence,
+  };
 
   return {
+    structuredContent,
+    _meta: {
+      ...hardwareLabToolMeta(),
+      scene,
+      evidence,
+    },
     content: [
       textContent({
-        studio_url: playgroundUrl,
-        share_url: playgroundUrl,
+        studio_url: urls.studioUrl,
+        share_url: urls.studioUrl,
+        inline_component_uri: HARDWARE_LAB_TEMPLATE_URI,
+        inline_frame_url: urls.embedUrl,
         summary: 'Created a virtual STM32 LED circuit in the Playground and validated the starter wiring.',
         board_id: board,
         validation,
