@@ -73,6 +73,8 @@ export { routeWire } from './editor/wire-router';
 export { getPinMapping, findPinFunction, PIN_MAPS } from './editor/pin-mapping';
 export type { PinFunction, PinMapping } from './editor/pin-mapping';
 export { COMPONENT_REGISTRY, getComponentsByCategory } from './editor/components/index';
+export { computeDiagramBounds } from './editor/diagramBounds';
+export type { DiagramBounds } from './editor/diagramBounds';
 export type {
   Diagram, Part, Wire, WireEndpoint, PinDef, PinSide,
   ComponentDef, ComponentState, AttrFieldDef,

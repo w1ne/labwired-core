@@ -1943,10 +1943,7 @@ export function App() {
         >
           <span aria-hidden className="mt-0.5 sm:mt-0">▶</span>
           <span className="break-words">
-            {selectedBoard.runHint
-              ?? (selectedBoard.kind === 'lab'
-                ? 'Click Run to start the simulation'
-                : 'Click Run to start — the LED should blink')}
+            {selectedBoard.runHint ?? 'Click Run to start the simulation'}
           </span>
         </div>
       )}
@@ -2120,6 +2117,9 @@ export function App() {
           onNtcChange={handleNtcChange}
           simControls={simDockNode}
           onOpenProjects={() => setProjectsModalOpen(true)}
+          bridge={bridge}
+          running={running}
+          onPartAttrChange={handlePartAttrChange}
         />
         {projectsModalNode}
       </ChipsProvider>

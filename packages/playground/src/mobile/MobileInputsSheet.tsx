@@ -8,7 +8,15 @@
 // device stays the single source of truth; this is just a faithful control.
 
 import { useLayoutEffect, useRef, useState } from 'react';
-import { COMPONENT_REGISTRY, type ComponentState, type Diagram } from '@labwired/ui';
+import {
+  COMPONENT_REGISTRY,
+  type ComponentState,
+  type Diagram,
+  type SimulatorBridge,
+} from '@labwired/ui';
+import { BleAnalyzer } from '../instruments/BleAnalyzer';
+import { IoLinkAnalyzer } from '../instruments/IoLinkAnalyzer';
+import { LogicAnalyzerPanel } from '../instruments/LogicAnalyzerPanel';
 
 export interface MobileInputsSheetProps {
   diagram: Diagram;
@@ -23,7 +31,15 @@ export interface MobileInputsSheetProps {
   onNtcChange: (partId: string, tempC: number) => void;
   /** ADC value setter (0–4095), keyed by part id (matches the board_io binding). */
   onAnalogChange: (partId: string, value: number) => void;
+  /** Live bridge for the instrument tabs (BLE / logic / IO-Link). */
+  bridge: SimulatorBridge | null;
+  /** Whether the sim is running — drives instrument poll cadence. */
+  running: boolean;
+  /** Update a part attribute used by the logic-analyzer decoder selector. */
+  onPartAttrChange: (partId: string, attrs: Record<string, string>) => void;
 }
+
+type Tab = 'inputs' | 'serial' | 'ble' | 'logic' | 'iolink';
 
 function partLabel(attrs: Record<string, unknown> | undefined, fallback: string): string {
   const label = attrs?.label;
@@ -38,6 +54,9 @@ export function MobileInputsSheet({
   ntcTemperatures,
   onNtcChange,
   onAnalogChange,
+  bridge,
+  running,
+  onPartAttrChange,
 }: MobileInputsSheetProps) {
   const ultrasonicParts = diagram.parts.filter((p) => p.type === 'ultrasonic');
   const thermistorParts = diagram.parts.filter((p) => p.type === 'ntc-thermistor');
@@ -46,9 +65,26 @@ export function MobileInputsSheet({
   );
   const hasInputs = ultrasonicParts.length > 0 || thermistorParts.length > 0 || adcParts.length > 0;
 
+  // Instrument tabs. BLE + Serial are always available (parity with the desktop
+  // always-on Air Tracer); Logic and IO-Link appear only when the diagram
+  // actually contains the matching part, so we never show an empty analyzer.
+  const logicAnalyzerPart = diagram.parts.find((p) => p.type === 'logic-analyzer');
+  const hasIoLink = diagram.parts.some((p) => p.type === 'iolink-master');
+
+  const tabs: { id: Tab; label: string }[] = [
+    ...(hasInputs ? [{ id: 'inputs' as Tab, label: 'Inputs' }] : []),
+    { id: 'serial', label: 'Serial' },
+    { id: 'ble', label: 'BLE' },
+    ...(logicAnalyzerPart ? [{ id: 'logic' as Tab, label: 'Logic' }] : []),
+    ...(hasIoLink ? [{ id: 'iolink' as Tab, label: 'IO-Link' }] : []),
+  ];
+
   // Default to the tab that actually has content.
-  const [tab, setTab] = useState<'inputs' | 'serial'>(hasInputs ? 'inputs' : 'serial');
+  const [tab, setTab] = useState<Tab>(hasInputs ? 'inputs' : 'serial');
   const [open, setOpen] = useState(true);
+  // Instrument tabs need real vertical space (their panels are h-full); the
+  // inputs/serial tabs stay compact. A taller body kicks in for tool tabs.
+  const isTool = tab === 'ble' || tab === 'logic' || tab === 'iolink';
 
   const serialRef = useRef<HTMLPreElement | null>(null);
   useLayoutEffect(() => {
@@ -94,37 +130,56 @@ export function MobileInputsSheet({
 
   return (
     <div className="shrink-0 bg-[rgba(13,14,18,0.96)] backdrop-blur border-t border-white/[0.08]">
-      {/* Tab bar / collapse handle */}
+      {/* Tab bar / collapse handle. Horizontally scrollable so extra tool tabs
+          (BLE / Logic / IO-Link) never overflow on a narrow phone. */}
       <div className="flex items-center gap-1 px-2 h-11">
-        <button
-          type="button"
-          onClick={() => { setTab('inputs'); setOpen(true); }}
-          className={`h-9 px-3 rounded-lg text-[13px] font-semibold ${
-            tab === 'inputs' && open ? 'bg-white/[0.1] text-fg-primary' : 'text-fg-tertiary'
-          }`}
-        >
-          Inputs
-        </button>
-        <button
-          type="button"
-          onClick={() => { setTab('serial'); setOpen(true); }}
-          className={`h-9 px-3 rounded-lg text-[13px] font-semibold ${
-            tab === 'serial' && open ? 'bg-white/[0.1] text-fg-primary' : 'text-fg-tertiary'
-          }`}
-        >
-          Serial
-        </button>
+        <div className="flex items-center gap-1 overflow-x-auto min-w-0">
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => { setTab(t.id); setOpen(true); }}
+              className={`h-9 px-3 rounded-lg text-[13px] font-semibold shrink-0 ${
+                tab === t.id && open ? 'bg-white/[0.1] text-fg-primary' : 'text-fg-tertiary'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
           aria-label={open ? 'Collapse panel' : 'Expand panel'}
-          className="ml-auto h-9 w-9 flex items-center justify-center rounded-lg text-fg-tertiary"
+          className="ml-auto h-9 w-9 flex items-center justify-center rounded-lg text-fg-tertiary shrink-0"
         >
           {open ? '▾' : '▴'}
         </button>
       </div>
 
-      {open && (
+      {open && isTool && (
+        // Instrument panels are `h-full` flex columns — give them a fixed,
+        // generous height so their internal scroll/waveform areas size right.
+        <div className="border-t border-white/[0.06]" style={{ height: '58vh' }}>
+          {tab === 'ble' && <BleAnalyzer bridge={bridge} running={running} />}
+          {tab === 'logic' && logicAnalyzerPart && (
+            // Waveforms can be wider than the phone — let them scroll sideways.
+            <div className="h-full overflow-x-auto">
+              <LogicAnalyzerPanel
+                diagram={diagram}
+                analyzerId={logicAnalyzerPart.id}
+                bridge={bridge}
+                running={running}
+                decoder={logicAnalyzerPart.attrs.decoder ?? 'raw'}
+                onDecoderChange={(decoder) => onPartAttrChange(logicAnalyzerPart.id, { decoder })}
+              />
+            </div>
+          )}
+          {tab === 'iolink' && <IoLinkAnalyzer bridge={bridge} running={running} />}
+        </div>
+      )}
+
+      {open && !isTool && (
         <div className="px-4 pb-4" style={{ maxHeight: '40vh', overflowY: 'auto' }}>
           {tab === 'inputs' && (
             <div className="flex flex-col gap-4 pt-1">

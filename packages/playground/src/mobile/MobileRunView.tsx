@@ -5,7 +5,13 @@
 // the canvas is read-only except for pressing interactive parts.
 
 import { useEffect, useState, type ReactNode } from 'react';
-import { EditorCanvas, type EditorState, type ComponentState, type SimulationState } from '@labwired/ui';
+import {
+  EditorCanvas,
+  type EditorState,
+  type ComponentState,
+  type SimulationState,
+  type SimulatorBridge,
+} from '@labwired/ui';
 import { GlobalLogo, GlobalNav } from '../components/GlobalNav';
 import type { BoardConfig } from '../bundled-configs';
 import { MobileInputsSheet } from './MobileInputsSheet';
@@ -29,6 +35,12 @@ export interface MobileRunViewProps {
   simControls: ReactNode;
   /** Open the saved-projects modal from the menu drawer. */
   onOpenProjects: () => void;
+  /** Live bridge for the instrument tabs (BLE / logic / IO-Link). */
+  bridge: SimulatorBridge | null;
+  /** Whether the sim is running — drives instrument poll cadence. */
+  running: boolean;
+  /** Update a part attribute (logic-analyzer decoder selector). */
+  onPartAttrChange: (partId: string, attrs: Record<string, string>) => void;
   toast?: ReactNode;
 }
 
@@ -47,6 +59,9 @@ export function MobileRunView({
   onNtcChange,
   simControls,
   onOpenProjects,
+  bridge,
+  running,
+  onPartAttrChange,
   toast,
 }: MobileRunViewProps) {
   const [showNav, setShowNav] = useState(false);
@@ -83,6 +98,7 @@ export function MobileRunView({
         <EditorCanvas
           state={editorState}
           interactionMode="run"
+          fitToContent
           boardIoStates={boardIoStates}
           displayBuffers={displayBuffers}
           onButtonToggle={onButtonToggle}
@@ -115,6 +131,9 @@ export function MobileRunView({
         ntcTemperatures={ntcTemperatures}
         onNtcChange={onNtcChange}
         onAnalogChange={onAnalogChange}
+        bridge={bridge}
+        running={running}
+        onPartAttrChange={onPartAttrChange}
       />
 
       {showNav && (
@@ -141,9 +160,7 @@ export function MobileRunView({
             >
               My projects
             </button>
-            <nav className="flex flex-col gap-1 mt-1">
-              <GlobalNav variant="dark" />
-            </nav>
+            <GlobalNav variant="dark" orientation="vertical" className="mt-1" />
             <div className="mt-auto text-[11px] text-fg-tertiary leading-snug">
               Need the full editor?<br />
               Open this page on a laptop for wiring, the code editor, and the CPU inspector.

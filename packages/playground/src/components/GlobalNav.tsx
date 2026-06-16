@@ -56,11 +56,22 @@ export interface GlobalNavProps {
   toolsSlot?: ReactNode;
   /** Nav items to hide on this surface (e.g. the playground app hides Validation). */
   exclude?: NavId[];
+  /** `horizontal` (default) = top-bar layout; `vertical` = full-width stacked
+   *  rows, used by the mobile menu drawer where a horizontal row overflows. */
+  orientation?: 'horizontal' | 'vertical';
 }
 
-export function GlobalNav({ active, variant = 'light', className, onToolsClick, toolsSlot, exclude }: GlobalNavProps) {
+export function GlobalNav({ active, variant = 'light', className, onToolsClick, toolsSlot, exclude, orientation = 'horizontal' }: GlobalNavProps) {
+  const vertical = orientation === 'vertical';
   return (
-    <nav className={clsx('flex items-center', variant === 'dark' ? 'gap-1' : 'gap-5 text-[14px]', className)}>
+    <nav
+      className={clsx(
+        'flex',
+        vertical ? 'flex-col items-stretch gap-1' : 'items-center',
+        !vertical && (variant === 'dark' ? 'gap-1' : 'gap-5 text-[14px]'),
+        className,
+      )}
+    >
       {NAV_ITEMS.filter((item) => item.id !== active && !(exclude ?? []).includes(item.id)).map((item) => {
         if (item.id === 'tools' && toolsSlot) {
           return <div key={item.id}>{toolsSlot}</div>;
@@ -74,8 +85,15 @@ export function GlobalNav({ active, variant = 'light', className, onToolsClick, 
                 onToolsClick();
               }
             : undefined;
-        const cls =
-          variant === 'dark'
+        const cls = vertical
+          ? clsx(
+              // Full-width tappable row for the mobile drawer.
+              'flex h-11 w-full items-center px-3 rounded-lg text-[15px] font-medium transition-colors duration-150',
+              isActive
+                ? 'text-fg-primary bg-white/[0.06] font-semibold'
+                : 'text-fg-secondary hover:text-fg-primary hover:bg-white/[0.05]',
+            )
+          : variant === 'dark'
             ? clsx(
                 'flex h-7 px-3 rounded-pill text-xs font-medium transition-colors duration-150 items-center shrink-0',
                 isActive

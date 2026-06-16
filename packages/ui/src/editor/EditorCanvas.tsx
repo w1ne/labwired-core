@@ -2,6 +2,7 @@ import { useRef, useState, useCallback, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import type { Part, PinDef, ComponentState, DisplayBuffer, EditorState, WireEndpoint } from './types';
 import { COMPONENT_REGISTRY } from './components/index';
+import { computeDiagramBounds } from './diagramBounds';
 import { validateWireConnection } from './circuitValidation';
 import { WireLayer } from './WireLayer';
 
@@ -69,6 +70,14 @@ interface EditorCanvasProps {
     part: Part,
     box: { x: number; y: number; width: number; height: number },
   ) => ReactNode;
+  /**
+   * When true, the viewBox is fit to the diagram's content (centred, with
+   * padding) on mount and whenever the set of parts changes — instead of the
+   * fixed default window. Used by the mobile run view so a shared circuit fills
+   * the screen rather than rendering tiny and off-centre. The user can still
+   * pan/zoom freely afterwards; the fit only re-runs when the diagram changes.
+   */
+  fitToContent?: boolean;
 }
 
 export function EditorCanvas({
@@ -90,9 +99,32 @@ export function EditorCanvas({
   onButtonToggle,
   onAnalogChange,
   selectedPartOverlay,
+  fitToContent = false,
 }: EditorCanvasProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [viewBox, setViewBox] = useState({ x: -100, y: -50, w: 1200, h: 800 });
+
+  // Fit-to-content: when enabled, frame the diagram's parts (centred, padded)
+  // whenever the set/placement of parts changes. preserveAspectRatio="meet"
+  // letterboxes the difference, so the whole circuit stays visible regardless
+  // of viewport aspect. Pan/zoom afterwards is preserved until the next change.
+  const fitSignature = fitToContent
+    ? state.diagram.parts.map((p) => `${p.id}:${p.x}:${p.y}:${p.rotate}:${p.scale ?? 1}`).join('|')
+    : '';
+  useEffect(() => {
+    if (!fitToContent) return;
+    const bounds = computeDiagramBounds(state.diagram);
+    if (!bounds || bounds.width <= 0 || bounds.height <= 0) return;
+    const pad = Math.max(bounds.width, bounds.height) * 0.12 + 20;
+    setViewBox({
+      x: bounds.x - pad,
+      y: bounds.y - pad,
+      w: bounds.width + pad * 2,
+      h: bounds.height + pad * 2,
+    });
+    // fitSignature changes exactly when part placement changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fitToContent, fitSignature]);
   const [dragging, setDragging] = useState<{
     partId: string;
     offsetX: number;
