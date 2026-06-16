@@ -10,9 +10,13 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import {
   COMPONENT_REGISTRY,
+  RegisterGrid,
+  InstructionTrace,
+  MemoryInspector,
   type ComponentState,
   type Diagram,
   type SimulatorBridge,
+  type TraceEntry,
 } from '@labwired/ui';
 import { BleAnalyzer } from '../instruments/BleAnalyzer';
 import { IoLinkAnalyzer } from '../instruments/IoLinkAnalyzer';
@@ -37,9 +41,16 @@ export interface MobileInputsSheetProps {
   running: boolean;
   /** Update a part attribute used by the logic-analyzer decoder selector. */
   onPartAttrChange: (partId: string, attrs: Record<string, string>) => void;
+  /** Live CPU state for the foreground chip (the "CPU" tab — parity with the
+   *  desktop chip inspector). Present only while a sim is loaded. */
+  registers?: Map<string, number>;
+  traceEntries?: TraceEntry[];
+  stackMemory?: Uint8Array;
+  stackBase?: number;
 }
 
-type Tab = 'inputs' | 'serial' | 'ble' | 'logic' | 'iolink';
+type Tab = 'inputs' | 'serial' | 'ble' | 'logic' | 'iolink' | 'cpu';
+type CpuView = 'reg' | 'trace' | 'mem';
 
 function partLabel(attrs: Record<string, unknown> | undefined, fallback: string): string {
   const label = attrs?.label;
@@ -57,6 +68,10 @@ export function MobileInputsSheet({
   bridge,
   running,
   onPartAttrChange,
+  registers,
+  traceEntries,
+  stackMemory,
+  stackBase,
 }: MobileInputsSheetProps) {
   const ultrasonicParts = diagram.parts.filter((p) => p.type === 'ultrasonic');
   const thermistorParts = diagram.parts.filter((p) => p.type === 'ntc-thermistor');
@@ -74,10 +89,16 @@ export function MobileInputsSheet({
   const tabs: { id: Tab; label: string }[] = [
     ...(hasInputs ? [{ id: 'inputs' as Tab, label: 'Inputs' }] : []),
     { id: 'serial', label: 'Serial' },
+    { id: 'cpu', label: 'CPU' },
     { id: 'ble', label: 'BLE' },
     ...(logicAnalyzerPart ? [{ id: 'logic' as Tab, label: 'Logic' }] : []),
     ...(hasIoLink ? [{ id: 'iolink' as Tab, label: 'IO-Link' }] : []),
   ];
+
+  // CPU sub-view (registers / trace / memory) — parity with the desktop chip
+  // inspector, scoped to the foreground chip.
+  const [cpuView, setCpuView] = useState<CpuView>('reg');
+  const hasCpu = !!bridge && !!registers;
 
   // Default to the tab that actually has content.
   const [tab, setTab] = useState<Tab>(hasInputs ? 'inputs' : 'serial');
@@ -91,7 +112,7 @@ export function MobileInputsSheet({
   };
   // Instrument tabs need real vertical space (their panels are h-full); the
   // inputs/serial tabs stay compact. A taller body kicks in for tool tabs.
-  const isTool = tab === 'ble' || tab === 'logic' || tab === 'iolink';
+  const isTool = tab === 'ble' || tab === 'logic' || tab === 'iolink' || tab === 'cpu';
 
   const serialRef = useRef<HTMLPreElement | null>(null);
   useLayoutEffect(() => {
@@ -190,6 +211,50 @@ export function MobileInputsSheet({
             </div>
           )}
           {tab === 'iolink' && <IoLinkAnalyzer bridge={bridge} running={running} />}
+          {tab === 'cpu' && (
+            <div className="h-full flex flex-col text-[12px] text-fg-primary">
+              {!hasCpu ? (
+                <div className="flex-1 flex items-center justify-center px-6 text-center text-fg-tertiary text-[12.5px]">
+                  Run the simulation to inspect the CPU — registers, instruction trace and memory appear here.
+                </div>
+              ) : (
+                <>
+                  {/* Sub-view selector: Registers / Trace / Memory. */}
+                  <div className="flex items-center gap-1.5 px-3 py-2 border-b border-white/[0.06] shrink-0">
+                    {([['reg', 'Registers'], ['trace', 'Trace'], ['mem', 'Memory']] as [CpuView, string][]).map(
+                      ([id, label]) => (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => setCpuView(id)}
+                          className={`h-7 px-3 rounded-full text-[12px] font-medium shrink-0 transition-colors ${
+                            cpuView === id ? 'bg-accent/15 text-accent' : 'text-fg-tertiary active:bg-white/[0.06]'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ),
+                    )}
+                  </div>
+                  <div className="flex-1 min-h-0 overflow-auto">
+                    {cpuView === 'reg' && registers && (
+                      <RegisterGrid registers={registers} style={{ maxHeight: '100%', overflow: 'auto' }} />
+                    )}
+                    {cpuView === 'trace' && (
+                      <InstructionTrace entries={traceEntries ?? []} style={{ maxHeight: '100%', overflow: 'auto' }} />
+                    )}
+                    {cpuView === 'mem' && stackMemory && (
+                      <MemoryInspector
+                        data={stackMemory}
+                        baseAddress={stackBase ?? 0}
+                        style={{ maxHeight: '100%', overflow: 'auto' }}
+                      />
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
       )}
 

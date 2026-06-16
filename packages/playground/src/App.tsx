@@ -2173,6 +2173,10 @@ export function App() {
           onPartAttrChange={handlePartAttrChange}
           toast={toast}
           onDismissToast={() => setToast(null)}
+          registers={registers}
+          traceEntries={traceEntries}
+          stackMemory={stackMemory}
+          stackBase={stackBase}
         />
         {projectsModalNode}
       </ChipsProvider>

@@ -13,6 +13,7 @@ import {
   type SimulatorBridge,
 } from '@labwired/ui';
 import { GlobalLogo, GlobalNav } from '../components/GlobalNav';
+import type { TraceEntry } from '@labwired/ui';
 import type { BoardConfig } from '../bundled-configs';
 import { MobileInputsSheet } from './MobileInputsSheet';
 import { Toast } from '../studio/Toast';
@@ -46,6 +47,11 @@ export interface MobileRunViewProps {
   /** Transient status/error message (e.g. "Cannot run: …"). Auto-dismisses. */
   toast?: string | null;
   onDismissToast?: () => void;
+  /** Live CPU state for the foreground chip (the drawer's "CPU" tab). */
+  registers?: Map<string, number>;
+  traceEntries?: TraceEntry[];
+  stackMemory?: Uint8Array;
+  stackBase?: number;
 }
 
 const noop = () => {};
@@ -68,6 +74,10 @@ export function MobileRunView({
   onPartAttrChange,
   toast,
   onDismissToast,
+  registers,
+  traceEntries,
+  stackMemory,
+  stackBase,
 }: MobileRunViewProps) {
   const features = resolveUiFeatures();
   const [showNav, setShowNav] = useState(false);
@@ -158,6 +168,10 @@ export function MobileRunView({
         bridge={bridge}
         running={running}
         onPartAttrChange={onPartAttrChange}
+        registers={registers}
+        traceEntries={traceEntries}
+        stackMemory={stackMemory}
+        stackBase={stackBase}
       />
 
       {features.menu && showNav && (
