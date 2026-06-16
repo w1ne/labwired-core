@@ -1,6 +1,6 @@
 import type { Env } from '../types.js';
 import type { HostedMcpIdentity, McpTool, McpToolResult } from './types.js';
-import { diagramToConfig, COMPONENT_META, composeDiagnostics, compile, normalizeLabWiredDiagramV1 } from '@labwired/board-config';
+import { diagramToConfig, COMPONENT_META, composeDiagnostics, compile, getPlaygroundBoard, listPlaygroundBoards, normalizeLabWiredDiagramV1 } from '@labwired/board-config';
 import type { ValidateDiagram } from '@labwired/board-config';
 import { builderRun } from './builder-client.js';
 import { getWorkspaceRecord, maybeResetMtdCycles, writeWorkspaceRecord } from '../keys.js';
@@ -47,7 +47,7 @@ const hostedTools: McpTool[] = [
         },
         board: {
           type: 'string',
-          description: 'Optional board id. Defaults to stm32l476-blinky.',
+          description: 'Optional Playground catalog board id from labwired_list_boards. Defaults to stm32f103-blinky.',
         },
         run: {
           type: 'boolean',
@@ -246,19 +246,12 @@ async function dispatchHostedTool(
   }
 
   if (name === 'labwired_list_boards') {
+    const input = (parsed?.arguments ?? {}) as { filter?: unknown };
+    const filter = typeof input.filter === 'string' ? input.filter : undefined;
     return {
       content: [
         textContent({
-          boards: [
-            {
-              id: 'stm32l476-blinky',
-              name: 'STM32L476 LED starter',
-              description: 'STM32L476 with an LED on PA5; best first hosted lab.',
-              board: 'stm32l476',
-              target: 'stm32l476',
-              languages: ['c', 'cpp'],
-            },
-          ],
+          boards: listPlaygroundBoards(filter),
         }),
       ],
     };
@@ -400,7 +393,16 @@ async function startPlaygroundLab(
   _identity: HostedMcpIdentity,
 ): Promise<McpToolResult> {
   const input = (args ?? {}) as { goal?: unknown; board?: unknown };
-  const board = typeof input.board === 'string' && input.board ? input.board : 'stm32l476-blinky';
+  const board = typeof input.board === 'string' && input.board ? input.board : 'stm32f103-blinky';
+  if (!getPlaygroundBoard(board)) {
+    return {
+      content: [textContent({
+        error: 'BOARD_NOT_IN_PLAYGROUND_CATALOG',
+        detail: `Unknown Playground board id "${board}". Call labwired_list_boards and use one of its returned id values.`,
+      })],
+      isError: true,
+    };
+  }
   const diagram = starterDiagram(board);
   const validation = composeDiagnostics(diagram as unknown as ValidateDiagram);
   if (!validation.ok) {
@@ -456,6 +458,8 @@ async function openHardwareLab(
 ): Promise<McpToolResult> {
   const input = (args ?? {}) as { diagram?: unknown; title?: unknown; source?: unknown; source_code?: unknown; firmware_source?: unknown };
   const diagram = diagramOrStarter(input.diagram);
+  const boardValidationError = validatePlaygroundDiagramBoard(diagram);
+  if (boardValidationError) return boardValidationError;
   const source = typeof input.source_code === 'string'
     ? input.source_code
     : typeof input.source === 'string'
@@ -499,6 +503,19 @@ async function openHardwareLab(
   };
 }
 
+function validatePlaygroundDiagramBoard(diagram: Record<string, unknown>): McpToolResult | null {
+  const board = typeof diagram.board === 'string' ? diagram.board : '';
+  const allowed = listPlaygroundBoards().some((entry) => entry.id === board || entry.board === board || entry.target === board);
+  if (allowed) return null;
+  return {
+    content: [textContent({
+      error: 'BOARD_NOT_IN_PLAYGROUND_CATALOG',
+      detail: `diagram.board="${board || 'missing'}" is not in the Playground catalog contract. Call labwired_list_boards and use a returned board/target value.`,
+    })],
+    isError: true,
+  };
+}
+
 async function playgroundUrls(env: Env, diagram: Record<string, unknown>, source: string): Promise<{ studioUrl: string; embedUrl: string }> {
   if (env.KV_PROJECTS) {
     const share = await createShareRecord(env, { diagram, source });
@@ -514,13 +531,13 @@ async function playgroundUrls(env: Env, diagram: Record<string, unknown>, source
 function starterSource(): string {
   return `#include <stdint.h>
 
-#define GPIOA_MODER (*(volatile uint32_t *)0x48000000u)
-#define GPIOA_ODR   (*(volatile uint32_t *)0x48000014u)
-#define RCC_AHB2ENR (*(volatile uint32_t *)0x4002104Cu)
+#define RCC_APB2ENR (*(volatile uint32_t *)0x40021018u)
+#define GPIOA_CRL   (*(volatile uint32_t *)0x40010800u)
+#define GPIOA_ODR   (*(volatile uint32_t *)0x4001080Cu)
 
 int main(void) {
-  RCC_AHB2ENR |= 1u;
-  GPIOA_MODER = (GPIOA_MODER & ~(3u << (5u * 2u))) | (1u << (5u * 2u));
+  RCC_APB2ENR |= (1u << 2u);
+  GPIOA_CRL = (GPIOA_CRL & ~(0xFu << 20u)) | (0x2u << 20u);
   while (1) {
     GPIOA_ODR ^= (1u << 5u);
     for (volatile uint32_t i = 0; i < 100000u; i++) {}
@@ -533,7 +550,7 @@ function diagramOrStarter(diagram: unknown): Record<string, unknown> {
   if (diagram && typeof diagram === 'object' && !Array.isArray(diagram)) {
     return normalizeLabWiredDiagramV1(diagram) as unknown as Record<string, unknown>;
   }
-  return starterDiagram('stm32l476-blinky');
+  return starterDiagram('stm32f103-blinky');
 }
 
 function sceneFromDiagram(diagram: Record<string, unknown>): Record<string, unknown> {
@@ -546,9 +563,7 @@ function sceneFromDiagram(diagram: Record<string, unknown>): Record<string, unkn
 }
 
 function boardChipForLabId(labId: string): string {
-  if (labId === 'stm32l476-blinky') return 'stm32l476';
-  // Fall back to the id itself if it doesn't match a known lab entry.
-  return labId;
+  return getPlaygroundBoard(labId)?.board ?? labId;
 }
 
 function starterDiagram(labId: string): Record<string, unknown> {
@@ -557,7 +572,7 @@ function starterDiagram(labId: string): Record<string, unknown> {
     version: 1,
     board: chip,
     parts: [
-      { id: 'mcu', type: 'mcu', label: 'STM32L476', x: 180, y: 180, rotate: 0, attrs: {} },
+      { id: 'mcu', type: 'mcu', label: chip.toUpperCase(), x: 180, y: 180, rotate: 0, attrs: {} },
       { id: 'led1', type: 'led', label: 'LED', x: 420, y: 180, rotate: 0, attrs: { color: 'green' } },
     ],
     wires: [

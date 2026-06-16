@@ -599,6 +599,38 @@ const DEFAULT_BOARD =
   BOARD_CONFIGS.find((c) => c.boardId === 'stm32f103-blinky') ?? BOARD_CONFIGS[0];
 const DEMO_AUTOSTART_KEY = 'labwired-demo-autostart-v1';
 
+export function resolveSharedBoardConfig(diagram: Diagram): BoardConfig {
+  const boardId = diagram.board;
+  return (
+    BOARD_CONFIGS.find((config) => config.kind !== 'lab' && config.boardId === boardId)
+    ?? BOARD_CONFIGS.find((config) => config.kind !== 'lab' && config.chipId === boardId)
+    ?? BOARD_CONFIGS.find((config) => config.boardId === boardId)
+    ?? DEFAULT_BOARD
+  );
+}
+
+function isGenericSharedMcuType(type: string, diagramBoard: string, config: BoardConfig): boolean {
+  return type === 'mcu' || type === diagramBoard || type === config.chipId || type === 'stm32';
+}
+
+export function prepareSharedProjectForPlayground(diagram: Diagram): { board: BoardConfig; diagram: Diagram } {
+  const board = resolveSharedBoardConfig(diagram);
+  const parts = diagram.parts.map((part) => {
+    if (part.id !== 'mcu' || !isGenericSharedMcuType(part.type, diagram.board, board)) {
+      return part;
+    }
+    return { ...part, type: board.mcuComponentType };
+  });
+  return {
+    board,
+    diagram: {
+      ...diagram,
+      board: board.chipId,
+      parts,
+    },
+  };
+}
+
 const PALETTE_CATEGORY: Record<string, PaletteCategory> = {
   adxl345: 'i2c',
   bme280: 'i2c',
@@ -1607,9 +1639,18 @@ export function App() {
     if (shareId) {
       fetchSharedProject(shareId).then((project) => {
         if (project) {
-          editor.loadDiagram(project.diagram);
+          const prepared = prepareSharedProjectForPlayground(project.diagram);
+          setSelectedBoard(prepared.board);
+          editor.loadDiagram(prepared.diagram);
           setSource(project.source);
-          for (const p of project.diagram.parts) {
+          setActiveProjectId(null);
+          setActiveProjectName(null);
+          setCanvasValidationMessage(null);
+          setInvalidPins([]);
+          setRunning(false);
+          setBridge(null);
+          setActiveSimulationConfig(null);
+          for (const p of prepared.diagram.parts) {
             const num = parseInt(p.id.replace(/\D/g, ''), 10);
             if (!isNaN(num) && num > partCounter) partCounter = num;
           }
@@ -1622,9 +1663,18 @@ export function App() {
     if (hash) {
       decodeProject(hash).then((project) => {
         if (project) {
-          editor.loadDiagram(project.diagram);
+          const prepared = prepareSharedProjectForPlayground(project.diagram);
+          setSelectedBoard(prepared.board);
+          editor.loadDiagram(prepared.diagram);
           setSource(project.source);
-          for (const p of project.diagram.parts) {
+          setActiveProjectId(null);
+          setActiveProjectName(null);
+          setCanvasValidationMessage(null);
+          setInvalidPins([]);
+          setRunning(false);
+          setBridge(null);
+          setActiveSimulationConfig(null);
+          for (const p of prepared.diagram.parts) {
             const num = parseInt(p.id.replace(/\D/g, ''), 10);
             if (!isNaN(num) && num > partCounter) partCounter = num;
           }

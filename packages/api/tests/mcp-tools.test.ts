@@ -62,6 +62,19 @@ describe('expanded MCP tools', () => {
     expect(compileTool!.annotations?.readOnlyHint).toBe(false);
   });
 
+  it('labwired_list_boards returns real Playground catalog ids, not invented aliases', async () => {
+    const res = await callHostedTool({
+      name: 'labwired_list_boards',
+      arguments: {},
+    }, { ENVIRONMENT: 'test' } as any, { userId: 'user_abc' });
+
+    const text = JSON.parse(res.content[0].text);
+    const ids = text.boards.map((board: { id: string }) => board.id);
+    expect(ids).toContain('stm32f103-blinky');
+    expect(ids).toContain('nucleo-f401re');
+    expect(ids).not.toContain('stm32l476-blinky');
+  });
+
   it('labwired_open_hardware_lab advertises an embedded ChatGPT component', () => {
     const tool = listHostedTools().find((t) => t.name === 'labwired_open_hardware_lab');
     expect(tool).toBeDefined();
@@ -126,7 +139,7 @@ describe('expanded MCP tools', () => {
       studio_url: expect.stringContaining('https://app.labwired.com/?share='),
       share_url: expect.stringContaining('https://app.labwired.com/?share='),
       scene: {
-        board: 'stm32l476',
+        board: 'stm32f103',
       },
     });
     expect(res._meta).toMatchObject({
@@ -151,6 +164,7 @@ describe('expanded MCP tools', () => {
     expect(payload.source).toContain('int main');
     expect(payload.diagram).toMatchObject({
       version: 1,
+      board: 'stm32f103',
       parts: [
         { id: 'mcu', attrs: {} },
         { id: 'led1', attrs: { color: 'green' } },
@@ -172,7 +186,7 @@ describe('expanded MCP tools', () => {
     const res = await callHostedTool({
       name: 'labwired_open_hardware_lab',
       arguments: {
-        diagram: { board: 'stm32l476', parts: [{ id: 'mcu', type: 'mcu' }], wires: [] },
+        diagram: { board: 'stm32f103', parts: [{ id: 'mcu', type: 'mcu' }], wires: [] },
         source_code: 'void app_main(void) {}',
       },
     }, env, { userId: 'user_abc' });
@@ -185,14 +199,29 @@ describe('expanded MCP tools', () => {
     expect(payload.source).toBe('void app_main(void) {}');
   });
 
+  it('labwired_open_hardware_lab rejects boards that are not in the Playground catalog contract', async () => {
+    const env = { BUILDER_URL: 'https://b', BUILDER_SECRET: 'k', ENVIRONMENT: 'test' } as any;
+    const res = await callHostedTool({
+      name: 'labwired_open_hardware_lab',
+      arguments: {
+        diagram: { board: 'stm32l476', parts: [{ id: 'mcu', type: 'mcu' }], wires: [] },
+      },
+    }, env, { userId: 'user_abc' });
+
+    expect(res.isError).toBe(true);
+    const text = JSON.parse(res.content[0].text);
+    expect(text.error).toBe('BOARD_NOT_IN_PLAYGROUND_CATALOG');
+    expect(text.detail).toContain('labwired_list_boards');
+  });
+
   it('labwired_open_hardware_lab returns Studio links, scene shell, and component template hint', async () => {
     const env = { BUILDER_URL: 'https://b', BUILDER_SECRET: 'k', ENVIRONMENT: 'test' } as any;
     const res = await callHostedTool({
       name: 'labwired_open_hardware_lab',
       arguments: {
         diagram: {
-          board: 'stm32l476',
-          parts: [{ id: 'mcu', type: 'stm32l476' }],
+          board: 'stm32f103',
+          parts: [{ id: 'mcu', type: 'stm32f103' }],
           wires: [],
         },
       },
@@ -205,8 +234,8 @@ describe('expanded MCP tools', () => {
       studio_url: expect.stringContaining('https://app.labwired.com/'),
       share_url: expect.stringContaining('https://app.labwired.com/'),
       scene: {
-        board: 'stm32l476',
-        parts: [{ id: 'mcu', type: 'stm32l476' }],
+        board: 'stm32f103',
+        parts: [{ id: 'mcu', type: 'stm32f103' }],
         wires: [],
       },
     });
@@ -235,9 +264,9 @@ describe('expanded MCP tools', () => {
       name: 'labwired_open_hardware_lab',
       arguments: {
         diagram: {
-          board: 'stm32l476',
+          board: 'stm32f103',
           parts: [
-            { id: 'mcu', type: 'mcu', label: 'STM32L476' },
+            { id: 'mcu', type: 'mcu', label: 'STM32F103' },
             { id: 'led1', type: 'led', label: 'LED', color: 'green' },
           ],
           wires: [

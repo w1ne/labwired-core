@@ -21,5 +21,7 @@ export { LABWIRED_DIAGRAM_V1_SCHEMA, normalizeLabWiredDiagramV1 } from './diagra
 export type { LabWiredDiagramPartV1, LabWiredDiagramV1, LabWiredDiagramWireEndpointV1, LabWiredDiagramWireV1 } from './diagram-contract';
 export { diagnoseDiagram } from './legacy-diagnostics';
 export type { DiagnosticSeverity, DiagnosticCode, Diagnostic as LegacyDiagnostic, ValidateDiagram, DiagramPart, DiagramWire, WireEndpoint as LegacyWireEndpoint } from './legacy-diagnostics';
+export { getPlaygroundBoard, listPlaygroundBoards, PLAYGROUND_BOARD_CATALOG } from './boards';
+export type { BoardCatalogEntry } from './boards';
 export { composeDiagnostics } from './compose';
 export type { ComposedDiagnostic, ComposeDiagnosticsResult } from './compose';
