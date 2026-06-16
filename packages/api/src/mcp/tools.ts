@@ -460,13 +460,19 @@ async function openHardwareLab(
   const diagram = diagramOrStarter(input.diagram);
   const boardValidationError = validatePlaygroundDiagramBoard(diagram);
   if (boardValidationError) return boardValidationError;
-  const source = typeof input.source_code === 'string'
+  const providedSource = typeof input.source_code === 'string'
     ? input.source_code
     : typeof input.source === 'string'
       ? input.source
       : typeof input.firmware_source === 'string'
         ? input.firmware_source
         : '';
+  // Every shared lab must be runnable: if the agent gives no firmware, attach a
+  // board-correct blink example so Run works on the shared link (otherwise the
+  // Playground has nothing to compile and Run dead-ends at "no firmware").
+  const source = providedSource.trim()
+    ? providedSource
+    : defaultSourceForBoard(typeof diagram.board === 'string' ? diagram.board : '');
   const urls = await playgroundUrls(env, diagram, source);
   const scene = sceneFromDiagram(diagram);
   const evidence = {
@@ -528,8 +534,9 @@ async function playgroundUrls(env: Env, diagram: Record<string, unknown>, source
   };
 }
 
-function starterSource(): string {
-  return `#include <stdint.h>
+// STM32F1 (e.g. stm32f103 "Bluepill"): PA5 push-pull output via GPIOA_CRL,
+// toggled in a busy-wait loop. Registers per the F1 reference manual.
+const STM32F1_BLINK_SOURCE = `#include <stdint.h>
 
 #define RCC_APB2ENR (*(volatile uint32_t *)0x40021018u)
 #define GPIOA_CRL   (*(volatile uint32_t *)0x40010800u)
@@ -544,6 +551,34 @@ int main(void) {
   }
 }
 `;
+
+// STM32L4 (e.g. stm32l476 Nucleo): enable GPIOA on AHB2, set PA5 to output via
+// MODER, toggle ODR. Addresses match the simulator's modelled L4 GPIO/RCC.
+const STM32L4_BLINK_SOURCE = `#include <stdint.h>
+
+#define RCC_AHB2ENR (*(volatile uint32_t *)0x4002104Cu)
+#define GPIOA_MODER (*(volatile uint32_t *)0x48000000u)
+#define GPIOA_ODR   (*(volatile uint32_t *)0x48000014u)
+
+int main(void) {
+  RCC_AHB2ENR |= (1u << 0u);                                    /* GPIOA clock */
+  GPIOA_MODER = (GPIOA_MODER & ~(0x3u << 10u)) | (0x1u << 10u); /* PA5 output */
+  while (1) {
+    GPIOA_ODR ^= (1u << 5u);
+    for (volatile uint32_t i = 0; i < 100000u; i++) {}
+  }
+}
+`;
+
+/** A runnable blink sketch for the diagram's board, so every shared lab runs. */
+function defaultSourceForBoard(board: string): string {
+  const b = board.toLowerCase();
+  if (b.startsWith('stm32l4') || b.includes('l476')) return STM32L4_BLINK_SOURCE;
+  return STM32F1_BLINK_SOURCE;
+}
+
+function starterSource(): string {
+  return STM32F1_BLINK_SOURCE;
 }
 
 function diagramOrStarter(diagram: unknown): Record<string, unknown> {
