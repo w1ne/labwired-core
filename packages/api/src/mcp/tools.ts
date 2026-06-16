@@ -14,6 +14,7 @@ import {
 } from './search-tools.js';
 import { decorateTools } from './tool-metadata.js';
 import { HARDWARE_LAB_TEMPLATE_URI } from './resources.js';
+import { createShareRecord, shareUrls } from '../shares.js';
 
 function hardwareLabToolMeta(): Record<string, unknown> {
   return {
@@ -82,6 +83,10 @@ const hostedTools: McpTool[] = [
         diagram: {
           type: 'object',
           description: 'Optional diagram JSON with board, parts, and wires. Defaults to a starter STM32 LED lab.',
+        },
+        source_code: {
+          type: 'string',
+          description: 'Optional firmware/source code to open in the LabWired Playground editor with this hardware.',
         },
         title: {
           type: 'string',
@@ -391,7 +396,7 @@ function randomHex(bytes: number): string {
 
 async function startPlaygroundLab(
   args: unknown,
-  _env: Env,
+  env: Env,
   _identity: HostedMcpIdentity,
 ): Promise<McpToolResult> {
   const input = (args ?? {}) as { goal?: unknown; board?: unknown };
@@ -404,7 +409,8 @@ async function startPlaygroundLab(
       isError: true,
     };
   }
-  const urls = playgroundUrls(diagram);
+  const source = starterSource();
+  const urls = await playgroundUrls(env, diagram, source);
   const scene = sceneFromDiagram(diagram);
   const evidence = {
     status: 'ready',
@@ -445,12 +451,19 @@ async function startPlaygroundLab(
 
 async function openHardwareLab(
   args: unknown,
-  _env: Env,
+  env: Env,
   _identity: HostedMcpIdentity,
 ): Promise<McpToolResult> {
-  const input = (args ?? {}) as { diagram?: unknown; title?: unknown };
+  const input = (args ?? {}) as { diagram?: unknown; title?: unknown; source?: unknown; source_code?: unknown; firmware_source?: unknown };
   const diagram = diagramOrStarter(input.diagram);
-  const urls = playgroundUrls(diagram);
+  const source = typeof input.source_code === 'string'
+    ? input.source_code
+    : typeof input.source === 'string'
+      ? input.source
+      : typeof input.firmware_source === 'string'
+        ? input.firmware_source
+        : '';
+  const urls = await playgroundUrls(env, diagram, source);
   const scene = sceneFromDiagram(diagram);
   const evidence = {
     status: 'ready',
@@ -486,12 +499,34 @@ async function openHardwareLab(
   };
 }
 
-function playgroundUrls(diagram: Record<string, unknown>): { studioUrl: string; embedUrl: string } {
-  const encoded = `r${btoa(JSON.stringify({ d: diagram, s: '' }))}`;
+async function playgroundUrls(env: Env, diagram: Record<string, unknown>, source: string): Promise<{ studioUrl: string; embedUrl: string }> {
+  if (env.KV_PROJECTS) {
+    const share = await createShareRecord(env, { diagram, source });
+    return shareUrls(share.id);
+  }
+  const encoded = `r${btoa(JSON.stringify({ d: diagram, s: source }))}`;
   return {
     studioUrl: `https://app.labwired.com/#${encoded}`,
     embedUrl: `https://app.labwired.com/?embed=true#${encoded}`,
   };
+}
+
+function starterSource(): string {
+  return `#include <stdint.h>
+
+#define GPIOA_MODER (*(volatile uint32_t *)0x48000000u)
+#define GPIOA_ODR   (*(volatile uint32_t *)0x48000014u)
+#define RCC_AHB2ENR (*(volatile uint32_t *)0x4002104Cu)
+
+int main(void) {
+  RCC_AHB2ENR |= 1u;
+  GPIOA_MODER = (GPIOA_MODER & ~(3u << (5u * 2u))) | (1u << (5u * 2u));
+  while (1) {
+    GPIOA_ODR ^= (1u << 5u);
+    for (volatile uint32_t i = 0; i < 100000u; i++) {}
+  }
+}
+`;
 }
 
 function diagramOrStarter(diagram: unknown): Record<string, unknown> {

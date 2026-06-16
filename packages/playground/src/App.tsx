@@ -26,6 +26,7 @@ import {
   COMPONENT_REGISTRY,
   createEmptyDiagram,
   decodeProject,
+  fetchSharedProject,
   generateShareUrl,
   isEmbedMode,
   type CompileError,
@@ -1600,8 +1601,23 @@ export function App() {
     [editor],
   );
 
-  // Load from URL hash (sharing) or localStorage
+  // Load from short share URL, hash sharing, or localStorage
   useEffect(() => {
+    const shareId = new URLSearchParams(window.location.search).get('share');
+    if (shareId) {
+      fetchSharedProject(shareId).then((project) => {
+        if (project) {
+          editor.loadDiagram(project.diagram);
+          setSource(project.source);
+          for (const p of project.diagram.parts) {
+            const num = parseInt(p.id.replace(/\D/g, ''), 10);
+            if (!isNaN(num) && num > partCounter) partCounter = num;
+          }
+        }
+      });
+      return;
+    }
+
     const hash = window.location.hash.slice(1);
     if (hash) {
       decodeProject(hash).then((project) => {

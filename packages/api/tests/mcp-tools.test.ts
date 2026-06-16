@@ -1,6 +1,18 @@
 import { describe, it, expect } from 'vitest';
 import { listHostedTools, callHostedTool } from '../src/mcp/tools.js';
 
+function makeKvStub() {
+  const store = new Map<string, string>();
+  return {
+    get: (key: string) => Promise.resolve(store.get(key) ?? null),
+    put: (key: string, value: string) => {
+      store.set(key, value);
+      return Promise.resolve();
+    },
+    _store: store,
+  };
+}
+
 describe('expanded MCP tools', () => {
   it('advertises run, list_components, list_boards, search, and compile_diagram', () => {
     const names = listHostedTools().map((t) => t.name);
@@ -96,8 +108,10 @@ describe('expanded MCP tools', () => {
   });
 
   it('labwired_start_playground_lab returns Studio links and an inline component without legacy watch_url', async () => {
+    const kvProjects = makeKvStub();
     const env = {
       ENVIRONMENT: 'test',
+      KV_PROJECTS: kvProjects,
     } as any;
     const res = await callHostedTool({
       name: 'labwired_start_playground_lab',
@@ -108,9 +122,9 @@ describe('expanded MCP tools', () => {
     expect(res.structuredContent).toMatchObject({
       ok: true,
       inline_component_uri: 'ui://widget/labwired-hardware-lab-v7.html',
-      inline_frame_url: expect.stringContaining('https://app.labwired.com/?embed=true#'),
-      studio_url: expect.stringContaining('https://app.labwired.com/#'),
-      share_url: expect.stringContaining('https://app.labwired.com/#'),
+      inline_frame_url: expect.stringContaining('https://app.labwired.com/?embed=true&share='),
+      studio_url: expect.stringContaining('https://app.labwired.com/?share='),
+      share_url: expect.stringContaining('https://app.labwired.com/?share='),
       scene: {
         board: 'stm32l476',
       },
@@ -120,18 +134,22 @@ describe('expanded MCP tools', () => {
     });
     const text = JSON.parse(res.content[0].text);
     expect(text).toMatchObject({
-      studio_url: expect.stringContaining('https://app.labwired.com/#'),
-      share_url: expect.stringContaining('https://app.labwired.com/#'),
+      studio_url: expect.stringContaining('https://app.labwired.com/?share='),
+      share_url: expect.stringContaining('https://app.labwired.com/?share='),
       inline_component_uri: 'ui://widget/labwired-hardware-lab-v7.html',
-      inline_frame_url: expect.stringContaining('https://app.labwired.com/?embed=true#'),
+      inline_frame_url: expect.stringContaining('https://app.labwired.com/?embed=true&share='),
     });
+    expect(text.studio_url.length).toBeLessThan(90);
     expect(text.studio_url).not.toContain('?watch=');
     expect(text.studio_url).not.toContain('?lab=');
+    expect(text.studio_url).not.toContain('#');
     expect(text).not.toHaveProperty('watch_url');
 
-    const hash = text.studio_url.split('#')[1];
-    const payload = JSON.parse(Buffer.from(hash.slice(1), 'base64').toString('utf8'));
-    expect(payload.d).toMatchObject({
+    const shareId = new URL(text.studio_url).searchParams.get('share');
+    expect(shareId).toBeTruthy();
+    const payload = JSON.parse(kvProjects._store.get(`share:${shareId}`)!);
+    expect(payload.source).toContain('int main');
+    expect(payload.diagram).toMatchObject({
       version: 1,
       parts: [
         { id: 'mcu', attrs: {} },
@@ -145,7 +163,26 @@ describe('expanded MCP tools', () => {
         },
       ],
     });
-    expect(payload.d.parts[1]).not.toHaveProperty('color');
+    expect(payload.diagram.parts[1]).not.toHaveProperty('color');
+  });
+
+  it('labwired_open_hardware_lab includes supplied source code in the short Playground share', async () => {
+    const kvProjects = makeKvStub();
+    const env = { BUILDER_URL: 'https://b', BUILDER_SECRET: 'k', ENVIRONMENT: 'test', KV_PROJECTS: kvProjects } as any;
+    const res = await callHostedTool({
+      name: 'labwired_open_hardware_lab',
+      arguments: {
+        diagram: { board: 'stm32l476', parts: [{ id: 'mcu', type: 'mcu' }], wires: [] },
+        source_code: 'void app_main(void) {}',
+      },
+    }, env, { userId: 'user_abc' });
+
+    expect(res.isError).toBeFalsy();
+    expect(res.structuredContent.studio_url).toContain('?share=');
+    expect(res.structuredContent.studio_url).not.toContain('#');
+    const shareId = new URL(res.structuredContent.studio_url).searchParams.get('share');
+    const payload = JSON.parse(kvProjects._store.get(`share:${shareId}`)!);
+    expect(payload.source).toBe('void app_main(void) {}');
   });
 
   it('labwired_open_hardware_lab returns Studio links, scene shell, and component template hint', async () => {

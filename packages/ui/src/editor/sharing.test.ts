@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decodeProject, normalizeSharedDiagram } from './sharing';
+import { decodeProject, fetchSharedProject, normalizeSharedDiagram } from './sharing';
 
 const failingAgentHash =
   'reyJkIjp7ImJvYXJkIjoic3RtMzJsNDc2IiwicGFydHMiOlt7ImlkIjoibWN1IiwidHlwZSI6Im1jdSIsImxhYmVsIjoiU1RNMzJMNDc2In0seyJpZCI6ImxlZDEiLCJ0eXBlIjoibGVkIiwibGFiZWwiOiJMRUQiLCJjb2xvciI6ImdyZWVuIn1dLCJ3aXJlcyI6W3siZnJvbSI6eyJwYXJ0IjoibWN1IiwicGluIjoiUEE1In0sInRvIjp7InBhcnQiOiJsZWQxIiwicGluIjoiQSJ9fV19LCJzIjoiIn0';
@@ -50,5 +50,31 @@ describe('shared project decoding', () => {
         { id: 'led1', type: 'led', x: 12, y: 34, rotate: 90, scale: 1.5, attrs: { color: 'blue' } },
       ],
     });
+  });
+
+  it('fetches short shared projects and normalizes the returned diagram', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => new Response(JSON.stringify({
+      diagram: {
+        board: 'stm32l476',
+        parts: [{ id: 'led1', type: 'led', color: 'green' }],
+        wires: [],
+      },
+      source: 'int main(void) {}',
+    }), { headers: { 'Content-Type': 'application/json' } })) as typeof fetch;
+
+    try {
+      const project = await fetchSharedProject('shr_abc');
+      expect(project).toMatchObject({
+        source: 'int main(void) {}',
+        diagram: {
+          version: 1,
+          board: 'stm32l476',
+          parts: [{ id: 'led1', attrs: { color: 'green' } }],
+        },
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

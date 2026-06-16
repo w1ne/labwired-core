@@ -46,6 +46,7 @@ import {
 } from './mcp/oauth.js';
 import { handleHostedMcp } from './mcp/http.js';
 import { handleTrackEvent } from './usage.js';
+import { handleCreateShare, handleGetShare } from './shares.js';
 export { SessionDO } from './SessionDO.js';
 
 // ── CORS headers for browser-facing endpoints ──────────────────────────────
@@ -115,6 +116,13 @@ export default {
       }
       if (method === 'POST' && pathname === '/v1/events') {
         return handleTrackEvent(request, env);
+      }
+      if (pathname === '/v1/shares') {
+        if (method === 'POST') return handleCreateShare(request, env);
+      }
+      const shareMatch = pathname.match(/^\/v1\/shares\/([A-Za-z0-9_-]+)$/);
+      if (shareMatch && method === 'GET') {
+        return handleGetShare(request, env, shareMatch[1]);
       }
       if (method === 'GET' && pathname === '/v1/workspaces/me') {
         return handleGetWorkspace(request, env);

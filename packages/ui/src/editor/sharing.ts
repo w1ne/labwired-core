@@ -1,8 +1,29 @@
 import { normalizeLabWiredDiagramV1 } from '@labwired/board-config';
 import type { Diagram } from './types';
 
+const API_BASE = 'https://api.labwired.com';
+
 export function normalizeSharedDiagram(value: unknown): Diagram | null {
   return normalizeLabWiredDiagramV1(value) as Diagram | null;
+}
+
+function shareApiBase(): string {
+  const envBase = (import.meta as unknown as { env?: { VITE_LABWIRED_API_BASE?: string } }).env?.VITE_LABWIRED_API_BASE;
+  return envBase || API_BASE;
+}
+
+export async function fetchSharedProject(shareId: string): Promise<{ diagram: Diagram; source: string } | null> {
+  if (!/^[A-Za-z0-9_-]+$/.test(shareId)) return null;
+  try {
+    const resp = await fetch(`${shareApiBase()}/v1/shares/${encodeURIComponent(shareId)}`);
+    if (!resp.ok) return null;
+    const obj = await resp.json() as { diagram?: unknown; source?: unknown };
+    const diagram = normalizeSharedDiagram(obj.diagram);
+    if (!diagram) return null;
+    return { diagram, source: typeof obj.source === 'string' ? obj.source : '' };
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -99,6 +120,19 @@ export function isEmbedMode(): boolean {
  * Generate a shareable URL with the project encoded in the hash.
  */
 export async function generateShareUrl(diagram: Diagram, source: string): Promise<string> {
+  try {
+    const resp = await fetch(`${shareApiBase()}/v1/shares`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ diagram, source }),
+    });
+    if (resp.ok) {
+      const body = await resp.json() as { url?: unknown };
+      if (typeof body.url === 'string') return body.url;
+    }
+  } catch {
+    // Fall back to self-contained hash links when the API is unavailable.
+  }
   const encoded = await encodeProject(diagram, source);
   const url = new URL(window.location.href);
   url.hash = encoded;
@@ -110,6 +144,19 @@ export async function generateShareUrl(diagram: Diagram, source: string): Promis
  * Generate an embed URL.
  */
 export async function generateEmbedUrl(diagram: Diagram, source: string): Promise<string> {
+  try {
+    const resp = await fetch(`${shareApiBase()}/v1/shares`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ diagram, source }),
+    });
+    if (resp.ok) {
+      const body = await resp.json() as { embed_url?: unknown };
+      if (typeof body.embed_url === 'string') return body.embed_url;
+    }
+  } catch {
+    // Fall back to self-contained hash links when the API is unavailable.
+  }
   const encoded = await encodeProject(diagram, source);
   const url = new URL(window.location.href);
   url.hash = encoded;

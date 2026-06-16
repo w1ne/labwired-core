@@ -27,12 +27,14 @@ function makeEnv(
   kvWorkspaces: KvStub,
   kvSubs: KvStub,
   kvClerk?: KvStub,
+  kvProjects?: KvStub,
 ) {
   return {
     KV_KEYS: kvKeys as unknown as KVNamespace,
     KV_WORKSPACES: kvWorkspaces as unknown as KVNamespace,
     KV_STRIPE_SUBS: kvSubs as unknown as KVNamespace,
     KV_CLERK_TO_WORKSPACE: (kvClerk ?? makeKvStub()) as unknown as KVNamespace,
+    KV_PROJECTS: (kvProjects ?? makeKvStub()) as unknown as KVNamespace,
     STRIPE_SECRET_KEY: 'sk_test_placeholder',
     STRIPE_WEBHOOK_SECRET: 'whsec_placeholder',
     PRO_CYCLES_QUOTA: '100000000',
@@ -83,6 +85,60 @@ function seedWorkspaceAndKey(
 // ── Import the worker fetch handler ───────────────────────────────────────
 
 const worker = await import('../src/index.js');
+
+describe('public Playground shares', () => {
+  it('creates and reads a short public share containing diagram and source code', async () => {
+    const kvProjects = makeKvStub();
+    const env = makeEnv(makeKvStub(), makeKvStub(), makeKvStub(), makeKvStub(), kvProjects);
+
+    const create = await worker.default.fetch(
+      new Request('https://api.labwired.com/v1/shares', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          diagram: {
+            board: 'stm32l476',
+            parts: [
+              { id: 'mcu', type: 'mcu' },
+              { id: 'led1', type: 'led', color: 'green' },
+            ],
+            wires: [
+              { from: { part: 'mcu', pin: 'PA5' }, to: { part: 'led1', pin: 'A' } },
+            ],
+          },
+          source: 'int main(void) { return 0; }',
+        }),
+      }),
+      env as any,
+    );
+
+    expect(create.status).toBe(201);
+    const created = (await create.json()) as any;
+    expect(created).toMatchObject({
+      id: expect.stringMatching(/^[A-Za-z0-9_-]{12,}$/),
+      url: expect.stringContaining('https://app.labwired.com/?share='),
+      embed_url: expect.stringContaining('https://app.labwired.com/?embed=true&share='),
+    });
+    expect(created.url.length).toBeLessThan(90);
+
+    const read = await worker.default.fetch(
+      new Request(`https://api.labwired.com/v1/shares/${created.id}`),
+      env as any,
+    );
+    expect(read.status).toBe(200);
+    const body = (await read.json()) as any;
+    expect(body.source).toBe('int main(void) { return 0; }');
+    expect(body.diagram).toMatchObject({
+      version: 1,
+      board: 'stm32l476',
+      parts: [
+        { id: 'mcu', attrs: {} },
+        { id: 'led1', attrs: { color: 'green' } },
+      ],
+      wires: [{ color: '#e83e8c' }],
+    });
+  });
+});
 
 // ── /v1/keys/validate tests ───────────────────────────────────────────────
 
