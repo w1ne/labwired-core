@@ -36,13 +36,15 @@ Use LabWired as a deterministic virtual hardware lab for firmware work.
 1. Choose a board with \`labwired_list_boards\`.
 2. Discover modeled peripherals with \`labwired_list_components\`.
 3. Build or update the diagram with an MCU, components, and wires.
-4. Validate the diagram with \`labwired_validate_diagram\` before running.
-5. Compile firmware outside hosted MCP using the documented scaffold and target flags.
-6. Run the ELF with \`labwired_run\`, passing \`elf_base64\`, \`target\`, and \`diagram\`. The hosted connector compiles the diagram internally — pass the diagram object directly, not a system YAML. Use \`labwired_compile_diagram\` separately if you need to inspect or download the compiled \`system_yaml\`.
-7. Inspect serial output, cycle counts, stop reasons, and hardware diagnosis.
-8. Iterate on firmware or wiring until simulator evidence matches the intended behavior.
+4. Use the canonical LabWiredDiagramV1 shape for outbound Playground links: \`version\`, \`board\`, editor-safe \`parts[].attrs/x/y/rotate\`, and \`wires[].color\`. Compact input is accepted, but MCP responses normalize before sharing.
+5. Validate the diagram with \`labwired_validate_diagram\` before running.
+6. Compile firmware outside hosted MCP using the documented scaffold and target flags.
+7. Run the ELF with \`labwired_run\`, passing \`elf_base64\`, \`target\`, and \`diagram\`. The hosted connector compiles the diagram internally — pass the diagram object directly, not a system YAML. Use \`labwired_compile_diagram\` separately if you need to inspect or download the compiled \`system_yaml\`.
+8. Inspect serial output, cycle counts, stop reasons, and hardware diagnosis.
+9. Iterate on firmware or wiring until simulator evidence matches the intended behavior.
 
 Hosted MCP accepts Clerk OAuth bearer tokens and \`lwk_live_\` workspace API keys. The hosted connector runs firmware through the LabWired builder; it does not compile source.
+Viewing uses the real Playground: inline ChatGPT views embed \`https://app.labwired.com/?embed=true#...\`; full sessions open \`https://app.labwired.com/#...\`.
 `;
 
 const HARDWARE_LAB_TEMPLATE_TEXT = `<!doctype html>

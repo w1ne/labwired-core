@@ -192,6 +192,44 @@ describe('expanded MCP tools', () => {
     expect(text).not.toHaveProperty('template_uri');
   });
 
+  it('labwired_open_hardware_lab normalizes agent diagrams before returning Playground URLs', async () => {
+    const env = { BUILDER_URL: 'https://b', BUILDER_SECRET: 'k', ENVIRONMENT: 'test' } as any;
+    const res = await callHostedTool({
+      name: 'labwired_open_hardware_lab',
+      arguments: {
+        diagram: {
+          board: 'stm32l476',
+          parts: [
+            { id: 'mcu', type: 'mcu', label: 'STM32L476' },
+            { id: 'led1', type: 'led', label: 'LED', color: 'green' },
+          ],
+          wires: [
+            { from: { part: 'mcu', pin: 'PA5' }, to: { part: 'led1', pin: 'A' } },
+          ],
+        },
+      },
+    }, env, { userId: 'user_abc' });
+
+    expect(res.isError).toBeFalsy();
+    const hash = res.structuredContent.studio_url.split('#')[1];
+    const payload = JSON.parse(Buffer.from(hash.slice(1), 'base64').toString('utf8'));
+    expect(payload.d).toMatchObject({
+      version: 1,
+      parts: [
+        { id: 'mcu', attrs: {} },
+        { id: 'led1', attrs: { color: 'green' } },
+      ],
+      wires: [
+        {
+          from: { part: 'mcu', pin: 'PA5' },
+          to: { part: 'led1', pin: 'A' },
+          color: '#e83e8c',
+        },
+      ],
+    });
+    expect(payload.d.parts[1]).not.toHaveProperty('color');
+  });
+
   it('labwired_compile_diagram compiles a clean dispenser diagram', async () => {
     const env = { BUILDER_URL: 'https://b', BUILDER_SECRET: 'k', ENVIRONMENT: 'test' } as any;
     const res = await callHostedTool({

@@ -1,6 +1,6 @@
 import type { Env } from '../types.js';
 import type { HostedMcpIdentity, McpTool, McpToolResult } from './types.js';
-import { diagramToConfig, COMPONENT_META, composeDiagnostics, compile } from '@labwired/board-config';
+import { diagramToConfig, COMPONENT_META, composeDiagnostics, compile, normalizeLabWiredDiagramV1 } from '@labwired/board-config';
 import type { ValidateDiagram } from '@labwired/board-config';
 import { builderRun } from './builder-client.js';
 import { getWorkspaceRecord, maybeResetMtdCycles, writeWorkspaceRecord } from '../keys.js';
@@ -496,7 +496,7 @@ function playgroundUrls(diagram: Record<string, unknown>): { studioUrl: string; 
 
 function diagramOrStarter(diagram: unknown): Record<string, unknown> {
   if (diagram && typeof diagram === 'object' && !Array.isArray(diagram)) {
-    return diagram as Record<string, unknown>;
+    return normalizeLabWiredDiagramV1(diagram) as unknown as Record<string, unknown>;
   }
   return starterDiagram('stm32l476-blinky');
 }
@@ -518,7 +518,7 @@ function boardChipForLabId(labId: string): string {
 
 function starterDiagram(labId: string): Record<string, unknown> {
   const chip = boardChipForLabId(labId);
-  return {
+  return normalizeLabWiredDiagramV1({
     version: 1,
     board: chip,
     parts: [
@@ -528,5 +528,5 @@ function starterDiagram(labId: string): Record<string, unknown> {
     wires: [
       { from: { part: 'mcu', pin: 'PA5' }, to: { part: 'led1', pin: 'A' }, color: '#3DD68C' },
     ],
-  };
+  }) as unknown as Record<string, unknown>;
 }

@@ -6,7 +6,8 @@
   "scripts": {
     "fetch-firmware": "bash scripts/fetch-demo-firmware.sh",
     "predev": "npm run fetch-firmware",
-    "prebuild": "npm run fetch-firmware",
+    "verify-production-env": "node scripts/verify-production-env.mjs",
+    "prebuild": "npm run verify-production-env && npm run fetch-firmware",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
