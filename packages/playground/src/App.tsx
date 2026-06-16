@@ -550,6 +550,20 @@ function getDefaultSource(config: BoardConfig): string {
   return EXAMPLE_SKETCHES.find((sketch) => sketch.name === 'Blink')?.source ?? EXAMPLE_SKETCHES[0].source;
 }
 
+/**
+ * Whether a circuit will actually run when shared/opened. A share runs by
+ * compiling its captured source for the board's chip (or by booting the board's
+ * pre-built demo firmware). So it's runnable when the board ships demo firmware,
+ * OR the user has written code that differs from the board's untouched default
+ * template. Sharing an untouched default on a firmware-less board produces a
+ * link that can't run (the default template targets a different chip) — the
+ * exact failure behind dead proximity/sensor shares. Used to warn at share time.
+ */
+export function sharedCircuitIsRunnable(config: BoardConfig, source: string): boolean {
+  if (config.demoFirmwarePath) return true;
+  return source.trim() !== getDefaultSource(config).trim();
+}
+
 function loadBoardWorkspace(config: BoardConfig): { diagram: Diagram; source: string } {
   if (config.kind === 'lab') {
     return {
@@ -1834,12 +1848,18 @@ export function App() {
     try {
       const url = await generateShareUrl(editor.state.diagram, source);
       await navigator.clipboard.writeText(url);
-      setToast('Share URL copied to clipboard');
+      // Warn (don't block) when the shared link can't actually run, so we stop
+      // minting dead shares that open to a circuit nobody can Run.
+      setToast(
+        sharedCircuitIsRunnable(selectedBoard, source)
+          ? 'Share URL copied to clipboard'
+          : "Link copied — but this circuit has no code to run yet, so it won't run when opened. Write and run code first, or share a built-in example.",
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setToast(`Share failed: ${message}`);
     }
-  }, [editor.state.diagram, source]);
+  }, [editor.state.diagram, source, selectedBoard]);
 
   // Keyboard shortcuts
   useEffect(() => {
