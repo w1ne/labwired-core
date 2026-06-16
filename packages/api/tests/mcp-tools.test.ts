@@ -204,7 +204,7 @@ describe('expanded MCP tools', () => {
     const res = await callHostedTool({
       name: 'labwired_open_hardware_lab',
       arguments: {
-        diagram: { board: 'stm32l476', parts: [{ id: 'mcu', type: 'mcu' }], wires: [] },
+        diagram: { board: 'stm32l999', parts: [{ id: 'mcu', type: 'mcu' }], wires: [] },
       },
     }, env, { userId: 'user_abc' });
 

@@ -16,6 +16,7 @@ describe('playground board catalog', () => {
     expect(ids).toContain('stm32f103-blinky');
     expect(ids).toContain('nucleo-f401re');
     expect(ids).toContain('nucleo-h563zi');
+    expect(ids).toContain('nucleo-l476rg');
     expect(ids).not.toContain('stm32l476-blinky');
     expect(ids.some((id) => id.includes('onboarding'))).toBe(false);
   });

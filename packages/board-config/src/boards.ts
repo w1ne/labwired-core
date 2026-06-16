@@ -45,6 +45,14 @@ export const PLAYGROUND_BOARD_CATALOG: BoardCatalogEntry[] = [
     "mcu_component_type": "nucleo-h563zi"
   },
   {
+    "id": "nucleo-l476rg",
+    "name": "Nucleo-L476RG",
+    "description": "STM32L4 Nucleo-64 board with LD2 on PA5 and user button on PC13.",
+    "board": "stm32l476",
+    "target": "stm32l476",
+    "mcu_component_type": "nucleo-l476rg"
+  },
+  {
     "id": "esp32c3-supermini",
     "name": "ESP32-C3 Super Mini",
     "description": "Compact RISC-V ESP32-C3 Super Mini board with USB-C. Built-in user LED on GPIO8 (active-low).",

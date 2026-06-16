@@ -6,9 +6,16 @@ describe('makeStarterDiagram', () => {
   it('opens generic STM32F103 agent shares on the existing Blinky catalog board', () => {
     const config = resolveSharedBoardConfig({ version: 1, board: 'stm32f103-blinky', parts: [], wires: [] });
 
-    expect(config.boardId).toBe('stm32f103-blinky');
-    expect(config.name).toBe('STM32F103 Blinky');
-    expect(config.mcuComponentType).toBe('stm32-dev');
+    expect(config?.boardId).toBe('stm32f103-blinky');
+    expect(config?.name).toBe('STM32F103 Blinky');
+    expect(config?.mcuComponentType).toBe('stm32-dev');
+  });
+
+  it('does not silently fall back to the default board for unsupported shared boards', () => {
+    const diagram = { version: 1, board: 'stm32l999', parts: [], wires: [] } as const;
+
+    expect(resolveSharedBoardConfig(diagram)).toBeNull();
+    expect(prepareSharedProjectForPlayground(diagram)).toBeNull();
   });
 
   it('upgrades a generic shared MCU part to the selected board component', () => {
@@ -22,9 +29,25 @@ describe('makeStarterDiagram', () => {
       wires: [{ from: { part: 'mcu', pin: 'PA5' }, to: { part: 'led1', pin: 'A' }, color: '#e83e8c' }],
     });
 
-    expect(project.board.boardId).toBe('stm32f103-blinky');
-    expect(project.diagram.board).toBe('stm32f103');
-    expect(project.diagram.parts.find((part) => part.id === 'mcu')?.type).toBe('stm32-dev');
+    expect(project?.board.boardId).toBe('stm32f103-blinky');
+    expect(project?.diagram.board).toBe('stm32f103');
+    expect(project?.diagram.parts.find((part) => part.id === 'mcu')?.type).toBe('stm32-dev');
+  });
+
+  it('opens generic STM32L476 agent shares on the NUCLEO-L476RG board', () => {
+    const project = prepareSharedProjectForPlayground({
+      version: 1,
+      board: 'stm32l476',
+      parts: [
+        { id: 'mcu', type: 'mcu', x: 140, y: 140, rotate: 0, attrs: {} },
+        { id: 'led1', type: 'led', x: 290, y: 140, rotate: 0, attrs: { color: 'green' } },
+      ],
+      wires: [{ from: { part: 'mcu', pin: 'PA5' }, to: { part: 'led1', pin: 'A' }, color: '#e83e8c' }],
+    });
+
+    expect(project?.board.boardId).toBe('nucleo-l476rg');
+    expect(project?.diagram.board).toBe('stm32l476');
+    expect(project?.diagram.parts.find((part) => part.id === 'mcu')?.type).toBe('nucleo-l476rg');
   });
 
   it('opens the STM32H5 UDS ECU lab with a diagnostic tester and UDS analyzer', () => {

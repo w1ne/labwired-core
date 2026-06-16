@@ -22,6 +22,7 @@ import systemNrf52840Onboarding from '../../../core/configs/systems/onboarding/n
 import systemNrf52840Proximity from '../../../core/examples/nrf52840-proximity-lab/system.yaml?raw';
 import systemNucleoF401re from '../../../core/configs/systems/nucleo-f401re.yaml?raw';
 import systemNucleoH563zi from '../../../core/configs/systems/nucleo-h563zi-demo.yaml?raw';
+import systemNucleoL476rg from '../../../core/configs/systems/nucleo-l476rg.yaml?raw';
 import systemRp2040Pico from '../../../core/configs/systems/rp2040-pico.yaml?raw';
 import systemStm32f401cdu6Blackpill from '../../../core/configs/systems/stm32f401cdu6-blackpill.yaml?raw';
 import systemStm32f103Blinky from '../../../core/examples/demo-blinky/system.yaml?raw';
@@ -414,6 +415,16 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     chipYaml: chipStm32h563,
     systemYaml: systemNucleoH563zi,
     mcuComponentType: 'nucleo-h563zi',
+  },
+  {
+    boardId: 'nucleo-l476rg',
+    chipId: 'stm32l476',
+    name: 'Nucleo-L476RG',
+    description: 'STM32L4 Nucleo-64 board with LD2 on PA5 and user button on PC13.',
+    arch: 'ARM Cortex-M4',
+    chipYaml: chipStm32l476,
+    systemYaml: systemNucleoL476rg,
+    mcuComponentType: 'nucleo-l476rg',
   },
   {
     boardId: 'esp32c3-supermini',

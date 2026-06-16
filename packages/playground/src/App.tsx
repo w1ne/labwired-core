@@ -599,13 +599,13 @@ const DEFAULT_BOARD =
   BOARD_CONFIGS.find((c) => c.boardId === 'stm32f103-blinky') ?? BOARD_CONFIGS[0];
 const DEMO_AUTOSTART_KEY = 'labwired-demo-autostart-v1';
 
-export function resolveSharedBoardConfig(diagram: Diagram): BoardConfig {
+export function resolveSharedBoardConfig(diagram: Diagram): BoardConfig | null {
   const boardId = diagram.board;
   return (
     BOARD_CONFIGS.find((config) => config.kind !== 'lab' && config.boardId === boardId)
     ?? BOARD_CONFIGS.find((config) => config.kind !== 'lab' && config.chipId === boardId)
     ?? BOARD_CONFIGS.find((config) => config.boardId === boardId)
-    ?? DEFAULT_BOARD
+    ?? null
   );
 }
 
@@ -613,8 +613,9 @@ function isGenericSharedMcuType(type: string, diagramBoard: string, config: Boar
   return type === 'mcu' || type === diagramBoard || type === config.chipId || type === 'stm32';
 }
 
-export function prepareSharedProjectForPlayground(diagram: Diagram): { board: BoardConfig; diagram: Diagram } {
+export function prepareSharedProjectForPlayground(diagram: Diagram): { board: BoardConfig; diagram: Diagram } | null {
   const board = resolveSharedBoardConfig(diagram);
+  if (!board) return null;
   const parts = diagram.parts.map((part) => {
     if (part.id !== 'mcu' || !isGenericSharedMcuType(part.type, diagram.board, board)) {
       return part;
@@ -1640,6 +1641,10 @@ export function App() {
       fetchSharedProject(shareId).then((project) => {
         if (project) {
           const prepared = prepareSharedProjectForPlayground(project.diagram);
+          if (!prepared) {
+            setCanvasValidationMessage(`Unsupported shared board: ${project.diagram.board}`);
+            return;
+          }
           setSelectedBoard(prepared.board);
           editor.loadDiagram(prepared.diagram);
           setSource(project.source);
@@ -1664,6 +1669,10 @@ export function App() {
       decodeProject(hash).then((project) => {
         if (project) {
           const prepared = prepareSharedProjectForPlayground(project.diagram);
+          if (!prepared) {
+            setCanvasValidationMessage(`Unsupported shared board: ${project.diagram.board}`);
+            return;
+          }
           setSelectedBoard(prepared.board);
           editor.loadDiagram(prepared.diagram);
           setSource(project.source);
