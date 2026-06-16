@@ -1,7 +1,7 @@
 export const AGENT_HARDWARE_LOOP_URI = 'labwired://guides/agent-hardware-loop';
 export const AGENT_HARDWARE_LOOP_NAME = 'labwired-agent-hardware-loop';
 export const AGENT_HARDWARE_LOOP_MIME = 'text/markdown';
-export const HARDWARE_LAB_TEMPLATE_URI = 'ui://widget/labwired-hardware-lab-v6.html';
+export const HARDWARE_LAB_TEMPLATE_URI = 'ui://widget/labwired-hardware-lab-v7.html';
 export const HARDWARE_LAB_TEMPLATE_NAME = 'labwired-hardware-lab';
 export const HARDWARE_LAB_TEMPLATE_MIME = 'text/html;profile=mcp-app';
 export const HARDWARE_LAB_TEMPLATE_ALIASES = [
@@ -12,6 +12,8 @@ export const HARDWARE_LAB_TEMPLATE_ALIASES = [
   'ui://labwired/hardware-lab-v5.html',
   'ui://widget/hardware-lab-v6.html',
   'ui://widget/labwired-hardware-lab-v6.html',
+  'ui://widget/hardware-lab-v7.html',
+  'ui://widget/labwired-hardware-lab-v7.html',
 ] as const;
 
 export const HARDWARE_LAB_WIDGET_CSP = {
@@ -52,20 +54,15 @@ const HARDWARE_LAB_TEMPLATE_TEXT = `<!doctype html>
     <style>
       :root { color-scheme: light dark; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
       body { margin: 0; background: #0f172a; color: #e5e7eb; }
-      main { display: grid; grid-template-rows: auto minmax(420px, 1fr) auto; gap: 12px; min-height: 100vh; padding: 14px; box-sizing: border-box; }
+      main { display: grid; grid-template-rows: auto minmax(520px, 1fr) auto; gap: 10px; min-height: 100vh; padding: 10px; box-sizing: border-box; }
       header { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
       h1 { font-size: 18px; margin: 0; font-weight: 650; }
       a { color: #67e8f9; }
-      .frame-shell { min-height: 420px; border: 1px solid #334155; border-radius: 8px; background: #020617; overflow: auto; }
-      .scene { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(180px, .7fr); gap: 16px; min-height: 420px; padding: 16px; box-sizing: border-box; }
-      .board { border: 1px solid #475569; border-radius: 8px; background: #111827; padding: 16px; display: grid; align-content: center; justify-items: center; gap: 14px; min-height: 300px; }
-      .chip { width: min(280px, 80%); aspect-ratio: 1.35; border: 2px solid #64748b; border-radius: 6px; background: #1f2937; color: #e5e7eb; display: grid; place-items: center; font-weight: 700; text-align: center; }
-      .pin-row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
-      .pin { border: 1px solid #334155; background: #0f172a; border-radius: 999px; padding: 4px 8px; font-size: 12px; color: #cbd5e1; }
-      .side { display: grid; align-content: start; gap: 12px; }
-      .item { border: 1px solid #334155; border-radius: 6px; background: #0f172a; padding: 10px; }
-      .item strong { display: block; margin-bottom: 4px; }
-      pre { margin: 0; overflow: auto; background: #020617; border: 1px solid #334155; border-radius: 8px; padding: 12px; max-height: 160px; }
+      .frame-shell { min-height: 520px; border: 1px solid #334155; border-radius: 8px; background: #020617; overflow: hidden; position: relative; }
+      iframe { width: 100%; height: 100%; min-height: 520px; border: 0; display: block; background: #020617; }
+      .fallback { position: absolute; inset: 0; display: grid; place-items: center; padding: 18px; text-align: center; background: #020617; box-sizing: border-box; }
+      .fallback[hidden] { display: none; }
+      pre { margin: 0; overflow: auto; background: #020617; border: 1px solid #334155; border-radius: 8px; padding: 10px; max-height: 110px; }
       .muted { color: #94a3b8; font-size: 12px; }
     </style>
   </head>
@@ -79,20 +76,21 @@ const HARDWARE_LAB_TEMPLATE_TEXT = `<!doctype html>
         <a id="watch" target="_blank" rel="noreferrer" aria-disabled="true">Waiting for lab link</a>
       </header>
       <section class="frame-shell" aria-label="LabWired embedded hardware lab">
-        <div id="labwired-scene" class="scene"></div>
+        <iframe id="labwired-frame" title="LabWired Playground" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"></iframe>
+        <div id="fallback" class="fallback">
+          <div>
+            <strong>Waiting for LabWired Playground</strong>
+            <div class="muted">The agent tool result will provide the embedded project URL.</div>
+          </div>
+        </div>
       </section>
       <pre id="json"></pre>
     </main>
     <script>
-      const sceneEl = document.getElementById('labwired-scene');
+      const frame = document.getElementById('labwired-frame');
+      const fallback = document.getElementById('fallback');
       const json = document.getElementById('json');
       const watch = document.getElementById('watch');
-      function el(tag, className, text) {
-        const node = document.createElement(tag);
-        if (className) node.className = className;
-        if (text !== undefined) node.textContent = String(text);
-        return node;
-      }
       function toolData(value) {
         if (!value || typeof value !== 'object') return {};
         if (value.result && typeof value.result === 'object') return toolData(value.result);
@@ -109,36 +107,13 @@ const HARDWARE_LAB_TEMPLATE_TEXT = `<!doctype html>
           window.openai?.toolResponseMetadata
         );
       }
-      function renderScene(scene) {
-        sceneEl.replaceChildren();
-        const board = el('div', 'board');
-        board.appendChild(el('div', 'chip', scene.board ?? 'Virtual MCU'));
-        const pins = el('div', 'pin-row');
-        for (const wire of scene.wires ?? []) {
-          const from = wire.from ?? {};
-          const to = wire.to ?? {};
-          const label = [from.pin, to.pin].filter(Boolean).join(' -> ');
-          if (label) pins.appendChild(el('span', 'pin', label));
-        }
-        board.appendChild(pins);
-        const side = el('div', 'side');
-        side.appendChild(el('h2', '', 'Parts'));
-        for (const part of scene.parts ?? []) {
-          const item = el('div', 'item');
-          item.appendChild(el('strong', '', part.label ?? part.id ?? part.type ?? 'part'));
-          item.appendChild(el('span', 'muted', part.type ?? 'component'));
-          side.appendChild(item);
-        }
-        if (!Array.isArray(scene.parts) || scene.parts.length === 0) {
-          side.appendChild(el('div', 'item', 'No parts reported yet.'));
-        }
-        sceneEl.append(board, side);
-      }
       function render(value) {
         const data = toolData(value);
         const scene = data.scene ?? {};
         const frameUrl = data.inline_frame_url ?? data.studio_url ?? data.share_url ?? '';
         if (frameUrl) {
+          if (frame.src !== frameUrl) frame.src = frameUrl;
+          fallback.hidden = true;
           watch.href = data.studio_url ?? frameUrl;
           watch.textContent = 'Open in LabWired Studio';
           watch.setAttribute('aria-disabled', 'false');
@@ -146,11 +121,12 @@ const HARDWARE_LAB_TEMPLATE_TEXT = `<!doctype html>
             window.openai.setOpenInAppUrl({ href: data.studio_url ?? frameUrl });
           }
         } else {
+          frame.removeAttribute('src');
+          fallback.hidden = false;
           watch.removeAttribute('href');
           watch.textContent = 'Waiting for lab link';
           watch.setAttribute('aria-disabled', 'true');
         }
-        renderScene(scene);
         json.textContent = JSON.stringify({ inline_frame_url: frameUrl, board: scene.board, parts: scene.parts ?? [], wires: scene.wires ?? [], evidence: data.evidence ?? {} }, null, 2);
       }
       render(currentBridgeData());

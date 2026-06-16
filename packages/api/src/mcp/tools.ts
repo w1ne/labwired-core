@@ -519,13 +519,14 @@ function boardChipForLabId(labId: string): string {
 function starterDiagram(labId: string): Record<string, unknown> {
   const chip = boardChipForLabId(labId);
   return {
+    version: 1,
     board: chip,
     parts: [
-      { id: 'mcu', type: 'mcu', label: 'STM32L476' },
-      { id: 'led1', type: 'led', label: 'LED', color: 'green' },
+      { id: 'mcu', type: 'mcu', label: 'STM32L476', x: 180, y: 180, rotate: 0, attrs: {} },
+      { id: 'led1', type: 'led', label: 'LED', x: 420, y: 180, rotate: 0, attrs: { color: 'green' } },
     ],
     wires: [
-      { from: { part: 'mcu', pin: 'PA5' }, to: { part: 'led1', pin: 'A' } },
+      { from: { part: 'mcu', pin: 'PA5' }, to: { part: 'led1', pin: 'A' }, color: '#3DD68C' },
     ],
   };
 }

@@ -43,7 +43,7 @@ export const ledComponent: ComponentDef = {
       options: ['red', 'green', 'blue', 'yellow', 'white'],
     },
   ],
-  render: (attrs, state) => {
+  render: (attrs = {}, state) => {
     const colorKey = (attrs.color as string) || 'red';
     const c = LED_COLORS[colorKey] ?? LED_COLORS.red;
     const active = !!state?.active;
