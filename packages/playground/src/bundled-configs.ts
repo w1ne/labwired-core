@@ -464,6 +464,7 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     chipYaml: chipNrf52840Onboarding,
     systemYaml: systemNrf52840Onboarding,
     mcuComponentType: 'nrf52840-dk',
+    hidden: true,
   },
   {
     boardId: 'nrf52840-ble-sensor',

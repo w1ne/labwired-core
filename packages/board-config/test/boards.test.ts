@@ -1,7 +1,15 @@
+import { execFileSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 import { getPlaygroundBoard, listPlaygroundBoards, PLAYGROUND_BOARD_CATALOG } from '../src/boards';
 
 describe('playground board catalog', () => {
+  it('is generated from the Playground BOARD_CONFIGS source', () => {
+    expect(() => execFileSync('npm', ['run', 'check:boards'], {
+      cwd: new URL('..', import.meta.url),
+      stdio: 'pipe',
+    })).not.toThrow();
+  });
+
   it('exposes real Playground ids and does not expose invented aliases', () => {
     const ids = PLAYGROUND_BOARD_CATALOG.map((board) => board.id);
 
@@ -9,6 +17,7 @@ describe('playground board catalog', () => {
     expect(ids).toContain('nucleo-f401re');
     expect(ids).toContain('nucleo-h563zi');
     expect(ids).not.toContain('stm32l476-blinky');
+    expect(ids.some((id) => id.includes('onboarding'))).toBe(false);
   });
 
   it('resolves and filters board entries for hosted MCP', () => {

@@ -11,6 +11,8 @@
   },
   "scripts": {
     "build": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.mjs --packages=external && cp dist/index.mjs dist/index.js",
+    "generate:boards": "node scripts/generate-playground-board-catalog.mjs",
+    "check:boards": "node scripts/generate-playground-board-catalog.mjs --check",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
