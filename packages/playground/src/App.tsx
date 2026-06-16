@@ -1643,6 +1643,8 @@ export function App() {
           const prepared = prepareSharedProjectForPlayground(project.diagram);
           if (!prepared) {
             setCanvasValidationMessage(`Unsupported shared board: ${project.diagram.board}`);
+            setActiveProjectId(null);
+            setActiveProjectName(`Unsupported board: ${project.diagram.board}`);
             return;
           }
           setSelectedBoard(prepared.board);
@@ -1671,6 +1673,8 @@ export function App() {
           const prepared = prepareSharedProjectForPlayground(project.diagram);
           if (!prepared) {
             setCanvasValidationMessage(`Unsupported shared board: ${project.diagram.board}`);
+            setActiveProjectId(null);
+            setActiveProjectName(`Unsupported board: ${project.diagram.board}`);
             return;
           }
           setSelectedBoard(prepared.board);
