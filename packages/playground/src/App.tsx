@@ -954,10 +954,18 @@ export function App() {
         chipYaml = config.chipYaml;
         setCompileOutput((prev) => prev + '\nUsing pre-built demo firmware.');
       } else {
-        // No demo firmware and compile failed
-        setCompileOutput(
-          (prev) => prev + `\nNo pre-built firmware for ${runBoard.name}. Write code and compile it first.`,
-        );
+        // No demo firmware and compile produced no ELF. The detailed reason is
+        // in the compile output panel, but that panel is desktop-only — surface
+        // a visible toast/error so mobile (where Run is the only control) isn't
+        // a dead button. This is the common outcome for a shared circuit that
+        // carries only a placeholder sketch and no pre-built firmware.
+        const why = result?.errors?.length
+          ? `compile failed (${result.errors.length} error${result.errors.length === 1 ? '' : 's'})`
+          : 'no firmware';
+        const msg = `Cannot run ${runBoard.name}: ${why}. Open on a desktop to write and build code.`;
+        setCompileOutput((prev) => prev + `\n${msg}`);
+        setError(msg);
+        setToast(msg);
         setLoading(false);
         return;
       }
@@ -2120,6 +2128,8 @@ export function App() {
           bridge={bridge}
           running={running}
           onPartAttrChange={handlePartAttrChange}
+          toast={toast}
+          onDismissToast={() => setToast(null)}
         />
         {projectsModalNode}
       </ChipsProvider>

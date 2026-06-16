@@ -81,7 +81,14 @@ export function MobileInputsSheet({
 
   // Default to the tab that actually has content.
   const [tab, setTab] = useState<Tab>(hasInputs ? 'inputs' : 'serial');
-  const [open, setOpen] = useState(true);
+  // Drawer: collapsed by default so the canvas owns the screen. Only the slim
+  // tab bar shows until the user taps a tab (or the expand chevron). Tapping the
+  // already-open tab collapses it again — a one-tap peek/dismiss.
+  const [open, setOpen] = useState(false);
+  const selectTab = (id: Tab) => {
+    if (tab === id && open) setOpen(false);
+    else { setTab(id); setOpen(true); }
+  };
   // Instrument tabs need real vertical space (their panels are h-full); the
   // inputs/serial tabs stay compact. A taller body kicks in for tool tabs.
   const isTool = tab === 'ble' || tab === 'logic' || tab === 'iolink';
@@ -138,7 +145,7 @@ export function MobileInputsSheet({
             <button
               key={t.id}
               type="button"
-              onClick={() => { setTab(t.id); setOpen(true); }}
+              onClick={() => selectTab(t.id)}
               className={`h-9 px-3 rounded-lg text-[13px] font-semibold shrink-0 ${
                 tab === t.id && open ? 'bg-white/[0.1] text-fg-primary' : 'text-fg-tertiary'
               }`}

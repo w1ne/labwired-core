@@ -15,6 +15,7 @@ import {
 import { GlobalLogo, GlobalNav } from '../components/GlobalNav';
 import type { BoardConfig } from '../bundled-configs';
 import { MobileInputsSheet } from './MobileInputsSheet';
+import { Toast } from '../studio/Toast';
 
 export interface MobileRunViewProps {
   selectedBoard: BoardConfig;
@@ -41,7 +42,9 @@ export interface MobileRunViewProps {
   running: boolean;
   /** Update a part attribute (logic-analyzer decoder selector). */
   onPartAttrChange: (partId: string, attrs: Record<string, string>) => void;
-  toast?: ReactNode;
+  /** Transient status/error message (e.g. "Cannot run: …"). Auto-dismisses. */
+  toast?: string | null;
+  onDismissToast?: () => void;
 }
 
 const noop = () => {};
@@ -63,6 +66,7 @@ export function MobileRunView({
   running,
   onPartAttrChange,
   toast,
+  onDismissToast,
 }: MobileRunViewProps) {
   const [showNav, setShowNav] = useState(false);
   useEffect(() => {
@@ -169,7 +173,7 @@ export function MobileRunView({
         </div>
       )}
 
-      {toast && <div className="fixed bottom-4 inset-x-4 z-40">{toast}</div>}
+      <Toast message={toast ?? null} onDismiss={() => onDismissToast?.()} />
     </div>
   );
 }
