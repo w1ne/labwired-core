@@ -29,6 +29,20 @@
     border-radius: var(--lw-radius-card);
   }
 
+  /* Unified UI, glass feature off (e.g. the ChatGPT embed): drop every
+     frosted-glass backdrop blur — it reads as a smeary haze in a small pane —
+     and make the main translucent surface opaque. Desktop (no .lw-no-glass)
+     keeps its glass. */
+  html.lw-no-glass *,
+  html.lw-no-glass *::before,
+  html.lw-no-glass *::after {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  html.lw-no-glass .lw-glass {
+    background: #15171b;
+  }
+
   /* The Studio shell renders its own top chrome, palette, sim controls and
      dev drawer; the playground tree below it keeps only the canvas + the
      right-side inspector. The right-sidebar toggle and the code pane stay

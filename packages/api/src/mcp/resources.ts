@@ -1,7 +1,7 @@
 export const AGENT_HARDWARE_LOOP_URI = 'labwired://guides/agent-hardware-loop';
 export const AGENT_HARDWARE_LOOP_NAME = 'labwired-agent-hardware-loop';
 export const AGENT_HARDWARE_LOOP_MIME = 'text/markdown';
-export const HARDWARE_LAB_TEMPLATE_URI = 'ui://widget/labwired-hardware-lab-v7.html';
+export const HARDWARE_LAB_TEMPLATE_URI = 'ui://widget/labwired-hardware-lab-v8.html';
 export const HARDWARE_LAB_TEMPLATE_NAME = 'labwired-hardware-lab';
 export const HARDWARE_LAB_TEMPLATE_MIME = 'text/html;profile=mcp-app';
 export const HARDWARE_LAB_TEMPLATE_ALIASES = [
@@ -14,6 +14,8 @@ export const HARDWARE_LAB_TEMPLATE_ALIASES = [
   'ui://widget/labwired-hardware-lab-v6.html',
   'ui://widget/hardware-lab-v7.html',
   'ui://widget/labwired-hardware-lab-v7.html',
+  'ui://widget/hardware-lab-v8.html',
+  'ui://widget/labwired-hardware-lab-v8.html',
 ] as const;
 
 export const HARDWARE_LAB_WIDGET_CSP = {
@@ -56,15 +58,18 @@ const HARDWARE_LAB_TEMPLATE_TEXT = `<!doctype html>
     <style>
       :root { color-scheme: light dark; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
       body { margin: 0; background: #0f172a; color: #e5e7eb; }
-      main { display: grid; grid-template-rows: auto minmax(520px, 1fr) auto; gap: 10px; min-height: 100vh; padding: 10px; box-sizing: border-box; }
+      main { display: grid; grid-template-rows: auto minmax(620px, 1fr) auto; gap: 10px; min-height: 100vh; padding: 10px; box-sizing: border-box; }
       header { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+      .actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
       h1 { font-size: 18px; margin: 0; font-weight: 650; }
       a { color: #67e8f9; }
-      .frame-shell { min-height: 520px; border: 1px solid #334155; border-radius: 8px; background: #020617; overflow: hidden; position: relative; }
-      iframe { width: 100%; height: 100%; min-height: 520px; border: 0; display: block; background: #020617; }
+      button.fs { appearance: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 13px; color: #e5e7eb; background: #1e293b; border: 1px solid #334155; border-radius: 7px; padding: 6px 11px; }
+      button.fs:hover { background: #273449; border-color: #475569; }
+      button.fs[hidden] { display: none; }
+      .frame-shell { min-height: 620px; border: 1px solid #334155; border-radius: 8px; background: #020617; overflow: hidden; position: relative; }
+      iframe { width: 100%; height: 100%; min-height: 620px; border: 0; display: block; background: #020617; }
       .fallback { position: absolute; inset: 0; display: grid; place-items: center; padding: 18px; text-align: center; background: #020617; box-sizing: border-box; }
       .fallback[hidden] { display: none; }
-      pre { margin: 0; overflow: auto; background: #020617; border: 1px solid #334155; border-radius: 8px; padding: 10px; max-height: 110px; }
       .muted { color: #94a3b8; font-size: 12px; }
     </style>
   </head>
@@ -75,7 +80,13 @@ const HARDWARE_LAB_TEMPLATE_TEXT = `<!doctype html>
           <h1>LabWired Hardware Lab</h1>
           <div class="muted">Embedded hardware view for agent-generated diagrams.</div>
         </div>
-        <a id="watch" target="_blank" rel="noreferrer" aria-disabled="true">Waiting for lab link</a>
+        <div class="actions">
+          <button type="button" id="fullscreen" class="fs" hidden aria-label="Expand the hardware lab to full screen">
+            <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2H2v4M10 2h4v4M6 14H2v-4M10 14h4v-4"/></svg>
+            <span id="fullscreen-label">Full screen</span>
+          </button>
+          <a id="watch" target="_blank" rel="noreferrer" aria-disabled="true">Waiting for lab link</a>
+        </div>
       </header>
       <section class="frame-shell" aria-label="LabWired embedded hardware lab">
         <iframe id="labwired-frame" title="LabWired Playground" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"></iframe>
@@ -86,13 +97,37 @@ const HARDWARE_LAB_TEMPLATE_TEXT = `<!doctype html>
           </div>
         </div>
       </section>
-      <pre id="json"></pre>
     </main>
     <script>
       const frame = document.getElementById('labwired-frame');
       const fallback = document.getElementById('fallback');
-      const json = document.getElementById('json');
       const watch = document.getElementById('watch');
+      const fullscreen = document.getElementById('fullscreen');
+      const fullscreenLabel = document.getElementById('fullscreen-label');
+      // Display-mode control: in a constrained inline pane the board is small and
+      // pan/drag fights the chat scroll, so offer a one-tap expand to the full
+      // host pane. Only shown when the Apps SDK host exposes requestDisplayMode.
+      function syncDisplayMode() {
+        const mode = window.openai && window.openai.displayMode;
+        const isFull = mode === 'fullscreen' || mode === 'pip';
+        if (fullscreenLabel) fullscreenLabel.textContent = isFull ? 'Exit full screen' : 'Full screen';
+      }
+      function setupFullscreen() {
+        if (!fullscreen) return;
+        if (!window.openai || typeof window.openai.requestDisplayMode !== 'function') {
+          fullscreen.hidden = true;
+          return;
+        }
+        fullscreen.hidden = false;
+        syncDisplayMode();
+        fullscreen.addEventListener('click', async () => {
+          const mode = window.openai && window.openai.displayMode;
+          const next = mode === 'fullscreen' || mode === 'pip' ? 'inline' : 'fullscreen';
+          try { await window.openai.requestDisplayMode({ mode: next }); } catch (err) { void err; }
+          syncDisplayMode();
+        });
+      }
+      setupFullscreen();
       function toolData(value) {
         if (!value || typeof value !== 'object') return {};
         if (value.result && typeof value.result === 'object') return toolData(value.result);
@@ -111,7 +146,6 @@ const HARDWARE_LAB_TEMPLATE_TEXT = `<!doctype html>
       }
       function render(value) {
         const data = toolData(value);
-        const scene = data.scene ?? {};
         const frameUrl = data.inline_frame_url ?? data.studio_url ?? data.share_url ?? '';
         if (frameUrl) {
           if (frame.src !== frameUrl) frame.src = frameUrl;
@@ -129,7 +163,6 @@ const HARDWARE_LAB_TEMPLATE_TEXT = `<!doctype html>
           watch.textContent = 'Waiting for lab link';
           watch.setAttribute('aria-disabled', 'true');
         }
-        json.textContent = JSON.stringify({ inline_frame_url: frameUrl, board: scene.board, parts: scene.parts ?? [], wires: scene.wires ?? [], evidence: data.evidence ?? {} }, null, 2);
       }
       render(currentBridgeData());
       watch.addEventListener('click', (event) => {
@@ -146,7 +179,7 @@ const HARDWARE_LAB_TEMPLATE_TEXT = `<!doctype html>
           render(message.params);
         }
       });
-      window.addEventListener('openai:set_globals', () => render(currentBridgeData()));
+      window.addEventListener('openai:set_globals', () => { render(currentBridgeData()); syncDisplayMode(); });
     </script>
   </body>
 </html>`;

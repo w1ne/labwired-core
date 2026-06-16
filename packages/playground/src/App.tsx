@@ -38,6 +38,7 @@ import {
   type ComponentState,
 } from '@labwired/ui';
 import { BOARD_CONFIGS, pickerBoards, type BoardConfig } from './bundled-configs';
+import { resolveUiFeatures } from './uiFeatures';
 import { resolveBoardForPart } from './board-resolve';
 import { useUser, useClerk } from '@clerk/clerk-react';
 import { resolveRunSystemConfig } from './run-config';
@@ -773,6 +774,17 @@ export function App() {
   const [showIolink, setShowIolink] = useState(false);
   const embed = isEmbedMode();
   const autostartTriggeredRef = useRef(false);
+
+  // Unified UI feature flags (URL-selectable; embed flips some defaults off).
+  // The frosted-glass backdrop-blur reads as a smeary haze in a small embedded
+  // pane, so when `glass` is off we tag the root and a CSS rule drops every
+  // backdrop-filter. Desktop keeps its glass.
+  const uiFeatures = resolveUiFeatures();
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle('lw-no-glass', !uiFeatures.glass);
+    return () => root.classList.remove('lw-no-glass');
+  }, [uiFeatures.glass]);
 
   // Command palette mode + ref for global ⌘K shortcut
   const commandRefs = useRef<{ open: () => void; close: () => void } | null>(null);
@@ -1802,13 +1814,22 @@ export function App() {
         action();
         return;
       }
+      // Embedded in a host (e.g. the ChatGPT app): the only way to reach this
+      // iframe is through an MCP tool call that already authenticated via the
+      // connector's OAuth. A second Clerk sign-in inside the embed is redundant
+      // and impossible to complete in that sandbox, so fail open. The sim runs
+      // in-browser (WASM), so there is no server cost behind this gate.
+      if (embed) {
+        action();
+        return;
+      }
       if (clerkLoaded && !isSignedIn) {
         openSignIn({});
         return;
       }
       action();
     },
-    [clerkLoaded, isSignedIn, openSignIn],
+    [embed, clerkLoaded, isSignedIn, openSignIn],
   );
 
   // Wall-clock runtime tracker — ticks while the simulation is running.
@@ -1966,12 +1987,14 @@ export function App() {
     <div className="flex flex-col items-center gap-2">
       {showRunHint && (
         <div
-          // Narrow viewports get a wrapped two-line pill instead of overflowing.
-          className="max-w-[92vw] sm:max-w-none px-3 py-1.5 rounded-2xl sm:rounded-pill bg-accent/15 border border-accent/40 text-accent text-[11px] font-medium flex items-start sm:items-center gap-1.5 shadow-[0_6px_18px_-6px_rgba(91,157,255,0.45)] text-center sm:text-left leading-snug"
+          // Light, single contextual hint — not a heavy glowing box. Board
+          // runHints are authored for desktop; map their "(toolbar)" reference
+          // to the mobile drawer's analyzer tab.
+          className="max-w-[92vw] px-3 py-1.5 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-fg-secondary text-[11.5px] flex items-start gap-1.5 text-center leading-snug"
         >
-          <span aria-hidden className="mt-0.5 sm:mt-0">▶</span>
+          <span aria-hidden className="mt-px text-accent">▶</span>
           <span className="break-words">
-            {selectedBoard.runHint ?? 'Click Run to start the simulation'}
+            {(selectedBoard.runHint ?? 'Tap Run to start the simulation').replace(/\(toolbar\)/gi, '(BLE tab)')}
           </span>
         </div>
       )}

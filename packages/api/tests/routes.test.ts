@@ -644,7 +644,7 @@ describe('OAuth discovery for /mcp', () => {
     );
     expect(listBody.result.resources).toContainEqual(
       expect.objectContaining({
-        uri: 'ui://widget/labwired-hardware-lab-v7.html',
+        uri: 'ui://widget/labwired-hardware-lab-v8.html',
         name: 'labwired-hardware-lab',
         mimeType: 'text/html;profile=mcp-app',
       }),
@@ -715,6 +715,9 @@ describe('OAuth discovery for /mcp', () => {
     expect(htmlBody.result.contents[0].text).toContain('openai:set_globals');
     expect(htmlBody.result.contents[0].text).toContain('setOpenInAppUrl');
     expect(htmlBody.result.contents[0].text).toContain('redirectUrl: false');
+    // Fullscreen/expand affordance for the cramped inline pane.
+    expect(htmlBody.result.contents[0].text).toContain('id="fullscreen"');
+    expect(htmlBody.result.contents[0].text).toContain('requestDisplayMode');
     expect(htmlBody.result.contents[0].text).not.toContain('data.watch_url');
     expect(htmlBody.result.contents[0].text).not.toContain("'https://app.labwired.com/'");
     expect(htmlBody.result.contents[0].text).not.toContain('renderScene');
@@ -736,7 +739,7 @@ describe('OAuth discovery for /mcp', () => {
     const listBody = (await list.json()) as any;
     expect(listBody.result.resources).toContainEqual(
       expect.objectContaining({
-        uri: 'ui://widget/labwired-hardware-lab-v7.html',
+        uri: 'ui://widget/labwired-hardware-lab-v8.html',
         mimeType: 'text/html;profile=mcp-app',
       }),
     );

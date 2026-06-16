@@ -1,4 +1,5 @@
 import { GlobalLogo, GlobalNav } from '../components/GlobalNav';
+import { GlobalFooter } from '../components/GlobalFooter';
 import { ValidationMatrix } from '../ValidationMatrix';
 
 export function ValidationLanding() {
@@ -40,30 +41,7 @@ export function ValidationLanding() {
       </section>
 
       {/* Footer */}
-      <footer className="px-6 py-10 border-t-2 border-[#1a1a1a] bg-white">
-        <div className="max-w-[1120px] mx-auto flex flex-wrap items-center justify-between gap-4 text-[13px] text-fg-tertiary">
-          <div className="flex items-center gap-2 font-semibold">
-            <svg viewBox="0 0 32 32" width="16" height="16" fill="none" aria-hidden>
-              <path d="M11 7V23H23" stroke="#0056b3" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-              <circle cx="11" cy="7" r="3" fill="#1a1a1a" />
-              <circle cx="23" cy="23" r="3" fill="#0056b3" />
-            </svg>
-            <span>LabWired · Deterministic firmware simulation</span>
-          </div>
-          <div className="flex items-center gap-5">
-            <a className="text-fg-secondary font-medium hover:text-fg-primary transition-colors" href="/">Playground</a>
-            <a
-              className="text-fg-secondary font-medium hover:text-fg-primary transition-colors"
-              href="https://github.com/w1ne/labwired-core"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              GitHub
-            </a>
-            <a className="text-fg-secondary font-medium hover:text-fg-primary transition-colors" href="mailto:contact@labwired.com">Contact</a>
-          </div>
-        </div>
-      </footer>
+      <GlobalFooter />
     </div>
   );
 }

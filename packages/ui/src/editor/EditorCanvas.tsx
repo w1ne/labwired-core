@@ -78,6 +78,13 @@ interface EditorCanvasProps {
    * pan/zoom freely afterwards; the fit only re-runs when the diagram changes.
    */
   fitToContent?: boolean;
+  /**
+   * When true (run mode in a constrained pane, e.g. the ChatGPT embed), render
+   * on-screen zoom-in / zoom-out / fit buttons so navigation does not depend on
+   * pinch/drag gestures, and auto-refit when the container resizes (until the
+   * user manually pans/zooms). Requires fitToContent for the auto-refit.
+   */
+  showZoomControls?: boolean;
 }
 
 export function EditorCanvas({
@@ -100,9 +107,13 @@ export function EditorCanvas({
   onAnalogChange,
   selectedPartOverlay,
   fitToContent = false,
+  showZoomControls = false,
 }: EditorCanvasProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [viewBox, setViewBox] = useState({ x: -100, y: -50, w: 1200, h: 800 });
+  // Set once the user manually pans or pinch-zooms, so auto-refit-on-resize
+  // stops clobbering their chosen view. Cleared by an explicit fit.
+  const userAdjustedRef = useRef(false);
 
   // Fit-to-content: when enabled, frame the diagram's parts (centred, padded)
   // whenever the set/placement of parts changes. preserveAspectRatio="meet"
@@ -111,20 +122,54 @@ export function EditorCanvas({
   const fitSignature = fitToContent
     ? state.diagram.parts.map((p) => `${p.id}:${p.x}:${p.y}:${p.rotate}:${p.scale ?? 1}`).join('|')
     : '';
-  useEffect(() => {
-    if (!fitToContent) return;
+  // Frame the diagram's parts (centred, padded) so the whole circuit fills the
+  // viewport. Reused by the fit effect, the Fit button, and resize auto-refit.
+  const fitNow = useCallback(() => {
     const bounds = computeDiagramBounds(state.diagram);
     if (!bounds || bounds.width <= 0 || bounds.height <= 0) return;
-    const pad = Math.max(bounds.width, bounds.height) * 0.12 + 20;
+    // Tight margin so the circuit fills the viewport instead of floating small
+    // in a sea of grid. preserveAspectRatio still letterboxes a wide circuit in
+    // a tall phone, but a small pad keeps it as large as the fit allows.
+    const pad = Math.max(bounds.width, bounds.height) * 0.04 + 8;
     setViewBox({
       x: bounds.x - pad,
       y: bounds.y - pad,
       w: bounds.width + pad * 2,
       h: bounds.height + pad * 2,
     });
+    userAdjustedRef.current = false;
+  }, [state.diagram]);
+  // Zoom about the viewport centre. factor < 1 zooms in, > 1 zooms out.
+  const zoomBy = useCallback((factor: number) => {
+    userAdjustedRef.current = true;
+    setViewBox((vb) => zoomedViewBox(vb, vb.x + vb.w / 2, vb.y + vb.h / 2, factor));
+  }, []);
+  useEffect(() => {
+    if (!fitToContent) return;
+    fitNow();
     // fitSignature changes exactly when part placement changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fitToContent, fitSignature]);
+  // Auto-refit when the container resizes (e.g. the embed expanding to full
+  // screen) — but only until the user has manually adjusted the view. Gated on
+  // fitToContent so desktop edit mode is never observed.
+  useEffect(() => {
+    if (!fitToContent) return;
+    const el = svgRef.current?.parentElement;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    let raf = 0;
+    const ro = new ResizeObserver(() => {
+      if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        if (!userAdjustedRef.current) fitNow();
+      });
+    });
+    ro.observe(el);
+    return () => {
+      if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
+  }, [fitToContent, fitNow]);
   const [dragging, setDragging] = useState<{
     partId: string;
     offsetX: number;
@@ -180,6 +225,7 @@ export function EditorCanvas({
         const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
         const anchor = clientToSvg((pts[0].x + pts[1].x) / 2, (pts[0].y + pts[1].y) / 2);
         pinchRef.current = { startDist: dist, startVB: { ...viewBox }, anchorX: anchor.x, anchorY: anchor.y };
+        userAdjustedRef.current = true;
         setPanning(null);
         setDragging(null);
         setSelectBox(null);
@@ -251,10 +297,14 @@ export function EditorCanvas({
         const rect = svg.getBoundingClientRect();
         const scaleX = panning.startVB.w / rect.width;
         const scaleY = panning.startVB.h / rect.height;
+        const dx = e.clientX - panning.startClientX;
+        const dy = e.clientY - panning.startClientY;
+        // A real drag (not a stationary tap) counts as a manual view adjustment.
+        if (Math.abs(dx) > 2 || Math.abs(dy) > 2) userAdjustedRef.current = true;
         setViewBox({
           ...panning.startVB,
-          x: panning.startVB.x - (e.clientX - panning.startClientX) * scaleX,
-          y: panning.startVB.y - (e.clientY - panning.startClientY) * scaleY,
+          x: panning.startVB.x - dx * scaleX,
+          y: panning.startVB.y - dy * scaleY,
         });
         return;
       }
@@ -455,7 +505,7 @@ export function EditorCanvas({
     h: Math.abs(selectBox.y2 - selectBox.y1),
   } : null;
 
-  return (
+  const canvas = (
     <svg
       ref={svgRef}
       className="editor-canvas"
@@ -740,5 +790,62 @@ export function EditorCanvas({
         </g>
       )}
     </svg>
+  );
+
+  if (!showZoomControls) return canvas;
+
+  // One segmented control grouping the three actions. Solid background (no
+  // backdrop blur): a frosted button over the board reads as a smeary haze in a
+  // small embedded pane.
+  const zoomBtnStyle: React.CSSProperties = {
+    width: 38,
+    height: 38,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    border: 'none',
+    background: 'transparent',
+    color: '#cbd1dc',
+    cursor: 'pointer',
+  };
+  const divider = <div style={{ height: 1, background: 'rgba(255,255,255,0.08)' }} aria-hidden />;
+  return (
+    <div className="editor-canvas-shell" style={{ position: 'relative', width: '100%', height: '100%' }}>
+      {canvas}
+      <div
+        style={{
+          position: 'absolute',
+          right: 12,
+          bottom: 12,
+          zIndex: 5,
+          display: 'flex',
+          flexDirection: 'column',
+          borderRadius: 12,
+          overflow: 'hidden',
+          border: '1px solid rgba(255,255,255,0.1)',
+          background: '#10182b',
+          boxShadow: '0 6px 20px -8px rgba(0,0,0,0.6)',
+        }}
+      >
+        <button type="button" aria-label="Zoom in" style={zoomBtnStyle} onClick={() => zoomBy(0.8)}>
+          <svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden>
+            <path d="M8 3.5v9M3.5 8h9" />
+          </svg>
+        </button>
+        {divider}
+        <button type="button" aria-label="Zoom out" style={zoomBtnStyle} onClick={() => zoomBy(1.25)}>
+          <svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden>
+            <path d="M3.5 8h9" />
+          </svg>
+        </button>
+        {divider}
+        <button type="button" aria-label="Fit to view" style={zoomBtnStyle} onClick={fitNow}>
+          {/* Four corner brackets = "frame / fit to view" (not a fullscreen arrow). */}
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M2 5.5v-3h3M14 5.5v-3h-3M2 10.5v3h3M14 10.5v3h-3" />
+          </svg>
+        </button>
+      </div>
+    </div>
   );
 }

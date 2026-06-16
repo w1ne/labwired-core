@@ -136,32 +136,39 @@ export function MobileInputsSheet({
   );
 
   return (
-    <div className="shrink-0 bg-[rgba(13,14,18,0.96)] backdrop-blur border-t border-white/[0.08]">
-      {/* Tab bar / collapse handle. Horizontally scrollable so extra tool tabs
-          (BLE / Logic / IO-Link) never overflow on a narrow phone. */}
-      <div className="flex items-center gap-1 px-2 h-11">
-        <div className="flex items-center gap-1 overflow-x-auto min-w-0">
-          {tabs.map((t) => (
+    <div
+      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      className="shrink-0 bg-[rgba(13,14,18,0.96)] backdrop-blur border-t border-white/[0.08] rounded-t-2xl shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.6)]"
+    >
+      {/* Grab handle — the canonical bottom-sheet affordance; tap to toggle. */}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-label={open ? 'Collapse panel' : 'Expand panel'}
+        className="w-full flex justify-center pt-2 pb-1"
+      >
+        <span className="h-1 w-9 rounded-full bg-white/20" aria-hidden />
+      </button>
+      {/* Tab bar. Horizontally scrollable so extra tool tabs (BLE / Logic /
+          IO-Link) never overflow on a narrow phone. */}
+      <div className="flex items-center gap-1.5 px-2.5 pb-1.5 overflow-x-auto">
+        {tabs.map((t) => {
+          const active = tab === t.id && open;
+          return (
             <button
               key={t.id}
               type="button"
               onClick={() => selectTab(t.id)}
-              className={`h-9 px-3 rounded-lg text-[13px] font-semibold shrink-0 ${
-                tab === t.id && open ? 'bg-white/[0.1] text-fg-primary' : 'text-fg-tertiary'
+              className={`h-8 px-3.5 rounded-full text-[13px] font-medium shrink-0 transition-colors ${
+                active
+                  ? 'bg-accent/15 text-accent'
+                  : 'text-fg-tertiary active:bg-white/[0.06]'
               }`}
             >
               {t.label}
             </button>
-          ))}
-        </div>
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          aria-label={open ? 'Collapse panel' : 'Expand panel'}
-          className="ml-auto h-9 w-9 flex items-center justify-center rounded-lg text-fg-tertiary shrink-0"
-        >
-          {open ? '▾' : '▴'}
-        </button>
+          );
+        })}
       </div>
 
       {open && isTool && (

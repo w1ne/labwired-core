@@ -16,6 +16,7 @@ import { GlobalLogo, GlobalNav } from '../components/GlobalNav';
 import type { BoardConfig } from '../bundled-configs';
 import { MobileInputsSheet } from './MobileInputsSheet';
 import { Toast } from '../studio/Toast';
+import { resolveUiFeatures } from '../uiFeatures';
 
 export interface MobileRunViewProps {
   selectedBoard: BoardConfig;
@@ -68,7 +69,15 @@ export function MobileRunView({
   toast,
   onDismissToast,
 }: MobileRunViewProps) {
+  const features = resolveUiFeatures();
   const [showNav, setShowNav] = useState(false);
+  // One-time gesture coach mark: show briefly on entry, then fade out so it
+  // doesn't sit on the canvas forever as permanent chrome.
+  const [showGestureHint, setShowGestureHint] = useState(true);
+  useEffect(() => {
+    const t = window.setTimeout(() => setShowGestureHint(false), 4500);
+    return () => window.clearTimeout(t);
+  }, []);
   useEffect(() => {
     if (!showNav) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setShowNav(false); };
@@ -78,22 +87,27 @@ export function MobileRunView({
 
   return (
     <div className="fixed inset-0 flex flex-col bg-bg-base text-fg-primary overflow-hidden">
-      <header className="shrink-0 flex items-center justify-between gap-3 h-12 px-3 bg-[rgba(13,14,18,0.9)] backdrop-blur border-b border-white/[0.06]">
-        <div className="flex items-center gap-2 min-w-0">
+      <header
+        style={{ paddingTop: 'env(safe-area-inset-top)' }}
+        className="shrink-0 flex items-center justify-between gap-3 min-h-[52px] px-4 bg-[rgba(13,14,18,0.92)] backdrop-blur border-b border-white/[0.06]"
+      >
+        <div className="flex items-center gap-2.5 min-w-0">
           <GlobalLogo variant="dark" />
-          <span className="text-fg-tertiary shrink-0" aria-hidden>›</span>
-          <span className="text-fg-secondary truncate text-[14px]">{selectedBoard.name}</span>
+          <span className="text-fg-tertiary/60 shrink-0 text-[13px]" aria-hidden>/</span>
+          <span className="text-fg-primary truncate text-[14px] font-medium">{selectedBoard.name}</span>
         </div>
-        <button
-          type="button"
-          onClick={() => setShowNav(true)}
-          aria-label="Open menu"
-          className="h-9 w-9 flex items-center justify-center rounded-full bg-white/[0.05] text-fg-secondary"
-        >
-          <svg viewBox="0 0 16 16" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden>
-            <path d="M2 4h12M2 8h12M2 12h12" />
-          </svg>
-        </button>
+        {features.menu && (
+          <button
+            type="button"
+            onClick={() => setShowNav(true)}
+            aria-label="Open menu"
+            className="h-9 w-9 flex items-center justify-center rounded-full bg-white/[0.06] text-fg-secondary active:bg-white/[0.12] transition-colors shrink-0"
+          >
+            <svg viewBox="0 0 16 16" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden>
+              <path d="M2 4h12M2 8h12M2 12h12" />
+            </svg>
+          </button>
+        )}
       </header>
 
       {/* The real canvas, in touch run mode. flex-1 + min-h-0 so it fills the
@@ -103,6 +117,7 @@ export function MobileRunView({
           state={editorState}
           interactionMode="run"
           fitToContent
+          showZoomControls
           boardIoStates={boardIoStates}
           displayBuffers={displayBuffers}
           onButtonToggle={onButtonToggle}
@@ -115,15 +130,20 @@ export function MobileRunView({
           onCancelWire={noop}
           onDeleteWire={noop}
         />
-        <div className="pointer-events-none absolute top-2 inset-x-0 flex justify-center">
-          <span className="pointer-events-none px-2.5 py-1 rounded-full bg-black/45 text-fg-tertiary text-[10.5px] font-mono">
-            Pinch to zoom · drag to pan · tap buttons
+        <div
+          className={`pointer-events-none absolute top-3 inset-x-0 flex justify-center transition-opacity duration-700 ${
+            showGestureHint ? 'opacity-100' : 'opacity-0'
+          }`}
+        >
+          <span className="px-3 py-1 rounded-full bg-black/35 backdrop-blur-sm text-fg-tertiary text-[11px] tracking-tight">
+            Pinch · drag · tap
           </span>
         </div>
       </div>
 
-      {/* Transport controls (Run / Pause / Reset) — reused desktop SimDock. */}
-      <div className="shrink-0 flex justify-center px-3 py-2 bg-[rgba(13,14,18,0.92)] border-t border-white/[0.06]">
+      {/* Transport controls (Run / Pause / Reset). Borderless so it reads as one
+          module with the drawer below it rather than a stack of bordered bands. */}
+      <div className="shrink-0 flex justify-center px-3 pt-2 pb-1 bg-[rgba(13,14,18,0.92)]">
         {simControls}
       </div>
 
@@ -140,7 +160,7 @@ export function MobileRunView({
         onPartAttrChange={onPartAttrChange}
       />
 
-      {showNav && (
+      {features.menu && showNav && (
         <div
           className="fixed inset-0 z-50 bg-black/60 backdrop-blur"
           onClick={(e) => { if (e.target === e.currentTarget) setShowNav(false); }}
@@ -164,7 +184,10 @@ export function MobileRunView({
             >
               My projects
             </button>
-            <GlobalNav variant="dark" orientation="vertical" className="mt-1" />
+            {/* Hide "Tools" here — its instruments (BLE / Logic / IO-Link) are
+                already surfaced as drawer tabs on mobile, so the link would be a
+                redundant no-op (it toggles the desktop-only tools panel). */}
+            <GlobalNav variant="dark" orientation="vertical" exclude={['tools']} className="mt-1" />
             <div className="mt-auto text-[11px] text-fg-tertiary leading-snug">
               Need the full editor?<br />
               Open this page on a laptop for wiring, the code editor, and the CPU inspector.
