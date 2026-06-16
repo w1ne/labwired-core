@@ -125,9 +125,10 @@ jobs:
           workspaces: core
 
       - name: Install wasm-pack
-        uses: jetli/wasm-pack-action@v0.4.0
-        with:
-          version: latest
+        if: steps.core_changed.outputs.rebuild == 'true'
+        run: |
+          set -euo pipefail
+          cargo install wasm-pack --locked --version 0.13.1
 
       - name: Rebuild wasm from pinned core
         if: steps.core_changed.outputs.rebuild == 'true'
