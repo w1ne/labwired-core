@@ -425,6 +425,9 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     chipYaml: chipStm32l476,
     systemYaml: systemNucleoL476rg,
     mcuComponentType: 'nucleo-l476rg',
+    // Pre-built PA5 (LD2) blink so a shared L476 lab runs on prod (which has no
+    // compiler) — agent labs default to this board. Source: core/examples/demo-l476-blink.
+    demoFirmwarePath: `${BASE}wasm/demo-stm32l476-blink.elf`,
   },
   {
     boardId: 'esp32c3-supermini',
