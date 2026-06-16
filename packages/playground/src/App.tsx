@@ -2136,6 +2136,12 @@ export function App() {
   );
 
   if (isMobile) {
+    // MCU parts in the diagram → the multi-chip switcher. Foreground is the
+    // selected chip (foregroundPartId); tapping selects another so App mirrors
+    // that chip's bridge/sim/serial.
+    const mcuChips = editor.state.diagram.parts
+      .filter((p) => mcuBoardForPart(p, selectedBoard))
+      .map((p) => ({ id: p.id, name: mcuBoardForPart(p, selectedBoard)?.name ?? p.id }));
     return (
       <ChipsProvider initialBoard={selectedBoard}>
         <AddMcuRefSync addMcuRef={addMcuRef} />
@@ -2173,6 +2179,9 @@ export function App() {
           onPartAttrChange={handlePartAttrChange}
           toast={toast}
           onDismissToast={() => setToast(null)}
+          chips={mcuChips}
+          foregroundChipId={foregroundPartId}
+          onSelectChip={(id) => editor.select(id)}
           registers={registers}
           traceEntries={traceEntries}
           stackMemory={stackMemory}

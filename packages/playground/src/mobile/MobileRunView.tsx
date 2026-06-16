@@ -47,6 +47,12 @@ export interface MobileRunViewProps {
   /** Transient status/error message (e.g. "Cannot run: …"). Auto-dismisses. */
   toast?: string | null;
   onDismissToast?: () => void;
+  /** MCU parts in the diagram, for the multi-chip switcher (shown only when 2+). */
+  chips?: { id: string; name: string }[];
+  /** The part id of the foreground chip (the one whose sim/serial is shown). */
+  foregroundChipId?: string;
+  /** Bring a chip to the foreground (selects it on the canvas). */
+  onSelectChip?: (id: string) => void;
   /** Live CPU state for the foreground chip (the drawer's "CPU" tab). */
   registers?: Map<string, number>;
   traceEntries?: TraceEntry[];
@@ -74,6 +80,9 @@ export function MobileRunView({
   onPartAttrChange,
   toast,
   onDismissToast,
+  chips,
+  foregroundChipId,
+  onSelectChip,
   registers,
   traceEntries,
   stackMemory,
@@ -119,6 +128,31 @@ export function MobileRunView({
           </button>
         )}
       </header>
+
+      {/* Multi-MCU switcher: pick which chip is in the foreground (its sim,
+          serial, BLE and inputs are what the rest of the view shows). Only
+          rendered for multi-chip labs so single-MCU views stay clean. */}
+      {chips && chips.length > 1 && (
+        <div className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 overflow-x-auto bg-[rgba(13,14,18,0.92)] border-b border-white/[0.06]">
+          <span className="text-fg-tertiary text-[11px] shrink-0 mr-0.5">Chip</span>
+          {chips.map((c) => {
+            const active = c.id === foregroundChipId;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => onSelectChip?.(c.id)}
+                aria-pressed={active}
+                className={`h-7 px-3 rounded-full text-[12px] font-medium shrink-0 transition-colors ${
+                  active ? 'bg-accent/15 text-accent' : 'text-fg-tertiary bg-white/[0.04] active:bg-white/[0.08]'
+                }`}
+              >
+                {c.name}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* The real canvas, in touch run mode. flex-1 + min-h-0 so it fills the
           space between header and the controls without pushing them off-screen. */}
