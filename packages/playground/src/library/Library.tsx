@@ -8,6 +8,7 @@
 
 import { GlobalLogo, GlobalNav } from '../components/GlobalNav';
 import { GlobalFooter } from '../components/GlobalFooter';
+import { BOARD_CONFIGS } from '../bundled-configs';
 
 // The Library is served on labwired.com (marketing), but the playground lives on
 // app.labwired.com — so tiles must link there absolutely. A relative ./?lab=
@@ -101,162 +102,140 @@ const SUPPORTED_BOARDS: SupportedBoard[] = [
   },
 ];
 
-interface FeaturedLab {
+// Library-only presentation for a featured lab. The lab's name, description
+// and existence come from BOARD_CONFIGS (single source of truth); this only
+// curates which labs are featured (and their order) plus pure decoration.
+interface FeaturedLabPresentation {
   id: string;
-  name: string;
   chip: string;
-  description: string;
   detail: string;
   accent: string;
   icon: string;
 }
 
-export const FEATURED_LABS: FeaturedLab[] = [
+const CURATED_LABS: FeaturedLabPresentation[] = [
   {
     id: 'stm32f103-blinky',
-    name: 'Blinky',
     chip: 'STM32F103',
-    description: 'Classic LED blink on PA5. The "hello world" of embedded.',
     detail: 'Bare-metal Rust toggling GPIOA_ODR. ~16k cycles between toggles. Verifies the toolchain end-to-end.',
     accent: '#27c93f',
     icon: '⚡',
   },
   {
     id: 'adxl345-sensor-lab',
-    name: 'ADXL345 Tilt',
     chip: 'STM32F103 · I²C',
-    description: 'Read 3-axis accelerometer data from a real I²C device model.',
     detail: 'Register-level ADXL345 implementation responding to firmware I²C reads.',
     accent: '#d63384',
     icon: '📊',
   },
   {
     id: 'mpu6050-sensor-lab',
-    name: 'MPU6050 IMU',
     chip: 'STM32F103 · I²C',
-    description: '6-DoF accelerometer + gyroscope over I²C.',
     detail: 'WHO_AM_I check + continuous accel/gyro loop. Full register state machine in the core.',
     accent: '#7e3ff2',
     icon: '🧭',
   },
   {
     id: 'bme280-weather-lab',
-    name: 'BME280 Weather',
     chip: 'STM32F103 · I²C',
-    description: 'Temperature / humidity / pressure environmental sensor.',
     detail: 'Bosch BME280 with factory calibration coefficients. Firmware runs the full compensation pipeline.',
     accent: '#27c93f',
     icon: '🌡',
   },
   {
     id: 'ssd1306-hello-lab',
-    name: 'OLED Hello',
     chip: 'STM32F103 · I²C',
-    description: 'SSD1306 128×64 monochrome OLED with live framebuffer rendering.',
     detail: 'Full GDDRAM + addressing-mode state machine. Pixels render live in the inspector.',
     accent: '#0056b3',
     icon: '📺',
   },
   {
     id: 'max31855-thermocouple-lab',
-    name: 'MAX31855',
     chip: 'STM32F103 · SPI',
-    description: 'K-type thermocouple amplifier — read-only SPI device.',
     detail: 'Demonstrates the SPI device-attach plumbing. 32-bit response with TC + cold-junction temps.',
     accent: '#ffbd2e',
     icon: '🔥',
   },
   {
     id: 'neo6m-gps-lab',
-    name: 'NEO-6M GPS',
     chip: 'STM32F103 · UART',
-    description: 'GPS module streaming NMEA sentences over UART RX.',
     detail: 'GGA + RMC sentences with XOR checksum, generated entirely in the Rust core. Firmware echoes the stream.',
     accent: '#7e3ff2',
     icon: '📡',
   },
   {
     id: 'quectel-bg770a-lab',
-    name: 'Quectel BG770A Cellular',
     chip: 'STM32F103 · UART',
-    description: 'LTE-M / NB-IoT cellular modem with the full Quectel AT command surface.',
     detail: 'Byte-exact V.250 + Quectel +QI*/+QMT*/+QHTTP*/+QGPS*/+QSSL* state machines, validated against real BG770A-GL hardware captures. Firmware sends AT commands, modem replies stream back over UART2.',
     accent: '#3ec1d3',
     icon: '📶',
   },
   {
     id: 'ntc-thermistor-lab',
-    name: 'NTC Thermistor',
     chip: 'STM32F103 · ADC',
-    description: 'Analog temperature sensor with Steinhart-Hart math.',
     detail: '10kΩ NTC + 10kΩ pulldown @ 3.3V. Slider injects °C; core computes mV and ADC count.',
     accent: '#ffbd2e',
     icon: '🌡️',
   },
   {
     id: 'ili9341-tft-lab',
-    name: 'TFT Color',
     chip: 'STM32F103 · SPI',
-    description: 'ILI9341 240×320 RGB565 color TFT display.',
     detail: 'Full ILI9341 protocol state machine + 153KB framebuffer + live RGB565 canvas decode.',
     accent: '#d63384',
     icon: '🎨',
   },
   {
     id: 'nucleo-f401re',
-    name: 'Nucleo-F401RE',
     chip: 'STM32F4 · Cortex-M4F',
-    description: 'Nucleo dev board with LED + user button.',
     detail: 'Higher-performance Cortex-M4 with FPU. Demonstrates LabWired\'s coverage of the STM32F4 family.',
     accent: '#0056b3',
     icon: '🔵',
   },
   {
     id: 'labwired-ereader',
-    name: 'ESP32 E-Reader',
     chip: 'ESP32-WROOM-32 · Xtensa LX6',
-    description: 'Arduino sketch driving a Waveshare 2.9" tri-color e-paper panel.',
     detail: 'GxEPD2 + Adafruit_GFX + FreeRTOS on dual-core Xtensa. The exact same .elf flashes to physical hardware via espflash.',
     accent: '#d63384',
     icon: '📖',
   },
   {
     id: 'esp32-epaper-lab',
-    name: 'ESP32 E-Paper (Rust)',
     chip: 'ESP32-WROOM-32 · Xtensa LX6',
-    description: 'Pure-Rust no_std driver for a Waveshare 2.9" SSD1680 tri-color panel.',
     detail: 'ESP32 VSPI to SSD1680 with full controller state machine. Same ELF runs in the sim and flashes to a real ESP32 module.',
     accent: '#7e3ff2',
     icon: '🖼',
   },
   {
     id: 'epaper-tricolor-lab',
-    name: 'STM32 E-Paper Tri-color',
     chip: 'STM32F103 · Cortex-M3',
-    description: 'Bluepill driving the same Waveshare 2.9" SSD1680 panel over SPI.',
     detail: 'Same SSD1680 model as the ESP32 lab, exercised from a different MCU + arch. Side-by-side digital-twin verification.',
     accent: '#27c93f',
     icon: '📰',
   },
   {
     id: 'nokia5110-invaders-lab',
-    name: 'Nokia 5110 Breakout',
     chip: 'STM32L476 · Cortex-M4',
-    description: 'PCD8544 84×48 monochrome LCD driven over SPI with a D/C GPIO discriminator.',
     detail: 'The full PCD8544 framebuffer model — the bus resolves the D/C pin to its driving GPIO ODR address at attach time, then commands vs data are decoded purely from SPI transactions.',
     accent: '#ffbd2e',
     icon: '🕹️',
   },
   {
     id: 'al2205-iolink-dido',
-    name: 'IO-Link DI (AL2205)',
     chip: 'STM32L476 · Cortex-M4',
-    description: 'IO-Link master driving an AL2205-style 2-channel DI device over a UART link.',
     detail: 'Full IO-Link master state machine in Rust core (wake-up → startup → operate cycles, m-sequence types, CRC6). A 74HC165 shift register surfaces the field-side switch state for the firmware to read over SPI.',
     accent: '#3ec1d3',
     icon: '🔌',
   },
 ];
+
+// Featured labs = curated presentation joined to BOARD_CONFIGS. Names,
+// descriptions and links come from BOARD_CONFIGS, so a lab can never drift from
+// the real board, and a tile can never deep-link to a board that doesn't exist.
+export const FEATURED_LABS = CURATED_LABS.flatMap((p) => {
+  const cfg = BOARD_CONFIGS.find((b) => b.boardId === p.id);
+  if (!cfg) return [];
+  return [{ ...p, name: cfg.name, description: cfg.description }];
+});
 
 const STATUS_LABEL: Record<SupportedBoard['status'], string> = {
   'working-labs': 'Working labs',
