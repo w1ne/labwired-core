@@ -13,7 +13,7 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 | `esp32c3` | 🟢 silicon-verified | 2026-06-17 | 2026-06-14 | ✅ fresh |
 | `nucleo-l476rg` | 🟢 silicon-verified | 2026-06-17 | 2026-06-14 | ✅ fresh |
 | `nucleo-l073rz` | 🟢 silicon-smoke | 2026-06-03 | 2026-06-14 | ⚠ drift acked 2026-06-14 (re-capture pending) |
-| `stm32f103` | 🟢 silicon-verified | 2026-06-09 | 2026-06-14 | ⚠ drift acked 2026-06-14 (re-capture pending) |
+| `stm32f103` | 🟢 silicon-verified | 2026-06-17 | 2026-06-14 | ✅ fresh |
 | `stm32f407` | 🟢 silicon-smoke | 2026-05-11 | 2026-06-14 | ⚠ drift acked 2026-06-14 (re-capture pending) |
 | `esp32s3` | 🟢 silicon-verified | 2026-06-17 | 2026-06-13 | ✅ fresh |
 | `stm32f401` | 🟡 smoke-manual | — | 2026-06-07 | no silicon capture |
@@ -74,10 +74,10 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 
 - Doc: [`docs/boards/stm32f103.md`](stm32f103.md)  ·  Chip: `configs/chips/stm32f103.yaml`
 - Note: Prose doc is STALE-PESSIMISTIC: lists SPI/TIM/ADC/CAN/RTC/IWDG/WWDG as 'not modeled' — all are modeled AND silicon-pinned.
-- Silicon: **2026-06-09** on ST-LINK V2 (Blue Pill, hil board stm32f103-bluepill) — mmio diff RCC/SPI1/I2C1/TIM2/ADC1/IWDG/WWDG/DMA1/USART2 + conformance digest
+- Silicon: **2026-06-17** on ST-LINK V2 J43 (genuine STM32F103, hil board stm32f103-bluepill) — mmio diff 102/102, 0 divergence (L476_STRICT). Caught + fixed a real model bug: classic SPI CR1 was masking CRCNEXT bit 12 (0xEFFF) — genuine silicon keeps it writable (0xFFFF), spi.rs corrected.
   - offline (CI): stm32f1_mmio_diff::{f1_reset_sim_only,f1_mmio_sim_only,f1_parity_sim_only,f1_sweep_sim_only}
   - offline (CI): f103_conformance::conformance_sim (digest)
-- Drift status: **⚠ drift acked 2026-06-14 (re-capture pending)**
+- Drift status: **✅ fresh**
 
 ## `stm32f407` — 🟢 silicon-smoke
 

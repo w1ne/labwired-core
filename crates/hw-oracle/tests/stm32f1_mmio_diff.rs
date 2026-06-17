@@ -1039,11 +1039,12 @@ const PARITY_REGS: &[ParityReg] = &[
         mask: 0x0000_FFFF,
     },
     // SPI1 control registers — classic SPI. Writable masks silicon-confirmed on
-    // F103 (the sweep): CR1 0xEFFF (CRCNEXT bit 12 reads 0), CR2 0xE7 (no DS).
+    // a genuine F103 (the sweep): CR1 0xFFFF (CRCNEXT bit 12 IS writable, reads
+    // back 1 — re-confirmed 2026-06-17), CR2 0xE7 (no DS).
     ParityReg {
         label: "SPI1 CR1",
         addr: SPI1_BASE + 0x00,
-        mask: 0x0000_EFFF,
+        mask: 0x0000_FFFF,
     },
     ParityReg {
         label: "SPI1 CR2",

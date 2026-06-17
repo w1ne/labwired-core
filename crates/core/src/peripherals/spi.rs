@@ -542,10 +542,11 @@ impl Spi {
         match offset {
             0x00 => {
                 if let SpiRegs::Stm32(r) = &mut self.regs {
-                    // Classic SPI CR1 writable mask 0xEFFF (CRCNEXT bit 12 reads
-                    // 0) — silicon-confirmed on F103 SPI1. The FIFO variant
-                    // (L4/F7/H5) has a different CR1 bit map, so leave it verbatim.
-                    r.cr1 = if r.fifo { value } else { value & 0xEFFF };
+                    // Classic SPI CR1 is fully writable incl. CRCNEXT (bit 12) —
+                    // silicon-confirmed on a genuine STM32F103 SPI1 (2026-06-17,
+                    // CR1 reads back 0xFFFF). The FIFO variant (L4/F7/H5) has a
+                    // different CR1 bit map; both store the written value verbatim.
+                    r.cr1 = value;
                 }
             }
             0x04 => {

@@ -168,10 +168,9 @@ boards:
       - "stm32f1_mmio_diff::{f1_reset_sim_only,f1_mmio_sim_only,f1_parity_sim_only,f1_sweep_sim_only}"
       - "f103_conformance::conformance_sim (digest)"
     silicon:
-      last_capture: 2026-06-09
-      probe: "ST-LINK V2 (Blue Pill, hil board stm32f103-bluepill)"
-      result: "mmio diff RCC/SPI1/I2C1/TIM2/ADC1/IWDG/WWDG/DMA1/USART2 + conformance digest"
-    drift_ack: 2026-06-14   # shared uart/timer/dma advanced to 06-14; re-capture pending
+      last_capture: 2026-06-17
+      probe: "ST-LINK V2 J43 (genuine STM32F103, hil board stm32f103-bluepill)"
+      result: "mmio diff 102/102, 0 divergence (F103_STRICT). Caught + fixed a real model bug: classic SPI CR1 was masking CRCNEXT bit 12 (0xEFFF) — genuine silicon keeps it writable (0xFFFF), spi.rs corrected."
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/afio.rs
