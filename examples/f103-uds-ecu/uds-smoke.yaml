@@ -1,0 +1,15 @@
+schema_version: "1.0"
+inputs:
+  system: "./system.yaml"
+  firmware: "./firmware/build/f103_uds_ecu.elf"
+limits:
+  max_steps: 300000
+assertions:
+  # Real UDSLib on the emulated F103 bxCAN (classical CAN, internal loopback)
+  # reassembles the reporter's multi-frame SecurityAccess request and answers.
+  - uart_contains: "F103-UDS-ECU"
+  - uart_contains: "UDS_REQ_27_01_FF"
+  - uart_contains: "UDS_REQ_27_01_CF"
+  - uart_contains: "UDS_RESP_67_SEED=066701DEADBEEF"
+  - uart_contains: "UDS_OK"
+  - expected_stop_reason: max_steps

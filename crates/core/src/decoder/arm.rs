@@ -444,6 +444,22 @@ pub enum Instruction {
         reg_list: u16,
         writeback: bool,
     },
+    /// STMIA.W Rn(!), {registers} — 32-bit store multiple increment-after.
+    /// The wide form of the compiler's struct-copy / block-store idiom; the
+    /// addressing mode is the U bit of the encoding, not implied by it being a
+    /// store. reg_list: bit n = register n (0-14=LR).
+    StmiaW {
+        rn: u8,
+        reg_list: u16,
+        writeback: bool,
+    },
+    /// LDMDB.W Rn(!), {registers} — 32-bit load multiple decrement-before.
+    /// reg_list: bit n = register n (0-14=LR, 15=PC).
+    LdmdbW {
+        rn: u8,
+        reg_list: u16,
+        writeback: bool,
+    },
     Ldrd {
         rt: u8,
         rt2: u8,
@@ -1540,23 +1556,38 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
                 return Instruction::Tbb { rn, rm };
             }
         } else if (h1 & 0x40) == 0 {
-            // STMDB / LDMIA.W: bit6=0 distinguishes LDM/STM from STRD/LDRD (bit6=1).
+            // LDM/STM.W: bit6=0 distinguishes LDM/STM from STRD/LDRD (bit6=1).
+            // The addressing mode is the U bit (h1 bit7): U=1 -> increment-after
+            // (IA), U=0 -> decrement-before (DB). Decoding STM as always-DB and
+            // LDM as always-IA is only correct for push/pop; a plain
+            // STMIA.W/LDMDB.W (e.g. the compiler's struct-copy idiom) needs the
+            // real mode or the access lands at the wrong address.
             // H2 is the full 16-bit register list (bit n = register n, bit14=LR, bit15=PC).
             let writeback = (h1 & 0x20) != 0;
+            let increment = (h1 & 0x80) != 0;
             let reg_list = h2;
-            if is_load {
-                return Instruction::LdmiaW {
+            return match (is_load, increment) {
+                (true, true) => Instruction::LdmiaW {
                     rn,
                     reg_list,
                     writeback,
-                };
-            } else {
-                return Instruction::StmdbW {
+                },
+                (true, false) => Instruction::LdmdbW {
                     rn,
                     reg_list,
                     writeback,
-                };
-            }
+                },
+                (false, true) => Instruction::StmiaW {
+                    rn,
+                    reg_list,
+                    writeback,
+                },
+                (false, false) => Instruction::StmdbW {
+                    rn,
+                    reg_list,
+                    writeback,
+                },
+            };
         } else if is_load {
             // LDREX (T1, ARMv7-M B6.7.79) shares the h1 = 0xE85x prefix
             // with LDRD; the distinguishing field is h2[11:8] = 0xF.
