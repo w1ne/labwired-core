@@ -28,6 +28,7 @@ pub mod spi_factory;
 pub mod ssd1306;
 pub mod ssd1680_tricolor_290;
 pub mod uc8151d_tricolor_290;
+pub mod vl53l1x;
 
 pub use adxl345::Adxl345;
 pub use aht20::Aht20;
@@ -54,3 +55,4 @@ pub use spi_factory::build_spi_device;
 pub use ssd1306::Ssd1306;
 pub use ssd1680_tricolor_290::Ssd1680Tricolor290;
 pub use uc8151d_tricolor_290::Uc8151dTricolor290;
+pub use vl53l1x::Vl53l1x;

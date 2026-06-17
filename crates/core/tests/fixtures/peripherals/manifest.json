@@ -355,6 +355,29 @@
           "demo_elf": "demo-ntc-thermistor-lab.elf"
         }
       ]
+    },
+    {
+      "device_type": "vl53l1x",
+      "label": "VL53L1X ToF",
+      "summary": "Laser time-of-flight distance sensor over I2C.",
+      "detail": "STMicroelectronics VL53L1X at fixed address 0x29, modeled against the Pololu VL53L1X driver: MODEL_ID = 0xEACC, SYSTEM__MODE_START to begin ranging, GPIO__TIO_HV_STATUS data-ready poll, and the RESULT range burst. Reports a host-settable distance (default 500 mm); the ranging algorithm is not simulated.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to the VL53L1X fixed address 0x29."
+        }
+      ],
+      "labs": [
+        {
+          "board_id": "vl53l1x-tof-lab",
+          "chip": "stm32f103",
+          "example_dir": "vl53l1x-tof-lab",
+          "demo_elf": "demo-vl53l1x-tof-lab.elf"
+        }
+      ]
     }
   ]
 }

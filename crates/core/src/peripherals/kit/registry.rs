@@ -33,6 +33,7 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::pcd8544::PCD8544_KIT,
     &components::iolink_master::IOLINK_MASTER_KIT,
     &components::ntc_thermistor::NTC_THERMISTOR_KIT,
+    &components::vl53l1x::VL53L1X_KIT,
 ];
 
 /// Borrow the registry slice.
