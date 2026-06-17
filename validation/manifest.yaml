@@ -123,7 +123,7 @@ boards:
       last_capture: 2026-06-01
       probe: "ST-LINK SWD (NUCLEO-L476RG)"
       result: "RCC/GPIO/SPI1/TIM2 mmio diff + UART byte-parity"
-    drift_ack: 2026-06-12   # shared uart/timer/dma/spi/adc/rtc_v3 models advanced to 06-12; re-capture pending
+    drift_ack: 2026-06-14   # shared uart/timer/dma/spi/adc/rtc_v3 models advanced to 06-14; re-capture pending
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -149,7 +149,7 @@ boards:
       last_capture: 2026-06-03
       probe: "ST-LINK SWD (NUCLEO-L073RZ)"
       result: "boot + USART2 byte-parity; RCC/GPIO/SPI1/TIM2/TIM21 mmio diff (IDCODE 0x2008_6447)"
-    drift_ack: 2026-06-12   # shared uart/timer/dma models advanced to 06-12; re-capture pending
+    drift_ack: 2026-06-14   # shared uart/timer/dma models advanced to 06-14; re-capture pending
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -172,7 +172,7 @@ boards:
       last_capture: 2026-06-09
       probe: "ST-LINK V2 (Blue Pill, hil board stm32f103-bluepill)"
       result: "mmio diff RCC/SPI1/I2C1/TIM2/ADC1/IWDG/WWDG/DMA1/USART2 + conformance digest"
-    drift_ack: 2026-06-12   # shared uart/timer/dma advanced to 06-12; re-capture pending
+    drift_ack: 2026-06-14   # shared uart/timer/dma advanced to 06-14; re-capture pending
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/afio.rs
@@ -201,7 +201,7 @@ boards:
       last_capture: 2026-05-11
       probe: "ST-LINK SWD (NUCLEO-F407, IDCODE 0x1001_6413)"
       result: "smoke + I²C survival UART traces (now stale relative to June model rewrites)"
-    drift_ack: 2026-06-12   # i2c/uart/gpio/timer/dma rewritten through 06-12; re-capture REQUIRED
+    drift_ack: 2026-06-14   # i2c/uart/gpio/timer/dma rewritten through 06-14; re-capture REQUIRED
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
