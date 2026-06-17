@@ -9,6 +9,12 @@
 import { GlobalLogo, GlobalNav } from '../components/GlobalNav';
 import { GlobalFooter } from '../components/GlobalFooter';
 
+// The Library is served on labwired.com (marketing), but the playground lives on
+// app.labwired.com — so tiles must link there absolutely. A relative ./?lab=
+// resolves to the marketing origin (which has no playground), opening the
+// homepage / last-cached project instead of the lab. Same-origin in dev.
+const PLAYGROUND_URL = import.meta.env.DEV ? '' : 'https://app.labwired.com';
+
 interface SupportedBoard {
   chip: string;
   family: string;
@@ -303,7 +309,7 @@ export function Library() {
           {SUPPORTED_BOARDS.map((b) => (
             <a
               key={b.chip}
-              href={b.playgroundBoardId ? `./?lab=${encodeURIComponent(b.playgroundBoardId)}` : './'}
+              href={b.playgroundBoardId ? `${PLAYGROUND_URL}/?lab=${encodeURIComponent(b.playgroundBoardId)}` : `${PLAYGROUND_URL}/`}
               className="block bg-white border-2 border-[#1a1a1a] rounded-[10px] p-5 shadow-[5px_5px_0_#1a1a1a] transition-all duration-150 hover:-translate-x-[2px] hover:-translate-y-[2px] hover:shadow-[7px_7px_0_#1a1a1a]"
             >
               <div className="flex items-baseline justify-between mb-2 gap-2">
@@ -343,7 +349,7 @@ export function Library() {
           {FEATURED_LABS.map((lab) => (
             <a
               key={lab.id}
-              href={`./?lab=${encodeURIComponent(lab.id)}`}
+              href={`${PLAYGROUND_URL}/?lab=${encodeURIComponent(lab.id)}`}
               className="group block bg-white border-2 border-[#1a1a1a] rounded-[10px] p-5 shadow-[5px_5px_0_#1a1a1a] transition-all duration-150 hover:-translate-x-[2px] hover:-translate-y-[2px] hover:shadow-[7px_7px_0_#1a1a1a]"
             >
               <div

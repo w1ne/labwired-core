@@ -1792,6 +1792,20 @@ export function App() {
     void handleRun();
   }, [handleRun]);
 
+  // "If we have a binary, run it by default, so we can see things." A deep-linked
+  // example/lab (?lab= / ?board=) that ships a pre-built binary (its own
+  // demoFirmwarePath, or one matched to the diagram) autostarts on open.
+  useEffect(() => {
+    if (autostartTriggeredRef.current || embed) return;
+    const sp = new URLSearchParams(window.location.search);
+    if (!(sp.get('lab') ?? sp.get('board'))) return;
+    const hasBinary = !!selectedBoard.demoFirmwarePath || !!pickFallbackDemoFirmware(editor.state.diagram);
+    if (!hasBinary) return;
+    autostartTriggeredRef.current = true;
+    void handleRun();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [embed, handleRun, selectedBoard.boardId, selectedBoard.demoFirmwarePath]);
+
   useEffect(() => {
     if (selectedBoard.kind === 'lab') return;
     localStorage.setItem(
