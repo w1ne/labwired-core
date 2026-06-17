@@ -19,6 +19,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history so the validation drift gate can resolve the last-commit
+          # date of each peripheral model via `git log`.
+          fetch-depth: 0
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.95.0
@@ -31,6 +35,19 @@ jobs:
           shared-key: core-ci
           workspaces: |
             . -> target
+
+      # Board validation status is generated, not hand-maintained. Fail the PR if
+      # the committed doc is stale, or if a peripheral model changed after a
+      # board's last silicon capture without a dated drift_ack in the manifest.
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validation status — regen check + drift gate
+        run: |
+          python -m pip install --quiet pyyaml
+          python3 scripts/generate_validation_status.py --check --drift
 
       - name: Check Formatting
         run: cargo fmt --all -- --check

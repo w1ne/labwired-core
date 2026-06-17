@@ -47,3 +47,7 @@ fixtures/
 
 # mkdocs build output
 /site/
+
+# Python
+__pycache__/
+*.pyc

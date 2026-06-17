@@ -1,0 +1,264 @@
+# LabWired board validation manifest — the source of truth for what is actually
+# validated, and against which silicon, on what date.
+#
+# WHY THIS FILE EXISTS
+#   The board docs (docs/boards/*.md) used to be hand-written and drifted out of
+#   sync with the models and tests (some claimed less than was true, some more).
+#   This manifest is the machine-checkable record. `scripts/generate_validation_status.py`
+#   renders docs/boards/VALIDATION_STATUS.md from it on every CI run and fails the
+#   build if (a) the generated doc is stale, or (b) a peripheral model changed
+#   AFTER the board's last silicon capture without an explicit, dated drift_ack.
+#
+# THE HONESTY RULE
+#   CI runners have no hardware, so the only thing CI can re-prove each run is the
+#   OFFLINE oracle suite (sim vs the silicon values frozen into the test sources).
+#   A `silicon.last_capture` is a HUMAN ASSERTION that a live `--ignored` diff was
+#   run on that date with that result. When you re-run a live diff (board plugged
+#   in, `--features hw-oracle-* -- --ignored`), update last_capture + result here.
+#
+# DRIFT
+#   `models` lists the source paths whose change can invalidate the capture. The
+#   generator takes the newest git commit date across them. If that date is newer
+#   than last_capture, the board has DRIFTED — its "silicon-verified" claim is
+#   stale until re-captured. `drift_ack` is an explicit, dated acknowledgement
+#   ("yes, the model changed on this date, re-capture is tracked") that keeps CI
+#   green; any model change PAST the ack date re-fails the gate. No silent decay.
+#
+# TIERS
+#   silicon-verified   — live register/behaviour diff vs real silicon (dated)
+#   silicon-smoke      — boot + one path (usually UART) byte-parity vs silicon
+#   sim-validated      — deep peripheral models + green sim/e2e tests, but no
+#                        silicon-diff oracle yet (model is real; HW diff is the gap)
+#   smoke-manual       — a manual runbook exists; no automated/silicon assertion
+#   structural         — thin/declarative model only (e.g. UART0 stub), no silicon
+
+boards:
+  # ── Fresh: re-verified on live silicon 2026-06-17 ────────────────────────────
+  - id: nrf52840
+    doc: docs/boards/nrf52840.md
+    chip: configs/chips/nrf52840.yaml
+    tier: silicon-verified
+    offline_tests:
+      - "nrf52_conformance::conformance_sim (digest vs frozen 2026-06-09 capture)"
+      - "nrf52_mmio_diff / nrf52_gpio_conformance (sim halves)"
+    silicon:
+      last_capture: 2026-06-17
+      probe: "ST-LINK V2 (J37S7)"
+      result: "conformance 16/16; mmio 16/16; GPIO P0 22/0, P1 23/0; onboarding 22/22; POWER 10/0, SPIS 19/0, TWIS 20/0, RTC0 12/0, TIMER0 16/0; SPIM0/CCM/full-register clean"
+    models:
+      - crates/core/src/peripherals/nrf52
+      - configs/chips/nrf52840.yaml
+
+  - id: seeed-xiao-nrf52840-sense
+    doc: docs/boards/seeed-xiao-nrf52840-sense.md
+    chip: configs/chips/nrf52840.yaml
+    tier: silicon-verified
+    note: "Same silicon as nrf52840 (the bench board IS a Seeed XIAO nRF52840 Sense)."
+    offline_tests:
+      - "nrf52.rs xiao_* (manifest build, GPIO task regs, SPIM0 EasyDMA)"
+    silicon:
+      last_capture: 2026-06-17
+      probe: "ST-LINK V2 (J37S7)"
+      result: "rides the nrf52840 full register sweep (16/16) re-confirmed 2026-06-17"
+    models:
+      - crates/core/src/peripherals/nrf52
+      - configs/chips/nrf52840.yaml
+
+  - id: stm32h563
+    doc: docs/boards/stm32h563.md
+    chip: configs/chips/stm32h563.yaml
+    tier: silicon-verified
+    offline_tests:
+      - "h563_conformance (5 tests vs frozen 2026-06-10..12 captures)"
+      - "h563_mmio_diff::{h563_mmio_sim_only,h563_parity_sim_only,h563_class_sim_only}"
+    silicon:
+      last_capture: 2026-06-17
+      probe: "ST-LINK V3 (J13)"
+      result: "class 65/65; GPIO mmio 8/8; GPIO parity 48/48 — 0 divergence (dapdirect AP1 recipe)"
+    models:
+      - crates/core/src/peripherals/rcc.rs
+      - crates/core/src/peripherals/gpio.rs
+      - crates/core/src/peripherals/uart.rs
+      - crates/core/src/peripherals/spi.rs
+      - crates/core/src/peripherals/i2c.rs
+      - crates/core/src/peripherals/timer.rs
+      - crates/core/src/peripherals/gpdma.rs
+      - crates/core/src/peripherals/adc.rs
+      - crates/core/src/peripherals/rtc_v3.rs
+      - crates/core/src/peripherals/fdcan.rs
+      - crates/core/src/peripherals/crc.rs
+      - crates/core/src/peripherals/pwr.rs
+      - crates/core/src/peripherals/flash.rs
+      - crates/core/src/peripherals/iwdg.rs
+      - crates/core/src/peripherals/wwdg.rs
+      - crates/core/src/peripherals/rng.rs
+      - configs/chips/stm32h563.yaml
+
+  # ── Silicon-verified once, but shared models drifted since (acknowledged) ─────
+  - id: esp32c3
+    doc: docs/boards/esp32c3.md
+    chip: configs/chips/esp32c3.yaml
+    tier: silicon-verified
+    note: "Reset-state oracle, not behavioural. ~40 peripherals declared (NOT 6 as the prose doc says)."
+    offline_tests:
+      - "esp32c3_reset_conformance::esp32c3_reset_values_match_silicon (79 regs; 366/423 overlap matched silicon)"
+    silicon:
+      last_capture: 2026-06-17
+      probe: "USB-JTAG (built-in, openocd-esp32) — re-verified live"
+      result: "reset oracle re-captured live 2026-06-17: 1123/1123 static registers match committed baseline (13 deltas all in per-chip efuse + live USB-device state, none in the asserted set); esp32c3_reset_values_match_silicon passes"
+    models:
+      - crates/core/src/peripherals/esp32c3
+      - crates/core/src/peripherals/esp_xtensa_common
+      - configs/chips/esp32c3.yaml
+
+  - id: nucleo-l476rg
+    doc: docs/boards/nucleo-l476rg.md
+    chip: configs/chips/stm32l476.yaml
+    tier: silicon-smoke
+    note: "Only RCC/GPIO/SPI1/TIM2 register-diffed + UART byte-parity. Prose doc overstates ('every peripheral exercised')."
+    offline_tests:
+      - "l476_mmio_diff::{l476_mmio_sim_only,l476_parity_sim_only}"
+      - "firmware_survival L476 cases (UART byte stream)"
+    silicon:
+      last_capture: 2026-06-01
+      probe: "ST-LINK SWD (NUCLEO-L476RG)"
+      result: "RCC/GPIO/SPI1/TIM2 mmio diff + UART byte-parity"
+    drift_ack: 2026-06-12   # shared uart/timer/dma/spi/adc/rtc_v3 models advanced to 06-12; re-capture pending
+    models:
+      - crates/core/src/peripherals/rcc.rs
+      - crates/core/src/peripherals/gpio.rs
+      - crates/core/src/peripherals/uart.rs
+      - crates/core/src/peripherals/spi.rs
+      - crates/core/src/peripherals/i2c.rs
+      - crates/core/src/peripherals/timer.rs
+      - crates/core/src/peripherals/dma.rs
+      - crates/core/src/peripherals/adc.rs
+      - crates/core/src/peripherals/rtc_v3.rs
+      - crates/core/src/peripherals/crc.rs
+      - crates/core/src/peripherals/pwr.rs
+      - configs/chips/stm32l476.yaml
+
+  - id: nucleo-l073rz
+    doc: docs/boards/nucleo-l073rz.md
+    chip: configs/chips/stm32l073.yaml
+    tier: silicon-smoke
+    offline_tests:
+      - "stm32l0_mmio_diff::{l0_mmio_sim_only,l0_parity_sim_only}"
+      - "firmware_survival L073 smoke case"
+    silicon:
+      last_capture: 2026-06-03
+      probe: "ST-LINK SWD (NUCLEO-L073RZ)"
+      result: "boot + USART2 byte-parity; RCC/GPIO/SPI1/TIM2/TIM21 mmio diff (IDCODE 0x2008_6447)"
+    drift_ack: 2026-06-12   # shared uart/timer/dma models advanced to 06-12; re-capture pending
+    models:
+      - crates/core/src/peripherals/rcc.rs
+      - crates/core/src/peripherals/gpio.rs
+      - crates/core/src/peripherals/uart.rs
+      - crates/core/src/peripherals/spi.rs
+      - crates/core/src/peripherals/timer.rs
+      - crates/core/src/peripherals/dma.rs
+      - crates/core/src/peripherals/crc.rs
+      - configs/chips/stm32l073.yaml
+
+  - id: stm32f103
+    doc: docs/boards/stm32f103.md
+    chip: configs/chips/stm32f103.yaml
+    tier: silicon-verified
+    note: "Prose doc is STALE-PESSIMISTIC: lists SPI/TIM/ADC/CAN/RTC/IWDG/WWDG as 'not modeled' — all are modeled AND silicon-pinned."
+    offline_tests:
+      - "stm32f1_mmio_diff::{f1_reset_sim_only,f1_mmio_sim_only,f1_parity_sim_only,f1_sweep_sim_only}"
+      - "f103_conformance::conformance_sim (digest)"
+    silicon:
+      last_capture: 2026-06-09
+      probe: "ST-LINK V2 (Blue Pill, hil board stm32f103-bluepill)"
+      result: "mmio diff RCC/SPI1/I2C1/TIM2/ADC1/IWDG/WWDG/DMA1/USART2 + conformance digest"
+    drift_ack: 2026-06-12   # shared uart/timer/dma advanced to 06-12; re-capture pending
+    models:
+      - crates/core/src/peripherals/rcc.rs
+      - crates/core/src/peripherals/afio.rs
+      - crates/core/src/peripherals/gpio.rs
+      - crates/core/src/peripherals/uart.rs
+      - crates/core/src/peripherals/spi.rs
+      - crates/core/src/peripherals/i2c.rs
+      - crates/core/src/peripherals/timer.rs
+      - crates/core/src/peripherals/dma.rs
+      - crates/core/src/peripherals/adc.rs
+      - crates/core/src/peripherals/bxcan.rs
+      - crates/core/src/peripherals/rtc_f1.rs
+      - crates/core/src/peripherals/iwdg.rs
+      - crates/core/src/peripherals/wwdg.rs
+      - configs/chips/stm32f103.yaml
+
+  - id: stm32f407
+    doc: docs/boards/stm32f407.md
+    chip: configs/chips/stm32f407.yaml
+    tier: silicon-smoke
+    note: "examples/nucleo-f407-i2c/VALIDATION.md badges '✅ Hardware-validated 2026-05-11' but I²C/UART/GPIO models were rewritten in June with no re-capture — STALE."
+    offline_tests:
+      - "stm32f4_mmio_diff::{f4_reset_sim_only,f4_sweep_sim_only,f4_behavior_sim_only}"
+      - "firmware_survival F407 smoke + i2c cases (sim-self-pinned)"
+    silicon:
+      last_capture: 2026-05-11
+      probe: "ST-LINK SWD (NUCLEO-F407, IDCODE 0x1001_6413)"
+      result: "smoke + I²C survival UART traces (now stale relative to June model rewrites)"
+    drift_ack: 2026-06-12   # i2c/uart/gpio/timer/dma rewritten through 06-12; re-capture REQUIRED
+    models:
+      - crates/core/src/peripherals/rcc.rs
+      - crates/core/src/peripherals/gpio.rs
+      - crates/core/src/peripherals/uart.rs
+      - crates/core/src/peripherals/i2c.rs
+      - crates/core/src/peripherals/spi.rs
+      - crates/core/src/peripherals/timer.rs
+      - crates/core/src/peripherals/dma.rs
+      - configs/chips/stm32f407.yaml
+
+  # ── No silicon capture: honest structural / manual-smoke tiers ───────────────
+  - id: esp32s3
+    doc: docs/boards/esp32s3.md
+    chip: configs/chips/esp32s3.yaml
+    tier: silicon-verified
+    note: "Deep model: 35 peripheral models + full Xtensa LX7 JIT; boots real firmware in sim (green e2e i2c_tmp102/hello_world/xtensa_exec/e-paper). Silicon anchor is reset-state (9 regs) on the firmware-path bus. KNOWN GAPS: (1) broader register + behavioural silicon diff still future work; (2) declarative from_config path falls back to generic ARM peripherals for type:i2c — the coded S3 models only wire via configure_xtensa_esp32s3; (3) full-firmware bring-up rides ~60 boot/ROM/WiFi thunks (FIDELITY.md)."
+    offline_tests:
+      - "esp32s3_reset_conformance (9 reset regs vs live silicon, firmware-path bus)"
+      - "e2e_i2c_tmp102 / e2e_hello_world / xtensa_exec / e2e_esp32_epaper (sim)"
+    silicon:
+      last_capture: 2026-06-17
+      probe: "USB-JTAG built-in (MAC 9C:13:9E:F4:40:C0, openocd-esp32, Tensilica tap 0x120034e5)"
+      result: "reset-state oracle: SYSTIMER CONF 0x46000000 + I2C0 timing block (TO/FIFO_CONF/SCL holds/FILTER_CFG/CLK_CONF) 9/9 match live silicon"
+    models:
+      - crates/core/src/peripherals/esp32s3
+      - crates/core/src/peripherals/esp_xtensa_common
+      - crates/core/src/cpu/xtensa_jit
+      - configs/chips/esp32s3.yaml
+
+  - id: stm32f401
+    doc: docs/boards/stm32f401.md
+    chip: configs/chips/stm32f401.yaml
+    tier: smoke-manual
+    note: "UART2 'smoke pass' is a manual runbook (examples/nucleo-f401re/VALIDATION.md) + a CI build step — no automated UART assertion."
+    models:
+      - configs/chips/stm32f401.yaml
+
+  - id: stm32wba52
+    doc: docs/boards/stm32wba52.md
+    chip: configs/chips/stm32wba52.yaml
+    tier: smoke-manual
+    note: "LPUART1 'smoke pass' is a manual runbook only; no automated test anywhere. Cortex-M33 TrustZone/radio/crypto not modeled."
+    models:
+      - configs/chips/stm32wba52.yaml
+
+  - id: nrf52832
+    doc: docs/boards/nrf52832.md
+    chip: configs/chips/nrf52832.yaml
+    tier: structural
+    note: "Chip yaml declares UART0 only. UART0 smoke test + empty-assertion survival test exist; no silicon."
+    models:
+      - configs/chips/nrf52832.yaml
+
+  - id: rp2040
+    doc: docs/boards/rp2040.md
+    chip: configs/chips/rp2040.yaml
+    tier: structural
+    note: "UART0 (stm32v2-profile cheat) + PIO0 declared, but ZERO PIO0 test coverage. No silicon."
+    models:
+      - configs/chips/rp2040.yaml
