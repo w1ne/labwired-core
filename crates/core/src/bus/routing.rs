@@ -7,7 +7,6 @@
 
 use super::*;
 
-
 impl SystemBus {
     /// Parse a pin label into `(gpio peripheral id, bit)`. Accepts the STM32
     /// form "PC7" -> `("gpioc", 7)` and the Nordic form "P0.04" / "P1.15" ->
