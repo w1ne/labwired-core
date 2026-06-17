@@ -12,15 +12,21 @@ function shareApiBase(): string {
   return envBase || API_BASE;
 }
 
-export async function fetchSharedProject(shareId: string): Promise<{ diagram: Diagram; source: string } | null> {
+export async function fetchSharedProject(
+  shareId: string,
+): Promise<{ diagram: Diagram; source: string; firmware?: string } | null> {
   if (!/^[A-Za-z0-9_-]+$/.test(shareId)) return null;
   try {
     const resp = await fetch(`${shareApiBase()}/v1/shares/${encodeURIComponent(shareId)}`);
     if (!resp.ok) return null;
-    const obj = await resp.json() as { diagram?: unknown; source?: unknown };
+    const obj = await resp.json() as { diagram?: unknown; source?: unknown; firmware?: unknown };
     const diagram = normalizeSharedDiagram(obj.diagram);
     if (!diagram) return null;
-    return { diagram, source: typeof obj.source === 'string' ? obj.source : '' };
+    return {
+      diagram,
+      source: typeof obj.source === 'string' ? obj.source : '',
+      ...(typeof obj.firmware === 'string' && obj.firmware ? { firmware: obj.firmware } : {}),
+    };
   } catch {
     return null;
   }
