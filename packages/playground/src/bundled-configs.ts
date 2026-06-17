@@ -468,6 +468,10 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     chipYaml: chipNrf52840,
     systemYaml: systemNrf52840Dk,
     mcuComponentType: 'nrf52840-dk',
+    // Pre-built proximity firmware (ultrasonic distance -> alarm LED) so bare
+    // nRF52840 labs run on prod, which has no compiler. Matches the common
+    // agent diagram (nRF52840 + ultrasonic + LED).
+    demoFirmwarePath: `${BASE}wasm/demo-nrf52840-proximity.elf`,
   },
   {
     boardId: 'nrf52840-onboarding',
