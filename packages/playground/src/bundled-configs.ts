@@ -425,9 +425,6 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     chipYaml: chipStm32l476,
     systemYaml: systemNucleoL476rg,
     mcuComponentType: 'nucleo-l476rg',
-    // Pre-built PA5 (LD2) blink so a shared L476 lab runs on prod (which has no
-    // compiler) — agent labs default to this board. Source: core/examples/demo-l476-blink.
-    demoFirmwarePath: `${BASE}wasm/demo-stm32l476-blink.elf`,
   },
   {
     boardId: 'esp32c3-supermini',
@@ -468,10 +465,6 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     chipYaml: chipNrf52840,
     systemYaml: systemNrf52840Dk,
     mcuComponentType: 'nrf52840-dk',
-    // Pre-built proximity firmware (ultrasonic distance -> alarm LED) so bare
-    // nRF52840 labs run on prod, which has no compiler. Matches the common
-    // agent diagram (nRF52840 + ultrasonic + LED).
-    demoFirmwarePath: `${BASE}wasm/demo-nrf52840-proximity.elf`,
   },
   {
     boardId: 'nrf52840-onboarding',

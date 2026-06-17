@@ -460,13 +460,11 @@ async function openHardwareLab(
   const diagram = diagramOrStarter(input.diagram);
   const boardValidationError = validatePlaygroundDiagramBoard(diagram);
   if (boardValidationError) return boardValidationError;
-  // Production has no compiler, so a lab only runs from a pre-built binary that
-  // ships with a curated example. Map the requested diagram to the nearest
-  // runnable example lab (which carries a preloaded ELF) and open THAT, so every
-  // shared lab opens preloaded and runs — instead of a bare board that dead-ends
-  // at "Cannot run: no firmware".
-  const exampleLabId = pickExampleLab(diagram);
-  const urls = exampleLabUrls(exampleLabId);
+  // One shareable link format for everything. The Playground runs the share's
+  // own binary if it carries one, else a curated example's firmware matched to
+  // the board (prod has no compiler), so the shared lab runs either way.
+  const urls = await playgroundUrls(env, diagram, '');
+  const embedUrl = urls.embedUrl.replace('?embed=true', '?embed=true&run=1');
   const scene = sceneFromDiagram(diagram);
   const evidence = {
     status: 'ready',
@@ -476,7 +474,7 @@ async function openHardwareLab(
     ok: true,
     title: typeof input.title === 'string' && input.title ? input.title : 'LabWired Hardware Lab',
     inline_component_uri: HARDWARE_LAB_TEMPLATE_URI,
-    inline_frame_url: urls.embedUrl,
+    inline_frame_url: embedUrl,
     studio_url: urls.studioUrl,
     share_url: urls.studioUrl,
     scene,
@@ -495,9 +493,8 @@ async function openHardwareLab(
         studio_url: urls.studioUrl,
         share_url: urls.studioUrl,
         inline_component_uri: HARDWARE_LAB_TEMPLATE_URI,
-        inline_frame_url: urls.embedUrl,
-        example_lab_id: exampleLabId,
-        summary: `Opened the runnable "${exampleLabId}" example lab (ships pre-built firmware) inline and as a shareable LabWired Studio project.`,
+        inline_frame_url: embedUrl,
+        summary: 'Opened an inline LabWired Playground viewer and a shareable LabWired Studio link for the device.',
       }),
     ],
   };

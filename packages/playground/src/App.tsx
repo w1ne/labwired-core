@@ -614,6 +614,21 @@ const DEFAULT_BOARD =
   BOARD_CONFIGS.find((c) => c.boardId === 'stm32f103-blinky') ?? BOARD_CONFIGS[0];
 const DEMO_AUTOSTART_KEY = 'labwired-demo-autostart-v1';
 
+// When a lab has no firmware of its own (no compiler on prod, no demoFirmwarePath
+// — e.g. an agent/shared bare-board diagram), fall back to a curated example's
+// pre-built ELF that matches the MCU, so the lab still runs. Binaries are only
+// ever sourced from examples, never attached to bare board configs.
+function pickFallbackDemoFirmware(diagram: Diagram): string | null {
+  const base = import.meta.env.BASE_URL;
+  const fw = (file: string) => `${base}wasm/${file}`;
+  const board = String(diagram.board ?? '').toLowerCase();
+  if (board.includes('nrf52840')) return fw('demo-nrf52840-proximity.elf');
+  if (board.includes('l476') || board.startsWith('stm32l4')) return fw('demo-stm32l476-blink.elf');
+  if (board.includes('f401') || board.startsWith('stm32f4')) return fw('demo-nucleo-f401.elf');
+  if (board.includes('f103') || board.startsWith('stm32f1')) return fw('demo-blinky.elf');
+  return null;
+}
+
 export function resolveSharedBoardConfig(diagram: Diagram): BoardConfig | null {
   const boardId = diagram.board;
   return (
@@ -774,6 +789,9 @@ export function App() {
   const [showIolink, setShowIolink] = useState(false);
   const embed = isEmbedMode();
   const autostartTriggeredRef = useRef(false);
+  // Pre-built ELF carried by a shared link (base64 decoded). When set, Run uses
+  // it directly — "if the share has a binary, we run it".
+  const sharedFirmwareRef = useRef<Uint8Array | null>(null);
 
   // Unified UI feature flags (URL-selectable; embed flips some defaults off).
   // The frosted-glass backdrop-blur reads as a smeary haze in a small embedded
@@ -949,42 +967,46 @@ export function App() {
       let systemYaml: string;
       let chipYaml: string;
 
+      const runConfig = () => resolveRunSystemConfig({
+        diagram: editor.state.diagram,
+        chipYaml: runBoard.chipYaml,
+        bundledSystemYaml: runBoard.systemYaml,
+        preferDiagram: true,
+        onFallback: (msg) => {
+          setCompileOutput((prev) => `${prev}\nUsing bundled system YAML — canvas not used: ${msg}`);
+        },
+      });
+
+      // A shared link can carry its own pre-built binary — if it does, we run
+      // it. Otherwise fall to the board's demo firmware, then to a demo matched
+      // to the diagram (sourced from a curated example). Prod has no compiler,
+      // so this is what makes shared labs runnable.
+      const demoPath = runBoard.demoFirmwarePath ?? pickFallbackDemoFirmware(editor.state.diagram);
+
       if (result?.success && result.elf) {
         firmware = result.elf;
-        const config = resolveRunSystemConfig({
-          diagram: editor.state.diagram,
-          chipYaml: runBoard.chipYaml,
-          bundledSystemYaml: runBoard.systemYaml,
-          preferDiagram: true,
-        });
+        const config = runConfig();
         systemYaml = config.systemYaml;
         chipYaml = config.chipYaml;
         setCompileOutput((prev) => prev + '\nUpload successful. Starting simulation...');
-      } else if (runBoard.demoFirmwarePath) {
-        // Fall back to pre-built demo firmware, but still use the current
-        // diagram YAML so edited sensor attributes reach the simulator.
-        const firmwareUrl = versionRuntimeAssetUrl(runBoard.demoFirmwarePath, __BUILD_TIME__);
+      } else if (sharedFirmwareRef.current) {
+        firmware = sharedFirmwareRef.current;
+        const config = runConfig();
+        systemYaml = config.systemYaml;
+        chipYaml = config.chipYaml;
+        setCompileOutput((prev) => prev + '\nRunning firmware shipped with this link.');
+      } else if (demoPath) {
+        const firmwareUrl = versionRuntimeAssetUrl(demoPath, __BUILD_TIME__);
         const resp = await fetch(firmwareUrl, { cache: 'no-store' });
-        if (!resp.ok) throw new Error(`Failed to load firmware: ${runBoard.demoFirmwarePath}`);
+        if (!resp.ok) throw new Error(`Failed to load firmware: ${demoPath}`);
         firmware = new Uint8Array(await resp.arrayBuffer());
-        const config = resolveRunSystemConfig({
-          diagram: editor.state.diagram,
-          chipYaml: runBoard.chipYaml,
-          bundledSystemYaml: runBoard.systemYaml,
-          preferDiagram: true,
-          onFallback: (msg) => {
-            setCompileOutput((prev) => `${prev}\nUsing bundled system YAML — canvas not used: ${msg}`);
-          },
-        });
+        const config = runConfig();
         systemYaml = config.systemYaml;
         chipYaml = config.chipYaml;
         setCompileOutput((prev) => prev + '\nUsing pre-built demo firmware.');
       } else {
-        // No demo firmware and compile produced no ELF. The detailed reason is
-        // in the compile output panel, but that panel is desktop-only — surface
-        // a visible toast/error so mobile (where Run is the only control) isn't
-        // a dead button. This is the common outcome for a shared circuit that
-        // carries only a placeholder sketch and no pre-built firmware.
+        // No firmware anywhere. Surface a visible toast (the compile panel is
+        // desktop-only) so mobile Run isn't a dead button.
         const why = result?.errors?.length
           ? `compile failed (${result.errors.length} error${result.errors.length === 1 ? '' : 's'})`
           : 'no firmware';
@@ -1684,6 +1706,10 @@ export function App() {
           setSelectedBoard(prepared.board);
           editor.loadDiagram(prepared.diagram);
           setSource(project.source);
+          // If the share shipped a pre-built binary, run that exact firmware.
+          sharedFirmwareRef.current = project.firmware
+            ? Uint8Array.from(atob(project.firmware), (c) => c.charCodeAt(0))
+            : null;
           setActiveProjectId(null);
           setActiveProjectName(null);
           setCanvasValidationMessage(null);
