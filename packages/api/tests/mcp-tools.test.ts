@@ -180,23 +180,22 @@ describe('expanded MCP tools', () => {
     expect(payload.diagram.parts[1]).not.toHaveProperty('color');
   });
 
-  it('labwired_open_hardware_lab includes supplied source code in the short Playground share', async () => {
-    const kvProjects = makeKvStub();
-    const env = { BUILDER_URL: 'https://b', BUILDER_SECRET: 'k', ENVIRONMENT: 'test', KV_PROJECTS: kvProjects } as any;
+  it('labwired_open_hardware_lab maps a diagram to a runnable example lab by its distinctive part', async () => {
+    const env = { BUILDER_URL: 'https://b', BUILDER_SECRET: 'k', ENVIRONMENT: 'test' } as any;
     const res = await callHostedTool({
       name: 'labwired_open_hardware_lab',
       arguments: {
-        diagram: { board: 'stm32f103', parts: [{ id: 'mcu', type: 'mcu' }], wires: [] },
-        source_code: 'void app_main(void) {}',
+        // nRF52840 + ultrasonic + LED → the proximity example, which ships a
+        // pre-built ELF so the shared lab runs (prod has no compiler).
+        diagram: { board: 'nrf52840', parts: [{ id: 'mcu', type: 'nrf52840-dk' }, { id: 'd', type: 'ultrasonic' }, { id: 'l', type: 'led' }], wires: [] },
       },
     }, env, { userId: 'user_abc' });
 
     expect(res.isError).toBeFalsy();
-    expect(res.structuredContent.studio_url).toContain('?share=');
-    expect(res.structuredContent.studio_url).not.toContain('#');
-    const shareId = new URL(res.structuredContent.studio_url).searchParams.get('share');
-    const payload = JSON.parse(kvProjects._store.get(`share:${shareId}`)!);
-    expect(payload.source).toBe('void app_main(void) {}');
+    expect(res.structuredContent.studio_url).toBe('https://app.labwired.com/?board=nrf52840-proximity-lab');
+    expect(res.structuredContent.inline_frame_url).toBe('https://app.labwired.com/?embed=true&run=1&board=nrf52840-proximity-lab');
+    const text = JSON.parse(res.content[0].text);
+    expect(text.example_lab_id).toBe('nrf52840-proximity-lab');
   });
 
   it('labwired_open_hardware_lab rejects boards that are not in the Playground catalog contract', async () => {
@@ -230,7 +229,7 @@ describe('expanded MCP tools', () => {
     expect(res.structuredContent).toMatchObject({
       ok: true,
       inline_component_uri: 'ui://widget/labwired-hardware-lab-v8.html',
-      inline_frame_url: expect.stringContaining('https://app.labwired.com/?embed=true#'),
+      inline_frame_url: expect.stringContaining('https://app.labwired.com/?embed=true&run=1&board='),
       studio_url: expect.stringContaining('https://app.labwired.com/'),
       share_url: expect.stringContaining('https://app.labwired.com/'),
       scene: {
@@ -245,7 +244,7 @@ describe('expanded MCP tools', () => {
     const text = JSON.parse(res.content[0].text);
     expect(text).toMatchObject({
       inline_component_uri: 'ui://widget/labwired-hardware-lab-v8.html',
-      inline_frame_url: expect.stringContaining('https://app.labwired.com/?embed=true#'),
+      inline_frame_url: expect.stringContaining('https://app.labwired.com/?embed=true&run=1&board='),
       studio_url: expect.stringContaining('https://app.labwired.com/'),
       share_url: expect.stringContaining('https://app.labwired.com/'),
     });
@@ -277,23 +276,10 @@ describe('expanded MCP tools', () => {
     }, env, { userId: 'user_abc' });
 
     expect(res.isError).toBeFalsy();
-    const hash = res.structuredContent.studio_url.split('#')[1];
-    const payload = JSON.parse(Buffer.from(hash.slice(1), 'base64').toString('utf8'));
-    expect(payload.d).toMatchObject({
-      version: 1,
-      parts: [
-        { id: 'mcu', attrs: {} },
-        { id: 'led1', attrs: { color: 'green' } },
-      ],
-      wires: [
-        {
-          from: { part: 'mcu', pin: 'PA5' },
-          to: { part: 'led1', pin: 'A' },
-          color: '#e83e8c',
-        },
-      ],
-    });
-    expect(payload.d.parts[1]).not.toHaveProperty('color');
+    // An LED-only STM32F1 diagram maps to the classic blink example (ships
+    // demo-blinky.elf), so the opened lab is preloaded and runnable.
+    expect(res.structuredContent.studio_url).toBe('https://app.labwired.com/?board=stm32f103-blinky');
+    expect(res.structuredContent.inline_frame_url).toBe('https://app.labwired.com/?embed=true&run=1&board=stm32f103-blinky');
   });
 
   it('labwired_compile_diagram compiles a clean dispenser diagram', async () => {

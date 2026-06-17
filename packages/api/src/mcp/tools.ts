@@ -460,20 +460,13 @@ async function openHardwareLab(
   const diagram = diagramOrStarter(input.diagram);
   const boardValidationError = validatePlaygroundDiagramBoard(diagram);
   if (boardValidationError) return boardValidationError;
-  const providedSource = typeof input.source_code === 'string'
-    ? input.source_code
-    : typeof input.source === 'string'
-      ? input.source
-      : typeof input.firmware_source === 'string'
-        ? input.firmware_source
-        : '';
-  // Every shared lab must be runnable: if the agent gives no firmware, attach a
-  // board-correct blink example so Run works on the shared link (otherwise the
-  // Playground has nothing to compile and Run dead-ends at "no firmware").
-  const source = providedSource.trim()
-    ? providedSource
-    : defaultSourceForBoard(typeof diagram.board === 'string' ? diagram.board : '');
-  const urls = await playgroundUrls(env, diagram, source);
+  // Production has no compiler, so a lab only runs from a pre-built binary that
+  // ships with a curated example. Map the requested diagram to the nearest
+  // runnable example lab (which carries a preloaded ELF) and open THAT, so every
+  // shared lab opens preloaded and runs — instead of a bare board that dead-ends
+  // at "Cannot run: no firmware".
+  const exampleLabId = pickExampleLab(diagram);
+  const urls = exampleLabUrls(exampleLabId);
   const scene = sceneFromDiagram(diagram);
   const evidence = {
     status: 'ready',
@@ -503,9 +496,52 @@ async function openHardwareLab(
         share_url: urls.studioUrl,
         inline_component_uri: HARDWARE_LAB_TEMPLATE_URI,
         inline_frame_url: urls.embedUrl,
-        summary: 'Opened an inline LabWired Playground viewer and a shareable LabWired Studio project for the full device.',
+        example_lab_id: exampleLabId,
+        summary: `Opened the runnable "${exampleLabId}" example lab (ships pre-built firmware) inline and as a shareable LabWired Studio project.`,
       }),
     ],
+  };
+}
+
+// Curated example labs that ship a pre-built binary (demoFirmwarePath in the
+// Playground). Agent diagrams map to the nearest one by their distinctive part,
+// so the opened lab is always preloaded and runnable. Order = most specific first.
+const EXAMPLE_LAB_BY_PART: Array<{ part: string; id: string }> = [
+  { part: 'ultrasonic', id: 'nrf52840-proximity-lab' },
+  { part: 'bme280', id: 'bme280-weather-lab' },
+  { part: 'mpu6050', id: 'mpu6050-sensor-lab' },
+  { part: 'adxl345', id: 'adxl345-sensor-lab' },
+  { part: 'max31855', id: 'max31855-thermocouple-lab' },
+  { part: 'ntc-thermistor', id: 'ntc-thermistor-lab' },
+  { part: 'neo6m-gps', id: 'neo6m-gps-lab' },
+  { part: 'oled-ssd1306', id: 'ssd1306-hello-lab' },
+  { part: 'ili9341', id: 'ili9341-tft-lab' },
+  { part: 'ssd1680_tricolor_290', id: 'epaper-tricolor-lab' },
+  { part: 'led-matrix', id: 'nokia5110-invaders-lab' },
+  { part: 'iolink-master', id: 'al2205-iolink-dido' },
+];
+
+/** Pick the nearest curated example lab (preloaded binary) for a diagram. */
+function pickExampleLab(diagram: Record<string, unknown>): string {
+  const parts = (Array.isArray(diagram.parts) ? diagram.parts : [])
+    .map((p) => (p && typeof p === 'object' ? String((p as Record<string, unknown>).type ?? '') : ''))
+    .filter(Boolean);
+  for (const { part, id } of EXAMPLE_LAB_BY_PART) {
+    if (parts.includes(part)) return id;
+  }
+  const board = (typeof diagram.board === 'string' ? diagram.board : '').toLowerCase();
+  if (board.includes('nrf52840')) return 'nrf52840-proximity-lab';
+  if (board.includes('l476') || board.startsWith('stm32l4')) return 'nucleo-l476rg';
+  if (board.includes('f401') || board.startsWith('stm32f4')) return 'nucleo-f401re';
+  // Default: the classic LED blink, which ships demo-blinky.elf.
+  return 'stm32f103-blinky';
+}
+
+function exampleLabUrls(boardId: string): { studioUrl: string; embedUrl: string } {
+  const id = encodeURIComponent(boardId);
+  return {
+    studioUrl: `https://app.labwired.com/?board=${id}`,
+    embedUrl: `https://app.labwired.com/?embed=true&run=1&board=${id}`,
   };
 }
 
