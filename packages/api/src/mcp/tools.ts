@@ -2,7 +2,7 @@ import type { Env } from '../types.js';
 import type { HostedMcpIdentity, McpTool, McpToolResult } from './types.js';
 import { diagramToConfig, COMPONENT_META, composeDiagnostics, compile, getPlaygroundBoard, listPlaygroundBoards, normalizeLabWiredDiagramV1 } from '@labwired/board-config';
 import type { ValidateDiagram } from '@labwired/board-config';
-import { builderRun } from './builder-client.js';
+import { builderRun, builderCompile } from './builder-client.js';
 import { getWorkspaceRecord, maybeResetMtdCycles, writeWorkspaceRecord } from '../keys.js';
 import { trackUsage } from '../usage.js';
 import {
@@ -15,6 +15,24 @@ import {
 import { decorateTools } from './tool-metadata.js';
 import { HARDWARE_LAB_TEMPLATE_URI } from './resources.js';
 import { createShareRecord, shareUrls } from '../shares.js';
+
+// Boards the hosted PlatformIO compiler accepts. MUST mirror PIO_BOARDS in
+// services/labwired-builder/src/compile.ts. `runnable: false` = compiles but
+// the digital twin cannot execute it yet (ESP32 Xtensa/RISC-V boot is open
+// sim work), so labwired_build_and_run will compile then stop short of run.
+const HOSTED_COMPILE_BOARDS: { board: string; runnable: boolean }[] = [
+  { board: 'stm32l476', runnable: true },
+  { board: 'nucleo-f401re', runnable: true },
+  { board: 'stm32-blackpill', runnable: true },
+  { board: 'nucleo-h563zi', runnable: true },
+  { board: 'rpi-pico', runnable: true },
+  { board: 'nrf52840-dk', runnable: true },
+  { board: 'esp32', runnable: false },
+  { board: 'esp32-s3-zero', runnable: false },
+  { board: 'esp32-c3-supermini', runnable: false },
+];
+const COMPILE_BOARD_IDS = HOSTED_COMPILE_BOARDS.map((b) => b.board);
+const RUNNABLE_BOARD_IDS = new Set(HOSTED_COMPILE_BOARDS.filter((b) => b.runnable).map((b) => b.board));
 
 function hardwareLabToolMeta(): Record<string, unknown> {
   return {
@@ -181,6 +199,51 @@ const hostedTools: McpTool[] = [
       },
     },
   },
+  {
+    name: 'labwired_compile_firmware',
+    description:
+      'Compile C/C++ firmware source into an ELF on LabWired\'s hosted PlatformIO toolchain — no local compiler needed. ' +
+      'Returns a base64 ELF you can pass straight to labwired_run, or structured compiler diagnostics (file/line/message) on failure. ' +
+      'Cortex-M targets (STM32, RP2040, nRF52) both compile and run in the digital twin; ESP32 targets compile but cannot be simulated yet. ' +
+      'For one-shot build+simulate, use labwired_build_and_run.',
+    inputSchema: {
+      type: 'object',
+      required: ['source', 'board'],
+      properties: {
+        source: { type: 'string', description: 'Firmware source (single translation unit). Compiled against a fixed board scaffold.' },
+        board: { type: 'string', enum: COMPILE_BOARD_IDS, description: 'Target board id from labwired_list_boards.' },
+        language: { type: 'string', enum: ['c', 'cpp'], description: 'Source language. Defaults to c.' },
+      },
+    },
+    outputSchema: {
+      type: 'object',
+      required: ['ok'],
+      properties: {
+        ok: { type: 'boolean' },
+        elf_base64: { type: 'string' },
+        runnable: { type: 'boolean', description: 'Whether the digital twin can execute this target today.' },
+        diagnostics: { type: 'array', items: { type: 'object' } },
+      },
+    },
+  },
+  {
+    name: 'labwired_build_and_run',
+    description:
+      'One call: compile C/C++ firmware on the hosted toolchain AND run the resulting ELF in the LabWired digital twin against a diagram. ' +
+      'The closed write→build→run→diagnose loop for agents with no local toolchain. Aborts with compiler diagnostics if the build fails, ' +
+      'or with DIAGRAM_INVALID if the wiring is invalid. Only Cortex-M targets currently execute; ESP32 will compile but not run.',
+    inputSchema: {
+      type: 'object',
+      required: ['source', 'board', 'diagram'],
+      properties: {
+        source: { type: 'string', description: 'Firmware source.' },
+        board: { type: 'string', enum: COMPILE_BOARD_IDS, description: 'Target board id; must equal diagram.board.' },
+        diagram: { type: 'object', description: 'Diagram JSON with board, parts, and wires.' },
+        language: { type: 'string', enum: ['c', 'cpp'], description: 'Source language. Defaults to c.' },
+        max_steps: { type: 'number', description: 'Maximum simulation steps (default 1,000,000).' },
+      },
+    },
+  },
 ];
 
 export function listHostedTools(): McpTool[] {
@@ -282,6 +345,8 @@ async function dispatchHostedTool(
         isError: true,
       };
     }
+    const invalid = diagramValidationGate(diagram);
+    if (invalid) return invalid;
     const result = compile(diagram as Parameters<typeof compile>[0]);
     if (!result.ok) {
       return {
@@ -296,6 +361,14 @@ async function dispatchHostedTool(
 
   if (name === 'labwired_run') {
     return handleRun(parsed?.arguments, env, identity);
+  }
+
+  if (name === 'labwired_compile_firmware') {
+    return handleCompileFirmware(parsed?.arguments, env);
+  }
+
+  if (name === 'labwired_build_and_run') {
+    return handleBuildAndRun(parsed?.arguments, env, identity);
   }
 
   if (name === 'labwired_list_components') {
@@ -313,6 +386,28 @@ async function dispatchHostedTool(
 
 function textContent(value: unknown): { type: 'text'; text: string } {
   return { type: 'text', text: JSON.stringify(value) };
+}
+
+/**
+ * First-class validation gate. EVERY tool that ingests an agent-authored
+ * diagram and then builds, compiles, runs, or publishes hardware MUST call
+ * this first: a diagram with ERC/pin errors (unknown pin, no MCU, undriven
+ * rail, dangling functional part, …) must never reach the compiler, the
+ * simulator, or a shared link. Returns a DIAGRAM_INVALID result to
+ * short-circuit the tool, or null when the diagram is clean. Warnings do not
+ * block (composeDiagnostics().ok is error-count based).
+ */
+function diagramValidationGate(diagram: unknown): McpToolResult | null {
+  const validation = composeDiagnostics(diagram as unknown as ValidateDiagram);
+  if (validation.ok) return null;
+  return {
+    content: [textContent({
+      error: 'DIAGRAM_INVALID',
+      detail: 'The diagram has wiring errors and was rejected before building. Fix the errors below, then retry. Call labwired_validate_diagram to re-check.',
+      validation,
+    })],
+    isError: true,
+  };
 }
 
 async function handleRun(
@@ -344,6 +439,13 @@ async function handleRun(
     };
   }
 
+  // First-class validation: a board with ERC/pin errors must never reach the
+  // simulator, even with a valid ELF and matching target. Block before we
+  // lower the diagram to YAML (diagramToConfig silently drops unresolvable
+  // pins, so it would otherwise "run" a board the user never actually wired).
+  const invalid = diagramValidationGate(diagram);
+  if (invalid) return invalid;
+
   // Convert diagram to system + chip YAML
   let systemYaml: string;
   let chipYaml: string;
@@ -371,6 +473,101 @@ async function handleRun(
     content: [textContent(result)],
     isError: result.status === 'error' ? true : undefined,
   };
+}
+
+function compileArgs(args: unknown): { source: string; board: string; language?: 'c' | 'cpp' } | McpToolResult {
+  const input = (args ?? {}) as Record<string, unknown>;
+  const source = typeof input.source === 'string' ? input.source : '';
+  const board = typeof input.board === 'string' ? input.board : '';
+  if (!source.trim() || !board) {
+    return {
+      content: [textContent({ error: 'INVALID_ARGS', detail: 'source and board are required.' })],
+      isError: true,
+    };
+  }
+  if (!COMPILE_BOARD_IDS.includes(board)) {
+    return {
+      content: [textContent({ error: 'BOARD_NOT_COMPILABLE', detail: `Board "${board}" is not supported by the hosted compiler. Supported: ${COMPILE_BOARD_IDS.join(', ')}.` })],
+      isError: true,
+    };
+  }
+  const language = input.language === 'cpp' ? 'cpp' : input.language === 'c' ? 'c' : undefined;
+  return { source, board, language };
+}
+
+function compilerUnavailable(err: unknown): McpToolResult {
+  return {
+    content: [textContent({
+      error: 'COMPILER_UNAVAILABLE',
+      detail: 'The hosted firmware compiler is not reachable right now. Compile the ELF in your own sandbox (see docs/firmware-scaffolds) and use labwired_run instead.',
+      cause: err instanceof Error ? err.message : String(err),
+    })],
+    isError: true,
+  };
+}
+
+async function handleCompileFirmware(args: unknown, env: Env): Promise<McpToolResult> {
+  const parsed = compileArgs(args);
+  if ('content' in parsed) return parsed;
+  let result;
+  try {
+    result = await builderCompile(env, parsed);
+  } catch (err) {
+    return compilerUnavailable(err);
+  }
+  return {
+    content: [textContent({
+      ok: result.ok,
+      ...(result.ok ? { elf_base64: result.elfBase64 } : {}),
+      runnable: result.runnable ?? RUNNABLE_BOARD_IDS.has(parsed.board),
+      diagnostics: result.diagnostics,
+      ...(result.ok ? {} : { detail: 'Firmware did not compile. Fix the diagnostics below and retry.' }),
+    })],
+    isError: result.ok ? undefined : true,
+  };
+}
+
+async function handleBuildAndRun(args: unknown, env: Env, identity: HostedMcpIdentity): Promise<McpToolResult> {
+  const parsed = compileArgs(args);
+  if ('content' in parsed) return parsed;
+  const input = (args ?? {}) as Record<string, unknown>;
+  const diagram = input.diagram;
+  if (!diagram || typeof diagram !== 'object' || Array.isArray(diagram)) {
+    return {
+      content: [textContent({ error: 'INVALID_ARGS', detail: 'diagram is required and must be an object.' })],
+      isError: true,
+    };
+  }
+  // Fail fast if the twin can't execute this board at all.
+  if (!RUNNABLE_BOARD_IDS.has(parsed.board)) {
+    return {
+      content: [textContent({ error: 'BOARD_NOT_RUNNABLE', detail: `Board "${parsed.board}" can be compiled (labwired_compile_firmware) but the digital twin cannot run it yet. Runnable: ${[...RUNNABLE_BOARD_IDS].join(', ')}.` })],
+      isError: true,
+    };
+  }
+  // Validate wiring before spending a compile.
+  const invalid = diagramValidationGate(diagram);
+  if (invalid) return invalid;
+
+  let compiled;
+  try {
+    compiled = await builderCompile(env, parsed);
+  } catch (err) {
+    return compilerUnavailable(err);
+  }
+  if (!compiled.ok) {
+    return {
+      content: [textContent({ ok: false, stage: 'compile', detail: 'Firmware did not compile. Fix the diagnostics below and retry.', diagnostics: compiled.diagnostics })],
+      isError: true,
+    };
+  }
+
+  // Hand the fresh ELF to the existing run path (validation + metering + diagnosis).
+  return handleRun(
+    { elf_base64: compiled.elfBase64, target: parsed.board, diagram, max_steps: input.max_steps },
+    env,
+    identity,
+  );
 }
 
 async function meterRunCycles(env: Env, workspaceId: string, cycles: number): Promise<void> {
@@ -460,6 +657,21 @@ async function openHardwareLab(
   const diagram = diagramOrStarter(input.diagram);
   const boardValidationError = validatePlaygroundDiagramBoard(diagram);
   if (boardValidationError) return boardValidationError;
+  // Gate: never publish a lab that fails validation (branch's first-class gate).
+  // Errors (unknown pin, no MCU, dangling functional part, …) must BLOCK the
+  // share — otherwise the agent ships a board that "looks wired but isn't" and it
+  // only surfaces when a human opens the link. Return the diagnostics to fix+retry.
+  const validation = composeDiagnostics(diagram as unknown as ValidateDiagram);
+  if (!validation.ok) {
+    return {
+      content: [textContent({
+        error: 'DIAGRAM_INVALID',
+        detail: 'The diagram has wiring errors and was not published. Fix the errors below and call labwired_open_hardware_lab again.',
+        validation,
+      })],
+      isError: true,
+    };
+  }
   // One shareable link format for everything. The Playground runs the share's
   // own binary if it carries one, else a curated example's firmware matched to
   // the board (prod has no compiler), so the shared lab runs either way.
@@ -468,7 +680,7 @@ async function openHardwareLab(
   const scene = sceneFromDiagram(diagram);
   const evidence = {
     status: 'ready',
-    diagnostics: composeDiagnostics(diagram as unknown as ValidateDiagram).diagnostics,
+    diagnostics: validation.diagnostics,
   };
   const structuredContent = {
     ok: true,
