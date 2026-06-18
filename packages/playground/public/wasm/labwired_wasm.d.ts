@@ -339,6 +339,13 @@ export class WasmSimulator {
      * Non-consuming UART trace snapshot for instruments such as the logic analyzer.
      */
     uart_trace_snapshot(): any;
+    /**
+     * Non-consuming WiFi 802.11 frame-trace snapshot for the network analyzer
+     * (the WiFi analog of `air_trace_snapshot`). Returns, per ESP32-C3 WiFi MAC,
+     * the recently captured TX/RX frames (most-recent first); the analyzer UI
+     * decodes 802.11 type/addresses and the L3 payload (DHCP/ARP/IP).
+     */
+    wifi_trace_snapshot(): any;
 }
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
@@ -346,47 +353,29 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly __wbg_wasmsimulator_free: (a: number, b: number) => void;
-    readonly wasmsimulator_air_trace_snapshot: (a: number) => any;
-    readonly wasmsimulator_apply_agentdeck_quirks: (a: number) => [number, number];
-    readonly wasmsimulator_apply_runtime_snapshot: (a: number, b: number, c: number) => [number, number];
     readonly wasmsimulator_bench_jit: (a: number, b: number) => [number, number, number];
-    readonly wasmsimulator_drain_uart_output: (a: number) => [number, number];
-    readonly wasmsimulator_fdcan_trace_snapshot: (a: number) => any;
-    readonly wasmsimulator_feed_uart_input: (a: number, b: number, c: number) => void;
     readonly wasmsimulator_gdb_process_packet: (a: number, b: number, c: number) => [number, number];
-    readonly wasmsimulator_get_adc_device_states: (a: number) => any;
-    readonly wasmsimulator_get_board_io_analog_states: (a: number) => any;
-    readonly wasmsimulator_get_board_io_config: (a: number) => any;
-    readonly wasmsimulator_get_board_io_states: (a: number) => any;
     readonly wasmsimulator_get_disassembly: (a: number) => [number, number];
-    readonly wasmsimulator_get_i2c_sensor_states: (a: number) => any;
-    readonly wasmsimulator_get_ili9341_framebuffer: (a: number, b: number, c: number) => [number, number, number, number];
-    readonly wasmsimulator_get_iolink_master_state: (a: number) => any;
-    readonly wasmsimulator_get_led_state: (a: number) => number;
     readonly wasmsimulator_get_pc: (a: number) => number;
-    readonly wasmsimulator_get_pcd8544_framebuffer: (a: number, b: number, c: number) => [number, number, number, number];
-    readonly wasmsimulator_get_peripheral_list: (a: number) => any;
-    readonly wasmsimulator_get_peripheral_snapshot: (a: number, b: number, c: number) => any;
     readonly wasmsimulator_get_register: (a: number, b: number) => number;
     readonly wasmsimulator_get_register_names: (a: number) => any;
-    readonly wasmsimulator_get_sn74hc165_inputs: (a: number) => number;
-    readonly wasmsimulator_get_spi_device_states: (a: number) => any;
-    readonly wasmsimulator_get_ssd1306_framebuffer: (a: number, b: number, c: number) => [number, number, number, number];
-    readonly wasmsimulator_get_ssd1680_framebuffer: (a: number, b: number, c: number) => [number, number, number, number];
-    readonly wasmsimulator_get_ssd1680_refresh_generation: (a: number, b: number, c: number) => [number, number, number];
-    readonly wasmsimulator_get_uart_device_states: (a: number) => any;
-    readonly wasmsimulator_get_uc8151d_framebuffer: (a: number, b: number, c: number) => [number, number, number, number];
-    readonly wasmsimulator_get_uc8151d_refresh_generation: (a: number, b: number, c: number) => [number, number, number];
-    readonly wasmsimulator_install_arduino_esp32_quirks: (a: number, b: number, c: number) => [number, number];
-    readonly wasmsimulator_install_esp32_arduino_quirks: (a: number) => [number, number];
-    readonly wasmsimulator_iolink_trace_clear: (a: number) => void;
-    readonly wasmsimulator_iolink_trace_snapshot: (a: number) => any;
     readonly wasmsimulator_jit_hits: (a: number) => bigint;
     readonly wasmsimulator_jit_refusals: (a: number) => bigint;
-    readonly wasmsimulator_keep_alive_esp32_dual_core: (a: number) => void;
     readonly wasmsimulator_new: (a: number, b: number) => [number, number, number];
     readonly wasmsimulator_new_from_config: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly wasmsimulator_read_memory: (a: number, b: number, c: number) => [number, number];
+    readonly wasmsimulator_set_jit_enabled: (a: number, b: number) => void;
+    readonly wasmsimulator_step: (a: number, b: number) => [number, number];
+    readonly wasmsimulator_step_batch: (a: number, b: number) => [number, number, number];
+    readonly wasmsimulator_step_single: (a: number) => [number, number];
+    readonly wasmsimulator_step_with_esp32_aids: (a: number, b: number) => [number, number];
+    readonly wasmsimulator_apply_agentdeck_quirks: (a: number) => [number, number];
+    readonly wasmsimulator_apply_runtime_snapshot: (a: number, b: number, c: number) => [number, number];
+    readonly wasmsimulator_feed_uart_input: (a: number, b: number, c: number) => void;
+    readonly wasmsimulator_get_i2c_sensor_states: (a: number) => any;
+    readonly wasmsimulator_get_sn74hc165_inputs: (a: number) => number;
+    readonly wasmsimulator_install_arduino_esp32_quirks: (a: number, b: number, c: number) => [number, number];
+    readonly wasmsimulator_keep_alive_esp32_dual_core: (a: number) => void;
     readonly wasmsimulator_set_adc_value: (a: number, b: number, c: number, d: number) => [number, number];
     readonly wasmsimulator_set_board_io_input: (a: number, b: number, c: number, d: number) => [number, number];
     readonly wasmsimulator_set_gps_fix: (a: number, b: number, c: number, d: number) => [number, number];
@@ -394,17 +383,36 @@ export interface InitOutput {
     readonly wasmsimulator_set_hcsr04_distance: (a: number, b: number, c: number, d: number) => [number, number];
     readonly wasmsimulator_set_i2c_sensor_sample: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
     readonly wasmsimulator_set_i2c_sensor_sample_6dof: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => [number, number];
-    readonly wasmsimulator_set_jit_enabled: (a: number, b: number) => void;
     readonly wasmsimulator_set_max31855_temperature: (a: number, b: number, c: number, d: number, e: number) => [number, number];
     readonly wasmsimulator_set_ntc_temperature: (a: number, b: number, c: number, d: number) => [number, number];
     readonly wasmsimulator_set_sn74hc165_channel: (a: number, b: number, c: number) => [number, number];
     readonly wasmsimulator_set_sn74hc165_inputs: (a: number, b: number) => [number, number];
-    readonly wasmsimulator_step: (a: number, b: number) => [number, number];
-    readonly wasmsimulator_step_batch: (a: number, b: number) => [number, number, number];
-    readonly wasmsimulator_step_single: (a: number) => [number, number];
-    readonly wasmsimulator_step_with_esp32_aids: (a: number, b: number) => [number, number];
     readonly wasmsimulator_take_runtime_snapshot: (a: number) => [number, number, number, number];
+    readonly wasmsimulator_install_esp32_arduino_quirks: (a: number) => [number, number];
+    readonly wasmsimulator_air_trace_snapshot: (a: number) => any;
+    readonly wasmsimulator_drain_uart_output: (a: number) => [number, number];
+    readonly wasmsimulator_fdcan_trace_snapshot: (a: number) => any;
+    readonly wasmsimulator_get_adc_device_states: (a: number) => any;
+    readonly wasmsimulator_get_board_io_analog_states: (a: number) => any;
+    readonly wasmsimulator_get_board_io_config: (a: number) => any;
+    readonly wasmsimulator_get_board_io_states: (a: number) => any;
+    readonly wasmsimulator_get_ili9341_framebuffer: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly wasmsimulator_get_iolink_master_state: (a: number) => any;
+    readonly wasmsimulator_get_led_state: (a: number) => number;
+    readonly wasmsimulator_get_pcd8544_framebuffer: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly wasmsimulator_get_peripheral_list: (a: number) => any;
+    readonly wasmsimulator_get_peripheral_snapshot: (a: number, b: number, c: number) => any;
+    readonly wasmsimulator_get_spi_device_states: (a: number) => any;
+    readonly wasmsimulator_get_ssd1306_framebuffer: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly wasmsimulator_get_ssd1680_framebuffer: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly wasmsimulator_get_ssd1680_refresh_generation: (a: number, b: number, c: number) => [number, number, number];
+    readonly wasmsimulator_get_uart_device_states: (a: number) => any;
+    readonly wasmsimulator_get_uc8151d_framebuffer: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly wasmsimulator_get_uc8151d_refresh_generation: (a: number, b: number, c: number) => [number, number, number];
+    readonly wasmsimulator_iolink_trace_clear: (a: number) => void;
+    readonly wasmsimulator_iolink_trace_snapshot: (a: number) => any;
     readonly wasmsimulator_uart_trace_snapshot: (a: number) => any;
+    readonly wasmsimulator_wifi_trace_snapshot: (a: number) => any;
     readonly wasm_bindgen__convert__closures_____invoke__h78b2ba27b68b9c3b: (a: number, b: number, c: number) => number;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;

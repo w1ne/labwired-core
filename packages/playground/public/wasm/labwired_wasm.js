@@ -777,6 +777,17 @@ export class WasmSimulator {
         const ret = wasm.wasmsimulator_uart_trace_snapshot(this.__wbg_ptr);
         return ret;
     }
+    /**
+     * Non-consuming WiFi 802.11 frame-trace snapshot for the network analyzer
+     * (the WiFi analog of `air_trace_snapshot`). Returns, per ESP32-C3 WiFi MAC,
+     * the recently captured TX/RX frames (most-recent first); the analyzer UI
+     * decodes 802.11 type/addresses and the L3 payload (DHCP/ARP/IP).
+     * @returns {any}
+     */
+    wifi_trace_snapshot() {
+        const ret = wasm.wasmsimulator_wifi_trace_snapshot(this.__wbg_ptr);
+        return ret;
+    }
 }
 if (Symbol.dispose) WasmSimulator.prototype[Symbol.dispose] = WasmSimulator.prototype.free;
 function __wbg_get_imports() {
@@ -890,7 +901,7 @@ function __wbg_get_imports() {
             console.warn(getStringFromWasm0(arg0, arg1));
         },
         __wbindgen_cast_0000000000000001: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [I32], shim_idx: 2088, ret: I32, inner_ret: Some(I32) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [I32], shim_idx: 2572, ret: I32, inner_ret: Some(I32) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h78b2ba27b68b9c3b);
             return ret;
         },
