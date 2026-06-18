@@ -35,7 +35,13 @@ jobs:
       # labwired-landing clone intermittently fails in CI ("Repository not
       # found"), which was aborting the whole `submodules: recursive` checkout.
       - name: Fetch core submodule
-        run: git submodule update --init --depth 1 core
+        # Rewrite the SSH submodule URL (git@github.com:) to HTTPS so the clone
+        # uses the token actions/checkout already persisted (persist-credentials)
+        # instead of SSH — there's no SSH key in CI. Same token + rewrite that
+        # checkout's own `submodules:` handling uses, but only for `core`.
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git submodule update --init --depth 1 core
 
       - name: Setup Node
         uses: actions/setup-node@v4
