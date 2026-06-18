@@ -26,6 +26,13 @@ pub trait MachineTrait: Send {
     fn total_cycles(&self) -> u64;
     fn read_u8(&self, addr: u64) -> SimResult<u8>;
     fn write_u8(&mut self, addr: u64, val: u8) -> SimResult<()>;
+    /// Attach a UART stream device (e.g. a `UartCrossLink` wire endpoint) to a
+    /// named UART peripheral inside this machine.
+    fn attach_uart_stream(
+        &mut self,
+        uart_id: &str,
+        dev: Box<dyn crate::peripherals::uart::UartStreamDevice>,
+    ) -> anyhow::Result<()>;
 }
 
 impl<C: Cpu + 'static> MachineTrait for Machine<C> {
@@ -52,6 +59,14 @@ impl<C: Cpu + 'static> MachineTrait for Machine<C> {
 
     fn write_u8(&mut self, addr: u64, val: u8) -> SimResult<()> {
         self.bus.write_u8(addr, val)
+    }
+
+    fn attach_uart_stream(
+        &mut self,
+        uart_id: &str,
+        dev: Box<dyn crate::peripherals::uart::UartStreamDevice>,
+    ) -> anyhow::Result<()> {
+        self.bus.attach_uart_stream_by_id(uart_id, dev)
     }
 }
 
