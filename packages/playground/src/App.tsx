@@ -309,6 +309,33 @@ export function makeStarterDiagram(config: BoardConfig): Diagram {
     };
   }
 
+  if (config.boardId === 'f103-uds-ecu') {
+    // STM32F103 ECU on the bxCAN (classical CAN) model. The logic analyzer
+    // decodes the bxCAN frame trace; bxCAN runs in internal loopback so the
+    // single node plays both tester and ECU (PA12 = CAN_TX, PA11 = CAN_RX).
+    return {
+      ...createEmptyDiagram(config.chipId),
+      parts: [
+        mcu,
+        { id: 'can_xcvr', type: 'can-transceiver', x: 500, y: 210, rotate: 0, attrs: {} },
+        { id: 'uds_tester', type: 'can-diagnostic-tool', x: 680, y: 205, rotate: 0, attrs: {} },
+        { id: 'uds_probe', type: 'logic-analyzer', x: 880, y: 196, rotate: 0, attrs: { decoder: 'uds' } },
+      ],
+      wires: [
+        { from: { part: 'mcu', pin: 'PA12' }, to: { part: 'can_xcvr', pin: 'TXD' }, color: '#06D6A0' },
+        { from: { part: 'mcu', pin: 'PA11' }, to: { part: 'can_xcvr', pin: 'RXD' }, color: '#118AB2' },
+        { from: { part: 'mcu', pin: '5V' }, to: { part: 'can_xcvr', pin: 'VCC' }, color: '#FF6B6B' },
+        { from: { part: 'mcu', pin: 'GND' }, to: { part: 'can_xcvr', pin: 'GND' }, color: '#888888' },
+        { from: { part: 'can_xcvr', pin: 'CAN_H' }, to: { part: 'uds_tester', pin: 'CAN_H' }, color: '#06D6A0' },
+        { from: { part: 'can_xcvr', pin: 'CAN_L' }, to: { part: 'uds_tester', pin: 'CAN_L' }, color: '#118AB2' },
+        { from: { part: 'can_xcvr', pin: 'GND' }, to: { part: 'uds_tester', pin: 'GND' }, color: '#888888' },
+        { from: { part: 'uds_probe', pin: 'CH0' }, to: { part: 'uds_tester', pin: 'CAN_H' }, color: '#F5B642' },
+        { from: { part: 'uds_probe', pin: 'CH1' }, to: { part: 'uds_tester', pin: 'CAN_L' }, color: '#F5B642' },
+        { from: { part: 'uds_probe', pin: 'GND' }, to: { part: 'uds_tester', pin: 'GND' }, color: '#888888' },
+      ],
+    };
+  }
+
   if (config.boardId === 'mpu6050-sensor-lab') {
     return {
       ...createEmptyDiagram(config.chipId),
@@ -803,6 +830,15 @@ export function App() {
     root.classList.toggle('lw-no-glass', !uiFeatures.glass);
     return () => root.classList.remove('lw-no-glass');
   }, [uiFeatures.glass]);
+
+  // Auto-open instruments a board/lab declares, so a shared link shows its
+  // output immediately instead of a blank canvas.
+  useEffect(() => {
+    if (selectedBoard.openInstruments?.includes('logic-analyzer')) {
+      setShowAnalyzer(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedBoard.boardId]);
 
   // Command palette mode + ref for global ⌘K shortcut
   const commandRefs = useRef<{ open: () => void; close: () => void } | null>(null);

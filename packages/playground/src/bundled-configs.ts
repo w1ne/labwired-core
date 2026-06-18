@@ -40,9 +40,11 @@ import systemEpaperTricolorLab from '../../../core/examples/epaper-tricolor-lab/
 import systemEsp32EpaperLab from '../../../core/examples/esp32-epaper-lab/system.yaml?raw';
 import systemAl2205IolinkDido from '../../../core/examples/al2205-iolink-dido/system.yaml?raw';
 import systemH563UdsEcu from '../../../core/examples/h563-uds-ecu/system.yaml?raw';
+import systemF103UdsEcu from '../../../core/examples/f103-uds-ecu/system.yaml?raw';
 import sourceBlinky from '../../../core/examples/demo-blinky/src/main.rs?raw';
 import sourceAl2205IolinkDido from '../../../core/examples/al2205-iolink-dido/firmware/main.c?raw';
 import sourceH563UdsEcu from '../../../core/examples/h563-uds-ecu/firmware/main.c?raw';
+import sourceF103UdsEcu from '../../../core/examples/f103-uds-ecu/firmware/main.c?raw';
 import sourceAdxl345 from '../../../core/examples/adxl345-sensor-lab/src/main.rs?raw';
 import sourceMpu6050 from '../../../core/examples/mpu6050-sensor-lab/src/main.rs?raw';
 import sourceBme280 from '../../../core/examples/bme280-weather-lab/src/main.rs?raw';
@@ -121,6 +123,12 @@ export interface BoardConfig {
   runHint?: string;
   /** Hidden from user-facing board lists (still resolvable by boardId — e.g. firmware for a sub-part of a multi-board lab). */
   hidden?: boolean;
+  /**
+   * Instruments to auto-open when this board loads, so a shared lab shows its
+   * output immediately instead of a blank canvas. Currently honors
+   * `'logic-analyzer'` (opens the analyzer panel).
+   */
+  openInstruments?: Array<'logic-analyzer'>;
 }
 
 const BASE = import.meta.env.BASE_URL;
@@ -233,6 +241,33 @@ export const BOARD_CONFIGS: BoardConfig[] = [
       nextStepRunning: 'Running UDS over the simulated CAN bus.',
     },
     runHint: 'Click Run - the virtual tester sends 0x22 F190 and the ECU answers with VIN DID 0xF190.',
+  },
+  {
+    boardId: 'f103-uds-ecu',
+    chipId: 'stm32f103',
+    name: 'STM32F103 bxCAN UDS ECU',
+    description:
+      'STM32F103 ECU on the bxCAN (classical CAN) model: real UDSLib ISO-TP reassembling a multi-frame SecurityAccess request in internal loopback. Reproduces udslib issue #29.',
+    arch: 'ARM Cortex-M3',
+    chipYaml: chipStm32f103,
+    systemYaml: systemF103UdsEcu,
+    demoFirmwarePath: `${BASE}wasm/demo-f103-uds-ecu.elf`,
+    mcuComponentType: 'stm32-dev',
+    sourceCode: sourceF103UdsEcu,
+    sourceFilename: 'f103-uds-ecu/firmware/main.c',
+    kind: 'lab',
+    hidden: true,
+    openInstruments: ['logic-analyzer'],
+    summary: {
+      title: 'STM32F103 bxCAN UDS ECU',
+      description:
+        'Real UDSLib on the F103 bxCAN model reassembling a multi-frame (FF+CF) SecurityAccess request over classical CAN in loopback.',
+      nextStep:
+        'Click Run - the firmware injects the FirstFrame + ConsecutiveFrame and the ECU answers; watch the logic analyzer decode the UDS exchange.',
+      nextStepRunning: 'Running multi-frame UDS over the simulated bxCAN bus.',
+    },
+    runHint:
+      'Click Run - the FF (27 01 ...) + CF reassemble and the ECU replies with the SecurityAccess seed (67 01 DE AD BE EF).',
   },
   {
     boardId: 'bme280-weather-lab',

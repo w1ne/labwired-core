@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { getPinMapping, PIN_MAPS, COMPONENT_REGISTRY } from '@labwired/ui';
 import { BOARD_CONFIGS, pickerBoards } from './bundled-configs';
 import { STARTER_LABS } from './studio/ChipRow';
+import demoAssets from '../demo-assets.json';
 
 // ── Firmware-asset gate helpers ─────────────────────────────────────────────
 // Every board's demoFirmwarePath is fetched by the browser at Run time. If the
@@ -226,7 +227,14 @@ describe('BOARD_CONFIGS', () => {
   // place and the user hits "Simulator init failed" on Run. CI fails HERE
   // instead — making every deploy reproducible from git alone.
   describe('firmware-asset gate', () => {
-    const firmwareBoards = BOARD_CONFIGS.filter((c) => c.demoFirmwarePath);
+    // Boards whose ELF is delivered via the demo-assets Release manifest are
+    // fetched at build time (prebuild -> fetch-demo-firmware.sh), not committed
+    // to git. They are validated by the 'demo-assets.json aligned' test below,
+    // so exempt them from the committed-ELF checks here.
+    const manifestNames = new Set((demoAssets.assets ?? []).map((a) => a.filename));
+    const firmwareBoards = BOARD_CONFIGS.filter(
+      (c) => c.demoFirmwarePath && !manifestNames.has(path.basename(publicPathForUrl(c.demoFirmwarePath))),
+    );
     const tracked = trackedWasmBasenames();
 
     it('there is at least one firmware board to gate (sanity)', () => {

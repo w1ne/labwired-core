@@ -73,8 +73,11 @@ const STM32F103_PINS: Record<string, PinMapping> = {
   ]},
   PA11: { gpio: { peripheral: 'gpioa', pin: 11 }, functions: [
     { type: 'timer', peripheral: 'tim1', channel: 4 },
+    { type: 'can', peripheral: 'bxcan1', role: 'rx' },
   ]},
-  PA12: { gpio: { peripheral: 'gpioa', pin: 12 }, functions: [] },
+  PA12: { gpio: { peripheral: 'gpioa', pin: 12 }, functions: [
+    { type: 'can', peripheral: 'bxcan1', role: 'tx' },
+  ]},
   PA13: { gpio: { peripheral: 'gpioa', pin: 13 }, functions: [] },
   PA14: { gpio: { peripheral: 'gpioa', pin: 14 }, functions: [] },
   PA15: { gpio: { peripheral: 'gpioa', pin: 15 }, functions: [
