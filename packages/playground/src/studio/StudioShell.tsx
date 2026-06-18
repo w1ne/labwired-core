@@ -10,6 +10,7 @@ export interface StudioShellProps {
   boardName?: string;
   isEmpty?: boolean;
   onShare?: () => void;
+  onEmbed?: () => void;
   onPickLab?: (labId: string) => void;
   onUploadFirmware?: (file: File) => void;
   onOpenTools?: () => void;
@@ -38,6 +39,7 @@ export function StudioShell({
   boardName = 'Untitled',
   isEmpty = false,
   onShare,
+  onEmbed,
   onPickLab,
   onUploadFirmware,
   onOpenTools,
@@ -69,6 +71,7 @@ export function StudioShell({
         boardName={boardName}
         onOpenCommand={layout.openCommand}
         onShare={onShare}
+        onEmbed={onEmbed}
         onUploadFirmware={onUploadFirmware}
         onOpenTools={onOpenTools}
         tools={tools}

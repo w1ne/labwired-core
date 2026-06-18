@@ -1,5 +1,7 @@
 import { useState, useCallback, useRef, useMemo, useEffect, type ReactNode } from 'react';
 import { ProjectsModal } from './studio/ProjectsModal';
+import { EmbedDialog } from './studio/EmbedDialog';
+import { EmbedBadge } from './EmbedBadge';
 import type { ProjectRecord } from './studio/useProjects';
 import { CommandPalette } from './studio/CommandPalette';
 import { useCommandPaletteItems } from './studio/useCommandPaletteItems';
@@ -805,6 +807,7 @@ export function App() {
   const [compiling, setCompiling] = useState(false);
   const [showCode] = useState(false);
   const [projectsModalOpen, setProjectsModalOpen] = useState(false);
+  const [embedOpen, setEmbedOpen] = useState(false);
   // Tracks the currently-loaded cloud project (null if the canvas is from
   // a board starter or unsaved). When set, "Save" overwrites this project.
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
@@ -1959,6 +1962,11 @@ export function App() {
     }
   }, [editor.state.diagram, source, selectedBoard]);
 
+  // Embed — opens the dialog that mints embed code + a live preview.
+  const handleEmbed = useCallback(() => {
+    setEmbedOpen(true);
+  }, []);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -2317,6 +2325,7 @@ export function App() {
       // Upload now lives per-chip in ChipControls — a global top-bar
       // Upload is ambiguous about which chip it targets, so it's gone.
       onShare={handleShare}
+      onEmbed={handleEmbed}
       toast={toast}
       onDismissToast={() => setToast(null)}
       paletteComponents={paletteComponents}
@@ -2612,6 +2621,15 @@ export function App() {
         <IoLinkAnalyzer bridge={bridge} running={running} />
       </ChipWindow>
     )}
+    <EmbedDialog
+      open={embedOpen}
+      onClose={() => setEmbedOpen(false)}
+      diagram={editor.state.diagram}
+      source={source}
+      onError={(message) => setToast(message)}
+    />
+    {/* Branded attribution shown only inside an embedded (?embed=true) lab. */}
+    {embed && <EmbedBadge />}
     </StudioShell>
     </ChipsProvider>
   );
