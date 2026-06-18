@@ -1,172 +1,126 @@
 # LabWired Builder — Hetzner Deploy Runbook
 
-Target: a small Hetzner VPS (cx22 / 2 vCPU, 4 GB RAM, Ubuntu 24.04 is fine).
-The service is accessed by the Cloudflare Worker via the `builder.labwired.com`
-tunnel — never exposed directly to the internet.
+The builder runs as a Docker Compose stack on a small Hetzner VPS (cx22 /
+2 vCPU / 4 GB, Ubuntu 24.04). Steady-state deploy is two commands; the box needs
+only Docker (no Rust, Node, or PlatformIO installed on the host).
 
-The service is **run-only**: it receives a compiled ELF from the agent and runs
-it in the `labwired` digital-twin simulator. There is no hosted compiler; agents
-compile in their own sandboxes and upload the ELF (see `docs/firmware-scaffolds`
-for the exact toolchain flags).
+```
+compile      ghcr.io/w1ne/labwired-compile   PlatformIO build service  (internal only)
+builder      ghcr.io/w1ne/labwired-builder    /run sim + /compile proxy (internal only)
+cloudflared  cloudflare/cloudflared           tunnel → builder.labwired.com
+```
+
+Both app images are **private GHCR packages**. The compile container compiles
+untrusted source, so it lives on an egress-denied internal network and is never
+published to the host. All PlatformIO frameworks are baked into the compile
+image at build time, so it compiles every catalog board with **no network**.
+
+## Exposure invariants (do not break)
+
+1. **Never add a `ports:` mapping to `builder` or `compile`.** Docker's iptables
+   rules bypass the host firewall; a published port is internet-reachable even
+   with UFW denying it. cloudflared reaches the builder over the compose network.
+2. **The Cloudflare tunnel has exactly one ingress rule:**
+   `builder.labwired.com → http://builder:18080`, then a `404` catch-all. Never
+   point an ingress rule at the compile service.
+3. **The compile service stays on the `backend` (internal) network** so it has no
+   internet egress at runtime (its toolchain caches are baked into the image).
 
 ---
 
-## 1. Build and install the native `labwired` simulator binary
+## One-time bootstrap
 
-On your **dev machine** (where the Rust toolchain lives):
-
-```bash
-cd ~/Projects/labwired/core
-cargo build --release
-scp target/release/labwired hetzner:/usr/local/bin/labwired
-```
-
-On the **Hetzner box**, verify:
+### 1. Install Docker
 
 ```bash
-sudo chmod +x /usr/local/bin/labwired
-labwired --version
+curl -fsSL https://get.docker.com | sudo sh
 ```
 
----
+### 2. Authenticate to private GHCR (read-only)
 
-## 2. Deploy the builder service
+Create a fine-grained PAT with **`read:packages`** only, then:
 
 ```bash
-sudo mkdir -p /opt/labwired-builder
-# Copy the whole labwired-builder package (or git clone and cd into it)
-sudo rsync -a --exclude node_modules --exclude .git \
-  ~/Projects/labwired/.worktrees/mcp-build-run-loop/services/labwired-builder/ \
-  hetzner:/opt/labwired-builder/
-
-# On the Hetzner box:
-cd /opt/labwired-builder
-npm ci --omit=dev
+echo "<PAT>" | docker login ghcr.io -u <github-username> --password-stdin
 ```
 
----
-
-## 3. Generate and store the shared secret
+### 3. Create the deploy directory and config
 
 ```bash
-# On any machine with openssl:
-openssl rand -hex 32
+sudo mkdir -p /opt/labwired-builder && cd /opt/labwired-builder
+# Copy docker-compose.yml, .env.example, deploy.sh from
+# services/labwired-builder/ (scp, or curl the raw files from the repo).
+cp .env.example .env && chmod 600 .env
+# Edit .env: set BUILDER_SECRET (openssl rand -hex 32 — must match the
+# labwired-api Worker secret), TUNNEL_TOKEN, and IMAGE_TAG.
 ```
 
-Create `/etc/labwired-builder.env` on the Hetzner box (mode 600, owned by root):
-
-```bash
-sudo tee /etc/labwired-builder.env > /dev/null <<'EOF'
-BUILDER_SECRET=<paste the 64-char hex string from above>
-EOF
-sudo chmod 600 /etc/labwired-builder.env
-```
-
----
-
-## 4. Install and enable the systemd unit
-
-```bash
-sudo cp /opt/labwired-builder/deploy/labwired-builder.service \
-        /etc/systemd/system/labwired-builder.service
-sudo systemctl daemon-reload
-sudo systemctl enable --now labwired-builder
-
-# Verify it started cleanly:
-sudo systemctl status labwired-builder
-sudo journalctl -u labwired-builder -n 30
-```
-
-Key `Environment=` lines in the unit (see `labwired-builder.service`):
-- `BUILDER_ENTRY=1` — without this the server.ts process exits immediately
-  (the entrypoint guard at the bottom of server.ts checks for this var).
-- `PORT=18080` — listens on the host only (cloudflared proxies it). `europa`
-  already uses `127.0.0.1:8080` for another service.
-- `MAX_CONCURRENT=2` — limits parallel run jobs.
-- `LABWIRED_BIN=/usr/local/bin/labwired` — path to the simulator binary.
-- `EnvironmentFile=/etc/labwired-builder.env` — loads `BUILDER_SECRET`.
-
-**Note on `PrivateNetwork`:** The unit does NOT set `PrivateNetwork=yes`. With no
-hosted compiler there is no untrusted C/C++ code executing on the server, so
-service-level network isolation is not needed. More importantly, `PrivateNetwork=yes`
-puts the service into a network namespace with only loopback, which prevents
-`cloudflared`/caddy from reaching the listening port.
-
----
-
-## 5. Create and route the Cloudflare tunnel
-
-```bash
-# Authenticate cloudflared (browser pop-up on first run):
-cloudflared tunnel login
-
-# Create the named tunnel:
-cloudflared tunnel create labwired-builder
-# Note the tunnel UUID printed; it will also appear in ~/.cloudflared/<uuid>.json
-
-# Copy this repo's config to the cloudflared config directory:
-sudo mkdir -p /home/labwired/.cloudflared
-sudo cp /opt/labwired-builder/deploy/cloudflared-config.yml \
-        /home/labwired/.cloudflared/config.yml
-# Update credentials-file path in config.yml to match the actual JSON path:
-#   /home/labwired/.cloudflared/<tunnel-uuid>.json
-
-# Create the DNS CNAME (points builder.labwired.com → the tunnel):
-cloudflared tunnel route dns labwired-builder builder.labwired.com
-
-# If `cloudflared tunnel route dns` is unavailable locally, create the same
-# proxied CNAME in Cloudflare DNS:
-#   builder.labwired.com → <tunnel-id>.cfargotunnel.com
-
-# Install as a system service:
-sudo cloudflared service install
-sudo systemctl enable --now cloudflared
-```
-
----
-
-## 6. Set the Worker secret (OAuth login workaround)
-
-The shell may have a stale `CLOUDFLARE_API_TOKEN` that returns error 9109.
-Unset both CF env vars before calling wrangler so it falls back to the
-OAuth login credentials stored in `~/.config/wrangler/config.toml`:
+Set the Worker side of the shared secret (once, from a machine with wrangler):
 
 ```bash
 env -u CLOUDFLARE_API_TOKEN -u CLOUDFLARE_ACCOUNT_ID \
   npx wrangler secret put BUILDER_SECRET --name labwired-api
-# When prompted, paste the same 64-char hex string you put in
-# /etc/labwired-builder.env.
+# paste the same value as BUILDER_SECRET in .env
 ```
 
----
+### 4. Create the Cloudflare named tunnel (token-based)
 
-## 7. Smoke-test
+In the Cloudflare dashboard → Zero Trust → Networks → Tunnels:
+1. Create a tunnel named `labwired-builder`; copy its **token** into `.env`
+   (`TUNNEL_TOKEN`).
+2. Add a **public hostname**: `builder.labwired.com` → service
+   `http://builder:18080`. (This is the single ingress rule from invariant #2.)
+
+### 5. Bring it up
 
 ```bash
-# Health check (no auth required):
-curl https://builder.labwired.com/healthz
-# Expected: {"ok":true}
-
-# Run smoke (requires the correct BUILDER_SECRET + a compiled ELF):
-# See docs/firmware-scaffolds/README.md for how to compile a test ELF.
-# Then:
-# ELF_B64=$(base64 -w 0 firmware.elf)
-# SYSTEM_YAML=$(cat blink-l476.system.yaml)
-# curl -s -X POST https://builder.labwired.com/run \
-#   -H 'Content-Type: application/json' \
-#   -H "X-Builder-Secret: $(sudo grep BUILDER_SECRET /etc/labwired-builder.env | cut -d= -f2)" \
-#   -d "{\"elfBase64\":\"$ELF_B64\",\"systemYaml\":\"$SYSTEM_YAML\",\"maxSteps\":10000}" | jq .stopReason
+./deploy.sh
 ```
 
 ---
 
-## Security notes
+## Steady-state deploy
 
-- **`safeEnv()`** — `src/safe-env.ts` strips `BUILDER_SECRET` (and other
-  sensitive vars) from the environment passed to every run subprocess.
-  The subprocess never sees the secret even on the same process tree.
-- `ProtectSystem=strict` + `DynamicUser=yes` prevent the service from writing
-  outside `/tmp` and ensure it runs as a transient non-privileged UID.
-- `PrivateTmp=yes` — each service restart gets a fresh `/tmp` namespace.
-- `NoNewPrivileges=yes` — the process and all children cannot gain new
-  privileges via setuid/setcap.
+```bash
+cd /opt/labwired-builder
+./deploy.sh        # docker compose pull && up -d
+```
+
+Pin a specific build by setting `IMAGE_TAG=<commit-sha>` in `.env` instead of
+`latest`.
+
+---
+
+## Adding a board
+
+The board catalog is a single file: `services/labwired-builder/src/boards.ts`.
+Add one entry and that is the whole job — the compile service supports it,
+`/boards` lists it, and CI's image build auto-bakes its PlatformIO framework
+(`src/warm-cache.ts` derives the bake from the catalog; there is no second list).
+The Dockerfile's BuildKit cache mount means a new board only downloads its own
+framework, not all of them. Deploy the new board by pulling the new image tag.
+
+---
+
+## Smoke test
+
+```bash
+# Public health (through the tunnel):
+curl https://builder.labwired.com/healthz          # {"ok":true}
+
+# Proxied compile (through the tunnel; needs BUILDER_SECRET):
+SECRET=$(grep BUILDER_SECRET .env | cut -d= -f2)
+curl -s -X POST https://builder.labwired.com/compile \
+  -H 'Content-Type: application/json' -H "X-Builder-Secret: $SECRET" \
+  -d '{"board":"stm32l476","language":"cpp","source":"int main(void){while(1){}}"}' \
+  | python3 -c 'import sys,json;print("ok=",json.load(sys.stdin)["ok"])'
+```
+
+## Logs & ops
+
+```bash
+docker compose logs -f builder
+docker compose logs -f compile
+docker compose logs -f cloudflared
+docker compose ps
+```

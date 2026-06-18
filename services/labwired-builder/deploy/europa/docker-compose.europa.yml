@@ -1,0 +1,17 @@
+# Europa cutover override.
+#
+# Europa already runs a host-level cloudflared that serves
+# builder.labwired.com -> 127.0.0.1:18080. Instead of running the cloudflared
+# sidecar (which would fight the host tunnel), we reuse it: bind the
+# containerized builder to 127.0.0.1:18080 — exactly what the host cloudflared
+# already proxies to — and start ONLY `compile` + `builder` (never cloudflared).
+#
+# The compile service keeps NO host port (internal, egress-denied) — it does not
+# collide with proto.cat's compile service on 127.0.0.1:8080.
+#
+# Usage (from the deploy dir on Europa):
+#   docker compose -f docker-compose.yml -f docker-compose.europa.yml up -d compile builder
+services:
+  builder:
+    ports:
+      - "127.0.0.1:18080:18080"

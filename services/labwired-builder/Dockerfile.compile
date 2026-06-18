@@ -1,0 +1,51 @@
+# syntax=docker/dockerfile:1.7
+# Shared PlatformIO compile service. Built + published by labwired; also
+# consumed by proto.cat. Untrusted source is compiled here, so it runs non-root
+# and (in the sealed lane) on an egress-denied compose network.
+#
+# Image-size note: PlatformIO's baked packages (~7GB) are created DIRECTLY by the
+# non-root `builder` user, so there is NO `chown -R /opt/platformio` step — that
+# would duplicate the whole 7GB into a second layer (~2x image). Everything that
+# writes to /opt/platformio or /app runs as `builder`.
+FROM node:22-bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      python3 python3-venv git curl ca-certificates build-essential \
+ && rm -rf /var/lib/apt/lists/*
+
+# PlatformIO in an isolated venv (Debian's Python is externally-managed).
+RUN python3 -m venv /opt/pio && /opt/pio/bin/pip install --no-cache-dir platformio==6.1.16
+ENV PIO_BIN=/opt/pio/bin/pio
+ENV PLATFORMIO_CORE_DIR=/opt/platformio
+
+# Create the non-root user up front and give it the dirs pio/node write to, so
+# nothing has to be chowned afterwards (that is what bloats the image).
+RUN useradd -m -u 10001 -U builder \
+ && mkdir -p /app /opt/platformio \
+ && chown builder:builder /app /opt/platformio
+WORKDIR /app
+USER builder
+
+COPY --chown=builder:builder package.json package-lock.json ./
+RUN npm ci --omit=dev
+COPY --chown=builder:builder tsconfig.json ./
+
+# --- Framework bake (the heavy layer; catalog-derived) ---
+# Only the catalog + warmer below bust this layer. A BuildKit cache mount on
+# PlatformIO's download cache keeps catalog edits fast: unchanged boards restore
+# from the cache, only a newly-added board hits the network. The installed
+# packages land in PLATFORMIO_CORE_DIR (a real image layer, owned by builder), so
+# the RUNNING container needs NO network egress. Add a board in board-catalog.json
+# — it is baked automatically; there is no second list to maintain.
+COPY --chown=builder:builder src/board-catalog.json src/boards.ts src/safe-env.ts src/compile.ts src/warm-cache.ts ./src/
+RUN --mount=type=cache,target=/opt/pio-dl-cache,sharing=locked,uid=10001,gid=10001 \
+    PLATFORMIO_CACHE_DIR=/opt/pio-dl-cache node --import tsx src/warm-cache.ts
+
+# --- Service code (editing these does NOT re-bake the frameworks above) ---
+COPY --chown=builder:builder src ./src
+
+ENV COMPILE_ENTRY=1 PORT=8080
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD curl -fsS http://127.0.0.1:8080/healthz || exit 1
+CMD ["node", "--import", "tsx", "src/compile-server.ts"]
