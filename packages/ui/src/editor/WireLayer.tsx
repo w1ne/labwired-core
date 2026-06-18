@@ -131,10 +131,15 @@ export function WireLayer({
 
     let waypoints = wire.waypoints;
     if (!waypoints || waypoints.length === 0) {
-      // Obstacles = every part except this wire's own source/target parts.
+      // Obstacles = EVERY part body, including this wire's own source/target
+      // components. A pin sits on its component's edge, so excluding the
+      // endpoint bodies used to let the wire route UNDER the very chip it
+      // connects to. The router escapes each pin to an exit point MARGIN (20)
+      // outside the edge — beyond the OBSTACLE_MARGIN (8) inflation — so the
+      // exit is clear of its own inflated body and the wire visibly routes
+      // around it instead of through it.
       const boxes: Box[] = [];
       for (const part of parts) {
-        if (part.id === wire.from.part || part.id === wire.to.part) continue;
         const b = partBox(part);
         if (b) boxes.push(b);
       }
