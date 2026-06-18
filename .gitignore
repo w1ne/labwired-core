@@ -38,3 +38,6 @@ foundry/backend/server.log
 
 # git worktrees
 .worktrees/
+
+# Builder stack live secrets (never commit — copy from .env.example)
+services/labwired-builder/.env

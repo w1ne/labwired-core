@@ -138,6 +138,38 @@ describe('public Playground shares', () => {
       wires: [{ color: '#e83e8c' }],
     });
   });
+
+  it('rejects an invalid diagram at the storage boundary (hallucinated pin)', async () => {
+    const kvProjects = makeKvStub();
+    const env = makeEnv(makeKvStub(), makeKvStub(), makeKvStub(), makeKvStub(), kvProjects);
+
+    const create = await worker.default.fetch(
+      new Request('https://api.labwired.com/v1/shares', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          diagram: {
+            board: 'stm32l476',
+            parts: [
+              { id: 'mcu', type: 'mcu' },
+              { id: 'led1', type: 'rgb-led' },
+            ],
+            // rgb-led has no 'DIN' pin (R/G/B/GND) — must not be persisted.
+            wires: [{ from: { part: 'mcu', pin: 'PA5' }, to: { part: 'led1', pin: 'DIN' } }],
+          },
+          source: 'int main(void) { return 0; }',
+        }),
+      }),
+      env as any,
+    );
+
+    expect(create.status).toBe(422);
+    const body = (await create.json()) as any;
+    expect(body.error).toBe('DIAGRAM_INVALID');
+    expect(body.validation.ok).toBe(false);
+    // Nothing was written to KV.
+    expect([...kvProjects._store.keys()].filter((k) => k.startsWith('share:'))).toEqual([]);
+  });
 });
 
 // ── /v1/keys/validate tests ───────────────────────────────────────────────

@@ -320,6 +320,99 @@ describe('expanded MCP tools', () => {
     expect(body.system_yaml).toContain('i2c');
   });
 
+  it('labwired_compile_diagram rejects a diagram with a hallucinated peripheral pin', async () => {
+    const env = { BUILDER_URL: 'https://b', BUILDER_SECRET: 'k', ENVIRONMENT: 'test' } as any;
+    const res = await callHostedTool({
+      name: 'labwired_compile_diagram',
+      arguments: {
+        diagram: {
+          board: 'esp32-s3-zero',
+          parts: [
+            { id: 'mcu', type: 'esp32-s3-zero' },
+            { id: 'led1', type: 'rgb-led' },
+          ],
+          // 'DIN' does not exist on rgb-led (R/G/B/GND) — must not compile.
+          wires: [{ from: { part: 'mcu', pin: 'GPIO8' }, to: { part: 'led1', pin: 'DIN' } }],
+        },
+      },
+    }, env, { userId: 'u' });
+    expect(res.isError).toBe(true);
+    const body = JSON.parse(res.content[0].text);
+    expect(body.error).toBe('DIAGRAM_INVALID');
+    expect(body.validation.ok).toBe(false);
+  });
+
+  it('labwired_run rejects an invalid diagram before reaching the simulator', async () => {
+    const env = { BUILDER_URL: 'https://b', BUILDER_SECRET: 'k', ENVIRONMENT: 'test' } as any;
+    const res = await callHostedTool({
+      name: 'labwired_run',
+      arguments: {
+        elf_base64: 'AA==',
+        target: 'esp32-s3-zero',
+        diagram: {
+          board: 'esp32-s3-zero',
+          parts: [
+            { id: 'mcu', type: 'esp32-s3-zero' },
+            { id: 'led1', type: 'rgb-led' },
+          ],
+          wires: [{ from: { part: 'mcu', pin: 'GPIO8' }, to: { part: 'led1', pin: 'DIN' } }],
+        },
+        max_steps: 1000,
+      },
+    }, env, { userId: 'u' });
+    expect(res.isError).toBe(true);
+    expect(JSON.parse(res.content[0].text).error).toBe('DIAGRAM_INVALID');
+  });
+
+  it('advertises labwired_compile_firmware and labwired_build_and_run', () => {
+    const names = listHostedTools().map((t) => t.name);
+    expect(names).toContain('labwired_compile_firmware');
+    expect(names).toContain('labwired_build_and_run');
+  });
+
+  it('labwired_compile_firmware rejects an unsupported board before calling the builder', async () => {
+    const env = { BUILDER_URL: 'https://b', BUILDER_SECRET: 'k', ENVIRONMENT: 'test' } as any;
+    const res = await callHostedTool(
+      { name: 'labwired_compile_firmware', arguments: { source: 'int main(){return 0;}', board: 'commodore64' } },
+      env, { userId: 'u' },
+    );
+    expect(res.isError).toBe(true);
+    expect(JSON.parse(res.content[0].text).error).toBe('BOARD_NOT_COMPILABLE');
+  });
+
+  it('labwired_compile_firmware rejects empty source', async () => {
+    const env = { BUILDER_URL: 'https://b', BUILDER_SECRET: 'k', ENVIRONMENT: 'test' } as any;
+    const res = await callHostedTool(
+      { name: 'labwired_compile_firmware', arguments: { source: '   ', board: 'stm32l476' } },
+      env, { userId: 'u' },
+    );
+    expect(res.isError).toBe(true);
+    expect(JSON.parse(res.content[0].text).error).toBe('INVALID_ARGS');
+  });
+
+  it('labwired_build_and_run refuses a compile-only board (ESP32) before building', async () => {
+    const env = { BUILDER_URL: 'https://b', BUILDER_SECRET: 'k', ENVIRONMENT: 'test' } as any;
+    const res = await callHostedTool(
+      { name: 'labwired_build_and_run', arguments: { source: 'int main(){return 0;}', board: 'esp32-s3-zero', diagram: { board: 'esp32-s3-zero', parts: [], wires: [] } } },
+      env, { userId: 'u' },
+    );
+    expect(res.isError).toBe(true);
+    expect(JSON.parse(res.content[0].text).error).toBe('BOARD_NOT_RUNNABLE');
+  });
+
+  it('labwired_build_and_run rejects an invalid diagram before building', async () => {
+    const env = { BUILDER_URL: 'https://b', BUILDER_SECRET: 'k', ENVIRONMENT: 'test' } as any;
+    const res = await callHostedTool(
+      { name: 'labwired_build_and_run', arguments: {
+        source: 'int main(){return 0;}', board: 'stm32l476',
+        diagram: { board: 'stm32l476', parts: [{ id: 'mcu', type: 'mcu' }, { id: 'led1', type: 'rgb-led' }], wires: [{ from: { part: 'mcu', pin: 'PA5' }, to: { part: 'led1', pin: 'DIN' } }] },
+      } },
+      env, { userId: 'u' },
+    );
+    expect(res.isError).toBe(true);
+    expect(JSON.parse(res.content[0].text).error).toBe('DIAGRAM_INVALID');
+  });
+
   it('labwired_run rejects a target/board mismatch', async () => {
     const env = { BUILDER_URL: 'https://b', BUILDER_SECRET: 'k', ENVIRONMENT: 'test' } as any;
     const res = await callHostedTool({ name: 'labwired_run', arguments: { elf_base64: 'AA==', target: 'stm32l476', diagram: { board: 'rp2040', parts: [], wires: [] }, max_steps: 1000 } }, env, { userId: 'u' });
