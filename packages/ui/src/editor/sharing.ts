@@ -123,15 +123,44 @@ export function isEmbedMode(): boolean {
 }
 
 /**
+ * Optional extras for a share/embed POST.
+ *
+ * `previewPng` — a `data:image/png;base64,…` data URL for the per-lab social
+ * card. The API stores it ONLY when the request is authenticated (see
+ * `authToken`); anonymous requests get the generic logo card. Best-effort:
+ * passing it never blocks the share.
+ *
+ * `authToken` — a Clerk session token. When present we send
+ * `Authorization: Bearer <token>`, which is what authorizes image storage.
+ */
+export interface ShareOptions {
+  previewPng?: string;
+  authToken?: string;
+}
+
+/** Build the headers + body for a POST /v1/shares, with optional auth + preview. */
+function buildShareRequest(
+  diagram: Diagram,
+  source: string,
+  opts: ShareOptions,
+): RequestInit {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (opts.authToken) headers['Authorization'] = `Bearer ${opts.authToken}`;
+  const body: Record<string, unknown> = { diagram, source };
+  if (opts.previewPng) body.preview = opts.previewPng;
+  return { method: 'POST', headers, body: JSON.stringify(body) };
+}
+
+/**
  * Generate a shareable URL with the project encoded in the hash.
  */
-export async function generateShareUrl(diagram: Diagram, source: string): Promise<string> {
+export async function generateShareUrl(
+  diagram: Diagram,
+  source: string,
+  opts: ShareOptions = {},
+): Promise<string> {
   try {
-    const resp = await fetch(`${shareApiBase()}/v1/shares`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ diagram, source }),
-    });
+    const resp = await fetch(`${shareApiBase()}/v1/shares`, buildShareRequest(diagram, source, opts));
     if (resp.ok) {
       const body = await resp.json() as { url?: unknown };
       if (typeof body.url === 'string') return body.url;
@@ -149,13 +178,13 @@ export async function generateShareUrl(diagram: Diagram, source: string): Promis
 /**
  * Generate an embed URL.
  */
-export async function generateEmbedUrl(diagram: Diagram, source: string): Promise<string> {
+export async function generateEmbedUrl(
+  diagram: Diagram,
+  source: string,
+  opts: ShareOptions = {},
+): Promise<string> {
   try {
-    const resp = await fetch(`${shareApiBase()}/v1/shares`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ diagram, source }),
-    });
+    const resp = await fetch(`${shareApiBase()}/v1/shares`, buildShareRequest(diagram, source, opts));
     if (resp.ok) {
       const body = await resp.json() as { embed_url?: unknown };
       if (typeof body.embed_url === 'string') return body.embed_url;

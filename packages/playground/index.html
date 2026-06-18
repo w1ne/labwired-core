@@ -12,11 +12,22 @@
   <meta property="og:description" content="Cycle-accurate STM32 firmware simulation, in your browser. No hardware required." />
   <meta property="og:url" content="https://app.labwired.com/" />
   <meta property="og:site_name" content="LabWired" />
+  <!-- Card image. Without an og:image, LinkedIn/Slack render a blank card. The
+       512×512 brand logo is the default/anonymous fallback; for an authenticated
+       `?share=` link the edge function (functions/_worker.ts) rewrites og:image
+       to that lab's own preview. Absolute URL (crawlers don't resolve relatives;
+       SVG isn't reliably rendered) — and these tags MUST exist for the rewrite
+       to have a target. -->
+  <meta property="og:image" content="https://app.labwired.com/icon-512.png" />
+  <meta property="og:image:width" content="512" />
+  <meta property="og:image:height" content="512" />
+  <meta property="og:image:alt" content="LabWired — deterministic firmware simulation in your browser" />
 
   <!-- Twitter -->
   <meta name="twitter:card" content="summary" />
   <meta name="twitter:title" content="LabWired Playground" />
   <meta name="twitter:description" content="Cycle-accurate STM32 firmware simulation, in your browser." />
+  <meta name="twitter:image" content="https://app.labwired.com/icon-512.png" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
