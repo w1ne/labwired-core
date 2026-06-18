@@ -44,12 +44,28 @@ fn build_iolink_native_bridge() {
         return;
     }
 
-    println!("cargo:rerun-if-changed=native/iolink_master_bridge.h");
-    println!("cargo:rerun-if-changed=native/iolink_master_bridge.c");
-
-    cc::Build::new()
+    // Build scripts run with cwd = the package manifest dir (`crates/core`),
+    // while the vendored stacks live at the workspace root (`core/third_party`).
+    let master_root = "../../third_party/iolinki-master";
+    let device_root = "../../third_party/iolinki";
+    let mut build = cc::Build::new();
+    build
         .file("native/iolink_master_bridge.c")
+        .file(format!("{master_root}/src/master_port.c"))
+        .file(format!("{master_root}/src/master_controller.c"))
+        .file(format!("{master_root}/src/master_isdu.c"))
+        .file(format!("{master_root}/src/master_parameters.c"))
+        .file(format!("{master_root}/src/master_sio.c"))
+        .file(format!("{device_root}/src/frame.c"))
+        .file(format!("{device_root}/src/crc.c"))
         .include("native")
+        .include(format!("{master_root}/include"))
+        .include(format!("{device_root}/include"))
         .warnings(true)
         .compile("labwired_iolink_master_bridge");
+
+    println!("cargo:rerun-if-changed=native/iolink_master_bridge.h");
+    println!("cargo:rerun-if-changed=native/iolink_master_bridge.c");
+    println!("cargo:rerun-if-changed={master_root}/src/master_port.c");
+    println!("cargo:rerun-if-changed={master_root}/include/iolinki_master/master.h");
 }
