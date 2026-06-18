@@ -11,9 +11,9 @@ describe('EmbedBadge', () => {
     setUrl('/?embed=true&share=abc123');
   });
 
-  it('renders the LabWired logo and attribution text', () => {
+  it('renders the LabWired logo and the open-in-editor label', () => {
     const { getByText, container } = render(<EmbedBadge />);
-    expect(getByText(/Made with LabWired/i)).toBeTruthy();
+    expect(getByText(/Open in LabWired/i)).toBeTruthy();
     // GlobalLogo's mark is an inline SVG.
     expect(container.querySelector('svg')).toBeTruthy();
   });

@@ -1,6 +1,7 @@
-// EmbedBadge — the "Made with LabWired" corner attribution shown inside an
-// embedded (?embed=true) lab. Pinned bottom-right, small and semi-transparent,
-// linking back to the full (editable) lab.
+// EmbedBadge — the "Open in LabWired ↗" corner action shown inside an embedded
+// (?embed=true) lab. Pinned bottom-right, small and semi-transparent; it both
+// brands the embed and links back to the full, EDITABLE version of the lab
+// (the current URL with the embed param stripped).
 //
 // Note: the shared `GlobalLogo` is itself an <a>, so we can't nest it inside
 // the badge's own link without producing invalid nested-anchor markup. We
@@ -20,7 +21,7 @@ export function EmbedBadge() {
       href={fullLabUrl()}
       target="_blank"
       rel="noopener noreferrer"
-      title="Open the full lab on LabWired"
+      title="Open the editable version on LabWired"
       className="fixed bottom-2 right-2 z-40 flex items-center gap-1.5 h-6 px-2 rounded-pill bg-black/40 hover:bg-black/60 text-white/70 hover:text-white/90 text-[11px] font-medium tracking-tight backdrop-blur transition-colors duration-150 no-underline shadow-[0_2px_8px_rgba(0,0,0,0.3)]"
     >
       <svg viewBox="0 0 32 32" width="14" height="14" fill="none" aria-hidden="true">
@@ -28,7 +29,8 @@ export function EmbedBadge() {
         <circle cx="11" cy="7" r="3" fill="currentColor" />
         <circle cx="23" cy="23" r="3" fill="#4d9fff" />
       </svg>
-      <span>Made with LabWired</span>
+      <span>Open in LabWired</span>
+      <span aria-hidden="true" className="text-white/50">↗</span>
     </a>
   );
 }

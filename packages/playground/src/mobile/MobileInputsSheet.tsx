@@ -7,7 +7,7 @@
 // (handleDistanceChange / setNtcTemperature / handleAnalogChange) — the Rust
 // device stays the single source of truth; this is just a faithful control.
 
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   COMPONENT_REGISTRY,
   RegisterGrid,
@@ -80,17 +80,39 @@ export function MobileInputsSheet({
   );
   const hasInputs = ultrasonicParts.length > 0 || thermistorParts.length > 0 || adcParts.length > 0;
 
-  // Instrument tabs. BLE + Serial are always available (parity with the desktop
-  // always-on Air Tracer); Logic and IO-Link appear only when the diagram
-  // actually contains the matching part, so we never show an empty analyzer.
+  // Instrument tabs are driven by what the lab actually EXERCISES, so an embed
+  // (or any run view) never shows a tool nobody used in the lab. Logic / IO-Link
+  // appear only when the diagram wires the matching instrument part; BLE appears
+  // only once real frames hit the virtual air. A radioless board (e.g. a Blue
+  // Pill) produces no air traffic, so its BLE tab is simply never revealed —
+  // universal, with no chip/board capability list to maintain.
   const logicAnalyzerPart = diagram.parts.find((p) => p.type === 'logic-analyzer');
   const hasIoLink = diagram.parts.some((p) => p.type === 'iolink-master');
+
+  // Reveal the BLE tab once any air frame has been observed (sticky). Polling the
+  // shared virtual-air trace is the universal signal — the tool shows exactly
+  // when it has data, the same principle as the wired-part tools above.
+  const [hasBleTraffic, setHasBleTraffic] = useState(false);
+  useEffect(() => {
+    if (hasBleTraffic || !bridge) return; // sticky: stop polling once seen
+    const check = () => {
+      try {
+        if (bridge.airTraceSnapshot().length > 0) setHasBleTraffic(true);
+      } catch {
+        /* bridge may be mid-teardown between Run/Stop; ignore one tick */
+      }
+    };
+    check(); // immediate read so a stopped sim still reveals prior frames
+    if (!running) return;
+    const id = window.setInterval(check, 400);
+    return () => window.clearInterval(id);
+  }, [bridge, running, hasBleTraffic]);
 
   const tabs: { id: Tab; label: string }[] = [
     ...(hasInputs ? [{ id: 'inputs' as Tab, label: 'Inputs' }] : []),
     { id: 'serial', label: 'Serial' },
     { id: 'cpu', label: 'CPU' },
-    { id: 'ble', label: 'BLE' },
+    ...(hasBleTraffic ? [{ id: 'ble' as Tab, label: 'BLE' }] : []),
     ...(logicAnalyzerPart ? [{ id: 'logic' as Tab, label: 'Logic' }] : []),
     ...(hasIoLink ? [{ id: 'iolink' as Tab, label: 'IO-Link' }] : []),
   ];
