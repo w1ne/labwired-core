@@ -309,7 +309,7 @@ export function makeStarterDiagram(config: BoardConfig): Diagram {
     };
   }
 
-  if (config.boardId === 'f103-uds-ecu') {
+  if (config.boardId === 'f103-uds-ecu' || config.boardId === 'f103-uds-ecu-broken') {
     // STM32F103 ECU on the bxCAN (classical CAN) model. The logic analyzer
     // decodes the bxCAN frame trace; bxCAN runs in internal loopback so the
     // single node plays both tester and ECU (PA12 = CAN_TX, PA11 = CAN_RX).
