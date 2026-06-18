@@ -151,6 +151,18 @@ const IDLE_FRAMES: u32 = 4;
 /// to response timing: wake-up (once) → several IDLE frames (→ PREOPERATE) → the
 /// OPERATE transition (→ ESTAB_COM) → cyclic Type 1 requests (→ OPERATE). Process
 /// data input is captured from the cyclic responses.
+/// Selects which protocol engine backs an [`IolinkMaster`]. The hand-rolled
+/// engine is always available; the `Native` variant drives the real
+/// `iolinki-master` C stack and only exists under the `iolink-native` feature.
+/// Trace/UART behavior still runs on the hand-rolled path for now — this enum
+/// currently records the chosen backend so the swap can land incrementally.
+#[derive(Debug)]
+enum IolinkMasterBackend {
+    HandRolled,
+    #[cfg(feature = "iolink-native")]
+    Native(super::iolink_native::NativeIolinkMasterPort),
+}
+
 #[derive(Debug, serde::Serialize)]
 pub struct IolinkMaster {
     pd_in_len: usize,
@@ -181,10 +193,21 @@ pub struct IolinkMaster {
     /// Monotonic per-frame sequence number.
     #[serde(skip)]
     frame_seq: u32,
+    /// Protocol engine backing this master (hand-rolled, or the real native
+    /// `iolinki-master` stack under the `iolink-native` feature).
+    #[serde(skip)]
+    backend: IolinkMasterBackend,
 }
 
 impl IolinkMaster {
     pub fn new(pd_in_len: usize, od_len: usize, com: IolinkComSpeed) -> Self {
+        #[cfg(feature = "iolink-native")]
+        let backend = IolinkMasterBackend::Native(
+            super::iolink_native::NativeIolinkMasterPort::new_type2_com3(pd_in_len as u8, 0),
+        );
+        #[cfg(not(feature = "iolink-native"))]
+        let backend = IolinkMasterBackend::HandRolled;
+
         let mut m = Self {
             pd_in_len,
             od_len,
@@ -199,9 +222,20 @@ impl IolinkMaster {
             trace: VecDeque::new(),
             current: None,
             frame_seq: 0,
+            backend,
         };
         m.queue_next_frame(); // queue the wake-up immediately
         m
+    }
+
+    /// Name of the protocol engine currently backing this master. Used by the
+    /// native-backend gating test; not part of the stable component API.
+    pub fn backend_name_for_test(&self) -> &'static str {
+        match &self.backend {
+            IolinkMasterBackend::HandRolled => "hand-rolled",
+            #[cfg(feature = "iolink-native")]
+            IolinkMasterBackend::Native(_) => "iolinki-master",
+        }
     }
 
     /// First process-data input byte (channel bitmap for a DI hub).

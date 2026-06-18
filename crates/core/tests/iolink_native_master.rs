@@ -62,3 +62,13 @@ fn real_master_exchanges_pd_with_one_stack_backed_device() {
         master.latest_pd()
     );
 }
+
+#[test]
+fn public_iolink_master_uses_native_backend_when_feature_enabled() {
+    let master = labwired_core::peripherals::components::IolinkMaster::new(
+        1,
+        1,
+        labwired_core::peripherals::components::IolinkComSpeed::Com3,
+    );
+    assert_eq!(master.backend_name_for_test(), "iolinki-master");
+}
