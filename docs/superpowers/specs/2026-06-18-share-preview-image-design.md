@@ -91,9 +91,23 @@ fetches `…/?share=<id>` → Pages Function HTMLRewrites `og:image` →
 - Ship order: **API first** (image store/serve must exist before the edge
   references it), then the Pages Function + client. Otherwise cards 404 briefly.
 
+## Cost / efficiency (hard constraint)
+- **No standing infra cost:** KV blob (no R2 bucket to provision/bill).
+- **Near-zero origin reads on serve:** `GET /v1/shares/:id/image` sends
+  `Cache-Control: public, max-age=31536000, immutable` → Cloudflare CDN caches it,
+  so repeated crawler/unfurl hits don't reach the worker/KV.
+- **Edge function does NO lookups:** it builds `og:image` purely from the `<id>`
+  in the URL (`…/v1/shares/<id>/image`) — no KV/API fetch per crawl. `og:title`
+  rewrite is DROPPED (it would cost a fetch); the title stays the #341 default.
+- **Zero cost on normal loads:** `_routes.json` scopes the function to the HTML
+  document only (excludes `/assets/*`, wasm, icons); and it early-returns
+  (pass-through, no HTMLRewriter) when there's no `share` param.
+- **Image gen is free:** rendered in the user's browser at share time.
+
 ## Scope guards (YAGNI)
 - No R2 (KV blob is enough); no headless screenshot service; no live-state capture
-  (static authored view); no per-embed theming. Title rewrite is best-effort.
+  (static authored view); no per-embed theming; no `og:title` rewrite (costs a
+  fetch). One write on share-create, cached reads thereafter.
 
 ## Files
 - NEW `packages/ui/src/editor/canvasPreview.ts` (+ test)
