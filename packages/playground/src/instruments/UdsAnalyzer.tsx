@@ -55,12 +55,12 @@ export function UdsAnalyzer({ bridge, running, binding, pollMs = 200 }: UdsAnaly
         <span className="truncate" title={channelLabel}>{channelLabel}</span>
       </div>
       <div className="border-b border-border px-3 py-2 text-[11px] text-fg-secondary">
-        Source: simulator FDCAN frame trace from the probed CAN_H/CAN_L bus net.
+        Source: simulator CAN frame trace from the probed CAN_H/CAN_L bus net.
       </div>
 
       {rows.length === 0 ? (
         <div className="flex flex-1 items-center justify-center px-6 text-center text-[12px] text-fg-tertiary">
-          {running ? 'Waiting for FDCAN frames on the probed CAN bus.' : 'No CAN frames yet. Press Run.'}
+          {running ? 'Waiting for CAN frames on the probed CAN bus.' : 'No CAN frames yet. Press Run.'}
         </div>
       ) : (
         <div className="min-h-0 flex-1 overflow-auto">
