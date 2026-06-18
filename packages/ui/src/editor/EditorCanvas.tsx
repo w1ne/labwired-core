@@ -181,6 +181,10 @@ export function EditorCanvas({
   const [panning, setPanning] = useState<{ startClientX: number; startClientY: number; startVB: typeof viewBox } | null>(null);
   const [cursorSvg, setCursorSvg] = useState<{ x: number; y: number } | null>(null);
   const [hoveredPin, setHoveredPin] = useState<{ partId: string; pinId: string } | null>(null);
+  // Connection-clarity emphasis state (F2). hover previews, select latches.
+  const [hoveredWire, setHoveredWire] = useState<number | null>(null);
+  const [selectedWire, setSelectedWire] = useState<number | null>(null);
+  const [selectedPin, setSelectedPin] = useState<{ partId: string; pinId: string } | null>(null);
   // Resize handle dragging
   const [resizing, setResizing] = useState<{
     partId: string;
@@ -244,6 +248,10 @@ export function EditorCanvas({
 
       // Edit mode (desktop): rubber-band select / pan only from empty canvas.
       if ((e.target as Element).tagName === 'svg' || (e.target as Element).classList.contains('editor-grid')) {
+        // Clicking empty canvas clears any latched connection emphasis (F2).
+        setSelectedWire(null);
+        setSelectedPin(null);
+        setHoveredWire(null);
         if (state.wireInProgress) {
           onCancelWire();
           return;
@@ -422,10 +430,15 @@ export function EditorCanvas({
     [clientToSvg, state.wireInProgress, interactionMode, onButtonToggle],
   );
 
+  // Set on the pointerdown that started/completed a wire, so the trailing click
+  // (which still sees the pre-dispatch state) does not also latch a pin select.
+  const pinDrawActedRef = useRef(false);
+
   const handlePinClick = useCallback(
     (e: React.MouseEvent, partId: string, pinId: string) => {
       e.stopPropagation();
       const endpoint: WireEndpoint = { part: partId, pin: pinId };
+      pinDrawActedRef.current = true;
       if (state.wireInProgress) {
         onCompleteWire(endpoint);
       } else {
@@ -433,6 +446,23 @@ export function EditorCanvas({
       }
     },
     [state.wireInProgress, onStartWire, onCompleteWire],
+  );
+
+  // Latch a pin selection for connection emphasis (F2). Fires on the click that
+  // follows pointerdown; the wire-draw path (handlePinClick) runs on pointerdown
+  // and starts/completes a wire — so only latch when NOT drawing and the
+  // pointerdown didn't just perform a wire action.
+  const handlePinSelect = useCallback(
+    (e: React.MouseEvent, partId: string, pinId: string) => {
+      e.stopPropagation();
+      if (pinDrawActedRef.current) {
+        pinDrawActedRef.current = false;
+        return;
+      }
+      if (state.wireInProgress) return;
+      setSelectedPin({ partId, pinId });
+    },
+    [state.wireInProgress],
   );
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -491,7 +521,12 @@ export function EditorCanvas({
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement).tagName === 'INPUT') return;
-      if (e.key === 'Escape') onCancelWire();
+      if (e.key === 'Escape') {
+        onCancelWire();
+        setSelectedWire(null);
+        setSelectedPin(null);
+        setHoveredWire(null);
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
@@ -556,6 +591,11 @@ export function EditorCanvas({
         wireFrom={state.wireInProgress}
         cursorPos={cursorSvg}
         onDeleteWire={onDeleteWire}
+        activeWire={hoveredWire ?? selectedWire}
+        activePinPartId={(hoveredPin ?? selectedPin)?.partId ?? null}
+        activePinId={(hoveredPin ?? selectedPin)?.pinId ?? null}
+        onHoverWire={setHoveredWire}
+        onSelectWire={setSelectedWire}
       />
 
       {state.diagram.parts.map((part) => {
@@ -641,6 +681,7 @@ export function EditorCanvas({
                     // the part so buttons can be pressed and gestures still pan.
                     style={{ cursor: 'crosshair', pointerEvents: interactionMode === 'run' ? 'none' : undefined }}
                     onPointerDown={(e) => handlePinClick(e, part.id, pin.id)}
+                    onClick={(e) => handlePinSelect(e, part.id, pin.id)}
                     onMouseEnter={() => setHoveredPin({ partId: part.id, pinId: pin.id })}
                     onMouseLeave={() => setHoveredPin(null)}
                   />
