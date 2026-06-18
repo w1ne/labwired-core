@@ -30,6 +30,8 @@ import {
   decodeProject,
   fetchSharedProject,
   generateShareUrl,
+  renderCanvasPng,
+  type ShareOptions,
   isEmbedMode,
   type CompileError,
   type TraceEntry,
@@ -42,7 +44,7 @@ import {
 import { BOARD_CONFIGS, pickerBoards, type BoardConfig } from './bundled-configs';
 import { resolveUiFeatures } from './uiFeatures';
 import { resolveBoardForPart } from './board-resolve';
-import { useUser, useClerk } from '@clerk/clerk-react';
+import { useUser, useClerk, useAuth } from '@clerk/clerk-react';
 import { resolveRunSystemConfig } from './run-config';
 import { versionRuntimeAssetUrl } from './runtime-assets';
 import { StudioShell } from './studio/StudioShell';
@@ -1884,7 +1886,30 @@ export function App() {
   // anonymous-but-allowed so the simulator is usable; the production
   // domain still gets the real gate because Clerk loads successfully there.
   const { isSignedIn, isLoaded: clerkLoaded } = useUser();
+  const { getToken } = useAuth();
   const { openSignIn } = useClerk();
+
+  // Build the auth + preview-image extras for a share/embed POST. ONLY
+  // signed-in users get a per-lab card: we render the board <svg> to a PNG and
+  // attach a Clerk token (the API stores the image only for authed requests).
+  // Anonymous users (and ANY failure) get an empty options object → the share
+  // still works, card falls back to the LabWired logo. Never throws.
+  const buildShareExtras = useCallback(async (): Promise<ShareOptions> => {
+    if (!isSignedIn) return {};
+    try {
+      const svg = document.querySelector('svg.editor-canvas') as SVGSVGElement | null;
+      const [previewPng, authToken] = await Promise.all([
+        svg ? renderCanvasPng(svg) : Promise.resolve(null),
+        getToken(),
+      ]);
+      const extras: ShareOptions = {};
+      if (previewPng) extras.previewPng = previewPng;
+      if (authToken) extras.authToken = authToken;
+      return extras;
+    } catch {
+      return {};
+    }
+  }, [isSignedIn, getToken]);
   const requireAuth = useCallback(
     (action: () => void) => {
       // Local-dev escape hatch: set VITE_DISABLE_AUTH=true in
@@ -1947,7 +1972,8 @@ export function App() {
   // Share
   const handleShare = useCallback(async () => {
     try {
-      const url = await generateShareUrl(editor.state.diagram, source);
+      const extras = await buildShareExtras();
+      const url = await generateShareUrl(editor.state.diagram, source, extras);
       await navigator.clipboard.writeText(url);
       // Warn (don't block) when the shared link can't actually run, so we stop
       // minting dead shares that open to a circuit nobody can Run.
@@ -1960,7 +1986,7 @@ export function App() {
       const message = err instanceof Error ? err.message : String(err);
       setToast(`Share failed: ${message}`);
     }
-  }, [editor.state.diagram, source, selectedBoard]);
+  }, [editor.state.diagram, source, selectedBoard, buildShareExtras]);
 
   // Embed — opens the dialog that mints embed code + a live preview.
   const handleEmbed = useCallback(() => {
@@ -2633,6 +2659,7 @@ export function App() {
       onClose={() => setEmbedOpen(false)}
       diagram={editor.state.diagram}
       source={source}
+      buildExtras={buildShareExtras}
       onError={(message) => setToast(message)}
     />
     {/* Branded attribution shown only inside an embedded (?embed=true) lab. */}
