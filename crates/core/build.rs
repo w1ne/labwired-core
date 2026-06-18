@@ -31,4 +31,25 @@ fn main() {
     let out_dir = env::var_os("OUT_DIR").expect("OUT_DIR must be set by cargo");
     let dest = PathBuf::from(out_dir).join("xtensa_jit_hot_bb.wasm");
     fs::write(&dest, &bytes).unwrap_or_else(|e| panic!("write {}: {e}", dest.display()));
+
+    build_iolink_native_bridge();
+}
+
+// Compile the native IO-Link bridge (and, in later plan tasks, the real
+// `iolinki-master` C stack) only when the `iolink-native` feature is enabled.
+// Browser/wasm builds never set this feature, so they need no C toolchain and
+// never link the GPL device-stack helpers.
+fn build_iolink_native_bridge() {
+    if std::env::var_os("CARGO_FEATURE_IOLINK_NATIVE").is_none() {
+        return;
+    }
+
+    println!("cargo:rerun-if-changed=native/iolink_master_bridge.h");
+    println!("cargo:rerun-if-changed=native/iolink_master_bridge.c");
+
+    cc::Build::new()
+        .file("native/iolink_master_bridge.c")
+        .include("native")
+        .warnings(true)
+        .compile("labwired_iolink_master_bridge");
 }

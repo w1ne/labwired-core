@@ -19,6 +19,10 @@ build = "build.rs"
 [build-dependencies]
 # Used solely by build.rs to pre-compile the hot-block WAT into wasm bytes.
 wat = "1.0"
+# Used solely by build.rs to compile the native IO-Link bridge C sources when
+# the `iolink-native` feature is enabled. Off by default so browser/wasm builds
+# never need a C toolchain.
+cc = "1.2"
 
 [dependencies]
 thiserror = { workspace = true }
@@ -62,6 +66,12 @@ jit = ["dep:wasmtime"]
 # drain in `Machine::step`. Off through 2B.N-1; flipped unconditional
 # after every peripheral migrates and the legacy walk is deleted.
 event-scheduler = []
+# Native IO-Link path (plan 2026-06-18): compiles the real `iolinki-master` C
+# stack behind a narrow bridge (`native/iolink_master_bridge.*`) into
+# `labwired-core`. Off by default and never enabled by the browser crate
+# (`labwired-wasm`) so wasm builds stay free of native C and GPL device-stack
+# linkage. See docs/engineering/iolink-device-stack-isolation.md.
+iolink-native = []
 
 [dev-dependencies]
 labwired-loader = { path = "../loader" }
