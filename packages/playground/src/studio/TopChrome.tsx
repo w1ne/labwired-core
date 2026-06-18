@@ -6,6 +6,7 @@ export interface TopChromeProps {
   boardName: string;
   onOpenCommand: () => void;
   onShare?: () => void;
+  onEmbed?: () => void;
   onUploadFirmware?: (file: File) => void;
   onOpenTools?: () => void;
   tools?: ToolItem[];
@@ -13,7 +14,7 @@ export interface TopChromeProps {
   projectSlot?: ReactNode;
 }
 
-export function TopChrome({ boardName, onOpenCommand, onShare, onUploadFirmware, onOpenTools, tools = [], authSlot, projectSlot }: TopChromeProps) {
+export function TopChrome({ boardName, onOpenCommand, onShare, onEmbed, onUploadFirmware, onOpenTools, tools = [], authSlot, projectSlot }: TopChromeProps) {
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const navToolTriggerClass =
     'flex h-7 px-3 rounded-pill text-xs font-medium transition-colors duration-150 items-center shrink-0 text-fg-secondary hover:text-fg-primary hover:bg-white/[0.05] border-0 bg-transparent appearance-none';
@@ -98,6 +99,16 @@ export function TopChrome({ boardName, onOpenCommand, onShare, onUploadFirmware,
       </div>
       <div className="hidden sm:contents">{projectSlot}</div>
       {authSlot}
+      {onEmbed && (
+        <button
+          type="button"
+          onClick={onEmbed}
+          title="Get copy-paste embed code for this lab"
+          className="hidden sm:flex h-6 px-3 rounded-pill text-xs font-medium bg-white/[0.05] text-fg-secondary hover:bg-white/[0.10] hover:text-fg-primary transition-colors duration-micro shrink-0 items-center border-0 outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+        >
+          Embed
+        </button>
+      )}
       <button
         type="button"
         onClick={onShare}
