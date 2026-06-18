@@ -291,6 +291,27 @@ impl WasmSimulator {
             .map_err(|e| JsValue::from_str(&format!("Step Error: {}", e)))
     }
 
+    /// Connect this chip's UART (`uart_id`, e.g. "uart2") to a shared in-module
+    /// cross-link, so it exchanges bytes with the other chip on the same
+    /// `link_id`. The two chips of a point-to-point IO-Link use opposite
+    /// `side`s (0 and 1). Bytes flow through a process-static medium with no
+    /// per-byte host round-trip, so both chips can keep stepping in batches.
+    #[wasm_bindgen]
+    pub fn attach_uart_wire(
+        &mut self,
+        uart_id: &str,
+        link_id: u32,
+        side: u8,
+    ) -> Result<(), JsValue> {
+        let endpoint = Box::new(
+            labwired_core::network::virtual_uart_wire::VirtualWireEndpoint::new(link_id, side),
+        );
+        self.machine()
+            .bus
+            .attach_uart_stream_by_id(uart_id, endpoint)
+            .map_err(|e| JsValue::from_str(&format!("attach_uart_wire: {e:#}")))
+    }
+
     #[wasm_bindgen]
     pub fn get_pc(&self) -> u32 {
         self.machine.as_ref().unwrap().cpu.get_pc()
@@ -531,6 +552,14 @@ impl WasmSimulator {
 extern "C" {
     #[wasm_bindgen(js_namespace = performance, js_name = now)]
     fn perf_now() -> f64;
+}
+
+/// Clear every shared UART cross-link. The playground calls this when (re)loading
+/// a multi-chip lab so a previous station's link buffers don't leak bytes into
+/// the new one.
+#[wasm_bindgen]
+pub fn clear_uart_wires() {
+    labwired_core::network::virtual_uart_wire::clear_virtual_uart_wires();
 }
 
 // WasmGdbEventLoop removed — see `gdb_process_packet` above for the rationale.
