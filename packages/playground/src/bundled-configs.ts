@@ -245,9 +245,9 @@ export const BOARD_CONFIGS: BoardConfig[] = [
   {
     boardId: 'f103-uds-ecu',
     chipId: 'stm32f103',
-    name: 'STM32F103 bxCAN UDS ECU',
+    name: 'STM32F103 bxCAN UDS ECU (fixed)',
     description:
-      'STM32F103 ECU on the bxCAN (classical CAN) model: real UDSLib ISO-TP reassembling a multi-frame SecurityAccess request in internal loopback. Reproduces udslib issue #29.',
+      'STM32F103 ECU on a real two-node CAN bus: a virtual UDS tester drives a multi-frame SecurityAccess request and real UDSLib (normal-mode bxCAN, valid timing + acceptance filter) reassembles it and answers. The working build of udslib issue #29.',
     arch: 'ARM Cortex-M3',
     chipYaml: chipStm32f103,
     systemYaml: systemF103UdsEcu,
@@ -259,15 +259,42 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     hidden: true,
     openInstruments: ['logic-analyzer'],
     summary: {
-      title: 'STM32F103 bxCAN UDS ECU',
+      title: 'STM32F103 bxCAN UDS ECU (fixed)',
       description:
-        'Real UDSLib on the F103 bxCAN model reassembling a multi-frame (FF+CF) SecurityAccess request over classical CAN in loopback.',
+        'Real UDSLib on the F103 bxCAN model reassembling a multi-frame (FF+CF) SecurityAccess request over a real two-node classical-CAN bus.',
       nextStep:
-        'Click Run - the firmware injects the FirstFrame + ConsecutiveFrame and the ECU answers; watch the logic analyzer decode the UDS exchange.',
-      nextStepRunning: 'Running multi-frame UDS over the simulated bxCAN bus.',
+        'Click Run - the virtual tester sends the FirstFrame + ConsecutiveFrame and the ECU answers; watch the logic analyzer decode the full UDS exchange.',
+      nextStepRunning: 'Running multi-frame UDS over the simulated two-node bxCAN bus.',
     },
     runHint:
       'Click Run - the FF (27 01 ...) + CF reassemble and the ECU replies with the SecurityAccess seed (67 01 DE AD BE EF).',
+  },
+  {
+    boardId: 'f103-uds-ecu-broken',
+    chipId: 'stm32f103',
+    name: 'STM32F103 bxCAN UDS ECU (broken)',
+    description:
+      "The BROKEN build that reproduces udslib issue #29 live: the ECU's ISO-TP N_Cr timer is armed from a clock reading 0 while uds_tp_isotp_process() is fed a real tick, so the multi-frame session is torn down right after the FirstFrame. The tester sends FF (ECU answers FlowControl) then CF — but the CF is dropped and the ECU never answers.",
+    arch: 'ARM Cortex-M3',
+    chipYaml: chipStm32f103,
+    systemYaml: systemF103UdsEcu,
+    demoFirmwarePath: `${BASE}wasm/demo-f103-uds-ecu-broken.elf`,
+    mcuComponentType: 'stm32-dev',
+    sourceCode: sourceF103UdsEcu,
+    sourceFilename: 'f103-uds-ecu/firmware/main.c (-DBROKEN_NCR)',
+    kind: 'lab',
+    hidden: true,
+    openInstruments: ['logic-analyzer'],
+    summary: {
+      title: 'STM32F103 bxCAN UDS ECU (broken)',
+      description:
+        'The N_Cr clock-mismatch bug from udslib issue #29, reproduced live: FirstFrame + FlowControl, then the ConsecutiveFrame is dropped and the ECU goes silent.',
+      nextStep:
+        'Click Run - the analyzer shows the FF and the FlowControl, then no response. Compare with the (fixed) lab where the seed comes back.',
+      nextStepRunning: 'Reproducing the dropped-consecutive-frame bug on the two-node bxCAN bus.',
+    },
+    runHint:
+      'Click Run - watch the FF + FlowControl appear, then silence (the multi-frame is dropped). This is the reporter’s "no response" bug.',
   },
   {
     boardId: 'bme280-weather-lab',

@@ -3,6 +3,15 @@
   "release_tag": "firmware-demos-v1",
   "release_base_url": "https://github.com/w1ne/labwired-core/releases/download",
   "assets": [
-    { "boardId": "f103-uds-ecu", "filename": "demo-f103-uds-ecu.elf", "minSizeBytes": 50000 }
+    {
+      "boardId": "f103-uds-ecu",
+      "filename": "demo-f103-uds-ecu.elf",
+      "minSizeBytes": 50000
+    },
+    {
+      "boardId": "f103-uds-ecu-broken",
+      "filename": "demo-f103-uds-ecu-broken.elf",
+      "minSizeBytes": 50000
+    }
   ]
 }
