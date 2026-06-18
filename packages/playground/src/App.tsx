@@ -2364,6 +2364,13 @@ export function App() {
             <div className="editor-canvas-pane">
               <EditorCanvas
                 state={editor.state}
+                // Run-only embed: a `?embed=true` pane is for showing a live,
+                // interactive sim (press buttons, watch LEDs/displays) on docs
+                // pages — never for editing the circuit. Lock the canvas to
+                // read-only run mode so viewers can't rewire/drag/delete. The
+                // Run control stays, so the sim is click-to-run (lazy), not
+                // auto-booted — a docs page may host several embeds.
+                interactionMode={embed ? 'run' : 'edit'}
                 boardIoStates={boardIoStateMap}
                 displayBuffers={simState.displayBuffers}
                 validationMessage={canvasValidationMessage}
