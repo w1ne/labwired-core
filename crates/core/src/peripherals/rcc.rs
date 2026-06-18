@@ -730,6 +730,69 @@ impl Rcc {
         }
     }
 
+    /// Resolve a symbolic clock-enable register name (e.g. "apb1enr",
+    /// "apb2enr", "ahbenr", "ahb2enr") to its byte offset within THIS chip
+    /// family's RCC register map. Returns `None` for an unknown name on the
+    /// active family. The offsets deliberately differ between families
+    /// (F1 apb1enr@0x1C vs L4 apb1enr@0x58), which is exactly why this lives
+    /// on the family-aware model rather than in the bus.
+    ///
+    /// Used by the bus to map a peripheral's `clock: { reg, bit }` declaration
+    /// onto the real RCC register it must read for the gate check.
+    pub fn enable_reg_offset(&self, reg: &str) -> Option<u64> {
+        let r = reg.trim().to_ascii_lowercase();
+        match self {
+            // F1: AHBENR@0x14, APB2ENR@0x18, APB1ENR@0x1C (RM0008 §7.3).
+            Self::Stm32F1(_) => match r.as_str() {
+                "ahbenr" | "ahb1enr" => Some(0x14),
+                "apb2enr" => Some(0x18),
+                "apb1enr" | "apb1enr1" => Some(0x1C),
+                _ => None,
+            },
+            // F4: AHB1ENR@0x30, AHB2ENR@0x34, APB1ENR@0x40, APB2ENR@0x44.
+            Self::Stm32F4(_) => match r.as_str() {
+                "ahbenr" | "ahb1enr" => Some(0x30),
+                "ahb2enr" => Some(0x34),
+                "apb1enr" | "apb1enr1" => Some(0x40),
+                "apb2enr" => Some(0x44),
+                _ => None,
+            },
+            // L4: AHB2ENR@0x4C, APB1ENR1@0x58, APB2ENR@0x60 (RM0351 §6.4).
+            Self::Stm32L4(_) => match r.as_str() {
+                "ahbenr" | "ahb2enr" => Some(0x4C),
+                "apb1enr" | "apb1enr1" => Some(0x58),
+                "apb2enr" => Some(0x60),
+                _ => None,
+            },
+            // L0: IOPENR@0x2C, AHBENR@0x30, APB2ENR@0x34, APB1ENR@0x38.
+            Self::Stm32L0(_) => match r.as_str() {
+                "iopenr" => Some(0x2C),
+                "ahbenr" => Some(0x30),
+                "apb2enr" => Some(0x34),
+                "apb1enr" => Some(0x38),
+                _ => None,
+            },
+            // V2 (H5-style): AHB2ENR@0x8C, APB1LENR@0x9C, APB2ENR@0xA4.
+            Self::Stm32V2(_) => match r.as_str() {
+                "ahbenr" | "ahb2enr" => Some(0x8C),
+                "apb1enr" | "apb1lenr" => Some(0x9C),
+                "apb2enr" => Some(0xA4),
+                _ => None,
+            },
+            // H5: AHB1ENR@0x88, AHB2ENR@0x8C, APB1LENR@0x9C, APB1HENR@0xA0,
+            // APB2ENR@0xA4, APB3ENR@0xA8 (RM0481 §11.8).
+            Self::Stm32H5(_) => match r.as_str() {
+                "ahb1enr" | "ahbenr" => Some(0x88),
+                "ahb2enr" => Some(0x8C),
+                "apb1enr" | "apb1lenr" => Some(0x9C),
+                "apb1henr" => Some(0xA0),
+                "apb2enr" => Some(0xA4),
+                "apb3enr" => Some(0xA8),
+                _ => None,
+            },
+        }
+    }
+
     /// Set the F4 clock-enable (ENR) writable masks — the per-part delta (which
     /// peripherals the device has). No-op for non-F4 layouts. `0xFFFF_FFFF`
     /// leaves a register unmasked.
@@ -787,6 +850,12 @@ impl crate::Peripheral for Rcc {
 
     fn snapshot(&self) -> serde_json::Value {
         self.model().snapshot()
+    }
+
+    // Exposed so the bus can resolve a peripheral's symbolic clock-gate register
+    // name to a concrete offset via the family-aware `enable_reg_offset`.
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
     }
 }
 

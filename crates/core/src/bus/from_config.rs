@@ -60,6 +60,7 @@ impl SystemBus {
             bit_band_enabled: Self::chip_has_bit_band(chip),
             pending_cpu_irqs: [0; 2],
             dport_idx: None,
+            rcc_idx: None,
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
             last_gpio_in: [0; 2],
@@ -510,6 +511,10 @@ impl SystemBus {
         }
 
         bus.rebuild_peripheral_ranges();
+        // Resolve declared per-peripheral RCC clock-gates now that every
+        // peripheral (incl. the RCC, needed to map reg-name → offset) is on the
+        // bus. Peripherals without a `clock:` field stay ungated.
+        bus.resolve_clock_gates(&merged_peripherals)?;
         // Per-config walk-deletion opt-in. The field is only consulted under the
         // `event-scheduler` feature (the legacy build always walks), so this is a
         // no-op there. Safe only because the manifest author verified the

@@ -23,6 +23,19 @@ mod tick;
 
 impl SystemBus {}
 
+/// A peripheral's RCC clock-gate, resolved to a concrete RCC register offset +
+/// bit at bus-build time (the symbolic `reg` name from the yaml is mapped to the
+/// active chip family's offset via [`Rcc::enable_reg_offset`]). When present, a
+/// CPU access to the owning peripheral only takes effect while `bit` is set in
+/// the RCC enable register at `reg_offset` — modelling silicon clock-gating.
+#[derive(Debug, Clone, Copy)]
+pub struct ResolvedClockGate {
+    /// Byte offset of the RCC enable register within the rcc peripheral.
+    pub reg_offset: u64,
+    /// Enable-bit position within that register.
+    pub bit: u8,
+}
+
 pub struct PeripheralEntry {
     pub name: String,
     pub base: u64,
@@ -34,6 +47,12 @@ pub struct PeripheralEntry {
     /// Bumped when the peripheral resets; `EventScheduler::drain_due` drops
     /// entries whose generation no longer matches the snapshot.
     pub generation: u32,
+    /// Optional RCC clock-gate (silicon clock-gating model). `None` (the common
+    /// case) → the peripheral is never gated and accesses always pass through.
+    /// `Some` → accesses are dropped (writes ignored, reads return 0) while the
+    /// gate bit is clear in the RCC, exactly like an unclocked peripheral on
+    /// real silicon. Resolved from `PeripheralConfig::clock` in `from_config`.
+    pub clock_gate: Option<ResolvedClockGate>,
 }
 
 pub struct SystemBus {
@@ -79,6 +98,12 @@ pub struct SystemBus {
     /// skip an O(peripherals) scan that would otherwise return 0 every step
     /// on buses with no DPORT.
     dport_idx: Option<usize>,
+    /// Cached index of the "rcc" peripheral, if one is registered. Recomputed in
+    /// `rebuild_peripheral_ranges` (same staleness contract as `dport_idx`). Lets
+    /// the clock-gate check on the hot read/write path resolve the RCC peripheral
+    /// in O(1) instead of scanning by name. `None` on buses with no RCC (e.g.
+    /// most non-STM32 chips), in which case no peripheral is ever gated.
+    rcc_idx: Option<usize>,
     /// Last-known IN value of GPIO ports 0 and 1, used by the per-tick
     /// edge-detection pass that drives GPIOTE EVENTS_IN. Both default to
     /// 0 at construction; the first tick after a GPIO write will produce
@@ -914,6 +939,35 @@ impl SystemBus {
                 .and_then(|a| a.downcast_ref::<crate::peripherals::esp32::dport::Dport>())
                 .is_some()
         });
+        // Cache the "rcc" peripheral index so the clock-gate check on the hot
+        // read/write path is O(1). Matched by id, as the clock-gate config
+        // references the RCC by the conventional "rcc" peripheral id.
+        self.rcc_idx = self.peripherals.iter().position(|p| p.name == "rcc");
+    }
+
+    /// Whether peripheral `idx` is currently clocked. `true` (always-on) for any
+    /// peripheral without a declared clock-gate — the safe default that keeps
+    /// every existing config/firmware working. For a gated peripheral, reads the
+    /// RCC enable register the gate points at and returns whether the gate bit is
+    /// set. If no RCC peripheral is registered, or its register read fails, the
+    /// peripheral is treated as clocked (fail-open: never wedge a chip that has
+    /// no modelled RCC). Cheap: one `Option` check, then on the rare gated path a
+    /// single cached-index RCC register read.
+    fn is_peripheral_clocked(&self, idx: usize) -> bool {
+        let Some(gate) = self
+            .peripherals
+            .get(idx)
+            .and_then(|p| p.clock_gate.as_ref())
+        else {
+            return true; // ungated → always accessible
+        };
+        let Some(rcc_idx) = self.rcc_idx else {
+            return true; // no RCC modelled → don't gate
+        };
+        match self.peripherals[rcc_idx].dev.read_u32(gate.reg_offset) {
+            Ok(reg) => (reg >> gate.bit) & 1 != 0,
+            Err(_) => true,
+        }
     }
 
     pub fn refresh_peripheral_index(&mut self) {
@@ -989,6 +1043,7 @@ impl SystemBus {
                     dev: Box::new(crate::peripherals::uart::Uart::new()),
                     ticks_remaining: 0,
                     generation: 0,
+                    clock_gate: None,
                 },
                 PeripheralEntry {
                     name: "gpioa".to_string(),
@@ -998,6 +1053,7 @@ impl SystemBus {
                     dev: Box::new(crate::peripherals::gpio::GpioPort::new()),
                     ticks_remaining: 0,
                     generation: 0,
+                    clock_gate: None,
                 },
                 PeripheralEntry {
                     name: "rcc".to_string(),
@@ -1007,6 +1063,7 @@ impl SystemBus {
                     dev: Box::new(crate::peripherals::rcc::Rcc::new()),
                     ticks_remaining: 0,
                     generation: 0,
+                    clock_gate: None,
                 },
                 PeripheralEntry {
                     name: "systick".to_string(),
@@ -1016,6 +1073,7 @@ impl SystemBus {
                     dev: Box::new(crate::peripherals::systick::Systick::new()),
                     ticks_remaining: 0,
                     generation: 0,
+                    clock_gate: None,
                 },
             ],
             nvic: None,
@@ -1024,6 +1082,7 @@ impl SystemBus {
             bit_band_enabled: true,
             pending_cpu_irqs: [0; 2],
             dport_idx: None,
+            rcc_idx: None,
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
             last_gpio_in: [0; 2],
@@ -1058,6 +1117,7 @@ impl SystemBus {
             bit_band_enabled: false,
             pending_cpu_irqs: [0; 2],
             dport_idx: None,
+            rcc_idx: None,
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
             last_gpio_in: [0; 2],
@@ -1097,6 +1157,7 @@ impl SystemBus {
             dev,
             ticks_remaining: 0,
             generation: 0,
+            clock_gate: None,
         });
         self.rebuild_peripheral_ranges();
     }
@@ -1278,7 +1339,55 @@ impl SystemBus {
             dev,
             ticks_remaining: 0,
             generation: 0,
+            // Resolved in a post-pass once every peripheral (incl. the RCC) is
+            // on the bus — see `resolve_clock_gates`.
+            clock_gate: None,
         });
+        Ok(())
+    }
+
+    /// Resolve every peripheral's optional `clock: { reg, bit }` declaration into
+    /// a concrete [`ResolvedClockGate`] (RCC register offset + bit). Run as a
+    /// post-pass by `from_config` after all peripherals — crucially the RCC —
+    /// are on the bus, so the symbolic `reg` name can be mapped to the active
+    /// chip family's RCC offset via [`Rcc::enable_reg_offset`] regardless of the
+    /// order peripherals appear in the config.
+    ///
+    /// A peripheral with no `clock` field is left ungated. A declared gate whose
+    /// `reg` name the family doesn't recognise is a hard config error (a silent
+    /// "never gate" would mask a typo that lets unclocked firmware falsely pass).
+    fn resolve_clock_gates(
+        &mut self,
+        peripherals: &[labwired_config::PeripheralConfig],
+    ) -> anyhow::Result<()> {
+        // Find the RCC model once (clock-gating requires one).
+        let rcc_off = |bus: &SystemBus, reg: &str| -> Option<u64> {
+            let idx = bus.rcc_idx?;
+            bus.peripherals[idx]
+                .dev
+                .as_any()
+                .and_then(|a| a.downcast_ref::<crate::peripherals::rcc::Rcc>())
+                .and_then(|rcc| rcc.enable_reg_offset(reg))
+        };
+        for p_cfg in peripherals {
+            let Some(gate) = &p_cfg.clock else { continue };
+            let Some(idx) = self.find_peripheral_index_by_name(&p_cfg.id) else {
+                continue;
+            };
+            let Some(reg_offset) = rcc_off(self, &gate.reg) else {
+                return Err(anyhow::anyhow!(
+                    "peripheral '{}' declares clock gate reg '{}' which the chip's \
+                     RCC model does not expose (no such enable register, or no RCC \
+                     peripheral is registered)",
+                    p_cfg.id,
+                    gate.reg
+                ));
+            };
+            self.peripherals[idx].clock_gate = Some(ResolvedClockGate {
+                reg_offset,
+                bit: gate.bit,
+            });
+        }
         Ok(())
     }
 
@@ -1323,6 +1432,9 @@ impl SystemBus {
         }
 
         if let Some(idx) = self.find_peripheral_index(addr) {
+            if !self.is_peripheral_clocked(idx) {
+                return Ok(0); // unclocked peripheral reads 0 (silicon gating)
+            }
             let p = &self.peripherals[idx];
             return p.dev.read_u32(addr - p.base);
         }
@@ -1350,6 +1462,9 @@ impl SystemBus {
         // Actually write_u8 checks flash_alias_old etc.
 
         if let Some(idx) = self.find_peripheral_index(addr) {
+            if !self.is_peripheral_clocked(idx) {
+                return Ok(()); // unclocked peripheral: write dropped (gating)
+            }
             #[cfg(feature = "event-scheduler")]
             self.sync_scheduler_peripheral(idx);
             self.maybe_latch_dc(idx);
@@ -1394,6 +1509,9 @@ impl SystemBus {
         }
 
         if let Some(idx) = self.find_peripheral_index(addr) {
+            if !self.is_peripheral_clocked(idx) {
+                return Ok(0); // unclocked peripheral reads 0 (silicon gating)
+            }
             let p = &self.peripherals[idx];
             return p.dev.read_u16(addr - p.base);
         }
@@ -1408,6 +1526,9 @@ impl SystemBus {
             return Ok(());
         }
         if let Some(idx) = self.find_peripheral_index(addr) {
+            if !self.is_peripheral_clocked(idx) {
+                return Ok(()); // unclocked peripheral: write dropped (gating)
+            }
             #[cfg(feature = "event-scheduler")]
             self.sync_scheduler_peripheral(idx);
             self.maybe_latch_dc(idx);
@@ -1686,6 +1807,7 @@ mod tests {
                 base_address: 0x4000_5400,
                 size: Some("1KB".to_string()),
                 irq: Some(31),
+                clock: None,
                 config: HashMap::new(),
             }],
         };
@@ -2106,6 +2228,7 @@ peripherals:
                     base_address: 0x4000_5400,
                     size: Some("1KB".to_string()),
                     irq: Some(31),
+                    clock: None,
                     config: HashMap::new(),
                 },
                 PeripheralConfig {
@@ -2114,6 +2237,7 @@ peripherals:
                     base_address: 0x4000_3800,
                     size: Some("1KB".to_string()),
                     irq: Some(37),
+                    clock: None,
                     config: HashMap::new(),
                 },
             ],
@@ -2287,6 +2411,7 @@ peripherals:
             bit_band_enabled: true,
             pending_cpu_irqs: [0; 2],
             dport_idx: None,
+            rcc_idx: None,
             flash_thunks: std::collections::HashMap::new(),
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
@@ -2328,6 +2453,7 @@ peripherals:
                     dev: Box::new(crate::peripherals::uart::Uart::new()),
                     ticks_remaining: 0,
                     generation: 0,
+                    clock_gate: None,
                 },
                 PeripheralEntry {
                     name: "low".to_string(),
@@ -2337,6 +2463,7 @@ peripherals:
                     dev: Box::new(crate::peripherals::uart::Uart::new()),
                     ticks_remaining: 0,
                     generation: 0,
+                    clock_gate: None,
                 },
             ],
             nvic: None,
@@ -2345,6 +2472,7 @@ peripherals:
             bit_band_enabled: true,
             pending_cpu_irqs: [0; 2],
             dport_idx: None,
+            rcc_idx: None,
             flash_thunks: std::collections::HashMap::new(),
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
@@ -2399,6 +2527,7 @@ peripherals:
                 dev: Box::new(crate::peripherals::dma::Dma1::new()),
                 ticks_remaining: 0,
                 generation: 0,
+                clock_gate: None,
             }],
             nvic: None,
             observers: Vec::new(),
@@ -2406,6 +2535,7 @@ peripherals:
             bit_band_enabled: true,
             pending_cpu_irqs: [0; 2],
             dport_idx: None,
+            rcc_idx: None,
             flash_thunks: std::collections::HashMap::new(),
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
@@ -2449,5 +2579,92 @@ peripherals:
             "DST should hold the SRC byte after mem-to-mem copy"
         );
         assert!(interrupts.contains(&16), "TCIE should pend NVIC IRQ 16");
+    }
+
+    /// RCC clock-gating (silicon fidelity): a peripheral with a declared
+    /// `clock:` gate is inert until its RCC enable bit is set — writes are
+    /// dropped and reads return 0 — and behaves normally once clocked. The
+    /// reg-name → offset mapping is family-aware (F1 apb2enr @ 0x18).
+    #[test]
+    fn gated_peripheral_is_inert_until_rcc_bit_set() {
+        let chip: ChipDescriptor = serde_yaml::from_str(
+            r#"
+name: "f1-clockgate-test"
+arch: "arm"
+core: "cortex-m3"
+flash:
+  base: 0x08000000
+  size: "64KB"
+ram:
+  base: 0x20000000
+  size: "20KB"
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40021000
+    size: "1KB"
+  - id: "uart1"
+    type: "uart"
+    base_address: 0x40013800
+    size: "1KB"
+    clock: { reg: "apb2enr", bit: 14 }
+  - id: "uart2"
+    type: "uart"
+    base_address: 0x40004400
+    size: "1KB"
+"#,
+        )
+        .unwrap();
+        let manifest: SystemManifest = serde_yaml::from_str(
+            r#"
+name: "clockgate"
+chip: "unused"
+external_devices: []
+board_io: []
+"#,
+        )
+        .unwrap();
+        let mut bus = SystemBus::from_config(&chip, &manifest).unwrap();
+
+        // USART1_CR1 @ 0x4001_380C. Clock is OFF out of reset → the write is
+        // dropped and the register reads back 0 (an unclocked peripheral).
+        const CR1: u64 = 0x4001_380C;
+        const CR1_UE_TE: u32 = (1 << 13) | (1 << 3);
+        bus.write_u32(CR1, CR1_UE_TE).unwrap();
+        assert_eq!(
+            bus.read_u32(CR1).unwrap(),
+            0,
+            "unclocked USART1 must drop writes and read 0"
+        );
+
+        // The ungated uart2 (no clock declared) is unaffected — accessible now.
+        const UART2_CR1: u64 = 0x4000_440C;
+        bus.write_u32(UART2_CR1, CR1_UE_TE).unwrap();
+        assert_eq!(
+            bus.read_u32(UART2_CR1).unwrap() & CR1_UE_TE,
+            CR1_UE_TE,
+            "ungated uart2 must work regardless of RCC"
+        );
+
+        // Enable RCC_APB2ENR.USART1EN (bit 14). RCC itself is never gated.
+        const RCC_APB2ENR: u64 = 0x4002_1018;
+        bus.write_u32(RCC_APB2ENR, 1 << 14).unwrap();
+        assert_eq!(bus.read_u32(RCC_APB2ENR).unwrap() & (1 << 14), 1 << 14);
+
+        // Now USART1 is clocked: the same write takes effect and reads back.
+        bus.write_u32(CR1, CR1_UE_TE).unwrap();
+        assert_eq!(
+            bus.read_u32(CR1).unwrap() & CR1_UE_TE,
+            CR1_UE_TE,
+            "clocked USART1 must accept writes"
+        );
+
+        // Drop the clock again → the peripheral goes inert (reads 0).
+        bus.write_u32(RCC_APB2ENR, 0).unwrap();
+        assert_eq!(
+            bus.read_u32(CR1).unwrap(),
+            0,
+            "USART1 must go inert again when its clock is removed"
+        );
     }
 }

@@ -57,6 +57,24 @@ void *__aeabi_memclr8(void *d, size_t n) { return memset(d, 0, n); }
 
 #define REG32(addr) (*(volatile uint32_t *) (addr))
 
+/* --- RCC (F1) — enable peripheral clocks. REQUIRED on real silicon and now in
+ * the sim (clock-gating modelled): USART1/CAN1/GPIOA/AFIO are unclocked out of
+ * reset, so their register writes are dropped and INAK/TXE never assert until
+ * the matching RCC enable bit is set. --- */
+#define RCC_BASE 0x40021000u
+#define RCC_APB2ENR REG32(RCC_BASE + 0x18u)
+#define RCC_APB1ENR REG32(RCC_BASE + 0x1Cu)
+#define RCC_APB2ENR_AFIOEN (1u << 0)
+#define RCC_APB2ENR_IOPAEN (1u << 2)
+#define RCC_APB2ENR_USART1EN (1u << 14)
+#define RCC_APB1ENR_CAN1EN (1u << 25)
+
+static void rcc_init(void)
+{
+    RCC_APB2ENR |= RCC_APB2ENR_AFIOEN | RCC_APB2ENR_IOPAEN | RCC_APB2ENR_USART1EN;
+    RCC_APB1ENR |= RCC_APB1ENR_CAN1EN;
+}
+
 /* --- USART1 (F1 layout: SR @ 0x00, DR @ 0x04, CR1 @ 0x0C) --- */
 #define USART1_BASE 0x40013800u
 #define U1_SR REG32(USART1_BASE + 0x00u)
@@ -222,6 +240,7 @@ static int security_seed(struct uds_ctx *ctx, uint8_t level, uint8_t *seed, uint
 
 int main(void)
 {
+    rcc_init(); /* enable USART1/CAN1/GPIOA/AFIO clocks before touching them */
     uart_init();
     uart_puts("F103-UDS-ECU\n");
 

@@ -40,6 +40,9 @@ impl crate::Bus for SystemBus {
                 return Ok(val);
             }
             if let Some(idx) = self.find_peripheral_index(addr) {
+                if !self.is_peripheral_clocked(idx) {
+                    return Ok(0); // unclocked peripheral reads 0 (silicon gating)
+                }
                 let p = &self.peripherals[idx];
                 return p.dev.read(addr - p.base);
             }
@@ -48,6 +51,9 @@ impl crate::Bus for SystemBus {
             // plain flash/extra_mem region claiming the same XIP address; flash/
             // extra_mem remain the fallback for addresses no peripheral covers.
             if let Some(idx) = self.find_peripheral_index(addr) {
+                if !self.is_peripheral_clocked(idx) {
+                    return Ok(0); // unclocked peripheral reads 0 (silicon gating)
+                }
                 let p = &self.peripherals[idx];
                 return p.dev.read(addr - p.base);
             }
@@ -105,6 +111,12 @@ impl crate::Bus for SystemBus {
         } else {
             // Dynamic Peripherals
             if let Some(idx) = self.find_peripheral_index(addr) {
+                if !self.is_peripheral_clocked(idx) {
+                    // Unclocked peripheral: the write is dropped on real silicon
+                    // (the bus access never reaches the gated block), so status
+                    // bits never change and the firmware visibly stalls.
+                    return Ok(());
+                }
                 #[cfg(feature = "event-scheduler")]
                 self.sync_scheduler_peripheral(idx);
                 self.maybe_latch_dc(idx);
@@ -160,12 +172,18 @@ impl crate::Bus for SystemBus {
                 return Ok(val);
             }
             if let Some(idx) = self.find_peripheral_index(addr) {
+                if !self.is_peripheral_clocked(idx) {
+                    return Ok(0);
+                }
                 return self.peripherals[idx]
                     .dev
                     .read_u16(addr - self.peripherals[idx].base);
             }
         } else {
             if let Some(idx) = self.find_peripheral_index(addr) {
+                if !self.is_peripheral_clocked(idx) {
+                    return Ok(0);
+                }
                 return self.peripherals[idx]
                     .dev
                     .read_u16(addr - self.peripherals[idx].base);
@@ -227,12 +245,18 @@ impl crate::Bus for SystemBus {
                 return Ok(val);
             }
             if let Some(idx) = self.find_peripheral_index(addr) {
+                if !self.is_peripheral_clocked(idx) {
+                    return Ok(0);
+                }
                 return self.peripherals[idx]
                     .dev
                     .read_u32(addr - self.peripherals[idx].base);
             }
         } else {
             if let Some(idx) = self.find_peripheral_index(addr) {
+                if !self.is_peripheral_clocked(idx) {
+                    return Ok(0);
+                }
                 return self.peripherals[idx]
                     .dev
                     .read_u32(addr - self.peripherals[idx].base);
@@ -257,6 +281,9 @@ impl crate::Bus for SystemBus {
             return Ok(());
         }
         if let Some(idx) = self.find_peripheral_index(addr) {
+            if !self.is_peripheral_clocked(idx) {
+                return Ok(()); // unclocked peripheral: write dropped (gating)
+            }
             #[cfg(feature = "event-scheduler")]
             self.sync_scheduler_peripheral(idx);
             self.maybe_latch_dc(idx);
@@ -306,6 +333,9 @@ impl crate::Bus for SystemBus {
             return Ok(());
         }
         if let Some(idx) = self.find_peripheral_index(addr) {
+            if !self.is_peripheral_clocked(idx) {
+                return Ok(()); // unclocked peripheral: write dropped (gating)
+            }
             #[cfg(feature = "event-scheduler")]
             self.sync_scheduler_peripheral(idx);
             self.maybe_latch_dc(idx);
