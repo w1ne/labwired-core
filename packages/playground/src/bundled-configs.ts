@@ -129,6 +129,14 @@ export interface BoardConfig {
    * `'logic-analyzer'` (opens the analyzer panel).
    */
   openInstruments?: Array<'logic-analyzer'>;
+  /**
+   * Run from the bundled system YAML, not one regenerated from the diagram.
+   * Needed when the lab's system YAML declares virtual devices the diagram
+   * emitter can't reproduce — e.g. the multi-frame `uds-tester` external device,
+   * which the diagram path would emit as a single-frame `can-diagnostic-tester`
+   * instead, so the CAN exchange (and its frames) never happens in-browser.
+   */
+  preferBundledSystem?: boolean;
 }
 
 const BASE = import.meta.env.BASE_URL;
@@ -258,6 +266,7 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     kind: 'lab',
     hidden: true,
     openInstruments: ['logic-analyzer'],
+    preferBundledSystem: true,
     summary: {
       title: 'STM32F103 bxCAN UDS ECU (fixed)',
       description:
@@ -285,6 +294,7 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     kind: 'lab',
     hidden: true,
     openInstruments: ['logic-analyzer'],
+    preferBundledSystem: true,
     summary: {
       title: 'STM32F103 bxCAN UDS ECU (broken)',
       description:

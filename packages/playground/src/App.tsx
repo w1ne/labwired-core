@@ -1003,7 +1003,10 @@ export function App() {
         diagram: editor.state.diagram,
         chipYaml: runBoard.chipYaml,
         bundledSystemYaml: runBoard.systemYaml,
-        preferDiagram: true,
+        // Labs whose system YAML declares virtual devices the diagram emitter
+        // can't reproduce (e.g. the multi-frame uds-tester) must run from the
+        // bundled YAML, else the regenerated config drops/wrongs the device.
+        preferDiagram: !runBoard.preferBundledSystem,
         onFallback: (msg) => {
           setCompileOutput((prev) => `${prev}\nUsing bundled system YAML — canvas not used: ${msg}`);
         },
