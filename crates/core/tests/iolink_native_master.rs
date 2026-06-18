@@ -72,3 +72,23 @@ fn public_iolink_master_uses_native_backend_when_feature_enabled() {
     );
     assert_eq!(master.backend_name_for_test(), "iolinki-master");
 }
+
+#[test]
+fn four_port_station_reports_connected_profiles_without_sharing_state() {
+    let mut station =
+        labwired_core::peripherals::components::iolink_station::IolinkStation::new_4port();
+    station.connect_proximity(1, true);
+    station.connect_pressure(2, 6.25);
+    station.connect_distance(3, 420);
+
+    let ports = station.port_profiles();
+    assert_eq!(
+        ports,
+        vec![
+            "proximity:present",
+            "pressure:6.25bar",
+            "distance:420mm",
+            "empty",
+        ]
+    );
+}

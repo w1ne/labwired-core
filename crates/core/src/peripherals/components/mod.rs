@@ -14,6 +14,7 @@ pub mod ili9341;
 pub mod iolink_master;
 #[cfg(feature = "iolink-native")]
 pub mod iolink_native;
+pub mod iolink_station;
 pub mod ir_component;
 pub mod ir_core;
 pub mod ir_spi_component;
