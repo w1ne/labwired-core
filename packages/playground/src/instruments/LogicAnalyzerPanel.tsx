@@ -254,7 +254,7 @@ export function LogicAnalyzerPanel({
         <>
           {uds.connected ? (
             <div className="border-b border-border px-3 py-1.5 font-mono text-[11px] text-fg-secondary">
-              CAN_H/CAN_L bits reconstructed from the FDCAN frame trace ({displaySamples.length} bits).
+              CAN_H/CAN_L bits reconstructed from the CAN frame trace ({displaySamples.length} bits).
             </div>
           ) : null}
           <RawWaveform samples={displaySamples} />
