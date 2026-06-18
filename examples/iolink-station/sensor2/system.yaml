@@ -1,0 +1,13 @@
+# IO-Link sensor node 2 — real iolinki DEVICE firmware on an L476; 74HC165 on
+# SPI1 preset to a distinct palindrome byte so each port's PD is independently
+# verifiable (bit-order-invariant). C/Q (USART2) cross-linked to a master port.
+name: "iolink-sensor2"
+chip: "../../../configs/chips/stm32l476.yaml"
+external_devices:
+  - id: "di_shifter"
+    type: "sn74hc165"
+    connection: "spi1"
+    config:
+      cs_pin: "PA4"
+      inputs: 60
+board_io: []

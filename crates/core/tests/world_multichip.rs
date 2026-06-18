@@ -118,3 +118,55 @@ fn master_chip_reaches_operate_with_real_sensor_chip() {
     );
     eprintln!("master reached OPERATE and exchanged real PD = {pd0:#x} with the sensor chip");
 }
+
+// Task 6: 4-port station. One master chip runs a 4-port iolinki-master
+// controller; each port is wired (USART2/3/4/5) to its own sensor chip running
+// the real device firmware, each preset to a distinct palindrome PD byte. All
+// four ports must reach OPERATE and read their own sensor's exact PD — proving
+// four independent, real IO-Link links with no cross-talk.
+#[test]
+fn four_port_station_all_sensors_operate_with_distinct_pd() {
+    let root = station_root();
+    let master_elf = root.join("master-fw-4port/master.elf");
+    let device_elf = root.join("../al2205-iolink-dido/firmware/al2205_dido.elf");
+    if !master_elf.exists() || !device_elf.exists() {
+        eprintln!(
+            "SKIP: build ELFs first (make -C examples/iolink-station/master-fw-4port && \
+             make -C examples/al2205-iolink-dido/firmware)"
+        );
+        return;
+    }
+
+    let env = EnvironmentManifest::from_file(root.join("env4.yaml")).expect("parse env4.yaml");
+    let mut world = World::from_manifest(env, &root).expect("build 4-port station");
+
+    const STATE: u64 = 0x2000_0000; // g_master_state[4]
+    const PD: u64 = 0x2000_0004; // g_master_pd[4]
+    const OPERATE: u8 = 3;
+    // sensor1..4 input presets (palindrome bytes), bit-order-invariant.
+    let expected: [u8; 4] = [0xA5, 0x3C, 0xC3, 0x5A];
+
+    let mut done = false;
+    for _ in 0..40_000_000u64 {
+        world.step_all();
+        let m = world.machines.get("master").unwrap();
+        let all = (0..4u64).all(|i| {
+            m.read_u8(STATE + i).unwrap() == OPERATE
+                && m.read_u8(PD + i).unwrap() == expected[i as usize]
+        });
+        if all {
+            done = true;
+            break;
+        }
+    }
+
+    let m = world.machines.get("master").unwrap();
+    let states: Vec<u8> = (0..4).map(|i| m.read_u8(STATE + i).unwrap()).collect();
+    let pds: Vec<u8> = (0..4).map(|i| m.read_u8(PD + i).unwrap()).collect();
+    assert!(
+        done,
+        "not all 4 ports reached OPERATE with their expected PD; \
+         states={states:02x?} pds={pds:02x?} expected={expected:02x?}"
+    );
+    eprintln!("4-port station: all ports OPERATE; PDs={pds:02x?}");
+}
