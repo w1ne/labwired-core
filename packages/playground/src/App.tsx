@@ -2220,7 +2220,12 @@ export function App() {
     />
   );
 
-  if (isMobile) {
+  // The embed (`?embed=true`) is a read-only demo runner: see properties, play
+  // with the model (run, press buttons, use the BLE/logic/IO-Link tools), but no
+  // authoring. That is exactly the mobile run shell — reuse it for embeds too,
+  // on any viewport, instead of stripping the desktop editor. `resolveUiFeatures`
+  // already turns the menu off in embed, so its nav drawer never shows.
+  if (isMobile || embed) {
     // MCU parts in the diagram → the multi-chip switcher. Foreground is the
     // selected chip (foregroundPartId); tapping selects another so App mirrors
     // that chip's bridge/sim/serial.
@@ -2272,6 +2277,8 @@ export function App() {
           stackMemory={stackMemory}
           stackBase={stackBase}
         />
+        {/* Branded back-link to the full lab — only in the embed (not on phones). */}
+        {embed && <EmbedBadge />}
         {projectsModalNode}
       </ChipsProvider>
     );
