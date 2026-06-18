@@ -1,3 +1,7 @@
+// LabWired - Firmware Simulation Platform
+// Copyright (C) 2026 Andrii Shylenko
+// SPDX-License-Identifier: MIT
+
 use std::env;
 use std::fs;
 use std::path::PathBuf;

@@ -1,3 +1,7 @@
+// LabWired - Firmware Simulation Platform
+// Copyright (C) 2026 Andrii Shylenko
+// SPDX-License-Identifier: MIT
+
 #![no_std]
 #![no_main]
 #![allow(clippy::identity_op)]
@@ -15,6 +19,10 @@ const I2C1_SR1: *const u32 = (I2C1_BASE + 0x14) as *const u32;
 // VL53L1X 7-bit address 0x29 → write 0x52, read 0x53
 const VL_W: u8 = 0x52;
 const VL_R: u8 = 0x53;
+
+// Proximity threshold (mm): readings at or below this report NEAR, otherwise FAR.
+// 300 mm is a sensible "something is close" trip point for a tabletop ToF sensor.
+const PROXIMITY_THRESHOLD_MM: u16 = 300;
 
 // 16-bit registers (verified against pololu/vl53l1x-arduino)
 const REG_GPIO_TIO_HV_STATUS: u16 = 0x0031;
@@ -143,17 +151,26 @@ fn main() -> ! {
         uart_str("DATA_READY ERR\n");
     }
 
+    // Continuous proximity monitor: each iteration reads the live range and
+    // classifies it against PROXIMITY_THRESHOLD_MM. The distance is host-settable
+    // (Vl53l1x::set_distance_mm) and driven live from the LabWired UI input
+    // bridge, so PROXIMITY flips NEAR/FAR as you move the slider.
     loop {
         let status = vl_read_register(REG_RESULT_RANGE_STATUS);
         let raw = vl_read_register16(REG_RESULT_RANGE_MM);
         // Same back-conversion the Pololu driver applies in read().
-        let range_mm = ((raw as u32) * 2011 + 0x0400) / 0x0800;
+        let range_mm = (((raw as u32) * 2011 + 0x0400) / 0x0800) as u16;
 
         uart_str("STATUS=");
         uart_u16(status as u16);
         uart_str(" RANGE=");
-        uart_u16(range_mm as u16);
-        uart_str(" mm\n");
+        uart_u16(range_mm);
+        uart_str(" mm PROXIMITY=");
+        if range_mm <= PROXIMITY_THRESHOLD_MM {
+            uart_str("NEAR\n");
+        } else {
+            uart_str("FAR\n");
+        }
 
         for _ in 0..200_000 {
             cortex_m::asm::nop();
