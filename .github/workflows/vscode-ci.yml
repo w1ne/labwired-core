@@ -54,7 +54,10 @@ jobs:
 
       - name: Build LabWired (DAP)
         run: cargo build -p labwired-dap --release
-        working-directory: ../core
+        # core submodule lives at <workspace>/core (step working-directory is
+        # workspace-relative, not relative to the job's ./vscode default). The
+        # old `../core` resolved outside the repo. Matches vscode-nightly.yml.
+        working-directory: ./core
 
       - name: Compile
         run: npm run compile
