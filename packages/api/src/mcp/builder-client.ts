@@ -36,3 +36,26 @@ export function builderRun(
 ) {
   return post<BuilderRunResult>(env, '/run', req);
 }
+
+export interface BuilderCompileDiagnostic {
+  severity: 'error' | 'warning';
+  file?: string;
+  line?: number;
+  column?: number;
+  message: string;
+}
+
+export interface BuilderCompileResult {
+  ok: boolean;
+  elfBase64?: string;
+  diagnostics: BuilderCompileDiagnostic[];
+  log?: string;
+  runnable?: boolean;
+}
+
+export function builderCompile(
+  env: Env,
+  req: { source: string; board: string; language?: 'c' | 'cpp' },
+) {
+  return post<BuilderCompileResult>(env, '/compile', req);
+}

@@ -4,6 +4,7 @@
  * authoritative implementation; packages/mcp re-exports from here.
  */
 import { getCatalogPart } from './catalog';
+import type { PinEtype } from './catalog';
 import { findPinFunction, getPinMapping } from './pin-mapping';
 
 // ---------------------------------------------------------------------------
@@ -76,6 +77,7 @@ const COMPONENT_LABELS: Record<string, string> = {
 export type DiagnosticSeverity = 'error' | 'warning';
 export type DiagnosticCode =
   | 'PIN_NOT_ON_CHIP'
+  | 'PIN_NOT_ON_COMPONENT'
   | 'PIN_LACKS_ADC'
   | 'PIN_LACKS_PWM'
   | 'PIN_LACKS_I2C'
@@ -299,6 +301,30 @@ export function diagnoseDiagram(diagram: ValidateDiagram): Diagnostic[] {
     if (d) out.push(d);
   }
 
+  // Pin-existence: a wire endpoint must reference a real pin on the part. This
+  // is what stops "looks wired but isn't" diagrams — a wire to a hallucinated
+  // pin (rgb-led.DIN, buzzer.PWM, button.OUT) resolves to nothing in the
+  // renderer, so the part shows as disconnected. Only parts with TYPED pins are
+  // checked here; MCU pins come from PIN_MAPS and are validated via
+  // PIN_NOT_ON_CHIP, and pin-less legacy parts are skipped (can't check yet).
+  for (const wire of wires) {
+    for (const ep of [wire.from, wire.to] as const) {
+      const part = diagram.parts.find((p) => p.id === ep.part);
+      if (!part) continue; // unknown part → WIRE_INVALID_PART already covers it
+      const cat = getCatalogPart(part.type);
+      if (!cat?.pins?.length) continue; // MCU / legacy pin-less part
+      if (cat.pins.some((pin) => pin.name === ep.pin)) continue;
+      const valid = cat.pins.map((pin) => pin.name).join(', ');
+      out.push({
+        severity: 'error',
+        code: 'PIN_NOT_ON_COMPONENT',
+        message: `Pin "${ep.pin}" does not exist on ${COMPONENT_LABELS[part.type] ?? part.type} (${part.id}). Valid pins: ${valid}.`,
+        location: { part_id: part.id, pin: ep.pin },
+        fix: `Wire to one of this component's actual pins: ${valid}.`,
+      });
+    }
+  }
+
   const mcuPinAssignments = new Map<string, string>();
   const componentMcuWireCount = new Map<string, number>();
   for (const wire of wires) {
@@ -329,11 +355,20 @@ export function diagnoseDiagram(diagram: ValidateDiagram): Diagnostic[] {
   // Only flag multiple MCU wires for simple-GPIO components — SPI/I2C/UART
   // devices legitimately need multiple wires (MOSI/SCK/CS + control + power).
   const SINGLE_WIRE_KINDS = new Set(['led', 'button', 'adc_input', 'pwm_output']);
+  // Active signal etypes: a pin that drives or is driven by an MCU GPIO. A part
+  // that declares more than one of these (e.g. HC-SR04 with TRIG + ECHO) is
+  // inherently multi-wire, so the single-wire rule must not apply to it — even
+  // though its legacy boardIoKind is 'button'. Without this, the hard
+  // validation gate would reject every legitimate ultrasonic/multi-signal board.
+  const SIGNAL_ETYPES = new Set<PinEtype>(['input', 'output', 'bidirectional', 'open_drain', 'tri_state']);
   for (const [partId, count] of componentMcuWireCount) {
     if (count <= 1) continue;
     const part = diagram.parts.find((p) => p.id === partId);
     const meta = part ? getPartMeta(part.type) : null;
     if (!meta?.boardIoKind || !SINGLE_WIRE_KINDS.has(meta.boardIoKind)) continue;
+    const cat = part ? getCatalogPart(part.type) : undefined;
+    const signalPins = cat?.pins?.filter((pin) => SIGNAL_ETYPES.has(pin.etype)) ?? [];
+    if (signalPins.length > 1) continue;
     out.push({
       severity: 'error',
       code: 'BOARDIO_MULTIPLE_WIRES',

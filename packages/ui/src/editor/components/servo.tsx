@@ -10,7 +10,7 @@ export const servoComponent: ComponentDef = {
   width: W,
   height: H,
   pins: [
-    { id: 'SIG', x: 0, y: 16, side: 'left', label: 'SIG' },
+    { id: 'PWM', x: 0, y: 16, side: 'left', label: 'PWM' },
     { id: 'VCC', x: 0, y: 34, side: 'left', label: 'VCC' },
     { id: 'GND', x: 0, y: 52, side: 'left', label: 'GND' },
   ],

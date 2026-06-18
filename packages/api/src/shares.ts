@@ -1,4 +1,5 @@
-import { normalizeLabWiredDiagramV1 } from '@labwired/board-config';
+import { normalizeLabWiredDiagramV1, composeDiagnostics } from '@labwired/board-config';
+import type { ValidateDiagram } from '@labwired/board-config';
 import type { Env } from './types.js';
 import { verifyClerkRequest } from './clerk.js';
 
@@ -22,6 +23,15 @@ export interface ShareRecord {
   /** MCU target id for the firmware (e.g. 'nrf52840', 'stm32l476'). */
   target?: string;
   created_at: number;
+}
+
+/** Thrown by createShareRecord when the diagram fails validation. Carries the
+ *  full diagnostics so the HTTP layer can return them to the caller. */
+export class ShareValidationError extends Error {
+  constructor(public readonly validation: ReturnType<typeof composeDiagnostics>) {
+    super('DIAGRAM_INVALID');
+    this.name = 'ShareValidationError';
+  }
 }
 
 const CORS_HEADERS: Record<string, string> = {
@@ -106,6 +116,16 @@ export async function createShareRecord(
   const diagram = normalizeLabWiredDiagramV1(input.diagram);
   if (!diagram) throw new Error('diagram is required');
 
+  // Storage-boundary validation gate: every share — whether created via the MCP
+  // open_hardware_lab tool or the raw POST /v1/shares route — must pass
+  // validation. This is the last line of defense against shipping a board that
+  // "looks wired but isn't" (hallucinated/unresolvable pins). No invalid diagram
+  // is ever persisted.
+  const validation = composeDiagnostics(diagram as unknown as ValidateDiagram);
+  if (!validation.ok) {
+    throw new ShareValidationError(validation);
+  }
+
   const source = sourceFrom(input.source);
   if (source.length > SOURCE_MAX) throw new Error(`source exceeds ${SOURCE_MAX} bytes`);
 
@@ -169,6 +189,9 @@ export async function handleCreateShare(request: Request, env: Env): Promise<Res
     const urls = shareUrls(record.id);
     return json({ id: record.id, url: urls.studioUrl, embed_url: urls.embedUrl }, 201);
   } catch (error) {
+    if (error instanceof ShareValidationError) {
+      return json({ error: 'DIAGRAM_INVALID', detail: 'The diagram has wiring errors and was not shared. Fix the errors below and retry.', validation: error.validation }, 422);
+    }
     return err(error instanceof Error ? error.message : String(error));
   }
 }

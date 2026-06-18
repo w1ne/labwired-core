@@ -128,6 +128,11 @@ export const CATALOG: Record<string, CatalogPart> = {
       p('GND', 'power_in'),
       p('SDA', 'open_drain', 'i2c_sda'),
       p('SCL', 'open_drain', 'i2c_scl'),
+      // 4-wire SPI mode pins (also drawn by the renderer): chip-select and
+      // data-out. Passive so they add no power/bus ERC — they only need to
+      // exist for pin-name validation to accept a wire the renderer can draw.
+      p('CSB', 'passive'),
+      p('SDO', 'passive'),
     ],
     operatingVoltage: { min: 1.71, max: 3.6 },
   },
@@ -158,10 +163,30 @@ export const CATALOG: Record<string, CatalogPart> = {
   },
 
   // --- Legacy parts: boardIoKind carried over verbatim, no pins yet ---
-  'rgb-led': { type: 'rgb-led', deviceClass: 'board_io', boardIoKind: 'led' },
-  buzzer: { type: 'buzzer', deviceClass: 'board_io', boardIoKind: 'pwm_output' },
+  // Pins below MUST match the @labwired/ui renderer pin ids exactly — a wire
+  // that validates here has to be one the renderer can actually draw. The
+  // catalog↔renderer parity is locked by a test in packages/ui. Pins are
+  // 'passive' (mirroring led/button) so adding them introduces no power/ERC
+  // rules — this layer only enforces that the pin NAME exists on the part.
+  'rgb-led': {
+    type: 'rgb-led',
+    deviceClass: 'board_io',
+    boardIoKind: 'led',
+    pins: [p('R', 'passive'), p('G', 'passive'), p('B', 'passive'), p('GND', 'passive')],
+  },
+  buzzer: {
+    type: 'buzzer',
+    deviceClass: 'board_io',
+    boardIoKind: 'pwm_output',
+    pins: [p('+', 'passive'), p('-', 'passive')],
+  },
   neopixel: { type: 'neopixel', deviceClass: 'spi_device', boardIoKind: 'spi_device' },
-  potentiometer: { type: 'potentiometer', deviceClass: 'passive', boardIoKind: 'adc_input' },
+  potentiometer: {
+    type: 'potentiometer',
+    deviceClass: 'passive',
+    boardIoKind: 'adc_input',
+    pins: [p('1', 'passive'), p('W', 'passive'), p('2', 'passive')],
+  },
   'slide-switch': { type: 'slide-switch', deviceClass: 'board_io', boardIoKind: 'button' },
   'dip-switch': { type: 'dip-switch', deviceClass: 'board_io', boardIoKind: 'button' },
   'rotary-encoder': { type: 'rotary-encoder', deviceClass: 'board_io', boardIoKind: 'button' },
