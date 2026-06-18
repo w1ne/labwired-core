@@ -831,15 +831,6 @@ export function App() {
     return () => root.classList.remove('lw-no-glass');
   }, [uiFeatures.glass]);
 
-  // Auto-open instruments a board/lab declares, so a shared link shows its
-  // output immediately instead of a blank canvas.
-  useEffect(() => {
-    if (selectedBoard.openInstruments?.includes('logic-analyzer')) {
-      setShowAnalyzer(true);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedBoard.boardId]);
-
   // Command palette mode + ref for global ⌘K shortcut
   const commandRefs = useRef<{ open: () => void; close: () => void } | null>(null);
 
@@ -1486,6 +1477,16 @@ export function App() {
     });
     openWindow(id);
   };
+
+  // Auto-open instruments a board/lab declares (openInstruments), so a shared
+  // link shows its output immediately. 'logic-analyzer' opens the UDS/CAN logic
+  // analyzer window for the board's probe — NOT the BLE air tracer.
+  useEffect(() => {
+    if (selectedBoard.openInstruments?.includes('logic-analyzer')) {
+      openLogicAnalyzerTool();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedBoard.boardId]);
 
   const renderRuntimeControl = (part: Part) =>
     renderComponentRuntimeControl({
