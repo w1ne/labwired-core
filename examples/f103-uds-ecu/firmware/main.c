@@ -187,7 +187,18 @@ static uint8_t g_rx_buf[128];
 static uint8_t g_tx_buf[128];
 static uint32_t g_now_ms;
 
+#ifdef BROKEN_NCR
+/* Reproduce w1c/udslib issue #29: the reporter's port armed the ISO-TP N_Cr
+ * timer from a clock that read 0 (an unset get_time_ms) while feeding
+ * uds_tp_isotp_process() a real, large HAL_GetTick(). That clock-source
+ * mismatch tears the multi-frame RX session down on the first process() tick
+ * after the FirstFrame, so the ConsecutiveFrame is dropped and the ECU never
+ * answers. We model it the same way: get_time_ms() returns 0 (used to ARM
+ * N_Cr), and the loop feeds process() a large tick (below). */
+static uint32_t get_time_ms(void) { return 0u; }
+#else
 static uint32_t get_time_ms(void) { return g_now_ms; }
+#endif
 
 static int isotp_send_adapter(struct uds_ctx *ctx, const uint8_t *data, uint16_t len)
 {
@@ -247,7 +258,13 @@ int main(void)
             uds_isotp_rx_callback(&g_iso, &ctx, f.id, f.data, f.len);
         }
         uds_process(&ctx);
+#ifdef BROKEN_NCR
+        /* Real, large tick into process() — vs the 0 that armed N_Cr. The
+         * (large - 0) >= n_cr check fires immediately after the FirstFrame. */
+        uds_tp_isotp_process(&g_iso, 100000u + g_now_ms);
+#else
         uds_tp_isotp_process(&g_iso, g_now_ms);
+#endif
         ++g_now_ms;
     }
 }

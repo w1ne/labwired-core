@@ -28,8 +28,18 @@ UDS_SRCS := \
 APP_OBJS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(APP_SRCS))
 UDS_OBJS := $(patsubst $(UDSLIB_DIR)/%.c,$(BUILD_DIR)/udslib/%.o,$(UDS_SRCS))
 ELF := $(BUILD_DIR)/$(TARGET).elf
+# Same firmware compiled with -DBROKEN_NCR to reproduce udslib issue #29
+# (N_Cr clock-source mismatch drops the consecutive frame).
+BROKEN_ELF := $(BUILD_DIR)/$(TARGET)_broken.elf
 
-all: check-udslib $(ELF)
+all: check-udslib $(ELF) $(BROKEN_ELF)
+
+$(BUILD_DIR)/main_broken.o: main.c | $(BUILD_DIR)
+	$(CC) $(APP_CFLAGS) -DBROKEN_NCR -c $< -o $@
+
+$(BROKEN_ELF): $(BUILD_DIR)/startup.o $(BUILD_DIR)/main_broken.o $(UDS_OBJS) minimal.ld
+	$(CC) $(CPUFLAGS) -nostdlib -T minimal.ld -Wl,--gc-sections \
+	  $(BUILD_DIR)/startup.o $(BUILD_DIR)/main_broken.o $(UDS_OBJS) -o $@
 
 check-udslib:
 	@test -f "$(UDSLIB_DIR)/include/uds/uds_core.h" || \
