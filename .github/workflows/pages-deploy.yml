@@ -35,10 +35,9 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout (with submodules)
+      - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
           # Full superproject history (not the default shallow depth-1) so that
           # `github.event.before` is present in the local git object store. The
           # "Detect whether this push changed core" step diffs BEFORE..AFTER to
@@ -47,6 +46,13 @@ jobs:
           # on EVERY push — defeating the playground-only fast path. depth 0
           # makes the diff work for both single-commit pushes and merge commits.
           fetch-depth: 0
+      # Fetch ONLY the `core` submodule (wasm/configs this deploy needs).
+      # Skipping the private `landing_page` + `vscode` submodules avoids the
+      # intermittent labwired-landing clone failure that aborts checkout, and is
+      # faster. `git submodule update core` uses the credentials checkout
+      # persisted, so the private `core` still clones.
+      - name: Fetch core submodule
+        run: git submodule update --init --depth 1 core
 
       - name: Setup Node
         uses: actions/setup-node@v4
