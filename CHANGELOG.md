@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-06-18
+
 ### Added
 - **Wiring Kernel**: named nets, electrical rule checks (ERC), and ERC-gated diagram compilation on both MCP surfaces. `labwired_validate_diagram` upgraded with full kernel ERC (I2C bus rules, driver conflicts, voltage mismatches, IRQ source ordinal validation for ESP32-S3). New `labwired_compile_diagram` compiles a diagram to a runnable board manifest with net-derived I2C bus binding; local surface persists to `.labwired/boards/`; hosted surface returns manifest inline.
 - **Component Model IR**: agents define off-chip I2C devices declaratively (`labwired_define_component`, `labwired asset validate-component`, `type: ir` manifest devices); PCA9685 and TMP102 reference specs gated by byte-equivalence tests.
@@ -32,6 +34,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Vision Completion Scoreboard**: `docs/strategy/vision/SCOREBOARD.md` tracking all 6 gaps with status and evidence links.
 - **Getting Started Tutorial**: `docs/tutorials/getting-started.md` — install, build, run, inspect, debug walkthrough.
 - **CI Integration Tutorial**: `docs/tutorials/ci-integration.md` — GitHub Actions, GitLab CI, and Docker recipes.
+- **Embeddable Playground**: branded `?embed=true` iframe embed — read-only mobile shell that exposes tools only when the lab actually uses them, an "Open in LabWired" edit link, an **Embed button** with copy-snippet + corner badge, a ChatGPT-app embed UX, and `og:image`/`twitter:image` social cards so shared & embed links render rich previews.
+- **CAN / UDS Labs**: STM32F103 bxCAN two-node UDS lab (strict bxCAN + virtual UDS tester) plus a paired bug-repro ("broken") lab, a universal UDS decoder, STM32H5 UDS ECU playground, and a real-CAN UDS analyzer with frame-level waveform reconstruction in the logic analyzer.
+- **ESP32 Real-Boot + Hosted Compile**: ESP32 firmware rom-boots from a flash image; `compile_firmware` / `build_and_run` MCP tools and a hosted PlatformIO `/compile` service let sandbox-less agents close the write-build-run loop.
+- **Containerized Builder + Europa Deploy**: shared PlatformIO compile service as a Docker Compose stack (builder + compile + cloudflared) deployed on Europa with staged cutover and instant `:prev` rollback.
+- **Chip 3D Models**: every wireable chip carries a real 3D model (`catalog_ref`), gated by a parity test.
+- **Mobile Chip Switcher**: playground multi-MCU chip switcher for small screens.
+
+### Fixed
+- **Silicon Fidelity**: STM32F103 SRAM corrected to 20 KB and opt-in RCC clock-gating added (F1 + L4) to prevent false-pass runs; SWD-validated byte-identical against real F103.
+- **Runnable Labs**: Library links open the real playground and autorun labs with a binary; one unified share-link format (runs the share's binary, else a matched example's); nRF52840-DK, agent labs, and L476 demo firmwares are now runnable; asset gate accepts manifest-delivered firmware.
+- **Analyzer Labels**: logic-analyzer source labelled `CAN` (works for bxCAN too), and `openInstruments` opens the UDS logic analyzer rather than the BLE tracer.
+
+### Changed
+- **Editor Connection Clarity**: terminal dots, hover/select wire tracing, hop-overs, and obstacle-aware routing; run-only embed locks the canvas to read-only run mode.
+- **Unified Library Lists**: featured labs derived from `BOARD_CONFIGS` as a single source of truth.
 
 ## [0.13.0] - 2026-03-20
 
