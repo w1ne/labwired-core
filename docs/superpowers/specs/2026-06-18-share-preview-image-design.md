@@ -21,7 +21,29 @@ static SPA, **no Pages Functions exist yet**.)
 
 ## Architecture (3 pieces, current state from investigation)
 
-### A. Client — render canvas → PNG at share time
+## Security posture (decided)
+
+Per-lab images are **only stored/served for AUTHENTICATED shares** (signed-in
+Clerk user). Anonymous shares still work but get **no custom image — they fall
+back to the LabWired logo**. This auth-gates the two real abuse vectors (hosting
+arbitrary attacker bytes on our domain; unauthenticated storage/cost), while
+keeping anonymous sharing. Plus the always-on must-dos:
+- **Edge:** validate the `share` id against its exact charset/length BEFORE use,
+  `encodeURIComponent` it, and set meta via HTMLRewriter `setAttribute` (escapes)
+  — never string-concat into HTML (prevents reflected XSS).
+- **Image serve:** `Content-Type: image/png` + `X-Content-Type-Options: nosniff`
+  + `Content-Disposition: inline` (defangs PNG/HTML polyglots). `immutable` cache
+  ONLY on a stored 200 — never on the miss/redirect.
+- **Anonymous fallback is lookup-free at the edge:** the edge always points
+  `og:image` at `/v1/shares/<id>/image`; that endpoint serves the stored image
+  (authed) or **302-redirects to the logo** (`/icon-512.png`) when none exists.
+
+### A. Client — render canvas → PNG at share time (signed-in only)
+Render + upload the preview ONLY when the user is signed in (Clerk
+`useAuth().isSignedIn`), and attach `Authorization: Bearer ${await getToken()}`
+to the share POST (same pattern as `useProjects`). Anonymous users skip the
+render/upload entirely (share still created, card = logo).
+
 - `EditorCanvas` already exposes the board `<svg>` via `svgRef`
   (`packages/ui/src/editor/EditorCanvas.tsx:112,510`). Add a helper
   `renderCanvasPng(svg: SVGSVGElement): Promise<string>` (new
@@ -42,14 +64,20 @@ static SPA, **no Pages Functions exist yet**.)
 ### B. API — store + serve the image (KV, no new infra)
 - Shares already live in **KV_PROJECTS** (`shares.ts`, 90-day TTL). KV values may
   be binary up to 25 MB; a 1200×630 PNG is tens of KB. **No R2 binding needed.**
-- `POST /v1/shares`: accept optional `preview` (base64 PNG, size-guarded ≤ ~512 KB).
-  When present, decode and `KV_PROJECTS.put('shareimg:'+id, bytes, {expirationTtl,
-  metadata:{contentType:'image/png'}})`. Reject oversized/non-PNG (magic check).
-- New `GET /v1/shares/:id/image` → returns the PNG with `Content-Type: image/png`
-  and long `Cache-Control` (immutable; id is content-addressed enough). 404 when
-  absent. CORS already `*` for the API.
-- Optionally persist the board/lab name on the `ShareRecord` (`title?: string`)
-  so the edge can set `og:title` too.
+- `POST /v1/shares`: accept optional `preview` (base64 PNG, size-guarded ≤ 512 KB).
+  Store the image **only when the request is authenticated** —
+  `verifyClerkRequest(request, env)` returns a user; otherwise ignore `preview`
+  (share still created anonymously, 201, no image). When authed + valid: decode,
+  PNG-magic check, `KV_PROJECTS.put('shareimg:'+id, bytes, {expirationTtl,
+  metadata:{contentType:'image/png'}})`.
+- `GET /v1/shares/:id/image`:
+  - **hit** → PNG, `Content-Type: image/png`, `X-Content-Type-Options: nosniff`,
+    `Content-Disposition: inline`, `Cache-Control: public, max-age=31536000, immutable`.
+  - **miss** → `302` to the logo `https://app.labwired.com/icon-512.png` with a
+    SHORT cache (e.g. `max-age=300`, NOT immutable) so anon cards still show the
+    brand image and a later... (anon never gets an image, so the redirect is stable).
+  - CORS already `*`.
+- No `title` on `ShareRecord` (the `og:title` rewrite is dropped for cost).
 
 ### C. Edge — inject per-share OG meta (new Pages Function)
 - Add `packages/playground/functions/_middleware.ts` (Cloudflare Pages
