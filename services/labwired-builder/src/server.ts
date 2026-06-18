@@ -1,7 +1,12 @@
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import { run } from './run.js';
+import { compile, type CompileRequest } from './compile.js';
 
 const MAX_CONCURRENT = Number(process.env.MAX_CONCURRENT ?? 2);
+// Upper bound on a proxied /compile round-trip. The compile service caps its own
+// `pio run` at 240s and always returns a result within that, so anything past
+// this is a stuck connection — fail fast with 502 instead of hanging the slot.
+const COMPILE_PROXY_TIMEOUT_MS = Number(process.env.COMPILE_PROXY_TIMEOUT_MS ?? 250_000);
 
 export interface ServerOptions {
   secret: string;
@@ -68,6 +73,40 @@ export function makeServer(opts: ServerOptions) {
         const req2 = parsed as { elfBase64: string; systemYaml: string; chipYaml?: string; maxSteps: number };
         const result = await run(req2);
         json(res, 200, result);
+      } else if (url === '/compile') {
+        // Route to the egress lane only when the request needs to fetch
+        // libraries (lib_deps); otherwise the sealed, egress-denied lane.
+        const ld = (parsed as { lib_deps?: unknown })?.lib_deps;
+        const needsNet = Array.isArray(ld)
+          ? ld.length > 0
+          : typeof ld === 'string' && ld.trim().length > 0;
+        const compileUrl =
+          (needsNet && process.env.COMPILE_NET_URL) || process.env.COMPILE_URL;
+        if (compileUrl) {
+          try {
+            const upstream = await fetch(`${compileUrl.replace(/\/$/, '')}/compile`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(parsed),
+              signal: AbortSignal.timeout(COMPILE_PROXY_TIMEOUT_MS),
+            });
+            const text = await upstream.text();
+            res.writeHead(upstream.status, { 'Content-Type': 'application/json' });
+            res.end(text);
+          } catch (err) {
+            const timedOut = err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError');
+            const message = err instanceof Error ? err.message : String(err);
+            json(res, 502, {
+              ok: false,
+              error: timedOut
+                ? `compile backend timed out after ${COMPILE_PROXY_TIMEOUT_MS}ms`
+                : `compile backend unreachable: ${message}`,
+            });
+          }
+        } else {
+          const result = await compile(parsed as CompileRequest);
+          json(res, 200, result);
+        }
       } else {
         json(res, 404, { error: 'not found' });
       }

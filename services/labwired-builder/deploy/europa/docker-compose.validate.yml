@@ -1,0 +1,11 @@
+# Validation override — bring the new stack up on a SPARE port (18081) ALONGSIDE
+# the running systemd builder (which holds 18080), so we can prove the container
+# works on Europa without touching the live service or the tunnel.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.validate.yml -p lwval up -d compile builder
+#   curl -fsS -X POST http://127.0.0.1:18081/compile -H 'X-Builder-Secret: <secret>' ...
+#   docker compose -p lwval down
+services:
+  builder:
+    ports:
+      - "127.0.0.1:18081:18080"

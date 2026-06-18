@@ -1,0 +1,90 @@
+# LabWired builder stack — pull-to-deploy on Hetzner.
+#   docker compose pull && docker compose up -d
+#
+# Networks:
+#   backend (internal: true)  -> compile + builder; NO internet egress.
+#   edge    (bridge)          -> builder + cloudflared; cloudflared reaches CF.
+#   netlane (bridge)          -> builder + compile-net; egress ONLY for libs.
+#
+# Two compile lanes (the builder routes by whether the request carries lib_deps):
+#   compile      — SEALED: egress-denied backend, for untrusted/public source.
+#   compile-net  — egress lane: lets `pio` download lib_deps (e.g. proto.cat's
+#                  e-paper libraries). Reachable only by the builder, which gates
+#                  every /compile on the shared secret, so only trusted callers
+#                  reach it. Never published to the host/internet.
+
+services:
+  compile:
+    image: ghcr.io/w1ne/labwired-compile:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    networks: [backend]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    tmpfs: ["/tmp"]
+    mem_limit: 2g
+    cpus: 2.0
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Egress-enabled lane (same image). Only used for requests with lib_deps; on an
+  # isolated bridge so it can reach the PlatformIO registry but not the edge/tunnel.
+  compile-net:
+    image: ghcr.io/w1ne/labwired-compile:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    networks: [netlane]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    tmpfs: ["/tmp"]
+    mem_limit: 2g
+    cpus: 2.0
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  builder:
+    image: ghcr.io/w1ne/labwired-builder:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: [.env]
+    environment:
+      COMPILE_URL: http://compile:8080
+      COMPILE_NET_URL: http://compile-net:8080
+    depends_on:
+      compile:
+        condition: service_healthy
+      compile-net:
+        condition: service_healthy
+    networks: [backend, edge, netlane]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    tmpfs: ["/tmp"]
+    mem_limit: 1g
+    cpus: 2.0
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:18080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: ["tunnel", "run"]
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN}
+    depends_on:
+      builder:
+        condition: service_healthy
+    networks: [edge]
+
+networks:
+  backend:
+    internal: true
+  edge:
+    driver: bridge
+  netlane:
+    driver: bridge

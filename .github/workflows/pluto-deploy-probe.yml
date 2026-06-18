@@ -1,0 +1,38 @@
+name: Pluto Deploy Probe
+
+# Read-only discovery job that runs ON the deploy box (self-hosted runner) to
+# learn its current state before we wire up the real builder deploy. Triggered
+# by pushing this branch; safe to delete after.
+on:
+  push:
+    branches: ["deploy/pluto-probe"]
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: [self-hosted, deploy]
+    steps:
+      - name: Inspect the box (read-only)
+        run: |
+          set +e
+          echo "== identity =="
+          echo "host=$(hostname)  user=$(whoami)"
+          echo "== docker =="
+          docker version --format 'server={{.Server.Version}}' 2>&1 | head -1
+          docker compose version 2>&1 | head -1
+          echo "== running containers =="
+          docker ps --format '{{.Names}}  {{.Image}}  {{.Status}}' 2>&1 | head -30
+          echo "== existing builder deploy dir =="
+          ls -la /opt/labwired-builder 2>/dev/null || echo "  /opt/labwired-builder: none"
+          echo "== existing secret file =="
+          test -f /etc/labwired-builder.env && echo "  /etc/labwired-builder.env: present" || echo "  /etc/labwired-builder.env: none"
+          echo "== existing systemd units =="
+          systemctl is-active labwired-builder 2>/dev/null && echo "  labwired-builder.service active" || echo "  labwired-builder.service: inactive/none"
+          systemctl is-active cloudflared 2>/dev/null && echo "  host cloudflared active" || echo "  host cloudflared: inactive/none"
+          echo "== live endpoint =="
+          curl -fsS --max-time 8 https://builder.labwired.com/healthz 2>&1 | head -1 || echo "  builder.labwired.com/healthz: no response"
+          echo "== local labwired sim binary =="
+          (command -v labwired && labwired --version) 2>&1 | head -2 || echo "  no /usr/local/bin/labwired"
+          echo "== disk =="
+          df -h / 2>/dev/null | tail -1
+          echo "DONE"

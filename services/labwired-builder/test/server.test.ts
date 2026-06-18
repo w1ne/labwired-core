@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 import { makeServer } from '../src/server';
+import { createServer } from 'node:http';
 import type { Server } from 'node:http';
 import { AddressInfo } from 'node:net';
 
@@ -51,11 +52,77 @@ describe('server', () => {
   });
 
   it('returns 404 for unknown route', async () => {
-    const r = await fetch(`${base}/compile`, {
+    const r = await fetch(`${base}/nope`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-builder-secret': SECRET },
       body: JSON.stringify({}),
     });
     expect(r.status).toBe(404);
+  });
+
+  it('routes POST /compile and validates input (200 with ok:false, no toolchain needed)', async () => {
+    const r = await fetch(`${base}/compile`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-builder-secret': SECRET },
+      body: JSON.stringify({ source: '', board: 'stm32l476' }),
+    });
+    expect(r.status).toBe(200);
+    const body = (await r.json()) as { ok: boolean; diagnostics: { message: string }[] };
+    expect(body.ok).toBe(false);
+    expect(body.diagnostics[0].message).toMatch(/source is required/i);
+  });
+});
+
+describe('builder /compile proxy', () => {
+  const started: Server[] = [];
+  afterEach(async () => {
+    delete process.env.COMPILE_URL;
+    await Promise.all(started.map((s) => new Promise<void>((r) => s.close(() => r()))));
+    started.length = 0;
+  });
+
+  async function listen(s: Server): Promise<string> {
+    started.push(s);
+    await new Promise<void>((r) => s.listen(0, '127.0.0.1', r));
+    const addr = s.address();
+    if (addr === null || typeof addr === 'string') throw new Error('no port');
+    return `http://127.0.0.1:${addr.port}`;
+  }
+
+  it('forwards /compile to COMPILE_URL and returns its response', async () => {
+    let received: unknown;
+    const upstream = createServer((req, res) => {
+      const chunks: Buffer[] = [];
+      req.on('data', (c) => chunks.push(c));
+      req.on('end', () => {
+        received = JSON.parse(Buffer.concat(chunks).toString());
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, elfBase64: 'ZmFrZQ==', diagnostics: [] }));
+      });
+    });
+    const upstreamBase = await listen(upstream);
+    process.env.COMPILE_URL = upstreamBase;
+
+    const builderBase = await listen(makeServer({ secret: 's3cret' }));
+    const res = await fetch(`${builderBase}/compile`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Builder-Secret': 's3cret' },
+      body: JSON.stringify({ board: 'stm32l476', source: 'int main(){}' }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, elfBase64: 'ZmFrZQ==', diagnostics: [] });
+    expect(received).toEqual({ board: 'stm32l476', source: 'int main(){}' });
+  });
+
+  it('returns 502 when the compile service is unreachable', async () => {
+    process.env.COMPILE_URL = 'http://127.0.0.1:1';
+    const builderBase = await listen(makeServer({ secret: 's3cret' }));
+    const res = await fetch(`${builderBase}/compile`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Builder-Secret': 's3cret' },
+      body: JSON.stringify({ board: 'stm32l476', source: 'int main(){}' }),
+    });
+    expect(res.status).toBe(502);
   });
 });
