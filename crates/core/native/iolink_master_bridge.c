@@ -19,7 +19,13 @@ typedef struct {
     size_t rx_len;
 } lw_iolm_context_t;
 
-static lw_iolm_context_t* g_active;
+/*
+ * Routes the PHY callbacks to the port currently being ticked. Thread-local so
+ * independent `NativeIolinkMasterPort`s driven from parallel test threads never
+ * race on it (each master port is otherwise fully self-contained — its protocol
+ * state lives in the caller-owned context, not in globals).
+ */
+static __thread lw_iolm_context_t* g_active;
 
 const char* lw_iolm_backend_name(void)
 {

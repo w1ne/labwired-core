@@ -30,8 +30,13 @@ typedef struct {
     size_t rx_len;
 } lw_iold_context_t;
 
-/* The device stack is a singleton, so a single active context is sufficient. */
-static lw_iold_context_t* g_device_active;
+/*
+ * Routes the device PHY callbacks. Thread-local so it never races with master
+ * bridge calls on other threads. `g_device_in_use` stays process-global: the
+ * device stack keeps its state in a true global (`g_dll_ctx`), so only one
+ * device may exist process-wide regardless of thread.
+ */
+static __thread lw_iold_context_t* g_device_active;
 static int g_device_in_use;
 
 static void q_push(uint8_t* q, size_t* head, size_t* len, uint8_t byte)

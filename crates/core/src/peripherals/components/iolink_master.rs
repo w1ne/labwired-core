@@ -156,6 +156,12 @@ const IDLE_FRAMES: u32 = 4;
 /// `iolinki-master` C stack and only exists under the `iolink-native` feature.
 /// Trace/UART behavior still runs on the hand-rolled path for now — this enum
 /// currently records the chosen backend so the swap can land incrementally.
+///
+/// `allow(dead_code)`: under `iolink-native` only `Native` is constructed (so
+/// `HandRolled` looks unused) and the native port is held but not yet read
+/// because trace/UART still run hand-rolled. Removing it would force a
+/// premature migration. See plan Task 5.
+#[allow(dead_code)]
 #[derive(Debug)]
 enum IolinkMasterBackend {
     HandRolled,

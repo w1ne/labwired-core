@@ -45,7 +45,7 @@ pub fn backend_name() -> &'static str {
 impl NativeIolinkMasterPort {
     pub fn new_type2_com3(pd_in_len: u8, pd_out_len: u8) -> Self {
         let bytes = unsafe { lw_iolm_context_size() };
-        let words = (bytes + std::mem::size_of::<u64>() - 1) / std::mem::size_of::<u64>();
+        let words = bytes.div_ceil(std::mem::size_of::<u64>());
         let mut storage = vec![0u64; words];
         let config = NativeConfig {
             pd_in_len,
@@ -105,7 +105,7 @@ pub struct NativeIolinkDevice {
 impl NativeIolinkDevice {
     pub fn new_proximity(present: bool) -> Self {
         let bytes = unsafe { lw_iold_context_size() };
-        let words = (bytes + std::mem::size_of::<u64>() - 1) / std::mem::size_of::<u64>();
+        let words = bytes.div_ceil(std::mem::size_of::<u64>());
         let mut storage = vec![0u64; words];
         let ret =
             unsafe { lw_iold_init_proximity(storage.as_mut_ptr().cast(), i32::from(present)) };

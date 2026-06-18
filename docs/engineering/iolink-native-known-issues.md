@@ -4,23 +4,20 @@ Tracked during implementation of the native `iolink-native` stack
 (plan 2026-06-18). These are not blockers for the proof-of-concept (all native
 tests pass), but should be fixed before the native path is relied on or shipped.
 
-## 1. Bridge globals are not thread-safe (latent test flakiness)
+## 1. Bridge routing globals — FIXED (was a real parallel-test failure)
 
-Both bridges use process-global mutable state:
+The bridges route PHY callbacks via a "currently active context" pointer
+(`g_active` in the master bridge, `g_device_active` in the device bridge). These
+were plain process globals; under cargo's default parallel test execution the
+writes raced and a callback could read the wrong context → the master-tick tests
+failed nondeterministically (observed reproducibly once the branch sat on
+`origin/main`).
 
-- `g_active` in `native/iolink_master_bridge.c`
-- `g_device_active` / `g_device_in_use` in `native/iolink_device_bridge.c`
-- the device stack itself (`g_dll_ctx`) is a true global (see issue #6).
-
-The master bridge sets `g_active = c` around each `iolink_master_*` call so the
-PHY `send`/`recv_byte` callbacks can find the right queue. If two
-`NativeIolinkMasterPort`s are driven from different threads (cargo runs tests in
-parallel by default), the `g_active` writes race and a callback can read the
-wrong context → corruption or SIGSEGV.
-
-It has NOT reproduced yet (the per-call C critical sections are short), but it is
-real. **Fix:** make `g_active` `thread_local`. The device stack is inherently
-singleton, so its instance must stay serialized regardless.
+**Fixed:** both routing pointers are now `__thread` (thread-local), so masters
+driven from parallel test threads never collide. `g_device_in_use` stays a
+process-global guard because the device stack keeps true global state
+(`g_dll_ctx`, see issue #6) — only one device may exist process-wide. Verified
+green across repeated full-suite runs.
 
 ## 2. C stack stores PHY/port by pointer — ownership is fragile
 
