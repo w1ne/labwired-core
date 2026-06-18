@@ -7,9 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-06-18
+
 ### Fixed
 - **Bit-band translation gated on cores that have it (M3/M4)**: the bus applied Cortex-M bit-band alias translation (0x4200_0000–0x43FF_FFFF → bit ops on 0x4000_0000) to every ARM chip, but the feature exists only on Cortex-M3/M4. M33 parts (STM32H563, STM32WBA52) map their real GPIO ports at 0x4202_xxxx, so word accesses there were translated into bit-band operations and never reached the GPIO model. Chip descriptors now carry an explicit `core` field; `SystemBus::from_config` enables translation only for `cortex-m3`/`cortex-m4` (configs without a `core` field keep the historical Arm default). Un-blocks the Tier-1 `gpio` cells for `stm32h563` and `stm32wba52` and the NUCLEO-H563ZI io-smoke.
 - **T1 shift-immediate flags inside IT blocks**: the 16-bit `LSL`/`LSR`/`ASR` immediate encodings updated N/Z unconditionally, but the architecture defines `setflags = !InITBlock()`. A flag update mid-IT-block re-evaluated the remaining block conditions and skipped instructions (observed as a false `gpio-bitband-shadow` FAIL in the Tier-1 H563/WBA52 fixtures after the bus fix).
+- **nRF52840 build targets**: corrected pin and proximity example build targets so the nRF52840 labs build and run.
+- **Proximity CLI cycle-accuracy**: the proximity demo now runs on the cycle-accurate CLI path.
 
 ### Added
 - **ESP32-S3 GDMA peripheral-coupled mode**: GDMA now moves real bytes between descriptor chains and the UART (UHCI0), SPI2, SPI3, I2S0 and I2S1 models, routed by the new `IN_PERI_SEL`/`OUT_PERI_SEL` registers. UART couples through UART0's real MMIO FIFO; SPI transactions kicked with `SPI_DMA_TX_ENA`/`SPI_DMA_RX_ENA` defer completion until GDMA supplies MOSI / consumes MISO bytes (attached-device responses included); I2S streams samples gated by TX/RX_START with `RXEOF_NUM` honored as a byte count. Transfers pump incrementally (64 bytes/tick); IN (RX) descriptors are written back with the owner bit cleared and the received length in dw0[23:12], while OUT (TX) owner writeback is gated on `OUT_AUTO_WRBACK` (`OUT_CONF0` bit 2, as on silicon) — with the bit clear a completed OUT chain can be re-kicked unchanged (M2M walks follow the same writeback rules). Unmodeled peripheral ids (AES, SHA, ADC, RMT, LCD_CAM, unbound) keep the auto-complete fallback.
@@ -17,8 +21,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **ESP32-S3 Faithful ROM Auto-Provisioning** (`crates/core/src/boot/esp32s3_rom.rs`): the real Espressif boot ROM is now discovered and extracted automatically from the installed toolchain (PlatformIO/ESP-IDF), cached by ELF content hash, and loaded by default — so `--rom-boot` needs only `LABWIRED_ESP32S3_FLASH` (no manual `make_esp32s3_rom_bins.py` step or `LABWIRED_ESP32S3_ROM/_DROM` env vars). The Rust extractor is byte-identical to the previous Python script. `LABWIRED_ESP32S3_ROM_ELF` overrides the ELF path; pre-extracted `LABWIRED_ESP32S3_ROM/_DROM` bins still work.
 - **`Esp32s3BootMode` telemetry**: `Esp32s3Wiring.boot_mode` reports `Faithful` (real ROM) vs `Harness` (no blob found → thunk fallback); the CLI `--rom-boot` path uses it to fail clearly when no real ROM is available.
 - **`LABWIRED_ESP32S3_FASTBOOT`** opt-out: forces the fast-boot/thunk path even when a real ROM is available (playground speed; deterministic fast-boot tests).
+- **SoC Factory architecture**: peripherals are now built from per-family factories backed by a const peripheral table with a thin `from_config` match, replacing bespoke per-chip wiring. Generic, nRF52, and ESP32 (LX6/LX7) families migrated; adding a chip is now a table entry plus a factory hook.
+- **Silicon-validation / drift gate**: a CI gate compares the model against silicon-derived expectations and fails on drift; board status (`docs`/coverage) is auto-generated from chip configs and smoke results.
+- **ESP32 real-boot de-thunk**: the ESP32 (LX6) boot path runs the real ROM instead of harness thunks where a blob is available, closing the gap between faithful and fast-boot behavior.
+- **Real-CAN UDS analyzer (core)**: frame-level CAN/UDS capture and decode in the core, feeding the playground logic analyzer.
+- **STM32H5 FDCAN support**: M_CAN peripheral for the H5 family (fixed RAM layout), enabling H563 FDCAN labs.
 
 ### Changed
+- **Module-split refactor**: the bus (routing, tick, accessors, modules), CLI command surface (run/test/snapshot/net-harness families), Xtensa core, and WASM inspect/inputs layers were split into focused modules — no behavior change, smaller compile units, clearer ownership.
+- **Fast PR CI gate**: a fast core-integrity gate runs on every PR; the full suite runs post-merge (see `ci/fast-pr-gate`).
+- **Data-driven coverage matrix**: the capability/coverage matrix is generated from config + smoke data rather than hand-maintained tables.
 - **ESP32-S3 I2C0 interrupt source corrected** to `ETS_I2C_EXT0_INTR_SOURCE = 42` (was 49). The wrong source left the interrupt parked at a disabled CPU interrupt, so ESP-IDF's interrupt-driven `i2c_master` never completed and returned `ESP_ERR_INVALID_STATE`. The unmodified SpiceDispenser firmware now drives its PCA9685 servos over I2C on the faithful path.
 - **`proper_model` (XIP flash-cache wiring) unified** with the resolved ROM: both the MMU-aware XIP model and the boot mode now derive from a single `provision_rom_images()` call, so they can never diverge.
 

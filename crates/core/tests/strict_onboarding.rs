@@ -18,6 +18,7 @@ const SMOKE_LESS_ALLOWLIST: &[&str] = &[
     "stm32wb55",     // BLE peripheral not yet modelled
     "stm32wba52",    // WBA series, early onboarding
     "esp32",         // Classic ESP32 Xtensa; separate e2e lane
+    "nrf52840",      // io-smoke pruned with its example by #300; restore pending — see #311
 ];
 
 #[test]
@@ -71,6 +72,20 @@ fn test_strict_board_onboarding() -> anyhow::Result<()> {
             if file_stem == "esp32s3-zero" || file_stem == "esp32s3" {
                 println!(
                     "  [SKIP] {} — Xtensa covered by hw-oracle / e2e fixture tests, not strict onboarding.",
+                    file_stem
+                );
+                continue;
+            }
+
+            // nrf52832 and esp32c3 are exercised by the tier-1 fixture /
+            // silicon-validation lane (examples/tier1-fixture/<chip>), which the
+            // generic cargo-driven strict-onboarding runner can't build. They
+            // have no top-level `system.yaml` example yet, so a dedicated
+            // io-smoke.yaml is still pending — tracked in #309 (nrf52832) and
+            // #310 (esp32c3). Skip here like the esp32s3 lane above.
+            if file_stem == "nrf52832" || file_stem == "esp32c3" {
+                println!(
+                    "  [SKIP] {} — covered by the tier-1 fixture lane; io-smoke.yaml pending (see #309/#310).",
                     file_stem
                 );
                 continue;
