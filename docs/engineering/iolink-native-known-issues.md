@@ -77,6 +77,24 @@ port. The "without sharing state" guarantee in its test is true of the Rust
 wrapper only — it is not evidence that four real device stacks coexist. Real
 multi-port stack-backed behavior needs the device-stack reentrancy work.
 
+## 9. `components/` is a flat junk drawer; IO-Link modules should be grouped
+
+`peripherals/components/mod.rs` is a flat list of ~30 `pub mod` declarations
+spanning unrelated device families. This implementation added two more
+top-level siblings (`iolink_native`, `iolink_station`) next to the existing
+`iolink_master`. A flat `pub mod` list is idiomatic Rust, but the IO-Link
+modules are one cohesive cluster and should live under a single `iolink/`
+submodule:
+
+```
+components/iolink/{mod.rs, master.rs, native.rs, station.rs}
+```
+
+so `components/mod.rs` carries one `pub mod iolink;` line. Done flat here to
+match the plan and the pre-existing `iolink_master.rs` placement. Regrouping
+also touches the kit registry and the public re-export path
+`peripherals::components::IolinkMaster`.
+
 ## 8. Single hard-coded master configuration
 
 `NativeIolinkMasterPort::new_type2_com3` hard-codes M-sequence type 2_1, COM3,
