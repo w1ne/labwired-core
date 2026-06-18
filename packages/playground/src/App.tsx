@@ -877,7 +877,13 @@ export function App() {
     const wasmUrl = new URL(`${import.meta.env.BASE_URL}wasm/labwired_wasm.js`, window.location.origin);
     wasmUrl.searchParams.set('v', String(__BUILD_TIME__));
     const mod = await import(/* @vite-ignore */ wasmUrl.href);
-    await mod.default();
+    // Version the .wasm binary URL too. The generated init() defaults to a fixed
+    // `labwired_wasm_bg.wasm` URL, which the browser/CDN cache forever — so a
+    // rebuilt engine never reaches returning visitors (they keep a stale wasm
+    // even though the versioned .js is fresh). Passing the busted URL fixes it.
+    const wasmBinUrl = new URL(`${import.meta.env.BASE_URL}wasm/labwired_wasm_bg.wasm`, window.location.origin);
+    wasmBinUrl.searchParams.set('v', String(__BUILD_TIME__));
+    await mod.default({ module_or_path: wasmBinUrl.href });
     setWasmModule(mod as WasmModule);
     return mod as WasmModule;
   }, [wasmModule]);
