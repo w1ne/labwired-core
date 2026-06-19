@@ -8,7 +8,8 @@
 #
 # `distance_cm` is the host-controlled "hand position" — change it to move the
 # target nearer/farther and watch the firmware's ALARM flag follow. 10 cm
-# (100 mm) is inside the firmware's 150 mm threshold, so ALARM is HIGH here.
+# (100 mm) is inside the firmware's 500 mm (50 cm) threshold, so ALARM is HIGH
+# here; drag past 50 cm to drop it.
 name: "nrf52840-proximity-lab"
 chip: "../../configs/chips/nrf52840.yaml"
 external_devices:

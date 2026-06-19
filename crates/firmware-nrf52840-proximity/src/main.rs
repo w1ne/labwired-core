@@ -73,13 +73,18 @@ const PAYLOAD_OFF: usize = 2;
 const BLE_PAYLOAD_LEN: u8 = 4;
 
 /// Target distance: raise ALARM when the measured distance is at or below this.
-const THRESHOLD_MM: u32 = 150;
+/// 500 mm (50 cm) sits in the middle of the HC-SR04's useful range, so dragging
+/// the host "hand distance" down past it visibly toggles the ALARM.
+const THRESHOLD_MM: u32 = 500;
 
-/// ECHO-high tick count corresponding to THRESHOLD_MM. Calibrated against the
-/// simulator at distance_cm = 15.0 (= 150 mm) with cpu_hz = 64 MHz: the ECHO
-/// pulse there is measured as 8950 of this loop's iterations. Deterministic for
-/// a given HC-SR04 `cpu_hz` and this measurement loop. See README "Calibration".
-const THRESHOLD_TICKS: u32 = 8950;
+/// ECHO-high tick count corresponding to THRESHOLD_MM. The ECHO pulse the
+/// simulator drives is strictly proportional to distance (it holds ECHO high for
+/// `distance_cm × 58 µs`), so this loop's iteration count is linear in distance:
+/// the original calibration measured 8950 ticks at 150 mm (cpu_hz = 64 MHz), i.e.
+/// 59.67 ticks/mm. 500 mm × 59.67 = 29833 ticks. Keeping ticks/mm identical leaves
+/// the reported `distance_mm` calibrated; only the in-range boundary moves to
+/// 50 cm. Deterministic for a given HC-SR04 `cpu_hz`. See README "Calibration".
+const THRESHOLD_TICKS: u32 = 29833;
 
 /// Safety bound so a missing/!wired ECHO never hangs the firmware.
 const MAX_TICKS: u32 = 4_000_000;
