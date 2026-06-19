@@ -13,7 +13,7 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 | `esp32c3` | 🟢 silicon-verified | 2026-06-17 | 2026-06-14 | ✅ fresh |
 | `nucleo-l476rg` | 🟢 silicon-verified | 2026-06-17 | 2026-06-18 | ⚠ drift acked 2026-06-19 (re-capture pending) |
 | `nucleo-l073rz` | 🟢 silicon-verified | 2026-06-17 | 2026-06-18 | ⚠ drift acked 2026-06-19 (re-capture pending) |
-| `stm32f103` | 🟢 silicon-verified | 2026-06-17 | 2026-06-19 | ⚠ drift acked 2026-06-19 (re-capture pending) |
+| `stm32f103` | 🟢 silicon-verified | 2026-06-20 | 2026-06-19 | ✅ fresh |
 | `stm32f407` | 🟢 silicon-smoke | 2026-05-11 | 2026-06-18 | ⚠ drift acked 2026-06-19 (re-capture pending) |
 | `esp32s3` | 🟢 silicon-verified | 2026-06-17 | 2026-06-18 | ⚠ drift acked 2026-06-19 (re-capture pending) |
 | `stm32f401` | 🟡 smoke-manual | — | 2026-06-07 | no silicon capture |
@@ -75,10 +75,10 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 
 - Doc: [`docs/boards/stm32f103.md`](stm32f103.md)  ·  Chip: `configs/chips/stm32f103.yaml`
 - Note: Prose doc is STALE-PESSIMISTIC: lists SPI/TIM/ADC/CAN/RTC/IWDG/WWDG as 'not modeled' — all are modeled AND silicon-pinned.
-- Silicon: **2026-06-17** on ST-LINK V2 J43 (genuine STM32F103, hil board stm32f103-bluepill) — mmio diff 102/102, 0 divergence (F103_STRICT). Caught + fixed a real model bug: classic SPI CR1 was masking CRCNEXT bit 12 (0xEFFF) — genuine silicon keeps it writable (0xFFFF), spi.rs corrected.
+- Silicon: **2026-06-20** on ST-LINK V2.1 (USB 0483:374b), genuine STM32F103 — Live re-capture after the v0.17.0 bxcan/clock-gating merge: stm32f1_mmio_diff 102/102 (24 reset + 26 R/W + 52 sweep), 0 divergence, and f103_conformance digest matches silicon. Supersedes the 2026-06-19 drift_ack. (Earlier capture caught + fixed a classic SPI CR1 bug masking CRCNEXT bit 12 — 0xEFFF vs silicon 0xFFFF.)
   - offline (CI): stm32f1_mmio_diff::{f1_reset_sim_only,f1_mmio_sim_only,f1_parity_sim_only,f1_sweep_sim_only}
   - offline (CI): f103_conformance::conformance_sim (digest)
-- Drift status: **⚠ drift acked 2026-06-19 (re-capture pending)**
+- Drift status: **✅ fresh**
 
 ## `stm32f407` — 🟢 silicon-smoke
 

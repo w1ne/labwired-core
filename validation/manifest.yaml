@@ -171,10 +171,9 @@ boards:
       - "stm32f1_mmio_diff::{f1_reset_sim_only,f1_mmio_sim_only,f1_parity_sim_only,f1_sweep_sim_only}"
       - "f103_conformance::conformance_sim (digest)"
     silicon:
-      last_capture: 2026-06-17
-      probe: "ST-LINK V2 J43 (genuine STM32F103, hil board stm32f103-bluepill)"
-      result: "mmio diff 102/102, 0 divergence (F103_STRICT). Caught + fixed a real model bug: classic SPI CR1 was masking CRCNEXT bit 12 (0xEFFF) — genuine silicon keeps it writable (0xFFFF), spi.rs corrected."
-    drift_ack: 2026-06-19   # merged feat/bxcan-bus-filter (CAN + RCC clock-gating + bus-routing models changed 2026-06-19); re-capture pending, no board connected
+      last_capture: 2026-06-20
+      probe: "ST-LINK V2.1 (USB 0483:374b), genuine STM32F103"
+      result: "Live re-capture after the v0.17.0 bxcan/clock-gating merge: stm32f1_mmio_diff 102/102 (24 reset + 26 R/W + 52 sweep), 0 divergence, and f103_conformance digest matches silicon. Supersedes the 2026-06-19 drift_ack. (Earlier capture caught + fixed a classic SPI CR1 bug masking CRCNEXT bit 12 — 0xEFFF vs silicon 0xFFFF.)"
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/afio.rs
