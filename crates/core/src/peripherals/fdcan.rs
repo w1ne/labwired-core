@@ -270,6 +270,14 @@ impl Fdcan {
         dev
     }
 
+    /// Bind this FDCAN to a `CanBus` interconnect after construction. Mirrors
+    /// `new_with_bus` but for peripherals already built by `SystemBus::from_config`
+    /// (interconnects are wired after the bus is built).
+    pub fn attach_bus(&mut self, tx: Sender<CanFrame>, rx: Receiver<CanFrame>) {
+        self.bus_tx = Some(tx);
+        self.bus_rx = Some(rx);
+    }
+
     pub fn trace_snapshot(&self, peripheral: &str) -> Vec<FdcanTraceFrame> {
         self.trace
             .iter()
@@ -887,6 +895,18 @@ mod tests {
         // ENDN = 0x87654321 read byte-wise — the classic endianness probe.
         assert_eq!(Peripheral::read(&dev, REG_ENDN).unwrap(), 0x21);
         assert_eq!(Peripheral::read(&dev, REG_ENDN + 3).unwrap(), 0x87);
+    }
+
+    #[test]
+    fn attach_bus_binds_endpoints_after_construction() {
+        use crate::network::CanBus;
+        let mut bus = CanBus::new();
+        let (tx, rx) = bus.attach();
+        let mut dev = Fdcan::new();          // standalone, no bus
+        assert!(dev.bus_tx.is_none());
+        dev.attach_bus(tx, rx);
+        assert!(dev.bus_tx.is_some());
+        assert!(dev.bus_rx.is_some());
     }
 
     #[test]
