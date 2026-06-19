@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.1] - 2026-06-20
+
+### Fixed
+- **STM32F407 SPI1 CR1 bit 12 (CRCNEXT)**: F407 silicon does not latch CRCNEXT (writing 0xFFFF reads back 0xEFFF), unlike F103 which keeps it writable. The shared classic-SPI model treated F1/F4 identically; it now applies a per-part `cr1_mask` (chip-config driven, default fully-writable 0xFFFF; F407 → 0xEFFF), mirroring the existing `cr2_mask`. Caught by the live F407 register diff.
+
+### Added
+- **hw-oracle connect-under-reset**: `LABWIRED_OPENOCD_CONNECT_UNDER_RESET` (assert SRST during connect/examine) + `LABWIRED_ADAPTER_SPEED` overrides in the OpenOCD wrapper, for boards whose running firmware disables/repurposes the SWD pins.
+
+### Validation
+- All six silicon-tier boards (stm32f103, stm32l073, stm32l476, stm32h563, stm32f407, esp32s3) re-captured on live silicon 2026-06-20; drift_acks cleared.
+
 ## [0.17.0] - 2026-06-19
 
 ### Added
