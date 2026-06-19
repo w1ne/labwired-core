@@ -136,6 +136,13 @@ const CURATED_LABS: FeaturedLabPresentation[] = [
     icon: '🧭',
   },
   {
+    id: 'vl53l1x-tof-lab',
+    chip: 'STM32F103 · I²C',
+    detail: 'Laser time-of-flight ranging: MODEL_ID check, start ranging, poll data-ready, read range in mm and trip a NEAR/FAR flag.',
+    accent: '#0d9488',
+    icon: '📏',
+  },
+  {
     id: 'bme280-weather-lab',
     chip: 'STM32F103 · I²C',
     detail: 'Bosch BME280 with factory calibration coefficients. Firmware runs the full compensation pipeline.',
