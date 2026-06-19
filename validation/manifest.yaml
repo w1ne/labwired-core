@@ -148,10 +148,9 @@ boards:
       - "stm32l0_mmio_diff::{l0_mmio_sim_only,l0_parity_sim_only}"
       - "firmware_survival L073 smoke case"
     silicon:
-      last_capture: 2026-06-17
-      probe: "ST-LINK V2 J28 (NUCLEO-L073RZ, IDCODE 0x2008_6447)"
-      result: "l0_mmio_diff 20/20, 0 divergence (L073_STRICT) — incl. the TIM2-16-bit fix"
-    drift_ack: 2026-06-19   # merged feat/bxcan-bus-filter (CAN + RCC clock-gating + bus-routing models changed 2026-06-19); re-capture pending, no board connected
+      last_capture: 2026-06-20
+      probe: "ST-LINK V2.1 (NUCLEO-L073RZ over SWD)"
+      result: "Live re-capture after the v0.17.0 merge: l0_mmio_diff 20/20, 0 divergence (RCC/GPIO/SPI1/TIM2/TIM21, incl. the TIM2-16-bit fix). Supersedes the 2026-06-19 drift_ack."
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -223,10 +222,9 @@ boards:
       - "esp32s3_reset_conformance (9 reset regs vs live silicon, firmware-path bus)"
       - "e2e_i2c_tmp102 / e2e_hello_world / xtensa_exec / e2e_esp32_epaper (sim)"
     silicon:
-      last_capture: 2026-06-17
-      probe: "USB-JTAG built-in (MAC 9C:13:9E:F4:40:C0, openocd-esp32, Tensilica tap 0x120034e5)"
-      result: "reset-state oracle: SYSTIMER CONF 0x46000000 + I2C0 timing block (TO/FIFO_CONF/SCL holds/FILTER_CFG/CLK_CONF) 9/9 match live silicon"
-    drift_ack: 2026-06-19   # merged feat/bxcan-bus-filter (CAN + RCC clock-gating + bus-routing models changed 2026-06-19); re-capture pending, no board connected
+      last_capture: 2026-06-20
+      probe: "USB-JTAG built-in (ESP32-S3-Zero, USB 303a:1001, openocd-esp32, Tensilica tap 0x120034e5)"
+      result: "Live re-capture after the v0.17.0 merge: reset-state oracle 9/9 match live silicon (SYSTIMER CONF 0x46000000 + I2C0 timing block TO/FIFO_CONF/SCL holds/FILTER_CFG), and esp32s3_reset_conformance (sim vs frozen) passes. Supersedes the 2026-06-19 drift_ack."
     models:
       - crates/core/src/peripherals/esp32s3
       - crates/core/src/peripherals/esp_xtensa_common
