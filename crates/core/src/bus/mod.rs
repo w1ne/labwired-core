@@ -24,6 +24,19 @@ mod tick;
 
 impl SystemBus {}
 
+/// A peripheral's RCC clock-gate, resolved to a concrete RCC register offset +
+/// bit at bus-build time (the symbolic `reg` name from the yaml is mapped to the
+/// active chip family's offset via [`Rcc::enable_reg_offset`]). When present, a
+/// CPU access to the owning peripheral only takes effect while `bit` is set in
+/// the RCC enable register at `reg_offset` — modelling silicon clock-gating.
+#[derive(Debug, Clone, Copy)]
+pub struct ResolvedClockGate {
+    /// Byte offset of the RCC enable register within the rcc peripheral.
+    pub reg_offset: u64,
+    /// Enable-bit position within that register.
+    pub bit: u8,
+}
+
 pub struct PeripheralEntry {
     pub name: String,
     pub base: u64,
@@ -35,6 +48,12 @@ pub struct PeripheralEntry {
     /// Bumped when the peripheral resets; `EventScheduler::drain_due` drops
     /// entries whose generation no longer matches the snapshot.
     pub generation: u32,
+    /// Optional RCC clock-gate (silicon clock-gating model). `None` (the common
+    /// case) → the peripheral is never gated and accesses always pass through.
+    /// `Some` → accesses are dropped (writes ignored, reads return 0) while the
+    /// gate bit is clear in the RCC, exactly like an unclocked peripheral on
+    /// real silicon. Resolved from `PeripheralConfig::clock` in `from_config`.
+    pub clock_gate: Option<ResolvedClockGate>,
 }
 
 pub struct SystemBus {
@@ -80,6 +99,12 @@ pub struct SystemBus {
     /// skip an O(peripherals) scan that would otherwise return 0 every step
     /// on buses with no DPORT.
     dport_idx: Option<usize>,
+    /// Cached index of the "rcc" peripheral, if one is registered. Recomputed in
+    /// `rebuild_peripheral_ranges` (same staleness contract as `dport_idx`). Lets
+    /// the clock-gate check on the hot read/write path resolve the RCC peripheral
+    /// in O(1) instead of scanning by name. `None` on buses with no RCC (e.g.
+    /// most non-STM32 chips), in which case no peripheral is ever gated.
+    rcc_idx: Option<usize>,
     /// Last-known IN value of GPIO ports 0 and 1, used by the per-tick
     /// edge-detection pass that drives GPIOTE EVENTS_IN. Both default to
     /// 0 at construction; the first tick after a GPIO write will produce
@@ -116,6 +141,11 @@ pub struct SystemBus {
     /// running, so ECU examples can be driven by a virtual off-board tester
     /// instead of self-loopback firmware.
     pub can_diagnostic_testers: Vec<CanDiagnosticTester>,
+    /// Stateful ISO-TP/UDS testers declared as external devices. Each is a real
+    /// second CAN node driving a multi-frame SecurityAccess exchange against a
+    /// named CAN peripheral (bxCAN or FDCAN) running in normal mode. Empty by
+    /// default → zero per-tick cost.
+    pub can_uds_testers: Vec<CanUdsTester>,
     /// ESP32-C3 (RISC-V) interrupt routing: when true, each tick the bus routes
     /// asserted peripheral sources and the SYSTEM FROM_CPU IPI registers
     /// (0x600C0028..0x34) through the INTERRUPT_CORE0 matrix MAP registers into
@@ -134,6 +164,113 @@ pub struct CanDiagnosticTester {
     pub request_id: u32,
     pub request_data: Vec<u8>,
     pub sent: bool,
+}
+
+/// Stateful ISO-TP / UDS tester driving a *multi-frame* SecurityAccess exchange
+/// against an emulated ECU's CAN controller running in **normal** mode (not
+/// loopback). Unlike [`CanDiagnosticTester`] (a one-shot single-frame injector),
+/// this is a real second CAN node: it injects a FirstFrame, waits for the ECU's
+/// FlowControl, injects the ConsecutiveFrame, then waits for the ECU's
+/// SecurityAccess positive response — exactly the handshake a physical UDS
+/// tester would perform over ISO 15765-2.
+///
+/// The ECU side is driven entirely through the peripheral's *public* API: we
+/// drain its `tx_frames` (frames it transmitted in normal mode) and inject our
+/// frames via `deliver_rx` (bxCAN) / `receive_frame` (FDCAN). Injection is
+/// filter-gated, so a `false` return (filter not yet configured, FIFO full)
+/// leaves the FSM parked on the same send to retry next tick.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CanUdsTesterState {
+    /// Need to inject the FirstFrame.
+    Start,
+    /// FirstFrame sent; waiting for the ECU's FlowControl frame.
+    AwaitFc,
+    /// ConsecutiveFrame sent; waiting for the ECU's positive response.
+    AwaitResp,
+    /// SecurityAccess positive response observed — handshake complete.
+    Done,
+    /// Timed out before completion (broken / silent ECU).
+    Failed,
+}
+
+pub struct CanUdsTester {
+    pub id: String,
+    /// Name of the connected CAN peripheral (e.g. `bxcan1` / `fdcan1`).
+    pub connection: String,
+    /// Tester → ECU request id (ISO-TP single physical address). Default 0x111.
+    pub request_id: u32,
+    /// ECU → tester response id. Default 0x222.
+    pub reply_id: u32,
+    /// ISO-TP FirstFrame payload injected in state `Start`.
+    pub first_frame: Vec<u8>,
+    /// ISO-TP ConsecutiveFrame payload injected on FlowControl.
+    pub consecutive_frame: Vec<u8>,
+    /// Current FSM state. Exposed for tests.
+    pub state: CanUdsTesterState,
+    /// Ticks elapsed since the tester started; used for the give-up timeout.
+    pub ticks: u64,
+    /// Tick budget before declaring `Failed`.
+    pub max_ticks: u64,
+}
+
+impl CanUdsTester {
+    /// Default tester ↔ ECU ids and ISO-TP payloads for the SecurityAccess
+    /// SeedRequest exchange the firmware contract expects.
+    pub const DEFAULT_REQUEST_ID: u32 = 0x111;
+    pub const DEFAULT_REPLY_ID: u32 = 0x222;
+    pub const DEFAULT_FIRST_FRAME: [u8; 8] = [0x10, 0x0B, 0x27, 0x01, 0x5A, 0x11, 0x22, 0x33];
+    pub const DEFAULT_CONSECUTIVE_FRAME: [u8; 8] =
+        [0x21, 0x44, 0x55, 0x66, 0x77, 0x88, 0x55, 0x55];
+    const DEFAULT_MAX_TICKS: u64 = 200_000;
+
+    pub fn new(id: String, connection: String) -> Self {
+        Self {
+            id,
+            connection,
+            request_id: Self::DEFAULT_REQUEST_ID,
+            reply_id: Self::DEFAULT_REPLY_ID,
+            first_frame: Self::DEFAULT_FIRST_FRAME.to_vec(),
+            consecutive_frame: Self::DEFAULT_CONSECUTIVE_FRAME.to_vec(),
+            state: CanUdsTesterState::Start,
+            ticks: 0,
+            max_ticks: Self::DEFAULT_MAX_TICKS,
+        }
+    }
+
+    fn is_terminal(&self) -> bool {
+        matches!(
+            self.state,
+            CanUdsTesterState::Done | CanUdsTesterState::Failed
+        )
+    }
+
+    /// Observe one frame the ECU transmitted. In `AwaitFc` an ISO-TP
+    /// FlowControl (`(data[0] & 0xF0) == 0x30`) on `reply_id` clears the wait;
+    /// in `AwaitResp` a SecurityAccess single-frame positive response
+    /// (`data[0] == 0x06 && data[1] == 0x67`) on `reply_id` completes the
+    /// handshake. Returns the payload to inject next (if the observation
+    /// unblocks a send), else `None`.
+    fn observe_ecu_frame(&mut self, id: u32, data: &[u8]) -> Option<Vec<u8>> {
+        if id != self.reply_id {
+            return None;
+        }
+        match self.state {
+            CanUdsTesterState::AwaitFc => {
+                if data.first().map(|b| b & 0xF0) == Some(0x30) {
+                    // FlowControl seen → time to send the ConsecutiveFrame.
+                    return Some(self.consecutive_frame.clone());
+                }
+                None
+            }
+            CanUdsTesterState::AwaitResp => {
+                if data.first() == Some(&0x06) && data.get(1) == Some(&0x67) {
+                    self.state = CanUdsTesterState::Done;
+                }
+                None
+            }
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -412,6 +549,122 @@ impl SystemBus {
         }
     }
 
+    /// Per-tick service for the stateful ISO-TP/UDS testers. For each tester:
+    /// resolve its peripheral by name, drain the ECU's outbound `tx_frames`,
+    /// advance the FSM, and inject the next ISO-TP frame (filter-gated) when due.
+    ///
+    /// Works against both bxCAN (`deliver_rx`) and FDCAN (`receive_frame`); the
+    /// downcast picks whichever is wired. A filtered/dropped injection (return
+    /// `false`) leaves the FSM parked on the same send so it retries next tick —
+    /// important on the first ticks before the ECU has configured its filter.
+    pub(crate) fn service_can_uds_testers(&mut self) {
+        if self.can_uds_testers.is_empty() {
+            return;
+        }
+
+        for i in 0..self.can_uds_testers.len() {
+            if self.can_uds_testers[i].is_terminal() {
+                continue;
+            }
+
+            // Timeout guard so a broken/silent ECU never hangs the sim.
+            self.can_uds_testers[i].ticks += 1;
+            if self.can_uds_testers[i].ticks > self.can_uds_testers[i].max_ticks {
+                self.can_uds_testers[i].state = CanUdsTesterState::Failed;
+                continue;
+            }
+
+            let connection = self.can_uds_testers[i].connection.clone();
+            let Some(idx) = self.find_peripheral_index_by_name(&connection) else {
+                continue;
+            };
+
+            // Drain the ECU's outbound frames and feed the FSM. `observe_ecu_frame`
+            // may return a payload to inject (e.g. the CF unblocked by FlowControl);
+            // the actual injection happens below so both peripheral kinds share one
+            // filter-gated send path.
+            let request_id = self.can_uds_testers[i].request_id;
+            let mut pending_inject: Option<Vec<u8>> = None;
+
+            // Resolve the peripheral once; reborrow per phase to satisfy the
+            // borrow checker (drain, then inject).
+            let drained: Vec<crate::network::CanFrame> = {
+                let any = self.peripherals[idx].dev.as_any_mut();
+                match any {
+                    Some(a) => {
+                        if let Some(bx) =
+                            a.downcast_mut::<crate::peripherals::bxcan::BxCan>()
+                        {
+                            bx.tx_frames.drain(..).collect()
+                        } else if let Some(fd) =
+                            a.downcast_mut::<crate::peripherals::fdcan::Fdcan>()
+                        {
+                            fd.tx_frames.drain(..).collect()
+                        } else {
+                            continue;
+                        }
+                    }
+                    None => continue,
+                }
+            };
+
+            for frame in &drained {
+                if let Some(payload) = self.can_uds_testers[i].observe_ecu_frame(frame.id, &frame.data)
+                {
+                    pending_inject = Some(payload);
+                }
+            }
+
+            // Decide what (if anything) to inject this tick.
+            let to_send: Option<Vec<u8>> = match self.can_uds_testers[i].state {
+                CanUdsTesterState::Start => {
+                    Some(self.can_uds_testers[i].first_frame.clone())
+                }
+                CanUdsTesterState::AwaitFc => pending_inject,
+                _ => None,
+            };
+
+            let Some(payload) = to_send else {
+                continue;
+            };
+
+            let frame = crate::network::CanFrame::classic(request_id, payload);
+            let injected = {
+                let any = self.peripherals[idx].dev.as_any_mut();
+                match any {
+                    Some(a) => {
+                        if let Some(bx) =
+                            a.downcast_mut::<crate::peripherals::bxcan::BxCan>()
+                        {
+                            bx.deliver_rx(frame)
+                        } else if let Some(fd) =
+                            a.downcast_mut::<crate::peripherals::fdcan::Fdcan>()
+                        {
+                            fd.receive_frame(frame)
+                        } else {
+                            false
+                        }
+                    }
+                    None => false,
+                }
+            };
+
+            if injected {
+                // Advance only on a successful (accepted) injection; otherwise
+                // stay parked and retry next tick.
+                match self.can_uds_testers[i].state {
+                    CanUdsTesterState::Start => {
+                        self.can_uds_testers[i].state = CanUdsTesterState::AwaitFc
+                    }
+                    CanUdsTesterState::AwaitFc => {
+                        self.can_uds_testers[i].state = CanUdsTesterState::AwaitResp
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
     fn yaml_u32(value: Option<&serde_yaml::Value>, default: u32) -> u32 {
         match value {
             Some(serde_yaml::Value::Number(n)) => n.as_u64().map(|v| v as u32).unwrap_or(default),
@@ -561,6 +814,31 @@ impl SystemBus {
         }
     }
 
+    /// Whether peripheral `idx` is currently clocked. `true` (always-on) for any
+    /// peripheral without a declared clock-gate — the safe default that keeps
+    /// every existing config/firmware working. For a gated peripheral, reads the
+    /// RCC enable register the gate points at and returns whether the gate bit is
+    /// set. If no RCC peripheral is registered, or its register read fails, the
+    /// peripheral is treated as clocked (fail-open: never wedge a chip that has
+    /// no modelled RCC). Cheap: one `Option` check, then on the rare gated path a
+    /// single cached-index RCC register read.
+    fn is_peripheral_clocked(&self, idx: usize) -> bool {
+        let Some(gate) = self
+            .peripherals
+            .get(idx)
+            .and_then(|p| p.clock_gate.as_ref())
+        else {
+            return true; // ungated → always accessible
+        };
+        let Some(rcc_idx) = self.rcc_idx else {
+            return true; // no RCC modelled → don't gate
+        };
+        match self.peripherals[rcc_idx].dev.read_u32(gate.reg_offset) {
+            Ok(reg) => (reg >> gate.bit) & 1 != 0,
+            Err(_) => true,
+        }
+    }
+
     pub fn new() -> Self {
         // Default initialization for tests
         let mut bus = Self {
@@ -577,6 +855,7 @@ impl SystemBus {
                     dev: Box::new(crate::peripherals::uart::Uart::new()),
                     ticks_remaining: 0,
                     generation: 0,
+                    clock_gate: None,
                 },
                 PeripheralEntry {
                     name: "gpioa".to_string(),
@@ -586,6 +865,7 @@ impl SystemBus {
                     dev: Box::new(crate::peripherals::gpio::GpioPort::new()),
                     ticks_remaining: 0,
                     generation: 0,
+                    clock_gate: None,
                 },
                 PeripheralEntry {
                     name: "rcc".to_string(),
@@ -595,6 +875,7 @@ impl SystemBus {
                     dev: Box::new(crate::peripherals::rcc::Rcc::new()),
                     ticks_remaining: 0,
                     generation: 0,
+                    clock_gate: None,
                 },
                 PeripheralEntry {
                     name: "systick".to_string(),
@@ -604,6 +885,7 @@ impl SystemBus {
                     dev: Box::new(crate::peripherals::systick::Systick::new()),
                     ticks_remaining: 0,
                     generation: 0,
+                    clock_gate: None,
                 },
             ],
             nvic: None,
@@ -612,6 +894,7 @@ impl SystemBus {
             bit_band_enabled: true,
             pending_cpu_irqs: [0; 2],
             dport_idx: None,
+            rcc_idx: None,
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
             last_gpio_in: [0; 2],
@@ -620,6 +903,7 @@ impl SystemBus {
             legacy_walk_disabled: false,
             hcsr04: Vec::new(),
             can_diagnostic_testers: Vec::new(),
+            can_uds_testers: Vec::new(),
             esp32c3_irq_routing: false,
             riscv_irq_lines: 0,
         };
@@ -645,6 +929,7 @@ impl SystemBus {
             bit_band_enabled: false,
             pending_cpu_irqs: [0; 2],
             dport_idx: None,
+            rcc_idx: None,
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
             last_gpio_in: [0; 2],
@@ -653,6 +938,7 @@ impl SystemBus {
             legacy_walk_disabled: false,
             hcsr04: Vec::new(),
             can_diagnostic_testers: Vec::new(),
+            can_uds_testers: Vec::new(),
             esp32c3_irq_routing: false,
             riscv_irq_lines: 0,
         };
@@ -683,6 +969,7 @@ impl SystemBus {
             dev,
             ticks_remaining: 0,
             generation: 0,
+            clock_gate: None,
         });
         self.rebuild_peripheral_ranges();
     }
@@ -864,7 +1151,55 @@ impl SystemBus {
             dev,
             ticks_remaining: 0,
             generation: 0,
+            // Resolved in a post-pass once every peripheral (incl. the RCC) is
+            // on the bus — see `resolve_clock_gates`.
+            clock_gate: None,
         });
+        Ok(())
+    }
+
+    /// Resolve every peripheral's optional `clock: { reg, bit }` declaration into
+    /// a concrete [`ResolvedClockGate`] (RCC register offset + bit). Run as a
+    /// post-pass by `from_config` after all peripherals — crucially the RCC —
+    /// are on the bus, so the symbolic `reg` name can be mapped to the active
+    /// chip family's RCC offset via [`Rcc::enable_reg_offset`] regardless of the
+    /// order peripherals appear in the config.
+    ///
+    /// A peripheral with no `clock` field is left ungated. A declared gate whose
+    /// `reg` name the family doesn't recognise is a hard config error (a silent
+    /// "never gate" would mask a typo that lets unclocked firmware falsely pass).
+    fn resolve_clock_gates(
+        &mut self,
+        peripherals: &[labwired_config::PeripheralConfig],
+    ) -> anyhow::Result<()> {
+        // Find the RCC model once (clock-gating requires one).
+        let rcc_off = |bus: &SystemBus, reg: &str| -> Option<u64> {
+            let idx = bus.rcc_idx?;
+            bus.peripherals[idx]
+                .dev
+                .as_any()
+                .and_then(|a| a.downcast_ref::<crate::peripherals::rcc::Rcc>())
+                .and_then(|rcc| rcc.enable_reg_offset(reg))
+        };
+        for p_cfg in peripherals {
+            let Some(gate) = &p_cfg.clock else { continue };
+            let Some(idx) = self.find_peripheral_index_by_name(&p_cfg.id) else {
+                continue;
+            };
+            let Some(reg_offset) = rcc_off(self, &gate.reg) else {
+                return Err(anyhow::anyhow!(
+                    "peripheral '{}' declares clock gate reg '{}' which the chip's \
+                     RCC model does not expose (no such enable register, or no RCC \
+                     peripheral is registered)",
+                    p_cfg.id,
+                    gate.reg
+                ));
+            };
+            self.peripherals[idx].clock_gate = Some(ResolvedClockGate {
+                reg_offset,
+                bit: gate.bit,
+            });
+        }
         Ok(())
     }
 
@@ -909,6 +1244,9 @@ impl SystemBus {
         }
 
         if let Some(idx) = self.find_peripheral_index(addr) {
+            if !self.is_peripheral_clocked(idx) {
+                return Ok(0); // unclocked peripheral reads 0 (silicon gating)
+            }
             let p = &self.peripherals[idx];
             return p.dev.read_u32(addr - p.base);
         }
@@ -936,6 +1274,9 @@ impl SystemBus {
         // Actually write_u8 checks flash_alias_old etc.
 
         if let Some(idx) = self.find_peripheral_index(addr) {
+            if !self.is_peripheral_clocked(idx) {
+                return Ok(()); // unclocked peripheral: write dropped (gating)
+            }
             #[cfg(feature = "event-scheduler")]
             self.sync_scheduler_peripheral(idx);
             self.maybe_latch_dc(idx);
@@ -980,6 +1321,9 @@ impl SystemBus {
         }
 
         if let Some(idx) = self.find_peripheral_index(addr) {
+            if !self.is_peripheral_clocked(idx) {
+                return Ok(0); // unclocked peripheral reads 0 (silicon gating)
+            }
             let p = &self.peripherals[idx];
             return p.dev.read_u16(addr - p.base);
         }
@@ -994,6 +1338,9 @@ impl SystemBus {
             return Ok(());
         }
         if let Some(idx) = self.find_peripheral_index(addr) {
+            if !self.is_peripheral_clocked(idx) {
+                return Ok(()); // unclocked peripheral: write dropped (gating)
+            }
             #[cfg(feature = "event-scheduler")]
             self.sync_scheduler_peripheral(idx);
             self.maybe_latch_dc(idx);
@@ -1213,6 +1560,7 @@ mod tests {
                 base_address: 0x4000_5400,
                 size: Some("1KB".to_string()),
                 irq: Some(31),
+                clock: None,
                 config: HashMap::new(),
             }],
         };
@@ -1313,6 +1661,188 @@ board_io: []
         assert_eq!(trace[0].id, 0x7E0);
         assert_eq!(trace[0].data, vec![0x03, 0x22, 0xF1, 0x90]);
         assert!(bus.can_diagnostic_testers[0].sent);
+    }
+
+    /// Pure FSM walk: FirstFrame → (ECU FlowControl) → ConsecutiveFrame →
+    /// (ECU positive response) → Done, driving the tester's state machine by
+    /// feeding ECU frames manually (no peripheral, no bus tick). This exercises
+    /// the exact observe/advance logic `service_can_uds_testers` reuses.
+    #[test]
+    fn uds_tester_fsm_drives_ff_fc_cf_response() {
+        let mut t = CanUdsTester::new("t".into(), "bxcan1".into());
+        assert_eq!(t.state, CanUdsTesterState::Start);
+        assert_eq!(t.request_id, 0x111);
+        assert_eq!(t.reply_id, 0x222);
+
+        // Start: the next frame to inject is the FirstFrame; on a (simulated)
+        // accepted inject the FSM advances to AwaitFc.
+        assert_eq!(t.first_frame, CanUdsTester::DEFAULT_FIRST_FRAME.to_vec());
+        t.state = CanUdsTesterState::AwaitFc;
+
+        // A non-FlowControl frame, or one on the wrong id, does not unblock.
+        assert!(t.observe_ecu_frame(0x999, &[0x30, 0x00, 0x00]).is_none());
+        assert!(t.observe_ecu_frame(0x222, &[0x06, 0x67]).is_none());
+        assert_eq!(t.state, CanUdsTesterState::AwaitFc);
+
+        // ECU FlowControl (0x30..) on reply_id → returns the ConsecutiveFrame.
+        let cf = t
+            .observe_ecu_frame(0x222, &[0x30, 0x00, 0x00, 0, 0, 0, 0, 0])
+            .expect("FlowControl unblocks the ConsecutiveFrame");
+        assert_eq!(cf, CanUdsTester::DEFAULT_CONSECUTIVE_FRAME.to_vec());
+
+        // Simulate the accepted CF inject.
+        t.state = CanUdsTesterState::AwaitResp;
+
+        // A wrong response (negative / different service) does not complete.
+        assert!(t.observe_ecu_frame(0x222, &[0x03, 0x7F, 0x27]).is_none());
+        assert_eq!(t.state, CanUdsTesterState::AwaitResp);
+
+        // SecurityAccess positive single-frame response → Done.
+        assert!(t
+            .observe_ecu_frame(0x222, &[0x06, 0x67, 0x01, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE])
+            .is_none());
+        assert_eq!(t.state, CanUdsTesterState::Done);
+        assert!(t.is_terminal());
+    }
+
+    /// End-to-end against a real `BxCan` registered on the bus and configured
+    /// (valid BTR + accept-0x111 filter, NORMAL mode — no loopback) so
+    /// `deliver_rx` accepts the tester's frames. We drive the full bus tick:
+    /// FF → (ECU emits FlowControl) → CF → (ECU emits positive response) → Done.
+    /// The ECU's "transmit" side is modeled by pushing frames into the bxCAN's
+    /// public `tx_frames`, which the tester drains exactly as it would for a
+    /// firmware-driven controller in normal mode.
+    #[test]
+    fn uds_tester_completes_against_real_bxcan() {
+        use crate::peripherals::bxcan::BxCan;
+
+        // bxCAN register offsets (RM0008 §24.9) addressed via the bus.
+        const MCR: u64 = 0x000;
+        const BTR: u64 = 0x01C;
+        const FMR: u64 = 0x200;
+        const FM1R: u64 = 0x204;
+        const FS1R: u64 = 0x20C;
+        const FFA1R: u64 = 0x214;
+        const FA1R: u64 = 0x21C;
+        const FBANK: u64 = 0x240;
+        const VALID_BTR: u32 = 0x00DC_0009; // valid TS1/TS2, no loopback bit.
+
+        let base: u64 = 0x4000_6400;
+        let mut bus = SystemBus::empty();
+        bus.add_peripheral("bxcan1", base, 0x400, None, Box::new(BxCan::new()));
+
+        // Bring the controller up in NORMAL mode and install a bank-0 mask
+        // filter accepting exactly 0x111 into FIFO0.
+        bus.write_u32(base + MCR, 1).unwrap(); // INRQ: request init
+        bus.write_u32(base + BTR, VALID_BTR).unwrap(); // valid timing, NOT loopback
+        bus.write_u32(base + FMR, 1).unwrap(); // FINIT: filter init
+        bus.write_u32(base + FS1R, 0x1).unwrap(); // bank0 32-bit
+        bus.write_u32(base + FM1R, 0x0).unwrap(); // bank0 mask mode
+        bus.write_u32(base + FFA1R, 0x0).unwrap(); // bank0 -> FIFO0
+        bus.write_u32(base + FBANK, (0x111u32) << 21).unwrap(); // F0R1
+        bus.write_u32(base + FBANK + 4, (0x111u32) << 21).unwrap(); // F0R2 mask
+        bus.write_u32(base + FA1R, 0x1).unwrap(); // bank0 active
+        bus.write_u32(base + FMR, 0x0).unwrap(); // clear FINIT: filters live
+        bus.write_u32(base + MCR, 0).unwrap(); // leave init -> running (normal)
+
+        bus.can_uds_testers
+            .push(CanUdsTester::new("uds".into(), "bxcan1".into()));
+
+        // Tick 1: tester injects the FirstFrame (filter accepts) → AwaitFc.
+        bus.service_can_uds_testers();
+        assert_eq!(bus.can_uds_testers[0].state, CanUdsTesterState::AwaitFc);
+
+        // The injected FF landed in the ECU's RX FIFO0 (filter-accepted).
+        {
+            let idx = bus.find_peripheral_index_by_name("bxcan1").unwrap();
+            let bx = bus.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .unwrap()
+                .downcast_mut::<BxCan>()
+                .unwrap();
+            // ECU "transmits" a FlowControl frame in normal mode (id = reply_id).
+            bx.tx_frames.push_back(crate::network::CanFrame::classic(
+                0x222,
+                vec![0x30, 0x00, 0x00, 0, 0, 0, 0, 0],
+            ));
+        }
+
+        // Tick 2: tester drains the FlowControl and injects the CF → AwaitResp.
+        bus.service_can_uds_testers();
+        assert_eq!(bus.can_uds_testers[0].state, CanUdsTesterState::AwaitResp);
+
+        // ECU "transmits" the SecurityAccess positive single-frame response.
+        {
+            let idx = bus.find_peripheral_index_by_name("bxcan1").unwrap();
+            let bx = bus.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .unwrap()
+                .downcast_mut::<BxCan>()
+                .unwrap();
+            bx.tx_frames.push_back(crate::network::CanFrame::classic(
+                0x222,
+                vec![0x06, 0x67, 0x01, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE],
+            ));
+        }
+
+        // Tick 3: tester observes the positive response → Done.
+        bus.service_can_uds_testers();
+        assert_eq!(bus.can_uds_testers[0].state, CanUdsTesterState::Done);
+    }
+
+    /// Config parsing: a `uds-tester` external device populates a
+    /// `CanUdsTester` with the configured ids and payloads.
+    #[test]
+    fn uds_tester_parsed_from_config() {
+        let chip: ChipDescriptor = serde_yaml::from_str(
+            r#"
+name: "f103"
+arch: "arm"
+core: "cortex-m3"
+flash:
+  base: 0x08000000
+  size: "128KB"
+ram:
+  base: 0x20000000
+  size: "20KB"
+peripherals:
+  - id: "bxcan1"
+    type: "bxcan"
+    base_address: 0x40006400
+    size: "1KB"
+"#,
+        )
+        .unwrap();
+        let manifest: SystemManifest = serde_yaml::from_str(
+            r#"
+name: "uds-multiframe"
+chip: "f103"
+external_devices:
+  - id: "uds_node"
+    type: "uds-tester"
+    connection: "bxcan1"
+    config:
+      request_id: "0x111"
+      reply_id: "0x222"
+      first_frame: "10 0B 27 01 5A 11 22 33"
+      consecutive_frame: "21 44 55 66 77 88 55 55"
+board_io: []
+"#,
+        )
+        .unwrap();
+        let bus = SystemBus::from_config(&chip, &manifest).unwrap();
+        assert_eq!(bus.can_uds_testers.len(), 1);
+        let t = &bus.can_uds_testers[0];
+        assert_eq!(t.request_id, 0x111);
+        assert_eq!(t.reply_id, 0x222);
+        assert_eq!(t.first_frame, CanUdsTester::DEFAULT_FIRST_FRAME.to_vec());
+        assert_eq!(
+            t.consecutive_frame,
+            CanUdsTester::DEFAULT_CONSECUTIVE_FRAME.to_vec()
+        );
+        assert_eq!(t.state, CanUdsTesterState::Start);
     }
 
     /// Parse a minimal chip yaml with the given header lines (name/arch/core).
@@ -1451,6 +1981,7 @@ peripherals:
                     base_address: 0x4000_5400,
                     size: Some("1KB".to_string()),
                     irq: Some(31),
+                    clock: None,
                     config: HashMap::new(),
                 },
                 PeripheralConfig {
@@ -1459,6 +1990,7 @@ peripherals:
                     base_address: 0x4000_3800,
                     size: Some("1KB".to_string()),
                     irq: Some(37),
+                    clock: None,
                     config: HashMap::new(),
                 },
             ],
@@ -1632,6 +2164,7 @@ peripherals:
             bit_band_enabled: true,
             pending_cpu_irqs: [0; 2],
             dport_idx: None,
+            rcc_idx: None,
             flash_thunks: std::collections::HashMap::new(),
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
@@ -1641,6 +2174,7 @@ peripherals:
             legacy_walk_disabled: false,
             hcsr04: Vec::new(),
             can_diagnostic_testers: Vec::new(),
+            can_uds_testers: Vec::new(),
             esp32c3_irq_routing: false,
             riscv_irq_lines: 0,
         };
@@ -1672,6 +2206,7 @@ peripherals:
                     dev: Box::new(crate::peripherals::uart::Uart::new()),
                     ticks_remaining: 0,
                     generation: 0,
+                    clock_gate: None,
                 },
                 PeripheralEntry {
                     name: "low".to_string(),
@@ -1681,6 +2216,7 @@ peripherals:
                     dev: Box::new(crate::peripherals::uart::Uart::new()),
                     ticks_remaining: 0,
                     generation: 0,
+                    clock_gate: None,
                 },
             ],
             nvic: None,
@@ -1689,6 +2225,7 @@ peripherals:
             bit_band_enabled: true,
             pending_cpu_irqs: [0; 2],
             dport_idx: None,
+            rcc_idx: None,
             flash_thunks: std::collections::HashMap::new(),
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
@@ -1698,6 +2235,7 @@ peripherals:
             legacy_walk_disabled: false,
             hcsr04: Vec::new(),
             can_diagnostic_testers: Vec::new(),
+            can_uds_testers: Vec::new(),
             esp32c3_irq_routing: false,
             riscv_irq_lines: 0,
         };
@@ -1742,6 +2280,7 @@ peripherals:
                 dev: Box::new(crate::peripherals::dma::Dma1::new()),
                 ticks_remaining: 0,
                 generation: 0,
+                clock_gate: None,
             }],
             nvic: None,
             observers: Vec::new(),
@@ -1749,6 +2288,7 @@ peripherals:
             bit_band_enabled: true,
             pending_cpu_irqs: [0; 2],
             dport_idx: None,
+            rcc_idx: None,
             flash_thunks: std::collections::HashMap::new(),
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
@@ -1758,6 +2298,7 @@ peripherals:
             legacy_walk_disabled: false,
             hcsr04: Vec::new(),
             can_diagnostic_testers: Vec::new(),
+            can_uds_testers: Vec::new(),
             esp32c3_irq_routing: false,
             riscv_irq_lines: 0,
         };
@@ -1791,5 +2332,183 @@ peripherals:
             "DST should hold the SRC byte after mem-to-mem copy"
         );
         assert!(interrupts.contains(&16), "TCIE should pend NVIC IRQ 16");
+    }
+
+    /// RCC clock-gating (silicon fidelity): a peripheral with a declared
+    /// `clock:` gate is inert until its RCC enable bit is set — writes are
+    /// dropped and reads return 0 — and behaves normally once clocked. The
+    /// reg-name → offset mapping is family-aware (F1 apb2enr @ 0x18).
+    #[test]
+    fn gated_peripheral_is_inert_until_rcc_bit_set() {
+        let chip: ChipDescriptor = serde_yaml::from_str(
+            r#"
+name: "f1-clockgate-test"
+arch: "arm"
+core: "cortex-m3"
+flash:
+  base: 0x08000000
+  size: "64KB"
+ram:
+  base: 0x20000000
+  size: "20KB"
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40021000
+    size: "1KB"
+  - id: "uart1"
+    type: "uart"
+    base_address: 0x40013800
+    size: "1KB"
+    clock: { reg: "apb2enr", bit: 14 }
+  - id: "uart2"
+    type: "uart"
+    base_address: 0x40004400
+    size: "1KB"
+"#,
+        )
+        .unwrap();
+        let manifest: SystemManifest = serde_yaml::from_str(
+            r#"
+name: "clockgate"
+chip: "unused"
+external_devices: []
+board_io: []
+"#,
+        )
+        .unwrap();
+        let mut bus = SystemBus::from_config(&chip, &manifest).unwrap();
+
+        // USART1_CR1 @ 0x4001_380C. Clock is OFF out of reset → the write is
+        // dropped and the register reads back 0 (an unclocked peripheral).
+        const CR1: u64 = 0x4001_380C;
+        const CR1_UE_TE: u32 = (1 << 13) | (1 << 3);
+        bus.write_u32(CR1, CR1_UE_TE).unwrap();
+        assert_eq!(
+            bus.read_u32(CR1).unwrap(),
+            0,
+            "unclocked USART1 must drop writes and read 0"
+        );
+
+        // The ungated uart2 (no clock declared) is unaffected — accessible now.
+        const UART2_CR1: u64 = 0x4000_440C;
+        bus.write_u32(UART2_CR1, CR1_UE_TE).unwrap();
+        assert_eq!(
+            bus.read_u32(UART2_CR1).unwrap() & CR1_UE_TE,
+            CR1_UE_TE,
+            "ungated uart2 must work regardless of RCC"
+        );
+
+        // Enable RCC_APB2ENR.USART1EN (bit 14). RCC itself is never gated.
+        const RCC_APB2ENR: u64 = 0x4002_1018;
+        bus.write_u32(RCC_APB2ENR, 1 << 14).unwrap();
+        assert_eq!(bus.read_u32(RCC_APB2ENR).unwrap() & (1 << 14), 1 << 14);
+
+        // Now USART1 is clocked: the same write takes effect and reads back.
+        bus.write_u32(CR1, CR1_UE_TE).unwrap();
+        assert_eq!(
+            bus.read_u32(CR1).unwrap() & CR1_UE_TE,
+            CR1_UE_TE,
+            "clocked USART1 must accept writes"
+        );
+
+        // Drop the clock again → the peripheral goes inert (reads 0).
+        bus.write_u32(RCC_APB2ENR, 0).unwrap();
+        assert_eq!(
+            bus.read_u32(CR1).unwrap(),
+            0,
+            "USART1 must go inert again when its clock is removed"
+        );
+    }
+
+    #[test]
+    fn gated_peripheral_resolves_l4_rcc_offsets() {
+        // The SAME symbolic reg names that map to F1 offsets above must resolve
+        // to the L4 family's offsets via Rcc::enable_reg_offset: apb1enr1 @ 0x58
+        // (not F1's 0x1C) and ahb2enr @ 0x4C. Mirrors the al2205 (USART2 on
+        // apb1enr1) and nokia5110 (GPIOA on ahb2enr) gates on the L476.
+        let chip: ChipDescriptor = serde_yaml::from_str(
+            r#"
+name: "l4-clockgate-test"
+arch: "arm"
+core: "cortex-m4"
+flash:
+  base: 0x08000000
+  size: "1MB"
+ram:
+  base: 0x20000000
+  size: "96KB"
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40021000
+    size: "1KB"
+    config:
+      profile: "stm32l4"
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x48000000
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "ahb2enr", bit: 0 }
+  - id: "uart2"
+    type: "uart"
+    base_address: 0x40004400
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "apb1enr1", bit: 17 }
+"#,
+        )
+        .unwrap();
+        let manifest: SystemManifest = serde_yaml::from_str(
+            r#"
+name: "clockgate-l4"
+chip: "unused"
+external_devices: []
+board_io: []
+"#,
+        )
+        .unwrap();
+        let mut bus = SystemBus::from_config(&chip, &manifest).unwrap();
+
+        // USART2_CR1 @ 0x4000_4400 (stm32v2 layout: CR1 at offset 0x00).
+        // Clock OFF out of reset.
+        const U2_CR1: u64 = 0x4000_4400;
+        const CR1_UE_TE: u32 = (1 << 0) | (1 << 3);
+        bus.write_u32(U2_CR1, CR1_UE_TE).unwrap();
+        assert_eq!(
+            bus.read_u32(U2_CR1).unwrap(),
+            0,
+            "unclocked USART2 must drop writes and read 0"
+        );
+
+        // RCC_APB1ENR1 @ 0x58 (L4 offset, NOT the F1 0x1C). USART2EN = bit 17.
+        const RCC_APB1ENR1: u64 = 0x4002_1058;
+        bus.write_u32(RCC_APB1ENR1, 1 << 17).unwrap();
+        bus.write_u32(U2_CR1, CR1_UE_TE).unwrap();
+        assert_eq!(
+            bus.read_u32(U2_CR1).unwrap() & CR1_UE_TE,
+            CR1_UE_TE,
+            "clocked USART2 must accept writes once apb1enr1.17 is set"
+        );
+
+        // GPIOA_MODER @ 0x4800_0000, gated on RCC_AHB2ENR @ 0x4C bit 0.
+        const GPIOA_MODER: u64 = 0x4800_0000;
+        bus.write_u32(GPIOA_MODER, 0x55).unwrap();
+        assert_eq!(
+            bus.read_u32(GPIOA_MODER).unwrap(),
+            0,
+            "unclocked GPIOA must drop writes and read 0"
+        );
+        const RCC_AHB2ENR: u64 = 0x4002_104C;
+        bus.write_u32(RCC_AHB2ENR, 1 << 0).unwrap();
+        bus.write_u32(GPIOA_MODER, 0x55).unwrap();
+        assert_eq!(
+            bus.read_u32(GPIOA_MODER).unwrap() & 0x55,
+            0x55,
+            "clocked GPIOA must accept writes once ahb2enr.0 is set"
+        );
     }
 }

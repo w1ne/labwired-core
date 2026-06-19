@@ -60,6 +60,7 @@ impl SystemBus {
             bit_band_enabled: Self::chip_has_bit_band(chip),
             pending_cpu_irqs: [0; 2],
             dport_idx: None,
+            rcc_idx: None,
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
             last_gpio_in: [0; 2],
@@ -68,6 +69,7 @@ impl SystemBus {
             legacy_walk_disabled: false,
             hcsr04: Vec::new(),
             can_diagnostic_testers: Vec::new(),
+            can_uds_testers: Vec::new(),
             esp32c3_irq_routing: false,
             riscv_irq_lines: 0,
         };
@@ -464,6 +466,37 @@ impl SystemBus {
                         sent: false,
                     });
                 }
+                "uds-tester" => {
+                    // Stateful ISO-TP / UDS tester: a real second CAN node that
+                    // drives a multi-frame SecurityAccess handshake against the
+                    // named CAN peripheral (bxCAN or FDCAN) in normal mode.
+                    if bus.find_peripheral_index_by_name(&ext.connection).is_none() {
+                        return Err(anyhow::anyhow!(
+                            "UDS tester '{}' connection '{}' was not found",
+                            ext.id,
+                            ext.connection
+                        ));
+                    }
+                    let mut tester =
+                        CanUdsTester::new(ext.id.clone(), ext.connection.clone());
+                    tester.request_id = Self::yaml_u32(
+                        ext.config.get("request_id"),
+                        CanUdsTester::DEFAULT_REQUEST_ID,
+                    );
+                    tester.reply_id = Self::yaml_u32(
+                        ext.config.get("reply_id"),
+                        CanUdsTester::DEFAULT_REPLY_ID,
+                    );
+                    tester.first_frame = Self::yaml_bytes(
+                        ext.config.get("first_frame"),
+                        &CanUdsTester::DEFAULT_FIRST_FRAME,
+                    );
+                    tester.consecutive_frame = Self::yaml_bytes(
+                        ext.config.get("consecutive_frame"),
+                        &CanUdsTester::DEFAULT_CONSECUTIVE_FRAME,
+                    );
+                    bus.can_uds_testers.push(tester);
+                }
                 // ntc-thermistor dispatches through the PeripheralKit registry above.
                 _ => {
                     tracing::warn!(
@@ -478,6 +511,10 @@ impl SystemBus {
         }
 
         bus.rebuild_peripheral_ranges();
+        // Resolve declared per-peripheral RCC clock-gates now that every
+        // peripheral (incl. the RCC, needed to map reg-name → offset) is on the
+        // bus. Peripherals without a `clock:` field stay ungated.
+        bus.resolve_clock_gates(&merged_peripherals)?;
         // Per-config walk-deletion opt-in. The field is only consulted under the
         // `event-scheduler` feature (the legacy build always walks), so this is a
         // no-op there. Safe only because the manifest author verified the

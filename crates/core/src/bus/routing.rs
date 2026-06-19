@@ -134,6 +134,10 @@ impl SystemBus {
                 .and_then(|a| a.downcast_ref::<crate::peripherals::esp32::dport::Dport>())
                 .is_some()
         });
+        // Cache the "rcc" peripheral index so the clock-gate check on the hot
+        // read/write path is O(1). Matched by id, as the clock-gate config
+        // references the RCC by the conventional "rcc" peripheral id.
+        self.rcc_idx = self.peripherals.iter().position(|p| p.name == "rcc");
     }
 
     pub fn refresh_peripheral_index(&mut self) {

@@ -1,0 +1,12 @@
+name: "f103-uds-ecu"
+chip: "../../configs/chips/stm32f103.yaml"
+external_devices:
+  # A real second CAN node: a virtual UDS tester that drives the multi-frame
+  # SecurityAccess request over the bus to the F103 ECU's bxCAN (normal mode).
+  - type: "uds-tester"
+    id: "uds-tester"
+    connection: "bxcan1"
+    config:
+      request_id: 0x111
+      reply_id: 0x222
+board_io: []
