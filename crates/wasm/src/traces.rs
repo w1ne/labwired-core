@@ -107,13 +107,11 @@ impl WasmSimulator {
                 };
                 // FDCAN (H5) and bxCAN (F1/F4) both feed the same CAN/UDS
                 // trace so the logic analyzer works across controllers.
-                if let Some(fdcan) =
-                    any.downcast_ref::<labwired_core::peripherals::fdcan::Fdcan>()
+                if let Some(fdcan) = any.downcast_ref::<labwired_core::peripherals::fdcan::Fdcan>()
                 {
                     return fdcan.trace_snapshot(&p.name);
                 }
-                if let Some(bxcan) =
-                    any.downcast_ref::<labwired_core::peripherals::bxcan::BxCan>()
+                if let Some(bxcan) = any.downcast_ref::<labwired_core::peripherals::bxcan::BxCan>()
                 {
                     return bxcan.trace_snapshot(&p.name);
                 }

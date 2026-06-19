@@ -304,8 +304,7 @@ impl BxCan {
                     let mask_a = (r1 >> 16) as u16;
                     let id_b = r2 as u16;
                     let mask_b = (r2 >> 16) as u16;
-                    (frame16 & mask_a) == (id_a & mask_a)
-                        || (frame16 & mask_b) == (id_b & mask_b)
+                    (frame16 & mask_a) == (id_a & mask_a) || (frame16 & mask_b) == (id_b & mask_b)
                 }
             };
             if matched {
@@ -358,8 +357,8 @@ impl BxCan {
                 id | if frame.remote { TI_RTR } else { 0 }
             }
             0x4 => frame.data.len().min(8) as u32, // RDT0R: DLC[3:0], FMI=0, TIME=0
-            0x8 => word_from_bytes(&frame.data, 0),  // RDL0R: data[0..3]
-            0xC => word_from_bytes(&frame.data, 4),  // RDH0R: data[4..7]
+            0x8 => word_from_bytes(&frame.data, 0), // RDL0R: data[0..3]
+            0xC => word_from_bytes(&frame.data, 4), // RDH0R: data[4..7]
             _ => 0,
         }
     }
@@ -644,7 +643,11 @@ mod tests {
         let mut dev = BxCan::new();
         // Firmware clears FINIT; the read-only upper field must survive.
         wr(&mut dev, REG_FMR, 0x0000_0000);
-        assert_eq!(rd(&dev, REG_FMR), 0x2A1C_0E00, "FINIT clears, forced bits stay");
+        assert_eq!(
+            rd(&dev, REG_FMR),
+            0x2A1C_0E00,
+            "FINIT clears, forced bits stay"
+        );
         wr(&mut dev, REG_FMR, 0xFFFF_FFFF);
         assert_eq!(rd(&dev, REG_FMR), 0x2A1C_0E01, "only FINIT settable");
     }
@@ -671,7 +674,11 @@ mod tests {
         let mut dev = BxCan::new();
         enter_loopback(&mut dev);
         install_std_accept_filter(&mut dev, 0x111);
-        send(&mut dev, 0x111, &[0x10, 0x0B, 0x27, 0x01, 0x5A, 0x11, 0x22, 0x33]);
+        send(
+            &mut dev,
+            0x111,
+            &[0x10, 0x0B, 0x27, 0x01, 0x5A, 0x11, 0x22, 0x33],
+        );
 
         // One pending message; TX mailbox reported the send complete.
         assert_eq!(rd(&dev, REG_RF0R) & 0x3, 1, "FMP0 = 1");
@@ -740,7 +747,11 @@ mod tests {
         enter_loopback(&mut dev);
         install_std_accept_filter(&mut dev, 0x111);
         send(&mut dev, 0x111, &[0x10, 0x0B, 0x27, 0x01]);
-        assert_eq!(rd(&dev, REG_RF0R) & 0x3, 1, "delivered with valid timing + filter");
+        assert_eq!(
+            rd(&dev, REG_RF0R) & 0x3,
+            1,
+            "delivered with valid timing + filter"
+        );
         assert_eq!(rd(&dev, REG_ESR), 0, "no error state");
         assert_eq!((rd(&dev, RX_FIFO0_BASE) >> 21) & 0x7FF, 0x111);
     }
@@ -784,7 +795,11 @@ mod tests {
         let mut dev = BxCan::new();
         enter_loopback(&mut dev);
         install_std_accept_filter(&mut dev, 0x111);
-        send(&mut dev, 0x111, &[0x10, 0x0B, 0x27, 0x01, 0x5A, 0x11, 0x22, 0x33]);
+        send(
+            &mut dev,
+            0x111,
+            &[0x10, 0x0B, 0x27, 0x01, 0x5A, 0x11, 0x22, 0x33],
+        );
         let trace = dev.trace_snapshot("bxcan1");
         // One loopback frame appears as a tx then an rx event.
         assert_eq!(trace.len(), 2);
@@ -793,7 +808,10 @@ mod tests {
         assert_eq!(trace[0].id, 0x111);
         assert_eq!(trace[1].direction, "rx");
         assert_eq!(trace[1].id, 0x111);
-        assert_eq!(trace[1].data, vec![0x10, 0x0B, 0x27, 0x01, 0x5A, 0x11, 0x22, 0x33]);
+        assert_eq!(
+            trace[1].data,
+            vec![0x10, 0x0B, 0x27, 0x01, 0x5A, 0x11, 0x22, 0x33]
+        );
     }
 
     #[test]

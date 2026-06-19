@@ -478,16 +478,13 @@ impl SystemBus {
                             ext.connection
                         ));
                     }
-                    let mut tester =
-                        CanUdsTester::new(ext.id.clone(), ext.connection.clone());
+                    let mut tester = CanUdsTester::new(ext.id.clone(), ext.connection.clone());
                     tester.request_id = Self::yaml_u32(
                         ext.config.get("request_id"),
                         CanUdsTester::DEFAULT_REQUEST_ID,
                     );
-                    tester.reply_id = Self::yaml_u32(
-                        ext.config.get("reply_id"),
-                        CanUdsTester::DEFAULT_REPLY_ID,
-                    );
+                    tester.reply_id =
+                        Self::yaml_u32(ext.config.get("reply_id"), CanUdsTester::DEFAULT_REPLY_ID);
                     tester.first_frame = Self::yaml_bytes(
                         ext.config.get("first_frame"),
                         &CanUdsTester::DEFAULT_FIRST_FRAME,

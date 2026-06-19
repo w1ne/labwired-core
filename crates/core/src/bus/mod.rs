@@ -225,8 +225,7 @@ impl CanUdsTester {
     pub const DEFAULT_REQUEST_ID: u32 = 0x111;
     pub const DEFAULT_REPLY_ID: u32 = 0x222;
     pub const DEFAULT_FIRST_FRAME: [u8; 8] = [0x10, 0x0B, 0x27, 0x01, 0x5A, 0x11, 0x22, 0x33];
-    pub const DEFAULT_CONSECUTIVE_FRAME: [u8; 8] =
-        [0x21, 0x44, 0x55, 0x66, 0x77, 0x88, 0x55, 0x55];
+    pub const DEFAULT_CONSECUTIVE_FRAME: [u8; 8] = [0x21, 0x44, 0x55, 0x66, 0x77, 0x88, 0x55, 0x55];
     const DEFAULT_MAX_TICKS: u64 = 200_000;
 
     pub fn new(id: String, connection: String) -> Self {
@@ -598,9 +597,7 @@ impl SystemBus {
                 let any = self.peripherals[idx].dev.as_any_mut();
                 match any {
                     Some(a) => {
-                        if let Some(bx) =
-                            a.downcast_mut::<crate::peripherals::bxcan::BxCan>()
-                        {
+                        if let Some(bx) = a.downcast_mut::<crate::peripherals::bxcan::BxCan>() {
                             bx.tx_frames.drain(..).collect()
                         } else if let Some(fd) =
                             a.downcast_mut::<crate::peripherals::fdcan::Fdcan>()
@@ -615,7 +612,8 @@ impl SystemBus {
             };
 
             for frame in &drained {
-                if let Some(payload) = self.can_uds_testers[i].observe_ecu_frame(frame.id, &frame.data)
+                if let Some(payload) =
+                    self.can_uds_testers[i].observe_ecu_frame(frame.id, &frame.data)
                 {
                     pending_inject = Some(payload);
                 }
@@ -623,9 +621,7 @@ impl SystemBus {
 
             // Decide what (if anything) to inject this tick.
             let to_send: Option<Vec<u8>> = match self.can_uds_testers[i].state {
-                CanUdsTesterState::Start => {
-                    Some(self.can_uds_testers[i].first_frame.clone())
-                }
+                CanUdsTesterState::Start => Some(self.can_uds_testers[i].first_frame.clone()),
                 CanUdsTesterState::AwaitFc => pending_inject,
                 _ => None,
             };
@@ -639,9 +635,7 @@ impl SystemBus {
                 let any = self.peripherals[idx].dev.as_any_mut();
                 match any {
                     Some(a) => {
-                        if let Some(bx) =
-                            a.downcast_mut::<crate::peripherals::bxcan::BxCan>()
-                        {
+                        if let Some(bx) = a.downcast_mut::<crate::peripherals::bxcan::BxCan>() {
                             bx.deliver_rx(frame)
                         } else if let Some(fd) =
                             a.downcast_mut::<crate::peripherals::fdcan::Fdcan>()
