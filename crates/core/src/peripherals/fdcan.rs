@@ -278,6 +278,14 @@ impl Fdcan {
         self.bus_rx = Some(rx);
     }
 
+    /// True once this FDCAN has been bound to a `CanBus` (via `new_with_bus` or
+    /// `attach_bus`). Both endpoints must be present for the binding to be considered
+    /// complete.
+    #[cfg(test)]
+    pub(crate) fn is_bus_attached(&self) -> bool {
+        self.bus_tx.is_some() && self.bus_rx.is_some()
+    }
+
     pub fn trace_snapshot(&self, peripheral: &str) -> Vec<FdcanTraceFrame> {
         self.trace
             .iter()

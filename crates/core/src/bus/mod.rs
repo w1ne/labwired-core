@@ -1853,21 +1853,39 @@ board_io: []
     #[test]
     fn attach_can_bus_by_id_binds_named_fdcan() {
         use crate::network::CanBus;
+        use crate::peripherals::fdcan::Fdcan;
         // Build a bus from a minimal chip+system declaring fdcan1.
         let mut bus = build_test_bus_with_fdcan1();
+
+        // Before attaching: confirm the peripheral exists, is an Fdcan, and has
+        // no bus endpoints yet.  This is the causality anchor — if attach_bus()
+        // were a no-op the post-attach assertion below would still fail.
+        let idx = bus.find_peripheral_index_by_name("fdcan1").unwrap();
+        let fdcan_before = bus.peripherals[idx]
+            .dev
+            .as_any()
+            .and_then(|a| a.downcast_ref::<Fdcan>())
+            .expect("fdcan1 must be an Fdcan peripheral");
+        assert!(
+            !fdcan_before.is_bus_attached(),
+            "bus endpoints must be absent before attach_can_bus_by_id"
+        );
+
+        // Attach and verify that the bus endpoints are now present.
         let mut can = CanBus::new();
         let (tx, rx) = can.attach();
-        bus.attach_can_bus_by_id("fdcan1", tx, rx).expect("attach");
-        // Confirm the named peripheral is present and is an Fdcan (downcast proves binding path).
-        let idx = bus.find_peripheral_index_by_name("fdcan1").unwrap();
+        bus.attach_can_bus_by_id("fdcan1", tx, rx).expect("attach must succeed");
+
+        let fdcan_after = bus.peripherals[idx]
+            .dev
+            .as_any()
+            .and_then(|a| a.downcast_ref::<Fdcan>())
+            .expect("fdcan1 must still be an Fdcan peripheral after attach");
         assert!(
-            bus.peripherals[idx]
-                .dev
-                .as_any()
-                .and_then(|a| a.downcast_ref::<crate::peripherals::fdcan::Fdcan>())
-                .is_some(),
-            "fdcan1 must be bound to the bus as an Fdcan peripheral"
+            fdcan_after.is_bus_attached(),
+            "attach_can_bus_by_id must call attach_bus — bus_tx and bus_rx must be Some"
         );
+
         // Attaching to an unknown name must return Err.
         let mut can2 = CanBus::new();
         let (tx2, rx2) = can2.attach();
