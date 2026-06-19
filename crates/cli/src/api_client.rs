@@ -53,6 +53,64 @@ pub enum ValidateOutcome {
     NetworkError(String),
 }
 
+impl ValidateOutcome {
+    /// Returns `true` only when the outcome is a hard misconfiguration that
+    /// should block the simulation run entirely.
+    ///
+    /// `Invalid` blocks — a bad key means the user must fix their config.
+    /// `QuotaExceeded` does NOT block — the simulation still runs locally;
+    /// only metering is skipped (billing recovers on the next cycle).
+    /// `NetworkError` does NOT block — API unreachability must not break CI.
+    /// `Valid` does NOT block — proceed normally.
+    #[cfg(test)]
+    pub fn blocks_run(&self) -> bool {
+        matches!(self, ValidateOutcome::Invalid)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ValidateOutcome;
+
+    #[test]
+    fn quota_exceeded_does_not_block_run() {
+        assert!(
+            !ValidateOutcome::QuotaExceeded.blocks_run(),
+            "QuotaExceeded must not block the local simulation run"
+        );
+    }
+
+    #[test]
+    fn invalid_key_blocks_run() {
+        assert!(
+            ValidateOutcome::Invalid.blocks_run(),
+            "Invalid key must block the run"
+        );
+    }
+
+    #[test]
+    fn network_error_does_not_block_run() {
+        assert!(
+            !ValidateOutcome::NetworkError("timeout".to_string()).blocks_run(),
+            "NetworkError must not block the run"
+        );
+    }
+
+    #[test]
+    fn valid_key_does_not_block_run() {
+        let outcome = ValidateOutcome::Valid {
+            workspace_id: "ws-1".to_string(),
+            plan: "pro".to_string(),
+            cycles_quota: 1000,
+            cycles_used_mtd: 500,
+        };
+        assert!(
+            !outcome.blocks_run(),
+            "Valid key must not block the run"
+        );
+    }
+}
+
 // ── Public API ─────────────────────────────────────────────────────────────
 
 /// Validate the API key before starting a simulation run.

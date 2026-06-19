@@ -40,10 +40,13 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                 return ExitCode::from(EXIT_CONFIG_ERROR);
             }
             api_client::ValidateOutcome::QuotaExceeded => {
-                eprintln!(
-                    "⚠️  Monthly cycle quota exceeded. Upgrade your plan or wait until next billing period."
+                // Quota exhaustion is non-fatal — the simulation still runs locally.
+                // Metering is skipped; billing resets at the next cycle boundary.
+                // This matches the NetworkError fall-through: CI must not be blocked
+                // by a billing state.
+                tracing::warn!(
+                    "LabWired API: monthly cycle quota exceeded; continuing simulation locally"
                 );
-                return ExitCode::from(EXIT_CONFIG_ERROR);
             }
             api_client::ValidateOutcome::NetworkError(e) => {
                 // Network errors are non-fatal — fall through to run in free-tier mode
