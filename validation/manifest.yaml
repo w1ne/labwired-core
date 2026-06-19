@@ -196,10 +196,9 @@ boards:
       - "stm32f4_mmio_diff::{f4_reset_sim_only,f4_sweep_sim_only,f4_behavior_sim_only}"
       - "firmware_survival F407 smoke + i2c cases (sim-self-pinned)"
     silicon:
-      last_capture: 2026-05-11
-      probe: "ST-LINK SWD (NUCLEO-F407, IDCODE 0x1001_6413)"
-      result: "smoke + I²C survival UART traces (now stale relative to June model rewrites)"
-    drift_ack: 2026-06-19   # merged feat/bxcan-bus-filter (CAN + RCC clock-gating + bus-routing models changed 2026-06-19); re-capture pending, no board connected
+      last_capture: 2026-06-20
+      probe: "ST-LINK/V2 (USB 0483:3748, IDCODE 0x10016413) — connect-under-reset (firmware was holding SWD), adapter 480 kHz"
+      result: "Live re-capture after the v0.17.0 merge: stm32f4_mmio_diff 37/37 (2 reset + 31 sweep + 4 behaviour), 0 divergence. Caught + fixed a real model bug: F407 silicon does NOT latch SPI1 CR1 bit 12 (CRCNEXT) — writes 0xFFFF, reads 0xEFFF — vs F103 which keeps it writable; spi.rs now applies a per-part cr1_mask (F4 0xEFFF). Supersedes the 2026-06-19 drift_ack. (I²C/UART models still smoke-tier — not in the mmio diff.)"
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
