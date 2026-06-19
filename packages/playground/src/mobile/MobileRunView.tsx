@@ -192,6 +192,8 @@ export function MobileRunView({
       </div>
 
       <MobileInputsSheet
+        labName={selectedBoard.name}
+        labDescription={selectedBoard.description}
         diagram={editorState.diagram}
         boardIoStates={boardIoStates}
         uartOutput={uartOutput}
