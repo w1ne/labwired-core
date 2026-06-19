@@ -564,6 +564,8 @@ pub enum StopReason {
 #[serde(deny_unknown_fields)]
 pub struct UartContainsAssertion {
     pub uart_contains: String,
+    #[serde(default)]
+    pub node: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -590,6 +592,10 @@ pub struct MemoryValueDetails {
     /// Defaults to a 32-bit (u32) word.
     #[serde(default)]
     pub size: Option<u8>,
+    /// Optional node selector for multi-node test scenarios.
+    /// When `None`, the assertion applies to the single (or default) node.
+    #[serde(default)]
+    pub node: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -895,5 +901,42 @@ registers:
             desc.registers[1].side_effects.as_ref().unwrap().on_read,
             Some("clear_rxne".to_string())
         );
+    }
+
+    #[test]
+    fn memory_value_accepts_node() {
+        let yaml = r#"
+memory_value:
+  node: tester
+  address: 0x20010000
+  expected_value: 0xA5
+  size: 8
+"#;
+        let assertion: MemoryValueAssertion = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(assertion.memory_value.node, Some("tester".to_string()));
+        assert_eq!(assertion.memory_value.address, 0x20010000u64);
+    }
+
+    #[test]
+    fn memory_value_without_node_still_parses() {
+        let yaml = r#"
+memory_value:
+  address: 0x20000000
+  expected_value: 1
+"#;
+        let assertion: MemoryValueAssertion = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(assertion.memory_value.node, None);
+        assert_eq!(assertion.memory_value.address, 0x20000000u64);
+    }
+
+    #[test]
+    fn uart_contains_accepts_node() {
+        let yaml = r#"
+uart_contains: "PASS"
+node: tester
+"#;
+        let assertion: UartContainsAssertion = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(assertion.node, Some("tester".to_string()));
+        assert_eq!(assertion.uart_contains, "PASS");
     }
 }
