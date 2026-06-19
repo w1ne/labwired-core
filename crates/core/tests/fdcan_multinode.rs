@@ -72,6 +72,22 @@ fn from_manifest_unknown_can_node_errors() {
 
 // ---- test 2: two-node manifest — frame crosses A→B via CanBus ---------------
 
+/// What this test PROVES:
+/// `from_manifest` correctly wired node "b"'s FDCAN onto the shared `CanBus`.
+/// Node "b" can only receive a `0x7E8` frame at all — including its own
+/// echo — if its FDCAN was bus-attached by `from_manifest`. An unwired node
+/// would never see any frame in its RX FIFO0.
+///
+/// What this test does NOT prove:
+/// It does not cleanly prove cross-node A→B delivery. Both nodes run the
+/// same `h563-uds-ecu` firmware and injector, and `CanBus` echoes a
+/// sender's own TX back to itself. The observed `0x7E8` in node "b"'s
+/// FIFO could be node "b"'s own response to its own injected request,
+/// not a frame originating from node "a".
+///
+/// Clean cross-node delivery (a non-transmitting bare observer receiving
+/// only the ECU's TX) is proven separately in
+/// `crates/core/tests/fdcan_firmware_crossing.rs`.
 #[test]
 fn from_manifest_two_can_nodes_frame_crosses() {
     let root = ecu_root();
@@ -147,12 +163,6 @@ fn from_manifest_two_can_nodes_frame_crosses() {
                     r0_addr,
                 );
                 let id = (r0 >> 18) & 0x7FF;
-                if id != 0 {
-                    eprintln!(
-                        "node 'b' frame at iter {iter}: id=0x{id:03X} \
-                         f0gi={f0gi} rxf0s=0x{rxf0s:08X}"
-                    );
-                }
                 // Wait specifically for the UDS response id 0x7E8 — it can
                 // only arrive via the CanBus from node 'a' (or node 'b'
                 // receiving its own TX echoed back by the shared bus).

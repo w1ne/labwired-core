@@ -202,12 +202,12 @@ impl World {
                 }
                 "can_bus" => {
                     let mut can = crate::network::CanBus::new();
+                    let peripheral = ic
+                        .config
+                        .get("peripheral")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("fdcan1");
                     for node_id in &ic.nodes {
-                        let peripheral = ic
-                            .config
-                            .get("peripheral")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("fdcan1");
                         let (tx, rx) = can.attach();
                         world
                             .machines
