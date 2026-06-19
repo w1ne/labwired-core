@@ -52,6 +52,7 @@ import { ChipsProvider, useChips } from './multi-mcu/ChipsProvider';
 import { ChipBridgeSync } from './multi-mcu/ChipBridgeSync';
 import { useBackgroundChips } from './multi-mcu/useBackgroundChips';
 import { MobileRunView } from './mobile/MobileRunView';
+import { LabInfoButton } from './LabInfoButton';
 import { PropertiesGate } from './multi-mcu/PropertiesGate';
 import { ChipTabsBar, DrawerCloseButton } from './multi-mcu/ChipTabsBar';
 import { ChipControls } from './multi-mcu/ChipControls';
@@ -239,7 +240,10 @@ export function makeStarterDiagram(config: BoardConfig): Diagram {
       ...createEmptyDiagram(config.chipId),
       parts: [
         mcu,
-        { id: 'ultrasonic', type: 'ultrasonic', x: 520, y: 80, rotate: 0, attrs: { distance: '10' } },
+        // Start out of range (100 cm) so the ALARM LED is OFF until you drag the
+        // Distance slider down past the firmware's 50 cm threshold — the toggle
+        // is the point of the lab.
+        { id: 'ultrasonic', type: 'ultrasonic', x: 520, y: 80, rotate: 0, attrs: { distance: '100' } },
         { id: 'alarm_led', type: 'led', x: 520, y: 300, rotate: 0, scale: 1.5, attrs: { color: 'red' } },
       ],
       wires: [
@@ -2406,7 +2410,16 @@ export function App() {
               </div>
             )}
             {/* Circuit canvas (always visible — shows live state during sim) */}
-            <div className="editor-canvas-pane">
+            <div className="editor-canvas-pane relative">
+              {/* Quiet "About this lab" affordance — overlays the top-left of the
+                  canvas; toggles a small popover, never covers the canvas. */}
+              {selectedBoard.description && (
+                <LabInfoButton
+                  name={selectedBoard.name}
+                  description={selectedBoard.description}
+                  runHint={selectedBoard.runHint}
+                />
+              )}
               <EditorCanvas
                 state={editor.state}
                 // Run-only embed: a `?embed=true` pane is for showing a live,

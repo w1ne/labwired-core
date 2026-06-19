@@ -592,7 +592,7 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     chipId: 'nrf52840',
     name: 'nRF52840 Proximity + BLE',
     description:
-      'Nordic nRF52840 reading an HC-SR04 ultrasonic sensor over GPIO (TRIG P0.04, ECHO P1.05), raising an ALARM LED on P0.06 when the target is within 150 mm, and broadcasting {distance, in-range} over the BLE 1 Mbit PHY. Drag Distance (cm) and watch the LED and the BLE packets follow. The same .elf flashes to real nRF silicon.',
+      'Nordic nRF52840 reading an HC-SR04 ultrasonic sensor over GPIO (TRIG P0.04, ECHO P0.05), raising an ALARM LED on P0.06 when the target comes within 50 cm, and broadcasting {distance, in-range} over the BLE 1 Mbit PHY. Drag Distance (cm) and watch the LED and the BLE packets follow. The same .elf flashes to real nRF silicon.',
     arch: 'ARM Cortex-M4',
     chipYaml: chipNrf52840,
     systemYaml: systemNrf52840Proximity,
@@ -601,7 +601,7 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     sourceCode: sourceNrf52840Proximity,
     sourceFilename: 'firmware-nrf52840-proximity/src/main.rs',
     kind: 'lab',
-    runHint: 'Run, then drag Distance (cm): under 15 cm the ALARM LED lights. Open the Analyzer (toolbar) to see the distance broadcast over BLE.',
+    runHint: 'Run, then drag Distance (cm): under 50 cm the ALARM LED lights. Open the Air Tracer · BLE (Tools) to see the distance broadcast over BLE.',
   },
 ];
 

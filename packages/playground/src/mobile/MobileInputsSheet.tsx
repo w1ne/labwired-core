@@ -23,6 +23,9 @@ import { IoLinkAnalyzer } from '../instruments/IoLinkAnalyzer';
 import { LogicAnalyzerPanel } from '../instruments/LogicAnalyzerPanel';
 
 export interface MobileInputsSheetProps {
+  /** Lab name + one-liner shown in the "About" tab (from bundled-configs). */
+  labName?: string;
+  labDescription?: string;
   diagram: Diagram;
   /** Live board-IO state keyed by part id (for ADC current values). */
   boardIoStates: Record<string, ComponentState>;
@@ -49,7 +52,7 @@ export interface MobileInputsSheetProps {
   stackBase?: number;
 }
 
-type Tab = 'inputs' | 'serial' | 'ble' | 'logic' | 'iolink' | 'cpu';
+type Tab = 'about' | 'inputs' | 'serial' | 'ble' | 'logic' | 'iolink' | 'cpu';
 type CpuView = 'reg' | 'trace' | 'mem';
 
 function partLabel(attrs: Record<string, unknown> | undefined, fallback: string): string {
@@ -58,6 +61,8 @@ function partLabel(attrs: Record<string, unknown> | undefined, fallback: string)
 }
 
 export function MobileInputsSheet({
+  labName,
+  labDescription,
   diagram,
   boardIoStates,
   uartOutput,
@@ -108,7 +113,9 @@ export function MobileInputsSheet({
     return () => window.clearInterval(id);
   }, [bridge, running, hasBleTraffic]);
 
+  const hasAbout = !!labDescription;
   const tabs: { id: Tab; label: string }[] = [
+    ...(hasAbout ? [{ id: 'about' as Tab, label: 'Info' }] : []),
     ...(hasInputs ? [{ id: 'inputs' as Tab, label: 'Inputs' }] : []),
     { id: 'serial', label: 'Serial' },
     { id: 'cpu', label: 'CPU' },
@@ -123,7 +130,7 @@ export function MobileInputsSheet({
   const hasCpu = !!bridge && !!registers;
 
   // Default to the tab that actually has content.
-  const [tab, setTab] = useState<Tab>(hasInputs ? 'inputs' : 'serial');
+  const [tab, setTab] = useState<Tab>(hasAbout ? 'about' : hasInputs ? 'inputs' : 'serial');
   // Drawer: collapsed by default so the canvas owns the screen. Only the slim
   // tab bar shows until the user taps a tab (or the expand chevron). Tapping the
   // already-open tab collapses it again — a one-tap peek/dismiss.
@@ -282,6 +289,15 @@ export function MobileInputsSheet({
 
       {open && !isTool && (
         <div className="px-4 pb-4" style={{ maxHeight: '40vh', overflowY: 'auto' }}>
+          {tab === 'about' && (
+            <div className="pt-2">
+              {labName && (
+                <div className="text-fg-primary text-[14px] font-medium tracking-tight mb-1">{labName}</div>
+              )}
+              <p className="text-fg-secondary text-[12.5px] leading-snug m-0">{labDescription}</p>
+            </div>
+          )}
+
           {tab === 'inputs' && (
             <div className="flex flex-col gap-4 pt-1">
               {!hasInputs && (

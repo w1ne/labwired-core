@@ -41,6 +41,16 @@ export function CodeIcon({ size = defaults.size, ...rest }: IconProps) {
   );
 }
 
+export function InfoIcon({ size = defaults.size, ...rest }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" {...rest}>
+      <circle cx="8" cy="8" r="6" />
+      <line x1="8" y1="7.25" x2="8" y2="11.5" />
+      <circle cx="8" cy="4.75" r="0.6" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 export function PanelBottomIcon({ size = defaults.size, ...rest }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" {...rest}>
