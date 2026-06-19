@@ -200,6 +200,23 @@ impl World {
                         .attach_uart_stream(b_uart, Box::new(eb))?;
                     world.add_interconnect(Box::new(link));
                 }
+                "can_bus" => {
+                    let mut can = crate::network::CanBus::new();
+                    for node_id in &ic.nodes {
+                        let peripheral = ic
+                            .config
+                            .get("peripheral")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("fdcan1");
+                        let (tx, rx) = can.attach();
+                        world
+                            .machines
+                            .get_mut(node_id)
+                            .with_context(|| format!("can_bus: unknown node '{node_id}'"))?
+                            .attach_can_bus(peripheral, tx, rx)?;
+                    }
+                    world.add_interconnect(Box::new(can));
+                }
                 other => anyhow::bail!("unsupported interconnect type '{other}'"),
             }
         }
