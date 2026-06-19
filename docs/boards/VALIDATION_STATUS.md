@@ -9,13 +9,13 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 |-------|------|----------------------|--------------|--------|
 | `nrf52840` | 🟢 silicon-verified | 2026-06-17 | 2026-06-14 | ✅ fresh |
 | `seeed-xiao-nrf52840-sense` | 🟢 silicon-verified | 2026-06-17 | 2026-06-14 | ✅ fresh |
-| `stm32h563` | 🟢 silicon-verified | 2026-06-17 | 2026-06-17 | ✅ fresh |
+| `stm32h563` | 🟢 silicon-verified | 2026-06-17 | 2026-06-18 | ⚠ drift acked 2026-06-19 (re-capture pending) |
 | `esp32c3` | 🟢 silicon-verified | 2026-06-17 | 2026-06-14 | ✅ fresh |
-| `nucleo-l476rg` | 🟢 silicon-verified | 2026-06-17 | 2026-06-17 | ✅ fresh |
-| `nucleo-l073rz` | 🟢 silicon-verified | 2026-06-17 | 2026-06-17 | ✅ fresh |
-| `stm32f103` | 🟢 silicon-verified | 2026-06-17 | 2026-06-17 | ✅ fresh |
-| `stm32f407` | 🟢 silicon-smoke | 2026-05-11 | 2026-06-17 | ⚠ drift acked 2026-06-17 (re-capture pending) |
-| `esp32s3` | 🟢 silicon-verified | 2026-06-17 | 2026-06-13 | ✅ fresh |
+| `nucleo-l476rg` | 🟢 silicon-verified | 2026-06-17 | 2026-06-18 | ⚠ drift acked 2026-06-19 (re-capture pending) |
+| `nucleo-l073rz` | 🟢 silicon-verified | 2026-06-17 | 2026-06-18 | ⚠ drift acked 2026-06-19 (re-capture pending) |
+| `stm32f103` | 🟢 silicon-verified | 2026-06-17 | 2026-06-19 | ⚠ drift acked 2026-06-19 (re-capture pending) |
+| `stm32f407` | 🟢 silicon-smoke | 2026-05-11 | 2026-06-18 | ⚠ drift acked 2026-06-19 (re-capture pending) |
+| `esp32s3` | 🟢 silicon-verified | 2026-06-17 | 2026-06-18 | ⚠ drift acked 2026-06-19 (re-capture pending) |
 | `stm32f401` | 🟡 smoke-manual | — | 2026-06-07 | no silicon capture |
 | `stm32wba52` | 🟡 smoke-manual | — | 2026-06-07 | no silicon capture |
 | `nrf52832` | ⚪ structural | — | 2026-06-07 | no silicon capture |
@@ -43,7 +43,7 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 - Silicon: **2026-06-17** on ST-LINK V3 (J13) — class 65/65; GPIO mmio 8/8; GPIO parity 48/48 — 0 divergence (dapdirect AP1 recipe)
   - offline (CI): h563_conformance (5 tests vs frozen 2026-06-10..12 captures)
   - offline (CI): h563_mmio_diff::{h563_mmio_sim_only,h563_parity_sim_only,h563_class_sim_only}
-- Drift status: **✅ fresh**
+- Drift status: **⚠ drift acked 2026-06-19 (re-capture pending)**
 
 ## `esp32c3` — 🟢 silicon-verified
 
@@ -60,7 +60,7 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 - Silicon: **2026-06-17** on ST-LINK V2 J36 (NUCLEO-L476RG onboard) — mass-erased to clean reset state — l476_mmio_diff 15/15 + parity 104/104, 0 divergence vs live silicon (L476_STRICT)
   - offline (CI): l476_mmio_diff::{l476_mmio_sim_only,l476_parity_sim_only}
   - offline (CI): firmware_survival L476 cases (UART byte stream)
-- Drift status: **✅ fresh**
+- Drift status: **⚠ drift acked 2026-06-19 (re-capture pending)**
 
 ## `nucleo-l073rz` — 🟢 silicon-verified
 
@@ -69,7 +69,7 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 - Silicon: **2026-06-17** on ST-LINK V2 J28 (NUCLEO-L073RZ, IDCODE 0x2008_6447) — l0_mmio_diff 20/20, 0 divergence (L073_STRICT) — incl. the TIM2-16-bit fix
   - offline (CI): stm32l0_mmio_diff::{l0_mmio_sim_only,l0_parity_sim_only}
   - offline (CI): firmware_survival L073 smoke case
-- Drift status: **✅ fresh**
+- Drift status: **⚠ drift acked 2026-06-19 (re-capture pending)**
 
 ## `stm32f103` — 🟢 silicon-verified
 
@@ -78,7 +78,7 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 - Silicon: **2026-06-17** on ST-LINK V2 J43 (genuine STM32F103, hil board stm32f103-bluepill) — mmio diff 102/102, 0 divergence (F103_STRICT). Caught + fixed a real model bug: classic SPI CR1 was masking CRCNEXT bit 12 (0xEFFF) — genuine silicon keeps it writable (0xFFFF), spi.rs corrected.
   - offline (CI): stm32f1_mmio_diff::{f1_reset_sim_only,f1_mmio_sim_only,f1_parity_sim_only,f1_sweep_sim_only}
   - offline (CI): f103_conformance::conformance_sim (digest)
-- Drift status: **✅ fresh**
+- Drift status: **⚠ drift acked 2026-06-19 (re-capture pending)**
 
 ## `stm32f407` — 🟢 silicon-smoke
 
@@ -87,7 +87,7 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 - Silicon: **2026-05-11** on ST-LINK SWD (NUCLEO-F407, IDCODE 0x1001_6413) — smoke + I²C survival UART traces (now stale relative to June model rewrites)
   - offline (CI): stm32f4_mmio_diff::{f4_reset_sim_only,f4_sweep_sim_only,f4_behavior_sim_only}
   - offline (CI): firmware_survival F407 smoke + i2c cases (sim-self-pinned)
-- Drift status: **⚠ drift acked 2026-06-17 (re-capture pending)**
+- Drift status: **⚠ drift acked 2026-06-19 (re-capture pending)**
 
 ## `esp32s3` — 🟢 silicon-verified
 
@@ -96,7 +96,7 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 - Silicon: **2026-06-17** on USB-JTAG built-in (MAC 9C:13:9E:F4:40:C0, openocd-esp32, Tensilica tap 0x120034e5) — reset-state oracle: SYSTIMER CONF 0x46000000 + I2C0 timing block (TO/FIFO_CONF/SCL holds/FILTER_CFG/CLK_CONF) 9/9 match live silicon
   - offline (CI): esp32s3_reset_conformance (9 reset regs vs live silicon, firmware-path bus)
   - offline (CI): e2e_i2c_tmp102 / e2e_hello_world / xtensa_exec / e2e_esp32_epaper (sim)
-- Drift status: **✅ fresh**
+- Drift status: **⚠ drift acked 2026-06-19 (re-capture pending)**
 
 ## `stm32f401` — 🟡 smoke-manual
 
