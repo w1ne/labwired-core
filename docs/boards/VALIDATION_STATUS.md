@@ -9,12 +9,12 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 |-------|------|----------------------|--------------|--------|
 | `nrf52840` | 🟢 silicon-verified | 2026-06-17 | 2026-06-14 | ✅ fresh |
 | `seeed-xiao-nrf52840-sense` | 🟢 silicon-verified | 2026-06-17 | 2026-06-14 | ✅ fresh |
-| `stm32h563` | 🟢 silicon-verified | 2026-06-20 | 2026-06-18 | ✅ fresh |
+| `stm32h563` | 🟢 silicon-verified | 2026-06-20 | 2026-06-20 | ✅ fresh |
 | `esp32c3` | 🟢 silicon-verified | 2026-06-17 | 2026-06-14 | ✅ fresh |
-| `nucleo-l476rg` | 🟢 silicon-verified | 2026-06-20 | 2026-06-18 | ✅ fresh |
-| `nucleo-l073rz` | 🟢 silicon-verified | 2026-06-20 | 2026-06-18 | ✅ fresh |
-| `stm32f103` | 🟢 silicon-verified | 2026-06-20 | 2026-06-19 | ✅ fresh |
-| `stm32f407` | 🟢 silicon-smoke | 2026-05-11 | 2026-06-18 | ⚠ drift acked 2026-06-19 (re-capture pending) |
+| `nucleo-l476rg` | 🟢 silicon-verified | 2026-06-20 | 2026-06-20 | ✅ fresh |
+| `nucleo-l073rz` | 🟢 silicon-verified | 2026-06-20 | 2026-06-20 | ✅ fresh |
+| `stm32f103` | 🟢 silicon-verified | 2026-06-20 | 2026-06-20 | ✅ fresh |
+| `stm32f407` | 🟢 silicon-smoke | 2026-06-20 | 2026-06-20 | ✅ fresh |
 | `esp32s3` | 🟢 silicon-verified | 2026-06-20 | 2026-06-18 | ✅ fresh |
 | `stm32f401` | 🟡 smoke-manual | — | 2026-06-07 | no silicon capture |
 | `stm32wba52` | 🟡 smoke-manual | — | 2026-06-07 | no silicon capture |
@@ -84,10 +84,10 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 
 - Doc: [`docs/boards/stm32f407.md`](stm32f407.md)  ·  Chip: `configs/chips/stm32f407.yaml`
 - Note: examples/nucleo-f407-i2c/VALIDATION.md badges '✅ Hardware-validated 2026-05-11' but I²C/UART/GPIO models were rewritten in June with no re-capture — STALE.
-- Silicon: **2026-05-11** on ST-LINK SWD (NUCLEO-F407, IDCODE 0x1001_6413) — smoke + I²C survival UART traces (now stale relative to June model rewrites)
+- Silicon: **2026-06-20** on ST-LINK/V2 (USB 0483:3748, IDCODE 0x10016413) — connect-under-reset (firmware was holding SWD), adapter 480 kHz — Live re-capture after the v0.17.0 merge: stm32f4_mmio_diff 37/37 (2 reset + 31 sweep + 4 behaviour), 0 divergence. Caught + fixed a real model bug: F407 silicon does NOT latch SPI1 CR1 bit 12 (CRCNEXT) — writes 0xFFFF, reads 0xEFFF — vs F103 which keeps it writable; spi.rs now applies a per-part cr1_mask (F4 0xEFFF). Supersedes the 2026-06-19 drift_ack. (I²C/UART models still smoke-tier — not in the mmio diff.)
   - offline (CI): stm32f4_mmio_diff::{f4_reset_sim_only,f4_sweep_sim_only,f4_behavior_sim_only}
   - offline (CI): firmware_survival F407 smoke + i2c cases (sim-self-pinned)
-- Drift status: **⚠ drift acked 2026-06-19 (re-capture pending)**
+- Drift status: **✅ fresh**
 
 ## `esp32s3` — 🟢 silicon-verified
 

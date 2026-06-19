@@ -133,6 +133,9 @@ peripherals:
     # F4 classic SPI CR2 adds bit 4 (FRF/TI-mode) over the F1 map → 0xF7.
     config:
       cr2_mask: 0xF7
+      # F407 silicon does not latch CR1 bit 12 (CRCNEXT): writing 0xFFFF reads
+      # back 0xEFFF (silicon-confirmed over SWD). F1/L0/L4 leave it writable.
+      cr1_mask: 0xEFFF
   - id: "spi2"
     type: "spi"
     base_address: 0x40003800
@@ -140,6 +143,9 @@ peripherals:
     irq: 36
     config:
       cr2_mask: 0xF7
+      # F407 silicon does not latch CR1 bit 12 (CRCNEXT): writing 0xFFFF reads
+      # back 0xEFFF (silicon-confirmed over SWD). F1/L0/L4 leave it writable.
+      cr1_mask: 0xEFFF
   - id: "spi3"
     type: "spi"
     base_address: 0x40003C00
@@ -147,6 +153,9 @@ peripherals:
     irq: 51
     config:
       cr2_mask: 0xF7
+      # F407 silicon does not latch CR1 bit 12 (CRCNEXT): writing 0xFFFF reads
+      # back 0xEFFF (silicon-confirmed over SWD). F1/L0/L4 leave it writable.
+      cr1_mask: 0xEFFF
   - id: "i2c2"
     type: "i2c"
     base_address: 0x40005800
