@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-06-19
+
+### Added
+- **Classical CAN (bxCAN) model** for STM32F1: loopback + frame trace, strict silicon-pinned acceptance filtering, bit-timing bus-off and bus-attach, and a real two-node CAN bus (a virtual UDS tester driving an F103 ECU).
+- **RCC clock-gating model** for STM32F1 / L4: gated peripherals are inaccessible until their RCC enable bit is set (opt-in via the chip-YAML `clock:` field).
+- **STM32F103C8 SRAM** modeled at its physical 20 KB.
+- **nRF52840 proximity lab**: ALARM in-range threshold raised to 50 cm.
+
+### Fixed
+- **STMIA.W** decoded as STMDB (struct-copy idiom wrote below the destination).
+- **Register-coverage probe** is now clock-gating-independent (`SystemBus::set_clock_gating_bypass`, measurement-only) so coverage reflects whether a register is modeled, not whether its clock is currently on. Runtime gating is unchanged.
+
 ## [0.16.0] - 2026-06-18
 
 ### Fixed
