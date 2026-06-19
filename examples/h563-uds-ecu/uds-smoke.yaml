@@ -10,5 +10,6 @@ assertions:
   - uart_contains: "UDS_RESP_62_F190"
   - uart_contains: "VIN=LABWIRED-H563-UDS"
   - uart_contains: "UDS_OK"
+  - memory_value: { address: 0x20010000, expected_value: 0x62F190A5, size: 32 }
   - expected_stop_reason: max_steps
 
