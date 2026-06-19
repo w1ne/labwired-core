@@ -35,6 +35,7 @@ import systemNokia5110InvadersLab from '../../../core/examples/nokia5110-invader
 import systemNeo6mGpsLab from '../../../core/examples/neo6m-gps-lab/system.yaml?raw';
 import systemQuectelBg770aLab from '../../../core/examples/quectel-bg770a-lab/system.yaml?raw';
 import systemNtcThermistorLab from '../../../core/examples/ntc-thermistor-lab/system.yaml?raw';
+import systemVl53l1xTofLab from '../../../core/examples/vl53l1x-tof-lab/system.yaml?raw';
 import systemIli9341TftLab from '../../../core/examples/ili9341-tft-lab/system.yaml?raw';
 import systemEpaperTricolorLab from '../../../core/examples/epaper-tricolor-lab/system.yaml?raw';
 import systemEsp32EpaperLab from '../../../core/examples/esp32-epaper-lab/system.yaml?raw';
@@ -55,6 +56,7 @@ import sourceNrf52840Proximity from '../../../core/crates/firmware-nrf52840-prox
 import sourceNeo6mGps from '../../../core/examples/neo6m-gps-lab/src/main.rs?raw';
 import sourceQuectelBg770a from '../../../core/examples/quectel-bg770a-lab/src/main.rs?raw';
 import sourceNtcThermistor from '../../../core/examples/ntc-thermistor-lab/src/main.rs?raw';
+import sourceVl53l1x from '../../../core/examples/vl53l1x-tof-lab/src/main.rs?raw';
 import sourceIli9341Tft from '../../../core/examples/ili9341-tft-lab/src/main.rs?raw';
 import sourceEpaperTricolor from '../../../core/examples/epaper-tricolor-lab/src/main.rs?raw';
 import sourceEsp32Epaper from '../../../core/examples/esp32-epaper-lab/src/main.rs?raw';
@@ -429,6 +431,21 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     sourceCode: sourceMpu6050,
     sourceFilename: 'mpu6050-sensor-lab/src/main.rs',
     kind: 'lab',
+  },
+  {
+    boardId: 'vl53l1x-tof-lab',
+    chipId: 'stm32f103',
+    name: 'VL53L1X ToF',
+    description: 'STM32F103 + VL53L1X laser time-of-flight distance sensor over simulated I²C. Reads range in mm and trips a NEAR/FAR proximity flag.',
+    arch: 'ARM Cortex-M3',
+    chipYaml: chipStm32f103,
+    systemYaml: systemVl53l1xTofLab,
+    demoFirmwarePath: `${BASE}wasm/demo-vl53l1x-tof-lab.elf`,
+    mcuComponentType: 'stm32-dev',
+    sourceCode: sourceVl53l1x,
+    sourceFilename: 'vl53l1x-tof-lab/src/main.rs',
+    kind: 'lab',
+    runHint: 'Click Run — firmware polls the VL53L1X over I²C and prints the range; drag Distance (mm) to cross the 300 mm proximity trip point.',
   },
   {
     boardId: 'adxl345-sensor-lab',

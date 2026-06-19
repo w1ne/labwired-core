@@ -8,7 +8,7 @@ import type { PaletteCategory } from './PaletteDrawer';
 
 // Mirror of App.tsx's PALETTE_CATEGORY so icon lookup uses the same category for fallbacks.
 export const COMPONENT_CATEGORIES: Record<string, PaletteCategory> = {
-  adxl345: 'i2c', bme280: 'i2c', mpu6050: 'i2c', 'oled-ssd1306': 'i2c', lcd1602: 'i2c',
+  adxl345: 'i2c', bme280: 'i2c', mpu6050: 'i2c', vl53l1x: 'i2c', 'oled-ssd1306': 'i2c', lcd1602: 'i2c',
   ili9341: 'spi', max31855: 'spi',
   'neo6m-gps': 'uart',
   'bg770a-cellular': 'uart',

@@ -453,6 +453,7 @@ const ICONS: Record<string, () => React.JSX.Element> = {
   ldr: LdrIcon,
   adxl345: ImuIcon,
   mpu6050: ImuIcon,
+  vl53l1x: UltrasonicIcon,
   bme280: BmeIcon,
   max31855: ThermocoupleIcon,
   'neo6m-gps': GpsIcon,
