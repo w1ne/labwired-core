@@ -191,6 +191,7 @@ mod tests {
                 base_address: base,
                 size: None,
                 irq,
+                clock: None,
                 config: HashMap::new(),
             };
             assert!(
@@ -228,6 +229,7 @@ mod tests {
                 base_address: base,
                 size: None,
                 irq,
+                clock: None,
                 config: HashMap::new(),
             };
             let dev = crate::peripherals::esp32s3::factory::try_build(ty, &cfg)

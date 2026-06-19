@@ -148,6 +148,7 @@ mod tests {
             base_address: 0x6000_0000,
             size: None,
             irq: None,
+            clock: None,
             config: HashMap::new(),
         }
     }

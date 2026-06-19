@@ -204,11 +204,21 @@ fn measure_chip(yaml: &str, svd: &str) -> Option<(usize, usize, usize, usize)> {
         Arch::Arm => {
             let (cpu, _nvic) = system::cortex_m::configure_cortex_m(&mut bus);
             let mut m = Machine::new(cpu, bus);
+            // Measure *modeling*, not the current runtime clock state. Out of
+            // reset, RCC-clock-gated peripherals (STM32F1/L4) read back 0 and
+            // ignore writes — silicon-accurate, but it makes a gated yet fully
+            // modeled register look unresponsive to this probe. Bypass gating so
+            // the count reflects whether the register is modeled, independent of
+            // whether firmware happens to have clocked it. (Pre-setting the RCC
+            // enable bits wouldn't work: the probe writes 0 to every register,
+            // including the RCC enable registers, re-gating later peripherals.)
+            m.bus.set_clock_gating_bypass(true);
             probe_all(&mut m.bus, &regs)
         }
         Arch::RiscV => {
             let cpu = system::riscv::configure_riscv(&mut bus);
             let mut m = Machine::new(cpu, bus);
+            m.bus.set_clock_gating_bypass(true);
             probe_all(&mut m.bus, &regs)
         }
         Arch::Xtensa => {
@@ -231,6 +241,7 @@ fn measure_chip(yaml: &str, svd: &str) -> Option<(usize, usize, usize, usize)> {
                 _ => system::xtensa::configure_xtensa(&mut bus),
             };
             let mut m = Machine::new(cpu, bus);
+            m.bus.set_clock_gating_bypass(true);
             probe_all(&mut m.bus, &regs)
         }
         Arch::Unknown => (0, 0, 0),

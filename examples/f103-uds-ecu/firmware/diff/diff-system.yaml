@@ -1,0 +1,7 @@
+# LabWired - F103 bxCAN UDS LOOPBACK differential system.
+# NO external tester: the firmware self-injects on a single bxCAN node in
+# internal loopback, so it needs no second CAN node.
+name: "f103-uds-diff"
+chip: "/tmp/lw-deploy/core/configs/chips/stm32f103.yaml"
+external_devices: []
+board_io: []

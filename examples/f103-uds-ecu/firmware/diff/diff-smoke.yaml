@@ -1,0 +1,12 @@
+schema_version: "1.0"
+inputs:
+  system: "/tmp/lw-deploy/core/examples/f103-uds-ecu/firmware/diff/diff-system.yaml"
+  firmware: "/tmp/lw-deploy/core/examples/f103-uds-ecu/firmware/diff/build/f103_uds_diff.elf"
+limits:
+  max_steps: 4000000
+assertions:
+  - uart_contains: "F103-UDS-DIFF"
+  - uart_contains: "LOOPBACK_READY"
+  - uart_contains: "UDS_SEED_SERVED"
+  - uart_contains: "DIFF_RESP="
+  - uart_contains: "DIFF_DONE"

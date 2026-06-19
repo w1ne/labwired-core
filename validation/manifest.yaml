@@ -75,6 +75,7 @@ boards:
       last_capture: 2026-06-17
       probe: "ST-LINK V3 (J13)"
       result: "class 65/65; GPIO mmio 8/8; GPIO parity 48/48 — 0 divergence (dapdirect AP1 recipe)"
+    drift_ack: 2026-06-19   # merged feat/bxcan-bus-filter (CAN + RCC clock-gating + bus-routing models changed 2026-06-19); re-capture pending, no board connected
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -123,6 +124,7 @@ boards:
       last_capture: 2026-06-17
       probe: "ST-LINK V2 J36 (NUCLEO-L476RG onboard) — mass-erased to clean reset state"
       result: "l476_mmio_diff 15/15 + parity 104/104, 0 divergence vs live silicon (L476_STRICT)"
+    drift_ack: 2026-06-19   # merged feat/bxcan-bus-filter (CAN + RCC clock-gating + bus-routing models changed 2026-06-19); re-capture pending, no board connected
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -149,6 +151,7 @@ boards:
       last_capture: 2026-06-17
       probe: "ST-LINK V2 J28 (NUCLEO-L073RZ, IDCODE 0x2008_6447)"
       result: "l0_mmio_diff 20/20, 0 divergence (L073_STRICT) — incl. the TIM2-16-bit fix"
+    drift_ack: 2026-06-19   # merged feat/bxcan-bus-filter (CAN + RCC clock-gating + bus-routing models changed 2026-06-19); re-capture pending, no board connected
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -171,6 +174,7 @@ boards:
       last_capture: 2026-06-17
       probe: "ST-LINK V2 J43 (genuine STM32F103, hil board stm32f103-bluepill)"
       result: "mmio diff 102/102, 0 divergence (F103_STRICT). Caught + fixed a real model bug: classic SPI CR1 was masking CRCNEXT bit 12 (0xEFFF) — genuine silicon keeps it writable (0xFFFF), spi.rs corrected."
+    drift_ack: 2026-06-19   # merged feat/bxcan-bus-filter (CAN + RCC clock-gating + bus-routing models changed 2026-06-19); re-capture pending, no board connected
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/afio.rs
@@ -199,7 +203,7 @@ boards:
       last_capture: 2026-05-11
       probe: "ST-LINK SWD (NUCLEO-F407, IDCODE 0x1001_6413)"
       result: "smoke + I²C survival UART traces (now stale relative to June model rewrites)"
-    drift_ack: 2026-06-17   # i2c/uart/gpio/timer/dma + classic-SPI CR1 fix through 06-17; re-capture REQUIRED (board not connected)
+    drift_ack: 2026-06-19   # merged feat/bxcan-bus-filter (CAN + RCC clock-gating + bus-routing models changed 2026-06-19); re-capture pending, no board connected
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -223,6 +227,7 @@ boards:
       last_capture: 2026-06-17
       probe: "USB-JTAG built-in (MAC 9C:13:9E:F4:40:C0, openocd-esp32, Tensilica tap 0x120034e5)"
       result: "reset-state oracle: SYSTIMER CONF 0x46000000 + I2C0 timing block (TO/FIFO_CONF/SCL holds/FILTER_CFG/CLK_CONF) 9/9 match live silicon"
+    drift_ack: 2026-06-19   # merged feat/bxcan-bus-filter (CAN + RCC clock-gating + bus-routing models changed 2026-06-19); re-capture pending, no board connected
     models:
       - crates/core/src/peripherals/esp32s3
       - crates/core/src/peripherals/esp_xtensa_common

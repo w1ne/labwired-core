@@ -38,6 +38,7 @@ fn test_real_world_iot_chain() {
         dev: Box::new(CanController::new(tx_can_ctrl, rx_can_ctrl)),
         ticks_remaining: 0,
         generation: 0,
+        clock_gate: None,
     });
     world.add_machine(
         "controller".to_string(),
@@ -54,6 +55,7 @@ fn test_real_world_iot_chain() {
         dev: Box::new(CanController::new(tx_can_act, rx_can_act)),
         ticks_remaining: 0,
         generation: 0,
+        clock_gate: None,
     });
     bus2.peripherals.push(labwired_core::bus::PeripheralEntry {
         name: "radio_act".to_string(),
@@ -63,6 +65,7 @@ fn test_real_world_iot_chain() {
         dev: Box::new(RadioController::new(tx_radio_act, rx_radio_act)),
         ticks_remaining: 0,
         generation: 0,
+        clock_gate: None,
     });
     world.add_machine(
         "actuator".to_string(),
@@ -79,6 +82,7 @@ fn test_real_world_iot_chain() {
         dev: Box::new(RadioController::new(tx_radio_mon, rx_radio_mon)),
         ticks_remaining: 0,
         generation: 0,
+        clock_gate: None,
     });
     world.add_machine(
         "monitor".to_string(),
