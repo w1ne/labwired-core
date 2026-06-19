@@ -241,3 +241,42 @@ jobs:
           # "Invalid commit message, it must be a valid UTF-8 string" — which
           # fails the deploy AFTER the files have already uploaded.
           command: pages deploy packages/playground/dist --project-name=labwired-playground --branch=main --commit-dirty=true --commit-message="main@${{ github.sha }}"
+
+  # Loud alert when a main deploy fails. The default GitHub failure email is
+  # easy to miss — and a failed deploy means prod silently serves a STALE build
+  # (PR #355's broken core pin went unnoticed for a day). This opens a tracking
+  # issue (or comments on the existing open one) so the failure is impossible to
+  # overlook and carries the run link + the usual root cause.
+  notify-on-failure:
+    needs: build-and-deploy
+    if: failure()
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Open/update deploy-failure issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = '🚨 Playground Pages deploy failed on main';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              `The **Deploy playground to Pages** workflow failed on \`main\`.`,
+              ``,
+              `- Commit: \`${context.sha}\``,
+              `- Run: ${runUrl}`,
+              ``,
+              `⚠️ Prod is now serving a **stale build** until this is fixed.`,
+              ``,
+              `Most common cause: the \`core\` submodule pin doesn't contain example/config files the playground imports (check the build log for an unresolved \`?raw\` import). See the build/import error in the run above.`,
+            ].join('\n');
+            const { owner, repo } = context.repo;
+            const open = await github.rest.issues.listForRepo({ owner, repo, state: 'open', per_page: 100 });
+            const hit = open.data.find((i) => i.title === title && !i.pull_request);
+            if (hit) {
+              await github.rest.issues.createComment({ owner, repo, issue_number: hit.number, body });
+              core.notice(`Commented on existing deploy-failure issue #${hit.number}`);
+            } else {
+              const created = await github.rest.issues.create({ owner, repo, title, body });
+              core.notice(`Opened deploy-failure issue #${created.data.number}`);
+            }

@@ -1,24 +1,21 @@
-# Run playground, board-config, and mcp tests on PRs and pushes that touch
-# the relevant packages.  No secrets or deploy steps — this is a pure test gate.
+# Run playground, board-config, and mcp tests on every PR + push to main.
+# No secrets or deploy steps — this is a pure test gate.
+#
+# DELIBERATELY NOT path-filtered. The "Playground tests" job is a REQUIRED
+# status check on main, and it must catch a `core` submodule pin bump that
+# drops example/config files the playground imports (that exact gap let PR #355
+# ship a pin whose core lacked `f103-uds-ecu`, breaking the Pages build/deploy
+# for a day). A pin bump only changes the `core` gitlink — it does NOT touch
+# `packages/playground/**`, so a path filter would skip this gate on the one
+# kind of PR that needs it most. A required check that never runs also blocks
+# merges forever. Both problems vanish by always running. The jobs are fast.
 
 name: Playground CI
 
 on:
   pull_request:
-    paths:
-      - "packages/playground/**"
-      - "packages/ui/**"
-      - "packages/board-config/**"
-      - "packages/mcp/**"
-      - ".github/workflows/playground-ci.yml"
   push:
     branches: ["main"]
-    paths:
-      - "packages/playground/**"
-      - "packages/ui/**"
-      - "packages/board-config/**"
-      - "packages/mcp/**"
-      - ".github/workflows/playground-ci.yml"
 
 permissions:
   contents: read
