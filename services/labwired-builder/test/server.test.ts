@@ -60,6 +60,27 @@ describe('server', () => {
     expect(r.status).toBe(404);
   });
 
+  it('returns 401 without secret header on POST /run-build', async () => {
+    const r = await fetch(`${base}/run-build`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ firmware_base64: 'AA==', system_yaml: 'x', test_yaml: 'y' }),
+    });
+    expect(r.status).toBe(401);
+  });
+
+  it('routes POST /run-build and validates input (400 with ok:false on missing fields, no toolchain needed)', async () => {
+    const r = await fetch(`${base}/run-build`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-builder-secret': SECRET },
+      body: JSON.stringify({ system_yaml: 'x', test_yaml: 'y' }),
+    });
+    expect(r.status).toBe(400);
+    const body = (await r.json()) as { ok: boolean; error: string };
+    expect(body.ok).toBe(false);
+    expect(body.error).toMatch(/firmware_base64/i);
+  });
+
   it('routes POST /compile and validates input (200 with ok:false, no toolchain needed)', async () => {
     const r = await fetch(`${base}/compile`, {
       method: 'POST',
