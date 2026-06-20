@@ -1,0 +1,36 @@
+# ESP32-C3 thermal-fingerprint AS A TRUE IO-LINK DEVICE — FAULT scenario.
+#
+# Same firmware, same IO-Link wiring; only the thermal scene differs (cooling
+# collapses). The firmware first behaves NORMAL, then the fingerprint detects the
+# runaway from the frames alone, publishes the fault verdict as IO-Link process
+# data, and raises an IO-Link TEMPERATURE diagnostic event (iolink_event_trigger
+# → operate-status EVENT bit). The native MASTER must read the fault-verdict PD
+# AND observe the event.
+#
+# NB: simple_regex supports only `.`, `*`, `^`, `$` — assertions are literal
+# substrings.
+schema_version: "1.0"
+inputs:
+  system: "./system-iolink-fault.yaml"
+  firmware: "./firmware/thermal_fingerprint.elf"
+limits:
+  max_steps: 50000000
+assertions:
+  # Device-side: boot + sensor up + IO-Link stack reaches OPERATE, and the run
+  # STARTS normal (proves it is not pre-tripped).
+  - uart_contains: "TFS BOOT"
+  - uart_contains: "MLX90640 READY"
+  - uart_contains: "STATE=04 OPERATE"
+  # MASTER side: the master received cyclic process data over IO-Link...
+  - uart_contains: "MASTER PD="
+  # ...read the NORMAL verdict first (STABLE, fault=NONE) — proving the link is
+  # not pre-tripped; the master decoded a healthy verdict before the runaway.
+  # (Health is 99/100 in the single pre-fault STABLE frame; the NORMAL test pins
+  # the full health=100 verdict — here we just require STABLE/NONE was read.)
+  - uart_contains: "MASTER VERDICT state=STABLE health=99 fault=NONE"
+  # ...then read the FAULT verdict (state=FAULT, health collapses, cooling fault).
+  - uart_contains: "MASTER VERDICT state=FAULT health=0 fault=COOLING_FAILURE"
+  - uart_contains: "MASTER VERDICT state=FAULT health=0 fault=OVERTEMP"
+  # MASTER side: the device raised an IO-Link TEMPERATURE diagnostic event and
+  # the master observed it via the operate-status EVENT bit.
+  - uart_contains: "MASTER EVENT"

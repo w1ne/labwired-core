@@ -1,0 +1,52 @@
+# LabWired - ESP32-C3 MLX90640 thermal-fingerprint AS A TRUE IO-LINK DEVICE
+#                                                              (NORMAL scenario)
+#
+# Same C3 + MLX90640 thermal stack as system.yaml, but the firmware now also
+# runs the iolinki IO-Link device stack on UART1 and publishes its 9-byte
+# thermal-verdict frame as IO-Link PROCESS DATA. A native IO-Link MASTER peer is
+# attached on UART1; it drives the wake-up / startup / OPERATE handshake and
+# cyclically reads the device's process data, emitting a `MASTER PD=<hex>` line
+# (and `MASTER EVENT=<sev>` when the device's operate-status EVENT bit sets) into
+# the captured UART log so a test can assert what the MASTER received.
+#
+#   - UART0 (0x60000000): debug console — the device's human verdict lines.
+#   - UART1 (0x60010000): the IO-Link C/Q wire — device DLL <-> IO-Link master.
+#
+# NORMAL scenario: the fan-cooled hotspot settles to a bounded plateau and never
+# faults. The master must read PD decoding to state=STABLE / high health /
+# fault=NONE, and must NOT raise a temperature event.
+name: "esp32c3-mlx90640-thermal-iolink-normal"
+chip: "../../configs/chips/esp32c3.yaml"
+
+external_devices:
+  - id: "thermal_cam"
+    type: "mlx90640"
+    connection: "i2c0"
+    config:
+      i2c_address: 0x33
+      ambient_c: 25.0
+      hot_row: 12
+      hot_col: 16
+      hot_radius: 1
+      hot_target_c: 78.0
+      load: 1.0
+      tau_s: 4.0
+      cooling_efficiency: 0.6
+      # cooling_fault_at_s omitted → bounded ~49 °C plateau, never faults.
+      frame_period_s: 4.0
+
+  # Native IO-Link master peer driving the device firmware over UART1 (the
+  # IO-Link C/Q line). pd_in_len=9 matches the firmware's 9-byte verdict frame.
+  - id: "iolink_master"
+    type: "iolink-master"
+    connection: "uart1"
+    config:
+      pd_in_len: 9
+      m_seq_type: 1
+      com: "COM2"
+      # The C3 device firmware is built -O2 and processes each IO-Link frame in
+      # few instructions, so a small inter-frame gap is safe and lets many
+      # cyclic verdict reads fit the runner's step budget.
+      frame_gap_ticks: 30000
+
+board_io: []

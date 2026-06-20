@@ -1,0 +1,43 @@
+# LabWired - ESP32-C3 MLX90640 thermal-fingerprint AS A TRUE IO-LINK DEVICE
+#                                                              (FAULT scenario)
+#
+# Identical wiring to system-iolink.yaml, but the cooling collapses (the scene's
+# `cooling_fault_at_s`), so the hotspot first settles NORMAL, then runs away. The
+# firmware's fingerprint detects COOLING_FAILURE then OVERTEMP purely from the
+# decoded frames, publishes the fault verdict as IO-Link process data, and
+# raises an IO-Link TEMPERATURE diagnostic event (iolink_event_trigger). The
+# native master must read the fault-verdict PD (state=FAULT) AND observe the
+# operate-status EVENT bit → `MASTER EVENT=...`.
+#
+#   - UART0 (0x60000000): debug console — the device's human verdict lines.
+#   - UART1 (0x60010000): the IO-Link C/Q wire — device DLL <-> IO-Link master.
+name: "esp32c3-mlx90640-thermal-iolink-fault"
+chip: "../../configs/chips/esp32c3.yaml"
+
+external_devices:
+  - id: "thermal_cam"
+    type: "mlx90640"
+    connection: "i2c0"
+    config:
+      i2c_address: 0x33
+      ambient_c: 25.0
+      hot_row: 12
+      hot_col: 16
+      hot_radius: 1
+      hot_target_c: 78.0
+      load: 1.0
+      tau_s: 4.0
+      cooling_efficiency: 0.6
+      cooling_fault_at_s: 18.0 # at t=18 s cooling collapses → hotspot climbs
+      frame_period_s: 4.0
+
+  - id: "iolink_master"
+    type: "iolink-master"
+    connection: "uart1"
+    config:
+      pd_in_len: 9
+      m_seq_type: 1
+      com: "COM2"
+      frame_gap_ticks: 30000
+
+board_io: []
