@@ -569,6 +569,12 @@ impl EnvTestScript {
         if self.limits.max_steps == 0 {
             anyhow::bail!("Limit 'max_steps' must be greater than zero");
         }
+        if self.assertions.is_empty() {
+            anyhow::bail!(
+                "Env test script must contain at least one assertion; \
+                 an empty assertions list would always pass with zero checks"
+            );
+        }
         Ok(())
     }
 }
@@ -1070,6 +1076,28 @@ limits:
         assert!(
             matches!(loaded, LoadedTestScript::V1_0(_)),
             "expected V1_0 variant"
+        );
+    }
+
+    #[test]
+    fn env_script_requires_at_least_one_assertion() {
+        // An env script with no assertions must be rejected at validation time;
+        // accepting it would cause the runner to pass with zero checks performed.
+        let script: EnvTestScript = serde_yaml::from_str(
+            r#"
+schema_version: "1.0"
+inputs:
+  env: "path/to/env.yaml"
+limits:
+  max_steps: 10000
+assertions: []
+"#,
+        )
+        .unwrap();
+        let err = script.validate().unwrap_err();
+        assert!(
+            err.to_string().contains("at least one assertion"),
+            "expected 'at least one assertion' in error, got: {err}"
         );
     }
 }

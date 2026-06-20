@@ -22,19 +22,32 @@ cargo run -q -p labwired-cli -- test \
 
 ## Two-node headless gate
 
-`twonode-smoke.yaml` proves the multi-node path end-to-end: two virtual STM32H563
-ECU nodes are wired to a shared virtual CAN bus and each runs the same pre-built
-`h563_uds_ecu.elf` firmware. Both nodes independently receive the UDS
-`ReadDataByIdentifier 0xF190` request injected by their `can-diagnostic-tester`,
-respond over FDCAN, and write the result marker `0x62F190A5` to `0x20010000`.
-The `labwired test` runner asserts both markers after 200 000 simulation steps.
+`twonode-coexistence-smoke.yaml` exercises the **multi-node headless test runner
+and per-node `memory_value` assertions**. It proves both ECUs **boot and respond
+to their own injector concurrently on a shared virtual CAN bus (co-existence)**.
+
+Both nodes run the same `h563_uds_ecu.elf` firmware. Each node receives a UDS
+`ReadDataByIdentifier 0xF190` request from its own `can-diagnostic-tester`,
+responds over FDCAN, and writes the result marker `0x62F190A5` to `0x20010000`.
+The runner asserts both markers after 200 000 simulation steps.
+
+**This does NOT prove cross-node A→B delivery.** Each node answers its own local
+injector; neither node depends on the other, so the assertions would pass even if
+the `can_bus` interconnect were removed. For the authoritative cross-node delivery
+proof see `crates/core/tests/fdcan_firmware_crossing.rs`, which uses a bare,
+non-transmitting observer FDCAN that can only see `0x7E8` if the frame crossed the
+bus from the ECU.
+
+A true tester↔ECU cross-node gate (a real udslib tester firmware driving requests
+over the bus and asserting the ECU's response) is Sub-project B, not yet
+implemented here.
 
 ```bash
 cargo run -q -p labwired-cli -- test \
-  --script examples/h563-uds-ecu/twonode-smoke.yaml \
+  --script examples/h563-uds-ecu/twonode-coexistence-smoke.yaml \
   --output-dir out/twonode \
   --no-uart-stdout
 ```
 
-Exit 0 means both `ecu_a` and `ecu_b` reached the marker — the CI-runnable
-artifact for Sub-project B.
+Exit 0 means both `ecu_a` and `ecu_b` reached the marker — confirming the
+multi-node runner and co-existence on a shared bus.

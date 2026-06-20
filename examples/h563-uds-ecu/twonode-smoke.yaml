@@ -1,8 +1,0 @@
-schema_version: "1.0"
-inputs:
-  env: "./twonode-env.yaml"
-limits:
-  max_steps: 200000
-assertions:
-  - memory_value: { node: ecu_a, address: 0x20010000, expected_value: 0x62F190A5, size: 32 }
-  - memory_value: { node: ecu_b, address: 0x20010000, expected_value: 0x62F190A5, size: 32 }
