@@ -317,6 +317,11 @@
           "name": "com",
           "ty": "str",
           "doc": "Communication speed: \"COM1\" (4.8 kbaud), \"COM2\" (38.4 kbaud, default), or \"COM3\" (230.4 kbaud)."
+        },
+        {
+          "name": "frame_gap_ticks",
+          "ty": "int",
+          "doc": "Inter-frame gap in UART ticks (default 6000). A faster -O2 device can use a small gap so many cyclic reads fit the step budget."
         }
       ],
       "labs": [

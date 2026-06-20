@@ -345,7 +345,32 @@ impl SystemBus {
     /// disable instruction batching when this returns true (correctness > speed).
     /// New per-tick GPIO-timing devices should extend this predicate.
     pub fn requires_cycle_accurate(&self) -> bool {
-        !self.hcsr04.is_empty()
+        !self.hcsr04.is_empty() || self.has_iolink_master()
+    }
+
+    /// True when an IO-Link master peer is attached to any UART. The master is
+    /// paced one byte per UART tick and runs a deterministic, tick-counted
+    /// startup schedule (wake-up → IDLE → OPERATE → cyclic) with a large
+    /// inter-frame gap. Under instruction batching the UART would tick only once
+    /// per ~10k-instruction batch, stretching the handshake to hundreds of
+    /// millions of steps; ticking per instruction keeps it well within the
+    /// runner's step budget. Cheap: called once at loop setup.
+    fn has_iolink_master(&self) -> bool {
+        use crate::peripherals::components::IolinkMaster;
+        for p in &self.peripherals {
+            let Some(any) = p.dev.as_any() else { continue };
+            let Some(uart) = any.downcast_ref::<Uart>() else {
+                continue;
+            };
+            for stream in &uart.attached_streams {
+                if let Some(sa) = stream.as_any() {
+                    if sa.downcast_ref::<IolinkMaster>().is_some() {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
     }
 
     /// Service all HC-SR04 sensors for one tick: compute each sensor's ECHO
@@ -795,6 +820,7 @@ impl SystemBus {
     ///
     /// When `echo_stdout` is false, UART writes will no longer be printed to stdout.
     pub fn attach_uart_tx_sink(&mut self, sink: Arc<Mutex<Vec<u8>>>, echo_stdout: bool) {
+        use crate::peripherals::components::IolinkMaster;
         use crate::peripherals::esp32::uart::Esp32Uart;
         for p in &mut self.peripherals {
             let Some(any) = p.dev.as_any_mut() else {
@@ -802,12 +828,55 @@ impl SystemBus {
             };
             // STM32-layout generic UART.
             if let Some(uart) = any.downcast_mut::<Uart>() {
-                uart.set_sink(Some(sink.clone()), echo_stdout);
+                // UARTs carrying an IO-Link master are the binary IO-Link C/Q
+                // wire, not a text console: their raw bytes must neither be
+                // echoed to stdout nor captured into the assertion buffer (they
+                // would pollute the console log and could collide with assertion
+                // substrings). A freshly built `Uart` defaults to
+                // `echo_stdout = true`, so we cannot simply skip it — we must
+                // explicitly clear the sink AND disable the echo. The master's
+                // own decoded records reach the capture sink via
+                // `attach_iolink_master_log_sink`.
+                let is_iolink_wire = uart.attached_streams.iter().any(|s| {
+                    s.as_any()
+                        .map(|a| a.is::<IolinkMaster>())
+                        .unwrap_or(false)
+                });
+                if is_iolink_wire {
+                    uart.set_sink(None, false);
+                } else {
+                    uart.set_sink(Some(sink.clone()), echo_stdout);
+                }
                 continue;
             }
             // Real ESP32-classic UART (echo is fixed at construction time).
             if let Some(uart) = any.downcast_mut::<Esp32Uart>() {
                 uart.set_sink(Some(sink.clone()));
+            }
+        }
+    }
+
+    /// Wire a capture sink into any attached IO-Link master so it records what
+    /// it received over IO-Link (`MASTER PD=`, `MASTER VERDICT`, `MASTER EVENT`)
+    /// into the given buffer. Pass the same `Arc<Mutex<Vec<u8>>>` used for the
+    /// UART-TX capture sink so `uart_contains` assertions can observe the
+    /// MASTER side (not just the device console). No-op when no IO-Link master
+    /// is attached.
+    pub fn attach_iolink_master_log_sink(&mut self, sink: Arc<Mutex<Vec<u8>>>) {
+        use crate::peripherals::components::IolinkMaster;
+        for p in &mut self.peripherals {
+            let Some(any) = p.dev.as_any_mut() else {
+                continue;
+            };
+            let Some(uart) = any.downcast_mut::<Uart>() else {
+                continue;
+            };
+            for stream in &mut uart.attached_streams {
+                if let Some(sa) = stream.as_any_mut() {
+                    if let Some(master) = sa.downcast_mut::<IolinkMaster>() {
+                        master.set_log_sink(sink.clone());
+                    }
+                }
             }
         }
     }

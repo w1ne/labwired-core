@@ -381,6 +381,11 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
 
     let uart_tx = Arc::new(Mutex::new(Vec::new()));
     bus.attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
+    // Let any attached IO-Link master record what it received over IO-Link into
+    // the same captured buffer, so `uart_contains` can assert on the MASTER
+    // side (MASTER PD= / MASTER VERDICT / MASTER EVENT), not just the device
+    // console. No-op when no IO-Link master is attached.
+    bus.attach_iolink_master_log_sink(uart_tx.clone());
 
     let program = match labwired_loader::load_elf(&firmware_path) {
         Ok(program) => program,

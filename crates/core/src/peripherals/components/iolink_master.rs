@@ -7,6 +7,7 @@
 use crate::peripherals::uart::UartStreamDevice;
 use std::any::Any;
 use std::collections::VecDeque;
+use std::sync::{Arc, Mutex};
 
 /// IO-Link 6-bit checksum (CRC6). Polynomial `0x1D << 2`, initial value `0x15`.
 /// Ports `calculate_crc6` from the project's reference virtual-master crc.py.
@@ -46,6 +47,10 @@ pub(crate) struct OperateResponse {
     pub(crate) pd: Vec<u8>,
     pub(crate) pd_valid: bool,
     pub(crate) checksum_ok: bool,
+    /// Operate-status EVENT bit (0x80): the device has a diagnostic event
+    /// pending for the master to retrieve. Set by the iolinki DLL whenever
+    /// `iolink_events_pending()` is true (see iolinki `dll.c`).
+    pub(crate) event_present: bool,
 }
 
 /// Decode `[status, PD_in..., OD..., CK]` (length `1 + pd_in_len + od_len + 1`).
@@ -55,6 +60,7 @@ pub(crate) fn decode_operate(data: &[u8], pd_in_len: usize, od_len: usize) -> Op
             pd: Vec::new(),
             pd_valid: false,
             checksum_ok: false,
+            event_present: false,
         };
     }
     let status = data[0];
@@ -63,10 +69,12 @@ pub(crate) fn decode_operate(data: &[u8], pd_in_len: usize, od_len: usize) -> Op
     let ck = data[data.len() - 1];
     let checksum_ok = crc6(&data[..data.len() - 1]) == ck;
     let pd_valid = status & 0x20 != 0;
+    let event_present = status & 0x80 != 0;
     OperateResponse {
         pd,
         pd_valid,
         checksum_ok,
+        event_present,
     }
 }
 
@@ -130,11 +138,14 @@ struct PendingXfer {
 /// Max trace records retained (oldest dropped).
 const TRACE_CAP: usize = 256;
 
-/// Ticks the master waits (one `poll` per UART tick) between frames. The
-/// simulated device executes far slower than the UART advances, so frames are
-/// paced generously to guarantee the device has fully processed (and replied
-/// to) one frame before the next arrives — this is what keeps the device's
-/// byte framing aligned. Tunable; sized for the `-O0` demo firmware.
+/// Default ticks the master waits (one `poll` per UART tick) between frames.
+/// The simulated device executes far slower than the UART advances, so frames
+/// are paced generously to guarantee the device has fully processed (and
+/// replied to) one frame before the next arrives — this is what keeps the
+/// device's byte framing aligned. Sized for the `-O0` al2205 demo firmware;
+/// overridable per device via the `frame_gap_ticks` config (a faster `-O2`
+/// device, e.g. the C3 thermal firmware, can run a much smaller gap so many
+/// cyclic reads fit the step budget).
 const FRAME_GAP_TICKS: u32 = 6000;
 
 /// Number of IDLE frames sent before the OPERATE transition. The device needs
@@ -203,10 +214,36 @@ pub struct IolinkMaster {
     /// `iolinki-master` stack under the `iolink-native` feature).
     #[serde(skip)]
     backend: IolinkMasterBackend,
+    /// Optional capture sink the master writes a human-readable record of what
+    /// it received into: `MASTER PD=<hex>`, `MASTER VERDICT ...` (decoded
+    /// thermal-fingerprint verdict for the 9-byte PD schema), and `MASTER EVENT
+    /// ...` when the device's operate-status EVENT bit sets. Wired to the same
+    /// captured UART-TX buffer the test runner reads, so a test can assert on
+    /// what the MASTER observed over IO-Link (not just the device console). When
+    /// `None`, the master is silent (UI/default path unchanged).
+    #[serde(skip)]
+    log_sink: Option<Arc<Mutex<Vec<u8>>>>,
+    /// Whether the previous decoded operate frame carried the EVENT bit, so a
+    /// `MASTER EVENT` line is emitted once per event rising edge (not per frame).
+    #[serde(skip)]
+    event_latched: bool,
+    /// Inter-frame gap in UART ticks (overridable per device via config).
+    frame_gap_ticks: u32,
 }
 
 impl IolinkMaster {
     pub fn new(pd_in_len: usize, od_len: usize, com: IolinkComSpeed) -> Self {
+        Self::new_with_gap(pd_in_len, od_len, com, FRAME_GAP_TICKS)
+    }
+
+    /// Like [`new`], but with an explicit inter-frame gap (UART ticks). A faster
+    /// device can use a small gap so many cyclic reads fit the step budget.
+    pub fn new_with_gap(
+        pd_in_len: usize,
+        od_len: usize,
+        com: IolinkComSpeed,
+        frame_gap_ticks: u32,
+    ) -> Self {
         #[cfg(feature = "iolink-native")]
         let backend = IolinkMasterBackend::Native(
             super::iolink_native::NativeIolinkMasterPort::new_type2_com3(pd_in_len as u8, 0),
@@ -229,9 +266,72 @@ impl IolinkMaster {
             current: None,
             frame_seq: 0,
             backend,
+            log_sink: None,
+            event_latched: false,
+            frame_gap_ticks: frame_gap_ticks.max(1),
         };
         m.queue_next_frame(); // queue the wake-up immediately
         m
+    }
+
+    /// Wire a capture sink so the master records what it received over IO-Link
+    /// (`MASTER PD=`, `MASTER VERDICT`, `MASTER EVENT`) into a test-observable
+    /// channel. Typically the same `Arc<Mutex<Vec<u8>>>` the runner attaches as
+    /// the UART-TX capture sink, so `uart_contains` assertions can key on it.
+    pub fn set_log_sink(&mut self, sink: Arc<Mutex<Vec<u8>>>) {
+        self.log_sink = Some(sink);
+    }
+
+    /// Append a line (CRLF-terminated) to the capture sink, if one is wired.
+    fn log_line(&self, line: &str) {
+        if let Some(sink) = &self.log_sink {
+            if let Ok(mut guard) = sink.lock() {
+                guard.extend_from_slice(line.as_bytes());
+                guard.extend_from_slice(b"\r\n");
+            }
+        }
+    }
+
+    /// Decode the device's 9-byte thermal-fingerprint process-data frame and
+    /// log the master-observed verdict + raw hex. The PD schema is the device's
+    /// published process data:
+    ///   [int16 temp_x100][int16 heatrate_x100][u8 state][u8 health]
+    ///   [u16 time_to_limit_s][u8 event_flags]   (big-endian on the wire)
+    /// For other PD lengths only the raw hex is logged (no thermal schema).
+    fn log_received_pd(&self, pd: &[u8]) {
+        if self.log_sink.is_none() {
+            return;
+        }
+        let mut hex = String::with_capacity(pd.len() * 2);
+        for b in pd {
+            hex.push_str(&format!("{b:02X}"));
+        }
+        self.log_line(&format!("MASTER PD={hex}"));
+
+        if pd.len() == 9 {
+            let state = match pd[4] {
+                0 => "IDLE",
+                1 => "WARMUP",
+                2 => "STABLE",
+                3 => "FAULT",
+                _ => "UNKNOWN",
+            };
+            // pd[8] high nibble carries the device's fault classification (the
+            // tfs_fault_t enum); the low nibble carries the 5-bit event flags.
+            // This is the device's published PD schema — the master decodes the
+            // verdict the device actually computed, it does not re-derive it.
+            let fault = match pd[8] >> 4 {
+                0 => "NONE",
+                1 => "OVERTEMP",
+                2 => "COOLING_FAILURE",
+                3 => "HOTSPOT_EMERGENCE",
+                _ => "UNKNOWN",
+            };
+            let health = pd[5];
+            self.log_line(&format!(
+                "MASTER VERDICT state={state} health={health} fault={fault}"
+            ));
+        }
     }
 
     /// Name of the protocol engine currently backing this master. Used by the
@@ -349,7 +449,7 @@ impl UartStreamDevice for IolinkMaster {
         }
         // Frame fully sent: wait the inter-frame gap, then queue the next one.
         self.gap_ticks = self.gap_ticks.saturating_add(1);
-        if self.gap_ticks < FRAME_GAP_TICKS {
+        if self.gap_ticks < self.frame_gap_ticks {
             return None;
         }
         self.gap_ticks = 0;
@@ -374,8 +474,22 @@ impl UartStreamDevice for IolinkMaster {
             let n = self.operate_response_len();
             let resp = decode_operate(&self.rx_accum[..n], self.pd_in_len, self.od_len);
             if resp.checksum_ok && resp.pd_valid {
+                // Log only when the verdict changed, so the capture stays
+                // readable (one line per distinct verdict the master received).
+                if resp.pd != self.latest_pd {
+                    self.log_received_pd(&resp.pd);
+                }
                 self.latest_pd = resp.pd;
                 self.pd_valid = true;
+            }
+            // The operate-status EVENT bit (set by the device DLL when it has a
+            // diagnostic event pending) rides every operate response. Surface it
+            // once per rising edge so the master records the device's event.
+            if resp.checksum_ok {
+                if resp.event_present && !self.event_latched {
+                    self.log_line("MASTER EVENT pending (device diagnostic event)");
+                }
+                self.event_latched = resp.event_present;
             }
             self.rx_accum.clear();
         }
@@ -423,6 +537,11 @@ static IOLINK_MASTER_METADATA: KitMetadata = KitMetadata {
             ty: ConfigType::Str,
             doc: "Communication speed: \"COM1\" (4.8 kbaud), \"COM2\" (38.4 kbaud, default), or \"COM3\" (230.4 kbaud).",
         },
+        ConfigKey {
+            name: "frame_gap_ticks",
+            ty: ConfigType::Int,
+            doc: "Inter-frame gap in UART ticks (default 6000). A faster -O2 device can use a small gap so many cyclic reads fit the step budget.",
+        },
     ],
     labs: &[LabRef {
         board_id: "al2205-iolink-dido",
@@ -450,8 +569,17 @@ impl PeripheralKit for IolinkMasterKit {
             "COM3" => IolinkComSpeed::Com3,
             _ => IolinkComSpeed::Com2,
         };
+        let frame_gap_ticks = ctx
+            .config_i64("frame_gap_ticks")
+            .map(|v| v.max(1) as u32)
+            .unwrap_or(FRAME_GAP_TICKS);
         let uart = ctx.uart()?;
-        uart.attach_stream(Box::new(IolinkMaster::new(pd_in_len, od_len, com)));
+        uart.attach_stream(Box::new(IolinkMaster::new_with_gap(
+            pd_in_len,
+            od_len,
+            com,
+            frame_gap_ticks,
+        )));
         Ok(())
     }
 }
@@ -613,6 +741,89 @@ mod tests {
         assert!(!m.trace_snapshot().is_empty());
         m.trace_clear();
         assert!(m.trace_snapshot().is_empty());
+    }
+
+    #[test]
+    fn decode_operate_surfaces_event_bit() {
+        // status byte with EVENT (0x80) + PD_VALID (0x20) set.
+        let mut frame = vec![0xA0u8, 0xAA, 0x00];
+        let ck = crc6(&frame);
+        frame.push(ck);
+        let resp = decode_operate(&frame, 1, 1);
+        assert!(resp.checksum_ok);
+        assert!(resp.pd_valid);
+        assert!(resp.event_present, "EVENT bit (0x80) must be decoded");
+
+        // PD_VALID only, no event.
+        let mut f2 = vec![0x20u8, 0xAA, 0x00];
+        let ck2 = crc6(&f2);
+        f2.push(ck2);
+        let r2 = decode_operate(&f2, 1, 1);
+        assert!(!r2.event_present);
+    }
+
+    #[test]
+    fn master_logs_decoded_thermal_verdict_and_event() {
+        // A 9-byte thermal-fingerprint PD frame: a FAULT/OVERTEMP verdict.
+        // [temp][temp][rate][rate][state=03][health=00][ttl][ttl][fault<<4|flags]
+        // fault=1 (OVERTEMP) in the high nibble of the last byte.
+        let pd = [0x1Cu8, 0xC5, 0x00, 0xBB, 0x03, 0x00, 0xFF, 0xFF, 0x17];
+        let mut frame = vec![0xA0u8]; // status: EVENT + PD_VALID
+        frame.extend_from_slice(&pd);
+        frame.push(0x00); // OD
+        let ck = crc6(&frame);
+        frame.push(ck);
+
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        let mut m = IolinkMaster::new(9, 1, IolinkComSpeed::Com2);
+        m.set_log_sink(sink.clone());
+        while m.link_state != IolinkLinkState::Operate {
+            drain(&mut m);
+        }
+        for b in frame {
+            m.on_tx_byte(b);
+        }
+        let log = String::from_utf8(sink.lock().unwrap().clone()).unwrap();
+        assert!(
+            log.contains("MASTER PD=1CC500BB0300FFFF17"),
+            "raw PD logged: {log}"
+        );
+        assert!(
+            log.contains("MASTER VERDICT state=FAULT health=0 fault=OVERTEMP"),
+            "decoded verdict logged: {log}"
+        );
+        assert!(log.contains("MASTER EVENT"), "event surfaced: {log}");
+    }
+
+    #[test]
+    fn frame_gap_override_paces_faster() {
+        // With a small configured gap, a full frame + the inter-frame wait
+        // completes in far fewer ticks than the 6000-tick default — proving the
+        // per-device override drives the master's pacing.
+        let mut m = IolinkMaster::new_with_gap(1, 1, IolinkComSpeed::Com2, 8);
+        let mut ticks = 0u32;
+        let mut frames = 0u32;
+        let mut prev_was_none = true;
+        for _ in 0..200 {
+            ticks += 1;
+            match m.poll(1000) {
+                Some(_) => {
+                    if prev_was_none {
+                        frames += 1;
+                    }
+                    prev_was_none = false;
+                }
+                None => prev_was_none = true,
+            }
+            if frames >= 3 {
+                break;
+            }
+        }
+        assert!(frames >= 3, "expected several frames quickly, got {frames}");
+        assert!(
+            ticks < 100,
+            "small gap should reach 3 frames in <100 ticks, took {ticks}"
+        );
     }
 
     #[test]
