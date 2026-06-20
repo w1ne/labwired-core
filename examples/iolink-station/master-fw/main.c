@@ -17,10 +17,22 @@
 #include "debug_uart.h"
 #include <stdint.h>
 
+/* RCC (STM32L4, RM0351 §6.4) — the simulator models clock-gating, so USART1
+ * (debug, APB2) and USART2 (IO-Link PHY, APB1) are unclocked out of reset and
+ * their registers read/write as no-ops until the matching enable bit is set. */
+#define RCC_BASE 0x40021000u
+#define RCC_REG(o) (*(volatile uint32_t *)(RCC_BASE + (o)))
+#define RCC_APB1ENR1 RCC_REG(0x58u)
+#define RCC_APB2ENR RCC_REG(0x60u)
+#define RCC_APB1ENR1_USART2EN (1u << 17)
+#define RCC_APB2ENR_USART1EN (1u << 14)
+
 volatile uint8_t g_master_state = 0xFFu; /* 0xFF = not yet initialized */
 volatile uint8_t g_master_pd0 = 0xFFu;
 
 int main(void) {
+    RCC_APB2ENR |= RCC_APB2ENR_USART1EN;   /* debug UART */
+    RCC_APB1ENR1 |= RCC_APB1ENR1_USART2EN; /* IO-Link C/Q PHY */
     dbg_uart_init();
 
     iolink_master_port_t port;
