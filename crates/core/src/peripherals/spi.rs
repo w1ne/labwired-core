@@ -471,6 +471,12 @@ pub struct Spi {
     /// chip config's `cr2_mask`. Ignored by the FIFO layout (its own CR2 logic).
     cr2_mask: u32,
 
+    /// Classic-SPI CR1 writable mask — a per-part delta. `None` = fully writable
+    /// (0xFFFF), the default that matches F103/L0/L476 silicon (CR1 reads back
+    /// 0xFFFF). F407 silicon does NOT latch CR1 bit 12 (CRCNEXT): writing
+    /// 0xFFFF reads back 0xEFFF, so its chip config sets `cr1_mask: 0xEFFF`.
+    cr1_mask: Option<u16>,
+
     #[serde(skip)]
     pub attached_devices: Vec<Box<dyn SpiDevice>>,
 }
@@ -528,6 +534,12 @@ impl Spi {
         self.loopback = on;
     }
 
+    /// Override the classic-SPI CR1 writable mask (default fully writable). Used
+    /// by chips like F407 whose silicon does not latch CR1 bit 12 (CRCNEXT).
+    pub fn set_cr1_mask(&mut self, mask: u16) {
+        self.cr1_mask = Some(mask);
+    }
+
     pub fn attach(&mut self, device: Box<dyn SpiDevice>) {
         self.attached_devices.push(device);
     }
@@ -541,12 +553,15 @@ impl Spi {
     fn write_stm32_reg(&mut self, offset: u64, value: u16) {
         match offset {
             0x00 => {
+                // Classic SPI CR1 is fully writable incl. CRCNEXT (bit 12) on
+                // F103/L0/L476 (silicon-confirmed, CR1 reads back 0xFFFF). F407
+                // silicon does NOT latch CRCNEXT — writing 0xFFFF reads back
+                // 0xEFFF — so its chip config sets `cr1_mask: 0xEFFF`. The FIFO
+                // variant (L4/F7/H5) has a different CR1 bit map; both store the
+                // (masked) written value verbatim.
+                let cr1_mask = self.cr1_mask.unwrap_or(0xFFFF);
                 if let SpiRegs::Stm32(r) = &mut self.regs {
-                    // Classic SPI CR1 is fully writable incl. CRCNEXT (bit 12) —
-                    // silicon-confirmed on a genuine STM32F103 SPI1 (2026-06-17,
-                    // CR1 reads back 0xFFFF). The FIFO variant (L4/F7/H5) has a
-                    // different CR1 bit map; both store the written value verbatim.
-                    r.cr1 = value;
+                    r.cr1 = value & cr1_mask;
                 }
             }
             0x04 => {

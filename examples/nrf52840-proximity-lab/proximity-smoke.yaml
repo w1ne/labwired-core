@@ -32,8 +32,8 @@ assertions:
       address: 0x20000000
       expected_value: 99
       size: 4
-  # IN_RANGE (0x20000004) latches to 1: 99 mm is inside the firmware's 150 mm
-  # threshold.
+  # IN_RANGE (0x20000004) latches to 1: 99 mm is inside the firmware's 500 mm
+  # (50 cm) threshold.
   - memory_value:
       address: 0x20000004
       expected_value: 1

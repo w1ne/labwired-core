@@ -11,6 +11,25 @@
 #include <string.h>
 #include <stdint.h>
 
+/* RCC (STM32L4, RM0351 §6.4) — enable the peripheral clocks this firmware uses
+ * before touching their registers. REQUIRED on real silicon and now in the sim
+ * (clock-gating modelled): USART1/USART2/SPI1 are unclocked out of reset, so
+ * their register writes are dropped and ISR.TXE/SR.RXNE never assert until the
+ * matching RCC enable bit is set. USART1/SPI1 are on APB2 (APB2ENR @ 0x60),
+ * USART2 is on APB1 (APB1ENR1 @ 0x58). */
+#define RCC_BASE 0x40021000u
+#define RCC_REG(o) (*(volatile uint32_t *)(RCC_BASE + (o)))
+#define RCC_APB1ENR1 RCC_REG(0x58u)
+#define RCC_APB2ENR RCC_REG(0x60u)
+#define RCC_APB1ENR1_USART2EN (1u << 17)
+#define RCC_APB2ENR_SPI1EN (1u << 12)
+#define RCC_APB2ENR_USART1EN (1u << 14)
+
+static void rcc_init(void) {
+    RCC_APB2ENR |= RCC_APB2ENR_SPI1EN | RCC_APB2ENR_USART1EN;
+    RCC_APB1ENR1 |= RCC_APB1ENR1_USART2EN;
+}
+
 /* SPI1 (stm32_fifo layout) reads the 74HC165 digital-input shift register:
  * one transfer clocks out the 8 input channels as a byte on MISO. */
 #define SPI1_BASE 0x40013000u
@@ -37,6 +56,7 @@ static uint8_t spi1_read_byte(void) {
 }
 
 int main(void) {
+    rcc_init();
     dbg_uart_init();
     dbg_puts("AL2205 BOOT\r\n");
 

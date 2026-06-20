@@ -206,6 +206,7 @@ pub mod integration_tests {
             dev: Box::new(RecordingPeripheral::new()),
             ticks_remaining: 0,
             generation: 0,
+            clock_gate: None,
         });
 
         bus.write_u8(base + 2, 0xAB).unwrap();
@@ -225,6 +226,7 @@ pub mod integration_tests {
             dev: Box::new(RecordingPeripheral::new()),
             ticks_remaining: 0,
             generation: 0,
+            clock_gate: None,
         });
 
         let value = 0xA1B2_C3D4;
@@ -272,6 +274,7 @@ pub mod integration_tests {
             }),
             ticks_remaining: 0,
             generation: 0,
+            clock_gate: None,
         });
 
         bus.write_u8(base, 0xAA).unwrap();
@@ -298,6 +301,7 @@ pub mod integration_tests {
             dev: Box::new(RecordingPeripheral::with_tick(true)),
             ticks_remaining: 0,
             generation: 0,
+            clock_gate: None,
         });
 
         let irqs = bus.tick_peripherals();
@@ -327,6 +331,7 @@ pub mod integration_tests {
             dev: Box::new(RecordingPeripheral::with_tick(true)),
             ticks_remaining: 0,
             generation: 0,
+            clock_gate: None,
         });
 
         let irqs = bus.tick_peripherals();
@@ -372,6 +377,7 @@ pub mod integration_tests {
             }),
             ticks_remaining: 0,
             generation: 0,
+            clock_gate: None,
         });
 
         // Force instruction fetch to fail with a memory violation.
@@ -412,6 +418,7 @@ pub mod integration_tests {
                     base_address: 0x4000_C000,
                     size: None,
                     irq: None,
+                    clock: None,
                     config: HashMap::new(),
                 },
                 PeripheralConfig {
@@ -420,6 +427,7 @@ pub mod integration_tests {
                     base_address: 0x5000_0000,
                     size: None,
                     irq: None,
+                    clock: None,
                     config: HashMap::new(),
                 },
             ],
@@ -515,6 +523,7 @@ pub mod integration_tests {
                     base_address: 0xE000_E010,
                     size: None,
                     irq: None,
+                    clock: None,
                     config: HashMap::new(),
                 },
                 PeripheralConfig {
@@ -523,6 +532,7 @@ pub mod integration_tests {
                     base_address: 0x4001_0800,
                     size: None,
                     irq: None,
+                    clock: None,
                     config: HashMap::new(),
                 },
             ],
@@ -582,6 +592,7 @@ pub mod integration_tests {
                 base_address: 0x4000_C000,
                 size: Some("1KB".to_string()),
                 irq: Some(37),
+                clock: None,
                 config: HashMap::new(),
             }],
         };
@@ -635,6 +646,7 @@ pub mod integration_tests {
                 base_address: 0x4001_0800,
                 size: None,
                 irq: None,
+                clock: None,
                 config: gpio_config,
             }],
         };
@@ -694,6 +706,7 @@ pub mod integration_tests {
                 base_address: 0x4000_4800,
                 size: None,
                 irq: None,
+                clock: None,
                 config: uart_config,
             }],
         };
@@ -750,6 +763,7 @@ pub mod integration_tests {
                 base_address: 0x4402_0C00,
                 size: None,
                 irq: None,
+                clock: None,
                 config: rcc_config,
             }],
         };
@@ -806,6 +820,7 @@ pub mod integration_tests {
                 base_address: 0x4002_3800,
                 size: None,
                 irq: None,
+                clock: None,
                 config: rcc_config,
             }],
         };
@@ -862,6 +877,7 @@ pub mod integration_tests {
                 base_address: 0x4001_0800,
                 size: None,
                 irq: None,
+                clock: None,
                 config: gpio_config,
             }],
         };
@@ -1300,6 +1316,7 @@ pub mod integration_tests {
             dev: Box::new(crate::peripherals::stub::StubPeripheral::new(0)),
             ticks_remaining: 0,
             generation: 0,
+            clock_gate: None,
         });
         // (Note: StubPeripheral::tick returns false. I should use a more active one or just pend manually)
 
@@ -1835,6 +1852,7 @@ pub mod integration_tests {
             dev: Box::new(Adc::new()),
             ticks_remaining: 0,
             generation: 0,
+            clock_gate: None,
         });
 
         let (cpu, _nvic) = crate::system::cortex_m::configure_cortex_m(&mut bus);
@@ -2031,6 +2049,7 @@ pub mod integration_tests {
                 base_address: 0x6001_F000,
                 size: None,
                 irq: None,
+                clock: None,
                 config: HashMap::new(),
             }],
         };

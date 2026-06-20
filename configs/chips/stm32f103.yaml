@@ -13,7 +13,10 @@ flash:
   size: "1MB"
 ram:
   base: 0x20000000
-  size: "128KB"
+  # STM32F103C8 has 20KB of SRAM (0x2000_0000..0x2000_5000). Modelling the
+  # physical size means firmware whose stack/heap runs past 0x2000_5000 faults
+  # in the sim exactly as it does on real silicon (HardFault before main()).
+  size: "20KB"
 peripherals:
   - id: "rcc"
     type: "rcc"
@@ -23,6 +26,10 @@ peripherals:
     type: "gpio"
     base_address: 0x40010800
     size: "1KB"
+    # GPIOA is clocked from RCC_APB2ENR.IOPAEN (bit 2). Unclocked out of reset:
+    # firmware that forgets to enable it has its register writes dropped on real
+    # silicon — modelled here so the sim fails the same way (RM0008 §7.3.7).
+    clock: { reg: "apb2enr", bit: 2 }
   - id: "gpiob"
     type: "gpio"
     base_address: 0x40010C00
@@ -39,6 +46,10 @@ peripherals:
     base_address: 0x40013800
     size: "1KB"
     irq: 37
+    # USART1 is clocked from RCC_APB2ENR.USART1EN (bit 14). Unclocked out of
+    # reset, so SR.TXE never asserts until firmware enables the clock — the exact
+    # real-hardware behaviour the differential test proved the sim was missing.
+    clock: { reg: "apb2enr", bit: 14 }
   - id: "uart2"
     type: "uart"
     base_address: 0x40004400
@@ -68,6 +79,8 @@ peripherals:
     type: "afio"
     base_address: 0x40010000
     size: "1KB"
+    # AFIO is clocked from RCC_APB2ENR.AFIOEN (bit 0). Unclocked out of reset.
+    clock: { reg: "apb2enr", bit: 0 }
   - id: "exti"
     type: "exti"
     base_address: 0x40010400
@@ -120,9 +133,13 @@ peripherals:
       idr_width: 8  # STM32F1 CRC_IDR is 8-bit (RM0008 §6.4.2)
   # bxCAN + USB share SRAM @ 0x4000_6000; bxCAN registers at 0x6400.
   - id: "bxcan1"
-    type: "stub"
+    type: "bxcan"
     base_address: 0x40006400
     size: "1KB"
+    # bxCAN1 is clocked from RCC_APB1ENR.CAN1EN (bit 25). Unclocked out of reset,
+    # so MSR.INAK never asserts (the chip never enters init mode) until firmware
+    # enables the clock — matching real silicon (RM0008 §7.3.8).
+    clock: { reg: "apb1enr", bit: 25 }
   - id: "usb_dev"
     type: "stub"
     base_address: 0x40005C00
