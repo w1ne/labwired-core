@@ -9,7 +9,7 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 |-------|------|----------------------|--------------|--------|
 | `nrf52840` | 🟢 silicon-verified | 2026-06-17 | 2026-06-14 | ✅ fresh |
 | `seeed-xiao-nrf52840-sense` | 🟢 silicon-verified | 2026-06-17 | 2026-06-14 | ✅ fresh |
-| `stm32h563` | 🟢 silicon-verified | 2026-06-20 | 2026-06-20 | ✅ fresh |
+| `stm32h563` | 🟢 silicon-verified | 2026-06-20 | 2026-06-21 | ⚠ drift acked 2026-06-21 (re-capture pending) |
 | `esp32c3` | 🟢 silicon-verified | 2026-06-17 | 2026-06-20 | ⚠ drift acked 2026-06-20 (re-capture pending) |
 | `nucleo-l476rg` | 🟢 silicon-verified | 2026-06-20 | 2026-06-20 | ✅ fresh |
 | `nucleo-l073rz` | 🟢 silicon-verified | 2026-06-20 | 2026-06-20 | ✅ fresh |
@@ -43,7 +43,7 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 - Silicon: **2026-06-20** on STLINK-V3 (USB 0483:374e, NUCLEO-H563ZI, dapdirect AP1 recipe) — Live re-capture after the v0.17.0 merge: h563_mmio_diff + h563_parity_diff + h563_class_diff all pass (class 65/65, GPIO mmio + parity), 0 divergence. Supersedes the 2026-06-19 drift_ack.
   - offline (CI): h563_conformance (5 tests vs frozen 2026-06-10..12 captures)
   - offline (CI): h563_mmio_diff::{h563_mmio_sim_only,h563_parity_sim_only,h563_class_sim_only}
-- Drift status: **✅ fresh**
+- Drift status: **⚠ drift acked 2026-06-21 (re-capture pending)**
 
 ## `esp32c3` — 🟢 silicon-verified
 

@@ -75,6 +75,13 @@ boards:
       last_capture: 2026-06-20
       probe: "STLINK-V3 (USB 0483:374e, NUCLEO-H563ZI, dapdirect AP1 recipe)"
       result: "Live re-capture after the v0.17.0 merge: h563_mmio_diff + h563_parity_diff + h563_class_diff all pass (class 65/65, GPIO mmio + parity), 0 divergence. Supersedes the 2026-06-19 drift_ack."
+    # FLASH model extended for UDS OTA: NSCR sector-erase + OPTSR_PRG.SWAP_BANK/
+    # OBL_LAUNCH (drained in Machine::step / batched run) + H563 sized in MiB.
+    # FLASH register offsets + reset values silicon-confirmed on the live board
+    # 2026-06-20 (ACR/OPTCR/NSSR/NSCR/OPTSR_CUR/OPTSR_PRG); the erase/swap
+    # *behavioural* live-diff (writes real flash) is not yet run — tracked for a
+    # follow-up hw-oracle capture. This ack covers the model change only.
+    drift_ack: 2026-06-21
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
