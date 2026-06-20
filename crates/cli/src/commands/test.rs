@@ -7,6 +7,173 @@
 //! `labwired test` subcommand: run the Tier-1 protocol suite.
 
 use crate::*;
+use labwired_config::{EnvTestScript, TestAssertion};
+
+/// Run a multi-node environment test described by an `EnvTestScript`.
+///
+/// Resolves `inputs.env` relative to the script file, builds a `World` from the
+/// `EnvironmentManifest`, steps all machines up to `limits.max_steps`, then
+/// evaluates `memory_value` assertions per-node.
+///
+/// # Supported assertions
+/// Only `memory_value` assertions are supported. `uart_contains` and `uart_regex`
+/// return `EXIT_CONFIG_ERROR` with the message
+/// "per-node uart_contains not yet supported in multi-node env scripts".
+///
+/// # Node binding
+/// Each `memory_value` assertion MUST carry `node: <id>`. A missing or unknown
+/// node name is `EXIT_CONFIG_ERROR`.
+///
+/// # Exit codes
+/// - `EXIT_PASS` (0): all assertions matched.
+/// - `EXIT_ASSERT_FAIL` (1): one or more assertions failed.
+/// - `EXIT_CONFIG_ERROR` (2): script/env configuration problem.
+fn run_env_test(script_path: &std::path::Path, script: EnvTestScript) -> ExitCode {
+    // Validate assertions — only memory_value is supported in env scripts.
+    for assertion in &script.assertions {
+        match assertion {
+            TestAssertion::UartContains(_) | TestAssertion::UartRegex(_) => {
+                let msg = "per-node uart_contains not yet supported in multi-node env scripts";
+                error!("{}", msg);
+                return ExitCode::from(EXIT_CONFIG_ERROR);
+            }
+            TestAssertion::ExpectedStopReason(_) => {
+                let msg =
+                    "expected_stop_reason not supported in multi-node env scripts";
+                error!("{}", msg);
+                return ExitCode::from(EXIT_CONFIG_ERROR);
+            }
+            TestAssertion::MemoryValue(mv) => {
+                if mv.memory_value.node.is_none() {
+                    let msg = format!(
+                        "memory_value assertion at address {:#x} is missing required 'node:' field in env script",
+                        mv.memory_value.address
+                    );
+                    error!("{}", msg);
+                    return ExitCode::from(EXIT_CONFIG_ERROR);
+                }
+            }
+        }
+    }
+
+    // Resolve env manifest path relative to the script file.
+    let env_path = resolve_script_path(script_path, &script.inputs.env);
+
+    let env_manifest = match labwired_config::EnvironmentManifest::from_file(&env_path) {
+        Ok(m) => m,
+        Err(e) => {
+            error!("Failed to load env manifest {:?}: {:#}", env_path, e);
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    };
+
+    let root_dir = env_path
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new("."));
+
+    let mut world = match labwired_core::world::World::from_manifest(env_manifest, root_dir) {
+        Ok(w) => w,
+        Err(e) => {
+            error!("Failed to build world from env manifest: {:#}", e);
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
+    };
+
+    // Step all machines up to max_steps.
+    let max_steps = script.limits.max_steps;
+    for _ in 0..max_steps {
+        let results = world.step_all();
+        // On any machine error, treat as a non-fatal step fault (machines may halt).
+        for (node_id, result) in &results {
+            if let Err(e) = result {
+                tracing::debug!("node '{}' step error: {:?}", node_id, e);
+            }
+        }
+    }
+
+    // Evaluate memory_value assertions.
+    let mut all_passed = true;
+    for assertion in &script.assertions {
+        let TestAssertion::MemoryValue(mv) = assertion else {
+            continue;
+        };
+        // node presence already validated above
+        let node_id = mv.memory_value.node.as_deref().unwrap();
+
+        let machine = match world.machines.get(node_id) {
+            Some(m) => m,
+            None => {
+                error!(
+                    "memory_value assertion references unknown node '{}' (not in env manifest)",
+                    node_id
+                );
+                return ExitCode::from(EXIT_CONFIG_ERROR);
+            }
+        };
+
+        // Read the value using little-endian byte assembly from MachineTrait::read_u8.
+        // `size` accepts bytes (1/2/4) or bits (8/16/32); defaults to 4 bytes (32-bit).
+        let size_field = mv.memory_value.size.unwrap_or(32);
+        let byte_count: u64 = match size_field {
+            1 | 8 => 1,
+            2 | 16 => 2,
+            4 | 32 => 4,
+            other => {
+                error!(
+                    "Unsupported memory assertion size: {} — use 1/2/4 (bytes) or 8/16/32 (bits)",
+                    other
+                );
+                return ExitCode::from(EXIT_CONFIG_ERROR);
+            }
+        };
+
+        let addr = mv.memory_value.address;
+        let mut raw: u64 = 0;
+        for i in 0..byte_count {
+            match machine.read_u8(addr + i) {
+                Ok(b) => raw |= (b as u64) << (i * 8),
+                Err(e) => {
+                    error!(
+                        "node '{}': failed to read address {:#x}+{}: {:?}",
+                        node_id, addr, i, e
+                    );
+                    all_passed = false;
+                    break;
+                }
+            }
+        }
+
+        let mask: u64 = mv.memory_value.mask.unwrap_or(match byte_count {
+            1 => 0xFF,
+            2 => 0xFFFF,
+            4 => 0xFFFFFFFF,
+            _ => u64::MAX,
+        });
+        let expected = mv.memory_value.expected_value & mask;
+        let actual = raw & mask;
+
+        if actual != expected {
+            error!(
+                "node '{}': memory assertion FAILED at {:#x} (size {}): expected {:#x}, got {:#x} (mask {:#x})",
+                node_id, addr, size_field, expected, actual, mask
+            );
+            all_passed = false;
+        } else {
+            tracing::debug!(
+                "node '{}': memory assertion PASSED at {:#x}: {:#x}",
+                node_id,
+                addr,
+                actual
+            );
+        }
+    }
+
+    if all_passed {
+        ExitCode::from(EXIT_PASS)
+    } else {
+        ExitCode::from(EXIT_ASSERT_FAIL)
+    }
+}
 
 pub(crate) fn run_test(args: TestArgs) -> ExitCode {
     // ── API key validation (Pro tier gate) ──────────────────────────────
@@ -69,6 +236,12 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
         }
     };
 
+    // ── Multi-node env dispatch (early return) ───────────────────────────
+    // Env scripts bypass the single-node firmware/system machinery entirely.
+    if let LoadedTestScript::Env(env_script) = loaded {
+        return run_env_test(&args.script, env_script);
+    }
+
     let (
         script_firmware,
         script_system,
@@ -107,6 +280,8 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                 script.assertions,
             )
         }
+        // Env variant is dispatched and returned early above; this arm is unreachable.
+        LoadedTestScript::Env(_) => unreachable!("Env scripts return early before this match"),
     };
 
     let max_steps = args.max_steps.unwrap_or(script_max_steps);

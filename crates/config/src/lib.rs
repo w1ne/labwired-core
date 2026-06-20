@@ -527,6 +527,52 @@ pub struct TestInputs {
     pub system: Option<String>,
 }
 
+/// Inputs block for multi-node environment test scripts.
+///
+/// Identifies a script as env-mode (selecting `LoadedTestScript::Env`) when the
+/// `inputs` section carries an `env:` key instead of `firmware:`.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct EnvTestInputs {
+    /// Path to the `EnvironmentManifest` YAML, resolved relative to the script file.
+    pub env: String,
+}
+
+/// Test script for multi-node environment tests (env-mode).
+///
+/// An env script drives `World::from_manifest` instead of a single `Machine`.
+/// Only `memory_value` assertions are supported in env scripts; any
+/// `uart_contains` or `uart_regex` assertion will be rejected at runtime with
+/// `EXIT_CONFIG_ERROR` ("per-node uart_contains not yet supported in multi-node
+/// env scripts").
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct EnvTestScript {
+    pub schema_version: String,
+    pub inputs: EnvTestInputs,
+    pub limits: TestLimits,
+    #[serde(default)]
+    pub assertions: Vec<TestAssertion>,
+}
+
+impl EnvTestScript {
+    pub fn validate(&self) -> Result<()> {
+        if self.schema_version != "1.0" {
+            anyhow::bail!(
+                "Unsupported schema_version '{}'. Supported versions: '1.0'",
+                self.schema_version
+            );
+        }
+        if self.inputs.env.trim().is_empty() {
+            anyhow::bail!("Input 'env' path cannot be empty");
+        }
+        if self.limits.max_steps == 0 {
+            anyhow::bail!("Limit 'max_steps' must be greater than zero");
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct TestLimits {
@@ -703,16 +749,41 @@ impl LegacyTestScriptV1 {
 pub enum LoadedTestScript {
     V1_0(TestScript),
     LegacyV1(LegacyTestScriptV1),
+    /// Multi-node environment test: drives `World::from_manifest`.
+    Env(EnvTestScript),
 }
 
 /// Load a CI test script from YAML.
 ///
 /// Supported formats:
-/// - v1.0 (frozen): `schema_version: \"1.0\"` with `inputs` + `limits` + `assertions`.
+/// - v1.0 env (new): `schema_version: "1.0"` with `inputs.env:` — multi-node world script.
+/// - v1.0 (frozen): `schema_version: "1.0"` with `inputs.firmware:` + `limits` + `assertions`.
 /// - legacy v1 (deprecated): `schema_version: 1` with `max_steps` at the top level.
+///
+/// Detection of env scripts is done by probing the raw YAML for an `inputs.env` key before
+/// attempting single-node parse. This keeps the existing single-node path byte-identical.
 pub fn load_test_script<P: AsRef<Path>>(path: P) -> Result<LoadedTestScript> {
     let contents = std::fs::read_to_string(&path)
         .with_context(|| format!("Failed to read test script at {:?}", path.as_ref()))?;
+
+    // ── Env-script detection ────────────────────────────────────────────────
+    // Probe the raw YAML for inputs.env before committing to single-node parse.
+    // This avoids polluting the single-node TestInputs struct (deny_unknown_fields).
+    let looks_like_env = serde_yaml::from_str::<serde_yaml::Value>(&contents)
+        .ok()
+        .and_then(|v| {
+            v.get("inputs")
+                .and_then(|i| i.get("env"))
+                .map(|e| e.is_string())
+        })
+        .unwrap_or(false);
+
+    if looks_like_env {
+        let env_script: EnvTestScript = serde_yaml::from_str(&contents)
+            .context("Failed to parse env Test Script YAML")?;
+        env_script.validate()?;
+        return Ok(LoadedTestScript::Env(env_script));
+    }
 
     match serde_yaml::from_str::<TestScript>(&contents) {
         Ok(script) => {
@@ -938,5 +1009,67 @@ node: tester
         let assertion: UartContainsAssertion = serde_yaml::from_str(yaml).unwrap();
         assert_eq!(assertion.node, Some("tester".to_string()));
         assert_eq!(assertion.uart_contains, "PASS");
+    }
+
+    #[test]
+    fn loads_env_test_script() {
+        let script_path = write_temp_file(
+            "env-test",
+            r#"
+schema_version: "1.0"
+inputs:
+  env: "path/to/env.yaml"
+limits:
+  max_steps: 50000
+assertions:
+  - memory_value:
+      node: node_a
+      address: 0x20010000
+      expected_value: 0xA5
+      size: 1
+  - memory_value:
+      node: node_b
+      address: 0x20010000
+      expected_value: 0xB5
+      size: 1
+"#,
+        );
+
+        let loaded = load_test_script(&script_path).unwrap();
+        match loaded {
+            LoadedTestScript::Env(script) => {
+                assert_eq!(script.inputs.env, "path/to/env.yaml");
+                assert_eq!(script.limits.max_steps, 50000);
+                assert_eq!(script.assertions.len(), 2);
+                if let TestAssertion::MemoryValue(mv) = &script.assertions[0] {
+                    assert_eq!(mv.memory_value.node, Some("node_a".to_string()));
+                    assert_eq!(mv.memory_value.address, 0x20010000u64);
+                    assert_eq!(mv.memory_value.expected_value, 0xA5);
+                } else {
+                    panic!("expected MemoryValue assertion");
+                }
+            }
+            other => panic!("expected LoadedTestScript::Env, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn env_script_does_not_steal_single_node_script() {
+        // A single-node v1.0 script must still parse as V1_0, not Env.
+        let script_path = write_temp_file(
+            "single-node",
+            r#"
+schema_version: "1.0"
+inputs:
+  firmware: "fw.elf"
+limits:
+  max_steps: 1000
+"#,
+        );
+        let loaded = load_test_script(&script_path).unwrap();
+        assert!(
+            matches!(loaded, LoadedTestScript::V1_0(_)),
+            "expected V1_0 variant"
+        );
     }
 }
