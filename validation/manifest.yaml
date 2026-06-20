@@ -110,6 +110,11 @@ boards:
       - crates/core/src/peripherals/esp32c3
       - crates/core/src/peripherals/esp_xtensa_common
       - configs/chips/esp32c3.yaml
+    # 2026-06-20: added behavioural I2C0 controller (esp32c3/i2c.rs) + external-device
+    # slave-attach. Live I2C0 reset capture this date over USB-JTAG is byte-identical to
+    # the model (CTR=0x20b, FIFO_CONF=0x408b, FIFO_ST=0, TO=0x10, INT_RAW=0x2). Full
+    # 79-reg live re-capture tracked; this ack covers the model change in the interim.
+    drift_ack: 2026-06-20
 
   - id: nucleo-l476rg
     doc: docs/boards/nucleo-l476rg.md
