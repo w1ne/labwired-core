@@ -33,12 +33,15 @@ describe('expanded MCP tools', () => {
         title: tool.title,
         destructiveHint: false,
       });
+      // OpenAI requires all three hints set to an explicit boolean on every tool.
       expect(tool.annotations?.readOnlyHint, tool.name).toBeTypeOf('boolean');
+      expect(tool.annotations?.openWorldHint, tool.name).toBeTypeOf('boolean');
+      expect(tool.annotations?.destructiveHint, tool.name).toBeTypeOf('boolean');
     }
     const run = listHostedTools().find((t) => t.name === 'labwired_run');
     expect(run?.annotations).toMatchObject({ readOnlyHint: false, openWorldHint: true });
     const listBoards = listHostedTools().find((t) => t.name === 'labwired_list_boards');
-    expect(listBoards?.annotations).toMatchObject({ readOnlyHint: true });
+    expect(listBoards?.annotations).toMatchObject({ readOnlyHint: true, openWorldHint: false });
   });
 
   it('advertises ChatGPT-compatible security schemes on every hosted tool', () => {
