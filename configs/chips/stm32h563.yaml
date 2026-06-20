@@ -290,8 +290,10 @@ peripherals:
     size: "1KB"
     config:
       profile: "stm32h5"
-  # FLASH interface registers (RM0481) — ACR latency/WRHIGHFREQ read-back
-  # for clock bring-up; program/erase not modeled.
+  # FLASH interface registers (RM0481) — ACR latency/WRHIGHFREQ read-back for
+  # clock bring-up; NSKEYR/OPTKEYR unlock, NSCR sector-erase and
+  # OPTSR_PRG.SWAP_BANK + OPTCR.OBL_LAUNCH (drained in Machine::step) model the
+  # UDS OTA reprogramming path. Programming is plain writes to the flash region.
   - id: "flash_iface"
     type: "flash"
     base_address: 0x40022000
