@@ -50,10 +50,14 @@ pub enum FlashRegisterLayout {
     /// register file is shorter (KEYR@0x04, SR@0x0C, CR@0x10, OBR@0x1C,
     /// WRPR@0x20). No ECCR / OPTR / PCROP / WRP1..2.
     Stm32F1,
-    /// STM32H5 (RM0481 §7). Interface registers only — program/erase is not
-    /// modeled. ACR (LATENCY/WRHIGHFREQ/PRFTEN) reads back what firmware
-    /// wrote, which is what HAL/embassy clock bring-up polls. Reset values
-    /// pinned to a NUCLEO-H563ZI SWD probe (silicon capture 2026-06-11):
+    /// STM32H5 (RM0481 §7). Models the OTA reprogramming path: ACR
+    /// (LATENCY/WRHIGHFREQ/PRFTEN) read-back for clock bring-up; NSKEYR/OPTKEYR
+    /// unlock; NSCR sector-erase and OPTSR_PRG.SWAP_BANK + OPTCR.OBL_LAUNCH,
+    /// recorded as pending ops drained by `Machine::step` (erase fills 0xFF;
+    /// swap exchanges the two 1 MiB banks and resets). Programming is plain
+    /// writes to the flash region (the bus routes them into the flash buffer).
+    /// Reset values pinned to a NUCLEO-H563ZI SWD probe (silicon capture
+    /// 2026-06-11, OPTSR re-confirmed 2026-06-20):
     /// ACR=0x13, OPTCR=1, NSCR=1, OPTSR_CUR=0x2D30EDF8 (this part's option
     /// bytes, representative).
     Stm32H5,
