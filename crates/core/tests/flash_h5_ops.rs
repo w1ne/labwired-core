@@ -14,7 +14,7 @@
 use labwired_config::ChipDescriptor;
 use labwired_core::peripherals::flash::h5;
 use labwired_core::system::cortex_m::configure_cortex_m;
-use labwired_core::{Cpu, Machine};
+use labwired_core::{Cpu, DebugControl, Machine};
 
 /// FLASH interface peripheral base address (RM0481, stm32h563.yaml).
 const FLASH_BASE: u64 = 0x4002_2000;
@@ -144,7 +144,8 @@ fn erase_targets_bank2_with_bksel() {
     write_flash_word(&mut m, bank2_addr, 0xBBBB_BBBB);
 
     unlock_nskeyr(&mut m);
-    let nscr = h5::NSCR_SER | h5::NSCR_BKSEL | ((sector as u32) << h5::NSCR_SNB_SHIFT) | h5::NSCR_STRT;
+    let nscr =
+        h5::NSCR_SER | h5::NSCR_BKSEL | ((sector as u32) << h5::NSCR_SNB_SHIFT) | h5::NSCR_STRT;
     m.bus.write_u32(FLASH_BASE + h5::NSCR_OFF, nscr).unwrap();
     m.step().expect("step must not fail");
 
@@ -236,5 +237,121 @@ fn swap_bank_reboots_into_bank2() {
         m.cpu.get_pc(),
         bank2_pc & !1,
         "CPU PC should point to bank2 reset handler after swap+reset"
+    );
+}
+
+// ── Test 3: H563 forces cycle-accurate execution ───────────────────────────
+
+/// Lock the predicate that makes the batch/CLI run path apply FLASH ops: an
+/// H5 op-modeling FLASH on the bus must force `requires_cycle_accurate()` true,
+/// so the runner executes one instruction per batch and the per-instruction
+/// FLASH-op drain fires. A regression that drops this would silently strand the
+/// erase/swap on the shipping run path — this test fails loudly if so.
+#[test]
+fn h563_requires_cycle_accurate() {
+    let m = h563_machine();
+    assert!(
+        m.bus.requires_cycle_accurate(),
+        "H563 bus has an H5 op-modeling FLASH, so it must require cycle-accurate execution"
+    );
+}
+
+// ── Test 4: erase applied via the batch/run path (not just step) ───────────
+
+/// Same erase as `erase_fills_sector_with_ff`, but driven through `Machine::run`
+/// — the path the CLI test runner and `Machine::run` take. Proves the op is
+/// applied on the batch path (cycle-accurate clamp + per-iteration drain), not
+/// only inside `step()`.
+#[test]
+fn erase_applied_via_run() {
+    let mut m = h563_machine();
+
+    let bank0_base: u64 = h5::FLASH_BASE;
+    let sector1_start: u64 = bank0_base + h5::SECTOR_SIZE;
+
+    write_flash_word(&mut m, sector1_start, 0x1234_5678);
+    assert_eq!(
+        read_flash_word(&m, sector1_start),
+        0x1234_5678,
+        "sentinel before erase"
+    );
+
+    unlock_nskeyr(&mut m);
+    let nscr = h5::NSCR_SER | (1 << h5::NSCR_SNB_SHIFT) | h5::NSCR_STRT;
+    m.bus.write_u32(FLASH_BASE + h5::NSCR_OFF, nscr).unwrap();
+
+    // Drive via run() (the shipping batch path), not step().
+    m.run(Some(2)).expect("run must not fail");
+
+    assert_eq!(
+        read_flash_word(&m, sector1_start),
+        0xFFFF_FFFF,
+        "first word of sector after erase via run() should be 0xFFFF_FFFF"
+    );
+    let last_word_offset: u64 = sector1_start + h5::SECTOR_SIZE - 4;
+    assert_eq!(
+        read_flash_word(&m, last_word_offset),
+        0xFFFF_FFFF,
+        "last word of sector after erase via run() should be 0xFFFF_FFFF"
+    );
+    assert_eq!(
+        read_flash_word(&m, bank0_base),
+        0x0000_0000,
+        "sector 0 must be untouched by sector-1 erase via run()"
+    );
+}
+
+// ── Test 5: bank swap + reset applied via the batch/run path ───────────────
+
+/// Same swap as `swap_bank_reboots_into_bank2`, but driven through
+/// `Machine::run`. Proves SWAP_BANK + OBL_LAUNCH swaps banks AND resets the CPU
+/// PC to bank2's reset vector on the shipping batch path.
+#[test]
+fn swap_applied_via_run() {
+    let mut m = h563_machine();
+
+    let bank1_base: u64 = h5::FLASH_BASE;
+    let bank2_base: u64 = h5::FLASH_BASE + h5::BANK_SIZE;
+
+    let bank1_sp: u32 = 0x2000_0000;
+    let bank1_pc: u32 = 0x0800_0009;
+    write_flash_word(&mut m, bank1_base, bank1_sp);
+    write_flash_word(&mut m, bank1_base + 4, bank1_pc);
+
+    let bank2_sp: u32 = 0x2001_0000;
+    let bank2_pc: u32 = 0x0810_0005;
+    write_flash_word(&mut m, bank2_base, bank2_sp);
+    write_flash_word(&mut m, bank2_base + 4, bank2_pc);
+
+    unlock_optkeyr(&mut m);
+    m.bus
+        .write_u32(FLASH_BASE + h5::OPTSR_PRG_OFF, h5::OPTSR_SWAP_BANK)
+        .unwrap();
+    m.bus
+        .write_u32(FLASH_BASE + h5::OPTCR_OFF, h5::OPTCR_OBL_LAUNCH)
+        .unwrap();
+
+    // Drive via run() (the shipping batch path), not step(). Limit to a single
+    // instruction: the SwapAndReset op is already pending (recorded by the MMIO
+    // writes above), so the first executed instruction triggers the drain →
+    // swap + reset, landing the CPU exactly on bank2's reset vector. A larger
+    // budget would execute further instructions from the (now bank2) reset
+    // handler, advancing PC past the vector and making the landing PC fragile.
+    m.run(Some(1)).expect("run must not fail");
+
+    assert_eq!(
+        read_flash_word(&m, bank1_base),
+        bank2_sp,
+        "after swap via run(): flash[0x08000000] should hold bank2 SP"
+    );
+    assert_eq!(
+        read_flash_word(&m, bank1_base + 4),
+        bank2_pc,
+        "after swap via run(): flash[0x08000004] should hold bank2 PC"
+    );
+    assert_eq!(
+        m.cpu.get_pc(),
+        bank2_pc & !1,
+        "CPU PC should point to bank2 reset handler after swap+reset via run()"
     );
 }

@@ -73,6 +73,7 @@ impl SystemBus {
             can_uds_testers: Vec::new(),
             esp32c3_irq_routing: false,
             riscv_irq_lines: 0,
+            flash_models_ops: false,
         };
 
         let mut merged_peripherals = chip.peripherals.clone();

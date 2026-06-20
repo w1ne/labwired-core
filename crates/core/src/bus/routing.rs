@@ -138,6 +138,17 @@ impl SystemBus {
         // read/write path is O(1). Matched by id, as the clock-gate config
         // references the RCC by the conventional "rcc" peripheral id.
         self.rcc_idx = self.peripherals.iter().position(|p| p.name == "rcc");
+        // Cache whether any FLASH peripheral models hardware ops (H5 erase /
+        // bank swap). Those ops are recorded as pending and must be drained and
+        // applied per instruction, which only holds under cycle-accurate
+        // execution — so `requires_cycle_accurate` reads this cached bool
+        // instead of scanning peripherals on every run-loop iteration.
+        self.flash_models_ops = self.peripherals.iter().any(|p| {
+            p.dev
+                .as_any()
+                .and_then(|a| a.downcast_ref::<crate::peripherals::flash::Flash>())
+                .is_some_and(|f| f.models_ops())
+        });
     }
 
     pub fn refresh_peripheral_index(&mut self) {

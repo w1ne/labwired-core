@@ -432,6 +432,15 @@ impl Flash {
     pub fn drain_pending_op(&self) -> Option<FlashOp> {
         self.pending_op.take()
     }
+
+    /// True when this FLASH models hardware operations (sector erase / bank
+    /// swap) as pending ops that must be drained and applied per instruction.
+    /// Only the H5 layout records such ops, so the runner must execute the
+    /// firmware cycle-accurately (batch size 1) for the drain to fire on every
+    /// instruction — see `SystemBus::requires_cycle_accurate`.
+    pub fn models_ops(&self) -> bool {
+        matches!(self.layout, FlashRegisterLayout::Stm32H5)
+    }
 }
 
 impl Default for Flash {

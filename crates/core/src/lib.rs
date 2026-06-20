@@ -942,7 +942,23 @@ impl<C: Cpu> Machine<C> {
 
         // H5 FLASH pending ops: sector erase fills flash with 0xFF; bank-swap
         // swaps the two 1 MB banks in the flash buffer then re-runs reset so
-        // the CPU boots from the new bank-1 vector table.
+        // the CPU boots from the new bank-1 vector table. Also drained on the
+        // batch/CLI run path (`Machine::run`), which executes cycle-accurately
+        // when an H5 op-modeling FLASH is present so this fires per instruction.
+        self.apply_pending_flash_op()?;
+
+        Ok(())
+    }
+
+    /// Drain and apply the single pending H5 FLASH hardware operation, if any.
+    ///
+    /// The FLASH peripheral records at most one op per instruction (in a `Cell`);
+    /// this helper must therefore run once per instruction so no op is lost. It
+    /// is called from both `step()` and the `Machine::run` batch loop body. The
+    /// run loop clamps its batch to 1 when `requires_cycle_accurate()` is true
+    /// (which an H5 op-modeling FLASH forces), preserving the one-op-per-
+    /// instruction invariant and the correct erase-before-program ordering.
+    fn apply_pending_flash_op(&mut self) -> SimResult<()> {
         if let Some(op) = self.drain_flash_op() {
             use crate::peripherals::flash::h5;
             use crate::peripherals::flash::FlashOp;
@@ -976,7 +992,6 @@ impl<C: Cpu> Machine<C> {
                 }
             }
         }
-
         Ok(())
     }
 
@@ -1229,11 +1244,22 @@ impl<C: Cpu> DebugControl for Machine<C> {
             let tick_interval = self.config.peripheral_tick_interval as u64;
             let remaining_until_tick = (tick_interval - (current_cycles % tick_interval)) as u32;
 
-            let current_batch = if let Some(limit) = max_steps {
+            let mut current_batch = if let Some(limit) = max_steps {
                 remaining_until_tick.min(limit - steps)
             } else {
                 remaining_until_tick
             };
+
+            // Cycle-accurate buses (HC-SR04, IO-Link, H5 op-modeling FLASH) must
+            // execute one instruction per batch so per-instruction services —
+            // notably the H5 FLASH pending-op drain below — fire on every
+            // instruction. Without this clamp the FLASH op would be recorded in
+            // the peripheral cell but applied at most once per tick interval (or
+            // not at all), losing all but the last op and breaking erase-before-
+            // program ordering.
+            if self.bus.requires_cycle_accurate() {
+                current_batch = current_batch.min(1);
+            }
 
             let executed =
                 self.cpu
@@ -1261,6 +1287,13 @@ impl<C: Cpu> DebugControl for Machine<C> {
 
             #[cfg(feature = "event-scheduler")]
             self.drain_scheduler_events();
+
+            // Apply any pending H5 FLASH op recorded by the instructions just
+            // executed. On a cycle-accurate bus the batch is clamped to 1 above,
+            // so this runs per instruction (matching `step()`); this is the path
+            // the CLI test runner and `Machine::run` take, where the op would
+            // otherwise never be applied.
+            self.apply_pending_flash_op()?;
 
             // If we executed less than requested, it means the CPU wanted to exit early (e.g. branch/exception)
             // or we just finished the batch naturally. The loop will continue and check breakpoints/limits.

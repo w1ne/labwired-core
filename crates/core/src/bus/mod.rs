@@ -162,6 +162,13 @@ pub struct SystemBus {
     /// recomputed every tick by `aggregate_esp32c3_irqs`. Read by the RISC-V
     /// core via `Bus::external_irq_lines`. 0 when `esp32c3_irq_routing` is false.
     pub riscv_irq_lines: u32,
+    /// True when a FLASH peripheral on this bus models hardware operations
+    /// (H5 sector erase / bank swap) as pending ops that the machine layer must
+    /// drain and apply per instruction. Cached in `rebuild_peripheral_ranges`
+    /// (same staleness contract as `dport_idx`/`rcc_idx`) so
+    /// `requires_cycle_accurate` — called per run-loop iteration — never scans
+    /// peripherals. `false` on every bus without an H5 op-modeling FLASH.
+    flash_models_ops: bool,
 }
 
 pub struct CanDiagnosticTester {
@@ -486,8 +493,15 @@ impl SystemBus {
     /// so the firmware polls a frozen ECHO and measures nothing. Runners should
     /// disable instruction batching when this returns true (correctness > speed).
     /// New per-tick GPIO-timing devices should extend this predicate.
+    ///
+    /// Also true when an H5 op-modeling FLASH is on the bus (`flash_models_ops`,
+    /// cached in `rebuild_peripheral_ranges`): its erase/bank-swap ops are
+    /// recorded as pending and drained+applied per instruction by the machine
+    /// layer, an invariant that only holds at batch size 1. Without this the
+    /// CLI/batch run path would record the op in the FLASH cell but never apply
+    /// it (no 0xFF fill, no bank swap, no reset).
     pub fn requires_cycle_accurate(&self) -> bool {
-        !self.hcsr04.is_empty() || self.has_iolink_master()
+        !self.hcsr04.is_empty() || self.has_iolink_master() || self.flash_models_ops
     }
 
     /// True when an IO-Link master peer is attached to any UART. The master is
@@ -958,6 +972,7 @@ impl SystemBus {
             can_uds_testers: Vec::new(),
             esp32c3_irq_routing: false,
             riscv_irq_lines: 0,
+            flash_models_ops: false,
         };
         bus.rebuild_peripheral_ranges();
         bus
@@ -994,6 +1009,7 @@ impl SystemBus {
             can_uds_testers: Vec::new(),
             esp32c3_irq_routing: false,
             riscv_irq_lines: 0,
+            flash_models_ops: false,
         };
         bus.rebuild_peripheral_ranges();
         bus
@@ -2475,6 +2491,7 @@ peripherals:
             can_uds_testers: Vec::new(),
             esp32c3_irq_routing: false,
             riscv_irq_lines: 0,
+            flash_models_ops: false,
         };
 
         bus.flash.write_u8(0x0800_0000, 0x12);
@@ -2537,6 +2554,7 @@ peripherals:
             can_uds_testers: Vec::new(),
             esp32c3_irq_routing: false,
             riscv_irq_lines: 0,
+            flash_models_ops: false,
         };
 
         bus.rebuild_peripheral_ranges();
@@ -2601,6 +2619,7 @@ peripherals:
             can_uds_testers: Vec::new(),
             esp32c3_irq_routing: false,
             riscv_irq_lines: 0,
+            flash_models_ops: false,
         };
         bus.rebuild_peripheral_ranges();
 
