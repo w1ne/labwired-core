@@ -225,6 +225,31 @@ impl SystemBus {
         Ok(())
     }
 
+    /// Detach a single UART (by peripheral id) from the shared console TX sink.
+    ///
+    /// `attach_uart_tx_sink` wires the human-readable serial monitor to *every*
+    /// UART on the bus. A UART used as an inter-chip cross-link (see
+    /// `attach_uart_stream_by_id` + `VirtualWireEndpoint`) carries raw protocol
+    /// octets (e.g. IO-Link M-sequences), not console text — letting those bytes
+    /// into the serial monitor floods it with binary garbage that looks
+    /// identical on both peers. Calling this after wiring a cross-link keeps the
+    /// protocol bytes out of the console while leaving them in the UART trace
+    /// (the protocol analyzers read `trace_snapshot`, not the sink).
+    pub fn detach_uart_sink_by_id(&mut self, uart_id: &str) -> anyhow::Result<()> {
+        let idx = self
+            .find_peripheral_index_by_name(uart_id)
+            .ok_or_else(|| anyhow::anyhow!("no peripheral '{uart_id}'"))?;
+        let any = self.peripherals[idx]
+            .dev
+            .as_any_mut()
+            .ok_or_else(|| anyhow::anyhow!("peripheral '{uart_id}' is not introspectable"))?;
+        let uart = any
+            .downcast_mut::<crate::peripherals::uart::Uart>()
+            .ok_or_else(|| anyhow::anyhow!("peripheral '{uart_id}' is not a UART"))?;
+        uart.set_sink(None, false);
+        Ok(())
+    }
+
     /// Return the `(base, size)` of the peripheral the bus router would dispatch
     /// `addr` to, using the same last-start-wins binary-search logic as
     /// [`read_u32`] / [`write_u32`]. Unlike `iter().find()`, this correctly

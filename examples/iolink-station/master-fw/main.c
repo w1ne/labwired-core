@@ -34,6 +34,8 @@ int main(void) {
     }
 
     uint32_t now = 0u;
+    uint8_t last_state = 0xFEu; /* force a first print */
+    uint8_t last_pd = 0xFEu;
     for (;;) {
         iolink_master_tick_at(&port, IOLINK_MASTER_TICK_CYCLE_DUE, now);
         now += 20u; /* 2 ms cycles in 100us units (min_cycle_time) */
@@ -46,6 +48,20 @@ int main(void) {
             g_master_pd0 = pd[0];
         }
 
-        dbg_hex8(g_master_state); /* also observable on USART1 */
+        /* Print debug on USART1 only on a change — the CPU loops far faster
+         * than the IO-Link cycle, so logging every iteration floods the serial
+         * monitor with the same byte. Mirrors the device firmware's on-change
+         * tracing. (The host test still reads g_master_state from RAM.) */
+        if (g_master_state != last_state || g_master_pd0 != last_pd) {
+            last_state = g_master_state;
+            last_pd = g_master_pd0;
+            dbg_puts("STATE=");
+            dbg_hex8(g_master_state);
+            if (g_master_state == 3u /* OPERATE */) {
+                dbg_puts(" PD=");
+                dbg_hex8(g_master_pd0);
+            }
+            dbg_puts("\r\n");
+        }
     }
 }

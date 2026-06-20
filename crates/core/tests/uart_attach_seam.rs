@@ -40,6 +40,31 @@ fn attach_uart_stream_by_id_wires_a_live_stream() {
 }
 
 #[test]
+fn detach_uart_sink_by_id_keeps_crosslink_bytes_out_of_the_console() {
+    let mut bus = l476_bus();
+    let console = Arc::new(Mutex::new(Vec::new()));
+    // The console sink is attached to EVERY UART (as the wasm bridge does).
+    bus.attach_uart_tx_sink(console.clone(), false);
+
+    // uart1 (debug) keeps feeding the console; uart2 (cross-link) is excluded.
+    bus.detach_uart_sink_by_id("uart2")
+        .expect("uart2 should be detachable from the sink");
+
+    // uart1 base 0x40013800, V2 TDR at offset 0x28.
+    bus.write_u32(0x4001_3828, 0x41).unwrap();
+    // uart2 base 0x40004400, V2 TDR at offset 0x28 — protocol byte, must NOT
+    // reach the console.
+    bus.write_u32(0x4000_4428, 0x99).unwrap();
+
+    assert_eq!(
+        *console.lock().unwrap(),
+        vec![0x41],
+        "only the debug UART (uart1) should reach the console; the cross-link \
+         (uart2) protocol byte must be excluded"
+    );
+}
+
+#[test]
 fn attach_uart_stream_by_id_rejects_unknown_and_non_uart() {
     let mut bus = l476_bus();
     assert!(bus

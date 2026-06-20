@@ -309,7 +309,15 @@ impl WasmSimulator {
         self.machine()
             .bus
             .attach_uart_stream_by_id(uart_id, endpoint)
-            .map_err(|e| JsValue::from_str(&format!("attach_uart_wire: {e:#}")))
+            .map_err(|e| JsValue::from_str(&format!("attach_uart_wire: {e:#}")))?;
+        // Keep the cross-link's raw protocol octets out of the human serial
+        // monitor — they're decoded by the protocol analyzer (uart_trace), and
+        // dumping them into the console floods both peers with identical-looking
+        // binary. The debug UART (USART1) still feeds the console normally.
+        self.machine()
+            .bus
+            .detach_uart_sink_by_id(uart_id)
+            .map_err(|e| JsValue::from_str(&format!("attach_uart_wire(sink): {e:#}")))
     }
 
     #[wasm_bindgen]
