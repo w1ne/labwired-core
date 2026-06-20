@@ -1202,13 +1202,16 @@ impl CortexM {
                                     let _ = bus.write_u8(addr as u64, val);
                                 }
                                 1 => {
-                                    if let Ok(v) = bus.read_u8(addr as u64) {
-                                        let out = if (op1 & 0x8) != 0 {
-                                            (v as i8) as i32 as u32
-                                        } else {
-                                            v as u32
-                                        };
-                                        self.write_reg(rt, out);
+                                    // Rt==15 = PLD/PLI preload hint — NOP, not a PC load.
+                                    if rt != 15 {
+                                        if let Ok(v) = bus.read_u8(addr as u64) {
+                                            let out = if (op1 & 0x8) != 0 {
+                                                (v as i8) as i32 as u32
+                                            } else {
+                                                v as u32
+                                            };
+                                            self.write_reg(rt, out);
+                                        }
                                     }
                                 }
                                 2 => {
@@ -1216,13 +1219,16 @@ impl CortexM {
                                     let _ = bus.write_u16(addr as u64, val);
                                 }
                                 3 => {
-                                    if let Ok(v) = bus.read_u16(addr as u64) {
-                                        let out = if (op1 & 0x8) != 0 {
-                                            (v as i16) as i32 as u32
-                                        } else {
-                                            v as u32
-                                        };
-                                        self.write_reg(rt, out);
+                                    // Rt==15 = PLDW preload hint — NOP, not a PC load.
+                                    if rt != 15 {
+                                        if let Ok(v) = bus.read_u16(addr as u64) {
+                                            let out = if (op1 & 0x8) != 0 {
+                                                (v as i16) as i32 as u32
+                                            } else {
+                                                v as u32
+                                            };
+                                            self.write_reg(rt, out);
+                                        }
                                     }
                                 }
                                 4 => {
@@ -1271,13 +1277,16 @@ impl CortexM {
                                     let _ = bus.write_u8(addr as u64, val);
                                 }
                                 1 => {
-                                    if let Ok(v) = bus.read_u8(addr as u64) {
-                                        let out = if (op1 & 0x8) != 0 {
-                                            (v as i8) as i32 as u32
-                                        } else {
-                                            v as u32
-                                        };
-                                        self.write_reg(rt, out);
+                                    // Rt==15 = PLD/PLI preload hint — NOP, not a PC load.
+                                    if rt != 15 {
+                                        if let Ok(v) = bus.read_u8(addr as u64) {
+                                            let out = if (op1 & 0x8) != 0 {
+                                                (v as i8) as i32 as u32
+                                            } else {
+                                                v as u32
+                                            };
+                                            self.write_reg(rt, out);
+                                        }
                                     }
                                 }
                                 2 => {
@@ -1285,13 +1294,16 @@ impl CortexM {
                                     let _ = bus.write_u16(addr as u64, val);
                                 }
                                 3 => {
-                                    if let Ok(v) = bus.read_u16(addr as u64) {
-                                        let out = if (op1 & 0x8) != 0 {
-                                            (v as i16) as i32 as u32
-                                        } else {
-                                            v as u32
-                                        };
-                                        self.write_reg(rt, out);
+                                    // Rt==15 = PLDW preload hint — NOP, not a PC load.
+                                    if rt != 15 {
+                                        if let Ok(v) = bus.read_u16(addr as u64) {
+                                            let out = if (op1 & 0x8) != 0 {
+                                                (v as i16) as i32 as u32
+                                            } else {
+                                                v as u32
+                                            };
+                                            self.write_reg(rt, out);
+                                        }
                                     }
                                 }
                                 4 => {
@@ -2644,6 +2656,35 @@ mod tests {
         assert_eq!(cpu.r3, 0xAAAA_AAAA);
         assert_eq!(cpu.r4, 0xBBBB_BBBB);
         assert_eq!(cpu.r2, 0x5008, "no writeback leaves Rn unchanged");
+    }
+
+    #[test]
+    fn test_thumb2_pld_is_nop_not_pc_load() {
+        // Regression: PLD/PLI/PLDW (preload memory hints) are encoded as
+        // byte/halfword "loads" with Rt==15. The 0xF800 LDR/STR handler wrote the
+        // loaded value into Rt=15 (PC), so `pld [r0]` — newlib's PLD-optimized
+        // strlen/memchr idiom — loaded a byte from [r0] into PC and the CPU jumped
+        // to a garbage (flash-alias) address, looping forever. Hints must be NOPs;
+        // only a WORD load (op1&7==5) with Rt==15 is a real LDR.W PC branch.
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x4000;
+        cpu.r0 = 0x5000;
+        // A value that would become a bogus PC if the hint were mishandled.
+        bus.write_u32(0x5000, 0x0000_0048).unwrap();
+
+        // PLD [r0, #0] = 0xF890 0xF000 (byte-load form, Rt=15).
+        run_test_instr(&mut cpu, &mut bus, 0xF890_F000, true);
+        assert_eq!(cpu.pc, 0x4004, "PLD must be a NOP (PC+=4), not a load into PC");
+
+        // PLDW/halfword preload hint [r0] = 0xF8B0 0xF000 (halfword form, Rt=15).
+        cpu.pc = 0x4000;
+        run_test_instr(&mut cpu, &mut bus, 0xF8B0_F000, true);
+        assert_eq!(cpu.pc, 0x4004, "halfword preload hint must be a NOP");
+
+        // The byte was never consumed as a PC — confirm no spurious branch left
+        // PC in the flash-alias region.
+        assert!(cpu.pc >= 0x4000, "PLD/PLDW must not have branched into low memory");
     }
 
     #[test]
