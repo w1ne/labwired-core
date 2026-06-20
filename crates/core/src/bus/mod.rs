@@ -1012,6 +1012,31 @@ impl SystemBus {
     }
 }
 
+impl SystemBus {
+    /// Bind the named FDCAN peripheral to a `CanBus` interconnect endpoint.
+    ///
+    /// This is the post-build counterpart used by `World` to wire `CanBus`
+    /// endpoints between nodes. Errors if no peripheral with the given name
+    /// exists or it is not an FDCAN.
+    pub fn attach_can_bus_by_id(
+        &mut self,
+        can_id: &str,
+        tx: std::sync::mpsc::Sender<crate::network::CanFrame>,
+        rx: std::sync::mpsc::Receiver<crate::network::CanFrame>,
+    ) -> anyhow::Result<()> {
+        let idx = self
+            .find_peripheral_index_by_name(can_id)
+            .ok_or_else(|| anyhow::anyhow!("no peripheral named '{can_id}'"))?;
+        let fdcan = self.peripherals[idx]
+            .dev
+            .as_any_mut()
+            .and_then(|a| a.downcast_mut::<crate::peripherals::fdcan::Fdcan>())
+            .ok_or_else(|| anyhow::anyhow!("peripheral '{can_id}' is not an FDCAN"))?;
+        fdcan.attach_bus(tx, rx);
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1791,5 +1816,83 @@ peripherals:
             "DST should hold the SRC byte after mem-to-mem copy"
         );
         assert!(interrupts.contains(&16), "TCIE should pend NVIC IRQ 16");
+    }
+
+    fn build_test_bus_with_fdcan1() -> SystemBus {
+        let chip: ChipDescriptor = serde_yaml::from_str(
+            r#"
+name: "h563-test"
+arch: "arm"
+core: "cortex-m33"
+flash:
+  base: 0x08000000
+  size: "128KB"
+ram:
+  base: 0x20000000
+  size: "64KB"
+peripherals:
+  - id: "fdcan1"
+    type: "fdcan"
+    base_address: 0x4000A400
+    size: "4KB"
+"#,
+        )
+        .unwrap();
+        let manifest: SystemManifest = serde_yaml::from_str(
+            r#"
+name: "fdcan-bus-test"
+chip: "unused"
+external_devices: []
+board_io: []
+"#,
+        )
+        .unwrap();
+        SystemBus::from_config(&chip, &manifest).unwrap()
+    }
+
+    #[test]
+    fn attach_can_bus_by_id_binds_named_fdcan() {
+        use crate::network::CanBus;
+        use crate::peripherals::fdcan::Fdcan;
+        // Build a bus from a minimal chip+system declaring fdcan1.
+        let mut bus = build_test_bus_with_fdcan1();
+
+        // Before attaching: confirm the peripheral exists, is an Fdcan, and has
+        // no bus endpoints yet.  This is the causality anchor — if attach_bus()
+        // were a no-op the post-attach assertion below would still fail.
+        let idx = bus.find_peripheral_index_by_name("fdcan1").unwrap();
+        let fdcan_before = bus.peripherals[idx]
+            .dev
+            .as_any()
+            .and_then(|a| a.downcast_ref::<Fdcan>())
+            .expect("fdcan1 must be an Fdcan peripheral");
+        assert!(
+            !fdcan_before.is_bus_attached(),
+            "bus endpoints must be absent before attach_can_bus_by_id"
+        );
+
+        // Attach and verify that the bus endpoints are now present.
+        let mut can = CanBus::new();
+        let (tx, rx) = can.attach();
+        bus.attach_can_bus_by_id("fdcan1", tx, rx).expect("attach must succeed");
+
+        let fdcan_after = bus.peripherals[idx]
+            .dev
+            .as_any()
+            .and_then(|a| a.downcast_ref::<Fdcan>())
+            .expect("fdcan1 must still be an Fdcan peripheral after attach");
+        assert!(
+            fdcan_after.is_bus_attached(),
+            "attach_can_bus_by_id must call attach_bus — bus_tx and bus_rx must be Some"
+        );
+
+        // Attaching to an unknown name must return Err.
+        let mut can2 = CanBus::new();
+        let (tx2, rx2) = can2.attach();
+        assert!(
+            bus.attach_can_bus_by_id("no_such_peripheral", tx2, rx2)
+                .is_err(),
+            "unknown peripheral must return Err"
+        );
     }
 }

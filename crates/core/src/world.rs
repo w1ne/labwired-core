@@ -33,6 +33,14 @@ pub trait MachineTrait: Send {
         uart_id: &str,
         dev: Box<dyn crate::peripherals::uart::UartStreamDevice>,
     ) -> anyhow::Result<()>;
+    /// Attach one endpoint of a `CanBus` interconnect to the named FDCAN
+    /// peripheral inside this machine.
+    fn attach_can_bus(
+        &mut self,
+        can_id: &str,
+        tx: std::sync::mpsc::Sender<crate::network::CanFrame>,
+        rx: std::sync::mpsc::Receiver<crate::network::CanFrame>,
+    ) -> anyhow::Result<()>;
 }
 
 impl<C: Cpu + 'static> MachineTrait for Machine<C> {
@@ -67,6 +75,15 @@ impl<C: Cpu + 'static> MachineTrait for Machine<C> {
         dev: Box<dyn crate::peripherals::uart::UartStreamDevice>,
     ) -> anyhow::Result<()> {
         self.bus.attach_uart_stream_by_id(uart_id, dev)
+    }
+
+    fn attach_can_bus(
+        &mut self,
+        can_id: &str,
+        tx: std::sync::mpsc::Sender<crate::network::CanFrame>,
+        rx: std::sync::mpsc::Receiver<crate::network::CanFrame>,
+    ) -> anyhow::Result<()> {
+        self.bus.attach_can_bus_by_id(can_id, tx, rx)
     }
 }
 
@@ -182,6 +199,23 @@ impl World {
                         .with_context(|| format!("uart_cross_link: unknown node '{b}'"))?
                         .attach_uart_stream(b_uart, Box::new(eb))?;
                     world.add_interconnect(Box::new(link));
+                }
+                "can_bus" => {
+                    let mut can = crate::network::CanBus::new();
+                    let peripheral = ic
+                        .config
+                        .get("peripheral")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("fdcan1");
+                    for node_id in &ic.nodes {
+                        let (tx, rx) = can.attach();
+                        world
+                            .machines
+                            .get_mut(node_id)
+                            .with_context(|| format!("can_bus: unknown node '{node_id}'"))?
+                            .attach_can_bus(peripheral, tx, rx)?;
+                    }
+                    world.add_interconnect(Box::new(can));
                 }
                 other => anyhow::bail!("unsupported interconnect type '{other}'"),
             }

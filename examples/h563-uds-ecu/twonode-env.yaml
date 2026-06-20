@@ -1,0 +1,13 @@
+name: "h563-uds-twonode"
+nodes:
+  - id: "ecu_a"
+    system: "system.yaml"
+    firmware: "firmware/build/h563_uds_ecu.elf"
+  - id: "ecu_b"
+    system: "system.yaml"
+    firmware: "firmware/build/h563_uds_ecu.elf"
+interconnects:
+  - type: "can_bus"
+    nodes: ["ecu_a", "ecu_b"]
+    config:
+      peripheral: "fdcan1"

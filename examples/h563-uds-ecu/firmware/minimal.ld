@@ -15,6 +15,7 @@ SECTIONS
   _sidata = LOADADDR(.data);
   .data : { . = ALIGN(4); _sdata = .; *(.data*) . = ALIGN(4); _edata = .; } > RAM AT > FLASH
   .bss  : { . = ALIGN(4); _sbss = .; *(.bss*) *(COMMON) . = ALIGN(4); _ebss = .; } > RAM
+  .uds_result 0x20010000 (NOLOAD) : { KEEP(*(.uds_result)) } > RAM
   . = ALIGN(8);
   PROVIDE(end = .);
   PROVIDE(_end = .);

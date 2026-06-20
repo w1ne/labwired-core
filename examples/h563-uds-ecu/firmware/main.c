@@ -73,9 +73,14 @@ void *__aeabi_memclr8(void *dst, size_t n)
     return memset(dst, 0, n);
 }
 
+volatile uint32_t g_uds_result __attribute__((section(".uds_result"), used));
+
 static volatile uint32_t g_now_ms;
 static volatile bool g_positive_response_sent;
 static volatile bool g_tester_request_seen;
+
+static uds_isotp_ctx_t g_iso;
+static uint8_t g_iso_tx_sdu[256];
 
 #define REG32(addr) (*(volatile uint32_t *) (addr))
 
@@ -234,6 +239,12 @@ static int can_send(uint32_t id, const uint8_t *data, uint8_t len)
     return fdcan_send_frame(id, data, len, len > 8u);
 }
 
+static int isotp_send_adapter(struct uds_ctx *ctx, const uint8_t *data, uint16_t len)
+{
+    (void) ctx;
+    return uds_isotp_send(&g_iso, data, len);
+}
+
 static uint8_t g_rx_buffer[128];
 static uint8_t g_tx_buffer[128];
 static const uint8_t g_vin[] = "LABWIRED-H563-UDS";
@@ -269,7 +280,7 @@ static int app_read_data_by_id(struct uds_ctx *ctx, const uint8_t *data, uint16_
 }
 
 static const uds_service_entry_t g_user_services[] = {
-    {0x22u, 3u, UDS_SESSION_ALL, 0u, app_read_data_by_id, NULL},
+    {0x22u, 3u, UDS_SESSION_ALL, 0u, app_read_data_by_id, NULL, 0u},
 };
 
 static void pump_one_tester_request(uds_ctx_t *ctx)
@@ -281,7 +292,7 @@ static void pump_one_tester_request(uds_ctx_t *ctx)
                 uart_puts("UDS_REQ_22_F190\n");
                 g_tester_request_seen = true;
             }
-            uds_isotp_rx_callback(ctx, frame.id, frame.data, frame.len);
+            uds_isotp_rx_callback(&g_iso, ctx, frame.id, frame.data, frame.len);
             return;
         }
     }
@@ -316,17 +327,19 @@ static bool positive_vin_response_seen(void)
 
 int main(void)
 {
+    g_uds_result = 0u;
+
     uart_init();
     uart_puts("H563-UDS-ECU\n");
 
     fdcan_start();
-    uds_tp_isotp_init(can_send, 0x7E8u, 0x7E0u);
-    uds_tp_isotp_set_fd(true);
+    uds_tp_isotp_init(&g_iso, can_send, 0x7E8u, 0x7E0u, g_iso_tx_sdu, sizeof(g_iso_tx_sdu));
+    uds_tp_isotp_set_fd(&g_iso, true);
 
     uds_config_t cfg = {
         .ecu_address = 0x10u,
         .get_time_ms = get_time_ms,
-        .fn_tp_send = uds_isotp_send,
+        .fn_tp_send = isotp_send_adapter,
         .p2_ms = 50u,
         .p2_star_ms = 2000u,
         .rx_buffer = g_rx_buffer,
@@ -347,12 +360,13 @@ int main(void)
     for (uint32_t i = 0; i < 64u && !ok; ++i) {
         pump_one_tester_request(&ctx);
         uds_process(&ctx);
-        uds_tp_isotp_process(g_now_ms);
+        uds_tp_isotp_process(&g_iso, g_now_ms);
         ok = positive_vin_response_seen() || g_positive_response_sent;
         ++g_now_ms;
     }
 
     if (ok) {
+        g_uds_result = 0x62F190A5u;
         uart_puts("UDS_RESP_62_F190\n");
         uart_puts("VIN=LABWIRED-H563-UDS\n");
         uart_puts("UDS_OK\n");

@@ -1,0 +1,29 @@
+# twonode-coexistence-smoke.yaml
+#
+# What this proves:
+#   - The multi-node headless test runner can load two STM32H563 nodes from a
+#     shared env (twonode-env.yaml), wire them to a virtual CAN bus, and drive
+#     both to completion concurrently.
+#   - Each node boots, receives its OWN locally-injected UDS request from its
+#     per-node `can-diagnostic-tester`, processes it over FDCAN, and writes the
+#     result marker 0x62F190A5 to 0x20010000.
+#   - This is a CONCURRENT CO-EXISTENCE smoke: both ECUs share one virtual bus
+#     without interfering with each other.
+#
+# What this does NOT prove:
+#   - Cross-node delivery (A sends → B receives). Each node answers its OWN
+#     injector; neither node ever receives a frame originated by the other.
+#     The authoritative cross-node delivery gate is:
+#         crates/core/tests/fdcan_firmware_crossing.rs
+#     which uses a bare, non-transmitting observer FDCAN that can only see
+#     0x7E8 if it crossed the bus from the ECU.
+#   - A true tester↔ECU cross-node gate (real udslib tester firmware driving
+#     requests over the shared bus) is Sub-project B, not yet implemented here.
+schema_version: "1.0"
+inputs:
+  env: "./twonode-env.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - memory_value: { node: ecu_a, address: 0x20010000, expected_value: 0x62F190A5, size: 32 }
+  - memory_value: { node: ecu_b, address: 0x20010000, expected_value: 0x62F190A5, size: 32 }

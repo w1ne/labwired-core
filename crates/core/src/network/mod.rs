@@ -9,6 +9,7 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 
 pub mod mqtt;
 pub mod sim;
+pub mod virtual_uart_wire;
 
 /// Trait for virtual interconnects between machines.
 pub trait Interconnect: Send {
