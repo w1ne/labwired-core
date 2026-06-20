@@ -19,6 +19,7 @@ pub mod ir_component;
 pub mod ir_core;
 pub mod ir_spi_component;
 pub mod max31855;
+pub mod mlx90640;
 pub mod mpu6050;
 pub mod neo6m;
 pub mod ntc_thermistor;
@@ -46,6 +47,7 @@ pub use iolink_master::{
 pub use ir_component::IrI2cComponent;
 pub use ir_spi_component::IrSpiComponent;
 pub use max31855::Max31855;
+pub use mlx90640::{Mlx90640, ThermalScene, MLX90640_ADDR};
 pub use mpu6050::Mpu6050;
 pub use neo6m::Neo6mGps;
 pub use ntc_thermistor::NtcThermistor;

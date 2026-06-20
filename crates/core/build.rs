@@ -33,6 +33,31 @@ fn main() {
     fs::write(&dest, &bytes).unwrap_or_else(|e| panic!("write {}: {e}", dest.display()));
 
     build_iolink_native_bridge();
+    build_mlx90640_bridge();
+}
+
+// Compile the REAL Melexis MLX90640 driver + the LabWired I²C bridge only when
+// the `mlx90640-decode-test` feature is enabled. The bridge's
+// `MLX90640_I2CRead/Write` call back into Rust (the device model), so the
+// unmodified vendor driver decodes frames the model serves over I²C.
+fn build_mlx90640_bridge() {
+    if std::env::var_os("CARGO_FEATURE_MLX90640_DECODE_TEST").is_none() {
+        return;
+    }
+
+    let mlx_root = "../../third_party/mlx90640-library";
+    cc::Build::new()
+        .file("native/mlx90640_bridge.c")
+        .file(format!("{mlx_root}/functions/MLX90640_API.c"))
+        .include("native")
+        .include(format!("{mlx_root}/headers"))
+        .warnings(false) // vendor code is unmodified; don't fail on its warnings
+        .compile("labwired_mlx90640_bridge");
+
+    println!("cargo:rerun-if-changed=native/mlx90640_bridge.c");
+    println!("cargo:rerun-if-changed=native/mlx90640_bridge.h");
+    println!("cargo:rerun-if-changed={mlx_root}/functions/MLX90640_API.c");
+    println!("cargo:rerun-if-changed={mlx_root}/headers/MLX90640_API.h");
 }
 
 // Compile the native IO-Link bridge (and, in later plan tasks, the real
