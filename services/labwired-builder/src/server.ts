@@ -1,6 +1,7 @@
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import { run } from './run.js';
 import { compile, type CompileRequest } from './compile.js';
+import { runExample, type RunExampleRequest } from './run-example.js';
 
 const MAX_CONCURRENT = Number(process.env.MAX_CONCURRENT ?? 2);
 // Upper bound on a proxied /compile round-trip. The compile service caps its own
@@ -107,6 +108,12 @@ export function makeServer(opts: ServerOptions) {
           const result = await compile(parsed as CompileRequest);
           json(res, 200, result);
         }
+      } else if (url === '/run-example') {
+        // Run a BAKED-IN example (firmware ELF + manifests are in the image)
+        // end-to-end and report the verdict the IO-Link master observed. The
+        // example_id is allowlisted + slug-validated in runExample().
+        const result = await runExample(parsed as RunExampleRequest);
+        json(res, result.ok ? 200 : 400, result);
       } else {
         json(res, 404, { error: 'not found' });
       }

@@ -11,7 +11,7 @@ import { z } from 'zod';
 import { mkdtemp, writeFile, rm, mkdir, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { listChips, runSimulation, validateSystem, runLab, fuzzFirmware, runCli, runDeviceCapture } from './cli.js';
+import { listChips, runSimulation, validateSystem, runLab, fuzzFirmware, runCli, runDeviceCapture, runExampleViaBuilder } from './cli.js';
 import {
   listBoards,
   getBoard,
@@ -540,6 +540,28 @@ function localTools() {
           name: {
             type: 'string',
             description: 'Optional name for the output file (defaults to board name). Kebab-cased.',
+          },
+        },
+      },
+    },
+    {
+      name: 'labwired_run_example',
+      description:
+        'Run a CURATED, BAKED-IN LabWired example end-to-end on the server-side builder and report ' +
+        'the real verdict its peripherals observed. Unlike labwired_run_lab, you supply NO firmware — ' +
+        'the example (pre-built firmware ELF + system manifests) is baked into the builder image and ' +
+        'runs INSIDE the container, so the result is a deterministic, silicon-validated oracle run, ' +
+        'not a self-reported claim. e.g. "esp32c3-mlx90640-thermal" runs the thermal-fingerprint ' +
+        'IO-Link device in both NORMAL and FAULT scenarios and returns whether the IO-Link MASTER read ' +
+        'the verdict (STABLE/health/NONE, then FAULT→COOLING_FAILURE/OVERTEMP + a diagnostic EVENT). ' +
+        'Returns { ok, passed, exit_code, scenarios[], master_verdict_lines[], uart_excerpt }.',
+      inputSchema: {
+        type: 'object',
+        required: ['example_id'],
+        properties: {
+          example_id: {
+            type: 'string',
+            description: 'Curated example id baked into the builder, e.g. "esp32c3-mlx90640-thermal".',
           },
         },
       },
@@ -1219,6 +1241,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             ),
           },
         ],
+      };
+    }
+
+    if (name === 'labwired_run_example') {
+      const a = (args ?? {}) as { example_id?: string };
+      if (!a.example_id || typeof a.example_id !== 'string') {
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ ok: false, error: 'example_id is required' }, null, 2) }],
+          isError: true,
+        };
+      }
+      const result = await runExampleViaBuilder({ exampleId: a.example_id });
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        isError: !result.ok || !result.passed,
       };
     }
 
