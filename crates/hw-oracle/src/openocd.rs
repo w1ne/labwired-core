@@ -231,6 +231,22 @@ impl OpenOcd {
                     full_args.push("-c".to_string());
                     full_args.push(format!("adapter usb location {location}"));
                 }
+                // LABWIRED_OPENOCD_CONNECT_UNDER_RESET: assert SRST during the
+                // initial connect/examine. Needed for targets whose running
+                // firmware disables or repurposes the SWD pins (e.g. an
+                // STM32F407 that boots straight into such firmware) — without
+                // it openocd reports "examination failed". Requires NRST wired.
+                if std::env::var("LABWIRED_OPENOCD_CONNECT_UNDER_RESET").is_ok() {
+                    full_args.push("-c".to_string());
+                    full_args
+                        .push("reset_config srst_only srst_nogate connect_assert_srst".to_string());
+                }
+                // LABWIRED_ADAPTER_SPEED overrides the SWD clock (kHz) — lower it
+                // for marginal signal integrity on clone/standalone ST-Links.
+                if let Ok(speed) = std::env::var("LABWIRED_ADAPTER_SPEED") {
+                    full_args.push("-c".to_string());
+                    full_args.push(format!("adapter speed {speed}"));
+                }
             }
         }
         full_args.push("-c".to_string());

@@ -299,6 +299,7 @@ impl SystemBus {
         // the computed ECHO input level. Empty list → skipped entirely.
         self.service_hcsr04();
         self.service_can_diagnostic_testers();
+        self.service_can_uds_testers();
 
         (
             interrupts,

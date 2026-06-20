@@ -37,6 +37,7 @@ pub(crate) fn run_asset_add_peripheral(args: AddPeripheralArgs) -> ExitCode {
         base_address: args.base as u64,
         size: Some("4KB".to_string()),
         irq: None,
+        clock: None,
         config,
     });
 

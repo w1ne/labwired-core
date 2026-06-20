@@ -144,6 +144,12 @@ pub fn try_build(
                 .map(|n| n as u32)
                 .unwrap_or(0x0000_00E7);
             let mut spi = crate::peripherals::spi::Spi::new_with_layout_cr2(layout, cr2_mask);
+            // Classic-SPI CR1 writable mask, also a per-part delta: F407 silicon
+            // does not latch CR1 bit 12 (CRCNEXT) → 0xEFFF; F1/L0/L4 leave it
+            // fully writable (the default). YAML: `config: { cr1_mask: 0xEFFF }`.
+            if let Some(cr1_mask) = p_cfg.config.get("cr1_mask").and_then(|v| v.as_u64()) {
+                spi.set_cr1_mask(cr1_mask as u16);
+            }
             // Declarative IR SPI devices (`type: ir`) attach here,
             // mirroring the I2C path. Hand-written SPI devices attach via
             // the PeripheralKit registry pass, which ignores `type: ir`,

@@ -2044,6 +2044,60 @@ impl CortexM {
                     }
                     pc_increment = 4;
                 }
+                // STMIA.W Rn(!), {reg_list} — 32-bit store multiple, increment
+                // after. Lowest-numbered register stored at the base address.
+                Instruction::StmiaW {
+                    rn,
+                    reg_list,
+                    writeback,
+                } => {
+                    let mut addr = self.read_reg(rn);
+                    for i in 0u8..=14 {
+                        if (reg_list & (1 << i)) != 0 {
+                            let val = self.read_reg(i);
+                            if bus.write_u32(addr as u64, val).is_err() {
+                                tracing::error!("Bus Write Fault (STMIA.W) at {:#x}", addr);
+                            }
+                            addr = addr.wrapping_add(4);
+                        }
+                    }
+                    if writeback {
+                        self.write_reg(rn, addr);
+                    }
+                    pc_increment = 4;
+                }
+                // LDMDB.W Rn(!), {reg_list} — 32-bit load multiple, decrement
+                // before. Lowest-numbered register loaded from the lowest address.
+                Instruction::LdmdbW {
+                    rn,
+                    reg_list,
+                    writeback,
+                } => {
+                    let count = reg_list.count_ones();
+                    let start = self.read_reg(rn).wrapping_sub(count * 4);
+                    let mut addr = start;
+                    for i in 0u8..=14 {
+                        if (reg_list & (1 << i)) != 0 {
+                            if let Ok(val) = bus.read_u32(addr as u64) {
+                                self.write_reg(i, val);
+                            }
+                            addr = addr.wrapping_add(4);
+                        }
+                    }
+                    if writeback {
+                        self.write_reg(rn, start);
+                    }
+                    if (reg_list & (1 << 15)) != 0 {
+                        if let Ok(pc_val) = bus.read_u32(addr as u64) {
+                            self.branch_to(pc_val, bus)?;
+                            pc_increment = 0;
+                        } else {
+                            pc_increment = 4;
+                        }
+                    } else {
+                        pc_increment = 4;
+                    }
+                }
                 // LDMIA.W Rn(!), {reg_list} — 32-bit load multiple, increment after.
                 // Lowest-numbered register loaded from lowest address.
                 Instruction::LdmiaW {
@@ -2558,6 +2612,38 @@ mod tests {
         run_test_instr(&mut cpu, &mut bus, 0xE9D23402, true);
         assert_eq!(cpu.r3, 0x11111111);
         assert_eq!(cpu.r4, 0x22222222);
+    }
+
+    #[test]
+    fn test_thumb2_stmia_ldmdb_wide_addressing() {
+        // Regression: the 0xE8xx/0xE9xx LDM/STM group was decoded as STM=>DB,
+        // LDM=>IA unconditionally, so STMIA.W (the compiler's struct-copy idiom)
+        // stored *below* the base instead of at it. Verify both addressing modes.
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x4000;
+        cpu.r2 = 0x5000;
+        cpu.r0 = 0xAAAA_AAAA;
+        cpu.r1 = 0xBBBB_BBBB;
+
+        // STMIA.W r2, {r0, r1}  (no writeback) = 0xE882 0003 — stores at the base.
+        run_test_instr(&mut cpu, &mut bus, 0xE882_0003, true);
+        assert_eq!(bus.read_u32(0x5000).unwrap(), 0xAAAA_AAAA);
+        assert_eq!(bus.read_u32(0x5004).unwrap(), 0xBBBB_BBBB);
+        assert_eq!(cpu.r2, 0x5000, "no writeback leaves Rn unchanged");
+
+        // STMIA.W r2!, {r0, r1} (writeback) = 0xE8A2 0003 — advances Rn by 8.
+        cpu.r2 = 0x6000;
+        run_test_instr(&mut cpu, &mut bus, 0xE8A2_0003, true);
+        assert_eq!(bus.read_u32(0x6000).unwrap(), 0xAAAA_AAAA);
+        assert_eq!(cpu.r2, 0x6008, "writeback advances Rn");
+
+        // LDMDB.W r2, {r3, r4} = 0xE912 0018 — loads from below the base.
+        cpu.r2 = 0x5008;
+        run_test_instr(&mut cpu, &mut bus, 0xE912_0018, true);
+        assert_eq!(cpu.r3, 0xAAAA_AAAA);
+        assert_eq!(cpu.r4, 0xBBBB_BBBB);
+        assert_eq!(cpu.r2, 0x5008, "no writeback leaves Rn unchanged");
     }
 
     #[test]

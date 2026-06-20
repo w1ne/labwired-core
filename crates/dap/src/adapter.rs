@@ -1095,6 +1095,7 @@ mod tests {
                 base_address: 0x4001_0800,
                 size: None,
                 irq: None,
+                clock: None,
                 config: HashMap::new(),
             }],
         };
@@ -1148,6 +1149,7 @@ mod tests {
                 base_address: 0x4202_0400,
                 size: None,
                 irq: None,
+                clock: None,
                 config: gpio_config,
             }],
         };
@@ -1214,6 +1216,7 @@ mod tests {
                 base_address: 0x4202_0400,
                 size: None,
                 irq: None,
+                clock: None,
                 config: gpio_config,
             }],
         };
