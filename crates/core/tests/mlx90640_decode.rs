@@ -129,8 +129,14 @@ fn real_driver_decodes_ta_25_vdd_3v3() {
     let mut vdd = 0.0f32;
     let err = unsafe { lw_mlx_decode_ta_vdd(MLX90640_ADDR, &mut ta, &mut vdd) };
     assert_eq!(err, 0);
-    assert!((ta - 25.0).abs() < 0.1, "real driver Ta should be ~25 °C, got {ta}");
-    assert!((vdd - 3.3).abs() < 0.05, "real driver VDD should be ~3.3 V, got {vdd}");
+    assert!(
+        (ta - 25.0).abs() < 0.1,
+        "real driver Ta should be ~25 °C, got {ta}"
+    );
+    assert!(
+        (vdd - 3.3).abs() < 0.05,
+        "real driver VDD should be ~3.3 V, got {vdd}"
+    );
 }
 
 #[test]
@@ -209,9 +215,7 @@ fn round_trip_warm_scene_tracks_multiple_levels() {
     let _g = lock_decode();
     // A warmer ambient with a stronger hotspot, to show the map is not pinned
     // to one calibration point.
-    let scene = ThermalScene::from_config(
-        40.0, 6, 8, 1, 95.0, 1.0, 0.0, 0.0, None, 0.5,
-    );
+    let scene = ThermalScene::from_config(40.0, 6, 8, 1, 95.0, 1.0, 0.0, 0.0, None, 0.5);
     install(Mlx90640::new(MLX90640_ADDR, scene));
     let result = decode_field();
 

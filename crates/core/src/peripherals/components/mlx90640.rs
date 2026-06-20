@@ -677,16 +677,16 @@ mod tests {
         // (25 + (60-25)*(1-0.8)) until the fault at t=15 s collapses cooling,
         // after which it climbs toward the un-cooled target (60 °C).
         let scene = ThermalScene::from_config(
-            25.0,       // ambient
+            25.0, // ambient
             12,
             16,
             0,
-            60.0, // hot_target
-            1.0,  // load
-            1.0,  // tau
-            0.8,  // cooling_efficiency
+            60.0,       // hot_target
+            1.0,        // load
+            1.0,        // tau
+            0.8,        // cooling_efficiency
             Some(15.0), // cooling_fault_at_s
-            1.0,  // frame_period
+            1.0,        // frame_period
         );
         let mut dev = Mlx90640::new(MLX90640_ADDR, scene);
         // Settle to the cooled steady state (well before the fault).
@@ -709,4 +709,3 @@ mod tests {
         );
     }
 }
-

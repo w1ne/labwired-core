@@ -573,7 +573,11 @@ mod tests {
         p.write_u32(REG_DATA, 0xBB).unwrap();
         p.write_u32(REG_DATA, 0xCC).unwrap();
         let sr = p.read_u32(REG_SR).unwrap();
-        assert_eq!((sr >> 18) & 0x3F, 3, "SR.txfifo_cnt should reflect 3 pushes");
+        assert_eq!(
+            (sr >> 18) & 0x3F,
+            3,
+            "SR.txfifo_cnt should reflect 3 pushes"
+        );
     }
 
     #[test]
@@ -608,8 +612,16 @@ mod tests {
         p.write_u32(REG_CMD0, cmd(CMD_END, 0)).unwrap();
         p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
         let int_raw = p.read_u32(REG_INT_RAW).unwrap();
-        assert_eq!(int_raw & INT_END_DETECT, INT_END_DETECT, "END must raise END_DETECT");
-        assert_eq!(int_raw & INT_TRANS_COMPLETE, 0, "END must NOT raise TRANS_COMPLETE");
+        assert_eq!(
+            int_raw & INT_END_DETECT,
+            INT_END_DETECT,
+            "END must raise END_DETECT"
+        );
+        assert_eq!(
+            int_raw & INT_TRANS_COMPLETE,
+            0,
+            "END must NOT raise TRANS_COMPLETE"
+        );
     }
 
     #[test]
@@ -635,11 +647,19 @@ mod tests {
     #[test]
     fn txfifo_start_addr_window_peeks_tx_fifo_non_destructively() {
         let mut p = Esp32c3I2c::new();
-        assert_eq!(p.read_u32(REG_TXFIFO_START).unwrap(), 0, "empty TX FIFO reads 0");
+        assert_eq!(
+            p.read_u32(REG_TXFIFO_START).unwrap(),
+            0,
+            "empty TX FIFO reads 0"
+        );
         p.write_u32(REG_DATA, 0xAA).unwrap();
         p.write_u32(REG_DATA, 0xBB).unwrap();
         assert_eq!(p.read_u32(REG_TXFIFO_START).unwrap(), 0xAA);
-        assert_eq!(p.read_u32(REG_TXFIFO_START).unwrap(), 0xAA, "peek is non-destructive");
+        assert_eq!(
+            p.read_u32(REG_TXFIFO_START).unwrap(),
+            0xAA,
+            "peek is non-destructive"
+        );
         let sr = p.read_u32(REG_SR).unwrap();
         assert_eq!((sr >> 18) & 0x3F, 2, "peek must not consume TX FIFO bytes");
     }
@@ -663,16 +683,48 @@ mod tests {
     #[test]
     fn config_registers_reset_values_match_c3_yaml() {
         let p = Esp32c3I2c::new();
-        assert_eq!(p.read_u32(REG_CTR).unwrap(), 0x0000_020B, "CTR reset (yaml 523)");
-        assert_eq!(p.read_u32(REG_FIFO_CONF).unwrap(), 0x0000_408B, "FIFO_CONF (yaml 16523)");
+        assert_eq!(
+            p.read_u32(REG_CTR).unwrap(),
+            0x0000_020B,
+            "CTR reset (yaml 523)"
+        );
+        assert_eq!(
+            p.read_u32(REG_FIFO_CONF).unwrap(),
+            0x0000_408B,
+            "FIFO_CONF (yaml 16523)"
+        );
         assert_eq!(p.read_u32(REG_TO).unwrap(), 0x0000_0010, "TO (yaml 16)");
-        assert_eq!(p.read_u32(REG_SCL_START_HOLD).unwrap(), 0x0000_0008, "SCL_START_HOLD (yaml 8)");
-        assert_eq!(p.read_u32(REG_FILTER_CFG).unwrap(), 0x0000_0300, "FILTER_CFG (yaml 768)");
-        assert_eq!(p.read_u32(REG_CLK_CONF).unwrap(), 0x0020_0000, "CLK_CONF (yaml 2097152)");
-        assert_eq!(p.read_u32(REG_DATE).unwrap(), 0x2007_0201, "DATE (yaml 537330177)");
+        assert_eq!(
+            p.read_u32(REG_SCL_START_HOLD).unwrap(),
+            0x0000_0008,
+            "SCL_START_HOLD (yaml 8)"
+        );
+        assert_eq!(
+            p.read_u32(REG_FILTER_CFG).unwrap(),
+            0x0000_0300,
+            "FILTER_CFG (yaml 768)"
+        );
+        assert_eq!(
+            p.read_u32(REG_CLK_CONF).unwrap(),
+            0x0020_0000,
+            "CLK_CONF (yaml 2097152)"
+        );
+        assert_eq!(
+            p.read_u32(REG_DATE).unwrap(),
+            0x2007_0201,
+            "DATE (yaml 537330177)"
+        );
         let sr = p.read_u32(REG_SR).unwrap();
-        assert_eq!(sr & 0x0000_C000, 0x0000_C000, "SR STRETCH_CAUSE (yaml 49152)");
-        assert_eq!(p.read_u32(REG_INT_RAW).unwrap() & 0x2, 0x2, "INT_RAW TXFIFO_WM (yaml 2)");
+        assert_eq!(
+            sr & 0x0000_C000,
+            0x0000_C000,
+            "SR STRETCH_CAUSE (yaml 49152)"
+        );
+        assert_eq!(
+            p.read_u32(REG_INT_RAW).unwrap() & 0x2,
+            0x2,
+            "INT_RAW TXFIFO_WM (yaml 2)"
+        );
     }
 
     // ── Headline test: an attached I2cDevice round-trips a write-then-read
@@ -718,7 +770,11 @@ mod tests {
             "SR.RESP_REC must be set after a successful transaction"
         );
         // The chip-id byte 0x58 should be in the RX FIFO.
-        assert_eq!(p.read_u32(REG_DATA).unwrap(), 0x58, "BMP280 CHIP_ID round-trip");
+        assert_eq!(
+            p.read_u32(REG_DATA).unwrap(),
+            0x58,
+            "BMP280 CHIP_ID round-trip"
+        );
         // STOP completed the transaction.
         assert_eq!(
             p.read_u32(REG_INT_RAW).unwrap() & INT_TRANS_COMPLETE,

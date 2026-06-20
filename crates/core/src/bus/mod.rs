@@ -1146,11 +1146,10 @@ impl SystemBus {
                 // explicitly clear the sink AND disable the echo. The master's
                 // own decoded records reach the capture sink via
                 // `attach_iolink_master_log_sink`.
-                let is_iolink_wire = uart.attached_streams.iter().any(|s| {
-                    s.as_any()
-                        .map(|a| a.is::<IolinkMaster>())
-                        .unwrap_or(false)
-                });
+                let is_iolink_wire = uart
+                    .attached_streams
+                    .iter()
+                    .any(|s| s.as_any().map(|a| a.is::<IolinkMaster>()).unwrap_or(false));
                 if is_iolink_wire {
                     uart.set_sink(None, false);
                 } else {
@@ -1775,7 +1774,11 @@ mod tests {
         // Address must have matched (no NACK at bit 10) and the chip-id byte
         // must round-trip out of the RX FIFO.
         let int_raw = i2c.read_u32(0x20).unwrap();
-        assert_eq!(int_raw & (1 << 10), 0, "BMP280 must ACK; INT_RAW=0x{int_raw:08x}");
+        assert_eq!(
+            int_raw & (1 << 10),
+            0,
+            "BMP280 must ACK; INT_RAW=0x{int_raw:08x}"
+        );
         assert_eq!(
             i2c.read_u32(0x1C).unwrap(),
             0x58,
