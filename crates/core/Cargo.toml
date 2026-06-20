@@ -72,6 +72,18 @@ event-scheduler = []
 # (`labwired-wasm`) so wasm builds stay free of native C and GPL device-stack
 # linkage. See docs/engineering/iolink-device-stack-isolation.md.
 iolink-native = []
+# MLX90640 round-trip decode test (plan 2026-06-20): compiles the REAL,
+# unmodified Melexis MLX90640 driver (third_party/mlx90640-library) behind a
+# bridge (native/mlx90640_bridge.*) that routes its I²C reads/writes into the
+# LabWired MLX90640 device model. The integration test
+# (tests/mlx90640_decode.rs) drives the model and asserts the real driver
+# decodes per-pixel °C matching the injected thermal scene. Off by default and
+# never enabled by the browser crate so wasm builds need no C toolchain.
+mlx90640-decode-test = []
+
+[[test]]
+name = "mlx90640_decode"
+required-features = ["mlx90640-decode-test"]
 
 [dev-dependencies]
 labwired-loader = { path = "../loader" }
