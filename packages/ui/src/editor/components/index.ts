@@ -48,6 +48,7 @@ import { canDiagnosticToolComponent } from './can-diagnostic-tool';
 import { motorDriverL293dComponent } from './motor-driver-l293d';
 // Tools
 import { logicAnalyzerComponent } from './logic-analyzer';
+import { noteComponent } from './note';
 import { textAnnotationComponent } from './text-annotation';
 // Board MCUs
 import { arduinoUnoComponent } from './boards/arduino-uno';
@@ -125,6 +126,7 @@ export const COMPONENT_REGISTRY: Map<string, ComponentDef> = new Map([
   [motorDriverL293dComponent.type, motorDriverL293dComponent],
   // Tools
   [logicAnalyzerComponent.type, logicAnalyzerComponent],
+  [noteComponent.type, noteComponent],
   [textAnnotationComponent.type, textAnnotationComponent],
 ]);
 
