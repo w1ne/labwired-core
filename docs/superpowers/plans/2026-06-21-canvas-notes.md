@@ -414,9 +414,9 @@ Show the user the full `LAB_NOTES` draft below (all 20 entries) as a list, apply
 ```ts
 const LAB_NOTES: Record<string, string> = {
   'ntc-thermistor-lab':
-    'NTC 3950 thermistor on the STM32F103 ADC. The Rust core runs the Steinhart–Hart equation to turn raw counts into °C.\nTry: drag the temperature slider and watch the ADC count and computed temperature track it.',
+    'NTC 3950 thermistor on the STM32F103 ADC. The Steinhart–Hart equation turns raw ADC counts into °C.\nTry: drag the temperature slider and watch the ADC count and computed temperature track it.',
   'neo6m-gps-lab':
-    'NEO-6M GPS over UART. Real NMEA sentences stream in; all parsing happens in the Rust core.\nTry: Run and watch live position and satellite data decode.',
+    'NEO-6M GPS over UART. Real NMEA sentences stream in and are parsed live.\nTry: Run and watch live position and satellite data decode.',
   'quectel-bg770a-lab':
     'Quectel BG770A LTE-M / NB-IoT modem over UART, with a byte-exact AT-command surface (MQTT/HTTP/GPS state machines).\nTry: Run and watch the firmware drive the modem through its AT sequence.',
   'ssd1306-hello-lab':
@@ -438,11 +438,11 @@ const LAB_NOTES: Record<string, string> = {
   'epaper-tricolor-lab':
     'Waveshare 2.9" tri-color (SSD1680) e-paper over SPI. The same firmware ELF flashes to a real NUCLEO-F103 + panel for digital-twin comparison.\nTry: Run and watch the e-paper refresh.',
   'esp32-epaper-lab':
-    'An ESP32 driving a tri-color e-paper panel, firmware written in Rust.\nTry: Run and watch the ESP32 boot and paint the display.',
+    'An ESP32 driving a tri-color e-paper panel over SPI.\nTry: Run and watch the ESP32 boot and paint the display.',
   'labwired-ereader':
     'An ESP32 e-reader sketch (Arduino .ino, unmodified) driving an e-paper page, ROM-booted.\nTry: Run and page through the reader.',
   'max31855-thermocouple-lab':
-    'MAX31855 K-type thermocouple amplifier over SPI; the core does the cold-junction math.\nTry: drag the temperature input and watch the converted reading.',
+    'MAX31855 K-type thermocouple amplifier over SPI, with cold-junction compensation.\nTry: drag the temperature input and watch the converted reading.',
   'mpu6050-sensor-lab':
     'MPU6050 6-axis IMU (accelerometer + gyro) over I²C.\nTry: Run and watch the motion axes update.',
   'vl53l1x-tof-lab':
