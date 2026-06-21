@@ -7,13 +7,13 @@ point-to-point — exactly one device per master port — so N sensors are N
 separate chips, each its own simulated MCU with its own address space. There is
 no host-side stack and no shared device state.
 
-This is the multi-chip counterpart to [`al2205-iolink-dido`](../al2205-iolink-dido),
+This is the multi-chip counterpart to [`iolink-dido`](../iolink-dido),
 which runs one device stack as firmware against a host-side master model.
 
 ## Topology
 
 ```
-  master chip (master-fw, STM32L476)        sensor chips (al2205 device FW)
+  master chip (master-fw, STM32L476)        sensor chips (iolink-dido device FW)
   ┌───────────────────────────┐             ┌─────────────────────────┐
   │ iolinki-master controller │  USART2 <═══╪═> USART2  iolinki device │ sensor1 (PD 0xA5)
   │                           │  USART3 <═══╪═> USART2  iolinki device │ sensor2 (PD 0x3C)
@@ -33,7 +33,7 @@ ticks the wires.
 ## Build the firmware (needs `arm-none-eabi-gcc`)
 
 ```bash
-make -C ../al2205-iolink-dido/firmware   # device ELF (al2205_dido.elf)
+make -C ../iolink-dido/firmware   # device ELF (iolink_dido.elf)
 make -C master-fw                        # one-port master ELF (master.elf)
 make -C master-fw-4port                  # four-port master ELF (master.elf)
 ```

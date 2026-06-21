@@ -61,7 +61,7 @@ the 9-byte verdict frame as IO-Link **process data** on **UART1** (`0x60010000`,
 the C/Q line), while UART0 stays the debug console. A C3 UART PHY shim
 ([`firmware/phy_c3_iolink.c`](firmware/phy_c3_iolink.c)) bridges UART1 to the
 `iolink_phy_api_t` (no timing enforcement — driven by byte arrival, mirroring the
-al2205 example).
+iolink-dido example).
 
 A native IO-Link **master** model is attached to UART1 in the system manifest
 (`type: iolink-master`, `pd_in_len: 9`). It drives the wake-up → startup →

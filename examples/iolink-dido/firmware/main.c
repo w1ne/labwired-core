@@ -1,4 +1,4 @@
-/* AL2205-style IO-Link DI device — firmware-under-test.
+/* IO-Link DI/DO IO-Link DI device — firmware-under-test.
  *
  * M2: bring up the iolinki device stack over the USART2 PHY and run its loop
  * with a constant process-data input. The native IO-Link master (M3) and the
@@ -58,7 +58,7 @@ static uint8_t spi1_read_byte(void) {
 int main(void) {
     rcc_init();
     dbg_uart_init();
-    dbg_puts("AL2205 BOOT\r\n");
+    dbg_puts("IOLINK DIDO BOOT\r\n");
 
     /* Zero the whole struct first: on this toolchain (arm-none-eabi GCC 10.2,
      * -Os, short-enums) a designated-initializer left t_pd_us uninitialised,

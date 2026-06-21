@@ -3,7 +3,7 @@
  * The iolink_phy_api_t callbacks carry no port context, so each port gets its
  * own generated set of send/recv/init/wake/flush functions bound to one USART
  * base (PORT macro). Shared port-agnostic no-ops cover mode/baudrate/prepare.
- * Config matches the al2205 device firmware: M-sequence type 1_1, 1-byte PD in.
+ * Config matches the iolink-dido device firmware: M-sequence type 1_1, 1-byte PD in.
  */
 #include "phy_labwired.h"
 #include <stdint.h>

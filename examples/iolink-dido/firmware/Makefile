@@ -1,4 +1,4 @@
-# AL2205 IO-Link DI device firmware for the simulated STM32L476.
+# IO-Link DI/DO IO-Link DI device firmware for the simulated STM32L476.
 # M1: startup + debug UART only. iolinki sources + PHY are added in M2.
 CC      := arm-none-eabi-gcc
 IOLINKI_DIR ?= ../../../third_party/iolinki
@@ -26,7 +26,7 @@ IOLINKI_SRC := \
   $(IOLINKI_DIR)/src/platform/baremetal/time_utils.c
 
 APP_SRC := startup.c debug_uart.c phy_labwired.c main.c
-ELF     := al2205_dido.elf
+ELF     := iolink_dido.elf
 
 all: $(ELF)
 

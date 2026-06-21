@@ -1,5 +1,5 @@
 # IO-Link sensor node: a simulated NUCLEO-L476RG running the real iolinki
-# DEVICE firmware (al2205-iolink-dido/firmware/al2205_dido.elf). Its IO-Link
+# DEVICE firmware (iolink-dido/firmware/iolink_dido.elf). Its IO-Link
 # C/Q line (USART2) is connected to a master-chip port by a uart_cross_link in
 # the environment manifest — there is NO host-side master model here; the master
 # is its own chip. A 74HC165 on SPI1 supplies the digital-input process data.

@@ -2725,7 +2725,7 @@ board_io: []
     fn gated_peripheral_resolves_l4_rcc_offsets() {
         // The SAME symbolic reg names that map to F1 offsets above must resolve
         // to the L4 family's offsets via Rcc::enable_reg_offset: apb1enr1 @ 0x58
-        // (not F1's 0x1C) and ahb2enr @ 0x4C. Mirrors the al2205 (USART2 on
+        // (not F1's 0x1C) and ahb2enr @ 0x4C. Mirrors the iolink-dido (USART2 on
         // apb1enr1) and nokia5110 (GPIOA on ahb2enr) gates on the L476.
         let chip: ChipDescriptor = serde_yaml::from_str(
             r#"

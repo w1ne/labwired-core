@@ -384,7 +384,7 @@ impl WasmSimulator {
     //  IO-Link DI demo: 74HC165 input toggling + IO-Link master readout.
     //  These find the device by iterating the bus (the shifter/master are
     //  `external_devices`, not `board_io` bindings), which suits the single
-    //  shifter + single master of the AL2205-style demo.
+    //  shifter + single master of the IO-Link DI/DO demo.
     // ──────────────────────────────────────────────────────────────────────
 
     // DEPRECATED: renamed to install_esp32_arduino_quirks for clarity.

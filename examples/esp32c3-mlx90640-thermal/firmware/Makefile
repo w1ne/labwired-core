@@ -35,7 +35,7 @@ LDFLAGS := -march=rv32imc_zicsr_zifencei -mabi=ilp32 -nostartfiles \
 
 # iolinki IO-Link DEVICE-stack sources compiled ON-TARGET for rv32imc (the CMake
 # IOLINKI_SOURCES list, minus the POSIX phy_virtual.c / linux platform, plus the
-# baremetal time source) — the same set the al2205 ARM build uses.
+# baremetal time source) — the same set the iolink-dido ARM build uses.
 IOLINKI_SRC := \
   $(IOLINKI_DIR)/src/iolink_core.c \
   $(IOLINKI_DIR)/src/phy_generic.c \

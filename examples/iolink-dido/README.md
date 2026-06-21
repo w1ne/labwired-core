@@ -1,7 +1,7 @@
-# AL2205-style IO-Link DI device (simulated)
+# IO-Link DI/DO IO-Link DI device (simulated)
 
 Runs the real [`iolinki`](../../third_party/iolinki) IO-Link **device** stack as
-firmware on a simulated STM32L476, modeling an IFM AL2205-style 8-port IO-Link
+firmware on a simulated STM32L476, modeling an IFM IO-Link DI/DO 8-port IO-Link
 **digital-input** hub. A native IO-Link master peer drives the link; the device
 reads 8 digital inputs from a 74HC165 shift register over SPI1 and publishes them
 as cyclic process data.
@@ -19,7 +19,7 @@ native `iolink-master`) and carries the UART bytes.
 ## Build the firmware
 
 ```sh
-make -C firmware            # needs arm-none-eabi-gcc; produces firmware/al2205_dido.elf
+make -C firmware            # needs arm-none-eabi-gcc; produces firmware/iolink_dido.elf
 ```
 
 The firmware is plain C with its own startup/linker (no vendor SDK). It is built
@@ -29,14 +29,14 @@ aggregate initialisation at `-Os` here.
 ## Run headless in the simulator
 
 ```sh
-cargo run --release -p labwired-cli -- test --script examples/al2205-iolink-dido/test.yaml
+cargo run --release -p labwired-cli -- test --script examples/iolink-dido/test.yaml
 ```
 
 Expected output (the device walks STARTUP → … → OPERATE and reports the input
 byte read from the shifter, preset to `0xA5` in `system.yaml`):
 
 ```
-AL2205 BOOT
+IOLINK DIDO BOOT
 IOLINK INIT OK
 STATE=01
 STATE=04 OPERATE PD=A5

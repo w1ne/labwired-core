@@ -17,7 +17,7 @@ fn station_root() -> PathBuf {
     .to_path_buf()
 }
 
-const DEVICE_FW: &str = "../al2205-iolink-dido/firmware/al2205_dido.elf";
+const DEVICE_FW: &str = "../iolink-dido/firmware/iolink_dido.elf";
 
 #[test]
 fn from_manifest_builds_two_cortexm_nodes_and_uart_link() {
@@ -62,17 +62,17 @@ fn from_manifest_builds_two_cortexm_nodes_and_uart_link() {
 
 // Task 5: the Phase-1 proof — a master chip running real iolinki-master firmware
 // drives a real iolinki DEVICE-firmware sensor chip over the UartCrossLink and
-// reaches OPERATE. Requires the built ELFs (master-fw/master.elf and the al2205
+// reaches OPERATE. Requires the built ELFs (master-fw/master.elf and the iolink-dido
 // device ELF); skipped with a clear message if they are missing.
 #[test]
 fn master_chip_reaches_operate_with_real_sensor_chip() {
     let root = station_root();
     let master_elf = root.join("master-fw/master.elf");
-    let device_elf = root.join("../al2205-iolink-dido/firmware/al2205_dido.elf");
+    let device_elf = root.join("../iolink-dido/firmware/iolink_dido.elf");
     if !master_elf.exists() || !device_elf.exists() {
         eprintln!(
             "SKIP: build ELFs first (make -C examples/iolink-station/master-fw && \
-             make -C examples/al2205-iolink-dido/firmware)"
+             make -C examples/iolink-dido/firmware)"
         );
         return;
     }
@@ -128,11 +128,11 @@ fn master_chip_reaches_operate_with_real_sensor_chip() {
 fn four_port_station_all_sensors_operate_with_distinct_pd() {
     let root = station_root();
     let master_elf = root.join("master-fw-4port/master.elf");
-    let device_elf = root.join("../al2205-iolink-dido/firmware/al2205_dido.elf");
+    let device_elf = root.join("../iolink-dido/firmware/iolink_dido.elf");
     if !master_elf.exists() || !device_elf.exists() {
         eprintln!(
             "SKIP: build ELFs first (make -C examples/iolink-station/master-fw-4port && \
-             make -C examples/al2205-iolink-dido/firmware)"
+             make -C examples/iolink-dido/firmware)"
         );
         return;
     }
