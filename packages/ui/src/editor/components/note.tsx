@@ -28,7 +28,7 @@ export const noteComponent: ComponentDef = {
         <foreignObject x={0} y={0} width={W} height={1} overflow="visible">
           <div
             // xmlns required so HTML inside SVG <foreignObject> paints in all browsers
-            xmlns="http://www.w3.org/1999/xhtml"
+            {...{ xmlns: 'http://www.w3.org/1999/xhtml' }}
             style={{
               width: `${W}px`,
               boxSizing: 'border-box',

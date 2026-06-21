@@ -2453,6 +2453,7 @@ export function App() {
                 onDropPart={handleDropPart}
                 onButtonToggle={handleButtonToggle}
                 onAnalogChange={handleAnalogChange}
+                onUpdateAttrs={handlePartAttrChange}
                 // Anchored control toolbar — only for MCU parts (a chip's
                 // intrinsic verbs live next to it on the canvas).
                 selectedPartOverlay={(part) => {
