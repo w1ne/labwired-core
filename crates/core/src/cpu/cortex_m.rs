@@ -1201,34 +1201,30 @@ impl CortexM {
                                     let val = (self.read_reg(rt) & 0xFF) as u8;
                                     let _ = bus.write_u8(addr as u64, val);
                                 }
-                                1 => {
-                                    // Rt==15 = PLD/PLI preload hint — NOP, not a PC load.
-                                    if rt != 15 {
-                                        if let Ok(v) = bus.read_u8(addr as u64) {
-                                            let out = if (op1 & 0x8) != 0 {
-                                                (v as i8) as i32 as u32
-                                            } else {
-                                                v as u32
-                                            };
-                                            self.write_reg(rt, out);
-                                        }
+                                // Rt==15 = PLD/PLI preload hint — NOP (handled by `_`).
+                                1 if rt != 15 => {
+                                    if let Ok(v) = bus.read_u8(addr as u64) {
+                                        let out = if (op1 & 0x8) != 0 {
+                                            (v as i8) as i32 as u32
+                                        } else {
+                                            v as u32
+                                        };
+                                        self.write_reg(rt, out);
                                     }
                                 }
                                 2 => {
                                     let val = (self.read_reg(rt) & 0xFFFF) as u16;
                                     let _ = bus.write_u16(addr as u64, val);
                                 }
-                                3 => {
-                                    // Rt==15 = PLDW preload hint — NOP, not a PC load.
-                                    if rt != 15 {
-                                        if let Ok(v) = bus.read_u16(addr as u64) {
-                                            let out = if (op1 & 0x8) != 0 {
-                                                (v as i16) as i32 as u32
-                                            } else {
-                                                v as u32
-                                            };
-                                            self.write_reg(rt, out);
-                                        }
+                                // Rt==15 = PLDW preload hint — NOP (handled by `_`).
+                                3 if rt != 15 => {
+                                    if let Ok(v) = bus.read_u16(addr as u64) {
+                                        let out = if (op1 & 0x8) != 0 {
+                                            (v as i16) as i32 as u32
+                                        } else {
+                                            v as u32
+                                        };
+                                        self.write_reg(rt, out);
                                     }
                                 }
                                 4 => {
@@ -1276,34 +1272,30 @@ impl CortexM {
                                     let val = (self.read_reg(rt) & 0xFF) as u8;
                                     let _ = bus.write_u8(addr as u64, val);
                                 }
-                                1 => {
-                                    // Rt==15 = PLD/PLI preload hint — NOP, not a PC load.
-                                    if rt != 15 {
-                                        if let Ok(v) = bus.read_u8(addr as u64) {
-                                            let out = if (op1 & 0x8) != 0 {
-                                                (v as i8) as i32 as u32
-                                            } else {
-                                                v as u32
-                                            };
-                                            self.write_reg(rt, out);
-                                        }
+                                // Rt==15 = PLD/PLI preload hint — NOP (handled by `_`).
+                                1 if rt != 15 => {
+                                    if let Ok(v) = bus.read_u8(addr as u64) {
+                                        let out = if (op1 & 0x8) != 0 {
+                                            (v as i8) as i32 as u32
+                                        } else {
+                                            v as u32
+                                        };
+                                        self.write_reg(rt, out);
                                     }
                                 }
                                 2 => {
                                     let val = (self.read_reg(rt) & 0xFFFF) as u16;
                                     let _ = bus.write_u16(addr as u64, val);
                                 }
-                                3 => {
-                                    // Rt==15 = PLDW preload hint — NOP, not a PC load.
-                                    if rt != 15 {
-                                        if let Ok(v) = bus.read_u16(addr as u64) {
-                                            let out = if (op1 & 0x8) != 0 {
-                                                (v as i16) as i32 as u32
-                                            } else {
-                                                v as u32
-                                            };
-                                            self.write_reg(rt, out);
-                                        }
+                                // Rt==15 = PLDW preload hint — NOP (handled by `_`).
+                                3 if rt != 15 => {
+                                    if let Ok(v) = bus.read_u16(addr as u64) {
+                                        let out = if (op1 & 0x8) != 0 {
+                                            (v as i16) as i32 as u32
+                                        } else {
+                                            v as u32
+                                        };
+                                        self.write_reg(rt, out);
                                     }
                                 }
                                 4 => {
