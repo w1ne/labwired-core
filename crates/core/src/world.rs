@@ -169,8 +169,7 @@ impl World {
                         .get("node_b_uart")
                         .and_then(|v| v.as_str())
                         .unwrap_or("uart2");
-                    let (link, ea, eb) =
-                        crate::network::UartCrossLink::new(a.clone(), b.clone());
+                    let (link, ea, eb) = crate::network::UartCrossLink::new(a.clone(), b.clone());
                     world
                         .machines
                         .get_mut(a)

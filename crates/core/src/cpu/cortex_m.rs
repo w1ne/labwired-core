@@ -2675,7 +2675,10 @@ mod tests {
 
         // PLD [r0, #0] = 0xF890 0xF000 (byte-load form, Rt=15).
         run_test_instr(&mut cpu, &mut bus, 0xF890_F000, true);
-        assert_eq!(cpu.pc, 0x4004, "PLD must be a NOP (PC+=4), not a load into PC");
+        assert_eq!(
+            cpu.pc, 0x4004,
+            "PLD must be a NOP (PC+=4), not a load into PC"
+        );
 
         // PLDW/halfword preload hint [r0] = 0xF8B0 0xF000 (halfword form, Rt=15).
         cpu.pc = 0x4000;
@@ -2684,7 +2687,10 @@ mod tests {
 
         // The byte was never consumed as a PC — confirm no spurious branch left
         // PC in the flash-alias region.
-        assert!(cpu.pc >= 0x4000, "PLD/PLDW must not have branched into low memory");
+        assert!(
+            cpu.pc >= 0x4000,
+            "PLD/PLDW must not have branched into low memory"
+        );
     }
 
     #[test]
