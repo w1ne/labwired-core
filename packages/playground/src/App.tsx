@@ -181,8 +181,13 @@ function withLabNote(config: BoardConfig, diagram: Diagram): Diagram {
   if (config.kind !== 'lab' || config.hidden) return diagram;
   const text = LAB_NOTES[config.boardId];
   if (!text) return diagram;
-  // Banner above the circuit. diagramBounds fits all parts, so negative y is safe.
-  const note: Part = { id: 'note', type: 'note', x: 100, y: -150, rotate: 0, attrs: { text } };
+  // Place the note just above the MCU (seeded at x:100, y:100), aligned to its
+  // horizontal span. This empty band is visible in both the desktop editor view
+  // (which frames on the circuit and clips far-out content) and the mobile
+  // fit-to-all view. Keeping it close above — rather than far above or far to
+  // the side — keeps it on-screen on desktop without collapsing the mobile
+  // fit-zoom. diagramBounds fits all parts, so negative y is safe.
+  const note: Part = { id: 'note', type: 'note', x: 100, y: -8, rotate: 0, attrs: { text } };
   return { ...diagram, parts: [note, ...diagram.parts] };
 }
 
