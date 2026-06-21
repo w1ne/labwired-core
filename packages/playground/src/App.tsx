@@ -142,6 +142,50 @@ function resolveBindingPartId(diagram: Diagram, binding: BoardIoBinding): string
   return binding.id;
 }
 
+export const LAB_NOTES: Record<string, string> = {
+  'ntc-thermistor-lab':
+    'NTC 3950 thermistor on the STM32F103 ADC. The Steinhart–Hart equation turns raw ADC counts into °C.\nTry: drag the temperature slider and watch the ADC count and computed temperature track it.',
+  'neo6m-gps-lab':
+    'NEO-6M GPS over UART. Real NMEA sentences stream in and are parsed live.\nTry: Run and watch live position and satellite data decode.',
+  'quectel-bg770a-lab':
+    'Quectel BG770A LTE-M / NB-IoT modem over UART, with a byte-exact AT-command surface (MQTT/HTTP/GPS state machines).\nTry: Run and watch the firmware drive the modem through its AT sequence.',
+  'ssd1306-hello-lab':
+    'SSD1306 128×64 OLED over I²C. The firmware draws into a framebuffer the panel renders pixel-for-pixel.\nTry: Run and watch the display paint.',
+  'nokia5110-invaders-lab':
+    'Nokia 5110 (PCD8544) LCD + ultrasonic sensor on the STM32L476 — a tiny Space-Invaders-style demo.\nTry: Run, then drag the distance sensor to steer.',
+  'al2205-iolink-dido':
+    'An IO-Link digital-input device (AL2205 profile). Speaks the IO-Link wake-up and process-data cycle.\nTry: open the IO-Link analyzer and Run to watch the master/device exchange.',
+  'stm32h5-uds-ecu':
+    'A minimal automotive diagnostic ECU on the STM32H5, answering UDS (ISO-14229) requests over FDCAN.\nTry: open the UDS analyzer and Run to send services and read responses.',
+  'bme280-weather-lab':
+    'BME280 temperature / humidity / pressure sensor over I²C.\nTry: Run and watch the three environmental readings update.',
+  'ili9341-tft-lab':
+    'ILI9341 240×320 RGB565 TFT over SPI. The firmware pushes a live color framebuffer.\nTry: Run and watch the panel render in color.',
+  'labwired-ereader':
+    'An ESP32 e-reader sketch (Arduino .ino, unmodified) driving an e-paper page, ROM-booted.\nTry: Run and page through the reader.',
+  'max31855-thermocouple-lab':
+    'MAX31855 K-type thermocouple amplifier over SPI, with cold-junction compensation.\nTry: drag the temperature input and watch the converted reading.',
+  'mpu6050-sensor-lab':
+    'MPU6050 6-axis IMU (accelerometer + gyro) over I²C.\nTry: Run and watch the motion axes update.',
+  'vl53l1x-tof-lab':
+    'VL53L1X time-of-flight distance sensor over I²C.\nTry: drag the distance and watch the ranging value follow.',
+  'adxl345-sensor-lab':
+    'ADXL345 3-axis accelerometer over I²C.\nTry: Run and watch the acceleration axes update.',
+  'nrf52840-ble-lab':
+    'Two nRF52840s on one canvas — a sensor node and a collector — talking over simulated BLE (no wires; they meet on the air).\nTry: Run and watch the sensor advertise and the collector receive.',
+  'nrf52840-proximity-lab':
+    'An nRF52840 reading a proximity sensor and reporting over BLE.\nTry: Run and watch proximity events broadcast.',
+};
+
+function withLabNote(config: BoardConfig, diagram: Diagram): Diagram {
+  if (config.kind !== 'lab' || config.hidden) return diagram;
+  const text = LAB_NOTES[config.boardId];
+  if (!text) return diagram;
+  // Banner above the circuit. diagramBounds fits all parts, so negative y is safe.
+  const note: Part = { id: 'note', type: 'note', x: 100, y: -150, rotate: 0, attrs: { text } };
+  return { ...diagram, parts: [note, ...diagram.parts] };
+}
+
 export function makeStarterDiagram(config: BoardConfig): Diagram {
   const mcu: Part = {
     id: 'mcu',
@@ -158,7 +202,7 @@ export function makeStarterDiagram(config: BoardConfig): Diagram {
     // talk over the shared virtual air, not copper — hence no wires. The first
     // part keeps id 'mcu' so the default foreground (foregroundPartId ?? 'mcu')
     // targets it on load.
-    return {
+    return withLabNote(config, {
       ...createEmptyDiagram(config.chipId),
       parts: [
         { id: 'mcu', type: config.mcuComponentType, x: 100, y: 160, rotate: 0,
@@ -167,11 +211,11 @@ export function makeStarterDiagram(config: BoardConfig): Diagram {
           attrs: { boardId: 'nrf52840-ble-collector' } },
       ],
       wires: [],
-    };
+    });
   }
 
   if (config.boardId === 'stm32f103-blinky') {
-    return {
+    return withLabNote(config, {
       ...createEmptyDiagram(config.chipId),
       parts: [
         mcu,
@@ -184,13 +228,13 @@ export function makeStarterDiagram(config: BoardConfig): Diagram {
           color: '#27c93f',
         },
       ],
-    };
+    });
   }
 
   // -------- I²C labs (oled, sensors): all share PB6 SCL / PB7 SDA on I2C1 --------
 
   if (config.boardId === 'ssd1306-hello-lab') {
-    return {
+    return withLabNote(config, {
       ...createEmptyDiagram(config.chipId),
       parts: [
         mcu,
@@ -202,14 +246,14 @@ export function makeStarterDiagram(config: BoardConfig): Diagram {
         { from: { part: 'mcu', pin: 'PB6' }, to: { part: 'oled', pin: 'SCL' }, color: '#5BD8FF' },
         { from: { part: 'mcu', pin: 'PB7' }, to: { part: 'oled', pin: 'SDA' }, color: '#B07BFF' },
       ],
-    };
+    });
   }
 
   if (config.boardId === 'nokia5110-invaders-lab') {
     // STM32L476 Breakout: Nokia 5110 (PCD8544 SPI1) + HC-SR04. Part ids match
     // the lab's external_device ids ('lcd', 'dist') so the framebuffer fetch
     // and distance setter resolve.
-    return {
+    return withLabNote(config, {
       ...createEmptyDiagram(config.chipId),
       parts: [
         mcu,
@@ -229,14 +273,14 @@ export function makeStarterDiagram(config: BoardConfig): Diagram {
         { from: { part: 'mcu', pin: 'PA8' }, to: { part: 'dist', pin: 'TRIG' }, color: '#06D6A0' },
         { from: { part: 'mcu', pin: 'PB10' }, to: { part: 'dist', pin: 'ECHO' }, color: '#118AB2' },
       ],
-    };
+    });
   }
 
   if (config.boardId === 'nrf52840-proximity-lab') {
     // nRF52840 + HC-SR04 ultrasonic proximity, all on P0. The 'ultrasonic'
     // part id matches the lab's external_device id so the distance setter
     // resolves; the LED on P0.06 lights when the firmware raises ALARM.
-    return {
+    return withLabNote(config, {
       ...createEmptyDiagram(config.chipId),
       parts: [
         mcu,
@@ -253,14 +297,14 @@ export function makeStarterDiagram(config: BoardConfig): Diagram {
         { from: { part: 'mcu', pin: 'P0.05' }, to: { part: 'ultrasonic', pin: 'ECHO' }, color: '#118AB2' },
         { from: { part: 'mcu', pin: 'P0.06' }, to: { part: 'alarm_led', pin: 'A' }, color: '#EF476F' },
       ],
-    };
+    });
   }
 
   if (config.boardId === 'al2205-iolink-dido') {
     // STM32L476 IO-Link DI device. Part ids match the lab's external_device
     // ids ('di_shifter', 'iolink_master') so the 74HC165 input toggles and the
     // IO-Link master state/PD readout resolve against the bridge.
-    return {
+    return withLabNote(config, {
       ...createEmptyDiagram(config.chipId),
       parts: [
         mcu,
@@ -287,14 +331,14 @@ export function makeStarterDiagram(config: BoardConfig): Diagram {
         { from: { part: 'iolink_probe', pin: 'CH0' }, to: { part: 'iolink_master', pin: 'TX' }, color: '#F5B642' },
         { from: { part: 'iolink_probe', pin: 'CH1' }, to: { part: 'iolink_master', pin: 'RX' }, color: '#F5B642' },
       ],
-    };
+    });
   }
 
   if (config.boardId === 'stm32h5-uds-ecu') {
     // STM32H563 UDS ECU with a reusable diagnostic tester on the CAN bus.
     // The logic analyzer decodes the simulator's FDCAN frame trace for the
     // probed CAN_H/CAN_L net.
-    return {
+    return withLabNote(config, {
       ...createEmptyDiagram(config.chipId),
       parts: [
         mcu,
@@ -314,14 +358,14 @@ export function makeStarterDiagram(config: BoardConfig): Diagram {
         { from: { part: 'uds_probe', pin: 'CH1' }, to: { part: 'uds_tester', pin: 'CAN_L' }, color: '#F5B642' },
         { from: { part: 'uds_probe', pin: 'GND' }, to: { part: 'uds_tester', pin: 'GND' }, color: '#888888' },
       ],
-    };
+    });
   }
 
   if (config.boardId === 'f103-uds-ecu' || config.boardId === 'f103-uds-ecu-broken') {
     // STM32F103 ECU on the bxCAN (classical CAN) model. The logic analyzer
     // decodes the bxCAN frame trace; bxCAN runs in internal loopback so the
     // single node plays both tester and ECU (PA12 = CAN_TX, PA11 = CAN_RX).
-    return {
+    return withLabNote(config, {
       ...createEmptyDiagram(config.chipId),
       parts: [
         mcu,
@@ -341,11 +385,11 @@ export function makeStarterDiagram(config: BoardConfig): Diagram {
         { from: { part: 'uds_probe', pin: 'CH1' }, to: { part: 'uds_tester', pin: 'CAN_L' }, color: '#F5B642' },
         { from: { part: 'uds_probe', pin: 'GND' }, to: { part: 'uds_tester', pin: 'GND' }, color: '#888888' },
       ],
-    };
+    });
   }
 
   if (config.boardId === 'mpu6050-sensor-lab') {
-    return {
+    return withLabNote(config, {
       ...createEmptyDiagram(config.chipId),
       parts: [
         mcu,
@@ -357,11 +401,11 @@ export function makeStarterDiagram(config: BoardConfig): Diagram {
         { from: { part: 'mcu', pin: 'PB6' }, to: { part: 'mpu6050', pin: 'SCL' }, color: '#5BD8FF' },
         { from: { part: 'mcu', pin: 'PB7' }, to: { part: 'mpu6050', pin: 'SDA' }, color: '#B07BFF' },
       ],
-    };
+    });
   }
 
   if (config.boardId === 'adxl345-sensor-lab') {
-    return {
+    return withLabNote(config, {
       ...createEmptyDiagram(config.chipId),
       parts: [
         mcu,
@@ -373,11 +417,11 @@ export function makeStarterDiagram(config: BoardConfig): Diagram {
         { from: { part: 'mcu', pin: 'PB6' }, to: { part: 'adxl345', pin: 'SCL' }, color: '#5BD8FF' },
         { from: { part: 'mcu', pin: 'PB7' }, to: { part: 'adxl345', pin: 'SDA' }, color: '#B07BFF' },
       ],
-    };
+    });
   }
 
   if (config.boardId === 'bme280-weather-lab') {
-    return {
+    return withLabNote(config, {
       ...createEmptyDiagram(config.chipId),
       parts: [
         mcu,
@@ -389,7 +433,7 @@ export function makeStarterDiagram(config: BoardConfig): Diagram {
         { from: { part: 'mcu', pin: 'PB6' }, to: { part: 'bme280', pin: 'SCL' }, color: '#5BD8FF' },
         { from: { part: 'mcu', pin: 'PB7' }, to: { part: 'bme280', pin: 'SDA' }, color: '#B07BFF' },
       ],
-    };
+    });
   }
 
   // -------- SPI labs --------
@@ -398,7 +442,7 @@ export function makeStarterDiagram(config: BoardConfig): Diagram {
     // ILI9341 sim ignores D/C (state machine over command boundaries), but
     // real hardware needs it — wire to PB0 so the same diagram is honest for
     // both. RESET wired to PB1; LED backlight tied to VCC.
-    return {
+    return withLabNote(config, {
       ...createEmptyDiagram(config.chipId),
       parts: [
         mcu,
@@ -414,11 +458,11 @@ export function makeStarterDiagram(config: BoardConfig): Diagram {
         { from: { part: 'mcu', pin: 'PB1' }, to: { part: 'tft', pin: 'RESET' }, color: '#F5B642' },
         { from: { part: 'mcu', pin: 'VCC' }, to: { part: 'tft', pin: 'LED'   }, color: '#FFE680' },
       ],
-    };
+    });
   }
 
   if (config.boardId === 'max31855-thermocouple-lab') {
-    return {
+    return withLabNote(config, {
       ...createEmptyDiagram(config.chipId),
       parts: [
         mcu,
@@ -431,14 +475,14 @@ export function makeStarterDiagram(config: BoardConfig): Diagram {
         { from: { part: 'mcu', pin: 'PA5' }, to: { part: 'tc1', pin: 'SCK' }, color: '#5BD8FF' },
         { from: { part: 'mcu', pin: 'PA6' }, to: { part: 'tc1', pin: 'DO'  }, color: '#B07BFF' },
       ],
-    };
+    });
   }
 
   // -------- UART --------
 
   if (config.boardId === 'neo6m-gps-lab') {
     // STM32 TX → GPS RX, GPS TX → STM32 RX (crossover).
-    return {
+    return withLabNote(config, {
       ...createEmptyDiagram(config.chipId),
       parts: [
         mcu,
@@ -450,12 +494,12 @@ export function makeStarterDiagram(config: BoardConfig): Diagram {
         { from: { part: 'mcu', pin: 'PA9'  }, to: { part: 'gps', pin: 'RX'  }, color: '#B07BFF' },
         { from: { part: 'mcu', pin: 'PA10' }, to: { part: 'gps', pin: 'TX'  }, color: '#5BD8FF' },
       ],
-    };
+    });
   }
 
   if (config.boardId === 'quectel-bg770a-lab') {
     // STM32 USART1 ↔ modem (PA9 TX → modem RX, PA10 RX ← modem TX).
-    return {
+    return withLabNote(config, {
       ...createEmptyDiagram(config.chipId),
       parts: [
         mcu,
@@ -467,14 +511,14 @@ export function makeStarterDiagram(config: BoardConfig): Diagram {
         { from: { part: 'mcu',   pin: 'PA9'  }, to: { part: 'modem', pin: 'RX'  }, color: '#B07BFF' },
         { from: { part: 'mcu',   pin: 'PA10' }, to: { part: 'modem', pin: 'TX'  }, color: '#5BD8FF' },
       ],
-    };
+    });
   }
 
   // -------- Analog (ADC) --------
 
   if (config.boardId === 'ntc-thermistor-lab') {
     // NTC voltage divider sits between VCC and GND; tap into ADC1 ch0 on PA0.
-    return {
+    return withLabNote(config, {
       ...createEmptyDiagram(config.chipId),
       parts: [
         mcu,
@@ -484,14 +528,14 @@ export function makeStarterDiagram(config: BoardConfig): Diagram {
         { from: { part: 'mcu', pin: 'PA0' }, to: { part: 'ntc', pin: 'A' }, color: '#F5B642' },
         { from: { part: 'mcu', pin: 'GND' }, to: { part: 'ntc', pin: 'B' }, color: '#888888' },
       ],
-    };
+    });
   }
 
   if (config.boardId === 'epaper-tricolor-lab') {
     // STM32F103 driving the Waveshare 2.9" SSD1680 tri-color panel.
     // Pin map matches the firmware (examples/epaper-tricolor-lab/src/main.rs)
     // AND a real NUCLEO-F103RB wiring of the panel — same ELF runs in both.
-    return {
+    return withLabNote(config, {
       ...createEmptyDiagram(config.chipId),
       parts: [
         mcu,
@@ -507,7 +551,7 @@ export function makeStarterDiagram(config: BoardConfig): Diagram {
         { from: { part: 'mcu', pin: 'PA9' },  to: { part: 'epaper', pin: 'RST'  }, color: '#F5B642' },
         { from: { part: 'mcu', pin: 'PC7' },  to: { part: 'epaper', pin: 'BUSY' }, color: '#FFE680' },
       ],
-    };
+    });
   }
 
   if (config.boardId === 'esp32-epaper-lab' || config.boardId === 'labwired-ereader') {
@@ -530,7 +574,7 @@ export function makeStarterDiagram(config: BoardConfig): Diagram {
       config.boardId === 'labwired-ereader'
         ? 'uc8151d_tricolor_290'
         : 'ssd1680_tricolor_290';
-    return {
+    return withLabNote(config, {
       ...createEmptyDiagram(config.chipId),
       parts: [
         mcu,
@@ -546,11 +590,11 @@ export function makeStarterDiagram(config: BoardConfig): Diagram {
         { from: { part: 'mcu', pin: 'GPIO16' },  to: { part: 'epaper', pin: 'RST'  }, color: '#F5B642' },
         { from: { part: 'mcu', pin: 'GPIO4'  },  to: { part: 'epaper', pin: 'BUSY' }, color: '#FFE680' },
       ],
-    };
+    });
   }
 
   if (config.boardId === 'nucleo-f401re') {
-    return {
+    return withLabNote(config, {
       ...createEmptyDiagram(config.chipId),
       parts: [
         mcu,
@@ -569,14 +613,14 @@ export function makeStarterDiagram(config: BoardConfig): Diagram {
           color: '#569cd6',
         },
       ],
-    };
+    });
   }
 
-  return {
+  return withLabNote(config, {
     ...createEmptyDiagram(config.chipId),
     parts: [mcu],
     wires: [],
-  };
+  });
 }
 
 function getDefaultSource(config: BoardConfig): string {
