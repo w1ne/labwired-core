@@ -541,6 +541,15 @@ export function EditorCanvas({
     return () => window.removeEventListener('keydown', handler);
   }, [onCancelWire]);
 
+  useEffect(() => {
+    if (
+      editingNoteId &&
+      !state.diagram.parts.some((p) => p.id === editingNoteId && p.type === 'note')
+    ) {
+      setEditingNoteId(null);
+    }
+  }, [editingNoteId, state.diagram.parts]);
+
   // Compute select box rect for rendering
   const selRect = selectBox ? {
     x: Math.min(selectBox.x1, selectBox.x2),
@@ -647,7 +656,10 @@ export function EditorCanvas({
                     data-note-editor={part.id}
                     contentEditable
                     suppressContentEditableWarning
-                    ref={(el) => { if (el && el.textContent !== (part.attrs.text ?? '')) el.textContent = part.attrs.text ?? ''; el?.focus(); }}
+                    ref={(el) => {
+                      if (el && el.textContent !== (part.attrs.text ?? '')) el.textContent = part.attrs.text ?? '';
+                      if (el && document.activeElement !== el) el.focus();
+                    }}
                     onBlur={(e) => {
                       onUpdateAttrs?.(part.id, { text: e.currentTarget.textContent ?? '' });
                       setEditingNoteId(null);
