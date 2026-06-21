@@ -30,6 +30,13 @@ describe('lab description notes', () => {
     }
   });
 
+  it('hidden labs seed no note (firmware sub-parts stay clean)', () => {
+    const hiddenLab = BOARD_CONFIGS.find((c) => c.kind === 'lab' && c.hidden);
+    expect(hiddenLab, 'expected at least one hidden lab in the catalog').toBeDefined();
+    const diagram = makeStarterDiagram(hiddenLab!);
+    expect(diagram.parts.some((p) => p.type === 'note')).toBe(false);
+  });
+
   it('a note never contributes a board_io binding', () => {
     const cfg = visibleLabs[0];
     const diagram = makeStarterDiagram(cfg);
