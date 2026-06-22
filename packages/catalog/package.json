@@ -1,17 +1,19 @@
 {
   "name": "@labwired/catalog",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "files": ["dist", "src/catalog-facts.json"],
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
-      "default": "./src/index.ts"
+      "default": "./dist/index.js"
     }
   },
   "scripts": {
-    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.mjs --packages=external && cp dist/index.mjs dist/index.js",
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.mjs --packages=external && cp dist/index.mjs dist/index.js && tsc -p tsconfig.build.json --emitDeclarationOnly",
     "generate:facts": "tsx scripts/generate-catalog-facts.ts",
     "check:facts": "tsx scripts/generate-catalog-facts.ts --check",
     "test": "vitest run",
