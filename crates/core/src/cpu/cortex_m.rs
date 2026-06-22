@@ -1494,14 +1494,21 @@ impl CortexM {
                     let val = self.read_reg(rm) as u16 as i16 as i32 as u32;
                     self.write_reg(rd, val);
                 }
-                Instruction::ExtendW { rd, rm, rotate, op } => {
+                Instruction::ExtendW { rd, rn, rm, rotate, op } => {
                     // ROR Rm by `rotate` (0/8/16/24), then extract+extend.
                     let v = self.read_reg(rm).rotate_right(rotate as u32);
-                    let out = match op {
-                        0b000 => v as u16 as i16 as i32 as u32, // SXTH.W
-                        0b001 => v & 0xFFFF,                    // UXTH.W
-                        0b100 => v as u8 as i8 as i32 as u32,   // SXTB.W
-                        _ => v & 0xFF,                          // UXTB.W (0b101)
+                    let ext = match op {
+                        0b000 => v as u16 as i16 as i32 as u32, // S*XTH
+                        0b001 => v & 0xFFFF,                    // U*XTH
+                        0b100 => v as u8 as i8 as i32 as u32,   // S*XTB
+                        _ => v & 0xFF,                          // U*XTB (0b101)
+                    };
+                    // Extend-and-add variants (Rn != 0xF) add Rn; the plain
+                    // extends encode Rn = 0xF.
+                    let out = if rn == 0xF {
+                        ext
+                    } else {
+                        self.read_reg(rn).wrapping_add(ext)
                     };
                     self.write_reg(rd, out);
                 }
@@ -3062,6 +3069,19 @@ mod tests {
             run_test_instr(&mut cpu, &mut bus, 0xFA1FF091, true);
             // ROR #8 of 0x00850000 = 0x00008500; & 0xFFFF = 0x8500.
             assert_eq!(cpu.r0, 0x0000_8500, "UXTH.W ROR #8 must rotate then extend");
+        }
+        // UXTAH R0, R1, R2 = FA11 F082 — R0 = R1 + uxth(R2) (extend-and-add).
+        // This is the `4 + path_len` form (uxtah r6,r3,r0) that the plain-extend
+        // decode missed, leaving the result register stale.
+        {
+            let mut cpu = CortexM::new();
+            let mut bus = MockBus::new();
+            cpu.pc = 0x2000;
+            cpu.r0 = 0xDEAD_BEEF; // stale value that must be overwritten
+            cpu.r1 = 0x0000_0004;
+            cpu.r2 = 0x1234_0002;
+            run_test_instr(&mut cpu, &mut bus, 0xFA11F082, true);
+            assert_eq!(cpu.r0, 0x0000_0006, "UXTAH must add Rn to the extended Rm");
         }
     }
 
