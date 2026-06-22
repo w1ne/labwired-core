@@ -152,3 +152,46 @@ jobs:
       - name: Test @labwired/mcp
         working-directory: packages/mcp
         run: npm test
+
+  catalog:
+    name: catalog tests
+    runs-on: [self-hosted, ci]
+    steps:
+      # A prior job (e.g. a container running as root) can leave root-owned files
+      # in the self-hosted runner workspace; the runner user has no sudo, so
+      # actions/checkout's clean step fails with EACCES. rm what we can; if
+      # root-owned files remain, rename the dir aside — we own the PARENT, so the
+      # rename succeeds — and checkout recreates it clean. Nightly
+      # pluto-maintenance reclaims the .broken.* dirs via docker (root).
+      - name: Reset self-hosted workspace
+        run: |
+          if [ -n "${GITHUB_WORKSPACE:-}" ] && [ -d "$GITHUB_WORKSPACE" ]; then
+            rm -rf "$GITHUB_WORKSPACE" 2>/dev/null \
+              || mv "$GITHUB_WORKSPACE" "${GITHUB_WORKSPACE}.broken.$(date +%s%N)" 2>/dev/null \
+              || true
+          fi
+          mkdir -p "$GITHUB_WORKSPACE"
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: packages/catalog/package-lock.json
+
+      # The generator imports board-config + ui manifest source via tsx, so no
+      # build of sibling packages is needed — only this package's devDeps.
+      - name: Install @labwired/catalog
+        working-directory: packages/catalog
+        run: npm ci
+
+      # Fails if catalog-facts.json drifted from board-config / the manifest.
+      - name: Check catalog facts are up to date
+        working-directory: packages/catalog
+        run: npm run check:facts
+
+      - name: Test @labwired/catalog
+        working-directory: packages/catalog
+        run: npm test
