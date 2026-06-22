@@ -1,7 +1,7 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import type { Part, PinDef, ComponentState, DisplayBuffer, EditorState, WireEndpoint } from './types';
-import { COMPONENT_REGISTRY } from './components/index';
+import { COMPONENT_REGISTRY, resolveComponentDef, renderComponentBody } from './components/index';
 import { computeDiagramBounds } from './diagramBounds';
 import { validateWireConnection } from './circuitValidation';
 import { WireLayer } from './WireLayer';
@@ -370,8 +370,7 @@ export function EditorCanvas({
         const maxY = Math.max(selectBox.y1, selectBox.y2);
         const ids = state.diagram.parts
           .filter((p) => {
-            const def = COMPONENT_REGISTRY.get(p.type);
-            if (!def) return false;
+            const def = resolveComponentDef(p.type);
             const s = p.scale ?? 1;
             const px = p.x + (def.width * s) / 2;
             const py = p.y + (def.height * s) / 2;
@@ -566,7 +565,7 @@ export function EditorCanvas({
       style={{
         width: '100%',
         height: '100%',
-        background: '#1a1a2e',
+        background: 'var(--lw-bg-canvas, #1a1a2e)',
         cursor: panning ? 'grabbing' : 'default',
         // Stop the browser from hijacking touch as page scroll / pinch-zoom so
         // our own pan/pinch gestures work. Critical for run mode on phones.
@@ -617,8 +616,7 @@ export function EditorCanvas({
       />
 
       {state.diagram.parts.map((part) => {
-        const def = COMPONENT_REGISTRY.get(part.type);
-        if (!def) return null;
+        const def = resolveComponentDef(part.type);
 
         const isSelected = state.selectedIds.has(part.id);
         const ioState = boardIoStates?.[part.id];
@@ -676,7 +674,7 @@ export function EditorCanvas({
                   />
                 </foreignObject>
               ) : (
-                def.render(part.attrs, compState)
+                renderComponentBody(def, part.attrs, compState)
               )}
               {def.pins.map((pin: PinDef) => {
                 const isHovered = hoveredPin?.partId === part.id && hoveredPin?.pinId === pin.id;

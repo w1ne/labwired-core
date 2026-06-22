@@ -130,6 +130,31 @@ export const COMPONENT_REGISTRY: Map<string, ComponentDef> = new Map([
   [textAnnotationComponent.type, textAnnotationComponent],
 ]);
 
+import { defineComponent, genericComponentDef, makeGenericRender } from './generic';
+export { defineComponent, genericComponentDef, makeGenericRender, renderComponentBody } from './generic';
+
+/** Register (or override) a component at runtime — lets a consumer (e.g. proto.cat)
+ *  inject its catalog parts as data-driven defs so the board can render anything. */
+export function registerComponentDef(def: ComponentDef): void {
+  COMPONENT_REGISTRY.set(def.type, def);
+}
+
+/** Register many parts from data in one call. */
+export function registerComponents(
+  parts: Array<Partial<ComponentDef> & { type: string; label: string }>,
+): void {
+  for (const p of parts) COMPONENT_REGISTRY.set(p.type, defineComponent(p));
+}
+
+/** Always return a usable def: the registered one, or a synthesized generic box
+ *  for an unregistered type, with a render guaranteed (generic when absent). So no
+ *  part ever fails to draw. */
+export function resolveComponentDef(type: string): ComponentDef {
+  const def = COMPONENT_REGISTRY.get(type) ?? genericComponentDef(type);
+  if (!def.render) def.render = makeGenericRender(def);
+  return def;
+}
+
 /** Component definitions grouped by category (excludes MCU). */
 export function getComponentsByCategory(): Record<string, ComponentDef[]> {
   const groups: Record<string, ComponentDef[]> = {};

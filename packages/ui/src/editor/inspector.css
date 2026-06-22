@@ -1,0 +1,118 @@
+/*
+ * Styles for <DeviceInspector>'s PropertyPanel (the panels' logic ships in this
+ * package, but PropertyPanel renders bare `.panel-*` / `.editor-property-panel`
+ * class names with no inline styles). Scoped under `.lw-inspector` (the wrapper
+ * DeviceInspector renders) so the generic class names can't leak into a consumer's
+ * global styles. Font/colour CSS vars get monospace/grey fallbacks so this works
+ * without tokens.css. RegisterGrid + SerialMonitor are inline-styled and need none.
+ *
+ * Consumers: `import '@labwired/ui/inspector.css'`.
+ */
+.lw-inspector .editor-property-panel {
+  padding: 12px;
+}
+
+.lw-inspector .panel-title {
+  font-family: var(--lw-font-heading, ui-sans-serif, system-ui, sans-serif);
+  font-size: 0.8rem;
+  font-weight: 700;
+  margin-bottom: 6px;
+  color: #cdd6f4;
+}
+
+.lw-inspector .panel-id {
+  font-family: var(--lw-font-mono, ui-monospace, monospace);
+  font-size: 0.7rem;
+  color: var(--lw-gray, #888);
+  margin-bottom: 8px;
+}
+
+.lw-inspector .panel-empty {
+  font-family: var(--lw-font-mono, ui-monospace, monospace);
+  font-size: 0.75rem;
+  color: var(--lw-gray, #555);
+  padding: 16px 0;
+  text-align: center;
+}
+
+.lw-inspector .panel-section {
+  margin-bottom: 12px;
+}
+
+.lw-inspector .panel-section-title {
+  font-family: var(--lw-font-mono, ui-monospace, monospace);
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--lw-gray, #888);
+  margin-bottom: 4px;
+}
+
+.lw-inspector .panel-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.lw-inspector .panel-row label {
+  font-family: var(--lw-font-mono, ui-monospace, monospace);
+  font-size: 0.7rem;
+  color: var(--lw-gray, #aaa);
+  flex-shrink: 0;
+}
+
+.lw-inspector .panel-input {
+  font-family: var(--lw-font-mono, ui-monospace, monospace);
+  font-size: 0.7rem;
+  padding: 3px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  width: 100%;
+  max-width: 100px;
+}
+
+.lw-inspector .panel-input-sm {
+  max-width: 55px;
+}
+
+.lw-inspector .panel-value {
+  font-family: var(--lw-font-mono, ui-monospace, monospace);
+  font-size: 0.7rem;
+  color: #fff;
+}
+
+.lw-inspector .panel-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.lw-inspector .panel-btn {
+  font-family: var(--lw-font-mono, ui-monospace, monospace);
+  font-size: 0.7rem;
+  padding: 4px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--lw-dark-text, #ccc);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.lw-inspector .panel-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.lw-inspector .panel-btn-danger {
+  border-color: #ff4444;
+  color: #ff4444;
+}
+
+.lw-inspector .panel-btn-danger:hover {
+  background: rgba(255, 68, 68, 0.15);
+}
