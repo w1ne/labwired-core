@@ -109,6 +109,8 @@ impl Scb {
     }
 
     /// Write a 32-bit value to an SCB register at the given word-aligned offset.
+    /// Only compiled in test builds; production MMIO goes through `Peripheral::write`.
+    #[cfg(test)]
     pub fn write_register(&mut self, offset: u64, value: u32) {
         self.write_reg(offset, value);
     }
