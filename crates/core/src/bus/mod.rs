@@ -192,6 +192,7 @@ pub struct CanDiagnosticTester {
 /// frames via `deliver_rx` (bxCAN) / `receive_frame` (FDCAN). Injection is
 /// filter-gated, so a `false` return (filter not yet configured, FIFO full)
 /// leaves the FSM parked on the same send to retry next tick.
+// -----
 /// One step in a UDS tester script: a raw payload to send and the
 /// expected response bytes (`None` = `..` wildcard, any byte matches).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -762,7 +763,16 @@ impl SystemBus {
                 .map(|part| {
                     let part = part.trim();
                     if let Some(hex) = part.strip_prefix("0x").or_else(|| part.strip_prefix("0X")) {
-                        u8::from_str_radix(hex, 16).unwrap_or(0)
+                        match u8::from_str_radix(hex, 16) {
+                            Ok(b) => b,
+                            Err(_) => {
+                                tracing::warn!(
+                                    "[uds-tester] malformed send byte {:?}, treating as 0x00",
+                                    part
+                                );
+                                0
+                            }
+                        }
                     } else {
                         u8::from_str_radix(part, 16)
                             .unwrap_or_else(|_| part.parse::<u8>().unwrap_or(0))
@@ -783,7 +793,16 @@ impl SystemBus {
                     None
                 } else {
                     let hex = tok.trim_start_matches("0x").trim_start_matches("0X");
-                    Some(u8::from_str_radix(hex, 16).unwrap_or(0))
+                    match u8::from_str_radix(hex, 16) {
+                        Ok(b) => Some(b),
+                        Err(_) => {
+                            tracing::warn!(
+                                "[uds-tester] malformed expect token {:?}, treating as 0x00",
+                                tok
+                            );
+                            Some(0)
+                        }
+                    }
                 }
             })
             .collect()
@@ -796,7 +815,7 @@ impl SystemBus {
             _ => return Vec::new(),
         };
         seq.iter()
-            .filter_map(|entry| {
+            .map(|entry| {
                 let send = Self::yaml_bytes(entry.get("send"), &[]);
                 let expect_str = entry
                     .get("expect")
@@ -814,13 +833,13 @@ impl SystemBus {
                     .get("timeout_ticks")
                     .map(|v| Self::yaml_u32(Some(v), 0) as u64)
                     .unwrap_or(CanUdsTester::DEFAULT_MAX_TICKS);
-                Some(UdsStep {
+                UdsStep {
                     send,
                     expect,
                     expect_nrc,
                     expect_silence,
                     timeout_ticks,
-                })
+                }
             })
             .collect()
     }
@@ -2282,6 +2301,37 @@ board_io: []
         assert_eq!(t.script[0].send, vec![0x11, 0x01]);
         assert_eq!(t.script[0].expect, vec![Some(0x51), Some(0x01)]);
         assert_eq!(t.script[1].expect, vec![Some(0x67), Some(0x01), None]); // .. = wildcard
+    }
+
+    #[test]
+    fn uds_script_parses_optional_step_fields() {
+        let manifest: SystemManifest = serde_yaml::from_str(
+            r#"
+name: "uds-script-opts"
+chip: "f103"
+external_devices:
+  - id: "uds-tester"
+    type: "uds-tester"
+    connection: "bxcan1"
+    config:
+      request_id: "0x111"
+      reply_id: "0x222"
+      script:
+        - send: "28 03"
+          expect: "68 03"
+          timeout_ticks: 500
+          expect_nrc: "0x22"
+          expect_silence: true
+board_io: []
+"#,
+        )
+        .unwrap();
+        let chip: ChipDescriptor = serde_yaml::from_str(MIN_F103_CHIP).unwrap();
+        let bus = SystemBus::from_config(&chip, &manifest).unwrap();
+        let step = &bus.can_uds_testers[0].script[0];
+        assert_eq!(step.timeout_ticks, 500);
+        assert_eq!(step.expect_nrc, Some(0x22));
+        assert!(step.expect_silence);
     }
 
     /// Parse a minimal chip yaml with the given header lines (name/arch/core).
