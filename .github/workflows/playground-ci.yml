@@ -192,6 +192,34 @@ jobs:
         working-directory: packages/catalog
         run: npm run check:facts
 
+      # If the facts changed in this PR, the package version MUST be bumped so the
+      # publish workflow ships an honest, committed version (roast #6). Without
+      # this, a facts change would publish-skip (version already on npm) and
+      # proto.cat would never get a bump PR.
+      - name: Require version bump when facts change
+        if: github.event_name == 'pull_request'
+        working-directory: packages/catalog
+        run: |
+          set -euo pipefail
+          git fetch --depth=1 origin "${{ github.base_ref }}"
+          BASE="$(git rev-parse FETCH_HEAD)"
+          if git diff --quiet "$BASE" -- src/catalog-facts.json; then
+            echo "catalog-facts.json unchanged — no bump required"
+            exit 0
+          fi
+          if ! git show "$BASE:packages/catalog/package.json" > /tmp/base-pkg.json 2>/dev/null; then
+            echo "package is new on this branch — no prior version to bump from"
+            exit 0
+          fi
+          OLD=$(node -p "require('/tmp/base-pkg.json').version")
+          NEW=$(node -p "require('./package.json').version")
+          if [ "$OLD" = "$NEW" ]; then
+            echo "catalog-facts.json changed but @labwired/catalog is still $NEW." >&2
+            echo "Bump it: (cd packages/catalog && npm version patch --no-git-tag-version)" >&2
+            exit 1
+          fi
+          echo "version bumped $OLD -> $NEW"
+
       - name: Test @labwired/catalog
         working-directory: packages/catalog
         run: npm test

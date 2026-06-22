@@ -7,10 +7,10 @@
 #   PROTOCAT_PAT  — PAT with `repo` scope on w1ne/protocat, for the bump PR.
 #                   Create + add:  gh secret set PROTOCAT_PAT
 #
-# Versioning: the published version is computed from npm at publish time
-# (current patch + 1) and set ephemerally — it is NOT committed back. The
-# committed package.json version is just a baseline, so there is no push to main
-# and no CI re-entry. proto.cat pins the published version via the bump PR.
+# Versioning: we publish the version committed in packages/catalog/package.json.
+# A PR gate (Playground CI) fails if catalog-facts.json changes without a version
+# bump, so the committed version is always honest and there is no push to main /
+# CI re-entry. The publish skips if that exact version is already on npm.
 
 name: Publish @labwired/catalog
 
@@ -55,7 +55,7 @@ jobs:
         working-directory: packages/catalog
         run: npm run build && npm test
 
-      - name: Publish if content changed
+      - name: Publish committed version if not already on npm
         id: pub
         working-directory: packages/catalog
         env:
@@ -63,26 +63,15 @@ jobs:
         run: |
           set -euo pipefail
           NAME=$(node -p "require('./package.json').name")
-          # Compare the committed facts to the facts inside the latest published
-          # tarball. If identical, there is nothing new to publish.
-          PUBLISHED_DIR=$(mktemp -d)
-          if npm pack "$NAME@latest" --pack-destination "$PUBLISHED_DIR" >/dev/null 2>&1; then
-            tar -xzf "$PUBLISHED_DIR"/*.tgz -C "$PUBLISHED_DIR"
-            if cmp -s src/catalog-facts.json "$PUBLISHED_DIR/package/src/catalog-facts.json"; then
-              echo "facts unchanged vs latest published — skipping publish"
-              echo "published=false" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-            CUR=$(npm view "$NAME" version)
-            NEXT=$(node -e "const [a,b,c]=process.argv[1].split('.'); console.log(\`\${a}.\${b}.\${Number(c)+1}\`)" "$CUR")
+          VER=$(node -p "require('./package.json').version")
+          if npm view "$NAME@$VER" version >/dev/null 2>&1; then
+            echo "$NAME@$VER is already published — skipping (bump the version to release)"
+            echo "published=false" >> "$GITHUB_OUTPUT"
           else
-            # Never published before — use the committed baseline version.
-            NEXT=$(node -p "require('./package.json').version")
+            npm publish --provenance --access public
+            echo "version=$VER" >> "$GITHUB_OUTPUT"
+            echo "published=true" >> "$GITHUB_OUTPUT"
           fi
-          npm version --no-git-tag-version "$NEXT"
-          npm publish --provenance --access public
-          echo "version=$NEXT" >> "$GITHUB_OUTPUT"
-          echo "published=true" >> "$GITHUB_OUTPUT"
 
   bump-protocat:
     needs: publish
