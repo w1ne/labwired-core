@@ -4,6 +4,7 @@ import { writeFile, readFile, mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { safeEnv } from './safe-env.js';
+import { CHIP_YAMLS } from '../../../packages/board-config/src/chip-yamls';
 
 const execFileAsync = promisify(execFile);
 
@@ -151,6 +152,38 @@ async function buildDiagnosis(
   };
 }
 
+/** Resolve the manifest's `chip:` field so the CLI can load it.
+ *  - explicit chipYamlOverride  → write it as chip.yaml, rewrite `chip: "inline"`.
+ *  - bare id (e.g. "esp32c3")   → resolve from CHIP_YAMLS, rewrite to chip.yaml.
+ *  - path / ".yaml" / "inline"  → leave untouched (CLI resolves on disk).
+ *  Throws a listing error on an unknown bare id. */
+export function resolveChipInManifest(
+  systemYaml: string,
+  chipYamlOverride?: string,
+): { systemYaml: string; chipYaml?: string } {
+  const rewriteToFile = (s: string) =>
+    s.replace(/^chip:\s*["']?[A-Za-z0-9_.\-/]+["']?\s*$/m, 'chip: "chip.yaml"');
+
+  if (chipYamlOverride) {
+    return { systemYaml: rewriteToFile(systemYaml), chipYaml: chipYamlOverride };
+  }
+  const m = systemYaml.match(/^chip:\s*["']?([A-Za-z0-9_.\-/]+)["']?\s*$/m);
+  if (!m) return { systemYaml };
+  const val = m[1];
+  if (val === 'inline' || val.includes('/') || val.endsWith('.yaml')) {
+    return { systemYaml };
+  }
+  const yaml = CHIP_YAMLS[val];
+  if (!yaml) {
+    const known = Object.keys(CHIP_YAMLS).sort().join(', ');
+    throw new Error(
+      `unknown chip id "${val}". Known chip ids: ${known}. ` +
+        'Call labwired_lookup with of:"chips" for ids and their peripheral names.',
+    );
+  }
+  return { systemYaml: rewriteToFile(systemYaml), chipYaml: yaml };
+}
+
 export async function run(req: RunRequest): Promise<RunResult> {
   const tmp = join('/tmp', `lwb-run-${randomUUID()}`);
   await mkdir(tmp, { recursive: true });
@@ -164,12 +197,10 @@ export async function run(req: RunRequest): Promise<RunResult> {
     // Write ELF bytes decoded from base64
     await writeFile(elfPath, Buffer.from(req.elfBase64, 'base64'));
 
-    // If a chip YAML is provided, write it alongside system.yaml and resolve
-    // the `chip: "inline"` placeholder so the CLI can find it on disk.
-    let systemYaml = req.systemYaml;
-    if (req.chipYaml) {
-      await writeFile(join(tmp, 'chip.yaml'), req.chipYaml);
-      systemYaml = systemYaml.replace(/^chip:\s*"inline"\s*$/m, 'chip: "chip.yaml"');
+    const resolved = resolveChipInManifest(req.systemYaml, req.chipYaml);
+    const systemYaml = resolved.systemYaml;
+    if (resolved.chipYaml) {
+      await writeFile(join(tmp, 'chip.yaml'), resolved.chipYaml);
     }
 
     // Write system manifest
