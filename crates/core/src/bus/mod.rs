@@ -192,6 +192,22 @@ pub struct CanDiagnosticTester {
 /// frames via `deliver_rx` (bxCAN) / `receive_frame` (FDCAN). Injection is
 /// filter-gated, so a `false` return (filter not yet configured, FIFO full)
 /// leaves the FSM parked on the same send to retry next tick.
+/// One step in a UDS tester script: a raw payload to send and the
+/// expected response bytes (`None` = `..` wildcard, any byte matches).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UdsStep {
+    /// Raw bytes to send to the ECU (before ISO-TP framing).
+    pub send: Vec<u8>,
+    /// Expected response bytes; `None` entries match any byte.
+    pub expect: Vec<Option<u8>>,
+    /// Optional expected NRC byte (response 0x7F <sid> <nrc>).
+    pub expect_nrc: Option<u8>,
+    /// When `true`, no response is expected within `timeout_ticks`.
+    pub expect_silence: bool,
+    /// Tick budget for this step before declaring a timeout.
+    pub timeout_ticks: u64,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CanUdsTesterState {
     /// Need to inject the FirstFrame.
@@ -224,6 +240,12 @@ pub struct CanUdsTester {
     pub ticks: u64,
     /// Tick budget before declaring `Failed`.
     pub max_ticks: u64,
+    /// Scripted exchange steps; empty when using legacy hardcoded payloads.
+    pub script: Vec<UdsStep>,
+    /// Index of the current step in `script`.
+    pub step_idx: usize,
+    /// Set when a step fails; describes what went wrong.
+    pub failure: Option<String>,
 }
 
 impl CanUdsTester {
@@ -246,6 +268,9 @@ impl CanUdsTester {
             state: CanUdsTesterState::Start,
             ticks: 0,
             max_ticks: Self::DEFAULT_MAX_TICKS,
+            script: Vec::new(),
+            step_idx: 0,
+            failure: None,
         }
     }
 
@@ -746,6 +771,58 @@ impl SystemBus {
                 .collect(),
             _ => default.to_vec(),
         }
+    }
+
+    /// Parse an expect string such as `"51 01 .."` into a mask vector.
+    /// `".."` becomes `None` (wildcard); any other token is parsed as a hex
+    /// byte and becomes `Some(byte)`.
+    fn parse_expect(s: &str) -> Vec<Option<u8>> {
+        s.split_ascii_whitespace()
+            .map(|tok| {
+                if tok == ".." {
+                    None
+                } else {
+                    let hex = tok.trim_start_matches("0x").trim_start_matches("0X");
+                    Some(u8::from_str_radix(hex, 16).unwrap_or(0))
+                }
+            })
+            .collect()
+    }
+
+    /// Parse an optional YAML `script:` sequence into a `Vec<UdsStep>`.
+    fn parse_script(value: Option<&serde_yaml::Value>) -> Vec<UdsStep> {
+        let seq = match value {
+            Some(serde_yaml::Value::Sequence(s)) => s,
+            _ => return Vec::new(),
+        };
+        seq.iter()
+            .filter_map(|entry| {
+                let send = Self::yaml_bytes(entry.get("send"), &[]);
+                let expect_str = entry
+                    .get("expect")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                let expect = Self::parse_expect(expect_str);
+                let expect_nrc = entry
+                    .get("expect_nrc")
+                    .map(|v| Self::yaml_u32(Some(v), 0) as u8);
+                let expect_silence = entry
+                    .get("expect_silence")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                let timeout_ticks = entry
+                    .get("timeout_ticks")
+                    .map(|v| Self::yaml_u32(Some(v), 0) as u64)
+                    .unwrap_or(CanUdsTester::DEFAULT_MAX_TICKS);
+                Some(UdsStep {
+                    send,
+                    expect,
+                    expect_nrc,
+                    expect_silence,
+                    timeout_ticks,
+                })
+            })
+            .collect()
     }
 
     /// Write-hook mirror of [`maybe_latch_dc`](Self::maybe_latch_dc) for the
@@ -2156,6 +2233,55 @@ board_io: []
             CanUdsTester::DEFAULT_CONSECUTIVE_FRAME.to_vec()
         );
         assert_eq!(t.state, CanUdsTesterState::Start);
+    }
+
+    /// Minimal F103 chip yaml reused across UDS script tests.
+    const MIN_F103_CHIP: &str = r#"
+name: "f103"
+arch: "arm"
+core: "cortex-m3"
+flash:
+  base: 0x08000000
+  size: "128KB"
+ram:
+  base: 0x20000000
+  size: "20KB"
+peripherals:
+  - id: "bxcan1"
+    type: "bxcan"
+    base_address: 0x40006400
+    size: "1KB"
+"#;
+
+    #[test]
+    fn uds_script_parses_send_expect_and_wildcards() {
+        let manifest: SystemManifest = serde_yaml::from_str(
+            r#"
+name: "uds-script"
+chip: "f103"
+external_devices:
+  - id: "uds-tester"
+    type: "uds-tester"
+    connection: "bxcan1"
+    config:
+      request_id: "0x111"
+      reply_id: "0x222"
+      script:
+        - send: "11 01"
+          expect: "51 01"
+        - send: "27 01"
+          expect: "67 01 .."
+board_io: []
+"#,
+        )
+        .unwrap();
+        let chip: ChipDescriptor = serde_yaml::from_str(MIN_F103_CHIP).unwrap();
+        let bus = SystemBus::from_config(&chip, &manifest).unwrap();
+        let t = &bus.can_uds_testers[0];
+        assert_eq!(t.script.len(), 2);
+        assert_eq!(t.script[0].send, vec![0x11, 0x01]);
+        assert_eq!(t.script[0].expect, vec![Some(0x51), Some(0x01)]);
+        assert_eq!(t.script[1].expect, vec![Some(0x67), Some(0x01), None]); // .. = wildcard
     }
 
     /// Parse a minimal chip yaml with the given header lines (name/arch/core).

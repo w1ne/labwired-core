@@ -555,6 +555,7 @@ impl SystemBus {
                         ext.config.get("consecutive_frame"),
                         &CanUdsTester::DEFAULT_CONSECUTIVE_FRAME,
                     );
+                    tester.script = Self::parse_script(ext.config.get("script"));
                     bus.can_uds_testers.push(tester);
                 }
                 // ntc-thermistor dispatches through the PeripheralKit registry above.
