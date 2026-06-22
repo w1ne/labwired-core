@@ -49,6 +49,25 @@ pub const NSCR_BKSEL: u32 = 1 << 31;
 
 /// Bit 0 — BSY: non-secure busy.
 pub const NSSR_BSY: u32 = 1 << 0;
+/// Bit 17 — WRPERR: write-protection error (program/erase of a protected or
+/// locked region). RM0481 §7.9.8. Sticky W1C.
+pub const NSSR_WRPERR: u32 = 1 << 17;
+/// Bit 18 — PGSERR: programming-sequence error (program to a non-quad-word
+/// aligned address, or program of a location not in the erased state).
+/// RM0481 §7.9.8. Sticky W1C.
+pub const NSSR_PGSERR: u32 = 1 << 18;
+/// Bit 20 — INCERR: inconsistency error (the programmed flash word does not
+/// match the requested value, e.g. a misaligned/over-not-erased quad-word
+/// program). RM0481 §7.9.8. Sticky W1C.
+pub const NSSR_INCERR: u32 = 1 << 20;
+
+/// Mask of the W1C error/status flags in NSSR (everything except read-only
+/// BSY/WBNE/DBNE-type status). Writing 1 to any of these clears it.
+pub const NSSR_W1C_MASK: u32 = NSSR_WRPERR | NSSR_PGSERR | NSSR_INCERR;
+
+/// Quad-word (16-byte) programming granularity. A non-secure program whose
+/// target flash offset is not 16-byte aligned is a sequence error on H5.
+pub const PROG_GRANULARITY: u64 = 16;
 
 // ── FLASH_OPTSR_CUR / OPTSR_PRG bitfields (RM0481 §7.9.14) ─────────────────
 
