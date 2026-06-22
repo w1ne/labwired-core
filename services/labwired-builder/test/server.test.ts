@@ -94,6 +94,18 @@ describe('server', () => {
   });
 });
 
+import { CHIP_YAMLS } from '../../../packages/board-config/src/chip-yamls';
+
+describe('GET /chips', () => {
+  it('lists the bundled chip ids', async () => {
+    const res = await fetch(`${base}/chips`);
+    expect(res.status).toBe(200);
+    const body = await res.json() as { chips: { id: string }[] };
+    const ids = body.chips.map((c: { id: string }) => c.id);
+    expect(ids).toEqual(expect.arrayContaining(Object.keys(CHIP_YAMLS)));
+  });
+});
+
 describe('builder /compile proxy', () => {
   const started: Server[] = [];
   afterEach(async () => {
