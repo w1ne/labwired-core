@@ -28,6 +28,7 @@ import { mpu6050Component } from './mpu6050';
 import { neo6mGpsComponent } from './neo6m-gps';
 import { bg770aCellularComponent } from './bg770a-cellular';
 import { ntcThermistorComponent } from './ntc-thermistor';
+import { mlx90640Component } from './mlx90640';
 // Displays
 import { oledSsd1306Component } from './oled-ssd1306';
 import { pcd8544Component } from './pcd8544';
@@ -43,6 +44,7 @@ import { transistorComponent } from './transistor';
 import { shiftRegister74hc595Component } from './shift-register-74hc595';
 import { sn74hc165Component } from './sn74hc165';
 import { iolinkMasterComponent } from './iolink-master';
+import { m12IoLinkComponent } from './m12-iolink';
 import { canTransceiverComponent } from './can-transceiver';
 import { canDiagnosticToolComponent } from './can-diagnostic-tool';
 import { motorDriverL293dComponent } from './motor-driver-l293d';
@@ -103,6 +105,7 @@ export const COMPONENT_REGISTRY: Map<string, ComponentDef> = new Map([
   [neo6mGpsComponent.type, neo6mGpsComponent],
   [bg770aCellularComponent.type, bg770aCellularComponent],
   [ntcThermistorComponent.type, ntcThermistorComponent],
+  [mlx90640Component.type, mlx90640Component],
   // Displays
   [sevenSegmentComponent.type, sevenSegmentComponent],
   [lcd1602Component.type, lcd1602Component],
@@ -121,6 +124,7 @@ export const COMPONENT_REGISTRY: Map<string, ComponentDef> = new Map([
   [shiftRegister74hc595Component.type, shiftRegister74hc595Component],
   [sn74hc165Component.type, sn74hc165Component],
   [iolinkMasterComponent.type, iolinkMasterComponent],
+  [m12IoLinkComponent.type, m12IoLinkComponent],
   [canTransceiverComponent.type, canTransceiverComponent],
   [canDiagnosticToolComponent.type, canDiagnosticToolComponent],
   [motorDriverL293dComponent.type, motorDriverL293dComponent],
