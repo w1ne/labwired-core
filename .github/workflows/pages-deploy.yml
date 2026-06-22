@@ -35,13 +35,6 @@ jobs:
   build-and-deploy:
     runs-on: [self-hosted, deploy]
     steps:
-      # Self-hosted hygiene: clear any root-owned leftovers from a prior job so
-      # actions/checkout's clean step doesn't fail with EACCES. Passwordless
-      # sudo when available, plain rm otherwise.
-      - name: Reset self-hosted workspace
-        run: |
-          sudo -n rm -rf "$GITHUB_WORKSPACE" 2>/dev/null || rm -rf "$GITHUB_WORKSPACE" 2>/dev/null || true
-          mkdir -p "$GITHUB_WORKSPACE"
       - name: Checkout
         uses: actions/checkout@v4
         with:
