@@ -117,6 +117,35 @@ function panelType(devType: string): string | null {
   return null;
 }
 
+// I2C sensors the editor can render (manifest device type → registry component).
+const I2C_SENSOR_TYPES: Record<string, string> = {
+  mlx90640: 'mlx90640',
+  bme280: 'bme280',
+  adxl345: 'adxl345',
+  mpu6050: 'mpu6050',
+};
+
+/** Map an I2C sensor manifest type to a renderable component type. */
+function sensorType(devType: string): string | null {
+  const t = devType.toLowerCase();
+  if (I2C_SENSOR_TYPES[t]) return I2C_SENSOR_TYPES[t];
+  if (t.includes('mlx90640')) return 'mlx90640';
+  return null;
+}
+
+/** Map an IO-Link / M12 field connector manifest type to a component type. */
+function connectorType(devType: string): string | null {
+  const t = devType.toLowerCase();
+  if (t.includes('m12') || t.includes('iolink') || t.includes('io-link') || t.includes('io_link'))
+    return 'm12-iolink';
+  return null;
+}
+
+/** Any external-device type the editor has a ComponentDef for. */
+function renderableType(devType: string): string | null {
+  return panelType(devType) ?? sensorType(devType) ?? connectorType(devType);
+}
+
 /** Normalize "5" | "GPIO5" | "IO5" → "GPIO5" (esp32 component pin ids). */
 function gpio(raw: string): string {
   return `GPIO${String(raw).replace(/[^0-9]/g, '')}`;
@@ -137,9 +166,10 @@ export function canRenderInEditor(systemManifest: string | null): boolean {
   }
   if (!mcuType(parsed.chip)) return false;
   if (parsed.externalDevices.length === 0) return false;
-  // Today the editor only has display ComponentDefs for the tri-color panels;
-  // require every external device to be one of those.
-  return parsed.externalDevices.every((d) => panelType(d.type) !== null);
+  // Render only when every external device maps to a ComponentDef — tri-color
+  // panels, known I2C sensors, or an IO-Link/M12 connector. Anything else falls
+  // back to the caller's generic renderer so nothing goes undrawn.
+  return parsed.externalDevices.every((d) => renderableType(d.type) !== null);
 }
 
 /**
@@ -158,23 +188,42 @@ export function manifestToEditorState(systemManifest: string | null): EditorStat
 
   parsed.externalDevices.forEach((dev, i) => {
     const partId = dev.id || `dev${i}`;
-    const type = panelType(dev.type) as string;
+    const panel = panelType(dev.type);
+    const sensor = sensorType(dev.type);
+    const connector = connectorType(dev.type);
+    const type = (panel ?? sensor ?? connector) as string;
     parts.push({ id: partId, type, x: 460, y: 120 + i * 200, rotate: 0, attrs: {} });
 
-    // Power rails.
-    W({ from: { part: 'mcu', pin: '3V3' }, to: { part: partId, pin: 'VCC' }, color: '#FF6B6B' });
-    W({ from: { part: 'mcu', pin: 'GND' }, to: { part: partId, pin: 'GND' }, color: '#888888' });
+    // Power rails — panels and I2C sensors carry VCC/GND pads; the M12 field
+    // connector instead exposes L+/L- (bus power) and is wired below.
+    if (panel || sensor) {
+      W({ from: { part: 'mcu', pin: '3V3' }, to: { part: partId, pin: 'VCC' }, color: '#FF6B6B' });
+      W({ from: { part: 'mcu', pin: 'GND' }, to: { part: partId, pin: 'GND' }, color: '#888888' });
+    }
 
-    const bus = SPI_BUS[dev.connection.toLowerCase()];
-    if (bus && PANEL_REGISTRY_TYPES.has(type)) {
-      const { cs_pin, dc_pin, rst_pin, reset_pin, busy_pin } = dev.config;
-      W({ from: { part: 'mcu', pin: bus.sck }, to: { part: partId, pin: 'CLK' }, color: '#5BD8FF' });
-      W({ from: { part: 'mcu', pin: bus.mosi }, to: { part: partId, pin: 'DIN' }, color: '#B07BFF' });
-      if (cs_pin) W({ from: { part: 'mcu', pin: gpio(cs_pin) }, to: { part: partId, pin: 'CS' }, color: '#3DD68C' });
-      if (dc_pin) W({ from: { part: 'mcu', pin: gpio(dc_pin) }, to: { part: partId, pin: 'DC' }, color: '#5B9DFF' });
-      const rst = rst_pin ?? reset_pin;
-      if (rst) W({ from: { part: 'mcu', pin: gpio(rst) }, to: { part: partId, pin: 'RST' }, color: '#F5B642' });
-      if (busy_pin) W({ from: { part: 'mcu', pin: gpio(busy_pin) }, to: { part: partId, pin: 'BUSY' }, color: '#FFE680' });
+    if (panel) {
+      const bus = SPI_BUS[dev.connection.toLowerCase()];
+      if (bus && PANEL_REGISTRY_TYPES.has(type)) {
+        const { cs_pin, dc_pin, rst_pin, reset_pin, busy_pin } = dev.config;
+        W({ from: { part: 'mcu', pin: bus.sck }, to: { part: partId, pin: 'CLK' }, color: '#5BD8FF' });
+        W({ from: { part: 'mcu', pin: bus.mosi }, to: { part: partId, pin: 'DIN' }, color: '#B07BFF' });
+        if (cs_pin) W({ from: { part: 'mcu', pin: gpio(cs_pin) }, to: { part: partId, pin: 'CS' }, color: '#3DD68C' });
+        if (dc_pin) W({ from: { part: 'mcu', pin: gpio(dc_pin) }, to: { part: partId, pin: 'DC' }, color: '#5B9DFF' });
+        const rst = rst_pin ?? reset_pin;
+        if (rst) W({ from: { part: 'mcu', pin: gpio(rst) }, to: { part: partId, pin: 'RST' }, color: '#F5B642' });
+        if (busy_pin) W({ from: { part: 'mcu', pin: gpio(busy_pin) }, to: { part: partId, pin: 'BUSY' }, color: '#FFE680' });
+      }
+    } else if (sensor) {
+      // I2C bus: SDA/SCL pins come from the device config.
+      const { scl_pin, sda_pin } = dev.config;
+      if (scl_pin) W({ from: { part: 'mcu', pin: gpio(scl_pin) }, to: { part: partId, pin: 'SCL' }, color: '#5BD8FF' });
+      if (sda_pin) W({ from: { part: 'mcu', pin: gpio(sda_pin) }, to: { part: partId, pin: 'SDA' }, color: '#B07BFF' });
+    } else if (connector) {
+      // IO-Link field connector: C/Q to the MCU UART line (via a PHY), L- to GND.
+      const { cq_pin, tx_pin } = dev.config;
+      const cq = cq_pin ?? tx_pin;
+      if (cq) W({ from: { part: 'mcu', pin: gpio(cq) }, to: { part: partId, pin: 'CQ' }, color: '#37D67A' });
+      W({ from: { part: 'mcu', pin: 'GND' }, to: { part: partId, pin: 'L-' }, color: '#888888' });
     }
   });
 
