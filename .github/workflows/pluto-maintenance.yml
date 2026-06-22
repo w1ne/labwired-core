@@ -35,6 +35,16 @@ jobs:
           # Legacy github-pages temp dirs can accumulate quickly.
           find /home/w1ne -maxdepth 1 -type d -name 'actions_github_pages_*' -mtime +2 -exec rm -rf {} + || true
 
+      - name: Reclaim root-owned workspace leftovers (.broken.* via docker)
+        run: |
+          set -euo pipefail
+          # CI/deploy jobs rename un-removable (root-owned) workspaces aside to
+          # `<workspace>.broken.<ts>` when a prior container job wrote as root.
+          # The runner user can't rm those (no sudo), so reclaim them with a
+          # throwaway container running as root. No-op when there are none.
+          docker run --rm -v /home/w1ne:/host alpine \
+            sh -c 'find /host/actions-runner*/_work/*/ -maxdepth 1 -name "*.broken.*" -exec rm -rf {} + 2>/dev/null; true' || true
+
       - name: Cleanup Docker caches
         run: |
           set -euo pipefail
