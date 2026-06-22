@@ -14,16 +14,38 @@ export interface CatalogFacts {
   chips: string[];
 }
 
-/** Schema version the TS side was built against. Generator must match. */
+/** Schema version the TS side was built against. */
 export const CATALOG_FACTS_SCHEMA = 1;
 
-const FACTS = factsRaw as CatalogFacts;
+function readFacts(raw: unknown): CatalogFacts {
+  const f = raw as CatalogFacts;
+  // device_types / chips are forward-compatible primitive arrays, so a newer or
+  // older schema is still readable. Do NOT throw on a version mismatch at import
+  // — that would crash a consumer's whole build just for reading a string list
+  // (roast #7). Only a genuinely malformed file (missing the arrays) is fatal.
+  if (!Array.isArray(f.device_types) || !Array.isArray(f.chips)) {
+    throw new Error('catalog-facts.json is malformed: missing device_types/chips arrays');
+  }
+  return f;
+}
 
-if (FACTS.schema_version !== CATALOG_FACTS_SCHEMA) {
-  throw new Error(
-    `catalog facts schema mismatch: file=${FACTS.schema_version}, ts=${CATALOG_FACTS_SCHEMA}. ` +
-      `Re-run \`npm --prefix packages/catalog run generate:facts\`.`,
-  );
+const FACTS = readFacts(factsRaw);
+
+/** True when the facts file matches the schema version these types expect. */
+export const schemaMatches = FACTS.schema_version === CATALOG_FACTS_SCHEMA;
+
+/**
+ * Opt-in hard check. Consumers that want to fail on a schema mismatch (rather
+ * than tolerate it) call this explicitly — importing the package never crashes
+ * on its own.
+ */
+export function assertSchemaCompatible(): void {
+  if (!schemaMatches) {
+    throw new Error(
+      `catalog facts schema mismatch: file=${FACTS.schema_version}, ts=${CATALOG_FACTS_SCHEMA}. ` +
+        `Bump @labwired/catalog to a version built for schema ${FACTS.schema_version}.`,
+    );
+  }
 }
 
 export const CATALOG_FACTS: CatalogFacts = FACTS;

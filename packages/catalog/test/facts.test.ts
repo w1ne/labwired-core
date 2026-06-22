@@ -5,6 +5,8 @@ import {
   isKnownChip,
   CATALOG_FACTS,
   PERIPHERAL_DEVICE_TYPES,
+  schemaMatches,
+  assertSchemaCompatible,
 } from '../src/index';
 
 describe('catalog-facts generation', () => {
@@ -48,6 +50,12 @@ describe('catalog facts helpers', () => {
     for (const dt of ['oled-ssd1306', 'ssd1680_tricolor_290', 'neo6m-gps', 'vl53l1x']) {
       expect(PERIPHERAL_DEVICE_TYPES, `${dt} dropped from coverage set`).toContain(dt);
     }
+  });
+
+  // Roast #7: importing never throws on version; assertion is opt-in.
+  it('matches its own schema and does not crash on import', () => {
+    expect(schemaMatches).toBe(true);
+    expect(() => assertSchemaCompatible()).not.toThrow();
   });
 
   // Roast #2: chips is a clean family list, not polluted with board variants.
