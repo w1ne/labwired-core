@@ -2358,6 +2358,13 @@ board_io: []
         let t = &bus.can_uds_testers[0];
         assert_eq!(t.script.len(), 1);
         assert_eq!(t.script[0].expect, vec![Some(0x06), Some(0x67)]);
+        assert_eq!(
+            t.script[0].send,
+            vec![0x27, 0x01, 0x5A, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
+        );
+        assert_eq!(t.script[0].expect_nrc, None);
+        assert!(!t.script[0].expect_silence);
+        assert_eq!(t.script[0].timeout_ticks, CanUdsTester::DEFAULT_MAX_TICKS);
     }
 
     /// Parse a minimal chip yaml with the given header lines (name/arch/core).

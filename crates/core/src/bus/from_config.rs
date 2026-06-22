@@ -566,6 +566,13 @@ impl SystemBus {
                         } else {
                             0
                         };
+                        if ext.config.contains_key("first_frame") && (ff.len() < 2 || pdu_len == 0) {
+                            tracing::warn!(
+                                "[uds-tester] '{}': first_frame is too short or decodes pdu_len=0 \
+                                 — synthesized send will be empty",
+                                ext.id
+                            );
+                        }
                         let ff_payload: &[u8] = if ff.len() >= 2 { &ff[2..] } else { &[] };
                         let cf_payload: &[u8] =
                             if !tester.consecutive_frame.is_empty() {
@@ -579,6 +586,13 @@ impl SystemBus {
                             .copied()
                             .take(pdu_len)
                             .collect();
+                        if raw.is_empty() && ext.config.contains_key("first_frame") {
+                            tracing::warn!(
+                                "[uds-tester] '{}': reassembled send payload is empty \
+                                 — check first_frame / consecutive_frame config",
+                                ext.id
+                            );
+                        }
                         tester.script = vec![UdsStep {
                             send: raw,
                             expect: vec![Some(0x06), Some(0x67)],
