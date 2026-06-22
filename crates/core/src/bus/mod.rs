@@ -2334,6 +2334,32 @@ board_io: []
         assert!(step.expect_silence);
     }
 
+    #[test]
+    fn uds_legacy_config_becomes_one_step_script() {
+        let manifest: SystemManifest = serde_yaml::from_str(
+            r#"
+name: "uds-legacy"
+chip: "f103"
+external_devices:
+  - id: "uds_node"
+    type: "uds-tester"
+    connection: "bxcan1"
+    config:
+      request_id: "0x111"
+      reply_id: "0x222"
+      first_frame: "10 0B 27 01 5A 11 22 33"
+      consecutive_frame: "21 44 55 66 77 88 55 55"
+board_io: []
+"#,
+        )
+        .unwrap();
+        let chip: ChipDescriptor = serde_yaml::from_str(MIN_F103_CHIP).unwrap();
+        let bus = SystemBus::from_config(&chip, &manifest).unwrap();
+        let t = &bus.can_uds_testers[0];
+        assert_eq!(t.script.len(), 1);
+        assert_eq!(t.script[0].expect, vec![Some(0x06), Some(0x67)]);
+    }
+
     /// Parse a minimal chip yaml with the given header lines (name/arch/core).
     fn bit_band_test_chip(header: &str, gpio_base: &str, gpio_profile: &str) -> ChipDescriptor {
         let yaml = format!(
