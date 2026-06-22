@@ -1,11 +1,27 @@
 import factsRaw from './catalog-facts.json';
 
+/** Enriched metadata for one external peripheral a consumer can compose from. */
+export interface Peripheral {
+  /** LabWired device_type (== manifest external_devices[].type). */
+  device_type: string;
+  /** Human label for UI (kit label, legacy label, or the device_type). */
+  label: string;
+  /** Bus transport: "i2c" | "spi" | "uart" | "unknown". */
+  transport: string;
+  /** One-line description (kit peripherals only; null otherwise). */
+  summary: string | null;
+  /** True if registered as a PeripheralKit (richest metadata). */
+  kit: boolean;
+}
+
 export interface CatalogFacts {
   schema_version: number;
   /** Every device_type LabWired can wire/simulate (broad validity set). */
   device_types: string[];
   /** External peripherals a proto.cat block is expected to map (coverage set). */
   peripheral_device_types: string[];
+  /** Enriched per-peripheral metadata (label/transport/summary/kit). */
+  peripherals: Peripheral[];
   /**
    * Best-effort chip_family proxy: families with a bundled playground board or a
    * pin-map, minus board-variant aliases. The authoritative chip_family set
@@ -15,16 +31,20 @@ export interface CatalogFacts {
 }
 
 /** Schema version the TS side was built against. */
-export const CATALOG_FACTS_SCHEMA = 1;
+export const CATALOG_FACTS_SCHEMA = 2;
 
 function readFacts(raw: unknown): CatalogFacts {
   const f = raw as CatalogFacts;
-  // device_types / chips are forward-compatible primitive arrays, so a newer or
-  // older schema is still readable. Do NOT throw on a version mismatch at import
-  // — that would crash a consumer's whole build just for reading a string list
-  // (roast #7). Only a genuinely malformed file (missing the arrays) is fatal.
-  if (!Array.isArray(f.device_types) || !Array.isArray(f.chips)) {
-    throw new Error('catalog-facts.json is malformed: missing device_types/chips arrays');
+  // The arrays are forward-compatible, so a newer or older schema is still
+  // readable. Do NOT throw on a version mismatch at import — that would crash a
+  // consumer's whole build just for reading data (roast #7). Only a genuinely
+  // malformed file (missing the core fields) is fatal.
+  if (
+    !Array.isArray(f.device_types) ||
+    !Array.isArray(f.chips) ||
+    !Array.isArray(f.peripherals)
+  ) {
+    throw new Error('catalog-facts.json is malformed: missing device_types/chips/peripherals');
   }
   return f;
 }
@@ -51,10 +71,12 @@ export function assertSchemaCompatible(): void {
 export const CATALOG_FACTS: CatalogFacts = FACTS;
 export const DEVICE_TYPES: readonly string[] = FACTS.device_types;
 export const PERIPHERAL_DEVICE_TYPES: readonly string[] = FACTS.peripheral_device_types;
+export const PERIPHERALS: readonly Peripheral[] = FACTS.peripherals;
 export const CHIPS: readonly string[] = FACTS.chips;
 
 const DEVICE_TYPE_SET = new Set(FACTS.device_types);
 const CHIP_SET = new Set(FACTS.chips);
+const PERIPHERAL_BY_TYPE = new Map(FACTS.peripherals.map((p) => [p.device_type, p]));
 
 /** True if `deviceType` is a real LabWired device_type (any class). */
 export function isKnownDeviceType(deviceType: string): boolean {
@@ -64,4 +86,16 @@ export function isKnownDeviceType(deviceType: string): boolean {
 /** True if `chip` is a real LabWired chip_family. */
 export function isKnownChip(chip: string): boolean {
   return CHIP_SET.has(chip);
+}
+
+/** Enriched metadata for one external peripheral, or undefined if unknown. */
+export function getPeripheral(deviceType: string): Peripheral | undefined {
+  return PERIPHERAL_BY_TYPE.get(deviceType);
+}
+
+/** All external peripherals, optionally filtered by bus transport. */
+export function listPeripherals(transport?: string): Peripheral[] {
+  return transport
+    ? FACTS.peripherals.filter((p) => p.transport === transport)
+    : [...FACTS.peripherals];
 }

@@ -20,7 +20,7 @@ export { compile } from './compile';
 export type { CompileResult } from './compile';
 export { LABWIRED_DIAGRAM_V1_SCHEMA, normalizeLabWiredDiagramV1 } from './diagram-contract';
 export type { LabWiredDiagramPartV1, LabWiredDiagramV1, LabWiredDiagramWireEndpointV1, LabWiredDiagramWireV1 } from './diagram-contract';
-export { diagnoseDiagram } from './legacy-diagnostics';
+export { diagnoseDiagram, COMPONENT_LABELS } from './legacy-diagnostics';
 export type { DiagnosticSeverity, DiagnosticCode, Diagnostic as LegacyDiagnostic, ValidateDiagram, DiagramPart, DiagramWire, WireEndpoint as LegacyWireEndpoint } from './legacy-diagnostics';
 export { getPlaygroundBoard, listPlaygroundBoards, PLAYGROUND_BOARD_CATALOG } from './boards';
 export type { BoardCatalogEntry } from './boards';
