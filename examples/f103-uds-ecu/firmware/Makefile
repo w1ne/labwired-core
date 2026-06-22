@@ -21,8 +21,10 @@ UDS_SRCS := \
   $(UDSLIB_DIR)/src/services/uds_service_link.c \
   $(UDSLIB_DIR)/src/services/uds_service_maintenance.c \
   $(UDSLIB_DIR)/src/services/uds_service_mem.c \
+  $(UDSLIB_DIR)/src/services/uds_service_roe.c \
   $(UDSLIB_DIR)/src/services/uds_service_security.c \
   $(UDSLIB_DIR)/src/services/uds_service_session.c \
+  $(UDSLIB_DIR)/src/services/uds_dtc_store.c \
   $(UDSLIB_DIR)/src/transport/uds_tp_isotp.c
 
 APP_OBJS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(APP_SRCS))

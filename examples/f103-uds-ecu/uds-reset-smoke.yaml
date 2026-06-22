@@ -1,0 +1,12 @@
+schema_version: "1.0"
+inputs:
+  system: "./system-reset.yaml"
+  firmware: "./firmware/build/f103_uds_ecu.elf"
+limits:
+  max_steps: 600000
+assertions:
+  # The scripted tester sends 11 01 (ECUReset) and asserts 51 01 lands on the
+  # bus before the ECU reboots (udslib #88). ECU_READY is reprinted on the real
+  # AIRCR-triggered reboot, so the banner appears twice.
+  - uart_contains: "ECU_READY"
+  - uds_tester: { id: "uds-tester", result: done }

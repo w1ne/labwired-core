@@ -224,6 +224,22 @@ static int isotp_send_adapter(struct uds_ctx *ctx, const uint8_t *data, uint16_t
     return uds_isotp_send(&g_iso, data, len);
 }
 
+/* UDSLib fn_reset hook: a faithful CMSIS NVIC_SystemReset. udslib's #88 fix
+ * calls this only AFTER the 0x11 positive response (51 01) has been handed to
+ * the transport, so by the time the AIRCR store latches the SYSRESETREQ the
+ * reply is already on the CAN bus. The model reboots the CPU through the vector
+ * table at the next instruction boundary; the reset never returns, so we spin. */
+static void ecu_reset(uds_ctx_t *ctx, uint8_t type)
+{
+    (void) ctx;
+    (void) type;
+    __asm volatile("dsb 0xF" ::: "memory");
+    REG32(0xE000ED0Cu) = (0x05FAu << 16) | (1u << 2); /* AIRCR: VECTKEY | SYSRESETREQ */
+    __asm volatile("dsb 0xF" ::: "memory");
+    for (;;) {
+    }
+}
+
 static int security_seed(struct uds_ctx *ctx, uint8_t level, uint8_t *seed, uint16_t max_len)
 {
     (void) ctx;
@@ -255,6 +271,7 @@ int main(void)
         .get_time_ms = get_time_ms,
         .fn_tp_send = isotp_send_adapter,
         .fn_security_seed = security_seed,
+        .fn_reset = ecu_reset,
         .rx_buffer = g_rx_buf,
         .rx_buffer_size = sizeof(g_rx_buf),
         .tx_buffer = g_tx_buf,
