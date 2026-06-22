@@ -39,4 +39,14 @@ describe('catalog facts helpers', () => {
     expect(PERIPHERAL_DEVICE_TYPES).not.toContain('resistor');
     expect(PERIPHERAL_DEVICE_TYPES).not.toContain('mcu');
   });
+
+  // Guard against roast item #5: the generator reaches into board-config's
+  // source by deviceClass. A renamed/dropped class would silently shrink the
+  // coverage set. These anchors must survive any board-config refactor — one
+  // i2c, one spi, one uart device, plus a kit-only (manifest, not catalog) one.
+  it('keeps known external peripherals across bus classes in the coverage set', () => {
+    for (const dt of ['oled-ssd1306', 'ssd1680_tricolor_290', 'neo6m-gps', 'vl53l1x']) {
+      expect(PERIPHERAL_DEVICE_TYPES, `${dt} dropped from coverage set`).toContain(dt);
+    }
+  });
 });
