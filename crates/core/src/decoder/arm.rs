@@ -574,6 +574,14 @@ pub enum Instruction {
         rn: u8,
         rm: u8,
     },
+    /// Unsigned multiply-accumulate-accumulate-long (64-bit).
+    /// (rd_hi:rd_lo) = Rn * Rm + rd_lo + rd_hi.
+    Umaal {
+        rd_lo: u8,
+        rd_hi: u8,
+        rn: u8,
+        rm: u8,
+    },
 
     /// 32-bit MLA: Rd = Ra + (Rn * Rm).
     Mla {
@@ -1117,6 +1125,22 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
     //     UMULL: h1 = 1111_1011_1010_rn4  -> h1[7:4] = 0xA
     //     SMLAL: h1 = 1111_1011_1100_rn4  -> h1[7:4] = 0xC
     //     UMLAL: h1 = 1111_1011_1110_rn4  -> h1[7:4] = 0xE
+    // UMAAL — ARMv7-M A7.7.203.
+    //   h1 = 1111_1011_1110_rn4 (h1[7:4] = 0xE), h2[7:4] = 0110.
+    //   (rd_hi:rd_lo) = Rn*Rm + rd_lo + rd_hi.
+    if (h1 & 0xFFF0) == 0xFBE0 && (h2 & 0x00F0) == 0x0060 {
+        let rn = (h1 & 0xF) as u8;
+        let rd_lo = ((h2 >> 12) & 0xF) as u8;
+        let rd_hi = ((h2 >> 8) & 0xF) as u8;
+        let rm = (h2 & 0xF) as u8;
+        return Instruction::Umaal {
+            rd_lo,
+            rd_hi,
+            rn,
+            rm,
+        };
+    }
+
     if (h1 & 0xFF80) == 0xFB80 && (h2 & 0x00F0) == 0x0000 {
         let op = (h1 >> 4) & 0xF;
         let rn = (h1 & 0xF) as u8;
@@ -2091,6 +2115,50 @@ mod tests {
                 rn: 1,
                 rm: 2,
                 shift_type: 0
+            }
+        );
+    }
+
+    #[test]
+    fn test_decode_umaal() {
+        // UMAAL R0, R1, R2, R3 -> 0xFBE2 0x0163
+        assert_eq!(
+            decode_thumb_32(0xFBE2, 0x0163),
+            Instruction::Umaal {
+                rd_lo: 0,
+                rd_hi: 1,
+                rn: 2,
+                rm: 3
+            }
+        );
+    }
+
+    #[test]
+    fn test_decode_dataproc32_adc_sbc_rsb() {
+        // ADCS R3, R4, R5 -> 0xEB54 0x0305
+        assert_eq!(
+            decode_thumb_32(0xEB54, 0x0305),
+            Instruction::DataProc32 {
+                op: 0xA,
+                rn: 4,
+                rd: 3,
+                rm: 5,
+                imm5: 0,
+                shift_type: 0,
+                set_flags: true
+            }
+        );
+        // RSB R2, R0, R1 -> 0xEBC0 0x0201
+        assert_eq!(
+            decode_thumb_32(0xEBC0, 0x0201),
+            Instruction::DataProc32 {
+                op: 0xE,
+                rn: 0,
+                rd: 2,
+                rm: 1,
+                imm5: 0,
+                shift_type: 0,
+                set_flags: false
             }
         );
     }
