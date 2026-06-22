@@ -1,21 +1,25 @@
-# Publish @labwired/catalog to npm when the generated facts change on main, then
-# open a bump PR in proto.cat so its drift gate runs against the new facts.
+# Publish @w1ne/catalog to GitHub Packages (private) when the generated facts
+# change on main, then open a bump PR in proto.cat so its drift gate runs
+# against the new facts.
+#
+# GitHub Packages (not public npm): the package is internal infra, and the
+# labwired repo is private. The scope is @w1ne (must match the repo owner for
+# GitHub Packages). Publishing uses the built-in GITHUB_TOKEN — no extra secret.
 #
 # Runs on the self-hosted pluto runners ([self-hosted, deploy]) — GitHub-hosted
 # minutes are billing-blocked for this repo, so ubuntu-latest jobs never start.
 #
 # Secrets used:
-#   NPM_TOKEN     — automation token with publish on @labwired/* (already set up
-#                   for mcp-publish.yml).
-#   PROTOCAT_PAT  — PAT with `repo` scope on w1ne/protocat, for the bump PR.
-#                   Until it is set, the bump job green-skips.  gh secret set PROTOCAT_PAT
+#   GITHUB_TOKEN  — built-in; publishes to this repo's GitHub Packages (packages: write).
+#   PROTOCAT_PAT  — PAT with repo + read:packages on w1ne/protocat-private, for the
+#                   bump PR. Until it is set, the bump job green-skips.
 #
 # Versioning: we publish the version committed in packages/catalog/package.json.
 # A PR gate (Playground CI) fails if catalog-facts.json changes without a version
-# bump, so the committed version is always honest and there is no push to main /
-# CI re-entry. The publish skips if that exact version is already on npm.
+# bump, so the committed version is always honest. Publish skips if that exact
+# version is already on GitHub Packages.
 
-name: Publish @labwired/catalog
+name: Publish @w1ne/catalog
 
 on:
   push:
@@ -26,7 +30,7 @@ on:
 
 permissions:
   contents: read
-  id-token: write # npm provenance attestations
+  packages: write
 
 jobs:
   publish:
@@ -53,7 +57,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-          registry-url: "https://registry.npmjs.org"
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@w1ne"
           cache: npm
           cache-dependency-path: packages/catalog/package-lock.json
 
@@ -71,11 +76,11 @@ jobs:
         working-directory: packages/catalog
         run: npm run build && npm test
 
-      - name: Publish committed version if not already on npm
+      - name: Publish committed version if not already on GitHub Packages
         id: pub
         working-directory: packages/catalog
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           NAME=$(node -p "require('./package.json').name")
@@ -84,7 +89,7 @@ jobs:
             echo "$NAME@$VER is already published — skipping (bump the version to release)"
             echo "published=false" >> "$GITHUB_OUTPUT"
           else
-            npm publish --provenance --access public
+            npm publish
             echo "version=$VER" >> "$GITHUB_OUTPUT"
             echo "published=true" >> "$GITHUB_OUTPUT"
           fi
@@ -119,32 +124,31 @@ jobs:
       - if: steps.pat.outputs.ok == 'true'
         uses: actions/checkout@v4
         with:
-          repository: w1ne/protocat
+          repository: w1ne/protocat-private
           token: ${{ secrets.PROTOCAT_PAT }}
 
       - if: steps.pat.outputs.ok == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@w1ne"
 
-      - if: steps.pat.outputs.ok == 'true'
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
-      - name: Bump @labwired/catalog
+      - name: Bump @w1ne/catalog
         if: steps.pat.outputs.ok == 'true'
-        run: pnpm add "@labwired/catalog@${{ needs.publish.outputs.version }}"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.PROTOCAT_PAT }}
+        run: npm install "@w1ne/catalog@${{ needs.publish.outputs.version }}"
 
       - if: steps.pat.outputs.ok == 'true'
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.PROTOCAT_PAT }}
-          branch: chore/bump-labwired-catalog
+          branch: chore/bump-w1ne-catalog
           base: main
-          title: "chore: bump @labwired/catalog to ${{ needs.publish.outputs.version }}"
-          commit-message: "chore: bump @labwired/catalog to ${{ needs.publish.outputs.version }}"
+          title: "chore: bump @w1ne/catalog to ${{ needs.publish.outputs.version }}"
+          commit-message: "chore: bump @w1ne/catalog to ${{ needs.publish.outputs.version }}"
           body: |
             Automated bump so proto.cat's catalog drift gate runs against the
-            latest LabWired facts. A red `check:catalog` here means a new LabWired
-            peripheral needs a proto.cat overlay block (or a coverage-baseline ack).
+            latest LabWired facts. A red catalog-sync test here means a new
+            LabWired peripheral needs a proto.cat block (or a KNOWN_UNMAPPED ack).
