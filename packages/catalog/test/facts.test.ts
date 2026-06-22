@@ -5,6 +5,9 @@ import {
   isKnownChip,
   CATALOG_FACTS,
   PERIPHERAL_DEVICE_TYPES,
+  PERIPHERALS,
+  getPeripheral,
+  listPeripherals,
   schemaMatches,
   assertSchemaCompatible,
 } from '../src/index';
@@ -34,7 +37,29 @@ describe('catalog facts helpers', () => {
     expect(isKnownChip('esp32')).toBe(true);
   });
   it('pins the schema version', () => {
-    expect(CATALOG_FACTS.schema_version).toBe(1);
+    expect(CATALOG_FACTS.schema_version).toBe(2);
+  });
+
+  it('exposes enriched peripheral metadata', () => {
+    // The coverage set and the enriched list never disagree.
+    expect(PERIPHERALS.map((p) => p.device_type)).toEqual([...PERIPHERAL_DEVICE_TYPES]);
+    const ssd1680 = getPeripheral('ssd1680_tricolor_290');
+    expect(ssd1680?.transport).toBe('spi');
+    expect(ssd1680?.kit).toBe(true);
+    expect(ssd1680?.label.length).toBeGreaterThan(0);
+    // Catalog-only (non-kit) peripheral still gets a label + transport.
+    const uc8151d = getPeripheral('uc8151d_tricolor_290');
+    expect(uc8151d?.kit).toBe(false);
+    expect(uc8151d?.transport).toBe('spi');
+    expect(uc8151d?.label).toContain('UC8151D');
+    expect(getPeripheral('totally-made-up')).toBeUndefined();
+  });
+
+  it('lists peripherals filtered by transport', () => {
+    const i2c = listPeripherals('i2c');
+    expect(i2c.length).toBeGreaterThan(0);
+    expect(i2c.every((p) => p.transport === 'i2c')).toBe(true);
+    expect(listPeripherals().length).toBe(PERIPHERALS.length);
   });
   it('treats external peripherals as coverage but excludes passives', () => {
     expect(PERIPHERAL_DEVICE_TYPES).toContain('bme280');
