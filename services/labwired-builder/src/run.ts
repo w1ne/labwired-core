@@ -12,8 +12,8 @@ export interface RunRequest {
   elfBase64: string;
   systemYaml: string;
   /** Optional chip descriptor YAML.  When provided it is written alongside
-   *  system.yaml and the `chip: "inline"` placeholder in systemYaml is
-   *  rewritten to `chip: "chip.yaml"` so the CLI can resolve it. */
+   *  system.yaml and the manifest's `chip:` field (any value) is rewritten to
+   *  `chip: "chip.yaml"` so the CLI can resolve it. */
   chipYaml?: string;
   maxSteps: number;
 }

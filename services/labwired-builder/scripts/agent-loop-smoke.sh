@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Replays the agent authoring loop against the live MCP gateway to prove the
-# Part-A dead-ends are closed. Requires curl + python3. Override MCP_URL to test
+# Part-A dead-ends are closed. Requires curl. Override MCP_URL to test
 # a non-prod gateway.
 set -euo pipefail
 MCP_URL="${MCP_URL:-https://mcp.proto.cat/mcp}"
