@@ -1,11 +1,14 @@
 # Publish @labwired/catalog to npm when the generated facts change on main, then
 # open a bump PR in proto.cat so its drift gate runs against the new facts.
 #
+# Runs on the self-hosted pluto runners ([self-hosted, deploy]) — GitHub-hosted
+# minutes are billing-blocked for this repo, so ubuntu-latest jobs never start.
+#
 # Secrets used:
 #   NPM_TOKEN     — automation token with publish on @labwired/* (already set up
 #                   for mcp-publish.yml).
 #   PROTOCAT_PAT  — PAT with `repo` scope on w1ne/protocat, for the bump PR.
-#                   Create + add:  gh secret set PROTOCAT_PAT
+#                   Until it is set, the bump job green-skips.  gh secret set PROTOCAT_PAT
 #
 # Versioning: we publish the version committed in packages/catalog/package.json.
 # A PR gate (Playground CI) fails if catalog-facts.json changes without a version
@@ -27,11 +30,24 @@ permissions:
 
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, deploy]
     outputs:
       version: ${{ steps.pub.outputs.version }}
       published: ${{ steps.pub.outputs.published }}
     steps:
+      # A prior job (e.g. a container running as root) can leave root-owned files
+      # in the self-hosted runner workspace; the runner user has no sudo, so
+      # actions/checkout's clean step fails with EACCES. rm what we can; if
+      # root-owned files remain, rename the dir aside — we own the PARENT, so the
+      # rename succeeds — and checkout recreates it clean.
+      - name: Reset self-hosted workspace
+        run: |
+          if [ -n "${GITHUB_WORKSPACE:-}" ] && [ -d "$GITHUB_WORKSPACE" ]; then
+            rm -rf "$GITHUB_WORKSPACE" 2>/dev/null \
+              || mv "$GITHUB_WORKSPACE" "${GITHUB_WORKSPACE}.broken.$(date +%s%N)" 2>/dev/null \
+              || true
+          fi
+          mkdir -p "$GITHUB_WORKSPACE"
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
@@ -76,25 +92,52 @@ jobs:
   bump-protocat:
     needs: publish
     if: needs.publish.outputs.published == 'true'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, deploy]
     steps:
-      - uses: actions/checkout@v4
+      - name: Reset self-hosted workspace
+        run: |
+          if [ -n "${GITHUB_WORKSPACE:-}" ] && [ -d "$GITHUB_WORKSPACE" ]; then
+            rm -rf "$GITHUB_WORKSPACE" 2>/dev/null \
+              || mv "$GITHUB_WORKSPACE" "${GITHUB_WORKSPACE}.broken.$(date +%s%N)" 2>/dev/null \
+              || true
+          fi
+          mkdir -p "$GITHUB_WORKSPACE"
+
+      # Green-skip the whole bump when PROTOCAT_PAT is not configured yet.
+      - name: Check PROTOCAT_PAT is present
+        id: pat
+        env:
+          PAT: ${{ secrets.PROTOCAT_PAT }}
+        run: |
+          if [ -z "${PAT:-}" ]; then
+            echo "PROTOCAT_PAT not set — skipping proto.cat bump PR"
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.pat.outputs.ok == 'true'
+        uses: actions/checkout@v4
         with:
           repository: w1ne/protocat
           token: ${{ secrets.PROTOCAT_PAT }}
 
-      - uses: actions/setup-node@v4
+      - if: steps.pat.outputs.ok == 'true'
+        uses: actions/setup-node@v4
         with:
           node-version: "20"
 
-      - uses: pnpm/action-setup@v4
+      - if: steps.pat.outputs.ok == 'true'
+        uses: pnpm/action-setup@v4
         with:
           version: 9
 
       - name: Bump @labwired/catalog
+        if: steps.pat.outputs.ok == 'true'
         run: pnpm add "@labwired/catalog@${{ needs.publish.outputs.version }}"
 
-      - uses: peter-evans/create-pull-request@v6
+      - if: steps.pat.outputs.ok == 'true'
+        uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.PROTOCAT_PAT }}
           branch: chore/bump-labwired-catalog
@@ -104,4 +147,4 @@ jobs:
           body: |
             Automated bump so proto.cat's catalog drift gate runs against the
             latest LabWired facts. A red `check:catalog` here means a new LabWired
-            device_type needs a proto.cat overlay block (or an UNSUPPORTED entry).
+            peripheral needs a proto.cat overlay block (or a coverage-baseline ack).
