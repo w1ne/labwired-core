@@ -1,10 +1,18 @@
 {
-  "name": "@labwired/catalog",
-  "version": "0.1.1",
+  "name": "@w1ne/catalog",
+  "version": "0.1.2",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": ["dist", "src/catalog-facts.json"],
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/w1ne/labwired.git",
+    "directory": "packages/catalog"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
