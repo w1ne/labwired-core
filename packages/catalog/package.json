@@ -1,0 +1,28 @@
+{
+  "name": "@labwired/catalog",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "files": ["dist", "src/catalog-facts.json"],
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.mjs --packages=external && cp dist/index.mjs dist/index.js",
+    "generate:facts": "tsx scripts/generate-catalog-facts.ts",
+    "check:facts": "tsx scripts/generate-catalog-facts.ts --check",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@labwired/board-config": "file:../board-config",
+    "@types/node": "^25.9.3",
+    "esbuild": "^0.25.0",
+    "tsx": "^4.19.0",
+    "typescript": "~5.9.3",
+    "vitest": "~3.2.0"
+  }
+}
