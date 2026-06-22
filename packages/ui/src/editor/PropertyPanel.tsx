@@ -124,6 +124,16 @@ export function PropertyPanel({ parts, onUpdateAttrs, onDelete, onRotate, onResi
                     }
                   />
                 </>
+              ) : field.type === 'textarea' ? (
+                <textarea
+                  className="panel-input"
+                  rows={4}
+                  aria-label={field.label}
+                  value={part.attrs[field.key] || ''}
+                  onChange={(e) =>
+                    onUpdateAttrs(part.id, { [field.key]: e.target.value })
+                  }
+                />
               ) : (
                 <input
                   type="text"

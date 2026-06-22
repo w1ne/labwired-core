@@ -60,6 +60,8 @@ interface EditorCanvasProps {
   onButtonToggle?: (partId: string, active: boolean) => void;
   /** Set analog value for adc_input components (e.g. potentiometer). Value 0-4095. */
   onAnalogChange?: (partId: string, value: number) => void;
+  /** Commit a note's attribute changes (e.g. after inline text editing). */
+  onUpdateAttrs?: (id: string, attrs: Record<string, string>) => void;
   /**
    * Optional overlay anchored to the single selected part — e.g. a chip's
    * control toolbar. Rendered in a <foreignObject> just above the part so it
@@ -105,12 +107,14 @@ export function EditorCanvas({
   onDropPart,
   onButtonToggle,
   onAnalogChange,
+  onUpdateAttrs,
   selectedPartOverlay,
   fitToContent = false,
   showZoomControls = false,
 }: EditorCanvasProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [viewBox, setViewBox] = useState({ x: -100, y: -50, w: 1200, h: 800 });
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   // Set once the user manually pans or pinch-zooms, so auto-refit-on-resize
   // stops clobbering their chosen view. Cleared by an explicit fit.
   const userAdjustedRef = useRef(false);
@@ -489,6 +493,11 @@ export function EditorCanvas({
       const def = COMPONENT_REGISTRY.get(part.type);
       if (!def) return;
 
+      if (part.type === 'note') {
+        setEditingNoteId(part.id);
+        return;
+      }
+
       if (def.boardIoKind === 'button' && onButtonToggle) {
         const currentActive = boardIoStates?.[part.id]?.active ?? false;
         onButtonToggle(part.id, !currentActive);
@@ -500,7 +509,7 @@ export function EditorCanvas({
         onAnalogChange(part.id, presets[nextIdx]);
       }
     },
-    [boardIoStates, onButtonToggle, onAnalogChange],
+    [boardIoStates, onButtonToggle, onAnalogChange, setEditingNoteId],
   );
 
   // Scroll-wheel on potentiometer/analog parts to fine-tune value
@@ -531,6 +540,15 @@ export function EditorCanvas({
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [onCancelWire]);
+
+  useEffect(() => {
+    if (
+      editingNoteId &&
+      !state.diagram.parts.some((p) => p.id === editingNoteId && p.type === 'note')
+    ) {
+      setEditingNoteId(null);
+    }
+  }, [editingNoteId, state.diagram.parts]);
 
   // Compute select box rect for rendering
   const selRect = selectBox ? {
@@ -619,6 +637,7 @@ export function EditorCanvas({
         return (
           <g
             key={part.id}
+            data-part-id={part.id}
             transform={`translate(${part.x}, ${part.y})`}
             style={{
               cursor: interactionMode === 'run'
@@ -630,7 +649,35 @@ export function EditorCanvas({
             onWheel={(e) => handlePartWheel(e, part)}
           >
             <g transform={`scale(${sc}) rotate(${part.rotate}, ${def.width / 2}, ${def.height / 2})`}>
-              {def.render(part.attrs, compState)}
+              {part.type === 'note' && editingNoteId === part.id ? (
+                <foreignObject x={0} y={0} width={def.width} height={1} overflow="visible">
+                  <div
+                    {...{ xmlns: 'http://www.w3.org/1999/xhtml' }}
+                    data-note-editor={part.id}
+                    contentEditable
+                    suppressContentEditableWarning
+                    ref={(el) => {
+                      if (el && el.textContent !== (part.attrs.text ?? '')) el.textContent = part.attrs.text ?? '';
+                      if (el && document.activeElement !== el) el.focus();
+                    }}
+                    onBlur={(e) => {
+                      onUpdateAttrs?.(part.id, { text: e.currentTarget.textContent ?? '' });
+                      setEditingNoteId(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') { e.preventDefault(); (e.currentTarget as HTMLElement).blur(); }
+                    }}
+                    style={{
+                      width: `${def.width}px`, boxSizing: 'border-box', padding: '12px',
+                      background: '#fffdf2', border: '1.5px solid #F5B642', borderRadius: '8px',
+                      font: "12px/1.45 -apple-system, 'Segoe UI', sans-serif", color: '#4a3f1e',
+                      whiteSpace: 'pre-wrap', wordBreak: 'break-word', outline: 'none',
+                    }}
+                  />
+                </foreignObject>
+              ) : (
+                def.render(part.attrs, compState)
+              )}
               {def.pins.map((pin: PinDef) => {
                 const isHovered = hoveredPin?.partId === part.id && hoveredPin?.pinId === pin.id;
                 const isWiring = state.wireInProgress !== null;

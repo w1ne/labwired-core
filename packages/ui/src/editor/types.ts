@@ -121,7 +121,7 @@ export type DisplayBuffer =
 export interface AttrFieldDef {
   key: string;
   label: string;
-  type: 'text' | 'select' | 'color' | 'range';
+  type: 'text' | 'select' | 'color' | 'range' | 'textarea';
   options?: string[];
   min?: number;
   max?: number;
