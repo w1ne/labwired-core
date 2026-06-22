@@ -98,6 +98,62 @@ impl crate::Bus for SystemBus {
             })
             .unwrap_or(0);
 
+        // OPT-IN H5 program write-buffer fidelity gate. When a FLASH peripheral
+        // has the gate enabled, a flash-region write feeds the silicon-true
+        // quad-word write-buffer state machine instead of committing directly:
+        // bytes accumulate into a 16-byte buffer (WBNE), commit only on a full
+        // aligned quad-word as the bitwise AND of new & existing (flash flips
+        // only 1→0, setting EOP), and a misaligned/inconsistent quad-word
+        // raises INCERR alone with no commit. The peripheral owns the NSSR
+        // status; the bus owns the flash backing memory, so the AND-commit is
+        // done here. `None` (gate off) ⇒ this block is skipped and the write
+        // commits as before — byte-identical to prior behaviour.
+        if let Some(flash_idx) = self.flash_error_flags_idx {
+            // Resolve the flash-region offset this write targets, if any. The
+            // backing buffer is addressed at `flash.base_addr`; the boot alias
+            // (addr < buffer len) mirrors the same offset.
+            let region_off = if self.flash.read_u8(addr).is_some() {
+                Some(addr - self.flash.base_addr)
+            } else if self.flash.base_addr != 0 && addr < self.flash.data.len() as u64 {
+                Some(addr) // boot-alias write: offset is addr itself
+            } else {
+                None
+            };
+            if let Some(off) = region_off {
+                use crate::peripherals::flash::H5ProgAction;
+                let action = self.peripherals[flash_idx]
+                    .dev
+                    .as_any_mut()
+                    .and_then(|a| a.downcast_mut::<crate::peripherals::flash::Flash>())
+                    .map(|f| f.h5_program_byte(off, value));
+                match action {
+                    // Quad-word complete: read the 16 existing bytes, AND each
+                    // with the buffered value, write back. This is the only
+                    // store on the gate-on path.
+                    Some(H5ProgAction::Commit { base, bytes }) => {
+                        for (i, &nb) in bytes.iter().enumerate() {
+                            let qoff = base + i as u64;
+                            let existing = self
+                                .flash
+                                .read_u8(self.flash.base_addr + qoff)
+                                .unwrap_or(0xFF);
+                            self.flash
+                                .write_u8(self.flash.base_addr + qoff, existing & nb);
+                        }
+                        for observer in &self.observers {
+                            observer.on_memory_write(addr, old_value, value);
+                        }
+                        return Ok(());
+                    }
+                    // Buffered / inconsistent / not-programming: nothing stored
+                    // (NSSR status already updated by the state machine).
+                    Some(_) => return Ok(()),
+                    // Downcast failed (should not happen): fall through.
+                    None => {}
+                }
+            }
+        }
+
         let flash_alias_write = self.flash.base_addr != 0
             && addr < self.flash.data.len() as u64
             && self.flash.write_u8(self.flash.base_addr + addr, value);
