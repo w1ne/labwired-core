@@ -79,12 +79,13 @@ function buildLastInstructions(trace: unknown[]): string[] {
 }
 
 /** Build a diagnosis from the stop_reason, cpu_state, and optional trace. */
-async function buildDiagnosis(
+export async function buildDiagnosis(
   stopReason: string,
   maxSteps: number,
   cpuState: Record<string, unknown> | null,
   trace: unknown[] | null,
   elfPath: string,
+  stderrTail?: string,
 ): Promise<RunDiagnosis | undefined> {
   // No diagnosis needed for clean completion
   if (!stopReason || stopReason === 'finished' || stopReason === 'pass') {
@@ -115,9 +116,15 @@ async function buildDiagnosis(
   }
 
   if (stopReason === 'config_error') {
+    const detail = (stderrTail ?? '').trim();
     return {
-      summary: 'Simulation failed at configuration time — the system YAML or chip descriptor could not be loaded. Check the diagram and target configuration.',
-      hint: 'Ensure the diagram board matches the target and all required peripherals are present.',
+      summary: detail
+        ? `Simulation failed at configuration time — the system manifest or chip could not be loaded:\n${detail}`
+        : 'Simulation failed at configuration time — the system manifest or chip descriptor could not be loaded.',
+      hint:
+        'Call labwired_lookup with of:"manifest_schema" for the exact schema + a worked example, ' +
+        'and of:"chips" for valid chip ids and their peripheral names. ' +
+        'When present, the detail above names the offending field.',
     };
   }
 
@@ -235,10 +242,32 @@ export async function run(req: RunRequest): Promise<RunResult> {
     // The CLI exits with code 3 on a simulation runtime error but still writes
     // result.json — swallow the non-zero exit so we can read that structured
     // result below.
-    await execFileAsync(bin, args, { timeout: 60000, env: safeEnv() }).catch(() => {});
+    let stderrTail = '';
+    try {
+      const { stderr } = await execFileAsync(bin, args, { timeout: 60000, env: safeEnv() });
+      stderrTail = (stderr ?? '').slice(-2000);
+    } catch (e) {
+      // The CLI exits non-zero on a sim/config error but still writes result.json.
+      stderrTail = ((e as { stderr?: string }).stderr ?? '').slice(-2000);
+    }
 
-    const resultJson = await readFile(join(outputDir, 'result.json'), 'utf8');
-    const result = JSON.parse(resultJson);
+    let result: Record<string, unknown>;
+    try {
+      result = JSON.parse(await readFile(join(outputDir, 'result.json'), 'utf8'));
+    } catch {
+      // No result.json — the CLI failed before the sim started (a config error).
+      return {
+        status: 'error',
+        stopReason: 'config_error',
+        stepsExecuted: 0,
+        cycles: 0,
+        instructions: 0,
+        serial: '',
+        peripherals: [],
+        timedOut: false,
+        diagnosis: await buildDiagnosis('config_error', req.maxSteps, null, null, elfPath, stderrTail),
+      };
+    }
 
     let serial = '';
     try {
@@ -270,6 +299,7 @@ export async function run(req: RunRequest): Promise<RunResult> {
       cpuState,
       trace,
       elfPath,
+      stderrTail,
     );
 
     return {
