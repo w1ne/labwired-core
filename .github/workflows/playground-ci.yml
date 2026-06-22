@@ -25,6 +25,20 @@ jobs:
     name: Playground tests
     runs-on: [self-hosted, ci]
     steps:
+      # A prior job (e.g. a container running as root) can leave root-owned files
+      # in the self-hosted runner workspace; the runner user has no sudo, so
+      # actions/checkout's clean step fails with EACCES. rm what we can; if
+      # root-owned files remain, rename the dir aside — we own the PARENT, so the
+      # rename succeeds — and checkout recreates it clean. Nightly
+      # pluto-maintenance reclaims the .broken.* dirs via docker (root).
+      - name: Reset self-hosted workspace
+        run: |
+          if [ -n "${GITHUB_WORKSPACE:-}" ] && [ -d "$GITHUB_WORKSPACE" ]; then
+            rm -rf "$GITHUB_WORKSPACE" 2>/dev/null \
+              || mv "$GITHUB_WORKSPACE" "${GITHUB_WORKSPACE}.broken.$(date +%s%N)" 2>/dev/null \
+              || true
+          fi
+          mkdir -p "$GITHUB_WORKSPACE"
       - name: Checkout
         uses: actions/checkout@v4
       # Fetch ONLY the `core` submodule (the configs/wasm these tests need).
@@ -55,16 +69,36 @@ jobs:
           npm ci --ignore-scripts
           npm run build
 
-      - name: Install + test @labwired/playground
+      - name: Install + typecheck + test @labwired/playground
         working-directory: packages/playground
         run: |
           npm ci --ignore-scripts
+          # Production-build typecheck. vitest runs via esbuild (no type-check),
+          # so cross-package type errors (e.g. a ComponentDef attr-field type the
+          # playground doesn't accept) only surfaced at deploy. tsc -b catches
+          # them here, pre-merge. @labwired/ui is built above; @labwired/board-config
+          # resolves its types from src via package exports, so no extra build.
+          npx tsc -b
           npm test
 
   board-config:
     name: board-config tests
     runs-on: [self-hosted, ci]
     steps:
+      # A prior job (e.g. a container running as root) can leave root-owned files
+      # in the self-hosted runner workspace; the runner user has no sudo, so
+      # actions/checkout's clean step fails with EACCES. rm what we can; if
+      # root-owned files remain, rename the dir aside — we own the PARENT, so the
+      # rename succeeds — and checkout recreates it clean. Nightly
+      # pluto-maintenance reclaims the .broken.* dirs via docker (root).
+      - name: Reset self-hosted workspace
+        run: |
+          if [ -n "${GITHUB_WORKSPACE:-}" ] && [ -d "$GITHUB_WORKSPACE" ]; then
+            rm -rf "$GITHUB_WORKSPACE" 2>/dev/null \
+              || mv "$GITHUB_WORKSPACE" "${GITHUB_WORKSPACE}.broken.$(date +%s%N)" 2>/dev/null \
+              || true
+          fi
+          mkdir -p "$GITHUB_WORKSPACE"
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -85,6 +119,20 @@ jobs:
     name: mcp tests
     runs-on: [self-hosted, ci]
     steps:
+      # A prior job (e.g. a container running as root) can leave root-owned files
+      # in the self-hosted runner workspace; the runner user has no sudo, so
+      # actions/checkout's clean step fails with EACCES. rm what we can; if
+      # root-owned files remain, rename the dir aside — we own the PARENT, so the
+      # rename succeeds — and checkout recreates it clean. Nightly
+      # pluto-maintenance reclaims the .broken.* dirs via docker (root).
+      - name: Reset self-hosted workspace
+        run: |
+          if [ -n "${GITHUB_WORKSPACE:-}" ] && [ -d "$GITHUB_WORKSPACE" ]; then
+            rm -rf "$GITHUB_WORKSPACE" 2>/dev/null \
+              || mv "$GITHUB_WORKSPACE" "${GITHUB_WORKSPACE}.broken.$(date +%s%N)" 2>/dev/null \
+              || true
+          fi
+          mkdir -p "$GITHUB_WORKSPACE"
       - name: Checkout
         uses: actions/checkout@v4
 
