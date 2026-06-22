@@ -814,7 +814,8 @@ impl CortexM {
                     shift_type,
                     set_flags,
                 } => {
-                    let mut op2 = self.read_reg(rm);
+                    let op2_raw = self.read_reg(rm);
+                    let mut op2 = op2_raw;
                     match shift_type {
                         0 => op2 = op2.wrapping_shl(imm5 as u32), // LSL
                         1 => {
@@ -839,37 +840,54 @@ impl CortexM {
                         _ => {}
                     }
                     let op1 = self.read_reg(rn);
-                    let result = match op {
-                        0x0 => op1 & op2,  // AND
-                        0x1 => op1 & !op2, // BIC
+                    let carry_in = self.get_carry();
+                    // (result, carry-out, overflow). For logical ops C/V are the
+                    // preserved current flags; the barrel-shifter carry-out is not
+                    // tracked here (NOTE: logical-op C reflects the prior C, not the
+                    // shifter carry — only N/Z are meaningful for them). Arithmetic
+                    // ops compute true NZCV via the shared add/sub-with-flags helpers.
+                    let (result, c, v) = match op {
+                        0x0 => (op1 & op2, carry_in, self.get_overflow()), // AND / TST
+                        0x1 => (op1 & !op2, carry_in, self.get_overflow()), // BIC
                         0x2 => {
-                            if rn == 0xF {
-                                op2
-                            } else {
-                                op1 | op2
-                            }
+                            let r = if rn == 0xF { op2 } else { op1 | op2 };
+                            (r, carry_in, self.get_overflow())
                         } // ORR / MOV
                         0x3 => {
-                            if rn == 0xF {
-                                !op2
-                            } else {
-                                op1 | !op2
-                            }
+                            let r = if rn == 0xF { !op2 } else { op1 | !op2 };
+                            (r, carry_in, self.get_overflow())
                         } // ORN / MVN
-                        0x4 => op1 ^ op2,  // EOR
-                        0x8 => op1.wrapping_add(op2), // ADD
-                        0xD => op1.wrapping_sub(op2), // SUB
+                        0x4 => (op1 ^ op2, carry_in, self.get_overflow()), // EOR / TEQ
+                        0x6 => {
+                            // PKH (PKHBT/PKHTB): pack halfwords. The tb bit lives in
+                            // shift_type bit1 (0 => PKHBT keep op1 low / Rm high,
+                            // 2 => PKHTB keep op1 high / Rm low). The optional barrel
+                            // shift on Rm is not applied here (PKH is off the bignum
+                            // path and only the imm5==0 form is exercised); operands
+                            // come from the raw Rm. Not flag-setting.
+                            let r = if shift_type == 2 {
+                                (op1 & 0xFFFF_0000) | (op2_raw & 0x0000_FFFF)
+                            } else {
+                                (op1 & 0x0000_FFFF) | (op2_raw & 0xFFFF_0000)
+                            };
+                            (r, carry_in, self.get_overflow())
+                        } // PKH
+                        0x8 => add_with_flags(op1, op2),                   // ADD / CMN
+                        0xA => adc_with_flags(op1, op2, carry_in as u32),  // ADC
+                        0xB => sbc_with_flags(op1, op2, carry_in as u32),  // SBC
+                        0xD => sub_with_flags(op1, op2),                   // SUB / CMP
+                        0xE => sub_with_flags(op2, op1),                   // RSB (op2 - op1)
                         _ => {
                             #[cfg(debug_assertions)]
                             tracing::warn!("Unknown DataProc32 op {:#x}", op);
-                            op2
+                            (op2, carry_in, self.get_overflow())
                         }
                     };
                     if rd != 15 {
                         self.write_reg(rd, result);
                     }
                     if set_flags {
-                        self.update_nz(result);
+                        self.update_nzcv(result, c, v);
                     }
                     pc_increment = 4;
                 }
@@ -1065,18 +1083,27 @@ impl CortexM {
                     rn,
                     imm8,
                     add_imm,
+                    index,
+                    writeback,
                 } => {
+                    // ARMv8-M LDRD (immediate): offset_addr = Rn ± imm32;
+                    // access_addr = index ? offset_addr : Rn; if writeback,
+                    // Rn = offset_addr.
                     let base = self.read_reg(rn);
-                    let addr = if add_imm {
+                    let offset_addr = if add_imm {
                         base.wrapping_add(imm8 << 2)
                     } else {
                         base.wrapping_sub(imm8 << 2)
                     };
+                    let addr = if index { offset_addr } else { base };
                     if let Ok(v1) = bus.read_u32(addr as u64) {
                         self.write_reg(rt, v1);
                     }
-                    if let Ok(v2) = bus.read_u32((addr + 4) as u64) {
+                    if let Ok(v2) = bus.read_u32(addr.wrapping_add(4) as u64) {
                         self.write_reg(rt2, v2);
+                    }
+                    if writeback {
+                        self.write_reg(rn, offset_addr);
                     }
                     pc_increment = 4;
                 }
@@ -1086,17 +1113,23 @@ impl CortexM {
                     rn,
                     imm8,
                     add_imm,
+                    index,
+                    writeback,
                 } => {
                     let base = self.read_reg(rn);
-                    let addr = if add_imm {
+                    let offset_addr = if add_imm {
                         base.wrapping_add(imm8 << 2)
                     } else {
                         base.wrapping_sub(imm8 << 2)
                     };
+                    let addr = if index { offset_addr } else { base };
                     let v1 = self.read_reg(rt);
                     let v2 = self.read_reg(rt2);
                     let _ = bus.write_u32(addr as u64, v1);
-                    let _ = bus.write_u32((addr + 4) as u64, v2);
+                    let _ = bus.write_u32(addr.wrapping_add(4) as u64, v2);
+                    if writeback {
+                        self.write_reg(rn, offset_addr);
+                    }
                     pc_increment = 4;
                 }
                 Instruction::Tbb { rn, rm } => {
@@ -2384,6 +2417,21 @@ impl CortexM {
                     self.write_reg(rd_hi, (new >> 32) as u32);
                     pc_increment = 4;
                 }
+                Instruction::Umaal {
+                    rd_lo,
+                    rd_hi,
+                    rn,
+                    rm,
+                } => {
+                    // (rd_hi:rd_lo) = Rn*Rm + rd_lo + rd_hi. Cannot overflow u64.
+                    let prod = (self.read_reg(rn) as u64).wrapping_mul(self.read_reg(rm) as u64);
+                    let res = prod
+                        .wrapping_add(self.read_reg(rd_lo) as u64)
+                        .wrapping_add(self.read_reg(rd_hi) as u64);
+                    self.write_reg(rd_lo, res as u32);
+                    self.write_reg(rd_hi, (res >> 32) as u32);
+                    pc_increment = 4;
+                }
                 Instruction::Mla { rd, rn, rm, ra } => {
                     let res = self
                         .read_reg(ra)
@@ -2658,6 +2706,221 @@ mod tests {
         // UDIV R0, R1, R2 is 0xFBB1 F0F2
         run_test_instr(&mut cpu, &mut bus, 0xFBB1F0F2, true);
         assert_eq!(cpu.r0, 10);
+    }
+
+    #[test]
+    fn test_strd_predec_writeback() {
+        // e96d ce04 → strd ip, lr, [sp, #-16]!  (P=1, U=0, W=1).
+        // libgcc __aeabi_uldivmod prologue used by the mbedTLS bignum/RSA
+        // path: it stores ip,lr below SP and updates SP. Ignoring writeback
+        // left SP stale so the matching `ldr lr,[sp,#4]` read a garbage
+        // return address and the RSA verify wild-jumped.
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x1000;
+        cpu.sp = 0x2000_0040;
+        cpu.r12 = 0xAABB_CCDD;
+        cpu.lr = 0x0800_5755;
+
+        run_test_instr(&mut cpu, &mut bus, 0xE96DCE04, true);
+
+        // SP updated to SP-16.
+        assert_eq!(cpu.sp, 0x2000_0030);
+        // Doubleword stored at the new SP.
+        assert_eq!(bus.read_u32(0x2000_0030).unwrap(), 0xAABB_CCDD);
+        assert_eq!(bus.read_u32(0x2000_0034).unwrap(), 0x0800_5755);
+    }
+
+    #[test]
+    fn test_ldrd_postindex_writeback() {
+        // e8f1 2304 → ldrd r2, r3, [r1], #16  (P=0, U=1, W=1).
+        // Post-indexed: load from [r1], then r1 += 16.
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x1000;
+        cpu.set_register(1, 0x2000_0080);
+        bus.write_u32(0x2000_0080, 0x1122_3344).unwrap();
+        bus.write_u32(0x2000_0084, 0x5566_7788).unwrap();
+
+        run_test_instr(&mut cpu, &mut bus, 0xE8F12304, true);
+
+        assert_eq!(cpu.get_register(2), 0x1122_3344);
+        assert_eq!(cpu.get_register(3), 0x5566_7788);
+        // Base updated by +16 after the access.
+        assert_eq!(cpu.get_register(1), 0x2000_0090);
+    }
+
+    #[test]
+    fn test_ldrd_offset_no_writeback() {
+        // e9d1 0702 → ldrd r0, r7, [r1, #8]  (P=1, U=1, W=0): base unchanged.
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x1000;
+        cpu.set_register(1, 0x2000_0100);
+        bus.write_u32(0x2000_0108, 0xDEAD_BEEF).unwrap();
+        bus.write_u32(0x2000_010C, 0xFEED_FACE).unwrap();
+
+        run_test_instr(&mut cpu, &mut bus, 0xE9D10702, true);
+
+        assert_eq!(cpu.get_register(0), 0xDEAD_BEEF);
+        assert_eq!(cpu.get_register(7), 0xFEED_FACE);
+        // Offset form: base register must be unchanged.
+        assert_eq!(cpu.get_register(1), 0x2000_0100);
+    }
+
+    // Helpers for flag inspection in arithmetic tests.
+    const C_BIT: u32 = 1 << 29;
+    const V_BIT: u32 = 1 << 28;
+    const Z_BIT: u32 = 1 << 30;
+    const N_BIT: u32 = 1 << 31;
+
+    #[test]
+    fn test_dataproc32_adc_carry_in() {
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x1000;
+
+        // ADCS R3, R4, R5 with carry-in set: 1 + 1 + 1 = 3
+        cpu.r4 = 1;
+        cpu.r5 = 1;
+        cpu.xpsr |= C_BIT; // carry-in = 1
+        run_test_instr(&mut cpu, &mut bus, 0xEB540305, true);
+        assert_eq!(cpu.r3, 3);
+        assert_eq!(cpu.xpsr & C_BIT, 0); // no carry-out
+    }
+
+    #[test]
+    fn test_dataproc32_add_sets_carry_and_overflow() {
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x1000;
+
+        // ADDS R2, R0, R1 : 0xFFFF_FFFF + 1 = 0, carry set, zero set
+        cpu.r0 = 0xFFFF_FFFF;
+        cpu.r1 = 1;
+        run_test_instr(&mut cpu, &mut bus, 0xEB100201, true);
+        assert_eq!(cpu.r2, 0);
+        assert_ne!(cpu.xpsr & C_BIT, 0);
+        assert_ne!(cpu.xpsr & Z_BIT, 0);
+        assert_eq!(cpu.xpsr & V_BIT, 0);
+
+        // ADDS overflow: 0x7FFF_FFFF + 1 = 0x8000_0000, V set, N set, C clear
+        cpu.pc = 0x1000;
+        cpu.r0 = 0x7FFF_FFFF;
+        cpu.r1 = 1;
+        run_test_instr(&mut cpu, &mut bus, 0xEB100201, true);
+        assert_eq!(cpu.r2, 0x8000_0000);
+        assert_ne!(cpu.xpsr & V_BIT, 0);
+        assert_ne!(cpu.xpsr & N_BIT, 0);
+        assert_eq!(cpu.xpsr & C_BIT, 0);
+    }
+
+    #[test]
+    fn test_dataproc32_multiword_carry_chain() {
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x1000;
+
+        // 64-bit add: (R1:R0) + (R4:R3) where low words overflow.
+        // low: ADDS R2, R0, R1 -> R0=0xFFFF_FFFF + R1=1 -> 0, carry=1
+        cpu.r0 = 0xFFFF_FFFF;
+        cpu.r1 = 0x0000_0001;
+        run_test_instr(&mut cpu, &mut bus, 0xEB100201, true); // ADDS R2,R0,R1
+        assert_eq!(cpu.r2, 0);
+        assert_ne!(cpu.xpsr & C_BIT, 0);
+
+        // high: ADCS R5, R3, R4 -> 0x10 + 0x20 + carry(1) = 0x31
+        cpu.r3 = 0x10;
+        cpu.r4 = 0x20;
+        run_test_instr(&mut cpu, &mut bus, 0xEB530504, true); // ADCS R5,R3,R4
+        assert_eq!(cpu.r5, 0x31);
+        // Full result: high=0x31, low=0 -> 0x0000_0031_0000_0000
+    }
+
+    #[test]
+    fn test_dataproc32_sbc_borrow() {
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x1000;
+
+        // SBCS R2, R0, R1 with carry-in clear (borrow): 5 - 3 - 1 = 1
+        cpu.r0 = 5;
+        cpu.r1 = 3;
+        cpu.xpsr &= !C_BIT; // carry-in 0 => borrow 1
+        run_test_instr(&mut cpu, &mut bus, 0xEB700201, true);
+        assert_eq!(cpu.r2, 1);
+        assert_ne!(cpu.xpsr & C_BIT, 0); // no final borrow -> C set
+
+        // SBCS producing a borrow: 0 - 1 - 0 = 0xFFFF_FFFE, C clear, N set
+        cpu.pc = 0x1000;
+        cpu.r0 = 0;
+        cpu.r1 = 1;
+        cpu.xpsr |= C_BIT; // carry-in 1 => borrow 0
+        run_test_instr(&mut cpu, &mut bus, 0xEB700201, true);
+        assert_eq!(cpu.r2, 0xFFFF_FFFF);
+        assert_eq!(cpu.xpsr & C_BIT, 0); // borrow -> C clear
+        assert_ne!(cpu.xpsr & N_BIT, 0);
+    }
+
+    #[test]
+    fn test_dataproc32_rsb() {
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x1000;
+
+        // RSB R2, R0, R1 -> R2 = R1 - R0 = 30 - 10 = 20 (no flags)
+        cpu.r0 = 10;
+        cpu.r1 = 30;
+        run_test_instr(&mut cpu, &mut bus, 0xEBC00201, true);
+        assert_eq!(cpu.r2, 20);
+
+        // RSBS R2, R0, R1 -> R2 = 0 - 5 = 0xFFFF_FFFB, flags set, C clear (borrow)
+        // (pc advances naturally; the decode cache keys on pc, so we must not
+        // re-use an address for a different opcode.)
+        cpu.r0 = 5;
+        cpu.r1 = 0;
+        run_test_instr(&mut cpu, &mut bus, 0xEBD00201, true);
+        assert_eq!(cpu.r2, 0xFFFF_FFFB);
+        assert_ne!(cpu.xpsr & N_BIT, 0);
+        assert_eq!(cpu.xpsr & C_BIT, 0);
+    }
+
+    #[test]
+    fn test_dataproc32_pkh() {
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x1000;
+
+        // PKHBT R2, R0, R1 : low half from R0, high half from R1
+        cpu.r0 = 0xAAAA_BBBB;
+        cpu.r1 = 0xCCCC_DDDD;
+        run_test_instr(&mut cpu, &mut bus, 0xEAC00201, true);
+        assert_eq!(cpu.r2, 0xCCCC_BBBB);
+
+        // PKHTB R2, R0, R1 : high half from R0, low half from R1.
+        // pc advances naturally (decode cache keys on pc, not on opcode bytes).
+        cpu.r0 = 0xAAAA_BBBB;
+        cpu.r1 = 0xCCCC_DDDD;
+        run_test_instr(&mut cpu, &mut bus, 0xEAC00221, true);
+        assert_eq!(cpu.r2, 0xAAAA_DDDD);
+    }
+
+    #[test]
+    fn test_dataproc32_umaal() {
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x1000;
+
+        // UMAAL R0, R1, R2, R3 : (R1:R0) = R2*R3 + R0 + R1
+        // R2=0xFFFF_FFFF, R3=0xFFFF_FFFF -> 0xFFFF_FFFE_0000_0001
+        // + R0(0x10) + R1(0x20) -> 0xFFFF_FFFE_0000_0031
+        cpu.r2 = 0xFFFF_FFFF;
+        cpu.r3 = 0xFFFF_FFFF;
+        cpu.r0 = 0x10;
+        cpu.r1 = 0x20;
+        run_test_instr(&mut cpu, &mut bus, 0xFBE20163, true);
+        let result = ((cpu.r1 as u64) << 32) | (cpu.r0 as u64);
+        assert_eq!(result, 0xFFFF_FFFE_0000_0031);
     }
 
     #[test]
