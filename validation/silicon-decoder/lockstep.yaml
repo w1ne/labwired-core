@@ -1,0 +1,19 @@
+schema_version: "1.0"
+# Asserts the labwired stm32l476 model produces the SAME wide-instruction decode
+# results that a real NUCLEO-L476RG produced over SWD (validation/silicon-decoder
+# README). Byte-for-byte lockstep — guards the LDRB.W/UXTH.W/UXTAH decoder fixes.
+inputs:
+  env: "./env.yaml"
+limits:
+  max_steps: 2000000
+assertions:
+  - memory_value: { node: l476, address: 0x20000000, expected_value: 0x00000085, size: 32 }
+  - memory_value: { node: l476, address: 0x20000004, expected_value: 0xFFFFFF85, size: 32 }
+  - memory_value: { node: l476, address: 0x20000008, expected_value: 0x00008042, size: 32 }
+  - memory_value: { node: l476, address: 0x2000000C, expected_value: 0xFFFF8042, size: 32 }
+  - memory_value: { node: l476, address: 0x20000010, expected_value: 0x0000FF00, size: 32 }
+  - memory_value: { node: l476, address: 0x20000014, expected_value: 0x00000085, size: 32 }
+  - memory_value: { node: l476, address: 0x20000018, expected_value: 0xFFFFFF85, size: 32 }
+  - memory_value: { node: l476, address: 0x2000001C, expected_value: 0x00008500, size: 32 }
+  - memory_value: { node: l476, address: 0x20000020, expected_value: 0x00000006, size: 32 }
+  - memory_value: { node: l476, address: 0x2000003C, expected_value: 0xDEADBEEF, size: 32 }
