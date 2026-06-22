@@ -1,0 +1,118 @@
+# Publish @labwired/catalog to npm when the generated facts change on main, then
+# open a bump PR in proto.cat so its drift gate runs against the new facts.
+#
+# Secrets used:
+#   NPM_TOKEN     — automation token with publish on @labwired/* (already set up
+#                   for mcp-publish.yml).
+#   PROTOCAT_PAT  — PAT with `repo` scope on w1ne/protocat, for the bump PR.
+#                   Create + add:  gh secret set PROTOCAT_PAT
+#
+# Versioning: the published version is computed from npm at publish time
+# (current patch + 1) and set ephemerally — it is NOT committed back. The
+# committed package.json version is just a baseline, so there is no push to main
+# and no CI re-entry. proto.cat pins the published version via the bump PR.
+
+name: Publish @labwired/catalog
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/catalog/src/catalog-facts.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # npm provenance attestations
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.pub.outputs.version }}
+      published: ${{ steps.pub.outputs.published }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+          cache: npm
+          cache-dependency-path: packages/catalog/package-lock.json
+
+      - name: Install
+        working-directory: packages/catalog
+        run: npm ci
+
+      # Guard: the facts must already match the registry/manifest (the Playground
+      # CI gate enforces this pre-merge; fail loudly if something bypassed it).
+      - name: Verify facts are not stale
+        working-directory: packages/catalog
+        run: npm run check:facts
+
+      - name: Build + test
+        working-directory: packages/catalog
+        run: npm run build && npm test
+
+      - name: Publish if content changed
+        id: pub
+        working-directory: packages/catalog
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          NAME=$(node -p "require('./package.json').name")
+          # Compare the committed facts to the facts inside the latest published
+          # tarball. If identical, there is nothing new to publish.
+          PUBLISHED_DIR=$(mktemp -d)
+          if npm pack "$NAME@latest" --pack-destination "$PUBLISHED_DIR" >/dev/null 2>&1; then
+            tar -xzf "$PUBLISHED_DIR"/*.tgz -C "$PUBLISHED_DIR"
+            if cmp -s src/catalog-facts.json "$PUBLISHED_DIR/package/src/catalog-facts.json"; then
+              echo "facts unchanged vs latest published — skipping publish"
+              echo "published=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            CUR=$(npm view "$NAME" version)
+            NEXT=$(node -e "const [a,b,c]=process.argv[1].split('.'); console.log(\`\${a}.\${b}.\${Number(c)+1}\`)" "$CUR")
+          else
+            # Never published before — use the committed baseline version.
+            NEXT=$(node -p "require('./package.json').version")
+          fi
+          npm version --no-git-tag-version "$NEXT"
+          npm publish --provenance --access public
+          echo "version=$NEXT" >> "$GITHUB_OUTPUT"
+          echo "published=true" >> "$GITHUB_OUTPUT"
+
+  bump-protocat:
+    needs: publish
+    if: needs.publish.outputs.published == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: w1ne/protocat
+          token: ${{ secrets.PROTOCAT_PAT }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Bump @labwired/catalog
+        run: pnpm add "@labwired/catalog@${{ needs.publish.outputs.version }}"
+
+      - uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.PROTOCAT_PAT }}
+          branch: chore/bump-labwired-catalog
+          base: main
+          title: "chore: bump @labwired/catalog to ${{ needs.publish.outputs.version }}"
+          commit-message: "chore: bump @labwired/catalog to ${{ needs.publish.outputs.version }}"
+          body: |
+            Automated bump so proto.cat's catalog drift gate runs against the
+            latest LabWired facts. A red `check:catalog` here means a new LabWired
+            device_type needs a proto.cat overlay block (or an UNSUPPORTED entry).
