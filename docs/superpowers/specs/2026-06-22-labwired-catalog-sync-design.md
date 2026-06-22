@@ -73,19 +73,27 @@ ceiling of what the manifest can authoritatively provide; everything else is ove
 
 `protocat/lib/labwired/blocks.ts` keeps its superset `ChipBlock` / `ComponentBlock`
 definitions, but they become an **overlay** validated against `@labwired/catalog`
-(added as an npm dependency). A new vitest drift gate in proto.cat enforces both
-directions:
+(added as an npm dependency). The drift gate is a standalone `tsx` script
+(`check-catalog-sync.ts`) wired into proto.cat CI — proto.cat has no unit-test
+runner, only Playwright. It enforces two directions with different severities:
 
-1. **No stale references.** Every electrical `ComponentBlock.device_type` and every
-   `ChipBlock.id` must exist in `CATALOG_FACTS`. Catches LabWired renames/removals
-   that would otherwise produce a simulator-rejected manifest.
-2. **No unmapped components.** Every catalog `device_type` must have a proto.cat
-   block, minus an explicit `UNSUPPORTED` allowlist. Catches a newly added LabWired
-   component proto.cat has not yet given an overlay, failing with the missing id(s).
+1. **No stale references (hard fail).** Every electrical `ComponentBlock.device_type`
+   and every `ChipBlock.id` must exist in the published facts. Catches LabWired
+   renames/removals that would otherwise produce a simulator-rejected manifest.
+2. **No *newly* unmapped peripheral (hard fail), backlog is informational.** proto.cat
+   commits an auto-generated `coverage-baseline.json` listing the peripherals it
+   knowingly does not map yet. The gate fails only for a peripheral that is neither
+   mapped nor in the baseline — i.e. one that appeared in LabWired *after* adoption.
+   The acknowledged backlog prints as a note, not an error.
+
+This split is deliberate (it answers the "auto-sync is really auto-nag" critique):
+the hard facts genuinely auto-sync, and a brand-new component is force-flagged, but
+proto.cat is not nagged into covering all 22 peripherals at once via a hand-typed
+allowlist. Coverage stays human-paced yet drift-proof.
 
 Mechanical-only blocks (e.g. the LiPo cell) live solely in proto.cat — they are not
-in the LabWired manifest — and are excluded from direction (2) by the existing
-`simulated: false` filter.
+external peripherals — and never enter direction (2) because the coverage set is
+`PERIPHERAL_DEVICE_TYPES` (external devices only).
 
 ## Auto-version + publish flow
 
@@ -93,21 +101,23 @@ New workflow `packages/catalog` publisher, `.github/workflows/catalog-publish.ym
 triggered on push to **main** touching `packages/catalog/**`,
 `packages/ui/src/peripherals/manifest.json`, or the chip-catalog source.
 
+Versioning is **committed, not ephemeral** (answering the "version lies" critique).
+The package publishes the version committed in `packages/catalog/package.json`; a PR
+gate in Playground CI fails if `catalog-facts.json` changes without a version bump,
+so whoever adds a component bumps the version in the same PR. This keeps the
+committed version honest with no privileged push-to-main token.
+
 Steps:
 
-1. Regenerate `catalog-facts.json`. If the generated content is unchanged from what
-   is already published, stop (no-op publish guard).
-2. `npm version patch` in `packages/catalog`, then
-   `npm publish --provenance --access public` using the existing `NPM_TOKEN` secret
-   (same setup as `mcp-publish.yml`). The version bump commit is pushed back to main
-   with a skip-ci guard to avoid a publish loop.
-3. Open or update a **bump PR in the proto.cat repo** raising the
-   `@labwired/catalog` dependency to the new version.
+1. On push to **main** changing `catalog-facts.json`, publish the committed version
+   with `npm publish --provenance --access public` (existing `NPM_TOKEN`), skipping
+   if that exact version is already on npm.
+2. Open or update a **bump PR in `w1ne/protocat`** raising the `@labwired/catalog`
+   dependency to the published version (needs a `PROTOCAT_PAT` secret).
 
-The bump PR runs proto.cat's drift gate. It goes green only when proto.cat is
-genuinely back in sync. A newly added component with no overlay leaves the PR red —
-which is the intended signal that a human must author the enclosure/firmware
-metadata before the new component is usable in proto.cat.
+The bump PR runs proto.cat's drift gate. Direction-1 drift or a brand-new unmapped
+peripheral leaves it red — the signal a human must map or acknowledge the component.
+The acknowledged backlog does not block the PR.
 
 ## Explicitly NOT synced (scope boundary)
 
@@ -120,17 +130,18 @@ stay proto.cat-only.
 
 | Unit | Responsibility | Depends on |
 | --- | --- | --- |
-| `@labwired/catalog` generator | Turn `manifest.json` + chip catalog into `catalog-facts.json` | manifest.json, chip-catalog source |
-| `@labwired/catalog` package API | Typed facts + `isKnownDeviceType`/`isKnownChip` | generated json |
-| `catalog-publish.yml` | Detect change, version, publish, open proto.cat bump PR | package, NPM_TOKEN, proto.cat repo |
+| `@labwired/catalog` generator | Turn `CATALOG` + `manifest.json` + boards/pin-maps into `catalog-facts.json` | board-config + ui manifest source |
+| `@labwired/catalog` package API | Typed facts + `isKnownDeviceType`/`isKnownChip` + `schemaMatches`/`assertSchemaCompatible` | generated json |
+| `catalog-publish.yml` | Publish committed version on facts change, open proto.cat bump PR | package, NPM_TOKEN, PROTOCAT_PAT |
 | proto.cat `blocks.ts` overlay | Superset block defs (hard facts + authoring metadata) | `@labwired/catalog` |
-| proto.cat drift gate (vitest) | Two-direction consistency check | `@labwired/catalog`, blocks.ts |
+| proto.cat drift gate (`tsx` script) | Direction-1 + new-peripheral check vs coverage baseline | `@labwired/catalog`, blocks.ts |
 
 ## Testing
 
-- `@labwired/catalog`: `check` gate (generated == committed) wired into the build
-  gate; a unit test for `isKnownDeviceType`/`isKnownChip`.
-- proto.cat: the two-direction drift gate as a vitest test in proto.cat CI.
+- `@labwired/catalog`: `check:facts` drift gate (generated == committed) + unit tests
+  for the helpers, coverage-set membership, chip-alias exclusion, and schema
+  tolerance — wired into Playground CI.
+- proto.cat: the drift gate (`check:catalog`) run as a CI step.
 - The publish workflow's no-op guard verified by a dry-run path (regenerate, compare,
   skip when unchanged).
 

@@ -511,32 +511,55 @@ git commit -m "ci(catalog): open bump PR in proto.cat after publish"
 - Create: `protocat/lib/labwired/check-catalog-sync.ts`
 
 **Interfaces:**
-- Consumes: `isKnownDeviceType`, `isKnownChip`, `DEVICE_TYPES` from `@labwired/catalog`; `CHIP_BLOCKS`, `COMPONENT_BLOCKS` from `./blocks`.
-- Produces: a process exiting non-zero when (1) a proto.cat electrical block references an unknown device_type/chip, or (2) a published device_type has no proto.cat block and is not in `UNSUPPORTED`.
+- Consumes: `isKnownDeviceType`, `isKnownChip`, `PERIPHERAL_DEVICE_TYPES` from `@labwired/catalog`; `CHIP_BLOCKS`, `COMPONENT_BLOCKS` from `./blocks`.
+- Produces: a process that **hard-fails** on direction-1 drift (a proto.cat block references an unknown device_type/chip) and on a **newly** unmapped peripheral (one absent from the committed `coverage-baseline.json`), while merely **warning** about the acknowledged backlog. `--update` rewrites the baseline.
+
+> **Roast #4/#3 resolution:** direction-2 is not a hard-fail against the full
+> published set (that demands proto.cat cover all 22 peripherals and produces a
+> 19-entry hand-typed allowlist of noise). Instead proto.cat commits an
+> auto-generated `coverage-baseline.json` — the set of peripherals it knowingly
+> does not map yet. The gate fails only for a peripheral that is neither mapped
+> nor in the baseline, i.e. one that appeared in LabWired *after* adoption. That
+> forces attention on genuinely new components (the real goal) without nagging
+> about the pre-existing backlog. Hard facts auto-sync; coverage is human-paced
+> but drift-proof.
 
 - [ ] **Step 1: Add the dependency and script**
 
-Run: `cd /home/andrii/projects/protocat && pnpm add @labwired/catalog`
-Then add to `package.json` scripts: `"check:catalog": "tsx lib/labwired/check-catalog-sync.ts"` (add `tsx` to devDeps if absent: `pnpm add -D tsx`).
+Run: `cd /home/andrii/projects/protocat && pnpm add @labwired/catalog && pnpm add -D tsx`
+Then add to `package.json` scripts: `"check:catalog": "tsx lib/labwired/check-catalog-sync.ts"`.
 
 - [ ] **Step 2: Write the drift gate**
 
 Create `protocat/lib/labwired/check-catalog-sync.ts`:
 
 ```typescript
-import { isKnownDeviceType, isKnownChip, DEVICE_TYPES } from '@labwired/catalog';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { isKnownDeviceType, isKnownChip, PERIPHERAL_DEVICE_TYPES } from '@labwired/catalog';
 import { CHIP_BLOCKS, COMPONENT_BLOCKS } from './blocks';
 
-// device_types LabWired knows but proto.cat intentionally does not expose yet.
-const UNSUPPORTED = new Set<string>([]);
+const BASELINE = new URL('./coverage-baseline.json', import.meta.url);
+
+const mapped = new Set(
+  COMPONENT_BLOCKS.filter((c) => c.simulated && c.device_type).map((c) => c.device_type as string),
+);
+// Peripherals LabWired exposes that proto.cat does not map yet.
+const unmapped = PERIPHERAL_DEVICE_TYPES.filter((dt) => !mapped.has(dt)).sort();
+
+if (process.argv.includes('--update')) {
+  writeFileSync(BASELINE, JSON.stringify({ acknowledged_unmapped: unmapped }, null, 2) + '\n');
+  console.error(`wrote coverage baseline (${unmapped.length} acknowledged)`);
+  process.exit(0);
+}
+
+const baseline: { acknowledged_unmapped: string[] } = JSON.parse(readFileSync(BASELINE, 'utf8'));
+const acknowledged = new Set(baseline.acknowledged_unmapped);
 
 const errors: string[] = [];
 
-// Direction 1: every proto.cat reference must be a real LabWired fact.
+// Direction 1 (hard fail): every proto.cat reference must be a real LabWired fact.
 for (const chip of CHIP_BLOCKS) {
-  if (!isKnownChip(chip.id)) {
-    errors.push(`chip "${chip.id}" is not a known LabWired chip_family`);
-  }
+  if (!isKnownChip(chip.id)) errors.push(`chip "${chip.id}" is not a known LabWired chip_family`);
 }
 for (const c of COMPONENT_BLOCKS) {
   if (c.simulated && c.device_type && !isKnownDeviceType(c.device_type)) {
@@ -544,16 +567,20 @@ for (const c of COMPONENT_BLOCKS) {
   }
 }
 
-// Direction 2: every published device_type must have a proto.cat block (or be allowlisted).
-const mapped = new Set(
-  COMPONENT_BLOCKS.filter((c) => c.simulated && c.device_type).map((c) => c.device_type as string),
-);
-for (const dt of DEVICE_TYPES) {
-  if (!mapped.has(dt) && !UNSUPPORTED.has(dt)) {
+// Direction 2 (hard fail only for NEW peripherals): unmapped + not acknowledged.
+for (const dt of unmapped) {
+  if (!acknowledged.has(dt)) {
     errors.push(
-      `LabWired device_type "${dt}" has no proto.cat block. Add an overlay block in lib/labwired/blocks.ts or add it to UNSUPPORTED.`,
+      `new LabWired peripheral "${dt}" has no proto.cat block. Add an overlay block in lib/labwired/blocks.ts, ` +
+        `or run \`pnpm check:catalog --update\` to acknowledge it in coverage-baseline.json.`,
     );
   }
+}
+
+// Backlog is informational only.
+const backlog = unmapped.filter((dt) => acknowledged.has(dt));
+if (backlog.length > 0) {
+  console.error(`note: ${backlog.length} acknowledged peripherals not yet mapped: ${backlog.join(', ')}`);
 }
 
 if (errors.length > 0) {
@@ -563,16 +590,16 @@ if (errors.length > 0) {
 console.error('catalog in sync with @labwired/catalog');
 ```
 
-- [ ] **Step 3: Run the gate**
+- [ ] **Step 3: Seed the baseline and run the gate**
 
-Run: `cd /home/andrii/projects/protocat && pnpm check:catalog`
-Expected: it lists every currently-unmapped LabWired device_type (most of the 14 kits proto.cat doesn't yet expose). Decide per id: add a real overlay block in `blocks.ts`, or add the id to `UNSUPPORTED` with a one-line reason. Re-run until it prints "catalog in sync".
+Run: `cd /home/andrii/projects/protocat && pnpm check:catalog --update && pnpm check:catalog`
+Expected: `--update` writes `coverage-baseline.json` acknowledging today's unmapped peripherals; the second run prints the backlog note and "catalog in sync". From now on a *new* LabWired peripheral fails the gate until mapped or re-acknowledged.
 
 - [ ] **Step 4: Commit**
 
 ```bash
 cd /home/andrii/projects/protocat
-git add package.json pnpm-lock.yaml lib/labwired/check-catalog-sync.ts lib/labwired/blocks.ts
+git add package.json pnpm-lock.yaml lib/labwired/check-catalog-sync.ts lib/labwired/coverage-baseline.json
 git commit -m "feat(labwired): consume @labwired/catalog with a drift gate"
 ```
 
