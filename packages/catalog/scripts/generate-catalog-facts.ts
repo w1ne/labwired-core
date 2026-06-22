@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { CATALOG } from '../../board-config/src/catalog';
 import { PIN_MAPS } from '../../board-config/src/pin-mapping';
+import { PLAYGROUND_BOARD_CATALOG } from '../../board-config/src/boards';
 import manifest from '../../ui/src/peripherals/manifest.json' with { type: 'json' };
 
 const SCHEMA_VERSION = 1;
@@ -12,8 +13,21 @@ const OUT = fileURLToPath(new URL('../src/catalog-facts.json', import.meta.url))
 // not composable peripherals, so they are excluded from the coverage set.
 const EXTERNAL_DEVICE_CLASSES = new Set(['i2c_device', 'spi_device', 'uart_device']);
 
+// PIN_MAPS keys that are board-specific aliases, not distinct chip families —
+// they reuse a base family's pin map and never appear as a board `board` value.
+// Excluded so `chips` stays a clean family list. The authoritative chip_family
+// set lives in the Rust core; this TS-side list is a best-effort proxy built
+// from real bundled boards + the pin-map families.
+const CHIP_ALIASES = new Set(['esp32-s3-zero', 'nrf52840-onboarding']);
+
 function sortedUnique(values: string[]): string[] {
   return [...new Set(values)].sort();
+}
+
+function buildChips(): string[] {
+  const fromBoards = PLAYGROUND_BOARD_CATALOG.map((b) => b.board);
+  const fromPinMaps = Object.keys(PIN_MAPS).filter((k) => !CHIP_ALIASES.has(k));
+  return sortedUnique([...fromBoards, ...fromPinMaps]);
 }
 
 function build(): string {
@@ -32,7 +46,9 @@ function build(): string {
     // Coverage set: external peripherals a proto.cat block is expected to map
     // (all kit-registered peripherals + bus-attached catalog devices).
     peripheral_device_types: sortedUnique([...manifestTypes, ...externalCatalogTypes]),
-    chips: sortedUnique(Object.keys(PIN_MAPS)),
+    // Best-effort chip_family proxy: real bundled-board families + pin-map
+    // families, minus board-variant aliases. See CHIP_ALIASES above.
+    chips: buildChips(),
   };
   return JSON.stringify(facts, null, 2) + '\n';
 }

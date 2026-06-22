@@ -49,4 +49,12 @@ describe('catalog facts helpers', () => {
       expect(PERIPHERAL_DEVICE_TYPES, `${dt} dropped from coverage set`).toContain(dt);
     }
   });
+
+  // Roast #2: chips is a clean family list, not polluted with board variants.
+  it('includes real chip families but excludes board-variant aliases', () => {
+    expect(CATALOG_FACTS.chips).toContain('esp32'); // proto.cat uses this
+    expect(CATALOG_FACTS.chips).toContain('stm32f103');
+    expect(CATALOG_FACTS.chips).not.toContain('esp32-s3-zero');
+    expect(CATALOG_FACTS.chips).not.toContain('nrf52840-onboarding');
+  });
 });

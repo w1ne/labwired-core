@@ -6,7 +6,11 @@ export interface CatalogFacts {
   device_types: string[];
   /** External peripherals a proto.cat block is expected to map (coverage set). */
   peripheral_device_types: string[];
-  /** Known chip families (== compile-service chip_family). */
+  /**
+   * Best-effort chip_family proxy: families with a bundled playground board or a
+   * pin-map, minus board-variant aliases. The authoritative chip_family set
+   * lives in the Rust core; treat this as a strong hint, not a closed universe.
+   */
   chips: string[];
 }
 

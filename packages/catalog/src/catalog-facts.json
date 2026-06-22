@@ -82,11 +82,9 @@
   ],
   "chips": [
     "esp32",
-    "esp32-s3-zero",
     "esp32c3",
     "esp32s3",
     "nrf52840",
-    "nrf52840-onboarding",
     "rp2040",
     "stm32f103",
     "stm32f401",
