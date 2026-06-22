@@ -25,6 +25,14 @@ jobs:
     name: Playground tests
     runs-on: [self-hosted, ci]
     steps:
+      # Self-hosted hygiene: a prior job can leave root-owned files in the
+      # runner workspace (e.g. a container that wrote as root), which makes
+      # actions/checkout's clean step fail with EACCES. Wipe the workspace
+      # first. Uses passwordless sudo when available, plain rm otherwise.
+      - name: Reset self-hosted workspace
+        run: |
+          sudo -n rm -rf "$GITHUB_WORKSPACE" 2>/dev/null || rm -rf "$GITHUB_WORKSPACE" 2>/dev/null || true
+          mkdir -p "$GITHUB_WORKSPACE"
       - name: Checkout
         uses: actions/checkout@v4
       # Fetch ONLY the `core` submodule (the configs/wasm these tests need).
@@ -65,6 +73,14 @@ jobs:
     name: board-config tests
     runs-on: [self-hosted, ci]
     steps:
+      # Self-hosted hygiene: a prior job can leave root-owned files in the
+      # runner workspace (e.g. a container that wrote as root), which makes
+      # actions/checkout's clean step fail with EACCES. Wipe the workspace
+      # first. Uses passwordless sudo when available, plain rm otherwise.
+      - name: Reset self-hosted workspace
+        run: |
+          sudo -n rm -rf "$GITHUB_WORKSPACE" 2>/dev/null || rm -rf "$GITHUB_WORKSPACE" 2>/dev/null || true
+          mkdir -p "$GITHUB_WORKSPACE"
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -85,6 +101,14 @@ jobs:
     name: mcp tests
     runs-on: [self-hosted, ci]
     steps:
+      # Self-hosted hygiene: a prior job can leave root-owned files in the
+      # runner workspace (e.g. a container that wrote as root), which makes
+      # actions/checkout's clean step fail with EACCES. Wipe the workspace
+      # first. Uses passwordless sudo when available, plain rm otherwise.
+      - name: Reset self-hosted workspace
+        run: |
+          sudo -n rm -rf "$GITHUB_WORKSPACE" 2>/dev/null || rm -rf "$GITHUB_WORKSPACE" 2>/dev/null || true
+          mkdir -p "$GITHUB_WORKSPACE"
       - name: Checkout
         uses: actions/checkout@v4
 
