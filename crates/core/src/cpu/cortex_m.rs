@@ -1147,6 +1147,13 @@ impl CortexM {
                         let rn = (h1 & 0xF) as u8;
                         let rt = ((h2 >> 12) & 0xF) as u8;
                         let is_t4 = (op1 & 0x8) == 0;
+                        // Signed (LDRSB.W/LDRSH.W) vs unsigned (LDRB.W/LDRH.W)
+                        // is selected by h1 bit 8 (0x0100), NOT op1 bit 3:
+                        // op1 = h1[7:4] excludes bit 8, and op1 bit 3 (=h1 bit 7)
+                        // is the imm12-form selector used for is_t4 above. Using
+                        // it for the sign made LDRB.W T2 (0xF89x) sign-extend any
+                        // byte >= 0x80 (0x85 -> 0xFFFFFF85).
+                        let is_signed = (h1 & 0x0100) != 0;
                         // When Rn=PC (rn==15), T4 form is always the PC-literal encoding
                         // (LDR.W Rt, [PC, ±imm12]), never register-offset.
                         let is_reg_offset = is_t4 && rn != 15 && (h2 & 0x0800) == 0;
@@ -1204,7 +1211,7 @@ impl CortexM {
                                 // Rt==15 = PLD/PLI preload hint — NOP (handled by `_`).
                                 1 if rt != 15 => {
                                     if let Ok(v) = bus.read_u8(addr as u64) {
-                                        let out = if (op1 & 0x8) != 0 {
+                                        let out = if is_signed {
                                             (v as i8) as i32 as u32
                                         } else {
                                             v as u32
@@ -1219,7 +1226,7 @@ impl CortexM {
                                 // Rt==15 = PLDW preload hint — NOP (handled by `_`).
                                 3 if rt != 15 => {
                                     if let Ok(v) = bus.read_u16(addr as u64) {
-                                        let out = if (op1 & 0x8) != 0 {
+                                        let out = if is_signed {
                                             (v as i16) as i32 as u32
                                         } else {
                                             v as u32
@@ -1275,7 +1282,7 @@ impl CortexM {
                                 // Rt==15 = PLD/PLI preload hint — NOP (handled by `_`).
                                 1 if rt != 15 => {
                                     if let Ok(v) = bus.read_u8(addr as u64) {
-                                        let out = if (op1 & 0x8) != 0 {
+                                        let out = if is_signed {
                                             (v as i8) as i32 as u32
                                         } else {
                                             v as u32
@@ -1290,7 +1297,7 @@ impl CortexM {
                                 // Rt==15 = PLDW preload hint — NOP (handled by `_`).
                                 3 if rt != 15 => {
                                     if let Ok(v) = bus.read_u16(addr as u64) {
-                                        let out = if (op1 & 0x8) != 0 {
+                                        let out = if is_signed {
                                             (v as i16) as i32 as u32
                                         } else {
                                             v as u32
@@ -2999,6 +3006,58 @@ mod tests {
         run_test_instr(&mut cpu, &mut bus, 0x5288, false);
         // The halfword at 0x3000 should be 0xBEEF.
         assert_eq!(bus.read_u16(0x3000).unwrap(), 0xBEEF);
+    }
+
+    #[test]
+    fn test_exec_wide_load_byte_halfword_extension() {
+        // Regression: the wide (32-bit Thumb-2) load encodings select
+        // signed vs unsigned via h1 bit 8 (0x0100), not op1 bit 3.
+        // Previously LDRB.W T2 (0xF89x) and LDRH.W T2 (0xF8Bx) wrongly
+        // sign-extended, corrupting any byte/halfword with the top bit set
+        // (e.g. a UDS SID 0x85 read back as 0xFFFFFF85).
+        // Each sub-test uses a fresh cpu/bus: instruction memory at a fixed
+        // address is treated as ROM by MockBus and will not accept a rewrite,
+        // so rerunning at the same pc would refetch the first instruction.
+        // LDRB.W R0, [R1, #0]  = F891 0000 — must ZERO-extend.
+        {
+            let mut cpu = CortexM::new();
+            let mut bus = MockBus::new();
+            cpu.pc = 0x2000;
+            cpu.r1 = 0x3000;
+            bus.write_u8(0x3000, 0x85).unwrap();
+            run_test_instr(&mut cpu, &mut bus, 0xF8910000, true);
+            assert_eq!(cpu.r0, 0x0000_0085, "LDRB.W must zero-extend 0x85");
+        }
+        // LDRSB.W R0, [R1, #0] = F991 0000 — must SIGN-extend.
+        {
+            let mut cpu = CortexM::new();
+            let mut bus = MockBus::new();
+            cpu.pc = 0x2000;
+            cpu.r1 = 0x3000;
+            bus.write_u8(0x3000, 0x85).unwrap();
+            run_test_instr(&mut cpu, &mut bus, 0xF9910000, true);
+            assert_eq!(cpu.r0, 0xFFFF_FF85, "LDRSB.W must sign-extend 0x85");
+        }
+        // LDRH.W R0, [R1, #0]  = F8B1 0000 — must ZERO-extend.
+        {
+            let mut cpu = CortexM::new();
+            let mut bus = MockBus::new();
+            cpu.pc = 0x2000;
+            cpu.r1 = 0x3000;
+            bus.write_u16(0x3000, 0x8042).unwrap();
+            run_test_instr(&mut cpu, &mut bus, 0xF8B10000, true);
+            assert_eq!(cpu.r0, 0x0000_8042, "LDRH.W must zero-extend 0x8042");
+        }
+        // LDRSH.W R0, [R1, #0] = F9B1 0000 — must SIGN-extend.
+        {
+            let mut cpu = CortexM::new();
+            let mut bus = MockBus::new();
+            cpu.pc = 0x2000;
+            cpu.r1 = 0x3000;
+            bus.write_u16(0x3000, 0x8042).unwrap();
+            run_test_instr(&mut cpu, &mut bus, 0xF9B10000, true);
+            assert_eq!(cpu.r0, 0xFFFF_8042, "LDRSH.W must sign-extend 0x8042");
+        }
     }
 
     #[test]
