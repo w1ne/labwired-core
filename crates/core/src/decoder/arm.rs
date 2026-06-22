@@ -455,6 +455,20 @@ pub enum Instruction {
         reg_list: u16,
         writeback: bool,
     },
+    /// STMIA.W Rn(!), {registers} — 32-bit store multiple increment-after
+    /// (0xE8xx). The store analogue of LdmiaW; NOT the same as StmdbW.
+    StmiaW {
+        rn: u8,
+        reg_list: u16,
+        writeback: bool,
+    },
+    /// LDMDB.W Rn(!), {registers} — 32-bit load multiple decrement-before
+    /// (0xE9xx).
+    LdmdbW {
+        rn: u8,
+        reg_list: u16,
+        writeback: bool,
+    },
     Ldrd {
         rt: u8,
         rt2: u8,
@@ -1475,7 +1489,13 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
         let rotate = (((h2 >> 4) & 0x3) * 8) as u8;
         let op = ((h1 >> 4) & 0x7) as u8;
         if op == 0b000 || op == 0b001 || op == 0b100 || op == 0b101 {
-            return Instruction::ExtendW { rd, rn, rm, rotate, op };
+            return Instruction::ExtendW {
+                rd,
+                rn,
+                rm,
+                rotate,
+                op,
+            };
         }
     }
 
@@ -1570,22 +1590,45 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
                 return Instruction::Tbb { rn, rm };
             }
         } else if (h1 & 0x40) == 0 {
-            // STMDB / LDMIA.W: bit6=0 distinguishes LDM/STM from STRD/LDRD (bit6=1).
-            // H2 is the full 16-bit register list (bit n = register n, bit14=LR, bit15=PC).
+            // Load/store multiple: bit6=0 distinguishes LDM/STM from STRD/LDRD
+            // (bit6=1). H2 is the full 16-bit register list (bit n = register n,
+            // bit14=LR, bit15=PC). h1 bit 8 selects addressing mode:
+            //   0xE8xx (bit8=0) = increment-after (STMIA.W / LDMIA.W)
+            //   0xE9xx (bit8=1) = decrement-before (STMDB.W / LDMDB.W)
+            // Ignoring bit 8 made STMIA.W execute as STMDB.W (writes 16 bytes
+            // below the base), e.g. clang's coalesced struct-init stores.
             let writeback = (h1 & 0x20) != 0;
             let reg_list = h2;
-            if is_load {
-                return Instruction::LdmiaW {
-                    rn,
-                    reg_list,
-                    writeback,
-                };
-            } else {
-                return Instruction::StmdbW {
-                    rn,
-                    reg_list,
-                    writeback,
-                };
+            let increment_after = (h1 & 0x0100) == 0;
+            match (is_load, increment_after) {
+                (true, true) => {
+                    return Instruction::LdmiaW {
+                        rn,
+                        reg_list,
+                        writeback,
+                    }
+                }
+                (true, false) => {
+                    return Instruction::LdmdbW {
+                        rn,
+                        reg_list,
+                        writeback,
+                    }
+                }
+                (false, true) => {
+                    return Instruction::StmiaW {
+                        rn,
+                        reg_list,
+                        writeback,
+                    }
+                }
+                (false, false) => {
+                    return Instruction::StmdbW {
+                        rn,
+                        reg_list,
+                        writeback,
+                    }
+                }
             }
         } else if is_load {
             // LDREX (T1, ARMv7-M B6.7.79) shares the h1 = 0xE85x prefix

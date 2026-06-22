@@ -58,6 +58,25 @@ __attribute__((noreturn)) void reset_handler(void)
       __asm volatile("uxtah %0, %1, %2" : "=r"(r) : "r"(a), "r"(b)); }
     g_results[8] = r;                                                          /* 0x00000006 */
 
+    /* STMIA.W increment-after (F-4: was mis-decoded as STMDB.W decrement-before).
+     * Store {r6,r7} at &scratch[2] with writeback; on increment-after the words
+     * land AT scratch[2]/[3] and the base advances +8.  A STMDB.W mis-decode
+     * would instead write scratch[0]/[1] and move the base -8. */
+    {
+        volatile uint32_t scratch[4] = {0u, 0u, 0u, 0u};
+        uint32_t base = (uint32_t)&scratch[2];
+        uint32_t end;
+        __asm volatile(
+            "mov  r4, #0x66\n"
+            "mov  r5, #0x77\n"
+            "stmia.w %0!, {r4, r5}\n"
+            : "=r"(end) : "0"(base) : "r4", "r5", "memory");
+        g_results[9]  = scratch[2];          /* 0x00000066 (stored AT base)        */
+        g_results[10] = scratch[3];          /* 0x00000077 (base+4)                */
+        g_results[11] = scratch[0];          /* 0x00000000 (NOT written below base) */
+        g_results[12] = end - base;          /* 0x00000008 (writeback = +count*4)  */
+    }
+
     g_results[15] = 0xDEADBEEFu; /* done sentinel */
     for (;;) { __asm volatile("nop"); }
 }

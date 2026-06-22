@@ -16,4 +16,8 @@ assertions:
   - memory_value: { node: l476, address: 0x20000018, expected_value: 0xFFFFFF85, size: 32 }
   - memory_value: { node: l476, address: 0x2000001C, expected_value: 0x00008500, size: 32 }
   - memory_value: { node: l476, address: 0x20000020, expected_value: 0x00000006, size: 32 }
+  - memory_value: { node: l476, address: 0x20000024, expected_value: 0x00000066, size: 32 }
+  - memory_value: { node: l476, address: 0x20000028, expected_value: 0x00000077, size: 32 }
+  - memory_value: { node: l476, address: 0x2000002C, expected_value: 0x00000000, size: 32 }
+  - memory_value: { node: l476, address: 0x20000030, expected_value: 0x00000008, size: 32 }
   - memory_value: { node: l476, address: 0x2000003C, expected_value: 0xDEADBEEF, size: 32 }

@@ -1490,7 +1490,13 @@ impl CortexM {
                     let val = self.read_reg(rm) as u16 as i16 as i32 as u32;
                     self.write_reg(rd, val);
                 }
-                Instruction::ExtendW { rd, rn, rm, rotate, op } => {
+                Instruction::ExtendW {
+                    rd,
+                    rn,
+                    rm,
+                    rotate,
+                    op,
+                } => {
                     // ROR Rm by `rotate` (0/8/16/24), then extract+extend.
                     let v = self.read_reg(rm).rotate_right(rotate as u32);
                     let ext = match op {
@@ -2068,6 +2074,68 @@ impl CortexM {
                         self.write_reg(rn, start);
                     }
                     pc_increment = 4;
+                }
+                // STMIA.W Rn(!), {reg_list} — 32-bit store multiple, increment
+                // after. Stores start AT Rn (not Rn-count*4); writeback adds.
+                Instruction::StmiaW {
+                    rn,
+                    reg_list,
+                    writeback,
+                } => {
+                    let count = reg_list.count_ones();
+                    let mut addr = self.read_reg(rn);
+                    for i in 0u8..=15 {
+                        if (reg_list & (1 << i)) != 0 {
+                            let val = self.read_reg(i);
+                            if bus.write_u32(addr as u64, val).is_err() {
+                                tracing::error!("Bus Write Fault (STMIA) at {:#x}", addr);
+                            }
+                            addr = addr.wrapping_add(4);
+                        }
+                    }
+                    if writeback {
+                        self.write_reg(rn, self.read_reg(rn).wrapping_add(count * 4));
+                    }
+                    pc_increment = 4;
+                }
+                // LDMDB.W Rn(!), {reg_list} — 32-bit load multiple, decrement
+                // before. Loads start at Rn-count*4; writeback subtracts.
+                Instruction::LdmdbW {
+                    rn,
+                    reg_list,
+                    writeback,
+                } => {
+                    let count = reg_list.count_ones();
+                    let base = self.read_reg(rn).wrapping_sub(count * 4);
+                    let mut addr = base;
+                    for i in 0u8..=14 {
+                        if (reg_list & (1 << i)) != 0 {
+                            if let Ok(val) = bus.read_u32(addr as u64) {
+                                self.write_reg(i, val);
+                            }
+                            addr = addr.wrapping_add(4);
+                        }
+                    }
+                    let branched = if (reg_list & (1 << 15)) != 0 {
+                        if let Ok(pc_val) = bus.read_u32(addr as u64) {
+                            if writeback {
+                                self.write_reg(rn, base);
+                            }
+                            self.branch_to(pc_val, bus)?;
+                            pc_increment = 0;
+                            true
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    };
+                    if !branched {
+                        if writeback {
+                            self.write_reg(rn, base);
+                        }
+                        pc_increment = 4;
+                    }
                 }
                 // LDMIA.W Rn(!), {reg_list} — 32-bit load multiple, increment after.
                 // Lowest-numbered register loaded from lowest address.
@@ -3009,6 +3077,55 @@ mod tests {
             cpu.r2 = 0x1234_0002;
             run_test_instr(&mut cpu, &mut bus, 0xFA11F082, true);
             assert_eq!(cpu.r0, 0x0000_0006, "UXTAH must add Rn to the extended Rm");
+        }
+    }
+
+    #[test]
+    fn test_exec_stmia_w_vs_stmdb_w() {
+        // Regression: STMIA.W (0xE8xx, increment-after) was decoded as STMDB.W
+        // (decrement-before), so coalesced struct-init stores landed count*4
+        // bytes below the base (e.g. a UDS config's fn_* pointers read NULL).
+        // STMIA.W r0!, {r4, r5} = E8A0 0030 — store AT base, writeback +8.
+        {
+            let mut cpu = CortexM::new();
+            let mut bus = MockBus::new();
+            cpu.pc = 0x2000;
+            cpu.r0 = 0x3000;
+            cpu.r4 = 0xAAAA_0001;
+            cpu.r5 = 0xBBBB_0002;
+            run_test_instr(&mut cpu, &mut bus, 0xE8A00030, true);
+            assert_eq!(
+                bus.read_u32(0x3000).unwrap(),
+                0xAAAA_0001,
+                "STMIA.W: r4 at base"
+            );
+            assert_eq!(
+                bus.read_u32(0x3004).unwrap(),
+                0xBBBB_0002,
+                "STMIA.W: r5 at base+4"
+            );
+            assert_eq!(cpu.r0, 0x3008, "STMIA.W writeback = base + count*4");
+        }
+        // STMDB.W r0!, {r4, r5} = E9A0 0030 — store BELOW base, writeback -8.
+        {
+            let mut cpu = CortexM::new();
+            let mut bus = MockBus::new();
+            cpu.pc = 0x2000;
+            cpu.r0 = 0x3008;
+            cpu.r4 = 0xCCCC_0001;
+            cpu.r5 = 0xDDDD_0002;
+            run_test_instr(&mut cpu, &mut bus, 0xE9A00030, true);
+            assert_eq!(
+                bus.read_u32(0x3000).unwrap(),
+                0xCCCC_0001,
+                "STMDB.W: r4 at base-8"
+            );
+            assert_eq!(
+                bus.read_u32(0x3004).unwrap(),
+                0xDDDD_0002,
+                "STMDB.W: r5 at base-4"
+            );
+            assert_eq!(cpu.r0, 0x3000, "STMDB.W writeback = base - count*4");
         }
     }
 
