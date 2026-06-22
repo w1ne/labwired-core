@@ -11,7 +11,7 @@ import { findPinFunction, getPinMapping } from './pin-mapping';
 // Component labels — kept here because the catalog doesn't carry human-readable
 // labels (only deviceClass + boardIoKind). These drive diagnostic messages.
 // ---------------------------------------------------------------------------
-const COMPONENT_LABELS: Record<string, string> = {
+export const COMPONENT_LABELS: Record<string, string> = {
   // MCU boards
   mcu: 'MCU',
   'arduino-uno': 'Arduino Uno',

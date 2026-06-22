@@ -129,12 +129,24 @@ export function MobileInputsSheet({
   const [cpuView, setCpuView] = useState<CpuView>('reg');
   const hasCpu = !!bridge && !!registers;
 
+  // ?panel=<tab> opens the drawer to a specific instrument on load. Used by
+  // embedded demo labs (docs/landing) so the lab shows its output — Serial
+  // text, the logic-analyzer trace — without the reader needing to tap a tab.
+  // Validated against the tabs that actually exist for this diagram; an
+  // unknown or absent value leaves the default collapsed behaviour intact.
+  const initialPanel = (() => {
+    if (typeof window === 'undefined') return null;
+    const p = new URLSearchParams(window.location.search).get('panel');
+    return p && tabs.some((t) => t.id === p) ? (p as Tab) : null;
+  })();
+
   // Default to the tab that actually has content.
-  const [tab, setTab] = useState<Tab>(hasAbout ? 'about' : hasInputs ? 'inputs' : 'serial');
+  const [tab, setTab] = useState<Tab>(initialPanel ?? (hasAbout ? 'about' : hasInputs ? 'inputs' : 'serial'));
   // Drawer: collapsed by default so the canvas owns the screen. Only the slim
   // tab bar shows until the user taps a tab (or the expand chevron). Tapping the
-  // already-open tab collapses it again — a one-tap peek/dismiss.
-  const [open, setOpen] = useState(false);
+  // already-open tab collapses it again — a one-tap peek/dismiss. A ?panel=
+  // request opens it on load instead.
+  const [open, setOpen] = useState(initialPanel != null);
   const selectTab = (id: Tab) => {
     if (tab === id && open) setOpen(false);
     else { setTab(id); setOpen(true); }
