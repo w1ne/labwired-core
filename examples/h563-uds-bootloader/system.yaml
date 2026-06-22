@@ -2,3 +2,17 @@ name: "h563-uds-bootloader"
 chip: "../../configs/chips/stm32h563.yaml"
 external_devices: []
 board_io: []
+# Enable the STM32H5 FLASH fidelity gates for this example: the bootloader's
+# flash driver is written to satisfy them (checks program-error flags, runs the
+# erase/program routines from SRAM). With the gates on, the simulator refuses a
+# misaligned program (INCERR) and a read-while-write erase of the running bank,
+# so this example exercises the honest model rather than the forgiving default.
+peripherals:
+  - id: "flash_iface"
+    type: "flash"
+    base_address: 0x40022000
+    size: "1KB"
+    config:
+      profile: "stm32h5"
+      error_flags: true
+      read_while_write: true

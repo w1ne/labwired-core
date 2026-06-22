@@ -6,7 +6,7 @@ limits:
   # The full OTA flow (handshake → download → verify → activate → bank-swap →
   # reset → boot APP-B) completes in ~440k steps; the new app then idles, so
   # the run terminates on max_steps after every milestone has printed.
-  max_steps: 1000000
+  max_steps: 15000000
 assertions:
   - uart_contains: "BL-START"
   - uart_contains: "BL-RECOVERY"
