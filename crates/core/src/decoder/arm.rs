@@ -311,10 +311,12 @@ pub enum Instruction {
         rd: u8,
         rm: u8,
     },
-    /// Wide register-extend (T2): {S,U}XT{B,H}.W Rd, Rm, ROR #rotate.
-    /// `rotate` is 0/8/16/24 (applied to Rm before the extract).
+    /// Wide register-extend (T2): {S,U}XT{B,H}.W and the extend-and-add
+    /// {S,U}XTA{B,H}.W. `Rd = (Rn==0xF ? 0 : Rn) + extend(ROR(Rm, rotate))`.
+    /// `rotate` is 0/8/16/24; `rn`==0xF means the plain extend (no add).
     ExtendW {
         rd: u8,
+        rn: u8,
         rm: u8,
         rotate: u8,
         /// 0=SXTH, 1=UXTH, 4=SXTB, 5=UXTB (ARM op field h1[6:4]).
@@ -1474,20 +1476,28 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
         }
     }
 
-    // Register-extend, wide (T2): SXTH.W/UXTH.W/SXTB.W/UXTB.W Rd, Rm{, ROR #r}.
-    //   h1 = 1111 1010 0 op 1111  (Rn=0xF, no add);  op: 000=SXTH 001=UXTH
-    //   100=SXTB 101=UXTB (010/011 = SXTB16/UXTB16, not modeled).
+    // Register-extend, wide (T2): the plain {S,U}XT{B,H}.W (Rn=0xF) and the
+    // extend-and-add {S,U}XTA{B,H}.W (Rn!=0xF).
+    //   h1 = 1111 1010 0 op nnnn ; op: 000=SXT(A)H 001=UXT(A)H 100=SXT(A)B
+    //   101=UXT(A)B (010/011 = ..B16, not modeled). nnnn = Rn (0xF = no add).
     //   h2 = 1111 dddd 10 rr mmmm  (rr = rotate/8).
-    // clang emits e.g. `uxth.w r2, ip` = FA1F F28C when extending via a high
-    // register; without this the insn decoded to Unknown32 and was skipped,
-    // leaving the destination register stale.
-    if (h1 & 0xFF8F) == 0xFA0F && (h2 & 0xF080) == 0xF080 {
+    // clang emits e.g. `uxth.w r2, ip` = FA1F F28C (extend via high register)
+    // and `uxtah r6, r3, r0` = FA13 F680 (4 + path_len). Without this the insn
+    // decoded to Unknown32 and was skipped, leaving Rd stale.
+    if (h1 & 0xFF80) == 0xFA00 && (h2 & 0xF080) == 0xF080 {
+        let rn = (h1 & 0xF) as u8;
         let rd = ((h2 >> 8) & 0xF) as u8;
         let rm = (h2 & 0xF) as u8;
         let rotate = (((h2 >> 4) & 0x3) * 8) as u8;
         let op = ((h1 >> 4) & 0x7) as u8;
         if op == 0b000 || op == 0b001 || op == 0b100 || op == 0b101 {
-            return Instruction::ExtendW { rd, rm, rotate, op };
+            return Instruction::ExtendW {
+                rd,
+                rn,
+                rm,
+                rotate,
+                op,
+            };
         }
     }
 
