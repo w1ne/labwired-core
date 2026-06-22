@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 export interface AttrField {
   key: string;
   label: string;
-  type: 'text' | 'select' | 'color' | 'range';
+  type: 'text' | 'select' | 'color' | 'range' | 'textarea';
   options?: string[];
   min?: number;
   max?: number;
@@ -92,6 +92,14 @@ export function ComponentInspector({
               onChange={(e) => onChange(f.key, e.target.value)}
             />
           </div>
+        ) : f.type === 'textarea' ? (
+          <textarea
+            id={inputId}
+            rows={4}
+            className={inputCls}
+            value={attrs[f.key] ?? ''}
+            onChange={(e) => onChange(f.key, e.target.value)}
+          />
         ) : (
           <input
             id={inputId}
