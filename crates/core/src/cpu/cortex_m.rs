@@ -1487,6 +1487,17 @@ impl CortexM {
                     let val = self.read_reg(rm) as u16 as i16 as i32 as u32;
                     self.write_reg(rd, val);
                 }
+                Instruction::ExtendW { rd, rm, rotate, op } => {
+                    // ROR Rm by `rotate` (0/8/16/24), then extract+extend.
+                    let v = self.read_reg(rm).rotate_right(rotate as u32);
+                    let out = match op {
+                        0b000 => v as u16 as i16 as i32 as u32, // SXTH.W
+                        0b001 => v & 0xFFFF,                    // UXTH.W
+                        0b100 => v as u8 as i8 as i32 as u32,   // SXTB.W
+                        _ => v & 0xFF,                          // UXTB.W (0b101)
+                    };
+                    self.write_reg(rd, out);
+                }
 
                 Instruction::It { cond, mask } => {
                     self.it_state = (cond << 4) | mask;
@@ -2999,6 +3010,52 @@ mod tests {
         run_test_instr(&mut cpu, &mut bus, 0x5288, false);
         // The halfword at 0x3000 should be 0xBEEF.
         assert_eq!(bus.read_u16(0x3000).unwrap(), 0xBEEF);
+    }
+
+    #[test]
+    fn test_exec_wide_register_extend() {
+        // Regression: the wide (T2) register-extend instructions were not
+        // decoded (fell to Unknown32 and were skipped), leaving Rd stale.
+        // clang emits e.g. `uxth.w r2, ip` = FA1F F28C when extending a high
+        // register, which corrupted a UDS routine-id argument (read as 0).
+        // UXTH.W R2, R12  = FA1F F28C — zero-extend low 16 bits.
+        {
+            let mut cpu = CortexM::new();
+            let mut bus = MockBus::new();
+            cpu.pc = 0x2000;
+            cpu.r2 = 0xDEAD_BEEF; // stale value that must be overwritten
+            cpu.r12 = 0x1234_FF00;
+            run_test_instr(&mut cpu, &mut bus, 0xFA1FF28C, true);
+            assert_eq!(cpu.r2, 0x0000_FF00, "UXTH.W must zero-extend low 16 bits");
+        }
+        // UXTB.W R0, R1   = FA5F F081 — zero-extend low 8 bits.
+        {
+            let mut cpu = CortexM::new();
+            let mut bus = MockBus::new();
+            cpu.pc = 0x2000;
+            cpu.r1 = 0x0000_0085;
+            run_test_instr(&mut cpu, &mut bus, 0xFA5FF081, true);
+            assert_eq!(cpu.r0, 0x0000_0085, "UXTB.W must zero-extend low 8 bits");
+        }
+        // SXTB.W R0, R1   = FA4F F081 — sign-extend low 8 bits.
+        {
+            let mut cpu = CortexM::new();
+            let mut bus = MockBus::new();
+            cpu.pc = 0x2000;
+            cpu.r1 = 0x0000_0085;
+            run_test_instr(&mut cpu, &mut bus, 0xFA4FF081, true);
+            assert_eq!(cpu.r0, 0xFFFF_FF85, "SXTB.W must sign-extend low 8 bits");
+        }
+        // UXTH.W R0, R1, ROR #8 = FA1F F091 — rotate then zero-extend.
+        {
+            let mut cpu = CortexM::new();
+            let mut bus = MockBus::new();
+            cpu.pc = 0x2000;
+            cpu.r1 = 0x0085_0000;
+            run_test_instr(&mut cpu, &mut bus, 0xFA1FF091, true);
+            // ROR #8 of 0x00850000 = 0x00008500; & 0xFFFF = 0x8500.
+            assert_eq!(cpu.r0, 0x0000_8500, "UXTH.W ROR #8 must rotate then extend");
+        }
     }
 
     #[test]
