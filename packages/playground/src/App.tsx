@@ -17,9 +17,7 @@ import {
   GpsControl,
   ThermistorControl,
   useSimulationLoop,
-  EditorCanvas,
-  PropertyPanel,
-  CodeEditor,
+  LabwiredEditor,
   compileCode,
   EXAMPLE_SKETCHES,
   useEditorState,
@@ -75,7 +73,6 @@ import { PartActions } from './multi-mcu/PartActions';
 import { type PaletteComponent, type PaletteCategory } from './studio/PaletteDrawer';
 import { trackUsage } from './usage';
 import { syncSensorAttributeToSimulator } from './sensor-attribute-sync';
-import { ChevronLeftIcon } from './Icons';
 
 type WorkspaceKind = 'diagram' | 'source';
 type ActiveSimulationConfig = {
@@ -1769,7 +1766,6 @@ export function App() {
     [launchSimulation, drawerSubject, editor.state.diagram],
   );
 
-  const selectedParts = editor.state.diagram.parts.filter((p) => editor.state.selectedIds.has(p.id));
   const handlePartAttrChange = useCallback(
     (partId: string, attrs: Record<string, string>) => {
       editor.updateAttrs(partId, attrs);
@@ -2443,102 +2439,66 @@ export function App() {
     >
     <AccountPanel open={accountOpen} onClose={() => setAccountOpen(false)} />
     <div data-legacy-shell="true" className={`playground${showCode ? ' code-open' : ''}`}>
-      {/* ===== Unified Layout ===== */}
+      {/* ===== Unified Layout =====
+          The editor SURFACE (palette · [code|canvas] · property panel) is the
+          shared <LabwiredEditor> from @labwired/ui — the SAME component proto.cat
+          mounts, so the two can't drift. The playground keeps its own RUNTIME
+          (compile, bridges, multi-MCU) and its richer floating windows (rendered
+          below), so it passes renderWindows={false} and opens windows from onSelect. */}
       <div className="editor-layout">
-        {/* Main content area */}
-        <div className="editor-center">
-          <div className="editor-top-split">
-            {/* Code editor (left pane) */}
-            {showCode && (
-              <div className="editor-code-pane">
-                <CodeEditor
-                  source={source}
-                  onChange={setSource}
-                  errors={compileErrors}
-                />
-              </div>
-            )}
-            {/* Circuit canvas (always visible — shows live state during sim) */}
-            <div className="editor-canvas-pane relative">
-              {/* Quiet "About this lab" affordance — overlays the top-left of the
-                  canvas; toggles a small popover, never covers the canvas. */}
-              {selectedBoard.description && (
-                <LabInfoButton
-                  name={selectedBoard.name}
-                  description={selectedBoard.description}
-                  runHint={selectedBoard.runHint}
-                />
-              )}
-              <EditorCanvas
-                state={editor.state}
-                // Run-only embed: a `?embed=true` pane is for showing a live,
-                // interactive sim (press buttons, watch LEDs/displays) on docs
-                // pages — never for editing the circuit. Lock the canvas to
-                // read-only run mode so viewers can't rewire/drag/delete. The
-                // Run control stays, so the sim is click-to-run (lazy), not
-                // auto-booted — a docs page may host several embeds.
-                interactionMode={embed ? 'run' : 'edit'}
-                boardIoStates={boardIoStateMap}
-                displayBuffers={simState.displayBuffers}
-                validationMessage={canvasValidationMessage}
-                invalidPins={invalidPins}
-                onMovePart={editor.movePart}
-                onResizePart={editor.resizePart}
-                onSelect={(id, add) => {
-                  editor.select(id, add);
-                  // Every component opens its own floating property window
-                  // when clicked (chips get the rich inspector, other parts
-                  // their properties). Clicking empty canvas (id null) or a
-                  // wire opens nothing.
-                  if (id && editor.state.diagram.parts.some((p) => p.id === id)) {
-                    openWindow(id);
-                  }
-                }}
-                onSelectRect={editor.selectRect}
-                onStartWire={handleStartWire}
-                onCompleteWire={handleCompleteWire}
-                onCancelWire={handleCancelWire}
-                onDeleteWire={editor.deleteWire}
-                onDropPart={handleDropPart}
-                onButtonToggle={handleButtonToggle}
-                onAnalogChange={handleAnalogChange}
-                onUpdateAttrs={handlePartAttrChange}
-                // Anchored control toolbar — only for MCU parts (a chip's
-                // intrinsic verbs live next to it on the canvas).
-                selectedPartOverlay={(part) => {
-                  if (!mcuBoardForPart(part, selectedBoard)) return null;
-                  return renderChipControls(part.id === 'mcu', 'toolbar');
-                }}
-              />
-            </div>
-          </div>
-
-        </div>
-
-        {/* Property panel (right sidebar) */}
-        {showRightSidebar && (
-          <div className="editor-sidebar-right">
-            <PropertyPanel
-              parts={selectedParts}
-              onUpdateAttrs={handlePartAttrChange}
-              onDelete={editor.deleteSelected}
-              onRotate={editor.rotatePart}
-              onResize={editor.resizePart}
-              labWidget={inspectorLabWidget}
+        <LabwiredEditor
+          state={editor.state}
+          // Run-only embed: a `?embed=true` pane shows a live, interactive sim
+          // on docs pages — never for editing. Lock to read-only run mode so
+          // viewers can't rewire/drag/delete (the Run control still works).
+          interactionMode={embed ? 'run' : 'edit'}
+          boardIoStates={boardIoStateMap}
+          displayBuffers={simState.displayBuffers}
+          validationMessage={canvasValidationMessage}
+          invalidPins={invalidPins}
+          onMovePart={editor.movePart}
+          onResizePart={editor.resizePart}
+          onSelect={(id, add) => {
+            editor.select(id, add);
+            // Every component opens its own floating window when clicked (chips
+            // get the rich inspector, other parts their properties). Clicking
+            // empty canvas (id null) or a wire opens nothing.
+            if (id && editor.state.diagram.parts.some((p) => p.id === id)) {
+              openWindow(id);
+            }
+          }}
+          onSelectRect={editor.selectRect}
+          onStartWire={handleStartWire}
+          onCompleteWire={handleCompleteWire}
+          onCancelWire={handleCancelWire}
+          onDeleteWire={editor.deleteWire}
+          onDropPart={handleDropPart}
+          onButtonToggle={handleButtonToggle}
+          onAnalogChange={handleAnalogChange}
+          // Anchored control toolbar — only for MCU parts (a chip's intrinsic
+          // verbs live next to it on the canvas).
+          selectedPartOverlay={(part) => {
+            if (!mcuBoardForPart(part, selectedBoard)) return null;
+            return renderChipControls(part.id === 'mcu', 'toolbar');
+          }}
+          // Quiet "About this lab" affordance, preserved through the shared
+          // editor's free-form overlay slot.
+          overlays={selectedBoard.description ? (
+            <LabInfoButton
+              name={selectedBoard.name}
+              description={selectedBoard.description}
+              runHint={selectedBoard.runHint}
             />
-          </div>
-        )}
-
-        {/* Collapsed right sidebar tab */}
-        {!showRightSidebar && (
-          <button
-            className="sidebar-toggle sidebar-toggle-right"
-            onClick={() => setShowRightSidebar(true)}
-            title="Show properties"
-          >
-            <ChevronLeftIcon size={12} />
-          </button>
-        )}
+          ) : undefined}
+          codePane={showCode ? { source, onChange: setSource, errors: compileErrors } : false}
+          propertyPanel={showRightSidebar}
+          propertyLabWidget={inspectorLabWidget}
+          onSetPropertyPanel={setShowRightSidebar}
+          onAttrChange={(partId, key, value) => handlePartAttrChange(partId, { [key]: value })}
+          onDeleteSelected={editor.deleteSelected}
+          onRotatePart={editor.rotatePart}
+          renderWindows={false}
+        />
       </div>
 
       {/* ===== Loading overlay (on top of UI, not replacing it) ===== */}

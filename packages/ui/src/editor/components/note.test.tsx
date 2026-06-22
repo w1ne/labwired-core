@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/react';
-import { COMPONENT_REGISTRY, getComponentsByCategory } from './index';
+import { COMPONENT_REGISTRY, getComponentsByCategory, renderComponentBody } from './index';
 
 describe('note component', () => {
   it('is registered as an inert tool with no pins or board binding', () => {
@@ -21,10 +21,10 @@ describe('note component', () => {
     const def = COMPONENT_REGISTRY.get('note')!;
     const long = 'x'.repeat(400);
     expect(() =>
-      render(<svg>{def.render({ text: '' }, { id: 'n1' })}</svg>),
+      render(<svg>{renderComponentBody(def, { text: '' }, { id: 'n1' })}</svg>),
     ).not.toThrow();
     expect(() =>
-      render(<svg>{def.render({ text: long }, { id: 'n2' })}</svg>),
+      render(<svg>{renderComponentBody(def, { text: long }, { id: 'n2' })}</svg>),
     ).not.toThrow();
   });
 });
