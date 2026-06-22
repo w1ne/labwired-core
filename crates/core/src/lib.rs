@@ -958,12 +958,40 @@ impl<C: Cpu> Machine<C> {
     /// run loop clamps its batch to 1 when `requires_cycle_accurate()` is true
     /// (which an H5 op-modeling FLASH forces), preserving the one-op-per-
     /// instruction invariant and the correct erase-before-program ordering.
-    fn apply_pending_flash_op(&mut self) -> SimResult<()> {
+    pub(crate) fn apply_pending_flash_op(&mut self) -> SimResult<()> {
         if let Some(op) = self.drain_flash_op() {
             use crate::peripherals::flash::h5;
             use crate::peripherals::flash::FlashOp;
             match op {
                 FlashOp::EraseSector { bank, sector } => {
+                    // OPT-IN read-while-write fidelity gate (H5 only, default
+                    // off). On real STM32H563 silicon a bank cannot be fetched
+                    // from while it is being erased — code running from that bank
+                    // stalls and cannot make progress, so production flash
+                    // routines run from SRAM. When the gate is on, an erase of
+                    // the SAME physical bank the CPU is currently executing from
+                    // is an unrecoverable access fault rather than a silent
+                    // success. The bank comparison is SWAP_BANK-aware: both the
+                    // BKSEL logical erase bank and PC's bank are mapped to a
+                    // physical bank through the active swap state (see
+                    // `Flash::rww_erase_violates`). Gate off ⇒ this branch is
+                    // skipped entirely and the erase proceeds as before.
+                    let pc = self.cpu.get_pc() as u64;
+                    let in_flash =
+                        (h5::FLASH_BASE..h5::FLASH_BASE + 2 * h5::BANK_SIZE).contains(&pc);
+                    if let Some(flash) = self.flash_peripheral() {
+                        if flash.h5_rww_enabled()
+                            && in_flash
+                            && flash.rww_erase_violates(bank, pc - h5::FLASH_BASE)
+                        {
+                            let phys = flash.physical_bank_of_offset(pc - h5::FLASH_BASE);
+                            return Err(SimulationError::Other(format!(
+                                "flash RWW violation: erase of bank {phys} while executing \
+                                 from bank {phys} (PC={pc:#010x}) — run the flash routine \
+                                 from SRAM"
+                            )));
+                        }
+                    }
                     let offset = (bank as u64) * h5::BANK_SIZE + (sector as u64) * h5::SECTOR_SIZE;
                     self.bus.flash.fill(offset, h5::SECTOR_SIZE, 0xFF);
                     tracing::debug!(
@@ -987,6 +1015,12 @@ impl<C: Cpu> Machine<C> {
                         self.bus.flash.data.len(),
                         2 * h5::BANK_SIZE
                     );
+                    // Record the swap so the RWW bank mapping reflects the new
+                    // active view (the physical second bank now answers at
+                    // 0x08000000). No-op for the gate-off path beyond a bool.
+                    if let Some(flash) = self.flash_peripheral_mut() {
+                        flash.mark_swapped();
+                    }
                     tracing::debug!("FLASH SwapAndReset: banks swapped, resetting CPU");
                     self.reset()?;
                 }
@@ -1160,6 +1194,30 @@ impl<C: Cpu> Machine<C> {
             .as_any()
             .and_then(|a| a.downcast_ref::<crate::peripherals::flash::Flash>())
             .and_then(|f| f.drain_pending_op())
+    }
+
+    /// Borrow the H5 FLASH peripheral, if one is on the bus. Used by the
+    /// read-while-write gate to query the swap state / bank mapping.
+    fn flash_peripheral(&self) -> Option<&crate::peripherals::flash::Flash> {
+        let idx = self.flash_index?;
+        self.bus
+            .peripherals
+            .get(idx)?
+            .dev
+            .as_any()
+            .and_then(|a| a.downcast_ref::<crate::peripherals::flash::Flash>())
+    }
+
+    /// Mutably borrow the FLASH peripheral, if one is on the bus. Used to record
+    /// the applied SWAP_BANK so the RWW bank mapping tracks the active view.
+    fn flash_peripheral_mut(&mut self) -> Option<&mut crate::peripherals::flash::Flash> {
+        let idx = self.flash_index?;
+        self.bus
+            .peripherals
+            .get_mut(idx)?
+            .dev
+            .as_any_mut()
+            .and_then(|a| a.downcast_mut::<crate::peripherals::flash::Flash>())
     }
 
     pub fn snapshot(&self) -> snapshot::MachineSnapshot {

@@ -169,6 +169,15 @@ pub struct SystemBus {
     /// `requires_cycle_accurate` — called per run-loop iteration — never scans
     /// peripherals. `false` on every bus without an H5 op-modeling FLASH.
     flash_models_ops: bool,
+    /// Index of the FLASH register peripheral whose opt-in H5 program-error
+    /// fidelity gate is enabled, if any. Cached in `rebuild_peripheral_ranges`
+    /// (same staleness contract as `rcc_idx`). `None` on every bus where the
+    /// gate is off — the common case — so the flash-region write path stays
+    /// byte-identical to prior behaviour. When `Some(idx)`, a program (a write
+    /// into the flash region) is validated against H5 silicon programming rules
+    /// before committing, and `peripherals[idx]` (the `Flash`) records the
+    /// resulting NSSR error flags.
+    flash_error_flags_idx: Option<usize>,
 }
 
 pub struct CanDiagnosticTester {
@@ -973,6 +982,7 @@ impl SystemBus {
             esp32c3_irq_routing: false,
             riscv_irq_lines: 0,
             flash_models_ops: false,
+            flash_error_flags_idx: None,
         };
         bus.rebuild_peripheral_ranges();
         bus
@@ -1010,6 +1020,7 @@ impl SystemBus {
             esp32c3_irq_routing: false,
             riscv_irq_lines: 0,
             flash_models_ops: false,
+            flash_error_flags_idx: None,
         };
         bus.rebuild_peripheral_ranges();
         bus
@@ -2492,6 +2503,7 @@ peripherals:
             esp32c3_irq_routing: false,
             riscv_irq_lines: 0,
             flash_models_ops: false,
+            flash_error_flags_idx: None,
         };
 
         bus.flash.write_u8(0x0800_0000, 0x12);
@@ -2504,6 +2516,429 @@ peripherals:
         // Write through alias and verify backing flash changed.
         bus.write_u8(0x0000_0001, 0xAB).unwrap();
         assert_eq!(bus.flash.read_u8(0x0800_0001), Some(0xAB));
+    }
+
+    /// Build a bus with a 1 KiB flash region (erased to 0xFF, like real silicon
+    /// after erase) and an H5 FLASH register peripheral at 0x4002_2000, with the
+    /// opt-in program-error gate set to `gate`.
+    fn h5_flash_bus(gate: bool) -> SystemBus {
+        let mut flash = LinearMemory::new(0x400, 0x0800_0000);
+        // Erased state is all-ones; the gate's not-erased check keys off this.
+        flash.data.iter_mut().for_each(|b| *b = 0xFF);
+        let mut bus = SystemBus {
+            flash,
+            ram: LinearMemory::new(256, 0x2000_0000),
+            extra_mem: Vec::new(),
+            peripherals: vec![PeripheralEntry {
+                name: "flash".to_string(),
+                base: 0x4002_2000,
+                size: 0x400,
+                irq: None,
+                dev: Box::new(
+                    crate::peripherals::flash::Flash::new_with_layout(
+                        crate::peripherals::flash::FlashRegisterLayout::Stm32H5,
+                    )
+                    .with_error_flags(gate),
+                ),
+                ticks_remaining: 0,
+                generation: 0,
+                clock_gate: None,
+            }],
+            nvic: None,
+            observers: Vec::new(),
+            config: crate::SimulationConfig::default(),
+            bit_band_enabled: false,
+            pending_cpu_irqs: [0; 2],
+            dport_idx: None,
+            rcc_idx: None,
+            clock_gating_bypass: false,
+            flash_thunks: std::collections::HashMap::new(),
+            peripheral_ranges: Vec::new(),
+            peripheral_hint: Cell::new(None),
+            last_gpio_in: [0; 2],
+            current_cycle: 0,
+            pending_schedule: Vec::new(),
+            legacy_walk_disabled: false,
+            hcsr04: Vec::new(),
+            can_diagnostic_testers: Vec::new(),
+            can_uds_testers: Vec::new(),
+            esp32c3_irq_routing: false,
+            riscv_irq_lines: 0,
+            flash_models_ops: false,
+            flash_error_flags_idx: None,
+        };
+        bus.rebuild_peripheral_ranges();
+        bus
+    }
+
+    fn read_nssr(bus: &SystemBus) -> u32 {
+        use crate::peripherals::flash::h5::NSSR_OFF;
+        bus.read_u32(0x4002_2000 + NSSR_OFF).unwrap()
+    }
+
+    /// Enable NSCR.PG on the H5 FLASH peripheral so the write-buffer machine
+    /// programs (silicon requires PG for a flash-region write to land).
+    fn h5_set_pg(bus: &mut SystemBus) {
+        use crate::peripherals::flash::h5;
+        bus.write_u32(0x4002_2000 + h5::NSCR_OFF, h5::NSCR_PG)
+            .unwrap();
+    }
+
+    #[test]
+    fn h5_gate_on_full_quadword_commits_as_and() {
+        use crate::peripherals::flash::h5;
+        let mut bus = h5_flash_bus(true);
+        assert!(bus.flash_error_flags_idx.is_some(), "gate index cached");
+        h5_set_pg(&mut bus);
+        // Pre-load the quad-word at 0x08000020 with 0xAA in the first lane so the
+        // commit must AND with it (flash only flips 1→0). Write the lower 15
+        // lanes via the buffer first... but to exercise the AND we re-program a
+        // committed quad-word below; here verify a clean commit from erased.
+        for i in 0..16u64 {
+            bus.write_u8(0x0800_0020 + i, 0x33).unwrap();
+        }
+        // 0xFF (erased) & 0x33 = 0x33 — full quad-word committed.
+        for i in 0..16u64 {
+            assert_eq!(bus.flash.read_u8(0x0800_0020 + i), Some(0x33));
+        }
+        assert_ne!(read_nssr(&bus) & h5::NSSR_EOP, 0, "EOP set on commit");
+        assert_eq!(read_nssr(&bus) & h5::NSSR_WBNE, 0, "WBNE clear on commit");
+    }
+
+    #[test]
+    fn h5_gate_on_partial_quadword_buffers_no_commit() {
+        use crate::peripherals::flash::h5;
+        let mut bus = h5_flash_bus(true);
+        h5_set_pg(&mut bus);
+        // Only 4 of 16 bytes: still buffering, flash unchanged, WBNE set.
+        for i in 0..4u64 {
+            bus.write_u8(0x0800_0020 + i, 0x55).unwrap();
+            assert_eq!(bus.flash.read_u8(0x0800_0020 + i), Some(0xFF), "not yet");
+        }
+        assert_ne!(read_nssr(&bus) & h5::NSSR_WBNE, 0, "WBNE set");
+        assert_eq!(read_nssr(&bus) & h5::NSSR_EOP, 0, "no EOP");
+    }
+
+    #[test]
+    fn h5_gate_on_reprogram_committed_quadword_ands_no_pgserr() {
+        use crate::peripherals::flash::h5;
+        let mut bus = h5_flash_bus(true);
+        h5_set_pg(&mut bus);
+        // First program: 0xFF & 0xF0 = 0xF0.
+        for i in 0..16u64 {
+            bus.write_u8(0x0800_0040 + i, 0xF0).unwrap();
+        }
+        assert_eq!(bus.flash.read_u8(0x0800_0040), Some(0xF0));
+        // Clear EOP via NSCCR, then re-program the SAME (now-not-erased) word.
+        bus.write_u32(0x4002_2000 + h5::NSCCR_OFF, h5::NSSR_EOP)
+            .unwrap();
+        for i in 0..16u64 {
+            bus.write_u8(0x0800_0040 + i, 0x0F).unwrap();
+        }
+        // Re-program ALLOWED, result is the AND: 0xF0 & 0x0F = 0x00. No PGSERR.
+        assert_eq!(bus.flash.read_u8(0x0800_0040), Some(0x00), "AND of old&new");
+        assert_eq!(read_nssr(&bus) & h5::NSSR_PGSERR, 0, "no PGSERR over-write");
+        assert_ne!(read_nssr(&bus) & h5::NSSR_EOP, 0, "EOP set (success)");
+    }
+
+    #[test]
+    fn h5_gate_on_misaligned_run_sets_incerr_alone_no_commit() {
+        use crate::peripherals::flash::h5;
+        let mut bus = h5_flash_bus(true);
+        h5_set_pg(&mut bus);
+        // Start at base+4 (quad-word 0x20), then jump into the next quad-word
+        // (0x30) before completing — an inconsistent program run.
+        bus.write_u8(0x0800_0024, 0x11).unwrap();
+        assert_ne!(read_nssr(&bus) & h5::NSSR_WBNE, 0, "WBNE while partial");
+        bus.write_u8(0x0800_0030, 0x22).unwrap();
+        // INCERR alone, nothing committed (both targets stay erased).
+        assert_eq!(bus.flash.read_u8(0x0800_0024), Some(0xFF), "no commit");
+        assert_eq!(bus.flash.read_u8(0x0800_0030), Some(0xFF), "no commit");
+        let nssr = read_nssr(&bus);
+        assert_ne!(nssr & h5::NSSR_INCERR, 0, "INCERR set");
+        assert_eq!(nssr & h5::NSSR_PGSERR, 0, "INCERR alone (no PGSERR)");
+    }
+
+    #[test]
+    fn h5_gate_off_commits_every_program_with_no_flag() {
+        use crate::peripherals::flash::h5;
+        let mut bus = h5_flash_bus(false);
+        assert!(bus.flash_error_flags_idx.is_none(), "gate off ⇒ no index");
+        // No buffering, no flags: every byte commits straight through, even
+        // misaligned and over-not-erased (old byte-identical behaviour).
+        bus.write_u8(0x0800_0003, 0x42).unwrap();
+        assert_eq!(bus.flash.read_u8(0x0800_0003), Some(0x42));
+        bus.write_u8(0x0800_0003, 0x99).unwrap();
+        assert_eq!(bus.flash.read_u8(0x0800_0003), Some(0x99));
+        assert_eq!(read_nssr(&bus) & h5::NSSR_W1C_MASK, 0, "no flag ever");
+        assert_eq!(read_nssr(&bus) & h5::NSSR_WBNE, 0, "no WBNE ever");
+    }
+
+    // ── H5 read-while-write fidelity gate (opt-in, default off) ─────────────
+
+    use crate::Cpu as _RwwCpuTrait;
+
+    /// Minimal CPU stub with a settable PC for the RWW Machine-level tests.
+    /// `step` is a no-op (the tests drive `apply_pending_flash_op` directly via
+    /// a manually recorded erase, so the CPU never needs to execute).
+    #[derive(Default)]
+    struct PcCpu {
+        pc: u32,
+    }
+
+    impl crate::Cpu for PcCpu {
+        fn reset(&mut self, _bus: &mut dyn crate::Bus) -> crate::SimResult<()> {
+            Ok(())
+        }
+        fn step(
+            &mut self,
+            _bus: &mut dyn crate::Bus,
+            _observers: &[std::sync::Arc<dyn crate::SimulationObserver>],
+            _config: &crate::SimulationConfig,
+        ) -> crate::SimResult<()> {
+            Ok(())
+        }
+        fn set_pc(&mut self, val: u32) {
+            self.pc = val;
+        }
+        fn get_pc(&self) -> u32 {
+            self.pc
+        }
+        fn set_sp(&mut self, _val: u32) {}
+        fn set_exception_pending(&mut self, _n: u32) {}
+        fn get_register(&self, _id: u8) -> u32 {
+            0
+        }
+        fn set_register(&mut self, _id: u8, _val: u32) {}
+        fn snapshot(&self) -> crate::snapshot::CpuSnapshot {
+            crate::snapshot::CpuSnapshot::Arm(crate::snapshot::ArmCpuSnapshot {
+                registers: vec![0; 16],
+                pc: self.pc,
+                xpsr: 0,
+                primask: false,
+                pending_exceptions: 0,
+                pending_exceptions_hi: Vec::new(),
+                vtor: 0,
+            })
+        }
+        fn apply_snapshot(&mut self, _snapshot: &crate::snapshot::CpuSnapshot) {}
+        fn get_register_names(&self) -> Vec<String> {
+            vec![]
+        }
+        fn index_of_register(&self, _name: &str) -> Option<u8> {
+            None
+        }
+    }
+
+    /// Build a bus with a 2 MiB flash region (two 1 MiB banks, as on the H563)
+    /// and an H5 FLASH register peripheral, with the opt-in read-while-write gate
+    /// set to `gate`. The flash is unlocked so a NSCR.SER|STRT write records an
+    /// erase op straight away.
+    fn h5_rww_bus(gate: bool) -> SystemBus {
+        use crate::peripherals::flash::h5;
+        let mut flash = LinearMemory::new((2 * h5::BANK_SIZE) as usize, h5::FLASH_BASE);
+        flash.data.iter_mut().for_each(|b| *b = 0xFF);
+        let mut bus = SystemBus {
+            flash,
+            ram: LinearMemory::new(0x1000, 0x2000_0000),
+            extra_mem: Vec::new(),
+            peripherals: vec![PeripheralEntry {
+                name: "flash".to_string(),
+                base: 0x4002_2000,
+                size: 0x400,
+                irq: None,
+                dev: Box::new(
+                    crate::peripherals::flash::Flash::new_with_layout(
+                        crate::peripherals::flash::FlashRegisterLayout::Stm32H5,
+                    )
+                    .with_read_while_write(gate),
+                ),
+                ticks_remaining: 0,
+                generation: 0,
+                clock_gate: None,
+            }],
+            nvic: None,
+            observers: Vec::new(),
+            config: crate::SimulationConfig::default(),
+            bit_band_enabled: false,
+            pending_cpu_irqs: [0; 2],
+            dport_idx: None,
+            rcc_idx: None,
+            clock_gating_bypass: false,
+            flash_thunks: std::collections::HashMap::new(),
+            peripheral_ranges: Vec::new(),
+            peripheral_hint: Cell::new(None),
+            last_gpio_in: [0; 2],
+            current_cycle: 0,
+            pending_schedule: Vec::new(),
+            legacy_walk_disabled: false,
+            hcsr04: Vec::new(),
+            can_diagnostic_testers: Vec::new(),
+            can_uds_testers: Vec::new(),
+            esp32c3_irq_routing: false,
+            riscv_irq_lines: 0,
+            flash_models_ops: false,
+            flash_error_flags_idx: None,
+        };
+        bus.rebuild_peripheral_ranges();
+        bus
+    }
+
+    /// Unlock NSKEYR then record a sector erase of `bank` (BKSEL logical) on the
+    /// bus, so a subsequent `apply_pending_flash_op` drains it.
+    fn h5_record_erase(bus: &mut SystemBus, bank: u8, sector: u32) {
+        use crate::peripherals::flash::h5;
+        bus.write_u32(0x4002_2000 + h5::NSKEYR_OFF, 0x4567_0123)
+            .unwrap();
+        bus.write_u32(0x4002_2000 + h5::NSKEYR_OFF, 0xCDEF_89AB)
+            .unwrap();
+        let mut nscr = h5::NSCR_SER | (sector << h5::NSCR_SNB_SHIFT) | h5::NSCR_STRT;
+        if bank == 1 {
+            nscr |= h5::NSCR_BKSEL;
+        }
+        bus.write_u32(0x4002_2000 + h5::NSCR_OFF, nscr).unwrap();
+    }
+
+    #[test]
+    fn rww_gate_on_same_bank_erase_faults() {
+        use crate::peripherals::flash::h5;
+        let mut cpu = PcCpu::default();
+        // PC executing from bank 1 (boot view at 0x08000000), sector 11.
+        cpu.set_pc(0x0801_6000);
+        let mut bus = h5_rww_bus(true);
+        h5_record_erase(&mut bus, 0, 11); // erase bank 1 (BKSEL=0), sector 11
+        let mut machine = crate::Machine::new(cpu, bus);
+        let err = machine
+            .apply_pending_flash_op()
+            .expect_err("same-bank erase under the RWW gate must fault");
+        match err {
+            crate::SimulationError::Other(msg) => {
+                assert!(msg.contains("RWW"), "reason names the RWW violation: {msg}");
+                assert!(
+                    msg.contains("SRAM"),
+                    "reason tells firmware to use SRAM: {msg}"
+                );
+            }
+            other => panic!("expected SimulationError::Other, got {other:?}"),
+        }
+        // Faulted before the fill: the erased sector is NOT cleared to 0xFF by us
+        // (it was already 0xFF), but more importantly the op did not silently
+        // "succeed" — the error propagated.
+        let _ = h5::BANK_SIZE;
+    }
+
+    #[test]
+    fn rww_gate_on_other_bank_erase_proceeds() {
+        use crate::peripherals::flash::h5;
+        let mut cpu = PcCpu::default();
+        // PC in bank 1; erase targets bank 2 — the normal cross-bank OTA case.
+        cpu.set_pc(0x0801_6000);
+        let mut bus = h5_rww_bus(true);
+        // Dirty the bank-2 boot-state sector so we can see the erase land.
+        let off = h5::BANK_SIZE + 11 * h5::SECTOR_SIZE;
+        bus.flash.write_u8(h5::FLASH_BASE + off, 0x00);
+        h5_record_erase(&mut bus, 1, 11); // erase bank 2 (BKSEL=1)
+        let mut machine = crate::Machine::new(cpu, bus);
+        machine
+            .apply_pending_flash_op()
+            .expect("cross-bank erase must proceed");
+        assert_eq!(
+            machine.bus.flash.read_u8(h5::FLASH_BASE + off),
+            Some(0xFF),
+            "bank-2 sector erased to 0xFF"
+        );
+    }
+
+    #[test]
+    fn rww_gate_on_pc_in_sram_never_faults() {
+        // The intended production layout: the flash routine runs from SRAM, so
+        // PC is not in any flash bank — even a same-(logical-)bank erase is fine.
+        use crate::peripherals::flash::h5;
+        let mut cpu = PcCpu::default();
+        cpu.set_pc(0x2000_0100); // SRAM
+        let mut bus = h5_rww_bus(true);
+        h5_record_erase(&mut bus, 0, 11);
+        let mut machine = crate::Machine::new(cpu, bus);
+        machine
+            .apply_pending_flash_op()
+            .expect("erase from a SRAM-resident routine must proceed");
+        let _ = h5::FLASH_BASE;
+    }
+
+    #[test]
+    fn rww_gate_on_respects_swap_bank_mapping() {
+        // After a SWAP_BANK, the physical second bank answers at 0x08000000.
+        // PC at 0x08000000 is then in physical bank 2; an erase that lands in
+        // that physical bank (BKSEL=0, which now maps to physical bank 2) must
+        // fault, while BKSEL=1 (physical bank 1, the inactive one) proceeds.
+        use crate::peripherals::flash::h5;
+
+        // Same-physical-bank under swap → fault.
+        {
+            let mut cpu = PcCpu::default();
+            cpu.set_pc(0x0800_4000); // bank presented at 0x08000000
+            let mut bus = h5_rww_bus(true);
+            // Toggle the FLASH's swap state directly to model an applied swap.
+            let idx = bus.find_peripheral_index_by_name("flash").unwrap();
+            bus.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<crate::peripherals::flash::Flash>())
+                .unwrap()
+                .mark_swapped();
+            h5_record_erase(&mut bus, 0, 2); // BKSEL=0 → physical bank 2 under swap
+            let mut machine = crate::Machine::new(cpu, bus);
+            let err = machine
+                .apply_pending_flash_op()
+                .expect_err("swapped: BKSEL=0 erase hits PC's physical bank");
+            assert!(matches!(err, crate::SimulationError::Other(_)));
+        }
+
+        // Cross-physical-bank under swap → proceeds.
+        {
+            let mut cpu = PcCpu::default();
+            cpu.set_pc(0x0800_4000);
+            let mut bus = h5_rww_bus(true);
+            let idx = bus.find_peripheral_index_by_name("flash").unwrap();
+            bus.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<crate::peripherals::flash::Flash>())
+                .unwrap()
+                .mark_swapped();
+            // BKSEL=1 → physical bank 1, which sits at buffer offset 0..1 MiB?
+            // No: under swap, logical bank 1 maps to physical bank 0, the bank
+            // NOT presented at 0x08000000 — the cross-bank case.
+            let off = h5::BANK_SIZE + 2 * h5::SECTOR_SIZE;
+            bus.flash.write_u8(h5::FLASH_BASE + off, 0x00);
+            h5_record_erase(&mut bus, 1, 2);
+            let mut machine = crate::Machine::new(cpu, bus);
+            machine
+                .apply_pending_flash_op()
+                .expect("swapped: cross-physical-bank erase proceeds");
+        }
+    }
+
+    #[test]
+    fn rww_gate_off_same_bank_erase_succeeds_silently() {
+        // Default behaviour (gate off): a same-bank erase succeeds, byte-
+        // identical to before this gate existed.
+        use crate::peripherals::flash::h5;
+        let mut cpu = PcCpu::default();
+        cpu.set_pc(0x0801_6000);
+        let mut bus = h5_rww_bus(false);
+        let off = 11 * h5::SECTOR_SIZE;
+        bus.flash.write_u8(h5::FLASH_BASE + off, 0x00);
+        h5_record_erase(&mut bus, 0, 11);
+        let mut machine = crate::Machine::new(cpu, bus);
+        machine
+            .apply_pending_flash_op()
+            .expect("gate off: same-bank erase succeeds");
+        assert_eq!(
+            machine.bus.flash.read_u8(h5::FLASH_BASE + off),
+            Some(0xFF),
+            "gate off: sector erased to 0xFF as before"
+        );
     }
 
     #[test]
@@ -2555,6 +2990,7 @@ peripherals:
             esp32c3_irq_routing: false,
             riscv_irq_lines: 0,
             flash_models_ops: false,
+            flash_error_flags_idx: None,
         };
 
         bus.rebuild_peripheral_ranges();
@@ -2620,6 +3056,7 @@ peripherals:
             esp32c3_irq_routing: false,
             riscv_irq_lines: 0,
             flash_models_ops: false,
+            flash_error_flags_idx: None,
         };
         bus.rebuild_peripheral_ranges();
 

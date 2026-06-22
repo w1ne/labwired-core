@@ -149,6 +149,15 @@ impl SystemBus {
                 .and_then(|a| a.downcast_ref::<crate::peripherals::flash::Flash>())
                 .is_some_and(|f| f.models_ops())
         });
+        // Cache the index of a FLASH peripheral whose opt-in H5 program-error
+        // gate is on, so the flash-region write path can validate programs
+        // without scanning. `None` (gate off) ⇒ that path is unchanged.
+        self.flash_error_flags_idx = self.peripherals.iter().position(|p| {
+            p.dev
+                .as_any()
+                .and_then(|a| a.downcast_ref::<crate::peripherals::flash::Flash>())
+                .is_some_and(|f| f.h5_error_flags_enabled())
+        });
     }
 
     pub fn refresh_peripheral_index(&mut self) {

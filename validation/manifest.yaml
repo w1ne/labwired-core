@@ -72,16 +72,16 @@ boards:
       - "h563_conformance (5 tests vs frozen 2026-06-10..12 captures)"
       - "h563_mmio_diff::{h563_mmio_sim_only,h563_parity_sim_only,h563_class_sim_only}"
     silicon:
-      last_capture: 2026-06-20
+      last_capture: 2026-06-22
       probe: "STLINK-V3 (USB 0483:374e, NUCLEO-H563ZI, dapdirect AP1 recipe)"
-      result: "Live re-capture after the v0.17.0 merge: h563_mmio_diff + h563_parity_diff + h563_class_diff all pass (class 65/65, GPIO mmio + parity), 0 divergence. Supersedes the 2026-06-19 drift_ack."
+      result: "FLASH program-behaviour live-diff run on the board 2026-06-22 (drives real program/erase over SWD): write buffer (NSSR.WBNE) accumulates a 16-byte quad-word, commits + sets EOP only on completion; a misaligned quad-word raises INCERR alone and commits nothing; program-over-not-erased is permitted and ANDs the bits (no PGSERR); flags clear via NSCCR (0x30), not by writing NSSR. The sim H5 flash error-flag + read-while-write fidelity gates were CORRECTED to match this capture (earlier datasheet model was wrong on all four points). Prior MMIO/reset diff (h563_mmio_diff + h563_parity_diff + h563_class_diff, 0 divergence) still holds."
     # FLASH model extended for UDS OTA: NSCR sector-erase + OPTSR_PRG.SWAP_BANK/
-    # OBL_LAUNCH (drained in Machine::step / batched run) + H563 sized in MiB.
-    # FLASH register offsets + reset values silicon-confirmed on the live board
-    # 2026-06-20 (ACR/OPTCR/NSSR/NSCR/OPTSR_CUR/OPTSR_PRG); the erase/swap
-    # *behavioural* live-diff (writes real flash) is not yet run — tracked for a
-    # follow-up hw-oracle capture. This ack covers the model change only.
-    drift_ack: 2026-06-21
+    # OBL_LAUNCH (drained in Machine::step / batched run) + H563 sized in MiB,
+    # plus opt-in program error-flag (WRPERR/PGSERR/INCERR) and read-while-write
+    # fidelity gates (default off). The erase/program *behavioural* live-diff
+    # (writes real flash over SWD) WAS run on 2026-06-22 and the model corrected
+    # to match silicon (write-buffer/EOP/INCERR/NSCCR; see result above).
+    drift_ack: 2026-06-22
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
