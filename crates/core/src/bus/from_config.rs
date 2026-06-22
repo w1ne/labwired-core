@@ -74,6 +74,7 @@ impl SystemBus {
             esp32c3_irq_routing: false,
             riscv_irq_lines: 0,
             flash_models_ops: false,
+            flash_error_flags_idx: None,
         };
 
         let mut merged_peripherals = chip.peripherals.clone();

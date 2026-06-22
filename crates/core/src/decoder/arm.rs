@@ -180,6 +180,30 @@ pub enum Instruction {
         rn: u8,
         imm12: u16,
     },
+    /// LDR (immediate) T4: indexed forms with optional base writeback.
+    /// `pre_index` true → offset applied before the load (`[Rn, #±imm]{!}`);
+    /// false → post-index (`[Rn], #±imm`, writeback implied). `add` selects
+    /// add vs subtract. Models the `ldr.w pc, [sp], #4` function-return idiom
+    /// (post-index, writeback) that the T3 form cannot express.
+    LdrImm32Idx {
+        rt: u8,
+        rn: u8,
+        imm8: u8,
+        pre_index: bool,
+        add: bool,
+        writeback: bool,
+    },
+    /// STR (immediate) T4: indexed forms with optional base writeback.
+    /// Mirror of [`Instruction::LdrImm32Idx`] for stores (`str.w rt,[rn],#imm`
+    /// and `str.w rt,[rn,#imm]!`), e.g. clang's pre-decrement stack pushes.
+    StrImm32Idx {
+        rt: u8,
+        rn: u8,
+        imm8: u8,
+        pre_index: bool,
+        add: bool,
+        writeback: bool,
+    },
     LdrbImm {
         rt: u8,
         rn: u8,
@@ -476,12 +500,14 @@ pub enum Instruction {
         rt2: u8,
         rn: u8,
         imm8: u32,
+        add_imm: bool,
     },
     Strd {
         rt: u8,
         rt2: u8,
         rn: u8,
         imm8: u32,
+        add_imm: bool,
     },
     Tbb {
         rn: u8,
@@ -959,6 +985,21 @@ pub fn decode_thumb_16(opcode: u16) -> Instruction {
             let rm = ((opcode >> 3) & 0x7) as u8;
             let rd = (opcode & 0x7) as u8;
             return Instruction::Sxtb { rd, rm };
+        }
+
+        // REV/REV16/REVSH (T1, 16-bit): 1011 1010 op Rm Rd
+        //   op=00 → REV  (0xBA00..0xBA3F)
+        //   op=01 → REV16 (0xBA40..0xBA7F)
+        //   op=11 → REVSH (0xBAC0..0xBAFF)
+        // Distinct from the 32-bit FA90 forms already handled in decode_32.
+        if (opcode & 0xFF00) == 0xBA00 {
+            let rm = ((opcode >> 3) & 0x7) as u8;
+            let rd = (opcode & 0x7) as u8;
+            return match (opcode >> 6) & 0x3 {
+                0b00 => Instruction::Rev { rd, rm },
+                0b01 => Instruction::Rev16 { rd, rm },
+                _ => Instruction::RevSh { rd, rm },
+            };
         }
 
         // CBZ/CBNZ (T1): 1011 op i 1 imm5 rn
@@ -1442,6 +1483,48 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
         }
     }
 
+    // LDR (immediate) T4: 1111 1000 0101 Rn | Rt 1 P U W imm8 -> F85x.
+    // h2 bit 11 == 1 marks the indexed/writeback (T4) form; distinguished from
+    // the LDR (register) T2 form (h2 bit 11 == 0). The plain positive-offset
+    // case (P=1,U=1,W=0) overlaps T3 semantics but is encoded here on F85x.
+    // Models `ldr.w pc, [sp], #4` (P=0,U=1,W=1) — the function-return idiom
+    // that was previously Unknown32, silently skipping the return branch.
+    if (h1 & 0xFFF0) == 0xF850 && (h2 & 0x0800) != 0 {
+        let rn = (h1 & 0xF) as u8;
+        let rt = ((h2 >> 12) & 0xF) as u8;
+        let pre_index = (h2 & 0x0400) != 0; // P
+        let add = (h2 & 0x0200) != 0; // U
+        let writeback = (h2 & 0x0100) != 0; // W
+        let imm8 = (h2 & 0xFF) as u8;
+        return Instruction::LdrImm32Idx {
+            rt,
+            rn,
+            imm8,
+            pre_index,
+            add,
+            writeback,
+        };
+    }
+
+    // STR (immediate) T4: 1111 1000 0100 Rn | Rt 1 P U W imm8 -> F84x.
+    // Same h2 bit-11 marker. Models `str.w rt,[rn],#imm` / `[rn,#imm]!`.
+    if (h1 & 0xFFF0) == 0xF840 && (h2 & 0x0800) != 0 {
+        let rn = (h1 & 0xF) as u8;
+        let rt = ((h2 >> 12) & 0xF) as u8;
+        let pre_index = (h2 & 0x0400) != 0;
+        let add = (h2 & 0x0200) != 0;
+        let writeback = (h2 & 0x0100) != 0;
+        let imm8 = (h2 & 0xFF) as u8;
+        return Instruction::StrImm32Idx {
+            rt,
+            rn,
+            imm8,
+            pre_index,
+            add,
+            writeback,
+        };
+    }
+
     // LDR.W (immediate) (T3): 1111 1000 1101 ... -> F8D..
     if (h1 & 0xFFF0) == 0xF8D0 {
         let rn = (h1 & 0xF) as u8;
@@ -1633,7 +1716,17 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
             if (h2 & 0x0F00) == 0x0F00 {
                 return Instruction::Unknown32(h1, h2);
             }
-            return Instruction::Ldrd { rt, rt2, rn, imm8 };
+            // U bit (h1[7]): 1 = add imm8*4, 0 = subtract. mbedTLS AES reads
+            // round keys via `ldrd Rt,Rt2,[Rn,#-imm]` (U=0); ignoring U read
+            // the wrong key and corrupted the cipher output.
+            let add_imm = (h1 & 0x80) != 0;
+            return Instruction::Ldrd {
+                rt,
+                rt2,
+                rn,
+                imm8,
+                add_imm,
+            };
         } else {
             // STREX (T1, B6.7.198) — distinguished from STRD the same
             // way. h2[15:12]=Rt (value), h2[11:8]=Rd (success flag);
@@ -1655,7 +1748,14 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
                 // Unlikely for STRD; treat as STREX.
                 return Instruction::Unknown32(h1, h2);
             }
-            return Instruction::Strd { rt, rt2, rn, imm8 };
+            let add_imm = (h1 & 0x80) != 0;
+            return Instruction::Strd {
+                rt,
+                rt2,
+                rn,
+                imm8,
+                add_imm,
+            };
         }
     }
 
@@ -1917,6 +2017,42 @@ mod tests {
         assert_eq!(
             decode_thumb_32(0xFA92, 0xF081),
             Instruction::Rev { rd: 0, rm: 2 }
+        );
+    }
+
+    #[test]
+    fn test_decode_rev_t1_16bit() {
+        // REV T1 (16-bit): `rev r3, r3` = 0xBA1B (0xBA00 | (rm=3<<3) | rd=3).
+        assert_eq!(decode_thumb_16(0xBA1B), Instruction::Rev { rd: 3, rm: 3 });
+        // REV16 T1: `rev16 r5, r5` = 0xBA6D (0xBA40 | (rm=5<<3) | rd=5).
+        assert_eq!(decode_thumb_16(0xBA6D), Instruction::Rev16 { rd: 5, rm: 5 });
+        // REVSH T1: `revsh r0, r1` = 0xBAC8 (0xBAC0 | (rm=1<<3) | rd=0).
+        assert_eq!(decode_thumb_16(0xBAC8), Instruction::RevSh { rd: 0, rm: 1 });
+    }
+
+    #[test]
+    fn test_decode_ldrd_negative_offset() {
+        // e951 0708 → ldrd r0, r7, [r1, #-32]  (U=0, subtract).
+        assert_eq!(
+            decode_thumb_32(0xE951, 0x0708),
+            Instruction::Ldrd {
+                rt: 0,
+                rt2: 7,
+                rn: 1,
+                imm8: 8,
+                add_imm: false
+            }
+        );
+        // e9d1 0708 → ldrd r0, r7, [r1, #32]  (U=1, add).
+        assert_eq!(
+            decode_thumb_32(0xE9D1, 0x0708),
+            Instruction::Ldrd {
+                rt: 0,
+                rt2: 7,
+                rn: 1,
+                imm8: 8,
+                add_imm: true
+            }
         );
     }
 
