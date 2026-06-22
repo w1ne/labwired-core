@@ -191,7 +191,19 @@ pub fn try_build(
             // default — backward compatible with existing chip configs.
             let layout: crate::peripherals::flash::FlashRegisterLayout =
                 SystemBus::parse_profile_or_default(p_cfg, "FLASH")?;
-            Box::new(crate::peripherals::flash::Flash::new_with_layout(layout))
+            // Opt-in H5 program-error fidelity gate. `config: { error_flags: true }`
+            // makes a misaligned / over-not-erased program raise the silicon
+            // NSSR error flags instead of silently committing. Default false
+            // (and a no-op on non-H5 layouts) — existing configs are unchanged.
+            let error_flags = p_cfg
+                .config
+                .get("error_flags")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            Box::new(
+                crate::peripherals::flash::Flash::new_with_layout(layout)
+                    .with_error_flags(error_flags),
+            )
         }
         "rng" => Box::new(crate::peripherals::rng::Rng::new()),
         "crc" => {

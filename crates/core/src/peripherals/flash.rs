@@ -120,6 +120,15 @@ pub struct Flash {
     // Internal: tracks unlock sequence on KEYR (write 0x45670123 then 0xCDEF89AB).
     key_state: KeyUnlockState,
     optkey_state: KeyUnlockState,
+
+    // OPT-IN fidelity gate (H5 only). When true, a program (a write into the
+    // flash region) that violates silicon programming rules — non-16-byte
+    // aligned target, or a target not in the erased (0xFF) state — sets the
+    // NSSR PGSERR/INCERR error flags and the write is rejected. Default false:
+    // gate off ⇒ byte-identical to prior behaviour (every program committed,
+    // no flag). Mirrors the per-peripheral opt-in pattern (clock-gating).
+    #[serde(default)]
+    error_flags: bool,
 }
 
 #[derive(Debug, Default, Clone, Copy, serde::Serialize, serde::Deserialize)]
@@ -174,7 +183,61 @@ impl Flash {
             pending_op: std::cell::Cell::new(None),
             key_state: KeyUnlockState::Locked,
             optkey_state: KeyUnlockState::Locked,
+            error_flags: false,
         }
+    }
+
+    /// Enable (or disable) the opt-in H5 programming-error fidelity gate.
+    /// Returns `self` so chip-factory construction can stay one expression.
+    /// No effect on non-H5 layouts (the program checks are H5-only).
+    pub fn with_error_flags(mut self, on: bool) -> Self {
+        self.error_flags = on;
+        self
+    }
+
+    /// True when the H5 programming-error fidelity gate is enabled AND this is
+    /// the H5 layout. The bus consults this on flash-region writes to decide
+    /// whether to run the program-error check.
+    pub fn h5_error_flags_enabled(&self) -> bool {
+        self.error_flags && matches!(self.layout, FlashRegisterLayout::Stm32H5)
+    }
+
+    /// H5 program-error check for a single byte write into the flash region.
+    ///
+    /// `flash_offset` is the byte offset within the flash bank (absolute addr
+    /// minus the flash base); `current_byte` is the value currently stored at
+    /// that offset (the erased state is 0xFF). Returns `true` when the program
+    /// is allowed to commit, `false` when it violates a silicon programming
+    /// rule — in which case the corresponding NSSR sticky flags are set and the
+    /// caller must NOT commit the write (a misaligned / over-not-erased
+    /// quad-word program does not store on real silicon).
+    ///
+    /// Only meaningful when [`h5_error_flags_enabled`](Self::h5_error_flags_enabled)
+    /// is true; with the gate off the bus never calls this and every write
+    /// commits, exactly as before.
+    ///
+    /// Rules (RM0481 §7):
+    ///   * target not 16-byte (quad-word) aligned → PGSERR + INCERR
+    ///   * target not in the erased (0xFF) state    → PGSERR
+    ///
+    /// WRPERR (write-protected/locked region) is intentionally out of scope:
+    /// this model does not yet track per-region write protection, so faking it
+    /// would be silicon-inaccurate.
+    pub fn h5_check_program(&mut self, flash_offset: u64, current_byte: u8) -> bool {
+        if !self.h5_error_flags_enabled() {
+            return true;
+        }
+        let mut ok = true;
+        if flash_offset % h5::PROG_GRANULARITY != 0 {
+            // Misaligned quad-word program: sequence + inconsistency error.
+            self.sr |= h5::NSSR_PGSERR | h5::NSSR_INCERR;
+            ok = false;
+        } else if current_byte != 0xFF {
+            // Program over a location not erased to all-ones.
+            self.sr |= h5::NSSR_PGSERR;
+            ok = false;
+        }
+        ok
     }
 
     // (legacy `new()` body replaced; kept as the no-op below for the
@@ -204,6 +267,7 @@ impl Flash {
             pending_op: std::cell::Cell::new(None),
             key_state: KeyUnlockState::Locked,
             optkey_state: KeyUnlockState::Locked,
+            error_flags: false,
         }
     }
 
@@ -319,6 +383,11 @@ impl Flash {
                             .set(Some(FlashOp::EraseSector { bank, sector }));
                     }
                 }
+                // NSSR error flags are sticky / write-1-to-clear. Firmware (or a
+                // test) clears WRPERR/PGSERR/INCERR by writing 1 to the bit.
+                // BSY and other read-only status bits are unaffected. Mirrors the
+                // L4 SR rc_w1 handling below.
+                h5::NSSR_OFF => self.sr &= !(value & h5::NSSR_W1C_MASK),
                 h5::OPTSR_PRG_OFF => self.optsr_prg = value,
                 // OPTSTRT (bit 1) requires the OPTION-key (OPTKEYR), not the flash
                 // key (NSKEYR): option-byte programming is a separate unlock domain
@@ -479,6 +548,9 @@ impl crate::Peripheral for Flash {
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)
     }
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
+    }
     fn snapshot(&self) -> serde_json::Value {
         serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
     }
@@ -554,5 +626,87 @@ mod h5_erase_swap_tests {
         let nscr = h5::NSCR_SER | (7 << h5::NSCR_SNB_SHIFT) | h5::NSCR_STRT;
         f.write_u32(h5::NSCR_OFF, nscr).unwrap();
         assert_eq!(f.drain_pending_op(), None);
+    }
+}
+
+#[cfg(test)]
+mod h5_program_error_tests {
+    use super::h5;
+    use super::{Flash, FlashRegisterLayout};
+    use crate::Peripheral;
+
+    fn h5_gate_on() -> Flash {
+        Flash::new_with_layout(FlashRegisterLayout::Stm32H5).with_error_flags(true)
+    }
+
+    fn nssr(f: &Flash) -> u32 {
+        // NSSR is the H5 status register (offset 0x20). Reassemble from bytes.
+        let b = |o: u64| f.read(o).unwrap() as u32;
+        b(h5::NSSR_OFF)
+            | (b(h5::NSSR_OFF + 1) << 8)
+            | (b(h5::NSSR_OFF + 2) << 16)
+            | (b(h5::NSSR_OFF + 3) << 24)
+    }
+
+    #[test]
+    fn gate_off_program_commits_and_sets_no_flag() {
+        // Gate OFF (default) ⇒ misaligned, over-not-erased: still allowed,
+        // no NSSR flag. This is the byte-identical-to-before path.
+        let mut f = Flash::new_with_layout(FlashRegisterLayout::Stm32H5);
+        assert!(!f.h5_error_flags_enabled());
+        // misaligned offset, current byte not erased — both rule violations
+        assert!(f.h5_check_program(0x3, 0x00));
+        assert_eq!(nssr(&f), 0, "gate off must never set an NSSR flag");
+    }
+
+    #[test]
+    fn misaligned_program_sets_pgserr_incerr_and_rejects() {
+        let mut f = h5_gate_on();
+        // offset 0x4 is 4-byte but NOT 16-byte (quad-word) aligned
+        let allowed = f.h5_check_program(0x4, 0xFF);
+        assert!(!allowed, "misaligned program must be rejected");
+        assert_ne!(nssr(&f) & h5::NSSR_PGSERR, 0, "PGSERR must be set");
+        assert_ne!(nssr(&f) & h5::NSSR_INCERR, 0, "INCERR must be set");
+    }
+
+    #[test]
+    fn program_over_not_erased_sets_pgserr() {
+        let mut f = h5_gate_on();
+        // aligned, but current byte is not the erased state (0xFF)
+        let allowed = f.h5_check_program(0x10, 0x00);
+        assert!(
+            !allowed,
+            "program over non-erased location must be rejected"
+        );
+        assert_ne!(nssr(&f) & h5::NSSR_PGSERR, 0, "PGSERR must be set");
+    }
+
+    #[test]
+    fn aligned_erased_program_is_allowed() {
+        let mut f = h5_gate_on();
+        assert!(
+            f.h5_check_program(0x20, 0xFF),
+            "valid program must be allowed"
+        );
+        assert_eq!(nssr(&f), 0, "valid program sets no error flag");
+    }
+
+    #[test]
+    fn nssr_error_flags_are_w1c() {
+        let mut f = h5_gate_on();
+        f.h5_check_program(0x4, 0xFF); // sets PGSERR + INCERR
+        assert_ne!(nssr(&f) & (h5::NSSR_PGSERR | h5::NSSR_INCERR), 0);
+        // Write 1 to PGSERR and INCERR positions to clear them.
+        f.write_u32(h5::NSSR_OFF, h5::NSSR_PGSERR | h5::NSSR_INCERR)
+            .unwrap();
+        assert_eq!(nssr(&f) & h5::NSSR_W1C_MASK, 0, "W1C must clear the flags");
+    }
+
+    #[test]
+    fn gate_is_noop_on_non_h5_layout() {
+        // Enabling the gate on L4 must not arm the H5 program check.
+        let mut f = Flash::new_with_layout(FlashRegisterLayout::Stm32L4).with_error_flags(true);
+        assert!(!f.h5_error_flags_enabled());
+        assert!(f.h5_check_program(0x3, 0x00), "non-H5 layout never rejects");
     }
 }

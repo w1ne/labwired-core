@@ -169,6 +169,15 @@ pub struct SystemBus {
     /// `requires_cycle_accurate` — called per run-loop iteration — never scans
     /// peripherals. `false` on every bus without an H5 op-modeling FLASH.
     flash_models_ops: bool,
+    /// Index of the FLASH register peripheral whose opt-in H5 program-error
+    /// fidelity gate is enabled, if any. Cached in `rebuild_peripheral_ranges`
+    /// (same staleness contract as `rcc_idx`). `None` on every bus where the
+    /// gate is off — the common case — so the flash-region write path stays
+    /// byte-identical to prior behaviour. When `Some(idx)`, a program (a write
+    /// into the flash region) is validated against H5 silicon programming rules
+    /// before committing, and `peripherals[idx]` (the `Flash`) records the
+    /// resulting NSSR error flags.
+    flash_error_flags_idx: Option<usize>,
 }
 
 pub struct CanDiagnosticTester {
@@ -973,6 +982,7 @@ impl SystemBus {
             esp32c3_irq_routing: false,
             riscv_irq_lines: 0,
             flash_models_ops: false,
+            flash_error_flags_idx: None,
         };
         bus.rebuild_peripheral_ranges();
         bus
@@ -1010,6 +1020,7 @@ impl SystemBus {
             esp32c3_irq_routing: false,
             riscv_irq_lines: 0,
             flash_models_ops: false,
+            flash_error_flags_idx: None,
         };
         bus.rebuild_peripheral_ranges();
         bus
@@ -2492,6 +2503,7 @@ peripherals:
             esp32c3_irq_routing: false,
             riscv_irq_lines: 0,
             flash_models_ops: false,
+            flash_error_flags_idx: None,
         };
 
         bus.flash.write_u8(0x0800_0000, 0x12);
@@ -2504,6 +2516,105 @@ peripherals:
         // Write through alias and verify backing flash changed.
         bus.write_u8(0x0000_0001, 0xAB).unwrap();
         assert_eq!(bus.flash.read_u8(0x0800_0001), Some(0xAB));
+    }
+
+    /// Build a bus with a 1 KiB flash region (erased to 0xFF, like real silicon
+    /// after erase) and an H5 FLASH register peripheral at 0x4002_2000, with the
+    /// opt-in program-error gate set to `gate`.
+    fn h5_flash_bus(gate: bool) -> SystemBus {
+        let mut flash = LinearMemory::new(0x400, 0x0800_0000);
+        // Erased state is all-ones; the gate's not-erased check keys off this.
+        flash.data.iter_mut().for_each(|b| *b = 0xFF);
+        let mut bus = SystemBus {
+            flash,
+            ram: LinearMemory::new(256, 0x2000_0000),
+            extra_mem: Vec::new(),
+            peripherals: vec![PeripheralEntry {
+                name: "flash".to_string(),
+                base: 0x4002_2000,
+                size: 0x400,
+                irq: None,
+                dev: Box::new(
+                    crate::peripherals::flash::Flash::new_with_layout(
+                        crate::peripherals::flash::FlashRegisterLayout::Stm32H5,
+                    )
+                    .with_error_flags(gate),
+                ),
+                ticks_remaining: 0,
+                generation: 0,
+                clock_gate: None,
+            }],
+            nvic: None,
+            observers: Vec::new(),
+            config: crate::SimulationConfig::default(),
+            bit_band_enabled: false,
+            pending_cpu_irqs: [0; 2],
+            dport_idx: None,
+            rcc_idx: None,
+            clock_gating_bypass: false,
+            flash_thunks: std::collections::HashMap::new(),
+            peripheral_ranges: Vec::new(),
+            peripheral_hint: Cell::new(None),
+            last_gpio_in: [0; 2],
+            current_cycle: 0,
+            pending_schedule: Vec::new(),
+            legacy_walk_disabled: false,
+            hcsr04: Vec::new(),
+            can_diagnostic_testers: Vec::new(),
+            can_uds_testers: Vec::new(),
+            esp32c3_irq_routing: false,
+            riscv_irq_lines: 0,
+            flash_models_ops: false,
+            flash_error_flags_idx: None,
+        };
+        bus.rebuild_peripheral_ranges();
+        bus
+    }
+
+    fn read_nssr(bus: &SystemBus) -> u32 {
+        use crate::peripherals::flash::h5::NSSR_OFF;
+        bus.read_u32(0x4002_2000 + NSSR_OFF).unwrap()
+    }
+
+    #[test]
+    fn h5_gate_on_misaligned_program_rejected_sets_pgserr() {
+        use crate::peripherals::flash::h5;
+        let mut bus = h5_flash_bus(true);
+        assert!(bus.flash_error_flags_idx.is_some(), "gate index cached");
+        // Program a byte at a non-16-byte-aligned flash offset (0x08000003).
+        bus.write_u8(0x0800_0003, 0x42).unwrap();
+        // Write rejected: flash byte still erased.
+        assert_eq!(bus.flash.read_u8(0x0800_0003), Some(0xFF));
+        let nssr = read_nssr(&bus);
+        assert_ne!(nssr & h5::NSSR_PGSERR, 0, "PGSERR set");
+        assert_ne!(nssr & h5::NSSR_INCERR, 0, "INCERR set");
+    }
+
+    #[test]
+    fn h5_gate_on_program_over_not_erased_rejected_sets_pgserr() {
+        use crate::peripherals::flash::h5;
+        let mut bus = h5_flash_bus(true);
+        // First aligned program of an erased location succeeds.
+        bus.write_u8(0x0800_0010, 0xAA).unwrap();
+        assert_eq!(bus.flash.read_u8(0x0800_0010), Some(0xAA));
+        assert_eq!(read_nssr(&bus) & h5::NSSR_W1C_MASK, 0, "no flag yet");
+        // Re-programming the same (now non-0xFF) location is rejected.
+        bus.write_u8(0x0800_0010, 0xBB).unwrap();
+        assert_eq!(bus.flash.read_u8(0x0800_0010), Some(0xAA), "unchanged");
+        assert_ne!(read_nssr(&bus) & h5::NSSR_PGSERR, 0, "PGSERR set");
+    }
+
+    #[test]
+    fn h5_gate_off_commits_every_program_with_no_flag() {
+        use crate::peripherals::flash::h5;
+        let mut bus = h5_flash_bus(false);
+        assert!(bus.flash_error_flags_idx.is_none(), "gate off ⇒ no index");
+        // Misaligned + over-not-erased: both commit, no flag (old behaviour).
+        bus.write_u8(0x0800_0003, 0x42).unwrap();
+        assert_eq!(bus.flash.read_u8(0x0800_0003), Some(0x42));
+        bus.write_u8(0x0800_0003, 0x99).unwrap();
+        assert_eq!(bus.flash.read_u8(0x0800_0003), Some(0x99));
+        assert_eq!(read_nssr(&bus) & h5::NSSR_W1C_MASK, 0, "no flag ever");
     }
 
     #[test]
@@ -2555,6 +2666,7 @@ peripherals:
             esp32c3_irq_routing: false,
             riscv_irq_lines: 0,
             flash_models_ops: false,
+            flash_error_flags_idx: None,
         };
 
         bus.rebuild_peripheral_ranges();
@@ -2620,6 +2732,7 @@ peripherals:
             esp32c3_irq_routing: false,
             riscv_irq_lines: 0,
             flash_models_ops: false,
+            flash_error_flags_idx: None,
         };
         bus.rebuild_peripheral_ranges();
 

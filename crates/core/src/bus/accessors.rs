@@ -98,6 +98,44 @@ impl crate::Bus for SystemBus {
             })
             .unwrap_or(0);
 
+        // OPT-IN H5 program-error fidelity gate. When a FLASH peripheral has the
+        // gate enabled, a program (a write that lands in the flash region) is
+        // validated against silicon programming rules BEFORE it commits: a
+        // non-16-byte-aligned target, or a target not in the erased (0xFF)
+        // state, sets the NSSR PGSERR/INCERR flags on the FLASH peripheral and
+        // the write is rejected (does not store), exactly as real H5 silicon
+        // behaves. `None` (gate off) ⇒ this block is skipped and the write
+        // commits as before — byte-identical to prior behaviour.
+        if let Some(flash_idx) = self.flash_error_flags_idx {
+            // Resolve the flash-region offset this write targets, if any. The
+            // backing buffer is addressed at `flash.base_addr`; the boot alias
+            // (addr < buffer len) mirrors the same offset.
+            let region_off = if self.flash.read_u8(addr).is_some() {
+                Some(addr - self.flash.base_addr)
+            } else if self.flash.base_addr != 0 && addr < self.flash.data.len() as u64 {
+                Some(addr) // boot-alias write: offset is addr itself
+            } else {
+                None
+            };
+            if let Some(off) = region_off {
+                let current = self
+                    .flash
+                    .read_u8(self.flash.base_addr + off)
+                    .unwrap_or(0xFF);
+                let allowed = self.peripherals[flash_idx]
+                    .dev
+                    .as_any_mut()
+                    .and_then(|a| a.downcast_mut::<crate::peripherals::flash::Flash>())
+                    .map(|f| f.h5_check_program(off, current))
+                    .unwrap_or(true);
+                if !allowed {
+                    // Program rejected: NSSR flag already set by the check; the
+                    // byte is not stored. Observers see no write.
+                    return Ok(());
+                }
+            }
+        }
+
         let flash_alias_write = self.flash.base_addr != 0
             && addr < self.flash.data.len() as u64
             && self.flash.write_u8(self.flash.base_addr + addr, value);
