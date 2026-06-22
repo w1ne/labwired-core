@@ -999,9 +999,79 @@ impl CortexM {
                     let _ = bus.write_u32(addr as u64, val);
                     pc_increment = 4;
                 }
-                Instruction::Ldrd { rt, rt2, rn, imm8 } => {
+                Instruction::LdrImm32Idx {
+                    rt,
+                    rn,
+                    imm8,
+                    pre_index,
+                    add,
+                    writeback,
+                } => {
+                    // LDR T4 indexed. Offset address = base ± imm8. The access
+                    // uses the offset address when pre_index, else the base
+                    // (post-index). Writeback stores the offset address in Rn.
                     let base = self.read_reg(rn);
-                    let addr = base.wrapping_add(imm8 << 2);
+                    let offset = imm8 as u32;
+                    let offset_addr = if add {
+                        base.wrapping_add(offset)
+                    } else {
+                        base.wrapping_sub(offset)
+                    };
+                    let access_addr = if pre_index { offset_addr } else { base };
+                    if let Ok(val) = bus.read_u32(access_addr as u64) {
+                        // Commit writeback before branching so a load-to-PC
+                        // (function return) leaves Rn=SP correct.
+                        if writeback {
+                            self.write_reg(rn, offset_addr);
+                        }
+                        if rt == 15 {
+                            // LDR PC, [...] — interworking branch (function return).
+                            self.branch_to(val, bus)?;
+                            pc_increment = 0;
+                        } else {
+                            self.write_reg(rt, val);
+                            pc_increment = 4;
+                        }
+                    } else {
+                        pc_increment = 4;
+                    }
+                }
+                Instruction::StrImm32Idx {
+                    rt,
+                    rn,
+                    imm8,
+                    pre_index,
+                    add,
+                    writeback,
+                } => {
+                    let base = self.read_reg(rn);
+                    let offset = imm8 as u32;
+                    let offset_addr = if add {
+                        base.wrapping_add(offset)
+                    } else {
+                        base.wrapping_sub(offset)
+                    };
+                    let access_addr = if pre_index { offset_addr } else { base };
+                    let val = self.read_reg(rt);
+                    let _ = bus.write_u32(access_addr as u64, val);
+                    if writeback {
+                        self.write_reg(rn, offset_addr);
+                    }
+                    pc_increment = 4;
+                }
+                Instruction::Ldrd {
+                    rt,
+                    rt2,
+                    rn,
+                    imm8,
+                    add_imm,
+                } => {
+                    let base = self.read_reg(rn);
+                    let addr = if add_imm {
+                        base.wrapping_add(imm8 << 2)
+                    } else {
+                        base.wrapping_sub(imm8 << 2)
+                    };
                     if let Ok(v1) = bus.read_u32(addr as u64) {
                         self.write_reg(rt, v1);
                     }
@@ -1010,9 +1080,19 @@ impl CortexM {
                     }
                     pc_increment = 4;
                 }
-                Instruction::Strd { rt, rt2, rn, imm8 } => {
+                Instruction::Strd {
+                    rt,
+                    rt2,
+                    rn,
+                    imm8,
+                    add_imm,
+                } => {
                     let base = self.read_reg(rn);
-                    let addr = base.wrapping_add(imm8 << 2);
+                    let addr = if add_imm {
+                        base.wrapping_add(imm8 << 2)
+                    } else {
+                        base.wrapping_sub(imm8 << 2)
+                    };
                     let v1 = self.read_reg(rt);
                     let v2 = self.read_reg(rt2);
                     let _ = bus.write_u32(addr as u64, v1);
@@ -2650,6 +2730,68 @@ mod tests {
     }
 
     #[test]
+    fn test_arm_ldrd_negative_offset() {
+        // Regression: LDRD T1 with U=0 must subtract imm8*4 from the base.
+        // `ldrd r0, r7, [r1, #-32]` = E951 0708 — mbedTLS AES round-key load.
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x4000;
+        cpu.r1 = 0x5020; // base = 0x5020; addr = 0x5020 - 32 = 0x5000
+        bus.write_u32(0x5000, 0xDEAD_BEEF).unwrap();
+        bus.write_u32(0x5004, 0xCAFE_BABE).unwrap();
+        // E951 0708: ldrd r0, r7, [r1, #-32] (U=0, imm8=8 → offset=32)
+        run_test_instr(&mut cpu, &mut bus, 0xE9510708, true);
+        assert_eq!(cpu.r0, 0xDEAD_BEEF);
+        assert_eq!(cpu.r7, 0xCAFE_BABE);
+    }
+
+    #[test]
+    fn test_ldr_t4_post_index_pc_function_return() {
+        // Regression: `ldr.w pc, [sp], #4` = F85D FB04 (T4 post-index, U=1,
+        // W=1) is the clang function-return idiom. Previously decoded to
+        // Unknown32 and silently skipped, so the return branched nowhere and
+        // execution fell through to a wrong address. Verify it loads PC from
+        // [sp] and post-increments sp by 4.
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x4000;
+        cpu.sp = 0x6000;
+        bus.write_u32(0x6000, 0x0000_1235).unwrap(); // return addr (thumb bit set)
+        run_test_instr(&mut cpu, &mut bus, 0xF85DFB04, true);
+        assert_eq!(
+            cpu.pc, 0x0000_1234,
+            "PC must come from [sp] (thumb bit cleared)"
+        );
+        assert_eq!(cpu.sp, 0x6004, "post-index writeback: sp += 4");
+    }
+
+    #[test]
+    fn test_ldr_t4_pre_index_writeback() {
+        // `ldr.w r3, [r1, #8]!` = F851 3F08 (T4 pre-index, U=1, W=1).
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x4000;
+        cpu.r1 = 0x5000;
+        bus.write_u32(0x5008, 0xABCD_1234).unwrap();
+        run_test_instr(&mut cpu, &mut bus, 0xF8513F08, true);
+        assert_eq!(cpu.r3, 0xABCD_1234, "loaded from r1+8");
+        assert_eq!(cpu.r1, 0x5008, "pre-index writeback: r1 = r1+8");
+    }
+
+    #[test]
+    fn test_str_t4_pre_decrement_writeback() {
+        // `str.w r2, [r1, #-4]!` = F841 2D04 (T4 pre-index, U=0, W=1).
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x4000;
+        cpu.r1 = 0x5008;
+        cpu.r2 = 0xDEAD_BEEF;
+        run_test_instr(&mut cpu, &mut bus, 0xF8412D04, true);
+        assert_eq!(bus.read_u32(0x5004).unwrap(), 0xDEAD_BEEF, "stored at r1-4");
+        assert_eq!(cpu.r1, 0x5004, "pre-index writeback: r1 = r1-4");
+    }
+
+    #[test]
     fn test_thumb2_stmia_ldmdb_wide_addressing() {
         // Regression: the 0xE8xx/0xE9xx LDM/STM group was decoded as STM=>DB,
         // LDM=>IA unconditionally, so STMIA.W (the compiler's struct-copy idiom)
@@ -3198,6 +3340,55 @@ mod tests {
         run_test_instr(&mut cpu, &mut bus, 0x5E88, false);
         // Sign-extended: 0xFFFF8001.
         assert_eq!(cpu.r0, 0xFFFF8001);
+    }
+
+    #[test]
+    fn test_exec_rev_t1_16bit() {
+        // REV T1: `rev r3, r3` = 0xBA1B — byte-reverse a 32-bit word.
+        // 0x11223344 → 0x44332211.
+        {
+            let mut cpu = CortexM::new();
+            let mut bus = MockBus::new();
+            cpu.pc = 0x2000;
+            cpu.r3 = 0x1122_3344;
+            run_test_instr(&mut cpu, &mut bus, 0xBA1B, false);
+            assert_eq!(cpu.r3, 0x4433_2211, "REV T1 must byte-swap the whole word");
+        }
+        // REV16 T1: `rev16 r5, r5` = 0xBA6D — swap bytes within each halfword.
+        // 0x11223344 → bytes in low half swapped + bytes in high half swapped
+        // = 0x22114433.
+        {
+            let mut cpu = CortexM::new();
+            let mut bus = MockBus::new();
+            cpu.pc = 0x2000;
+            cpu.r5 = 0x1122_3344;
+            run_test_instr(&mut cpu, &mut bus, 0xBA6D, false);
+            assert_eq!(
+                cpu.r5, 0x2211_4433,
+                "REV16 T1 must swap bytes within each halfword"
+            );
+        }
+        // REVSH T1: `revsh r0, r1` = 0xBAC8 — swap low two bytes, sign-extend.
+        // Input r1=0x00008001: low halfword bytes swapped → 0x0180, sign-extended
+        // as i16 = 0x0180 (positive, MSB not set) → 0x00000180.
+        {
+            let mut cpu = CortexM::new();
+            let mut bus = MockBus::new();
+            cpu.pc = 0x2000;
+            cpu.r1 = 0x0000_8001;
+            run_test_instr(&mut cpu, &mut bus, 0xBAC8, false);
+            assert_eq!(cpu.r0, 0x0000_0180, "REVSH T1 positive case");
+        }
+        // REVSH sign case: input r1=0x00000180 — low halfword bytes swapped
+        // → 0x8001, sign-extended as i16 → 0xFFFF8001.
+        {
+            let mut cpu = CortexM::new();
+            let mut bus = MockBus::new();
+            cpu.pc = 0x2000;
+            cpu.r1 = 0x0000_0180;
+            run_test_instr(&mut cpu, &mut bus, 0xBAC8, false);
+            assert_eq!(cpu.r0, 0xFFFF_8001, "REVSH T1 sign-extend case");
+        }
     }
 
     #[test]
