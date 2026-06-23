@@ -92,6 +92,7 @@ static volatile uint32_t g_now_ms;
 #define FDCAN_REG_IR 0x050u
 #define FDCAN_REG_RXF0S 0x090u
 #define FDCAN_REG_RXF0A 0x094u
+#define FDCAN_REG_TXBRP 0x0C8u
 #define FDCAN_REG_TXBAR 0x0CCu
 
 #define FDCAN_RAM_BASE 0x800u
@@ -235,15 +236,30 @@ static int can_send(uint32_t id, const uint8_t *data, uint8_t len)
     return fdcan_send_frame(id, data, len, len > 8u);
 }
 
+/* tx_buffer and the ISO-TP SDU buffer are sized > 512 so the >512-byte DID
+ * 0xF1A0 calibration block (62 F1 A0 + 600 bytes = 603 bytes) is built in
+ * tx_buffer and then streamed as a multi-frame ISO-TP response (use case 1). */
 static uds_isotp_ctx_t g_iso;
-static uint8_t g_iso_tx_sdu[64];
+static uint8_t g_iso_tx_sdu[768];
 static uint8_t g_rx_buffer[128];
-static uint8_t g_tx_buffer[128];
+static uint8_t g_tx_buffer[768];
 
 static int isotp_send_adapter(struct uds_ctx *ctx, const uint8_t *data, uint16_t len)
 {
     (void) ctx;
     return uds_isotp_send(&g_iso, data, len);
+}
+
+/* fn_tx_complete hook (udslib v2.0.0, use case 2): TXBRP bit 0 stays set while
+ * TX buffer 0 still holds a pending request; it clears once the FDCAN has
+ * arbitrated the frame onto the wire. udslib polls this once per uds_process
+ * tick (bounded by reset_tx_wait_ms) and holds fn_reset until it returns true,
+ * so SCB SYSRESETREQ cannot reboot before the 0x51 response drains (udslib
+ * #88). */
+static bool can_tx_complete(struct uds_ctx *ctx)
+{
+    (void) ctx;
+    return (REG32(fdcan_reg(FDCAN_REG_TXBRP)) & 0x1u) == 0u;
 }
 
 int main(void)
@@ -266,6 +282,8 @@ int main(void)
         .tx_buffer_size = sizeof(g_tx_buffer),
         .p2_ms = 50u,
         .p2_star_ms = 2000u,
+        .fn_tx_complete = can_tx_complete, /* gate 0x11 reset on frame-on-wire */
+        .reset_tx_wait_ms = 20u,           /* budget before forcing the reset */
     };
     uds_ecu_app_fill_config(&cfg, "LABWIRED-H563-UDS");
 

@@ -1,0 +1,13 @@
+schema_version: "1.0"
+# gpiobug: USART1 clocked (so it can report), but GPIOA driven without enabling
+# RCC_APB2ENR.IOPAEN. Ground truth: the port is held in reset, CRL/ODR writes are
+# dropped, the readback never reflects them — BENCH_GPIO_OK must NOT appear.
+# LabWired (GPIOA clock gate modelled) reproduces this: EXPECTED TO FAIL. A pass
+# means the emulator does not gate GPIO (a false pass on a second peripheral).
+inputs:
+  system: "./system.yaml"
+  firmware: "./firmware/build/gpiobug.elf"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "BENCH_GPIO_OK"

@@ -68,5 +68,4 @@ to observe progress; they skip with a message if the ELFs are not built.
 This is **functional** simulation evidence: real master and device firmware
 exchanging real IO-Link process data over a modeled C/Q wire. It is **not**
 IO-Link electrical/PHY-timing conformance. Line speed is irrelevant in the
-cycle-stepped model. See the design spec at
-`docs/superpowers/specs/2026-06-19-iolink-multichip-station-design.md`.
+cycle-stepped model.
