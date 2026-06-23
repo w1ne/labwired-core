@@ -9,5 +9,6 @@ assertions:
   # session switch, tester present, DTC count/clear, routine, IO control, comm
   # control) and finishes with 0x11 ECUReset. ECU_READY reprints on the real
   # AIRCR-triggered reboot, so the banner appears twice.
+  - uart_contains: "H563-UDS-ECU"
   - uart_contains: "ECU_READY"
   - uds_tester: { id: "uds-tester", result: done }
