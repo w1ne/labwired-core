@@ -43,14 +43,17 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
     {
         p.name = "scb".to_string();
         p.base = 0xE000_ED00;
-        p.size = 0x40;
+        // 0xC0 so the MPU block (TYPE/CTRL/RNR/RBAR/RASR at 0x90..0xA0) is
+        // served by the SCB/SCS model, not unmapped space.
+        p.size = 0xC0;
         p.irq = None;
         p.dev = Box::new(scb);
     } else {
         bus.peripherals.push(PeripheralEntry {
             name: "scb".to_string(),
             base: 0xE000_ED00,
-            size: 0x40,
+            // 0xC0 to include the MPU block (0x90..0xA0); see above.
+            size: 0xC0,
             irq: None,
             dev: Box::new(scb),
             ticks_remaining: 0,

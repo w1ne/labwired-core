@@ -14,7 +14,7 @@ Start your learning and reference with these key files:
 - [architecture.md](./architecture.md) - Engine internals (CPU trait, decoder, performance gates, debug protocols).
 - [architecture_overview.md](./architecture_overview.md) - High-level subsystem tour (Asset Foundry, IR, Core Engine).
 - [CONTRIBUTING.md](../CONTRIBUTING.md) - General connection and contributing guidelines.
-- [CONTRIBUTING_PERIPHERALS.md](./CONTRIBUTING_PERIPHERALS.md) - How to implement and integrate new peripheral models.
+- [peripherals.md](./peripherals.md) - How to model and validate new peripherals (declarative + Rust paths).
 - [board_onboarding_playbook.md](./board_onboarding_playbook.md) - Complete playbook for onboarding new boards and MSUs.
 - [ci_test_runner.md](./ci_test_runner.md) - Details on how CI validation works and is triggered.
 
@@ -39,8 +39,14 @@ cargo clippy --workspace $EXCLUDES -- -D warnings
 ```
 
 **Running the Simulator:**
+The built binary is `labwired` (package `labwired-cli`). Interactive run:
 ```bash
-cargo run -p labwired-cli -- --firmware path/to/firmware.elf --system path/to/system.yaml
+cargo run -p labwired-cli -- run --firmware path/to/firmware.elf --system path/to/system.yaml
+```
+For CI / deterministic checks, prefer the `test` subcommand driven by a YAML test
+script (this is what the CI gates run, and it emits `result.json` + `uart.log`):
+```bash
+cargo run -p labwired-cli -- test --script path/to/test.yaml --junit report.xml
 ```
 
 **Testing Simulator Accuracy (Unsupported Instruction Audit):**

@@ -1,0 +1,88 @@
+name: "LabWired test"
+description: "Boot firmware on LabWired and assert against it — digital-twin firmware CI in one step."
+branding:
+  icon: cpu
+  color: purple
+
+inputs:
+  script:
+    description: "Path to the LabWired test script (YAML)."
+    required: true
+  version:
+    description: "LabWired release tag to use, or 'latest'."
+    required: false
+    default: "latest"
+  repo:
+    description: "Repository that publishes the LabWired releases."
+    required: false
+    default: "w1ne/labwired"
+  args:
+    description: "Extra flags appended to `labwired test`."
+    required: false
+    default: ""
+  junit:
+    description: "Path to write a JUnit XML report."
+    required: false
+    default: "labwired-junit.xml"
+  output-dir:
+    description: "Directory for run artifacts (result.json, uart.log)."
+    required: false
+    default: "labwired-artifacts"
+  upload-artifacts:
+    description: "Upload the output dir + JUnit report as a workflow artifact."
+    required: false
+    default: "true"
+  github-token:
+    description: "Token used to download the release (defaults to the job token)."
+    required: false
+    default: ${{ github.token }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install LabWired
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: |
+        set -euo pipefail
+        ver='${{ inputs.version }}'
+        repo='${{ inputs.repo }}'
+        if [ "$ver" = "latest" ]; then
+          ver="$(gh release view --repo "$repo" --json tagName -q .tagName)"
+        fi
+        case "$(uname -s)-$(uname -m)" in
+          Linux-x86_64)            plat=linux-x86_64 ;;
+          Linux-aarch64|Linux-arm64) plat=linux-aarch64 ;;
+          Darwin-x86_64)           plat=darwin-x86_64 ;;
+          Darwin-arm64)            plat=darwin-aarch64 ;;
+          *) echo "::error::unsupported runner $(uname -s)-$(uname -m)"; exit 1 ;;
+        esac
+        asset="labwired-${ver}-${plat}.tar.gz"
+        dir="$RUNNER_TEMP/labwired"
+        mkdir -p "$dir"
+        echo "Downloading ${asset} from ${repo}@${ver}"
+        gh release download "$ver" --repo "$repo" --pattern "$asset" --dir "$dir"
+        tar -xzf "$dir/$asset" -C "$dir"
+        chmod +x "$dir/labwired"
+        echo "$dir" >> "$GITHUB_PATH"
+
+    - name: Run LabWired test
+      shell: bash
+      run: |
+        set -euo pipefail
+        labwired test \
+          --script '${{ inputs.script }}' \
+          --junit '${{ inputs.junit }}' \
+          --output-dir '${{ inputs.output-dir }}' \
+          ${{ inputs.args }}
+
+    - name: Upload artifacts
+      if: ${{ always() && inputs.upload-artifacts == 'true' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: labwired-${{ github.job }}-${{ github.run_id }}
+        path: |
+          ${{ inputs.output-dir }}
+          ${{ inputs.junit }}
+        if-no-files-found: ignore
