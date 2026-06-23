@@ -3,7 +3,7 @@
 Onboarding of the ESP32-C3 peripheral blocks that were present as declarative
 descriptors under `configs/peripherals/esp32c3/` but **not wired** into
 `configs/chips/esp32c3.yaml`. Validated against real silicon per
-[`docs/peripheral_onboarding_playbook.md`](peripheral_onboarding_playbook.md).
+[`docs/peripherals.md`](peripherals.md).
 
 ## Hardware
 
