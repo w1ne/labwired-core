@@ -1373,7 +1373,11 @@ impl CortexM {
                                 if wb {
                                     self.write_reg(rn, wb_val);
                                 }
-                                if !branch_taken {
+                                // Rt==15 load is a branch; suppress pc_increment
+                                // (see the register-offset path below).
+                                if branch_taken {
+                                    pc_increment = 0;
+                                } else {
                                     pc_increment = 4;
                                 }
                             }
@@ -1434,7 +1438,14 @@ impl CortexM {
                                 }
                                 _ => {}
                             }
-                            if !branch_taken {
+                            // A load into PC (Rt==15) is a branch: branch_to
+                            // already set PC, so the 32-bit pc_increment must be
+                            // suppressed (same contract as Bx). Leaving it at 4
+                            // landed PC one halfword past the target — this broke
+                            // GCC switch jump tables (`ldr.w pc,[rn,rm,lsl#n]`).
+                            if branch_taken {
+                                pc_increment = 0;
+                            } else {
                                 pc_increment = 4;
                             }
                         }
@@ -2679,6 +2690,31 @@ mod tests {
             bus.write_u16(pc as u64, instr_bin as u16).unwrap();
         }
         cpu.step_internal(bus, &[], &bus.config.clone()).unwrap();
+    }
+
+    #[test]
+    fn ldr_to_pc_register_offset_branches_to_target() {
+        // `ldr.w pc, [r3, r0, lsl #2]` = 0xF853 0xF020 is GCC's switch
+        // jump-table idiom. It must branch to the loaded value, not loaded+4:
+        // the load-to-PC path was leaving pc_increment at 4, so PC landed one
+        // instruction past the real target. That corrupted control flow into
+        // Zephyr's onoff state machine (process_event's EVT_START dispatch),
+        // tripping `__ASSERT(state == ONOFF_STATE_OFF)` and hanging boot.
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x1000;
+        cpu.r3 = 0x2000; // jump-table base
+        cpu.r0 = 2; // case index
+        // [0x2000 + (2 << 2)] = [0x2008] holds the (thumb) target 0x5001.
+        bus.write_u32(0x2008, 0x5001).unwrap();
+
+        run_test_instr(&mut cpu, &mut bus, 0xF853F020, true);
+
+        assert_eq!(
+            cpu.pc, 0x5000,
+            "ldr.w pc,[rn,rm,lsl#n] must branch to the loaded target (thumb bit \
+             cleared), not target+4"
+        );
     }
 
     #[test]
