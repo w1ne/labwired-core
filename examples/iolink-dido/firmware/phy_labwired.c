@@ -1,27 +1,17 @@
-/* PHY backend over the simulated STM32L476 USART2 (stm32v2 register layout).
+/* PHY backend over the simulated STM32L476 USART2, driven through the CMSIS
+ * register definitions (USART2->CR1/ISR/RDR/TDR).
  *
  * The simulator transmits on any TDR write and reports TXE ready, and exposes
  * received bytes via RXNE/RDR, so only a token CR1 (UE|TE|RE) init is needed.
  * The IO-Link line speed is irrelevant in the cycle-stepped sim, so set_baudrate
  * is a no-op. detect_wakeup scans for the 0x55 wake-up byte (mirrors phy_virtual).
  */
+#include "stm32l476xx.h"
 #include "phy_labwired.h"
 #include <stdint.h>
 
-#define USART2_BASE 0x40004400u
-#define REG(a) (*(volatile uint32_t *)(a))
-#define U2_CR1 REG(USART2_BASE + 0x00u)
-#define U2_ISR REG(USART2_BASE + 0x1Cu)
-#define U2_RDR REG(USART2_BASE + 0x24u)
-#define U2_TDR REG(USART2_BASE + 0x28u)
-#define ISR_RXNE (1u << 5)
-#define ISR_TXE (1u << 7)
-#define CR1_UE (1u << 0)
-#define CR1_RE (1u << 2)
-#define CR1_TE (1u << 3)
-
 static int phy_init(void) {
-    U2_CR1 = CR1_UE | CR1_TE | CR1_RE;
+    USART2->CR1 = USART_CR1_UE | USART_CR1_TE | USART_CR1_RE;
     return 0;
 }
 
@@ -35,16 +25,16 @@ static void phy_set_baudrate(iolink_baudrate_t baudrate) {
 
 static int phy_send(const uint8_t *data, size_t len) {
     for (size_t i = 0; i < len; i++) {
-        while ((U2_ISR & ISR_TXE) == 0u) {
+        while ((USART2->ISR & USART_ISR_TXE) == 0u) {
         }
-        U2_TDR = (uint32_t)data[i];
+        USART2->TDR = (uint32_t)data[i];
     }
     return (int)len;
 }
 
 static int phy_recv_byte(uint8_t *byte) {
-    if (U2_ISR & ISR_RXNE) {
-        *byte = (uint8_t)U2_RDR;
+    if (USART2->ISR & USART_ISR_RXNE) {
+        *byte = (uint8_t)USART2->RDR;
         return 1;
     }
     return 0;

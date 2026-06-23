@@ -3,7 +3,13 @@
  * M2: bring up the iolinki device stack over the USART2 PHY and run its loop
  * with a constant process-data input. The native IO-Link master (M3) and the
  * 74HC165 input shifter (M4) are wired in later milestones.
+ *
+ * Built as a standard STM32CubeL4 project: the ST CMSIS device pack supplies
+ * the startup code, system_stm32l4xx.c and the NUCLEO-L476RG linker script, and
+ * peripherals are driven through the CMSIS register definitions (RCC->, USARTx->,
+ * SPIx->) — no hand-computed register addresses.
  */
+#include "stm32l476xx.h"
 #include "iolinki/iolink.h"
 #include "iolinki/application.h"
 #include "phy_labwired.h"
@@ -11,45 +17,33 @@
 #include <string.h>
 #include <stdint.h>
 
-/* RCC (STM32L4, RM0351 §6.4) — enable the peripheral clocks this firmware uses
- * before touching their registers. REQUIRED on real silicon and now in the sim
- * (clock-gating modelled): USART1/USART2/SPI1 are unclocked out of reset, so
- * their register writes are dropped and ISR.TXE/SR.RXNE never assert until the
- * matching RCC enable bit is set. USART1/SPI1 are on APB2 (APB2ENR @ 0x60),
- * USART2 is on APB1 (APB1ENR1 @ 0x58). */
-#define RCC_BASE 0x40021000u
-#define RCC_REG(o) (*(volatile uint32_t *)(RCC_BASE + (o)))
-#define RCC_APB1ENR1 RCC_REG(0x58u)
-#define RCC_APB2ENR RCC_REG(0x60u)
-#define RCC_APB1ENR1_USART2EN (1u << 17)
-#define RCC_APB2ENR_SPI1EN (1u << 12)
-#define RCC_APB2ENR_USART1EN (1u << 14)
+/* The CMSIS startup calls __libc_init_array to run C++/constructor init-array
+ * entries; this firmware has none, and -nostartfiles drops the crt object that
+ * defines _init, so provide an empty implementation (matches the other LabWired
+ * Cube examples). Plain C globals are initialised by the startup .data copy. */
+void __libc_init_array(void) {}
 
+/* RCC (STM32L4, RM0351 §6.4) — enable the peripheral clocks this firmware uses
+ * before touching their registers. REQUIRED on real silicon and modelled by the
+ * simulator (clock-gating): USART1/USART2/SPI1 are unclocked out of reset, so
+ * their register writes are dropped and ISR.TXE/SR.RXNE never assert until the
+ * matching RCC enable bit is set. USART1/SPI1 are on APB2, USART2 on APB1. */
 static void rcc_init(void) {
-    RCC_APB2ENR |= RCC_APB2ENR_SPI1EN | RCC_APB2ENR_USART1EN;
-    RCC_APB1ENR1 |= RCC_APB1ENR1_USART2EN;
+    RCC->APB2ENR |= RCC_APB2ENR_SPI1EN | RCC_APB2ENR_USART1EN;
+    RCC->APB1ENR1 |= RCC_APB1ENR1_USART2EN;
 }
 
 /* SPI1 (stm32_fifo layout) reads the 74HC165 digital-input shift register:
  * one transfer clocks out the 8 input channels as a byte on MISO. */
-#define SPI1_BASE 0x40013000u
-#define SREG(o) (*(volatile uint32_t *)(SPI1_BASE + (o)))
-#define SPI_CR1 SREG(0x00u)
-#define SPI_SR SREG(0x08u)
-#define SPI_DR SREG(0x0Cu)
-#define CR1_MSTR (1u << 2)
-#define CR1_SPE (1u << 6)
-#define SR_RXNE (1u << 0)
-
 static void spi1_init(void) {
-    SPI_CR1 = CR1_SPE | CR1_MSTR; /* master, enabled, fastest baud */
+    SPI1->CR1 = SPI_CR1_SPE | SPI_CR1_MSTR; /* master, enabled, fastest baud */
 }
 
 static uint8_t spi1_read_byte(void) {
-    SPI_DR = 0x00u; /* dummy write triggers the transfer */
+    SPI1->DR = 0x00u; /* dummy write triggers the transfer */
     for (uint32_t i = 0; i < 100000u; i++) {
-        if (SPI_SR & SR_RXNE) {
-            return (uint8_t)SPI_DR;
+        if (SPI1->SR & SPI_SR_RXNE) {
+            return (uint8_t)SPI1->DR;
         }
     }
     return 0u; /* bounded: never hang the IO-Link loop */
