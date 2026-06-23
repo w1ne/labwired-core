@@ -1,19 +1,14 @@
-/* 4-port MASTER PHY over the simulated L476 USART2/3/4/5 (stm32v2 layout).
+/* 4-port MASTER PHY over the simulated L476 USART2/3/4/5, driven through the
+ * CMSIS register definitions.
  *
  * The iolink_phy_api_t callbacks carry no port context, so each port gets its
  * own generated set of send/recv/init/wake/flush functions bound to one USART
- * base (PORT macro). Shared port-agnostic no-ops cover mode/baudrate/prepare.
+ * instance (PORT macro). Shared port-agnostic no-ops cover mode/baudrate/prepare.
  * Config matches the iolink-dido device firmware: M-sequence type 1_1, 1-byte PD in.
  */
+#include "stm32l476xx.h"
 #include "phy_labwired.h"
 #include <stdint.h>
-
-#define REG(a) (*(volatile uint32_t *)(a))
-#define ISR_RXNE (1u << 5)
-#define ISR_TXE (1u << 7)
-#define CR1_UE (1u << 0)
-#define CR1_RE (1u << 2)
-#define CR1_TE (1u << 3)
 
 static void p_set_mode(iolink_phy_mode_t m) { (void)m; }
 static void p_set_baud(iolink_baudrate_t b) { (void)b; }
@@ -27,41 +22,41 @@ static int p_set_baud_chk(iolink_baudrate_t b) {
 }
 static int p_prepare(void) { return 0; }
 
-#define PORT(IDX, BASE)                                                          \
-    static int send_##IDX(const uint8_t *d, size_t n) {                          \
-        for (size_t i = 0; i < n; i++) {                                         \
-            while ((REG((BASE) + 0x1Cu) & ISR_TXE) == 0u) {                      \
-            }                                                                    \
-            REG((BASE) + 0x28u) = (uint32_t)d[i];                               \
-        }                                                                        \
-        return (int)n;                                                          \
-    }                                                                            \
-    static int recv_##IDX(uint8_t *b) {                                          \
-        if (REG((BASE) + 0x1Cu) & ISR_RXNE) {                                    \
-            *b = (uint8_t)REG((BASE) + 0x24u);                                   \
-            return 1;                                                            \
-        }                                                                        \
-        return 0;                                                               \
-    }                                                                            \
-    static int init_##IDX(void) {                                                \
-        REG((BASE) + 0x00u) = CR1_UE | CR1_TE | CR1_RE;                          \
-        return 0;                                                               \
-    }                                                                            \
-    static int wake_##IDX(void) {                                                \
-        uint8_t w = 0x55u;                                                       \
-        return send_##IDX(&w, 1u) == 1 ? 0 : -1;                                 \
-    }                                                                            \
-    static int flush_##IDX(void) {                                               \
-        uint8_t b;                                                              \
-        while (recv_##IDX(&b) > 0) {                                             \
-        }                                                                        \
-        return 0;                                                               \
+#define PORT(IDX, U)                                                            \
+    static int send_##IDX(const uint8_t *d, size_t n) {                         \
+        for (size_t i = 0; i < n; i++) {                                        \
+            while (((U)->ISR & USART_ISR_TXE) == 0u) {                          \
+            }                                                                   \
+            (U)->TDR = (uint32_t)d[i];                                          \
+        }                                                                       \
+        return (int)n;                                                         \
+    }                                                                           \
+    static int recv_##IDX(uint8_t *b) {                                         \
+        if ((U)->ISR & USART_ISR_RXNE) {                                        \
+            *b = (uint8_t)(U)->RDR;                                             \
+            return 1;                                                          \
+        }                                                                       \
+        return 0;                                                              \
+    }                                                                           \
+    static int init_##IDX(void) {                                               \
+        (U)->CR1 = USART_CR1_UE | USART_CR1_TE | USART_CR1_RE;                  \
+        return 0;                                                              \
+    }                                                                           \
+    static int wake_##IDX(void) {                                               \
+        uint8_t w = 0x55u;                                                      \
+        return send_##IDX(&w, 1u) == 1 ? 0 : -1;                               \
+    }                                                                           \
+    static int flush_##IDX(void) {                                              \
+        uint8_t b;                                                             \
+        while (recv_##IDX(&b) > 0) {                                            \
+        }                                                                       \
+        return 0;                                                              \
     }
 
-PORT(0, 0x40004400u) /* USART2 */
-PORT(1, 0x40004800u) /* USART3 */
-PORT(2, 0x40004C00u) /* UART4  */
-PORT(3, 0x40005000u) /* UART5  */
+PORT(0, USART2)
+PORT(1, USART3)
+PORT(2, UART4)
+PORT(3, UART5)
 
 static void fill_one(iolink_phy_api_t *phy, iolink_master_config_t *cfg,
                      int (*init)(void), int (*send)(const uint8_t *, size_t),

@@ -80,10 +80,14 @@ fn master_chip_reaches_operate_with_real_sensor_chip() {
     let env = EnvironmentManifest::from_file(root.join("env.yaml")).expect("parse env.yaml");
     let mut world = World::from_manifest(env, &root).expect("build station world");
 
-    // g_master_state lives at 0x20000000 (D g_master_state in the master map);
-    // 3 == IOLINK_MASTER_STATE_OPERATE.
-    const STATE_ADDR: u64 = 0x2000_0000;
-    const PD0_ADDR: u64 = 0x2000_0001;
+    // Resolve the observability globals straight from the master ELF symbol
+    // table rather than hardcoding link addresses — robust to linker/layout
+    // changes (e.g. the STM32CubeL4 linker script). 3 == IOLINK_MASTER_STATE_OPERATE.
+    let master_bytes = std::fs::read(&master_elf).expect("read master elf");
+    let state_addr = labwired_loader::resolve_symbol_in_elf(&master_bytes, "g_master_state")
+        .expect("g_master_state symbol in master elf") as u64;
+    let pd0_addr = labwired_loader::resolve_symbol_in_elf(&master_bytes, "g_master_pd0")
+        .expect("g_master_pd0 symbol in master elf") as u64;
     const OPERATE: u8 = 3;
 
     // The sensor publishes its 74HC165 input byte as process data; the
@@ -97,11 +101,11 @@ fn master_chip_reaches_operate_with_real_sensor_chip() {
     for _ in 0..5_000_000u64 {
         world.step_all();
         let master = world.machines.get("master").unwrap();
-        last_state = master.read_u8(STATE_ADDR).unwrap();
+        last_state = master.read_u8(state_addr).unwrap();
         if last_state == OPERATE {
             reached_operate = true;
         }
-        pd0 = master.read_u8(PD0_ADDR).unwrap();
+        pd0 = master.read_u8(pd0_addr).unwrap();
         // Stop once we have proof of a real cyclic PD exchange in OPERATE.
         if reached_operate && pd0 != 0xFF {
             break;
@@ -140,8 +144,13 @@ fn four_port_station_all_sensors_operate_with_distinct_pd() {
     let env = EnvironmentManifest::from_file(root.join("env4.yaml")).expect("parse env4.yaml");
     let mut world = World::from_manifest(env, &root).expect("build 4-port station");
 
-    const STATE: u64 = 0x2000_0000; // g_master_state[4]
-    const PD: u64 = 0x2000_0004; // g_master_pd[4]
+    // Resolve the per-port observability arrays from the ELF symbol table
+    // (robust to linker layout) rather than hardcoding addresses.
+    let master_bytes = std::fs::read(&master_elf).expect("read master elf");
+    let state = labwired_loader::resolve_symbol_in_elf(&master_bytes, "g_master_state")
+        .expect("g_master_state symbol in master elf") as u64; // g_master_state[4]
+    let pd = labwired_loader::resolve_symbol_in_elf(&master_bytes, "g_master_pd")
+        .expect("g_master_pd symbol in master elf") as u64; // g_master_pd[4]
     const OPERATE: u8 = 3;
     // sensor1..4 input presets (palindrome bytes), bit-order-invariant.
     let expected: [u8; 4] = [0xA5, 0x3C, 0xC3, 0x5A];
@@ -151,8 +160,8 @@ fn four_port_station_all_sensors_operate_with_distinct_pd() {
         world.step_all();
         let m = world.machines.get("master").unwrap();
         let all = (0..4u64).all(|i| {
-            m.read_u8(STATE + i).unwrap() == OPERATE
-                && m.read_u8(PD + i).unwrap() == expected[i as usize]
+            m.read_u8(state + i).unwrap() == OPERATE
+                && m.read_u8(pd + i).unwrap() == expected[i as usize]
         });
         if all {
             done = true;
@@ -161,8 +170,8 @@ fn four_port_station_all_sensors_operate_with_distinct_pd() {
     }
 
     let m = world.machines.get("master").unwrap();
-    let states: Vec<u8> = (0..4).map(|i| m.read_u8(STATE + i).unwrap()).collect();
-    let pds: Vec<u8> = (0..4).map(|i| m.read_u8(PD + i).unwrap()).collect();
+    let states: Vec<u8> = (0..4).map(|i| m.read_u8(state + i).unwrap()).collect();
+    let pds: Vec<u8> = (0..4).map(|i| m.read_u8(pd + i).unwrap()).collect();
     assert!(
         done,
         "not all 4 ports reached OPERATE with their expected PD; \
