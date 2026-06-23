@@ -2070,6 +2070,20 @@ impl CortexM {
                     }
                 }
 
+                Instruction::Svc { imm8: _ } => {
+                    // Supervisor call. Pend the SVCall exception (number 11);
+                    // the exception-entry path at the top of `step_internal`
+                    // stacks the frame and vectors to the handler on the next
+                    // step. Zephyr drives its fatal handler, irq_offload, and
+                    // userspace syscalls through SVC, so an unmodeled SVC left
+                    // the PC stuck on the instruction (ztest hung forever).
+                    // The immediate selects the call on the Zephyr side; the
+                    // handler recovers it from the stacked instruction, so we
+                    // don't branch on it here. pc_increment stays 2 so the
+                    // stacked return address points just past the SVC.
+                    self.set_exception_pending(11);
+                }
+
                 // Stack Operations
                 Instruction::Push { registers, m } => {
                     let mut sp = self.read_reg(13);
@@ -2706,6 +2720,43 @@ mod tests {
         // UDIV R0, R1, R2 is 0xFBB1 F0F2
         run_test_instr(&mut cpu, &mut bus, 0xFBB1F0F2, true);
         assert_eq!(cpu.r0, 10);
+    }
+
+    #[test]
+    fn test_svc_pends_and_takes_svcall_exception() {
+        // Zephyr's fatal path, irq_offload, and userspace syscalls all execute
+        // `svc`. Without taking the SVCall exception the PC sticks on the
+        // instruction forever (ztest hangs). Executing SVC must pend SVCall
+        // (exception 11) and the next step must vector to its handler with a
+        // standard 8-word exception frame.
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x1000;
+        cpu.sp = 0x2000_0040;
+
+        // VTOR defaults to 0, so the SVCall vector (exc 11) is at 11*4 = 0x2C.
+        let handler = 0x0000_5000u32;
+        bus.write_u32(0x2C, handler | 1).unwrap(); // thumb bit set
+
+        // SVC #2 at 0x1000.
+        bus.write_u16(0x1000, 0xDF02).unwrap();
+
+        let cfg = bus.config.clone();
+        // 1st step executes SVC: pends SVCall, advances PC past the 16-bit instr.
+        cpu.step_internal(&mut bus, &[], &cfg).unwrap();
+        assert_eq!(cpu.pc, 0x1002, "SVC should advance PC past the instruction");
+
+        // 2nd step takes the exception: vector to the handler, stack the frame.
+        cpu.step_internal(&mut bus, &[], &cfg).unwrap();
+        assert_eq!(cpu.pc, handler & !1, "should vector to the SVCall handler");
+        assert_eq!(
+            cpu.sp,
+            0x2000_0040 - 32,
+            "should push an 8-word exception frame"
+        );
+        assert_eq!(cpu.active_exception, 11, "SVCall is exception 11");
+        // Stacked return address (frame + 24) is the instruction after the SVC.
+        assert_eq!(bus.read_u32(cpu.sp as u64 + 24).unwrap(), 0x1002);
     }
 
     #[test]
