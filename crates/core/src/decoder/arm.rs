@@ -89,8 +89,14 @@ pub enum Instruction {
         rd: u8,
         rm: u8,
     }, // ADD Rd, Rm (at least one high register)
-    Cpsie, // CPSIE i
-    Cpsid, // CPSID i
+    Cpsie {
+        primask: bool,
+        faultmask: bool,
+    }, // CPSIE i/f
+    Cpsid {
+        primask: bool,
+        faultmask: bool,
+    }, // CPSID i/f
 
     And {
         rd: u8,
@@ -1064,14 +1070,18 @@ pub fn decode_thumb_16(opcode: u16) -> Instruction {
         }
     }
 
-    // CPS (T1): 1011 0110 011 effect 0 interrupt_flags (0xB660 mask 0xFFE0)
-    if (opcode & 0xFFEF) == 0xB662 {
-        // Matches B662 or B672 (ignoring bit 4)
+    // CPS (T1): 1011 0110 011 im 0 0 (A) I F (0xB660 mask 0xFFE8).
+    // im (bit 4): 0 = CPSIE (enable/clear), 1 = CPSID (disable/set).
+    // I (bit 1): affects PRIMASK. F (bit 0): affects FAULTMASK. Both may be set
+    // (`cpsid if`). The f-variant (FAULTMASK) was previously undecoded → Unknown.
+    if (opcode & 0xFFE8) == 0xB660 {
         let disable = (opcode & 0x0010) != 0;
+        let primask = (opcode & 0x0002) != 0;
+        let faultmask = (opcode & 0x0001) != 0;
         if disable {
-            return Instruction::Cpsid;
+            return Instruction::Cpsid { primask, faultmask };
         } else {
-            return Instruction::Cpsie;
+            return Instruction::Cpsie { primask, faultmask };
         }
     }
 

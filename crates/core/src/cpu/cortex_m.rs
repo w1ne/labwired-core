@@ -44,6 +44,11 @@ pub struct CortexM {
     /// caught by foreign firmware whose time driver never ticked.
     pub pending_exceptions: [u64; 4],
     pub primask: bool, // Interrupt mask (true = disabled)
+    /// FAULTMASK: when set, masks every exception except NMI (it raises the
+    /// effective priority to -1). Set by `CPSID f` / `MSR FAULTMASK`, cleared by
+    /// `CPSIE f` and automatically on exception return (except return from NMI).
+    /// Zephyr's fault path toggles it; an unmodelled `CPS f` decoded as Unknown.
+    pub faultmask: bool,
     /// BASEPRI: when non-zero, masks any exception whose priority value is
     /// numerically >= basepri (i.e. equal or lower priority). Zephyr's Cortex-M
     /// critical sections raise BASEPRI to block the scheduler/timer IRQs; an
@@ -104,6 +109,7 @@ impl Default for CortexM {
             xpsr: 0x01000000, // Typical reset state (Thumb bit set)
             pending_exceptions: [0; 4],
             primask: false,
+            faultmask: false,
             basepri: 0,
             vtor: Arc::new(AtomicU32::new(0)),
             it_state: 0,
@@ -347,7 +353,20 @@ impl CortexM {
         Ok(())
     }
 
+    /// True if FAULTMASK currently blocks taking the given exception. FAULTMASK
+    /// masks everything except NMI (exception 2).
+    #[inline]
+    fn faultmask_blocks(&self, exc: u32) -> bool {
+        self.faultmask && exc != 2
+    }
+
     fn exception_return<B: Bus + ?Sized>(&mut self, bus: &mut B) -> SimResult<()> {
+        // FAULTMASK is cleared automatically on exception return, except when
+        // returning from NMI (exception 2).
+        if self.active_exception != 2 {
+            self.faultmask = false;
+        }
+
         // Perform Unstacking
         let frame_ptr = self.sp;
 
@@ -538,7 +557,10 @@ impl Cpu for CortexM {
                     if let Some(exc) = self.highest_priority_pending() {
                         let exc_prio = self.exception_priority(exc);
                         let active_prio = self.exception_priority(self.active_exception);
-                        if exc_prio < active_prio && !self.masked_by_basepri(exc_prio) {
+                        if exc_prio < active_prio
+                            && !self.masked_by_basepri(exc_prio)
+                            && !self.faultmask_blocks(exc)
+                        {
                             break;
                         }
                     }
@@ -557,7 +579,10 @@ impl Cpu for CortexM {
                     if let Some(exc) = self.highest_priority_pending() {
                         let exc_prio = self.exception_priority(exc);
                         let active_prio = self.exception_priority(self.active_exception);
-                        if exc_prio < active_prio && !self.masked_by_basepri(exc_prio) {
+                        if exc_prio < active_prio
+                            && !self.masked_by_basepri(exc_prio)
+                            && !self.faultmask_blocks(exc)
+                        {
                             break;
                         }
                     }
@@ -595,7 +620,9 @@ impl CortexM {
         if self.pending_exceptions.iter().any(|&w| w != 0) && !self.primask && exception_num != 0 {
             let take_prio = self.exception_priority(exception_num);
             let active_prio = self.exception_priority(self.active_exception);
-            let can_take = take_prio < active_prio && !self.masked_by_basepri(take_prio);
+            let can_take = take_prio < active_prio
+                && !self.masked_by_basepri(take_prio)
+                && !self.faultmask_blocks(exception_num);
 
             if can_take {
                 self.pending_exceptions[(exception_num / 64) as usize] &=
@@ -1726,11 +1753,21 @@ impl CortexM {
                     pc_increment = 4;
                 }
 
-                Instruction::Cpsie => {
-                    self.primask = false;
+                Instruction::Cpsie { primask, faultmask } => {
+                    if primask {
+                        self.primask = false;
+                    }
+                    if faultmask {
+                        self.faultmask = false;
+                    }
                 }
-                Instruction::Cpsid => {
-                    self.primask = true;
+                Instruction::Cpsid { primask, faultmask } => {
+                    if primask {
+                        self.primask = true;
+                    }
+                    if faultmask {
+                        self.faultmask = true;
+                    }
                 }
 
                 // Shifts
@@ -2404,6 +2441,7 @@ impl CortexM {
                         0x03 => (self.xpsr & 0xF800_0000) | ipsr, // xPSR
                         0x05 => ipsr,                             // IPSR
                         0x10 => self.primask as u32,
+                        0x13 => self.faultmask as u32, // FAULTMASK
                         // BASEPRI (0x11) and BASEPRI_MAX (0x12) both read BASEPRI.
                         0x11 | 0x12 => self.basepri as u32,
                         _ => 0,
@@ -2415,6 +2453,7 @@ impl CortexM {
                     let val = self.read_reg(rn);
                     match sysm {
                         0x10 => self.primask = (val & 1) != 0,
+                        0x13 => self.faultmask = (val & 1) != 0, // FAULTMASK
                         // BASEPRI: plain write of the priority mask byte.
                         0x11 => self.basepri = (val & 0xFF) as u8,
                         // BASEPRI_MAX: writes BASEPRI only if it raises the
@@ -2742,6 +2781,39 @@ mod tests {
             bus.write_u16(pc as u64, instr_bin as u16).unwrap();
         }
         cpu.step_internal(bus, &[], &bus.config.clone()).unwrap();
+    }
+
+    #[test]
+    fn cps_faultmask_set_clear_and_mask() {
+        // CPSID f (0xB671) sets FAULTMASK; CPSIE f (0xB661) clears it. Zephyr's
+        // fault handler toggles FAULTMASK; an unmodelled CPS-f decoded as Unknown
+        // and the fault path ("ESF could not be retrieved") failed.
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        // Sequential PCs so the decode cache doesn't reuse the first opcode.
+        cpu.pc = 0x1000;
+        run_test_instr(&mut cpu, &mut bus, 0xB671, false); // CPSID f @0x1000
+        assert!(cpu.faultmask, "CPSID f sets FAULTMASK");
+        run_test_instr(&mut cpu, &mut bus, 0xB661, false); // CPSIE f @0x1002
+        assert!(!cpu.faultmask, "CPSIE f clears FAULTMASK");
+
+        // FAULTMASK masks a normal IRQ but NOT NMI (exception 2).
+        cpu.pc = 0x2000;
+        cpu.sp = 0x2000_0040;
+        cpu.faultmask = true;
+        bus.write_u16(0x2000, 0xBF00).unwrap(); // NOP
+        bus.write_u32(0x40, 0x0000_5000 | 1).unwrap(); // exc 16 vector
+        cpu.set_exception_pending(16);
+        let cfg = bus.config.clone();
+        cpu.step_internal(&mut bus, &[], &cfg).unwrap();
+        assert_eq!(cpu.pc, 0x2002, "FAULTMASK must mask the IRQ; the NOP runs");
+
+        // NMI (exception 2) still preempts under FAULTMASK.
+        cpu.pc = 0x3000;
+        bus.write_u32(0x08, 0x0000_6000 | 1).unwrap(); // exc 2 (NMI) vector
+        cpu.set_exception_pending(2);
+        cpu.step_internal(&mut bus, &[], &cfg).unwrap();
+        assert_eq!(cpu.pc, 0x6000, "NMI is never masked by FAULTMASK");
     }
 
     #[test]
