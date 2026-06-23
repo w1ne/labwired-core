@@ -17,10 +17,16 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 export interface PioBoard {
-  /** PlatformIO platform, e.g. 'ststm32'. */
-  platform: string;
-  /** PlatformIO board id, e.g. 'nucleo_l476rg'. */
-  board: string;
+  /** Build backend. 'platformio' (default) drives `pio run`; 'zephyr' drives
+   *  `west build` against the image's pre-baked Zephyr workspace. */
+  builder?: 'platformio' | 'zephyr';
+  /** West board id for a Zephyr target, e.g. 'nrf52840dk/nrf52840'. Required
+   *  when builder === 'zephyr'; ignored otherwise. */
+  zephyrBoard?: string;
+  /** PlatformIO platform, e.g. 'ststm32'. Required for PlatformIO targets. */
+  platform?: string;
+  /** PlatformIO board id, e.g. 'nucleo_l476rg'. Required for PlatformIO targets. */
+  board?: string;
   /** PlatformIO framework, e.g. 'arduino' | 'stm32cube'. Omit for bare-metal. */
   framework?: string;
   /** True when the LabWired digital twin can execute this target today.
@@ -49,7 +55,14 @@ function loadCatalog(): Catalog {
   // Fail loud at startup if the data is malformed — better than a confusing miss
   // at compile time.
   for (const [id, b] of [...Object.entries(boards), ...Object.entries(chipFamilies)]) {
-    if (!b || !b.platform || !b.board) {
+    if (!b) {
+      throw new Error(`board-catalog.json: entry "${id}" is empty`);
+    }
+    if (b.builder === 'zephyr') {
+      if (!b.zephyrBoard) {
+        throw new Error(`board-catalog.json: zephyr entry "${id}" missing zephyrBoard`);
+      }
+    } else if (!b.platform || !b.board) {
       throw new Error(`board-catalog.json: entry "${id}" missing platform/board`);
     }
   }

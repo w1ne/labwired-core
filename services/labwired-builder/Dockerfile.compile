@@ -11,6 +11,7 @@ FROM node:22-bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       python3 python3-venv git curl ca-certificates build-essential \
+      cmake ninja-build device-tree-compiler gperf gcc-arm-none-eabi \
  && rm -rf /var/lib/apt/lists/*
 
 # PlatformIO in an isolated venv (Debian's Python is externally-managed).
@@ -29,6 +30,33 @@ USER builder
 COPY --chown=builder:builder package.json package-lock.json ./
 RUN npm ci --omit=dev
 COPY --chown=builder:builder tsconfig.json ./
+
+# --- Zephyr workspace (west) bake ---
+# A Zephyr catalog target (builder='zephyr') is built with `west build`, NOT
+# PlatformIO. We pin the Zephyr v3.7 LTS line and `west update` the full
+# manifest at build time (network available), so the egress-denied runtime
+# builds offline exactly like the pio path. The gnuarmemb toolchain is the
+# Debian arm-none-eabi gcc installed above (GNUARMEMB_TOOLCHAIN_PATH=/usr).
+# .git dirs are pruned afterwards to keep the layer lean.
+ARG ZEPHYR_REF=v3.7.0
+ENV ZEPHYR_WORKSPACE=/opt/zephyrproject
+# Privileged setup (venv + workspace dir under /opt), then hand both to builder.
+USER root
+RUN python3 -m venv /opt/west && /opt/west/bin/pip install --no-cache-dir west \
+ && mkdir -p ${ZEPHYR_WORKSPACE} \
+ && chown -R builder:builder /opt/west ${ZEPHYR_WORKSPACE}
+USER builder
+RUN /opt/west/bin/west init -m https://github.com/zephyrproject-rtos/zephyr --mr ${ZEPHYR_REF} ${ZEPHYR_WORKSPACE} \
+ && cd ${ZEPHYR_WORKSPACE} && /opt/west/bin/west update --narrow -o=--depth=1 \
+ && /opt/west/bin/pip install --no-cache-dir -r ${ZEPHYR_WORKSPACE}/zephyr/scripts/requirements-base.txt \
+ && find ${ZEPHYR_WORKSPACE} -name .git -prune -exec rm -rf {} +
+
+# west + the Zephyr build env the compile service reads (see compileZephyr).
+ENV WEST_BIN=/opt/west/bin/west \
+    WEST_WORKSPACE=${ZEPHYR_WORKSPACE} \
+    ZEPHYR_BASE=${ZEPHYR_WORKSPACE}/zephyr \
+    ZEPHYR_TOOLCHAIN_VARIANT=gnuarmemb \
+    GNUARMEMB_TOOLCHAIN_PATH=/usr
 
 # --- Framework bake (the heavy layer; catalog-derived) ---
 # Only the catalog + warmer below bust this layer. A BuildKit cache mount on

@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
   compile,
   generatePlatformioIni,
+  generateZephyrFiles,
   parseGccDiagnostics,
   supportedCompileBoards,
   bakeTargets,
 } from '../src/compile.js';
-import { resolveBoard } from '../src/boards.js';
+import { resolveBoard, PIO_BOARDS } from '../src/boards.js';
 
 describe('generatePlatformioIni', () => {
   it('generates a controlled ini for a known board (no agent-supplied fields)', () => {
@@ -38,6 +39,43 @@ describe('generatePlatformioIni', () => {
     const ini = generatePlatformioIni('esp32', 'a/one, b/two')!;
     expect(ini).toContain('    a/one');
     expect(ini).toContain('    b/two');
+  });
+});
+
+describe('generateZephyrFiles', () => {
+  it('scaffolds CMakeLists/prj.conf + the agent source under src/', () => {
+    const files = generateZephyrFiles('int main(void){return 0;}', 'c');
+    expect(files['CMakeLists.txt']).toContain('find_package(Zephyr');
+    expect(files['CMakeLists.txt']).toContain('target_sources(app PRIVATE src/main.c)');
+    expect(files['prj.conf']).toContain('CONFIG_PRINTK=y');
+    expect(files['src/main.c']).toBe('int main(void){return 0;}');
+    // No agent-controlled build files leak in.
+    expect(Object.keys(files).sort()).toEqual(['CMakeLists.txt', 'prj.conf', 'src/main.c']);
+  });
+
+  it('uses main.cpp for C++ sources', () => {
+    const files = generateZephyrFiles('extern "C" int main(){return 0;}', 'cpp');
+    expect(files['CMakeLists.txt']).toContain('target_sources(app PRIVATE src/main.cpp)');
+    expect(files['src/main.cpp']).toBeDefined();
+    expect(files['src/main.c']).toBeUndefined();
+  });
+});
+
+describe('zephyr target wiring', () => {
+  it('catalogs nrf52840-dk-zephyr as a runnable west target', () => {
+    const b = PIO_BOARDS['nrf52840-dk-zephyr'];
+    expect(b.builder).toBe('zephyr');
+    expect(b.zephyrBoard).toBe('nrf52840dk/nrf52840');
+    expect(b.runnable).toBe(true);
+  });
+
+  it('has no platformio.ini (built via west, not pio)', () => {
+    expect(generatePlatformioIni('nrf52840-dk-zephyr')).toBeNull();
+  });
+
+  it('is excluded from the PlatformIO bake (west bakes it in the image)', () => {
+    const labels = bakeTargets().map((t) => t.label);
+    expect(labels).not.toContain('nrf52840-dk-zephyr');
   });
 });
 
