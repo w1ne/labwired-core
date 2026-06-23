@@ -53,6 +53,13 @@ COPY services/labwired-builder/package.json services/labwired-builder/package-lo
 RUN npm ci --omit=dev
 COPY services/labwired-builder/tsconfig.json ./
 COPY services/labwired-builder/src ./src
+# run.ts + server.ts import the curated chip catalog from board-config via a
+# relative path that resolves to /packages/board-config/src/chip-yamls (tsx maps
+# the .js specifier to the .ts source). The file is self-contained (no imports),
+# so copying just it is enough. Without this the service exits 1 at startup with
+# ERR_MODULE_NOT_FOUND, even though the image builds (tsx transpiles at runtime,
+# so nothing typechecks the import at build time).
+COPY packages/board-config/src/chip-yamls.ts /packages/board-config/src/chip-yamls.ts
 COPY --from=rust-build /src/core/target/release/labwired /usr/local/bin/labwired
 
 # Bake the curated example so /run-example can verify it in-container. The
