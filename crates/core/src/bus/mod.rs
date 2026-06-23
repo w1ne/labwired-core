@@ -1495,6 +1495,7 @@ impl SystemBus {
     pub fn attach_uart_tx_sink(&mut self, sink: Arc<Mutex<Vec<u8>>>, echo_stdout: bool) {
         use crate::peripherals::components::IolinkMaster;
         use crate::peripherals::esp32::uart::Esp32Uart;
+        use crate::peripherals::nrf52::uarte::Nrf52Uarte;
         for p in &mut self.peripherals {
             let Some(any) = p.dev.as_any_mut() else {
                 continue;
@@ -1524,6 +1525,11 @@ impl SystemBus {
             // Real ESP32-classic UART (echo is fixed at construction time).
             if let Some(uart) = any.downcast_mut::<Esp32Uart>() {
                 uart.set_sink(Some(sink.clone()));
+                continue;
+            }
+            // nRF52 UARTE console (EasyDMA): captured/echoed the same way.
+            if let Some(uarte) = any.downcast_mut::<Nrf52Uarte>() {
+                uarte.set_sink(Some(sink.clone()), echo_stdout);
             }
         }
     }
