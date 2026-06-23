@@ -20,6 +20,16 @@
  *                               gating asserts TXE anyway and prints the marker —
  *                               a false pass.
  *
+ *   gpiobug  (-DGPIO_CLOCK_BUG): enables the USART1 clock (so it can report),
+ *                               then drives GPIOA WITHOUT enabling the GPIOA
+ *                               clock (RCC_APB2ENR.IOPAEN). On real silicon the
+ *                               port is held in reset: CRL/ODR writes are
+ *                               dropped and the readback never reflects them, so
+ *                               BENCH_GPIO_OK never prints. An emulator that does
+ *                               not gate GPIO accepts the writes — a false pass.
+ *                               A second peripheral, same fidelity gap as
+ *                               clockbug: this is not a one-off.
+ *
  *   rambug   (-DRAM_OVERFLOW) : enables the clock, then writes one word 4 KB
  *                               past the end of the 20 KB SRAM that an
  *                               STM32F103C8 actually has (0x2000_5000), reads it
@@ -46,6 +56,12 @@
 #define RCC_BASE 0x40021000u
 #define RCC_APB2ENR REG32(RCC_BASE + 0x18u)
 #define RCC_APB2ENR_USART1EN (1u << 14)
+#define RCC_APB2ENR_IOPAEN (1u << 2)
+
+/* --- GPIOA (F1 layout: CRL @ 0x00, ODR @ 0x0C) --- */
+#define GPIOA_BASE 0x40010800u
+#define GPIOA_CRL REG32(GPIOA_BASE + 0x00u)
+#define GPIOA_ODR REG32(GPIOA_BASE + 0x0Cu)
 
 /* --- USART1 (F1 layout: SR @ 0x00, DR @ 0x04, CR1 @ 0x0C) --- */
 #define USART1_BASE 0x40013800u
@@ -87,6 +103,14 @@ int main(void)
     uart_puts("BENCH_BANNER\n");
     if (*oob == 0xCAFEBABEu) {
         uart_puts("BENCH_RAM_OK\n"); /* only reachable if the OOB store stuck */
+    }
+#elif defined(GPIO_CLOCK_BUG)
+    /* GPIOA clock deliberately NOT enabled (no RCC_APB2ENR.IOPAEN). */
+    uart_puts("BENCH_BANNER\n");
+    GPIOA_CRL = 0x33333333u;     /* all low pins = output (dropped if gated) */
+    GPIOA_ODR = 0x000000FFu;     /* drive PA0..PA7 high (dropped if gated)   */
+    if ((GPIOA_ODR & 0x000000FFu) == 0x000000FFu) {
+        uart_puts("BENCH_GPIO_OK\n"); /* readback only reflects a clocked port */
     }
 #else
     uart_puts("BENCH_BANNER\n");

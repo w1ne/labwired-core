@@ -50,6 +50,7 @@ make -C firmware >/dev/null
 cases=(
   "control|control-smoke.yaml|control.elf|BENCH_UART_OK|PASS"
   "clockbug|clockbug-smoke.yaml|clockbug.elf|BENCH_UART_OK|FAIL"
+  "gpiobug|gpiobug-smoke.yaml|gpiobug.elf|BENCH_GPIO_OK|FAIL"
   "rambug|rambug-smoke.yaml|rambug.elf|BENCH_RAM_OK|FAIL"
 )
 
@@ -88,23 +89,27 @@ printf '\n%-10s %-12s %-18s %-18s\n' "case" "real-HW" "LabWired" "Renode"
 printf '%-10s %-12s %-18s %-18s\n' "----" "-------" "--------" "------"
 
 lw_correct=0; lw_total=0; rn_correct=0; rn_total=0
+json_rows=()
 for row in "${cases[@]}"; do
   IFS='|' read -r name script fw marker expected <<<"$row"
   lw=$(run_labwired "$script" "$marker")
-  lw_total=$((lw_total+1)); [[ "$lw" == "$expected" ]] && lw_correct=$((lw_correct+1))
+  lw_total=$((lw_total+1)); lw_ok=false; [[ "$lw" == "$expected" ]] && { lw_correct=$((lw_correct+1)); lw_ok=true; }
   lw_tag=$([[ "$lw" == "$expected" ]] && echo "$lw" || echo "$lw <$(mark "$lw" "$expected")>")
+  rn="skipped"; rn_ok="null"
   if [[ $have_renode -eq 1 ]]; then
     rn=$(run_renode "$fw" "$marker")
     if [[ "$rn" == "NO-REPL" || "$rn" == "" ]]; then
-      rn_tag="(no f103 repl)"
+      rn_tag="(no f103 repl)"; rn="no-platform"
     else
-      rn_total=$((rn_total+1)); [[ "$rn" == "$expected" ]] && rn_correct=$((rn_correct+1))
+      rn_total=$((rn_total+1)); rn_ok=false; [[ "$rn" == "$expected" ]] && { rn_correct=$((rn_correct+1)); rn_ok=true; }
       rn_tag=$([[ "$rn" == "$expected" ]] && echo "$rn" || echo "$rn <$(mark "$rn" "$expected")>")
     fi
   else
     rn_tag="(skipped)"
   fi
   printf '%-10s %-12s %-18s %-18s\n' "$name" "$expected" "$lw_tag" "$rn_tag"
+  json_rows+=("$(printf '{"case":"%s","expected":"%s","labwired":"%s","labwired_correct":%s,"renode":"%s","renode_correct":%s}' \
+    "$name" "$expected" "$lw" "$lw_ok" "$rn" "$rn_ok")")
 done
 
 echo
@@ -115,6 +120,25 @@ if [[ $have_renode -eq 1 && $rn_total -gt 0 ]]; then
 else
   echo "  Renode:   not run (set RENODE_BIN to a renode launcher to include it)"
 fi
+
+# --- machine-readable summary (for CI / dashboards) --------------------------
+BENCH_JSON="${BENCH_JSON:-benchmark-results.json}"
+{
+  printf '{\n  "board": "stm32f103",\n'
+  printf '  "labwired_score": %d, "labwired_total": %d,\n' "$lw_correct" "$lw_total"
+  if [[ $have_renode -eq 1 && $rn_total -gt 0 ]]; then
+    printf '  "renode_score": %d, "renode_total": %d,\n' "$rn_correct" "$rn_total"
+  else
+    printf '  "renode_score": null, "renode_total": null,\n'
+  fi
+  printf '  "cases": [\n'
+  for i in "${!json_rows[@]}"; do
+    sep=,; [[ $i -eq $((${#json_rows[@]}-1)) ]] && sep=
+    printf '    %s%s\n' "${json_rows[$i]}" "$sep"
+  done
+  printf '  ]\n}\n'
+} > "$BENCH_JSON"
+echo "wrote $BENCH_JSON"
 
 if [[ $lw_correct -ne $lw_total ]]; then
   echo; echo "REGRESSION: LabWired disagrees with silicon ground truth."; exit 1

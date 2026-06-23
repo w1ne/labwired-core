@@ -13,7 +13,8 @@ LDFLAGS := -nostdlib -T bench.ld -Wl,--gc-sections
 
 SRCS := startup.c main.c
 
-ELVES := $(BUILD_DIR)/control.elf $(BUILD_DIR)/clockbug.elf $(BUILD_DIR)/rambug.elf
+ELVES := $(BUILD_DIR)/control.elf $(BUILD_DIR)/clockbug.elf \
+         $(BUILD_DIR)/gpiobug.elf $(BUILD_DIR)/rambug.elf
 
 all: $(ELVES)
 
@@ -25,6 +26,9 @@ $(BUILD_DIR)/control.elf: $(SRCS) bench.ld | $(BUILD_DIR)
 
 $(BUILD_DIR)/clockbug.elf: $(SRCS) bench.ld | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -DSKIP_UART_CLOCK $(LDFLAGS) $(SRCS) -o $@
+
+$(BUILD_DIR)/gpiobug.elf: $(SRCS) bench.ld | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -DGPIO_CLOCK_BUG $(LDFLAGS) $(SRCS) -o $@
 
 $(BUILD_DIR)/rambug.elf: $(SRCS) bench.ld | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -DRAM_OVERFLOW $(LDFLAGS) $(SRCS) -o $@
