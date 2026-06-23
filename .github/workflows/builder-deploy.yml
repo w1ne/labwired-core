@@ -79,7 +79,11 @@ jobs:
           file: services/labwired-builder/Dockerfile.builder
           platforms: linux/amd64
           push: true
+          # :dev is the tag the Europa compose project actually pins, so it must
+          # be published for a main build to be deployable. :latest + :sha kept
+          # for convenience/rollback.
           tags: |
+            ghcr.io/w1ne/labwired-builder:dev
             ghcr.io/w1ne/labwired-builder:latest
             ghcr.io/w1ne/labwired-builder:${{ github.sha }}
           cache-from: type=gha,scope=labwired-builder
