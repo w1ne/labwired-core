@@ -2719,7 +2719,7 @@ mod tests {
         cpu.pc = 0x1000;
         cpu.r3 = 0x2000; // jump-table base
         cpu.r0 = 2; // case index
-        // [0x2000 + (2 << 2)] = [0x2008] holds the (thumb) target 0x5001.
+                    // [0x2000 + (2 << 2)] = [0x2008] holds the (thumb) target 0x5001.
         bus.write_u32(0x2008, 0x5001).unwrap();
 
         run_test_instr(&mut cpu, &mut bus, 0xF853F020, true);
