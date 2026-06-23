@@ -1,0 +1,7 @@
+name: "f103-fidelity-bench-nogate"
+# Same board, but the clock-gating-stripped chip. Used to demonstrate that with
+# fidelity OFF, LabWired false-passes the clockbug case just like Renode — i.e.
+# the gating is exactly what catches the bug.
+chip: "./stm32f103-nogate.yaml"
+external_devices: []
+board_io: []

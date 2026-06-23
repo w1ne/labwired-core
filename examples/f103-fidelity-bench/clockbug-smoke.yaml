@@ -1,0 +1,13 @@
+schema_version: "1.0"
+# clockbug: firmware forgot RCC_APB2ENR.USART1EN. Ground truth (RM0008): the
+# USART is clock-gated, SR.TXE never asserts, nothing transmits — BENCH_UART_OK
+# must NOT appear. LabWired (clock gates modelled) reproduces this: the assertion
+# fails, so this run is EXPECTED TO FAIL. A pass here means the emulator does not
+# model clock gating (a false pass).
+inputs:
+  system: "./system.yaml"
+  firmware: "./firmware/build/clockbug.elf"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "BENCH_UART_OK"

@@ -1,0 +1,12 @@
+# Renode run template for the fidelity benchmark.
+# The runner substitutes @REPL@, @ELF@ and @OUT@ before invoking Renode.
+# Uses Renode's own shipped STM32F103 platform so the comparison is honest:
+# that platform has no RCC clock-gating model and maps a 256 MB SRAM, which is
+# exactly why the clockbug and rambug firmwares false-pass on it.
+using sysbus
+mach create
+machine LoadPlatformDescription @@REPL@
+usart1 CreateFileBackend @@OUT@
+sysbus LoadELF @@ELF@
+emulation RunFor "0.2"
+quit
