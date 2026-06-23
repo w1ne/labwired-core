@@ -3,12 +3,8 @@ inputs:
   system: "./system.yaml"
   firmware: "./firmware/build/h563_uds_ecu.elf"
 limits:
-  max_steps: 200000
+  max_steps: 2000000
 assertions:
   - uart_contains: "H563-UDS-ECU"
-  - uart_contains: "UDS_REQ_22_F190"
-  - uart_contains: "UDS_RESP_62_F190"
-  - uart_contains: "VIN=LABWIRED-H563-UDS"
-  - uart_contains: "UDS_OK"
-  - expected_stop_reason: max_steps
-
+  - uart_contains: "ECU_READY"
+  - uds_tester: { id: "uds-tester", result: done }

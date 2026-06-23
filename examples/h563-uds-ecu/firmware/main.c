@@ -4,6 +4,7 @@
 
 #include "uds/uds_core.h"
 #include "uds/uds_isotp.h"
+#include "uds_ecu_app.h"
 
 void *memcpy(void *dst, const void *src, size_t n)
 {
@@ -74,8 +75,6 @@ void *__aeabi_memclr8(void *dst, size_t n)
 }
 
 static volatile uint32_t g_now_ms;
-static volatile bool g_positive_response_sent;
-static volatile bool g_tester_request_seen;
 
 #define REG32(addr) (*(volatile uint32_t *) (addr))
 
@@ -132,6 +131,8 @@ static void uart_puts(const char *s)
         uart_putc(*s++);
     }
 }
+
+void uds_ecu_app_log(const char *msg) { uart_puts(msg); }
 
 static uint32_t fdcan_reg(uint32_t offset)
 {
@@ -234,84 +235,15 @@ static int can_send(uint32_t id, const uint8_t *data, uint8_t len)
     return fdcan_send_frame(id, data, len, len > 8u);
 }
 
+static uds_isotp_ctx_t g_iso;
+static uint8_t g_iso_tx_sdu[64];
 static uint8_t g_rx_buffer[128];
 static uint8_t g_tx_buffer[128];
-static const uint8_t g_vin[] = "LABWIRED-H563-UDS";
-static const uds_did_entry_t g_dids[] = {
-    {0xF190u, sizeof(g_vin) - 1u, 0u, 0u, NULL, NULL, (void *) g_vin},
-};
-static const uds_did_table_t g_did_table = {
-    g_dids,
-    (uint16_t) (sizeof(g_dids) / sizeof(g_dids[0])),
-};
 
-static int app_read_data_by_id(struct uds_ctx *ctx, const uint8_t *data, uint16_t len)
+static int isotp_send_adapter(struct uds_ctx *ctx, const uint8_t *data, uint16_t len)
 {
-    (void) data;
-    if (len != 3u) {
-        return uds_send_nrc(ctx, 0x22u, 0x13u);
-    }
-
-    const uds_did_entry_t *entry = &g_dids[0];
-    if ((uint16_t) (3u + entry->size) > ctx->config->tx_buffer_size) {
-        return uds_send_nrc(ctx, 0x22u, 0x14u);
-    }
-
-    ctx->config->tx_buffer[0] = 0x62u;
-    ctx->config->tx_buffer[1] = (uint8_t) (entry->id >> 8u);
-    ctx->config->tx_buffer[2] = (uint8_t) entry->id;
-    memcpy(&ctx->config->tx_buffer[3], entry->storage, entry->size);
-    int rc = uds_send_response(ctx, (uint16_t) (3u + entry->size));
-    if (rc == 0) {
-        g_positive_response_sent = true;
-    }
-    return rc;
-}
-
-static const uds_service_entry_t g_user_services[] = {
-    {0x22u, 3u, UDS_SESSION_ALL, 0u, app_read_data_by_id, NULL},
-};
-
-static void pump_one_tester_request(uds_ctx_t *ctx)
-{
-    can_frame_t frame;
-    while (fdcan_poll_rx_frame(&frame)) {
-        if (frame.id == 0x7E0u) {
-            if (!g_tester_request_seen) {
-                uart_puts("UDS_REQ_22_F190\n");
-                g_tester_request_seen = true;
-            }
-            uds_isotp_rx_callback(ctx, frame.id, frame.data, frame.len);
-            return;
-        }
-    }
-}
-
-static bool positive_vin_response_seen(void)
-{
-    can_frame_t frame;
-    while (fdcan_poll_rx_frame(&frame)) {
-        if (frame.id != 0x7E8u) {
-            continue;
-        }
-        uint8_t offset = 0u;
-        uint8_t sdu_len = frame.data[0] & 0x0Fu;
-        if (sdu_len == 0u) {
-            sdu_len = frame.data[1];
-            offset = 2u;
-        } else {
-            offset = 1u;
-        }
-        if (sdu_len != (uint8_t) (3u + sizeof(g_vin) - 1u)) {
-            continue;
-        }
-        if (frame.data[offset + 0u] != 0x62u || frame.data[offset + 1u] != 0xF1u ||
-            frame.data[offset + 2u] != 0x90u) {
-            continue;
-        }
-        return true;
-    }
-    return false;
+    (void) ctx;
+    return uds_isotp_send(&g_iso, data, len);
 }
 
 int main(void)
@@ -320,46 +252,37 @@ int main(void)
     uart_puts("H563-UDS-ECU\n");
 
     fdcan_start();
-    uds_tp_isotp_init(can_send, 0x7E8u, 0x7E0u);
-    uds_tp_isotp_set_fd(true);
+    uds_tp_isotp_init(&g_iso, can_send, 0x7E8u, 0x7E0u, g_iso_tx_sdu, sizeof(g_iso_tx_sdu));
+    uds_tp_isotp_set_fd(&g_iso, true);
+    uart_puts("ECU_READY\n");
 
     uds_config_t cfg = {
         .ecu_address = 0x10u,
         .get_time_ms = get_time_ms,
-        .fn_tp_send = uds_isotp_send,
-        .p2_ms = 50u,
-        .p2_star_ms = 2000u,
+        .fn_tp_send = isotp_send_adapter,
         .rx_buffer = g_rx_buffer,
         .rx_buffer_size = sizeof(g_rx_buffer),
         .tx_buffer = g_tx_buffer,
         .tx_buffer_size = sizeof(g_tx_buffer),
-        .did_table = g_did_table,
-        .user_services = g_user_services,
-        .user_service_count = (uint16_t) (sizeof(g_user_services) / sizeof(g_user_services[0])),
+        .p2_ms = 50u,
+        .p2_star_ms = 2000u,
     };
+    uds_ecu_app_fill_config(&cfg, "LABWIRED-H563-UDS");
+
     uds_ctx_t ctx;
     if (uds_init(&ctx, &cfg) != UDS_OK) {
         uart_puts("UDS_INIT_FAIL\n");
         for (;;) {
         }
     }
-    bool ok = false;
-    for (uint32_t i = 0; i < 64u && !ok; ++i) {
-        pump_one_tester_request(&ctx);
-        uds_process(&ctx);
-        uds_tp_isotp_process(g_now_ms);
-        ok = positive_vin_response_seen() || g_positive_response_sent;
-        ++g_now_ms;
-    }
-
-    if (ok) {
-        uart_puts("UDS_RESP_62_F190\n");
-        uart_puts("VIN=LABWIRED-H563-UDS\n");
-        uart_puts("UDS_OK\n");
-    } else {
-        uart_puts("UDS_FAIL\n");
-    }
 
     for (;;) {
+        can_frame_t frame;
+        if (fdcan_poll_rx_frame(&frame)) {
+            uds_isotp_rx_callback(&g_iso, &ctx, frame.id, frame.data, frame.len);
+        }
+        uds_process(&ctx);
+        uds_tp_isotp_process(&g_iso, g_now_ms);
+        ++g_now_ms;
     }
 }
