@@ -383,17 +383,34 @@ impl CanUdsTester {
                     //     frames — the ECU runs ISO-TP in FD mode).
                     let b0 = data.first().copied().unwrap_or(0);
                     let (pdu_len, data_off) = if b0 == 0x00 {
-                        (data.get(1).copied().unwrap_or(0) as usize, 2)
+                        // CAN-FD escape SF: a length byte must follow.
+                        match data.get(1) {
+                            Some(&len) => (len as usize, 2),
+                            None => {
+                                self.failure = Some(format!(
+                                    "step {}: malformed FD escape SingleFrame (no length byte)",
+                                    self.step_idx
+                                ));
+                                self.state = CanUdsTesterState::Failed;
+                                return None;
+                            }
+                        }
                     } else {
                         ((b0 & 0x0F) as usize, 1)
                     };
-                    let payload: Vec<u8> = data
-                        .get(data_off..)
-                        .unwrap_or(&[])
-                        .iter()
-                        .copied()
-                        .take(pdu_len)
-                        .collect();
+                    // The frame must actually carry the declared payload bytes; a
+                    // short/truncated SF is a protocol error, not an empty match.
+                    if data.len() < data_off + pdu_len {
+                        self.failure = Some(format!(
+                            "step {}: truncated SingleFrame (declared {} payload bytes, frame carries {})",
+                            self.step_idx,
+                            pdu_len,
+                            data.len().saturating_sub(data_off)
+                        ));
+                        self.state = CanUdsTesterState::Failed;
+                        return None;
+                    }
+                    let payload: Vec<u8> = data[data_off..data_off + pdu_len].to_vec();
                     self.complete_response(payload);
                 } else if ptype == 0x10 {
                     // ECU FirstFrame: start reassembly, send FlowControl.
@@ -2380,6 +2397,45 @@ board_io: []
         assert!(t.is_terminal());
     }
 
+    /// A malformed SingleFrame (FD escape with no length byte, or a declared
+    /// length the frame does not actually carry) must fail with a clear
+    /// "malformed"/"truncated" reason — not be silently decoded as a short or
+    /// empty payload that then reads as an ordinary response mismatch.
+    #[test]
+    fn scripted_tester_rejects_malformed_single_frame() {
+        let mk = || {
+            let mut t = CanUdsTester::new("t".into(), "fdcan1".into());
+            t.reply_id = 0x7E8;
+            t.script = vec![UdsStep {
+                send: vec![0x22, 0xF1, 0x90],
+                expect: vec![Some(0x62), Some(0xF1), Some(0x90)],
+                expect_nrc: None,
+            }];
+            t.state = CanUdsTesterState::AwaitResp;
+            t
+        };
+
+        // FD escape SF (byte0 = 0x00) with no length byte.
+        let mut t = mk();
+        assert!(t.observe_ecu_frame(0x7E8, &[0x00]).is_none());
+        assert_eq!(t.state, CanUdsTesterState::Failed);
+        assert!(
+            t.failure.as_deref().unwrap_or("").contains("malformed"),
+            "expected a malformed-frame reason, got {:?}",
+            t.failure
+        );
+
+        // SF that declares 20 payload bytes but carries only one.
+        let mut t = mk();
+        assert!(t.observe_ecu_frame(0x7E8, &[0x00, 0x14, 0x62]).is_none());
+        assert_eq!(t.state, CanUdsTesterState::Failed);
+        assert!(
+            t.failure.as_deref().unwrap_or("").contains("truncated"),
+            "expected a truncated-frame reason, got {:?}",
+            t.failure
+        );
+    }
+
     /// End-to-end against a real `BxCan` registered on the bus and configured
     /// (valid BTR + accept-0x111 filter, NORMAL mode — no loopback) so
     /// `deliver_rx` accepts the tester's frames. We drive the full bus tick:
@@ -4149,7 +4205,9 @@ board_io: []
     #[test]
     fn uds_tester_did_write_sf_completes() {
         let mut bus = bus_with_script(&[("2E 01 23 DE AD BE EF", "6E 01 23")]);
-        inject_ecu_reply(&mut bus, 0x222, &[0x04, 0x6E, 0x01, 0x23]);
+        // SF header 0x03 = three payload bytes (6E 01 23); the prior 0x04 was a
+        // malformed fixture (declared 4, carried 3) the lenient decoder masked.
+        inject_ecu_reply(&mut bus, 0x222, &[0x03, 0x6E, 0x01, 0x23]);
         bus.service_can_uds_testers();
         assert_eq!(bus.can_uds_testers[0].state, CanUdsTesterState::Done);
     }
