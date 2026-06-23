@@ -53,7 +53,18 @@ pub struct CortexM {
     /// 120 -> exception 136), which a single u64 silently dropped —
     /// caught by foreign firmware whose time driver never ticked.
     pub pending_exceptions: [u64; 4],
-    pub primask: bool,        // Interrupt mask (true = disabled)
+    pub primask: bool, // Interrupt mask (true = disabled)
+    /// FAULTMASK: when set, masks every exception except NMI (it raises the
+    /// effective priority to -1). Set by `CPSID f` / `MSR FAULTMASK`, cleared by
+    /// `CPSIE f` and automatically on exception return (except return from NMI).
+    /// Zephyr's fault path toggles it; an unmodelled `CPS f` decoded as Unknown.
+    pub faultmask: bool,
+    /// BASEPRI: when non-zero, masks any exception whose priority value is
+    /// numerically >= basepri (i.e. equal or lower priority). Zephyr's Cortex-M
+    /// critical sections raise BASEPRI to block the scheduler/timer IRQs; an
+    /// unmodelled BASEPRI let those fire mid-critical-section and corrupt kernel
+    /// state. NMI/HardFault (negative priority) are never masked by it.
+    pub basepri: u8,
     pub vtor: Arc<AtomicU32>, // Shared Vector Table Offset Register
     pub it_state: u8,         // Thumb IT block state
     /// Currently active exception number (0 = thread mode). Used to prevent re-entry
@@ -111,6 +122,8 @@ impl Default for CortexM {
             xpsr: 0x01000000, // Typical reset state (Thumb bit set)
             pending_exceptions: [0; 4],
             primask: false,
+            faultmask: false,
+            basepri: 0,
             vtor: Arc::new(AtomicU32::new(0)),
             it_state: 0,
             active_exception: 0,
@@ -193,6 +206,15 @@ impl CortexM {
             }
             _ => 0xFF,
         }
+    }
+
+    /// True if BASEPRI masks an exception of the given priority. A non-zero
+    /// BASEPRI masks any exception whose priority value is numerically >=
+    /// BASEPRI (equal or lower priority). NMI/HardFault (negative priority) are
+    /// never masked.
+    #[inline]
+    fn masked_by_basepri(&self, prio: i32) -> bool {
+        self.basepri != 0 && prio >= self.basepri as i32
     }
 
     /// Among the pending exceptions, return the one with the highest
@@ -344,6 +366,13 @@ impl CortexM {
         Ok(())
     }
 
+    /// True if FAULTMASK currently blocks taking the given exception. FAULTMASK
+    /// masks everything except NMI (exception 2).
+    #[inline]
+    fn faultmask_blocks(&self, exc: u32) -> bool {
+        self.faultmask && exc != 2
+    }
+
     /// True when the live `sp` is the Process stack: Thread mode with
     /// CONTROL.SPSEL set. Handler mode always uses MSP.
     #[inline]
@@ -393,6 +422,12 @@ impl CortexM {
     }
 
     fn exception_return<B: Bus + ?Sized>(&mut self, exc_return: u32, bus: &mut B) -> SimResult<()> {
+        // FAULTMASK is cleared automatically on exception return, except when
+        // returning from NMI (exception 2).
+        if self.active_exception != 2 {
+            self.faultmask = false;
+        }
+
         // We are in Handler mode, so the live `sp` is MSP — capture it.
         self.sync_sp_to_bank();
 
@@ -614,8 +649,12 @@ impl Cpu for CortexM {
                 // the currently-active one (or 256 = thread mode baseline).
                 if self.pending_exceptions.iter().any(|&w| w != 0) && !self.primask {
                     if let Some(exc) = self.highest_priority_pending() {
+                        let exc_prio = self.exception_priority(exc);
                         let active_prio = self.exception_priority(self.active_exception);
-                        if self.exception_priority(exc) < active_prio {
+                        if exc_prio < active_prio
+                            && !self.masked_by_basepri(exc_prio)
+                            && !self.faultmask_blocks(exc)
+                        {
                             break;
                         }
                     }
@@ -632,8 +671,12 @@ impl Cpu for CortexM {
             while executed < max_count {
                 if self.pending_exceptions.iter().any(|&w| w != 0) && !self.primask {
                     if let Some(exc) = self.highest_priority_pending() {
+                        let exc_prio = self.exception_priority(exc);
                         let active_prio = self.exception_priority(self.active_exception);
-                        if self.exception_priority(exc) < active_prio {
+                        if exc_prio < active_prio
+                            && !self.masked_by_basepri(exc_prio)
+                            && !self.faultmask_blocks(exc)
+                        {
                             break;
                         }
                     }
@@ -671,7 +714,9 @@ impl CortexM {
         if self.pending_exceptions.iter().any(|&w| w != 0) && !self.primask && exception_num != 0 {
             let take_prio = self.exception_priority(exception_num);
             let active_prio = self.exception_priority(self.active_exception);
-            let can_take = take_prio < active_prio;
+            let can_take = take_prio < active_prio
+                && !self.masked_by_basepri(take_prio)
+                && !self.faultmask_blocks(exception_num);
 
             if can_take {
                 self.pending_exceptions[(exception_num / 64) as usize] &=
@@ -1488,7 +1533,11 @@ impl CortexM {
                                 if wb {
                                     self.write_reg(rn, wb_val);
                                 }
-                                if !branch_taken {
+                                // Rt==15 load is a branch; suppress pc_increment
+                                // (see the register-offset path below).
+                                if branch_taken {
+                                    pc_increment = 0;
+                                } else {
                                     pc_increment = 4;
                                 }
                             }
@@ -1549,7 +1598,14 @@ impl CortexM {
                                 }
                                 _ => {}
                             }
-                            if !branch_taken {
+                            // A load into PC (Rt==15) is a branch: branch_to
+                            // already set PC, so the 32-bit pc_increment must be
+                            // suppressed (same contract as Bx). Leaving it at 4
+                            // landed PC one halfword past the target — this broke
+                            // GCC switch jump tables (`ldr.w pc,[rn,rm,lsl#n]`).
+                            if branch_taken {
+                                pc_increment = 0;
+                            } else {
                                 pc_increment = 4;
                             }
                         }
@@ -1812,11 +1868,21 @@ impl CortexM {
                     pc_increment = 4;
                 }
 
-                Instruction::Cpsie => {
-                    self.primask = false;
+                Instruction::Cpsie { primask, faultmask } => {
+                    if primask {
+                        self.primask = false;
+                    }
+                    if faultmask {
+                        self.faultmask = false;
+                    }
                 }
-                Instruction::Cpsid => {
-                    self.primask = true;
+                Instruction::Cpsid { primask, faultmask } => {
+                    if primask {
+                        self.primask = true;
+                    }
+                    if faultmask {
+                        self.faultmask = true;
+                    }
                 }
 
                 // Shifts
@@ -2185,6 +2251,20 @@ impl CortexM {
                     }
                 }
 
+                Instruction::Svc { imm8: _ } => {
+                    // Supervisor call. Pend the SVCall exception (number 11);
+                    // the exception-entry path at the top of `step_internal`
+                    // stacks the frame and vectors to the handler on the next
+                    // step. Zephyr drives its fatal handler, irq_offload, and
+                    // userspace syscalls through SVC, so an unmodeled SVC left
+                    // the PC stuck on the instruction (ztest hung forever).
+                    // The immediate selects the call on the Zephyr side; the
+                    // handler recovers it from the stacked instruction, so we
+                    // don't branch on it here. pc_increment stays 2 so the
+                    // stacked return address points just past the SVC.
+                    self.set_exception_pending(11);
+                }
+
                 // Stack Operations
                 Instruction::Push { registers, m } => {
                     let mut sp = self.read_reg(13);
@@ -2464,13 +2544,25 @@ impl CortexM {
                     pc_increment = 4;
                 }
                 Instruction::Mrs { rd, sysm } => {
-                    // Special-register reads. Banked SP (MSP/PSP) and CONTROL are
-                    // modelled alongside PRIMASK; unmodelled sysm values read 0.
+                    // IPSR (the active exception number, xPSR[8:0]) is load-bearing
+                    // for Zephyr: _isr_wrapper reads it and computes `IRQ = IPSR-16`
+                    // to index the software ISR table. Returning 0 made the index
+                    // -16 → garbage handler. The xPSR/IPSR-bearing reads all expose
+                    // the current exception number; PRIMASK, BASEPRI, FAULTMASK,
+                    // the banked SPs and CONTROL are the other modelled special
+                    // registers. Anything else still reads as zero.
+                    let ipsr = self.active_exception & 0x1FF;
                     let val: u32 = match sysm {
-                        0x08 => self.read_msp(),
-                        0x09 => self.read_psp(),
+                        0x00 => self.xpsr & 0xF800_0000,          // APSR (condition flags)
+                        0x03 => (self.xpsr & 0xF800_0000) | ipsr, // xPSR
+                        0x05 => ipsr,                             // IPSR
+                        0x08 => self.read_msp(),                  // MSP
+                        0x09 => self.read_psp(),                  // PSP
                         0x10 => self.primask as u32,
-                        0x14 => self.control & 0x3,
+                        // BASEPRI (0x11) and BASEPRI_MAX (0x12) both read BASEPRI.
+                        0x11 | 0x12 => self.basepri as u32,
+                        0x13 => self.faultmask as u32, // FAULTMASK
+                        0x14 => self.control & 0x3,    // CONTROL
                         _ => 0,
                     };
                     self.write_reg(rd, val);
@@ -2494,6 +2586,17 @@ impl CortexM {
                             }
                         }
                         0x10 => self.primask = (val & 1) != 0,
+                        // BASEPRI: plain write of the priority mask byte.
+                        0x11 => self.basepri = (val & 0xFF) as u8,
+                        // BASEPRI_MAX: writes BASEPRI only if it raises the
+                        // masking level (smaller non-zero value), or BASEPRI is 0.
+                        0x12 => {
+                            let new = (val & 0xFF) as u8;
+                            if new != 0 && (self.basepri == 0 || new < self.basepri) {
+                                self.basepri = new;
+                            }
+                        }
+                        0x13 => self.faultmask = (val & 1) != 0, // FAULTMASK
                         0x14 => {
                             // CONTROL.SPSEL can switch the active thread stack.
                             // Persist the live `sp` to its bank, change SPSEL/nPRIV,
@@ -2822,6 +2925,117 @@ mod tests {
     }
 
     #[test]
+    fn cps_faultmask_set_clear_and_mask() {
+        // CPSID f (0xB671) sets FAULTMASK; CPSIE f (0xB661) clears it. Zephyr's
+        // fault handler toggles FAULTMASK; an unmodelled CPS-f decoded as Unknown
+        // and the fault path ("ESF could not be retrieved") failed.
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        // Sequential PCs so the decode cache doesn't reuse the first opcode.
+        cpu.pc = 0x1000;
+        run_test_instr(&mut cpu, &mut bus, 0xB671, false); // CPSID f @0x1000
+        assert!(cpu.faultmask, "CPSID f sets FAULTMASK");
+        run_test_instr(&mut cpu, &mut bus, 0xB661, false); // CPSIE f @0x1002
+        assert!(!cpu.faultmask, "CPSIE f clears FAULTMASK");
+
+        // FAULTMASK masks a normal IRQ but NOT NMI (exception 2).
+        cpu.pc = 0x2000;
+        cpu.sp = 0x2000_0040;
+        cpu.faultmask = true;
+        bus.write_u16(0x2000, 0xBF00).unwrap(); // NOP
+        bus.write_u32(0x40, 0x0000_5000 | 1).unwrap(); // exc 16 vector
+        cpu.set_exception_pending(16);
+        let cfg = bus.config.clone();
+        cpu.step_internal(&mut bus, &[], &cfg).unwrap();
+        assert_eq!(cpu.pc, 0x2002, "FAULTMASK must mask the IRQ; the NOP runs");
+
+        // NMI (exception 2) still preempts under FAULTMASK.
+        cpu.pc = 0x3000;
+        bus.write_u32(0x08, 0x0000_6000 | 1).unwrap(); // exc 2 (NMI) vector
+        cpu.set_exception_pending(2);
+        cpu.step_internal(&mut bus, &[], &cfg).unwrap();
+        assert_eq!(cpu.pc, 0x6000, "NMI is never masked by FAULTMASK");
+    }
+
+    #[test]
+    fn basepri_masks_equal_or_lower_priority_exceptions() {
+        // A non-zero BASEPRI masks any exception whose priority value is >=
+        // BASEPRI. Zephyr raises BASEPRI to guard scheduler critical sections; an
+        // unmodelled BASEPRI let the timer IRQ fire inside them and corrupt state.
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x1000;
+        cpu.sp = 0x2000_0040;
+        bus.write_u16(0x1000, 0xBF00).unwrap(); // NOP at 0x1000
+                                                // Exception 16 (IRQ 0). With no NVIC wired, its priority reads 0xFF.
+        let handler = 0x0000_5000u32;
+        bus.write_u32(0x40, handler | 1).unwrap(); // VTOR=0 → vector[16] at 0x40
+        cpu.set_exception_pending(16);
+
+        let cfg = bus.config.clone();
+        // BASEPRI=0x80 masks priority 0xFF (>= 0x80): the NOP runs, no vectoring.
+        cpu.basepri = 0x80;
+        cpu.step_internal(&mut bus, &[], &cfg).unwrap();
+        assert_eq!(
+            cpu.pc, 0x1002,
+            "BASEPRI must mask exc 16; the NOP should run"
+        );
+
+        // Clearing BASEPRI lets the still-pending exception through.
+        cpu.basepri = 0;
+        cpu.step_internal(&mut bus, &[], &cfg).unwrap();
+        assert_eq!(
+            cpu.pc,
+            handler & !1,
+            "with BASEPRI=0 the pending exception is taken"
+        );
+    }
+
+    #[test]
+    fn mrs_ipsr_reads_active_exception() {
+        // `mrs Rd, IPSR` (sysm = 5) must return the current exception number,
+        // not 0. Zephyr's _isr_wrapper computes the IRQ line as `IPSR - 16` to
+        // index the software ISR table; an IPSR of 0 made the index -16, so it
+        // `blx`-ed a garbage handler and executed rodata as code. Bare-metal and
+        // FreeRTOS firmware never hit this because they don't dispatch ISRs by
+        // reading IPSR.
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x1000;
+        cpu.active_exception = 33; // e.g. an IRQ exception (16 + IRQ 17)
+
+        // mrs r3, IPSR = 0xF3EF 8305
+        run_test_instr(&mut cpu, &mut bus, 0xF3EF8305, true);
+
+        assert_eq!(cpu.r3, 33, "MRS IPSR must read the active exception number");
+    }
+
+    #[test]
+    fn ldr_to_pc_register_offset_branches_to_target() {
+        // `ldr.w pc, [r3, r0, lsl #2]` = 0xF853 0xF020 is GCC's switch
+        // jump-table idiom. It must branch to the loaded value, not loaded+4:
+        // the load-to-PC path was leaving pc_increment at 4, so PC landed one
+        // instruction past the real target. That corrupted control flow into
+        // Zephyr's onoff state machine (process_event's EVT_START dispatch),
+        // tripping `__ASSERT(state == ONOFF_STATE_OFF)` and hanging boot.
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x1000;
+        cpu.r3 = 0x2000; // jump-table base
+        cpu.r0 = 2; // case index
+                    // [0x2000 + (2 << 2)] = [0x2008] holds the (thumb) target 0x5001.
+        bus.write_u32(0x2008, 0x5001).unwrap();
+
+        run_test_instr(&mut cpu, &mut bus, 0xF853F020, true);
+
+        assert_eq!(
+            cpu.pc, 0x5000,
+            "ldr.w pc,[rn,rm,lsl#n] must branch to the loaded target (thumb bit \
+             cleared), not target+4"
+        );
+    }
+
+    #[test]
     fn test_arm_dataproc_complex() {
         let mut cpu = CortexM::new();
         let mut bus = MockBus::new();
@@ -2846,6 +3060,43 @@ mod tests {
         // UDIV R0, R1, R2 is 0xFBB1 F0F2
         run_test_instr(&mut cpu, &mut bus, 0xFBB1F0F2, true);
         assert_eq!(cpu.r0, 10);
+    }
+
+    #[test]
+    fn test_svc_pends_and_takes_svcall_exception() {
+        // Zephyr's fatal path, irq_offload, and userspace syscalls all execute
+        // `svc`. Without taking the SVCall exception the PC sticks on the
+        // instruction forever (ztest hangs). Executing SVC must pend SVCall
+        // (exception 11) and the next step must vector to its handler with a
+        // standard 8-word exception frame.
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x1000;
+        cpu.sp = 0x2000_0040;
+
+        // VTOR defaults to 0, so the SVCall vector (exc 11) is at 11*4 = 0x2C.
+        let handler = 0x0000_5000u32;
+        bus.write_u32(0x2C, handler | 1).unwrap(); // thumb bit set
+
+        // SVC #2 at 0x1000.
+        bus.write_u16(0x1000, 0xDF02).unwrap();
+
+        let cfg = bus.config.clone();
+        // 1st step executes SVC: pends SVCall, advances PC past the 16-bit instr.
+        cpu.step_internal(&mut bus, &[], &cfg).unwrap();
+        assert_eq!(cpu.pc, 0x1002, "SVC should advance PC past the instruction");
+
+        // 2nd step takes the exception: vector to the handler, stack the frame.
+        cpu.step_internal(&mut bus, &[], &cfg).unwrap();
+        assert_eq!(cpu.pc, handler & !1, "should vector to the SVCall handler");
+        assert_eq!(
+            cpu.sp,
+            0x2000_0040 - 32,
+            "should push an 8-word exception frame"
+        );
+        assert_eq!(cpu.active_exception, 11, "SVCall is exception 11");
+        // Stacked return address (frame + 24) is the instruction after the SVC.
+        assert_eq!(bus.read_u32(cpu.sp as u64 + 24).unwrap(), 0x1002);
     }
 
     #[test]
