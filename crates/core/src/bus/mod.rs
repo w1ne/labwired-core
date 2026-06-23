@@ -2426,6 +2426,159 @@ board_io: []
         assert_eq!(bus.can_uds_testers[0].state, CanUdsTesterState::Done);
     }
 
+    /// End-to-end against a real `Fdcan` registered on the bus and brought to
+    /// normal mode (CCCR.INIT cleared, TEST.LBCK = 0) so `receive_frame`
+    /// accepts the tester's frames. We drive a script-driven exchange where the
+    /// ECU responds with a multi-frame FirstFrame + CF, exercising the
+    /// FlowControl-delivery path on FDCAN — the same gap class that #343
+    /// identified on the analogous bxCAN path.
+    ///
+    /// Exchange (script: `send = "22 F1 90"`, `expect = "62 F1 90"`):
+    /// 1. Tick 1 (Start): tester sends SF ReadDataById request → AwaitResp.
+    /// 2. ECU replies with a FirstFrame (13-byte response) via `tx_frames`.
+    /// 3. Tick 2 (AwaitResp → AwaitMultiResp): tester sees the FF, transitions,
+    ///    and MUST inject a FlowControl ([0x30, 0x00, 0x00]) via `receive_frame`.
+    /// 4. ECU replies with the ConsecutiveFrame.
+    /// 5. Tick 3 (AwaitMultiResp → Done): PDU reassembled and matched.
+    ///
+    /// The discriminating assertion is the presence of a FlowControl entry
+    /// (`first_byte & 0xF0 == 0x30`) in the FDCAN "rx" trace after tick 2,
+    /// proving `receive_frame` was called — not merely that Done was reached.
+    #[test]
+    fn uds_tester_completes_against_real_fdcan() {
+        use crate::peripherals::fdcan::Fdcan;
+
+        // FDCAN1 on H563: RM0481 base 0x4000_A400.
+        const FDCAN_BASE: u64 = 0x4000_A400;
+        const REG_CCCR: u64 = 0x018; // CCCR offset within the peripheral window
+
+        let mut bus = SystemBus::empty();
+        bus.add_peripheral("fdcan1", FDCAN_BASE, 0x1000, None, Box::new(Fdcan::new()));
+
+        // Bring FDCAN to normal mode (mirrors fdcan_start in h563-uds-ecu/main.c):
+        //   Step 1: assert INIT + CCE (config unlock).
+        bus.write_u32(FDCAN_BASE + REG_CCCR, 0x3).unwrap();
+        //   Step 2: clear INIT — CCE clears with it (capture13: 0xA2→0xA0).
+        bus.write_u32(FDCAN_BASE + REG_CCCR, 0x0).unwrap();
+        // CCCR now reads 0x0: bus_active = true, receive_frame will accept frames.
+
+        // Script step: ReadDataByIdentifier 0xF190 (3 bytes), expect prefix 62 F1 90.
+        // The response is multi-frame (13 bytes), so the tester must send a
+        // FlowControl when the ECU sends its FirstFrame.
+        let mut tester = CanUdsTester::new("uds".into(), "fdcan1".into());
+        tester.request_id = 0x7E0;
+        tester.reply_id = 0x7E8;
+        tester.script = vec![UdsStep {
+            send: vec![0x22, 0xF1, 0x90],
+            expect: SystemBus::parse_expect("62 F1 90"),
+            expect_nrc: None,
+        }];
+        bus.can_uds_testers.push(tester);
+
+        // Tick 1: script-driven Start → tester sends SF request (3 bytes fit in SF)
+        // → AwaitResp (no pending CFs for a SF request).
+        bus.service_can_uds_testers();
+        assert_eq!(
+            bus.can_uds_testers[0].state,
+            CanUdsTesterState::AwaitResp,
+            "state must be AwaitResp after tester sends its SF request"
+        );
+
+        // Record trace length after tick 1 so the FC check ignores the SF request.
+        let trace_len_before = {
+            let idx = bus.find_peripheral_index_by_name("fdcan1").unwrap();
+            let fd = bus.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .unwrap()
+                .downcast_mut::<Fdcan>()
+                .unwrap();
+            fd.trace_snapshot("fdcan1").len()
+        };
+
+        // ECU "transmits" a FirstFrame: 13-byte (0x0D) response, 6 payload bytes
+        // in the FF (62 F1 90 = RDBI positive response prefix + 3 VIN chars).
+        {
+            let idx = bus.find_peripheral_index_by_name("fdcan1").unwrap();
+            let fd = bus.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .unwrap()
+                .downcast_mut::<Fdcan>()
+                .unwrap();
+            fd.tx_frames.push_back(crate::network::CanFrame::classic(
+                0x7E8,
+                vec![0x10, 0x0D, 0x62, 0xF1, 0x90, 0x31, 0x32, 0x33],
+            ));
+        }
+
+        // Tick 2: tester drains the ECU FirstFrame → observe_ecu_frame_script sees
+        // a 0x10 frame in AwaitResp, sets state = AwaitMultiResp, and returns the
+        // FlowControl payload [0x30, 0x00, 0x00].
+        // service_can_uds_testers picks that up in the AwaitMultiResp branch and
+        // MUST call receive_frame to inject it onto the FDCAN.
+        bus.service_can_uds_testers();
+        assert_eq!(
+            bus.can_uds_testers[0].state,
+            CanUdsTesterState::AwaitMultiResp,
+            "state must be AwaitMultiResp after receiving ECU FirstFrame"
+        );
+
+        // Discriminating assertion: a FlowControl frame (first byte & 0xF0 == 0x30)
+        // with the tester's request_id (0x7E0) must appear as an "rx" entry in the
+        // FDCAN trace after tick 1.  An absent FC means the tester silently dropped
+        // the CTS signal — the FDCAN analogue of the bxCAN #343 bug.
+        {
+            let idx = bus.find_peripheral_index_by_name("fdcan1").unwrap();
+            let fd = bus.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .unwrap()
+                .downcast_mut::<Fdcan>()
+                .unwrap();
+            let trace = fd.trace_snapshot("fdcan1");
+            let new_frames = &trace[trace_len_before..];
+            assert!(
+                new_frames.iter().any(|f| {
+                    f.direction == "rx"
+                        && f.id == 0x7E0
+                        && f.data.first().map(|b| b & 0xF0 == 0x30).unwrap_or(false)
+                }),
+                "FlowControl (0x30 nibble) must appear in FDCAN rx trace after ECU FirstFrame; \
+                 new frames after tick 1: {:?}",
+                new_frames
+                    .iter()
+                    .map(|f| (f.direction.as_str(), f.id, f.data.clone()))
+                    .collect::<Vec<_>>()
+            );
+        }
+
+        // ECU "transmits" the ConsecutiveFrame carrying the remaining 7 bytes.
+        // 13 - 6 (from FF) = 7 bytes in the CF.
+        {
+            let idx = bus.find_peripheral_index_by_name("fdcan1").unwrap();
+            let fd = bus.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .unwrap()
+                .downcast_mut::<Fdcan>()
+                .unwrap();
+            fd.tx_frames.push_back(crate::network::CanFrame::classic(
+                0x7E8,
+                vec![0x21, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30],
+            ));
+        }
+
+        // Tick 3: tester drains the CF, PDU buf reaches the declared 13 bytes,
+        // complete_response matches the expect prefix → Done.
+        bus.service_can_uds_testers();
+        assert_eq!(
+            bus.can_uds_testers[0].state,
+            CanUdsTesterState::Done,
+            "state must be Done after CF received and PDU matched"
+        );
+    }
+
     /// Config parsing: a `uds-tester` external device populates a
     /// `CanUdsTester` with the configured ids and payloads.
     #[test]
