@@ -88,6 +88,7 @@ export function bakeTargets(): { label: string; ini: string; isArduino: boolean 
   const seen = new Set<string>();
   const out: { label: string; ini: string; isArduino: boolean }[] = [];
   const consider = (label: string, b: PioBoard) => {
+    if (b.builder === 'zephyr') return; // Zephyr is baked via west in the image, not pio
     const ini = iniFor(b);
     if (seen.has(ini)) return;
     seen.add(ini);
@@ -126,7 +127,34 @@ function iniFor(b: PioBoard, libDeps: string[] = []): string {
 export function generatePlatformioIni(board: string, libDeps?: string[] | string): string | null {
   const b = PIO_BOARDS[board];
   if (!b) return null;
+  if (b.builder === 'zephyr') return null; // Zephyr targets have no platformio.ini
   return iniFor(b, normalizeLibDeps(libDeps));
+}
+
+// --- Zephyr (west) build path -------------------------------------------------
+// A Zephyr target is built with `west build` against the image's pre-baked
+// workspace (ZEPHYR_BASE), not PlatformIO. We scaffold a minimal Zephyr
+// application around the agent's single source file: a CMakeLists.txt that
+// pulls in the source, and a prj.conf that turns on the console (printk) and
+// GPIO. The agent supplies ONLY src/main.{c,cpp}; the build files are ours.
+
+/** The scaffold files for a Zephyr application wrapping the agent's source.
+ *  Pure; tested. Keys are project-relative paths. */
+export function generateZephyrFiles(source: string, lang: CompileLanguage): Record<string, string> {
+  const srcName = lang === 'cpp' ? 'main.cpp' : 'main.c';
+  const cmake = [
+    'cmake_minimum_required(VERSION 3.20.0)',
+    'find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})',
+    'project(labwired_app)',
+    `target_sources(app PRIVATE src/${srcName})`,
+    '',
+  ].join('\n');
+  const prj = ['CONFIG_PRINTK=y', 'CONFIG_GPIO=y', ''].join('\n');
+  return {
+    'CMakeLists.txt': cmake,
+    'prj.conf': prj,
+    [`src/${srcName}`]: source,
+  };
 }
 
 const GCC_LINE = /^(.+?):(\d+):(?:(\d+):)?\s*(fatal error|error|warning):\s*(.*)$/;
@@ -200,6 +228,63 @@ function fail(message: string): CompileResult {
   return { ok: false, diagnostics: [{ severity: 'error', message }] };
 }
 
+/** Build a Zephyr target with `west build`. The workspace (ZEPHYR_BASE) and the
+ *  gnuarmemb toolchain are pre-baked into the image, so this runs offline like
+ *  the PlatformIO path. Reads build/zephyr/zephyr.elf on success. */
+async function compileZephyr(
+  target: PioBoard,
+  source: string,
+  lang: CompileLanguage,
+  mappingSource: string,
+): Promise<CompileResult> {
+  const meta = {
+    platformioBoard: target.zephyrBoard,
+    framework: 'zephyr',
+    mappingSource,
+    runnable: target.runnable,
+  };
+  const proj = join('/tmp', `lwz-${randomUUID()}`);
+  const build = join(proj, 'build');
+  try {
+    for (const [rel, content] of Object.entries(generateZephyrFiles(source, lang))) {
+      const abs = join(proj, rel);
+      await mkdir(join(abs, '..'), { recursive: true });
+      await writeFile(abs, content);
+    }
+    const west = process.env.WEST_BIN ?? 'west';
+    // `west build` locates the Zephyr workspace from its cwd, so it must run
+    // inside the pre-baked workspace topdir (WEST_WORKSPACE); the app + build
+    // dirs are passed as absolute paths and live outside it.
+    const cwd = process.env.WEST_WORKSPACE;
+    try {
+      const { stdout, stderr } = await execFileAsync(
+        west,
+        ['build', '-p', 'always', '-b', target.zephyrBoard!, '-d', build, proj],
+        { timeout: COMPILE_TIMEOUT_MS, env: safeEnv(), maxBuffer: 16 * 1024 * 1024, ...(cwd ? { cwd } : {}) },
+      );
+      const elf = await readFile(join(build, 'zephyr', 'zephyr.elf'));
+      return {
+        ok: true,
+        elfBase64: elf.toString('base64'),
+        diagnostics: parseGccDiagnostics(`${stdout ?? ''}\n${stderr ?? ''}`),
+        ...meta,
+      };
+    } catch (err) {
+      const e = err as { stdout?: string; stderr?: string; message?: string };
+      const log = `${e.stdout ?? ''}\n${e.stderr ?? ''}\n${e.message ?? ''}`.trim().slice(-MAX_LOG);
+      const diagnostics = parseGccDiagnostics(log);
+      return {
+        ok: false,
+        diagnostics: diagnostics.length ? diagnostics : [{ severity: 'error', message: log.slice(-2000) || 'zephyr build failed' }],
+        log,
+        ...meta,
+      };
+    }
+  } finally {
+    await rm(proj, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
 export async function compile(req: CompileRequest): Promise<CompileResult> {
   const boardId = req.board ?? req.labwired_board_id;
   const resolved = resolveBoard(boardId, req.chip_family);
@@ -221,6 +306,11 @@ export async function compile(req: CompileRequest): Promise<CompileResult> {
   }
 
   const lang: CompileLanguage = req.language === 'cpp' ? 'cpp' : 'c';
+
+  if (target.builder === 'zephyr') {
+    return compileZephyr(target, req.source, lang, mappingSource);
+  }
+
   const proj = join('/tmp', `lwc-${randomUUID()}`);
   try {
     await mkdir(join(proj, 'src'), { recursive: true });
@@ -244,7 +334,7 @@ export async function compile(req: CompileRequest): Promise<CompileResult> {
       const buildDir = join(proj, '.pio', 'build', PIO_ENV);
       const elf = await readFile(join(buildDir, 'firmware.elf'));
 
-      const isEsp = target.framework === 'arduino' && target.platform.startsWith('espressif');
+      const isEsp = target.framework === 'arduino' && !!target.platform?.startsWith('espressif');
       const flashChip = isEsp ? (target.espChip ?? req.chip_family ?? 'esp32') : undefined;
       const flashImages = isEsp ? await collectFlashImages(buildDir, flashChip!) : undefined;
 
