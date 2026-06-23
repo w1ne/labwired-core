@@ -899,6 +899,10 @@ impl SystemBus {
                     // is None but the queue is non-empty).
                     CanUdsTesterState::AwaitFc => pending_inject
                         .or_else(|| self.can_uds_testers[i].pending_cfs.first().cloned()),
+                    // ECU sent a FirstFrame this tick; observe_ecu_frame_script
+                    // already set state=AwaitMultiResp and returned the FlowControl
+                    // in pending_inject. Forward it so the ECU can send its CFs.
+                    CanUdsTesterState::AwaitMultiResp => pending_inject,
                     _ => None,
                 }
             } else {
@@ -3685,16 +3689,13 @@ board_io: []
     // Script-driven FSM tests
     // -----------------------------------------------------------------------
 
-    /// Build a bus with an F103 + bxCAN in normal mode (filter accepts 0x111)
-    /// and a UDS tester loaded with the given script steps. Each step is a
-    /// `(send_hex, expect_hex)` pair parsed the same way as the YAML config.
-    /// Returns the bus after the first service tick so the tester has already
-    /// sent its initial SF/FF and is in `AwaitResp` (or `AwaitFc` for a
-    /// multi-frame request).
-    fn bus_with_script(steps: &[(&str, &str)]) -> SystemBus {
+    /// Core helper: build a bus with a bxCAN in normal mode (filter accepts
+    /// 0x111) and attach a UDS tester loaded with the given steps. Returns
+    /// the bus after the first service tick so the tester has already sent its
+    /// initial SF/FF and is in `AwaitResp` (or `AwaitFc` for a multi-frame
+    /// request).
+    fn bus_with_steps(script: Vec<UdsStep>) -> SystemBus {
         use crate::peripherals::bxcan::BxCan;
-
-        // bxCAN register offsets (RM0008 §24.9).
         const MCR: u64 = 0x000;
         const BTR: u64 = 0x01C;
         const FMR: u64 = 0x200;
@@ -3709,7 +3710,6 @@ board_io: []
         let mut bus = SystemBus::empty();
         bus.add_peripheral("bxcan1", BASE, 0x400, None, Box::new(BxCan::new()));
 
-        // Normal mode with bank-0 mask filter accepting 0x111 into FIFO0.
         bus.write_u32(BASE + MCR, 1).unwrap();
         bus.write_u32(BASE + BTR, VALID_BTR).unwrap();
         bus.write_u32(BASE + FMR, 1).unwrap();
@@ -3722,6 +3722,16 @@ board_io: []
         bus.write_u32(BASE + FMR, 0x0).unwrap();
         bus.write_u32(BASE + MCR, 0).unwrap();
 
+        let mut tester = CanUdsTester::new("uds".into(), "bxcan1".into());
+        tester.script = script;
+        bus.can_uds_testers.push(tester);
+        bus.service_can_uds_testers();
+        bus
+    }
+
+    /// Convenience wrapper: build a bus from `(send_hex, expect_hex)` tuples.
+    /// Each step is parsed the same way as the YAML config.
+    fn bus_with_script(steps: &[(&str, &str)]) -> SystemBus {
         let script: Vec<UdsStep> = steps
             .iter()
             .map(|(send_str, expect_str)| UdsStep {
@@ -3733,15 +3743,7 @@ board_io: []
                 expect_nrc: None,
             })
             .collect();
-
-        let mut tester = CanUdsTester::new("uds".into(), "bxcan1".into());
-        tester.script = script;
-        bus.can_uds_testers.push(tester);
-
-        // First tick: sends the initial request frame(s) for step 0.
-        bus.service_can_uds_testers();
-
-        bus
+        bus_with_steps(script)
     }
 
     /// Push a simulated ECU frame into the connected bxCAN's `tx_frames` so
@@ -3944,6 +3946,169 @@ board_io: []
         inject_ecu_reply(&mut bus, 0x222, &[0x02, 0x76, 0x01]);
 
         // Tick 4: match → Done.
+        bus.service_can_uds_testers();
+        assert_eq!(bus.can_uds_testers[0].state, CanUdsTesterState::Done);
+    }
+
+    /// 0x2E WriteDataByIdentifier: single-frame multi-byte request (7 bytes) →
+    /// positive 6E echo. Covers DID-write framing the existing tests lack.
+    #[test]
+    fn uds_tester_did_write_sf_completes() {
+        let mut bus = bus_with_script(&[("2E 01 23 DE AD BE EF", "6E 01 23")]);
+        inject_ecu_reply(&mut bus, 0x222, &[0x04, 0x6E, 0x01, 0x23]);
+        bus.service_can_uds_testers();
+        assert_eq!(bus.can_uds_testers[0].state, CanUdsTesterState::Done);
+    }
+
+    /// 0x31 RoutineControl: reply carries an output byte after the echo; the
+    /// prefix match must accept the longer response.
+    #[test]
+    fn uds_tester_routine_reply_with_output_byte() {
+        let mut bus = bus_with_script(&[("31 01 02 03", "71 01 02 03")]);
+        inject_ecu_reply(&mut bus, 0x222, &[0x05, 0x71, 0x01, 0x02, 0x03, 0x00]);
+        bus.service_can_uds_testers();
+        assert_eq!(bus.can_uds_testers[0].state, CanUdsTesterState::Done);
+    }
+
+    /// 0x2F IOControl: shortTermAdjustment request, reply echoes DID + state.
+    #[test]
+    fn uds_tester_io_control_reply_completes() {
+        let mut bus = bus_with_script(&[("2F A0 01 03 01", "6F A0 01")]);
+        inject_ecu_reply(&mut bus, 0x222, &[0x05, 0x6F, 0xA0, 0x01, 0x03, 0x01]);
+        bus.service_can_uds_testers();
+        assert_eq!(bus.can_uds_testers[0].state, CanUdsTesterState::Done);
+    }
+
+    /// 0x19 ReadDTCInformation: a multi-frame ECU reply (FF + 1 CF) must be
+    /// reassembled (AwaitResp → AwaitMultiResp → Done) and prefix-matched.
+    #[test]
+    fn uds_tester_dtc_read_multiframe_reply_completes() {
+        let mut bus = bus_with_script(&[("19 02 09", "59 02")]);
+        // FF declares 10-byte response, carries first 6 bytes (59 02 09 01 23 45).
+        inject_ecu_reply(
+            &mut bus,
+            0x222,
+            &[0x10, 0x0A, 0x59, 0x02, 0x09, 0x01, 0x23, 0x45],
+        );
+        bus.service_can_uds_testers(); // tester replies FlowControl, enters AwaitMultiResp
+        assert_eq!(
+            bus.can_uds_testers[0].state,
+            CanUdsTesterState::AwaitMultiResp
+        );
+        // CF carries the remaining bytes; total >= 10 → complete.
+        inject_ecu_reply(&mut bus, 0x222, &[0x21, 0x67, 0xAA, 0xBB, 0xCC, 0xDD]);
+        bus.service_can_uds_testers();
+        assert_eq!(bus.can_uds_testers[0].state, CanUdsTesterState::Done);
+    }
+
+    /// Multi-frame ECU response: the tester must inject a FlowControl frame onto
+    /// the bxCAN bus so the ECU can send its ConsecutiveFrames.
+    ///
+    /// Guards the bug where the `AwaitMultiResp` arm was missing from the
+    /// `to_send` match in `service_can_uds_testers`, causing the FlowControl
+    /// returned by `observe_ecu_frame_script` to be silently dropped (the
+    /// `_ => None` arm swallowed it).  Without the fix the ECU never receives
+    /// CTS and the exchange deadlocks.
+    ///
+    /// The discriminating assertion is NOT the final `Done` state (the
+    /// `inject_ecu_reply` shortcut bypasses that gate) but the presence of a
+    /// FlowControl frame (`first_byte & 0xF0 == 0x30`) in the bxCAN RX trace
+    /// after the tick that processes the ECU FirstFrame.
+    #[test]
+    fn uds_tester_multiframe_ecu_response_injects_flowcontrol() {
+        use crate::peripherals::bxcan::BxCan;
+
+        // Step 0: ReadDataByIdentifier 0xF190 (VIN), expect prefix 62 F1 90.
+        let mut bus = bus_with_script(&[("22 F1 90", "62 F1 90")]);
+
+        // Tick 1 already ran: the SF request (first byte 0x03) was delivered to
+        // the bxCAN via deliver_rx.  Record the trace length now so we can
+        // distinguish that pre-existing frame from the FlowControl we expect next.
+        let trace_len_before = {
+            let idx = bus.find_peripheral_index_by_name("bxcan1").unwrap();
+            let bx = bus.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .unwrap()
+                .downcast_mut::<BxCan>()
+                .unwrap();
+            bx.trace_snapshot("bxcan1").len()
+        };
+
+        // ECU replies with a FirstFrame declaring a 13-byte (0x0D) response
+        // and carrying the first 6 payload bytes (62 F1 90 + 3 VIN chars).
+        // 13 bytes = 6 in FF + 7 in one CF.
+        inject_ecu_reply(
+            &mut bus,
+            0x222,
+            &[0x10, 0x0D, 0x62, 0xF1, 0x90, 0x31, 0x32, 0x33],
+        );
+
+        // Tick 2: tester sees the FF, sets state=AwaitMultiResp, and MUST
+        // inject a FlowControl ([0x30, 0x00, 0x00]) onto the bxCAN bus.
+        bus.service_can_uds_testers();
+
+        assert_eq!(
+            bus.can_uds_testers[0].state,
+            CanUdsTesterState::AwaitMultiResp,
+            "state must be AwaitMultiResp after receiving ECU FirstFrame"
+        );
+
+        // Verify the FlowControl was actually delivered to the bus.
+        // Only frames appended AFTER tick 1 (index >= trace_len_before) are
+        // candidates; the earlier SF request frame starts with 0x03, not 0x3x.
+        {
+            let idx = bus.find_peripheral_index_by_name("bxcan1").unwrap();
+            let bx = bus.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .unwrap()
+                .downcast_mut::<BxCan>()
+                .unwrap();
+            let trace = bx.trace_snapshot("bxcan1");
+            let new_frames = &trace[trace_len_before..];
+            assert!(
+                new_frames.iter().any(|f| {
+                    f.direction == "rx"
+                        && f.id == 0x111
+                        && f.data.first().map(|b| b & 0xF0 == 0x30).unwrap_or(false)
+                }),
+                "FlowControl (0x30 nibble) must appear in bxCAN rx trace after ECU FirstFrame; \
+                 new frames after tick 1: {:?}",
+                new_frames
+                    .iter()
+                    .map(|f| (f.direction.as_str(), f.id, f.data.clone()))
+                    .collect::<Vec<_>>()
+            );
+        }
+
+        // Complete the exchange: one CF carries the remaining 7 bytes to reach
+        // the declared 13.  After this the tester must reach Done.
+        inject_ecu_reply(
+            &mut bus,
+            0x222,
+            &[0x21, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30],
+        );
+        bus.service_can_uds_testers();
+        assert_eq!(bus.can_uds_testers[0].state, CanUdsTesterState::Done);
+    }
+
+    /// Session-gated write rejected in the default session: the tester must
+    /// accept a negative response when the step declares `expect_nrc`.
+    #[test]
+    fn uds_tester_expect_nrc_negative_response_completes() {
+        let steps = vec![UdsStep {
+            send: SystemBus::yaml_bytes(
+                Some(&serde_yaml::Value::String(
+                    "2E 01 23 DE AD BE EF".to_string(),
+                )),
+                &[],
+            ),
+            expect: Vec::new(),
+            expect_nrc: Some(0x31),
+        }];
+        let mut bus = bus_with_steps(steps);
+        inject_ecu_reply(&mut bus, 0x222, &[0x03, 0x7F, 0x2E, 0x31]);
         bus.service_can_uds_testers();
         assert_eq!(bus.can_uds_testers[0].state, CanUdsTesterState::Done);
     }
