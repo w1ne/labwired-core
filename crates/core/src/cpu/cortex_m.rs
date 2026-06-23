@@ -2374,10 +2374,17 @@ impl CortexM {
                     pc_increment = 4;
                 }
                 Instruction::Mrs { rd, sysm } => {
-                    // Only PRIMASK (sysm = 0x10) is modelled; other sysm values
-                    // read as zero. Matches the behaviour firmware expects when
-                    // calling __get_PRIMASK().
+                    // IPSR (the active exception number, xPSR[8:0]) is load-bearing
+                    // for Zephyr: _isr_wrapper reads it and computes `IRQ = IPSR-16`
+                    // to index the software ISR table. Returning 0 made the index
+                    // -16 → garbage handler. The xPSR/IPSR-bearing reads all expose
+                    // the current exception number; PRIMASK is the other modelled
+                    // special register. Anything else still reads as zero.
+                    let ipsr = self.active_exception & 0x1FF;
                     let val: u32 = match sysm {
+                        0x00 => self.xpsr & 0xF800_0000,          // APSR (condition flags)
+                        0x03 => (self.xpsr & 0xF800_0000) | ipsr, // xPSR
+                        0x05 => ipsr,                             // IPSR
                         0x10 => self.primask as u32,
                         _ => 0,
                     };
@@ -2729,6 +2736,25 @@ mod tests {
             "ldr.w pc,[rn,rm,lsl#n] must branch to the loaded target (thumb bit \
              cleared), not target+4"
         );
+    }
+
+    #[test]
+    fn mrs_ipsr_reads_active_exception() {
+        // `mrs Rd, IPSR` (sysm = 5) must return the current exception number,
+        // not 0. Zephyr's _isr_wrapper computes the IRQ line as `IPSR - 16` to
+        // index the software ISR table; an IPSR of 0 made the index -16, so it
+        // `blx`-ed a garbage handler and executed rodata as code. Bare-metal and
+        // FreeRTOS firmware never hit this because they don't dispatch ISRs by
+        // reading IPSR.
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x1000;
+        cpu.active_exception = 33; // e.g. an IRQ exception (16 + IRQ 17)
+
+        // mrs r3, IPSR = 0xF3EF 8305
+        run_test_instr(&mut cpu, &mut bus, 0xF3EF8305, true);
+
+        assert_eq!(cpu.r3, 33, "MRS IPSR must read the active exception number");
     }
 
     #[test]
