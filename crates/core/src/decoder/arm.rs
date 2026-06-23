@@ -526,6 +526,10 @@ pub enum Instruction {
         imm8: u8,
     },
 
+    Svc {
+        imm8: u8,
+    },
+
     // --- Thumb-2 additions (ARMv7-M data-processing bits that common
     //     firmware compilers emit, but which were missing from main).
     /// DMB / DSB / ISB — all modelled as architectural no-ops on our
@@ -919,18 +923,21 @@ pub fn decode_thumb_16(opcode: u16) -> Instruction {
     // 7. Conditional Branch (Bcc): 1101 xxxx iiii iiii
     if (opcode & 0xF000) == 0xD000 {
         let cond = ((opcode >> 8) & 0xF) as u8;
-        // Don't match SWI (1101 1111 ...) -> cond 0xF is SWI
-        if cond != 0xF {
-            let mut offset = (opcode & 0xFF) as i32;
-            // Sign extend 8-bit to 32-bit
-            if (offset & 0x80) != 0 {
-                offset |= !0xFF;
-            }
-            return Instruction::BranchCond {
-                cond,
-                offset: offset << 1,
+        // cond 0xF (1101 1111 ...) is SVC (supervisor call), not a branch.
+        if cond == 0xF {
+            return Instruction::Svc {
+                imm8: (opcode & 0xFF) as u8,
             };
         }
+        let mut offset = (opcode & 0xFF) as i32;
+        // Sign extend 8-bit to 32-bit
+        if (offset & 0x80) != 0 {
+            offset |= !0xFF;
+        }
+        return Instruction::BranchCond {
+            cond,
+            offset: offset << 1,
+        };
     }
 
     // 7.1 ADR (T1) / ADD (SP) (T1)
@@ -2407,6 +2414,16 @@ mod tests {
                 offset: -6
             }
         );
+    }
+
+    #[test]
+    fn test_decode_svc() {
+        // SVC #2 -> 1101 1111 0000 0010 = 0xDF02. The 0xF cond field in the
+        // 0xD000 block is the supervisor call, not a conditional branch.
+        assert_eq!(decode_thumb_16(0xDF02), Instruction::Svc { imm8: 2 });
+        // Full imm8 range.
+        assert_eq!(decode_thumb_16(0xDF00), Instruction::Svc { imm8: 0 });
+        assert_eq!(decode_thumb_16(0xDFFF), Instruction::Svc { imm8: 255 });
     }
 
     #[test]
