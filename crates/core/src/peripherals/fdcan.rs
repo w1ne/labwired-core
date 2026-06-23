@@ -186,11 +186,18 @@ pub struct Fdcan {
     txbcf: u32,
     txbtie: u32,
     txbcie: u32,
-    /// TX FIFO put/get indices (mod 3). With instant completion the
-    /// fill level is always 3 free, but the indices advance per TX as
+    /// TX FIFO put/get indices (mod 3). The indices advance per TX as
     /// pinned on silicon (TXFQS = 0x0001_0103 after one send).
     txfq_put: u32,
     txfq_get: u32,
+    /// Frames queued by `request_tx` awaiting tick-deferred completion.
+    /// Each entry carries the buffer bit-mask and the decoded frame so
+    /// that completion (TXBRP→0, TXBTO, IR flags) is applied in the
+    /// next `tick()` rather than synchronously on the TXBAR write.
+    /// This models the real M_CAN: TXBRP stays asserted until the
+    /// frame is actually placed on the bus (arbitration + bit time).
+    #[serde(skip)]
+    pending_tx: VecDeque<(u32, CanFrame)>,
     ckdiv: u32,
     optr: u32,
     /// Protocol has left INIT at least once — flips PSR from its reset
@@ -257,6 +264,7 @@ impl Fdcan {
             trace: VecDeque::new(),
             bus_tx: None,
             bus_rx: None,
+            pending_tx: VecDeque::new(),
         }
     }
 
@@ -324,8 +332,10 @@ impl Fdcan {
     }
 
     fn txfqs(&self) -> u32 {
-        // Instant completion: the queue never stays full, TFFL = 3.
-        (self.txfq_put << 16) | (self.txfq_get << 8) | FIFO_DEPTH
+        // TFFL reflects free slots: depth minus in-flight pending frames.
+        let pending = self.pending_tx.len() as u32;
+        let free = FIFO_DEPTH.saturating_sub(pending);
+        (self.txfq_put << 16) | (self.txfq_get << 8) | free
     }
 
     fn psr(&self) -> u32 {
@@ -456,14 +466,28 @@ impl Fdcan {
             let Some(frame) = self.decode_tx_element(idx as usize) else {
                 continue;
             };
-            // Instant completion: pending request resolves this write.
+            // Assert the pending bit — it stays set until tick() delivers
+            // the frame and posts the completion flags. Firmware polling
+            // `while (TXBRP & 1) {}` will spin for at least one tick,
+            // matching real M_CAN behavior (TXBRP clears only after the
+            // frame has left the node on the physical bus).
+            self.txbrp |= bit;
+            self.pending_tx.push_back((bit, frame));
+        }
+    }
+
+    /// Complete all queued TX frames: deliver each frame to the bus or
+    /// loopback receiver, then post the completion flags (TXBRP→0,
+    /// TXBTO, IR.TFE / IR.TC). Called from `tick()` so the completion
+    /// is always at least one tick after the TXBAR write.
+    fn drain_pending_tx(&mut self) {
+        while let Some((bit, frame)) = self.pending_tx.pop_front() {
             self.txbrp &= !bit;
             self.txbto |= bit;
             self.txfq_put = (self.txfq_put + 1) % FIFO_DEPTH;
             self.txfq_get = self.txfq_put;
-            // TFE always (queue drains immediately); TC only for
-            // TXBTIE-enabled buffers — capture13 pinned TC clear with
-            // TXBTIE = 0.
+            // TFE always; TC only for TXBTIE-enabled buffers —
+            // capture13 pinned TC clear with TXBTIE = 0.
             self.ir |= IR_TFE;
             if self.txbtie & bit != 0 {
                 self.ir |= IR_TC;
@@ -633,6 +657,11 @@ impl Peripheral for Fdcan {
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
+        // Complete any pending TX frames queued by request_tx(). This
+        // is the earliest point at which TXBRP can be cleared and
+        // IR.TC/TFE posted — one tick after the TXBAR write, so firmware
+        // polling `while (TXBRP & 1) {}` actually blocks.
+        self.drain_pending_tx();
         // Drain the interconnect into the receiver.
         if let Some(rx) = self.bus_rx.take() {
             while let Ok(frame) = rx.try_recv() {
@@ -739,6 +768,10 @@ mod tests {
         let mut dev = Fdcan::new();
         enter_loopback(&mut dev);
         wr(&mut dev, REG_TXBAR, 0x1);
+        // TX is asynchronous: TXBRP stays set until the next tick.
+        assert_ne!(rd(&dev, REG_TXBRP), 0, "pending before tick");
+        assert_eq!(rd(&dev, REG_TXBTO), 0, "not complete before tick");
+        dev.tick();
         // Every value below is the capture13 post-TX read.
         assert_eq!(rd(&dev, REG_TXBRP), 0);
         assert_eq!(rd(&dev, REG_TXBTO), 0x1);
@@ -765,6 +798,8 @@ mod tests {
         let mut dev = Fdcan::new();
         enter_loopback(&mut dev);
         wr(&mut dev, REG_TXBAR, 0x1);
+        // Trace events are posted by drain_pending_tx inside tick().
+        dev.tick();
 
         let trace = dev.trace_snapshot("fdcan1");
         assert_eq!(trace.len(), 2);
@@ -785,6 +820,7 @@ mod tests {
         enter_loopback(&mut dev);
         wr(&mut dev, REG_TXBTIE, 0x1);
         wr(&mut dev, REG_TXBAR, 0x1);
+        dev.tick();
         assert_ne!(rd(&dev, REG_IR) & IR_TC, 0);
     }
 
@@ -793,6 +829,7 @@ mod tests {
         let mut dev = Fdcan::new();
         enter_loopback(&mut dev);
         wr(&mut dev, REG_TXBAR, 0x1);
+        dev.tick();
         let ir = rd(&dev, REG_IR);
         assert_ne!(ir, 0);
         wr(&mut dev, REG_IR, ir);
@@ -804,6 +841,7 @@ mod tests {
         let mut dev = Fdcan::new();
         enter_loopback(&mut dev);
         wr(&mut dev, REG_TXBAR, 0x1);
+        dev.tick();
         wr(&mut dev, REG_RXF0A, 0x0);
         // capture13: F0PI = 1, F0GI = 1, F0FL = 0.
         assert_eq!(rd(&dev, REG_RXF0S), 0x0001_0100);
@@ -838,6 +876,7 @@ mod tests {
         wr(&mut dev, RAM_BASE + 0x280, 0x0102_0304);
         wr(&mut dev, REG_CCCR, 0xA2);
         wr(&mut dev, REG_TXBAR, 0x1);
+        dev.tick();
         let r0 = rd(&dev, RAM_BASE + 0xB0);
         assert_ne!(r0 & (1 << 30), 0, "XTD");
         assert_eq!(r0 & 0x1FFF_FFFF, 0x1ABC_DEF0 & 0x1FFF_FFFF);
@@ -849,9 +888,11 @@ mod tests {
         let mut dev = Fdcan::new();
         enter_loopback(&mut dev);
         wr(&mut dev, REG_TXBAR, 0x1);
+        dev.tick();
         // Reload buffer 0 with a different payload, send again.
         wr(&mut dev, RAM_BASE + 0x280, 0x1111_2222);
         wr(&mut dev, REG_TXBAR, 0x1);
+        dev.tick();
         assert_eq!(rd(&dev, REG_TXFQS), 0x0002_0203);
         assert_eq!(rd(&dev, REG_RXF0S) & 0x7F, 2);
         // Second element at SRAMCAN + 0xB0 + 72.
