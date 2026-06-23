@@ -3,6 +3,7 @@ import { run } from './run.js';
 import { compile, type CompileRequest } from './compile.js';
 import { runExample, type RunExampleRequest } from './run-example.js';
 import { runBuild, type RunBuildRequest } from './run-build.js';
+import { CHIP_YAMLS } from '../../../packages/board-config/src/chip-yamls.js';
 
 const MAX_CONCURRENT = Number(process.env.MAX_CONCURRENT ?? 2);
 // Upper bound on a proxied /compile round-trip. The compile service caps its own
@@ -39,6 +40,13 @@ export function makeServer(opts: ServerOptions) {
     // Health check — open, no auth
     if (url === '/healthz') {
       json(res, 200, { ok: true });
+      return;
+    }
+
+    // Chip catalog — open, no auth
+    if (req.method === 'GET' && url === '/chips') {
+      const chips = Object.keys(CHIP_YAMLS).sort().map((id) => ({ id }));
+      json(res, 200, { chips });
       return;
     }
 

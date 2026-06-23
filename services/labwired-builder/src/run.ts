@@ -4,6 +4,7 @@ import { writeFile, readFile, mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { safeEnv } from './safe-env.js';
+import { CHIP_YAMLS } from '../../../packages/board-config/src/chip-yamls';
 
 const execFileAsync = promisify(execFile);
 
@@ -11,8 +12,8 @@ export interface RunRequest {
   elfBase64: string;
   systemYaml: string;
   /** Optional chip descriptor YAML.  When provided it is written alongside
-   *  system.yaml and the `chip: "inline"` placeholder in systemYaml is
-   *  rewritten to `chip: "chip.yaml"` so the CLI can resolve it. */
+   *  system.yaml and the manifest's `chip:` field (any value) is rewritten to
+   *  `chip: "chip.yaml"` so the CLI can resolve it. */
   chipYaml?: string;
   maxSteps: number;
 }
@@ -78,12 +79,13 @@ function buildLastInstructions(trace: unknown[]): string[] {
 }
 
 /** Build a diagnosis from the stop_reason, cpu_state, and optional trace. */
-async function buildDiagnosis(
+export async function buildDiagnosis(
   stopReason: string,
   maxSteps: number,
   cpuState: Record<string, unknown> | null,
   trace: unknown[] | null,
   elfPath: string,
+  stderrTail?: string,
 ): Promise<RunDiagnosis | undefined> {
   // No diagnosis needed for clean completion
   if (!stopReason || stopReason === 'finished' || stopReason === 'pass') {
@@ -114,9 +116,15 @@ async function buildDiagnosis(
   }
 
   if (stopReason === 'config_error') {
+    const detail = (stderrTail ?? '').trim();
     return {
-      summary: 'Simulation failed at configuration time — the system YAML or chip descriptor could not be loaded. Check the diagram and target configuration.',
-      hint: 'Ensure the diagram board matches the target and all required peripherals are present.',
+      summary: detail
+        ? `Simulation failed at configuration time — the system manifest or chip could not be loaded:\n${detail}`
+        : 'Simulation failed at configuration time — the system manifest or chip descriptor could not be loaded.',
+      hint:
+        'Call labwired_lookup with of:"manifest_schema" for the exact schema + a worked example, ' +
+        'and of:"chips" for valid chip ids and their peripheral names. ' +
+        'When present, the detail above names the offending field.',
     };
   }
 
@@ -151,6 +159,38 @@ async function buildDiagnosis(
   };
 }
 
+/** Resolve the manifest's `chip:` field so the CLI can load it.
+ *  - explicit chipYamlOverride  → write it as chip.yaml, rewrite `chip: "inline"`.
+ *  - bare id (e.g. "esp32c3")   → resolve from CHIP_YAMLS, rewrite to chip.yaml.
+ *  - path / ".yaml" / "inline"  → leave untouched (CLI resolves on disk).
+ *  Throws a listing error on an unknown bare id. */
+export function resolveChipInManifest(
+  systemYaml: string,
+  chipYamlOverride?: string,
+): { systemYaml: string; chipYaml?: string } {
+  const rewriteToFile = (s: string) =>
+    s.replace(/^chip:\s*["']?[A-Za-z0-9_.\-/]+["']?\s*$/m, 'chip: "chip.yaml"');
+
+  if (chipYamlOverride) {
+    return { systemYaml: rewriteToFile(systemYaml), chipYaml: chipYamlOverride };
+  }
+  const m = systemYaml.match(/^chip:\s*["']?([A-Za-z0-9_.\-/]+)["']?\s*$/m);
+  if (!m) return { systemYaml };
+  const val = m[1];
+  if (val === 'inline' || val.includes('/') || val.endsWith('.yaml')) {
+    return { systemYaml };
+  }
+  const yaml = CHIP_YAMLS[val];
+  if (!yaml) {
+    const known = Object.keys(CHIP_YAMLS).sort().join(', ');
+    throw new Error(
+      `unknown chip id "${val}". Known chip ids: ${known}. ` +
+        'Call labwired_lookup with of:"chips" for ids and their peripheral names.',
+    );
+  }
+  return { systemYaml: rewriteToFile(systemYaml), chipYaml: yaml };
+}
+
 export async function run(req: RunRequest): Promise<RunResult> {
   const tmp = join('/tmp', `lwb-run-${randomUUID()}`);
   await mkdir(tmp, { recursive: true });
@@ -164,12 +204,10 @@ export async function run(req: RunRequest): Promise<RunResult> {
     // Write ELF bytes decoded from base64
     await writeFile(elfPath, Buffer.from(req.elfBase64, 'base64'));
 
-    // If a chip YAML is provided, write it alongside system.yaml and resolve
-    // the `chip: "inline"` placeholder so the CLI can find it on disk.
-    let systemYaml = req.systemYaml;
-    if (req.chipYaml) {
-      await writeFile(join(tmp, 'chip.yaml'), req.chipYaml);
-      systemYaml = systemYaml.replace(/^chip:\s*"inline"\s*$/m, 'chip: "chip.yaml"');
+    const resolved = resolveChipInManifest(req.systemYaml, req.chipYaml);
+    const systemYaml = resolved.systemYaml;
+    if (resolved.chipYaml) {
+      await writeFile(join(tmp, 'chip.yaml'), resolved.chipYaml);
     }
 
     // Write system manifest
@@ -204,10 +242,32 @@ export async function run(req: RunRequest): Promise<RunResult> {
     // The CLI exits with code 3 on a simulation runtime error but still writes
     // result.json — swallow the non-zero exit so we can read that structured
     // result below.
-    await execFileAsync(bin, args, { timeout: 60000, env: safeEnv() }).catch(() => {});
+    let stderrTail = '';
+    try {
+      const { stderr } = await execFileAsync(bin, args, { timeout: 60000, env: safeEnv() });
+      stderrTail = (stderr ?? '').slice(-2000);
+    } catch (e) {
+      // The CLI exits non-zero on a sim/config error but still writes result.json.
+      stderrTail = ((e as { stderr?: string }).stderr ?? '').slice(-2000);
+    }
 
-    const resultJson = await readFile(join(outputDir, 'result.json'), 'utf8');
-    const result = JSON.parse(resultJson);
+    let result: Record<string, unknown>;
+    try {
+      result = JSON.parse(await readFile(join(outputDir, 'result.json'), 'utf8'));
+    } catch {
+      // No result.json — the CLI failed before the sim started (a config error).
+      return {
+        status: 'error',
+        stopReason: 'config_error',
+        stepsExecuted: 0,
+        cycles: 0,
+        instructions: 0,
+        serial: '',
+        peripherals: [],
+        timedOut: false,
+        diagnosis: await buildDiagnosis('config_error', req.maxSteps, null, null, elfPath, stderrTail),
+      };
+    }
 
     let serial = '';
     try {
@@ -239,6 +299,7 @@ export async function run(req: RunRequest): Promise<RunResult> {
       cpuState,
       trace,
       elfPath,
+      stderrTail,
     );
 
     return {

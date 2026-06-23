@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { run } from '../src/run';
+import { run, buildDiagnosis } from '../src/run';
 import { CHIP_YAMLS } from '../../../packages/board-config/src/chip-yamls';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -50,4 +50,21 @@ describe.skipIf(!binAvailable)('run (requires labwired binary — set LABWIRED_B
     // hint should be present for step-limit
     expect(typeof r.diagnosis!.hint).toBe('string');
   }, 60000);
+});
+
+describe('buildDiagnosis config_error (binary-free)', () => {
+  it('surfaces the captured stderr detail and points at labwired_lookup', async () => {
+    const stderr =
+      'Error: unknown field `peripherals`, expected one of `name`, `chip`, `external_devices`, `board_io`';
+    const d = await buildDiagnosis('config_error', 1000, null, null, '/nope.elf', stderr);
+    expect(d).toBeDefined();
+    expect(d!.summary).toContain('unknown field `peripherals`');
+    expect(d!.hint).toMatch(/labwired_lookup/);
+  });
+
+  it('still returns a useful summary when stderr is empty', async () => {
+    const d = await buildDiagnosis('config_error', 1000, null, null, '/nope.elf', '');
+    expect(d!.summary.length).toBeGreaterThan(0);
+    expect(d!.hint).toMatch(/labwired_lookup/);
+  });
 });
