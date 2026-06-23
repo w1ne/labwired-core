@@ -22,6 +22,7 @@
 
 #include "uds/uds_core.h"
 #include "uds/uds_isotp.h"
+#include "uds_ecu_app.h"
 
 /* --- freestanding libc shims (no libc linked) --- */
 void *memcpy(void *dst, const void *src, size_t n)
@@ -95,6 +96,8 @@ static void uart_puts(const char *s)
 {
     while (*s) uart_putc(*s++);
 }
+
+void uds_ecu_app_log(const char *msg) { uart_puts(msg); }
 
 /* --- bxCAN @ 0x40006400 (RM0008 §24.9) --- */
 #define CAN_BASE 0x40006400u
@@ -224,36 +227,6 @@ static int isotp_send_adapter(struct uds_ctx *ctx, const uint8_t *data, uint16_t
     return uds_isotp_send(&g_iso, data, len);
 }
 
-/* UDSLib fn_reset hook: a faithful CMSIS NVIC_SystemReset. udslib's #88 fix
- * calls this only AFTER the 0x11 positive response (51 01) has been handed to
- * the transport, so by the time the AIRCR store latches the SYSRESETREQ the
- * reply is already on the CAN bus. The model reboots the CPU through the vector
- * table at the next instruction boundary; the reset never returns, so we spin. */
-static void ecu_reset(uds_ctx_t *ctx, uint8_t type)
-{
-    (void) ctx;
-    (void) type;
-    __asm volatile("dsb 0xF" ::: "memory");
-    REG32(0xE000ED0Cu) = (0x05FAu << 16) | (1u << 2); /* AIRCR: VECTKEY | SYSRESETREQ */
-    __asm volatile("dsb 0xF" ::: "memory");
-    for (;;) {
-    }
-}
-
-static int security_seed(struct uds_ctx *ctx, uint8_t level, uint8_t *seed, uint16_t max_len)
-{
-    (void) ctx;
-    (void) level;
-    (void) max_len;
-    /* The multi-frame request reassembled and dispatched to us — serve a seed. */
-    uart_puts("UDS_SEED_SERVED\n");
-    seed[0] = 0xDE;
-    seed[1] = 0xAD;
-    seed[2] = 0xBE;
-    seed[3] = 0xEF;
-    return 4;
-}
-
 int main(void)
 {
     rcc_init(); /* enable USART1/CAN1/GPIOA/AFIO clocks before touching them */
@@ -270,8 +243,6 @@ int main(void)
         .ecu_address = 0x10u,
         .get_time_ms = get_time_ms,
         .fn_tp_send = isotp_send_adapter,
-        .fn_security_seed = security_seed,
-        .fn_reset = ecu_reset,
         .rx_buffer = g_rx_buf,
         .rx_buffer_size = sizeof(g_rx_buf),
         .tx_buffer = g_tx_buf,
@@ -279,6 +250,8 @@ int main(void)
         .p2_ms = 50u,
         .p2_star_ms = 2000u,
     };
+    uds_ecu_app_fill_config(&cfg, "LABWIRED-F103-UDS");
+
     uds_ctx_t ctx;
     if (uds_init(&ctx, &cfg) != UDS_OK) {
         uart_puts("UDS_INIT_FAIL\n");

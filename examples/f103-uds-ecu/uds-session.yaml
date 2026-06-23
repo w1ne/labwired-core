@@ -1,5 +1,5 @@
-name: "h563-uds-ecu"
-chip: "../../configs/chips/stm32h563.yaml"
+name: "f103-uds-ecu"
+chip: "../../configs/chips/stm32f103.yaml"
 external_devices:
   # A real second CAN node: a virtual UDS tester scripted to walk the full
   # everyday diagnostic session and assert each ECU reply on the bus. Sends are
@@ -7,10 +7,10 @@ external_devices:
   # `expect_nrc` matches a [7F sid nrc] negative response exactly.
   - type: "uds-tester"
     id: "uds-tester"
-    connection: "fdcan1"
+    connection: "bxcan1"
     config:
-      request_id: 0x7E0
-      reply_id: 0x7E8
+      request_id: 0x111
+      reply_id: 0x222
       script:
         - send: "22 F1 90"            # ReadDataByIdentifier VIN (open session)
           expect: "62 F1 90"

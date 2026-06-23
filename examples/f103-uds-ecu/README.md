@@ -29,3 +29,28 @@ cargo run -q -p labwired-cli -- test \
   --script examples/f103-uds-ecu/uds-smoke.yaml \
   --output-dir out/f103-uds-ecu
 ```
+
+## Scenarios
+
+- `uds-smoke.yaml` — multi-frame SecurityAccess (0x27) seed handshake.
+- `uds-reset-smoke.yaml` — ECUReset (0x11): `51 01` lands before the real reboot.
+- `uds-session-smoke.yaml` — the full everyday diagnostic session driven by the
+  scripted tester: ReadDataByIdentifier (0x22), session switch (0x10) and
+  TesterPresent (0x3E), WriteDataByIdentifier (0x2E, extended-session gated),
+  ReadDTCInformation/ClearDTC (0x19/0x14), RoutineControl (0x31, extended-gated),
+  InputOutputControl (0x2F), CommunicationControl (0x28), and ECUReset (0x11).
+  The default-session write is asserted to return `7F 2E 31`, then succeeds after
+  `10 03`.
+
+These smokes drive a locally-built ELF and are **not** clean-checkout CI gates.
+Build first:
+
+    make -C firmware UDSLIB_DIR=$HOME/projects/udslib
+
+Run:
+
+    cargo run -p labwired-cli --bin labwired -- test --script examples/f103-uds-ecu/uds-session-smoke.yaml
+
+The always-on regression for the scriptable tester's framing (single/multi-frame
+requests and responses, wildcard and NRC matching) lives in the
+`uds_tester_*` tests in `crates/core/src/bus/mod.rs`, which run in CI.

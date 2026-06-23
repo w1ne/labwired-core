@@ -7,14 +7,15 @@ RUST_LLD ?= $(HOME)/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustl
 CPUFLAGS := --target=arm-none-eabi -mcpu=cortex-m33 -mthumb
 COMMON_CFLAGS := $(CPUFLAGS) -ffreestanding -fno-builtin -ffunction-sections \
                  -fdata-sections -Os -g -Iinclude -I$(UDSLIB_DIR)/include \
-                 -I$(UDSLIB_DIR)/src/core
+                 -I$(UDSLIB_DIR)/src/core -I../../common
+VPATH = .:../../common
 APP_CFLAGS := $(COMMON_CFLAGS) -Wall -Wextra -Werror
 UDS_CFLAGS := $(COMMON_CFLAGS) -Wall -Wextra -Wno-unused-parameter \
               -Wno-missing-field-initializers
 LDFLAGS := -flavor gnu -m armelf -T minimal.ld --gc-sections \
            -Map=$(BUILD_DIR)/$(TARGET).map
 
-APP_SRCS := startup.c main.c
+APP_SRCS := startup.c main.c uds_ecu_app.c
 UDS_SRCS := \
   $(UDSLIB_DIR)/src/core/uds_core.c \
   $(UDSLIB_DIR)/src/services/uds_service_data.c \
@@ -22,8 +23,11 @@ UDS_SRCS := \
   $(UDSLIB_DIR)/src/services/uds_service_io.c \
   $(UDSLIB_DIR)/src/services/uds_service_maintenance.c \
   $(UDSLIB_DIR)/src/services/uds_service_mem.c \
+  $(UDSLIB_DIR)/src/services/uds_service_link.c \
+  $(UDSLIB_DIR)/src/services/uds_service_roe.c \
   $(UDSLIB_DIR)/src/services/uds_service_security.c \
   $(UDSLIB_DIR)/src/services/uds_service_session.c \
+  $(UDSLIB_DIR)/src/services/uds_dtc_store.c \
   $(UDSLIB_DIR)/src/transport/uds_tp_isotp.c
 
 APP_OBJS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(APP_SRCS))

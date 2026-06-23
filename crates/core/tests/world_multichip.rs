@@ -19,11 +19,41 @@ fn station_root() -> PathBuf {
 
 const DEVICE_FW: &str = "../iolink-dido/firmware/iolink_dido.elf";
 
+// Behaviour when a required prebuilt firmware ELF is absent.
+//
+// By default a missing ELF skips the test, so the workspace `cargo test` gate
+// (which has no arm-none-eabi toolchain or STM32CubeL4 pack) and local dev runs
+// stay green instead of demanding cross-built artifacts. The dedicated
+// `core-iolink-station` CI job builds the ELFs and sets
+// `LABWIRED_REQUIRE_IOLINK_ELFS=1`, which turns "missing" into a hard failure —
+// so a silently-broken firmware build can't sail through the gate as a no-op
+// skip that still reports `ok`.
+fn require_iolink_elfs() -> bool {
+    std::env::var_os("LABWIRED_REQUIRE_IOLINK_ELFS").is_some()
+}
+
+// Returns true if the caller should `return` (skip). Panics — failing the test —
+// when ELFs are required but absent.
+fn skip_or_fail_missing_elfs(build_hint: &str) -> bool {
+    if require_iolink_elfs() {
+        panic!(
+            "required IO-Link station ELF(s) missing while LABWIRED_REQUIRE_IOLINK_ELFS \
+             is set; build them: {build_hint}"
+        );
+    }
+    eprintln!("SKIP: IO-Link station ELF(s) not built; build them: {build_hint}");
+    true
+}
+
 #[test]
 fn from_manifest_builds_two_cortexm_nodes_and_uart_link() {
     // Two device-FW nodes wired uart2<->uart2. This exercises node construction,
     // ELF load + reset, the UART-link wiring, and lockstep stepping — without
     // needing the master firmware (Task 4).
+    if !station_root().join(DEVICE_FW).exists() {
+        skip_or_fail_missing_elfs("make -C examples/iolink-dido/firmware");
+        return;
+    }
     let env = EnvironmentManifest {
         schema_version: "1".into(),
         name: "twonode".into(),
@@ -70,9 +100,8 @@ fn master_chip_reaches_operate_with_real_sensor_chip() {
     let master_elf = root.join("master-fw/master.elf");
     let device_elf = root.join("../iolink-dido/firmware/iolink_dido.elf");
     if !master_elf.exists() || !device_elf.exists() {
-        eprintln!(
-            "SKIP: build ELFs first (make -C examples/iolink-station/master-fw && \
-             make -C examples/iolink-dido/firmware)"
+        skip_or_fail_missing_elfs(
+            "make -C examples/iolink-station/master-fw && make -C examples/iolink-dido/firmware",
         );
         return;
     }
@@ -80,10 +109,14 @@ fn master_chip_reaches_operate_with_real_sensor_chip() {
     let env = EnvironmentManifest::from_file(root.join("env.yaml")).expect("parse env.yaml");
     let mut world = World::from_manifest(env, &root).expect("build station world");
 
-    // g_master_state lives at 0x20000000 (D g_master_state in the master map);
-    // 3 == IOLINK_MASTER_STATE_OPERATE.
-    const STATE_ADDR: u64 = 0x2000_0000;
-    const PD0_ADDR: u64 = 0x2000_0001;
+    // Resolve the observability globals straight from the master ELF symbol
+    // table rather than hardcoding link addresses — robust to linker/layout
+    // changes (e.g. the STM32CubeL4 linker script). 3 == IOLINK_MASTER_STATE_OPERATE.
+    let master_bytes = std::fs::read(&master_elf).expect("read master elf");
+    let state_addr = labwired_loader::resolve_symbol_in_elf(&master_bytes, "g_master_state")
+        .expect("g_master_state symbol in master elf") as u64;
+    let pd0_addr = labwired_loader::resolve_symbol_in_elf(&master_bytes, "g_master_pd0")
+        .expect("g_master_pd0 symbol in master elf") as u64;
     const OPERATE: u8 = 3;
 
     // The sensor publishes its 74HC165 input byte as process data; the
@@ -97,11 +130,11 @@ fn master_chip_reaches_operate_with_real_sensor_chip() {
     for _ in 0..5_000_000u64 {
         world.step_all();
         let master = world.machines.get("master").unwrap();
-        last_state = master.read_u8(STATE_ADDR).unwrap();
+        last_state = master.read_u8(state_addr).unwrap();
         if last_state == OPERATE {
             reached_operate = true;
         }
-        pd0 = master.read_u8(PD0_ADDR).unwrap();
+        pd0 = master.read_u8(pd0_addr).unwrap();
         // Stop once we have proof of a real cyclic PD exchange in OPERATE.
         if reached_operate && pd0 != 0xFF {
             break;
@@ -130,9 +163,8 @@ fn four_port_station_all_sensors_operate_with_distinct_pd() {
     let master_elf = root.join("master-fw-4port/master.elf");
     let device_elf = root.join("../iolink-dido/firmware/iolink_dido.elf");
     if !master_elf.exists() || !device_elf.exists() {
-        eprintln!(
-            "SKIP: build ELFs first (make -C examples/iolink-station/master-fw-4port && \
-             make -C examples/iolink-dido/firmware)"
+        skip_or_fail_missing_elfs(
+            "make -C examples/iolink-station/master-fw-4port && make -C examples/iolink-dido/firmware",
         );
         return;
     }
@@ -140,8 +172,13 @@ fn four_port_station_all_sensors_operate_with_distinct_pd() {
     let env = EnvironmentManifest::from_file(root.join("env4.yaml")).expect("parse env4.yaml");
     let mut world = World::from_manifest(env, &root).expect("build 4-port station");
 
-    const STATE: u64 = 0x2000_0000; // g_master_state[4]
-    const PD: u64 = 0x2000_0004; // g_master_pd[4]
+    // Resolve the per-port observability arrays from the ELF symbol table
+    // (robust to linker layout) rather than hardcoding addresses.
+    let master_bytes = std::fs::read(&master_elf).expect("read master elf");
+    let state = labwired_loader::resolve_symbol_in_elf(&master_bytes, "g_master_state")
+        .expect("g_master_state symbol in master elf") as u64; // g_master_state[4]
+    let pd = labwired_loader::resolve_symbol_in_elf(&master_bytes, "g_master_pd")
+        .expect("g_master_pd symbol in master elf") as u64; // g_master_pd[4]
     const OPERATE: u8 = 3;
     // sensor1..4 input presets (palindrome bytes), bit-order-invariant.
     let expected: [u8; 4] = [0xA5, 0x3C, 0xC3, 0x5A];
@@ -151,8 +188,8 @@ fn four_port_station_all_sensors_operate_with_distinct_pd() {
         world.step_all();
         let m = world.machines.get("master").unwrap();
         let all = (0..4u64).all(|i| {
-            m.read_u8(STATE + i).unwrap() == OPERATE
-                && m.read_u8(PD + i).unwrap() == expected[i as usize]
+            m.read_u8(state + i).unwrap() == OPERATE
+                && m.read_u8(pd + i).unwrap() == expected[i as usize]
         });
         if all {
             done = true;
@@ -161,8 +198,8 @@ fn four_port_station_all_sensors_operate_with_distinct_pd() {
     }
 
     let m = world.machines.get("master").unwrap();
-    let states: Vec<u8> = (0..4).map(|i| m.read_u8(STATE + i).unwrap()).collect();
-    let pds: Vec<u8> = (0..4).map(|i| m.read_u8(PD + i).unwrap()).collect();
+    let states: Vec<u8> = (0..4).map(|i| m.read_u8(state + i).unwrap()).collect();
+    let pds: Vec<u8> = (0..4).map(|i| m.read_u8(pd + i).unwrap()).collect();
     assert!(
         done,
         "not all 4 ports reached OPERATE with their expected PD; \
