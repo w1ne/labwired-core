@@ -34,6 +34,7 @@ members = [
     "crates/firmware-nrf52840-ble-sensor",
     "crates/firmware-nrf52840-ble-tx",
     "crates/firmware-nrf52840-conformance",
+    "crates/firmware-nrf52840-cpu-conformance",
     "crates/firmware-nrf52840-demo",
     "crates/firmware-nrf52840-isr-blinky",
     "crates/firmware-nrf52840-proximity",
@@ -170,6 +171,10 @@ codegen-units = 1
 opt-level = "s"
 
 [profile.release.package.firmware-nrf52840-conformance]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-nrf52840-cpu-conformance]
 codegen-units = 1
 opt-level = "s"
 
