@@ -45,6 +45,13 @@ boards:
       last_capture: 2026-06-17
       probe: "ST-LINK V2 (J37S7)"
       result: "conformance 16/16; mmio 16/16; GPIO P0 22/0, P1 23/0; onboarding 22/22; POWER 10/0, SPIS 19/0, TWIS 20/0, RTC0 12/0, TIMER0 16/0; SPIM0/CCM/full-register clean"
+    # The UARTE model gained an EasyDMA TX path (STARTTX now reads the TXD buffer,
+    # emits the bytes, and raises TXSTARTED/TXDRDY/ENDTX/TXSTOPPED) so an unmodified
+    # nrfx console boots under the sim. Additive: the 2026-06-17 register sweep
+    # (conformance/mmio/GPIO/POWER/SPIS/TWIS/RTC/TIMER) is unaffected. No live SWD
+    # re-capture of the new TX register sequence was run this session (no bench
+    # board); a UARTE TX live diff is tracked.
+    drift_ack: 2026-06-23
     models:
       - crates/core/src/peripherals/nrf52
       - configs/chips/nrf52840.yaml
@@ -60,6 +67,9 @@ boards:
       last_capture: 2026-06-17
       probe: "ST-LINK V2 (J37S7)"
       result: "rides the nrf52840 full register sweep (16/16) re-confirmed 2026-06-17"
+    # Rides the nrf52840 UARTE EasyDMA TX model change (same silicon); see the
+    # nrf52840 drift_ack note. UARTE TX live diff tracked there.
+    drift_ack: 2026-06-23
     models:
       - crates/core/src/peripherals/nrf52
       - configs/chips/nrf52840.yaml
