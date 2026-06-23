@@ -13,6 +13,11 @@ on:
       - "core"
       - ".github/workflows/builder-deploy.yml"
   workflow_dispatch:
+    inputs:
+      builder_only:
+        description: "Build only the labwired-builder image (skip the heavy PlatformIO compile bake). The compile image rarely changes."
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -20,7 +25,9 @@ permissions:
 
 jobs:
   build-push:
-    runs-on: ubuntu-latest
+    # Self-hosted (pluto) so the build runs even when GitHub-hosted Actions
+    # minutes are billing-blocked. Native X64 — no QEMU for linux/amd64.
+    runs-on: [self-hosted, ci]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -50,6 +57,9 @@ jobs:
       # (CAX) instances, set platforms to "linux/amd64,linux/arm64" — note the
       # PlatformIO bake runs under QEMU for the non-native arch and is slower.
       - name: Build & push labwired-compile
+        # Skipped on dispatch with builder_only=true (the default). Always runs
+        # on push and on workflow_dispatch when builder_only is unchecked.
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.builder_only == false }}
         uses: docker/build-push-action@v6
         with:
           context: services/labwired-builder
