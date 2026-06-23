@@ -43,7 +43,13 @@ pub struct CortexM {
     /// 120 -> exception 136), which a single u64 silently dropped —
     /// caught by foreign firmware whose time driver never ticked.
     pub pending_exceptions: [u64; 4],
-    pub primask: bool,        // Interrupt mask (true = disabled)
+    pub primask: bool, // Interrupt mask (true = disabled)
+    /// BASEPRI: when non-zero, masks any exception whose priority value is
+    /// numerically >= basepri (i.e. equal or lower priority). Zephyr's Cortex-M
+    /// critical sections raise BASEPRI to block the scheduler/timer IRQs; an
+    /// unmodelled BASEPRI let those fire mid-critical-section and corrupt kernel
+    /// state. NMI/HardFault (negative priority) are never masked by it.
+    pub basepri: u8,
     pub vtor: Arc<AtomicU32>, // Shared Vector Table Offset Register
     pub it_state: u8,         // Thumb IT block state
     /// Currently active exception number (0 = thread mode). Used to prevent re-entry
@@ -98,6 +104,7 @@ impl Default for CortexM {
             xpsr: 0x01000000, // Typical reset state (Thumb bit set)
             pending_exceptions: [0; 4],
             primask: false,
+            basepri: 0,
             vtor: Arc::new(AtomicU32::new(0)),
             it_state: 0,
             active_exception: 0,
@@ -180,6 +187,15 @@ impl CortexM {
             }
             _ => 0xFF,
         }
+    }
+
+    /// True if BASEPRI masks an exception of the given priority. A non-zero
+    /// BASEPRI masks any exception whose priority value is numerically >=
+    /// BASEPRI (equal or lower priority). NMI/HardFault (negative priority) are
+    /// never masked.
+    #[inline]
+    fn masked_by_basepri(&self, prio: i32) -> bool {
+        self.basepri != 0 && prio >= self.basepri as i32
     }
 
     /// Among the pending exceptions, return the one with the highest
@@ -520,8 +536,9 @@ impl Cpu for CortexM {
                 // the currently-active one (or 256 = thread mode baseline).
                 if self.pending_exceptions.iter().any(|&w| w != 0) && !self.primask {
                     if let Some(exc) = self.highest_priority_pending() {
+                        let exc_prio = self.exception_priority(exc);
                         let active_prio = self.exception_priority(self.active_exception);
-                        if self.exception_priority(exc) < active_prio {
+                        if exc_prio < active_prio && !self.masked_by_basepri(exc_prio) {
                             break;
                         }
                     }
@@ -538,8 +555,9 @@ impl Cpu for CortexM {
             while executed < max_count {
                 if self.pending_exceptions.iter().any(|&w| w != 0) && !self.primask {
                     if let Some(exc) = self.highest_priority_pending() {
+                        let exc_prio = self.exception_priority(exc);
                         let active_prio = self.exception_priority(self.active_exception);
-                        if self.exception_priority(exc) < active_prio {
+                        if exc_prio < active_prio && !self.masked_by_basepri(exc_prio) {
                             break;
                         }
                     }
@@ -577,7 +595,7 @@ impl CortexM {
         if self.pending_exceptions.iter().any(|&w| w != 0) && !self.primask && exception_num != 0 {
             let take_prio = self.exception_priority(exception_num);
             let active_prio = self.exception_priority(self.active_exception);
-            let can_take = take_prio < active_prio;
+            let can_take = take_prio < active_prio && !self.masked_by_basepri(take_prio);
 
             if can_take {
                 self.pending_exceptions[(exception_num / 64) as usize] &=
@@ -2386,6 +2404,8 @@ impl CortexM {
                         0x03 => (self.xpsr & 0xF800_0000) | ipsr, // xPSR
                         0x05 => ipsr,                             // IPSR
                         0x10 => self.primask as u32,
+                        // BASEPRI (0x11) and BASEPRI_MAX (0x12) both read BASEPRI.
+                        0x11 | 0x12 => self.basepri as u32,
                         _ => 0,
                     };
                     self.write_reg(rd, val);
@@ -2393,8 +2413,19 @@ impl CortexM {
                 }
                 Instruction::Msr { sysm, rn } => {
                     let val = self.read_reg(rn);
-                    if sysm == 0x10 {
-                        self.primask = (val & 1) != 0;
+                    match sysm {
+                        0x10 => self.primask = (val & 1) != 0,
+                        // BASEPRI: plain write of the priority mask byte.
+                        0x11 => self.basepri = (val & 0xFF) as u8,
+                        // BASEPRI_MAX: writes BASEPRI only if it raises the
+                        // masking level (smaller non-zero value), or BASEPRI is 0.
+                        0x12 => {
+                            let new = (val & 0xFF) as u8;
+                            if new != 0 && (self.basepri == 0 || new < self.basepri) {
+                                self.basepri = new;
+                            }
+                        }
+                        _ => {}
                     }
                     pc_increment = 4;
                 }
@@ -2711,6 +2742,40 @@ mod tests {
             bus.write_u16(pc as u64, instr_bin as u16).unwrap();
         }
         cpu.step_internal(bus, &[], &bus.config.clone()).unwrap();
+    }
+
+    #[test]
+    fn basepri_masks_equal_or_lower_priority_exceptions() {
+        // A non-zero BASEPRI masks any exception whose priority value is >=
+        // BASEPRI. Zephyr raises BASEPRI to guard scheduler critical sections; an
+        // unmodelled BASEPRI let the timer IRQ fire inside them and corrupt state.
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x1000;
+        cpu.sp = 0x2000_0040;
+        bus.write_u16(0x1000, 0xBF00).unwrap(); // NOP at 0x1000
+                                                // Exception 16 (IRQ 0). With no NVIC wired, its priority reads 0xFF.
+        let handler = 0x0000_5000u32;
+        bus.write_u32(0x40, handler | 1).unwrap(); // VTOR=0 → vector[16] at 0x40
+        cpu.set_exception_pending(16);
+
+        let cfg = bus.config.clone();
+        // BASEPRI=0x80 masks priority 0xFF (>= 0x80): the NOP runs, no vectoring.
+        cpu.basepri = 0x80;
+        cpu.step_internal(&mut bus, &[], &cfg).unwrap();
+        assert_eq!(
+            cpu.pc, 0x1002,
+            "BASEPRI must mask exc 16; the NOP should run"
+        );
+
+        // Clearing BASEPRI lets the still-pending exception through.
+        cpu.basepri = 0;
+        cpu.step_internal(&mut bus, &[], &cfg).unwrap();
+        assert_eq!(
+            cpu.pc,
+            handler & !1,
+            "with BASEPRI=0 the pending exception is taken"
+        );
     }
 
     #[test]
