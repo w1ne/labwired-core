@@ -21,9 +21,8 @@
 #include <stdint.h>
 
 #include "uds/uds_core.h"
-#include "uds/uds_dtc.h"
-#include "uds/uds_dtc_store.h"
 #include "uds/uds_isotp.h"
+#include "uds_ecu_app.h"
 
 /* --- freestanding libc shims (no libc linked) --- */
 void *memcpy(void *dst, const void *src, size_t n)
@@ -97,6 +96,8 @@ static void uart_puts(const char *s)
 {
     while (*s) uart_putc(*s++);
 }
+
+void uds_ecu_app_log(const char *msg) { uart_puts(msg); }
 
 /* --- bxCAN @ 0x40006400 (RM0008 §24.9) --- */
 #define CAN_BASE 0x40006400u
@@ -226,104 +227,6 @@ static int isotp_send_adapter(struct uds_ctx *ctx, const uint8_t *data, uint16_t
     return uds_isotp_send(&g_iso, data, len);
 }
 
-/* UDSLib fn_reset hook: a faithful CMSIS NVIC_SystemReset. udslib's #88 fix
- * calls this only AFTER the 0x11 positive response (51 01) has been handed to
- * the transport, so by the time the AIRCR store latches the SYSRESETREQ the
- * reply is already on the CAN bus. The model reboots the CPU through the vector
- * table at the next instruction boundary; the reset never returns, so we spin. */
-static void ecu_reset(uds_ctx_t *ctx, uint8_t type)
-{
-    (void) ctx;
-    (void) type;
-    __asm volatile("dsb 0xF" ::: "memory");
-    REG32(0xE000ED0Cu) = (0x05FAu << 16) | (1u << 2); /* AIRCR: VECTKEY | SYSRESETREQ */
-    __asm volatile("dsb 0xF" ::: "memory");
-    for (;;) {
-    }
-}
-
-/* --- Diagnostic data: DIDs, one seeded DTC, one IO point --- */
-#define ECU_SESSION_EXTENDED 0x03u /* UDS_SESSION_ID_EXTENDED (internal id) */
-
-/* VIN reported by ReadDataByIdentifier 0xF190 (read-only, any session). */
-static const uint8_t g_vin[17] = {'L', 'A', 'B', 'W', 'I', 'R', 'E', 'D', '-',
-                                  'F', '1', '0', '3', '-', 'U', 'D', 'S'};
-/* Writable scratch DID 0x0123 (read+write, EXTENDED session only). */
-static uint8_t g_scratch[4];
-/* IO-controlled point 0xA001 ("test lamp") for InputOutputControl 0x2F. */
-static uint8_t g_lamp[1];
-
-static const uds_did_entry_t g_dids[] = {
-    {0xF190u, 17u, 0u, 0u, NULL, NULL, (void *) g_vin},
-    {0x0123u, 4u, UDS_SESSION_EXTENDED, 0u, NULL, NULL, g_scratch},
-    {0xA001u, 1u, 0u, 0u, NULL, NULL, g_lamp},
-};
-
-/* Reference DTC store, seeded with one failing DTC (0x123456). */
-static uds_dtc_record_t g_dtc_backing[4];
-static uds_dtc_store_t g_dtc_store;
-
-static int security_seed(struct uds_ctx *ctx, uint8_t level, uint8_t *seed, uint16_t max_len)
-{
-    (void) ctx;
-    (void) level;
-    (void) max_len;
-    /* The multi-frame request reassembled and dispatched to us — serve a seed. */
-    uart_puts("UDS_SEED_SERVED\n");
-    seed[0] = 0xDE;
-    seed[1] = 0xAD;
-    seed[2] = 0xBE;
-    seed[3] = 0xEF;
-    return 4;
-}
-
-/* UDSLib fn_routine_control: routine 0x0203, startRoutine in EXTENDED only. */
-static int ecu_routine(uds_ctx_t *ctx, uint8_t type, uint16_t id, const uint8_t *data,
-                       uint16_t len, uint8_t *out, uint16_t max)
-{
-    (void) data;
-    (void) len;
-    (void) max;
-    if (id != 0x0203u) {
-        return -0x31; /* requestOutOfRange */
-    }
-    if (ctx->active_session != ECU_SESSION_EXTENDED) {
-        return -0x31; /* requestOutOfRange: routine requires extended session */
-    }
-    if (type == 0x01u) { /* startRoutine */
-        out[0] = 0x00u;  /* routine status: OK */
-        return 1;
-    }
-    return -0x31; /* requestOutOfRange: unsupported routine control type */
-}
-
-/* UDSLib fn_io_control: IO point 0xA001 (test lamp) — store and echo state. */
-static int ecu_io(uds_ctx_t *ctx, uint16_t id, uint8_t type, const uint8_t *data,
-                  uint16_t len, uint8_t *out, uint16_t max)
-{
-    (void) ctx;
-    (void) type;
-    (void) max;
-    if (id != 0xA001u) {
-        return -0x31; /* requestOutOfRange */
-    }
-    if (len >= 1u) {
-        g_lamp[0] = data[0];
-    }
-    out[0] = g_lamp[0];
-    return 1;
-}
-
-/* UDSLib fn_comm_control: accept the requested communication mode. */
-static int ecu_comm(uds_ctx_t *ctx, uint8_t ctrl_type, uint8_t comm_type, uint16_t node_id)
-{
-    (void) ctx;
-    (void) ctrl_type;
-    (void) comm_type;
-    (void) node_id;
-    return UDS_OK;
-}
-
 int main(void)
 {
     rcc_init(); /* enable USART1/CAN1/GPIOA/AFIO clocks before touching them */
@@ -336,24 +239,10 @@ int main(void)
     uds_tp_isotp_init(&g_iso, can_send, ECU_TX_ID, ECU_RX_ID, g_iso_tx_sdu, sizeof(g_iso_tx_sdu));
     uds_tp_isotp_set_fd(&g_iso, false); /* classical CAN */
 
-    uds_dtc_store_init(&g_dtc_store, g_dtc_backing, 4u, 40u);
-    uds_dtc_store_register(&g_dtc_store, 0x123456u, UDS_DTC_SEVERITY_CHECK_IMMEDIATELY, 0x10u,
-                           UDS_DTC_FGID_EMISSIONS);
-    uds_dtc_store_report_test(&g_dtc_store, 0x123456u, true); /* set testFailed status */
-
     uds_config_t cfg = {
         .ecu_address = 0x10u,
         .get_time_ms = get_time_ms,
         .fn_tp_send = isotp_send_adapter,
-        .fn_security_seed = security_seed,
-        .fn_reset = ecu_reset,
-        .did_table = {.entries = g_dids, .count = (uint16_t) (sizeof(g_dids) / sizeof(g_dids[0]))},
-        .app_data = &g_dtc_store,
-        .fn_dtc_list = uds_dtc_store_list_cb,
-        .fn_dtc_clear = uds_dtc_store_clear_cb,
-        .fn_routine_control = ecu_routine,
-        .fn_io_control = ecu_io,
-        .fn_comm_control = ecu_comm,
         .rx_buffer = g_rx_buf,
         .rx_buffer_size = sizeof(g_rx_buf),
         .tx_buffer = g_tx_buf,
@@ -361,6 +250,8 @@ int main(void)
         .p2_ms = 50u,
         .p2_star_ms = 2000u,
     };
+    uds_ecu_app_fill_config(&cfg, "LABWIRED-F103-UDS");
+
     uds_ctx_t ctx;
     if (uds_init(&ctx, &cfg) != UDS_OK) {
         uart_puts("UDS_INIT_FAIL\n");

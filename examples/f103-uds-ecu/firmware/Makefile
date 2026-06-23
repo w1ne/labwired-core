@@ -6,13 +6,15 @@ CC := $(CROSS)gcc
 
 CPUFLAGS := -mcpu=cortex-m3 -mthumb
 COMMON_CFLAGS := $(CPUFLAGS) -ffreestanding -fno-builtin -ffunction-sections \
-                 -fdata-sections -Os -g -I$(UDSLIB_DIR)/include -I$(UDSLIB_DIR)/src/core
+                 -fdata-sections -Os -g -I$(UDSLIB_DIR)/include -I$(UDSLIB_DIR)/src/core \
+                 -I../../common
+VPATH = .:../../common
 APP_CFLAGS := $(COMMON_CFLAGS) -Wall -Wextra -Werror
 UDS_CFLAGS := $(COMMON_CFLAGS) -Wall -Wextra -Wno-unused-parameter \
               -Wno-missing-field-initializers
 LDFLAGS := -nostdlib -T minimal.ld -Wl,--gc-sections -Wl,-Map=$(BUILD_DIR)/$(TARGET).map
 
-APP_SRCS := startup.c main.c
+APP_SRCS := startup.c main.c uds_ecu_app.c
 UDS_SRCS := \
   $(UDSLIB_DIR)/src/core/uds_core.c \
   $(UDSLIB_DIR)/src/services/uds_service_data.c \
@@ -39,9 +41,9 @@ all: check-udslib $(ELF) $(BROKEN_ELF)
 $(BUILD_DIR)/main_broken.o: main.c | $(BUILD_DIR)
 	$(CC) $(APP_CFLAGS) -DBROKEN_NCR -c $< -o $@
 
-$(BROKEN_ELF): $(BUILD_DIR)/startup.o $(BUILD_DIR)/main_broken.o $(UDS_OBJS) minimal.ld
+$(BROKEN_ELF): $(BUILD_DIR)/startup.o $(BUILD_DIR)/main_broken.o $(BUILD_DIR)/uds_ecu_app.o $(UDS_OBJS) minimal.ld
 	$(CC) $(CPUFLAGS) -nostdlib -T minimal.ld -Wl,--gc-sections \
-	  $(BUILD_DIR)/startup.o $(BUILD_DIR)/main_broken.o $(UDS_OBJS) -o $@
+	  $(BUILD_DIR)/startup.o $(BUILD_DIR)/main_broken.o $(BUILD_DIR)/uds_ecu_app.o $(UDS_OBJS) -o $@
 
 check-udslib:
 	@test -f "$(UDSLIB_DIR)/include/uds/uds_core.h" || \
