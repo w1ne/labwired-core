@@ -14,6 +14,11 @@ external_devices:
       script:
         - send: "22 F1 90"            # ReadDataByIdentifier VIN (open session)
           expect: "62 F1 90"
+        - send: "22 F1 A0"            # ReadDataByIdentifier 600-byte calib block
+          # udslib v2.0.0 use case 1: a >512-byte response (62 F1 A0 + 600 bytes
+          # = 603) reassembled over multi-frame ISO-TP (CAN-FD). Pattern is
+          # byte i = i & 0xFF; assert the header + first pattern bytes.
+          expect: "62 F1 A0 00 01 02 03 04 05 06"
         - send: "2E 01 23 DE AD BE EF" # WriteDataByIdentifier rejected in default
           expect_nrc: 0x31
         - send: "10 03"               # DiagnosticSessionControl -> extended
