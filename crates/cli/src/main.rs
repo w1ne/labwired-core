@@ -1963,10 +1963,38 @@ fn write_outputs<C: labwired_core::Cpu>(
             if let Some(cov) = coverage_observer {
                 match labwired_loader::SymbolProvider::new(firmware_path) {
                     Ok(symbols) => {
-                        let report = labwired_cli::pc_coverage_report::CoverageReport::build(
+                        let mut report = labwired_cli::pc_coverage_report::CoverageReport::build(
                             symbols.statement_rows(),
                             |addr| cov.was_executed(addr as u32),
                         );
+                        // Resolve each observed branch site to its source line.
+                        let branch_cov = cov
+                            .branch_sites()
+                            .into_iter()
+                            .filter_map(|(src, counts)| {
+                                symbols.lookup(src as u64).and_then(|loc| {
+                                    loc.line.map(|line| {
+                                        // statement_rows uses the line-program
+                                        // file basename; lookup() returns the
+                                        // full path. Normalise to the basename
+                                        // so branches attach to the right SF.
+                                        let file = loc
+                                            .file
+                                            .rsplit('/')
+                                            .next()
+                                            .unwrap_or(&loc.file)
+                                            .to_string();
+                                        labwired_cli::pc_coverage_report::BranchCoverage {
+                                            file,
+                                            line,
+                                            taken: counts.taken,
+                                            not_taken: counts.not_taken,
+                                        }
+                                    })
+                                })
+                            })
+                            .collect();
+                        report.set_branches(branch_cov);
                         let info_path = output_dir.join("coverage.info");
                         if let Err(e) = std::fs::write(&info_path, report.to_lcov()) {
                             error!("Failed to write coverage.info: {}", e);
@@ -1981,10 +2009,13 @@ fn write_outputs<C: labwired_core::Cpu>(
                             Err(e) => error!("Failed to create coverage.json: {}", e),
                         }
                         info!(
-                            "Coverage: {}/{} statements ({:.1}%)",
+                            "Coverage: {}/{} statements ({:.1}%), {}/{} branches ({:.1}%)",
                             report.covered_statements,
                             report.total_statements,
-                            report.statement_percent()
+                            report.statement_percent(),
+                            report.covered_branches,
+                            report.total_branches,
+                            report.branch_percent()
                         );
                     }
                     Err(e) => error!("Failed to load symbols for coverage: {}", e),
