@@ -18,6 +18,7 @@ import type { BoardConfig } from '../bundled-configs';
 import { MobileInputsSheet } from './MobileInputsSheet';
 import { Toast } from '../studio/Toast';
 import { resolveUiFeatures } from '../uiFeatures';
+import { STARTER_LABS } from '../studio/ChipRow';
 
 export interface MobileRunViewProps {
   selectedBoard: BoardConfig;
@@ -38,6 +39,8 @@ export interface MobileRunViewProps {
   simControls: ReactNode;
   /** Open the saved-projects modal from the menu drawer. */
   onOpenProjects: () => void;
+  /** Switch to another bundled example lab from the mobile menu. */
+  onPickLab?: (labId: string) => void;
   /** Live bridge for the instrument tabs (BLE / logic / IO-Link). */
   bridge: SimulatorBridge | null;
   /** Whether the sim is running — drives instrument poll cadence. */
@@ -75,6 +78,7 @@ export function MobileRunView({
   onNtcChange,
   simControls,
   onOpenProjects,
+  onPickLab,
   bridge,
   running,
   onPartAttrChange,
@@ -234,6 +238,50 @@ export function MobileRunView({
             >
               My projects
             </button>
+            <section aria-labelledby="mobile-example-labs" className="min-h-0 rounded-lg border border-white/[0.08] bg-white/[0.035] p-2.5">
+              <div className="flex items-center justify-between gap-3 pb-2">
+                <h2 id="mobile-example-labs" className="text-[11px] font-semibold uppercase tracking-[0.08em] text-fg-tertiary">
+                  Example labs
+                </h2>
+                <span className="shrink-0 text-[11px] text-fg-tertiary">{STARTER_LABS.length}</span>
+              </div>
+              <div
+                role="list"
+                aria-labelledby="mobile-example-labs"
+                className="max-h-[38vh] overflow-y-auto grid grid-cols-2 gap-1.5 pr-0.5"
+              >
+                {STARTER_LABS.map((lab) => {
+                  const active = lab.id === selectedBoard.boardId;
+                  return (
+                    <div key={lab.id} role="listitem">
+                      <button
+                        type="button"
+                        aria-current={active ? 'page' : undefined}
+                        onClick={() => {
+                          setShowNav(false);
+                          if (!lab.locked) onPickLab?.(lab.id);
+                        }}
+                        className={`min-h-[56px] w-full rounded-md px-2.5 py-2 text-left flex flex-col justify-between gap-1 transition-colors border ${
+                          active
+                            ? 'border-accent/45 bg-accent/15 text-accent'
+                            : lab.locked
+                              ? 'border-white/[0.05] bg-white/[0.025] text-fg-tertiary'
+                              : 'border-white/[0.06] bg-white/[0.045] text-fg-primary active:bg-white/[0.09]'
+                        }`}
+                      >
+                        <span className="text-[18px] leading-none" aria-hidden>{lab.icon}</span>
+                        <span className="min-w-0 max-w-full truncate text-[12px] font-medium leading-tight">{lab.name}</span>
+                        {lab.locked && lab.comingIn && (
+                          <span className="rounded px-1 py-0.5 text-[8px] uppercase tracking-[0.08em] bg-white/[0.05] text-fg-tertiary">
+                            {lab.comingIn}
+                          </span>
+                        )}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
             {/* Hide "Tools" here — its instruments (BLE / Logic / IO-Link) are
                 already surfaced as drawer tabs on mobile, so the link would be a
                 redundant no-op (it toggles the desktop-only tools panel). */}
