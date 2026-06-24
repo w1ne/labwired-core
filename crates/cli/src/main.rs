@@ -591,6 +591,12 @@ struct TestArgs {
     #[arg(long)]
     coverage: bool,
 
+    /// Write a signable, reproducible run-manifest.json into --output-dir
+    /// (input hashes, engine version, result subset, coverage summary, and a
+    /// wall-clock-free SHA-256 digest).
+    #[arg(long)]
+    run_manifest: bool,
+
     /// Explicitly opt out of sending LABWIRED_API_KEY even if it is set in the environment.
     /// Useful for local development and testing.
     #[arg(long)]
@@ -1960,6 +1966,7 @@ fn write_outputs<C: labwired_core::Cpu>(
             }
 
             // coverage.info (LCOV) + coverage.json
+            let mut coverage_summary: Option<labwired_cli::manifest::CoverageSummary> = None;
             if let Some(cov) = coverage_observer {
                 match labwired_loader::SymbolProvider::new(firmware_path) {
                     Ok(symbols) => {
@@ -2017,9 +2024,81 @@ fn write_outputs<C: labwired_core::Cpu>(
                             report.total_branches,
                             report.branch_percent()
                         );
+                        coverage_summary = Some(labwired_cli::manifest::CoverageSummary {
+                            statements_total: report.total_statements,
+                            statements_covered: report.covered_statements,
+                            branches_total: report.total_branches,
+                            branches_covered: report.covered_branches,
+                        });
                     }
                     Err(e) => error!("Failed to load symbols for coverage: {}", e),
                 }
+            }
+
+            // run-manifest.json (signable, reproducible)
+            if args.run_manifest {
+                use labwired_cli::manifest;
+                // Use the file basename, not the absolute path, so the digest
+                // depends only on file contents and is reproducible across
+                // machines with different checkout locations.
+                let basename = |p: &Path| -> String {
+                    p.file_name()
+                        .map(|s| s.to_string_lossy().into_owned())
+                        .unwrap_or_else(|| p.display().to_string())
+                };
+                let hash_file = |p: &Path| -> manifest::HashedFile {
+                    let sha256 = std::fs::read(p)
+                        .map(|b| manifest::sha256_hex(&b))
+                        .unwrap_or_default();
+                    manifest::HashedFile {
+                        path: basename(p),
+                        sha256,
+                    }
+                };
+                let mut configs = vec![hash_file(&args.script)];
+                if let Some(sys) = system_path {
+                    configs.push(hash_file(sys));
+                }
+                let mut man = manifest::RunManifest {
+                    manifest_schema_version: manifest::MANIFEST_SCHEMA_VERSION.to_string(),
+                    engine_version: env!("CARGO_PKG_VERSION").to_string(),
+                    seed: 0,
+                    nondeterminism: "none".to_string(),
+                    firmware: manifest::HashedFile {
+                        path: basename(firmware_path),
+                        sha256: result.firmware_hash.clone(),
+                    },
+                    configs,
+                    results: manifest::ManifestResults {
+                        status: status.to_string(),
+                        stop_reason: format!("{:?}", result.stop_reason),
+                        steps_executed: result.steps_executed,
+                        cycles: result.cycles,
+                        instructions: result.instructions,
+                        assertions: assertions_for_junit
+                            .iter()
+                            .map(|a| manifest::AssertionOutcome {
+                                assertion: format!("{:?}", a.assertion),
+                                passed: a.passed,
+                            })
+                            .collect(),
+                        cpu_state_digest: manifest::digest_value(&cpu.snapshot()),
+                    },
+                    coverage: coverage_summary.clone(),
+                    fault_injections: Vec::new(),
+                    digest: String::new(),
+                };
+                man.finalize_digest();
+                let manifest_path = output_dir.join("run-manifest.json");
+                match std::fs::File::create(&manifest_path) {
+                    Ok(f) => {
+                        if let Err(e) = serde_json::to_writer_pretty(f, &man) {
+                            error!("Failed to write run-manifest.json: {}", e);
+                        }
+                    }
+                    Err(e) => error!("Failed to create run-manifest.json: {}", e),
+                }
+                info!("Run manifest digest: {}", man.digest);
             }
 
             // result.json handles cpu generically now
