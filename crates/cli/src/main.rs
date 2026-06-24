@@ -585,6 +585,12 @@ struct TestArgs {
     #[arg(long, default_value = "100000")]
     trace_max: usize,
 
+    /// Collect firmware statement coverage. Writes coverage.info (LCOV) and
+    /// coverage.json into --output-dir. Distinct from `labwired coverage`,
+    /// which measures chip-model register faithfulness.
+    #[arg(long)]
+    coverage: bool,
+
     /// Explicitly opt out of sending LABWIRED_API_KEY even if it is set in the environment.
     /// Useful for local development and testing.
     #[arg(long)]
@@ -1492,6 +1498,7 @@ fn handle_load_error<C: labwired_core::Cpu>(
         system_path,
         std::time::Duration::from_secs(0),
         &None,
+        &None,
     );
     ExitCode::from(EXIT_RUNTIME_ERROR)
 }
@@ -1520,6 +1527,14 @@ fn execute_test_loop<C: labwired_core::Cpu>(
 
     let trace_observer = if args.trace {
         let obs = Arc::new(labwired_core::trace::TraceObserver::new(args.trace_max));
+        machine.observers.push(obs.clone());
+        Some(obs)
+    } else {
+        None
+    };
+
+    let coverage_observer = if args.coverage {
+        let obs = Arc::new(labwired_core::pc_coverage::PcCoverageObserver::new());
         machine.observers.push(obs.clone());
         Some(obs)
     } else {
@@ -1859,6 +1874,7 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         system_path,
         duration,
         &trace_observer,
+        &coverage_observer,
     );
 
     if !all_passed || (stop_requires_assertion && !expected_stop_reason_matched) {
@@ -1887,6 +1903,7 @@ fn write_outputs<C: labwired_core::Cpu>(
     system_path: Option<&PathBuf>,
     duration: std::time::Duration,
     trace_observer: &Option<Arc<labwired_core::trace::TraceObserver>>,
+    coverage_observer: &Option<Arc<labwired_core::pc_coverage::PcCoverageObserver>>,
 ) {
     let mut hasher = Sha256::new();
     hasher.update(firmware_bytes);
@@ -1939,6 +1956,38 @@ fn write_outputs<C: labwired_core::Cpu>(
                         }
                     }
                     Err(e) => error!("Failed to create trace.json: {}", e),
+                }
+            }
+
+            // coverage.info (LCOV) + coverage.json
+            if let Some(cov) = coverage_observer {
+                match labwired_loader::SymbolProvider::new(firmware_path) {
+                    Ok(symbols) => {
+                        let report = labwired_cli::pc_coverage_report::CoverageReport::build(
+                            symbols.statement_rows(),
+                            |addr| cov.was_executed(addr as u32),
+                        );
+                        let info_path = output_dir.join("coverage.info");
+                        if let Err(e) = std::fs::write(&info_path, report.to_lcov()) {
+                            error!("Failed to write coverage.info: {}", e);
+                        }
+                        let cov_json_path = output_dir.join("coverage.json");
+                        match std::fs::File::create(&cov_json_path) {
+                            Ok(f) => {
+                                if let Err(e) = serde_json::to_writer_pretty(f, &report) {
+                                    error!("Failed to write coverage.json: {}", e);
+                                }
+                            }
+                            Err(e) => error!("Failed to create coverage.json: {}", e),
+                        }
+                        info!(
+                            "Coverage: {}/{} statements ({:.1}%)",
+                            report.covered_statements,
+                            report.total_statements,
+                            report.statement_percent()
+                        );
+                    }
+                    Err(e) => error!("Failed to load symbols for coverage: {}", e),
                 }
             }
 

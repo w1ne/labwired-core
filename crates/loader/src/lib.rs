@@ -439,6 +439,18 @@ pub struct SourceLocation {
     pub function: Option<String>,
 }
 
+/// One row of the DWARF line-number program: the instruction address and the
+/// source position it maps to. Unlike the reverse `line_map`, these are NOT
+/// deduplicated — every row is retained, so the set of `is_stmt` rows is the
+/// statement universe for coverage.
+#[derive(Debug, Clone)]
+pub struct StmtRow {
+    pub addr: u64,
+    pub file: String,
+    pub line: u32,
+    pub is_stmt: bool,
+}
+
 #[derive(Debug, Clone)]
 pub enum DwarfLocation {
     Register(u16),
@@ -464,6 +476,8 @@ pub struct SymbolProvider {
     >,
     // Map of (file_name, line) -> address
     line_map: HashMap<(String, u32), u64>,
+    // Full line-program rows (not deduped) — the statement universe for coverage
+    stmt_rows: Vec<StmtRow>,
     // Map of symbol_name -> address
     symbol_map: HashMap<String, u64>,
     // Test-only locals: PC -> list of locals
@@ -483,6 +497,7 @@ impl SymbolProvider {
         let object = object::File::parse(slice).context("Failed to parse ELF for symbols")?;
 
         let mut line_map = std::collections::HashMap::new();
+        let mut stmt_rows: Vec<StmtRow> = Vec::new();
 
         // Build line map using gimli for reverse lookup
         let load_section = |id: gimli::SectionId| -> std::result::Result<
@@ -521,10 +536,16 @@ impl SymbolProvider {
                                 });
 
                             if let (Some(f), Some(line)) = (file_name, row.line()) {
-                                // Store the first address seen for this file:line
-                                line_map
-                                    .entry((f, line.get() as u32))
-                                    .or_insert(row.address());
+                                let line_u32 = line.get() as u32;
+                                // Retain every row for the statement universe...
+                                stmt_rows.push(StmtRow {
+                                    addr: row.address(),
+                                    file: f.clone(),
+                                    line: line_u32,
+                                    is_stmt: row.is_stmt(),
+                                });
+                                // ...and the first address per file:line for reverse lookup.
+                                line_map.entry((f, line_u32)).or_insert(row.address());
                             }
                         }
                     }
@@ -551,9 +572,17 @@ impl SymbolProvider {
             dwarf,
             context,
             line_map,
+            stmt_rows,
             symbol_map,
             test_locals: HashMap::new(),
         })
+    }
+
+    /// Full DWARF line-program rows (not deduplicated). The set of rows with
+    /// `is_stmt` set is the statement universe: a statement is covered when an
+    /// instruction at its address was executed.
+    pub fn statement_rows(&self) -> &[StmtRow] {
+        &self.stmt_rows
     }
 
     pub fn lookup(&self, addr: u64) -> Option<SourceLocation> {
@@ -791,6 +820,7 @@ impl SymbolProvider {
             dwarf,
             context,
             line_map: HashMap::new(),
+            stmt_rows: Vec::new(),
             symbol_map: HashMap::new(),
             test_locals: HashMap::new(),
         }
@@ -873,6 +903,45 @@ mod tests {
             loc.file
         );
         assert_eq!(loc.line, Some(26));
+    }
+
+    #[test]
+    fn test_statement_rows_full_not_deduped() {
+        let elf_path =
+            std::path::PathBuf::from("../../target/thumbv7m-none-eabi/debug/firmware-ci-fixture");
+        if !elf_path.exists() {
+            eprintln!(
+                "skipping test_statement_rows_full_not_deduped: fixture not built \
+                 (cargo build -p firmware-ci-fixture --target thumbv7m-none-eabi)"
+            );
+            return;
+        }
+
+        let provider = SymbolProvider::new(&elf_path).expect("Failed to create SymbolProvider");
+        let rows = provider.statement_rows();
+
+        assert!(!rows.is_empty(), "expected DWARF line-program rows");
+        assert!(
+            rows.iter().any(|r| r.is_stmt),
+            "expected at least one is_stmt row"
+        );
+
+        // The full row set must not be deduplicated the way the reverse line_map
+        // is: there are more rows than distinct (file,line) keys whenever any
+        // line spans multiple address ranges (loops, inlining, -O).
+        let distinct_lines: std::collections::HashSet<(&str, u32)> =
+            rows.iter().map(|r| (r.file.as_str(), r.line)).collect();
+        assert!(
+            rows.len() >= distinct_lines.len(),
+            "row count must be at least the distinct-line count"
+        );
+
+        // main.rs line 26 is known-present (see test_location_to_pc).
+        assert!(
+            rows.iter()
+                .any(|r| r.file.ends_with("main.rs") && r.line == 26),
+            "expected a statement row for main.rs:26"
+        );
     }
 
     #[test]

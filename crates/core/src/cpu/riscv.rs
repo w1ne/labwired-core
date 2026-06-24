@@ -733,12 +733,16 @@ impl Cpu for RiscV {
 
         self.pc = next_pc;
 
-        let mut registers = [0u32; 33];
-        registers[..32].copy_from_slice(&self.x);
-        registers[32] = self.pc;
+        // Building the register snapshot is pure waste when nothing observes it,
+        // and this runs on every instruction. Gate it on having observers.
+        if !observers.is_empty() {
+            let mut registers = [0u32; 33];
+            registers[..32].copy_from_slice(&self.x);
+            registers[32] = self.pc;
 
-        for obs in observers {
-            obs.on_step_end(inst_len, &registers);
+            for obs in observers {
+                obs.on_step_end(inst_len, &registers);
+            }
         }
 
         Ok(())

@@ -2776,14 +2776,19 @@ impl CortexM {
 
         self.pc = self.pc.wrapping_add(pc_increment);
 
-        let mut registers = [0u32; 17];
-        for (i, reg) in registers.iter_mut().enumerate().take(16) {
-            *reg = self.get_register(i as u8);
-        }
-        registers[16] = self.xpsr;
+        // Building the register snapshot is pure waste when nothing observes it,
+        // and this runs on every instruction. Gate it on having observers, the
+        // same way on_step_start above is gated.
+        if !_observers.is_empty() {
+            let mut registers = [0u32; 17];
+            for (i, reg) in registers.iter_mut().enumerate().take(16) {
+                *reg = self.get_register(i as u8);
+            }
+            registers[16] = self.xpsr;
 
-        for obs in _observers {
-            obs.on_step_end(_cycles, &registers);
+            for obs in _observers {
+                obs.on_step_end(_cycles, &registers);
+            }
         }
 
         Ok(())

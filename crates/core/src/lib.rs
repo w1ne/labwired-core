@@ -17,6 +17,7 @@ pub mod memory;
 pub mod metrics;
 pub mod multi_core;
 pub mod network;
+pub mod pc_coverage;
 pub mod peripherals;
 pub mod physics;
 pub mod runtime_snapshot;
@@ -1365,6 +1366,17 @@ impl<C: Cpu> DebugControl for Machine<C> {
             // not at all), losing all but the last op and breaking erase-before-
             // program ordering.
             if self.bus.requires_cycle_accurate() {
+                current_batch = current_batch.min(1);
+            }
+
+            // Breakpoints are only checked at batch boundaries (top of loop). If
+            // any breakpoint is set, clamp the batch to one instruction so a
+            // breakpoint whose PC lies inside a batch is caught at exactly that
+            // PC instead of being executed past and noticed only at the next
+            // boundary (the GDB "continue never stops" bug). This per-instruction
+            // cost applies ONLY while breakpoints are set, i.e. under a debugger,
+            // so the no-breakpoint hot path is unaffected.
+            if !self.breakpoints.is_empty() {
                 current_batch = current_batch.min(1);
             }
 
