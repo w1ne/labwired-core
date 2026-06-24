@@ -102,10 +102,18 @@ export function SimDock({ state, runtimeMs = 0, cycles, pc, onRun, onPause, onSt
         onClick={onStep}
         disabled={!isPaused}
         aria-label="Step"
+        title="Step one instruction (pause first)"
         style={{ borderRadius: 999 }}
-        className="h-10 w-10 sm:h-8 sm:w-8 bg-white/[0.05] hover:bg-white/[0.10] text-fg-secondary hover:text-fg-primary disabled:opacity-40 disabled:cursor-not-allowed outline-none border-0 shrink-0"
+        className="h-10 w-10 sm:h-8 sm:w-8 bg-white/[0.05] hover:bg-white/[0.10] text-fg-secondary hover:text-fg-primary disabled:opacity-40 disabled:cursor-not-allowed outline-none border-0 shrink-0 inline-flex items-center justify-center"
       >
-        ⏵
+        {/* Explicit "step / advance one" icon (triangle + bar). Inline SVG, not a
+            Unicode media glyph (U+23F5 ⏵ is font-fragile on Linux and reads as a
+            second Play button next to Run) — renders identically everywhere and
+            clearly means step-forward. */}
+        <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden>
+          <path d="M3.5 3.2v9.6L10.7 8z" />
+          <rect x="11.4" y="3.2" width="1.7" height="9.6" rx="0.5" />
+        </svg>
       </button>
       <button
         type="button"
