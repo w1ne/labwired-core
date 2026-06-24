@@ -17,21 +17,34 @@
 //! firmware under test ran (firmware coverage).
 
 use crate::SimulationObserver;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
+/// Taken / not-taken counts observed for the instruction at one source address.
+///
+/// `taken` counts the times execution left via a non-fall-through path (a taken
+/// conditional branch, an unconditional jump, a call, a return or a trap);
+/// `not_taken` counts the times it fell through to the next instruction. A
+/// source address with `taken > 0` is a branch site.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct BranchCounts {
+    pub taken: u64,
+    pub not_taken: u64,
+    pub target: Option<u32>,
+}
+
 /// Observer that accumulates the set of executed instruction addresses and the
-/// control-flow edges taken between them.
+/// per-instruction taken/not-taken control-flow outcomes between them.
 ///
 /// Addresses are stored half-word aligned (the Thumb bit is masked off) so a PC
-/// and its interworking alias collapse to one entry. An edge `(from, to)` is
-/// recorded whenever the next executed address is not the natural fall-through
-/// of the previous one, which is exactly a taken branch / call / return / trap.
+/// and its interworking alias collapse to one entry. For each source address we
+/// record whether execution fell through or diverged, which yields both branch
+/// edges and branch taken/not-taken coverage.
 #[derive(Debug, Default)]
 pub struct PcCoverageObserver {
     executed: Mutex<BTreeSet<u32>>,
-    edges: Mutex<BTreeSet<(u32, u32)>>,
+    branches: Mutex<BTreeMap<u32, BranchCounts>>,
     last: Mutex<Option<(u32, u32)>>, // (aligned_pc, opcode_len_in_bytes)
     total: AtomicU64,
 }
@@ -61,9 +74,27 @@ impl PcCoverageObserver {
 
     /// Control-flow edges taken, as `(from, to)` aligned address pairs, ascending.
     pub fn edges(&self) -> Vec<(u32, u32)> {
-        self.edges
+        self.branches
             .lock()
-            .map(|s| s.iter().copied().collect())
+            .map(|b| {
+                b.iter()
+                    .filter_map(|(src, c)| c.target.filter(|_| c.taken > 0).map(|t| (*src, t)))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Branch sites — source addresses that diverged at least once — with their
+    /// taken/not-taken counts, ascending by address.
+    pub fn branch_sites(&self) -> Vec<(u32, BranchCounts)> {
+        self.branches
+            .lock()
+            .map(|b| {
+                b.iter()
+                    .filter(|(_, c)| c.taken > 0)
+                    .map(|(src, c)| (*src, *c))
+                    .collect()
+            })
             .unwrap_or_default()
     }
 
@@ -98,9 +129,13 @@ impl SimulationObserver for PcCoverageObserver {
         if let Ok(mut last) = self.last.lock() {
             if let Some((prev_pc, prev_len)) = *last {
                 let fallthrough = prev_pc.wrapping_add(prev_len);
-                if aligned != fallthrough {
-                    if let Ok(mut edges) = self.edges.lock() {
-                        edges.insert((prev_pc, aligned));
+                if let Ok(mut branches) = self.branches.lock() {
+                    let counts = branches.entry(prev_pc).or_default();
+                    if aligned != fallthrough {
+                        counts.taken += 1;
+                        counts.target = Some(aligned);
+                    } else {
+                        counts.not_taken += 1;
                     }
                 }
             }
@@ -151,5 +186,27 @@ mod tests {
         // A jump backwards to 0x0800_0000: one edge from 0x0800_0002.
         cov.on_step_start(0x0800_0000, 0x4600);
         assert_eq!(cov.edges(), vec![(0x0800_0002, 0x0800_0000)]);
+    }
+
+    #[test]
+    fn records_branch_taken_and_not_taken_counts() {
+        let cov = PcCoverageObserver::new();
+        // Branch at 0x0800_0100: once falls through to 0x0800_0102, once taken
+        // to 0x0800_0200. (Re-entering the branch is itself a divergence from
+        // 0x0800_0102, so assert on 0x0800_0100's own counts, not the site
+        // total.)
+        cov.on_step_start(0x0800_0100, 0x4600);
+        cov.on_step_start(0x0800_0102, 0x4600); // 0x...0100 fell through
+        cov.on_step_start(0x0800_0100, 0x4600); // re-enter the branch
+        cov.on_step_start(0x0800_0200, 0x4600); // 0x...0100 taken to 0x...0200
+
+        let sites = cov.branch_sites();
+        let (_, counts) = sites
+            .iter()
+            .find(|(src, _)| *src == 0x0800_0100)
+            .expect("0x0800_0100 is a branch site");
+        assert_eq!(counts.not_taken, 1);
+        assert_eq!(counts.taken, 1);
+        assert_eq!(counts.target, Some(0x0800_0200));
     }
 }
