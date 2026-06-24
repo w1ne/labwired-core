@@ -94,6 +94,40 @@ impl GenericPeripheral {
         &self.descriptor
     }
 
+    /// Force `reg_id` to `value`, overriding both its live contents and its
+    /// declared reset value so the change survives a later reset. This is the
+    /// injection point for the `wrong_reset_value` fault. Returns false if no
+    /// register has `reg_id`.
+    pub fn force_register_value(&mut self, reg_id: &str, value: u32) -> bool {
+        let Some(reg) = self
+            .descriptor
+            .registers
+            .iter_mut()
+            .find(|r| r.id == reg_id)
+        else {
+            return false;
+        };
+        reg.reset_value = value;
+        let offset = reg.address_offset as usize;
+        let size = reg.size;
+        let mut data = self.data.borrow_mut();
+        match size {
+            8 if offset < data.len() => data[offset] = value as u8,
+            16 if offset + 1 < data.len() => {
+                data[offset] = (value & 0xFF) as u8;
+                data[offset + 1] = ((value >> 8) & 0xFF) as u8;
+            }
+            32 if offset + 3 < data.len() => {
+                data[offset] = (value & 0xFF) as u8;
+                data[offset + 1] = ((value >> 8) & 0xFF) as u8;
+                data[offset + 2] = ((value >> 16) & 0xFF) as u8;
+                data[offset + 3] = ((value >> 24) & 0xFF) as u8;
+            }
+            _ => {}
+        }
+        true
+    }
+
     fn check_triggers(&self, register_id: &str, is_write: bool, value: Option<u32>) {
         if let Some(timing) = &self.descriptor.timing {
             for hook in timing {
@@ -470,6 +504,31 @@ mod tests {
             interrupts: None,
             timing: None,
         }
+    }
+
+    #[test]
+    fn force_register_value_overrides_and_persists_through_reset() {
+        let mut p = GenericPeripheral::new(mock_descriptor());
+        assert_eq!(p.read_u32(0x00).unwrap(), 0x12345678);
+
+        assert!(p.force_register_value("REG1", 0xDEAD_BEEF));
+        assert_eq!(
+            p.read_u32(0x00).unwrap(),
+            0xDEAD_BEEF,
+            "live value overridden"
+        );
+
+        // The reset value is overridden too, so a fresh peripheral built from
+        // the mutated descriptor seeds the faulted value (survives reset).
+        let p2 = GenericPeripheral::new(p.get_descriptor().clone());
+        assert_eq!(
+            p2.read_u32(0x00).unwrap(),
+            0xDEAD_BEEF,
+            "reset value overridden"
+        );
+
+        // An unknown register is reported, not silently ignored.
+        assert!(!p.force_register_value("NOPE", 1));
     }
 
     #[test]

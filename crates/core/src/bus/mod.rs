@@ -1250,6 +1250,34 @@ impl SystemBus {
         self.clock_gating_bypass = bypass;
     }
 
+    /// Inject a `wrong_reset_value` fault: force `register` on the declarative
+    /// peripheral `peripheral` to `value`. Returns an error (never a silent
+    /// no-op) if the peripheral or register is absent, or the peripheral is not
+    /// a declarative `GenericPeripheral`.
+    pub fn inject_wrong_reset_value(
+        &mut self,
+        peripheral: &str,
+        register: &str,
+        value: u32,
+    ) -> Result<(), String> {
+        let idx = self
+            .find_peripheral_index_by_name(peripheral)
+            .ok_or_else(|| format!("fault target peripheral '{peripheral}' not found"))?;
+        let any = self.peripherals[idx]
+            .dev
+            .as_any_mut()
+            .ok_or_else(|| format!("peripheral '{peripheral}' is not introspectable for faults"))?;
+        let generic = any
+            .downcast_mut::<crate::peripherals::declarative::GenericPeripheral>()
+            .ok_or_else(|| format!("peripheral '{peripheral}' is not a declarative peripheral"))?;
+        if !generic.force_register_value(register, value) {
+            return Err(format!(
+                "register '{register}' not found on peripheral '{peripheral}'"
+            ));
+        }
+        Ok(())
+    }
+
     pub fn new() -> Self {
         // Default initialization for tests
         let mut bus = Self {
