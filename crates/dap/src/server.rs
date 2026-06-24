@@ -1438,28 +1438,42 @@ impl DapServer {
                 )?;
             }
             "stepBack" => {
-                let _ = self.adapter.step_back();
-                sender.send_response(req_seq, "stepBack", None)?;
-                sender.send_event(
-                    "stopped",
-                    Some(json!({
-                        "reason": "step",
-                        "threadId": 1,
-                        "allThreadsStopped": true
-                    })),
-                )?;
+                if let Err(e) = self.adapter.step_back() {
+                    sender.send_error_response(
+                        req_seq,
+                        "stepBack",
+                        &format!("Step back failed: {}", e),
+                    )?;
+                } else {
+                    sender.send_response(req_seq, "stepBack", None)?;
+                    sender.send_event(
+                        "stopped",
+                        Some(json!({
+                            "reason": "step",
+                            "threadId": 1,
+                            "allThreadsStopped": true
+                        })),
+                    )?;
+                }
             }
             "stepOut" => {
-                let _ = self.adapter.step_out();
-                sender.send_response(req_seq, "stepOut", None)?;
-                sender.send_event(
-                    "stopped",
-                    Some(json!({
-                        "reason": "step",
-                        "threadId": 1,
-                        "allThreadsStopped": true
-                    })),
-                )?;
+                if let Err(e) = self.adapter.step_out() {
+                    sender.send_error_response(
+                        req_seq,
+                        "stepOut",
+                        &format!("Step out failed: {}", e),
+                    )?;
+                } else {
+                    sender.send_response(req_seq, "stepOut", None)?;
+                    sender.send_event(
+                        "stopped",
+                        Some(json!({
+                            "reason": "step",
+                            "threadId": 1,
+                            "allThreadsStopped": true
+                        })),
+                    )?;
+                }
             }
             "readInstructionTrace" => {
                 let (start_cycle, end_cycle) = if let Some(args) = arguments {
