@@ -147,10 +147,23 @@ impl Scb {
         match offset {
             0x00 => self.cpuid,
             0x04 => {
-                // ICSR: only VECTACTIVE [8:0] is modeled live. The rest
-                // (VECTPENDING [22:12], ISRPREEMPT [23], PENDSV [28],
-                // NMIPENDSET [31] etc.) come from the stored icsr.
-                (self.icsr & !0x1FF) | (self.vectactive.load(Ordering::Relaxed) & 0x1FF)
+                // ICSR. VECTACTIVE [8:0] is live; the pend bits PENDSV [28],
+                // PENDSTSET [26] and NMIPENDSET [31] read back live pending
+                // state. The write-only SET/CLR action bits never read back
+                // (ARMv7-M ARM B3.2.4) — they are masked out of the stored
+                // value on write, so PENDSVCLR/PENDSTCLR always read 0.
+                let mut v =
+                    (self.icsr & !0x1FF) | (self.vectactive.load(Ordering::Relaxed) & 0x1FF);
+                if self.pendsv_pending {
+                    v |= 1 << 28;
+                }
+                if self.systick_pending {
+                    v |= 1 << 26;
+                }
+                if self.nmi_pending {
+                    v |= 1 << 31;
+                }
+                v
             }
             0x08 => self.vtor.load(Ordering::Relaxed),
             0x0C => self.aircr,
@@ -197,7 +210,15 @@ impl Scb {
                 if value & (1 << 25) != 0 {
                     self.systick_pending = false;
                 }
-                self.icsr = value;
+                // The SET/CLR action bits are write-only / self-clearing: never
+                // persist them. Zephyr's arch_swap re-pends with a read-modify-
+                // write (`ldr ICSR; orr #PENDSVSET; str ICSR`); storing the bits
+                // would read back a stale PENDSVCLR, and its side effect above
+                // would then cancel the fresh PENDSVSET — leaving PendSV unpended,
+                // so a self-aborting thread's context switch never fires.
+                const ICSR_ACTION_BITS: u32 =
+                    (1 << 31) | (1 << 28) | (1 << 27) | (1 << 26) | (1 << 25);
+                self.icsr = value & !ICSR_ACTION_BITS;
             }
             0x08 => self.vtor.store(value, Ordering::Relaxed),
             0x0C => {
@@ -312,6 +333,7 @@ impl crate::Peripheral for Scb {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Peripheral;
 
     #[test]
     fn aircr_sysresetreq_with_vectkey_latches_reset() {
@@ -359,5 +381,60 @@ mod tests {
         assert_eq!(scb.read_register(0x98), 0x3, "RNR");
         assert_eq!(scb.read_register(0x9C), 0x2000_0013, "RBAR");
         assert_eq!(scb.read_register(0xA0), 0x0300_0027, "RASR");
+    }
+
+    #[test]
+    fn icsr_pendsvclr_is_write_only() {
+        // PENDSVCLR [27] is a write-only action bit (ARMv7-M ARM B3.2.4); it
+        // must always read back 0, never the last written value.
+        let mut scb = Scb::new(Arc::new(AtomicU32::new(0)));
+        scb.write_register(0x04, 1 << 27); // PENDSVCLR
+        assert_eq!(scb.read_register(0x04) & (1 << 27), 0, "PENDSVCLR reads 0");
+    }
+
+    #[test]
+    fn icsr_pendsvset_reads_live_pending() {
+        // PENDSV [28] reads back the live pending state: set after PENDSVSET,
+        // cleared once the exception is serviced — not the written action bit.
+        let mut scb = Scb::new(Arc::new(AtomicU32::new(0)));
+        scb.write_register(0x04, 1 << 28); // PENDSVSET
+        assert_eq!(scb.read_register(0x04) & (1 << 28), 1 << 28, "pending");
+        let _ = scb.tick(); // service PendSV
+        assert_eq!(scb.read_register(0x04) & (1 << 28), 0, "drained reads 0");
+    }
+
+    #[test]
+    fn icsr_stale_pendsvclr_does_not_poison_later_pend() {
+        // Regression for the Zephyr sched.c:493 abort. arch_swap re-pends with
+        // `ldr ICSR; orr #PENDSVSET; str ICSR`. If a PENDSVCLR written earlier
+        // read back stale, the OR-and-store would carry it along and the
+        // PENDSVCLR side effect would cancel the fresh PENDSVSET — no context
+        // switch, and z_swap returns into the dying thread.
+        let mut scb = Scb::new(Arc::new(AtomicU32::new(0)));
+        scb.write_register(0x04, 1 << 28); // start swap: pend PendSV
+        let _ = scb.tick(); // serviced
+        scb.write_register(0x04, 1 << 27); // kernel clears: PENDSVCLR
+        let v = scb.read_register(0x04); // RMW read
+        scb.write_register(0x04, v | (1 << 28)); // orr PENDSVSET; str
+        assert!(
+            scb.pendsv_pending,
+            "PendSV pending; stale CLR must not survive"
+        );
+    }
+
+    #[test]
+    fn icsr_nmi_systick_pend_read_live_clr_reads_zero() {
+        let mut scb = Scb::new(Arc::new(AtomicU32::new(0)));
+        scb.write_register(0x04, 1 << 31); // NMIPENDSET
+        assert_eq!(scb.read_register(0x04) & (1 << 31), 1 << 31, "NMI pending");
+        scb.write_register(0x04, 1 << 26); // PENDSTSET
+        assert_eq!(
+            scb.read_register(0x04) & (1 << 26),
+            1 << 26,
+            "SysTick pending"
+        );
+        scb.write_register(0x04, 1 << 25); // PENDSTCLR
+        assert_eq!(scb.read_register(0x04) & (1 << 25), 0, "PENDSTCLR reads 0");
+        assert_eq!(scb.read_register(0x04) & (1 << 26), 0, "SysTick cleared");
     }
 }
