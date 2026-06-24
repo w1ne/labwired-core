@@ -497,16 +497,26 @@ export function getPinEtype(board: string, pinLabel: string): PinElectrical | nu
   const override = PIN_ELECTRICAL_OVERRIDES[board]?.[pinLabel];
   if (override) return override;
 
-  // 2. Name-based power-rail default (works across all boards).
+  // 2a. Universal base power rails resolve to `power_out` even when the board's
+  // GPIO PIN_MAP omits them (those maps list signal pins, not every header
+  // rail). EXACT match only, against the same base-rail set that
+  // legacy-diagnostics' POWER_PINS allow-list bypasses for PIN_NOT_ON_CHIP — so
+  // a power wire to mcu:5V / mcu:VCC is always valid. Without this, peripherals
+  // powered from a rail the map happens to omit (F103 Blue Pill 5V, L476 VCC)
+  // falsely tripped PWR_RAIL_UNDRIVEN. A board-specific or instanced name
+  // (AGND, GND.99) is NOT universal and still requires map membership (2b).
+  // `getPinMapping` is unaffected — it still returns null for unmapped pins.
+  if (/^(3V3|5V|VCC|VDD|VBUS|VSS|VIN|GND)$/i.test(pinLabel)) {
+    return { etype: 'power_out', internalPullup: false };
+  }
+
+  // 2b. Name-based power-rail default for other power-ish labels (e.g. AGND, or
+  // an instanced GND.2), applied only when the pin actually exists in the
+  // board's map; otherwise null so getPinMapping-null callers stay consistent.
   const powerDefault = powerPinDefaultEtype(pinLabel);
   if (powerDefault) {
-    // Only apply if the pin actually exists in the board's map (or the board
-    // has no map — treat it as known when the board itself is unknown and
-    // we'd return null from getPinMapping anyway).
     const mapping = getPinMapping(board, pinLabel);
     if (mapping) return powerDefault;
-    // Pin name looks like power but is not in this board's map → return null
-    // so that getPinMapping(board, pinLabel) == null callers still get null.
     return null;
   }
 

@@ -261,6 +261,15 @@ function diagnoseWireEndpoints(
   const otherEnd = boardIoEnd === a ? b : a;
   if (!boardIoEnd) return null;
 
+  // A probe/analyzer (deviceClass 'tool', e.g. logic-analyzer, can-diagnostic-tool)
+  // is a non-intrusive instrument: it legitimately taps any signal node —
+  // including a board_io device's pin — without going through the MCU. Such a
+  // tap is not a topology error, so skip the direct-to-MCU requirement when the
+  // non-board_io end is a tool.
+  if (otherEnd.part && getCatalogPart(otherEnd.part.type)?.deviceClass === 'tool') {
+    return null;
+  }
+
   if (!otherEnd.isMcu) {
     return {
       severity: 'error',
@@ -335,6 +344,12 @@ export function diagnoseDiagram(diagram: ValidateDiagram): Diagnostic[] {
         : null;
     const otherEndpoint = mcuEndpoint === wire.from ? wire.to : mcuEndpoint === wire.to ? wire.from : null;
     if (!mcuEndpoint || !otherEndpoint) continue;
+    // Power-rail wires (mcu:VCC/GND/3V3/5V → part) are not functional signal
+    // assignments: a rail legitimately fans out to many parts, and a part's GND
+    // leg is not a second "MCU connection". Excluding them stops false
+    // PIN_OVERLOADED (shared VCC/GND) and BOARDIO_MULTIPLE_WIRES (e.g. an NTC
+    // divider's signal + GND counted as two) on otherwise-correct boards.
+    if (typeof mcuEndpoint.pin === 'string' && POWER_PINS.has(mcuEndpoint.pin.toUpperCase())) continue;
     const otherRole = getRole(diagram, otherEndpoint);
     if (!otherRole.boardIoKind) continue;
     const partId = otherEndpoint.part;
