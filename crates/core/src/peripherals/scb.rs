@@ -152,8 +152,8 @@ impl Scb {
                 // state. The write-only SET/CLR action bits never read back
                 // (ARMv7-M ARM B3.2.4) — they are masked out of the stored
                 // value on write, so PENDSVCLR/PENDSTCLR always read 0.
-                let mut v = (self.icsr & !0x1FF)
-                    | (self.vectactive.load(Ordering::Relaxed) & 0x1FF);
+                let mut v =
+                    (self.icsr & !0x1FF) | (self.vectactive.load(Ordering::Relaxed) & 0x1FF);
                 if self.pendsv_pending {
                     v |= 1 << 28;
                 }
@@ -416,7 +416,10 @@ mod tests {
         scb.write_register(0x04, 1 << 27); // kernel clears: PENDSVCLR
         let v = scb.read_register(0x04); // RMW read
         scb.write_register(0x04, v | (1 << 28)); // orr PENDSVSET; str
-        assert!(scb.pendsv_pending, "PendSV pending; stale CLR must not survive");
+        assert!(
+            scb.pendsv_pending,
+            "PendSV pending; stale CLR must not survive"
+        );
     }
 
     #[test]
@@ -425,7 +428,11 @@ mod tests {
         scb.write_register(0x04, 1 << 31); // NMIPENDSET
         assert_eq!(scb.read_register(0x04) & (1 << 31), 1 << 31, "NMI pending");
         scb.write_register(0x04, 1 << 26); // PENDSTSET
-        assert_eq!(scb.read_register(0x04) & (1 << 26), 1 << 26, "SysTick pending");
+        assert_eq!(
+            scb.read_register(0x04) & (1 << 26),
+            1 << 26,
+            "SysTick pending"
+        );
         scb.write_register(0x04, 1 << 25); // PENDSTCLR
         assert_eq!(scb.read_register(0x04) & (1 << 25), 0, "PENDSTCLR reads 0");
         assert_eq!(scb.read_register(0x04) & (1 << 26), 0, "SysTick cleared");
