@@ -2145,4 +2145,41 @@ pub mod integration_tests {
             "Should have executed one instruction (thumb)"
         );
     }
+
+    #[test]
+    fn test_breakpoint_stops_inside_batch() {
+        // A breakpoint whose PC lies INSIDE a multi-instruction batch must stop
+        // at exactly that PC. Breakpoints are only checked at batch boundaries,
+        // so with a tick interval > 1 the batch would otherwise execute straight
+        // past the breakpoint — the classic GDB "set breakpoint, continue, never
+        // stops" symptom.
+        let mut machine = create_machine();
+        // Force batches larger than one instruction so the breakpoint is not at
+        // a batch boundary.
+        machine.config.peripheral_tick_interval = 16;
+
+        let pc = 0x2000_0000u32;
+        machine.cpu.set_pc(pc);
+
+        // 64 Thumb NOPs (MOV R0, R0 = 0x4600) so every stepped address is valid.
+        for i in 0..64u64 {
+            machine.bus.write_u16(pc as u64 + i * 2, 0x4600).unwrap();
+        }
+
+        // Breakpoint three instructions in — inside the first batch, not at the
+        // starting PC (which the boundary check already catches).
+        let bp = pc + 6;
+        machine.add_breakpoint(bp);
+
+        let res = machine.run(Some(64)).unwrap();
+        assert!(
+            matches!(res, StopReason::Breakpoint(addr) if addr == bp),
+            "continue must stop AT the breakpoint inside a batch, got {res:?}"
+        );
+        assert_eq!(
+            machine.cpu.get_pc(),
+            bp,
+            "PC must be exactly at the breakpoint, not past it"
+        );
+    }
 }

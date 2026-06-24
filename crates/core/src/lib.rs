@@ -1368,6 +1368,17 @@ impl<C: Cpu> DebugControl for Machine<C> {
                 current_batch = current_batch.min(1);
             }
 
+            // Breakpoints are only checked at batch boundaries (top of loop). If
+            // any breakpoint is set, clamp the batch to one instruction so a
+            // breakpoint whose PC lies inside a batch is caught at exactly that
+            // PC instead of being executed past and noticed only at the next
+            // boundary (the GDB "continue never stops" bug). This per-instruction
+            // cost applies ONLY while breakpoints are set, i.e. under a debugger,
+            // so the no-breakpoint hot path is unaffected.
+            if !self.breakpoints.is_empty() {
+                current_batch = current_batch.min(1);
+            }
+
             let executed =
                 self.cpu
                     .step_batch(&mut self.bus, &self.observers, &self.config, current_batch)?;
