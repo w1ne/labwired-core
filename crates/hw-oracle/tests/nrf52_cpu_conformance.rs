@@ -35,6 +35,10 @@ const IDX_IPSR_IN_SVC: usize = 1;
 const IDX_SWITCH_ACC: usize = 2;
 const IDX_MPU_DREGION: usize = 3;
 const IDX_LDRPC_ACC: usize = 4;
+const IDX_BASEPRI: usize = 5;
+const IDX_FAULTMASK: usize = 6;
+const IDX_MSP_PSP: usize = 7;
+const IDX_ICSR: usize = 8;
 
 // Architecture-defined expectations (identical on sim and silicon).
 //
@@ -52,6 +56,23 @@ const EXPECT_MPU_DREGION: u32 = 8;
 // one halfword past the case body and changes this value.
 const EXPECT_LDRPC_ACC: u32 = 0x0005_B05B;
 
+// Words 5..8 each pack (TAG << 4) | bool_nibble, where every bool is an
+// architecture-defined observation; all-correct yields the value below. A
+// regression in the modelled behaviour flips a bool and changes the word.
+//
+// BASEPRI (#355): masked SysTick stays pending, unmasks once; BASEPRI readback;
+// BASEPRI_MAX only-raises (weaker ignored, stronger applied). TAG 0xB.
+const EXPECT_BASEPRI: u32 = 0x0000_00BF;
+// FAULTMASK (#356): masks a pended SysTick, clears to fire once, and auto-clears
+// on exception return (set in-handler → reads 0 after). TAG 0xF.
+const EXPECT_FAULTMASK: u32 = 0x0000_00FF;
+// MSP/PSP banking (#354): PSP banked + distinct from MSP, exception from
+// thread/PSP sees EXC_RETURN=0xFFFFFFFD, PSP restored on return. TAG 0xD.
+const EXPECT_MSP_PSP: u32 = 0x0000_00DF;
+// ICSR write-only/self-clearing (#358): PENDSVSET self-clears on take, PENDSVCLR
+// reads back 0, the `|= PENDSVSET` RMW re-pends exactly once. TAG 0xC.
+const EXPECT_ICSR: u32 = 0x0000_00CF;
+
 #[allow(dead_code)]
 const LABELS: [&str; DIGEST_WORDS] = [
     "DONE",
@@ -59,10 +80,10 @@ const LABELS: [&str; DIGEST_WORDS] = [
     "switch_acc",
     "mpu_dregion",
     "ldrpc_acc",
-    "rsv5",
-    "rsv6",
-    "rsv7",
-    "rsv8",
+    "basepri",
+    "faultmask",
+    "msp_psp",
+    "icsr",
     "rsv9",
     "rsv10",
     "rsv11",
@@ -154,6 +175,23 @@ fn assert_architectural(d: &[u32]) {
         d[IDX_LDRPC_ACC], EXPECT_LDRPC_ACC,
         "ldr.w pc,[rn,rm,lsl#2] dispatch — a mis-modelled load-to-PC changes it"
     );
+    assert_eq!(
+        d[IDX_BASEPRI], EXPECT_BASEPRI,
+        "BASEPRI priority masking (#355) — masked SysTick must stay pending, \
+         unmask once; BASEPRI/BASEPRI_MAX semantics"
+    );
+    assert_eq!(
+        d[IDX_FAULTMASK], EXPECT_FAULTMASK,
+        "FAULTMASK masking + auto-clear-on-return (#356)"
+    );
+    assert_eq!(
+        d[IDX_MSP_PSP], EXPECT_MSP_PSP,
+        "MSP/PSP banking + EXC_RETURN=0xFFFFFFFD from thread/PSP (#354)"
+    );
+    assert_eq!(
+        d[IDX_ICSR], EXPECT_ICSR,
+        "ICSR write-only/self-clearing PENDSV RMW (#358)"
+    );
 }
 
 // ── Sim-only test (CI) ────────────────────────────────────────────────────────
@@ -170,7 +208,7 @@ fn cpu_conformance_sim() {
     };
     let d = run_sim(&elf);
     println!("\nnRF52840 sim CPU-conformance digest:");
-    for (i, (&v, label)) in d.iter().zip(LABELS.iter()).enumerate().take(5) {
+    for (i, (&v, label)) in d.iter().zip(LABELS.iter()).enumerate().take(9) {
         println!("  [{i:02}] {label:<14} = 0x{v:08X}");
     }
     assert_architectural(&d);
@@ -179,18 +217,25 @@ fn cpu_conformance_sim() {
 // ── HW + diff (silicon) ───────────────────────────────────────────────────────
 
 /// Silicon capture from the real nRF52840 (FICR.INFO.PART=0x00052840), ST-LINK
-/// V2, 2026-06-23. The firmware digest read over SWD at 0x2000_3000 was:
+/// V2. Words 0..4 captured 2026-06-23; words 5..8 captured 2026-06-24. The
+/// firmware digest read over SWD at 0x2000_3000 was:
 ///   [0]=0x52840D0E (DONE)      [1]=0x0000000B (IPSR-in-SVC = 11)
 ///   [2]=0x59C82174 (switch)    [3]=0x00000008 (DREGION = 8)
-///   [4]=0x0005B05B (ldr.w pc,[rn,rm,lsl#2] dispatch)
+///   [4]=0x0005B05B (ldr.w pc)  [5]=0x000000BF (BASEPRI #355)
+///   [6]=0x000000FF (FAULTMASK #356)  [7]=0x000000DF (MSP/PSP banking #354)
+///   [8]=0x000000CF (ICSR write-only/self-clearing #358)
 /// Every architectural word equals the sim. Lock it: this must never regress.
 #[cfg(feature = "hw-oracle-nrf52")]
-const SILICON_DIGEST: [u32; 5] = [
+const SILICON_DIGEST: [u32; 9] = [
     DONE_MAGIC,
     0x0000_000B,
     0x59C8_2174,
     0x0000_0008,
     0x0005_B05B,
+    0x0000_00BF,
+    0x0000_00FF,
+    0x0000_00DF,
+    0x0000_00CF,
 ];
 
 #[cfg(feature = "hw-oracle-nrf52")]
@@ -240,7 +285,7 @@ fn cpu_conformance_diff() {
     let hw = run_hw(&elf);
 
     println!("\nnRF52840 CPU-conformance sim-vs-silicon:");
-    for (i, label) in LABELS.iter().enumerate().take(5) {
+    for (i, label) in LABELS.iter().enumerate().take(9) {
         let mark = if sim[i] == hw[i] { "ok" } else { "MISMATCH" };
         println!(
             "  [{i:02}] {label:<14} sim=0x{:08X} hw=0x{:08X}  {mark}",

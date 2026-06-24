@@ -4,36 +4,38 @@
 //! nRF52840 **CPU**-conformance firmware.
 //!
 //! Where `firmware-nrf52840-conformance` exercises peripherals, this firmware
-//! exercises four ARMv7-M *core* behaviours that were recently modelled while
-//! bringing up Zephyr, and whose values are architecture-defined (identical on
-//! the simulator and on real silicon):
+//! exercises ARMv7-M *core* behaviours that were modelled while bringing up
+//! Zephyr, and whose values are architecture-defined (identical on the simulator
+//! and on real silicon):
 //!
-//!   1. **SVC delivery + `MRS IPSR` in exception context** — execute `svc #0`,
-//!      and inside the SVCall handler read IPSR (`mrs rN, IPSR`). In a SVCall
-//!      handler IPSR must read 11 (the SVCall exception number). This single
-//!      check exercises BOTH the SVC instruction (it must pend/take SVCall, not
-//!      fall through as a NOP) AND `MRS IPSR` (it must return the active
-//!      exception number, not 0).
+//!   1. **SVC delivery + `MRS IPSR` in exception context** — `svc #0`, and inside
+//!      the SVCall handler read IPSR (`mrs rN, IPSR`). Must read 11 (SVCall).
+//!   2. **`ldr.w pc,[rn,rm,lsl#2]` switch dispatch** — compiler jump table.
+//!   3. **MPU_TYPE.DREGION** — `0xE000ED90`, bits[15:8]; the M4F reports 8.
+//!   4. **explicit `ldr.w pc` jump table** — hand-emitted absolute-address table.
 //!
-//!   2. **`ldr.w pc,[rn,rm,lsl#2]` switch dispatch** — a dense integer `match`
-//!      that the compiler lowers to a PC-relative jump table (`ldr.w pc,[...]`).
-//!      Several inputs are dispatched and a position-weighted accumulator proves
-//!      every case branched to the RIGHT arm (a mis-modelled load-to-PC would
-//!      land on the wrong arm and change the accumulator).
+//! Words 5..8 lock the four fixes made while running Zephyr ztest, each probed so
+//! its observable result is architecture-defined and identical on sim/silicon:
 //!
-//!   3. **MPU_TYPE.DREGION** — read `MPU_TYPE` (`0xE000ED90`) and store the
-//!      DREGION field (bits[15:8]). The nRF52840 Cortex-M4F reports 8 regions.
-//!      This is the value most in need of confirmation against silicon, so it is
-//!      the most important digest word to diff against HW.
+//!   5. **BASEPRI** (#355) — priority masking: a configured-priority SysTick is
+//!      pended while BASEPRI masks it (must NOT run), then BASEPRI is lowered (it
+//!      runs). Also exercises BASEPRI_MAX only-raises semantics.
+//!   6. **FAULTMASK** (#356) — a pended SysTick is masked by FAULTMASK (must NOT
+//!      run), then FAULTMASK is cleared (it runs); and FAULTMASK auto-clears on
+//!      exception return (set inside a SysTick handler → reads 0 after return).
+//!   7. **MSP/PSP banking** (#354) — set PSP + CONTROL.SPSEL=1, MSP/PSP read
+//!      distinct, take an exception from thread/PSP (frame stacks on PSP, handler
+//!      sees EXC_RETURN=0xFFFFFFFD), return and confirm PSP is restored.
+//!   8. **ICSR write-only/self-clearing** (#358) — PENDSVSET self-clears on take;
+//!      PENDSVCLR reads back 0; the `ICSR |= PENDSVSET` RMW re-pends exactly once
+//!      (a stale PENDSVCLR must not cancel it).
 //!
-//! Layout mirrors the peripheral conformance firmware: `VERDICT[0]` is the DONE
-//! sentinel (written LAST, after every check); `VERDICT[1..]` are per-check
-//! digest words. The harness (`crates/hw-oracle/tests/nrf52_cpu_conformance.rs`)
-//! polls `VERDICT[0]` then diffs the block sim-vs-silicon.
+//! `VERDICT[0]` is the DONE sentinel (written LAST); `VERDICT[1..]` are per-check
+//! digest words. The harness polls `VERDICT[0]` then diffs sim-vs-silicon.
 #![no_std]
 #![no_main]
 
-use core::ptr::write_volatile;
+use core::ptr::{addr_of_mut, write_volatile};
 use core::sync::atomic::{AtomicU32, Ordering};
 use cortex_m_rt::{entry, exception};
 use panic_halt as _;
@@ -50,19 +52,43 @@ const IDX_IPSR_IN_SVC: usize = 1; // IPSR read inside SVCall handler (expect 11)
 const IDX_SWITCH_ACC: usize = 2; // compiler switch-table accumulator
 const IDX_MPU_DREGION: usize = 3; // MPU_TYPE.DREGION (bits[15:8]); expect 8
 const IDX_LDRPC_ACC: usize = 4; // explicit `ldr.w pc,[rn,rm,lsl#2]` dispatch
+const IDX_BASEPRI: usize = 5; // BASEPRI priority masking (#355)
+const IDX_FAULTMASK: usize = 6; // FAULTMASK masking + auto-clear (#356)
+const IDX_MSP_PSP: usize = 7; // MSP/PSP banking + EXC_RETURN (#354)
+const IDX_ICSR: usize = 8; // ICSR write-only/self-clearing PENDSV (#358)
 
 const VERDICT_WORDS: usize = 16;
 
 // ── Core register addresses (ARMv7-M System Control Space) ────────────────────
 
-/// MPU_TYPE — ARMv7-M MPU type register. DREGION = bits[15:8].
 const MPU_TYPE: u32 = 0xE000_ED90;
+/// Interrupt Control and State Register.
+const ICSR: u32 = 0xE000_ED04;
+const ICSR_PENDSVSET: u32 = 1 << 28;
+const ICSR_PENDSVCLR: u32 = 1 << 27;
+const ICSR_PENDSTSET: u32 = 1 << 26;
+/// System Handler Priority Register 3: PendSV = byte[23:16], SysTick = byte[31:24].
+const SHPR3: u32 = 0xE000_ED20;
+
+/// Priority assigned to SysTick for the masking probes. On a 3-priority-bit core
+/// the low 5 bits are RAZ, so 0x40 is a real, distinct, maskable level.
+const SYSTICK_PRIO: u32 = 0x40;
 
 // ── Cross-handler scratch ─────────────────────────────────────────────────────
 
-/// IPSR value captured inside the SVCall handler. The handler runs in exception
-/// context; `main` reads this back after the `svc` returns.
 static IPSR_IN_SVC: AtomicU32 = AtomicU32::new(0xFFFF_FFFF);
+/// EXC_RETURN (LR) captured at the top of the SVCall handler.
+static EXC_RETURN_SEEN: AtomicU32 = AtomicU32::new(0);
+static SYSTICK_COUNT: AtomicU32 = AtomicU32::new(0);
+static PENDSV_COUNT: AtomicU32 = AtomicU32::new(0);
+/// When 1, the SysTick handler sets FAULTMASK before returning (auto-clear probe).
+static SET_FAULTMASK_IN_SYSTICK: AtomicU32 = AtomicU32::new(0);
+
+/// Dedicated PSP stack for the banking probe (256 bytes; the 32-byte exception
+/// frame fits with room to spare). In `.bss`, so its address is identical on sim
+/// and silicon (same linker layout, same RAM base).
+const PSP_STACK_WORDS: usize = 64;
+static mut PSP_STACK: [u32; PSP_STACK_WORDS] = [0; PSP_STACK_WORDS];
 
 // ── MMIO helpers ─────────────────────────────────────────────────────────────
 
@@ -81,44 +107,47 @@ unsafe fn digest(idx: usize, val: u32) {
     wr(VERDICT + (idx as u32) * 4, val);
 }
 
-// ── SVCall exception handler ──────────────────────────────────────────────────
-//
-// Reached by `svc #0` from `main`. In a SVCall handler the IPSR (xPSR[8:0])
-// must read 11 — the exception number for SVCall on every ARMv7-M part. Read it
-// with `mrs` and stash it for `main`. (Exercises both SVC delivery AND MRS
-// IPSR: a NOP-modelled SVC never enters here; an IPSR-reads-0 model stores 0.)
+// ── Exception handlers ─────────────────────────────────────────────────────────
+
+// Reached by `svc #0`. Capture EXC_RETURN (LR) FIRST — before any call could
+// reuse LR — then IPSR (must read 11 in a SVCall handler). Both the IPSR probe
+// (entered from thread/MSP, EXC_RETURN 0xFFFFFFF9) and the MSP/PSP probe (entered
+// from thread/PSP, EXC_RETURN 0xFFFFFFFD) land here.
 #[exception]
 fn SVCall() {
+    let exc_return: u32;
     let ipsr: u32;
     unsafe {
+        core::arch::asm!("mov {0}, lr", out(reg) exc_return, options(nomem, nostack, preserves_flags));
         core::arch::asm!("mrs {0}, IPSR", out(reg) ipsr, options(nomem, nostack, preserves_flags));
     }
+    EXC_RETURN_SEEN.store(exc_return, Ordering::Relaxed);
     IPSR_IN_SVC.store(ipsr, Ordering::Relaxed);
 }
 
+#[exception]
+fn SysTick() {
+    SYSTICK_COUNT.fetch_add(1, Ordering::Relaxed);
+    if SET_FAULTMASK_IN_SYSTICK.load(Ordering::Relaxed) == 1 {
+        // Raise FAULTMASK inside the handler; the architecture must auto-clear it
+        // on exception return (this is NOT NMI).
+        unsafe {
+            core::arch::asm!("cpsid f", options(nomem, nostack, preserves_flags));
+        }
+    }
+}
+
+#[exception]
+fn PendSV() {
+    PENDSV_COUNT.fetch_add(1, Ordering::Relaxed);
+}
+
 // ── ldr-pc switch dispatch ─────────────────────────────────────────────────────
-//
-// A dense, contiguous integer `match` whose arms have DISTINCT, non-constant
-// bodies (each spins a small per-arm loop before producing its value), so the
-// compiler cannot collapse the switch into a rodata value-lookup. With ≥12
-// branch targets spread far apart in code, the thumbv7em backend emits a
-// PC-relative *jump* table — `ldr.w pc,[rn,rm,lsl#2]` — the exact GCC/LLVM
-// switch-branch form whose load-to-PC modelling was just fixed (a mis-modelled
-// load-to-PC lands on the wrong arm). `core::hint::black_box` blocks the
-// constant-folding / value-table rewrite without adding any nondeterminism; the
-// returned values stay architecture-defined.
-//
-// `#[inline(never)]` + a runtime `sel` keep the table in the final binary so the
-// disasm check can confirm the `ldr.w pc,[...]` encoding.
 #[inline(never)]
 fn switch_dispatch(sel: u32) -> u32 {
-    // Per-arm: fold a distinct constant through black_box so each arm is a
-    // separate, non-foldable basic block. The value is still fully determined.
     macro_rules! arm {
         ($v:expr) => {{
             let mut acc: u32 = core::hint::black_box($v);
-            // A short, fixed, per-arm loop makes the bodies distinct in size and
-            // defeats the value-table rewrite; the result is deterministic.
             for _ in 0..core::hint::black_box(1u32) {
                 acc = core::hint::black_box(acc);
             }
@@ -142,15 +171,6 @@ fn switch_dispatch(sel: u32) -> u32 {
     }
 }
 
-// ── Explicit ldr-to-PC jump table ──────────────────────────────────────────────
-//
-// The `match` above lowers to TBB (compact byte offsets), which never exercises
-// the 32-bit `ldr.w pc,[rn,rm,lsl#2]` absolute-address switch table whose
-// load-to-PC modelling was fixed. Emit that exact instruction by hand so it is
-// diffed on sim and silicon: the table holds absolute (thumb-bit-set) addresses
-// of the case labels; `ldr.w pc,[base,i,lsl#2]` loads table[i] and branches. A
-// load-to-PC model that fails to suppress pc_increment lands one halfword past
-// the case → a different value → digest mismatch.
 #[inline(never)]
 fn ldr_pc_dispatch(idx: u32) -> u32 {
     let result: u32;
@@ -188,35 +208,28 @@ fn ldr_pc_dispatch(idx: u32) -> u32 {
     result
 }
 
-// ── Check 4: explicit ldr.w-pc dispatch ────────────────────────────────────────
-unsafe fn check_ldr_pc() {
-    // Dispatch each index through the hand-built ldr.w-pc table, weighting by
-    // index so any wrong-arm landing changes the fold.
-    let mut acc: u32 = 0;
-    let mut i = 0u32;
-    while i < 6 {
-        acc = acc.wrapping_add(ldr_pc_dispatch(i).wrapping_mul(i + 1));
-        i += 1;
-    }
-    digest(IDX_LDRPC_ACC, acc);
-}
-
 // ── Entry point ──────────────────────────────────────────────────────────────
 
 #[entry]
 fn main() -> ! {
     unsafe {
-        // Zero the digest block first.
         for i in 0..VERDICT_WORDS {
             digest(i, 0);
         }
+
+        // Give PendSV and SysTick a defined, maskable priority for the masking
+        // probes (PendSV byte[23:16], SysTick byte[31:24] of SHPR3).
+        wr(SHPR3, (SYSTICK_PRIO << 24) | (SYSTICK_PRIO << 16));
 
         check_svc_ipsr();
         check_switch_dispatch();
         check_mpu_type();
         check_ldr_pc();
+        check_basepri();
+        check_faultmask();
+        check_msp_psp();
+        check_icsr();
 
-        // Sentinel written LAST so the harness knows every check ran.
         digest(IDX_DONE, DONE_MAGIC);
     }
     loop {}
@@ -225,23 +238,12 @@ fn main() -> ! {
 // ── Check 1: SVC delivery + MRS IPSR ───────────────────────────────────────────
 unsafe fn check_svc_ipsr() {
     IPSR_IN_SVC.store(0xFFFF_FFFF, Ordering::Relaxed);
-    // Supervisor call. Must vector to SVCall (exception 11) and run the handler,
-    // which records IPSR. A NOP-modelled SVC would leave the sentinel untouched.
     core::arch::asm!("svc #0", options(nomem, nostack, preserves_flags));
     digest(IDX_IPSR_IN_SVC, IPSR_IN_SVC.load(Ordering::Relaxed));
 }
 
 // ── Check 2: ldr-pc switch-table dispatch ──────────────────────────────────────
 unsafe fn check_switch_dispatch() {
-    // Run every defined case plus one out-of-range value, XOR-folding the
-    // results. The fold is order-independent but case-sensitive: any input
-    // landing on the wrong arm changes the final accumulator.
-    //
-    // Expected (XOR of all arms 0..=11 and the default):
-    //   0x00000001 ^ 0x00000020 ^ 0x00000300 ^ 0x00004000
-    // ^ 0x00050000 ^ 0x00600000 ^ 0x07000000 ^ 0x80000000
-    // ^ 0x0000000A ^ 0x000000B0 ^ 0x00000C00 ^ 0x0000D000
-    // ^ 0xDEADBEEF
     let mut acc: u32 = 0;
     for sel in 0..=12u32 {
         acc ^= switch_dispatch(sel);
@@ -254,4 +256,200 @@ unsafe fn check_mpu_type() {
     let mpu_type = rd(MPU_TYPE);
     let dregion = (mpu_type >> 8) & 0xFF;
     digest(IDX_MPU_DREGION, dregion);
+}
+
+// ── Check 4: explicit ldr.w-pc dispatch ────────────────────────────────────────
+unsafe fn check_ldr_pc() {
+    let mut acc: u32 = 0;
+    let mut i = 0u32;
+    while i < 6 {
+        acc = acc.wrapping_add(ldr_pc_dispatch(i).wrapping_mul(i + 1));
+        i += 1;
+    }
+    digest(IDX_LDRPC_ACC, acc);
+}
+
+// ── Check 5: BASEPRI priority masking (#355) ───────────────────────────────────
+//
+// SysTick is given priority SYSTICK_PRIO. Pend it with BASEPRI raised to the same
+// level (masked → must not run), confirm the counter is unchanged, then drop
+// BASEPRI to 0 (unmasked → runs once). Also exercise BASEPRI_MAX "only raises":
+// a weaker (numerically larger) write is ignored, a stronger write applies.
+//
+// Fold = (TAG 0xB << 4) | bool_nibble; all-correct → 0x000000BF.
+unsafe fn check_basepri() {
+    SYSTICK_COUNT.store(0, Ordering::Relaxed);
+
+    // Mask: BASEPRI = SYSTICK_PRIO, pend SysTick, it must NOT fire.
+    set_basepri(SYSTICK_PRIO);
+    wr(ICSR, ICSR_PENDSTSET);
+    nops();
+    let masked_count = SYSTICK_COUNT.load(Ordering::Relaxed);
+    let basepri_rb = get_basepri();
+
+    // BASEPRI_MAX only-raises: a weaker level (larger number) is ignored…
+    set_basepri_max(0x80);
+    let after_weaker = get_basepri();
+    // …a stronger level (smaller number) applies.
+    set_basepri_max(0x20);
+    let after_stronger = get_basepri();
+
+    // Unmask: the still-pending SysTick now fires exactly once.
+    set_basepri(0);
+    nops();
+    let unmasked_count = SYSTICK_COUNT.load(Ordering::Relaxed);
+
+    let b0 = (masked_count == 0) as u32;
+    let b1 = (unmasked_count == 1) as u32;
+    let b2 = (basepri_rb == SYSTICK_PRIO) as u32;
+    let b3 = (after_weaker == SYSTICK_PRIO && after_stronger == 0x20) as u32;
+    let nibble = b0 | (b1 << 1) | (b2 << 2) | (b3 << 3);
+    digest(IDX_BASEPRI, (0xB << 4) | nibble);
+}
+
+// ── Check 6: FAULTMASK masking + auto-clear (#356) ──────────────────────────────
+//
+// FAULTMASK masks all maskable exceptions regardless of priority. Pend SysTick
+// with FAULTMASK set (must NOT run), clear it (runs once). Then verify FAULTMASK
+// auto-clears on exception return: a SysTick handler sets FAULTMASK and returns;
+// FAULTMASK must read 0 afterwards.
+//
+// Fold = (TAG 0xF << 4) | bool_nibble; all-correct → 0x000000FF.
+unsafe fn check_faultmask() {
+    SYSTICK_COUNT.store(0, Ordering::Relaxed);
+    SET_FAULTMASK_IN_SYSTICK.store(0, Ordering::Relaxed);
+
+    // Mask with FAULTMASK, pend SysTick — must not fire.
+    core::arch::asm!("cpsid f", options(nomem, nostack, preserves_flags));
+    wr(ICSR, ICSR_PENDSTSET);
+    nops();
+    let masked_count = SYSTICK_COUNT.load(Ordering::Relaxed);
+    // Clear FAULTMASK — the pending SysTick fires once.
+    core::arch::asm!("cpsie f", options(nomem, nostack, preserves_flags));
+    nops();
+    let unmasked_count = SYSTICK_COUNT.load(Ordering::Relaxed);
+
+    // Auto-clear on exception return: handler raises FAULTMASK, returns.
+    SET_FAULTMASK_IN_SYSTICK.store(1, Ordering::Relaxed);
+    wr(ICSR, ICSR_PENDSTSET);
+    nops();
+    SET_FAULTMASK_IN_SYSTICK.store(0, Ordering::Relaxed);
+    let faultmask_after: u32 = get_faultmask();
+
+    let b0 = (masked_count == 0) as u32;
+    let b1 = (unmasked_count == 1) as u32;
+    let b2 = (faultmask_after == 0) as u32; // auto-cleared on return
+    let b3 = (SYSTICK_COUNT.load(Ordering::Relaxed) == 2) as u32; // handler ran again
+    let nibble = b0 | (b1 << 1) | (b2 << 2) | (b3 << 3);
+    digest(IDX_FAULTMASK, (0xF << 4) | nibble);
+}
+
+// ── Check 7: MSP/PSP banking + EXC_RETURN (#354) ────────────────────────────────
+//
+// Set PSP to a private stack, switch CONTROL.SPSEL=1 (thread now uses PSP), prove
+// MSP and PSP read distinct, take `svc #0` from thread/PSP — the frame stacks on
+// PSP and the handler captures EXC_RETURN=0xFFFFFFFD — then confirm PSP is fully
+// restored (frame popped from PSP, not MSP) and return to MSP.
+//
+// Fold = (EXC_RETURN nibble 0xD << 4) | bool_nibble; all-correct → 0x000000DF.
+unsafe fn check_msp_psp() {
+    EXC_RETURN_SEEN.store(0, Ordering::Relaxed);
+    let psp_top = (addr_of_mut!(PSP_STACK) as u32) + (PSP_STACK_WORDS as u32) * 4;
+
+    let msp_before: u32;
+    let psp_rb: u32;
+    let psp_after: u32;
+    core::arch::asm!(
+        "msr psp, {top}",          // set PSP to our private stack
+        "mrs {msp}, msp",          // capture MSP (distinct from PSP)
+        "mrs {rb}, psp",           // read PSP back (== top)
+        "movs {tmp}, #2",          // CONTROL: SPSEL=1, nPRIV=0
+        "msr control, {tmp}",
+        "isb",
+        "svc #0",                  // exception from thread/PSP → frame on PSP, EXC_RETURN=0xFFFFFFFD
+        "mrs {after}, psp",        // PSP after return (== top iff popped from PSP)
+        "movs {tmp}, #0",          // CONTROL: SPSEL=0 → back to MSP thread
+        "msr control, {tmp}",
+        "isb",
+        top = in(reg) psp_top,
+        msp = out(reg) msp_before,
+        rb = out(reg) psp_rb,
+        after = out(reg) psp_after,
+        tmp = out(reg) _,
+        options(nostack),
+    );
+
+    let exc_return = EXC_RETURN_SEEN.load(Ordering::Relaxed);
+    let b0 = (psp_rb == psp_top) as u32; // PSP banked the written value
+    let b1 = (msp_before != psp_top) as u32; // MSP and PSP are distinct banks
+    let b2 = (exc_return == 0xFFFF_FFFD) as u32; // EXC_RETURN thread/PSP
+    let b3 = (psp_after == psp_top) as u32; // frame popped from PSP on return
+    let nibble = b0 | (b1 << 1) | (b2 << 2) | (b3 << 3);
+    digest(IDX_MSP_PSP, (0xD << 4) | nibble);
+}
+
+// ── Check 8: ICSR write-only / self-clearing PENDSV (#358) ──────────────────────
+//
+// Reproduce the Zephyr arch_swap RMW. PENDSVSET pends PendSV and self-clears on
+// take; a written PENDSVCLR must read back 0 (write-only); and the
+// `v = ICSR; ICSR = v | PENDSVSET` RMW must re-pend exactly once — a stale
+// PENDSVCLR riding along in the read must NOT cancel the new set.
+//
+// Fold = (TAG 0xC << 4) | bool_nibble; all-correct → 0x000000CF.
+unsafe fn check_icsr() {
+    PENDSV_COUNT.store(0, Ordering::Relaxed);
+
+    // Pend PendSV (BASEPRI/FAULTMASK are clear here) — it runs once.
+    wr(ICSR, ICSR_PENDSVSET);
+    nops();
+    let count_after_set = PENDSV_COUNT.load(Ordering::Relaxed);
+    let set_selfcleared = (rd(ICSR) & ICSR_PENDSVSET) == 0; // self-cleared on take
+
+    // Write PENDSVCLR — it is write-only/self-clearing; must read back 0.
+    wr(ICSR, ICSR_PENDSVCLR);
+    let clr_reads_zero = (rd(ICSR) & (ICSR_PENDSVSET | ICSR_PENDSVCLR)) == 0;
+
+    // The poisoned RMW: read ICSR (must NOT carry a stale PENDSVCLR), OR in
+    // PENDSVSET, write it back. PendSV must fire exactly once more.
+    let v = rd(ICSR);
+    wr(ICSR, v | ICSR_PENDSVSET);
+    nops();
+    let count_after_rmw = PENDSV_COUNT.load(Ordering::Relaxed);
+
+    let b0 = (count_after_set == 1) as u32;
+    let b1 = set_selfcleared as u32;
+    let b2 = clr_reads_zero as u32;
+    let b3 = (count_after_rmw == 2) as u32; // RMW re-pended, stale CLR did not cancel
+    let nibble = b0 | (b1 << 1) | (b2 << 2) | (b3 << 3);
+    digest(IDX_ICSR, (0xC << 4) | nibble);
+}
+
+// ── small helpers ──────────────────────────────────────────────────────────────
+
+#[inline(always)]
+unsafe fn set_basepri(v: u32) {
+    core::arch::asm!("msr basepri, {0}", in(reg) v, options(nomem, nostack, preserves_flags));
+}
+#[inline(always)]
+unsafe fn get_basepri() -> u32 {
+    let v: u32;
+    core::arch::asm!("mrs {0}, basepri", out(reg) v, options(nomem, nostack, preserves_flags));
+    v
+}
+#[inline(always)]
+unsafe fn set_basepri_max(v: u32) {
+    core::arch::asm!("msr basepri_max, {0}", in(reg) v, options(nomem, nostack, preserves_flags));
+}
+#[inline(always)]
+unsafe fn get_faultmask() -> u32 {
+    let v: u32;
+    core::arch::asm!("mrs {0}, faultmask", out(reg) v, options(nomem, nostack, preserves_flags));
+    v & 1
+}
+#[inline(always)]
+fn nops() {
+    // Enough cycles for a pending-and-unmasked exception to be taken.
+    for _ in 0..8 {
+        cortex_m::asm::nop();
+    }
 }
