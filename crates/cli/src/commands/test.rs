@@ -8,6 +8,46 @@
 
 use crate::*;
 
+/// Apply the script's faults to the built bus, log and persist per-fault
+/// evidence, and enforce the require_fault_fired gate. Returns `Some(exit)` to
+/// abort the run when a required fault did not fire (the run is invalid, not a
+/// firmware pass); `None` to proceed.
+fn handle_faults(
+    args: &TestArgs,
+    bus: &mut labwired_core::bus::SystemBus,
+    faults: &[labwired_config::FaultSpec],
+    require_fault_fired: bool,
+) -> Option<ExitCode> {
+    if faults.is_empty() {
+        return None;
+    }
+    let evidence = labwired_cli::faults::apply_faults(bus, faults);
+    for e in &evidence {
+        if e.fired {
+            info!("fault '{}' ({}) fired", e.id, e.kind);
+        } else {
+            error!(
+                "fault '{}' ({}) did NOT fire: {}",
+                e.id,
+                e.kind,
+                e.error.as_deref().unwrap_or("")
+            );
+        }
+    }
+    if let Some(dir) = &args.output_dir {
+        let _ = std::fs::create_dir_all(dir);
+        if let Ok(f) = std::fs::File::create(dir.join("fault-evidence.json")) {
+            let _ = serde_json::to_writer_pretty(f, &evidence);
+        }
+    }
+    if require_fault_fired && evidence.iter().any(|e| !e.fired) {
+        let n = evidence.iter().filter(|e| !e.fired).count();
+        error!("require_fault_fired: {n} fault(s) did not fire; run is invalid");
+        return Some(ExitCode::from(EXIT_ASSERT_FAIL));
+    }
+    None
+}
+
 pub(crate) fn run_test(args: TestArgs) -> ExitCode {
     // ── API key validation (Pro tier gate) ──────────────────────────────
     // If LABWIRED_API_KEY is set and --no-key is not passed, validate before
@@ -76,6 +116,8 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
         script_wall_time_ms,
         script_max_vcd_bytes,
         assertions,
+        faults,
+        verdict,
     ) = match loaded {
         LoadedTestScript::V1_0(script) => (
             Some(script.inputs.firmware),
@@ -87,6 +129,8 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
             script.limits.wall_time_ms,
             script.limits.max_vcd_bytes,
             script.assertions,
+            script.faults,
+            script.verdict,
         ),
         LoadedTestScript::LegacyV1(script) => {
             tracing::warn!(
@@ -102,9 +146,23 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                 script.wall_time_ms,
                 None,
                 script.assertions,
+                Vec::new(),
+                None,
             )
         }
     };
+
+    // Fault injection (schema_version 1.1): the verdict's safe_when entries are
+    // evaluated as ordinary assertions; require_fault_fired gates the run on the
+    // faults actually taking effect.
+    let require_fault_fired = verdict
+        .as_ref()
+        .map(|v| v.require_fault_fired)
+        .unwrap_or(false);
+    let mut assertions = assertions;
+    if let Some(v) = &verdict {
+        assertions.extend(v.safe_when.iter().cloned());
+    }
 
     let max_steps = args.max_steps.unwrap_or(script_max_steps);
     let max_cycles = args.max_cycles.or(script_max_cycles);
@@ -291,6 +349,10 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
             // to the app. See FIDELITY.md §C.
             machine.cpu.set_pc(program.entry_point as u32);
             machine.cpu.set_sp(0x3FFE_0000);
+            if let Some(code) = handle_faults(&args, &mut machine.bus, &faults, require_fault_fired)
+            {
+                return code;
+            }
             let exit_code = execute_test_loop(
                 &args,
                 &mut machine,
@@ -422,6 +484,10 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                     system_path.as_ref(),
                     e,
                 );
+            }
+            if let Some(code) = handle_faults(&args, &mut machine.bus, &faults, require_fault_fired)
+            {
+                return code;
             }
             execute_test_loop(
                 &args,
