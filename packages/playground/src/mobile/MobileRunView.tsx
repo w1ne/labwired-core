@@ -39,6 +39,8 @@ export interface MobileRunViewProps {
   simControls: ReactNode;
   /** Open the saved-projects modal from the menu drawer. */
   onOpenProjects: () => void;
+  /** Copy a shareable link to this lab (same handler as desktop). */
+  onShare?: () => void;
   /** Switch to another bundled example lab from the mobile menu. */
   onPickLab?: (labId: string) => void;
   /** Live bridge for the instrument tabs (BLE / logic / IO-Link). */
@@ -78,6 +80,7 @@ export function MobileRunView({
   onNtcChange,
   simControls,
   onOpenProjects,
+  onShare,
   onPickLab,
   bridge,
   running,
@@ -231,6 +234,15 @@ export function MobileRunView({
                 ✕
               </button>
             </div>
+            {onShare && (
+              <button
+                type="button"
+                onClick={() => { setShowNav(false); onShare(); }}
+                className="h-10 rounded-lg bg-white/[0.06] text-fg-primary text-[14px] font-medium text-left px-3"
+              >
+                Share lab
+              </button>
+            )}
             <button
               type="button"
               onClick={() => { setShowNav(false); onOpenProjects(); }}

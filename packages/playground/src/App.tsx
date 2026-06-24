@@ -2348,6 +2348,7 @@ export function App() {
           onNtcChange={handleNtcChange}
           simControls={simDockNode}
           onOpenProjects={() => setProjectsModalOpen(true)}
+          onShare={handleShare}
           onPickLab={handlePickLab}
           bridge={bridge}
           running={running}

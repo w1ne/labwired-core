@@ -9,7 +9,11 @@ import type { NetProtocol } from './schema';
 
 /** Compiler/ERC dispatch class. */
 export type DeviceClass =
-  | 'mcu' | 'board_io' | 'i2c_device' | 'spi_device' | 'uart_device' | 'passive' | 'tool';
+  | 'mcu' | 'board_io' | 'i2c_device' | 'spi_device' | 'uart_device' | 'passive' | 'tool'
+  // Non-electrical canvas annotation (sticky note). No pins, no wires; the
+  // compiler skips it (see compile/index.ts "Unknown device class: skip") and
+  // every ERC rule ignores it (no boardIoKind, no typed pins).
+  | 'annotation';
 
 /** KiCad-vocabulary pin electrical types. */
 export type PinEtype =
@@ -58,6 +62,7 @@ export const CATALOG: Record<string, CatalogPart> = {
   'arduino-uno': { type: 'arduino-uno', deviceClass: 'mcu' },
   'stm32-dev': { type: 'stm32-dev', deviceClass: 'mcu' },
   'nucleo-h563zi': { type: 'nucleo-h563zi', deviceClass: 'mcu' },
+  'nucleo-l476rg': { type: 'nucleo-l476rg', deviceClass: 'mcu' },
   'nucleo-f401re': { type: 'nucleo-f401re', deviceClass: 'mcu' },
   'stm32-blackpill': { type: 'stm32-blackpill', deviceClass: 'mcu' },
   esp32: { type: 'esp32', deviceClass: 'mcu' },
@@ -105,6 +110,36 @@ export const CATALOG: Record<string, CatalogPart> = {
       p('GND', 'power_in'),
     ],
   },
+  // Logic analyzer: a high-impedance probe instrument. Channels observe a net
+  // (passive), GND is its reference. Mirrors can-diagnostic-tool so the F103/H5
+  // UDS labs and the IO-Link lab validate. Pins match logic-analyzer.tsx.
+  'logic-analyzer': {
+    type: 'logic-analyzer',
+    deviceClass: 'tool',
+    pins: [
+      p('CH0', 'passive'),
+      p('CH1', 'passive'),
+      p('CH2', 'passive'),
+      p('CH3', 'passive'),
+      p('GND', 'power_in'),
+    ],
+  },
+  // Quectel BG770A cellular modem over UART. Pins match bg770a-cellular.tsx.
+  'bg770a-cellular': {
+    type: 'bg770a-cellular',
+    deviceClass: 'uart_device',
+    pins: [
+      p('VCC', 'power_in'),
+      p('GND', 'power_in'),
+      p('TX', 'output', 'uart_tx'),
+      p('RX', 'input', 'uart_rx'),
+    ],
+    operatingVoltage: { min: 3.3, max: 4.3 },
+  },
+  // Free-form canvas annotation (sticky note). Not a circuit element: no pins,
+  // no wires. Registered so it is not flagged as an unknown component; the
+  // 'annotation' device class makes the compiler and every ERC rule skip it.
+  note: { type: 'note', deviceClass: 'annotation' },
   servo: {
     type: 'servo',
     deviceClass: 'board_io',

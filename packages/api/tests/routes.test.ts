@@ -139,7 +139,12 @@ describe('public Playground shares', () => {
     });
   });
 
-  it('rejects an invalid diagram at the storage boundary (hallucinated pin)', async () => {
+  it('still creates a short link for an invalid diagram, surfacing non-blocking diagnostics', async () => {
+    // The human Share button never withholds a link: a person sharing a
+    // half-finished or imperfect board still gets a short ?share= URL. The wiring
+    // diagnostics ride back in a non-blocking `validation` field so the UI can
+    // warn. (The MCP open_hardware_lab publish path keeps the enforcing gate —
+    // see mcp-tools.test.ts.)
     const kvProjects = makeKvStub();
     const env = makeEnv(makeKvStub(), makeKvStub(), makeKvStub(), makeKvStub(), kvProjects);
 
@@ -154,7 +159,7 @@ describe('public Playground shares', () => {
               { id: 'mcu', type: 'mcu' },
               { id: 'led1', type: 'rgb-led' },
             ],
-            // rgb-led has no 'DIN' pin (R/G/B/GND) — must not be persisted.
+            // rgb-led has no 'DIN' pin (R/G/B/GND) — invalid, but still shareable.
             wires: [{ from: { part: 'mcu', pin: 'PA5' }, to: { part: 'led1', pin: 'DIN' } }],
           },
           source: 'int main(void) { return 0; }',
@@ -163,12 +168,14 @@ describe('public Playground shares', () => {
       env as any,
     );
 
-    expect(create.status).toBe(422);
+    expect(create.status).toBe(201);
     const body = (await create.json()) as any;
-    expect(body.error).toBe('DIAGRAM_INVALID');
+    expect(typeof body.url).toBe('string');
+    expect(body.url).toContain('?share=');
+    // Diagnostics are surfaced but did NOT block the share.
     expect(body.validation.ok).toBe(false);
-    // Nothing was written to KV.
-    expect([...kvProjects._store.keys()].filter((k) => k.startsWith('share:'))).toEqual([]);
+    // The share WAS persisted so the link resolves.
+    expect([...kvProjects._store.keys()].filter((k) => k.startsWith('share:')).length).toBe(1);
   });
 });
 

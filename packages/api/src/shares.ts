@@ -23,6 +23,9 @@ export interface ShareRecord {
   /** MCU target id for the firmware (e.g. 'nrf52840', 'stm32l476'). */
   target?: string;
   created_at: number;
+  /** Validation diagnostics computed at create time. Non-blocking on the human
+   *  share path (the share is created regardless); surfaced so the UI can warn. */
+  validation?: ReturnType<typeof composeDiagnostics>;
 }
 
 /** Thrown by createShareRecord when the diagram fails validation. Carries the
@@ -112,17 +115,22 @@ export async function createShareRecord(
     target?: unknown;
     preview?: unknown;
   },
+  opts: { enforceValidation?: boolean } = {},
 ): Promise<ShareRecord> {
+  const { enforceValidation = true } = opts;
   const diagram = normalizeLabWiredDiagramV1(input.diagram);
   if (!diagram) throw new Error('diagram is required');
 
-  // Storage-boundary validation gate: every share — whether created via the MCP
-  // open_hardware_lab tool or the raw POST /v1/shares route — must pass
-  // validation. This is the last line of defense against shipping a board that
-  // "looks wired but isn't" (hallucinated/unresolvable pins). No invalid diagram
-  // is ever persisted.
+  // Storage-boundary validation gate. Two modes:
+  //   - enforceValidation: true (default, the MCP open_hardware_lab publish
+  //     path) — an invalid diagram is REJECTED. This is the last line of defense
+  //     against an agent shipping a board that "looks wired but isn't"
+  //     (hallucinated/unresolvable pins). No invalid diagram is ever published.
+  //   - enforceValidation: false (the human Share button) — the share is created
+  //     regardless, so a person always gets a short link. The diagnostics ride
+  //     along on the record as a non-blocking signal the UI can surface.
   const validation = composeDiagnostics(diagram as unknown as ValidateDiagram);
-  if (!validation.ok) {
+  if (enforceValidation && !validation.ok) {
     throw new ShareValidationError(validation);
   }
 
@@ -140,6 +148,7 @@ export async function createShareRecord(
     ...(firmware ? { firmware } : {}),
     ...(target ? { target } : {}),
     created_at: Date.now(),
+    ...(validation.ok ? {} : { validation }),
   };
   await env.KV_PROJECTS.put(shareKey(record.id), JSON.stringify(record), { expirationTtl: SHARE_TTL_SECONDS });
 
@@ -179,15 +188,24 @@ export async function handleCreateShare(request: Request, env: Env): Promise<Res
   const authed = await verifyClerkRequest(request, env);
 
   try {
+    // The human Share button never blocks on validation — a person always gets a
+    // short link. Any wiring diagnostics ride back as a non-blocking `validation`
+    // field so the client can warn without withholding the link. (The MCP
+    // open_hardware_lab publish path keeps the default enforcing gate.)
     const record = await createShareRecord(env, {
       diagram: body.diagram,
       source: body.source ?? body.source_code,
       firmware: body.firmware,
       target: body.target,
       preview: authed ? body.preview : undefined,
-    });
+    }, { enforceValidation: false });
     const urls = shareUrls(record.id);
-    return json({ id: record.id, url: urls.studioUrl, embed_url: urls.embedUrl }, 201);
+    return json({
+      id: record.id,
+      url: urls.studioUrl,
+      embed_url: urls.embedUrl,
+      ...(record.validation ? { validation: record.validation } : {}),
+    }, 201);
   } catch (error) {
     if (error instanceof ShareValidationError) {
       return json({ error: 'DIAGRAM_INVALID', detail: 'The diagram has wiring errors and was not shared. Fix the errors below and retry.', validation: error.validation }, 422);
