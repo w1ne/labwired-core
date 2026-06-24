@@ -633,16 +633,28 @@ function getDefaultSource(config: BoardConfig): string {
 }
 
 /**
- * Whether a circuit will actually run when shared/opened. A share runs by
- * compiling its captured source for the board's chip (or by booting the board's
- * pre-built demo firmware). So it's runnable when the board ships demo firmware,
- * OR the user has written code that differs from the board's untouched default
- * template. Sharing an untouched default on a firmware-less board produces a
- * link that can't run (the default template targets a different chip) — the
- * exact failure behind dead proximity/sensor shares. Used to warn at share time.
+ * Whether a circuit will actually run when its share is opened.
+ *
+ * Runnability is grounded in ONE fact: will bootable firmware exist on open?
+ * It is NOT a property of the editor text. The signals, in order:
+ *   1. The board ships a prebuilt demo ELF (`demoFirmwarePath`) — boots directly.
+ *   2. It is a curated lab (`kind: 'lab'`) — labs always ship prebuilt firmware.
+ *      Multi-chip labs (e.g. the nRF52840 BLE sensor+collector) load firmware
+ *      PER CHIP, so the top-level `demoFirmwarePath` is absent even though the
+ *      lab runs — hence the explicit `kind` check, not a firmware-path check.
+ *   3. Otherwise it's a bare board: runnable only once the user has authored
+ *      code (source differs from the untouched default template). Sharing an
+ *      untouched default on a bare board yields a link that can't run — the
+ *      original dead-proximity/sensor-share failure.
+ *
+ * Earlier this inferred (1)+(3) only and used the source-vs-default text as the
+ * lab signal too, which false-warned "no code" on every curated example whose
+ * firmware doesn't come from the editor (all multi-chip labs). The lab is the
+ * fundamental unit of runnability here, so it gets a first-class check.
  */
 export function sharedCircuitIsRunnable(config: BoardConfig, source: string): boolean {
   if (config.demoFirmwarePath) return true;
+  if (config.kind === 'lab') return true;
   return source.trim() !== getDefaultSource(config).trim();
 }
 
