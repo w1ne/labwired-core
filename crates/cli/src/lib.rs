@@ -5,5 +5,6 @@
 // See the LICENSE file in the project root for full license information.
 
 pub mod coverage;
+pub mod manifest;
 pub mod pc_coverage_report;
 pub mod tier1;
