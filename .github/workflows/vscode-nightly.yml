@@ -14,8 +14,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
+
+      - name: Fetch submodules
+        # labwired-landing is private and unfetchable by CI; only fetch what we
+        # need. Rewrite the SSH submodule URL to HTTPS so it uses the token
+        # actions/checkout persisted (no SSH key in CI).
+        working-directory: .
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git submodule update --init --depth 1 core vscode
 
       - name: Install Node.js
         uses: actions/setup-node@v4

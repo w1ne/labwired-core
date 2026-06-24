@@ -1,24 +1,21 @@
-# Run playground, board-config, and mcp tests on PRs and pushes that touch
-# the relevant packages.  No secrets or deploy steps — this is a pure test gate.
+# Run playground, board-config, and mcp tests on every PR + push to main.
+# No secrets or deploy steps — this is a pure test gate.
+#
+# DELIBERATELY NOT path-filtered. The "Playground tests" job is a REQUIRED
+# status check on main, and it must catch a `core` submodule pin bump that
+# drops example/config files the playground imports (that exact gap let PR #355
+# ship a pin whose core lacked `f103-uds-ecu`, breaking the Pages build/deploy
+# for a day). A pin bump only changes the `core` gitlink — it does NOT touch
+# `packages/playground/**`, so a path filter would skip this gate on the one
+# kind of PR that needs it most. A required check that never runs also blocks
+# merges forever. Both problems vanish by always running. The jobs are fast.
 
 name: Playground CI
 
 on:
   pull_request:
-    paths:
-      - "packages/playground/**"
-      - "packages/ui/**"
-      - "packages/board-config/**"
-      - "packages/mcp/**"
-      - ".github/workflows/playground-ci.yml"
   push:
     branches: ["main"]
-    paths:
-      - "packages/playground/**"
-      - "packages/ui/**"
-      - "packages/board-config/**"
-      - "packages/mcp/**"
-      - ".github/workflows/playground-ci.yml"
 
 permissions:
   contents: read
@@ -26,12 +23,36 @@ permissions:
 jobs:
   test:
     name: Playground tests
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, ci]
     steps:
-      - name: Checkout (with submodules)
+      # A prior job (e.g. a container running as root) can leave root-owned files
+      # in the self-hosted runner workspace; the runner user has no sudo, so
+      # actions/checkout's clean step fails with EACCES. rm what we can; if
+      # root-owned files remain, rename the dir aside — we own the PARENT, so the
+      # rename succeeds — and checkout recreates it clean. Nightly
+      # pluto-maintenance reclaims the .broken.* dirs via docker (root).
+      - name: Reset self-hosted workspace
+        run: |
+          if [ -n "${GITHUB_WORKSPACE:-}" ] && [ -d "$GITHUB_WORKSPACE" ]; then
+            rm -rf "$GITHUB_WORKSPACE" 2>/dev/null \
+              || mv "$GITHUB_WORKSPACE" "${GITHUB_WORKSPACE}.broken.$(date +%s%N)" 2>/dev/null \
+              || true
+          fi
+          mkdir -p "$GITHUB_WORKSPACE"
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
+      # Fetch ONLY the `core` submodule (the configs/wasm these tests need).
+      # `landing_page` (private) + `vscode` aren't needed here, and the
+      # labwired-landing clone intermittently fails in CI ("Repository not
+      # found"), which was aborting the whole `submodules: recursive` checkout.
+      - name: Fetch core submodule
+        # Rewrite the SSH submodule URL (git@github.com:) to HTTPS so the clone
+        # uses the token actions/checkout already persisted (persist-credentials)
+        # instead of SSH — there's no SSH key in CI. Same token + rewrite that
+        # checkout's own `submodules:` handling uses, but only for `core`.
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git submodule update --init --depth 1 core
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -48,16 +69,36 @@ jobs:
           npm ci --ignore-scripts
           npm run build
 
-      - name: Install + test @labwired/playground
+      - name: Install + typecheck + test @labwired/playground
         working-directory: packages/playground
         run: |
           npm ci --ignore-scripts
+          # Production-build typecheck. vitest runs via esbuild (no type-check),
+          # so cross-package type errors (e.g. a ComponentDef attr-field type the
+          # playground doesn't accept) only surfaced at deploy. tsc -b catches
+          # them here, pre-merge. @labwired/ui is built above; @labwired/board-config
+          # resolves its types from src via package exports, so no extra build.
+          npx tsc -b
           npm test
 
   board-config:
     name: board-config tests
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, ci]
     steps:
+      # A prior job (e.g. a container running as root) can leave root-owned files
+      # in the self-hosted runner workspace; the runner user has no sudo, so
+      # actions/checkout's clean step fails with EACCES. rm what we can; if
+      # root-owned files remain, rename the dir aside — we own the PARENT, so the
+      # rename succeeds — and checkout recreates it clean. Nightly
+      # pluto-maintenance reclaims the .broken.* dirs via docker (root).
+      - name: Reset self-hosted workspace
+        run: |
+          if [ -n "${GITHUB_WORKSPACE:-}" ] && [ -d "$GITHUB_WORKSPACE" ]; then
+            rm -rf "$GITHUB_WORKSPACE" 2>/dev/null \
+              || mv "$GITHUB_WORKSPACE" "${GITHUB_WORKSPACE}.broken.$(date +%s%N)" 2>/dev/null \
+              || true
+          fi
+          mkdir -p "$GITHUB_WORKSPACE"
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -76,8 +117,22 @@ jobs:
 
   mcp:
     name: mcp tests
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, ci]
     steps:
+      # A prior job (e.g. a container running as root) can leave root-owned files
+      # in the self-hosted runner workspace; the runner user has no sudo, so
+      # actions/checkout's clean step fails with EACCES. rm what we can; if
+      # root-owned files remain, rename the dir aside — we own the PARENT, so the
+      # rename succeeds — and checkout recreates it clean. Nightly
+      # pluto-maintenance reclaims the .broken.* dirs via docker (root).
+      - name: Reset self-hosted workspace
+        run: |
+          if [ -n "${GITHUB_WORKSPACE:-}" ] && [ -d "$GITHUB_WORKSPACE" ]; then
+            rm -rf "$GITHUB_WORKSPACE" 2>/dev/null \
+              || mv "$GITHUB_WORKSPACE" "${GITHUB_WORKSPACE}.broken.$(date +%s%N)" 2>/dev/null \
+              || true
+          fi
+          mkdir -p "$GITHUB_WORKSPACE"
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -96,4 +151,75 @@ jobs:
 
       - name: Test @labwired/mcp
         working-directory: packages/mcp
+        run: npm test
+
+  catalog:
+    name: catalog tests
+    runs-on: [self-hosted, ci]
+    steps:
+      # A prior job (e.g. a container running as root) can leave root-owned files
+      # in the self-hosted runner workspace; the runner user has no sudo, so
+      # actions/checkout's clean step fails with EACCES. rm what we can; if
+      # root-owned files remain, rename the dir aside — we own the PARENT, so the
+      # rename succeeds — and checkout recreates it clean. Nightly
+      # pluto-maintenance reclaims the .broken.* dirs via docker (root).
+      - name: Reset self-hosted workspace
+        run: |
+          if [ -n "${GITHUB_WORKSPACE:-}" ] && [ -d "$GITHUB_WORKSPACE" ]; then
+            rm -rf "$GITHUB_WORKSPACE" 2>/dev/null \
+              || mv "$GITHUB_WORKSPACE" "${GITHUB_WORKSPACE}.broken.$(date +%s%N)" 2>/dev/null \
+              || true
+          fi
+          mkdir -p "$GITHUB_WORKSPACE"
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: packages/catalog/package-lock.json
+
+      # The generator imports board-config + ui manifest source via tsx, so no
+      # build of sibling packages is needed — only this package's devDeps.
+      - name: Install @labwired/catalog
+        working-directory: packages/catalog
+        run: npm ci
+
+      # Fails if catalog-facts.json drifted from board-config / the manifest.
+      - name: Check catalog facts are up to date
+        working-directory: packages/catalog
+        run: npm run check:facts
+
+      # If the facts changed in this PR, the package version MUST be bumped so the
+      # publish workflow ships an honest, committed version (roast #6). Without
+      # this, a facts change would publish-skip (version already on npm) and
+      # proto.cat would never get a bump PR.
+      - name: Require version bump when facts change
+        if: github.event_name == 'pull_request'
+        working-directory: packages/catalog
+        run: |
+          set -euo pipefail
+          git fetch --depth=1 origin "${{ github.base_ref }}"
+          BASE="$(git rev-parse FETCH_HEAD)"
+          if git diff --quiet "$BASE" -- src/catalog-facts.json; then
+            echo "catalog-facts.json unchanged — no bump required"
+            exit 0
+          fi
+          if ! git show "$BASE:packages/catalog/package.json" > /tmp/base-pkg.json 2>/dev/null; then
+            echo "package is new on this branch — no prior version to bump from"
+            exit 0
+          fi
+          OLD=$(node -p "require('/tmp/base-pkg.json').version")
+          NEW=$(node -p "require('./package.json').version")
+          if [ "$OLD" = "$NEW" ]; then
+            echo "catalog-facts.json changed but @labwired/catalog is still $NEW." >&2
+            echo "Bump it: (cd packages/catalog && npm version patch --no-git-tag-version)" >&2
+            exit 1
+          fi
+          echo "version bumped $OLD -> $NEW"
+
+      - name: Test @labwired/catalog
+        working-directory: packages/catalog
         run: npm test

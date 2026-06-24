@@ -28,6 +28,7 @@ import { mpu6050Component } from './mpu6050';
 import { neo6mGpsComponent } from './neo6m-gps';
 import { bg770aCellularComponent } from './bg770a-cellular';
 import { ntcThermistorComponent } from './ntc-thermistor';
+import { mlx90640Component } from './mlx90640';
 // Displays
 import { oledSsd1306Component } from './oled-ssd1306';
 import { pcd8544Component } from './pcd8544';
@@ -43,11 +44,14 @@ import { transistorComponent } from './transistor';
 import { shiftRegister74hc595Component } from './shift-register-74hc595';
 import { sn74hc165Component } from './sn74hc165';
 import { iolinkMasterComponent } from './iolink-master';
+import { m12IoLinkComponent } from './m12-iolink';
 import { canTransceiverComponent } from './can-transceiver';
 import { canDiagnosticToolComponent } from './can-diagnostic-tool';
 import { motorDriverL293dComponent } from './motor-driver-l293d';
 // Tools
 import { logicAnalyzerComponent } from './logic-analyzer';
+import { noteComponent } from './note';
+import { textAnnotationComponent } from './text-annotation';
 // Board MCUs
 import { arduinoUnoComponent } from './boards/arduino-uno';
 import { esp32Component } from './boards/esp32';
@@ -101,6 +105,7 @@ export const COMPONENT_REGISTRY: Map<string, ComponentDef> = new Map([
   [neo6mGpsComponent.type, neo6mGpsComponent],
   [bg770aCellularComponent.type, bg770aCellularComponent],
   [ntcThermistorComponent.type, ntcThermistorComponent],
+  [mlx90640Component.type, mlx90640Component],
   // Displays
   [sevenSegmentComponent.type, sevenSegmentComponent],
   [lcd1602Component.type, lcd1602Component],
@@ -119,12 +124,40 @@ export const COMPONENT_REGISTRY: Map<string, ComponentDef> = new Map([
   [shiftRegister74hc595Component.type, shiftRegister74hc595Component],
   [sn74hc165Component.type, sn74hc165Component],
   [iolinkMasterComponent.type, iolinkMasterComponent],
+  [m12IoLinkComponent.type, m12IoLinkComponent],
   [canTransceiverComponent.type, canTransceiverComponent],
   [canDiagnosticToolComponent.type, canDiagnosticToolComponent],
   [motorDriverL293dComponent.type, motorDriverL293dComponent],
   // Tools
   [logicAnalyzerComponent.type, logicAnalyzerComponent],
+  [noteComponent.type, noteComponent],
+  [textAnnotationComponent.type, textAnnotationComponent],
 ]);
+
+import { defineComponent, genericComponentDef, makeGenericRender } from './generic';
+export { defineComponent, genericComponentDef, makeGenericRender, renderComponentBody } from './generic';
+
+/** Register (or override) a component at runtime — lets a consumer (e.g. proto.cat)
+ *  inject its catalog parts as data-driven defs so the board can render anything. */
+export function registerComponentDef(def: ComponentDef): void {
+  COMPONENT_REGISTRY.set(def.type, def);
+}
+
+/** Register many parts from data in one call. */
+export function registerComponents(
+  parts: Array<Partial<ComponentDef> & { type: string; label: string }>,
+): void {
+  for (const p of parts) COMPONENT_REGISTRY.set(p.type, defineComponent(p));
+}
+
+/** Always return a usable def: the registered one, or a synthesized generic box
+ *  for an unregistered type, with a render guaranteed (generic when absent). So no
+ *  part ever fails to draw. */
+export function resolveComponentDef(type: string): ComponentDef {
+  const def = COMPONENT_REGISTRY.get(type) ?? genericComponentDef(type);
+  if (!def.render) def.render = makeGenericRender(def);
+  return def;
+}
 
 /** Component definitions grouped by category (excludes MCU). */
 export function getComponentsByCategory(): Record<string, ComponentDef[]> {

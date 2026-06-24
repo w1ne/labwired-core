@@ -7,6 +7,11 @@
 
 import { useMemo } from 'react';
 import type { ComponentDef, DisplayBuffer } from '../types';
+import {
+  decodeTricolorFramebuffer,
+  EPAPER_LANDSCAPE_W as LANDSCAPE_W,
+  EPAPER_LANDSCAPE_H as LANDSCAPE_H,
+} from '../../peripherals/epaper';
 
 const W = 160;
 const H = 78;
@@ -14,41 +19,6 @@ const FACE_X = 8;
 const FACE_Y = 6;
 const FACE_W = W - 16;
 const FACE_H = H - 30;
-const PANEL_W = 128;
-const PANEL_H = 296;
-const PANEL_W_BYTES = PANEL_W / 8;
-const PLANE_BYTES = PANEL_W_BYTES * PANEL_H;
-const LANDSCAPE_W = PANEL_H;
-const LANDSCAPE_H = PANEL_W;
-
-function composeRgba(planes: Uint8Array): Uint8ClampedArray | null {
-  if (planes.length !== PLANE_BYTES * 2) return null;
-  const out = new Uint8ClampedArray(LANDSCAPE_W * LANDSCAPE_H * 4);
-  for (let nativeY = 0; nativeY < PANEL_H; nativeY++) {
-    for (let nativeXByte = 0; nativeXByte < PANEL_W_BYTES; nativeXByte++) {
-      const idx = nativeY * PANEL_W_BYTES + nativeXByte;
-      const blackByte = planes[idx];
-      const redByte = planes[PLANE_BYTES + idx];
-      for (let bit = 0; bit < 8; bit++) {
-        const nativeX = nativeXByte * 8 + bit;
-        const mask = 1 << (7 - bit);
-        const blackBit = (blackByte & mask) !== 0;
-        const redBit = (redByte & mask) !== 0;
-        const lx = nativeY;
-        const ly = (PANEL_W - 1) - nativeX;
-        const off = (ly * LANDSCAPE_W + lx) * 4;
-        if (!redBit) {
-          out[off] = 196; out[off + 1] = 30; out[off + 2] = 30; out[off + 3] = 255;
-        } else if (!blackBit) {
-          out[off] = 30; out[off + 1] = 30; out[off + 2] = 30; out[off + 3] = 255;
-        } else {
-          out[off] = 244; out[off + 1] = 241; out[off + 2] = 232; out[off + 3] = 255;
-        }
-      }
-    }
-  }
-  return out;
-}
 
 function rgbaToPngDataUrl(rgba: Uint8ClampedArray): string | null {
   if (typeof document === 'undefined') return null;
@@ -66,7 +36,7 @@ function rgbaToPngDataUrl(rgba: Uint8ClampedArray): string | null {
 function PanelPixels({ buffer }: { buffer: DisplayBuffer }) {
   const dataUrl = useMemo(() => {
     if (buffer.kind !== 'uc8151d_tricolor_290') return null;
-    const rgba = composeRgba(buffer.data);
+    const rgba = decodeTricolorFramebuffer(buffer.data);
     if (!rgba) return null;
     return rgbaToPngDataUrl(rgba);
   }, [buffer.kind, buffer.generation, buffer.data]);

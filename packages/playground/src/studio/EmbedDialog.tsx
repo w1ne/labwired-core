@@ -7,7 +7,7 @@
 // existing Tailwind styling conventions used across the studio chrome rather
 // than introduce a new UI dependency.
 import { useEffect, useState } from 'react';
-import { generateEmbedUrl, type Diagram } from '@labwired/ui';
+import { generateEmbedUrl, type Diagram, type ShareOptions } from '@labwired/ui';
 import { buildEmbedSnippet, EMBED_HEIGHTS, type EmbedHeightPreset } from './embedSnippet';
 
 export interface EmbedDialogProps {
@@ -15,11 +15,17 @@ export interface EmbedDialogProps {
   onClose: () => void;
   diagram: Diagram;
   source: string;
+  /**
+   * Build the auth + preview-image extras for the embed POST (signed-in only;
+   * resolves to `{}` for anonymous users / on any failure). Best-effort — a
+   * rejection here must not block minting the embed link.
+   */
+  buildExtras?: () => Promise<ShareOptions>;
   /** Surface failures through the host's toast (mirrors handleShare). */
   onError?: (message: string) => void;
 }
 
-export function EmbedDialog({ open, onClose, diagram, source, onError }: EmbedDialogProps) {
+export function EmbedDialog({ open, onClose, diagram, source, buildExtras, onError }: EmbedDialogProps) {
   const [embedUrl, setEmbedUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [preset, setPreset] = useState<EmbedHeightPreset>('Compact');
@@ -32,7 +38,10 @@ export function EmbedDialog({ open, onClose, diagram, source, onError }: EmbedDi
     setLoading(true);
     setEmbedUrl(null);
     setCopied(false);
-    generateEmbedUrl(diagram, source)
+    // Best-effort extras (preview PNG + auth token). A failure resolves to {}
+    // so the embed link is still minted; it just falls back to the logo card.
+    (buildExtras ? buildExtras().catch(() => ({})) : Promise.resolve({}))
+      .then((extras) => generateEmbedUrl(diagram, source, extras))
       .then((url) => {
         if (!cancelled) setEmbedUrl(url);
       })

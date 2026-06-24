@@ -37,7 +37,11 @@ export function toolAnnotations(name: string): NonNullable<McpTool['annotations'
     title,
     readOnlyHint: readOnly,
     destructiveHint: false,
-    ...(readOnly ? {} : { openWorldHint: true }),
+    // Every hint must be explicitly set — OpenAI's ChatGPT app review rejects
+    // tools that omit any of readOnlyHint/openWorldHint/destructiveHint.
+    // Read-only tools (catalog lookups, deterministic validation) are
+    // closed-world; the rest reach the hosted simulation backend.
+    openWorldHint: !readOnly,
   };
 }
 

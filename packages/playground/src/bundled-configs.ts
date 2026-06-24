@@ -35,6 +35,7 @@ import systemNokia5110InvadersLab from '../../../core/examples/nokia5110-invader
 import systemNeo6mGpsLab from '../../../core/examples/neo6m-gps-lab/system.yaml?raw';
 import systemQuectelBg770aLab from '../../../core/examples/quectel-bg770a-lab/system.yaml?raw';
 import systemNtcThermistorLab from '../../../core/examples/ntc-thermistor-lab/system.yaml?raw';
+import systemVl53l1xTofLab from '../../../core/examples/vl53l1x-tof-lab/system.yaml?raw';
 import systemIli9341TftLab from '../../../core/examples/ili9341-tft-lab/system.yaml?raw';
 import systemEpaperTricolorLab from '../../../core/examples/epaper-tricolor-lab/system.yaml?raw';
 import systemEsp32EpaperLab from '../../../core/examples/esp32-epaper-lab/system.yaml?raw';
@@ -55,6 +56,7 @@ import sourceNrf52840Proximity from '../../../core/crates/firmware-nrf52840-prox
 import sourceNeo6mGps from '../../../core/examples/neo6m-gps-lab/src/main.rs?raw';
 import sourceQuectelBg770a from '../../../core/examples/quectel-bg770a-lab/src/main.rs?raw';
 import sourceNtcThermistor from '../../../core/examples/ntc-thermistor-lab/src/main.rs?raw';
+import sourceVl53l1x from '../../../core/examples/vl53l1x-tof-lab/src/main.rs?raw';
 import sourceIli9341Tft from '../../../core/examples/ili9341-tft-lab/src/main.rs?raw';
 import sourceEpaperTricolor from '../../../core/examples/epaper-tricolor-lab/src/main.rs?raw';
 import sourceEsp32Epaper from '../../../core/examples/esp32-epaper-lab/src/main.rs?raw';
@@ -129,6 +131,14 @@ export interface BoardConfig {
    * `'logic-analyzer'` (opens the analyzer panel).
    */
   openInstruments?: Array<'logic-analyzer'>;
+  /**
+   * Run from the bundled system YAML, not one regenerated from the diagram.
+   * Needed when the lab's system YAML declares virtual devices the diagram
+   * emitter can't reproduce — e.g. the multi-frame `uds-tester` external device,
+   * which the diagram path would emit as a single-frame `can-diagnostic-tester`
+   * instead, so the CAN exchange (and its frames) never happens in-browser.
+   */
+  preferBundledSystem?: boolean;
 }
 
 const BASE = import.meta.env.BASE_URL;
@@ -258,6 +268,7 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     kind: 'lab',
     hidden: true,
     openInstruments: ['logic-analyzer'],
+    preferBundledSystem: true,
     summary: {
       title: 'STM32F103 bxCAN UDS ECU (fixed)',
       description:
@@ -285,6 +296,7 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     kind: 'lab',
     hidden: true,
     openInstruments: ['logic-analyzer'],
+    preferBundledSystem: true,
     summary: {
       title: 'STM32F103 bxCAN UDS ECU (broken)',
       description:
@@ -419,6 +431,21 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     sourceCode: sourceMpu6050,
     sourceFilename: 'mpu6050-sensor-lab/src/main.rs',
     kind: 'lab',
+  },
+  {
+    boardId: 'vl53l1x-tof-lab',
+    chipId: 'stm32f103',
+    name: 'VL53L1X ToF',
+    description: 'STM32F103 + VL53L1X laser time-of-flight distance sensor over simulated I²C. Reads range in mm and trips a NEAR/FAR proximity flag.',
+    arch: 'ARM Cortex-M3',
+    chipYaml: chipStm32f103,
+    systemYaml: systemVl53l1xTofLab,
+    demoFirmwarePath: `${BASE}wasm/demo-vl53l1x-tof-lab.elf`,
+    mcuComponentType: 'stm32-dev',
+    sourceCode: sourceVl53l1x,
+    sourceFilename: 'vl53l1x-tof-lab/src/main.rs',
+    kind: 'lab',
+    runHint: 'Click Run — firmware polls the VL53L1X over I²C and prints the range; drag Distance (mm) to cross the 300 mm proximity trip point.',
   },
   {
     boardId: 'adxl345-sensor-lab',
@@ -582,7 +609,7 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     chipId: 'nrf52840',
     name: 'nRF52840 Proximity + BLE',
     description:
-      'Nordic nRF52840 reading an HC-SR04 ultrasonic sensor over GPIO (TRIG P0.04, ECHO P1.05), raising an ALARM LED on P0.06 when the target is within 150 mm, and broadcasting {distance, in-range} over the BLE 1 Mbit PHY. Drag Distance (cm) and watch the LED and the BLE packets follow. The same .elf flashes to real nRF silicon.',
+      'Nordic nRF52840 reading an HC-SR04 ultrasonic sensor over GPIO (TRIG P0.04, ECHO P0.05), raising an ALARM LED on P0.06 when the target comes within 50 cm, and broadcasting {distance, in-range} over the BLE 1 Mbit PHY. Drag Distance (cm) and watch the LED and the BLE packets follow. The same .elf flashes to real nRF silicon.',
     arch: 'ARM Cortex-M4',
     chipYaml: chipNrf52840,
     systemYaml: systemNrf52840Proximity,
@@ -591,7 +618,7 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     sourceCode: sourceNrf52840Proximity,
     sourceFilename: 'firmware-nrf52840-proximity/src/main.rs',
     kind: 'lab',
-    runHint: 'Run, then drag Distance (cm): under 15 cm the ALARM LED lights. Open the Analyzer (toolbar) to see the distance broadcast over BLE.',
+    runHint: 'Run, then drag Distance (cm): under 50 cm the ALARM LED lights. Open the Air Tracer · BLE (Tools) to see the distance broadcast over BLE.',
   },
 ];
 

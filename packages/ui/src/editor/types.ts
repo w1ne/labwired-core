@@ -36,6 +36,35 @@ export interface Wire {
 
 export type PinSide = 'left' | 'right' | 'top' | 'bottom';
 
+/** Electrical type of a pin (KiCad-style vocabulary). Mirrors board-config's PinEtype. */
+export type PinEtype =
+  | 'input'
+  | 'output'
+  | 'bidirectional'
+  | 'open_drain'
+  | 'power_in'
+  | 'power_out'
+  | 'passive'
+  | 'tristate'
+  | 'no_connect';
+
+/** Protocol role a pin plays on its net. Mirrors board-config's NetProtocol. */
+export type PinRole =
+  | 'i2c_sda'
+  | 'i2c_scl'
+  | 'spi_mosi'
+  | 'spi_miso'
+  | 'spi_sck'
+  | 'spi_cs'
+  | 'uart_tx'
+  | 'uart_rx'
+  | 'pwm'
+  | 'adc'
+  | 'gpio'
+  | 'irq'
+  | 'power'
+  | 'ground';
+
 export interface PinDef {
   id: string;
   x: number;
@@ -44,6 +73,13 @@ export interface PinDef {
   label?: string;
   /** Passive measurement point. Probe pins may tap an existing signal net. */
   probe?: boolean;
+  /** Electrical type — carried so the Diagram emits enough for codegen + ERC.
+   *  Optional for back-compat; defaults to a passive/gpio interpretation. */
+  etype?: PinEtype;
+  /** Protocol role on the net (i2c_sda, spi_cs, pwm, gpio, …). */
+  role?: PinRole;
+  /** Whether this pin must be connected for the part to function. */
+  required?: boolean;
 }
 
 export interface ComponentDef {
@@ -53,8 +89,13 @@ export interface ComponentDef {
   width: number;
   height: number;
   pins: PinDef[];
-  render: (attrs: Record<string, string>, state?: ComponentState) => ReactNode;
+  /** Visual renderer. OPTIONAL — when absent, a generic box+labels renderer is
+   *  used, so a part can be defined purely by data (no bespoke SVG). */
+  render?: (attrs: Record<string, string>, state?: ComponentState) => ReactNode;
   defaultAttrs: Record<string, string>;
+  /** Device class for the compiler/ERC (mcu, i2c_device, spi_device, …). Lets a
+   *  data-driven part route correctly without type-sniffing. */
+  deviceClass?: string;
   /** If set, this component maps to a board_io binding in the simulator. */
   boardIoKind?:
     | 'led'
@@ -121,7 +162,7 @@ export type DisplayBuffer =
 export interface AttrFieldDef {
   key: string;
   label: string;
-  type: 'text' | 'select' | 'color' | 'range';
+  type: 'text' | 'select' | 'color' | 'range' | 'textarea';
   options?: string[];
   min?: number;
   max?: number;

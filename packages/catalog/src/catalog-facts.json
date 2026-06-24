@@ -1,0 +1,251 @@
+{
+  "schema_version": 2,
+  "device_types": [
+    "74hc595",
+    "adxl345",
+    "arduino-uno",
+    "bg770a-cellular",
+    "bme280",
+    "button",
+    "buzzer",
+    "can-diagnostic-tool",
+    "can-transceiver",
+    "capacitor",
+    "dht22",
+    "diode",
+    "dip-switch",
+    "esp32",
+    "esp32-c3-supermini",
+    "esp32-s3-zero",
+    "ili9341",
+    "iolink-master",
+    "ir",
+    "keypad",
+    "l293d",
+    "lcd1602",
+    "ldr",
+    "led",
+    "led-matrix",
+    "max31855",
+    "mcu",
+    "mpu6050",
+    "neo6m-gps",
+    "neopixel",
+    "nrf52840-dk",
+    "ntc-thermistor",
+    "nucleo-f401re",
+    "nucleo-h563zi",
+    "oled-ssd1306",
+    "pca9685",
+    "pcd8544",
+    "pir-sensor",
+    "potentiometer",
+    "resistor",
+    "rgb-led",
+    "rotary-encoder",
+    "rpi-pico",
+    "servo",
+    "seven-segment",
+    "slide-switch",
+    "sn74hc165",
+    "ssd1680_tricolor_290",
+    "stm32-blackpill",
+    "stm32-dev",
+    "transistor",
+    "uc8151d_tricolor_290",
+    "ultrasonic",
+    "vl53l1x"
+  ],
+  "peripheral_device_types": [
+    "74hc595",
+    "adxl345",
+    "bg770a-cellular",
+    "bme280",
+    "ili9341",
+    "iolink-master",
+    "ir",
+    "lcd1602",
+    "led-matrix",
+    "max31855",
+    "mpu6050",
+    "neo6m-gps",
+    "neopixel",
+    "ntc-thermistor",
+    "oled-ssd1306",
+    "pca9685",
+    "pcd8544",
+    "seven-segment",
+    "sn74hc165",
+    "ssd1680_tricolor_290",
+    "uc8151d_tricolor_290",
+    "vl53l1x"
+  ],
+  "peripherals": [
+    {
+      "device_type": "74hc595",
+      "label": "74HC595",
+      "transport": "spi",
+      "summary": null,
+      "kit": false
+    },
+    {
+      "device_type": "adxl345",
+      "label": "ADXL345 Tilt",
+      "transport": "i2c",
+      "summary": "3-axis ±2/4/8/16 g digital accelerometer over I2C.",
+      "kit": true
+    },
+    {
+      "device_type": "bg770a-cellular",
+      "label": "Quectel BG770A Cellular",
+      "transport": "uart",
+      "summary": "LTE-M / NB-IoT cellular modem with the full Quectel AT command surface.",
+      "kit": true
+    },
+    {
+      "device_type": "bme280",
+      "label": "BME280 Weather",
+      "transport": "i2c",
+      "summary": "Bosch BME280 temp + humidity + pressure sensor over I2C.",
+      "kit": true
+    },
+    {
+      "device_type": "ili9341",
+      "label": "ILI9341 TFT",
+      "transport": "spi",
+      "summary": "240×320 RGB565 SPI TFT display.",
+      "kit": true
+    },
+    {
+      "device_type": "iolink-master",
+      "label": "IO-Link Master",
+      "transport": "uart",
+      "summary": "IO-Link master state machine over UART.",
+      "kit": true
+    },
+    {
+      "device_type": "ir",
+      "label": "IR Transceiver",
+      "transport": "i2c",
+      "summary": null,
+      "kit": false
+    },
+    {
+      "device_type": "lcd1602",
+      "label": "LCD 16x2",
+      "transport": "i2c",
+      "summary": null,
+      "kit": false
+    },
+    {
+      "device_type": "led-matrix",
+      "label": "8x8 LED Matrix",
+      "transport": "spi",
+      "summary": null,
+      "kit": false
+    },
+    {
+      "device_type": "max31855",
+      "label": "MAX31855 Thermocouple",
+      "transport": "spi",
+      "summary": "Cold-junction-compensated K-type thermocouple amplifier (read-only SPI).",
+      "kit": true
+    },
+    {
+      "device_type": "mpu6050",
+      "label": "MPU6050 IMU",
+      "transport": "i2c",
+      "summary": "6-axis gyro + accelerometer over I2C.",
+      "kit": true
+    },
+    {
+      "device_type": "neo6m-gps",
+      "label": "NEO-6M GPS",
+      "transport": "uart",
+      "summary": "GPS module streaming NMEA sentences over UART RX.",
+      "kit": true
+    },
+    {
+      "device_type": "neopixel",
+      "label": "NeoPixel Strip",
+      "transport": "spi",
+      "summary": null,
+      "kit": false
+    },
+    {
+      "device_type": "ntc-thermistor",
+      "label": "NTC Thermistor",
+      "transport": "analog",
+      "summary": "10 kΩ NTC + voltage divider on an ADC channel.",
+      "kit": true
+    },
+    {
+      "device_type": "oled-ssd1306",
+      "label": "SSD1306 OLED",
+      "transport": "i2c",
+      "summary": "128×64 monochrome OLED display over I2C with a paged framebuffer.",
+      "kit": true
+    },
+    {
+      "device_type": "pca9685",
+      "label": "PCA9685",
+      "transport": "i2c",
+      "summary": null,
+      "kit": false
+    },
+    {
+      "device_type": "pcd8544",
+      "label": "Nokia 5110 LCD",
+      "transport": "spi",
+      "summary": "Nokia 5110 (PCD8544) monochrome 84×48 LCD over SPI.",
+      "kit": true
+    },
+    {
+      "device_type": "seven-segment",
+      "label": "7-Segment",
+      "transport": "spi",
+      "summary": null,
+      "kit": false
+    },
+    {
+      "device_type": "sn74hc165",
+      "label": "74HC165 Shift Register",
+      "transport": "spi",
+      "summary": "8-bit parallel-in / serial-out shift register over SPI.",
+      "kit": true
+    },
+    {
+      "device_type": "ssd1680_tricolor_290",
+      "label": "SSD1680 Tri-Color E-Paper",
+      "transport": "spi",
+      "summary": "2.9\" tri-color (black/white/red) SSD1680 e-paper over SPI.",
+      "kit": true
+    },
+    {
+      "device_type": "uc8151d_tricolor_290",
+      "label": "E-Paper 2.9\" tri-color (UC8151D)",
+      "transport": "spi",
+      "summary": null,
+      "kit": false
+    },
+    {
+      "device_type": "vl53l1x",
+      "label": "VL53L1X ToF",
+      "transport": "i2c",
+      "summary": "Laser time-of-flight distance sensor over I2C.",
+      "kit": true
+    }
+  ],
+  "chips": [
+    "esp32",
+    "esp32c3",
+    "esp32s3",
+    "nrf52840",
+    "rp2040",
+    "stm32f103",
+    "stm32f401",
+    "stm32f401cdu6",
+    "stm32h563",
+    "stm32l476"
+  ]
+}

@@ -155,17 +155,6 @@ function anySegmentBlocked(points: Point[], boxes: Box[]): boolean {
   return false;
 }
 
-/** First box (already inflated) that any segment of the path crosses. */
-function firstBlocker(points: Point[], boxes: Box[]): Box | null {
-  const segs = segmentsOf(points);
-  for (const s of segs) {
-    for (const b of boxes) {
-      if (segIntersectsBox(s, b)) return b;
-    }
-  }
-  return null;
-}
-
 // -- routeAroundObstacles --
 
 /**
@@ -194,109 +183,189 @@ export function routeAroundObstacles(
     return base;
   }
 
-  // Escape pins perpendicular by MARGIN, then attempt an L/Z detour around the
-  // blocking box. We work between the two exit points and prepend/append them.
+  // Escape each pin perpendicular by MARGIN. Because MARGIN (20) > OBSTACLE_MARGIN
+  // (8), the exit points lie outside their own component's inflated body, so they
+  // are valid A* start/goal nodes even when the endpoint bodies are obstacles.
   const fd = exitDir(fromSide);
   const td = exitDir(toSide);
   const exitFrom = { x: from.x + fd.x * MARGIN, y: from.y + fd.y * MARGIN };
   const exitTo = { x: to.x + td.x * MARGIN, y: to.y + td.y * MARGIN };
 
-  // Candidate interior paths between exitFrom and exitTo, ordered by preference.
-  // Each candidate is the list of interior waypoints (between exits).
-  const candidates = buildDetourCandidates(exitFrom, exitTo, inflated);
-
-  let best: Point[] | null = null;
-  let bestLen = Infinity;
-  for (const interior of candidates) {
-    const full = [from, exitFrom, ...interior, exitTo, to];
-    if (anySegmentBlocked(full, inflated)) continue;
-    const len = pathLength(full);
-    if (len < bestLen) {
-      bestLen = len;
-      best = [exitFrom, ...interior, exitTo];
-    }
+  // Route exitFrom -> exitTo on a Hanan grid with A*, avoiding inflated boxes.
+  const interior = hananAStar(exitFrom, exitTo, inflated);
+  if (interior) {
+    return collapseCollinear([exitFrom, ...interior, exitTo]);
   }
 
-  if (best) return best;
-
-  // Fallback: couldn't find a fully-clear detour; return the base path so the
-  // wire still renders (best-effort for hard multi-blocker cases).
+  // Fallback: A* found no path (e.g. fully enclosed pin — shouldn't happen for a
+  // real board). Return the base path so the wire still renders (best-effort).
   return base;
 }
 
+// -- Hanan-grid A* router --
+
 /**
- * Build a set of candidate interior routes (between the two exit points) that
- * attempt to skirt the blocking box(es). Pragmatic escape-then-detour, not A*.
+ * Orthogonal A* over a Hanan grid built from the start/goal coordinates and the
+ * skirt lines of every inflated obstacle box.
+ *
+ * Grid construction: candidate X coords = {start.x, goal.x} ∪ {box.x, box.x+w}
+ * for every box, plus a 1px channel just outside each vertical box edge so paths
+ * can hug the margin without grazing the interior. Same for Y. Nodes are all
+ * (x,y) intersections; a node strictly inside any box is blocked.
+ *
+ * Edges connect grid-adjacent nodes on the same row/column; an edge is allowed
+ * only if its segment does not cross any box interior. Cost = Manhattan length +
+ * TURN_PENALTY per direction change, so few-bend routes win. Heuristic =
+ * Manhattan distance to goal (admissible; turn penalty is extra non-negative
+ * cost, so the straight-line Manhattan estimate never overestimates).
+ *
+ * Returns interior waypoints (EXCLUDING start/goal) or null if unreachable.
  */
-function buildDetourCandidates(
-  exitFrom: Point,
-  exitTo: Point,
-  inflated: Box[],
-): Point[][] {
-  const candidates: Point[][] = [];
+const TURN_PENALTY = 1000;
+const CHANNEL = 1;
 
-  // The straight L/Z connectors between the two exits (no detour).
-  // Z via mid-X (horizontal-dominant)
-  const midX = (exitFrom.x + exitTo.x) / 2;
-  candidates.push([
-    { x: midX, y: exitFrom.y },
-    { x: midX, y: exitTo.y },
-  ]);
-  // Z via mid-Y (vertical-dominant)
-  const midY = (exitFrom.y + exitTo.y) / 2;
-  candidates.push([
-    { x: exitFrom.x, y: midY },
-    { x: exitTo.x, y: midY },
-  ]);
-  // L corners
-  candidates.push([{ x: exitTo.x, y: exitFrom.y }]);
-  candidates.push([{ x: exitFrom.x, y: exitTo.y }]);
+function hananAStar(start: Point, goal: Point, boxes: Box[]): Point[] | null {
+  // Build candidate coordinate lines.
+  const xs = new Set<number>([start.x, goal.x]);
+  const ys = new Set<number>([start.y, goal.y]);
+  for (const b of boxes) {
+    xs.add(b.x);
+    xs.add(b.x + b.w);
+    xs.add(b.x - CHANNEL);
+    xs.add(b.x + b.w + CHANNEL);
+    ys.add(b.y);
+    ys.add(b.y + b.h);
+    ys.add(b.y - CHANNEL);
+    ys.add(b.y + b.h + CHANNEL);
+  }
+  const xList = [...xs].sort((a, b) => a - b);
+  const yList = [...ys].sort((a, b) => a - b);
+  const xi = new Map(xList.map((v, i) => [v, i]));
+  const yi = new Map(yList.map((v, i) => [v, i]));
 
-  // Detours around the blocking box. Identify the box crossing the simplest
-  // direct connector and route over/under or left/right of it.
-  const direct = [exitFrom, { x: exitTo.x, y: exitFrom.y }, exitTo];
-  const blocker = firstBlocker(direct, inflated) ?? inflated[0];
-  if (blocker) {
-    const bx0 = blocker.x;
-    const bx1 = blocker.x + blocker.w;
-    const by0 = blocker.y;
-    const by1 = blocker.y + blocker.h;
+  const cols = xList.length;
+  const rows = yList.length;
+  const nodeId = (ix: number, iy: number) => iy * cols + ix;
 
-    // Over-the-top / under-the-bottom (route in Y around a vertical-blocking box):
-    // go to a Y just outside the box (top or bottom), traverse X, then come back.
-    const overY = by0 - OBSTACLE_MARGIN; // above the box
-    const underY = by1 + OBSTACLE_MARGIN; // below the box
-    candidates.push([
-      { x: exitFrom.x, y: overY },
-      { x: exitTo.x, y: overY },
-    ]);
-    candidates.push([
-      { x: exitFrom.x, y: underY },
-      { x: exitTo.x, y: underY },
-    ]);
+  // A grid node is blocked if it lies strictly inside any box interior.
+  const blocked = (px: number, py: number): boolean => {
+    for (const b of boxes) {
+      if (px > b.x + EPS && px < b.x + b.w - EPS && py > b.y + EPS && py < b.y + b.h - EPS) {
+        return true;
+      }
+    }
+    return false;
+  };
 
-    // Left / right (route in X around a horizontal-blocking box).
-    const leftX = bx0 - OBSTACLE_MARGIN;
-    const rightX = bx1 + OBSTACLE_MARGIN;
-    candidates.push([
-      { x: leftX, y: exitFrom.y },
-      { x: leftX, y: exitTo.y },
-    ]);
-    candidates.push([
-      { x: rightX, y: exitFrom.y },
-      { x: rightX, y: exitTo.y },
-    ]);
+  const startIx = xi.get(start.x)!;
+  const startIy = yi.get(start.y)!;
+  const goalIx = xi.get(goal.x)!;
+  const goalIy = yi.get(goal.y)!;
+  const startNode = nodeId(startIx, startIy);
+  const goalNode = nodeId(goalIx, goalIy);
+
+  const h = (ix: number, iy: number) =>
+    Math.abs(xList[ix] - goal.x) + Math.abs(yList[iy] - goal.y);
+
+  // A* state. dir: 0=none, 1=horizontal, 2=vertical (last move into the node).
+  const gScore = new Map<number, number>();
+  const cameFrom = new Map<number, number>();
+  const cameDir = new Map<number, number>();
+  gScore.set(startNode, 0);
+  cameDir.set(startNode, 0);
+
+  // Simple binary-heap-free priority queue (arrays are small per wire).
+  const open: { id: number; f: number }[] = [{ id: startNode, f: h(startIx, startIy) }];
+
+  const popLowest = (): { id: number; f: number } | undefined => {
+    let best = 0;
+    for (let i = 1; i < open.length; i++) {
+      if (open[i].f < open[best].f) best = i;
+    }
+    return open.splice(best, 1)[0];
+  };
+
+  const neighbors = (ix: number, iy: number): [number, number, number][] => {
+    // [ix, iy, dir]
+    const out: [number, number, number][] = [];
+    if (ix + 1 < cols) out.push([ix + 1, iy, 1]);
+    if (ix - 1 >= 0) out.push([ix - 1, iy, 1]);
+    if (iy + 1 < rows) out.push([ix, iy + 1, 2]);
+    if (iy - 1 >= 0) out.push([ix, iy - 1, 2]);
+    return out;
+  };
+
+  while (open.length > 0) {
+    const cur = popLowest()!;
+    if (cur.id === goalNode) break;
+    const cix = cur.id % cols;
+    const ciy = Math.floor(cur.id / cols);
+    const cg = gScore.get(cur.id)!;
+    const cdir = cameDir.get(cur.id) ?? 0;
+
+    for (const [nix, niy, ndir] of neighbors(cix, ciy)) {
+      const npx = xList[nix];
+      const npy = yList[niy];
+      if (blocked(npx, npy)) continue;
+
+      // Edge must not cross a box interior.
+      const seg: Segment = { a: { x: xList[cix], y: yList[ciy] }, b: { x: npx, y: npy } };
+      let crosses = false;
+      for (const b of boxes) {
+        if (segIntersectsBox(seg, b)) {
+          crosses = true;
+          break;
+        }
+      }
+      if (crosses) continue;
+
+      const stepLen = Math.abs(npx - xList[cix]) + Math.abs(npy - yList[ciy]);
+      const turn = cdir !== 0 && cdir !== ndir ? TURN_PENALTY : 0;
+      const tentative = cg + stepLen + turn;
+
+      const nId = nodeId(nix, niy);
+      if (tentative < (gScore.get(nId) ?? Infinity)) {
+        gScore.set(nId, tentative);
+        cameFrom.set(nId, cur.id);
+        cameDir.set(nId, ndir);
+        open.push({ id: nId, f: tentative + h(nix, niy) });
+      }
+    }
   }
 
-  return candidates;
+  if (!gScore.has(goalNode)) return null;
+
+  // Reconstruct path of grid points, then drop the start/goal endpoints.
+  const path: Point[] = [];
+  let nodeIdCur: number | undefined = goalNode;
+  while (nodeIdCur !== undefined) {
+    const ix = nodeIdCur % cols;
+    const iy = Math.floor(nodeIdCur / cols);
+    path.push({ x: xList[ix], y: yList[iy] });
+    nodeIdCur = cameFrom.get(nodeIdCur);
+  }
+  path.reverse();
+  // path[0] === start, path[last] === goal; return only interior turn points.
+  return path.slice(1, path.length - 1);
 }
 
-function pathLength(points: Point[]): number {
-  let len = 0;
-  for (let i = 0; i + 1 < points.length; i++) {
-    len += Math.abs(points[i + 1].x - points[i].x) + Math.abs(points[i + 1].y - points[i].y);
+/** Drop intermediate points that are collinear with their neighbors. */
+function collapseCollinear(points: Point[]): Point[] {
+  if (points.length <= 2) return points.slice();
+  const out: Point[] = [points[0]];
+  for (let i = 1; i < points.length - 1; i++) {
+    const prev = out[out.length - 1];
+    const cur = points[i];
+    const next = points[i + 1];
+    const collinearH =
+      Math.abs(prev.y - cur.y) < EPS && Math.abs(cur.y - next.y) < EPS;
+    const collinearV =
+      Math.abs(prev.x - cur.x) < EPS && Math.abs(cur.x - next.x) < EPS;
+    if (collinearH || collinearV) continue; // skip the redundant midpoint
+    out.push(cur);
   }
-  return len;
+  out.push(points[points.length - 1]);
+  return out;
 }
 
 // -- findHops --

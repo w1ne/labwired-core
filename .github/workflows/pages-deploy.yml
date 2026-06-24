@@ -33,12 +33,25 @@ permissions:
 
 jobs:
   build-and-deploy:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, deploy]
     steps:
-      - name: Checkout (with submodules)
+      # A prior job (e.g. a container running as root) can leave root-owned files
+      # in the self-hosted runner workspace; the runner user has no sudo, so
+      # actions/checkout's clean step fails with EACCES. rm what we can; if
+      # root-owned files remain, rename the dir aside — we own the PARENT, so the
+      # rename succeeds — and checkout recreates it clean. Nightly
+      # pluto-maintenance reclaims the .broken.* dirs via docker (root).
+      - name: Reset self-hosted workspace
+        run: |
+          if [ -n "${GITHUB_WORKSPACE:-}" ] && [ -d "$GITHUB_WORKSPACE" ]; then
+            rm -rf "$GITHUB_WORKSPACE" 2>/dev/null \
+              || mv "$GITHUB_WORKSPACE" "${GITHUB_WORKSPACE}.broken.$(date +%s%N)" 2>/dev/null \
+              || true
+          fi
+          mkdir -p "$GITHUB_WORKSPACE"
+      - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
           # Full superproject history (not the default shallow depth-1) so that
           # `github.event.before` is present in the local git object store. The
           # "Detect whether this push changed core" step diffs BEFORE..AFTER to
@@ -47,6 +60,19 @@ jobs:
           # on EVERY push — defeating the playground-only fast path. depth 0
           # makes the diff work for both single-commit pushes and merge commits.
           fetch-depth: 0
+      # Fetch ONLY the `core` submodule (wasm/configs this deploy needs).
+      # Skipping the private `landing_page` + `vscode` submodules avoids the
+      # intermittent labwired-landing clone failure that aborts checkout, and is
+      # faster. `git submodule update core` uses the credentials checkout
+      # persisted, so the private `core` still clones.
+      - name: Fetch core submodule
+        # Rewrite the SSH submodule URL (git@github.com:) to HTTPS so the clone
+        # uses the token actions/checkout already persisted (persist-credentials)
+        # instead of SSH — there's no SSH key in CI. Same token + rewrite that
+        # checkout's own `submodules:` handling uses, but only for `core`.
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git submodule update --init --depth 1 core
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -229,3 +255,42 @@ jobs:
           # "Invalid commit message, it must be a valid UTF-8 string" — which
           # fails the deploy AFTER the files have already uploaded.
           command: pages deploy packages/playground/dist --project-name=labwired-playground --branch=main --commit-dirty=true --commit-message="main@${{ github.sha }}"
+
+  # Loud alert when a main deploy fails. The default GitHub failure email is
+  # easy to miss — and a failed deploy means prod silently serves a STALE build
+  # (PR #355's broken core pin went unnoticed for a day). This opens a tracking
+  # issue (or comments on the existing open one) so the failure is impossible to
+  # overlook and carries the run link + the usual root cause.
+  notify-on-failure:
+    needs: build-and-deploy
+    if: failure()
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Open/update deploy-failure issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = '🚨 Playground Pages deploy failed on main';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              `The **Deploy playground to Pages** workflow failed on \`main\`.`,
+              ``,
+              `- Commit: \`${context.sha}\``,
+              `- Run: ${runUrl}`,
+              ``,
+              `⚠️ Prod is now serving a **stale build** until this is fixed.`,
+              ``,
+              `Most common cause: the \`core\` submodule pin doesn't contain example/config files the playground imports (check the build log for an unresolved \`?raw\` import). See the build/import error in the run above.`,
+            ].join('\n');
+            const { owner, repo } = context.repo;
+            const open = await github.rest.issues.listForRepo({ owner, repo, state: 'open', per_page: 100 });
+            const hit = open.data.find((i) => i.title === title && !i.pull_request);
+            if (hit) {
+              await github.rest.issues.createComment({ owner, repo, issue_number: hit.number, body });
+              core.notice(`Commented on existing deploy-failure issue #${hit.number}`);
+            } else {
+              const created = await github.rest.issues.create({ owner, repo, title, body });
+              core.notice(`Opened deploy-failure issue #${created.data.number}`);
+            }

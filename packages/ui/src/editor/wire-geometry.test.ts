@@ -95,6 +95,15 @@ function segIntersectsBox(s: Segment, box: Box): boolean {
   return maxX > bx0 && minX < bx1 && maxY > by0 && minY < by1;
 }
 
+function inflateBox(box: Box, m: number): Box {
+  return { x: box.x - m, y: box.y - m, w: box.w + 2 * m, h: box.h + 2 * m };
+}
+
+/** Are two consecutive points axis-aligned (share x or y)? */
+function isOrthogonal(a: Point, b: Point): boolean {
+  return Math.abs(a.x - b.x) < 1e-6 || Math.abs(a.y - b.y) < 1e-6;
+}
+
 describe('routeAroundObstacles with a blocking box', () => {
   it('no returned segment intersects the inflated box; endpoints unchanged', () => {
     // Two horizontally-facing pins with a chip body straddling the direct path.
@@ -102,12 +111,7 @@ describe('routeAroundObstacles with a blocking box', () => {
     const to = { x: 300, y: 50 };
     // Box centered on the straight line between them.
     const box: Box = { x: 120, y: 20, w: 60, h: 60 };
-    const inflated: Box = {
-      x: box.x - OBSTACLE_MARGIN,
-      y: box.y - OBSTACLE_MARGIN,
-      w: box.w + 2 * OBSTACLE_MARGIN,
-      h: box.h + 2 * OBSTACLE_MARGIN,
-    };
+    const inflated = inflateBox(box, OBSTACLE_MARGIN);
 
     const wps = routeAroundObstacles(from, 'right', to, 'left', [box]);
 
@@ -121,6 +125,66 @@ describe('routeAroundObstacles with a blocking box', () => {
     // must still begin at `from` and end at `to` (we prepend/append them).
     expect(full[0]).toEqual(from);
     expect(full[full.length - 1]).toEqual(to);
+  });
+
+  it('blinky-shaped case: routes AROUND the MCU body, never under it', () => {
+    // A large MCU. The FROM pin sits on its LEFT edge; the TO pin (an LED) is
+    // to the RIGHT of the whole MCU body. A naive direct route would cut
+    // straight through the chip.
+    const mcu: Box = { x: 100, y: 100, w: 200, h: 160 };
+    const from = { x: 100, y: 180 }; // left edge of MCU
+    const to = { x: 400, y: 180 }; // LED pin to the right of MCU, left-facing
+
+    const wps = routeAroundObstacles(from, 'left', to, 'left', [mcu]);
+    const full: Point[] = [from, ...wps, to];
+
+    // Goes around, not under: no segment crosses the MCU body interior. We test
+    // against the RAW body (not the inflated box): the pin's own perpendicular
+    // exit stub necessarily passes through the inflation margin band of its own
+    // component, but the wire must never cut across the actual chip body.
+    for (const s of segmentsOf(full)) {
+      expect(segIntersectsBox(s, mcu)).toBe(false);
+    }
+    // Connected end-to-end.
+    expect(full[0]).toEqual(from);
+    expect(full[full.length - 1]).toEqual(to);
+  });
+
+  it('returned path is orthogonal and connects from -> to', () => {
+    const from = { x: 0, y: 50 };
+    const to = { x: 300, y: 50 };
+    const box: Box = { x: 120, y: 20, w: 60, h: 60 };
+
+    const wps = routeAroundObstacles(from, 'right', to, 'left', [box]);
+    const full: Point[] = [from, ...wps, to];
+
+    expect(full[0]).toEqual(from);
+    expect(full[full.length - 1]).toEqual(to);
+    for (const s of segmentsOf(full)) {
+      expect(isOrthogonal(s.a, s.b)).toBe(true);
+    }
+  });
+
+  it('turn-penalty sanity: a clear straight shot returns minimal bends', () => {
+    // Facing pins with a clear shot and an obstacle well out of the way; the
+    // router must not introduce gratuitous bends. baseRoute (H-H) yields a
+    // 4-point Z; with a turn penalty an unobstructed shot stays simple.
+    const from = { x: 0, y: 50 };
+    const to = { x: 300, y: 50 };
+    const farBox: Box = { x: 100, y: 400, w: 60, h: 60 }; // far below, no effect
+    const wps = routeAroundObstacles(from, 'right', to, 'left', [farBox]);
+    const full: Point[] = [from, ...wps, to];
+    // Count direction changes.
+    let bends = 0;
+    const segs = segmentsOf(full);
+    for (let i = 1; i < segs.length; i++) {
+      const prevH = Math.abs(segs[i - 1].a.y - segs[i - 1].b.y) < 1e-6;
+      const curH = Math.abs(segs[i].a.y - segs[i].b.y) < 1e-6;
+      if (prevH !== curH) bends++;
+    }
+    // from and to share the same y (50), so the ideal path is one straight
+    // line: zero bends.
+    expect(bends).toBe(0);
   });
 });
 

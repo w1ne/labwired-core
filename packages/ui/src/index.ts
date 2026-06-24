@@ -64,6 +64,14 @@ export { EditorCanvas } from './editor/EditorCanvas';
 export { WireLayer } from './editor/WireLayer';
 export { ComponentPalette } from './editor/ComponentPalette';
 export { PropertyPanel } from './editor/PropertyPanel';
+export { DeviceInspector } from './editor/DeviceInspector';
+export { ChipWindow } from './editor/ChipWindow';
+export type { ChipWindowProps } from './editor/ChipWindow';
+export { ChipInspector } from './editor/ChipInspector';
+export type { ChipInspectorProps } from './editor/ChipInspector';
+export { ComponentInspector } from './editor/ComponentInspector';
+export type { ComponentInspectorProps, AttrField, ComponentLiveState } from './editor/ComponentInspector';
+export { manifestToEditorState, canRenderInEditor } from './editor/manifest';
 export { useEditorState } from './editor/useEditorState';
 export { diagramToConfig } from './editor/diagramToConfig';
 export { validateDiagram, validateWireConnection } from './editor/circuitValidation';
@@ -72,7 +80,17 @@ export type { Diagnostic, DiagnosticCode, DiagnosticSeverity } from './editor/ci
 export { routeWire } from './editor/wire-router';
 export { getPinMapping, findPinFunction, PIN_MAPS } from './editor/pin-mapping';
 export type { PinFunction, PinMapping } from './editor/pin-mapping';
-export { COMPONENT_REGISTRY, getComponentsByCategory } from './editor/components/index';
+export {
+  COMPONENT_REGISTRY,
+  getComponentsByCategory,
+  registerComponentDef,
+  registerComponents,
+  resolveComponentDef,
+  defineComponent,
+  genericComponentDef,
+  makeGenericRender,
+  renderComponentBody,
+} from './editor/components/index';
 export { computeDiagramBounds } from './editor/diagramBounds';
 export type { DiagramBounds } from './editor/diagramBounds';
 export type {
@@ -87,6 +105,9 @@ export { compileCode, EXAMPLE_SKETCHES } from './editor/compile-service';
 export type { CompileResult, CompileOptions } from './editor/compile-service';
 export { startTone, stopTone, resumeAudio } from './editor/audio-engine';
 export { encodeProject, decodeProject, fetchSharedProject, isEmbedMode, generateShareUrl, generateEmbedUrl } from './editor/sharing';
+export type { ShareOptions } from './editor/sharing';
+export { renderCanvasPng } from './editor/canvasPreview';
+export type { RenderCanvasPngOptions } from './editor/canvasPreview';
 
 /**
  * @deprecated Replaced by `InspectorCard` in the Playground Studio shell. Will be removed in a future release.
@@ -110,3 +131,27 @@ export type {
   Category,
   ConfigType,
 } from './peripherals/registry';
+
+// Standalone live e-paper panel + shared tri-color framebuffer decoder, so an
+// external consumer (e.g. proto.cat) can render the SSD1680/UC8151D panel from a
+// sim-loop DisplayBuffer without pulling in the whole editor canvas.
+export {
+  EpaperPanel,
+  decodeTricolorFramebuffer,
+  EPAPER_LANDSCAPE_W,
+  EPAPER_LANDSCAPE_H,
+} from './peripherals/epaper';
+export type { EpaperPanelProps } from './peripherals/epaper';
+export type { DisplayBuffer } from './editor/types';
+export type { DisplayBinding } from './hooks/useSimulationLoop';
+
+export { LabwiredEditor } from './editor/LabwiredEditor';
+export type { LabwiredEditorProps, EditorSimData } from './editor/LabwiredEditor';
+export { SimDock } from './editor/SimDock';
+export type { SimDockProps, SimState } from './editor/SimDock';
+export { BleAnalyzer } from './editor/instruments/BleAnalyzer';
+export type { BleAnalyzerProps } from './editor/instruments/BleAnalyzer';
+export { decodeBleTrace } from './editor/instruments/bleDecode';
+export type { BleTransaction } from './editor/instruments/bleDecode';
+export { IoLinkAnalyzer } from './editor/instruments/IoLinkAnalyzer';
+export type { IoLinkAnalyzerProps } from './editor/instruments/IoLinkAnalyzer';

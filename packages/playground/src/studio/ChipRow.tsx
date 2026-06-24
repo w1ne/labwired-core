@@ -12,6 +12,7 @@ export const STARTER_LABS: StarterLab[] = [
   { id: 'stm32f103-blinky', name: 'Blinky', icon: '⚡', locked: false },
   { id: 'adxl345-sensor-lab', name: 'ADXL345 Tilt', icon: '📊', locked: false },
   { id: 'mpu6050-sensor-lab', name: 'MPU6050 IMU', icon: '🧭', locked: false },
+  { id: 'vl53l1x-tof-lab', name: 'VL53L1X ToF', icon: '📏', locked: false },
   { id: 'bme280-weather-lab', name: 'BME280 Weather', icon: '🌡', locked: false },
   { id: 'ssd1306-hello-lab', name: 'OLED Hello', icon: '📺', locked: false },
   { id: 'nokia5110-invaders-lab', name: 'Nokia 5110 Breakout', icon: '🕹️', locked: false },

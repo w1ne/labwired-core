@@ -1,0 +1,154 @@
+# Publish @w1ne/catalog to GitHub Packages (private) when the generated facts
+# change on main, then open a bump PR in proto.cat so its drift gate runs
+# against the new facts.
+#
+# GitHub Packages (not public npm): the package is internal infra, and the
+# labwired repo is private. The scope is @w1ne (must match the repo owner for
+# GitHub Packages). Publishing uses the built-in GITHUB_TOKEN — no extra secret.
+#
+# Runs on the self-hosted pluto runners ([self-hosted, deploy]) — GitHub-hosted
+# minutes are billing-blocked for this repo, so ubuntu-latest jobs never start.
+#
+# Secrets used:
+#   GITHUB_TOKEN  — built-in; publishes to this repo's GitHub Packages (packages: write).
+#   PROTOCAT_PAT  — PAT with repo + read:packages on w1ne/protocat-private, for the
+#                   bump PR. Until it is set, the bump job green-skips.
+#
+# Versioning: we publish the version committed in packages/catalog/package.json.
+# A PR gate (Playground CI) fails if catalog-facts.json changes without a version
+# bump, so the committed version is always honest. Publish skips if that exact
+# version is already on GitHub Packages.
+
+name: Publish @w1ne/catalog
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/catalog/src/catalog-facts.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: [self-hosted, deploy]
+    outputs:
+      version: ${{ steps.pub.outputs.version }}
+      published: ${{ steps.pub.outputs.published }}
+    steps:
+      # A prior job (e.g. a container running as root) can leave root-owned files
+      # in the self-hosted runner workspace; the runner user has no sudo, so
+      # actions/checkout's clean step fails with EACCES. rm what we can; if
+      # root-owned files remain, rename the dir aside — we own the PARENT, so the
+      # rename succeeds — and checkout recreates it clean.
+      - name: Reset self-hosted workspace
+        run: |
+          if [ -n "${GITHUB_WORKSPACE:-}" ] && [ -d "$GITHUB_WORKSPACE" ]; then
+            rm -rf "$GITHUB_WORKSPACE" 2>/dev/null \
+              || mv "$GITHUB_WORKSPACE" "${GITHUB_WORKSPACE}.broken.$(date +%s%N)" 2>/dev/null \
+              || true
+          fi
+          mkdir -p "$GITHUB_WORKSPACE"
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@w1ne"
+          cache: npm
+          cache-dependency-path: packages/catalog/package-lock.json
+
+      - name: Install
+        working-directory: packages/catalog
+        run: npm ci
+
+      # Guard: the facts must already match the registry/manifest (the Playground
+      # CI gate enforces this pre-merge; fail loudly if something bypassed it).
+      - name: Verify facts are not stale
+        working-directory: packages/catalog
+        run: npm run check:facts
+
+      - name: Build + test
+        working-directory: packages/catalog
+        run: npm run build && npm test
+
+      - name: Publish committed version if not already on GitHub Packages
+        id: pub
+        working-directory: packages/catalog
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          NAME=$(node -p "require('./package.json').name")
+          VER=$(node -p "require('./package.json').version")
+          if npm view "$NAME@$VER" version >/dev/null 2>&1; then
+            echo "$NAME@$VER is already published — skipping (bump the version to release)"
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          else
+            npm publish
+            echo "version=$VER" >> "$GITHUB_OUTPUT"
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  bump-protocat:
+    needs: publish
+    if: needs.publish.outputs.published == 'true'
+    runs-on: [self-hosted, deploy]
+    steps:
+      - name: Reset self-hosted workspace
+        run: |
+          if [ -n "${GITHUB_WORKSPACE:-}" ] && [ -d "$GITHUB_WORKSPACE" ]; then
+            rm -rf "$GITHUB_WORKSPACE" 2>/dev/null \
+              || mv "$GITHUB_WORKSPACE" "${GITHUB_WORKSPACE}.broken.$(date +%s%N)" 2>/dev/null \
+              || true
+          fi
+          mkdir -p "$GITHUB_WORKSPACE"
+
+      # Green-skip the whole bump when PROTOCAT_PAT is not configured yet.
+      - name: Check PROTOCAT_PAT is present
+        id: pat
+        env:
+          PAT: ${{ secrets.PROTOCAT_PAT }}
+        run: |
+          if [ -z "${PAT:-}" ]; then
+            echo "PROTOCAT_PAT not set — skipping proto.cat bump PR"
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.pat.outputs.ok == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: w1ne/protocat-private
+          token: ${{ secrets.PROTOCAT_PAT }}
+
+      - if: steps.pat.outputs.ok == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@w1ne"
+
+      - name: Bump @w1ne/catalog
+        if: steps.pat.outputs.ok == 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.PROTOCAT_PAT }}
+        run: npm install "@w1ne/catalog@${{ needs.publish.outputs.version }}"
+
+      - if: steps.pat.outputs.ok == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.PROTOCAT_PAT }}
+          branch: chore/bump-w1ne-catalog
+          base: main
+          title: "chore: bump @w1ne/catalog to ${{ needs.publish.outputs.version }}"
+          commit-message: "chore: bump @w1ne/catalog to ${{ needs.publish.outputs.version }}"
+          body: |
+            Automated bump so proto.cat's catalog drift gate runs against the
+            latest LabWired facts. A red catalog-sync test here means a new
+            LabWired peripheral needs a proto.cat block (or a KNOWN_UNMAPPED ack).

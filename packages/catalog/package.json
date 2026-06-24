@@ -1,0 +1,38 @@
+{
+  "name": "@w1ne/catalog",
+  "version": "0.1.3",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist", "src/catalog-facts.json"],
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/w1ne/labwired.git",
+    "directory": "packages/catalog"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.mjs --packages=external && cp dist/index.mjs dist/index.js && tsc -p tsconfig.build.json --emitDeclarationOnly",
+    "generate:facts": "tsx scripts/generate-catalog-facts.ts",
+    "check:facts": "tsx scripts/generate-catalog-facts.ts --check",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@labwired/board-config": "file:../board-config",
+    "@types/node": "^25.9.3",
+    "esbuild": "^0.25.0",
+    "tsx": "^4.19.0",
+    "typescript": "~5.9.3",
+    "vitest": "~3.2.0"
+  }
+}

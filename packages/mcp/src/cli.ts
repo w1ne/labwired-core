@@ -245,6 +245,162 @@ export async function fuzzFirmware(opts: {
   }
 }
 
+// ─── Builder HTTP client: run a baked-in example ────────────────────────────
+// The builder image bakes a curated example (firmware ELF + manifests) and runs
+// it INSIDE the container via POST /run-example, returning the IO-Link master's
+// real verdict. We reach it over HTTP — same base URL the hosted compile client
+// uses (LABWIRED_COMPILE_URL, the builder root) + the X-Builder-Secret header.
+
+export interface RunExampleScenario {
+  script: string;
+  passed: boolean;
+  status: string;
+  stop_reason: string;
+  assertions: { assertion: unknown; passed: boolean }[];
+  master_verdict_lines: string[];
+  uart_excerpt: string;
+}
+
+export interface RunExampleResult {
+  ok: boolean;
+  example_id: string;
+  passed: boolean;
+  exit_code: number;
+  scenarios: RunExampleScenario[];
+  master_verdict_lines: string[];
+  uart_excerpt: string;
+  error?: string;
+}
+
+/** Builder base URL for HTTP endpoints (/compile, /run-example). */
+function builderBaseUrl(): string | undefined {
+  const raw = process.env.LABWIRED_COMPILE_URL ?? process.env.LABWIRED_BUILDER_URL;
+  return raw ? raw.replace(/\/$/, '') : undefined;
+}
+
+export async function runExampleViaBuilder(opts: {
+  exampleId: string;
+}): Promise<RunExampleResult> {
+  const base = builderBaseUrl();
+  if (!base) {
+    return {
+      ok: false,
+      example_id: opts.exampleId,
+      passed: false,
+      exit_code: 1,
+      scenarios: [],
+      master_verdict_lines: [],
+      uart_excerpt: '',
+      error:
+        'No builder URL configured. Set LABWIRED_COMPILE_URL (or LABWIRED_BUILDER_URL) ' +
+        'to the labwired-builder base URL so the example can run server-side.',
+    };
+  }
+  const secret = process.env.LABWIRED_BUILDER_SECRET ?? process.env.BUILDER_SECRET ?? '';
+  const headers: Record<string, string> = { 'content-type': 'application/json' };
+  if (secret) headers['x-builder-secret'] = secret;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 600_000);
+  try {
+    const resp = await fetch(`${base}/run-example`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ example_id: opts.exampleId }),
+      signal: controller.signal,
+    });
+    const data = (await resp.json()) as RunExampleResult;
+    return data;
+  } catch (e) {
+    return {
+      ok: false,
+      example_id: opts.exampleId,
+      passed: false,
+      exit_code: 1,
+      scenarios: [],
+      master_verdict_lines: [],
+      uart_excerpt: '',
+      error: `builder /run-example unreachable: ${e instanceof Error ? e.message : String(e)}`,
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// The builder also runs a SUPPLIED build (firmware ELF + system manifest + test
+// script — all sent in the request, nothing baked in) INSIDE the container via
+// POST /run-build, returning the honest verdict. Generic counterpart to
+// /run-example; same base URL + X-Builder-Secret header.
+
+export interface RunBuildResult {
+  ok: boolean;
+  passed: boolean;
+  exit_code: number;
+  status: string;
+  stop_reason: string;
+  assertions: { assertion: unknown; passed: boolean }[];
+  verdict_lines: string[];
+  uart_excerpt: string;
+  error?: string;
+}
+
+export async function runBuildViaBuilder(opts: {
+  firmwareBase64: string;
+  systemYaml: string;
+  testYaml: string;
+}): Promise<RunBuildResult> {
+  const base = builderBaseUrl();
+  if (!base) {
+    return {
+      ok: false,
+      passed: false,
+      exit_code: 1,
+      status: '',
+      stop_reason: '',
+      assertions: [],
+      verdict_lines: [],
+      uart_excerpt: '',
+      error:
+        'No builder URL configured. Set LABWIRED_COMPILE_URL (or LABWIRED_BUILDER_URL) ' +
+        'to the labwired-builder base URL so the build can run server-side.',
+    };
+  }
+  const secret = process.env.LABWIRED_BUILDER_SECRET ?? process.env.BUILDER_SECRET ?? '';
+  const headers: Record<string, string> = { 'content-type': 'application/json' };
+  if (secret) headers['x-builder-secret'] = secret;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 600_000);
+  try {
+    const resp = await fetch(`${base}/run-build`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        firmware_base64: opts.firmwareBase64,
+        system_yaml: opts.systemYaml,
+        test_yaml: opts.testYaml,
+      }),
+      signal: controller.signal,
+    });
+    const data = (await resp.json()) as RunBuildResult;
+    return data;
+  } catch (e) {
+    return {
+      ok: false,
+      passed: false,
+      exit_code: 1,
+      status: '',
+      stop_reason: '',
+      assertions: [],
+      verdict_lines: [],
+      uart_excerpt: '',
+      error: `builder /run-build unreachable: ${e instanceof Error ? e.message : String(e)}`,
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function validateSystem(systemYaml: string): Promise<CliResult> {
   const work = await mkdtemp(join(tmpdir(), 'labwired-mcp-validate-'));
   try {

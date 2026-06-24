@@ -11,7 +11,7 @@ import { z } from 'zod';
 import { mkdtemp, writeFile, rm, mkdir, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { listChips, runSimulation, validateSystem, runLab, fuzzFirmware, runCli, runDeviceCapture } from './cli.js';
+import { listChips, runSimulation, validateSystem, runLab, fuzzFirmware, runCli, runDeviceCapture, runExampleViaBuilder, runBuildViaBuilder } from './cli.js';
 import {
   listBoards,
   getBoard,
@@ -540,6 +540,62 @@ function localTools() {
           name: {
             type: 'string',
             description: 'Optional name for the output file (defaults to board name). Kebab-cased.',
+          },
+        },
+      },
+    },
+    {
+      name: 'labwired_run_example',
+      description:
+        'Run a CURATED, BAKED-IN LabWired example end-to-end on the server-side builder and report ' +
+        'the real verdict its peripherals observed. Unlike labwired_run_lab, you supply NO firmware — ' +
+        'the example (pre-built firmware ELF + system manifests) is baked into the builder image and ' +
+        'runs INSIDE the container, so the result is a deterministic, silicon-validated oracle run, ' +
+        'not a self-reported claim. e.g. "esp32c3-mlx90640-thermal" runs the thermal-fingerprint ' +
+        'IO-Link device in both NORMAL and FAULT scenarios and returns whether the IO-Link MASTER read ' +
+        'the verdict (STABLE/health/NONE, then FAULT→COOLING_FAILURE/OVERTEMP + a diagnostic EVENT). ' +
+        'Returns { ok, passed, exit_code, scenarios[], master_verdict_lines[], uart_excerpt }.',
+      inputSchema: {
+        type: 'object',
+        required: ['example_id'],
+        properties: {
+          example_id: {
+            type: 'string',
+            description: 'Curated example id baked into the builder, e.g. "esp32c3-mlx90640-thermal".',
+          },
+        },
+      },
+    },
+    {
+      name: 'labwired_run_build',
+      description:
+        'Run YOUR OWN build end-to-end on the server-side builder and report the real verdict it ' +
+        'observed. Unlike labwired_run_example (curated, baked-in by id), you SUPPLY everything: the ' +
+        'compiled firmware ELF (base64), the LabWired system manifest (YAML), and the test script ' +
+        '(YAML with assertions). The builder writes them to an ephemeral, traversal-safe dir and runs ' +
+        '`labwired test` against them INSIDE the container, so the result is a deterministic oracle ' +
+        'run on the modeled hardware, not a self-reported claim. This is the generic oracle-run for ' +
+        'ANY build — use it to verify your firmware actually exercises your hardware and your test ' +
+        'assertions pass before publishing. The manifest\'s `chip:` may use the standard ' +
+        '"../../configs/chips/<chip>.yaml" convention and resolves against the in-image config tree. ' +
+        'Returns { ok, passed, exit_code, status, stop_reason, assertions[], verdict_lines[], uart_excerpt }.',
+      inputSchema: {
+        type: 'object',
+        required: ['firmware_base64', 'system_yaml', 'test_yaml'],
+        properties: {
+          firmware_base64: {
+            type: 'string',
+            description: 'Base64-encoded compiled firmware ELF for your build.',
+          },
+          system_yaml: {
+            type: 'string',
+            description: 'LabWired system manifest (YAML) describing the modeled hardware your firmware runs on.',
+          },
+          test_yaml: {
+            type: 'string',
+            description:
+              'LabWired test script (YAML, schema_version "1.0") with limits + assertions that PROVE your build works. ' +
+              'Its inputs.firmware / inputs.system are overridden by the supplied firmware + manifest.',
           },
         },
       },
@@ -1219,6 +1275,43 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             ),
           },
         ],
+      };
+    }
+
+    if (name === 'labwired_run_example') {
+      const a = (args ?? {}) as { example_id?: string };
+      if (!a.example_id || typeof a.example_id !== 'string') {
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ ok: false, error: 'example_id is required' }, null, 2) }],
+          isError: true,
+        };
+      }
+      const result = await runExampleViaBuilder({ exampleId: a.example_id });
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        isError: !result.ok || !result.passed,
+      };
+    }
+
+    if (name === 'labwired_run_build') {
+      const a = (args ?? {}) as { firmware_base64?: string; system_yaml?: string; test_yaml?: string };
+      const missing = ['firmware_base64', 'system_yaml', 'test_yaml'].filter(
+        (k) => typeof (a as Record<string, unknown>)[k] !== 'string' || !((a as Record<string, string>)[k] ?? '').trim(),
+      );
+      if (missing.length) {
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ ok: false, error: `missing required: ${missing.join(', ')}` }, null, 2) }],
+          isError: true,
+        };
+      }
+      const result = await runBuildViaBuilder({
+        firmwareBase64: a.firmware_base64!,
+        systemYaml: a.system_yaml!,
+        testYaml: a.test_yaml!,
+      });
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        isError: !result.ok || !result.passed,
       };
     }
 

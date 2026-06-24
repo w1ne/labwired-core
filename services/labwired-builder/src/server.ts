@@ -1,6 +1,9 @@
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import { run } from './run.js';
 import { compile, type CompileRequest } from './compile.js';
+import { runExample, type RunExampleRequest } from './run-example.js';
+import { runBuild, type RunBuildRequest } from './run-build.js';
+import { CHIP_YAMLS } from '../../../packages/board-config/src/chip-yamls.js';
 
 const MAX_CONCURRENT = Number(process.env.MAX_CONCURRENT ?? 2);
 // Upper bound on a proxied /compile round-trip. The compile service caps its own
@@ -37,6 +40,13 @@ export function makeServer(opts: ServerOptions) {
     // Health check — open, no auth
     if (url === '/healthz') {
       json(res, 200, { ok: true });
+      return;
+    }
+
+    // Chip catalog — open, no auth
+    if (req.method === 'GET' && url === '/chips') {
+      const chips = Object.keys(CHIP_YAMLS).sort().map((id) => ({ id }));
+      json(res, 200, { chips });
       return;
     }
 
@@ -107,6 +117,19 @@ export function makeServer(opts: ServerOptions) {
           const result = await compile(parsed as CompileRequest);
           json(res, 200, result);
         }
+      } else if (url === '/run-example') {
+        // Run a BAKED-IN example (firmware ELF + manifests are in the image)
+        // end-to-end and report the verdict the IO-Link master observed. The
+        // example_id is allowlisted + slug-validated in runExample().
+        const result = await runExample(parsed as RunExampleRequest);
+        json(res, result.ok ? 200 : 400, result);
+      } else if (url === '/run-build') {
+        // Run a SUPPLIED build (firmware ELF + system manifest + test script,
+        // all in the request body — nothing baked in) end-to-end inside the
+        // container and report the honest verdict. The generic oracle-run for
+        // ANY build; written to an ephemeral, traversal-safe tmp dir.
+        const result = await runBuild(parsed as RunBuildRequest);
+        json(res, result.ok ? 200 : 400, result);
       } else {
         json(res, 404, { error: 'not found' });
       }

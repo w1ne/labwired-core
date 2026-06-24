@@ -1,5 +1,5 @@
 {
-  "_doc": "THE board catalog — single source of truth for the hosted PlatformIO compiler, shared by labwired and proto.cat. Add a board here and it is (a) served by /boards, (b) auto-baked into the offline image (warm-cache derives from this), (c) resolvable by /compile. Resolution precedence: boards[id] wins, else chipFamilies[chip_family]. Fields: platform/board/framework are the PlatformIO triple; runnable = LabWired sim can execute it; extra = extra platformio.ini lines (ours, never agent input); libDeps = default libraries; espChip = ESP flash-image chip hint.",
+  "_doc": "THE board catalog — single source of truth for the hosted PlatformIO compiler, shared by labwired and proto.cat. Add a board here and it is (a) served by /boards, (b) auto-baked into the offline image (warm-cache derives from this), (c) resolvable by /compile. Resolution precedence: boards[id] wins, else chipFamilies[chip_family]. Fields: platform/board/framework are the PlatformIO triple; runnable = LabWired sim can execute it; extra = extra platformio.ini lines (ours, never agent input); libDeps = default libraries; espChip = ESP flash-image chip hint. A Zephyr target instead sets builder='zephyr' + zephyrBoard (west board id) and is built with `west build` against the image's pre-baked Zephyr workspace, NOT PlatformIO.",
   "boards": {
     "stm32l476": { "platform": "ststm32", "board": "nucleo_l476rg", "framework": "stm32cube", "runnable": true },
     "nucleo-f401re": { "platform": "ststm32", "board": "nucleo_f401re", "framework": "stm32cube", "runnable": true },
@@ -7,6 +7,7 @@
     "nucleo-h563zi": { "platform": "ststm32", "board": "nucleo_h563zi", "framework": "arduino", "runnable": true },
     "rpi-pico": { "platform": "raspberrypi", "board": "pico", "framework": "arduino", "runnable": true },
     "nrf52840-dk": { "platform": "nordicnrf52", "board": "nrf52840_dk", "framework": "arduino", "runnable": true },
+    "nrf52840-dk-zephyr": { "builder": "zephyr", "zephyrBoard": "nrf52840dk/nrf52840", "platform": "nordicnrf52", "board": "nrf52840_dk", "runnable": true },
     "esp32": { "platform": "espressif32", "board": "esp32dev", "framework": "arduino", "runnable": true, "espChip": "esp32" },
     "esp32-s3-zero": {
       "platform": "espressif32", "board": "esp32-s3-devkitc-1", "framework": "arduino", "runnable": true, "espChip": "esp32s3",

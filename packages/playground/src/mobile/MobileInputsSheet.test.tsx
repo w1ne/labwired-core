@@ -25,10 +25,17 @@ function bridgeWithAir(frames = 1): SimulatorBridge {
 
 function renderSheet(
   d: Diagram,
-  opts: { bridge?: SimulatorBridge | null; running?: boolean } = {},
+  opts: {
+    bridge?: SimulatorBridge | null;
+    running?: boolean;
+    labName?: string;
+    labDescription?: string;
+  } = {},
 ) {
   return render(
     <MobileInputsSheet
+      labName={opts.labName}
+      labDescription={opts.labDescription}
       diagram={d}
       boardIoStates={{}}
       uartOutput=""
@@ -47,7 +54,7 @@ function tabNames(): string[] {
   return screen
     .getAllByRole('button')
     .map((b) => b.textContent?.trim() ?? '')
-    .filter((t) => ['Inputs', 'Serial', 'BLE', 'Logic', 'IO-Link'].includes(t));
+    .filter((t) => ['Info', 'Inputs', 'Serial', 'BLE', 'Logic', 'IO-Link'].includes(t));
 }
 
 describe('MobileInputsSheet tabs', () => {
@@ -79,5 +86,16 @@ describe('MobileInputsSheet tabs', () => {
   it('shows the IO-Link tab only when an iolink-master part is present', () => {
     renderSheet(diagram([part({ type: 'iolink-master' })]));
     expect(tabNames()).toContain('IO-Link');
+  });
+
+  it('shows the Info tab only when a lab description is provided', () => {
+    renderSheet(diagram([part({ type: 'led' })]));
+    expect(tabNames()).not.toContain('Info');
+
+    renderSheet(diagram([part({ type: 'led' })]), {
+      labName: 'Blinky',
+      labDescription: 'Toggles an LED from firmware.',
+    });
+    expect(tabNames()).toContain('Info');
   });
 });
