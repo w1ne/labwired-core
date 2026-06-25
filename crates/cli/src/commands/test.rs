@@ -8,44 +8,27 @@
 
 use crate::*;
 
-/// Apply the script's faults to the built bus, log and persist per-fault
-/// evidence, and enforce the require_fault_fired gate. Returns `Some(exit)` to
-/// abort the run when a required fault did not fire (the run is invalid, not a
-/// firmware pass); `None` to proceed.
+/// Apply the script's faults to the built bus before the run, logging any that
+/// could not be applied. Returns the provisional evidence; runtime-observed
+/// outcomes (and the require_fault_fired gate) are finalised after the run in
+/// execute_test_loop.
 fn handle_faults(
-    args: &TestArgs,
     bus: &mut labwired_core::bus::SystemBus,
     faults: &[labwired_config::FaultSpec],
-    require_fault_fired: bool,
-) -> Result<Vec<labwired_cli::faults::FaultEvidence>, ExitCode> {
+) -> Vec<labwired_cli::faults::FaultEvidence> {
     if faults.is_empty() {
-        return Ok(Vec::new());
+        return Vec::new();
     }
     let evidence = labwired_cli::faults::apply_faults(bus, faults);
     for e in &evidence {
-        if e.fired {
-            info!("fault '{}' ({}) fired", e.id, e.kind);
-        } else {
+        if let Some(err) = &e.error {
             error!(
-                "fault '{}' ({}) did NOT fire: {}",
-                e.id,
-                e.kind,
-                e.error.as_deref().unwrap_or("")
+                "fault '{}' ({}) could not be applied: {}",
+                e.id, e.kind, err
             );
         }
     }
-    if let Some(dir) = &args.output_dir {
-        let _ = std::fs::create_dir_all(dir);
-        if let Ok(f) = std::fs::File::create(dir.join("fault-evidence.json")) {
-            let _ = serde_json::to_writer_pretty(f, &evidence);
-        }
-    }
-    if require_fault_fired && evidence.iter().any(|e| !e.fired) {
-        let n = evidence.iter().filter(|e| !e.fired).count();
-        error!("require_fault_fired: {n} fault(s) did not fire; run is invalid");
-        return Err(ExitCode::from(EXIT_ASSERT_FAIL));
-    }
-    Ok(evidence)
+    evidence
 }
 
 pub(crate) fn run_test(args: TestArgs) -> ExitCode {
@@ -349,11 +332,7 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
             // to the app. See FIDELITY.md §C.
             machine.cpu.set_pc(program.entry_point as u32);
             machine.cpu.set_sp(0x3FFE_0000);
-            let fault_evidence =
-                match handle_faults(&args, &mut machine.bus, &faults, require_fault_fired) {
-                    Ok(ev) => ev,
-                    Err(code) => return code,
-                };
+            let fault_evidence = handle_faults(&mut machine.bus, &faults);
             let exit_code = execute_test_loop(
                 &args,
                 &mut machine,
@@ -364,7 +343,9 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                 &metrics,
                 &firmware_path,
                 system_path.as_ref(),
-                &fault_evidence,
+                &faults,
+                require_fault_fired,
+                fault_evidence,
             );
             // Device-block render readout. Surfaces the attached panel block's
             // REAL render state — refresh_gen AND black-plane ink — so a generic
@@ -487,11 +468,7 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                     e,
                 );
             }
-            let fault_evidence =
-                match handle_faults(&args, &mut machine.bus, &faults, require_fault_fired) {
-                    Ok(ev) => ev,
-                    Err(code) => return code,
-                };
+            let fault_evidence = handle_faults(&mut machine.bus, &faults);
             execute_test_loop(
                 &args,
                 &mut machine,
@@ -502,7 +479,9 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                 &metrics,
                 &firmware_path,
                 system_path.as_ref(),
-                &fault_evidence,
+                &faults,
+                require_fault_fired,
+                fault_evidence,
             )
         }};
     }

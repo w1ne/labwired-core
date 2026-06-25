@@ -1521,7 +1521,9 @@ fn execute_test_loop<C: labwired_core::Cpu>(
     metrics: &Arc<labwired_core::metrics::PerformanceMetrics>,
     firmware_path: &Path,
     system_path: Option<&PathBuf>,
-    fault_evidence: &[labwired_cli::faults::FaultEvidence],
+    faults: &[labwired_config::FaultSpec],
+    require_fault_fired: bool,
+    mut fault_evidence: Vec<labwired_cli::faults::FaultEvidence>,
 ) -> ExitCode {
     let max_steps = resolved_limits.max_steps;
     let max_cycles = resolved_limits.max_cycles;
@@ -1866,6 +1868,17 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         duration,
         0, // vcd_bytes - will be updated below
     );
+    // Finalise runtime-observed fault outcomes (e.g. missing_clock fires only
+    // when the firmware actually accessed the unclocked peripheral) and enforce
+    // the require_fault_fired gate: a fault that never took effect makes the run
+    // invalid, not a firmware pass.
+    labwired_cli::faults::finalize_fault_evidence(&machine.bus, faults, &mut fault_evidence);
+    let fault_gate_failed = require_fault_fired && fault_evidence.iter().any(|e| !e.fired);
+    if fault_gate_failed {
+        let n = fault_evidence.iter().filter(|e| !e.fired).count();
+        error!("require_fault_fired: {n} fault(s) did not fire; run is invalid");
+    }
+
     write_outputs(
         args,
         status,
@@ -1883,10 +1896,13 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         duration,
         &trace_observer,
         &coverage_observer,
-        fault_evidence,
+        &fault_evidence,
     );
 
-    if !all_passed || (stop_requires_assertion && !expected_stop_reason_matched) {
+    if !all_passed
+        || fault_gate_failed
+        || (stop_requires_assertion && !expected_stop_reason_matched)
+    {
         ExitCode::from(EXIT_ASSERT_FAIL)
     } else if sim_error_happened && !expected_stop_reason_matched {
         ExitCode::from(EXIT_RUNTIME_ERROR)
@@ -1966,6 +1982,19 @@ fn write_outputs<C: labwired_core::Cpu>(
                         }
                     }
                     Err(e) => error!("Failed to create trace.json: {}", e),
+                }
+            }
+
+            // fault-evidence.json (per-fault verdicts; also folded into the manifest)
+            if !fault_evidence.is_empty() {
+                let fault_path = output_dir.join("fault-evidence.json");
+                match std::fs::File::create(&fault_path) {
+                    Ok(f) => {
+                        if let Err(e) = serde_json::to_writer_pretty(f, fault_evidence) {
+                            error!("Failed to write fault-evidence.json: {}", e);
+                        }
+                    }
+                    Err(e) => error!("Failed to create fault-evidence.json: {}", e),
                 }
             }
 
