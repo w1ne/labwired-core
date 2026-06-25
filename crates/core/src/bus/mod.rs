@@ -71,6 +71,12 @@ pub struct SystemBus {
     /// False for architectures (e.g. RISC-V) whose memory maps collide with
     /// the bit-band alias ranges 0x42000000–0x44000000 / 0x22000000–0x24000000.
     pub bit_band_enabled: bool,
+    /// Offset (bytes) from the flash base to the application vector table when
+    /// a second-stage bootloader precedes it (RP2040 boot2 = `0x100`). `0`
+    /// means the vector table sits at the flash base. Carried from the chip
+    /// descriptor so `Machine::load_firmware` can relocate the reset vector
+    /// past the stage-2 blob. See `ChipDescriptor::reset_vector_offset`.
+    pub reset_vector_offset: u64,
     /// Plan 3: per-core bitmask of pending cpu IRQ slots (32 bits each;
     /// index 0 = PRO_CPU, 1 = APP_CPU). Aggregated by
     /// `tick_peripherals_with_costs` from peripheral `explicit_irqs` source
@@ -1381,6 +1387,7 @@ impl SystemBus {
             current_cycle: 0,
             pending_schedule: Vec::new(),
             legacy_walk_disabled: false,
+            reset_vector_offset: 0,
             hcsr04: Vec::new(),
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
@@ -1420,6 +1427,7 @@ impl SystemBus {
             current_cycle: 0,
             pending_schedule: Vec::new(),
             legacy_walk_disabled: false,
+            reset_vector_offset: 0,
             hcsr04: Vec::new(),
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
@@ -1664,6 +1672,29 @@ impl SystemBus {
             }
             None => matches!(chip.arch, labwired_config::Arch::Arm),
         }
+    }
+
+    /// Whether the 8 bytes at `addr` form a plausible Cortex-M reset vector:
+    /// word[0] (the initial SP) points into RAM and word[1] (the initial PC)
+    /// points into flash. Used by `Machine::load_firmware` to decide whether a
+    /// candidate vector table (flash base vs. post-stage-2 offset) is the real
+    /// one, so a second-stage bootloader (RP2040 boot2) can be skipped.
+    pub fn vector_pair_valid(&self, addr: u64) -> bool {
+        let (Some(sp), Some(pc)) = (
+            self.read_u32(addr).ok(),
+            self.read_u32(addr.wrapping_add(4)).ok(),
+        ) else {
+            return false;
+        };
+        let pc = pc & !1; // strip the Thumb bit
+                          // The initial SP is the top of the full-descending stack, conventionally
+                          // one past the last RAM byte (ram.base + ram.size), so the upper bound
+                          // is inclusive.
+        let in_ram = (sp as u64) >= self.ram.base_addr
+            && (sp as u64) <= self.ram.base_addr + self.ram.data.len() as u64;
+        let in_flash = (pc as u64) >= self.flash.base_addr
+            && (pc as u64) < self.flash.base_addr + self.flash.data.len() as u64;
+        in_ram && in_flash
     }
 
     /// Place a built peripheral on the bus using the descriptor's window size
@@ -2097,6 +2128,7 @@ mod tests {
 
         let chip = ChipDescriptor {
             schema_version: "1.0".to_string(),
+            reset_vector_offset: 0,
             memory_regions: Vec::new(),
             name: "stm32f103-test".to_string(),
             arch: Arch::Arm,
@@ -2162,6 +2194,7 @@ mod tests {
 
         let chip = ChipDescriptor {
             schema_version: "1.0".to_string(),
+            reset_vector_offset: 0,
             memory_regions: Vec::new(),
             name: "esp32c3-i2c-test".to_string(),
             arch: Arch::RiscV,
@@ -2261,6 +2294,7 @@ mod tests {
 
         let chip = ChipDescriptor {
             schema_version: "1.0".to_string(),
+            reset_vector_offset: 0,
             memory_regions: Vec::new(),
             name: "esp32c3-mlx-test".to_string(),
             arch: Arch::RiscV,
@@ -3048,6 +3082,7 @@ peripherals:
 
         labwired_config::ChipDescriptor {
             schema_version: "1.0".to_string(),
+            reset_vector_offset: 0,
             memory_regions: Vec::new(),
             name: "stm32f103-test".to_string(),
             arch: Arch::Arm,
@@ -3260,6 +3295,7 @@ peripherals:
             current_cycle: 0,
             pending_schedule: Vec::new(),
             legacy_walk_disabled: false,
+            reset_vector_offset: 0,
             hcsr04: Vec::new(),
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
@@ -3323,6 +3359,7 @@ peripherals:
             current_cycle: 0,
             pending_schedule: Vec::new(),
             legacy_walk_disabled: false,
+            reset_vector_offset: 0,
             hcsr04: Vec::new(),
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
@@ -3537,6 +3574,7 @@ peripherals:
             current_cycle: 0,
             pending_schedule: Vec::new(),
             legacy_walk_disabled: false,
+            reset_vector_offset: 0,
             hcsr04: Vec::new(),
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
@@ -3750,6 +3788,7 @@ peripherals:
             current_cycle: 0,
             pending_schedule: Vec::new(),
             legacy_walk_disabled: false,
+            reset_vector_offset: 0,
             hcsr04: Vec::new(),
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
@@ -3817,6 +3856,7 @@ peripherals:
             current_cycle: 0,
             pending_schedule: Vec::new(),
             legacy_walk_disabled: false,
+            reset_vector_offset: 0,
             hcsr04: Vec::new(),
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),

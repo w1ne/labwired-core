@@ -127,6 +127,16 @@ pub struct ChipDescriptor {
     pub core: Option<String>,
     pub flash: MemoryRange,
     pub ram: MemoryRange,
+    /// Offset in bytes from the flash base to the application vector table
+    /// when a second-stage bootloader precedes it. The RP2040 bootrom runs a
+    /// 256-byte stage-2 (boot2) blob from flash and only then enters the
+    /// vector table at `flash_base + 0x100`, so set this to `0x100` for the
+    /// RP2040. `0` (the default) means the vector table sits at the flash base
+    /// — the usual case for STM32/nRF/etc. The simulator does not execute the
+    /// stage-2 blob (flash is directly mapped); it uses this offset to find
+    /// the real reset vector when the flash-base vectors are not valid.
+    #[serde(default, deserialize_with = "deserialize_u64_lax")]
+    pub reset_vector_offset: u64,
     /// Extra CPU-visible memory windows beyond `flash`/`ram` (e.g. ESP32 IRAM
     /// and flash-DROM). Empty for chips with a simple two-region map.
     #[serde(default)]
@@ -516,6 +526,7 @@ impl From<labwired_ir::IrDevice> for ChipDescriptor {
             core,
             flash,
             ram,
+            reset_vector_offset: 0,
             memory_regions: Vec::new(),
             peripherals: ir
                 .peripherals

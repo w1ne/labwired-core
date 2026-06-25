@@ -58,6 +58,7 @@ impl SystemBus {
             observers: Vec::new(),
             config: crate::SimulationConfig::default(),
             bit_band_enabled: Self::chip_has_bit_band(chip),
+            reset_vector_offset: chip.reset_vector_offset,
             pending_cpu_irqs: [0; 2],
             dport_idx: None,
             rcc_idx: None,

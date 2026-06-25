@@ -9,6 +9,11 @@ flash:
 ram:
   base: 0x20000000
   size: "256KB"
+# The RP2040 bootrom runs a 256-byte second-stage bootloader (boot2) from the
+# top of flash; the application vector table follows it at flash_base + 0x100.
+# LabWired does not execute boot2 (flash is directly mapped), so it relocates
+# the reset vector past the stage-2 blob using this offset.
+reset_vector_offset: 0x100
 peripherals:
   - id: "pio0"
     type: "pio"
