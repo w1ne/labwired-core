@@ -37,6 +37,7 @@ bincode = "1.3"
 sha2 = { workspace = true, features = ["compress"] }
 goblin = { workspace = true }
 labwired-ir = { path = "../ir" }
+labwired-hw-trace = { path = "../hw-trace" }
 serde_yaml.workspace = true
 memmap2.workspace = true
 pio.workspace = true

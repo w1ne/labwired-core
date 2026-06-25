@@ -2537,6 +2537,14 @@ impl crate::Bus for SystemBus {
             }
 
             // Trigger observers
+            crate::emit_trace_event(
+                &self.observers,
+                labwired_hw_trace::TraceEvent::MemoryWrite {
+                    addr,
+                    old: old_value,
+                    new: value,
+                },
+            );
             for observer in &self.observers {
                 observer.on_memory_write(addr, old_value, value);
             }

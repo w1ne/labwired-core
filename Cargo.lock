@@ -1730,6 +1730,7 @@ dependencies = [
  "bitflags 2.11.1",
  "goblin",
  "labwired-config",
+ "labwired-hw-trace",
  "labwired-ir",
  "labwired-loader",
  "memmap2 0.9.10",
@@ -1829,6 +1830,10 @@ version = "0.15.0"
 [[package]]
 name = "labwired-hw-trace"
 version = "0.15.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "labwired-ir"

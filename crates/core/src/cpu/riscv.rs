@@ -116,8 +116,11 @@ impl Cpu for RiscV {
     ) -> SimResult<()> {
         let opcode = bus.read_u32(self.pc as u64)?;
 
-        for observer in observers {
-            observer.on_step_start(self.pc, opcode);
+        let retired_pc = self.pc;
+        if !observers.is_empty() {
+            for observer in observers {
+                observer.on_step_start(self.pc, opcode);
+            }
         }
 
         let instruction = decode_rv32(opcode);
@@ -663,6 +666,15 @@ impl Cpu for RiscV {
                     // at the instruction we just finished executing — passing
                     // it would cause MRET to re-execute, doubling side effects
                     // (ADDI counted twice, stores applied twice, etc).
+                    if !observers.is_empty() {
+                        crate::emit_trace_event(
+                            observers,
+                            labwired_hw_trace::TraceEvent::InstructionRetired {
+                                pc: retired_pc,
+                                opcode,
+                            },
+                        );
+                    }
                     self.handle_trap(0x80000000 | irq, next_pc);
                     // Trap taken, next instruction will be handled in trap handler
                     return Ok(());
@@ -676,8 +688,17 @@ impl Cpu for RiscV {
         registers[..32].copy_from_slice(&self.x);
         registers[32] = self.pc;
 
-        for obs in observers {
-            obs.on_step_end(inst_len, &registers);
+        if !observers.is_empty() {
+            crate::emit_trace_event(
+                observers,
+                labwired_hw_trace::TraceEvent::InstructionRetired {
+                    pc: retired_pc,
+                    opcode,
+                },
+            );
+            for obs in observers {
+                obs.on_step_end(inst_len, &registers);
+            }
         }
 
         Ok(())

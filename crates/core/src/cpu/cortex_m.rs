@@ -696,6 +696,7 @@ impl CortexM {
             eprintln!("INSN pc=0x{:08X} op=0x{:08X}", self.pc, opcode);
         }
 
+        let retired_pc = self.pc;
         if !_observers.is_empty() {
             for observer in _observers {
                 observer.on_step_start(self.pc, opcode);
@@ -2322,8 +2323,17 @@ impl CortexM {
         }
         registers[16] = self.xpsr;
 
-        for obs in _observers {
-            obs.on_step_end(_cycles, &registers);
+        if !_observers.is_empty() {
+            crate::emit_trace_event(
+                _observers,
+                labwired_hw_trace::TraceEvent::InstructionRetired {
+                    pc: retired_pc,
+                    opcode,
+                },
+            );
+            for obs in _observers {
+                obs.on_step_end(_cycles, &registers);
+            }
         }
 
         Ok(())
