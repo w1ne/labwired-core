@@ -793,6 +793,14 @@ pub mod integration_tests {
             ("imxuart", L::Imx),
             ("sifive_uart", L::Sifive),
             ("litex_uart", L::Litex),
+            ("murax_uart", L::Murax),
+            ("miv_coreuart", L::CoreUart),
+            ("k6xf_uart", L::KinetisUart),
+            ("pulp_udma_uart", L::Pulp),
+            ("ft9001_usart", L::Ns16550),
+            ("cosimulateduart", L::Ns16550),
+            ("mpc5567_uart", L::Esci),
+            ("picosoc_simpleuart", L::PicoUart),
         ] {
             assert_eq!(resolve(ty, None).unwrap(), want, "type '{ty}' layout");
         }
@@ -800,16 +808,17 @@ pub mod integration_tests {
         // The generic "uart" escape hatch is profile-overridable.
         assert_eq!(resolve("uart", Some("stm32v2")).unwrap(), Stm32V2);
 
-        // A UART we still do NOT model must be named explicitly — no silent
+        // A UART type we genuinely don't recognise must error — no silent
         // fallback onto an STM32 register map.
-        for unmodelled in ["murax_uart", "picosoc_simpleuart", "ft9001_usart"] {
-            assert!(
-                resolve(unmodelled, None).is_err(),
-                "'{unmodelled}' without a profile must error, not default to STM32F1"
-            );
-        }
-        // …but an explicit profile lets any of them pick a layout deterministically.
-        assert_eq!(resolve("murax_uart", Some("ns16550")).unwrap(), L::Ns16550);
+        assert!(
+            resolve("definitely_not_a_real_uart", None).is_err(),
+            "an unrecognised UART type must error, not default to STM32F1"
+        );
+        // …but an explicit profile lets any type pick a layout deterministically.
+        assert_eq!(
+            resolve("definitely_not_a_real_uart", Some("ns16550")).unwrap(),
+            L::Ns16550
+        );
     }
 
     #[test]

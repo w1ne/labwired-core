@@ -800,6 +800,24 @@ impl SystemBus {
             Sifive
         } else if has("litex") {
             Litex
+        } else if has("murax") {
+            Murax
+        } else if has("coreuart") || has("miv") {
+            CoreUart
+        } else if has("k6xf") {
+            KinetisUart
+        } else if has("pulp") || has("udma") {
+            Pulp
+        } else if has("ft9001") || has("ft900") {
+            // Bridgetek FT9xx UART is 16550-compatible.
+            Ns16550
+        } else if has("cosimulated") {
+            // Co-simulation stub with no fixed register map — default to 16550.
+            Ns16550
+        } else if has("mpc5567") || has("esci") {
+            Esci
+        } else if has("picosoc") || has("simpleuart") {
+            PicoUart
         } else {
             // 3. Unmodelled UART — refuse to guess.
             anyhow::bail!(

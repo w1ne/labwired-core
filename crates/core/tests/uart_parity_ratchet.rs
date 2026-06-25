@@ -20,17 +20,11 @@ use labwired_core::bus::SystemBus;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-/// UART types with no faithful register layout yet. Obscure RISC-V / SoC cores
-/// (Murax/VexRiscv, Microsemi MIV CoreUART, PULP uDMA, Focaltech FT9001, NXP
-/// K6xF, a co-simulation stub). Shrink-only: model one and delete it here.
-const UNMODELLED_UART_TYPES: &[&str] = &[
-    "cosimulateduart",
-    "ft9001_usart",
-    "k6xf_uart",
-    "miv_coreuart",
-    "murax_uart",
-    "pulp_udma_uart",
-];
+/// UART types with no faithful register layout yet. Shrink-only: model one and
+/// delete it here. Currently EMPTY — every UART type in the onboarding library
+/// has a layout. A new unmodelled type makes `onboarding_uart_parity_ratchet`
+/// fail until it is modelled (or, deliberately, added here).
+const UNMODELLED_UART_TYPES: &[&str] = &[];
 
 fn dummy_manifest(path: &str) -> SystemManifest {
     SystemManifest {

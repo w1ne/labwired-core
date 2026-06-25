@@ -91,6 +91,25 @@ pub enum UartRegisterLayout {
     Sifive,
     /// LiteX UART — rxtx@0x00, txfull@0x04 (TX faithful, RX approximate).
     Litex,
+    /// VexRiscv Murax SoC UART (SpinalHDL) — DATA@0x00, STATUS@0x04 with TX-free
+    /// count in bits[23:16] and RX-occupancy in bits[31:24].
+    Murax,
+    /// Microsemi/Microchip CoreUARTapb (Mi-V) — TxData@0x00, RxData@0x04,
+    /// Status@0x10 (TXRDY bit0, RXRDY bit1).
+    CoreUart,
+    /// NXP/Freescale Kinetis K6x UART (classic 8-bit, not LPUART) — D@0x07,
+    /// S1@0x04 (TDRE bit7, TC bit6, RDRF bit5).
+    KinetisUart,
+    /// PULP uDMA UART — DMA-only TX (no byte-write register); STATUS@0x20,
+    /// DATA@0x34. Estate-level: reads don't fault, TX byte-path is nominal.
+    Pulp,
+    /// Freescale MPC5500 eSCI (MPC5567) — DR@0x06 (byte at 0x07), SR@0x08
+    /// (TDRE bit31, TC bit30, RDRF bit29). Big-endian part; this estate-level
+    /// model keeps the engine's little-endian status byte order.
+    Esci,
+    /// PicoSoC simpleuart — reg_dat@0x04 (write=TX, read=RX), no status register
+    /// (TX blocks in HW; RX reads -1 when empty). Estate-level.
+    PicoUart,
 }
 
 impl FromStr for UartRegisterLayout {
@@ -120,10 +139,17 @@ impl FromStr for UartRegisterLayout {
             "imx" | "imxuart" => Ok(Self::Imx),
             "sifive" => Ok(Self::Sifive),
             "litex" => Ok(Self::Litex),
+            "murax" => Ok(Self::Murax),
+            "coreuart" | "miv" => Ok(Self::CoreUart),
+            "k6xf" | "kinetis_uart" => Ok(Self::KinetisUart),
+            "pulp" | "udma" => Ok(Self::Pulp),
+            "esci" | "mpc5567" => Ok(Self::Esci),
+            "picosoc" | "simpleuart" => Ok(Self::PicoUart),
             _ => Err(format!(
                 "unsupported UART register layout '{}'; supported: stm32f1, stm32v2, nrf52, \
                  lpuart, ns16550, dw_apb_uart, pl011, cadence, efm32, efr32, leuart, sci, \
-                 gaisler, npcx, max32650, opentitan, sam, sercom, imx, sifive, litex",
+                 gaisler, npcx, max32650, opentitan, sam, sercom, imx, sifive, litex, murax, \
+                 coreuart, k6xf, pulp",
                 value
             )),
         }
@@ -490,6 +516,99 @@ impl UartRegisterLayout {
                 status: 0x04, // txfull = 0 at idle (ready)
                 tx: 0x00,
                 rx: 0x00,
+                cr3: 0xF00,
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+                status_width: 4,
+                status_idle: 0x0000_0000,
+                rx_present_set: 0,
+                rx_present_clear: 0,
+            },
+            // VexRiscv Murax. DATA@0x00, STATUS@0x04: TX-free count bits[23:16]
+            // (idle 16 = 0x100000, firmware writes while != 0), RX-occupancy
+            // bits[31:24] (!= 0 means data present).
+            UartRegisterLayout::Murax => UartRegMap {
+                status: 0x04,
+                tx: 0x00,
+                rx: 0x00,
+                cr3: 0xF00,
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+                status_width: 4,
+                status_idle: 0x0010_0000,       // TX FIFO free = 16
+                rx_present_set: 0x0100_0000,     // RX occupancy = 1
+                rx_present_clear: 0,
+            },
+            // Microsemi CoreUARTapb. TxData@0x00, RxData@0x04, Status@0x10:
+            // TXRDY(0) ready, RXRDY(1) set on data. Idle 0x01.
+            UartRegisterLayout::CoreUart => UartRegMap {
+                status: 0x10,
+                tx: 0x00,
+                rx: 0x04,
+                cr3: 0xF00,
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+                status_width: 4,
+                status_idle: 0x01,      // TXRDY
+                rx_present_set: 1 << 1, // RXRDY
+                rx_present_clear: 0,
+            },
+            // NXP Kinetis K6x UART (classic). D@0x07, S1@0x04 (8-bit): TDRE(7)|
+            // TC(6) ready, RDRF(5) set on data. Idle 0xC0. width=1 (S2@0x05).
+            UartRegisterLayout::KinetisUart => UartRegMap {
+                status: 0x04,
+                tx: 0x07,
+                rx: 0x07,
+                cr3: 0xF00,
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+                status_width: 1,
+                status_idle: 0xC0,      // TDRE | TC
+                rx_present_set: 1 << 5, // RDRF
+                rx_present_clear: 0,
+            },
+            // PULP uDMA UART. Transmit is DMA-descriptor only on real silicon —
+            // there is no byte-write TX register — so this is an estate-level
+            // model: STATUS@0x20 (TX_BUSY=0 idle), DATA@0x34 read. RX presence
+            // (VALID@0x30) is not in the status window, so it is approximate.
+            UartRegisterLayout::Pulp => UartRegMap {
+                status: 0x20,
+                tx: 0x34,
+                rx: 0x34,
+                cr3: 0xF00,
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+                status_width: 4,
+                status_idle: 0x0000_0000, // TX_BUSY = 0 (ready)
+                rx_present_set: 0,
+                rx_present_clear: 0,
+            },
+            // Freescale MPC5567 eSCI. DR@0x06 (data byte at 0x07), SR@0x08:
+            // TDRE(31)|TC(30) ready, RDRF(29) set on data. Idle SR 0xC0000000.
+            UartRegisterLayout::Esci => UartRegMap {
+                status: 0x08,
+                tx: 0x07,
+                rx: 0x07,
+                cr3: 0xF00,
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+                status_width: 4,
+                status_idle: 0xC000_0000,     // TDRE | TC
+                rx_present_set: 0x2000_0000,   // RDRF
+                rx_present_clear: 0,
+            },
+            // PicoSoC simpleuart. reg_dat@0x04 (write=TX, read=RX). No status
+            // register exists (TX blocks in HW); status parks at reg_div@0x00.
+            UartRegisterLayout::PicoUart => UartRegMap {
+                status: 0x00,
+                tx: 0x04,
+                rx: 0x04,
                 cr3: 0xF00,
                 cr1: None,
                 txeie_mask: 0,
@@ -1082,6 +1201,12 @@ mod tests {
             (Imx, 0x40, 0x94),
             (Sifive, 0x00, 0x00),
             (Litex, 0x00, 0x04),
+            (Murax, 0x00, 0x04),
+            (CoreUart, 0x00, 0x10),
+            (KinetisUart, 0x07, 0x04),
+            (Pulp, 0x34, 0x20),
+            (Esci, 0x07, 0x08),
+            (PicoUart, 0x04, 0x00),
         ];
         for (layout, tx, status) in cases {
             let mut uart = Uart::new_with_layout(layout);
