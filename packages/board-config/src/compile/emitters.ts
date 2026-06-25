@@ -170,6 +170,33 @@ export function uartPeripheralForPart(diagram: Diagram, partId: string): string 
   return null;
 }
 
+function uartPeripheralForIolinkTransceiver(diagram: Diagram, partId: string): string | null {
+  const matches = new Set<string>();
+  for (const pinId of ['TXD', 'RXD']) {
+    for (const mcuPin of mcuPinsOnNet(diagram, partId, pinId)) {
+      const uart = findPinFunction(diagram.board, mcuPin, 'uart');
+      if (uart) matches.add(uart.peripheral);
+    }
+  }
+  return matches.size === 1 ? [...matches][0] : null;
+}
+
+function uartPeripheralForIolinkMaster(diagram: Diagram, partId: string): string | null {
+  const direct = uartPeripheralForPart(diagram, partId);
+  if (direct) return direct;
+
+  for (const pinId of ['TX', 'RX']) {
+    for (const endpoint of connectedEndpoints(diagram, { part: partId, pin: pinId })) {
+      const part = diagram.parts.find((candidate) => candidate.id === endpoint.part);
+      if (part?.type !== 'iolink-transceiver') continue;
+      if (endpoint.pin !== 'CQ') continue;
+      const uart = uartPeripheralForIolinkTransceiver(diagram, endpoint.part);
+      if (uart) return uart;
+    }
+  }
+  return null;
+}
+
 export function i2cPeripheralForPartWire(diagram: Diagram, partId: string): string | null {
   for (const pinId of ['SDA', 'SCL']) {
     const mcuPin = mcuPinForPartPin(diagram, partId, pinId);
@@ -262,7 +289,7 @@ export function emitIolinkMaster(
   diagram: Diagram,
   partId: string,
 ): { externalDevice?: string; boardIo?: string } {
-  const connection = uartPeripheralForPart(diagram, partId);
+  const connection = uartPeripheralForIolinkMaster(diagram, partId);
   if (!connection) return {};
   return {
     externalDevice: `  - id: "${partId}"

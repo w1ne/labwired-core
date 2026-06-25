@@ -30,6 +30,14 @@ describe('Blocking 1 — sn74hc165 and iolink-master in CATALOG', () => {
     expect(part!.boardIoKind).toBe('uart_device');
   });
 
+  it('iolink-transceiver is in the catalog as a passive typed interface part', () => {
+    const part = getCatalogPart('iolink-transceiver');
+    expect(part, 'iolink-transceiver must be in CATALOG').toBeDefined();
+    expect(part!.deviceClass).toBe('passive');
+    expect(part!.boardIoKind).toBeUndefined();
+    expect(part!.pins?.map((p) => p.name)).toEqual(['TXD', 'RXD', 'VCC', 'GND', 'CQ', 'L+']);
+  });
+
   it('diagnoseDiagram on a wired sn74hc165 does NOT return UNKNOWN_COMPONENT', () => {
     const diagram = {
       board: 'esp32-s3-zero',

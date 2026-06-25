@@ -39,11 +39,11 @@ import systemVl53l1xTofLab from '../../../core/examples/vl53l1x-tof-lab/system.y
 import systemIli9341TftLab from '../../../core/examples/ili9341-tft-lab/system.yaml?raw';
 import systemEpaperTricolorLab from '../../../core/examples/epaper-tricolor-lab/system.yaml?raw';
 import systemEsp32EpaperLab from '../../../core/examples/esp32-epaper-lab/system.yaml?raw';
-import systemAl2205IolinkDido from '../../../core/examples/al2205-iolink-dido/system.yaml?raw';
+import systemAl2205IolinkDido from '../../../core/examples/iolink-dido/system.yaml?raw';
 import systemH563UdsEcu from '../../../core/examples/h563-uds-ecu/system.yaml?raw';
 import systemF103UdsEcu from '../../../core/examples/f103-uds-ecu/system.yaml?raw';
 import sourceBlinky from '../../../core/examples/demo-blinky/src/main.rs?raw';
-import sourceAl2205IolinkDido from '../../../core/examples/al2205-iolink-dido/firmware/main.c?raw';
+import sourceAl2205IolinkDido from '../../../core/examples/iolink-dido/firmware/main.c?raw';
 import sourceH563UdsEcu from '../../../core/examples/h563-uds-ecu/firmware/main.c?raw';
 import sourceF103UdsEcu from '../../../core/examples/f103-uds-ecu/firmware/main.c?raw';
 import sourceAdxl345 from '../../../core/examples/adxl345-sensor-lab/src/main.rs?raw';
@@ -227,7 +227,7 @@ export const BOARD_CONFIGS: BoardConfig[] = [
     demoFirmwarePath: `${BASE}wasm/demo-al2205-iolink-dido.elf`,
     mcuComponentType: 'nucleo-l476rg',
     sourceCode: sourceAl2205IolinkDido,
-    sourceFilename: 'al2205-iolink-dido/firmware/main.c',
+    sourceFilename: 'iolink-dido/firmware/main.c',
     kind: 'lab',
   },
   {
