@@ -3,3 +3,5 @@
 // SPDX-License-Identifier: MIT
 
 pub mod event;
+
+pub use event::{FaultEffect, TraceEvent};

@@ -149,10 +149,20 @@ impl PeripheralTickResult {
 pub trait SimulationObserver: std::fmt::Debug + Send + Sync {
     fn on_simulation_start(&self) {}
     fn on_simulation_stop(&self) {}
+    fn on_trace_event(&self, _event: labwired_hw_trace::TraceEvent) {}
     fn on_step_start(&self, _pc: u32, _opcode: u32) {}
     fn on_step_end(&self, _cycles: u32, _registers: &[u32]) {}
     fn on_memory_write(&self, _addr: u64, _old: u8, _new: u8) {}
     fn on_peripheral_tick(&self, _name: &str, _cycles: u32) {}
+}
+
+pub fn emit_trace_event(
+    observers: &[Arc<dyn SimulationObserver>],
+    event: labwired_hw_trace::TraceEvent,
+) {
+    for observer in observers {
+        observer.on_trace_event(event.clone());
+    }
 }
 
 /// Trait representing a CPU architecture

@@ -1733,6 +1733,7 @@ dependencies = [
  "cc",
  "goblin",
  "labwired-config",
+ "labwired-hw-trace",
  "labwired-ir",
  "labwired-loader",
  "memmap2 0.9.10",
@@ -1832,6 +1833,10 @@ version = "0.17.3"
 [[package]]
 name = "labwired-hw-trace"
 version = "0.17.3"
+dependencies = [
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "labwired-ir"
