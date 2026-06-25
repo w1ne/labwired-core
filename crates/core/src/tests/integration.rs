@@ -441,6 +441,7 @@ pub mod integration_tests {
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             board_io: Vec::new(),
+            debug_uart: None,
             peripherals: Vec::new(),
         };
 
@@ -546,6 +547,7 @@ pub mod integration_tests {
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             board_io: Vec::new(),
+            debug_uart: None,
             peripherals: Vec::new(),
         };
 
@@ -605,6 +607,7 @@ pub mod integration_tests {
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             board_io: Vec::new(),
+            debug_uart: None,
             peripherals: Vec::new(),
         };
 
@@ -659,6 +662,7 @@ pub mod integration_tests {
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             board_io: Vec::new(),
+            debug_uart: None,
             peripherals: Vec::new(),
         };
 
@@ -719,6 +723,7 @@ pub mod integration_tests {
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             board_io: Vec::new(),
+            debug_uart: None,
             peripherals: Vec::new(),
         };
 
@@ -733,6 +738,67 @@ pub mod integration_tests {
 
         let data = sink.lock().unwrap().clone();
         assert_eq!(data, vec![b'Y']);
+    }
+
+    #[test]
+    fn test_attach_uart_tx_sink_named_captures_only_selected_uart() {
+        let chip = ChipDescriptor {
+            schema_version: "1.0".to_string(),
+            name: "test-chip-two-uarts".to_string(),
+            arch: Arch::Arm,
+            core: None,
+            flash: MemoryRange {
+                base: 0x0,
+                size: "128KB".to_string(),
+            },
+            ram: MemoryRange {
+                base: 0x2000_0000,
+                size: "20KB".to_string(),
+            },
+            memory_regions: Vec::new(),
+            peripherals: vec![
+                PeripheralConfig {
+                    id: "uart1".to_string(),
+                    r#type: "uart".to_string(),
+                    base_address: 0x4000_C000,
+                    size: Some("1KB".to_string()),
+                    irq: Some(37),
+                    config: HashMap::new(),
+                    clock: None,
+                },
+                PeripheralConfig {
+                    id: "uart2".to_string(),
+                    r#type: "uart".to_string(),
+                    base_address: 0x4000_D000,
+                    size: Some("1KB".to_string()),
+                    irq: Some(38),
+                    config: HashMap::new(),
+                    clock: None,
+                },
+            ],
+        };
+
+        let manifest = SystemManifest {
+            walk_deleted: false,
+            schema_version: "1.0".to_string(),
+            name: "test-system-two-uarts".to_string(),
+            chip: "test-chip-two-uarts".to_string(),
+            memory_overrides: HashMap::new(),
+            external_devices: Vec::new(),
+            board_io: Vec::new(),
+            debug_uart: Some("uart1".to_string()),
+            peripherals: Vec::new(),
+        };
+
+        let mut bus = crate::bus::SystemBus::from_config(&chip, &manifest).unwrap();
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        assert!(bus.attach_uart_tx_sink_named("uart1", sink.clone(), false));
+
+        bus.write_u8(0x4000_D004, b'P').unwrap();
+        bus.write_u8(0x4000_C004, b'D').unwrap();
+
+        let data = sink.lock().unwrap().clone();
+        assert_eq!(data, vec![b'D']);
     }
 
     #[test]
@@ -776,6 +842,7 @@ pub mod integration_tests {
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             board_io: Vec::new(),
+            debug_uart: None,
             peripherals: Vec::new(),
         };
 
@@ -833,6 +900,7 @@ pub mod integration_tests {
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             board_io: Vec::new(),
+            debug_uart: None,
             peripherals: Vec::new(),
         };
 
@@ -890,6 +958,7 @@ pub mod integration_tests {
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             board_io: Vec::new(),
+            debug_uart: None,
             peripherals: Vec::new(),
         };
 
@@ -2062,6 +2131,7 @@ pub mod integration_tests {
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
             board_io: Vec::new(),
+            debug_uart: None,
             peripherals: Vec::new(),
         };
 

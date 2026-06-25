@@ -1140,6 +1140,7 @@ mod tests {
                 device_type: None,
                 i2c_address: None,
             }],
+            debug_uart: None,
             peripherals: Vec::new(),
         };
 
@@ -1206,6 +1207,7 @@ mod tests {
                     i2c_address: None,
                 },
             ],
+            debug_uart: None,
             peripherals: Vec::new(),
         };
 
@@ -1261,6 +1263,7 @@ mod tests {
                 device_type: None,
                 i2c_address: None,
             }],
+            debug_uart: None,
             peripherals: Vec::new(),
         };
 

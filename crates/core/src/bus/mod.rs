@@ -1658,6 +1658,39 @@ impl SystemBus {
         }
     }
 
+    /// Attach a UART TX capture sink to one named UART peripheral.
+    /// Returns false when no matching UART peripheral exists.
+    pub fn attach_uart_tx_sink_named(
+        &mut self,
+        name: &str,
+        sink: Arc<Mutex<Vec<u8>>>,
+        echo_stdout: bool,
+    ) -> bool {
+        for p in &mut self.peripherals {
+            let Some(any) = p.dev.as_any_mut() else {
+                continue;
+            };
+            if let Some(uart) = any.downcast_mut::<Uart>() {
+                uart.set_sink(None, false);
+            }
+        }
+
+        for p in &mut self.peripherals {
+            if p.name != name {
+                continue;
+            }
+            let Some(any) = p.dev.as_any_mut() else {
+                return false;
+            };
+            let Some(uart) = any.downcast_mut::<Uart>() else {
+                return false;
+            };
+            uart.set_sink(Some(sink), echo_stdout);
+            return true;
+        }
+        false
+    }
+
     /// Collect shared RX buffer handles from all UART peripherals on this bus.
     /// The caller can push bytes into these buffers to inject serial input.
     pub fn attach_uart_rx_source(&self) -> Vec<Arc<Mutex<VecDeque<u8>>>> {
@@ -2168,6 +2201,7 @@ mod tests {
                 config,
             }],
             board_io: Vec::new(),
+            debug_uart: None,
             peripherals: Vec::new(),
         };
 
@@ -2233,6 +2267,7 @@ mod tests {
                 config,
             }],
             board_io: Vec::new(),
+            debug_uart: None,
             peripherals: Vec::new(),
         };
 
@@ -2336,6 +2371,7 @@ mod tests {
                 config,
             }],
             board_io: Vec::new(),
+            debug_uart: None,
             peripherals: Vec::new(),
         };
 
@@ -2993,6 +3029,7 @@ peripherals:
             memory_overrides: std::collections::HashMap::new(),
             external_devices: Vec::new(),
             board_io: Vec::new(),
+            debug_uart: None,
             peripherals: Vec::new(),
         }
     }
@@ -3131,6 +3168,7 @@ peripherals:
                 config,
             }],
             board_io: Vec::new(),
+            debug_uart: None,
             peripherals: Vec::new(),
         }
     }
