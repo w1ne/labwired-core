@@ -767,37 +767,49 @@ pub mod integration_tests {
         };
 
         // Families we model pin exactly one layout, no profile required.
-        assert_eq!(resolve("nxp_lpuart", None).unwrap(), Lpuart);
-        assert_eq!(resolve("stm32f1_uart", None).unwrap(), Stm32F1);
-        assert_eq!(resolve("stm32_uart", None).unwrap(), Stm32F1);
-        assert_eq!(resolve("stm32f7_usart", None).unwrap(), Stm32V2);
-        assert_eq!(resolve("stm32h5_usart", None).unwrap(), Stm32V2);
+        use crate::peripherals::uart::UartRegisterLayout as L;
+        for (ty, want) in [
+            ("nxp_lpuart", Lpuart),
+            ("stm32f1_uart", Stm32F1),
+            ("stm32_uart", Stm32F1),
+            ("stm32f7_usart", Stm32V2),
+            ("stm32h5_usart", Stm32V2),
+            ("uart", Stm32F1), // generic escape hatch
+            ("ns16550", L::Ns16550),
+            ("pl011", L::Pl011),
+            ("cadence_uart", L::Cadence),
+            ("efm32_uart", L::Efm32),
+            ("efr32_usart", L::Efr32),
+            ("leuart", L::Leuart),
+            ("renesas_sci", L::Sci),
+            ("renesasra6m5_sci", L::Sci),
+            ("renesasda14_uart", L::DwApbUart),
+            ("gaislerapbuart", L::Gaisler),
+            ("npcx_uart", L::Npcx),
+            ("max32650_uart", L::Max32650),
+            ("opentitan_uart", L::OpenTitan),
+            ("sam_usart", L::Sam),
+            ("samd5_uart", L::Sercom),
+            ("imxuart", L::Imx),
+            ("sifive_uart", L::Sifive),
+            ("litex_uart", L::Litex),
+        ] {
+            assert_eq!(resolve(ty, None).unwrap(), want, "type '{ty}' layout");
+        }
 
-        // The generic "uart" escape hatch: classic STM32 default, profile-overridable.
-        assert_eq!(resolve("uart", None).unwrap(), Stm32F1);
+        // The generic "uart" escape hatch is profile-overridable.
         assert_eq!(resolve("uart", Some("stm32v2")).unwrap(), Stm32V2);
 
-        // Every UART we do NOT model must be named explicitly — no silent
+        // A UART we still do NOT model must be named explicitly — no silent
         // fallback onto an STM32 register map.
-        for unmodelled in [
-            "pl011",
-            "ns16550",
-            "gaislerapbuart",
-            "efm32_uart",
-            "renesas_sci",
-            "litex_uart",
-            "sifive_uart",
-            "sam_usart",
-        ] {
+        for unmodelled in ["murax_uart", "picosoc_simpleuart", "ft9001_usart"] {
             assert!(
                 resolve(unmodelled, None).is_err(),
                 "'{unmodelled}' without a profile must error, not default to STM32F1"
             );
         }
-
         // …but an explicit profile lets any of them pick a layout deterministically.
-        assert_eq!(resolve("pl011", Some("stm32v2")).unwrap(), Stm32V2);
-        assert_eq!(resolve("efm32_uart", Some("stm32f1")).unwrap(), Stm32F1);
+        assert_eq!(resolve("murax_uart", Some("ns16550")).unwrap(), L::Ns16550);
     }
 
     #[test]

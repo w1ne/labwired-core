@@ -746,33 +746,73 @@ impl SystemBus {
             });
         }
 
-        // 2. Route the families we faithfully model.
+        // 2. Route the families we model faithfully, by declared type. Each
+        //    family's register map lives in `UartRegisterLayout`; the offsets
+        //    come from datasheets / vendor CMSIS headers / in-tree drivers.
+        use UartRegisterLayout::*;
         let raw = p_cfg.r#type.to_ascii_lowercase();
-        if raw.contains("lpuart") {
-            return Ok(Lpuart);
-        }
-        if raw == "uart" {
+        let has = |needle: &str| raw.contains(needle);
+        let layout = if has("lpuart") {
+            Lpuart
+        } else if raw == "uart" {
             // The generic escape hatch: the classic STM32 USART map.
-            return Ok(Stm32F1);
-        }
-        if raw.contains("stm32") {
-            return Ok(if raw.contains("stm32h5") || raw.contains("stm32f7") {
+            Stm32F1
+        } else if has("stm32") {
+            if has("stm32h5") || has("stm32f7") {
                 Stm32V2
             } else {
                 Stm32F1
-            });
-        }
-
-        // 3. Unmodelled UART — refuse to guess.
-        anyhow::bail!(
-            "UART type '{}' (peripheral '{}') has no register layout modelled yet \
-             and no `config.profile` set; it will NOT be silently mapped onto an \
-             STM32. Choose a layout explicitly with \
-             `config: {{ profile: stm32f1 | stm32v2 | nrf52 | lpuart }}`, or add a \
-             dedicated model for it.",
-            p_cfg.r#type,
-            p_cfg.id
-        )
+            }
+        } else if has("pl011") {
+            Pl011
+        } else if has("16550") {
+            Ns16550
+        } else if has("da14") {
+            // Dialog/Renesas DA1469x = Synopsys DW_apb_uart (16550, 4-byte stride).
+            DwApbUart
+        } else if has("cadence") {
+            Cadence
+        } else if has("efr32") {
+            Efr32
+        } else if has("efm32") {
+            Efm32
+        } else if raw == "leuart" {
+            // Exact: "leuart" is a substring of unrelated names (e.g. "simpleuart").
+            Leuart
+        } else if has("sci") {
+            // Renesas SCI (renesas_sci, renesasraXmY_sci).
+            Sci
+        } else if has("gaisler") || has("apbuart") {
+            Gaisler
+        } else if has("npcx") {
+            Npcx
+        } else if has("max32650") {
+            Max32650
+        } else if has("opentitan") {
+            OpenTitan
+        } else if has("sam_usart") || has("samusart") {
+            Sam
+        } else if has("samd5") || has("same5") || has("sercom") {
+            Sercom
+        } else if has("imx") {
+            Imx
+        } else if has("sifive") {
+            Sifive
+        } else if has("litex") {
+            Litex
+        } else {
+            // 3. Unmodelled UART — refuse to guess.
+            anyhow::bail!(
+                "UART type '{}' (peripheral '{}') has no register layout modelled yet \
+                 and no `config.profile` set; it will NOT be silently mapped onto an \
+                 STM32. Choose a layout explicitly with \
+                 `config: {{ profile: <one of the supported layouts> }}`, or add a \
+                 dedicated model for it.",
+                p_cfg.r#type,
+                p_cfg.id
+            );
+        };
+        Ok(layout)
     }
 
     fn resolve_peripheral_path(manifest: &SystemManifest, descriptor_path: &str) -> PathBuf {
