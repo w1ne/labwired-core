@@ -1390,6 +1390,36 @@ impl SystemBus {
             .unwrap_or(0)
     }
 
+    /// Inject a `stuck_at_bit` fault: hold `bit` of `register` on the
+    /// declarative peripheral `peripheral` at `level` (0/1) — the CPU always
+    /// reads that level regardless of writes. Returns an error if the peripheral
+    /// or register is absent, the bit is out of range, or the peripheral is not
+    /// a declarative `GenericPeripheral`.
+    pub fn inject_stuck_bit(
+        &mut self,
+        peripheral: &str,
+        register: &str,
+        bit: u8,
+        level: u8,
+    ) -> Result<(), String> {
+        let idx = self
+            .find_peripheral_index_by_name(peripheral)
+            .ok_or_else(|| format!("fault target peripheral '{peripheral}' not found"))?;
+        let any = self.peripherals[idx]
+            .dev
+            .as_any_mut()
+            .ok_or_else(|| format!("peripheral '{peripheral}' is not introspectable for faults"))?;
+        let generic = any
+            .downcast_mut::<crate::peripherals::declarative::GenericPeripheral>()
+            .ok_or_else(|| format!("peripheral '{peripheral}' is not a declarative peripheral"))?;
+        if !generic.force_stuck_bit(register, bit, level) {
+            return Err(format!(
+                "register '{register}' bit {bit} invalid on peripheral '{peripheral}'"
+            ));
+        }
+        Ok(())
+    }
+
     /// Inject a `wrong_reset_value` fault: force `register` on the declarative
     /// peripheral `peripheral` to `value`. Returns an error (never a silent
     /// no-op) if the peripheral or register is absent, or the peripheral is not
