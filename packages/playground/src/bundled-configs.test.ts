@@ -116,7 +116,7 @@ describe('BOARD_CONFIGS', () => {
     expect(uds).toBeDefined();
     expect(uds?.chipId).toBe('stm32h563');
     expect(uds?.systemYaml).toContain('name: "h563-uds-ecu"');
-    expect(uds?.systemYaml).toContain('type: "can-diagnostic-tester"');
+    expect(uds?.systemYaml).toContain('type: "uds-tester"');
     expect(uds?.chipYaml).toContain('type: "fdcan"');
     expect(uds?.demoFirmwarePath).toContain('demo-stm32h5-uds-ecu.elf');
     expect(uds?.sourceCode).toContain('LABWIRED-H563-UDS');
