@@ -49,6 +49,12 @@ pub enum UartRegisterLayout {
     Stm32F1,
     Stm32V2,
     Nrf52,
+    /// NXP Kinetis Low-Power UART (LPUART), as on the KW41Z / K-series. A flat
+    /// 32-bit register block: BAUD@0x00, STAT@0x04 (TDRE/TC/RDRF in the high
+    /// byte), CTRL@0x08 (TE/RE + TIE/TCIE interrupt enables), DATA@0x0C
+    /// (read pops RX, write transmits). Register offsets ingested from the
+    /// public CMSIS-SVD (cmsis-svd-data: NXP/MKW41Z4.svd).
+    Lpuart,
 }
 
 impl FromStr for UartRegisterLayout {
@@ -60,8 +66,9 @@ impl FromStr for UartRegisterLayout {
             "stm32f1" | "f1" | "legacy" => Ok(Self::Stm32F1),
             "stm32v2" | "v2" | "modern" | "stm32-modern" | "h5" | "stm32h5" => Ok(Self::Stm32V2),
             "nrf52" | "nordic" => Ok(Self::Nrf52),
+            "lpuart" | "kinetis" | "nxp" => Ok(Self::Lpuart),
             _ => Err(format!(
-                "unsupported UART register layout '{}'; supported: stm32f1, stm32v2",
+                "unsupported UART register layout '{}'; supported: stm32f1, stm32v2, nrf52, lpuart",
                 value
             )),
         }
@@ -83,6 +90,11 @@ struct UartRegMap {
     cr1: Option<u64>,
     txeie_mask: u32,
     tcie_mask: u32,
+    /// Byte position *within the status word* where the ready flags (TXE/TC,
+    /// or Kinetis TDRE/TC) live. 0 for the STM32 / nRF maps whose flags are in
+    /// the low byte; 2 for the Kinetis LPUART, whose TDRE(23)/TC(22)/RDRF(21)
+    /// sit in the high byte of the 32-bit STAT register.
+    status_flag_byte: u64,
 }
 
 impl UartRegisterLayout {
@@ -96,6 +108,7 @@ impl UartRegisterLayout {
                 cr1: Some(0x0C),
                 txeie_mask: 1 << 7, // TXEIE
                 tcie_mask: 1 << 6,  // TCIE
+                status_flag_byte: 0,
             },
             // CR1 bit 3 is TE (transmitter enable) on the v2 USART — NOT an
             // interrupt enable; TXEIE/TXFNFIE lives at bit 7. The mask
@@ -113,6 +126,7 @@ impl UartRegisterLayout {
                 cr1: Some(0x00),
                 txeie_mask: 1 << 7, // TXEIE/TXFNFIE
                 tcie_mask: 1 << 6,  // TCIE
+                status_flag_byte: 0,
             },
             UartRegisterLayout::Nrf52 => UartRegMap {
                 status: 0x400, // EVENTS_TXDRDY
@@ -122,6 +136,22 @@ impl UartRegisterLayout {
                 cr1: None,
                 txeie_mask: 0,
                 tcie_mask: 0,
+                status_flag_byte: 0,
+            },
+            // NXP Kinetis LPUART. Flat 32-bit block: STAT.TDRE(23)/TC(22)/
+            // RDRF(21) → ready flags in byte 2 of the status word; CTRL.TIE(23)
+            // / TCIE(22) are the TX interrupt enables; DATA@0x0C is the shared
+            // TX/RX data register. CR3 points at MODIR (no DMAT-on-CR3 concept;
+            // the smoke path never touches it).
+            UartRegisterLayout::Lpuart => UartRegMap {
+                status: 0x04,    // STAT
+                tx: 0x0C,        // DATA (write transmits)
+                rx: 0x0C,        // DATA (read pops RX)
+                cr3: 0x14,       // MODIR
+                cr1: Some(0x08), // CTRL
+                txeie_mask: 1 << 23, // TIE
+                tcie_mask: 1 << 22,  // TCIE
+                status_flag_byte: 2, // TDRE/TC/RDRF live in STAT byte 2
             },
         }
     }
@@ -297,6 +327,11 @@ impl Uart {
     fn status_offset(&self) -> u64 {
         self.layout.regmap().status
     }
+    /// Absolute offset of the byte that carries the ready flags (TXE/TC, or
+    /// Kinetis TDRE/TC). For low-byte families this equals `status_offset()`.
+    fn status_flag_offset(&self) -> u64 {
+        self.status_offset() + self.layout.regmap().status_flag_byte
+    }
     fn tx_offset(&self) -> u64 {
         self.layout.regmap().tx
     }
@@ -448,12 +483,14 @@ impl Uart {
 
 impl crate::Peripheral for Uart {
     fn read(&self, offset: u64) -> SimResult<u8> {
-        if offset == self.status_offset() {
+        if offset == self.status_flag_offset() {
             let mut val = self.status_ready_value();
-            // Set RXNE bit (bit 5) when RX buffer has data
+            // Set RXNE / RDRF bit (bit 5) when RX buffer has data. On the
+            // Kinetis layout this byte is STAT byte 2, so bit 5 lands on
+            // RDRF (STAT bit 21) — exactly where the HAL polls for RX.
             if let Ok(guard) = self.rx_buf.lock() {
                 if !guard.is_empty() {
-                    val |= 1 << 5; // RXNE
+                    val |= 1 << 5; // RXNE / RDRF
                 }
             }
             return Ok(val);
@@ -571,11 +608,11 @@ impl crate::Peripheral for Uart {
     }
 
     fn peek(&self, offset: u64) -> Option<u8> {
-        if offset == self.status_offset() {
+        if offset == self.status_flag_offset() {
             let mut val = self.status_ready_value();
             if let Ok(guard) = self.rx_buf.lock() {
                 if !guard.is_empty() {
-                    val |= 1 << 5; // RXNE
+                    val |= 1 << 5; // RXNE / RDRF
                 }
             }
             return Some(val);
@@ -652,6 +689,51 @@ mod tests {
         let data = sink.lock().unwrap().clone();
         assert_eq!(data, vec![b'Y']);
         assert_eq!(uart.read(0x1C).unwrap(), 0xC0); // ISR ready flags
+    }
+
+    #[test]
+    fn test_uart_lpuart_transmit_uses_data_register() {
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::Lpuart);
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        uart.set_sink(Some(sink.clone()), false);
+
+        // STAT (0x04) must report TDRE (bit 23) + TC (bit 22) ready: that is
+        // 0xC0 in byte 2 of the word, i.e. read at offset 0x06.
+        assert_eq!(uart.read(0x06).unwrap(), 0xC0, "STAT byte 2 = TDRE|TC");
+        // A write to a wrong offset (STAT) must not transmit.
+        uart.write(0x04, b'X').unwrap();
+        // DATA register at 0x0C transmits.
+        uart.write(0x0C, b'K').unwrap();
+
+        assert_eq!(sink.lock().unwrap().clone(), vec![b'K']);
+    }
+
+    #[test]
+    fn test_uart_lpuart_tie_and_tcie_raise_irq() {
+        // CTRL (0x08): TIE = bit 23, TCIE = bit 22. Either pends the LPUART IRQ.
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::Lpuart);
+        uart.write_u32(0x08, 1 << 23).unwrap(); // TIE
+        assert!(uart.tick().irq, "TIE must pend");
+
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::Lpuart);
+        uart.write_u32(0x08, 1 << 22).unwrap(); // TCIE
+        assert!(uart.tick().irq, "TCIE must pend");
+
+        // TE alone (bit 19, transmitter enable — not an interrupt) must not pend.
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::Lpuart);
+        uart.write_u32(0x08, 1 << 19).unwrap();
+        assert!(!uart.tick().irq, "TE alone must not pend");
+    }
+
+    #[test]
+    fn test_uart_lpuart_rx_sets_rdrf_and_reads_data() {
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::Lpuart);
+        uart.rx_buffer().lock().unwrap().push_back(b'Z');
+        // RDRF (STAT bit 21) sits at byte 2 bit 5 → read 0x06 has bit 5 set.
+        assert_eq!(uart.read(0x06).unwrap(), 0xC0 | (1 << 5));
+        // DATA read at 0x0C pops the byte.
+        assert_eq!(uart.read(0x0C).unwrap(), b'Z');
+        assert_eq!(uart.read(0x06).unwrap(), 0xC0, "RDRF clears once drained");
     }
 
     #[test]

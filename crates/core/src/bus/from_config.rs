@@ -8,7 +8,6 @@
 use super::*;
 use crate::memory::LinearMemory;
 use crate::peripherals::gpio::GpioRegisterLayout;
-use crate::peripherals::uart::UartRegisterLayout;
 use crate::Peripheral;
 use anyhow::Context;
 use labwired_config::{parse_size, ChipDescriptor, SystemManifest};
@@ -148,14 +147,7 @@ impl SystemBus {
                 "uart" | "stm32_uart" | "stm32f1_uart" | "stm32f2_uart" | "stm32f4_uart"
                 | "stm32f7_usart" | "stm32h5_usart" | "efm32_uart" | "nxp_lpuart" | "ns16550"
                 | "pl011" | "gaislerapbuart" => {
-                    let layout: UartRegisterLayout =
-                        if p_cfg.r#type.contains("stm32h5") || p_cfg.r#type.contains("stm32f7") {
-                            UartRegisterLayout::Stm32V2
-                        } else if p_cfg.r#type.contains("nrf") {
-                            UartRegisterLayout::Nrf52
-                        } else {
-                            Self::parse_profile_or_default(p_cfg, "UART")?
-                        };
+                    let layout = Self::uart_layout_for(p_cfg)?;
                     // CR3 writable mask is a per-part delta on the shared F1 map:
                     // F1 implements [10:0] (0x07FF), F4 adds bit 11 ONEBIT (0x0FFF).
                     // YAML: `config: { cr3_mask: 0xFFF }`; default F1.

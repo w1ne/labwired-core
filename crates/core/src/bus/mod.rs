@@ -714,6 +714,67 @@ impl SystemBus {
         })
     }
 
+    /// Resolve the UART register layout for a peripheral **deterministically**
+    /// from its declared type. The decision order is fixed and total, and there
+    /// is no path that silently mismodels a strange UART:
+    ///
+    ///   1. An explicit `config.profile` always wins (the author's deliberate
+    ///      choice), so any UART can be pinned to any modelled layout.
+    ///   2. A type whose silicon register map we actually model routes to that
+    ///      layout: `*lpuart*` → Kinetis LPUART; `stm32h5`/`stm32f7` → modern
+    ///      STM32 USART; any other `stm32…` name and the bare generic `"uart"`
+    ///      → the classic STM32 USART map (SR/DR/BRR/CR1…).
+    ///   3. Anything else — every vendor UART we do not model yet (PL011, 16550,
+    ///      Gaisler APBUART, EFM32/EFR32, Renesas SCI, LiteX, SiFive, SAM, …) —
+    ///      ERRORS. It must name a layout via `config.profile` to run. A UART is
+    ///      never silently mapped onto an STM32 register map by omission, the
+    ///      way `nxp_lpuart` was before this gate existed.
+    pub(crate) fn uart_layout_for(
+        p_cfg: &PeripheralConfig,
+    ) -> anyhow::Result<crate::peripherals::uart::UartRegisterLayout> {
+        use crate::peripherals::uart::UartRegisterLayout::{self, Lpuart, Stm32F1, Stm32V2};
+
+        // 1. Explicit author override wins, for any UART type.
+        if let Some(name) = Self::profile_name(p_cfg)? {
+            return UartRegisterLayout::from_str(name).map_err(|e| {
+                anyhow::anyhow!(
+                    "Peripheral '{}' has invalid UART profile '{}': {}",
+                    p_cfg.id,
+                    name,
+                    e
+                )
+            });
+        }
+
+        // 2. Route the families we faithfully model.
+        let raw = p_cfg.r#type.to_ascii_lowercase();
+        if raw.contains("lpuart") {
+            return Ok(Lpuart);
+        }
+        if raw == "uart" {
+            // The generic escape hatch: the classic STM32 USART map.
+            return Ok(Stm32F1);
+        }
+        if raw.contains("stm32") {
+            return Ok(if raw.contains("stm32h5") || raw.contains("stm32f7") {
+                Stm32V2
+            } else {
+                Stm32F1
+            });
+        }
+
+        // 3. Unmodelled UART — refuse to guess.
+        anyhow::bail!(
+            "UART type '{}' (peripheral '{}') has no register layout modelled yet \
+             and no `config.profile` set; it will NOT be silently mapped onto an \
+             STM32. Choose a layout explicitly with \
+             `config: {{ profile: stm32f1 | stm32v2 | nrf52 | lpuart }}`, or add a \
+             dedicated model for it.",
+            p_cfg.r#type,
+            p_cfg.id
+        )
+    }
+
     fn resolve_peripheral_path(manifest: &SystemManifest, descriptor_path: &str) -> PathBuf {
         let raw = PathBuf::from(descriptor_path);
         if raw.is_absolute() {

@@ -735,6 +735,71 @@ pub mod integration_tests {
         assert_eq!(data, vec![b'Y']);
     }
 
+    /// UART layout resolution must be deterministic per type — no `contains()`
+    /// guessing, no silent default. A named hardware type pins exactly one
+    /// layout; a UART family with no faithful model must be named explicitly or
+    /// it errors rather than masquerade as an STM32.
+    #[test]
+    fn test_uart_layout_is_deterministic_per_type() {
+        use crate::peripherals::uart::UartRegisterLayout::*;
+
+        let cfg = |ty: &str, profile: Option<&str>| {
+            let mut config = HashMap::new();
+            if let Some(p) = profile {
+                config.insert(
+                    "profile".to_string(),
+                    serde_yaml::Value::String(p.to_string()),
+                );
+            }
+            PeripheralConfig {
+                id: "u".to_string(),
+                r#type: ty.to_string(),
+                base_address: 0x4000_0000,
+                size: None,
+                irq: None,
+                clock: None,
+                config,
+            }
+        };
+
+        let resolve = |ty: &str, profile: Option<&str>| {
+            crate::bus::SystemBus::uart_layout_for(&cfg(ty, profile))
+        };
+
+        // Families we model pin exactly one layout, no profile required.
+        assert_eq!(resolve("nxp_lpuart", None).unwrap(), Lpuart);
+        assert_eq!(resolve("stm32f1_uart", None).unwrap(), Stm32F1);
+        assert_eq!(resolve("stm32_uart", None).unwrap(), Stm32F1);
+        assert_eq!(resolve("stm32f7_usart", None).unwrap(), Stm32V2);
+        assert_eq!(resolve("stm32h5_usart", None).unwrap(), Stm32V2);
+
+        // The generic "uart" escape hatch: classic STM32 default, profile-overridable.
+        assert_eq!(resolve("uart", None).unwrap(), Stm32F1);
+        assert_eq!(resolve("uart", Some("stm32v2")).unwrap(), Stm32V2);
+
+        // Every UART we do NOT model must be named explicitly — no silent
+        // fallback onto an STM32 register map.
+        for unmodelled in [
+            "pl011",
+            "ns16550",
+            "gaislerapbuart",
+            "efm32_uart",
+            "renesas_sci",
+            "litex_uart",
+            "sifive_uart",
+            "sam_usart",
+        ] {
+            assert!(
+                resolve(unmodelled, None).is_err(),
+                "'{unmodelled}' without a profile must error, not default to STM32F1"
+            );
+        }
+
+        // …but an explicit profile lets any of them pick a layout deterministically.
+        assert_eq!(resolve("pl011", Some("stm32v2")).unwrap(), Stm32V2);
+        assert_eq!(resolve("efm32_uart", Some("stm32f1")).unwrap(), Stm32F1);
+    }
+
     #[test]
     fn test_from_config_rcc_profile_stm32v2() {
         let mut rcc_config = HashMap::new();

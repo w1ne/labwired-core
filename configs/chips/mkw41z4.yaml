@@ -1,0 +1,139 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+# NXP KW41Z (MKW41Z512VHT4) — Cortex-M0+ BLE 4.2 + IEEE 802.15.4 wireless MCU.
+# Register surface (offsets, reset values, fields) ingested from the public
+# CMSIS-SVD (cmsis-svd-data: data/NXP/MKW41Z4.svd) via `svd-ingestor`; see
+# configs/peripherals/mkw41z4/. The radio blocks (BTLE_RF / GENFSK / ZLL /
+# XCVR) are present in the SVD but intentionally not modelled here yet — this
+# profile covers the core + sensor/peripheral path (UART, GPIO, clock, I2C/SPI,
+# timers). Memory map: 512KB flash, 128KB SRAM (Kinetis split, addressed as one
+# contiguous CPU-visible window).
+name: "mkw41z4"
+arch: "arm"
+core: "cortex-m0+"
+flash:
+  base: 0x00000000
+  size: "512KB"
+ram:
+  base: 0x1FFF8000
+  size: "128KB"
+peripherals:
+  # --- Console / serial ---
+  # Behavioural LPUART (Kinetis layout): DATA writes hit the TX sink, STAT
+  # reports TDRE/TC/RDRF, CTRL drives the TIE/TCIE interrupt. Register offsets
+  # match the ingested descriptor at peripherals/mkw41z4/lpuart0.yaml.
+  - id: "lpuart0"
+    type: "nxp_lpuart"
+    base_address: 0x40054000
+    size: "4KB"
+    irq: 12
+  # --- Clock / system integration ---
+  - id: "sim"
+    type: "declarative"
+    base_address: 0x40047000
+    size: "4KB"
+    config:
+      path: "../peripherals/mkw41z4/sim.yaml"
+  - id: "mcg"
+    type: "declarative"
+    base_address: 0x40064000
+    size: "4KB"
+    config:
+      path: "../peripherals/mkw41z4/mcg.yaml"
+  - id: "pmc"
+    type: "declarative"
+    base_address: 0x4007D000
+    size: "4KB"
+    config:
+      path: "../peripherals/mkw41z4/pmc.yaml"
+  - id: "smc"
+    type: "declarative"
+    base_address: 0x4007E000
+    size: "4KB"
+    config:
+      path: "../peripherals/mkw41z4/smc.yaml"
+  - id: "rcm"
+    type: "declarative"
+    base_address: 0x4007F000
+    size: "4KB"
+    config:
+      path: "../peripherals/mkw41z4/rcm.yaml"
+  # --- Pin mux / GPIO ---
+  - id: "porta"
+    type: "declarative"
+    base_address: 0x40049000
+    size: "4KB"
+    config:
+      path: "../peripherals/mkw41z4/porta.yaml"
+  - id: "portb"
+    type: "declarative"
+    base_address: 0x4004A000
+    size: "4KB"
+    config:
+      path: "../peripherals/mkw41z4/portb.yaml"
+  - id: "portc"
+    type: "declarative"
+    base_address: 0x4004B000
+    size: "4KB"
+    config:
+      path: "../peripherals/mkw41z4/portc.yaml"
+  # GPIOA/B/C are 0x40 apart within the 0x400FF000 page — narrow windows.
+  - id: "gpioa"
+    type: "declarative"
+    base_address: 0x400FF000
+    size: "64B"
+    config:
+      path: "../peripherals/mkw41z4/gpioa.yaml"
+  - id: "gpiob"
+    type: "declarative"
+    base_address: 0x400FF040
+    size: "64B"
+    config:
+      path: "../peripherals/mkw41z4/gpiob.yaml"
+  - id: "gpioc"
+    type: "declarative"
+    base_address: 0x400FF080
+    size: "64B"
+    config:
+      path: "../peripherals/mkw41z4/gpioc.yaml"
+  # --- Sensor buses ---
+  - id: "i2c0"
+    type: "declarative"
+    base_address: 0x40066000
+    size: "4KB"
+    irq: 10
+    config:
+      path: "../peripherals/mkw41z4/i2c0.yaml"
+  - id: "spi0"
+    type: "declarative"
+    base_address: 0x4002C000
+    size: "4KB"
+    irq: 11
+    config:
+      path: "../peripherals/mkw41z4/spi0.yaml"
+  # --- Timers / RNG ---
+  - id: "tpm0"
+    type: "declarative"
+    base_address: 0x40038000
+    size: "4KB"
+    irq: 17
+    config:
+      path: "../peripherals/mkw41z4/tpm0.yaml"
+  - id: "pit"
+    type: "declarative"
+    base_address: 0x40037000
+    size: "4KB"
+    irq: 22
+    config:
+      path: "../peripherals/mkw41z4/pit.yaml"
+  - id: "trng0"
+    type: "declarative"
+    base_address: 0x40029000
+    size: "4KB"
+    irq: 6
+    config:
+      path: "../peripherals/mkw41z4/trng0.yaml"

@@ -1,0 +1,1556 @@
+peripheral: PORTA
+version: 0.1.0
+registers:
+- id: PCR0
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 1795
+  fields:
+  - name: PS
+    bit_range:
+    - 0
+    - 0
+    description: Pull Select
+  - name: PE
+    bit_range:
+    - 1
+    - 1
+    description: Pull Enable
+  - name: SRE
+    bit_range:
+    - 2
+    - 2
+    description: Slew Rate Enable
+  - name: PFE
+    bit_range:
+    - 4
+    - 4
+    description: Passive Filter Enable
+  - name: DSE
+    bit_range:
+    - 6
+    - 6
+    description: Drive Strength Enable
+  - name: MUX
+    bit_range:
+    - 10
+    - 8
+    description: Pin Mux Control
+  - name: IRQC
+    bit_range:
+    - 19
+    - 16
+    description: Interrupt Configuration
+  - name: ISF
+    bit_range:
+    - 24
+    - 24
+    description: Interrupt Status Flag
+  side_effects: null
+- id: PCR1
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 1798
+  fields:
+  - name: PS
+    bit_range:
+    - 0
+    - 0
+    description: Pull Select
+  - name: PE
+    bit_range:
+    - 1
+    - 1
+    description: Pull Enable
+  - name: SRE
+    bit_range:
+    - 2
+    - 2
+    description: Slew Rate Enable
+  - name: PFE
+    bit_range:
+    - 4
+    - 4
+    description: Passive Filter Enable
+  - name: DSE
+    bit_range:
+    - 6
+    - 6
+    description: Drive Strength Enable
+  - name: MUX
+    bit_range:
+    - 10
+    - 8
+    description: Pin Mux Control
+  - name: IRQC
+    bit_range:
+    - 19
+    - 16
+    description: Interrupt Configuration
+  - name: ISF
+    bit_range:
+    - 24
+    - 24
+    description: Interrupt Status Flag
+  side_effects: null
+- id: PCR2
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 5
+  fields:
+  - name: PS
+    bit_range:
+    - 0
+    - 0
+    description: Pull Select
+  - name: PE
+    bit_range:
+    - 1
+    - 1
+    description: Pull Enable
+  - name: SRE
+    bit_range:
+    - 2
+    - 2
+    description: Slew Rate Enable
+  - name: PFE
+    bit_range:
+    - 4
+    - 4
+    description: Passive Filter Enable
+  - name: DSE
+    bit_range:
+    - 6
+    - 6
+    description: Drive Strength Enable
+  - name: MUX
+    bit_range:
+    - 10
+    - 8
+    description: Pin Mux Control
+  - name: IRQC
+    bit_range:
+    - 19
+    - 16
+    description: Interrupt Configuration
+  - name: ISF
+    bit_range:
+    - 24
+    - 24
+    description: Interrupt Status Flag
+  side_effects: null
+- id: PCR3
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 5
+  fields:
+  - name: PS
+    bit_range:
+    - 0
+    - 0
+    description: Pull Select
+  - name: PE
+    bit_range:
+    - 1
+    - 1
+    description: Pull Enable
+  - name: SRE
+    bit_range:
+    - 2
+    - 2
+    description: Slew Rate Enable
+  - name: PFE
+    bit_range:
+    - 4
+    - 4
+    description: Passive Filter Enable
+  - name: DSE
+    bit_range:
+    - 6
+    - 6
+    description: Drive Strength Enable
+  - name: MUX
+    bit_range:
+    - 10
+    - 8
+    description: Pin Mux Control
+  - name: IRQC
+    bit_range:
+    - 19
+    - 16
+    description: Interrupt Configuration
+  - name: ISF
+    bit_range:
+    - 24
+    - 24
+    description: Interrupt Status Flag
+  side_effects: null
+- id: PCR4
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 5
+  fields:
+  - name: PS
+    bit_range:
+    - 0
+    - 0
+    description: Pull Select
+  - name: PE
+    bit_range:
+    - 1
+    - 1
+    description: Pull Enable
+  - name: SRE
+    bit_range:
+    - 2
+    - 2
+    description: Slew Rate Enable
+  - name: PFE
+    bit_range:
+    - 4
+    - 4
+    description: Passive Filter Enable
+  - name: DSE
+    bit_range:
+    - 6
+    - 6
+    description: Drive Strength Enable
+  - name: MUX
+    bit_range:
+    - 10
+    - 8
+    description: Pin Mux Control
+  - name: IRQC
+    bit_range:
+    - 19
+    - 16
+    description: Interrupt Configuration
+  - name: ISF
+    bit_range:
+    - 24
+    - 24
+    description: Interrupt Status Flag
+  side_effects: null
+- id: PCR5
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 5
+  fields:
+  - name: PS
+    bit_range:
+    - 0
+    - 0
+    description: Pull Select
+  - name: PE
+    bit_range:
+    - 1
+    - 1
+    description: Pull Enable
+  - name: SRE
+    bit_range:
+    - 2
+    - 2
+    description: Slew Rate Enable
+  - name: PFE
+    bit_range:
+    - 4
+    - 4
+    description: Passive Filter Enable
+  - name: DSE
+    bit_range:
+    - 6
+    - 6
+    description: Drive Strength Enable
+  - name: MUX
+    bit_range:
+    - 10
+    - 8
+    description: Pin Mux Control
+  - name: IRQC
+    bit_range:
+    - 19
+    - 16
+    description: Interrupt Configuration
+  - name: ISF
+    bit_range:
+    - 24
+    - 24
+    description: Interrupt Status Flag
+  side_effects: null
+- id: PCR6
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 5
+  fields:
+  - name: PS
+    bit_range:
+    - 0
+    - 0
+    description: Pull Select
+  - name: PE
+    bit_range:
+    - 1
+    - 1
+    description: Pull Enable
+  - name: SRE
+    bit_range:
+    - 2
+    - 2
+    description: Slew Rate Enable
+  - name: PFE
+    bit_range:
+    - 4
+    - 4
+    description: Passive Filter Enable
+  - name: DSE
+    bit_range:
+    - 6
+    - 6
+    description: Drive Strength Enable
+  - name: MUX
+    bit_range:
+    - 10
+    - 8
+    description: Pin Mux Control
+  - name: IRQC
+    bit_range:
+    - 19
+    - 16
+    description: Interrupt Configuration
+  - name: ISF
+    bit_range:
+    - 24
+    - 24
+    description: Interrupt Status Flag
+  side_effects: null
+- id: PCR7
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 5
+  fields:
+  - name: PS
+    bit_range:
+    - 0
+    - 0
+    description: Pull Select
+  - name: PE
+    bit_range:
+    - 1
+    - 1
+    description: Pull Enable
+  - name: SRE
+    bit_range:
+    - 2
+    - 2
+    description: Slew Rate Enable
+  - name: PFE
+    bit_range:
+    - 4
+    - 4
+    description: Passive Filter Enable
+  - name: DSE
+    bit_range:
+    - 6
+    - 6
+    description: Drive Strength Enable
+  - name: MUX
+    bit_range:
+    - 10
+    - 8
+    description: Pin Mux Control
+  - name: IRQC
+    bit_range:
+    - 19
+    - 16
+    description: Interrupt Configuration
+  - name: ISF
+    bit_range:
+    - 24
+    - 24
+    description: Interrupt Status Flag
+  side_effects: null
+- id: PCR8
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 5
+  fields:
+  - name: PS
+    bit_range:
+    - 0
+    - 0
+    description: Pull Select
+  - name: PE
+    bit_range:
+    - 1
+    - 1
+    description: Pull Enable
+  - name: SRE
+    bit_range:
+    - 2
+    - 2
+    description: Slew Rate Enable
+  - name: PFE
+    bit_range:
+    - 4
+    - 4
+    description: Passive Filter Enable
+  - name: DSE
+    bit_range:
+    - 6
+    - 6
+    description: Drive Strength Enable
+  - name: MUX
+    bit_range:
+    - 10
+    - 8
+    description: Pin Mux Control
+  - name: IRQC
+    bit_range:
+    - 19
+    - 16
+    description: Interrupt Configuration
+  - name: ISF
+    bit_range:
+    - 24
+    - 24
+    description: Interrupt Status Flag
+  side_effects: null
+- id: PCR9
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 5
+  fields:
+  - name: PS
+    bit_range:
+    - 0
+    - 0
+    description: Pull Select
+  - name: PE
+    bit_range:
+    - 1
+    - 1
+    description: Pull Enable
+  - name: SRE
+    bit_range:
+    - 2
+    - 2
+    description: Slew Rate Enable
+  - name: PFE
+    bit_range:
+    - 4
+    - 4
+    description: Passive Filter Enable
+  - name: DSE
+    bit_range:
+    - 6
+    - 6
+    description: Drive Strength Enable
+  - name: MUX
+    bit_range:
+    - 10
+    - 8
+    description: Pin Mux Control
+  - name: IRQC
+    bit_range:
+    - 19
+    - 16
+    description: Interrupt Configuration
+  - name: ISF
+    bit_range:
+    - 24
+    - 24
+    description: Interrupt Status Flag
+  side_effects: null
+- id: PCR10
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 5
+  fields:
+  - name: PS
+    bit_range:
+    - 0
+    - 0
+    description: Pull Select
+  - name: PE
+    bit_range:
+    - 1
+    - 1
+    description: Pull Enable
+  - name: SRE
+    bit_range:
+    - 2
+    - 2
+    description: Slew Rate Enable
+  - name: PFE
+    bit_range:
+    - 4
+    - 4
+    description: Passive Filter Enable
+  - name: DSE
+    bit_range:
+    - 6
+    - 6
+    description: Drive Strength Enable
+  - name: MUX
+    bit_range:
+    - 10
+    - 8
+    description: Pin Mux Control
+  - name: IRQC
+    bit_range:
+    - 19
+    - 16
+    description: Interrupt Configuration
+  - name: ISF
+    bit_range:
+    - 24
+    - 24
+    description: Interrupt Status Flag
+  side_effects: null
+- id: PCR11
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 5
+  fields:
+  - name: PS
+    bit_range:
+    - 0
+    - 0
+    description: Pull Select
+  - name: PE
+    bit_range:
+    - 1
+    - 1
+    description: Pull Enable
+  - name: SRE
+    bit_range:
+    - 2
+    - 2
+    description: Slew Rate Enable
+  - name: PFE
+    bit_range:
+    - 4
+    - 4
+    description: Passive Filter Enable
+  - name: DSE
+    bit_range:
+    - 6
+    - 6
+    description: Drive Strength Enable
+  - name: MUX
+    bit_range:
+    - 10
+    - 8
+    description: Pin Mux Control
+  - name: IRQC
+    bit_range:
+    - 19
+    - 16
+    description: Interrupt Configuration
+  - name: ISF
+    bit_range:
+    - 24
+    - 24
+    description: Interrupt Status Flag
+  side_effects: null
+- id: PCR12
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 5
+  fields:
+  - name: PS
+    bit_range:
+    - 0
+    - 0
+    description: Pull Select
+  - name: PE
+    bit_range:
+    - 1
+    - 1
+    description: Pull Enable
+  - name: SRE
+    bit_range:
+    - 2
+    - 2
+    description: Slew Rate Enable
+  - name: PFE
+    bit_range:
+    - 4
+    - 4
+    description: Passive Filter Enable
+  - name: DSE
+    bit_range:
+    - 6
+    - 6
+    description: Drive Strength Enable
+  - name: MUX
+    bit_range:
+    - 10
+    - 8
+    description: Pin Mux Control
+  - name: IRQC
+    bit_range:
+    - 19
+    - 16
+    description: Interrupt Configuration
+  - name: ISF
+    bit_range:
+    - 24
+    - 24
+    description: Interrupt Status Flag
+  side_effects: null
+- id: PCR13
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 5
+  fields:
+  - name: PS
+    bit_range:
+    - 0
+    - 0
+    description: Pull Select
+  - name: PE
+    bit_range:
+    - 1
+    - 1
+    description: Pull Enable
+  - name: SRE
+    bit_range:
+    - 2
+    - 2
+    description: Slew Rate Enable
+  - name: PFE
+    bit_range:
+    - 4
+    - 4
+    description: Passive Filter Enable
+  - name: DSE
+    bit_range:
+    - 6
+    - 6
+    description: Drive Strength Enable
+  - name: MUX
+    bit_range:
+    - 10
+    - 8
+    description: Pin Mux Control
+  - name: IRQC
+    bit_range:
+    - 19
+    - 16
+    description: Interrupt Configuration
+  - name: ISF
+    bit_range:
+    - 24
+    - 24
+    description: Interrupt Status Flag
+  side_effects: null
+- id: PCR14
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 5
+  fields:
+  - name: PS
+    bit_range:
+    - 0
+    - 0
+    description: Pull Select
+  - name: PE
+    bit_range:
+    - 1
+    - 1
+    description: Pull Enable
+  - name: SRE
+    bit_range:
+    - 2
+    - 2
+    description: Slew Rate Enable
+  - name: PFE
+    bit_range:
+    - 4
+    - 4
+    description: Passive Filter Enable
+  - name: DSE
+    bit_range:
+    - 6
+    - 6
+    description: Drive Strength Enable
+  - name: MUX
+    bit_range:
+    - 10
+    - 8
+    description: Pin Mux Control
+  - name: IRQC
+    bit_range:
+    - 19
+    - 16
+    description: Interrupt Configuration
+  - name: ISF
+    bit_range:
+    - 24
+    - 24
+    description: Interrupt Status Flag
+  side_effects: null
+- id: PCR15
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 5
+  fields:
+  - name: PS
+    bit_range:
+    - 0
+    - 0
+    description: Pull Select
+  - name: PE
+    bit_range:
+    - 1
+    - 1
+    description: Pull Enable
+  - name: SRE
+    bit_range:
+    - 2
+    - 2
+    description: Slew Rate Enable
+  - name: PFE
+    bit_range:
+    - 4
+    - 4
+    description: Passive Filter Enable
+  - name: DSE
+    bit_range:
+    - 6
+    - 6
+    description: Drive Strength Enable
+  - name: MUX
+    bit_range:
+    - 10
+    - 8
+    description: Pin Mux Control
+  - name: IRQC
+    bit_range:
+    - 19
+    - 16
+    description: Interrupt Configuration
+  - name: ISF
+    bit_range:
+    - 24
+    - 24
+    description: Interrupt Status Flag
+  side_effects: null
+- id: PCR16
+  address_offset: 64
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: PS
+    bit_range:
+    - 0
+    - 0
+    description: Pull Select
+  - name: PE
+    bit_range:
+    - 1
+    - 1
+    description: Pull Enable
+  - name: SRE
+    bit_range:
+    - 2
+    - 2
+    description: Slew Rate Enable
+  - name: PFE
+    bit_range:
+    - 4
+    - 4
+    description: Passive Filter Enable
+  - name: DSE
+    bit_range:
+    - 6
+    - 6
+    description: Drive Strength Enable
+  - name: MUX
+    bit_range:
+    - 10
+    - 8
+    description: Pin Mux Control
+  - name: IRQC
+    bit_range:
+    - 19
+    - 16
+    description: Interrupt Configuration
+  - name: ISF
+    bit_range:
+    - 24
+    - 24
+    description: Interrupt Status Flag
+  side_effects: null
+- id: PCR17
+  address_offset: 68
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: PS
+    bit_range:
+    - 0
+    - 0
+    description: Pull Select
+  - name: PE
+    bit_range:
+    - 1
+    - 1
+    description: Pull Enable
+  - name: SRE
+    bit_range:
+    - 2
+    - 2
+    description: Slew Rate Enable
+  - name: PFE
+    bit_range:
+    - 4
+    - 4
+    description: Passive Filter Enable
+  - name: DSE
+    bit_range:
+    - 6
+    - 6
+    description: Drive Strength Enable
+  - name: MUX
+    bit_range:
+    - 10
+    - 8
+    description: Pin Mux Control
+  - name: IRQC
+    bit_range:
+    - 19
+    - 16
+    description: Interrupt Configuration
+  - name: ISF
+    bit_range:
+    - 24
+    - 24
+    description: Interrupt Status Flag
+  side_effects: null
+- id: PCR18
+  address_offset: 72
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: PS
+    bit_range:
+    - 0
+    - 0
+    description: Pull Select
+  - name: PE
+    bit_range:
+    - 1
+    - 1
+    description: Pull Enable
+  - name: SRE
+    bit_range:
+    - 2
+    - 2
+    description: Slew Rate Enable
+  - name: PFE
+    bit_range:
+    - 4
+    - 4
+    description: Passive Filter Enable
+  - name: DSE
+    bit_range:
+    - 6
+    - 6
+    description: Drive Strength Enable
+  - name: MUX
+    bit_range:
+    - 10
+    - 8
+    description: Pin Mux Control
+  - name: IRQC
+    bit_range:
+    - 19
+    - 16
+    description: Interrupt Configuration
+  - name: ISF
+    bit_range:
+    - 24
+    - 24
+    description: Interrupt Status Flag
+  side_effects: null
+- id: PCR19
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: PS
+    bit_range:
+    - 0
+    - 0
+    description: Pull Select
+  - name: PE
+    bit_range:
+    - 1
+    - 1
+    description: Pull Enable
+  - name: SRE
+    bit_range:
+    - 2
+    - 2
+    description: Slew Rate Enable
+  - name: PFE
+    bit_range:
+    - 4
+    - 4
+    description: Passive Filter Enable
+  - name: DSE
+    bit_range:
+    - 6
+    - 6
+    description: Drive Strength Enable
+  - name: MUX
+    bit_range:
+    - 10
+    - 8
+    description: Pin Mux Control
+  - name: IRQC
+    bit_range:
+    - 19
+    - 16
+    description: Interrupt Configuration
+  - name: ISF
+    bit_range:
+    - 24
+    - 24
+    description: Interrupt Status Flag
+  side_effects: null
+- id: PCR20
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 5
+  fields:
+  - name: PS
+    bit_range:
+    - 0
+    - 0
+    description: Pull Select
+  - name: PE
+    bit_range:
+    - 1
+    - 1
+    description: Pull Enable
+  - name: SRE
+    bit_range:
+    - 2
+    - 2
+    description: Slew Rate Enable
+  - name: PFE
+    bit_range:
+    - 4
+    - 4
+    description: Passive Filter Enable
+  - name: DSE
+    bit_range:
+    - 6
+    - 6
+    description: Drive Strength Enable
+  - name: MUX
+    bit_range:
+    - 10
+    - 8
+    description: Pin Mux Control
+  - name: IRQC
+    bit_range:
+    - 19
+    - 16
+    description: Interrupt Configuration
+  - name: ISF
+    bit_range:
+    - 24
+    - 24
+    description: Interrupt Status Flag
+  side_effects: null
+- id: PCR21
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 5
+  fields:
+  - name: PS
+    bit_range:
+    - 0
+    - 0
+    description: Pull Select
+  - name: PE
+    bit_range:
+    - 1
+    - 1
+    description: Pull Enable
+  - name: SRE
+    bit_range:
+    - 2
+    - 2
+    description: Slew Rate Enable
+  - name: PFE
+    bit_range:
+    - 4
+    - 4
+    description: Passive Filter Enable
+  - name: DSE
+    bit_range:
+    - 6
+    - 6
+    description: Drive Strength Enable
+  - name: MUX
+    bit_range:
+    - 10
+    - 8
+    description: Pin Mux Control
+  - name: IRQC
+    bit_range:
+    - 19
+    - 16
+    description: Interrupt Configuration
+  - name: ISF
+    bit_range:
+    - 24
+    - 24
+    description: Interrupt Status Flag
+  side_effects: null
+- id: PCR22
+  address_offset: 88
+  size: 32
+  access: READ_WRITE
+  reset_value: 5
+  fields:
+  - name: PS
+    bit_range:
+    - 0
+    - 0
+    description: Pull Select
+  - name: PE
+    bit_range:
+    - 1
+    - 1
+    description: Pull Enable
+  - name: SRE
+    bit_range:
+    - 2
+    - 2
+    description: Slew Rate Enable
+  - name: PFE
+    bit_range:
+    - 4
+    - 4
+    description: Passive Filter Enable
+  - name: DSE
+    bit_range:
+    - 6
+    - 6
+    description: Drive Strength Enable
+  - name: MUX
+    bit_range:
+    - 10
+    - 8
+    description: Pin Mux Control
+  - name: IRQC
+    bit_range:
+    - 19
+    - 16
+    description: Interrupt Configuration
+  - name: ISF
+    bit_range:
+    - 24
+    - 24
+    description: Interrupt Status Flag
+  side_effects: null
+- id: PCR23
+  address_offset: 92
+  size: 32
+  access: READ_WRITE
+  reset_value: 5
+  fields:
+  - name: PS
+    bit_range:
+    - 0
+    - 0
+    description: Pull Select
+  - name: PE
+    bit_range:
+    - 1
+    - 1
+    description: Pull Enable
+  - name: SRE
+    bit_range:
+    - 2
+    - 2
+    description: Slew Rate Enable
+  - name: PFE
+    bit_range:
+    - 4
+    - 4
+    description: Passive Filter Enable
+  - name: DSE
+    bit_range:
+    - 6
+    - 6
+    description: Drive Strength Enable
+  - name: MUX
+    bit_range:
+    - 10
+    - 8
+    description: Pin Mux Control
+  - name: IRQC
+    bit_range:
+    - 19
+    - 16
+    description: Interrupt Configuration
+  - name: ISF
+    bit_range:
+    - 24
+    - 24
+    description: Interrupt Status Flag
+  side_effects: null
+- id: PCR24
+  address_offset: 96
+  size: 32
+  access: READ_WRITE
+  reset_value: 5
+  fields:
+  - name: PS
+    bit_range:
+    - 0
+    - 0
+    description: Pull Select
+  - name: PE
+    bit_range:
+    - 1
+    - 1
+    description: Pull Enable
+  - name: SRE
+    bit_range:
+    - 2
+    - 2
+    description: Slew Rate Enable
+  - name: PFE
+    bit_range:
+    - 4
+    - 4
+    description: Passive Filter Enable
+  - name: DSE
+    bit_range:
+    - 6
+    - 6
+    description: Drive Strength Enable
+  - name: MUX
+    bit_range:
+    - 10
+    - 8
+    description: Pin Mux Control
+  - name: IRQC
+    bit_range:
+    - 19
+    - 16
+    description: Interrupt Configuration
+  - name: ISF
+    bit_range:
+    - 24
+    - 24
+    description: Interrupt Status Flag
+  side_effects: null
+- id: PCR25
+  address_offset: 100
+  size: 32
+  access: READ_WRITE
+  reset_value: 5
+  fields:
+  - name: PS
+    bit_range:
+    - 0
+    - 0
+    description: Pull Select
+  - name: PE
+    bit_range:
+    - 1
+    - 1
+    description: Pull Enable
+  - name: SRE
+    bit_range:
+    - 2
+    - 2
+    description: Slew Rate Enable
+  - name: PFE
+    bit_range:
+    - 4
+    - 4
+    description: Passive Filter Enable
+  - name: DSE
+    bit_range:
+    - 6
+    - 6
+    description: Drive Strength Enable
+  - name: MUX
+    bit_range:
+    - 10
+    - 8
+    description: Pin Mux Control
+  - name: IRQC
+    bit_range:
+    - 19
+    - 16
+    description: Interrupt Configuration
+  - name: ISF
+    bit_range:
+    - 24
+    - 24
+    description: Interrupt Status Flag
+  side_effects: null
+- id: PCR26
+  address_offset: 104
+  size: 32
+  access: READ_WRITE
+  reset_value: 5
+  fields:
+  - name: PS
+    bit_range:
+    - 0
+    - 0
+    description: Pull Select
+  - name: PE
+    bit_range:
+    - 1
+    - 1
+    description: Pull Enable
+  - name: SRE
+    bit_range:
+    - 2
+    - 2
+    description: Slew Rate Enable
+  - name: PFE
+    bit_range:
+    - 4
+    - 4
+    description: Passive Filter Enable
+  - name: DSE
+    bit_range:
+    - 6
+    - 6
+    description: Drive Strength Enable
+  - name: MUX
+    bit_range:
+    - 10
+    - 8
+    description: Pin Mux Control
+  - name: IRQC
+    bit_range:
+    - 19
+    - 16
+    description: Interrupt Configuration
+  - name: ISF
+    bit_range:
+    - 24
+    - 24
+    description: Interrupt Status Flag
+  side_effects: null
+- id: PCR27
+  address_offset: 108
+  size: 32
+  access: READ_WRITE
+  reset_value: 5
+  fields:
+  - name: PS
+    bit_range:
+    - 0
+    - 0
+    description: Pull Select
+  - name: PE
+    bit_range:
+    - 1
+    - 1
+    description: Pull Enable
+  - name: SRE
+    bit_range:
+    - 2
+    - 2
+    description: Slew Rate Enable
+  - name: PFE
+    bit_range:
+    - 4
+    - 4
+    description: Passive Filter Enable
+  - name: DSE
+    bit_range:
+    - 6
+    - 6
+    description: Drive Strength Enable
+  - name: MUX
+    bit_range:
+    - 10
+    - 8
+    description: Pin Mux Control
+  - name: IRQC
+    bit_range:
+    - 19
+    - 16
+    description: Interrupt Configuration
+  - name: ISF
+    bit_range:
+    - 24
+    - 24
+    description: Interrupt Status Flag
+  side_effects: null
+- id: PCR28
+  address_offset: 112
+  size: 32
+  access: READ_WRITE
+  reset_value: 5
+  fields:
+  - name: PS
+    bit_range:
+    - 0
+    - 0
+    description: Pull Select
+  - name: PE
+    bit_range:
+    - 1
+    - 1
+    description: Pull Enable
+  - name: SRE
+    bit_range:
+    - 2
+    - 2
+    description: Slew Rate Enable
+  - name: PFE
+    bit_range:
+    - 4
+    - 4
+    description: Passive Filter Enable
+  - name: DSE
+    bit_range:
+    - 6
+    - 6
+    description: Drive Strength Enable
+  - name: MUX
+    bit_range:
+    - 10
+    - 8
+    description: Pin Mux Control
+  - name: IRQC
+    bit_range:
+    - 19
+    - 16
+    description: Interrupt Configuration
+  - name: ISF
+    bit_range:
+    - 24
+    - 24
+    description: Interrupt Status Flag
+  side_effects: null
+- id: PCR29
+  address_offset: 116
+  size: 32
+  access: READ_WRITE
+  reset_value: 5
+  fields:
+  - name: PS
+    bit_range:
+    - 0
+    - 0
+    description: Pull Select
+  - name: PE
+    bit_range:
+    - 1
+    - 1
+    description: Pull Enable
+  - name: SRE
+    bit_range:
+    - 2
+    - 2
+    description: Slew Rate Enable
+  - name: PFE
+    bit_range:
+    - 4
+    - 4
+    description: Passive Filter Enable
+  - name: DSE
+    bit_range:
+    - 6
+    - 6
+    description: Drive Strength Enable
+  - name: MUX
+    bit_range:
+    - 10
+    - 8
+    description: Pin Mux Control
+  - name: IRQC
+    bit_range:
+    - 19
+    - 16
+    description: Interrupt Configuration
+  - name: ISF
+    bit_range:
+    - 24
+    - 24
+    description: Interrupt Status Flag
+  side_effects: null
+- id: PCR30
+  address_offset: 120
+  size: 32
+  access: READ_WRITE
+  reset_value: 5
+  fields:
+  - name: PS
+    bit_range:
+    - 0
+    - 0
+    description: Pull Select
+  - name: PE
+    bit_range:
+    - 1
+    - 1
+    description: Pull Enable
+  - name: SRE
+    bit_range:
+    - 2
+    - 2
+    description: Slew Rate Enable
+  - name: PFE
+    bit_range:
+    - 4
+    - 4
+    description: Passive Filter Enable
+  - name: DSE
+    bit_range:
+    - 6
+    - 6
+    description: Drive Strength Enable
+  - name: MUX
+    bit_range:
+    - 10
+    - 8
+    description: Pin Mux Control
+  - name: IRQC
+    bit_range:
+    - 19
+    - 16
+    description: Interrupt Configuration
+  - name: ISF
+    bit_range:
+    - 24
+    - 24
+    description: Interrupt Status Flag
+  side_effects: null
+- id: PCR31
+  address_offset: 124
+  size: 32
+  access: READ_WRITE
+  reset_value: 5
+  fields:
+  - name: PS
+    bit_range:
+    - 0
+    - 0
+    description: Pull Select
+  - name: PE
+    bit_range:
+    - 1
+    - 1
+    description: Pull Enable
+  - name: SRE
+    bit_range:
+    - 2
+    - 2
+    description: Slew Rate Enable
+  - name: PFE
+    bit_range:
+    - 4
+    - 4
+    description: Passive Filter Enable
+  - name: DSE
+    bit_range:
+    - 6
+    - 6
+    description: Drive Strength Enable
+  - name: MUX
+    bit_range:
+    - 10
+    - 8
+    description: Pin Mux Control
+  - name: IRQC
+    bit_range:
+    - 19
+    - 16
+    description: Interrupt Configuration
+  - name: ISF
+    bit_range:
+    - 24
+    - 24
+    description: Interrupt Status Flag
+  side_effects: null
+- id: GPCLR
+  address_offset: 128
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: GPWD
+    bit_range:
+    - 15
+    - 0
+    description: Global Pin Write Data
+  - name: GPWE
+    bit_range:
+    - 31
+    - 16
+    description: Global Pin Write Enable
+  side_effects: null
+- id: GPCHR
+  address_offset: 132
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: GPWD
+    bit_range:
+    - 15
+    - 0
+    description: Global Pin Write Data
+  - name: GPWE
+    bit_range:
+    - 31
+    - 16
+    description: Global Pin Write Enable
+  side_effects: null
+- id: ISFR
+  address_offset: 160
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ISF
+    bit_range:
+    - 31
+    - 0
+    description: Interrupt Status Flag
+  side_effects: null
+interrupts:
+  PORTA: 30
+timing: null

@@ -98,6 +98,21 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"NRF52840_SMOKE_OK\n",
     },
     SurvivalCase {
+        // NXP KW41Z (Cortex-M0+ BLE + 802.15.4). Bare-metal smoke firmware
+        // (crates/firmware-kw41z-demo) brings up LPUART0 the way the NXP HAL
+        // does — enable CTRL.TE, poll STAT.TDRE, write DATA — and prints the
+        // banner below. Exercises the Kinetis LPUART register layout end to
+        // end: DATA writes reach the TX sink and STAT reports TDRE/TC.
+        name: "kw41z_smoke",
+        core: "cortex-m0+",
+        family: CpuFamily::CortexM,
+        chip: "mkw41z4",
+        system: "frdm-kw41z",
+        fixture: "kw41z-smoke.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x000F_FFFF), (0x1FFF_8000, 0x2001_8000)],
+        expected_uart_output: b"KW41Z_SMOKE_OK\n",
+    },
+    SurvivalCase {
         name: "nrf52832_demo",
         core: "cortex-m4",
         family: CpuFamily::CortexM,
@@ -927,6 +942,11 @@ fn test_nrf52840_demo_survival() {
 #[test]
 fn test_nrf52832_demo_survival() {
     run_survival_case(case_by_name("nrf52832_demo"));
+}
+
+#[test]
+fn test_kw41z_smoke_survival() {
+    run_survival_case(case_by_name("kw41z_smoke"));
 }
 
 #[test]
