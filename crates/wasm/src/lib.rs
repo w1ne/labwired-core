@@ -143,7 +143,13 @@ impl WasmSimulator {
             .map_err(|e| JsValue::from_str(&format!("Bus config error: {:#}", e)))?;
 
         let uart_sink = Arc::new(Mutex::new(Vec::new()));
-        bus.attach_uart_tx_sink(uart_sink.clone(), false);
+        if let Some(debug_uart) = manifest.debug_uart.as_deref() {
+            if !bus.attach_uart_tx_sink_named(debug_uart, uart_sink.clone(), false) {
+                bus.attach_uart_tx_sink(uart_sink.clone(), false);
+            }
+        } else {
+            bus.attach_uart_tx_sink(uart_sink.clone(), false);
+        }
         let uart_rx_bufs = bus.attach_uart_rx_source();
 
         let (cpu, _nvic) = configure_cortex_m(&mut bus);

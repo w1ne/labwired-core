@@ -2104,6 +2104,7 @@ mod tests {
                 config,
             }],
             board_io: vec![],
+            debug_uart: None,
         };
 
         let mut bus = SystemBus::new();
@@ -2167,6 +2168,7 @@ mod tests {
                 config: std::collections::HashMap::new(),
             }],
             board_io: vec![],
+            debug_uart: None,
         };
 
         let mut bus = SystemBus::new();

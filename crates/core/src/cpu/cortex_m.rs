@@ -840,37 +840,39 @@ impl CortexM {
                         _ => {}
                     }
                     let op1 = self.read_reg(rn);
-                    let result = match op {
-                        0x0 => op1 & op2,  // AND
-                        0x1 => op1 & !op2, // BIC
+                    let (result, carry, overflow) = match op {
+                        0x0 => (op1 & op2, self.get_carry(), self.get_overflow()), // AND
+                        0x1 => (op1 & !op2, self.get_carry(), self.get_overflow()), // BIC
                         0x2 => {
                             if rn == 0xF {
-                                op2
+                                (op2, self.get_carry(), self.get_overflow())
                             } else {
-                                op1 | op2
+                                (op1 | op2, self.get_carry(), self.get_overflow())
                             }
                         } // ORR / MOV
                         0x3 => {
                             if rn == 0xF {
-                                !op2
+                                (!op2, self.get_carry(), self.get_overflow())
                             } else {
-                                op1 | !op2
+                                (op1 | !op2, self.get_carry(), self.get_overflow())
                             }
                         } // ORN / MVN
-                        0x4 => op1 ^ op2,  // EOR
-                        0x8 => op1.wrapping_add(op2), // ADD
-                        0xD => op1.wrapping_sub(op2), // SUB
+                        0x4 => (op1 ^ op2, self.get_carry(), self.get_overflow()), // EOR
+                        0x8 => add_with_flags(op1, op2),                           // ADD
+                        0xA => adc_with_flags(op1, op2, self.get_carry() as u32),  // ADC
+                        0xB => sbc_with_flags(op1, op2, self.get_carry() as u32),  // SBC
+                        0xD => sub_with_flags(op1, op2),                           // SUB
                         _ => {
                             #[cfg(debug_assertions)]
                             tracing::warn!("Unknown DataProc32 op {:#x}", op);
-                            op2
+                            (op2, self.get_carry(), self.get_overflow())
                         }
                     };
                     if rd != 15 {
                         self.write_reg(rd, result);
                     }
                     if set_flags {
-                        self.update_nz(result);
+                        self.update_nzcv(result, carry, overflow);
                     }
                     pc_increment = 4;
                 }
@@ -1138,6 +1140,44 @@ impl CortexM {
                             self.set_register(rd, 0); // success
                         }
                         pc_increment = 4;
+                    } else if (h1 & 0xFFF0) == 0xFA80 && (h2 & 0xF0F0) == 0xF040 {
+                        // UADD8 Rd, Rn, Rm: unsigned byte-wise add, setting
+                        // APSR.GE[n] when byte n did not overflow.
+                        let rn = (h1 & 0xF) as u8;
+                        let rd = ((h2 >> 8) & 0xF) as u8;
+                        let rm = (h2 & 0xF) as u8;
+                        let n = self.get_register(rn);
+                        let m = self.get_register(rm);
+                        let mut result = 0u32;
+                        let mut ge = 0u32;
+                        for lane in 0..4 {
+                            let shift = lane * 8;
+                            let sum = ((n >> shift) & 0xFF) + ((m >> shift) & 0xFF);
+                            result |= (sum & 0xFF) << shift;
+                            if sum >= 0x100 {
+                                ge |= 1 << lane;
+                            }
+                        }
+                        self.set_register(rd, result);
+                        self.xpsr = (self.xpsr & !(0xF << 16)) | (ge << 16);
+                        pc_increment = 4;
+                    } else if (h1 & 0xFFF0) == 0xFAA0 && (h2 & 0xF0F0) == 0xF080 {
+                        // SEL Rd, Rn, Rm: select each byte from Rn when the
+                        // corresponding APSR.GE bit is set, otherwise from Rm.
+                        let rn = (h1 & 0xF) as u8;
+                        let rd = ((h2 >> 8) & 0xF) as u8;
+                        let rm = (h2 & 0xF) as u8;
+                        let n = self.get_register(rn);
+                        let m = self.get_register(rm);
+                        let ge = (self.xpsr >> 16) & 0xF;
+                        let mut result = 0u32;
+                        for lane in 0..4 {
+                            let shift = lane * 8;
+                            let src = if (ge & (1 << lane)) != 0 { n } else { m };
+                            result |= src & (0xFF << shift);
+                        }
+                        self.set_register(rd, result);
+                        pc_increment = 4;
                     } else if (h1 & 0xFE00) == 0xE800 {
                         // Table branch, load/store multiple etc — not yet
                         // modeled in full; advance past the 32-bit insn.
@@ -1147,11 +1187,19 @@ impl CortexM {
                         let op1 = (h1 >> 4) & 0xF;
                         let rn = (h1 & 0xF) as u8;
                         let rt = ((h2 >> 12) & 0xF) as u8;
-                        let is_t4 = (op1 & 0x8) == 0;
-                        // When Rn=PC (rn==15), T4 form is always the PC-literal encoding
-                        // (LDR.W Rt, [PC, ±imm12]), never register-offset.
-                        let is_reg_offset = is_t4 && rn != 15 && (h2 & 0x0800) == 0;
-                        if !is_reg_offset {
+                        let is_preload_hint = rt == 15 && matches!(op1 & 0x7, 1 | 3);
+                        if is_preload_hint {
+                            // PLD/PLI preload hints encode in the load-byte /
+                            // load-halfword space with Rt=1111. They do not
+                            // read architected state and must not be treated
+                            // as LDR into PC. newlib strlen emits PLD.
+                            pc_increment = 4;
+                        } else {
+                            let is_t4 = (op1 & 0x8) == 0;
+                            // When Rn=PC (rn==15), T4 form is always the PC-literal encoding
+                            // (LDR.W Rt, [PC, ±imm12]), never register-offset.
+                            let is_reg_offset = is_t4 && rn != 15 && (h2 & 0x0800) == 0;
+                            if !is_reg_offset {
                             let mut supported = true;
                             let addr: u32;
                             let mut wb = false;
@@ -1314,6 +1362,7 @@ impl CortexM {
                             if !branch_taken {
                                 pc_increment = 4;
                             }
+                        }
                         }
                     } else if (h1 & 0xFB00) == 0xF000 && (h2 & 0x8000) == 0 {
                         // Data-processing (modified immediate) - repeated here for safety but usually handled by DataProcImm32
@@ -2045,6 +2094,60 @@ impl CortexM {
                     }
                     pc_increment = 4;
                 }
+                // STMIA.W Rn(!), {reg_list} — 32-bit store multiple, increment
+                // after. Lowest-numbered register stored at the base address.
+                Instruction::StmiaW {
+                    rn,
+                    reg_list,
+                    writeback,
+                } => {
+                    let mut addr = self.read_reg(rn);
+                    for i in 0u8..=14 {
+                        if (reg_list & (1 << i)) != 0 {
+                            let val = self.read_reg(i);
+                            if bus.write_u32(addr as u64, val).is_err() {
+                                tracing::error!("Bus Write Fault (STMIA.W) at {:#x}", addr);
+                            }
+                            addr = addr.wrapping_add(4);
+                        }
+                    }
+                    if writeback {
+                        self.write_reg(rn, addr);
+                    }
+                    pc_increment = 4;
+                }
+                // LDMDB.W Rn(!), {reg_list} — 32-bit load multiple, decrement
+                // before. Lowest-numbered register loaded from the lowest address.
+                Instruction::LdmdbW {
+                    rn,
+                    reg_list,
+                    writeback,
+                } => {
+                    let count = reg_list.count_ones();
+                    let start = self.read_reg(rn).wrapping_sub(count * 4);
+                    let mut addr = start;
+                    for i in 0u8..=14 {
+                        if (reg_list & (1 << i)) != 0 {
+                            if let Ok(val) = bus.read_u32(addr as u64) {
+                                self.write_reg(i, val);
+                            }
+                            addr = addr.wrapping_add(4);
+                        }
+                    }
+                    if writeback {
+                        self.write_reg(rn, start);
+                    }
+                    if (reg_list & (1 << 15)) != 0 {
+                        if let Ok(pc_val) = bus.read_u32(addr as u64) {
+                            self.branch_to(pc_val, bus)?;
+                            pc_increment = 0;
+                        } else {
+                            pc_increment = 4;
+                        }
+                    } else {
+                        pc_increment = 4;
+                    }
+                }
                 // LDMIA.W Rn(!), {reg_list} — 32-bit load multiple, increment after.
                 // Lowest-numbered register loaded from lowest address.
                 Instruction::LdmiaW {
@@ -2549,6 +2652,96 @@ mod tests {
     }
 
     #[test]
+    fn test_arm_dataproc_shifted_adc_sbc() {
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x3000;
+
+        // ADC.W r9, r3, r5 = EB43 0905. This exact form is emitted by the
+        // real Cortex-M4 AL2205 firmware build.
+        cpu.r3 = 0xFFFF_FFFF;
+        cpu.r5 = 0;
+        cpu.xpsr |= 1 << 29; // C set
+        run_test_instr(&mut cpu, &mut bus, 0xEB43_0905, true);
+        assert_eq!(cpu.r9, 0);
+        assert!(cpu.get_carry());
+
+        // SBC.W r3, r1, r3 = EB61 0303.
+        cpu.r1 = 10;
+        cpu.r3 = 3;
+        cpu.xpsr |= 1 << 29; // no borrow
+        run_test_instr(&mut cpu, &mut bus, 0xEB61_0303, true);
+        assert_eq!(cpu.r3, 7);
+        assert!(cpu.get_carry());
+    }
+
+    #[test]
+    fn test_arm_simd_uadd8_sel() {
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x3000;
+
+        // UADD8 r2, r2, ip = FA82 F24C, emitted by newlib strlen.
+        cpu.r2 = 0x00_FF_7F_01;
+        cpu.r12 = 0x01_01_81_FF;
+        run_test_instr(&mut cpu, &mut bus, 0xFA82_F24C, true);
+        assert_eq!(cpu.r2, 0x01_00_00_00);
+        assert_eq!((cpu.xpsr >> 16) & 0xF, 0b0111);
+
+        // SEL r3, r2, ip = FAA2 F38C: GE-set bytes come from Rn, others from Rm.
+        cpu.pc = 0x3004;
+        cpu.r2 = 0x11_22_33_44;
+        cpu.r12 = 0xAA_BB_CC_DD;
+        cpu.xpsr = (cpu.xpsr & !(0xF << 16)) | (0b1010 << 16);
+        run_test_instr(&mut cpu, &mut bus, 0xFAA2_F38C, true);
+        assert_eq!(cpu.r3, 0x11_BB_33_DD);
+
+        // strlen zero-byte detector: UADD8 with 0xFFFF_FFFF clears GE for
+        // zero bytes, then SEL r2, r4, ip must produce 0xFF in those lanes.
+        cpu.pc = 0x3008;
+        cpu.r2 = 0x0043_4241;
+        cpu.r12 = 0xFFFF_FFFF;
+        run_test_instr(&mut cpu, &mut bus, 0xFA82_F24C, true);
+        cpu.pc = 0x300c;
+        cpu.r4 = 0;
+        run_test_instr(&mut cpu, &mut bus, 0xFAA4_F28C, true);
+        assert_eq!(cpu.r2, 0xFF00_0000);
+    }
+
+    #[test]
+    fn test_thumb2_pld_hint_is_nop() {
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x3000;
+        cpu.r0 = 0x5000;
+        cpu.r1 = 0x6000;
+
+        // PLD [r0] = F890 F000, emitted by newlib strlen. Rt=15 is a hint,
+        // not a real load into PC.
+        run_test_instr(&mut cpu, &mut bus, 0xF890_F000, true);
+        assert_eq!(cpu.pc, 0x3004);
+        assert_eq!(cpu.r0, 0x5000);
+
+        // PLD [r1, #32] = F891 F020.
+        run_test_instr(&mut cpu, &mut bus, 0xF891_F020, true);
+        assert_eq!(cpu.pc, 0x3008);
+        assert_eq!(cpu.r1, 0x6000);
+    }
+
+    #[test]
+    fn test_thumb16_rev() {
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x3000;
+        cpu.r2 = 0x1122_3344;
+
+        // REV r2, r2 = BA12, emitted by newlib strlen.
+        run_test_instr(&mut cpu, &mut bus, 0xBA12, false);
+        assert_eq!(cpu.r2, 0x4433_2211);
+        assert_eq!(cpu.pc, 0x3002);
+    }
+
+    #[test]
     fn test_arm_ldrd_strd() {
         let mut cpu = CortexM::new();
         let mut bus = MockBus::new();
@@ -2568,6 +2761,68 @@ mod tests {
         run_test_instr(&mut cpu, &mut bus, 0xE9D23402, true);
         assert_eq!(cpu.r3, 0x11111111);
         assert_eq!(cpu.r4, 0x22222222);
+    }
+
+    #[test]
+    fn test_thumb2_stmia_ldmdb_wide_addressing() {
+        // Regression: the 0xE8xx/0xE9xx LDM/STM group was decoded as STM=>DB,
+        // LDM=>IA unconditionally, so STMIA.W (the compiler's struct-copy idiom)
+        // stored *below* the base instead of at it. Verify both addressing modes.
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x4000;
+        cpu.r2 = 0x5000;
+        cpu.r0 = 0xAAAA_AAAA;
+        cpu.r1 = 0xBBBB_BBBB;
+
+        // STMIA.W r2, {r0, r1}  (no writeback) = 0xE882 0003 — stores at the base.
+        run_test_instr(&mut cpu, &mut bus, 0xE882_0003, true);
+        assert_eq!(bus.read_u32(0x5000).unwrap(), 0xAAAA_AAAA);
+        assert_eq!(bus.read_u32(0x5004).unwrap(), 0xBBBB_BBBB);
+        assert_eq!(cpu.r2, 0x5000, "no writeback leaves Rn unchanged");
+
+        // STMIA.W r2!, {r0, r1} (writeback) = 0xE8A2 0003 — advances Rn by 8.
+        cpu.r2 = 0x6000;
+        run_test_instr(&mut cpu, &mut bus, 0xE8A2_0003, true);
+        assert_eq!(bus.read_u32(0x6000).unwrap(), 0xAAAA_AAAA);
+        assert_eq!(cpu.r2, 0x6008, "writeback advances Rn");
+
+        // LDMDB.W r2, {r3, r4} = 0xE912 0018 — loads from below the base.
+        cpu.r2 = 0x5008;
+        run_test_instr(&mut cpu, &mut bus, 0xE912_0018, true);
+        assert_eq!(cpu.r3, 0xAAAA_AAAA);
+        assert_eq!(cpu.r4, 0xBBBB_BBBB);
+        assert_eq!(cpu.r2, 0x5008, "no writeback leaves Rn unchanged");
+    }
+
+    #[test]
+    fn test_thumb2_post_index_word_load_store() {
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x4000;
+
+        // STR.W r5, [r2], #4 = F842 5B04, emitted by newlib memset.
+        cpu.r2 = 0x5000;
+        cpu.r5 = 0xA5A5_5A5A;
+        run_test_instr(&mut cpu, &mut bus, 0xF842_5B04, true);
+        assert_eq!(bus.read_u32(0x5000).unwrap(), 0xA5A5_5A5A);
+        assert_eq!(cpu.r2, 0x5004, "post-index STR writes back Rn");
+
+        // LDR.W r3, [r1], #4 = F851 3B04, emitted by newlib memcpy.
+        cpu.pc = 0x4004;
+        cpu.r1 = 0x6000;
+        bus.write_u32(0x6000, 0x1122_3344).unwrap();
+        run_test_instr(&mut cpu, &mut bus, 0xF851_3B04, true);
+        assert_eq!(cpu.r3, 0x1122_3344);
+        assert_eq!(cpu.r1, 0x6004, "post-index LDR writes back Rn");
+
+        // STR.W r3, [r0], #4 = F840 3B04, emitted by newlib memcpy.
+        cpu.pc = 0x4008;
+        cpu.r0 = 0x7000;
+        cpu.r3 = 0x5566_7788;
+        run_test_instr(&mut cpu, &mut bus, 0xF840_3B04, true);
+        assert_eq!(bus.read_u32(0x7000).unwrap(), 0x5566_7788);
+        assert_eq!(cpu.r0, 0x7004, "post-index STR writes back Rn");
     }
 
     #[test]

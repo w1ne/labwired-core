@@ -13,7 +13,7 @@ use std::str::FromStr;
 // use std::sync::atomic::Ordering; // Removed as unused
 use labwired_core::{Bus, Cpu};
 use std::sync::{Arc, Mutex};
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 mod api_client;
 mod asset_validation;
@@ -874,6 +874,7 @@ fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
         memory_overrides: Default::default(),
         external_devices: vec![],
         board_io: vec![],
+        debug_uart: None,
         peripherals: vec![],
         walk_deleted: false,
     };
@@ -4355,7 +4356,21 @@ fn run_test(args: TestArgs) -> ExitCode {
     };
 
     let uart_tx = Arc::new(Mutex::new(Vec::new()));
-    bus.attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
+    let debug_uart = system_path
+        .as_ref()
+        .and_then(|path| labwired_config::SystemManifest::from_file(path).ok())
+        .and_then(|manifest| manifest.debug_uart);
+    if let Some(debug_uart) = debug_uart.as_deref() {
+        if !bus.attach_uart_tx_sink_named(debug_uart, uart_tx.clone(), !args.no_uart_stdout) {
+            warn!(
+                "debug_uart '{}' did not resolve to a UART peripheral; falling back to all UARTs",
+                debug_uart
+            );
+            bus.attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
+        }
+    } else {
+        bus.attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
+    }
 
     let program = match labwired_loader::load_elf(&firmware_path) {
         Ok(program) => program,

@@ -130,6 +130,7 @@ fn dummy_manifest(path: &str) -> labwired_config::SystemManifest {
         chip: path.to_string(),
         external_devices: vec![],
         board_io: vec![],
+        debug_uart: None,
         peripherals: vec![],
         memory_overrides: Default::default(),
     }
