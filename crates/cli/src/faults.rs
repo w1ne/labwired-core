@@ -48,6 +48,15 @@ fn apply_one(bus: &mut SystemBus, f: &FaultSpec) -> FaultEvidence {
                 ),
             }
         }
+        FaultKind::MissingClock => match f.target.peripheral.as_deref() {
+            // fired is provisional here — it is finalised after the run, since
+            // missing_clock only fires if the firmware accessed the peripheral.
+            Some(p) => match bus.inject_missing_clock(p) {
+                Ok(()) => (false, None),
+                Err(e) => (false, Some(e)),
+            },
+            None => (false, Some("missing target.peripheral".to_string())),
+        },
         other => (
             false,
             Some(format!("fault kind {other:?} not yet implemented")),
@@ -58,6 +67,30 @@ fn apply_one(bus: &mut SystemBus, f: &FaultSpec) -> FaultEvidence {
         kind,
         fired,
         error,
+    }
+}
+
+/// Finalise runtime-observed fault outcomes after the run. For `missing_clock`,
+/// the fault fired only if the firmware actually accessed the unclocked
+/// peripheral (an access was suppressed). Apply-time-known kinds are left as-is.
+pub fn finalize_fault_evidence(
+    bus: &SystemBus,
+    faults: &[FaultSpec],
+    evidence: &mut [FaultEvidence],
+) {
+    for f in faults {
+        if !matches!(f.kind, FaultKind::MissingClock) {
+            continue;
+        }
+        let Some(ev) = evidence.iter_mut().find(|e| e.id == f.id) else {
+            continue;
+        };
+        if ev.error.is_some() {
+            continue; // could not be applied; keep it not-fired with its reason
+        }
+        if let Some(p) = f.target.peripheral.as_deref() {
+            ev.fired = bus.missing_clock_suppressed(p) > 0;
+        }
     }
 }
 
@@ -123,5 +156,59 @@ mod tests {
             .as_ref()
             .unwrap()
             .contains("not yet implemented"));
+    }
+
+    #[test]
+    fn missing_clock_apply_then_finalize_on_access() {
+        use labwired_config::{Access, PeripheralDescriptor, RegisterDescriptor};
+        use labwired_core::peripherals::declarative::GenericPeripheral;
+
+        let desc = PeripheralDescriptor {
+            peripheral: "t".to_string(),
+            version: "1.0".to_string(),
+            registers: vec![RegisterDescriptor {
+                id: "r".to_string(),
+                address_offset: 0,
+                size: 32,
+                access: Access::ReadWrite,
+                reset_value: 0xAB,
+                fields: vec![],
+                side_effects: None,
+            }],
+            interrupts: None,
+            timing: None,
+        };
+        let mut bus = SystemBus::new();
+        bus.add_peripheral(
+            "usart1",
+            0x4000_0000,
+            0x400,
+            None,
+            Box::new(GenericPeripheral::new(desc)),
+        );
+
+        let f = spec(
+            "mc",
+            FaultKind::MissingClock,
+            FaultTarget {
+                peripheral: Some("usart1".to_string()),
+                ..Default::default()
+            },
+            None,
+        );
+        let mut ev = apply_faults(&mut bus, std::slice::from_ref(&f));
+        assert!(!ev[0].fired, "fired is provisional before the run");
+
+        // No access yet: still not fired.
+        finalize_fault_evidence(&bus, std::slice::from_ref(&f), &mut ev);
+        assert!(!ev[0].fired);
+
+        // The firmware accesses the unclocked peripheral: now it fires.
+        let _ = bus.read_u32(0x4000_0000);
+        finalize_fault_evidence(&bus, std::slice::from_ref(&f), &mut ev);
+        assert!(
+            ev[0].fired,
+            "missing_clock fires once the peripheral is accessed"
+        );
     }
 }
