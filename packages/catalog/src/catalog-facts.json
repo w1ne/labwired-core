@@ -19,6 +19,7 @@
     "esp32-s3-zero",
     "ili9341",
     "iolink-master",
+    "iolink-transceiver",
     "ir",
     "keypad",
     "l293d",
