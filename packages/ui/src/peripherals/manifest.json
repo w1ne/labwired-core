@@ -262,7 +262,7 @@
         {
           "board_id": "al2205-iolink-dido",
           "chip": "stm32l476",
-          "example_dir": "al2205-iolink-dido",
+          "example_dir": "iolink-dido",
           "demo_elf": "demo-al2205-iolink-dido.elf"
         }
       ]
@@ -323,7 +323,7 @@
         {
           "board_id": "al2205-iolink-dido",
           "chip": "stm32l476",
-          "example_dir": "al2205-iolink-dido",
+          "example_dir": "iolink-dido",
           "demo_elf": "demo-al2205-iolink-dido.elf"
         }
       ]

@@ -270,6 +270,10 @@ function diagnoseWireEndpoints(
     return null;
   }
 
+  if (boardIoEnd.part?.type === 'iolink-master' && otherEnd.part?.type === 'iolink-transceiver') {
+    return null;
+  }
+
   if (!otherEnd.isMcu) {
     return {
       severity: 'error',

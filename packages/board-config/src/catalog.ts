@@ -101,6 +101,18 @@ export const CATALOG: Record<string, CatalogPart> = {
       p('CAN_L', 'passive'),
     ],
   },
+  'iolink-transceiver': {
+    type: 'iolink-transceiver',
+    deviceClass: 'passive',
+    pins: [
+      p('TXD', 'input'),
+      p('RXD', 'output'),
+      p('VCC', 'power_in'),
+      p('GND', 'power_in'),
+      p('CQ', 'bidirectional'),
+      p('L+', 'power_in'),
+    ],
+  },
   'can-diagnostic-tool': {
     type: 'can-diagnostic-tool',
     deviceClass: 'tool',

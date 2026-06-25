@@ -145,6 +145,9 @@ function diagnoseWireEndpoints(diagram: Diagram, from: WireEndpoint, to: WireEnd
   const otherEnd = boardIoEnd === a ? b : a;
   if (!boardIoEnd) return null;
   if (hasProbeEndpoint(diagram, from, to)) return null;
+  if (boardIoEnd.part?.type === 'iolink-master' && otherEnd.part?.type === 'iolink-transceiver') {
+    return null;
+  }
 
   if (!otherEnd.isMcu) {
     return {
