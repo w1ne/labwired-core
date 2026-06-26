@@ -126,6 +126,12 @@ fn leo_normal_scenario_boots_all_sensors_and_flips_verdict() {
     assert_contains(&run.uart, "air quality is good", ctx);
     assert_contains(&run.uart, "crack a window", ctx);
 
+    // Mold Index: as the closed room's humidity climbs into the mold-favorable
+    // band, the derived mold risk escalates from low to elevated — the metric
+    // Leo's mold-detection use case is built around.
+    assert_contains(&run.uart, "mold risk: low", ctx);
+    assert_contains(&run.uart, "mold risk: ELEVATED", ctx);
+
     // The run completes and the OLED rendered a real frame.
     assert_contains(&run.uart, "LEO DONE", ctx);
     assert_oled_rendered(&run.uart, ctx);

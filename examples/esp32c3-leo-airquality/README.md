@@ -39,12 +39,24 @@ CO2  1395 PPM
 PM2.5 22 UG
 VOC 0
 LIGHT 91 LX
-TEMP 23C RH 50%
-
->CRACK A WINDOW
+TEMP 23C RH 68%
+MOLD  HIGH
+>MOLD RISK HIGH
 ```
 
 (the stuffy scenario shows `>VENTILATE NOW`).
+
+## Mold Index
+
+Beyond the raw readings the firmware derives a **Mold Index** — the headline
+metric commercial IAQ monitors report and the one Leo's mold-detection use case
+is built around. Mold is not a sensor reading: it germinates when humidity stays
+high in a livable temperature band, and the longer a room sits damp the higher
+the risk. The firmware tracks a dwell counter of consecutive mold-favorable
+cycles and combines it with the humidity level — entirely from the SCD41's
+temperature and humidity, no extra hardware. As the closed room's humidity
+climbs past ~60 %RH the verdict escalates `low → watch → ELEVATED → HIGH` and
+takes over the OLED headline.
 
 ## How it works
 

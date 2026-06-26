@@ -26,7 +26,8 @@ external_devices:
       co2_target_ppm: 1400.0  # stuffy, closed-room steady state
       ramp_alpha: 0.08        # per-measurement approach rate (0 = flat scene)
       temp_c: 22.0
-      rh_pct: 45.0
+      rh_pct: 50.0            # closed room, mild humidity
+      rh_target_pct: 72.0     # climbs into mold-favorable range as it fills
 
   # ── Sensirion SGP41: VOC / NOx raw signals (→ VOC Index on-device) ─────────
   - id: "sgp41"

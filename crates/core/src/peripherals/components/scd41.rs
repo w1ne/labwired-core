@@ -60,6 +60,7 @@ pub struct Scd41 {
 impl Scd41 {
     /// Build with explicit scene parameters. `co2_start`/`co2_target` in ppm,
     /// `alpha` the per-measurement ramp rate (0 = flat scene).
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         address: u8,
         co2_start: f64,
@@ -67,15 +68,17 @@ impl Scd41 {
         alpha: f64,
         temp_c: f64,
         rh: f64,
+        rh_target: f64,
     ) -> Self {
         let address = if address == 0 { SCD41_ADDR } else { address };
         Self {
             address,
             co2: Ramp::new(co2_start, co2_target, alpha),
-            // Temperature/humidity drift gently upward as a room fills; pin them
-            // flat if alpha is 0 so a "frozen" scenario stays put.
+            // Temperature/humidity drift upward as a room fills; pin them flat if
+            // alpha is 0 so a "frozen" scenario stays put. The humidity target is
+            // configurable so a damp room can climb into mold-favorable range.
             temp_c: Ramp::new(temp_c, temp_c + 1.5, alpha * 0.5),
-            rh: Ramp::new(rh, rh + 6.0, alpha * 0.5),
+            rh: Ramp::new(rh, rh_target, alpha * 0.5),
             periodic_running: false,
             write_buf: Vec::with_capacity(8),
             read_buf: Vec::new(),
@@ -83,9 +86,9 @@ impl Scd41 {
         }
     }
 
-    /// Default fresh→stuffy scenario: 450 → 1400 ppm at 22 °C / 45 %RH.
+    /// Default fresh→stuffy scenario: 450 → 1400 ppm at 22 °C / 45 → 51 %RH.
     pub fn new_default(address: u8) -> Self {
-        Self::new(address, 450.0, 1400.0, 0.08, 22.0, 45.0)
+        Self::new(address, 450.0, 1400.0, 0.08, 22.0, 45.0, 51.0)
     }
 
     fn encode_temperature(t_c: f64) -> u16 {
@@ -225,6 +228,12 @@ static SCD41_METADATA: KitMetadata = KitMetadata {
             ty: ConfigType::Float,
             doc: "Starting relative humidity, %. Default 45.0.",
         },
+        ConfigKey {
+            name: "rh_target_pct",
+            ty: ConfigType::Float,
+            doc: "Steady-state relative humidity the room climbs toward, %. \
+                  Default rh_pct + 6. Raise above 60 for a damp, mold-favorable room.",
+        },
     ],
     labs: &[LabRef {
         board_id: "leo-airquality-lab",
@@ -245,8 +254,9 @@ impl PeripheralKit for Scd41Kit {
         let alpha = ctx.config_f64("ramp_alpha").unwrap_or(0.08);
         let temp_c = ctx.config_f64("temp_c").unwrap_or(22.0);
         let rh = ctx.config_f64("rh_pct").unwrap_or(45.0);
+        let rh_target = ctx.config_f64("rh_target_pct").unwrap_or(rh + 6.0);
         ctx.attach_i2c_device(Box::new(Scd41::new(
-            address, co2_start, co2_target, alpha, temp_c, rh,
+            address, co2_start, co2_target, alpha, temp_c, rh, rh_target,
         )))
     }
 }
@@ -361,7 +371,7 @@ mod tests {
 
     #[test]
     fn flat_scenario_holds_co2() {
-        let mut d = Scd41::new(SCD41_ADDR, 800.0, 800.0, 0.0, 22.0, 45.0);
+        let mut d = Scd41::new(SCD41_ADDR, 800.0, 800.0, 0.0, 22.0, 45.0, 45.0);
         let mut seen = vec![];
         for _ in 0..5 {
             send_cmd(&mut d, CMD_READ_MEASUREMENT);
