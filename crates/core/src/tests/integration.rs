@@ -1175,12 +1175,16 @@ pub mod integration_tests {
         machine.bus.write_u32(0xE000_E014, 1).unwrap();
         machine.bus.write_u32(0xE000_E010, 3).unwrap();
 
-        // Step 1: PC=0x2000_0000. Ticks SysTick.
-        // SysTick wrap triggers exception 15.
+        // Reload step: writing SYST_CVR cleared the counter to 0, so the first
+        // tick reloads RVR (=1) without firing — SysTick is edge-triggered on a
+        // count-down to zero, not on a held zero.
         let _ = machine.step();
 
-        // Step 2: Next step should detect pending exception AND handle it.
-        // It should perform stacking and jump to 0x1000.
+        // Step 1: counter 1->0, SysTick wrap pends exception 15.
+        let _ = machine.step();
+
+        // Step 2: next step detects the pending exception AND handles it —
+        // stacking and jumping to 0x1000.
         let _ = machine.step();
 
         assert_eq!(machine.cpu.pc, 0x1000);
@@ -1206,11 +1210,15 @@ pub mod integration_tests {
         machine.cpu.r0 = 10;
         machine.cpu.r7 = 20;
 
-        // 3. Trigger SysTick
-        machine.bus.write_u32(0xE000_E014, 100).unwrap();
+        // 3. Trigger SysTick (Reload=1 so the wrap is one count-down away).
+        machine.bus.write_u32(0xE000_E014, 1).unwrap();
         machine.bus.write_u32(0xE000_E010, 3).unwrap();
 
-        // Step 1: Wrap SysTick
+        // Reload step: writing SYST_CVR cleared the counter to 0; the first tick
+        // reloads RVR without firing (edge-triggered on count-down to zero).
+        machine.step().unwrap();
+
+        // Step 1: counter 1->0, SysTick wraps and pends exception 15.
         machine.step().unwrap();
 
         // Step 2: Handle Exception (Entry)
@@ -1233,8 +1241,10 @@ pub mod integration_tests {
         // Step 4: Execute BX LR (Exception Return)
         machine.step().unwrap();
 
-        // 5. Verify restored state
-        assert_eq!(machine.cpu.pc, 0x2000_0002); // Back at original PC + 2
+        // 5. Verify restored state. Two instructions ran at the (zeroed) reset
+        // PC before the wrap — the reload tick step and the count-down step —
+        // each a 2-byte NOP, so the interrupted/restored PC is original + 4.
+        assert_eq!(machine.cpu.pc, 0x2000_0004);
         assert_eq!(machine.cpu.r0, 10); // Original R0 restored!
         assert_eq!(machine.cpu.sp, 0x2002_0000); // SP restored
         assert_eq!(machine.cpu.r7, 20); // R7 was untouched
