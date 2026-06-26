@@ -798,11 +798,30 @@ impl Uart {
     /// 8-bit LSR and a 32-bit STAT share one path.
     fn status_word(&self, rx_present: bool) -> u32 {
         let m = self.layout.regmap();
-        if rx_present {
+        let mut v = if rx_present {
             (m.status_idle & !m.rx_present_clear) | m.rx_present_set
         } else {
             m.status_idle
+        };
+        // Modern STM32 USART (ISR at 0x1C): bits 21/22 are TEACK/REACK — hardware
+        // sets them once the transmitter/receiver are acknowledged after the USART
+        // is enabled (UE) with TE/RE, and Zephyr's uart_stm32_init spins on TEACK.
+        // They are 0 while the USART is disabled, so a reset-state ISR read still
+        // sees status_idle (0xC0). The legacy SR has no such bits.
+        if matches!(self.layout, UartRegisterLayout::Stm32V2) {
+            const UE: u32 = 1 << 0;
+            const RE: u32 = 1 << 2;
+            const TE: u32 = 1 << 3;
+            if self.cr1 & UE != 0 {
+                if self.cr1 & TE != 0 {
+                    v |= 1 << 21; // TEACK
+                }
+                if self.cr1 & RE != 0 {
+                    v |= 1 << 22; // REACK
+                }
+            }
         }
+        v
     }
     fn tx_offset(&self) -> u64 {
         self.layout.regmap().tx
@@ -1148,6 +1167,24 @@ mod tests {
         let data = sink.lock().unwrap().clone();
         assert_eq!(data, vec![b'Y']);
         assert_eq!(uart.read(0x1C).unwrap(), 0xC0); // ISR ready flags
+    }
+
+    /// Modern-USART ISR exposes TEACK (bit 21) / REACK (bit 22), but ONLY once
+    /// the USART is enabled (CR1.UE) with TE/RE set — Zephyr's uart_stm32_init
+    /// spins on TEACK after enabling, while firmware that samples ISR at reset
+    /// (CONFIG read-back) must still see 0xC0. Word reads must serve the upper
+    /// bytes too, since the driver reads ISR with a 32-bit load.
+    #[test]
+    fn test_uart_v2_teack_gated_on_enable() {
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::Stm32V2);
+        // Reset: UART disabled → no TEACK/REACK.
+        assert_eq!(uart.read_u32(0x1C).unwrap(), 0xC0);
+        // CR1 (offset 0x00 on v2) = UE | TE | RE = 0xD.
+        uart.write(0x00, 0x0D).unwrap();
+        let isr = uart.read_u32(0x1C).unwrap();
+        assert_ne!(isr & (1 << 21), 0, "TEACK set once UE+TE");
+        assert_ne!(isr & (1 << 22), 0, "REACK set once UE+RE");
+        assert_eq!(isr & 0xC0, 0xC0, "TXE/TC still present");
     }
 
     #[test]
