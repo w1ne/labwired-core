@@ -1030,11 +1030,43 @@ pub fn load_test_script<P: AsRef<Path>>(path: P) -> Result<LoadedTestScript> {
 
 pub fn parse_size(size_str: &str) -> Result<u64> {
     use human_size::{Byte, Size, SpecificSize};
-    let s: Size = size_str
+    let trimmed = size_str.trim();
+    // A bare integer is a raw byte count. `human_size` rejects unit-less values
+    // with "no multiple", but many chip configs give sizes as plain bytes
+    // (e.g. `1048576`), so accept those directly before falling back to the
+    // unit-aware parser ("512KB", "1.5 MiB", …).
+    if let Ok(bytes) = trimmed.parse::<u64>() {
+        return Ok(bytes);
+    }
+    let s: Size = trimmed
         .parse()
         .map_err(|e| anyhow::anyhow!("Invalid size format: {}", e))?;
     let bytes: SpecificSize<Byte> = s.into();
     Ok(bytes.value() as u64)
+}
+
+#[cfg(test)]
+mod parse_size_tests {
+    use super::parse_size;
+
+    #[test]
+    fn bare_integers_are_byte_counts() {
+        assert_eq!(parse_size("1048576").unwrap(), 1_048_576);
+        assert_eq!(parse_size("262144").unwrap(), 262_144);
+        assert_eq!(parse_size("  4096  ").unwrap(), 4096);
+    }
+
+    #[test]
+    fn unit_suffixes_still_parse() {
+        assert_eq!(parse_size("512KB").unwrap(), 524_288);
+        assert_eq!(parse_size("1564672B").unwrap(), 1_564_672);
+        assert_eq!(parse_size("1KB").unwrap(), 1024);
+    }
+
+    #[test]
+    fn garbage_still_errors() {
+        assert!(parse_size("not-a-size").is_err());
+    }
 }
 
 #[cfg(test)]

@@ -17,7 +17,8 @@ use labwired_config::ExternalDevice;
 
 use crate::bus::SystemBus;
 use crate::peripherals::adc::Adc;
-use crate::peripherals::i2c::I2c;
+use crate::peripherals::esp32c3::i2c::Esp32c3I2c;
+use crate::peripherals::i2c::{I2c, I2cDevice};
 use crate::peripherals::spi::Spi;
 use crate::peripherals::uart::Uart;
 
@@ -94,6 +95,34 @@ impl<'a> AttachCtx<'a> {
             .ok_or_else(|| downcast_err(ext))?;
         any.downcast_mut::<I2c>()
             .ok_or_else(|| wrong_transport_err(ext, "I2C"))
+    }
+
+    /// Attach an [`I2cDevice`] slave to whichever I²C controller the
+    /// `connection:` field resolves to — the STM32 `I2c` enum *or* the
+    /// ESP32-C3 `Esp32c3I2c` command-list controller. The two controllers
+    /// expose different attach methods (`attach` vs `attach_slave`), so a kit
+    /// that called `ctx.i2c()?.attach(...)` directly would only work on STM32
+    /// buses. Going through this method lets one kit serve a sensor on either
+    /// family without caring which bus the system.yaml wired it to.
+    pub fn attach_i2c_device(&mut self, device: Box<dyn I2cDevice>) -> Result<()> {
+        let ext = self.ext;
+        let idx = self
+            .bus
+            .find_peripheral_index_by_name(&ext.connection)
+            .ok_or_else(|| missing_connection_err(ext))?;
+        let any = self.bus.peripherals[idx]
+            .dev
+            .as_any_mut()
+            .ok_or_else(|| downcast_err(ext))?;
+        if let Some(i2c) = any.downcast_mut::<I2c>() {
+            i2c.attach(device);
+            return Ok(());
+        }
+        if let Some(c3) = any.downcast_mut::<Esp32c3I2c>() {
+            c3.attach_slave(device);
+            return Ok(());
+        }
+        Err(wrong_transport_err(ext, "I2C"))
     }
 
     /// Acquire the ADC peripheral declared in the system.yaml `connection:`

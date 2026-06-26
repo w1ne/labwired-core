@@ -34,6 +34,11 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::iolink_master::IOLINK_MASTER_KIT,
     &components::ntc_thermistor::NTC_THERMISTOR_KIT,
     &components::vl53l1x::VL53L1X_KIT,
+    // Leo air-quality board sensors (ESP32-C3 I²C).
+    &components::scd41::SCD41_KIT,
+    &components::sgp41::SGP41_KIT,
+    &components::sps30::SPS30_KIT,
+    &components::veml7700::VEML7700_KIT,
 ];
 
 /// Borrow the registry slice.

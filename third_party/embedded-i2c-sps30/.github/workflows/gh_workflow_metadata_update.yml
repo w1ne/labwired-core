@@ -1,0 +1,11 @@
+name: Driver Index Metadata Update
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  driver-index-metadata-update:
+    uses: sensirion/.github/.github/workflows/driver.common.di_metadata_update.yml@main
+    secrets: inherit
