@@ -1,0 +1,11 @@
+[package]
+name = "validation-report"
+version = "0.1.0"
+edition = "2021"
+description = "Aggregates labwired's per-chip model-fidelity evidence (tier-1 matrix, silicon reset-conformance, SVD coverage) into one provenanced validation report."
+
+[dependencies]
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }

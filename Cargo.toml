@@ -49,6 +49,7 @@ members = [
     "crates/hw-trace",
     "crates/ir",
     "crates/loader",
+    "crates/validation-report",
     "crates/python",
     "crates/riscv-ci-fixture",
     "crates/svd-ingestor",
