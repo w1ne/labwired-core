@@ -149,12 +149,10 @@ impl I2cDevice for Veml7700 {
         match self.write_buf.len() {
             1 => self.pointer = data,
             // 16-bit LE config write: low byte then high byte.
-            3 => {
-                if (self.pointer as usize) < self.conf.len() {
-                    let lo = self.write_buf[1] as u16;
-                    let hi = self.write_buf[2] as u16;
-                    self.conf[self.pointer as usize] = (hi << 8) | lo;
-                }
+            3 if (self.pointer as usize) < self.conf.len() => {
+                let lo = self.write_buf[1] as u16;
+                let hi = self.write_buf[2] as u16;
+                self.conf[self.pointer as usize] = (hi << 8) | lo;
             }
             _ => {}
         }

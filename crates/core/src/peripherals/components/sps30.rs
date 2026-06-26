@@ -348,7 +348,7 @@ mod tests {
             }
             last = pm2_5;
         }
-        assert!(first >= 5.0 && first < 10.0, "starts fresh-ish: {first}");
+        assert!((5.0..10.0).contains(&first), "starts fresh-ish: {first}");
         assert!(last > 18.0, "PM2.5 climbs toward target: {last}");
     }
 
