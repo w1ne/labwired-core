@@ -8,14 +8,62 @@ flash:
   size: "2MB"
 ram:
   base: 0x20000000
-  size: "256KB"
+  # 264KB contiguous: 4×64KB striped banks + the two 4KB scratch banks
+  # (SCRATCH_X @0x20040000, SCRATCH_Y @0x20041000) Zephyr uses for early stacks.
+  size: "264KB"
+# The RP2040 bootrom runs a 256-byte second-stage bootloader (boot2) from the
+# top of flash; the application vector table follows it at flash_base + 0x100.
+# LabWired does not execute boot2 (flash is directly mapped), so it relocates
+# the reset vector past the stage-2 blob using this offset.
+reset_vector_offset: 0x100
+# The RP2040 HAL drives register setup through atomic SET/CLR/XOR aliases.
+atomic_register_aliases: true
 peripherals:
   - id: "pio0"
     type: "pio"
     base_address: 0x50200000
     size: "4KB"
+  # CLOCKS / RESETS / PSM / XOSC / PLL_SYS / PLL_USB as one block. Models the
+  # boot "ready" bits (RESET_DONE, XOSC STABLE, PLL LOCK, CLK_*_SELECTED) so
+  # Zephyr's clock bring-up completes; everything else is register storage.
+  # Window 0x40008000..0x40030000 stops short of UART0 (0x40034000).
+  - id: "clk_rst"
+    type: "rp2040_clkrst"
+    base_address: 0x40008000
+    size: "160KB"
   - id: "uart0"
     type: "uart"
     base_address: 0x40034000
     config:
-      profile: "stm32v2"
+      profile: "pl011"
+  # ROSC (ring oscillator): same model, separate window above UART0. Models
+  # ROSC.STATUS.STABLE so the ROSC start-up poll terminates.
+  - id: "rosc"
+    type: "rp2040_clkrst"
+    base_address: 0x40060000
+    size: "4KB"
+  # WATCHDOG: Zephyr writes the tick generator once during boot; storage is
+  # enough (it is not polled before the console comes up).
+  - id: "watchdog"
+    type: "stub"
+    base_address: 0x40058000
+    size: "4KB"
+  # TIMER: 64-bit microsecond timer. Storage suffices for boot.
+  - id: "timer"
+    type: "stub"
+    base_address: 0x40054000
+    size: "4KB"
+  # Cortex-M0+ SysTick (SCS). A storage stub: Zephyr's tick driver configures
+  # it during boot but the console banner prints before the first tick, and the
+  # behavioural SysTick model fires its exception too early for this boot path.
+  # Driving the kernel tick on the RP2040 is left as follow-up work.
+  - id: "systick"
+    type: "stub"
+    base_address: 0xE000E010
+    size: "16B"
+  # Single-cycle IO (SIO): CPUID reads 0 (core 0), GPIO out/oe set/clr absorbed.
+  # No atomic aliases on this block.
+  - id: "sio"
+    type: "stub"
+    base_address: 0xD0000000
+    size: "4KB"

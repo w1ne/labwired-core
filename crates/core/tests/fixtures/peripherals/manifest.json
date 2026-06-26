@@ -383,6 +383,173 @@
           "demo_elf": "demo-vl53l1x-tof-lab.elf"
         }
       ]
+    },
+    {
+      "device_type": "scd41",
+      "label": "Sensirion SCD41 CO₂",
+      "summary": "Photoacoustic CO₂ + temperature + humidity sensor over I2C.",
+      "detail": "Sensirion SCD41 at fixed address 0x62, speaking the real Sensirion command protocol (16-bit commands, 16-bit words + CRC-8 poly 0x31), so the unmodified Sensirion SCD4x vendor driver decodes it on-target. CO₂ advances along a configurable ramp each read_measurement, so a closed room climbs from fresh toward stuffy and the firmware verdict flips.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to the SCD41 fixed address 0x62."
+        },
+        {
+          "name": "co2_start_ppm",
+          "ty": "float",
+          "doc": "CO₂ the ramp starts from, ppm (fresh-room baseline). Default 450."
+        },
+        {
+          "name": "co2_target_ppm",
+          "ty": "float",
+          "doc": "CO₂ the ramp approaches, ppm (closed-room steady state). Default 1400."
+        },
+        {
+          "name": "ramp_alpha",
+          "ty": "float",
+          "doc": "Per-measurement approach rate 0..1 (0 = flat scene). Default 0.08."
+        },
+        {
+          "name": "temp_c",
+          "ty": "float",
+          "doc": "Starting temperature, °C. Default 22.0."
+        },
+        {
+          "name": "rh_pct",
+          "ty": "float",
+          "doc": "Starting relative humidity, %. Default 45.0."
+        }
+      ],
+      "labs": [
+        {
+          "board_id": "leo-airquality-lab",
+          "chip": "esp32c3",
+          "example_dir": "esp32c3-leo-airquality",
+          "demo_elf": "demo-esp32c3-leo-airquality.elf"
+        }
+      ]
+    },
+    {
+      "device_type": "sgp41",
+      "label": "Sensirion SGP41 VOC/NOx",
+      "summary": "MOx gas sensor returning raw VOC/NOx signals over I2C.",
+      "detail": "Sensirion SGP41 at fixed address 0x59, speaking the real Sensirion command protocol with CRC-8 (poly 0x31). Returns raw SRAW_VOC / SRAW_NOX ticks that the on-host Sensirion Gas Index Algorithm converts to a VOC Index; the raw VOC signal advances along a configurable ramp.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to the SGP41 fixed address 0x59."
+        },
+        {
+          "name": "voc_sraw_start",
+          "ty": "float",
+          "doc": "Raw VOC tick at the first measurement (~20000..40000). Default 28000."
+        },
+        {
+          "name": "voc_sraw_target",
+          "ty": "float",
+          "doc": "Raw VOC tick the ramp approaches. Default 34000."
+        },
+        {
+          "name": "nox_sraw",
+          "ty": "float",
+          "doc": "Steady raw NOx tick value. Default 16000."
+        },
+        {
+          "name": "ramp_alpha",
+          "ty": "float",
+          "doc": "Per-measurement approach rate 0..1 (0 = flat scene). Default 0.08."
+        }
+      ],
+      "labs": [
+        {
+          "board_id": "leo-airquality-lab",
+          "chip": "esp32c3",
+          "example_dir": "esp32c3-leo-airquality",
+          "demo_elf": "demo-esp32c3-leo-airquality.elf"
+        }
+      ]
+    },
+    {
+      "device_type": "sps30",
+      "label": "Sensirion SPS30 PM",
+      "summary": "Laser particulate-matter sensor (PM1/2.5/4/10) over I2C.",
+      "detail": "Sensirion SPS30 at fixed address 0x69, speaking the real Sensirion command protocol with CRC-8 (poly 0x31) in both float and uint16 output modes. PM2.5 mass advances along a configurable ramp and the other size bins track it. Drive it in uint16 mode on the ESP32-C3 (30-byte frame fits the controller's 32-byte FIFO).",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to the SPS30 fixed address 0x69."
+        },
+        {
+          "name": "pm2_5_start",
+          "ty": "float",
+          "doc": "PM2.5 mass at the first reading, µg/m³ (clean air). Default 6.0."
+        },
+        {
+          "name": "pm2_5_target",
+          "ty": "float",
+          "doc": "PM2.5 mass the ramp approaches, µg/m³. Default 22.0."
+        },
+        {
+          "name": "ramp_alpha",
+          "ty": "float",
+          "doc": "Per-read approach rate 0..1 (0 = flat scene). Default 0.08."
+        }
+      ],
+      "labs": [
+        {
+          "board_id": "leo-airquality-lab",
+          "chip": "esp32c3",
+          "example_dir": "esp32c3-leo-airquality",
+          "demo_elf": "demo-esp32c3-leo-airquality.elf"
+        }
+      ]
+    },
+    {
+      "device_type": "veml7700",
+      "label": "Vishay VEML7700 Light",
+      "summary": "Ambient-light sensor (lux) over I2C.",
+      "detail": "Vishay VEML7700 at fixed address 0x10, a register-pointer device with 16-bit little-endian words. Reports a raw ALS count the firmware scales to lux at the default gain ×1 / 100 ms resolution (0.0576 lux/count). Light follows a configurable ramp (dims toward evening by default).",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to the VEML7700 fixed address 0x10."
+        },
+        {
+          "name": "lux_start",
+          "ty": "float",
+          "doc": "Ambient light at the first reading, lux (daylit room). Default 450."
+        },
+        {
+          "name": "lux_target",
+          "ty": "float",
+          "doc": "Lux the ramp approaches (dims when below start). Default 90."
+        },
+        {
+          "name": "ramp_alpha",
+          "ty": "float",
+          "doc": "Per-read approach rate 0..1 (0 = flat scene). Default 0.08."
+        }
+      ],
+      "labs": [
+        {
+          "board_id": "leo-airquality-lab",
+          "chip": "esp32c3",
+          "example_dir": "esp32c3-leo-airquality",
+          "demo_elf": "demo-esp32c3-leo-airquality.elf"
+        }
+      ]
     }
   ]
 }

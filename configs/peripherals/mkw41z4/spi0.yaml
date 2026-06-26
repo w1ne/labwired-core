@@ -1,0 +1,552 @@
+peripheral: SPI0
+version: 0.1.0
+registers:
+- id: MCR
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 16385
+  fields:
+  - name: HALT
+    bit_range:
+    - 0
+    - 0
+    description: Halt
+  - name: SMPL_PT
+    bit_range:
+    - 9
+    - 8
+    description: Sample Point
+  - name: CLR_RXF
+    bit_range:
+    - 10
+    - 10
+    description: CLR_RXF
+  - name: CLR_TXF
+    bit_range:
+    - 11
+    - 11
+    description: Clear TX FIFO
+  - name: DIS_RXF
+    bit_range:
+    - 12
+    - 12
+    description: Disable Receive FIFO
+  - name: DIS_TXF
+    bit_range:
+    - 13
+    - 13
+    description: Disable Transmit FIFO
+  - name: MDIS
+    bit_range:
+    - 14
+    - 14
+    description: Module Disable
+  - name: DOZE
+    bit_range:
+    - 15
+    - 15
+    description: Doze Enable
+  - name: PCSIS
+    bit_range:
+    - 19
+    - 16
+    description: Peripheral Chip Select x Inactive State
+  - name: ROOE
+    bit_range:
+    - 24
+    - 24
+    description: Receive FIFO Overflow Overwrite Enable
+  - name: MTFE
+    bit_range:
+    - 26
+    - 26
+    description: Modified Transfer Format Enable
+  - name: FRZ
+    bit_range:
+    - 27
+    - 27
+    description: Freeze
+  - name: DCONF
+    bit_range:
+    - 29
+    - 28
+    description: SPI Configuration.
+  - name: CONT_SCKE
+    bit_range:
+    - 30
+    - 30
+    description: Continuous SCK Enable
+  - name: MSTR
+    bit_range:
+    - 31
+    - 31
+    description: Master/Slave Mode Select
+  side_effects: null
+- id: TCR
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SPI_TCNT
+    bit_range:
+    - 31
+    - 16
+    description: SPI Transfer Counter
+  side_effects: null
+- id: CTAR_SLAVE
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 2013265920
+  fields:
+  - name: CPHA
+    bit_range:
+    - 25
+    - 25
+    description: Clock Phase
+  - name: CPOL
+    bit_range:
+    - 26
+    - 26
+    description: Clock Polarity
+  - name: FMSZ
+    bit_range:
+    - 30
+    - 27
+    description: Frame Size
+  side_effects: null
+- id: CTAR0
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 2013265920
+  fields:
+  - name: BR
+    bit_range:
+    - 3
+    - 0
+    description: Baud Rate Scaler
+  - name: DT
+    bit_range:
+    - 7
+    - 4
+    description: Delay After Transfer Scaler
+  - name: ASC
+    bit_range:
+    - 11
+    - 8
+    description: After SCK Delay Scaler
+  - name: CSSCK
+    bit_range:
+    - 15
+    - 12
+    description: PCS to SCK Delay Scaler
+  - name: PBR
+    bit_range:
+    - 17
+    - 16
+    description: Baud Rate Prescaler
+  - name: PDT
+    bit_range:
+    - 19
+    - 18
+    description: Delay after Transfer Prescaler
+  - name: PASC
+    bit_range:
+    - 21
+    - 20
+    description: After SCK Delay Prescaler
+  - name: PCSSCK
+    bit_range:
+    - 23
+    - 22
+    description: PCS to SCK Delay Prescaler
+  - name: LSBFE
+    bit_range:
+    - 24
+    - 24
+    description: LSB First
+  - name: CPHA
+    bit_range:
+    - 25
+    - 25
+    description: Clock Phase
+  - name: CPOL
+    bit_range:
+    - 26
+    - 26
+    description: Clock Polarity
+  - name: FMSZ
+    bit_range:
+    - 30
+    - 27
+    description: Frame Size
+  - name: DBR
+    bit_range:
+    - 31
+    - 31
+    description: Double Baud Rate
+  side_effects: null
+- id: CTAR1
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 2013265920
+  fields:
+  - name: BR
+    bit_range:
+    - 3
+    - 0
+    description: Baud Rate Scaler
+  - name: DT
+    bit_range:
+    - 7
+    - 4
+    description: Delay After Transfer Scaler
+  - name: ASC
+    bit_range:
+    - 11
+    - 8
+    description: After SCK Delay Scaler
+  - name: CSSCK
+    bit_range:
+    - 15
+    - 12
+    description: PCS to SCK Delay Scaler
+  - name: PBR
+    bit_range:
+    - 17
+    - 16
+    description: Baud Rate Prescaler
+  - name: PDT
+    bit_range:
+    - 19
+    - 18
+    description: Delay after Transfer Prescaler
+  - name: PASC
+    bit_range:
+    - 21
+    - 20
+    description: After SCK Delay Prescaler
+  - name: PCSSCK
+    bit_range:
+    - 23
+    - 22
+    description: PCS to SCK Delay Prescaler
+  - name: LSBFE
+    bit_range:
+    - 24
+    - 24
+    description: LSB First
+  - name: CPHA
+    bit_range:
+    - 25
+    - 25
+    description: Clock Phase
+  - name: CPOL
+    bit_range:
+    - 26
+    - 26
+    description: Clock Polarity
+  - name: FMSZ
+    bit_range:
+    - 30
+    - 27
+    description: Frame Size
+  - name: DBR
+    bit_range:
+    - 31
+    - 31
+    description: Double Baud Rate
+  side_effects: null
+- id: SR
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 33554432
+  fields:
+  - name: POPNXTPTR
+    bit_range:
+    - 3
+    - 0
+    description: Pop Next Pointer
+  - name: RXCTR
+    bit_range:
+    - 7
+    - 4
+    description: RX FIFO Counter
+  - name: TXNXTPTR
+    bit_range:
+    - 11
+    - 8
+    description: Transmit Next Pointer
+  - name: TXCTR
+    bit_range:
+    - 15
+    - 12
+    description: TX FIFO Counter
+  - name: RFDF
+    bit_range:
+    - 17
+    - 17
+    description: Receive FIFO Drain Flag
+  - name: RFOF
+    bit_range:
+    - 19
+    - 19
+    description: Receive FIFO Overflow Flag
+  - name: TFFF
+    bit_range:
+    - 25
+    - 25
+    description: Transmit FIFO Fill Flag
+  - name: TFUF
+    bit_range:
+    - 27
+    - 27
+    description: Transmit FIFO Underflow Flag
+  - name: EOQF
+    bit_range:
+    - 28
+    - 28
+    description: End of Queue Flag
+  - name: TXRXS
+    bit_range:
+    - 30
+    - 30
+    description: TX and RX Status
+  - name: TCF
+    bit_range:
+    - 31
+    - 31
+    description: Transfer Complete Flag
+  side_effects: null
+- id: RSER
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RFDF_DIRS
+    bit_range:
+    - 16
+    - 16
+    description: Receive FIFO Drain DMA or Interrupt Request Select
+  - name: RFDF_RE
+    bit_range:
+    - 17
+    - 17
+    description: Receive FIFO Drain Request Enable
+  - name: RFOF_RE
+    bit_range:
+    - 19
+    - 19
+    description: Receive FIFO Overflow Request Enable
+  - name: TFFF_DIRS
+    bit_range:
+    - 24
+    - 24
+    description: Transmit FIFO Fill DMA or Interrupt Request Select
+  - name: TFFF_RE
+    bit_range:
+    - 25
+    - 25
+    description: Transmit FIFO Fill Request Enable
+  - name: TFUF_RE
+    bit_range:
+    - 27
+    - 27
+    description: Transmit FIFO Underflow Request Enable
+  - name: EOQF_RE
+    bit_range:
+    - 28
+    - 28
+    description: Finished Request Enable
+  - name: TCF_RE
+    bit_range:
+    - 31
+    - 31
+    description: Transmission Complete Request Enable
+  side_effects: null
+- id: PUSHR
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TXDATA
+    bit_range:
+    - 15
+    - 0
+    description: Transmit Data
+  - name: PCS
+    bit_range:
+    - 19
+    - 16
+    description: Select which PCS signals are to be asserted for the transfer
+  - name: CTCNT
+    bit_range:
+    - 26
+    - 26
+    description: Clear Transfer Counter
+  - name: EOQ
+    bit_range:
+    - 27
+    - 27
+    description: End Of Queue
+  - name: CTAS
+    bit_range:
+    - 30
+    - 28
+    description: Clock and Transfer Attributes Select
+  - name: CONT
+    bit_range:
+    - 31
+    - 31
+    description: Continuous Peripheral Chip Select Enable
+  side_effects: null
+- id: PUSHR_SLAVE
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TXDATA
+    bit_range:
+    - 15
+    - 0
+    description: Transmit Data
+  side_effects: null
+- id: POPR
+  address_offset: 56
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: RXDATA
+    bit_range:
+    - 31
+    - 0
+    description: Received Data
+  side_effects: null
+- id: TXFR0
+  address_offset: 60
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: TXDATA
+    bit_range:
+    - 15
+    - 0
+    description: Transmit Data
+  - name: TXCMD_TXDATA
+    bit_range:
+    - 31
+    - 16
+    description: Transmit Command or Transmit Data
+  side_effects: null
+- id: TXFR1
+  address_offset: 64
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: TXDATA
+    bit_range:
+    - 15
+    - 0
+    description: Transmit Data
+  - name: TXCMD_TXDATA
+    bit_range:
+    - 31
+    - 16
+    description: Transmit Command or Transmit Data
+  side_effects: null
+- id: TXFR2
+  address_offset: 68
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: TXDATA
+    bit_range:
+    - 15
+    - 0
+    description: Transmit Data
+  - name: TXCMD_TXDATA
+    bit_range:
+    - 31
+    - 16
+    description: Transmit Command or Transmit Data
+  side_effects: null
+- id: TXFR3
+  address_offset: 72
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: TXDATA
+    bit_range:
+    - 15
+    - 0
+    description: Transmit Data
+  - name: TXCMD_TXDATA
+    bit_range:
+    - 31
+    - 16
+    description: Transmit Command or Transmit Data
+  side_effects: null
+- id: RXFR0
+  address_offset: 124
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: RXDATA
+    bit_range:
+    - 31
+    - 0
+    description: Receive Data
+  side_effects: null
+- id: RXFR1
+  address_offset: 128
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: RXDATA
+    bit_range:
+    - 31
+    - 0
+    description: Receive Data
+  side_effects: null
+- id: RXFR2
+  address_offset: 132
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: RXDATA
+    bit_range:
+    - 31
+    - 0
+    description: Receive Data
+  side_effects: null
+- id: RXFR3
+  address_offset: 136
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: RXDATA
+    bit_range:
+    - 31
+    - 0
+    description: Receive Data
+  side_effects: null
+interrupts:
+  SPI0: 10
+timing: null

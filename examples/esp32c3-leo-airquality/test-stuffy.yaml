@@ -1,0 +1,29 @@
+# Headless run of the ESP32-C3 Leo air-quality firmware — NORMAL scenario.
+#
+# The firmware reads four sensors over the real C3 I²C0 controller using the
+# unmodified Sensirion vendor drivers ON-TARGET, and prints a plain-language air
+# verdict per cycle. NORMAL: a closed room fills up, CO₂ climbs from fresh
+# (~450 ppm) toward stuffy (~1400 ppm), and the verdict flips from "air quality
+# is good" to "ventilate now" as CO₂ crosses 1000 ppm.
+#
+# NB: the simple_regex engine supports only `.`, `*`, `^`, `$` — no char classes
+# or alternation — so all assertions below are literal substrings.
+schema_version: "1.0"
+inputs:
+  system: "./system-stuffy.yaml"
+  firmware: "./firmware/leo_airquality.elf"
+limits:
+  max_steps: 50000000
+assertions:
+  # Boot banner + all four sensors brought up over real I²C.
+  - uart_contains: "LEO BOOT"
+  - uart_contains: "SCD41 READY"
+  - uart_contains: "SGP41 READY"
+  - uart_contains: "SPS30 READY"
+  - uart_contains: "VEML7700 READY"
+  # Early cycles: fresh air. The decoded CO₂ starts low.
+  # The headline transition once CO₂ climbs past 1000 ppm — the plain-language
+  # verdict Leo's product is built around.
+  - uart_contains: "ventilate now"
+  # The run completes its measurement cycles.
+  - uart_contains: "LEO DONE"

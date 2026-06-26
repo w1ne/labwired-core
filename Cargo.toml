@@ -40,6 +40,7 @@ members = [
     "crates/firmware-nrf52840-proximity",
     "crates/firmware-nrf52840-timer-blinky",
     "crates/firmware-rp2040-demo",
+    "crates/firmware-kw41z-demo",
     "crates/firmware-rp2040-pio-onboarding",
     "crates/gdbstub",
     "crates/hw-oracle",
@@ -183,6 +184,10 @@ codegen-units = 1
 opt-level = "s"
 
 [profile.release.package.firmware-rp2040-demo]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-kw41z-demo]
 codegen-units = 1
 opt-level = "s"
 

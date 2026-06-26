@@ -1,0 +1,463 @@
+peripheral: LPUART0
+version: 0.1.0
+registers:
+- id: BAUD
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 251658244
+  fields:
+  - name: SBR
+    bit_range:
+    - 12
+    - 0
+    description: Baud Rate Modulo Divisor.
+  - name: SBNS
+    bit_range:
+    - 13
+    - 13
+    description: Stop Bit Number Select
+  - name: RXEDGIE
+    bit_range:
+    - 14
+    - 14
+    description: RX Input Active Edge Interrupt Enable
+  - name: LBKDIE
+    bit_range:
+    - 15
+    - 15
+    description: LIN Break Detect Interrupt Enable
+  - name: RESYNCDIS
+    bit_range:
+    - 16
+    - 16
+    description: Resynchronization Disable
+  - name: BOTHEDGE
+    bit_range:
+    - 17
+    - 17
+    description: Both Edge Sampling
+  - name: MATCFG
+    bit_range:
+    - 19
+    - 18
+    description: Match Configuration
+  - name: RDMAE
+    bit_range:
+    - 21
+    - 21
+    description: Receiver Full DMA Enable
+  - name: TDMAE
+    bit_range:
+    - 23
+    - 23
+    description: Transmitter DMA Enable
+  - name: OSR
+    bit_range:
+    - 28
+    - 24
+    description: Oversampling Ratio
+  - name: M10
+    bit_range:
+    - 29
+    - 29
+    description: 10-bit Mode select
+  - name: MAEN2
+    bit_range:
+    - 30
+    - 30
+    description: Match Address Mode Enable 2
+  - name: MAEN1
+    bit_range:
+    - 31
+    - 31
+    description: Match Address Mode Enable 1
+  side_effects: null
+- id: STAT
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 12582912
+  fields:
+  - name: MA2F
+    bit_range:
+    - 14
+    - 14
+    description: Match 2 Flag
+  - name: MA1F
+    bit_range:
+    - 15
+    - 15
+    description: Match 1 Flag
+  - name: PF
+    bit_range:
+    - 16
+    - 16
+    description: Parity Error Flag
+  - name: FE
+    bit_range:
+    - 17
+    - 17
+    description: Framing Error Flag
+  - name: NF
+    bit_range:
+    - 18
+    - 18
+    description: Noise Flag
+  - name: OR
+    bit_range:
+    - 19
+    - 19
+    description: Receiver Overrun Flag
+  - name: IDLE
+    bit_range:
+    - 20
+    - 20
+    description: Idle Line Flag
+  - name: RDRF
+    bit_range:
+    - 21
+    - 21
+    description: Receive Data Register Full Flag
+  - name: TC
+    bit_range:
+    - 22
+    - 22
+    description: Transmission Complete Flag
+  - name: TDRE
+    bit_range:
+    - 23
+    - 23
+    description: Transmit Data Register Empty Flag
+  - name: RAF
+    bit_range:
+    - 24
+    - 24
+    description: Receiver Active Flag
+  - name: LBKDE
+    bit_range:
+    - 25
+    - 25
+    description: LIN Break Detection Enable
+  - name: BRK13
+    bit_range:
+    - 26
+    - 26
+    description: Break Character Generation Length
+  - name: RWUID
+    bit_range:
+    - 27
+    - 27
+    description: Receive Wake Up Idle Detect
+  - name: RXINV
+    bit_range:
+    - 28
+    - 28
+    description: Receive Data Inversion
+  - name: MSBF
+    bit_range:
+    - 29
+    - 29
+    description: MSB First
+  - name: RXEDGIF
+    bit_range:
+    - 30
+    - 30
+    description: LPUART_RX Pin Active Edge Interrupt Flag
+  - name: LBKDIF
+    bit_range:
+    - 31
+    - 31
+    description: LIN Break Detect Interrupt Flag
+  side_effects: null
+- id: CTRL
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PT
+    bit_range:
+    - 0
+    - 0
+    description: Parity Type
+  - name: PE
+    bit_range:
+    - 1
+    - 1
+    description: Parity Enable
+  - name: ILT
+    bit_range:
+    - 2
+    - 2
+    description: Idle Line Type Select
+  - name: WAKE
+    bit_range:
+    - 3
+    - 3
+    description: Receiver Wakeup Method Select
+  - name: M
+    bit_range:
+    - 4
+    - 4
+    description: 9-Bit or 8-Bit Mode Select
+  - name: RSRC
+    bit_range:
+    - 5
+    - 5
+    description: Receiver Source Select
+  - name: DOZEEN
+    bit_range:
+    - 6
+    - 6
+    description: Doze Enable
+  - name: LOOPS
+    bit_range:
+    - 7
+    - 7
+    description: Loop Mode Select
+  - name: IDLECFG
+    bit_range:
+    - 10
+    - 8
+    description: Idle Configuration
+  - name: MA2IE
+    bit_range:
+    - 14
+    - 14
+    description: Match 2 Interrupt Enable
+  - name: MA1IE
+    bit_range:
+    - 15
+    - 15
+    description: Match 1 Interrupt Enable
+  - name: SBK
+    bit_range:
+    - 16
+    - 16
+    description: Send Break
+  - name: RWU
+    bit_range:
+    - 17
+    - 17
+    description: Receiver Wakeup Control
+  - name: RE
+    bit_range:
+    - 18
+    - 18
+    description: Receiver Enable
+  - name: TE
+    bit_range:
+    - 19
+    - 19
+    description: Transmitter Enable
+  - name: ILIE
+    bit_range:
+    - 20
+    - 20
+    description: Idle Line Interrupt Enable
+  - name: RIE
+    bit_range:
+    - 21
+    - 21
+    description: Receiver Interrupt Enable
+  - name: TCIE
+    bit_range:
+    - 22
+    - 22
+    description: Transmission Complete Interrupt Enable for
+  - name: TIE
+    bit_range:
+    - 23
+    - 23
+    description: Transmit Interrupt Enable
+  - name: PEIE
+    bit_range:
+    - 24
+    - 24
+    description: Parity Error Interrupt Enable
+  - name: FEIE
+    bit_range:
+    - 25
+    - 25
+    description: Framing Error Interrupt Enable
+  - name: NEIE
+    bit_range:
+    - 26
+    - 26
+    description: Noise Error Interrupt Enable
+  - name: ORIE
+    bit_range:
+    - 27
+    - 27
+    description: Overrun Interrupt Enable
+  - name: TXINV
+    bit_range:
+    - 28
+    - 28
+    description: Transmit Data Inversion
+  - name: TXDIR
+    bit_range:
+    - 29
+    - 29
+    description: LPUART_TX Pin Direction in Single-Wire Mode
+  - name: R9T8
+    bit_range:
+    - 30
+    - 30
+    description: Receive Bit 9 / Transmit Bit 8
+  - name: R8T9
+    bit_range:
+    - 31
+    - 31
+    description: Receive Bit 8 / Transmit Bit 9
+  side_effects: null
+- id: DATA
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 4096
+  fields:
+  - name: R0T0
+    bit_range:
+    - 0
+    - 0
+    description: Read receive data buffer 0 or write transmit data buffer 0.
+  - name: R1T1
+    bit_range:
+    - 1
+    - 1
+    description: Read receive data buffer 1 or write transmit data buffer 1.
+  - name: R2T2
+    bit_range:
+    - 2
+    - 2
+    description: Read receive data buffer 2 or write transmit data buffer 2.
+  - name: R3T3
+    bit_range:
+    - 3
+    - 3
+    description: Read receive data buffer 3 or write transmit data buffer 3.
+  - name: R4T4
+    bit_range:
+    - 4
+    - 4
+    description: Read receive data buffer 4 or write transmit data buffer 4.
+  - name: R5T5
+    bit_range:
+    - 5
+    - 5
+    description: Read receive data buffer 5 or write transmit data buffer 5.
+  - name: R6T6
+    bit_range:
+    - 6
+    - 6
+    description: Read receive data buffer 6 or write transmit data buffer 6.
+  - name: R7T7
+    bit_range:
+    - 7
+    - 7
+    description: Read receive data buffer 7 or write transmit data buffer 7.
+  - name: R8T8
+    bit_range:
+    - 8
+    - 8
+    description: Read receive data buffer 8 or write transmit data buffer 8.
+  - name: R9T9
+    bit_range:
+    - 9
+    - 9
+    description: Read receive data buffer 9 or write transmit data buffer 9.
+  - name: IDLINE
+    bit_range:
+    - 11
+    - 11
+    description: Idle Line
+  - name: RXEMPT
+    bit_range:
+    - 12
+    - 12
+    description: Receive Buffer Empty
+  - name: FRETSC
+    bit_range:
+    - 13
+    - 13
+    description: Frame Error / Transmit Special Character
+  - name: PARITYE
+    bit_range:
+    - 14
+    - 14
+    description: The current received dataword contained in DATA[R9:R0] was received with a parity error.
+  - name: NOISY
+    bit_range:
+    - 15
+    - 15
+    description: The current received dataword contained in DATA[R9:R0] was received with noise.
+  side_effects: null
+- id: MATCH
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: MA1
+    bit_range:
+    - 9
+    - 0
+    description: Match Address 1
+  - name: MA2
+    bit_range:
+    - 25
+    - 16
+    description: Match Address 2
+  side_effects: null
+- id: MODIR
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TXCTSE
+    bit_range:
+    - 0
+    - 0
+    description: Transmitter clear-to-send enable
+  - name: TXRTSE
+    bit_range:
+    - 1
+    - 1
+    description: Transmitter request-to-send enable
+  - name: TXRTSPOL
+    bit_range:
+    - 2
+    - 2
+    description: Transmitter request-to-send polarity
+  - name: RXRTSE
+    bit_range:
+    - 3
+    - 3
+    description: Receiver request-to-send enable
+  - name: TXCTSC
+    bit_range:
+    - 4
+    - 4
+    description: Transmit CTS Configuration
+  - name: TXCTSSRC
+    bit_range:
+    - 5
+    - 5
+    description: Transmit CTS Source
+  - name: TNP
+    bit_range:
+    - 17
+    - 16
+    description: Transmitter narrow pulse
+  - name: IREN
+    bit_range:
+    - 18
+    - 18
+    description: Infrared enable
+  side_effects: null
+interrupts:
+  LPUART0: 12
+timing: null

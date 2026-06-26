@@ -155,6 +155,19 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"RP2040_SMOKE_OK\n",
     },
     SurvivalCase {
+        // Unmodified Zephyr 3.7 hello_world built for `rpi_pico`: exercises the
+        // boot2 vector relocation, atomic register aliases, the clock/reset
+        // bring-up (RESET_DONE / XOSC / PLL / CLOCKS) and the PL011 console.
+        name: "rp2040_zephyr_hello",
+        core: "cortex-m0+",
+        family: CpuFamily::CortexM,
+        chip: "rp2040",
+        system: "rp2040-pico",
+        fixture: "rp2040-zephyr-hello.elf",
+        valid_pc_ranges: &[(0x1000_0000, 0x101F_FFFF), (0x2000_0000, 0x2004_1FFF)],
+        expected_uart_output: b"Hello World! rpi_pico",
+    },
+    SurvivalCase {
         name: "nrf52840_demo",
         core: "cortex-m4",
         family: CpuFamily::CortexM,
@@ -163,6 +176,39 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         fixture: "nrf52840-demo.elf",
         valid_pc_ranges: &[(0x0000_0000, 0x000F_FFFF), (0x2000_0000, 0x2003_FFFF)],
         expected_uart_output: b"NRF52840_SMOKE_OK\n",
+    },
+    SurvivalCase {
+        // NXP KW41Z (Cortex-M0+ BLE + 802.15.4). Bare-metal smoke firmware
+        // (crates/firmware-kw41z-demo) brings up LPUART0 the way the NXP HAL
+        // does — enable CTRL.TE, poll STAT.TDRE, write DATA — and prints the
+        // banner below. Exercises the Kinetis LPUART register layout end to
+        // end: DATA writes reach the TX sink and STAT reports TDRE/TC.
+        name: "kw41z_smoke",
+        core: "cortex-m0+",
+        family: CpuFamily::CortexM,
+        chip: "mkw41z4",
+        system: "frdm-kw41z",
+        fixture: "kw41z-smoke.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x000F_FFFF), (0x1FFF_8000, 0x2001_8000)],
+        expected_uart_output: b"KW41Z_SMOKE_OK\n",
+    },
+    SurvivalCase {
+        // NXP KW41Z running REAL, unmodified NXP MCUXpresso vendor code
+        // (crates/firmware-kw41z-nxp): the genuine system_MKW41Z4.c SystemInit,
+        // the verbatim FRDM-KW41Z BOARD_BootClockRUN (RfOscInit + fsl_clock.c
+        // CLOCK_SetFeeMode → 40 MHz FEE), and fsl_lpuart.c LPUART_WriteBlocking.
+        // Booting this end to end proves the behavioural MCG/RSIM/SIM models
+        // satisfy the vendor clock-bring-up spin loops (RSIM RF_OSC_READY,
+        // MCG_S IREFST/CLKST/OSCINIT0) instead of hanging. The deterministic
+        // register-level twin of this is tests/kw41z_clock_boot.rs.
+        name: "kw41z_nxp",
+        core: "cortex-m0+",
+        family: CpuFamily::CortexM,
+        chip: "mkw41z4",
+        system: "frdm-kw41z",
+        fixture: "kw41z-nxp.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x000F_FFFF), (0x1FFF_8000, 0x2001_8000)],
+        expected_uart_output: b"KW41Z_NXP_OK\n",
     },
     SurvivalCase {
         name: "nrf52832_demo",
@@ -1017,6 +1063,11 @@ fn test_rp2040_demo_survival() {
 }
 
 #[test]
+fn test_rp2040_zephyr_hello_survival() {
+    run_survival_case(case_by_name("rp2040_zephyr_hello"));
+}
+
+#[test]
 fn test_nrf52840_demo_survival() {
     run_survival_case(case_by_name("nrf52840_demo"));
 }
@@ -1024,6 +1075,16 @@ fn test_nrf52840_demo_survival() {
 #[test]
 fn test_nrf52832_demo_survival() {
     run_survival_case(case_by_name("nrf52832_demo"));
+}
+
+#[test]
+fn test_kw41z_smoke_survival() {
+    run_survival_case(case_by_name("kw41z_smoke"));
+}
+
+#[test]
+fn test_kw41z_nxp_survival() {
+    run_survival_case(case_by_name("kw41z_nxp"));
 }
 
 #[test]

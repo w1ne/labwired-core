@@ -127,6 +127,25 @@ pub struct ChipDescriptor {
     pub core: Option<String>,
     pub flash: MemoryRange,
     pub ram: MemoryRange,
+    /// Offset in bytes from the flash base to the application vector table
+    /// when a second-stage bootloader precedes it. The RP2040 bootrom runs a
+    /// 256-byte stage-2 (boot2) blob from flash and only then enters the
+    /// vector table at `flash_base + 0x100`, so set this to `0x100` for the
+    /// RP2040. `0` (the default) means the vector table sits at the flash base
+    /// — the usual case for STM32/nRF/etc. The simulator does not execute the
+    /// stage-2 blob (flash is directly mapped); it uses this offset to find
+    /// the real reset vector when the flash-base vectors are not valid.
+    #[serde(default, deserialize_with = "deserialize_u64_lax")]
+    pub reset_vector_offset: u64,
+    /// RP2040-style atomic register aliases. When true, every 0x1000-strided
+    /// alias of a peripheral register in the APB window decodes as an atomic
+    /// op on the base register: `+0x0000` normal, `+0x1000` XOR, `+0x2000`
+    /// SET (bitwise OR), `+0x3000` CLR (bitwise AND-NOT). The RP2040 HAL drives
+    /// nearly all of its register setup through these aliases (`hw_set_bits`,
+    /// `hw_clear_bits`), so without them an unmodified image faults on the
+    /// first `hw_set_bits`. Default `false` (other Cortex-M parts).
+    #[serde(default)]
+    pub atomic_register_aliases: bool,
     /// Extra CPU-visible memory windows beyond `flash`/`ram` (e.g. ESP32 IRAM
     /// and flash-DROM). Empty for chips with a simple two-region map.
     #[serde(default)]
@@ -518,6 +537,8 @@ impl From<labwired_ir::IrDevice> for ChipDescriptor {
             core,
             flash,
             ram,
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             memory_regions: Vec::new(),
             peripherals: ir
                 .peripherals
@@ -1030,11 +1051,43 @@ pub fn load_test_script<P: AsRef<Path>>(path: P) -> Result<LoadedTestScript> {
 
 pub fn parse_size(size_str: &str) -> Result<u64> {
     use human_size::{Byte, Size, SpecificSize};
-    let s: Size = size_str
+    let trimmed = size_str.trim();
+    // A bare integer is a raw byte count. `human_size` rejects unit-less values
+    // with "no multiple", but many chip configs give sizes as plain bytes
+    // (e.g. `1048576`), so accept those directly before falling back to the
+    // unit-aware parser ("512KB", "1.5 MiB", …).
+    if let Ok(bytes) = trimmed.parse::<u64>() {
+        return Ok(bytes);
+    }
+    let s: Size = trimmed
         .parse()
         .map_err(|e| anyhow::anyhow!("Invalid size format: {}", e))?;
     let bytes: SpecificSize<Byte> = s.into();
     Ok(bytes.value() as u64)
+}
+
+#[cfg(test)]
+mod parse_size_tests {
+    use super::parse_size;
+
+    #[test]
+    fn bare_integers_are_byte_counts() {
+        assert_eq!(parse_size("1048576").unwrap(), 1_048_576);
+        assert_eq!(parse_size("262144").unwrap(), 262_144);
+        assert_eq!(parse_size("  4096  ").unwrap(), 4096);
+    }
+
+    #[test]
+    fn unit_suffixes_still_parse() {
+        assert_eq!(parse_size("512KB").unwrap(), 524_288);
+        assert_eq!(parse_size("1564672B").unwrap(), 1_564_672);
+        assert_eq!(parse_size("1KB").unwrap(), 1024);
+    }
+
+    #[test]
+    fn garbage_still_errors() {
+        assert!(parse_size("not-a-size").is_err());
+    }
 }
 
 #[cfg(test)]

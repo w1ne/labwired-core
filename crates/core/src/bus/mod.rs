@@ -56,6 +56,18 @@ pub struct PeripheralEntry {
     pub clock_gate: Option<ResolvedClockGate>,
 }
 
+/// RP2040 atomic register-alias operation (see
+/// [`SystemBus::atomic_alias_redirect`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AtomicAliasOp {
+    /// `+0x1000`: write XORs the bits, read returns the base register.
+    Xor,
+    /// `+0x2000`: write sets (ORs) the bits.
+    Set,
+    /// `+0x3000`: write clears (AND-NOT) the bits.
+    Clr,
+}
+
 pub struct SystemBus {
     pub flash: LinearMemory,
     pub ram: LinearMemory,
@@ -71,6 +83,17 @@ pub struct SystemBus {
     /// False for architectures (e.g. RISC-V) whose memory maps collide with
     /// the bit-band alias ranges 0x42000000–0x44000000 / 0x22000000–0x24000000.
     pub bit_band_enabled: bool,
+    /// Offset (bytes) from the flash base to the application vector table when
+    /// a second-stage bootloader precedes it (RP2040 boot2 = `0x100`). `0`
+    /// means the vector table sits at the flash base. Carried from the chip
+    /// descriptor so `Machine::load_firmware` can relocate the reset vector
+    /// past the stage-2 blob. See `ChipDescriptor::reset_vector_offset`.
+    pub reset_vector_offset: u64,
+    /// RP2040 atomic register aliases enabled (see
+    /// `ChipDescriptor::atomic_register_aliases`). When set, word accesses in
+    /// the APB peripheral window whose offset has bits [13:12] set decode as
+    /// XOR/SET/CLR atomic ops on the aligned base register.
+    pub atomic_register_aliases: bool,
     /// Plan 3: per-core bitmask of pending cpu IRQ slots (32 bits each;
     /// index 0 = PRO_CPU, 1 = APP_CPU). Aggregated by
     /// `tick_peripherals_with_costs` from peripheral `explicit_irqs` source
@@ -712,6 +735,125 @@ impl SystemBus {
                 e
             )
         })
+    }
+
+    /// Resolve the UART register layout for a peripheral **deterministically**
+    /// from its declared type. The decision order is fixed and total, and there
+    /// is no path that silently mismodels a strange UART:
+    ///
+    ///   1. An explicit `config.profile` always wins (the author's deliberate
+    ///      choice), so any UART can be pinned to any modelled layout.
+    ///   2. A type whose silicon register map we actually model routes to that
+    ///      layout: `*lpuart*` → Kinetis LPUART; `stm32h5`/`stm32f7` → modern
+    ///      STM32 USART; any other `stm32…` name and the bare generic `"uart"`
+    ///      → the classic STM32 USART map (SR/DR/BRR/CR1…).
+    ///   3. Anything else — every vendor UART we do not model yet (PL011, 16550,
+    ///      Gaisler APBUART, EFM32/EFR32, Renesas SCI, LiteX, SiFive, SAM, …) —
+    ///      ERRORS. It must name a layout via `config.profile` to run. A UART is
+    ///      never silently mapped onto an STM32 register map by omission, the
+    ///      way `nxp_lpuart` was before this gate existed.
+    pub(crate) fn uart_layout_for(
+        p_cfg: &PeripheralConfig,
+    ) -> anyhow::Result<crate::peripherals::uart::UartRegisterLayout> {
+        use crate::peripherals::uart::UartRegisterLayout::{self, Lpuart, Stm32F1, Stm32V2};
+
+        // 1. Explicit author override wins, for any UART type.
+        if let Some(name) = Self::profile_name(p_cfg)? {
+            return UartRegisterLayout::from_str(name).map_err(|e| {
+                anyhow::anyhow!(
+                    "Peripheral '{}' has invalid UART profile '{}': {}",
+                    p_cfg.id,
+                    name,
+                    e
+                )
+            });
+        }
+
+        // 2. Route the families we model faithfully, by declared type. Each
+        //    family's register map lives in `UartRegisterLayout`; the offsets
+        //    come from datasheets / vendor CMSIS headers / in-tree drivers.
+        use UartRegisterLayout::*;
+        let raw = p_cfg.r#type.to_ascii_lowercase();
+        let has = |needle: &str| raw.contains(needle);
+        let layout = if has("lpuart") {
+            Lpuart
+        } else if raw == "uart" {
+            // The generic escape hatch: the classic STM32 USART map.
+            Stm32F1
+        } else if has("stm32") {
+            if has("stm32h5") || has("stm32f7") {
+                Stm32V2
+            } else {
+                Stm32F1
+            }
+        } else if has("pl011") {
+            Pl011
+        } else if has("16550") {
+            Ns16550
+        } else if has("da14") {
+            // Dialog/Renesas DA1469x = Synopsys DW_apb_uart (16550, 4-byte stride).
+            DwApbUart
+        } else if has("cadence") {
+            Cadence
+        } else if has("efr32") {
+            Efr32
+        } else if has("efm32") {
+            Efm32
+        } else if raw == "leuart" {
+            // Exact: "leuart" is a substring of unrelated names (e.g. "simpleuart").
+            Leuart
+        } else if has("sci") {
+            // Renesas SCI (renesas_sci, renesasraXmY_sci).
+            Sci
+        } else if has("gaisler") || has("apbuart") {
+            Gaisler
+        } else if has("npcx") {
+            Npcx
+        } else if has("max32650") {
+            Max32650
+        } else if has("opentitan") {
+            OpenTitan
+        } else if has("sam_usart") || has("samusart") {
+            Sam
+        } else if has("samd5") || has("same5") || has("sercom") {
+            Sercom
+        } else if has("imx") {
+            Imx
+        } else if has("sifive") {
+            Sifive
+        } else if has("litex") {
+            Litex
+        } else if has("murax") {
+            Murax
+        } else if has("coreuart") || has("miv") {
+            CoreUart
+        } else if has("k6xf") {
+            KinetisUart
+        } else if has("pulp") || has("udma") {
+            Pulp
+        } else if has("ft9001") || has("ft900") {
+            // Bridgetek FT9xx UART is 16550-compatible.
+            Ns16550
+        } else if has("cosimulated") {
+            // Co-simulation stub with no fixed register map — default to 16550.
+            Ns16550
+        } else if has("mpc5567") || has("esci") {
+            Esci
+        } else if has("picosoc") || has("simpleuart") {
+            PicoUart
+        } else {
+            // 3. Unmodelled UART — refuse to guess.
+            anyhow::bail!(
+                "UART type '{}' (peripheral '{}') has no register layout modelled yet \
+                 and no `config.profile` set; it will NOT be silently mapped onto an \
+                 STM32. Choose a layout explicitly with \
+                 `config: {{ profile: <one of the supported layouts> }}`, or add a \
+                 dedicated model for it.",
+                p_cfg.r#type,
+                p_cfg.id
+            );
+        };
+        Ok(layout)
     }
 
     fn resolve_peripheral_path(manifest: &SystemManifest, descriptor_path: &str) -> PathBuf {
@@ -1411,6 +1553,8 @@ impl SystemBus {
             current_cycle: 0,
             pending_schedule: Vec::new(),
             legacy_walk_disabled: false,
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             hcsr04: Vec::new(),
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
@@ -1450,6 +1594,8 @@ impl SystemBus {
             current_cycle: 0,
             pending_schedule: Vec::new(),
             legacy_walk_disabled: false,
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             hcsr04: Vec::new(),
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
@@ -1727,6 +1873,50 @@ impl SystemBus {
             }
             None => matches!(chip.arch, labwired_config::Arch::Arm),
         }
+    }
+
+    /// Decode an RP2040 atomic register-alias access. Returns the aligned base
+    /// register address and the atomic op when `addr` lands on a `+0x1000`
+    /// (XOR), `+0x2000` (SET) or `+0x3000` (CLR) alias of a peripheral register
+    /// in the APB/AHB-Lite peripheral window; `None` for a normal (`+0x0000`)
+    /// access or any address outside the window. Only consulted when
+    /// `atomic_register_aliases` is set, so it is a no-op for other parts.
+    #[inline]
+    pub fn atomic_alias_redirect(&self, addr: u64) -> Option<(u64, AtomicAliasOp)> {
+        const APB_AHB: std::ops::Range<u64> = 0x4000_0000..0x5040_0000;
+        if !APB_AHB.contains(&addr) {
+            return None;
+        }
+        let op = match (addr >> 12) & 0x3 {
+            0 => return None,
+            1 => AtomicAliasOp::Xor,
+            2 => AtomicAliasOp::Set,
+            _ => AtomicAliasOp::Clr,
+        };
+        Some((addr & !0x3000, op))
+    }
+
+    /// Whether the 8 bytes at `addr` form a plausible Cortex-M reset vector:
+    /// word[0] (the initial SP) points into RAM and word[1] (the initial PC)
+    /// points into flash. Used by `Machine::load_firmware` to decide whether a
+    /// candidate vector table (flash base vs. post-stage-2 offset) is the real
+    /// one, so a second-stage bootloader (RP2040 boot2) can be skipped.
+    pub fn vector_pair_valid(&self, addr: u64) -> bool {
+        let (Some(sp), Some(pc)) = (
+            self.read_u32(addr).ok(),
+            self.read_u32(addr.wrapping_add(4)).ok(),
+        ) else {
+            return false;
+        };
+        let pc = pc & !1; // strip the Thumb bit
+                          // The initial SP is the top of the full-descending stack, conventionally
+                          // one past the last RAM byte (ram.base + ram.size), so the upper bound
+                          // is inclusive.
+        let in_ram = (sp as u64) >= self.ram.base_addr
+            && (sp as u64) <= self.ram.base_addr + self.ram.data.len() as u64;
+        let in_flash = (pc as u64) >= self.flash.base_addr
+            && (pc as u64) < self.flash.base_addr + self.flash.data.len() as u64;
+        in_ram && in_flash
     }
 
     /// Place a built peripheral on the bus using the descriptor's window size
@@ -2160,6 +2350,8 @@ mod tests {
 
         let chip = ChipDescriptor {
             schema_version: "1.0".to_string(),
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             memory_regions: Vec::new(),
             name: "stm32f103-test".to_string(),
             arch: Arch::Arm,
@@ -2226,6 +2418,8 @@ mod tests {
 
         let chip = ChipDescriptor {
             schema_version: "1.0".to_string(),
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             memory_regions: Vec::new(),
             name: "esp32c3-i2c-test".to_string(),
             arch: Arch::RiscV,
@@ -2326,6 +2520,8 @@ mod tests {
 
         let chip = ChipDescriptor {
             schema_version: "1.0".to_string(),
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             memory_regions: Vec::new(),
             name: "esp32c3-mlx-test".to_string(),
             arch: Arch::RiscV,
@@ -3115,6 +3311,8 @@ peripherals:
 
         labwired_config::ChipDescriptor {
             schema_version: "1.0".to_string(),
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             memory_regions: Vec::new(),
             name: "stm32f103-test".to_string(),
             arch: Arch::Arm,
@@ -3328,6 +3526,8 @@ peripherals:
             current_cycle: 0,
             pending_schedule: Vec::new(),
             legacy_walk_disabled: false,
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             hcsr04: Vec::new(),
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
@@ -3391,6 +3591,8 @@ peripherals:
             current_cycle: 0,
             pending_schedule: Vec::new(),
             legacy_walk_disabled: false,
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             hcsr04: Vec::new(),
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
@@ -3605,6 +3807,8 @@ peripherals:
             current_cycle: 0,
             pending_schedule: Vec::new(),
             legacy_walk_disabled: false,
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             hcsr04: Vec::new(),
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
@@ -3818,6 +4022,8 @@ peripherals:
             current_cycle: 0,
             pending_schedule: Vec::new(),
             legacy_walk_disabled: false,
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             hcsr04: Vec::new(),
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
@@ -3885,6 +4091,8 @@ peripherals:
             current_cycle: 0,
             pending_schedule: Vec::new(),
             legacy_walk_disabled: false,
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             hcsr04: Vec::new(),
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),

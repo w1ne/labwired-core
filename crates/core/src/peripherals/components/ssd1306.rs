@@ -263,8 +263,8 @@ impl PeripheralKit for Ssd1306Kit {
     }
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
         let address = ctx.i2c_address_or(0x3C)?;
-        let i2c = ctx.i2c()?;
-        i2c.attach(Box::new(Ssd1306::new(address)));
-        Ok(())
+        // attach_i2c_device works on both the STM32 I2c and the ESP32-C3
+        // Esp32c3I2c controllers, so the OLED can sit on either family's bus.
+        ctx.attach_i2c_device(Box::new(Ssd1306::new(address)))
     }
 }

@@ -1,0 +1,3 @@
+# Build artifacts — the committed fixture is tests/fixtures/kw41z-nxp.elf,
+# rebuilt from this tree via ./build.sh.
+/build/
