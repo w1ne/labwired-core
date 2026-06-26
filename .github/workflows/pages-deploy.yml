@@ -150,6 +150,21 @@ jobs:
         with:
           workspaces: core
 
+      - name: Install portable C linker
+        if: steps.core_changed.outputs.rebuild == 'true'
+        run: |
+          set -euo pipefail
+          version=0.13.0
+          archive="zig-linux-x86_64-${version}.tar.xz"
+          curl -fsSL "https://ziglang.org/download/${version}/${archive}" -o "/tmp/${archive}"
+          tar -xJf "/tmp/${archive}" -C /tmp
+          mkdir -p "$RUNNER_TEMP/toolbin"
+          zig_bin="/tmp/zig-linux-x86_64-${version}/zig"
+          printf '#!/usr/bin/env bash\nexec %q cc "$@"\n' "$zig_bin" > "$RUNNER_TEMP/toolbin/cc"
+          chmod +x "$RUNNER_TEMP/toolbin/cc"
+          echo "$RUNNER_TEMP/toolbin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/toolbin/cc" --version
+
       - name: Install wasm-pack
         if: steps.core_changed.outputs.rebuild == 'true'
         run: |
