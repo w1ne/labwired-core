@@ -286,6 +286,15 @@ boards:
       last_capture: 2026-06-20
       probe: "USB-JTAG built-in (ESP32-S3-Zero, USB 303a:1001, openocd-esp32, Tensilica tap 0x120034e5)"
       result: "Live re-capture after the v0.17.0 merge: reset-state oracle 9/9 match live silicon (SYSTIMER CONF 0x46000000 + I2C0 timing block TO/FIFO_CONF/SCL holds/FILTER_CFG), and esp32s3_reset_conformance (sim vs frozen) passes. Supersedes the 2026-06-19 drift_ack."
+    # SPIMEM1 flash-command model fix: SPI_MEM_ADDR_REG is read right-justified
+    # (was wrongly >>8) and the dual/quad fast-read opcodes (0x3B/0xBB/0x6B/0xEB)
+    # are now decoded, so a 2nd-stage bootloader (MCUboot) reads slot0 and
+    # unmodified Zephyr boots on S3 + C3. Behavioural only — no register
+    # reset-value change, so the 9-reg reset-state silicon anchor is unaffected.
+    # Corroborated: the tier1 esp32s3 prebuilt-image rom-boot still passes all
+    # self-tests (loads app from 0x10000). No live SWD re-capture this session
+    # (no S3 board attached; a real C3 was used to dump the C3 mask ROM).
+    drift_ack: 2026-06-26
     models:
       - crates/core/src/peripherals/esp32s3
       - crates/core/src/peripherals/esp_xtensa_common
