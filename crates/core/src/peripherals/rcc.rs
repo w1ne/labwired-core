@@ -289,8 +289,12 @@ pub struct V2Rcc {
     ahbrstr: u32,  // 0x6C
     apb1rstr: u32, // 0x7C
     apb2rstr: u32, // 0x84
+    bdcr: u32,     // 0x90 — WB/G4 backup domain: LSEON bit0 → LSERDY bit1
     csr: u32,      // 0x94 — LSION bit0 → LSIRDY bit1
     crrcr: u32,    // 0x98 — HSI48ON bit0 → HSI48RDY bit1
+    bdcr1: u32,    // 0xF0 — WBA backup domain: LSI/LSESYS/LSE2 enable→ready pairs
+    cfgr1: u32,    // 0x1C — WBA RCC_CFGR1 (SW→SWS); G4/WB use CFGR at 0x08
+    reg28: u32,    // 0x28 — WBA: request bit20 ↔ acknowledge bit22 (deselect)
 }
 
 impl V2Rcc {
@@ -319,14 +323,26 @@ impl RccModel for V2Rcc {
         match offset {
             0x00 => self.cr,
             0x08 => self.cfgr,
+            0x1C => self.cfgr1,
+            // 0x28 acknowledge (bit22) tracks the inverse of request bit20:
+            // the SoC init clears bit20 and waits for bit22 to confirm.
+            0x28 => {
+                if self.reg28 & (1 << 20) == 0 {
+                    self.reg28 | (1 << 22)
+                } else {
+                    self.reg28 & !(1 << 22)
+                }
+            }
             0x6C => self.ahbrstr,
             0x7C => self.apb1rstr,
             0x84 => self.apb2rstr,
             0x8C => self.ahbenr,
+            0x90 => self.bdcr,
             0x94 => self.csr,
             0x98 => self.crrcr,
             0x9C => self.apb1enr,
             0xA4 => self.apb2enr,
+            0xF0 => self.bdcr1,
             _ => 0,
         }
     }
@@ -334,6 +350,18 @@ impl RccModel for V2Rcc {
         match offset {
             0x00 => self.cr = Self::ready(value),
             0x08 => self.cfgr = cfgr_with_optimistic_sws(value),
+            // WBA RCC_CFGR1 (0x1C): SW[1:0]→SWS[3:2], so the SYSCLK switch the
+            // SoC init waits on completes immediately.
+            0x1C => self.cfgr1 = cfgr_with_optimistic_sws(value),
+            0x28 => self.reg28 = value,
+            // BDCR: LSEON (bit0) → LSERDY (bit1); rest is RTC/backup storage.
+            0x90 => {
+                self.bdcr = if value & 1 != 0 {
+                    value | (1 << 1)
+                } else {
+                    value & !(1 << 1)
+                };
+            }
             0x6C => self.ahbrstr = value,
             0x7C => self.apb1rstr = value,
             0x84 => self.apb2rstr = value,
@@ -356,6 +384,21 @@ impl RccModel for V2Rcc {
             }
             0x9C => self.apb1enr = value,
             0xA4 => self.apb2enr = value,
+            // BDCR1 (WBA backup domain, RM0493): the LSI / LSESYS / LSE2
+            // enable→ready handshakes Zephyr's clock init polls — LSION(0)→
+            // LSIRDY(1), LSESYSEN(7)→LSESYSRDY(11), and the bit26→bit27 pair.
+            // Other bits (LSE config, RTC sel) are plain storage.
+            0xF0 => {
+                let mut v = value;
+                for &(on, rdy) in &[(0u32, 1u32), (7, 11), (26, 27)] {
+                    if v & (1 << on) != 0 {
+                        v |= 1 << rdy;
+                    } else {
+                        v &= !(1 << rdy);
+                    }
+                }
+                self.bdcr1 = v;
+            }
             _ => {}
         }
     }
@@ -1024,6 +1067,41 @@ mod tests {
         let mut rcc = Rcc::new_with_layout(RccRegisterLayout::Stm32V2);
         rcc.write_u32(0x98, 1).unwrap();
         assert_eq!(rcc.read_u32(0x98).unwrap() & 0x3, 0x3);
+    }
+
+    /// WB's classic RCC_BDCR (0x90) acks LSEON→LSERDY; WBA's BDCR1 (0xF0) acks
+    /// LSION(0)→LSIRDY(1), LSESYSEN(7)→LSESYSRDY(11) and the bit26→bit27 pair;
+    /// WBA RCC_CFGR1 (0x1C) follows SW→SWS; RCC 0x28 acks the bit20→bit22 deselect.
+    #[test]
+    fn v2_wb_wba_backup_and_switch_gates() {
+        let mut rcc = Rcc::new_with_layout(RccRegisterLayout::Stm32V2);
+
+        rcc.write_u32(0x90, 1).unwrap(); // BDCR LSEON
+        assert_eq!(rcc.read_u32(0x90).unwrap() & 0x3, 0x3, "LSERDY");
+
+        rcc.write_u32(0xF0, (1 << 0) | (1 << 7) | (1 << 26))
+            .unwrap();
+        let bdcr1 = rcc.read_u32(0xF0).unwrap();
+        for rdy in [1u32, 11, 27] {
+            assert_ne!(bdcr1 & (1 << rdy), 0, "BDCR1 rdy bit {rdy}");
+        }
+
+        rcc.write_u32(0x1C, 0x3).unwrap(); // SW = 0b11
+        assert_eq!(
+            (rcc.read_u32(0x1C).unwrap() >> 2) & 0x3,
+            0x3,
+            "SWS follows SW"
+        );
+
+        // 0x28: clearing request bit20 confirms via ack bit22.
+        rcc.write_u32(0x28, 0).unwrap();
+        assert_ne!(rcc.read_u32(0x28).unwrap() & (1 << 22), 0, "deselect ack");
+        rcc.write_u32(0x28, 1 << 20).unwrap();
+        assert_eq!(
+            rcc.read_u32(0x28).unwrap() & (1 << 22),
+            0,
+            "ack clears with request"
+        );
     }
 
     #[test]

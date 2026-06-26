@@ -28,6 +28,7 @@ pub mod generic_factory;
 pub mod gpdma;
 pub mod gpio;
 pub mod hc_sr04;
+pub mod hsem;
 pub mod i2c;
 pub mod i2c_temp_sensor;
 pub mod iwdg;
