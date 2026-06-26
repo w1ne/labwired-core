@@ -308,3 +308,9 @@ peripherals:
     size: "1KB"
     config:
       idcode: 0x10016484
+  # ICACHE (RM0481) — stm32h5_init enables it via ICACHE_CR.EN and never polls a
+  # completion flag, so a read-as-zero stub keeps the enable from bus-faulting.
+  - id: "icache"
+    type: "icache"
+    base_address: 0x40030400
+    size: "1KB"
