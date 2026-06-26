@@ -124,7 +124,7 @@ impl FromStr for UartRegisterLayout {
             "lpuart" | "kinetis" | "nxp" => Ok(Self::Lpuart),
             "16550" | "ns16550" | "uart16550" => Ok(Self::Ns16550),
             "dw_apb_uart" | "dwapb" | "designware" => Ok(Self::DwApbUart),
-            "pl011" | "primecell" => Ok(Self::Pl011),
+            "pl011" | "primecell" | "rp2040" => Ok(Self::Pl011),
             "cadence" | "cdns" | "zynq" => Ok(Self::Cadence),
             "efm32" => Ok(Self::Efm32),
             "efr32" => Ok(Self::Efr32),

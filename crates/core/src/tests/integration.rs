@@ -410,6 +410,8 @@ pub mod integration_tests {
                 base: 0x2000_0000,
                 size: "20KB".to_string(),
             },
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             memory_regions: Vec::new(),
             peripherals: vec![
                 PeripheralConfig {
@@ -516,6 +518,8 @@ pub mod integration_tests {
                 base: 0x2000_0000,
                 size: "20KB".to_string(),
             },
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             memory_regions: Vec::new(),
             peripherals: vec![
                 PeripheralConfig {
@@ -587,6 +591,8 @@ pub mod integration_tests {
                 base: 0x2000_0000,
                 size: "20KB".to_string(),
             },
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "uart1".to_string(),
@@ -642,6 +648,8 @@ pub mod integration_tests {
                 base: 0x2000_0000,
                 size: "20KB".to_string(),
             },
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "gpioa".to_string(),
@@ -703,6 +711,8 @@ pub mod integration_tests {
                 base: 0x2000_0000,
                 size: "20KB".to_string(),
             },
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "uart3".to_string(),
@@ -862,6 +872,8 @@ pub mod integration_tests {
                     clock: None,
                 },
             ],
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
         };
 
         let manifest = SystemManifest {
@@ -908,6 +920,8 @@ pub mod integration_tests {
                 base: 0x2000_0000,
                 size: "20KB".to_string(),
             },
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "rcc".to_string(),
@@ -966,6 +980,8 @@ pub mod integration_tests {
                 base: 0x2000_0000,
                 size: "20KB".to_string(),
             },
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "rcc".to_string(),
@@ -1024,6 +1040,8 @@ pub mod integration_tests {
                 base: 0x2000_0000,
                 size: "20KB".to_string(),
             },
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "gpioa".to_string(),
@@ -2207,6 +2225,8 @@ pub mod integration_tests {
                 base: 0x3FC8_0000,
                 size: "400KB".to_string(),
             },
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "timg0".to_string(),

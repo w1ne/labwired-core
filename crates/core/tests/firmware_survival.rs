@@ -101,6 +101,19 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"RP2040_SMOKE_OK\n",
     },
     SurvivalCase {
+        // Unmodified Zephyr 3.7 hello_world built for `rpi_pico`: exercises the
+        // boot2 vector relocation, atomic register aliases, the clock/reset
+        // bring-up (RESET_DONE / XOSC / PLL / CLOCKS) and the PL011 console.
+        name: "rp2040_zephyr_hello",
+        core: "cortex-m0+",
+        family: CpuFamily::CortexM,
+        chip: "rp2040",
+        system: "rp2040-pico",
+        fixture: "rp2040-zephyr-hello.elf",
+        valid_pc_ranges: &[(0x1000_0000, 0x101F_FFFF), (0x2000_0000, 0x2004_1FFF)],
+        expected_uart_output: b"Hello World! rpi_pico",
+    },
+    SurvivalCase {
         name: "nrf52840_demo",
         core: "cortex-m4",
         family: CpuFamily::CortexM,
@@ -968,6 +981,11 @@ fn test_stm32f401_zephyr_survival() {
 #[test]
 fn test_rp2040_demo_survival() {
     run_survival_case(case_by_name("rp2040_demo"));
+}
+
+#[test]
+fn test_rp2040_zephyr_hello_survival() {
+    run_survival_case(case_by_name("rp2040_zephyr_hello"));
 }
 
 #[test]

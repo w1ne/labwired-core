@@ -217,6 +217,9 @@ pub fn try_build(
             )
         }
         "rng" => Box::new(crate::peripherals::rng::Rng::new()),
+        "rp2040_clkrst" => Box::new(crate::peripherals::rp2040_clocks::Rp2040ClockReset::new(
+            p_cfg.base_address,
+        )),
         "crc" => {
             // IDR scratch register width: 8-bit on F0/F1/L0, 32-bit
             // on F2+/L4+. YAML: `config: { idr_width: 8 }`; default 32.

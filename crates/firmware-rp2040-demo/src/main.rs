@@ -9,8 +9,8 @@ const UART0_BASE: u32 = 0x40034000;
 // We'll use a mocked "LED" mapped to a scratch register or standard PIO base for demonstration
 const MOCK_LED_REG: *mut u32 = 0x50200000 as *mut u32;
 
-// UART Registers (stm32v2 layout: TDR at offset 0x28)
-const UART0_TDR: *mut u32 = (UART0_BASE + 0x28) as *mut u32;
+// UART data register (PL011 UARTDR at offset 0x00 — the RP2040's real UART).
+const UART0_DR: *mut u32 = UART0_BASE as *mut u32;
 
 #[entry]
 fn main() -> ! {
@@ -36,7 +36,7 @@ fn main() -> ! {
 fn print_uart(s: &str) {
     for b in s.bytes() {
         unsafe {
-            core::ptr::write_volatile(UART0_TDR, b as u32);
+            core::ptr::write_volatile(UART0_DR, b as u32);
         }
     }
 }
