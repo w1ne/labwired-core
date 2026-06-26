@@ -31,6 +31,9 @@ pub fn build_i2c_device(
             )))
         }
         "aht20" => Some(Box::new(crate::peripherals::components::Aht20::new())),
+        // scd41 / sgp41 / sps30 / veml7700 are onboarded through the
+        // PeripheralKit registry (peripherals/kit), which dispatches them on
+        // both the STM32 and ESP32-C3 I²C buses — no legacy arm needed here.
         "bmp280" => {
             let address = config
                 .get("i2c_address")

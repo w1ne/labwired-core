@@ -294,6 +294,12 @@ pub fn try_build(
         "esp32_timg" => Box::new(crate::peripherals::esp32::timg::Timg::new(
             p_cfg.base_address as u32,
         )),
+        // NXP Kinetis clock peripherals — behavioural so the vendor MCUXpresso
+        // clock bring-up (which spins on MCG_S / RSIM_CONTROL status bits)
+        // settles instead of hanging. A passive register bank cannot complete
+        // these hand-offs. See peripherals/mcg.rs and peripherals/rsim.rs.
+        "nxp_mcg" | "kinetis_mcg" => Box::new(crate::peripherals::mcg::Mcg::new()),
+        "nxp_rsim" => Box::new(crate::peripherals::rsim::Rsim::new()),
         _ => return Ok(None),
     };
     Ok(Some(dev))

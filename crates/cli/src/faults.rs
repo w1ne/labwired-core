@@ -48,6 +48,25 @@ fn apply_one(bus: &mut SystemBus, f: &FaultSpec) -> FaultEvidence {
                 ),
             }
         }
+        FaultKind::StuckAtBit => {
+            match (
+                f.target.peripheral.as_deref(),
+                f.target.register.as_deref(),
+                f.target.bit,
+                f.level,
+            ) {
+                (Some(p), Some(r), Some(bit), Some(level)) => {
+                    match bus.inject_stuck_bit(p, r, bit, level) {
+                        Ok(()) => (true, None),
+                        Err(e) => (false, Some(e)),
+                    }
+                }
+                _ => (
+                    false,
+                    Some("stuck_at_bit needs target.register, target.bit and level".to_string()),
+                ),
+            }
+        }
         FaultKind::MissingClock => match f.target.peripheral.as_deref() {
             // fired is provisional here — it is finalised after the run, since
             // missing_clock only fires if the firmware accessed the peripheral.
@@ -210,5 +229,60 @@ mod tests {
             ev[0].fired,
             "missing_clock fires once the peripheral is accessed"
         );
+    }
+
+    #[test]
+    fn stuck_at_bit_applies_and_reads_stuck() {
+        use labwired_config::{Access, PeripheralDescriptor, RegisterDescriptor};
+        use labwired_core::peripherals::declarative::GenericPeripheral;
+
+        let desc = PeripheralDescriptor {
+            peripheral: "t".to_string(),
+            version: "1.0".to_string(),
+            registers: vec![RegisterDescriptor {
+                id: "sr".to_string(),
+                address_offset: 0,
+                size: 32,
+                access: Access::ReadWrite,
+                reset_value: 0,
+                fields: vec![],
+                side_effects: None,
+            }],
+            interrupts: None,
+            timing: None,
+        };
+        let mut bus = SystemBus::new();
+        bus.add_peripheral(
+            "usart1",
+            0x4000_0000,
+            0x400,
+            None,
+            Box::new(GenericPeripheral::new(desc)),
+        );
+
+        let f = FaultSpec {
+            id: "s".to_string(),
+            kind: FaultKind::StuckAtBit,
+            target: FaultTarget {
+                peripheral: Some("usart1".to_string()),
+                register: Some("sr".to_string()),
+                bit: Some(7),
+                address: None,
+            },
+            trigger: FaultTrigger::AtStart,
+            level: Some(1),
+            value: None,
+            xor: None,
+            to: None,
+            deny: None,
+            delay_cycles: None,
+            interrupt: None,
+            bits: None,
+            size: None,
+        };
+        let ev = apply_faults(&mut bus, std::slice::from_ref(&f));
+        assert!(ev[0].fired);
+        assert!(ev[0].error.is_none());
+        assert_eq!(bus.read_u32(0x4000_0000).unwrap() & (1 << 7), 1 << 7);
     }
 }

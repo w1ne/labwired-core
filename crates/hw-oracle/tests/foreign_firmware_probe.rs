@@ -33,6 +33,7 @@ fn probe_foreign_firmware() {
         chip: chip_path.to_string_lossy().to_string(),
         external_devices: vec![],
         board_io: vec![],
+        debug_uart: None,
         peripherals: vec![],
         memory_overrides: Default::default(),
     };

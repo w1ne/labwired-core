@@ -7,6 +7,7 @@
 //! `labwired test` subcommand: run the Tier-1 protocol suite.
 
 use crate::*;
+use tracing::warn;
 
 /// Apply the script's faults to the built bus before the run, logging any that
 /// could not be applied. Returns the provisional evidence; runtime-observed
@@ -425,7 +426,21 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
     };
 
     let uart_tx = Arc::new(Mutex::new(Vec::new()));
-    bus.attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
+    let debug_uart = system_path
+        .as_ref()
+        .and_then(|path| labwired_config::SystemManifest::from_file(path).ok())
+        .and_then(|manifest| manifest.debug_uart);
+    if let Some(debug_uart) = debug_uart.as_deref() {
+        if !bus.attach_uart_tx_sink_named(debug_uart, uart_tx.clone(), !args.no_uart_stdout) {
+            warn!(
+                "debug_uart '{}' did not resolve to a UART peripheral; falling back to all UARTs",
+                debug_uart
+            );
+            bus.attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
+        }
+    } else {
+        bus.attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
+    }
     // Let any attached IO-Link master record what it received over IO-Link into
     // the same captured buffer, so `uart_contains` can assert on the MASTER
     // side (MASTER PD= / MASTER VERDICT / MASTER EVENT), not just the device

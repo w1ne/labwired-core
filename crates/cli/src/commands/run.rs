@@ -28,6 +28,7 @@ pub(crate) fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode 
         memory_overrides: Default::default(),
         external_devices: vec![],
         board_io: vec![],
+        debug_uart: None,
         peripherals: vec![],
         walk_deleted: false,
     };

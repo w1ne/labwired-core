@@ -1,0 +1,71 @@
+# LabWired - Leo air-quality sensor (ESP32-C3 + Sensirion + Vishay), NORMAL.
+#
+# An ESP32-C3 reads four air-quality sensors over the behavioral I²C0 controller
+# (0x60013000) using the REAL, unmodified Sensirion embedded-i2c drivers
+# (SCD41/SGP41/SPS30) plus a register-level VEML7700 driver, all ON-TARGET. It
+# turns the raw measurements into a plain-language verdict over UART0 — Leo's
+# core promise, with no hardware in the loop.
+#
+# NORMAL scenario: a closed room slowly fills up. CO₂ climbs from a fresh
+# ~450 ppm toward a stuffy ~1400 ppm (first-order, alpha 0.08), particulates
+# drift up, the light dims toward evening. The firmware's verdict must flip from
+# "air quality is good" to "CO2 climbing, crack a window" as CO₂ crosses
+# 1000 ppm — a transition the firmware infers purely from the decoded readings,
+# blind to this scene config.
+name: "esp32c3-leo-airquality-stuffy"
+chip: "../../configs/chips/esp32c3.yaml"
+
+external_devices:
+  # ── Sensirion SCD41: CO₂ + temperature + humidity ─────────────────────────
+  - id: "scd41"
+    type: "scd41"
+    connection: "i2c0"
+    config:
+      i2c_address: 0x62
+      co2_start_ppm: 450.0    # fresh room
+      co2_target_ppm: 1800.0  # stuffy, closed-room steady state
+      ramp_alpha: 0.08        # per-measurement approach rate (0 = flat scene)
+      temp_c: 22.0
+      rh_pct: 45.0
+
+  # ── Sensirion SGP41: VOC / NOx raw signals (→ VOC Index on-device) ─────────
+  - id: "sgp41"
+    type: "sgp41"
+    connection: "i2c0"
+    config:
+      i2c_address: 0x59
+      voc_sraw_start: 28000.0
+      voc_sraw_target: 34000.0
+      nox_sraw: 16000.0
+      ramp_alpha: 0.08
+
+  # ── Sensirion SPS30: particulate matter (PM1/2.5/4/10) ─────────────────────
+  - id: "sps30"
+    type: "sps30"
+    connection: "i2c0"
+    config:
+      i2c_address: 0x69
+      pm2_5_start: 6.0        # µg/m³, clean indoor air
+      pm2_5_target: 40.0      # mild haze as the room settles
+      ramp_alpha: 0.08
+
+  # ── Vishay VEML7700: ambient light ────────────────────────────────────────
+  - id: "veml7700"
+    type: "veml7700"
+    connection: "i2c0"
+    config:
+      i2c_address: 0x10
+      lux_start: 450.0        # daylit room
+      lux_target: 90.0        # dims toward evening
+      ramp_alpha: 0.08
+
+  # ── SSD1306 OLED: on-device screen showing the plain-language verdict ──────
+  - id: "oled"
+    type: "oled-ssd1306"
+    connection: "i2c0"
+    config:
+      i2c_address: 0x3C
+
+# All sensors + the OLED are wired purely via the I²C0 `connection:` above; no
+# GPIO board_io binding is needed.
+board_io: []

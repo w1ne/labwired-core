@@ -376,7 +376,7 @@ impl IolinkMaster {
                 let r = decode_operate(&p.raw_device[..n], self.pd_in_len, self.od_len);
                 (r.pd, Some(r.checksum_ok), Some(r.pd_valid))
             } else {
-                (Vec::new(), Some(false), Some(false))
+                (Vec::new(), None, Some(false))
             }
         } else {
             (Vec::new(), None, None)
@@ -670,6 +670,23 @@ mod tests {
         let x = m.finalize_xfer(p);
         assert_eq!(x.ck_ok, None);
         assert_eq!(x.pd_valid, None);
+        assert!(x.pd_in.is_empty());
+    }
+
+    #[test]
+    fn finalize_incomplete_cyclic_frame_has_no_crc_verdict() {
+        let m = IolinkMaster::new(1, 1, IolinkComSpeed::Com2);
+        let p = PendingXfer {
+            seq: 1,
+            kind: IolinkFrameKind::Cyclic,
+            pd_out: vec![0],
+            link_state: IolinkLinkState::Operate,
+            raw_master: encode_type1_cycle(&[0]),
+            raw_device: vec![0x20],
+        };
+        let x = m.finalize_xfer(p);
+        assert_eq!(x.ck_ok, None);
+        assert_eq!(x.pd_valid, Some(false));
         assert!(x.pd_in.is_empty());
     }
 

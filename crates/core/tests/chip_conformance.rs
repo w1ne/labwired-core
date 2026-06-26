@@ -146,6 +146,15 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: None,
     },
+    // NXP KW41Z (Cortex-M0+ BLE + 802.15.4). Register surface ingested from the
+    // public CMSIS-SVD; radio (BTLE_RF/GENFSK/ZLL/XCVR) not yet modelled. The
+    // behavior gate boots bare-metal firmware that prints over LPUART0.
+    ChipConf {
+        name: "mkw41z4",
+        yaml: "configs/chips/mkw41z4.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_kw41z_smoke_survival"),
+    },
 ];
 
 /// Registers a cold-reset sim model can *never* reproduce from a `reset_halt`
@@ -255,6 +264,7 @@ fn dummy_manifest(path: &str) -> SystemManifest {
         chip: path.to_string(),
         external_devices: vec![],
         board_io: vec![],
+        debug_uart: None,
         peripherals: vec![],
         memory_overrides: Default::default(),
     }

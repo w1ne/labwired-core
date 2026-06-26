@@ -1,0 +1,242 @@
+on:
+  workflow_dispatch:
+  push:
+  pull_request:
+    branches:
+     - master
+
+jobs:
+  generate-wrapper:
+    runs-on: "ubuntu-22.04"
+    defaults:
+      run:
+        working-directory: ./python-wrapper
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install dependencies
+        uses: awalsh128/cache-apt-pkgs-action@v1.6.0
+        with: 
+          packages: gcc g++ swig
+          version: 1.0
+      - name: generate wrapper
+        run: ./generate_swig_wrapper.sh
+        shell: bash
+      - uses: actions/upload-artifact@v6
+        with:
+          name: python-sources
+          path: python-wrapper/sensirion_gas_index_algorithm/**
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v6
+        with:
+          name: swig-sources
+          path: python-wrapper/swig/**
+          if-no-files-found: error
+  check_readme_rst_syntax:
+    runs-on: "ubuntu-22.04"
+    defaults:
+      run:
+        working-directory: ./python-wrapper    
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: 3.8
+      - name: install rst linter
+        run: pip install restructuredtext-lint pygments      
+      - name: run
+        run: rst-lint *.rst          
+  build:
+    continue-on-error: true
+    strategy:
+      matrix:
+        py-version: ["3.8", "3.9"]
+        os: [ubuntu-22.04, windows-2019, macOS-15]
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
+    needs: generate-wrapper
+    defaults:
+      run:
+        working-directory: ./python-wrapper
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v6
+        with:
+          name: python-sources
+          path: python-wrapper/sensirion_gas_index_algorithm
+      - uses: actions/download-artifact@v6
+        with:
+          name: swig-sources
+          path: python-wrapper/swig
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.py-version }}
+      - name: install package
+        run: | 
+          pip3 install -e .[test]
+          pip3 install wheel
+      - name: static test
+        run: flake8
+      - name: unit test
+        run: pytest
+      - name: create wheel
+        run: python3 setup.py bdist_wheel
+      - uses: actions/upload-artifact@v6
+        with:
+          name: py_${{ matrix.py-version }}_${{ matrix.os}}_build
+          path: python-wrapper/dist/**
+          if-no-files-found: error
+  py3p8_linux_sdist:
+    runs-on: "ubuntu-22.04"
+    needs: generate-wrapper
+    defaults:
+      run:
+        working-directory: ./python-wrapper
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v6
+        with:
+          name: python-sources
+          path: python-wrapper/sensirion_gas_index_algorithm
+      - uses: actions/download-artifact@v6
+        with:
+          name: swig-sources
+          path: python-wrapper/swig
+      - uses: actions/setup-python@v6
+        with:
+          python-version: 3.8
+      - name: create dist package
+        run: python3 setup.py sdist
+      - uses: actions/upload-artifact@v6
+        with:
+          name: py_source_dist
+          path: python-wrapper/dist/**
+          if-no-files-found: error
+  build_pages:
+    runs-on: "ubuntu-22.04"
+    needs: generate-wrapper
+    defaults:
+      run:
+        working-directory: ./python-wrapper
+    steps:    
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v6
+        with:
+          name: python-sources
+          path: python-wrapper/sensirion_gas_index_algorithm
+      - uses: actions/download-artifact@v6
+        with:
+          name: swig-sources
+          path: python-wrapper/swig
+      - uses: actions/setup-python@v6
+        with:
+          python-version: 3.8
+          cache: "pip"
+      - name: Install the project dependencies
+        run: |    
+          python setup.py install
+          python -m pip install -r docs/requirements.txt
+      - name: Build documentation
+        run: cd ./docs && make html
+      - name: Upload html
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: python-wrapper/docs/_build/html
+  deploy_pages:
+    if: (github.event_name == 'push' && startsWith(github.ref, 'refs/tags')) || github.event_name == 'workflow_dispatch'
+    runs-on: "ubuntu-22.04"
+    needs: build_pages
+    permissions:
+      pages: write # to deploy to Pages
+      id-token: write # to verify the deployment originates from an appropriate source
+      actions: read # required by actions/deploy-pages@v4
+    # Deploy to the github-pages environment
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+  deploy_pypi:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
+    runs-on: "ubuntu-22.04"
+    permissions:
+      id-token: write
+    needs: ["py3p8_linux_sdist", "build"]
+    steps:
+      - name: download python source dist artifacts
+        uses: actions/download-artifact@v6
+        with:          
+          path: python-wrapper/dist
+          name: py_source_dist
+      - name: download win python build artifacts
+        uses: actions/download-artifact@v6
+        with:          
+          path: python-wrapper/dist
+          merge-multiple: true
+          pattern: py_*windows*_build
+      - name: download mac build artifacts
+        uses: actions/download-artifact@v6
+        with:          
+          path: python-wrapper/dist
+          merge-multiple: true
+          pattern: py_*macOS*_build
+      # pypi does not accept the linux wheels with _x86_64, thus not uploading any linux wheels
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+  github-release:
+    name: Create GitHub Release and add signature for python packages
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
+    needs:
+      - build
+      - py3p8_linux_sdist
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: ./python-wrapper
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: download python source dist artifacts
+        uses: actions/download-artifact@v6
+        with:          
+          path: python-wrapper/dist
+          merge-multiple: true
+          name: py_source_dist
+      - name: download python build artifacts
+        uses: actions/download-artifact@v6
+        with:          
+          path: python-wrapper/dist
+          merge-multiple: true
+          pattern: py_*_build
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [[ "$(gh release view '${{ github.ref_name }}' 2>&1)" == "release not found" ]]; then
+            gh release create '${{ github.ref_name }}' --repo '${{ github.repository }}' --notes ""
+          fi
+      - name: Upload artifacts to GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # Upload release artifacts before the signing, such that artifacts are still uploaded if signing fails
+        run: |          
+          gh release upload '${{ github.ref_name }}' dist/** --repo '${{ github.repository }}'
+      - name: Sign the dists with Sigstore
+        uses: sigstore/gh-action-sigstore-python@f514d46b907ebcd5bedc05145c03b69c1edd8b46
+        with:
+          inputs: >-
+            ./python-wrapper/dist/*.tar.gz
+            ./python-wrapper/dist/*.whl
+      - name: Upload signatures to GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # upload sigstore-produced signatures and certificates from dist
+        run: |          
+          gh release upload '${{ github.ref_name }}' dist/*.sigstore.json --repo '${{ github.repository }}'

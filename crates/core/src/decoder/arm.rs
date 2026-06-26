@@ -973,6 +973,19 @@ pub fn decode_thumb_16(opcode: u16) -> Instruction {
 
     // 8.1 Misc (T1) (0xBxxx)
     if (opcode & 0xF000) == 0xB000 {
+        // REV/REV16/REVSH (T1): 1011 1010 op mmm ddd.
+        // newlib strlen emits REV after its word-at-a-time zero-byte scan.
+        if (opcode & 0xFF00) == 0xBA00 {
+            let rm = ((opcode >> 3) & 0x7) as u8;
+            let rd = (opcode & 0x7) as u8;
+            return match (opcode >> 6) & 0x3 {
+                0b00 => Instruction::Rev { rd, rm },
+                0b01 => Instruction::Rev16 { rd, rm },
+                0b11 => Instruction::RevSh { rd, rm },
+                _ => Instruction::Unknown(opcode),
+            };
+        }
+
         // SXTH/SXTB/UXTH/UXTB (T1): 1011 0010 [op2] mmm ddd
         //   op2 = 00 -> SXTH (0xB200..0xB23F)
         //   op2 = 01 -> SXTB (0xB240..0xB27F)
@@ -2164,6 +2177,14 @@ mod tests {
         assert_eq!(decode_thumb_16(0xB281), Instruction::Uxth { rd: 1, rm: 0 });
         // UXTB R5, R4 -> 0xB2E5 (preserves existing behavior)
         assert_eq!(decode_thumb_16(0xB2E5), Instruction::Uxtb { rd: 5, rm: 4 });
+    }
+
+    #[test]
+    fn test_decode_rev_t1() {
+        // REV r2, r2 = 0xBA12, emitted by newlib strlen.
+        assert_eq!(decode_thumb_16(0xBA12), Instruction::Rev { rd: 2, rm: 2 });
+        assert_eq!(decode_thumb_16(0xBA52), Instruction::Rev16 { rd: 2, rm: 2 });
+        assert_eq!(decode_thumb_16(0xBAD2), Instruction::RevSh { rd: 2, rm: 2 });
     }
 
     #[test]
