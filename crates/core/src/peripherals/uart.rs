@@ -386,6 +386,31 @@ impl Uart {
         0xC0 // TX-ready + TC-ready in low byte for both layouts.
     }
 
+    /// Full status register word. Low byte = TXE|TC (always ready, the model
+    /// drains TX instantly); RXNE folded in by the read path. On the modern
+    /// STM32 USART (ISR at 0x1C) bits 21/22 are TEACK/REACK — hardware sets them
+    /// once the transmitter/receiver are acknowledged after the USART is enabled
+    /// (UE) with TE/RE set, and Zephyr's uart_stm32_init spins on TEACK. They are
+    /// 0 while the USART is disabled, so firmware that reads ISR at reset still
+    /// sees 0xC0. The legacy SR has no such bits.
+    fn status_word(&self) -> u32 {
+        let mut v = self.status_ready_value() as u32;
+        if matches!(self.layout, UartRegisterLayout::Stm32V2) {
+            const UE: u32 = 1 << 0;
+            const RE: u32 = 1 << 2;
+            const TE: u32 = 1 << 3;
+            if self.cr1 & UE != 0 {
+                if self.cr1 & TE != 0 {
+                    v |= 1 << 21; // TEACK
+                }
+                if self.cr1 & RE != 0 {
+                    v |= 1 << 22; // REACK
+                }
+            }
+        }
+        v
+    }
+
     fn push_tx(&mut self, value: u8) {
         self.record_trace("tx", value);
 
@@ -448,15 +473,17 @@ impl Uart {
 
 impl crate::Peripheral for Uart {
     fn read(&self, offset: u64) -> SimResult<u8> {
-        if offset == self.status_offset() {
-            let mut val = self.status_ready_value();
+        let status_base = self.status_offset();
+        if offset >= status_base && offset < status_base + 4 {
+            let mut word = self.status_word();
             // Set RXNE bit (bit 5) when RX buffer has data
             if let Ok(guard) = self.rx_buf.lock() {
                 if !guard.is_empty() {
-                    val |= 1 << 5; // RXNE
+                    word |= 1 << 5; // RXNE
                 }
             }
-            return Ok(val);
+            let byte = (offset - status_base) * 8;
+            return Ok(((word >> byte) & 0xFF) as u8);
         }
         if offset == self.rx_offset() {
             // Pop one byte from RX buffer
@@ -652,6 +679,24 @@ mod tests {
         let data = sink.lock().unwrap().clone();
         assert_eq!(data, vec![b'Y']);
         assert_eq!(uart.read(0x1C).unwrap(), 0xC0); // ISR ready flags
+    }
+
+    /// Modern-USART ISR exposes TEACK (bit 21) / REACK (bit 22), but ONLY once
+    /// the USART is enabled (CR1.UE) with TE/RE set — Zephyr's uart_stm32_init
+    /// spins on TEACK after enabling, while firmware that samples ISR at reset
+    /// (CONFIG read-back) must still see 0xC0. Word reads must serve the upper
+    /// bytes too, since the driver reads ISR with a 32-bit load.
+    #[test]
+    fn test_uart_v2_teack_gated_on_enable() {
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::Stm32V2);
+        // Reset: UART disabled → no TEACK/REACK.
+        assert_eq!(uart.read_u32(0x1C).unwrap(), 0xC0);
+        // CR1 (offset 0x00 on v2) = UE | TE | RE = 0xD.
+        uart.write(0x00, 0x0D).unwrap();
+        let isr = uart.read_u32(0x1C).unwrap();
+        assert_ne!(isr & (1 << 21), 0, "TEACK set once UE+TE");
+        assert_ne!(isr & (1 << 22), 0, "REACK set once UE+RE");
+        assert_eq!(isr & 0xC0, 0xC0, "TXE/TC still present");
     }
 
     #[test]
