@@ -42,9 +42,31 @@ peripherals:
   - id: "systick"
     type: "systick"
     base_address: 0xE000E010
+  - id: "usart1"
+    type: "uart"
+    base_address: 0x40013800
+    irq: 46
+    config:
+      profile: "stm32v2"
   - id: "lpuart1"
     type: "uart"
     base_address: 0x46002400
     irq: 45
     config:
       profile: "stm32v2"
+  - id: "flash"
+    type: "flash"
+    base_address: 0x40022000
+    size: "1KB"
+    config:
+      profile: "l4"
+  - id: "pwr"
+    type: "pwr"
+    base_address: 0x46020800
+    size: "1KB"
+    config:
+      profile: "wba"
+  - id: "icache"
+    type: "icache"
+    base_address: 0x40030400
+    size: "1KB"

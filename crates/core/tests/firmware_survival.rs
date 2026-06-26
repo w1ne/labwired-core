@@ -145,6 +145,30 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"Hello World! nucleo_h563zi",
     },
     SurvivalCase {
+        // Dual-core (M4 + M0+): exercises the HSEM inter-core lock (granted to
+        // CPU1) and the classic RCC BDCR LSE path.
+        name: "stm32wb55_zephyr",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        chip: "stm32wb55",
+        system: "mb1355c",
+        fixture: "stm32wb55-zephyr-hello.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x0807_FFFF), (0x2000_0000, 0x2003_FFFF)],
+        expected_uart_output: b"Hello World! nucleo_wb55rg",
+    },
+    SurvivalCase {
+        // Cortex-M33: exercises the WBA-specific RCC (CFGR1@0x1C, BDCR1@0xF0,
+        // the 0x28 request/ack) and the PWR VOSR voltage-ready handshake.
+        name: "stm32wba52_zephyr",
+        core: "cortex-m33",
+        family: CpuFamily::CortexM,
+        chip: "stm32wba52",
+        system: "nucleo_wba52cg",
+        fixture: "stm32wba52-zephyr-hello.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x080F_FFFF), (0x2000_0000, 0x2001_FFFF)],
+        expected_uart_output: b"Hello World! nucleo_wba52cg",
+    },
+    SurvivalCase {
         name: "rp2040_demo",
         core: "cortex-m0+",
         family: CpuFamily::CortexM,
@@ -1009,6 +1033,16 @@ fn test_stm32g474_zephyr_survival() {
 #[test]
 fn test_stm32h563_zephyr_survival() {
     run_survival_case(case_by_name("stm32h563_zephyr"));
+}
+
+#[test]
+fn test_stm32wb55_zephyr_survival() {
+    run_survival_case(case_by_name("stm32wb55_zephyr"));
+}
+
+#[test]
+fn test_stm32wba52_zephyr_survival() {
+    run_survival_case(case_by_name("stm32wba52_zephyr"));
 }
 
 #[test]

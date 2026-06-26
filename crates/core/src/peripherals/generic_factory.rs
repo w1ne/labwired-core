@@ -182,6 +182,8 @@ pub fn try_build(
                 // L0 has a two-register surface (CR/CSR), not the L4
                 // CR1..CR4 / PUCRx set — a distinct reset shape.
                 Some("stm32l0") | Some("l0") => Box::new(crate::peripherals::pwr::PwrL0::new()),
+                // WBA: VOSR (0x0C) VOS→VOSRDY handshake the SoC init polls.
+                Some("stm32wba") | Some("wba") => Box::new(crate::peripherals::pwr::PwrWba::new()),
                 _ => Box::new(crate::peripherals::pwr::Pwr::new()),
             }
         }
@@ -296,6 +298,9 @@ pub fn try_build(
         // so a read-as-zero stub keeps the enable sequence from bus-faulting.
         // No cache behaviour is modelled — the simulator has flat memory.
         "icache" | "dcache" => Box::new(crate::peripherals::stub::StubPeripheral::new(0x00)),
+        // Hardware semaphore (WB/WL dual-core inter-core lock). Single-core sim
+        // grants every lock to CPU1, so the read-lock path succeeds at once.
+        "hsem" => Box::new(crate::peripherals::hsem::Hsem::new()),
         _ => return Ok(None),
     };
     Ok(Some(dev))
