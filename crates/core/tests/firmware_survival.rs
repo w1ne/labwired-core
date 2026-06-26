@@ -78,6 +78,19 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"",
     },
     SurvivalCase {
+        // Unmodified Zephyr 3.7 hello_world for nucleo_f401re. Drives the kernel
+        // from Cortex SysTick (not an SoC timer), so it exercises the SysTick
+        // count-down/reload path and the USART2 console end-to-end.
+        name: "stm32f401_zephyr",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        chip: "stm32f401",
+        system: "nucleo-f401re",
+        fixture: "stm32f401-zephyr-hello.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x0807_FFFF), (0x2000_0000, 0x2001_FFFF)],
+        expected_uart_output: b"Hello World! nucleo_f401re",
+    },
+    SurvivalCase {
         name: "rp2040_demo",
         core: "cortex-m0+",
         family: CpuFamily::CortexM,
@@ -945,6 +958,11 @@ fn test_stm32f103_blinky_survival() {
 #[test]
 fn test_stm32f401_blinky_survival() {
     run_survival_case(case_by_name("stm32f401_blinky"));
+}
+
+#[test]
+fn test_stm32f401_zephyr_survival() {
+    run_survival_case(case_by_name("stm32f401_zephyr"));
 }
 
 #[test]

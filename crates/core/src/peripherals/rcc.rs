@@ -178,6 +178,7 @@ pub struct F4Rcc {
     ahbrstr: u32,  // AHB1RSTR 0x10
     apb1rstr: u32, // 0x20
     apb2rstr: u32, // 0x24
+    csr: u32,      // 0x74 — LSION bit0 → LSIRDY bit1
     // Per-part ENR writable masks (silicon-pinned); 0xFFFF_FFFF = unmasked.
     ahb1_mask: u32,
     apb1_mask: u32,
@@ -213,6 +214,7 @@ impl RccModel for F4Rcc {
             0x34 => self.ahb2enr,
             0x40 => self.apb1enr,
             0x44 => self.apb2enr,
+            0x74 => self.csr,
             _ => 0,
         }
     }
@@ -237,6 +239,16 @@ impl RccModel for F4Rcc {
             0x34 => self.ahb2enr = value,
             0x40 => self.apb1enr = value & self.apb1_mask,
             0x44 => self.apb2enr = value & self.apb2_mask,
+            // CSR: LSION (bit0) auto-sets LSIRDY (bit1), mirroring the classic
+            // CR ready rule. The reset-flag bits (25:31) and RMVF (24) are
+            // kept as plain storage.
+            0x74 => {
+                self.csr = if value & 1 != 0 {
+                    value | (1 << 1)
+                } else {
+                    value & !(1 << 1)
+                };
+            }
             _ => {}
         }
     }
