@@ -21,6 +21,8 @@ assertions:
   - uart_contains: "SGP41 READY"
   - uart_contains: "SPS30 READY"
   - uart_contains: "VEML7700 READY"
+  - uart_contains: "OLED READY"
+  - uart_contains: "OLED render done"
   # Early cycles: fresh air. The decoded CO₂ starts low.
   - uart_contains: "AIR: fresh - air quality is good"
   # The headline transition once CO₂ climbs past 1000 ppm — the plain-language

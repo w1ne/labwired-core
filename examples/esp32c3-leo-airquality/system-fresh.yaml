@@ -59,6 +59,13 @@ external_devices:
       lux_target: 90.0        # dims toward evening
       ramp_alpha: 0.08
 
-# All four sensors are wired purely via the I²C0 `connection:` above; no GPIO
-# board_io binding is needed.
+  # ── SSD1306 OLED: on-device screen showing the plain-language verdict ──────
+  - id: "oled"
+    type: "oled-ssd1306"
+    connection: "i2c0"
+    config:
+      i2c_address: 0x3C
+
+# All sensors + the OLED are wired purely via the I²C0 `connection:` above; no
+# GPIO board_io binding is needed.
 board_io: []

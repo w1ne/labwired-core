@@ -20,9 +20,31 @@ team would flash to real silicon boots and decodes here.
 | VOC       | Sensirion SGP41 | I²C0 0x59  | VOC raw → VOC Index            | real `embedded-i2c-sgp41` + `gas-index-algorithm` |
 | Particles | Sensirion SPS30 | I²C0 0x69  | PM1/2.5/4/10                   | real `embedded-i2c-sps30` (uint16 output) |
 | Light     | Vishay VEML7700 | I²C0 0x10  | ambient lux                    | register-level driver (Vishay ships no bare-metal C lib) |
+| Screen    | SSD1306 OLED    | I²C0 0x3C  | 128×64 on-device display       | bare-C driver + 5×7 font |
 
 That covers every metric on the product brief — CO₂, particulates, VOC,
-humidity, light, temperature — on one I²C bus.
+humidity, light, temperature — on one I²C bus, plus a 128×64 OLED that shows the
+plain-language verdict on the device itself.
+
+## The screen
+
+The firmware renders the readings and the headline verdict to the SSD1306 OLED
+each cycle (the playground draws the live panel). For headless runs it also
+echoes the final frame as ASCII art between `OLED-FB-BEGIN`/`OLED-FB-END` so the
+rendered screen is verifiable in the log. A normal-scenario frame:
+
+```
+LEO AIR QUALITY
+CO2  1395 PPM
+PM2.5 22 UG
+VOC 0
+LIGHT 91 LX
+TEMP 23C RH 50%
+
+>CRACK A WINDOW
+```
+
+(the stuffy scenario shows `>VENTILATE NOW`).
 
 ## How it works
 

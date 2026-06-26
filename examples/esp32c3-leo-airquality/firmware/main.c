@@ -28,7 +28,9 @@
 #include "sensirion_i2c_hal.h"
 #include "sgp41_i2c.h"
 #include "sps30_i2c.h"
+#include "ssd1306_c3.h"
 #include "veml7700_c3.h"
+#include "font5x7.h"
 
 #define SCD41_ADDR 0x62
 #define SPS30_ADDR 0x69
@@ -66,6 +68,127 @@ static void print_verdict(uint16_t co2, uint16_t pm2_5) {
     uart_puts("\r\n");
 }
 
+/* ── On-device OLED screen ───────────────────────────────────────────────── */
+
+static uint8_t g_fb[SSD1306_FB_SIZE];
+
+static int put_str(char *d, int p, const char *s) {
+    while (*s) {
+        d[p++] = *s++;
+    }
+    return p;
+}
+
+static int put_uint(char *d, int p, uint32_t v) {
+    char t[12];
+    int n = 0;
+    if (v == 0) {
+        t[n++] = '0';
+    }
+    while (v) {
+        t[n++] = (char)('0' + (v % 10u));
+        v /= 10u;
+    }
+    while (n) {
+        d[p++] = t[--n];
+    }
+    return p;
+}
+
+/* Draw an upper-cased string into the page-major framebuffer at (x, page). */
+static void gfx_text(uint8_t *fb, int x, int page, const char *s) {
+    while (*s && x + FONT_WIDTH <= SSD1306_WIDTH) {
+        char c = *s++;
+        if (c >= 'a' && c <= 'z') {
+            c = (char)(c - 32);
+        }
+        if (c < FONT_FIRST || c > FONT_LAST) {
+            c = ' ';
+        }
+        const uint8_t *g = FONT5X7[c - FONT_FIRST];
+        for (int i = 0; i < FONT_WIDTH; i++) {
+            fb[page * SSD1306_WIDTH + x + i] = g[i];
+        }
+        x += FONT_WIDTH;
+        if (x < SSD1306_WIDTH) {
+            fb[page * SSD1306_WIDTH + x] = 0x00; /* 1px inter-char gap */
+        }
+        x += 1;
+    }
+}
+
+/* Short OLED headline, mirroring print_verdict's CO₂ thresholds. */
+static const char *oled_headline(uint16_t co2) {
+    if (co2 >= 1400) {
+        return ">VENTILATE NOW";
+    } else if (co2 >= 1000) {
+        return ">CRACK A WINDOW";
+    } else if (co2 >= 800) {
+        return ">CO2 RISING";
+    }
+    return ">AIR IS GOOD";
+}
+
+static void render_screen(uint16_t co2, int temp_c, int rh, uint16_t pm2_5,
+                          int32_t voc, uint32_t lux) {
+    for (int i = 0; i < SSD1306_FB_SIZE; i++) {
+        g_fb[i] = 0;
+    }
+    char line[24];
+    int p;
+
+    gfx_text(g_fb, 0, 0, "LEO AIR QUALITY");
+
+    p = put_str(line, 0, "CO2   ");
+    p = put_uint(line, p, co2);
+    p = put_str(line, p, " PPM");
+    line[p] = 0;
+    gfx_text(g_fb, 0, 1, line);
+
+    p = put_str(line, 0, "PM2.5  ");
+    p = put_uint(line, p, pm2_5);
+    p = put_str(line, p, " UG");
+    line[p] = 0;
+    gfx_text(g_fb, 0, 2, line);
+
+    p = put_str(line, 0, "VOC    ");
+    p = put_uint(line, p, (uint32_t)(voc < 0 ? 0 : voc));
+    line[p] = 0;
+    gfx_text(g_fb, 0, 3, line);
+
+    p = put_str(line, 0, "LIGHT ");
+    p = put_uint(line, p, lux);
+    p = put_str(line, p, " LX");
+    line[p] = 0;
+    gfx_text(g_fb, 0, 4, line);
+
+    p = put_str(line, 0, "TEMP ");
+    p = put_uint(line, p, (uint32_t)temp_c);
+    p = put_str(line, p, "C RH ");
+    p = put_uint(line, p, (uint32_t)rh);
+    p = put_str(line, p, "%");
+    line[p] = 0;
+    gfx_text(g_fb, 0, 5, line);
+
+    gfx_text(g_fb, 0, 7, oled_headline(co2));
+}
+
+/* Dump the framebuffer as ASCII art over UART so the rendered screen is
+ * verifiable in headless runs (and legible in the log). */
+static void oled_dump_ascii(void) {
+    uart_puts("OLED-FB-BEGIN\r\n");
+    for (int y = 0; y < 64; y++) {
+        int page = y >> 3;
+        int bit = y & 7;
+        for (int x = 0; x < SSD1306_WIDTH; x++) {
+            uint8_t on = (uint8_t)((g_fb[page * SSD1306_WIDTH + x] >> bit) & 1u);
+            uart_putc(on ? '#' : ' ');
+        }
+        uart_puts("\r\n");
+    }
+    uart_puts("OLED-FB-END\r\n");
+}
+
 int main(void) {
     sensirion_i2c_hal_init();
     uart_puts("LEO BOOT\r\n");
@@ -94,6 +217,9 @@ int main(void) {
     /* ── VEML7700: ambient light ─────────────────────────────────────────── */
     veml7700_init();
     uart_puts("VEML7700 READY\r\n");
+
+    ssd1306_init();
+    uart_puts("OLED READY\r\n");
 
     GasIndexAlgorithmParams voc_params;
     GasIndexAlgorithm_init(&voc_params, GasIndexAlgorithm_ALGORITHM_TYPE_VOC);
@@ -148,9 +274,19 @@ int main(void) {
         uart_puts("\r\n");
 
         print_verdict(co2, mc_2p5);
+
+        /* Render the same readings + verdict to the on-device OLED. */
+        render_screen(co2, (int)(temp_m_deg_c / 1000), (int)(rh_m_pct / 1000),
+                      mc_2p5, voc_index, lux);
+        ssd1306_flush(g_fb);
+        if (cycle == 0) {
+            uart_puts("OLED render done\r\n");
+        }
     }
 
     uart_puts("LEO DONE\r\n");
+    /* Echo the final OLED frame as ASCII art for headless verification. */
+    oled_dump_ascii();
     for (;;) {
     }
 }
