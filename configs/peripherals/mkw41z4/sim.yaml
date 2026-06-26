@@ -119,8 +119,13 @@ registers:
 - id: SDID
   address_offset: 4132
   size: 32
+  # SVD documents REVID (bits 15:12) = 0, but real FRDM-KW41Z silicon is die
+  # Rev 2.0. The NXP BOARD_RfOscInit reads REVID and, when it is 0, runs a
+  # rev-1.0-only XCVR_TSM/ANA_TRIM workaround that pokes transceiver registers
+  # this profile does not model. Reporting REVID=2 (0x5F0000 | 0x2000 = 0x5F2000)
+  # matches Rev 2.0 boards and takes the mainline boot path.
   access: READ_ONLY
-  reset_value: 6225920
+  reset_value: 6234112
   fields:
   - name: PINID
     bit_range:

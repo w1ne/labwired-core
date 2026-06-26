@@ -113,6 +113,24 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"KW41Z_SMOKE_OK\n",
     },
     SurvivalCase {
+        // NXP KW41Z running REAL, unmodified NXP MCUXpresso vendor code
+        // (crates/firmware-kw41z-nxp): the genuine system_MKW41Z4.c SystemInit,
+        // the verbatim FRDM-KW41Z BOARD_BootClockRUN (RfOscInit + fsl_clock.c
+        // CLOCK_SetFeeMode → 40 MHz FEE), and fsl_lpuart.c LPUART_WriteBlocking.
+        // Booting this end to end proves the behavioural MCG/RSIM/SIM models
+        // satisfy the vendor clock-bring-up spin loops (RSIM RF_OSC_READY,
+        // MCG_S IREFST/CLKST/OSCINIT0) instead of hanging. The deterministic
+        // register-level twin of this is tests/kw41z_clock_boot.rs.
+        name: "kw41z_nxp",
+        core: "cortex-m0+",
+        family: CpuFamily::CortexM,
+        chip: "mkw41z4",
+        system: "frdm-kw41z",
+        fixture: "kw41z-nxp.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x000F_FFFF), (0x1FFF_8000, 0x2001_8000)],
+        expected_uart_output: b"KW41Z_NXP_OK\n",
+    },
+    SurvivalCase {
         name: "nrf52832_demo",
         core: "cortex-m4",
         family: CpuFamily::CortexM,
@@ -947,6 +965,11 @@ fn test_nrf52832_demo_survival() {
 #[test]
 fn test_kw41z_smoke_survival() {
     run_survival_case(case_by_name("kw41z_smoke"));
+}
+
+#[test]
+fn test_kw41z_nxp_survival() {
+    run_survival_case(case_by_name("kw41z_nxp"));
 }
 
 #[test]

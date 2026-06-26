@@ -32,18 +32,31 @@ peripherals:
     size: "4KB"
     irq: 12
   # --- Clock / system integration ---
+  # SIM stays declarative (no status polls on the boot path) but the window must
+  # span the "high" register block: SDID @0x1024 and COPC @0x1100 live well past
+  # the first 4KB page. The ingested descriptor sets SDID's REVID (bits 15:12) to
+  # a non-zero die revision so the NXP BOARD_RfOscInit skips the rev-1.0 silicon
+  # XCVR workaround (real FRDM-KW41Z is Rev 2.0).
   - id: "sim"
     type: "declarative"
     base_address: 0x40047000
-    size: "4KB"
+    size: "8KB"
     config:
       path: "../peripherals/mkw41z4/sim.yaml"
+  # MCG is BEHAVIOURAL (peripherals/mcg.rs): the NXP fsl_clock.c FEE bring-up
+  # spins on MCG_S until IREFST/CLKST settle. A passive bank holds S at 0x10
+  # forever and hangs boot; the model mirrors C1/C2 into S the way silicon does.
   - id: "mcg"
-    type: "declarative"
+    type: "nxp_mcg"
     base_address: 0x40064000
     size: "4KB"
-    config:
-      path: "../peripherals/mkw41z4/mcg.yaml"
+  # RSIM gates the 32 MHz radio reference oscillator. BOARD_RfOscInit enables it
+  # and spins on RSIM_CONTROL[RF_OSC_READY] (bit 24); the behavioural model
+  # (peripherals/rsim.rs) raises it on enable.
+  - id: "rsim"
+    type: "nxp_rsim"
+    base_address: 0x40059000
+    size: "4KB"
   - id: "pmc"
     type: "declarative"
     base_address: 0x4007D000
