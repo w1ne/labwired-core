@@ -532,6 +532,7 @@ mod tests {
                 config,
             }],
             board_io: vec![],
+            debug_uart: None,
         };
 
         let mut bus = SystemBus::new();
@@ -603,6 +604,7 @@ mod tests {
                 config,
             }],
             board_io: vec![],
+            debug_uart: None,
         };
 
         // Register spi3_s3 exactly as the production S3 bring-up does
@@ -654,6 +656,7 @@ mod tests {
                 config: std::collections::HashMap::new(),
             }],
             board_io: vec![],
+            debug_uart: None,
         };
 
         let mut bus = SystemBus::new();

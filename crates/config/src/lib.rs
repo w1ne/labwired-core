@@ -195,6 +195,8 @@ pub struct SystemManifest {
     pub external_devices: Vec<ExternalDevice>,
     #[serde(default)]
     pub board_io: Vec<BoardIoBinding>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub debug_uart: Option<String>,
     #[serde(default)]
     pub peripherals: Vec<PeripheralConfig>,
     /// Opt-in: delete the per-cycle peripheral walk for this config (only takes
