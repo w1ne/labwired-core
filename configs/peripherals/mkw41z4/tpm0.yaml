@@ -1,0 +1,485 @@
+peripheral: TPM0
+version: 0.1.0
+registers:
+- id: SC
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PS
+    bit_range:
+    - 2
+    - 0
+    description: Prescale Factor Selection
+  - name: CMOD
+    bit_range:
+    - 4
+    - 3
+    description: Clock Mode Selection
+  - name: CPWMS
+    bit_range:
+    - 5
+    - 5
+    description: Center-Aligned PWM Select
+  - name: TOIE
+    bit_range:
+    - 6
+    - 6
+    description: Timer Overflow Interrupt Enable
+  - name: TOF
+    bit_range:
+    - 7
+    - 7
+    description: Timer Overflow Flag
+  - name: DMA
+    bit_range:
+    - 8
+    - 8
+    description: DMA Enable
+  side_effects: null
+- id: CNT
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COUNT
+    bit_range:
+    - 15
+    - 0
+    description: Counter value
+  side_effects: null
+- id: MOD
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 65535
+  fields:
+  - name: MOD
+    bit_range:
+    - 15
+    - 0
+    description: Modulo value
+  side_effects: null
+- id: C0SC
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DMA
+    bit_range:
+    - 0
+    - 0
+    description: DMA Enable
+  - name: ELSA
+    bit_range:
+    - 2
+    - 2
+    description: Edge or Level Select
+  - name: ELSB
+    bit_range:
+    - 3
+    - 3
+    description: Edge or Level Select
+  - name: MSA
+    bit_range:
+    - 4
+    - 4
+    description: Channel Mode Select
+  - name: MSB
+    bit_range:
+    - 5
+    - 5
+    description: Channel Mode Select
+  - name: CHIE
+    bit_range:
+    - 6
+    - 6
+    description: Channel Interrupt Enable
+  - name: CHF
+    bit_range:
+    - 7
+    - 7
+    description: Channel Flag
+  side_effects: null
+- id: C0V
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: VAL
+    bit_range:
+    - 15
+    - 0
+    description: Channel Value
+  side_effects: null
+- id: C1SC
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DMA
+    bit_range:
+    - 0
+    - 0
+    description: DMA Enable
+  - name: ELSA
+    bit_range:
+    - 2
+    - 2
+    description: Edge or Level Select
+  - name: ELSB
+    bit_range:
+    - 3
+    - 3
+    description: Edge or Level Select
+  - name: MSA
+    bit_range:
+    - 4
+    - 4
+    description: Channel Mode Select
+  - name: MSB
+    bit_range:
+    - 5
+    - 5
+    description: Channel Mode Select
+  - name: CHIE
+    bit_range:
+    - 6
+    - 6
+    description: Channel Interrupt Enable
+  - name: CHF
+    bit_range:
+    - 7
+    - 7
+    description: Channel Flag
+  side_effects: null
+- id: C1V
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: VAL
+    bit_range:
+    - 15
+    - 0
+    description: Channel Value
+  side_effects: null
+- id: C2SC
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DMA
+    bit_range:
+    - 0
+    - 0
+    description: DMA Enable
+  - name: ELSA
+    bit_range:
+    - 2
+    - 2
+    description: Edge or Level Select
+  - name: ELSB
+    bit_range:
+    - 3
+    - 3
+    description: Edge or Level Select
+  - name: MSA
+    bit_range:
+    - 4
+    - 4
+    description: Channel Mode Select
+  - name: MSB
+    bit_range:
+    - 5
+    - 5
+    description: Channel Mode Select
+  - name: CHIE
+    bit_range:
+    - 6
+    - 6
+    description: Channel Interrupt Enable
+  - name: CHF
+    bit_range:
+    - 7
+    - 7
+    description: Channel Flag
+  side_effects: null
+- id: C2V
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: VAL
+    bit_range:
+    - 15
+    - 0
+    description: Channel Value
+  side_effects: null
+- id: C3SC
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DMA
+    bit_range:
+    - 0
+    - 0
+    description: DMA Enable
+  - name: ELSA
+    bit_range:
+    - 2
+    - 2
+    description: Edge or Level Select
+  - name: ELSB
+    bit_range:
+    - 3
+    - 3
+    description: Edge or Level Select
+  - name: MSA
+    bit_range:
+    - 4
+    - 4
+    description: Channel Mode Select
+  - name: MSB
+    bit_range:
+    - 5
+    - 5
+    description: Channel Mode Select
+  - name: CHIE
+    bit_range:
+    - 6
+    - 6
+    description: Channel Interrupt Enable
+  - name: CHF
+    bit_range:
+    - 7
+    - 7
+    description: Channel Flag
+  side_effects: null
+- id: C3V
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: VAL
+    bit_range:
+    - 15
+    - 0
+    description: Channel Value
+  side_effects: null
+- id: STATUS
+  address_offset: 80
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH0F
+    bit_range:
+    - 0
+    - 0
+    description: Channel 0 Flag
+  - name: CH1F
+    bit_range:
+    - 1
+    - 1
+    description: Channel 1 Flag
+  - name: CH2F
+    bit_range:
+    - 2
+    - 2
+    description: Channel 2 Flag
+  - name: CH3F
+    bit_range:
+    - 3
+    - 3
+    description: Channel 3 Flag
+  - name: TOF
+    bit_range:
+    - 8
+    - 8
+    description: Timer Overflow Flag
+  side_effects: null
+- id: COMBINE
+  address_offset: 100
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COMBINE0
+    bit_range:
+    - 0
+    - 0
+    description: Combine Channels 0 and 1
+  - name: COMSWAP0
+    bit_range:
+    - 1
+    - 1
+    description: Combine Channel 0 and 1 Swap
+  - name: COMBINE1
+    bit_range:
+    - 8
+    - 8
+    description: Combine Channels 2 and 3
+  - name: COMSWAP1
+    bit_range:
+    - 9
+    - 9
+    description: Combine Channels 2 and 3 Swap
+  side_effects: null
+- id: POL
+  address_offset: 112
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: POL0
+    bit_range:
+    - 0
+    - 0
+    description: Channel 0 Polarity
+  - name: POL1
+    bit_range:
+    - 1
+    - 1
+    description: Channel 1 Polarity
+  - name: POL2
+    bit_range:
+    - 2
+    - 2
+    description: Channel 2 Polarity
+  - name: POL3
+    bit_range:
+    - 3
+    - 3
+    description: Channel 3 Polarity
+  side_effects: null
+- id: FILTER
+  address_offset: 120
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CH0FVAL
+    bit_range:
+    - 3
+    - 0
+    description: Channel 0 Filter Value
+  - name: CH1FVAL
+    bit_range:
+    - 7
+    - 4
+    description: Channel 1 Filter Value
+  - name: CH2FVAL
+    bit_range:
+    - 11
+    - 8
+    description: Channel 2 Filter Value
+  - name: CH3FVAL
+    bit_range:
+    - 15
+    - 12
+    description: Channel 3 Filter Value
+  side_effects: null
+- id: QDCTRL
+  address_offset: 128
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: QUADEN
+    bit_range:
+    - 0
+    - 0
+    description: Enables the quadrature decoder mode
+  - name: TOFDIR
+    bit_range:
+    - 1
+    - 1
+    description: Indicates if the TOF bit was set on the top or the bottom of counting.
+  - name: QUADIR
+    bit_range:
+    - 2
+    - 2
+    description: Counter Direction in Quadrature Decode Mode
+  - name: QUADMODE
+    bit_range:
+    - 3
+    - 3
+    description: Quadrature Decoder Mode
+  side_effects: null
+- id: CONF
+  address_offset: 132
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DOZEEN
+    bit_range:
+    - 5
+    - 5
+    description: Doze Enable
+  - name: DBGMODE
+    bit_range:
+    - 7
+    - 6
+    description: Debug Mode
+  - name: GTBSYNC
+    bit_range:
+    - 8
+    - 8
+    description: Global Time Base Synchronization
+  - name: GTBEEN
+    bit_range:
+    - 9
+    - 9
+    description: Global time base enable
+  - name: CSOT
+    bit_range:
+    - 16
+    - 16
+    description: Counter Start on Trigger
+  - name: CSOO
+    bit_range:
+    - 17
+    - 17
+    description: Counter Stop On Overflow
+  - name: CROT
+    bit_range:
+    - 18
+    - 18
+    description: Counter Reload On Trigger
+  - name: CPOT
+    bit_range:
+    - 19
+    - 19
+    description: Counter Pause On Trigger
+  - name: TRGPOL
+    bit_range:
+    - 22
+    - 22
+    description: Trigger Polarity
+  - name: TRGSRC
+    bit_range:
+    - 23
+    - 23
+    description: Trigger Source
+  - name: TRGSEL
+    bit_range:
+    - 27
+    - 24
+    description: Trigger Select
+  side_effects: null
+interrupts:
+  TPM0: 17
+timing: null

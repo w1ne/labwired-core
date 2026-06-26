@@ -1,0 +1,327 @@
+peripheral: I2C0
+version: 0.1.0
+registers:
+- id: A1
+  address_offset: 0
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: AD
+    bit_range:
+    - 7
+    - 1
+    description: Address
+  side_effects: null
+- id: F
+  address_offset: 1
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ICR
+    bit_range:
+    - 5
+    - 0
+    description: ClockRate
+  - name: MULT
+    bit_range:
+    - 7
+    - 6
+    description: Multiplier Factor
+  side_effects: null
+- id: C1
+  address_offset: 2
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DMAEN
+    bit_range:
+    - 0
+    - 0
+    description: DMA Enable
+  - name: WUEN
+    bit_range:
+    - 1
+    - 1
+    description: Wakeup Enable
+  - name: RSTA
+    bit_range:
+    - 2
+    - 2
+    description: Repeat START
+  - name: TXAK
+    bit_range:
+    - 3
+    - 3
+    description: Transmit Acknowledge Enable
+  - name: TX
+    bit_range:
+    - 4
+    - 4
+    description: Transmit Mode Select
+  - name: MST
+    bit_range:
+    - 5
+    - 5
+    description: Master Mode Select
+  - name: IICIE
+    bit_range:
+    - 6
+    - 6
+    description: I2C Interrupt Enable
+  - name: IICEN
+    bit_range:
+    - 7
+    - 7
+    description: I2C Enable
+  side_effects: null
+- id: S
+  address_offset: 3
+  size: 8
+  access: READ_WRITE
+  reset_value: 128
+  fields:
+  - name: RXAK
+    bit_range:
+    - 0
+    - 0
+    description: Receive Acknowledge
+  - name: IICIF
+    bit_range:
+    - 1
+    - 1
+    description: Interrupt Flag
+  - name: SRW
+    bit_range:
+    - 2
+    - 2
+    description: Slave Read/Write
+  - name: RAM
+    bit_range:
+    - 3
+    - 3
+    description: Range Address Match
+  - name: ARBL
+    bit_range:
+    - 4
+    - 4
+    description: Arbitration Lost
+  - name: BUSY
+    bit_range:
+    - 5
+    - 5
+    description: Bus Busy
+  - name: IAAS
+    bit_range:
+    - 6
+    - 6
+    description: Addressed As A Slave
+  - name: TCF
+    bit_range:
+    - 7
+    - 7
+    description: Transfer Complete Flag
+  side_effects: null
+- id: D
+  address_offset: 4
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DATA
+    bit_range:
+    - 7
+    - 0
+    description: Data
+  side_effects: null
+- id: C2
+  address_offset: 5
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: AD
+    bit_range:
+    - 2
+    - 0
+    description: Slave Address
+  - name: RMEN
+    bit_range:
+    - 3
+    - 3
+    description: Range Address Matching Enable
+  - name: SBRC
+    bit_range:
+    - 4
+    - 4
+    description: Slave Baud Rate Control
+  - name: HDRS
+    bit_range:
+    - 5
+    - 5
+    description: High Drive Select
+  - name: ADEXT
+    bit_range:
+    - 6
+    - 6
+    description: Address Extension
+  - name: GCAEN
+    bit_range:
+    - 7
+    - 7
+    description: General Call Address Enable
+  side_effects: null
+- id: FLT
+  address_offset: 6
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: FLT
+    bit_range:
+    - 3
+    - 0
+    description: I2C Programmable Filter Factor
+  - name: STARTF
+    bit_range:
+    - 4
+    - 4
+    description: I2C Bus Start Detect Flag
+  - name: SSIE
+    bit_range:
+    - 5
+    - 5
+    description: I2C Bus Stop or Start Interrupt Enable
+  - name: STOPF
+    bit_range:
+    - 6
+    - 6
+    description: I2C Bus Stop Detect Flag
+  - name: SHEN
+    bit_range:
+    - 7
+    - 7
+    description: Stop Hold Enable
+  side_effects: null
+- id: RA
+  address_offset: 7
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RAD
+    bit_range:
+    - 7
+    - 1
+    description: Range Slave Address
+  side_effects: null
+- id: SMB
+  address_offset: 8
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SHTF2IE
+    bit_range:
+    - 0
+    - 0
+    description: SHTF2 Interrupt Enable
+  - name: SHTF2
+    bit_range:
+    - 1
+    - 1
+    description: SCL High Timeout Flag 2
+  - name: SHTF1
+    bit_range:
+    - 2
+    - 2
+    description: SCL High Timeout Flag 1
+  - name: SLTF
+    bit_range:
+    - 3
+    - 3
+    description: SCL Low Timeout Flag
+  - name: TCKSEL
+    bit_range:
+    - 4
+    - 4
+    description: Timeout Counter Clock Select
+  - name: SIICAEN
+    bit_range:
+    - 5
+    - 5
+    description: Second I2C Address Enable
+  - name: ALERTEN
+    bit_range:
+    - 6
+    - 6
+    description: SMBus Alert Response Address Enable
+  - name: FACK
+    bit_range:
+    - 7
+    - 7
+    description: Fast NACK/ACK Enable
+  side_effects: null
+- id: A2
+  address_offset: 9
+  size: 8
+  access: READ_WRITE
+  reset_value: 194
+  fields:
+  - name: SAD
+    bit_range:
+    - 7
+    - 1
+    description: SMBus Address
+  side_effects: null
+- id: SLTH
+  address_offset: 10
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SSLT
+    bit_range:
+    - 7
+    - 0
+    description: SSLT[15:8]
+  side_effects: null
+- id: SLTL
+  address_offset: 11
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SSLT
+    bit_range:
+    - 7
+    - 0
+    description: SSLT[7:0]
+  side_effects: null
+- id: S2
+  address_offset: 12
+  size: 8
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: EMPTY
+    bit_range:
+    - 0
+    - 0
+    description: Empty flag
+  - name: ERROR
+    bit_range:
+    - 1
+    - 1
+    description: Error flag
+  - name: DFEN
+    bit_range:
+    - 2
+    - 2
+    description: Double Buffer Enable
+  side_effects: null
+interrupts:
+  I2C0: 8
+timing: null

@@ -714,6 +714,125 @@ impl SystemBus {
         })
     }
 
+    /// Resolve the UART register layout for a peripheral **deterministically**
+    /// from its declared type. The decision order is fixed and total, and there
+    /// is no path that silently mismodels a strange UART:
+    ///
+    ///   1. An explicit `config.profile` always wins (the author's deliberate
+    ///      choice), so any UART can be pinned to any modelled layout.
+    ///   2. A type whose silicon register map we actually model routes to that
+    ///      layout: `*lpuart*` → Kinetis LPUART; `stm32h5`/`stm32f7` → modern
+    ///      STM32 USART; any other `stm32…` name and the bare generic `"uart"`
+    ///      → the classic STM32 USART map (SR/DR/BRR/CR1…).
+    ///   3. Anything else — every vendor UART we do not model yet (PL011, 16550,
+    ///      Gaisler APBUART, EFM32/EFR32, Renesas SCI, LiteX, SiFive, SAM, …) —
+    ///      ERRORS. It must name a layout via `config.profile` to run. A UART is
+    ///      never silently mapped onto an STM32 register map by omission, the
+    ///      way `nxp_lpuart` was before this gate existed.
+    pub(crate) fn uart_layout_for(
+        p_cfg: &PeripheralConfig,
+    ) -> anyhow::Result<crate::peripherals::uart::UartRegisterLayout> {
+        use crate::peripherals::uart::UartRegisterLayout::{self, Lpuart, Stm32F1, Stm32V2};
+
+        // 1. Explicit author override wins, for any UART type.
+        if let Some(name) = Self::profile_name(p_cfg)? {
+            return UartRegisterLayout::from_str(name).map_err(|e| {
+                anyhow::anyhow!(
+                    "Peripheral '{}' has invalid UART profile '{}': {}",
+                    p_cfg.id,
+                    name,
+                    e
+                )
+            });
+        }
+
+        // 2. Route the families we model faithfully, by declared type. Each
+        //    family's register map lives in `UartRegisterLayout`; the offsets
+        //    come from datasheets / vendor CMSIS headers / in-tree drivers.
+        use UartRegisterLayout::*;
+        let raw = p_cfg.r#type.to_ascii_lowercase();
+        let has = |needle: &str| raw.contains(needle);
+        let layout = if has("lpuart") {
+            Lpuart
+        } else if raw == "uart" {
+            // The generic escape hatch: the classic STM32 USART map.
+            Stm32F1
+        } else if has("stm32") {
+            if has("stm32h5") || has("stm32f7") {
+                Stm32V2
+            } else {
+                Stm32F1
+            }
+        } else if has("pl011") {
+            Pl011
+        } else if has("16550") {
+            Ns16550
+        } else if has("da14") {
+            // Dialog/Renesas DA1469x = Synopsys DW_apb_uart (16550, 4-byte stride).
+            DwApbUart
+        } else if has("cadence") {
+            Cadence
+        } else if has("efr32") {
+            Efr32
+        } else if has("efm32") {
+            Efm32
+        } else if raw == "leuart" {
+            // Exact: "leuart" is a substring of unrelated names (e.g. "simpleuart").
+            Leuart
+        } else if has("sci") {
+            // Renesas SCI (renesas_sci, renesasraXmY_sci).
+            Sci
+        } else if has("gaisler") || has("apbuart") {
+            Gaisler
+        } else if has("npcx") {
+            Npcx
+        } else if has("max32650") {
+            Max32650
+        } else if has("opentitan") {
+            OpenTitan
+        } else if has("sam_usart") || has("samusart") {
+            Sam
+        } else if has("samd5") || has("same5") || has("sercom") {
+            Sercom
+        } else if has("imx") {
+            Imx
+        } else if has("sifive") {
+            Sifive
+        } else if has("litex") {
+            Litex
+        } else if has("murax") {
+            Murax
+        } else if has("coreuart") || has("miv") {
+            CoreUart
+        } else if has("k6xf") {
+            KinetisUart
+        } else if has("pulp") || has("udma") {
+            Pulp
+        } else if has("ft9001") || has("ft900") {
+            // Bridgetek FT9xx UART is 16550-compatible.
+            Ns16550
+        } else if has("cosimulated") {
+            // Co-simulation stub with no fixed register map — default to 16550.
+            Ns16550
+        } else if has("mpc5567") || has("esci") {
+            Esci
+        } else if has("picosoc") || has("simpleuart") {
+            PicoUart
+        } else {
+            // 3. Unmodelled UART — refuse to guess.
+            anyhow::bail!(
+                "UART type '{}' (peripheral '{}') has no register layout modelled yet \
+                 and no `config.profile` set; it will NOT be silently mapped onto an \
+                 STM32. Choose a layout explicitly with \
+                 `config: {{ profile: <one of the supported layouts> }}`, or add a \
+                 dedicated model for it.",
+                p_cfg.r#type,
+                p_cfg.id
+            );
+        };
+        Ok(layout)
+    }
+
     fn resolve_peripheral_path(manifest: &SystemManifest, descriptor_path: &str) -> PathBuf {
         let raw = PathBuf::from(descriptor_path);
         if raw.is_absolute() {
