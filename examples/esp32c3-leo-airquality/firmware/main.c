@@ -68,6 +68,57 @@ static void print_verdict(uint16_t co2, uint16_t pm2_5) {
     uart_puts("\r\n");
 }
 
+/* ── Mold risk ───────────────────────────────────────────────────────────────
+ * Mold is not a sensor reading — commercial IAQ monitors (e.g. the ThinkLite
+ * Flair's "Mold Index") derive it. Mould germinates when humidity stays high in
+ * a livable temperature band; the longer a room sits damp, the higher the risk.
+ * We track a dwell counter of consecutive mold-favorable cycles and combine it
+ * with the humidity level — all from the SCD41's T/RH, no extra hardware. */
+static int g_damp_dwell = 0; /* consecutive cycles in mold-favorable conditions */
+
+static int mold_favorable(int temp_c, int rh) {
+    return temp_c >= 10 && temp_c <= 35 && rh >= 60;
+}
+
+/* 0 = low … 4 = severe. */
+static int mold_index(int temp_c, int rh) {
+    if (!mold_favorable(temp_c, rh)) {
+        if (g_damp_dwell > 0) {
+            g_damp_dwell--;
+        }
+        return rh >= 55 ? 1 : 0;
+    }
+    if (g_damp_dwell < 240) {
+        g_damp_dwell++;
+    }
+    int idx = 1; /* damp + livable temperature */
+    if (rh >= 70) {
+        idx++; /* very damp */
+    }
+    if (g_damp_dwell >= 6) {
+        idx++; /* sustained */
+    }
+    if (rh >= 70 && g_damp_dwell >= 12) {
+        idx++; /* sustained AND very damp */
+    }
+    return idx > 4 ? 4 : idx;
+}
+
+static const char *mold_verdict(int idx) {
+    switch (idx) {
+        case 0:
+            return "mold risk: low";
+        case 1:
+            return "mold risk: watch - humidity climbing";
+        case 2:
+            return "mold risk: ELEVATED - damp, mold-favorable";
+        case 3:
+            return "mold risk: HIGH - sustained damp";
+        default:
+            return "mold risk: SEVERE - mold likely to grow";
+    }
+}
+
 /* ── On-device OLED screen ───────────────────────────────────────────────── */
 
 static uint8_t g_fb[SSD1306_FB_SIZE];
@@ -117,8 +168,14 @@ static void gfx_text(uint8_t *fb, int x, int page, const char *s) {
     }
 }
 
-/* Short OLED headline, mirroring print_verdict's CO₂ thresholds. */
-static const char *oled_headline(uint16_t co2) {
+/* Short OLED headline. Mold risk takes the headline once it is elevated — that
+ * is the metric Leo's users care about most; otherwise CO₂ leads. */
+static const char *oled_headline(uint16_t co2, int mold) {
+    if (mold >= 3) {
+        return ">MOLD RISK HIGH";
+    } else if (mold >= 2) {
+        return ">MOLD RISK UP";
+    }
     if (co2 >= 1400) {
         return ">VENTILATE NOW";
     } else if (co2 >= 1000) {
@@ -130,7 +187,7 @@ static const char *oled_headline(uint16_t co2) {
 }
 
 static void render_screen(uint16_t co2, int temp_c, int rh, uint16_t pm2_5,
-                          int32_t voc, uint32_t lux) {
+                          int32_t voc, uint32_t lux, int mold) {
     for (int i = 0; i < SSD1306_FB_SIZE; i++) {
         g_fb[i] = 0;
     }
@@ -170,7 +227,14 @@ static void render_screen(uint16_t co2, int temp_c, int rh, uint16_t pm2_5,
     line[p] = 0;
     gfx_text(g_fb, 0, 5, line);
 
-    gfx_text(g_fb, 0, 7, oled_headline(co2));
+    p = put_str(line, 0, "MOLD  ");
+    p = put_str(line, p, mold >= 3 ? "HIGH" : mold >= 2 ? "ELEVATED"
+                                            : mold >= 1 ? "WATCH"
+                                                        : "LOW");
+    line[p] = 0;
+    gfx_text(g_fb, 0, 6, line);
+
+    gfx_text(g_fb, 0, 7, oled_headline(co2, mold));
 }
 
 /* Dump the framebuffer as ASCII art over UART so the rendered screen is
@@ -275,9 +339,17 @@ int main(void) {
 
         print_verdict(co2, mc_2p5);
 
+        /* Mold risk from the SCD41's temperature + humidity — the "Mold Index"
+         * a commercial monitor reports, derived rather than directly sensed. */
+        int temp_c = (int)(temp_m_deg_c / 1000);
+        int rh_pct = (int)(rh_m_pct / 1000);
+        int mold = mold_index(temp_c, rh_pct);
+        uart_puts("MOLD: ");
+        uart_puts(mold_verdict(mold));
+        uart_puts("\r\n");
+
         /* Render the same readings + verdict to the on-device OLED. */
-        render_screen(co2, (int)(temp_m_deg_c / 1000), (int)(rh_m_pct / 1000),
-                      mc_2p5, voc_index, lux);
+        render_screen(co2, temp_c, rh_pct, mc_2p5, voc_index, lux, mold);
         ssd1306_flush(g_fb);
         if (cycle == 0) {
             uart_puts("OLED render done\r\n");

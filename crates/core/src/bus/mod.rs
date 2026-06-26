@@ -18,6 +18,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 mod accessors;
+mod embedded_descriptors;
 mod from_config;
 mod routing;
 mod tick;

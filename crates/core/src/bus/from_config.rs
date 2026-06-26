@@ -321,16 +321,34 @@ impl SystemBus {
                             )
                         })?;
 
-                    let resolved_path = Self::resolve_peripheral_path(manifest, descriptor_path);
-                    let desc = labwired_config::PeripheralDescriptor::from_file(&resolved_path)
-                        .with_context(|| {
-                            format!(
-                                "Failed to load declarative descriptor for '{}' from '{}' (resolved to '{}')",
-                                p_cfg.id,
-                                descriptor_path,
-                                resolved_path.display()
-                            )
-                        })?;
+                    // Prefer the descriptor embedded in the binary (wasm32 has no
+                    // std::fs); fall back to the filesystem for native builds and
+                    // any path not embedded.
+                    let desc = if let Some(embedded) =
+                        super::embedded_descriptors::lookup(descriptor_path)
+                    {
+                        labwired_config::PeripheralDescriptor::from_yaml(embedded).with_context(
+                            || {
+                                format!(
+                                    "Failed to parse embedded declarative descriptor for '{}' ('{}')",
+                                    p_cfg.id, descriptor_path
+                                )
+                            },
+                        )?
+                    } else {
+                        let resolved_path =
+                            Self::resolve_peripheral_path(manifest, descriptor_path);
+                        labwired_config::PeripheralDescriptor::from_file(&resolved_path).with_context(
+                            || {
+                                format!(
+                                    "Failed to load declarative descriptor for '{}' from '{}' (resolved to '{}')",
+                                    p_cfg.id,
+                                    descriptor_path,
+                                    resolved_path.display()
+                                )
+                            },
+                        )?
+                    };
 
                     Box::new(crate::peripherals::declarative::GenericPeripheral::new(
                         desc,

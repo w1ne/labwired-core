@@ -131,9 +131,8 @@ impl WasmSimulator {
             .map_err(|e| JsValue::from_str(&format!("Chip YAML error: {}", e)))?;
 
         match chip.arch {
-            Arch::Arm | Arch::RiscV | Arch::Unknown => {
-                Self::new_from_config_arm(&chip, &manifest, firmware)
-            }
+            Arch::Arm | Arch::Unknown => Self::new_from_config_arm(&chip, &manifest, firmware),
+            Arch::RiscV => Self::new_from_config_riscv(&chip, &manifest, firmware),
             Arch::Xtensa => Self::new_from_config_xtensa_esp32(&manifest, firmware),
         }
     }
@@ -174,6 +173,56 @@ impl WasmSimulator {
             uart_sink,
             uart_rx_bufs,
             arch: Arch::Arm,
+            esp32_ipi: None,
+            jit_browser_enabled: false,
+            jit_browser_cache: None,
+        })
+    }
+
+    /// RISC-V (esp32c3) bus setup. Mirrors `new_from_config_arm` but builds a
+    /// RISC-V core via `configure_riscv` and seeds the stack pointer at the top
+    /// of DRAM — fast-boot skips the ROM/2nd-stage bootloader that would
+    /// normally set SP, so the app's first prologue store would otherwise fault.
+    fn new_from_config_riscv(
+        chip: &ChipDescriptor,
+        manifest: &SystemManifest,
+        firmware: &[u8],
+    ) -> Result<WasmSimulator, JsValue> {
+        let mut bus = SystemBus::from_config(chip, manifest)
+            .map_err(|e| JsValue::from_str(&format!("Bus config error: {:#}", e)))?;
+
+        let uart_sink = Arc::new(Mutex::new(Vec::new()));
+        if let Some(debug_uart) = manifest.debug_uart.as_deref() {
+            if !bus.attach_uart_tx_sink_named(debug_uart, uart_sink.clone(), false) {
+                bus.attach_uart_tx_sink(uart_sink.clone(), false);
+            }
+        } else {
+            bus.attach_uart_tx_sink(uart_sink.clone(), false);
+        }
+        let uart_rx_bufs = bus.attach_uart_rx_source();
+
+        let cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
+        let boxed: Box<dyn Cpu> = Box::new(cpu);
+        let mut machine = Machine::new(boxed, bus);
+
+        let program_image = load_elf_bytes(firmware)
+            .map_err(|e| JsValue::from_str(&format!("Loader Error: {}", e)))?;
+        machine
+            .load_firmware(&program_image)
+            .map_err(|e| JsValue::from_str(&format!("Simulation Error: {}", e)))?;
+
+        let sp_top =
+            (chip.ram.base + labwired_config::parse_size(&chip.ram.size).unwrap_or(0)) as u32;
+        machine.cpu.set_sp(sp_top & !0xF);
+
+        let board_io = manifest.board_io.clone();
+
+        Ok(WasmSimulator {
+            machine: Some(machine),
+            board_io,
+            uart_sink,
+            uart_rx_bufs,
+            arch: Arch::RiscV,
             esp32_ipi: None,
             jit_browser_enabled: false,
             jit_browser_cache: None,
