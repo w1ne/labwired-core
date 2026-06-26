@@ -1,0 +1,92 @@
+peripheral: PMC
+version: 0.1.0
+registers:
+- id: LVDSC1
+  address_offset: 0
+  size: 8
+  access: READ_WRITE
+  reset_value: 16
+  fields:
+  - name: LVDV
+    bit_range:
+    - 1
+    - 0
+    description: Low-Voltage Detect Voltage Select
+  - name: LVDRE
+    bit_range:
+    - 4
+    - 4
+    description: Low-Voltage Detect Reset Enable
+  - name: LVDIE
+    bit_range:
+    - 5
+    - 5
+    description: Low-Voltage Detect Interrupt Enable
+  - name: LVDACK
+    bit_range:
+    - 6
+    - 6
+    description: Low-Voltage Detect Acknowledge
+  - name: LVDF
+    bit_range:
+    - 7
+    - 7
+    description: Low-Voltage Detect Flag
+  side_effects: null
+- id: LVDSC2
+  address_offset: 1
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LVWV
+    bit_range:
+    - 1
+    - 0
+    description: Low-Voltage Warning Voltage Select
+  - name: LVWIE
+    bit_range:
+    - 5
+    - 5
+    description: Low-Voltage Warning Interrupt Enable
+  - name: LVWACK
+    bit_range:
+    - 6
+    - 6
+    description: Low-Voltage Warning Acknowledge
+  - name: LVWF
+    bit_range:
+    - 7
+    - 7
+    description: Low-Voltage Warning Flag
+  side_effects: null
+- id: REGSC
+  address_offset: 2
+  size: 8
+  access: READ_WRITE
+  reset_value: 4
+  fields:
+  - name: BGBE
+    bit_range:
+    - 0
+    - 0
+    description: Bandgap Buffer Enable
+  - name: REGONS
+    bit_range:
+    - 2
+    - 2
+    description: Regulator In Run Regulation Status
+  - name: ACKISO
+    bit_range:
+    - 3
+    - 3
+    description: Acknowledge Isolation
+  - name: VLPO
+    bit_range:
+    - 6
+    - 6
+    description: VLPx Option
+  side_effects: null
+interrupts:
+  LVD_LVW_DCDC: 6
+timing: null

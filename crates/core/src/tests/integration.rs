@@ -740,6 +740,92 @@ pub mod integration_tests {
         assert_eq!(data, vec![b'Y']);
     }
 
+    /// UART layout resolution must be deterministic per type — no `contains()`
+    /// guessing, no silent default. A named hardware type pins exactly one
+    /// layout; a UART family with no faithful model must be named explicitly or
+    /// it errors rather than masquerade as an STM32.
+    #[test]
+    fn test_uart_layout_is_deterministic_per_type() {
+        use crate::peripherals::uart::UartRegisterLayout::*;
+
+        let cfg = |ty: &str, profile: Option<&str>| {
+            let mut config = HashMap::new();
+            if let Some(p) = profile {
+                config.insert(
+                    "profile".to_string(),
+                    serde_yaml::Value::String(p.to_string()),
+                );
+            }
+            PeripheralConfig {
+                id: "u".to_string(),
+                r#type: ty.to_string(),
+                base_address: 0x4000_0000,
+                size: None,
+                irq: None,
+                clock: None,
+                config,
+            }
+        };
+
+        let resolve = |ty: &str, profile: Option<&str>| {
+            crate::bus::SystemBus::uart_layout_for(&cfg(ty, profile))
+        };
+
+        // Families we model pin exactly one layout, no profile required.
+        use crate::peripherals::uart::UartRegisterLayout as L;
+        for (ty, want) in [
+            ("nxp_lpuart", Lpuart),
+            ("stm32f1_uart", Stm32F1),
+            ("stm32_uart", Stm32F1),
+            ("stm32f7_usart", Stm32V2),
+            ("stm32h5_usart", Stm32V2),
+            ("uart", Stm32F1), // generic escape hatch
+            ("ns16550", L::Ns16550),
+            ("pl011", L::Pl011),
+            ("cadence_uart", L::Cadence),
+            ("efm32_uart", L::Efm32),
+            ("efr32_usart", L::Efr32),
+            ("leuart", L::Leuart),
+            ("renesas_sci", L::Sci),
+            ("renesasra6m5_sci", L::Sci),
+            ("renesasda14_uart", L::DwApbUart),
+            ("gaislerapbuart", L::Gaisler),
+            ("npcx_uart", L::Npcx),
+            ("max32650_uart", L::Max32650),
+            ("opentitan_uart", L::OpenTitan),
+            ("sam_usart", L::Sam),
+            ("samd5_uart", L::Sercom),
+            ("imxuart", L::Imx),
+            ("sifive_uart", L::Sifive),
+            ("litex_uart", L::Litex),
+            ("murax_uart", L::Murax),
+            ("miv_coreuart", L::CoreUart),
+            ("k6xf_uart", L::KinetisUart),
+            ("pulp_udma_uart", L::Pulp),
+            ("ft9001_usart", L::Ns16550),
+            ("cosimulateduart", L::Ns16550),
+            ("mpc5567_uart", L::Esci),
+            ("picosoc_simpleuart", L::PicoUart),
+        ] {
+            assert_eq!(resolve(ty, None).unwrap(), want, "type '{ty}' layout");
+        }
+
+        // The generic "uart" escape hatch is profile-overridable.
+        assert_eq!(resolve("uart", Some("stm32v2")).unwrap(), Stm32V2);
+
+        // A UART type we genuinely don't recognise must error — no silent
+        // fallback onto an STM32 register map.
+        assert!(
+            resolve("definitely_not_a_real_uart", None).is_err(),
+            "an unrecognised UART type must error, not default to STM32F1"
+        );
+        // …but an explicit profile lets any type pick a layout deterministically.
+        assert_eq!(
+            resolve("definitely_not_a_real_uart", Some("ns16550")).unwrap(),
+            L::Ns16550
+        );
+    }
+
     #[test]
     fn test_attach_uart_tx_sink_named_captures_only_selected_uart() {
         let chip = ChipDescriptor {

@@ -49,6 +49,67 @@ pub enum UartRegisterLayout {
     Stm32F1,
     Stm32V2,
     Nrf52,
+    /// NXP Kinetis Low-Power UART (LPUART), as on the KW41Z / K-series. A flat
+    /// 32-bit register block: BAUD@0x00, STAT@0x04 (TDRE/TC/RDRF in the high
+    /// byte), CTRL@0x08 (TE/RE + TIE/TCIE interrupt enables), DATA@0x0C
+    /// (read pops RX, write transmits). Register offsets ingested from the
+    /// public CMSIS-SVD (cmsis-svd-data: NXP/MKW41Z4.svd).
+    Lpuart,
+    /// Standard 16550 (THR/RBR@0x00, LSR@0x05). Byte-addressed.
+    Ns16550,
+    /// Synopsys DW_apb_uart: 16550 semantics, 4-byte register stride, LSR@0x14
+    /// (Dialog/Renesas DA1469x).
+    DwApbUart,
+    /// ARM PrimeCell PL011 (DR@0x00, FR@0x18; RXFE set when empty).
+    Pl011,
+    /// Cadence UART (Xilinx Zynq) — FIFO@0x30, SR@0x2C.
+    Cadence,
+    /// Silicon Labs EFM32 USART (Series 0) — STATUS@0x10, reset 0x40.
+    Efm32,
+    /// Silicon Labs EFR32 USART (Series 1) — STATUS@0x10, reset 0x2040.
+    Efr32,
+    /// Silicon Labs LEUART (Low Energy UART) — STATUS@0x08, reset 0x10.
+    Leuart,
+    /// Renesas SCI (classic SH/RX and RA-series) — SSR@0x04, byte registers.
+    Sci,
+    /// Gaisler APBUART (LEON/GRLIB) — DATA@0x00, STATUS@0x04.
+    Gaisler,
+    /// Nuvoton NPCX — UTBUF@0x00, URBUF@0x02, readiness in UICTRL@0x04.
+    Npcx,
+    /// Maxim MAX32650 — FIFO@0x1C, STAT@0x08.
+    Max32650,
+    /// lowRISC OpenTitan — WDATA@0x1C, RDATA@0x18, STATUS@0x14.
+    OpenTitan,
+    /// Atmel/Microchip SAM USART (SAM3/SAM4) — US_CSR@0x14, US_THR@0x1C.
+    Sam,
+    /// Microchip SAMD5x/SAME5x SERCOM USART — DATA@0x28, INTFLAG@0x18.
+    Sercom,
+    /// NXP i.MX UART — UTXD@0x40, URXD@0x00, USR1@0x94.
+    Imx,
+    /// SiFive UART (FE310) — txdata@0x00 / rxdata@0x04, status folded in data
+    /// (TX faithful, RX presence approximate).
+    Sifive,
+    /// LiteX UART — rxtx@0x00, txfull@0x04 (TX faithful, RX approximate).
+    Litex,
+    /// VexRiscv Murax SoC UART (SpinalHDL) — DATA@0x00, STATUS@0x04 with TX-free
+    /// count in bits[23:16] and RX-occupancy in bits[31:24].
+    Murax,
+    /// Microsemi/Microchip CoreUARTapb (Mi-V) — TxData@0x00, RxData@0x04,
+    /// Status@0x10 (TXRDY bit0, RXRDY bit1).
+    CoreUart,
+    /// NXP/Freescale Kinetis K6x UART (classic 8-bit, not LPUART) — D@0x07,
+    /// S1@0x04 (TDRE bit7, TC bit6, RDRF bit5).
+    KinetisUart,
+    /// PULP uDMA UART — DMA-only TX (no byte-write register); STATUS@0x20,
+    /// DATA@0x34. Estate-level: reads don't fault, TX byte-path is nominal.
+    Pulp,
+    /// Freescale MPC5500 eSCI (MPC5567) — DR@0x06 (byte at 0x07), SR@0x08
+    /// (TDRE bit31, TC bit30, RDRF bit29). Big-endian part; this estate-level
+    /// model keeps the engine's little-endian status byte order.
+    Esci,
+    /// PicoSoC simpleuart — reg_dat@0x04 (write=TX, read=RX), no status register
+    /// (TX blocks in HW; RX reads -1 when empty). Estate-level.
+    PicoUart,
 }
 
 impl FromStr for UartRegisterLayout {
@@ -60,8 +121,35 @@ impl FromStr for UartRegisterLayout {
             "stm32f1" | "f1" | "legacy" => Ok(Self::Stm32F1),
             "stm32v2" | "v2" | "modern" | "stm32-modern" | "h5" | "stm32h5" => Ok(Self::Stm32V2),
             "nrf52" | "nordic" => Ok(Self::Nrf52),
+            "lpuart" | "kinetis" | "nxp" => Ok(Self::Lpuart),
+            "16550" | "ns16550" | "uart16550" => Ok(Self::Ns16550),
+            "dw_apb_uart" | "dwapb" | "designware" => Ok(Self::DwApbUart),
+            "pl011" | "primecell" => Ok(Self::Pl011),
+            "cadence" | "cdns" | "zynq" => Ok(Self::Cadence),
+            "efm32" => Ok(Self::Efm32),
+            "efr32" => Ok(Self::Efr32),
+            "leuart" => Ok(Self::Leuart),
+            "sci" | "renesas_sci" | "sh_sci" => Ok(Self::Sci),
+            "gaisler" | "apbuart" | "grlib" => Ok(Self::Gaisler),
+            "npcx" | "nuvoton" => Ok(Self::Npcx),
+            "max32650" | "maxim" => Ok(Self::Max32650),
+            "opentitan" | "lowrisc" => Ok(Self::OpenTitan),
+            "sam" | "sam_usart" | "atmel" => Ok(Self::Sam),
+            "sercom" | "samd5" => Ok(Self::Sercom),
+            "imx" | "imxuart" => Ok(Self::Imx),
+            "sifive" => Ok(Self::Sifive),
+            "litex" => Ok(Self::Litex),
+            "murax" => Ok(Self::Murax),
+            "coreuart" | "miv" => Ok(Self::CoreUart),
+            "k6xf" | "kinetis_uart" => Ok(Self::KinetisUart),
+            "pulp" | "udma" => Ok(Self::Pulp),
+            "esci" | "mpc5567" => Ok(Self::Esci),
+            "picosoc" | "simpleuart" => Ok(Self::PicoUart),
             _ => Err(format!(
-                "unsupported UART register layout '{}'; supported: stm32f1, stm32v2",
+                "unsupported UART register layout '{}'; supported: stm32f1, stm32v2, nrf52, \
+                 lpuart, ns16550, dw_apb_uart, pl011, cadence, efm32, efr32, leuart, sci, \
+                 gaisler, npcx, max32650, opentitan, sam, sercom, imx, sifive, litex, murax, \
+                 coreuart, k6xf, pulp",
                 value
             )),
         }
@@ -83,6 +171,23 @@ struct UartRegMap {
     cr1: Option<u64>,
     txeie_mask: u32,
     tcie_mask: u32,
+    /// Width in bytes of the status register window, [`status`, `status`+N).
+    /// 4 for 32-bit status words; 1 for byte-register families (16550 LSR,
+    /// Renesas SSR, NPCX UICTRL) where the next byte is a *different* register
+    /// (e.g. SCI packs SSR@0x04 and RDR@0x05 adjacently).
+    status_width: u64,
+    /// Status-register value at idle: every TX-ready / transmitter-empty flag
+    /// set and the RX shown empty. Any byte read within the window returns the
+    /// matching byte of this value (so an 8-bit LSR and a 32-bit STAT share one
+    /// path).
+    status_idle: u32,
+    /// Bits OR-ed into the status word when the RX buffer holds a byte —
+    /// active-high "data present" flags (16550 LSR.DR, STM32 RXNE, Kinetis RDRF).
+    rx_present_set: u32,
+    /// Bits cleared from the status word when the RX buffer holds a byte —
+    /// active-high "empty" flags that go low when data arrives (PL011 FR.RXFE,
+    /// Cadence SR.RxEMPTY). Most families leave this 0.
+    rx_present_clear: u32,
 }
 
 impl UartRegisterLayout {
@@ -96,6 +201,10 @@ impl UartRegisterLayout {
                 cr1: Some(0x0C),
                 txeie_mask: 1 << 7, // TXEIE
                 tcie_mask: 1 << 6,  // TCIE
+                status_width: 4,
+                status_idle: 0xC0,      // TXE | TC
+                rx_present_set: 1 << 5, // RXNE
+                rx_present_clear: 0,
             },
             // CR1 bit 3 is TE (transmitter enable) on the v2 USART — NOT an
             // interrupt enable; TXEIE/TXFNFIE lives at bit 7. The mask
@@ -113,6 +222,10 @@ impl UartRegisterLayout {
                 cr1: Some(0x00),
                 txeie_mask: 1 << 7, // TXEIE/TXFNFIE
                 tcie_mask: 1 << 6,  // TCIE
+                status_width: 4,
+                status_idle: 0xC0,      // TXE | TC
+                rx_present_set: 1 << 5, // RXNE
+                rx_present_clear: 0,
             },
             UartRegisterLayout::Nrf52 => UartRegMap {
                 status: 0x400, // EVENTS_TXDRDY
@@ -122,6 +235,388 @@ impl UartRegisterLayout {
                 cr1: None,
                 txeie_mask: 0,
                 tcie_mask: 0,
+                status_width: 4,
+                status_idle: 0xC0,
+                rx_present_set: 1 << 5,
+                rx_present_clear: 0,
+            },
+            // NXP Kinetis LPUART. Flat 32-bit block: STAT.TDRE(23)/TC(22)/
+            // RDRF(21) → ready flags in byte 2 of the status word; CTRL.TIE(23)
+            // / TCIE(22) are the TX interrupt enables; DATA@0x0C is the shared
+            // TX/RX data register. CR3 points at MODIR (no DMAT-on-CR3 concept;
+            // the smoke path never touches it).
+            UartRegisterLayout::Lpuart => UartRegMap {
+                status: 0x04,        // STAT
+                tx: 0x0C,            // DATA (write transmits)
+                rx: 0x0C,            // DATA (read pops RX)
+                cr3: 0x14,           // MODIR
+                cr1: Some(0x08),     // CTRL
+                txeie_mask: 1 << 23, // TIE
+                tcie_mask: 1 << 22,  // TCIE
+                status_width: 4,
+                status_idle: 0x00C0_0000, // TDRE | TC (bits 23/22)
+                rx_present_set: 1 << 21,  // RDRF
+                rx_present_clear: 0,
+            },
+            // ── Vendor UART families (register maps from public datasheets /
+            //    vendor CMSIS headers / in-tree Linux drivers). All share the
+            //    generic TX-sink + status-word engine; only offsets and the
+            //    idle/rx flag masks differ. cr3 is parked at an unused offset
+            //    (0xF00) for families with no STM32-style DMAT-on-CR3 concept.
+            // Standard 16550 (PC16550D). THR/RBR@0x00, LSR@0x05 (8-bit):
+            // THRE(5)|TEMT(6) ready, DR(0) set when data present. Reset 0x60.
+            UartRegisterLayout::Ns16550 => UartRegMap {
+                status: 0x05,
+                tx: 0x00,
+                rx: 0x00,
+                cr3: 0xF00,
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+                status_width: 1,
+                status_idle: 0x60,
+                rx_present_set: 1 << 0, // DR
+                rx_present_clear: 0,
+            },
+            // Synopsys DW_apb_uart (16550 semantics, 4-byte register stride),
+            // as on Dialog/Renesas DA1469x. THR/RBR@0x00, LSR@0x14. Reset 0x60.
+            UartRegisterLayout::DwApbUart => UartRegMap {
+                status: 0x14,
+                tx: 0x00,
+                rx: 0x00,
+                cr3: 0xF00,
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+                status_width: 4,
+                status_idle: 0x60, // THRE | TEMT
+                rx_present_set: 1 << 0,
+                rx_present_clear: 0,
+            },
+            // ARM PrimeCell PL011 (DDI 0183G). DR@0x00, FR@0x18: TXFE(7) ready,
+            // RXFE(4) SET WHEN EMPTY (cleared on data), RXFF(6). Reset 0x90.
+            UartRegisterLayout::Pl011 => UartRegMap {
+                status: 0x18,
+                tx: 0x00,
+                rx: 0x00,
+                cr3: 0xF00,
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+                status_width: 4,
+                status_idle: 0x90,        // TXFE | RXFE (TX empty, RX empty)
+                rx_present_set: 1 << 6,   // RXFF
+                rx_present_clear: 1 << 4, // clear RXFE on data
+            },
+            // Cadence UART (Xilinx Zynq UG585). FIFO@0x30, SR@0x2C: TxEMPTY(3),
+            // RxEMPTY(1) SET WHEN EMPTY. Reset 0x0A.
+            UartRegisterLayout::Cadence => UartRegMap {
+                status: 0x2C,
+                tx: 0x30,
+                rx: 0x30,
+                cr3: 0xF00,
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+                status_width: 4,
+                status_idle: 0x0A, // TxEMPTY(3) | RxEMPTY(1)
+                rx_present_set: 0,
+                rx_present_clear: 1 << 1, // clear RxEMPTY on data
+            },
+            // Silicon Labs EFM32 USART (Series 0). TXDATA@0x34, RXDATA@0x1C,
+            // STATUS@0x10: TXBL(6) ready, RXDATAV(7) set on data. Reset 0x40.
+            UartRegisterLayout::Efm32 => UartRegMap {
+                status: 0x10,
+                tx: 0x34,
+                rx: 0x1C,
+                cr3: 0xF00,
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+                status_width: 4,
+                status_idle: 0x40,      // TXBL
+                rx_present_set: 1 << 7, // RXDATAV
+                rx_present_clear: 0,
+            },
+            // Silicon Labs EFR32 USART (Series 1): same map as EFM32, reset
+            // STATUS adds TXIDLE(13) → 0x2040.
+            UartRegisterLayout::Efr32 => UartRegMap {
+                status: 0x10,
+                tx: 0x34,
+                rx: 0x1C,
+                cr3: 0xF00,
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+                status_width: 4,
+                status_idle: 0x2040,    // TXBL | TXIDLE
+                rx_present_set: 1 << 7, // RXDATAV
+                rx_present_clear: 0,
+            },
+            // Silicon Labs LEUART (Low Energy UART). TXDATA@0x28, RXDATA@0x1C,
+            // STATUS@0x08: TXBL(4) ready, RXDATAV(5) set on data. Reset 0x10.
+            UartRegisterLayout::Leuart => UartRegMap {
+                status: 0x08,
+                tx: 0x28,
+                rx: 0x1C,
+                cr3: 0xF00,
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+                status_width: 4,
+                status_idle: 0x10,      // TXBL
+                rx_present_set: 1 << 5, // RXDATAV
+                rx_present_clear: 0,
+            },
+            // Renesas SCI (classic SH/RX and RA-series, async non-FIFO).
+            // TDR@0x03, SSR@0x04 (8-bit): TDRE(7)|TEND(2) ready, RDRF(6) set on
+            // data; RDR@0x05. Reset SSR 0x84. status_width=1 so RDR stays clear.
+            UartRegisterLayout::Sci => UartRegMap {
+                status: 0x04,
+                tx: 0x03,
+                rx: 0x05,
+                cr3: 0xF00,
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+                status_width: 1,
+                status_idle: 0x84,      // TDRE | TEND
+                rx_present_set: 1 << 6, // RDRF
+                rx_present_clear: 0,
+            },
+            // Gaisler APBUART (LEON/GRLIB). DATA@0x00, STATUS@0x04: TS(1)|TE(2)
+            // ready, DR(0) set on data. Reset 0x06.
+            UartRegisterLayout::Gaisler => UartRegMap {
+                status: 0x04,
+                tx: 0x00,
+                rx: 0x00,
+                cr3: 0xF00,
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+                status_width: 4,
+                status_idle: 0x06,      // TS | TE
+                rx_present_set: 1 << 0, // DR
+                rx_present_clear: 0,
+            },
+            // Nuvoton NPCX (Zephyr). UTBUF@0x00 (TX), URBUF@0x02 (RX), readiness
+            // in UICTRL@0x04 (8-bit): TBE(0) ready, RBF(1) set on data. The
+            // error-only USTAT@0x06 is not modelled (reads 0 = no errors).
+            UartRegisterLayout::Npcx => UartRegMap {
+                status: 0x04,
+                tx: 0x00,
+                rx: 0x02,
+                cr3: 0xF00,
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+                status_width: 1,
+                status_idle: 0x01,      // TBE
+                rx_present_set: 1 << 1, // RBF
+                rx_present_clear: 0,
+            },
+            // Maxim MAX32650. FIFO@0x1C, STAT@0x08: TX_EMPTY(6) ready (TX_FULL(7)
+            // clear), RX_EMPTY(4) SET WHEN EMPTY. Reset 0x50.
+            UartRegisterLayout::Max32650 => UartRegMap {
+                status: 0x08,
+                tx: 0x1C,
+                rx: 0x1C,
+                cr3: 0xF00,
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+                status_width: 4,
+                status_idle: 0x50, // RX_EMPTY(4) | TX_EMPTY(6)
+                rx_present_set: 0,
+                rx_present_clear: 1 << 4, // clear RX_EMPTY on data
+            },
+            // lowRISC OpenTitan. WDATA@0x1C (TX), RDATA@0x18 (RX), STATUS@0x14:
+            // TXFULL(0) clear = ready, TXEMPTY(2)|TXIDLE(3) set, RXEMPTY(5) SET
+            // WHEN EMPTY. Reset 0x2C.
+            UartRegisterLayout::OpenTitan => UartRegMap {
+                status: 0x14,
+                tx: 0x1C,
+                rx: 0x18,
+                cr3: 0xF00,
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+                status_width: 4,
+                status_idle: 0x2C, // TXEMPTY(2) | TXIDLE(3) | RXEMPTY(5)
+                rx_present_set: 0,
+                rx_present_clear: 1 << 5, // clear RXEMPTY on data
+            },
+            // Atmel/Microchip SAM USART (SAM3/SAM4 "US"). US_THR@0x1C, US_RHR@
+            // 0x18, US_CSR@0x14: TXRDY(1)|TXEMPTY(9) ready, RXRDY(0) set on data.
+            // Idle (TX enabled) 0x202.
+            UartRegisterLayout::Sam => UartRegMap {
+                status: 0x14,
+                tx: 0x1C,
+                rx: 0x18,
+                cr3: 0xF00,
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+                status_width: 4,
+                status_idle: 0x202,     // TXRDY | TXEMPTY
+                rx_present_set: 1 << 0, // RXRDY
+                rx_present_clear: 0,
+            },
+            // Microchip SAMD5x/SAME5x SERCOM USART. Shared DATA@0x28, INTFLAG@
+            // 0x18 (8-bit): DRE(0) ready, RXC(2) set on data. Idle 0x01.
+            UartRegisterLayout::Sercom => UartRegMap {
+                status: 0x18,
+                tx: 0x28,
+                rx: 0x28,
+                cr3: 0xF00,
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+                status_width: 1,
+                status_idle: 0x01,      // DRE
+                rx_present_set: 1 << 2, // RXC
+                rx_present_clear: 0,
+            },
+            // NXP i.MX UART. UTXD@0x40, URXD@0x00, USR1@0x94: TRDY(13) ready,
+            // RRDY(9) set on data. Idle USR1 0x2040 (USR2@0x98 not modelled).
+            UartRegisterLayout::Imx => UartRegMap {
+                status: 0x94,
+                tx: 0x40,
+                rx: 0x00,
+                cr3: 0xF00,
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+                status_width: 4,
+                status_idle: 0x2040,    // TRDY | RXDS
+                rx_present_set: 1 << 9, // RRDY
+                rx_present_clear: 0,
+            },
+            // SiFive UART (FE310). txdata@0x00 (bit31 full), rxdata@0x04 (bit31
+            // empty). Status is folded into the data registers, so the generic
+            // engine models TX faithfully (write @0x00 transmits; full reads 0 =
+            // ready) but RX presence (rxdata bit31) is approximate.
+            UartRegisterLayout::Sifive => UartRegMap {
+                status: 0x00, // txdata.full = 0 at idle (ready)
+                tx: 0x00,
+                rx: 0x04,
+                cr3: 0xF00,
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+                status_width: 4,
+                status_idle: 0x0000_0000,
+                rx_present_set: 0,
+                rx_present_clear: 0,
+            },
+            // LiteX UART. rxtx@0x00 (shared), txfull@0x04, rxempty@0x08. The
+            // generic engine polls txfull@0x04 (idle 0 = ready) for faithful TX;
+            // rxempty@0x08 is not in the window, so RX presence is approximate.
+            UartRegisterLayout::Litex => UartRegMap {
+                status: 0x04, // txfull = 0 at idle (ready)
+                tx: 0x00,
+                rx: 0x00,
+                cr3: 0xF00,
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+                status_width: 4,
+                status_idle: 0x0000_0000,
+                rx_present_set: 0,
+                rx_present_clear: 0,
+            },
+            // VexRiscv Murax. DATA@0x00, STATUS@0x04: TX-free count bits[23:16]
+            // (idle 16 = 0x100000, firmware writes while != 0), RX-occupancy
+            // bits[31:24] (!= 0 means data present).
+            UartRegisterLayout::Murax => UartRegMap {
+                status: 0x04,
+                tx: 0x00,
+                rx: 0x00,
+                cr3: 0xF00,
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+                status_width: 4,
+                status_idle: 0x0010_0000,    // TX FIFO free = 16
+                rx_present_set: 0x0100_0000, // RX occupancy = 1
+                rx_present_clear: 0,
+            },
+            // Microsemi CoreUARTapb. TxData@0x00, RxData@0x04, Status@0x10:
+            // TXRDY(0) ready, RXRDY(1) set on data. Idle 0x01.
+            UartRegisterLayout::CoreUart => UartRegMap {
+                status: 0x10,
+                tx: 0x00,
+                rx: 0x04,
+                cr3: 0xF00,
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+                status_width: 4,
+                status_idle: 0x01,      // TXRDY
+                rx_present_set: 1 << 1, // RXRDY
+                rx_present_clear: 0,
+            },
+            // NXP Kinetis K6x UART (classic). D@0x07, S1@0x04 (8-bit): TDRE(7)|
+            // TC(6) ready, RDRF(5) set on data. Idle 0xC0. width=1 (S2@0x05).
+            UartRegisterLayout::KinetisUart => UartRegMap {
+                status: 0x04,
+                tx: 0x07,
+                rx: 0x07,
+                cr3: 0xF00,
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+                status_width: 1,
+                status_idle: 0xC0,      // TDRE | TC
+                rx_present_set: 1 << 5, // RDRF
+                rx_present_clear: 0,
+            },
+            // PULP uDMA UART. Transmit is DMA-descriptor only on real silicon —
+            // there is no byte-write TX register — so this is an estate-level
+            // model: STATUS@0x20 (TX_BUSY=0 idle), DATA@0x34 read. RX presence
+            // (VALID@0x30) is not in the status window, so it is approximate.
+            UartRegisterLayout::Pulp => UartRegMap {
+                status: 0x20,
+                tx: 0x34,
+                rx: 0x34,
+                cr3: 0xF00,
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+                status_width: 4,
+                status_idle: 0x0000_0000, // TX_BUSY = 0 (ready)
+                rx_present_set: 0,
+                rx_present_clear: 0,
+            },
+            // Freescale MPC5567 eSCI. DR@0x06 (data byte at 0x07), SR@0x08:
+            // TDRE(31)|TC(30) ready, RDRF(29) set on data. Idle SR 0xC0000000.
+            UartRegisterLayout::Esci => UartRegMap {
+                status: 0x08,
+                tx: 0x07,
+                rx: 0x07,
+                cr3: 0xF00,
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+                status_width: 4,
+                status_idle: 0xC000_0000,    // TDRE | TC
+                rx_present_set: 0x2000_0000, // RDRF
+                rx_present_clear: 0,
+            },
+            // PicoSoC simpleuart. reg_dat@0x04 (write=TX, read=RX). No status
+            // register exists (TX blocks in HW); status parks at reg_div@0x00.
+            UartRegisterLayout::PicoUart => UartRegMap {
+                status: 0x00,
+                tx: 0x04,
+                rx: 0x04,
+                cr3: 0xF00,
+                cr1: None,
+                txeie_mask: 0,
+                tcie_mask: 0,
+                status_width: 4,
+                status_idle: 0x0000_0000,
+                rx_present_set: 0,
+                rx_present_clear: 0,
             },
         }
     }
@@ -297,6 +792,18 @@ impl Uart {
     fn status_offset(&self) -> u64 {
         self.layout.regmap().status
     }
+    /// The status register as a 32-bit word: the idle pattern adjusted for a
+    /// pending RX byte (set the active-high "data present" flags, clear the
+    /// active-high "empty" flags). Byte-addressed reads slice this word, so an
+    /// 8-bit LSR and a 32-bit STAT share one path.
+    fn status_word(&self, rx_present: bool) -> u32 {
+        let m = self.layout.regmap();
+        if rx_present {
+            (m.status_idle & !m.rx_present_clear) | m.rx_present_set
+        } else {
+            m.status_idle
+        }
+    }
     fn tx_offset(&self) -> u64 {
         self.layout.regmap().tx
     }
@@ -382,10 +889,6 @@ impl Uart {
         self.layout.regmap().tcie_mask
     }
 
-    fn status_ready_value(&self) -> u8 {
-        0xC0 // TX-ready + TC-ready in low byte for both layouts.
-    }
-
     fn push_tx(&mut self, value: u8) {
         self.record_trace("tx", value);
 
@@ -448,15 +951,11 @@ impl Uart {
 
 impl crate::Peripheral for Uart {
     fn read(&self, offset: u64) -> SimResult<u8> {
-        if offset == self.status_offset() {
-            let mut val = self.status_ready_value();
-            // Set RXNE bit (bit 5) when RX buffer has data
-            if let Ok(guard) = self.rx_buf.lock() {
-                if !guard.is_empty() {
-                    val |= 1 << 5; // RXNE
-                }
-            }
-            return Ok(val);
+        let status = self.status_offset();
+        if offset >= status && offset < status + self.layout.regmap().status_width {
+            let rx_present = self.rx_buf.lock().map(|g| !g.is_empty()).unwrap_or(false);
+            let word = self.status_word(rx_present);
+            return Ok(((word >> ((offset - status) * 8)) & 0xFF) as u8);
         }
         if offset == self.rx_offset() {
             // Pop one byte from RX buffer
@@ -571,14 +1070,11 @@ impl crate::Peripheral for Uart {
     }
 
     fn peek(&self, offset: u64) -> Option<u8> {
-        if offset == self.status_offset() {
-            let mut val = self.status_ready_value();
-            if let Ok(guard) = self.rx_buf.lock() {
-                if !guard.is_empty() {
-                    val |= 1 << 5; // RXNE
-                }
-            }
-            return Some(val);
+        let status = self.status_offset();
+        if offset >= status && offset < status + self.layout.regmap().status_width {
+            let rx_present = self.rx_buf.lock().map(|g| !g.is_empty()).unwrap_or(false);
+            let word = self.status_word(rx_present);
+            return Some(((word >> ((offset - status) * 8)) & 0xFF) as u8);
         }
         if offset == self.rx_offset() {
             // Peek without consuming
@@ -652,6 +1148,134 @@ mod tests {
         let data = sink.lock().unwrap().clone();
         assert_eq!(data, vec![b'Y']);
         assert_eq!(uart.read(0x1C).unwrap(), 0xC0); // ISR ready flags
+    }
+
+    #[test]
+    fn test_uart_lpuart_transmit_uses_data_register() {
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::Lpuart);
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        uart.set_sink(Some(sink.clone()), false);
+
+        // STAT (0x04) must report TDRE (bit 23) + TC (bit 22) ready: that is
+        // 0xC0 in byte 2 of the word, i.e. read at offset 0x06.
+        assert_eq!(uart.read(0x06).unwrap(), 0xC0, "STAT byte 2 = TDRE|TC");
+        // A write to a wrong offset (STAT) must not transmit.
+        uart.write(0x04, b'X').unwrap();
+        // DATA register at 0x0C transmits.
+        uart.write(0x0C, b'K').unwrap();
+
+        assert_eq!(sink.lock().unwrap().clone(), vec![b'K']);
+    }
+
+    /// Every vendor layout: a write to its TX data offset reaches the sink, and
+    /// its status offset reports transmitter-ready at idle. Offsets are the
+    /// datasheet values encoded in `regmap()`.
+    #[test]
+    fn test_vendor_layout_tx_and_status() {
+        use super::UartRegisterLayout::*;
+        // (layout, tx_offset, status_offset)
+        let cases = [
+            (Ns16550, 0x00u64, 0x05u64),
+            (DwApbUart, 0x00, 0x14),
+            (Pl011, 0x00, 0x18),
+            (Cadence, 0x30, 0x2C),
+            (Efm32, 0x34, 0x10),
+            (Efr32, 0x34, 0x10),
+            (Leuart, 0x28, 0x08),
+            (Sci, 0x03, 0x04),
+            (Gaisler, 0x00, 0x04),
+            (Npcx, 0x00, 0x04),
+            (Max32650, 0x1C, 0x08),
+            (OpenTitan, 0x1C, 0x14),
+            (Sam, 0x1C, 0x14),
+            (Sercom, 0x28, 0x18),
+            (Imx, 0x40, 0x94),
+            (Sifive, 0x00, 0x00),
+            (Litex, 0x00, 0x04),
+            (Murax, 0x00, 0x04),
+            (CoreUart, 0x00, 0x10),
+            (KinetisUart, 0x07, 0x04),
+            (Pulp, 0x34, 0x20),
+            (Esci, 0x07, 0x08),
+            (PicoUart, 0x04, 0x00),
+        ];
+        for (layout, tx, status) in cases {
+            let mut uart = Uart::new_with_layout(layout);
+            let sink = Arc::new(Mutex::new(Vec::new()));
+            uart.set_sink(Some(sink.clone()), false);
+            uart.write(tx, b'Q').unwrap();
+            assert_eq!(
+                sink.lock().unwrap().clone(),
+                vec![b'Q'],
+                "{layout:?}: write to tx offset {tx:#x} must reach the sink"
+            );
+            // The status register must read non-faulting and is consistent with
+            // its idle word (a 32-bit read assembled from the byte path).
+            let w = uart.read_u32(status).unwrap();
+            assert_eq!(
+                w,
+                layout.regmap().status_idle,
+                "{layout:?}: idle status at {status:#x}"
+            );
+        }
+    }
+
+    /// Empty-flag families (PL011 FR.RXFE, Cadence SR.RxEMPTY, OpenTitan
+    /// STATUS.RXEMPTY) must show "RX empty" at idle and clear that bit when a
+    /// byte arrives — the inverse of the STM32 "set RXNE" convention.
+    #[test]
+    fn test_vendor_empty_flag_rx_semantics() {
+        use super::UartRegisterLayout::*;
+        // (layout, status_offset, rx_empty_bit)
+        for (layout, status, empty_bit) in [
+            (Pl011, 0x18u64, 4u32),
+            (Cadence, 0x2C, 1),
+            (OpenTitan, 0x14, 5),
+        ] {
+            let mut uart = Uart::new_with_layout(layout);
+            uart.set_sink(None, false);
+            // Idle: empty bit set.
+            assert_ne!(
+                uart.read_u32(status).unwrap() & (1 << empty_bit),
+                0,
+                "{layout:?}: RX-empty must be set at idle"
+            );
+            // A pending RX byte clears the empty bit.
+            uart.rx_buffer().lock().unwrap().push_back(b'Z');
+            assert_eq!(
+                uart.read_u32(status).unwrap() & (1 << empty_bit),
+                0,
+                "{layout:?}: RX-empty must clear when data is present"
+            );
+        }
+    }
+
+    #[test]
+    fn test_uart_lpuart_tie_and_tcie_raise_irq() {
+        // CTRL (0x08): TIE = bit 23, TCIE = bit 22. Either pends the LPUART IRQ.
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::Lpuart);
+        uart.write_u32(0x08, 1 << 23).unwrap(); // TIE
+        assert!(uart.tick().irq, "TIE must pend");
+
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::Lpuart);
+        uart.write_u32(0x08, 1 << 22).unwrap(); // TCIE
+        assert!(uart.tick().irq, "TCIE must pend");
+
+        // TE alone (bit 19, transmitter enable — not an interrupt) must not pend.
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::Lpuart);
+        uart.write_u32(0x08, 1 << 19).unwrap();
+        assert!(!uart.tick().irq, "TE alone must not pend");
+    }
+
+    #[test]
+    fn test_uart_lpuart_rx_sets_rdrf_and_reads_data() {
+        let uart = Uart::new_with_layout(UartRegisterLayout::Lpuart);
+        uart.rx_buffer().lock().unwrap().push_back(b'Z');
+        // RDRF (STAT bit 21) sits at byte 2 bit 5 → read 0x06 has bit 5 set.
+        assert_eq!(uart.read(0x06).unwrap(), 0xC0 | (1 << 5));
+        // DATA read at 0x0C pops the byte.
+        assert_eq!(uart.read(0x0C).unwrap(), b'Z');
+        assert_eq!(uart.read(0x06).unwrap(), 0xC0, "RDRF clears once drained");
     }
 
     #[test]
