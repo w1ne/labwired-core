@@ -22,6 +22,7 @@
 
 #include "uds/uds_core.h"
 #include "uds/uds_isotp.h"
+#include "uds_ecu_app.h"
 
 /* --- freestanding libc shims (no libc linked) --- */
 void *memcpy(void *dst, const void *src, size_t n)
@@ -96,6 +97,8 @@ static void uart_puts(const char *s)
     while (*s) uart_putc(*s++);
 }
 
+void uds_ecu_app_log(const char *msg) { uart_puts(msg); }
+
 /* --- bxCAN @ 0x40006400 (RM0008 §24.9) --- */
 #define CAN_BASE 0x40006400u
 #define CAN_MCR REG32(CAN_BASE + 0x000u)
@@ -123,6 +126,7 @@ static void uart_puts(const char *s)
 #define MSR_INAK (1u << 0)
 #define TI_TXRQ (1u << 0)
 #define RF_RFOM (1u << 5)
+#define TSR_TME0 (1u << 26) /* Transmit mailbox 0 empty (frame left the mailbox) */
 /* Valid bit timing (TS1=12, TS2=5, BRP=9) — silicon-captured working value
  * (loopback used 0x40DC0009; normal mode drops the LBKM bit). A degenerate
  * BTR with zero segments would bus-off on the real chip and in the model. */
@@ -198,11 +202,14 @@ static bool can_poll(can_frame_t *f)
     return true;
 }
 
-/* --- UDS stack --- */
+/* --- UDS stack ---
+ * tx_buffer and the ISO-TP SDU buffer are sized > 512 so the >512-byte DID
+ * 0xF1A0 calibration block (62 F1 A0 + 600 bytes = 603 bytes) is built in
+ * tx_buffer and then streamed as a multi-frame ISO-TP response (use case 1). */
 static uds_isotp_ctx_t g_iso;
-static uint8_t g_iso_tx_sdu[64];
+static uint8_t g_iso_tx_sdu[768];
 static uint8_t g_rx_buf[128];
-static uint8_t g_tx_buf[128];
+static uint8_t g_tx_buf[768];
 static uint32_t g_now_ms;
 
 #ifdef BROKEN_NCR
@@ -224,18 +231,16 @@ static int isotp_send_adapter(struct uds_ctx *ctx, const uint8_t *data, uint16_t
     return uds_isotp_send(&g_iso, data, len);
 }
 
-static int security_seed(struct uds_ctx *ctx, uint8_t level, uint8_t *seed, uint16_t max_len)
+/* fn_tx_complete hook (udslib v2.0.0, use case 2): report when the last TX
+ * frame has physically left the bxCAN mailbox. On real silicon fn_tp_send only
+ * QUEUES into TX mailbox 0; the 0x51 ECUReset response is not on the wire until
+ * the controller arbitrates it out and TME0 re-asserts. udslib polls this once
+ * per uds_process tick (bounded by reset_tx_wait_ms) and holds fn_reset until it
+ * returns true, so NVIC_SystemReset cannot drop the response (udslib #88). */
+static bool can_tx_complete(struct uds_ctx *ctx)
 {
     (void) ctx;
-    (void) level;
-    (void) max_len;
-    /* The multi-frame request reassembled and dispatched to us — serve a seed. */
-    uart_puts("UDS_SEED_SERVED\n");
-    seed[0] = 0xDE;
-    seed[1] = 0xAD;
-    seed[2] = 0xBE;
-    seed[3] = 0xEF;
-    return 4;
+    return (CAN_TSR & TSR_TME0) != 0u;
 }
 
 int main(void)
@@ -254,14 +259,17 @@ int main(void)
         .ecu_address = 0x10u,
         .get_time_ms = get_time_ms,
         .fn_tp_send = isotp_send_adapter,
-        .fn_security_seed = security_seed,
         .rx_buffer = g_rx_buf,
         .rx_buffer_size = sizeof(g_rx_buf),
         .tx_buffer = g_tx_buf,
         .tx_buffer_size = sizeof(g_tx_buf),
         .p2_ms = 50u,
         .p2_star_ms = 2000u,
+        .fn_tx_complete = can_tx_complete, /* gate 0x11 reset on frame-on-wire */
+        .reset_tx_wait_ms = 20u,           /* budget before forcing the reset */
     };
+    uds_ecu_app_fill_config(&cfg, "LABWIRED-F103-UDS");
+
     uds_ctx_t ctx;
     if (uds_init(&ctx, &cfg) != UDS_OK) {
         uart_puts("UDS_INIT_FAIL\n");

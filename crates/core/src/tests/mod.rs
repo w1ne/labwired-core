@@ -7,4 +7,6 @@ pub mod nrf52;
 #[cfg(test)]
 pub mod rp2040;
 #[cfg(test)]
+pub mod scb_reset;
+#[cfg(test)]
 pub mod test_cycles;

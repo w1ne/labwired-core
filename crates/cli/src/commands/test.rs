@@ -7,6 +7,30 @@
 //! `labwired test` subcommand: run the Tier-1 protocol suite.
 
 use crate::*;
+use tracing::warn;
+
+/// Apply the script's faults to the built bus before the run, logging any that
+/// could not be applied. Returns the provisional evidence; runtime-observed
+/// outcomes (and the require_fault_fired gate) are finalised after the run in
+/// execute_test_loop.
+fn handle_faults(
+    bus: &mut labwired_core::bus::SystemBus,
+    faults: &[labwired_config::FaultSpec],
+) -> Vec<labwired_cli::faults::FaultEvidence> {
+    if faults.is_empty() {
+        return Vec::new();
+    }
+    let evidence = labwired_cli::faults::apply_faults(bus, faults);
+    for e in &evidence {
+        if let Some(err) = &e.error {
+            error!(
+                "fault '{}' ({}) could not be applied: {}",
+                e.id, e.kind, err
+            );
+        }
+    }
+    evidence
+}
 
 pub(crate) fn run_test(args: TestArgs) -> ExitCode {
     // ── API key validation (Pro tier gate) ──────────────────────────────
@@ -76,6 +100,8 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
         script_wall_time_ms,
         script_max_vcd_bytes,
         assertions,
+        faults,
+        verdict,
     ) = match loaded {
         LoadedTestScript::V1_0(script) => (
             Some(script.inputs.firmware),
@@ -87,6 +113,8 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
             script.limits.wall_time_ms,
             script.limits.max_vcd_bytes,
             script.assertions,
+            script.faults,
+            script.verdict,
         ),
         LoadedTestScript::LegacyV1(script) => {
             tracing::warn!(
@@ -102,9 +130,23 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                 script.wall_time_ms,
                 None,
                 script.assertions,
+                Vec::new(),
+                None,
             )
         }
     };
+
+    // Fault injection (schema_version 1.1): the verdict's safe_when entries are
+    // evaluated as ordinary assertions; require_fault_fired gates the run on the
+    // faults actually taking effect.
+    let require_fault_fired = verdict
+        .as_ref()
+        .map(|v| v.require_fault_fired)
+        .unwrap_or(false);
+    let mut assertions = assertions;
+    if let Some(v) = &verdict {
+        assertions.extend(v.safe_when.iter().cloned());
+    }
 
     let max_steps = args.max_steps.unwrap_or(script_max_steps);
     let max_cycles = args.max_cycles.or(script_max_cycles);
@@ -291,6 +333,7 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
             // to the app. See FIDELITY.md §C.
             machine.cpu.set_pc(program.entry_point as u32);
             machine.cpu.set_sp(0x3FFE_0000);
+            let fault_evidence = handle_faults(&mut machine.bus, &faults);
             let exit_code = execute_test_loop(
                 &args,
                 &mut machine,
@@ -301,6 +344,9 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                 &metrics,
                 &firmware_path,
                 system_path.as_ref(),
+                &faults,
+                require_fault_fired,
+                fault_evidence,
             );
             // Device-block render readout. Surfaces the attached panel block's
             // REAL render state — refresh_gen AND black-plane ink — so a generic
@@ -380,7 +426,21 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
     };
 
     let uart_tx = Arc::new(Mutex::new(Vec::new()));
-    bus.attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
+    let debug_uart = system_path
+        .as_ref()
+        .and_then(|path| labwired_config::SystemManifest::from_file(path).ok())
+        .and_then(|manifest| manifest.debug_uart);
+    if let Some(debug_uart) = debug_uart.as_deref() {
+        if !bus.attach_uart_tx_sink_named(debug_uart, uart_tx.clone(), !args.no_uart_stdout) {
+            warn!(
+                "debug_uart '{}' did not resolve to a UART peripheral; falling back to all UARTs",
+                debug_uart
+            );
+            bus.attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
+        }
+    } else {
+        bus.attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
+    }
     // Let any attached IO-Link master record what it received over IO-Link into
     // the same captured buffer, so `uart_contains` can assert on the MASTER
     // side (MASTER PD= / MASTER VERDICT / MASTER EVENT), not just the device
@@ -423,6 +483,7 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                     e,
                 );
             }
+            let fault_evidence = handle_faults(&mut machine.bus, &faults);
             execute_test_loop(
                 &args,
                 &mut machine,
@@ -433,6 +494,9 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                 &metrics,
                 &firmware_path,
                 system_path.as_ref(),
+                &faults,
+                require_fault_fired,
+                fault_evidence,
             )
         }};
     }

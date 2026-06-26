@@ -127,6 +127,25 @@ pub struct ChipDescriptor {
     pub core: Option<String>,
     pub flash: MemoryRange,
     pub ram: MemoryRange,
+    /// Offset in bytes from the flash base to the application vector table
+    /// when a second-stage bootloader precedes it. The RP2040 bootrom runs a
+    /// 256-byte stage-2 (boot2) blob from flash and only then enters the
+    /// vector table at `flash_base + 0x100`, so set this to `0x100` for the
+    /// RP2040. `0` (the default) means the vector table sits at the flash base
+    /// — the usual case for STM32/nRF/etc. The simulator does not execute the
+    /// stage-2 blob (flash is directly mapped); it uses this offset to find
+    /// the real reset vector when the flash-base vectors are not valid.
+    #[serde(default, deserialize_with = "deserialize_u64_lax")]
+    pub reset_vector_offset: u64,
+    /// RP2040-style atomic register aliases. When true, every 0x1000-strided
+    /// alias of a peripheral register in the APB window decodes as an atomic
+    /// op on the base register: `+0x0000` normal, `+0x1000` XOR, `+0x2000`
+    /// SET (bitwise OR), `+0x3000` CLR (bitwise AND-NOT). The RP2040 HAL drives
+    /// nearly all of its register setup through these aliases (`hw_set_bits`,
+    /// `hw_clear_bits`), so without them an unmodified image faults on the
+    /// first `hw_set_bits`. Default `false` (other Cortex-M parts).
+    #[serde(default)]
+    pub atomic_register_aliases: bool,
     /// Extra CPU-visible memory windows beyond `flash`/`ram` (e.g. ESP32 IRAM
     /// and flash-DROM). Empty for chips with a simple two-region map.
     #[serde(default)]
@@ -195,6 +214,8 @@ pub struct SystemManifest {
     pub external_devices: Vec<ExternalDevice>,
     #[serde(default)]
     pub board_io: Vec<BoardIoBinding>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub debug_uart: Option<String>,
     #[serde(default)]
     pub peripherals: Vec<PeripheralConfig>,
     /// Opt-in: delete the per-cycle peripheral walk for this config (only takes
@@ -516,6 +537,8 @@ impl From<labwired_ir::IrDevice> for ChipDescriptor {
             core,
             flash,
             ram,
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             memory_regions: Vec::new(),
             peripherals: ir
                 .peripherals
@@ -620,12 +643,157 @@ pub struct MemoryValueAssertion {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "snake_case")]
+pub enum UdsTesterResult {
+    Done,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct UdsTesterDetails {
+    pub id: String,
+    pub result: UdsTesterResult,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct UdsTesterAssertion {
+    pub uds_tester: UdsTesterDetails,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
 pub enum TestAssertion {
     UartContains(UartContainsAssertion),
     UartRegex(UartRegexAssertion),
     ExpectedStopReason(StopReasonAssertion),
     MemoryValue(MemoryValueAssertion),
+    UdsTester(UdsTesterAssertion),
+}
+
+/// Where a fault is applied. Either a peripheral (by `id`, optionally narrowed
+/// to a `register` and `bit`) or a raw memory `address`. Resolved against the
+/// built chip when the run starts.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
+#[serde(deny_unknown_fields)]
+pub struct FaultTarget {
+    #[serde(default)]
+    pub peripheral: Option<String>,
+    #[serde(default)]
+    pub register: Option<String>,
+    #[serde(default)]
+    pub bit: Option<u8>,
+    #[serde(default)]
+    pub address: Option<u64>,
+}
+
+/// The access mode a `permission_flip` fault forces a register into.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AccessMode {
+    ReadOnly,
+    WriteOnly,
+}
+
+/// The access direction a `permission_violation` fault denies.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AccessDirection {
+    Read,
+    Write,
+}
+
+/// When a fault takes effect. Mirrors the declarative peripheral trigger
+/// vocabulary so peripheral-class faults reuse the same evaluator.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum FaultTrigger {
+    /// Applied while the bus is built, before the firmware runs.
+    #[default]
+    AtStart,
+    /// Applied once, `cycles` cycles into the run.
+    AfterCycles { cycles: u64 },
+    /// Applied when the firmware writes `register` (optionally matching value/mask).
+    OnWrite {
+        register: String,
+        #[serde(default)]
+        value: Option<u64>,
+        #[serde(default)]
+        mask: Option<u64>,
+    },
+    /// Applied when the firmware reads `register`.
+    OnRead { register: String },
+}
+
+/// The taxonomy of injectable faults. Each maps to a documented silicon failure
+/// mode; see the per-kind required parameters enforced in [`TestScript::validate`].
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum FaultKind {
+    MissingClock,
+    StuckAtBit,
+    WrongResetValue,
+    PermissionFlip,
+    BoundViolation,
+    PermissionViolation,
+    MemoryCorruption,
+    DelayedIrq,
+    NeverIrq,
+    PeripheralErrorState,
+    PeripheralTimeout,
+}
+
+/// A single injected fault. `kind`-specific parameters are the optional fields;
+/// which are required is enforced structurally by [`TestScript::validate`].
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct FaultSpec {
+    pub id: String,
+    pub kind: FaultKind,
+    #[serde(default)]
+    pub target: FaultTarget,
+    #[serde(default)]
+    pub trigger: FaultTrigger,
+    /// `stuck_at_bit`: the level (0 or 1) the bit is held at.
+    #[serde(default)]
+    pub level: Option<u8>,
+    /// `wrong_reset_value` / `memory_corruption`: the value written.
+    #[serde(default)]
+    pub value: Option<u64>,
+    /// `memory_corruption`: XOR mask applied to the target instead of `value`.
+    #[serde(default)]
+    pub xor: Option<u64>,
+    /// `permission_flip`: the mode to force the register into.
+    #[serde(default)]
+    pub to: Option<AccessMode>,
+    /// `permission_violation`: the direction to deny.
+    #[serde(default)]
+    pub deny: Option<AccessDirection>,
+    /// `delayed_irq`: how many cycles to delay the interrupt.
+    #[serde(default)]
+    pub delay_cycles: Option<u64>,
+    /// `delayed_irq` / `never_irq`: the interrupt name on the peripheral.
+    #[serde(default)]
+    pub interrupt: Option<String>,
+    /// `peripheral_error_state` / `peripheral_timeout`: the status bits to set.
+    #[serde(default)]
+    pub bits: Option<u64>,
+    /// Memory-class faults: access width in bytes (1/2/4).
+    #[serde(default)]
+    pub size: Option<u8>,
+}
+
+/// The safe-behaviour judgment for a fault-injection run. `safe_when` reuses the
+/// ordinary assertion vocabulary; the firmware passes iff every entry holds.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct Verdict {
+    #[serde(default)]
+    pub safe_when: Vec<TestAssertion>,
+    /// If true (default), the run is invalid — not a pass — unless every fault
+    /// is observed to actually fire. The false-pass gate.
+    #[serde(default = "default_true")]
+    pub require_fault_fired: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -636,6 +804,12 @@ pub struct TestScript {
     pub limits: TestLimits,
     #[serde(default)]
     pub assertions: Vec<TestAssertion>,
+    /// Faults to inject into the simulated silicon (schema_version 1.1+).
+    #[serde(default)]
+    pub faults: Vec<FaultSpec>,
+    /// The safe-behaviour verdict for a fault-injection run (schema_version 1.1+).
+    #[serde(default)]
+    pub verdict: Option<Verdict>,
 }
 
 impl TestScript {
@@ -649,9 +823,9 @@ impl TestScript {
     }
 
     pub fn validate(&self) -> Result<()> {
-        if self.schema_version != "1.0" {
+        if self.schema_version != "1.0" && self.schema_version != "1.1" {
             anyhow::bail!(
-                "Unsupported schema_version '{}'. Supported versions: '1.0'",
+                "Unsupported schema_version '{}'. Supported versions: '1.0', '1.1'",
                 self.schema_version
             );
         }
@@ -664,8 +838,124 @@ impl TestScript {
             anyhow::bail!("Limit 'max_steps' must be greater than zero");
         }
 
+        // Fault injection requires schema_version 1.1+.
+        if self.schema_version == "1.0" && (!self.faults.is_empty() || self.verdict.is_some()) {
+            anyhow::bail!(
+                "'faults'/'verdict' require schema_version '1.1' (got '{}')",
+                self.schema_version
+            );
+        }
+
+        // Structural fault-compiler guardrails. Deeper checks that need the
+        // built chip (target resolution, bit-within-register) run when the bus
+        // is available; these catch malformed specs up front.
+        let mut seen = std::collections::HashSet::new();
+        for fault in &self.faults {
+            if fault.id.trim().is_empty() {
+                anyhow::bail!("Every fault needs a non-empty 'id'");
+            }
+            if !seen.insert(fault.id.as_str()) {
+                anyhow::bail!("Duplicate fault id '{}'", fault.id);
+            }
+            validate_fault(fault)?;
+        }
+
         Ok(())
     }
+}
+
+/// Per-kind structural validation of a fault spec: that the target shape and the
+/// kind-specific parameters required to lower the fault are present. This is the
+/// config-side half of the fault compiler; silicon-resolution guardrails (does
+/// the peripheral exist, is the bit within the register) run against the built
+/// bus at run time.
+fn validate_fault(f: &FaultSpec) -> Result<()> {
+    let needs_peripheral = || -> Result<()> {
+        if f.target.peripheral.is_none() {
+            anyhow::bail!("Fault '{}' ({:?}) needs target.peripheral", f.id, f.kind);
+        }
+        Ok(())
+    };
+    let needs_register = || -> Result<()> {
+        if f.target.register.is_none() {
+            anyhow::bail!("Fault '{}' ({:?}) needs target.register", f.id, f.kind);
+        }
+        Ok(())
+    };
+    let needs_address = || -> Result<()> {
+        if f.target.address.is_none() {
+            anyhow::bail!("Fault '{}' ({:?}) needs target.address", f.id, f.kind);
+        }
+        Ok(())
+    };
+
+    match f.kind {
+        FaultKind::MissingClock => needs_peripheral()?,
+        FaultKind::StuckAtBit => {
+            needs_peripheral()?;
+            needs_register()?;
+            if f.target.bit.is_none() {
+                anyhow::bail!("Fault '{}' (stuck_at_bit) needs target.bit", f.id);
+            }
+            match f.level {
+                Some(0) | Some(1) => {}
+                _ => anyhow::bail!("Fault '{}' (stuck_at_bit) needs level: 0 or 1", f.id),
+            }
+        }
+        FaultKind::WrongResetValue => {
+            needs_peripheral()?;
+            needs_register()?;
+            if f.value.is_none() {
+                anyhow::bail!("Fault '{}' (wrong_reset_value) needs 'value'", f.id);
+            }
+        }
+        FaultKind::PermissionFlip => {
+            needs_peripheral()?;
+            needs_register()?;
+            if f.to.is_none() {
+                anyhow::bail!("Fault '{}' (permission_flip) needs 'to'", f.id);
+            }
+        }
+        FaultKind::BoundViolation => needs_address()?,
+        FaultKind::PermissionViolation => {
+            needs_address()?;
+            if f.deny.is_none() {
+                anyhow::bail!("Fault '{}' (permission_violation) needs 'deny'", f.id);
+            }
+        }
+        FaultKind::MemoryCorruption => {
+            needs_address()?;
+            if f.value.is_none() && f.xor.is_none() {
+                anyhow::bail!(
+                    "Fault '{}' (memory_corruption) needs 'value' or 'xor'",
+                    f.id
+                );
+            }
+        }
+        FaultKind::DelayedIrq => {
+            needs_peripheral()?;
+            if f.interrupt.is_none() {
+                anyhow::bail!("Fault '{}' (delayed_irq) needs 'interrupt'", f.id);
+            }
+            if f.delay_cycles.is_none() {
+                anyhow::bail!("Fault '{}' (delayed_irq) needs 'delay_cycles'", f.id);
+            }
+        }
+        FaultKind::NeverIrq => {
+            needs_peripheral()?;
+            if f.interrupt.is_none() {
+                anyhow::bail!("Fault '{}' (never_irq) needs 'interrupt'", f.id);
+            }
+        }
+        FaultKind::PeripheralErrorState | FaultKind::PeripheralTimeout => {
+            needs_peripheral()?;
+            needs_register()?;
+            if f.bits.is_none() {
+                anyhow::bail!("Fault '{}' ({:?}) needs 'bits'", f.id, f.kind);
+            }
+        }
+    }
+    Ok(())
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -761,11 +1051,43 @@ pub fn load_test_script<P: AsRef<Path>>(path: P) -> Result<LoadedTestScript> {
 
 pub fn parse_size(size_str: &str) -> Result<u64> {
     use human_size::{Byte, Size, SpecificSize};
-    let s: Size = size_str
+    let trimmed = size_str.trim();
+    // A bare integer is a raw byte count. `human_size` rejects unit-less values
+    // with "no multiple", but many chip configs give sizes as plain bytes
+    // (e.g. `1048576`), so accept those directly before falling back to the
+    // unit-aware parser ("512KB", "1.5 MiB", …).
+    if let Ok(bytes) = trimmed.parse::<u64>() {
+        return Ok(bytes);
+    }
+    let s: Size = trimmed
         .parse()
         .map_err(|e| anyhow::anyhow!("Invalid size format: {}", e))?;
     let bytes: SpecificSize<Byte> = s.into();
     Ok(bytes.value() as u64)
+}
+
+#[cfg(test)]
+mod parse_size_tests {
+    use super::parse_size;
+
+    #[test]
+    fn bare_integers_are_byte_counts() {
+        assert_eq!(parse_size("1048576").unwrap(), 1_048_576);
+        assert_eq!(parse_size("262144").unwrap(), 262_144);
+        assert_eq!(parse_size("  4096  ").unwrap(), 4096);
+    }
+
+    #[test]
+    fn unit_suffixes_still_parse() {
+        assert_eq!(parse_size("512KB").unwrap(), 524_288);
+        assert_eq!(parse_size("1564672B").unwrap(), 1_564_672);
+        assert_eq!(parse_size("1KB").unwrap(), 1024);
+    }
+
+    #[test]
+    fn garbage_still_errors() {
+        assert!(parse_size("not-a-size").is_err());
+    }
 }
 
 #[cfg(test)]
@@ -792,6 +1114,107 @@ assertions:
         assert_eq!(script.inputs.firmware, "path/to/fw.elf");
         assert_eq!(script.limits.max_steps, 1000);
         assert_eq!(script.assertions.len(), 2);
+    }
+
+    #[test]
+    fn test_fault_injection_script_roundtrips() {
+        let yaml = r#"
+schema_version: "1.1"
+inputs:
+  firmware: "fw.elf"
+limits:
+  max_steps: 1000
+faults:
+  - id: usart1_no_clock
+    kind: missing_clock
+    target: { peripheral: usart1 }
+  - id: sr_stuck
+    kind: stuck_at_bit
+    target: { peripheral: usart1, register: sr, bit: 7 }
+    level: 1
+    trigger: at_start
+verdict:
+  safe_when:
+    - uart_contains: "FAULT_HANDLED"
+  require_fault_fired: true
+"#;
+        let script: TestScript = serde_yaml::from_str(yaml).unwrap();
+        script.validate().expect("valid 1.1 fault script");
+        assert_eq!(script.faults.len(), 2);
+        assert_eq!(script.faults[0].kind, FaultKind::MissingClock);
+        assert!(script.verdict.as_ref().unwrap().require_fault_fired);
+    }
+
+    #[test]
+    fn test_faults_require_v1_1() {
+        let yaml = r#"
+schema_version: "1.0"
+inputs:
+  firmware: "fw.elf"
+limits:
+  max_steps: 100
+faults:
+  - id: x
+    kind: missing_clock
+    target: { peripheral: usart1 }
+"#;
+        let script: TestScript = serde_yaml::from_str(yaml).unwrap();
+        let err = script.validate().unwrap_err();
+        assert!(err.to_string().contains("require schema_version '1.1'"));
+    }
+
+    #[test]
+    fn test_fault_missing_required_param_rejected() {
+        // stuck_at_bit without a level.
+        let yaml = r#"
+schema_version: "1.1"
+inputs:
+  firmware: "fw.elf"
+limits:
+  max_steps: 100
+faults:
+  - id: bad
+    kind: stuck_at_bit
+    target: { peripheral: usart1, register: sr, bit: 7 }
+"#;
+        let script: TestScript = serde_yaml::from_str(yaml).unwrap();
+        let err = script.validate().unwrap_err();
+        assert!(err.to_string().contains("level"));
+    }
+
+    #[test]
+    fn test_duplicate_fault_id_rejected() {
+        let yaml = r#"
+schema_version: "1.1"
+inputs:
+  firmware: "fw.elf"
+limits:
+  max_steps: 100
+faults:
+  - id: dup
+    kind: missing_clock
+    target: { peripheral: a }
+  - id: dup
+    kind: missing_clock
+    target: { peripheral: b }
+"#;
+        let script: TestScript = serde_yaml::from_str(yaml).unwrap();
+        let err = script.validate().unwrap_err();
+        assert!(err.to_string().contains("Duplicate fault id"));
+    }
+
+    #[test]
+    fn test_v1_0_script_still_valid_without_faults() {
+        let yaml = r#"
+schema_version: "1.0"
+inputs:
+  firmware: "fw.elf"
+limits:
+  max_steps: 100
+"#;
+        let script: TestScript = serde_yaml::from_str(yaml).unwrap();
+        assert!(script.validate().is_ok());
+        assert!(script.faults.is_empty());
     }
 
     #[test]
@@ -916,5 +1339,23 @@ registers:
             desc.registers[1].side_effects.as_ref().unwrap().on_read,
             Some("clear_rxne".to_string())
         );
+    }
+
+    #[test]
+    fn uds_tester_assertion_parses_result_done() {
+        let yaml = r#"
+- uds_tester:
+    id: "uds-tester"
+    result: done
+"#;
+        let assertions: Vec<TestAssertion> = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(assertions.len(), 1);
+        match &assertions[0] {
+            TestAssertion::UdsTester(a) => {
+                assert_eq!(a.uds_tester.id, "uds-tester");
+                assert!(matches!(a.uds_tester.result, UdsTesterResult::Done));
+            }
+            other => panic!("expected UdsTester variant, got {:?}", other),
+        }
     }
 }

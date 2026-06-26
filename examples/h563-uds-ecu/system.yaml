@@ -1,10 +1,44 @@
 name: "h563-uds-ecu"
 chip: "../../configs/chips/stm32h563.yaml"
 external_devices:
-  - id: "uds_tester"
-    type: "can-diagnostic-tester"
+  # A real second CAN node: a virtual UDS tester scripted to walk the full
+  # everyday diagnostic session and assert each ECU reply on the bus. Sends are
+  # UDS-payload bytes; the tester frames ISO-TP. `expect` is a prefix match;
+  # `expect_nrc` matches a [7F sid nrc] negative response exactly.
+  - type: "uds-tester"
+    id: "uds-tester"
     connection: "fdcan1"
     config:
-      request_id: "0x7E0"
-      request_data: "03 22 F1 90"
+      request_id: 0x7E0
+      reply_id: 0x7E8
+      script:
+        - send: "22 F1 90"            # ReadDataByIdentifier VIN (open session)
+          expect: "62 F1 90"
+        - send: "22 F1 A0"            # ReadDataByIdentifier 600-byte calib block
+          # udslib v2.0.0 use case 1: a >512-byte response (62 F1 A0 + 600 bytes
+          # = 603) reassembled over multi-frame ISO-TP (CAN-FD). Pattern is
+          # byte i = i & 0xFF; assert the header + first pattern bytes.
+          expect: "62 F1 A0 00 01 02 03 04 05 06"
+        - send: "2E 01 23 DE AD BE EF" # WriteDataByIdentifier rejected in default
+          expect_nrc: 0x31
+        - send: "10 03"               # DiagnosticSessionControl -> extended
+          expect: "50 03"
+        - send: "3E 00"               # TesterPresent
+          expect: "7E 00"
+        - send: "2E 01 23 DE AD BE EF" # WriteDataByIdentifier accepted in extended
+          expect: "6E 01 23"
+        - send: "22 01 23"            # read back proves the write persisted
+          expect: "62 01 23 DE AD BE EF"
+        - send: "19 01 09"            # ReadDTCInformation reportNumberOfDTCByStatusMask
+          expect: "59 01"
+        - send: "14 FF FF FF"         # ClearDiagnosticInformation (all groups)
+          expect: "54"
+        - send: "31 01 02 03"         # RoutineControl startRoutine 0x0203 (extended)
+          expect: "71 01 02 03"
+        - send: "2F A0 01 03 01"      # InputOutputControl shortTermAdjustment
+          expect: "6F A0 01"
+        - send: "28 00 01"            # CommunicationControl enableRxAndTx / normal
+          expect: "68 00"
+        - send: "11 01"              # ECUReset softReset (51 01 before reboot)
+          expect: "51 01"
 board_io: []

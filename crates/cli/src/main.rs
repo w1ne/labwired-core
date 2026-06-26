@@ -26,7 +26,9 @@ mod gpio_observer;
 mod size_limited_writer;
 mod vcd_trace;
 
-use labwired_config::{load_test_script, LoadedTestScript, StopReason, TestAssertion, TestLimits};
+use labwired_config::{
+    load_test_script, LoadedTestScript, StopReason, TestAssertion, TestLimits, UdsTesterDetails,
+};
 
 pub(crate) const EXIT_PASS: u8 = 0;
 pub(crate) const EXIT_ASSERT_FAIL: u8 = 1;
@@ -583,6 +585,18 @@ struct TestArgs {
     #[arg(long, default_value = "100000")]
     trace_max: usize,
 
+    /// Collect firmware statement coverage. Writes coverage.info (LCOV) and
+    /// coverage.json into --output-dir. Distinct from `labwired coverage`,
+    /// which measures chip-model register faithfulness.
+    #[arg(long)]
+    coverage: bool,
+
+    /// Write a signable, reproducible run-manifest.json into --output-dir
+    /// (input hashes, engine version, result subset, coverage summary, and a
+    /// wall-clock-free SHA-256 digest).
+    #[arg(long)]
+    run_manifest: bool,
+
     /// Explicitly opt out of sending LABWIRED_API_KEY even if it is set in the environment.
     /// Useful for local development and testing.
     #[arg(long)]
@@ -829,10 +843,12 @@ fn main() -> ExitCode {
     // Initialize tracing with appropriate level based on --trace flag
     if cli.trace {
         tracing_subscriber::fmt()
+            .with_writer(std::io::stderr)
             .with_max_level(tracing::Level::DEBUG)
             .init();
     } else {
         tracing_subscriber::fmt()
+            .with_writer(std::io::stderr)
             .with_max_level(tracing::Level::INFO)
             .init();
     }
@@ -1490,6 +1506,8 @@ fn handle_load_error<C: labwired_core::Cpu>(
         system_path,
         std::time::Duration::from_secs(0),
         &None,
+        &None,
+        &[],
     );
     ExitCode::from(EXIT_RUNTIME_ERROR)
 }
@@ -1505,6 +1523,9 @@ fn execute_test_loop<C: labwired_core::Cpu>(
     metrics: &Arc<labwired_core::metrics::PerformanceMetrics>,
     firmware_path: &Path,
     system_path: Option<&PathBuf>,
+    faults: &[labwired_config::FaultSpec],
+    require_fault_fired: bool,
+    mut fault_evidence: Vec<labwired_cli::faults::FaultEvidence>,
 ) -> ExitCode {
     let max_steps = resolved_limits.max_steps;
     let max_cycles = resolved_limits.max_cycles;
@@ -1518,6 +1539,14 @@ fn execute_test_loop<C: labwired_core::Cpu>(
 
     let trace_observer = if args.trace {
         let obs = Arc::new(labwired_core::trace::TraceObserver::new(args.trace_max));
+        machine.observers.push(obs.clone());
+        Some(obs)
+    } else {
+        None
+    };
+
+    let coverage_observer = if args.coverage {
+        let obs = Arc::new(labwired_core::pc_coverage::PcCoverageObserver::new());
         machine.observers.push(obs.clone());
         Some(obs)
     } else {
@@ -1612,6 +1641,41 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                         }
                         for irq in interrupts {
                             machine.cpu.set_exception_pending(irq);
+                        }
+                    }
+
+                    // Honor a firmware-requested system reset (AIRCR
+                    // SYSRESETREQ with VECTKEY) latched by the batch just
+                    // executed. The single-step `else` branch gets this via
+                    // `machine.step()`; the batched path must drain it
+                    // explicitly or the reboot never fires.
+                    if machine.drain_scb_reset_request() {
+                        if let Err(e) = machine.reset() {
+                            sim_error_happened = true;
+                            stop_reason = match e {
+                                labwired_core::SimulationError::MemoryViolation(_) => {
+                                    StopReason::MemoryViolation
+                                }
+                                labwired_core::SimulationError::DecodeError(_) => {
+                                    StopReason::DecodeError
+                                }
+                                labwired_core::SimulationError::Halt => StopReason::Halt,
+                                labwired_core::SimulationError::SnapshotSchemaMismatch {
+                                    ..
+                                } => StopReason::Exception,
+                                labwired_core::SimulationError::Other(_) => StopReason::Exception,
+                                labwired_core::SimulationError::NotImplemented(_) => {
+                                    StopReason::Exception
+                                }
+                                labwired_core::SimulationError::BreakpointHit(_) => {
+                                    StopReason::Halt
+                                }
+                                labwired_core::SimulationError::ExceptionRaised { .. } => {
+                                    StopReason::Exception
+                                }
+                            };
+                            error!("Reset error at step {}: {}", step, e);
+                            break;
                         }
                     }
 
@@ -1751,6 +1815,15 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                     }
                 }
             }
+            TestAssertion::UdsTester(a) => {
+                match evaluate_uds_tester(&machine.bus.can_uds_testers, &a.uds_tester) {
+                    Ok(()) => true,
+                    Err(msg) => {
+                        error!("Assertion failed: {}", msg);
+                        false
+                    }
+                }
+            }
         };
 
         if matches!(assertion, TestAssertion::ExpectedStopReason(_)) && passed {
@@ -1797,6 +1870,17 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         duration,
         0, // vcd_bytes - will be updated below
     );
+    // Finalise runtime-observed fault outcomes (e.g. missing_clock fires only
+    // when the firmware actually accessed the unclocked peripheral) and enforce
+    // the require_fault_fired gate: a fault that never took effect makes the run
+    // invalid, not a firmware pass.
+    labwired_cli::faults::finalize_fault_evidence(&machine.bus, faults, &mut fault_evidence);
+    let fault_gate_failed = require_fault_fired && fault_evidence.iter().any(|e| !e.fired);
+    if fault_gate_failed {
+        let n = fault_evidence.iter().filter(|e| !e.fired).count();
+        error!("require_fault_fired: {n} fault(s) did not fire; run is invalid");
+    }
+
     write_outputs(
         args,
         status,
@@ -1813,9 +1897,14 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         system_path,
         duration,
         &trace_observer,
+        &coverage_observer,
+        &fault_evidence,
     );
 
-    if !all_passed || (stop_requires_assertion && !expected_stop_reason_matched) {
+    if !all_passed
+        || fault_gate_failed
+        || (stop_requires_assertion && !expected_stop_reason_matched)
+    {
         ExitCode::from(EXIT_ASSERT_FAIL)
     } else if sim_error_happened && !expected_stop_reason_matched {
         ExitCode::from(EXIT_RUNTIME_ERROR)
@@ -1841,6 +1930,8 @@ fn write_outputs<C: labwired_core::Cpu>(
     system_path: Option<&PathBuf>,
     duration: std::time::Duration,
     trace_observer: &Option<Arc<labwired_core::trace::TraceObserver>>,
+    coverage_observer: &Option<Arc<labwired_core::pc_coverage::PcCoverageObserver>>,
+    fault_evidence: &[labwired_cli::faults::FaultEvidence],
 ) {
     let mut hasher = Sha256::new();
     hasher.update(firmware_bytes);
@@ -1894,6 +1985,155 @@ fn write_outputs<C: labwired_core::Cpu>(
                     }
                     Err(e) => error!("Failed to create trace.json: {}", e),
                 }
+            }
+
+            // fault-evidence.json (per-fault verdicts; also folded into the manifest)
+            if !fault_evidence.is_empty() {
+                let fault_path = output_dir.join("fault-evidence.json");
+                match std::fs::File::create(&fault_path) {
+                    Ok(f) => {
+                        if let Err(e) = serde_json::to_writer_pretty(f, fault_evidence) {
+                            error!("Failed to write fault-evidence.json: {}", e);
+                        }
+                    }
+                    Err(e) => error!("Failed to create fault-evidence.json: {}", e),
+                }
+            }
+
+            // coverage.info (LCOV) + coverage.json
+            let mut coverage_summary: Option<labwired_cli::manifest::CoverageSummary> = None;
+            if let Some(cov) = coverage_observer {
+                match labwired_loader::SymbolProvider::new(firmware_path) {
+                    Ok(symbols) => {
+                        let mut report = labwired_cli::pc_coverage_report::CoverageReport::build(
+                            symbols.statement_rows(),
+                            |addr| cov.was_executed(addr as u32),
+                        );
+                        // Resolve each observed branch site to its source line.
+                        let branch_cov = cov
+                            .branch_sites()
+                            .into_iter()
+                            .filter_map(|(src, counts)| {
+                                symbols.lookup(src as u64).and_then(|loc| {
+                                    loc.line.map(|line| {
+                                        // statement_rows uses the line-program
+                                        // file basename; lookup() returns the
+                                        // full path. Normalise to the basename
+                                        // so branches attach to the right SF.
+                                        let file = loc
+                                            .file
+                                            .rsplit('/')
+                                            .next()
+                                            .unwrap_or(&loc.file)
+                                            .to_string();
+                                        labwired_cli::pc_coverage_report::BranchCoverage {
+                                            file,
+                                            line,
+                                            taken: counts.taken,
+                                            not_taken: counts.not_taken,
+                                        }
+                                    })
+                                })
+                            })
+                            .collect();
+                        report.set_branches(branch_cov);
+                        let info_path = output_dir.join("coverage.info");
+                        if let Err(e) = std::fs::write(&info_path, report.to_lcov()) {
+                            error!("Failed to write coverage.info: {}", e);
+                        }
+                        let cov_json_path = output_dir.join("coverage.json");
+                        match std::fs::File::create(&cov_json_path) {
+                            Ok(f) => {
+                                if let Err(e) = serde_json::to_writer_pretty(f, &report) {
+                                    error!("Failed to write coverage.json: {}", e);
+                                }
+                            }
+                            Err(e) => error!("Failed to create coverage.json: {}", e),
+                        }
+                        info!(
+                            "Coverage: {}/{} statements ({:.1}%), {}/{} branches ({:.1}%)",
+                            report.covered_statements,
+                            report.total_statements,
+                            report.statement_percent(),
+                            report.covered_branches,
+                            report.total_branches,
+                            report.branch_percent()
+                        );
+                        coverage_summary = Some(labwired_cli::manifest::CoverageSummary {
+                            statements_total: report.total_statements,
+                            statements_covered: report.covered_statements,
+                            branches_total: report.total_branches,
+                            branches_covered: report.covered_branches,
+                        });
+                    }
+                    Err(e) => error!("Failed to load symbols for coverage: {}", e),
+                }
+            }
+
+            // run-manifest.json (signable, reproducible)
+            if args.run_manifest {
+                use labwired_cli::manifest;
+                // Use the file basename, not the absolute path, so the digest
+                // depends only on file contents and is reproducible across
+                // machines with different checkout locations.
+                let basename = |p: &Path| -> String {
+                    p.file_name()
+                        .map(|s| s.to_string_lossy().into_owned())
+                        .unwrap_or_else(|| p.display().to_string())
+                };
+                let hash_file = |p: &Path| -> manifest::HashedFile {
+                    let sha256 = std::fs::read(p)
+                        .map(|b| manifest::sha256_hex(&b))
+                        .unwrap_or_default();
+                    manifest::HashedFile {
+                        path: basename(p),
+                        sha256,
+                    }
+                };
+                let mut configs = vec![hash_file(&args.script)];
+                if let Some(sys) = system_path {
+                    configs.push(hash_file(sys));
+                }
+                let mut man = manifest::RunManifest {
+                    manifest_schema_version: manifest::MANIFEST_SCHEMA_VERSION.to_string(),
+                    engine_version: env!("CARGO_PKG_VERSION").to_string(),
+                    seed: 0,
+                    nondeterminism: "none".to_string(),
+                    firmware: manifest::HashedFile {
+                        path: basename(firmware_path),
+                        sha256: result.firmware_hash.clone(),
+                    },
+                    configs,
+                    results: manifest::ManifestResults {
+                        status: status.to_string(),
+                        stop_reason: format!("{:?}", result.stop_reason),
+                        steps_executed: result.steps_executed,
+                        cycles: result.cycles,
+                        instructions: result.instructions,
+                        assertions: assertions_for_junit
+                            .iter()
+                            .map(|a| manifest::AssertionOutcome {
+                                assertion: format!("{:?}", a.assertion),
+                                passed: a.passed,
+                            })
+                            .collect(),
+                        cpu_state_digest: manifest::digest_value(&cpu.snapshot()),
+                    },
+                    coverage: coverage_summary.clone(),
+                    fault_injections: fault_evidence.to_vec(),
+                    digest: String::new(),
+                };
+                man.finalize_digest();
+                let manifest_path = output_dir.join("run-manifest.json");
+                match std::fs::File::create(&manifest_path) {
+                    Ok(f) => {
+                        if let Err(e) = serde_json::to_writer_pretty(f, &man) {
+                            error!("Failed to write run-manifest.json: {}", e);
+                        }
+                    }
+                    Err(e) => error!("Failed to create run-manifest.json: {}", e),
+                }
+                info!("Run manifest digest: {}", man.digest);
             }
 
             // result.json handles cpu generically now
@@ -2323,6 +2563,12 @@ fn assertion_short_name(assertion: &TestAssertion) -> String {
             "memory_value: @{:#x}={:#x}",
             a.memory_value.address, a.memory_value.expected_value
         ),
+        TestAssertion::UdsTester(a) => {
+            format!(
+                "uds_tester: {} result={:?}",
+                a.uds_tester.id, a.uds_tester.result
+            )
+        }
     };
 
     if s.len() <= MAX_LEN {
@@ -2332,6 +2578,24 @@ fn assertion_short_name(assertion: &TestAssertion) -> String {
     let mut truncated = s.chars().take(MAX_LEN - 1).collect::<String>();
     truncated.push('…');
     truncated
+}
+
+/// Returns `Ok(())` if the named tester ended in `Done`; `Err(message)` otherwise.
+pub(crate) fn evaluate_uds_tester(
+    testers: &[labwired_core::bus::CanUdsTester],
+    details: &UdsTesterDetails,
+) -> Result<(), String> {
+    match testers.iter().find(|t| t.id == details.id) {
+        None => Err(format!("tester '{}': not found", details.id)),
+        Some(t) => {
+            if t.state == labwired_core::bus::CanUdsTesterState::Done {
+                Ok(())
+            } else {
+                let reason = t.failure.as_deref().unwrap_or("not completed").to_string();
+                Err(format!("tester '{}': {}", details.id, reason))
+            }
+        }
+    }
 }
 
 // Minimal regex matcher supporting: '^' anchor, '$' anchor, '.' and '*' (Kleene star).
@@ -2386,4 +2650,59 @@ pub(crate) fn simple_regex_is_match(pattern: &str, text: &str) -> bool {
         }
     }
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use labwired_config::UdsTesterDetails;
+    use labwired_config::UdsTesterResult;
+    use labwired_core::bus::{CanUdsTester, CanUdsTesterState};
+
+    fn make_tester(id: &str, state: CanUdsTesterState, failure: Option<&str>) -> CanUdsTester {
+        let mut t = CanUdsTester::new(id.to_string(), "bxcan1".to_string());
+        t.state = state;
+        t.failure = failure.map(|s| s.to_string());
+        t
+    }
+
+    #[test]
+    fn evaluate_uds_tester_done_passes() {
+        let testers = vec![make_tester("my-tester", CanUdsTesterState::Done, None)];
+        let details = UdsTesterDetails {
+            id: "my-tester".to_string(),
+            result: UdsTesterResult::Done,
+        };
+        assert!(evaluate_uds_tester(&testers, &details).is_ok());
+    }
+
+    #[test]
+    fn evaluate_uds_tester_failed_returns_err_with_failure_text() {
+        let testers = vec![make_tester(
+            "my-tester",
+            CanUdsTesterState::Failed,
+            Some("step 0: unexpected response 0x7F"),
+        )];
+        let details = UdsTesterDetails {
+            id: "my-tester".to_string(),
+            result: UdsTesterResult::Done,
+        };
+        let err = evaluate_uds_tester(&testers, &details).unwrap_err();
+        assert!(err.contains("my-tester"), "missing id in: {err}");
+        assert!(
+            err.contains("step 0: unexpected response 0x7F"),
+            "missing failure text in: {err}"
+        );
+    }
+
+    #[test]
+    fn evaluate_uds_tester_unknown_id_returns_err() {
+        let testers = vec![make_tester("other", CanUdsTesterState::Done, None)];
+        let details = UdsTesterDetails {
+            id: "ghost-tester".to_string(),
+            result: UdsTesterResult::Done,
+        };
+        let err = evaluate_uds_tester(&testers, &details).unwrap_err();
+        assert!(err.contains("ghost-tester"), "missing id in: {err}");
+    }
 }

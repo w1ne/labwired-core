@@ -243,7 +243,7 @@
       "device_type": "sn74hc165",
       "label": "74HC165 Shift Register",
       "summary": "8-bit parallel-in / serial-out shift register over SPI.",
-      "detail": "Lets a host MCU sample 8 GPIO inputs through one SPI clock burst. Used in the AL2205 IO-Link DI lab to surface field-side switch state.",
+      "detail": "Lets a host MCU sample 8 GPIO inputs through one SPI clock burst. Used in the IO-Link DI/DO lab to surface field-side switch state.",
       "transport": "spi",
       "category": "spi",
       "config_keys": [
@@ -260,10 +260,10 @@
       ],
       "labs": [
         {
-          "board_id": "al2205-iolink-dido",
+          "board_id": "iolink-dido",
           "chip": "stm32l476",
-          "example_dir": "al2205-iolink-dido",
-          "demo_elf": "demo-al2205-iolink-dido.elf"
+          "example_dir": "iolink-dido",
+          "demo_elf": "demo-iolink-dido.elf"
         }
       ]
     },
@@ -299,7 +299,7 @@
       "device_type": "iolink-master",
       "label": "IO-Link Master",
       "summary": "IO-Link master state machine over UART.",
-      "detail": "Drives wake-up / startup / operate cycles, m-sequence types, process-data exchange. The AL2205 DI device demo uses this to host two digital-input channels.",
+      "detail": "Drives wake-up / startup / operate cycles, m-sequence types, process-data exchange. The IO-Link DI/DO device demo uses this to host two digital-input channels.",
       "transport": "uart",
       "category": "uart",
       "config_keys": [
@@ -326,10 +326,10 @@
       ],
       "labs": [
         {
-          "board_id": "al2205-iolink-dido",
+          "board_id": "iolink-dido",
           "chip": "stm32l476",
-          "example_dir": "al2205-iolink-dido",
-          "demo_elf": "demo-al2205-iolink-dido.elf"
+          "example_dir": "iolink-dido",
+          "demo_elf": "demo-iolink-dido.elf"
         }
       ]
     },

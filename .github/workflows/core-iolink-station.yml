@@ -1,0 +1,82 @@
+name: Core Board Model - IO-Link Station (STM32L476)
+
+# Real gate for the multi-chip IO-Link station: builds the three STM32L476
+# firmwares (real iolinki device stack + real iolinki-master stack, as standard
+# STM32CubeL4 projects) and runs the world_multichip integration tests against
+# the freshly built ELFs.
+#
+# Why a dedicated job: the firmware ELFs are gitignored build artifacts and the
+# workspace `cargo test` gate has no arm-none-eabi toolchain or STM32CubeL4 pack,
+# so those tests skip there. This job provides the toolchain + Cube pack, builds
+# the ELFs, and runs the suite with LABWIRED_REQUIRE_IOLINK_ELFS=1 so a missing
+# or silently-broken firmware build fails the gate instead of skipping to green.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  STM32CUBEL4_TAG: v1.18.2
+
+jobs:
+  iolink-station:
+    name: iolink-station-l476
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # third_party/iolinki is a public submodule; iolinki-master is vendored.
+          submodules: recursive
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-iolink-station
+          workspaces: |
+            . -> target
+
+      - name: Install ARM bare-metal toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi
+
+      - name: Fetch STM32CubeL4 CMSIS device pack (pinned, sparse)
+        run: |
+          CUBE="$RUNNER_TEMP/STM32CubeL4"
+          git clone --depth 1 --branch "$STM32CUBEL4_TAG" \
+            --filter=blob:none --sparse \
+            https://github.com/STMicroelectronics/STM32CubeL4.git "$CUBE"
+          # List the submodule's PARENT dir (a real tree), not the gitlink path —
+          # cone-mode sparse-checkout rejects a submodule path with "not a directory".
+          git -C "$CUBE" sparse-checkout set \
+            Drivers/CMSIS/Include \
+            Drivers/CMSIS/Device/ST \
+            Projects/NUCLEO-L476RG/Templates/STM32CubeIDE
+          # The CMSIS device pack (startup/system/headers) is itself a submodule.
+          git -C "$CUBE" submodule update --init --depth 1 \
+            Drivers/CMSIS/Device/ST/STM32L4xx
+          echo "STM32CUBE_L4_DIR=$CUBE" >> "$GITHUB_ENV"
+
+      - name: Build IO-Link station firmwares (real stacks + CubeL4)
+        run: |
+          set -e
+          make -C examples/iolink-dido/firmware          STM32CUBE_L4_DIR="$STM32CUBE_L4_DIR"
+          make -C examples/iolink-station/master-fw       STM32CUBE_L4_DIR="$STM32CUBE_L4_DIR"
+          make -C examples/iolink-station/master-fw-4port  STM32CUBE_L4_DIR="$STM32CUBE_L4_DIR"
+          # Hard-fail if any ELF is missing, so a silent build miss can't slip the gate.
+          test -f examples/iolink-dido/firmware/iolink_dido.elf
+          test -f examples/iolink-station/master-fw/master.elf
+          test -f examples/iolink-station/master-fw-4port/master.elf
+
+      - name: Run multi-chip station integration tests (ELFs required)
+        env:
+          LABWIRED_REQUIRE_IOLINK_ELFS: "1"
+        run: cargo test -p labwired-core --release --test world_multichip -- --nocapture

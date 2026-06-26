@@ -7,7 +7,7 @@
 TARGET := h563_blink_uart
 BUILD_DIR := build
 
-STM32CUBE_H5_DIR ?= $(abspath ../../../../../STM32CubeH5)
+STM32CUBE_H5_DIR ?= $(abspath ../../../../STM32CubeH5)
 
 DEVICE_INCLUDE := $(STM32CUBE_H5_DIR)/Drivers/CMSIS/Device/ST/STM32H5xx/Include
 CMSIS_INCLUDE := $(STM32CUBE_H5_DIR)/Drivers/CMSIS/Include

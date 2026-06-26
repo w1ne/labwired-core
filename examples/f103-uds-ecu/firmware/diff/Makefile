@@ -1,5 +1,7 @@
 TARGET := f103_uds_diff
 BUILD_DIR := build
+# Pinned UDSLib version (see ../Makefile). Fetch with `make -C .. fetch-udslib`.
+UDSLIB_VERSION ?= 2.0.0
 UDSLIB_DIR ?= $(HOME)/projects/udslib
 CROSS ?= arm-none-eabi-
 CC := $(CROSS)gcc
@@ -22,6 +24,7 @@ UDS_SRCS := \
   $(UDSLIB_DIR)/src/services/uds_service_link.c \
   $(UDSLIB_DIR)/src/services/uds_service_maintenance.c \
   $(UDSLIB_DIR)/src/services/uds_service_mem.c \
+  $(UDSLIB_DIR)/src/services/uds_service_roe.c \
   $(UDSLIB_DIR)/src/services/uds_service_security.c \
   $(UDSLIB_DIR)/src/services/uds_service_session.c \
   $(UDSLIB_DIR)/src/transport/uds_tp_isotp.c
@@ -33,7 +36,9 @@ all: check-udslib $(ELF)
 
 check-udslib:
 	@test -f "$(UDSLIB_DIR)/include/uds/uds_core.h" || \
-	  (echo "UDSLIB_DIR must point at a UDSLib checkout" >&2; exit 1)
+	  (echo "UDSLIB_DIR must point at a UDSLib checkout (try: make -C .. fetch-udslib)" >&2; exit 1)
+	@grep -q 'UDS_VERSION_STR "$(UDSLIB_VERSION)"' "$(UDSLIB_DIR)/include/uds/uds_version.h" || \
+	  (echo "UDSLIB_DIR is not UDSLib v$(UDSLIB_VERSION); run 'make -C .. fetch-udslib' or repoint UDSLIB_DIR" >&2; exit 1)
 
 $(ELF): $(APP_OBJS) $(UDS_OBJS) diff.ld
 	$(CC) $(CPUFLAGS) $(LDFLAGS) $(APP_OBJS) $(UDS_OBJS) -o $@

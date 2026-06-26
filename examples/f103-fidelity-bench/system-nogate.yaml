@@ -1,0 +1,7 @@
+name: "f103-fidelity-bench-nogate"
+# Same board, but the clock-gating-stripped chip. With fidelity OFF the clockbug
+# firmware false-passes — showing that the clock model is exactly what turns a
+# false pass into a real fail.
+chip: "./stm32f103-nogate.yaml"
+external_devices: []
+board_io: []

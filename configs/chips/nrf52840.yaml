@@ -9,11 +9,10 @@ ram:
   size: "256KB"
 peripherals:
   - id: "uart0"
-    type: "uart"
+    type: "nrf52840_uart"
     base_address: 0x40002000
     size: "4KB"
-    config:
-      profile: "nrf52"
+    irq: 2
   - id: "spi0"
     type: "spi"
     base_address: 0x40003000

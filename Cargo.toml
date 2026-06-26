@@ -34,11 +34,13 @@ members = [
     "crates/firmware-nrf52840-ble-sensor",
     "crates/firmware-nrf52840-ble-tx",
     "crates/firmware-nrf52840-conformance",
+    "crates/firmware-nrf52840-cpu-conformance",
     "crates/firmware-nrf52840-demo",
     "crates/firmware-nrf52840-isr-blinky",
     "crates/firmware-nrf52840-proximity",
     "crates/firmware-nrf52840-timer-blinky",
     "crates/firmware-rp2040-demo",
+    "crates/firmware-kw41z-demo",
     "crates/firmware-rp2040-pio-onboarding",
     "crates/gdbstub",
     "crates/hw-oracle",
@@ -88,7 +90,7 @@ exclude = [
 default-members = ["crates/cli", "crates/core", "crates/dap", "crates/loader", "crates/labwired-fuzz"]
 
 [workspace.package]
-version = "0.17.1"
+version = "0.17.3"
 edition = "2021"
 authors = ["Andrii Shylenko"]
 license = "MIT"
@@ -173,11 +175,19 @@ opt-level = "s"
 codegen-units = 1
 opt-level = "s"
 
+[profile.release.package.firmware-nrf52840-cpu-conformance]
+codegen-units = 1
+opt-level = "s"
+
 [profile.release.package.firmware-nrf52840-demo]
 codegen-units = 1
 opt-level = "s"
 
 [profile.release.package.firmware-rp2040-demo]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-kw41z-demo]
 codegen-units = 1
 opt-level = "s"
 

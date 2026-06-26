@@ -182,6 +182,8 @@ pub fn try_build(
                 // L0 has a two-register surface (CR/CSR), not the L4
                 // CR1..CR4 / PUCRx set — a distinct reset shape.
                 Some("stm32l0") | Some("l0") => Box::new(crate::peripherals::pwr::PwrL0::new()),
+                // WBA: VOSR (0x0C) VOS→VOSRDY handshake the SoC init polls.
+                Some("stm32wba") | Some("wba") => Box::new(crate::peripherals::pwr::PwrWba::new()),
                 _ => Box::new(crate::peripherals::pwr::Pwr::new()),
             }
         }
@@ -191,9 +193,35 @@ pub fn try_build(
             // default — backward compatible with existing chip configs.
             let layout: crate::peripherals::flash::FlashRegisterLayout =
                 SystemBus::parse_profile_or_default(p_cfg, "FLASH")?;
-            Box::new(crate::peripherals::flash::Flash::new_with_layout(layout))
+            // Opt-in H5 program-error fidelity gate. `config: { error_flags: true }`
+            // makes a misaligned / over-not-erased program raise the silicon
+            // NSSR error flags instead of silently committing. Default false
+            // (and a no-op on non-H5 layouts) — existing configs are unchanged.
+            let error_flags = p_cfg
+                .config
+                .get("error_flags")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            // Opt-in H5 read-while-write fidelity gate. `config: { read_while_write:
+            // true }` makes an erase of the bank the CPU is executing from fault
+            // (the firmware must run the flash routine from SRAM) instead of
+            // silently succeeding. Default false (no-op on non-H5 layouts) —
+            // existing configs unchanged. Independent of `error_flags`.
+            let read_while_write = p_cfg
+                .config
+                .get("read_while_write")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            Box::new(
+                crate::peripherals::flash::Flash::new_with_layout(layout)
+                    .with_error_flags(error_flags)
+                    .with_read_while_write(read_while_write),
+            )
         }
         "rng" => Box::new(crate::peripherals::rng::Rng::new()),
+        "rp2040_clkrst" => Box::new(crate::peripherals::rp2040_clocks::Rp2040ClockReset::new(
+            p_cfg.base_address,
+        )),
         "crc" => {
             // IDR scratch register width: 8-bit on F0/F1/L0, 32-bit
             // on F2+/L4+. YAML: `config: { idr_width: 8 }`; default 32.
@@ -268,6 +296,20 @@ pub fn try_build(
         "esp32_timg" => Box::new(crate::peripherals::esp32::timg::Timg::new(
             p_cfg.base_address as u32,
         )),
+        // Instruction/data cache controllers (H5, WBA, U5…). Zephyr's SoC init
+        // enables the cache via ICACHE_CR.EN and never polls a completion flag,
+        // so a read-as-zero stub keeps the enable sequence from bus-faulting.
+        // No cache behaviour is modelled — the simulator has flat memory.
+        "icache" | "dcache" => Box::new(crate::peripherals::stub::StubPeripheral::new(0x00)),
+        // Hardware semaphore (WB/WL dual-core inter-core lock). Single-core sim
+        // grants every lock to CPU1, so the read-lock path succeeds at once.
+        "hsem" => Box::new(crate::peripherals::hsem::Hsem::new()),
+        // NXP Kinetis clock peripherals — behavioural so the vendor MCUXpresso
+        // clock bring-up (which spins on MCG_S / RSIM_CONTROL status bits)
+        // settles instead of hanging. A passive register bank cannot complete
+        // these hand-offs. See peripherals/mcg.rs and peripherals/rsim.rs.
+        "nxp_mcg" | "kinetis_mcg" => Box::new(crate::peripherals::mcg::Mcg::new()),
+        "nxp_rsim" => Box::new(crate::peripherals::rsim::Rsim::new()),
         _ => return Ok(None),
     };
     Ok(Some(dev))

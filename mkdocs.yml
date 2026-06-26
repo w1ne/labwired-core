@@ -69,9 +69,7 @@ nav:
   - How-To Guides:
     - Board Onboarding: board_onboarding_playbook.md
     - CI/CD Integration: ci_integration.md
-    - Developing Peripherals: peripheral_development.md
-    - Contributing Peripherals: CONTRIBUTING_PERIPHERALS.md
-    - Advanced Peripherals: advanced_peripherals.md
+    - Peripheral Modeling: peripherals.md
     - Hardware Interaction Guide: hardware_interaction_guide.md
     - Debugging with VS Code: vscode_debugging.md
     - GDB Integration: gdb_integration.md

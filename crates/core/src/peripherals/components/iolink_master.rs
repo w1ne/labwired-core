@@ -142,7 +142,7 @@ const TRACE_CAP: usize = 256;
 /// The simulated device executes far slower than the UART advances, so frames
 /// are paced generously to guarantee the device has fully processed (and
 /// replied to) one frame before the next arrives — this is what keeps the
-/// device's byte framing aligned. Sized for the `-O0` al2205 demo firmware;
+/// device's byte framing aligned. Sized for the `-O0` iolink-dido demo firmware;
 /// overridable per device via the `frame_gap_ticks` config (a faster `-O2`
 /// device, e.g. the C3 thermal firmware, can run a much smaller gap so many
 /// cyclic reads fit the step budget).
@@ -376,7 +376,7 @@ impl IolinkMaster {
                 let r = decode_operate(&p.raw_device[..n], self.pd_in_len, self.od_len);
                 (r.pd, Some(r.checksum_ok), Some(r.pd_valid))
             } else {
-                (Vec::new(), Some(false), Some(false))
+                (Vec::new(), None, Some(false))
             }
         } else {
             (Vec::new(), None, None)
@@ -518,7 +518,7 @@ static IOLINK_MASTER_METADATA: KitMetadata = KitMetadata {
     label: "IO-Link Master",
     summary: "IO-Link master state machine over UART.",
     detail: "Drives wake-up / startup / operate cycles, m-sequence types, process-data \
-             exchange. The AL2205 DI device demo uses this to host two digital-input channels.",
+             exchange. The IO-Link DI/DO device demo uses this to host two digital-input channels.",
     transport: Transport::Uart,
     category: Category::Uart,
     config_keys: &[
@@ -544,10 +544,10 @@ static IOLINK_MASTER_METADATA: KitMetadata = KitMetadata {
         },
     ],
     labs: &[LabRef {
-        board_id: "al2205-iolink-dido",
+        board_id: "iolink-dido",
         chip: "stm32l476",
-        example_dir: "al2205-iolink-dido",
-        demo_elf: "demo-al2205-iolink-dido.elf",
+        example_dir: "iolink-dido",
+        demo_elf: "demo-iolink-dido.elf",
     }],
 };
 
@@ -670,6 +670,23 @@ mod tests {
         let x = m.finalize_xfer(p);
         assert_eq!(x.ck_ok, None);
         assert_eq!(x.pd_valid, None);
+        assert!(x.pd_in.is_empty());
+    }
+
+    #[test]
+    fn finalize_incomplete_cyclic_frame_has_no_crc_verdict() {
+        let m = IolinkMaster::new(1, 1, IolinkComSpeed::Com2);
+        let p = PendingXfer {
+            seq: 1,
+            kind: IolinkFrameKind::Cyclic,
+            pd_out: vec![0],
+            link_state: IolinkLinkState::Operate,
+            raw_master: encode_type1_cycle(&[0]),
+            raw_device: vec![0x20],
+        };
+        let x = m.finalize_xfer(p);
+        assert_eq!(x.ck_ok, None);
+        assert_eq!(x.pd_valid, Some(false));
         assert!(x.pd_in.is_empty());
     }
 

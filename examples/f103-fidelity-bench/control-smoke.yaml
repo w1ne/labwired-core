@@ -1,0 +1,12 @@
+schema_version: "1.0"
+# Positive control: correct firmware. Must PASS everywhere. Proves the UART
+# path and the harness work, so a clockbug FAIL is the clock model, not a setup
+# error.
+inputs:
+  system: "./system.yaml"
+  firmware: "./firmware/build/control.elf"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "BENCH_UART_OK"
+  - expected_stop_reason: max_steps

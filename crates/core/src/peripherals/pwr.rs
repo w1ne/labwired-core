@@ -337,6 +337,61 @@ impl crate::Peripheral for PwrL0 {
     }
 }
 
+/// STM32WBA PWR (RM0493). Zephyr's set_regu_voltage writes PWR_VOSR (0x0C) to
+/// select the voltage range/EPOD boost, then spins on VOSRDY (bit 15) before the
+/// PLL is configured; the SoC init also flips enable bits in other PWR registers
+/// and reads them straight back. Model VOSR so any VOS/EPOD enable acknowledges
+/// instantly (VOSRDY bit 15 + BOOSTRDY bit 14); all other registers are plain
+/// read-back storage so the self-confirming enables (e.g. PWR @ 0x28 bit0) pass.
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
+pub struct PwrWba {
+    regs: std::collections::HashMap<u64, u32>,
+}
+
+impl PwrWba {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    fn read_reg(&self, offset: u64) -> u32 {
+        self.regs.get(&offset).copied().unwrap_or(0)
+    }
+
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        let mut v = value;
+        if offset == 0x0C {
+            // VOS[16:17] selected → VOSRDY (15); EPOD boost (18) → BOOSTRDY (14).
+            if v & (0x3 << 16) != 0 {
+                v |= 1 << 15;
+            }
+            if v & (1 << 18) != 0 {
+                v |= 1 << 14;
+            }
+        }
+        self.regs.insert(offset, v);
+    }
+}
+
+impl crate::Peripheral for PwrWba {
+    fn read(&self, offset: u64) -> SimResult<u8> {
+        let reg = offset & !3;
+        let byte = (offset % 4) as u32;
+        Ok(((self.read_reg(reg) >> (byte * 8)) & 0xFF) as u8)
+    }
+    fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        let reg = offset & !3;
+        let byte = (offset % 4) as u32;
+        let mut v = self.read_reg(reg);
+        let mask: u32 = 0xFF << (byte * 8);
+        v = (v & !mask) | ((value as u32) << (byte * 8));
+        self.write_reg(reg, v);
+        Ok(())
+    }
+    fn snapshot(&self) -> serde_json::Value {
+        serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+}
+
 #[cfg(test)]
 mod l0_tests {
     use super::PwrL0;
@@ -351,6 +406,31 @@ mod l0_tests {
         // The L4 PUCRx/SR surface does not exist on L0 — must read 0.
         assert_eq!(pwr.read_u32(0x08).unwrap(), 0, "no register at 0x08");
         assert_eq!(pwr.read_u32(0x14).unwrap(), 0, "no register at 0x14");
+    }
+}
+
+#[cfg(test)]
+mod wba_tests {
+    use super::PwrWba;
+    use crate::Peripheral;
+
+    #[test]
+    fn vosr_vos_select_acks_vosrdy() {
+        let mut pwr = PwrWba::new();
+        // set_regu_voltage selects a VOS range (bit16) and spins on VOSRDY (15).
+        pwr.write_u32(0x0C, 1 << 16).unwrap();
+        assert_ne!(pwr.read_u32(0x0C).unwrap() & (1 << 15), 0, "VOSRDY acked");
+        // EPOD boost (bit18) acks BOOSTRDY (bit14).
+        pwr.write_u32(0x0C, 1 << 18).unwrap();
+        assert_ne!(pwr.read_u32(0x0C).unwrap() & (1 << 14), 0, "BOOSTRDY acked");
+    }
+
+    #[test]
+    fn other_regs_are_readback_storage() {
+        // The SoC init flips enable bits in other PWR regs and reads them back.
+        let mut pwr = PwrWba::new();
+        pwr.write_u32(0x28, 1).unwrap();
+        assert_eq!(pwr.read_u32(0x28).unwrap(), 1);
     }
 }
 

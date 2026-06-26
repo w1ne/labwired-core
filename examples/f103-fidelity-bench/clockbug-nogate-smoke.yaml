@@ -1,0 +1,13 @@
+schema_version: "1.0"
+# Same clockbug firmware, but on the clock-gating-stripped chip. This run is
+# EXPECTED TO (falsely) PASS — it shows LabWired without fidelity behaves like a
+# low-fidelity emulator, which is the whole point: the gating is what catches the
+# bug.
+inputs:
+  system: "./system-nogate.yaml"
+  firmware: "./firmware/build/clockbug.elf"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "BENCH_UART_OK"
+  - expected_stop_reason: max_steps

@@ -1,0 +1,9 @@
+# IO-Link master node: a simulated NUCLEO-L476RG running the real iolinki-master
+# firmware (master-fw/master.elf). Its IO-Link C/Q port (USART2 in the one-port
+# Phase 1 layout) is connected to a sensor chip by a uart_cross_link in the
+# environment manifest. No external_devices: the master's peer is a real sensor
+# chip over the wire, not a host model.
+name: "iolink-master"
+chip: "../../../configs/chips/stm32l476.yaml"
+external_devices: []
+board_io: []

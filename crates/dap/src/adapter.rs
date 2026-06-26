@@ -1074,9 +1074,34 @@ mod tests {
     use std::path::PathBuf;
 
     #[test]
+    fn step_back_and_step_out_error_before_machine_attached() {
+        // The server relies on these returning Err pre-init so it can reply with
+        // a DAP error response instead of a false success.
+        let adapter = LabwiredAdapter::new();
+        assert!(
+            adapter.step_back().is_err(),
+            "step_back must error before a machine is attached"
+        );
+        assert!(
+            adapter.step_out().is_err(),
+            "step_out must error before a machine is attached"
+        );
+        assert!(
+            adapter.step().is_err(),
+            "step must error before a machine is attached"
+        );
+        assert!(
+            adapter.set_pc(0x0800_0000).is_err(),
+            "set_pc must error before a machine is attached"
+        );
+    }
+
+    #[test]
     fn test_resolve_board_io_bindings_uses_default_gpio_offsets() {
         let chip = labwired_config::ChipDescriptor {
             schema_version: "1.0".to_string(),
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             memory_regions: Vec::new(),
             name: "test".to_string(),
             arch: labwired_config::Arch::Arm,
@@ -1117,6 +1142,7 @@ mod tests {
                 device_type: None,
                 i2c_address: None,
             }],
+            debug_uart: None,
             peripherals: Vec::new(),
         };
 
@@ -1131,6 +1157,8 @@ mod tests {
         gpio_config.insert("profile".to_string(), "stm32v2".into());
         let chip = labwired_config::ChipDescriptor {
             schema_version: "1.0".to_string(),
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             memory_regions: Vec::new(),
             name: "test".to_string(),
             arch: labwired_config::Arch::Arm,
@@ -1183,6 +1211,7 @@ mod tests {
                     i2c_address: None,
                 },
             ],
+            debug_uart: None,
             peripherals: Vec::new(),
         };
 
@@ -1198,6 +1227,8 @@ mod tests {
         gpio_config.insert("register_layout".to_string(), "stm32v2".into());
         let chip = labwired_config::ChipDescriptor {
             schema_version: "1.0".to_string(),
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             memory_regions: Vec::new(),
             name: "test".to_string(),
             arch: labwired_config::Arch::Arm,
@@ -1238,6 +1269,7 @@ mod tests {
                 device_type: None,
                 i2c_address: None,
             }],
+            debug_uart: None,
             peripherals: Vec::new(),
         };
 

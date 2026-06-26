@@ -20,6 +20,15 @@ struct InflightEvent {
     periodic_interval: Option<u64>,
 }
 
+/// A bit held at a fixed level by a `stuck_at_bit` fault. Applied to every read
+/// so the CPU always observes the stuck level regardless of writes.
+#[derive(Debug)]
+struct StuckBit {
+    byte_offset: u64,
+    bit_in_byte: u8,
+    level: u8,
+}
+
 /// A generic peripheral implementation that uses a `PeripheralDescriptor` to define its
 /// register layout and access permissions.
 ///
@@ -29,6 +38,7 @@ pub struct GenericPeripheral {
     descriptor: PeripheralDescriptor,
     data: RefCell<Vec<u8>>,
     inflight_events: RefCell<Vec<InflightEvent>>,
+    stuck_bits: RefCell<Vec<StuckBit>>,
 }
 
 impl GenericPeripheral {
@@ -71,6 +81,7 @@ impl GenericPeripheral {
             descriptor,
             data: RefCell::new(data),
             inflight_events: RefCell::new(Vec::new()),
+            stuck_bits: RefCell::new(Vec::new()),
         };
 
         // Initialize periodic events
@@ -92,6 +103,87 @@ impl GenericPeripheral {
 
     pub fn get_descriptor(&self) -> &labwired_config::PeripheralDescriptor {
         &self.descriptor
+    }
+
+    /// Force `reg_id` to `value`, overriding both its live contents and its
+    /// declared reset value so the change survives a later reset. This is the
+    /// injection point for the `wrong_reset_value` fault. Returns false if no
+    /// register has `reg_id`.
+    pub fn force_register_value(&mut self, reg_id: &str, value: u32) -> bool {
+        let Some(reg) = self
+            .descriptor
+            .registers
+            .iter_mut()
+            .find(|r| r.id == reg_id)
+        else {
+            return false;
+        };
+        reg.reset_value = value;
+        let offset = reg.address_offset as usize;
+        let size = reg.size;
+        let mut data = self.data.borrow_mut();
+        match size {
+            8 if offset < data.len() => data[offset] = value as u8,
+            16 if offset + 1 < data.len() => {
+                data[offset] = (value & 0xFF) as u8;
+                data[offset + 1] = ((value >> 8) & 0xFF) as u8;
+            }
+            32 if offset + 3 < data.len() => {
+                data[offset] = (value & 0xFF) as u8;
+                data[offset + 1] = ((value >> 8) & 0xFF) as u8;
+                data[offset + 2] = ((value >> 16) & 0xFF) as u8;
+                data[offset + 3] = ((value >> 24) & 0xFF) as u8;
+            }
+            _ => {}
+        }
+        true
+    }
+
+    /// Hold `bit` of `reg_id` at `level` (the `stuck_at_bit` fault). The bit is
+    /// forced on every read, so writes never change what the CPU observes.
+    /// Returns false if the register is absent or the bit is out of range.
+    pub fn force_stuck_bit(&mut self, reg_id: &str, bit: u8, level: u8) -> bool {
+        let Some(reg) = self.descriptor.registers.iter().find(|r| r.id == reg_id) else {
+            return false;
+        };
+        if (bit as u32) >= reg.size as u32 {
+            return false;
+        }
+        self.stuck_bits.borrow_mut().push(StuckBit {
+            byte_offset: reg.address_offset + (bit / 8) as u64,
+            bit_in_byte: bit % 8,
+            level: level & 1,
+        });
+        true
+    }
+
+    /// Apply any stuck bits that fall on the byte at `offset` to a read value.
+    fn apply_stuck_byte(&self, offset: u64, mut byte: u8) -> u8 {
+        for s in self.stuck_bits.borrow().iter() {
+            if s.byte_offset == offset {
+                if s.level == 1 {
+                    byte |= 1 << s.bit_in_byte;
+                } else {
+                    byte &= !(1 << s.bit_in_byte);
+                }
+            }
+        }
+        byte
+    }
+
+    /// Apply any stuck bits within the 4 bytes at `offset` to a read value.
+    fn apply_stuck_u32(&self, offset: u64, mut val: u32) -> u32 {
+        for s in self.stuck_bits.borrow().iter() {
+            if s.byte_offset >= offset && s.byte_offset < offset + 4 {
+                let pos = ((s.byte_offset - offset) as u32) * 8 + s.bit_in_byte as u32;
+                if s.level == 1 {
+                    val |= 1 << pos;
+                } else {
+                    val &= !(1 << pos);
+                }
+            }
+        }
+        val
     }
 
     fn check_triggers(&self, register_id: &str, is_write: bool, value: Option<u32>) {
@@ -205,7 +297,7 @@ impl Peripheral for GenericPeripheral {
 
                 self.check_triggers(&reg.id, false, None);
 
-                return Ok(val);
+                return Ok(self.apply_stuck_byte(offset, val));
             }
         }
         Ok(0)
@@ -284,7 +376,7 @@ impl Peripheral for GenericPeripheral {
 
                 self.check_triggers(&reg.id, false, None);
 
-                return Ok(val);
+                return Ok(self.apply_stuck_u32(offset, val));
             }
         }
         let b0 = self.read(offset)? as u32;
@@ -470,6 +562,58 @@ mod tests {
             interrupts: None,
             timing: None,
         }
+    }
+
+    #[test]
+    fn force_register_value_overrides_and_persists_through_reset() {
+        let mut p = GenericPeripheral::new(mock_descriptor());
+        assert_eq!(p.read_u32(0x00).unwrap(), 0x12345678);
+
+        assert!(p.force_register_value("REG1", 0xDEAD_BEEF));
+        assert_eq!(
+            p.read_u32(0x00).unwrap(),
+            0xDEAD_BEEF,
+            "live value overridden"
+        );
+
+        // The reset value is overridden too, so a fresh peripheral built from
+        // the mutated descriptor seeds the faulted value (survives reset).
+        let p2 = GenericPeripheral::new(p.get_descriptor().clone());
+        assert_eq!(
+            p2.read_u32(0x00).unwrap(),
+            0xDEAD_BEEF,
+            "reset value overridden"
+        );
+
+        // An unknown register is reported, not silently ignored.
+        assert!(!p.force_register_value("NOPE", 1));
+    }
+
+    #[test]
+    fn stuck_at_bit_holds_bit_through_writes() {
+        let mut p = GenericPeripheral::new(mock_descriptor());
+
+        // Force REG1 bit 5 stuck high; a write of 0 cannot clear it.
+        assert!(p.force_stuck_bit("REG1", 5, 1));
+        assert_eq!(p.read_u32(0).unwrap() & (1 << 5), 1 << 5);
+        p.write_u32(0, 0).unwrap();
+        assert_eq!(
+            p.read_u32(0).unwrap() & (1 << 5),
+            1 << 5,
+            "stuck-high bit survives a zero write"
+        );
+
+        // Force REG1 bit 3 stuck low (reset 0x12345678 has bit 3 set).
+        assert!(p.force_stuck_bit("REG1", 3, 0));
+        assert_eq!(
+            p.read_u32(0).unwrap() & (1 << 3),
+            0,
+            "stuck-low bit reads 0 despite a set reset value"
+        );
+
+        // Out-of-range bit and unknown register are rejected.
+        assert!(!p.force_stuck_bit("REG1", 32, 1));
+        assert!(!p.force_stuck_bit("NOPE", 0, 1));
     }
 
     #[test]

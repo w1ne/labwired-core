@@ -147,7 +147,13 @@ impl WasmSimulator {
             .map_err(|e| JsValue::from_str(&format!("Bus config error: {:#}", e)))?;
 
         let uart_sink = Arc::new(Mutex::new(Vec::new()));
-        bus.attach_uart_tx_sink(uart_sink.clone(), false);
+        if let Some(debug_uart) = manifest.debug_uart.as_deref() {
+            if !bus.attach_uart_tx_sink_named(debug_uart, uart_sink.clone(), false) {
+                bus.attach_uart_tx_sink(uart_sink.clone(), false);
+            }
+        } else {
+            bus.attach_uart_tx_sink(uart_sink.clone(), false);
+        }
         let uart_rx_bufs = bus.attach_uart_rx_source();
 
         let (cpu, _nvic) = configure_cortex_m(&mut bus);
@@ -291,6 +297,35 @@ impl WasmSimulator {
             .map_err(|e| JsValue::from_str(&format!("Step Error: {}", e)))
     }
 
+    /// Connect this chip's UART (`uart_id`, e.g. "uart2") to a shared in-module
+    /// cross-link, so it exchanges bytes with the other chip on the same
+    /// `link_id`. The two chips of a point-to-point IO-Link use opposite
+    /// `side`s (0 and 1). Bytes flow through a process-static medium with no
+    /// per-byte host round-trip, so both chips can keep stepping in batches.
+    #[wasm_bindgen]
+    pub fn attach_uart_wire(
+        &mut self,
+        uart_id: &str,
+        link_id: u32,
+        side: u8,
+    ) -> Result<(), JsValue> {
+        let endpoint = Box::new(
+            labwired_core::network::virtual_uart_wire::VirtualWireEndpoint::new(link_id, side),
+        );
+        self.machine()
+            .bus
+            .attach_uart_stream_by_id(uart_id, endpoint)
+            .map_err(|e| JsValue::from_str(&format!("attach_uart_wire: {e:#}")))?;
+        // Keep the cross-link's raw protocol octets out of the human serial
+        // monitor — they're decoded by the protocol analyzer (uart_trace), and
+        // dumping them into the console floods both peers with identical-looking
+        // binary. The debug UART (USART1) still feeds the console normally.
+        self.machine()
+            .bus
+            .detach_uart_sink_by_id(uart_id)
+            .map_err(|e| JsValue::from_str(&format!("attach_uart_wire(sink): {e:#}")))
+    }
+
     #[wasm_bindgen]
     pub fn get_pc(&self) -> u32 {
         self.machine.as_ref().unwrap().cpu.get_pc()
@@ -355,7 +390,7 @@ impl WasmSimulator {
     //  IO-Link DI demo: 74HC165 input toggling + IO-Link master readout.
     //  These find the device by iterating the bus (the shifter/master are
     //  `external_devices`, not `board_io` bindings), which suits the single
-    //  shifter + single master of the AL2205-style demo.
+    //  shifter + single master of the IO-Link DI/DO demo.
     // ──────────────────────────────────────────────────────────────────────
 
     // DEPRECATED: renamed to install_esp32_arduino_quirks for clarity.
@@ -531,6 +566,14 @@ impl WasmSimulator {
 extern "C" {
     #[wasm_bindgen(js_namespace = performance, js_name = now)]
     fn perf_now() -> f64;
+}
+
+/// Clear every shared UART cross-link. The playground calls this when (re)loading
+/// a multi-chip lab so a previous station's link buffers don't leak bytes into
+/// the new one.
+#[wasm_bindgen]
+pub fn clear_uart_wires() {
+    labwired_core::network::virtual_uart_wire::clear_virtual_uart_wires();
 }
 
 // WasmGdbEventLoop removed — see `gdb_process_packet` above for the rationale.

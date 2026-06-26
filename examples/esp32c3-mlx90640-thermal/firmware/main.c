@@ -109,7 +109,7 @@ static void print_verdict(const tfs_verdict_t *v) {
 }
 
 /* Trace IO-Link DLL state transitions over the debug console (mirrors the
- * al2205 device gate): prints `STATE=<hex>` on change and flags OPERATE (0x04)
+ * iolink-dido device gate): prints `STATE=<hex>` on change and flags OPERATE (0x04)
  * so the device-side test can confirm the link reached OPERATE. */
 static iolink_dll_state_t g_last_iol_state = (iolink_dll_state_t)0xFF;
 static void trace_iolink_state(void) {
@@ -178,7 +178,7 @@ int main(void) {
     /* ── Bring up the iolinki IO-Link DEVICE stack on UART1 (the C/Q line) ──
      * The 9-byte thermal verdict is published as IO-Link process data; a native
      * master attached to uart1 cyclically reads it. memset the config first (the
-     * al2205 lesson: a designated-init can leave t_pd_us garbage and arm a bogus
+     * iolink-dido lesson: a designated-init can leave t_pd_us garbage and arm a bogus
      * power-on delay). pd_in_len=9 matches the verdict frame; m_seq_type 1_1
      * (PD + 1-byte OD) matches the master's `m_seq_type: 1`. */
     iolink_config_t cfg;

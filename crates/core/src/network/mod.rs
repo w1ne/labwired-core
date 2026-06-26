@@ -9,6 +9,7 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 
 pub mod mqtt;
 pub mod sim;
+pub mod virtual_uart_wire;
 
 /// Trait for virtual interconnects between machines.
 pub trait Interconnect: Send {
@@ -83,17 +84,94 @@ impl Interconnect for CanBus {
     }
 }
 
-/// A simple cross-link between two UART peripherals.
+/// One end of the point-to-point UART wire, attached to a chip's UART via
+/// `UartStreamDevice`. Bytes the firmware transmits land in `out` (drained by
+/// the link); bytes the link delivers land in `inbox` (fed to the chip RX).
+pub struct UartWireEndpoint {
+    out: Sender<u8>,
+    inbox: Receiver<u8>,
+}
+
+impl crate::peripherals::uart::UartStreamDevice for UartWireEndpoint {
+    fn poll(&mut self, _elapsed_us: u32) -> Option<u8> {
+        self.inbox.try_recv().ok()
+    }
+    fn on_tx_byte(&mut self, byte: u8) {
+        let _ = self.out.send(byte);
+    }
+}
+
+/// Point-to-point full-duplex UART link between two nodes' UARTs (the simulated
+/// IO-Link C/Q wire). Construct with [`UartCrossLink::new`], attach the two
+/// returned [`UartWireEndpoint`]s to each node's UART, and register the link as
+/// a `World` interconnect; `tick()` shuttles bytes both directions each step.
 pub struct UartCrossLink {
     pub node_a: String,
     pub node_b: String,
-    // Add buffers and peripheral references
+    a_out: Receiver<u8>, // bytes node A's firmware transmitted
+    b_in: Sender<u8>,    // -> node B inbox (RX)
+    b_out: Receiver<u8>, // bytes node B's firmware transmitted
+    a_in: Sender<u8>,    // -> node A inbox (RX)
+}
+
+impl UartCrossLink {
+    pub fn new(node_a: String, node_b: String) -> (Self, UartWireEndpoint, UartWireEndpoint) {
+        let (a_tx, a_out) = channel(); // A firmware TX -> link
+        let (a_in, a_inbox) = channel(); // link -> A RX
+        let (b_tx, b_out) = channel(); // B firmware TX -> link
+        let (b_in, b_inbox) = channel(); // link -> B RX
+        let endpoint_a = UartWireEndpoint {
+            out: a_tx,
+            inbox: a_inbox,
+        };
+        let endpoint_b = UartWireEndpoint {
+            out: b_tx,
+            inbox: b_inbox,
+        };
+        let link = Self {
+            node_a,
+            node_b,
+            a_out,
+            b_in,
+            b_out,
+            a_in,
+        };
+        (link, endpoint_a, endpoint_b)
+    }
 }
 
 impl Interconnect for UartCrossLink {
     fn tick(&mut self) -> SimResult<()> {
-        // TODO: Move bytes between node buffers
+        while let Ok(byte) = self.a_out.try_recv() {
+            let _ = self.b_in.send(byte);
+        }
+        while let Ok(byte) = self.b_out.try_recv() {
+            let _ = self.a_in.send(byte);
+        }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::peripherals::uart::UartStreamDevice;
+
+    #[test]
+    fn uart_cross_link_moves_bytes_both_directions() {
+        let (mut link, mut a, mut b) = UartCrossLink::new("nodeA".into(), "nodeB".into());
+
+        // Firmware on A transmits 0x55; B receives it after a tick.
+        a.on_tx_byte(0x55);
+        link.tick().unwrap();
+        assert_eq!(b.poll(1000), Some(0x55));
+        assert_eq!(b.poll(1000), None);
+
+        // Reverse direction.
+        b.on_tx_byte(0xAA);
+        link.tick().unwrap();
+        assert_eq!(a.poll(1000), Some(0xAA));
+        assert_eq!(a.poll(1000), None);
     }
 }
 

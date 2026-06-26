@@ -38,10 +38,14 @@ core: "cortex-m33"
 registers_count: 220
 flash:
   base: 0x08000000
-  size: "2MB"
+  # Binary units (MiB) so the buffer is exactly 2 * 0x100000 = 2,097,152 bytes,
+  # matching real H563 silicon: two 1 MiB (0x100000) banks. SI "2MB" would parse
+  # as 2,000,000 (human_size) and break dual-bank addressing (bank 2 @ 0x08100000).
+  size: "2MiB"
 ram:
   base: 0x20000000
-  size: "640KB"
+  # 640 KiB = 655,360 bytes, matching silicon (initial SP read = 0x200A0000 = RAM top).
+  size: "640KiB"
 peripherals:
   - id: "rcc"
     type: "rcc"
@@ -286,8 +290,10 @@ peripherals:
     size: "1KB"
     config:
       profile: "stm32h5"
-  # FLASH interface registers (RM0481) — ACR latency/WRHIGHFREQ read-back
-  # for clock bring-up; program/erase not modeled.
+  # FLASH interface registers (RM0481) — ACR latency/WRHIGHFREQ read-back for
+  # clock bring-up; NSKEYR/OPTKEYR unlock, NSCR sector-erase and
+  # OPTSR_PRG.SWAP_BANK + OPTCR.OBL_LAUNCH (drained in Machine::step) model the
+  # UDS OTA reprogramming path. Programming is plain writes to the flash region.
   - id: "flash_iface"
     type: "flash"
     base_address: 0x40022000
@@ -302,3 +308,9 @@ peripherals:
     size: "1KB"
     config:
       idcode: 0x10016484
+  # ICACHE (RM0481) — stm32h5_init enables it via ICACHE_CR.EN and never polls a
+  # completion flag, so a read-as-zero stub keeps the enable from bus-faulting.
+  - id: "icache"
+    type: "icache"
+    base_address: 0x40030400
+    size: "1KB"

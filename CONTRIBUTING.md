@@ -15,7 +15,7 @@ First off, thank you for considering contributing to LabWired! It's people like 
 
 ### Adding New Architectures or Peripherals
 - We love new hardware support!
-- Check out our [Peripheral Development Guide](docs/peripheral_development.md).
+- Check out our [Peripheral Modeling Guide](docs/peripherals.md).
 - Ensure you include unit tests for new peripherals.
 - Use the **New Peripheral** PR template.
 

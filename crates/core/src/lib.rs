@@ -17,6 +17,7 @@ pub mod memory;
 pub mod metrics;
 pub mod multi_core;
 pub mod network;
+pub mod pc_coverage;
 pub mod peripherals;
 pub mod physics;
 pub mod runtime_snapshot;
@@ -148,10 +149,20 @@ impl PeripheralTickResult {
 pub trait SimulationObserver: std::fmt::Debug + Send + Sync {
     fn on_simulation_start(&self) {}
     fn on_simulation_stop(&self) {}
+    fn on_trace_event(&self, _event: labwired_hw_trace::TraceEvent) {}
     fn on_step_start(&self, _pc: u32, _opcode: u32) {}
     fn on_step_end(&self, _cycles: u32, _registers: &[u32]) {}
     fn on_memory_write(&self, _addr: u64, _old: u8, _new: u8) {}
     fn on_peripheral_tick(&self, _name: &str, _cycles: u32) {}
+}
+
+pub fn emit_trace_event(
+    observers: &[Arc<dyn SimulationObserver>],
+    event: labwired_hw_trace::TraceEvent,
+) {
+    for observer in observers {
+        observer.on_trace_event(event.clone());
+    }
 }
 
 /// Trait representing a CPU architecture
@@ -697,6 +708,19 @@ pub struct Machine<C: Cpu> {
     /// indexed access + one downcast. `None` for configs that don't register
     /// an RTC_CNTL peripheral (every non-ESP32-classic target).
     rtc_cntl_index: Option<usize>,
+    /// Cached bus index of the FLASH peripheral (H5 layout). Resolved once at
+    /// construction; `step()` drains pending FLASH ops (sector erase,
+    /// bank-swap+reset) at clean instruction boundaries without walking the
+    /// full peripheral list every cycle. `None` for configs with no FLASH
+    /// peripheral on the bus (e.g. bare-bus unit tests).
+    flash_index: Option<usize>,
+    /// Cached bus index of the SCB peripheral (Cortex-M). Resolved once at
+    /// construction; `step()` drains a pending SYSRESETREQ latch every cycle
+    /// and, when set, reboots the CPU through the vector table via the
+    /// existing `Machine::reset`. `None` for non-Cortex-M targets (no SCB on
+    /// the bus), so the per-cycle drain short-circuits without a peripheral
+    /// walk or downcast.
+    scb_index: Option<usize>,
     /// Phase 2B.3b (issue #192): whether the one-time scheduler bootstrap has
     /// run. On the first `drain_scheduler_events`, peripherals with setup-time
     /// work (e.g. a UART with an RX stream attached before any MMIO write) get
@@ -714,6 +738,18 @@ impl<C: Cpu> Machine<C> {
                 .and_then(|a| a.downcast_ref::<crate::peripherals::esp32::rtc_cntl::RtcCntl>())
                 .is_some()
         });
+        let flash_index = bus.peripherals.iter().position(|p| {
+            p.dev
+                .as_any()
+                .and_then(|a| a.downcast_ref::<crate::peripherals::flash::Flash>())
+                .is_some()
+        });
+        let scb_index = bus.peripherals.iter().position(|p| {
+            p.dev
+                .as_any()
+                .and_then(|a| a.downcast_ref::<crate::peripherals::scb::Scb>())
+                .is_some()
+        });
         Self {
             cpu,
             cpu_secondary: None,
@@ -726,6 +762,8 @@ impl<C: Cpu> Machine<C> {
             sched: sched::EventScheduler::new(),
             clocks: sched::ClockGraph::new(),
             rtc_cntl_index,
+            flash_index,
+            scb_index,
             scheduler_bootstrapped: false,
         }
     }
@@ -841,9 +879,40 @@ impl<C: Cpu> Machine<C> {
         }
         self.reset()?;
 
-        // Fallback if vector table is missing/zero
-        if self.cpu.get_pc() == 0 {
-            self.cpu.set_pc(image.entry_point as u32);
+        // Resolve the reset vector. Reset reads the initial (SP, PC) from the
+        // vector table at VTOR, which defaults to 0 and aliases to the flash
+        // base — correct for the common case (STM32/nRF/etc.). Some SoCs
+        // prepend a second-stage bootloader: the RP2040 bootrom runs a 256-byte
+        // stage-2 (boot2) blob from flash and only then enters the application
+        // vector table at `flash_base + reset_vector_offset`. We don't execute
+        // boot2 (flash is directly mapped), so when the flash-base vectors are
+        // not valid, relocate to the declared post-stage-2 table — emulating
+        // boot2's only observable effect.
+        let flash_base = self.bus.flash.base_addr;
+        if !self.bus.vector_pair_valid(flash_base) {
+            let offset = self.bus.reset_vector_offset;
+            let relocated = if offset != 0 {
+                let table = flash_base + offset;
+                if self.bus.vector_pair_valid(table) {
+                    let sp = self.bus.read_u32(table)?;
+                    let pc = self.bus.read_u32(table + 4)? & !1;
+                    // Point VTOR at the relocated table so early exceptions
+                    // (before firmware sets VTOR itself) vector correctly.
+                    let _ = self.bus.write_u32(0xE000_ED08, table as u32);
+                    self.cpu.set_sp(sp);
+                    self.cpu.set_pc(pc);
+                    true
+                } else {
+                    false
+                }
+            } else {
+                false
+            };
+
+            // Last-resort fallback if the vector table is missing/zero.
+            if !relocated && self.cpu.get_pc() == 0 {
+                self.cpu.set_pc(image.entry_point as u32);
+            }
         }
 
         Ok(())
@@ -927,6 +996,106 @@ impl<C: Cpu> Machine<C> {
             tracing::debug!("RTC_CNTL SW_SYS_RST: CPU re-pointed at reset vector 0x40000400");
         }
 
+        // Cortex-M SCB system reset (AIRCR.SYSRESETREQ with the VECTKEY).
+        // Firmware that asks for a reboot (e.g. a UDS ECUReset) writes
+        // AIRCR and does not expect the store to return; on real silicon the
+        // core restarts through the vector table. We drain the latch here, at
+        // the same clean instruction boundary as RTC_CNTL — after the
+        // AIRCR-writing store and any pending peripheral effects of this
+        // instruction have been applied — then reuse the power-on reset
+        // machinery so MSP/PC reload from vector[0]/vector[1] via the CPU
+        // reset path. No-op on non-Cortex-M targets (no SCB on the bus).
+        if self.drain_scb_reset_request() {
+            self.reset()?;
+            tracing::debug!("SCB SYSRESETREQ: CPU rebooted through vector table");
+        }
+
+        // H5 FLASH pending ops: sector erase fills flash with 0xFF; bank-swap
+        // swaps the two 1 MB banks in the flash buffer then re-runs reset so
+        // the CPU boots from the new bank-1 vector table. Also drained on the
+        // batch/CLI run path (`Machine::run`), which executes cycle-accurately
+        // when an H5 op-modeling FLASH is present so this fires per instruction.
+        self.apply_pending_flash_op()?;
+
+        Ok(())
+    }
+
+    /// Drain and apply the single pending H5 FLASH hardware operation, if any.
+    ///
+    /// The FLASH peripheral records at most one op per instruction (in a `Cell`);
+    /// this helper must therefore run once per instruction so no op is lost. It
+    /// is called from both `step()` and the `Machine::run` batch loop body. The
+    /// run loop clamps its batch to 1 when `requires_cycle_accurate()` is true
+    /// (which an H5 op-modeling FLASH forces), preserving the one-op-per-
+    /// instruction invariant and the correct erase-before-program ordering.
+    pub(crate) fn apply_pending_flash_op(&mut self) -> SimResult<()> {
+        if let Some(op) = self.drain_flash_op() {
+            use crate::peripherals::flash::h5;
+            use crate::peripherals::flash::FlashOp;
+            match op {
+                FlashOp::EraseSector { bank, sector } => {
+                    // OPT-IN read-while-write fidelity gate (H5 only, default
+                    // off). On real STM32H563 silicon a bank cannot be fetched
+                    // from while it is being erased — code running from that bank
+                    // stalls and cannot make progress, so production flash
+                    // routines run from SRAM. When the gate is on, an erase of
+                    // the SAME physical bank the CPU is currently executing from
+                    // is an unrecoverable access fault rather than a silent
+                    // success. The bank comparison is SWAP_BANK-aware: both the
+                    // BKSEL logical erase bank and PC's bank are mapped to a
+                    // physical bank through the active swap state (see
+                    // `Flash::rww_erase_violates`). Gate off ⇒ this branch is
+                    // skipped entirely and the erase proceeds as before.
+                    let pc = self.cpu.get_pc() as u64;
+                    let in_flash =
+                        (h5::FLASH_BASE..h5::FLASH_BASE + 2 * h5::BANK_SIZE).contains(&pc);
+                    if let Some(flash) = self.flash_peripheral() {
+                        if flash.h5_rww_enabled()
+                            && in_flash
+                            && flash.rww_erase_violates(bank, pc - h5::FLASH_BASE)
+                        {
+                            let phys = flash.physical_bank_of_offset(pc - h5::FLASH_BASE);
+                            return Err(SimulationError::Other(format!(
+                                "flash RWW violation: erase of bank {phys} while executing \
+                                 from bank {phys} (PC={pc:#010x}) — run the flash routine \
+                                 from SRAM"
+                            )));
+                        }
+                    }
+                    let offset = (bank as u64) * h5::BANK_SIZE + (sector as u64) * h5::SECTOR_SIZE;
+                    self.bus.flash.fill(offset, h5::SECTOR_SIZE, 0xFF);
+                    tracing::debug!(
+                        "FLASH EraseSector bank={bank} sector={sector} offset={offset:#010x}"
+                    );
+                }
+                FlashOp::SwapAndReset => {
+                    // Swap the two architectural 1 MiB (0x100000) banks. The
+                    // H563 flash buffer is sized to exactly 2 * BANK_SIZE by the
+                    // chip yaml (`size: "2MiB"`), so the same BANK_SIZE used by
+                    // EraseSector above also bounds the swap — keeping erase and
+                    // swap on one consistent bank-size notion (real silicon:
+                    // bank 2 @ 0x08100000). swap_banks returns false if the
+                    // buffer is not exactly two banks; debug-assert that here so
+                    // a mis-sized chip yaml fails loudly in tests.
+                    let swapped = self.bus.flash.swap_banks(h5::BANK_SIZE);
+                    debug_assert!(
+                        swapped,
+                        "SWAP_BANK: flash buffer ({} bytes) is not 2 * BANK_SIZE ({}); \
+                         check the chip yaml flash size uses binary (MiB) units",
+                        self.bus.flash.data.len(),
+                        2 * h5::BANK_SIZE
+                    );
+                    // Record the swap so the RWW bank mapping reflects the new
+                    // active view (the physical second bank now answers at
+                    // 0x08000000). No-op for the gate-off path beyond a bool.
+                    if let Some(flash) = self.flash_peripheral_mut() {
+                        flash.mark_swapped();
+                    }
+                    tracing::debug!("FLASH SwapAndReset: banks swapped, resetting CPU");
+                    self.reset()?;
+                }
+            }
+        }
         Ok(())
     }
 
@@ -1083,6 +1252,65 @@ impl<C: Cpu> Machine<C> {
             .unwrap_or(false)
     }
 
+    /// Returns true (and clears the latch) if the registered SCB peripheral
+    /// has a pending SYSRESETREQ — an AIRCR write with the correct VECTKEY
+    /// and the SYSRESETREQ bit set (`Scb::write_reg`, offset 0x0C). Used by
+    /// `step()` to honor a firmware-requested system reset at a clean
+    /// instruction boundary. Uses the cached `scb_index` resolved at
+    /// construction — non-Cortex-M configs (no SCB on the bus) short-circuit
+    /// to `false` without touching the peripheral vector at all.
+    pub fn drain_scb_reset_request(&self) -> bool {
+        let Some(idx) = self.scb_index else {
+            return false;
+        };
+        let Some(p) = self.bus.peripherals.get(idx) else {
+            return false;
+        };
+        p.dev
+            .as_any()
+            .and_then(|a| a.downcast_ref::<crate::peripherals::scb::Scb>())
+            .map(|scb| scb.drain_reset_request())
+            .unwrap_or(false)
+    }
+
+    /// Drain a pending FLASH hardware operation recorded by the H5 FLASH
+    /// peripheral (sector erase or bank-swap+reset). Returns `None` for
+    /// configs that have no FLASH peripheral on the bus. The caller is
+    /// responsible for applying the returned op to `bus.flash` and issuing
+    /// a CPU reset when required.
+    fn drain_flash_op(&self) -> Option<crate::peripherals::flash::FlashOp> {
+        let idx = self.flash_index?;
+        let p = self.bus.peripherals.get(idx)?;
+        p.dev
+            .as_any()
+            .and_then(|a| a.downcast_ref::<crate::peripherals::flash::Flash>())
+            .and_then(|f| f.drain_pending_op())
+    }
+
+    /// Borrow the H5 FLASH peripheral, if one is on the bus. Used by the
+    /// read-while-write gate to query the swap state / bank mapping.
+    fn flash_peripheral(&self) -> Option<&crate::peripherals::flash::Flash> {
+        let idx = self.flash_index?;
+        self.bus
+            .peripherals
+            .get(idx)?
+            .dev
+            .as_any()
+            .and_then(|a| a.downcast_ref::<crate::peripherals::flash::Flash>())
+    }
+
+    /// Mutably borrow the FLASH peripheral, if one is on the bus. Used to record
+    /// the applied SWAP_BANK so the RWW bank mapping tracks the active view.
+    fn flash_peripheral_mut(&mut self) -> Option<&mut crate::peripherals::flash::Flash> {
+        let idx = self.flash_index?;
+        self.bus
+            .peripherals
+            .get_mut(idx)?
+            .dev
+            .as_any_mut()
+            .and_then(|a| a.downcast_mut::<crate::peripherals::flash::Flash>())
+    }
+
     pub fn snapshot(&self) -> snapshot::MachineSnapshot {
         snapshot::MachineSnapshot {
             schema_version: snapshot::SCHEMA_VERSION,
@@ -1165,11 +1393,33 @@ impl<C: Cpu> DebugControl for Machine<C> {
             let tick_interval = self.config.peripheral_tick_interval as u64;
             let remaining_until_tick = (tick_interval - (current_cycles % tick_interval)) as u32;
 
-            let current_batch = if let Some(limit) = max_steps {
+            let mut current_batch = if let Some(limit) = max_steps {
                 remaining_until_tick.min(limit - steps)
             } else {
                 remaining_until_tick
             };
+
+            // Cycle-accurate buses (HC-SR04, IO-Link, H5 op-modeling FLASH) must
+            // execute one instruction per batch so per-instruction services —
+            // notably the H5 FLASH pending-op drain below — fire on every
+            // instruction. Without this clamp the FLASH op would be recorded in
+            // the peripheral cell but applied at most once per tick interval (or
+            // not at all), losing all but the last op and breaking erase-before-
+            // program ordering.
+            if self.bus.requires_cycle_accurate() {
+                current_batch = current_batch.min(1);
+            }
+
+            // Breakpoints are only checked at batch boundaries (top of loop). If
+            // any breakpoint is set, clamp the batch to one instruction so a
+            // breakpoint whose PC lies inside a batch is caught at exactly that
+            // PC instead of being executed past and noticed only at the next
+            // boundary (the GDB "continue never stops" bug). This per-instruction
+            // cost applies ONLY while breakpoints are set, i.e. under a debugger,
+            // so the no-breakpoint hot path is unaffected.
+            if !self.breakpoints.is_empty() {
+                current_batch = current_batch.min(1);
+            }
 
             let executed =
                 self.cpu
@@ -1197,6 +1447,21 @@ impl<C: Cpu> DebugControl for Machine<C> {
 
             #[cfg(feature = "event-scheduler")]
             self.drain_scheduler_events();
+
+            // Apply any pending H5 FLASH op recorded by the instructions just
+            // executed. On a cycle-accurate bus the batch is clamped to 1 above,
+            // so this runs per instruction (matching `step()`); this is the path
+            // the CLI test runner and `Machine::run` take, where the op would
+            // otherwise never be applied.
+            self.apply_pending_flash_op()?;
+
+            // Honor a firmware-requested system reset (AIRCR SYSRESETREQ with
+            // VECTKEY) latched by the instructions just executed. `step()` drains
+            // this on every instruction boundary; the batched `run` path must do
+            // the same on every batch return or the reboot never fires.
+            if self.drain_scb_reset_request() {
+                self.reset()?;
+            }
 
             // If we executed less than requested, it means the CPU wanted to exit early (e.g. branch/exception)
             // or we just finished the batch naturally. The loop will continue and check breakpoints/limits.

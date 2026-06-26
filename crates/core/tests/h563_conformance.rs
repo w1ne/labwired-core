@@ -28,6 +28,7 @@ fn h563_bus() -> labwired_core::bus::SystemBus {
         chip: path.to_string_lossy().to_string(),
         external_devices: vec![],
         board_io: vec![],
+        debug_uart: None,
         peripherals: vec![],
         memory_overrides: Default::default(),
     };

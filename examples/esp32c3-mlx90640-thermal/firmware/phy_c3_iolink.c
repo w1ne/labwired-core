@@ -7,7 +7,7 @@
  *   - A byte write to offset 0x00 is also a legacy TX alias.
  * The IO-Link line speed is irrelevant in the cycle-stepped sim, so set_baudrate
  * is a no-op. detect_wakeup scans for the 0x55 wake-up byte the master sends
- * first (mirrors the al2205 phy_labwired / iolinki phy_virtual). No timing is
+ * first (mirrors the iolink-dido phy_labwired / iolinki phy_virtual). No timing is
  * enforced here — the device firmware calls iolink_set_timing_enforcement(false)
  * and the handshake is driven purely by byte arrival. */
 #include "phy_c3_iolink.h"

@@ -6,3 +6,7 @@ license.workspace = true
 description = "Shared hardware trace event model for labwired-core (stub in Plan 1)."
 
 [dependencies]
+serde = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
