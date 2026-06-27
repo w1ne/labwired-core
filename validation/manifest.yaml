@@ -352,3 +352,16 @@ boards:
     note: "UART0 (stm32v2-profile cheat) + PIO0 declared, but ZERO PIO0 test coverage. No silicon."
     models:
       - configs/chips/rp2040.yaml
+
+  - id: nrf5340
+    doc: docs/boards/nrf5340.md
+    chip: configs/chips/nrf5340.yaml
+    tier: sim-validated
+    note: "Application core (Cortex-M33). Boots UNMODIFIED upstream Zephyr v3.7 hello_world (board nrf5340dk/nrf5340/cpuapp) end to end and prints its banner over the UARTE0 EasyDMA console — asserted by firmware_survival::test_nrf5340_zephyr_survival, with the ELF-independent clock/alias twin in tests/nrf5340_clock_boot.rs. Reuses the shared Nordic CLOCK/UARTE/RTC behavioural models at the 0x5000_0000 non-secure peripheral alias; the whole boot is bus-violation-free (LABWIRED_TRACE_VIOLATIONS=1). Network core, radio, TrustZone/SPU enforcement, and analog trims are not modeled (FICR/UICR/regulator/trim blocks are benign stubs). No nRF5340 silicon diff — no bench board."
+    offline_tests:
+      - "firmware_survival::test_nrf5340_zephyr_survival (real Zephyr ELF boots + banner)"
+      - "nrf5340_clock_boot (HFCLK/LFCLK started-event polls + non-secure alias mapping)"
+    models:
+      - configs/chips/nrf5340.yaml
+      - crates/core/src/peripherals/nrf52
+      - crates/core/src/peripherals/scb.rs
