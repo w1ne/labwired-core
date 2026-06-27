@@ -52,3 +52,18 @@ peripherals:
     base_address: 0x40005400
     size: "1KB"
     irq: 31
+  - id: "flash"
+    type: "flash"
+    base_address: 0x40023C00
+    size: "1KB"
+    config:
+      profile: "f1"
+  - id: "pwr"
+    type: "pwr"
+    base_address: 0x40007000
+    size: "1KB"
+  - id: "uart1"
+    type: "uart"
+    base_address: 0x40011000
+    size: "1KB"
+    irq: 37

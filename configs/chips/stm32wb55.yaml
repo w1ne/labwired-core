@@ -48,3 +48,23 @@ peripherals:
     irq: 37
     config:
       profile: "stm32v2"
+  - id: "lpuart1"
+    type: "uart"
+    base_address: 0x40008000
+    irq: 70
+    config:
+      profile: "stm32v2"
+  - id: "flash"
+    type: "flash"
+    base_address: 0x58004000
+    size: "1KB"
+    config:
+      profile: "l4"
+  - id: "pwr"
+    type: "pwr"
+    base_address: 0x58000400
+    size: "1KB"
+  - id: "hsem"
+    type: "hsem"
+    base_address: 0x58001400
+    size: "1KB"

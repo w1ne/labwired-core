@@ -1,0 +1,6 @@
+inputs:
+  firmware: x.elf
+assertions:
+  - uart_contains: "READY"
+  - uart_contains: "DONE"
+  - expected_stop_reason: max_steps

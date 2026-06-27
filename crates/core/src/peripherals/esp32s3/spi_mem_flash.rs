@@ -27,6 +27,13 @@ use std::sync::{Arc, Mutex};
 
 const CMD: u64 = 0x00;
 const ADDR: u64 = 0x04;
+/// SPI_MEM_USER1_REG: bits[31:27] = SPI_MEM_USR_ADDR_BITLEN (address-phase
+/// length minus one). The byte address is left-justified in ADDR, so the
+/// right-shift to recover it depends on this width (24-bit phase → >>8,
+/// 32-bit phase → >>0). The boot ROM uses a 24-bit phase; MCUboot's
+/// `bootloader_flash_read` uses a 32-bit phase, so a hardcoded >>8 misreads
+/// every slot0 access by a factor of 256.
+const USER1: u64 = 0x1C;
 const USER2: u64 = 0x20;
 const MISO_DLEN: u64 = 0x28;
 /// SPI_MEM_RD_STATUS_REG: holds the flash status register value captured by a
@@ -58,6 +65,10 @@ const STATUS_WEL: u16 = 1 << 1; // write-enable latch
 /// Flash command opcodes the controller emulates (USR-path `USER2` opcode).
 const CMD_READ: u8 = 0x03; // READ
 const CMD_FAST_READ: u8 = 0x0B; // FAST READ
+const CMD_READ_DUAL_OUT: u8 = 0x3B; // Dual Output Fast Read
+const CMD_READ_DUAL_IO: u8 = 0xBB; // Dual I/O Fast Read (DIOR) — MCUboot
+const CMD_READ_QUAD_OUT: u8 = 0x6B; // Quad Output Fast Read
+const CMD_READ_QUAD_IO: u8 = 0xEB; // Quad I/O Fast Read (QIOR)
 const CMD_RDSR: u8 = 0x05; // read status register 1 (WIP/WEL)
 const CMD_RDSR2: u8 = 0x35; // read status register 2 (QE/…)
 const CMD_RDSR3: u8 = 0x15; // read status register 3
@@ -146,10 +157,20 @@ impl SpiMemFlash {
     /// any read result in the W buffer, then clear the USR trigger.
     fn execute_user_command(&mut self) {
         let cmd = (self.reg(USER2) & 0xFFFF) as u8;
-        // ESP32-S3 SPI_MEM_ADDR_REG carries the 24-bit flash byte address in
-        // the high bits (the low 8 bits are the dummy/alignment slot).
+        // ESP32-S3 SPI_MEM_ADDR_REG holds the flash byte address right-justified
+        // (the controller sends the low USER1[31:27]+1 bits MSB-first during the
+        // address phase). So the byte address is the register value as-is — NOT a
+        // >>8 of a left-justified field. The boot ROM happens to probe only
+        // zero-address commands (RDID/RDSR), so the earlier >>8 was never
+        // exercised; MCUboot's bootloader_flash_read of slot0 (ADDR_REG=0x00010000
+        // for flash 0x10000) is the first real data read and exposed it. Unused
+        // high bits are already zero for in-range addresses, and an out-of-range
+        // offset reads back 0xFF (flash.get bounds-checks), so no masking is
+        // needed. (USER1 carries the address-phase width if a future model wants
+        // to validate it.)
+        let _ = USER1;
         let addr_reg = self.reg(ADDR);
-        let addr = (addr_reg >> 8) as usize;
+        let addr = addr_reg as usize;
         // MISO_DLEN holds (bits - 1); bytes = (bits)/8.
         let read_bytes = ((self.reg(MISO_DLEN) as usize) + 1) / 8;
         let debug = std::env::var("LABWIRED_SPI_DEBUG").is_ok();
@@ -164,7 +185,8 @@ impl SpiMemFlash {
         }
 
         match cmd {
-            CMD_READ | CMD_FAST_READ => {
+            CMD_READ | CMD_FAST_READ | CMD_READ_DUAL_OUT | CMD_READ_DUAL_IO | CMD_READ_QUAD_OUT
+            | CMD_READ_QUAD_IO => {
                 let flash = self.flash.lock().unwrap();
                 // Pack the read data into W0.. little-endian, mirroring how the
                 // hardware fills the buffer the firmware then reads back.
@@ -287,9 +309,10 @@ mod tests {
         let mut flash = vec![0u8; 0x200];
         flash[0x100..0x104].copy_from_slice(&[0x11, 0x22, 0x33, 0x44]);
         let mut c = ctrl_with(flash);
-        // program: READ (0x03), addr 0x100 (in high bits), 32 bits (4 bytes)
+        // program: READ (0x03), addr 0x100 (right-justified byte address),
+        // 32 bits (4 bytes)
         c.write_u32(USER2, 0x03).unwrap();
-        c.write_u32(ADDR, 0x100 << 8).unwrap();
+        c.write_u32(ADDR, 0x100).unwrap();
         c.write_u32(MISO_DLEN, 32 - 1).unwrap();
         // launch
         c.write_u32(CMD, USR_BIT).unwrap();
@@ -297,6 +320,27 @@ mod tests {
         assert_eq!(c.read_u32(CMD).unwrap(), 0);
         // W0 holds the 4 bytes little-endian
         assert_eq!(c.read_u32(W0).unwrap(), 0x4433_2211);
+    }
+
+    #[test]
+    fn dual_io_read_uses_raw_address_for_mcuboot_slot0() {
+        // Regression for booting MCUboot/Zephyr: bootloader_flash_read issues a
+        // Dual I/O Fast Read (0xBB) of slot0 with ADDR_REG = the raw byte address
+        // 0x10000 (right-justified, NOT 0x10000<<8). The earlier model both (a)
+        // right-shifted the address by 8 (reading 0x100) and (b) didn't decode
+        // 0xBB at all (returning a stale W0), so MCUboot saw a bad image magic.
+        let mut flash = vec![0u8; 0x10100];
+        flash[0x10000..0x10004].copy_from_slice(&[0x3d, 0xb8, 0xf3, 0x96]); // MCUboot magic
+        let mut c = ctrl_with(flash);
+        c.write_u32(USER2, CMD_READ_DUAL_IO as u32).unwrap();
+        c.write_u32(ADDR, 0x0001_0000).unwrap();
+        c.write_u32(MISO_DLEN, 32 - 1).unwrap();
+        c.write_u32(CMD, USR_BIT).unwrap();
+        assert_eq!(
+            c.read_u32(W0).unwrap(),
+            0x96f3_b83d,
+            "0xBB read of slot0 must return the real MCUboot magic, not a stale/shifted value"
+        );
     }
 
     #[test]

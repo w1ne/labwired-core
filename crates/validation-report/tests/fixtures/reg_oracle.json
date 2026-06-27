@@ -1,0 +1,11 @@
+{
+  "schema": "labwired-hw-oracle/test/v1",
+  "chip": "esp32-c3",
+  "state": "reset_halt",
+  "source": "openocd-esp32 v0.12.0 / board/esp32c3-builtin.cfg",
+  "blocks": {
+    "uart0": { "base": "0x60000000", "words": { "0x60000000": "0x0", "0x60000004": "0x2" } },
+    "spi2":  { "base": "0x60024000", "words": { "0x60024000": "0x0" } },
+    "empty": { "base": "0x0", "words": {} }
+  }
+}
