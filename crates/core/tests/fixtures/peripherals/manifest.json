@@ -421,6 +421,11 @@
           "name": "rh_pct",
           "ty": "float",
           "doc": "Starting relative humidity, %. Default 45.0."
+        },
+        {
+          "name": "rh_target_pct",
+          "ty": "float",
+          "doc": "Steady-state relative humidity the room climbs toward, %. Default rh_pct + 6. Raise above 60 for a damp, mold-favorable room."
         }
       ],
       "labs": [
@@ -535,6 +540,49 @@
           "name": "lux_target",
           "ty": "float",
           "doc": "Lux the ramp approaches (dims when below start). Default 90."
+        },
+        {
+          "name": "ramp_alpha",
+          "ty": "float",
+          "doc": "Per-read approach rate 0..1 (0 = flat scene). Default 0.08."
+        }
+      ],
+      "labs": [
+        {
+          "board_id": "leo-airquality-lab",
+          "chip": "esp32c3",
+          "example_dir": "esp32c3-leo-airquality",
+          "demo_elf": "demo-esp32c3-leo-airquality.elf"
+        }
+      ]
+    },
+    {
+      "device_type": "mlx90614",
+      "label": "Melexis MLX90614 IR Temp",
+      "summary": "Single-point IR (non-contact) thermometer over SMBus/I2C.",
+      "detail": "Melexis MLX90614 at address 0x5A. Reports an SMBus read-word (LSB, MSB, PEC) for ambient (0x06) and object/surface (0x07) temperature, encoded raw×0.02 K with a correct CRC-8 PEC. The surface temperature follows a ramp (cools toward a cold window by default), letting firmware compute the dew point and flag surface condensation the air humidity misses.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to the MLX90614 fixed address 0x5A."
+        },
+        {
+          "name": "surface_temp_c",
+          "ty": "float",
+          "doc": "Surface (object) temperature at the first reading, °C. Default 18."
+        },
+        {
+          "name": "surface_temp_target_c",
+          "ty": "float",
+          "doc": "Surface temperature the ramp approaches, °C (cools below start). Default 10."
+        },
+        {
+          "name": "ambient_temp_c",
+          "ty": "float",
+          "doc": "Ambient (chip) temperature reported on the Ta channel, °C. Default 22."
         },
         {
           "name": "ramp_alpha",

@@ -19,10 +19,12 @@
  * and the verdict flips from "air quality is good" to "CO₂ climbing, crack a
  * window" — live, deterministic, reproducible.
  */
+#include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
 
 #include "c3_uart.h"
+#include "mlx90614_c3.h"
 #include "scd4x_i2c.h"
 #include "sensirion_gas_index_algorithm.h"
 #include "sensirion_i2c_hal.h"
@@ -117,6 +119,57 @@ static const char *mold_verdict(int idx) {
         default:
             return "mold risk: SEVERE - mold likely to grow";
     }
+}
+
+/* ── Surface condensation (the moisture-first mold signal) ────────────────────
+ * Air humidity lies about the wall. Mould starts on the cold surface, where the
+ * *surface* relative humidity can be at condensation (100 %) while the room air
+ * reads a benign 70 %. With the air temperature + RH (SCD41) and the surface
+ * temperature (MLX90614 IR) we compute the dew point and the surface RH from the
+ * Magnus saturation-vapour relation, and flag condensation — exactly the early
+ * warning a humidity-only "Mold Index" cannot give. */
+#define MAGNUS_A 17.62f
+#define MAGNUS_B 243.12f
+
+static float magnus_gamma(float t_c, float rh_pct) {
+    return logf(rh_pct / 100.0f) + (MAGNUS_A * t_c) / (MAGNUS_B + t_c);
+}
+
+/* Dew point of the room air, °C. */
+static float dew_point_c(float t_air, float rh_air) {
+    float g = magnus_gamma(t_air, rh_air);
+    return (MAGNUS_B * g) / (MAGNUS_A - g);
+}
+
+/* Relative humidity *at the cold surface*, %. Can exceed 100 (condensing):
+ * RH_surf = RH_air · Psat(T_air) / Psat(T_surf). */
+static float surface_rh_pct(float t_air, float rh_air, float t_surf) {
+    float e = (MAGNUS_A * t_air) / (MAGNUS_B + t_air) -
+              (MAGNUS_A * t_surf) / (MAGNUS_B + t_surf);
+    return rh_air * expf(e);
+}
+
+/* Consecutive cycles with active surface condensation. */
+static int g_cond_dwell = 0;
+
+/* Surface contribution to the mold index, 0..4, from the surface RH. */
+static int surface_mold_index(float surf_rh) {
+    if (surf_rh >= 100.0f) { /* condensation on the wall */
+        if (g_cond_dwell < 240) {
+            g_cond_dwell++;
+        }
+        return g_cond_dwell >= 6 ? 4 : 3; /* sustained condensation → severe */
+    }
+    if (g_cond_dwell > 0) {
+        g_cond_dwell--;
+    }
+    if (surf_rh >= 90.0f) {
+        return 2; /* surface damp, near condensation */
+    }
+    if (surf_rh >= 80.0f) {
+        return 1;
+    }
+    return 0;
 }
 
 /* ── On-device OLED screen ───────────────────────────────────────────────── */
@@ -256,7 +309,8 @@ static void oled_dump_ascii(void) {
 int main(void) {
     sensirion_i2c_hal_init();
     uart_puts("LEO BOOT\r\n");
-    uart_puts("Leo air-quality sensor: ESP32-C3 + SCD41/SGP41/SPS30 + VEML7700\r\n");
+    uart_puts("Leo air-quality sensor: ESP32-C3 + SCD41/SGP41/SPS30 + VEML7700 "
+              "+ MLX90614\r\n");
 
     /* ── SCD41: CO₂ + T + RH ──────────────────────────────────────────────── */
     scd4x_init(SCD41_ADDR);
@@ -281,6 +335,9 @@ int main(void) {
     /* ── VEML7700: ambient light ─────────────────────────────────────────── */
     veml7700_init();
     uart_puts("VEML7700 READY\r\n");
+
+    /* ── MLX90614: IR surface temperature (no init transaction needed) ────── */
+    uart_puts("MLX90614 READY\r\n");
 
     ssd1306_init();
     uart_puts("OLED READY\r\n");
@@ -339,13 +396,40 @@ int main(void) {
 
         print_verdict(co2, mc_2p5);
 
-        /* Mold risk from the SCD41's temperature + humidity — the "Mold Index"
-         * a commercial monitor reports, derived rather than directly sensed. */
+        /* MLX90614 — cold-surface temperature for dew-point / condensation. */
+        float t_air = (float)temp_m_deg_c / 1000.0f;
+        float rh_air = (float)rh_m_pct / 1000.0f;
+        int32_t surf_centi = 0;
+        int surf_ok = (mlx90614_read_surface_centi_c(&surf_centi) == 0);
+        float t_surf = (float)surf_centi / 100.0f;
+        float dew = dew_point_c(t_air, rh_air);
+        float surf_rh = surf_ok ? surface_rh_pct(t_air, rh_air, t_surf) : 0.0f;
+        int condensing = surf_ok && surf_rh >= 100.0f;
+
+        if (surf_ok) {
+            /* Surface line: the wall's own humidity story, distinct from the air. */
+            uart_puts("SURFACE: ");
+            uart_putfix2((int32_t)(t_surf * 100.0f));
+            uart_puts("C dew ");
+            uart_putfix2((int32_t)(dew * 100.0f));
+            uart_puts("C surfaceRH ");
+            uart_puti((int32_t)(surf_rh + 0.5f));
+            uart_puts("%");
+            uart_puts(condensing ? " CONDENSING - wall is wet\r\n" : "\r\n");
+        }
+
+        /* Mold risk: the worse of the air-humidity "Mold Index" a commercial
+         * monitor reports and the surface-condensation signal it cannot see. */
         int temp_c = (int)(temp_m_deg_c / 1000);
         int rh_pct = (int)(rh_m_pct / 1000);
-        int mold = mold_index(temp_c, rh_pct);
+        int mold_air = mold_index(temp_c, rh_pct);
+        int mold_surf = surf_ok ? surface_mold_index(surf_rh) : 0;
+        int mold = mold_air > mold_surf ? mold_air : mold_surf;
         uart_puts("MOLD: ");
         uart_puts(mold_verdict(mold));
+        if (condensing && mold_surf >= mold_air) {
+            uart_puts(" (surface condensation)");
+        }
         uart_puts("\r\n");
 
         /* Render the same readings + verdict to the on-device OLED. */

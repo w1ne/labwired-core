@@ -13,7 +13,7 @@ inputs:
   system: "./system.yaml"
   firmware: "./firmware/leo_airquality.elf"
 limits:
-  max_steps: 50000000
+  max_steps: 5000000
 assertions:
   # Boot banner + all four sensors brought up over real I²C.
   - uart_contains: "LEO BOOT"
@@ -28,5 +28,12 @@ assertions:
   # The headline transition once CO₂ climbs past 1000 ppm — the plain-language
   # verdict Leo's product is built around.
   - uart_contains: "crack a window"
+  # Surface-condensation channel (MLX90614 IR + SCD41 dew point): the cold wall
+  # crosses below the dew point and the surface RH hits condensation while the
+  # *air* RH is still benign — the moisture-first mold signal an air-only Mold
+  # Index cannot see. This is the differentiator, so it is gated here.
+  - uart_contains: "SURFACE:"
+  - uart_contains: "CONDENSING - wall is wet"
+  - uart_contains: "surface condensation"
   # The run completes its measurement cycles.
   - uart_contains: "LEO DONE"

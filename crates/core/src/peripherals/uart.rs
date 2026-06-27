@@ -989,6 +989,17 @@ impl crate::Peripheral for Uart {
                 return Ok(b);
             }
         }
+        // V2 (USARTv2: L4/F7/G0/H7…) BRR read-back. The USART exposes USARTDIV
+        // at 0x0C, and Zephyr's uart_stm32_set_baudrate writes it then reads it
+        // back to `__ASSERT(BRR >= 16)`. The divisor has no behavioural effect in
+        // this instruction-level model (byte timing is not simulated), but the
+        // register must read what firmware wrote or the assert panics at boot.
+        if matches!(self.layout, UartRegisterLayout::Stm32V2) {
+            let bo = offset.wrapping_sub(0x0C);
+            if bo < 4 {
+                return Ok((((self.brr & 0x0000_FFFF) >> (bo * 8)) & 0xFF) as u8);
+            }
+        }
         if offset == self.cr3_offset() {
             return Ok(self.cr3 as u8);
         }
@@ -1020,6 +1031,13 @@ impl crate::Peripheral for Uart {
             if (self.cr3 & (1 << 7)) != 0 {
                 self.dma_tx_pending = true;
             }
+        } else if matches!(self.layout, UartRegisterLayout::Stm32V2)
+            && offset.wrapping_sub(0x0C) < 4
+        {
+            // V2 BRR@0x0C: capture the written USARTDIV byte so the driver's
+            // read-back assert (BRR >= 16) sees what it wrote. Read-back only.
+            let shift = (offset - 0x0C) * 8;
+            self.brr = (self.brr & !(0xFF << shift)) | ((value as u32) << shift);
         } else if offset == self.cr3_offset() {
             self.cr3 = value as u32;
             if (self.cr3 & (1 << 7)) != 0 {
@@ -1185,6 +1203,36 @@ mod tests {
         assert_ne!(isr & (1 << 21), 0, "TEACK set once UE+TE");
         assert_ne!(isr & (1 << 22), 0, "REACK set once UE+RE");
         assert_eq!(isr & 0xC0, 0xC0, "TXE/TC still present");
+    }
+
+    /// Modern-USART BRR (USARTDIV) lives at 0x0C and must read back what
+    /// firmware wrote: Zephyr's uart_stm32_set_baudrate writes BRR then
+    /// `__ASSERT(BRR >= 16)`. A model that dropped the write returned 0 and
+    /// panicked the kernel before the console banner (silent boot hang).
+    /// BRR is read-back-only here — it has no behavioural effect on the
+    /// instruction-level TX path (byte timing is not simulated).
+    #[test]
+    fn test_uart_v2_brr_readback() {
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::Stm32V2);
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        uart.set_sink(Some(sink.clone()), false);
+
+        // Reset BRR reads 0; the driver's assert would fire here.
+        assert_eq!(uart.read_u32(0x0C).unwrap(), 0);
+
+        // 80 MHz PCLK1 / 115200 baud, oversampling 16 → USARTDIV = 694 (0x2B6).
+        uart.write_u32(0x0C, 0x2B6).unwrap();
+        assert_eq!(uart.read_u32(0x0C).unwrap(), 0x2B6, "BRR reads back");
+        assert!(
+            uart.read_u32(0x0C).unwrap() >= 16,
+            "passes BRR >= 16 assert"
+        );
+
+        // Writing BRR must not transmit (TDR is 0x28).
+        assert!(sink.lock().unwrap().is_empty(), "BRR write is not a TX");
+        // Only the upper 16 bits are reserved; the divisor is 16-bit.
+        uart.write_u32(0x0C, 0xFFFF_FFFF).unwrap();
+        assert_eq!(uart.read_u32(0x0C).unwrap(), 0x0000_FFFF, "BRR is 16-bit");
     }
 
     #[test]
