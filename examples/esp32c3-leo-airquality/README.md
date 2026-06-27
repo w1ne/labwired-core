@@ -20,11 +20,13 @@ team would flash to real silicon boots and decodes here.
 | VOC       | Sensirion SGP41 | I²C0 0x59  | VOC raw → VOC Index            | real `embedded-i2c-sgp41` + `gas-index-algorithm` |
 | Particles | Sensirion SPS30 | I²C0 0x69  | PM1/2.5/4/10                   | real `embedded-i2c-sps30` (uint16 output) |
 | Light     | Vishay VEML7700 | I²C0 0x10  | ambient lux                    | register-level driver (Vishay ships no bare-metal C lib) |
+| Surface T | Melexis MLX90614| I²C0 0x5A  | IR surface temperature (°C)    | bare-C SMBus driver (read-word + CRC-8 PEC) |
 | Screen    | SSD1306 OLED    | I²C0 0x3C  | 128×64 on-device display       | bare-C driver + 5×7 font |
 
 That covers every metric on the product brief — CO₂, particulates, VOC,
-humidity, light, temperature — on one I²C bus, plus a 128×64 OLED that shows the
-plain-language verdict on the device itself.
+humidity, light, temperature — on one I²C bus, plus a non-contact IR surface
+temperature for condensation, and a 128×64 OLED that shows the plain-language
+verdict on the device itself.
 
 ## The screen
 
@@ -54,9 +56,34 @@ is built around. Mold is not a sensor reading: it germinates when humidity stays
 high in a livable temperature band, and the longer a room sits damp the higher
 the risk. The firmware tracks a dwell counter of consecutive mold-favorable
 cycles and combines it with the humidity level — entirely from the SCD41's
-temperature and humidity, no extra hardware. As the closed room's humidity
-climbs past ~60 %RH the verdict escalates `low → watch → ELEVATED → HIGH` and
-takes over the OLED headline.
+temperature and humidity. As the closed room's humidity climbs past ~60 %RH the
+verdict escalates `low → watch → ELEVATED → HIGH` and takes over the OLED
+headline.
+
+### Surface condensation — the moisture-first upgrade
+
+Air humidity lies about the wall. Mould starts on the **cold surface** (a window,
+an exterior wall, a thermal bridge), where the *surface* relative humidity can be
+at condensation (100 %) while the room air still reads a benign ~70 %. The
+MLX90614 IR thermometer reads that surface temperature; with the SCD41's air
+temperature and RH the firmware computes the **dew point** and the **surface RH**
+from the Magnus saturation-vapour relation (real `expf`/`logf`, soft-float on the
+FPU-less C3) and flags condensation when the wall drops below the dew point.
+
+That surface signal escalates the mold verdict for a reason an air-only "Mold
+Index" is blind to. In the default scene the wall cools from 18 °C toward 10 °C
+while the air RH climbs into the 70s; partway through, the surface crosses the
+dew point and the run prints:
+
+```
+SURFACE: 10.03C dew 17.68C surfaceRH 164% CONDENSING - wall is wet
+MOLD: mold risk: HIGH - sustained damp (surface condensation)
+```
+
+The `system-stuffy.yaml` scene (cold exterior wall, damp room) drives this to
+`SEVERE`; `system-fresh.yaml` (warm surface, dry air) never condenses — the
+negative control. This is the differentiating channel from the Leo "moisture
+first" product direction, exercised end-to-end over the real C3 I²C bus.
 
 ## How it works
 

@@ -60,6 +60,22 @@ external_devices:
       lux_target: 90.0        # dims toward evening
       ramp_alpha: 0.08
 
+  # ── Melexis MLX90614: IR surface temperature (condensation / mold) ────────
+  # Pointed at a cold spot (window / exterior wall). As the room air RH climbs
+  # into the 70s, this cold surface drifts down past the dew point, so its
+  # surface RH hits condensation while the *air* still reads a benign ~70 %.
+  # That crossover is what the firmware's surface-condensation flag catches —
+  # the moisture-first mold signal an air-only humidity index cannot see.
+  - id: "surface-ir"
+    type: "mlx90614"
+    connection: "i2c0"
+    config:
+      i2c_address: 0x5A
+      surface_temp_c: 18.0          # cold window, start of evening
+      surface_temp_target_c: 10.0   # cools below the rising dew point
+      ambient_temp_c: 22.0          # roughly the room air temperature
+      ramp_alpha: 0.08
+
   # ── SSD1306 OLED: on-device screen showing the plain-language verdict ──────
   - id: "oled"
     type: "oled-ssd1306"
