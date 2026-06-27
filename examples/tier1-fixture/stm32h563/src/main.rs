@@ -418,8 +418,30 @@ fn check_spi() -> Result<(), &'static [u8]> {
     Ok(())
 }
 
-/// adc: ADC1 power-up handshake, silicon-pinned 2026-06-11: DEEPPWD out of
-/// reset, DEEPPWD clear -> ADVREGEN -> ADEN raises ISR.ADRDY.
+/// Run one ADC conversion at CFGR.RES = `res` and return the DR code. The L4
+/// ADC model converts a fixed internal source (3.0 V / 3.3 Vref); the code must
+/// scale with resolution, so a constant or non-converting model fails this.
+fn adc_convert(res: u32) -> Result<u32, &'static [u8]> {
+    let cfgr = rd32(ADC1_BASE + 0x0C) & !(0x3 << 3); // RES = CFGR bits[4:3]
+    wr32(ADC1_BASE + 0x0C, cfgr | (res << 3));
+    wr32(ADC1_BASE + 0x00, 1 << 2); // ISR rc_w1: clear stale EOC
+    wr32(ADC1_BASE + 0x08, rd32(ADC1_BASE + 0x08) | (1 << 2)); // CR.ADSTART
+    let mut eoc = false;
+    for _ in 0..20_000 {
+        if rd32(ADC1_BASE + 0x00) & (1 << 2) != 0 {
+            eoc = true;
+            break;
+        }
+    }
+    if !eoc {
+        return Err(b"adc-eoc");
+    }
+    Ok(rd32(ADC1_BASE + 0x40) & 0xFFFF)
+}
+
+/// adc: ADC1 power-up handshake (silicon-pinned 2026-06-11: DEEPPWD out of
+/// reset, DEEPPWD clear -> ADVREGEN -> ADEN raises ISR.ADRDY) followed by a
+/// real conversion whose code must scale with resolution.
 fn check_adc() -> Result<(), &'static [u8]> {
     let ahb2 = rd32(RCC_BASE + 0x8C);
     wr32(RCC_BASE + 0x8C, ahb2 | (1 << 10)); // ADCEN
@@ -439,6 +461,18 @@ fn check_adc() -> Result<(), &'static [u8]> {
     }
     if !ready {
         return Err(b"adc-adrdy");
+    }
+    // Real conversion: derived code must scale with resolution (12-bit then 10-bit).
+    let code12 = adc_convert(0)?;
+    if code12 != 3723 {
+        return Err(b"adc-code12");
+    }
+    let code10 = adc_convert(1)?;
+    if code10 != 930 {
+        return Err(b"adc-code10");
+    }
+    if code10 >= code12 {
+        return Err(b"adc-scale");
     }
     wr32(ADC1_BASE, 0x1); // rc_w1: clear ADRDY
     wr32(ADC1_BASE + 0x08, 0x2000_0000); // back to deep power-down

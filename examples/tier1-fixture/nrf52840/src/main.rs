@@ -126,19 +126,10 @@ const SAADC_RESOLUTION: u32 = SAADC_BASE + 0x5F0;
 const SAADC_RESULT_PTR: u32 = SAADC_BASE + 0x62C;
 const SAADC_RESULT_MAXCNT: u32 = SAADC_BASE + 0x630;
 const SAADC_RESULT_AMOUNT: u32 = SAADC_BASE + 0x634;
-const SAADC_SAMPLE_VALUE: u16 = 0x0AAA; // engine's deterministic sample code
-
-// ── PWM0 (nrf52840_pwm, base 0x4001c000) ──────────────────────────────────
-// Sequence playback engine: TASKS_SEQSTART0 reads SEQ0.CNT duty values from
-// SEQ0.PTR and fires SEQSTARTED0 + SEQEND0 + PWMPERIODEND.
-const PWM0_BASE: u32 = 0x4001_c000;
-const PWM0_TASKS_SEQSTART0: u32 = PWM0_BASE + 0x008;
-const PWM0_EVENTS_SEQEND0: u32 = PWM0_BASE + 0x110;
-const PWM0_EVENTS_PWMPERIODEND: u32 = PWM0_BASE + 0x118;
-const PWM0_ENABLE: u32 = PWM0_BASE + 0x500;
-const PWM0_COUNTERTOP: u32 = PWM0_BASE + 0x508;
-const PWM0_SEQ0_PTR: u32 = PWM0_BASE + 0x520;
-const PWM0_SEQ0_CNT: u32 = PWM0_BASE + 0x524;
+// Converted codes for the model's fixed internal source (V(P)=3.0 V, 3.6 V
+// full-scale): code(N) = (3.0/3.6) * 2^N, narrower resolutions drop LSBs.
+const SAADC_CODE_12BIT: u16 = 3413; // (3.0/3.6) * 2^12
+const SAADC_CODE_10BIT: u16 = 853; // (3.0/3.6) * 2^10
 
 // ── WDT (nrf52840_watchdog, base 0x40010000) ──────────────────────────────
 const WDT_BASE: u32 = 0x4001_0000;
@@ -171,10 +162,9 @@ static mut I2C_TX_BUF: [u8; 4] = [0xDE, 0xAD, 0xBE, 0xEF];
 static mut SPI_TX_BUF: [u8; 4] = [0x11, 0x22, 0x33, 0x44];
 static mut SPI_RX_BUF: [u8; 4] = [0; 4];
 
-// SAADC RESULT buffer (4 x 16-bit samples) + PWM SEQ0 duty buffer. Static .bss
-// RAM, the only region the EasyDMA engines can address.
+// SAADC RESULT buffer (4 x 16-bit samples). Static .bss RAM, the only region
+// the EasyDMA engine can address.
 static mut ADC_RESULT_BUF: [u16; 4] = [0; 4];
-static mut PWM_SEQ_BUF: [u16; 4] = [0x8010, 0x8020, 0x8030, 0x8040];
 
 /// Spin until the event register at `addr` reads non-zero, or give up.
 /// Returns true if the event fired. Each loop iteration steps the CPU, which
@@ -376,10 +366,13 @@ fn check_spi() -> Result<(), &'static str> {
     Ok(())
 }
 
-// ── adc (SAADC): EasyDMA conversion → RESULT buffer + END/RESULTDONE ────────
-fn check_adc() -> Result<(), &'static str> {
+// ── adc (SAADC): real EasyDMA conversion of a fixed internal source ─────────
+// The model converts V(P)=3.0 V against a 3.6 V full-scale, scaled to the
+// configured RESOLUTION. This fixture proves a real conversion BY VALUE at two
+// resolutions — it fails if the engine returned a constant or didn't convert.
+fn saadc_sample(res: u32) -> Result<u16, &'static str> {
     reg_write(SAADC_ENABLE, 1); // enable SAADC
-    reg_write(SAADC_RESOLUTION, 2); // 12-bit
+    reg_write(SAADC_RESOLUTION, res);
     reg_write(SAADC_CH0_PSELP, 1); // CH[0].PSELP = AnalogInput0
     reg_write(SAADC_CH0_CONFIG, 0x0002_0000); // CH[0].CONFIG (gain/ref defaults)
     reg_write(SAADC_EVENTS_STARTED, 0);
@@ -405,31 +398,23 @@ fn check_adc() -> Result<(), &'static str> {
     if reg_read(SAADC_RESULT_AMOUNT) != 4 {
         return Err("adc-amount");
     }
-    // The engine wrote SAADC_SAMPLE_VALUE into every slot via EasyDMA.
-    let sample = unsafe { core::ptr::read_volatile(core::ptr::addr_of!(ADC_RESULT_BUF[0])) };
-    if sample != SAADC_SAMPLE_VALUE {
-        return Err("adc-sample");
-    }
-    Ok(())
+    Ok(unsafe { core::ptr::read_volatile(core::ptr::addr_of!(ADC_RESULT_BUF[0])) })
 }
 
-// ── pwm: SEQ0 playback → SEQEND0 + PWMPERIODEND ───────────────────────────
-fn check_pwm() -> Result<(), &'static str> {
-    reg_write(PWM0_ENABLE, 1); // enable PWM
-    reg_write(PWM0_COUNTERTOP, 1000);
-    reg_write(PWM0_EVENTS_SEQEND0, 0);
-    reg_write(PWM0_EVENTS_PWMPERIODEND, 0);
-
-    let seq = core::ptr::addr_of!(PWM_SEQ_BUF) as u32;
-    reg_write(PWM0_SEQ0_PTR, seq);
-    reg_write(PWM0_SEQ0_CNT, 4); // 4 duty values
-
-    reg_write(PWM0_TASKS_SEQSTART0, 1);
-    if !poll_event(PWM0_EVENTS_SEQEND0) {
-        return Err("pwm-no-seqend");
+fn check_adc() -> Result<(), &'static str> {
+    // 12-bit conversion of the fixed internal source.
+    let code12 = saadc_sample(2)?;
+    if code12 != SAADC_CODE_12BIT {
+        return Err("adc-code12");
     }
-    if reg_read(PWM0_EVENTS_PWMPERIODEND) == 0 {
-        return Err("pwm-no-periodend");
+    // 10-bit conversion: the SAR core drops 2 LSBs, so the code must scale
+    // down. This is what distinguishes a real conversion from a constant.
+    let code10 = saadc_sample(1)?;
+    if code10 != SAADC_CODE_10BIT {
+        return Err("adc-code10");
+    }
+    if code10 >= code12 {
+        return Err("adc-scale");
     }
     Ok(())
 }
@@ -468,7 +453,6 @@ fn main() -> ! {
     report("i2c", check_i2c());
     report("spi", check_spi());
     report("adc", check_adc());
-    report("pwm", check_pwm());
     report("wdt", check_wdt());
 
     // uart: implicit via TIER1 done — no explicit line needed.

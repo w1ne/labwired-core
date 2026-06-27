@@ -314,10 +314,32 @@ fn check_spi() -> Result<(), &'static [u8]> {
     Ok(())
 }
 
-/// adc: ADC1 (stm32l4). The L4 ADC model has NO conversion engine (EOC/DR
-/// conversion is F1-only), so this exercises the genuinely-modelled power-up:
-/// CR resets with DEEPPWD (bit29); clearing it, setting ADVREGEN (bit28) then
-/// ADEN (bit0) raises ISR.ADRDY (bit0). ADRDY must NOT assert before ADEN.
+/// Run one ADC1 single conversion at CFGR.RES = `res`, returning DR. The model
+/// converts a fixed internal source (V(IN)=3.0 V, V(REF+)=3.3 V): the 12-bit
+/// code is (3.0/3.3)*4096=3723, narrower resolutions drop LSBs.
+fn adc_convert(res: u32) -> Result<u32, &'static [u8]> {
+    // RES = CFGR bits[4:3]; preserve the JQDIS reset bit.
+    let cfgr = rd32(ADC1_BASE + 0x0C) & !(0x3 << 3);
+    wr32(ADC1_BASE + 0x0C, cfgr | (res << 3));
+    wr32(ADC1_BASE + 0x00, 1 << 2); // ISR rc_w1: clear any stale EOC
+    wr32(ADC1_BASE + 0x08, rd32(ADC1_BASE + 0x08) | (1 << 2)); // CR.ADSTART
+    let mut eoc = false;
+    for _ in 0..20_000 {
+        if rd32(ADC1_BASE + 0x00) & (1 << 2) != 0 {
+            eoc = true;
+            break;
+        }
+    }
+    if !eoc {
+        return Err(b"adc-eoc");
+    }
+    Ok(rd32(ADC1_BASE + 0x40) & 0xFFFF)
+}
+
+/// adc: ADC1 (stm32l4). Power up (clear DEEPPWD, ADVREGEN, ADEN -> ISR.ADRDY;
+/// ADRDY must NOT assert before ADEN), then prove a REAL conversion BY VALUE:
+/// ADSTART converts the fixed internal source, and the code must scale when
+/// CFGR.RES narrows. Fails if the model returned a constant or didn't convert.
 fn check_adc() -> Result<(), &'static [u8]> {
     wr32(ADC1_BASE + 0x08, 0); // CR: clear DEEPPWD
     wr32(ADC1_BASE + 0x08, 1 << 28); // CR: ADVREGEN
@@ -327,6 +349,18 @@ fn check_adc() -> Result<(), &'static [u8]> {
     wr32(ADC1_BASE + 0x08, (1 << 28) | 1); // CR: ADVREGEN | ADEN
     if rd32(ADC1_BASE + 0x00) & 0x1 == 0 {
         return Err(b"adc-adrdy");
+    }
+    // 12-bit (RES=00) then 10-bit (RES=01): code drops 2 LSBs.
+    let code12 = adc_convert(0)?;
+    if code12 != 3723 {
+        return Err(b"adc-code12");
+    }
+    let code10 = adc_convert(1)?;
+    if code10 != 930 {
+        return Err(b"adc-code10");
+    }
+    if code10 >= code12 {
+        return Err(b"adc-scale");
     }
     Ok(())
 }

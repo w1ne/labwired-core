@@ -177,6 +177,23 @@ fn check_i2c() -> Result<(), &'static [u8]> {
     if !sb {
         return Err(b"i2c-sb");
     }
+    // Drive a real one-byte write transaction: address an absent device. The F1
+    // transaction engine runs the address phase, finds no slave attached, and
+    // NACKs → SR1.AF (bit 10). Observing AF proves the engine ran addr+data, not
+    // just that START latched SB.
+    unsafe { write_volatile((I2C1_BASE + 0x10) as *mut u8, 0xA0) }; // DR: 0x50<<1 | W
+    let mut af = false;
+    for _ in 0..20_000 {
+        if rd32(I2C1_BASE + 0x14) & (1 << 10) != 0 {
+            // SR1.AF @ 0x14 — acknowledge failure (no device ACKed the address)
+            af = true;
+            break;
+        }
+    }
+    if !af {
+        return Err(b"i2c-af");
+    }
+    wr32(I2C1_BASE + 0x14, 0); // clear SR1 (AF)
     wr32(I2C1_BASE, (1 << 9) | 1); // CR1: STOP + PE
     Ok(())
 }

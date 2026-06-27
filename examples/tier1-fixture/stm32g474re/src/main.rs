@@ -364,10 +364,32 @@ fn check_spi() -> Result<(), &'static [u8]> {
     Ok(())
 }
 
-/// adc: ADC1 (stm32l4), clock-gated on RCC_AHB2ENR.ADC12EN (bit 13). The L4
-/// ADC model has no conversion engine, so this exercises the modelled power-up:
-/// CR resets with DEEPPWD; clearing it, setting ADVREGEN then ADEN raises
-/// ISR.ADRDY. Gated the CR reads 0; ADRDY must NOT assert before ADEN.
+/// Run one ADC1 single conversion at CFGR.RES = `res`, returning DR. The model
+/// converts a fixed internal source (V(IN)=3.0 V, V(REF+)=3.3 V): the 12-bit
+/// code is (3.0/3.3)*4096=3723, narrower resolutions drop LSBs.
+fn adc_convert(res: u32) -> Result<u32, &'static [u8]> {
+    let cfgr = rd32(ADC1_BASE + 0x0C) & !(0x3 << 3);
+    wr32(ADC1_BASE + 0x0C, cfgr | (res << 3));
+    wr32(ADC1_BASE + 0x00, 1 << 2); // ISR rc_w1: clear any stale EOC
+    wr32(ADC1_BASE + 0x08, rd32(ADC1_BASE + 0x08) | (1 << 2)); // CR.ADSTART
+    let mut eoc = false;
+    for _ in 0..20_000 {
+        if rd32(ADC1_BASE + 0x00) & (1 << 2) != 0 {
+            eoc = true;
+            break;
+        }
+    }
+    if !eoc {
+        return Err(b"adc-eoc");
+    }
+    Ok(rd32(ADC1_BASE + 0x40) & 0xFFFF)
+}
+
+/// adc: ADC1 (stm32l4), clock-gated on RCC_AHB2ENR.ADC12EN (bit 13). Gated the
+/// CR reads 0. After ungating + power-up (clear DEEPPWD, ADVREGEN, ADEN ->
+/// ISR.ADRDY; ADRDY must NOT assert before ADEN), prove a REAL conversion BY
+/// VALUE: ADSTART converts the fixed internal source and the code must scale
+/// when CFGR.RES narrows. Fails if the model returned a constant.
 fn check_adc() -> Result<(), &'static [u8]> {
     if rd32(ADC1_BASE + 0x08) != 0 {
         return Err(b"adc-gated");
@@ -381,6 +403,17 @@ fn check_adc() -> Result<(), &'static [u8]> {
     wr32(ADC1_BASE + 0x08, (1 << 28) | 1); // CR: ADVREGEN | ADEN
     if rd32(ADC1_BASE + 0x00) & 0x1 == 0 {
         return Err(b"adc-adrdy");
+    }
+    let code12 = adc_convert(0)?;
+    if code12 != 3723 {
+        return Err(b"adc-code12");
+    }
+    let code10 = adc_convert(1)?;
+    if code10 != 930 {
+        return Err(b"adc-code10");
+    }
+    if code10 >= code12 {
+        return Err(b"adc-scale");
     }
     Ok(())
 }
