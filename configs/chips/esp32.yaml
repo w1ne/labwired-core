@@ -88,6 +88,13 @@ peripherals:
     type: "esp32_i2c"
     base_address: 0x3FF53000
     size: "4KB"
+  # SENS SAR-ADC one-shot engine (TRM §29.4). Real Esp32SarAdc model wired by
+  # configure_xtensa_esp32 at the SENS block base 0x3FF4_8800; backs the adc
+  # matrix class. ADC1 (adc1_get_raw) + ADC2 (adc2_get_raw) one-shot reads.
+  - id: "sar_adc"
+    type: "esp32_sar_adc"
+    base_address: 0x3FF48800
+    size: "256B"
   # LEDC — LED PWM controller (TRM §14). Real Ledc model; base matches
   # ESP32_PERIPHERALS (ledc = 0x3FF5_9000). Backs the pwm matrix class
   # (the matrix aliases ledc -> pwm).

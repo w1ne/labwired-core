@@ -56,6 +56,10 @@ const SPI3_BASE: u32 = 0x3FF6_5000;
 // I2C0 / I2C_EXT0 controller (TRM §11). Real command-list engine; a BMP280 is
 // attached on the bus at address 0x76 by configure_xtensa_esp32.
 const I2C0_BASE: u32 = 0x3FF5_3000;
+// SENS block (TRM §29.4) — the classic ESP32 has no APB_SARADC; the one-shot
+// ("RTC controller") ADC path the IDF adc1_get_raw driver uses lives here.
+// Wired as a real Esp32SarAdc model by configure_xtensa_esp32.
+const SENS_BASE: u32 = 0x3FF4_8800;
 
 #[inline(always)]
 fn reg_read(addr: u32) -> u32 {
@@ -256,15 +260,82 @@ fn check_irq() -> Result<(), &'static str> {
     Ok(())
 }
 
-// ── dma: not modeled on ESP32-classic ─────────────────────────────────────
+// ── adc: SENS SAR-ADC one-shot, channel- and width-dependent result ────────
 //
-// The ESP32-classic has a non-GDMA DMA controller (AHB DMA, "GPDMA" in
-// esp-idf parlance). No model exists for this peripheral in the simulator
-// today (`crates/core/src/peripherals/esp32/` has no dma.rs and
-// `configs/chips/esp32.yaml` lists no dma/gdma peripheral). We report FAIL
-// with an honest model-gap code rather than silently skipping.
+// TRM §29.4 (SENS block at 0x3FF4_8800 — the classic ESP32's one-shot ADC path,
+// distinct from the C3/S3 APB_SARADC):
+//   SAR_READ_CTRL   @ 0x00 — bits[17:16] SAR1_SAMPLE_BIT (00=9-bit … 11=12-bit)
+//   SAR_MEAS_START1 @ 0x54 — bits[30:19] SAR1_EN_PAD (one-hot channel bitmap),
+//                            bit 18 MEAS1_START_FORCE, bit 17 MEAS1_START_SAR
+//                            (trigger), bit 16 MEAS1_DONE_SAR (RO), bits[15:0]
+//                            MEAS1_DATA_SAR (RO, the sample).
+//
+// The model (`crates/core/src/peripherals/esp32/sar_adc.rs`) decodes the
+// one-hot channel, produces a deterministic channel-dependent 12-bit code
+// scaled to the configured resolution, latches it into DATA and raises DONE.
+// A round-trip register stub cannot (a) raise the RO DONE bit, (b) return a
+// channel-dependent DATA, or (c) scale DATA with the configured width — so each
+// assert below proves genuine conversion behaviour, not a register echo.
+fn check_adc() -> Result<(), &'static str> {
+    const READ_CTRL: u32 = SENS_BASE + 0x00;
+    const MEAS_START1: u32 = SENS_BASE + 0x54;
+    const START_FORCE: u32 = 1 << 18;
+    const START_SAR: u32 = 1 << 17;
+    const DONE_SAR: u32 = 1 << 16;
+    const DATA_MASK: u32 = 0xFFFF;
+    const EN_PAD_SHIFT: u32 = 19;
+    const SAMPLE_BIT_SHIFT: u32 = 16;
+
+    // Set SAR1 resolution, then trigger a one-shot of `channel` and return its
+    // DATA field once DONE latches (bounded poll — the conversion is synchronous
+    // in the model, so DONE is set on the START write).
+    let read_channel = |channel: u32, sample_bit: u32| -> Result<u32, &'static str> {
+        reg_write(READ_CTRL, sample_bit << SAMPLE_BIT_SHIFT);
+        let en_pad = 1u32 << channel;
+        reg_write(MEAS_START1, (en_pad << EN_PAD_SHIFT) | START_FORCE | START_SAR);
+        for _ in 0..10_000 {
+            if reg_read(MEAS_START1) & DONE_SAR != 0 {
+                return Ok(reg_read(MEAS_START1) & DATA_MASK);
+            }
+        }
+        Err("adc-done-never-set")
+    };
+
+    // 12-bit conversions on two distinct channels must yield distinct, nonzero
+    // results — proof the sample tracks the selected channel.
+    let d3 = read_channel(3, 3)?;
+    if d3 == 0 {
+        return Err("adc-ch3-zero");
+    }
+    let d5 = read_channel(5, 3)?;
+    if d5 == 0 {
+        return Err("adc-ch5-zero");
+    }
+    if d3 == d5 {
+        return Err("adc-channel-independent");
+    }
+
+    // Same channel at 9-bit resolution must equal the 12-bit value >> 3 — proof
+    // the result scales with the configured width (a real lower-res SAR).
+    let d5_9bit = read_channel(5, 0)?;
+    if d5_9bit != d5 >> 3 {
+        return Err("adc-width-not-scaled");
+    }
+    Ok(())
+}
+
+// ── dma: not a general-purpose mem→mem controller on ESP32-classic ─────────
+//
+// Honest model gap. Unlike the C3/S3 (which have a central GDMA capable of
+// mem→mem copies), the classic ESP32 has NO general-purpose DMA engine: DMA is
+// per-peripheral linked-list (SPI/I2S/SDMMC/AES/SHA), each moving data between
+// memory and that peripheral's data path — never memory→memory. There is no
+// transfer a fixture could fire and prove by checking a destination buffer
+// received source bytes + an EOF flag without also modelling a full peripheral
+// pipeline. So no `dma`/`gdma` peripheral is declared in `configs/chips/esp32.yaml`
+// (the matrix renders the cell `na`) and we report an honest gap code here.
 fn check_dma() -> Result<(), &'static str> {
-    Err("esp32-no-dma-model")
+    Err("esp32-no-mem2mem-dma")
 }
 
 // ── spi: FIFO round-trip + CMD.USR synchronous self-clear on SPI3 ──────────
@@ -412,6 +483,7 @@ fn main() -> ! {
     report("gpio", check_gpio());
     report("timer", check_timer());
     report("irq", check_irq());
+    report("adc", check_adc());
     report("dma", check_dma());
     report("spi", check_spi());
     report("i2c", check_i2c());

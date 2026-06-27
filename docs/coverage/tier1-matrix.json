@@ -1,7 +1,7 @@
 {
   "esp32": {
     "adc": {
-      "status": "na"
+      "status": "pass"
     },
     "clock": {
       "status": "pass"

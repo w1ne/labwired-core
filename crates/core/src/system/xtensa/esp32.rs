@@ -712,6 +712,11 @@ pub(crate) const ESP32_PERIPHERALS: &[(&str, &str, u64, u64, Option<u32>)] = &[
     ("spi1",     "esp32_spi",      0x3FF4_2000, 0x1000, None),
     ("spi3",     "esp32_spi",      0x3FF6_5000, 0x1000, None),
     ("i2c0",     "esp32_i2c",      0x3FF5_3000, 0x1000, Some(49)),
+    // SENS SAR-ADC one-shot engine (RTC controller ADC1/ADC2 path the IDF
+    // adc1_get_raw/adc2_get_raw drivers drive). 0x100 window over the SAR
+    // control + measurement registers; registered before the rtcio catch-all
+    // stub (0x3FF4_8400/0x1000) so it wins the overlapping SENS sub-range.
+    ("sens_sar_adc", "esp32_sar_adc", 0x3FF4_8800, 0x0100, None),
     ("gpio",     "esp32_gpio",     0x3FF4_4000, 0x1000, None),
     ("dport",    "esp32_dport",    0x3FF0_0000, 0x1000, None),
     ("sha",      "esp32_sha",      0x3FF0_3000, 0x0100, None),
