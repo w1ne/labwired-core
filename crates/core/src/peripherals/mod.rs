@@ -43,6 +43,7 @@ pub mod quadspi;
 pub mod radio;
 pub mod rcc;
 pub mod rng;
+pub mod rp2040;
 pub mod rp2040_clocks;
 pub mod rsim;
 pub mod rtc;

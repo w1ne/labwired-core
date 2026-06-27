@@ -169,6 +169,7 @@ const CLASS_MARKERS: &[(&str, &str)] = &[
     ("usart", "uart"),      // STM32 naming: usart1 does not substring-match "uart"
     ("usb_serial", "uart"), // S3 console can be USB-Serial-JTAG
     ("gpio", "gpio"),
+    ("sio", "gpio"), // RP2040 single-cycle IO block (id/type `sio`) is its GPIO
     ("timg", "timer"),
     ("systimer", "timer"),
     ("tim", "timer"),

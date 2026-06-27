@@ -197,16 +197,16 @@
       "status": "na"
     },
     "clock": {
-      "status": "unrecorded"
+      "status": "pass"
     },
     "dma": {
       "status": "na"
     },
     "gpio": {
-      "status": "na"
+      "status": "pass"
     },
     "i2c": {
-      "status": "na"
+      "status": "pass"
     },
     "irq": {
       "status": "na"
@@ -218,10 +218,10 @@
       "status": "na"
     },
     "spi": {
-      "status": "na"
+      "status": "pass"
     },
     "timer": {
-      "status": "unrecorded"
+      "status": "pass"
     },
     "uart": {
       "status": "pass"

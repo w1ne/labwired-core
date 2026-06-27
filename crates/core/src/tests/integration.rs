@@ -481,6 +481,21 @@ pub mod integration_tests {
             crate::bus::SystemBus::canonical_peripheral_type("arm_sp804_timer"),
             "systick"
         );
+        // RP2040 native peripherals must NOT be coerced by the fuzzy
+        // contains("timer"/"spi"/"i2c") matchers to the generic STM32 models;
+        // they carry RP2040-specific register layouts.
+        assert_eq!(
+            crate::bus::SystemBus::canonical_peripheral_type("rp2040_timer"),
+            "rp2040_timer"
+        );
+        assert_eq!(
+            crate::bus::SystemBus::canonical_peripheral_type("rp2040_spi"),
+            "rp2040_spi"
+        );
+        assert_eq!(
+            crate::bus::SystemBus::canonical_peripheral_type("rp2040_i2c"),
+            "rp2040_i2c"
+        );
     }
 
     #[test]
