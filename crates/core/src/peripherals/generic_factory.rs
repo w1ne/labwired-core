@@ -222,6 +222,10 @@ pub fn try_build(
         "rp2040_clkrst" => Box::new(crate::peripherals::rp2040_clocks::Rp2040ClockReset::new(
             p_cfg.base_address,
         )),
+        "rp2040_timer" => Box::new(crate::peripherals::rp2040::timer::Rp2040Timer::new()),
+        "rp2040_sio" => Box::new(crate::peripherals::rp2040::sio::Rp2040Sio::new()),
+        "rp2040_spi" => Box::new(crate::peripherals::rp2040::spi::Rp2040Spi::new()),
+        "rp2040_i2c" => Box::new(crate::peripherals::rp2040::i2c::Rp2040I2c::new()),
         "crc" => {
             // IDR scratch register width: 8-bit on F0/F1/L0, 32-bit
             // on F2+/L4+. YAML: `config: { idr_width: 8 }`; default 32.

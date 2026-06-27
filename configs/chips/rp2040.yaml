@@ -48,10 +48,25 @@ peripherals:
     type: "stub"
     base_address: 0x40058000
     size: "4KB"
-  # TIMER: 64-bit microsecond timer. Storage suffices for boot.
+  # TIMER: 64-bit free-running microsecond timer (datasheet §4.6). Behavioural
+  # model — the counter advances on every tick, sampled via TIMERAWL/TIMERAWH
+  # (and TIMELR/TIMEHR); PAUSE freezes it.
   - id: "timer"
-    type: "stub"
+    type: "rp2040_timer"
     base_address: 0x40054000
+    size: "4KB"
+  # SPI0: PL022 SSP (datasheet §4.4). Behavioural model — internal-loopback
+  # (SSPCR1.LBM) transfer round-trip through SSPDR with SSPSR FIFO flags.
+  - id: "spi0"
+    type: "rp2040_spi"
+    base_address: 0x4003c000
+    size: "4KB"
+  # I2C0: Synopsys DW_apb_i2c (datasheet §4.3). Behavioural master engine — a
+  # command to an unconnected target raises TX_ABRT with a 7-bit address NACK,
+  # the genuine no-slave bus response.
+  - id: "i2c0"
+    type: "rp2040_i2c"
+    base_address: 0x40044000
     size: "4KB"
   # Cortex-M0+ SysTick (SCS). A storage stub: Zephyr's tick driver configures
   # it during boot but the console banner prints before the first tick, and the
@@ -61,9 +76,12 @@ peripherals:
     type: "stub"
     base_address: 0xE000E010
     size: "16B"
-  # Single-cycle IO (SIO): CPUID reads 0 (core 0), GPIO out/oe set/clr absorbed.
-  # No atomic aliases on this block.
+  # Single-cycle IO (SIO): GPIO out/oe via direct + set/clr/xor registers
+  # (datasheet §2.3.1). Behavioural model — GPIO_IN reads back the driven
+  # level (GPIO_OUT & GPIO_OE), a real set-drive-readback round-trip. CPUID
+  # reads 0 (core 0). No atomic aliases on this block (it sits at 0xD0000000,
+  # outside the APB/AHB window).
   - id: "sio"
-    type: "stub"
+    type: "rp2040_sio"
     base_address: 0xD0000000
     size: "4KB"
