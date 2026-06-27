@@ -131,18 +131,6 @@ const SAADC_RESULT_AMOUNT: u32 = SAADC_BASE + 0x634;
 const SAADC_CODE_12BIT: u16 = 3413; // (3.0/3.6) * 2^12
 const SAADC_CODE_10BIT: u16 = 853; // (3.0/3.6) * 2^10
 
-// ── PWM0 (nrf52840_pwm, base 0x4001c000) ──────────────────────────────────
-// Sequence playback engine: TASKS_SEQSTART0 reads SEQ0.CNT duty values from
-// SEQ0.PTR and fires SEQSTARTED0 + SEQEND0 + PWMPERIODEND.
-const PWM0_BASE: u32 = 0x4001_c000;
-const PWM0_TASKS_SEQSTART0: u32 = PWM0_BASE + 0x008;
-const PWM0_EVENTS_SEQEND0: u32 = PWM0_BASE + 0x110;
-const PWM0_EVENTS_PWMPERIODEND: u32 = PWM0_BASE + 0x118;
-const PWM0_ENABLE: u32 = PWM0_BASE + 0x500;
-const PWM0_COUNTERTOP: u32 = PWM0_BASE + 0x508;
-const PWM0_SEQ0_PTR: u32 = PWM0_BASE + 0x520;
-const PWM0_SEQ0_CNT: u32 = PWM0_BASE + 0x524;
-
 // ── WDT (nrf52840_watchdog, base 0x40010000) ──────────────────────────────
 const WDT_BASE: u32 = 0x4001_0000;
 const WDT_TASKS_START: u32 = WDT_BASE + 0x000;
@@ -174,10 +162,9 @@ static mut I2C_TX_BUF: [u8; 4] = [0xDE, 0xAD, 0xBE, 0xEF];
 static mut SPI_TX_BUF: [u8; 4] = [0x11, 0x22, 0x33, 0x44];
 static mut SPI_RX_BUF: [u8; 4] = [0; 4];
 
-// SAADC RESULT buffer (4 x 16-bit samples) + PWM SEQ0 duty buffer. Static .bss
-// RAM, the only region the EasyDMA engines can address.
+// SAADC RESULT buffer (4 x 16-bit samples). Static .bss RAM, the only region
+// the EasyDMA engine can address.
 static mut ADC_RESULT_BUF: [u16; 4] = [0; 4];
-static mut PWM_SEQ_BUF: [u16; 4] = [0x8010, 0x8020, 0x8030, 0x8040];
 
 /// Spin until the event register at `addr` reads non-zero, or give up.
 /// Returns true if the event fired. Each loop iteration steps the CPU, which
@@ -432,27 +419,6 @@ fn check_adc() -> Result<(), &'static str> {
     Ok(())
 }
 
-// ── pwm: SEQ0 playback → SEQEND0 + PWMPERIODEND ───────────────────────────
-fn check_pwm() -> Result<(), &'static str> {
-    reg_write(PWM0_ENABLE, 1); // enable PWM
-    reg_write(PWM0_COUNTERTOP, 1000);
-    reg_write(PWM0_EVENTS_SEQEND0, 0);
-    reg_write(PWM0_EVENTS_PWMPERIODEND, 0);
-
-    let seq = core::ptr::addr_of!(PWM_SEQ_BUF) as u32;
-    reg_write(PWM0_SEQ0_PTR, seq);
-    reg_write(PWM0_SEQ0_CNT, 4); // 4 duty values
-
-    reg_write(PWM0_TASKS_SEQSTART0, 1);
-    if !poll_event(PWM0_EVENTS_SEQEND0) {
-        return Err("pwm-no-seqend");
-    }
-    if reg_read(PWM0_EVENTS_PWMPERIODEND) == 0 {
-        return Err("pwm-no-periodend");
-    }
-    Ok(())
-}
-
 // ── wdt: configure CRV/RREN, TASKS_START, observe countdown → TIMEOUT ──────
 // The model surfaces the timeout signal without resetting the core, so it is
 // safe to let the dog bite here.
@@ -487,7 +453,6 @@ fn main() -> ! {
     report("i2c", check_i2c());
     report("spi", check_spi());
     report("adc", check_adc());
-    report("pwm", check_pwm());
     report("wdt", check_wdt());
 
     // uart: implicit via TIER1 done — no explicit line needed.

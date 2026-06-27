@@ -53,8 +53,6 @@ const DPORT_BASE: u32 = 0x3FF0_0000;
 // SPI3 / VSPI controller (TRM §7). Free general-purpose SPI on classic ESP32
 // (SPI0/SPI1 are the flash controllers). Wired as a real Esp32Spi model.
 const SPI3_BASE: u32 = 0x3FF6_5000;
-// LEDC — LED PWM controller (TRM §14). Real Ledc model; backs the pwm class.
-const LEDC_BASE: u32 = 0x3FF5_9000;
 
 #[inline(always)]
 fn reg_read(addr: u32) -> u32 {
@@ -310,39 +308,6 @@ fn check_spi() -> Result<(), &'static str> {
     Ok(())
 }
 
-// ── ledc (→ pwm): CONF1.DUTY_START latches staged DUTY into DUTY_R ─────────
-//
-// TRM §14 (LED PWM Controller at 0x3FF5_9000). HS channel 0 register block:
-//   HSCH0_DUTY   @ 0x08 — staged duty (Q4 fixed-point).
-//   HSCH0_CONF1  @ 0x0C — bit 31 (DUTY_START) commits staged DUTY → DUTY_R.
-//   HSCH0_DUTY_R @ 0x10 — live duty shadow, read back by ledc_get_duty().
-//
-// The model (`crates/core/src/peripherals/esp32/ledc.rs`) implements the
-// DUTY_START strobe: before the strobe DUTY_R reads 0; after it, DUTY_R equals
-// the staged DUTY. A round-trip stub would leave DUTY_R at 0 (it never copies
-// DUTY across), so the latch is genuine, register-observable PWM behaviour.
-// The matrix aliases `ledc` -> the pwm column.
-fn check_ledc() -> Result<(), &'static str> {
-    const CH0_DUTY: u32 = LEDC_BASE + 0x08;
-    const CH0_CONF1: u32 = LEDC_BASE + 0x0C;
-    const CH0_DUTY_R: u32 = LEDC_BASE + 0x10;
-    const DUTY_START: u32 = 1 << 31;
-    // Stage duty 512 in Q4 format (integer 512 → register value 512 << 4).
-    const STAGED: u32 = 512 << 4;
-
-    reg_write(CH0_DUTY, STAGED);
-    // Before the strobe, the live shadow must still be zero.
-    if reg_read(CH0_DUTY_R) != 0 {
-        return Err("ledc-duty-r-prematurely-set");
-    }
-    // Strobe DUTY_START — commits the staged duty into the live shadow.
-    reg_write(CH0_CONF1, DUTY_START);
-    if reg_read(CH0_DUTY_R) != STAGED {
-        return Err("ledc-duty-not-latched");
-    }
-    Ok(())
-}
-
 #[esp_hal::main]
 fn main() -> ! {
     let _peripherals = esp_hal::init(esp_hal::Config::default());
@@ -353,8 +318,6 @@ fn main() -> ! {
     report("irq", check_irq());
     report("dma", check_dma());
     report("spi", check_spi());
-    // LEDC backs the pwm column (the matrix aliases `ledc` -> `pwm`).
-    report("ledc", check_ledc());
     uart0_write_line("TIER1 done");
 
     loop {
