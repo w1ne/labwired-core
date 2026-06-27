@@ -13,7 +13,7 @@
       "status": "pass"
     },
     "i2c": {
-      "status": "na"
+      "status": "pass"
     },
     "irq": {
       "status": "pass"

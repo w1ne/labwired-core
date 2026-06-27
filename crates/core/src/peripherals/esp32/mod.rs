@@ -18,6 +18,7 @@ pub mod dport;
 pub mod efuse;
 pub mod factory;
 pub mod gpio;
+pub mod i2c;
 pub mod ledc;
 pub mod mcpwm;
 pub mod rtc_cntl;

@@ -53,6 +53,9 @@ const DPORT_BASE: u32 = 0x3FF0_0000;
 // SPI3 / VSPI controller (TRM §7). Free general-purpose SPI on classic ESP32
 // (SPI0/SPI1 are the flash controllers). Wired as a real Esp32Spi model.
 const SPI3_BASE: u32 = 0x3FF6_5000;
+// I2C0 / I2C_EXT0 controller (TRM §11). Real command-list engine; a BMP280 is
+// attached on the bus at address 0x76 by configure_xtensa_esp32.
+const I2C0_BASE: u32 = 0x3FF5_3000;
 
 #[inline(always)]
 fn reg_read(addr: u32) -> u32 {
@@ -308,6 +311,99 @@ fn check_spi() -> Result<(), &'static str> {
     Ok(())
 }
 
+// ── i2c: command-list engine drives a real BMP280 register-pointer read ────
+//
+// TRM §11 (I2C controller, ESP32-classic offsets):
+//   I2C_CTR_REG       @ 0x04 — bit 5 (TRANS_START) = fire; self-clears.
+//   I2C_SR_REG        @ 0x08 — bit 0 = ACK_REC (slave acked).
+//   I2C_FIFO_CONF_REG @ 0x18 — bit 13 = TX_FIFO_RST, bit 12 = RX_FIFO_RST.
+//   I2C_DATA_REG      @ 0x1C — write→TX FIFO, read→pop RX FIFO.
+//   I2C_INT_RAW_REG   @ 0x20 — bit 7 = TRANS_COMPLETE, bit 10 = NACK(ACK_ERR).
+//   I2C_INT_CLR_REG   @ 0x24 — write 1 to clear matching INT_RAW bits.
+//   I2C_COMD0..15_REG @ 0x58 — 16 command slots.
+//
+// Classic-ESP32 command opcodes (hal/esp32/include/hal/i2c_ll.h):
+//   RSTART=0, WRITE=1, READ=2, STOP=3, END=4.  (C3/S3 renumber these.)
+//
+// The model (`crates/core/src/peripherals/esp32/i2c.rs`) runs the COMD list on
+// TRANS_START: it pops the addr byte, matches the attached BMP280 at 0x76,
+// delivers the register pointer, then a repeated-start READ pulls the device's
+// CHIP_ID (0x58) into the RX FIFO and STOP raises TRANS_COMPLETE. A round-trip
+// stub could never (a) clear TRANS_START, (b) raise TRANS_COMPLETE, (c) raise
+// NACK for an absent address, or (d) return device-specific data — so each of
+// these asserts genuine engine behaviour.
+fn check_i2c() -> Result<(), &'static str> {
+    const CTR: u32 = I2C0_BASE + 0x04;
+    const SR: u32 = I2C0_BASE + 0x08;
+    const FIFO_CONF: u32 = I2C0_BASE + 0x18;
+    const DATA: u32 = I2C0_BASE + 0x1C;
+    const INT_RAW: u32 = I2C0_BASE + 0x20;
+    const INT_CLR: u32 = I2C0_BASE + 0x24;
+    const COMD0: u32 = I2C0_BASE + 0x58;
+
+    const TRANS_START: u32 = 1 << 5;
+    const ACK_REC: u32 = 1 << 0;
+    const TX_FIFO_RST: u32 = 1 << 13;
+    const RX_FIFO_RST: u32 = 1 << 12;
+    const TRANS_COMPLETE: u32 = 1 << 7;
+    const NACK: u32 = 1 << 10;
+
+    // Opcode encode: bits[13:11] = op, bits[7:0] = byte_num.
+    const fn cmd(op: u32, n: u32) -> u32 {
+        ((op & 0x7) << 11) | (n & 0xFF)
+    }
+    const OP_RSTART: u32 = 0;
+    const OP_WRITE: u32 = 1;
+    const OP_READ: u32 = 2;
+    const OP_STOP: u32 = 3;
+
+    let clear_ints = || reg_write(INT_CLR, 0xFFFF_FFFF);
+
+    // ── Phase 1: addressing an ABSENT device (0x20) must raise NACK ──────────
+    reg_write(FIFO_CONF, TX_FIFO_RST | RX_FIFO_RST);
+    clear_ints();
+    reg_write(COMD0, cmd(OP_RSTART, 0));
+    reg_write(COMD0 + 4, cmd(OP_WRITE, 1));
+    reg_write(COMD0 + 8, cmd(OP_STOP, 0));
+    reg_write(DATA, 0x20 << 1); // addr 0x20 + W; nothing attached there
+    reg_write(CTR, TRANS_START);
+    if reg_read(CTR) & TRANS_START != 0 {
+        return Err("i2c-trans-start-stuck");
+    }
+    if reg_read(INT_RAW) & NACK == 0 {
+        return Err("i2c-absent-no-nack");
+    }
+
+    // ── Phase 2: real read of the BMP280 CHIP_ID (0x58) at register 0xD0 ─────
+    reg_write(FIFO_CONF, TX_FIFO_RST | RX_FIFO_RST);
+    clear_ints();
+    // RSTART; WRITE 2 (addr+W, ptr=0xD0); RSTART; WRITE 1 (addr+R); READ 1; STOP
+    reg_write(COMD0, cmd(OP_RSTART, 0));
+    reg_write(COMD0 + 4, cmd(OP_WRITE, 2));
+    reg_write(COMD0 + 8, cmd(OP_RSTART, 0));
+    reg_write(COMD0 + 12, cmd(OP_WRITE, 1));
+    reg_write(COMD0 + 16, cmd(OP_READ, 1));
+    reg_write(COMD0 + 20, cmd(OP_STOP, 0));
+    reg_write(DATA, 0x76 << 1); // addr+W (0xEC)
+    reg_write(DATA, 0xD0); // register pointer = CHIP_ID
+    reg_write(DATA, (0x76 << 1) | 1); // addr+R (0xED)
+    reg_write(CTR, TRANS_START);
+
+    if reg_read(INT_RAW) & NACK != 0 {
+        return Err("i2c-bmp280-nacked");
+    }
+    if reg_read(SR) & ACK_REC == 0 {
+        return Err("i2c-no-ack-rec");
+    }
+    if reg_read(INT_RAW) & TRANS_COMPLETE == 0 {
+        return Err("i2c-no-trans-complete");
+    }
+    if reg_read(DATA) != 0x58 {
+        return Err("i2c-bad-chip-id");
+    }
+    Ok(())
+}
+
 #[esp_hal::main]
 fn main() -> ! {
     let _peripherals = esp_hal::init(esp_hal::Config::default());
@@ -318,6 +414,7 @@ fn main() -> ! {
     report("irq", check_irq());
     report("dma", check_dma());
     report("spi", check_spi());
+    report("i2c", check_i2c());
     uart0_write_line("TIER1 done");
 
     loop {

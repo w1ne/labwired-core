@@ -36,6 +36,7 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
             Box::new(uart::Esp32Uart::new(echo, p_cfg.irq.unwrap_or(34)))
         }
         "esp32_spi" => Box::new(spi::Esp32Spi::new()),
+        "esp32_i2c" => Box::new(i2c::Esp32I2c::new()),
         "esp32_gpio" => Box::new(gpio::Esp32Gpio::new()),
         "esp32_dport" => Box::new(dport::Dport::new()),
         "esp32_sha" => Box::new(sha::Sha::new()),
@@ -56,6 +57,7 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
 pub const SUPPORTED_TYPES: &[&str] = &[
     "esp32_uart",
     "esp32_spi",
+    "esp32_i2c",
     "esp32_gpio",
     "esp32_dport",
     "esp32_sha",
