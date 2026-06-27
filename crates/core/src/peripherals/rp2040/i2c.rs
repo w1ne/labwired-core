@@ -68,13 +68,7 @@ impl Peripheral for Rp2040I2c {
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
         let val = match offset {
             IC_ENABLE => self.enable,
-            IC_RAW_INTR_STAT => {
-                if self.tx_abrt.get() {
-                    INTR_TX_ABRT
-                } else {
-                    0
-                }
-            }
+            IC_RAW_INTR_STAT if self.tx_abrt.get() => INTR_TX_ABRT,
             IC_TX_ABRT_SOURCE => self.tx_abrt_source.get(),
             // Reading IC_CLR_TX_ABRT clears the abort interrupt (read-to-clear).
             IC_CLR_TX_ABRT => {
@@ -94,15 +88,13 @@ impl Peripheral for Rp2040I2c {
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         match offset {
             IC_ENABLE => self.enable = value,
-            IC_DATA_CMD => {
-                // A command issued while enabled drives the bus. With no slave
-                // attached the address phase gets no ACK → 7-bit address NACK
-                // abort. (A read command — CMD bit8 set — aborts the same way.)
-                if self.enable & ENABLE_ENABLE != 0 {
-                    self.tx_abrt.set(true);
-                    self.tx_abrt_source
-                        .set(self.tx_abrt_source.get() | ABRT_7B_ADDR_NOACK);
-                }
+            // A command issued while enabled drives the bus. With no slave
+            // attached the address phase gets no ACK → 7-bit address NACK
+            // abort. (A read command — CMD bit8 set — aborts the same way.)
+            IC_DATA_CMD if self.enable & ENABLE_ENABLE != 0 => {
+                self.tx_abrt.set(true);
+                self.tx_abrt_source
+                    .set(self.tx_abrt_source.get() | ABRT_7B_ADDR_NOACK);
             }
             _ => {}
         }
