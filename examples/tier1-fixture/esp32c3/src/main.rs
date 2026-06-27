@@ -23,6 +23,10 @@
 //! | gpio              | gpio          | gpio   | PASS — OUT round-trip    |
 //! | timg0             | timg          | timer  | FAIL — declarative model has no counter advance |
 //! | interrupt_core0   | interrupt     | irq    | PASS — MAP register round-trip |
+//! | i2c0              | i2c           | i2c    | PASS — command-list engine runs |
+//! | spi2              | spi           | spi    | PASS — GP-SPI2 USR launch + TRANS_DONE |
+//! | apb_saradc        | adc           | adc    | PASS — one-shot channel-dependent conversion |
+//! | ledc              | ledc          | pwm    | unrecorded — declarative shadow only, no real duty/timer |
 //! | (no systimer)     | —             | clock  | na      |
 //! | (no gdma/dma)     | —             | dma    | na      |
 //!
@@ -42,6 +46,8 @@ const GPIO_BASE: u32 = 0x6000_4000;
 const TIMG0_BASE: u32 = 0x6001_F000;
 const INTMATRIX_BASE: u32 = 0x600C_2000;
 const I2C0_BASE: u32 = 0x6001_3000;
+const SPI2_BASE: u32 = 0x6002_4000;
+const APB_SARADC_BASE: u32 = 0x6004_0000;
 
 #[inline(always)]
 fn reg_read(addr: u32) -> u32 {
@@ -244,6 +250,104 @@ fn check_i2c() -> Result<(), &'static str> {
     Ok(())
 }
 
+// ── spi: drive a GP-SPI2 transaction through the behavioral engine ─────────
+//
+// configs/chips/esp32c3.yaml wires spi2 (type esp32c3_spi) — the behavioral
+// CPU/W-buffer transaction engine (crates/core/src/peripherals/esp32c3/spi.rs),
+// not the declarative descriptor. Program a 32-bit transfer length, load a MOSI
+// pattern into the W0 data window, then set SPI_CMD.USR to launch. With no
+// device on the bus the controller shifts in an idle (pulled-high) MISO line, so
+// W0 reads back 0xFFFF_FFFF; SPI_CMD.USR auto-clears and SPI_TRANS_DONE latches
+// in SPI_DMA_INT_RAW. Those state transitions (USR self-clear, TRANS_DONE latch,
+// W0 overwritten with shifted-in data) are the proof the transaction engine ran
+// — a declarative register file could not produce them.
+fn check_spi() -> Result<(), &'static str> {
+    const CMD: u32 = SPI2_BASE + 0x00;
+    const MS_DLEN: u32 = SPI2_BASE + 0x1C;
+    const DMA_INT_CLR: u32 = SPI2_BASE + 0x38;
+    const DMA_INT_RAW: u32 = SPI2_BASE + 0x3C;
+    const W0: u32 = SPI2_BASE + 0x98;
+    const USR: u32 = 1 << 24;
+    const TRANS_DONE: u32 = 1 << 12;
+
+    reg_write(DMA_INT_CLR, 0xFFFF_FFFF); // clear any stale raw-int state
+    reg_write(MS_DLEN, 32 - 1); // 32-bit (4-byte) transfer
+    reg_write(W0, 0x1234_5678); // MOSI payload
+
+    if reg_read(DMA_INT_RAW) & TRANS_DONE != 0 {
+        return Err("spi-done-early"); // must not be set before launch
+    }
+    reg_write(CMD, USR); // launch
+
+    if reg_read(CMD) & USR != 0 {
+        return Err("spi-usr-stuck"); // USR must auto-clear on completion
+    }
+    if reg_read(DMA_INT_RAW) & TRANS_DONE == 0 {
+        return Err("spi-no-done"); // TRANS_DONE must latch
+    }
+    if reg_read(W0) != 0xFFFF_FFFF {
+        return Err("spi-no-miso"); // idle-bus MISO must overwrite W0 with 0xFF
+    }
+    Ok(())
+}
+
+// ── adc: run a one-shot SAR conversion and check it tracks the channel ─────
+//
+// configs/chips/esp32c3.yaml wires apb_saradc (type esp32c3_apb_saradc) — the
+// behavioral one-shot engine (crates/core/src/peripherals/esp32c3/apb_saradc.rs).
+// Set ONETIME_SAMPLE = SAR1_SELECT | START | (channel<<25) to trigger a
+// conversion, poll INT_RAW for the SAR1-done bit, then read SAR1DATA_STATUS. The
+// 12-bit sample is a deterministic function of the SELECTED channel
+// (0x100 + channel*0x111) with the channel packed into bits [16:13], so two
+// different channels yield two different, predictable results — proof the
+// conversion reflects its input, not a constant a register file would return.
+fn check_adc() -> Result<(), &'static str> {
+    const ONETIME_SAMPLE: u32 = APB_SARADC_BASE + 0x20;
+    const SAR1DATA_STATUS: u32 = APB_SARADC_BASE + 0x2C;
+    const INT_RAW: u32 = APB_SARADC_BASE + 0x44;
+    const INT_CLR: u32 = APB_SARADC_BASE + 0x4C;
+    const SAR1_SELECT: u32 = 1 << 31;
+    const ONETIME_START: u32 = 1 << 29;
+    const SAR1_DONE: u32 = 1 << 31;
+
+    let sample = |ch: u32| -> u32 { (0x100 + ch * 0x111) & 0x0FFF };
+    let oneshot = |ch: u32| SAR1_SELECT | ONETIME_START | ((ch & 0xF) << 25);
+
+    reg_write(INT_CLR, 0xFC00_0000); // clear any stale done bits
+
+    if reg_read(INT_RAW) & SAR1_DONE != 0 {
+        return Err("adc-done-early"); // must not be done before a conversion
+    }
+
+    // Conversion of channel 3.
+    reg_write(ONETIME_SAMPLE, oneshot(3));
+    if reg_read(INT_RAW) & SAR1_DONE == 0 {
+        return Err("adc-no-done");
+    }
+    if reg_read(ONETIME_SAMPLE) & ONETIME_START != 0 {
+        return Err("adc-start-stuck"); // START must self-clear
+    }
+    let d3 = reg_read(SAR1DATA_STATUS);
+    if d3 & 0x0FFF != sample(3) {
+        return Err("adc-ch3-sample");
+    }
+    if (d3 >> 13) & 0xF != 3 {
+        return Err("adc-ch3-channel"); // packed channel id must match
+    }
+
+    // A second conversion on a different channel must yield a different result.
+    reg_write(INT_CLR, 0xFC00_0000);
+    reg_write(ONETIME_SAMPLE, oneshot(5));
+    let d5 = reg_read(SAR1DATA_STATUS);
+    if d5 & 0x0FFF != sample(5) {
+        return Err("adc-ch5-sample");
+    }
+    if d3 == d5 {
+        return Err("adc-channel-constant"); // result must track the channel
+    }
+    Ok(())
+}
+
 #[entry]
 fn main() -> ! {
     // gpio, timer, irq, i2c — ordered by increasing complexity.
@@ -253,6 +357,8 @@ fn main() -> ! {
     report("timer", check_timer());
     report("irq", check_irq());
     report("i2c", check_i2c());
+    report("spi", check_spi());
+    report("adc", check_adc());
     uart0_write_line("TIER1 done");
 
     loop {

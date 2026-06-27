@@ -9,7 +9,8 @@
 //   * `F1I2c` — the legacy peripheral (CR1/CR2/OAR/DR/SR1/SR2/CCR/TRISE) AND
 //     the full transaction state machine. START/STOP live in CR1.
 //   * `L4I2c` — the modern peripheral (CR1/CR2/OAR/TIMINGR/ISR/ICR/RXDR/TXDR),
-//     register-fidelity latching (START/STOP in CR2; no transaction engine).
+//     register-fidelity latching PLUS a minimal master transaction engine
+//     (START/STOP/AUTOEND in CR2; address phase → ISR.NACKF when no slave acks).
 // Each variant owns ALL of its own registers and state — an F1 I2C cannot
 // carry TIMINGR/ISR, an L4 I2C cannot carry SR1/DR. CR1/CR2/OAR and the
 // attached-device list exist on both because both families genuinely have
@@ -344,7 +345,7 @@ impl F1I2c {
     }
 }
 
-// ── STM32L4 modern I2C (register-fidelity latching; no engine) ───────────────
+// ── STM32L4 modern I2C (register-fidelity latching + minimal master engine) ──
 #[derive(serde::Serialize)]
 pub struct L4I2c {
     cr1: u32,
@@ -358,8 +359,25 @@ pub struct L4I2c {
     pecr: u32,
     rxdr: u32,
     txdr: u32,
+
+    // Minimal master transaction engine (mirrors F1I2c, modern-register flavour).
+    state: I2cState,
+    cycles_remaining: u32,
+
     #[serde(skip)]
     attached_devices: Vec<RefCell<Box<dyn I2cDevice>>>,
+    /// Index of the addressed slave for the armed/in-flight transfer (None when
+    /// no attached device matches SADD — the tier-1 no-device case).
+    #[serde(skip)]
+    current_target: Option<usize>,
+    #[serde(skip)]
+    is_reading: bool,
+    #[serde(skip)]
+    autoend: bool,
+    /// CR2.START has latched a transfer; the address phase fires once the first
+    /// data byte is loaded into TXDR (write) — mirrors F1's START→DR ordering.
+    #[serde(skip)]
+    start_armed: bool,
 }
 
 impl Default for L4I2c {
@@ -376,7 +394,13 @@ impl Default for L4I2c {
             pecr: 0,
             rxdr: 0,
             txdr: 0,
+            state: I2cState::Idle,
+            cycles_remaining: 0,
             attached_devices: Vec::new(),
+            current_target: None,
+            is_reading: false,
+            autoend: false,
+            start_armed: false,
         }
     }
 }
@@ -405,10 +429,42 @@ impl L4I2c {
             0x04 => {
                 self.cr2 = value;
                 if (value & (1 << 13)) != 0 {
-                    self.isr |= 1 << 15; // START → BUSY
+                    // START: latch BUSY and arm a master transfer. Capture the
+                    // addressed slave (SADD[7:1] in 7-bit mode), direction
+                    // (RD_WRN), NBYTES and AUTOEND. The address phase runs once
+                    // the first byte reaches TXDR (write) or immediately for a
+                    // read — mirrors the F1 START→DR handshake.
+                    self.isr |= 1 << 15; // BUSY
+                    let addr = ((value >> 1) & 0x7F) as u8;
+                    self.is_reading = (value & (1 << 10)) != 0; // RD_WRN
+                    self.autoend = (value & (1 << 25)) != 0;
+                    self.current_target = self
+                        .attached_devices
+                        .iter()
+                        .position(|d| d.borrow().address() == addr);
+                    if let Some(idx) = self.current_target {
+                        self.attached_devices[idx].borrow_mut().start();
+                    }
+                    self.start_armed = true;
+                    if self.is_reading {
+                        // Read needs no TXDR write to begin; kick the engine now.
+                        self.state = I2cState::AddressPending;
+                        self.cycles_remaining = 20;
+                        self.start_armed = false;
+                    } else {
+                        self.isr |= 1 << 1; // TXIS: hardware requests the byte
+                    }
                 }
                 if (value & (1 << 14)) != 0 {
-                    self.isr &= !(1 << 15); // STOP → clear BUSY
+                    // STOP: release the bus and tear down any armed/in-flight
+                    // transfer.
+                    self.isr &= !(1 << 15); // clear BUSY
+                    if let Some(idx) = self.current_target {
+                        self.attached_devices[idx].borrow_mut().stop();
+                    }
+                    self.current_target = None;
+                    self.state = I2cState::Idle;
+                    self.start_armed = false;
                 }
             }
             0x08 => self.oar1 = value,
@@ -429,6 +485,13 @@ impl L4I2c {
             0x28 => {
                 self.txdr = value & 0xFF;
                 self.isr &= !0x0000_0003; // writing TXDR clears TXE+TXIS
+                                          // Loading the first byte while a write transfer is armed starts
+                                          // the address phase.
+                if self.start_armed && self.state == I2cState::Idle {
+                    self.state = I2cState::AddressPending;
+                    self.cycles_remaining = 20;
+                    self.start_armed = false;
+                }
             }
             _ => {}
         }
@@ -460,6 +523,65 @@ impl L4I2c {
         } else {
             0
         }
+    }
+
+    /// One tick of the minimal master transaction engine. Returns whether an
+    /// IRQ should be raised. Structure mirrors `F1I2c::tick` but uses the modern
+    /// ISR/ICR/CR2 register set (NACKF/STOPF/TC, START/STOP/AUTOEND in CR2).
+    fn tick(&mut self) -> bool {
+        let mut irq = false;
+        if self.state == I2cState::Idle {
+            return irq;
+        }
+        self.cycles_remaining = self.cycles_remaining.saturating_sub(1);
+        if self.cycles_remaining != 0 {
+            return irq;
+        }
+        if self.state == I2cState::AddressPending {
+            match self.current_target {
+                None => {
+                    // No slave ACKed the address → NACKF (matches L476 silicon:
+                    // a write to an absent device sets ISR.NACKF, and AUTOEND
+                    // auto-generates STOP, clearing BUSY and setting STOPF).
+                    self.isr |= 1 << 4; // NACKF
+                    self.isr &= !(1 << 1); // no further byte requested (TXIS off)
+                    if self.autoend {
+                        self.isr |= 1 << 5; // STOPF
+                        self.isr &= !(1 << 15); // BUSY released
+                    }
+                    if (self.cr1 & (1 << 4)) != 0 {
+                        irq = true; // NACKIE
+                    }
+                }
+                Some(idx) => {
+                    // Slave ACKed. Deliver the one armed byte (write) or fetch
+                    // one (read), then complete (TC) and auto-STOP if requested.
+                    if self.is_reading {
+                        self.rxdr = self.attached_devices[idx].borrow_mut().read() as u32;
+                        self.isr |= 1 << 2; // RXNE
+                    } else {
+                        self.attached_devices[idx]
+                            .borrow_mut()
+                            .write(self.txdr as u8);
+                        self.isr |= 1 << 0; // TXE
+                    }
+                    self.isr |= 1 << 6; // TC (NBYTES transferred)
+                    if self.autoend {
+                        self.isr |= 1 << 5; // STOPF
+                        self.isr &= !(1 << 15); // BUSY released
+                        if let Some(i) = self.current_target {
+                            self.attached_devices[i].borrow_mut().stop();
+                        }
+                        self.current_target = None;
+                    }
+                    if (self.cr1 & (1 << 6)) != 0 {
+                        irq = true; // TCIE
+                    }
+                }
+            }
+            self.state = I2cState::Idle;
+        }
+        irq
     }
 }
 
@@ -532,7 +654,7 @@ impl crate::Peripheral for I2c {
     fn tick(&mut self) -> crate::PeripheralTickResult {
         let irq = match self {
             Self::Stm32F1(i) => i.tick(),
-            Self::Stm32L4(_) => false, // L4 has no transaction engine
+            Self::Stm32L4(i) => i.tick(),
         };
         crate::PeripheralTickResult {
             irq,
@@ -741,5 +863,100 @@ mod tests {
         assert_ne!(i2c.peek(0x14).unwrap() & 0x40, 0);
         assert_eq!(i2c.read(0x10).unwrap(), 0);
         assert_eq!(reads.load(Ordering::SeqCst), 1);
+    }
+
+    // ── STM32L4 (modern) transaction engine ──────────────────────────────────
+
+    /// Configure CR2 for a 1-byte 7-bit master write to `addr` with AUTOEND,
+    /// then load TXDR — the no-device case the tier-1 fixtures exercise.
+    fn l4_write_xfer(i2c: &mut I2c, addr: u8, byte: u8) {
+        use crate::Peripheral;
+        i2c.write(0x00, 1).unwrap(); // CR1.PE
+                                     // CR2 = SADD(addr<<1) | NBYTES=1<<16 | AUTOEND<<25 | START<<13
+        let cr2: u32 = ((addr as u32) << 1) | (1 << 16) | (1 << 25) | (1 << 13);
+        for b in 0..4 {
+            i2c.write(0x04 + b, ((cr2 >> (b * 8)) & 0xFF) as u8)
+                .unwrap();
+        }
+        i2c.write(0x28, byte).unwrap(); // TXDR: first (only) byte
+    }
+
+    #[test]
+    fn test_l4_i2c_nack_on_no_device() {
+        use super::I2cRegisterLayout;
+        let mut i2c = I2c::new_with_layout(I2cRegisterLayout::Stm32L4);
+
+        // START latches BUSY (ISR bit15) up front.
+        l4_write_xfer(&mut i2c, 0x52, 0xAB);
+        // BUSY is ISR bit15 → byte offset 0x19, bit7.
+        assert_ne!(i2c.peek(0x19).unwrap() & (1 << 7), 0, "BUSY after START");
+
+        // No attached device → address phase NACKs after the engine ticks.
+        let mut nacked = false;
+        for _ in 0..40 {
+            i2c.tick();
+            if i2c.peek(0x18).unwrap() & (1 << 4) != 0 {
+                nacked = true;
+                break;
+            }
+        }
+        assert!(nacked, "ISR.NACKF must set when no slave acknowledges");
+        // AUTOEND released the bus: BUSY clear, STOPF set.
+        assert_eq!(i2c.peek(0x19).unwrap() & (1 << 7), 0, "AUTOEND clears BUSY");
+        assert_ne!(i2c.peek(0x18).unwrap() & (1 << 5), 0, "AUTOEND sets STOPF");
+
+        // ICR.NACKCF (bit4) + STOPCF (bit5) clear the flags.
+        i2c.write(0x1C, (1 << 4) | (1 << 5)).unwrap();
+        assert_eq!(
+            i2c.peek(0x18).unwrap() & (1 << 4),
+            0,
+            "NACKF cleared by ICR"
+        );
+    }
+
+    #[test]
+    fn test_l4_i2c_ack_delivers_byte_to_device() {
+        use super::I2cRegisterLayout;
+        use std::sync::atomic::AtomicUsize;
+        let writes = Arc::new(AtomicUsize::new(0));
+
+        struct WriteCounter {
+            address: u8,
+            writes: Arc<AtomicUsize>,
+        }
+        impl I2cDevice for WriteCounter {
+            fn address(&self) -> u8 {
+                self.address
+            }
+            fn read(&mut self) -> u8 {
+                0
+            }
+            fn write(&mut self, _data: u8) {
+                self.writes.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        let mut i2c = I2c::new_with_layout(I2cRegisterLayout::Stm32L4);
+        i2c.attach(Box::new(WriteCounter {
+            address: 0x3C,
+            writes: writes.clone(),
+        }));
+
+        l4_write_xfer(&mut i2c, 0x3C, 0x42);
+        for _ in 0..40 {
+            i2c.tick();
+        }
+        // Attached device ACKs → no NACKF, the byte reaches the device, TC set.
+        assert_eq!(
+            i2c.peek(0x18).unwrap() & (1 << 4),
+            0,
+            "no NACKF when device present"
+        );
+        assert_ne!(
+            i2c.peek(0x18).unwrap() & (1 << 6),
+            0,
+            "TC after byte transferred"
+        );
+        assert_eq!(writes.load(Ordering::SeqCst), 1);
     }
 }

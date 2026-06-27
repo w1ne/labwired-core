@@ -114,6 +114,9 @@ boards:
     # fidelity (was dropped → read 0). Additive and read-back only — no byte-path
     # or reset-value change; h563_mmio_diff/parity (which don't write-then-read BRR)
     # pass unchanged. No live re-capture this session.
+    # 2026-06-27: additive L4/V2 i2c transaction engine (ISR.NACKF on a write to
+    # an absent slave; AUTOEND clears BUSY + sets STOPF). Register layout and the
+    # previously-pinned reset/latch behaviour are unchanged; no silicon re-capture.
     drift_ack: 2026-06-27
     models:
       - crates/core/src/peripherals/rcc.rs
@@ -154,7 +157,14 @@ boards:
     # slave-attach. Live I2C0 reset capture this date over USB-JTAG is byte-identical to
     # the model (CTR=0x20b, FIFO_CONF=0x408b, FIFO_ST=0, TO=0x10, INT_RAW=0x2). Full
     # 79-reg live re-capture tracked; this ack covers the model change in the interim.
-    drift_ack: 2026-06-20
+    # 2026-06-27: added behavioural GP-SPI2 (esp32c3/spi.rs) + one-shot SAR ADC
+    # (esp32c3/apb_saradc.rs), wired into esp32c3.yaml for tier-1 spi/adc cells.
+    # Both are ADDITIVE behavioural engines whose reset values + register layout
+    # were diffed against the committed spi2.yaml / apb_saradc.yaml SVD descriptors
+    # (CLOCK=0x80003043, CTRL=0x3c0000, DMA_CONF reset 0 + DATE=0x2007220 for SPI;
+    # ONETIME_SAMPLE/INT layout for ADC). They do not touch the asserted reset-oracle
+    # set; this ack covers the new model files until the next full live re-capture.
+    drift_ack: 2026-06-27
 
   - id: nucleo-l476rg
     doc: docs/boards/nucleo-l476rg.md
@@ -180,6 +190,9 @@ boards:
     # previously panicked at PRE_KERNEL boot. Additive, read-back only — no byte-path
     # change; l476_mmio_diff/parity (no BRR write-then-read) pass unchanged. tests/
     # ztest/base now reaches PROJECT EXECUTION SUCCESSFUL. No live re-capture.
+    # 2026-06-27: additive L4/V2 i2c transaction engine (ISR.NACKF on a write to
+    # an absent slave; AUTOEND clears BUSY + sets STOPF). Register layout and the
+    # previously-pinned reset/latch behaviour are unchanged; no silicon re-capture.
     drift_ack: 2026-06-27
     models:
       - crates/core/src/peripherals/rcc.rs

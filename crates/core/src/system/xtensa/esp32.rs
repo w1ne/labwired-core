@@ -519,6 +519,16 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     // apb_ctrl catch-all and must preserve that registration order.
     register_esp32_peripherals(bus);
 
+    // I2C0 (I2C_EXT0, TRM §11) at 0x3FF5_3000 — real command-list engine
+    // (`peripherals::esp32::i2c::Esp32I2c`). Built directly (not via the table
+    // loop) so a board-level I2C slave is attached: a BMP280 at 0x76, the
+    // canonical register-pointer device, lets firmware drive a full
+    // write-pointer / repeated-start / read transaction and read back genuine
+    // device data (CHIP_ID 0x58). Source 49 = ETS_I2C_EXT0_INTR_SOURCE.
+    let mut i2c0 = crate::peripherals::esp32::i2c::Esp32I2c::new();
+    i2c0.attach_slave(Box::new(crate::peripherals::components::Bmp280::new(0x76)));
+    bus.add_peripheral("i2c0", 0x3FF5_3000, 0x1000, None, Box::new(i2c0));
+
     // SYSCON (TRM §13.2) — system controller. Owns SYSCLK_CONF, TICK_CONF,
     // SARADC_CTRL, FRONT_END_MEM_PD, and the RND_DATA TRNG output the BROM
     // samples. Seeds TICK_CONF with XTAL_TICK_NUM=39 (40 MHz / 1 MHz - 1)
@@ -576,7 +586,7 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         ("sar_adc", 0x3FF4_C000),
         ("i2s0", 0x3FF4_F000),
         ("uart1", 0x3FF5_0000),
-        ("i2c0", 0x3FF5_3000),
+        // i2c0 (0x3FF5_3000) is the real Esp32I2c model registered above.
         ("uhci0", 0x3FF5_4000),
         ("i2s1", 0x3FF6_D000),
         ("uart2", 0x3FF6_E000),
@@ -662,7 +672,9 @@ pub(crate) fn register_esp32_peripherals(bus: &mut SystemBus) {
     use labwired_config::PeripheralConfig;
     use std::collections::HashMap;
     for &(id, ty, base, size, irq) in ESP32_PERIPHERALS {
-        if id == "syscon" {
+        // syscon shares base with apb_ctrl (registration-order-sensitive);
+        // i2c0 is built directly so board-specific I2C slaves can be attached.
+        if id == "syscon" || id == "i2c0" {
             continue;
         }
         let mut config: HashMap<String, serde_yaml::Value> = HashMap::new();
@@ -699,6 +711,7 @@ pub(crate) const ESP32_PERIPHERALS: &[(&str, &str, u64, u64, Option<u32>)] = &[
     ("spi0",     "esp32_spi",      0x3FF4_3000, 0x1000, None),
     ("spi1",     "esp32_spi",      0x3FF4_2000, 0x1000, None),
     ("spi3",     "esp32_spi",      0x3FF6_5000, 0x1000, None),
+    ("i2c0",     "esp32_i2c",      0x3FF5_3000, 0x1000, Some(49)),
     ("gpio",     "esp32_gpio",     0x3FF4_4000, 0x1000, None),
     ("dport",    "esp32_dport",    0x3FF0_0000, 0x1000, None),
     ("sha",      "esp32_sha",      0x3FF0_3000, 0x0100, None),

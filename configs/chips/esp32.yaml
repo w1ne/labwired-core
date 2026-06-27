@@ -82,6 +82,12 @@ peripherals:
     type: "esp32_spi"
     base_address: 0x3FF65000
     size: "4KB"
+  # I2C0 / I2C_EXT0 (TRM §11). Real Esp32I2c command-list engine wired by
+  # configure_xtensa_esp32; base matches ESP32_PERIPHERALS (i2c0 = 0x3FF5_3000).
+  - id: "i2c0"
+    type: "esp32_i2c"
+    base_address: 0x3FF53000
+    size: "4KB"
   # LEDC — LED PWM controller (TRM §14). Real Ledc model; base matches
   # ESP32_PERIPHERALS (ledc = 0x3FF5_9000). Backs the pwm matrix class
   # (the matrix aliases ledc -> pwm).
