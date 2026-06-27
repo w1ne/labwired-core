@@ -10,7 +10,7 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 | `nrf52840` | 🟢 silicon-verified | 2026-06-17 | 2026-06-27 | ⚠ drift acked 2026-06-27 (re-capture pending) |
 | `seeed-xiao-nrf52840-sense` | 🟢 silicon-verified | 2026-06-17 | 2026-06-27 | ⚠ drift acked 2026-06-27 (re-capture pending) |
 | `stm32h563` | 🟢 silicon-verified | 2026-06-22 | 2026-06-27 | ⚠ drift acked 2026-06-27 (re-capture pending) |
-| `esp32c3` | 🟢 silicon-verified | 2026-06-17 | 2026-06-27 | ⚠ drift acked 2026-06-28 (re-capture pending) |
+| `esp32c3` | 🟢 silicon-verified | 2026-06-17 | 2026-06-28 | ⚠ drift acked 2026-06-28 (re-capture pending) |
 | `nucleo-l476rg` | 🟢 silicon-verified | 2026-06-20 | 2026-06-27 | ⚠ drift acked 2026-06-27 (re-capture pending) |
 | `nucleo-l073rz` | 🟢 silicon-verified | 2026-06-20 | 2026-06-27 | ⚠ drift acked 2026-06-27 (re-capture pending) |
 | `stm32f103` | 🟢 silicon-verified | 2026-06-20 | 2026-06-27 | ⚠ drift acked 2026-06-27 (re-capture pending) |
