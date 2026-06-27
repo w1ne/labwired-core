@@ -131,6 +131,9 @@ peripherals:
     irq: 27
     config:
       irq_base: 27  # per-channel NVIC lines 27..34 (ch7 TCIE silicon-probed)
+    # GPDMA1 is clocked from RCC_AHB1ENR.GPDMA1EN (bit 0). Unclocked out of
+    # reset (RM0481 §11.8.32) — channel registers read 0 / drop writes until on.
+    clock: { reg: "ahb1enr", bit: 0 }
   # FDCAN1 (RM0481 §60, Bosch M_CAN with the fixed message-RAM layout).
   # Internal-loopback TX -> RX FIFO0 silicon-verified 2026-06-12
   # (capture13). The window spans the whole FDCAN estate relative to the
@@ -142,6 +145,10 @@ peripherals:
     base_address: 0x4000A400
     size: "4KB"
     irq: 39  # FDCAN1_IT0; line 1 (IT1 = 40) routing via ILS not modeled
+    # FDCAN1 bus interface is clocked from RCC_APB1HENR.FDCAN1EN (bit 9).
+    # Unclocked out of reset (RM0481 §11.8.38) — ENDN/register surface reads 0
+    # until the bus clock is enabled (the kernel clock is selected separately).
+    clock: { reg: "apb1henr", bit: 9 }
   # TIM1 is the advanced-control PWM timer; the `_pwm` id suffix declares the
   # tier1 pwm class alongside timer (CLASS_MARKERS match on id substrings).
   - id: "tim1_pwm"
@@ -151,6 +158,9 @@ peripherals:
     irq: 42
     config:
       advanced: true
+    # TIM1 is clocked from RCC_APB2ENR.TIM1EN (bit 11). Unclocked out of reset
+    # (RM0481 §11.8.39) — registers read 0 / drop writes until the clock is on.
+    clock: { reg: "apb2enr", bit: 11 }
   - id: "tim2"
     type: "timer"
     base_address: 0x40000000
@@ -158,6 +168,9 @@ peripherals:
     irq: 45
     config:
       width: 32
+    # TIM2 is clocked from RCC_APB1LENR.TIM2EN (bit 0). Unclocked out of reset
+    # (RM0481 §11.8.37) — ARR reads its 0xFFFFFFFF reset only once the clock is on.
+    clock: { reg: "apb1lenr", bit: 0 }
   - id: "tim3"
     type: "timer"
     base_address: 0x40000400
@@ -184,6 +197,9 @@ peripherals:
     irq: 51
     config:
       profile: "h5"
+    # I2C1 is clocked from RCC_APB1LENR.I2C1EN (bit 21). Unclocked out of reset
+    # (RM0481 §11.8.37) — registers read 0 / drop writes until the clock is on.
+    clock: { reg: "apb1lenr", bit: 21 }
   - id: "i2c2"
     type: "i2c"
     base_address: 0x40005800
@@ -246,6 +262,9 @@ peripherals:
     irq: 55
     config:
       profile: "stm32h5"
+    # SPI1 is clocked from RCC_APB2ENR.SPI1EN (bit 12). Unclocked out of reset
+    # (RM0481 §11.8.39) — CFG1 reads 0 until the bus clock is enabled.
+    clock: { reg: "apb2enr", bit: 12 }
   - id: "spi2"
     type: "spi"
     base_address: 0x40003800
@@ -269,6 +288,10 @@ peripherals:
     irq: 37
     config:
       profile: "stm32l4"
+    # ADC1/2 are clocked from RCC_AHB2ENR.ADCEN (bit 10) — the H5 ADC sits on
+    # AHB2, not an APB bus. Unclocked out of reset (RM0481 §11.8.34): CR reads 0
+    # (not its 0x20000000 DEEPPWD reset) until the clock is enabled.
+    clock: { reg: "ahb2enr", bit: 10 }
   # RTC v3 calendar (RM0481). Silicon needs DBP + LSI + BDCR.RTCEN first;
   # the sim calendar is always clocked.
   - id: "rtc"
@@ -276,6 +299,10 @@ peripherals:
     base_address: 0x44007800
     size: "1KB"
     irq: 2
+    # RTC register interface is clocked from RCC_APB3ENR.RTCAPBEN (bit 21).
+    # Unclocked out of reset (RM0481 §11.8.40) — the calendar registers read 0
+    # until RTCAPBEN is set (the RTC kernel clock + BDCR.RTCEN are separate).
+    clock: { reg: "apb3enr", bit: 21 }
   # NVIC is wired unconditionally for Cortex-M machines (system/cortex_m.rs);
   # this entry declares the tier1 irq class and pins the canonical base.
   - id: "nvic"

@@ -155,6 +155,13 @@ fn check_gpio() -> Result<(), &'static [u8]> {
 /// timer: TIM2 (32-bit). EGR.UG latches UIF and zeroes CNT; SR write-0
 /// clears; with CEN set the counter advances between two bounded reads.
 fn check_timer() -> Result<(), &'static [u8]> {
+    // clock-gating: TIM2 (RCC_APB1ENR.TIM2EN bit 0, ENR @ 0x38) is unclocked out
+    // of reset, so its registers read 0 / drop writes. Prove the dead state —
+    // ARR reads 0, not its clocked reset — then enable the APB1 bus clock.
+    if rd32(TIM2_BASE + 0x2C) != 0 {
+        return Err(b"timer-gated");
+    }
+    wr32(RCC_BASE + 0x38, rd32(RCC_BASE + 0x38) | 0x1); // APB1ENR.TIM2EN
     wr32(TIM2_BASE + 0x28, 0); // PSC = 0
     wr32(TIM2_BASE + 0x2C, 0xFFFF_FFFF); // ARR = max (32-bit TIM2)
     wr32(TIM2_BASE + 0x14, 1); // EGR.UG
@@ -182,6 +189,15 @@ fn check_dma() -> Result<(), &'static [u8]> {
     const N: usize = 8;
     let src: [u8; N] = [0xA5, 0x5A, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66];
     let mut dst: [u8; N] = [0; N];
+
+    // clock-gating: DMA1 (RCC_AHBENR.DMA1EN bit 0, ENR @ 0x30) is unclocked out
+    // of reset. A pre-clock CCR1 write is dropped and reads back 0; enable the
+    // bus clock, then run the copy.
+    wr32(DMA1_BASE + 0x08, 1 << 14); // dropped while gated
+    if rd32(DMA1_BASE + 0x08) != 0 {
+        return Err(b"dma-gated");
+    }
+    wr32(RCC_BASE + 0x30, rd32(RCC_BASE + 0x30) | 0x1); // AHBENR.DMA1EN
 
     wr32(DMA1_BASE + 0x04, 0xF); // IFCR: clear stale CH1 flags
     wr32(DMA1_BASE + 0x10, dst.as_mut_ptr() as u32); // CPAR1 = destination
@@ -241,6 +257,13 @@ fn check_irq() -> Result<(), &'static [u8]> {
 /// PE (CR1.PE bit0) round-trips; CR2.START (bit13) latches ISR.BUSY (bit15);
 /// CR2.STOP (bit14) clears it (i2c.rs L4I2c register-fidelity model).
 fn check_i2c() -> Result<(), &'static [u8]> {
+    // clock-gating: I2C1 (RCC_APB1ENR.I2C1EN bit 21, ENR @ 0x38) is unclocked
+    // out of reset, so ISR reads 0 (TXE not yet asserted). Prove the dead state,
+    // then enable the bus clock.
+    if rd32(I2C1_BASE + 0x18) != 0 {
+        return Err(b"i2c-gated");
+    }
+    wr32(RCC_BASE + 0x38, rd32(RCC_BASE + 0x38) | (1 << 21)); // APB1ENR.I2C1EN
     if rd32(I2C1_BASE + 0x18) & 0x1 == 0 {
         return Err(b"i2c-txe-reset");
     }
@@ -287,6 +310,13 @@ fn check_i2c() -> Result<(), &'static [u8]> {
 /// starts a frame — SR.BSY (bit7) sets, then the cycle-counted engine clears
 /// BSY and re-asserts TXE on completion (spi.rs Stm32 transfer engine).
 fn check_spi() -> Result<(), &'static [u8]> {
+    // clock-gating: SPI1 (RCC_APB2ENR.SPI1EN bit 12, ENR @ 0x34) is unclocked
+    // out of reset, so SR reads 0 (TXE not yet asserted). Prove the dead state,
+    // then enable the bus clock.
+    if rd32(SPI1_BASE + 0x08) != 0 {
+        return Err(b"spi-gated");
+    }
+    wr32(RCC_BASE + 0x34, rd32(RCC_BASE + 0x34) | (1 << 12)); // APB2ENR.SPI1EN
     if rd32(SPI1_BASE + 0x08) & (1 << 1) == 0 {
         return Err(b"spi-txe-reset");
     }
@@ -341,6 +371,13 @@ fn adc_convert(res: u32) -> Result<u32, &'static [u8]> {
 /// BY VALUE: ADSTART converts the fixed internal source and the code must scale
 /// when CFGR.RES narrows. Fails if the model returned a constant.
 fn check_adc() -> Result<(), &'static [u8]> {
+    // clock-gating: ADC1 (RCC_APB2ENR.ADCEN bit 9, ENR @ 0x34) is unclocked out
+    // of reset, so CR reads 0 (not its 0x20000000 DEEPPWD clocked reset). Prove
+    // the dead state, then enable the bus clock.
+    if rd32(ADC1_BASE + 0x08) != 0 {
+        return Err(b"adc-gated");
+    }
+    wr32(RCC_BASE + 0x34, rd32(RCC_BASE + 0x34) | (1 << 9)); // APB2ENR.ADCEN
     wr32(ADC1_BASE + 0x08, 0); // CR: clear DEEPPWD
     wr32(ADC1_BASE + 0x08, 1 << 28); // CR: ADVREGEN
     if rd32(ADC1_BASE + 0x00) & 0x1 != 0 {
@@ -364,7 +401,9 @@ fn check_adc() -> Result<(), &'static [u8]> {
     Ok(())
 }
 
-/// wdt: IWDG. PR/RLR are write-protected until KR (0x00) gets the 0x5555
+/// wdt: IWDG. No RCC clock-gate — the IWDG runs off the dedicated LSI
+/// oscillator, not an APB/AHB peripheral-enable bit, so it has no `clock:`
+/// field in the yaml. PR/RLR are write-protected until KR (0x00) gets the 0x5555
 /// unlock and re-protect on any other code; reset PR=0, RLR=0x0FFF
 /// (iwdg.rs write-access gate).
 fn check_wdt() -> Result<(), &'static [u8]> {
@@ -393,7 +432,10 @@ fn check_wdt() -> Result<(), &'static [u8]> {
     Ok(())
 }
 
-/// rtc: RTC (stm32l4 layout). DR resets to 0x2101; the write-protect state
+/// rtc: RTC (stm32l4 layout). No RCC peripheral-enable gate — the RTC lives in
+/// the backup domain, clock-enabled via RCC_CSR.RTCEN (not an APB/AHB enable bit
+/// this model expresses), so it carries no `clock:` field. DR resets to 0x2101;
+/// the write-protect state
 /// machine half-unlocks on WPR=0xCA (readable back) then unlocks on 0x53, and
 /// TR round-trips under its 0x007F7F7F writable mask (rtc.rs).
 fn check_rtc() -> Result<(), &'static [u8]> {

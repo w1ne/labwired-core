@@ -117,7 +117,8 @@ boards:
     # 2026-06-27: additive L4/V2 i2c transaction engine (ISR.NACKF on a write to
     # an absent slave; AUTOEND clears BUSY + sets STOPF). Register layout and the
     # previously-pinned reset/latch behaviour are unchanged; no silicon re-capture.
-    drift_ack: 2026-06-27
+    # 2026-06-28: clock-gating retrofit (gpdma1/tim1/tim2/i2c1/spi1/adc1/fdcan1/rtc RCC clock:{reg,bit}); additive, enabled-clock path unchanged, h563_mmio_diff + h563_conformance pass. No live re-capture.
+    drift_ack: 2026-06-28
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -230,7 +231,8 @@ boards:
     # fidelity (was dropped → read 0). Additive, read-back only — no byte-path or
     # reset-value change; l0_mmio_diff (no BRR write-then-read) passes unchanged.
     # No live re-capture this session.
-    drift_ack: 2026-06-27
+    # 2026-06-28: clock-gating retrofit (tim2/i2c1/spi1/adc1/dma1 RCC clock:{reg,bit}); additive, enabled-clock path unchanged, l0_mmio_diff passes. No live re-capture.
+    drift_ack: 2026-06-28
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -262,7 +264,8 @@ boards:
     # 2026-06-27: uart.rs BRR read-back fix is gated to the Stm32V2 layout; the F1
     # USART arm (this board) is untouched — purely a shared-file hash drift, zero
     # behavioural change. stm32f1_mmio_diff + f103_conformance pass unchanged.
-    drift_ack: 2026-06-27
+    # 2026-06-28: clock-gating retrofit (tim2/i2c1/spi1/adc1/dma1 RCC clock:{reg,bit}); additive, enabled-clock path unchanged, stm32f1_mmio_diff + f103_conformance pass. No live re-capture.
+    drift_ack: 2026-06-28
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/afio.rs
@@ -300,7 +303,8 @@ boards:
     # 2026-06-27: uart.rs BRR read-back fix is gated to the Stm32V2 layout; the F1
     # USART arm (this board) is untouched — purely a shared-file hash drift, zero
     # behavioural change. stm32f4_mmio_diff passes unchanged.
-    drift_ack: 2026-06-27
+    # 2026-06-28: clock-gating retrofit (tim2/i2c1/spi1/adc1 RCC clock:{reg,bit}); additive, enabled-clock path byte-for-byte unchanged, stm32f4_mmio_diff passes. No live re-capture.
+    drift_ack: 2026-06-28
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
