@@ -1,0 +1,7 @@
+peripheral: UART0
+version: 0.1.0
+registers:
+- id: FIFO
+  address_offset: 0
+- id: CONF0
+  address_offset: 4

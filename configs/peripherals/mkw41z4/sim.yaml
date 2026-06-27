@@ -1,0 +1,496 @@
+peripheral: SIM
+version: 0.1.0
+registers:
+- id: SOPT1
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 36864
+  fields:
+  - name: OSC32KOUT
+    bit_range:
+    - 17
+    - 16
+    description: 32K oscillator clock output
+  - name: OSC32KSEL
+    bit_range:
+    - 19
+    - 18
+    description: 32K Oscillator Clock Select
+  side_effects: null
+- id: SOPT2
+  address_offset: 4100
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CLKOUTSEL
+    bit_range:
+    - 7
+    - 5
+    description: CLKOUT select
+  - name: TPMSRC
+    bit_range:
+    - 25
+    - 24
+    description: TPM Clock Source Select
+  - name: LPUART0SRC
+    bit_range:
+    - 27
+    - 26
+    description: LPUART0 Clock Source Select
+  side_effects: null
+- id: SOPT4
+  address_offset: 4108
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TPM1CH0SRC
+    bit_range:
+    - 18
+    - 18
+    description: TPM1 Channel 0 Input Capture Source Select
+  - name: TPM2CH0SRC
+    bit_range:
+    - 20
+    - 20
+    description: TPM2 Channel 0 Input Capture Source Select
+  - name: TPM0CLKSEL
+    bit_range:
+    - 24
+    - 24
+    description: TPM0 External Clock Pin Select
+  - name: TPM1CLKSEL
+    bit_range:
+    - 25
+    - 25
+    description: TPM1 External Clock Pin Select
+  - name: TPM2CLKSEL
+    bit_range:
+    - 26
+    - 26
+    description: TPM2 External Clock Pin Select
+  side_effects: null
+- id: SOPT5
+  address_offset: 4112
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LPUART0TXSRC
+    bit_range:
+    - 1
+    - 0
+    description: LPUART0 Transmit Data Source Select
+  - name: LPUART0RXSRC
+    bit_range:
+    - 2
+    - 2
+    description: LPUART0 Receive Data Source Select
+  - name: LPUART0ODE
+    bit_range:
+    - 16
+    - 16
+    description: LPUART0 Open Drain Enable
+  side_effects: null
+- id: SOPT7
+  address_offset: 4120
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ADC0TRGSEL
+    bit_range:
+    - 3
+    - 0
+    description: ADC0 Trigger Select
+  - name: ADC0PRETRGSEL
+    bit_range:
+    - 4
+    - 4
+    description: ADC0 Pretrigger Select
+  - name: ADC0ALTTRGEN
+    bit_range:
+    - 7
+    - 7
+    description: ADC0 Alternate Trigger Enable
+  side_effects: null
+- id: SDID
+  address_offset: 4132
+  size: 32
+  # SVD documents REVID (bits 15:12) = 0, but real FRDM-KW41Z silicon is die
+  # Rev 2.0. The NXP BOARD_RfOscInit reads REVID and, when it is 0, runs a
+  # rev-1.0-only XCVR_TSM/ANA_TRIM workaround that pokes transceiver registers
+  # this profile does not model. Reporting REVID=2 (0x5F0000 | 0x2000 = 0x5F2000)
+  # matches Rev 2.0 boards and takes the mainline boot path.
+  access: READ_ONLY
+  reset_value: 6234112
+  fields:
+  - name: PINID
+    bit_range:
+    - 3
+    - 0
+    description: Pin count Identification
+  - name: DIEID
+    bit_range:
+    - 11
+    - 7
+    description: Device Die Number
+  - name: REVID
+    bit_range:
+    - 15
+    - 12
+    description: Device Revision Number
+  - name: SRAMSIZE
+    bit_range:
+    - 19
+    - 16
+    description: System SRAM Size
+  - name: SERIESID
+    bit_range:
+    - 23
+    - 20
+    description: Kinetis Series ID
+  - name: SUBFAMID
+    bit_range:
+    - 25
+    - 24
+    description: Kinetis Sub-Family ID.
+  - name: FAMID
+    bit_range:
+    - 31
+    - 28
+    description: Kinetis family ID
+  side_effects: null
+- id: SCGC4
+  address_offset: 4148
+  size: 32
+  access: READ_WRITE
+  reset_value: 4026531888
+  fields:
+  - name: CMT
+    bit_range:
+    - 2
+    - 2
+    description: CMT Clock Gate Control
+  - name: I2C0
+    bit_range:
+    - 6
+    - 6
+    description: I2C0 Clock Gate Control
+  - name: I2C1
+    bit_range:
+    - 7
+    - 7
+    description: I2C1 Clock Gate Control
+  - name: CMP
+    bit_range:
+    - 19
+    - 19
+    description: Comparator Clock Gate Control
+  - name: VREF
+    bit_range:
+    - 20
+    - 20
+    description: VREF Clock Gate Control
+  side_effects: null
+- id: SCGC5
+  address_offset: 4152
+  size: 32
+  access: READ_WRITE
+  reset_value: 33554818
+  fields:
+  - name: LPTMR
+    bit_range:
+    - 0
+    - 0
+    description: Low Power Timer Access Control
+  - name: TSI
+    bit_range:
+    - 5
+    - 5
+    description: TSI Access Control
+  - name: PORTA
+    bit_range:
+    - 9
+    - 9
+    description: Port A Clock Gate Control
+  - name: PORTB
+    bit_range:
+    - 10
+    - 10
+    description: Port B Clock Gate Control
+  - name: PORTC
+    bit_range:
+    - 11
+    - 11
+    description: Port C Clock Gate Control
+  - name: LPUART0
+    bit_range:
+    - 20
+    - 20
+    description: LPUART0 Clock Gate Control
+  - name: LTC
+    bit_range:
+    - 24
+    - 24
+    description: LTC Clock Gate Control
+  - name: RSIM
+    bit_range:
+    - 25
+    - 25
+    description: RSIM Clock Gate Control
+  - name: DCDC
+    bit_range:
+    - 26
+    - 26
+    description: DCDC Clock Gate Control
+  - name: BTLL
+    bit_range:
+    - 27
+    - 27
+    description: BTLL System Clock Gate Control
+  - name: PHYDIG
+    bit_range:
+    - 28
+    - 28
+    description: PHY Digital Clock Gate Control
+  - name: ZigBee
+    bit_range:
+    - 29
+    - 29
+    description: 802.15.4 Clock Gate Control
+  - name: ANT
+    bit_range:
+    - 30
+    - 30
+    description: ANT Clock Gate Control
+  - name: GEN_FSK
+    bit_range:
+    - 31
+    - 31
+    description: Generic FSK enabled
+  side_effects: null
+- id: SCGC6
+  address_offset: 4156
+  size: 32
+  access: READ_WRITE
+  reset_value: 1
+  fields:
+  - name: FTF
+    bit_range:
+    - 0
+    - 0
+    description: Flash Memory Clock Gate Control
+  - name: DMAMUX
+    bit_range:
+    - 1
+    - 1
+    description: DMA Mux Clock Gate Control
+  - name: TRNG
+    bit_range:
+    - 9
+    - 9
+    description: TRNG Clock Gate Control
+  - name: SPI0
+    bit_range:
+    - 12
+    - 12
+    description: SPI0 Clock Gate Control
+  - name: SPI1
+    bit_range:
+    - 13
+    - 13
+    description: SPI1 Clock Gate Control
+  - name: PIT
+    bit_range:
+    - 23
+    - 23
+    description: PIT Clock Gate Control
+  - name: TPM0
+    bit_range:
+    - 24
+    - 24
+    description: TPM0 Clock Gate Control
+  - name: TPM1
+    bit_range:
+    - 25
+    - 25
+    description: TPM1 Clock Gate Control
+  - name: TPM2
+    bit_range:
+    - 26
+    - 26
+    description: TPM2 Clock Gate Control
+  - name: ADC0
+    bit_range:
+    - 27
+    - 27
+    description: ADC0 Clock Gate Control
+  - name: RTC
+    bit_range:
+    - 29
+    - 29
+    description: RTC Access Control
+  - name: DAC0
+    bit_range:
+    - 31
+    - 31
+    description: DAC0 Clock Gate Control
+  side_effects: null
+- id: SCGC7
+  address_offset: 4160
+  size: 32
+  access: READ_WRITE
+  reset_value: 256
+  fields:
+  - name: DMA
+    bit_range:
+    - 8
+    - 8
+    description: DMA Clock Gate Control
+  side_effects: null
+- id: CLKDIV1
+  address_offset: 4164
+  size: 32
+  access: READ_WRITE
+  reset_value: 65536
+  fields:
+  - name: OUTDIV4
+    bit_range:
+    - 18
+    - 16
+    description: Clock 4 Output Divider value
+  - name: OUTDIV1
+    bit_range:
+    - 31
+    - 28
+    description: Clock 1 Output Divider value
+  side_effects: null
+- id: FCFG1
+  address_offset: 4172
+  size: 32
+  access: READ_WRITE
+  reset_value: 251658240
+  fields:
+  - name: FLASHDIS
+    bit_range:
+    - 0
+    - 0
+    description: Flash Disable
+  - name: FLASHDOZE
+    bit_range:
+    - 1
+    - 1
+    description: Flash Doze
+  - name: PFSIZE
+    bit_range:
+    - 27
+    - 24
+    description: Program Flash Size
+  side_effects: null
+- id: FCFG2
+  address_offset: 4176
+  size: 32
+  access: READ_ONLY
+  reset_value: 2147418112
+  fields:
+  - name: MAXADDR1
+    bit_range:
+    - 22
+    - 16
+    description: This field concatenated with leading zeros plus the value of the MAXADDR1 field indicates the first invalid address of the second program flash block (flash block 1)
+  - name: MAXADDR0
+    bit_range:
+    - 30
+    - 24
+    description: Max Address lock
+  side_effects: null
+- id: UIDMH
+  address_offset: 4184
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: UID
+    bit_range:
+    - 15
+    - 0
+    description: Unique Identification
+  side_effects: null
+- id: UIDML
+  address_offset: 4188
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: UID
+    bit_range:
+    - 31
+    - 0
+    description: Unique Identification
+  side_effects: null
+- id: UIDL
+  address_offset: 4192
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: UID
+    bit_range:
+    - 31
+    - 0
+    description: Unique Identification
+  side_effects: null
+- id: COPC
+  address_offset: 4352
+  size: 32
+  access: READ_WRITE
+  reset_value: 12
+  fields:
+  - name: COPW
+    bit_range:
+    - 0
+    - 0
+    description: COP Windowed Mode
+  - name: COPCLKS
+    bit_range:
+    - 1
+    - 1
+    description: COP Clock Select
+  - name: COPT
+    bit_range:
+    - 3
+    - 2
+    description: COP Watchdog Timeout
+  - name: COPSTPEN
+    bit_range:
+    - 4
+    - 4
+    description: COP Stop Enable
+  - name: COPDBGEN
+    bit_range:
+    - 5
+    - 5
+    description: COP Debug Enable
+  - name: COPCLKSEL
+    bit_range:
+    - 7
+    - 6
+    description: COP Clock Select
+  side_effects: null
+- id: SRVCOP
+  address_offset: 4356
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: SRVCOP
+    bit_range:
+    - 7
+    - 0
+    description: Service COP Register
+  side_effects: null
+interrupts: null
+timing: null

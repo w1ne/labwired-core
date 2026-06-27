@@ -1,0 +1,2 @@
+name: "good-c3"
+chip: "../../configs/chips/esp32c3.yaml"
