@@ -9,9 +9,11 @@ runs:
   steps:
     - name: Fetch pack
       shell: bash
+      env:
+        PACK: ${{ inputs.pack }}
       run: |
         set -euo pipefail
-        name="${{ inputs.pack }}"
+        name="$PACK"
         case "$name" in
           stm32cubel4@*)
             tag="${name#*@}"

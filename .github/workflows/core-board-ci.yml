@@ -21,8 +21,11 @@ jobs:
           python-version: "3.12"
       - run: pip install pyyaml
       - id: gen
+        env:
+          EVENT_NAME: ${{ github.event_name }}
         run: |
-          echo "matrix=$(python scripts/ci/board_matrix.py --event '${{ github.event_name }}')" >> "$GITHUB_OUTPUT"
+          matrix="$(python scripts/ci/board_matrix.py --event "$EVENT_NAME")"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
   board:
     needs: setup
@@ -63,10 +66,14 @@ jobs:
           pack: ${{ matrix.packs }}
 
       - name: Build firmware
-        run: ${{ matrix.path }}/ci/build.sh
+        env:
+          BOARD_PATH: ${{ matrix.path }}
+        run: "$BOARD_PATH/ci/build.sh"
 
       - name: Run tests
-        run: ${{ matrix.path }}/ci/test.sh
+        env:
+          BOARD_PATH: ${{ matrix.path }}
+        run: "$BOARD_PATH/ci/test.sh"
 
       - name: Upload board artifacts
         if: always()

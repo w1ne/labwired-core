@@ -21,6 +21,8 @@ def validate(entries: list[dict], repo_root: str) -> list[str]:
     root = Path(repo_root)
     errors: list[str] = []
     seen: set[str] = set()
+    if not entries:
+        errors.append("manifest has no boards")
     for e in entries:
         eid = e.get("id", "<no-id>")
         if eid in seen:
@@ -66,7 +68,7 @@ def main() -> int:
     ap.add_argument("--manifest", default="configs/ci/boards.yml")
     args = ap.parse_args()
 
-    manifest = str(Path(args.repo_root) / args.manifest)
+    manifest = args.manifest if Path(args.manifest).is_absolute() else str(Path(args.repo_root) / args.manifest)
     entries = load_manifest(manifest)
     errors = validate(entries, args.repo_root)
     if errors:
