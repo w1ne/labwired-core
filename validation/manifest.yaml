@@ -105,7 +105,11 @@ boards:
     # hardcoded behaviour byte-for-byte (ISR@0x1C, TDR@0x28, RDR@0x24, status_idle
     # 0xC0=TXE|TC, RXNE 1<<5, TXEIE 1<<7/TCIE 1<<6); h563_mmio_diff/parity pass
     # unchanged, so no behavioural change to this board's pinned registers.
-    drift_ack: 2026-06-26
+    # 2026-06-27: Stm32V2 USART now persists BRR (USARTDIV @ 0x0C) for read-back
+    # fidelity (was dropped → read 0). Additive and read-back only — no byte-path
+    # or reset-value change; h563_mmio_diff/parity (which don't write-then-read BRR)
+    # pass unchanged. No live re-capture this session.
+    drift_ack: 2026-06-27
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -165,7 +169,13 @@ boards:
     # byte-for-byte (status_idle 0xC0=TXE|TC, RXNE 1<<5, same ISR/TDR/RDR offsets);
     # l476_mmio_diff + l476_parity_diff pass unchanged → no behavioural change to
     # this board's pinned registers. No live re-capture this session.
-    drift_ack: 2026-06-26
+    # 2026-06-27: Stm32V2 USART now persists BRR (USARTDIV @ 0x0C) for read-back
+    # fidelity (was dropped → read 0). This fix lets unmodified Zephyr ztest run on
+    # this board: uart_stm32_set_baudrate writes BRR then __ASSERT(BRR >= 16), which
+    # previously panicked at PRE_KERNEL boot. Additive, read-back only — no byte-path
+    # change; l476_mmio_diff/parity (no BRR write-then-read) pass unchanged. tests/
+    # ztest/base now reaches PROJECT EXECUTION SUCCESSFUL. No live re-capture.
+    drift_ack: 2026-06-27
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -198,7 +208,11 @@ boards:
     # (status_idle 0xC0, RXNE 1<<5, same offsets); l0_mmio_diff passes unchanged →
     # no behavioural change to this board's pinned registers. No live re-capture
     # this session.
-    drift_ack: 2026-06-26
+    # 2026-06-27: Stm32V2 USART now persists BRR (USARTDIV @ 0x0C) for read-back
+    # fidelity (was dropped → read 0). Additive, read-back only — no byte-path or
+    # reset-value change; l0_mmio_diff (no BRR write-then-read) passes unchanged.
+    # No live re-capture this session.
+    drift_ack: 2026-06-27
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -227,7 +241,10 @@ boards:
     # (SR@0x00, DR@0x04, status_idle 0xC0=TXE|TC, RXNE 1<<5, TXEIE 1<<7/TCIE 1<<6);
     # stm32f1_mmio_diff + f103_conformance digest pass unchanged → no behavioural
     # change to this board's pinned registers. No live re-capture this session.
-    drift_ack: 2026-06-26
+    # 2026-06-27: uart.rs BRR read-back fix is gated to the Stm32V2 layout; the F1
+    # USART arm (this board) is untouched — purely a shared-file hash drift, zero
+    # behavioural change. stm32f1_mmio_diff + f103_conformance pass unchanged.
+    drift_ack: 2026-06-27
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/afio.rs
@@ -262,7 +279,10 @@ boards:
     # DR@0x04, status_idle 0xC0, RXNE 1<<5). UART was already smoke-tier here (not
     # in the mmio diff), so this board's silicon-pinned set is unaffected. No live
     # re-capture this session.
-    drift_ack: 2026-06-26
+    # 2026-06-27: uart.rs BRR read-back fix is gated to the Stm32V2 layout; the F1
+    # USART arm (this board) is untouched — purely a shared-file hash drift, zero
+    # behavioural change. stm32f4_mmio_diff passes unchanged.
+    drift_ack: 2026-06-27
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -332,3 +352,16 @@ boards:
     note: "UART0 (stm32v2-profile cheat) + PIO0 declared, but ZERO PIO0 test coverage. No silicon."
     models:
       - configs/chips/rp2040.yaml
+
+  - id: nrf5340
+    doc: docs/boards/nrf5340.md
+    chip: configs/chips/nrf5340.yaml
+    tier: sim-validated
+    note: "Application core (Cortex-M33). Boots UNMODIFIED upstream Zephyr v3.7 hello_world (board nrf5340dk/nrf5340/cpuapp) end to end and prints its banner over the UARTE0 EasyDMA console — asserted by firmware_survival::test_nrf5340_zephyr_survival, with the ELF-independent clock/alias twin in tests/nrf5340_clock_boot.rs. Reuses the shared Nordic CLOCK/UARTE/RTC behavioural models at the 0x5000_0000 non-secure peripheral alias; the whole boot is bus-violation-free (LABWIRED_TRACE_VIOLATIONS=1). Network core, radio, TrustZone/SPU enforcement, and analog trims are not modeled (FICR/UICR/regulator/trim blocks are benign stubs). No nRF5340 silicon diff — no bench board."
+    offline_tests:
+      - "firmware_survival::test_nrf5340_zephyr_survival (real Zephyr ELF boots + banner)"
+      - "nrf5340_clock_boot (HFCLK/LFCLK started-event polls + non-secure alias mapping)"
+    models:
+      - configs/chips/nrf5340.yaml
+      - crates/core/src/peripherals/nrf52
+      - crates/core/src/peripherals/scb.rs

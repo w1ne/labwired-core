@@ -48,7 +48,7 @@ SENSIRION_PARTS := \
   $(GAS_DIR)/sensirion_gas_index_algorithm.c
 
 # Application + platform shims (our code).
-APP_SRC := startup.S c3_uart.c sensirion_i2c_hal_c3.c veml7700_c3.c ssd1306_c3.c main.c
+APP_SRC := startup.S c3_uart.c sensirion_i2c_hal_c3.c veml7700_c3.c mlx90614_c3.c ssd1306_c3.c main.c
 
 ELF := leo_airquality.elf
 

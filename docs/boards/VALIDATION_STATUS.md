@@ -9,17 +9,18 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 |-------|------|----------------------|--------------|--------|
 | `nrf52840` | 🟢 silicon-verified | 2026-06-17 | 2026-06-23 | ⚠ drift acked 2026-06-23 (re-capture pending) |
 | `seeed-xiao-nrf52840-sense` | 🟢 silicon-verified | 2026-06-17 | 2026-06-23 | ⚠ drift acked 2026-06-23 (re-capture pending) |
-| `stm32h563` | 🟢 silicon-verified | 2026-06-22 | 2026-06-26 | ⚠ drift acked 2026-06-26 (re-capture pending) |
+| `stm32h563` | 🟢 silicon-verified | 2026-06-22 | 2026-06-27 | ⚠ drift acked 2026-06-27 (re-capture pending) |
 | `esp32c3` | 🟢 silicon-verified | 2026-06-17 | 2026-06-20 | ⚠ drift acked 2026-06-20 (re-capture pending) |
-| `nucleo-l476rg` | 🟢 silicon-verified | 2026-06-20 | 2026-06-26 | ⚠ drift acked 2026-06-26 (re-capture pending) |
-| `nucleo-l073rz` | 🟢 silicon-verified | 2026-06-20 | 2026-06-26 | ⚠ drift acked 2026-06-26 (re-capture pending) |
-| `stm32f103` | 🟢 silicon-verified | 2026-06-20 | 2026-06-26 | ⚠ drift acked 2026-06-26 (re-capture pending) |
-| `stm32f407` | 🟢 silicon-smoke | 2026-06-20 | 2026-06-26 | ⚠ drift acked 2026-06-26 (re-capture pending) |
+| `nucleo-l476rg` | 🟢 silicon-verified | 2026-06-20 | 2026-06-27 | ⚠ drift acked 2026-06-27 (re-capture pending) |
+| `nucleo-l073rz` | 🟢 silicon-verified | 2026-06-20 | 2026-06-27 | ⚠ drift acked 2026-06-27 (re-capture pending) |
+| `stm32f103` | 🟢 silicon-verified | 2026-06-20 | 2026-06-27 | ⚠ drift acked 2026-06-27 (re-capture pending) |
+| `stm32f407` | 🟢 silicon-smoke | 2026-06-20 | 2026-06-27 | ⚠ drift acked 2026-06-27 (re-capture pending) |
 | `esp32s3` | 🟢 silicon-verified | 2026-06-20 | 2026-06-26 | ⚠ drift acked 2026-06-26 (re-capture pending) |
-| `stm32f401` | 🟡 smoke-manual | — | 2026-06-26 | no silicon capture |
-| `stm32wba52` | 🟡 smoke-manual | — | 2026-06-26 | no silicon capture |
-| `nrf52832` | ⚪ structural | — | 2026-06-07 | no silicon capture |
+| `stm32f401` | 🟡 smoke-manual | — | 2026-06-27 | no silicon capture |
+| `stm32wba52` | 🟡 smoke-manual | — | 2026-06-27 | no silicon capture |
+| `nrf52832` | ⚪ structural | — | 2026-06-27 | no silicon capture |
 | `rp2040` | ⚪ structural | — | 2026-06-26 | no silicon capture |
+| `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | 2026-06-27 | no silicon capture |
 
 ## `nrf52840` — 🟢 silicon-verified
 
@@ -43,7 +44,7 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 - Silicon: **2026-06-22** on STLINK-V3 (USB 0483:374e, NUCLEO-H563ZI, dapdirect AP1 recipe) — FLASH program-behaviour live-diff run on the board 2026-06-22 (drives real program/erase over SWD): write buffer (NSSR.WBNE) accumulates a 16-byte quad-word, commits + sets EOP only on completion; a misaligned quad-word raises INCERR alone and commits nothing; program-over-not-erased is permitted and ANDs the bits (no PGSERR); flags clear via NSCCR (0x30), not by writing NSSR. The sim H5 flash error-flag + read-while-write fidelity gates were CORRECTED to match this capture (earlier datasheet model was wrong on all four points). Prior MMIO/reset diff (h563_mmio_diff + h563_parity_diff + h563_class_diff, 0 divergence) still holds.
   - offline (CI): h563_conformance (5 tests vs frozen 2026-06-10..12 captures)
   - offline (CI): h563_mmio_diff::{h563_mmio_sim_only,h563_parity_sim_only,h563_class_sim_only}
-- Drift status: **⚠ drift acked 2026-06-26 (re-capture pending)**
+- Drift status: **⚠ drift acked 2026-06-27 (re-capture pending)**
 
 ## `esp32c3` — 🟢 silicon-verified
 
@@ -60,7 +61,7 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 - Silicon: **2026-06-20** on STLINK-V2.1 (USB 0483:374b serial 0670FF…1747, NUCLEO-L476RG onboard) — Live re-capture after the v0.17.0 merge: l476_mmio_diff + l476_parity_diff pass (15 mmio + 104 parity), 0 divergence. Supersedes the 2026-06-19 drift_ack.
   - offline (CI): l476_mmio_diff::{l476_mmio_sim_only,l476_parity_sim_only}
   - offline (CI): firmware_survival L476 cases (UART byte stream)
-- Drift status: **⚠ drift acked 2026-06-26 (re-capture pending)**
+- Drift status: **⚠ drift acked 2026-06-27 (re-capture pending)**
 
 ## `nucleo-l073rz` — 🟢 silicon-verified
 
@@ -69,7 +70,7 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 - Silicon: **2026-06-20** on ST-LINK V2.1 (NUCLEO-L073RZ over SWD) — Live re-capture after the v0.17.0 merge: l0_mmio_diff 20/20, 0 divergence (RCC/GPIO/SPI1/TIM2/TIM21, incl. the TIM2-16-bit fix). Supersedes the 2026-06-19 drift_ack.
   - offline (CI): stm32l0_mmio_diff::{l0_mmio_sim_only,l0_parity_sim_only}
   - offline (CI): firmware_survival L073 smoke case
-- Drift status: **⚠ drift acked 2026-06-26 (re-capture pending)**
+- Drift status: **⚠ drift acked 2026-06-27 (re-capture pending)**
 
 ## `stm32f103` — 🟢 silicon-verified
 
@@ -78,7 +79,7 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 - Silicon: **2026-06-20** on ST-LINK V2.1 (USB 0483:374b), genuine STM32F103 — Live re-capture after the v0.17.0 bxcan/clock-gating merge: stm32f1_mmio_diff 102/102 (24 reset + 26 R/W + 52 sweep), 0 divergence, and f103_conformance digest matches silicon. Supersedes the 2026-06-19 drift_ack. (Earlier capture caught + fixed a classic SPI CR1 bug masking CRCNEXT bit 12 — 0xEFFF vs silicon 0xFFFF.)
   - offline (CI): stm32f1_mmio_diff::{f1_reset_sim_only,f1_mmio_sim_only,f1_parity_sim_only,f1_sweep_sim_only}
   - offline (CI): f103_conformance::conformance_sim (digest)
-- Drift status: **⚠ drift acked 2026-06-26 (re-capture pending)**
+- Drift status: **⚠ drift acked 2026-06-27 (re-capture pending)**
 
 ## `stm32f407` — 🟢 silicon-smoke
 
@@ -87,7 +88,7 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 - Silicon: **2026-06-20** on ST-LINK/V2 (USB 0483:3748, IDCODE 0x10016413) — connect-under-reset (firmware was holding SWD), adapter 480 kHz — Live re-capture after the v0.17.0 merge: stm32f4_mmio_diff 37/37 (2 reset + 31 sweep + 4 behaviour), 0 divergence. Caught + fixed a real model bug: F407 silicon does NOT latch SPI1 CR1 bit 12 (CRCNEXT) — writes 0xFFFF, reads 0xEFFF — vs F103 which keeps it writable; spi.rs now applies a per-part cr1_mask (F4 0xEFFF). Supersedes the 2026-06-19 drift_ack. (I²C/UART models still smoke-tier — not in the mmio diff.)
   - offline (CI): stm32f4_mmio_diff::{f4_reset_sim_only,f4_sweep_sim_only,f4_behavior_sim_only}
   - offline (CI): firmware_survival F407 smoke + i2c cases (sim-self-pinned)
-- Drift status: **⚠ drift acked 2026-06-26 (re-capture pending)**
+- Drift status: **⚠ drift acked 2026-06-27 (re-capture pending)**
 
 ## `esp32s3` — 🟢 silicon-verified
 
@@ -124,4 +125,13 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 - Doc: [`docs/boards/rp2040.md`](rp2040.md)  ·  Chip: `configs/chips/rp2040.yaml`
 - Note: UART0 (stm32v2-profile cheat) + PIO0 declared, but ZERO PIO0 test coverage. No silicon.
 - Silicon: none — not validated against real hardware.
+- Drift status: **no silicon capture**
+
+## `nrf5340` — 🔵 sim-validated (deep model, no HW diff)
+
+- Doc: [`docs/boards/nrf5340.md`](nrf5340.md)  ·  Chip: `configs/chips/nrf5340.yaml`
+- Note: Application core (Cortex-M33). Boots UNMODIFIED upstream Zephyr v3.7 hello_world (board nrf5340dk/nrf5340/cpuapp) end to end and prints its banner over the UARTE0 EasyDMA console — asserted by firmware_survival::test_nrf5340_zephyr_survival, with the ELF-independent clock/alias twin in tests/nrf5340_clock_boot.rs. Reuses the shared Nordic CLOCK/UARTE/RTC behavioural models at the 0x5000_0000 non-secure peripheral alias; the whole boot is bus-violation-free (LABWIRED_TRACE_VIOLATIONS=1). Network core, radio, TrustZone/SPU enforcement, and analog trims are not modeled (FICR/UICR/regulator/trim blocks are benign stubs). No nRF5340 silicon diff — no bench board.
+- Silicon: none — not validated against real hardware.
+  - offline (CI): firmware_survival::test_nrf5340_zephyr_survival (real Zephyr ELF boots + banner)
+  - offline (CI): nrf5340_clock_boot (HFCLK/LFCLK started-event polls + non-secure alias mapping)
 - Drift status: **no silicon capture**

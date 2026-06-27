@@ -127,10 +127,20 @@ fn leo_normal_scenario_boots_all_sensors_and_flips_verdict() {
     assert_contains(&run.uart, "crack a window", ctx);
 
     // Mold Index: as the closed room's humidity climbs into the mold-favorable
-    // band, the derived mold risk escalates from low to elevated — the metric
-    // Leo's mold-detection use case is built around.
+    // band, the derived mold risk escalates from low — the metric Leo's
+    // mold-detection use case is built around.
     assert_contains(&run.uart, "mold risk: low", ctx);
-    assert_contains(&run.uart, "mold risk: ELEVATED", ctx);
+
+    // Surface-condensation channel — the moisture-first differentiator. The
+    // MLX90614 IR reads a cold wall; with the SCD41 air T/RH the firmware
+    // computes the dew point and surface RH. As the wall cools below the dew
+    // point the surface RH hits condensation while the *air* RH is still benign,
+    // escalating the mold verdict to HIGH for a reason an air-only humidity
+    // index is blind to. This is exercised end-to-end over the real C3 I²C bus.
+    assert_contains(&run.uart, "SURFACE:", ctx);
+    assert_contains(&run.uart, "CONDENSING - wall is wet", ctx);
+    assert_contains(&run.uart, "(surface condensation)", ctx);
+    assert_contains(&run.uart, "mold risk: HIGH", ctx);
 
     // The run completes and the OLED rendered a real frame.
     assert_contains(&run.uart, "LEO DONE", ctx);
@@ -153,6 +163,10 @@ fn leo_stuffy_scenario_reaches_ventilate_now() {
     // A crowded, poorly ventilated room climbs past 1400 ppm to the strongest
     // verdict.
     assert_contains(&run.uart, "ventilate now", ctx);
+    // Damp room + cold exterior wall: condensation drives the mold verdict to
+    // its worst (SEVERE) via the surface channel.
+    assert_contains(&run.uart, "CONDENSING - wall is wet", ctx);
+    assert_contains(&run.uart, "mold risk: SEVERE", ctx);
     assert_contains(&run.uart, "LEO DONE", ctx);
     assert_oled_rendered(&run.uart, ctx);
 }

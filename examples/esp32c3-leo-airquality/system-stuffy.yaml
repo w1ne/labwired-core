@@ -59,6 +59,20 @@ external_devices:
       lux_target: 90.0        # dims toward evening
       ramp_alpha: 0.08
 
+  # ── Melexis MLX90614: IR surface temperature (condensation / mold) ────────
+  # STUFFY scene: damp room, cold exterior wall. The surface starts already
+  # near the dew point and cools well below it, so condensation sets in early
+  # and the mold risk escalates to SEVERE — the worst-case the monitor is for.
+  - id: "surface-ir"
+    type: "mlx90614"
+    connection: "i2c0"
+    config:
+      i2c_address: 0x5A
+      surface_temp_c: 16.0
+      surface_temp_target_c: 8.0    # deep below the dew point
+      ambient_temp_c: 21.0
+      ramp_alpha: 0.08
+
   # ── SSD1306 OLED: on-device screen showing the plain-language verdict ──────
   - id: "oled"
     type: "oled-ssd1306"
