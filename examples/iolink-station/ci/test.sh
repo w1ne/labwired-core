@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Run the multi-chip station integration tests against the freshly built ELFs.
+set -euo pipefail
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+export LABWIRED_REQUIRE_IOLINK_ELFS=1
+cargo test -p labwired-core --release --test world_multichip -- --nocapture
