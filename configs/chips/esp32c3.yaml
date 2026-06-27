@@ -121,11 +121,16 @@ peripherals:
     type: "esp32c3_spi"
     base_address: 0x60024000
     size: "4KB"
+  # Behavioral LEDC (LED PWM) controller
+  # (crates/core/src/peripherals/esp32c3/ledc.rs): the four low-speed timers
+  # run as live up-counters clocked by elapsed cycles, each wrapping at its
+  # programmed 2^DUTY_RES period and latching LSTIMERx_OVF — a real timer the
+  # declarative descriptor lacks. The register layout still matches
+  # ../peripherals/esp32c3/ledc.yaml (the SVD descriptor it was diffed against).
   - id: "ledc"
-    type: "declarative"
+    type: "esp32c3_ledc"
     base_address: 0x60019000
-    config:
-      path: "../peripherals/esp32c3/ledc.yaml"
+    size: "1KB"
   - id: "rmt"
     type: "declarative"
     base_address: 0x60016000

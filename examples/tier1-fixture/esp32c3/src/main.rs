@@ -26,7 +26,7 @@
 //! | i2c0              | i2c           | i2c    | PASS — command-list engine runs |
 //! | spi2              | spi           | spi    | PASS — GP-SPI2 USR launch + TRANS_DONE |
 //! | apb_saradc        | adc           | adc    | PASS — one-shot channel-dependent conversion |
-//! | ledc              | ledc          | pwm    | unrecorded — declarative shadow only, no real duty/timer |
+//! | ledc              | ledc          | pwm    | PASS — live timer counter advances, wraps (LSTIMER0_OVF), PAUSE freezes |
 //! | (no systimer)     | —             | clock  | na      |
 //! | (no gdma/dma)     | —             | dma    | na      |
 //!
@@ -48,6 +48,7 @@ const INTMATRIX_BASE: u32 = 0x600C_2000;
 const I2C0_BASE: u32 = 0x6001_3000;
 const SPI2_BASE: u32 = 0x6002_4000;
 const APB_SARADC_BASE: u32 = 0x6004_0000;
+const LEDC_BASE: u32 = 0x6001_9000;
 
 #[inline(always)]
 fn reg_read(addr: u32) -> u32 {
@@ -348,6 +349,81 @@ fn check_adc() -> Result<(), &'static str> {
     Ok(())
 }
 
+// ── pwm: run a LEDC timer and observe a live counter + overflow ────────────
+//
+// configs/chips/esp32c3.yaml wires ledc (type esp32c3_ledc) — the behavioral
+// timer engine (crates/core/src/peripherals/esp32c3/ledc.rs), not the
+// declarative descriptor. TIMER0_CONF @ 0xA0 holds DUTY_RES[3:0]
+// (period = 1<<DUTY_RES), CLK_DIV[21:4] (integer divider = field>>8),
+// PAUSE[22], RST[23]; TIMER0_VALUE @ 0xA4 reads back the live counter
+// (CNT[13:0]); INT_RAW @ 0xC0 latches LSTIMER0_OVF (bit 0) on wrap, INT_CLR @
+// 0xCC is W1C.
+//
+// The proof a register file cannot fake: (1) with the timer running the
+// counter advances between two reads; (2) it wraps past 2^DUTY_RES and latches
+// LSTIMER0_OVF; (3) asserting PAUSE freezes the counter so no further overflow
+// occurs. A declarative shadow register would never advance, wrap, or stall.
+fn check_ledc() -> Result<(), &'static str> {
+    const TIMER0_CONF: u32 = LEDC_BASE + 0xA0;
+    const TIMER0_VALUE: u32 = LEDC_BASE + 0xA4;
+    const INT_RAW: u32 = LEDC_BASE + 0xC0;
+    const INT_CLR: u32 = LEDC_BASE + 0xCC;
+    const PAUSE: u32 = 1 << 22;
+    const RST: u32 = 1 << 23;
+    const LSTIMER0_OVF: u32 = 1 << 0;
+    // CONF = DUTY_RES | (CLK_DIV_field << 4); CLK_DIV integer part = field>>8.
+    let conf = |duty_res: u32, div_int: u32| (duty_res & 0xF) | (((div_int & 0x3FF) << 8) << 4);
+
+    // Hold the timer in reset, clear stale state, then release it. Period =
+    // 1<<10 = 1024 counts at divider 1, so it cannot wrap in the handful of
+    // cycles before the first checks below, but will within a bounded spin.
+    reg_write(TIMER0_CONF, conf(10, 1) | RST);
+    reg_write(INT_CLR, LSTIMER0_OVF);
+    reg_write(TIMER0_CONF, conf(10, 1)); // release reset, start counting
+
+    if reg_read(INT_RAW) & LSTIMER0_OVF != 0 {
+        return Err("ledc-ovf-early"); // must not have wrapped yet
+    }
+
+    // (1) The live counter advances with elapsed cycles.
+    let a = reg_read(TIMER0_VALUE);
+    for i in 0u32..2_000 {
+        core::hint::black_box(i);
+    }
+    let b = reg_read(TIMER0_VALUE);
+    if a == b {
+        return Err("ledc-not-counting");
+    }
+
+    // (2) Run long enough to wrap the 1024-count period and latch overflow.
+    let mut overflowed = false;
+    for _ in 0..200_000 {
+        if reg_read(INT_RAW) & LSTIMER0_OVF != 0 {
+            overflowed = true;
+            break;
+        }
+    }
+    if !overflowed {
+        return Err("ledc-ovf-timeout");
+    }
+
+    // (3) PAUSE freezes the counter: after clearing overflow no new wrap fires.
+    reg_write(TIMER0_CONF, conf(10, 1) | PAUSE);
+    reg_write(INT_CLR, LSTIMER0_OVF);
+    let p1 = reg_read(TIMER0_VALUE);
+    for i in 0u32..4_000 {
+        core::hint::black_box(i);
+    }
+    let p2 = reg_read(TIMER0_VALUE);
+    if p1 != p2 {
+        return Err("ledc-pause-not-frozen");
+    }
+    if reg_read(INT_RAW) & LSTIMER0_OVF != 0 {
+        return Err("ledc-pause-still-overflowing");
+    }
+    Ok(())
+}
+
 #[entry]
 fn main() -> ! {
     // gpio, timer, irq, i2c — ordered by increasing complexity.
@@ -359,6 +435,7 @@ fn main() -> ! {
     report("i2c", check_i2c());
     report("spi", check_spi());
     report("adc", check_adc());
+    report("ledc", check_ledc());
     uart0_write_line("TIER1 done");
 
     loop {

@@ -82,6 +82,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "esp32c3_i2c",
     "esp32c3_spi",
     "esp32c3_apb_saradc",
+    "esp32c3_ledc",
     // nRF52 behavioral models (nrf52 factory).
     "nrf52840_twim",
     "nrf52_saadc",

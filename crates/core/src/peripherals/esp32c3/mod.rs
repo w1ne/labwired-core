@@ -9,6 +9,7 @@ pub mod apb_saradc;
 pub mod cache;
 pub mod forced_status;
 pub mod i2c;
+pub mod ledc;
 pub mod reg_block;
 pub mod rng;
 pub mod rtc_timer;

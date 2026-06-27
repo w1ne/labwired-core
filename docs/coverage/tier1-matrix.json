@@ -57,7 +57,7 @@
       "status": "pass"
     },
     "pwm": {
-      "status": "unrecorded"
+      "status": "pass"
     },
     "rtc": {
       "status": "na"

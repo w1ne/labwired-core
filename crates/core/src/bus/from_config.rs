@@ -318,6 +318,17 @@ impl SystemBus {
                     );
                     Box::new(crate::peripherals::esp32c3::apb_saradc::Esp32c3ApbSarAdc::new(src))
                 }
+                // ESP32-C3 behavioral LEDC (LED PWM) controller. Drives the
+                // four low-speed timers as live up-counters that advance with
+                // elapsed cycles and latch LSTIMERx_OVF on wrap; the C3 chip
+                // yaml selects this type for `ledc`. The descriptor `irq`
+                // overrides the default intr-matrix source (LEDC = 23).
+                "esp32c3_ledc" => {
+                    let src = p_cfg
+                        .irq
+                        .unwrap_or(crate::peripherals::esp32c3::ledc::LEDC_INTR_SOURCE_ID);
+                    Box::new(crate::peripherals::esp32c3::ledc::Esp32c3Ledc::new(src))
+                }
                 // Nordic peripherals — register-surface models cross-validated
                 // by hw-oracle::nrf52_onboarding_diff. See peripherals/nrf52/.
                 // TWIM (I²C master with EasyDMA) — nRF52840 PS §6.31.

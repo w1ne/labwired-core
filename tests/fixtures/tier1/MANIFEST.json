@@ -1,66 +1,66 @@
 {
   "esp32.elf": {
     "sha256": "5caf387941cb54bc421b1b2bc1685f8a5086894e1311decb8eabf254d7532aea",
-    "source_rev": "ee361955da68f64a34bb6d0f66d9ee2dedfe5fe2"
+    "source_rev": "823f5f381f96125aa9bf5e776374c789e6a22665"
   },
   "esp32c3.elf": {
-    "sha256": "4676cde73cadaf766c80e19a390e9c57bf74fb59deb87a1f837a720bd1f12911",
-    "source_rev": "ee361955da68f64a34bb6d0f66d9ee2dedfe5fe2"
+    "sha256": "004553a89d1ea70071f7b7328b671310bd761a52843cb8aa1eeaa249bb87a668",
+    "source_rev": "823f5f381f96125aa9bf5e776374c789e6a22665"
   },
   "esp32s3-flash.bin": {
     "sha256": "9c0bb604abbc8d18da77bf6c0f2ff6cb11fcda8db18b34ce08081cbf12d64209",
-    "source_rev": "ee361955da68f64a34bb6d0f66d9ee2dedfe5fe2"
+    "source_rev": "823f5f381f96125aa9bf5e776374c789e6a22665"
   },
   "esp32s3.elf": {
     "sha256": "27a61f851c798edbf2dabc38526cf4ca9211ab51a89387baba9faa1936060a5f",
-    "source_rev": "ee361955da68f64a34bb6d0f66d9ee2dedfe5fe2"
+    "source_rev": "823f5f381f96125aa9bf5e776374c789e6a22665"
   },
   "nrf52832.elf": {
     "sha256": "12c39a0b61da606f0be34d52f7d3402e9fa806dbabea1f076550a09c211dcc1f",
-    "source_rev": "ee361955da68f64a34bb6d0f66d9ee2dedfe5fe2"
+    "source_rev": "823f5f381f96125aa9bf5e776374c789e6a22665"
   },
   "nrf52840.elf": {
     "sha256": "616776cc28d8f5693151ff01c0e0ca124bf42405e98982f191c40988a338cae2",
-    "source_rev": "ee361955da68f64a34bb6d0f66d9ee2dedfe5fe2"
+    "source_rev": "823f5f381f96125aa9bf5e776374c789e6a22665"
   },
   "rp2040.elf": {
     "sha256": "ce1865dcb9b6f581ea662642972aa809f09dea36e659b16eb92e4d74c92750d2",
-    "source_rev": "ee361955da68f64a34bb6d0f66d9ee2dedfe5fe2"
+    "source_rev": "823f5f381f96125aa9bf5e776374c789e6a22665"
   },
   "stm32f103.elf": {
     "sha256": "9642dbe030da2b0986a64b2abef5f1eafc118798b677e851673412222bdf9ba0",
-    "source_rev": "ee361955da68f64a34bb6d0f66d9ee2dedfe5fe2"
+    "source_rev": "823f5f381f96125aa9bf5e776374c789e6a22665"
   },
   "stm32f401.elf": {
     "sha256": "f7914ce4ab12b96f013bc57422b2c01bba61e4b75f8c4b23538711ce76d16086",
-    "source_rev": "ee361955da68f64a34bb6d0f66d9ee2dedfe5fe2"
+    "source_rev": "823f5f381f96125aa9bf5e776374c789e6a22665"
   },
   "stm32f407.elf": {
     "sha256": "9b9860bed790573d5f3bf505bdf73659c27361686b1453ef46d4a19c08ad4086",
-    "source_rev": "ee361955da68f64a34bb6d0f66d9ee2dedfe5fe2"
+    "source_rev": "823f5f381f96125aa9bf5e776374c789e6a22665"
   },
   "stm32g474re.elf": {
     "sha256": "410a4a2a6a3396dff1cbf3670203c9647889f08e774162c3ca7e979f251b1f2e",
-    "source_rev": "ee361955da68f64a34bb6d0f66d9ee2dedfe5fe2"
+    "source_rev": "823f5f381f96125aa9bf5e776374c789e6a22665"
   },
   "stm32h563.elf": {
     "sha256": "a67fd1ee05d2771d8e6c624f55d97bf44993c285955fe6a97f6669e0926d833a",
-    "source_rev": "ee361955da68f64a34bb6d0f66d9ee2dedfe5fe2"
+    "source_rev": "823f5f381f96125aa9bf5e776374c789e6a22665"
   },
   "stm32l073.elf": {
     "sha256": "7255e56e43738bb6d848b26f1e73b3a3809375a11719e749594d336dbab174df",
-    "source_rev": "ee361955da68f64a34bb6d0f66d9ee2dedfe5fe2"
+    "source_rev": "823f5f381f96125aa9bf5e776374c789e6a22665"
   },
   "stm32l476.elf": {
     "sha256": "3b953b09fb64b9a81239feddd10f5145378b37a96b1ea786cebbc302fca38d8f",
-    "source_rev": "ee361955da68f64a34bb6d0f66d9ee2dedfe5fe2"
+    "source_rev": "823f5f381f96125aa9bf5e776374c789e6a22665"
   },
   "stm32wb55.elf": {
     "sha256": "5af1bfac360e6446d1e4b6267cc48088a98b47682d779ad5f8cff8afb04ddb65",
-    "source_rev": "ee361955da68f64a34bb6d0f66d9ee2dedfe5fe2"
+    "source_rev": "823f5f381f96125aa9bf5e776374c789e6a22665"
   },
   "stm32wba52.elf": {
     "sha256": "fbbc51840437278d1721997a5f88595eeb6df00a298636057454e10d04160d79",
-    "source_rev": "ee361955da68f64a34bb6d0f66d9ee2dedfe5fe2"
+    "source_rev": "823f5f381f96125aa9bf5e776374c789e6a22665"
   }
 }

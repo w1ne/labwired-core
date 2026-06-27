@@ -164,7 +164,13 @@ boards:
     # (CLOCK=0x80003043, CTRL=0x3c0000, DMA_CONF reset 0 + DATE=0x2007220 for SPI;
     # ONETIME_SAMPLE/INT layout for ADC). They do not touch the asserted reset-oracle
     # set; this ack covers the new model files until the next full live re-capture.
-    drift_ack: 2026-06-27
+    # 2026-06-28: added behavioural LEDC controller (esp32c3/ledc.rs), wired into
+    # esp32c3.yaml for the tier-1 pwm cell. ADDITIVE: the four low-speed timers now
+    # run as live up-counters that advance with elapsed cycles, wrap at 2^DUTY_RES,
+    # and latch LSTIMERx_OVF (TIMERx_CONF/VALUE + INT_* layout diffed against the
+    # committed ledc.yaml SVD descriptor). It does not touch the asserted reset-oracle
+    # set; this ack covers the new model file until the next full live re-capture.
+    drift_ack: 2026-06-28
 
   - id: nucleo-l476rg
     doc: docs/boards/nucleo-l476rg.md
