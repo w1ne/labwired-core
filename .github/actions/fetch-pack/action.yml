@@ -1,0 +1,34 @@
+name: Fetch device pack
+description: Sparse-fetch a named CMSIS/vendor device pack and export its dir to env.
+inputs:
+  pack:
+    description: "pack id, e.g. stm32cubel4@v1.18.2"
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Fetch pack
+      shell: bash
+      run: |
+        set -euo pipefail
+        name="${{ inputs.pack }}"
+        case "$name" in
+          stm32cubel4@*)
+            tag="${name#*@}"
+            CUBE="$RUNNER_TEMP/STM32CubeL4"
+            git clone --depth 1 --branch "$tag" \
+              --filter=blob:none --sparse \
+              https://github.com/STMicroelectronics/STM32CubeL4.git "$CUBE"
+            git -C "$CUBE" sparse-checkout set \
+              Drivers/CMSIS/Include \
+              Drivers/CMSIS/Device/ST \
+              Projects/NUCLEO-L476RG/Templates/STM32CubeIDE
+            git -C "$CUBE" submodule update --init --depth 1 \
+              Drivers/CMSIS/Device/ST/STM32L4xx
+            echo "STM32CUBE_L4_DIR=$CUBE" >> "$GITHUB_ENV"
+            ;;
+          *)
+            echo "Unknown pack: $name" >&2
+            exit 1
+            ;;
+        esac
