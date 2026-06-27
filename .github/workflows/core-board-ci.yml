@@ -49,15 +49,20 @@ jobs:
           workspaces: |
             . -> target
 
-      - name: Install ARM bare-metal toolchain
-        if: contains(matrix.toolchains, 'arm-none-eabi')
+      - name: Install apt packages
+        if: matrix.apt != ''
+        env:
+          APT: ${{ matrix.apt }}
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-arm-none-eabi
+          sudo apt-get install -y $APT
 
-      - name: Install RISC-V target
-        if: contains(matrix.toolchains, 'riscv')
-        run: rustup target add riscv32imac-unknown-none-elf
+      - name: Add rust targets
+        if: matrix.rust_targets != ''
+        env:
+          RUST_TARGETS: ${{ matrix.rust_targets }}
+        run: |
+          for t in $RUST_TARGETS; do rustup target add "$t"; done
 
       - name: Fetch device packs
         if: matrix.packs != ''
