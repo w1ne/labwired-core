@@ -39,7 +39,7 @@
   },
   "esp32c3": {
     "adc": {
-      "status": "unrecorded"
+      "status": "pass"
     },
     "clock": {
       "status": "unrecorded"
@@ -63,7 +63,7 @@
       "status": "na"
     },
     "spi": {
-      "status": "unrecorded"
+      "status": "pass"
     },
     "timer": {
       "status": "pass"

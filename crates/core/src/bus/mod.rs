@@ -619,6 +619,16 @@ impl SystemBus {
         if t == "esp32c3_i2c" {
             return "esp32c3_i2c".to_string();
         }
+        // ESP32-C3 behavioral GP-SPI2 — must precede the generic
+        // "contains(spi)" matcher below, which would otherwise coerce it to the
+        // STM32 SPI model and drop the C3 transaction engine.
+        if t == "esp32c3_spi" {
+            return "esp32c3_spi".to_string();
+        }
+        // ESP32-C3 behavioral SAR ADC — must precede any generic "adc" matcher.
+        if t == "esp32c3_apb_saradc" {
+            return "esp32c3_apb_saradc".to_string();
+        }
         // UARTE: nRF52 UART with EasyDMA — must be intercepted before the
         // generic "contains(uart)" matcher, which would coerce it to the
         // STM32-style generic Uart model and lose PSEL/BAUDRATE/CONFIG.

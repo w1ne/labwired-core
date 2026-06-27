@@ -111,11 +111,16 @@ peripherals:
     type: "esp32c3_i2c"
     base_address: 0x60013000
     size: "4KB"
+  # GP-SPI2 (FSPI) behavioral master: the CPU/W-buffer transaction engine
+  # (crates/core/src/peripherals/esp32c3/spi.rs). Same Espressif GP-SPI IP
+  # family as the S3 SPI2; the register layout still matches
+  # ../peripherals/esp32c3/spi2.yaml (the SVD descriptor it was diffed against),
+  # and the behavioral model adds the CMD.USR launch handshake + TRANS_DONE
+  # latching the declarative descriptor lacks.
   - id: "spi2"
-    type: "declarative"
+    type: "esp32c3_spi"
     base_address: 0x60024000
-    config:
-      path: "../peripherals/esp32c3/spi2.yaml"
+    size: "4KB"
   - id: "ledc"
     type: "declarative"
     base_address: 0x60019000
@@ -218,12 +223,15 @@ peripherals:
     base_address: 0x6003F000
     config:
       path: "../peripherals/esp32c3/dma.yaml"
-  # SAR ADC
+  # SAR ADC behavioral one-shot engine
+  # (crates/core/src/peripherals/esp32c3/apb_saradc.rs): a ONETIME_SAMPLE
+  # conversion produces a channel-dependent result + DONE handshake. The
+  # register layout matches ../peripherals/esp32c3/apb_saradc.yaml (the SVD
+  # descriptor it was built against).
   - id: "apb_saradc"
-    type: "declarative"
+    type: "esp32c3_apb_saradc"
     base_address: 0x60040000
-    config:
-      path: "../peripherals/esp32c3/apb_saradc.yaml"
+    size: "4KB"
   # USB Serial/JTAG (the on-chip debug/console port)
   - id: "usb_device"
     type: "declarative"

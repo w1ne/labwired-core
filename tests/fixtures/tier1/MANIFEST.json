@@ -4,8 +4,8 @@
     "source_rev": "3a62ce71348c702c364387fd4e6982c2174b2965"
   },
   "esp32c3.elf": {
-    "sha256": "4faeaabbb420aac93493a911690f590eb7b2e459b031055d088eb8d2de746db6",
-    "source_rev": "3a62ce71348c702c364387fd4e6982c2174b2965"
+    "sha256": "4676cde73cadaf766c80e19a390e9c57bf74fb59deb87a1f837a720bd1f12911",
+    "source_rev": "6cc43d54f44c18bda6abce149bffe7bf4f0e43d2"
   },
   "esp32s3-flash.bin": {
     "sha256": "9c0bb604abbc8d18da77bf6c0f2ff6cb11fcda8db18b34ce08081cbf12d64209",

@@ -5,6 +5,7 @@
 //! ESP32-C3 (RISC-V) specific peripheral models.
 
 pub mod ana_i2c;
+pub mod apb_saradc;
 pub mod cache;
 pub mod forced_status;
 pub mod i2c;
@@ -13,5 +14,6 @@ pub mod rng;
 pub mod rtc_timer;
 pub mod sar_adc;
 pub mod sha;
+pub mod spi;
 pub mod virtual_wifi;
 pub mod wifi_mac;

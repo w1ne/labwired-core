@@ -297,6 +297,27 @@ impl SystemBus {
                     }
                     Box::new(i2c)
                 }
+                // ESP32-C3 behavioral GP-SPI2 controller (CPU/W-buffer
+                // transaction engine). Same Espressif GP-SPI IP family as the
+                // S3; the C3 chip yaml selects this type for `spi2`. The
+                // descriptor `irq` overrides the default intr-matrix source
+                // (GP-SPI2 = 19 on the C3).
+                "esp32c3_spi" => {
+                    let src = p_cfg
+                        .irq
+                        .unwrap_or(crate::peripherals::esp32c3::spi::SPI2_INTR_SOURCE_ID);
+                    Box::new(crate::peripherals::esp32c3::spi::Esp32c3Spi::new(src))
+                }
+                // ESP32-C3 behavioral SAR ADC controller (one-shot conversion
+                // engine). Drives a channel-dependent result + DONE handshake
+                // for the IDF `adc_oneshot` flow; the C3 chip yaml selects this
+                // type for `apb_saradc`.
+                "esp32c3_apb_saradc" => {
+                    let src = p_cfg.irq.unwrap_or(
+                        crate::peripherals::esp32c3::apb_saradc::APB_SARADC_INTR_SOURCE_ID,
+                    );
+                    Box::new(crate::peripherals::esp32c3::apb_saradc::Esp32c3ApbSarAdc::new(src))
+                }
                 // Nordic peripherals — register-surface models cross-validated
                 // by hw-oracle::nrf52_onboarding_diff. See peripherals/nrf52/.
                 // TWIM (I²C master with EasyDMA) — nRF52840 PS §6.31.
