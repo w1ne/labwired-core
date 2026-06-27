@@ -100,16 +100,14 @@ impl Peripheral for Rp2040Spi {
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         match offset {
             SSPCR1 => self.cr1 = value,
-            SSPDR => {
-                if self.enabled() && self.loopback() {
-                    let mut rx = self.rx_fifo.borrow_mut();
-                    if rx.len() < FIFO_DEPTH {
-                        // Internal loopback: MOSI is wired to MISO, so the byte
-                        // clocks straight into the receive FIFO.
-                        rx.push_back((value & 0xffff) as u16);
-                    }
+            // Internal loopback: MOSI is wired to MISO, so the byte clocks
+            // straight into the receive FIFO. Non-loopback (or disabled) with no
+            // attached slave: byte consumed, no RX (falls through to `_`).
+            SSPDR if self.enabled() && self.loopback() => {
+                let mut rx = self.rx_fifo.borrow_mut();
+                if rx.len() < FIFO_DEPTH {
+                    rx.push_back((value & 0xffff) as u16);
                 }
-                // Non-loopback with no attached slave: byte consumed, no RX.
             }
             _ => {}
         }
