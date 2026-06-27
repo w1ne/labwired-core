@@ -38,6 +38,11 @@ const GPIOA_BASE: u32 = 0x4800_0000; // type gpio, profile stm32v2
 const USART2_BASE: u32 = 0x4000_4400; // type uart, profile stm32v2
 const TIM2_BASE: u32 = 0x4000_0000; // type timer, width 32
 const DMA1_BASE: u32 = 0x4002_0000; // type dma (Dma1, 7ch)
+const I2C1_BASE: u32 = 0x4000_5400; // type i2c, profile stm32l4
+const SPI1_BASE: u32 = 0x4001_3000; // type spi, profile stm32_fifo
+const ADC1_BASE: u32 = 0x5004_0000; // type adc, profile stm32l4
+const RTC_BASE: u32 = 0x4000_2800; // type rtc (stm32l4 layout)
+const IWDG_BASE: u32 = 0x4000_3000; // type iwdg
 
 // NVIC (installed for every Cortex-M chip; declared in the yaml as `nvic`).
 const NVIC_ISER0: u32 = 0xE000_E100;
@@ -124,7 +129,21 @@ fn check_clock() -> Result<(), &'static [u8]> {
     if rd32(RCC_BASE) & (1 << 17) != 0 {
         return Err(b"clock-hserdy-stuck");
     }
-    // Switch SYSCLK to HSI16 (SW=01); SWS must follow (HSI ready @ bit 1).
+    // Enable HSI16 (CR bit 8) and wait for HSI16RDY (bit 10): the L4 RCC model
+    // gates the SYSCLK switch on the requested source being ready, so HSI16 must
+    // be on before SW=01 will latch into SWS.
+    wr32(RCC_BASE, rd32(RCC_BASE) | (1 << 8));
+    let mut hsi_ready = false;
+    for _ in 0..10_000 {
+        if rd32(RCC_BASE) & (1 << 10) != 0 {
+            hsi_ready = true;
+            break;
+        }
+    }
+    if !hsi_ready {
+        return Err(b"clock-hsi16rdy");
+    }
+    // Switch SYSCLK to HSI16 (SW=01); SWS must follow now that HSI16 is ready.
     wr32(RCC_BASE + 0x08, 0x1);
     if (rd32(RCC_BASE + 0x08) >> 2) & 0x3 != 0x1 {
         return Err(b"clock-sws");
@@ -238,6 +257,129 @@ fn check_irq() -> Result<(), &'static [u8]> {
     Err(b"irq-not-delivered")
 }
 
+/// i2c: I2C1, modern (stm32l4) controller. ISR @ 0x18 resets with TXE (bit0).
+/// PE (CR1.PE bit0) round-trips; CR2.START (bit13) latches ISR.BUSY (bit15);
+/// CR2.STOP (bit14) clears it (i2c.rs L4I2c register-fidelity model).
+fn check_i2c() -> Result<(), &'static [u8]> {
+    if rd32(I2C1_BASE + 0x18) & 0x1 == 0 {
+        return Err(b"i2c-txe-reset");
+    }
+    wr32(I2C1_BASE + 0x00, 1); // CR1.PE
+    if rd32(I2C1_BASE + 0x00) & 0x1 == 0 {
+        return Err(b"i2c-pe");
+    }
+    wr32(I2C1_BASE + 0x04, 1 << 13); // CR2.START → ISR.BUSY
+    if rd32(I2C1_BASE + 0x18) & (1 << 15) == 0 {
+        return Err(b"i2c-busy");
+    }
+    wr32(I2C1_BASE + 0x04, 1 << 14); // CR2.STOP → clear ISR.BUSY
+    if rd32(I2C1_BASE + 0x18) & (1 << 15) != 0 {
+        return Err(b"i2c-busy-stuck");
+    }
+    Ok(())
+}
+
+/// spi: SPI1 (stm32_fifo). SPI1 is clock-gated (RCC_APB2ENR.SPI1EN bit12 @
+/// 0x60) — unclocked it reads dead, so enable it first; SR.TXE (bit1) reads 0
+/// until the clock is on. Enable the master, then a byte DR write starts a
+/// transfer: SR.BSY (bit7) sets, then the cycle-counted engine clears BSY and
+/// re-asserts TXE on completion (spi.rs Stm32 transfer engine).
+fn check_spi() -> Result<(), &'static [u8]> {
+    wr32(RCC_BASE + 0x60, rd32(RCC_BASE + 0x60) | (1 << 12)); // SPI1EN
+    if rd32(SPI1_BASE + 0x08) & (1 << 1) == 0 {
+        return Err(b"spi-txe-reset");
+    }
+    // CR1: SPE(6) | MSTR(2) | SSM(9) | SSI(8) — master, software NSS high.
+    wr32(SPI1_BASE + 0x00, (1 << 6) | (1 << 2) | (1 << 9) | (1 << 8));
+    // Byte DR write (offset 0x0C) kicks off one frame; word write would
+    // restart it four times, so use an 8-bit store like the UART TX path.
+    unsafe { write_volatile((SPI1_BASE + 0x0C) as *mut u8, 0xA5) };
+    if rd32(SPI1_BASE + 0x08) & (1 << 7) == 0 {
+        return Err(b"spi-bsy");
+    }
+    let mut done = false;
+    for _ in 0..20_000 {
+        if rd32(SPI1_BASE + 0x08) & (1 << 7) == 0 {
+            done = true;
+            break;
+        }
+    }
+    if !done {
+        return Err(b"spi-bsy-stuck");
+    }
+    if rd32(SPI1_BASE + 0x08) & (1 << 1) == 0 {
+        return Err(b"spi-txe");
+    }
+    wr32(SPI1_BASE + 0x00, 0); // disable
+    Ok(())
+}
+
+/// adc: ADC1 (stm32l4). The L4 ADC model has NO conversion engine (EOC/DR
+/// conversion is F1-only), so this exercises the genuinely-modelled power-up:
+/// CR resets with DEEPPWD (bit29); clearing it, setting ADVREGEN (bit28) then
+/// ADEN (bit0) raises ISR.ADRDY (bit0). ADRDY must NOT assert before ADEN.
+fn check_adc() -> Result<(), &'static [u8]> {
+    wr32(ADC1_BASE + 0x08, 0); // CR: clear DEEPPWD
+    wr32(ADC1_BASE + 0x08, 1 << 28); // CR: ADVREGEN
+    if rd32(ADC1_BASE + 0x00) & 0x1 != 0 {
+        return Err(b"adc-adrdy-early");
+    }
+    wr32(ADC1_BASE + 0x08, (1 << 28) | 1); // CR: ADVREGEN | ADEN
+    if rd32(ADC1_BASE + 0x00) & 0x1 == 0 {
+        return Err(b"adc-adrdy");
+    }
+    Ok(())
+}
+
+/// wdt: IWDG. PR/RLR are write-protected until KR (0x00) gets the 0x5555
+/// unlock and re-protect on any other code; reset PR=0, RLR=0x0FFF
+/// (iwdg.rs write-access gate).
+fn check_wdt() -> Result<(), &'static [u8]> {
+    if rd32(IWDG_BASE + 0x04) != 0 || rd32(IWDG_BASE + 0x08) != 0x0FFF {
+        return Err(b"wdt-reset");
+    }
+    // Without the 0x5555 unlock, PR/RLR writes are dropped.
+    wr32(IWDG_BASE + 0x04, 0x5);
+    wr32(IWDG_BASE + 0x08, 0x123);
+    if rd32(IWDG_BASE + 0x04) != 0 || rd32(IWDG_BASE + 0x08) != 0x0FFF {
+        return Err(b"wdt-unprotected");
+    }
+    // Unlock → PR/RLR latch.
+    wr32(IWDG_BASE + 0x00, 0x5555);
+    wr32(IWDG_BASE + 0x04, 0x5);
+    wr32(IWDG_BASE + 0x08, 0x123);
+    if rd32(IWDG_BASE + 0x04) != 0x5 || rd32(IWDG_BASE + 0x08) != 0x123 {
+        return Err(b"wdt-latch");
+    }
+    // Any other KR code (0xAAAA reload) re-protects.
+    wr32(IWDG_BASE + 0x00, 0xAAAA);
+    wr32(IWDG_BASE + 0x04, 0x2);
+    if rd32(IWDG_BASE + 0x04) != 0x5 {
+        return Err(b"wdt-reprotect");
+    }
+    Ok(())
+}
+
+/// rtc: RTC (stm32l4 layout). DR resets to 0x2101; the write-protect state
+/// machine half-unlocks on WPR=0xCA (readable back) then unlocks on 0x53, and
+/// TR round-trips under its 0x007F7F7F writable mask (rtc.rs).
+fn check_rtc() -> Result<(), &'static [u8]> {
+    if rd32(RTC_BASE + 0x04) != 0x0000_2101 {
+        return Err(b"rtc-dr-reset");
+    }
+    // WPR is byte-accessed: 0xCA half-unlocks (latches, readable), 0x53 unlocks.
+    unsafe { write_volatile((RTC_BASE + 0x24) as *mut u8, 0xCA) };
+    if rd32(RTC_BASE + 0x24) & 0xFF != 0xCA {
+        return Err(b"rtc-wpr");
+    }
+    unsafe { write_volatile((RTC_BASE + 0x24) as *mut u8, 0x53) };
+    wr32(RTC_BASE + 0x00, 0x0012_3456); // TR
+    if rd32(RTC_BASE + 0x00) != 0x0012_3456 {
+        return Err(b"rtc-tr");
+    }
+    Ok(())
+}
+
 #[exception]
 unsafe fn DefaultHandler(irqn: i16) {
     if irqn == TEST_IRQ {
@@ -251,11 +393,20 @@ unsafe fn DefaultHandler(irqn: i16) {
 
 #[entry]
 fn main() -> ! {
+    // USART2 is clock-gated in stm32l476.yaml (RCC_APB1ENR1.USART2EN, bit 17 @
+    // offset 0x58) and is unclocked out of reset — enable it before the first
+    // report() or the console UART silently drops every byte.
+    wr32(RCC_BASE + 0x58, rd32(RCC_BASE + 0x58) | (1 << 17));
     report(b"clock", check_clock());
     report(b"gpio", check_gpio());
     report(b"timer", check_timer());
     report(b"dma", check_dma());
     report(b"irq", check_irq());
+    report(b"i2c", check_i2c());
+    report(b"spi", check_spi());
+    report(b"adc", check_adc());
+    report(b"wdt", check_wdt());
+    report(b"rtc", check_rtc());
     puts(b"TIER1 done\n");
 
     loop {

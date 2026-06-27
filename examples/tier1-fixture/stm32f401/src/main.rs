@@ -42,6 +42,7 @@ use panic_halt as _;
 const RCC_BASE: u32 = 0x4002_3800; // type rcc, profile stm32f4
 const GPIOA_BASE: u32 = 0x4002_0000; // type gpio, stm32f1 layout (default)
 const USART2_BASE: u32 = 0x4000_4400; // type uart, stm32f1 layout (default)
+const I2C1_BASE: u32 = 0x4000_5400; // type i2c, stm32f1 layout (default)
 
 // USART2, stm32f1 layout: SR @ 0x00 (TXE = bit 7), DR @ 0x04.
 // Read the full SR word and bit-test TXE: a sign-bit test on a byte
@@ -148,10 +149,33 @@ fn check_gpio() -> Result<(), &'static [u8]> {
     Ok(())
 }
 
+/// i2c: F1 legacy I2C1 (F4 silicon carries the same legacy I2C IP). Enable
+/// (CR1.PE) then request a START (CR1.START, bit 8); the transaction state
+/// machine must latch SR1.SB (bit 0) after a bounded number of ticks, then a
+/// STOP (CR1.STOP, bit 9) releases the bus.
+fn check_i2c() -> Result<(), &'static [u8]> {
+    wr32(I2C1_BASE, 1); // CR1.PE @ 0x00
+    wr32(I2C1_BASE, (1 << 8) | 1); // CR1: START + PE
+    let mut sb = false;
+    for _ in 0..20_000 {
+        if rd32(I2C1_BASE + 0x14) & 0x1 != 0 {
+            // SR1.SB @ 0x14
+            sb = true;
+            break;
+        }
+    }
+    if !sb {
+        return Err(b"i2c-sb");
+    }
+    wr32(I2C1_BASE, (1 << 9) | 1); // CR1: STOP + PE
+    Ok(())
+}
+
 #[entry]
 fn main() -> ! {
     report(b"clock", check_clock());
     report(b"gpio", check_gpio());
+    report(b"i2c", check_i2c());
     puts(b"TIER1 done\n");
 
     loop {

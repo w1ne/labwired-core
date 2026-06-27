@@ -13,12 +13,12 @@
 //! The `uart` class is implicit: receiving `TIER1 done` over UART0 is itself
 //! the proof of a working UART path.
 //!
-//! The RP2040 chip YAML declares `uart0` (stm32v2 profile) and `pio0`.
+//! The RP2040 chip YAML declares `uart0` (pl011 profile) and `pio0`.
 //! `pio0` is not in CLASS_MARKERS so it does not declare any additional
 //! rubric class. All rubric classes except `uart` resolve to `na`.
 //!
-//! Register offsets follow the RP2040 datasheet §4.2 (UART) and the
-//! simulator's stm32v2 UART layout (TDR at offset 0x28).
+//! Register offsets follow the RP2040 datasheet §4.2 (UART), which is an
+//! ARM PrimeCell PL011: the data register (UARTDR) sits at offset 0x00.
 
 #![no_std]
 #![no_main]
@@ -28,12 +28,14 @@ use panic_halt as _;
 
 // ── UART0 (RP2040 datasheet §4.2, base 0x40034000) ────────────────────────
 //
-// The simulator wires uart0 with profile "stm32v2". In that layout the
-// TX data register (TDR) sits at offset 0x28 (stm32v2 TDR / RP2040 UARTDR).
-// Writing a byte here enqueues it for transmission. No CR1 enable required
-// in the simulator model — writes are captured unconditionally.
+// The simulator wires uart0 with profile "pl011" (ARM PrimeCell PL011, the
+// RP2040's actual UART IP). In that layout the data register (UARTDR) sits at
+// offset 0x00 — writing a byte here enqueues it for transmission. No CR1
+// enable required in the simulator model — writes are captured unconditionally.
+// (The earlier 0x28 offset assumed an stm32v2 profile; the chip YAML now uses
+// pl011, so DR moved to 0x00.)
 const UART0_BASE: u32 = 0x4003_4000;
-const UART0_TDR: u32 = UART0_BASE + 0x28;
+const UART0_TDR: u32 = UART0_BASE + 0x00;
 
 #[inline(always)]
 fn reg_write(addr: u32, value: u32) {

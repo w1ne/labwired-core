@@ -100,8 +100,9 @@ fn report(class: &[u8], result: Result<(), &'static [u8]>) {
 // ── Checks ──────────────────────────────────────────────────────────────────
 
 /// clock: V2 (H5-style) RCC. HSI is on+ready out of reset; HSEON (bit 16)
-/// must latch HSERDY (bit 17); SW→SWS mirrors in CFGR @ 0x04; AHB2ENR @
-/// 0x8C round-trips GPIO port enables.
+/// must latch HSERDY (bit 17); SW→SWS mirrors in CFGR @ 0x08 (G4/WB V2
+/// layout: CR=0x00, ICSCR=0x04, CFGR=0x08); AHB2ENR @ 0x8C round-trips GPIO
+/// port enables.
 fn check_clock() -> Result<(), &'static [u8]> {
     if rd32(RCC_BASE) & (1 << 1) == 0 {
         return Err(b"clock-hsirdy");
@@ -115,9 +116,9 @@ fn check_clock() -> Result<(), &'static [u8]> {
     if rd32(RCC_BASE) & (1 << 17) != 0 {
         return Err(b"clock-hserdy-stuck");
     }
-    // CFGR SW=01 → SWS must mirror.
-    wr32(RCC_BASE + 0x04, 0x1);
-    if (rd32(RCC_BASE + 0x04) >> 2) & 0x3 != 0x1 {
+    // CFGR (0x08) SW=01 → SWS must mirror.
+    wr32(RCC_BASE + 0x08, 0x1);
+    if (rd32(RCC_BASE + 0x08) >> 2) & 0x3 != 0x1 {
         return Err(b"clock-sws");
     }
     // AHB2ENR round-trip: GPIOA/B/C/D enables.
