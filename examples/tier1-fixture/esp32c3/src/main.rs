@@ -41,6 +41,7 @@ const UART0_BASE: u32 = 0x6000_0000;
 const GPIO_BASE: u32 = 0x6000_4000;
 const TIMG0_BASE: u32 = 0x6001_F000;
 const INTMATRIX_BASE: u32 = 0x600C_2000;
+const I2C0_BASE: u32 = 0x6001_3000;
 
 #[inline(always)]
 fn reg_read(addr: u32) -> u32 {
@@ -194,14 +195,64 @@ fn check_irq() -> Result<(), &'static str> {
     Ok(())
 }
 
+// ── i2c: run a command list through the I2C0 transaction engine ───────────
+//
+// configs/chips/esp32c3.yaml wires i2c0 (type esp32c3_i2c) — a behavioral
+// model with the COMD command-list engine
+// (crates/core/src/peripherals/esp32c3/i2c.rs), not the declarative descriptor.
+// Program RSTART→WRITE(1)→STOP, push an address byte into the TX FIFO, then set
+// CTR.TRANS_START. With no slave wired the WRITE is NACKed, but the engine still
+// walks the list to STOP: every executed slot latches COMD.command_done (bit 31)
+// and the run raises INT_RAW.TRANS_COMPLETE (bit 7). That state transition is
+// the proof the transaction engine ran (a declarative register file could not
+// produce it).
+fn check_i2c() -> Result<(), &'static str> {
+    const CTR: u32 = I2C0_BASE + 0x04;
+    const FIFO_CONF: u32 = I2C0_BASE + 0x18;
+    const DATA: u32 = I2C0_BASE + 0x1C;
+    const INT_RAW: u32 = I2C0_BASE + 0x20;
+    const INT_CLR: u32 = I2C0_BASE + 0x24;
+    const CMD0: u32 = I2C0_BASE + 0x58;
+    const TRANS_START: u32 = 1 << 5;
+    const TRANS_COMPLETE: u32 = 1 << 7;
+    const CMD_DONE: u32 = 1 << 31;
+    // COMD word = (opcode << 11) | byte_num. opcodes: WRITE=1, STOP=2, RSTART=6.
+    let cmd = |opcode: u32, byte_num: u32| (opcode << 11) | byte_num;
+
+    reg_write(INT_CLR, 0xFFFF_FFFF); // clear any stale raw-int state
+    reg_write(FIFO_CONF, (1 << 12) | (1 << 13)); // RX/TX FIFO reset (self-clearing)
+    reg_write(CMD0, cmd(6, 0)); // RSTART
+    reg_write(CMD0 + 4, cmd(1, 1)); // WRITE 1 byte (the address)
+    reg_write(CMD0 + 8, cmd(2, 0)); // STOP
+    reg_write(DATA, 0xA0); // address byte into TX FIFO
+
+    if reg_read(INT_RAW) & TRANS_COMPLETE != 0 {
+        return Err("i2c-complete-early"); // must not be set before TRANS_START
+    }
+    reg_write(CTR, TRANS_START);
+
+    if reg_read(INT_RAW) & TRANS_COMPLETE == 0 {
+        return Err("i2c-no-complete");
+    }
+    if reg_read(CMD0) & CMD_DONE == 0 {
+        return Err("i2c-cmd-not-done");
+    }
+    // TRANS_START is self-clearing once the list has run.
+    if reg_read(CTR) & TRANS_START != 0 {
+        return Err("i2c-start-stuck");
+    }
+    Ok(())
+}
+
 #[entry]
 fn main() -> ! {
-    // gpio, timer, irq — ordered by increasing complexity.
-    // clock: no systimer/rtc_cntl/system/rcc peripheral in esp32c3.yaml → na.
-    // dma: no gdma/dma peripheral in esp32c3.yaml → na.
+    // gpio, timer, irq, i2c — ordered by increasing complexity.
+    // clock/dma: esp32c3.yaml wires system/rtc_cntl/dma as declarative register
+    // files only (no behavioral engine) → left unrecorded, not faked.
     report("gpio", check_gpio());
     report("timer", check_timer());
     report("irq", check_irq());
+    report("i2c", check_i2c());
     uart0_write_line("TIER1 done");
 
     loop {

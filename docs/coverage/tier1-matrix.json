@@ -51,7 +51,7 @@
       "status": "pass"
     },
     "i2c": {
-      "status": "unrecorded"
+      "status": "pass"
     },
     "irq": {
       "status": "pass"
@@ -121,16 +121,16 @@
       "status": "na"
     },
     "clock": {
-      "status": "na"
+      "status": "pass"
     },
     "dma": {
       "status": "na"
     },
     "gpio": {
-      "status": "na"
+      "status": "pass"
     },
     "i2c": {
-      "status": "na"
+      "status": "pass"
     },
     "irq": {
       "status": "na"
@@ -139,19 +139,19 @@
       "status": "na"
     },
     "rtc": {
-      "status": "na"
+      "status": "pass"
     },
     "spi": {
-      "status": "na"
+      "status": "pass"
     },
     "timer": {
-      "status": "na"
+      "status": "pass"
     },
     "uart": {
       "status": "pass"
     },
     "wdt": {
-      "status": "na"
+      "status": "pass"
     }
   },
   "nrf52840": {
