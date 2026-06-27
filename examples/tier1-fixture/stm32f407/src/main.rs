@@ -41,6 +41,10 @@ use panic_halt as _;
 const RCC_BASE: u32 = 0x4002_3800; // type rcc, profile stm32f4
 const GPIOA_BASE: u32 = 0x4002_0000; // type stm32f4_gpio → stm32v2 layout
 const USART2_BASE: u32 = 0x4000_4400; // type uart, stm32f1 layout (default)
+const TIM2_BASE: u32 = 0x4000_0000; // type timer, 32-bit (width: 32)
+const I2C1_BASE: u32 = 0x4000_5400; // type i2c, stm32f1 layout (default)
+const SPI1_BASE: u32 = 0x4001_3000; // type spi, stm32 classic (cr1_mask 0xEFFF)
+const ADC1_BASE: u32 = 0x4001_2000; // type adc, stm32f1 layout (default)
 
 // USART2, stm32f1 layout: SR @ 0x00 (TXE = bit 7), DR @ 0x04.
 // Read the full SR word and bit-test TXE: a sign-bit test on a byte
@@ -145,10 +149,111 @@ fn check_gpio() -> Result<(), &'static [u8]> {
     Ok(())
 }
 
+/// timer: TIM2 (32-bit). EGR.UG latches UIF and zeroes CNT; SR write-0
+/// clears; with CEN set the counter advances between two bounded reads.
+fn check_timer() -> Result<(), &'static [u8]> {
+    wr32(TIM2_BASE + 0x28, 0); // PSC = 0
+    wr32(TIM2_BASE + 0x2C, 0xFFFF_FFFF); // ARR = max (32-bit)
+    wr32(TIM2_BASE + 0x14, 1); // EGR.UG
+    if rd32(TIM2_BASE + 0x10) & 1 == 0 {
+        return Err(b"timer-uif");
+    }
+    wr32(TIM2_BASE + 0x10, 0); // SR: rc_w0 clear
+    if rd32(TIM2_BASE + 0x10) & 1 != 0 {
+        return Err(b"timer-uif-clear");
+    }
+    wr32(TIM2_BASE, 1); // CR1.CEN
+    let c1 = rd32(TIM2_BASE + 0x24);
+    spin(2_000);
+    let c2 = rd32(TIM2_BASE + 0x24);
+    wr32(TIM2_BASE, 0); // stop
+    if c2 == c1 {
+        return Err(b"timer-cnt-stuck");
+    }
+    Ok(())
+}
+
+/// i2c: F1 legacy I2C1 (F4 silicon carries the same legacy I2C IP). Enable
+/// (CR1.PE) then request a START (CR1.START, bit 8); the transaction state
+/// machine must latch SR1.SB (bit 0), then a STOP (CR1.STOP, bit 9) releases.
+fn check_i2c() -> Result<(), &'static [u8]> {
+    wr32(I2C1_BASE, 1); // CR1.PE @ 0x00
+    wr32(I2C1_BASE, (1 << 8) | 1); // CR1: START + PE
+    let mut sb = false;
+    for _ in 0..20_000 {
+        if rd32(I2C1_BASE + 0x14) & 0x1 != 0 {
+            // SR1.SB @ 0x14
+            sb = true;
+            break;
+        }
+    }
+    if !sb {
+        return Err(b"i2c-sb");
+    }
+    wr32(I2C1_BASE, (1 << 9) | 1); // CR1: STOP + PE
+    Ok(())
+}
+
+/// spi: classic SPI1. TXE (SR bit 1) is set out of reset. With SPE (CR1
+/// bit 6) + MSTR (bit 2) + software-NSS (SSM bit 9, SSI bit 8), a DR write
+/// kicks off a shift-register transfer: BSY (SR bit 7) latches immediately
+/// and the cycle-counted engine clears it / re-asserts TXE on completion.
+fn check_spi() -> Result<(), &'static [u8]> {
+    if rd32(SPI1_BASE + 0x08) & (1 << 1) == 0 {
+        return Err(b"spi-txe-reset"); // SR.TXE @ 0x08
+    }
+    wr32(SPI1_BASE, (1 << 6) | (1 << 2) | (1 << 9) | (1 << 8)); // CR1: SPE|MSTR|SSM|SSI
+    unsafe { write_volatile((SPI1_BASE + 0x0C) as *mut u8, 0xAB) }; // DR @ 0x0C → start transfer
+    if rd32(SPI1_BASE + 0x08) & (1 << 7) == 0 {
+        return Err(b"spi-bsy-set"); // BSY must be high while the frame shifts
+    }
+    let mut done = false;
+    for _ in 0..20_000 {
+        let sr = rd32(SPI1_BASE + 0x08);
+        if sr & (1 << 7) == 0 && sr & (1 << 1) != 0 {
+            // BSY clear + TXE set
+            done = true;
+            break;
+        }
+    }
+    if !done {
+        return Err(b"spi-bsy-stuck");
+    }
+    Ok(())
+}
+
+/// adc: F1 ADC1. ADON (CR2 bit 0) powers the converter; a rising SWSTART
+/// (CR2 bit 30) launches a regular conversion. The engine latches EOC
+/// (SR bit 1) after its fixed conversion time and writes the result to DR.
+fn check_adc() -> Result<(), &'static [u8]> {
+    wr32(ADC1_BASE + 0x08, 1); // CR2.ADON @ 0x08
+    spin(100); // converter wake-up
+    wr32(ADC1_BASE + 0x08, 1 | (1 << 30)); // CR2: ADON + SWSTART (rising edge)
+    let mut eoc = false;
+    for _ in 0..20_000 {
+        if rd32(ADC1_BASE) & (1 << 1) != 0 {
+            // SR.EOC @ 0x00
+            eoc = true;
+            break;
+        }
+    }
+    if !eoc {
+        return Err(b"adc-eoc");
+    }
+    if rd32(ADC1_BASE + 0x4C) & 0xFFF == 0 {
+        return Err(b"adc-dr"); // DR @ 0x4C must hold the converted count
+    }
+    Ok(())
+}
+
 #[entry]
 fn main() -> ! {
     report(b"clock", check_clock());
     report(b"gpio", check_gpio());
+    report(b"timer", check_timer());
+    report(b"i2c", check_i2c());
+    report(b"spi", check_spi());
+    report(b"adc", check_adc());
     puts(b"TIER1 done\n");
 
     loop {

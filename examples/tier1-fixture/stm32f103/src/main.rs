@@ -41,6 +41,11 @@ const GPIOA_BASE: u32 = 0x4001_0800; // type gpio, stm32f1 layout (default)
 const USART1_BASE: u32 = 0x4001_3800; // type uart, stm32f1 layout (default)
 const TIM2_BASE: u32 = 0x4000_0000; // type timer, 16-bit
 const DMA1_BASE: u32 = 0x4002_0000; // type dma (Dma1, 7ch)
+const I2C1_BASE: u32 = 0x4000_5400; // type i2c, stm32f1 layout (default)
+const SPI1_BASE: u32 = 0x4001_3000; // type spi, stm32 classic layout (default)
+const ADC1_BASE: u32 = 0x4001_2400; // type adc, stm32f1 layout (default)
+const IWDG_BASE: u32 = 0x4000_3000; // type iwdg
+const RTC_BASE: u32 = 0x4000_2800; // type rtc_f1
 
 // USART1, stm32f1 layout: SR @ 0x00 (TXE = bit 7), DR @ 0x04.
 // Read the full SR word and bit-test TXE: a sign-bit test on a byte
@@ -209,12 +214,127 @@ fn check_dma() -> Result<(), &'static [u8]> {
     Ok(())
 }
 
+/// i2c: F1 legacy I2C1. Enable (CR1.PE) then request a START (CR1.START,
+/// bit 8); the transaction state machine must latch SR1.SB (bit 0) after a
+/// bounded number of ticks, then a STOP (CR1.STOP, bit 9) releases the bus.
+fn check_i2c() -> Result<(), &'static [u8]> {
+    wr32(I2C1_BASE, 1); // CR1.PE @ 0x00
+    wr32(I2C1_BASE, (1 << 8) | 1); // CR1: START + PE
+    let mut sb = false;
+    for _ in 0..20_000 {
+        if rd32(I2C1_BASE + 0x14) & 0x1 != 0 {
+            // SR1.SB @ 0x14
+            sb = true;
+            break;
+        }
+    }
+    if !sb {
+        return Err(b"i2c-sb");
+    }
+    wr32(I2C1_BASE, (1 << 9) | 1); // CR1: STOP + PE
+    Ok(())
+}
+
+/// spi: classic SPI1. TXE (SR bit 1) is set out of reset. With SPE (CR1
+/// bit 6) + MSTR (bit 2) + software-NSS (SSM bit 9, SSI bit 8), a DR write
+/// kicks off a shift-register transfer: BSY (SR bit 7) latches immediately
+/// and the cycle-counted engine clears it / re-asserts TXE on completion.
+fn check_spi() -> Result<(), &'static [u8]> {
+    if rd32(SPI1_BASE + 0x08) & (1 << 1) == 0 {
+        return Err(b"spi-txe-reset"); // SR.TXE @ 0x08
+    }
+    wr32(SPI1_BASE, (1 << 6) | (1 << 2) | (1 << 9) | (1 << 8)); // CR1: SPE|MSTR|SSM|SSI
+    unsafe { write_volatile((SPI1_BASE + 0x0C) as *mut u8, 0xAB) }; // DR @ 0x0C → start transfer
+    if rd32(SPI1_BASE + 0x08) & (1 << 7) == 0 {
+        return Err(b"spi-bsy-set"); // BSY must be high while the frame shifts
+    }
+    let mut done = false;
+    for _ in 0..20_000 {
+        let sr = rd32(SPI1_BASE + 0x08);
+        if sr & (1 << 7) == 0 && sr & (1 << 1) != 0 {
+            // BSY clear + TXE set
+            done = true;
+            break;
+        }
+    }
+    if !done {
+        return Err(b"spi-bsy-stuck");
+    }
+    Ok(())
+}
+
+/// adc: F1 ADC1. ADON (CR2 bit 0) powers the converter; a rising SWSTART
+/// (CR2 bit 30) launches a regular conversion. The engine latches EOC
+/// (SR bit 1) after its fixed conversion time and writes the result to DR.
+fn check_adc() -> Result<(), &'static [u8]> {
+    wr32(ADC1_BASE + 0x08, 1); // CR2.ADON @ 0x08
+    spin(100); // converter wake-up
+    wr32(ADC1_BASE + 0x08, 1 | (1 << 30)); // CR2: ADON + SWSTART (rising edge)
+    let mut eoc = false;
+    for _ in 0..20_000 {
+        if rd32(ADC1_BASE) & (1 << 1) != 0 {
+            // SR.EOC @ 0x00
+            eoc = true;
+            break;
+        }
+    }
+    if !eoc {
+        return Err(b"adc-eoc");
+    }
+    if rd32(ADC1_BASE + 0x4C) & 0xFFF == 0 {
+        return Err(b"adc-dr"); // DR @ 0x4C must hold the converted count
+    }
+    Ok(())
+}
+
+/// wdt: IWDG. PR/RLR are write-protected until KR (@ 0x00) receives the
+/// 0x5555 unlock code (RM0008 §19.4): a pre-unlock RLR write is dropped
+/// (RLR keeps its 0x0FFF reset), and after unlock PR/RLR round-trip.
+fn check_wdt() -> Result<(), &'static [u8]> {
+    wr32(IWDG_BASE + 0x08, 0x123); // RLR @ 0x08 without key → dropped
+    if rd32(IWDG_BASE + 0x08) != 0xFFF {
+        return Err(b"wdt-unprotected");
+    }
+    wr32(IWDG_BASE, 0x5555); // KR unlock
+    wr32(IWDG_BASE + 0x04, 0x5); // PR @ 0x04
+    wr32(IWDG_BASE + 0x08, 0x123); // RLR @ 0x08
+    if rd32(IWDG_BASE + 0x04) != 0x5 {
+        return Err(b"wdt-pr");
+    }
+    if rd32(IWDG_BASE + 0x08) != 0x123 {
+        return Err(b"wdt-rlr");
+    }
+    Ok(())
+}
+
+/// rtc: F1 RTC. CRL.RTOFF (bit 5) stays asserted while idle, and the 32-bit
+/// counter round-trips through its CNTH/CNTL half-registers (RM0008 §18).
+fn check_rtc() -> Result<(), &'static [u8]> {
+    if rd32(RTC_BASE + 0x04) & 0x20 == 0 {
+        return Err(b"rtc-rtoff"); // CRL @ 0x04
+    }
+    wr32(RTC_BASE + 0x18, 0xBEEF); // CNTH @ 0x18
+    wr32(RTC_BASE + 0x1C, 0x1234); // CNTL @ 0x1C
+    if rd32(RTC_BASE + 0x18) & 0xFFFF != 0xBEEF {
+        return Err(b"rtc-cnth");
+    }
+    if rd32(RTC_BASE + 0x1C) & 0xFFFF != 0x1234 {
+        return Err(b"rtc-cntl");
+    }
+    Ok(())
+}
+
 #[entry]
 fn main() -> ! {
     report(b"clock", check_clock());
     report(b"gpio", check_gpio());
     report(b"timer", check_timer());
+    report(b"i2c", check_i2c());
+    report(b"spi", check_spi());
+    report(b"adc", check_adc());
     report(b"dma", check_dma());
+    report(b"wdt", check_wdt());
+    report(b"rtc", check_rtc());
     puts(b"TIER1 done\n");
 
     loop {
