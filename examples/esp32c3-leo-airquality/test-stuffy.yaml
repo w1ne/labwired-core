@@ -13,7 +13,7 @@ inputs:
   system: "./system-stuffy.yaml"
   firmware: "./firmware/leo_airquality.elf"
 limits:
-  max_steps: 50000000
+  max_steps: 5000000
 assertions:
   # Boot banner + all four sensors brought up over real I²C.
   - uart_contains: "LEO BOOT"
@@ -25,5 +25,9 @@ assertions:
   # The headline transition once CO₂ climbs past 1000 ppm — the plain-language
   # verdict Leo's product is built around.
   - uart_contains: "ventilate now"
+  # STUFFY: a damp room against a cold exterior wall. Condensation sets in and
+  # the mold risk escalates to its worst (SEVERE) via the surface channel.
+  - uart_contains: "CONDENSING - wall is wet"
+  - uart_contains: "mold risk: SEVERE"
   # The run completes its measurement cycles.
   - uart_contains: "LEO DONE"

@@ -20,6 +20,7 @@ pub mod ir_component;
 pub mod ir_core;
 pub mod ir_spi_component;
 pub mod max31855;
+pub mod mlx90614;
 pub mod mlx90640;
 pub mod mpu6050;
 pub mod neo6m;
