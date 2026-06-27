@@ -58,3 +58,35 @@ def test_cli_emits_json_for_pull_request():
     )
     matrix = json.loads(out)
     assert any(e["id"] == "iolink-station-l476" for e in matrix["include"])
+
+
+def test_cli_exits_nonzero_on_invalid_manifest(tmp_path):
+    bad = tmp_path / "boards.yml"
+    bad.write_text(
+        "boards:\n"
+        "  - id: ghost\n"
+        "    kind: firmware-gate\n"
+        "    path: examples/does-not-exist\n"
+        "    gate: true\n"
+    )
+    result = subprocess.run(
+        [sys.executable, str(REPO_ROOT / "scripts/ci/board_matrix.py"),
+         "--event", "pull_request", "--repo-root", str(REPO_ROOT),
+         "--manifest", str(bad)],
+        capture_output=True, text=True,
+    )
+    assert result.returncode != 0
+    assert "ci/build.sh" in result.stderr
+
+
+def test_cli_exits_nonzero_on_empty_manifest(tmp_path):
+    empty = tmp_path / "boards.yml"
+    empty.write_text("boards: []\n")
+    result = subprocess.run(
+        [sys.executable, str(REPO_ROOT / "scripts/ci/board_matrix.py"),
+         "--event", "pull_request", "--repo-root", str(REPO_ROOT),
+         "--manifest", str(empty)],
+        capture_output=True, text=True,
+    )
+    assert result.returncode != 0
+    assert "no boards" in result.stderr
