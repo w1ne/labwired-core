@@ -353,6 +353,29 @@ fn check_i2c() -> Result<(), &'static [u8]> {
     if rd32(I2C1_BASE + 0x18) & (1 << 15) != 0 {
         return Err(b"i2c-busy-stuck");
     }
+    // Transaction engine: a 1-byte master write to an ABSENT slave (addr 0x52)
+    // must drive the address+data phase and NACK. CR2 = SADD(0x52<<1) |
+    // NBYTES(1)<<16 | AUTOEND<<25 | START<<13; the TXDR byte arms the phase.
+    let cr2 = (0x52u32 << 1) | (1 << 16) | (1 << 25) | (1 << 13);
+    wr32(I2C1_BASE + 0x04, cr2);
+    unsafe { write_volatile((I2C1_BASE + 0x28) as *mut u8, 0xAB) }; // TXDR
+    let mut nacked = false;
+    for _ in 0..20_000 {
+        if rd32(I2C1_BASE + 0x18) & (1 << 4) != 0 {
+            nacked = true; // ISR.NACKF
+            break;
+        }
+    }
+    if !nacked {
+        return Err(b"i2c-no-nack");
+    }
+    if rd32(I2C1_BASE + 0x18) & (1 << 15) != 0 {
+        return Err(b"i2c-autoend-busy"); // AUTOEND must release the bus
+    }
+    wr32(I2C1_BASE + 0x1C, (1 << 4) | (1 << 5)); // ICR: NACKCF | STOPCF
+    if rd32(I2C1_BASE + 0x18) & (1 << 4) != 0 {
+        return Err(b"i2c-nack-stuck");
+    }
     wr32(I2C1_BASE + 0x00, 0);
     Ok(())
 }

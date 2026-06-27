@@ -114,6 +114,9 @@ boards:
     # fidelity (was dropped → read 0). Additive and read-back only — no byte-path
     # or reset-value change; h563_mmio_diff/parity (which don't write-then-read BRR)
     # pass unchanged. No live re-capture this session.
+    # 2026-06-27: additive L4/V2 i2c transaction engine (ISR.NACKF on a write to
+    # an absent slave; AUTOEND clears BUSY + sets STOPF). Register layout and the
+    # previously-pinned reset/latch behaviour are unchanged; no silicon re-capture.
     drift_ack: 2026-06-27
     models:
       - crates/core/src/peripherals/rcc.rs
@@ -180,6 +183,9 @@ boards:
     # previously panicked at PRE_KERNEL boot. Additive, read-back only — no byte-path
     # change; l476_mmio_diff/parity (no BRR write-then-read) pass unchanged. tests/
     # ztest/base now reaches PROJECT EXECUTION SUCCESSFUL. No live re-capture.
+    # 2026-06-27: additive L4/V2 i2c transaction engine (ISR.NACKF on a write to
+    # an absent slave; AUTOEND clears BUSY + sets STOPF). Register layout and the
+    # previously-pinned reset/latch behaviour are unchanged; no silicon re-capture.
     drift_ack: 2026-06-27
     models:
       - crates/core/src/peripherals/rcc.rs
