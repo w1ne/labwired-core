@@ -235,6 +235,24 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"KW41Z_NXP_OK\n",
     },
     SurvivalCase {
+        // Nordic nRF5340 APPLICATION core (Cortex-M33) running REAL, unmodified
+        // upstream Zephyr v3.7 hello_world, built for board
+        // nrf5340dk/nrf5340/cpuapp. Boots through the genuine Zephyr nRF
+        // clock_control (HFCLK/LFCLK start + poll) and nrf_rtc_timer init, then
+        // prints the banner over the UARTE0 EasyDMA console. Proves the shared
+        // Nordic CLOCK / UARTE / RTC behavioural models satisfy the nRF5340 boot
+        // spin-loops at the 0x50000000 non-secure peripheral alias. Fixture is
+        // rebuilt via crates/firmware-nrf5340-zephyr/build.sh.
+        name: "nrf5340_zephyr",
+        core: "cortex-m33",
+        family: CpuFamily::CortexM,
+        chip: "nrf5340",
+        system: "nrf5340dk",
+        fixture: "nrf5340-zephyr-hello.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x000F_FFFF), (0x2000_0000, 0x2007_FFFF)],
+        expected_uart_output: b"Hello World! nrf5340dk/nrf5340/cpuapp",
+    },
+    SurvivalCase {
         name: "nrf52832_demo",
         core: "cortex-m4",
         family: CpuFamily::CortexM,
@@ -1109,6 +1127,11 @@ fn test_nrf52840_demo_survival() {
 #[test]
 fn test_nrf52832_demo_survival() {
     run_survival_case(case_by_name("nrf52832_demo"));
+}
+
+#[test]
+fn test_nrf5340_zephyr_survival() {
+    run_survival_case(case_by_name("nrf5340_zephyr"));
 }
 
 #[test]
