@@ -54,3 +54,13 @@ peripherals:
     base_address: 0x40010000
     size: "4KB"
     irq: 16
+  - id: "saadc"
+    type: "nrf52840_saadc"
+    base_address: 0x40007000
+    size: "4KB"
+    irq: 7
+  - id: "pwm0"
+    type: "nrf52840_pwm"
+    base_address: 0x4001c000
+    size: "4KB"
+    irq: 28

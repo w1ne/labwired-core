@@ -109,6 +109,37 @@ const SPI2_TXD_PTR: u32 = SPI2_BASE + 0x544;
 const SPI2_TXD_MAXCNT: u32 = SPI2_BASE + 0x548;
 const SPI2_TXD_AMOUNT: u32 = SPI2_BASE + 0x54C;
 
+// ── SAADC (nrf52840_saadc, base 0x40007000) ───────────────────────────────
+// 12-bit ADC with EasyDMA RESULT buffer. The modeled engine performs a
+// deterministic conversion: TASKS_START → STARTED, TASKS_SAMPLE writes
+// RESULT.MAXCNT samples to RESULT.PTR and fires END + RESULTDONE.
+const SAADC_BASE: u32 = 0x4000_7000;
+const SAADC_TASKS_START: u32 = SAADC_BASE + 0x000;
+const SAADC_TASKS_SAMPLE: u32 = SAADC_BASE + 0x004;
+const SAADC_EVENTS_STARTED: u32 = SAADC_BASE + 0x100;
+const SAADC_EVENTS_END: u32 = SAADC_BASE + 0x104;
+const SAADC_EVENTS_RESULTDONE: u32 = SAADC_BASE + 0x10C;
+const SAADC_ENABLE: u32 = SAADC_BASE + 0x500;
+const SAADC_CH0_PSELP: u32 = SAADC_BASE + 0x510;
+const SAADC_CH0_CONFIG: u32 = SAADC_BASE + 0x518;
+const SAADC_RESOLUTION: u32 = SAADC_BASE + 0x5F0;
+const SAADC_RESULT_PTR: u32 = SAADC_BASE + 0x62C;
+const SAADC_RESULT_MAXCNT: u32 = SAADC_BASE + 0x630;
+const SAADC_RESULT_AMOUNT: u32 = SAADC_BASE + 0x634;
+const SAADC_SAMPLE_VALUE: u16 = 0x0AAA; // engine's deterministic sample code
+
+// ── PWM0 (nrf52840_pwm, base 0x4001c000) ──────────────────────────────────
+// Sequence playback engine: TASKS_SEQSTART0 reads SEQ0.CNT duty values from
+// SEQ0.PTR and fires SEQSTARTED0 + SEQEND0 + PWMPERIODEND.
+const PWM0_BASE: u32 = 0x4001_c000;
+const PWM0_TASKS_SEQSTART0: u32 = PWM0_BASE + 0x008;
+const PWM0_EVENTS_SEQEND0: u32 = PWM0_BASE + 0x110;
+const PWM0_EVENTS_PWMPERIODEND: u32 = PWM0_BASE + 0x118;
+const PWM0_ENABLE: u32 = PWM0_BASE + 0x500;
+const PWM0_COUNTERTOP: u32 = PWM0_BASE + 0x508;
+const PWM0_SEQ0_PTR: u32 = PWM0_BASE + 0x520;
+const PWM0_SEQ0_CNT: u32 = PWM0_BASE + 0x524;
+
 // ── WDT (nrf52840_watchdog, base 0x40010000) ──────────────────────────────
 const WDT_BASE: u32 = 0x4001_0000;
 const WDT_TASKS_START: u32 = WDT_BASE + 0x000;
@@ -139,6 +170,11 @@ static mut TX_BUF: [u8; 64] = [0; 64];
 static mut I2C_TX_BUF: [u8; 4] = [0xDE, 0xAD, 0xBE, 0xEF];
 static mut SPI_TX_BUF: [u8; 4] = [0x11, 0x22, 0x33, 0x44];
 static mut SPI_RX_BUF: [u8; 4] = [0; 4];
+
+// SAADC RESULT buffer (4 x 16-bit samples) + PWM SEQ0 duty buffer. Static .bss
+// RAM, the only region the EasyDMA engines can address.
+static mut ADC_RESULT_BUF: [u16; 4] = [0; 4];
+static mut PWM_SEQ_BUF: [u16; 4] = [0x8010, 0x8020, 0x8030, 0x8040];
 
 /// Spin until the event register at `addr` reads non-zero, or give up.
 /// Returns true if the event fired. Each loop iteration steps the CPU, which
@@ -340,6 +376,64 @@ fn check_spi() -> Result<(), &'static str> {
     Ok(())
 }
 
+// ── adc (SAADC): EasyDMA conversion → RESULT buffer + END/RESULTDONE ────────
+fn check_adc() -> Result<(), &'static str> {
+    reg_write(SAADC_ENABLE, 1); // enable SAADC
+    reg_write(SAADC_RESOLUTION, 2); // 12-bit
+    reg_write(SAADC_CH0_PSELP, 1); // CH[0].PSELP = AnalogInput0
+    reg_write(SAADC_CH0_CONFIG, 0x0002_0000); // CH[0].CONFIG (gain/ref defaults)
+    reg_write(SAADC_EVENTS_STARTED, 0);
+    reg_write(SAADC_EVENTS_END, 0);
+    reg_write(SAADC_EVENTS_RESULTDONE, 0);
+
+    let buf = core::ptr::addr_of!(ADC_RESULT_BUF) as u32;
+    reg_write(SAADC_RESULT_PTR, buf);
+    reg_write(SAADC_RESULT_MAXCNT, 4);
+
+    reg_write(SAADC_TASKS_START, 1);
+    if !poll_event(SAADC_EVENTS_STARTED) {
+        return Err("adc-no-started");
+    }
+
+    reg_write(SAADC_TASKS_SAMPLE, 1);
+    if !poll_event(SAADC_EVENTS_END) {
+        return Err("adc-no-end");
+    }
+    if reg_read(SAADC_EVENTS_RESULTDONE) == 0 {
+        return Err("adc-no-resultdone");
+    }
+    if reg_read(SAADC_RESULT_AMOUNT) != 4 {
+        return Err("adc-amount");
+    }
+    // The engine wrote SAADC_SAMPLE_VALUE into every slot via EasyDMA.
+    let sample = unsafe { core::ptr::read_volatile(core::ptr::addr_of!(ADC_RESULT_BUF[0])) };
+    if sample != SAADC_SAMPLE_VALUE {
+        return Err("adc-sample");
+    }
+    Ok(())
+}
+
+// ── pwm: SEQ0 playback → SEQEND0 + PWMPERIODEND ───────────────────────────
+fn check_pwm() -> Result<(), &'static str> {
+    reg_write(PWM0_ENABLE, 1); // enable PWM
+    reg_write(PWM0_COUNTERTOP, 1000);
+    reg_write(PWM0_EVENTS_SEQEND0, 0);
+    reg_write(PWM0_EVENTS_PWMPERIODEND, 0);
+
+    let seq = core::ptr::addr_of!(PWM_SEQ_BUF) as u32;
+    reg_write(PWM0_SEQ0_PTR, seq);
+    reg_write(PWM0_SEQ0_CNT, 4); // 4 duty values
+
+    reg_write(PWM0_TASKS_SEQSTART0, 1);
+    if !poll_event(PWM0_EVENTS_SEQEND0) {
+        return Err("pwm-no-seqend");
+    }
+    if reg_read(PWM0_EVENTS_PWMPERIODEND) == 0 {
+        return Err("pwm-no-periodend");
+    }
+    Ok(())
+}
+
 // ── wdt: configure CRV/RREN, TASKS_START, observe countdown → TIMEOUT ──────
 // The model surfaces the timeout signal without resetting the core, so it is
 // safe to let the dog bite here.
@@ -373,12 +467,9 @@ fn main() -> ! {
     report("rtc", check_rtc());
     report("i2c", check_i2c());
     report("spi", check_spi());
+    report("adc", check_adc());
+    report("pwm", check_pwm());
     report("wdt", check_wdt());
-
-    // adc (SAADC) and pwm are register-surface-only in the model: their
-    // TASKS_* writes are no-ops and EVENTS_* are never hardware-set, so no
-    // genuine conversion / sequence round-trip is observable. Left unreported
-    // (→ unrecorded) rather than faking a pass.
 
     // uart: implicit via TIER1 done — no explicit line needed.
 

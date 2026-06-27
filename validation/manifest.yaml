@@ -51,7 +51,10 @@ boards:
     # (conformance/mmio/GPIO/POWER/SPIS/TWIS/RTC/TIMER) is unaffected. No live SWD
     # re-capture of the new TX register sequence was run this session (no bench
     # board); a UARTE TX live diff is tracked.
-    drift_ack: 2026-06-23
+    # 2026-06-27: SAADC + PWM gained Tier-3 behavioral engines (real conversion /
+    # duty output) for the coverage matrix. Additive and behavioral-only; the
+    # 2026-06-17 register sweep is unaffected. No live SWD re-capture this session.
+    drift_ack: 2026-06-27
     models:
       - crates/core/src/peripherals/nrf52
       - configs/chips/nrf52840.yaml
@@ -69,7 +72,9 @@ boards:
       result: "rides the nrf52840 full register sweep (16/16) re-confirmed 2026-06-17"
     # Rides the nrf52840 UARTE EasyDMA TX model change (same silicon); see the
     # nrf52840 drift_ack note. UARTE TX live diff tracked there.
-    drift_ack: 2026-06-23
+    # 2026-06-27: rides the nrf52840 SAADC/PWM Tier-3 behavioral engines (same
+    # silicon); additive, no live re-capture. See the nrf52840 drift_ack note.
+    drift_ack: 2026-06-27
     models:
       - crates/core/src/peripherals/nrf52
       - configs/chips/nrf52840.yaml

@@ -118,7 +118,7 @@
   },
   "nrf52832": {
     "adc": {
-      "status": "na"
+      "status": "pass"
     },
     "clock": {
       "status": "pass"
@@ -136,7 +136,7 @@
       "status": "na"
     },
     "pwm": {
-      "status": "na"
+      "status": "pass"
     },
     "rtc": {
       "status": "pass"
@@ -156,7 +156,7 @@
   },
   "nrf52840": {
     "adc": {
-      "status": "unrecorded"
+      "status": "pass"
     },
     "clock": {
       "status": "pass"
@@ -174,7 +174,7 @@
       "status": "na"
     },
     "pwm": {
-      "status": "unrecorded"
+      "status": "pass"
     },
     "rtc": {
       "status": "pass"
