@@ -1,0 +1,84 @@
+name: Core Board CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.gen.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pyyaml
+      - id: gen
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          matrix="$(python scripts/ci/board_matrix.py --event "$EVENT_NAME")"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  board:
+    needs: setup
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
+    name: ${{ matrix.id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: ${{ matrix.submodules }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-board-${{ matrix.id }}
+          workspaces: |
+            . -> target
+
+      - name: Install ARM bare-metal toolchain
+        if: contains(matrix.toolchains, 'arm-none-eabi')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi
+
+      - name: Install RISC-V target
+        if: contains(matrix.toolchains, 'riscv')
+        run: rustup target add riscv32imac-unknown-none-elf
+
+      - name: Fetch device packs
+        if: matrix.packs != ''
+        uses: ./.github/actions/fetch-pack
+        with:
+          pack: ${{ matrix.packs }}
+
+      - name: Build firmware
+        env:
+          BOARD_PATH: ${{ matrix.path }}
+        run: "$BOARD_PATH/ci/build.sh"
+
+      - name: Run tests
+        env:
+          BOARD_PATH: ${{ matrix.path }}
+        run: "$BOARD_PATH/ci/test.sh"
+
+      - name: Upload board artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: board-${{ matrix.id }}
+          path: out/boards/${{ matrix.id }}/
+          if-no-files-found: ignore

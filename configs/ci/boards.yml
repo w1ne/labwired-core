@@ -1,0 +1,14 @@
+# Board/example CI manifest. One entry per CI target.
+# kind:        firmware-gate | sim-validate | aggregate
+# gate: true   -> runs on pull_request/push to main; false -> nightly only
+# path:        directory whose ci/build.sh + ci/test.sh run the entry
+# toolchains:  toolchains the workflow installs (e.g. arm-none-eabi, riscv)
+# packs:       named, reusable device-pack fetchers (see .github/actions/fetch-pack)
+boards:
+  - id: iolink-station-l476
+    kind: firmware-gate
+    path: examples/iolink-station
+    toolchains: [arm-none-eabi]
+    packs: [stm32cubel4@v1.18.2]
+    submodules: recursive
+    gate: true
