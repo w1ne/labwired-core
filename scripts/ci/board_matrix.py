@@ -10,7 +10,6 @@ from pathlib import Path
 import yaml
 
 GATE_EVENTS = {"pull_request", "push"}
-ALL_EVENTS = {"schedule", "workflow_dispatch"}
 
 
 def load_manifest(path: str) -> list[dict]:
