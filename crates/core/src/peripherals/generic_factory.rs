@@ -17,6 +17,86 @@ use crate::peripherals::rcc::RccRegisterLayout;
 use crate::Peripheral;
 use labwired_config::{PeripheralConfig, SystemManifest};
 
+/// Canonical model-type names — the single source of truth for "is this string
+/// already a real, modelled peripheral type?".
+///
+/// This is the set of canonical **output** names of
+/// [`crate::bus::SystemBus::canonical_peripheral_type`]: the generic core types
+/// built here and by `from_config`'s descriptor loaders, plus the
+/// family-specific behavioral models built by the per-vendor factories
+/// (`esp32`, `esp32s3`, `nrf52`, RP2040 arms below). `canonical_peripheral_type`
+/// consults this set to short-circuit any raw name that is *already* canonical,
+/// so the generic fuzzy SVD-name heuristics can never mis-route a real model
+/// type (e.g. coerce `esp32c3_spi`, which contains "spi", to the STM32 `spi`
+/// model). Adding a new behavioral model means adding its canonical name here —
+/// no more per-name identity blocks in `canonical_peripheral_type`.
+///
+/// Note: this is the canonical-output set, NOT every alternate input spelling
+/// the factories tolerate (e.g. `stm32spi`, `stm32dma`). Alias spellings whose
+/// canonical output differs from the input live in `canonical_peripheral_type`'s
+/// alias table.
+pub const MODEL_TYPES: &[&str] = &[
+    // Generic core types (built here or by `from_config` descriptor loaders).
+    "uart",
+    "gpio",
+    "rcc",
+    "systick",
+    "timer",
+    "i2c",
+    "spi",
+    "exti",
+    "afio",
+    "dma",
+    "gpdma",
+    "adc",
+    "pio",
+    "declarative",
+    "strict_ir",
+    "strict_ir_internal",
+    "pwr",
+    "flash",
+    "rng",
+    "crc",
+    "rtc",
+    "rtc_f1",
+    "rtc_v3",
+    "iwdg",
+    "wwdg",
+    "dac",
+    "dbgmcu",
+    "lptim",
+    "quadspi",
+    "sai",
+    "usb_otg",
+    "bxcan",
+    "fdcan",
+    "sdmmc",
+    "comp",
+    "tsc",
+    "fmc",
+    // RP2040 native peripherals (built here).
+    "rp2040_timer",
+    "rp2040_spi",
+    "rp2040_i2c",
+    // ESP32-C3 behavioral models (esp32 factory).
+    "esp32c3_i2c",
+    "esp32c3_spi",
+    "esp32c3_apb_saradc",
+    // nRF52 behavioral models (nrf52 factory).
+    "nrf52840_twim",
+    "nrf52_saadc",
+    "nrf52_qspi",
+    "nrf52840_spis",
+    "nrf52840_twis",
+    "nrf52840_uart",
+    "nrf52_gpiote",
+];
+
+/// True if `t` is already a canonical model-type name (see [`MODEL_TYPES`]).
+pub fn is_canonical_model_type(t: &str) -> bool {
+    MODEL_TYPES.contains(&t)
+}
+
 /// Build a generic peripheral model for `canonical_type`, or `None` if it is not
 /// a generic type (so `from_config` falls through to the descriptor loaders).
 pub fn try_build(

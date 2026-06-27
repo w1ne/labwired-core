@@ -496,6 +496,50 @@ pub mod integration_tests {
             crate::bus::SystemBus::canonical_peripheral_type("rp2040_i2c"),
             "rp2040_i2c"
         );
+
+        // Registry-membership short-circuit: names that are already canonical
+        // model types must be returned verbatim, never coerced by the fuzzy
+        // `contains(...)` chain (e.g. `esp32c3_spi` contains "spi").
+        assert_eq!(
+            crate::bus::SystemBus::canonical_peripheral_type("esp32c3_spi"),
+            "esp32c3_spi"
+        );
+        assert_eq!(
+            crate::bus::SystemBus::canonical_peripheral_type("esp32c3_apb_saradc"),
+            "esp32c3_apb_saradc"
+        );
+        assert_eq!(
+            crate::bus::SystemBus::canonical_peripheral_type("rp2040_timer"),
+            "rp2040_timer"
+        );
+        assert_eq!(
+            crate::bus::SystemBus::canonical_peripheral_type("nrf52_gpiote"),
+            "nrf52_gpiote"
+        );
+
+        // Alias table: raw input spellings whose canonical output differs.
+        assert_eq!(
+            crate::bus::SystemBus::canonical_peripheral_type("nrf52840_i2c"),
+            "nrf52840_twim"
+        );
+        assert_eq!(
+            crate::bus::SystemBus::canonical_peripheral_type("nrf52840_saadc"),
+            "nrf52_saadc"
+        );
+        assert_eq!(
+            crate::bus::SystemBus::canonical_peripheral_type("nrf52840_qspi"),
+            "nrf52_qspi"
+        );
+
+        // Fuzzy fallback still applies to unmodelled vendor names.
+        assert_eq!(
+            crate::bus::SystemBus::canonical_peripheral_type("qspi"),
+            "quadspi"
+        );
+        assert_eq!(
+            crate::bus::SystemBus::canonical_peripheral_type("USART1"),
+            "uart"
+        );
     }
 
     #[test]

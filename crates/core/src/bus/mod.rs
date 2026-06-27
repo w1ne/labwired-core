@@ -577,73 +577,62 @@ impl SystemBus {
     pub(crate) fn canonical_peripheral_type(raw_type: &str) -> String {
         let t = raw_type.to_ascii_lowercase();
 
-        // Keep explicit core types as-is.
-        match t.as_str() {
-            "uart" | "gpio" | "rcc" | "systick" | "timer" | "i2c" | "spi" | "exti" | "afio"
-            | "dma" | "gpdma" | "adc" | "pio" | "declarative" | "strict_ir"
-            | "strict_ir_internal" | "pwr" | "flash" | "rng" | "crc" | "rtc" | "rtc_f1"
-            | "rtc_v3" | "iwdg" | "wwdg" | "dac" | "dbgmcu" | "lptim" | "quadspi" | "sai"
-            | "usb_otg" | "bxcan" | "fdcan" | "sdmmc" | "comp" | "tsc" | "fmc" => {
-                return t;
-            }
-            _ => {}
-        }
-
-        // Nordic-specific pre-emption — keep these ahead of the generic
-        // mappers so types like `nrf52840_saadc` (contains "adc") and
-        // `nrf52840_qspi` (contains "spi" + "qspi") aren't coerced to
-        // STM32 layouts.
-        if t == "nrf52840_saadc" || t == "nrf52_saadc" || t == "nrf52840_adc" {
-            return "nrf52_saadc".to_string();
-        }
-        if t == "nrf52840_qspi" || t == "nrf52_qspi" {
-            return "nrf52_qspi".to_string();
-        }
-        // SPIS / TWIS / TWIM must be intercepted before the generic "contains(spi)"
-        // and "contains(i2c)" / "ends_with(_twi)" matchers, otherwise they
-        // would be mis-routed to the STM32 SPI / I2C models.
-        if t == "nrf52840_spis" || t == "nrf52_spis" {
-            return "nrf52840_spis".to_string();
-        }
-        if t == "nrf52840_twis" || t == "nrf52_twis" {
-            return "nrf52840_twis".to_string();
-        }
-        // TWIM / TWI master: nRF52 I²C master with EasyDMA. Must precede the
-        // generic "contains(i2c)" / "ends_with(_twi)" fuzzy matchers.
-        if t == "nrf52840_i2c" || t == "nrf52840_twim" || t == "nrf52_twim" || t == "nrf52_i2c" {
-            return "nrf52840_twim".to_string();
-        }
-        // ESP32-C3 behavioral I²C controller — must precede the generic
-        // "contains(i2c)" matcher below, which would otherwise coerce it to the
-        // STM32 `i2c` model and drop the C3 command-list engine.
-        if t == "esp32c3_i2c" {
-            return "esp32c3_i2c".to_string();
-        }
-        // RP2040 native peripherals — keep ahead of the generic
-        // "contains(timer)" / "contains(spi)" / "contains(i2c)" fuzzy matchers,
-        // which would otherwise coerce them to the STM32 models and drop the
-        // RP2040 register layouts (PL022 SSP, DW_apb_i2c, the 64-bit timer).
-        if t == "rp2040_timer" || t == "rp2040_spi" || t == "rp2040_i2c" {
+        // 1. If the name is ALREADY a canonical model type, return it verbatim.
+        //    This is the single source of truth (co-located with the factory in
+        //    `generic_factory::MODEL_TYPES`) and replaces both the old core-type
+        //    match and the per-name identity pre-emption blocks. It guarantees a
+        //    real model type (e.g. `esp32c3_spi`, `nrf52840_twim`, `rp2040_timer`)
+        //    is never coerced by the legacy fuzzy heuristics below.
+        if crate::peripherals::generic_factory::is_canonical_model_type(&t) {
             return t;
         }
-        // ESP32-C3 behavioral GP-SPI2 — must precede the generic
-        // "contains(spi)" matcher below, which would otherwise coerce it to the
-        // STM32 SPI model and drop the C3 transaction engine.
-        if t == "esp32c3_spi" {
-            return "esp32c3_spi".to_string();
-        }
-        // ESP32-C3 behavioral SAR ADC — must precede any generic "adc" matcher.
-        if t == "esp32c3_apb_saradc" {
-            return "esp32c3_apb_saradc".to_string();
-        }
-        // UARTE: nRF52 UART with EasyDMA — must be intercepted before the
-        // generic "contains(uart)" matcher, which would coerce it to the
-        // STM32-style generic Uart model and lose PSEL/BAUDRATE/CONFIG.
-        if t == "nrf52840_uart" || t == "nrf52_uart" || t == "nrf52_uarte" {
-            return "nrf52840_uart".to_string();
+
+        // 2. Alias table: raw INPUT spellings whose canonical OUTPUT differs from
+        //    the input. These are NOT identities (the verbatim case is handled by
+        //    membership above), so they must not appear in `MODEL_TYPES`. Mostly
+        //    nRF52 vendor synonyms (`nrf52840_i2c` → the TWIM master model, …)
+        //    that must resolve before the fuzzy `contains(...)` chain, otherwise
+        //    e.g. `nrf52840_saadc` (contains "adc") or `nrf52840_qspi`
+        //    (contains "spi") would be coerced onto STM32 layouts. Iterated in
+        //    order; first matching group wins.
+        const ALIASES: &[(&[&str], &str)] = &[
+            // SAADC: nRF52 SAR ADC (vendor "adc"/"saadc" spellings).
+            (
+                &["nrf52840_saadc", "nrf52_saadc", "nrf52840_adc"],
+                "nrf52_saadc",
+            ),
+            // QSPI: nRF52 external-flash quad-SPI controller.
+            (&["nrf52840_qspi", "nrf52_qspi"], "nrf52_qspi"),
+            // SPIS / TWIS: SPI / I²C slave with EasyDMA.
+            (&["nrf52840_spis", "nrf52_spis"], "nrf52840_spis"),
+            (&["nrf52840_twis", "nrf52_twis"], "nrf52840_twis"),
+            // TWIM / TWI master: nRF52 I²C master with EasyDMA.
+            (
+                &["nrf52840_i2c", "nrf52840_twim", "nrf52_twim", "nrf52_i2c"],
+                "nrf52840_twim",
+            ),
+            // UARTE: nRF52 UART with EasyDMA (PSEL/BAUDRATE/CONFIG).
+            (
+                &["nrf52840_uart", "nrf52_uart", "nrf52_uarte"],
+                "nrf52840_uart",
+            ),
+            // GPIOTE: Nordic GPIO task/event controller (shares "gpio" in name
+            // but a totally different register surface).
+            (
+                &["nrf52840_gpiotasksevents", "nrf52_gpiote"],
+                "nrf52_gpiote",
+            ),
+        ];
+        for (inputs, canonical) in ALIASES {
+            if inputs.contains(&t.as_str()) {
+                return canonical.to_string();
+            }
         }
 
-        // Specific mappers first — must come before fuzzy matchers so e.g.
+        // 3. Legacy generic SVD-name heuristics (fallback). Fuzzy `contains` /
+        //    `starts_with` / `ends_with` matching for raw vendor names we have
+        //    not given an explicit canonical type. Ordering matters: specific
+        //    mappers come before broader ones so e.g.
         // "quadspi" doesn't get swallowed by the generic "contains(spi)" rule.
         if t.contains("quadspi") || t == "qspi" {
             return "quadspi".to_string();
@@ -675,12 +664,6 @@ impl SystemBus {
 
         if t.contains("uart") || t.contains("usart") || t == "leuart" || t.ends_with("_sci") {
             return "uart".to_string();
-        }
-        // Nordic GPIOTE shares "gpio" in its name but is a task/event
-        // controller with a totally different register surface; route it
-        // to the dedicated nRF52 model before the generic gpio matcher.
-        if t == "nrf52840_gpiotasksevents" || t == "nrf52_gpiote" {
-            return "nrf52_gpiote".to_string();
         }
         if t == "sam4s_pio" || (t.contains("gpio") && t != "pio") {
             return "gpio".to_string();
