@@ -20,6 +20,7 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 | `stm32wba52` | 🟡 smoke-manual | — | 2026-06-26 | no silicon capture |
 | `nrf52832` | ⚪ structural | — | 2026-06-07 | no silicon capture |
 | `rp2040` | ⚪ structural | — | 2026-06-26 | no silicon capture |
+| `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | 2026-06-24 | no silicon capture |
 
 ## `nrf52840` — 🟢 silicon-verified
 
@@ -124,4 +125,13 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 - Doc: [`docs/boards/rp2040.md`](rp2040.md)  ·  Chip: `configs/chips/rp2040.yaml`
 - Note: UART0 (stm32v2-profile cheat) + PIO0 declared, but ZERO PIO0 test coverage. No silicon.
 - Silicon: none — not validated against real hardware.
+- Drift status: **no silicon capture**
+
+## `nrf5340` — 🔵 sim-validated (deep model, no HW diff)
+
+- Doc: [`docs/boards/nrf5340.md`](nrf5340.md)  ·  Chip: `configs/chips/nrf5340.yaml`
+- Note: Application core (Cortex-M33). Boots UNMODIFIED upstream Zephyr v3.7 hello_world (board nrf5340dk/nrf5340/cpuapp) end to end and prints its banner over the UARTE0 EasyDMA console — asserted by firmware_survival::test_nrf5340_zephyr_survival, with the ELF-independent clock/alias twin in tests/nrf5340_clock_boot.rs. Reuses the shared Nordic CLOCK/UARTE/RTC behavioural models at the 0x5000_0000 non-secure peripheral alias; the whole boot is bus-violation-free (LABWIRED_TRACE_VIOLATIONS=1). Network core, radio, TrustZone/SPU enforcement, and analog trims are not modeled (FICR/UICR/regulator/trim blocks are benign stubs). No nRF5340 silicon diff — no bench board.
+- Silicon: none — not validated against real hardware.
+  - offline (CI): firmware_survival::test_nrf5340_zephyr_survival (real Zephyr ELF boots + banner)
+  - offline (CI): nrf5340_clock_boot (HFCLK/LFCLK started-event polls + non-secure alias mapping)
 - Drift status: **no silicon capture**

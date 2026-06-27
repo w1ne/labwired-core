@@ -87,6 +87,15 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_nrf52840_demo_survival"),
     },
     ChipConf {
+        name: "nrf5340",
+        yaml: "configs/chips/nrf5340.yaml",
+        reset_oracle: None,
+        // Behaviour gate is the real unmodified Zephyr v3.7 hello_world boot on
+        // the application core (Cortex-M33). The ELF-independent twin that
+        // replays the boot clock/SCS poll loops is tests/nrf5340_clock_boot.rs.
+        behavior_gate: Some("firmware_survival::test_nrf5340_zephyr_survival"),
+    },
+    ChipConf {
         name: "rp2040",
         yaml: "configs/chips/rp2040.yaml",
         reset_oracle: None,
