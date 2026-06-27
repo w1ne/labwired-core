@@ -70,3 +70,79 @@ peripherals:
     type: "icache"
     base_address: 0x40030400
     size: "1KB"
+  # ── Tier-1 peripherals (RM0493). The RCC model is profile stm32v2, so the
+  # clock-gate `reg:` names resolve to the V2 enable-register offsets
+  # (ahb2enr@0x8C, apb1lenr@0x9C, apb2enr@0xA4); the `bit:` values are the
+  # silicon RM0493 enable bits for each block's real bus. ──────────────────
+  # TIM2 — 32-bit GP timer (APB1). RCC_APB1ENR1.TIM2EN (bit 0).
+  - id: "tim2"
+    type: "timer"
+    base_address: 0x40000000
+    size: "1KB"
+    irq: 41
+    config:
+      width: 32
+    clock: { reg: "apb1enr", bit: 0 }
+  # TIM1 — advanced-control PWM timer (APB2). The `_pwm` id suffix declares the
+  # pwm class alongside timer. RCC_APB2ENR.TIM1EN (bit 11).
+  - id: "tim1_pwm"
+    type: "timer"
+    base_address: 0x40012C00
+    size: "1KB"
+    irq: 38
+    config:
+      advanced: true
+    clock: { reg: "apb2enr", bit: 11 }
+  # I2C1 (APB1) — modern v2 controller. RCC_APB1ENR1.I2C1EN (bit 21).
+  - id: "i2c1"
+    type: "i2c"
+    base_address: 0x40005400
+    size: "1KB"
+    irq: 43
+    config:
+      profile: "stm32l4"
+    clock: { reg: "apb1enr", bit: 21 }
+  # SPI1 (APB2) — new H5-style SPI IP (CFG1@0x08, SR@0x14, per RM0493 / SVD).
+  # RCC_APB2ENR.SPI1EN (bit 12).
+  - id: "spi1"
+    type: "spi"
+    base_address: 0x40013000
+    size: "1KB"
+    irq: 45
+    config:
+      profile: "stm32h5"
+    clock: { reg: "apb2enr", bit: 12 }
+  # GPDMA1 (AHB1, 8-channel, RM0481/RM0493 fixed layout). RM0493 puts GPDMA1EN
+  # on AHB1ENR (bit 0), which the stm32v2 RCC model does not surface, so the
+  # channel is declared ungated; the mem-to-mem round-trip is the proof.
+  - id: "gpdma1"
+    type: "gpdma"
+    base_address: 0x40020000
+    size: "2KB"
+    irq: 29
+    config:
+      irq_base: 29
+  # IWDG — clocked by the LSI, no RCC enable gate on silicon (ungated).
+  - id: "iwdg"
+    type: "iwdg"
+    base_address: 0x40003000
+    size: "1KB"
+  # RTC (APB7, base 0x46007800). Its register interface is gated by
+  # RCC_APB7ENR.RTCAPBEN (bit 21) on the SmartRun domain, which the stm32v2 RCC
+  # model does not surface (it exposes only ahb2enr/apb1lenr/apb2enr), so the
+  # RTC is declared ungated and the WPR/calendar round-trip carries the proof.
+  - id: "rtc"
+    type: "rtc"
+    base_address: 0x46007800
+    size: "1KB"
+    irq: 2
+  # NVIC is wired unconditionally for Cortex-M machines; this entry declares
+  # the tier1 irq class and pins the canonical base.
+  - id: "nvic"
+    type: "nvic"
+    base_address: 0xE000E100
+    size: "1KB"
+  # NOTE: ADC4 (base 0x46021000) is NOT declared. Its clock enable is
+  # RCC_AHB4ENR.ADC4EN on the SmartRun (APB7/AHB4) domain, which the stm32v2
+  # RCC model does not surface, so it cannot be honestly clock-gated — the adc
+  # class is left `na` rather than shipped ungated.

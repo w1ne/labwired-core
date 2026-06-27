@@ -20,9 +20,12 @@
 //! The `uart` class is implicit: receiving `TIER1 done` over the UART is
 //! itself the proof of a working UART path, so no `uart` line is printed.
 //!
-//! `timer`, `dma` and `irq` are NOT reported: the F407 yaml declares no
-//! TIM/DMA/NVIC-class peripheral ids (systick does not count as a `timer`
-//! class marker), so the matrix renders those cells `na`.
+//! `dma` and `irq` are NOT reported: the F407 yaml declares no DMA/NVIC-class
+//! peripheral id. The F4 DMA is a stream controller, but the only modelled DMA
+//! IP is the F1/L4 channel layout (`Dma1`), so DMA is left `na` rather than
+//! claimed with a mismatched register map. `wdt` (IWDG) and `rtc` are reported
+//! but carry no clock gate: IWDG runs off LSI and RTC off the backup domain
+//! (RCC_BDCR.RTCEN), neither of which is an APB/AHB peripheral-enable bit.
 //!
 //! Every poll is bounded by a fixed iteration count (the simulator is
 //! deterministic — no wall-clock timeouts). Register offsets follow the
@@ -45,6 +48,8 @@ const TIM2_BASE: u32 = 0x4000_0000; // type timer, 32-bit (width: 32)
 const I2C1_BASE: u32 = 0x4000_5400; // type i2c, stm32f1 layout (default)
 const SPI1_BASE: u32 = 0x4001_3000; // type spi, stm32 classic (cr1_mask 0xEFFF)
 const ADC1_BASE: u32 = 0x4001_2000; // type adc, stm32f1 layout (default)
+const IWDG_BASE: u32 = 0x4000_3000; // type iwdg (LSI-clocked, ungated)
+const RTC_BASE: u32 = 0x4000_2800; // type rtc, L4-style calendar (ungated)
 
 // USART2, stm32f1 layout: SR @ 0x00 (TXE = bit 7), DR @ 0x04.
 // Read the full SR word and bit-test TXE: a sign-bit test on a byte
@@ -246,6 +251,43 @@ fn check_adc() -> Result<(), &'static [u8]> {
     Ok(())
 }
 
+/// wdt: IWDG (LSI-clocked, no RCC gate). PR/RLR are write-protected until KR
+/// (@ 0x00) receives the 0x5555 unlock code (RM0090 §21): a pre-unlock RLR
+/// write is dropped (RLR keeps its 0x0FFF reset), and after unlock PR/RLR
+/// round-trip.
+fn check_wdt() -> Result<(), &'static [u8]> {
+    wr32(IWDG_BASE + 0x08, 0x123); // RLR @ 0x08 without key → dropped
+    if rd32(IWDG_BASE + 0x08) != 0xFFF {
+        return Err(b"wdt-unprotected");
+    }
+    wr32(IWDG_BASE, 0x5555); // KR unlock
+    wr32(IWDG_BASE + 0x04, 0x5); // PR @ 0x04
+    wr32(IWDG_BASE + 0x08, 0x123); // RLR @ 0x08
+    if rd32(IWDG_BASE + 0x04) != 0x5 {
+        return Err(b"wdt-pr");
+    }
+    if rd32(IWDG_BASE + 0x08) != 0x123 {
+        return Err(b"wdt-rlr");
+    }
+    Ok(())
+}
+
+/// rtc: F4 calendar RTC (L4-style IP). DR resets to 0x2101 (year 00, month 01,
+/// day 01); after the WPR unlock dance (0xCA, 0x53) the time register TR
+/// round-trips within its writable mask 0x007F7F7F (RM0090 §26).
+fn check_rtc() -> Result<(), &'static [u8]> {
+    if rd32(RTC_BASE + 0x04) & 0xFFFF != 0x2101 {
+        return Err(b"rtc-dr-reset"); // DR @ 0x04
+    }
+    wr32(RTC_BASE + 0x24, 0xCA); // WPR @ 0x24: first key
+    wr32(RTC_BASE + 0x24, 0x53); // WPR: second key
+    wr32(RTC_BASE, 0x0012_3456); // TR @ 0x00 (accepted; mask 0x007F7F7F)
+    if rd32(RTC_BASE) & 0x007F_7F7F != 0x0012_3456 {
+        return Err(b"rtc-tr");
+    }
+    Ok(())
+}
+
 #[entry]
 fn main() -> ! {
     report(b"clock", check_clock());
@@ -254,6 +296,8 @@ fn main() -> ! {
     report(b"i2c", check_i2c());
     report(b"spi", check_spi());
     report(b"adc", check_adc());
+    report(b"wdt", check_wdt());
+    report(b"rtc", check_rtc());
     puts(b"TIER1 done\n");
 
     loop {

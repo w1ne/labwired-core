@@ -1,66 +1,66 @@
 {
   "esp32.elf": {
     "sha256": "718ea0a2f0fa76d669462de21b4d8b8e832f31e0fe555f49164b7f0815f29853",
-    "source_rev": "ac0658abbc388392310b189a1984f14640569a68"
+    "source_rev": "fa5de7a98b1f548c5a2308ce1c4d4a713c75763b"
   },
   "esp32c3.elf": {
     "sha256": "4faeaabbb420aac93493a911690f590eb7b2e459b031055d088eb8d2de746db6",
-    "source_rev": "ac0658abbc388392310b189a1984f14640569a68"
+    "source_rev": "fa5de7a98b1f548c5a2308ce1c4d4a713c75763b"
   },
   "esp32s3-flash.bin": {
     "sha256": "9c0bb604abbc8d18da77bf6c0f2ff6cb11fcda8db18b34ce08081cbf12d64209",
-    "source_rev": "ac0658abbc388392310b189a1984f14640569a68"
+    "source_rev": "fa5de7a98b1f548c5a2308ce1c4d4a713c75763b"
   },
   "esp32s3.elf": {
     "sha256": "27a61f851c798edbf2dabc38526cf4ca9211ab51a89387baba9faa1936060a5f",
-    "source_rev": "ac0658abbc388392310b189a1984f14640569a68"
+    "source_rev": "fa5de7a98b1f548c5a2308ce1c4d4a713c75763b"
   },
   "nrf52832.elf": {
     "sha256": "73262697e65ffdb33d8cee6ccc91b859ed8c47fae56753b35e3d2294d2c2dcd9",
-    "source_rev": "ac0658abbc388392310b189a1984f14640569a68"
+    "source_rev": "fa5de7a98b1f548c5a2308ce1c4d4a713c75763b"
   },
   "nrf52840.elf": {
     "sha256": "ddb18ab69c14b06ae7e3a874b2d06285945f46d6c1e3b5c16bba11b3d470c393",
-    "source_rev": "ac0658abbc388392310b189a1984f14640569a68"
+    "source_rev": "fa5de7a98b1f548c5a2308ce1c4d4a713c75763b"
   },
   "rp2040.elf": {
     "sha256": "ee58f571d13d5c7267881c502a1dd7208330fc8cd9ec0795c85a326cebdee556",
-    "source_rev": "ac0658abbc388392310b189a1984f14640569a68"
+    "source_rev": "fa5de7a98b1f548c5a2308ce1c4d4a713c75763b"
   },
   "stm32f103.elf": {
     "sha256": "42982a74dda8310cb1f5596cd69e98b86547b69d7d7c85e75aab6611881d7978",
-    "source_rev": "ac0658abbc388392310b189a1984f14640569a68"
+    "source_rev": "fa5de7a98b1f548c5a2308ce1c4d4a713c75763b"
   },
   "stm32f401.elf": {
-    "sha256": "89ec2f9a82a264b393dca06b4f78f53b9441267d7684d38f9fc2ba064ddf77e7",
-    "source_rev": "ac0658abbc388392310b189a1984f14640569a68"
+    "sha256": "410020a1c98b91072879bff801e8f42a9618ce6ef0649c034393123d4270a0b8",
+    "source_rev": "fa5de7a98b1f548c5a2308ce1c4d4a713c75763b"
   },
   "stm32f407.elf": {
-    "sha256": "be3a93628f321e1b2f503aea6abbdc9450faa6471ca1546fd4404c51b58eade9",
-    "source_rev": "ac0658abbc388392310b189a1984f14640569a68"
+    "sha256": "6dc7f62af0dc59a3ff175e6b3cedf99b2eda37a93d6f04caaa46a179634e6561",
+    "source_rev": "fa5de7a98b1f548c5a2308ce1c4d4a713c75763b"
   },
   "stm32g474re.elf": {
-    "sha256": "ddb23f8b8d79c685d915e778e2b7f5e3fa700872c43a0492bd9139fcd142f89f",
-    "source_rev": "ac0658abbc388392310b189a1984f14640569a68"
+    "sha256": "ef93880619b18220ca7858e55f50c9c34051306e6e1debc6180e59a51cd2da45",
+    "source_rev": "fa5de7a98b1f548c5a2308ce1c4d4a713c75763b"
   },
   "stm32h563.elf": {
     "sha256": "591620620686e768c74f3829f169f699095a449ef67555cc5b9a531c9cfc7fcb",
-    "source_rev": "ac0658abbc388392310b189a1984f14640569a68"
+    "source_rev": "fa5de7a98b1f548c5a2308ce1c4d4a713c75763b"
   },
   "stm32l073.elf": {
     "sha256": "d4459b50263a7daad1e86e9c73b37e5aba1474fa493e0536dfa3159cfd7294dc",
-    "source_rev": "ac0658abbc388392310b189a1984f14640569a68"
+    "source_rev": "fa5de7a98b1f548c5a2308ce1c4d4a713c75763b"
   },
   "stm32l476.elf": {
     "sha256": "db94aa0fc713db3e8abbf2aa6c9d736c139c963ee4c36a0ce5ca25589f1160f2",
-    "source_rev": "ac0658abbc388392310b189a1984f14640569a68"
+    "source_rev": "fa5de7a98b1f548c5a2308ce1c4d4a713c75763b"
   },
   "stm32wb55.elf": {
-    "sha256": "a5cd1e6eb8d1fa12b61a2c3067f548a03c4725d6ed6a9875d84384d4f0ff8963",
-    "source_rev": "ac0658abbc388392310b189a1984f14640569a68"
+    "sha256": "a9df131e77b05ff98d2d9bfc318c01a22bf583f30b1399906b38d0f0a8116e18",
+    "source_rev": "fa5de7a98b1f548c5a2308ce1c4d4a713c75763b"
   },
   "stm32wba52.elf": {
-    "sha256": "bf7da9bfa376365b8c476d0ebdd6f15b42ac7026fbe985df3d0393e294436caa",
-    "source_rev": "ac0658abbc388392310b189a1984f14640569a68"
+    "sha256": "f27e321224f8224ed0d31cbc6e4faf45305ec525596e68a5fc273a4890038e19",
+    "source_rev": "fa5de7a98b1f548c5a2308ce1c4d4a713c75763b"
   }
 }

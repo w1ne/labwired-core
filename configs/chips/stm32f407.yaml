@@ -177,6 +177,20 @@ peripherals:
     size: "1KB"
     config:
       lines: 23
+  # IWDG — independent watchdog (RM0090 §21). Clocked from the dedicated LSI
+  # oscillator, NOT an APB/AHB peripheral-enable bit, so it carries no `clock:`
+  # gate. The KR key (0x5555) protects PR/RLR writes instead.
+  - id: "iwdg"
+    type: "iwdg"
+    base_address: 0x40003000
+    size: "1KB"
+  # RTC — calendar real-time clock (RM0090 §26; same IP as the L4 `rtc` model).
+  # Lives in the backup domain, clock-enabled via RCC_BDCR.RTCEN — outside the
+  # APB/AHB peripheral-enable gate this model expresses, so it is left ungated.
+  - id: "rtc"
+    type: "rtc"
+    base_address: 0x40002800
+    size: "1KB"
   - id: "dbgmcu"
     type: "dbgmcu"
     base_address: 0xE0042000

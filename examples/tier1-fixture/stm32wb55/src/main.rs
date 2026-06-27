@@ -20,26 +20,53 @@
 //! The `uart` class is implicit: receiving `TIER1 done` over the UART is
 //! itself the proof of a working UART path, so no `uart` line is printed.
 //!
-//! `timer`, `dma` and `irq` are NOT reported: the WB55 yaml declares no
-//! TIM/DMA/NVIC-class peripheral ids (systick does not count as a `timer`
-//! class marker), so the matrix renders those cells `na`.
+//! Each gated peripheral (timer/pwm/i2c/spi/adc/rtc) is FIRST poked while its
+//! RCC clock-enable bit is off and required to read dead/0 — proving the
+//! stm32v2 clock-gate is modelled — then its bit is enabled before the
+//! behavioural round-trip. dma/wdt are ungated (AHB1ENR is not surfaced by the
+//! V2 RCC model / IWDG has no enable gate on silicon), so those are pure
+//! behavioural checks.
 //!
 //! Every poll is bounded by a fixed iteration count (the simulator is
-//! deterministic — no wall-clock timeouts). Register offsets follow the
-//! simulator's models: rcc.rs (`stm32v2` profile), gpio.rs (`stm32v2`) and
-//! uart.rs (`stm32v2`).
+//! deterministic — no wall-clock timeouts). Register offsets follow RM0434 and
+//! the simulator's models: rcc.rs (`stm32v2`), gpio.rs (`stm32v2`), uart.rs
+//! (`stm32v2`), timer.rs, i2c.rs (`stm32l4`), spi.rs (`stm32_fifo`), adc.rs
+//! (`stm32l4`), dma.rs (Dma1), rtc.rs, iwdg.rs and nvic.rs.
 
 #![no_std]
 #![no_main]
 
 use core::ptr::{read_volatile, write_volatile};
-use cortex_m_rt::entry;
+use cortex_m_rt::{entry, exception};
 use panic_halt as _;
 
-// ── Wired peripherals (configs/chips/stm32wb55.yaml) ──────────────────────
+// ── Wired peripherals (configs/chips/stm32wb55.yaml) ────────────────────
 const RCC_BASE: u32 = 0x5800_0000; // type rcc, profile stm32v2
 const GPIOA_BASE: u32 = 0x4800_0000; // type gpio, profile stm32v2
-const USART1_BASE: u32 = 0x4001_3800; // type uart, profile stm32v2
+const USART1_BASE: u32 = 0x4001_3800; // type uart, profile stm32v2 (console)
+const TIM2_BASE: u32 = 0x4000_0000; // type timer, width 32
+const TIM1_BASE: u32 = 0x4001_2C00; // type timer, advanced (id tim1_pwm)
+const I2C1_BASE: u32 = 0x4000_5400; // type i2c, profile stm32l4
+const SPI1_BASE: u32 = 0x4001_3000; // type spi, profile stm32_fifo
+const ADC1_BASE: u32 = 0x5004_0000; // type adc, profile stm32l4
+const DMA1_BASE: u32 = 0x4002_0000; // type dma (Dma1, 7ch)
+const IWDG_BASE: u32 = 0x4000_3000; // type iwdg
+const RTC_BASE: u32 = 0x4000_2800; // type rtc (stm32l4 layout)
+
+// V2 RCC clock-enable registers (offsets the stm32v2 RCC model exposes).
+const RCC_AHB2ENR: u32 = RCC_BASE + 0x8C;
+const RCC_APB1ENR: u32 = RCC_BASE + 0x9C; // APB1LENR
+const RCC_APB2ENR: u32 = RCC_BASE + 0xA4;
+
+// NVIC (installed for every Cortex-M chip; declared in the yaml as `nvic`).
+const NVIC_ISER0: u32 = 0xE000_E100;
+const NVIC_ICER0: u32 = 0xE000_E180;
+const NVIC_ISPR0: u32 = 0xE000_E200;
+const NVIC_ICPR0: u32 = 0xE000_E280;
+/// Software-pended test IRQ. Must be < 32 (cortex-m-rt default vector table)
+/// and unused by any wired peripheral (WB55 uses 2, 11, 18, 24, 28, 30, 34 in
+/// that range — 20 is free).
+const TEST_IRQ: i16 = 20;
 
 // USART1, stm32v2 layout: ISR @ 0x1C (TXE = bit 7), TDR @ 0x28.
 // Read the full ISR word and bit-test TXE: a sign-bit test on a byte
@@ -100,9 +127,8 @@ fn report(class: &[u8], result: Result<(), &'static [u8]>) {
 // ── Checks ──────────────────────────────────────────────────────────────────
 
 /// clock: V2 (H5-style) RCC. HSI is on+ready out of reset; HSEON (bit 16)
-/// must latch HSERDY (bit 17); SW→SWS mirrors in CFGR @ 0x08 (G4/WB V2
-/// layout: CR=0x00, ICSCR=0x04, CFGR=0x08); AHB2ENR @ 0x8C round-trips GPIO
-/// port enables.
+/// must latch HSERDY (bit 17); SW→SWS mirrors in CFGR @ 0x08; AHB2ENR @ 0x8C
+/// round-trips GPIO port enables.
 fn check_clock() -> Result<(), &'static [u8]> {
     if rd32(RCC_BASE) & (1 << 1) == 0 {
         return Err(b"clock-hsirdy");
@@ -122,8 +148,8 @@ fn check_clock() -> Result<(), &'static [u8]> {
         return Err(b"clock-sws");
     }
     // AHB2ENR round-trip: GPIOA/B/C/D enables.
-    wr32(RCC_BASE + 0x8C, 0xF);
-    if rd32(RCC_BASE + 0x8C) != 0xF {
+    wr32(RCC_AHB2ENR, 0xF);
+    if rd32(RCC_AHB2ENR) != 0xF {
         return Err(b"clock-enr");
     }
     Ok(())
@@ -145,10 +171,296 @@ fn check_gpio() -> Result<(), &'static [u8]> {
     Ok(())
 }
 
+/// timer: TIM2 (32-bit), clock-gated on RCC_APB1ENR1.TIM2EN (bit 0). Gated it
+/// reads dead; enabled, EGR.UG latches UIF, SR write-0 clears, and CEN makes
+/// the 32-bit counter advance.
+fn check_timer() -> Result<(), &'static [u8]> {
+    // Dead while gated: writes are dropped and reads return 0.
+    wr32(TIM2_BASE + 0x2C, 0x1234);
+    if rd32(TIM2_BASE + 0x2C) != 0 {
+        return Err(b"tim-gated");
+    }
+    wr32(RCC_APB1ENR, rd32(RCC_APB1ENR) | (1 << 0)); // TIM2EN
+    wr32(TIM2_BASE + 0x28, 0); // PSC = 0
+    wr32(TIM2_BASE + 0x2C, 0xFFFF_FFFF); // ARR = max (32-bit TIM2)
+    if rd32(TIM2_BASE + 0x2C) != 0xFFFF_FFFF {
+        return Err(b"tim-arr32");
+    }
+    wr32(TIM2_BASE + 0x14, 1); // EGR.UG
+    if rd32(TIM2_BASE + 0x10) & 1 == 0 {
+        return Err(b"tim-uif");
+    }
+    wr32(TIM2_BASE + 0x10, 0); // SR: rc_w0 clear
+    if rd32(TIM2_BASE + 0x10) & 1 != 0 {
+        return Err(b"tim-uif-clear");
+    }
+    wr32(TIM2_BASE, 1); // CR1.CEN
+    let c1 = rd32(TIM2_BASE + 0x24);
+    spin(2_000);
+    let c2 = rd32(TIM2_BASE + 0x24);
+    wr32(TIM2_BASE, 0); // stop
+    if c2 == c1 {
+        return Err(b"tim-cnt-stuck");
+    }
+    Ok(())
+}
+
+/// pwm: TIM1 (advanced), clock-gated on RCC_APB2ENR.TIM1EN (bit 11). A bare UG
+/// latches the compare-match flags for every channel whose CCR equals the
+/// reloaded CNT — including the internal channels 5/6 at SR bits 16/17. With
+/// CCR1=50 and ARR=100 the running counter must raise CC1IF when it crosses 50.
+fn check_pwm() -> Result<(), &'static [u8]> {
+    wr32(TIM1_BASE + 0x2C, 0x100);
+    if rd32(TIM1_BASE + 0x2C) != 0 {
+        return Err(b"pwm-gated");
+    }
+    wr32(RCC_APB2ENR, rd32(RCC_APB2ENR) | (1 << 11)); // TIM1EN
+    wr32(TIM1_BASE + 0x18, 0x0068); // CCMR1: OC1M=PWM1, OC1PE
+    wr32(TIM1_BASE + 0x20, 0x0001); // CCER: CC1E
+    wr32(TIM1_BASE + 0x28, 0); // PSC
+    wr32(TIM1_BASE + 0x2C, 100); // ARR
+    wr32(TIM1_BASE + 0x34, 50); // CCR1
+    wr32(TIM1_BASE + 0x44, 0x8000); // BDTR.MOE
+    wr32(TIM1_BASE + 0x14, 0x1); // EGR.UG
+    let sr = rd32(TIM1_BASE + 0x10);
+    // UIF + CC2..4IF (CCR2..4=0 match the reloaded CNT=0) + CC5IF/CC6IF.
+    if sr & 0x0003_001D != 0x0003_001D {
+        return Err(b"pwm-ug-latch");
+    }
+    if sr & 0x2 != 0 {
+        return Err(b"pwm-cc1-early"); // CCR1=50 != 0: must NOT match at UG
+    }
+    wr32(TIM1_BASE + 0x10, 0); // clear SR
+    wr32(TIM1_BASE, 0x1); // CEN
+    let mut hit = false;
+    for _ in 0..20_000 {
+        if rd32(TIM1_BASE + 0x10) & 0x2 != 0 {
+            hit = true;
+            break;
+        }
+    }
+    wr32(TIM1_BASE, 0); // CEN off
+    if !hit {
+        return Err(b"pwm-cc1if");
+    }
+    Ok(())
+}
+
+/// dma: DMA1 channel 1 mem-to-mem copy (CCR.MEM2MEM, CMAR → CPAR), byte
+/// elements with MINC+PINC. TCIF1 must latch and the destination must match.
+/// Ungated: RM0434 puts DMA1EN on AHB1ENR, which the V2 RCC model does not
+/// surface, so the channel is left ungated and the round-trip carries the proof.
+fn check_dma() -> Result<(), &'static [u8]> {
+    const N: usize = 8;
+    let src: [u8; N] = [0xA5, 0x5A, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66];
+    let mut dst: [u8; N] = [0; N];
+
+    wr32(DMA1_BASE + 0x04, 0xF); // IFCR: clear stale CH1 flags
+    wr32(DMA1_BASE + 0x10, dst.as_mut_ptr() as u32); // CPAR1 = destination
+    wr32(DMA1_BASE + 0x14, src.as_ptr() as u32); // CMAR1 = source
+    wr32(DMA1_BASE + 0x0C, N as u32); // CNDTR1
+                                      // Configure first WITHOUT EN, then flip EN alone.
+    let cfg: u32 = (1 << 14) | (1 << 7) | (1 << 6) | (1 << 4); // MEM2MEM|MINC|PINC|DIR
+    wr32(DMA1_BASE + 0x08, cfg);
+    unsafe { write_volatile((DMA1_BASE + 0x08) as *mut u8, (cfg | 1) as u8) }; // EN
+
+    let mut done = false;
+    for _ in 0..20_000 {
+        if rd32(DMA1_BASE) & (1 << 1) != 0 {
+            // TCIF1
+            done = true;
+            break;
+        }
+    }
+    wr32(DMA1_BASE + 0x08, 0); // disable channel
+    wr32(DMA1_BASE + 0x04, 0xF); // clear CH1 flags
+    if !done {
+        return Err(b"dma-tcif-timeout");
+    }
+    for i in 0..N {
+        if unsafe { read_volatile(dst.as_ptr().add(i)) } != src[i] {
+            return Err(b"dma-data-mismatch");
+        }
+    }
+    Ok(())
+}
+
+/// Hit counter for the software-pended test IRQ.
+static mut IRQ_HITS: u32 = 0;
+
+/// irq: NVIC delivery round-trip. Enable TEST_IRQ in ISER0, software-pend it
+/// via ISPR0, and require the vector to actually run.
+fn check_irq() -> Result<(), &'static [u8]> {
+    wr32(NVIC_ISER0, 1 << TEST_IRQ as u32);
+    wr32(NVIC_ISPR0, 1 << TEST_IRQ as u32);
+    for _ in 0..10_000 {
+        if unsafe { read_volatile(core::ptr::addr_of!(IRQ_HITS)) } != 0 {
+            return Ok(());
+        }
+    }
+    wr32(NVIC_ICER0, 1 << TEST_IRQ as u32);
+    wr32(NVIC_ICPR0, 1 << TEST_IRQ as u32);
+    Err(b"irq-not-delivered")
+}
+
+/// i2c: I2C1 (modern v2), clock-gated on RCC_APB1ENR1.I2C1EN (bit 21). Gated
+/// ISR reads 0; enabled, ISR resets with TXE; PE round-trips; CR2.START latches
+/// ISR.BUSY; CR2.STOP clears it.
+fn check_i2c() -> Result<(), &'static [u8]> {
+    if rd32(I2C1_BASE + 0x18) != 0 {
+        return Err(b"i2c-gated");
+    }
+    wr32(RCC_APB1ENR, rd32(RCC_APB1ENR) | (1 << 21)); // I2C1EN
+    if rd32(I2C1_BASE + 0x18) & 0x1 == 0 {
+        return Err(b"i2c-txe-reset");
+    }
+    wr32(I2C1_BASE + 0x00, 1); // CR1.PE
+    if rd32(I2C1_BASE + 0x00) & 0x1 == 0 {
+        return Err(b"i2c-pe");
+    }
+    wr32(I2C1_BASE + 0x04, 1 << 13); // CR2.START → ISR.BUSY
+    if rd32(I2C1_BASE + 0x18) & (1 << 15) == 0 {
+        return Err(b"i2c-busy");
+    }
+    wr32(I2C1_BASE + 0x04, 1 << 14); // CR2.STOP → clear ISR.BUSY
+    if rd32(I2C1_BASE + 0x18) & (1 << 15) != 0 {
+        return Err(b"i2c-busy-stuck");
+    }
+    wr32(I2C1_BASE + 0x00, 0);
+    Ok(())
+}
+
+/// spi: SPI1 (stm32_fifo), clock-gated on RCC_APB2ENR.SPI1EN (bit 12). Gated
+/// SR reads 0; enabled, SR.TXE (bit1) asserts; a byte DR write sets SR.BSY
+/// (bit7), then the cycle-counted engine clears BSY and re-asserts TXE.
+fn check_spi() -> Result<(), &'static [u8]> {
+    if rd32(SPI1_BASE + 0x08) != 0 {
+        return Err(b"spi-gated");
+    }
+    wr32(RCC_APB2ENR, rd32(RCC_APB2ENR) | (1 << 12)); // SPI1EN
+    if rd32(SPI1_BASE + 0x08) & (1 << 1) == 0 {
+        return Err(b"spi-txe-reset");
+    }
+    // CR1: SPE(6) | MSTR(2) | SSM(9) | SSI(8) — master, software NSS high.
+    wr32(SPI1_BASE + 0x00, (1 << 6) | (1 << 2) | (1 << 9) | (1 << 8));
+    unsafe { write_volatile((SPI1_BASE + 0x0C) as *mut u8, 0xA5) }; // byte DR write
+    if rd32(SPI1_BASE + 0x08) & (1 << 7) == 0 {
+        return Err(b"spi-bsy");
+    }
+    let mut done = false;
+    for _ in 0..20_000 {
+        if rd32(SPI1_BASE + 0x08) & (1 << 7) == 0 {
+            done = true;
+            break;
+        }
+    }
+    if !done {
+        return Err(b"spi-bsy-stuck");
+    }
+    if rd32(SPI1_BASE + 0x08) & (1 << 1) == 0 {
+        return Err(b"spi-txe");
+    }
+    wr32(SPI1_BASE + 0x00, 0); // disable
+    Ok(())
+}
+
+/// adc: ADC1 (stm32l4), clock-gated on RCC_AHB2ENR.ADCEN (bit 13). The L4
+/// ADC model has no conversion engine, so this exercises the modelled power-up:
+/// CR resets with DEEPPWD; clearing it, setting ADVREGEN then ADEN raises
+/// ISR.ADRDY. Gated the CR reads 0; ADRDY must NOT assert before ADEN.
+fn check_adc() -> Result<(), &'static [u8]> {
+    if rd32(ADC1_BASE + 0x08) != 0 {
+        return Err(b"adc-gated");
+    }
+    wr32(RCC_AHB2ENR, rd32(RCC_AHB2ENR) | (1 << 13)); // ADC12EN
+    wr32(ADC1_BASE + 0x08, 0); // CR: clear DEEPPWD
+    wr32(ADC1_BASE + 0x08, 1 << 28); // CR: ADVREGEN
+    if rd32(ADC1_BASE + 0x00) & 0x1 != 0 {
+        return Err(b"adc-adrdy-early");
+    }
+    wr32(ADC1_BASE + 0x08, (1 << 28) | 1); // CR: ADVREGEN | ADEN
+    if rd32(ADC1_BASE + 0x00) & 0x1 == 0 {
+        return Err(b"adc-adrdy");
+    }
+    Ok(())
+}
+
+/// wdt: IWDG. Ungated (clocked by the LSI on silicon — no RCC enable bit).
+/// PR/RLR are write-protected until KR (0x00) gets the 0x5555 unlock and
+/// re-protect on any other code; reset PR=0, RLR=0x0FFF.
+fn check_wdt() -> Result<(), &'static [u8]> {
+    if rd32(IWDG_BASE + 0x04) != 0 || rd32(IWDG_BASE + 0x08) != 0x0FFF {
+        return Err(b"wdt-reset");
+    }
+    // Without the 0x5555 unlock, PR/RLR writes are dropped.
+    wr32(IWDG_BASE + 0x04, 0x5);
+    wr32(IWDG_BASE + 0x08, 0x123);
+    if rd32(IWDG_BASE + 0x04) != 0 || rd32(IWDG_BASE + 0x08) != 0x0FFF {
+        return Err(b"wdt-unprotected");
+    }
+    // Unlock → PR/RLR latch.
+    wr32(IWDG_BASE + 0x00, 0x5555);
+    wr32(IWDG_BASE + 0x04, 0x5);
+    wr32(IWDG_BASE + 0x08, 0x123);
+    if rd32(IWDG_BASE + 0x04) != 0x5 || rd32(IWDG_BASE + 0x08) != 0x123 {
+        return Err(b"wdt-latch");
+    }
+    // Any other KR code (0xAAAA reload) re-protects.
+    wr32(IWDG_BASE + 0x00, 0xAAAA);
+    wr32(IWDG_BASE + 0x04, 0x2);
+    if rd32(IWDG_BASE + 0x04) != 0x5 {
+        return Err(b"wdt-reprotect");
+    }
+    Ok(())
+}
+
+/// rtc: RTC (stm32l4 layout), register interface clock-gated on
+/// RCC_APB1ENR1.RTCAPBEN (bit 10). Gated DR reads 0; enabled, DR resets to
+/// 0x2101; WPR half-unlocks on 0xCA then unlocks on 0x53, and TR round-trips.
+fn check_rtc() -> Result<(), &'static [u8]> {
+    if rd32(RTC_BASE + 0x04) != 0 {
+        return Err(b"rtc-gated");
+    }
+    wr32(RCC_APB1ENR, rd32(RCC_APB1ENR) | (1 << 10)); // RTCAPBEN
+    if rd32(RTC_BASE + 0x04) != 0x0000_2101 {
+        return Err(b"rtc-dr-reset");
+    }
+    // WPR is byte-accessed: 0xCA half-unlocks (latches, readable), 0x53 unlocks.
+    unsafe { write_volatile((RTC_BASE + 0x24) as *mut u8, 0xCA) };
+    if rd32(RTC_BASE + 0x24) & 0xFF != 0xCA {
+        return Err(b"rtc-wpr");
+    }
+    unsafe { write_volatile((RTC_BASE + 0x24) as *mut u8, 0x53) };
+    wr32(RTC_BASE + 0x00, 0x0012_3456); // TR
+    if rd32(RTC_BASE + 0x00) != 0x0012_3456 {
+        return Err(b"rtc-tr");
+    }
+    Ok(())
+}
+
+#[exception]
+unsafe fn DefaultHandler(irqn: i16) {
+    if irqn == TEST_IRQ {
+        wr32(NVIC_ICER0, 1 << TEST_IRQ as u32);
+        wr32(NVIC_ICPR0, 1 << TEST_IRQ as u32);
+        let hits = read_volatile(core::ptr::addr_of!(IRQ_HITS));
+        write_volatile(core::ptr::addr_of_mut!(IRQ_HITS), hits + 1);
+    }
+}
+
 #[entry]
 fn main() -> ! {
     report(b"clock", check_clock());
     report(b"gpio", check_gpio());
+    report(b"timer", check_timer());
+    report(b"pwm", check_pwm());
+    report(b"dma", check_dma());
+    report(b"irq", check_irq());
+    report(b"i2c", check_i2c());
+    report(b"spi", check_spi());
+    report(b"adc", check_adc());
+    report(b"wdt", check_wdt());
+    report(b"rtc", check_rtc());
     puts(b"TIER1 done\n");
 
     loop {

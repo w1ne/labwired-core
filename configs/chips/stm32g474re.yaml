@@ -70,3 +70,82 @@ peripherals:
     type: "pwr"
     base_address: 0x40007000
     size: "1KB"
+  # ── Tier-1 peripherals (RM0440). The RCC model is profile stm32v2, so the
+  # clock-gate `reg:` names resolve to the V2 enable-register offsets
+  # (ahb2enr@0x8C, apb1lenr@0x9C, apb2enr@0xA4); the `bit:` values are the
+  # silicon RM0440 §7.4 enable bits for each block's real bus. ─────────────
+  # TIM2 — 32-bit GP timer (APB1). RCC_APB1ENR1.TIM2EN (bit 0).
+  - id: "tim2"
+    type: "timer"
+    base_address: 0x40000000
+    size: "1KB"
+    irq: 28
+    config:
+      width: 32
+    clock: { reg: "apb1enr", bit: 0 }
+  # TIM1 — advanced-control PWM timer (APB2). The `_pwm` id suffix declares the
+  # pwm class alongside timer. RCC_APB2ENR.TIM1EN (bit 11).
+  - id: "tim1_pwm"
+    type: "timer"
+    base_address: 0x40012C00
+    size: "1KB"
+    irq: 24
+    config:
+      advanced: true
+    clock: { reg: "apb2enr", bit: 11 }
+  # I2C1 (APB1) — modern v2 controller. RCC_APB1ENR1.I2C1EN (bit 21).
+  - id: "i2c1"
+    type: "i2c"
+    base_address: 0x40005400
+    size: "1KB"
+    irq: 31
+    config:
+      profile: "stm32l4"
+    clock: { reg: "apb1enr", bit: 21 }
+  # SPI1 (APB2). RCC_APB2ENR.SPI1EN (bit 12).
+  - id: "spi1"
+    type: "spi"
+    base_address: 0x40013000
+    size: "1KB"
+    irq: 35
+    config:
+      profile: "stm32_fifo"
+    clock: { reg: "apb2enr", bit: 12 }
+  # ADC1 (AHB2). RCC_AHB2ENR.ADC12EN (bit 13). Model has no conversion engine
+  # (L4 layout) — the genuinely-modelled DEEPPWD→ADVREGEN→ADEN→ADRDY power-up
+  # path is exercised.
+  - id: "adc1"
+    type: "adc"
+    base_address: 0x50000000
+    size: "1KB"
+    irq: 18
+    config:
+      profile: "stm32l4"
+    clock: { reg: "ahb2enr", bit: 13 }
+  # DMA1 (AHB1, 7-channel + DMAMUX). RM0440 puts DMA1EN on AHB1ENR (bit 0),
+  # which the stm32v2 RCC model does not surface (it exposes only
+  # ahb2enr/apb1lenr/apb2enr), so the channel is declared ungated; the
+  # mem-to-mem round-trip is the truthful proof of the model.
+  - id: "dma1"
+    type: "dma"
+    base_address: 0x40020000
+    size: "1KB"
+    irq: 11
+  # IWDG — clocked by the LSI, no RCC enable gate on silicon (ungated).
+  - id: "iwdg"
+    type: "iwdg"
+    base_address: 0x40003000
+    size: "1KB"
+  # RTC (APB1) — register interface gated by RCC_APB1ENR1.RTCAPBEN (bit 10).
+  - id: "rtc"
+    type: "rtc"
+    base_address: 0x40002800
+    size: "1KB"
+    irq: 2
+    clock: { reg: "apb1enr", bit: 10 }
+  # NVIC is wired unconditionally for Cortex-M machines; this entry declares
+  # the tier1 irq class and pins the canonical base.
+  - id: "nvic"
+    type: "nvic"
+    base_address: 0xE000E100
+    size: "1KB"

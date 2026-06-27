@@ -67,3 +67,49 @@ peripherals:
     base_address: 0x40011000
     size: "1KB"
     irq: 37
+  # TIM2 — 32-bit general-purpose timer (RM0368 §13). On APB1, clock-gated by
+  # RCC_APB1ENR.TIM2EN (bit 0); unclocked out of reset, so register writes are
+  # dropped until firmware enables the gate.
+  - id: "tim2"
+    type: "timer"
+    base_address: 0x40000000
+    size: "1KB"
+    irq: 28
+    config:
+      width: 32
+    clock: { reg: "apb1enr", bit: 0 }
+  # SPI1 — classic STM32 SPI (RM0368 §20). On APB2, clock-gated by
+  # RCC_APB2ENR.SPI1EN (bit 12). F4 silicon CR masks mirror the F407:
+  # CR2 bit 4 (FRF/TI-mode) writable → 0xF7; CR1 bit 12 (CRCNEXT) not latched
+  # → 0xEFFF.
+  - id: "spi1"
+    type: "spi"
+    base_address: 0x40013000
+    size: "1KB"
+    irq: 35
+    config:
+      cr2_mask: 0xF7
+      cr1_mask: 0xEFFF
+    clock: { reg: "apb2enr", bit: 12 }
+  # ADC1 — 12-bit SAR ADC (RM0368 §11). On APB2, clock-gated by
+  # RCC_APB2ENR.ADC1EN (bit 8); unclocked out of reset.
+  - id: "adc1"
+    type: "adc"
+    base_address: 0x40012000
+    size: "1KB"
+    irq: 18
+    clock: { reg: "apb2enr", bit: 8 }
+  # IWDG — independent watchdog (RM0368 §14). Clocked from the dedicated LSI
+  # oscillator, NOT an APB/AHB peripheral-enable bit, so it carries no `clock:`
+  # gate. The KR key (0x5555) protects PR/RLR writes instead.
+  - id: "iwdg"
+    type: "iwdg"
+    base_address: 0x40003000
+    size: "1KB"
+  # RTC — calendar real-time clock (RM0368 §16; same IP as the L4 `rtc` model).
+  # Lives in the backup domain, clock-enabled via RCC_BDCR.RTCEN — outside the
+  # APB/AHB peripheral-enable gate this model expresses, so it is left ungated.
+  - id: "rtc"
+    type: "rtc"
+    base_address: 0x40002800
+    size: "1KB"

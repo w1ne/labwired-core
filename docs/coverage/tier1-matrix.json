@@ -270,7 +270,7 @@
   },
   "stm32f401": {
     "adc": {
-      "status": "na"
+      "status": "pass"
     },
     "clock": {
       "status": "pass"
@@ -291,19 +291,19 @@
       "status": "na"
     },
     "rtc": {
-      "status": "na"
+      "status": "pass"
     },
     "spi": {
-      "status": "na"
+      "status": "pass"
     },
     "timer": {
-      "status": "na"
+      "status": "pass"
     },
     "uart": {
       "status": "pass"
     },
     "wdt": {
-      "status": "na"
+      "status": "pass"
     }
   },
   "stm32f407": {
@@ -329,7 +329,7 @@
       "status": "na"
     },
     "rtc": {
-      "status": "na"
+      "status": "pass"
     },
     "spi": {
       "status": "pass"
@@ -341,45 +341,45 @@
       "status": "pass"
     },
     "wdt": {
-      "status": "na"
+      "status": "pass"
     }
   },
   "stm32g474re": {
     "adc": {
-      "status": "na"
+      "status": "pass"
     },
     "clock": {
       "status": "pass"
     },
     "dma": {
-      "status": "na"
+      "status": "pass"
     },
     "gpio": {
       "status": "pass"
     },
     "i2c": {
-      "status": "na"
+      "status": "pass"
     },
     "irq": {
-      "status": "na"
+      "status": "pass"
     },
     "pwm": {
-      "status": "na"
+      "status": "pass"
     },
     "rtc": {
-      "status": "na"
+      "status": "pass"
     },
     "spi": {
-      "status": "na"
+      "status": "pass"
     },
     "timer": {
-      "status": "na"
+      "status": "pass"
     },
     "uart": {
       "status": "pass"
     },
     "wdt": {
-      "status": "na"
+      "status": "pass"
     }
   },
   "stm32h563": {
@@ -501,40 +501,40 @@
   },
   "stm32wb55": {
     "adc": {
-      "status": "na"
+      "status": "pass"
     },
     "clock": {
       "status": "pass"
     },
     "dma": {
-      "status": "na"
+      "status": "pass"
     },
     "gpio": {
       "status": "pass"
     },
     "i2c": {
-      "status": "na"
+      "status": "pass"
     },
     "irq": {
-      "status": "na"
+      "status": "pass"
     },
     "pwm": {
-      "status": "na"
+      "status": "pass"
     },
     "rtc": {
-      "status": "na"
+      "status": "pass"
     },
     "spi": {
-      "status": "na"
+      "status": "pass"
     },
     "timer": {
-      "status": "na"
+      "status": "pass"
     },
     "uart": {
       "status": "pass"
     },
     "wdt": {
-      "status": "na"
+      "status": "pass"
     }
   },
   "stm32wba52": {
@@ -545,34 +545,34 @@
       "status": "pass"
     },
     "dma": {
-      "status": "na"
+      "status": "pass"
     },
     "gpio": {
       "status": "pass"
     },
     "i2c": {
-      "status": "na"
+      "status": "pass"
     },
     "irq": {
-      "status": "na"
+      "status": "pass"
     },
     "pwm": {
-      "status": "na"
+      "status": "pass"
     },
     "rtc": {
-      "status": "na"
+      "status": "pass"
     },
     "spi": {
-      "status": "na"
+      "status": "pass"
     },
     "timer": {
-      "status": "na"
+      "status": "pass"
     },
     "uart": {
       "status": "pass"
     },
     "wdt": {
-      "status": "na"
+      "status": "pass"
     }
   }
 }
