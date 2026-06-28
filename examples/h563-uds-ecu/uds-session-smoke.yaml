@@ -1,7 +1,7 @@
 schema_version: "1.0"
 inputs:
   system: "./system.yaml"
-  firmware: "./firmware/build/h563_uds_ecu.elf"
+  firmware: "./firmware/h563_uds_ecu.elf"
 limits:
   max_steps: 2000000
 assertions:

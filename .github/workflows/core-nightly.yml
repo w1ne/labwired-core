@@ -66,6 +66,49 @@ jobs:
             out/digital-twin-verification/
             out/trace-drift-assert/
 
+  example-smokes:
+    name: Example Smokes (real-output autochecks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-nightly
+          workspaces: |
+            . -> target
+
+      # clang + rust-lld build the bare-metal C examples (e.g. the H563 UDS
+      # responder); arm-none-eabi-objcopy strips them for the sim.
+      - name: Install C cross toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang gcc-arm-none-eabi
+
+      # Rebuild the H563 UDS responder from source against the pinned UDSLib so a
+      # firmware/library regression is caught here, not on the live blog demo.
+      - name: Rebuild H563 UDS responder firmware from source
+        run: |
+          RUST_LLD="$(rustc --print sysroot)/lib/rustlib/$(rustc -vV | sed -n 's/host: //p')/bin/rust-lld"
+          make -C examples/h563-uds-ecu/firmware fetch-udslib
+          make -C examples/h563-uds-ecu/firmware RUST_LLD="$RUST_LLD"
+          arm-none-eabi-objcopy --strip-debug \
+            examples/h563-uds-ecu/firmware/build/h563_uds_ecu.elf \
+            examples/h563-uds-ecu/firmware/h563_uds_ecu.elf
+
+      # Run every example whose firmware ELF is available; report uncovered ones.
+      - name: Run example smokes
+        run: ./scripts/example_smokes.sh | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # The decoded-output e2e checks: assert the FDCAN UDS trace (what the web
+      # logic analyzer shows) and the Leo air-quality verdicts are real.
+      - name: Run example e2e assertions
+        run: cargo test --release -p labwired-cli --test e2e_h563_uds --test e2e_leo_airquality
+
   tier1-matrix-refresh:
     name: Tier-1 Matrix Nightly Refresh
     runs-on: ubuntu-latest
