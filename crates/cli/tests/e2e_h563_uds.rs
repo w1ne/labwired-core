@@ -45,7 +45,7 @@ fn h563_uds_ecu_answers_read_data_by_identifier_on_the_fdcan_trace() {
         .expect("load committed responder ELF (run build-firmware / make to regenerate)");
 
     let manifest =
-        SystemManifest::from_file(&example.join("system.yaml")).expect("load system manifest");
+        SystemManifest::from_file(example.join("system.yaml")).expect("load system manifest");
     let chip_path = example.join(&manifest.chip);
     let chip = ChipDescriptor::from_file(&chip_path)
         .unwrap_or_else(|_| panic!("load chip descriptor at {chip_path:?}"));
