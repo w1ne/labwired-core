@@ -24,8 +24,13 @@ cargo test --release -p labwired-cli --test tier1_matrix_ratchet -- --nocapture
 # Regenerate tier1 matrix into TMP, stamping run_url into every real cell.
 cargo run -p labwired-cli --release -- tier1-matrix --json-out "$TMP" --run-url "$RUN_URL"
 
-# Regenerate chip-conformance.md in place (also ratchets against its JSON baseline).
-cargo test --release -p labwired-core --test chip_conformance -- --nocapture
+# Regenerate chip-conformance.md in place. This is a post-merge REFRESH, not a
+# gate: the test writes the doc before its regression assert, and we never set
+# UPDATE_CONFORMANCE_BASELINE, so a pre-existing regression cannot be laundered
+# into the baseline. A chip-conformance regression must NOT block the tier1
+# matrix refresh (the visible /validation grid), so surface it as a warning.
+cargo test --release -p labwired-core --test chip_conformance -- --nocapture \
+  || echo "::warning::chip-conformance regressed; doc regenerated, baseline unchanged (re-baseline intentionally with UPDATE_CONFORMANCE_BASELINE=1)"
 
 # Update tier1 matrix only on real status change (or when forced).
 set +e
