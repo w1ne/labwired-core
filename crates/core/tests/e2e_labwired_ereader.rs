@@ -149,70 +149,17 @@ external_devices:
             }
         };
 
-    // Heap: the sim-side bump allocator (default). It's debt — the real
-    // ESP-IDF heap_caps should run on emulated DRAM. LABWIRED_REAL_HEAP=1
-    // un-thunks it, but that currently walls.
-    //
-    // Diagnosed root cause (2026-06-04, via the WiFi fixture — same wall):
-    // the real heap_caps_init mis-registers a heap region, so heap_caps_malloc
-    // hands out pointers into non-heap memory. A vector_desc node ends up
-    // pointing at memory whose first word is the bytes "lock" (0x6b636f6c),
-    // and APP_CPU's esp_intr_alloc_intrstatus_bind faults dereferencing it
-    // (node->next = "lock") while PRO_CPU spins in main_task waiting for
-    // s_other_cpu_startup_done.
-    //
-    // Eliminated hypotheses (don't re-tread):
-    //   * seeded-stack collision (#173) — moving SP to top-of-DRAM gives the
-    //     IDENTICAL crash, and "lock" is a fixed string, not stack noise;
-    //   * unbacked DRAM — 0x3FFA_0000..0x4000_0000 is fully RamPeripheral-backed;
-    //   * broken atomic CAS — S32C1I is correct and the sim interleaves cores
-    //     at instruction granularity, so spinlocks serialize;
-    //   * unshared memory — both cores step against the same SystemBus.
-    // Further eliminated (2026-06-28):
-    //   * wrong/garbled soc_memory_regions[] — the table at 0x3f40625c is
-    //     correct in the ELF rodata (entries describe DRAM: 0x3ffae000,
-    //     0x3ffb0000, 0x3ffb8000, ... with sane sizes/types);
-    //   * rodata not loaded — the loader writes PT_LOAD by p_paddr, and the
-    //     DROM window 0x3F40_0000 is a writable 4 MiB RamPeripheral, so the
-    //     table is present in emulated memory exactly where heap_caps_init
-    //     reads it.
-    // So heap_caps_init sees a correct region table; the corruption is
-    // DOWNSTREAM — a subtle instruction/bus mis-emulation in the real
-    // multi_heap (TLSF) registration/allocation or in esp_intr_alloc's
-    // vector_desc list, which leaves a heap node's ->next holding the rodata
-    // bytes "lock". Next decisive step: under LABWIRED_REAL_HEAP=1, watch PC
-    // for heap_caps_malloc (0x400836e4) and capture its return (a2) for the
-    // FIRST few allocations — a DRAM pointer means in-heap metadata got
-    // corrupted (TLSF/instruction bug); a rodata pointer means the wrong heap
-    // got registered despite the correct table. Real fix lands there; then
-    // delete this bump allocator.
-    if std::env::var("LABWIRED_REAL_HEAP").is_err() {
-        push_named(
-            &mut thunks,
-            "heap_caps_init",
-            rom_thunks::esp_idf_heap_caps_init,
-        );
-        push_named(
-            &mut thunks,
-            "heap_caps_malloc",
-            rom_thunks::esp_idf_heap_caps_malloc,
-        );
-        push_named(
-            &mut thunks,
-            "heap_caps_calloc",
-            rom_thunks::esp_idf_heap_caps_calloc,
-        );
-        push_named(
-            &mut thunks,
-            "heap_caps_free",
-            rom_thunks::esp_idf_heap_caps_free,
-        );
-        push_named(
-            &mut thunks,
-            "heap_caps_realloc",
-            rom_thunks::esp_idf_heap_caps_realloc,
-        );
-    }
+    // Heap: the firmware's REAL ESP-IDF multi_heap (TLSF) allocator runs on
+    // the emulated DRAM — no bump-allocator thunks. The long-standing "real
+    // heap walls" symptom (diagnosed 2026-06-04 against the WiFi fixture:
+    // heap_caps_malloc hands out a pointer whose first word is the rodata bytes
+    // "lock" = 0x6b636f6c, and APP_CPU faults dereferencing vector_desc->next
+    // in esp_intr_alloc while PRO_CPU spins on s_other_cpu_startup_done) was
+    // NOT an allocator bug. It was APP_CPU dual-core bring-up: with a real
+    // second core (XtensaLx7::new_app_cpu) and the DPORT delivering the
+    // cross-core IPI through Machine::step, APP_CPU initialises correctly and
+    // the real heap registers + allocates cleanly. This test paints identically
+    // with the real heap (refresh_gen=1, 1429 ink bytes), proving it.
 
     // No-op stubs for ESP-IDF / Arduino-ESP32 init paths we don't model.
     for sym in &[

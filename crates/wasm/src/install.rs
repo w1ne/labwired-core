@@ -227,31 +227,15 @@ impl WasmSimulator {
             }
         };
 
-        push_named(
-            &mut thunks,
-            "heap_caps_init",
-            rom_thunks::esp_idf_heap_caps_init,
-        );
-        push_named(
-            &mut thunks,
-            "heap_caps_malloc",
-            rom_thunks::esp_idf_heap_caps_malloc,
-        );
-        push_named(
-            &mut thunks,
-            "heap_caps_calloc",
-            rom_thunks::esp_idf_heap_caps_calloc,
-        );
-        push_named(
-            &mut thunks,
-            "heap_caps_free",
-            rom_thunks::esp_idf_heap_caps_free,
-        );
-        push_named(
-            &mut thunks,
-            "heap_caps_realloc",
-            rom_thunks::esp_idf_heap_caps_realloc,
-        );
+        // heap_caps_* are NO LONGER thunked. The firmware's real ESP-IDF
+        // multi_heap (TLSF) allocator runs on the emulated DRAM. The old
+        // bump-allocator thunks were debt; the "real heap walls" symptom
+        // (heap_caps_malloc handing out a rodata pointer → vector_desc.next =
+        // "lock" → APP_CPU fault in esp_intr_alloc) was actually an APP_CPU
+        // dual-core bring-up bug, not an allocator bug — it disappeared once
+        // the real second core landed (see new_from_config_xtensa_esp32 +
+        // crates/core/tests/e2e_labwired_ereader.rs, which paints identically
+        // with the real heap: refresh_gen=1, 1429 ink bytes).
 
         // No-op stubs for ESP-IDF / Arduino-ESP32 init paths we don't model.
         for sym in &[
