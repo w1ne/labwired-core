@@ -843,10 +843,12 @@ fn main() -> ExitCode {
     // Initialize tracing with appropriate level based on --trace flag
     if cli.trace {
         tracing_subscriber::fmt()
+            .with_writer(std::io::stderr)
             .with_max_level(tracing::Level::DEBUG)
             .init();
     } else {
         tracing_subscriber::fmt()
+            .with_writer(std::io::stderr)
             .with_max_level(tracing::Level::INFO)
             .init();
     }

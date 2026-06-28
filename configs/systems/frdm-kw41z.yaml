@@ -1,0 +1,9 @@
+# LabWired - FRDM-KW41Z System Configuration
+#
+# NXP Freedom development board for the KW41Z (MKW41Z512VHT4) wireless MCU.
+# The board exposes LPUART0 on the OpenSDA virtual COM port — the console the
+# smoke firmware prints to.
+name: "frdm-kw41z"
+chip: "../chips/mkw41z4.yaml"
+external_devices: []
+board_io: []

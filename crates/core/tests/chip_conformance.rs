@@ -87,6 +87,15 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_nrf52840_demo_survival"),
     },
     ChipConf {
+        name: "nrf5340",
+        yaml: "configs/chips/nrf5340.yaml",
+        reset_oracle: None,
+        // Behaviour gate is the real unmodified Zephyr v3.7 hello_world boot on
+        // the application core (Cortex-M33). The ELF-independent twin that
+        // replays the boot clock/SCS poll loops is tests/nrf5340_clock_boot.rs.
+        behavior_gate: Some("firmware_survival::test_nrf5340_zephyr_survival"),
+    },
+    ChipConf {
         name: "rp2040",
         yaml: "configs/chips/rp2040.yaml",
         reset_oracle: None,
@@ -145,6 +154,15 @@ const CHIPS: &[ChipConf] = &[
         yaml: "configs/chips/stm32wba52.yaml",
         reset_oracle: None,
         behavior_gate: None,
+    },
+    // NXP KW41Z (Cortex-M0+ BLE + 802.15.4). Register surface ingested from the
+    // public CMSIS-SVD; radio (BTLE_RF/GENFSK/ZLL/XCVR) not yet modelled. The
+    // behavior gate boots bare-metal firmware that prints over LPUART0.
+    ChipConf {
+        name: "mkw41z4",
+        yaml: "configs/chips/mkw41z4.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_kw41z_smoke_survival"),
     },
 ];
 

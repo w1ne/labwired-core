@@ -277,6 +277,13 @@ impl crate::Bus for SystemBus {
                 return Ok(((byte_val >> bit) & 1) as u32);
             }
         }
+        // RP2040 atomic register aliases: every alias of a register reads back
+        // the aligned base register (the op only affects writes).
+        if self.atomic_register_aliases {
+            if let Some((base, _)) = self.atomic_alias_redirect(addr) {
+                return self.read_u32(base);
+            }
+        }
 
         if let Some(val) = self.ram.read_u32(addr) {
             return Ok(val);
@@ -357,6 +364,21 @@ impl crate::Bus for SystemBus {
     }
 
     fn write_u32(&mut self, addr: u64, value: u32) -> SimResult<()> {
+        // RP2040 atomic register aliases: a write to a +0x1000/0x2000/0x3000
+        // alias of a peripheral register is a read-modify-write (XOR/SET/CLR)
+        // on the aligned base register. The base access recurses into the
+        // normal path (its alias bits are clear), so there is no further alias.
+        if self.atomic_register_aliases {
+            if let Some((base, op)) = self.atomic_alias_redirect(addr) {
+                let cur = self.read_u32(base)?;
+                let new = match op {
+                    crate::bus::AtomicAliasOp::Xor => cur ^ value,
+                    crate::bus::AtomicAliasOp::Set => cur | value,
+                    crate::bus::AtomicAliasOp::Clr => cur & !value,
+                };
+                return self.write_u32(base, new);
+            }
+        }
         // Debug: trace WiFi MAC-window writes (env-gated) to RE the TX path.
         if (0x6003_3000..0x6003_6000).contains(&addr) && std::env::var("LABWIRED_MAC_TRACE").is_ok()
         {

@@ -80,7 +80,13 @@ pub struct Mlx90614 {
 impl Mlx90614 {
     /// `surface_start`/`surface_target` in °C, `ambient` in °C, `alpha` the
     /// per-read ramp rate (surface cools when `target < start`).
-    pub fn new(address: u8, surface_start: f64, surface_target: f64, ambient: f64, alpha: f64) -> Self {
+    pub fn new(
+        address: u8,
+        surface_start: f64,
+        surface_target: f64,
+        ambient: f64,
+        alpha: f64,
+    ) -> Self {
         let address = if address == 0 { MLX90614_ADDR } else { address };
         Self {
             address,
@@ -157,7 +163,11 @@ impl I2cDevice for Mlx90614 {
         if !self.latched {
             self.latch_response();
         }
-        let byte = self.response.get(self.read_byte_idx).copied().unwrap_or(0xFF);
+        let byte = self
+            .response
+            .get(self.read_byte_idx)
+            .copied()
+            .unwrap_or(0xFF);
         self.read_byte_idx += 1;
         byte
     }
@@ -274,7 +284,10 @@ mod tests {
         let mut d = Mlx90614::new_default(MLX90614_ADDR);
         let (raw, _) = read_word(&mut d, CMD_TOBJ1);
         let t = raw_to_celsius(raw);
-        assert!((8.0..20.0).contains(&t), "first surface read near 18 °C: {t:.1}");
+        assert!(
+            (8.0..20.0).contains(&t),
+            "first surface read near 18 °C: {t:.1}"
+        );
     }
 
     #[test]
@@ -306,7 +319,13 @@ mod tests {
         let (raw, pec) = read_word(&mut d, CMD_TOBJ1);
         let lsb = (raw & 0xFF) as u8;
         let msb = (raw >> 8) as u8;
-        let expect = smbus_pec(&[MLX90614_ADDR << 1, CMD_TOBJ1, (MLX90614_ADDR << 1) | 1, lsb, msb]);
+        let expect = smbus_pec(&[
+            MLX90614_ADDR << 1,
+            CMD_TOBJ1,
+            (MLX90614_ADDR << 1) | 1,
+            lsb,
+            msb,
+        ]);
         assert_eq!(pec, expect, "PEC matches the SMBus CRC-8 over the frame");
     }
 

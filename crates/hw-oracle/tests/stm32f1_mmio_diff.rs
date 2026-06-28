@@ -10,7 +10,7 @@
 //! semantics so a change to any shared model that would leak into the F1 board
 //! is caught here, per-board:
 //!   * the F1 RCC layout (CR reset 0x0000_4A83, AHBENR@0x14, APB2ENR@0x18,
-//!     APB1ENR@0x1C, optimistic SW->SWS),
+//!     APB1ENR@0x1C, source-ready-gated SW->SWS),
 //!   * the F1 GPIO layout (CRL/CRH config words, ODR@0x0C, BSRR@0x10, BRR@0x14),
 //!   * the *classic* SPI (CR2 reset 0x0000 — no DS field),
 //!   * the F1 I²C reset state (TRISE reset 0x0002),

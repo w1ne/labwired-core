@@ -1,0 +1,88 @@
+peripheral: SMC
+version: 0.1.0
+registers:
+- id: PMPROT
+  address_offset: 0
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: AVLLS
+    bit_range:
+    - 1
+    - 1
+    description: Allow Very-Low-Leakage Stop Mode
+  - name: ALLS
+    bit_range:
+    - 3
+    - 3
+    description: Allow Low-Leakage Stop Mode
+  - name: AVLP
+    bit_range:
+    - 5
+    - 5
+    description: Allow Very-Low-Power Modes
+  side_effects: null
+- id: PMCTRL
+  address_offset: 1
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: STOPM
+    bit_range:
+    - 2
+    - 0
+    description: Stop Mode Control
+  - name: STOPA
+    bit_range:
+    - 3
+    - 3
+    description: Stop Aborted
+  - name: RUNM
+    bit_range:
+    - 6
+    - 5
+    description: Run Mode Control
+  side_effects: null
+- id: STOPCTRL
+  address_offset: 2
+  size: 8
+  access: READ_WRITE
+  reset_value: 3
+  fields:
+  - name: LLSM
+    bit_range:
+    - 2
+    - 0
+    description: LLS or VLLS Mode Control
+  - name: RAM2PO
+    bit_range:
+    - 4
+    - 4
+    description: RAM2 Power Option
+  - name: PORPO
+    bit_range:
+    - 5
+    - 5
+    description: POR Power Option
+  - name: PSTOPO
+    bit_range:
+    - 7
+    - 6
+    description: Partial Stop Option
+  side_effects: null
+- id: PMSTAT
+  address_offset: 3
+  size: 8
+  access: READ_ONLY
+  reset_value: 1
+  fields:
+  - name: PMSTAT
+    bit_range:
+    - 7
+    - 0
+    description: Power Mode Status
+  side_effects: null
+interrupts: null
+timing: null

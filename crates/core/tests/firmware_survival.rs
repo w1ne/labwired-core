@@ -78,6 +78,97 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"",
     },
     SurvivalCase {
+        // Unmodified Zephyr 3.7 hello_world for nucleo_f401re. Drives the kernel
+        // from Cortex SysTick (not an SoC timer), so it exercises the SysTick
+        // count-down/reload path and the USART2 console end-to-end.
+        name: "stm32f401_zephyr",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        chip: "stm32f401",
+        system: "nucleo-f401re",
+        fixture: "stm32f401-zephyr-hello.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x0807_FFFF), (0x2000_0000, 0x2001_FFFF)],
+        expected_uart_output: b"Hello World! nucleo_f401re",
+    },
+    // Stock Zephyr 3.7 hello_world across the STM32 families that drive the
+    // kernel tick from Cortex SysTick. Each exercises that family's RCC
+    // ready-bit path (CR oscillators + CSR LSI) and the modern USART TEACK
+    // handshake end-to-end. F1 additionally covers the legacy USART + CSR LSI.
+    SurvivalCase {
+        name: "stm32f103_zephyr",
+        core: "cortex-m3",
+        family: CpuFamily::CortexM,
+        chip: "stm32f103",
+        system: "nucleo-f103rb-epaper",
+        fixture: "stm32f103-zephyr-hello.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x0801_FFFF), (0x2000_0000, 0x2000_4FFF)],
+        expected_uart_output: b"Hello World! nucleo_f103rb",
+    },
+    SurvivalCase {
+        name: "stm32l073_zephyr",
+        core: "cortex-m0+",
+        family: CpuFamily::CortexM,
+        chip: "stm32l073",
+        system: "nucleo-l073rz",
+        fixture: "stm32l073-zephyr-hello.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x0802_FFFF), (0x2000_0000, 0x2000_4FFF)],
+        expected_uart_output: b"Hello World! nucleo_l073rz",
+    },
+    SurvivalCase {
+        name: "stm32l476_zephyr",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        chip: "stm32l476",
+        system: "nucleo-l476rg",
+        fixture: "stm32l476-zephyr-hello.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x080F_FFFF), (0x2000_0000, 0x2001_7FFF)],
+        expected_uart_output: b"Hello World! nucleo_l476rg",
+    },
+    SurvivalCase {
+        name: "stm32g474_zephyr",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        chip: "stm32g474re",
+        system: "nucleo_g474re",
+        fixture: "stm32g474-zephyr-hello.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x0807_FFFF), (0x2000_0000, 0x2001_FFFF)],
+        expected_uart_output: b"Hello World! nucleo_g474re",
+    },
+    SurvivalCase {
+        name: "stm32h563_zephyr",
+        core: "cortex-m33",
+        family: CpuFamily::CortexM,
+        chip: "stm32h563",
+        system: "nucleo-h563zi-demo",
+        fixture: "stm32h563-zephyr-hello.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x081F_FFFF), (0x2000_0000, 0x200A_0000)],
+        expected_uart_output: b"Hello World! nucleo_h563zi",
+    },
+    SurvivalCase {
+        // Dual-core (M4 + M0+): exercises the HSEM inter-core lock (granted to
+        // CPU1) and the classic RCC BDCR LSE path.
+        name: "stm32wb55_zephyr",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        chip: "stm32wb55",
+        system: "mb1355c",
+        fixture: "stm32wb55-zephyr-hello.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x0807_FFFF), (0x2000_0000, 0x2003_FFFF)],
+        expected_uart_output: b"Hello World! nucleo_wb55rg",
+    },
+    SurvivalCase {
+        // Cortex-M33: exercises the WBA-specific RCC (CFGR1@0x1C, BDCR1@0xF0,
+        // the 0x28 request/ack) and the PWR VOSR voltage-ready handshake.
+        name: "stm32wba52_zephyr",
+        core: "cortex-m33",
+        family: CpuFamily::CortexM,
+        chip: "stm32wba52",
+        system: "nucleo_wba52cg",
+        fixture: "stm32wba52-zephyr-hello.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x080F_FFFF), (0x2000_0000, 0x2001_FFFF)],
+        expected_uart_output: b"Hello World! nucleo_wba52cg",
+    },
+    SurvivalCase {
         name: "rp2040_demo",
         core: "cortex-m0+",
         family: CpuFamily::CortexM,
@@ -88,6 +179,19 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"RP2040_SMOKE_OK\n",
     },
     SurvivalCase {
+        // Unmodified Zephyr 3.7 hello_world built for `rpi_pico`: exercises the
+        // boot2 vector relocation, atomic register aliases, the clock/reset
+        // bring-up (RESET_DONE / XOSC / PLL / CLOCKS) and the PL011 console.
+        name: "rp2040_zephyr_hello",
+        core: "cortex-m0+",
+        family: CpuFamily::CortexM,
+        chip: "rp2040",
+        system: "rp2040-pico",
+        fixture: "rp2040-zephyr-hello.elf",
+        valid_pc_ranges: &[(0x1000_0000, 0x101F_FFFF), (0x2000_0000, 0x2004_1FFF)],
+        expected_uart_output: b"Hello World! rpi_pico",
+    },
+    SurvivalCase {
         name: "nrf52840_demo",
         core: "cortex-m4",
         family: CpuFamily::CortexM,
@@ -96,6 +200,57 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         fixture: "nrf52840-demo.elf",
         valid_pc_ranges: &[(0x0000_0000, 0x000F_FFFF), (0x2000_0000, 0x2003_FFFF)],
         expected_uart_output: b"NRF52840_SMOKE_OK\n",
+    },
+    SurvivalCase {
+        // NXP KW41Z (Cortex-M0+ BLE + 802.15.4). Bare-metal smoke firmware
+        // (crates/firmware-kw41z-demo) brings up LPUART0 the way the NXP HAL
+        // does — enable CTRL.TE, poll STAT.TDRE, write DATA — and prints the
+        // banner below. Exercises the Kinetis LPUART register layout end to
+        // end: DATA writes reach the TX sink and STAT reports TDRE/TC.
+        name: "kw41z_smoke",
+        core: "cortex-m0+",
+        family: CpuFamily::CortexM,
+        chip: "mkw41z4",
+        system: "frdm-kw41z",
+        fixture: "kw41z-smoke.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x000F_FFFF), (0x1FFF_8000, 0x2001_8000)],
+        expected_uart_output: b"KW41Z_SMOKE_OK\n",
+    },
+    SurvivalCase {
+        // NXP KW41Z running REAL, unmodified NXP MCUXpresso vendor code
+        // (crates/firmware-kw41z-nxp): the genuine system_MKW41Z4.c SystemInit,
+        // the verbatim FRDM-KW41Z BOARD_BootClockRUN (RfOscInit + fsl_clock.c
+        // CLOCK_SetFeeMode → 40 MHz FEE), and fsl_lpuart.c LPUART_WriteBlocking.
+        // Booting this end to end proves the behavioural MCG/RSIM/SIM models
+        // satisfy the vendor clock-bring-up spin loops (RSIM RF_OSC_READY,
+        // MCG_S IREFST/CLKST/OSCINIT0) instead of hanging. The deterministic
+        // register-level twin of this is tests/kw41z_clock_boot.rs.
+        name: "kw41z_nxp",
+        core: "cortex-m0+",
+        family: CpuFamily::CortexM,
+        chip: "mkw41z4",
+        system: "frdm-kw41z",
+        fixture: "kw41z-nxp.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x000F_FFFF), (0x1FFF_8000, 0x2001_8000)],
+        expected_uart_output: b"KW41Z_NXP_OK\n",
+    },
+    SurvivalCase {
+        // Nordic nRF5340 APPLICATION core (Cortex-M33) running REAL, unmodified
+        // upstream Zephyr v3.7 hello_world, built for board
+        // nrf5340dk/nrf5340/cpuapp. Boots through the genuine Zephyr nRF
+        // clock_control (HFCLK/LFCLK start + poll) and nrf_rtc_timer init, then
+        // prints the banner over the UARTE0 EasyDMA console. Proves the shared
+        // Nordic CLOCK / UARTE / RTC behavioural models satisfy the nRF5340 boot
+        // spin-loops at the 0x50000000 non-secure peripheral alias. Fixture is
+        // rebuilt via crates/firmware-nrf5340-zephyr/build.sh.
+        name: "nrf5340_zephyr",
+        core: "cortex-m33",
+        family: CpuFamily::CortexM,
+        chip: "nrf5340",
+        system: "nrf5340dk",
+        fixture: "nrf5340-zephyr-hello.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x000F_FFFF), (0x2000_0000, 0x2007_FFFF)],
+        expected_uart_output: b"Hello World! nrf5340dk/nrf5340/cpuapp",
     },
     SurvivalCase {
         name: "nrf52832_demo",
@@ -915,8 +1070,53 @@ fn test_stm32f401_blinky_survival() {
 }
 
 #[test]
+fn test_stm32f401_zephyr_survival() {
+    run_survival_case(case_by_name("stm32f401_zephyr"));
+}
+
+#[test]
+fn test_stm32f103_zephyr_survival() {
+    run_survival_case(case_by_name("stm32f103_zephyr"));
+}
+
+#[test]
+fn test_stm32l073_zephyr_survival() {
+    run_survival_case(case_by_name("stm32l073_zephyr"));
+}
+
+#[test]
+fn test_stm32l476_zephyr_survival() {
+    run_survival_case(case_by_name("stm32l476_zephyr"));
+}
+
+#[test]
+fn test_stm32g474_zephyr_survival() {
+    run_survival_case(case_by_name("stm32g474_zephyr"));
+}
+
+#[test]
+fn test_stm32h563_zephyr_survival() {
+    run_survival_case(case_by_name("stm32h563_zephyr"));
+}
+
+#[test]
+fn test_stm32wb55_zephyr_survival() {
+    run_survival_case(case_by_name("stm32wb55_zephyr"));
+}
+
+#[test]
+fn test_stm32wba52_zephyr_survival() {
+    run_survival_case(case_by_name("stm32wba52_zephyr"));
+}
+
+#[test]
 fn test_rp2040_demo_survival() {
     run_survival_case(case_by_name("rp2040_demo"));
+}
+
+#[test]
+fn test_rp2040_zephyr_hello_survival() {
+    run_survival_case(case_by_name("rp2040_zephyr_hello"));
 }
 
 #[test]
@@ -927,6 +1127,21 @@ fn test_nrf52840_demo_survival() {
 #[test]
 fn test_nrf52832_demo_survival() {
     run_survival_case(case_by_name("nrf52832_demo"));
+}
+
+#[test]
+fn test_nrf5340_zephyr_survival() {
+    run_survival_case(case_by_name("nrf5340_zephyr"));
+}
+
+#[test]
+fn test_kw41z_smoke_survival() {
+    run_survival_case(case_by_name("kw41z_smoke"));
+}
+
+#[test]
+fn test_kw41z_nxp_survival() {
+    run_survival_case(case_by_name("kw41z_nxp"));
 }
 
 #[test]

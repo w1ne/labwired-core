@@ -879,9 +879,40 @@ impl<C: Cpu> Machine<C> {
         }
         self.reset()?;
 
-        // Fallback if vector table is missing/zero
-        if self.cpu.get_pc() == 0 {
-            self.cpu.set_pc(image.entry_point as u32);
+        // Resolve the reset vector. Reset reads the initial (SP, PC) from the
+        // vector table at VTOR, which defaults to 0 and aliases to the flash
+        // base — correct for the common case (STM32/nRF/etc.). Some SoCs
+        // prepend a second-stage bootloader: the RP2040 bootrom runs a 256-byte
+        // stage-2 (boot2) blob from flash and only then enters the application
+        // vector table at `flash_base + reset_vector_offset`. We don't execute
+        // boot2 (flash is directly mapped), so when the flash-base vectors are
+        // not valid, relocate to the declared post-stage-2 table — emulating
+        // boot2's only observable effect.
+        let flash_base = self.bus.flash.base_addr;
+        if !self.bus.vector_pair_valid(flash_base) {
+            let offset = self.bus.reset_vector_offset;
+            let relocated = if offset != 0 {
+                let table = flash_base + offset;
+                if self.bus.vector_pair_valid(table) {
+                    let sp = self.bus.read_u32(table)?;
+                    let pc = self.bus.read_u32(table + 4)? & !1;
+                    // Point VTOR at the relocated table so early exceptions
+                    // (before firmware sets VTOR itself) vector correctly.
+                    let _ = self.bus.write_u32(0xE000_ED08, table as u32);
+                    self.cpu.set_sp(sp);
+                    self.cpu.set_pc(pc);
+                    true
+                } else {
+                    false
+                }
+            } else {
+                false
+            };
+
+            // Last-resort fallback if the vector table is missing/zero.
+            if !relocated && self.cpu.get_pc() == 0 {
+                self.cpu.set_pc(image.entry_point as u32);
+            }
         }
 
         Ok(())

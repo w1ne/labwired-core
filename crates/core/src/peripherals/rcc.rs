@@ -59,11 +59,27 @@ impl FromStr for RccRegisterLayout {
 
 // ── Shared, stateless helpers (shared silicon IP behaviour, never shared state) ─
 
-/// Optimistic SW→SWS: the switch completes immediately (SWS mirrors SW).
-/// Used by the classic families (F1/F4/V2) whose existing models assume the
-/// requested source is always ready.
-fn cfgr_with_optimistic_sws(value: u32) -> u32 {
-    (value & !(0x3 << 2)) | ((value & 0x3) << 2)
+/// Source-ready SW→SWS gate. The SYSCLK switch only completes (SWS follows SW)
+/// once the requested source's CR ready bit is set; until then SWS holds its
+/// previous value, exactly as silicon does. `rdy_bits[sw]` is the CR ready-bit
+/// index for each SW[1:0] encoding, or `None` for a reserved encoding that
+/// never switches. This mirrors the per-source gating the L4/L0/H5 models
+/// already apply, and prevents the false-pass where firmware switches SYSCLK to
+/// a source it never enabled+waited for.
+///
+/// Per-family `rdy_bits` (silicon-verified against the ST CMSIS headers):
+///   F1/F4 (CFGR @ 0x04/0x08): 00 HSI→1, 01 HSE→17, 10 PLL→25, 11 reserved.
+///   G4/WB (CFGR @ 0x08):      00 MSI→1, 01 HSI16→10, 10 HSE→17, 11 PLL→25.
+///   WBA   (CFGR1 @ 0x1C):     00 HSI16→10, 01 reserved, 10 HSE→17, 11 PLL1R→25.
+fn cfgr_with_gated_sws(value: u32, cr: u32, prev_cfgr: u32, rdy_bits: [Option<u32>; 4]) -> u32 {
+    let sw = (value & 0x3) as usize;
+    let ready = matches!(rdy_bits[sw], Some(b) if cr & (1 << b) != 0);
+    let sws = if ready {
+        (value & 0x3) << 2
+    } else {
+        prev_cfgr & (0x3 << 2)
+    };
+    (value & !(0x3 << 2)) | sws
 }
 
 /// Classic CR ready-flag rule (F1/F4/V2): each ON bit auto-sets its RDY bit.
@@ -98,6 +114,8 @@ pub struct F1Rcc {
     apb2rstr: u32, // 0x0C
     apb1rstr: u32, // 0x10
     ahbrstr: u32,  // 0x28
+    bdcr: u32,     // 0x20 — RTC/LSE backup domain control
+    csr: u32,      // 0x24 — LSION bit0 → LSIRDY bit1
 }
 
 impl F1Rcc {
@@ -129,6 +147,8 @@ impl RccModel for F1Rcc {
             0x14 => self.ahbenr,
             0x18 => self.apb2enr,
             0x1C => self.apb1enr,
+            0x20 => self.bdcr,
+            0x24 => self.csr,
             0x28 => self.ahbrstr,
             _ => 0,
         }
@@ -141,13 +161,39 @@ impl RccModel for F1Rcc {
         // enable bits 12:8 (0x1F00) read back.
         match offset {
             0x00 => self.cr = classic_cr_ready(value),
-            0x04 => self.cfgr = cfgr_with_optimistic_sws(value),
+            // SW→SWS only follows once the requested source is ready in CR:
+            // 00 HSI (bit1), 01 HSE (bit17), 10 PLL (bit25), 11 reserved.
+            0x04 => {
+                self.cfgr = cfgr_with_gated_sws(
+                    value,
+                    self.cr,
+                    self.cfgr,
+                    [Some(1), Some(17), Some(25), None],
+                )
+            }
             0x08 => self.cir = value & 0x0000_1F00,
             0x0C => self.apb2rstr = value,
             0x10 => self.apb1rstr = value,
             0x14 => self.ahbenr = value & 0x0000_0055, // DMA1/SRAM/FLITF/CRC
             0x18 => self.apb2enr = value & 0x0000_5E7D,
             0x1C => self.apb1enr = value & 0x1AE6_4807,
+            // BDCR: LSEON (bit0) → LSERDY (bit1); the rest is RTC/backup storage.
+            0x20 => {
+                self.bdcr = if value & 1 != 0 {
+                    value | (1 << 1)
+                } else {
+                    value & !(1 << 1)
+                };
+            }
+            // CSR: LSION (bit0) → LSIRDY (bit1). The reset-flag bits (31:24) are
+            // kept as plain storage. Zephyr's RTC/LSI clock init polls LSIRDY.
+            0x24 => {
+                self.csr = if value & 1 != 0 {
+                    value | (1 << 1)
+                } else {
+                    value & !(1 << 1)
+                };
+            }
             0x28 => self.ahbrstr = value,
             _ => {}
         }
@@ -178,6 +224,7 @@ pub struct F4Rcc {
     ahbrstr: u32,  // AHB1RSTR 0x10
     apb1rstr: u32, // 0x20
     apb2rstr: u32, // 0x24
+    csr: u32,      // 0x74 — LSION bit0 → LSIRDY bit1
     // Per-part ENR writable masks (silicon-pinned); 0xFFFF_FFFF = unmasked.
     ahb1_mask: u32,
     apb1_mask: u32,
@@ -213,6 +260,7 @@ impl RccModel for F4Rcc {
             0x34 => self.ahb2enr,
             0x40 => self.apb1enr,
             0x44 => self.apb2enr,
+            0x74 => self.csr,
             _ => 0,
         }
     }
@@ -222,9 +270,17 @@ impl RccModel for F4Rcc {
             // PLLCFGR writable = PLLM/PLLN/PLLP/PLLSRC/PLLQ = 0x7F43_7FFF
             // (silicon-confirmed on F407). Reserved bits read 0.
             0x04 => self.pllcfgr = value & 0x7F43_7FFF,
-            // CFGR at 0x08 on F4 (not 0x04). The optimistic SW->SWS fake lets
-            // firmware that switches SYSCLK to PLL/HSE see the switch complete.
-            0x08 => self.cfgr = cfgr_with_optimistic_sws(value),
+            // CFGR at 0x08 on F4 (not 0x04). SW→SWS follows only once the
+            // requested source is ready in CR: 00 HSI (bit1), 01 HSE (bit17),
+            // 10 PLL (bit25), 11 reserved.
+            0x08 => {
+                self.cfgr = cfgr_with_gated_sws(
+                    value,
+                    self.cr,
+                    self.cfgr,
+                    [Some(1), Some(17), Some(25), None],
+                )
+            }
             // CIR interrupt-enable bits 13:8 = 0x3F00 (F4 adds PLLI2SRDYIE bit
             // 13 over the F1's 5 bits) — silicon-confirmed on F407.
             0x0C => self.cir = value & 0x0000_3F00,
@@ -237,6 +293,16 @@ impl RccModel for F4Rcc {
             0x34 => self.ahb2enr = value,
             0x40 => self.apb1enr = value & self.apb1_mask,
             0x44 => self.apb2enr = value & self.apb2_mask,
+            // CSR: LSION (bit0) auto-sets LSIRDY (bit1), mirroring the classic
+            // CR ready rule. The reset-flag bits (25:31) and RMVF (24) are
+            // kept as plain storage.
+            0x74 => {
+                self.csr = if value & 1 != 0 {
+                    value | (1 << 1)
+                } else {
+                    value & !(1 << 1)
+                };
+            }
             _ => {}
         }
     }
@@ -249,21 +315,39 @@ impl RccModel for F4Rcc {
 #[derive(Debug, Default, serde::Serialize)]
 pub struct V2Rcc {
     cr: u32,
-    cfgr: u32,     // 0x04
+    cfgr: u32,     // 0x08 (G4/WB RM0440/RM0434: CR=0x00, ICSCR=0x04, CFGR=0x08)
     ahbenr: u32,   // AHB2ENR 0x8C
     apb1enr: u32,  // APB1LENR 0x9C
     apb2enr: u32,  // 0xA4
     ahbrstr: u32,  // 0x6C
     apb1rstr: u32, // 0x7C
     apb2rstr: u32, // 0x84
+    bdcr: u32,     // 0x90 — WB/G4 backup domain: LSEON bit0 → LSERDY bit1
+    csr: u32,      // 0x94 — LSION bit0 → LSIRDY bit1
+    crrcr: u32,    // 0x98 — HSI48ON bit0 → HSI48RDY bit1
+    bdcr1: u32,    // 0xF0 — WBA backup domain: LSI/LSESYS/LSE2 enable→ready pairs
+    cfgr1: u32,    // 0x1C — WBA RCC_CFGR1 (SW→SWS); G4/WB use CFGR at 0x08
+    reg28: u32,    // 0x28 — WBA: request bit20 ↔ acknowledge bit22 (deselect)
 }
 
 impl V2Rcc {
     fn new() -> Self {
         Self {
-            cr: classic_cr_ready(1 << 0),
+            cr: Self::ready(1 << 0),
             ..Default::default()
         }
+    }
+    /// G4/WB/WBA CR ready rule: the classic HSI(0)/HSE(16)/PLL(24) bits plus
+    /// HSI16 at bit8→bit10 (these families gate the kernel clock on HSI16RDY,
+    /// e.g. WBA's stm32_clock_control_init).
+    fn ready(cr: u32) -> u32 {
+        let mut cr = classic_cr_ready(cr);
+        if cr & (1 << 8) != 0 {
+            cr |= 1 << 10;
+        } else {
+            cr &= !(1 << 10);
+        }
+        cr
     }
 }
 
@@ -271,26 +355,101 @@ impl RccModel for V2Rcc {
     fn read_reg(&self, offset: u64) -> u32 {
         match offset {
             0x00 => self.cr,
-            0x04 => self.cfgr,
+            0x08 => self.cfgr,
+            0x1C => self.cfgr1,
+            // 0x28 acknowledge (bit22) tracks the inverse of request bit20:
+            // the SoC init clears bit20 and waits for bit22 to confirm.
+            0x28 => {
+                if self.reg28 & (1 << 20) == 0 {
+                    self.reg28 | (1 << 22)
+                } else {
+                    self.reg28 & !(1 << 22)
+                }
+            }
             0x6C => self.ahbrstr,
             0x7C => self.apb1rstr,
             0x84 => self.apb2rstr,
             0x8C => self.ahbenr,
+            0x90 => self.bdcr,
+            0x94 => self.csr,
+            0x98 => self.crrcr,
             0x9C => self.apb1enr,
             0xA4 => self.apb2enr,
+            0xF0 => self.bdcr1,
             _ => 0,
         }
     }
     fn write_reg(&mut self, offset: u64, value: u32) {
         match offset {
-            0x00 => self.cr = classic_cr_ready(value),
-            0x04 => self.cfgr = cfgr_with_optimistic_sws(value),
+            0x00 => self.cr = Self::ready(value),
+            // G4/WB RCC_CFGR (0x08): SW→SWS follows only once the requested
+            // source is ready in CR — 00 MSI (bit1), 01 HSI16 (bit10),
+            // 10 HSE (bit17), 11 PLL (bit25).
+            0x08 => {
+                self.cfgr = cfgr_with_gated_sws(
+                    value,
+                    self.cr,
+                    self.cfgr,
+                    [Some(1), Some(10), Some(17), Some(25)],
+                )
+            }
+            // WBA RCC_CFGR1 (0x1C): SW[1:0]→SWS[3:2], gated on the source's CR
+            // ready bit — 00 HSI16 (bit10), 01 reserved, 10 HSE (bit17),
+            // 11 PLL1R (bit25). (RM0493: SW=01 is not a defined source.)
+            0x1C => {
+                self.cfgr1 = cfgr_with_gated_sws(
+                    value,
+                    self.cr,
+                    self.cfgr1,
+                    [Some(10), None, Some(17), Some(25)],
+                )
+            }
+            0x28 => self.reg28 = value,
+            // BDCR: LSEON (bit0) → LSERDY (bit1); rest is RTC/backup storage.
+            0x90 => {
+                self.bdcr = if value & 1 != 0 {
+                    value | (1 << 1)
+                } else {
+                    value & !(1 << 1)
+                };
+            }
             0x6C => self.ahbrstr = value,
             0x7C => self.apb1rstr = value,
             0x84 => self.apb2rstr = value,
             0x8C => self.ahbenr = value,
+            // CSR: LSION (bit0) → LSIRDY (bit1); reset flags (31:23) are storage.
+            0x94 => {
+                self.csr = if value & 1 != 0 {
+                    value | (1 << 1)
+                } else {
+                    value & !(1 << 1)
+                };
+            }
+            // CRRCR: HSI48ON (bit0) → HSI48RDY (bit1).
+            0x98 => {
+                self.crrcr = if value & 1 != 0 {
+                    value | (1 << 1)
+                } else {
+                    value & !(1 << 1)
+                };
+            }
             0x9C => self.apb1enr = value,
             0xA4 => self.apb2enr = value,
+            // BDCR1 (WBA backup domain, RM0493): the LSI / LSESYS / LSE2
+            // enable→ready handshakes Zephyr's clock init polls — LSION(0)→
+            // LSIRDY(1), LSESYSEN(7)→LSESYSRDY(11), and the bit26→bit27 pair.
+            // Other bits (LSE config, RTC sel) are plain storage.
+            0xF0 => {
+                let mut v = value;
+                for &(on, rdy) in &[(0u32, 1u32), (7, 11), (26, 27)] {
+                    if v & (1 << on) != 0 {
+                        v |= 1 << rdy;
+                    } else {
+                        v &= !(1 << rdy);
+                    }
+                }
+                self.bdcr1 = v;
+            }
             _ => {}
         }
     }
@@ -499,6 +658,8 @@ pub struct L4Rcc {
     ahbrstr: u32,  // AHB2RSTR 0x2C
     apb1rstr: u32, // APB1RSTR1 0x38
     apb2rstr: u32, // 0x40
+    bdcr: u32,     // 0x90 — LSE/RTC backup domain control
+    csr: u32,      // 0x94 — LSION bit0 → LSIRDY bit1
 }
 
 impl L4Rcc {
@@ -511,13 +672,19 @@ impl L4Rcc {
         s.cr = s.ready(s.cr);
         s
     }
-    /// L4 CR ready rule: MSI bit0→bit1; HSE bit16→bit17 gated by HSEBYP(bit18);
-    /// PLL bit24→bit25 gated by the PLLCFGR.PLLSRC clock being ready.
+    /// L4 CR ready rule: MSI bit0→bit1; HSI16 bit8→bit10; HSE bit16→bit17 gated
+    /// by HSEBYP(bit18); PLL bit24→bit25 gated by the PLLCFGR.PLLSRC clock being
+    /// ready. (Zephyr's LL_RCC_HSI_IsReady polls HSIRDY at bit10.)
     fn ready(&self, mut cr: u32) -> u32 {
         if cr & (1 << 0) != 0 {
             cr |= 1 << 1;
         } else {
             cr &= !(1 << 1);
+        }
+        if cr & (1 << 8) != 0 {
+            cr |= 1 << 10;
+        } else {
+            cr &= !(1 << 10);
         }
         let hsebyp = cr & (1 << 18) != 0;
         if cr & (1 << 16) != 0 && hsebyp {
@@ -528,7 +695,7 @@ impl L4Rcc {
         let src = self.pllcfgr & 0x3;
         let src_ready = match src {
             1 => cr & (1 << 1) != 0,  // MSI
-            2 => cr & (1 << 1) != 0,  // HSI16 (modelled at bit1, as before)
+            2 => cr & (1 << 10) != 0, // HSI16
             3 => cr & (1 << 17) != 0, // HSE
             _ => false,
         };
@@ -553,6 +720,8 @@ impl RccModel for L4Rcc {
             0x4C => self.ahbenr,
             0x58 => self.apb1enr,
             0x60 => self.apb2enr,
+            0x90 => self.bdcr,
+            0x94 => self.csr,
             _ => 0,
         }
     }
@@ -564,7 +733,7 @@ impl RccModel for L4Rcc {
                 let prev_sws = (self.cfgr >> 2) & 0x3;
                 let sw = value & 0x3;
                 let msirdy = self.cr & (1 << 1) != 0;
-                let hsirdy = self.cr & (1 << 1) != 0;
+                let hsirdy = self.cr & (1 << 10) != 0;
                 let hserdy = self.cr & (1 << 17) != 0;
                 let pllrdy = self.cr & (1 << 25) != 0;
                 let sws = match sw {
@@ -586,6 +755,22 @@ impl RccModel for L4Rcc {
             0x4C => self.ahbenr = value,
             0x58 => self.apb1enr = value,
             0x60 => self.apb2enr = value,
+            // BDCR: LSEON (bit0) → LSERDY (bit1); rest is RTC/backup storage.
+            0x90 => {
+                self.bdcr = if value & 1 != 0 {
+                    value | (1 << 1)
+                } else {
+                    value & !(1 << 1)
+                };
+            }
+            // CSR: LSION (bit0) → LSIRDY (bit1); reset flags (31:23) are storage.
+            0x94 => {
+                self.csr = if value & 1 != 0 {
+                    value | (1 << 1)
+                } else {
+                    value & !(1 << 1)
+                };
+            }
             _ => {}
         }
     }
@@ -608,6 +793,7 @@ pub struct L0Rcc {
     ahbenr: u32,   // 0x30 — DMA/CRC/RNG
     apb2enr: u32,  // 0x34
     apb1enr: u32,  // 0x38
+    csr: u32,      // 0x50 — LSION bit0 → LSIRDY bit1
 }
 
 impl L0Rcc {
@@ -647,6 +833,7 @@ impl RccModel for L0Rcc {
             0x30 => self.ahbenr,
             0x34 => self.apb2enr,
             0x38 => self.apb1enr,
+            0x50 => self.csr,
             _ => 0,
         }
     }
@@ -686,6 +873,14 @@ impl RccModel for L0Rcc {
             0x30 => self.ahbenr = value,
             0x34 => self.apb2enr = value,
             0x38 => self.apb1enr = value,
+            // CSR: LSION (bit0) → LSIRDY (bit1); reset flags (31:23) are storage.
+            0x50 => {
+                self.csr = if value & 1 != 0 {
+                    value | (1 << 1)
+                } else {
+                    value & !(1 << 1)
+                };
+            }
             _ => {}
         }
     }
@@ -877,6 +1072,98 @@ mod tests {
         assert_eq!(rcc.read(0x1C).unwrap(), 0x01);
     }
 
+    /// Every family Zephyr drives auto-acks LSION→LSIRDY in its CSR, at the
+    /// per-family offset. Zephyr's RTC/LSI clock init spins on LSIRDY.
+    #[test]
+    fn lsi_ready_auto_acks_per_family() {
+        for (layout, csr) in [
+            (RccRegisterLayout::Stm32F1, 0x24u64),
+            (RccRegisterLayout::Stm32F4, 0x74),
+            (RccRegisterLayout::Stm32L0, 0x50),
+            (RccRegisterLayout::Stm32L4, 0x94),
+            (RccRegisterLayout::Stm32V2, 0x94),
+        ] {
+            let mut rcc = Rcc::new_with_layout(layout);
+            rcc.write_u32(csr, 1).unwrap(); // LSION
+            assert_eq!(
+                rcc.read_u32(csr).unwrap() & 0x3,
+                0x3,
+                "{:?} CSR@{:#x} must set LSIRDY",
+                layout,
+                csr
+            );
+        }
+    }
+
+    /// L4 and the G4/WB/WBA V2 layout gate the kernel clock on HSI16RDY, which
+    /// hardware reports at CR bit 10 (HSION at bit 8), not the MSI bit-1 slot.
+    #[test]
+    fn hsi16_ready_at_bit10() {
+        for layout in [RccRegisterLayout::Stm32L4, RccRegisterLayout::Stm32V2] {
+            let mut rcc = Rcc::new_with_layout(layout);
+            let cr = rcc.read_u32(0x00).unwrap();
+            rcc.write_u32(0x00, cr | (1 << 8)).unwrap(); // HSION
+            assert_ne!(
+                rcc.read_u32(0x00).unwrap() & (1 << 10),
+                0,
+                "{:?} must set HSIRDY at bit 10",
+                layout
+            );
+        }
+    }
+
+    /// G4/WB/WBA expose HSI48 via CRRCR (0x98): HSI48ON→HSI48RDY.
+    #[test]
+    fn v2_hsi48_ready() {
+        let mut rcc = Rcc::new_with_layout(RccRegisterLayout::Stm32V2);
+        rcc.write_u32(0x98, 1).unwrap();
+        assert_eq!(rcc.read_u32(0x98).unwrap() & 0x3, 0x3);
+    }
+
+    /// WB's classic RCC_BDCR (0x90) acks LSEON→LSERDY; WBA's BDCR1 (0xF0) acks
+    /// LSION(0)→LSIRDY(1), LSESYSEN(7)→LSESYSRDY(11) and the bit26→bit27 pair;
+    /// WBA RCC_CFGR1 (0x1C) follows SW→SWS; RCC 0x28 acks the bit20→bit22 deselect.
+    #[test]
+    fn v2_wb_wba_backup_and_switch_gates() {
+        let mut rcc = Rcc::new_with_layout(RccRegisterLayout::Stm32V2);
+
+        rcc.write_u32(0x90, 1).unwrap(); // BDCR LSEON
+        assert_eq!(rcc.read_u32(0x90).unwrap() & 0x3, 0x3, "LSERDY");
+
+        rcc.write_u32(0xF0, (1 << 0) | (1 << 7) | (1 << 26))
+            .unwrap();
+        let bdcr1 = rcc.read_u32(0xF0).unwrap();
+        for rdy in [1u32, 11, 27] {
+            assert_ne!(bdcr1 & (1 << rdy), 0, "BDCR1 rdy bit {rdy}");
+        }
+
+        // CFGR1 SW=PLL1R (0b11) is gated on PLLRDY: with the PLL off the switch
+        // holds; enabling PLL1 (CR bit24 → PLLRDY bit25) lets it complete.
+        rcc.write_u32(0x1C, 0x3).unwrap();
+        assert_eq!(
+            (rcc.read_u32(0x1C).unwrap() >> 2) & 0x3,
+            0x0,
+            "SWS holds while PLL not ready"
+        );
+        rcc.write_u32(0x00, 1 << 24).unwrap(); // PLL1ON → PLL1RDY
+        rcc.write_u32(0x1C, 0x3).unwrap();
+        assert_eq!(
+            (rcc.read_u32(0x1C).unwrap() >> 2) & 0x3,
+            0x3,
+            "SWS follows SW once PLL ready"
+        );
+
+        // 0x28: clearing request bit20 confirms via ack bit22.
+        rcc.write_u32(0x28, 0).unwrap();
+        assert_ne!(rcc.read_u32(0x28).unwrap() & (1 << 22), 0, "deselect ack");
+        rcc.write_u32(0x28, 1 << 20).unwrap();
+        assert_eq!(
+            rcc.read_u32(0x28).unwrap() & (1 << 22),
+            0,
+            "ack clears with request"
+        );
+    }
+
     #[test]
     fn test_rcc_f4_offsets() {
         let mut rcc = Rcc::new_with_layout(RccRegisterLayout::Stm32F4);
@@ -977,12 +1264,18 @@ mod tests {
     }
 
     #[test]
-    fn test_rcc_cfgr_sws_mirrors_sw() {
+    fn test_rcc_cfgr_sws_follows_sw_when_source_ready() {
         let mut rcc = Rcc::new();
-        rcc.write(0x04, 0b10).unwrap();
-        let cfgr = rcc.read(0x04).unwrap();
-        assert_eq!(cfgr & 0b11, 0b10); // SW
-        assert_eq!((cfgr >> 2) & 0b11, 0b10); // SWS mirrors SW
+        // SW=PLL (0b10) with PLL off: the switch must NOT complete — SWS holds.
+        rcc.write_u32(0x04, 0b10).unwrap();
+        let cfgr = rcc.read_u32(0x04).unwrap();
+        assert_eq!(cfgr & 0b11, 0b10); // SW latched
+        assert_eq!((cfgr >> 2) & 0b11, 0b00, "SWS holds while PLL not ready");
+        // Enable PLL (CR bit24 → PLLRDY bit25), then SW=PLL completes.
+        rcc.write_u32(0x00, rcc.read_u32(0x00).unwrap() | (1 << 24))
+            .unwrap();
+        rcc.write_u32(0x04, 0b10).unwrap();
+        assert_eq!((rcc.read_u32(0x04).unwrap() >> 2) & 0b11, 0b10, "SWS=PLL");
     }
 
     #[test]

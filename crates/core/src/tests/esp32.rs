@@ -104,6 +104,36 @@ fn esp32_uart0_emits_to_sink() {
 }
 
 #[test]
+fn esp32_sar_adc_oneshot_is_channel_dependent() {
+    // The SENS SAR-ADC model must win the overlapping rtcio-stub window at
+    // 0x3FF4_8800 and produce a genuine channel-dependent one-shot result.
+    let mut bus = SystemBus::empty();
+    let _cpu = configure_xtensa_esp32(&mut bus);
+
+    const READ_CTRL: u64 = 0x3FF4_8800; // SAR_READ_CTRL
+    const MEAS_START1: u64 = 0x3FF4_8800 + 0x54;
+    const START: u32 = (1 << 18) | (1 << 17); // START_FORCE | START_SAR
+    const DONE: u32 = 1 << 16;
+
+    let convert = |bus: &mut SystemBus, channel: u32, sample_bit: u32| -> u32 {
+        bus.write_u32(READ_CTRL, sample_bit << 16).unwrap();
+        bus.write_u32(MEAS_START1, ((1u32 << channel) << 19) | START)
+            .unwrap();
+        let v = bus.read_u32(MEAS_START1).unwrap();
+        assert_ne!(v & DONE, 0, "DONE must latch after START");
+        v & 0xFFFF
+    };
+
+    let d3 = convert(&mut bus, 3, 3);
+    let d5 = convert(&mut bus, 5, 3);
+    assert_ne!(d3, 0);
+    assert_ne!(d3, d5, "distinct channels must give distinct results");
+    // 9-bit conversion of channel 5 is the 12-bit value >> 3.
+    let d5_9 = convert(&mut bus, 5, 0);
+    assert_eq!(d5_9, d5 >> 3, "result must scale with configured width");
+}
+
+#[test]
 fn esp32_iram_round_trip() {
     let mut bus = SystemBus::empty();
     let _cpu = configure_xtensa_esp32(&mut bus);

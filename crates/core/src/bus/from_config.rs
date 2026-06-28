@@ -8,7 +8,6 @@
 use super::*;
 use crate::memory::LinearMemory;
 use crate::peripherals::gpio::GpioRegisterLayout;
-use crate::peripherals::uart::UartRegisterLayout;
 use crate::Peripheral;
 use anyhow::Context;
 use labwired_config::{parse_size, ChipDescriptor, SystemManifest};
@@ -58,6 +57,8 @@ impl SystemBus {
             observers: Vec::new(),
             config: crate::SimulationConfig::default(),
             bit_band_enabled: Self::chip_has_bit_band(chip),
+            reset_vector_offset: chip.reset_vector_offset,
+            atomic_register_aliases: chip.atomic_register_aliases,
             pending_cpu_irqs: [0; 2],
             dport_idx: None,
             rcc_idx: None,
@@ -148,14 +149,7 @@ impl SystemBus {
                 "uart" | "stm32_uart" | "stm32f1_uart" | "stm32f2_uart" | "stm32f4_uart"
                 | "stm32f7_usart" | "stm32h5_usart" | "efm32_uart" | "nxp_lpuart" | "ns16550"
                 | "pl011" | "gaislerapbuart" => {
-                    let layout: UartRegisterLayout =
-                        if p_cfg.r#type.contains("stm32h5") || p_cfg.r#type.contains("stm32f7") {
-                            UartRegisterLayout::Stm32V2
-                        } else if p_cfg.r#type.contains("nrf") {
-                            UartRegisterLayout::Nrf52
-                        } else {
-                            Self::parse_profile_or_default(p_cfg, "UART")?
-                        };
+                    let layout = Self::uart_layout_for(p_cfg)?;
                     // CR3 writable mask is a per-part delta on the shared F1 map:
                     // F1 implements [10:0] (0x07FF), F4 adds bit 11 ONEBIT (0x0FFF).
                     // YAML: `config: { cr3_mask: 0xFFF }`; default F1.
@@ -302,6 +296,38 @@ impl SystemBus {
                         }
                     }
                     Box::new(i2c)
+                }
+                // ESP32-C3 behavioral GP-SPI2 controller (CPU/W-buffer
+                // transaction engine). Same Espressif GP-SPI IP family as the
+                // S3; the C3 chip yaml selects this type for `spi2`. The
+                // descriptor `irq` overrides the default intr-matrix source
+                // (GP-SPI2 = 19 on the C3).
+                "esp32c3_spi" => {
+                    let src = p_cfg
+                        .irq
+                        .unwrap_or(crate::peripherals::esp32c3::spi::SPI2_INTR_SOURCE_ID);
+                    Box::new(crate::peripherals::esp32c3::spi::Esp32c3Spi::new(src))
+                }
+                // ESP32-C3 behavioral SAR ADC controller (one-shot conversion
+                // engine). Drives a channel-dependent result + DONE handshake
+                // for the IDF `adc_oneshot` flow; the C3 chip yaml selects this
+                // type for `apb_saradc`.
+                "esp32c3_apb_saradc" => {
+                    let src = p_cfg.irq.unwrap_or(
+                        crate::peripherals::esp32c3::apb_saradc::APB_SARADC_INTR_SOURCE_ID,
+                    );
+                    Box::new(crate::peripherals::esp32c3::apb_saradc::Esp32c3ApbSarAdc::new(src))
+                }
+                // ESP32-C3 behavioral LEDC (LED PWM) controller. Drives the
+                // four low-speed timers as live up-counters that advance with
+                // elapsed cycles and latch LSTIMERx_OVF on wrap; the C3 chip
+                // yaml selects this type for `ledc`. The descriptor `irq`
+                // overrides the default intr-matrix source (LEDC = 23).
+                "esp32c3_ledc" => {
+                    let src = p_cfg
+                        .irq
+                        .unwrap_or(crate::peripherals::esp32c3::ledc::LEDC_INTR_SOURCE_ID);
+                    Box::new(crate::peripherals::esp32c3::ledc::Esp32c3Ledc::new(src))
                 }
                 // Nordic peripherals — register-surface models cross-validated
                 // by hw-oracle::nrf52_onboarding_diff. See peripherals/nrf52/.

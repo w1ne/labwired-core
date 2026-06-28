@@ -51,7 +51,10 @@ boards:
     # (conformance/mmio/GPIO/POWER/SPIS/TWIS/RTC/TIMER) is unaffected. No live SWD
     # re-capture of the new TX register sequence was run this session (no bench
     # board); a UARTE TX live diff is tracked.
-    drift_ack: 2026-06-23
+    # 2026-06-27: SAADC + PWM gained Tier-3 behavioral engines (real conversion /
+    # duty output) for the coverage matrix. Additive and behavioral-only; the
+    # 2026-06-17 register sweep is unaffected. No live SWD re-capture this session.
+    drift_ack: 2026-06-27
     models:
       - crates/core/src/peripherals/nrf52
       - configs/chips/nrf52840.yaml
@@ -69,7 +72,9 @@ boards:
       result: "rides the nrf52840 full register sweep (16/16) re-confirmed 2026-06-17"
     # Rides the nrf52840 UARTE EasyDMA TX model change (same silicon); see the
     # nrf52840 drift_ack note. UARTE TX live diff tracked there.
-    drift_ack: 2026-06-23
+    # 2026-06-27: rides the nrf52840 SAADC/PWM Tier-3 behavioral engines (same
+    # silicon); additive, no live re-capture. See the nrf52840 drift_ack note.
+    drift_ack: 2026-06-27
     models:
       - crates/core/src/peripherals/nrf52
       - configs/chips/nrf52840.yaml
@@ -99,7 +104,24 @@ boards:
     # MMIO/parity/class reset diffs (0 divergence) and the 2026-06-22 FLASH
     # behavioural capture still hold. Live re-diff of FDCAN TX timing over SWD is
     # tracked as a follow-up (no H563 probe attached this session).
-    drift_ack: 2026-06-24
+    # 2026-06-26: uart.rs generalised — UartRegMap gained status_width/status_idle/
+    # rx_present_set/rx_present_clear and 20+ vendor layouts were added for the
+    # onboarding library. The Stm32V2 arm (this board's USART) reproduces the prior
+    # hardcoded behaviour byte-for-byte (ISR@0x1C, TDR@0x28, RDR@0x24, status_idle
+    # 0xC0=TXE|TC, RXNE 1<<5, TXEIE 1<<7/TCIE 1<<6); h563_mmio_diff/parity pass
+    # unchanged, so no behavioural change to this board's pinned registers.
+    # 2026-06-27: Stm32V2 USART now persists BRR (USARTDIV @ 0x0C) for read-back
+    # fidelity (was dropped → read 0). Additive and read-back only — no byte-path
+    # or reset-value change; h563_mmio_diff/parity (which don't write-then-read BRR)
+    # pass unchanged. No live re-capture this session.
+    # 2026-06-27: additive L4/V2 i2c transaction engine (ISR.NACKF on a write to
+    # an absent slave; AUTOEND clears BUSY + sets STOPF). Register layout and the
+    # previously-pinned reset/latch behaviour are unchanged; no silicon re-capture.
+    # 2026-06-28: clock-gating retrofit (gpdma1/tim1/tim2/i2c1/spi1/adc1/fdcan1/rtc RCC clock:{reg,bit}); additive, enabled-clock path unchanged, h563_mmio_diff + h563_conformance pass. No live re-capture.
+    # 2026-06-28: rcc.rs SW→SWS gated on source-ready for F1/F4/V2/WBA; the H5 RCC
+    # model already gated and is unchanged, so this board is untouched (shared-file
+    # hash drift only). h563_mmio_diff + h563_conformance pass. No live re-capture.
+    drift_ack: 2026-06-28
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -139,7 +161,20 @@ boards:
     # slave-attach. Live I2C0 reset capture this date over USB-JTAG is byte-identical to
     # the model (CTR=0x20b, FIFO_CONF=0x408b, FIFO_ST=0, TO=0x10, INT_RAW=0x2). Full
     # 79-reg live re-capture tracked; this ack covers the model change in the interim.
-    drift_ack: 2026-06-20
+    # 2026-06-27: added behavioural GP-SPI2 (esp32c3/spi.rs) + one-shot SAR ADC
+    # (esp32c3/apb_saradc.rs), wired into esp32c3.yaml for tier-1 spi/adc cells.
+    # Both are ADDITIVE behavioural engines whose reset values + register layout
+    # were diffed against the committed spi2.yaml / apb_saradc.yaml SVD descriptors
+    # (CLOCK=0x80003043, CTRL=0x3c0000, DMA_CONF reset 0 + DATE=0x2007220 for SPI;
+    # ONETIME_SAMPLE/INT layout for ADC). They do not touch the asserted reset-oracle
+    # set; this ack covers the new model files until the next full live re-capture.
+    # 2026-06-28: added behavioural LEDC controller (esp32c3/ledc.rs), wired into
+    # esp32c3.yaml for the tier-1 pwm cell. ADDITIVE: the four low-speed timers now
+    # run as live up-counters that advance with elapsed cycles, wrap at 2^DUTY_RES,
+    # and latch LSTIMERx_OVF (TIMERx_CONF/VALUE + INT_* layout diffed against the
+    # committed ledc.yaml SVD descriptor). It does not touch the asserted reset-oracle
+    # set; this ack covers the new model file until the next full live re-capture.
+    drift_ack: 2026-06-28
 
   - id: nucleo-l476rg
     doc: docs/boards/nucleo-l476rg.md
@@ -153,6 +188,25 @@ boards:
       last_capture: 2026-06-20
       probe: "STLINK-V2.1 (USB 0483:374b serial 0670FF…1747, NUCLEO-L476RG onboard)"
       result: "Live re-capture after the v0.17.0 merge: l476_mmio_diff + l476_parity_diff pass (15 mmio + 104 parity), 0 divergence. Supersedes the 2026-06-19 drift_ack."
+    # 2026-06-26: uart.rs generalised — UartRegMap gained status_width/status_idle/
+    # rx_present masks and 20+ vendor layouts for the onboarding library. The L4
+    # USART maps to the Stm32V2 arm, which reproduces the prior hardcoded behaviour
+    # byte-for-byte (status_idle 0xC0=TXE|TC, RXNE 1<<5, same ISR/TDR/RDR offsets);
+    # l476_mmio_diff + l476_parity_diff pass unchanged → no behavioural change to
+    # this board's pinned registers. No live re-capture this session.
+    # 2026-06-27: Stm32V2 USART now persists BRR (USARTDIV @ 0x0C) for read-back
+    # fidelity (was dropped → read 0). This fix lets unmodified Zephyr ztest run on
+    # this board: uart_stm32_set_baudrate writes BRR then __ASSERT(BRR >= 16), which
+    # previously panicked at PRE_KERNEL boot. Additive, read-back only — no byte-path
+    # change; l476_mmio_diff/parity (no BRR write-then-read) pass unchanged. tests/
+    # ztest/base now reaches PROJECT EXECUTION SUCCESSFUL. No live re-capture.
+    # 2026-06-27: additive L4/V2 i2c transaction engine (ISR.NACKF on a write to
+    # an absent slave; AUTOEND clears BUSY + sets STOPF). Register layout and the
+    # previously-pinned reset/latch behaviour are unchanged; no silicon re-capture.
+    # 2026-06-28: rcc.rs SW→SWS is now gated on source-ready for F1/F4/V2/WBA;
+    # the L4 RCC model already gated and is unchanged, so this board's behaviour
+    # is untouched. l476_mmio_diff passes unchanged. No live re-capture.
+    drift_ack: 2026-06-28
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -179,6 +233,21 @@ boards:
       last_capture: 2026-06-20
       probe: "ST-LINK V2.1 (NUCLEO-L073RZ over SWD)"
       result: "Live re-capture after the v0.17.0 merge: l0_mmio_diff 20/20, 0 divergence (RCC/GPIO/SPI1/TIM2/TIM21, incl. the TIM2-16-bit fix). Supersedes the 2026-06-19 drift_ack."
+    # 2026-06-26: uart.rs generalised (status_width/status_idle/rx_present masks +
+    # 20+ vendor layouts for the onboarding library). The L0 USART maps to the
+    # Stm32V2 arm, byte-for-byte identical to the prior hardcoded behaviour
+    # (status_idle 0xC0, RXNE 1<<5, same offsets); l0_mmio_diff passes unchanged →
+    # no behavioural change to this board's pinned registers. No live re-capture
+    # this session.
+    # 2026-06-27: Stm32V2 USART now persists BRR (USARTDIV @ 0x0C) for read-back
+    # fidelity (was dropped → read 0). Additive, read-back only — no byte-path or
+    # reset-value change; l0_mmio_diff (no BRR write-then-read) passes unchanged.
+    # No live re-capture this session.
+    # 2026-06-28: clock-gating retrofit (tim2/i2c1/spi1/adc1/dma1 RCC clock:{reg,bit}); additive, enabled-clock path unchanged, l0_mmio_diff passes. No live re-capture.
+    # 2026-06-28: rcc.rs SW→SWS gated on source-ready for F1/F4/V2/WBA; the L0 RCC
+    # model already gated and is unchanged, so this board is untouched (shared-file
+    # hash drift only). stm32l0_mmio_diff passes unchanged. No live re-capture.
+    drift_ack: 2026-06-28
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -201,6 +270,21 @@ boards:
       last_capture: 2026-06-20
       probe: "ST-LINK V2.1 (USB 0483:374b), genuine STM32F103"
       result: "Live re-capture after the v0.17.0 bxcan/clock-gating merge: stm32f1_mmio_diff 102/102 (24 reset + 26 R/W + 52 sweep), 0 divergence, and f103_conformance digest matches silicon. Supersedes the 2026-06-19 drift_ack. (Earlier capture caught + fixed a classic SPI CR1 bug masking CRCNEXT bit 12 — 0xEFFF vs silicon 0xFFFF.)"
+    # 2026-06-26: uart.rs generalised (status_width/status_idle/rx_present masks +
+    # 20+ vendor layouts for the onboarding library). The F1 USART maps to the
+    # Stm32F1 arm, which reproduces the prior hardcoded behaviour byte-for-byte
+    # (SR@0x00, DR@0x04, status_idle 0xC0=TXE|TC, RXNE 1<<5, TXEIE 1<<7/TCIE 1<<6);
+    # stm32f1_mmio_diff + f103_conformance digest pass unchanged → no behavioural
+    # change to this board's pinned registers. No live re-capture this session.
+    # 2026-06-27: uart.rs BRR read-back fix is gated to the Stm32V2 layout; the F1
+    # USART arm (this board) is untouched — purely a shared-file hash drift, zero
+    # behavioural change. stm32f1_mmio_diff + f103_conformance pass unchanged.
+    # 2026-06-28: clock-gating retrofit (tim2/i2c1/spi1/adc1/dma1 RCC clock:{reg,bit}); additive, enabled-clock path unchanged, stm32f1_mmio_diff + f103_conformance pass. No live re-capture.
+    # 2026-06-28: RCC SW→SWS now gated on source-ready (HSI/HSE/PLL RDY) instead
+    # of mirroring optimistically; faithful to silicon. stm32f1_mmio_diff +
+    # f103_conformance pass unchanged (neither pins the SWS switch); tier1 fixture
+    # firmware updated to enable+wait HSE before selecting it. No live re-capture.
+    drift_ack: 2026-06-28
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/afio.rs
@@ -229,6 +313,22 @@ boards:
       last_capture: 2026-06-20
       probe: "ST-LINK/V2 (USB 0483:3748, IDCODE 0x10016413) — connect-under-reset (firmware was holding SWD), adapter 480 kHz"
       result: "Live re-capture after the v0.17.0 merge: stm32f4_mmio_diff 37/37 (2 reset + 31 sweep + 4 behaviour), 0 divergence. Caught + fixed a real model bug: F407 silicon does NOT latch SPI1 CR1 bit 12 (CRCNEXT) — writes 0xFFFF, reads 0xEFFF — vs F103 which keeps it writable; spi.rs now applies a per-part cr1_mask (F4 0xEFFF). Supersedes the 2026-06-19 drift_ack. (I²C/UART models still smoke-tier — not in the mmio diff.)"
+    # 2026-06-26: uart.rs generalised (status_width/status_idle/rx_present masks +
+    # 20+ vendor layouts for the onboarding library). The F4 USART maps to the
+    # Stm32F1 arm, byte-for-byte identical to the prior hardcoded behaviour (SR@0x00,
+    # DR@0x04, status_idle 0xC0, RXNE 1<<5). UART was already smoke-tier here (not
+    # in the mmio diff), so this board's silicon-pinned set is unaffected. No live
+    # re-capture this session.
+    # 2026-06-27: uart.rs BRR read-back fix is gated to the Stm32V2 layout; the F1
+    # USART arm (this board) is untouched — purely a shared-file hash drift, zero
+    # behavioural change. stm32f4_mmio_diff passes unchanged.
+    # 2026-06-28: clock-gating retrofit (tim2/i2c1/spi1/adc1 RCC clock:{reg,bit}); additive, enabled-clock path byte-for-byte unchanged, stm32f4_mmio_diff passes. No live re-capture.
+    # 2026-06-28: RCC SW→SWS now gated on source-ready (HSI/HSE/PLL RDY) instead
+    # of mirroring optimistically; faithful to silicon. stm32f4_mmio_diff +
+    # stm32f4_exec_oracle pass unchanged (neither pins the SWS switch); tier1
+    # fixture firmware updated to enable+wait HSE before selecting it. No live
+    # re-capture.
+    drift_ack: 2026-06-28
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -252,6 +352,15 @@ boards:
       last_capture: 2026-06-20
       probe: "USB-JTAG built-in (ESP32-S3-Zero, USB 303a:1001, openocd-esp32, Tensilica tap 0x120034e5)"
       result: "Live re-capture after the v0.17.0 merge: reset-state oracle 9/9 match live silicon (SYSTIMER CONF 0x46000000 + I2C0 timing block TO/FIFO_CONF/SCL holds/FILTER_CFG), and esp32s3_reset_conformance (sim vs frozen) passes. Supersedes the 2026-06-19 drift_ack."
+    # SPIMEM1 flash-command model fix: SPI_MEM_ADDR_REG is read right-justified
+    # (was wrongly >>8) and the dual/quad fast-read opcodes (0x3B/0xBB/0x6B/0xEB)
+    # are now decoded, so a 2nd-stage bootloader (MCUboot) reads slot0 and
+    # unmodified Zephyr boots on S3 + C3. Behavioural only — no register
+    # reset-value change, so the 9-reg reset-state silicon anchor is unaffected.
+    # Corroborated: the tier1 esp32s3 prebuilt-image rom-boot still passes all
+    # self-tests (loads app from 0x10000). No live SWD re-capture this session
+    # (no S3 board attached; a real C3 was used to dump the C3 mask ROM).
+    drift_ack: 2026-06-26
     models:
       - crates/core/src/peripherals/esp32s3
       - crates/core/src/peripherals/esp_xtensa_common
@@ -286,6 +395,21 @@ boards:
     doc: docs/boards/rp2040.md
     chip: configs/chips/rp2040.yaml
     tier: structural
-    note: "UART0 (stm32v2-profile cheat) + PIO0 declared, but ZERO PIO0 test coverage. No silicon."
+    note: "Behavioural models for clocks/resets (RESET_DONE/PLL-LOCK/XOSC-STABLE), the 64-bit free-running TIMER, SIO GPIO (drive/readback round-trip), PL022 SPI0 (loopback transfer), and DW_apb_i2c I2C0 (no-slave address-NACK abort), plus the PL011 UART0 console. Each is exercised by the tier-1 fixture (tests/fixtures/tier1/rp2040.elf) which reports clock/timer/gpio/spi/i2c PASS over UART. PIO0 is declared but has no test coverage. No silicon bench."
     models:
       - configs/chips/rp2040.yaml
+      - crates/core/src/peripherals/rp2040
+      - crates/core/src/peripherals/rp2040_clocks.rs
+
+  - id: nrf5340
+    doc: docs/boards/nrf5340.md
+    chip: configs/chips/nrf5340.yaml
+    tier: sim-validated
+    note: "Application core (Cortex-M33). Boots UNMODIFIED upstream Zephyr v3.7 hello_world (board nrf5340dk/nrf5340/cpuapp) end to end and prints its banner over the UARTE0 EasyDMA console — asserted by firmware_survival::test_nrf5340_zephyr_survival, with the ELF-independent clock/alias twin in tests/nrf5340_clock_boot.rs. Reuses the shared Nordic CLOCK/UARTE/RTC behavioural models at the 0x5000_0000 non-secure peripheral alias; the whole boot is bus-violation-free (LABWIRED_TRACE_VIOLATIONS=1). Network core, radio, TrustZone/SPU enforcement, and analog trims are not modeled (FICR/UICR/regulator/trim blocks are benign stubs). No nRF5340 silicon diff — no bench board."
+    offline_tests:
+      - "firmware_survival::test_nrf5340_zephyr_survival (real Zephyr ELF boots + banner)"
+      - "nrf5340_clock_boot (HFCLK/LFCLK started-event polls + non-secure alias mapping)"
+    models:
+      - configs/chips/nrf5340.yaml
+      - crates/core/src/peripherals/nrf52
+      - crates/core/src/peripherals/scb.rs

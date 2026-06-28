@@ -1,0 +1,165 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# Nordic nRF5340 — APPLICATION core (Cortex-M33).
+#
+# Source references:
+# - nRF5340 Product Specification v1.5 (memory map, peripheral instances, IRQs).
+# - Address map taken from the Zephyr `nrf5340dk/nrf5340/cpuapp` devicetree, which
+#   is the exact view the firmware is linked against: peripherals are accessed at
+#   the NON-secure alias base 0x50000000 (DT `peripheral@50000000`,
+#   `ranges = <0x0 0x50000000 0x10000000>`), so e.g. UARTE0 = 0x50008000,
+#   CLOCK = 0x50005000, GPIO P0 = 0x50842500.
+# - IRQ numbers are the DT `interrupts` cell (UARTE0=8, CLOCK=5, TIMER0..2=15..17,
+#   RTC0=20, RTC1=21).
+#
+# Boot path this profile is built to satisfy (unmodified Zephyr v3.7 hello_world):
+#   reset -> SystemInit/soc trims -> clock_control (HFCLK/LFCLK start+poll) ->
+#   nrf_rtc_timer (RTC1 + LFCLK) -> UARTE0 EasyDMA console -> "Hello World! nrf5340dk".
+#
+# The Nordic CLOCK + UARTE EasyDMA + RTC behavioural models are shared with
+# nRF52 (crates/core/src/peripherals/nrf52/); their register offsets match the
+# nRF5340 application core, so they are reused verbatim — only the base address
+# differs. Pure trim/config blocks the boot ROM/soc-init poke but never poll for
+# a settled value (DCNF, SPU, OSCILLATORS/REGULATORS, CTRL-AP, GPIOTE) are mapped
+# as benign stub windows so a write/readback never faults the bus.
+name: "nrf5340"
+arch: "arm"
+core: "cortex-m33"
+flash:
+  base: 0x00000000
+  size: "1024KB"
+ram:
+  base: 0x20000000
+  size: "512KB"
+peripherals:
+  # ── Behavioural models (shared nRF52 implementations, reused at nRF5340 bases) ──
+
+  # CLOCK / POWER / RESET share peripheral id 5 (0x50005000). The model settles
+  # EVENTS_HFCLKSTARTED / EVENTS_LFCLKSTARTED on the same tick the start task is
+  # written — the busy-loops in Zephyr's clock_control and nrf_rtc_timer init.
+  - id: "clock"
+    type: "nrf_clock"
+    base_address: 0x50005000
+    size: "4KB"
+    irq: 5
+
+  # UARTE0 — the console. EasyDMA TX walks TXD.PTR/MAXCNT out of RAM and emits the
+  # bytes to the capture sink (this is the path the hello_world banner travels).
+  - id: "uart0"
+    type: "nrf52840_uart"
+    base_address: 0x50008000
+    size: "4KB"
+    irq: 8
+
+  # RTC0/RTC1 — nrf_rtc_timer drives the kernel tick off RTC1 (LFCLK-clocked).
+  - id: "rtc0"
+    type: "nrf52840_rtc"
+    base_address: 0x50014000
+    size: "4KB"
+    irq: 20
+  - id: "rtc1"
+    type: "nrf52840_rtc"
+    base_address: 0x50015000
+    size: "4KB"
+    irq: 21
+    config:
+      num_cc: 4
+
+  - id: "timer0"
+    type: "nrf52840_timer"
+    base_address: 0x5000f000
+    size: "4KB"
+    irq: 15
+  - id: "timer1"
+    type: "nrf52840_timer"
+    base_address: 0x50010000
+    size: "4KB"
+    irq: 16
+  - id: "timer2"
+    type: "nrf52840_timer"
+    base_address: 0x50011000
+    size: "4KB"
+    irq: 17
+
+  # GPIO P0/P1 — note the nRF5340 GPIO base is the unusual 0x_0842_500 offset,
+  # NOT 0x50000000 as on nRF52840.
+  - id: "gpio0"
+    type: "gpio"
+    base_address: 0x50842500
+    size: "4KB"
+    config:
+      profile: "nrf52"
+  - id: "gpio1"
+    type: "gpio"
+    base_address: 0x50842800
+    size: "4KB"
+    config:
+      profile: "nrf52"
+      num_pins: 16
+
+  # ── Benign stub windows (trim/config blocks: write-only or never polled) ──
+  # These are poked by SystemInit / soc-level errata + DCDC/regulator setup but
+  # are not waited on for a settled status, so a zero-returning stub is faithful
+  # to the boot path. If a future firmware polls one of these, promote it to a
+  # behavioural model.
+  - id: "dcnf"
+    type: "nrf5340_dcnf_stub"
+    base_address: 0x50000000
+    size: "4KB"
+  - id: "fpu"
+    type: "nrf5340_fpu_stub"
+    base_address: 0x50001000
+    size: "4KB"
+  - id: "cache"
+    type: "nrf5340_cache_stub"
+    base_address: 0x50002000
+    size: "4KB"
+  - id: "spu"
+    type: "nrf5340_spu_stub"
+    base_address: 0x50003000
+    size: "4KB"
+  - id: "oscillators_regulators"
+    type: "nrf5340_osc_reg_stub"
+    base_address: 0x50004000
+    size: "4KB"
+  - id: "ctrlap"
+    type: "nrf5340_ctrlap_stub"
+    base_address: 0x50006000
+    size: "4KB"
+  - id: "gpiote0"
+    type: "nrf5340_gpiote_stub"
+    base_address: 0x5000d000
+    size: "4KB"
+  # DPPIC — the RTC/timer SUBSCRIBE/PUBLISH channel wiring is poked here at boot
+  # but is not read back; benign for a UART smoke boot.
+  - id: "dppic"
+    type: "nrf5340_dppic_stub"
+    base_address: 0x50017000
+    size: "4KB"
+  # FICR — factory info / analog trims at 0x00FF0000 (NOT in the 0x5000_0000
+  # block). Zephyr's soc-init copies a trim block out of here; the values are
+  # oscillator/radio calibration that the UART console path does not depend on,
+  # so a zero-returning window is faithful to the boot path while keeping the bus
+  # violation-free. Promote to real FICR reset values if a future firmware needs
+  # the device ID or a specific trim.
+  - id: "ficr"
+    type: "nrf5340_ficr_stub"
+    base_address: 0x00FF0000
+    size: "4KB"
+  # UICR — user info config at 0x00FF8000. Read during soc-init (e.g. approtect /
+  # reg-out config); unprovisioned reads as 0 here, which the boot path accepts.
+  - id: "uicr"
+    type: "nrf5340_uicr_stub"
+    base_address: 0x00FF8000
+    size: "4KB"
+  # Analog trim target block (0x5002A000): soc-init writes FICR-sourced
+  # oscillator/analog trim values here. Write-only on the boot path (never read
+  # back) and irrelevant to the digital UART console, so a stub is faithful.
+  - id: "trim_analog"
+    type: "nrf5340_trim_stub"
+    base_address: 0x5002A000
+    size: "4KB"
