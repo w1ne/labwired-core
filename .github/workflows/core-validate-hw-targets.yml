@@ -74,16 +74,20 @@ jobs:
             cat out/hw-target-validation/summary.md >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      - name: Commit and push onboarding updates
+      # NOTE: this job used to auto-commit refreshed pass-rate metadata into
+      # configs/onboarding and push to main. `main` is a protected branch that
+      # requires the `core-integrity` check, so an automated direct push is
+      # rejected (GH006: protected branch hook declined) — the step had been
+      # failing on every scheduled run. The validation + summary above are the
+      # useful output; we no longer attempt the push. If fresh committed
+      # pass-rates are wanted again, do it via a PR (auto-merge) rather than a
+      # direct push, the same constraint that retired the tier1 matrix auto-commit.
+      - name: Report onboarding metadata drift (no auto-commit)
         if: github.ref == 'refs/heads/main'
         run: |
           if git diff --quiet -- configs/onboarding; then
-            echo "No onboarding manifest changes"
-            exit 0
+            echo "Onboarding pass-rate metadata is unchanged."
+          else
+            echo "::notice::Onboarding pass-rate metadata changed this run. It is NOT auto-committed (protected main rejects bot pushes); regenerate and land via a PR if you want it refreshed."
+            git --no-pager diff --stat -- configs/onboarding || true
           fi
-
-          git config user.name "LabWired CI"
-          git config user.email "ci@labwired.com"
-          git add configs/onboarding
-          git commit -m "chore(catalog): autoupdate onboarding targets pass rates"
-          git push
