@@ -15,7 +15,7 @@ name: "esp32-wroom-epaper"
 chip: "../chips/esp32.yaml"
 external_devices:
   - id: "epaper"
-    type: "ssd1680_tricolor_290"
+    type: "uc8151d_tricolor_290"
     connection: "spi3"
     config:
       cs_pin: "GPIO5"
@@ -27,4 +27,4 @@ board_io:
     pin: 5
     signal: "input"
     active_high: true
-    device_type: "ssd1680_tricolor_290"
+    device_type: "uc8151d_tricolor_290"
