@@ -81,6 +81,23 @@ const DATA_MASK: u32 = 0x0001_FFFF;
 /// into bits [16:13] (the IDF `ADC_GET_CHANNEL`/`ADC_GET_DATA` layout).
 const DATA_CHANNEL_SHIFT: u32 = 13;
 
+/// Silicon cold-reset values of the register-backed `APB_SARADC` config
+/// registers (`(offset, reset_value)`), corroborated against a live ESP32-C3
+/// (rev v0.4) in `crates/hw-oracle/tests/esp32c3_reset_conformance.rs`. These
+/// power up non-zero; seeding them keeps the behavioral model's cold-reset
+/// readback identical to the demoted declarative descriptor. The behavioral
+/// one-shot logic only reacts to writes, so these defaults do not affect it.
+const RESET_REGS: &[(u64, u32)] = &[
+    (0x00, 0x4003_8240), // CTRL
+    (0x04, 0x0000_A1FE), // CTRL2
+    (0x0C, 0x00FF_0808), // FSM_WAIT
+    (0x20, 0x1A00_0000), // ONETIME_SAMPLE
+    (0x24, 0x0000_0900), // ARB_CTRL
+    (0x50, 0x0000_00FF), // DMA_CONF
+    (0x54, 0x0000_0004), // CLKM_CONF
+    (0x60, 0x0000_8000), // CALI
+];
+
 /// Deterministic fixed 12-bit source code for `channel`. The ramp is injective
 /// over the C3's five ADC1 channels so a reader can prove the result tracks the
 /// SELECTED channel, not a constant.
@@ -122,9 +139,16 @@ impl std::fmt::Debug for Esp32c3ApbSarAdc {
 
 impl Esp32c3ApbSarAdc {
     pub fn new(source_id: u32) -> Self {
+        // Seed the register-backed window with the silicon cold-reset state so
+        // the model's reset readback matches the captured oracle; the remaining
+        // registers power up at 0.
+        let mut regs = vec![0u32; (APB_SARADC_SIZE / 4) as usize];
+        for &(off, val) in RESET_REGS {
+            regs[(off / 4) as usize] = val;
+        }
         Self {
             source_id,
-            regs: vec![0u32; (APB_SARADC_SIZE / 4) as usize],
+            regs,
             int_raw: Cell::new(0),
             sar1_data: 0,
             sar2_data: 0,

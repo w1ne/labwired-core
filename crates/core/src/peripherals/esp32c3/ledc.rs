@@ -59,6 +59,21 @@ pub const LEDC_INTR_SOURCE_ID: u32 = 23;
 /// Number of low-speed timers in the C3 LEDC block.
 const NUM_TIMERS: usize = 4;
 
+/// Number of channels in the C3 LEDC block.
+const NUM_CHANNELS: usize = 6;
+
+/// Silicon reset value of each `LEDC_CHn_CONF1` register (offset `0x0C + n*0x14`):
+/// the channel's `DUTY_START`/duty-increment defaults latched at power-on. These
+/// registers are pure register-backed state in this model, so seeding the reset
+/// value matches the silicon capture without changing timer behavior.
+const CH_CONF1_RESET: u32 = 0x4000_0000;
+
+/// Silicon reset value of each `LEDC_TIMERx_CONF` register (offset `0xA0 + x*8`):
+/// the `RST` bit (bit 23) is set at power-on, i.e. every timer is held in reset
+/// until firmware configures and releases it. The behavioral counter already
+/// honors `RST` (held at 0 while set), so this is the correct cold-reset seed.
+const TIMER_CONF_RESET: u32 = 1 << 23;
+
 /// First timer-config register offset (`TIMER0_CONF`); the four configs are
 /// 8 bytes apart (`TIMERx_VALUE` sits between them).
 const TIMER0_CONF: u64 = 0xA0;
@@ -186,10 +201,23 @@ impl std::fmt::Debug for Esp32c3Ledc {
 
 impl Esp32c3Ledc {
     pub fn new(source_id: u32) -> Self {
+        // Seed the register-backed window with the silicon reset state so the
+        // cold-reset readback matches the captured oracle. Channel CONF1
+        // registers carry a non-zero reset value; the rest power up at 0.
+        let mut regs = vec![0u32; (LEDC_SIZE / 4) as usize];
+        for n in 0..NUM_CHANNELS {
+            let off = 0x0C + n * 0x14;
+            regs[off / 4] = CH_CONF1_RESET;
+        }
+        // Every timer's CONF reset value holds RST (bit 23) set, matching silicon.
+        let timers = core::array::from_fn(|_| Timer {
+            conf: TIMER_CONF_RESET,
+            ..Default::default()
+        });
         Self {
             source_id,
-            regs: vec![0u32; (LEDC_SIZE / 4) as usize],
-            timers: Default::default(),
+            regs,
+            timers,
             int_raw: 0,
             int_ena: 0,
         }
