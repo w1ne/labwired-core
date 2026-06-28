@@ -30,7 +30,7 @@
 
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::xtensa_lx7::XtensaLx7;
-use labwired_core::peripherals::components::Ssd1680Tricolor290;
+use labwired_core::peripherals::components::Uc8151dTricolor290;
 use labwired_core::peripherals::esp32::spi::Esp32Spi;
 use labwired_core::peripherals::esp_xtensa_common::rom_thunks;
 use labwired_core::system::xtensa::configure_xtensa_esp32;
@@ -73,7 +73,7 @@ name: esp32-epaper-ereader
 chip: esp32
 external_devices:
   - id: epd
-    type: gxepd2_290_c90c
+    type: uc8151d_tricolor_290
     connection: spi3
     config:
       cs_pin: GPIO5
@@ -467,7 +467,7 @@ external_devices:
                     .and_then(|spi| {
                         spi.attached_devices.iter().find_map(|d| {
                             d.as_any()
-                                .and_then(|a| a.downcast_ref::<Ssd1680Tricolor290>())
+                                .and_then(|a| a.downcast_ref::<Uc8151dTricolor290>())
                         })
                     })
                 {
@@ -491,7 +491,7 @@ external_devices:
         .iter()
         .find_map(|d| {
             d.as_any()
-                .and_then(|a| a.downcast_ref::<Ssd1680Tricolor290>())
+                .and_then(|a| a.downcast_ref::<Uc8151dTricolor290>())
         })
         .expect("panel attached");
     let refresh_gen = panel.refresh_generation();
