@@ -168,12 +168,24 @@ external_devices:
     //   * broken atomic CAS — S32C1I is correct and the sim interleaves cores
     //     at instruction granularity, so spinlocks serialize;
     //   * unshared memory — both cores step against the same SystemBus.
-    // Remaining suspect: the real heap_caps_init mis-registers a heap region
-    // (wrong soc_memory_regions read via flash XIP, or a subtle instruction
-    // mis-emulation in the TLSF/multi_heap registration path), so malloc
-    // returns an out-of-region pointer. Next step: trace heap_caps_malloc
-    // returns / multi_heap_register args under LABWIRED_REAL_HEAP=1. Real fix
-    // lands there; then delete this bump allocator.
+    // Further eliminated (2026-06-28):
+    //   * wrong/garbled soc_memory_regions[] — the table at 0x3f40625c is
+    //     correct in the ELF rodata (entries describe DRAM: 0x3ffae000,
+    //     0x3ffb0000, 0x3ffb8000, ... with sane sizes/types);
+    //   * rodata not loaded — the loader writes PT_LOAD by p_paddr, and the
+    //     DROM window 0x3F40_0000 is a writable 4 MiB RamPeripheral, so the
+    //     table is present in emulated memory exactly where heap_caps_init
+    //     reads it.
+    // So heap_caps_init sees a correct region table; the corruption is
+    // DOWNSTREAM — a subtle instruction/bus mis-emulation in the real
+    // multi_heap (TLSF) registration/allocation or in esp_intr_alloc's
+    // vector_desc list, which leaves a heap node's ->next holding the rodata
+    // bytes "lock". Next decisive step: under LABWIRED_REAL_HEAP=1, watch PC
+    // for heap_caps_malloc (0x400836e4) and capture its return (a2) for the
+    // FIRST few allocations — a DRAM pointer means in-heap metadata got
+    // corrupted (TLSF/instruction bug); a rodata pointer means the wrong heap
+    // got registered despite the correct table. Real fix lands there; then
+    // delete this bump allocator.
     if std::env::var("LABWIRED_REAL_HEAP").is_err() {
         push_named(
             &mut thunks,
