@@ -41,6 +41,11 @@ const GPIOA_BASE: u32 = 0x4001_0800; // type gpio, stm32f1 layout (default)
 const USART1_BASE: u32 = 0x4001_3800; // type uart, stm32f1 layout (default)
 const TIM2_BASE: u32 = 0x4000_0000; // type timer, 16-bit
 const DMA1_BASE: u32 = 0x4002_0000; // type dma (Dma1, 7ch)
+const I2C1_BASE: u32 = 0x4000_5400; // type i2c, stm32f1 layout (default)
+const SPI1_BASE: u32 = 0x4001_3000; // type spi, stm32 classic layout (default)
+const ADC1_BASE: u32 = 0x4001_2400; // type adc, stm32f1 layout (default)
+const IWDG_BASE: u32 = 0x4000_3000; // type iwdg
+const RTC_BASE: u32 = 0x4000_2800; // type rtc_f1
 
 // USART1, stm32f1 layout: SR @ 0x00 (TXE = bit 7), DR @ 0x04.
 // Read the full SR word and bit-test TXE: a sign-bit test on a byte
@@ -101,7 +106,8 @@ fn report(class: &[u8], result: Result<(), &'static [u8]>) {
 // ── Checks ──────────────────────────────────────────────────────────────────
 
 /// clock: F1 RCC. HSI is on+ready out of reset; HSEON (bit 16) must latch
-/// HSERDY (bit 17); SW→SWS mirrors in CFGR @ 0x04; APB2ENR @ 0x18
+/// HSERDY (bit 17); SW→SWS in CFGR @ 0x04 is gated on the source being ready
+/// (RCC completes the SYSCLK switch only once HSERDY is set); APB2ENR @ 0x18
 /// round-trips peripheral enables.
 fn check_clock() -> Result<(), &'static [u8]> {
     if rd32(RCC_BASE) & (1 << 1) == 0 {
@@ -116,8 +122,11 @@ fn check_clock() -> Result<(), &'static [u8]> {
     if rd32(RCC_BASE) & (1 << 17) != 0 {
         return Err(b"clock-hserdy-stuck");
     }
-    // CFGR SW=01 → SWS must mirror.
-    wr32(RCC_BASE + 0x04, 0x1);
+    // Faithful SYSCLK switch: re-enable HSE and wait HSERDY, THEN select HSE
+    // (SW=01). SWS follows only once the source is ready — the RCC gates it.
+    wr32(RCC_BASE, cr | (1 << 16)); // HSEON
+    while rd32(RCC_BASE) & (1 << 17) == 0 {}
+    wr32(RCC_BASE + 0x04, 0x1); // SW=01 = HSE
     if (rd32(RCC_BASE + 0x04) >> 2) & 0x3 != 0x1 {
         return Err(b"clock-sws");
     }
@@ -149,6 +158,13 @@ fn check_gpio() -> Result<(), &'static [u8]> {
 /// timer: TIM2 (16-bit). EGR.UG latches UIF and zeroes CNT; SR write-0
 /// clears; with CEN set the counter advances between two bounded reads.
 fn check_timer() -> Result<(), &'static [u8]> {
+    // clock-gating: TIM2 (RCC_APB1ENR.TIM2EN bit 0) is unclocked out of reset,
+    // so its registers read 0 / drop writes. Prove the dead state — ARR reads 0,
+    // not its 0xFFFF clocked reset — then enable the APB1 bus clock.
+    if rd32(TIM2_BASE + 0x2C) != 0 {
+        return Err(b"timer-gated");
+    }
+    wr32(RCC_BASE + 0x1C, rd32(RCC_BASE + 0x1C) | 0x1); // APB1ENR.TIM2EN
     wr32(TIM2_BASE + 0x28, 0); // PSC = 0
     wr32(TIM2_BASE + 0x2C, 0xFFFF); // ARR = max (16-bit)
     wr32(TIM2_BASE + 0x14, 1); // EGR.UG
@@ -176,6 +192,15 @@ fn check_dma() -> Result<(), &'static [u8]> {
     const N: usize = 8;
     let src: [u8; N] = [0xA5, 0x5A, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66];
     let mut dst: [u8; N] = [0; N];
+
+    // clock-gating: DMA1 (RCC_AHBENR.DMA1EN bit 0) is unclocked out of reset.
+    // A pre-clock CCR1 write is dropped and reads back 0; enable the bus clock
+    // (RMW to preserve the SRAM/FLITF reset enables), then run the copy.
+    wr32(DMA1_BASE + 0x08, 1 << 14); // dropped while gated
+    if rd32(DMA1_BASE + 0x08) != 0 {
+        return Err(b"dma-gated");
+    }
+    wr32(RCC_BASE + 0x14, rd32(RCC_BASE + 0x14) | 0x1); // AHBENR.DMA1EN
 
     wr32(DMA1_BASE + 0x04, 0xF); // IFCR: clear stale CH1 flags
     wr32(DMA1_BASE + 0x10, dst.as_mut_ptr() as u32); // CPAR1 = destination
@@ -209,12 +234,172 @@ fn check_dma() -> Result<(), &'static [u8]> {
     Ok(())
 }
 
+/// i2c: F1 legacy I2C1. Enable (CR1.PE) then request a START (CR1.START,
+/// bit 8); the transaction state machine must latch SR1.SB (bit 0) after a
+/// bounded number of ticks, then a STOP (CR1.STOP, bit 9) releases the bus.
+fn check_i2c() -> Result<(), &'static [u8]> {
+    // clock-gating: I2C1 (RCC_APB1ENR.I2C1EN bit 21) is unclocked out of reset.
+    // A pre-clock CR1.PE write is dropped and the register reads back 0; enable
+    // the bus clock, then run the real transaction.
+    wr32(I2C1_BASE, 1); // dropped while gated
+    if rd32(I2C1_BASE) != 0 {
+        return Err(b"i2c-gated");
+    }
+    wr32(RCC_BASE + 0x1C, rd32(RCC_BASE + 0x1C) | (1 << 21)); // APB1ENR.I2C1EN
+    wr32(I2C1_BASE, 1); // CR1.PE @ 0x00
+    wr32(I2C1_BASE, (1 << 8) | 1); // CR1: START + PE
+    let mut sb = false;
+    for _ in 0..20_000 {
+        if rd32(I2C1_BASE + 0x14) & 0x1 != 0 {
+            // SR1.SB @ 0x14
+            sb = true;
+            break;
+        }
+    }
+    if !sb {
+        return Err(b"i2c-sb");
+    }
+    // Drive a real one-byte write transaction: address an absent device. The F1
+    // transaction engine runs the address phase, finds no slave attached, and
+    // NACKs → SR1.AF (bit 10). Observing AF proves the engine ran addr+data, not
+    // just that START latched SB.
+    unsafe { write_volatile((I2C1_BASE + 0x10) as *mut u8, 0xA0) }; // DR: 0x50<<1 | W
+    let mut af = false;
+    for _ in 0..20_000 {
+        if rd32(I2C1_BASE + 0x14) & (1 << 10) != 0 {
+            // SR1.AF @ 0x14 — acknowledge failure (no device ACKed the address)
+            af = true;
+            break;
+        }
+    }
+    if !af {
+        return Err(b"i2c-af");
+    }
+    wr32(I2C1_BASE + 0x14, 0); // clear SR1 (AF)
+    wr32(I2C1_BASE, (1 << 9) | 1); // CR1: STOP + PE
+    Ok(())
+}
+
+/// spi: classic SPI1. TXE (SR bit 1) is set out of reset. With SPE (CR1
+/// bit 6) + MSTR (bit 2) + software-NSS (SSM bit 9, SSI bit 8), a DR write
+/// kicks off a shift-register transfer: BSY (SR bit 7) latches immediately
+/// and the cycle-counted engine clears it / re-asserts TXE on completion.
+fn check_spi() -> Result<(), &'static [u8]> {
+    // clock-gating: SPI1 (RCC_APB2ENR.SPI1EN bit 12) is unclocked out of reset,
+    // so SR reads 0 (TXE not yet asserted). Prove the dead state, then enable
+    // the bus clock (RMW to preserve the GPIO/USART enables from check_clock).
+    if rd32(SPI1_BASE + 0x08) != 0 {
+        return Err(b"spi-gated"); // SR dead while gated
+    }
+    wr32(RCC_BASE + 0x18, rd32(RCC_BASE + 0x18) | (1 << 12)); // APB2ENR.SPI1EN
+    if rd32(SPI1_BASE + 0x08) & (1 << 1) == 0 {
+        return Err(b"spi-txe-reset"); // SR.TXE @ 0x08
+    }
+    wr32(SPI1_BASE, (1 << 6) | (1 << 2) | (1 << 9) | (1 << 8)); // CR1: SPE|MSTR|SSM|SSI
+    unsafe { write_volatile((SPI1_BASE + 0x0C) as *mut u8, 0xAB) }; // DR @ 0x0C → start transfer
+    if rd32(SPI1_BASE + 0x08) & (1 << 7) == 0 {
+        return Err(b"spi-bsy-set"); // BSY must be high while the frame shifts
+    }
+    let mut done = false;
+    for _ in 0..20_000 {
+        let sr = rd32(SPI1_BASE + 0x08);
+        if sr & (1 << 7) == 0 && sr & (1 << 1) != 0 {
+            // BSY clear + TXE set
+            done = true;
+            break;
+        }
+    }
+    if !done {
+        return Err(b"spi-bsy-stuck");
+    }
+    Ok(())
+}
+
+/// adc: F1 ADC1. ADON (CR2 bit 0) powers the converter; a rising SWSTART
+/// (CR2 bit 30) launches a regular conversion. The engine latches EOC
+/// (SR bit 1) after its fixed conversion time and writes the result to DR.
+fn check_adc() -> Result<(), &'static [u8]> {
+    // clock-gating: ADC1 (RCC_APB2ENR.ADC1EN bit 9) is unclocked out of reset.
+    // A pre-clock CR2.ADON write is dropped and CR2 reads back 0; enable the
+    // bus clock, then power up and convert.
+    wr32(ADC1_BASE + 0x08, 1); // dropped while gated
+    if rd32(ADC1_BASE + 0x08) != 0 {
+        return Err(b"adc-gated");
+    }
+    wr32(RCC_BASE + 0x18, rd32(RCC_BASE + 0x18) | (1 << 9)); // APB2ENR.ADC1EN
+    wr32(ADC1_BASE + 0x08, 1); // CR2.ADON @ 0x08
+    spin(100); // converter wake-up
+    wr32(ADC1_BASE + 0x08, 1 | (1 << 30)); // CR2: ADON + SWSTART (rising edge)
+    let mut eoc = false;
+    for _ in 0..20_000 {
+        if rd32(ADC1_BASE) & (1 << 1) != 0 {
+            // SR.EOC @ 0x00
+            eoc = true;
+            break;
+        }
+    }
+    if !eoc {
+        return Err(b"adc-eoc");
+    }
+    if rd32(ADC1_BASE + 0x4C) & 0xFFF == 0 {
+        return Err(b"adc-dr"); // DR @ 0x4C must hold the converted count
+    }
+    Ok(())
+}
+
+/// wdt: IWDG. No RCC clock-gate — the IWDG runs off the dedicated LSI
+/// oscillator, not an APB/AHB peripheral-enable bit, so it has no `clock:`
+/// field in the yaml. PR/RLR are write-protected until KR (@ 0x00) receives the
+/// 0x5555 unlock code (RM0008 §19.4): a pre-unlock RLR write is dropped
+/// (RLR keeps its 0x0FFF reset), and after unlock PR/RLR round-trip.
+fn check_wdt() -> Result<(), &'static [u8]> {
+    wr32(IWDG_BASE + 0x08, 0x123); // RLR @ 0x08 without key → dropped
+    if rd32(IWDG_BASE + 0x08) != 0xFFF {
+        return Err(b"wdt-unprotected");
+    }
+    wr32(IWDG_BASE, 0x5555); // KR unlock
+    wr32(IWDG_BASE + 0x04, 0x5); // PR @ 0x04
+    wr32(IWDG_BASE + 0x08, 0x123); // RLR @ 0x08
+    if rd32(IWDG_BASE + 0x04) != 0x5 {
+        return Err(b"wdt-pr");
+    }
+    if rd32(IWDG_BASE + 0x08) != 0x123 {
+        return Err(b"wdt-rlr");
+    }
+    Ok(())
+}
+
+/// rtc: F1 RTC. No RCC peripheral-enable gate — the RTC lives in the backup
+/// domain, clock-enabled via RCC_BDCR.RTCEN (not an APB/AHB enable bit this
+/// model expresses), so it carries no `clock:` field. CRL.RTOFF (bit 5) stays
+/// asserted while idle, and the 32-bit counter round-trips through its
+/// CNTH/CNTL half-registers (RM0008 §18).
+fn check_rtc() -> Result<(), &'static [u8]> {
+    if rd32(RTC_BASE + 0x04) & 0x20 == 0 {
+        return Err(b"rtc-rtoff"); // CRL @ 0x04
+    }
+    wr32(RTC_BASE + 0x18, 0xBEEF); // CNTH @ 0x18
+    wr32(RTC_BASE + 0x1C, 0x1234); // CNTL @ 0x1C
+    if rd32(RTC_BASE + 0x18) & 0xFFFF != 0xBEEF {
+        return Err(b"rtc-cnth");
+    }
+    if rd32(RTC_BASE + 0x1C) & 0xFFFF != 0x1234 {
+        return Err(b"rtc-cntl");
+    }
+    Ok(())
+}
+
 #[entry]
 fn main() -> ! {
     report(b"clock", check_clock());
     report(b"gpio", check_gpio());
     report(b"timer", check_timer());
+    report(b"i2c", check_i2c());
+    report(b"spi", check_spi());
+    report(b"adc", check_adc());
     report(b"dma", check_dma());
+    report(b"wdt", check_wdt());
+    report(b"rtc", check_rtc());
     puts(b"TIER1 done\n");
 
     loop {

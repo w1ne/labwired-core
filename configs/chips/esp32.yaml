@@ -76,3 +76,29 @@ peripherals:
     type: "intmatrix_stub"
     base_address: 0x3FF00000
     size: "4KB"
+  # SPI3 / VSPI (TRM §7). Real Esp32Spi model wired by configure_xtensa_esp32;
+  # base matches ESP32_PERIPHERALS (spi3 = 0x3FF6_5000).
+  - id: "spi3"
+    type: "esp32_spi"
+    base_address: 0x3FF65000
+    size: "4KB"
+  # I2C0 / I2C_EXT0 (TRM §11). Real Esp32I2c command-list engine wired by
+  # configure_xtensa_esp32; base matches ESP32_PERIPHERALS (i2c0 = 0x3FF5_3000).
+  - id: "i2c0"
+    type: "esp32_i2c"
+    base_address: 0x3FF53000
+    size: "4KB"
+  # SENS SAR-ADC one-shot engine (TRM §29.4). Real Esp32SarAdc model wired by
+  # configure_xtensa_esp32 at the SENS block base 0x3FF4_8800; backs the adc
+  # matrix class. ADC1 (adc1_get_raw) + ADC2 (adc2_get_raw) one-shot reads.
+  - id: "sar_adc"
+    type: "esp32_sar_adc"
+    base_address: 0x3FF48800
+    size: "256B"
+  # LEDC — LED PWM controller (TRM §14). Real Ledc model; base matches
+  # ESP32_PERIPHERALS (ledc = 0x3FF5_9000). Backs the pwm matrix class
+  # (the matrix aliases ledc -> pwm).
+  - id: "ledc"
+    type: "esp32_ledc"
+    base_address: 0x3FF59000
+    size: "4KB"

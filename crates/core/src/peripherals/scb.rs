@@ -71,6 +71,13 @@ pub struct Scb {
     pub mpu_rbar: u32,
     /// MPU_RASR (0xE000EDA0): region attribute and size register.
     pub mpu_rasr: u32,
+    /// MPU_MAIR0/MAIR1 (0xE000EDC0/0xC4): ARMv8-M memory attribute indirection
+    /// registers. Present on Cortex-M33 parts (the M23/M33 MPU replaces the
+    /// v7-M RASR attribute encoding with an 8-entry MAIR table). Zephyr's
+    /// `z_arm_mpu_init` writes these on M33 targets; stored so the access
+    /// round-trips, not enforced (attributes have no effect in the model).
+    pub mpu_mair0: u32,
+    pub mpu_mair1: u32,
     /// Set when firmware writes AIRCR with the correct VECTKEY and SYSRESETREQ.
     /// Drained by the machine reset routing via drain_reset_request().
     #[serde(skip)]
@@ -120,6 +127,8 @@ impl Scb {
             mpu_rnr: 0,
             mpu_rbar: 0,
             mpu_rasr: 0,
+            mpu_mair0: 0,
+            mpu_mair1: 0,
             pending_reset: Cell::new(false),
         }
     }
@@ -179,6 +188,9 @@ impl Scb {
             0x98 => self.mpu_rnr,
             0x9C => self.mpu_rbar,
             0xA0 => self.mpu_rasr,
+            // ARMv8-M MPU memory attribute indirection registers (Cortex-M33).
+            0xC0 => self.mpu_mair0,
+            0xC4 => self.mpu_mair1,
             _ => 0,
         }
     }
@@ -240,6 +252,10 @@ impl Scb {
             0x98 => self.mpu_rnr = value,
             0x9C => self.mpu_rbar = value,
             0xA0 => self.mpu_rasr = value,
+            // ARMv8-M MPU MAIR0/MAIR1 (Cortex-M33). Stored for round-trip; the
+            // attribute encodings have no effect since access is not enforced.
+            0xC0 => self.mpu_mair0 = value,
+            0xC4 => self.mpu_mair1 = value,
             _ => {}
         }
     }
@@ -381,6 +397,23 @@ mod tests {
         assert_eq!(scb.read_register(0x98), 0x3, "RNR");
         assert_eq!(scb.read_register(0x9C), 0x2000_0013, "RBAR");
         assert_eq!(scb.read_register(0xA0), 0x0300_0027, "RASR");
+    }
+
+    #[test]
+    fn mpu_mair_round_trips_on_armv8m() {
+        // Cortex-M33 (ARMv8-M) z_arm_mpu_init writes the attribute table to
+        // MAIR0/MAIR1 at SCS offset 0xC0/0xC4 — just past the v7-M MPU block.
+        // The SCS window now covers them (system::cortex_m sizes the SCB region
+        // to 0xC8); an unmapped store here previously faulted the bus on every
+        // M33 boot (observed bringing up Zephyr on the nRF5340 application core).
+        let mut scb = Scb::new(Arc::new(AtomicU32::new(0)));
+        // Reset value is 0 (no attributes programmed).
+        assert_eq!(scb.read_register(0xC0), 0, "MAIR0 reset");
+        assert_eq!(scb.read_register(0xC4), 0, "MAIR1 reset");
+        scb.write_register(0xC0, 0x0000_00AA);
+        scb.write_register(0xC4, 0x0444_0000);
+        assert_eq!(scb.read_register(0xC0), 0x0000_00AA, "MAIR0");
+        assert_eq!(scb.read_register(0xC4), 0x0444_0000, "MAIR1");
     }
 
     #[test]

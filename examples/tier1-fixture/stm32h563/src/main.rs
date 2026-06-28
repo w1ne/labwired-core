@@ -207,7 +207,12 @@ fn check_dma() -> Result<(), &'static [u8]> {
     let src: [u8; N] = [0xA5, 0x5A, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66];
     let mut dst: [u8; N] = [0; N];
 
-    // GPDMA1 bus clock (AHB1ENR bit 0), restored at the end.
+    // clock-gating: GPDMA1 (RCC_AHB1ENR.GPDMA1EN bit 0) is unclocked out of
+    // reset — C0SR reads 0 (IDLEF not asserted). Prove the dead state, then
+    // enable the bus clock (restored at the end).
+    if rd32(C0SR) != 0 {
+        return Err(b"dma-gated");
+    }
     let ahb1 = rd32(RCC_BASE + 0x88);
     wr32(RCC_BASE + 0x88, ahb1 | 0x1);
 
@@ -259,6 +264,13 @@ fn check_dma() -> Result<(), &'static [u8]> {
 /// restored (ARR back to full-scale, CNT 0).
 fn check_timer() -> Result<(), &'static [u8]> {
     const TIM2: u32 = 0x4000_0000;
+    // clock-gating: TIM2 (RCC_APB1LENR.TIM2EN bit 0, ENR @ 0x9C) is unclocked
+    // out of reset — ARR reads 0, not its 0xFFFFFFFF clocked reset. Prove the
+    // dead state, then enable the bus clock.
+    if rd32(TIM2 + 0x2C) != 0 {
+        return Err(b"tim-gated");
+    }
+    wr32(RCC_BASE + 0x9C, rd32(RCC_BASE + 0x9C) | 0x1); // APB1LENR.TIM2EN
     wr32(TIM2 + 0x28, 7); // PSC
     if rd32(TIM2 + 0x28) != 7 {
         return Err(b"tim-psc");
@@ -297,6 +309,13 @@ fn check_timer() -> Result<(), &'static [u8]> {
 /// set + clear. State restored.
 fn check_i2c() -> Result<(), &'static [u8]> {
     const I2C1: u32 = 0x4000_5400;
+    // clock-gating: I2C1 (RCC_APB1LENR.I2C1EN bit 21, ENR @ 0x9C) is unclocked
+    // out of reset — ISR reads 0 (TXE not asserted). Prove the dead state, then
+    // enable the bus clock.
+    if rd32(I2C1 + 0x18) != 0 {
+        return Err(b"i2c-gated");
+    }
+    wr32(RCC_BASE + 0x9C, rd32(RCC_BASE + 0x9C) | (1 << 21)); // APB1LENR.I2C1EN
     if rd32(I2C1 + 0x18) & 0x1 == 0 {
         return Err(b"i2c-txe");
     }
@@ -312,13 +331,38 @@ fn check_i2c() -> Result<(), &'static [u8]> {
     if rd32(I2C1 + 0x00) & 0x1 == 0 {
         return Err(b"i2c-pe");
     }
+    // Transaction engine: a 1-byte master write to an ABSENT slave (addr 0x52)
+    // must drive the address+data phase and NACK. CR2 = SADD(0x52<<1) |
+    // NBYTES(1)<<16 | AUTOEND<<25 | START<<13; the TXDR byte arms the phase.
+    let cr2 = (0x52u32 << 1) | (1 << 16) | (1 << 25) | (1 << 13);
+    wr32(I2C1 + 0x04, cr2);
+    unsafe { write_volatile((I2C1 + 0x28) as *mut u8, 0xAB) }; // TXDR
+    let mut nacked = false;
+    for _ in 0..20_000 {
+        if rd32(I2C1 + 0x18) & (1 << 4) != 0 {
+            nacked = true; // ISR.NACKF
+            break;
+        }
+    }
+    if !nacked {
+        return Err(b"i2c-no-nack");
+    }
+    if rd32(I2C1 + 0x18) & (1 << 15) != 0 {
+        return Err(b"i2c-autoend-busy"); // AUTOEND must release the bus
+    }
+    wr32(I2C1 + 0x1C, (1 << 4) | (1 << 5)); // ICR: NACKCF | STOPCF
+    if rd32(I2C1 + 0x18) & (1 << 4) != 0 {
+        return Err(b"i2c-nack-stuck");
+    }
     wr32(I2C1 + 0x00, 0x0);
     wr32(I2C1 + 0x08, 0x0);
     wr32(I2C1 + 0x10, 0x0);
     Ok(())
 }
 
-/// wdt: IWDG register-access protocol — PR/RLR writes only take effect after
+/// wdt: IWDG. No RCC peripheral-enable gate — the IWDG runs off the dedicated
+/// LSI oscillator, not an APB/AHB enable bit, so it carries no `clock:` field.
+/// Register-access protocol — PR/RLR writes only take effect after
 /// KR=0x5555 AND only once the LSI-domain sync completes (bench-probed: with
 /// LSI off, SR.PVU stays 1 and the writes never commit). The check brings LSI
 /// up via RCC_BDCR first and polls SR between steps, so it is faithful to
@@ -372,6 +416,11 @@ fn check_wdt() -> Result<(), &'static [u8]> {
 /// the same writes behave identically except frames only shift once
 /// spi_ker_ck is configured (divergence documented in the chip yaml).
 fn check_spi() -> Result<(), &'static [u8]> {
+    // clock-gating: SPI1 (RCC_APB2ENR.SPI1EN bit 12) is unclocked out of reset
+    // — CFG1 reads 0, not its 0x00070007 clocked reset. Prove the dead state.
+    if rd32(SPI1_BASE + 0x08) != 0 {
+        return Err(b"spi-gated");
+    }
     let apb2 = rd32(RCC_BASE + 0xA4);
     wr32(RCC_BASE + 0xA4, apb2 | (1 << 12)); // SPI1EN
 
@@ -418,9 +467,36 @@ fn check_spi() -> Result<(), &'static [u8]> {
     Ok(())
 }
 
-/// adc: ADC1 power-up handshake, silicon-pinned 2026-06-11: DEEPPWD out of
-/// reset, DEEPPWD clear -> ADVREGEN -> ADEN raises ISR.ADRDY.
+/// Run one ADC conversion at CFGR.RES = `res` and return the DR code. The L4
+/// ADC model converts a fixed internal source (3.0 V / 3.3 Vref); the code must
+/// scale with resolution, so a constant or non-converting model fails this.
+fn adc_convert(res: u32) -> Result<u32, &'static [u8]> {
+    let cfgr = rd32(ADC1_BASE + 0x0C) & !(0x3 << 3); // RES = CFGR bits[4:3]
+    wr32(ADC1_BASE + 0x0C, cfgr | (res << 3));
+    wr32(ADC1_BASE + 0x00, 1 << 2); // ISR rc_w1: clear stale EOC
+    wr32(ADC1_BASE + 0x08, rd32(ADC1_BASE + 0x08) | (1 << 2)); // CR.ADSTART
+    let mut eoc = false;
+    for _ in 0..20_000 {
+        if rd32(ADC1_BASE + 0x00) & (1 << 2) != 0 {
+            eoc = true;
+            break;
+        }
+    }
+    if !eoc {
+        return Err(b"adc-eoc");
+    }
+    Ok(rd32(ADC1_BASE + 0x40) & 0xFFFF)
+}
+
+/// adc: ADC1 power-up handshake (silicon-pinned 2026-06-11: DEEPPWD out of
+/// reset, DEEPPWD clear -> ADVREGEN -> ADEN raises ISR.ADRDY) followed by a
+/// real conversion whose code must scale with resolution.
 fn check_adc() -> Result<(), &'static [u8]> {
+    // clock-gating: ADC1 (RCC_AHB2ENR.ADCEN bit 10) is unclocked out of reset
+    // — CR reads 0, not its 0x20000000 DEEPPWD reset. Prove the dead state.
+    if rd32(ADC1_BASE + 0x08) != 0 {
+        return Err(b"adc-gated");
+    }
     let ahb2 = rd32(RCC_BASE + 0x8C);
     wr32(RCC_BASE + 0x8C, ahb2 | (1 << 10)); // ADCEN
 
@@ -440,6 +516,18 @@ fn check_adc() -> Result<(), &'static [u8]> {
     if !ready {
         return Err(b"adc-adrdy");
     }
+    // Real conversion: derived code must scale with resolution (12-bit then 10-bit).
+    let code12 = adc_convert(0)?;
+    if code12 != 3723 {
+        return Err(b"adc-code12");
+    }
+    let code10 = adc_convert(1)?;
+    if code10 != 930 {
+        return Err(b"adc-code10");
+    }
+    if code10 >= code12 {
+        return Err(b"adc-scale");
+    }
     wr32(ADC1_BASE, 0x1); // rc_w1: clear ADRDY
     wr32(ADC1_BASE + 0x08, 0x2000_0000); // back to deep power-down
     wr32(RCC_BASE + 0x8C, ahb2);
@@ -452,6 +540,11 @@ fn check_adc() -> Result<(), &'static [u8]> {
 /// (silicon-pinned 2026-06-11). With CCR1=50 and ARR=100 the running
 /// counter must raise CC1IF when it crosses the compare value.
 fn check_pwm() -> Result<(), &'static [u8]> {
+    // clock-gating: TIM1 (RCC_APB2ENR.TIM1EN bit 11) is unclocked out of reset
+    // — ARR reads 0, not its 0xFFFF clocked reset. Prove the dead state.
+    if rd32(TIM1_BASE + 0x2C) != 0 {
+        return Err(b"pwm-gated");
+    }
     let apb2 = rd32(RCC_BASE + 0xA4);
     wr32(RCC_BASE + 0xA4, apb2 | (1 << 11)); // TIM1EN
 
@@ -499,6 +592,12 @@ fn check_pwm() -> Result<(), &'static [u8]> {
 /// (INIT->INITF), TR/DR/PRER writes, exit (INITS rises), and the WPR
 /// relock dropping further calendar writes.
 fn check_rtc() -> Result<(), &'static [u8]> {
+    // clock-gating: the RTC register interface is clocked from
+    // RCC_APB3ENR.RTCAPBEN (bit 21) — ICSR reads 0, not its 0x07 reset, until
+    // it is set. Prove the dead state, then enable the APB register clock.
+    if rd32(RTC_BASE + 0x0C) != 0 {
+        return Err(b"rtc-gated");
+    }
     let apb3 = rd32(RCC_BASE + 0xA8);
     wr32(RCC_BASE + 0xA8, apb3 | (1 << 21)); // RTCAPBEN
     let bdcr = rd32(RCC_BASE + 0xF0);
@@ -511,7 +610,10 @@ fn check_rtc() -> Result<(), &'static [u8]> {
     if rd32(RCC_BASE + 0xF0) & (1 << 27) == 0 {
         return Err(b"rtc-lsirdy");
     }
-    wr32(RCC_BASE + 0xF0, rd32(RCC_BASE + 0xF0) | (0x2 << 8) | (1 << 15)); // RTCSEL=LSI, RTCEN
+    wr32(
+        RCC_BASE + 0xF0,
+        rd32(RCC_BASE + 0xF0) | (0x2 << 8) | (1 << 15),
+    ); // RTCSEL=LSI, RTCEN
 
     wr32(RTC_BASE + 0x24, 0xCA); // WPR key 1
     wr32(RTC_BASE + 0x24, 0x53); // WPR key 2
@@ -564,6 +666,12 @@ static mut IRQ_HITS: u32 = 0;
 /// (2026-06-12, NUCLEO-H563ZI) register-for-register, so the same ELF is
 /// bench-replayable; no transceiver needed.
 fn check_can() -> Result<(), &'static [u8]> {
+    // clock-gating: FDCAN1's bus interface is clocked from RCC_APB1HENR.FDCAN1EN
+    // (bit 9) — ENDN reads 0, not its 0x87654321 reset, until it is set. Prove
+    // the dead state, then enable the bus clock (kernel clock follows).
+    if rd32(FDCAN1_BASE + 0x04) != 0 {
+        return Err(b"can-gated");
+    }
     // Bus clock, then kernel clock: FDCANSEL resets to 00 = HSE, and the
     // Nucleo's HSE is the ST-LINK 8 MHz MCO — digital bypass
     // (HSEON | HSEBYP | HSEEXT).

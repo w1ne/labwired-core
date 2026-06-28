@@ -1,0 +1,1003 @@
+peripheral: TRNG0
+version: 0.1.0
+registers:
+- id: MCTL
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 73729
+  fields:
+  - name: SAMP_MODE
+    bit_range:
+    - 1
+    - 0
+    description: Sample Mode
+  - name: OSC_DIV
+    bit_range:
+    - 3
+    - 2
+    description: Oscillator Divide
+  - name: UNUSED
+    bit_range:
+    - 4
+    - 4
+    description: This bit is unused but write-able. Must be left as zero.
+  - name: TRNG_ACC
+    bit_range:
+    - 5
+    - 5
+    description: TRNG Access Mode
+  - name: RST_DEF
+    bit_range:
+    - 6
+    - 6
+    description: Reset Defaults
+  - name: FOR_SCLK
+    bit_range:
+    - 7
+    - 7
+    description: Force System Clock
+  - name: FCT_FAIL
+    bit_range:
+    - 8
+    - 8
+    description: 'Read only: Frequency Count Fail'
+  - name: FCT_VAL
+    bit_range:
+    - 9
+    - 9
+    description: 'Read only: Frequency Count Valid. Indicates that a valid frequency count may be read from FRQCNT.'
+  - name: ENT_VAL
+    bit_range:
+    - 10
+    - 10
+    description: 'Read only: Entropy Valid'
+  - name: TST_OUT
+    bit_range:
+    - 11
+    - 11
+    description: 'Read only: Test point inside ring oscillator.'
+  - name: ERR
+    bit_range:
+    - 12
+    - 12
+    description: 'Read: Error status'
+  - name: TSTOP_OK
+    bit_range:
+    - 13
+    - 13
+    description: TRNG_OK_TO_STOP
+  - name: PRGM
+    bit_range:
+    - 16
+    - 16
+    description: Programming Mode Select
+  side_effects: null
+- id: SCMISC
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 65570
+  fields:
+  - name: LRUN_MAX
+    bit_range:
+    - 7
+    - 0
+    description: LONG RUN MAX LIMIT
+  - name: RTY_CT
+    bit_range:
+    - 19
+    - 16
+    description: RETRY COUNT
+  side_effects: null
+- id: PKRRNG
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 2467
+  fields:
+  - name: PKR_RNG
+    bit_range:
+    - 15
+    - 0
+    description: Poker Range
+  side_effects: null
+- id: PKRSQ
+  address_offset: 12
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: PKR_SQ
+    bit_range:
+    - 23
+    - 0
+    description: Poker Square Calculation Result.
+  side_effects: null
+- id: PKRMAX
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 26912
+  fields:
+  - name: PKR_MAX
+    bit_range:
+    - 23
+    - 0
+    description: Poker Maximum Limit.
+  side_effects: null
+- id: SDCTL
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 209717700
+  fields:
+  - name: SAMP_SIZE
+    bit_range:
+    - 15
+    - 0
+    description: Sample Size
+  - name: ENT_DLY
+    bit_range:
+    - 31
+    - 16
+    description: Entropy Delay
+  side_effects: null
+- id: SBLIM
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 63
+  fields:
+  - name: SB_LIM
+    bit_range:
+    - 9
+    - 0
+    description: Sparse Bit Limit
+  side_effects: null
+- id: TOTSAM
+  address_offset: 20
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: TOT_SAM
+    bit_range:
+    - 19
+    - 0
+    description: Total Samples
+  side_effects: null
+- id: FRQMIN
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 1600
+  fields:
+  - name: FRQ_MIN
+    bit_range:
+    - 21
+    - 0
+    description: Frequency Count Minimum Limit
+  side_effects: null
+- id: FRQCNT
+  address_offset: 28
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: FRQ_CT
+    bit_range:
+    - 21
+    - 0
+    description: Frequency Count
+  side_effects: null
+- id: FRQMAX
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 25600
+  fields:
+  - name: FRQ_MAX
+    bit_range:
+    - 21
+    - 0
+    description: Frequency Counter Maximum Limit
+  side_effects: null
+- id: SCML
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 17565032
+  fields:
+  - name: MONO_MAX
+    bit_range:
+    - 15
+    - 0
+    description: Monobit Maximum Limit
+  - name: MONO_RNG
+    bit_range:
+    - 31
+    - 16
+    description: Monobit Range
+  side_effects: null
+- id: SCMC
+  address_offset: 32
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: MONO_CT
+    bit_range:
+    - 15
+    - 0
+    description: Monobit Count
+  side_effects: null
+- id: SCR1C
+  address_offset: 36
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: R1_0_CT
+    bit_range:
+    - 14
+    - 0
+    description: Runs of Zero, Length 1 Count
+  - name: R1_1_CT
+    bit_range:
+    - 30
+    - 16
+    description: Runs of One, Length 1 Count
+  side_effects: null
+- id: SCR1L
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 11665813
+  fields:
+  - name: RUN1_MAX
+    bit_range:
+    - 14
+    - 0
+    description: Run Length 1 Maximum Limit
+  - name: RUN1_RNG
+    bit_range:
+    - 30
+    - 16
+    description: Run Length 1 Range
+  side_effects: null
+- id: SCR2C
+  address_offset: 40
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: R2_0_CT
+    bit_range:
+    - 13
+    - 0
+    description: Runs of Zero, Length 2 Count
+  - name: R2_1_CT
+    bit_range:
+    - 29
+    - 16
+    description: Runs of One, Length 2 Count
+  side_effects: null
+- id: SCR2L
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 7995612
+  fields:
+  - name: RUN2_MAX
+    bit_range:
+    - 13
+    - 0
+    description: Run Length 2 Maximum Limit
+  - name: RUN2_RNG
+    bit_range:
+    - 29
+    - 16
+    description: Run Length 2 Range
+  side_effects: null
+- id: SCR3L
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 5767293
+  fields:
+  - name: RUN3_MAX
+    bit_range:
+    - 12
+    - 0
+    description: Run Length 3 Maximum Limit
+  - name: RUN3_RNG
+    bit_range:
+    - 28
+    - 16
+    description: Run Length 3 Range
+  side_effects: null
+- id: SCR3C
+  address_offset: 44
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: R3_0_CT
+    bit_range:
+    - 12
+    - 0
+    description: Runs of Zeroes, Length 3 Count
+  - name: R3_1_CT
+    bit_range:
+    - 28
+    - 16
+    description: Runs of Ones, Length 3 Count
+  side_effects: null
+- id: SCR4L
+  address_offset: 48
+  size: 32
+  access: READ_WRITE
+  reset_value: 4194379
+  fields:
+  - name: RUN4_MAX
+    bit_range:
+    - 11
+    - 0
+    description: Run Length 4 Maximum Limit
+  - name: RUN4_RNG
+    bit_range:
+    - 27
+    - 16
+    description: Run Length 4 Range
+  side_effects: null
+- id: SCR4C
+  address_offset: 48
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: R4_0_CT
+    bit_range:
+    - 11
+    - 0
+    description: Runs of Zero, Length 4 Count
+  - name: R4_1_CT
+    bit_range:
+    - 27
+    - 16
+    description: Runs of One, Length 4 Count
+  side_effects: null
+- id: SCR5C
+  address_offset: 52
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: R5_0_CT
+    bit_range:
+    - 10
+    - 0
+    description: Runs of Zero, Length 5 Count
+  - name: R5_1_CT
+    bit_range:
+    - 26
+    - 16
+    description: Runs of One, Length 5 Count
+  side_effects: null
+- id: SCR5L
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 3014703
+  fields:
+  - name: RUN5_MAX
+    bit_range:
+    - 10
+    - 0
+    description: Run Length 5 Maximum Limit
+  - name: RUN5_RNG
+    bit_range:
+    - 26
+    - 16
+    description: Run Length 5 Range
+  side_effects: null
+- id: SCR6PL
+  address_offset: 56
+  size: 32
+  access: READ_WRITE
+  reset_value: 3014703
+  fields:
+  - name: RUN6P_MAX
+    bit_range:
+    - 10
+    - 0
+    description: Run Length 6+ Maximum Limit
+  - name: RUN6P_RNG
+    bit_range:
+    - 26
+    - 16
+    description: Run Length 6+ Range
+  side_effects: null
+- id: SCR6PC
+  address_offset: 56
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: R6P_0_CT
+    bit_range:
+    - 10
+    - 0
+    description: Runs of Zero, Length 6+ Count
+  - name: R6P_1_CT
+    bit_range:
+    - 26
+    - 16
+    description: Runs of One, Length 6+ Count
+  side_effects: null
+- id: STATUS
+  address_offset: 60
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: TF1BR0
+    bit_range:
+    - 0
+    - 0
+    description: Test Fail, 1-Bit Run, Sampling 0s. If TF1BR0=1, the 1-Bit Run, Sampling 0s Test has failed.
+  - name: TF1BR1
+    bit_range:
+    - 1
+    - 1
+    description: Test Fail, 1-Bit Run, Sampling 1s. If TF1BR1=1, the 1-Bit Run, Sampling 1s Test has failed.
+  - name: TF2BR0
+    bit_range:
+    - 2
+    - 2
+    description: Test Fail, 2-Bit Run, Sampling 0s. If TF2BR0=1, the 2-Bit Run, Sampling 0s Test has failed.
+  - name: TF2BR1
+    bit_range:
+    - 3
+    - 3
+    description: Test Fail, 2-Bit Run, Sampling 1s. If TF2BR1=1, the 2-Bit Run, Sampling 1s Test has failed.
+  - name: TF3BR0
+    bit_range:
+    - 4
+    - 4
+    description: Test Fail, 3-Bit Run, Sampling 0s. If TF3BR0=1, the 3-Bit Run, Sampling 0s Test has failed.
+  - name: TF3BR1
+    bit_range:
+    - 5
+    - 5
+    description: Test Fail, 3-Bit Run, Sampling 1s. If TF3BR1=1, the 3-Bit Run, Sampling 1s Test has failed.
+  - name: TF4BR0
+    bit_range:
+    - 6
+    - 6
+    description: Test Fail, 4-Bit Run, Sampling 0s. If TF4BR0=1, the 4-Bit Run, Sampling 0s Test has failed.
+  - name: TF4BR1
+    bit_range:
+    - 7
+    - 7
+    description: Test Fail, 4-Bit Run, Sampling 1s. If TF4BR1=1, the 4-Bit Run, Sampling 1s Test has failed.
+  - name: TF5BR0
+    bit_range:
+    - 8
+    - 8
+    description: Test Fail, 5-Bit Run, Sampling 0s. If TF5BR0=1, the 5-Bit Run, Sampling 0s Test has failed.
+  - name: TF5BR1
+    bit_range:
+    - 9
+    - 9
+    description: Test Fail, 5-Bit Run, Sampling 1s. If TF5BR1=1, the 5-Bit Run, Sampling 1s Test has failed.
+  - name: TF6PBR0
+    bit_range:
+    - 10
+    - 10
+    description: Test Fail, 6 Plus Bit Run, Sampling 0s
+  - name: TF6PBR1
+    bit_range:
+    - 11
+    - 11
+    description: Test Fail, 6 Plus Bit Run, Sampling 1s
+  - name: TFSB
+    bit_range:
+    - 12
+    - 12
+    description: Test Fail, Sparse Bit. If TFSB=1, the Sparse Bit Test has failed.
+  - name: TFLR
+    bit_range:
+    - 13
+    - 13
+    description: Test Fail, Long Run. If TFLR=1, the Long Run Test has failed.
+  - name: TFP
+    bit_range:
+    - 14
+    - 14
+    description: Test Fail, Poker. If TFP=1, the Poker Test has failed.
+  - name: TFMB
+    bit_range:
+    - 15
+    - 15
+    description: Test Fail, Mono Bit. If TFMB=1, the Mono Bit Test has failed.
+  - name: RETRY_CT
+    bit_range:
+    - 19
+    - 16
+    description: RETRY COUNT
+  side_effects: null
+- id: ENT0
+  address_offset: 64
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: ENT
+    bit_range:
+    - 31
+    - 0
+    description: Entropy Value
+  side_effects: null
+- id: ENT1
+  address_offset: 68
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: ENT
+    bit_range:
+    - 31
+    - 0
+    description: Entropy Value
+  side_effects: null
+- id: ENT2
+  address_offset: 72
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: ENT
+    bit_range:
+    - 31
+    - 0
+    description: Entropy Value
+  side_effects: null
+- id: ENT3
+  address_offset: 76
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: ENT
+    bit_range:
+    - 31
+    - 0
+    description: Entropy Value
+  side_effects: null
+- id: ENT4
+  address_offset: 80
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: ENT
+    bit_range:
+    - 31
+    - 0
+    description: Entropy Value
+  side_effects: null
+- id: ENT5
+  address_offset: 84
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: ENT
+    bit_range:
+    - 31
+    - 0
+    description: Entropy Value
+  side_effects: null
+- id: ENT6
+  address_offset: 88
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: ENT
+    bit_range:
+    - 31
+    - 0
+    description: Entropy Value
+  side_effects: null
+- id: ENT7
+  address_offset: 92
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: ENT
+    bit_range:
+    - 31
+    - 0
+    description: Entropy Value
+  side_effects: null
+- id: ENT8
+  address_offset: 96
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: ENT
+    bit_range:
+    - 31
+    - 0
+    description: Entropy Value
+  side_effects: null
+- id: ENT9
+  address_offset: 100
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: ENT
+    bit_range:
+    - 31
+    - 0
+    description: Entropy Value
+  side_effects: null
+- id: ENT10
+  address_offset: 104
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: ENT
+    bit_range:
+    - 31
+    - 0
+    description: Entropy Value
+  side_effects: null
+- id: ENT11
+  address_offset: 108
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: ENT
+    bit_range:
+    - 31
+    - 0
+    description: Entropy Value
+  side_effects: null
+- id: ENT12
+  address_offset: 112
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: ENT
+    bit_range:
+    - 31
+    - 0
+    description: Entropy Value
+  side_effects: null
+- id: ENT13
+  address_offset: 116
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: ENT
+    bit_range:
+    - 31
+    - 0
+    description: Entropy Value
+  side_effects: null
+- id: ENT14
+  address_offset: 120
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: ENT
+    bit_range:
+    - 31
+    - 0
+    description: Entropy Value
+  side_effects: null
+- id: ENT15
+  address_offset: 124
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: ENT
+    bit_range:
+    - 31
+    - 0
+    description: Entropy Value
+  side_effects: null
+- id: PKRCNT10
+  address_offset: 128
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: PKR_0_CT
+    bit_range:
+    - 15
+    - 0
+    description: Poker 0h Count
+  - name: PKR_1_CT
+    bit_range:
+    - 31
+    - 16
+    description: Poker 1h Count
+  side_effects: null
+- id: PKRCNT32
+  address_offset: 132
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: PKR_2_CT
+    bit_range:
+    - 15
+    - 0
+    description: Poker 2h Count
+  - name: PKR_3_CT
+    bit_range:
+    - 31
+    - 16
+    description: Poker 3h Count
+  side_effects: null
+- id: PKRCNT54
+  address_offset: 136
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: PKR_4_CT
+    bit_range:
+    - 15
+    - 0
+    description: Poker 4h Count
+  - name: PKR_5_CT
+    bit_range:
+    - 31
+    - 16
+    description: Poker 5h Count
+  side_effects: null
+- id: PKRCNT76
+  address_offset: 140
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: PKR_6_CT
+    bit_range:
+    - 15
+    - 0
+    description: Poker 6h Count
+  - name: PKR_7_CT
+    bit_range:
+    - 31
+    - 16
+    description: Poker 7h Count
+  side_effects: null
+- id: PKRCNT98
+  address_offset: 144
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: PKR_8_CT
+    bit_range:
+    - 15
+    - 0
+    description: Poker 8h Count
+  - name: PKR_9_CT
+    bit_range:
+    - 31
+    - 16
+    description: Poker 9h Count
+  side_effects: null
+- id: PKRCNTBA
+  address_offset: 148
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: PKR_A_CT
+    bit_range:
+    - 15
+    - 0
+    description: Poker Ah Count
+  - name: PKR_B_CT
+    bit_range:
+    - 31
+    - 16
+    description: Poker Bh Count
+  side_effects: null
+- id: PKRCNTDC
+  address_offset: 152
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: PKR_C_CT
+    bit_range:
+    - 15
+    - 0
+    description: Poker Ch Count
+  - name: PKR_D_CT
+    bit_range:
+    - 31
+    - 16
+    description: Poker Dh Count
+  side_effects: null
+- id: PKRCNTFE
+  address_offset: 156
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: PKR_E_CT
+    bit_range:
+    - 15
+    - 0
+    description: Poker Eh Count
+  - name: PKR_F_CT
+    bit_range:
+    - 31
+    - 16
+    description: Poker Fh Count
+  side_effects: null
+- id: SEC_CFG
+  address_offset: 176
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SH0
+    bit_range:
+    - 0
+    - 0
+    description: Reserved. DRNG specific, not applicable to this version.
+  - name: NO_PRGM
+    bit_range:
+    - 1
+    - 1
+    description: If set, the TRNG registers cannot be programmed
+  - name: SK_VAL
+    bit_range:
+    - 2
+    - 2
+    description: Reserved. DRNG-specific, not applicable to this version.
+  side_effects: null
+- id: INT_CTRL
+  address_offset: 180
+  size: 32
+  access: READ_WRITE
+  reset_value: 4294967295
+  fields:
+  - name: HW_ERR
+    bit_range:
+    - 0
+    - 0
+    description: Bit position that can be cleared if corresponding bit of INT_STATUS has been asserted.
+  - name: ENT_VAL
+    bit_range:
+    - 1
+    - 1
+    description: Same behavior as bit 0 above.
+  - name: FRQ_CT_FAIL
+    bit_range:
+    - 2
+    - 2
+    description: Same behavior as bit 0 above.
+  - name: UNUSED
+    bit_range:
+    - 31
+    - 3
+    description: Reserved but writeable.
+  side_effects: null
+- id: INT_MASK
+  address_offset: 184
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HW_ERR
+    bit_range:
+    - 0
+    - 0
+    description: Bit position that can be cleared if corresponding bit of INT_STATUS has been asserted.
+  - name: ENT_VAL
+    bit_range:
+    - 1
+    - 1
+    description: Same behavior as bit 0 above.
+  - name: FRQ_CT_FAIL
+    bit_range:
+    - 2
+    - 2
+    description: Same behavior as bit 0 above.
+  side_effects: null
+- id: INT_STATUS
+  address_offset: 188
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: HW_ERR
+    bit_range:
+    - 0
+    - 0
+    description: 'Read: Error status'
+  - name: ENT_VAL
+    bit_range:
+    - 1
+    - 1
+    description: 'Read only: Entropy Valid'
+  - name: FRQ_CT_FAIL
+    bit_range:
+    - 2
+    - 2
+    description: 'Read only: Frequency Count Fail'
+  side_effects: null
+- id: VID1
+  address_offset: 240
+  size: 32
+  access: READ_ONLY
+  reset_value: 3145984
+  fields:
+  - name: MIN_REV
+    bit_range:
+    - 7
+    - 0
+    description: Shows the Freescale IP's Minor revision of the TRNG.
+  - name: MAJ_REV
+    bit_range:
+    - 15
+    - 8
+    description: Shows the Freescale IP's Major revision of the TRNG.
+  - name: IP_ID
+    bit_range:
+    - 31
+    - 16
+    description: Shows the Freescale IP ID.
+  side_effects: null
+- id: VID2
+  address_offset: 244
+  size: 32
+  access: READ_ONLY
+  reset_value: 3145984
+  fields:
+  - name: CONFIG_OPT
+    bit_range:
+    - 7
+    - 0
+    description: Shows the Freescale IP's Configuaration options for the TRNG.
+  - name: ECO_REV
+    bit_range:
+    - 15
+    - 8
+    description: Shows the Freescale IP's ECO revision of the TRNG.
+  - name: INTG_OPT
+    bit_range:
+    - 23
+    - 16
+    description: Shows the Freescale integration options for the TRNG.
+  - name: ERA
+    bit_range:
+    - 31
+    - 24
+    description: Shows the Freescale compile options for the TRNG.
+  side_effects: null
+interrupts:
+  TRNG0: 13
+timing: null

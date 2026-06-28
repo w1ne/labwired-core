@@ -17,6 +17,87 @@ use crate::peripherals::rcc::RccRegisterLayout;
 use crate::Peripheral;
 use labwired_config::{PeripheralConfig, SystemManifest};
 
+/// Canonical model-type names — the single source of truth for "is this string
+/// already a real, modelled peripheral type?".
+///
+/// This is the set of canonical **output** names of
+/// [`crate::bus::SystemBus::canonical_peripheral_type`]: the generic core types
+/// built here and by `from_config`'s descriptor loaders, plus the
+/// family-specific behavioral models built by the per-vendor factories
+/// (`esp32`, `esp32s3`, `nrf52`, RP2040 arms below). `canonical_peripheral_type`
+/// consults this set to short-circuit any raw name that is *already* canonical,
+/// so the generic fuzzy SVD-name heuristics can never mis-route a real model
+/// type (e.g. coerce `esp32c3_spi`, which contains "spi", to the STM32 `spi`
+/// model). Adding a new behavioral model means adding its canonical name here —
+/// no more per-name identity blocks in `canonical_peripheral_type`.
+///
+/// Note: this is the canonical-output set, NOT every alternate input spelling
+/// the factories tolerate (e.g. `stm32spi`, `stm32dma`). Alias spellings whose
+/// canonical output differs from the input live in `canonical_peripheral_type`'s
+/// alias table.
+pub const MODEL_TYPES: &[&str] = &[
+    // Generic core types (built here or by `from_config` descriptor loaders).
+    "uart",
+    "gpio",
+    "rcc",
+    "systick",
+    "timer",
+    "i2c",
+    "spi",
+    "exti",
+    "afio",
+    "dma",
+    "gpdma",
+    "adc",
+    "pio",
+    "declarative",
+    "strict_ir",
+    "strict_ir_internal",
+    "pwr",
+    "flash",
+    "rng",
+    "crc",
+    "rtc",
+    "rtc_f1",
+    "rtc_v3",
+    "iwdg",
+    "wwdg",
+    "dac",
+    "dbgmcu",
+    "lptim",
+    "quadspi",
+    "sai",
+    "usb_otg",
+    "bxcan",
+    "fdcan",
+    "sdmmc",
+    "comp",
+    "tsc",
+    "fmc",
+    // RP2040 native peripherals (built here).
+    "rp2040_timer",
+    "rp2040_spi",
+    "rp2040_i2c",
+    // ESP32-C3 behavioral models (esp32 factory).
+    "esp32c3_i2c",
+    "esp32c3_spi",
+    "esp32c3_apb_saradc",
+    "esp32c3_ledc",
+    // nRF52 behavioral models (nrf52 factory).
+    "nrf52840_twim",
+    "nrf52_saadc",
+    "nrf52_qspi",
+    "nrf52840_spis",
+    "nrf52840_twis",
+    "nrf52840_uart",
+    "nrf52_gpiote",
+];
+
+/// True if `t` is already a canonical model-type name (see [`MODEL_TYPES`]).
+pub fn is_canonical_model_type(t: &str) -> bool {
+    MODEL_TYPES.contains(&t)
+}
+
 /// Build a generic peripheral model for `canonical_type`, or `None` if it is not
 /// a generic type (so `from_config` falls through to the descriptor loaders).
 pub fn try_build(
@@ -182,6 +263,8 @@ pub fn try_build(
                 // L0 has a two-register surface (CR/CSR), not the L4
                 // CR1..CR4 / PUCRx set — a distinct reset shape.
                 Some("stm32l0") | Some("l0") => Box::new(crate::peripherals::pwr::PwrL0::new()),
+                // WBA: VOSR (0x0C) VOS→VOSRDY handshake the SoC init polls.
+                Some("stm32wba") | Some("wba") => Box::new(crate::peripherals::pwr::PwrWba::new()),
                 _ => Box::new(crate::peripherals::pwr::Pwr::new()),
             }
         }
@@ -217,6 +300,13 @@ pub fn try_build(
             )
         }
         "rng" => Box::new(crate::peripherals::rng::Rng::new()),
+        "rp2040_clkrst" => Box::new(crate::peripherals::rp2040_clocks::Rp2040ClockReset::new(
+            p_cfg.base_address,
+        )),
+        "rp2040_timer" => Box::new(crate::peripherals::rp2040::timer::Rp2040Timer::new()),
+        "rp2040_sio" => Box::new(crate::peripherals::rp2040::sio::Rp2040Sio::new()),
+        "rp2040_spi" => Box::new(crate::peripherals::rp2040::spi::Rp2040Spi::new()),
+        "rp2040_i2c" => Box::new(crate::peripherals::rp2040::i2c::Rp2040I2c::new()),
         "crc" => {
             // IDR scratch register width: 8-bit on F0/F1/L0, 32-bit
             // on F2+/L4+. YAML: `config: { idr_width: 8 }`; default 32.
@@ -291,6 +381,20 @@ pub fn try_build(
         "esp32_timg" => Box::new(crate::peripherals::esp32::timg::Timg::new(
             p_cfg.base_address as u32,
         )),
+        // Instruction/data cache controllers (H5, WBA, U5…). Zephyr's SoC init
+        // enables the cache via ICACHE_CR.EN and never polls a completion flag,
+        // so a read-as-zero stub keeps the enable sequence from bus-faulting.
+        // No cache behaviour is modelled — the simulator has flat memory.
+        "icache" | "dcache" => Box::new(crate::peripherals::stub::StubPeripheral::new(0x00)),
+        // Hardware semaphore (WB/WL dual-core inter-core lock). Single-core sim
+        // grants every lock to CPU1, so the read-lock path succeeds at once.
+        "hsem" => Box::new(crate::peripherals::hsem::Hsem::new()),
+        // NXP Kinetis clock peripherals — behavioural so the vendor MCUXpresso
+        // clock bring-up (which spins on MCG_S / RSIM_CONTROL status bits)
+        // settles instead of hanging. A passive register bank cannot complete
+        // these hand-offs. See peripherals/mcg.rs and peripherals/rsim.rs.
+        "nxp_mcg" | "kinetis_mcg" => Box::new(crate::peripherals::mcg::Mcg::new()),
+        "nxp_rsim" => Box::new(crate::peripherals::rsim::Rsim::new()),
         _ => return Ok(None),
     };
     Ok(Some(dev))

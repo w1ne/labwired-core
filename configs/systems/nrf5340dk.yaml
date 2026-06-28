@@ -1,0 +1,6 @@
+# LabWired - nRF5340-DK System Configuration
+#
+# Maps to Zephyr board target `nrf5340dk/nrf5340/cpuapp` (application core).
+name: "nrf5340dk"
+chip: "../chips/nrf5340.yaml"
+peripherals: []

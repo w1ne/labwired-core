@@ -15,6 +15,30 @@ use crate::{Peripheral, PeripheralTickResult, SimResult};
 use std::any::Any;
 use std::str::FromStr;
 
+// ── Modeled internal source (L4/V2 path) ────────────────────────────────────
+// There is no live analog input in simulation, so the L4 conversion engine
+// converts a *fixed* source: V(IN) = 3.0 V against V(REF+) = 3.3 V. The 12-bit
+// code is round-down(3.0/3.3 * 4096) = 3723; narrower resolutions drop LSBs
+// (>> (12 - bits)), exactly as the SAR core truncates. The code is therefore
+// derived + deterministic and CHANGES with CFGR.RES — a real conversion, not a
+// constant.
+const STM32_ADC_REF12: u32 = (3000 * 4096) / 3300; // 3723
+
+/// CFGR.RES (bits [4:3]) → conversion bit-width. 0b00=12, 01=10, 10=8, 11=6.
+fn l4_resolution_bits(cfgr: u32) -> u32 {
+    match (cfgr >> 3) & 0x3 {
+        0 => 12,
+        1 => 10,
+        2 => 8,
+        _ => 6,
+    }
+}
+
+/// Converted code for the fixed internal source at the given bit-width.
+fn l4_adc_code(bits: u32) -> u32 {
+    STM32_ADC_REF12 >> (12 - bits)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AdcRegisterLayout {
@@ -160,6 +184,27 @@ impl Adc {
         }
     }
 
+    /// L4 single-conversion engine. ADSTART (CR bit 2) with ADEN (bit 0) and a
+    /// ready converter (ISR.ADRDY) converts the fixed internal source: loads DR
+    /// with the code for CFGR.RES, raises ISR.EOC + EOS, and auto-clears
+    /// ADSTART. Deterministic and immediate (no analog settling to model).
+    fn maybe_start_l4_conversion(&mut self, cr: u32) {
+        let aden = cr & 0x1 != 0;
+        let adstart = cr & (1 << 2) != 0;
+        let (adrdy, cfgr) = match &self.regs {
+            AdcRegs::Stm32L4(r) => (r.isr & 0x1 != 0, r.cfgr),
+            AdcRegs::Stm32F1(_) => return,
+        };
+        if !(aden && adstart && adrdy) {
+            return;
+        }
+        self.dr = l4_adc_code(l4_resolution_bits(cfgr));
+        if let AdcRegs::Stm32L4(r) = &mut self.regs {
+            r.cr &= !(1 << 2); // ADSTART auto-clears after a single conversion
+            r.isr |= (1 << 2) | (1 << 3); // EOC | EOS
+        }
+    }
+
     fn write_reg_l4(r: &mut L4AdcRegs, reg: u64, value: u32) {
         match reg {
             // ISR is rc_w1 — a write clears matched flags; firmware can't SET it.
@@ -253,9 +298,14 @@ impl Peripheral for Adc {
             AdcRegs::Stm32L4(_) => {
                 let reg = offset & !3;
                 let dr = self.dr;
+                let mut full = 0;
                 if let AdcRegs::Stm32L4(r) = &mut self.regs {
-                    let full = (Self::read_reg_l4(r, dr, reg) & !mask) | val_shifted;
+                    full = (Self::read_reg_l4(r, dr, reg) & !mask) | val_shifted;
                     Self::write_reg_l4(r, reg, full);
+                }
+                // A write touching CR may have set ADSTART — try to convert.
+                if reg == 0x08 {
+                    self.maybe_start_l4_conversion(full);
                 }
             }
         }
@@ -385,5 +435,54 @@ mod tests {
         let mut cold = Adc::new_with_layout(AdcRegisterLayout::Stm32L4);
         cold.write_u32(0x08, (1 << 29) | 1).unwrap();
         assert_eq!(cold.read_u32(0x00).unwrap() & 0x1, 0);
+    }
+
+    /// L4 ADSTART converts the fixed internal source: DR holds a derived code,
+    /// ISR.EOC rises, and the code scales when firmware narrows CFGR.RES.
+    #[test]
+    fn test_adc_l4_conversion_scales_with_resolution() {
+        let convert = |res: u32| -> (u32, u32) {
+            let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32L4);
+            adc.write_u32(0x08, 0).unwrap(); // DEEPPWD = 0
+            adc.write_u32(0x08, 1 << 28).unwrap(); // ADVREGEN
+            adc.write_u32(0x08, (1 << 28) | 1).unwrap(); // ADEN -> ADRDY
+            assert_eq!(adc.read_u32(0x00).unwrap() & 0x1, 1, "ADRDY");
+            adc.write_u32(0x0C, res << 3).unwrap(); // CFGR.RES
+            adc.write_u32(0x08, adc.read_u32(0x08).unwrap() | (1 << 2))
+                .unwrap(); // ADSTART
+            let isr = adc.read_u32(0x00).unwrap();
+            (adc.read_u32(0x40).unwrap() & 0xFFFF, isr)
+        };
+
+        // No conversion without ADSTART.
+        let mut idle = Adc::new_with_layout(AdcRegisterLayout::Stm32L4);
+        idle.write_u32(0x08, 0).unwrap();
+        idle.write_u32(0x08, (1 << 28) | 1).unwrap();
+        assert_eq!(idle.read_u32(0x40).unwrap(), 0, "DR stays 0 until ADSTART");
+        assert_eq!(idle.read_u32(0x00).unwrap() & (1 << 2), 0, "no EOC");
+
+        let (dr12, isr12) = convert(0); // 12-bit
+        let (dr10, _) = convert(1); // 10-bit
+        let (dr8, _) = convert(2); // 8-bit
+
+        assert_ne!(isr12 & (1 << 2), 0, "EOC set after conversion");
+        assert_eq!(dr12, 3723, "12-bit code = (3.0/3.3) * 4096");
+        assert_eq!(dr10, 930, "10-bit code = 3723 >> 2");
+        assert_eq!(dr8, 232, "8-bit code = 3723 >> 4");
+        assert!(
+            dr10 < dr12 && dr8 < dr10,
+            "code scales down with resolution"
+        );
+    }
+
+    #[test]
+    fn test_l4_adc_code_helpers() {
+        assert_eq!(l4_resolution_bits(0), 12);
+        assert_eq!(l4_resolution_bits(1 << 3), 10);
+        assert_eq!(l4_resolution_bits(2 << 3), 8);
+        assert_eq!(l4_resolution_bits(3 << 3), 6);
+        assert_eq!(l4_adc_code(12), 3723);
+        assert_eq!(l4_adc_code(10), 930);
+        assert_ne!(l4_adc_code(12), l4_adc_code(10));
     }
 }

@@ -1,15 +1,72 @@
 // LabWired - Firmware Simulation Platform
 // SPDX-License-Identifier: MIT
 
-//! Nordic nRF52 SAADC peripheral — register-surface model.
+//! Nordic nRF52 SAADC peripheral — register surface + EasyDMA conversion
+//! engine.
 //!
 //! Source: nRF52840 PS rev 1.7 §6.23 (SAADC). 8-channel 12-bit successive
-//! approximation ADC. Models enough register state for firmware probing
-//! ENABLE / RESOLUTION / CH[i].PSELP / CH[i].PSELN / CH[i].CONFIG to round
-//! trip; no actual conversions are performed (RESULT will be whatever the
-//! pointer at RESULT.PTR contains).
+//! approximation ADC. Models ENABLE / RESOLUTION / CH[i].PSELP / CH[i].PSELN /
+//! CH[i].CONFIG round-tripping plus a deterministic conversion engine:
+//!
+//! # Conversion engine (deterministic, no analog source)
+//!
+//! **TASKS_START (0x000):** if ENABLE=1, fires EVENTS_STARTED (0x100) — the
+//! peripheral is now armed and waiting for a sample trigger.
+//!
+//! **TASKS_SAMPLE (0x004):** if ENABLE=1, performs `RESULT.MAXCNT`
+//! conversions, writing a *derived* 16-bit sample to the EasyDMA buffer at
+//! RESULT.PTR in guest RAM, sets RESULT.AMOUNT, then fires EVENTS_END (0x104) +
+//! EVENTS_RESULTDONE (0x10C). The sample is a real conversion of a fixed
+//! internal source scaled to the configured RESOLUTION (see `sample_code`), so
+//! it changes when firmware changes RESOLUTION — not a hardcoded constant. The
+//! memory write runs on the next bus tick (same `needs_bus_tick`/`tick_with_bus`
+//! pattern as TWIM/SPIM), keeping the register write itself synchronous.
+//!
+//! **TASKS_STOP (0x008):** fires EVENTS_STOPPED (0x114).
+//!
+//! # EVENTS write semantics
+//!
+//! SW writes of 1 are silently ignored (hardware-generated only). SW writes of
+//! 0 clear the event register, matching the other Nordic peripherals.
 
-use crate::{Peripheral, SimResult};
+use crate::{Bus, Peripheral, SimResult};
+
+/// Modeled internal source: V(P) = 3.0 V against a 3.6 V full-scale (the
+/// SAADC's default 1/6 gain + 0.6 V internal reference). There is no live analog
+/// input in simulation, so the engine converts this *fixed* source. The digital
+/// code is the source scaled to the firmware-configured RESOLUTION, computed at
+/// the SAADC's 14-bit maximum and then truncated to narrower resolutions
+/// (dropping LSBs, exactly as a SAR core narrows). This makes every sample a
+/// derived, deterministic conversion that CHANGES with RESOLUTION — not a
+/// constant.
+///
+///   code(N bits) = (3.0 / 3.6) * 2^N   [integer math, via the 14-bit ref]
+const SAADC_VIN_MV: u32 = 3000; // modeled V(P)
+const SAADC_VFS_MV: u32 = 3600; // full-scale (1/6 gain, 0.6 V ref)
+/// 14-bit code for the fixed source: (3000 * 2^14) / 3600 = 13653.
+const SAADC_REF14: u32 = (SAADC_VIN_MV << 14) / SAADC_VFS_MV;
+
+/// RESOLUTION register (0x5F0) encoding → sample bit-width.
+/// 0=8-bit, 1=10-bit, 2=12-bit, 3=14-bit (PS rev 1.7 §6.23).
+fn resolution_bits(resolution: u32) -> u32 {
+    match resolution & 0x7 {
+        0 => 8,
+        1 => 10,
+        2 => 12,
+        _ => 14, // 3 (and reserved values) → 14-bit
+    }
+}
+
+/// Conversion: fixed internal source scaled to the configured RESOLUTION.
+fn sample_code(resolution: u32) -> u16 {
+    let bits = resolution_bits(resolution);
+    (SAADC_REF14 >> (14 - bits)) as u16
+}
+
+/// No conversion pending.
+const PENDING_NONE: u8 = 0;
+/// TASKS_SAMPLE was written — run conversions on the next bus tick.
+const PENDING_SAMPLE: u8 = 1;
 
 // Tasks
 const OFF_TASKS_START: u64 = 0x000;
@@ -66,11 +123,18 @@ pub struct Nrf52Saadc {
     result_ptr: u32,
     result_maxcnt: u32,
     result_amount: u32,
+
+    /// Conversion pending for `tick_with_bus`. One of PENDING_{NONE,SAMPLE}.
+    pending: u8,
 }
 
 impl Nrf52Saadc {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    fn enabled(&self) -> bool {
+        self.enable & 1 != 0
     }
 }
 
@@ -112,6 +176,19 @@ impl Peripheral for Nrf52Saadc {
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         match offset {
+            // ── TASKS (conversion engine; gated on ENABLE) ──────────────────
+            // START arms the ADC and fires STARTED synchronously (no RAM).
+            OFF_TASKS_START if value != 0 && self.enabled() => {
+                self.events_started = 1;
+            }
+            // SAMPLE performs the EasyDMA conversion on the next bus tick.
+            OFF_TASKS_SAMPLE if value != 0 && self.enabled() => {
+                self.pending = PENDING_SAMPLE;
+            }
+            // STOP fires STOPPED synchronously.
+            OFF_TASKS_STOP if value != 0 && self.enabled() => {
+                self.events_stopped = 1;
+            }
             OFF_TASKS_START | OFF_TASKS_SAMPLE | OFF_TASKS_STOP | OFF_TASKS_CALIBRATEOFFSET => {}
             // EVENTS_*: hardware-generated. SW write-1 is ignored; SW write-0 clears.
             OFF_EVENTS_STARTED if value == 0 => self.events_started = 0,
@@ -142,11 +219,82 @@ impl Peripheral for Nrf52Saadc {
         }
         Ok(())
     }
+
+    fn needs_bus_tick(&self) -> bool {
+        self.pending != PENDING_NONE
+    }
+
+    /// Conversion engine. Runs on the bus tick after TASKS_SAMPLE: writes
+    /// `RESULT.MAXCNT` derived 16-bit samples (fixed source scaled to RESOLUTION)
+    /// into the EasyDMA buffer at `RESULT.PTR`, sets RESULT.AMOUNT, and fires
+    /// EVENTS_END + RESULTDONE.
+    fn tick_with_bus(&mut self, bus: &mut dyn Bus) {
+        if self.pending != PENDING_SAMPLE {
+            return;
+        }
+        self.pending = PENDING_NONE;
+
+        let ptr = self.result_ptr as u64;
+        let maxcnt = (self.result_maxcnt & 0x7FFF) as usize;
+        // Real conversion of the fixed internal source at the configured RES.
+        let sample = sample_code(self.resolution).to_le_bytes();
+
+        for i in 0..maxcnt {
+            let base = ptr + (i as u64) * 2;
+            let _ = bus.write_u8(base, sample[0]);
+            let _ = bus.write_u8(base + 1, sample[1]);
+        }
+
+        self.result_amount = maxcnt as u32;
+        self.events_end = 1;
+        self.events_resultdone = 1;
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{Bus, DmaRequest, SimulationConfig};
+    use std::collections::HashMap;
+
+    // ── Minimal flat-RAM bus (mirrors the TWIM test harness) ──────────────────
+    struct FlatRam {
+        mem: HashMap<u64, u8>,
+        config: SimulationConfig,
+    }
+
+    impl FlatRam {
+        fn new() -> Self {
+            Self {
+                mem: HashMap::new(),
+                config: SimulationConfig::default(),
+            }
+        }
+        fn read_slice(&self, base: u64, len: usize) -> Vec<u8> {
+            (0..len)
+                .map(|i| *self.mem.get(&(base + i as u64)).unwrap_or(&0))
+                .collect()
+        }
+    }
+
+    impl Bus for FlatRam {
+        fn read_u8(&self, addr: u64) -> crate::SimResult<u8> {
+            Ok(*self.mem.get(&addr).unwrap_or(&0))
+        }
+        fn write_u8(&mut self, addr: u64, value: u8) -> crate::SimResult<()> {
+            self.mem.insert(addr, value);
+            Ok(())
+        }
+        fn tick_peripherals(&mut self) -> Vec<u32> {
+            Vec::new()
+        }
+        fn execute_dma(&mut self, _requests: &[DmaRequest]) -> crate::SimResult<()> {
+            Ok(())
+        }
+        fn config(&self) -> &SimulationConfig {
+            &self.config
+        }
+    }
 
     #[test]
     fn resolution_masks_to_3_bits() {
@@ -161,5 +309,107 @@ mod tests {
         // CH[0].CONFIG = +0x518 → offset 0x008 within channel block.
         s.write_u32(0x518, 0x0002_0210).unwrap();
         assert_eq!(s.read_u32(0x518).unwrap(), 0x0002_0210);
+    }
+
+    #[test]
+    fn start_sets_started_when_enabled() {
+        let mut s = Nrf52Saadc::new();
+        s.write_u32(OFF_ENABLE, 1).unwrap();
+        s.write_u32(OFF_TASKS_START, 1).unwrap();
+        assert_eq!(s.read_u32(OFF_EVENTS_STARTED).unwrap(), 1);
+    }
+
+    #[test]
+    fn start_ignored_when_disabled() {
+        let mut s = Nrf52Saadc::new();
+        // ENABLE left at 0.
+        s.write_u32(OFF_TASKS_START, 1).unwrap();
+        assert_eq!(s.read_u32(OFF_EVENTS_STARTED).unwrap(), 0);
+    }
+
+    #[test]
+    fn sample_writes_easydma_result_and_fires_events() {
+        let mut s = Nrf52Saadc::new();
+        let mut bus = FlatRam::new();
+        let base: u64 = 0x2000_0000;
+
+        s.write_u32(OFF_ENABLE, 1).unwrap();
+        s.write_u32(0x510, 0).unwrap(); // CH[0].PSELP = AnalogInput0 (config read)
+        s.write_u32(OFF_RESOLUTION, 2).unwrap(); // 12-bit
+        s.write_u32(OFF_RESULT_PTR, base as u32).unwrap();
+        s.write_u32(OFF_RESULT_MAXCNT, 4).unwrap();
+
+        s.write_u32(OFF_TASKS_START, 1).unwrap();
+        s.write_u32(OFF_TASKS_SAMPLE, 1).unwrap();
+        // Events not set before the bus tick performs the conversion.
+        assert_eq!(s.read_u32(OFF_EVENTS_END).unwrap(), 0);
+        assert!(s.needs_bus_tick());
+
+        s.tick_with_bus(&mut bus);
+
+        assert_eq!(s.read_u32(OFF_EVENTS_END).unwrap(), 1, "END fired");
+        assert_eq!(
+            s.read_u32(OFF_EVENTS_RESULTDONE).unwrap(),
+            1,
+            "RESULTDONE fired"
+        );
+        assert_eq!(s.read_u32(OFF_RESULT_AMOUNT).unwrap(), 4, "AMOUNT = MAXCNT");
+        assert!(!s.needs_bus_tick(), "pending cleared after tick");
+
+        // Four little-endian 16-bit samples of the 12-bit converted code (3413).
+        let code = sample_code(2);
+        assert_eq!(code, 3413, "12-bit code = (3.0/3.6) * 4096");
+        let expect: Vec<u8> = (0..4).flat_map(|_| code.to_le_bytes()).collect();
+        assert_eq!(bus.read_slice(base, 8), expect, "RESULT buffer filled");
+    }
+
+    #[test]
+    fn sample_code_scales_with_resolution() {
+        // Fixed source converted at each RESOLUTION: code halves per 2 bits
+        // dropped (the SAR core truncates LSBs). Derived, not a constant.
+        assert_eq!(sample_code(3), 13653, "14-bit"); // (3000*2^14)/3600
+        assert_eq!(sample_code(2), 3413, "12-bit"); // 13653 >> 2
+        assert_eq!(sample_code(1), 853, "10-bit"); // 13653 >> 4
+        assert_eq!(sample_code(0), 213, "8-bit"); // 13653 >> 6
+                                                  // A real conversion MUST change when firmware narrows the resolution.
+        assert_ne!(sample_code(2), sample_code(1));
+    }
+
+    #[test]
+    fn sample_written_to_dma_changes_with_resolution() {
+        let base: u64 = 0x2000_0000;
+        let run = |res: u32| -> u16 {
+            let mut s = Nrf52Saadc::new();
+            let mut bus = FlatRam::new();
+            s.write_u32(OFF_ENABLE, 1).unwrap();
+            s.write_u32(OFF_RESOLUTION, res).unwrap();
+            s.write_u32(OFF_RESULT_PTR, base as u32).unwrap();
+            s.write_u32(OFF_RESULT_MAXCNT, 1).unwrap();
+            s.write_u32(OFF_TASKS_SAMPLE, 1).unwrap();
+            s.tick_with_bus(&mut bus);
+            u16::from_le_bytes([bus.read_u8(base).unwrap(), bus.read_u8(base + 1).unwrap()])
+        };
+        assert_eq!(run(2), 3413, "12-bit code in DMA buffer");
+        assert_eq!(run(1), 853, "10-bit code in DMA buffer");
+        assert_ne!(run(2), run(1), "DMA result tracks RESOLUTION");
+    }
+
+    #[test]
+    fn sample_ignored_when_disabled() {
+        let mut s = Nrf52Saadc::new();
+        s.write_u32(OFF_RESULT_MAXCNT, 4).unwrap();
+        s.write_u32(OFF_TASKS_SAMPLE, 1).unwrap();
+        assert!(
+            !s.needs_bus_tick(),
+            "disabled SAADC does not arm conversion"
+        );
+    }
+
+    #[test]
+    fn stop_sets_stopped_when_enabled() {
+        let mut s = Nrf52Saadc::new();
+        s.write_u32(OFF_ENABLE, 1).unwrap();
+        s.write_u32(OFF_TASKS_STOP, 1).unwrap();
+        assert_eq!(s.read_u32(OFF_EVENTS_STOPPED).unwrap(), 1);
     }
 }

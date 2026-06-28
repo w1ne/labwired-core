@@ -1,0 +1,78 @@
+peripheral: GPIOA
+version: 0.1.0
+registers:
+- id: PDOR
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PDO
+    bit_range:
+    - 31
+    - 0
+    description: Port Data Output
+  side_effects: null
+- id: PSOR
+  address_offset: 4
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: PTSO
+    bit_range:
+    - 31
+    - 0
+    description: Port Set Output
+  side_effects: null
+- id: PCOR
+  address_offset: 8
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: PTCO
+    bit_range:
+    - 31
+    - 0
+    description: Port Clear Output
+  side_effects: null
+- id: PTOR
+  address_offset: 12
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: PTTO
+    bit_range:
+    - 31
+    - 0
+    description: Port Toggle Output
+  side_effects: null
+- id: PDIR
+  address_offset: 16
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: PDI
+    bit_range:
+    - 31
+    - 0
+    description: Port Data Input
+  side_effects: null
+- id: PDDR
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PDD
+    bit_range:
+    - 31
+    - 0
+    description: Port Data Direction
+  side_effects: null
+interrupts:
+  PORTA: 30
+timing: null

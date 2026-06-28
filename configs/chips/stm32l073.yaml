@@ -170,6 +170,9 @@ peripherals:
     irq: 25
     config:
       profile: "stm32"
+    # SPI1 is clocked from RCC_APB2ENR.SPI1EN (bit 12). Unclocked out of reset
+    # (RM0367 §7.3.13) — SR.TXE never asserts until the clock is enabled.
+    clock: { reg: "apb2enr", bit: 12 }
 
   - id: "spi2"
     type: "spi"
@@ -187,6 +190,9 @@ peripherals:
     irq: 23
     config:
       profile: "stm32l4"
+    # I2C1 is clocked from RCC_APB1ENR.I2C1EN (bit 21). Unclocked out of reset
+    # (RM0367 §7.3.12) — registers read 0 / drop writes until the clock is on.
+    clock: { reg: "apb1enr", bit: 21 }
 
   - id: "i2c2"
     type: "i2c"
@@ -212,6 +218,9 @@ peripherals:
     irq: 12
     config:
       profile: "stm32l4"
+    # ADC1 is clocked from RCC_APB2ENR.ADCEN (bit 9). Unclocked out of reset
+    # (RM0367 §7.3.13) — the converter is dead until the clock is enabled.
+    clock: { reg: "apb2enr", bit: 9 }
 
   - id: "dac"
     type: "dac"
@@ -224,6 +233,9 @@ peripherals:
     base_address: 0x40020000
     size: "1KB"
     irq: 9
+    # DMA1 is clocked from RCC_AHBENR.DMA1EN (bit 0). Unclocked out of reset
+    # (RM0367 §7.3.10) — channel registers read 0 / drop writes until enabled.
+    clock: { reg: "ahbenr", bit: 0 }
 
   # --- Timers ---------------------------------------------------------------
   # TIM2 — 16-bit general-purpose timer. (RM0367: on STM32L0, TIM2/TIM3 are
@@ -236,6 +248,9 @@ peripherals:
     irq: 15
     config:
       width: 16
+    # TIM2 is clocked from RCC_APB1ENR.TIM2EN (bit 0). Unclocked out of reset
+    # (RM0367 §7.3.12) — ARR reads its 0xFFFF reset only once the clock is on.
+    clock: { reg: "apb1enr", bit: 0 }
 
   # TIM3 — 16-bit general-purpose timer.
   - id: "tim3"
