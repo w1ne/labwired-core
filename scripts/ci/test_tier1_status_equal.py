@@ -33,6 +33,18 @@ def test_differs_when_cell_removed(tmp_path):
     assert _run(a, b) == 1
 
 
+def test_differs_when_evidence_gained(tmp_path):
+    # committed has status but no run_url; fresh adds the run_url -> must refresh
+    a = _write(tmp_path, "a.json", {"esp32": {"adc": {"status": "pass"}}})
+    b = _write(tmp_path, "b.json", {"esp32": {"adc": {"status": "pass", "run_url": "https://x/1"}}})
+    assert _run(a, b) == 1
+
+def test_differs_when_evidence_lost(tmp_path):
+    a = _write(tmp_path, "a.json", {"esp32": {"adc": {"status": "pass", "run_url": "https://x/1"}}})
+    b = _write(tmp_path, "b.json", {"esp32": {"adc": {"status": "pass"}}})
+    assert _run(a, b) == 1
+
+
 def test_error_exit_on_malformed(tmp_path):
     good = _write(tmp_path, "g.json", {"esp32": {"adc": {"status": "pass"}}})
     bad = tmp_path / "bad.json"
