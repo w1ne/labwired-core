@@ -13,7 +13,8 @@ def _entry(**over):
         id="demo-board",
         kind="firmware-gate",
         path="examples/iolink-station",
-        toolchains=["arm-none-eabi"],
+        apt=["gcc-arm-none-eabi"],
+        rust_targets=[],
         packs=["stm32cubel4@v1.18.2"],
         submodules="recursive",
         gate=True,
@@ -44,10 +45,12 @@ def test_validate_passes_for_real_iolink_entry():
 
 
 def test_to_matrix_joins_lists_to_strings():
-    m = bm.to_matrix([_entry()])
+    m = bm.to_matrix([_entry(apt=["gcc-arm-none-eabi"], rust_targets=["thumbv6m-none-eabi"], packs=["stm32cubel4@v1.18.2"])])
     inc = m["include"][0]
-    assert inc["toolchains"] == "arm-none-eabi"
+    assert inc["apt"] == "gcc-arm-none-eabi"
+    assert inc["rust_targets"] == "thumbv6m-none-eabi"
     assert inc["packs"] == "stm32cubel4@v1.18.2"
+    assert "toolchains" not in inc
 
 
 def test_cli_emits_json_for_pull_request():

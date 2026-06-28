@@ -2,13 +2,29 @@
 # kind:        firmware-gate | sim-validate | aggregate
 # gate: true   -> runs on pull_request/push to main; false -> nightly only
 # path:        directory whose ci/build.sh + ci/test.sh run the entry
-# toolchains:  toolchains the workflow installs (e.g. arm-none-eabi, riscv)
+# apt:         apt packages to install (e.g. gcc-arm-none-eabi)
+# rust_targets: rustup targets to add (e.g. thumbv6m-none-eabi)
 # packs:       named, reusable device-pack fetchers (see .github/actions/fetch-pack)
 boards:
   - id: iolink-station-l476
     kind: firmware-gate
     path: examples/iolink-station
-    toolchains: [arm-none-eabi]
+    apt: [gcc-arm-none-eabi]
     packs: [stm32cubel4@v1.18.2]
     submodules: recursive
     gate: true
+  - id: ci-fixture-arm
+    kind: firmware-gate
+    path: examples/ci-fixture-arm
+    rust_targets: [thumbv6m-none-eabi]
+    gate: false
+  - id: ci-fixture-riscv
+    kind: firmware-gate
+    path: examples/ci-fixture-riscv
+    rust_targets: [riscv32i-unknown-none-elf]
+    gate: false
+  - id: nucleo-h563zi
+    kind: firmware-gate
+    path: examples/nucleo-h563zi
+    rust_targets: [thumbv7m-none-eabi]
+    gate: false

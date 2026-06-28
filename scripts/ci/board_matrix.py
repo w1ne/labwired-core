@@ -54,7 +54,8 @@ def to_matrix(entries: list[dict]) -> dict:
             "id": e["id"],
             "kind": e["kind"],
             "path": e["path"],
-            "toolchains": " ".join(e.get("toolchains", [])),
+            "apt": " ".join(e.get("apt", [])),
+            "rust_targets": " ".join(e.get("rust_targets", [])),
             "packs": " ".join(e.get("packs", [])),
             "submodules": e.get("submodules", "false"),
         })
