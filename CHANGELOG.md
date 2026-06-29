@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.8] - 2026-06-29
+
+### Fixed
+- **nRF52 TWIM SHORTS register bit positions**: The `SHORTS` constants were shifted one position low relative to the nRF52840 Product Specification. `LASTTX_STOP` was at bit 8 (hardware: bit 9), `LASTRX_STOP` was at bit 9 (hardware: bit 12). The hardware uses bits 7-12: LASTTX_STARTRX(7), LASTTX_SUSPEND(8), LASTTX_STOP(9), LASTRX_STARTTX(10), LASTRX_SUSPEND(11), LASTRX_STOP(12). With the wrong positions, `nrfx_twim_xfer(XFER_RX)` wrote `LASTRX_STOP_MASK=1<<12` which was filtered out by `SHORTS_MASK`, so the STOPPED event never fired, the completion semaphore timed out (500 ms), and every I2C read returned -EAGAIN. Fixes BME280 `device_is_ready` = false in Zephyr.
+- **nRF52 TWIM LASTTX_SUSPEND event**: Added `EVENTS_SUSPENDED` (offset 0x128, `INTEN` bit 18) to fire when the `SHORT_LASTTX_SUSPEND` path is taken (TX_NO_STOP mode used by `nrfx` for combined write-read transfers). Previously the model misidentified `LASTTX_SUSPEND` as `LASTTX_STOP` and fired `EVENTS_STOPPED` instead, which masked the RX semaphore timeout for the follow-on read.
+- **nRF52 TWIM I2C device `stop()` on transaction end**: The TWIM model now calls `I2cDevice::stop()` when `EVENTS_STOPPED` fires (via `LASTTX_STOP`, `LASTRX_STOP`, or `TASKS_STOP`). Without this, the BME280 `register_address_written` flag was never cleared between transactions, corrupting register addressing for all transfers after the first.
+
 ## [0.17.7] - 2026-06-29
 
 ### Fixed

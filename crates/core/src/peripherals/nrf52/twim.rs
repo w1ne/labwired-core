@@ -24,12 +24,14 @@
 //!
 //! **TASKS_STOP (0x014):** fires EVENTS_STOPPED (0x104).
 //!
-//! # SHORTS (0x200)
+//! # SHORTS (0x200)  (nRF52840 PS §6.31, Table 211)
 //!
-//! Bit 7: LASTTX_STARTRX  — auto-chain TX→RX
-//! Bit 8: LASTTX_STOP     — auto-stop after TX
-//! Bit 9: LASTRX_STOP     — auto-stop after RX
-//! Bit 10: LASTRX_STARTTX — auto-chain RX→TX
+//! Bit  7: LASTTX_STARTRX  — auto-chain TX→RX (repeated-START)
+//! Bit  8: LASTTX_SUSPEND  — hold bus after TX (no STOP; fires EVENTS_SUSPENDED)
+//! Bit  9: LASTTX_STOP     — auto-stop after TX
+//! Bit 10: LASTRX_STARTTX  — auto-chain RX→TX
+//! Bit 11: LASTRX_SUSPEND  — hold bus after RX (no STOP; fires EVENTS_SUSPENDED)
+//! Bit 12: LASTRX_STOP     — auto-stop after RX
 //!
 //! # EVENTS write semantics
 //!
@@ -57,6 +59,7 @@ const OFF_TASKS_SUSPEND: u64 = 0x01C;
 // ── Event offsets ─────────────────────────────────────────────────────────────
 const OFF_EVENTS_STOPPED: u64 = 0x104;
 const OFF_EVENTS_ERROR: u64 = 0x124;
+const OFF_EVENTS_SUSPENDED: u64 = 0x128;
 const OFF_EVENTS_RXSTARTED: u64 = 0x14C;
 const OFF_EVENTS_TXSTARTED: u64 = 0x150;
 const OFF_EVENTS_LASTRX: u64 = 0x158;
@@ -84,22 +87,30 @@ const OFF_TXD_AMOUNT: u64 = 0x54C;
 // ── Address register ──────────────────────────────────────────────────────────
 const OFF_ADDRESS: u64 = 0x588;
 
-// ── SHORTS bits ───────────────────────────────────────────────────────────────
-const SHORT_LASTTX_STARTRX: u32 = 1 << 7;
-const SHORT_LASTTX_STOP: u32 = 1 << 8;
-const SHORT_LASTRX_STOP: u32 = 1 << 9;
-const SHORT_LASTRX_STARTTX: u32 = 1 << 10;
+// ── SHORTS bits (nRF52840 PS TWIM_SHORTS, Table 211) ─────────────────────────
+const SHORT_LASTTX_STARTRX: u32 = 1 << 7;  // LASTTX → STARTRX
+const SHORT_LASTTX_SUSPEND: u32 = 1 << 8;  // LASTTX → SUSPEND (TX_NO_STOP path)
+const SHORT_LASTTX_STOP: u32 = 1 << 9;     // LASTTX → STOP
+const SHORT_LASTRX_STARTTX: u32 = 1 << 10; // LASTRX → STARTTX
+const SHORT_LASTRX_SUSPEND: u32 = 1 << 11; // LASTRX → SUSPEND
+const SHORT_LASTRX_STOP: u32 = 1 << 12;    // LASTRX → STOP
 
-// ── INTEN bits (PS §6.31) ─────────────────────────────────────────────────────
-// STOPPED=1, ERROR=9, RXSTARTED=19, TXSTARTED=20, LASTRX=23, LASTTX=24
+// ── INTEN bits (PS §6.31, TWIM_INTENSET table) ───────────────────────────────
+// STOPPED=1, ERROR=9, SUSPENDED=18, RXSTARTED=19, TXSTARTED=20, LASTRX=23, LASTTX=24
 const INTEN_STOPPED: u32 = 1 << 1;
 const INTEN_ERROR: u32 = 1 << 9;
+const INTEN_SUSPENDED: u32 = 1 << 18;
 const INTEN_RXSTARTED: u32 = 1 << 19;
 const INTEN_TXSTARTED: u32 = 1 << 20;
 const INTEN_LASTRX: u32 = 1 << 23;
 const INTEN_LASTTX: u32 = 1 << 24;
-const INTEN_MASK: u32 =
-    INTEN_STOPPED | INTEN_ERROR | INTEN_RXSTARTED | INTEN_TXSTARTED | INTEN_LASTRX | INTEN_LASTTX;
+const INTEN_MASK: u32 = INTEN_STOPPED
+    | INTEN_ERROR
+    | INTEN_SUSPENDED
+    | INTEN_RXSTARTED
+    | INTEN_TXSTARTED
+    | INTEN_LASTRX
+    | INTEN_LASTTX;
 
 // ── ERRORSRC bits ─────────────────────────────────────────────────────────────
 const ERRORSRC_ANACK: u32 = 1 << 1;
@@ -110,8 +121,12 @@ const ERRORSRC_MASK: u32 = ERRORSRC_ANACK | ERRORSRC_DNACK;
 const ENABLE_MASK: u32 = 0xF;
 const MAXCNT_MASK: u32 = 0xFF;
 const ADDRESS_MASK: u32 = 0x7F;
-const SHORTS_MASK: u32 =
-    SHORT_LASTTX_STARTRX | SHORT_LASTTX_STOP | SHORT_LASTRX_STOP | SHORT_LASTRX_STARTTX;
+const SHORTS_MASK: u32 = SHORT_LASTTX_STARTRX
+    | SHORT_LASTTX_SUSPEND
+    | SHORT_LASTTX_STOP
+    | SHORT_LASTRX_STARTTX
+    | SHORT_LASTRX_SUSPEND
+    | SHORT_LASTRX_STOP;
 
 // ── Pending-transfer token values ─────────────────────────────────────────────
 /// No transfer pending.
@@ -132,6 +147,7 @@ pub struct Nrf52Twim {
     // ── EVENTS (HW-set only; SW write-1 ignored, write-0 clears) ─────────────
     events_stopped: u32,
     events_error: u32,
+    events_suspended: u32,
     events_rxstarted: u32,
     events_txstarted: u32,
     events_lastrx: u32,
@@ -182,6 +198,7 @@ impl Default for Nrf52Twim {
         Self {
             events_stopped: 0,
             events_error: 0,
+            events_suspended: 0,
             events_rxstarted: 0,
             events_txstarted: 0,
             events_lastrx: 0,
@@ -331,6 +348,7 @@ impl Peripheral for Nrf52Twim {
             // EVENTS.
             OFF_EVENTS_STOPPED => self.events_stopped,
             OFF_EVENTS_ERROR => self.events_error,
+            OFF_EVENTS_SUSPENDED => self.events_suspended,
             OFF_EVENTS_RXSTARTED => self.events_rxstarted,
             OFF_EVENTS_TXSTARTED => self.events_txstarted,
             OFF_EVENTS_LASTRX => self.events_lastrx,
@@ -390,6 +408,7 @@ impl Peripheral for Nrf52Twim {
             // ── EVENTS — SW write-1 ignored; SW write-0 clears ───────────────
             OFF_EVENTS_STOPPED if value == 0 => self.events_stopped = 0,
             OFF_EVENTS_ERROR if value == 0 => self.events_error = 0,
+            OFF_EVENTS_SUSPENDED if value == 0 => self.events_suspended = 0,
             OFF_EVENTS_RXSTARTED if value == 0 => self.events_rxstarted = 0,
             OFF_EVENTS_TXSTARTED if value == 0 => self.events_txstarted = 0,
             OFF_EVENTS_LASTRX if value == 0 => self.events_lastrx = 0,
@@ -437,8 +456,8 @@ impl Peripheral for Nrf52Twim {
     /// Sequence (PS §6.31 state diagram):
     /// 1. Execute the pending task (TX or RX or STOP).
     /// 2. Check SHORTS to determine what to chain next.
-    /// 3. Fire EVENTS_STOPPED if the transfer chain ends without a further
-    ///    chained task.
+    /// 3. Fire EVENTS_SUSPENDED (bus held, no STOP) or EVENTS_STOPPED as
+    ///    appropriate, and reset the I2C device state on STOP.
     fn tick_with_bus(&mut self, bus: &mut dyn Bus) {
         let pending = self.pending;
         if pending == PENDING_NONE {
@@ -446,23 +465,36 @@ impl Peripheral for Nrf52Twim {
         }
         self.pending = PENDING_NONE;
 
+        let addr7 = (self.address & ADDRESS_MASK) as u8;
+
         match pending {
             PENDING_STOP => {
                 self.events_stopped = 1;
+                // STOP condition: reset I2C device register-address cursor.
+                if let Some(idx) = self.device_for(addr7) {
+                    self.attached_devices[idx].borrow_mut().stop();
+                }
             }
             PENDING_TX => {
                 let _nack = self.do_tx(bus);
 
                 // Honour SHORTS after LASTTX.
                 if self.shorts & SHORT_LASTTX_STARTRX != 0 {
-                    // Chain into RX (re-arm pending so tick_with_bus runs again).
+                    // Chain TX→RX via repeated-START (no STOP between them).
                     self.pending = PENDING_RX;
+                } else if self.shorts & SHORT_LASTTX_SUSPEND != 0 {
+                    // Bus held (no STOP); fires EVENTS_SUSPENDED.
+                    // nrfx uses this for TX_NO_STOP (write-then-read split into
+                    // two separate nrfx_twim_xfer calls).
+                    self.events_suspended = 1;
                 } else if self.shorts & SHORT_LASTTX_STOP != 0 {
                     self.events_stopped = 1;
+                    if let Some(idx) = self.device_for(addr7) {
+                        self.attached_devices[idx].borrow_mut().stop();
+                    }
                 }
-                // If neither SHORT is set, the peripheral waits for firmware
-                // to issue TASKS_STOP or TASKS_STARTRX explicitly — no STOPPED
-                // here.
+                // If no SHORT matches, firmware drives TASKS_STOP or
+                // TASKS_STARTRX explicitly.
             }
             PENDING_RX => {
                 let _nack = self.do_rx(bus);
@@ -470,6 +502,11 @@ impl Peripheral for Nrf52Twim {
                 // Honour SHORTS after LASTRX.
                 if self.shorts & SHORT_LASTRX_STOP != 0 {
                     self.events_stopped = 1;
+                    if let Some(idx) = self.device_for(addr7) {
+                        self.attached_devices[idx].borrow_mut().stop();
+                    }
+                } else if self.shorts & SHORT_LASTRX_SUSPEND != 0 {
+                    self.events_suspended = 1;
                 } else if self.shorts & SHORT_LASTRX_STARTTX != 0 {
                     self.pending = PENDING_TX;
                 }
@@ -483,6 +520,11 @@ impl Peripheral for Nrf52Twim {
         let events: &[(&u32, u32, u64)] = &[
             (&self.events_stopped, INTEN_STOPPED, OFF_EVENTS_STOPPED),
             (&self.events_error, INTEN_ERROR, OFF_EVENTS_ERROR),
+            (
+                &self.events_suspended,
+                INTEN_SUSPENDED,
+                OFF_EVENTS_SUSPENDED,
+            ),
             (
                 &self.events_rxstarted,
                 INTEN_RXSTARTED,
@@ -973,6 +1015,38 @@ mod tests {
             read32(&t, OFF_EVENTS_STOPPED),
             1,
             "STOPPED auto-fired via SHORT"
+        );
+        assert!(!t.needs_bus_tick(), "no further pending transfer");
+    }
+
+    /// SHORT LASTTX_SUSPEND: after TX with TX_NO_STOP, EVENTS_SUSPENDED fires
+    /// (no STOP condition; bus is held for a subsequent RX).
+    #[test]
+    fn short_lasttx_suspend_fires_suspended() {
+        let mut t = Nrf52Twim::new();
+        t.attach(Box::new(RecordingDevice::new(0x76, vec![])));
+        let mut bus = FlatRam::new();
+        let tx_base: u64 = 0x2000_0500;
+        bus.write_slice(tx_base, &[0xD0]); // register address byte
+
+        write32(&mut t, OFF_ENABLE, 6);
+        write32(&mut t, OFF_ADDRESS, 0x76);
+        write32(&mut t, OFF_TXD_PTR, tx_base as u32);
+        write32(&mut t, OFF_TXD_MAXCNT, 1);
+        write32(&mut t, OFF_SHORTS, SHORT_LASTTX_SUSPEND); // TX_NO_STOP path
+        write32(&mut t, OFF_TASKS_STARTTX, 1);
+        t.tick_with_bus(&mut bus);
+
+        assert_eq!(read32(&t, OFF_EVENTS_LASTTX), 1, "LASTTX fired");
+        assert_eq!(
+            read32(&t, OFF_EVENTS_SUSPENDED),
+            1,
+            "SUSPENDED auto-fired via SHORT_LASTTX_SUSPEND"
+        );
+        assert_eq!(
+            read32(&t, OFF_EVENTS_STOPPED),
+            0,
+            "STOPPED must NOT fire for TX_NO_STOP"
         );
         assert!(!t.needs_bus_tick(), "no further pending transfer");
     }
