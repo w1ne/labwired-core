@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.7] - 2026-06-29
+
+### Fixed
+- **nRF52 SerialInstance pre-enable PSEL shadow**: Zephyr pinctrl writes PSEL.SCL/SDA (offsets 0x508/0x50C) before the ENABLE register is set. The SPIM0/TWIM0 mux was silently dropping those writes (falling to the no-op `_ => {}` arm), leaving PSEL at 0xFFFF_FFFF. `nrfx_twim_init` then called `nrfx_twi_twim_bus_recover(0x7FFFFFFF, 0x7FFFFFFF)` → `nrf_gpio_pin_present_check(0x7FFFFFFF)` → assertion failure at boot. Fix: route pre-enable writes/reads to the TWIM model so pinctrl's PSEL setup is preserved.
+
 ## [0.17.1] - 2026-06-20
 
 ### Fixed
