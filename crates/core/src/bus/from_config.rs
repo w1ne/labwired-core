@@ -132,6 +132,18 @@ impl SystemBus {
                 crate::peripherals::nrf52::factory::try_build(&canonical_type, p_cfg, manifest)
             });
             if let Some(dev) = family_dev {
+                // The nRF52 serial-instance mux (SPIM0/TWIM0) attaches all
+                // external devices connected to the shared MMIO window itself,
+                // so mark them here so the kit registry pass below does not
+                // try to attach them a second time (which would fail because
+                // Nrf52SerialInstance is not an I2c/Esp32c3I2c).
+                if canonical_type == "nrf52_serial_instance" {
+                    for ext in &manifest.external_devices {
+                        if ext.connection == p_cfg.id {
+                            attached_i2c_ext_ids.insert(ext.id.as_str());
+                        }
+                    }
+                }
                 bus.push_peripheral(p_cfg, dev)?;
                 continue;
             }
