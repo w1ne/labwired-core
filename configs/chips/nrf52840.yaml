@@ -13,12 +13,12 @@ peripherals:
     base_address: 0x40002000
     size: "4KB"
     irq: 2
-  - id: "spi0"
-    type: "spi"
+  # SPIM0/TWIM0 share 0x40003000; active peripheral selected by ENABLE (6=TWIM, 7=SPIM).
+  - id: "i2c0"
+    type: "nrf52840_serial"
     base_address: 0x40003000
     size: "4KB"
-    config:
-      profile: "nrf52"
+    irq: 3
   - id: "gpio0"
     type: "gpio"
     base_address: 0x50000000

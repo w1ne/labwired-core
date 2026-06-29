@@ -35,6 +35,7 @@ pub mod radio;
 pub mod rng;
 pub mod rtc;
 pub mod saadc;
+pub mod serial_instance;
 pub mod spis;
 pub mod temp;
 pub mod timer;

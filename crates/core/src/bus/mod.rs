@@ -629,6 +629,16 @@ impl SystemBus {
             }
         }
 
+        // Serial-instance mux (SPIM0/TWIM0 share one MMIO window) — must
+        // precede the generic "contains(spi)" and "contains(i2c)" matchers.
+        if t == "nrf52840_serial"
+            || t == "nrf52_serial"
+            || t == "nrf52_spim_twim"
+            || t == "nrf52840_spim_twim"
+        {
+            return "nrf52_serial_instance".to_string();
+        }
+
         // 3. Legacy generic SVD-name heuristics (fallback). Fuzzy `contains` /
         //    `starts_with` / `ends_with` matching for raw vendor names we have
         //    not given an explicit canonical type. Ordering matters: specific
