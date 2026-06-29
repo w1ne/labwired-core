@@ -382,8 +382,8 @@ mod tests {
         let chip_id = bus.read_slice(rx_base, 1);
         assert_eq!(chip_id[0], 0x60, "BME280 chip-id must be 0x60");
 
-        // EVENTS_LASTRX must be set.
-        assert_eq!(read32(&s, 0x158), 1, "EVENTS_LASTRX must be 1");
+        // EVENTS_LASTRX must be set (nRF52840 TWIM offset 0x15C = bit-23).
+        assert_eq!(read32(&s, 0x15C), 1, "EVENTS_LASTRX must be 1");
     }
 
     // ── SPIM path: EasyDMA loopback through the mux ───────────────────────────

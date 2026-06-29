@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.10] - 2026-06-29
+
+### Fixed
+- **nRF52 TWIM event register offsets**: Three event registers had wrong peripheral offsets in the model, making them invisible to firmware. The nrfx driver computes bit positions via `(offset - 0x100) / 4`, so the register at bit 18 must live at `0x100 + 18*4 = 0x148`, bit 23 at `0x15C`, bit 24 at `0x160`. The model had `EVENTS_SUSPENDED` at `0x128` (hardware: `0x148`), `EVENTS_LASTRX` at `0x158` (hardware: `0x15C`), `EVENTS_LASTTX` at `0x15C` (hardware: `0x160`). Consequences: (1) the ISR/polling loop never saw `EVENTS_SUSPENDED`, so `nrfx` never wrote `TASKS_RESUME` and the RX phase never started; (2) `EVENTS_LASTRX` was never seen at the correct offset, so completion was never acknowledged; (3) stale events at wrong offsets were never cleared by firmware, causing spurious IRQ loops that ate all simulation steps without producing UART output. Fixes Zephyr BME280 `i2c_write_read` hanging and simulation timeout.
+
 ## [0.17.9] - 2026-06-29
 
 ### Fixed

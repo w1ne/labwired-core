@@ -14,12 +14,12 @@
 //!
 //! **TASKS_STARTTX (0x008):** reads TXD.MAXCNT bytes from RAM at TXD.PTR,
 //! delivers them to the attached I2C device (or consumes them if no device
-//! is attached), sets TXD.AMOUNT, fires EVENTS_LASTTX (0x15C). Then,
+//! is attached), sets TXD.AMOUNT, fires EVENTS_LASTTX (0x160). Then,
 //! depending on SHORTS, may fire EVENTS_STOPPED (0x104) or chain to STARTRX.
 //!
 //! **TASKS_STARTRX (0x000):** reads RXD.MAXCNT bytes from the device (or
 //! fills with 0xFF if no device), writes them to RAM at RXD.PTR, sets
-//! RXD.AMOUNT, fires EVENTS_LASTRX (0x158). Then, depending on SHORTS, may
+//! RXD.AMOUNT, fires EVENTS_LASTRX (0x15C). Then, depending on SHORTS, may
 //! fire EVENTS_STOPPED (0x104) or chain to STARTTX.
 //!
 //! **TASKS_STOP (0x014):** fires EVENTS_STOPPED (0x104).
@@ -59,11 +59,11 @@ const OFF_TASKS_SUSPEND: u64 = 0x01C;
 // ── Event offsets ─────────────────────────────────────────────────────────────
 const OFF_EVENTS_STOPPED: u64 = 0x104;
 const OFF_EVENTS_ERROR: u64 = 0x124;
-const OFF_EVENTS_SUSPENDED: u64 = 0x128;
+const OFF_EVENTS_SUSPENDED: u64 = 0x148;
 const OFF_EVENTS_RXSTARTED: u64 = 0x14C;
 const OFF_EVENTS_TXSTARTED: u64 = 0x150;
-const OFF_EVENTS_LASTRX: u64 = 0x158;
-const OFF_EVENTS_LASTTX: u64 = 0x15C;
+const OFF_EVENTS_LASTRX: u64 = 0x15C;
+const OFF_EVENTS_LASTTX: u64 = 0x160;
 
 // ── Control registers ─────────────────────────────────────────────────────────
 const OFF_SHORTS: u64 = 0x200;
