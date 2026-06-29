@@ -1,0 +1,4 @@
+name: "canmod-gps-sim"
+chip: "../../configs/chips/stm32f103.yaml"
+external_devices: []
+board_io: []
