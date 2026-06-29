@@ -128,6 +128,174 @@ struct PendingXfer {
     raw_device: Vec<u8>,
 }
 
+#[cfg(feature = "iolink-native")]
+mod native {
+    use std::ffi::{c_int, c_uint, c_void};
+    use std::ptr::NonNull;
+
+    const IOLINK_MASTER_STATE_STARTUP: c_int = 1;
+    const IOLINK_MASTER_STATE_PREOPERATE: c_int = 2;
+    const IOLINK_MASTER_STATE_OPERATE: c_int = 3;
+
+    unsafe extern "C" {
+        fn lw_iolm_bridge_new(
+            m_seq_type: u8,
+            pd_in_len: u8,
+            pd_out_len: u8,
+            min_cycle_time: u8,
+            response_timeout_100us: u8,
+        ) -> *mut c_void;
+        fn lw_iolm_bridge_free(bridge: *mut c_void);
+        fn lw_iolm_bridge_set_pd_out(bridge: *mut c_void, data: *const u8, len: u8) -> c_int;
+        fn lw_iolm_bridge_cycle_due(bridge: *mut c_void, now_100us: c_uint) -> c_int;
+        fn lw_iolm_bridge_tick_none(bridge: *mut c_void, now_100us: c_uint) -> c_int;
+        fn lw_iolm_bridge_feed_rx(bridge: *mut c_void, data: *const u8, len: usize) -> c_int;
+        fn lw_iolm_bridge_drain_tx(bridge: *mut c_void, out: *mut u8, out_len: usize) -> usize;
+        fn lw_iolm_bridge_state(bridge: *const c_void) -> c_int;
+        fn lw_iolm_bridge_get_pd_in(
+            bridge: *const c_void,
+            out: *mut u8,
+            out_len: u8,
+            actual_len: *mut u8,
+        ) -> c_int;
+        #[cfg(test)]
+        fn lw_iolm_bridge_wake_count(bridge: *const c_void) -> c_uint;
+    }
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub(crate) enum NativeState {
+        Startup,
+        Preoperate,
+        Operate,
+        Error,
+    }
+
+    pub(crate) struct NativeIolinkMaster {
+        bridge: NonNull<c_void>,
+    }
+
+    // The bridge pointer is uniquely owned by this wrapper. All C entry points
+    // that mutate state require `&mut self`, and the C active-context global is
+    // set only for the duration of those calls.
+    unsafe impl Send for NativeIolinkMaster {}
+
+    impl std::fmt::Debug for NativeIolinkMaster {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("NativeIolinkMaster")
+                .field("state", &self.state())
+                .finish_non_exhaustive()
+        }
+    }
+
+    impl NativeIolinkMaster {
+        pub(crate) fn new(
+            m_seq_type: u8,
+            pd_in_len: usize,
+            pd_out: &[u8],
+        ) -> Result<Self, &'static str> {
+            if pd_in_len > u8::MAX as usize || pd_out.len() > u8::MAX as usize {
+                return Err("IO-Link PD length does not fit native C API");
+            }
+            let ptr = unsafe {
+                lw_iolm_bridge_new(m_seq_type, pd_in_len as u8, pd_out.len() as u8, 10, 20)
+            };
+            let bridge = NonNull::new(ptr).ok_or("failed to initialize native IO-Link master")?;
+            let mut this = Self { bridge };
+            this.set_pd_out(pd_out)?;
+            Ok(this)
+        }
+
+        pub(crate) fn set_pd_out(&mut self, pd_out: &[u8]) -> Result<(), &'static str> {
+            if pd_out.len() > u8::MAX as usize {
+                return Err("IO-Link PD out length does not fit native C API");
+            }
+            let ret = unsafe {
+                lw_iolm_bridge_set_pd_out(self.bridge.as_ptr(), pd_out.as_ptr(), pd_out.len() as u8)
+            };
+            if ret == 0 {
+                Ok(())
+            } else {
+                Err("native IO-Link set_pd_out failed")
+            }
+        }
+
+        pub(crate) fn cycle_due(&mut self, now_100us: u32) -> Result<(), &'static str> {
+            let ret = unsafe { lw_iolm_bridge_cycle_due(self.bridge.as_ptr(), now_100us) };
+            if ret >= 0 {
+                Ok(())
+            } else {
+                Err("native IO-Link cycle tick failed")
+            }
+        }
+
+        pub(crate) fn tick_none(&mut self, now_100us: u32) -> Result<i32, &'static str> {
+            let ret = unsafe { lw_iolm_bridge_tick_none(self.bridge.as_ptr(), now_100us) };
+            if ret >= 0 {
+                Ok(ret)
+            } else {
+                Err("native IO-Link poll tick failed")
+            }
+        }
+
+        pub(crate) fn feed_rx(&mut self, data: &[u8]) -> Result<(), &'static str> {
+            let ret =
+                unsafe { lw_iolm_bridge_feed_rx(self.bridge.as_ptr(), data.as_ptr(), data.len()) };
+            if ret == 0 {
+                Ok(())
+            } else {
+                Err("native IO-Link RX queue overflow")
+            }
+        }
+
+        pub(crate) fn drain_tx(&mut self) -> Vec<u8> {
+            let mut out = [0u8; 128];
+            let n = unsafe {
+                lw_iolm_bridge_drain_tx(self.bridge.as_ptr(), out.as_mut_ptr(), out.len())
+            };
+            out[..n].to_vec()
+        }
+
+        pub(crate) fn state(&self) -> NativeState {
+            match unsafe { lw_iolm_bridge_state(self.bridge.as_ptr()) } {
+                IOLINK_MASTER_STATE_STARTUP => NativeState::Startup,
+                IOLINK_MASTER_STATE_PREOPERATE => NativeState::Preoperate,
+                IOLINK_MASTER_STATE_OPERATE => NativeState::Operate,
+                _ => NativeState::Error,
+            }
+        }
+
+        pub(crate) fn pd_in(&self, max_len: usize) -> Option<Vec<u8>> {
+            let mut out = vec![0u8; max_len.min(u8::MAX as usize)];
+            let mut actual_len = 0u8;
+            let ret = unsafe {
+                lw_iolm_bridge_get_pd_in(
+                    self.bridge.as_ptr(),
+                    out.as_mut_ptr(),
+                    out.len() as u8,
+                    &mut actual_len,
+                )
+            };
+            if ret == 0 {
+                out.truncate(actual_len as usize);
+                Some(out)
+            } else {
+                None
+            }
+        }
+
+        #[cfg(test)]
+        pub(crate) fn wake_count(&self) -> u32 {
+            unsafe { lw_iolm_bridge_wake_count(self.bridge.as_ptr()) as u32 }
+        }
+    }
+
+    impl Drop for NativeIolinkMaster {
+        fn drop(&mut self) {
+            unsafe { lw_iolm_bridge_free(self.bridge.as_ptr()) };
+        }
+    }
+}
+
 /// Max trace records retained (oldest dropped).
 const TRACE_CAP: usize = 256;
 
@@ -184,6 +352,12 @@ pub struct IolinkMaster {
     /// Monotonic per-frame sequence number.
     #[serde(skip)]
     frame_seq: u32,
+    #[cfg(feature = "iolink-native")]
+    #[serde(skip)]
+    native: Option<native::NativeIolinkMaster>,
+    #[cfg(feature = "iolink-native")]
+    #[serde(skip)]
+    native_now_100us: u32,
 }
 
 impl IolinkMaster {
@@ -212,8 +386,37 @@ impl IolinkMaster {
             trace: VecDeque::new(),
             current: None,
             frame_seq: 0,
+            #[cfg(feature = "iolink-native")]
+            native: None,
+            #[cfg(feature = "iolink-native")]
+            native_now_100us: 0,
         };
         m.queue_next_frame(); // queue the wake-up immediately
+        m
+    }
+
+    #[cfg(feature = "iolink-native")]
+    pub fn new_with_native_c_master(
+        pd_in_len: usize,
+        od_len: usize,
+        com: IolinkComSpeed,
+        pd_out: Vec<u8>,
+        m_seq_type: u8,
+    ) -> Self {
+        let native = native::NativeIolinkMaster::new(m_seq_type, pd_in_len, &pd_out)
+            .expect("initialize native C iolinki-master");
+        let mut m = Self::new_with_pd_out(pd_in_len, od_len, com, pd_out);
+        m.tx_queue.clear();
+        m.rx_accum.clear();
+        m.trace.clear();
+        m.current = None;
+        m.step = 0;
+        m.gap_ticks = 0;
+        m.frame_seq = 0;
+        m.link_state = IolinkLinkState::Startup;
+        m.native = Some(native);
+        m.native_now_100us = 0;
+        m.queue_next_frame();
         m
     }
 
@@ -282,6 +485,12 @@ impl IolinkMaster {
         }
         self.rx_accum.clear();
 
+        #[cfg(feature = "iolink-native")]
+        if self.native.is_some() {
+            self.queue_next_native_frame();
+            return;
+        }
+
         let idle_end = 1 + IDLE_FRAMES; // steps [1..=IDLE_FRAMES] are IDLE
         let (frame, kind): (Vec<u8>, IolinkFrameKind) = if self.step == 0 {
             (vec![0x55], IolinkFrameKind::WakeUp) // wake-up pulse (once)
@@ -320,6 +529,47 @@ impl IolinkMaster {
             self.step += 1;
         }
     }
+
+    #[cfg(feature = "iolink-native")]
+    fn queue_next_native_frame(&mut self) {
+        let native = self.native.as_mut().expect("native IO-Link master");
+        native
+            .cycle_due(self.native_now_100us)
+            .expect("native IO-Link cycle due");
+        self.native_now_100us = self.native_now_100us.wrapping_add(20);
+        let frame = native.drain_tx();
+        if frame.is_empty() {
+            return;
+        }
+
+        self.link_state = match native.state() {
+            native::NativeState::Operate => IolinkLinkState::Operate,
+            _ => IolinkLinkState::Startup,
+        };
+        let kind = match frame.as_slice() {
+            [0x55] => IolinkFrameKind::WakeUp,
+            [0x00, 0x24] => IolinkFrameKind::Idle,
+            [0x0F, 0x0D] => IolinkFrameKind::OperateReq,
+            _ => IolinkFrameKind::Cyclic,
+        };
+        let pd_out = if matches!(kind, IolinkFrameKind::Cyclic) {
+            self.pd_out.clone()
+        } else {
+            Vec::new()
+        };
+        for &b in &frame {
+            self.tx_queue.push_back(b);
+        }
+        self.current = Some(PendingXfer {
+            seq: self.frame_seq,
+            kind,
+            pd_out,
+            link_state: self.link_state,
+            raw_master: frame,
+            raw_device: Vec::new(),
+        });
+        self.frame_seq = self.frame_seq.wrapping_add(1);
+    }
 }
 
 impl UartStreamDevice for IolinkMaster {
@@ -347,6 +597,22 @@ impl UartStreamDevice for IolinkMaster {
             if p.raw_device.len() < 64 {
                 p.raw_device.push(byte);
             }
+        }
+        #[cfg(feature = "iolink-native")]
+        if let Some(native) = self.native.as_mut() {
+            native.feed_rx(&[byte]).expect("feed native IO-Link RX");
+            let _ = native
+                .tick_none(self.native_now_100us)
+                .expect("poll native IO-Link RX");
+            if native.state() == native::NativeState::Operate {
+                self.link_state = IolinkLinkState::Operate;
+                if let Some(pd) = native.pd_in(self.pd_in_len) {
+                    self.latest_pd = pd;
+                    self.pd_valid = true;
+                    self.rx_accum.clear();
+                }
+            }
+            return;
         }
         if self.link_state == IolinkLinkState::Operate
             && self.rx_accum.len() >= self.operate_response_len()
@@ -437,10 +703,24 @@ impl PeripheralKit for IolinkMasterKit {
             _ => IolinkComSpeed::Com2,
         };
         let uart = ctx.uart()?;
-        uart.attach_stream(Box::new(IolinkMaster::new_with_pd_out(
-            pd_in_len, od_len, com, pd_out,
-        )));
-        Ok(())
+        #[cfg(feature = "iolink-native")]
+        {
+            uart.attach_stream(Box::new(IolinkMaster::new_with_native_c_master(
+                pd_in_len,
+                od_len,
+                com,
+                pd_out,
+                m_seq_type as u8,
+            )));
+            Ok(())
+        }
+        #[cfg(not(feature = "iolink-native"))]
+        {
+            uart.attach_stream(Box::new(IolinkMaster::new_with_pd_out(
+                pd_in_len, od_len, com, pd_out,
+            )));
+            Ok(())
+        }
     }
 }
 
@@ -539,6 +819,69 @@ mod tests {
             .expect("cyclic trace record");
         assert_eq!(cyclic.pd_out, vec![0x11, 0x22]);
         assert_eq!(cyclic.raw_master, expected);
+    }
+
+    #[cfg(feature = "iolink-native")]
+    #[test]
+    fn native_c_master_walks_startup_transition_and_cyclic_exchange() {
+        use super::native::{NativeIolinkMaster, NativeState};
+
+        let pd_out = [0x11, 0x22];
+        let mut native =
+            NativeIolinkMaster::new(4, 4, &pd_out).expect("native C IO-Link master init");
+
+        native.cycle_due(0).expect("wake-up tick");
+        assert_eq!(native.drain_tx(), vec![0x55]);
+        assert_eq!(native.wake_count(), 1);
+        assert_eq!(native.state(), NativeState::Startup);
+
+        native.cycle_due(20).expect("idle tick");
+        assert_eq!(native.drain_tx(), vec![0x00, 0x24]);
+        native
+            .feed_rx(&[0x00, 0x24])
+            .expect("type0 startup response");
+        native.tick_none(21).expect("startup RX poll");
+        assert_eq!(native.state(), NativeState::Preoperate);
+
+        native.cycle_due(40).expect("operate transition tick");
+        assert_eq!(native.drain_tx(), vec![0x0F, 0x0D]);
+        assert_eq!(native.state(), NativeState::Operate);
+
+        native.cycle_due(60).expect("cyclic tick");
+        assert_eq!(native.drain_tx(), encode_type1_cycle(&pd_out, 2));
+
+        let mut response = vec![0x20, 0xAA, 0xBB, 0xCC, 0xDD, 0x00, 0x00];
+        response.push(crc6(&response));
+        native.feed_rx(&response).expect("operate response");
+        assert_eq!(native.tick_none(61).expect("operate RX poll"), 1);
+        assert_eq!(native.pd_in(4), Some(vec![0xAA, 0xBB, 0xCC, 0xDD]));
+    }
+
+    #[cfg(feature = "iolink-native")]
+    #[test]
+    fn native_stream_uses_c_master_at_uart_boundary() {
+        let pd_out = vec![0x11, 0x22];
+        let mut m =
+            IolinkMaster::new_with_native_c_master(4, 2, IolinkComSpeed::Com2, pd_out.clone(), 4);
+
+        assert_eq!(drain(&mut m), vec![0x55]);
+        assert_eq!(drain(&mut m), vec![0x00, 0x24]);
+        for b in [0x00, 0x24] {
+            m.on_tx_byte(b);
+        }
+        assert_eq!(drain(&mut m), vec![0x0F, 0x0D]);
+
+        let cyclic = drain(&mut m);
+        assert_eq!(cyclic, encode_type1_cycle(&pd_out, 2));
+        assert_eq!(m.link_state, IolinkLinkState::Operate);
+
+        let mut response = vec![0x20, 0xAA, 0xBB, 0xCC, 0xDD, 0x00, 0x00];
+        response.push(crc6(&response));
+        for b in response {
+            m.on_tx_byte(b);
+        }
+        assert_eq!(m.input_byte(), 0xAA);
+        assert!(m.pd_valid);
     }
 
     #[test]

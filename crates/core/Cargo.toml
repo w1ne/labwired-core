@@ -19,6 +19,9 @@ build = "build.rs"
 [build-dependencies]
 # Used solely by build.rs to pre-compile the hot-block WAT into wasm bytes.
 wat = "1.0"
+# Used by build.rs only when `iolink-native` is explicitly enabled. Browser/wasm
+# builds keep the default Rust-only runtime path and do not link native C.
+cc = "1"
 
 [dependencies]
 thiserror = { workspace = true }
@@ -63,6 +66,9 @@ jit = ["dep:wasmtime"]
 # drain in `Machine::step`. Off through 2B.N-1; flipped unconditional
 # after every peripheral migrates and the legacy walk is deleted.
 event-scheduler = []
+# Use the real C `iolinki-master` stack through a narrow in-memory PHY bridge.
+# This is off by default so browser builds and standard CI do not link native C.
+iolink-native = []
 
 [dev-dependencies]
 labwired-loader = { path = "../loader" }

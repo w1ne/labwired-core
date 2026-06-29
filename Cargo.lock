@@ -1728,6 +1728,7 @@ dependencies = [
  "anyhow",
  "bincode 1.3.3",
  "bitflags 2.11.1",
+ "cc",
  "goblin",
  "labwired-config",
  "labwired-hw-trace",
