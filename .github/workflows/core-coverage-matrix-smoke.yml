@@ -69,6 +69,10 @@ jobs:
             profile_dir: release
             script: examples/demo-blinky/io-smoke.yaml
             system: examples/demo-blinky/system.yaml
+          - id: canmod-gps-sim
+            make: examples/canmod-gps-sim/firmware
+            script: examples/canmod-gps-sim/canmod-smoke.yaml
+            system: examples/canmod-gps-sim/system.yaml
 
     steps:
       - uses: actions/checkout@v4
@@ -88,7 +92,18 @@ jobs:
       - name: Build CLI
         run: cargo build -p labwired-cli
 
+      - name: Install C cross toolchain
+        if: matrix.make != ''
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y gcc-arm-none-eabi
+
+      - name: Build C firmware
+        if: matrix.make != ''
+        run: make -C ${{ matrix.make }}
+
       - name: Build matrix firmware
+        if: matrix.crate != ''
         run: |
           if [ "${{ matrix.profile }}" = "release" ]; then
             cargo build -p "${{ matrix.crate }}" --release --target "${{ matrix.target }}"
@@ -105,6 +120,7 @@ jobs:
             --no-uart-stdout
 
       - name: Run unsupported-instruction audit
+        if: matrix.crate != ''
         run: |
           ./scripts/unsupported_instruction_audit.sh \
             --firmware "target/${{ matrix.target }}/${{ matrix.profile_dir }}/${{ matrix.crate }}" \
