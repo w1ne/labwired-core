@@ -30,11 +30,12 @@ pub(crate) fn encode_type0(mc: u8) -> Vec<u8> {
     vec![mc, crc6(&[mc, 0x00])]
 }
 
-/// Encode a Type 1 cyclic request: `[MC=0x00, CKT=0x00, PD_out..., OD=0x00, CK]`.
-pub(crate) fn encode_type1_cycle(pd_out: &[u8]) -> Vec<u8> {
+/// Encode a Type 1/2 cyclic request:
+/// `[MC=0x00, CKT=0x00, PD_out..., OD..., CK]`.
+pub(crate) fn encode_type1_cycle(pd_out: &[u8], od_len: usize) -> Vec<u8> {
     let mut frame = vec![0x00u8, 0x00];
     frame.extend_from_slice(pd_out);
-    frame.push(0x00); // OD (1-byte, idle)
+    frame.extend(std::iter::repeat(0x00).take(od_len.max(1))); // OD idle bytes
     let ck = crc6(&frame);
     frame.push(ck);
     frame
@@ -170,6 +171,8 @@ pub struct IolinkMaster {
     gap_ticks: u32,
     /// Latest valid process-data input bytes received from the device.
     latest_pd: Vec<u8>,
+    /// Process-data output bytes sent by the simulated master on cyclic frames.
+    pd_out: Vec<u8>,
     /// Latches true on the first valid cyclic frame and is intentionally sticky.
     pub pd_valid: bool,
     /// Bounded ring of completed transactions (oldest→newest), for the analyzer.
@@ -185,9 +188,18 @@ pub struct IolinkMaster {
 
 impl IolinkMaster {
     pub fn new(pd_in_len: usize, od_len: usize, com: IolinkComSpeed) -> Self {
+        Self::new_with_pd_out(pd_in_len, od_len, com, Vec::new())
+    }
+
+    pub fn new_with_pd_out(
+        pd_in_len: usize,
+        od_len: usize,
+        com: IolinkComSpeed,
+        pd_out: Vec<u8>,
+    ) -> Self {
         let mut m = Self {
             pd_in_len,
-            od_len,
+            od_len: od_len.max(1),
             com,
             link_state: IolinkLinkState::Startup,
             tx_queue: VecDeque::new(),
@@ -195,6 +207,7 @@ impl IolinkMaster {
             step: 0,
             gap_ticks: 0,
             latest_pd: vec![0u8; pd_in_len.max(1)],
+            pd_out,
             pd_valid: false,
             trace: VecDeque::new(),
             current: None,
@@ -278,10 +291,17 @@ impl IolinkMaster {
             (encode_type0(0x0F), IolinkFrameKind::OperateReq) // OPERATE transition
         } else {
             self.link_state = IolinkLinkState::Operate;
-            (encode_type1_cycle(&[]), IolinkFrameKind::Cyclic) // cyclic Type 1
+            (
+                encode_type1_cycle(&self.pd_out, self.od_len),
+                IolinkFrameKind::Cyclic,
+            ) // cyclic Type 1/2
         };
 
-        let pd_out: Vec<u8> = Vec::new(); // DI device: master sends no PD out
+        let pd_out = if matches!(kind, IolinkFrameKind::Cyclic) {
+            self.pd_out.clone()
+        } else {
+            Vec::new()
+        };
         for &b in &frame {
             self.tx_queue.push_back(b);
         }
@@ -383,6 +403,11 @@ static IOLINK_MASTER_METADATA: KitMetadata = KitMetadata {
             ty: ConfigType::Str,
             doc: "Communication speed: \"COM1\" (4.8 kbaud), \"COM2\" (38.4 kbaud, default), or \"COM3\" (230.4 kbaud).",
         },
+        ConfigKey {
+            name: "pd_out_hex",
+            ty: ConfigType::Str,
+            doc: "Optional process-data output bytes as hex, e.g. \"11 22\".",
+        },
     ],
     labs: &[LabRef {
         board_id: "al2205-iolink-dido",
@@ -400,6 +425,7 @@ impl PeripheralKit for IolinkMasterKit {
         let pd_in_len = ctx.config_i64("pd_in_len").unwrap_or(1) as usize;
         let m_seq_type = ctx.config_i64("m_seq_type").unwrap_or(1);
         let od_len: usize = if m_seq_type >= 4 { 2 } else { 1 };
+        let pd_out = parse_pd_out_hex(ctx.config_str("pd_out_hex")).unwrap_or_default();
         let com = match ctx
             .config_str("com")
             .unwrap_or("COM2")
@@ -411,9 +437,33 @@ impl PeripheralKit for IolinkMasterKit {
             _ => IolinkComSpeed::Com2,
         };
         let uart = ctx.uart()?;
-        uart.attach_stream(Box::new(IolinkMaster::new(pd_in_len, od_len, com)));
+        uart.attach_stream(Box::new(IolinkMaster::new_with_pd_out(
+            pd_in_len, od_len, com, pd_out,
+        )));
         Ok(())
     }
+}
+
+fn parse_pd_out_hex(value: Option<&str>) -> Option<Vec<u8>> {
+    let value = value?.trim();
+    if value.is_empty() {
+        return Some(Vec::new());
+    }
+
+    let mut out = Vec::new();
+    for token in value.split(|c: char| c.is_ascii_whitespace() || c == ',' || c == ':') {
+        if token.is_empty() {
+            continue;
+        }
+        let token = token
+            .strip_prefix("0x")
+            .or_else(|| token.strip_prefix("0X"))
+            .unwrap_or(token);
+        let byte = u8::from_str_radix(token, 16).ok()?;
+        out.push(byte);
+    }
+
+    Some(out)
 }
 
 #[cfg(test)]
@@ -457,7 +507,38 @@ mod tests {
 
     #[test]
     fn encodes_type1_di_cycle_with_no_output_pd() {
-        assert_eq!(encode_type1_cycle(&[]), vec![0x00, 0x00, 0x00, 0x09]);
+        assert_eq!(encode_type1_cycle(&[], 1), vec![0x00, 0x00, 0x00, 0x09]);
+    }
+
+    #[test]
+    fn parses_pd_out_hex_config() {
+        assert_eq!(
+            parse_pd_out_hex(Some("0x11 22,33:44")),
+            Some(vec![0x11, 0x22, 0x33, 0x44])
+        );
+        assert_eq!(parse_pd_out_hex(Some("")), Some(Vec::new()));
+        assert_eq!(parse_pd_out_hex(Some("not-hex")), None);
+        assert_eq!(parse_pd_out_hex(None), None);
+    }
+
+    #[test]
+    fn cyclic_schedule_includes_configured_pd_out_and_two_byte_od() {
+        let mut m = IolinkMaster::new_with_pd_out(2, 2, IolinkComSpeed::Com2, vec![0x11, 0x22]);
+
+        while m.link_state != IolinkLinkState::Operate {
+            drain(&mut m);
+        }
+
+        let frame = drain(&mut m);
+        let expected = encode_type1_cycle(&[0x11, 0x22], 2);
+        assert_eq!(frame, expected);
+        let trace = m.trace_snapshot();
+        let cyclic = trace
+            .iter()
+            .find(|x| x.kind == IolinkFrameKind::Cyclic)
+            .expect("cyclic trace record");
+        assert_eq!(cyclic.pd_out, vec![0x11, 0x22]);
+        assert_eq!(cyclic.raw_master, expected);
     }
 
     #[test]
@@ -477,7 +558,7 @@ mod tests {
             kind: IolinkFrameKind::Cyclic,
             pd_out: vec![],
             link_state: IolinkLinkState::Operate,
-            raw_master: encode_type1_cycle(&[]),
+            raw_master: encode_type1_cycle(&[], 1),
             raw_device: resp.to_vec(),
         };
         let x = m.finalize_xfer(p);
@@ -513,7 +594,7 @@ mod tests {
             kind: IolinkFrameKind::Cyclic,
             pd_out: vec![0],
             link_state: IolinkLinkState::Operate,
-            raw_master: encode_type1_cycle(&[0]),
+            raw_master: encode_type1_cycle(&[0], 1),
             raw_device: vec![0x20],
         };
         let x = m.finalize_xfer(p);
