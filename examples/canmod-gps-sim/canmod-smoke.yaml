@@ -7,4 +7,5 @@ limits:
 assertions:
   # Simulated CANmod.gps on the emulated F103 bxCAN (classical CAN, loopback).
   - uart_contains: "CANMOD-GPS-SIM"
+  - uart_contains: "CAN_TX 0001: 5B"
   - expected_stop_reason: max_steps
