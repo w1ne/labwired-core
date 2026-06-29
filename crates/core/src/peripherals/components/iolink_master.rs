@@ -162,6 +162,29 @@ mod native {
         ) -> c_int;
         #[cfg(test)]
         fn lw_iolm_bridge_wake_count(bridge: *const c_void) -> c_uint;
+        #[cfg(test)]
+        fn lw_iolm_conformance_run_profile(
+            m_seq_type: u8,
+            pd_in_len: u8,
+            pd_out_len: u8,
+            pd_value: u8,
+            result: *mut NativeConformanceResult,
+        ) -> c_int;
+    }
+
+    #[cfg(test)]
+    #[repr(C)]
+    #[derive(Clone, Copy, Debug, Default)]
+    pub(crate) struct NativeConformanceResult {
+        pub(crate) master_state: c_int,
+        pub(crate) pd_in_len: u8,
+        pub(crate) pd_out_len: u8,
+        pub(crate) pd_in: [u8; 32],
+        pub(crate) device_observed_pd_input_len: u8,
+        pub(crate) device_observed_pd_input: [u8; 32],
+        pub(crate) device_observed_pd_output_len: u8,
+        pub(crate) device_observed_pd_output: [u8; 32],
+        pub(crate) cycles: u8,
     }
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -307,6 +330,33 @@ mod native {
     impl Drop for NativeIolinkMaster {
         fn drop(&mut self) {
             unsafe { lw_iolm_bridge_free(self.bridge.as_ptr()) };
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn run_real_device_stack_profile(
+        m_seq_type: u8,
+        pd_in_len: u8,
+        pd_out_len: u8,
+        pd_value: u8,
+    ) -> Result<NativeConformanceResult, &'static str> {
+        let _guard = NATIVE_CALL_LOCK
+            .lock()
+            .expect("native IO-Link lock poisoned");
+        let mut result = NativeConformanceResult::default();
+        let ret = unsafe {
+            lw_iolm_conformance_run_profile(
+                m_seq_type,
+                pd_in_len,
+                pd_out_len,
+                pd_value,
+                &mut result,
+            )
+        };
+        if ret == 0 {
+            Ok(result)
+        } else {
+            Err("native IO-Link real device-stack profile failed")
         }
     }
 }
@@ -897,6 +947,48 @@ mod tests {
         }
         assert_eq!(m.input_byte(), 0xAA);
         assert!(m.pd_valid);
+    }
+
+    #[cfg(feature = "iolink-native")]
+    #[test]
+    fn native_real_device_stack_profiles_exchange_without_scripted_responses() {
+        use super::native::run_real_device_stack_profile;
+
+        let cases = [
+            (1u8, 1u8, 0u8, 0x11u8),
+            (2u8, 2u8, 1u8, 0x22u8),
+            (4u8, 2u8, 2u8, 0x33u8),
+            (5u8, 3u8, 2u8, 0x44u8),
+            (3u8, 4u8, 1u8, 0x55u8),
+            (6u8, 4u8, 3u8, 0x66u8),
+        ];
+
+        for (m_seq_type, pd_in_len, pd_out_len, pd_value) in cases {
+            let result = run_real_device_stack_profile(m_seq_type, pd_in_len, pd_out_len, pd_value)
+                .expect("real iolinki device-stack profile");
+            assert_eq!(result.master_state, 3);
+            assert_eq!(result.pd_in_len, pd_in_len);
+            assert_eq!(result.device_observed_pd_input_len, pd_in_len);
+            assert_eq!(result.device_observed_pd_output_len, pd_out_len);
+            assert!(
+                result.cycles > 0,
+                "profile should require at least one real cycle"
+            );
+
+            for i in 0..pd_in_len as usize {
+                assert_eq!(result.pd_in[i], pd_value.wrapping_add(i as u8));
+                assert_eq!(
+                    result.device_observed_pd_input[i],
+                    pd_value.wrapping_add(i as u8)
+                );
+            }
+            for i in 0..pd_out_len as usize {
+                assert_eq!(
+                    result.device_observed_pd_output[i],
+                    (pd_value ^ 0x55).wrapping_add(i as u8)
+                );
+            }
+        }
     }
 
     #[test]

@@ -30,7 +30,7 @@ concurrency:
 jobs:
   iolink-native:
     name: iolink-native-c-master
-    runs-on: ["self-hosted", "Linux", "X64", "ci", "iolink-native", "pluto"]
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout LabWired core
         uses: actions/checkout@v4
@@ -53,21 +53,20 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.95.0
 
-      - name: Use Pluto user-local C toolchain
+      - name: Install host C toolchain
         run: |
-          echo "/home/w1ne/.local/bin" >> "$GITHUB_PATH"
-          /home/w1ne/.local/bin/cc --version
+          sudo apt-get update
+          sudo apt-get install -y build-essential
+          cc --version
 
       - name: Native C master UART-boundary tests
         env:
-          CC: /home/w1ne/.local/bin/cc
           IOLINKI_MASTER_DIR: ${{ github.workspace }}/iolinki-master
           IOLINKI_DEVICE_DIR: ${{ github.workspace }}/third_party/iolinki
         run: cargo test -p labwired-core --features iolink-native native_ --lib -- --nocapture
 
       - name: Native C master compile check
         env:
-          CC: /home/w1ne/.local/bin/cc
           IOLINKI_MASTER_DIR: ${{ github.workspace }}/iolinki-master
           IOLINKI_DEVICE_DIR: ${{ github.workspace }}/third_party/iolinki
         run: cargo check -p labwired-core --features iolink-native

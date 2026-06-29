@@ -70,6 +70,7 @@ fn build_iolink_native_bridge() {
 
     let sources = [
         manifest_dir.join("native/iolink_master_bridge.c"),
+        manifest_dir.join("native/iolink_conformance.c"),
         master_dir.join("src/master_controller.c"),
         master_dir.join("src/master_isdu.c"),
         master_dir.join("src/master_parameters.c"),
@@ -77,11 +78,28 @@ fn build_iolink_native_bridge() {
         master_dir.join("src/master_sio.c"),
         device_dir.join("src/crc.c"),
         device_dir.join("src/frame.c"),
+        device_dir.join("src/iolink_core.c"),
+        device_dir.join("src/phy_generic.c"),
+        device_dir.join("src/phy_virtual.c"),
+        device_dir.join("src/dll.c"),
+        device_dir.join("src/isdu.c"),
+        device_dir.join("src/events.c"),
+        device_dir.join("src/platform.c"),
+        device_dir.join("src/params.c"),
+        device_dir.join("src/data_storage.c"),
+        device_dir.join("src/device_info.c"),
+        device_dir.join("src/platform_stubs.c"),
+        device_dir.join("src/platform/linux/time_utils.c"),
+        device_dir.join("src/platform/linux/nvm_mock.c"),
     ];
 
     println!(
         "cargo:rerun-if-changed={}",
         manifest_dir.join("native/iolink_master_bridge.c").display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        manifest_dir.join("native/iolink_conformance.c").display()
     );
     println!(
         "cargo:rerun-if-changed={}",
@@ -99,6 +117,7 @@ fn build_iolink_native_bridge() {
     build
         .std("c99")
         .warnings(false)
+        .define("_POSIX_C_SOURCE", Some("200809L"))
         .include(master_dir.join("include"))
         .include(device_dir.join("include"));
     for source in sources {
