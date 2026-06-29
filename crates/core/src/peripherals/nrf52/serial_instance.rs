@@ -351,14 +351,14 @@ mod tests {
 
         // TX descriptor: send register address byte.
         write32(&mut s, 0x544, tx_base as u32); // TXD.PTR
-        write32(&mut s, 0x548, 1);              // TXD.MAXCNT = 1
+        write32(&mut s, 0x548, 1); // TXD.MAXCNT = 1
 
         // SHORT: LASTTX→STARTRX (write-then-read in one transaction).
         write32(&mut s, 0x200, 1 << 7); // SHORTS: LASTTX_STARTRX
 
         // RX descriptor: receive one byte.
         write32(&mut s, 0x534, rx_base as u32); // RXD.PTR
-        write32(&mut s, 0x538, 1);              // RXD.MAXCNT = 1
+        write32(&mut s, 0x538, 1); // RXD.MAXCNT = 1
 
         // Fire TASKS_STARTTX.
         write32(&mut s, 0x008, 1);
@@ -397,9 +397,9 @@ mod tests {
         write32(&mut s, OFF_ENABLE, ENABLE_SPIM);
 
         write32(&mut s, 0x544, tx_base as u32); // TXD.PTR
-        write32(&mut s, 0x548, 3);              // TXD.MAXCNT
+        write32(&mut s, 0x548, 3); // TXD.MAXCNT
         write32(&mut s, 0x534, rx_base as u32); // RXD.PTR
-        write32(&mut s, 0x538, 3);              // RXD.MAXCNT
+        write32(&mut s, 0x538, 3); // RXD.MAXCNT
 
         // TASKS_START (nRF52 SPIM offset 0x010).
         write32(&mut s, 0x010, 1);
@@ -408,7 +408,11 @@ mod tests {
         s.tick_with_bus(&mut bus);
 
         // EVENTS_END must be 1.
-        assert_eq!(read32(&s, 0x118), 1, "EVENTS_END must be 1 after SPIM transfer");
+        assert_eq!(
+            read32(&s, 0x118),
+            1,
+            "EVENTS_END must be 1 after SPIM transfer"
+        );
         assert_eq!(read32(&s, 0x120), 1, "EVENTS_ENDTX must be 1");
         assert_eq!(read32(&s, 0x110), 1, "EVENTS_ENDRX must be 1");
 

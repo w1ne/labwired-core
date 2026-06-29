@@ -137,17 +137,15 @@ pub fn try_build(
         // nRF52 serial-instance mux: SPIM0/TWIM0 at a single MMIO base.
         // ENABLE=6 selects TWIM, ENABLE=7 selects SPIM (nRF52840 PS §6.31/§6.30).
         "nrf52_serial_instance" => {
-            let mut inst =
-                crate::peripherals::nrf52::serial_instance::Nrf52SerialInstance::new();
+            let mut inst = crate::peripherals::nrf52::serial_instance::Nrf52SerialInstance::new();
             for ext in &manifest.external_devices {
                 if ext.connection != p_cfg.id {
                     continue;
                 }
                 // Try I²C device first.
-                if let Some(device) = crate::peripherals::components::build_i2c_device(
-                    &ext.r#type,
-                    &ext.config,
-                ) {
+                if let Some(device) =
+                    crate::peripherals::components::build_i2c_device(&ext.r#type, &ext.config)
+                {
                     tracing::info!(
                         "serial-instance i2c attach: '{}' (type={}) -> '{}'",
                         ext.id,
@@ -155,10 +153,9 @@ pub fn try_build(
                         p_cfg.id
                     );
                     inst.attach_i2c(device);
-                } else if let Some(device) = crate::peripherals::components::build_spi_device(
-                    &ext.r#type,
-                    &ext.config,
-                ) {
+                } else if let Some(device) =
+                    crate::peripherals::components::build_spi_device(&ext.r#type, &ext.config)
+                {
                     tracing::info!(
                         "serial-instance spi attach: '{}' (type={}) -> '{}'",
                         ext.id,
