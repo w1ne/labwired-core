@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.9] - 2026-06-29
+
+### Fixed
+- **nRF52 TWIM TASKS_RESUME handling**: `nrfx` issues `TASKS_RESUME` (not `TASKS_STARTRX`) to restart the bus after `EVENTS_SUSPENDED` in the TX_NO_STOP (write-then-read) path. The model previously treated `TASKS_RESUME` as a no-op, causing the follow-on RX transfer to never start. The bus would hang waiting for `EVENTS_STOPPED` (from `LASTRX_STOP`), producing a simulation timeout for every I2C `write_read_dt` call. Fixed by routing `TASKS_RESUME` to `PENDING_RX` when the driver has already set up `RXD.PTR`/`RXD.MAXCNT`.
+
 ## [0.17.8] - 2026-06-29
 
 ### Fixed

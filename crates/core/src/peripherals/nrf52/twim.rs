@@ -400,6 +400,13 @@ impl Peripheral for Nrf52Twim {
             OFF_TASKS_STOP if value != 0 && self.pending == PENDING_NONE => {
                 self.pending = PENDING_STOP;
             }
+            // TASKS_RESUME: nrfx uses this after EVENTS_SUSPENDED (TX_NO_STOP path) to
+            // restart the bus and begin the follow-on RX transfer.  The driver sets up
+            // RXD.PTR / RXD.MAXCNT / SHORTS before writing TASKS_RESUME, so routing to
+            // PENDING_RX here is correct and sufficient.
+            OFF_TASKS_RESUME if value != 0 && self.rxd_maxcnt > 0 => {
+                self.pending = PENDING_RX;
+            }
             OFF_TASKS_RESUME | OFF_TASKS_SUSPEND => {}
             OFF_TASKS_STARTRX | OFF_TASKS_STARTTX | OFF_TASKS_STOP => {
                 // value == 0: no-op (tasks are level-triggered on non-zero)
