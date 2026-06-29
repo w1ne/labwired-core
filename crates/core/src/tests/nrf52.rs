@@ -81,7 +81,7 @@ fn xiao_nrf52840_sense_manifest_builds_with_uart_gpio_spi() {
     assert!(names.contains(&"uart0"), "uart0 missing: {names:?}");
     assert!(names.contains(&"gpio0"), "gpio0 missing: {names:?}");
     assert!(names.contains(&"gpio1"), "gpio1 missing: {names:?}");
-    assert!(names.contains(&"spi0"), "spi0 missing: {names:?}");
+    assert!(names.contains(&"i2c0"), "i2c0 missing: {names:?}");
 }
 
 #[test]

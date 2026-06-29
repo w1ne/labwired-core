@@ -54,7 +54,12 @@ boards:
     # 2026-06-27: SAADC + PWM gained Tier-3 behavioral engines (real conversion /
     # duty output) for the coverage matrix. Additive and behavioral-only; the
     # 2026-06-17 register sweep is unaffected. No live SWD re-capture this session.
-    drift_ack: 2026-06-27
+    # 2026-06-29: unified SPIM0/TWIM0 serial-instance mux (Nrf52SerialInstance) at
+    # 0x40003000 replaces the generic spi0 chip-YAML entry. The 2026-06-17 register
+    # sweep did not cover SPIM0/TWIM0 shared-MMIO behaviour (it tested SPIS/TWIS/
+    # TIMER/RTC/POWER/GPIO). This is a new model for an untested path; additive
+    # and validated by 6 offline unit tests (twim_path_reads_bme280_chip_id etc.).
+    drift_ack: 2026-06-29
     models:
       - crates/core/src/peripherals/nrf52
       - configs/chips/nrf52840.yaml
@@ -74,7 +79,8 @@ boards:
     # nrf52840 drift_ack note. UARTE TX live diff tracked there.
     # 2026-06-27: rides the nrf52840 SAADC/PWM Tier-3 behavioral engines (same
     # silicon); additive, no live re-capture. See the nrf52840 drift_ack note.
-    drift_ack: 2026-06-27
+    # 2026-06-29: rides the nRF52840 SPIM0/TWIM0 serial-instance mux; same silicon.
+    drift_ack: 2026-06-29
     models:
       - crates/core/src/peripherals/nrf52
       - configs/chips/nrf52840.yaml
