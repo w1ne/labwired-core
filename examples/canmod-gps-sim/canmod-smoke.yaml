@@ -1,0 +1,10 @@
+schema_version: "1.0"
+inputs:
+  system: "./system.yaml"
+  firmware: "./firmware/build/canmod_gps_sim.elf"
+limits:
+  max_steps: 300000
+assertions:
+  # Simulated CANmod.gps on the emulated F103 bxCAN (classical CAN, loopback).
+  - uart_contains: "CANMOD-GPS-SIM"
+  - expected_stop_reason: max_steps
