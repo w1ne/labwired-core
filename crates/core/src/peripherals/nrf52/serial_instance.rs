@@ -75,7 +75,8 @@ impl Peripheral for Nrf52SerialInstance {
         match self.active() {
             ENABLE_TWIM => self.twim.read(offset),
             ENABLE_SPIM => self.spim.read(offset),
-            _ => Ok(0),
+            // ENABLE=0: pinctrl writes PSEL before ENABLE is set; shadow to TWIM.
+            _ => self.twim.read(offset),
         }
     }
 
@@ -93,7 +94,8 @@ impl Peripheral for Nrf52SerialInstance {
         match self.active() {
             ENABLE_TWIM => self.twim.write(offset, value),
             ENABLE_SPIM => self.spim.write(offset, value),
-            _ => Ok(()),
+            // ENABLE=0: pinctrl writes PSEL before ENABLE is set; shadow to TWIM.
+            _ => self.twim.write(offset, value),
         }
     }
 
@@ -104,7 +106,8 @@ impl Peripheral for Nrf52SerialInstance {
         match self.active() {
             ENABLE_TWIM => self.twim.read_u32(offset),
             ENABLE_SPIM => self.spim.read_u32(offset),
-            _ => Ok(0),
+            // ENABLE=0: pinctrl writes PSEL before ENABLE is set; shadow to TWIM.
+            _ => self.twim.read_u32(offset),
         }
     }
 
@@ -119,7 +122,8 @@ impl Peripheral for Nrf52SerialInstance {
         match self.active() {
             ENABLE_TWIM => self.twim.write_u32(offset, value),
             ENABLE_SPIM => self.spim.write_u32(offset, value),
-            _ => Ok(()),
+            // ENABLE=0: pinctrl writes PSEL before ENABLE is set; shadow to TWIM.
+            _ => self.twim.write_u32(offset, value),
         }
     }
 
@@ -130,7 +134,7 @@ impl Peripheral for Nrf52SerialInstance {
         match self.active() {
             ENABLE_TWIM => self.twim.read_u16(offset),
             ENABLE_SPIM => self.spim.read_u16(offset),
-            _ => Ok(0),
+            _ => self.twim.read_u16(offset),
         }
     }
 
@@ -144,7 +148,7 @@ impl Peripheral for Nrf52SerialInstance {
         match self.active() {
             ENABLE_TWIM => self.twim.write_u16(offset, value),
             ENABLE_SPIM => self.spim.write_u16(offset, value),
-            _ => Ok(()),
+            _ => self.twim.write_u16(offset, value),
         }
     }
 
@@ -425,6 +429,35 @@ mod tests {
     // When TWIM is active a write to a TWIM-specific offset must not bleed
     // SPIM state (and vice versa).  Light smoke: write to TWIM ADDRESS (0x588)
     // while TWIM is active, then switch to SPIM and verify EVENTS_END is still 0.
+
+    // ── Pre-enable PSEL shadow ────────────────────────────────────────────────
+    // nrfx / Zephyr pinctrl writes PSEL.SCL and PSEL.SDA _before_ ENABLE is
+    // written (they share offset space 0x508/0x50C with SPIM PSEL).  The mux
+    // must shadow those writes to the TWIM model so nrfx_twim_init can read
+    // them back without calling nrf_gpio_pin_present_check on 0x7FFFFFFF.
+
+    #[test]
+    fn psel_writes_before_enable_are_shadowed_to_twim() {
+        let mut s = Nrf52SerialInstance::new();
+
+        // ENABLE=0 at construction; write PSEL.SCL (P0.27) and PSEL.SDA (P0.26)
+        // the way Zephyr pinctrl does before writing ENABLE.
+        write32(&mut s, 0x508, 27); // PSEL.SCL
+        write32(&mut s, 0x50C, 26); // PSEL.SDA
+
+        // Now enable TWIM; the stored PSEL values must be readable.
+        write32(&mut s, OFF_ENABLE, ENABLE_TWIM);
+        assert_eq!(
+            read32(&s, 0x508),
+            27,
+            "PSEL.SCL written before ENABLE must survive into TWIM mode"
+        );
+        assert_eq!(
+            read32(&s, 0x50C),
+            26,
+            "PSEL.SDA written before ENABLE must survive into TWIM mode"
+        );
+    }
 
     #[test]
     fn dispatch_isolation_twim_write_does_not_set_spim_events() {
