@@ -1190,8 +1190,12 @@ fn test_kw41z_zephyr_fxos8700_survival() {
     // fetch+print; at the KW41Z's 40 MHz that is ~6.4M cycles, so this fixture
     // needs a larger budget than the default to reach the first "AX=" line.
     let case = case_by_name("kw41z_zephyr_fxos8700");
-    let (pc, uart_bytes) =
-        run_cortex_m_firmware(case.chip, case.system, fixtures().join(case.fixture), 8_000_000);
+    let (pc, uart_bytes) = run_cortex_m_firmware(
+        case.chip,
+        case.system,
+        fixtures().join(case.fixture),
+        8_000_000,
+    );
     assert_pc_in_range(pc, 8_000_000, case.valid_pc_ranges);
     assert_uart_contains(&uart_bytes, case.expected_uart_output, case.name);
 }

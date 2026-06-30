@@ -94,7 +94,7 @@ impl Fxos8700 {
         self.accel[0] = tri(p);
         self.accel[1] = tri((p + 3) % 8);
         self.accel[2] = ONE_G_LJ - (tri(p).abs() / 4); // slight Z dip while moving
-        // Magnetometer: a slowly rotating heading vector (earth field-ish).
+                                                       // Magnetometer: a slowly rotating heading vector (earth field-ish).
         self.mag[0] = tri((p + 1) % 8) * 4;
         self.mag[1] = tri((p + 5) % 8) * 4;
         self.mag[2] = 1200;
