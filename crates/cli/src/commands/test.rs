@@ -160,6 +160,7 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
         no_progress_steps: detect_stuck,
         wall_time_ms: script_wall_time_ms,
         max_vcd_bytes,
+        stop_when_assertions_pass: false,
     };
 
     // Guard against accidentally huge runs from CI misconfiguration.

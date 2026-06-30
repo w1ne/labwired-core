@@ -1451,6 +1451,7 @@ pub(crate) fn build_stop_reason_details(
                 value: vcd_bytes,
             }),
         ),
+        StopReason::AssertionsPassed => (None, None),
         StopReason::MemoryViolation
         | StopReason::DecodeError
         | StopReason::Halt
@@ -2240,6 +2241,7 @@ pub(crate) fn write_config_error_outputs(
         no_progress_steps: None,
         wall_time_ms: None,
         max_vcd_bytes: None,
+        stop_when_assertions_pass: false,
     });
 
     let stop_reason = StopReason::ConfigError;

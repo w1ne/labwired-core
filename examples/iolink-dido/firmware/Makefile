@@ -23,7 +23,7 @@ LDFLAGS := -mcpu=cortex-m4 -mthumb -mfloat-abi=soft -nostartfiles \
 # iolinki device-stack sources (the CMake IOLINKI_SOURCES list, minus the POSIX
 # phy_virtual.c / linux platform, plus the baremetal time source).
 IOLINKI_SRC := \
-  $(IOLINKI_DIR)/src/iolink_core.c \
+  $(IOLINKI_DIR)/src/device.c \
   $(IOLINKI_DIR)/src/phy_generic.c \
   $(IOLINKI_DIR)/src/crc.c \
   $(IOLINKI_DIR)/src/dll.c \

@@ -5,6 +5,6 @@
 #include "iolinki/phy.h"
 #include <stdint.h>
 
-void iolink_phy_labwired_init(iolink_phy_api_t *phy, uintptr_t usart_base);
+const iolink_phy_api_t *iolink_phy_labwired_get(void);
 
 #endif /* PHY_LABWIRED_H */

@@ -10,20 +10,24 @@
 #include "phy_labwired.h"
 #include <stdint.h>
 
-static int phy_init(void) {
+static int phy_init(void *user) {
+    (void)user;
     USART2->CR1 = USART_CR1_UE | USART_CR1_TE | USART_CR1_RE;
     return 0;
 }
 
-static void phy_set_mode(iolink_phy_mode_t mode) {
+static void phy_set_mode(void *user, iolink_phy_mode_t mode) {
+    (void)user;
     (void)mode;
 }
 
-static void phy_set_baudrate(iolink_baudrate_t baudrate) {
+static void phy_set_baudrate(void *user, iolink_baudrate_t baudrate) {
+    (void)user;
     (void)baudrate;
 }
 
-static int phy_send(const uint8_t *data, size_t len) {
+static int phy_send(void *user, const uint8_t *data, size_t len) {
+    (void)user;
     for (size_t i = 0; i < len; i++) {
         while ((USART2->ISR & USART_ISR_TXE) == 0u) {
         }
@@ -32,7 +36,8 @@ static int phy_send(const uint8_t *data, size_t len) {
     return (int)len;
 }
 
-static int phy_recv_byte(uint8_t *byte) {
+static int phy_recv_byte(void *user, uint8_t *byte) {
+    (void)user;
     if (USART2->ISR & USART_ISR_RXNE) {
         *byte = (uint8_t)USART2->RDR;
         return 1;
@@ -40,9 +45,9 @@ static int phy_recv_byte(uint8_t *byte) {
     return 0;
 }
 
-static int phy_detect_wakeup(void) {
+static int phy_detect_wakeup(void *user) {
     uint8_t b;
-    while (phy_recv_byte(&b) > 0) {
+    while (phy_recv_byte(user, &b) > 0) {
         if (b == 0x55u) {
             return 1;
         }
@@ -51,6 +56,7 @@ static int phy_detect_wakeup(void) {
 }
 
 static const iolink_phy_api_t PHY = {
+    .user = 0,
     .init = phy_init,
     .set_mode = phy_set_mode,
     .set_baudrate = phy_set_baudrate,
