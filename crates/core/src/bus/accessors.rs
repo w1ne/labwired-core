@@ -519,6 +519,21 @@ impl crate::Bus for SystemBus {
         }
     }
 
+    fn is_nvic_irq_pending(&self, exception_num: u32) -> bool {
+        if exception_num < 16 {
+            return true; // Non-NVIC exceptions (SysTick, PendSV, etc.) are always live.
+        }
+        if let Some(nvic) = &self.nvic {
+            let irq = exception_num - 16;
+            let idx = (irq / 32) as usize;
+            let bit = irq % 32;
+            if idx < 8 {
+                return (nvic.ispr[idx].load(Ordering::SeqCst) & (1 << bit)) != 0;
+            }
+        }
+        true // No NVIC — assume pending (safe conservative default).
+    }
+
     fn get_rom_thunk(
         &self,
         pc: u32,

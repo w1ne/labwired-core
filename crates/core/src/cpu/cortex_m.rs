@@ -719,6 +719,20 @@ impl CortexM {
                 && !self.faultmask_blocks(exception_num);
 
             if can_take {
+                // For NVIC-routed exceptions (num >= 16): verify the NVIC ISPR bit is
+                // still set before taking the exception.  Firmware may have called
+                // NVIC_ClearPendingIRQ (writing NVIC ICPR) while the ISR was active,
+                // which clears ISPR but leaves our cpu-side `pending_exceptions` stale.
+                // Without this check the stale bit causes a spurious second ISR after the
+                // real one returns.  On real ARM Cortex-M the hardware never re-latches a
+                // pending bit whose ISPR was cleared by software before ISR exit.
+                if exception_num >= 16 && !bus.is_nvic_irq_pending(exception_num) {
+                    // Stale pending_exceptions bit — drop it without taking the exception.
+                    self.pending_exceptions[(exception_num / 64) as usize] &=
+                        !(1u64 << (exception_num % 64));
+                    // Fall through to normal instruction execution.
+                } else {
+
                 self.pending_exceptions[(exception_num / 64) as usize] &=
                     !(1u64 << (exception_num % 64));
 
@@ -799,6 +813,7 @@ impl CortexM {
                 }
 
                 return Ok(());
+                } // end else (NVIC ISPR still set — take the exception)
             }
             // Can't take this exception right now (lower priority than active).
             // Fall through and execute the current instruction normally.
