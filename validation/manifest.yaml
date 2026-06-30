@@ -59,7 +59,20 @@ boards:
     # sweep did not cover SPIM0/TWIM0 shared-MMIO behaviour (it tested SPIS/TWIS/
     # TIMER/RTC/POWER/GPIO). This is a new model for an untested path; additive
     # and validated by 6 offline unit tests (twim_path_reads_bme280_chip_id etc.).
-    drift_ack: 2026-06-29
+    # 2026-06-30: four temporal/clock-domain fidelity fixes so an unmodified Zephyr
+    # BME280 ztest now passes in-sim: (1) TWIM completion EVENTS/IRQ fire after a
+    # physical-latency countdown (transfer_cycles) instead of the same tick as
+    # TASKS_START; (2) TWIM TASKS_RESUME/SUSPEND made no-ops (only STARTTX/STARTRX
+    # initiate); (3) Cortex-M no longer re-latches an NVIC pending bit the firmware
+    # cleared via ICPR (is_nvic_irq_pending gate — kills a spurious double-ISR);
+    # (4) nRF52 RTC counts on the 32.768 kHz LFCLK via an exact fractional
+    # accumulator instead of the 64 MHz core clock. Behavioural timing/IRQ changes,
+    # NOT register-reset-value changes: the 2026-06-17 register sweep (conformance/
+    # mmio/GPIO/POWER/SPIS/TWIS/RTC/TIMER) is unaffected. The success-path BME280
+    # read was NOT live-diffed on silicon this session (no BME280 wired to the
+    # bench board — only the NACK/no-device path was captured 2026-06-30); a live
+    # success-path TWIM+RTC re-capture is tracked.
+    drift_ack: 2026-06-30
     models:
       - crates/core/src/peripherals/nrf52
       - configs/chips/nrf52840.yaml
@@ -80,7 +93,10 @@ boards:
     # 2026-06-27: rides the nrf52840 SAADC/PWM Tier-3 behavioral engines (same
     # silicon); additive, no live re-capture. See the nrf52840 drift_ack note.
     # 2026-06-29: rides the nRF52840 SPIM0/TWIM0 serial-instance mux; same silicon.
-    drift_ack: 2026-06-29
+    # 2026-06-30: rides the nRF52840 TWIM/RTC/Cortex-M temporal+clock-domain fixes
+    # (Zephyr BME280 ztest now passes in-sim); same silicon. See the nrf52840
+    # drift_ack note — success-path live re-capture tracked there.
+    drift_ack: 2026-06-30
     models:
       - crates/core/src/peripherals/nrf52
       - configs/chips/nrf52840.yaml
