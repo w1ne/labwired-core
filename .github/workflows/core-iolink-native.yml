@@ -64,7 +64,7 @@ jobs:
       - name: Install host C toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends build-essential gcc-arm-none-eabi
+          sudo apt-get install -y --no-install-recommends build-essential gcc-arm-none-eabi libnewlib-arm-none-eabi
           cc --version
           arm-none-eabi-gcc --version
 
