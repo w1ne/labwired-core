@@ -30,6 +30,15 @@ pub fn build_i2c_device(
                 address,
             )))
         }
+        "fxos8700" => {
+            let address = config
+                .get("i2c_address")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0x1f) as u8;
+            Some(Box::new(crate::peripherals::components::Fxos8700::new(
+                address,
+            )))
+        }
         "aht20" => Some(Box::new(crate::peripherals::components::Aht20::new())),
         // scd41 / sgp41 / sps30 / veml7700 are onboarded through the
         // PeripheralKit registry (peripherals/kit), which dispatches them on
