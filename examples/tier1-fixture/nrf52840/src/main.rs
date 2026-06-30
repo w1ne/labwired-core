@@ -326,14 +326,13 @@ fn check_rtc() -> Result<(), &'static str> {
     reg_write(RTC0_TASKS_START, 1);
 
     let c1 = reg_read(RTC0_COUNTER);
-    for _ in 0..256 {
+    for _ in 0..65_536 {
+        if reg_read(RTC0_COUNTER) > c1 {
+            return Ok(());
+        }
         core::hint::spin_loop();
     }
-    let c2 = reg_read(RTC0_COUNTER);
-    if c2 <= c1 {
-        return Err("rtc-not-advancing");
-    }
-    Ok(())
+    Err("rtc-not-advancing")
 }
 
 // ── i2c (TWIM): EasyDMA TX with no slave → modeled address-NACK ────────────
