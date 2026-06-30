@@ -719,86 +719,100 @@ impl CortexM {
                 && !self.faultmask_blocks(exception_num);
 
             if can_take {
-                self.pending_exceptions[(exception_num / 64) as usize] &=
-                    !(1u64 << (exception_num % 64));
-
-                // Clear NVIC ISPR for this exception so it isn't immediately re-pended.
-                // On real ARM hardware this happens automatically when the exception is taken.
-                bus.clear_nvic_pending(exception_num);
-
-                // Capture the entry context BEFORE switching to Handler mode:
-                // which mode/stack we came from determines EXC_RETURN.
-                let entered_from_handler = self.active_exception != 0;
-                let entry_on_psp = self.use_psp();
-
-                // Perform Stacking on the CURRENT (preempted) stack.
-                let sp = self.sp;
-                let frame_ptr = sp.wrapping_sub(32);
-
-                // Save the previous active_exception in xPSR IPSR bits [8:0] so that
-                // exception_return can restore the correct nesting level.
-                let save_xpsr =
-                    self.xpsr_with_itstate((self.xpsr & !0x1FF) | self.active_exception);
-
-                // Stack: R0, R1, R2, R3, R12, LR, PC, xPSR (with previous IPSR)
-                let stacked_lr = self.lr;
-                let stacked_pc = self.pc;
-                let _ = bus.write_u32(frame_ptr as u64, self.r0);
-                let _ = bus.write_u32((frame_ptr + 4) as u64, self.r1);
-                let _ = bus.write_u32((frame_ptr + 8) as u64, self.r2);
-                let _ = bus.write_u32((frame_ptr + 12) as u64, self.r3);
-                let _ = bus.write_u32((frame_ptr + 16) as u64, self.r12);
-                let _ = bus.write_u32((frame_ptr + 20) as u64, self.lr);
-                let _ = bus.write_u32((frame_ptr + 24) as u64, self.pc);
-                let _ = bus.write_u32((frame_ptr + 28) as u64, save_xpsr);
-
-                // Bank the preempted stack pointer into its bank (PSP or MSP)
-                // BEFORE entering Handler mode, then switch the live `sp` to MSP.
-                if entry_on_psp {
-                    self.psp = frame_ptr;
+                // For NVIC-routed exceptions (num >= 16): verify the NVIC ISPR bit is
+                // still set before taking the exception.  Firmware may have called
+                // NVIC_ClearPendingIRQ (writing NVIC ICPR) while the ISR was active,
+                // which clears ISPR but leaves our cpu-side `pending_exceptions` stale.
+                // Without this check the stale bit causes a spurious second ISR after the
+                // real one returns.  On real ARM Cortex-M the hardware never re-latches a
+                // pending bit whose ISPR was cleared by software before ISR exit.
+                if exception_num >= 16 && !bus.is_nvic_irq_pending(exception_num) {
+                    // Stale pending_exceptions bit — drop it without taking the exception.
+                    self.pending_exceptions[(exception_num / 64) as usize] &=
+                        !(1u64 << (exception_num % 64));
+                    // Fall through to normal instruction execution.
                 } else {
-                    self.msp = frame_ptr;
-                }
+                    self.pending_exceptions[(exception_num / 64) as usize] &=
+                        !(1u64 << (exception_num % 64));
 
-                // Update active exception (→ Handler mode) so nested exceptions
-                // see the correct level. Handler always runs on MSP.
-                self.set_active_exception(exception_num);
-                self.sp = self.msp;
-                self.it_state = 0;
+                    // Clear NVIC ISPR for this exception so it isn't immediately re-pended.
+                    // On real ARM hardware this happens automatically when the exception is taken.
+                    bus.clear_nvic_pending(exception_num);
 
-                // EXC_RETURN encodes the mode/stack to restore on return:
-                //   0xFFFFFFF1 → return to Handler mode (nested), frame on MSP
-                //   0xFFFFFFF9 → return to Thread/MSP
-                //   0xFFFFFFFD → return to Thread/PSP
-                self.lr = if entered_from_handler {
-                    0xFFFF_FFF1
-                } else if entry_on_psp {
-                    0xFFFF_FFFD
-                } else {
-                    0xFFFF_FFF9
-                };
+                    // Capture the entry context BEFORE switching to Handler mode:
+                    // which mode/stack we came from determines EXC_RETURN.
+                    let entered_from_handler = self.active_exception != 0;
+                    let entry_on_psp = self.use_psp();
 
-                // Jump to ISR handler
-                let vtor = self.vtor.load(Ordering::SeqCst);
-                let vector_addr = vtor + (exception_num * 4);
-                if std::env::var("LABWIRED_TRACE_EXC").is_ok() {
-                    eprintln!(
-                        "EXC take num={} vtor=0x{:08X} vec=0x{:08X} fetch={:?}",
-                        exception_num,
-                        vtor,
-                        vector_addr,
-                        bus.read_u32(vector_addr as u64)
-                    );
-                }
-                if let Ok(handler) = bus.read_u32(vector_addr as u64) {
-                    self.pc = handler & !1;
-                    tracing::debug!(
+                    // Perform Stacking on the CURRENT (preempted) stack.
+                    let sp = self.sp;
+                    let frame_ptr = sp.wrapping_sub(32);
+
+                    // Save the previous active_exception in xPSR IPSR bits [8:0] so that
+                    // exception_return can restore the correct nesting level.
+                    let save_xpsr =
+                        self.xpsr_with_itstate((self.xpsr & !0x1FF) | self.active_exception);
+
+                    // Stack: R0, R1, R2, R3, R12, LR, PC, xPSR (with previous IPSR)
+                    let stacked_lr = self.lr;
+                    let stacked_pc = self.pc;
+                    let _ = bus.write_u32(frame_ptr as u64, self.r0);
+                    let _ = bus.write_u32((frame_ptr + 4) as u64, self.r1);
+                    let _ = bus.write_u32((frame_ptr + 8) as u64, self.r2);
+                    let _ = bus.write_u32((frame_ptr + 12) as u64, self.r3);
+                    let _ = bus.write_u32((frame_ptr + 16) as u64, self.r12);
+                    let _ = bus.write_u32((frame_ptr + 20) as u64, self.lr);
+                    let _ = bus.write_u32((frame_ptr + 24) as u64, self.pc);
+                    let _ = bus.write_u32((frame_ptr + 28) as u64, save_xpsr);
+
+                    // Bank the preempted stack pointer into its bank (PSP or MSP)
+                    // BEFORE entering Handler mode, then switch the live `sp` to MSP.
+                    if entry_on_psp {
+                        self.psp = frame_ptr;
+                    } else {
+                        self.msp = frame_ptr;
+                    }
+
+                    // Update active exception (→ Handler mode) so nested exceptions
+                    // see the correct level. Handler always runs on MSP.
+                    self.set_active_exception(exception_num);
+                    self.sp = self.msp;
+                    self.it_state = 0;
+
+                    // EXC_RETURN encodes the mode/stack to restore on return:
+                    //   0xFFFFFFF1 → return to Handler mode (nested), frame on MSP
+                    //   0xFFFFFFF9 → return to Thread/MSP
+                    //   0xFFFFFFFD → return to Thread/PSP
+                    self.lr = if entered_from_handler {
+                        0xFFFF_FFF1
+                    } else if entry_on_psp {
+                        0xFFFF_FFFD
+                    } else {
+                        0xFFFF_FFF9
+                    };
+
+                    // Jump to ISR handler
+                    let vtor = self.vtor.load(Ordering::SeqCst);
+                    let vector_addr = vtor + (exception_num * 4);
+                    if std::env::var("LABWIRED_TRACE_EXC").is_ok() {
+                        eprintln!(
+                            "EXC take num={} vtor=0x{:08X} vec=0x{:08X} fetch={:?}",
+                            exception_num,
+                            vtor,
+                            vector_addr,
+                            bus.read_u32(vector_addr as u64)
+                        );
+                    }
+                    if let Ok(handler) = bus.read_u32(vector_addr as u64) {
+                        self.pc = handler & !1;
+                        tracing::debug!(
                         "EXC_ENTRY: exc={} handler={:#010x} frame={:#010x} stacked_lr={:#010x} stacked_pc={:#010x}",
                         exception_num, self.pc, frame_ptr, stacked_lr, stacked_pc
                     );
-                }
+                    }
 
-                return Ok(());
+                    return Ok(());
+                } // end else (NVIC ISPR still set — take the exception)
             }
             // Can't take this exception right now (lower priority than active).
             // Fall through and execute the current instruction normally.

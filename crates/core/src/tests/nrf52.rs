@@ -190,9 +190,11 @@ fn nrf52840_onboarding_rtc0_fires_compare_and_pends_irq() {
     bus.write_u32(INTENSET, 1 << 16).unwrap();
     bus.write_u32(TASKS_START, 1).unwrap();
 
+    // RTC runs at 32768 Hz; CPU at 64 MHz → ~1953 CPU ticks per RTC increment.
+    // CC[0]=4 requires 4 × ~1953 ≈ 7812 CPU ticks to fire. Allow 10000 ticks.
     let mut compare_fired = false;
     let mut irq_pended = false;
-    for _ in 0..200 {
+    for _ in 0..10000 {
         let (interrupts, _costs) = bus.tick_peripherals_fully();
         if interrupts.contains(&RTC0_IRQ) {
             irq_pended = true;

@@ -368,16 +368,15 @@ mod tests {
         write32(&mut s, 0x008, 1);
         assert!(s.needs_bus_tick(), "pending TX must be set");
 
-        // Tick 1: TX completes → LASTTX_STARTRX arms RX.
-        s.tick_with_bus(&mut bus);
-        assert!(
-            s.needs_bus_tick(),
-            "LASTTX_STARTRX must chain into RX pending"
-        );
-
-        // Tick 2: RX completes → device delivers chip-id byte.
-        s.tick_with_bus(&mut bus);
-        assert!(!s.needs_bus_tick(), "no more pending after RX");
+        // Drive the EasyDMA engine to completion. The TWIM model now imposes
+        // realistic wire latency (see Nrf52Twim::transfer_cycles), so the
+        // TX→RX chain spans many ticks rather than two; drain until idle.
+        let mut guard = 0u32;
+        while s.needs_bus_tick() {
+            s.tick_with_bus(&mut bus);
+            guard += 1;
+            assert!(guard < 5_000_000, "muxed TWIM transfer never completed");
+        }
 
         let chip_id = bus.read_slice(rx_base, 1);
         assert_eq!(chip_id[0], 0x60, "BME280 chip-id must be 0x60");
