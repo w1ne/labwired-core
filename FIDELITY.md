@@ -33,6 +33,36 @@ firmware → real SPI3 + real DC GPIO → real panel model. The boot/runtime thu
 around it are plumbing; none fake the render. Drill into peripheral/device
 breadth (the product) and genericity-via-resident-ROM, not deeper boot emulation.
 
+### The firmware-exercise matrix — and how to classify a cell honestly
+
+`docs/boards/FIRMWARE_EXERCISE_MATRIX.md` (generated from
+`validation/firmware_exercise.yaml`, gated in CI) is the systematic view of this
+section: per chip, every modeled peripheral is **proven-by-fw** (a booting
+firmware drives it), **unit-only** (register test, no firmware), **dead**
+(modeled, never run), or **shim** (hardcoded stub). It is the companion to
+`VALIDATION_STATUS.md`: that asks "is the model right vs silicon?", this asks
+"does any firmware actually run against it?".
+
+Two lessons paid for in a 2026-06-30 audit:
+
+1. **Classify from the model + a running test, never from a code comment.** A
+   first-pass audit labelled esp32s3 GDMA "dead/broken" off a stale fixture
+   comment (`gdma-no-m2m-model`); the model was actually a 65-test real
+   mem-to-mem engine and the committed tier1 matrix showed `esp32s3.dma=pass`.
+   Same error mislabeled nRF52 USBD (a 4-test partial model) and the esp32c3
+   `virtual_wifi`/`wifi_mac` (real shared-medium + RE'd MAC models that two C3
+   firmwares run over) as shims. Always open the model, count its tests, and
+   find the running test that exercises it before writing a cell.
+
+2. **A peripheral with no executable image is a *structural* shim — not a
+   closable gap.** The ESP32 WiFi MAC/PHY is a closed RF-coprocessor blob that
+   ships no runnable code, so `wifi_thunks` can never be "firmware-exercised":
+   there is nothing to execute. The honest move is to label it (`CHEAT(THUNK-LIB)`)
+   and keep it out of the fidelity count, not to fake a deeper model. Same shape:
+   boot-ROM bring-up stubs (`sdio_stub`), thin VBUS/regulator stubs, and SystemInit
+   pokes that are never polled. "Get rid of shims" means stop them *counting as
+   models* — not delete plumbing the boot path needs.
+
 ## Temporal fidelity — completion events must not fire instantaneously
 
 There is a second class of fidelity gap that has nothing to do with faking a

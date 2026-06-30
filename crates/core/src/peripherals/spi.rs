@@ -96,6 +96,12 @@ pub enum SpiRegisterLayout {
     /// CR1.CSTART-gated transfer engine. See [`Stm32H5SpiRegs`].
     Stm32H5,
     Nrf52Spim,
+    /// NXP Kinetis **DSPI** (KW41Z `SPI0/SPI1`) — FIFO master with MCR / TCR /
+    /// CTAR / SR / PUSHR / POPR. A frame is transmitted by writing PUSHR (the
+    /// low 16 bits are the data, the high bits select PCS / CONT / EOQ); the
+    /// `fsl_dspi` blocking path polls SR.TFFF before the push and SR.TCF after.
+    /// See [`KinetisDspiRegs`].
+    KinetisDspi,
 }
 
 impl FromStr for SpiRegisterLayout {
@@ -109,8 +115,9 @@ impl FromStr for SpiRegisterLayout {
             // H5 carries the H7-lineage "SPI v3" IP, not the L4/F7 FIFO map.
             "stm32h5" => Ok(Self::Stm32H5),
             "nrf52" | "nrf52_spim" | "nrf_spim" | "nordic" => Ok(Self::Nrf52Spim),
+            "kinetis" | "dspi" | "kinetis_dspi" | "nxp_dspi" | "kw41z" => Ok(Self::KinetisDspi),
             _ => Err(format!(
-                "unsupported SPI register layout '{}'; supported: stm32, stm32_fifo, stm32h5, nrf52",
+                "unsupported SPI register layout '{}'; supported: stm32, stm32_fifo, stm32h5, nrf52, kinetis",
                 value
             )),
         }
@@ -429,6 +436,59 @@ impl Nrf52SpiRegs {
     }
 }
 
+// ── NXP Kinetis DSPI (KW41Z SPI0/SPI1) ──────────────────────────────────────
+// MCR@0x0, TCR@0x8, CTAR0@0xC, CTAR1@0x10, SR@0x2C, RSER@0x30, PUSHR@0x34,
+// POPR@0x38. A frame is sent by writing PUSHR; the `fsl_dspi` blocking write
+// (DSPI_MasterWriteDataBlocking) clears SR.TCF, spins until SR.TFFF (TX FIFO
+// has room — always true here), writes PUSHR, then spins until SR.TCF. We model
+// a depth-immaterial FIFO: TFFF stays asserted, and each PUSHR write completes
+// the frame synchronously (broadcast to attached devices) and raises TCF.
+const DSPI_SR_RFDF: u32 = 0x0002_0000;
+const DSPI_SR_TFFF: u32 = 0x0200_0000;
+const DSPI_SR_EOQF: u32 = 0x1000_0000;
+const DSPI_SR_TCF: u32 = 0x8000_0000;
+
+#[derive(Debug, Clone, serde::Serialize)]
+struct KinetisDspiRegs {
+    mcr: u32,
+    tcr: u32,
+    ctar: [u32; 2],
+    sr: u32,
+    rser: u32,
+    /// Last byte clocked back on MISO (POP RX FIFO). 0 for a write-only device.
+    popr: u32,
+}
+
+impl Default for KinetisDspiRegs {
+    fn default() -> Self {
+        Self {
+            // HALT=1 at reset (module stopped until firmware configures + clears
+            // it); TFFF asserted so the first DSPI_GetStatusFlags poll passes.
+            mcr: 0x0000_0001,
+            tcr: 0,
+            ctar: [0, 0],
+            sr: DSPI_SR_TFFF,
+            rser: 0,
+            popr: 0,
+        }
+    }
+}
+
+impl KinetisDspiRegs {
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x00 => self.mcr,
+            0x08 => self.tcr,
+            0x0C => self.ctar[0],
+            0x10 => self.ctar[1],
+            0x2C => self.sr,
+            0x30 => self.rser,
+            0x38 => self.popr,
+            _ => 0,
+        }
+    }
+}
+
 /// Family-isolated SPI register state. STM32 and nRF register sets cannot
 /// coexist on one instance.
 #[derive(Debug, Clone, serde::Serialize)]
@@ -436,6 +496,7 @@ enum SpiRegs {
     Stm32(Stm32SpiRegs),
     Stm32H5(Stm32H5SpiRegs),
     Nrf52(Nrf52SpiRegs),
+    KinetisDspi(KinetisDspiRegs),
 }
 
 impl Default for SpiRegs {
@@ -522,6 +583,7 @@ impl Spi {
             }),
             SpiRegisterLayout::Stm32H5 => SpiRegs::Stm32H5(Stm32H5SpiRegs::reset()),
             SpiRegisterLayout::Nrf52Spim => SpiRegs::Nrf52(Nrf52SpiRegs::default()),
+            SpiRegisterLayout::KinetisDspi => SpiRegs::KinetisDspi(KinetisDspiRegs::default()),
         };
         Self {
             regs,
@@ -628,6 +690,71 @@ impl Spi {
                         }
                         self.transfer_buffer = miso;
                     }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// NXP Kinetis DSPI register write with transfer-engine side effects. Only
+    /// called on the `KinetisDspi` variant. A PUSHR write transmits one frame
+    /// (broadcast to attached devices) and raises SR.TCF; SR is write-1-to-clear
+    /// for TCF/EOQF/RFDF, matching the `fsl_dspi` blocking-write poll loop.
+    fn write_kinetis_dspi_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            0x00 => {
+                if let SpiRegs::KinetisDspi(r) = &mut self.regs {
+                    // CLR_TXF/CLR_RXF are momentary (read back 0); keep the
+                    // configured MCR bits otherwise.
+                    r.mcr = value & !(0x0000_0C00);
+                }
+            }
+            0x08 => {
+                if let SpiRegs::KinetisDspi(r) = &mut self.regs {
+                    r.tcr = value;
+                }
+            }
+            0x0C => {
+                if let SpiRegs::KinetisDspi(r) = &mut self.regs {
+                    r.ctar[0] = value;
+                }
+            }
+            0x10 => {
+                if let SpiRegs::KinetisDspi(r) = &mut self.regs {
+                    r.ctar[1] = value;
+                }
+            }
+            0x2C => {
+                // SR: TCF/EOQF/RFDF are write-1-to-clear; TFFF stays asserted.
+                if let SpiRegs::KinetisDspi(r) = &mut self.regs {
+                    r.sr &= !(value & (DSPI_SR_TCF | DSPI_SR_EOQF | DSPI_SR_RFDF));
+                }
+            }
+            0x30 => {
+                if let SpiRegs::KinetisDspi(r) = &mut self.regs {
+                    r.rser = value;
+                }
+            }
+            0x34 => {
+                // PUSHR: low 16 bits are the frame data. PCD8544 and most SPI
+                // peripherals here clock 8-bit frames, so deliver the low byte.
+                let mosi = (value & 0xFF) as u8;
+                self.transfer_buffer = mosi;
+                let mut miso: u8 = 0;
+                for dev in &mut self.attached_devices {
+                    let resp = dev.transfer(mosi);
+                    if resp != 0 {
+                        miso = resp;
+                    }
+                }
+                if self.loopback && self.attached_devices.is_empty() {
+                    miso = mosi;
+                }
+                if let SpiRegs::KinetisDspi(r) = &mut self.regs {
+                    r.popr = miso as u32;
+                    // Frame complete: raise TCF (and RFDF — a byte landed in the
+                    // RX FIFO). TFFF remains set (FIFO has room).
+                    r.sr |= DSPI_SR_TCF | DSPI_SR_RFDF | DSPI_SR_TFFF;
                 }
             }
             _ => {}
@@ -789,6 +916,7 @@ impl crate::Peripheral for Spi {
         let byte_offset = (offset % 4) as u32;
         let reg_val = match &self.regs {
             SpiRegs::Nrf52(r) => r.read_reg(reg_offset),
+            SpiRegs::KinetisDspi(r) => r.read_reg(reg_offset),
             SpiRegs::Stm32H5(r) => r.read_reg(reg_offset),
             // Widen u16→u32 before the shift: byte accesses at offsets 2/3 read
             // the upper byte of the next halfword; `(u16 as u32) >> 16` is 0
@@ -836,6 +964,20 @@ impl crate::Peripheral for Spi {
             return Ok(());
         }
 
+        // Kinetis DSPI: 32-bit registers, read-modify-write the byte then hand
+        // the full word to the register handler (PUSHR reads back 0, so a byte
+        // write degenerates to the shifted byte).
+        if let SpiRegs::KinetisDspi(_) = &self.regs {
+            let cur = match &self.regs {
+                SpiRegs::KinetisDspi(r) => r.read_reg(reg_offset),
+                _ => 0,
+            };
+            let mask: u32 = 0xFF << (byte_offset * 8);
+            let new = (cur & !mask) | ((value as u32) << (byte_offset * 8));
+            self.write_kinetis_dspi_reg(reg_offset, new);
+            return Ok(());
+        }
+
         // STM32: same widen-then-shift dance to avoid u16 shift overflow; the
         // final write truncates back to u16, discarding bytes 2..3.
         let cur = match &self.regs {
@@ -873,6 +1015,12 @@ impl crate::Peripheral for Spi {
         // (write-1-to-clear) must see the full mask in a single access.
         if let SpiRegs::Stm32H5(_) = &self.regs {
             self.write_stm32h5_reg(offset & !3, value);
+            return Ok(());
+        }
+        // Kinetis DSPI: PUSHR is one 32-bit frame push — must be atomic (byte
+        // splitting would transmit spurious frames), so handle the word here.
+        if let SpiRegs::KinetisDspi(_) = &self.regs {
+            self.write_kinetis_dspi_reg(offset & !3, value);
             return Ok(());
         }
         // STM32 default: four byte writes.

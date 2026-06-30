@@ -48,6 +48,7 @@ jobs:
         run: |
           python -m pip install --quiet pyyaml
           python3 scripts/generate_validation_status.py --check --drift
+          python3 scripts/generate_firmware_exercise_matrix.py --check
 
       - name: Check Formatting
         run: cargo fmt --all -- --check

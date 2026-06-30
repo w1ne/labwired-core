@@ -60,6 +60,11 @@ const I2C0_BASE: u32 = 0x3FF5_3000;
 // ("RTC controller") ADC path the IDF adc1_get_raw driver uses lives here.
 // Wired as a real Esp32SarAdc model by configure_xtensa_esp32.
 const SENS_BASE: u32 = 0x3FF4_8800;
+// LEDC (TRM §14, base 0x3FF5_9000) — backs the `pwm` matrix class. The model
+// latches the staged HSCH0_DUTY into the read-only DUTY_R shadow on the
+// CONF1.DUTY_START strobe (matching ledc_get_duty()), which is the behavioural
+// side effect the check exercises.
+const LEDC_BASE: u32 = 0x3FF5_9000;
 
 #[inline(always)]
 fn reg_read(addr: u32) -> u32 {
@@ -292,7 +297,10 @@ fn check_adc() -> Result<(), &'static str> {
     let read_channel = |channel: u32, sample_bit: u32| -> Result<u32, &'static str> {
         reg_write(READ_CTRL, sample_bit << SAMPLE_BIT_SHIFT);
         let en_pad = 1u32 << channel;
-        reg_write(MEAS_START1, (en_pad << EN_PAD_SHIFT) | START_FORCE | START_SAR);
+        reg_write(
+            MEAS_START1,
+            (en_pad << EN_PAD_SHIFT) | START_FORCE | START_SAR,
+        );
         for _ in 0..10_000 {
             if reg_read(MEAS_START1) & DONE_SAR != 0 {
                 return Ok(reg_read(MEAS_START1) & DATA_MASK);
@@ -475,6 +483,33 @@ fn check_i2c() -> Result<(), &'static str> {
     Ok(())
 }
 
+// ── pwm (LEDC): stage a duty, strobe DUTY_START, observe the DUTY_R shadow
+// latch the staged value ──────────────────────────────────────────────────
+// The DUTY_R shadow must NOT reflect the staged duty until the CONF1.DUTY_START
+// strobe; after it, DUTY_R == DUTY. A pure round-trip model never moves the
+// shadow, so this proves the real latch side effect (what ledc_get_duty reads).
+fn check_ledc() -> Result<(), &'static str> {
+    const HSCH0_DUTY: u32 = LEDC_BASE + 0x08;
+    const HSCH0_CONF1: u32 = LEDC_BASE + 0x0C;
+    const HSCH0_DUTY_R: u32 = LEDC_BASE + 0x10;
+    const DUTY_START: u32 = 1 << 31;
+
+    reg_write(HSCH0_DUTY, 0x0000_4000);
+    let staged = reg_read(HSCH0_DUTY);
+    if staged == 0 {
+        return Err("ledc-duty-zero");
+    }
+    // Before the strobe the live shadow must not yet carry the staged duty.
+    if reg_read(HSCH0_DUTY_R) == staged {
+        return Err("ledc-latched-early");
+    }
+    reg_write(HSCH0_CONF1, DUTY_START);
+    if reg_read(HSCH0_DUTY_R) != staged {
+        return Err("ledc-duty-not-latched");
+    }
+    Ok(())
+}
+
 #[esp_hal::main]
 fn main() -> ! {
     let _peripherals = esp_hal::init(esp_hal::Config::default());
@@ -487,6 +522,7 @@ fn main() -> ! {
     report("dma", check_dma());
     report("spi", check_spi());
     report("i2c", check_i2c());
+    report("ledc", check_ledc());
     uart0_write_line("TIER1 done");
 
     loop {
