@@ -99,6 +99,7 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
         script_no_progress_steps,
         script_wall_time_ms,
         script_max_vcd_bytes,
+        script_stop_when_assertions_pass,
         assertions,
         faults,
         verdict,
@@ -112,6 +113,7 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
             script.limits.no_progress_steps,
             script.limits.wall_time_ms,
             script.limits.max_vcd_bytes,
+            script.limits.stop_when_assertions_pass,
             script.assertions,
             script.faults,
             script.verdict,
@@ -129,6 +131,7 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                 None,
                 script.wall_time_ms,
                 None,
+                false,
                 script.assertions,
                 Vec::new(),
                 None,
@@ -160,7 +163,7 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
         no_progress_steps: detect_stuck,
         wall_time_ms: script_wall_time_ms,
         max_vcd_bytes,
-        stop_when_assertions_pass: false,
+        stop_when_assertions_pass: script_stop_when_assertions_pass,
     };
 
     // Guard against accidentally huge runs from CI misconfiguration.
