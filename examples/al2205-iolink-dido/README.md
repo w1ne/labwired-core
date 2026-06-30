@@ -17,10 +17,13 @@ as the firmware-under-test via a thin `phy_labwired.c` PHY over the L476 USART
 registers. LabWired provides the simulated peripherals (the `sn74hc165` shifter
 and two native `iolink-master` peers) and carries the UART bytes.
 
-Current boundary: this is a two-port firmware topology inside one simulated MCU.
-It proves isolated IO-Link stack contexts, separate UART links, and separate
-field-input stimulus. It is not yet a multi-MCU LabWired topology with separate
-firmware images, reset domains, and clocks per device node.
+The headless CLI scenario runs a two-port firmware topology inside one simulated
+MCU and proves isolated IO-Link stack contexts, separate UART links, and separate
+field-input stimulus. The CI conformance lane also runs
+`crates/core/tests/iolink_multi_node_world.rs`, which places two independent
+STM32L476 firmware machines in a LabWired `World`; each node has its own bus,
+CPU, reset domain, UART log, native C `iolinki-master` peers, and IO-Link device
+firmware image.
 
 ## Build the firmware
 
@@ -63,3 +66,12 @@ PORT3 STATE=04 OPERATE PD=3C
 
 The `inputs:` preset stands in for live switch toggling, which the playground UI
 adds in a later step.
+
+## Run the multi-chip world test
+
+After building the firmware:
+
+```sh
+IOLINKI_MASTER_DIR=/path/to/iolinki-master \
+cargo test -p labwired-core --features iolink-native --test iolink_multi_node_world -- --nocapture
+```
