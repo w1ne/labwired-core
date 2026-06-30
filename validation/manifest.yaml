@@ -127,7 +127,8 @@ boards:
     # 2026-06-28: rcc.rs SW→SWS gated on source-ready for F1/F4/V2/WBA; the H5 RCC
     # model already gated and is unchanged, so this board is untouched (shared-file
     # hash drift only). h563_mmio_diff + h563_conformance pass. No live re-capture.
-    drift_ack: 2026-06-28
+    # 2026-06-30: additive Kinetis I2C variant (KinetisI2c) + enum arm in i2c.rs for the KW41Z; the STM32 F1/L4 I2C engines are byte-for-byte untouched, stm32h563 diff/conformance unchanged. No live re-capture.
+    drift_ack: 2026-06-30
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -212,7 +213,8 @@ boards:
     # 2026-06-28: rcc.rs SW→SWS is now gated on source-ready for F1/F4/V2/WBA;
     # the L4 RCC model already gated and is unchanged, so this board's behaviour
     # is untouched. l476_mmio_diff passes unchanged. No live re-capture.
-    drift_ack: 2026-06-28
+    # 2026-06-30: additive Kinetis I2C variant (KinetisI2c) + enum arm in i2c.rs for the KW41Z; the STM32 F1/L4 I2C engines are byte-for-byte untouched, nucleo-l476rg diff/conformance unchanged. No live re-capture.
+    drift_ack: 2026-06-30
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -290,7 +292,8 @@ boards:
     # of mirroring optimistically; faithful to silicon. stm32f1_mmio_diff +
     # f103_conformance pass unchanged (neither pins the SWS switch); tier1 fixture
     # firmware updated to enable+wait HSE before selecting it. No live re-capture.
-    drift_ack: 2026-06-28
+    # 2026-06-30: additive Kinetis I2C variant (KinetisI2c) + enum arm in i2c.rs for the KW41Z; the STM32 F1/L4 I2C engines are byte-for-byte untouched, stm32f103 diff/conformance unchanged. No live re-capture.
+    drift_ack: 2026-06-30
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/afio.rs
@@ -334,7 +337,8 @@ boards:
     # stm32f4_exec_oracle pass unchanged (neither pins the SWS switch); tier1
     # fixture firmware updated to enable+wait HSE before selecting it. No live
     # re-capture.
-    drift_ack: 2026-06-28
+    # 2026-06-30: additive Kinetis I2C variant (KinetisI2c) + enum arm in i2c.rs for the KW41Z; the STM32 F1/L4 I2C engines are byte-for-byte untouched, stm32f407 diff/conformance unchanged. No live re-capture.
+    drift_ack: 2026-06-30
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs

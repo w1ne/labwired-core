@@ -24,4 +24,4 @@ Reg match = verifiable cold-reset registers reproduced. "Excluded" = registers a
 | stm32l476 | **L1** | ✓ | 58 | — | — | firmware_survival::test_nucleo_l476rg_demo_survival |
 | stm32wb55 | **L0** | ✓ | 20 | — | — | — |
 | stm32wba52 | **L0** | ✓ | 19 | — | — | — |
-| mkw41z4 | **L1** | ✓ | 18 | — | — | firmware_survival::test_kw41z_smoke_survival |
+| mkw41z4 | **L1** | ✓ | 20 | — | — | firmware_survival::test_kw41z_smoke_survival |
