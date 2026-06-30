@@ -1513,6 +1513,41 @@ fn handle_load_error<C: labwired_core::Cpu>(
     ExitCode::from(EXIT_RUNTIME_ERROR)
 }
 
+fn assertion_currently_passes(
+    assertion: &TestAssertion,
+    uart_text: &str,
+    machine: &labwired_core::Machine<impl labwired_core::Cpu>,
+) -> bool {
+    match assertion {
+        TestAssertion::UartContains(a) => uart_text.contains(&a.uart_contains),
+        TestAssertion::UartRegex(a) => simple_regex_is_match(&a.uart_regex, uart_text),
+        TestAssertion::ExpectedStopReason(_) => true,
+        TestAssertion::MemoryValue(a) => {
+            let size = a.memory_value.size.unwrap_or(32);
+            let result = match size {
+                1 | 8 => machine
+                    .bus
+                    .read_u8(a.memory_value.address)
+                    .map(|v| v as u32),
+                2 | 16 => machine
+                    .bus
+                    .read_u16(a.memory_value.address)
+                    .map(|v| v as u32),
+                4 | 32 => machine.bus.read_u32(a.memory_value.address),
+                _ => return false,
+            };
+            result.is_ok_and(|val| {
+                let mask = a.memory_value.mask.unwrap_or(0xFFFFFFFF) as u32;
+                let expected = a.memory_value.expected_value as u32;
+                (val & mask) == (expected & mask)
+            })
+        }
+        TestAssertion::UdsTester(a) => {
+            evaluate_uds_tester(&machine.bus.can_uds_testers, &a.uds_tester).is_ok()
+        }
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn execute_test_loop<C: labwired_core::Cpu>(
     args: &TestArgs,
@@ -1567,6 +1602,7 @@ fn execute_test_loop<C: labwired_core::Cpu>(
     let batch_size = if machine.config.batch_mode_enabled
         && args.breakpoint.is_empty()
         && detect_stuck.is_none()
+        && !resolved_limits.stop_when_assertions_pass
         // Cycle-tight GPIO-timing devices (e.g. HC-SR04 ECHO pulse) only behave
         // correctly when peripherals tick between every instruction; instruction
         // batching freezes them across the batch and the firmware measures 0.
@@ -1751,6 +1787,26 @@ fn execute_test_loop<C: labwired_core::Cpu>(
             } else {
                 stuck_counter = 0;
                 prev_pc = current_pc;
+            }
+        }
+
+        if resolved_limits.stop_when_assertions_pass {
+            let has_runtime_assertions = assertions
+                .iter()
+                .any(|a| !matches!(a, TestAssertion::ExpectedStopReason(_)));
+            if has_runtime_assertions {
+                let uart_text = {
+                    let bytes = uart_tx.lock().map(|g| g.clone()).unwrap_or_default();
+                    String::from_utf8_lossy(&bytes).to_string()
+                };
+                if assertions
+                    .iter()
+                    .filter(|a| !matches!(a, TestAssertion::ExpectedStopReason(_)))
+                    .all(|a| assertion_currently_passes(a, &uart_text, machine))
+                {
+                    stop_reason = StopReason::AssertionsPassed;
+                    break;
+                }
             }
         }
     }
