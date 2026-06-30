@@ -1,5 +1,5 @@
 # AL2205 IO-Link DI device firmware for the simulated STM32L476.
-# M1: startup + debug UART only. iolinki sources + PHY are added in M2.
+# Builds the two-port firmware-under-test used by the LabWired IO-Link CI scenario.
 CC      := arm-none-eabi-gcc
 IOLINKI_DIR ?= ../../../third_party/iolinki
 

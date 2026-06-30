@@ -1,6 +1,6 @@
 # AL2205-style IO-Link DI device on a simulated NUCLEO-L476RG.
-# M1: bare board (no external devices yet). The IO-Link master and the
-# 74HC165 input shifter are attached in M3/M4.
+# Two native IO-Link master peers talk to two independent firmware device
+# contexts. Each context has a separate 74HC165 input shifter stimulus.
 name: "al2205-iolink-dido"
 chip: "../../configs/chips/stm32l476.yaml"
 debug_uart: "uart1"
@@ -20,14 +20,13 @@ external_devices:
       pd_in_len: 1
       m_seq_type: 1
       com: "COM2"
-  # 74HC165 digital-input shift register: 8 input channels read over SPI1.
+  # 74HC165 digital-input shift registers: one independent input byte per port.
   - id: "di_shifter"
     type: "sn74hc165"
     connection: "spi1"
     config:
       cs_pin: "PA4"
       # Headless demo stimulus: preset the 8 input channels (0xA5 = 1010_0101).
-      # The UI (Plan 3) will toggle these live instead.
       inputs: 165
   - id: "di_shifter_port3"
     type: "sn74hc165"

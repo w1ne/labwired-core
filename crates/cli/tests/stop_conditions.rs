@@ -198,6 +198,28 @@ assertions:
 }
 
 #[test]
+fn test_stop_when_assertions_pass() {
+    let script = r#"
+schema_version: "1.0"
+inputs:
+  firmware: "__FIRMWARE__"
+  system: "__SYSTEM__"
+limits:
+  max_steps: 1000000
+  stop_when_assertions_pass: true
+assertions:
+  - uart_contains: "OK"
+"#;
+    let result = run_test("assertions_passed", script);
+    assert_eq!(result["status"], "pass");
+    assert_eq!(result["stop_reason"], "assertions_passed");
+    assert!(
+        result["steps_executed"].as_u64().unwrap() < 1000000,
+        "runner should stop before max_steps once assertions pass"
+    );
+}
+
+#[test]
 fn test_max_uart_bytes() {
     let script = r#"
 schema_version: "1.0"
