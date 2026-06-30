@@ -33,6 +33,145 @@ firmware → real SPI3 + real DC GPIO → real panel model. The boot/runtime thu
 around it are plumbing; none fake the render. Drill into peripheral/device
 breadth (the product) and genericity-via-resident-ROM, not deeper boot emulation.
 
+### The firmware-exercise matrix — and how to classify a cell honestly
+
+`docs/boards/FIRMWARE_EXERCISE_MATRIX.md` (generated from
+`validation/firmware_exercise.yaml`, gated in CI) is the systematic view of this
+section: per chip, every modeled peripheral is **proven-by-fw** (a booting
+firmware drives it), **unit-only** (register test, no firmware), **dead**
+(modeled, never run), or **shim** (hardcoded stub). It is the companion to
+`VALIDATION_STATUS.md`: that asks "is the model right vs silicon?", this asks
+"does any firmware actually run against it?".
+
+Two lessons paid for in a 2026-06-30 audit:
+
+1. **Classify from the model + a running test, never from a code comment.** A
+   first-pass audit labelled esp32s3 GDMA "dead/broken" off a stale fixture
+   comment (`gdma-no-m2m-model`); the model was actually a 65-test real
+   mem-to-mem engine and the committed tier1 matrix showed `esp32s3.dma=pass`.
+   Same error mislabeled nRF52 USBD (a 4-test partial model) and the esp32c3
+   `virtual_wifi`/`wifi_mac` (real shared-medium + RE'd MAC models that two C3
+   firmwares run over) as shims. Always open the model, count its tests, and
+   find the running test that exercises it before writing a cell.
+
+2. **A peripheral with no executable image is a *structural* shim — not a
+   closable gap.** The ESP32 WiFi MAC/PHY is a closed RF-coprocessor blob that
+   ships no runnable code, so `wifi_thunks` can never be "firmware-exercised":
+   there is nothing to execute. The honest move is to label it (`CHEAT(THUNK-LIB)`)
+   and keep it out of the fidelity count, not to fake a deeper model. Same shape:
+   boot-ROM bring-up stubs (`sdio_stub`), thin VBUS/regulator stubs, and SystemInit
+   pokes that are never polled. "Get rid of shims" means stop them *counting as
+   models* — not delete plumbing the boot path needs.
+
+## Temporal fidelity — completion events must not fire instantaneously
+
+There is a second class of fidelity gap that has nothing to do with faking a
+value: **getting the *timing* wrong.** A peripheral that performs a multi-cycle
+operation in the real world — a DMA/EasyDMA bus transfer, an ADC conversion, a
+flash page write, a UART byte — does not finish "on the next tick." It finishes
+microseconds later, and its completion EVENT (and the IRQ it raises) lands then.
+A model that fires the completion **synchronously, on the tick right after the
+firmware writes the START task, is a cheat** — it short-circuits the wall-clock
+the firmware's driver depends on, even though every register value is correct.
+
+**Why it breaks real firmware (the failure is non-obvious):** interrupt-driven
+RTOS drivers (Zephyr's `nrfx`, STM32 HAL `_IT`/`_DMA`, ESP-IDF, …) follow a
+launch-then-park pattern:
+
+```
+k_spin_lock();              // or a HAL critical section — IRQs masked / lock held
+nrfx_twim_xfer(...);        // writes TASKS_START* — the transfer begins
+k_spin_unlock();            // lock released
+k_sem_take(&done, FOREVER); // park; the ISR will give the sem, IRQs enabled
+```
+
+On silicon the completion IRQ arrives long after the lock is released. If the
+model fires it on the very next tick, **the IRQ preempts the driver while the
+spinlock is still held** → the ISR re-takes the same lock → recursive-spinlock
+fault (or re-entrancy the driver never expects), and the firmware wedges *before
+it ever reaches `main()`*. The simulator looks "fast"; the firmware looks broken.
+
+### Case study: nRF52 TWIM I²C (`peripherals/nrf52/twim.rs`, 2026-06-30)
+
+- **Symptom:** a real Zephyr BME280 firmware never printed its boot banner. The
+  CPU was pinned in `__nrfy_internal_twim_event_handle` → `z_spin_lock_valid`
+  (recursive-spinlock). The sim executed millions of steps; the firmware made no
+  progress.
+- **Root cause:** `tick_with_bus` performed the I²C transfer and set
+  `EVENTS_SUSPENDED`/`STOPPED` (raising the IRQ) on the first tick after
+  `TASKS_STARTTX`. With `peripheral_tick_interval = 1` that is the very next
+  instruction — the IRQ fired inside the nrfx driver's transfer-launch critical
+  section.
+- **Fix:** model the wire time. `Nrf52Twim::transfer_cycles(bytes)` derives the
+  transfer latency from the real bit-rate — `(bytes+1) × 9 bits × (core_hz /
+  scl_hz)` (≈5760 cycles for one byte at 100 kHz on the 64 MHz core) — and a
+  `busy_cycles` countdown holds the completion EVENTS/IRQ until that budget,
+  decremented by `peripheral_tick_interval` each `tick_with_bus`, elapses. The
+  IRQ now lands after the driver has dropped its lock and parked in `k_sem_take`.
+- **Silicon cross-check:** the *same* `zephyr.elf`, flashed to a real nRF52840
+  over SWD (ST-Link), boots fully to `arch_cpu_idle` and leaves the TWIM at
+  `ENABLE=6`, all `EVENTS=0` — i.e. real silicon clears the event and idles,
+  never storming. After the fix the sim matches: it boots Zephyr and runs the
+  test suite. This is the oracle for the class: *the firmware must reach the same
+  idle/ready state the silicon reaches.*
+
+### The general rule (applies to every chip)
+
+Any peripheral whose real operation spans more than a handful of cycles **and**
+can raise an interrupt on completion must model that latency before firing the
+completion EVENT/IRQ. Derive the delay from physics (byte/bit count × clock,
+conversion time, page-program time) — not a magic constant — so it scales with
+the transfer and the configured speed, and make the countdown interval-aware so
+it is independent of `peripheral_tick_interval`. `transfer_cycles` /
+`busy_cycles` in `twim.rs` is the reference implementation.
+
+**At-risk models elsewhere (audit when an interrupt-driven driver hangs at
+boot):** any peripheral that sets a completion/`LAST*`/`DONE`/`TC`/`EOC` event
+inside its `tick`/`tick_with_bus` on the same tick as the START task — e.g. the
+nRF52 SPIM and UARTE EasyDMA paths, STM32 SPI/I²C/DMA `TC`/`TXE`/`RXNE`
+completions, ESP32 SPI/I²C command-list `done` interrupts, and any ADC/SAADC
+that flags `EOC`/`END` immediately. A polling driver tolerates a zero-latency
+completion; an interrupt-driven one on an RTOS may not. Find candidates with:
+
+```sh
+grep -rn "events_.* = 1\|_done = 1\|tc = 1\|eoc = 1" crates/core/src/peripherals --include="*.rs"
+```
+
+## Interrupt-pending fidelity — a software pending-clear must reach the CPU
+
+The CPU keeps its own pending-exception set (`pending_exceptions`) separate from
+the NVIC's `ISPR`/`ICPR` shadow. On real Cortex-M these are one and the same bit:
+when firmware writes `NVIC_ClearPendingIRQ` (NVIC `ICPR`) the hardware drops the
+pending state, and a pending bit cleared by software before ISR exit is **never**
+re-latched. If the model clears only the NVIC shadow and leaves the CPU-side bit
+set, the core re-enters the same ISR with no real event pending — a spurious
+double-ISR that silently corrupts an interrupt-driven driver's state machine
+(observed: nrfx TWIM exited without signalling its completion `k_sem`, so the
+Zephyr BME280 read hung). Fix (`cortex_m.rs` + `bus/accessors.rs`, 2026-06-30):
+before taking an NVIC-routed exception (num ≥ 16) from `pending_exceptions`,
+verify the NVIC `ISPR` bit is still set via `Bus::is_nvic_irq_pending`; if a prior
+`ICPR` write cleared it, drop the stale CPU bit without taking the exception. The
+rule is general — **every CPU-side mirror of a peripheral/NVIC register must be
+kept coherent with software writes to that register**, not just refreshed when the
+peripheral itself changes it.
+
+## Clock-domain fidelity — a peripheral ticks on its own clock, not the CPU's
+
+`tick()` is called once per CPU cycle, but most timer/RTC/watchdog blocks run on a
+different clock domain. Advancing such a counter once per `tick()` runs it at the
+core frequency — wrong by the domain ratio. The nRF52 RTC runs on the 32.768 kHz
+LFCLK; ticking it per CPU cycle ran it **1953× too fast**, so Zephyr's RTC1 system
+clock believed a 500 ms I²C timeout had elapsed after ~16 k cycles instead of
+~32 M, and `k_sem_take` timed out before a 24-byte calibration read finished.
+Model the ratio exactly with a fractional accumulator rather than a rounded
+divide: 64 MHz / 32768 = 15625/8, so add 8 per CPU cycle and emit one base-clock
+edge each time the accumulator reaches 15625 (`rtc.rs`, 2026-06-30 — zero drift).
+**At-risk: any peripheral whose `tick` advances a counter that real silicon clocks
+from LFCLK / PCLK / a prescaled bus clock / an external crystal** — RTCs,
+watchdogs, low-power timers, SysTick with an external reference, UART/SPI
+baud divisors. A driver that derives a timeout from such a counter will mis-fire
+if the model runs the counter at core speed.
+
 ## Marker convention
 
 Every cheat in the code carries a grep-able marker on the line or block:

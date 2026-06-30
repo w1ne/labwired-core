@@ -1,0 +1,137 @@
+# LabWired firmware-exercise matrix — the BEYOND-RUBRIC layer.
+#
+# WHAT THIS FILE IS (AND IS NOT)
+#   The RUBRIC peripheral classes (clock/gpio/uart/timer/dma/irq/i2c/spi/adc/pwm/
+#   wdt/rtc/can/rmt) are NOT recorded here. Their firmware-exercise status is
+#   AUTHORITATIVE from docs/coverage/tier1-matrix.json — the committed, ratchet-
+#   gated output of the Tier-1 fixture sims (each chip's fixture is real firmware
+#   that drives those classes and self-reports PASS). The matrix generator reads
+#   that JSON directly, so the rubric grid cannot drift from reality.
+#
+#   This file records only what tier1 does NOT cover:
+#     functional         — a real driver decoding a sensor/protocol over a bus
+#                           and asserting a physical value (the gold standard).
+#     advanced_unit_only — chip-specific peripherals exercised by unit tests but
+#                           by no running firmware.
+#     advanced_dead      — chip-specific peripherals modeled but never exercised.
+#     shim               — hardcoded stubs presenting as models (the most
+#                           misleading class). Several are structurally
+#                           irreducible (a closed RF blob ships no runnable image).
+#
+# WHY THE SPLIT
+#   A first-pass hand-authored matrix under-counted the STM32 family ~4x because
+#   it read only the banner-level survival tests and missed the tier1 fixtures.
+#   Sourcing the rubric from tier1-matrix.json makes that error impossible; this
+#   file holds only the curated, non-rubric judgements.
+#
+#   scripts/generate_firmware_exercise_matrix.py renders
+#   docs/boards/FIRMWARE_EXERCISE_MATRIX.md and CI fails (--check) if stale.
+#   Only chips with beyond-rubric content need an entry.
+
+chips:
+  - id: stm32l476
+    arch: cortex-m4f
+    headline: "Richest ARM coverage: drives 11 rubric classes via real firmware, plus a gated IO-Link station that runs real sensor + shift-register devices over USART3/I2C."
+    functional:
+      - what: "IO-Link master station — AHT20 + BMP280 over I2C, SN74HC165 shift register"
+        fw: iolink-station
+        ev: "examples/iolink-station ci/test.sh (firmware-gate)"
+        gate: pr
+    advanced_unit_only: [SPI2, SPI3]
+    advanced_dead: {count: 3, examples: [GPDMA, FDCAN, HSEM]}
+    shim: []
+
+  - id: esp32c3
+    arch: riscv32imc
+    headline: "Only functional-sensor proof in the PR gate. clock/dma stay unrecorded by design — esp32c3 wires system/rtc_cntl/dma as declarative register files with no behavioural engine, so a PASS would overclaim."
+    functional:
+      - what: "Leo air-quality — real Sensirion SCD41/SGP41/SPS30 + Melexis MLX90614 + Vishay VEML7700 decode CO2 / humidity / surface condensation to plain-language verdicts"
+        fw: leo-airquality
+        ev: "e2e_leo_airquality.rs:126-143"
+        gate: pr
+    advanced_unit_only:
+      - ana_i2c
+      - sha
+      - "virtual_wifi (real shared-802.11 medium model two C3 firmwares associate over, 2 tests)"
+      - "wifi_mac (RE'd MAC<->SimNet bridge, RX descriptor ring, 5 tests)"
+    advanced_dead: {count: 2, examples: [cache, rng]}
+    shim: []
+
+  - id: esp32s3
+    arch: xtensa-lx7
+    headline: "Broad model surface (~35); the rubric grid proves ~9, plus a TMP102 functional read in the PR gate. GDMA is a real 65-test mem-to-mem engine (proven via the dma rubric cell), not a stub."
+    functional:
+      - what: "TMP102 temperature read over I2C (real driver, decoded value + GPIO threshold)"
+        fw: esp32s3-i2c-tmp102
+        ev: "e2e_i2c_tmp102.rs:58"
+        gate: pr
+    advanced_unit_only: [aes, ds, hmac, rsa, sha, i2s, lcd_cam, sdmmc, usb_otg, gpspi,
+                         pcnt, io_mux, extmem, flash_xip, spi_mem_flash, sens, system,
+                         core1_control, crosscore_ipi]
+    advanced_dead: {count: 0, examples: []}
+    shim:
+      - {p: wifi_thunks, ev: "esp32s3/wifi_thunks.rs:8 (CHEAT(THUNK-LIB))", note: "IRREDUCIBLE: the ESP32 WiFi MAC/PHY is a closed RF-coprocessor blob with NO executable image — there is no firmware to run, so it can never be firmware-exercised. The lwIP/socket layer above is routed to a real SimNet."}
+
+  - id: esp32
+    arch: xtensa-lx6
+    headline: "tier1 fixture drives 8 rubric classes incl. a BMP280 chip-id read over the I2C command-list engine and a real LEDC duty-latch."
+    functional: []
+    advanced_unit_only: [efuse, sha, syscon, twai, mcpwm, rtc_cntl]
+    advanced_dead: {count: 0, examples: []}
+    shim:
+      - {p: sdio_stub, ev: "esp32/sdio_stub.rs:5", note: "STRUCTURAL: hardcoded FSM_DONE so the boot ROM's SDIO bring-up poll terminates. Removing it breaks boot; the ROM blob is the only 'firmware' that touches it."}
+
+  - id: nrf52840
+    arch: cortex-m4f
+    headline: "TWIM/PWM are now firmware-proven via the rubric fixture (the BME280 fidelity work paid off). Radio rides an #[ignore] proximity e2e; the Zephyr BME280 temperature read runs in an external west build."
+    functional:
+      - what: "BME280 temperature read (~25 °C) via an unmodified Zephyr sensor driver"
+        fw: zephyr-bme280-ztest
+        ev: "external west build (not in core cargo test)"
+        gate: ignored
+    advanced_unit_only: [TWIS, SPIS, CCM, RNG, TEMP, ECB, GPIOTE, PPI, NVMC, FICR,
+                         UICR, NFCT, PDM, EGU, QSPI]
+    advanced_dead: {count: 8, examples: [QDEC, AAR, ACL, BPROT, COMP, CRYPTOCELL, I2S, LPCOMP, MWU]}
+    shim:
+      - {p: USBREGULATOR, ev: "nrf52/usbregulator.rs (70 lines, 0 tests)", note: "thin VBUS-ready register stub"}
+
+  - id: nrf52832
+    arch: cortex-m4f
+    headline: "Shares the nRF52 model; tier1 fixture drives TWIM/SPIM/SAADC/WDT/RTC/PWM. (The separate firmware_survival demo ELF is RAM-broken — built for 256KB on a 64KB part — but the tier1 fixture is correct.)"
+    functional: []
+    advanced_unit_only: [TWIS, SPIS, CCM, PPI, GPIOTE, NVMC]
+    advanced_dead: {count: 7, examples: [AAR, ACL, BPROT, COMP, I2S, LPCOMP, MWU, NFCT, QDEC]}
+    shim: []
+
+  - id: rp2040
+    arch: cortex-m0plus
+    headline: "tier1 fixture drives clock/timer/gpio/spi/i2c (PL022/DW_apb); boots unmodified Zephyr."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead:
+      count: 1
+      examples: [PIO0]
+      note: "PIO0 has a dedicated firmware (firmware-rp2040-pio-onboarding) but it is NOT wired into the tier1 fixture or any survival case — declared, never run."
+    shim: []
+
+  - id: stm32h563
+    arch: cortex-m33
+    headline: "Drives all 13 rubric classes (incl. FDCAN→can) via real firmware — the broadest rubric coverage. UDS bootloader/ECU examples exist but are not yet gated as automated tests."
+    functional: []
+    advanced_unit_only: ["UDS bootloader/ECU (0x10/0x27/0x34/0x36/0x37/0x85/0x28 — example firmware, not gated)"]
+    advanced_dead: {count: 0, examples: []}
+    shim: []
+
+  # ── Chips with NO tier1 fixture (not in the rubric grid) ─────────────────
+  - id: nrf5340
+    arch: cortex-m33
+    headline: "No tier1 fixture. Boots unmodified Zephyr hello_world end-to-end: CLOCK/UARTE0/RTC1 drive the boot (firmware_survival + nrf5340_clock_boot). Nine peripheral blocks are benign boot stubs."
+    functional:
+      - what: "Unmodified Zephyr v3.7 hello_world boots + prints over UARTE0 EasyDMA"
+        fw: nrf5340-zephyr
+        ev: "firmware_survival::test_nrf5340_zephyr_survival"
+        gate: pr
+    advanced_unit_only: [GPIO, "TIMER0-2", RTC0]
+    advanced_dead: {count: 0, examples: []}
+    shim:
+      - {p: "DCNF/FPU/CACHE/SPU/OSC_REG/CTRLAP/GPIOTE0/DPPIC/FICR", ev: "nrf5340_*_stub", note: "STRUCTURAL: SystemInit pokes them once at boot and never polls them again, so a register stub is byte-faithful for the hello_world boot path."}
