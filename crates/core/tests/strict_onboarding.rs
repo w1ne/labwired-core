@@ -91,6 +91,18 @@ fn test_strict_board_onboarding() -> anyhow::Result<()> {
                 continue;
             }
 
+            // These chips are exercised by firmware-survival/conformance tests
+            // rather than strict example-directory onboarding. Do not put them
+            // in SMOKE_LESS_ALLOWLIST: that list is only for chips with an
+            // example directory but no io-smoke.yaml.
+            if file_stem == "mkw41z4" || file_stem == "nrf5340" {
+                println!(
+                    "  [SKIP] {} — covered by firmware survival/conformance gates, not strict onboarding.",
+                    file_stem
+                );
+                continue;
+            }
+
             println!("---------------------------------------------------");
             println!("Verifying Strict Onboarding for: {}", file_stem);
 
@@ -224,12 +236,8 @@ fn ensure_smoke_firmware_exists(project_root: &Path, smoke_test: &Path) -> anyho
         return Ok(true);
     };
 
-    if firmware_path.exists() {
-        return Ok(true);
-    }
-
     let Ok(relative_path) = firmware_path.strip_prefix(project_root) else {
-        return Ok(false);
+        return Ok(firmware_path.exists());
     };
 
     let parts: Vec<String> = relative_path

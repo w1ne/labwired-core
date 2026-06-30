@@ -5,9 +5,9 @@
 use panic_halt as _;
 
 // Register Addresses (STM32H563)
-const RCC_AHB1ENR: *mut u32 = 0x4402_0C1C as *mut u32;
-const RCC_AHB2ENR: *mut u32 = 0x4402_0C20 as *mut u32;
-const RCC_APB1LENR: *mut u32 = 0x4402_0C28 as *mut u32;
+const RCC_AHB1ENR: *mut u32 = 0x4402_0C88 as *mut u32;
+const RCC_AHB2ENR: *mut u32 = 0x4402_0C8C as *mut u32;
+const RCC_APB1LENR: *mut u32 = 0x4402_0C9C as *mut u32;
 
 const GPIOB_BSRR: *mut u32 = 0x4202_0418 as *mut u32;
 const GPIOD_MODER: *mut u32 = 0x4202_0C00 as *mut u32;

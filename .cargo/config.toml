@@ -1,6 +1,6 @@
 # Linker configuration for ARM targets.
-# cortex-m-rt 0.7.x does not emit rustc-link-arg=-Tlink.x automatically;
-# this config.toml provides it globally for all thumbv6m targets.
-
-[target.thumbv6m-none-eabi]
-rustflags = ["-C", "link-arg=-Tlink.x"]
+#
+# `cortex-m-rt` provides `-Tlink.x` for the firmware crates. Keep this file
+# present for future target-specific overrides, but do not add a global
+# thumbv6m `-Tlink.x`: doing so passes the linker script twice and duplicates
+# MEMORY regions from memory.x.
