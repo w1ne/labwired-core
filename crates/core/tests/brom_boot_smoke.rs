@@ -65,7 +65,7 @@ fn esp32_brom_loads_and_executes() {
         for p in bus.peripherals.iter_mut() {
             if let Some(any) = p.dev.as_any_mut() {
                 if let Some(rom) = any
-                    .downcast_mut::<labwired_core::peripherals::esp32s3::rom_thunks::RomThunkBank>()
+                    .downcast_mut::<labwired_core::peripherals::esp_xtensa_common::rom_thunks::RomThunkBank>()
                 {
                     let base = p.base as u32;
                     let size = p.size as u32;

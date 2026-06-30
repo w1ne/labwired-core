@@ -9,7 +9,8 @@
 //   * `F1I2c` — the legacy peripheral (CR1/CR2/OAR/DR/SR1/SR2/CCR/TRISE) AND
 //     the full transaction state machine. START/STOP live in CR1.
 //   * `L4I2c` — the modern peripheral (CR1/CR2/OAR/TIMINGR/ISR/ICR/RXDR/TXDR),
-//     register-fidelity latching (START/STOP in CR2; no transaction engine).
+//     register-fidelity latching PLUS a minimal master transaction engine
+//     (START/STOP/AUTOEND in CR2; address phase → ISR.NACKF when no slave acks).
 // Each variant owns ALL of its own registers and state — an F1 I2C cannot
 // carry TIMINGR/ISR, an L4 I2C cannot carry SR1/DR. CR1/CR2/OAR and the
 // attached-device list exist on both because both families genuinely have
@@ -44,6 +45,9 @@ pub enum I2cRegisterLayout {
     /// STM32L4 family (also F7/H5/G0). Verified against real NUCLEO-L476RG
     /// silicon via SWD register dump.
     Stm32L4,
+    /// NXP Kinetis classic I2C (KW41Z / K series): byte-oriented A1/F/C1/S/D,
+    /// interrupt-driven master matching the fsl_i2c HAL.
+    Kinetis,
 }
 
 impl FromStr for I2cRegisterLayout {
@@ -54,8 +58,9 @@ impl FromStr for I2cRegisterLayout {
             "stm32l4" | "l4" | "stm32f7" | "f7" | "stm32h5" | "h5" | "stm32g0" | "g0" => {
                 Ok(Self::Stm32L4)
             }
+            "kinetis" | "nxp" | "nxp_i2c" | "kw41z" | "mkw41z4" => Ok(Self::Kinetis),
             _ => Err(format!(
-                "unsupported I2C register layout '{}'; supported: stm32f1, stm32l4",
+                "unsupported I2C register layout '{}'; supported: stm32f1, stm32l4, kinetis",
                 value
             )),
         }
@@ -344,7 +349,7 @@ impl F1I2c {
     }
 }
 
-// ── STM32L4 modern I2C (register-fidelity latching; no engine) ───────────────
+// ── STM32L4 modern I2C (register-fidelity latching + minimal master engine) ──
 #[derive(serde::Serialize)]
 pub struct L4I2c {
     cr1: u32,
@@ -358,8 +363,25 @@ pub struct L4I2c {
     pecr: u32,
     rxdr: u32,
     txdr: u32,
+
+    // Minimal master transaction engine (mirrors F1I2c, modern-register flavour).
+    state: I2cState,
+    cycles_remaining: u32,
+
     #[serde(skip)]
     attached_devices: Vec<RefCell<Box<dyn I2cDevice>>>,
+    /// Index of the addressed slave for the armed/in-flight transfer (None when
+    /// no attached device matches SADD — the tier-1 no-device case).
+    #[serde(skip)]
+    current_target: Option<usize>,
+    #[serde(skip)]
+    is_reading: bool,
+    #[serde(skip)]
+    autoend: bool,
+    /// CR2.START has latched a transfer; the address phase fires once the first
+    /// data byte is loaded into TXDR (write) — mirrors F1's START→DR ordering.
+    #[serde(skip)]
+    start_armed: bool,
 }
 
 impl Default for L4I2c {
@@ -376,7 +398,13 @@ impl Default for L4I2c {
             pecr: 0,
             rxdr: 0,
             txdr: 0,
+            state: I2cState::Idle,
+            cycles_remaining: 0,
             attached_devices: Vec::new(),
+            current_target: None,
+            is_reading: false,
+            autoend: false,
+            start_armed: false,
         }
     }
 }
@@ -405,10 +433,47 @@ impl L4I2c {
             0x04 => {
                 self.cr2 = value;
                 if (value & (1 << 13)) != 0 {
-                    self.isr |= 1 << 15; // START → BUSY
+                    // START: latch BUSY and arm a master transfer. Capture the
+                    // addressed slave (SADD[7:1] in 7-bit mode), direction
+                    // (RD_WRN), NBYTES and AUTOEND. The address phase runs once
+                    // the first byte reaches TXDR (write) or immediately for a
+                    // read — mirrors the F1 START→DR handshake.
+                    self.isr |= 1 << 15; // BUSY
+                    let addr = ((value >> 1) & 0x7F) as u8;
+                    self.is_reading = (value & (1 << 10)) != 0; // RD_WRN
+                    self.autoend = (value & (1 << 25)) != 0;
+                    self.current_target = self
+                        .attached_devices
+                        .iter()
+                        .position(|d| d.borrow().address() == addr);
+                    if let Some(idx) = self.current_target {
+                        self.attached_devices[idx].borrow_mut().start();
+                    }
+                    self.start_armed = true;
+                    if self.is_reading {
+                        // Read needs no TXDR write to begin; kick the engine now.
+                        self.state = I2cState::AddressPending;
+                        self.cycles_remaining = 20;
+                        self.start_armed = false;
+                    }
+                    // For a write, TXIS is NOT asserted here: on real STM32 L4
+                    // silicon TXIS only sets once the address phase has been
+                    // clocked out and ACKed (hardware then requests the first
+                    // byte). Firmware reading ISR immediately after setting
+                    // CR2.START sees only BUSY|TXE (0x8001), not TXIS. The byte
+                    // request is modelled by the engine consuming TXDR after the
+                    // address ACK (see `tick`), so no premature TXIS is needed.
                 }
                 if (value & (1 << 14)) != 0 {
-                    self.isr &= !(1 << 15); // STOP → clear BUSY
+                    // STOP: release the bus and tear down any armed/in-flight
+                    // transfer.
+                    self.isr &= !(1 << 15); // clear BUSY
+                    if let Some(idx) = self.current_target {
+                        self.attached_devices[idx].borrow_mut().stop();
+                    }
+                    self.current_target = None;
+                    self.state = I2cState::Idle;
+                    self.start_armed = false;
                 }
             }
             0x08 => self.oar1 = value,
@@ -429,6 +494,13 @@ impl L4I2c {
             0x28 => {
                 self.txdr = value & 0xFF;
                 self.isr &= !0x0000_0003; // writing TXDR clears TXE+TXIS
+                                          // Loading the first byte while a write transfer is armed starts
+                                          // the address phase.
+                if self.start_armed && self.state == I2cState::Idle {
+                    self.state = I2cState::AddressPending;
+                    self.cycles_remaining = 20;
+                    self.start_armed = false;
+                }
             }
             _ => {}
         }
@@ -461,6 +533,280 @@ impl L4I2c {
             0
         }
     }
+
+    /// One tick of the minimal master transaction engine. Returns whether an
+    /// IRQ should be raised. Structure mirrors `F1I2c::tick` but uses the modern
+    /// ISR/ICR/CR2 register set (NACKF/STOPF/TC, START/STOP/AUTOEND in CR2).
+    fn tick(&mut self) -> bool {
+        let mut irq = false;
+        if self.state == I2cState::Idle {
+            return irq;
+        }
+        self.cycles_remaining = self.cycles_remaining.saturating_sub(1);
+        if self.cycles_remaining != 0 {
+            return irq;
+        }
+        if self.state == I2cState::AddressPending {
+            match self.current_target {
+                None => {
+                    // No slave ACKed the address → NACKF (matches L476 silicon:
+                    // a write to an absent device sets ISR.NACKF, and AUTOEND
+                    // auto-generates STOP, clearing BUSY and setting STOPF).
+                    self.isr |= 1 << 4; // NACKF
+                    self.isr &= !(1 << 1); // no further byte requested (TXIS off)
+                    if self.autoend {
+                        self.isr |= 1 << 5; // STOPF
+                        self.isr &= !(1 << 15); // BUSY released
+                    }
+                    if (self.cr1 & (1 << 4)) != 0 {
+                        irq = true; // NACKIE
+                    }
+                }
+                Some(idx) => {
+                    // Slave ACKed. Deliver the one armed byte (write) or fetch
+                    // one (read), then complete (TC) and auto-STOP if requested.
+                    if self.is_reading {
+                        self.rxdr = self.attached_devices[idx].borrow_mut().read() as u32;
+                        self.isr |= 1 << 2; // RXNE
+                    } else {
+                        self.attached_devices[idx]
+                            .borrow_mut()
+                            .write(self.txdr as u8);
+                        self.isr |= 1 << 0; // TXE
+                    }
+                    self.isr |= 1 << 6; // TC (NBYTES transferred)
+                    if self.autoend {
+                        self.isr |= 1 << 5; // STOPF
+                        self.isr &= !(1 << 15); // BUSY released
+                        if let Some(i) = self.current_target {
+                            self.attached_devices[i].borrow_mut().stop();
+                        }
+                        self.current_target = None;
+                    }
+                    if (self.cr1 & (1 << 6)) != 0 {
+                        irq = true; // TCIE
+                    }
+                }
+            }
+            self.state = I2cState::Idle;
+        }
+        irq
+    }
+}
+
+// ── NXP Kinetis I2C (classic Freescale module: A1/F/C1/S/D/C2/FLT, byte-oriented,
+//    interrupt-driven master) ──────────────────────────────────────────────────
+//
+// 1-byte registers: A1=0x00, F=0x01, C1=0x02, S=0x03, D=0x04, C2=0x05, FLT=0x06,
+// RA=0x07, SMB=0x08, A2=0x09, SLTH=0x0A, SLTL=0x0B, S2=0x0C.
+//   C1 bits: IICEN 0x80, IICIE 0x40, MST 0x20, TX 0x10, TXAK 0x08, RSTA 0x04.
+//   S  bits: TCF 0x80, IAAS 0x40, BUSY 0x20, ARBL 0x10, SRW 0x04, IICIF 0x02, RXAK 0x01.
+//
+// The NXP fsl_i2c HAL drives each transfer byte-by-byte from the I2C ISR
+// (I2C_MasterTransferHandleIRQ): START is C1.MST 0→1 then the slave address is
+// written to D; a repeated START is C1.RSTA then the new address to D; entering
+// master-receive clears C1.TX and the HAL dummy-reads D once to release the bus;
+// STOP is C1.MST 1→0. Every byte the firmware moves through D "completes"
+// synchronously here — we raise S.TCF|S.IICIF and set S.RXAK from whether a
+// slave answered the address. The interrupt is LEVEL-driven: tick() asserts the
+// IRQ while (S.IICIF & C1.IICIE), because the HAL enables IICIE only AFTER the
+// opening address byte is already on the wire (I2C_MasterTransferNonBlocking),
+// so an edge model would drop the first interrupt and hang the transfer.
+const KI_C1_IICIE: u8 = 0x40;
+const KI_C1_MST: u8 = 0x20;
+const KI_C1_TX: u8 = 0x10;
+const KI_C1_RSTA: u8 = 0x04;
+const KI_S_TCF: u8 = 0x80;
+const KI_S_BUSY: u8 = 0x20;
+const KI_S_ARBL: u8 = 0x10;
+const KI_S_IICIF: u8 = 0x02;
+const KI_S_RXAK: u8 = 0x01;
+
+#[derive(serde::Serialize)]
+pub struct KinetisI2c {
+    a1: u8,
+    f: u8,
+    c1: u8,
+    s: Cell<u8>,
+    d: Cell<u8>,
+    c2: u8,
+    flt: u8,
+    ra: u8,
+    smb: u8,
+    a2: u8,
+    slth: u8,
+    sltl: u8,
+
+    /// Next byte written to D is a slave address (after START / repeated START).
+    expect_address: bool,
+    /// Next read of D is the HAL bus-release dummy (return junk, no device byte).
+    rx_dummy_pending: Cell<bool>,
+    /// Current transfer is a master read (set from the address R/W bit).
+    is_reading: bool,
+
+    #[serde(skip)]
+    attached_devices: Vec<RefCell<Box<dyn I2cDevice>>>,
+    #[serde(skip)]
+    current_target: Option<usize>,
+}
+
+impl Default for KinetisI2c {
+    fn default() -> Self {
+        Self {
+            a1: 0,
+            f: 0,
+            c1: 0,
+            // TCF=1 (idle, transfer complete), everything else clear (RM §49.3.4).
+            s: Cell::new(KI_S_TCF),
+            d: Cell::new(0),
+            c2: 0,
+            flt: 0,
+            ra: 0,
+            smb: 0,
+            a2: 0,
+            slth: 0,
+            sltl: 0,
+            expect_address: false,
+            rx_dummy_pending: Cell::new(false),
+            is_reading: false,
+            attached_devices: Vec::new(),
+            current_target: None,
+        }
+    }
+}
+
+impl KinetisI2c {
+    /// Mark a byte transfer complete: TCF + IICIF latch; RXAK mirrors the slave ack.
+    fn byte_complete(&self, acked: bool) {
+        let mut s = self.s.get() | KI_S_TCF | KI_S_IICIF;
+        if acked {
+            s &= !KI_S_RXAK;
+        } else {
+            s |= KI_S_RXAK;
+        }
+        self.s.set(s);
+    }
+
+    fn read_reg(&self, offset: u64) -> u8 {
+        match offset {
+            0x00 => self.a1,
+            0x01 => self.f,
+            0x02 => self.c1,
+            0x03 => self.s.get(),
+            0x04 => {
+                // Bus-release dummy read after entering RX: HAL discards it.
+                if self.rx_dummy_pending.replace(false) {
+                    self.byte_complete(true);
+                    return 0xFF;
+                }
+                if self.is_reading {
+                    let byte = match self.current_target {
+                        Some(idx) => self.attached_devices[idx].borrow_mut().read(),
+                        None => 0xFF,
+                    };
+                    self.d.set(byte);
+                    self.byte_complete(true);
+                    return byte;
+                }
+                self.d.get()
+            }
+            0x05 => self.c2,
+            0x06 => self.flt,
+            0x07 => self.ra,
+            0x08 => self.smb,
+            0x09 => self.a2,
+            0x0A => self.slth,
+            0x0B => self.sltl,
+            // S2: EMPTY=1 always (double-buffer TX FIFO empty) — the HAL polls
+            // this before every D write on parts with double buffering.
+            0x0C => 0x01,
+            _ => 0,
+        }
+    }
+
+    fn write_reg(&mut self, offset: u64, value: u8) {
+        match offset {
+            0x00 => self.a1 = value,
+            0x01 => self.f = value,
+            0x02 => {
+                let old = self.c1;
+                self.c1 = value;
+                let mst_old = old & KI_C1_MST != 0;
+                let mst_new = value & KI_C1_MST != 0;
+                let tx_old = old & KI_C1_TX != 0;
+                let tx_new = value & KI_C1_TX != 0;
+
+                if !mst_old && mst_new {
+                    // START: the next D write is the slave address.
+                    self.expect_address = true;
+                    self.s.set(self.s.get() | KI_S_BUSY);
+                } else if mst_old && !mst_new {
+                    // STOP. Keep current_target so a trailing last-byte D read
+                    // (the HAL issues STOP just before reading it) still resolves.
+                    if let Some(idx) = self.current_target {
+                        self.attached_devices[idx].borrow_mut().stop();
+                    }
+                    self.s.set(self.s.get() & !KI_S_BUSY);
+                }
+                if value & KI_C1_RSTA != 0 && mst_new {
+                    // Repeated START: next D write is a fresh address; RSTA self-clears.
+                    self.expect_address = true;
+                    self.c1 &= !KI_C1_RSTA;
+                }
+                if tx_old && !tx_new && mst_new {
+                    // Entering master-receive: HAL dummy-reads D next to release the bus.
+                    self.rx_dummy_pending.set(true);
+                }
+            }
+            0x03 => {
+                // S: IICIF and ARBL are write-1-to-clear.
+                let mut s = self.s.get();
+                if value & KI_S_IICIF != 0 {
+                    s &= !KI_S_IICIF;
+                }
+                if value & KI_S_ARBL != 0 {
+                    s &= !KI_S_ARBL;
+                }
+                self.s.set(s);
+            }
+            0x04 => {
+                self.d.set(value);
+                if self.expect_address {
+                    let addr = value >> 1;
+                    self.is_reading = (value & 1) != 0;
+                    self.current_target = self
+                        .attached_devices
+                        .iter()
+                        .position(|dev| dev.borrow().address() == addr);
+                    if let Some(idx) = self.current_target {
+                        self.attached_devices[idx].borrow_mut().start();
+                        self.byte_complete(true);
+                    } else {
+                        self.byte_complete(false); // address NAK
+                    }
+                    self.expect_address = false;
+                } else {
+                    if let Some(idx) = self.current_target {
+                        self.attached_devices[idx].borrow_mut().write(value);
+                    }
+                    self.byte_complete(true);
+                }
+            }
+            0x05 => self.c2 = value,
+            0x06 => self.flt = value,
+            0x07 => self.ra = value,
+            0x08 => self.smb = value,
+            0x09 => self.a2 = value,
+            0x0A => self.slth = value,
+            0x0B => self.sltl = value,
+            _ => {}
+        }
+    }
+
+    /// LEVEL interrupt: asserted while a byte is pending (IICIF) and IICIE is set.
+    fn tick(&mut self) -> bool {
+        (self.s.get() & KI_S_IICIF) != 0 && (self.c1 & KI_C1_IICIE) != 0
+    }
 }
 
 /// I2C peripheral — one variant per chip family. Register sets fully isolated.
@@ -468,6 +814,7 @@ impl L4I2c {
 pub enum I2c {
     Stm32F1(F1I2c),
     Stm32L4(L4I2c),
+    Kinetis(KinetisI2c),
 }
 
 impl core::fmt::Debug for I2c {
@@ -475,6 +822,11 @@ impl core::fmt::Debug for I2c {
         match self {
             I2c::Stm32F1(i) => f.debug_struct("I2c::F1").field("state", &i.state).finish(),
             I2c::Stm32L4(_) => f.debug_struct("I2c::L4").finish(),
+            I2c::Kinetis(i) => f
+                .debug_struct("I2c::Kinetis")
+                .field("c1", &i.c1)
+                .field("s", &i.s.get())
+                .finish(),
         }
     }
 }
@@ -494,6 +846,7 @@ impl I2c {
         match layout {
             I2cRegisterLayout::Stm32F1 => Self::Stm32F1(F1I2c::default()),
             I2cRegisterLayout::Stm32L4 => Self::Stm32L4(L4I2c::default()),
+            I2cRegisterLayout::Kinetis => Self::Kinetis(KinetisI2c::default()),
         }
     }
 
@@ -501,6 +854,7 @@ impl I2c {
         match self {
             Self::Stm32F1(i) => i.attached_devices.push(RefCell::new(device)),
             Self::Stm32L4(i) => i.attached_devices.push(RefCell::new(device)),
+            Self::Kinetis(i) => i.attached_devices.push(RefCell::new(device)),
         }
     }
 
@@ -509,6 +863,7 @@ impl I2c {
         match self {
             Self::Stm32F1(i) => &i.attached_devices,
             Self::Stm32L4(i) => &i.attached_devices,
+            Self::Kinetis(i) => &i.attached_devices,
         }
     }
 }
@@ -518,6 +873,7 @@ impl crate::Peripheral for I2c {
         Ok(match self {
             Self::Stm32F1(i) => i.read(offset),
             Self::Stm32L4(i) => i.read(offset),
+            Self::Kinetis(i) => i.read_reg(offset),
         })
     }
 
@@ -525,6 +881,7 @@ impl crate::Peripheral for I2c {
         match self {
             Self::Stm32F1(i) => i.write(offset, value),
             Self::Stm32L4(i) => i.write(offset, value),
+            Self::Kinetis(i) => i.write_reg(offset, value),
         }
         Ok(())
     }
@@ -532,7 +889,8 @@ impl crate::Peripheral for I2c {
     fn tick(&mut self) -> crate::PeripheralTickResult {
         let irq = match self {
             Self::Stm32F1(i) => i.tick(),
-            Self::Stm32L4(_) => false, // L4 has no transaction engine
+            Self::Stm32L4(i) => i.tick(),
+            Self::Kinetis(i) => i.tick(),
         };
         crate::PeripheralTickResult {
             irq,
@@ -545,6 +903,15 @@ impl crate::Peripheral for I2c {
         Some(match self {
             Self::Stm32F1(i) => i.peek(offset),
             Self::Stm32L4(i) => i.peek(offset),
+            // Kinetis registers are side-effect-free to read except D; peek D
+            // without consuming a device byte.
+            Self::Kinetis(i) => {
+                if offset == 0x04 {
+                    i.d.get()
+                } else {
+                    i.read_reg(offset)
+                }
+            }
         })
     }
 
@@ -560,6 +927,7 @@ impl crate::Peripheral for I2c {
         match self {
             Self::Stm32F1(i) => serde_json::to_value(i),
             Self::Stm32L4(i) => serde_json::to_value(i),
+            Self::Kinetis(i) => serde_json::to_value(i),
         }
         .unwrap_or(serde_json::Value::Null)
     }
@@ -741,5 +1109,100 @@ mod tests {
         assert_ne!(i2c.peek(0x14).unwrap() & 0x40, 0);
         assert_eq!(i2c.read(0x10).unwrap(), 0);
         assert_eq!(reads.load(Ordering::SeqCst), 1);
+    }
+
+    // ── STM32L4 (modern) transaction engine ──────────────────────────────────
+
+    /// Configure CR2 for a 1-byte 7-bit master write to `addr` with AUTOEND,
+    /// then load TXDR — the no-device case the tier-1 fixtures exercise.
+    fn l4_write_xfer(i2c: &mut I2c, addr: u8, byte: u8) {
+        use crate::Peripheral;
+        i2c.write(0x00, 1).unwrap(); // CR1.PE
+                                     // CR2 = SADD(addr<<1) | NBYTES=1<<16 | AUTOEND<<25 | START<<13
+        let cr2: u32 = ((addr as u32) << 1) | (1 << 16) | (1 << 25) | (1 << 13);
+        for b in 0..4 {
+            i2c.write(0x04 + b, ((cr2 >> (b * 8)) & 0xFF) as u8)
+                .unwrap();
+        }
+        i2c.write(0x28, byte).unwrap(); // TXDR: first (only) byte
+    }
+
+    #[test]
+    fn test_l4_i2c_nack_on_no_device() {
+        use super::I2cRegisterLayout;
+        let mut i2c = I2c::new_with_layout(I2cRegisterLayout::Stm32L4);
+
+        // START latches BUSY (ISR bit15) up front.
+        l4_write_xfer(&mut i2c, 0x52, 0xAB);
+        // BUSY is ISR bit15 → byte offset 0x19, bit7.
+        assert_ne!(i2c.peek(0x19).unwrap() & (1 << 7), 0, "BUSY after START");
+
+        // No attached device → address phase NACKs after the engine ticks.
+        let mut nacked = false;
+        for _ in 0..40 {
+            i2c.tick();
+            if i2c.peek(0x18).unwrap() & (1 << 4) != 0 {
+                nacked = true;
+                break;
+            }
+        }
+        assert!(nacked, "ISR.NACKF must set when no slave acknowledges");
+        // AUTOEND released the bus: BUSY clear, STOPF set.
+        assert_eq!(i2c.peek(0x19).unwrap() & (1 << 7), 0, "AUTOEND clears BUSY");
+        assert_ne!(i2c.peek(0x18).unwrap() & (1 << 5), 0, "AUTOEND sets STOPF");
+
+        // ICR.NACKCF (bit4) + STOPCF (bit5) clear the flags.
+        i2c.write(0x1C, (1 << 4) | (1 << 5)).unwrap();
+        assert_eq!(
+            i2c.peek(0x18).unwrap() & (1 << 4),
+            0,
+            "NACKF cleared by ICR"
+        );
+    }
+
+    #[test]
+    fn test_l4_i2c_ack_delivers_byte_to_device() {
+        use super::I2cRegisterLayout;
+        use std::sync::atomic::AtomicUsize;
+        let writes = Arc::new(AtomicUsize::new(0));
+
+        struct WriteCounter {
+            address: u8,
+            writes: Arc<AtomicUsize>,
+        }
+        impl I2cDevice for WriteCounter {
+            fn address(&self) -> u8 {
+                self.address
+            }
+            fn read(&mut self) -> u8 {
+                0
+            }
+            fn write(&mut self, _data: u8) {
+                self.writes.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        let mut i2c = I2c::new_with_layout(I2cRegisterLayout::Stm32L4);
+        i2c.attach(Box::new(WriteCounter {
+            address: 0x3C,
+            writes: writes.clone(),
+        }));
+
+        l4_write_xfer(&mut i2c, 0x3C, 0x42);
+        for _ in 0..40 {
+            i2c.tick();
+        }
+        // Attached device ACKs → no NACKF, the byte reaches the device, TC set.
+        assert_eq!(
+            i2c.peek(0x18).unwrap() & (1 << 4),
+            0,
+            "no NACKF when device present"
+        );
+        assert_ne!(
+            i2c.peek(0x18).unwrap() & (1 << 6),
+            0,
+            "TC after byte transferred"
+        );
+        assert_eq!(writes.load(Ordering::SeqCst), 1);
     }
 }

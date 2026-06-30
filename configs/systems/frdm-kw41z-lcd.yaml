@@ -1,0 +1,37 @@
+# LabWired - FRDM-KW41Z + Nokia-5110 activity-display System
+#
+# The KW41Z "cattle activity tag" demo: the on-board FXOS8700 accelerometer on
+# I2C1 (slave 0x1f) feeds a live 3-axis activity bar-graph rendered onto a Nokia
+# 5110 (PCD8544) LCD on SPI0 (Kinetis DSPI). The display's D/C line is a GPIOC
+# output (PTC0); the SPI bus latches that pin's level into the display model to
+# tell command bytes from framebuffer data. Firmware: crates/firmware-kw41z-lcd.
+name: "frdm-kw41z-lcd"
+chip: "../chips/mkw41z4.yaml"
+external_devices:
+  - id: "fxos8700"
+    type: "fxos8700"
+    connection: "i2c1"
+    config:
+      i2c_address: 0x1f
+  - id: "lcd"
+    type: "pcd8544"
+    connection: "spi0"
+    config:
+      cs_pin: "PC4"
+      dc_pin: "PC0"
+board_io:
+  - id: "fxos8700"
+    kind: "i2c_device"
+    peripheral: "i2c1"
+    pin: 0
+    signal: "input"
+    active_high: true
+    i2c_address: 0x1f
+    device_type: "fxos8700"
+  - id: "lcd"
+    kind: "spi_device"
+    peripheral: "spi0"
+    pin: 4
+    signal: "input"
+    active_high: true
+    device_type: "pcd8544"

@@ -14,22 +14,24 @@
 //!
 //! **TASKS_STARTTX (0x008):** reads TXD.MAXCNT bytes from RAM at TXD.PTR,
 //! delivers them to the attached I2C device (or consumes them if no device
-//! is attached), sets TXD.AMOUNT, fires EVENTS_LASTTX (0x15C). Then,
+//! is attached), sets TXD.AMOUNT, fires EVENTS_LASTTX (0x160). Then,
 //! depending on SHORTS, may fire EVENTS_STOPPED (0x104) or chain to STARTRX.
 //!
 //! **TASKS_STARTRX (0x000):** reads RXD.MAXCNT bytes from the device (or
 //! fills with 0xFF if no device), writes them to RAM at RXD.PTR, sets
-//! RXD.AMOUNT, fires EVENTS_LASTRX (0x158). Then, depending on SHORTS, may
+//! RXD.AMOUNT, fires EVENTS_LASTRX (0x15C). Then, depending on SHORTS, may
 //! fire EVENTS_STOPPED (0x104) or chain to STARTTX.
 //!
 //! **TASKS_STOP (0x014):** fires EVENTS_STOPPED (0x104).
 //!
-//! # SHORTS (0x200)
+//! # SHORTS (0x200)  (nRF52840 PS §6.31, Table 211)
 //!
-//! Bit 7: LASTTX_STARTRX  — auto-chain TX→RX
-//! Bit 8: LASTTX_STOP     — auto-stop after TX
-//! Bit 9: LASTRX_STOP     — auto-stop after RX
-//! Bit 10: LASTRX_STARTTX — auto-chain RX→TX
+//! Bit  7: LASTTX_STARTRX  — auto-chain TX→RX (repeated-START)
+//! Bit  8: LASTTX_SUSPEND  — hold bus after TX (no STOP; fires EVENTS_SUSPENDED)
+//! Bit  9: LASTTX_STOP     — auto-stop after TX
+//! Bit 10: LASTRX_STARTTX  — auto-chain RX→TX
+//! Bit 11: LASTRX_SUSPEND  — hold bus after RX (no STOP; fires EVENTS_SUSPENDED)
+//! Bit 12: LASTRX_STOP     — auto-stop after RX
 //!
 //! # EVENTS write semantics
 //!
@@ -57,10 +59,11 @@ const OFF_TASKS_SUSPEND: u64 = 0x01C;
 // ── Event offsets ─────────────────────────────────────────────────────────────
 const OFF_EVENTS_STOPPED: u64 = 0x104;
 const OFF_EVENTS_ERROR: u64 = 0x124;
+const OFF_EVENTS_SUSPENDED: u64 = 0x148;
 const OFF_EVENTS_RXSTARTED: u64 = 0x14C;
 const OFF_EVENTS_TXSTARTED: u64 = 0x150;
-const OFF_EVENTS_LASTRX: u64 = 0x158;
-const OFF_EVENTS_LASTTX: u64 = 0x15C;
+const OFF_EVENTS_LASTRX: u64 = 0x15C;
+const OFF_EVENTS_LASTTX: u64 = 0x160;
 
 // ── Control registers ─────────────────────────────────────────────────────────
 const OFF_SHORTS: u64 = 0x200;
@@ -84,22 +87,30 @@ const OFF_TXD_AMOUNT: u64 = 0x54C;
 // ── Address register ──────────────────────────────────────────────────────────
 const OFF_ADDRESS: u64 = 0x588;
 
-// ── SHORTS bits ───────────────────────────────────────────────────────────────
-const SHORT_LASTTX_STARTRX: u32 = 1 << 7;
-const SHORT_LASTTX_STOP: u32 = 1 << 8;
-const SHORT_LASTRX_STOP: u32 = 1 << 9;
-const SHORT_LASTRX_STARTTX: u32 = 1 << 10;
+// ── SHORTS bits (nRF52840 PS TWIM_SHORTS, Table 211) ─────────────────────────
+const SHORT_LASTTX_STARTRX: u32 = 1 << 7; // LASTTX → STARTRX
+const SHORT_LASTTX_SUSPEND: u32 = 1 << 8; // LASTTX → SUSPEND (TX_NO_STOP path)
+const SHORT_LASTTX_STOP: u32 = 1 << 9; // LASTTX → STOP
+const SHORT_LASTRX_STARTTX: u32 = 1 << 10; // LASTRX → STARTTX
+const SHORT_LASTRX_SUSPEND: u32 = 1 << 11; // LASTRX → SUSPEND
+const SHORT_LASTRX_STOP: u32 = 1 << 12; // LASTRX → STOP
 
-// ── INTEN bits (PS §6.31) ─────────────────────────────────────────────────────
-// STOPPED=1, ERROR=9, RXSTARTED=19, TXSTARTED=20, LASTRX=23, LASTTX=24
+// ── INTEN bits (PS §6.31, TWIM_INTENSET table) ───────────────────────────────
+// STOPPED=1, ERROR=9, SUSPENDED=18, RXSTARTED=19, TXSTARTED=20, LASTRX=23, LASTTX=24
 const INTEN_STOPPED: u32 = 1 << 1;
 const INTEN_ERROR: u32 = 1 << 9;
+const INTEN_SUSPENDED: u32 = 1 << 18;
 const INTEN_RXSTARTED: u32 = 1 << 19;
 const INTEN_TXSTARTED: u32 = 1 << 20;
 const INTEN_LASTRX: u32 = 1 << 23;
 const INTEN_LASTTX: u32 = 1 << 24;
-const INTEN_MASK: u32 =
-    INTEN_STOPPED | INTEN_ERROR | INTEN_RXSTARTED | INTEN_TXSTARTED | INTEN_LASTRX | INTEN_LASTTX;
+const INTEN_MASK: u32 = INTEN_STOPPED
+    | INTEN_ERROR
+    | INTEN_SUSPENDED
+    | INTEN_RXSTARTED
+    | INTEN_TXSTARTED
+    | INTEN_LASTRX
+    | INTEN_LASTTX;
 
 // ── ERRORSRC bits ─────────────────────────────────────────────────────────────
 const ERRORSRC_ANACK: u32 = 1 << 1;
@@ -110,8 +121,12 @@ const ERRORSRC_MASK: u32 = ERRORSRC_ANACK | ERRORSRC_DNACK;
 const ENABLE_MASK: u32 = 0xF;
 const MAXCNT_MASK: u32 = 0xFF;
 const ADDRESS_MASK: u32 = 0x7F;
-const SHORTS_MASK: u32 =
-    SHORT_LASTTX_STARTRX | SHORT_LASTTX_STOP | SHORT_LASTRX_STOP | SHORT_LASTRX_STARTTX;
+const SHORTS_MASK: u32 = SHORT_LASTTX_STARTRX
+    | SHORT_LASTTX_SUSPEND
+    | SHORT_LASTTX_STOP
+    | SHORT_LASTRX_STARTTX
+    | SHORT_LASTRX_SUSPEND
+    | SHORT_LASTRX_STOP;
 
 // ── Pending-transfer token values ─────────────────────────────────────────────
 /// No transfer pending.
@@ -132,6 +147,7 @@ pub struct Nrf52Twim {
     // ── EVENTS (HW-set only; SW write-1 ignored, write-0 clears) ─────────────
     events_stopped: u32,
     events_error: u32,
+    events_suspended: u32,
     events_rxstarted: u32,
     events_txstarted: u32,
     events_lastrx: u32,
@@ -162,6 +178,13 @@ pub struct Nrf52Twim {
     /// Transfer pending for `tick_with_bus`.  One of PENDING_{NONE,TX,RX,STOP}.
     pending: u8,
 
+    /// Remaining core-cycles of wire latency before the pending transfer
+    /// completes and its EVENTS (and the IRQ) fire. Models real I²C transfer
+    /// time so a completion interrupt cannot preempt the driver's
+    /// transfer-launch critical section. See `transfer_cycles`. Counted down by
+    /// the configured `peripheral_tick_interval` each `tick_with_bus`.
+    busy_cycles: u32,
+
     /// I2C devices attached to this master bus.  Keyed by 7-bit address.
     #[allow(dead_code)]
     attached_devices: Vec<RefCell<Box<dyn I2cDevice>>>,
@@ -182,6 +205,7 @@ impl Default for Nrf52Twim {
         Self {
             events_stopped: 0,
             events_error: 0,
+            events_suspended: 0,
             events_rxstarted: 0,
             events_txstarted: 0,
             events_lastrx: 0,
@@ -203,6 +227,7 @@ impl Default for Nrf52Twim {
             txd_amount: 0,
             address: 0,
             pending: PENDING_NONE,
+            busy_cycles: 0,
             attached_devices: Vec::new(),
         }
     }
@@ -224,6 +249,36 @@ impl Nrf52Twim {
         self.attached_devices
             .iter()
             .position(|d| d.borrow().address() == addr7)
+    }
+
+    /// Core-cycle latency of a `bytes`-byte wire transfer at the configured SCL
+    /// frequency, including the START + address phase.
+    ///
+    /// **Why this matters (silicon-fidelity / false-pass prevention):** real
+    /// I²C is slow — one byte at 100 kHz takes ~90 µs (~5760 cycles at the
+    /// nRF52840's 64 MHz core). The interrupt-driven nrfx/Zephyr driver writes
+    /// TASKS_START*while holding a spinlock*, then leaves the critical section
+    /// and blocks in `k_sem_take`; the completion IRQ only arrives microseconds
+    /// later, by which time the lock is released. If the model instead fired
+    /// the completion EVENTS (and thus the IRQ) on the *next* tick, the ISR
+    /// would preempt the still-held spinlock → recursive-spinlock fault → the
+    /// nrfx ISR re-enters forever. Modelling the transfer time makes the IRQ
+    /// land after the driver is safely parked, exactly as on hardware.
+    fn transfer_cycles(&self, bytes: u32) -> u32 {
+        // nRF52840 CPU/HFCLK = 64 MHz. Map the FREQUENCY register to the SCL
+        // bit-rate (only the three standard Nordic values matter; anything
+        // unrecognised falls back to the slowest/safest 100 kHz).
+        const CORE_HZ: u32 = 64_000_000;
+        let scl_hz: u32 = match self.frequency {
+            f if f >= 0x0640_0000 => 400_000,
+            f if f >= 0x0400_0000 => 250_000,
+            _ => 100_000,
+        };
+        let cycles_per_bit = CORE_HZ / scl_hz; // 640 @100k · 256 @250k · 160 @400k
+                                               // 9 bits/byte (8 data + ACK); +1 byte models START + address + R/W.
+                                               // Floor at one byte-time so even a 0-byte STOP delays past the
+                                               // driver's critical section.
+        ((bytes + 1) * 9 * cycles_per_bit).max(9 * cycles_per_bit)
     }
 
     /// Execute a TX transfer: read `txd_maxcnt` bytes from bus RAM at
@@ -331,6 +386,7 @@ impl Peripheral for Nrf52Twim {
             // EVENTS.
             OFF_EVENTS_STOPPED => self.events_stopped,
             OFF_EVENTS_ERROR => self.events_error,
+            OFF_EVENTS_SUSPENDED => self.events_suspended,
             OFF_EVENTS_RXSTARTED => self.events_rxstarted,
             OFF_EVENTS_TXSTARTED => self.events_txstarted,
             OFF_EVENTS_LASTRX => self.events_lastrx,
@@ -371,9 +427,11 @@ impl Peripheral for Nrf52Twim {
             // ── TASKS ─────────────────────────────────────────────────────────
             OFF_TASKS_STARTRX if value != 0 => {
                 self.pending = PENDING_RX;
+                self.busy_cycles = self.transfer_cycles(self.rxd_maxcnt & MAXCNT_MASK);
             }
             OFF_TASKS_STARTTX if value != 0 => {
                 self.pending = PENDING_TX;
+                self.busy_cycles = self.transfer_cycles(self.txd_maxcnt & MAXCNT_MASK);
             }
             // Immediate stop with no pending transfer. If a transfer is in
             // flight this arm does not match (the write lands in the no-op
@@ -381,7 +439,27 @@ impl Peripheral for Nrf52Twim {
             // transfer completes.
             OFF_TASKS_STOP if value != 0 && self.pending == PENDING_NONE => {
                 self.pending = PENDING_STOP;
+                self.busy_cycles = self.transfer_cycles(0);
             }
+            // TASKS_RESUME after a LASTTX_SUSPEND hold: this is nrfx's
+            // TX_NO_STOP (`write_read_dt`) path — the TX leg suspended the bus
+            // (EVENTS_SUSPENDED) instead of stopping, the driver set up
+            // RXD.PTR/MAXCNT, and now RESUME (NOT STARTRX) starts the follow-on
+            // RX. Gating on an ACTIVE EVENTS_SUSPENDED is what makes this safe:
+            // in the SHORTS auto-chain path no suspend is ever held when a
+            // spurious RESUME is written, so the earlier "stale RXD.MAXCNT"
+            // mis-fire (a register write turned into a bogus read) cannot recur.
+            OFF_TASKS_RESUME
+                if value != 0
+                    && self.events_suspended != 0
+                    && (self.rxd_maxcnt & MAXCNT_MASK) > 0 =>
+            {
+                self.events_suspended = 0;
+                self.pending = PENDING_RX;
+                self.busy_cycles = self.transfer_cycles(self.rxd_maxcnt & MAXCNT_MASK);
+            }
+            // Otherwise RESUME/SUSPEND only un-/hold the bus and never start a
+            // transfer — the STARTTX/STARTRX tasks are the sole initiators.
             OFF_TASKS_RESUME | OFF_TASKS_SUSPEND => {}
             OFF_TASKS_STARTRX | OFF_TASKS_STARTTX | OFF_TASKS_STOP => {
                 // value == 0: no-op (tasks are level-triggered on non-zero)
@@ -390,6 +468,7 @@ impl Peripheral for Nrf52Twim {
             // ── EVENTS — SW write-1 ignored; SW write-0 clears ───────────────
             OFF_EVENTS_STOPPED if value == 0 => self.events_stopped = 0,
             OFF_EVENTS_ERROR if value == 0 => self.events_error = 0,
+            OFF_EVENTS_SUSPENDED if value == 0 => self.events_suspended = 0,
             OFF_EVENTS_RXSTARTED if value == 0 => self.events_rxstarted = 0,
             OFF_EVENTS_TXSTARTED if value == 0 => self.events_txstarted = 0,
             OFF_EVENTS_LASTRX if value == 0 => self.events_lastrx = 0,
@@ -437,32 +516,59 @@ impl Peripheral for Nrf52Twim {
     /// Sequence (PS §6.31 state diagram):
     /// 1. Execute the pending task (TX or RX or STOP).
     /// 2. Check SHORTS to determine what to chain next.
-    /// 3. Fire EVENTS_STOPPED if the transfer chain ends without a further
-    ///    chained task.
+    /// 3. Fire EVENTS_SUSPENDED (bus held, no STOP) or EVENTS_STOPPED as
+    ///    appropriate, and reset the I2C device state on STOP.
     fn tick_with_bus(&mut self, bus: &mut dyn Bus) {
         let pending = self.pending;
         if pending == PENDING_NONE {
             return;
         }
+
+        // Model wire-transfer latency: hold the transfer "on the bus" until the
+        // configured per-tick instruction quantum has counted down the cycle
+        // budget set when the task was triggered. Until then the completion
+        // EVENTS (and the IRQ) do not fire, so an interrupt cannot preempt the
+        // driver's transfer-launch critical section. See `transfer_cycles`.
+        if self.busy_cycles > 0 {
+            let interval = bus.config().peripheral_tick_interval.max(1);
+            self.busy_cycles = self.busy_cycles.saturating_sub(interval);
+            return;
+        }
+
         self.pending = PENDING_NONE;
+
+        let addr7 = (self.address & ADDRESS_MASK) as u8;
 
         match pending {
             PENDING_STOP => {
                 self.events_stopped = 1;
+                // STOP condition: reset I2C device register-address cursor.
+                if let Some(idx) = self.device_for(addr7) {
+                    self.attached_devices[idx].borrow_mut().stop();
+                }
             }
             PENDING_TX => {
                 let _nack = self.do_tx(bus);
 
                 // Honour SHORTS after LASTTX.
                 if self.shorts & SHORT_LASTTX_STARTRX != 0 {
-                    // Chain into RX (re-arm pending so tick_with_bus runs again).
+                    // Chain TX→RX via repeated-START (no STOP between them).
+                    // The follow-on RX is a fresh wire transfer: re-arm latency.
                     self.pending = PENDING_RX;
+                    self.busy_cycles = self.transfer_cycles(self.rxd_maxcnt & MAXCNT_MASK);
+                } else if self.shorts & SHORT_LASTTX_SUSPEND != 0 {
+                    // Bus held (no STOP); fires EVENTS_SUSPENDED.
+                    // nrfx uses this for TX_NO_STOP (write-then-read split into
+                    // two separate nrfx_twim_xfer calls).
+                    self.events_suspended = 1;
                 } else if self.shorts & SHORT_LASTTX_STOP != 0 {
                     self.events_stopped = 1;
+                    if let Some(idx) = self.device_for(addr7) {
+                        self.attached_devices[idx].borrow_mut().stop();
+                    }
                 }
-                // If neither SHORT is set, the peripheral waits for firmware
-                // to issue TASKS_STOP or TASKS_STARTRX explicitly — no STOPPED
-                // here.
+                // If no SHORT matches, firmware drives TASKS_STOP or
+                // TASKS_STARTRX explicitly.
             }
             PENDING_RX => {
                 let _nack = self.do_rx(bus);
@@ -470,8 +576,15 @@ impl Peripheral for Nrf52Twim {
                 // Honour SHORTS after LASTRX.
                 if self.shorts & SHORT_LASTRX_STOP != 0 {
                     self.events_stopped = 1;
+                    if let Some(idx) = self.device_for(addr7) {
+                        self.attached_devices[idx].borrow_mut().stop();
+                    }
+                } else if self.shorts & SHORT_LASTRX_SUSPEND != 0 {
+                    self.events_suspended = 1;
                 } else if self.shorts & SHORT_LASTRX_STARTTX != 0 {
+                    // Chain RX→TX: re-arm latency for the follow-on TX leg.
                     self.pending = PENDING_TX;
+                    self.busy_cycles = self.transfer_cycles(self.txd_maxcnt & MAXCNT_MASK);
                 }
             }
             _ => {}
@@ -483,6 +596,11 @@ impl Peripheral for Nrf52Twim {
         let events: &[(&u32, u32, u64)] = &[
             (&self.events_stopped, INTEN_STOPPED, OFF_EVENTS_STOPPED),
             (&self.events_error, INTEN_ERROR, OFF_EVENTS_ERROR),
+            (
+                &self.events_suspended,
+                INTEN_SUSPENDED,
+                OFF_EVENTS_SUSPENDED,
+            ),
             (
                 &self.events_rxstarted,
                 INTEN_RXSTARTED,
@@ -624,6 +742,21 @@ mod tests {
 
     fn read32(t: &Nrf52Twim, offset: u64) -> u32 {
         t.read_u32(offset).unwrap()
+    }
+
+    /// Drive exactly one EasyDMA transfer leg to completion: burn the modelled
+    /// wire latency (see `Nrf52Twim::transfer_cycles`), then run the leg. This
+    /// is the 1:1 replacement for a single `tick_with_bus` call in the old
+    /// zero-latency model, so each call advances one TX/RX/STOP leg — a chained
+    /// TX→RX still takes two `run_leg` calls, exactly as before.
+    fn run_leg(t: &mut Nrf52Twim, bus: &mut FlatRam) {
+        let mut guard = 0u32;
+        while t.busy_cycles > 0 {
+            t.tick_with_bus(bus);
+            guard += 1;
+            assert!(guard < 5_000_000, "transfer latency never drained");
+        }
+        t.tick_with_bus(bus);
     }
 
     // ── Register surface tests ────────────────────────────────────────────────
@@ -805,7 +938,7 @@ mod tests {
         assert!(t.needs_bus_tick(), "pending_start must be set");
 
         // Run EasyDMA.
-        t.tick_with_bus(&mut bus);
+        run_leg(&mut t, &mut bus);
 
         assert_eq!(
             read32(&t, OFF_EVENTS_LASTTX),
@@ -834,7 +967,7 @@ mod tests {
         write32(&mut t, OFF_TXD_PTR, tx_base as u32);
         write32(&mut t, OFF_TXD_MAXCNT, 2);
         write32(&mut t, OFF_TASKS_STARTTX, 1);
-        t.tick_with_bus(&mut bus);
+        run_leg(&mut t, &mut bus);
 
         assert_eq!(
             read32(&t, OFF_ERRORSRC) & ERRORSRC_ANACK,
@@ -865,7 +998,7 @@ mod tests {
         write32(&mut t, OFF_TXD_PTR, tx_base as u32);
         write32(&mut t, OFF_TXD_MAXCNT, 4);
         write32(&mut t, OFF_TASKS_STARTTX, 1);
-        t.tick_with_bus(&mut bus);
+        run_leg(&mut t, &mut bus);
 
         let dev = t.attached_devices[0].borrow();
         let dev_any = dev
@@ -901,7 +1034,7 @@ mod tests {
         );
         assert!(t.needs_bus_tick());
 
-        t.tick_with_bus(&mut bus);
+        run_leg(&mut t, &mut bus);
 
         assert_eq!(
             read32(&t, OFF_EVENTS_LASTRX),
@@ -932,7 +1065,7 @@ mod tests {
         write32(&mut t, OFF_RXD_PTR, rx_base as u32);
         write32(&mut t, OFF_RXD_MAXCNT, 3);
         write32(&mut t, OFF_TASKS_STARTRX, 1);
-        t.tick_with_bus(&mut bus);
+        run_leg(&mut t, &mut bus);
 
         assert_eq!(read32(&t, OFF_ERRORSRC) & ERRORSRC_ANACK, ERRORSRC_ANACK);
         assert_eq!(read32(&t, OFF_EVENTS_ERROR), 1);
@@ -966,7 +1099,7 @@ mod tests {
         write32(&mut t, OFF_TXD_MAXCNT, 2);
         write32(&mut t, OFF_SHORTS, SHORT_LASTTX_STOP);
         write32(&mut t, OFF_TASKS_STARTTX, 1);
-        t.tick_with_bus(&mut bus);
+        run_leg(&mut t, &mut bus);
 
         assert_eq!(read32(&t, OFF_EVENTS_LASTTX), 1, "LASTTX fired");
         assert_eq!(
@@ -975,6 +1108,96 @@ mod tests {
             "STOPPED auto-fired via SHORT"
         );
         assert!(!t.needs_bus_tick(), "no further pending transfer");
+    }
+
+    /// SHORT LASTTX_SUSPEND: after TX with TX_NO_STOP, EVENTS_SUSPENDED fires
+    /// (no STOP condition; bus is held for a subsequent RX).
+    #[test]
+    fn short_lasttx_suspend_fires_suspended() {
+        let mut t = Nrf52Twim::new();
+        t.attach(Box::new(RecordingDevice::new(0x76, vec![])));
+        let mut bus = FlatRam::new();
+        let tx_base: u64 = 0x2000_0500;
+        bus.write_slice(tx_base, &[0xD0]); // register address byte
+
+        write32(&mut t, OFF_ENABLE, 6);
+        write32(&mut t, OFF_ADDRESS, 0x76);
+        write32(&mut t, OFF_TXD_PTR, tx_base as u32);
+        write32(&mut t, OFF_TXD_MAXCNT, 1);
+        write32(&mut t, OFF_SHORTS, SHORT_LASTTX_SUSPEND); // TX_NO_STOP path
+        write32(&mut t, OFF_TASKS_STARTTX, 1);
+        run_leg(&mut t, &mut bus);
+
+        assert_eq!(read32(&t, OFF_EVENTS_LASTTX), 1, "LASTTX fired");
+        assert_eq!(
+            read32(&t, OFF_EVENTS_SUSPENDED),
+            1,
+            "SUSPENDED auto-fired via SHORT_LASTTX_SUSPEND"
+        );
+        assert_eq!(
+            read32(&t, OFF_EVENTS_STOPPED),
+            0,
+            "STOPPED must NOT fire for TX_NO_STOP"
+        );
+        assert!(!t.needs_bus_tick(), "no further pending transfer");
+    }
+
+    /// nrfx TX_NO_STOP write-then-read: a TX leg with LASTTX_SUSPEND holds the
+    /// bus (EVENTS_SUSPENDED, no STOP); the driver then sets up RXD and issues
+    /// **TASKS_RESUME** (not TASKS_STARTRX) to start the follow-on RX. The model
+    /// must route that RESUME to the RX leg — this is the path #422 fixed, kept
+    /// working alongside #424's SHORTS-chained path. RESUME→RX is gated on an
+    /// active EVENTS_SUSPENDED so it cannot mis-fire on a stale RXD.MAXCNT in
+    /// the SHORTS auto-chain path (where no suspend is ever active).
+    #[test]
+    fn twim_resume_after_suspend_starts_followon_rx() {
+        let read_seq: Vec<u8> = vec![0x60]; // BME280 chip-id
+        let mut t = Nrf52Twim::new();
+        t.attach(Box::new(RecordingDevice::new(0x76, read_seq.clone())));
+        let mut bus = FlatRam::new();
+        let tx_base: u64 = 0x2000_0500;
+        let rx_base: u64 = 0x2000_0600;
+        bus.write_slice(tx_base, &[0xD0]); // register-address byte
+
+        write32(&mut t, OFF_ENABLE, 6);
+        write32(&mut t, OFF_ADDRESS, 0x76);
+        write32(&mut t, OFF_TXD_PTR, tx_base as u32);
+        write32(&mut t, OFF_TXD_MAXCNT, 1);
+        write32(&mut t, OFF_SHORTS, SHORT_LASTTX_SUSPEND); // TX_NO_STOP
+        write32(&mut t, OFF_TASKS_STARTTX, 1);
+        run_leg(&mut t, &mut bus);
+
+        assert_eq!(read32(&t, OFF_EVENTS_LASTTX), 1, "LASTTX fired");
+        assert_eq!(read32(&t, OFF_EVENTS_SUSPENDED), 1, "bus held via SUSPEND");
+
+        // Driver now sets up RXD and RESUMEs (the nrfx write_read_dt path).
+        write32(&mut t, OFF_RXD_PTR, rx_base as u32);
+        write32(&mut t, OFF_RXD_MAXCNT, 1);
+        write32(&mut t, OFF_SHORTS, SHORT_LASTRX_STOP); // stop after the read
+        write32(&mut t, OFF_TASKS_RESUME, 1);
+        assert!(
+            t.needs_bus_tick(),
+            "TASKS_RESUME after SUSPEND must start the follow-on RX"
+        );
+        run_leg(&mut t, &mut bus);
+
+        assert_eq!(
+            read32(&t, OFF_EVENTS_LASTRX),
+            1,
+            "LASTRX after follow-on RX"
+        );
+        assert_eq!(read32(&t, OFF_RXD_AMOUNT), 1, "RXD.AMOUNT = MAXCNT");
+        assert_eq!(read32(&t, OFF_EVENTS_STOPPED), 1, "STOPPED via LASTRX_STOP");
+        assert_eq!(
+            read32(&t, OFF_EVENTS_SUSPENDED),
+            0,
+            "SUSPENDED cleared on resume"
+        );
+        assert_eq!(
+            bus.read_slice(rx_base, 1),
+            read_seq,
+            "device chip-id byte landed in RXD RAM"
+        );
     }
 
     /// SHORT LASTRX_STOP: after RX, EVENTS_STOPPED fires automatically.
@@ -991,7 +1214,7 @@ mod tests {
         write32(&mut t, OFF_RXD_MAXCNT, 2);
         write32(&mut t, OFF_SHORTS, SHORT_LASTRX_STOP);
         write32(&mut t, OFF_TASKS_STARTRX, 1);
-        t.tick_with_bus(&mut bus);
+        run_leg(&mut t, &mut bus);
 
         assert_eq!(read32(&t, OFF_EVENTS_LASTRX), 1, "LASTRX fired");
         assert_eq!(
@@ -1025,7 +1248,7 @@ mod tests {
         write32(&mut t, OFF_TASKS_STARTTX, 1);
 
         // First tick: TX completes, LASTTX fired, PENDING_RX armed.
-        t.tick_with_bus(&mut bus);
+        run_leg(&mut t, &mut bus);
         assert_eq!(read32(&t, OFF_EVENTS_LASTTX), 1, "LASTTX after first tick");
         assert_eq!(
             read32(&t, OFF_EVENTS_STOPPED),
@@ -1035,7 +1258,7 @@ mod tests {
         assert!(t.needs_bus_tick(), "RX chained: pending must be set");
 
         // Second tick: RX completes, LASTRX fired, STOPPED via SHORT.
-        t.tick_with_bus(&mut bus);
+        run_leg(&mut t, &mut bus);
         assert_eq!(read32(&t, OFF_EVENTS_LASTRX), 1, "LASTRX after second tick");
         assert_eq!(
             read32(&t, OFF_EVENTS_STOPPED),
@@ -1070,12 +1293,12 @@ mod tests {
         write32(&mut t, OFF_TASKS_STARTRX, 1);
 
         // First tick: RX completes, chains TX.
-        t.tick_with_bus(&mut bus);
+        run_leg(&mut t, &mut bus);
         assert_eq!(read32(&t, OFF_EVENTS_LASTRX), 1, "LASTRX after first tick");
         assert!(t.needs_bus_tick(), "TX chained: pending");
 
         // Second tick: TX completes, STOPPED via SHORT.
-        t.tick_with_bus(&mut bus);
+        run_leg(&mut t, &mut bus);
         assert_eq!(read32(&t, OFF_EVENTS_LASTTX), 1, "LASTTX after second tick");
         assert_eq!(read32(&t, OFF_EVENTS_STOPPED), 1, "STOPPED via SHORT");
         assert!(!t.needs_bus_tick());
@@ -1091,7 +1314,7 @@ mod tests {
 
         write32(&mut t, OFF_TASKS_STOP, 1);
         assert!(t.needs_bus_tick());
-        t.tick_with_bus(&mut bus);
+        run_leg(&mut t, &mut bus);
         assert_eq!(
             read32(&t, OFF_EVENTS_STOPPED),
             1,
@@ -1114,7 +1337,7 @@ mod tests {
         write32(&mut t, OFF_TXD_MAXCNT, 1);
         t.attach(Box::new(RecordingDevice::new(0x48, vec![])));
         write32(&mut t, OFF_TASKS_STARTTX, 1);
-        t.tick_with_bus(&mut bus);
+        run_leg(&mut t, &mut bus);
 
         // HW set EVENTS_LASTTX.
         assert_eq!(read32(&t, OFF_EVENTS_LASTTX), 1);
@@ -1144,7 +1367,7 @@ mod tests {
         write32(&mut t, OFF_TXD_PTR, 0x2000_0000);
         write32(&mut t, OFF_TXD_MAXCNT, 0);
         write32(&mut t, OFF_TASKS_STARTTX, 1);
-        t.tick_with_bus(&mut bus);
+        run_leg(&mut t, &mut bus);
 
         assert_eq!(
             read32(&t, OFF_TXD_AMOUNT),
@@ -1170,7 +1393,7 @@ mod tests {
         write32(&mut t, OFF_RXD_PTR, 0x2000_0100);
         write32(&mut t, OFF_RXD_MAXCNT, 0);
         write32(&mut t, OFF_TASKS_STARTRX, 1);
-        t.tick_with_bus(&mut bus);
+        run_leg(&mut t, &mut bus);
 
         assert_eq!(
             read32(&t, OFF_RXD_AMOUNT),
@@ -1200,7 +1423,7 @@ mod tests {
         write32(&mut t, OFF_INTENSET, INTEN_LASTTX);
         write32(&mut t, OFF_SHORTS, SHORT_LASTTX_STOP);
         write32(&mut t, OFF_TASKS_STARTTX, 1);
-        t.tick_with_bus(&mut bus);
+        run_leg(&mut t, &mut bus);
 
         let result = t.tick();
         assert!(
@@ -1230,7 +1453,7 @@ mod tests {
         write32(&mut t, OFF_TASKS_STARTTX, 1);
         assert!(t.needs_bus_tick(), "true after STARTTX");
         let mut bus = FlatRam::new();
-        t.tick_with_bus(&mut bus);
+        run_leg(&mut t, &mut bus);
         assert!(!t.needs_bus_tick(), "false after tick");
     }
 }

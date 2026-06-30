@@ -26,6 +26,13 @@ pub trait MachineTrait: Send {
     fn total_cycles(&self) -> u64;
     fn read_u8(&self, addr: u64) -> SimResult<u8>;
     fn write_u8(&mut self, addr: u64, val: u8) -> SimResult<()>;
+    /// Attach a UART stream device (e.g. a `UartCrossLink` wire endpoint) to a
+    /// named UART peripheral inside this machine.
+    fn attach_uart_stream(
+        &mut self,
+        uart_id: &str,
+        dev: Box<dyn crate::peripherals::uart::UartStreamDevice>,
+    ) -> anyhow::Result<()>;
 }
 
 impl<C: Cpu + 'static> MachineTrait for Machine<C> {
@@ -52,6 +59,14 @@ impl<C: Cpu + 'static> MachineTrait for Machine<C> {
 
     fn write_u8(&mut self, addr: u64, val: u8) -> SimResult<()> {
         self.bus.write_u8(addr, val)
+    }
+
+    fn attach_uart_stream(
+        &mut self,
+        uart_id: &str,
+        dev: Box<dyn crate::peripherals::uart::UartStreamDevice>,
+    ) -> anyhow::Result<()> {
+        self.bus.attach_uart_stream_by_id(uart_id, dev)
     }
 }
 
@@ -98,18 +113,111 @@ impl World {
         results
     }
 
-    /// Load a simulation environment from a manifest.
+    /// Build a multi-node environment from an `EnvironmentManifest`.
+    ///
+    /// Each node is a Cortex-M `Machine` built from its `SystemManifest` + chip,
+    /// with its firmware ELF loaded and the CPU reset to boot from the vector
+    /// table. Each `uart_cross_link` interconnect wires two nodes' named UARTs
+    /// via a [`crate::network::UartCrossLink`] (point-to-point, the IO-Link
+    /// C/Q wire). Paths in the manifest are resolved relative to `root_dir`
+    /// (the directory containing the env manifest).
     pub fn from_manifest(
-        _manifest: labwired_config::EnvironmentManifest,
-        _root_dir: &std::path::Path,
+        manifest: labwired_config::EnvironmentManifest,
+        root_dir: &std::path::Path,
     ) -> anyhow::Result<Self> {
-        // Implementation will involve:
-        // 1. Parsing SystemManifest for each node
-        // 2. Initializing Machines with correct CPUs
-        // 3. Loading ELF binaries
-        // 4. Setting up interconnects
-        anyhow::bail!("Loading from manifest not yet implemented")
+        use anyhow::Context;
+
+        let mut world = World::new(manifest.name.clone());
+
+        for node in &manifest.nodes {
+            let sys_path = root_dir.join(&node.system);
+            let sysman = labwired_config::SystemManifest::from_file(&sys_path)
+                .with_context(|| format!("node '{}': system {:?}", node.id, sys_path))?;
+            let chip_path = sys_path
+                .parent()
+                .unwrap_or_else(|| std::path::Path::new("."))
+                .join(&sysman.chip);
+            let chip = labwired_config::ChipDescriptor::from_file(&chip_path)
+                .with_context(|| format!("node '{}': chip {:?}", node.id, chip_path))?;
+            let bus = crate::bus::SystemBus::from_config(&chip, &sysman)
+                .with_context(|| format!("node '{}': build bus", node.id))?;
+            let mut machine = Machine::new(crate::cpu::cortex_m::CortexM::new(), bus);
+            let fw_path = root_dir.join(&node.firmware);
+            let image = load_elf_image(&fw_path)
+                .with_context(|| format!("node '{}': firmware {:?}", node.id, fw_path))?;
+            machine
+                .load_firmware(&image)
+                .map_err(|e| anyhow::anyhow!("node '{}': load firmware: {e:?}", node.id))?;
+            machine
+                .reset()
+                .map_err(|e| anyhow::anyhow!("node '{}': reset: {e:?}", node.id))?;
+            world.add_machine(node.id.clone(), Box::new(machine));
+        }
+
+        for ic in &manifest.interconnects {
+            match ic.r#type.as_str() {
+                "uart_cross_link" => {
+                    let a = ic.nodes.first().context("uart_cross_link needs nodes[0]")?;
+                    let b = ic.nodes.get(1).context("uart_cross_link needs nodes[1]")?;
+                    let a_uart = ic
+                        .config
+                        .get("node_a_uart")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("uart2");
+                    let b_uart = ic
+                        .config
+                        .get("node_b_uart")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("uart2");
+                    let (link, ea, eb) = crate::network::UartCrossLink::new(a.clone(), b.clone());
+                    world
+                        .machines
+                        .get_mut(a)
+                        .with_context(|| format!("uart_cross_link: unknown node '{a}'"))?
+                        .attach_uart_stream(a_uart, Box::new(ea))?;
+                    world
+                        .machines
+                        .get_mut(b)
+                        .with_context(|| format!("uart_cross_link: unknown node '{b}'"))?
+                        .attach_uart_stream(b_uart, Box::new(eb))?;
+                    world.add_interconnect(Box::new(link));
+                }
+                other => anyhow::bail!("unsupported interconnect type '{other}'"),
+            }
+        }
+
+        Ok(world)
     }
+}
+
+/// Parse an ELF file into a `ProgramImage` using goblin (core cannot depend on
+/// the `loader` crate — it depends on core). PT_LOAD segments are placed at
+/// their load address (`p_paddr`), matching how Cortex-M flash images and the
+/// `.data` LMA-in-flash convention work.
+fn load_elf_image(path: &std::path::Path) -> anyhow::Result<crate::memory::ProgramImage> {
+    use anyhow::Context;
+    use goblin::elf::program_header::PT_LOAD;
+    use goblin::elf::Elf;
+
+    let bytes = std::fs::read(path).with_context(|| format!("read ELF {path:?}"))?;
+    let elf = Elf::parse(&bytes).with_context(|| format!("parse ELF {path:?}"))?;
+    let arch = match elf.header.e_machine {
+        goblin::elf::header::EM_ARM => crate::Arch::Arm,
+        goblin::elf::header::EM_RISCV => crate::Arch::RiscV,
+        _ => crate::Arch::Arm,
+    };
+    let mut image = crate::memory::ProgramImage::new(elf.entry, arch);
+    for ph in &elf.program_headers {
+        if ph.p_type != PT_LOAD || ph.p_filesz == 0 {
+            continue;
+        }
+        let off = ph.p_offset as usize;
+        let n = ph.p_filesz as usize;
+        if off + n <= bytes.len() {
+            image.add_segment(ph.p_paddr, bytes[off..off + n].to_vec());
+        }
+    }
+    Ok(image)
 }
 
 #[cfg(test)]

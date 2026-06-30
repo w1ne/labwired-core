@@ -5,13 +5,9 @@
 // See the LICENSE file in the project root for full license information.
 
 use crate::memory::LinearMemory;
-use crate::peripherals::gpio::GpioRegisterLayout;
 use crate::peripherals::nvic::NvicState;
-use crate::peripherals::rcc::RccRegisterLayout;
 use crate::peripherals::uart::Uart;
-use crate::peripherals::uart::UartRegisterLayout;
-use crate::{Bus, DmaRequest, Peripheral, SimResult, SimulationError};
-use anyhow::Context;
+use crate::{Bus, Peripheral, SimResult};
 use labwired_config::{parse_size, ChipDescriptor, PeripheralConfig, SystemManifest};
 use std::cell::Cell;
 use std::collections::VecDeque;
@@ -21,98 +17,25 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-/// Pend a peripheral-raised IRQ. Behaviour depends on whether the chip
-/// has an NVIC modelled:
-///
-/// - **With NVIC** (production chip configs): `irq` is the NVIC IRQ
-///   position (0-based, as it appears in chip yaml — DMA1_CH1 = 11 on
-///   STM32L4, USART2 = 38). We pend it on ISPR and let
-///   `collect_enabled_nvic_interrupts` translate to an exception number
-///   (16 + position) when ISER also has it enabled. The previous code
-///   special-cased `irq < 16`, which silently routed DMA1_CH1 (irq=11)
-///   through the system-exception path and ended up calling SVCall
-///   on every DMA TC — invisible until firmware actually hooked the
-///   IRQ.
-///
-/// - **Without NVIC** (legacy unit-test fixtures with no NVIC entry):
-///   pass `irq` through unchanged. Single-peripheral test machines
-///   call `tick_peripherals()` and read the result directly; they treat
-///   the irq value as whatever convention the test author chose.
-fn pend_nvic(
-    nvic: &Option<Arc<crate::peripherals::nvic::NvicState>>,
-    interrupts: &mut Vec<u32>,
-    irq: u32,
-) {
-    if let Some(nvic) = nvic {
-        let idx = (irq / 32) as usize;
-        let bit = irq % 32;
-        if idx < 8 {
-            nvic.ispr[idx].fetch_or(1 << bit, std::sync::atomic::Ordering::SeqCst);
-        }
-    } else {
-        interrupts.push(irq);
-    }
-}
+mod accessors;
+mod embedded_descriptors;
+mod from_config;
+mod routing;
+mod tick;
 
-impl SystemBus {
-    /// Phase 2B.1 (issue #192): pend an NVIC IRQ on behalf of an event
-    /// handler. Mirrors the per-tick `pend_nvic` path but collects
-    /// non-NVIC fallthroughs into the supplied vector for the caller to
-    /// forward to `cpu.set_exception_pending`.
-    pub fn pend_irq_for_event(&self, irq: u32, fallthrough: &mut Vec<u32>) {
-        pend_nvic(&self.nvic, fallthrough, irq);
-    }
+impl SystemBus {}
 
-    /// Route a peripheral DMA signal (`source_name` + `request_id`) to its
-    /// target DMA channel. Single source of truth shared by the legacy
-    /// `tick_peripherals_with_costs` path and the event path
-    /// (`Machine::apply_event_result`), so both behave identically.
-    pub fn route_dma_signal(&mut self, source_name: &str, request_id: u32) {
-        // Simplified routing for Top-5 targets (e.g. STM32F1):
-        // UART1_TX (signal ID 1) -> DMA1 Channel 1 (H5 uses GPDMA; mocked here).
-        let target_dma = if (source_name == "uart1" || source_name == "uart3") && request_id == 1 {
-            Some(("dma1", 1))
-        } else {
-            None
-        };
-        if let Some((dma_name, channel)) = target_dma {
-            if let Some(p_idx) = self.find_peripheral_index_by_name(dma_name) {
-                self.peripherals[p_idx].dev.dma_request(channel);
-            }
-        }
-    }
-
-    /// Phase 2B.2 (issue #192): if the peripheral at `idx` is scheduler-driven,
-    /// advance its lazy state to the current peripheral-tick index before an
-    /// MMIO write observes it. The tick index is `current_cycle /
-    /// peripheral_tick_interval` — the same quantum the legacy walk advanced by
-    /// one per `tick()`. One virtual `uses_scheduler()` call for legacy
-    /// peripherals (false → return); the sync only runs for opted-in ones.
-    #[cfg(feature = "event-scheduler")]
-    #[inline]
-    fn sync_scheduler_peripheral(&mut self, idx: usize) {
-        let interval = (self.config.peripheral_tick_interval as u64).max(1);
-        let tick_now = self.current_cycle / interval;
-        let p = &mut self.peripherals[idx];
-        if p.dev.uses_scheduler() {
-            p.dev.sync_to(tick_now);
-        }
-    }
-
-    /// Phase 2B.3a (issue #192): after an MMIO write to a scheduler-driven
-    /// peripheral, harvest any events it wants scheduled (e.g. a just-armed
-    /// TX interrupt) into `pending_schedule` for `Machine` to enqueue. One
-    /// virtual `uses_scheduler()` call for legacy peripherals (false → return).
-    #[cfg(feature = "event-scheduler")]
-    #[inline]
-    fn collect_scheduled_events(&mut self, idx: usize) {
-        if !self.peripherals[idx].dev.uses_scheduler() {
-            return;
-        }
-        for (delay, token) in self.peripherals[idx].dev.take_scheduled_events() {
-            self.pending_schedule.push((idx, delay, token));
-        }
-    }
+/// A peripheral's RCC clock-gate, resolved to a concrete RCC register offset +
+/// bit at bus-build time (the symbolic `reg` name from the yaml is mapped to the
+/// active chip family's offset via [`Rcc::enable_reg_offset`]). When present, a
+/// CPU access to the owning peripheral only takes effect while `bit` is set in
+/// the RCC enable register at `reg_offset` — modelling silicon clock-gating.
+#[derive(Debug, Clone, Copy)]
+pub struct ResolvedClockGate {
+    /// Byte offset of the RCC enable register within the rcc peripheral.
+    pub reg_offset: u64,
+    /// Enable-bit position within that register.
+    pub bit: u8,
 }
 
 pub struct PeripheralEntry {
@@ -126,6 +49,24 @@ pub struct PeripheralEntry {
     /// Bumped when the peripheral resets; `EventScheduler::drain_due` drops
     /// entries whose generation no longer matches the snapshot.
     pub generation: u32,
+    /// Optional RCC clock-gate (silicon clock-gating model). `None` (the common
+    /// case) → the peripheral is never gated and accesses always pass through.
+    /// `Some` → accesses are dropped (writes ignored, reads return 0) while the
+    /// gate bit is clear in the RCC, exactly like an unclocked peripheral on
+    /// real silicon. Resolved from `PeripheralConfig::clock` in `from_config`.
+    pub clock_gate: Option<ResolvedClockGate>,
+}
+
+/// RP2040 atomic register-alias operation (see
+/// [`SystemBus::atomic_alias_redirect`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AtomicAliasOp {
+    /// `+0x1000`: write XORs the bits, read returns the base register.
+    Xor,
+    /// `+0x2000`: write sets (ORs) the bits.
+    Set,
+    /// `+0x3000`: write clears (AND-NOT) the bits.
+    Clr,
 }
 
 pub struct SystemBus {
@@ -143,6 +84,17 @@ pub struct SystemBus {
     /// False for architectures (e.g. RISC-V) whose memory maps collide with
     /// the bit-band alias ranges 0x42000000–0x44000000 / 0x22000000–0x24000000.
     pub bit_band_enabled: bool,
+    /// Offset (bytes) from the flash base to the application vector table when
+    /// a second-stage bootloader precedes it (RP2040 boot2 = `0x100`). `0`
+    /// means the vector table sits at the flash base. Carried from the chip
+    /// descriptor so `Machine::load_firmware` can relocate the reset vector
+    /// past the stage-2 blob. See `ChipDescriptor::reset_vector_offset`.
+    pub reset_vector_offset: u64,
+    /// RP2040 atomic register aliases enabled (see
+    /// `ChipDescriptor::atomic_register_aliases`). When set, word accesses in
+    /// the APB peripheral window whose offset has bits [13:12] set decode as
+    /// XOR/SET/CLR atomic ops on the aligned base register.
+    pub atomic_register_aliases: bool,
     /// Plan 3: per-core bitmask of pending cpu IRQ slots (32 bits each;
     /// index 0 = PRO_CPU, 1 = APP_CPU). Aggregated by
     /// `tick_peripherals_with_costs` from peripheral `explicit_irqs` source
@@ -157,8 +109,10 @@ pub struct SystemBus {
     /// `bus.flash_thunks.insert(pc, thunk)`. The CPU's BREAK 1,14
     /// dispatcher (xtensa_lx7.rs) calls `bus.get_rom_thunk(pc)` which
     /// checks both this table and any `RomThunkBank` peripherals.
-    pub flash_thunks:
-        std::collections::HashMap<u32, crate::peripherals::esp32s3::rom_thunks::RomThunkFn>,
+    pub flash_thunks: std::collections::HashMap<
+        u32,
+        crate::peripherals::esp_xtensa_common::rom_thunks::RomThunkFn,
+    >,
     peripheral_ranges: Vec<PeripheralRange>,
     peripheral_hint: Cell<Option<usize>>,
     /// Cached index of the classic-ESP32 DPORT peripheral, if one is
@@ -169,6 +123,22 @@ pub struct SystemBus {
     /// skip an O(peripherals) scan that would otherwise return 0 every step
     /// on buses with no DPORT.
     dport_idx: Option<usize>,
+    /// Cached index of the "rcc" peripheral, if one is registered. Recomputed in
+    /// `rebuild_peripheral_ranges` (same staleness contract as `dport_idx`). Lets
+    /// the clock-gate check on the hot read/write path resolve the RCC peripheral
+    /// in O(1) instead of scanning by name. `None` on buses with no RCC (e.g.
+    /// most non-STM32 chips), in which case no peripheral is ever gated.
+    rcc_idx: Option<usize>,
+    /// Measurement-only escape hatch: when `true`, [`is_peripheral_clocked`]
+    /// short-circuits to `true` so RCC clock-gating never suppresses an access.
+    /// Off by default (the runtime always gates); only diagnostic tooling such
+    /// as the SVD register-coverage probe flips it on via
+    /// [`set_clock_gating_bypass`].
+    clock_gating_bypass: bool,
+    /// `missing_clock` fault injection: peripheral indices forced unclocked,
+    /// mapped to a count of accesses suppressed because of the fault (the
+    /// runtime fired-observation). Empty in the common case.
+    fault_unclocked: std::collections::HashMap<usize, std::sync::atomic::AtomicU64>,
     /// Last-known IN value of GPIO ports 0 and 1, used by the per-tick
     /// edge-detection pass that drives GPIOTE EVENTS_IN. Both default to
     /// 0 at construction; the first tick after a GPIO write will produce
@@ -200,6 +170,388 @@ pub struct SystemBus {
     /// per-tick pass (`service_hcsr04`) drives the computed ECHO input level,
     /// touching the bus only on a transition. Empty by default → zero cost.
     pub hcsr04: Vec<crate::peripherals::hc_sr04::HcSr04>,
+    /// Reusable CAN diagnostic clients declared as external devices. They
+    /// inject configured CAN frames into a named FDCAN peripheral once it is
+    /// running, so ECU examples can be driven by a virtual off-board tester
+    /// instead of self-loopback firmware.
+    pub can_diagnostic_testers: Vec<CanDiagnosticTester>,
+    /// Stateful ISO-TP/UDS testers declared as external devices. Each is a real
+    /// second CAN node driving a multi-frame SecurityAccess exchange against a
+    /// named CAN peripheral (bxCAN or FDCAN) running in normal mode. Empty by
+    /// default → zero per-tick cost.
+    pub can_uds_testers: Vec<CanUdsTester>,
+    /// ESP32-C3 (RISC-V) interrupt routing: when true, each tick the bus routes
+    /// asserted peripheral sources and the SYSTEM FROM_CPU IPI registers
+    /// (0x600C0028..0x34) through the INTERRUPT_CORE0 matrix MAP registers into
+    /// `riscv_irq_lines`. Set by the C3 rom-boot setup; false everywhere else
+    /// so no other architecture's bus is affected.
+    pub esp32c3_irq_routing: bool,
+    /// ESP32-C3 level-sensitive bitmask of asserted CPU interrupt lines (1..31),
+    /// recomputed every tick by `aggregate_esp32c3_irqs`. Read by the RISC-V
+    /// core via `Bus::external_irq_lines`. 0 when `esp32c3_irq_routing` is false.
+    pub riscv_irq_lines: u32,
+    /// True when a FLASH peripheral on this bus models hardware operations
+    /// (H5 sector erase / bank swap) as pending ops that the machine layer must
+    /// drain and apply per instruction. Cached in `rebuild_peripheral_ranges`
+    /// (same staleness contract as `dport_idx`/`rcc_idx`) so
+    /// `requires_cycle_accurate` — called per run-loop iteration — never scans
+    /// peripherals. `false` on every bus without an H5 op-modeling FLASH.
+    flash_models_ops: bool,
+    /// Index of the FLASH register peripheral whose opt-in H5 program-error
+    /// fidelity gate is enabled, if any. Cached in `rebuild_peripheral_ranges`
+    /// (same staleness contract as `rcc_idx`). `None` on every bus where the
+    /// gate is off — the common case — so the flash-region write path stays
+    /// byte-identical to prior behaviour. When `Some(idx)`, a program (a write
+    /// into the flash region) is validated against H5 silicon programming rules
+    /// before committing, and `peripherals[idx]` (the `Flash`) records the
+    /// resulting NSSR error flags.
+    flash_error_flags_idx: Option<usize>,
+}
+
+pub struct CanDiagnosticTester {
+    pub id: String,
+    pub connection: String,
+    pub request_id: u32,
+    pub request_data: Vec<u8>,
+    pub sent: bool,
+}
+
+/// Stateful ISO-TP / UDS tester driving a *multi-frame* SecurityAccess exchange
+/// against an emulated ECU's CAN controller running in **normal** mode (not
+/// loopback). Unlike [`CanDiagnosticTester`] (a one-shot single-frame injector),
+/// this is a real second CAN node: it injects a FirstFrame, waits for the ECU's
+/// FlowControl, injects the ConsecutiveFrame, then waits for the ECU's
+/// SecurityAccess positive response — exactly the handshake a physical UDS
+/// tester would perform over ISO 15765-2.
+///
+/// The ECU side is driven entirely through the peripheral's *public* API: we
+/// drain its `tx_frames` (frames it transmitted in normal mode) and inject our
+/// frames via `deliver_rx` (bxCAN) / `receive_frame` (FDCAN). Injection is
+/// filter-gated, so a `false` return (filter not yet configured, FIFO full)
+/// leaves the FSM parked on the same send to retry next tick.
+// -----
+/// One step in a UDS tester script: a raw payload to send and the
+/// expected response bytes (`None` = `..` wildcard, any byte matches).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UdsStep {
+    /// Raw bytes to send to the ECU (before ISO-TP framing).
+    pub send: Vec<u8>,
+    /// Expected response bytes; `None` entries match any byte.
+    pub expect: Vec<Option<u8>>,
+    /// Optional expected NRC byte (response 0x7F <sid> <nrc>).
+    pub expect_nrc: Option<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CanUdsTesterState {
+    /// Need to inject the FirstFrame.
+    Start,
+    /// FirstFrame sent; waiting for the ECU's FlowControl frame.
+    AwaitFc,
+    /// ConsecutiveFrame sent; waiting for the ECU's positive response.
+    AwaitResp,
+    /// Tester sent FlowControl; collecting ECU ConsecutiveFrames until the
+    /// declared PDU length is reached (script-driven multi-frame response path).
+    AwaitMultiResp,
+    /// SecurityAccess positive response observed — handshake complete.
+    Done,
+    /// Timed out before completion (broken / silent ECU).
+    Failed,
+}
+
+pub struct CanUdsTester {
+    pub id: String,
+    /// Name of the connected CAN peripheral (e.g. `bxcan1` / `fdcan1`).
+    pub connection: String,
+    /// Tester → ECU request id (ISO-TP single physical address). Default 0x111.
+    pub request_id: u32,
+    /// ECU → tester response id. Default 0x222.
+    pub reply_id: u32,
+    /// ISO-TP FirstFrame payload injected in state `Start`.
+    pub first_frame: Vec<u8>,
+    /// ISO-TP ConsecutiveFrame payload injected on FlowControl.
+    pub consecutive_frame: Vec<u8>,
+    /// Current FSM state. Exposed for tests.
+    pub state: CanUdsTesterState,
+    /// Ticks elapsed since the tester started; used for the give-up timeout.
+    pub ticks: u64,
+    /// Tick budget before declaring `Failed`.
+    pub max_ticks: u64,
+    /// Scripted exchange steps; empty when using legacy hardcoded payloads.
+    pub script: Vec<UdsStep>,
+    /// Index of the current step in `script`.
+    pub step_idx: usize,
+    /// Set when a step fails; describes what went wrong.
+    pub failure: Option<String>,
+    /// PDU accumulator for the script-driven multi-frame ECU response path.
+    /// Cleared at the start of each step.
+    resp_buf: Vec<u8>,
+    /// Declared PDU length from the ECU's FF header (script path only).
+    resp_expected_len: usize,
+    /// Remaining ConsecutiveFrames to inject for a multi-frame tester request,
+    /// populated after the request FF is accepted and the ECU FlowControl is
+    /// received (script path only).
+    pending_cfs: Vec<Vec<u8>>,
+}
+
+impl CanUdsTester {
+    /// Default tester ↔ ECU ids and ISO-TP payloads for the SecurityAccess
+    /// SeedRequest exchange the firmware contract expects.
+    pub const DEFAULT_REQUEST_ID: u32 = 0x111;
+    pub const DEFAULT_REPLY_ID: u32 = 0x222;
+    pub const DEFAULT_FIRST_FRAME: [u8; 8] = [0x10, 0x0B, 0x27, 0x01, 0x5A, 0x11, 0x22, 0x33];
+    pub const DEFAULT_CONSECUTIVE_FRAME: [u8; 8] = [0x21, 0x44, 0x55, 0x66, 0x77, 0x88, 0x55, 0x55];
+    const DEFAULT_MAX_TICKS: u64 = 200_000;
+
+    pub fn new(id: String, connection: String) -> Self {
+        Self {
+            id,
+            connection,
+            request_id: Self::DEFAULT_REQUEST_ID,
+            reply_id: Self::DEFAULT_REPLY_ID,
+            first_frame: Self::DEFAULT_FIRST_FRAME.to_vec(),
+            consecutive_frame: Self::DEFAULT_CONSECUTIVE_FRAME.to_vec(),
+            state: CanUdsTesterState::Start,
+            ticks: 0,
+            max_ticks: Self::DEFAULT_MAX_TICKS,
+            script: Vec::new(),
+            step_idx: 0,
+            failure: None,
+            resp_buf: Vec::new(),
+            resp_expected_len: 0,
+            pending_cfs: Vec::new(),
+        }
+    }
+
+    /// Build the ISO-TP request frame(s) for `script[step_idx]`.
+    /// Single-frame when `send.len() <= 7`; otherwise a FirstFrame followed by
+    /// ConsecutiveFrames. The caller sends the first frame and queues the rest
+    /// in `pending_cfs` after FlowControl.
+    fn build_request_frames(&self) -> Vec<Vec<u8>> {
+        let Some(step) = self.script.get(self.step_idx) else {
+            return Vec::new();
+        };
+        let data = &step.send;
+        let len = data.len();
+        if len <= 7 {
+            // Single-frame: [len, payload...]
+            let mut frame = Vec::with_capacity(len + 1);
+            frame.push(len as u8);
+            frame.extend_from_slice(data);
+            return vec![frame];
+        }
+        // Multi-frame: FF then CFs.
+        let mut frames = Vec::new();
+        // FirstFrame: [0x10 | (len>>8), len & 0xFF, first 6 bytes]
+        let mut ff = Vec::with_capacity(8);
+        ff.push(0x10 | ((len >> 8) as u8));
+        ff.push((len & 0xFF) as u8);
+        ff.extend_from_slice(&data[..6.min(len)]);
+        frames.push(ff);
+        // ConsecutiveFrames
+        let mut seq: u8 = 1;
+        let mut offset = 6;
+        while offset < len {
+            let end = (offset + 7).min(len);
+            let mut cf = Vec::with_capacity(8);
+            cf.push(0x20 | (seq & 0x0F));
+            cf.extend_from_slice(&data[offset..end]);
+            frames.push(cf);
+            seq = seq.wrapping_add(1);
+            offset = end;
+        }
+        frames
+    }
+
+    /// Return `true` when `resp` satisfies the match criteria of `step`.
+    /// If `step.expect_nrc` is `Some(nrc)`, matches `[0x7F, send[0], nrc]`.
+    /// Otherwise compares against `step.expect` element-wise (`None` = any byte),
+    /// allowing `resp` to be longer than the pattern (prefix match).
+    fn matches(resp: &[u8], step: &UdsStep) -> bool {
+        if let Some(nrc) = step.expect_nrc {
+            return resp == [0x7F, step.send.first().copied().unwrap_or(0), nrc];
+        }
+        let pattern = &step.expect;
+        if resp.len() < pattern.len() {
+            return false;
+        }
+        pattern
+            .iter()
+            .zip(resp.iter())
+            .all(|(p, b)| p.is_none_or(|expected| expected == *b))
+    }
+
+    /// Observe one ECU frame in the **script-driven** path. Returns the payload
+    /// to inject next (FlowControl or first pending CF), or `None`. Sets
+    /// `state = Done / Failed` when the exchange concludes.
+    fn observe_ecu_frame_script(&mut self, id: u32, data: &[u8]) -> Option<Vec<u8>> {
+        if id != self.reply_id {
+            return None;
+        }
+        match self.state {
+            CanUdsTesterState::AwaitFc => {
+                if data.first().map(|b| b & 0xF0) == Some(0x30) {
+                    // FlowControl received: signal the next CF to inject.
+                    // Do NOT change state here — the injected block in
+                    // service_can_uds_testers advances AwaitFc→AwaitResp only
+                    // after the last CF has been successfully accepted, draining
+                    // pending_cfs one entry per tick.
+                    return self.pending_cfs.first().cloned();
+                }
+                None
+            }
+            CanUdsTesterState::AwaitResp => {
+                let ptype = data.first().map(|b| b & 0xF0).unwrap_or(0xFF);
+                if ptype == 0x00 {
+                    // ECU SingleFrame response. Two ISO-TP SF encodings:
+                    //   * classic: byte0 = 0x0L, length L (1..=7) in the low
+                    //     nibble, payload from byte 1.
+                    //   * CAN-FD escape: byte0 = 0x00, real length in byte 1,
+                    //     payload from byte 2 (used for SF up to 62 bytes on FD
+                    //     frames — the ECU runs ISO-TP in FD mode).
+                    let b0 = data.first().copied().unwrap_or(0);
+                    let (pdu_len, data_off) = if b0 == 0x00 {
+                        // CAN-FD escape SF: a length byte must follow.
+                        match data.get(1) {
+                            Some(&len) => (len as usize, 2),
+                            None => {
+                                self.failure = Some(format!(
+                                    "step {}: malformed FD escape SingleFrame (no length byte)",
+                                    self.step_idx
+                                ));
+                                self.state = CanUdsTesterState::Failed;
+                                return None;
+                            }
+                        }
+                    } else {
+                        ((b0 & 0x0F) as usize, 1)
+                    };
+                    // The frame must actually carry the declared payload bytes; a
+                    // short/truncated SF is a protocol error, not an empty match.
+                    if data.len() < data_off + pdu_len {
+                        self.failure = Some(format!(
+                            "step {}: truncated SingleFrame (declared {} payload bytes, frame carries {})",
+                            self.step_idx,
+                            pdu_len,
+                            data.len().saturating_sub(data_off)
+                        ));
+                        self.state = CanUdsTesterState::Failed;
+                        return None;
+                    }
+                    let payload: Vec<u8> = data[data_off..data_off + pdu_len].to_vec();
+                    self.complete_response(payload);
+                } else if ptype == 0x10 {
+                    // ECU FirstFrame: start reassembly, send FlowControl.
+                    let declared = if data.len() >= 2 {
+                        (((data[0] & 0x0F) as usize) << 8) | (data[1] as usize)
+                    } else {
+                        0
+                    };
+                    self.resp_expected_len = declared;
+                    self.resp_buf.clear();
+                    if data.len() > 2 {
+                        self.resp_buf.extend_from_slice(&data[2..]);
+                    }
+                    self.state = CanUdsTesterState::AwaitMultiResp;
+                    // FlowControl: ContinueToSend, block size 0, ST 0.
+                    return Some(vec![0x30, 0x00, 0x00]);
+                }
+                None
+            }
+            CanUdsTesterState::AwaitMultiResp => {
+                if data.first().map(|b| b & 0xF0) == Some(0x20) {
+                    self.resp_buf
+                        .extend_from_slice(data.get(1..).unwrap_or(&[]));
+                    if self.resp_buf.len() >= self.resp_expected_len {
+                        let payload = self.resp_buf[..self.resp_expected_len].to_vec();
+                        self.resp_buf.clear();
+                        self.complete_response(payload);
+                    }
+                }
+                None
+            }
+            _ => None,
+        }
+    }
+
+    /// Called when a complete PDU has been reassembled. Matches against the
+    /// current step and either advances to the next step (or `Done`) or sets
+    /// `Failed`.
+    fn complete_response(&mut self, payload: Vec<u8>) {
+        let Some(step) = self.script.get(self.step_idx) else {
+            self.state = CanUdsTesterState::Done;
+            return;
+        };
+        if Self::matches(&payload, step) {
+            self.step_idx += 1;
+            self.resp_buf.clear();
+            self.resp_expected_len = 0;
+            if self.step_idx >= self.script.len() {
+                self.state = CanUdsTesterState::Done;
+            } else {
+                // More steps: the driver will send the next request next tick.
+                self.state = CanUdsTesterState::Start;
+            }
+        } else {
+            let msg = if let Some(nrc) = step.expect_nrc {
+                format!(
+                    "step {}: expected NRC 7F {:02X} {:02X}, got {:02X?}",
+                    self.step_idx,
+                    step.send.first().copied().unwrap_or(0),
+                    nrc,
+                    payload
+                )
+            } else {
+                format!(
+                    "step {}: expected {:02X?}, got {:02X?}",
+                    self.step_idx, step.expect, payload
+                )
+            };
+            self.failure = Some(msg);
+            self.state = CanUdsTesterState::Failed;
+        }
+    }
+
+    fn is_terminal(&self) -> bool {
+        matches!(
+            self.state,
+            CanUdsTesterState::Done | CanUdsTesterState::Failed
+        )
+    }
+
+    /// Observe one frame the ECU transmitted. Legacy path (empty `script`):
+    /// In `AwaitFc` an ISO-TP FlowControl (`(data[0] & 0xF0) == 0x30`) on
+    /// `reply_id` returns the ConsecutiveFrame payload to inject; in `AwaitResp`
+    /// a SecurityAccess single-frame positive response (`data[0] == 0x06 &&
+    /// data[1] == 0x67`) completes the handshake. Returns the payload to inject
+    /// next, else `None`.
+    ///
+    /// When `script` is non-empty, delegates to `observe_ecu_frame_script`
+    /// instead so the script-driven logic handles framing and matching.
+    fn observe_ecu_frame(&mut self, id: u32, data: &[u8]) -> Option<Vec<u8>> {
+        if !self.script.is_empty() {
+            return self.observe_ecu_frame_script(id, data);
+        }
+        if id != self.reply_id {
+            return None;
+        }
+        match self.state {
+            CanUdsTesterState::AwaitFc => {
+                if data.first().map(|b| b & 0xF0) == Some(0x30) {
+                    // FlowControl seen → time to send the ConsecutiveFrame.
+                    return Some(self.consecutive_frame.clone());
+                }
+                None
+            }
+            CanUdsTesterState::AwaitResp => {
+                if data.first() == Some(&0x06) && data.get(1) == Some(&0x67) {
+                    self.state = CanUdsTesterState::Done;
+                }
+                None
+            }
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -225,50 +577,72 @@ impl SystemBus {
     pub(crate) fn canonical_peripheral_type(raw_type: &str) -> String {
         let t = raw_type.to_ascii_lowercase();
 
-        // Keep explicit core types as-is.
-        match t.as_str() {
-            "uart" | "gpio" | "rcc" | "systick" | "timer" | "i2c" | "spi" | "exti" | "afio"
-            | "dma" | "gpdma" | "adc" | "pio" | "declarative" | "strict_ir"
-            | "strict_ir_internal" | "pwr" | "flash" | "rng" | "crc" | "rtc" | "rtc_f1"
-            | "rtc_v3" | "iwdg" | "wwdg" | "dac" | "dbgmcu" | "lptim" | "quadspi" | "sai"
-            | "usb_otg" | "bxcan" | "fdcan" | "sdmmc" | "comp" | "tsc" | "fmc" => {
-                return t;
+        // 1. If the name is ALREADY a canonical model type, return it verbatim.
+        //    This is the single source of truth (co-located with the factory in
+        //    `generic_factory::MODEL_TYPES`) and replaces both the old core-type
+        //    match and the per-name identity pre-emption blocks. It guarantees a
+        //    real model type (e.g. `esp32c3_spi`, `nrf52840_twim`, `rp2040_timer`)
+        //    is never coerced by the legacy fuzzy heuristics below.
+        if crate::peripherals::generic_factory::is_canonical_model_type(&t) {
+            return t;
+        }
+
+        // 2. Alias table: raw INPUT spellings whose canonical OUTPUT differs from
+        //    the input. These are NOT identities (the verbatim case is handled by
+        //    membership above), so they must not appear in `MODEL_TYPES`. Mostly
+        //    nRF52 vendor synonyms (`nrf52840_i2c` → the TWIM master model, …)
+        //    that must resolve before the fuzzy `contains(...)` chain, otherwise
+        //    e.g. `nrf52840_saadc` (contains "adc") or `nrf52840_qspi`
+        //    (contains "spi") would be coerced onto STM32 layouts. Iterated in
+        //    order; first matching group wins.
+        const ALIASES: &[(&[&str], &str)] = &[
+            // SAADC: nRF52 SAR ADC (vendor "adc"/"saadc" spellings).
+            (
+                &["nrf52840_saadc", "nrf52_saadc", "nrf52840_adc"],
+                "nrf52_saadc",
+            ),
+            // QSPI: nRF52 external-flash quad-SPI controller.
+            (&["nrf52840_qspi", "nrf52_qspi"], "nrf52_qspi"),
+            // SPIS / TWIS: SPI / I²C slave with EasyDMA.
+            (&["nrf52840_spis", "nrf52_spis"], "nrf52840_spis"),
+            (&["nrf52840_twis", "nrf52_twis"], "nrf52840_twis"),
+            // TWIM / TWI master: nRF52 I²C master with EasyDMA.
+            (
+                &["nrf52840_i2c", "nrf52840_twim", "nrf52_twim", "nrf52_i2c"],
+                "nrf52840_twim",
+            ),
+            // UARTE: nRF52 UART with EasyDMA (PSEL/BAUDRATE/CONFIG).
+            (
+                &["nrf52840_uart", "nrf52_uart", "nrf52_uarte"],
+                "nrf52840_uart",
+            ),
+            // GPIOTE: Nordic GPIO task/event controller (shares "gpio" in name
+            // but a totally different register surface).
+            (
+                &["nrf52840_gpiotasksevents", "nrf52_gpiote"],
+                "nrf52_gpiote",
+            ),
+        ];
+        for (inputs, canonical) in ALIASES {
+            if inputs.contains(&t.as_str()) {
+                return canonical.to_string();
             }
-            _ => {}
         }
 
-        // Nordic-specific pre-emption — keep these ahead of the generic
-        // mappers so types like `nrf52840_saadc` (contains "adc") and
-        // `nrf52840_qspi` (contains "spi" + "qspi") aren't coerced to
-        // STM32 layouts.
-        if t == "nrf52840_saadc" || t == "nrf52_saadc" || t == "nrf52840_adc" {
-            return "nrf52_saadc".to_string();
-        }
-        if t == "nrf52840_qspi" || t == "nrf52_qspi" {
-            return "nrf52_qspi".to_string();
-        }
-        // SPIS / TWIS / TWIM must be intercepted before the generic "contains(spi)"
-        // and "contains(i2c)" / "ends_with(_twi)" matchers, otherwise they
-        // would be mis-routed to the STM32 SPI / I2C models.
-        if t == "nrf52840_spis" || t == "nrf52_spis" {
-            return "nrf52840_spis".to_string();
-        }
-        if t == "nrf52840_twis" || t == "nrf52_twis" {
-            return "nrf52840_twis".to_string();
-        }
-        // TWIM / TWI master: nRF52 I²C master with EasyDMA. Must precede the
-        // generic "contains(i2c)" / "ends_with(_twi)" fuzzy matchers.
-        if t == "nrf52840_i2c" || t == "nrf52840_twim" || t == "nrf52_twim" || t == "nrf52_i2c" {
-            return "nrf52840_twim".to_string();
-        }
-        // UARTE: nRF52 UART with EasyDMA — must be intercepted before the
-        // generic "contains(uart)" matcher, which would coerce it to the
-        // STM32-style generic Uart model and lose PSEL/BAUDRATE/CONFIG.
-        if t == "nrf52840_uart" || t == "nrf52_uart" || t == "nrf52_uarte" {
-            return "nrf52840_uart".to_string();
+        // Serial-instance mux (SPIM0/TWIM0 share one MMIO window) — must
+        // precede the generic "contains(spi)" and "contains(i2c)" matchers.
+        if t == "nrf52840_serial"
+            || t == "nrf52_serial"
+            || t == "nrf52_spim_twim"
+            || t == "nrf52840_spim_twim"
+        {
+            return "nrf52_serial_instance".to_string();
         }
 
-        // Specific mappers first — must come before fuzzy matchers so e.g.
+        // 3. Legacy generic SVD-name heuristics (fallback). Fuzzy `contains` /
+        //    `starts_with` / `ends_with` matching for raw vendor names we have
+        //    not given an explicit canonical type. Ordering matters: specific
+        //    mappers come before broader ones so e.g.
         // "quadspi" doesn't get swallowed by the generic "contains(spi)" rule.
         if t.contains("quadspi") || t == "qspi" {
             return "quadspi".to_string();
@@ -300,12 +674,6 @@ impl SystemBus {
 
         if t.contains("uart") || t.contains("usart") || t == "leuart" || t.ends_with("_sci") {
             return "uart".to_string();
-        }
-        // Nordic GPIOTE shares "gpio" in its name but is a task/event
-        // controller with a totally different register surface; route it
-        // to the dedicated nRF52 model before the generic gpio matcher.
-        if t == "nrf52840_gpiotasksevents" || t == "nrf52_gpiote" {
-            return "nrf52_gpiote".to_string();
         }
         if t == "sam4s_pio" || (t.contains("gpio") && t != "pio") {
             return "gpio".to_string();
@@ -342,7 +710,7 @@ impl SystemBus {
         t
     }
 
-    fn profile_name(p_cfg: &PeripheralConfig) -> anyhow::Result<Option<&str>> {
+    pub(crate) fn profile_name(p_cfg: &PeripheralConfig) -> anyhow::Result<Option<&str>> {
         if let Some(value) = p_cfg.config.get("profile") {
             return value.as_str().map(Some).ok_or_else(|| {
                 anyhow::anyhow!("Peripheral '{}' config.profile must be a string", p_cfg.id)
@@ -359,7 +727,7 @@ impl SystemBus {
         Ok(None)
     }
 
-    fn parse_profile_or_default<T>(
+    pub(crate) fn parse_profile_or_default<T>(
         p_cfg: &PeripheralConfig,
         peripheral_kind: &str,
     ) -> anyhow::Result<T>
@@ -380,6 +748,125 @@ impl SystemBus {
         })
     }
 
+    /// Resolve the UART register layout for a peripheral **deterministically**
+    /// from its declared type. The decision order is fixed and total, and there
+    /// is no path that silently mismodels a strange UART:
+    ///
+    ///   1. An explicit `config.profile` always wins (the author's deliberate
+    ///      choice), so any UART can be pinned to any modelled layout.
+    ///   2. A type whose silicon register map we actually model routes to that
+    ///      layout: `*lpuart*` → Kinetis LPUART; `stm32h5`/`stm32f7` → modern
+    ///      STM32 USART; any other `stm32…` name and the bare generic `"uart"`
+    ///      → the classic STM32 USART map (SR/DR/BRR/CR1…).
+    ///   3. Anything else — every vendor UART we do not model yet (PL011, 16550,
+    ///      Gaisler APBUART, EFM32/EFR32, Renesas SCI, LiteX, SiFive, SAM, …) —
+    ///      ERRORS. It must name a layout via `config.profile` to run. A UART is
+    ///      never silently mapped onto an STM32 register map by omission, the
+    ///      way `nxp_lpuart` was before this gate existed.
+    pub(crate) fn uart_layout_for(
+        p_cfg: &PeripheralConfig,
+    ) -> anyhow::Result<crate::peripherals::uart::UartRegisterLayout> {
+        use crate::peripherals::uart::UartRegisterLayout::{self, Lpuart, Stm32F1, Stm32V2};
+
+        // 1. Explicit author override wins, for any UART type.
+        if let Some(name) = Self::profile_name(p_cfg)? {
+            return UartRegisterLayout::from_str(name).map_err(|e| {
+                anyhow::anyhow!(
+                    "Peripheral '{}' has invalid UART profile '{}': {}",
+                    p_cfg.id,
+                    name,
+                    e
+                )
+            });
+        }
+
+        // 2. Route the families we model faithfully, by declared type. Each
+        //    family's register map lives in `UartRegisterLayout`; the offsets
+        //    come from datasheets / vendor CMSIS headers / in-tree drivers.
+        use UartRegisterLayout::*;
+        let raw = p_cfg.r#type.to_ascii_lowercase();
+        let has = |needle: &str| raw.contains(needle);
+        let layout = if has("lpuart") {
+            Lpuart
+        } else if raw == "uart" {
+            // The generic escape hatch: the classic STM32 USART map.
+            Stm32F1
+        } else if has("stm32") {
+            if has("stm32h5") || has("stm32f7") {
+                Stm32V2
+            } else {
+                Stm32F1
+            }
+        } else if has("pl011") {
+            Pl011
+        } else if has("16550") {
+            Ns16550
+        } else if has("da14") {
+            // Dialog/Renesas DA1469x = Synopsys DW_apb_uart (16550, 4-byte stride).
+            DwApbUart
+        } else if has("cadence") {
+            Cadence
+        } else if has("efr32") {
+            Efr32
+        } else if has("efm32") {
+            Efm32
+        } else if raw == "leuart" {
+            // Exact: "leuart" is a substring of unrelated names (e.g. "simpleuart").
+            Leuart
+        } else if has("sci") {
+            // Renesas SCI (renesas_sci, renesasraXmY_sci).
+            Sci
+        } else if has("gaisler") || has("apbuart") {
+            Gaisler
+        } else if has("npcx") {
+            Npcx
+        } else if has("max32650") {
+            Max32650
+        } else if has("opentitan") {
+            OpenTitan
+        } else if has("sam_usart") || has("samusart") {
+            Sam
+        } else if has("samd5") || has("same5") || has("sercom") {
+            Sercom
+        } else if has("imx") {
+            Imx
+        } else if has("sifive") {
+            Sifive
+        } else if has("litex") {
+            Litex
+        } else if has("murax") {
+            Murax
+        } else if has("coreuart") || has("miv") {
+            CoreUart
+        } else if has("k6xf") {
+            KinetisUart
+        } else if has("pulp") || has("udma") {
+            Pulp
+        } else if has("ft9001") || has("ft900") {
+            // Bridgetek FT9xx UART is 16550-compatible.
+            Ns16550
+        } else if has("cosimulated") {
+            // Co-simulation stub with no fixed register map — default to 16550.
+            Ns16550
+        } else if has("mpc5567") || has("esci") {
+            Esci
+        } else if has("picosoc") || has("simpleuart") {
+            PicoUart
+        } else {
+            // 3. Unmodelled UART — refuse to guess.
+            anyhow::bail!(
+                "UART type '{}' (peripheral '{}') has no register layout modelled yet \
+                 and no `config.profile` set; it will NOT be silently mapped onto an \
+                 STM32. Choose a layout explicitly with \
+                 `config: {{ profile: <one of the supported layouts> }}`, or add a \
+                 dedicated model for it.",
+                p_cfg.r#type,
+                p_cfg.id
+            );
+        };
+        Ok(layout)
+    }
+
     fn resolve_peripheral_path(manifest: &SystemManifest, descriptor_path: &str) -> PathBuf {
         let raw = PathBuf::from(descriptor_path);
         if raw.is_absolute() {
@@ -396,105 +883,48 @@ impl SystemBus {
         }
     }
 
-    /// Parse a pin label into `(gpio peripheral id, bit)`. Accepts the STM32
-    /// form "PC7" -> `("gpioc", 7)` and the Nordic form "P0.04" / "P1.15" ->
-    /// `("gpio0", 4)` / `("gpio1", 15)`.
-    fn parse_stm32_pin(pin: &str) -> Option<(String, u8)> {
-        let s = pin.trim();
-        let bytes = s.as_bytes();
-        if bytes.len() < 3 || !bytes[0].eq_ignore_ascii_case(&b'P') {
-            return None;
-        }
-        // Nordic ports are numbered and dot-separated; nRF52840 P0 has 32 pins.
-        if let Some((port, num)) = s[1..].split_once('.') {
-            let port: u8 = port.parse().ok()?;
-            let num: u8 = num.parse().ok()?;
-            if num > 31 {
-                return None;
-            }
-            return Some((format!("gpio{port}"), num));
-        }
-        let port = (bytes[1] as char).to_ascii_lowercase();
-        if !port.is_ascii_alphabetic() {
-            return None;
-        }
-        let num: u8 = s[2..].parse().ok()?;
-        if num > 15 {
-            return None;
-        }
-        Some((format!("gpio{port}"), num))
+    /// True when the wired devices need cycle-accurate (non-batched) execution
+    /// to behave correctly. Some external devices are driven from `tick_peripherals`
+    /// and observed by cycle-tight firmware loops — e.g. the HC-SR04 holds ECHO
+    /// high for a pulse the firmware times by polling GPIO IN in a busy loop.
+    /// Batched execution advances many instructions before ticking peripherals,
+    /// so the firmware polls a frozen ECHO and measures nothing. Runners should
+    /// disable instruction batching when this returns true (correctness > speed).
+    /// New per-tick GPIO-timing devices should extend this predicate.
+    ///
+    /// Also true when an H5 op-modeling FLASH is on the bus (`flash_models_ops`,
+    /// cached in `rebuild_peripheral_ranges`): its erase/bank-swap ops are
+    /// recorded as pending and drained+applied per instruction by the machine
+    /// layer, an invariant that only holds at batch size 1. Without this the
+    /// CLI/batch run path would record the op in the FLASH cell but never apply
+    /// it (no 0xFF fill, no bank swap, no reset).
+    pub fn requires_cycle_accurate(&self) -> bool {
+        !self.hcsr04.is_empty() || self.has_iolink_master() || self.flash_models_ops
     }
 
-    /// Resolve an STM32 pin label to its `(ODR address, bit)` so a display's
-    /// D/C line can be sampled directly from the driving GPIO's output register.
-    /// Public wrapper exposed via [`AttachCtx::resolve_pin_odr`] so kits can
-    /// hook MCU GPIO outputs into a SPI device's D/C line.
-    pub fn resolve_pin_odr_pub(bus: &SystemBus, pin: &str) -> Option<(u64, u8)> {
-        Self::resolve_pin_odr(bus, pin)
-    }
-
-    fn resolve_pin_odr(bus: &SystemBus, pin: &str) -> Option<(u64, u8)> {
-        // STM32/Nordic: "PA5" / "P0.13" → per-port GpioPort with an ODR offset.
-        if let Some((port_name, bit)) = Self::parse_stm32_pin(pin) {
-            if let Some(idx) = bus.find_peripheral_index_by_name(&port_name) {
-                let base = bus.peripherals[idx].base;
-                if let Some(odr_off) = bus.peripherals[idx]
-                    .dev
-                    .as_any()
-                    .and_then(|a| a.downcast_ref::<crate::peripherals::gpio::GpioPort>())
-                    .map(|g| g.odr_offset())
-                {
-                    return Some((base + odr_off, bit));
+    /// True when an IO-Link master peer is attached to any UART. The master is
+    /// paced one byte per UART tick and runs a deterministic, tick-counted
+    /// startup schedule (wake-up → IDLE → OPERATE → cyclic) with a large
+    /// inter-frame gap. Under instruction batching the UART would tick only once
+    /// per ~10k-instruction batch, stretching the handshake to hundreds of
+    /// millions of steps; ticking per instruction keeps it well within the
+    /// runner's step budget. Cheap: called once at loop setup.
+    fn has_iolink_master(&self) -> bool {
+        use crate::peripherals::components::IolinkMaster;
+        for p in &self.peripherals {
+            let Some(any) = p.dev.as_any() else { continue };
+            let Some(uart) = any.downcast_ref::<Uart>() else {
+                continue;
+            };
+            for stream in &uart.attached_streams {
+                if let Some(sa) = stream.as_any() {
+                    if sa.downcast_ref::<IolinkMaster>().is_some() {
+                        return true;
+                    }
                 }
             }
         }
-        // ESP32: "GPIO17" → the single "gpio" peripheral, GPIO_OUT_REG at
-        // base + 0x04 (TRM §4.10, bit = pin number for GPIO0..31).
-        if let Some(bit) = Self::parse_esp32_gpio_pin(pin) {
-            let idx = bus.find_peripheral_index_by_name("gpio")?;
-            let is_esp32 = bus.peripherals[idx]
-                .dev
-                .as_any()
-                .map(|a| {
-                    a.downcast_ref::<crate::peripherals::esp32::gpio::Esp32Gpio>()
-                        .is_some()
-                })
-                .unwrap_or(false);
-            if is_esp32 {
-                const GPIO_OUT_REG_OFFSET: u64 = 0x04;
-                return Some((bus.peripherals[idx].base + GPIO_OUT_REG_OFFSET, bit));
-            }
-        }
-        None
-    }
-
-    /// Parse an ESP32 GPIO label ("GPIO17", "gpio17", "IO17", or a bare "17")
-    /// into its bit number in GPIO_OUT_REG. Only the low bank (0..31) is
-    /// modeled, matching [`Esp32Gpio`](crate::peripherals::esp32::gpio::Esp32Gpio).
-    fn parse_esp32_gpio_pin(pin: &str) -> Option<u8> {
-        let s = pin.trim();
-        let digits = s
-            .trim_start_matches(|c: char| c.is_ascii_alphabetic())
-            .trim();
-        let num: u8 = digits.parse().ok()?;
-        if num > 31 {
-            return None;
-        }
-        Some(num)
-    }
-
-    /// Resolve an STM32 pin label to its `(IDR address, bit)` so a sensor can
-    /// drive an MCU input line (e.g. the HC-SR04 ECHO pin).
-    fn resolve_pin_idr(bus: &SystemBus, pin: &str) -> Option<(u64, u8)> {
-        let (port_name, bit) = Self::parse_stm32_pin(pin)?;
-        let idx = bus.find_peripheral_index_by_name(&port_name)?;
-        let base = bus.peripherals[idx].base;
-        let idr_off = bus.peripherals[idx]
-            .dev
-            .as_any()
-            .and_then(|a| a.downcast_ref::<crate::peripherals::gpio::GpioPort>())
-            .map(|g| g.idr_offset())?;
-        Some((base + idr_off, bit))
+        false
     }
 
     /// Service all HC-SR04 sensors for one tick: compute each sensor's ECHO
@@ -529,6 +959,296 @@ impl SystemBus {
             }
             self.hcsr04[i].set_last_echo_high(echo_high);
         }
+    }
+
+    pub(crate) fn service_can_diagnostic_testers(&mut self) {
+        if self.can_diagnostic_testers.is_empty() {
+            return;
+        }
+
+        for i in 0..self.can_diagnostic_testers.len() {
+            if self.can_diagnostic_testers[i].sent {
+                continue;
+            }
+
+            let connection = self.can_diagnostic_testers[i].connection.clone();
+            let Some(idx) = self.find_peripheral_index_by_name(&connection) else {
+                continue;
+            };
+            let Some(fdcan) = self.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .and_then(|any| any.downcast_mut::<crate::peripherals::fdcan::Fdcan>())
+            else {
+                continue;
+            };
+
+            let frame = crate::network::CanFrame {
+                id: self.can_diagnostic_testers[i].request_id,
+                data: self.can_diagnostic_testers[i].request_data.clone(),
+                extended: false,
+                fd: self.can_diagnostic_testers[i].request_data.len() > 8,
+                bitrate_switch: self.can_diagnostic_testers[i].request_data.len() > 8,
+                remote: false,
+            };
+            if fdcan.receive_frame(frame) {
+                self.can_diagnostic_testers[i].sent = true;
+            }
+        }
+    }
+
+    /// Per-tick service for the stateful ISO-TP/UDS testers. For each tester:
+    /// resolve its peripheral by name, drain the ECU's outbound `tx_frames`,
+    /// advance the FSM, and inject the next ISO-TP frame (filter-gated) when due.
+    ///
+    /// Works against both bxCAN (`deliver_rx`) and FDCAN (`receive_frame`); the
+    /// downcast picks whichever is wired. A filtered/dropped injection (return
+    /// `false`) leaves the FSM parked on the same send so it retries next tick —
+    /// important on the first ticks before the ECU has configured its filter.
+    pub(crate) fn service_can_uds_testers(&mut self) {
+        if self.can_uds_testers.is_empty() {
+            return;
+        }
+
+        for i in 0..self.can_uds_testers.len() {
+            if self.can_uds_testers[i].is_terminal() {
+                continue;
+            }
+
+            // Timeout guard so a broken/silent ECU never hangs the sim.
+            self.can_uds_testers[i].ticks += 1;
+            if self.can_uds_testers[i].ticks > self.can_uds_testers[i].max_ticks {
+                self.can_uds_testers[i].state = CanUdsTesterState::Failed;
+                continue;
+            }
+
+            let connection = self.can_uds_testers[i].connection.clone();
+            let Some(idx) = self.find_peripheral_index_by_name(&connection) else {
+                continue;
+            };
+
+            // Drain the ECU's outbound frames and feed the FSM. `observe_ecu_frame`
+            // may return a payload to inject (e.g. the CF unblocked by FlowControl);
+            // the actual injection happens below so both peripheral kinds share one
+            // filter-gated send path.
+            let request_id = self.can_uds_testers[i].request_id;
+            let mut pending_inject: Option<Vec<u8>> = None;
+
+            // Resolve the peripheral once; reborrow per phase to satisfy the
+            // borrow checker (drain, then inject).
+            let drained: Vec<crate::network::CanFrame> = {
+                let any = self.peripherals[idx].dev.as_any_mut();
+                match any {
+                    Some(a) => {
+                        if let Some(bx) = a.downcast_mut::<crate::peripherals::bxcan::BxCan>() {
+                            bx.tx_frames.drain(..).collect()
+                        } else if let Some(fd) =
+                            a.downcast_mut::<crate::peripherals::fdcan::Fdcan>()
+                        {
+                            fd.tx_frames.drain(..).collect()
+                        } else {
+                            continue;
+                        }
+                    }
+                    None => continue,
+                }
+            };
+
+            for frame in &drained {
+                if let Some(payload) =
+                    self.can_uds_testers[i].observe_ecu_frame(frame.id, &frame.data)
+                {
+                    pending_inject = Some(payload);
+                }
+            }
+
+            // Decide what (if anything) to inject this tick.
+            let has_script = !self.can_uds_testers[i].script.is_empty();
+            let to_send: Option<Vec<u8>> = if has_script {
+                match self.can_uds_testers[i].state {
+                    CanUdsTesterState::Start => {
+                        // Build request frames for the current script step.
+                        let frames = self.can_uds_testers[i].build_request_frames();
+                        if let Some((first, rest)) = frames.split_first() {
+                            // Queue any CFs for later (after FlowControl).
+                            self.can_uds_testers[i].pending_cfs = rest.to_vec();
+                            Some(first.clone())
+                        } else {
+                            None
+                        }
+                    }
+                    // Use the observe result when an FC arrived this tick, or
+                    // the front of pending_cfs when additional CFs remain from
+                    // a previous tick's FC (no new ECU frame → pending_inject
+                    // is None but the queue is non-empty).
+                    CanUdsTesterState::AwaitFc => pending_inject
+                        .or_else(|| self.can_uds_testers[i].pending_cfs.first().cloned()),
+                    // ECU sent a FirstFrame this tick; observe_ecu_frame_script
+                    // already set state=AwaitMultiResp and returned the FlowControl
+                    // in pending_inject. Forward it so the ECU can send its CFs.
+                    CanUdsTesterState::AwaitMultiResp => pending_inject,
+                    _ => None,
+                }
+            } else {
+                match self.can_uds_testers[i].state {
+                    CanUdsTesterState::Start => Some(self.can_uds_testers[i].first_frame.clone()),
+                    CanUdsTesterState::AwaitFc => pending_inject,
+                    _ => None,
+                }
+            };
+
+            let Some(payload) = to_send else {
+                continue;
+            };
+
+            let frame = crate::network::CanFrame::classic(request_id, payload);
+            let injected = {
+                let any = self.peripherals[idx].dev.as_any_mut();
+                match any {
+                    Some(a) => {
+                        if let Some(bx) = a.downcast_mut::<crate::peripherals::bxcan::BxCan>() {
+                            bx.deliver_rx(frame)
+                        } else if let Some(fd) =
+                            a.downcast_mut::<crate::peripherals::fdcan::Fdcan>()
+                        {
+                            fd.receive_frame(frame)
+                        } else {
+                            false
+                        }
+                    }
+                    None => false,
+                }
+            };
+
+            if injected {
+                // Advance only on a successful (accepted) injection; otherwise
+                // stay parked and retry next tick.
+                let has_script = !self.can_uds_testers[i].script.is_empty();
+                match self.can_uds_testers[i].state {
+                    CanUdsTesterState::Start if has_script => {
+                        // SF (no pending CFs) → go straight to AwaitResp.
+                        // FF (pending CFs queued) → go to AwaitFc.
+                        if self.can_uds_testers[i].pending_cfs.is_empty() {
+                            self.can_uds_testers[i].state = CanUdsTesterState::AwaitResp;
+                        } else {
+                            self.can_uds_testers[i].state = CanUdsTesterState::AwaitFc;
+                        }
+                    }
+                    CanUdsTesterState::Start => {
+                        self.can_uds_testers[i].state = CanUdsTesterState::AwaitFc
+                    }
+                    CanUdsTesterState::AwaitFc if has_script => {
+                        // Pop the CF that was just successfully injected.
+                        if !self.can_uds_testers[i].pending_cfs.is_empty() {
+                            self.can_uds_testers[i].pending_cfs.remove(0);
+                        }
+                        // Only advance to AwaitResp once all CFs have been sent.
+                        if self.can_uds_testers[i].pending_cfs.is_empty() {
+                            self.can_uds_testers[i].state = CanUdsTesterState::AwaitResp;
+                        }
+                    }
+                    CanUdsTesterState::AwaitFc => {
+                        self.can_uds_testers[i].state = CanUdsTesterState::AwaitResp
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    fn yaml_u32(value: Option<&serde_yaml::Value>, default: u32) -> u32 {
+        match value {
+            Some(serde_yaml::Value::Number(n)) => n.as_u64().map(|v| v as u32).unwrap_or(default),
+            Some(serde_yaml::Value::String(s)) => {
+                let s = s.trim();
+                if let Some(hex) = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")) {
+                    u32::from_str_radix(&hex.replace('_', ""), 16).unwrap_or(default)
+                } else {
+                    s.replace('_', "").parse::<u32>().unwrap_or(default)
+                }
+            }
+            _ => default,
+        }
+    }
+
+    fn yaml_bytes(value: Option<&serde_yaml::Value>, default: &[u8]) -> Vec<u8> {
+        match value {
+            Some(serde_yaml::Value::Sequence(seq)) => seq
+                .iter()
+                .map(|value| Self::yaml_u32(Some(value), 0) as u8)
+                .collect(),
+            Some(serde_yaml::Value::String(s)) => s
+                .split(|c: char| c.is_ascii_whitespace() || c == ',' || c == ':')
+                .filter(|part| !part.is_empty())
+                .map(|part| {
+                    let part = part.trim();
+                    if let Some(hex) = part.strip_prefix("0x").or_else(|| part.strip_prefix("0X")) {
+                        match u8::from_str_radix(hex, 16) {
+                            Ok(b) => b,
+                            Err(_) => {
+                                tracing::warn!(
+                                    "[uds-tester] malformed send byte {:?}, treating as 0x00",
+                                    part
+                                );
+                                0
+                            }
+                        }
+                    } else {
+                        u8::from_str_radix(part, 16)
+                            .unwrap_or_else(|_| part.parse::<u8>().unwrap_or(0))
+                    }
+                })
+                .collect(),
+            _ => default.to_vec(),
+        }
+    }
+
+    /// Parse an expect string such as `"51 01 .."` into a mask vector.
+    /// `".."` becomes `None` (wildcard); any other token is parsed as a hex
+    /// byte and becomes `Some(byte)`.
+    fn parse_expect(s: &str) -> Vec<Option<u8>> {
+        s.split_ascii_whitespace()
+            .map(|tok| {
+                if tok == ".." {
+                    None
+                } else {
+                    let hex = tok.trim_start_matches("0x").trim_start_matches("0X");
+                    match u8::from_str_radix(hex, 16) {
+                        Ok(b) => Some(b),
+                        Err(_) => {
+                            tracing::warn!(
+                                "[uds-tester] malformed expect token {:?}, treating as 0x00",
+                                tok
+                            );
+                            Some(0)
+                        }
+                    }
+                }
+            })
+            .collect()
+    }
+
+    /// Parse an optional YAML `script:` sequence into a `Vec<UdsStep>`.
+    fn parse_script(value: Option<&serde_yaml::Value>) -> Vec<UdsStep> {
+        let seq = match value {
+            Some(serde_yaml::Value::Sequence(s)) => s,
+            _ => return Vec::new(),
+        };
+        seq.iter()
+            .map(|entry| {
+                let send = Self::yaml_bytes(entry.get("send"), &[]);
+                let expect_str = entry.get("expect").and_then(|v| v.as_str()).unwrap_or("");
+                let expect = Self::parse_expect(expect_str);
+                let expect_nrc = entry
+                    .get("expect_nrc")
+                    .map(|v| Self::yaml_u32(Some(v), 0) as u8);
+                UdsStep {
+                    send,
+                    expect,
+                    expect_nrc,
+                }
+            })
+            .collect()
     }
 
     /// Write-hook mirror of [`maybe_latch_dc`](Self::maybe_latch_dc) for the
@@ -642,88 +1362,142 @@ impl SystemBus {
         }
     }
 
-    fn is_peripheral_addr(p: &PeripheralEntry, addr: u64) -> bool {
-        addr >= p.base && addr < p.base + p.size
-    }
-
-    fn rebuild_peripheral_ranges(&mut self) {
-        self.peripheral_ranges = self
-            .peripherals
-            .iter()
-            .enumerate()
-            .map(|(index, p)| PeripheralRange {
-                start: p.base,
-                end: p.base.saturating_add(p.size),
-                index,
-            })
-            .collect();
-        self.peripheral_ranges.sort_by_key(|r| r.start);
-        self.peripheral_hint.set(None);
-        // Cache the DPORT index (classic-ESP32 only) so the per-step
-        // cross-core IPI read is O(1) instead of scanning every peripheral.
-        self.dport_idx = self.peripherals.iter().position(|p| {
-            p.dev
-                .as_any()
-                .and_then(|a| a.downcast_ref::<crate::peripherals::esp32::dport::Dport>())
-                .is_some()
-        });
-    }
-
-    pub fn refresh_peripheral_index(&mut self) {
-        self.rebuild_peripheral_ranges();
-    }
-
-    fn find_peripheral_index(&self, addr: u64) -> Option<usize> {
-        // Canonical routing: among the windows CONTAINING `addr`, the one
-        // with the GREATEST start wins (last-start-wins; equal starts resolve
-        // to the last-registered entry). This makes routing a pure function
-        // of the address.
-        //
-        // The hint cache deliberately does NOT short-circuit on containment:
-        // with layered windows (a narrow per-peripheral twin inside a broad
-        // catch-all stub) a hint seeded by a broad-only access also CONTAINS
-        // the twin's addresses, so a containment-only check hijacks them to
-        // the catch-all and routing becomes a function of access history —
-        // see bus::tests::overlapping_windows_route_history_independently.
-        // The canonical path is already cheap: one partition_point (O(log n))
-        // and, in the common non-overlapped case, one containment check.
-        let mut idx = None;
-        if self.peripheral_ranges.len() == self.peripherals.len() {
-            let pos = self
-                .peripheral_ranges
-                .partition_point(|range| range.start <= addr);
-            // Walk backwards through the candidate starts: the nearest
-            // (greatest-start) window may have already ENDED below `addr`
-            // while a broader, earlier-started window still covers it.
-            for range in self.peripheral_ranges[..pos].iter().rev() {
-                if addr < range.end {
-                    idx = Some(range.index);
-                    break;
-                }
-            }
-        } else {
-            // Ranges index stale (mid-mutation, defensive only): validated
-            // hint first, then a scan matching the canonical tie-break
-            // (greatest base; max_by_key keeps the LAST of equal maxima,
-            // i.e. the last-registered entry).
-            idx = self.peripheral_hint.get().filter(|&i| {
-                self.peripherals
-                    .get(i)
-                    .is_some_and(|p| Self::is_peripheral_addr(p, addr))
-            });
-            if idx.is_none() {
-                idx = self
-                    .peripherals
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, p)| Self::is_peripheral_addr(p, addr))
-                    .max_by_key(|&(_, p)| p.base)
-                    .map(|(i, _)| i);
-            }
+    /// Whether peripheral `idx` is currently clocked. `true` (always-on) for any
+    /// peripheral without a declared clock-gate — the safe default that keeps
+    /// every existing config/firmware working. For a gated peripheral, reads the
+    /// RCC enable register the gate points at and returns whether the gate bit is
+    /// set. If no RCC peripheral is registered, or its register read fails, the
+    /// peripheral is treated as clocked (fail-open: never wedge a chip that has
+    /// no modelled RCC). Cheap: one `Option` check, then on the rare gated path a
+    /// single cached-index RCC register read.
+    fn is_peripheral_clocked(&self, idx: usize) -> bool {
+        // missing_clock fault: force the peripheral unclocked and count the
+        // suppressed access as the runtime fired-observation. Checked before the
+        // bypass so a fault is honoured even under measurement mode.
+        if let Some(suppressed) = self.fault_unclocked.get(&idx) {
+            suppressed.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            return false;
         }
+        if self.clock_gating_bypass {
+            return true; // measurement mode: ignore gating (see set_clock_gating_bypass)
+        }
+        let Some(gate) = self
+            .peripherals
+            .get(idx)
+            .and_then(|p| p.clock_gate.as_ref())
+        else {
+            return true; // ungated → always accessible
+        };
+        let Some(rcc_idx) = self.rcc_idx else {
+            return true; // no RCC modelled → don't gate
+        };
+        match self.peripherals[rcc_idx].dev.read_u32(gate.reg_offset) {
+            Ok(reg) => (reg >> gate.bit) & 1 != 0,
+            Err(_) => true,
+        }
+    }
 
-        self.peripheral_hint.set(idx);
-        idx
+    /// Disable RCC clock-gating for measurement/diagnostic tooling: while set,
+    /// `is_peripheral_clocked` returns `true` for every peripheral, so a gated
+    /// peripheral's registers stay accessible regardless of the RCC enable bits.
+    ///
+    /// This is a measurement hook, NOT something the runtime ever calls. The
+    /// runtime requires firmware to clock a peripheral before use, and a gated-
+    /// but-unclocked peripheral must read 0 / ignore writes (silicon fidelity).
+    /// But tooling that measures *register modeling* (the SVD coverage probe)
+    /// needs to ask "is this register modelled" — a property of the device —
+    /// independent of whether its clock happens to be on. A flag is used rather
+    /// than pre-setting the RCC enable bits because the coverage probe itself
+    /// writes 0 to every register, including the RCC enable registers, which
+    /// would re-gate any peripheral probed after the RCC.
+    pub fn set_clock_gating_bypass(&mut self, bypass: bool) {
+        self.clock_gating_bypass = bypass;
+    }
+
+    /// Inject a `missing_clock` fault: force `peripheral` to behave as if its
+    /// clock is never enabled, so every CPU access to it is suppressed (reads
+    /// return 0, writes are dropped) exactly like an unclocked peripheral on
+    /// silicon. Returns an error if the peripheral is absent. Whether the fault
+    /// actually fired (an access was suppressed) is read back with
+    /// [`Self::missing_clock_suppressed`] after the run.
+    pub fn inject_missing_clock(&mut self, peripheral: &str) -> Result<(), String> {
+        let idx = self
+            .find_peripheral_index_by_name(peripheral)
+            .ok_or_else(|| format!("fault target peripheral '{peripheral}' not found"))?;
+        self.fault_unclocked
+            .entry(idx)
+            .or_insert_with(|| std::sync::atomic::AtomicU64::new(0));
+        Ok(())
+    }
+
+    /// Number of accesses suppressed by a `missing_clock` fault on `peripheral`
+    /// (0 if not faulted or never accessed). `> 0` means the fault fired.
+    pub fn missing_clock_suppressed(&self, peripheral: &str) -> u64 {
+        let Some(idx) = self.find_peripheral_index_by_name(peripheral) else {
+            return 0;
+        };
+        self.fault_unclocked
+            .get(&idx)
+            .map(|c| c.load(std::sync::atomic::Ordering::Relaxed))
+            .unwrap_or(0)
+    }
+
+    /// Inject a `stuck_at_bit` fault: hold `bit` of `register` on the
+    /// declarative peripheral `peripheral` at `level` (0/1) — the CPU always
+    /// reads that level regardless of writes. Returns an error if the peripheral
+    /// or register is absent, the bit is out of range, or the peripheral is not
+    /// a declarative `GenericPeripheral`.
+    pub fn inject_stuck_bit(
+        &mut self,
+        peripheral: &str,
+        register: &str,
+        bit: u8,
+        level: u8,
+    ) -> Result<(), String> {
+        let idx = self
+            .find_peripheral_index_by_name(peripheral)
+            .ok_or_else(|| format!("fault target peripheral '{peripheral}' not found"))?;
+        let any = self.peripherals[idx]
+            .dev
+            .as_any_mut()
+            .ok_or_else(|| format!("peripheral '{peripheral}' is not introspectable for faults"))?;
+        let generic = any
+            .downcast_mut::<crate::peripherals::declarative::GenericPeripheral>()
+            .ok_or_else(|| format!("peripheral '{peripheral}' is not a declarative peripheral"))?;
+        if !generic.force_stuck_bit(register, bit, level) {
+            return Err(format!(
+                "register '{register}' bit {bit} invalid on peripheral '{peripheral}'"
+            ));
+        }
+        Ok(())
+    }
+
+    /// Inject a `wrong_reset_value` fault: force `register` on the declarative
+    /// peripheral `peripheral` to `value`. Returns an error (never a silent
+    /// no-op) if the peripheral or register is absent, or the peripheral is not
+    /// a declarative `GenericPeripheral`.
+    pub fn inject_wrong_reset_value(
+        &mut self,
+        peripheral: &str,
+        register: &str,
+        value: u32,
+    ) -> Result<(), String> {
+        let idx = self
+            .find_peripheral_index_by_name(peripheral)
+            .ok_or_else(|| format!("fault target peripheral '{peripheral}' not found"))?;
+        let any = self.peripherals[idx]
+            .dev
+            .as_any_mut()
+            .ok_or_else(|| format!("peripheral '{peripheral}' is not introspectable for faults"))?;
+        let generic = any
+            .downcast_mut::<crate::peripherals::declarative::GenericPeripheral>()
+            .ok_or_else(|| format!("peripheral '{peripheral}' is not a declarative peripheral"))?;
+        if !generic.force_register_value(register, value) {
+            return Err(format!(
+                "register '{register}' not found on peripheral '{peripheral}'"
+            ));
+        }
+        Ok(())
     }
 
     pub fn new() -> Self {
@@ -742,6 +1516,7 @@ impl SystemBus {
                     dev: Box::new(crate::peripherals::uart::Uart::new()),
                     ticks_remaining: 0,
                     generation: 0,
+                    clock_gate: None,
                 },
                 PeripheralEntry {
                     name: "gpioa".to_string(),
@@ -751,6 +1526,7 @@ impl SystemBus {
                     dev: Box::new(crate::peripherals::gpio::GpioPort::new()),
                     ticks_remaining: 0,
                     generation: 0,
+                    clock_gate: None,
                 },
                 PeripheralEntry {
                     name: "rcc".to_string(),
@@ -760,6 +1536,7 @@ impl SystemBus {
                     dev: Box::new(crate::peripherals::rcc::Rcc::new()),
                     ticks_remaining: 0,
                     generation: 0,
+                    clock_gate: None,
                 },
                 PeripheralEntry {
                     name: "systick".to_string(),
@@ -769,6 +1546,7 @@ impl SystemBus {
                     dev: Box::new(crate::peripherals::systick::Systick::new()),
                     ticks_remaining: 0,
                     generation: 0,
+                    clock_gate: None,
                 },
             ],
             nvic: None,
@@ -777,13 +1555,24 @@ impl SystemBus {
             bit_band_enabled: true,
             pending_cpu_irqs: [0; 2],
             dport_idx: None,
+            rcc_idx: None,
+            clock_gating_bypass: false,
+            fault_unclocked: std::collections::HashMap::new(),
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
             last_gpio_in: [0; 2],
             current_cycle: 0,
             pending_schedule: Vec::new(),
             legacy_walk_disabled: false,
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             hcsr04: Vec::new(),
+            can_diagnostic_testers: Vec::new(),
+            can_uds_testers: Vec::new(),
+            esp32c3_irq_routing: false,
+            riscv_irq_lines: 0,
+            flash_models_ops: false,
+            flash_error_flags_idx: None,
         };
         bus.rebuild_peripheral_ranges();
         bus
@@ -807,13 +1596,24 @@ impl SystemBus {
             bit_band_enabled: false,
             pending_cpu_irqs: [0; 2],
             dport_idx: None,
+            rcc_idx: None,
+            clock_gating_bypass: false,
+            fault_unclocked: std::collections::HashMap::new(),
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
             last_gpio_in: [0; 2],
             current_cycle: 0,
             pending_schedule: Vec::new(),
             legacy_walk_disabled: false,
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             hcsr04: Vec::new(),
+            can_diagnostic_testers: Vec::new(),
+            can_uds_testers: Vec::new(),
+            esp32c3_irq_routing: false,
+            riscv_irq_lines: 0,
+            flash_models_ops: false,
+            flash_error_flags_idx: None,
         };
         bus.rebuild_peripheral_ranges();
         bus
@@ -842,6 +1642,7 @@ impl SystemBus {
             dev,
             ticks_remaining: 0,
             generation: 0,
+            clock_gate: None,
         });
         self.rebuild_peripheral_ranges();
     }
@@ -864,7 +1665,7 @@ impl SystemBus {
     pub fn get_rom_thunk(
         &self,
         pc: u32,
-    ) -> Option<crate::peripherals::esp32s3::rom_thunks::RomThunkFn> {
+    ) -> Option<crate::peripherals::esp_xtensa_common::rom_thunks::RomThunkFn> {
         // First check the Bus-level flash thunk table (for thunks installed
         // outside any RomThunkBank's range — typically firmware functions
         // resident in flash that we want to intercept).
@@ -877,7 +1678,7 @@ impl SystemBus {
             if pc >= base && pc < end {
                 if let Some(any) = p.dev.as_any() {
                     if let Some(bank) =
-                        any.downcast_ref::<crate::peripherals::esp32s3::rom_thunks::RomThunkBank>()
+                        any.downcast_ref::<crate::peripherals::esp_xtensa_common::rom_thunks::RomThunkBank>()
                     {
                         return bank.get(pc);
                     }
@@ -895,9 +1696,9 @@ impl SystemBus {
     pub fn install_flash_thunk(
         &mut self,
         pc: u32,
-        thunk: crate::peripherals::esp32s3::rom_thunks::RomThunkFn,
+        thunk: crate::peripherals::esp_xtensa_common::rom_thunks::RomThunkFn,
     ) -> SimResult<()> {
-        let bytes = crate::peripherals::esp32s3::rom_thunks::ROM_THUNK_BREAK_BYTES;
+        let bytes = crate::peripherals::esp_xtensa_common::rom_thunks::ROM_THUNK_BREAK_BYTES;
         for (i, b) in bytes.iter().enumerate() {
             self.write_u8(pc as u64 + i as u64, *b)?;
         }
@@ -948,6 +1749,55 @@ impl SystemBus {
     ///
     /// When `echo_stdout` is false, UART writes will no longer be printed to stdout.
     pub fn attach_uart_tx_sink(&mut self, sink: Arc<Mutex<Vec<u8>>>, echo_stdout: bool) {
+        use crate::peripherals::components::IolinkMaster;
+        use crate::peripherals::esp32::uart::Esp32Uart;
+        use crate::peripherals::nrf52::uarte::Nrf52Uarte;
+        for p in &mut self.peripherals {
+            let Some(any) = p.dev.as_any_mut() else {
+                continue;
+            };
+            // STM32-layout generic UART.
+            if let Some(uart) = any.downcast_mut::<Uart>() {
+                // UARTs carrying an IO-Link master are the binary IO-Link C/Q
+                // wire, not a text console: their raw bytes must neither be
+                // echoed to stdout nor captured into the assertion buffer (they
+                // would pollute the console log and could collide with assertion
+                // substrings). A freshly built `Uart` defaults to
+                // `echo_stdout = true`, so we cannot simply skip it — we must
+                // explicitly clear the sink AND disable the echo. The master's
+                // own decoded records reach the capture sink via
+                // `attach_iolink_master_log_sink`.
+                let is_iolink_wire = uart
+                    .attached_streams
+                    .iter()
+                    .any(|s| s.as_any().map(|a| a.is::<IolinkMaster>()).unwrap_or(false));
+                if is_iolink_wire {
+                    uart.set_sink(None, false);
+                } else {
+                    uart.set_sink(Some(sink.clone()), echo_stdout);
+                }
+                continue;
+            }
+            // Real ESP32-classic UART (echo is fixed at construction time).
+            if let Some(uart) = any.downcast_mut::<Esp32Uart>() {
+                uart.set_sink(Some(sink.clone()));
+                continue;
+            }
+            // nRF52 UARTE console (EasyDMA): captured/echoed the same way.
+            if let Some(uarte) = any.downcast_mut::<Nrf52Uarte>() {
+                uarte.set_sink(Some(sink.clone()), echo_stdout);
+            }
+        }
+    }
+
+    /// Wire a capture sink into any attached IO-Link master so it records what
+    /// it received over IO-Link (`MASTER PD=`, `MASTER VERDICT`, `MASTER EVENT`)
+    /// into the given buffer. Pass the same `Arc<Mutex<Vec<u8>>>` used for the
+    /// UART-TX capture sink so `uart_contains` assertions can observe the
+    /// MASTER side (not just the device console). No-op when no IO-Link master
+    /// is attached.
+    pub fn attach_iolink_master_log_sink(&mut self, sink: Arc<Mutex<Vec<u8>>>) {
+        use crate::peripherals::components::IolinkMaster;
         for p in &mut self.peripherals {
             let Some(any) = p.dev.as_any_mut() else {
                 continue;
@@ -955,7 +1805,13 @@ impl SystemBus {
             let Some(uart) = any.downcast_mut::<Uart>() else {
                 continue;
             };
-            uart.set_sink(Some(sink.clone()), echo_stdout);
+            for stream in &mut uart.attached_streams {
+                if let Some(sa) = stream.as_any_mut() {
+                    if let Some(master) = sa.downcast_mut::<IolinkMaster>() {
+                        master.set_log_sink(sink.clone());
+                    }
+                }
+            }
         }
     }
 
@@ -1030,831 +1886,120 @@ impl SystemBus {
         }
     }
 
-    pub fn from_config(chip: &ChipDescriptor, manifest: &SystemManifest) -> anyhow::Result<Self> {
-        let flash_size = parse_size(&chip.flash.size)?;
-        let ram_size = parse_size(&chip.ram.size)?;
-
-        let mut extra_mem = Vec::with_capacity(chip.memory_regions.len());
-        for region in &chip.memory_regions {
-            let size = parse_size(&region.size)?;
-            let mut mem = LinearMemory::new(size as usize, region.base);
-            // Optionally preload a raw binary image (e.g. a dumped mask ROM)
-            // from a path given by an env var. Copyrighted vendor blobs are not
-            // committed, so a missing image just leaves the region zero-filled.
-            if let Some(env) = &region.image_env {
-                if let Ok(path) = std::env::var(env) {
-                    match std::fs::read(&path) {
-                        Ok(bytes) => {
-                            let n = bytes.len().min(mem.data.len());
-                            mem.data[..n].copy_from_slice(&bytes[..n]);
-                            tracing::info!(
-                                "loaded {n} bytes into '{}' region @ {:#010x} from {path}",
-                                region.name,
-                                region.base
-                            );
-                        }
-                        Err(e) => tracing::warn!(
-                            "region '{}' image {path} (${env}) unreadable: {e}",
-                            region.name
-                        ),
-                    }
-                }
-            }
-            extra_mem.push(mem);
+    /// Decode an RP2040 atomic register-alias access. Returns the aligned base
+    /// register address and the atomic op when `addr` lands on a `+0x1000`
+    /// (XOR), `+0x2000` (SET) or `+0x3000` (CLR) alias of a peripheral register
+    /// in the APB/AHB-Lite peripheral window; `None` for a normal (`+0x0000`)
+    /// access or any address outside the window. Only consulted when
+    /// `atomic_register_aliases` is set, so it is a no-op for other parts.
+    #[inline]
+    pub fn atomic_alias_redirect(&self, addr: u64) -> Option<(u64, AtomicAliasOp)> {
+        const APB_AHB: std::ops::Range<u64> = 0x4000_0000..0x5040_0000;
+        if !APB_AHB.contains(&addr) {
+            return None;
         }
-
-        let mut bus = Self {
-            flash_thunks: std::collections::HashMap::new(),
-            flash: LinearMemory::new(flash_size as usize, chip.flash.base),
-            ram: LinearMemory::new(ram_size as usize, chip.ram.base),
-            extra_mem,
-            peripherals: Vec::new(),
-            nvic: None,
-            observers: Vec::new(),
-            config: crate::SimulationConfig::default(),
-            bit_band_enabled: Self::chip_has_bit_band(chip),
-            pending_cpu_irqs: [0; 2],
-            dport_idx: None,
-            peripheral_ranges: Vec::new(),
-            peripheral_hint: Cell::new(None),
-            last_gpio_in: [0; 2],
-            current_cycle: 0,
-            pending_schedule: Vec::new(),
-            legacy_walk_disabled: false,
-            hcsr04: Vec::new(),
+        let op = match (addr >> 12) & 0x3 {
+            0 => return None,
+            1 => AtomicAliasOp::Xor,
+            2 => AtomicAliasOp::Set,
+            _ => AtomicAliasOp::Clr,
         };
+        Some((addr & !0x3000, op))
+    }
 
-        let mut merged_peripherals = chip.peripherals.clone();
-        for m_p in &manifest.peripherals {
-            if let Some(existing) = merged_peripherals.iter_mut().find(|p| p.id == m_p.id) {
-                // Merge config map
-                for (k, v) in &m_p.config {
-                    existing.config.insert(k.clone(), v.clone());
-                }
-                // Also override other fields if provided
-                if m_p.base_address != 0 {
-                    existing.base_address = m_p.base_address;
-                }
-                if m_p.irq.is_some() {
-                    existing.irq = m_p.irq;
-                }
-                if m_p.size.is_some() {
-                    existing.size = m_p.size.clone();
-                }
-            } else {
-                merged_peripherals.push(m_p.clone());
-            }
-        }
+    /// Whether the 8 bytes at `addr` form a plausible Cortex-M reset vector:
+    /// word[0] (the initial SP) points into RAM and word[1] (the initial PC)
+    /// points into flash. Used by `Machine::load_firmware` to decide whether a
+    /// candidate vector table (flash base vs. post-stage-2 offset) is the real
+    /// one, so a second-stage bootloader (RP2040 boot2) can be skipped.
+    pub fn vector_pair_valid(&self, addr: u64) -> bool {
+        let (Some(sp), Some(pc)) = (
+            self.read_u32(addr).ok(),
+            self.read_u32(addr.wrapping_add(4)).ok(),
+        ) else {
+            return false;
+        };
+        let pc = pc & !1; // strip the Thumb bit
+                          // The initial SP is the top of the full-descending stack, conventionally
+                          // one past the last RAM byte (ram.base + ram.size), so the upper bound
+                          // is inclusive.
+        let in_ram = (sp as u64) >= self.ram.base_addr
+            && (sp as u64) <= self.ram.base_addr + self.ram.data.len() as u64;
+        let in_flash = (pc as u64) >= self.flash.base_addr
+            && (pc as u64) < self.flash.base_addr + self.flash.data.len() as u64;
+        in_ram && in_flash
+    }
 
-        for p_cfg in &merged_peripherals {
-            let canonical_type = Self::canonical_peripheral_type(&p_cfg.r#type);
-            if canonical_type != p_cfg.r#type.to_ascii_lowercase() {
-                tracing::debug!(
-                    "Canonicalized peripheral type '{}' -> '{}' for id '{}'",
-                    p_cfg.r#type,
-                    canonical_type,
-                    p_cfg.id
-                );
-            }
+    /// Place a built peripheral on the bus using the descriptor's window size
+    /// (default 4KB) and IRQ. Shared by the per-family factory dispatch and the
+    /// generic-match path in [`Self::from_config`] so both stay in lockstep.
+    fn push_peripheral(
+        &mut self,
+        p_cfg: &labwired_config::PeripheralConfig,
+        dev: Box<dyn Peripheral>,
+    ) -> anyhow::Result<()> {
+        let size = match &p_cfg.size {
+            Some(size) => parse_size(size)?,
+            None => 0x1000,
+        };
+        self.peripherals.push(PeripheralEntry {
+            name: p_cfg.id.clone(),
+            base: p_cfg.base_address,
+            size,
+            irq: p_cfg.irq,
+            dev,
+            ticks_remaining: 0,
+            generation: 0,
+            // Resolved in a post-pass once every peripheral (incl. the RCC) is
+            // on the bus — see `resolve_clock_gates`.
+            clock_gate: None,
+        });
+        Ok(())
+    }
 
-            let dev: Box<dyn Peripheral> = match canonical_type.as_str() {
-                // nRF52 UARTE: full register surface including PSEL/BAUDRATE/CONFIG/DMA.
-                "nrf52840_uart" => Box::new(crate::peripherals::nrf52::uarte::Nrf52Uarte::new()),
-                "uart" | "stm32_uart" | "stm32f1_uart" | "stm32f2_uart" | "stm32f4_uart"
-                | "stm32f7_usart" | "stm32h5_usart" | "efm32_uart" | "nxp_lpuart" | "ns16550"
-                | "pl011" | "gaislerapbuart" => {
-                    let layout: UartRegisterLayout =
-                        if p_cfg.r#type.contains("stm32h5") || p_cfg.r#type.contains("stm32f7") {
-                            UartRegisterLayout::Stm32V2
-                        } else if p_cfg.r#type.contains("nrf") {
-                            UartRegisterLayout::Nrf52
-                        } else {
-                            Self::parse_profile_or_default(p_cfg, "UART")?
-                        };
-                    // CR3 writable mask is a per-part delta on the shared F1 map:
-                    // F1 implements [10:0] (0x07FF), F4 adds bit 11 ONEBIT (0x0FFF).
-                    // YAML: `config: { cr3_mask: 0xFFF }`; default F1.
-                    let cr3_mask: u32 = p_cfg
-                        .config
-                        .get("cr3_mask")
-                        .and_then(|v| v.as_u64())
-                        .map(|n| n as u32)
-                        .unwrap_or(0x0000_07FF);
-                    Box::new(crate::peripherals::uart::Uart::new_with_layout_cr3(
-                        layout, cr3_mask,
-                    ))
-                }
-                "systick" | "arm_generictimer" => {
-                    // CALIB is implementation-defined per chip; the yaml can
-                    // supply the silicon value via `config: { calib: ... }`.
-                    match p_cfg.config.get("calib").and_then(|v| v.as_u64()) {
-                        Some(calib) => Box::new(crate::peripherals::systick::Systick::with_calib(
-                            calib as u32,
-                        )),
-                        None => Box::new(crate::peripherals::systick::Systick::new()),
-                    }
-                }
-                "gpio" | "stm32_gpioport" | "stm32f4_gpio" | "efmgpioport" | "npcx_gpio"
-                | "imxrt_gpio" => {
-                    let layout: GpioRegisterLayout = if p_cfg.r#type.contains("nrf") {
-                        GpioRegisterLayout::Nrf52
-                    } else if p_cfg.r#type.contains("stm32f4") || p_cfg.r#type.contains("h5") {
-                        GpioRegisterLayout::Stm32V2
-                    } else {
-                        Self::parse_profile_or_default(p_cfg, "GPIO")?
-                    };
-                    // For nRF52 ports, an optional `num_pins` config key caps the
-                    // valid-pin range (e.g. 16 for nRF52840 P1 which has P1.0–P1.15).
-                    // Writes outside that range are discarded; reads return 0.
-                    if layout == GpioRegisterLayout::Nrf52 {
-                        let num_pins: u32 = p_cfg
-                            .config
-                            .get("num_pins")
-                            .and_then(|v| v.as_u64())
-                            .map(|n| n as u32)
-                            .unwrap_or(32);
-                        Box::new(crate::peripherals::gpio::GpioPort::new_nrf52(num_pins))
-                    } else if layout == GpioRegisterLayout::Stm32V2
-                        && p_cfg.config.contains_key("reset_moder")
-                    {
-                        // Per-port silicon reset values (MODER/OSPEEDR/PUPDR)
-                        // supplied by the chip yaml; missing keys default to 0.
-                        let cfg_u32 = |key: &str| -> u32 {
-                            p_cfg
-                                .config
-                                .get(key)
-                                .and_then(|v| v.as_u64())
-                                .map(|n| n as u32)
-                                .unwrap_or(0)
-                        };
-                        Box::new(crate::peripherals::gpio::GpioPort::new_stm32v2_with_resets(
-                            cfg_u32("reset_moder"),
-                            cfg_u32("reset_ospeedr"),
-                            cfg_u32("reset_pupdr"),
-                        ))
-                    } else {
-                        Box::new(crate::peripherals::gpio::GpioPort::new_with_layout(layout))
-                    }
-                }
-                "rcc" => {
-                    let layout: RccRegisterLayout = Self::parse_profile_or_default(p_cfg, "RCC")?;
-                    let mut rcc = crate::peripherals::rcc::Rcc::new_with_layout(layout);
-                    // F4 ENR writable masks are per-part (implemented-peripheral
-                    // set). YAML: `config: { rcc_ahb1enr_mask, rcc_apb1enr_mask,
-                    // rcc_apb2enr_mask }`; default unmasked (0xFFFF_FFFF).
-                    let m = |k: &str| -> u32 {
-                        p_cfg
-                            .config
-                            .get(k)
-                            .and_then(|v| v.as_u64())
-                            .map(|n| n as u32)
-                            .unwrap_or(0xFFFF_FFFF)
-                    };
-                    rcc.set_f4_enr_masks(
-                        m("rcc_ahb1enr_mask"),
-                        m("rcc_apb1enr_mask"),
-                        m("rcc_apb2enr_mask"),
-                    );
-                    Box::new(rcc)
-                }
-                "dbgmcu" => {
-                    // Pull IDCODE from YAML config (`idcode: "0x10076415"` or
-                    // `idcode: 269009941`). Default 0 — firmware probing
-                    // DBGMCU_IDCODE will then read 0; logged.
-                    let idcode: u32 = p_cfg
-                        .config
-                        .get("idcode")
-                        .and_then(|v| {
-                            if let Some(s) = v.as_str() {
-                                let s = s.trim();
-                                if let Some(rest) =
-                                    s.strip_prefix("0x").or_else(|| s.strip_prefix("0X"))
-                                {
-                                    u32::from_str_radix(rest, 16).ok()
-                                } else {
-                                    s.parse::<u32>().ok()
-                                }
-                            } else {
-                                v.as_u64().map(|n| n as u32)
-                            }
-                        })
-                        .unwrap_or(0);
-                    if idcode == 0 {
-                        tracing::warn!(
-                            "dbgmcu peripheral '{}' has no idcode configured \
-                             — firmware probing DBGMCU_IDCODE will read 0",
-                            p_cfg.id
-                        );
-                    }
-                    Box::new(crate::peripherals::dbgmcu::Dbgmcu::new(idcode))
-                }
-                "timer" | "stm32_timer" | "efm32timer" | "renesasra_agt" | "stm32l0_lptimer" => {
-                    if p_cfg.r#type.contains("nrf") {
-                        // Nordic TIMER is task/event-driven and shares no
-                        // register layout with the STM32 TIMx family —
-                        // route to the dedicated nRF52 model.
-                        // TIMER3/4 have 6 CC; TIMER0/1/2 have 4 (default).
-                        let num_cc: usize = p_cfg
-                            .config
-                            .get("num_cc")
-                            .and_then(|v| v.as_u64())
-                            .map(|n| n as usize)
-                            .unwrap_or(4);
-                        Box::new(crate::peripherals::nrf52::timer::Nrf52Timer::new_with_cc(
-                            num_cc,
-                        ))
-                    } else {
-                        // Width selector for 32-bit TIM2/TIM5 (STM32L4 etc).
-                        // YAML: `config: { width: 32 }`. Defaults to 16 for
-                        // back-compat with F1-class general-purpose timers.
-                        // `advanced: true` enables RCR/BDTR/CCR5/6 (TIM1/TIM8).
-                        let width: u8 = p_cfg
-                            .config
-                            .get("width")
-                            .and_then(|v| v.as_u64())
-                            .map(|n| n as u8)
-                            .unwrap_or(16);
-                        let advanced = p_cfg
-                            .config
-                            .get("advanced")
-                            .and_then(|v| v.as_bool())
-                            .unwrap_or(false);
-                        // `basic: true` (TIM6/TIM7) → counter + UIF only, no
-                        // capture/compare channels.
-                        let basic = p_cfg
-                            .config
-                            .get("basic")
-                            .and_then(|v| v.as_bool())
-                            .unwrap_or(false);
-                        Box::new(
-                            crate::peripherals::timer::Timer::new_with_layout(width, advanced)
-                                .basic(basic),
-                        )
-                    }
-                }
-                "i2c"
-                | "stm32f1_i2c"
-                | "stm32f2_i2c"
-                | "stm32f4_i2c"
-                | "stm32f7_i2c"
-                | "efm32ggi2ccontroller" => {
-                    let layout: crate::peripherals::i2c::I2cRegisterLayout =
-                        Self::parse_profile_or_default(p_cfg, "I2C")?;
-                    let mut i2c = crate::peripherals::i2c::I2c::new_with_layout(layout);
-                    for ext in &manifest.external_devices {
-                        if ext.connection != p_cfg.id {
-                            continue;
-                        }
-                        match crate::peripherals::components::build_i2c_device(
-                            &ext.r#type,
-                            &ext.config,
-                        ) {
-                            Some(device) => {
-                                tracing::info!(
-                                    "i2c attach: '{}' (type={}) -> '{}'",
-                                    ext.id,
-                                    ext.r#type,
-                                    p_cfg.id
-                                );
-                                i2c.attach(device);
-                            }
-                            None => {
-                                tracing::warn!(
-                                    "i2c attach skipped: unknown device type '{}' for external id '{}' on bus '{}'",
-                                    ext.r#type,
-                                    ext.id,
-                                    p_cfg.id
-                                );
-                            }
-                        }
-                    }
-                    Box::new(i2c)
-                }
-                "spi" | "stm32spi" => {
-                    let layout: crate::peripherals::spi::SpiRegisterLayout =
-                        if p_cfg.r#type.contains("nrf") {
-                            crate::peripherals::spi::SpiRegisterLayout::Nrf52Spim
-                        } else {
-                            Self::parse_profile_or_default(p_cfg, "SPI")?
-                        };
-                    // Classic-SPI CR2 mask is a per-part delta: F1 0xE7, F4 adds
-                    // FRF bit 4 → 0xF7. YAML: `config: { cr2_mask: 0xF7 }`.
-                    let cr2_mask: u32 = p_cfg
-                        .config
-                        .get("cr2_mask")
-                        .and_then(|v| v.as_u64())
-                        .map(|n| n as u32)
-                        .unwrap_or(0x0000_00E7);
-                    let mut spi =
-                        crate::peripherals::spi::Spi::new_with_layout_cr2(layout, cr2_mask);
-                    // Declarative IR SPI devices (`type: ir`) attach here,
-                    // mirroring the I2C path. Hand-written SPI devices attach via
-                    // the PeripheralKit registry pass, which ignores `type: ir`,
-                    // so the two dispatch paths never double-attach the same bus.
-                    for ext in &manifest.external_devices {
-                        if ext.connection != p_cfg.id || !ext.r#type.eq_ignore_ascii_case("ir") {
-                            continue;
-                        }
-                        match crate::peripherals::components::build_spi_device(
-                            &ext.r#type,
-                            &ext.config,
-                        ) {
-                            Some(device) => {
-                                tracing::info!(
-                                    "spi attach: '{}' (type=ir) -> '{}'",
-                                    ext.id,
-                                    p_cfg.id
-                                );
-                                spi.attach(device);
-                            }
-                            None => {
-                                tracing::warn!(
-                                    "spi attach skipped: invalid ir spec for external id '{}' on bus '{}'",
-                                    ext.id,
-                                    p_cfg.id
-                                );
-                            }
-                        }
-                    }
-                    Box::new(spi)
-                }
-                "pwr" => {
-                    // `config: { profile: stm32h5 }` selects the H5 layout
-                    // (VOSCR/VOSSR voltage scaling); default stays L4.
-                    match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
-                        Some("stm32h5") | Some("h5") => {
-                            Box::new(crate::peripherals::pwr::PwrH5::new())
-                        }
-                        // L0 has a two-register surface (CR/CSR), not the L4
-                        // CR1..CR4 / PUCRx set — a distinct reset shape.
-                        Some("stm32l0") | Some("l0") => {
-                            Box::new(crate::peripherals::pwr::PwrL0::new())
-                        }
-                        _ => Box::new(crate::peripherals::pwr::Pwr::new()),
-                    }
-                }
-                "flash" | "flash_iface" => {
-                    // Layout selected via `config: { profile: stm32f1 | stm32l4 }`
-                    // in the chip yaml. Missing/unknown profile keeps the L4
-                    // default — backward compatible with existing chip configs.
-                    let layout: crate::peripherals::flash::FlashRegisterLayout =
-                        Self::parse_profile_or_default(p_cfg, "FLASH")?;
-                    Box::new(crate::peripherals::flash::Flash::new_with_layout(layout))
-                }
-                "rng" => Box::new(crate::peripherals::rng::Rng::new()),
-                "crc" => {
-                    // IDR scratch register width: 8-bit on F0/F1/L0, 32-bit
-                    // on F2+/L4+. YAML: `config: { idr_width: 8 }`; default 32.
-                    let idr_width: u8 = p_cfg
-                        .config
-                        .get("idr_width")
-                        .and_then(|v| v.as_u64())
-                        .map(|n| n as u8)
-                        .unwrap_or(32);
-                    Box::new(crate::peripherals::crc::Crc::new().with_idr_width(idr_width))
-                }
-                "rtc" => Box::new(crate::peripherals::rtc::Rtc::new()),
-                "rtc_f1" => Box::new(crate::peripherals::rtc_f1::RtcF1::new()),
-                "rtc_v3" => Box::new(crate::peripherals::rtc_v3::RtcV3::new()),
-                "iwdg" => Box::new(crate::peripherals::iwdg::Iwdg::new()),
-                "wwdg" => Box::new(crate::peripherals::wwdg::Wwdg::new()),
-                "dac" => Box::new(crate::peripherals::dac::Dac::new()),
-                "lptim" => Box::new(crate::peripherals::lptim::Lptim::new()),
-                "quadspi" => Box::new(crate::peripherals::quadspi::Quadspi::new()),
-                "sai" => Box::new(crate::peripherals::sai::Sai::new()),
-                "usb_otg" => Box::new(crate::peripherals::usb_otg::UsbOtg::new()),
-                "bxcan" => Box::new(crate::peripherals::bxcan::BxCan::new()),
-                "fdcan" => Box::new(crate::peripherals::fdcan::Fdcan::new()),
-                "sdmmc" => Box::new(crate::peripherals::sdmmc::Sdmmc::new()),
-                "comp" => Box::new(crate::peripherals::comp::Comp::new()),
-                "tsc" => Box::new(crate::peripherals::tsc::Tsc::new()),
-                "fmc" => Box::new(crate::peripherals::fmc::Fmc::new()),
-                "exti" => {
-                    let layout: crate::peripherals::exti::ExtiRegisterLayout =
-                        Self::parse_profile_or_default(p_cfg, "EXTI")?;
-                    // Implemented-line count is part-specific (F103 = 19). YAML:
-                    // `config: { lines: 19 }`; default 20 for back-compat.
-                    let lines: u32 = p_cfg
-                        .config
-                        .get("lines")
-                        .and_then(|v| v.as_u64())
-                        .map(|n| n as u32)
-                        .unwrap_or(20);
-                    let line_mask = if lines >= 32 {
-                        0xFFFF_FFFF
-                    } else {
-                        (1u32 << lines) - 1
-                    };
-                    Box::new(crate::peripherals::exti::Exti::new_with_layout_lines(
-                        layout, line_mask,
-                    ))
-                }
-                "afio" => Box::new(crate::peripherals::afio::Afio::new()),
-                "dma" | "stm32dma" => Box::new(crate::peripherals::dma::Dma1::new()),
-                "gpdma" => {
-                    // `config: { irq_base: N }` routes channel n to NVIC
-                    // line N + n (H563 GPDMA1: 27..34). Without it the
-                    // block's single `irq:` line serves every channel.
-                    let g = crate::peripherals::gpdma::Gpdma::new()
-                        .with_base(p_cfg.base_address as u32);
-                    match p_cfg.config.get("irq_base").and_then(|v| v.as_u64()) {
-                        Some(base) => Box::new(g.with_irq_base(base as u32)),
-                        None => Box::new(g),
-                    }
-                }
-                "adc" => {
-                    let layout: crate::peripherals::adc::AdcRegisterLayout =
-                        Self::parse_profile_or_default(p_cfg, "ADC")?;
-                    Box::new(crate::peripherals::adc::Adc::new_with_layout(layout))
-                }
-                "pio" => {
-                    let mut pio = crate::peripherals::pio::Pio::new();
-                    if let Some(program) = p_cfg.config.get("program").and_then(|v| v.as_str()) {
-                        pio.load_program_asm(program)?;
-                    }
-                    Box::new(pio)
-                }
-                // Nordic peripherals — register-surface models cross-validated
-                // by hw-oracle::nrf52_onboarding_diff. See peripherals/nrf52/.
-                "nrf52840_rtc" | "nrf52_rtc" => {
-                    // RTC1/RTC2 have 4 CC; RTC0 has 3 (default).
-                    let num_cc: usize = p_cfg
-                        .config
-                        .get("num_cc")
-                        .and_then(|v| v.as_u64())
-                        .map(|n| n as usize)
-                        .unwrap_or(3);
-                    Box::new(crate::peripherals::nrf52::rtc::Nrf52Rtc::new_with_cc(
-                        num_cc,
-                    ))
-                }
-                "nrf52840_rng" | "nrf52_rng" => {
-                    Box::new(crate::peripherals::nrf52::rng::Nrf52Rng::new())
-                }
-                "nrf52840_watchdog" | "nrf52_watchdog" | "nrf52_wdt" => {
-                    Box::new(crate::peripherals::nrf52::wdt::Nrf52Wdt::new())
-                }
-                "nrf52840_ppi" | "nrf52_ppi" => {
-                    Box::new(crate::peripherals::nrf52::ppi::Nrf52Ppi::new())
-                }
-                "nrf52840_pdm" | "nrf52_pdm" => {
-                    Box::new(crate::peripherals::nrf52::pdm::Nrf52Pdm::new())
-                }
-                "nrf52_gpiote" | "nrf52840_gpiotasksevents" => {
-                    Box::new(crate::peripherals::nrf52::gpiote::Nrf52Gpiote::new())
-                }
-                "nrf52840_ecb" | "nrf52_ecb" => {
-                    Box::new(crate::peripherals::nrf52::ecb::Nrf52Ecb::new())
-                }
-                "nrf52_clock" => Box::new(crate::peripherals::nrf52::clock::Nrf52Clock::new()),
-                "nrf52840_temp" | "nrf52_temp" => {
-                    Box::new(crate::peripherals::nrf52::temp::Nrf52Temp::new())
-                }
-                "nrf52840_adc" | "nrf52840_saadc" | "nrf52_saadc" => {
-                    Box::new(crate::peripherals::nrf52::saadc::Nrf52Saadc::new())
-                }
-                "nrf52840_pwm" | "nrf52_pwm" => {
-                    Box::new(crate::peripherals::nrf52::pwm::Nrf52Pwm::new())
-                }
-                "nrf52840_qspi" | "nrf52_qspi" => {
-                    Box::new(crate::peripherals::nrf52::qspi::Nrf52Qspi::new())
-                }
-                "nrf52840_nfct" | "nrf52_nfct" => {
-                    Box::new(crate::peripherals::nrf52::nfct::Nrf52Nfct::new())
-                }
-                "nrf52840_ficr" | "nrf52_ficr" => {
-                    Box::new(crate::peripherals::nrf52::ficr::Nrf52Ficr::new())
-                }
-                "nrf52840_uicr" | "nrf52_uicr" => {
-                    Box::new(crate::peripherals::nrf52::uicr::Nrf52Uicr::new())
-                }
-                "nrf52840_nvmc" | "nrf52_nvmc" => {
-                    Box::new(crate::peripherals::nrf52::nvmc::Nrf52Nvmc::new())
-                }
-                "nrf52840_egu" | "nrf52_egu" => {
-                    Box::new(crate::peripherals::nrf52::egu::Nrf52Egu::new())
-                }
-                "nrf52840_comp" | "nrf52_comp" => {
-                    Box::new(crate::peripherals::nrf52::comp::Nrf52Comp::new())
-                }
-                "nrf52840_lpcomp" | "nrf52_lpcomp" => {
-                    Box::new(crate::peripherals::nrf52::lpcomp::Nrf52Lpcomp::new())
-                }
-                "nrf52840_qdec" | "nrf52_qdec" => {
-                    Box::new(crate::peripherals::nrf52::qdec::Nrf52Qdec::new())
-                }
-                "nrf52840_i2s" | "nrf52_i2s" => {
-                    Box::new(crate::peripherals::nrf52::i2s::Nrf52I2s::new())
-                }
-                "nrf52840_mwu" | "nrf52_mwu" => {
-                    Box::new(crate::peripherals::nrf52::mwu::Nrf52Mwu::new())
-                }
-                "nrf52840_aar" | "nrf52_aar" => {
-                    Box::new(crate::peripherals::nrf52::aar::Nrf52Aar::new())
-                }
-                "nrf52840_ccm" | "nrf52_ccm" => {
-                    Box::new(crate::peripherals::nrf52::ccm::Nrf52Ccm::new())
-                }
-                "nrf52840_bprot" | "nrf52_bprot" => {
-                    Box::new(crate::peripherals::nrf52::bprot::Nrf52Bprot::new())
-                }
-                "nrf52840_radio" | "nrf52_radio" => {
-                    Box::new(crate::peripherals::nrf52::radio::Nrf52Radio::new())
-                }
-                "nrf52840_usbd" | "nrf52_usbd" => {
-                    Box::new(crate::peripherals::nrf52::usbd::Nrf52Usbd::new())
-                }
-                "nrf52840_acl" | "nrf52_acl" => {
-                    Box::new(crate::peripherals::nrf52::acl::Nrf52Acl::new())
-                }
-                "nrf52840_cryptocell" | "nrf52_cryptocell" => {
-                    Box::new(crate::peripherals::nrf52::cryptocell::Nrf52Cryptocell::new())
-                }
-                "nrf52840_usbregulator" | "nrf52_usbregulator" => {
-                    Box::new(crate::peripherals::nrf52::usbregulator::Nrf52UsbRegulator::new())
-                }
-                "nrf52840_spis" | "nrf52_spis" => {
-                    Box::new(crate::peripherals::nrf52::spis::Nrf52Spis::new())
-                }
-                "nrf52840_twis" | "nrf52_twis" => {
-                    Box::new(crate::peripherals::nrf52::twis::Nrf52Twis::new())
-                }
-                // TWIM (I²C master with EasyDMA) — nRF52840 PS §6.31.
-                // `nrf52840_i2c` is the canonical chip-YAML type; `nrf52840_twim`
-                // and `nrf52_twim` are also accepted so firmware configs that
-                // name it more precisely still resolve here.
-                "nrf52840_twim" | "nrf52_twim" => {
-                    let mut twim = crate::peripherals::nrf52::twim::Nrf52Twim::new();
-                    for ext in &manifest.external_devices {
-                        if ext.connection != p_cfg.id {
-                            continue;
-                        }
-                        match crate::peripherals::components::build_i2c_device(
-                            &ext.r#type,
-                            &ext.config,
-                        ) {
-                            Some(device) => {
-                                tracing::info!(
-                                    "twim attach: '{}' (type={}) -> '{}'",
-                                    ext.id,
-                                    ext.r#type,
-                                    p_cfg.id
-                                );
-                                twim.attach(device);
-                            }
-                            None => {
-                                tracing::warn!(
-                                    "twim attach skipped: unknown device type '{}' \
-                                     for external id '{}' on bus '{}'",
-                                    ext.r#type,
-                                    ext.id,
-                                    p_cfg.id
-                                );
-                            }
-                        }
-                    }
-                    Box::new(twim)
-                }
-                // ESP32-family Timer Group (TIMG0/TIMG1) — the same IP block is
-                // used by the classic ESP32, S3, and C3.  All share the register
-                // layout: T0CONFIG=0x00, T0LO=0x04, T0HI=0x08, T0UPDATE=0x0C.
-                // Wiring via this type string gives C3 (RISC-V, from_config path)
-                // the same live counter that the Xtensa chips get via their
-                // hard-wired system builders.
-                "esp32_timg" => Box::new(crate::peripherals::esp32::timg::Timg::new(
-                    p_cfg.base_address as u32,
-                )),
-                "declarative" => {
-                    let descriptor_path = p_cfg
-                        .config
-                        .get("path")
-                        .and_then(|v| v.as_str())
-                        .ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "Field 'path' is required in 'config' for declarative peripheral '{}'",
-                                p_cfg.id
-                            )
-                        })?;
-
-                    let resolved_path = Self::resolve_peripheral_path(manifest, descriptor_path);
-                    let desc = labwired_config::PeripheralDescriptor::from_file(&resolved_path)
-                        .with_context(|| {
-                            format!(
-                                "Failed to load declarative descriptor for '{}' from '{}' (resolved to '{}')",
-                                p_cfg.id,
-                                descriptor_path,
-                                resolved_path.display()
-                            )
-                        })?;
-
-                    Box::new(crate::peripherals::declarative::GenericPeripheral::new(
-                        desc,
-                    ))
-                }
-                "strict_ir" => {
-                    let descriptor_path = p_cfg
-                        .config
-                        .get("path")
-                        .and_then(|v| v.as_str())
-                        .ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "Field 'path' is required in 'config' for strict_ir peripheral '{}'",
-                                p_cfg.id
-                            )
-                        })?;
-
-                    let resolved_path = Self::resolve_peripheral_path(manifest, descriptor_path);
-                    let content = std::fs::read_to_string(&resolved_path).with_context(|| {
-                        format!(
-                            "Failed to read IR file '{}' (resolved to '{}')",
-                            descriptor_path,
-                            resolved_path.display()
-                        )
-                    })?;
-                    let ir_peripheral = match serde_json::from_str::<labwired_ir::IrPeripheral>(
-                        &content,
-                    ) {
-                        Ok(peripheral) => peripheral,
-                        Err(peripheral_err) => {
-                            let device: labwired_ir::IrDevice = serde_json::from_str(&content)
-                                .with_context(|| {
-                                    format!(
-                                        "Failed to parse Strict IR from {} as IrPeripheral ({}) or IrDevice",
-                                        resolved_path.display(),
-                                        peripheral_err
-                                    )
-                                })?;
-
-                            if let Some(peripheral) = device.peripherals.get(&p_cfg.id) {
-                                peripheral.clone()
-                            } else if device.peripherals.len() == 1 {
-                                device
-                                    .peripherals
-                                    .into_values()
-                                    .next()
-                                    .expect("len() checked above")
-                            } else {
-                                let available = device
-                                    .peripherals
-                                    .keys()
-                                    .cloned()
-                                    .collect::<Vec<_>>()
-                                    .join(", ");
-                                return Err(anyhow::anyhow!(
-                                    "Strict IR '{}' contains multiple peripherals [{}]; no match for id '{}'",
-                                    resolved_path.display(),
-                                    available,
-                                    p_cfg.id
-                                ));
-                            }
-                        }
-                    };
-
-                    let desc: labwired_config::PeripheralDescriptor = ir_peripheral.into();
-
-                    Box::new(crate::peripherals::declarative::GenericPeripheral::new(
-                        desc,
-                    ))
-                }
-                "strict_ir_internal" => {
-                    let val = p_cfg.config.get("internal_ir_peripheral").ok_or_else(|| {
-                        anyhow::anyhow!("Missing internal_ir_peripheral config for converted IR")
-                    })?;
-                    // Convert yaml Value (which was serde_yaml::to_value(p)) back to IrPeripheral
-                    let ir_peripheral: labwired_ir::IrPeripheral =
-                        serde_yaml::from_value(val.clone())?;
-                    let desc: labwired_config::PeripheralDescriptor = ir_peripheral.into();
-
-                    Box::new(crate::peripherals::declarative::GenericPeripheral::new(
-                        desc,
-                    ))
-                }
-                _other => {
-                    tracing::debug!(
-                        "Mapping unknown peripheral type '{}' to Stub for id '{}'",
-                        p_cfg.r#type,
-                        p_cfg.id
-                    );
-                    Box::new(crate::peripherals::stub::StubPeripheral::new(0x00))
-                }
+    /// Resolve every peripheral's optional `clock: { reg, bit }` declaration into
+    /// a concrete [`ResolvedClockGate`] (RCC register offset + bit). Run as a
+    /// post-pass by `from_config` after all peripherals — crucially the RCC —
+    /// are on the bus, so the symbolic `reg` name can be mapped to the active
+    /// chip family's RCC offset via [`Rcc::enable_reg_offset`] regardless of the
+    /// order peripherals appear in the config.
+    ///
+    /// A peripheral with no `clock` field is left ungated. A declared gate whose
+    /// `reg` name the family doesn't recognise is a hard config error (a silent
+    /// "never gate" would mask a typo that lets unclocked firmware falsely pass).
+    fn resolve_clock_gates(
+        &mut self,
+        peripherals: &[labwired_config::PeripheralConfig],
+    ) -> anyhow::Result<()> {
+        // Find the RCC model once (clock-gating requires one).
+        let rcc_off = |bus: &SystemBus, reg: &str| -> Option<u64> {
+            let idx = bus.rcc_idx?;
+            bus.peripherals[idx]
+                .dev
+                .as_any()
+                .and_then(|a| a.downcast_ref::<crate::peripherals::rcc::Rcc>())
+                .and_then(|rcc| rcc.enable_reg_offset(reg))
+        };
+        for p_cfg in peripherals {
+            let Some(gate) = &p_cfg.clock else { continue };
+            let Some(idx) = self.find_peripheral_index_by_name(&p_cfg.id) else {
+                continue;
             };
-
-            // Map peripheral window size + IRQ from descriptor when provided.
-            // Defaults keep older descriptors working.
-            let size = if let Some(size) = &p_cfg.size {
-                parse_size(size)?
-            } else {
-                0x1000 // Default 4KB page
+            let Some(reg_offset) = rcc_off(self, &gate.reg) else {
+                return Err(anyhow::anyhow!(
+                    "peripheral '{}' declares clock gate reg '{}' which the chip's \
+                     RCC model does not expose (no such enable register, or no RCC \
+                     peripheral is registered)",
+                    p_cfg.id,
+                    gate.reg
+                ));
             };
-
-            // SysTick raises its IRQ via PeripheralTickResult::system_exception,
-            // not via the NVIC IRQ position field — leave its irq as None
-            // unless the yaml explicitly sets one.
-            let irq = p_cfg.irq;
-
-            bus.peripherals.push(PeripheralEntry {
-                name: p_cfg.id.clone(),
-                base: p_cfg.base_address,
-                size,
-                irq,
-                dev,
-                ticks_remaining: 0,
-                generation: 0,
+            self.peripherals[idx].clock_gate = Some(ResolvedClockGate {
+                reg_offset,
+                bit: gate.bit,
             });
         }
-
-        for ext in &manifest.external_devices {
-            // First-pass: peripherals that have migrated to the unified
-            // `PeripheralKit` contract are dispatched through the registry,
-            // so each one ships its own `attach` next to its model instead
-            // of a hand-written arm here.
-            if let Some(kit) = crate::peripherals::kit::registry::lookup(&ext.r#type) {
-                let mut ctx = crate::peripherals::kit::AttachCtx::new(&mut bus, ext);
-                kit.attach(&mut ctx)?;
-                continue;
-            }
-            match ext.r#type.as_str() {
-                // ili9341, adxl345/mpu6050/bme280/oled-ssd1306, neo6m-gps,
-                // and bg770a-cellular dispatch through the PeripheralKit
-                // registry above — see `peripherals::kit`.
-                // iolink-master dispatches through the PeripheralKit registry above.
-                // max31855, sn74hc165, ssd1680_tricolor_290, and pcd8544
-                // dispatch through the PeripheralKit registry above.
-                "hc-sr04" | "hcsr04" => {
-                    // GPIO-wired ultrasonic sensor — no SPI/I2C connection. The
-                    // bus services it each tick: reads TRIG (an MCU output) and
-                    // drives ECHO (an MCU input) with a distance-proportional
-                    // pulse. `distance_cm` is the host-controlled "hand position".
-                    let trig = ext
-                        .config
-                        .get("trig_pin")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("PA8")
-                        .to_string();
-                    let echo = ext
-                        .config
-                        .get("echo_pin")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("PA9")
-                        .to_string();
-                    let distance_cm = ext
-                        .config
-                        .get("distance_cm")
-                        .and_then(|v| v.as_f64())
-                        .unwrap_or(50.0) as f32;
-                    let cpu_hz = ext
-                        .config
-                        .get("cpu_hz")
-                        .and_then(|v| v.as_u64())
-                        .unwrap_or(80_000_000);
-
-                    let (trig_addr, trig_bit) =
-                        Self::resolve_pin_odr(&bus, &trig).ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "HC-SR04 '{}' trig_pin '{}' could not be resolved to a GPIO",
-                                ext.id,
-                                trig
-                            )
-                        })?;
-                    let (echo_addr, echo_bit) =
-                        Self::resolve_pin_idr(&bus, &echo).ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "HC-SR04 '{}' echo_pin '{}' could not be resolved to a GPIO",
-                                ext.id,
-                                echo
-                            )
-                        })?;
-
-                    bus.hcsr04.push(crate::peripherals::hc_sr04::HcSr04::new(
-                        ext.id.clone(),
-                        trig_addr,
-                        trig_bit,
-                        echo_addr,
-                        echo_bit,
-                        cpu_hz,
-                        distance_cm,
-                    ));
-                }
-                // ntc-thermistor dispatches through the PeripheralKit registry above.
-                _ => {
-                    tracing::warn!(
-                        "Unsupported external device '{}' type '{}' on connection '{}'; skipping",
-                        ext.id,
-                        ext.r#type,
-                        ext.connection
-                    );
-                    continue;
-                }
-            }
-        }
-
-        bus.rebuild_peripheral_ranges();
-        // Per-config walk-deletion opt-in. The field is only consulted under the
-        // `event-scheduler` feature (the legacy build always walks), so this is a
-        // no-op there. Safe only because the manifest author verified the
-        // firmware runs byte-identical walk-free (see the walk-identity test).
-        bus.legacy_walk_disabled = manifest.walk_deleted;
-        Ok(bus)
+        Ok(())
     }
 
     pub fn signal_nvic_irq(&self, irq: u32) {
@@ -1898,6 +2043,9 @@ impl SystemBus {
         }
 
         if let Some(idx) = self.find_peripheral_index(addr) {
+            if !self.is_peripheral_clocked(idx) {
+                return Ok(0); // unclocked peripheral reads 0 (silicon gating)
+            }
             let p = &self.peripherals[idx];
             return p.dev.read_u32(addr - p.base);
         }
@@ -1925,6 +2073,9 @@ impl SystemBus {
         // Actually write_u8 checks flash_alias_old etc.
 
         if let Some(idx) = self.find_peripheral_index(addr) {
+            if !self.is_peripheral_clocked(idx) {
+                return Ok(()); // unclocked peripheral: write dropped (gating)
+            }
             #[cfg(feature = "event-scheduler")]
             self.sync_scheduler_peripheral(idx);
             self.maybe_latch_dc(idx);
@@ -1969,6 +2120,9 @@ impl SystemBus {
         }
 
         if let Some(idx) = self.find_peripheral_index(addr) {
+            if !self.is_peripheral_clocked(idx) {
+                return Ok(0); // unclocked peripheral reads 0 (silicon gating)
+            }
             let p = &self.peripherals[idx];
             return p.dev.read_u16(addr - p.base);
         }
@@ -1983,6 +2137,9 @@ impl SystemBus {
             return Ok(());
         }
         if let Some(idx) = self.find_peripheral_index(addr) {
+            if !self.is_peripheral_clocked(idx) {
+                return Ok(()); // unclocked peripheral: write dropped (gating)
+            }
             #[cfg(feature = "event-scheduler")]
             self.sync_scheduler_peripheral(idx);
             self.maybe_latch_dc(idx);
@@ -1998,821 +2155,6 @@ impl SystemBus {
         self.write_u8(addr, (value & 0xFF) as u8)?;
         self.write_u8(addr + 1, ((value >> 8) & 0xFF) as u8)?;
         Ok(())
-    }
-
-    #[allow(clippy::type_complexity)]
-    fn tick_peripherals_phase1(
-        &mut self,
-    ) -> (
-        Vec<u32>,
-        Vec<PeripheralTickCost>,
-        Vec<DmaRequest>,
-        Vec<(String, u32)>,
-        Vec<u32>,
-    ) {
-        let mut interrupts = Vec::new();
-        let mut costs = Vec::new();
-        let mut dma_requests = Vec::new();
-        let mut dma_signals_out = Vec::new();
-
-        // ── Pre-tick bus-aware pass ─────────────────────────────────────────
-        // Some peripherals (currently just RADIO) need to read/write the bus
-        // BEFORE their `tick()` runs so the work they schedule (e.g. setting
-        // a bit-rate countdown after reading PACKETPTR-pointed RAM) is
-        // visible to that same tick(). The swap dance below temporarily
-        // removes the peripheral from `self.peripherals` so we can lend
-        // `&mut self` into `tick_with_bus`; a no-op stub stands in for the
-        // duration. `needs_bus_tick` returning false skips this for
-        // everyone else at near-zero cost.
-        for i in 0..self.peripherals.len() {
-            if !self.peripherals[i].dev.needs_bus_tick() {
-                continue;
-            }
-            let placeholder: Box<dyn Peripheral> =
-                Box::new(crate::peripherals::stub::StubPeripheral::new(0));
-            let mut dev = std::mem::replace(&mut self.peripherals[i].dev, placeholder);
-            dev.tick_with_bus(self);
-            self.peripherals[i].dev = dev;
-        }
-
-        // Plan 3: collect ESP32-S3 explicit_irq source IDs during pass 1 so
-        // they can be routed through the intmatrix in a follow-up pass that
-        // requires `&self` (incompatible with the iter_mut borrow here).
-        let mut explicit_source_ids: Vec<u32> = Vec::new();
-
-        // Cross-peripheral side-effects collected during phase 1 and
-        // applied after the iter_mut borrow ends.
-        let mut pending_mmio: Vec<(u32, u32)> = Vec::new();
-        let mut fired_events_global: Vec<u32> = Vec::new();
-
-        let tick_interval = self.config.peripheral_tick_interval as u64;
-
-        // Phase 2B.3c (issue #192): if every peripheral on this bus is migrated
-        // or inert, the whole walk is skipped — the actual orchestration win.
-        // Read once before the borrow; gated so flag-off always walks.
-        #[cfg(feature = "event-scheduler")]
-        let legacy_walk_disabled = self.legacy_walk_disabled;
-
-        for (peripheral_index, p) in self.peripherals.iter_mut().enumerate() {
-            #[cfg(feature = "event-scheduler")]
-            if legacy_walk_disabled {
-                break;
-            }
-            // Phase 2B.2 (issue #192): scheduler-driven peripherals are advanced
-            // lazily via `sync_to` on MMIO access (and by the event drain in
-            // `Machine::step`), never by this per-cycle walk. Skipping them here
-            // is the actual orchestration saving. Gated so the legacy build is
-            // byte-identical.
-            #[cfg(feature = "event-scheduler")]
-            if p.dev.uses_scheduler() {
-                continue;
-            }
-
-            if p.ticks_remaining > tick_interval {
-                p.ticks_remaining -= tick_interval;
-                continue;
-            }
-
-            let res = p.dev.tick();
-
-            p.ticks_remaining = res.ticks_until_next.unwrap_or(0);
-
-            if res.cycles > 0 {
-                costs.push(PeripheralTickCost {
-                    index: peripheral_index,
-                    cycles: res.cycles,
-                });
-            }
-
-            if let Some(reqs) = res.dma_requests {
-                dma_requests.extend(reqs);
-            }
-
-            if let Some(signals) = res.dma_signals {
-                for sig in signals {
-                    dma_signals_out.push((p.name.clone(), sig));
-                }
-            }
-
-            if res.irq {
-                if let Some(irq) = p.irq {
-                    pend_nvic(&self.nvic, &mut interrupts, irq);
-                }
-            }
-
-            if let Some(irqs) = res.explicit_irqs {
-                for irq in &irqs {
-                    pend_nvic(&self.nvic, &mut interrupts, *irq);
-                }
-                // Plan 3: stash source IDs for pass-2 intmatrix routing.
-                explicit_source_ids.extend(irqs);
-            }
-
-            // System exceptions (SysTick = 15, etc) bypass NVIC and are
-            // pushed directly so the CPU sees them on next dispatch.
-            if let Some(exc) = res.system_exception {
-                interrupts.push(exc);
-            }
-
-            // Cross-peripheral writes: collected here, applied below
-            // (we can't call self.write_u32 while iter_mut holds the
-            // borrow).
-            pending_mmio.extend(res.mmio_writes);
-
-            // Globalise event offsets (relative to peripheral window) into
-            // absolute bus addresses so PPI sees them at the same address
-            // firmware uses for CH[i].EEP.
-            for off in res.fired_events {
-                fired_events_global.push((p.base as u32).wrapping_add(off));
-            }
-        }
-
-        // Apply any cross-peripheral mmio writes the peripherals requested
-        // (e.g. GPIOTE → GPIO OUTSET/OUTCLR).  Errors are logged but not
-        // propagated — these are best-effort side-effects, not core sim
-        // failures.
-        for (addr, val) in pending_mmio.drain(..) {
-            if let Err(e) = self.write_u32(addr as u64, val) {
-                tracing::warn!("phase1 mmio_write 0x{addr:08X} = 0x{val:08X} failed: {e:?}");
-            }
-        }
-
-        // PPI routing pass: feed every fired event through any peripheral
-        // that overrides route_ppi_events (only Nrf52Ppi does).  Each
-        // returned absolute address is a task to trigger by writing 1.
-        if !fired_events_global.is_empty() {
-            let mut pending_tasks: Vec<u32> = Vec::new();
-            for p in self.peripherals.iter_mut() {
-                let tasks = p.dev.route_ppi_events(&fired_events_global);
-                pending_tasks.extend(tasks);
-            }
-            for task_addr in pending_tasks {
-                if let Err(e) = self.write_u32(task_addr as u64, 1) {
-                    tracing::warn!("PPI task trigger 0x{task_addr:08X} failed: {e:?}");
-                }
-            }
-        }
-
-        // GPIO edge-detection pass: snapshot the IN registers of GPIO ports
-        // 0 and 1, diff against last-known state, and notify every
-        // peripheral of changed pins.  GPIOTE overrides observe_gpio_change
-        // to drive EVENTS_IN[i] when a channel watches a matching pin.
-        //
-        // We look up peripheral bases by name so the addresses stay valid
-        // even when a chip yaml relocates GPIO ports (e.g. the onboarding
-        // yaml's non-standard gpio1 at 0x50001000).
-        let gpio_bases: [Option<u64>; 2] = [
-            self.find_peripheral_index_by_name("gpio0")
-                .map(|i| self.peripherals[i].base),
-            self.find_peripheral_index_by_name("gpio1")
-                .map(|i| self.peripherals[i].base),
-        ];
-        let mut changes: Vec<(u8, u8, u8)> = Vec::new();
-        let mut current_in = self.last_gpio_in;
-        for (port, base) in gpio_bases.iter().enumerate() {
-            let Some(base) = base else { continue };
-            // GPIO IN register is at offset 0x510 in the Nordic layout.
-            let cur = self.read_u32(*base + 0x510).unwrap_or(0);
-            let prev = self.last_gpio_in[port];
-            let diff = cur ^ prev;
-            if diff != 0 {
-                for pin in 0..32u8 {
-                    if diff & (1 << pin) != 0 {
-                        let level = ((cur >> pin) & 1) as u8;
-                        changes.push((port as u8, pin, level));
-                    }
-                }
-            }
-            current_in[port] = cur;
-        }
-        self.last_gpio_in = current_in;
-        if !changes.is_empty() {
-            for p in self.peripherals.iter_mut() {
-                p.dev.observe_gpio_change(&changes);
-            }
-        }
-
-        // HC-SR04 service pass: read each sensor's TRIG output level and drive
-        // the computed ECHO input level. Empty list → skipped entirely.
-        self.service_hcsr04();
-
-        (
-            interrupts,
-            costs,
-            dma_requests,
-            dma_signals_out,
-            explicit_source_ids,
-        )
-    }
-
-    /// Plan 3: route a batch of ESP32-S3 explicit_irq source IDs through the
-    /// registered intmatrix peripheral. Updates `self.pending_cpu_irqs` and
-    /// pushes the per-source assertion bitmap into the intmatrix's
-    /// PRO_INTR_STATUS_REG_n mirror via `set_pending_sources`. No-op for buses
-    /// without an intmatrix peripheral.
-    fn aggregate_esp32s3_explicit_irqs(&mut self, source_ids: &[u32]) {
-        // Rebuild the per-core routed pending bitmap as a faithful LEVEL
-        // reflection of the sources asserting THIS tick — set while a source
-        // asserts, cleared the tick it stops. (Was OR-accumulate + clear only
-        // on dispatch + early-return when empty, which LATCHED a stale bit
-        // after a level source de-asserted.) A level source like the systimer
-        // tick re-emits its ID every tick while INT_RAW is set and stops the
-        // tick after firmware writes INT_CLR; with the old latch the source
-        // kept re-emitting during the ISR — after dispatch had cleared the
-        // routed bit — so a stale bit survived the ISR's INT_CLR and re-fired
-        // the tick interrupt the instant the ISR returned, wedging the
-        // FreeRTOS SMP scheduler in an endless tick-ISR loop (never returning
-        // to the dispatched task). Runs every tick, including empty, so a
-        // de-asserting source clears its routed bit.
-        // Isolation: this aggregation is ESP32-S3-specific. If no ESP32-S3
-        // interrupt matrix is registered, this is some other architecture's
-        // bus (ARM/RISC-V/nRF use the NVIC path and never read
-        // `pending_cpu_irqs`) — return without touching any state so the
-        // model stays fully self-contained and cannot influence other models.
-        let has_intmatrix = self.peripherals.iter().any(|p| {
-            p.dev
-                .as_any()
-                .and_then(|a| {
-                    a.downcast_ref::<crate::peripherals::esp32s3::intmatrix::Esp32s3IntMatrix>()
-                })
-                .is_some()
-        });
-        if !has_intmatrix {
-            return;
-        }
-        let mut routed = [0u32; 2];
-        let mut intr_status = [0u32; 4];
-        for &source_id in source_ids {
-            // Route each asserting source through BOTH cores' map tables;
-            // a source delivers to whichever core(s) bound it (the SMP
-            // cross-core IPI relies on this: source 79 → core 0, 80 → core 1).
-            if let Some(slot) = self.route_irq_source_to_cpu_irq_core(source_id, 0) {
-                routed[0] |= 1u32 << slot;
-            }
-            if let Some(slot) = self.route_irq_source_to_cpu_irq_core(source_id, 1) {
-                routed[1] |= 1u32 << slot;
-            }
-            // Mirror into PRO_INTR_STATUS_REG_n bitmap so esp-hal's
-            // __level_*_interrupt can discover which source asserted.
-            let reg = (source_id / 32) as usize;
-            let bit = source_id & 31;
-            if reg < intr_status.len() {
-                intr_status[reg] |= 1u32 << bit;
-            }
-        }
-        self.pending_cpu_irqs = routed;
-        // Push the live source-assertion bitmap into the intmatrix peripheral.
-        // No-op for buses without an intmatrix registered.
-        for p in self.peripherals.iter_mut() {
-            if let Some(any) = p.dev.as_any_mut() {
-                if let Some(matrix) =
-                    any.downcast_mut::<crate::peripherals::esp32s3::intmatrix::Esp32s3IntMatrix>()
-                {
-                    matrix.set_pending_sources(intr_status);
-                    break;
-                }
-            }
-        }
-    }
-
-    /// One DMA source-unit -> destination-unit copy with the STM32H5 GPDMA
-    /// data-handling semantics (RM0481 §15): width conversion via PAM
-    /// (zero-pad / sign-extend / left- or right-truncate) and the SBX / DBX /
-    /// DHX byte / half-word exchanges. Pinned by the DMA_DataHandling HAL
-    /// example's expected-result vectors and its on-board run.
-    fn dma_copy_unit(
-        &mut self,
-        src: u64,
-        dst: u64,
-        t: crate::DmaUnitTransform,
-    ) -> crate::SimResult<()> {
-        let sw = (t.src_width.max(1) as usize).min(4);
-        let dw = (t.dst_width.max(1) as usize).min(4);
-
-        let mut unit = [0u8; 4];
-        for (k, b) in unit.iter_mut().enumerate().take(sw) {
-            *b = self.read_u8(src + k as u64)?;
-        }
-        // SBX: exchange the two middle bytes of a word-width source.
-        if t.sbx && sw == 4 {
-            unit.swap(1, 2);
-        }
-
-        let mut out = [0u8; 4];
-        if dw >= sw {
-            // Narrow -> wide: right-aligned (LSBs hold the source unit);
-            // upper bytes zero-padded (PAM=0) or sign-extended (PAM=1).
-            out[..sw].copy_from_slice(&unit[..sw]);
-            let fill = if t.pam & 1 != 0 && unit[sw - 1] & 0x80 != 0 {
-                0xFF
-            } else {
-                0
-            };
-            for b in out.iter_mut().take(dw).skip(sw) {
-                *b = fill;
-            }
-        } else {
-            // Wide -> narrow: PAM=0 keeps the LSBs (right-aligned,
-            // left-truncated); PAM=1 keeps the MSBs (left-aligned,
-            // right-truncated).
-            let from = if t.pam & 1 != 0 { sw - dw } else { 0 };
-            out[..dw].copy_from_slice(&unit[from..from + dw]);
-        }
-        // DBX: swap bytes within each destination half-word.
-        if t.dbx && dw >= 2 {
-            out.swap(0, 1);
-            if dw == 4 {
-                out.swap(2, 3);
-            }
-        }
-        // DHX: swap the half-words of a word-width destination.
-        if t.dhx && dw == 4 {
-            out.swap(0, 2);
-            out.swap(1, 3);
-        }
-
-        for (k, b) in out.iter().enumerate().take(dw) {
-            self.write_u8(dst + k as u64, *b)?;
-        }
-        Ok(())
-    }
-
-    fn collect_enabled_nvic_interrupts(&self, interrupts: &mut Vec<u32>) {
-        if let Some(nvic) = &self.nvic {
-            for idx in 0..8 {
-                let mask =
-                    nvic.iser[idx].load(Ordering::SeqCst) & nvic.ispr[idx].load(Ordering::SeqCst);
-                if mask != 0 {
-                    for bit in 0..32 {
-                        if (mask & (1 << bit)) != 0 {
-                            let irq = 16 + (idx as u32 * 32) + bit;
-                            interrupts.push(irq);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    pub fn tick_peripherals_with_costs(
-        &mut self,
-    ) -> (Vec<u32>, Vec<PeripheralTickCost>, Vec<DmaRequest>) {
-        let (mut interrupts, costs, dma_requests, _dma_signals, explicit_source_ids) =
-            self.tick_peripherals_phase1();
-        // Plan 3: route ESP32-S3 source IDs through the intmatrix and update
-        // the pending cpu IRQ bitmap + intmatrix INTR_STATUS mirror.
-        self.aggregate_esp32s3_explicit_irqs(&explicit_source_ids);
-        self.collect_enabled_nvic_interrupts(&mut interrupts);
-
-        (interrupts, costs, dma_requests)
-    }
-
-    pub fn tick_peripherals_fully(&mut self) -> (Vec<u32>, Vec<PeripheralTickCost>) {
-        let (mut interrupts, costs, pending_dma, dma_signals, explicit_source_ids) =
-            self.tick_peripherals_phase1();
-        // Plan 3: route ESP32-S3 source IDs through the intmatrix.
-        self.aggregate_esp32s3_explicit_irqs(&explicit_source_ids);
-
-        // Phase 1.5: Route DMA signals
-        for (source_name, request_id) in dma_signals {
-            self.route_dma_signal(&source_name, request_id);
-        }
-
-        // Phase 2: Execute DMA requests (this now has access to self.flash/ram via write_u8)
-        for req in pending_dma {
-            match req.direction {
-                crate::DmaDirection::Read => {
-                    if let Ok(val) = self.read_u8(req.addr) {
-                        tracing::trace!("DMA Read: {:#x} -> {:#x}", req.addr, val);
-                    }
-                }
-                crate::DmaDirection::Write => {
-                    let _ = self.write_u8(req.addr, req.val);
-                    tracing::trace!("DMA Write: {:#x} <- {:#x}", req.addr, req.val);
-                }
-                crate::DmaDirection::Copy => {
-                    if let Some(t) = req.transform {
-                        let _ = self.dma_copy_unit(req.src_addr, req.addr, t);
-                    } else if let Ok(val) = self.read_u8(req.src_addr) {
-                        let _ = self.write_u8(req.addr, val);
-                        tracing::trace!(
-                            "DMA Copy: {:#x} -> {:#x} ({:#x})",
-                            req.src_addr,
-                            req.addr,
-                            val
-                        );
-                    }
-                }
-            }
-        }
-
-        // Phase 3: Scan NVIC
-        self.collect_enabled_nvic_interrupts(&mut interrupts);
-
-        (interrupts, costs)
-    }
-
-    pub fn find_peripheral_index_by_name(&self, name: &str) -> Option<usize> {
-        self.peripherals.iter().position(|p| p.name == name)
-    }
-
-    /// Return the `(base, size)` of the peripheral the bus router would dispatch
-    /// `addr` to, using the same last-start-wins binary-search logic as
-    /// [`read_u32`] / [`write_u32`]. Unlike `iter().find()`, this correctly
-    /// resolves overlapping entries where a narrower, later-registered twin
-    /// (e.g. `uart0_s3`) shadows a broader catch-all stub (e.g. `low_mmio`)
-    /// that has an equal or lower base address.
-    pub fn resolve_window(&self, addr: u64) -> Option<(u64, u64)> {
-        let idx = self.find_peripheral_index(addr)?;
-        let p = &self.peripherals[idx];
-        Some((p.base, p.size))
-    }
-
-    /// Smallest registered window start STRICTLY greater than `addr`, if any.
-    ///
-    /// Together with [`resolve_window`] this bounds the contiguous span from
-    /// `addr` that is guaranteed to dispatch to the same peripheral entry:
-    /// past the next window start, a narrower layered twin may take over even
-    /// though `addr`'s own window continues underneath (last-start-wins).
-    /// The SVD coverage probe uses this to keep its baseline samples inside
-    /// the service region of the peripheral under probe.
-    pub fn next_window_start(&self, addr: u64) -> Option<u64> {
-        if self.peripheral_ranges.len() == self.peripherals.len() {
-            let pos = self
-                .peripheral_ranges
-                .partition_point(|range| range.start <= addr);
-            return self.peripheral_ranges.get(pos).map(|r| r.start);
-        }
-        self.peripherals
-            .iter()
-            .map(|p| p.base)
-            .filter(|&b| b > addr)
-            .min()
-    }
-
-    /// Translate a Cortex-M bit-band alias address to (physical_byte_addr, bit_index).
-    ///
-    /// Peripheral bit-band: alias 0x42000000–0x43FFFFFF → physical 0x40000000–0x400FFFFF
-    /// SRAM bit-band:       alias 0x22000000–0x23FFFFFF → physical 0x20000000–0x200FFFFF
-    ///
-    /// Each alias *word* (4 bytes, naturally aligned) represents one physical bit.
-    fn bit_band_translate(addr: u64) -> Option<(u64, u8)> {
-        let (phys_base, alias_base) = if (0x42000000..0x44000000).contains(&addr) {
-            (0x40000000u64, 0x42000000u64)
-        } else if (0x22000000..0x24000000).contains(&addr) {
-            (0x20000000u64, 0x22000000u64)
-        } else {
-            return None;
-        };
-        let offset = addr - alias_base;
-        let bit_word = offset / 4; // each alias word = 1 physical bit
-        let phys_byte = phys_base + bit_word / 8;
-        let bit = (bit_word % 8) as u8;
-        Some((phys_byte, bit))
-    }
-}
-
-impl crate::Bus for SystemBus {
-    fn read_u8(&self, addr: u64) -> SimResult<u8> {
-        if let Some(val) = self.ram.read_u8(addr) {
-            return Ok(val);
-        }
-        if let Some(val) = self.flash.read_u8(addr) {
-            return Ok(val);
-        }
-        for mem in &self.extra_mem {
-            if let Some(val) = mem.read_u8(addr) {
-                return Ok(val);
-            }
-        }
-        // Cortex-M boot alias: address 0x0000_0000 mirrors flash start on many STM32 parts.
-        // This lets reset-vector fetch work when flash is configured at 0x0800_0000.
-        if self.flash.base_addr != 0 {
-            let alias_end = self.flash.data.len() as u64;
-            if addr < alias_end {
-                if let Some(val) = self.flash.read_u8(self.flash.base_addr + addr) {
-                    return Ok(val);
-                }
-            }
-        }
-
-        // Dynamic Peripherals
-        if let Some(idx) = self.find_peripheral_index(addr) {
-            let p = &self.peripherals[idx];
-            return p.dev.read(addr - p.base);
-        }
-
-        if std::env::var("LABWIRED_TRACE_VIOLATIONS").is_ok() {
-            eprintln!("BUS_VIOLATION read_u8 addr=0x{:08X}", addr);
-        }
-        Err(SimulationError::MemoryViolation(addr))
-    }
-
-    fn write_u8(&mut self, addr: u64, value: u8) -> SimResult<()> {
-        let flash_alias_old = if self.flash.base_addr != 0 && addr < self.flash.data.len() as u64 {
-            self.flash.read_u8(self.flash.base_addr + addr)
-        } else {
-            None
-        };
-
-        // Avoid calling `read_u8` here since peripheral reads may carry side effects.
-        let old_value = self
-            .ram
-            .read_u8(addr)
-            .or_else(|| self.flash.read_u8(addr))
-            .or(flash_alias_old)
-            .or_else(|| self.extra_mem.iter().find_map(|m| m.read_u8(addr)))
-            .or_else(|| {
-                self.find_peripheral_index(addr).and_then(|idx| {
-                    let p = &self.peripherals[idx];
-                    p.dev.peek(addr - p.base)
-                })
-            })
-            .unwrap_or(0);
-
-        let flash_alias_write = self.flash.base_addr != 0
-            && addr < self.flash.data.len() as u64
-            && self.flash.write_u8(self.flash.base_addr + addr, value);
-
-        let res = if self.ram.write_u8(addr, value)
-            || self.flash.write_u8(addr, value)
-            || flash_alias_write
-            || self.extra_mem.iter_mut().any(|m| m.write_u8(addr, value))
-        {
-            Ok(())
-        } else {
-            // Dynamic Peripherals
-            if let Some(idx) = self.find_peripheral_index(addr) {
-                #[cfg(feature = "event-scheduler")]
-                self.sync_scheduler_peripheral(idx);
-                self.maybe_latch_dc(idx);
-                let p = &mut self.peripherals[idx];
-                let r = p.dev.write(addr - p.base, value);
-                self.maybe_arm_hcsr04(idx);
-                #[cfg(feature = "event-scheduler")]
-                self.collect_scheduled_events(idx);
-                r
-            } else {
-                if std::env::var("LABWIRED_TRACE_VIOLATIONS").is_ok() {
-                    eprintln!(
-                        "BUS_VIOLATION write_u8 addr=0x{:08X} val=0x{:02X}",
-                        addr, value
-                    );
-                }
-                Err(SimulationError::MemoryViolation(addr))
-            }
-        };
-
-        if res.is_ok() {
-            // Wake up the peripheral
-            if let Some(idx) = self.find_peripheral_index(addr) {
-                self.peripherals[idx].ticks_remaining = 0;
-            }
-
-            // Trigger observers
-            crate::emit_trace_event(
-                &self.observers,
-                labwired_hw_trace::TraceEvent::MemoryWrite {
-                    addr,
-                    old: old_value,
-                    new: value,
-                },
-            );
-            for observer in &self.observers {
-                observer.on_memory_write(addr, old_value, value);
-            }
-        }
-
-        res
-    }
-
-    fn read_u16(&self, addr: u64) -> SimResult<u16> {
-        if let Some(val) = self.ram.read_u16(addr) {
-            return Ok(val);
-        }
-        if let Some(val) = self.flash.read_u16(addr) {
-            return Ok(val);
-        }
-        if self.flash.base_addr != 0 && addr + 1 < self.flash.data.len() as u64 {
-            if let Some(val) = self.flash.read_u16(self.flash.base_addr + addr) {
-                return Ok(val);
-            }
-        }
-        if let Some(idx) = self.find_peripheral_index(addr) {
-            let p = &self.peripherals[idx];
-            return p.dev.read_u16(addr - p.base);
-        }
-        let b0 = self.read_u8(addr)? as u16;
-        let b1 = self.read_u8(addr + 1)? as u16;
-        Ok(b0 | (b1 << 8))
-    }
-
-    fn read_u32(&self, addr: u64) -> SimResult<u32> {
-        // Cortex-M bit-band alias: return 0 or 1 based on the physical bit.
-        if self.bit_band_enabled {
-            if let Some((phys_byte, bit)) = Self::bit_band_translate(addr) {
-                let byte_val = self.read_u8(phys_byte)?;
-                return Ok(((byte_val >> bit) & 1) as u32);
-            }
-        }
-
-        if let Some(val) = self.ram.read_u32(addr) {
-            return Ok(val);
-        }
-        if let Some(val) = self.flash.read_u32(addr) {
-            return Ok(val);
-        }
-        if self.flash.base_addr != 0 && addr + 3 < self.flash.data.len() as u64 {
-            if let Some(val) = self.flash.read_u32(self.flash.base_addr + addr) {
-                return Ok(val);
-            }
-        }
-        if let Some(idx) = self.find_peripheral_index(addr) {
-            let p = &self.peripherals[idx];
-            return p.dev.read_u32(addr - p.base);
-        }
-        let b0 = self.read_u8(addr)? as u32;
-        let b1 = self.read_u8(addr + 1)? as u32;
-        let b2 = self.read_u8(addr + 2)? as u32;
-        let b3 = self.read_u8(addr + 3)? as u32;
-        Ok(b0 | (b1 << 8) | (b2 << 16) | (b3 << 24))
-    }
-
-    fn write_u16(&mut self, addr: u64, value: u16) -> SimResult<()> {
-        let mut wrote = self.ram.write_u16(addr, value) || self.flash.write_u16(addr, value);
-        if !wrote && self.flash.base_addr != 0 && addr + 1 < self.flash.data.len() as u64 {
-            wrote = self.flash.write_u16(self.flash.base_addr + addr, value);
-        }
-        if wrote {
-            return Ok(());
-        }
-        if let Some(idx) = self.find_peripheral_index(addr) {
-            #[cfg(feature = "event-scheduler")]
-            self.sync_scheduler_peripheral(idx);
-            self.maybe_latch_dc(idx);
-            let p = &mut self.peripherals[idx];
-            p.ticks_remaining = 0;
-            let r = p.dev.write_u16(addr - p.base, value);
-            self.maybe_arm_hcsr04(idx);
-            #[cfg(feature = "event-scheduler")]
-            self.collect_scheduled_events(idx);
-            return r;
-        }
-        self.write_u8(addr, (value & 0xFF) as u8)?;
-        self.write_u8(addr + 1, ((value >> 8) & 0xFF) as u8)?;
-        Ok(())
-    }
-
-    fn write_u32(&mut self, addr: u64, value: u32) -> SimResult<()> {
-        // Cortex-M bit-band alias translation (peripheral: 0x42000000-0x43FFFFFF,
-        // SRAM: 0x22000000-0x23FFFFFF).  Each alias word maps to one bit of the
-        // physical address.  Writing 1 sets the bit; writing 0 clears it.
-        if self.bit_band_enabled {
-            if let Some((phys_byte, bit)) = Self::bit_band_translate(addr) {
-                let old = self.read_u8(phys_byte)?;
-                let new_byte = if value & 1 != 0 {
-                    old | (1 << bit)
-                } else {
-                    old & !(1 << bit)
-                };
-                return self.write_u8(phys_byte, new_byte);
-            }
-        }
-
-        let mut wrote = self.ram.write_u32(addr, value) || self.flash.write_u32(addr, value);
-        if !wrote && self.flash.base_addr != 0 && addr + 3 < self.flash.data.len() as u64 {
-            wrote = self.flash.write_u32(self.flash.base_addr + addr, value);
-        }
-        if wrote {
-            return Ok(());
-        }
-        if let Some(idx) = self.find_peripheral_index(addr) {
-            #[cfg(feature = "event-scheduler")]
-            self.sync_scheduler_peripheral(idx);
-            self.maybe_latch_dc(idx);
-            let p = &mut self.peripherals[idx];
-            p.ticks_remaining = 0;
-            let r = p.dev.write_u32(addr - p.base, value);
-            self.maybe_arm_hcsr04(idx);
-            #[cfg(feature = "event-scheduler")]
-            self.collect_scheduled_events(idx);
-            return r;
-        }
-        self.write_u8(addr, (value & 0xFF) as u8)?;
-        self.write_u8(addr + 1, ((value >> 8) & 0xFF) as u8)?;
-        self.write_u8(addr + 2, ((value >> 16) & 0xFF) as u8)?;
-        self.write_u8(addr + 3, ((value >> 24) & 0xFF) as u8)?;
-        Ok(())
-    }
-
-    /// Fast-path fetch slice for the CPU instruction-fetch cache
-    /// (#119 Phase 1.2). Returns `Some((base, end, slice))` when `pc`
-    /// lands inside a `RamPeripheral` we can serve directly; falls
-    /// through to `None` (slow path) for any other peripheral kind or
-    /// unmapped addresses.
-    ///
-    /// The returned slice borrows the peripheral's backing buffer for
-    /// the duration of the call. The CPU stashes a raw pointer derived
-    /// from it; the `RamPeripheral` INVARIANT (no resize) keeps that
-    /// pointer valid until the peripheral is dropped, but the CPU MUST
-    /// invalidate the cache on any bus write into the cached range
-    /// and on snapshot restore. Reads from non-RAM peripherals (e.g.
-    /// `RomThunkBank`, GPIO, declarative peripherals) keep going
-    /// through the slow path so side effects fire as before.
-    fn fetch_slice(&self, pc: u64) -> Option<(u64, u64, &[u8])> {
-        let idx = self.find_peripheral_index(pc)?;
-        let entry = self.peripherals.get(idx)?;
-        let any = entry.dev.as_any()?;
-        let ram = any.downcast_ref::<crate::system::xtensa::RamPeripheral>()?;
-        let (ptr, len) = ram.backing_ptr_len();
-        // SAFETY: `RamPeripheral`'s backing `Vec` is fixed-size at
-        // construction (see struct-level INVARIANT in
-        // `system::xtensa::RamPeripheral`). The `&self` borrow on the
-        // bus keeps the peripheral entry alive for the duration of
-        // this borrow. We're only producing a read-only `&[u8]` from
-        // a `*const u8`; no concurrent `borrow_mut` is in flight
-        // because reads don't mutate.
-        let slice = unsafe { std::slice::from_raw_parts(ptr, len) };
-        Some((entry.base, entry.base.saturating_add(entry.size), slice))
-    }
-
-    fn execute_dma(&mut self, requests: &[crate::DmaRequest]) -> SimResult<()> {
-        for req in requests {
-            match req.direction {
-                crate::DmaDirection::Read => {
-                    let _ = self.read_u8(req.addr)?;
-                }
-                crate::DmaDirection::Write => {
-                    self.write_u8(req.addr, req.val)?;
-                }
-                crate::DmaDirection::Copy => {
-                    if let Some(t) = req.transform {
-                        self.dma_copy_unit(req.src_addr, req.addr, t)?;
-                    } else {
-                        let val = self.read_u8(req.src_addr)?;
-                        self.write_u8(req.addr, val)?;
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-
-    fn config(&self) -> &crate::SimulationConfig {
-        &self.config
-    }
-
-    fn as_any(&self) -> Option<&dyn std::any::Any> {
-        Some(self)
-    }
-
-    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
-        Some(self)
-    }
-
-    fn tick_peripherals(&mut self) -> Vec<u32> {
-        let (interrupts, _costs) = self.tick_peripherals_fully();
-        interrupts
-    }
-
-    fn clear_nvic_pending(&mut self, exception_num: u32) {
-        if exception_num >= 16 {
-            if let Some(nvic) = &self.nvic {
-                let irq = exception_num - 16;
-                let idx = (irq / 32) as usize;
-                let bit = irq % 32;
-                if idx < 8 {
-                    nvic.ispr[idx].fetch_and(!(1 << bit), Ordering::SeqCst);
-                }
-            }
-        }
-    }
-
-    fn get_rom_thunk(
-        &self,
-        pc: u32,
-    ) -> Option<crate::peripherals::esp32s3::rom_thunks::RomThunkFn> {
-        SystemBus::get_rom_thunk(self, pc)
-    }
-
-    fn route_irq_source_to_cpu_irq(&self, source_id: u32) -> Option<u8> {
-        SystemBus::route_irq_source_to_cpu_irq(self, source_id)
-    }
-
-    fn pending_cpu_irqs(&self, core_id: u8) -> u32 {
-        // Two cross-core delivery paths coexist after the dual-core merge:
-        //   * ESP32-S3 (intmatrix registered): the aggregator routes every
-        //     asserting source — including the FROM_CPU IPI sources
-        //     79→core0 / 80→core1 — into this per-core array.
-        //   * ESP32-classic (no intmatrix, DPORT instead): the array stays
-        //     empty and cross-core FROM_CPU IPIs come from the DPORT matrix.
-        // Each path contributes 0 on the other chip, so OR-ing is safe and
-        // keeps both dual-core models working.
-        self.pending_cpu_irqs[(core_id & 1) as usize] | self.dport_cross_core_pending(core_id)
-    }
-
-    fn clear_cpu_irq_pending(&mut self, core_id: u8, slot: u8) {
-        self.pending_cpu_irqs[(core_id & 1) as usize] &= !(1u32 << slot);
     }
 }
 
@@ -2833,6 +2175,26 @@ mod tests {
         fn write(&mut self, _offset: u64, _value: u8) -> crate::SimResult<()> {
             Ok(())
         }
+    }
+
+    #[test]
+    fn missing_clock_fault_suppresses_access_and_counts() {
+        let mut bus = SystemBus::new();
+        let base = 0x4000_0000u64;
+        bus.add_peripheral("usart1", base, 0x400, None, Box::new(TagPeripheral(0xAB)));
+
+        // Normally clocked: reads the peripheral's tag bytes.
+        assert_eq!(bus.read_u32(base).unwrap(), 0xABAB_ABAB);
+
+        bus.inject_missing_clock("usart1").unwrap();
+        assert_eq!(bus.missing_clock_suppressed("usart1"), 0);
+
+        // Now the access is suppressed: reads 0, and the fault is recorded fired.
+        assert_eq!(bus.read_u32(base).unwrap(), 0);
+        assert!(bus.missing_clock_suppressed("usart1") > 0);
+
+        // An unknown peripheral is an error, not a silent no-op.
+        assert!(bus.inject_missing_clock("nope").is_err());
     }
 
     /// Routing must be a pure function of the address — never of access
@@ -2999,6 +2361,8 @@ mod tests {
 
         let chip = ChipDescriptor {
             schema_version: "1.0".to_string(),
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             memory_regions: Vec::new(),
             name: "stm32f103-test".to_string(),
             arch: Arch::Arm,
@@ -3017,6 +2381,7 @@ mod tests {
                 base_address: 0x4000_5400,
                 size: Some("1KB".to_string()),
                 irq: Some(31),
+                clock: None,
                 config: HashMap::new(),
             }],
         };
@@ -3048,6 +2413,795 @@ mod tests {
         let any = bus.peripherals[i2c_idx].dev.as_any_mut().unwrap();
         let i2c = any.downcast_mut::<crate::peripherals::i2c::I2c>().unwrap();
         assert_eq!(i2c.attached_devices().len(), 1);
+    }
+
+    /// Wiring guard for the ESP32-C3 behavioral I²C: a chip yaml declaring
+    /// `i2c0` as `esp32c3_i2c` plus a system manifest declaring a BMP280 on
+    /// `connection: "i2c0"` must attach that slave to the behavioral controller
+    /// AND let a register-driven write-then-read transaction reach it. This is
+    /// the path the MLX90640 will use (different device type, same wiring).
+    #[test]
+    fn test_from_config_attaches_bmp280_to_esp32c3_i2c0() {
+        use labwired_config::{
+            Arch, ChipDescriptor, ExternalDevice, MemoryRange, PeripheralConfig, SystemManifest,
+        };
+        use std::collections::HashMap;
+
+        let chip = ChipDescriptor {
+            schema_version: "1.0".to_string(),
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
+            memory_regions: Vec::new(),
+            name: "esp32c3-i2c-test".to_string(),
+            arch: Arch::RiscV,
+            core: None,
+            flash: MemoryRange {
+                base: 0x4200_0000,
+                size: "4MB".to_string(),
+            },
+            ram: MemoryRange {
+                base: 0x3FC8_0000,
+                size: "400KB".to_string(),
+            },
+            peripherals: vec![PeripheralConfig {
+                id: "i2c0".to_string(),
+                r#type: "esp32c3_i2c".to_string(),
+                base_address: 0x6001_3000,
+                size: Some("4KB".to_string()),
+                irq: None,
+                config: HashMap::new(),
+                clock: None,
+            }],
+        };
+
+        let mut config = HashMap::new();
+        config.insert(
+            "i2c_address".to_string(),
+            serde_yaml::Value::Number(0x76.into()),
+        );
+        let manifest = SystemManifest {
+            walk_deleted: false,
+            schema_version: "1.0".to_string(),
+            name: "esp32c3-bmp280-test".to_string(),
+            chip: "../chips/esp32c3.yaml".to_string(),
+            memory_overrides: HashMap::new(),
+            external_devices: vec![ExternalDevice {
+                id: "bmp280".to_string(),
+                r#type: "bmp280".to_string(),
+                connection: "i2c0".to_string(),
+                config,
+            }],
+            board_io: Vec::new(),
+            debug_uart: None,
+            peripherals: Vec::new(),
+        };
+
+        let mut bus = SystemBus::from_config(&chip, &manifest).unwrap();
+        let i2c_idx = bus
+            .find_peripheral_index_by_name("i2c0")
+            .expect("i2c0 must be registered");
+        let any = bus.peripherals[i2c_idx].dev.as_any_mut().unwrap();
+        let i2c = any
+            .downcast_mut::<crate::peripherals::esp32c3::i2c::Esp32c3I2c>()
+            .expect("i2c0 must be the behavioral Esp32c3I2c controller");
+
+        // Drive the canonical register-pointer read of the BMP280 chip-id
+        // (0xD0 → 0x58), exactly as C3 firmware would, through the controller's
+        // registers: RSTART; WRITE 2 (addr+W, ptr); RSTART; WRITE 1 (addr+R);
+        // READ 1; STOP. Opcodes: 6=RSTART, 1=WRITE, 3=READ, 2=STOP.
+        i2c.write_u32(0x58, 6 << 11).unwrap(); // CMD0 RSTART
+        i2c.write_u32(0x5C, (1 << 11) | 2).unwrap(); // CMD1 WRITE 2
+        i2c.write_u32(0x60, 6 << 11).unwrap(); // CMD2 RSTART
+        i2c.write_u32(0x64, (1 << 11) | 1).unwrap(); // CMD3 WRITE 1
+        i2c.write_u32(0x68, (3 << 11) | 1).unwrap(); // CMD4 READ 1
+        i2c.write_u32(0x6C, 2 << 11).unwrap(); // CMD5 STOP
+        i2c.write_u32(0x1C, 0xEC).unwrap(); // addr+W (0x76<<1)
+        i2c.write_u32(0x1C, 0xD0).unwrap(); // pointer = chip-id
+        i2c.write_u32(0x1C, 0xED).unwrap(); // addr+R
+        i2c.write_u32(0x04, 1 << 5).unwrap(); // TRANS_START
+
+        // Address must have matched (no NACK at bit 10) and the chip-id byte
+        // must round-trip out of the RX FIFO.
+        let int_raw = i2c.read_u32(0x20).unwrap();
+        assert_eq!(
+            int_raw & (1 << 10),
+            0,
+            "BMP280 must ACK; INT_RAW=0x{int_raw:08x}"
+        );
+        assert_eq!(
+            i2c.read_u32(0x1C).unwrap(),
+            0x58,
+            "BMP280 CHIP_ID must round-trip through the bus-attached controller"
+        );
+    }
+
+    /// Wiring + reachability guard for the MLX90640 thermal camera on the
+    /// ESP32-C3 behavioral I²C0: a system manifest declaring an `mlx90640` on
+    /// `connection: "i2c0"` must attach it at 0x33 AND let a register-driven
+    /// 16-bit-addressed read reach an EEPROM word. We read the gainEE word at
+    /// EEPROM address 0x2430 (== 0x2400 + 48), which the linearized calibration
+    /// fixes to 6000, exercising the 16-bit register-address protocol over the
+    /// real bus-attached controller.
+    #[test]
+    fn test_from_config_attaches_mlx90640_to_esp32c3_i2c0_and_reads_eeprom() {
+        use labwired_config::{
+            Arch, ChipDescriptor, ExternalDevice, MemoryRange, PeripheralConfig, SystemManifest,
+        };
+        use std::collections::HashMap;
+
+        let chip = ChipDescriptor {
+            schema_version: "1.0".to_string(),
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
+            memory_regions: Vec::new(),
+            name: "esp32c3-mlx-test".to_string(),
+            arch: Arch::RiscV,
+            core: None,
+            flash: MemoryRange {
+                base: 0x4200_0000,
+                size: "4MB".to_string(),
+            },
+            ram: MemoryRange {
+                base: 0x3FC8_0000,
+                size: "400KB".to_string(),
+            },
+            peripherals: vec![PeripheralConfig {
+                id: "i2c0".to_string(),
+                r#type: "esp32c3_i2c".to_string(),
+                base_address: 0x6001_3000,
+                size: Some("4KB".to_string()),
+                irq: None,
+                config: HashMap::new(),
+                clock: None,
+            }],
+        };
+
+        let mut config = HashMap::new();
+        config.insert(
+            "i2c_address".to_string(),
+            serde_yaml::Value::Number(0x33.into()),
+        );
+        config.insert(
+            "ambient_c".to_string(),
+            serde_yaml::Value::Number(25.0.into()),
+        );
+        let manifest = SystemManifest {
+            walk_deleted: false,
+            schema_version: "1.0".to_string(),
+            name: "esp32c3-mlx90640-test".to_string(),
+            chip: "../chips/esp32c3.yaml".to_string(),
+            memory_overrides: HashMap::new(),
+            external_devices: vec![ExternalDevice {
+                id: "thermal_cam".to_string(),
+                r#type: "mlx90640".to_string(),
+                connection: "i2c0".to_string(),
+                config,
+            }],
+            board_io: Vec::new(),
+            debug_uart: None,
+            peripherals: Vec::new(),
+        };
+
+        let mut bus = SystemBus::from_config(&chip, &manifest).unwrap();
+        let i2c_idx = bus
+            .find_peripheral_index_by_name("i2c0")
+            .expect("i2c0 must be registered");
+        let any = bus.peripherals[i2c_idx].dev.as_any_mut().unwrap();
+        let i2c = any
+            .downcast_mut::<crate::peripherals::esp32c3::i2c::Esp32c3I2c>()
+            .expect("i2c0 must be the behavioral Esp32c3I2c controller");
+
+        // 16-bit-addressed read of EEPROM word 0x2430: write the 2-byte big-
+        // endian register address (0x24, 0x30), repeated-start, read 2 bytes
+        // (MSB first). Opcodes: 6=RSTART, 1=WRITE, 3=READ, 2=STOP.
+        i2c.write_u32(0x58, 6 << 11).unwrap(); // CMD0 RSTART
+        i2c.write_u32(0x5C, (1 << 11) | 3).unwrap(); // CMD1 WRITE 3 (addr+W, addr_hi, addr_lo)
+        i2c.write_u32(0x60, 6 << 11).unwrap(); // CMD2 RSTART
+        i2c.write_u32(0x64, (1 << 11) | 1).unwrap(); // CMD3 WRITE 1 (addr+R)
+        i2c.write_u32(0x68, (3 << 11) | 2).unwrap(); // CMD4 READ 2 (one 16-bit word)
+        i2c.write_u32(0x6C, 2 << 11).unwrap(); // CMD5 STOP
+        i2c.write_u32(0x1C, 0x66).unwrap(); // addr+W (0x33<<1)
+        i2c.write_u32(0x1C, 0x24).unwrap(); // reg addr high byte
+        i2c.write_u32(0x1C, 0x30).unwrap(); // reg addr low byte
+        i2c.write_u32(0x1C, 0x67).unwrap(); // addr+R (0x33<<1 | 1)
+        i2c.write_u32(0x04, 1 << 5).unwrap(); // TRANS_START
+
+        let int_raw = i2c.read_u32(0x20).unwrap();
+        assert_eq!(
+            int_raw & (1 << 10),
+            0,
+            "MLX90640 at 0x33 must ACK; INT_RAW=0x{int_raw:08x}"
+        );
+        let hi = i2c.read_u32(0x1C).unwrap();
+        let lo = i2c.read_u32(0x1C).unwrap();
+        let word = (hi << 8) | lo;
+        assert_eq!(
+            word, 6000,
+            "MLX90640 gainEE EEPROM word (0x2430) must round-trip the 16-bit \
+             register protocol through the bus-attached C3 controller"
+        );
+    }
+
+    #[test]
+    fn test_from_config_can_diagnostic_tester_injects_frame_into_fdcan() {
+        let chip: ChipDescriptor = serde_yaml::from_str(
+            r#"
+name: "h563-test"
+arch: "arm"
+core: "cortex-m33"
+flash:
+  base: 0x08000000
+  size: "128KB"
+ram:
+  base: 0x20000000
+  size: "64KB"
+peripherals:
+  - id: "fdcan1"
+    type: "fdcan"
+    base_address: 0x4000A400
+    size: "4KB"
+"#,
+        )
+        .unwrap();
+        let manifest: SystemManifest = serde_yaml::from_str(
+            r#"
+name: "uds-tester"
+chip: "unused"
+external_devices:
+  - id: "uds_tester"
+    type: "can-diagnostic-tester"
+    connection: "fdcan1"
+    config:
+      request_id: "0x7E0"
+      request_data: "03 22 F1 90"
+board_io: []
+"#,
+        )
+        .unwrap();
+        let mut bus = SystemBus::from_config(&chip, &manifest).unwrap();
+        assert_eq!(bus.can_diagnostic_testers.len(), 1);
+
+        // Still in INIT: tester retries but cannot inject into a stopped FDCAN.
+        bus.tick_peripherals_fully();
+        {
+            let idx = bus.find_peripheral_index_by_name("fdcan1").unwrap();
+            let fdcan = bus.peripherals[idx]
+                .dev
+                .as_any()
+                .unwrap()
+                .downcast_ref::<crate::peripherals::fdcan::Fdcan>()
+                .unwrap();
+            assert!(fdcan.trace_snapshot("fdcan1").is_empty());
+        }
+
+        // Leave INIT; next bus tick lets the reusable tester drive the CAN frame.
+        bus.write_u32(0x4000_A400 + 0x018, 0).unwrap();
+        bus.tick_peripherals_fully();
+        let idx = bus.find_peripheral_index_by_name("fdcan1").unwrap();
+        let fdcan = bus.peripherals[idx]
+            .dev
+            .as_any()
+            .unwrap()
+            .downcast_ref::<crate::peripherals::fdcan::Fdcan>()
+            .unwrap();
+        let trace = fdcan.trace_snapshot("fdcan1");
+        assert_eq!(trace.len(), 1);
+        assert_eq!(trace[0].direction, "rx");
+        assert_eq!(trace[0].id, 0x7E0);
+        assert_eq!(trace[0].data, vec![0x03, 0x22, 0xF1, 0x90]);
+        assert!(bus.can_diagnostic_testers[0].sent);
+    }
+
+    /// Pure FSM walk: FirstFrame → (ECU FlowControl) → ConsecutiveFrame →
+    /// (ECU positive response) → Done, driving the tester's state machine by
+    /// feeding ECU frames manually (no peripheral, no bus tick). This exercises
+    /// the exact observe/advance logic `service_can_uds_testers` reuses.
+    #[test]
+    fn uds_tester_fsm_drives_ff_fc_cf_response() {
+        let mut t = CanUdsTester::new("t".into(), "bxcan1".into());
+        assert_eq!(t.state, CanUdsTesterState::Start);
+        assert_eq!(t.request_id, 0x111);
+        assert_eq!(t.reply_id, 0x222);
+
+        // Start: the next frame to inject is the FirstFrame; on a (simulated)
+        // accepted inject the FSM advances to AwaitFc.
+        assert_eq!(t.first_frame, CanUdsTester::DEFAULT_FIRST_FRAME.to_vec());
+        t.state = CanUdsTesterState::AwaitFc;
+
+        // A non-FlowControl frame, or one on the wrong id, does not unblock.
+        assert!(t.observe_ecu_frame(0x999, &[0x30, 0x00, 0x00]).is_none());
+        assert!(t.observe_ecu_frame(0x222, &[0x06, 0x67]).is_none());
+        assert_eq!(t.state, CanUdsTesterState::AwaitFc);
+
+        // ECU FlowControl (0x30..) on reply_id → returns the ConsecutiveFrame.
+        let cf = t
+            .observe_ecu_frame(0x222, &[0x30, 0x00, 0x00, 0, 0, 0, 0, 0])
+            .expect("FlowControl unblocks the ConsecutiveFrame");
+        assert_eq!(cf, CanUdsTester::DEFAULT_CONSECUTIVE_FRAME.to_vec());
+
+        // Simulate the accepted CF inject.
+        t.state = CanUdsTesterState::AwaitResp;
+
+        // A wrong response (negative / different service) does not complete.
+        assert!(t.observe_ecu_frame(0x222, &[0x03, 0x7F, 0x27]).is_none());
+        assert_eq!(t.state, CanUdsTesterState::AwaitResp);
+
+        // SecurityAccess positive single-frame response → Done.
+        assert!(t
+            .observe_ecu_frame(0x222, &[0x06, 0x67, 0x01, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE])
+            .is_none());
+        assert_eq!(t.state, CanUdsTesterState::Done);
+        assert!(t.is_terminal());
+    }
+
+    /// Script-driven AwaitResp must decode the CAN-FD *escape* SingleFrame
+    /// (`0x00 LL <payload>`, length in byte 1, payload from byte 2), not just
+    /// the classic SF (`0x0L`). The H563 ECU runs ISO-TP in FD mode and answers
+    /// a 20-byte ReadDataByIdentifier as one 0x00-escape SF; the old parser read
+    /// the low nibble of 0x00 as length 0 and completed with an empty payload
+    /// ("got []"). Regression for the h563-uds-ecu smoke.
+    #[test]
+    fn scripted_tester_decodes_fd_escape_single_frame() {
+        let mut t = CanUdsTester::new("t".into(), "fdcan1".into());
+        t.reply_id = 0x7E8;
+        t.script = vec![UdsStep {
+            send: vec![0x22, 0xF1, 0x90],
+            expect: vec![Some(0x62), Some(0xF1), Some(0x90)],
+            expect_nrc: None,
+        }];
+        t.step_idx = 0;
+        t.state = CanUdsTesterState::AwaitResp;
+
+        // ECU FD escape SF: byte0 = 0x00, real length = 0x14 (20) in byte1,
+        // payload 62 F1 90 + 17-byte VIN string.
+        let mut resp = vec![0x00, 0x14, 0x62, 0xF1, 0x90];
+        resp.extend_from_slice(b"LABWIRED-H563-UDS");
+        assert!(t.observe_ecu_frame(0x7E8, &resp).is_none());
+        assert_eq!(
+            t.state,
+            CanUdsTesterState::Done,
+            "FD escape SF must decode the full payload and match step 0"
+        );
+        assert!(t.is_terminal());
+    }
+
+    /// A malformed SingleFrame (FD escape with no length byte, or a declared
+    /// length the frame does not actually carry) must fail with a clear
+    /// "malformed"/"truncated" reason — not be silently decoded as a short or
+    /// empty payload that then reads as an ordinary response mismatch.
+    #[test]
+    fn scripted_tester_rejects_malformed_single_frame() {
+        let mk = || {
+            let mut t = CanUdsTester::new("t".into(), "fdcan1".into());
+            t.reply_id = 0x7E8;
+            t.script = vec![UdsStep {
+                send: vec![0x22, 0xF1, 0x90],
+                expect: vec![Some(0x62), Some(0xF1), Some(0x90)],
+                expect_nrc: None,
+            }];
+            t.state = CanUdsTesterState::AwaitResp;
+            t
+        };
+
+        // FD escape SF (byte0 = 0x00) with no length byte.
+        let mut t = mk();
+        assert!(t.observe_ecu_frame(0x7E8, &[0x00]).is_none());
+        assert_eq!(t.state, CanUdsTesterState::Failed);
+        assert!(
+            t.failure.as_deref().unwrap_or("").contains("malformed"),
+            "expected a malformed-frame reason, got {:?}",
+            t.failure
+        );
+
+        // SF that declares 20 payload bytes but carries only one.
+        let mut t = mk();
+        assert!(t.observe_ecu_frame(0x7E8, &[0x00, 0x14, 0x62]).is_none());
+        assert_eq!(t.state, CanUdsTesterState::Failed);
+        assert!(
+            t.failure.as_deref().unwrap_or("").contains("truncated"),
+            "expected a truncated-frame reason, got {:?}",
+            t.failure
+        );
+    }
+
+    /// End-to-end against a real `BxCan` registered on the bus and configured
+    /// (valid BTR + accept-0x111 filter, NORMAL mode — no loopback) so
+    /// `deliver_rx` accepts the tester's frames. We drive the full bus tick:
+    /// FF → (ECU emits FlowControl) → CF → (ECU emits positive response) → Done.
+    /// The ECU's "transmit" side is modeled by pushing frames into the bxCAN's
+    /// public `tx_frames`, which the tester drains exactly as it would for a
+    /// firmware-driven controller in normal mode.
+    #[test]
+    fn uds_tester_completes_against_real_bxcan() {
+        use crate::peripherals::bxcan::BxCan;
+
+        // bxCAN register offsets (RM0008 §24.9) addressed via the bus.
+        const MCR: u64 = 0x000;
+        const BTR: u64 = 0x01C;
+        const FMR: u64 = 0x200;
+        const FM1R: u64 = 0x204;
+        const FS1R: u64 = 0x20C;
+        const FFA1R: u64 = 0x214;
+        const FA1R: u64 = 0x21C;
+        const FBANK: u64 = 0x240;
+        const VALID_BTR: u32 = 0x00DC_0009; // valid TS1/TS2, no loopback bit.
+
+        let base: u64 = 0x4000_6400;
+        let mut bus = SystemBus::empty();
+        bus.add_peripheral("bxcan1", base, 0x400, None, Box::new(BxCan::new()));
+
+        // Bring the controller up in NORMAL mode and install a bank-0 mask
+        // filter accepting exactly 0x111 into FIFO0.
+        bus.write_u32(base + MCR, 1).unwrap(); // INRQ: request init
+        bus.write_u32(base + BTR, VALID_BTR).unwrap(); // valid timing, NOT loopback
+        bus.write_u32(base + FMR, 1).unwrap(); // FINIT: filter init
+        bus.write_u32(base + FS1R, 0x1).unwrap(); // bank0 32-bit
+        bus.write_u32(base + FM1R, 0x0).unwrap(); // bank0 mask mode
+        bus.write_u32(base + FFA1R, 0x0).unwrap(); // bank0 -> FIFO0
+        bus.write_u32(base + FBANK, (0x111u32) << 21).unwrap(); // F0R1
+        bus.write_u32(base + FBANK + 4, (0x111u32) << 21).unwrap(); // F0R2 mask
+        bus.write_u32(base + FA1R, 0x1).unwrap(); // bank0 active
+        bus.write_u32(base + FMR, 0x0).unwrap(); // clear FINIT: filters live
+        bus.write_u32(base + MCR, 0).unwrap(); // leave init -> running (normal)
+
+        bus.can_uds_testers
+            .push(CanUdsTester::new("uds".into(), "bxcan1".into()));
+
+        // Tick 1: tester injects the FirstFrame (filter accepts) → AwaitFc.
+        bus.service_can_uds_testers();
+        assert_eq!(bus.can_uds_testers[0].state, CanUdsTesterState::AwaitFc);
+
+        // The injected FF landed in the ECU's RX FIFO0 (filter-accepted).
+        {
+            let idx = bus.find_peripheral_index_by_name("bxcan1").unwrap();
+            let bx = bus.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .unwrap()
+                .downcast_mut::<BxCan>()
+                .unwrap();
+            // ECU "transmits" a FlowControl frame in normal mode (id = reply_id).
+            bx.tx_frames.push_back(crate::network::CanFrame::classic(
+                0x222,
+                vec![0x30, 0x00, 0x00, 0, 0, 0, 0, 0],
+            ));
+        }
+
+        // Tick 2: tester drains the FlowControl and injects the CF → AwaitResp.
+        bus.service_can_uds_testers();
+        assert_eq!(bus.can_uds_testers[0].state, CanUdsTesterState::AwaitResp);
+
+        // ECU "transmits" the SecurityAccess positive single-frame response.
+        {
+            let idx = bus.find_peripheral_index_by_name("bxcan1").unwrap();
+            let bx = bus.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .unwrap()
+                .downcast_mut::<BxCan>()
+                .unwrap();
+            bx.tx_frames.push_back(crate::network::CanFrame::classic(
+                0x222,
+                vec![0x06, 0x67, 0x01, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE],
+            ));
+        }
+
+        // Tick 3: tester observes the positive response → Done.
+        bus.service_can_uds_testers();
+        assert_eq!(bus.can_uds_testers[0].state, CanUdsTesterState::Done);
+    }
+
+    /// End-to-end against a real `Fdcan` registered on the bus and brought to
+    /// normal mode (CCCR.INIT cleared, TEST.LBCK = 0) so `receive_frame`
+    /// accepts the tester's frames. We drive a script-driven exchange where the
+    /// ECU responds with a multi-frame FirstFrame + CF, exercising the
+    /// FlowControl-delivery path on FDCAN — the same gap class that #343
+    /// identified on the analogous bxCAN path.
+    ///
+    /// Exchange (script: `send = "22 F1 90"`, `expect = "62 F1 90"`):
+    /// 1. Tick 1 (Start): tester sends SF ReadDataById request → AwaitResp.
+    /// 2. ECU replies with a FirstFrame (13-byte response) via `tx_frames`.
+    /// 3. Tick 2 (AwaitResp → AwaitMultiResp): tester sees the FF, transitions,
+    ///    and MUST inject a FlowControl ([0x30, 0x00, 0x00]) via `receive_frame`.
+    /// 4. ECU replies with the ConsecutiveFrame.
+    /// 5. Tick 3 (AwaitMultiResp → Done): PDU reassembled and matched.
+    ///
+    /// The discriminating assertion is the presence of a FlowControl entry
+    /// (`first_byte & 0xF0 == 0x30`) in the FDCAN "rx" trace after tick 2,
+    /// proving `receive_frame` was called — not merely that Done was reached.
+    #[test]
+    fn uds_tester_completes_against_real_fdcan() {
+        use crate::peripherals::fdcan::Fdcan;
+
+        // FDCAN1 on H563: RM0481 base 0x4000_A400.
+        const FDCAN_BASE: u64 = 0x4000_A400;
+        const REG_CCCR: u64 = 0x018; // CCCR offset within the peripheral window
+
+        let mut bus = SystemBus::empty();
+        bus.add_peripheral("fdcan1", FDCAN_BASE, 0x1000, None, Box::new(Fdcan::new()));
+
+        // Bring FDCAN to normal mode (mirrors fdcan_start in h563-uds-ecu/main.c):
+        //   Step 1: assert INIT + CCE (config unlock).
+        bus.write_u32(FDCAN_BASE + REG_CCCR, 0x3).unwrap();
+        //   Step 2: clear INIT — CCE clears with it (capture13: 0xA2→0xA0).
+        bus.write_u32(FDCAN_BASE + REG_CCCR, 0x0).unwrap();
+        // CCCR now reads 0x0: bus_active = true, receive_frame will accept frames.
+
+        // Script step: ReadDataByIdentifier 0xF190 (3 bytes), expect prefix 62 F1 90.
+        // The response is multi-frame (13 bytes), so the tester must send a
+        // FlowControl when the ECU sends its FirstFrame.
+        let mut tester = CanUdsTester::new("uds".into(), "fdcan1".into());
+        tester.request_id = 0x7E0;
+        tester.reply_id = 0x7E8;
+        tester.script = vec![UdsStep {
+            send: vec![0x22, 0xF1, 0x90],
+            expect: SystemBus::parse_expect("62 F1 90"),
+            expect_nrc: None,
+        }];
+        bus.can_uds_testers.push(tester);
+
+        // Tick 1: script-driven Start → tester sends SF request (3 bytes fit in SF)
+        // → AwaitResp (no pending CFs for a SF request).
+        bus.service_can_uds_testers();
+        assert_eq!(
+            bus.can_uds_testers[0].state,
+            CanUdsTesterState::AwaitResp,
+            "state must be AwaitResp after tester sends its SF request"
+        );
+
+        // Record trace length after tick 1 so the FC check ignores the SF request.
+        let trace_len_before = {
+            let idx = bus.find_peripheral_index_by_name("fdcan1").unwrap();
+            let fd = bus.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .unwrap()
+                .downcast_mut::<Fdcan>()
+                .unwrap();
+            fd.trace_snapshot("fdcan1").len()
+        };
+
+        // ECU "transmits" a FirstFrame: 13-byte (0x0D) response, 6 payload bytes
+        // in the FF (62 F1 90 = RDBI positive response prefix + 3 VIN chars).
+        {
+            let idx = bus.find_peripheral_index_by_name("fdcan1").unwrap();
+            let fd = bus.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .unwrap()
+                .downcast_mut::<Fdcan>()
+                .unwrap();
+            fd.tx_frames.push_back(crate::network::CanFrame::classic(
+                0x7E8,
+                vec![0x10, 0x0D, 0x62, 0xF1, 0x90, 0x31, 0x32, 0x33],
+            ));
+        }
+
+        // Tick 2: tester drains the ECU FirstFrame → observe_ecu_frame_script sees
+        // a 0x10 frame in AwaitResp, sets state = AwaitMultiResp, and returns the
+        // FlowControl payload [0x30, 0x00, 0x00].
+        // service_can_uds_testers picks that up in the AwaitMultiResp branch and
+        // MUST call receive_frame to inject it onto the FDCAN.
+        bus.service_can_uds_testers();
+        assert_eq!(
+            bus.can_uds_testers[0].state,
+            CanUdsTesterState::AwaitMultiResp,
+            "state must be AwaitMultiResp after receiving ECU FirstFrame"
+        );
+
+        // Discriminating assertion: a FlowControl frame (first byte & 0xF0 == 0x30)
+        // with the tester's request_id (0x7E0) must appear as an "rx" entry in the
+        // FDCAN trace after tick 1.  An absent FC means the tester silently dropped
+        // the CTS signal — the FDCAN analogue of the bxCAN #343 bug.
+        {
+            let idx = bus.find_peripheral_index_by_name("fdcan1").unwrap();
+            let fd = bus.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .unwrap()
+                .downcast_mut::<Fdcan>()
+                .unwrap();
+            let trace = fd.trace_snapshot("fdcan1");
+            let new_frames = &trace[trace_len_before..];
+            assert!(
+                new_frames.iter().any(|f| {
+                    f.direction == "rx"
+                        && f.id == 0x7E0
+                        && f.data.first().map(|b| b & 0xF0 == 0x30).unwrap_or(false)
+                }),
+                "FlowControl (0x30 nibble) must appear in FDCAN rx trace after ECU FirstFrame; \
+                 new frames after tick 1: {:?}",
+                new_frames
+                    .iter()
+                    .map(|f| (f.direction.as_str(), f.id, f.data.clone()))
+                    .collect::<Vec<_>>()
+            );
+        }
+
+        // ECU "transmits" the ConsecutiveFrame carrying the remaining 7 bytes.
+        // 13 - 6 (from FF) = 7 bytes in the CF.
+        {
+            let idx = bus.find_peripheral_index_by_name("fdcan1").unwrap();
+            let fd = bus.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .unwrap()
+                .downcast_mut::<Fdcan>()
+                .unwrap();
+            fd.tx_frames.push_back(crate::network::CanFrame::classic(
+                0x7E8,
+                vec![0x21, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30],
+            ));
+        }
+
+        // Tick 3: tester drains the CF, PDU buf reaches the declared 13 bytes,
+        // complete_response matches the expect prefix → Done.
+        bus.service_can_uds_testers();
+        assert_eq!(
+            bus.can_uds_testers[0].state,
+            CanUdsTesterState::Done,
+            "state must be Done after CF received and PDU matched"
+        );
+    }
+
+    /// Config parsing: a `uds-tester` external device populates a
+    /// `CanUdsTester` with the configured ids and payloads.
+    #[test]
+    fn uds_tester_parsed_from_config() {
+        let chip: ChipDescriptor = serde_yaml::from_str(
+            r#"
+name: "f103"
+arch: "arm"
+core: "cortex-m3"
+flash:
+  base: 0x08000000
+  size: "128KB"
+ram:
+  base: 0x20000000
+  size: "20KB"
+peripherals:
+  - id: "bxcan1"
+    type: "bxcan"
+    base_address: 0x40006400
+    size: "1KB"
+"#,
+        )
+        .unwrap();
+        let manifest: SystemManifest = serde_yaml::from_str(
+            r#"
+name: "uds-multiframe"
+chip: "f103"
+external_devices:
+  - id: "uds_node"
+    type: "uds-tester"
+    connection: "bxcan1"
+    config:
+      request_id: "0x111"
+      reply_id: "0x222"
+      first_frame: "10 0B 27 01 5A 11 22 33"
+      consecutive_frame: "21 44 55 66 77 88 55 55"
+board_io: []
+"#,
+        )
+        .unwrap();
+        let bus = SystemBus::from_config(&chip, &manifest).unwrap();
+        assert_eq!(bus.can_uds_testers.len(), 1);
+        let t = &bus.can_uds_testers[0];
+        assert_eq!(t.request_id, 0x111);
+        assert_eq!(t.reply_id, 0x222);
+        assert_eq!(t.first_frame, CanUdsTester::DEFAULT_FIRST_FRAME.to_vec());
+        assert_eq!(
+            t.consecutive_frame,
+            CanUdsTester::DEFAULT_CONSECUTIVE_FRAME.to_vec()
+        );
+        assert_eq!(t.state, CanUdsTesterState::Start);
+    }
+
+    /// Minimal F103 chip yaml reused across UDS script tests.
+    const MIN_F103_CHIP: &str = r#"
+name: "f103"
+arch: "arm"
+core: "cortex-m3"
+flash:
+  base: 0x08000000
+  size: "128KB"
+ram:
+  base: 0x20000000
+  size: "20KB"
+peripherals:
+  - id: "bxcan1"
+    type: "bxcan"
+    base_address: 0x40006400
+    size: "1KB"
+"#;
+
+    #[test]
+    fn uds_script_parses_send_expect_and_wildcards() {
+        let manifest: SystemManifest = serde_yaml::from_str(
+            r#"
+name: "uds-script"
+chip: "f103"
+external_devices:
+  - id: "uds-tester"
+    type: "uds-tester"
+    connection: "bxcan1"
+    config:
+      request_id: "0x111"
+      reply_id: "0x222"
+      script:
+        - send: "11 01"
+          expect: "51 01"
+        - send: "27 01"
+          expect: "67 01 .."
+board_io: []
+"#,
+        )
+        .unwrap();
+        let chip: ChipDescriptor = serde_yaml::from_str(MIN_F103_CHIP).unwrap();
+        let bus = SystemBus::from_config(&chip, &manifest).unwrap();
+        let t = &bus.can_uds_testers[0];
+        assert_eq!(t.script.len(), 2);
+        assert_eq!(t.script[0].send, vec![0x11, 0x01]);
+        assert_eq!(t.script[0].expect, vec![Some(0x51), Some(0x01)]);
+        assert_eq!(t.script[1].expect, vec![Some(0x67), Some(0x01), None]); // .. = wildcard
+    }
+
+    #[test]
+    fn uds_script_parses_optional_expect_nrc() {
+        let manifest: SystemManifest = serde_yaml::from_str(
+            r#"
+name: "uds-script-opts"
+chip: "f103"
+external_devices:
+  - id: "uds-tester"
+    type: "uds-tester"
+    connection: "bxcan1"
+    config:
+      request_id: "0x111"
+      reply_id: "0x222"
+      script:
+        - send: "28 03"
+          expect: "68 03"
+          expect_nrc: "0x22"
+board_io: []
+"#,
+        )
+        .unwrap();
+        let chip: ChipDescriptor = serde_yaml::from_str(MIN_F103_CHIP).unwrap();
+        let bus = SystemBus::from_config(&chip, &manifest).unwrap();
+        let step = &bus.can_uds_testers[0].script[0];
+        assert_eq!(step.expect_nrc, Some(0x22));
+    }
+
+    #[test]
+    fn uds_legacy_config_becomes_one_step_script() {
+        let manifest: SystemManifest = serde_yaml::from_str(
+            r#"
+name: "uds-legacy"
+chip: "f103"
+external_devices:
+  - id: "uds_node"
+    type: "uds-tester"
+    connection: "bxcan1"
+    config:
+      request_id: "0x111"
+      reply_id: "0x222"
+      first_frame: "10 0B 27 01 5A 11 22 33"
+      consecutive_frame: "21 44 55 66 77 88 55 55"
+board_io: []
+"#,
+        )
+        .unwrap();
+        let chip: ChipDescriptor = serde_yaml::from_str(MIN_F103_CHIP).unwrap();
+        let bus = SystemBus::from_config(&chip, &manifest).unwrap();
+        let t = &bus.can_uds_testers[0];
+        assert_eq!(t.script.len(), 1);
+        assert_eq!(t.script[0].expect, vec![Some(0x06), Some(0x67)]);
+        assert_eq!(
+            t.script[0].send,
+            vec![0x27, 0x01, 0x5A, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
+        );
+        assert_eq!(t.script[0].expect_nrc, None);
     }
 
     /// Parse a minimal chip yaml with the given header lines (name/arch/core).
@@ -3168,6 +3322,8 @@ peripherals:
 
         labwired_config::ChipDescriptor {
             schema_version: "1.0".to_string(),
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             memory_regions: Vec::new(),
             name: "stm32f103-test".to_string(),
             arch: Arch::Arm,
@@ -3187,6 +3343,7 @@ peripherals:
                     base_address: 0x4000_5400,
                     size: Some("1KB".to_string()),
                     irq: Some(31),
+                    clock: None,
                     config: HashMap::new(),
                 },
                 PeripheralConfig {
@@ -3195,6 +3352,7 @@ peripherals:
                     base_address: 0x4000_3800,
                     size: Some("1KB".to_string()),
                     irq: Some(37),
+                    clock: None,
                     config: HashMap::new(),
                 },
             ],
@@ -3369,6 +3527,9 @@ peripherals:
             bit_band_enabled: true,
             pending_cpu_irqs: [0; 2],
             dport_idx: None,
+            rcc_idx: None,
+            clock_gating_bypass: false,
+            fault_unclocked: std::collections::HashMap::new(),
             flash_thunks: std::collections::HashMap::new(),
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
@@ -3376,7 +3537,15 @@ peripherals:
             current_cycle: 0,
             pending_schedule: Vec::new(),
             legacy_walk_disabled: false,
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             hcsr04: Vec::new(),
+            can_diagnostic_testers: Vec::new(),
+            can_uds_testers: Vec::new(),
+            esp32c3_irq_routing: false,
+            riscv_irq_lines: 0,
+            flash_models_ops: false,
+            flash_error_flags_idx: None,
         };
 
         bus.flash.write_u8(0x0800_0000, 0x12);
@@ -3389,6 +3558,435 @@ peripherals:
         // Write through alias and verify backing flash changed.
         bus.write_u8(0x0000_0001, 0xAB).unwrap();
         assert_eq!(bus.flash.read_u8(0x0800_0001), Some(0xAB));
+    }
+
+    /// Build a bus with a 1 KiB flash region (erased to 0xFF, like real silicon
+    /// after erase) and an H5 FLASH register peripheral at 0x4002_2000, with the
+    /// opt-in program-error gate set to `gate`.
+    fn h5_flash_bus(gate: bool) -> SystemBus {
+        let mut flash = LinearMemory::new(0x400, 0x0800_0000);
+        // Erased state is all-ones; the gate's not-erased check keys off this.
+        flash.data.iter_mut().for_each(|b| *b = 0xFF);
+        let mut bus = SystemBus {
+            flash,
+            ram: LinearMemory::new(256, 0x2000_0000),
+            extra_mem: Vec::new(),
+            peripherals: vec![PeripheralEntry {
+                name: "flash".to_string(),
+                base: 0x4002_2000,
+                size: 0x400,
+                irq: None,
+                dev: Box::new(
+                    crate::peripherals::flash::Flash::new_with_layout(
+                        crate::peripherals::flash::FlashRegisterLayout::Stm32H5,
+                    )
+                    .with_error_flags(gate),
+                ),
+                ticks_remaining: 0,
+                generation: 0,
+                clock_gate: None,
+            }],
+            nvic: None,
+            observers: Vec::new(),
+            config: crate::SimulationConfig::default(),
+            bit_band_enabled: false,
+            pending_cpu_irqs: [0; 2],
+            dport_idx: None,
+            rcc_idx: None,
+            clock_gating_bypass: false,
+            fault_unclocked: std::collections::HashMap::new(),
+            flash_thunks: std::collections::HashMap::new(),
+            peripheral_ranges: Vec::new(),
+            peripheral_hint: Cell::new(None),
+            last_gpio_in: [0; 2],
+            current_cycle: 0,
+            pending_schedule: Vec::new(),
+            legacy_walk_disabled: false,
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
+            hcsr04: Vec::new(),
+            can_diagnostic_testers: Vec::new(),
+            can_uds_testers: Vec::new(),
+            esp32c3_irq_routing: false,
+            riscv_irq_lines: 0,
+            flash_models_ops: false,
+            flash_error_flags_idx: None,
+        };
+        bus.rebuild_peripheral_ranges();
+        bus
+    }
+
+    fn read_nssr(bus: &SystemBus) -> u32 {
+        use crate::peripherals::flash::h5::NSSR_OFF;
+        bus.read_u32(0x4002_2000 + NSSR_OFF).unwrap()
+    }
+
+    /// Enable NSCR.PG on the H5 FLASH peripheral so the write-buffer machine
+    /// programs (silicon requires PG for a flash-region write to land).
+    fn h5_set_pg(bus: &mut SystemBus) {
+        use crate::peripherals::flash::h5;
+        bus.write_u32(0x4002_2000 + h5::NSCR_OFF, h5::NSCR_PG)
+            .unwrap();
+    }
+
+    #[test]
+    fn h5_gate_on_full_quadword_commits_as_and() {
+        use crate::peripherals::flash::h5;
+        let mut bus = h5_flash_bus(true);
+        assert!(bus.flash_error_flags_idx.is_some(), "gate index cached");
+        h5_set_pg(&mut bus);
+        // Pre-load the quad-word at 0x08000020 with 0xAA in the first lane so the
+        // commit must AND with it (flash only flips 1→0). Write the lower 15
+        // lanes via the buffer first... but to exercise the AND we re-program a
+        // committed quad-word below; here verify a clean commit from erased.
+        for i in 0..16u64 {
+            bus.write_u8(0x0800_0020 + i, 0x33).unwrap();
+        }
+        // 0xFF (erased) & 0x33 = 0x33 — full quad-word committed.
+        for i in 0..16u64 {
+            assert_eq!(bus.flash.read_u8(0x0800_0020 + i), Some(0x33));
+        }
+        assert_ne!(read_nssr(&bus) & h5::NSSR_EOP, 0, "EOP set on commit");
+        assert_eq!(read_nssr(&bus) & h5::NSSR_WBNE, 0, "WBNE clear on commit");
+    }
+
+    #[test]
+    fn h5_gate_on_partial_quadword_buffers_no_commit() {
+        use crate::peripherals::flash::h5;
+        let mut bus = h5_flash_bus(true);
+        h5_set_pg(&mut bus);
+        // Only 4 of 16 bytes: still buffering, flash unchanged, WBNE set.
+        for i in 0..4u64 {
+            bus.write_u8(0x0800_0020 + i, 0x55).unwrap();
+            assert_eq!(bus.flash.read_u8(0x0800_0020 + i), Some(0xFF), "not yet");
+        }
+        assert_ne!(read_nssr(&bus) & h5::NSSR_WBNE, 0, "WBNE set");
+        assert_eq!(read_nssr(&bus) & h5::NSSR_EOP, 0, "no EOP");
+    }
+
+    #[test]
+    fn h5_gate_on_reprogram_committed_quadword_ands_no_pgserr() {
+        use crate::peripherals::flash::h5;
+        let mut bus = h5_flash_bus(true);
+        h5_set_pg(&mut bus);
+        // First program: 0xFF & 0xF0 = 0xF0.
+        for i in 0..16u64 {
+            bus.write_u8(0x0800_0040 + i, 0xF0).unwrap();
+        }
+        assert_eq!(bus.flash.read_u8(0x0800_0040), Some(0xF0));
+        // Clear EOP via NSCCR, then re-program the SAME (now-not-erased) word.
+        bus.write_u32(0x4002_2000 + h5::NSCCR_OFF, h5::NSSR_EOP)
+            .unwrap();
+        for i in 0..16u64 {
+            bus.write_u8(0x0800_0040 + i, 0x0F).unwrap();
+        }
+        // Re-program ALLOWED, result is the AND: 0xF0 & 0x0F = 0x00. No PGSERR.
+        assert_eq!(bus.flash.read_u8(0x0800_0040), Some(0x00), "AND of old&new");
+        assert_eq!(read_nssr(&bus) & h5::NSSR_PGSERR, 0, "no PGSERR over-write");
+        assert_ne!(read_nssr(&bus) & h5::NSSR_EOP, 0, "EOP set (success)");
+    }
+
+    #[test]
+    fn h5_gate_on_misaligned_run_sets_incerr_alone_no_commit() {
+        use crate::peripherals::flash::h5;
+        let mut bus = h5_flash_bus(true);
+        h5_set_pg(&mut bus);
+        // Start at base+4 (quad-word 0x20), then jump into the next quad-word
+        // (0x30) before completing — an inconsistent program run.
+        bus.write_u8(0x0800_0024, 0x11).unwrap();
+        assert_ne!(read_nssr(&bus) & h5::NSSR_WBNE, 0, "WBNE while partial");
+        bus.write_u8(0x0800_0030, 0x22).unwrap();
+        // INCERR alone, nothing committed (both targets stay erased).
+        assert_eq!(bus.flash.read_u8(0x0800_0024), Some(0xFF), "no commit");
+        assert_eq!(bus.flash.read_u8(0x0800_0030), Some(0xFF), "no commit");
+        let nssr = read_nssr(&bus);
+        assert_ne!(nssr & h5::NSSR_INCERR, 0, "INCERR set");
+        assert_eq!(nssr & h5::NSSR_PGSERR, 0, "INCERR alone (no PGSERR)");
+    }
+
+    #[test]
+    fn h5_gate_off_commits_every_program_with_no_flag() {
+        use crate::peripherals::flash::h5;
+        let mut bus = h5_flash_bus(false);
+        assert!(bus.flash_error_flags_idx.is_none(), "gate off ⇒ no index");
+        // No buffering, no flags: every byte commits straight through, even
+        // misaligned and over-not-erased (old byte-identical behaviour).
+        bus.write_u8(0x0800_0003, 0x42).unwrap();
+        assert_eq!(bus.flash.read_u8(0x0800_0003), Some(0x42));
+        bus.write_u8(0x0800_0003, 0x99).unwrap();
+        assert_eq!(bus.flash.read_u8(0x0800_0003), Some(0x99));
+        assert_eq!(read_nssr(&bus) & h5::NSSR_W1C_MASK, 0, "no flag ever");
+        assert_eq!(read_nssr(&bus) & h5::NSSR_WBNE, 0, "no WBNE ever");
+    }
+
+    // ── H5 read-while-write fidelity gate (opt-in, default off) ─────────────
+
+    use crate::Cpu as _RwwCpuTrait;
+
+    /// Minimal CPU stub with a settable PC for the RWW Machine-level tests.
+    /// `step` is a no-op (the tests drive `apply_pending_flash_op` directly via
+    /// a manually recorded erase, so the CPU never needs to execute).
+    #[derive(Default)]
+    struct PcCpu {
+        pc: u32,
+    }
+
+    impl crate::Cpu for PcCpu {
+        fn reset(&mut self, _bus: &mut dyn crate::Bus) -> crate::SimResult<()> {
+            Ok(())
+        }
+        fn step(
+            &mut self,
+            _bus: &mut dyn crate::Bus,
+            _observers: &[std::sync::Arc<dyn crate::SimulationObserver>],
+            _config: &crate::SimulationConfig,
+        ) -> crate::SimResult<()> {
+            Ok(())
+        }
+        fn set_pc(&mut self, val: u32) {
+            self.pc = val;
+        }
+        fn get_pc(&self) -> u32 {
+            self.pc
+        }
+        fn set_sp(&mut self, _val: u32) {}
+        fn set_exception_pending(&mut self, _n: u32) {}
+        fn get_register(&self, _id: u8) -> u32 {
+            0
+        }
+        fn set_register(&mut self, _id: u8, _val: u32) {}
+        fn snapshot(&self) -> crate::snapshot::CpuSnapshot {
+            crate::snapshot::CpuSnapshot::Arm(crate::snapshot::ArmCpuSnapshot {
+                registers: vec![0; 16],
+                pc: self.pc,
+                xpsr: 0,
+                primask: false,
+                pending_exceptions: 0,
+                pending_exceptions_hi: Vec::new(),
+                vtor: 0,
+            })
+        }
+        fn apply_snapshot(&mut self, _snapshot: &crate::snapshot::CpuSnapshot) {}
+        fn get_register_names(&self) -> Vec<String> {
+            vec![]
+        }
+        fn index_of_register(&self, _name: &str) -> Option<u8> {
+            None
+        }
+    }
+
+    /// Build a bus with a 2 MiB flash region (two 1 MiB banks, as on the H563)
+    /// and an H5 FLASH register peripheral, with the opt-in read-while-write gate
+    /// set to `gate`. The flash is unlocked so a NSCR.SER|STRT write records an
+    /// erase op straight away.
+    fn h5_rww_bus(gate: bool) -> SystemBus {
+        use crate::peripherals::flash::h5;
+        let mut flash = LinearMemory::new((2 * h5::BANK_SIZE) as usize, h5::FLASH_BASE);
+        flash.data.iter_mut().for_each(|b| *b = 0xFF);
+        let mut bus = SystemBus {
+            flash,
+            ram: LinearMemory::new(0x1000, 0x2000_0000),
+            extra_mem: Vec::new(),
+            peripherals: vec![PeripheralEntry {
+                name: "flash".to_string(),
+                base: 0x4002_2000,
+                size: 0x400,
+                irq: None,
+                dev: Box::new(
+                    crate::peripherals::flash::Flash::new_with_layout(
+                        crate::peripherals::flash::FlashRegisterLayout::Stm32H5,
+                    )
+                    .with_read_while_write(gate),
+                ),
+                ticks_remaining: 0,
+                generation: 0,
+                clock_gate: None,
+            }],
+            nvic: None,
+            observers: Vec::new(),
+            config: crate::SimulationConfig::default(),
+            bit_band_enabled: false,
+            pending_cpu_irqs: [0; 2],
+            dport_idx: None,
+            rcc_idx: None,
+            clock_gating_bypass: false,
+            fault_unclocked: std::collections::HashMap::new(),
+            flash_thunks: std::collections::HashMap::new(),
+            peripheral_ranges: Vec::new(),
+            peripheral_hint: Cell::new(None),
+            last_gpio_in: [0; 2],
+            current_cycle: 0,
+            pending_schedule: Vec::new(),
+            legacy_walk_disabled: false,
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
+            hcsr04: Vec::new(),
+            can_diagnostic_testers: Vec::new(),
+            can_uds_testers: Vec::new(),
+            esp32c3_irq_routing: false,
+            riscv_irq_lines: 0,
+            flash_models_ops: false,
+            flash_error_flags_idx: None,
+        };
+        bus.rebuild_peripheral_ranges();
+        bus
+    }
+
+    /// Unlock NSKEYR then record a sector erase of `bank` (BKSEL logical) on the
+    /// bus, so a subsequent `apply_pending_flash_op` drains it.
+    fn h5_record_erase(bus: &mut SystemBus, bank: u8, sector: u32) {
+        use crate::peripherals::flash::h5;
+        bus.write_u32(0x4002_2000 + h5::NSKEYR_OFF, 0x4567_0123)
+            .unwrap();
+        bus.write_u32(0x4002_2000 + h5::NSKEYR_OFF, 0xCDEF_89AB)
+            .unwrap();
+        let mut nscr = h5::NSCR_SER | (sector << h5::NSCR_SNB_SHIFT) | h5::NSCR_STRT;
+        if bank == 1 {
+            nscr |= h5::NSCR_BKSEL;
+        }
+        bus.write_u32(0x4002_2000 + h5::NSCR_OFF, nscr).unwrap();
+    }
+
+    #[test]
+    fn rww_gate_on_same_bank_erase_faults() {
+        use crate::peripherals::flash::h5;
+        let mut cpu = PcCpu::default();
+        // PC executing from bank 1 (boot view at 0x08000000), sector 11.
+        cpu.set_pc(0x0801_6000);
+        let mut bus = h5_rww_bus(true);
+        h5_record_erase(&mut bus, 0, 11); // erase bank 1 (BKSEL=0), sector 11
+        let mut machine = crate::Machine::new(cpu, bus);
+        let err = machine
+            .apply_pending_flash_op()
+            .expect_err("same-bank erase under the RWW gate must fault");
+        match err {
+            crate::SimulationError::Other(msg) => {
+                assert!(msg.contains("RWW"), "reason names the RWW violation: {msg}");
+                assert!(
+                    msg.contains("SRAM"),
+                    "reason tells firmware to use SRAM: {msg}"
+                );
+            }
+            other => panic!("expected SimulationError::Other, got {other:?}"),
+        }
+        // Faulted before the fill: the erased sector is NOT cleared to 0xFF by us
+        // (it was already 0xFF), but more importantly the op did not silently
+        // "succeed" — the error propagated.
+        let _ = h5::BANK_SIZE;
+    }
+
+    #[test]
+    fn rww_gate_on_other_bank_erase_proceeds() {
+        use crate::peripherals::flash::h5;
+        let mut cpu = PcCpu::default();
+        // PC in bank 1; erase targets bank 2 — the normal cross-bank OTA case.
+        cpu.set_pc(0x0801_6000);
+        let mut bus = h5_rww_bus(true);
+        // Dirty the bank-2 boot-state sector so we can see the erase land.
+        let off = h5::BANK_SIZE + 11 * h5::SECTOR_SIZE;
+        bus.flash.write_u8(h5::FLASH_BASE + off, 0x00);
+        h5_record_erase(&mut bus, 1, 11); // erase bank 2 (BKSEL=1)
+        let mut machine = crate::Machine::new(cpu, bus);
+        machine
+            .apply_pending_flash_op()
+            .expect("cross-bank erase must proceed");
+        assert_eq!(
+            machine.bus.flash.read_u8(h5::FLASH_BASE + off),
+            Some(0xFF),
+            "bank-2 sector erased to 0xFF"
+        );
+    }
+
+    #[test]
+    fn rww_gate_on_pc_in_sram_never_faults() {
+        // The intended production layout: the flash routine runs from SRAM, so
+        // PC is not in any flash bank — even a same-(logical-)bank erase is fine.
+        use crate::peripherals::flash::h5;
+        let mut cpu = PcCpu::default();
+        cpu.set_pc(0x2000_0100); // SRAM
+        let mut bus = h5_rww_bus(true);
+        h5_record_erase(&mut bus, 0, 11);
+        let mut machine = crate::Machine::new(cpu, bus);
+        machine
+            .apply_pending_flash_op()
+            .expect("erase from a SRAM-resident routine must proceed");
+        let _ = h5::FLASH_BASE;
+    }
+
+    #[test]
+    fn rww_gate_on_respects_swap_bank_mapping() {
+        // After a SWAP_BANK, the physical second bank answers at 0x08000000.
+        // PC at 0x08000000 is then in physical bank 2; an erase that lands in
+        // that physical bank (BKSEL=0, which now maps to physical bank 2) must
+        // fault, while BKSEL=1 (physical bank 1, the inactive one) proceeds.
+        use crate::peripherals::flash::h5;
+
+        // Same-physical-bank under swap → fault.
+        {
+            let mut cpu = PcCpu::default();
+            cpu.set_pc(0x0800_4000); // bank presented at 0x08000000
+            let mut bus = h5_rww_bus(true);
+            // Toggle the FLASH's swap state directly to model an applied swap.
+            let idx = bus.find_peripheral_index_by_name("flash").unwrap();
+            bus.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<crate::peripherals::flash::Flash>())
+                .unwrap()
+                .mark_swapped();
+            h5_record_erase(&mut bus, 0, 2); // BKSEL=0 → physical bank 2 under swap
+            let mut machine = crate::Machine::new(cpu, bus);
+            let err = machine
+                .apply_pending_flash_op()
+                .expect_err("swapped: BKSEL=0 erase hits PC's physical bank");
+            assert!(matches!(err, crate::SimulationError::Other(_)));
+        }
+
+        // Cross-physical-bank under swap → proceeds.
+        {
+            let mut cpu = PcCpu::default();
+            cpu.set_pc(0x0800_4000);
+            let mut bus = h5_rww_bus(true);
+            let idx = bus.find_peripheral_index_by_name("flash").unwrap();
+            bus.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<crate::peripherals::flash::Flash>())
+                .unwrap()
+                .mark_swapped();
+            // BKSEL=1 → physical bank 1, which sits at buffer offset 0..1 MiB?
+            // No: under swap, logical bank 1 maps to physical bank 0, the bank
+            // NOT presented at 0x08000000 — the cross-bank case.
+            let off = h5::BANK_SIZE + 2 * h5::SECTOR_SIZE;
+            bus.flash.write_u8(h5::FLASH_BASE + off, 0x00);
+            h5_record_erase(&mut bus, 1, 2);
+            let mut machine = crate::Machine::new(cpu, bus);
+            machine
+                .apply_pending_flash_op()
+                .expect("swapped: cross-physical-bank erase proceeds");
+        }
+    }
+
+    #[test]
+    fn rww_gate_off_same_bank_erase_succeeds_silently() {
+        // Default behaviour (gate off): a same-bank erase succeeds, byte-
+        // identical to before this gate existed.
+        use crate::peripherals::flash::h5;
+        let mut cpu = PcCpu::default();
+        cpu.set_pc(0x0801_6000);
+        let mut bus = h5_rww_bus(false);
+        let off = 11 * h5::SECTOR_SIZE;
+        bus.flash.write_u8(h5::FLASH_BASE + off, 0x00);
+        h5_record_erase(&mut bus, 0, 11);
+        let mut machine = crate::Machine::new(cpu, bus);
+        machine
+            .apply_pending_flash_op()
+            .expect("gate off: same-bank erase succeeds");
+        assert_eq!(
+            machine.bus.flash.read_u8(h5::FLASH_BASE + off),
+            Some(0xFF),
+            "gate off: sector erased to 0xFF as before"
+        );
     }
 
     #[test]
@@ -3406,6 +4004,7 @@ peripherals:
                     dev: Box::new(crate::peripherals::uart::Uart::new()),
                     ticks_remaining: 0,
                     generation: 0,
+                    clock_gate: None,
                 },
                 PeripheralEntry {
                     name: "low".to_string(),
@@ -3415,6 +4014,7 @@ peripherals:
                     dev: Box::new(crate::peripherals::uart::Uart::new()),
                     ticks_remaining: 0,
                     generation: 0,
+                    clock_gate: None,
                 },
             ],
             nvic: None,
@@ -3423,6 +4023,9 @@ peripherals:
             bit_band_enabled: true,
             pending_cpu_irqs: [0; 2],
             dport_idx: None,
+            rcc_idx: None,
+            clock_gating_bypass: false,
+            fault_unclocked: std::collections::HashMap::new(),
             flash_thunks: std::collections::HashMap::new(),
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
@@ -3430,7 +4033,15 @@ peripherals:
             current_cycle: 0,
             pending_schedule: Vec::new(),
             legacy_walk_disabled: false,
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             hcsr04: Vec::new(),
+            can_diagnostic_testers: Vec::new(),
+            can_uds_testers: Vec::new(),
+            esp32c3_irq_routing: false,
+            riscv_irq_lines: 0,
+            flash_models_ops: false,
+            flash_error_flags_idx: None,
         };
 
         bus.rebuild_peripheral_ranges();
@@ -3473,6 +4084,7 @@ peripherals:
                 dev: Box::new(crate::peripherals::dma::Dma1::new()),
                 ticks_remaining: 0,
                 generation: 0,
+                clock_gate: None,
             }],
             nvic: None,
             observers: Vec::new(),
@@ -3480,6 +4092,9 @@ peripherals:
             bit_band_enabled: true,
             pending_cpu_irqs: [0; 2],
             dport_idx: None,
+            rcc_idx: None,
+            clock_gating_bypass: false,
+            fault_unclocked: std::collections::HashMap::new(),
             flash_thunks: std::collections::HashMap::new(),
             peripheral_ranges: Vec::new(),
             peripheral_hint: Cell::new(None),
@@ -3487,7 +4102,15 @@ peripherals:
             current_cycle: 0,
             pending_schedule: Vec::new(),
             legacy_walk_disabled: false,
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             hcsr04: Vec::new(),
+            can_diagnostic_testers: Vec::new(),
+            can_uds_testers: Vec::new(),
+            esp32c3_irq_routing: false,
+            riscv_irq_lines: 0,
+            flash_models_ops: false,
+            flash_error_flags_idx: None,
         };
         bus.rebuild_peripheral_ranges();
 
@@ -3519,5 +4142,613 @@ peripherals:
             "DST should hold the SRC byte after mem-to-mem copy"
         );
         assert!(interrupts.contains(&16), "TCIE should pend NVIC IRQ 16");
+    }
+
+    /// RCC clock-gating (silicon fidelity): a peripheral with a declared
+    /// `clock:` gate is inert until its RCC enable bit is set — writes are
+    /// dropped and reads return 0 — and behaves normally once clocked. The
+    /// reg-name → offset mapping is family-aware (F1 apb2enr @ 0x18).
+    #[test]
+    fn gated_peripheral_is_inert_until_rcc_bit_set() {
+        let chip: ChipDescriptor = serde_yaml::from_str(
+            r#"
+name: "f1-clockgate-test"
+arch: "arm"
+core: "cortex-m3"
+flash:
+  base: 0x08000000
+  size: "64KB"
+ram:
+  base: 0x20000000
+  size: "20KB"
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40021000
+    size: "1KB"
+  - id: "uart1"
+    type: "uart"
+    base_address: 0x40013800
+    size: "1KB"
+    clock: { reg: "apb2enr", bit: 14 }
+  - id: "uart2"
+    type: "uart"
+    base_address: 0x40004400
+    size: "1KB"
+"#,
+        )
+        .unwrap();
+        let manifest: SystemManifest = serde_yaml::from_str(
+            r#"
+name: "clockgate"
+chip: "unused"
+external_devices: []
+board_io: []
+"#,
+        )
+        .unwrap();
+        let mut bus = SystemBus::from_config(&chip, &manifest).unwrap();
+
+        // USART1_CR1 @ 0x4001_380C. Clock is OFF out of reset → the write is
+        // dropped and the register reads back 0 (an unclocked peripheral).
+        const CR1: u64 = 0x4001_380C;
+        const CR1_UE_TE: u32 = (1 << 13) | (1 << 3);
+        bus.write_u32(CR1, CR1_UE_TE).unwrap();
+        assert_eq!(
+            bus.read_u32(CR1).unwrap(),
+            0,
+            "unclocked USART1 must drop writes and read 0"
+        );
+
+        // The ungated uart2 (no clock declared) is unaffected — accessible now.
+        const UART2_CR1: u64 = 0x4000_440C;
+        bus.write_u32(UART2_CR1, CR1_UE_TE).unwrap();
+        assert_eq!(
+            bus.read_u32(UART2_CR1).unwrap() & CR1_UE_TE,
+            CR1_UE_TE,
+            "ungated uart2 must work regardless of RCC"
+        );
+
+        // Enable RCC_APB2ENR.USART1EN (bit 14). RCC itself is never gated.
+        const RCC_APB2ENR: u64 = 0x4002_1018;
+        bus.write_u32(RCC_APB2ENR, 1 << 14).unwrap();
+        assert_eq!(bus.read_u32(RCC_APB2ENR).unwrap() & (1 << 14), 1 << 14);
+
+        // Now USART1 is clocked: the same write takes effect and reads back.
+        bus.write_u32(CR1, CR1_UE_TE).unwrap();
+        assert_eq!(
+            bus.read_u32(CR1).unwrap() & CR1_UE_TE,
+            CR1_UE_TE,
+            "clocked USART1 must accept writes"
+        );
+
+        // Drop the clock again → the peripheral goes inert (reads 0).
+        bus.write_u32(RCC_APB2ENR, 0).unwrap();
+        assert_eq!(
+            bus.read_u32(CR1).unwrap(),
+            0,
+            "USART1 must go inert again when its clock is removed"
+        );
+    }
+
+    #[test]
+    fn gated_peripheral_resolves_l4_rcc_offsets() {
+        // The SAME symbolic reg names that map to F1 offsets above must resolve
+        // to the L4 family's offsets via Rcc::enable_reg_offset: apb1enr1 @ 0x58
+        // (not F1's 0x1C) and ahb2enr @ 0x4C. Mirrors the iolink-dido (USART2 on
+        // apb1enr1) and nokia5110 (GPIOA on ahb2enr) gates on the L476.
+        let chip: ChipDescriptor = serde_yaml::from_str(
+            r#"
+name: "l4-clockgate-test"
+arch: "arm"
+core: "cortex-m4"
+flash:
+  base: 0x08000000
+  size: "1MB"
+ram:
+  base: 0x20000000
+  size: "96KB"
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40021000
+    size: "1KB"
+    config:
+      profile: "stm32l4"
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x48000000
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "ahb2enr", bit: 0 }
+  - id: "uart2"
+    type: "uart"
+    base_address: 0x40004400
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+    clock: { reg: "apb1enr1", bit: 17 }
+"#,
+        )
+        .unwrap();
+        let manifest: SystemManifest = serde_yaml::from_str(
+            r#"
+name: "clockgate-l4"
+chip: "unused"
+external_devices: []
+board_io: []
+"#,
+        )
+        .unwrap();
+        let mut bus = SystemBus::from_config(&chip, &manifest).unwrap();
+
+        // USART2_CR1 @ 0x4000_4400 (stm32v2 layout: CR1 at offset 0x00).
+        // Clock OFF out of reset.
+        const U2_CR1: u64 = 0x4000_4400;
+        const CR1_UE_TE: u32 = (1 << 0) | (1 << 3);
+        bus.write_u32(U2_CR1, CR1_UE_TE).unwrap();
+        assert_eq!(
+            bus.read_u32(U2_CR1).unwrap(),
+            0,
+            "unclocked USART2 must drop writes and read 0"
+        );
+
+        // RCC_APB1ENR1 @ 0x58 (L4 offset, NOT the F1 0x1C). USART2EN = bit 17.
+        const RCC_APB1ENR1: u64 = 0x4002_1058;
+        bus.write_u32(RCC_APB1ENR1, 1 << 17).unwrap();
+        bus.write_u32(U2_CR1, CR1_UE_TE).unwrap();
+        assert_eq!(
+            bus.read_u32(U2_CR1).unwrap() & CR1_UE_TE,
+            CR1_UE_TE,
+            "clocked USART2 must accept writes once apb1enr1.17 is set"
+        );
+
+        // GPIOA_MODER @ 0x4800_0000, gated on RCC_AHB2ENR @ 0x4C bit 0.
+        const GPIOA_MODER: u64 = 0x4800_0000;
+        bus.write_u32(GPIOA_MODER, 0x55).unwrap();
+        assert_eq!(
+            bus.read_u32(GPIOA_MODER).unwrap(),
+            0,
+            "unclocked GPIOA must drop writes and read 0"
+        );
+        const RCC_AHB2ENR: u64 = 0x4002_104C;
+        bus.write_u32(RCC_AHB2ENR, 1 << 0).unwrap();
+        bus.write_u32(GPIOA_MODER, 0x55).unwrap();
+        assert_eq!(
+            bus.read_u32(GPIOA_MODER).unwrap() & 0x55,
+            0x55,
+            "clocked GPIOA must accept writes once ahb2enr.0 is set"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Script-driven FSM tests
+    // -----------------------------------------------------------------------
+
+    /// Core helper: build a bus with a bxCAN in normal mode (filter accepts
+    /// 0x111) and attach a UDS tester loaded with the given steps. Returns
+    /// the bus after the first service tick so the tester has already sent its
+    /// initial SF/FF and is in `AwaitResp` (or `AwaitFc` for a multi-frame
+    /// request).
+    fn bus_with_steps(script: Vec<UdsStep>) -> SystemBus {
+        use crate::peripherals::bxcan::BxCan;
+        const MCR: u64 = 0x000;
+        const BTR: u64 = 0x01C;
+        const FMR: u64 = 0x200;
+        const FM1R: u64 = 0x204;
+        const FS1R: u64 = 0x20C;
+        const FFA1R: u64 = 0x214;
+        const FA1R: u64 = 0x21C;
+        const FBANK: u64 = 0x240;
+        const VALID_BTR: u32 = 0x00DC_0009;
+        const BASE: u64 = 0x4000_6400;
+
+        let mut bus = SystemBus::empty();
+        bus.add_peripheral("bxcan1", BASE, 0x400, None, Box::new(BxCan::new()));
+
+        bus.write_u32(BASE + MCR, 1).unwrap();
+        bus.write_u32(BASE + BTR, VALID_BTR).unwrap();
+        bus.write_u32(BASE + FMR, 1).unwrap();
+        bus.write_u32(BASE + FS1R, 0x1).unwrap();
+        bus.write_u32(BASE + FM1R, 0x0).unwrap();
+        bus.write_u32(BASE + FFA1R, 0x0).unwrap();
+        bus.write_u32(BASE + FBANK, (0x111u32) << 21).unwrap();
+        bus.write_u32(BASE + FBANK + 4, (0x111u32) << 21).unwrap();
+        bus.write_u32(BASE + FA1R, 0x1).unwrap();
+        bus.write_u32(BASE + FMR, 0x0).unwrap();
+        bus.write_u32(BASE + MCR, 0).unwrap();
+
+        let mut tester = CanUdsTester::new("uds".into(), "bxcan1".into());
+        tester.script = script;
+        bus.can_uds_testers.push(tester);
+        bus.service_can_uds_testers();
+        bus
+    }
+
+    /// Convenience wrapper: build a bus from `(send_hex, expect_hex)` tuples.
+    /// Each step is parsed the same way as the YAML config.
+    fn bus_with_script(steps: &[(&str, &str)]) -> SystemBus {
+        let script: Vec<UdsStep> = steps
+            .iter()
+            .map(|(send_str, expect_str)| UdsStep {
+                send: SystemBus::yaml_bytes(
+                    Some(&serde_yaml::Value::String(send_str.to_string())),
+                    &[],
+                ),
+                expect: SystemBus::parse_expect(expect_str),
+                expect_nrc: None,
+            })
+            .collect();
+        bus_with_steps(script)
+    }
+
+    /// Push a simulated ECU frame into the connected bxCAN's `tx_frames` so
+    /// the next `service_can_uds_testers` call drains and processes it.
+    fn inject_ecu_reply(bus: &mut SystemBus, id: u32, data: &[u8]) {
+        use crate::peripherals::bxcan::BxCan;
+        let idx = bus
+            .find_peripheral_index_by_name("bxcan1")
+            .expect("bxcan1 must be registered");
+        let bx = bus.peripherals[idx]
+            .dev
+            .as_any_mut()
+            .unwrap()
+            .downcast_mut::<BxCan>()
+            .expect("bxcan1 must be BxCan");
+        bx.tx_frames
+            .push_back(crate::network::CanFrame::classic(id, data.to_vec()));
+    }
+
+    #[test]
+    fn uds_tester_single_step_sf_request_matches_reply() {
+        let mut bus = bus_with_script(&[("11 01", "51 01")]);
+        inject_ecu_reply(&mut bus, 0x222, &[0x02, 0x51, 0x01]);
+        bus.service_can_uds_testers();
+        assert_eq!(bus.can_uds_testers[0].state, CanUdsTesterState::Done);
+    }
+
+    #[test]
+    fn uds_tester_wildcard_and_multistep() {
+        let mut bus = bus_with_script(&[("10 03", "50 03"), ("27 01", "67 01 ..")]);
+        // bus_with_script already sent step 0 request; inject step 0 reply.
+        inject_ecu_reply(&mut bus, 0x222, &[0x02, 0x50, 0x03]);
+        bus.service_can_uds_testers();
+        assert_eq!(bus.can_uds_testers[0].step_idx, 1);
+        // After step 0 completes, state returns to Start. The next service call
+        // sends step 1 request.
+        bus.service_can_uds_testers();
+        inject_ecu_reply(&mut bus, 0x222, &[0x03, 0x67, 0x01, 0xAB]);
+        bus.service_can_uds_testers();
+        assert_eq!(bus.can_uds_testers[0].state, CanUdsTesterState::Done);
+    }
+
+    #[test]
+    fn uds_tester_nrc_mismatch_fails_with_reason() {
+        let mut bus = bus_with_script(&[("11 01", "51 01")]);
+        // NRC response (0x7F 0x11 0x22) — does not match expected "51 01".
+        inject_ecu_reply(&mut bus, 0x222, &[0x03, 0x7F, 0x11, 0x22]);
+        bus.service_can_uds_testers();
+        assert_eq!(bus.can_uds_testers[0].state, CanUdsTesterState::Failed);
+        assert!(bus.can_uds_testers[0]
+            .failure
+            .as_ref()
+            .unwrap()
+            .contains("step 0"));
+    }
+
+    /// Script-path FF+1CF request: send.len() == 8 (one CF required).
+    /// Verifies that the ConsecutiveFrame is injected onto the bus after the
+    /// ECU's FlowControl arrives, and that the step reaches Done.
+    ///
+    /// This test exercises the bug fixed in this commit: before the fix,
+    /// observe_ecu_frame_script set state=AwaitResp before service_can_uds_testers
+    /// evaluated to_send, so the CF payload was silently discarded.
+    #[test]
+    fn uds_tester_script_ff_plus_one_cf_request_completes() {
+        use crate::peripherals::bxcan::BxCan;
+
+        // 8-byte payload: FF carries bytes 0..5, CF carries bytes 6..7.
+        // Expected response for 0x27 service: 0x67 0x02 (single-frame).
+        let mut bus = bus_with_script(&[("27 01 02 03 04 05 06 07", "67 02")]);
+
+        // bus_with_script already ran tick 1: FF sent, state=AwaitFc.
+        assert_eq!(bus.can_uds_testers[0].state, CanUdsTesterState::AwaitFc);
+        assert_eq!(
+            bus.can_uds_testers[0].pending_cfs.len(),
+            1,
+            "one CF must be queued after FF"
+        );
+
+        // ECU responds with FlowControl (ContinueToSend).
+        inject_ecu_reply(
+            &mut bus,
+            0x222,
+            &[0x30, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
+        );
+
+        // Tick 2: tester drains the FC and injects the CF.
+        bus.service_can_uds_testers();
+        assert_eq!(
+            bus.can_uds_testers[0].state,
+            CanUdsTesterState::AwaitResp,
+            "CF must be injected and state must advance to AwaitResp"
+        );
+        assert!(
+            bus.can_uds_testers[0].pending_cfs.is_empty(),
+            "pending_cfs must be drained after the only CF is sent"
+        );
+
+        // Confirm the CF actually landed in the bxCAN RX buffer (direction=rx
+        // means the tester delivered it into the ECU-side FIFO).
+        {
+            let idx = bus.find_peripheral_index_by_name("bxcan1").unwrap();
+            let bx = bus.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .unwrap()
+                .downcast_mut::<BxCan>()
+                .unwrap();
+            let trace = bx.trace_snapshot("bxcan1");
+            // trace contains all rx frames: FF (tick 1) + CF (tick 2).
+            assert!(
+                trace
+                    .iter()
+                    .any(|f| f.direction == "rx" && f.id == 0x111 && f.data.first() == Some(&0x21)),
+                "CF (SN=0x21) must appear as an rx frame in the bxCAN trace"
+            );
+        }
+
+        // ECU sends the positive response (single-frame: len=3, 0x67 0x02 0xAB).
+        inject_ecu_reply(&mut bus, 0x222, &[0x03, 0x67, 0x02, 0xAB]);
+
+        // Tick 3: tester matches the response → Done.
+        bus.service_can_uds_testers();
+        assert_eq!(bus.can_uds_testers[0].state, CanUdsTesterState::Done);
+    }
+
+    /// Script-path FF+2CF request: send.len() == 14 (two CFs required).
+    /// Verifies that both ConsecutiveFrames are injected on successive ticks
+    /// and the step reaches Done.
+    #[test]
+    fn uds_tester_script_ff_plus_two_cf_request_completes() {
+        use crate::peripherals::bxcan::BxCan;
+
+        // 14-byte payload: FF carries bytes 0..5, CF1 carries 6..12, CF2 carries 13.
+        // Expected response: 0x76 0x01.
+        let mut bus = bus_with_script(&[("36 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D", "76 01")]);
+
+        // Tick 1 already ran: FF sent, two CFs queued.
+        assert_eq!(bus.can_uds_testers[0].state, CanUdsTesterState::AwaitFc);
+        assert_eq!(
+            bus.can_uds_testers[0].pending_cfs.len(),
+            2,
+            "two CFs must be queued after FF"
+        );
+
+        // ECU replies with FlowControl.
+        inject_ecu_reply(
+            &mut bus,
+            0x222,
+            &[0x30, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
+        );
+
+        // Tick 2: CF1 injected; one CF still pending, state stays AwaitFc.
+        bus.service_can_uds_testers();
+        assert_eq!(
+            bus.can_uds_testers[0].state,
+            CanUdsTesterState::AwaitFc,
+            "state must stay AwaitFc while CFs remain"
+        );
+        assert_eq!(
+            bus.can_uds_testers[0].pending_cfs.len(),
+            1,
+            "one CF must remain after CF1 is sent"
+        );
+
+        // Tick 3: no new ECU frame; CF2 taken from pending_cfs → AwaitResp.
+        bus.service_can_uds_testers();
+        assert_eq!(
+            bus.can_uds_testers[0].state,
+            CanUdsTesterState::AwaitResp,
+            "state must advance to AwaitResp after last CF is sent"
+        );
+        assert!(bus.can_uds_testers[0].pending_cfs.is_empty());
+
+        // Verify both CFs appear in the trace (SN 0x21 and 0x22).
+        {
+            let idx = bus.find_peripheral_index_by_name("bxcan1").unwrap();
+            let bx = bus.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .unwrap()
+                .downcast_mut::<BxCan>()
+                .unwrap();
+            let trace = bx.trace_snapshot("bxcan1");
+            assert!(
+                trace
+                    .iter()
+                    .any(|f| f.direction == "rx" && f.id == 0x111 && f.data.first() == Some(&0x21)),
+                "CF1 (SN=0x21) must appear as an rx frame"
+            );
+            assert!(
+                trace
+                    .iter()
+                    .any(|f| f.direction == "rx" && f.id == 0x111 && f.data.first() == Some(&0x22)),
+                "CF2 (SN=0x22) must appear as an rx frame"
+            );
+        }
+
+        // ECU single-frame positive response.
+        inject_ecu_reply(&mut bus, 0x222, &[0x02, 0x76, 0x01]);
+
+        // Tick 4: match → Done.
+        bus.service_can_uds_testers();
+        assert_eq!(bus.can_uds_testers[0].state, CanUdsTesterState::Done);
+    }
+
+    /// 0x2E WriteDataByIdentifier: single-frame multi-byte request (7 bytes) →
+    /// positive 6E echo. Covers DID-write framing the existing tests lack.
+    #[test]
+    fn uds_tester_did_write_sf_completes() {
+        let mut bus = bus_with_script(&[("2E 01 23 DE AD BE EF", "6E 01 23")]);
+        // SF header 0x03 = three payload bytes (6E 01 23); the prior 0x04 was a
+        // malformed fixture (declared 4, carried 3) the lenient decoder masked.
+        inject_ecu_reply(&mut bus, 0x222, &[0x03, 0x6E, 0x01, 0x23]);
+        bus.service_can_uds_testers();
+        assert_eq!(bus.can_uds_testers[0].state, CanUdsTesterState::Done);
+    }
+
+    /// 0x31 RoutineControl: reply carries an output byte after the echo; the
+    /// prefix match must accept the longer response.
+    #[test]
+    fn uds_tester_routine_reply_with_output_byte() {
+        let mut bus = bus_with_script(&[("31 01 02 03", "71 01 02 03")]);
+        inject_ecu_reply(&mut bus, 0x222, &[0x05, 0x71, 0x01, 0x02, 0x03, 0x00]);
+        bus.service_can_uds_testers();
+        assert_eq!(bus.can_uds_testers[0].state, CanUdsTesterState::Done);
+    }
+
+    /// 0x2F IOControl: shortTermAdjustment request, reply echoes DID + state.
+    #[test]
+    fn uds_tester_io_control_reply_completes() {
+        let mut bus = bus_with_script(&[("2F A0 01 03 01", "6F A0 01")]);
+        inject_ecu_reply(&mut bus, 0x222, &[0x05, 0x6F, 0xA0, 0x01, 0x03, 0x01]);
+        bus.service_can_uds_testers();
+        assert_eq!(bus.can_uds_testers[0].state, CanUdsTesterState::Done);
+    }
+
+    /// 0x19 ReadDTCInformation: a multi-frame ECU reply (FF + 1 CF) must be
+    /// reassembled (AwaitResp → AwaitMultiResp → Done) and prefix-matched.
+    #[test]
+    fn uds_tester_dtc_read_multiframe_reply_completes() {
+        let mut bus = bus_with_script(&[("19 02 09", "59 02")]);
+        // FF declares 10-byte response, carries first 6 bytes (59 02 09 01 23 45).
+        inject_ecu_reply(
+            &mut bus,
+            0x222,
+            &[0x10, 0x0A, 0x59, 0x02, 0x09, 0x01, 0x23, 0x45],
+        );
+        bus.service_can_uds_testers(); // tester replies FlowControl, enters AwaitMultiResp
+        assert_eq!(
+            bus.can_uds_testers[0].state,
+            CanUdsTesterState::AwaitMultiResp
+        );
+        // CF carries the remaining bytes; total >= 10 → complete.
+        inject_ecu_reply(&mut bus, 0x222, &[0x21, 0x67, 0xAA, 0xBB, 0xCC, 0xDD]);
+        bus.service_can_uds_testers();
+        assert_eq!(bus.can_uds_testers[0].state, CanUdsTesterState::Done);
+    }
+
+    /// Multi-frame ECU response: the tester must inject a FlowControl frame onto
+    /// the bxCAN bus so the ECU can send its ConsecutiveFrames.
+    ///
+    /// Guards the bug where the `AwaitMultiResp` arm was missing from the
+    /// `to_send` match in `service_can_uds_testers`, causing the FlowControl
+    /// returned by `observe_ecu_frame_script` to be silently dropped (the
+    /// `_ => None` arm swallowed it).  Without the fix the ECU never receives
+    /// CTS and the exchange deadlocks.
+    ///
+    /// The discriminating assertion is NOT the final `Done` state (the
+    /// `inject_ecu_reply` shortcut bypasses that gate) but the presence of a
+    /// FlowControl frame (`first_byte & 0xF0 == 0x30`) in the bxCAN RX trace
+    /// after the tick that processes the ECU FirstFrame.
+    #[test]
+    fn uds_tester_multiframe_ecu_response_injects_flowcontrol() {
+        use crate::peripherals::bxcan::BxCan;
+
+        // Step 0: ReadDataByIdentifier 0xF190 (VIN), expect prefix 62 F1 90.
+        let mut bus = bus_with_script(&[("22 F1 90", "62 F1 90")]);
+
+        // Tick 1 already ran: the SF request (first byte 0x03) was delivered to
+        // the bxCAN via deliver_rx.  Record the trace length now so we can
+        // distinguish that pre-existing frame from the FlowControl we expect next.
+        let trace_len_before = {
+            let idx = bus.find_peripheral_index_by_name("bxcan1").unwrap();
+            let bx = bus.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .unwrap()
+                .downcast_mut::<BxCan>()
+                .unwrap();
+            bx.trace_snapshot("bxcan1").len()
+        };
+
+        // ECU replies with a FirstFrame declaring a 13-byte (0x0D) response
+        // and carrying the first 6 payload bytes (62 F1 90 + 3 VIN chars).
+        // 13 bytes = 6 in FF + 7 in one CF.
+        inject_ecu_reply(
+            &mut bus,
+            0x222,
+            &[0x10, 0x0D, 0x62, 0xF1, 0x90, 0x31, 0x32, 0x33],
+        );
+
+        // Tick 2: tester sees the FF, sets state=AwaitMultiResp, and MUST
+        // inject a FlowControl ([0x30, 0x00, 0x00]) onto the bxCAN bus.
+        bus.service_can_uds_testers();
+
+        assert_eq!(
+            bus.can_uds_testers[0].state,
+            CanUdsTesterState::AwaitMultiResp,
+            "state must be AwaitMultiResp after receiving ECU FirstFrame"
+        );
+
+        // Verify the FlowControl was actually delivered to the bus.
+        // Only frames appended AFTER tick 1 (index >= trace_len_before) are
+        // candidates; the earlier SF request frame starts with 0x03, not 0x3x.
+        {
+            let idx = bus.find_peripheral_index_by_name("bxcan1").unwrap();
+            let bx = bus.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .unwrap()
+                .downcast_mut::<BxCan>()
+                .unwrap();
+            let trace = bx.trace_snapshot("bxcan1");
+            let new_frames = &trace[trace_len_before..];
+            assert!(
+                new_frames.iter().any(|f| {
+                    f.direction == "rx"
+                        && f.id == 0x111
+                        && f.data.first().map(|b| b & 0xF0 == 0x30).unwrap_or(false)
+                }),
+                "FlowControl (0x30 nibble) must appear in bxCAN rx trace after ECU FirstFrame; \
+                 new frames after tick 1: {:?}",
+                new_frames
+                    .iter()
+                    .map(|f| (f.direction.as_str(), f.id, f.data.clone()))
+                    .collect::<Vec<_>>()
+            );
+        }
+
+        // Complete the exchange: one CF carries the remaining 7 bytes to reach
+        // the declared 13.  After this the tester must reach Done.
+        inject_ecu_reply(
+            &mut bus,
+            0x222,
+            &[0x21, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30],
+        );
+        bus.service_can_uds_testers();
+        assert_eq!(bus.can_uds_testers[0].state, CanUdsTesterState::Done);
+    }
+
+    /// Session-gated write rejected in the default session: the tester must
+    /// accept a negative response when the step declares `expect_nrc`.
+    #[test]
+    fn uds_tester_expect_nrc_negative_response_completes() {
+        let steps = vec![UdsStep {
+            send: SystemBus::yaml_bytes(
+                Some(&serde_yaml::Value::String(
+                    "2E 01 23 DE AD BE EF".to_string(),
+                )),
+                &[],
+            ),
+            expect: Vec::new(),
+            expect_nrc: Some(0x31),
+        }];
+        let mut bus = bus_with_steps(steps);
+        inject_ecu_reply(&mut bus, 0x222, &[0x03, 0x7F, 0x2E, 0x31]);
+        bus.service_can_uds_testers();
+        assert_eq!(bus.can_uds_testers[0].state, CanUdsTesterState::Done);
     }
 }

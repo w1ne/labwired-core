@@ -9,10 +9,15 @@ on:
       - "crates/core/build.rs"
       - "crates/core/native/**"
       - "crates/core/src/peripherals/components/iolink_master.rs"
+      - "crates/core/src/peripherals/components/iolink_native.rs"
+      - "crates/core/src/peripherals/components/iolink_station.rs"
       - "crates/core/src/world.rs"
-      - "crates/core/tests/iolink_multi_node_world.rs"
-      - "examples/al2205-iolink-dido/**"
+      - "crates/core/tests/iolink_native_master.rs"
+      - "crates/core/tests/world_multichip.rs"
+      - "examples/iolink-dido/**"
+      - "examples/iolink-station/**"
       - "third_party/iolinki"
+      - "third_party/iolinki-master/**"
   pull_request:
     branches:
       - main
@@ -23,10 +28,15 @@ on:
       - "crates/core/build.rs"
       - "crates/core/native/**"
       - "crates/core/src/peripherals/components/iolink_master.rs"
+      - "crates/core/src/peripherals/components/iolink_native.rs"
+      - "crates/core/src/peripherals/components/iolink_station.rs"
       - "crates/core/src/world.rs"
-      - "crates/core/tests/iolink_multi_node_world.rs"
-      - "examples/al2205-iolink-dido/**"
+      - "crates/core/tests/iolink_native_master.rs"
+      - "crates/core/tests/world_multichip.rs"
+      - "examples/iolink-dido/**"
+      - "examples/iolink-station/**"
       - "third_party/iolinki"
+      - "third_party/iolinki-master/**"
   workflow_dispatch:
 
 concurrency:
@@ -43,24 +53,8 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Configure private submodule auth
-        run: git config --global url."https://x-access-token:${{ github.token }}@github.com/".insteadOf "git@github.com:"
-
       - name: Checkout iolinki device submodule
         run: git submodule update --init --depth 1 third_party/iolinki
-
-      - name: Checkout C iolinki-master
-        uses: actions/checkout@v4
-        with:
-          repository: w1ne/iolinki-master
-          ref: b140b3dbb10a366de16f5d610a05f018e432db12
-          path: iolinki-master
-          fetch-depth: 0
-
-      - name: Pin C iolinki-master commit
-        run: |
-          git -C iolinki-master checkout --detach b140b3dbb10a366de16f5d610a05f018e432db12
-          test "$(git -C iolinki-master rev-parse HEAD)" = "b140b3dbb10a366de16f5d610a05f018e432db12"
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.95.0
@@ -73,35 +67,17 @@ jobs:
           arm-none-eabi-gcc --version
 
       - name: Native C master UART-boundary tests
-        env:
-          IOLINKI_MASTER_DIR: ${{ github.workspace }}/iolinki-master
-          IOLINKI_DEVICE_DIR: ${{ github.workspace }}/third_party/iolinki
-        run: cargo test -p labwired-core --features iolink-native native_ --lib -- --nocapture
+        run: cargo test -p labwired-core --features iolink-native --test iolink_native_master -- --nocapture
 
       - name: Native C master compile check
-        env:
-          IOLINKI_MASTER_DIR: ${{ github.workspace }}/iolinki-master
-          IOLINKI_DEVICE_DIR: ${{ github.workspace }}/third_party/iolinki
         run: cargo check -p labwired-core --features iolink-native
 
-      - name: Build AL2205 IO-Link device firmware
-        run: make -C examples/al2205-iolink-dido/firmware
-
-      - name: Multi-chip LabWired IO-Link world orchestration
-        env:
-          IOLINKI_MASTER_DIR: ${{ github.workspace }}/iolinki-master
-          IOLINKI_DEVICE_DIR: ${{ github.workspace }}/third_party/iolinki
-        run: cargo test -p labwired-core --features iolink-native --test iolink_multi_node_world -- --nocapture
-
-      - name: Real LabWired IO-Link simulation
-        env:
-          IOLINKI_MASTER_DIR: ${{ github.workspace }}/iolinki-master
-          IOLINKI_DEVICE_DIR: ${{ github.workspace }}/third_party/iolinki
-        run: cargo run --release -q -p labwired-cli --features labwired-core/iolink-native -- test --script examples/al2205-iolink-dido/test.yaml --output-dir out/iolink/al2205 --no-uart-stdout
+      - name: Multi-chip world tests skip cleanly without prebuilt station ELFs
+        run: cargo test -p labwired-core --test world_multichip -- --nocapture
 
       - name: Upload LabWired IO-Link simulation artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: labwired-iolink-al2205
-          path: out/iolink/al2205
+          name: labwired-iolink-native
+          path: out/iolink

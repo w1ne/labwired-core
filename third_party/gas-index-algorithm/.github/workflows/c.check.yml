@@ -1,0 +1,47 @@
+on:
+  push:
+  pull_request:
+    branches:
+     - master
+
+jobs:
+  code-analysis:
+    runs-on: "ubuntu-22.04"
+    steps:
+      - uses: actions/checkout@v6
+      - uses: awalsh128/cache-apt-pkgs-action@v1.6.0
+        with:
+          packages: clang-format
+          version: 1.0
+      - name: clang-format
+        run: find . -type f -iregex ".*\.\(c\|h\|cpp\|ino\)" -exec clang-format -i -style=file {} \; && git diff --exit-code
+
+  raspberry-pi-example-sources:
+    runs-on: "ubuntu-22.04"
+    steps:
+      - uses: actions/checkout@v6
+      - name: run-download
+        run: |
+          cd ./examples/raspberry-pi
+          ls
+          make download
+      - uses: actions/upload-artifact@v6
+        with:
+          name: raspi-source-dist
+          path: ./examples/raspberry-pi/*
+          if-no-files-found: error        
+  build-raspberry-pi-examples:
+    runs-on: "ubuntu-22.04"
+    needs: raspberry-pi-example-sources
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v6
+        with:
+          name: raspi-source-dist
+          path: ./examples/raspberry-pi/build-test
+      - name: test-build
+        run: |
+          cd ./examples/raspberry-pi/build-test
+          ls
+          make algorithm_example_usage
+          make low_power_example

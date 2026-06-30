@@ -2,7 +2,15 @@
 
 This roadmap outlines the planned evolution of LabWired Core as we move towards a production-ready ecosystem for professional firmware simulation.
 
-## 🟢 v0.15.0: Dual-Core ESP32 + Arduino-ESP32 Bring-Up (Current)
+## 🟢 v0.16.0: SoC Factory, Faithful ESP32 Boot & Module Refactor (Current)
+- **SoC Factory architecture**: per-family peripheral factories + const peripheral table with a thin `from_config` match (generic, nRF52, ESP32 LX6/LX7); adding a chip is a table entry plus a factory hook.
+- **Faithful ESP32 boot**: ESP32-S3 ROM auto-provisioning from the toolchain (loaded by default) and ESP32 (LX6) real-boot de-thunk; `Esp32s3BootMode` telemetry distinguishes Faithful vs Harness.
+- **Silicon-validation & drift gate**: CI compares the model against silicon-derived expectations and fails on drift; auto-generated board status and a data-driven coverage matrix.
+- **Core-accurate bus**: bit-band translation gated to Cortex-M3/M4 via an explicit `core` chip field (un-blocks STM32H563 / WBA52 GPIO); ESP32-S3 GDMA peripheral-coupled mode and corrected I2C0 interrupt source.
+- **STM32H5 FDCAN** and a real-CAN UDS analyzer feeding the playground logic analyzer.
+- **Module-split refactor**: bus, CLI, Xtensa, and WASM layers split into focused modules; fast PR CI gate with full suite post-merge.
+
+## 🟢 v0.15.0: Dual-Core ESP32 + Arduino-ESP32 Bring-Up
 - **Dual-Core ESP32 Simulation**: PRO_CPU / APP_CPU round-robin step loop, PRID register, cross-core IPI bridge for FreeRTOS yield.
 - **Arduino-ESP32 / FreeRTOS Runtime**: ROM thunks for `xQueueCreateMutex*`, `xTaskGetCurrentTaskHandle`, `esp_clk_cpu_freq`, IPC-task no-ops, and SPIClass lazy `spi_t` init with USR_MOSI auto-enable — enough to boot a GxEPD2 sketch end-to-end through `setup()` → `drawPage()` → SSD1680 panel paint.
 - **Runtime Snapshot Subsystem**: `Machine::{take,apply}_runtime_snapshot`, CLI `snapshot capture` subcommand, WASM `apply_runtime_snapshot` — cold-boot collapses from 30 s to ~0.5 s in the playground.

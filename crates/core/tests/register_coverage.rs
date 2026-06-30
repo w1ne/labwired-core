@@ -205,20 +205,44 @@ fn measure_chip(yaml: &str, svd: &str) -> Option<(usize, usize, usize, usize)> {
         Arch::Arm => {
             let (cpu, _nvic) = system::cortex_m::configure_cortex_m(&mut bus);
             let mut m = Machine::new(cpu, bus);
+            // Measure *modeling*, not the current runtime clock state. Out of
+            // reset, RCC-clock-gated peripherals (STM32F1/L4) read back 0 and
+            // ignore writes — silicon-accurate, but it makes a gated yet fully
+            // modeled register look unresponsive to this probe. Bypass gating so
+            // the count reflects whether the register is modeled, independent of
+            // whether firmware happens to have clocked it. (Pre-setting the RCC
+            // enable bits wouldn't work: the probe writes 0 to every register,
+            // including the RCC enable registers, re-gating later peripherals.)
+            m.bus.set_clock_gating_bypass(true);
             probe_all(&mut m.bus, &regs)
         }
         Arch::RiscV => {
             let cpu = system::riscv::configure_riscv(&mut bus);
             let mut m = Machine::new(cpu, bus);
+            m.bus.set_clock_gating_bypass(true);
             probe_all(&mut m.bus, &regs)
         }
         Arch::Xtensa => {
-            let cpu = if chip.name == "esp32" {
-                system::xtensa::configure_xtensa_esp32(&mut bus)
-            } else {
-                system::xtensa::configure_xtensa(&mut bus)
+            // Build the real per-chip peripheral set, the same way the runtime
+            // does, so coverage reflects the actual model — not the vestigial
+            // chip-yaml peripheral list that from_config seeded above (these
+            // system builders clear and repopulate the bus). esp32s3 previously
+            // fell through to the generic `configure_xtensa`, which registers no
+            // peripherals, so its coverage was measured against the yaml stub
+            // only. Mirrors cli::coverage::build_matrix.
+            let cpu = match chip.name.as_str() {
+                "esp32" => system::xtensa::configure_xtensa_esp32(&mut bus),
+                "esp32s3" => {
+                    system::xtensa::configure_xtensa_esp32s3(
+                        &mut bus,
+                        &system::xtensa::Esp32s3Opts::default(),
+                    )
+                    .cpu
+                }
+                _ => system::xtensa::configure_xtensa(&mut bus),
             };
             let mut m = Machine::new(cpu, bus);
+            m.bus.set_clock_gating_bypass(true);
             probe_all(&mut m.bus, &regs)
         }
         Arch::Unknown => (0, 0, 0),

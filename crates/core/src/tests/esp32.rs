@@ -76,17 +76,23 @@ fn esp32_uart0_emits_to_sink() {
     let sink = Arc::new(Mutex::new(Vec::new()));
     bus.attach_uart_tx_sink(sink.clone(), false);
 
-    // UART0 base 0x3FF4_0000.  The simulator's UART model uses the
-    // STM32F1 layout (SR @ 0x00, DR @ 0x04) for now; the firmware-side
-    // ergonomic path for ESP32 (FIFO at offset 0x00) is a follow-up
-    // that needs a dedicated UartRegisterLayout::Esp32 variant.  For
-    // the modeling smoke we write directly to DR and assert the sink
-    // sees the byte.
-    bus.write_u8(0x3FF4_0004, b'E').unwrap();
-    bus.write_u8(0x3FF4_0004, b'S').unwrap();
-    bus.write_u8(0x3FF4_0004, b'P').unwrap();
-    bus.write_u8(0x3FF4_0004, b'3').unwrap();
-    bus.write_u8(0x3FF4_0004, b'2').unwrap();
+    // UART0 base 0x3FF4_0000, real ESP32 layout: TX is the FIFO at offset 0x00.
+    // Bytes shift out at the baud rate. Drain by ticking the uart0 peripheral
+    // directly — independent of the bus's scheduler cadence (uart0 is
+    // event-scheduler-managed, so a tight tick_peripherals loop wouldn't
+    // reliably advance it across build configs).
+    for &b in b"ESP32" {
+        bus.write_u8(0x3FF4_0000, b).unwrap();
+    }
+    let uart0_idx = bus
+        .find_peripheral_index_by_name("uart0")
+        .expect("uart0 mapped");
+    for _ in 0..2_000_000 {
+        let _ = bus.peripherals[uart0_idx].dev.tick();
+        if sink.lock().unwrap().len() >= 5 {
+            break;
+        }
+    }
 
     let bytes = sink.lock().unwrap();
     assert_eq!(
@@ -95,6 +101,36 @@ fn esp32_uart0_emits_to_sink() {
         "UART0 sink should have received 'ESP32', got {:?}",
         std::str::from_utf8(&bytes).unwrap_or("<non-utf8>")
     );
+}
+
+#[test]
+fn esp32_sar_adc_oneshot_is_channel_dependent() {
+    // The SENS SAR-ADC model must win the overlapping rtcio-stub window at
+    // 0x3FF4_8800 and produce a genuine channel-dependent one-shot result.
+    let mut bus = SystemBus::empty();
+    let _cpu = configure_xtensa_esp32(&mut bus);
+
+    const READ_CTRL: u64 = 0x3FF4_8800; // SAR_READ_CTRL
+    const MEAS_START1: u64 = 0x3FF4_8800 + 0x54;
+    const START: u32 = (1 << 18) | (1 << 17); // START_FORCE | START_SAR
+    const DONE: u32 = 1 << 16;
+
+    let convert = |bus: &mut SystemBus, channel: u32, sample_bit: u32| -> u32 {
+        bus.write_u32(READ_CTRL, sample_bit << 16).unwrap();
+        bus.write_u32(MEAS_START1, ((1u32 << channel) << 19) | START)
+            .unwrap();
+        let v = bus.read_u32(MEAS_START1).unwrap();
+        assert_ne!(v & DONE, 0, "DONE must latch after START");
+        v & 0xFFFF
+    };
+
+    let d3 = convert(&mut bus, 3, 3);
+    let d5 = convert(&mut bus, 5, 3);
+    assert_ne!(d3, 0);
+    assert_ne!(d3, d5, "distinct channels must give distinct results");
+    // 9-bit conversion of channel 5 is the 12-bit value >> 3.
+    let d5_9 = convert(&mut bus, 5, 0);
+    assert_eq!(d5_9, d5 >> 3, "result must scale with configured width");
 }
 
 #[test]

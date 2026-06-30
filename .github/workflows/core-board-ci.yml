@@ -1,0 +1,109 @@
+name: Core Board CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.gen.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pyyaml
+      - id: gen
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          matrix="$(python scripts/ci/board_matrix.py --event "$EVENT_NAME")"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  board:
+    needs: setup
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
+    name: ${{ matrix.id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: ${{ matrix.submodules }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-board-${{ matrix.id }}
+          workspaces: |
+            . -> target
+
+      - name: Install apt packages
+        if: matrix.apt != ''
+        env:
+          APT: ${{ matrix.apt }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y $APT
+
+      - name: Add rust targets
+        if: matrix.rust_targets != ''
+        env:
+          RUST_TARGETS: ${{ matrix.rust_targets }}
+        run: |
+          for t in $RUST_TARGETS; do rustup target add "$t"; done
+
+      - name: Fetch device packs
+        if: matrix.packs != ''
+        uses: ./.github/actions/fetch-pack
+        with:
+          pack: ${{ matrix.packs }}
+
+      - name: Build firmware
+        env:
+          BOARD_PATH: ${{ matrix.path }}
+        run: "$BOARD_PATH/ci/build.sh"
+
+      - name: Run tests
+        env:
+          BOARD_PATH: ${{ matrix.path }}
+        run: "$BOARD_PATH/ci/test.sh"
+
+      - name: Upload board artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: board-${{ matrix.id }}
+          path: out/boards/${{ matrix.id }}/
+          if-no-files-found: ignore
+
+  # The tier1 scoreboard is generated from docs/coverage/tier1-matrix.json (the
+  # ratchet-gated source of truth). Keep the committed markdown in sync without
+  # auto-committing to protected main: regenerate here and fail if it drifted, so
+  # whoever changed the matrix must commit the regenerated scoreboard.
+  coverage-staleness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Regenerate tier1 scoreboard and fail if stale
+        run: |
+          python scripts/generate_tier1_scoreboard.py
+          if ! git diff --quiet -- docs/coverage/tier1-scoreboard.md; then
+            echo "::error::docs/coverage/tier1-scoreboard.md is stale — run 'python3 scripts/generate_tier1_scoreboard.py' and commit the result." >&2
+            git --no-pager diff -- docs/coverage/tier1-scoreboard.md
+            exit 1
+          fi

@@ -29,6 +29,13 @@ fn test_chip_config_validation() {
     let val = bus.read_u32(0x4001100C).expect("Failed to read from GPIOC");
     assert_eq!(val, 0x1234);
 
+    // I2C1 is clock-gated on STM32F103: RCC_APB1ENR.I2C1EN = bit 21.
+    // RCC base is 0x40021000, APB1ENR is at offset 0x1C.
+    // Enable the clock before accessing I2C1 registers, mirroring what
+    // firmware does at boot.
+    bus.write_u32(0x4002101C, 1 << 21)
+        .expect("Failed to enable I2C1 clock in RCC_APB1ENR");
+
     // Try writing to I2C1_OAR1 (offset 0x08) which is a simple data register.
     // Bits 13:10 are reserved on F1 silicon and read back as 0, so the
     // silicon-faithful model echoes 0x55AA as 0x41AA.

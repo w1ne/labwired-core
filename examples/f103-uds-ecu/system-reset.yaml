@@ -1,0 +1,16 @@
+name: "f103-uds-ecu"
+chip: "../../configs/chips/stm32f103.yaml"
+external_devices:
+  # A real second CAN node: a virtual UDS tester scripted to send a 0x11 01
+  # ECUReset request and assert the 51 01 positive response lands on the bus
+  # BEFORE the ECU reboots (udslib issue #88).
+  - type: "uds-tester"
+    id: "uds-tester"
+    connection: "bxcan1"
+    config:
+      request_id: 0x111
+      reply_id: 0x222
+      script:
+        - send: "11 01"
+          expect: "51 01"
+board_io: []

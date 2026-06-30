@@ -2,7 +2,8 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! ESP32-S3 I2S controller (I2S0 + I2S1) — configuration + control digital twin.
+//! ESP32-S3 I2S controller (I2S0 + I2S1) — configuration/control twin with
+//! GDMA-coupled sample streaming.
 //!
 //! The S3 has two identical I2S peripherals supporting standard (Philips),
 //! TDM and PDM modes, each with independent TX and RX paths:
@@ -33,9 +34,15 @@
 //!   hanging.
 //!
 //! Actual audio-sample streaming on the S3 flows entirely through GDMA
-//! (the I2S core has no CPU-visible sample FIFO register on this chip) and is
-//! therefore **out of scope** for this peripheral — we model the MMIO control
-//! surface, not the DMA-fed bit clock.
+//! (the I2S core has no CPU-visible sample FIFO register on this chip). The
+//! GDMA coupled pump (gdma.rs) streams OUT-chain bytes into this model's TX
+//! sample sink ([`Esp32s3I2s::set_tx_sink`] — same surface as the UART's TX
+//! sink) and feeds the IN chain from the test-injectable RX sample source
+//! ([`Esp32s3I2s::push_rx_samples`]), gated by the TX/RX START bits below.
+//! `RXEOF_NUM` (a **byte** count on the S3 — ESP-IDF `i2s_ll_rx_set_eof_num`
+//! writes the byte length directly, unlike the classic ESP32 whose register
+//! counts words) tells GDMA when to latch `IN_SUC_EOF`. The bit clock itself
+//! is not modeled.
 //!
 //! ## Register map (ESP32-S3 TRM §38; `soc/i2s_reg.h`)
 //!
@@ -65,6 +72,8 @@
 //! Any other offset accepts writes silently and reads 0.
 
 use crate::{Peripheral, PeripheralTickResult, SimResult};
+use std::collections::VecDeque;
+use std::sync::{Arc, Mutex};
 
 /// I2S0 MMIO base address.
 pub const I2S0_BASE: u32 = 0x6000_F000;
@@ -151,6 +160,16 @@ pub struct Esp32s3I2s {
     tx_running: bool,
     /// Set while RX_START is asserted (readable via RX_CONF bit 2).
     rx_running: bool,
+
+    /// TX sample-capture sink (GDMA-coupled OUT path). Mirrors the UART's
+    /// `sink` surface: when set, every byte the GDMA OUT pump streams in is
+    /// appended; when `None`, transmitted samples are discarded (no line
+    /// model to drive).
+    tx_sink: Option<Arc<Mutex<Vec<u8>>>>,
+    /// Test-injectable RX sample source: bytes queued via
+    /// [`Esp32s3I2s::push_rx_samples`] are consumed by the GDMA IN pump
+    /// while `RX_START` is set.
+    rx_source: VecDeque<u8>,
 }
 
 impl Esp32s3I2s {
@@ -182,7 +201,57 @@ impl Esp32s3I2s {
             int_ena: 0,
             tx_running: false,
             rx_running: false,
+            tx_sink: None,
+            rx_source: VecDeque::new(),
         }
+    }
+
+    /// Set or clear the TX sample-capture sink (mirrors
+    /// `Esp32s3Uart::set_sink`). Bytes the GDMA OUT pump streams into this
+    /// controller are appended to the sink in order.
+    pub fn set_tx_sink(&mut self, sink: Option<Arc<Mutex<Vec<u8>>>>) {
+        self.tx_sink = sink;
+    }
+
+    /// Queue sample bytes on the RX path. The GDMA IN pump consumes them
+    /// (in order) while `RX_START` is set — the test-injectable equivalent
+    /// of data arriving on the serial-audio input.
+    pub fn push_rx_samples(&mut self, bytes: &[u8]) {
+        self.rx_source.extend(bytes.iter().copied());
+    }
+
+    /// True while `TX_START` is asserted — gates the GDMA OUT pump.
+    pub(crate) fn tx_running(&self) -> bool {
+        self.tx_running
+    }
+
+    /// True while `RX_START` is asserted — gates the GDMA IN pump.
+    pub(crate) fn rx_running(&self) -> bool {
+        self.rx_running
+    }
+
+    /// Current `RXEOF_NUM` value: the received **byte** count at which GDMA
+    /// latches `IN_SUC_EOF` (see the module doc for the bytes-vs-words
+    /// ground truth).
+    pub(crate) fn rxeof_num(&self) -> u32 {
+        self.rxeof_num
+    }
+
+    /// Accept one burst of transmitted sample bytes from the GDMA OUT pump.
+    pub(crate) fn dma_push_tx(&mut self, bytes: &[u8]) {
+        if let Some(sink) = &self.tx_sink {
+            // Poison-tolerant (matches the UART sink): a panicked observer
+            // thread must not cascade a panic into the GDMA swap window.
+            if let Ok(mut s) = sink.lock() {
+                s.extend_from_slice(bytes);
+            }
+        }
+    }
+
+    /// Hand up to `max` queued RX sample bytes to the GDMA IN pump.
+    pub(crate) fn dma_pop_rx(&mut self, max: usize) -> Vec<u8> {
+        let n = max.min(self.rx_source.len());
+        self.rx_source.drain(..n).collect()
     }
 }
 
@@ -530,5 +599,27 @@ mod tests {
         let mut p = Esp32s3I2s::new(I2S0_INTR_SOURCE_ID);
         p.write_u32(0xFFC, 0xDEAD_BEEF).unwrap();
         assert_eq!(p.read_u32(0xFFC).unwrap(), 0);
+    }
+
+    #[test]
+    fn tx_sink_captures_dma_pushed_bytes_in_order() {
+        let mut p = Esp32s3I2s::new(I2S0_INTR_SOURCE_ID);
+        // Without a sink, pushes are discarded (no panic, no storage).
+        p.dma_push_tx(&[0x01, 0x02]);
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        p.set_tx_sink(Some(sink.clone()));
+        p.dma_push_tx(&[0xAA, 0xBB]);
+        p.dma_push_tx(&[0xCC]);
+        assert_eq!(*sink.lock().unwrap(), vec![0xAA, 0xBB, 0xCC]);
+    }
+
+    #[test]
+    fn rx_source_pops_in_order_bounded_by_max() {
+        let mut p = Esp32s3I2s::new(I2S0_INTR_SOURCE_ID);
+        assert!(p.dma_pop_rx(8).is_empty(), "empty source yields nothing");
+        p.push_rx_samples(&[1, 2, 3, 4, 5]);
+        assert_eq!(p.dma_pop_rx(3), vec![1, 2, 3]);
+        assert_eq!(p.dma_pop_rx(8), vec![4, 5], "bounded by what remains");
+        assert!(p.dma_pop_rx(1).is_empty());
     }
 }

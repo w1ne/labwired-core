@@ -30,8 +30,8 @@ Understand how LabWired achieves deterministic simulation:
 
 For contributors extending the core engine or adding new peripherals:
 
-- **[Peripheral Development](peripheral_development.md)**: How to implement custom peripheral models in Rust.
-- **[Declarative Registers](declarative_registers.md)**: Defining register maps using simple YAML files.
+- **[Peripheral Modeling](peripherals.md)**: How to model and validate a peripheral — declarative YAML and Rust paths, the silicon-validation loop, and the merge bar.
+- **[Declarative Registers](declarative_registers.md)**: The register-map YAML schema.
 - **[CI Integration](ci_integration.md)**: How to run LabWired in GitHub Actions or GitLab CI.
 - **[Coverage Scoreboard](coverage_scoreboard.md)**: Top-target smoke coverage and deterministic status tracking.
 - **Onboarding Smoke CI**: `core-onboarding-smoke.yml` publishes time-to-first-smoke metrics and scoreboard artifacts.

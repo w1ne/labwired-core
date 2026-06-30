@@ -30,7 +30,28 @@ pub fn build_i2c_device(
                 address,
             )))
         }
+        "fxos8700" => {
+            let address = config
+                .get("i2c_address")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0x1f) as u8;
+            Some(Box::new(crate::peripherals::components::Fxos8700::new(
+                address,
+            )))
+        }
         "aht20" => Some(Box::new(crate::peripherals::components::Aht20::new())),
+        // scd41 / sgp41 / sps30 / veml7700 are onboarded through the
+        // PeripheralKit registry (peripherals/kit), which dispatches them on
+        // both the STM32 and ESP32-C3 I²C buses — no legacy arm needed here.
+        "bme280" => {
+            let address = config
+                .get("i2c_address")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0x76) as u8;
+            Some(Box::new(crate::peripherals::components::Bme280::new(
+                address,
+            )))
+        }
         "bmp280" => {
             let address = config
                 .get("i2c_address")
@@ -39,6 +60,34 @@ pub fn build_i2c_device(
             Some(Box::new(crate::peripherals::components::Bmp280::new(
                 address,
             )))
+        }
+        "mlx90640" => {
+            use crate::peripherals::components::mlx90640::{Mlx90640, ThermalScene, MLX90640_ADDR};
+            let address = config
+                .get("i2c_address")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(MLX90640_ADDR as u64) as u8;
+
+            let f = |key: &str, default: f64| -> f64 {
+                config.get(key).and_then(|v| v.as_f64()).unwrap_or(default)
+            };
+            let u = |key: &str, default: u64| -> usize {
+                config.get(key).and_then(|v| v.as_u64()).unwrap_or(default) as usize
+            };
+
+            let scene = ThermalScene::from_config(
+                f("ambient_c", 25.0),
+                u("hot_row", 12),
+                u("hot_col", 16),
+                u("hot_radius", 0),
+                f("hot_target_c", 60.0),
+                f("load", 1.0),
+                f("tau_s", 0.0),
+                f("cooling_efficiency", 0.0),
+                config.get("cooling_fault_at_s").and_then(|v| v.as_f64()),
+                f("frame_period_s", 0.5),
+            );
+            Some(Box::new(Mlx90640::new(address, scene)))
         }
         "shm_i2c" => {
             let address = config
@@ -179,6 +228,32 @@ mod tests {
         );
         let dev = build_i2c_device("ir", &cfg).expect("ir device should build");
         assert_eq!(dev.address(), 0x41);
+    }
+
+    #[test]
+    fn mlx90640_built_at_default_address() {
+        let cfg = HashMap::new();
+        let dev = build_i2c_device("mlx90640", &cfg).expect("mlx90640 should build");
+        assert_eq!(dev.address(), 0x33);
+    }
+
+    #[test]
+    fn mlx90640_address_and_scene_from_config() {
+        let mut cfg = HashMap::new();
+        cfg.insert(
+            "i2c_address".to_string(),
+            serde_yaml::Value::Number(serde_yaml::Number::from(0x33)),
+        );
+        cfg.insert(
+            "ambient_c".to_string(),
+            serde_yaml::Value::Number(serde_yaml::Number::from(30.0)),
+        );
+        cfg.insert(
+            "hot_target_c".to_string(),
+            serde_yaml::Value::Number(serde_yaml::Number::from(90.0)),
+        );
+        let dev = build_i2c_device("mlx90640", &cfg).expect("mlx90640 should build");
+        assert_eq!(dev.address(), 0x33);
     }
 
     #[test]

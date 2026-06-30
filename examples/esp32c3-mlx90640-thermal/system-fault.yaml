@@ -1,0 +1,36 @@
+# LabWired - ESP32-C3 + MLX90640 thermal-fingerprint system (FAULT scenario)
+#
+# Identical wiring to system.yaml, but the cooling collapses at t=30 s
+# (`cooling_fault_at_s: 18.0`). The hotspot first settles to the cooled plateau
+# (~49 °C, NORMAL), then climbs toward the un-cooled driven target (85 °C) once
+# cooling fails — crossing the firmware's warn/critical thresholds.
+#
+# The fingerprint algorithm DOES NOT read `cooling_fault_at_s`. It detects the
+# fault purely from the decoded frames: a heating rate that fails to decay
+# toward 0 past the expected thermal time constant (COOLING_FAILURE), or the
+# hotspot crossing critical_c (OVERTEMP). Thresholds are firmware-side #defines.
+name: "esp32c3-mlx90640-thermal-fault"
+chip: "../../configs/chips/esp32c3.yaml"
+
+external_devices:
+  - id: "thermal_cam"
+    type: "mlx90640"
+    connection: "i2c0"
+    config:
+      i2c_address: 0x33
+
+      # ── Thermal scene (real first-order RC physics) ──────────────────────
+      ambient_c: 25.0          # background temperature, °C
+      hot_row: 12              # hotspot centre row (0..24)
+      hot_col: 16              # hotspot centre col (0..32)
+      hot_radius: 1            # hotspot half-extent, pixels
+      hot_target_c: 78.0       # steady-state hotspot target before load scaling
+      load: 1.0                # load multiplier on the hotspot target
+      tau_s: 4.0               # heating time constant τ, seconds
+      cooling_efficiency: 0.6  # fan/cooling efficiency 0..1 (pulls peak down)
+      cooling_fault_at_s: 18.0 # at t=18 s cooling collapses → hotspot climbs
+      frame_period_s: 4.0      # simulated time advanced per captured frame
+
+# The thermal camera is wired purely via the I²C0 `connection:` above; no GPIO
+# board_io binding is needed.
+board_io: []

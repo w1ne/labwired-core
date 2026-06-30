@@ -1,6 +1,11 @@
 #include <stdint.h>
 #include "stm32h563xx.h"
 
+// The CMSIS startup calls __libc_init_array (which pulls newlib's _init); under
+// -nostdlib that symbol is absent, so stub it empty (no C++ static ctors here).
+// Matches the nucleo-h563zi/board_firmware sibling example.
+void __libc_init_array(void) {}
+
 // Stress test parameters
 #define STRESS_BUFFER_SIZE 256U
 uint8_t stress_buffer[STRESS_BUFFER_SIZE];

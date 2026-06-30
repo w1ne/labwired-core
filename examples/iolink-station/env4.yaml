@@ -1,0 +1,30 @@
+name: "iolink-station-4port"
+nodes:
+  - id: "master"
+    system: "master/system.yaml"
+    firmware: "master-fw-4port/master.elf"
+  - id: "sensor1"
+    system: "sensor/system.yaml"
+    firmware: "../iolink-dido/firmware/iolink_dido.elf"
+  - id: "sensor2"
+    system: "sensor2/system.yaml"
+    firmware: "../iolink-dido/firmware/iolink_dido.elf"
+  - id: "sensor3"
+    system: "sensor3/system.yaml"
+    firmware: "../iolink-dido/firmware/iolink_dido.elf"
+  - id: "sensor4"
+    system: "sensor4/system.yaml"
+    firmware: "../iolink-dido/firmware/iolink_dido.elf"
+interconnects:
+  - type: "uart_cross_link"
+    nodes: ["master", "sensor1"]
+    config: { node_a_uart: "uart2", node_b_uart: "uart2" }
+  - type: "uart_cross_link"
+    nodes: ["master", "sensor2"]
+    config: { node_a_uart: "uart3", node_b_uart: "uart2" }
+  - type: "uart_cross_link"
+    nodes: ["master", "sensor3"]
+    config: { node_a_uart: "uart4", node_b_uart: "uart2" }
+  - type: "uart_cross_link"
+    nodes: ["master", "sensor4"]
+    config: { node_a_uart: "uart5", node_b_uart: "uart2" }

@@ -25,7 +25,7 @@
 //!     talk to the in-sim virtual servers with no real network and no lwIP
 //!     internals running.
 //!
-//! Thunk ABI mirrors [`rom_thunks`](super::rom_thunks): args are at logical
+//! Thunk ABI mirrors [`rom_thunks`](crate::peripherals::esp_xtensa_common::rom_thunks): args are at logical
 //! registers `base + i` (`base = callinc==0 ? 2 : callinc*4 + 2`), the
 //! return value goes back through `RomThunkBank::return_with`, and firmware
 //! memory is reached through the `bus`. State (the network, the fd→conn
@@ -44,9 +44,9 @@
 //! Chunked/connection-close `recv` semantics to make `HTTPClient` return a
 //! clean 200 are a follow-up.
 
-use super::rom_thunks::RomThunkBank;
 use crate::cpu::xtensa_lx7::XtensaLx7;
 use crate::network::sim::SimNet;
+use crate::peripherals::esp_xtensa_common::rom_thunks::RomThunkBank;
 use crate::{Bus, SimResult};
 use std::cell::RefCell;
 use std::collections::HashMap;

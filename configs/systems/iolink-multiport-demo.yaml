@@ -1,0 +1,17 @@
+name: "iolink-multiport-demo"
+chip: "../chips/stm32l476.yaml"
+external_devices:
+  - id: "iolink_master_4p"
+    type: "iolink-master"
+    connection: "uart1"
+    config:
+      native_backend: true
+      ports: 4
+      com: "COM3"
+      port1_profile: "proximity"
+      port1_present: true
+      port2_profile: "pressure"
+      port2_pressure_bar: 6.25
+      port3_profile: "distance"
+      port3_distance_mm: 420
+board_io: []

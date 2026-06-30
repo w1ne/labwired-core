@@ -69,9 +69,7 @@ nav:
   - How-To Guides:
     - Board Onboarding: board_onboarding_playbook.md
     - CI/CD Integration: ci_integration.md
-    - Developing Peripherals: peripheral_development.md
-    - Contributing Peripherals: CONTRIBUTING_PERIPHERALS.md
-    - Advanced Peripherals: advanced_peripherals.md
+    - Peripheral Modeling: peripherals.md
     - Hardware Interaction Guide: hardware_interaction_guide.md
     - Debugging with VS Code: vscode_debugging.md
     - GDB Integration: gdb_integration.md
@@ -108,6 +106,8 @@ nav:
     - Verification Audit: labwired_audit_protocol.md
     - Supported Devices: supported_devices.md
     - Coverage Scoreboard: coverage_scoreboard.md
+    - Chip Conformance (live): coverage/chip-conformance.md
+    - Tier-1 Matrix (live): coverage/tier1-scoreboard.md
     - Safety & Guardrails: safety.md
     - Demos: demos.md
     - Case Study (STM32): case_study_stm32.md

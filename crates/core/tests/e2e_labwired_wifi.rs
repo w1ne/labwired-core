@@ -25,7 +25,8 @@
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::xtensa_lx7::XtensaLx7;
 use labwired_core::network::sim::{HttpResponse, HttpServer, SimNet};
-use labwired_core::peripherals::esp32s3::{rom_thunks, wifi_thunks};
+use labwired_core::peripherals::esp32s3::wifi_thunks;
+use labwired_core::peripherals::esp_xtensa_common::rom_thunks;
 use labwired_core::system::xtensa::configure_xtensa_esp32;
 use labwired_core::{Cpu, Machine};
 use std::net::{Ipv4Addr, SocketAddrV4};

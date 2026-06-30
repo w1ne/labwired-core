@@ -19,9 +19,10 @@ build = "build.rs"
 [build-dependencies]
 # Used solely by build.rs to pre-compile the hot-block WAT into wasm bytes.
 wat = "1.0"
-# Used by build.rs only when `iolink-native` is explicitly enabled. Browser/wasm
-# builds keep the default Rust-only runtime path and do not link native C.
-cc = "1"
+# Used solely by build.rs to compile the native IO-Link bridge C sources when
+# the `iolink-native` feature is enabled. Off by default so browser/wasm builds
+# never need a C toolchain.
+cc = "1.2"
 
 [dependencies]
 thiserror = { workspace = true }
@@ -66,9 +67,24 @@ jit = ["dep:wasmtime"]
 # drain in `Machine::step`. Off through 2B.N-1; flipped unconditional
 # after every peripheral migrates and the legacy walk is deleted.
 event-scheduler = []
-# Use the real C `iolinki-master` stack through a narrow in-memory PHY bridge.
-# This is off by default so browser builds and standard CI do not link native C.
+# Native IO-Link path (plan 2026-06-18): compiles the real `iolinki-master` C
+# stack behind a narrow bridge (`native/iolink_master_bridge.*`) into
+# `labwired-core`. Off by default and never enabled by the browser crate
+# (`labwired-wasm`) so wasm builds stay free of native C and GPL device-stack
+# linkage. See docs/engineering/iolink-device-stack-isolation.md.
 iolink-native = []
+# MLX90640 round-trip decode test (plan 2026-06-20): compiles the REAL,
+# unmodified Melexis MLX90640 driver (third_party/mlx90640-library) behind a
+# bridge (native/mlx90640_bridge.*) that routes its I²C reads/writes into the
+# LabWired MLX90640 device model. The integration test
+# (tests/mlx90640_decode.rs) drives the model and asserts the real driver
+# decodes per-pixel °C matching the injected thermal scene. Off by default and
+# never enabled by the browser crate so wasm builds need no C toolchain.
+mlx90640-decode-test = []
+
+[[test]]
+name = "mlx90640_decode"
+required-features = ["mlx90640-decode-test"]
 
 [dev-dependencies]
 labwired-loader = { path = "../loader" }

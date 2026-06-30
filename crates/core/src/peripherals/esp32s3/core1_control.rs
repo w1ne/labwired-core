@@ -19,7 +19,7 @@
 //! APP_CPU at the ROM reset vector so it boots the real ROM like silicon.
 //! No firmware-symbol hooks — works for any image.
 
-use crate::peripherals::esp32s3::rom_thunks::APPCPU_RESET_RELEASED;
+use crate::peripherals::esp_xtensa_common::rom_thunks::APPCPU_RESET_RELEASED;
 use crate::{Peripheral, SimResult};
 
 const CONTROL_0: u64 = 0x0;

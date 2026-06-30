@@ -10,7 +10,7 @@
 //! semantics so a change to any shared model that would leak into the F1 board
 //! is caught here, per-board:
 //!   * the F1 RCC layout (CR reset 0x0000_4A83, AHBENR@0x14, APB2ENR@0x18,
-//!     APB1ENR@0x1C, optimistic SW->SWS),
+//!     APB1ENR@0x1C, source-ready-gated SW->SWS),
 //!   * the F1 GPIO layout (CRL/CRH config words, ODR@0x0C, BSRR@0x10, BRR@0x14),
 //!   * the *classic* SPI (CR2 reset 0x0000 — no DS field),
 //!   * the F1 I²C reset state (TRISE reset 0x0002),
@@ -1039,11 +1039,12 @@ const PARITY_REGS: &[ParityReg] = &[
         mask: 0x0000_FFFF,
     },
     // SPI1 control registers — classic SPI. Writable masks silicon-confirmed on
-    // F103 (the sweep): CR1 0xEFFF (CRCNEXT bit 12 reads 0), CR2 0xE7 (no DS).
+    // a genuine F103 (the sweep): CR1 0xFFFF (CRCNEXT bit 12 IS writable, reads
+    // back 1 — re-confirmed 2026-06-17), CR2 0xE7 (no DS).
     ParityReg {
         label: "SPI1 CR1",
         addr: SPI1_BASE + 0x00,
-        mask: 0x0000_EFFF,
+        mask: 0x0000_FFFF,
     },
     ParityReg {
         label: "SPI1 CR2",

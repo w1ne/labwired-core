@@ -8,6 +8,16 @@ use crate::decoder::riscv::{decode_rv32, Instruction};
 use crate::{Bus, Cpu, SimResult, SimulationObserver};
 use std::sync::Arc;
 
+/// Estimated CPU clocks per interpreted instruction, used to scale the
+/// free-running cycle/perf-counter CSRs (0x802/0x7E2/0xC00). Firmware busy-wait
+/// delays compute a target in CPU clocks (e.g. `us * cpu_freq_mhz`); reporting
+/// the cycle counter as `mtime * CYCLE_SCALE` lets those delays elapse in
+/// ~1/CYCLE_SCALE the interpreted instructions instead of one-per-clock. Sim
+/// delays only need to complete, not match wall-clock, so a coarse value is
+/// correct here. Kept a power of two; tuned so the C3 bootloader's entropy fill
+/// drops from ~380M instructions to a few million.
+const CYCLE_SCALE: u64 = 256;
+
 #[derive(Debug, Default)]
 pub struct RiscV {
     pub x: [u32; 32], // x0..x31. x0 is correctly hardwired to 0 in logic.
@@ -66,6 +76,20 @@ impl RiscV {
             // Timer CSR stubs (Standard RISC-V shadow non-privileged? No, these are machine mode)
             0xB00 => (self.mtime & 0xFFFFFFFF) as u32,
             0xB80 => (self.mtime >> 32) as u32,
+            // Free-running cycle counters. 0xC00/0xC80 = standard cycle[h];
+            // 0x802 is the ESP32-C3 machine cycle CSR (`ets_delay_us` busy-reads
+            // it as while(now-start < target_cycles)); 0x7E2 is the C3 perf
+            // counter PCCR (bootloader_fill_random reads it as an entropy delta).
+            //
+            // These are reported as mtime * CYCLE_SCALE so that cycle-budget
+            // delays (which the firmware computes in CPU clocks, e.g. µs*freq)
+            // elapse in ~1/CYCLE_SCALE as many interpreted instructions. Without
+            // it the bootloader's entropy fill alone burns ~380M instructions of
+            // pure delay. Delay loops only need to *complete*, not match wall
+            // time, so a coarse cycle estimate is correct in sim; the real-time
+            // CLINT timer (mtime vs mtimecmp, CSR 0xB00) stays unscaled.
+            0xC00 | 0x802 | 0x7E2 => (self.mtime.wrapping_mul(CYCLE_SCALE) & 0xFFFFFFFF) as u32,
+            0xC80 => (self.mtime.wrapping_mul(CYCLE_SCALE) >> 32) as u32,
             _ => 0,
         }
     }
@@ -85,6 +109,16 @@ impl RiscV {
     }
 
     fn handle_trap(&mut self, cause: u32, epc: u32) {
+        if std::env::var("LABWIRED_TRAP_DEBUG").is_ok() {
+            use std::sync::atomic::{AtomicU32, Ordering};
+            static N: AtomicU32 = AtomicU32::new(0);
+            if N.fetch_add(1, Ordering::Relaxed) < 60 {
+                eprintln!(
+                    "[trap] cause={cause:#010x} epc={epc:#010x} mtvec={:#010x} ra={:#010x} sp={:#010x} a0={:#010x}",
+                    self.mtvec, self.x[1], self.x[2], self.x[10]
+                );
+            }
+        }
         self.mepc = epc;
         self.mcause = cause;
         // mtvec handling (Direct vs Vectored)
@@ -97,8 +131,15 @@ impl RiscV {
         } else {
             self.pc = base;
         }
-        // Disable interrupts (saving previous status in MPIE if we supported it fully)
-        self.mstatus &= !(1 << 3); // Clear MIE
+        // Update mstatus per the privileged spec on trap entry:
+        //   MPIE <- MIE, MIE <- 0, MPP <- current privilege (M-mode = 0b11).
+        // The IDF trap handler saves/restores mstatus around nested interrupts
+        // and ends with MRET, which relies on MPIE carrying the pre-trap MIE.
+        let mie = (self.mstatus >> 3) & 1;
+        self.mstatus &= !(1 << 7); // clear MPIE
+        self.mstatus |= mie << 7; // MPIE <- MIE
+        self.mstatus &= !(1 << 3); // MIE <- 0
+        self.mstatus |= 0b11 << 11; // MPP <- M-mode
     }
 }
 
@@ -117,10 +158,8 @@ impl Cpu for RiscV {
         let opcode = bus.read_u32(self.pc as u64)?;
 
         let retired_pc = self.pc;
-        if !observers.is_empty() {
-            for observer in observers {
-                observer.on_step_start(self.pc, opcode);
-            }
+        for observer in observers {
+            observer.on_step_start(self.pc, opcode);
         }
 
         let instruction = decode_rv32(opcode);
@@ -145,13 +184,17 @@ impl Cpu for RiscV {
             }
             Instruction::Jal { rd, imm } => {
                 let target = self.pc.wrapping_add(imm as u32);
-                self.write_reg(rd, self.pc.wrapping_add(4));
+                // Link address is the NEXT instruction: pc + inst_len. The
+                // decoder maps the 2-byte C.JAL to Jal, so a hardcoded +4 would
+                // set ra 2 bytes too far and corrupt every compressed call's
+                // return — use inst_len so c.jal links pc+2 and jal links pc+4.
+                self.write_reg(rd, self.pc.wrapping_add(inst_len));
                 next_pc = target;
             }
             Instruction::Jalr { rd, rs1, imm } => {
                 let base = self.read_reg(rs1);
                 let target = base.wrapping_add(imm as u32) & !1;
-                self.write_reg(rd, self.pc.wrapping_add(4));
+                self.write_reg(rd, self.pc.wrapping_add(inst_len));
                 next_pc = target;
             }
             Instruction::Beq { rs1, rs2, imm } => {
@@ -325,6 +368,11 @@ impl Cpu for RiscV {
             Instruction::Fence => {
                 // No-op in single threaded core model
             }
+            Instruction::Wfi => {
+                // Wait-for-interrupt: implemented as a no-op busy-wait. The step
+                // loop already polls pending interrupts every instruction, so
+                // the idle task's WFI spin wakes as soon as a line asserts.
+            }
             Instruction::Ecall | Instruction::Ebreak => {
                 // Should trap. For now, we can just log or halt.
                 tracing::warn!("ECALL/EBREAK encountered at {:#x}", self.pc);
@@ -339,11 +387,13 @@ impl Cpu for RiscV {
                 return Ok(());
             }
             Instruction::Mret => {
-                // Return from trap
+                // Return from trap. Per the privileged spec:
+                //   MIE <- MPIE, MPIE <- 1 (privilege <- MPP, but we stay M-mode).
                 self.pc = self.mepc;
-                // mstatus.MIE = mstatus.MPIE. For now we just set MIE=1 if we assume it was enabled.
-                // Simple version:
-                self.mstatus |= 1 << 3; // Re-enable MIE
+                let mpie = (self.mstatus >> 7) & 1;
+                self.mstatus &= !(1 << 3); // clear MIE
+                self.mstatus |= mpie << 3; // MIE <- MPIE
+                self.mstatus |= 1 << 7; // MPIE <- 1
                 return Ok(());
             }
             Instruction::Csrrw { rd, rs1, csr } => {
@@ -643,12 +693,21 @@ impl Cpu for RiscV {
             self.mip &= !(1 << 7);
         }
 
-        // Check for interrupts
+        // Check for interrupts. On the ESP32-C3 the custom interrupt controller
+        // exposes its 31 sources as CPU interrupt lines 1..31 directly in
+        // mip/mie (no standard MEIP/MSIP/MTIP semantics); the bus drives those
+        // lines level-sensitively via `external_irq_lines()` after routing
+        // asserted sources through the interrupt matrix. OR them into the local
+        // mip view so a line stays asserted only while its source does.
         if (self.mstatus & (1 << 3)) != 0 {
-            let pending = self.mip & self.mie;
+            // Standard machine sources are masked by `mie`; ESP32-C3 external
+            // lines arrive already gated (enable + priority/threshold) by the
+            // bus, so they bypass `mie` (which the C3 firmware leaves at 0).
+            let pending = (self.mip & self.mie) | bus.external_irq_lines();
             if pending != 0 {
-                // Find highest priority interrupt (Simplified: MTIP=7, MSIP=3, MEIP=11)
-                // Priority: External > Software > Timer
+                // Standard machine interrupts keep their spec priority
+                // (External > Software > Timer); any other set bit is an ESP
+                // interrupt-matrix line, taken highest-line-first.
                 let irq = if (pending & (1 << 11)) != 0 {
                     11
                 } else if (pending & (1 << 3)) != 0 {
@@ -656,7 +715,7 @@ impl Cpu for RiscV {
                 } else if (pending & (1 << 7)) != 0 {
                     7
                 } else {
-                    0xFFFFFFFF // Should not happen
+                    31 - pending.leading_zeros()
                 };
 
                 if irq != 0xFFFFFFFF {
@@ -684,11 +743,13 @@ impl Cpu for RiscV {
 
         self.pc = next_pc;
 
-        let mut registers = [0u32; 33];
-        registers[..32].copy_from_slice(&self.x);
-        registers[32] = self.pc;
-
+        // Building the register snapshot is pure waste when nothing observes it,
+        // and this runs on every instruction. Gate it on having observers.
         if !observers.is_empty() {
+            let mut registers = [0u32; 33];
+            registers[..32].copy_from_slice(&self.x);
+            registers[32] = self.pc;
+
             crate::emit_trace_event(
                 observers,
                 labwired_hw_trace::TraceEvent::InstructionRetired {
@@ -997,6 +1058,70 @@ mod tests {
             3,
             "ADDI at 0x8 must not be re-executed (would read 4 if bug present)"
         );
+    }
+
+    #[test]
+    fn test_riscv_external_irq_line_vectored_and_mret_restores_mie() {
+        // ESP32-C3-style external interrupt: the bus drives a CPU interrupt
+        // line (1..31) via `external_irq_lines()`; with vectored mtvec the core
+        // traps to base + line*4, and MRET restores MIE from MPIE.
+        let mut bus = SystemBus::new();
+        let mut cpu = RiscV::new();
+        cpu.mtvec = 0x2000 | 1; // vectored
+        cpu.mstatus = 1 << 3; // MIE
+        cpu.mtimecmp = u64::MAX; // no CLINT timer interference
+
+        bus.flash.data = vec![0; 0x3000];
+        // NOP loop at 0x0 (ADDI x0,x0,0) and the per-line handlers are NOPs+MRET.
+        bus.write_u32(0x0, 0x00000013).unwrap();
+        bus.write_u32(0x4, 0x00000013).unwrap();
+        // Line 5 vector (0x2000 + 5*4 = 0x2014): MRET.
+        bus.write_u32(0x2014, 0x30200073).unwrap();
+        // Assert external line 5 (esp32c3_irq_routing stays false, so the C3
+        // aggregation leaves riscv_irq_lines untouched between ticks).
+        bus.riscv_irq_lines = 1 << 5;
+
+        cpu.pc = 0x0;
+        let mut machine = Machine::new(cpu, bus);
+        // First step executes the NOP at 0x0, then takes the pending line-5 trap.
+        machine.step().unwrap();
+        assert_eq!(
+            machine.cpu.pc, 0x2014,
+            "vectored trap must jump to mtvec base + line*4"
+        );
+        assert_eq!(
+            machine.cpu.mcause,
+            0x8000_0000 | 5,
+            "mcause = interrupt|line"
+        );
+        assert_eq!(machine.cpu.mstatus & (1 << 3), 0, "MIE cleared on trap");
+        assert_ne!(machine.cpu.mstatus & (1 << 7), 0, "MPIE holds prior MIE");
+        // Drop the line so MRET doesn't immediately re-trap, then MRET.
+        machine.bus.riscv_irq_lines = 0;
+        machine.step().unwrap();
+        assert_ne!(
+            machine.cpu.mstatus & (1 << 3),
+            0,
+            "MRET restores MIE from MPIE"
+        );
+    }
+
+    #[test]
+    fn test_riscv_wfi_is_nop() {
+        // WFI must decode and execute as a no-op (PC advances by 4); the idle
+        // task's WFI spin relies on this.
+        assert_eq!(
+            crate::decoder::riscv::decode_rv32(0x1050_0073),
+            crate::decoder::riscv::Instruction::Wfi
+        );
+        let mut bus = SystemBus::new();
+        let mut cpu = RiscV::new();
+        bus.flash.data = vec![0; 0x100];
+        bus.write_u32(0x0, 0x1050_0073).unwrap(); // WFI
+        cpu.pc = 0x0;
+        let mut machine = Machine::new(cpu, bus);
+        machine.step().unwrap();
+        assert_eq!(machine.cpu.pc, 0x4, "WFI advances PC like a NOP");
     }
 
     #[test]

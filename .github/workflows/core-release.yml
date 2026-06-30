@@ -24,7 +24,7 @@ jobs:
             platform: linux-aarch64
             cross: true
           - target: x86_64-apple-darwin
-            runner: macos-13
+            runner: macos-latest
             platform: darwin-x86_64
           - target: aarch64-apple-darwin
             runner: macos-latest

@@ -192,7 +192,23 @@ impl Dport {
     }
 
     fn write_word(&mut self, word_off: u32, value: u32) {
-        self.regs[(word_off >> 2) as usize] = value;
+        let mut stored = value;
+        // Cache enable/enabled handshake. The BROM `Cache_Read_Init` sets
+        // PRO/APP_CACHE_CTRL bit 4 (CACHE_ENABLE) then spin-waits for bit 5
+        // (CACHE_ENABLED) to assert — real silicon turns the cache on in a
+        // few cycles and latches the status bit. We don't model cache
+        // behavior, so mirror the enabled bit to the enable bit immediately,
+        // otherwise the BROM's `bnone CACHE_CTRL, 0x20` poll never completes.
+        if word_off == DPORT_PRO_CACHE_CTRL_OFFSET || word_off == DPORT_APP_CACHE_CTRL_OFFSET {
+            const CACHE_ENABLE_BIT: u32 = 1 << 4;
+            const CACHE_ENABLED_BIT: u32 = 1 << 5;
+            if stored & CACHE_ENABLE_BIT != 0 {
+                stored |= CACHE_ENABLED_BIT;
+            } else {
+                stored &= !CACHE_ENABLED_BIT;
+            }
+        }
+        self.regs[(word_off >> 2) as usize] = stored;
     }
 
     /// Cross-core IPI delivery: which CPU-interrupt slots `core` should see

@@ -124,6 +124,16 @@ impl Esp32Spi {
                 self.cmd = value;
                 if value & CMD_USR_BIT != 0 {
                     self.kick_user_transaction();
+                } else if value != 0 {
+                    // Flash-controller command bits (the SPI_FLASH_* set, and
+                    // the BROM `spi_flash_attach` bit-12 probe) are
+                    // write-1-to-start and self-clear when the operation
+                    // completes. We don't model flash array content, so the op
+                    // completes instantly — clear the start bits so the
+                    // firmware's busy-poll (`bnez SPI_CMD_REG`) terminates
+                    // instead of spinning forever (real silicon clears these in
+                    // a few SPI clocks).
+                    self.cmd = 0;
                 }
             }
             REG_USER => self.user = value,

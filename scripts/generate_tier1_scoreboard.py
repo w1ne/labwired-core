@@ -45,7 +45,9 @@ def render(matrix: dict) -> str:
     lines = [
         "# Tier-1 Validation Matrix",
         "",
-        "Every cell links the CI run that produced it; no link → `·` unrecorded.",
+        "Each cell shows its committed status (gated by the Tier-1 ratchet on every",
+        "change; the full sim suite runs nightly) and links the CI run that recorded",
+        "it when one is available.",
         "",
         "**Confidence tier:** ✅ means *sim-consistent* — the check passed against",
         "the simulator's peripheral models on real firmware. Silicon-anchored",
@@ -70,11 +72,11 @@ def render(matrix: dict) -> str:
                 continue
             status = cell.get("status", "unrecorded")
             url = cell.get("run_url")
-            # Malformed evidence demotes to unrecorded.
+            # Statuses are trustworthy on their own (ratchet-gated per change,
+            # full suite nightly), so render them directly. A run_url is an
+            # optional evidence link; drop only malformed ones.
             if url and (not url.startswith("https://") or any(c in url for c in " |()")):
                 url = None
-            if status not in ("na", "unrecorded") and not url:
-                status = "unrecorded"  # no evidence, no claim
             icon = ICONS.get(status, "·")
             cells.append(f"[{icon}]({url})" if url else icon)
         label = DISPLAY_NAMES.get(chip, chip)

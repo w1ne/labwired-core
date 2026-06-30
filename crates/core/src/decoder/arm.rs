@@ -89,8 +89,14 @@ pub enum Instruction {
         rd: u8,
         rm: u8,
     }, // ADD Rd, Rm (at least one high register)
-    Cpsie, // CPSIE i
-    Cpsid, // CPSID i
+    Cpsie {
+        primask: bool,
+        faultmask: bool,
+    }, // CPSIE i/f
+    Cpsid {
+        primask: bool,
+        faultmask: bool,
+    }, // CPSID i/f
 
     And {
         rd: u8,
@@ -179,6 +185,30 @@ pub enum Instruction {
         rt: u8,
         rn: u8,
         imm12: u16,
+    },
+    /// LDR (immediate) T4: indexed forms with optional base writeback.
+    /// `pre_index` true → offset applied before the load (`[Rn, #±imm]{!}`);
+    /// false → post-index (`[Rn], #±imm`, writeback implied). `add` selects
+    /// add vs subtract. Models the `ldr.w pc, [sp], #4` function-return idiom
+    /// (post-index, writeback) that the T3 form cannot express.
+    LdrImm32Idx {
+        rt: u8,
+        rn: u8,
+        imm8: u8,
+        pre_index: bool,
+        add: bool,
+        writeback: bool,
+    },
+    /// STR (immediate) T4: indexed forms with optional base writeback.
+    /// Mirror of [`Instruction::LdrImm32Idx`] for stores (`str.w rt,[rn],#imm`
+    /// and `str.w rt,[rn,#imm]!`), e.g. clang's pre-decrement stack pushes.
+    StrImm32Idx {
+        rt: u8,
+        rn: u8,
+        imm8: u8,
+        pre_index: bool,
+        add: bool,
+        writeback: bool,
     },
     LdrbImm {
         rt: u8,
@@ -310,6 +340,17 @@ pub enum Instruction {
     Uxth {
         rd: u8,
         rm: u8,
+    },
+    /// Wide register-extend (T2): {S,U}XT{B,H}.W and the extend-and-add
+    /// {S,U}XTA{B,H}.W. `Rd = (Rn==0xF ? 0 : Rn) + extend(ROR(Rm, rotate))`.
+    /// `rotate` is 0/8/16/24; `rn`==0xF means the plain extend (no add).
+    ExtendW {
+        rd: u8,
+        rn: u8,
+        rm: u8,
+        rotate: u8,
+        /// 0=SXTH, 1=UXTH, 4=SXTB, 5=UXTB (ARM op field h1[6:4]).
+        op: u8,
     },
     Adr {
         rd: u8,
@@ -465,12 +506,18 @@ pub enum Instruction {
         rt2: u8,
         rn: u8,
         imm8: u32,
+        add_imm: bool,
+        index: bool,
+        writeback: bool,
     },
     Strd {
         rt: u8,
         rt2: u8,
         rn: u8,
         imm8: u32,
+        add_imm: bool,
+        index: bool,
+        writeback: bool,
     },
     Tbb {
         rn: u8,
@@ -482,6 +529,10 @@ pub enum Instruction {
     },
 
     Bkpt {
+        imm8: u8,
+    },
+
+    Svc {
         imm8: u8,
     },
 
@@ -532,6 +583,14 @@ pub enum Instruction {
     },
     /// Unsigned multiply-accumulate (64-bit).
     Umlal {
+        rd_lo: u8,
+        rd_hi: u8,
+        rn: u8,
+        rm: u8,
+    },
+    /// Unsigned multiply-accumulate-accumulate-long (64-bit).
+    /// (rd_hi:rd_lo) = Rn * Rm + rd_lo + rd_hi.
+    Umaal {
         rd_lo: u8,
         rd_hi: u8,
         rn: u8,
@@ -870,18 +929,21 @@ pub fn decode_thumb_16(opcode: u16) -> Instruction {
     // 7. Conditional Branch (Bcc): 1101 xxxx iiii iiii
     if (opcode & 0xF000) == 0xD000 {
         let cond = ((opcode >> 8) & 0xF) as u8;
-        // Don't match SWI (1101 1111 ...) -> cond 0xF is SWI
-        if cond != 0xF {
-            let mut offset = (opcode & 0xFF) as i32;
-            // Sign extend 8-bit to 32-bit
-            if (offset & 0x80) != 0 {
-                offset |= !0xFF;
-            }
-            return Instruction::BranchCond {
-                cond,
-                offset: offset << 1,
+        // cond 0xF (1101 1111 ...) is SVC (supervisor call), not a branch.
+        if cond == 0xF {
+            return Instruction::Svc {
+                imm8: (opcode & 0xFF) as u8,
             };
         }
+        let mut offset = (opcode & 0xFF) as i32;
+        // Sign extend 8-bit to 32-bit
+        if (offset & 0x80) != 0 {
+            offset |= !0xFF;
+        }
+        return Instruction::BranchCond {
+            cond,
+            offset: offset << 1,
+        };
     }
 
     // 7.1 ADR (T1) / ADD (SP) (T1)
@@ -963,6 +1025,21 @@ pub fn decode_thumb_16(opcode: u16) -> Instruction {
             return Instruction::Sxtb { rd, rm };
         }
 
+        // REV/REV16/REVSH (T1, 16-bit): 1011 1010 op Rm Rd
+        //   op=00 → REV  (0xBA00..0xBA3F)
+        //   op=01 → REV16 (0xBA40..0xBA7F)
+        //   op=11 → REVSH (0xBAC0..0xBAFF)
+        // Distinct from the 32-bit FA90 forms already handled in decode_32.
+        if (opcode & 0xFF00) == 0xBA00 {
+            let rm = ((opcode >> 3) & 0x7) as u8;
+            let rd = (opcode & 0x7) as u8;
+            return match (opcode >> 6) & 0x3 {
+                0b00 => Instruction::Rev { rd, rm },
+                0b01 => Instruction::Rev16 { rd, rm },
+                _ => Instruction::RevSh { rd, rm },
+            };
+        }
+
         // CBZ/CBNZ (T1): 1011 op i 1 imm5 rn
         if (opcode & 0xF500) == 0xB100 {
             let op = (opcode >> 11) & 1;
@@ -1006,14 +1083,18 @@ pub fn decode_thumb_16(opcode: u16) -> Instruction {
         }
     }
 
-    // CPS (T1): 1011 0110 011 effect 0 interrupt_flags (0xB660 mask 0xFFE0)
-    if (opcode & 0xFFEF) == 0xB662 {
-        // Matches B662 or B672 (ignoring bit 4)
+    // CPS (T1): 1011 0110 011 im 0 0 (A) I F (0xB660 mask 0xFFE8).
+    // im (bit 4): 0 = CPSIE (enable/clear), 1 = CPSID (disable/set).
+    // I (bit 1): affects PRIMASK. F (bit 0): affects FAULTMASK. Both may be set
+    // (`cpsid if`). The f-variant (FAULTMASK) was previously undecoded → Unknown.
+    if (opcode & 0xFFE8) == 0xB660 {
         let disable = (opcode & 0x0010) != 0;
+        let primask = (opcode & 0x0002) != 0;
+        let faultmask = (opcode & 0x0001) != 0;
         if disable {
-            return Instruction::Cpsid;
+            return Instruction::Cpsid { primask, faultmask };
         } else {
-            return Instruction::Cpsie;
+            return Instruction::Cpsie { primask, faultmask };
         }
     }
 
@@ -1078,6 +1159,22 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
     //     UMULL: h1 = 1111_1011_1010_rn4  -> h1[7:4] = 0xA
     //     SMLAL: h1 = 1111_1011_1100_rn4  -> h1[7:4] = 0xC
     //     UMLAL: h1 = 1111_1011_1110_rn4  -> h1[7:4] = 0xE
+    // UMAAL — ARMv7-M A7.7.203.
+    //   h1 = 1111_1011_1110_rn4 (h1[7:4] = 0xE), h2[7:4] = 0110.
+    //   (rd_hi:rd_lo) = Rn*Rm + rd_lo + rd_hi.
+    if (h1 & 0xFFF0) == 0xFBE0 && (h2 & 0x00F0) == 0x0060 {
+        let rn = (h1 & 0xF) as u8;
+        let rd_lo = ((h2 >> 12) & 0xF) as u8;
+        let rd_hi = ((h2 >> 8) & 0xF) as u8;
+        let rm = (h2 & 0xF) as u8;
+        return Instruction::Umaal {
+            rd_lo,
+            rd_hi,
+            rn,
+            rm,
+        };
+    }
+
     if (h1 & 0xFF80) == 0xFB80 && (h2 & 0x00F0) == 0x0000 {
         let op = (h1 >> 4) & 0xF;
         let rn = (h1 & 0xF) as u8;
@@ -1444,6 +1541,48 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
         }
     }
 
+    // LDR (immediate) T4: 1111 1000 0101 Rn | Rt 1 P U W imm8 -> F85x.
+    // h2 bit 11 == 1 marks the indexed/writeback (T4) form; distinguished from
+    // the LDR (register) T2 form (h2 bit 11 == 0). The plain positive-offset
+    // case (P=1,U=1,W=0) overlaps T3 semantics but is encoded here on F85x.
+    // Models `ldr.w pc, [sp], #4` (P=0,U=1,W=1) — the function-return idiom
+    // that was previously Unknown32, silently skipping the return branch.
+    if (h1 & 0xFFF0) == 0xF850 && (h2 & 0x0800) != 0 {
+        let rn = (h1 & 0xF) as u8;
+        let rt = ((h2 >> 12) & 0xF) as u8;
+        let pre_index = (h2 & 0x0400) != 0; // P
+        let add = (h2 & 0x0200) != 0; // U
+        let writeback = (h2 & 0x0100) != 0; // W
+        let imm8 = (h2 & 0xFF) as u8;
+        return Instruction::LdrImm32Idx {
+            rt,
+            rn,
+            imm8,
+            pre_index,
+            add,
+            writeback,
+        };
+    }
+
+    // STR (immediate) T4: 1111 1000 0100 Rn | Rt 1 P U W imm8 -> F84x.
+    // Same h2 bit-11 marker. Models `str.w rt,[rn],#imm` / `[rn,#imm]!`.
+    if (h1 & 0xFFF0) == 0xF840 && (h2 & 0x0800) != 0 {
+        let rn = (h1 & 0xF) as u8;
+        let rt = ((h2 >> 12) & 0xF) as u8;
+        let pre_index = (h2 & 0x0400) != 0;
+        let add = (h2 & 0x0200) != 0;
+        let writeback = (h2 & 0x0100) != 0;
+        let imm8 = (h2 & 0xFF) as u8;
+        return Instruction::StrImm32Idx {
+            rt,
+            rn,
+            imm8,
+            pre_index,
+            add,
+            writeback,
+        };
+    }
+
     // LDR.W (immediate) (T3): 1111 1000 1101 ... -> F8D..
     if (h1 & 0xFFF0) == 0xF8D0 {
         let rn = (h1 & 0xF) as u8;
@@ -1475,6 +1614,31 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
             return Instruction::Ubfx { rd, rn, lsb, width };
         } else {
             return Instruction::Sbfx { rd, rn, lsb, width };
+        }
+    }
+
+    // Register-extend, wide (T2): the plain {S,U}XT{B,H}.W (Rn=0xF) and the
+    // extend-and-add {S,U}XTA{B,H}.W (Rn!=0xF).
+    //   h1 = 1111 1010 0 op nnnn ; op: 000=SXT(A)H 001=UXT(A)H 100=SXT(A)B
+    //   101=UXT(A)B (010/011 = ..B16, not modeled). nnnn = Rn (0xF = no add).
+    //   h2 = 1111 dddd 10 rr mmmm  (rr = rotate/8).
+    // clang emits e.g. `uxth.w r2, ip` = FA1F F28C (extend via high register)
+    // and `uxtah r6, r3, r0` = FA13 F680 (4 + path_len). Without this the insn
+    // decoded to Unknown32 and was skipped, leaving Rd stale.
+    if (h1 & 0xFF80) == 0xFA00 && (h2 & 0xF080) == 0xF080 {
+        let rn = (h1 & 0xF) as u8;
+        let rd = ((h2 >> 8) & 0xF) as u8;
+        let rm = (h2 & 0xF) as u8;
+        let rotate = (((h2 >> 4) & 0x3) * 8) as u8;
+        let op = ((h1 >> 4) & 0x7) as u8;
+        if op == 0b000 || op == 0b001 || op == 0b100 || op == 0b101 {
+            return Instruction::ExtendW {
+                rd,
+                rn,
+                rm,
+                rotate,
+                op,
+            };
         }
     }
 
@@ -1610,7 +1774,27 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
             if (h2 & 0x0F00) == 0x0F00 {
                 return Instruction::Unknown32(h1, h2);
             }
-            return Instruction::Ldrd { rt, rt2, rn, imm8 };
+            // U bit (h1[7]): 1 = add imm8*4, 0 = subtract. mbedTLS AES reads
+            // round keys via `ldrd Rt,Rt2,[Rn,#-imm]` (U=0); ignoring U read
+            // the wrong key and corrupted the cipher output.
+            let add_imm = (h1 & 0x80) != 0;
+            // P (h1[8]) selects pre/post indexing; W (h1[5]) selects writeback.
+            // Pre-indexed-with-writeback (`ldrd Rt,Rt2,[Rn,#imm]!`) and
+            // post-indexed (`ldrd Rt,Rt2,[Rn],#imm`) both update Rn; the
+            // libgcc 64-bit divide helper used by mbedTLS bignum relies on
+            // the writeback form to restore SP, so ignoring W corrupted the
+            // stack frame and crashed the RSA verify path.
+            let index = (h1 & 0x100) != 0;
+            let writeback = (h1 & 0x20) != 0;
+            return Instruction::Ldrd {
+                rt,
+                rt2,
+                rn,
+                imm8,
+                add_imm,
+                index,
+                writeback,
+            };
         } else {
             // STREX (T1, B6.7.198) — distinguished from STRD the same
             // way. h2[15:12]=Rt (value), h2[11:8]=Rd (success flag);
@@ -1632,7 +1816,18 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
                 // Unlikely for STRD; treat as STREX.
                 return Instruction::Unknown32(h1, h2);
             }
-            return Instruction::Strd { rt, rt2, rn, imm8 };
+            let add_imm = (h1 & 0x80) != 0;
+            let index = (h1 & 0x100) != 0;
+            let writeback = (h1 & 0x20) != 0;
+            return Instruction::Strd {
+                rt,
+                rt2,
+                rn,
+                imm8,
+                add_imm,
+                index,
+                writeback,
+            };
         }
     }
 
@@ -1898,6 +2093,81 @@ mod tests {
     }
 
     #[test]
+    fn test_decode_rev_t1_16bit() {
+        // REV T1 (16-bit): `rev r3, r3` = 0xBA1B (0xBA00 | (rm=3<<3) | rd=3).
+        assert_eq!(decode_thumb_16(0xBA1B), Instruction::Rev { rd: 3, rm: 3 });
+        // REV16 T1: `rev16 r5, r5` = 0xBA6D (0xBA40 | (rm=5<<3) | rd=5).
+        assert_eq!(decode_thumb_16(0xBA6D), Instruction::Rev16 { rd: 5, rm: 5 });
+        // REVSH T1: `revsh r0, r1` = 0xBAC8 (0xBAC0 | (rm=1<<3) | rd=0).
+        assert_eq!(decode_thumb_16(0xBAC8), Instruction::RevSh { rd: 0, rm: 1 });
+    }
+
+    #[test]
+    fn test_decode_ldrd_negative_offset() {
+        // e951 0708 → ldrd r0, r7, [r1, #-32]  (U=0, subtract).
+        assert_eq!(
+            decode_thumb_32(0xE951, 0x0708),
+            Instruction::Ldrd {
+                rt: 0,
+                rt2: 7,
+                rn: 1,
+                imm8: 8,
+                add_imm: false,
+                index: true,
+                writeback: false
+            }
+        );
+        // e9d1 0708 → ldrd r0, r7, [r1, #32]  (U=1, add).
+        assert_eq!(
+            decode_thumb_32(0xE9D1, 0x0708),
+            Instruction::Ldrd {
+                rt: 0,
+                rt2: 7,
+                rn: 1,
+                imm8: 8,
+                add_imm: true,
+                index: true,
+                writeback: false
+            }
+        );
+    }
+
+    #[test]
+    fn test_decode_strd_predec_writeback() {
+        // e96d ce04 → strd ip, lr, [sp, #-16]!  (P=1, U=0, W=1).
+        // This is the libgcc __aeabi_uldivmod prologue used by mbedTLS bignum.
+        assert_eq!(
+            decode_thumb_32(0xE96D, 0xCE04),
+            Instruction::Strd {
+                rt: 12,
+                rt2: 14,
+                rn: 13,
+                imm8: 4,
+                add_imm: false,
+                index: true,
+                writeback: true
+            }
+        );
+    }
+
+    #[test]
+    fn test_decode_ldrd_postindex_writeback() {
+        // e8f1 2304 → ldrd r2, r3, [r1], #16  (P=0, U=1, W=1).
+        assert_eq!(
+            decode_thumb_32(0xE8F1, 0x2304),
+            Instruction::Ldrd {
+                rt: 2,
+                rt2: 3,
+                rn: 1,
+                imm8: 4,
+                add_imm: true,
+                index: false,
+                writeback: true
+            }
+        );
+    }
+
+    #[test]
     fn test_decode_extend_t1() {
         // SXTH R1, R0 -> 0xB201
         assert_eq!(decode_thumb_16(0xB201), Instruction::Sxth { rd: 1, rm: 0 });
@@ -1913,14 +2183,8 @@ mod tests {
     fn test_decode_rev_t1() {
         // REV r2, r2 = 0xBA12, emitted by newlib strlen.
         assert_eq!(decode_thumb_16(0xBA12), Instruction::Rev { rd: 2, rm: 2 });
-        assert_eq!(
-            decode_thumb_16(0xBA52),
-            Instruction::Rev16 { rd: 2, rm: 2 }
-        );
-        assert_eq!(
-            decode_thumb_16(0xBAD2),
-            Instruction::RevSh { rd: 2, rm: 2 }
-        );
+        assert_eq!(decode_thumb_16(0xBA52), Instruction::Rev16 { rd: 2, rm: 2 });
+        assert_eq!(decode_thumb_16(0xBAD2), Instruction::RevSh { rd: 2, rm: 2 });
     }
 
     #[test]
@@ -1946,6 +2210,50 @@ mod tests {
                 rn: 1,
                 rm: 2,
                 shift_type: 0
+            }
+        );
+    }
+
+    #[test]
+    fn test_decode_umaal() {
+        // UMAAL R0, R1, R2, R3 -> 0xFBE2 0x0163
+        assert_eq!(
+            decode_thumb_32(0xFBE2, 0x0163),
+            Instruction::Umaal {
+                rd_lo: 0,
+                rd_hi: 1,
+                rn: 2,
+                rm: 3
+            }
+        );
+    }
+
+    #[test]
+    fn test_decode_dataproc32_adc_sbc_rsb() {
+        // ADCS R3, R4, R5 -> 0xEB54 0x0305
+        assert_eq!(
+            decode_thumb_32(0xEB54, 0x0305),
+            Instruction::DataProc32 {
+                op: 0xA,
+                rn: 4,
+                rd: 3,
+                rm: 5,
+                imm5: 0,
+                shift_type: 0,
+                set_flags: true
+            }
+        );
+        // RSB R2, R0, R1 -> 0xEBC0 0x0201
+        assert_eq!(
+            decode_thumb_32(0xEBC0, 0x0201),
+            Instruction::DataProc32 {
+                op: 0xE,
+                rn: 0,
+                rd: 2,
+                rm: 1,
+                imm5: 0,
+                shift_type: 0,
+                set_flags: false
             }
         );
     }
@@ -2137,6 +2445,16 @@ mod tests {
                 offset: -6
             }
         );
+    }
+
+    #[test]
+    fn test_decode_svc() {
+        // SVC #2 -> 1101 1111 0000 0010 = 0xDF02. The 0xF cond field in the
+        // 0xD000 block is the supervisor call, not a conditional branch.
+        assert_eq!(decode_thumb_16(0xDF02), Instruction::Svc { imm8: 2 });
+        // Full imm8 range.
+        assert_eq!(decode_thumb_16(0xDF00), Instruction::Svc { imm8: 0 });
+        assert_eq!(decode_thumb_16(0xDFFF), Instruction::Svc { imm8: 255 });
     }
 
     #[test]

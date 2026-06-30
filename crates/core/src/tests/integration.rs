@@ -206,6 +206,7 @@ pub mod integration_tests {
             dev: Box::new(RecordingPeripheral::new()),
             ticks_remaining: 0,
             generation: 0,
+            clock_gate: None,
         });
 
         bus.write_u8(base + 2, 0xAB).unwrap();
@@ -225,6 +226,7 @@ pub mod integration_tests {
             dev: Box::new(RecordingPeripheral::new()),
             ticks_remaining: 0,
             generation: 0,
+            clock_gate: None,
         });
 
         let value = 0xA1B2_C3D4;
@@ -272,6 +274,7 @@ pub mod integration_tests {
             }),
             ticks_remaining: 0,
             generation: 0,
+            clock_gate: None,
         });
 
         bus.write_u8(base, 0xAA).unwrap();
@@ -298,6 +301,7 @@ pub mod integration_tests {
             dev: Box::new(RecordingPeripheral::with_tick(true)),
             ticks_remaining: 0,
             generation: 0,
+            clock_gate: None,
         });
 
         let irqs = bus.tick_peripherals();
@@ -327,6 +331,7 @@ pub mod integration_tests {
             dev: Box::new(RecordingPeripheral::with_tick(true)),
             ticks_remaining: 0,
             generation: 0,
+            clock_gate: None,
         });
 
         let irqs = bus.tick_peripherals();
@@ -372,6 +377,7 @@ pub mod integration_tests {
             }),
             ticks_remaining: 0,
             generation: 0,
+            clock_gate: None,
         });
 
         // Force instruction fetch to fail with a memory violation.
@@ -404,6 +410,8 @@ pub mod integration_tests {
                 base: 0x2000_0000,
                 size: "20KB".to_string(),
             },
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             memory_regions: Vec::new(),
             peripherals: vec![
                 PeripheralConfig {
@@ -412,6 +420,7 @@ pub mod integration_tests {
                     base_address: 0x4000_C000,
                     size: None,
                     irq: None,
+                    clock: None,
                     config: HashMap::new(),
                 },
                 PeripheralConfig {
@@ -420,6 +429,7 @@ pub mod integration_tests {
                     base_address: 0x5000_0000,
                     size: None,
                     irq: None,
+                    clock: None,
                     config: HashMap::new(),
                 },
             ],
@@ -471,6 +481,65 @@ pub mod integration_tests {
             crate::bus::SystemBus::canonical_peripheral_type("arm_sp804_timer"),
             "systick"
         );
+        // RP2040 native peripherals must NOT be coerced by the fuzzy
+        // contains("timer"/"spi"/"i2c") matchers to the generic STM32 models;
+        // they carry RP2040-specific register layouts.
+        assert_eq!(
+            crate::bus::SystemBus::canonical_peripheral_type("rp2040_timer"),
+            "rp2040_timer"
+        );
+        assert_eq!(
+            crate::bus::SystemBus::canonical_peripheral_type("rp2040_spi"),
+            "rp2040_spi"
+        );
+        assert_eq!(
+            crate::bus::SystemBus::canonical_peripheral_type("rp2040_i2c"),
+            "rp2040_i2c"
+        );
+
+        // Registry-membership short-circuit: names that are already canonical
+        // model types must be returned verbatim, never coerced by the fuzzy
+        // `contains(...)` chain (e.g. `esp32c3_spi` contains "spi").
+        assert_eq!(
+            crate::bus::SystemBus::canonical_peripheral_type("esp32c3_spi"),
+            "esp32c3_spi"
+        );
+        assert_eq!(
+            crate::bus::SystemBus::canonical_peripheral_type("esp32c3_apb_saradc"),
+            "esp32c3_apb_saradc"
+        );
+        assert_eq!(
+            crate::bus::SystemBus::canonical_peripheral_type("rp2040_timer"),
+            "rp2040_timer"
+        );
+        assert_eq!(
+            crate::bus::SystemBus::canonical_peripheral_type("nrf52_gpiote"),
+            "nrf52_gpiote"
+        );
+
+        // Alias table: raw input spellings whose canonical output differs.
+        assert_eq!(
+            crate::bus::SystemBus::canonical_peripheral_type("nrf52840_i2c"),
+            "nrf52840_twim"
+        );
+        assert_eq!(
+            crate::bus::SystemBus::canonical_peripheral_type("nrf52840_saadc"),
+            "nrf52_saadc"
+        );
+        assert_eq!(
+            crate::bus::SystemBus::canonical_peripheral_type("nrf52840_qspi"),
+            "nrf52_qspi"
+        );
+
+        // Fuzzy fallback still applies to unmodelled vendor names.
+        assert_eq!(
+            crate::bus::SystemBus::canonical_peripheral_type("qspi"),
+            "quadspi"
+        );
+        assert_eq!(
+            crate::bus::SystemBus::canonical_peripheral_type("USART1"),
+            "uart"
+        );
     }
 
     #[test]
@@ -508,6 +577,8 @@ pub mod integration_tests {
                 base: 0x2000_0000,
                 size: "20KB".to_string(),
             },
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             memory_regions: Vec::new(),
             peripherals: vec![
                 PeripheralConfig {
@@ -516,6 +587,7 @@ pub mod integration_tests {
                     base_address: 0xE000_E010,
                     size: None,
                     irq: None,
+                    clock: None,
                     config: HashMap::new(),
                 },
                 PeripheralConfig {
@@ -524,6 +596,7 @@ pub mod integration_tests {
                     base_address: 0x4001_0800,
                     size: None,
                     irq: None,
+                    clock: None,
                     config: HashMap::new(),
                 },
             ],
@@ -577,6 +650,8 @@ pub mod integration_tests {
                 base: 0x2000_0000,
                 size: "20KB".to_string(),
             },
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "uart1".to_string(),
@@ -584,6 +659,7 @@ pub mod integration_tests {
                 base_address: 0x4000_C000,
                 size: Some("1KB".to_string()),
                 irq: Some(37),
+                clock: None,
                 config: HashMap::new(),
             }],
         };
@@ -631,6 +707,8 @@ pub mod integration_tests {
                 base: 0x2000_0000,
                 size: "20KB".to_string(),
             },
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "gpioa".to_string(),
@@ -638,6 +716,7 @@ pub mod integration_tests {
                 base_address: 0x4001_0800,
                 size: None,
                 irq: None,
+                clock: None,
                 config: gpio_config,
             }],
         };
@@ -691,6 +770,8 @@ pub mod integration_tests {
                 base: 0x2000_0000,
                 size: "20KB".to_string(),
             },
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "uart3".to_string(),
@@ -698,6 +779,7 @@ pub mod integration_tests {
                 base_address: 0x4000_4800,
                 size: None,
                 irq: None,
+                clock: None,
                 config: uart_config,
             }],
         };
@@ -727,6 +809,92 @@ pub mod integration_tests {
         assert_eq!(data, vec![b'Y']);
     }
 
+    /// UART layout resolution must be deterministic per type — no `contains()`
+    /// guessing, no silent default. A named hardware type pins exactly one
+    /// layout; a UART family with no faithful model must be named explicitly or
+    /// it errors rather than masquerade as an STM32.
+    #[test]
+    fn test_uart_layout_is_deterministic_per_type() {
+        use crate::peripherals::uart::UartRegisterLayout::*;
+
+        let cfg = |ty: &str, profile: Option<&str>| {
+            let mut config = HashMap::new();
+            if let Some(p) = profile {
+                config.insert(
+                    "profile".to_string(),
+                    serde_yaml::Value::String(p.to_string()),
+                );
+            }
+            PeripheralConfig {
+                id: "u".to_string(),
+                r#type: ty.to_string(),
+                base_address: 0x4000_0000,
+                size: None,
+                irq: None,
+                clock: None,
+                config,
+            }
+        };
+
+        let resolve = |ty: &str, profile: Option<&str>| {
+            crate::bus::SystemBus::uart_layout_for(&cfg(ty, profile))
+        };
+
+        // Families we model pin exactly one layout, no profile required.
+        use crate::peripherals::uart::UartRegisterLayout as L;
+        for (ty, want) in [
+            ("nxp_lpuart", Lpuart),
+            ("stm32f1_uart", Stm32F1),
+            ("stm32_uart", Stm32F1),
+            ("stm32f7_usart", Stm32V2),
+            ("stm32h5_usart", Stm32V2),
+            ("uart", Stm32F1), // generic escape hatch
+            ("ns16550", L::Ns16550),
+            ("pl011", L::Pl011),
+            ("cadence_uart", L::Cadence),
+            ("efm32_uart", L::Efm32),
+            ("efr32_usart", L::Efr32),
+            ("leuart", L::Leuart),
+            ("renesas_sci", L::Sci),
+            ("renesasra6m5_sci", L::Sci),
+            ("renesasda14_uart", L::DwApbUart),
+            ("gaislerapbuart", L::Gaisler),
+            ("npcx_uart", L::Npcx),
+            ("max32650_uart", L::Max32650),
+            ("opentitan_uart", L::OpenTitan),
+            ("sam_usart", L::Sam),
+            ("samd5_uart", L::Sercom),
+            ("imxuart", L::Imx),
+            ("sifive_uart", L::Sifive),
+            ("litex_uart", L::Litex),
+            ("murax_uart", L::Murax),
+            ("miv_coreuart", L::CoreUart),
+            ("k6xf_uart", L::KinetisUart),
+            ("pulp_udma_uart", L::Pulp),
+            ("ft9001_usart", L::Ns16550),
+            ("cosimulateduart", L::Ns16550),
+            ("mpc5567_uart", L::Esci),
+            ("picosoc_simpleuart", L::PicoUart),
+        ] {
+            assert_eq!(resolve(ty, None).unwrap(), want, "type '{ty}' layout");
+        }
+
+        // The generic "uart" escape hatch is profile-overridable.
+        assert_eq!(resolve("uart", Some("stm32v2")).unwrap(), Stm32V2);
+
+        // A UART type we genuinely don't recognise must error — no silent
+        // fallback onto an STM32 register map.
+        assert!(
+            resolve("definitely_not_a_real_uart", None).is_err(),
+            "an unrecognised UART type must error, not default to STM32F1"
+        );
+        // …but an explicit profile lets any type pick a layout deterministically.
+        assert_eq!(
+            resolve("definitely_not_a_real_uart", Some("ns16550")).unwrap(),
+            L::Ns16550
+        );
+    }
+
     #[test]
     fn test_attach_uart_tx_sink_named_captures_only_selected_uart() {
         let chip = ChipDescriptor {
@@ -751,6 +919,7 @@ pub mod integration_tests {
                     size: Some("1KB".to_string()),
                     irq: Some(37),
                     config: HashMap::new(),
+                    clock: None,
                 },
                 PeripheralConfig {
                     id: "uart2".to_string(),
@@ -759,8 +928,11 @@ pub mod integration_tests {
                     size: Some("1KB".to_string()),
                     irq: Some(38),
                     config: HashMap::new(),
+                    clock: None,
                 },
             ],
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
         };
 
         let manifest = SystemManifest {
@@ -807,6 +979,8 @@ pub mod integration_tests {
                 base: 0x2000_0000,
                 size: "20KB".to_string(),
             },
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "rcc".to_string(),
@@ -814,6 +988,7 @@ pub mod integration_tests {
                 base_address: 0x4402_0C00,
                 size: None,
                 irq: None,
+                clock: None,
                 config: rcc_config,
             }],
         };
@@ -864,6 +1039,8 @@ pub mod integration_tests {
                 base: 0x2000_0000,
                 size: "20KB".to_string(),
             },
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "rcc".to_string(),
@@ -871,6 +1048,7 @@ pub mod integration_tests {
                 base_address: 0x4002_3800,
                 size: None,
                 irq: None,
+                clock: None,
                 config: rcc_config,
             }],
         };
@@ -921,6 +1099,8 @@ pub mod integration_tests {
                 base: 0x2000_0000,
                 size: "20KB".to_string(),
             },
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "gpioa".to_string(),
@@ -928,6 +1108,7 @@ pub mod integration_tests {
                 base_address: 0x4001_0800,
                 size: None,
                 irq: None,
+                clock: None,
                 config: gpio_config,
             }],
         };
@@ -1157,12 +1338,16 @@ pub mod integration_tests {
         machine.bus.write_u32(0xE000_E014, 1).unwrap();
         machine.bus.write_u32(0xE000_E010, 3).unwrap();
 
-        // Step 1: PC=0x2000_0000. Ticks SysTick.
-        // SysTick wrap triggers exception 15.
+        // Reload step: writing SYST_CVR cleared the counter to 0, so the first
+        // tick reloads RVR (=1) without firing — SysTick is edge-triggered on a
+        // count-down to zero, not on a held zero.
         let _ = machine.step();
 
-        // Step 2: Next step should detect pending exception AND handle it.
-        // It should perform stacking and jump to 0x1000.
+        // Step 1: counter 1->0, SysTick wrap pends exception 15.
+        let _ = machine.step();
+
+        // Step 2: next step detects the pending exception AND handles it —
+        // stacking and jumping to 0x1000.
         let _ = machine.step();
 
         assert_eq!(machine.cpu.pc, 0x1000);
@@ -1188,11 +1373,15 @@ pub mod integration_tests {
         machine.cpu.r0 = 10;
         machine.cpu.r7 = 20;
 
-        // 3. Trigger SysTick
-        machine.bus.write_u32(0xE000_E014, 100).unwrap();
+        // 3. Trigger SysTick (Reload=1 so the wrap is one count-down away).
+        machine.bus.write_u32(0xE000_E014, 1).unwrap();
         machine.bus.write_u32(0xE000_E010, 3).unwrap();
 
-        // Step 1: Wrap SysTick
+        // Reload step: writing SYST_CVR cleared the counter to 0; the first tick
+        // reloads RVR without firing (edge-triggered on count-down to zero).
+        machine.step().unwrap();
+
+        // Step 1: counter 1->0, SysTick wraps and pends exception 15.
         machine.step().unwrap();
 
         // Step 2: Handle Exception (Entry)
@@ -1215,8 +1404,10 @@ pub mod integration_tests {
         // Step 4: Execute BX LR (Exception Return)
         machine.step().unwrap();
 
-        // 5. Verify restored state
-        assert_eq!(machine.cpu.pc, 0x2000_0002); // Back at original PC + 2
+        // 5. Verify restored state. Two instructions ran at the (zeroed) reset
+        // PC before the wrap — the reload tick step and the count-down step —
+        // each a 2-byte NOP, so the interrupted/restored PC is original + 4.
+        assert_eq!(machine.cpu.pc, 0x2000_0004);
         assert_eq!(machine.cpu.r0, 10); // Original R0 restored!
         assert_eq!(machine.cpu.sp, 0x2002_0000); // SP restored
         assert_eq!(machine.cpu.r7, 20); // R7 was untouched
@@ -1367,6 +1558,7 @@ pub mod integration_tests {
             dev: Box::new(crate::peripherals::stub::StubPeripheral::new(0)),
             ticks_remaining: 0,
             generation: 0,
+            clock_gate: None,
         });
         // (Note: StubPeripheral::tick returns false. I should use a more active one or just pend manually)
 
@@ -1902,6 +2094,7 @@ pub mod integration_tests {
             dev: Box::new(Adc::new()),
             ticks_remaining: 0,
             generation: 0,
+            clock_gate: None,
         });
 
         let (cpu, _nvic) = crate::system::cortex_m::configure_cortex_m(&mut bus);
@@ -2091,6 +2284,8 @@ pub mod integration_tests {
                 base: 0x3FC8_0000,
                 size: "400KB".to_string(),
             },
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
             memory_regions: Vec::new(),
             peripherals: vec![PeripheralConfig {
                 id: "timg0".to_string(),
@@ -2098,6 +2293,7 @@ pub mod integration_tests {
                 base_address: 0x6001_F000,
                 size: None,
                 irq: None,
+                clock: None,
                 config: HashMap::new(),
             }],
         };
@@ -2192,6 +2388,73 @@ pub mod integration_tests {
             machine.cpu.get_pc(),
             pc + 2,
             "Should have executed one instruction (thumb)"
+        );
+    }
+
+    #[test]
+    fn test_breakpoint_stops_inside_batch() {
+        // A breakpoint whose PC lies INSIDE a multi-instruction batch must stop
+        // at exactly that PC. Breakpoints are only checked at batch boundaries,
+        // so with a tick interval > 1 the batch would otherwise execute straight
+        // past the breakpoint — the classic GDB "set breakpoint, continue, never
+        // stops" symptom.
+        let mut machine = create_machine();
+        // Force batches larger than one instruction so the breakpoint is not at
+        // a batch boundary.
+        machine.config.peripheral_tick_interval = 16;
+
+        let pc = 0x2000_0000u32;
+        machine.cpu.set_pc(pc);
+
+        // 64 Thumb NOPs (MOV R0, R0 = 0x4600) so every stepped address is valid.
+        for i in 0..64u64 {
+            machine.bus.write_u16(pc as u64 + i * 2, 0x4600).unwrap();
+        }
+
+        // Breakpoint three instructions in — inside the first batch, not at the
+        // starting PC (which the boundary check already catches).
+        let bp = pc + 6;
+        machine.add_breakpoint(bp);
+
+        let res = machine.run(Some(64)).unwrap();
+        assert!(
+            matches!(res, StopReason::Breakpoint(addr) if addr == bp),
+            "continue must stop AT the breakpoint inside a batch, got {res:?}"
+        );
+        assert_eq!(
+            machine.cpu.get_pc(),
+            bp,
+            "PC must be exactly at the breakpoint, not past it"
+        );
+    }
+
+    #[test]
+    fn pc_coverage_observer_records_executed_addresses() {
+        use crate::pc_coverage::PcCoverageObserver;
+
+        let mut machine = create_machine();
+        let cov = Arc::new(PcCoverageObserver::new());
+        machine.observers.push(cov.clone());
+
+        let pc = 0x2000_0000u32;
+        machine.cpu.set_pc(pc);
+        // Eight Thumb NOPs (MOV R0, R0).
+        for i in 0..8u64 {
+            machine.bus.write_u16(pc as u64 + i * 2, 0x4600).unwrap();
+        }
+
+        let _ = machine.run(Some(8)).unwrap();
+
+        assert_eq!(
+            cov.covered_count(),
+            8,
+            "all eight straight-line instruction addresses must be covered"
+        );
+        assert!(cov.was_executed(pc));
+        assert!(cov.was_executed(pc + 14));
+        assert!(
+            cov.edges().is_empty(),
+            "straight-line code takes no branch edges"
         );
     }
 }

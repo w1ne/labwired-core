@@ -1,0 +1,26 @@
+# LabWired - FRDM-KW41Z System Configuration
+#
+# NXP Freedom development board for the KW41Z (MKW41Z512VHT4) wireless MCU.
+# The board exposes LPUART0 on the OpenSDA virtual COM port — the console the
+# firmware prints to — and an on-board NXP FXOS8700CQ 3D accelerometer + 3D
+# magnetometer on I2C1 (PTC2/PTC3, slave 0x1f). The FXOS8700 is the motion
+# sensor a livestock ear-tag uses to track activity/rumination; here it lets
+# the unmodified upstream Zephyr `fxos8700` sensor driver boot and stream real
+# accel/mag readings, the way a CowManager-style cattle tag would.
+name: "frdm-kw41z"
+chip: "../chips/mkw41z4.yaml"
+external_devices:
+  - id: "fxos8700"
+    type: "fxos8700"
+    connection: "i2c1"
+    config:
+      i2c_address: 0x1f
+board_io:
+  - id: "fxos8700"
+    kind: "i2c_device"
+    peripheral: "i2c1"
+    pin: 0
+    signal: "input"
+    active_high: true
+    i2c_address: 0x1f
+    device_type: "fxos8700"

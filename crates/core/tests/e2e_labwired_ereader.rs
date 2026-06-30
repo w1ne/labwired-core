@@ -30,9 +30,9 @@
 
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::xtensa_lx7::XtensaLx7;
-use labwired_core::peripherals::components::Ssd1680Tricolor290;
+use labwired_core::peripherals::components::Uc8151dTricolor290;
 use labwired_core::peripherals::esp32::spi::Esp32Spi;
-use labwired_core::peripherals::esp32s3::rom_thunks;
+use labwired_core::peripherals::esp_xtensa_common::rom_thunks;
 use labwired_core::system::xtensa::configure_xtensa_esp32;
 use labwired_core::{Cpu, Machine};
 use std::path::PathBuf;
@@ -73,7 +73,7 @@ name: esp32-epaper-ereader
 chip: esp32
 external_devices:
   - id: epd
-    type: gxepd2_290_c90c
+    type: uc8151d_tricolor_290
     connection: spi3
     config:
       cs_pin: GPIO5
@@ -149,58 +149,17 @@ external_devices:
             }
         };
 
-    // Heap: the sim-side bump allocator (default). It's debt — the real
-    // ESP-IDF heap_caps should run on emulated DRAM. LABWIRED_REAL_HEAP=1
-    // un-thunks it, but that currently walls.
-    //
-    // Diagnosed root cause (2026-06-04, via the WiFi fixture — same wall):
-    // the real heap_caps_init mis-registers a heap region, so heap_caps_malloc
-    // hands out pointers into non-heap memory. A vector_desc node ends up
-    // pointing at memory whose first word is the bytes "lock" (0x6b636f6c),
-    // and APP_CPU's esp_intr_alloc_intrstatus_bind faults dereferencing it
-    // (node->next = "lock") while PRO_CPU spins in main_task waiting for
-    // s_other_cpu_startup_done.
-    //
-    // Eliminated hypotheses (don't re-tread):
-    //   * seeded-stack collision (#173) — moving SP to top-of-DRAM gives the
-    //     IDENTICAL crash, and "lock" is a fixed string, not stack noise;
-    //   * unbacked DRAM — 0x3FFA_0000..0x4000_0000 is fully RamPeripheral-backed;
-    //   * broken atomic CAS — S32C1I is correct and the sim interleaves cores
-    //     at instruction granularity, so spinlocks serialize;
-    //   * unshared memory — both cores step against the same SystemBus.
-    // Remaining suspect: the real heap_caps_init mis-registers a heap region
-    // (wrong soc_memory_regions read via flash XIP, or a subtle instruction
-    // mis-emulation in the TLSF/multi_heap registration path), so malloc
-    // returns an out-of-region pointer. Next step: trace heap_caps_malloc
-    // returns / multi_heap_register args under LABWIRED_REAL_HEAP=1. Real fix
-    // lands there; then delete this bump allocator.
-    if std::env::var("LABWIRED_REAL_HEAP").is_err() {
-        push_named(
-            &mut thunks,
-            "heap_caps_init",
-            rom_thunks::esp_idf_heap_caps_init,
-        );
-        push_named(
-            &mut thunks,
-            "heap_caps_malloc",
-            rom_thunks::esp_idf_heap_caps_malloc,
-        );
-        push_named(
-            &mut thunks,
-            "heap_caps_calloc",
-            rom_thunks::esp_idf_heap_caps_calloc,
-        );
-        push_named(
-            &mut thunks,
-            "heap_caps_free",
-            rom_thunks::esp_idf_heap_caps_free,
-        );
-        push_named(
-            &mut thunks,
-            "heap_caps_realloc",
-            rom_thunks::esp_idf_heap_caps_realloc,
-        );
-    }
+    // Heap: the firmware's REAL ESP-IDF multi_heap (TLSF) allocator runs on
+    // the emulated DRAM — no bump-allocator thunks. The long-standing "real
+    // heap walls" symptom (diagnosed 2026-06-04 against the WiFi fixture:
+    // heap_caps_malloc hands out a pointer whose first word is the rodata bytes
+    // "lock" = 0x6b636f6c, and APP_CPU faults dereferencing vector_desc->next
+    // in esp_intr_alloc while PRO_CPU spins on s_other_cpu_startup_done) was
+    // NOT an allocator bug. It was APP_CPU dual-core bring-up: with a real
+    // second core (XtensaLx7::new_app_cpu) and the DPORT delivering the
+    // cross-core IPI through Machine::step, APP_CPU initialises correctly and
+    // the real heap registers + allocates cleanly. This test paints identically
+    // with the real heap (refresh_gen=1, 1429 ink bytes), proving it.
 
     // No-op stubs for ESP-IDF / Arduino-ESP32 init paths we don't model.
     for sym in &[
@@ -467,7 +426,7 @@ external_devices:
                     .and_then(|spi| {
                         spi.attached_devices.iter().find_map(|d| {
                             d.as_any()
-                                .and_then(|a| a.downcast_ref::<Ssd1680Tricolor290>())
+                                .and_then(|a| a.downcast_ref::<Uc8151dTricolor290>())
                         })
                     })
                 {
@@ -491,7 +450,7 @@ external_devices:
         .iter()
         .find_map(|d| {
             d.as_any()
-                .and_then(|a| a.downcast_ref::<Ssd1680Tricolor290>())
+                .and_then(|a| a.downcast_ref::<Uc8151dTricolor290>())
         })
         .expect("panel attached");
     let refresh_gen = panel.refresh_generation();

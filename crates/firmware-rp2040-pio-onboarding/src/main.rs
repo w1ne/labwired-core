@@ -8,9 +8,9 @@ use panic_halt as _;
 const UART0_BASE: u32 = 0x40034000;
 const PIO0_BASE: u32 = 0x50200000;
 
-// UART Registers — labwired's rp2040.yaml models UART0 with the stm32v2
-// profile (TDR at offset 0x28), matching firmware-rp2040-demo.
-const UART0_TDR: *mut u32 = (UART0_BASE + 0x28) as *mut u32;
+// UART data register (PL011 UARTDR at offset 0x00 — the RP2040's real UART,
+// matching firmware-rp2040-demo and configs/chips/rp2040.yaml profile: pl011).
+const UART0_TDR: *mut u32 = UART0_BASE as *mut u32;
 
 // PIO Registers
 const PIO0_CTRL: *mut u32 = PIO0_BASE as *mut u32;

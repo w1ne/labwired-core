@@ -97,7 +97,7 @@ static SN74HC165_METADATA: KitMetadata = KitMetadata {
     label: "74HC165 Shift Register",
     summary: "8-bit parallel-in / serial-out shift register over SPI.",
     detail: "Lets a host MCU sample 8 GPIO inputs through one SPI clock burst. Used in the \
-             AL2205 IO-Link DI lab to surface field-side switch state.",
+             IO-Link DI/DO lab to surface field-side switch state.",
     transport: Transport::Spi,
     category: Category::Spi,
     config_keys: &[
@@ -113,10 +113,10 @@ static SN74HC165_METADATA: KitMetadata = KitMetadata {
         },
     ],
     labs: &[LabRef {
-        board_id: "al2205-iolink-dido",
+        board_id: "iolink-dido",
         chip: "stm32l476",
-        example_dir: "al2205-iolink-dido",
-        demo_elf: "demo-al2205-iolink-dido.elf",
+        example_dir: "iolink-dido",
+        demo_elf: "demo-iolink-dido.elf",
     }],
 };
 

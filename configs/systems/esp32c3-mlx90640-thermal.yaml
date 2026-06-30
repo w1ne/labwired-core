@@ -1,0 +1,36 @@
+# LabWired - ESP32-C3 + MLX90640 thermal-camera system
+#
+# An ESP32-C3 reading a Melexis MLX90640 32×24 far-IR thermal array over I²C0
+# at address 0x33. The MLX90640 device model serves a real, time-evolving
+# thermal scene (electrical-cabinet / motor-housing hotspot) that the official
+# Melexis driver, running unmodified on the C3, decodes to per-pixel °C.
+#
+# The `connection: "i2c0"` links the device to the C3's behavioral I²C0
+# controller (chip yaml `i2c0`, type `esp32c3_i2c`), which attaches it via the
+# `build_i2c_device` factory ("mlx90640" arm).
+name: "esp32c3-mlx90640-thermal"
+chip: "../chips/esp32c3.yaml"
+
+external_devices:
+  - id: "thermal_cam"
+    type: "mlx90640"
+    connection: "i2c0"
+    config:
+      i2c_address: 0x33
+
+      # ── Thermal scene (real first-order RC physics) ──────────────────────
+      ambient_c: 25.0          # background temperature, °C
+      hot_row: 12              # hotspot centre row (0..24)
+      hot_col: 16              # hotspot centre col (0..32)
+      hot_radius: 1            # hotspot half-extent, pixels (0 = single pixel)
+      hot_target_c: 85.0       # steady-state hotspot target before load scaling
+      load: 1.0                # load multiplier on the hotspot target
+      tau_s: 8.0               # heating time constant τ, seconds
+      cooling_efficiency: 0.6  # fan/cooling efficiency 0..1 (pulls peak down)
+      cooling_fault_at_s: 30.0 # at t=30 s cooling collapses → hotspot climbs
+      frame_period_s: 0.5      # simulated time advanced per captured frame (2 Hz)
+
+board_io:
+  - id: "thermal_cam"
+    kind: "i2c_device"
+    peripheral: "i2c0"

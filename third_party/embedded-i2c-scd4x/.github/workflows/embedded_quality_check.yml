@@ -1,0 +1,10 @@
+name: Quality check
+
+on:
+  push:
+  pull_request:
+    branches:
+      - master
+jobs:
+  driver-quality:
+    uses: sensirion/.github/.github/workflows/driver.c.check.yml@main

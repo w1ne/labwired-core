@@ -89,7 +89,7 @@ fn external_arduino_esp32_firmware_drives_panel_in_sim() {
     // can't bootstrap multi_heap state in our sim (chicken-and-egg with
     // the static heap allocator), so we replace the heap-caps API surface
     // with a bump allocator over a fixed 64 KiB pool in SRAM2.
-    use labwired_core::peripherals::esp32s3::rom_thunks;
+    use labwired_core::peripherals::esp_xtensa_common::rom_thunks;
     machine
         .bus
         .install_flash_thunk(0x400e_e3b0, rom_thunks::esp_idf_heap_caps_init)

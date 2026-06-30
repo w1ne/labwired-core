@@ -34,11 +34,14 @@ members = [
     "crates/firmware-nrf52840-ble-sensor",
     "crates/firmware-nrf52840-ble-tx",
     "crates/firmware-nrf52840-conformance",
+    "crates/firmware-nrf52840-cpu-conformance",
     "crates/firmware-nrf52840-demo",
     "crates/firmware-nrf52840-isr-blinky",
     "crates/firmware-nrf52840-proximity",
     "crates/firmware-nrf52840-timer-blinky",
     "crates/firmware-rp2040-demo",
+    "crates/firmware-kw41z-demo",
+    "crates/firmware-kw41z-lcd",
     "crates/firmware-rp2040-pio-onboarding",
     "crates/gdbstub",
     "crates/hw-oracle",
@@ -47,16 +50,17 @@ members = [
     "crates/hw-trace",
     "crates/ir",
     "crates/loader",
+    "crates/validation-report",
     "crates/python",
     "crates/riscv-ci-fixture",
     "crates/svd-ingestor",
     "crates/wasm",
-    "examples/arm-cortex-m0",
     "examples/demo-blinky",
     "examples/nucleo-f407-i2c",
     "examples/riscv-virt",
     "examples/adxl345-sensor-lab",
     "examples/mpu6050-sensor-lab",
+    "examples/vl53l1x-tof-lab",
     "examples/bme280-weather-lab",
     "examples/max31855-thermocouple-lab",
     "examples/ssd1306-hello-lab",
@@ -88,7 +92,7 @@ exclude = [
 default-members = ["crates/cli", "crates/core", "crates/dap", "crates/loader", "crates/labwired-fuzz"]
 
 [workspace.package]
-version = "0.15.0"
+version = "0.17.10"
 edition = "2021"
 authors = ["Andrii Shylenko"]
 license = "MIT"
@@ -173,11 +177,23 @@ opt-level = "s"
 codegen-units = 1
 opt-level = "s"
 
+[profile.release.package.firmware-nrf52840-cpu-conformance]
+codegen-units = 1
+opt-level = "s"
+
 [profile.release.package.firmware-nrf52840-demo]
 codegen-units = 1
 opt-level = "s"
 
 [profile.release.package.firmware-rp2040-demo]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-kw41z-demo]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-kw41z-lcd]
 codegen-units = 1
 opt-level = "s"
 

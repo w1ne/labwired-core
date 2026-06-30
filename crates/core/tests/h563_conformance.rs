@@ -82,7 +82,15 @@ fn gpio_reset_state_matches_silicon() {
 
 #[test]
 fn peripheral_estate_reset_state_matches_silicon() {
-    let bus = h563_bus();
+    let mut bus = h563_bus();
+    // These are CLOCKED reset values: TIM1/TIM2/I2C1 are clock-gated out of
+    // reset (yaml `clock:`), so the warm silicon capture enabled their bus
+    // clocks before sampling. Mirror that — enable TIM2EN/I2C1EN (APB1LENR)
+    // and TIM1EN (APB2ENR) so the gated peripherals present their real reset
+    // state rather than the dead-while-gated 0.
+    const RCC: u64 = 0x4402_0C00;
+    bus.write_u32(RCC + 0x9C, (1 << 21) | 1).unwrap(); // APB1LENR: I2C1EN|TIM2EN
+    bus.write_u32(RCC + 0xA4, 1 << 11).unwrap(); // APB2ENR: TIM1EN
     let rd = |addr: u64| bus.read_u32(addr).unwrap();
     // Timers: ARR resets full-scale per counter width; everything else 0.
     assert_eq!(rd(0x4001_2C00 + 0x2C), 0xFFFF, "TIM1_ARR");
@@ -157,7 +165,17 @@ fn class_model_reset_state_matches_silicon() {
     // SPI1/SPI2 (stm32h5 profile), ADC1 (stm32l4 layout), RTC (rtc_v3) and
     // GPDMA1 reset values, all pinned to the 2026-06-11 NUCLEO-H563ZI
     // capture (validation corpus probe-20260611).
-    let bus = h563_bus();
+    //
+    // These are CLOCKED reset values: SPI1/ADC1/RTC/GPDMA1 are clock-gated out
+    // of reset (yaml `clock:`), so the warm capture enabled their bus clocks
+    // first. Mirror that before sampling — otherwise the gated peripherals read
+    // the dead-while-gated 0. (SPI2 is left ungated, so it reads either way.)
+    let mut bus = h563_bus();
+    const RCC: u64 = 0x4402_0C00;
+    bus.write_u32(RCC + 0xA4, 1 << 12).unwrap(); // APB2ENR: SPI1EN
+    bus.write_u32(RCC + 0x8C, 1 << 10).unwrap(); // AHB2ENR: ADCEN
+    bus.write_u32(RCC + 0xA8, 1 << 21).unwrap(); // APB3ENR: RTCAPBEN
+    bus.write_u32(RCC + 0x88, 1).unwrap(); // AHB1ENR: GPDMA1EN
     let rd = |addr: u64| bus.read_u32(addr).unwrap();
 
     // SPI1 @ 0x4001_3000 / SPI2 @ 0x4000_3800.

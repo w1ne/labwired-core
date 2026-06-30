@@ -19,6 +19,8 @@ const RAM: u64 = 0x800;
 const REG_CCCR: u64 = 0x018;
 const REG_RXF0S: u64 = 0x090;
 const REG_TXBAR: u64 = 0x0CC;
+const REG_TXBRP: u64 = 0x0C8;
+const REG_TXBTO: u64 = 0x0D4;
 
 fn rd(dev: &Fdcan, offset: u64) -> u32 {
     Peripheral::read_u32(dev, offset).unwrap()
@@ -50,6 +52,10 @@ fn fdcan_nodes_exchange_classic_can_frames_over_can_bus() {
     start(&mut node_b);
 
     wr(&mut node_a, REG_TXBAR, 0x1);
+    // TX is asynchronous: node_a must tick first so drain_pending_tx
+    // sends the frame to the bus channel, then the bus propagates it
+    // to node_b on the subsequent ticks.
+    node_a.tick();
     can_bus.tick().unwrap();
     node_b.tick();
 
@@ -82,6 +88,8 @@ fn fdcan_can_fd_frames_preserve_fd_metadata_and_64_byte_payload() {
     start(&mut node_b);
 
     wr(&mut node_a, REG_TXBAR, 0x1);
+    // TX is asynchronous: tick node_a first to push the frame onto the bus.
+    node_a.tick();
     can_bus.tick().unwrap();
     node_b.tick();
 
@@ -114,10 +122,65 @@ fn transmitter_echo_is_contained_to_the_bus_broadcast() {
     wr(&mut node_a, RAM + 0x27C, 1 << 16);
     start(&mut node_a);
     wr(&mut node_a, REG_TXBAR, 0x1);
-    assert_eq!(rd(&node_a, REG_RXF0S) & 0x7F, 0, "no rx before bus tick");
+    assert_eq!(rd(&node_a, REG_RXF0S) & 0x7F, 0, "no rx before node tick");
+    // Tick node_a first so drain_pending_tx sends the frame to the bus
+    // channel; then bus propagates the broadcast; then node_a drains
+    // its own RX (the echo arrives on this second tick).
+    node_a.tick();
     can_bus.tick().unwrap();
     node_a.tick();
     assert_eq!(rd(&node_a, REG_RXF0S) & 0x7F, 1, "broadcast echo");
     wr(&mut node_a, 0x094, 0);
     assert_eq!(rd(&node_a, REG_RXF0S) & 0x7F, 0);
+}
+
+/// Issue #336: TXBRP must stay asserted until tick() completes the
+/// transmission. Firmware that polls `while (TXBRP & 1) {}` should
+/// actually block in simulation, preventing false-pass of code that
+/// resets before the frame reaches the bus (the udslib #88 pattern).
+#[test]
+fn txbrp_stays_set_until_tick_then_txbto_is_set() {
+    // Register offsets used in this test only.
+    const REG_TEST: u64 = 0x010;
+
+    let mut dev = Fdcan::new();
+
+    // Enter loopback using the same sequence as capture13: CCCR.INIT +
+    // CCCR.CCE + CCCR.TEST, then TEST.LBCK (bit 4), then leave INIT.
+    wr(&mut dev, REG_CCCR, 0x3); // INIT | CCE
+    wr(&mut dev, REG_CCCR, 0xA3); // + TEST | MON
+    wr(&mut dev, REG_TEST, 1 << 4); // TEST.LBCK
+    wr(&mut dev, REG_CCCR, 0xA2); // leave INIT, keep TEST | MON
+
+    wr(&mut dev, RAM + 0x278, 0x100 << 18); // TX buf 0: std ID 0x100
+    wr(&mut dev, RAM + 0x27C, 1 << 16); // DLC 1
+
+    // Write TXBAR — frame is queued as pending, TXBRP asserted.
+    wr(&mut dev, REG_TXBAR, 0x1);
+
+    // TXBRP must be non-zero immediately after the TXBAR write.
+    assert_ne!(
+        rd(&dev, REG_TXBRP) & 0x1,
+        0,
+        "TXBRP must be set before tick (frame in flight)"
+    );
+    // TXBTO must still be zero — completion not yet posted.
+    assert_eq!(
+        rd(&dev, REG_TXBTO) & 0x1,
+        0,
+        "TXBTO must be clear before tick"
+    );
+
+    // One tick — drain_pending_tx delivers the frame and posts flags.
+    dev.tick();
+
+    // Completion flags are now visible to the firmware.
+    assert_eq!(rd(&dev, REG_TXBRP) & 0x1, 0, "TXBRP must clear after tick");
+    assert_ne!(rd(&dev, REG_TXBTO) & 0x1, 0, "TXBTO must set after tick");
+    // Loopback path: frame must have reached RX FIFO0 on the same tick.
+    assert_eq!(
+        rd(&dev, REG_RXF0S) & 0x7F,
+        1,
+        "loopback frame in FIFO0 after tick"
+    );
 }

@@ -34,6 +34,9 @@ peripherals:
     size: "1KB"
     config:
       profile: "stm32v2"
+    # GPIOA is clocked from RCC_AHB2ENR.GPIOAEN (bit 0). Unclocked out of reset,
+    # so register writes are dropped until firmware enables it (RM0351 §6.4.17).
+    clock: { reg: "ahb2enr", bit: 0 }
 
   - id: "gpiob"
     type: "gpio"
@@ -41,6 +44,8 @@ peripherals:
     size: "1KB"
     config:
       profile: "stm32v2"
+    # GPIOB is clocked from RCC_AHB2ENR.GPIOBEN (bit 1).
+    clock: { reg: "ahb2enr", bit: 1 }
 
   - id: "gpioc"
     type: "gpio"
@@ -48,6 +53,8 @@ peripherals:
     size: "1KB"
     config:
       profile: "stm32v2"
+    # GPIOC is clocked from RCC_AHB2ENR.GPIOCEN (bit 2).
+    clock: { reg: "ahb2enr", bit: 2 }
 
   - id: "gpiod"
     type: "gpio"
@@ -81,6 +88,9 @@ peripherals:
     irq: 38
     config:
       profile: "stm32v2"
+    # USART2 is on APB1: RCC_APB1ENR1.USART2EN (bit 17). Unclocked out of reset,
+    # so ISR.TXE/RXNE never assert until firmware enables the clock (RM0351 §6.4.19).
+    clock: { reg: "apb1enr1", bit: 17 }
 
   - id: "uart1"
     type: "uart"
@@ -89,6 +99,9 @@ peripherals:
     irq: 37
     config:
       profile: "stm32v2"
+    # USART1 is on APB2: RCC_APB2ENR.USART1EN (bit 14). Unclocked out of reset
+    # (RM0351 §6.4.21).
+    clock: { reg: "apb2enr", bit: 14 }
 
   - id: "uart3"
     type: "uart"
@@ -130,6 +143,9 @@ peripherals:
     irq: 35
     config:
       profile: "stm32_fifo"
+    # SPI1 is on APB2: RCC_APB2ENR.SPI1EN (bit 12). Unclocked out of reset, so
+    # SR.RXNE/TXE never assert until firmware enables the clock (RM0351 §6.4.21).
+    clock: { reg: "apb2enr", bit: 12 }
 
   - id: "spi2"
     type: "spi"

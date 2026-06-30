@@ -48,6 +48,7 @@ pub enum Instruction {
     Ecall,                                // ECALL
     Ebreak,                               // EBREAK
     Mret,                                 // MRET
+    Wfi,                                  // WFI (wait for interrupt)
     Csrrw { rd: u8, rs1: u8, csr: u16 },  // CSRRW
     Csrrs { rd: u8, rs1: u8, csr: u16 },  // CSRRS
     Csrrc { rd: u8, rs1: u8, csr: u16 },  // CSRRC
@@ -298,6 +299,7 @@ pub fn decode_rv32(inst: u32) -> Instruction {
                     0x000 => Instruction::Ecall,
                     0x001 => Instruction::Ebreak,
                     0x302 => Instruction::Mret,
+                    0x105 => Instruction::Wfi, // WFI (0x10500073)
                     _ => Instruction::Unknown(inst),
                 },
                 1 => Instruction::Csrrw { rd, rs1, csr },
@@ -352,11 +354,18 @@ pub fn decode_rv32c(inst: u16) -> Instruction {
             // Quadrant 0
             match funct3 {
                 0 => {
-                    // C.ADDI4SPN
-                    let imm = ((inst >> 7) & 0x30) << 4 | // imm[5:4]
-                              ((inst >> 1) & 0x3C0) |      // imm[9:6]
-                              ((inst >> 4) & 0x4) |       // imm[2]
-                              ((inst >> 2) & 0x8); // imm[3]
+                    // C.ADDI4SPN (CIW): rd' = sp + zero-ext nzuimm, scaled. The
+                    // previous extraction mis-placed imm[5:4] at bits[9:8]
+                    // (decoded `addi4spn a0,sp,28` as 268), so stack-relative
+                    // buffers landed 240 bytes high — e.g. the C3 BROM staged
+                    // the bootloader header at sp+268 while validating sp+28,
+                    // looping forever on "invalid header". Correct CIW layout:
+                    //   inst[12:11]=imm[5:4] inst[10:7]=imm[9:6]
+                    //   inst[6]=imm[2]       inst[5]=imm[3]
+                    let imm = (((inst >> 11) & 0x3) << 4)  // imm[5:4]
+                              | (((inst >> 7) & 0xF) << 6)   // imm[9:6]
+                              | (((inst >> 6) & 0x1) << 2)   // imm[2]
+                              | (((inst >> 5) & 0x1) << 3); // imm[3]
                     let rd = (((inst >> 2) & 0x7) + 8) as u8;
                     Instruction::CAddi4spn {
                         rd,
@@ -410,15 +419,20 @@ pub fn decode_rv32c(inst: u16) -> Instruction {
                     }
                 }
                 1 => {
-                    // C.JAL (RV32C only)
-                    let imm = ((inst >> 2) & 0xE) |     // imm[3:1]
-                              ((inst >> 7) & 0x10) |    // imm[4]
-                              ((inst >> 2) & 0x20) |    // imm[5]
-                              ((inst >> 1) & 0x40) |    // imm[6]
-                              ((inst >> 11) & 0x80) |   // imm[7]
-                              ((inst >> 1) & 0x300) |   // imm[9:8]
-                              ((inst >> 1) & 0x400) |   // imm[10]
-                              ((inst >> 1) & 0x800); // imm[11]
+                    // C.JAL (RV32C only) — CJ-format immediate, identical bit
+                    // layout to C.J below. The previous hand-rolled extraction
+                    // mis-sourced offset[5], offset[7], and offset[10] (read
+                    // inst[8] from the wrong field), dropping 0x400 on any
+                    // target with offset[10] set — which slid the real C3 BROM's
+                    // `c.jal` off into a shared epilogue and rebooted to 0.
+                    let imm = (((inst >> 12) & 0x1) << 11)  // offset[11]
+                              | (((inst >> 11) & 0x1) << 4)   // offset[4]
+                              | (((inst >> 9) & 0x3) << 8)    // offset[9:8]
+                              | (((inst >> 8) & 0x1) << 10)   // offset[10]
+                              | (((inst >> 7) & 0x1) << 6)    // offset[6]
+                              | (((inst >> 6) & 0x1) << 7)    // offset[7]
+                              | (((inst >> 3) & 0x7) << 1)    // offset[3:1]
+                              | (((inst >> 2) & 0x1) << 5); // offset[5]
                     let signed_imm = if (imm & 0x800) != 0 {
                         (imm as i32) | !0xFFF
                     } else {
@@ -446,12 +460,19 @@ pub fn decode_rv32c(inst: u16) -> Instruction {
                 3 => {
                     let rd = ((inst >> 7) & 0x1F) as u8;
                     if rd == 2 {
-                        // C.ADDI16SP
-                        let imm = ((inst >> 3) & 0x180) | // imm[8:7]
-                                  ((inst >> 2) & 0x40) |  // imm[6]
-                                  ((inst >> 1) & 0x20) |  // imm[5]
-                                  ((inst >> 4) & 0x10) |  // imm[4]
-                                  (((inst >> 12) & 1) << 9); // imm[9]
+                        // C.ADDI16SP — nzimm[9:4], scaled by 16. The previous
+                        // extraction mis-sourced imm[4/5/7/8] (decoded
+                        // `addi sp,sp,-288` as -432), unbalancing every stack
+                        // frame that uses it and corrupting saved return
+                        // addresses. Correct CI-for-sp layout:
+                        //   inst[12]=imm[9] inst[6]=imm[4] inst[5]=imm[6]
+                        //   inst[4]=imm[8]  inst[3]=imm[7] inst[2]=imm[5]
+                        let imm = (((inst >> 12) & 1) << 9)  // imm[9]
+                                  | (((inst >> 4) & 1) << 8)   // imm[8]
+                                  | (((inst >> 3) & 1) << 7)   // imm[7]
+                                  | (((inst >> 5) & 1) << 6)   // imm[6]
+                                  | (((inst >> 2) & 1) << 5)   // imm[5]
+                                  | (((inst >> 6) & 1) << 4); // imm[4]
                         let signed_imm = if (imm & 0x200) != 0 {
                             (imm as i32) | !0x3FF
                         } else {
@@ -654,5 +675,62 @@ pub fn decode_rv32c(inst: u16) -> Instruction {
             }
         }
         _ => Instruction::Unknown(inst as u32),
+    }
+}
+
+#[cfg(test)]
+mod compressed_jump_tests {
+    use super::*;
+
+    // Regression tests for the RV32C immediate bugs surfaced by running the
+    // real ESP32-C3 mask ROM (all three broke boot before being fixed).
+
+    #[test]
+    fn c_jal_immediate_real_rom_instruction() {
+        // 0x3539 @ 0x40047e4e in the C3 BROM is `c.jal 0x40047c5c` (offset
+        // -498). The old decode mis-sourced offset[10] and produced -1522,
+        // landing in a shared epilogue and rebooting to 0.
+        match decode_rv32c(0x3539) {
+            Instruction::Jal { rd, imm } => {
+                assert_eq!(rd, 1, "c.jal links ra (x1)");
+                assert_eq!(imm, -498, "c.jal offset");
+            }
+            other => panic!("expected Jal, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn c_addi4spn_immediate_real_rom_instruction() {
+        // 0x0868 @ 0x40049dbe is `addi a0,sp,28` (CIW). The old decode mis-placed
+        // imm[5:4] at bits[9:8] and produced 268, so the C3 BROM staged the
+        // bootloader header at sp+268 while validating sp+28 — "invalid header"
+        // forever. a0 = x10 → rd field decodes to 10.
+        match decode_rv32c(0x0868) {
+            Instruction::CAddi4spn { rd, imm } => {
+                assert_eq!(rd, 10, "rd' = a0");
+                assert_eq!(imm, 28, "addi4spn offset");
+            }
+            other => panic!("expected CAddi4spn, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn c_addi16sp_immediate_real_rom_instruction() {
+        // 0x712d @ 0x4004874c is `addi sp,sp,-288`. The old decode produced
+        // -432, unbalancing the stack frame and clobbering the saved ra.
+        match decode_rv32c(0x712d) {
+            Instruction::CAddi16sp { imm } => assert_eq!(imm, -288),
+            other => panic!("expected CAddi16sp, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn c_j_immediate_positive_and_negative() {
+        // C.J (funct3=5) shares the CJ layout; sanity-check a known pair.
+        // 0xbff1 = `c.j -16` (a common backward jump); verify sign + magnitude.
+        match decode_rv32c(0xa001) {
+            Instruction::CJ { imm } => assert_eq!(imm, 0, "c.j 0 (to self)"),
+            other => panic!("expected CJ, got {other:?}"),
+        }
     }
 }

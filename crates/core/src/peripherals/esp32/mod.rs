@@ -16,13 +16,17 @@
 
 pub mod dport;
 pub mod efuse;
+pub mod factory;
 pub mod gpio;
+pub mod i2c;
 pub mod ledc;
 pub mod mcpwm;
 pub mod rtc_cntl;
+pub mod sar_adc;
 pub mod sdio_stub;
 pub mod sha;
 pub mod spi;
 pub mod syscon;
 pub mod timg;
 pub mod twai;
+pub mod uart;

@@ -7,17 +7,75 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.10] - 2026-06-29
+
+### Fixed
+- **nRF52 TWIM event register offsets**: Three event registers had wrong peripheral offsets in the model, making them invisible to firmware. The nrfx driver computes bit positions via `(offset - 0x100) / 4`, so the register at bit 18 must live at `0x100 + 18*4 = 0x148`, bit 23 at `0x15C`, bit 24 at `0x160`. The model had `EVENTS_SUSPENDED` at `0x128` (hardware: `0x148`), `EVENTS_LASTRX` at `0x158` (hardware: `0x15C`), `EVENTS_LASTTX` at `0x15C` (hardware: `0x160`). Consequences: (1) the ISR/polling loop never saw `EVENTS_SUSPENDED`, so `nrfx` never wrote `TASKS_RESUME` and the RX phase never started; (2) `EVENTS_LASTRX` was never seen at the correct offset, so completion was never acknowledged; (3) stale events at wrong offsets were never cleared by firmware, causing spurious IRQ loops that ate all simulation steps without producing UART output. Fixes Zephyr BME280 `i2c_write_read` hanging and simulation timeout.
+
+## [0.17.9] - 2026-06-29
+
+### Fixed
+- **nRF52 TWIM TASKS_RESUME handling**: `nrfx` issues `TASKS_RESUME` (not `TASKS_STARTRX`) to restart the bus after `EVENTS_SUSPENDED` in the TX_NO_STOP (write-then-read) path. The model previously treated `TASKS_RESUME` as a no-op, causing the follow-on RX transfer to never start. The bus would hang waiting for `EVENTS_STOPPED` (from `LASTRX_STOP`), producing a simulation timeout for every I2C `write_read_dt` call. Fixed by routing `TASKS_RESUME` to `PENDING_RX` when the driver has already set up `RXD.PTR`/`RXD.MAXCNT`.
+
+## [0.17.8] - 2026-06-29
+
+### Fixed
+- **nRF52 TWIM SHORTS register bit positions**: The `SHORTS` constants were shifted one position low relative to the nRF52840 Product Specification. `LASTTX_STOP` was at bit 8 (hardware: bit 9), `LASTRX_STOP` was at bit 9 (hardware: bit 12). The hardware uses bits 7-12: LASTTX_STARTRX(7), LASTTX_SUSPEND(8), LASTTX_STOP(9), LASTRX_STARTTX(10), LASTRX_SUSPEND(11), LASTRX_STOP(12). With the wrong positions, `nrfx_twim_xfer(XFER_RX)` wrote `LASTRX_STOP_MASK=1<<12` which was filtered out by `SHORTS_MASK`, so the STOPPED event never fired, the completion semaphore timed out (500 ms), and every I2C read returned -EAGAIN. Fixes BME280 `device_is_ready` = false in Zephyr.
+- **nRF52 TWIM LASTTX_SUSPEND event**: Added `EVENTS_SUSPENDED` (offset 0x128, `INTEN` bit 18) to fire when the `SHORT_LASTTX_SUSPEND` path is taken (TX_NO_STOP mode used by `nrfx` for combined write-read transfers). Previously the model misidentified `LASTTX_SUSPEND` as `LASTTX_STOP` and fired `EVENTS_STOPPED` instead, which masked the RX semaphore timeout for the follow-on read.
+- **nRF52 TWIM I2C device `stop()` on transaction end**: The TWIM model now calls `I2cDevice::stop()` when `EVENTS_STOPPED` fires (via `LASTTX_STOP`, `LASTRX_STOP`, or `TASKS_STOP`). Without this, the BME280 `register_address_written` flag was never cleared between transactions, corrupting register addressing for all transfers after the first.
+
+## [0.17.7] - 2026-06-29
+
+### Fixed
+- **nRF52 SerialInstance pre-enable PSEL shadow**: Zephyr pinctrl writes PSEL.SCL/SDA (offsets 0x508/0x50C) before the ENABLE register is set. The SPIM0/TWIM0 mux was silently dropping those writes (falling to the no-op `_ => {}` arm), leaving PSEL at 0xFFFF_FFFF. `nrfx_twim_init` then called `nrfx_twi_twim_bus_recover(0x7FFFFFFF, 0x7FFFFFFF)` → `nrf_gpio_pin_present_check(0x7FFFFFFF)` → assertion failure at boot. Fix: route pre-enable writes/reads to the TWIM model so pinctrl's PSEL setup is preserved.
+
+## [0.17.1] - 2026-06-20
+
+### Fixed
+- **STM32F407 SPI1 CR1 bit 12 (CRCNEXT)**: F407 silicon does not latch CRCNEXT (writing 0xFFFF reads back 0xEFFF), unlike F103 which keeps it writable. The shared classic-SPI model treated F1/F4 identically; it now applies a per-part `cr1_mask` (chip-config driven, default fully-writable 0xFFFF; F407 → 0xEFFF), mirroring the existing `cr2_mask`. Caught by the live F407 register diff.
+
+### Added
+- **hw-oracle connect-under-reset**: `LABWIRED_OPENOCD_CONNECT_UNDER_RESET` (assert SRST during connect/examine) + `LABWIRED_ADAPTER_SPEED` overrides in the OpenOCD wrapper, for boards whose running firmware disables/repurposes the SWD pins.
+
+### Validation
+- All six silicon-tier boards (stm32f103, stm32l073, stm32l476, stm32h563, stm32f407, esp32s3) re-captured on live silicon 2026-06-20; drift_acks cleared.
+
+## [0.17.0] - 2026-06-19
+
+### Added
+- **Classical CAN (bxCAN) model** for STM32F1: loopback + frame trace, strict silicon-pinned acceptance filtering, bit-timing bus-off and bus-attach, and a real two-node CAN bus (a virtual UDS tester driving an F103 ECU).
+- **RCC clock-gating model** for STM32F1 / L4: gated peripherals are inaccessible until their RCC enable bit is set (opt-in via the chip-YAML `clock:` field).
+- **STM32F103C8 SRAM** modeled at its physical 20 KB.
+- **nRF52840 proximity lab**: ALARM in-range threshold raised to 50 cm.
+
+### Fixed
+- **STMIA.W** decoded as STMDB (struct-copy idiom wrote below the destination).
+- **Register-coverage probe** is now clock-gating-independent (`SystemBus::set_clock_gating_bypass`, measurement-only) so coverage reflects whether a register is modeled, not whether its clock is currently on. Runtime gating is unchanged.
+
+## [0.16.0] - 2026-06-18
+
 ### Fixed
 - **Bit-band translation gated on cores that have it (M3/M4)**: the bus applied Cortex-M bit-band alias translation (0x4200_0000–0x43FF_FFFF → bit ops on 0x4000_0000) to every ARM chip, but the feature exists only on Cortex-M3/M4. M33 parts (STM32H563, STM32WBA52) map their real GPIO ports at 0x4202_xxxx, so word accesses there were translated into bit-band operations and never reached the GPIO model. Chip descriptors now carry an explicit `core` field; `SystemBus::from_config` enables translation only for `cortex-m3`/`cortex-m4` (configs without a `core` field keep the historical Arm default). Un-blocks the Tier-1 `gpio` cells for `stm32h563` and `stm32wba52` and the NUCLEO-H563ZI io-smoke.
 - **T1 shift-immediate flags inside IT blocks**: the 16-bit `LSL`/`LSR`/`ASR` immediate encodings updated N/Z unconditionally, but the architecture defines `setflags = !InITBlock()`. A flag update mid-IT-block re-evaluated the remaining block conditions and skipped instructions (observed as a false `gpio-bitband-shadow` FAIL in the Tier-1 H563/WBA52 fixtures after the bus fix).
+- **nRF52840 build targets**: corrected pin and proximity example build targets so the nRF52840 labs build and run.
+- **Proximity CLI cycle-accuracy**: the proximity demo now runs on the cycle-accurate CLI path.
 
 ### Added
+- **ESP32-S3 GDMA peripheral-coupled mode**: GDMA now moves real bytes between descriptor chains and the UART (UHCI0), SPI2, SPI3, I2S0 and I2S1 models, routed by the new `IN_PERI_SEL`/`OUT_PERI_SEL` registers. UART couples through UART0's real MMIO FIFO; SPI transactions kicked with `SPI_DMA_TX_ENA`/`SPI_DMA_RX_ENA` defer completion until GDMA supplies MOSI / consumes MISO bytes (attached-device responses included); I2S streams samples gated by TX/RX_START with `RXEOF_NUM` honored as a byte count. Transfers pump incrementally (64 bytes/tick); IN (RX) descriptors are written back with the owner bit cleared and the received length in dw0[23:12], while OUT (TX) owner writeback is gated on `OUT_AUTO_WRBACK` (`OUT_CONF0` bit 2, as on silicon) — with the bit clear a completed OUT chain can be re-kicked unchanged (M2M walks follow the same writeback rules). Unmodeled peripheral ids (AES, SHA, ADC, RMT, LCD_CAM, unbound) keep the auto-complete fallback.
 - **`core` field in chip descriptors** (`configs/chips/*.yaml`): exact CPU core (e.g. `cortex-m3`, `cortex-m33`, `cortex-m0+`). `arch` collapses all Cortex-M variants, so core-specific bus behavior keys off this field; SVD-IR imports derive it from the CMSIS `arch` automatically. All in-tree ARM chip yamls now declare it.
 - **ESP32-S3 Faithful ROM Auto-Provisioning** (`crates/core/src/boot/esp32s3_rom.rs`): the real Espressif boot ROM is now discovered and extracted automatically from the installed toolchain (PlatformIO/ESP-IDF), cached by ELF content hash, and loaded by default — so `--rom-boot` needs only `LABWIRED_ESP32S3_FLASH` (no manual `make_esp32s3_rom_bins.py` step or `LABWIRED_ESP32S3_ROM/_DROM` env vars). The Rust extractor is byte-identical to the previous Python script. `LABWIRED_ESP32S3_ROM_ELF` overrides the ELF path; pre-extracted `LABWIRED_ESP32S3_ROM/_DROM` bins still work.
 - **`Esp32s3BootMode` telemetry**: `Esp32s3Wiring.boot_mode` reports `Faithful` (real ROM) vs `Harness` (no blob found → thunk fallback); the CLI `--rom-boot` path uses it to fail clearly when no real ROM is available.
 - **`LABWIRED_ESP32S3_FASTBOOT`** opt-out: forces the fast-boot/thunk path even when a real ROM is available (playground speed; deterministic fast-boot tests).
+- **SoC Factory architecture**: peripherals are now built from per-family factories backed by a const peripheral table with a thin `from_config` match, replacing bespoke per-chip wiring. Generic, nRF52, and ESP32 (LX6/LX7) families migrated; adding a chip is now a table entry plus a factory hook.
+- **Silicon-validation / drift gate**: a CI gate compares the model against silicon-derived expectations and fails on drift; board status (`docs`/coverage) is auto-generated from chip configs and smoke results.
+- **ESP32 real-boot de-thunk**: the ESP32 (LX6) boot path runs the real ROM instead of harness thunks where a blob is available, closing the gap between faithful and fast-boot behavior.
+- **Real-CAN UDS analyzer (core)**: frame-level CAN/UDS capture and decode in the core, feeding the playground logic analyzer.
+- **STM32H5 FDCAN support**: M_CAN peripheral for the H5 family (fixed RAM layout), enabling H563 FDCAN labs.
 
 ### Changed
+- **Module-split refactor**: the bus (routing, tick, accessors, modules), CLI command surface (run/test/snapshot/net-harness families), Xtensa core, and WASM inspect/inputs layers were split into focused modules — no behavior change, smaller compile units, clearer ownership.
+- **Fast PR CI gate**: a fast core-integrity gate runs on every PR; the full suite runs post-merge (see `ci/fast-pr-gate`).
+- **Data-driven coverage matrix**: the capability/coverage matrix is generated from config + smoke data rather than hand-maintained tables.
 - **ESP32-S3 I2C0 interrupt source corrected** to `ETS_I2C_EXT0_INTR_SOURCE = 42` (was 49). The wrong source left the interrupt parked at a disabled CPU interrupt, so ESP-IDF's interrupt-driven `i2c_master` never completed and returned `ESP_ERR_INVALID_STATE`. The unmodified SpiceDispenser firmware now drives its PCA9685 servos over I2C on the faithful path.
 - **`proper_model` (XIP flash-cache wiring) unified** with the resolved ROM: both the MMU-aware XIP model and the boot mode now derive from a single `provision_rom_images()` call, so they can never diverge.
 

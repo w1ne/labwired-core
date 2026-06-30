@@ -43,18 +43,24 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
     {
         p.name = "scb".to_string();
         p.base = 0xE000_ED00;
-        p.size = 0x40;
+        // 0xC8 so the MPU block is served by the SCB/SCS model, not unmapped
+        // space: TYPE/CTRL/RNR/RBAR/RASR at 0x90..0xA0 plus the ARMv8-M
+        // (Cortex-M33) MAIR0/MAIR1 attribute registers at 0xC0/0xC4.
+        p.size = 0xC8;
         p.irq = None;
         p.dev = Box::new(scb);
     } else {
         bus.peripherals.push(PeripheralEntry {
             name: "scb".to_string(),
             base: 0xE000_ED00,
-            size: 0x40,
+            // 0xC8 to include the MPU block (0x90..0xA0) plus the ARMv8-M
+            // MAIR0/MAIR1 at 0xC0/0xC4; see above.
+            size: 0xC8,
             irq: None,
             dev: Box::new(scb),
             ticks_remaining: 0,
             generation: 0,
+            clock_gate: None,
         });
     }
 
@@ -79,6 +85,7 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
             dev: Box::new(nvic),
             ticks_remaining: 0,
             generation: 0,
+            clock_gate: None,
         });
     }
 
@@ -105,6 +112,7 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
             dev: Box::new(dwt),
             ticks_remaining: 0,
             generation: 0,
+            clock_gate: None,
         });
     }
 

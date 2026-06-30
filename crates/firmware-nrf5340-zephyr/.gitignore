@@ -1,0 +1,3 @@
+# Build artifacts — the committed fixture is tests/fixtures/nrf5340-zephyr-hello.elf,
+# rebuilt from this recipe via ./build.sh.
+/build/

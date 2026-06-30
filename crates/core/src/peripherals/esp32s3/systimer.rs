@@ -176,10 +176,22 @@ pub struct Systimer {
     /// DATE register (0xFC). Silicon-validated reset = 0x02012251.
     /// RW storage; firmware may write but reset value is the revision ID.
     date: u32,
+    /// Interrupt-matrix source ID emitted for TARGET0 (TARGET1/2 follow at
+    /// +1/+2). Defaults to the ESP32-S3 PAC value (57); the ESP32-C3 reuses
+    /// this same IP but its matrix source IDs are 37/38/39, so the C3 wiring
+    /// constructs the model with `new_with_source(_, 37)`.
+    target0_source: u32,
 }
 
 impl Systimer {
     pub fn new(cpu_clock_hz: u32) -> Self {
+        Self::new_with_source(cpu_clock_hz, SYSTIMER_TARGET0_SOURCE)
+    }
+
+    /// Construct with an explicit TARGET0 interrupt-matrix source ID (TARGET1/2
+    /// at +1/+2). The ESP32-C3 reuses this IP but maps the comparators to
+    /// matrix sources 37/38/39 rather than the S3's 57/58/59.
+    pub fn new_with_source(cpu_clock_hz: u32, target0_source: u32) -> Self {
         Self {
             // SVD/silicon reset = 0x46000000:
             //   bit 30 (UNIT0_WORK_EN) = 1 → UNIT0 runs immediately at reset.
@@ -202,6 +214,7 @@ impl Systimer {
             int_ena: 0,
             // Silicon-validated date/revision register (read via OpenOCD).
             date: 0x0201_2251,
+            target0_source,
         }
     }
 
@@ -531,7 +544,7 @@ impl Peripheral for Systimer {
             // because we re-emit each tick, the firmware sees a stable
             // pending_cpu_irqs/INTERRUPT bit while it iterates handlers.
             if alarm.pending && (self.int_ena & (1 << i) != 0) {
-                explicit_irqs.push(SYSTIMER_TARGET0_SOURCE + i as u32);
+                explicit_irqs.push(self.target0_source + i as u32);
             }
         }
 

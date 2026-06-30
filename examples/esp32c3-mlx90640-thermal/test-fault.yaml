@@ -1,0 +1,30 @@
+# Headless run of the ESP32-C3 thermal-fingerprint firmware — FAULT scenario.
+#
+# Same firmware, same thresholds — only the scene differs (cooling collapses at
+# t=30 s). The firmware must FIRST behave normally (reach STABLE, fault=NONE),
+# THEN detect the runaway from the thermal frames alone and transition the
+# verdict to fault=COOLING_FAILURE (and ultimately OVERTEMP), with health
+# dropping to 0. The algorithm never reads `cooling_fault_at_s` — it infers the
+# fault from the heating-rate failing to decay past the expected time constant.
+#
+# NB: the simple_regex engine supports only `.`, `*`, `^`, `$` — no char
+# classes or alternation — so all assertions below are literal substrings.
+schema_version: "1.0"
+inputs:
+  system: "./system-fault.yaml"
+  firmware: "./firmware/thermal_fingerprint.elf"
+limits:
+  max_steps: 50000000
+assertions:
+  # Boot + sensor up, and the run STARTS normal (proves it is not pre-tripped).
+  - uart_contains: "TFS BOOT"
+  - uart_contains: "MLX90640 READY"
+  - uart_contains: "state=STABLE"
+  - uart_contains: "fault=NONE"
+  # After the cooling collapse the fingerprint detects the rate runaway.
+  - uart_contains: "fault=COOLING_FAILURE"
+  # The runaway eventually crosses the critical threshold → OVERTEMP + FAULT.
+  - uart_contains: "state=FAULT"
+  - uart_contains: "fault=OVERTEMP"
+  # Health collapses to zero once the hotspot reaches critical.
+  - uart_contains: "health=0 "

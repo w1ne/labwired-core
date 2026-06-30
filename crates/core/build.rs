@@ -17,15 +17,13 @@
 
 use std::env;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 const WAT_SRC: &str = "src/cpu/xtensa_jit/hot_bb.wat";
 
 fn main() {
     println!("cargo:rerun-if-changed={WAT_SRC}");
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-env-changed=IOLINKI_MASTER_DIR");
-    println!("cargo:rerun-if-env-changed=IOLINKI_DEVICE_DIR");
 
     let wat_text = fs::read_to_string(WAT_SRC).unwrap_or_else(|e| panic!("read {WAT_SRC}: {e}"));
     let bytes = wat::parse_str(&wat_text).unwrap_or_else(|e| panic!("parse {WAT_SRC} as WAT: {e}"));
@@ -34,94 +32,83 @@ fn main() {
     let dest = PathBuf::from(out_dir).join("xtensa_jit_hot_bb.wasm");
     fs::write(&dest, &bytes).unwrap_or_else(|e| panic!("write {}: {e}", dest.display()));
 
-    if env::var_os("CARGO_FEATURE_IOLINK_NATIVE").is_some() {
-        build_iolink_native_bridge();
-    }
+    build_iolink_native_bridge();
+    build_mlx90640_bridge();
 }
 
+// Compile the REAL Melexis MLX90640 driver + the LabWired I²C bridge only when
+// the `mlx90640-decode-test` feature is enabled. The bridge's
+// `MLX90640_I2CRead/Write` call back into Rust (the device model), so the
+// unmodified vendor driver decodes frames the model serves over I²C.
+fn build_mlx90640_bridge() {
+    if std::env::var_os("CARGO_FEATURE_MLX90640_DECODE_TEST").is_none() {
+        return;
+    }
+
+    let mlx_root = "../../third_party/mlx90640-library";
+    cc::Build::new()
+        .file("native/mlx90640_bridge.c")
+        .file(format!("{mlx_root}/functions/MLX90640_API.c"))
+        .include("native")
+        .include(format!("{mlx_root}/headers"))
+        .warnings(false) // vendor code is unmodified; don't fail on its warnings
+        .compile("labwired_mlx90640_bridge");
+
+    println!("cargo:rerun-if-changed=native/mlx90640_bridge.c");
+    println!("cargo:rerun-if-changed=native/mlx90640_bridge.h");
+    println!("cargo:rerun-if-changed={mlx_root}/functions/MLX90640_API.c");
+    println!("cargo:rerun-if-changed={mlx_root}/headers/MLX90640_API.h");
+}
+
+// Compile the native IO-Link bridge (and, in later plan tasks, the real
+// `iolinki-master` C stack) only when the `iolink-native` feature is enabled.
+// Browser/wasm builds never set this feature, so they need no C toolchain and
+// never link the GPL device-stack helpers.
 fn build_iolink_native_bridge() {
-    let manifest_dir = PathBuf::from(
-        env::var_os("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR must be set by cargo"),
-    );
-    let repo_root = manifest_dir
-        .parent()
-        .and_then(Path::parent)
-        .expect("core crate must live under crates/core");
-    let default_device_dir = repo_root.join("third_party/iolinki");
-    let device_dir = env::var_os("IOLINKI_DEVICE_DIR")
-        .map(PathBuf::from)
-        .unwrap_or(default_device_dir);
-    let master_dir = env::var_os("IOLINKI_MASTER_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| repo_root.join("../iolinki-master"));
-
-    if !master_dir.join("include/iolinki_master/master.h").exists() {
-        panic!(
-            "iolink-native requires IOLINKI_MASTER_DIR to point at the C iolinki-master repo; tried {}",
-            master_dir.display()
-        );
-    }
-    if !device_dir.join("include/iolinki/phy.h").exists() {
-        panic!(
-            "iolink-native requires IOLINKI_DEVICE_DIR to point at the iolinki device stack; tried {}",
-            device_dir.display()
-        );
+    if std::env::var_os("CARGO_FEATURE_IOLINK_NATIVE").is_none() {
+        return;
     }
 
-    let sources = [
-        manifest_dir.join("native/iolink_master_bridge.c"),
-        manifest_dir.join("native/iolink_conformance.c"),
-        master_dir.join("src/master_controller.c"),
-        master_dir.join("src/master_isdu.c"),
-        master_dir.join("src/master_parameters.c"),
-        master_dir.join("src/master_port.c"),
-        master_dir.join("src/master_sio.c"),
-        device_dir.join("src/crc.c"),
-        device_dir.join("src/frame.c"),
-        device_dir.join("src/device.c"),
-        device_dir.join("src/phy_generic.c"),
-        device_dir.join("src/phy_virtual.c"),
-        device_dir.join("src/dll.c"),
-        device_dir.join("src/isdu.c"),
-        device_dir.join("src/events.c"),
-        device_dir.join("src/platform.c"),
-        device_dir.join("src/params.c"),
-        device_dir.join("src/data_storage.c"),
-        device_dir.join("src/device_info.c"),
-        device_dir.join("src/platform_stubs.c"),
-        device_dir.join("src/platform/linux/time_utils.c"),
-        device_dir.join("src/platform/linux/nvm_mock.c"),
-    ];
-
-    println!(
-        "cargo:rerun-if-changed={}",
-        manifest_dir.join("native/iolink_master_bridge.c").display()
-    );
-    println!(
-        "cargo:rerun-if-changed={}",
-        manifest_dir.join("native/iolink_conformance.c").display()
-    );
-    println!(
-        "cargo:rerun-if-changed={}",
-        master_dir.join("include/iolinki_master/master.h").display()
-    );
-    println!(
-        "cargo:rerun-if-changed={}",
-        device_dir.join("include/iolinki/phy.h").display()
-    );
-    for source in &sources {
-        println!("cargo:rerun-if-changed={}", source.display());
-    }
-
+    // Build scripts run with cwd = the package manifest dir (`crates/core`),
+    // while the vendored stacks live at the workspace root (`core/third_party`).
+    let master_root = "../../third_party/iolinki-master";
+    let device_root = "../../third_party/iolinki";
     let mut build = cc::Build::new();
     build
-        .std("c99")
-        .warnings(false)
-        .define("_POSIX_C_SOURCE", Some("200809L"))
-        .include(master_dir.join("include"))
-        .include(device_dir.join("include"));
-    for source in sources {
-        build.file(source);
-    }
-    build.compile("labwired_iolinki_master_bridge");
+        .file("native/iolink_master_bridge.c")
+        .file("native/iolink_device_bridge.c")
+        .file(format!("{master_root}/src/master_port.c"))
+        .file(format!("{master_root}/src/master_controller.c"))
+        .file(format!("{master_root}/src/master_isdu.c"))
+        .file(format!("{master_root}/src/master_parameters.c"))
+        .file(format!("{master_root}/src/master_sio.c"))
+        // Device stack (singleton). frame.c/crc.c are shared with the master
+        // helpers above; listing them once is enough.
+        .file(format!("{device_root}/src/frame.c"))
+        .file(format!("{device_root}/src/crc.c"))
+        .file(format!("{device_root}/src/device.c"))
+        .file(format!("{device_root}/src/dll.c"))
+        .file(format!("{device_root}/src/isdu.c"))
+        .file(format!("{device_root}/src/events.c"))
+        .file(format!("{device_root}/src/params.c"))
+        .file(format!("{device_root}/src/data_storage.c"))
+        .file(format!("{device_root}/src/device_info.c"))
+        .file(format!("{device_root}/src/phy_generic.c"))
+        .file(format!("{device_root}/src/phy_virtual.c"))
+        .file(format!("{device_root}/src/platform.c"))
+        .file(format!("{device_root}/src/platform_stubs.c"))
+        .file(format!("{device_root}/src/platform/linux/time_utils.c"))
+        .file(format!("{device_root}/src/platform/linux/nvm_mock.c"))
+        .include("native")
+        .include(format!("{master_root}/include"))
+        .include(format!("{device_root}/include"))
+        .warnings(true)
+        .compile("labwired_iolink_master_bridge");
+
+    println!("cargo:rerun-if-changed=native/iolink_master_bridge.h");
+    println!("cargo:rerun-if-changed=native/iolink_master_bridge.c");
+    println!("cargo:rerun-if-changed=native/iolink_device_bridge.h");
+    println!("cargo:rerun-if-changed=native/iolink_device_bridge.c");
+    println!("cargo:rerun-if-changed={master_root}/src/master_port.c");
+    println!("cargo:rerun-if-changed={master_root}/include/iolinki_master/master.h");
 }

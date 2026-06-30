@@ -117,6 +117,41 @@ impl LinearMemory {
         }
     }
 
+    /// Fill `[offset, offset+len)` with `byte`, where `offset` is buffer-relative
+    /// (i.e. `absolute_addr - self.base_addr`, the same buffer space `read_u8`/
+    /// `write_u8` reach after subtracting `base_addr`). Returns false if the
+    /// range is outside the backing buffer.
+    pub fn fill(&mut self, offset: u64, len: u64, byte: u8) -> bool {
+        let (Ok(start), Some(Ok(end))) = (
+            usize::try_from(offset),
+            offset.checked_add(len).map(usize::try_from),
+        ) else {
+            return false;
+        };
+        if end > self.data.len() {
+            return false;
+        }
+        self.data[start..end].iter_mut().for_each(|b| *b = byte);
+        true
+    }
+
+    /// Swap the two `bank_size` halves of the buffer in place (models H5
+    /// hardware SWAP_BANK). Returns false unless the buffer is exactly two banks.
+    pub fn swap_banks(&mut self, bank_size: u64) -> bool {
+        let Some(total) = bank_size.checked_mul(2) else {
+            return false;
+        };
+        let (Ok(bank), Ok(total)) = (usize::try_from(bank_size), usize::try_from(total)) else {
+            return false;
+        };
+        if self.data.len() != total {
+            return false;
+        }
+        let (lo, hi) = self.data.split_at_mut(bank);
+        lo.swap_with_slice(hi);
+        true
+    }
+
     pub fn load_from_segment(&mut self, segment: &Segment) -> bool {
         // Simple overlap check
         let end_addr = segment.start_addr + segment.data.len() as u64;
@@ -128,6 +163,39 @@ impl LinearMemory {
             return true;
         }
         false
+    }
+}
+
+#[cfg(test)]
+mod bank_tests {
+    use super::LinearMemory;
+
+    #[test]
+    fn fill_sets_range_relative_to_base() {
+        let mut m = LinearMemory::new(0x4000, 0x0800_0000);
+        assert!(m.fill(0x2000, 0x2000, 0xFF));
+        assert_eq!(m.read_u8(0x0800_1FFF).unwrap(), 0x00);
+        assert_eq!(m.read_u8(0x0800_2000).unwrap(), 0xFF);
+        assert_eq!(m.read_u8(0x0800_3FFF).unwrap(), 0xFF);
+    }
+
+    #[test]
+    fn fill_rejects_out_of_range() {
+        let mut m = LinearMemory::new(0x2000, 0x0800_0000);
+        assert!(!m.fill(0x1000, 0x2000, 0xFF));
+    }
+
+    #[test]
+    fn swap_banks_exchanges_halves() {
+        let mut m = LinearMemory::new(0x4, 0x0800_0000); // tiny 2-byte banks
+        m.write_u8(0x0800_0000, 0xA1);
+        m.write_u8(0x0800_0001, 0xA2);
+        m.write_u8(0x0800_0002, 0xB1);
+        m.write_u8(0x0800_0003, 0xB2);
+        assert!(m.swap_banks(0x2));
+        assert_eq!(m.read_u8(0x0800_0000).unwrap(), 0xB1);
+        assert_eq!(m.read_u8(0x0800_0001).unwrap(), 0xB2);
+        assert_eq!(m.read_u8(0x0800_0002).unwrap(), 0xA1);
     }
 }
 

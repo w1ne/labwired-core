@@ -5,7 +5,7 @@
 // End-to-end test for the nrf52840-proximity-lab: the same firmware ELF that
 // flashes to a real nRF52840 must, in the simulator, range the HC-SR04 and
 // raise the ALARM line (P0.06) when the host-controlled target distance is
-// inside the 150 mm threshold — and drop it when the target moves away.
+// inside the 500 mm (50 cm) threshold — and drop it when the target moves away.
 
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::cpu::cortex_m::CortexM;
@@ -82,7 +82,7 @@ fn alarm_tracks_target_distance() {
     let elf = ensure_firmware_built();
     let mut machine = build_machine(&elf);
 
-    // Near target (system.yaml default 10 cm = 100 mm < 150 mm threshold):
+    // Near target (system.yaml default 10 cm = 100 mm < 500 mm threshold):
     // the firmware must raise ALARM.
     run_steps(&mut machine, 3_000_000);
     assert!(
@@ -90,12 +90,13 @@ fn alarm_tracks_target_distance() {
         "ALARM (P0.06) should be HIGH with the target at 10 cm"
     );
 
-    // Move the target out of range; the next ranging cycles must drop ALARM.
-    machine.bus.hcsr04[0].set_distance_cm(50.0);
+    // Move the target out of range (100 cm > 50 cm threshold); the next ranging
+    // cycles must drop ALARM.
+    machine.bus.hcsr04[0].set_distance_cm(100.0);
     run_steps(&mut machine, 3_000_000);
     assert!(
         !alarm_high(&machine),
-        "ALARM (P0.06) should be LOW with the target at 50 cm"
+        "ALARM (P0.06) should be LOW with the target at 100 cm"
     );
 
     // And bring it back in range.

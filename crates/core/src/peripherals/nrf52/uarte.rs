@@ -11,8 +11,10 @@
 //!
 //! EVENTS: hardware-generated. SW write-1 is ignored; write-0 clears.
 
-use crate::{Peripheral, SimResult};
+use crate::{Bus, Peripheral, SimResult};
 use std::collections::BTreeMap;
+use std::io::{self, Write};
+use std::sync::{Arc, Mutex};
 
 // Task offsets (read-as-0, task starts on write-1)
 const OFF_TASKS_STARTRX: u64 = 0x000;
@@ -67,7 +69,7 @@ const OFF_TXD_AMOUNT: u64 = 0x54C;
 // CONFIG: bits [3:0] = hwfc|parity, bit 4 = paritytype; reset = 0
 const OFF_CONFIG: u64 = 0x56C;
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct Nrf52Uarte {
     // Events (TASKS always read 0)
     events_cts: u32,
@@ -100,6 +102,26 @@ pub struct Nrf52Uarte {
     config: u32,
     // Overflow bucket for any unmodelled register
     extra: BTreeMap<u64, u32>,
+    // ── Dynamic EasyDMA TX state (not part of the register surface) ──────
+    /// Set by a STARTTX task write; consumed by the next `tick_with_bus`,
+    /// which DMA-reads the TXD buffer from RAM and emits it. The transfer is
+    /// deferred to the bus-aware tick because `write_u32` has no bus handle.
+    tx_pending: bool,
+    /// Captured TX bytes for `test`-mode assertions (`uart_contains`).
+    sink: Option<Arc<Mutex<Vec<u8>>>>,
+    /// Echo transmitted bytes to the process stdout (console behaviour).
+    echo_stdout: bool,
+}
+
+impl std::fmt::Debug for Nrf52Uarte {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Nrf52Uarte")
+            .field("enable", &self.enable)
+            .field("txd_ptr", &self.txd_ptr)
+            .field("txd_maxcnt", &self.txd_maxcnt)
+            .field("tx_pending", &self.tx_pending)
+            .finish()
+    }
 }
 
 impl Nrf52Uarte {
@@ -112,7 +134,32 @@ impl Nrf52Uarte {
             psel_rxd: 0xFFFF_FFFF,
             // BAUDRATE reset: BAUD_115200
             baudrate: 0x01D7_E000,
+            // Default to console echo; capture sink attached on demand.
+            echo_stdout: true,
             ..Self::default()
+        }
+    }
+
+    /// Attach a capture sink and/or toggle stdout echo. Mirrors `Uart::set_sink`
+    /// so `Bus::attach_uart_tx_sink` can wire a UARTE console the same way it
+    /// wires the legacy UART.
+    pub fn set_sink(&mut self, sink: Option<Arc<Mutex<Vec<u8>>>>, echo_stdout: bool) {
+        self.sink = sink;
+        self.echo_stdout = echo_stdout;
+    }
+
+    fn emit_byte(&mut self, byte: u8) {
+        if let Some(sink) = &self.sink {
+            if let Ok(mut guard) = sink.lock() {
+                guard.push(byte);
+            }
+        }
+        if self.echo_stdout {
+            #[allow(unused_must_use)]
+            {
+                print!("{}", byte as char);
+                io::stdout().flush();
+            }
         }
     }
 }
@@ -169,9 +216,15 @@ impl Peripheral for Nrf52Uarte {
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         match offset {
-            // Tasks: write-only trigger, no state change needed for register surface
-            OFF_TASKS_STARTRX | OFF_TASKS_STOPRX | OFF_TASKS_STARTTX | OFF_TASKS_STOPTX
-            | OFF_TASKS_FLUSHRX => {}
+            // STARTTX arms an EasyDMA TX; the actual buffer read + emit happens
+            // in `tick_with_bus` (write_u32 has no bus handle). A 1-byte
+            // poll_out and a multi-byte buffered write both land here.
+            OFF_TASKS_STARTTX => self.tx_pending = true,
+            // STOPTX completes immediately in this model: raise TXSTOPPED so a
+            // driver waiting on it (nrfx is_tx_ready) makes progress.
+            OFF_TASKS_STOPTX => self.events_txstopped = 1,
+            // Remaining tasks are RX/flush — no TX-path effect yet.
+            OFF_TASKS_STARTRX | OFF_TASKS_STOPRX | OFF_TASKS_FLUSHRX => {}
             // EVENTS: hardware-generated; SW write-1 ignored, write-0 clears
             OFF_EVENTS_CTS if value == 0 => self.events_cts = 0,
             OFF_EVENTS_NCTS if value == 0 => self.events_ncts = 0,
@@ -214,11 +267,89 @@ impl Peripheral for Nrf52Uarte {
         }
         Ok(())
     }
+
+    /// EasyDMA needs to read the firmware-owned TX buffer out of RAM, which is
+    /// only reachable with a bus handle — so the transfer is performed here,
+    /// in the bus-aware pre-tick pass, rather than in `write_u32`.
+    fn needs_bus_tick(&self) -> bool {
+        self.tx_pending
+    }
+
+    fn tick_with_bus(&mut self, bus: &mut dyn Bus) {
+        if !self.tx_pending {
+            return;
+        }
+        self.tx_pending = false;
+
+        // EasyDMA reads MAXCNT bytes starting at TXD.PTR. A disconnected pin or
+        // a disabled peripheral still completes the transfer on real silicon
+        // (the bytes just go nowhere), so we don't gate on PSEL.
+        let len = (self.txd_maxcnt & 0xFFFF) as usize;
+        for i in 0..len {
+            let addr = self.txd_ptr as u64 + i as u64;
+            if let Ok(b) = bus.read_u8(addr) {
+                self.emit_byte(b);
+            }
+        }
+        self.txd_amount = len as u32;
+
+        // Raise the TX-path events a polling driver waits on. The transfer is
+        // modelled as instantaneous (whole buffer in one tick), so all of the
+        // begin→drain→stop events fire together: TXSTARTED, then TXDRDY/ENDTX,
+        // then TXSTOPPED. nrfx's poll_out enables the ENDTX_STOPTX short and
+        // waits on TXSTOPPED, so that one must be set or it spins forever.
+        self.events_txstarted = 1;
+        self.events_txdrdy = 1;
+        self.events_endtx = 1;
+        self.events_txstopped = 1;
+    }
+
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
+
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn easydma_tx_emits_buffer_and_raises_completion_events() {
+        use crate::bus::SystemBus;
+        use crate::memory::LinearMemory;
+        use crate::Bus;
+
+        // RAM-backed bus holding the TX buffer "Hi" at 0x2000_0010.
+        let mut bus = SystemBus::empty();
+        bus.ram = LinearMemory::new(256, 0x2000_0000);
+        bus.write_u8(0x2000_0010, b'H').unwrap();
+        bus.write_u8(0x2000_0011, b'i').unwrap();
+
+        let mut u = Nrf52Uarte::new();
+        let sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        u.set_sink(Some(sink.clone()), false); // capture only, no stdout echo
+
+        u.write_u32(OFF_ENABLE, 8).unwrap(); // UARTE mode
+        u.write_u32(OFF_TXD_PTR, 0x2000_0010).unwrap();
+        u.write_u32(OFF_TXD_MAXCNT, 2).unwrap();
+        assert!(!u.needs_bus_tick(), "no DMA armed before STARTTX");
+
+        u.write_u32(OFF_TASKS_STARTTX, 1).unwrap();
+        assert!(u.needs_bus_tick(), "STARTTX arms the EasyDMA");
+        u.tick_with_bus(&mut bus);
+
+        assert_eq!(&*sink.lock().unwrap(), b"Hi", "buffer DMAed out of RAM");
+        assert_eq!(u.read_u32(OFF_TXD_AMOUNT).unwrap(), 2);
+        // poll_out (ENDTX_STOPTX short) waits on these — all must be set.
+        assert_eq!(u.read_u32(OFF_EVENTS_ENDTX).unwrap(), 1);
+        assert_eq!(u.read_u32(OFF_EVENTS_TXSTARTED).unwrap(), 1);
+        assert_eq!(u.read_u32(OFF_EVENTS_TXSTOPPED).unwrap(), 1);
+        assert!(!u.needs_bus_tick(), "transfer consumes the pending flag");
+    }
 
     #[test]
     fn psel_defaults_to_disconnected() {

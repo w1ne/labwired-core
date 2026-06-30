@@ -1,257 +1,209 @@
+#include "iolink_master_bridge.h"
 #include "iolinki_master/master.h"
 
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <stdlib.h>
 #include <string.h>
 
-#define LW_IOLM_QUEUE_CAP 128U
-#define LW_IOLM_STATUS_OK 0
-#define LW_IOLM_ERR_INVALID_ARG -1
-
-typedef struct
-{
+typedef struct {
     iolink_master_port_t port;
+    /*
+     * `iolink_master_init` keeps the PHY by pointer (`state->phy = phy`) while
+     * copying the config by value. The PHY must therefore outlive init, so it
+     * is owned by the context rather than passed as a stack local.
+     */
     iolink_phy_api_t phy;
-    uint8_t tx[LW_IOLM_QUEUE_CAP];
+    uint8_t tx_queue[LW_IOLM_QUEUE_CAP];
+    size_t tx_head;
     size_t tx_len;
-    uint8_t rx[LW_IOLM_QUEUE_CAP];
+    uint8_t rx_queue[LW_IOLM_QUEUE_CAP];
     size_t rx_head;
     size_t rx_len;
-    uint32_t wake_count;
-} lw_iolm_bridge_t;
+} lw_iolm_context_t;
 
-static lw_iolm_bridge_t* g_active_bridge = NULL;
+/*
+ * Routes the PHY callbacks to the port currently being ticked. Thread-local so
+ * independent `NativeIolinkMasterPort`s driven from parallel test threads never
+ * race on it (each master port is otherwise fully self-contained — its protocol
+ * state lives in the caller-owned context, not in globals).
+ */
+static __thread lw_iolm_context_t* g_active;
 
-static int bridge_push_tx(lw_iolm_bridge_t* bridge, uint8_t byte)
+const char* lw_iolm_backend_name(void)
 {
-    if((bridge == NULL) || (bridge->tx_len >= LW_IOLM_QUEUE_CAP))
-    {
-        return LW_IOLM_ERR_INVALID_ARG;
+    return "iolinki-master";
+}
+
+size_t lw_iolm_context_size(void)
+{
+    return sizeof(lw_iolm_context_t);
+}
+
+static void q_push(uint8_t* q, size_t* head, size_t* len, uint8_t byte)
+{
+    if (*len >= LW_IOLM_QUEUE_CAP) {
+        return;
     }
-    bridge->tx[bridge->tx_len++] = byte;
-    return LW_IOLM_STATUS_OK;
+    size_t tail = (*head + *len) % LW_IOLM_QUEUE_CAP;
+    q[tail] = byte;
+    *len += 1U;
+}
+
+static int q_pop(uint8_t* q, size_t* head, size_t* len, uint8_t* byte)
+{
+    if (*len == 0U) {
+        return 0;
+    }
+    *byte = q[*head];
+    *head = (*head + 1U) % LW_IOLM_QUEUE_CAP;
+    *len -= 1U;
+    return 1;
 }
 
 static int bridge_send(void* user, const uint8_t* data, size_t len)
 {
-    lw_iolm_bridge_t* bridge = (lw_iolm_bridge_t*)user;
-    size_t i;
-
-    if((bridge == NULL) || ((data == NULL) && (len > 0U)))
-    {
-        return LW_IOLM_ERR_INVALID_ARG;
+    lw_iolm_context_t* c = (lw_iolm_context_t*) user;
+    if (c == 0) {
+        c = g_active;
     }
-    if((bridge->tx_len + len) > LW_IOLM_QUEUE_CAP)
-    {
-        return LW_IOLM_ERR_INVALID_ARG;
+    if ((c == 0) || (data == 0)) {
+        return -1;
     }
-
-    for(i = 0U; i < len; i++)
-    {
-        bridge->tx[bridge->tx_len++] = data[i];
+    for (size_t i = 0; i < len; i++) {
+        q_push(c->tx_queue, &c->tx_head, &c->tx_len, data[i]);
     }
-    return (int)len;
+    return (int) len;
 }
 
 static int bridge_recv_byte(void* user, uint8_t* byte)
 {
-    lw_iolm_bridge_t* bridge = (lw_iolm_bridge_t*)user;
-
-    if((bridge == NULL) || (byte == NULL))
-    {
-        return LW_IOLM_ERR_INVALID_ARG;
+    lw_iolm_context_t* c = (lw_iolm_context_t*) user;
+    if (c == 0) {
+        c = g_active;
     }
-    if(bridge->rx_len == 0U)
-    {
-        return LW_IOLM_STATUS_OK;
+    if ((c == 0) || (byte == 0)) {
+        return -1;
     }
-
-    *byte = bridge->rx[bridge->rx_head];
-    bridge->rx_head = (bridge->rx_head + 1U) % LW_IOLM_QUEUE_CAP;
-    bridge->rx_len--;
-    if(bridge->rx_len == 0U)
-    {
-        bridge->rx_head = 0U;
-    }
-    return 1;
-}
-
-static int bridge_noop(void)
-{
-    return LW_IOLM_STATUS_OK;
+    return q_pop(c->rx_queue, &c->rx_head, &c->rx_len, byte);
 }
 
 static int bridge_wake_up(void)
 {
-    if(g_active_bridge == NULL)
-    {
-        return LW_IOLM_ERR_INVALID_ARG;
-    }
-    g_active_bridge->wake_count++;
-    return bridge_push_tx(g_active_bridge, 0x55U);
+    uint8_t byte = 0x55U;
+    return bridge_send(g_active, &byte, 1U) == 1 ? 0 : -1;
 }
 
-static int bridge_with_active(lw_iolm_bridge_t* bridge,
-                              iolink_master_tick_event_t event,
-                              uint32_t now_100us)
+static int bridge_set_mode_checked(iolink_phy_mode_t mode)
 {
-    int ret;
+    (void) mode;
+    return 0;
+}
 
-    if(bridge == NULL)
-    {
-        return LW_IOLM_ERR_INVALID_ARG;
+static int bridge_set_baudrate_checked(iolink_baudrate_t baudrate)
+{
+    (void) baudrate;
+    return 0;
+}
+
+static int bridge_flush_rx(void) { return 0; }
+static int bridge_prepare_tx(void) { return 0; }
+static int bridge_prepare_rx(void) { return 0; }
+
+int lw_iolm_init(void* ctx, const lw_iolm_config_t* config)
+{
+    if ((ctx == 0) || (config == 0)) {
+        return -1;
     }
-    g_active_bridge = bridge;
-    ret = iolink_master_tick_at(&bridge->port, event, now_100us);
-    g_active_bridge = NULL;
+    lw_iolm_context_t* c = (lw_iolm_context_t*) ctx;
+    memset(c, 0, sizeof(*c));
+
+    c->phy.user = c;
+    c->phy.send = bridge_send;
+    c->phy.recv_byte = bridge_recv_byte;
+    iolink_master_config_t cfg = {
+        .port_mode = IOLINK_MASTER_PORT_MODE_IOLINK,
+        .m_seq_type = (iolink_master_m_seq_type_t) config->m_seq_type,
+        .baudrate = (iolink_baudrate_t) config->com,
+        .min_cycle_time = config->min_cycle_time_100us,
+        .pd_in_len = config->pd_in_len,
+        .pd_out_len = config->pd_out_len,
+        .auto_baudrate = false,
+        .response_timeout_100us = config->response_timeout_100us,
+        .set_mode_checked = bridge_set_mode_checked,
+        .set_baudrate_checked = bridge_set_baudrate_checked,
+        .flush_rx = bridge_flush_rx,
+        .prepare_tx = bridge_prepare_tx,
+        .prepare_rx = bridge_prepare_rx,
+        .wake_up = bridge_wake_up,
+    };
+
+    g_active = c;
+    int ret = iolink_master_init(&c->port, &c->phy, &cfg);
+    g_active = 0;
     return ret;
 }
 
-lw_iolm_bridge_t* lw_iolm_bridge_new(uint8_t m_seq_type,
-                                     uint8_t pd_in_len,
-                                     uint8_t pd_out_len,
-                                     uint8_t min_cycle_time,
-                                     uint8_t response_timeout_100us)
+int lw_iolm_tick(void* ctx, lw_iolm_tick_event_t event, uint32_t now_100us)
 {
-    lw_iolm_bridge_t* bridge = (lw_iolm_bridge_t*)calloc(1U, sizeof(lw_iolm_bridge_t));
-    int ret;
-
-    if(bridge == NULL)
-    {
-        return NULL;
+    if (ctx == 0) {
+        return -1;
     }
-
-    iolink_master_config_t config = {
-        .port_mode = IOLINK_MASTER_PORT_MODE_IOLINK,
-        .m_seq_type = (iolink_master_m_seq_type_t)m_seq_type,
-        .baudrate = IOLINK_BAUDRATE_COM2,
-        .min_cycle_time = min_cycle_time,
-        .pd_in_len = pd_in_len,
-        .pd_out_len = pd_out_len,
-        .response_timeout_100us = response_timeout_100us,
-        .prepare_tx = bridge_noop,
-        .prepare_rx = bridge_noop,
-        .wake_up = bridge_wake_up,
-    };
-    bridge->phy.user = bridge;
-    bridge->phy.send = bridge_send;
-    bridge->phy.recv_byte = bridge_recv_byte;
-
-    g_active_bridge = bridge;
-    ret = iolink_master_init(&bridge->port, &bridge->phy, &config);
-    g_active_bridge = NULL;
-    if(ret != IOLINK_MASTER_STATUS_OK)
-    {
-        free(bridge);
-        return NULL;
-    }
-
-    return bridge;
+    lw_iolm_context_t* c = (lw_iolm_context_t*) ctx;
+    g_active = c;
+    int ret = iolink_master_tick_at(&c->port, (iolink_master_tick_event_t) event, now_100us);
+    g_active = 0;
+    return ret;
 }
 
-void lw_iolm_bridge_free(lw_iolm_bridge_t* bridge)
+size_t lw_iolm_drain_tx(void* ctx, uint8_t* out, size_t out_len)
 {
-    free(bridge);
-}
-
-int lw_iolm_bridge_set_pd_out(lw_iolm_bridge_t* bridge, const uint8_t* data, uint8_t len)
-{
-    if(bridge == NULL)
-    {
-        return LW_IOLM_ERR_INVALID_ARG;
-    }
-    return iolink_master_set_pd_out(&bridge->port, data, len);
-}
-
-int lw_iolm_bridge_cycle_due(lw_iolm_bridge_t* bridge, uint32_t now_100us)
-{
-    return bridge_with_active(bridge, IOLINK_MASTER_TICK_CYCLE_DUE, now_100us);
-}
-
-int lw_iolm_bridge_tick_none(lw_iolm_bridge_t* bridge, uint32_t now_100us)
-{
-    return bridge_with_active(bridge, IOLINK_MASTER_TICK_NONE, now_100us);
-}
-
-int lw_iolm_bridge_feed_rx(lw_iolm_bridge_t* bridge, const uint8_t* data, size_t len)
-{
-    size_t tail;
-    size_t i;
-
-    if((bridge == NULL) || ((data == NULL) && (len > 0U)))
-    {
-        return LW_IOLM_ERR_INVALID_ARG;
-    }
-    if((bridge->rx_len + len) > LW_IOLM_QUEUE_CAP)
-    {
-        return LW_IOLM_ERR_INVALID_ARG;
-    }
-
-    for(i = 0U; i < len; i++)
-    {
-        tail = (bridge->rx_head + bridge->rx_len) % LW_IOLM_QUEUE_CAP;
-        bridge->rx[tail] = data[i];
-        bridge->rx_len++;
-    }
-
-    return LW_IOLM_STATUS_OK;
-}
-
-size_t lw_iolm_bridge_drain_tx(lw_iolm_bridge_t* bridge, uint8_t* out, size_t out_len)
-{
-    size_t n;
-
-    if((bridge == NULL) || (out == NULL))
-    {
+    if ((ctx == 0) || (out == 0)) {
         return 0U;
     }
-
-    n = bridge->tx_len;
-    if(n > out_len)
-    {
-        n = out_len;
+    lw_iolm_context_t* c = (lw_iolm_context_t*) ctx;
+    size_t n = 0U;
+    while (n < out_len && q_pop(c->tx_queue, &c->tx_head, &c->tx_len, &out[n]) > 0) {
+        n++;
     }
-    if(n > 0U)
-    {
-        memcpy(out, bridge->tx, n);
-    }
-    if(n < bridge->tx_len)
-    {
-        memmove(bridge->tx, bridge->tx + n, bridge->tx_len - n);
-    }
-    bridge->tx_len -= n;
-
     return n;
 }
 
-int lw_iolm_bridge_state(const lw_iolm_bridge_t* bridge)
+size_t lw_iolm_feed_rx(void* ctx, const uint8_t* data, size_t len)
 {
-    if(bridge == NULL)
-    {
-        return IOLINK_MASTER_STATE_ERROR;
-    }
-    return (int)iolink_master_get_state(&bridge->port);
-}
-
-int lw_iolm_bridge_get_pd_in(const lw_iolm_bridge_t* bridge,
-                             uint8_t* out,
-                             uint8_t out_len,
-                             uint8_t* actual_len)
-{
-    if(bridge == NULL)
-    {
-        return LW_IOLM_ERR_INVALID_ARG;
-    }
-    return iolink_master_get_pd_in(&bridge->port, out, out_len, actual_len);
-}
-
-uint32_t lw_iolm_bridge_wake_count(const lw_iolm_bridge_t* bridge)
-{
-    if(bridge == NULL)
-    {
+    if ((ctx == 0) || (data == 0)) {
         return 0U;
     }
-    return bridge->wake_count;
+    lw_iolm_context_t* c = (lw_iolm_context_t*) ctx;
+    for (size_t i = 0; i < len; i++) {
+        q_push(c->rx_queue, &c->rx_head, &c->rx_len, data[i]);
+    }
+    return len;
+}
+
+size_t lw_iolm_latest_pd(void* ctx, uint8_t* out, size_t out_len)
+{
+    if ((ctx == 0) || (out == 0) || (out_len == 0U)) {
+        return 0U;
+    }
+    lw_iolm_context_t* c = (lw_iolm_context_t*) ctx;
+    uint8_t copied = 0U;
+    uint8_t cap = (out_len > 255U) ? 255U : (uint8_t) out_len;
+    if (iolink_master_get_pd_in(&c->port, out, cap, &copied) != IOLINK_MASTER_STATUS_OK) {
+        return 0U;
+    }
+    return (size_t) copied;
+}
+
+const char* lw_iolm_state_name(void* ctx)
+{
+    if (ctx == 0) {
+        return "invalid";
+    }
+    lw_iolm_context_t* c = (lw_iolm_context_t*) ctx;
+    switch (iolink_master_get_state(&c->port)) {
+        case IOLINK_MASTER_STATE_INACTIVE: return "inactive";
+        case IOLINK_MASTER_STATE_STARTUP: return "startup";
+        case IOLINK_MASTER_STATE_PREOPERATE: return "preoperate";
+        case IOLINK_MASTER_STATE_OPERATE: return "operate";
+        case IOLINK_MASTER_STATE_ERROR: return "error";
+        default: return "unknown";
+    }
 }

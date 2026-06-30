@@ -1,0 +1,40 @@
+# LabWired - ESP32-C3 + MLX90640 thermal-fingerprint system (NORMAL scenario)
+#
+# An ESP32-C3 reads a Melexis MLX90640 32×24 far-IR thermal array over the
+# behavioral I²C0 controller (0x60013000), decodes per-pixel °C ON-TARGET with
+# the REAL, unmodified Melexis driver, computes a spatial thermal-fingerprint +
+# fault classification, and prints a per-frame verdict over UART0 (0x60000000).
+#
+# NORMAL scenario: a fan-cooled cabinet hotspot warms up to a bounded plateau
+# and never faults. With ambient 25 °C, target 85 °C, load 1.0 and cooling
+# efficiency 0.6, the cooled steady state is 25 + (85-25)*0.4 = 49 °C — below
+# the firmware's warn (60 °C) and critical (70 °C) thresholds. The firmware
+# must reach STABLE and report fault=NONE with high health.
+#
+# NB: `cooling_fault_at_s` is omitted (no fault). The fingerprint algorithm is
+# blind to this — it classifies purely from the decoded thermal frames.
+name: "esp32c3-mlx90640-thermal-normal"
+chip: "../../configs/chips/esp32c3.yaml"
+
+external_devices:
+  - id: "thermal_cam"
+    type: "mlx90640"
+    connection: "i2c0"
+    config:
+      i2c_address: 0x33
+
+      # ── Thermal scene (real first-order RC physics) ──────────────────────
+      ambient_c: 25.0          # background temperature, °C
+      hot_row: 12              # hotspot centre row (0..24)
+      hot_col: 16              # hotspot centre col (0..32)
+      hot_radius: 1            # hotspot half-extent, pixels
+      hot_target_c: 78.0       # steady-state hotspot target before load scaling
+      load: 1.0                # load multiplier on the hotspot target
+      tau_s: 4.0               # heating time constant τ, seconds
+      cooling_efficiency: 0.6  # fan/cooling efficiency 0..1 (pulls peak down)
+      # cooling_fault_at_s omitted → cooling never fails → bounded ~49 °C plateau.
+      frame_period_s: 4.0      # simulated time advanced per captured frame
+
+# The thermal camera is wired purely via the I²C0 `connection:` above; no GPIO
+# board_io binding is needed.
+board_io: []
