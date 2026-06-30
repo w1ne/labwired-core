@@ -137,6 +137,59 @@ pub fn lookup(descriptor_path: &str) -> Option<&'static str> {
         "esp32c3/xts_aes.yaml" => Some(include_str!(
             "../../../../configs/peripherals/esp32c3/xts_aes.yaml"
         )),
+        // NXP KW41Z (mkw41z4) declarative descriptors — embedded so the chip's
+        // declarative peripherals load in the wasm playground (no std::fs).
+        "mkw41z4/gpioa.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/mkw41z4/gpioa.yaml"
+        )),
+        "mkw41z4/gpiob.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/mkw41z4/gpiob.yaml"
+        )),
+        "mkw41z4/gpioc.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/mkw41z4/gpioc.yaml"
+        )),
+        "mkw41z4/i2c0.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/mkw41z4/i2c0.yaml"
+        )),
+        "mkw41z4/lpuart0.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/mkw41z4/lpuart0.yaml"
+        )),
+        "mkw41z4/mcg.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/mkw41z4/mcg.yaml"
+        )),
+        "mkw41z4/pit.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/mkw41z4/pit.yaml"
+        )),
+        "mkw41z4/pmc.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/mkw41z4/pmc.yaml"
+        )),
+        "mkw41z4/porta.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/mkw41z4/porta.yaml"
+        )),
+        "mkw41z4/portb.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/mkw41z4/portb.yaml"
+        )),
+        "mkw41z4/portc.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/mkw41z4/portc.yaml"
+        )),
+        "mkw41z4/rcm.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/mkw41z4/rcm.yaml"
+        )),
+        "mkw41z4/sim.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/mkw41z4/sim.yaml"
+        )),
+        "mkw41z4/smc.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/mkw41z4/smc.yaml"
+        )),
+        "mkw41z4/spi0.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/mkw41z4/spi0.yaml"
+        )),
+        "mkw41z4/tpm0.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/mkw41z4/tpm0.yaml"
+        )),
+        "mkw41z4/trng0.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/mkw41z4/trng0.yaml"
+        )),
         _ => None,
     }
 }
