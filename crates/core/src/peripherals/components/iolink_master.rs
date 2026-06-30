@@ -170,6 +170,15 @@ mod native {
             pd_value: u8,
             result: *mut NativeConformanceResult,
         ) -> c_int;
+        #[cfg(test)]
+        fn lw_iolm_conformance_run_multi_profile(
+            port_count: u8,
+            m_seq_type: u8,
+            pd_in_len: u8,
+            pd_out_len: u8,
+            first_pd_value: u8,
+            results: *mut NativeConformanceResult,
+        ) -> c_int;
     }
 
     #[cfg(test)]
@@ -357,6 +366,37 @@ mod native {
             Ok(result)
         } else {
             Err("native IO-Link real device-stack profile failed")
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn run_real_multi_device_stack_profile<const N: usize>(
+        m_seq_type: u8,
+        pd_in_len: u8,
+        pd_out_len: u8,
+        first_pd_value: u8,
+    ) -> Result<[NativeConformanceResult; N], &'static str> {
+        if N == 0 || N > u8::MAX as usize {
+            return Err("invalid native IO-Link port count");
+        }
+        let _guard = NATIVE_CALL_LOCK
+            .lock()
+            .expect("native IO-Link lock poisoned");
+        let mut results = [NativeConformanceResult::default(); N];
+        let ret = unsafe {
+            lw_iolm_conformance_run_multi_profile(
+                N as u8,
+                m_seq_type,
+                pd_in_len,
+                pd_out_len,
+                first_pd_value,
+                results.as_mut_ptr(),
+            )
+        };
+        if ret == 0 {
+            Ok(results)
+        } else {
+            Err("native IO-Link multi-device profile failed")
         }
     }
 }
@@ -989,6 +1029,42 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[cfg(feature = "iolink-native")]
+    #[test]
+    fn native_real_device_stack_runs_two_isolated_devices() {
+        use super::native::run_real_multi_device_stack_profile;
+
+        let results = run_real_multi_device_stack_profile::<2>(4, 2, 2, 0x31)
+            .expect("real multi-device native IO-Link profile");
+
+        for (port_idx, result) in results.iter().enumerate() {
+            let pd_value = 0x31u8.wrapping_add((port_idx as u8) * 0x10);
+            assert_eq!(result.master_state, 3, "port {port_idx} should reach OPERATE");
+            assert_eq!(result.pd_in_len, 2);
+            assert_eq!(result.pd_out_len, 2);
+            assert_eq!(result.device_observed_pd_input_len, 2);
+            assert_eq!(result.device_observed_pd_output_len, 2);
+            assert!(result.cycles > 0);
+
+            for i in 0..2 {
+                assert_eq!(result.pd_in[i], pd_value.wrapping_add(i as u8));
+                assert_eq!(
+                    result.device_observed_pd_input[i],
+                    pd_value.wrapping_add(i as u8)
+                );
+                assert_eq!(
+                    result.device_observed_pd_output[i],
+                    (pd_value ^ 0x55).wrapping_add(i as u8)
+                );
+            }
+        }
+        assert_ne!(results[0].pd_in[0], results[1].pd_in[0]);
+        assert_ne!(
+            results[0].device_observed_pd_output[0],
+            results[1].device_observed_pd_output[0]
+        );
     }
 
     #[test]

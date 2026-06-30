@@ -1,5 +1,5 @@
 #include "iolinki/application.h"
-#include "iolinki/iolink.h"
+#include "iolinki/device.h"
 #include "iolinki/protocol.h"
 #include "iolinki_master/master.h"
 
@@ -9,6 +9,7 @@
 
 #define LW_IOLM_LINK_QUEUE_CAP 128U
 #define LW_IOLM_MAX_PD_LEN 32U
+#define LW_IOLM_MAX_PORTS 4U
 #define LW_IOLM_STATUS_OK 0
 #define LW_IOLM_ERR_INVALID_ARG -1
 #define LW_IOLM_ERR_INIT -2
@@ -35,13 +36,25 @@ typedef struct
     uint8_t cycles;
 } lw_iolm_conformance_result_t;
 
-static lw_iolm_link_queue_t g_master_to_device;
-static lw_iolm_link_queue_t g_device_to_master;
-static int g_wakeup_pending;
-static uint8_t g_last_pd_input[LW_IOLM_MAX_PD_LEN];
-static uint8_t g_last_pd_input_len;
-static uint8_t g_last_pd_output[LW_IOLM_MAX_PD_LEN];
-static uint8_t g_last_pd_output_len;
+typedef struct
+{
+    iolink_master_port_t master;
+    iolink_phy_api_t master_phy;
+    iolink_master_config_t master_config;
+    iolink_device_ctx_t device;
+    iolink_device_config_t device_config;
+    iolink_phy_api_t device_phy;
+    iolink_app_callbacks_t app_callbacks;
+    lw_iolm_link_queue_t master_to_device;
+    lw_iolm_link_queue_t device_to_master;
+    int wakeup_pending;
+    uint8_t device_pd[LW_IOLM_MAX_PD_LEN];
+    uint8_t master_pd_out[LW_IOLM_MAX_PD_LEN];
+    uint8_t last_pd_input[LW_IOLM_MAX_PD_LEN];
+    uint8_t last_pd_input_len;
+    uint8_t last_pd_output[LW_IOLM_MAX_PD_LEN];
+    uint8_t last_pd_output_len;
+} lw_iolm_port_fixture_t;
 
 static void q_reset(lw_iolm_link_queue_t* q)
 {
@@ -80,20 +93,33 @@ static int q_pop(lw_iolm_link_queue_t* q, uint8_t* byte)
     return 1;
 }
 
-static int master_send(const uint8_t* data, size_t len)
+static int master_send(void* user, const uint8_t* data, size_t len)
 {
-    return q_push(&g_master_to_device, data, len);
+    lw_iolm_port_fixture_t* port = (lw_iolm_port_fixture_t*)user;
+    return (port != NULL) ? q_push(&port->master_to_device, data, len) : LW_IOLM_ERR_INVALID_ARG;
 }
 
-static int master_recv(uint8_t* byte)
+static int master_recv(void* user, uint8_t* byte)
 {
-    return q_pop(&g_device_to_master, byte);
+    lw_iolm_port_fixture_t* port = (lw_iolm_port_fixture_t*)user;
+    return (port != NULL) ? q_pop(&port->device_to_master, byte) : LW_IOLM_ERR_INVALID_ARG;
 }
+
+static int master_wake_up_for(lw_iolm_port_fixture_t* port)
+{
+    if(port == NULL)
+    {
+        return LW_IOLM_ERR_INVALID_ARG;
+    }
+    port->wakeup_pending = 1;
+    return LW_IOLM_STATUS_OK;
+}
+
+static lw_iolm_port_fixture_t* g_active_master_config_port;
 
 static int master_wake_up(void)
 {
-    g_wakeup_pending = 1;
-    return 0;
+    return master_wake_up_for(g_active_master_config_port);
 }
 
 static int checked_set_mode(iolink_phy_mode_t mode)
@@ -102,56 +128,85 @@ static int checked_set_mode(iolink_phy_mode_t mode)
     return 0;
 }
 
-static int phy_noop(void)
+static int phy_noop(void* user)
+{
+    (void)user;
+    return 0;
+}
+
+static int config_noop(void)
 {
     return 0;
 }
 
-static int device_send(const uint8_t* data, size_t len)
+static int device_send(void* user, const uint8_t* data, size_t len)
 {
-    return q_push(&g_device_to_master, data, len);
+    lw_iolm_port_fixture_t* port = (lw_iolm_port_fixture_t*)user;
+    return (port != NULL) ? q_push(&port->device_to_master, data, len) : LW_IOLM_ERR_INVALID_ARG;
 }
 
-static int device_recv(uint8_t* byte)
+static int device_recv(void* user, uint8_t* byte)
 {
-    return q_pop(&g_master_to_device, byte);
+    lw_iolm_port_fixture_t* port = (lw_iolm_port_fixture_t*)user;
+    return (port != NULL) ? q_pop(&port->master_to_device, byte) : LW_IOLM_ERR_INVALID_ARG;
 }
 
-static int device_detect_wakeup(void)
+static int device_detect_wakeup(void* user)
 {
-    int ret = g_wakeup_pending;
-    g_wakeup_pending = 0;
+    lw_iolm_port_fixture_t* port = (lw_iolm_port_fixture_t*)user;
+    int ret;
+
+    if(port == NULL)
+    {
+        return 0;
+    }
+    ret = port->wakeup_pending;
+    port->wakeup_pending = 0;
     return ret;
 }
 
-static void device_set_mode(iolink_phy_mode_t mode)
+static void device_set_mode(void* user, iolink_phy_mode_t mode)
 {
+    (void)user;
     (void)mode;
 }
 
-static void device_set_baudrate(iolink_baudrate_t baudrate)
+static void device_set_baudrate(void* user, iolink_baudrate_t baudrate)
 {
+    (void)user;
     (void)baudrate;
 }
 
 static void on_device_pd_input(const uint8_t* data, uint8_t len)
 {
+    lw_iolm_port_fixture_t* port = g_active_master_config_port;
+
+    if(port == NULL)
+    {
+        return;
+    }
     if(len > LW_IOLM_MAX_PD_LEN)
     {
         len = LW_IOLM_MAX_PD_LEN;
     }
-    memcpy(g_last_pd_input, data, len);
-    g_last_pd_input_len = len;
+    memcpy(port->last_pd_input, data, len);
+    port->last_pd_input_len = len;
 }
 
 static void on_device_pd_output(uint8_t* data, uint8_t len)
 {
+    lw_iolm_port_fixture_t* port = g_active_master_config_port;
+
+    if(port == NULL)
+    {
+        return;
+    }
     if(len > LW_IOLM_MAX_PD_LEN)
     {
         len = LW_IOLM_MAX_PD_LEN;
     }
-    memcpy(g_last_pd_output, data, len);
-    g_last_pd_output_len = len;
+    memcpy(port->last_pd_output, data, len);
+    port->last_pd_output_len = len;
 }
 
 static void fill_incrementing(uint8_t* data, uint8_t len, uint8_t first)
@@ -164,17 +219,22 @@ static void fill_incrementing(uint8_t* data, uint8_t len, uint8_t first)
     }
 }
 
-static int pump_device(const uint8_t* pd, uint8_t len)
+static int pump_device(lw_iolm_port_fixture_t* port)
 {
     uint8_t i;
 
-    if(iolink_pd_input_update(pd, len, true) != 0)
+    if(iolink_device_pd_input_update(&port->device,
+                                     port->device_pd,
+                                     port->device_config.stack.pd_in_len,
+                                     true) != 0)
     {
         return LW_IOLM_ERR_CYCLIC;
     }
     for(i = 0U; i < 4U; i++)
     {
-        iolink_process();
+        g_active_master_config_port = port;
+        iolink_device_process(&port->device);
+        g_active_master_config_port = NULL;
     }
     return LW_IOLM_STATUS_OK;
 }
@@ -201,15 +261,142 @@ static iolink_m_seq_type_t device_mseq_for_master(iolink_master_m_seq_type_t typ
     }
 }
 
-static void reset_link(void)
+static int init_fixture(lw_iolm_port_fixture_t* port,
+                        uint8_t m_seq_type,
+                        uint8_t pd_in_len,
+                        uint8_t pd_out_len,
+                        uint8_t pd_value)
 {
-    q_reset(&g_master_to_device);
-    q_reset(&g_device_to_master);
-    g_wakeup_pending = 0;
-    g_last_pd_input_len = 0U;
-    g_last_pd_output_len = 0U;
-    memset(g_last_pd_input, 0, sizeof(g_last_pd_input));
-    memset(g_last_pd_output, 0, sizeof(g_last_pd_output));
+    if((port == NULL) || (pd_in_len > LW_IOLM_MAX_PD_LEN) || (pd_out_len > LW_IOLM_MAX_PD_LEN))
+    {
+        return LW_IOLM_ERR_INVALID_ARG;
+    }
+
+    memset(port, 0, sizeof(*port));
+    q_reset(&port->master_to_device);
+    q_reset(&port->device_to_master);
+    fill_incrementing(port->device_pd, pd_in_len, pd_value);
+    fill_incrementing(port->master_pd_out, pd_out_len, (uint8_t)(pd_value ^ 0x55U));
+
+    port->master_phy.user = port;
+    port->master_phy.send = master_send;
+    port->master_phy.recv_byte = master_recv;
+    port->master_config.port_mode = IOLINK_MASTER_PORT_MODE_IOLINK;
+    port->master_config.m_seq_type = (iolink_master_m_seq_type_t)m_seq_type;
+    port->master_config.baudrate = IOLINK_BAUDRATE_COM2;
+    port->master_config.min_cycle_time = 10U;
+    port->master_config.pd_in_len = pd_in_len;
+    port->master_config.pd_out_len = pd_out_len;
+    port->master_config.response_timeout_100us = 20U;
+    port->master_config.set_mode_checked = checked_set_mode;
+    port->master_config.prepare_tx = config_noop;
+    port->master_config.prepare_rx = config_noop;
+    port->master_config.wake_up = master_wake_up;
+
+    port->device_phy.user = port;
+    port->device_phy.init = phy_noop;
+    port->device_phy.set_mode = device_set_mode;
+    port->device_phy.set_baudrate = device_set_baudrate;
+    port->device_phy.send = device_send;
+    port->device_phy.recv_byte = device_recv;
+    port->device_phy.detect_wakeup = device_detect_wakeup;
+    port->app_callbacks.on_pd_input = on_device_pd_input;
+    port->app_callbacks.on_pd_output = on_device_pd_output;
+    port->device_config.phy = port->device_phy;
+    port->device_config.stack.m_seq_type =
+        device_mseq_for_master((iolink_master_m_seq_type_t)m_seq_type);
+    port->device_config.stack.min_cycle_time = 10U;
+    port->device_config.stack.pd_in_len = pd_in_len;
+    port->device_config.stack.pd_out_len = pd_out_len;
+    port->device_config.stack.t_pd_us = 0U;
+    port->device_config.app_callbacks = &port->app_callbacks;
+
+    if(iolink_device_init(&port->device, &port->device_config) != 0)
+    {
+        return LW_IOLM_ERR_INIT;
+    }
+    iolink_device_set_timing_enforcement(&port->device, false);
+
+    g_active_master_config_port = port;
+    if(iolink_master_init(&port->master, &port->master_phy, &port->master_config) != 0)
+    {
+        g_active_master_config_port = NULL;
+        return LW_IOLM_ERR_INIT;
+    }
+    g_active_master_config_port = NULL;
+    if(iolink_master_set_pd_out(&port->master, port->master_pd_out, pd_out_len) != 0)
+    {
+        return LW_IOLM_ERR_INIT;
+    }
+
+    return LW_IOLM_STATUS_OK;
+}
+
+static int tick_fixture(lw_iolm_port_fixture_t* port, uint8_t cycle, lw_iolm_conformance_result_t* result)
+{
+    uint8_t pd_len = 0U;
+
+    g_active_master_config_port = port;
+    if(iolink_master_tick_at(&port->master, IOLINK_MASTER_TICK_CYCLE_DUE, cycle) != 0)
+    {
+        g_active_master_config_port = NULL;
+        return LW_IOLM_ERR_CYCLIC;
+    }
+    g_active_master_config_port = NULL;
+    if(pump_device(port) != 0)
+    {
+        return LW_IOLM_ERR_CYCLIC;
+    }
+
+    g_active_master_config_port = port;
+    (void)iolink_master_tick_at(&port->master, IOLINK_MASTER_TICK_NONE, (uint32_t)(cycle + 1U));
+    g_active_master_config_port = NULL;
+
+    if(iolink_master_get_state(&port->master) == IOLINK_MASTER_STATE_OPERATE)
+    {
+        g_active_master_config_port = port;
+        if(iolink_master_tick_at(&port->master,
+                                 IOLINK_MASTER_TICK_CYCLE_DUE,
+                                 (uint32_t)(cycle + 40U)) != 0)
+        {
+            g_active_master_config_port = NULL;
+            return LW_IOLM_ERR_CYCLIC;
+        }
+        g_active_master_config_port = NULL;
+        if(pump_device(port) != 0)
+        {
+            return LW_IOLM_ERR_CYCLIC;
+        }
+        g_active_master_config_port = port;
+        if(iolink_master_tick_at(&port->master,
+                                 IOLINK_MASTER_TICK_NONE,
+                                 (uint32_t)(cycle + 41U)) < 0)
+        {
+            g_active_master_config_port = NULL;
+            return LW_IOLM_ERR_CYCLIC;
+        }
+        g_active_master_config_port = NULL;
+        if(iolink_master_get_pd_in(&port->master, result->pd_in, sizeof(result->pd_in), &pd_len) !=
+           0)
+        {
+            return LW_IOLM_ERR_CYCLIC;
+        }
+
+        result->master_state = (int32_t)iolink_master_get_state(&port->master);
+        result->pd_in_len = pd_len;
+        result->pd_out_len = port->device_config.stack.pd_out_len;
+        result->device_observed_pd_input_len = port->last_pd_input_len;
+        result->device_observed_pd_output_len = port->last_pd_output_len;
+        memcpy(result->device_observed_pd_input,
+               port->last_pd_input,
+               sizeof(result->device_observed_pd_input));
+        memcpy(result->device_observed_pd_output,
+               port->last_pd_output,
+               sizeof(result->device_observed_pd_output));
+        result->cycles = (uint8_t)(cycle + 1U);
+    }
+
+    return LW_IOLM_STATUS_OK;
 }
 
 int lw_iolm_conformance_run_profile(uint8_t m_seq_type,
@@ -218,128 +405,102 @@ int lw_iolm_conformance_run_profile(uint8_t m_seq_type,
                                     uint8_t pd_value,
                                     lw_iolm_conformance_result_t* result)
 {
-    static const iolink_phy_api_t master_phy = {
-        .send = master_send,
-        .recv_byte = master_recv,
-    };
-    static const iolink_phy_api_t device_phy = {
-        .init = phy_noop,
-        .set_mode = device_set_mode,
-        .set_baudrate = device_set_baudrate,
-        .send = device_send,
-        .recv_byte = device_recv,
-        .detect_wakeup = device_detect_wakeup,
-    };
-    static const iolink_app_callbacks_t app_callbacks = {
-        .on_pd_input = on_device_pd_input,
-        .on_pd_output = on_device_pd_output,
-    };
-    iolink_master_port_t master;
-    iolink_master_config_t master_config = {
-        .port_mode = IOLINK_MASTER_PORT_MODE_IOLINK,
-        .m_seq_type = (iolink_master_m_seq_type_t)m_seq_type,
-        .baudrate = IOLINK_BAUDRATE_COM2,
-        .min_cycle_time = 10U,
-        .pd_in_len = pd_in_len,
-        .pd_out_len = pd_out_len,
-        .response_timeout_100us = 20U,
-        .set_mode_checked = checked_set_mode,
-        .prepare_tx = phy_noop,
-        .prepare_rx = phy_noop,
-        .wake_up = master_wake_up,
-    };
-    iolink_config_t device_config = {
-        .m_seq_type = device_mseq_for_master((iolink_master_m_seq_type_t)m_seq_type),
-        .min_cycle_time = 10U,
-        .pd_in_len = pd_in_len,
-        .pd_out_len = pd_out_len,
-        .t_pd_us = 0U,
-    };
-    uint8_t device_pd[LW_IOLM_MAX_PD_LEN] = {0U};
-    uint8_t master_pd_out[LW_IOLM_MAX_PD_LEN] = {0U};
-    uint8_t pd_len = 0U;
+    lw_iolm_port_fixture_t port;
     uint8_t cycle;
+    int ret;
 
-    if((result == NULL) || (pd_in_len > LW_IOLM_MAX_PD_LEN) ||
-       (pd_out_len > LW_IOLM_MAX_PD_LEN))
+    if(result == NULL)
     {
         return LW_IOLM_ERR_INVALID_ARG;
     }
-
     memset(result, 0, sizeof(*result));
-    reset_link();
-    fill_incrementing(device_pd, pd_in_len, pd_value);
-    fill_incrementing(master_pd_out, pd_out_len, (uint8_t)(pd_value ^ 0x55U));
-
-    iolink_app_register(&app_callbacks);
-    if(iolink_init(&device_phy, &device_config) != 0)
+    ret = init_fixture(&port, m_seq_type, pd_in_len, pd_out_len, pd_value);
+    if(ret != LW_IOLM_STATUS_OK)
     {
-        return LW_IOLM_ERR_INIT;
-    }
-    iolink_set_timing_enforcement(false);
-    if(iolink_master_init(&master, &master_phy, &master_config) != 0)
-    {
-        return LW_IOLM_ERR_INIT;
-    }
-    if(iolink_master_set_pd_out(&master, master_pd_out, pd_out_len) != 0)
-    {
-        return LW_IOLM_ERR_INIT;
+        return ret;
     }
 
     for(cycle = 0U; cycle < 20U; cycle++)
     {
-        if(iolink_master_tick_at(&master, IOLINK_MASTER_TICK_CYCLE_DUE, cycle) != 0)
+        ret = tick_fixture(&port, cycle, result);
+        if(ret != LW_IOLM_STATUS_OK)
         {
-            return LW_IOLM_ERR_CYCLIC;
+            return ret;
         }
-        if(pump_device(device_pd, pd_in_len) != 0)
+        if(result->master_state == IOLINK_MASTER_STATE_OPERATE)
         {
-            return LW_IOLM_ERR_CYCLIC;
-        }
-        (void)iolink_master_tick_at(&master, IOLINK_MASTER_TICK_NONE, (uint32_t)(cycle + 1U));
-
-        if(iolink_master_get_state(&master) == IOLINK_MASTER_STATE_OPERATE)
-        {
-            if(iolink_master_tick_at(&master,
-                                     IOLINK_MASTER_TICK_CYCLE_DUE,
-                                     (uint32_t)(cycle + 40U)) != 0)
-            {
-                return LW_IOLM_ERR_CYCLIC;
-            }
-            if(pump_device(device_pd, pd_in_len) != 0)
-            {
-                return LW_IOLM_ERR_CYCLIC;
-            }
-            if(iolink_master_tick_at(&master,
-                                     IOLINK_MASTER_TICK_NONE,
-                                     (uint32_t)(cycle + 41U)) < 0)
-            {
-                return LW_IOLM_ERR_CYCLIC;
-            }
-            if(iolink_master_get_pd_in(&master,
-                                       result->pd_in,
-                                       sizeof(result->pd_in),
-                                       &pd_len) != 0)
-            {
-                return LW_IOLM_ERR_CYCLIC;
-            }
-
-            result->master_state = (int32_t)iolink_master_get_state(&master);
-            result->pd_in_len = pd_len;
-            result->pd_out_len = pd_out_len;
-            result->device_observed_pd_input_len = g_last_pd_input_len;
-            result->device_observed_pd_output_len = g_last_pd_output_len;
-            memcpy(result->device_observed_pd_input,
-                   g_last_pd_input,
-                   sizeof(result->device_observed_pd_input));
-            memcpy(result->device_observed_pd_output,
-                   g_last_pd_output,
-                   sizeof(result->device_observed_pd_output));
-            result->cycles = (uint8_t)(cycle + 1U);
             return LW_IOLM_STATUS_OK;
         }
     }
 
-    result->master_state = (int32_t)iolink_master_get_state(&master);
+    result->master_state = (int32_t)iolink_master_get_state(&port.master);
+    return LW_IOLM_ERR_NO_OPERATE;
+}
+
+int lw_iolm_conformance_run_multi_profile(uint8_t port_count,
+                                          uint8_t m_seq_type,
+                                          uint8_t pd_in_len,
+                                          uint8_t pd_out_len,
+                                          uint8_t first_pd_value,
+                                          lw_iolm_conformance_result_t* results)
+{
+    lw_iolm_port_fixture_t ports[LW_IOLM_MAX_PORTS];
+    uint8_t completed[LW_IOLM_MAX_PORTS] = {0U};
+    uint8_t complete_count = 0U;
+    uint8_t port_idx;
+    uint8_t cycle;
+    int ret;
+
+    if((results == NULL) || (port_count == 0U) || (port_count > LW_IOLM_MAX_PORTS))
+    {
+        return LW_IOLM_ERR_INVALID_ARG;
+    }
+    memset(results, 0, sizeof(lw_iolm_conformance_result_t) * port_count);
+
+    for(port_idx = 0U; port_idx < port_count; port_idx++)
+    {
+        ret = init_fixture(&ports[port_idx],
+                           m_seq_type,
+                           pd_in_len,
+                           pd_out_len,
+                           (uint8_t)(first_pd_value + (uint8_t)(port_idx * 0x10U)));
+        if(ret != LW_IOLM_STATUS_OK)
+        {
+            return ret;
+        }
+    }
+
+    for(cycle = 0U; cycle < 20U; cycle++)
+    {
+        for(port_idx = 0U; port_idx < port_count; port_idx++)
+        {
+            if(completed[port_idx] != 0U)
+            {
+                continue;
+            }
+            ret = tick_fixture(&ports[port_idx], cycle, &results[port_idx]);
+            if(ret != LW_IOLM_STATUS_OK)
+            {
+                return ret;
+            }
+            if(results[port_idx].master_state == IOLINK_MASTER_STATE_OPERATE)
+            {
+                completed[port_idx] = 1U;
+                complete_count++;
+            }
+        }
+        if(complete_count == port_count)
+        {
+            return LW_IOLM_STATUS_OK;
+        }
+    }
+
+    for(port_idx = 0U; port_idx < port_count; port_idx++)
+    {
+        if(results[port_idx].master_state != IOLINK_MASTER_STATE_OPERATE)
+        {
+            results[port_idx].master_state = (int32_t)iolink_master_get_state(&ports[port_idx].master);
+        }
+    }
     return LW_IOLM_ERR_NO_OPERATE;
 }

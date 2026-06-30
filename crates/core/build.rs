@@ -78,7 +78,7 @@ fn build_iolink_native_bridge() {
         master_dir.join("src/master_sio.c"),
         device_dir.join("src/crc.c"),
         device_dir.join("src/frame.c"),
-        device_dir.join("src/iolink_core.c"),
+        device_dir.join("src/device.c"),
         device_dir.join("src/phy_generic.c"),
         device_dir.join("src/phy_virtual.c"),
         device_dir.join("src/dll.c"),

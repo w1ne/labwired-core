@@ -13,6 +13,7 @@
 typedef struct
 {
     iolink_master_port_t port;
+    iolink_phy_api_t phy;
     uint8_t tx[LW_IOLM_QUEUE_CAP];
     size_t tx_len;
     uint8_t rx[LW_IOLM_QUEUE_CAP];
@@ -33,43 +34,46 @@ static int bridge_push_tx(lw_iolm_bridge_t* bridge, uint8_t byte)
     return LW_IOLM_STATUS_OK;
 }
 
-static int bridge_send(const uint8_t* data, size_t len)
+static int bridge_send(void* user, const uint8_t* data, size_t len)
 {
+    lw_iolm_bridge_t* bridge = (lw_iolm_bridge_t*)user;
     size_t i;
 
-    if((g_active_bridge == NULL) || ((data == NULL) && (len > 0U)))
+    if((bridge == NULL) || ((data == NULL) && (len > 0U)))
     {
         return LW_IOLM_ERR_INVALID_ARG;
     }
-    if((g_active_bridge->tx_len + len) > LW_IOLM_QUEUE_CAP)
+    if((bridge->tx_len + len) > LW_IOLM_QUEUE_CAP)
     {
         return LW_IOLM_ERR_INVALID_ARG;
     }
 
     for(i = 0U; i < len; i++)
     {
-        g_active_bridge->tx[g_active_bridge->tx_len++] = data[i];
+        bridge->tx[bridge->tx_len++] = data[i];
     }
     return (int)len;
 }
 
-static int bridge_recv_byte(uint8_t* byte)
+static int bridge_recv_byte(void* user, uint8_t* byte)
 {
-    if((g_active_bridge == NULL) || (byte == NULL))
+    lw_iolm_bridge_t* bridge = (lw_iolm_bridge_t*)user;
+
+    if((bridge == NULL) || (byte == NULL))
     {
         return LW_IOLM_ERR_INVALID_ARG;
     }
-    if(g_active_bridge->rx_len == 0U)
+    if(bridge->rx_len == 0U)
     {
         return LW_IOLM_STATUS_OK;
     }
 
-    *byte = g_active_bridge->rx[g_active_bridge->rx_head];
-    g_active_bridge->rx_head = (g_active_bridge->rx_head + 1U) % LW_IOLM_QUEUE_CAP;
-    g_active_bridge->rx_len--;
-    if(g_active_bridge->rx_len == 0U)
+    *byte = bridge->rx[bridge->rx_head];
+    bridge->rx_head = (bridge->rx_head + 1U) % LW_IOLM_QUEUE_CAP;
+    bridge->rx_len--;
+    if(bridge->rx_len == 0U)
     {
-        g_active_bridge->rx_head = 0U;
+        bridge->rx_head = 0U;
     }
     return 1;
 }
@@ -111,10 +115,6 @@ lw_iolm_bridge_t* lw_iolm_bridge_new(uint8_t m_seq_type,
                                      uint8_t min_cycle_time,
                                      uint8_t response_timeout_100us)
 {
-    static const iolink_phy_api_t phy = {
-        .send = bridge_send,
-        .recv_byte = bridge_recv_byte,
-    };
     lw_iolm_bridge_t* bridge = (lw_iolm_bridge_t*)calloc(1U, sizeof(lw_iolm_bridge_t));
     int ret;
 
@@ -135,9 +135,12 @@ lw_iolm_bridge_t* lw_iolm_bridge_new(uint8_t m_seq_type,
         .prepare_rx = bridge_noop,
         .wake_up = bridge_wake_up,
     };
+    bridge->phy.user = bridge;
+    bridge->phy.send = bridge_send;
+    bridge->phy.recv_byte = bridge_recv_byte;
 
     g_active_bridge = bridge;
-    ret = iolink_master_init(&bridge->port, &phy, &config);
+    ret = iolink_master_init(&bridge->port, &bridge->phy, &config);
     g_active_bridge = NULL;
     if(ret != IOLINK_MASTER_STATUS_OK)
     {
