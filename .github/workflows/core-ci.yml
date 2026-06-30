@@ -97,7 +97,7 @@ jobs:
           cargo build -p demo-blinky --release --target thumbv7m-none-eabi
           cargo build -p firmware-h563-io-demo --release --target thumbv7m-none-eabi
           cargo build -p firmware-f401-demo --release --target thumbv7em-none-eabi
-          cargo build -p firmware-rp2040-pio-onboarding --release --target thumbv6m-none-eabi
+          RUSTFLAGS="-C link-arg=-Tlink.x" cargo build -p firmware-rp2040-pio-onboarding --release --target thumbv6m-none-eabi
           # Debug build: dap/e2e and loader/test_location_to_pc look for the debug path.
           cargo build -p firmware-ci-fixture --target thumbv7m-none-eabi
 
