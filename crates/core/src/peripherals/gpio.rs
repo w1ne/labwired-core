@@ -22,6 +22,9 @@ pub enum GpioRegisterLayout {
     Stm32F1,
     Stm32V2,
     Nrf52,
+    /// NXP Kinetis (KW41Z GPIOA/B/C): PDOR @0x0 (output), PSOR/PCOR/PTOR
+    /// set/clear/toggle, PDIR @0x10 (input), PDDR @0x14 (direction).
+    Kinetis,
 }
 
 impl FromStr for GpioRegisterLayout {
@@ -33,8 +36,9 @@ impl FromStr for GpioRegisterLayout {
             "stm32f1" | "f1" | "legacy" => Ok(Self::Stm32F1),
             "stm32v2" | "v2" | "modern" | "stm32-modern" | "h5" | "stm32h5" => Ok(Self::Stm32V2),
             "nrf52" | "nordic" => Ok(Self::Nrf52),
+            "kinetis" | "kw41z" | "nxp" => Ok(Self::Kinetis),
             _ => Err(format!(
-                "unsupported GPIO register layout '{}'; supported: stm32f1, stm32v2, nrf52",
+                "unsupported GPIO register layout '{}'; supported: stm32f1, stm32v2, nrf52, kinetis",
                 value
             )),
         }
@@ -234,12 +238,44 @@ impl Nrf52Gpio {
     }
 }
 
+// ── NXP Kinetis (KW41Z GPIOA/B/C) ────────────────────────────────────────────
+// PDOR @0x0 (data output), PSOR @0x4 (set, w1s), PCOR @0x8 (clear, w1c),
+// PTOR @0xC (toggle), PDIR @0x10 (data input), PDDR @0x14 (data direction).
+#[derive(Debug, Default, serde::Serialize)]
+pub struct KinetisGpio {
+    pdor: u32, // 0x00 output
+    pdir: u32, // 0x10 input
+    pddr: u32, // 0x14 direction
+}
+
+impl KinetisGpio {
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x00 => self.pdor,
+            0x10 => self.pdir,
+            0x14 => self.pddr,
+            _ => 0,
+        }
+    }
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            0x00 => self.pdor = value,   // PDOR
+            0x04 => self.pdor |= value,  // PSOR: set 1s
+            0x08 => self.pdor &= !value, // PCOR: clear 1s
+            0x0C => self.pdor ^= value,  // PTOR: toggle
+            0x14 => self.pddr = value,   // PDDR
+            _ => {}
+        }
+    }
+}
+
 /// GPIO port — one variant per chip family. Register sets are fully isolated.
 #[derive(Debug, serde::Serialize)]
 pub enum GpioPort {
     Stm32F1(F1Gpio),
     Stm32V2(V2Gpio),
     Nrf52(Nrf52Gpio),
+    Kinetis(KinetisGpio),
 }
 
 impl Default for GpioPort {
@@ -258,6 +294,7 @@ impl GpioPort {
             GpioRegisterLayout::Stm32F1 => Self::Stm32F1(F1Gpio::new()),
             GpioRegisterLayout::Stm32V2 => Self::Stm32V2(V2Gpio::default()),
             GpioRegisterLayout::Nrf52 => Self::Nrf52(Nrf52Gpio::default()),
+            GpioRegisterLayout::Kinetis => Self::Kinetis(KinetisGpio::default()),
         }
     }
 
@@ -286,6 +323,7 @@ impl GpioPort {
             Self::Stm32F1(g) => g.read_reg(offset),
             Self::Stm32V2(g) => g.read_reg(offset),
             Self::Nrf52(g) => g.read_reg(offset),
+            Self::Kinetis(g) => g.read_reg(offset),
         }
     }
 
@@ -294,6 +332,7 @@ impl GpioPort {
             Self::Stm32F1(g) => g.write_reg(offset, value),
             Self::Stm32V2(g) => g.write_reg(offset, value),
             Self::Nrf52(g) => g.write_reg(offset, value),
+            Self::Kinetis(g) => g.write_reg(offset, value),
         }
     }
 
@@ -304,6 +343,7 @@ impl GpioPort {
             Self::Stm32F1(_) => 0x0C,
             Self::Stm32V2(_) => 0x14,
             Self::Nrf52(_) => 0x504,
+            Self::Kinetis(_) => 0x00,
         }
     }
 
@@ -314,6 +354,7 @@ impl GpioPort {
             Self::Stm32F1(_) => 0x08,
             Self::Stm32V2(_) => 0x10,
             Self::Nrf52(_) => 0x510,
+            Self::Kinetis(_) => 0x10,
         }
     }
 }
@@ -368,6 +409,7 @@ impl crate::Peripheral for GpioPort {
             Self::Stm32F1(g) => serde_json::to_value(g),
             Self::Stm32V2(g) => serde_json::to_value(g),
             Self::Nrf52(g) => serde_json::to_value(g),
+            Self::Kinetis(g) => serde_json::to_value(g),
         }
         .unwrap_or(serde_json::Value::Null)
     }

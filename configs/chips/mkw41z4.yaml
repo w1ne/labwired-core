@@ -116,12 +116,17 @@ peripherals:
     size: "64B"
     config:
       path: "../peripherals/mkw41z4/gpiob.yaml"
+  # GPIOC is BEHAVIOURAL (Kinetis layout — peripherals/gpio.rs KinetisGpio):
+  # PDOR/PSOR/PCOR/PTOR/PDIR/PDDR. Firmware drives the PCD8544 Nokia-5110 D/C
+  # line from a GPIOC output here, and the SPI bus latches that pin's level into
+  # the display model (command vs data). A passive declarative bank has no
+  # readable output level for the bus to latch, so this must be behavioural.
   - id: "gpioc"
-    type: "declarative"
+    type: "gpio"
     base_address: 0x400FF080
     size: "64B"
     config:
-      path: "../peripherals/mkw41z4/gpioc.yaml"
+      profile: "kinetis"
   # --- Sensor buses ---
   - id: "i2c0"
     type: "declarative"
@@ -142,13 +147,17 @@ peripherals:
     irq: 9
     config:
       profile: "kinetis"
+  # SPI0 is BEHAVIOURAL (Kinetis DSPI — peripherals/spi.rs KinetisDspi): MCR /
+  # TCR / CTAR / SR / PUSHR / POPR FIFO master. A PUSHR write clocks a frame out
+  # to the attached SPI device (e.g. the PCD8544 Nokia-5110 LCD). A passive
+  # declarative bank can't transfer, so the display path needs the real model.
   - id: "spi0"
-    type: "declarative"
+    type: "spi"
     base_address: 0x4002C000
     size: "4KB"
     irq: 11
     config:
-      path: "../peripherals/mkw41z4/spi0.yaml"
+      profile: "kinetis"
   # --- Timers / RNG ---
   - id: "tpm0"
     type: "declarative"
