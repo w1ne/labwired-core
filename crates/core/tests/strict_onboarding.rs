@@ -255,6 +255,7 @@ fn ensure_smoke_firmware_exists(project_root: &Path, smoke_test: &Path) -> anyho
     let target = parts[target_idx + 1].clone();
     let profile = parts[target_idx + 2].clone();
     let package = parts[target_idx + 3].clone();
+    let needs_thumbv6m_link_arg = target == "thumbv6m-none-eabi";
 
     let mut args = vec![
         "build".to_string(),
@@ -278,12 +279,17 @@ fn ensure_smoke_firmware_exists(project_root: &Path, smoke_test: &Path) -> anyho
         project_root.to_path_buf()
     };
 
-    let status = Command::new("cargo")
+    let mut command = Command::new("cargo");
+    command
         .current_dir(&build_dir)
         .env_remove("CARGO_ENCODED_RUSTFLAGS")
         .env_remove("RUSTFLAGS")
-        .args(args)
-        .status()?;
+        .args(args);
+    if needs_thumbv6m_link_arg {
+        command.env("RUSTFLAGS", "-C link-arg=-Tlink.x");
+    }
+
+    let status = command.status()?;
 
     Ok(status.success())
 }
