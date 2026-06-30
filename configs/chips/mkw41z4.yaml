@@ -31,6 +31,15 @@ peripherals:
     base_address: 0x40054000
     size: "4KB"
     irq: 12
+  # --- Cortex-M0+ core timer ---
+  # SysTick (ARMv6-M core peripheral @ 0xE000E010). The Zephyr KW41Z port uses
+  # the cortex_m_systick driver as the system clock, and any time-based wait
+  # (e.g. the FXOS8700 driver's k_busy_wait after a soft reset) spins on
+  # sys_clock_cycle_get_32 until SysTick advances. Without this entry 0xE000E010
+  # is unmapped, the counter never ticks, and those waits hang forever.
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
   # --- Clock / system integration ---
   # SIM stays declarative (no status polls on the boot path) but the window must
   # span the "high" register block: SDID @0x1024 and COPC @0x1100 live well past
@@ -107,12 +116,17 @@ peripherals:
     size: "64B"
     config:
       path: "../peripherals/mkw41z4/gpiob.yaml"
+  # GPIOC is BEHAVIOURAL (Kinetis layout — peripherals/gpio.rs KinetisGpio):
+  # PDOR/PSOR/PCOR/PTOR/PDIR/PDDR. Firmware drives the PCD8544 Nokia-5110 D/C
+  # line from a GPIOC output here, and the SPI bus latches that pin's level into
+  # the display model (command vs data). A passive declarative bank has no
+  # readable output level for the bus to latch, so this must be behavioural.
   - id: "gpioc"
-    type: "declarative"
+    type: "gpio"
     base_address: 0x400FF080
     size: "64B"
     config:
-      path: "../peripherals/mkw41z4/gpioc.yaml"
+      profile: "kinetis"
   # --- Sensor buses ---
   - id: "i2c0"
     type: "declarative"
@@ -121,13 +135,29 @@ peripherals:
     irq: 10
     config:
       path: "../peripherals/mkw41z4/i2c0.yaml"
+  # I2C1 is BEHAVIOURAL (Kinetis classic I2C — peripherals/i2c.rs KinetisI2c).
+  # The FRDM-KW41Z wires its on-board FXOS8700 accelerometer/magnetometer here
+  # (PTC2/PTC3, slave 0x1f). The NXP fsl_i2c HAL drives transfers byte-by-byte
+  # from the I2C1 ISR (IRQ 9), so a passive declarative bank can't service it:
+  # the model latches S.TCF/IICIF per byte and asserts the IRQ while IICIE is set.
+  - id: "i2c1"
+    type: "i2c"
+    base_address: 0x40067000
+    size: "4KB"
+    irq: 9
+    config:
+      profile: "kinetis"
+  # SPI0 is BEHAVIOURAL (Kinetis DSPI — peripherals/spi.rs KinetisDspi): MCR /
+  # TCR / CTAR / SR / PUSHR / POPR FIFO master. A PUSHR write clocks a frame out
+  # to the attached SPI device (e.g. the PCD8544 Nokia-5110 LCD). A passive
+  # declarative bank can't transfer, so the display path needs the real model.
   - id: "spi0"
-    type: "declarative"
+    type: "spi"
     base_address: 0x4002C000
     size: "4KB"
     irq: 11
     config:
-      path: "../peripherals/mkw41z4/spi0.yaml"
+      profile: "kinetis"
   # --- Timers / RNG ---
   - id: "tpm0"
     type: "declarative"
