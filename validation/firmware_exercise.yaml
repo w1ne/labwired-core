@@ -1,320 +1,137 @@
-# LabWired firmware-exercise matrix — the source of truth for which peripheral
-# MODELS are actually driven by a BOOTING FIRMWARE, versus only poked by a
-# register-level unit test, versus modeled but never exercised at all.
+# LabWired firmware-exercise matrix — the BEYOND-RUBRIC layer.
 #
-# WHY THIS FILE EXISTS
-#   `validation/manifest.yaml` answers "is the model right vs silicon?".
-#   This file answers a different, complementary question: "does any real
-#   firmware actually RUN against the model?". A peripheral can have a perfect
-#   reset-state oracle and still never be touched by firmware — that is latent
-#   false confidence. This matrix makes the firmware-exercise gap visible and
-#   gateable so dead cells cannot silently accumulate.
+# WHAT THIS FILE IS (AND IS NOT)
+#   The RUBRIC peripheral classes (clock/gpio/uart/timer/dma/irq/i2c/spi/adc/pwm/
+#   wdt/rtc/can/rmt) are NOT recorded here. Their firmware-exercise status is
+#   AUTHORITATIVE from docs/coverage/tier1-matrix.json — the committed, ratchet-
+#   gated output of the Tier-1 fixture sims (each chip's fixture is real firmware
+#   that drives those classes and self-reports PASS). The matrix generator reads
+#   that JSON directly, so the rubric grid cannot drift from reality.
 #
-# THE BAR (strict)
-#   A model is PROVEN only when a real firmware BOOTS in the sim and RUNS
-#   exercising that model end to end — the firmware reads/writes it and depends
-#   on its modeled behaviour. NOT proven by: (a) a banner-only boot that never
-#   touches the peripheral; (b) a Rust unit/conformance test that constructs the
-#   model and poizes its registers directly WITHOUT running firmware.
+#   This file records only what tier1 does NOT cover:
+#     functional         — a real driver decoding a sensor/protocol over a bus
+#                           and asserting a physical value (the gold standard).
+#     advanced_unit_only — chip-specific peripherals exercised by unit tests but
+#                           by no running firmware.
+#     advanced_dead      — chip-specific peripherals modeled but never exercised.
+#     shim               — hardcoded stubs presenting as models (the most
+#                           misleading class). Several are structurally
+#                           irreducible (a closed RF blob ships no runnable image).
 #
-# CLASSES
-#   proven     — a booting firmware drives the model (record fw + test + gate).
-#   unit_only  — only a direct-model unit/conformance/mmio-diff test exists; no
-#                running firmware drives it on this chip.
-#   dead       — modeled (or declared) but neither firmware nor a meaningful
-#                test exercises it.
-#   shim       — the "model" is a hardcoded stub presenting as a peripheral
-#                (e.g. wifi thunks, sdio bring-up stub). The most misleading
-#                class: it looks modeled but encodes no real behaviour.
+# WHY THE SPLIT
+#   A first-pass hand-authored matrix under-counted the STM32 family ~4x because
+#   it read only the banner-level survival tests and missed the tier1 fixtures.
+#   Sourcing the rubric from tier1-matrix.json makes that error impossible; this
+#   file holds only the curated, non-rubric judgements.
 #
-# GATE (where the strongest proving firmware actually runs)
-#   pr       — default `cargo test` (the per-PR merge gate)
-#   release  — release-only CI step (e.g. the tier1 matrix; #[ignore] in debug)
-#   ignored  — an #[ignore]/--ignored or external (west) test; runs on demand
-#   none     — firmware exists but no automated test runs it
-#
-# MAINTENANCE
-#   `scripts/generate_firmware_exercise_matrix.py` renders
-#   docs/boards/FIRMWARE_EXERCISE_MATRIX.md from this file and fails CI
-#   (`--check`) if the committed doc is stale. Update this file when a firmware
-#   starts (or stops) exercising a model, then regenerate.
-
-legend:
-  proven: "booting firmware drives the model"
-  unit_only: "register-level test only, no running firmware"
-  dead: "modeled/declared but never exercised"
-  shim: "hardcoded stub masquerading as a model"
+#   scripts/generate_firmware_exercise_matrix.py renders
+#   docs/boards/FIRMWARE_EXERCISE_MATRIX.md and CI fails (--check) if stale.
+#   Only chips with beyond-rubric content need an entry.
 
 chips:
-  # ── Strongest: many peripherals driven by real firmware ──────────────────
   - id: stm32l476
     arch: cortex-m4f
-    headline: "Strongest ARM chip — 20+ peripherals driven by real firmware + IO-Link station (gated firmware test). Most cells are register-trace, not sensor reads."
-    proven:
-      - {p: RCC,      fw: nucleo-l476rg-pll/cubemx-hal, ev: "firmware_survival.rs:351", gate: pr}
-      - {p: GPIO,     fw: nucleo-l476rg-demo,           ev: "firmware_survival.rs:445", gate: pr}
-      - {p: USART2,   fw: nucleo-l476rg-*,              ev: "firmware_survival.rs:307", gate: pr}
-      - {p: SPI1,     fw: nucleo-l476rg-spi,            ev: "firmware_survival.rs:320", gate: pr}
-      - {p: I2C1,     fw: nucleo-l476rg-i2c,            ev: "firmware_survival.rs:523", gate: pr}
-      - {p: ADC1,     fw: nucleo-l476rg-adc,            ev: "firmware_survival.rs:498", gate: pr}
-      - {p: DMA1,     fw: nucleo-l476rg-dma,            ev: "firmware_survival.rs:471", gate: pr}
-      - {p: PWR,      fw: nucleo-l476rg-l4periphs,      ev: "firmware_survival.rs:406", gate: pr}
-      - {p: FLASH,    fw: nucleo-l476rg-l4periphs,      ev: "firmware_survival.rs:406", gate: pr}
-      - {p: TIM1,     fw: nucleo-l476rg-tim1-advanced,  ev: "firmware_survival.rs:657", gate: pr}
-      - {p: TIM2,     fw: nucleo-l476rg-l4periphs,      ev: "firmware_survival.rs:406", gate: pr}
-      - {p: IWDG,     fw: nucleo-l476rg-misc,           ev: "firmware_survival.rs:374", gate: pr}
-      - {p: WWDG,     fw: nucleo-l476rg-misc,           ev: "firmware_survival.rs:374", gate: pr}
-      - {p: DAC,      fw: nucleo-l476rg-misc,           ev: "firmware_survival.rs:374", gate: pr}
-      - {p: RTC,      fw: nucleo-l476rg-misc,           ev: "firmware_survival.rs:374", gate: pr}
-      - {p: LPUART1,  fw: nucleo-l476rg-l4periphs2,     ev: "firmware_survival.rs:560", gate: pr}
-      - {p: LPTIM1,   fw: nucleo-l476rg-l4periphs2,     ev: "firmware_survival.rs:560", gate: pr}
-      - {p: EXTI,     fw: nucleo-l476rg-l4periphs2,     ev: "firmware_survival.rs:560", gate: pr}
-      - {p: QUADSPI,  fw: nucleo-l476rg-l4periphs2,     ev: "firmware_survival.rs:560", gate: pr}
-      - {p: SAI1,     fw: nucleo-l476rg-l4periphs2,     ev: "firmware_survival.rs:560", gate: pr}
-      - {p: USB_OTG,  fw: nucleo-l476rg-l4periphs2,     ev: "firmware_survival.rs:560", gate: pr}
-      - {p: bxCAN1,   fw: nucleo-l476rg-l4periphs2,     ev: "firmware_survival.rs:560", gate: pr}
-      - {p: COMP,     fw: nucleo-l476rg-r12,            ev: "firmware_survival.rs:725", gate: pr}
-      - {p: TSC,      fw: nucleo-l476rg-r12,            ev: "firmware_survival.rs:725", gate: pr}
-      - {p: FMC,      fw: nucleo-l476rg-r12,            ev: "firmware_survival.rs:725", gate: pr}
-      - {p: SDMMC1,   fw: nucleo-l476rg-r11,            ev: "firmware_survival.rs:693", gate: pr}
-      - {p: SysTick,  fw: nucleo-l476rg-cubemx-hal,     ev: "firmware_survival.rs:625", gate: pr}
-      - {p: "IO-Link (USART3+I2C+AHT20/BMP280+SN74HC165)", fw: iolink-station, ev: "examples/iolink-station ci/test.sh", gate: pr}
-    unit_only: [SPI2, SPI3]
-    dead: {count: 4, examples: [GPDMA, FDCAN, HSEM]}
+    headline: "Richest ARM coverage: drives 11 rubric classes via real firmware, plus a gated IO-Link station that runs real sensor + shift-register devices over USART3/I2C."
+    functional:
+      - what: "IO-Link master station — AHT20 + BMP280 over I2C, SN74HC165 shift register"
+        fw: iolink-station
+        ev: "examples/iolink-station ci/test.sh (firmware-gate)"
+        gate: pr
+    advanced_unit_only: [SPI2, SPI3]
+    advanced_dead: {count: 3, examples: [GPDMA, FDCAN, HSEM]}
     shim: []
 
   - id: esp32c3
     arch: riscv32imc
-    headline: "Only functional-sensor proof in the PR gate: real Sensirion/Melexis/Vishay drivers decode CO2/humidity/condensation over modeled I2C (Leo air-quality e2e). The WiFi path is a REAL simulated-medium model (two C3 firmwares associate + exchange IP over a shared VirtualWifi air), not a shim."
-    proven:
-      - {p: UART,       fw: tier1-fixture/esp32c3,  ev: "tier1_matrix (release)", gate: release}
-      - {p: GPIO,       fw: tier1-fixture/esp32c3,  ev: "esp32c3/src/main.rs:114", gate: release}
-      - {p: I2C,        fw: leo-airquality,         ev: "e2e_leo_airquality.rs:118", gate: pr}
-      - {p: SPI,        fw: tier1-fixture/esp32c3,  ev: "esp32c3/src/main.rs:265", gate: release}
-      - {p: apb_saradc, fw: tier1-fixture/esp32c3,  ev: "esp32c3/src/main.rs:305", gate: release}
-      - {p: ledc,       fw: tier1-fixture/esp32c3,  ev: "esp32c3/src/main.rs:366", gate: release}
-      - {p: intmatrix,  fw: tier1-fixture/esp32c3,  ev: "esp32c3/src/main.rs:187", gate: release}
-      - {p: "I2C sensor stack (SCD41/SGP41/SPS30/VEML7700/MLX90614)", fw: leo-airquality, ev: "e2e_leo_airquality.rs:126-143", gate: pr}
-    unit_only: [ana_i2c, forced_status, rtc_timer, sar_adc, sha,
-                "virtual_wifi (real shared-802.11 medium model, 2 tests; driven by the dual-C3 CLI run)",
-                "wifi_mac (RE'd MAC↔SimNet bridge, RX descriptor ring, 5 tests)"]
-    dead: {count: 2, examples: [cache, rng]}
+    headline: "Only functional-sensor proof in the PR gate. clock/dma stay unrecorded by design — esp32c3 wires system/rtc_cntl/dma as declarative register files with no behavioural engine, so a PASS would overclaim."
+    functional:
+      - what: "Leo air-quality — real Sensirion SCD41/SGP41/SPS30 + Melexis MLX90614 + Vishay VEML7700 decode CO2 / humidity / surface condensation to plain-language verdicts"
+        fw: leo-airquality
+        ev: "e2e_leo_airquality.rs:126-143"
+        gate: pr
+    advanced_unit_only:
+      - ana_i2c
+      - sha
+      - "virtual_wifi (real shared-802.11 medium model two C3 firmwares associate over, 2 tests)"
+      - "wifi_mac (RE'd MAC<->SimNet bridge, RX descriptor ring, 5 tests)"
+    advanced_dead: {count: 2, examples: [cache, rng]}
     shim: []
 
   - id: esp32s3
     arch: xtensa-lx7
-    headline: "Broad model surface (~35), thin firmware: tier1 fixture + TMP102 read prove ~9; the rest are unit-only, several dead/broken."
-    proven:
-      - {p: systimer,        fw: "tier1 + e2e",          ev: "e2e_i2c_tmp102.rs:95", gate: pr}
-      - {p: GPIO,            fw: "tier1 + e2e_blinky",   ev: "esp32s3/src/main.rs:152", gate: pr}
-      - {p: timer_group,     fw: tier1-fixture/esp32s3,  ev: "esp32s3/src/main.rs:185", gate: release}
-      - {p: intmatrix,       fw: tier1-fixture/esp32s3,  ev: "esp32s3/src/main.rs:219", gate: release}
-      - {p: I2C,             fw: e2e_i2c_tmp102,         ev: "e2e_i2c_tmp102.rs:58", gate: pr}
-      - {p: "TMP102 read",   fw: esp32s3-i2c-tmp102,     ev: "e2e_i2c_tmp102.rs:58", gate: pr}
-      - {p: usb_serial_jtag, fw: esp32s3-hello-world,    ev: "e2e_hello_world.rs", gate: pr}
-      - {p: mcpwm,           fw: tier1-fixture/esp32s3,  ev: "esp32s3/src/main.rs:344", gate: release}
-      - {p: rmt,             fw: tier1-fixture/esp32s3,  ev: "esp32s3/src/main.rs:374", gate: release}
-      - {p: UART,            fw: tier1-fixture/esp32s3,  ev: "esp32s3/src/main.rs", gate: release}
-      - {p: "GDMA (mem-to-mem)", fw: tier1-fixture/esp32s3, ev: "tier1-matrix.json esp32s3.dma=pass (real descriptor walk, 65 unit tests incl. m2m_single_descriptor_bytes_move)", gate: release}
-    unit_only: [aes, core1_control, crosscore_ipi, ds, extmem, flash_xip, gpspi, hmac, i2s,
-                io_mux, ledc, lcd_cam, pcnt, rng, rsa, sar_adc, sdmmc, sens, sha,
-                spi_mem_flash, system, twai, usb_otg]
-    dead: {count: 0, examples: []}
+    headline: "Broad model surface (~35); the rubric grid proves ~9, plus a TMP102 functional read in the PR gate. GDMA is a real 65-test mem-to-mem engine (proven via the dma rubric cell), not a stub."
+    functional:
+      - what: "TMP102 temperature read over I2C (real driver, decoded value + GPIO threshold)"
+        fw: esp32s3-i2c-tmp102
+        ev: "e2e_i2c_tmp102.rs:58"
+        gate: pr
+    advanced_unit_only: [aes, ds, hmac, rsa, sha, i2s, lcd_cam, sdmmc, usb_otg, gpspi,
+                         pcnt, io_mux, extmem, flash_xip, spi_mem_flash, sens, system,
+                         core1_control, crosscore_ipi]
+    advanced_dead: {count: 0, examples: []}
     shim:
-      - {p: wifi_thunks, ev: "esp32s3/wifi_thunks.rs:8 (CHEAT(THUNK-LIB))", note: "IRREDUCIBLE: the ESP32 WiFi MAC/PHY is a closed RF-coprocessor blob with NO executable image — there is no firmware to run, so it can never be firmware-exercised. The lwIP/socket layer above is routed to a real SimNet. Honestly labeled, e2e test #[ignore]d."}
+      - {p: wifi_thunks, ev: "esp32s3/wifi_thunks.rs:8 (CHEAT(THUNK-LIB))", note: "IRREDUCIBLE: the ESP32 WiFi MAC/PHY is a closed RF-coprocessor blob with NO executable image — there is no firmware to run, so it can never be firmware-exercised. The lwIP/socket layer above is routed to a real SimNet."}
 
   - id: esp32
     arch: xtensa-lx6
-    headline: "tier1 fixture drives 7 blocks incl. a BMP280 chip-id read over the I2C command-list engine."
-    proven:
-      - {p: UART,    fw: tier1-fixture/esp32, ev: "esp32/src/main.rs", gate: release}
-      - {p: dport,   fw: tier1-fixture/esp32, ev: "esp32/src/main.rs:246", gate: release}
-      - {p: GPIO,    fw: tier1-fixture/esp32, ev: "esp32/src/main.rs:176", gate: release}
-      - {p: timg,    fw: tier1-fixture/esp32, ev: "esp32/src/main.rs:139", gate: release}
-      - {p: sar_adc, fw: tier1-fixture/esp32, ev: "esp32/src/main.rs:279", gate: release}
-      - {p: spi,     fw: tier1-fixture/esp32, ev: "esp32/src/main.rs:356", gate: release}
-      - {p: "I2C (+BMP280 chip-id 0x58)", fw: tier1-fixture/esp32, ev: "esp32/src/main.rs:406", gate: release}
-    unit_only: [efuse, ledc, mcpwm, rtc_cntl, sha, syscon, twai]
-    dead: {count: 0, examples: []}
+    headline: "tier1 fixture drives 8 rubric classes incl. a BMP280 chip-id read over the I2C command-list engine and a real LEDC duty-latch."
+    functional: []
+    advanced_unit_only: [efuse, sha, syscon, twai, mcpwm, rtc_cntl]
+    advanced_dead: {count: 0, examples: []}
     shim:
       - {p: sdio_stub, ev: "esp32/sdio_stub.rs:5", note: "STRUCTURAL: hardcoded FSM_DONE so the boot ROM's SDIO bring-up poll terminates. Removing it breaks boot; the ROM blob is the only 'firmware' that touches it."}
 
-  - id: rp2040
-    arch: cortex-m0plus
-    headline: "tier1 fixture drives clock/timer/gpio/spi/i2c (PL022/DW_apb); boots unmodified Zephyr (banner). PIO0 declared but never run."
-    proven:
-      - {p: UART,    fw: rp2040-zephyr-hello/demo, ev: "firmware_survival.rs:185", gate: pr}
-      - {p: clk_rst, fw: tier1-fixture/rp2040,     ev: "rp2040/src/main.rs:124", gate: release}
-      - {p: SIO_GPIO, fw: tier1-fixture/rp2040,    ev: "rp2040/src/main.rs", gate: release}
-      - {p: timer,   fw: tier1-fixture/rp2040,     ev: "rp2040/src/main.rs:148", gate: release}
-      - {p: SPI0,    fw: tier1-fixture/rp2040,     ev: "rp2040/src/main.rs:68", gate: release}
-      - {p: I2C0,    fw: tier1-fixture/rp2040,     ev: "rp2040/src/main.rs:77", gate: release}
-    unit_only: []
-    dead:
-      count: 3
-      examples: [PIO0, watchdog, systick]
-      note: "PIO0 has a dedicated firmware (firmware-rp2040-pio-onboarding) but it is NOT wired into the tier1 fixture or any survival case — declared, never run."
-    shim: []
-
-  - id: nrf52832
-    arch: cortex-m4f
-    headline: "tier1 fixture drives TWIM/SPIM/SAADC/WDT/RTC over EasyDMA. NOTE: the separate firmware_survival demo ELF is RAM-broken (built for 256KB on a 64KB part)."
-    proven:
-      - {p: UART,  fw: tier1-fixture/nrf52832, ev: "nrf52832/src/main.rs", gate: release}
-      - {p: GPIO,  fw: tier1-fixture/nrf52832, ev: "nrf52832/src/main.rs", gate: release}
-      - {p: CLOCK, fw: tier1-fixture/nrf52832, ev: "nrf52832/src/main.rs", gate: release}
-      - {p: TIMER0, fw: tier1-fixture/nrf52832, ev: "nrf52832/src/main.rs", gate: release}
-      - {p: RTC0,  fw: tier1-fixture/nrf52832, ev: "nrf52832/src/main.rs:69", gate: release}
-      - {p: TWIM,  fw: tier1-fixture/nrf52832, ev: "nrf52832/src/main.rs:76", gate: release}
-      - {p: SPIM,  fw: tier1-fixture/nrf52832, ev: "nrf52832/src/main.rs:92", gate: release}
-      - {p: SAADC, fw: tier1-fixture/nrf52832, ev: "nrf52832/src/main.rs:104", gate: release}
-      - {p: WDT,   fw: tier1-fixture/nrf52832, ev: "nrf52832/src/main.rs:126", gate: release}
-    unit_only: [PPI, PWM0, TIMER, RTC, CCM]
-    dead: {count: 7, examples: [AAR, ACL, BPROT, COMP, I2S, LPCOMP, MWU, NFCT, QDEC]}
-    shim: []
-
-  # ── nrf52840: the irony — heavy TWIM fidelity work, but TWIM is unit-only in CI ──
   - id: nrf52840
     arch: cortex-m4f
-    headline: "Demo firmware drives UARTE/GPIO/SPIM0 in the PR gate; radio/clock/timer only via #[ignore] proximity e2e. TWIM (the BME280 work) is UNIT-ONLY — the real temperature ztest is an EXTERNAL west build, not in core CI."
-    proven:
-      - {p: UARTE,  fw: nrf52840-demo,            ev: "firmware_survival.rs:200", gate: pr}
-      - {p: GPIO,   fw: nrf52840-demo,            ev: "firmware_survival.rs:200", gate: pr}
-      - {p: SPIM0,  fw: nrf52840-demo,            ev: "serial_instance.rs (demo loopback)", gate: pr}
-      - {p: RADIO,  fw: nrf52840-proximity,       ev: "e2e_nrf52840_proximity.rs:79 (#[ignore])", gate: ignored}
-      - {p: CLOCK,  fw: nrf52840-proximity,       ev: "e2e_nrf52840_proximity.rs:79 (#[ignore])", gate: ignored}
-      - {p: TIMER0, fw: nrf52840-proximity,       ev: "e2e_nrf52840_proximity.rs:79 (#[ignore])", gate: ignored}
-    unit_only: [TWIM, TWIS, SPIS, SAADC, PWM, RTC, CCM, RNG, TEMP, ECB, GPIOTE, PPI,
-                NVMC, FICR, UICR, NFCT, PDM, EGU, QSPI, "TIMER1-4",
-                "USBD (partial endpoint model, 4 tests)"]
-    dead: {count: 8, examples: [QDEC, AAR, ACL, BPROT, COMP, CRYPTOCELL, I2S, LPCOMP, MWU]}
+    headline: "TWIM/PWM are now firmware-proven via the rubric fixture (the BME280 fidelity work paid off). Radio rides an #[ignore] proximity e2e; the Zephyr BME280 temperature read runs in an external west build."
+    functional:
+      - what: "BME280 temperature read (~25 °C) via an unmodified Zephyr sensor driver"
+        fw: zephyr-bme280-ztest
+        ev: "external west build (not in core cargo test)"
+        gate: ignored
+    advanced_unit_only: [TWIS, SPIS, CCM, RNG, TEMP, ECB, GPIOTE, PPI, NVMC, FICR,
+                         UICR, NFCT, PDM, EGU, QSPI]
+    advanced_dead: {count: 8, examples: [QDEC, AAR, ACL, BPROT, COMP, CRYPTOCELL, I2S, LPCOMP, MWU]}
     shim:
       - {p: USBREGULATOR, ev: "nrf52/usbregulator.rs (70 lines, 0 tests)", note: "thin VBUS-ready register stub"}
 
-  - id: mkw41z4
+  - id: nrf52832
+    arch: cortex-m4f
+    headline: "Shares the nRF52 model; tier1 fixture drives TWIM/SPIM/SAADC/WDT/RTC/PWM. (The separate firmware_survival demo ELF is RAM-broken — built for 256KB on a 64KB part — but the tier1 fixture is correct.)"
+    functional: []
+    advanced_unit_only: [TWIS, SPIS, CCM, PPI, GPIOTE, NVMC]
+    advanced_dead: {count: 7, examples: [AAR, ACL, BPROT, COMP, I2S, LPCOMP, MWU, NFCT, QDEC]}
+    shim: []
+
+  - id: rp2040
     arch: cortex-m0plus
-    headline: "First real NXP vendor firmware: LPUART0 + MCG/RSIM/SIM clock bring-up satisfy MCUXpresso spin loops."
-    proven:
-      - {p: LPUART0, fw: kw41z-smoke, ev: "firmware_survival.rs:210", gate: pr}
-      - {p: MCG,     fw: kw41z-nxp,   ev: "firmware_survival.rs:219", gate: pr}
-      - {p: RSIM,    fw: kw41z-nxp,   ev: "firmware_survival.rs:219", gate: pr}
-      - {p: SIM,     fw: kw41z-nxp,   ev: "kw41z_clock_boot.rs:72", gate: pr}
-    unit_only: []
-    dead: {count: 16, examples: [ADC, DMA, I2C, SPI, GPIO, TPM, LPTMR, RTC, TRNG, RADIO]}
+    headline: "tier1 fixture drives clock/timer/gpio/spi/i2c (PL022/DW_apb); boots unmodified Zephyr."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead:
+      count: 1
+      examples: [PIO0]
+      note: "PIO0 has a dedicated firmware (firmware-rp2040-pio-onboarding) but it is NOT wired into the tier1 fixture or any survival case — declared, never run."
     shim: []
 
   - id: stm32h563
     arch: cortex-m33
-    headline: "Banner-only Zephyr + demo: RCC/PWR/USART/SysTick. ~40-register silicon conformance is UNIT-ONLY. UDS bootloader/ECU examples exist but are NOT gated as tests."
-    proven:
-      - {p: RCC,     fw: stm32h563-zephyr, ev: "firmware_survival.rs:137", gate: pr}
-      - {p: PWR,     fw: stm32h563-zephyr, ev: "firmware_survival.rs:137", gate: pr}
-      - {p: USART3,  fw: stm32h563-demo,   ev: "firmware_survival.rs:269", gate: pr}
-      - {p: SysTick, fw: stm32h563-zephyr, ev: "firmware_survival.rs:137", gate: pr}
-    unit_only: [GPIO, FLASH, FDCAN, "RCC/TIM/I2C/SPI/ADC reset (h563_conformance)"]
-    dead: {count: 28, examples: [ADC, DMA/GPDMA, I2C, SPI, FDCAN, USB, SAI, SDMMC, COMP, TSC, FMC, RNG, IWDG, WWDG, LPTIM, EXTI]}
+    headline: "Drives all 13 rubric classes (incl. FDCAN→can) via real firmware — the broadest rubric coverage. UDS bootloader/ECU examples exist but are not yet gated as automated tests."
+    functional: []
+    advanced_unit_only: ["UDS bootloader/ECU (0x10/0x27/0x34/0x36/0x37/0x85/0x28 — example firmware, not gated)"]
+    advanced_dead: {count: 0, examples: []}
     shim: []
 
-  - id: stm32l073
-    arch: cortex-m0plus
-    headline: "Zephyr banner + a CRC/DMA smoke demo (silicon-captured CRC value)."
-    proven:
-      - {p: RCC,     fw: stm32l073-zephyr,    ev: "firmware_survival.rs:107", gate: pr}
-      - {p: USART,   fw: stm32l073-zephyr,    ev: "firmware_survival.rs:107", gate: pr}
-      - {p: SysTick, fw: stm32l073-zephyr,    ev: "firmware_survival.rs:107", gate: pr}
-      - {p: CRC,     fw: nucleo-l073rz-demo,  ev: "firmware_survival.rs:817", gate: pr}
-      - {p: DMA1,    fw: nucleo-l073rz-demo,  ev: "firmware_survival.rs:817", gate: pr}
-    unit_only: [GPIO, SPI1, TIM2, TIM21]
-    dead: {count: 26, examples: [I2C, ADC, USB, COMP, LPTIM, PWR, FLASH, IWDG, WWDG, EXTI, RNG]}
-    shim: []
-
-  - id: stm32f407
-    arch: cortex-m4f
-    headline: "Focused I2C/GPIO demo (no Zephyr): drives the I2C SR1/SR2 state machine and a PA5 LED."
-    proven:
-      - {p: USART,  fw: nucleo-f407-i2c,   ev: "firmware_survival.rs:783", gate: pr}
-      - {p: GPIO,   fw: nucleo-f407-i2c,   ev: "firmware_survival.rs:783", gate: pr}
-      - {p: I2C1,   fw: nucleo-f407-i2c,   ev: "firmware_survival.rs:783", gate: pr}
-      - {p: RCC,    fw: nucleo-f407-smoke, ev: "firmware_survival.rs:762", gate: pr}
-    unit_only: ["GPIO/USART2/I2C1/EXTI/SPI1/TIM2 reset (stm32f4_mmio_diff)"]
-    dead: {count: 25, examples: [CAN, FDCAN, USB, DMA, ADC, SAI, SDMMC, RNG, COMP, FMC, LPTIM, PWR, FLASH, IWDG, WWDG]}
-    shim: []
-
-  - id: stm32f103
-    arch: cortex-m3
-    headline: "Banner-only Zephyr (RCC/USART/SysTick). All other peripherals are exec-oracle/mmio-diff unit tests — no firmware drives them."
-    proven:
-      - {p: RCC,     fw: stm32f103-zephyr, ev: "firmware_survival.rs:97", gate: pr}
-      - {p: USART2,  fw: stm32f103-zephyr/blinky, ev: "firmware_survival.rs:65", gate: pr}
-      - {p: SysTick, fw: stm32f103-zephyr, ev: "firmware_survival.rs:97", gate: pr}
-    unit_only: [GPIO, SPI1, I2C1, TIM2, ADC1, EXTI, IWDG, WWDG, RTC, DMA1, CRC]
-    dead: {count: 15, examples: [CAN, FDCAN, USB_OTG, SAI, SDMMC, QUADSPI, RNG, COMP, TSC, FMC, LPTIM, PWR, FLASH, GPDMA, HSEM]}
-    shim: []
-
-  # ── Banner-only: real firmware boots, but only UART+clock+SysTick run ─────
-  - id: stm32f401
-    arch: cortex-m4f
-    headline: "Banner-only Zephyr; UART is not yet deterministic end-to-end (survival asserts no bytes)."
-    proven:
-      - {p: RCC,     fw: stm32f401-zephyr, ev: "firmware_survival.rs:84", gate: pr}
-      - {p: USART2,  fw: stm32f401-zephyr, ev: "firmware_survival.rs:84", gate: pr}
-      - {p: SysTick, fw: stm32f401-zephyr, ev: "firmware_survival.rs:84", gate: pr}
-    unit_only: ["GPIO/RCC/I2C1/USART2/EXTI/SPI1/TIM2 (stm32f4_mmio_diff)"]
-    dead: {count: 25, examples: [CAN, FDCAN, USB, DMA, ADC, SAI, SDMMC, COMP, FMC, RNG, IWDG, WWDG, PWR, FLASH, LPTIM, QUADSPI]}
-    shim: []
-
-  - id: stm32g474re
-    arch: cortex-m4f
-    headline: "Banner-only Zephyr hello: RCC/UART/SysTick only. No peripheral oracle suite."
-    proven:
-      - {p: RCC,     fw: stm32g474-zephyr, ev: "firmware_survival.rs:128", gate: pr}
-      - {p: USART,   fw: stm32g474-zephyr, ev: "firmware_survival.rs:128", gate: pr}
-      - {p: SysTick, fw: stm32g474-zephyr, ev: "firmware_survival.rs:128", gate: pr}
-    unit_only: []
-    dead: {count: 32, examples: [ADC, DAC, DMA, I2C, SPI, FDCAN, USB, COMP, OPAMP, HRTIM, CORDIC, FMAC, RNG, IWDG, WWDG, LPTIM, EXTI, FLASH, PWR]}
-    shim: []
-
-  - id: stm32wb55
-    arch: cortex-m4+m0plus
-    headline: "Banner-only Zephyr; proves the HSEM inter-core lock + RCC BDCR LSE path on a dual-core part."
-    proven:
-      - {p: RCC,     fw: stm32wb55-zephyr, ev: "firmware_survival.rs:150", gate: pr}
-      - {p: HSEM,    fw: stm32wb55-zephyr, ev: "firmware_survival.rs:150", gate: pr}
-      - {p: USART,   fw: stm32wb55-zephyr, ev: "firmware_survival.rs:150", gate: pr}
-      - {p: SysTick, fw: stm32wb55-zephyr, ev: "firmware_survival.rs:150", gate: pr}
-    unit_only: []
-    dead: {count: 31, examples: [ADC, DMA, I2C, SPI, USB, COMP, TSC, RNG, IWDG, WWDG, LPTIM, EXTI, PWR, FLASH, radio/BLE]}
-    shim: []
-
-  - id: stm32wba52
-    arch: cortex-m33
-    headline: "Banner-only Zephyr; proves the WBA-specific RCC request/ack + PWR VOSR handshake."
-    proven:
-      - {p: RCC,     fw: stm32wba52-zephyr, ev: "firmware_survival.rs:159", gate: pr}
-      - {p: PWR,     fw: stm32wba52-zephyr, ev: "firmware_survival.rs:159", gate: pr}
-      - {p: USART,   fw: stm32wba52-zephyr, ev: "firmware_survival.rs:159", gate: pr}
-      - {p: SysTick, fw: stm32wba52-zephyr, ev: "firmware_survival.rs:159", gate: pr}
-    unit_only: []
-    dead: {count: 31, examples: [ADC, DMA, I2C, SPI, USB, COMP, TSC, RNG, IWDG, WWDG, LPTIM, EXTI, GPIO, FLASH, radio/BLE]}
-    shim: []
-
+  # ── Chips with NO tier1 fixture (not in the rubric grid) ─────────────────
   - id: nrf5340
     arch: cortex-m33
-    headline: "Banner-only unmodified Zephyr: CLOCK/UARTE0/RTC1 drive the boot; nine peripheral blocks are benign stubs poked by SystemInit but never polled."
-    proven:
-      - {p: CLOCK,  fw: nrf5340-zephyr, ev: "nrf5340_clock_boot.rs", gate: pr}
-      - {p: UARTE0, fw: nrf5340-zephyr, ev: "firmware_survival.rs:246", gate: pr}
-      - {p: RTC1,   fw: nrf5340-zephyr, ev: "firmware_survival.rs:246", gate: pr}
-    unit_only: [GPIO, "TIMER0-2", RTC0]
-    dead: {count: 0, examples: []}
+    headline: "No tier1 fixture. Boots unmodified Zephyr hello_world end-to-end: CLOCK/UARTE0/RTC1 drive the boot (firmware_survival + nrf5340_clock_boot). Nine peripheral blocks are benign boot stubs."
+    functional:
+      - what: "Unmodified Zephyr v3.7 hello_world boots + prints over UARTE0 EasyDMA"
+        fw: nrf5340-zephyr
+        ev: "firmware_survival::test_nrf5340_zephyr_survival"
+        gate: pr
+    advanced_unit_only: [GPIO, "TIMER0-2", RTC0]
+    advanced_dead: {count: 0, examples: []}
     shim:
-      - {p: "DCNF/FPU/CACHE/SPU/OSC_REG/CTRLAP/GPIOTE0/DPPIC/FICR", ev: "nrf5340_*_stub", note: "STRUCTURAL: SystemInit pokes them once during boot and never polls them again, so a register stub is byte-faithful for the hello_world boot path. Real behaviour only matters once firmware uses these blocks (none does yet)."}
-
-  - id: ci-fixture-riscv
-    arch: riscv32
-    headline: "Bare boot fixture: UART only ('RV OK')."
-    proven:
-      - {p: UART, fw: riscv-ci-fixture, ev: "firmware_survival.rs:279", gate: pr}
-    unit_only: []
-    dead: {count: 0, examples: []}
-    shim: []
+      - {p: "DCNF/FPU/CACHE/SPU/OSC_REG/CTRLAP/GPIOTE0/DPPIC/FICR", ev: "nrf5340_*_stub", note: "STRUCTURAL: SystemInit pokes them once at boot and never polls them again, so a register stub is byte-faithful for the hello_world boot path."}
