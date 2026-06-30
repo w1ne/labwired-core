@@ -107,6 +107,41 @@ completion; an interrupt-driven one on an RTOS may not. Find candidates with:
 grep -rn "events_.* = 1\|_done = 1\|tc = 1\|eoc = 1" crates/core/src/peripherals --include="*.rs"
 ```
 
+## Interrupt-pending fidelity — a software pending-clear must reach the CPU
+
+The CPU keeps its own pending-exception set (`pending_exceptions`) separate from
+the NVIC's `ISPR`/`ICPR` shadow. On real Cortex-M these are one and the same bit:
+when firmware writes `NVIC_ClearPendingIRQ` (NVIC `ICPR`) the hardware drops the
+pending state, and a pending bit cleared by software before ISR exit is **never**
+re-latched. If the model clears only the NVIC shadow and leaves the CPU-side bit
+set, the core re-enters the same ISR with no real event pending — a spurious
+double-ISR that silently corrupts an interrupt-driven driver's state machine
+(observed: nrfx TWIM exited without signalling its completion `k_sem`, so the
+Zephyr BME280 read hung). Fix (`cortex_m.rs` + `bus/accessors.rs`, 2026-06-30):
+before taking an NVIC-routed exception (num ≥ 16) from `pending_exceptions`,
+verify the NVIC `ISPR` bit is still set via `Bus::is_nvic_irq_pending`; if a prior
+`ICPR` write cleared it, drop the stale CPU bit without taking the exception. The
+rule is general — **every CPU-side mirror of a peripheral/NVIC register must be
+kept coherent with software writes to that register**, not just refreshed when the
+peripheral itself changes it.
+
+## Clock-domain fidelity — a peripheral ticks on its own clock, not the CPU's
+
+`tick()` is called once per CPU cycle, but most timer/RTC/watchdog blocks run on a
+different clock domain. Advancing such a counter once per `tick()` runs it at the
+core frequency — wrong by the domain ratio. The nRF52 RTC runs on the 32.768 kHz
+LFCLK; ticking it per CPU cycle ran it **1953× too fast**, so Zephyr's RTC1 system
+clock believed a 500 ms I²C timeout had elapsed after ~16 k cycles instead of
+~32 M, and `k_sem_take` timed out before a 24-byte calibration read finished.
+Model the ratio exactly with a fractional accumulator rather than a rounded
+divide: 64 MHz / 32768 = 15625/8, so add 8 per CPU cycle and emit one base-clock
+edge each time the accumulator reaches 15625 (`rtc.rs`, 2026-06-30 — zero drift).
+**At-risk: any peripheral whose `tick` advances a counter that real silicon clocks
+from LFCLK / PCLK / a prescaled bus clock / an external crystal** — RTCs,
+watchdogs, low-power timers, SysTick with an external reference, UART/SPI
+baud divisors. A driver that derives a timeout from such a counter will mis-fire
+if the model runs the counter at core speed.
+
 ## Marker convention
 
 Every cheat in the code carries a grep-able marker on the line or block:
