@@ -235,6 +235,41 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"KW41Z_NXP_OK\n",
     },
     SurvivalCase {
+        // NXP KW41Z running REAL, unmodified upstream Zephyr v3.7 hello_world
+        // built for board frdm_kw41z. Boots through the genuine Zephyr Kinetis
+        // clock_control (MCG FEE bring-up) and the LPUART0 console, then prints
+        // the banner over LPUART0. Proves the behavioural MCG/RSIM/LPUART models
+        // satisfy upstream Zephyr's boot path, not just the NXP vendor HAL.
+        name: "kw41z_zephyr",
+        core: "cortex-m0+",
+        family: CpuFamily::CortexM,
+        chip: "mkw41z4",
+        system: "frdm-kw41z",
+        fixture: "kw41z-zephyr-hello.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x000F_FFFF), (0x1FFF_8000, 0x2001_8000)],
+        expected_uart_output: b"Hello World! frdm_kw41z",
+    },
+    SurvivalCase {
+        // NXP KW41Z running REAL, unmodified upstream Zephyr v3.7 — the stock
+        // samples/sensor/fxos8700 built for frdm_kw41z (hybrid accel+mag, polled).
+        // This is a CowManager-style livestock activity node: the genuine Zephyr
+        // `fxos8700` sensor driver probes WHOAMI, runs the standby→config→active
+        // bring-up and burst-reads OUT_X/Y/Z over I2C1, then prints accel/mag/temp.
+        // Booting it end to end exercises the interrupt-driven Kinetis I2C master
+        // (peripherals/i2c.rs KinetisI2c, IRQ 9) against the on-board FXOS8700
+        // device model (peripherals/components/fxos8700.rs). The "AX=" banner only
+        // prints once a real sample has been fetched, so it proves the full
+        // I2C transaction + sensor path, not just survival.
+        name: "kw41z_zephyr_fxos8700",
+        core: "cortex-m0+",
+        family: CpuFamily::CortexM,
+        chip: "mkw41z4",
+        system: "frdm-kw41z",
+        fixture: "kw41z-zephyr-fxos8700.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x000F_FFFF), (0x1FFF_8000, 0x2001_8000)],
+        expected_uart_output: b"AX=",
+    },
+    SurvivalCase {
         // Nordic nRF5340 APPLICATION core (Cortex-M33) running REAL, unmodified
         // upstream Zephyr v3.7 hello_world, built for board
         // nrf5340dk/nrf5340/cpuapp. Boots through the genuine Zephyr nRF
@@ -1142,6 +1177,23 @@ fn test_kw41z_smoke_survival() {
 #[test]
 fn test_kw41z_nxp_survival() {
     run_survival_case(case_by_name("kw41z_nxp"));
+}
+
+#[test]
+fn test_kw41z_zephyr_survival() {
+    run_survival_case(case_by_name("kw41z_zephyr"));
+}
+
+#[test]
+fn test_kw41z_zephyr_fxos8700_survival() {
+    // The stock fxos8700 sample sleeps k_sleep(K_MSEC(160)) before its first
+    // fetch+print; at the KW41Z's 40 MHz that is ~6.4M cycles, so this fixture
+    // needs a larger budget than the default to reach the first "AX=" line.
+    let case = case_by_name("kw41z_zephyr_fxos8700");
+    let (pc, uart_bytes) =
+        run_cortex_m_firmware(case.chip, case.system, fixtures().join(case.fixture), 8_000_000);
+    assert_pc_in_range(pc, 8_000_000, case.valid_pc_ranges);
+    assert_uart_contains(&uart_bytes, case.expected_uart_output, case.name);
 }
 
 #[test]

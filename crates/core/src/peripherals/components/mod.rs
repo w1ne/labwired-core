@@ -10,6 +10,7 @@ pub mod air_scene;
 pub mod bg770a;
 pub mod bme280;
 pub mod bmp280;
+pub mod fxos8700;
 pub mod i2c_factory;
 pub mod ili9341;
 pub mod iolink_master;
@@ -46,6 +47,7 @@ pub use aht20::Aht20;
 pub use bg770a::QuectelBg770a;
 pub use bme280::Bme280;
 pub use bmp280::Bmp280;
+pub use fxos8700::Fxos8700;
 pub use i2c_factory::build_i2c_device;
 pub use ili9341::Ili9341;
 pub use iolink_master::{
