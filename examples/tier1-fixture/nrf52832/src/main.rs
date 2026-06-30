@@ -80,7 +80,7 @@ const RTC0_PRESCALER: u32 = RTC0_BASE + 0x508;
 const TWI1_BASE: u32 = 0x4000_4000;
 const TWI1_TASKS_STARTTX: u32 = TWI1_BASE + 0x008;
 const TWI1_EVENTS_ERROR: u32 = TWI1_BASE + 0x124;
-const TWI1_EVENTS_LASTTX: u32 = TWI1_BASE + 0x15C;
+const TWI1_EVENTS_LASTTX: u32 = TWI1_BASE + 0x160;
 const TWI1_ERRORSRC: u32 = TWI1_BASE + 0x4C4;
 const TWI1_ENABLE: u32 = TWI1_BASE + 0x500;
 const TWI1_TXD_PTR: u32 = TWI1_BASE + 0x544;
@@ -131,6 +131,26 @@ const WDT_RUNSTATUS: u32 = WDT_BASE + 0x400;
 const WDT_CRV: u32 = WDT_BASE + 0x504;
 const WDT_RREN: u32 = WDT_BASE + 0x508;
 
+// PWM0 (nRF52832 PS §47, base 0x4001C000; same model as nRF52840). The
+// sequence engine reads SEQ[0].CNT 16-bit duty values out of guest RAM at
+// SEQ[0].PTR (EasyDMA-style) and fires SEQSTARTED0 / SEQEND0 / PWMPERIODEND.
+const PWM0_BASE: u32 = 0x4001_C000;
+const PWM0_TASKS_SEQSTART0: u32 = PWM0_BASE + 0x008;
+const PWM0_EVENTS_SEQSTARTED0: u32 = PWM0_BASE + 0x108;
+const PWM0_EVENTS_SEQEND0: u32 = PWM0_BASE + 0x110;
+const PWM0_EVENTS_PWMPERIODEND: u32 = PWM0_BASE + 0x118;
+const PWM0_ENABLE: u32 = PWM0_BASE + 0x500;
+const PWM0_MODE: u32 = PWM0_BASE + 0x504;
+const PWM0_COUNTERTOP: u32 = PWM0_BASE + 0x508;
+const PWM0_PRESCALER: u32 = PWM0_BASE + 0x50C;
+const PWM0_DECODER: u32 = PWM0_BASE + 0x510;
+const PWM0_LOOP: u32 = PWM0_BASE + 0x514;
+const PWM0_SEQ0_PTR: u32 = PWM0_BASE + 0x520;
+const PWM0_SEQ0_CNT: u32 = PWM0_BASE + 0x524;
+const PWM0_SEQ0_REFRESH: u32 = PWM0_BASE + 0x528;
+const PWM0_SEQ0_ENDDELAY: u32 = PWM0_BASE + 0x52C;
+const PWM0_PSEL_OUT0: u32 = PWM0_BASE + 0x560;
+
 #[inline(always)]
 fn reg_read(addr: u32) -> u32 {
     unsafe { core::ptr::read_volatile(addr as *const u32) }
@@ -150,6 +170,10 @@ static mut SPI_RX_BUF: [u8; 4] = [0; 4];
 // SAADC RESULT buffer (4 x 16-bit samples). Static .bss RAM, the only region
 // the EasyDMA engine can address.
 static mut ADC_RESULT_BUF: [u16; 4] = [0; 4];
+
+// PWM SEQ[0] duty buffer (4 x 16-bit). Static .bss RAM — the sequence engine
+// reads these duty values out by EasyDMA at SEQ[0].PTR.
+static mut PWM_SEQ_BUF: [u16; 4] = [0x8000 | 250, 0x8000 | 500, 0x8000 | 750, 0x8000 | 1000];
 
 /// Spin until the event register at `addr` reads non-zero, or give up.
 /// Returns true if the event fired. Each loop iteration steps the CPU, which
@@ -403,6 +427,43 @@ fn check_wdt() -> Result<(), &'static str> {
     Ok(())
 }
 
+// ── pwm: configure PWM0, point SEQ[0] at a RAM duty buffer, SEQSTART0,
+// observe the sequence play to SEQEND0 + PWMPERIODEND ──────────────────────
+// The decoder reads the four 16-bit duty values out of PWM_SEQ_BUF by EasyDMA;
+// a constant/no-op model never reaches SEQEND0, so this proves real playback.
+fn check_pwm() -> Result<(), &'static str> {
+    reg_write(PWM0_ENABLE, 1);
+    reg_write(PWM0_MODE, 0); // Up counter
+    reg_write(PWM0_PRESCALER, 0); // 16 MHz base clock
+    reg_write(PWM0_COUNTERTOP, 1000);
+    reg_write(PWM0_DECODER, 0); // load=Common, mode=RefreshCount
+    reg_write(PWM0_LOOP, 0);
+    reg_write(PWM0_PSEL_OUT0, 13); // drive P0.13 (connect bit 31 = 0)
+
+    let seq = core::ptr::addr_of!(PWM_SEQ_BUF) as u32;
+    reg_write(PWM0_SEQ0_PTR, seq);
+    reg_write(PWM0_SEQ0_CNT, 4);
+    reg_write(PWM0_SEQ0_REFRESH, 0);
+    reg_write(PWM0_SEQ0_ENDDELAY, 0);
+
+    reg_write(PWM0_EVENTS_SEQSTARTED0, 0);
+    reg_write(PWM0_EVENTS_SEQEND0, 0);
+    reg_write(PWM0_EVENTS_PWMPERIODEND, 0);
+
+    reg_write(PWM0_TASKS_SEQSTART0, 1);
+
+    if !poll_event(PWM0_EVENTS_SEQEND0) {
+        return Err("pwm-no-seqend");
+    }
+    if reg_read(PWM0_EVENTS_SEQSTARTED0) == 0 {
+        return Err("pwm-no-seqstarted");
+    }
+    if reg_read(PWM0_EVENTS_PWMPERIODEND) == 0 {
+        return Err("pwm-no-periodend");
+    }
+    Ok(())
+}
+
 #[entry]
 fn main() -> ! {
     // Enable UART0 (value 4 per Nordic PS UART.ENABLE field).
@@ -419,6 +480,7 @@ fn main() -> ! {
     report("spi", check_spi());
     report("adc", check_adc());
     report("wdt", check_wdt());
+    report("pwm", check_pwm());
 
     // uart: implicit via TIER1 done — no explicit line needed.
 

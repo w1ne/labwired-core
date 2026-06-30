@@ -19,7 +19,7 @@
       "status": "pass"
     },
     "pwm": {
-      "status": "unrecorded"
+      "status": "pass"
     },
     "rtc": {
       "status": "na"
@@ -136,7 +136,7 @@
       "status": "na"
     },
     "pwm": {
-      "status": "unrecorded"
+      "status": "pass"
     },
     "rtc": {
       "status": "pass"
@@ -174,7 +174,7 @@
       "status": "na"
     },
     "pwm": {
-      "status": "unrecorded"
+      "status": "pass"
     },
     "rtc": {
       "status": "pass"
