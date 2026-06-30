@@ -399,6 +399,100 @@ static int tick_fixture(lw_iolm_port_fixture_t* port, uint8_t cycle, lw_iolm_con
     return LW_IOLM_STATUS_OK;
 }
 
+static int drive_fixture_to_operate(lw_iolm_port_fixture_t* port, uint8_t* cycle)
+{
+    lw_iolm_conformance_result_t result;
+    uint8_t i;
+    int ret;
+
+    memset(&result, 0, sizeof(result));
+    for(i = 0U; i < 20U; i++)
+    {
+        ret = tick_fixture(port, *cycle, &result);
+        (*cycle)++;
+        if(ret != LW_IOLM_STATUS_OK)
+        {
+            return ret;
+        }
+        if(result.master_state == IOLINK_MASTER_STATE_OPERATE)
+        {
+            return LW_IOLM_STATUS_OK;
+        }
+    }
+
+    return LW_IOLM_ERR_NO_OPERATE;
+}
+
+static int drive_fixture_write_isdu(lw_iolm_port_fixture_t* port,
+                                    uint16_t index,
+                                    uint8_t subindex,
+                                    const uint8_t* data,
+                                    uint8_t len,
+                                    uint8_t* cycle)
+{
+    lw_iolm_conformance_result_t result;
+    uint8_t i;
+    int ret = iolink_master_write_isdu(&port->master, index, subindex, data, len);
+
+    if(ret != IOLINK_MASTER_STATUS_PENDING)
+    {
+        return ret;
+    }
+
+    for(i = 0U; i < 80U; i++)
+    {
+        memset(&result, 0, sizeof(result));
+        ret = tick_fixture(port, *cycle, &result);
+        (*cycle)++;
+        if(ret != LW_IOLM_STATUS_OK)
+        {
+            return ret;
+        }
+        ret = iolink_master_write_isdu(&port->master, index, subindex, data, len);
+        if(ret != IOLINK_MASTER_STATUS_PENDING)
+        {
+            return ret;
+        }
+    }
+
+    return LW_IOLM_ERR_CYCLIC;
+}
+
+static int drive_fixture_read_isdu(lw_iolm_port_fixture_t* port,
+                                   uint16_t index,
+                                   uint8_t subindex,
+                                   uint8_t* data,
+                                   uint8_t* len,
+                                   uint8_t* cycle)
+{
+    lw_iolm_conformance_result_t result;
+    uint8_t i;
+    int ret = iolink_master_read_isdu(&port->master, index, subindex, data, len);
+
+    if(ret != IOLINK_MASTER_STATUS_PENDING)
+    {
+        return ret;
+    }
+
+    for(i = 0U; i < 80U; i++)
+    {
+        memset(&result, 0, sizeof(result));
+        ret = tick_fixture(port, *cycle, &result);
+        (*cycle)++;
+        if(ret != LW_IOLM_STATUS_OK)
+        {
+            return ret;
+        }
+        ret = iolink_master_read_isdu(&port->master, index, subindex, data, len);
+        if(ret != IOLINK_MASTER_STATUS_PENDING)
+        {
+            return ret;
+        }
+    }
+
+    return LW_IOLM_ERR_CYCLIC;
+}
+
 int lw_iolm_conformance_run_profile(uint8_t m_seq_type,
                                     uint8_t pd_in_len,
                                     uint8_t pd_out_len,
@@ -503,4 +597,93 @@ int lw_iolm_conformance_run_multi_profile(uint8_t port_count,
         }
     }
     return LW_IOLM_ERR_NO_OPERATE;
+}
+
+int lw_iolm_conformance_run_multi_direct_parameter_isolation(uint8_t* values, uint8_t value_count)
+{
+    lw_iolm_port_fixture_t ports[2];
+    uint8_t cycles[2] = {0U};
+    uint8_t write0 = 0xA1U;
+    uint8_t write1 = 0xB2U;
+    uint8_t read0 = 0U;
+    uint8_t read1 = 0U;
+    uint8_t len0 = 1U;
+    uint8_t len1 = 1U;
+    int ret;
+
+    if((values == NULL) || (value_count < 2U))
+    {
+        return LW_IOLM_ERR_INVALID_ARG;
+    }
+
+    ret = init_fixture(&ports[0], IOLINK_MASTER_M_SEQ_TYPE_1_2, 2U, 1U, 0x51U);
+    if(ret != LW_IOLM_STATUS_OK)
+    {
+        return ret;
+    }
+    ret = init_fixture(&ports[1], IOLINK_MASTER_M_SEQ_TYPE_1_2, 2U, 1U, 0x61U);
+    if(ret != LW_IOLM_STATUS_OK)
+    {
+        return ret;
+    }
+    ret = drive_fixture_to_operate(&ports[0], &cycles[0]);
+    if(ret != LW_IOLM_STATUS_OK)
+    {
+        return ret;
+    }
+    ret = drive_fixture_to_operate(&ports[1], &cycles[1]);
+    if(ret != LW_IOLM_STATUS_OK)
+    {
+        return ret;
+    }
+
+    ret = drive_fixture_write_isdu(&ports[0],
+                                   IOLINK_IDX_DIRECT_PARAMETERS_2,
+                                   1U,
+                                   &write0,
+                                   1U,
+                                   &cycles[0]);
+    if(ret != IOLINK_MASTER_STATUS_OK)
+    {
+        return ret;
+    }
+    ret = drive_fixture_write_isdu(&ports[1],
+                                   IOLINK_IDX_DIRECT_PARAMETERS_2,
+                                   1U,
+                                   &write1,
+                                   1U,
+                                   &cycles[1]);
+    if(ret != IOLINK_MASTER_STATUS_OK)
+    {
+        return ret;
+    }
+
+    ret = drive_fixture_read_isdu(&ports[0],
+                                  IOLINK_IDX_DIRECT_PARAMETERS_2,
+                                  1U,
+                                  &read0,
+                                  &len0,
+                                  &cycles[0]);
+    if(ret != IOLINK_MASTER_STATUS_OK)
+    {
+        return ret;
+    }
+    ret = drive_fixture_read_isdu(&ports[1],
+                                  IOLINK_IDX_DIRECT_PARAMETERS_2,
+                                  1U,
+                                  &read1,
+                                  &len1,
+                                  &cycles[1]);
+    if(ret != IOLINK_MASTER_STATUS_OK)
+    {
+        return ret;
+    }
+    if((len0 != 1U) || (len1 != 1U))
+    {
+        return LW_IOLM_ERR_CYCLIC;
+    }
+
+    values[0] = read0;
+    values[1] = read1;
+    return ((read0 == write0) && (read1 == write1)) ? LW_IOLM_STATUS_OK : LW_IOLM_ERR_CYCLIC;
 }

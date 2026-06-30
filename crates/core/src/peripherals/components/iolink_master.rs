@@ -179,6 +179,11 @@ mod native {
             first_pd_value: u8,
             results: *mut NativeConformanceResult,
         ) -> c_int;
+        #[cfg(test)]
+        fn lw_iolm_conformance_run_multi_direct_parameter_isolation(
+            values: *mut u8,
+            value_count: u8,
+        ) -> c_int;
     }
 
     #[cfg(test)]
@@ -397,6 +402,26 @@ mod native {
             Ok(results)
         } else {
             Err("native IO-Link multi-device profile failed")
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn run_real_multi_device_direct_parameter_isolation() -> Result<[u8; 2], &'static str>
+    {
+        let _guard = NATIVE_CALL_LOCK
+            .lock()
+            .expect("native IO-Link lock poisoned");
+        let mut values = [0u8; 2];
+        let ret = unsafe {
+            lw_iolm_conformance_run_multi_direct_parameter_isolation(
+                values.as_mut_ptr(),
+                values.len() as u8,
+            )
+        };
+        if ret == 0 {
+            Ok(values)
+        } else {
+            Err("native IO-Link multi-device direct parameter isolation failed")
         }
     }
 }
@@ -1065,6 +1090,17 @@ mod tests {
             results[0].device_observed_pd_output[0],
             results[1].device_observed_pd_output[0]
         );
+    }
+
+    #[cfg(feature = "iolink-native")]
+    #[test]
+    fn native_real_device_stack_isolates_direct_parameters_per_device() {
+        use super::native::run_real_multi_device_direct_parameter_isolation;
+
+        let values = run_real_multi_device_direct_parameter_isolation()
+            .expect("real multi-device direct parameter isolation profile");
+
+        assert_eq!(values, [0xA1, 0xB2]);
     }
 
     #[test]
