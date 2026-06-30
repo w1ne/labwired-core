@@ -49,7 +49,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: w1ne/iolinki-master
-          ref: feat/user-aware-phy-api
+          ref: b140b3dbb10a366de16f5d610a05f018e432db12
           path: iolinki-master
           fetch-depth: 0
 

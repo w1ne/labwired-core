@@ -1,8 +1,7 @@
 /* AL2205-style IO-Link DI device — firmware-under-test.
  *
- * M2: bring up the iolinki device stack over the USART2 PHY and run its loop
- * with a constant process-data input. The native IO-Link master (M3) and the
- * 74HC165 input shifter (M4) are wired in later milestones.
+ * Runs two independent iolinki device contexts on USART2/USART3. Each context
+ * publishes process data read from its own simulated 74HC165 input shifter.
  */
 #include "iolinki/device.h"
 #include "phy_labwired.h"
@@ -13,26 +12,24 @@
 #define USART2_BASE 0x40004400u
 #define USART3_BASE 0x40004800u
 
-/* SPI1 (stm32_fifo layout) reads the 74HC165 digital-input shift register:
+/* SPI (stm32_fifo layout) reads the 74HC165 digital-input shift register:
  * one transfer clocks out the 8 input channels as a byte on MISO. */
 #define SPI1_BASE 0x40013000u
-#define SREG(o) (*(volatile uint32_t *)(SPI1_BASE + (o)))
-#define SPI_CR1 SREG(0x00u)
-#define SPI_SR SREG(0x08u)
-#define SPI_DR SREG(0x0Cu)
+#define SPI2_BASE 0x40003800u
+#define SREG(base, o) (*(volatile uint32_t *)((base) + (o)))
 #define CR1_MSTR (1u << 2)
 #define CR1_SPE (1u << 6)
 #define SR_RXNE (1u << 0)
 
-static void spi1_init(void) {
-    SPI_CR1 = CR1_SPE | CR1_MSTR; /* master, enabled, fastest baud */
+static void spi_init(uintptr_t spi_base) {
+    SREG(spi_base, 0x00u) = CR1_SPE | CR1_MSTR; /* master, enabled, fastest baud */
 }
 
-static uint8_t spi1_read_byte(void) {
-    SPI_DR = 0x00u; /* dummy write triggers the transfer */
+static uint8_t spi_read_byte(uintptr_t spi_base) {
+    SREG(spi_base, 0x0Cu) = 0x00u; /* dummy write triggers the transfer */
     for (uint32_t i = 0; i < 100000u; i++) {
-        if (SPI_SR & SR_RXNE) {
-            return (uint8_t)SPI_DR;
+        if (SREG(spi_base, 0x08u) & SR_RXNE) {
+            return (uint8_t)SREG(spi_base, 0x0Cu);
         }
     }
     return 0u; /* bounded: never hang the IO-Link loop */
@@ -41,6 +38,7 @@ static uint8_t spi1_read_byte(void) {
 typedef struct {
     const char *name;
     uintptr_t usart_base;
+    uintptr_t spi_base;
     iolink_device_ctx_t device;
     iolink_device_config_t config;
     iolink_dll_state_t last_state;
@@ -83,8 +81,8 @@ static void port_process(iolink_port_t *port, uint8_t pd) {
 
 int main(void) {
     static iolink_port_t ports[] = {
-        {.name = "PORT2", .usart_base = USART2_BASE},
-        {.name = "PORT3", .usart_base = USART3_BASE},
+        {.name = "PORT2", .usart_base = USART2_BASE, .spi_base = SPI1_BASE},
+        {.name = "PORT3", .usart_base = USART3_BASE, .spi_base = SPI2_BASE},
     };
 
     dbg_uart_init();
@@ -99,15 +97,15 @@ int main(void) {
         for (;;) {
         }
     }
-    spi1_init();
+    spi_init(SPI1_BASE);
+    spi_init(SPI2_BASE);
     dbg_puts("IOLINK INIT OK\r\n");
 
     for (;;) {
         /* Read the 8 digital inputs from the 74HC165 and publish them as the
          * IO-Link process data the master cyclically reads. */
-        uint8_t pd = spi1_read_byte();
-        port_process(&ports[0], pd);
-        port_process(&ports[1], pd);
+        port_process(&ports[0], spi_read_byte(ports[0].spi_base));
+        port_process(&ports[1], spi_read_byte(ports[1].spi_base));
         /* Deliberately do NOT advance g_iolink_ticks_ms: the CPU loops far
          * faster than the simulated UART byte rate, so a per-loop tick would
          * race the stack's millisecond timeouts (e.g. the >1000 ms inactivity

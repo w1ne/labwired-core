@@ -9,5 +9,5 @@ limits:
 assertions:
   - uart_contains: "AL2205 BOOT"
   - uart_contains: "IOLINK INIT OK"
-  - uart_contains: "PORT2 STATE=04 OPERATE PD="
-  - uart_contains: "PORT3 STATE=04 OPERATE PD="
+  - uart_contains: "PORT2 STATE=04 OPERATE PD=A5"
+  - uart_contains: "PORT3 STATE=04 OPERATE PD=3C"

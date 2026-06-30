@@ -29,4 +29,11 @@ external_devices:
       # Headless demo stimulus: preset the 8 input channels (0xA5 = 1010_0101).
       # The UI (Plan 3) will toggle these live instead.
       inputs: 165
+  - id: "di_shifter_port3"
+    type: "sn74hc165"
+    connection: "spi2"
+    config:
+      cs_pin: "PB12"
+      # Distinct stimulus proves PORT3 is not accidentally reading PORT2 data.
+      inputs: 60
 board_io: []
