@@ -17,6 +17,11 @@ as the firmware-under-test via a thin `phy_labwired.c` PHY over the L476 USART
 registers. LabWired provides the simulated peripherals (the `sn74hc165` shifter
 and two native `iolink-master` peers) and carries the UART bytes.
 
+Current boundary: this is a two-port firmware topology inside one simulated MCU.
+It proves isolated IO-Link stack contexts, separate UART links, and separate
+field-input stimulus. It is not yet a multi-MCU LabWired topology with separate
+firmware images, reset domains, and clocks per device node.
+
 ## Build the firmware
 
 ```sh
