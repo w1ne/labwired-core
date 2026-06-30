@@ -255,7 +255,8 @@ boards:
     # 2026-06-28: rcc.rs SW→SWS gated on source-ready for F1/F4/V2/WBA; the L0 RCC
     # model already gated and is unchanged, so this board is untouched (shared-file
     # hash drift only). stm32l0_mmio_diff passes unchanged. No live re-capture.
-    drift_ack: 2026-06-28
+    # 2026-06-30: additive Kinetis GPIO + DSPI variants in gpio.rs/spi.rs for the KW41Z; the STM32 GPIO/SPI engines are untouched, l073 diff unchanged. No live re-capture.
+    drift_ack: 2026-06-30
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs

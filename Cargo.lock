@@ -1072,6 +1072,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-kw41z-lcd"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-l073-demo"
 version = "0.1.0"
 dependencies = [

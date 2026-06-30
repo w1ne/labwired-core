@@ -270,6 +270,22 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"AX=",
     },
     SurvivalCase {
+        // KW41Z "cattle activity tag": bare-metal firmware (firmware-kw41z-lcd)
+        // reads the FXOS8700 over the Kinetis I2C and renders a 3-axis activity
+        // bar-graph onto a Nokia-5110 (PCD8544) LCD over the Kinetis DSPI, D/C
+        // driven from GPIOC. Exercises KinetisI2c + KinetisDspi + KinetisGpio +
+        // the PCD8544 model end to end. The framebuffer render is asserted
+        // separately in test_kw41z_lcd_renders_screen.
+        name: "kw41z_lcd_activity",
+        core: "cortex-m0+",
+        family: CpuFamily::CortexM,
+        chip: "mkw41z4",
+        system: "frdm-kw41z-lcd",
+        fixture: "kw41z-lcd-activity.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x000F_FFFF), (0x1FFF_8000, 0x2001_8000)],
+        expected_uart_output: b"KW41Z_LCD_OK",
+    },
+    SurvivalCase {
         // Nordic nRF5340 APPLICATION core (Cortex-M33) running REAL, unmodified
         // upstream Zephyr v3.7 hello_world, built for board
         // nrf5340dk/nrf5340/cpuapp. Boots through the genuine Zephyr nRF
@@ -1182,6 +1198,66 @@ fn test_kw41z_nxp_survival() {
 #[test]
 fn test_kw41z_zephyr_survival() {
     run_survival_case(case_by_name("kw41z_zephyr"));
+}
+
+#[test]
+fn test_kw41z_lcd_activity_survival() {
+    run_survival_case(case_by_name("kw41z_lcd_activity"));
+}
+
+/// End-to-end proof that the activity bar-graph reaches the screen: boot the
+/// firmware, then read back the PCD8544 model's framebuffer and confirm the
+/// display was turned on and real pixels were drawn — i.e. the FXOS8700 read
+/// (Kinetis I2C), the DSPI master, the GPIO D/C latch and the display model all
+/// cooperated, not just that the CPU survived.
+#[test]
+fn test_kw41z_lcd_renders_screen() {
+    use labwired_core::peripherals::components::Pcd8544;
+    use labwired_core::peripherals::spi::Spi;
+
+    let (chip, manifest) = load_system("mkw41z4", "frdm-kw41z-lcd");
+    let mut bus = SystemBus::from_config(&chip, &manifest).expect("bus");
+    let (cpu, _nvic) = configure_cortex_m(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
+    let image = labwired_loader::load_elf(&fixtures().join("kw41z-lcd-activity.elf"))
+        .expect("load lcd elf");
+    machine.load_firmware(&image).expect("load fw");
+    for _ in 0..SURVIVAL_CYCLES {
+        if machine.step().is_err() {
+            break;
+        }
+    }
+
+    let lcd = machine
+        .bus
+        .peripherals
+        .iter()
+        .filter_map(|p| p.dev.as_any().and_then(|a| a.downcast_ref::<Spi>()))
+        .flat_map(|spi| spi.attached_devices.iter())
+        .find_map(|d| d.as_any().and_then(|a| a.downcast_ref::<Pcd8544>()))
+        .expect("PCD8544 attached to an SPI bus");
+
+    assert!(lcd.display_on(), "PCD8544 display was never turned on");
+    let fb = lcd.framebuffer();
+    let lit = fb.iter().filter(|&&b| b != 0).count();
+    assert!(
+        lit > 0,
+        "PCD8544 framebuffer is blank — no activity bars were rendered"
+    );
+    // ASCII snapshot of the 84x48 Nokia-5110 screen (bank-major, 8 px/byte).
+    eprintln!("┌{}┐", "─".repeat(84));
+    for bank in 0..6 {
+        for sub in 0..8 {
+            let mut row = String::with_capacity(84);
+            for x in 0..84 {
+                let byte = fb[bank * 84 + x];
+                row.push(if (byte >> sub) & 1 != 0 { '#' } else { ' ' });
+            }
+            eprintln!("│{row}│");
+        }
+    }
+    eprintln!("└{}┘", "─".repeat(84));
+    eprintln!("PCD8544 rendered: {lit} non-blank framebuffer bytes, display ON");
 }
 
 #[test]
