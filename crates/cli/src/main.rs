@@ -3972,6 +3972,7 @@ fn build_stop_reason_details(
         StopReason::MemoryViolation
         | StopReason::DecodeError
         | StopReason::Halt
+        | StopReason::AssertionsPassed
         | StopReason::Exception
         | StopReason::ConfigError => (None, None),
     };
@@ -4051,6 +4052,7 @@ fn run_test(args: TestArgs) -> ExitCode {
         script_no_progress_steps,
         script_wall_time_ms,
         script_max_vcd_bytes,
+        script_stop_when_assertions_pass,
         assertions,
     ) = match loaded {
         LoadedTestScript::V1_0(script) => (
@@ -4062,6 +4064,7 @@ fn run_test(args: TestArgs) -> ExitCode {
             script.limits.no_progress_steps,
             script.limits.wall_time_ms,
             script.limits.max_vcd_bytes,
+            script.limits.stop_when_assertions_pass,
             script.assertions,
         ),
         LoadedTestScript::LegacyV1(script) => {
@@ -4077,6 +4080,7 @@ fn run_test(args: TestArgs) -> ExitCode {
                 None,
                 script.wall_time_ms,
                 None,
+                false,
                 script.assertions,
             )
         }
@@ -4094,6 +4098,7 @@ fn run_test(args: TestArgs) -> ExitCode {
         no_progress_steps: detect_stuck,
         wall_time_ms: script_wall_time_ms,
         max_vcd_bytes,
+        stop_when_assertions_pass: script_stop_when_assertions_pass,
     };
 
     // Guard against accidentally huge runs from CI misconfiguration.
@@ -4523,6 +4528,67 @@ fn handle_load_error<C: labwired_core::Cpu>(
     ExitCode::from(EXIT_RUNTIME_ERROR)
 }
 
+fn assertion_currently_passes<C: labwired_core::Cpu>(
+    assertion: &TestAssertion,
+    uart_text: &str,
+    machine: &mut labwired_core::Machine<C>,
+    stop_reason: &StopReason,
+) -> bool {
+    match assertion {
+        TestAssertion::UartContains(a) => uart_text.contains(&a.uart_contains),
+        TestAssertion::UartRegex(a) => simple_regex_is_match(&a.uart_regex, uart_text),
+        TestAssertion::ExpectedStopReason(a) => &a.expected_stop_reason == stop_reason,
+        TestAssertion::MemoryValue(a) => {
+            let size = a.memory_value.size.unwrap_or(32);
+            let result = match size {
+                8 => machine
+                    .bus
+                    .read_u8(a.memory_value.address)
+                    .map(|v| v as u32),
+                16 => machine
+                    .bus
+                    .read_u16(a.memory_value.address)
+                    .map(|v| v as u32),
+                32 => machine.bus.read_u32(a.memory_value.address),
+                _ => return false,
+            };
+
+            match result {
+                Ok(val) => {
+                    let mask = a.memory_value.mask.unwrap_or(0xFFFFFFFF) as u32;
+                    let expected = a.memory_value.expected_value as u32;
+                    (val & mask) == (expected & mask)
+                }
+                Err(_) => false,
+            }
+        }
+    }
+}
+
+fn all_runtime_assertions_pass<C: labwired_core::Cpu>(
+    assertions: &[TestAssertion],
+    uart_tx: &Arc<Mutex<Vec<u8>>>,
+    machine: &mut labwired_core::Machine<C>,
+    stop_reason: &StopReason,
+) -> bool {
+    let runtime_assertions: Vec<&TestAssertion> = assertions
+        .iter()
+        .filter(|a| !matches!(a, TestAssertion::ExpectedStopReason(_)))
+        .collect();
+    if runtime_assertions.is_empty() {
+        return false;
+    }
+
+    let uart_text = {
+        let bytes = uart_tx.lock().map(|g| g.clone()).unwrap_or_default();
+        String::from_utf8_lossy(&bytes).to_string()
+    };
+
+    runtime_assertions
+        .iter()
+        .all(|a| assertion_currently_passes(a, &uart_text, machine, stop_reason))
+}
+
 #[allow(clippy::too_many_arguments)]
 fn execute_test_loop<C: labwired_core::Cpu>(
     args: &TestArgs,
@@ -4640,10 +4706,9 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                         }
                     }
 
-                    if executed < to_execute {
-                        // Bailed out early (e.g. exception/branch)
-                        continue;
-                    }
+                    // Short batches happen on control-flow boundaries. Keep
+                    // falling through so limit and assertion stop checks still
+                    // run before the next batch.
                 }
                 Err(e) => {
                     sim_error_happened = true;
@@ -4713,6 +4778,13 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                 prev_pc = current_pc;
             }
         }
+
+        if resolved_limits.stop_when_assertions_pass
+            && all_runtime_assertions_pass(assertions, uart_tx, machine, &stop_reason)
+        {
+            stop_reason = StopReason::AssertionsPassed;
+            break;
+        }
     }
 
     let uart_text = {
@@ -4726,9 +4798,11 @@ fn execute_test_loop<C: labwired_core::Cpu>(
 
     for assertion in assertions {
         let passed = match &assertion {
-            TestAssertion::UartContains(a) => uart_text.contains(&a.uart_contains),
-            TestAssertion::UartRegex(a) => simple_regex_is_match(&a.uart_regex, &uart_text),
-            TestAssertion::ExpectedStopReason(a) => a.expected_stop_reason == stop_reason,
+            TestAssertion::UartContains(_)
+            | TestAssertion::UartRegex(_)
+            | TestAssertion::ExpectedStopReason(_) => {
+                assertion_currently_passes(assertion, &uart_text, machine, &stop_reason)
+            }
             TestAssertion::MemoryValue(a) => {
                 let size = a.memory_value.size.unwrap_or(32);
                 let result = match size {
@@ -5018,6 +5092,7 @@ fn write_config_error_outputs(
         no_progress_steps: None,
         wall_time_ms: None,
         max_vcd_bytes: None,
+        stop_when_assertions_pass: false,
     });
 
     let stop_reason = StopReason::ConfigError;

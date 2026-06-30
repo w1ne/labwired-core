@@ -3,14 +3,13 @@
 Runs the real [`iolinki`](../../third_party/iolinki) IO-Link **device** stack as
 firmware on a simulated STM32L476, modeling IFM AL2205-style IO-Link
 **digital-input** links. Two native IO-Link master peers drive independent
-firmware device contexts on separate UARTs; each device reads the 8 digital
-inputs from a 74HC165 shift register over SPI1 and publishes them as cyclic
-process data.
+firmware device contexts on separate UARTs; each device reads its own 8 digital
+inputs from a 74HC165 shift register and publishes them as cyclic process data.
 
 ```
-[74HC165 inputs] --SPI1--> iolinki device stack PORT2 --USART2--> iolink-master
-                    \----> iolinki device stack PORT3 --USART3--> iolink-master
-                                                                         (shows PD)
+[74HC165 inputs A5] --SPI1--> iolinki device stack PORT2 --USART2--> iolink-master
+[74HC165 inputs 3C] --SPI2--> iolinki device stack PORT3 --USART3--> iolink-master
+                                                                            (shows PD)
 ```
 
 Nothing of IO-Link is re-implemented in the simulator: the `iolinki` stack runs
@@ -34,16 +33,16 @@ aggregate initialisation at `-Os` here.
 cargo run --release -p labwired-cli -- test --script examples/al2205-iolink-dido/test.yaml
 ```
 
-Expected output (the device walks STARTUP → … → OPERATE and reports the input
-byte read from the shifter, preset to `0xA5` in `system.yaml`):
+Expected output (each port walks STARTUP -> OPERATE and reports the byte read
+from its own shifter, preset to `0xA5` and `0x3C` in `system.yaml`):
 
 ```
 AL2205 BOOT
 IOLINK INIT OK
 PORT2 STATE=01
 PORT3 STATE=01
-PORT3 STATE=04 OPERATE PD=A5
 PORT2 STATE=04 OPERATE PD=A5
+PORT3 STATE=04 OPERATE PD=3C
 ```
 
 ## Files
@@ -52,9 +51,10 @@ PORT2 STATE=04 OPERATE PD=A5
   the DI app `main.c`, and the `Makefile` that compiles the vendored `iolinki`
   sources.
 - `system.yaml` — L476 board with native `iolink-master` peers on `uart2` and
-  `uart3`, plus the `sn74hc165` on `spi1` (its `inputs:` preset is headless demo
-  stimulus).
-- `test.yaml` — headless run + assertions for both ports reaching OPERATE.
+  `uart3`, plus `sn74hc165` shifters on `spi1` and `spi2` with distinct
+  headless input stimulus.
+- `test.yaml` — headless run + assertions for both ports reaching OPERATE with
+  their own process-data bytes; exits once assertions pass.
 
 The `inputs:` preset stands in for live switch toggling, which the playground UI
 adds in a later step.
