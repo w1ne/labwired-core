@@ -56,6 +56,18 @@ const EN_COMPARE_SHIFT: u32 = 16;
 const COUNTER_MASK: u32 = 0x00FF_FFFF;
 const PRESCALER_MASK: u32 = 0xFFF;
 
+/// CPU cycles per LFCLK base-clock tick (nRF52840: 64 MHz CPU, 32.768 kHz LFCLK).
+///
+/// 64_000_000 / 32_768 = 1953.125 exactly = 15625 / 8.
+/// We advance `lfclk_accum` by LFCLK_ACCUM_INC each `tick()` call (once per
+/// CPU cycle) and fire one LFCLK edge when it reaches LFCLK_ACCUM_PERIOD.
+/// This gives exactly 32768 Hz without accumulating rounding error.
+///
+/// Unit tests that call tick() directly use `Nrf52Rtc::new_fast()` which sets
+/// both to 1, giving a 1:1 CPU:LFCLK ratio so small tick counts suffice.
+pub const LFCLK_ACCUM_INC_DEFAULT: u32 = 8;
+pub const LFCLK_ACCUM_PERIOD_DEFAULT: u32 = 15625; // 64_000_000 / (32_768 / 8)
+
 #[derive(Debug)]
 pub struct Nrf52Rtc {
     /// Number of CC/EVENTS_COMPARE channels present on this instance.
@@ -73,6 +85,15 @@ pub struct Nrf52Rtc {
 
     running: bool,
     prescaler_accum: u32,
+    /// Fractional LFCLK accumulator. Incremented by `lfclk_inc` each CPU
+    /// cycle; when it reaches `lfclk_period` one LFCLK base-clock cycle fires
+    /// and is fed into the PRESCALER divider. This models the ratio
+    /// 64 MHz CPU : 32.768 kHz LFCLK = 1953.125 CPU cycles per LFCLK tick.
+    ///
+    /// Set both to 1 (via `new_fast`) for unit tests that call tick() directly.
+    lfclk_accum: u32,
+    lfclk_inc: u32,
+    lfclk_period: u32,
 }
 
 impl Default for Nrf52Rtc {
@@ -89,6 +110,9 @@ impl Default for Nrf52Rtc {
             cc: [0u32; 4],
             running: false,
             prescaler_accum: 0,
+            lfclk_accum: 0,
+            lfclk_inc: LFCLK_ACCUM_INC_DEFAULT,
+            lfclk_period: LFCLK_ACCUM_PERIOD_DEFAULT,
         }
     }
 }
@@ -103,6 +127,32 @@ impl Nrf52Rtc {
         Self {
             num_cc: num_cc.clamp(1, 4),
             ..Self::default()
+        }
+    }
+
+    /// Construct a "fast" RTC with 1:1 CPU:LFCLK ratio. Intended for unit
+    /// tests that call `tick()` directly and want small tick counts to fire
+    /// events, without requiring 1953 ticks per counter increment.
+    #[cfg(test)]
+    pub fn new_fast() -> Self {
+        Self {
+            lfclk_inc: 1,
+            lfclk_period: 1,
+            ..Self::default()
+        }
+    }
+
+    /// Advance the LFCLK accumulator by one CPU-cycle increment. Returns true
+    /// if a LFCLK base-clock edge fired (i.e. the prescaler/counter should
+    /// advance this cycle).
+    #[inline]
+    fn advance_lfclk(&mut self) -> bool {
+        self.lfclk_accum = self.lfclk_accum.wrapping_add(self.lfclk_inc);
+        if self.lfclk_accum >= self.lfclk_period {
+            self.lfclk_accum -= self.lfclk_period;
+            true
+        } else {
+            false
         }
     }
 
@@ -171,6 +221,7 @@ impl Peripheral for Nrf52Rtc {
                 if value & 1 != 0 => {
                     self.counter = 0;
                     self.prescaler_accum = 0;
+                    self.lfclk_accum = 0;
                 }
             OFF_TASKS_TRIGOVRFLW
                 // Per PS §6.21.5: sets COUNTER to 0x00FFFFF0 to trigger overflow
@@ -217,6 +268,15 @@ impl Peripheral for Nrf52Rtc {
     fn tick(&mut self) -> PeripheralTickResult {
         if !self.running {
             return PeripheralTickResult::default();
+        }
+
+        // Advance the CPU→LFCLK fractional accumulator. Only proceed with a
+        // counter tick when a LFCLK base-clock edge fires.
+        if !self.advance_lfclk() {
+            return PeripheralTickResult {
+                cycles: 1,
+                ..Default::default()
+            };
         }
 
         // PRESCALER+1 base-clock cycles per counter increment.
@@ -338,7 +398,7 @@ mod tests {
 
     #[test]
     fn events_tick_set_by_hw_cleared_by_sw() {
-        let mut r = Nrf52Rtc::new();
+        let mut r = Nrf52Rtc::new_fast();
         r.write_u32(OFF_PRESCALER, 0).unwrap();
         r.write_u32(OFF_EVTENSET, EN_TICK).unwrap();
         r.write_u32(OFF_TASKS_START, 1).unwrap();
@@ -374,7 +434,7 @@ mod tests {
 
     #[test]
     fn tick_compare_fires_event_and_irq() {
-        let mut r = Nrf52Rtc::new();
+        let mut r = Nrf52Rtc::new_fast();
         r.write_u32(OFF_PRESCALER, 0).unwrap();
         r.write_u32(OFF_CC0, 7).unwrap();
         r.write_u32(OFF_EVTENSET, 1 << 16).unwrap();
@@ -393,7 +453,7 @@ mod tests {
 
     #[test]
     fn tick_tick_event_fires_when_enabled() {
-        let mut r = Nrf52Rtc::new();
+        let mut r = Nrf52Rtc::new_fast();
         r.write_u32(OFF_PRESCALER, 0).unwrap();
         r.write_u32(OFF_EVTENSET, 1).unwrap();
         r.write_u32(OFF_INTENSET, 1).unwrap();
@@ -413,7 +473,7 @@ mod tests {
 
     #[test]
     fn counter_wraps_at_24_bits_and_fires_ovrflw() {
-        let mut r = Nrf52Rtc::new();
+        let mut r = Nrf52Rtc::new_fast();
         r.write_u32(OFF_PRESCALER, 0).unwrap();
         r.write_u32(OFF_EVTENSET, 1 << 1).unwrap(); // OVRFLW
         r.write_u32(OFF_INTENSET, 1 << 1).unwrap();

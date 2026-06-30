@@ -535,6 +535,17 @@ pub trait Bus {
     /// immediate re-entry of the same exception.
     fn clear_nvic_pending(&mut self, _exception_num: u32) {}
 
+    /// Check whether a NVIC exception is still hardware-pending (ISPR bit set).
+    ///
+    /// Called by the CPU before dispatching an exception that is present in
+    /// `pending_exceptions` but may have been software-cleared via NVIC ICPR
+    /// (e.g. `NRFY_IRQ_PENDING_CLEAR`) while the ISR was still executing.
+    /// Returns `true` for non-NVIC exceptions (num < 16) or when no NVIC is
+    /// present — the conservative/backward-compatible default.
+    fn is_nvic_irq_pending(&self, _exception_num: u32) -> bool {
+        true
+    }
+
     /// Plan 3: route a peripheral source ID to a cpu0 IRQ slot via a
     /// registered ESP32-S3 interrupt matrix peripheral. Default returns
     /// None for buses that don't model this.
