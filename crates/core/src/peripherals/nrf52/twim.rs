@@ -275,9 +275,9 @@ impl Nrf52Twim {
             _ => 100_000,
         };
         let cycles_per_bit = CORE_HZ / scl_hz; // 640 @100k · 256 @250k · 160 @400k
-        // 9 bits/byte (8 data + ACK); +1 byte models START + address + R/W.
-        // Floor at one byte-time so even a 0-byte STOP delays past the
-        // driver's critical section.
+                                               // 9 bits/byte (8 data + ACK); +1 byte models START + address + R/W.
+                                               // Floor at one byte-time so even a 0-byte STOP delays past the
+                                               // driver's critical section.
         ((bytes + 1) * 9 * cycles_per_bit).max(9 * cycles_per_bit)
     }
 
