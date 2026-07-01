@@ -17,8 +17,9 @@ static int g_forced_send_return;
 static uint8_t g_sent[16][64];
 static size_t g_sent_len[16];
 
-static int fake_phy_send(const uint8_t* data, size_t len)
+static int fake_phy_send(void* user, const uint8_t* data, size_t len)
 {
+    (void)user;
     assert_non_null(data);
     assert_in_range(len, 1U, sizeof(g_sent[0]));
     assert_in_range(g_send_calls, 0, 15);

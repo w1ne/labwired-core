@@ -17,8 +17,9 @@ static uint8_t g_recv_len;
 static uint8_t g_recv_pos;
 static int g_recv_error_after = -1;
 
-static int fake_recv_byte(uint8_t* byte)
+static int fake_recv_byte(void* user, uint8_t* byte)
 {
+    (void)user;
     assert_non_null(byte);
 
     if((g_recv_error_after >= 0) && (g_recv_pos >= (uint8_t)g_recv_error_after))

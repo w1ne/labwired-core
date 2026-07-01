@@ -82,7 +82,7 @@ fn build_iolink_native_bridge() {
         .file(format!("{master_root}/src/master_isdu.c"))
         .file(format!("{master_root}/src/master_parameters.c"))
         .file(format!("{master_root}/src/master_sio.c"))
-        // Device stack (singleton). frame.c/crc.c are shared with the master
+        // Device stack. frame.c/crc.c are shared with the master
         // helpers above; listing them once is enough.
         .file(format!("{device_root}/src/frame.c"))
         .file(format!("{device_root}/src/crc.c"))

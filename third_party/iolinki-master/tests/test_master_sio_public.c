@@ -28,8 +28,9 @@ static int fake_checked_read_cq_line(void)
 
 static const iolink_phy_api_t g_phy = {0};
 
-static void fake_set_mode(iolink_phy_mode_t mode)
+static void fake_set_mode(void* user, iolink_phy_mode_t mode)
 {
+    (void)user;
     g_set_mode_calls++;
     g_last_mode = mode;
 }

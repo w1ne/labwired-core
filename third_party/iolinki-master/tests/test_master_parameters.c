@@ -27,8 +27,9 @@ static const uint8_t g_page1[] = {
     0x00U,
 };
 
-static int null_phy_init(void)
+static int null_phy_init(void* user)
 {
+    (void)user;
     return 0;
 }
 

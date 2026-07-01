@@ -6,12 +6,10 @@
 
 //! IFM-inspired multi-port IO-Link master station — a product/profile model.
 //!
-//! This is a pure-Rust model of which sensor profile is plugged into each port.
-//! It does NOT instantiate one real device stack per port: the `iolinki` device
-//! stack is singleton, so real stack-backed behavior is limited to a single
-//! port (see docs/engineering/iolink-device-stack-isolation.md). The "without
-//! sharing state" guarantee here is a property of this wrapper, not evidence of
-//! four coexisting native device stacks.
+//! This is the product/profile layer for which sensor profile is plugged into
+//! each port. Under the `iolink-native` feature, stack-backed coverage lives in
+//! the native bridge and multi-chip tests, where real `iolinki-master` ports are
+//! paired with real reentrant `iolinki` device contexts.
 
 #[derive(Debug, Clone)]
 enum PortModel {

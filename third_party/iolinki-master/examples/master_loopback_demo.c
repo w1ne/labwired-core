@@ -19,8 +19,9 @@ static void queue_bytes(const uint8_t* data, uint8_t len)
     g_rx_pos = 0U;
 }
 
-static int demo_phy_init(void)
+static int demo_phy_init(void* user)
 {
+    (void)user;
     g_rx_len = 0U;
     g_rx_pos = 0U;
     g_baudrate = IOLINK_BAUDRATE_COM3;
@@ -28,18 +29,21 @@ static int demo_phy_init(void)
     return 0;
 }
 
-static void demo_phy_set_mode(iolink_phy_mode_t mode)
+static void demo_phy_set_mode(void* user, iolink_phy_mode_t mode)
 {
+    (void)user;
     g_mode = mode;
 }
 
-static void demo_phy_set_baudrate(iolink_baudrate_t baudrate)
+static void demo_phy_set_baudrate(void* user, iolink_baudrate_t baudrate)
 {
+    (void)user;
     g_baudrate = baudrate;
 }
 
-static int demo_phy_recv_byte(uint8_t* byte)
+static int demo_phy_recv_byte(void* user, uint8_t* byte)
 {
+    (void)user;
     if(byte == NULL)
     {
         return -1;
@@ -54,10 +58,11 @@ static int demo_phy_recv_byte(uint8_t* byte)
     return 1;
 }
 
-static int demo_phy_send(const uint8_t* data, size_t len)
+static int demo_phy_send(void* user, const uint8_t* data, size_t len)
 {
     uint8_t response[8] = {0U};
 
+    (void)user;
     if((data == NULL) || (len == 0U))
     {
         return -1;

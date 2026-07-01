@@ -691,7 +691,8 @@ int iolink_master_poll_rx(iolink_master_port_t* port)
     }
 
     while((recv_ret = iolink_master_port_state(port)->phy->recv_byte(
-               iolink_master_port_state(port)->phy->user, &byte)) > 0)
+               iolink_master_port_state(port)->phy->user,
+               &byte)) > 0)
     {
         if(iolink_master_port_state(port)->rx.len >= sizeof(iolink_master_port_state(port)->rx.buf))
         {

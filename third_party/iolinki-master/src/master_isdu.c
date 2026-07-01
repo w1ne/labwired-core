@@ -203,9 +203,9 @@ void iolink_master_isdu_on_od(iolink_master_port_t* port, const uint8_t* od, uin
     {
         byte = od[i];
 
-        if(!iolink_master_port_state(port)->isdu.request_sent &&
-           iolink_master_port_state(port)->isdu.response_expect_control &&
-           (iolink_master_port_state(port)->isdu.response_len == 0U) && ((byte & IOLINK_ISDU_CTRL_START) == 0U))
+        if(iolink_master_port_state(port)->isdu.response_expect_control &&
+           (iolink_master_port_state(port)->isdu.response_len == 0U) &&
+           ((byte & IOLINK_ISDU_CTRL_START) == 0U))
         {
             continue;
         }
@@ -441,11 +441,149 @@ int iolink_master_verify_isdu(iolink_master_port_t* port,
     return iolink_master_service_result(port, IOLINK_MASTER_STATUS_OK);
 }
 
+static bool iolink_master_ds_next_record(const uint8_t* data,
+                                         uint8_t len,
+                                         uint8_t* pos,
+                                         const uint8_t** record,
+                                         uint8_t* record_len)
+{
+    uint8_t value_len;
+
+    if((data == NULL) || (pos == NULL) || (record == NULL) || (record_len == NULL) ||
+       (*pos > len) || ((uint8_t)(len - *pos) < 4U))
+    {
+        return false;
+    }
+
+    value_len = data[(uint8_t)(*pos + 3U)];
+    if(value_len > (uint8_t)(len - *pos - 4U))
+    {
+        return false;
+    }
+
+    *record = &data[*pos];
+    *record_len = (uint8_t)(4U + value_len);
+    *pos = (uint8_t)(*pos + *record_len);
+    return true;
+}
+
+static bool iolink_master_ds_image_contains_records(const uint8_t* actual,
+                                                    uint8_t actual_len,
+                                                    const uint8_t* expected,
+                                                    uint8_t expected_len)
+{
+    uint8_t expected_pos = 0U;
+    const uint8_t* expected_record;
+    uint8_t expected_record_len;
+
+    if((expected == NULL) && (expected_len > 0U))
+    {
+        return false;
+    }
+
+    while(expected_pos < expected_len)
+    {
+        uint8_t actual_pos = 0U;
+        bool found = false;
+
+        if(!iolink_master_ds_next_record(expected,
+                                         expected_len,
+                                         &expected_pos,
+                                         &expected_record,
+                                         &expected_record_len))
+        {
+            return false;
+        }
+
+        while(actual_pos < actual_len)
+        {
+            const uint8_t* actual_record;
+            uint8_t actual_record_len;
+
+            if(!iolink_master_ds_next_record(actual,
+                                             actual_len,
+                                             &actual_pos,
+                                             &actual_record,
+                                             &actual_record_len))
+            {
+                return false;
+            }
+
+            if((actual_record_len == expected_record_len) &&
+               (memcmp(actual_record, expected_record, expected_record_len) == 0))
+            {
+                found = true;
+                break;
+            }
+        }
+
+        if(!found)
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static bool iolink_master_ds_image_is_valid(const uint8_t* data, uint8_t len)
+{
+    uint8_t pos = 0U;
+
+    if((data == NULL) && (len > 0U))
+    {
+        return false;
+    }
+
+    while(pos < len)
+    {
+        const uint8_t* record;
+        uint8_t record_len;
+
+        if(!iolink_master_ds_next_record(data, len, &pos, &record, &record_len))
+        {
+            return false;
+        }
+        (void)record;
+        (void)record_len;
+    }
+
+    return true;
+}
+
 int iolink_master_verify_data_storage(iolink_master_port_t* port,
                                       const uint8_t* expected,
                                       uint8_t len)
 {
-    return iolink_master_verify_isdu(port, IOLINK_IDX_DATA_STORAGE, 0U, expected, len);
+    uint8_t data[IOLINK_ISDU_BUFFER_SIZE];
+    uint8_t read_len = UINT8_MAX;
+    int ret;
+
+    if((expected == NULL) && (len > 0U))
+    {
+        return IOLINK_MASTER_ERR_INVALID_ARG;
+    }
+
+    ret = iolink_master_read_isdu(port, IOLINK_IDX_DATA_STORAGE, 0U, data, &read_len);
+    if(ret != IOLINK_MASTER_STATUS_OK)
+    {
+        return ret;
+    }
+
+    if(iolink_master_ds_image_is_valid(expected, len) &&
+       iolink_master_ds_image_is_valid(data, read_len))
+    {
+        if(!iolink_master_ds_image_contains_records(data, read_len, expected, len))
+        {
+            return iolink_master_service_result(port, IOLINK_MASTER_ISDU_ERR_VERIFY_FAILED);
+        }
+    }
+    else if((read_len != len) || ((len > 0U) && (memcmp(data, expected, len) != 0)))
+    {
+        return iolink_master_service_result(port, IOLINK_MASTER_ISDU_ERR_VERIFY_FAILED);
+    }
+
+    return iolink_master_service_result(port, IOLINK_MASTER_STATUS_OK);
 }
 
 int iolink_master_read_detailed_device_status(iolink_master_port_t* port,
@@ -666,7 +804,14 @@ int iolink_master_write_parameter_block(iolink_master_port_t* port,
         block->step = IOLINK_MASTER_BLOCK_STEP_VERIFY;
     }
 
-    ret = iolink_master_verify_isdu(port, block->index, block->subindex, block->data, block->len);
+    if((block->index == IOLINK_IDX_DATA_STORAGE) && (block->subindex == 0U))
+    {
+        ret = iolink_master_verify_data_storage(port, block->data, block->len);
+    }
+    else
+    {
+        ret = iolink_master_verify_isdu(port, block->index, block->subindex, block->data, block->len);
+    }
     if(ret == IOLINK_MASTER_STATUS_OK)
     {
         iolink_master_block_clear(port);
