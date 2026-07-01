@@ -1242,9 +1242,12 @@ fn test_kw41z_lcd_renders_screen() {
     let lit = fb.iter().filter(|&&b| b != 0).count();
     assert!(
         lit > 0,
-        "PCD8544 framebuffer is blank — no activity bars were rendered"
+        "PCD8544 framebuffer is blank — no cow was rendered"
     );
+
     // ASCII snapshot of the 84x48 Nokia-5110 screen (bank-major, 8 px/byte).
+    // Printed BEFORE the feature assertions below so a failure still leaves
+    // the rendered cow visible in the test output.
     eprintln!("┌{}┐", "─".repeat(84));
     for bank in 0..6 {
         for sub in 0..8 {
@@ -1257,7 +1260,114 @@ fn test_kw41z_lcd_renders_screen() {
         }
     }
     eprintln!("└{}┘", "─".repeat(84));
-    eprintln!("PCD8544 rendered: {lit} non-blank framebuffer bytes, display ON");
+    eprintln!("PCD8544 rendered: {lit} non-blank framebuffer bytes, display ON — cute cow face");
+
+    // Pixel-level helper matching the firmware's own bank-major addressing
+    // (fb[(y/8)*84 + x], bit y%8), so we can assert on specific cow features
+    // rather than just "something is lit".
+    let px = |x: usize, y: usize| -> bool { (fb[(y / 8) * 84 + x] >> (y % 8)) & 1 != 0 };
+
+    // Head outline: the ellipse's left/right extremes at its vertical center
+    // (cx=42, cy=20, rx=25) must be lit.
+    assert!(px(17, 20) || px(18, 20), "cow head left edge missing");
+    assert!(px(66, 20) || px(67, 20), "cow head right edge missing");
+    // Muzzle nostrils (mx=42, my=29, offsets ±5,-1): two solid dots.
+    assert!(px(37, 28), "left nostril missing");
+    assert!(px(47, 28), "right nostril missing");
+    // The whole cow reads as more than a couple of bars: expect a healthy
+    // number of lit framebuffer bytes across the face + banner + meter.
+    assert!(
+        lit > 150,
+        "framebuffer has too few non-blank bytes ({lit}) for a full cow face"
+    );
+
+    // The bottom-edge activity meter track (row 46) must span the full width.
+    for x in 0..84 {
+        assert!(px(x, 46), "activity meter track missing at column {x}");
+    }
+}
+
+/// End-to-end proof that the universal bus-trace logic analyzer (Tasks 1-2)
+/// captures REAL transactions from the unmodified KW41Z-LCD demo firmware:
+/// an I2C address frame for the FXOS8700 accelerometer and at least one SPI
+/// frame for the PCD8544 LCD (on spi0). This is the same machine setup as
+/// `test_kw41z_lcd_renders_screen` (the `SystemBus::from_config` path that
+/// wires `set_bus_trace` before devices are attached), just reading the
+/// trace log instead of the framebuffer.
+///
+/// NOTE: the FXOS8700 7-bit address on THIS board's config
+/// (`configs/systems/frdm-kw41z-lcd.yaml`, mirrored in
+/// `peripherals/components/fxos8700.rs::default()`) is `0x1f`, not the
+/// `0x1E` used in some external references/datasheets for other SA0/SA1
+/// strap combos. Asserting against the actual wired address (0x1f).
+#[test]
+fn kw41z_lcd_bus_trace_captures_i2c_and_spi() {
+    use labwired_core::bus::bus_trace::{BusPayload, I2cSym};
+
+    let (chip, manifest) = load_system("mkw41z4", "frdm-kw41z-lcd");
+    let mut bus = SystemBus::from_config(&chip, &manifest).expect("bus");
+    let (cpu, _nvic) = configure_cortex_m(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
+    let image = labwired_loader::load_elf(&fixtures().join("kw41z-lcd-activity.elf"))
+        .expect("load lcd elf");
+    machine.load_firmware(&image).expect("load fw");
+    for _ in 0..SURVIVAL_CYCLES {
+        if machine.step().is_err() {
+            break;
+        }
+    }
+
+    let events = machine.bus.bus_trace_snapshot();
+    eprintln!("bus trace captured {} events", events.len());
+    // The trace ring is bounded (BUS_TRACE_LIMIT), so by the end of a long run it
+    // can be dominated by the LCD's continuous SPI redraws. Print a few samples
+    // from each bus (not just the head) so both protocols are visible in evidence.
+    for ev in events.iter().filter(|e| e.bus == "i2c1").take(6) {
+        eprintln!("  [i2c1] seq={} payload={:?}", ev.seq, ev.payload);
+    }
+    for ev in events.iter().filter(|e| e.bus == "spi0").take(6) {
+        eprintln!("  [spi0] seq={} payload={:?}", ev.seq, ev.payload);
+    }
+    assert!(
+        !events.is_empty(),
+        "bus trace is empty — tracing wrappers were not engaged for the kw41z-lcd firmware path"
+    );
+
+    let fxos8700_addr_event = events.iter().any(|ev| {
+        ev.bus == "i2c1"
+            && matches!(
+                &ev.payload,
+                BusPayload::I2c { kind: I2cSym::AddrWrite | I2cSym::AddrRead, byte, .. }
+                    if (byte >> 1) == 0x1f
+            )
+    });
+    assert!(
+        fxos8700_addr_event,
+        "no I2C address frame for the FXOS8700 (0x1f) seen on i2c1; events: {events:?}"
+    );
+
+    let i2c_data_event = events.iter().any(|ev| {
+        ev.bus == "i2c1"
+            && matches!(
+                &ev.payload,
+                BusPayload::I2c {
+                    kind: I2cSym::Data,
+                    ..
+                }
+            )
+    });
+    assert!(
+        i2c_data_event,
+        "no I2C data event seen on i2c1; events: {events:?}"
+    );
+
+    let spi_event = events
+        .iter()
+        .any(|ev| ev.bus == "spi0" && matches!(&ev.payload, BusPayload::Spi { .. }));
+    assert!(
+        spi_event,
+        "no SPI frame seen on spi0 (PCD8544 LCD); events: {events:?}"
+    );
 }
 
 #[test]

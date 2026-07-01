@@ -297,6 +297,13 @@ pub struct RunArgs {
     #[arg(long)]
     pub gpio_trace: Option<PathBuf>,
 
+    /// Optional path to export the universal I²C/SPI bus trace (logic
+    /// analyzer) captured during the run. `.json` writes the raw event list;
+    /// any other extension (e.g. `.vcd`) writes a Value Change Dump that
+    /// opens directly in GTKWave / PulseView / Saleae / sigrok.
+    #[arg(long)]
+    pub bus_trace_out: Option<PathBuf>,
+
     /// Boot from the real ROM reset vector (0x40000400) instead of fast-booting
     /// the ELF. The chip's real boot ROM runs and loads the 2nd-stage bootloader
     /// and app through the SPI-flash controller — the faithful chip-model path.

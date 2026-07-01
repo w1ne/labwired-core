@@ -104,6 +104,13 @@ pub struct F1I2c {
     rxne_consumed: Cell<bool>,
     #[serde(skip)]
     read_dr_consumed: Cell<bool>,
+    /// Bus name + shared trace log for the universal logic-analyzer (set via
+    /// `I2c::set_bus_trace`). `None` (default) keeps `attach` unwrapped —
+    /// existing behaviour for every caller that doesn't opt in.
+    #[serde(skip)]
+    bus_name: String,
+    #[serde(skip)]
+    bus_log: Option<crate::bus::bus_trace::BusTraceLog>,
 }
 
 impl Default for F1I2c {
@@ -129,6 +136,8 @@ impl Default for F1I2c {
             stop_requested: false,
             rxne_consumed: Cell::new(false),
             read_dr_consumed: Cell::new(true),
+            bus_name: String::new(),
+            bus_log: None,
         }
     }
 }
@@ -382,6 +391,13 @@ pub struct L4I2c {
     /// data byte is loaded into TXDR (write) — mirrors F1's START→DR ordering.
     #[serde(skip)]
     start_armed: bool,
+    /// Bus name + shared trace log for the universal logic-analyzer (set via
+    /// `I2c::set_bus_trace`). `None` (default) keeps `attach` unwrapped —
+    /// existing behaviour for every caller that doesn't opt in.
+    #[serde(skip)]
+    bus_name: String,
+    #[serde(skip)]
+    bus_log: Option<crate::bus::bus_trace::BusTraceLog>,
 }
 
 impl Default for L4I2c {
@@ -405,6 +421,8 @@ impl Default for L4I2c {
             is_reading: false,
             autoend: false,
             start_armed: false,
+            bus_name: String::new(),
+            bus_log: None,
         }
     }
 }
@@ -648,6 +666,13 @@ pub struct KinetisI2c {
     attached_devices: Vec<RefCell<Box<dyn I2cDevice>>>,
     #[serde(skip)]
     current_target: Option<usize>,
+    /// Bus name + shared trace log for the universal logic-analyzer (set via
+    /// `I2c::set_bus_trace`). `None` (default) keeps `attach` unwrapped —
+    /// existing behaviour for every caller that doesn't opt in.
+    #[serde(skip)]
+    bus_name: String,
+    #[serde(skip)]
+    bus_log: Option<crate::bus::bus_trace::BusTraceLog>,
 }
 
 impl Default for KinetisI2c {
@@ -671,6 +696,8 @@ impl Default for KinetisI2c {
             is_reading: false,
             attached_devices: Vec::new(),
             current_target: None,
+            bus_name: String::new(),
+            bus_log: None,
         }
     }
 }
@@ -850,11 +877,54 @@ impl I2c {
         }
     }
 
-    pub fn attach(&mut self, device: Box<dyn I2cDevice>) {
+    /// Set the bus name + a clone of the shared bus-trace log (universal logic
+    /// analyzer, see `crate::bus::bus_trace`). Must be called before `attach`
+    /// for an attached device to be wrapped into the log — devices already
+    /// attached are unaffected.
+    pub fn set_bus_trace(&mut self, name: String, log: crate::bus::bus_trace::BusTraceLog) {
         match self {
-            Self::Stm32F1(i) => i.attached_devices.push(RefCell::new(device)),
-            Self::Stm32L4(i) => i.attached_devices.push(RefCell::new(device)),
-            Self::Kinetis(i) => i.attached_devices.push(RefCell::new(device)),
+            I2c::Stm32F1(i) => {
+                i.bus_name = name;
+                i.bus_log = Some(log);
+            }
+            I2c::Stm32L4(i) => {
+                i.bus_name = name;
+                i.bus_log = Some(log);
+            }
+            I2c::Kinetis(i) => {
+                i.bus_name = name;
+                i.bus_log = Some(log);
+            }
+        }
+    }
+
+    pub fn attach(&mut self, device: Box<dyn I2cDevice>) {
+        let wrap = |name: &str,
+                    log: &Option<crate::bus::bus_trace::BusTraceLog>,
+                    d: Box<dyn I2cDevice>|
+         -> Box<dyn I2cDevice> {
+            match log {
+                Some(l) => Box::new(crate::bus::bus_trace::TracingI2cDevice::new(
+                    name.to_string(),
+                    l.clone(),
+                    d,
+                )),
+                None => d,
+            }
+        };
+        match self {
+            Self::Stm32F1(i) => {
+                let d = wrap(&i.bus_name, &i.bus_log, device);
+                i.attached_devices.push(RefCell::new(d));
+            }
+            Self::Stm32L4(i) => {
+                let d = wrap(&i.bus_name, &i.bus_log, device);
+                i.attached_devices.push(RefCell::new(d));
+            }
+            Self::Kinetis(i) => {
+                let d = wrap(&i.bus_name, &i.bus_log, device);
+                i.attached_devices.push(RefCell::new(d));
+            }
         }
     }
 
@@ -935,7 +1005,7 @@ impl crate::Peripheral for I2c {
 
 #[cfg(test)]
 mod tests {
-    use super::{I2c, I2cDevice};
+    use super::{I2c, I2cDevice, KinetisI2c, KI_C1_MST, KI_C1_TX};
     use crate::Peripheral;
     use std::sync::{
         atomic::{AtomicUsize, Ordering},
@@ -1204,5 +1274,41 @@ mod tests {
             "TC after byte transferred"
         );
         assert_eq!(writes.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn i2c_attach_wraps_device_into_shared_log() {
+        use crate::bus::bus_trace::{new_log, BusPayload};
+        use crate::Peripheral;
+
+        let log = new_log();
+        let mut i2c = I2c::Kinetis(KinetisI2c::default());
+        i2c.set_bus_trace("i2c1".into(), log.clone());
+
+        // device at 0x1E
+        struct D;
+        impl I2cDevice for D {
+            fn address(&self) -> u8 {
+                0x1E
+            }
+            fn read(&mut self) -> u8 {
+                0
+            }
+            fn write(&mut self, _: u8) {}
+        }
+        i2c.attach(Box::new(D));
+
+        // Drive START + addr(W) + one data byte through the Kinetis register
+        // model via the public `Peripheral::write` MMIO path (the same path
+        // every other Kinetis-adjacent test in this module uses to poke
+        // registers — `write_reg` itself is private).
+        i2c.write(0x02, KI_C1_MST | KI_C1_TX).unwrap(); // START
+        i2c.write(0x04, 0x3C).unwrap(); // addr 0x1E + W -> selects device, start()
+        i2c.write(0x04, 0xAF).unwrap(); // data -> device.write -> wrapper records
+
+        let snap = log.lock().unwrap().snapshot();
+        assert!(snap
+            .iter()
+            .any(|e| matches!(&e.payload, BusPayload::I2c { byte, .. } if *byte == 0xAF)));
     }
 }

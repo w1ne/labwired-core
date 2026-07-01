@@ -8,6 +8,46 @@
 
 use crate::*;
 
+/// Export the bus trace (logic analyzer) captured by `bus`, if
+/// `--bus-trace-out <path>` was given. Dispatches by extension: `.json`
+/// writes the raw event list, anything else writes VCD (GTKWave / PulseView
+/// / Saleae / sigrok). Non-fatal: a write error is reported on stderr but
+/// does not change the run's exit code, since the simulation itself already
+/// completed.
+pub(crate) fn export_bus_trace_if_requested(
+    bus_trace_out: &Option<PathBuf>,
+    bus: &labwired_core::bus::SystemBus,
+) {
+    let Some(path) = bus_trace_out else {
+        return;
+    };
+    let events = bus.bus_trace_snapshot();
+    let file = match std::fs::File::create(path) {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("error: cannot create bus-trace-out file {path:?}: {e}");
+            return;
+        }
+    };
+    let is_json = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.eq_ignore_ascii_case("json"))
+        .unwrap_or(false);
+    let result = if is_json {
+        labwired_cli::bus_vcd::write_bus_trace_json(&events, file)
+    } else {
+        labwired_cli::bus_vcd::write_bus_trace_vcd(&events, file)
+    };
+    match result {
+        Ok(()) => eprintln!(
+            "labwired-cli run: bus trace ({} events) -> {path:?}",
+            events.len()
+        ),
+        Err(e) => eprintln!("error: failed to write bus-trace-out {path:?}: {e}"),
+    }
+}
+
 pub(crate) fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode {
     use labwired_core::bus::SystemBus;
 
@@ -266,6 +306,7 @@ pub(crate) fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode 
         }
     }
 
+    export_bus_trace_if_requested(&args.bus_trace_out, &machine.bus);
     ExitCode::from(EXIT_PASS)
 }
 
@@ -347,6 +388,7 @@ pub(crate) fn run_firmware_esp32(args: &RunArgs) -> ExitCode {
         "labwired-cli run (esp32): reached --max-steps {limit}; pc=0x{:08x}",
         cpu.get_pc(),
     );
+    export_bus_trace_if_requested(&args.bus_trace_out, &bus);
     ExitCode::from(EXIT_PASS)
 }
 
@@ -648,6 +690,7 @@ pub(crate) fn run_firmware(args: RunArgs) -> ExitCode {
             Ok(()) => {}
             Err(SimulationError::BreakpointHit(pc)) => {
                 eprintln!("labwired-cli run: BREAK at 0x{pc:08x}");
+                export_bus_trace_if_requested(&args.bus_trace_out, &bus);
                 return ExitCode::from(EXIT_PASS);
             }
             Err(SimulationError::ExceptionRaised { cause, pc }) => {
@@ -800,6 +843,7 @@ pub(crate) fn run_firmware(args: RunArgs) -> ExitCode {
         "labwired-cli run: reached --max-steps {limit}; pc=0x{:08x}{cpu1_pc}",
         cpu.get_pc(),
     );
+    export_bus_trace_if_requested(&args.bus_trace_out, &bus);
     ExitCode::from(EXIT_PASS)
 }
 
@@ -1021,6 +1065,7 @@ pub(crate) fn run_firmware_arm(args: &RunArgs, chip_yaml: &str) -> ExitCode {
 
     // Flush stdout.
     let _ = std::io::stdout().flush();
+    export_bus_trace_if_requested(&args.bus_trace_out, &machine.bus);
     ExitCode::from(EXIT_PASS)
 }
 

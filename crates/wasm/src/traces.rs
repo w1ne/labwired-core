@@ -122,6 +122,17 @@ impl WasmSimulator {
         serde_wasm_bindgen::to_value(&snapshots).unwrap_or(JsValue::NULL)
     }
 
+    /// Non-consuming universal bus trace snapshot for logic analyzers.
+    /// Returns the shared bus event log (seq, bus, payload) grouped by bus type.
+    #[wasm_bindgen]
+    pub fn bus_trace_snapshot(&self) -> JsValue {
+        let Some(machine) = self.machine.as_ref() else {
+            return serde_wasm_bindgen::to_value(&Vec::<serde_json::Value>::new())
+                .unwrap_or(JsValue::NULL);
+        };
+        serde_wasm_bindgen::to_value(&machine.bus.bus_trace_snapshot()).unwrap_or(JsValue::NULL)
+    }
+
     /// Snapshot of the IO-Link master's captured transactions (oldest→newest),
     /// for the IO-Link Analyzer instrument. Empty array if no master is wired.
     #[wasm_bindgen]

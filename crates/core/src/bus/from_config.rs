@@ -77,6 +77,7 @@ impl SystemBus {
             riscv_irq_lines: 0,
             flash_models_ops: false,
             flash_error_flags_idx: None,
+            bus_trace: bus_trace::new_log(),
         };
 
         let mut merged_peripherals = chip.peripherals.clone();
@@ -226,6 +227,10 @@ impl SystemBus {
                     let layout: crate::peripherals::i2c::I2cRegisterLayout =
                         Self::parse_profile_or_default(p_cfg, "I2C")?;
                     let mut i2c = crate::peripherals::i2c::I2c::new_with_layout(layout);
+                    // Wire the shared bus-trace log (universal logic analyzer)
+                    // BEFORE any device is attached below, so every attach call
+                    // wraps its device into the log (see `I2c::attach`).
+                    i2c.set_bus_trace(p_cfg.id.clone(), bus.bus_trace.clone());
                     for ext in &manifest.external_devices {
                         if ext.connection != p_cfg.id {
                             continue;
@@ -487,6 +492,26 @@ impl SystemBus {
             };
 
             bus.push_peripheral(p_cfg, dev)?;
+        }
+
+        // Wire the shared bus-trace log (universal logic analyzer) into every
+        // I2C/SPI peripheral built above, by name, BEFORE the PeripheralKit
+        // registry pass below attaches its devices — so those attaches also
+        // wrap into the log. The inline I²C arm above already does this for
+        // itself (so its own attach loop, which runs before this point, is
+        // covered too); this pass additionally covers `Spi` peripherals built
+        // by `generic_factory::try_build` (which has no direct access to
+        // `bus.bus_trace`) and any I²C peripheral re-touched here is a no-op
+        // (same name + same log already set).
+        let trace_log = bus.bus_trace.clone();
+        for entry in &mut bus.peripherals {
+            if let Some(any) = entry.dev.as_any_mut() {
+                if let Some(i2c) = any.downcast_mut::<crate::peripherals::i2c::I2c>() {
+                    i2c.set_bus_trace(entry.name.clone(), trace_log.clone());
+                } else if let Some(spi) = any.downcast_mut::<crate::peripherals::spi::Spi>() {
+                    spi.set_bus_trace(entry.name.clone(), trace_log.clone());
+                }
+            }
         }
 
         for ext in &manifest.external_devices {

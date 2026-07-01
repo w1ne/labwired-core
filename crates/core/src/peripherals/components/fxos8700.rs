@@ -53,6 +53,11 @@ pub struct Fxos8700 {
     activity_phase: u32,
     accel: [i16; 3],
     mag: [i16; 3],
+
+    /// Set once `set_sample` is called: latches the accel triplet so the
+    /// built-in "grazing cow" animation stops overwriting it on every
+    /// burst-read (live UI input must stick, not be animated away).
+    manual: bool,
 }
 
 impl Default for Fxos8700 {
@@ -75,6 +80,7 @@ impl Fxos8700 {
             activity_phase: 0,
             accel: [0, 0, ONE_G_LJ],
             mag: [0, 0, 0],
+            manual: false,
         };
         s.refresh_pose();
         s
@@ -129,6 +135,13 @@ impl Fxos8700 {
         }
     }
 
+    /// Accepts a live sample (e.g. from a UI slider) and latches `manual` so
+    /// the built-in "grazing cow" animation in `read()` stops overwriting it.
+    pub fn set_sample(&mut self, ax: i16, ay: i16, az: i16) {
+        self.accel = [ax, ay, az];
+        self.manual = true;
+    }
+
     fn write_register(&mut self, reg: u8, value: u8) {
         match reg {
             0x0E => self.xyz_data_cfg = value,
@@ -148,8 +161,10 @@ impl I2cDevice for Fxos8700 {
 
     fn read(&mut self) -> u8 {
         // Advance the activity pose at the start of each accelerometer burst so
-        // every sample_fetch sees fresh, believable motion.
-        if self.current_register == REG_OUT_X_MSB {
+        // every sample_fetch sees fresh, believable motion — unless a manual
+        // sample has been latched via `set_sample`, in which case the live
+        // value must stick rather than be animated away.
+        if self.current_register == REG_OUT_X_MSB && !self.manual {
             self.activity_phase = self.activity_phase.wrapping_add(1);
             self.refresh_pose();
         }
@@ -191,5 +206,35 @@ impl I2cDevice for Fxos8700 {
 
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Burst-reads one accel axis (MSB then LSB) the way the Zephyr driver
+    /// does: write the register pointer, then read the two bytes, then end
+    /// the transaction (mirrors the bmp280 tests' write/read/stop shape,
+    /// adapted to Fxos8700's `register_address_written` pointer-vs-data gate
+    /// which `stop()` resets between transactions).
+    fn read_axis(s: &mut Fxos8700, msb_reg: u8) -> i16 {
+        s.stop();
+        s.write(msb_reg);
+        let hi = s.read() as i16;
+        let lo = s.read() as i16;
+        s.stop();
+        (hi << 8) | (lo & 0xFF)
+    }
+
+    #[test]
+    fn fxos8700_manual_sample_overrides_animation() {
+        let mut s = Fxos8700::new(0x1f);
+        s.set_sample(0x0800, -0x0400, 0x0100);
+        // Burst-read OUT_X_MSB..OUT_X_LSB twice; value must stay put (no animation).
+        let x1 = read_axis(&mut s, 0x01);
+        let x2 = read_axis(&mut s, 0x01);
+        assert_eq!(x1, 0x0800);
+        assert_eq!(x2, 0x0800, "manual value must not animate away");
     }
 }

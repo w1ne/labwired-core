@@ -5,10 +5,10 @@
 // See the LICENSE file in the project root for full license information.
 //
 // KW41Z "cattle activity tag" display firmware. Reads the on-board FXOS8700
-// accelerometer over the Kinetis I2C (I2C1) and renders a live 3-axis activity
-// bar-graph onto a Nokia-5110 (PCD8544) LCD over the Kinetis DSPI (SPI0), with
-// the display's D/C line driven from a GPIOC output. Also echoes the readings
-// over LPUART0 so the boot is observable as text.
+// accelerometer over the Kinetis I2C (I2C1) and renders a cute activity-
+// reactive cow face onto a Nokia-5110 (PCD8544) LCD over the Kinetis DSPI
+// (SPI0), with the display's D/C line driven from a GPIOC output. Also
+// echoes the readings over LPUART0 so the boot is observable as text.
 //
 // Boots on the LabWired KW41Z model unchanged: the behavioural Kinetis I2C /
 // DSPI / GPIO peripherals route exactly the register pokes below, and the
@@ -57,7 +57,10 @@ const GPIOC_PDOR: *mut u32 = 0x400F_F080 as *mut u32;
 const DC_BIT: u32 = 1 << 0;
 
 const LCD_W: usize = 84;
+const LCD_H: usize = 48;
 const LCD_BANKS: usize = 6;
+
+type FrameBuffer = [u8; LCD_BANKS * LCD_W];
 
 #[entry]
 fn main() -> ! {
@@ -84,7 +87,7 @@ fn main() -> ! {
             let ay = ((raw[2] as i16) << 8 | raw[3] as i16) >> 2;
             let az = ((raw[4] as i16) << 8 | raw[5] as i16) >> 2;
 
-            render_activity(ax, ay, az);
+            render_cow(ax, ay, az);
 
             print(b"X=");
             print_dec(ax);
@@ -134,27 +137,313 @@ unsafe fn pcd8544_init() {
     pcd_cmd(0x0C); // display control: normal mode
 }
 
-/// Draw a 3-axis horizontal activity bar-graph. Each axis gets two of the six
-/// banks; the bar length is the axis magnitude scaled to the 84-px width, so an
-/// idle tag shows a tall Z bar (~1 g) and motion lengthens X/Y.
-unsafe fn render_activity(ax: i16, ay: i16, az: i16) {
+// ── Cow face rendering ───────────────────────────────────────────────────────
+//
+// The whole 84x48 panel is composed as an in-RAM framebuffer (6 banks x 84
+// columns, matching the PCD8544's own vertical-byte addressing) and then
+// streamed out in one pass, exactly the way the original bar-graph blitted
+// its bytes. Every shape below is drawn with pure-integer primitives (line /
+// midpoint-ellipse outline / ellipse fill) — deterministic, no floating
+// point, no RNG. The cow is a fixed sprite; only the eyes, the mood banner,
+// and the activity meter change with the sensor reading.
+//
+// At rest the FXOS8700 reports ~0 on X/Y (gravity loads onto Z), so summing
+// the raw X/Y magnitudes IS the deviation from the resting pose — no extra
+// bias subtraction needed. `ACTIVE_THRESHOLD` is the crossover between the
+// "calm" and "active" moods.
+const ACTIVE_THRESHOLD: i32 = 32;
+
+/// Read the FXOS8700 X/Y magnitude and render the cow reacting to it, then
+/// blit the whole framebuffer out over DSPI (same Y=0/X=0 + streamed-bytes
+/// protocol the bar-graph used).
+unsafe fn render_cow(ax: i16, ay: i16, az: i16) {
+    let _ = az; // Z stays ~constant (gravity) at rest; only X/Y drive the mood.
+    let activity = axis_len(ax) + axis_len(ay);
+    let active = activity > ACTIVE_THRESHOLD;
+
+    let mut fb: FrameBuffer = [0u8; LCD_BANKS * LCD_W];
+    let (cx, cy) = draw_static_cow(&mut fb);
+    draw_eyes(&mut fb, cx, cy, active);
+    if active {
+        draw_motion_marks(&mut fb);
+        draw_text(&mut fb, b"MOO!", 40);
+    } else {
+        draw_glyph(&mut fb, &GLYPH_HEART, 3, 40);
+        draw_text(&mut fb, b"MOO :)", 40);
+    }
+    draw_meter(&mut fb, activity);
+
     pcd_cmd(0x40); // Y = 0
     pcd_cmd(0x80); // X = 0
-    let bar = |v: i16| -> usize {
-        let m = (v.unsigned_abs() as usize) >> 4; // 14-bit → ~0..127, then clamp
-        if m > LCD_W {
-            LCD_W
-        } else {
-            m
+    for byte in fb.iter() {
+        pcd_data(*byte);
+    }
+}
+
+/// Scale a raw 14-bit accel axis reading down to the 0..=LCD_W range used for
+/// both the activity meter and the calm/active threshold.
+fn axis_len(v: i16) -> i32 {
+    let m = (v.unsigned_abs() as i32) >> 4;
+    if m > LCD_W as i32 {
+        LCD_W as i32
+    } else {
+        m
+    }
+}
+
+// NOTE: several of these primitives are `#[inline(always)]`. This started as
+// a workaround for a real divergence found while bringing up the cow: with a
+// plain (non-inlined) 5-argument `fn draw_ellipse_outline(fb, cx, cy, rx, ry)`
+// — where the 5th arg (ry) is stack-passed per AAPCS — the *simulator*
+// rendered a blank outline (0 pixels) while the identical logic, built
+// natively for the host, was pixel-perfect. Forcing inlining (so the call
+// site never materializes a stack-passed argument) made the simulator's
+// output match the host reference exactly. Kept on the small hot-path
+// helpers too, both to sidestep the same class of bug and because inlining
+// tiny per-pixel functions is the right call for an embedded framebuffer
+// renderer anyway.
+#[inline(always)]
+fn set_pixel(fb: &mut FrameBuffer, x: i32, y: i32) {
+    if x < 0 || y < 0 || x as usize >= LCD_W || y as usize >= LCD_H {
+        return;
+    }
+    let (xu, yu) = (x as usize, y as usize);
+    fb[(yu / 8) * LCD_W + xu] |= 1 << (yu % 8);
+}
+
+#[inline(always)]
+fn draw_line(fb: &mut FrameBuffer, x0: i32, y0: i32, x1: i32, y1: i32) {
+    let (mut x0, mut y0) = (x0, y0);
+    let dx = (x1 - x0).abs();
+    let sx: i32 = if x0 < x1 { 1 } else { -1 };
+    let dy = -(y1 - y0).abs();
+    let sy: i32 = if y0 < y1 { 1 } else { -1 };
+    let mut err = dx + dy;
+    loop {
+        set_pixel(fb, x0, y0);
+        if x0 == x1 && y0 == y1 {
+            break;
         }
-    };
-    let axes = [bar(ax), bar(ay), bar(az)];
-    for bank in 0..LCD_BANKS {
-        let len = axes[bank / 2];
-        // Solid bar on the top row of the bank's first sub-line.
-        let fill: u8 = if bank % 2 == 0 { 0x7E } else { 0x00 };
-        for x in 0..LCD_W {
-            pcd_data(if x < len { fill } else { 0x00 });
+        let e2 = 2 * err;
+        if e2 >= dy {
+            err += dy;
+            x0 += sx;
+        }
+        if e2 <= dx {
+            err += dx;
+            y0 += sy;
+        }
+    }
+}
+
+#[inline(always)]
+fn plot_ellipse_points(fb: &mut FrameBuffer, cx: i32, cy: i32, px: i32, py: i32) {
+    set_pixel(fb, cx + px, cy + py);
+    set_pixel(fb, cx - px, cy + py);
+    set_pixel(fb, cx + px, cy - py);
+    set_pixel(fb, cx - px, cy - py);
+}
+
+/// Single-pixel midpoint ellipse outline (integer-only Bresenham variant).
+#[inline(always)]
+fn draw_ellipse_outline(fb: &mut FrameBuffer, cx: i32, cy: i32, rx: i32, ry: i32) {
+    let mut x = 0i32;
+    let mut y = ry;
+    let rx2 = rx * rx;
+    let ry2 = ry * ry;
+    let two_rx2 = 2 * rx2;
+    let two_ry2 = 2 * ry2;
+    let mut p = ry2 - rx2 * ry + rx2 / 4;
+    let mut dx = 2 * ry2 * x;
+    let mut dy = 2 * rx2 * y;
+
+    while dx < dy {
+        plot_ellipse_points(fb, cx, cy, x, y);
+        x += 1;
+        dx += two_ry2;
+        if p < 0 {
+            p += dx + ry2;
+        } else {
+            y -= 1;
+            dy -= two_rx2;
+            p += dx - dy + ry2;
+        }
+    }
+    let mut p2 = ry2 * (2 * x + 1) * (2 * x + 1) / 4 + rx2 * (y - 1) * (y - 1) - rx2 * ry2;
+    while y >= 0 {
+        plot_ellipse_points(fb, cx, cy, x, y);
+        y -= 1;
+        dy -= two_rx2;
+        if p2 > 0 {
+            p2 += rx2 - dy;
+        } else {
+            x += 1;
+            dx += two_ry2;
+            p2 += dx - dy + rx2;
+        }
+    }
+}
+
+#[inline(always)]
+fn draw_ellipse_fill(fb: &mut FrameBuffer, cx: i32, cy: i32, rx: i32, ry: i32) {
+    let rx2 = rx * rx;
+    let ry2 = ry * ry;
+    let mut yy = -ry;
+    while yy <= ry {
+        let mut xx = -rx;
+        while xx <= rx {
+            if xx * xx * ry2 + yy * yy * rx2 <= rx2 * ry2 {
+                set_pixel(fb, cx + xx, cy + yy);
+            }
+            xx += 1;
+        }
+        yy += 1;
+    }
+}
+
+/// A tiny 5-row bitmap glyph. `rows` are ASCII art ('#'/'.') so the source is
+/// self-documenting — this is the "hand-authored sprite table" the design
+/// brief asks for, just split per-character instead of one giant bitmap.
+struct Glyph {
+    width: i32,
+    rows: [&'static [u8]; 5],
+}
+
+const GLYPH_SPACE: Glyph = Glyph {
+    width: 3,
+    rows: [b"...", b"...", b"...", b"...", b"..."],
+};
+const GLYPH_M: Glyph = Glyph {
+    width: 5,
+    rows: [b"#...#", b"##.##", b"#.#.#", b"#...#", b"#...#"],
+};
+const GLYPH_O: Glyph = Glyph {
+    width: 5,
+    rows: [b".###.", b"#...#", b"#...#", b"#...#", b".###."],
+};
+const GLYPH_EXCL: Glyph = Glyph {
+    width: 1,
+    rows: [b"#", b"#", b"#", b".", b"#"],
+};
+const GLYPH_COLON: Glyph = Glyph {
+    width: 2,
+    rows: [b"..", b"##", b"..", b"##", b".."],
+};
+const GLYPH_RPAREN: Glyph = Glyph {
+    width: 3,
+    rows: [b"..#", b".#.", b".#.", b".#.", b"..#"],
+};
+const GLYPH_HEART: Glyph = Glyph {
+    width: 5,
+    rows: [b".#.#.", b"#####", b"#####", b".###.", b"..#.."],
+};
+
+fn glyph_for(c: u8) -> &'static Glyph {
+    match c {
+        b'M' => &GLYPH_M,
+        b'O' => &GLYPH_O,
+        b'!' => &GLYPH_EXCL,
+        b':' => &GLYPH_COLON,
+        b')' => &GLYPH_RPAREN,
+        _ => &GLYPH_SPACE,
+    }
+}
+
+fn draw_glyph(fb: &mut FrameBuffer, g: &Glyph, x0: i32, y0: i32) {
+    for (ry, row) in g.rows.iter().enumerate() {
+        for (rx, b) in row.iter().enumerate() {
+            if *b == b'#' {
+                set_pixel(fb, x0 + rx as i32, y0 + ry as i32);
+            }
+        }
+    }
+}
+
+fn text_width(s: &[u8]) -> i32 {
+    let mut w = 0;
+    for &c in s {
+        w += glyph_for(c).width + 1;
+    }
+    if w > 0 {
+        w - 1
+    } else {
+        0
+    }
+}
+
+/// Draw a banner of text centered horizontally, top-left at row `y0`.
+fn draw_text(fb: &mut FrameBuffer, s: &[u8], y0: i32) {
+    let total = text_width(s);
+    let mut x = (LCD_W as i32 - total) / 2;
+    for &c in s {
+        let g = glyph_for(c);
+        draw_glyph(fb, g, x, y0);
+        x += g.width + 1;
+    }
+}
+
+/// The fixed part of the sprite: rounded head, two ears, horn/tuft ticks, a
+/// muzzle oval with nostrils, and two spots. Returns the head center so
+/// eyes can be positioned relative to it. Eyes are drawn separately since
+/// they are the one part of the "face" that changes with mood.
+fn draw_static_cow(fb: &mut FrameBuffer) -> (i32, i32) {
+    let (cx, cy) = (42, 20);
+
+    // Head outline.
+    draw_ellipse_outline(fb, cx, cy, 25, 15);
+
+    // Ears, pushed outward so they only just kiss the head's silhouette.
+    draw_ellipse_outline(fb, cx - 33, cy - 6, 8, 6);
+    draw_ellipse_outline(fb, cx + 33, cy - 6, 8, 6);
+
+    // Horn / tuft ticks above the head's top curve.
+    draw_line(fb, cx - 7, 0, cx - 4, 4);
+    draw_line(fb, cx - 3, 0, cx - 4, 4);
+    draw_line(fb, cx + 7, 0, cx + 4, 4);
+    draw_line(fb, cx + 3, 0, cx + 4, 4);
+
+    // Muzzle: outline oval nested inside the head, with two nostril dots.
+    let (mx, my) = (cx, cy + 9);
+    draw_ellipse_outline(fb, mx, my, 11, 6);
+    draw_ellipse_fill(fb, mx - 5, my - 1, 2, 2);
+    draw_ellipse_fill(fb, mx + 5, my - 1, 2, 2);
+
+    // Two spots, tucked inside the head away from the other features.
+    draw_ellipse_fill(fb, cx - 17, cy + 3, 3, 2);
+    draw_ellipse_fill(fb, cx + 17, cy - 9, 3, 2);
+
+    (cx, cy)
+}
+
+/// Calm = content, half-closed eyes (a short horizontal line each).
+/// Active = wide open eyes (filled circles).
+fn draw_eyes(fb: &mut FrameBuffer, cx: i32, cy: i32, active: bool) {
+    if active {
+        draw_ellipse_fill(fb, cx - 11, cy - 4, 3, 3);
+        draw_ellipse_fill(fb, cx + 11, cy - 4, 3, 3);
+    } else {
+        draw_line(fb, cx - 14, cy - 3, cx - 8, cy - 3);
+        draw_line(fb, cx + 8, cy - 3, cx + 14, cy - 3);
+    }
+}
+
+/// Small "shaken" speed-lines flanking the ears, only shown when active.
+fn draw_motion_marks(fb: &mut FrameBuffer) {
+    for i in 0..3i32 {
+        let yb = 8 + i * 5;
+        draw_line(fb, 2, yb, 8, yb - 2);
+        draw_line(fb, LCD_W as i32 - 3, yb, LCD_W as i32 - 9, yb - 2);
+    }
+}
+
+/// Thin activity meter along the very bottom edge: a full-width track line
+/// plus a fill proportional to `level` (0..=LCD_W).
+fn draw_meter(fb: &mut FrameBuffer, level: i32) {
+    let level = level.clamp(0, LCD_W as i32);
+    for x in 0..LCD_W as i32 {
+        set_pixel(fb, x, 46);
+        if x < level {
+            set_pixel(fb, x, 47);
         }
     }
 }

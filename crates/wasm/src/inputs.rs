@@ -68,9 +68,9 @@ impl WasmSimulator {
         Ok(())
     }
 
-    /// Set the simulated X/Y/Z sample on an ADXL345 attached to an I2C peripheral.
-    /// Looks up the binding in `board_io` by id; the binding must have
-    /// `device_type: "adxl345"`.
+    /// Set the simulated X/Y/Z sample on an ADXL345 or FXOS8700 attached to an
+    /// I2C peripheral. Looks up the binding in `board_io` by id; the binding
+    /// must have `device_type: "adxl345"` or `device_type: "fxos8700"`.
     #[wasm_bindgen]
     pub fn set_i2c_sensor_sample(
         &mut self,
@@ -82,11 +82,18 @@ impl WasmSimulator {
         let binding = self
             .board_io
             .iter()
-            .find(|b| b.id == device_id && b.device_type.as_deref() == Some("adxl345"))
+            .find(|b| {
+                b.id == device_id
+                    && matches!(b.device_type.as_deref(), Some("adxl345") | Some("fxos8700"))
+            })
             .cloned()
             .ok_or_else(|| {
-                JsValue::from_str(&format!("No ADXL345 board_io binding '{}'", device_id))
+                JsValue::from_str(&format!(
+                    "No ADXL345/FXOS8700 board_io binding '{}'",
+                    device_id
+                ))
             })?;
+        let device_type = binding.device_type.as_deref().unwrap_or("adxl345");
 
         let machine = self.machine.as_mut().unwrap();
         let idx = machine
@@ -110,6 +117,27 @@ impl WasmSimulator {
                     binding.peripheral
                 ))
             })?;
+
+        if device_type == "fxos8700" {
+            let address = binding.i2c_address.unwrap_or(0x1f);
+            for device in i2c.attached_devices() {
+                let mut device = device.borrow_mut();
+                if device.address() != address {
+                    continue;
+                }
+                if let Some(sensor) = device.as_any_mut().and_then(|any| {
+                    any.downcast_mut::<labwired_core::peripherals::components::Fxos8700>()
+                }) {
+                    sensor.set_sample(x, y, z);
+                    return Ok(());
+                }
+            }
+
+            return Err(JsValue::from_str(&format!(
+                "FXOS8700 device at address 0x{:02x} not found on '{}'",
+                address, binding.peripheral
+            )));
+        }
 
         let address = binding.i2c_address.unwrap_or(0x53);
         for device in i2c.attached_devices() {

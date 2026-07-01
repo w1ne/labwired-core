@@ -540,6 +540,14 @@ pub struct Spi {
 
     #[serde(skip)]
     pub attached_devices: Vec<Box<dyn SpiDevice>>,
+
+    /// Bus name + shared trace log for the universal logic-analyzer (set via
+    /// `Spi::set_bus_trace`). `None` (default) keeps `attach` unwrapped —
+    /// existing behaviour for every caller that doesn't opt in.
+    #[serde(skip)]
+    bus_name: String,
+    #[serde(skip)]
+    bus_log: Option<crate::bus::bus_trace::BusTraceLog>,
 }
 
 impl core::fmt::Debug for Spi {
@@ -602,7 +610,24 @@ impl Spi {
         self.cr1_mask = Some(mask);
     }
 
+    /// Set the bus name + a clone of the shared bus-trace log (universal logic
+    /// analyzer, see `crate::bus::bus_trace`). Must be called before `attach`
+    /// for an attached device to be wrapped into the log — devices already
+    /// attached are unaffected.
+    pub fn set_bus_trace(&mut self, name: String, log: crate::bus::bus_trace::BusTraceLog) {
+        self.bus_name = name;
+        self.bus_log = Some(log);
+    }
+
     pub fn attach(&mut self, device: Box<dyn SpiDevice>) {
+        let device = match &self.bus_log {
+            Some(log) => Box::new(crate::bus::bus_trace::TracingSpiDevice::new(
+                self.bus_name.clone(),
+                log.clone(),
+                device,
+            )) as Box<dyn SpiDevice>,
+            None => device,
+        };
         self.attached_devices.push(device);
     }
 
