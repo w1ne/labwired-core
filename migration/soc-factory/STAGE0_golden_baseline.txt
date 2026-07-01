@@ -1,0 +1,18 @@
+     Running tests/brom_boot_smoke.rs (target/debug/deps/brom_boot_smoke-4849e2adf216c30b)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+     Running tests/chip_conformance.rs (target/debug/deps/chip_conformance-19ae6716d6d190c1)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+     Running tests/intmatrix_alarm.rs (target/debug/deps/intmatrix_alarm-e98374656f6dc848)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/ir_component_equivalence.rs (target/debug/deps/ir_component_equivalence-842b944c2d047be1)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/register_compliance.rs (target/debug/deps/register_compliance-1927edec77129804)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+     Running tests/xtensa_decode.rs (target/debug/deps/xtensa_decode-772920a8a723afff)
+test result: ok. 99 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/xtensa_exec.rs (target/debug/deps/xtensa_exec-44deddef77085fe0)
+test result: ok. 194 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.08s
+     Running tests/xtensa_lx7.rs (target/debug/deps/xtensa_lx7-d8ceabfd8d971443)
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/xtensa_regs.rs (target/debug/deps/xtensa_regs-d670ddabba9db572)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

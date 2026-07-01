@@ -1,0 +1,3248 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://labwired.com/docs/superpowers/plans/2026-06-29-iolinki-reentrant-device-stack/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>iolinki Reentrant Device Stack Implementation Plan - LabWired Core</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#iolinki-reentrant-device-stack-implementation-plan" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="LabWired Core" class="md-header__button md-logo" aria-label="LabWired Core" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            LabWired Core
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              iolinki Reentrant Device Stack Implementation Plan
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/w1ne/labwired-core" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    w1ne/labwired-core
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../../architecture/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Architecture Overview
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../../golden_reference/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Hardware-Sim Parity
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../../supported_devices/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Hardware Matrix
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../../agents/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  AI Agent Manual
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../getting_started_firmware/" class="md-tabs__link">
+          
+  
+  
+  Tutorials
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../board_onboarding_playbook/" class="md-tabs__link">
+          
+  
+  
+  How-To Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../configuration_reference/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../boards/stm32f103/" class="md-tabs__link">
+          
+  
+  
+  Boards
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../release_strategy/" class="md-tabs__link">
+          
+  
+  
+  Operations
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../architecture_overview/" class="md-tabs__link">
+          
+  
+  
+  Explanation
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="LabWired Core" class="md-nav__button md-logo" aria-label="LabWired Core" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    LabWired Core
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/w1ne/labwired-core" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    w1ne/labwired-core
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../golden_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware-Sim Parity
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../supported_devices/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware Matrix
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AI Agent Manual
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../getting_started_firmware/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Running Firmware
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/i2c_sensor_example/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Simulating Sensors (I2C)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/dma_exti_example/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mastering DMA & Interrupts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../examples/integrated_test_walkthrough/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Integrated Test Walkthrough
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How-To Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How-To Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../board_onboarding_playbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Board Onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../ci_integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CI/CD Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../peripherals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Peripheral Modeling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../hardware_interaction_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware Interaction Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../vscode_debugging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Debugging with VS Code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../gdb_integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GDB Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../debugging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Debugging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../configuration_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration (YAML)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../declarative_registers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Declarative Registers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../cli_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../ci_test_runner/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test Script Schema
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference_client_flows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Client Flows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../isa_coverage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ISA Coverage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../schema_compatibility/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Schema Compatibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../catalog_validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Catalog Validation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../target_support_rubric/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Target Support Rubric
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Boards
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Boards
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../boards/stm32f103/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F103
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../boards/stm32f401/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F401
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../boards/stm32f407/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F407
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../boards/nucleo-l476rg/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NUCLEO-L476RG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../boards/stm32h563/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32H563
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../boards/stm32wba52/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32WBA52
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../boards/nrf52832/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nRF52832
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../boards/nrf52840/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nRF52840
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../boards/rp2040/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RP2040
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../boards/esp32c3/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESP32-C3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../boards/esp32s3/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESP32-S3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../release_strategy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Strategy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../RELEASE_DETERMINISM/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Determinism
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../labwired_audit_protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verification Audit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../supported_devices/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware Matrix
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../coverage_scoreboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coverage Scoreboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../coverage/chip-conformance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Chip Conformance (live)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../coverage/tier1-scoreboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tier-1 Matrix (live)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../safety/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Safety & Guardrails
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../demos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demos
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../case_study_stm32/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Case Study (STM32)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Explanation
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Explanation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../architecture_overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../simulation_protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Simulation Protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#delegated-architecture-inputs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Delegated Architecture Inputs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scope-and-stop-gates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scope And Stop Gates
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#public-api-shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Public API Shape
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#file-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File Structure
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#task-1-red-test-the-public-reentrant-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Task 1: Red-Test The Public Reentrant API
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#task-2-introduce-context-backends-for-device-info-and-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Task 2: Introduce Context Backends For Device Info And Parameters
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#task-3-implement-iolink_device_ctx_t-core-and-delete-singleton-entry-points" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Task 3: Implement iolink_device_ctx_t Core And Delete Singleton Entry Points
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#task-4-inject-isdu-dependencies-through-the-device-context" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Task 4: Inject ISDU Dependencies Through The Device Context
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#task-5-make-data-storage-instance-isolated" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Task 5: Make Data Storage Instance-Isolated
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#task-6-prove-real-master-against-several-real-device-contexts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Task 6: Prove Real Master Against Several Real Device Contexts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#task-7-update-labwired-native-conformance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Task 7: Update LabWired Native Conformance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#task-8-ci-and-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Task 8: CI And Documentation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#self-review" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Self-Review
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="iolinki-reentrant-device-stack-implementation-plan">iolinki Reentrant Device Stack Implementation Plan</h1>
+<blockquote>
+<p><strong>For agentic workers:</strong> REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (<code>- [ ]</code>) syntax for tracking.</p>
+</blockquote>
+<p><strong>Goal:</strong> Redesign the C <code>iolinki</code> device stack so one host process can run several isolated real IO-Link devices against several real C master ports, without fake protocol shims, global singleton state, or prefixed duplicate C builds.</p>
+<p><strong>Architecture:</strong> Follow the proven UDSLib shape: caller-owned protocol contexts, borrowed immutable config, app/transport/storage callbacks with <code>void *user</code>, and no hidden allocation. Replace singleton <code>iolink_*</code> entry points with <code>iolink_device_ctx_t</code> as the public device instance API. Keep <code>iolinki-master</code> separate: master role state stays in <code>iolink_master_port_t</code> / <code>iolink_master_controller_t</code>, while <code>iolinki</code> owns device role state, parameters, object dictionary, events, and Data Storage server behavior.</p>
+<p><strong>Tech Stack:</strong> C99, CMake/CTest, CMocka, existing <code>iolinki</code> C stack, <code>iolinki-master</code> C master, LabWired Rust <code>iolink-native</code> feature.</p>
+<hr />
+<h2 id="delegated-architecture-inputs">Delegated Architecture Inputs</h2>
+<p>Three read-only subagents reviewed the architecture before this plan revision:</p>
+<ul>
+<li><code>iolinki</code> audit: lower engines are already mostly context based: <code>iolink_dll_ctx_t</code>, <code>iolink_isdu_ctx_t</code>, <code>iolink_ds_ctx_t</code>, events, and frame helpers. Singleton blockers are <code>iolink_core.c</code>, <code>device_info.c</code>, <code>params.c</code>, <code>isdu.c</code> Direct Parameter page 2, and DS calls to global params.</li>
+<li>UDSLib audit: best pattern is caller-owned <code>uds_ctx_t</code>, borrowed <code>uds_config_t</code>, caller-provided RX/TX buffers, clock/transport/storage callbacks, <code>void *app_data</code>, optional lock hooks, and role separation. IO-Link should mirror that.</li>
+<li><code>iolinki-master</code> audit: master side is already reentrant. Multi-device conformance should use <code>N</code> <code>iolink_master_port_t</code> ports under one <code>iolink_master_controller_t</code>, paired with <code>N</code> real <code>iolink_device_ctx_t</code> instances.</li>
+</ul>
+<h2 id="scope-and-stop-gates">Scope And Stop Gates</h2>
+<p>Implementation roots:</p>
+<ul>
+<li>Device stack: <code>/home/andrii/projects/labwired/core/.worktrees/iolink-simulator-conformance/third_party/iolinki</code></li>
+<li>Master stack reference: <code>/home/andrii/projects/iolinki-master</code></li>
+<li>LabWired integration: <code>/home/andrii/projects/labwired/core/.worktrees/iolink-simulator-conformance</code></li>
+</ul>
+<p>Before implementation, create a real branch/worktree for the upstream <code>iolinki</code> repo. The submodule in LabWired should be advanced only after device-stack tests pass.</p>
+<p>Stop gates:</p>
+<ul>
+<li>Do not change <code>iolinki-master</code> public behavior to hide device-stack flaws.</li>
+<li>Do not put master ISDU/client state into the device context.</li>
+<li>Do not require consumers to mutate context internals directly. The context may be a complete public struct for static allocation, matching UDSLib, but fields are private by convention and normal consumers use accessor functions.</li>
+<li>Do not preserve the old singleton <code>iolink_*</code> API. There are no external users yet; tests, examples, and LabWired integration should migrate to the reentrant API directly.</li>
+<li>Do not rely on process-per-device, prefixed duplicate builds, or fake Rust devices as the final architecture.</li>
+<li>Do not claim multi-device LabWired conformance until one process runs at least two independent real <code>iolink_device_ctx_t</code> instances with separate PD, ISDU writable tags, device info, events, Direct Parameter page 2, and Data Storage state.</li>
+</ul>
+<h2 id="public-api-shape">Public API Shape</h2>
+<p>Create <code>third_party/iolinki/include/iolinki/device.h</code> with a caller-owned context. Like UDSLib, the struct is complete so embedded users can allocate it on the stack, in static storage, or inside a board/port object. Fields are documented as private; API users should use functions rather than direct field mutation.</p>
+<div class="language-c highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="cp">#ifndef IOLINK_DEVICE_H</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="cp">#define IOLINK_DEVICE_H</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&quot;iolinki/application.h&quot;</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&quot;iolinki/data_storage.h&quot;</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&quot;iolinki/device_info.h&quot;</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&quot;iolinki/dll.h&quot;</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&quot;iolinki/iolink.h&quot;</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&quot;iolinki/params.h&quot;</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&quot;iolinki/phy.h&quot;</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;stdbool.h&gt;</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;stddef.h&gt;</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;stdint.h&gt;</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="k">typedef</span><span class="w"> </span><span class="kt">uint64_t</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="n">iolink_device_time_us_fn</span><span class="p">)(</span><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="n">user</span><span class="p">);</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="k">typedef</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="n">iolink_device_lock_fn</span><span class="p">)(</span><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="n">user</span><span class="p">);</span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="k">typedef</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="n">iolink_device_unlock_fn</span><span class="p">)(</span><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="n">user</span><span class="p">);</span>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="k">typedef</span><span class="w"> </span><span class="k">struct</span>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="p">{</span>
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="w">    </span><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="n">user</span><span class="p">;</span>
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="n">init</span><span class="p">)(</span><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="n">user</span><span class="p">);</span>
+</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="n">set_mode</span><span class="p">)(</span><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="n">user</span><span class="p">,</span><span class="w"> </span><span class="n">iolink_phy_mode_t</span><span class="w"> </span><span class="n">mode</span><span class="p">);</span>
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="n">set_baudrate</span><span class="p">)(</span><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="n">user</span><span class="p">,</span><span class="w"> </span><span class="n">iolink_baudrate_t</span><span class="w"> </span><span class="n">baudrate</span><span class="p">);</span>
+</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="n">send</span><span class="p">)(</span><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="n">user</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="kt">uint8_t</span><span class="o">*</span><span class="w"> </span><span class="n">data</span><span class="p">,</span><span class="w"> </span><span class="kt">size_t</span><span class="w"> </span><span class="n">len</span><span class="p">);</span>
+</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="n">recv_byte</span><span class="p">)(</span><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="n">user</span><span class="p">,</span><span class="w"> </span><span class="kt">uint8_t</span><span class="o">*</span><span class="w"> </span><span class="n">byte</span><span class="p">);</span>
+</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="n">detect_wakeup</span><span class="p">)(</span><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="n">user</span><span class="p">);</span>
+</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="n">set_cq_line</span><span class="p">)(</span><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="n">user</span><span class="p">,</span><span class="w"> </span><span class="kt">uint8_t</span><span class="w"> </span><span class="n">state</span><span class="p">);</span>
+</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="n">get_voltage_mv</span><span class="p">)(</span><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="n">user</span><span class="p">);</span>
+</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a><span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="n">is_short_circuit</span><span class="p">)(</span><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="n">user</span><span class="p">);</span>
+</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a><span class="p">}</span><span class="w"> </span><span class="n">iolink_device_phy_t</span><span class="p">;</span>
+</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a>
+</span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a><span class="k">typedef</span><span class="w"> </span><span class="k">struct</span>
+</span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a><span class="p">{</span>
+</span><span id="__span-0-35"><a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a><span class="w">    </span><span class="n">iolink_device_phy_t</span><span class="w"> </span><span class="n">phy</span><span class="p">;</span>
+</span><span id="__span-0-36"><a id="__codelineno-0-36" name="__codelineno-0-36" href="#__codelineno-0-36"></a><span class="w">    </span><span class="n">iolink_config_t</span><span class="w"> </span><span class="n">stack</span><span class="p">;</span>
+</span><span id="__span-0-37"><a id="__codelineno-0-37" name="__codelineno-0-37" href="#__codelineno-0-37"></a><span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">iolink_app_callbacks_t</span><span class="o">*</span><span class="w"> </span><span class="n">app_callbacks</span><span class="p">;</span>
+</span><span id="__span-0-38"><a id="__codelineno-0-38" name="__codelineno-0-38" href="#__codelineno-0-38"></a><span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">iolink_device_info_t</span><span class="o">*</span><span class="w"> </span><span class="n">device_info</span><span class="p">;</span>
+</span><span id="__span-0-39"><a id="__codelineno-0-39" name="__codelineno-0-39" href="#__codelineno-0-39"></a><span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">iolink_ds_storage_api_t</span><span class="o">*</span><span class="w"> </span><span class="n">ds_storage</span><span class="p">;</span>
+</span><span id="__span-0-40"><a id="__codelineno-0-40" name="__codelineno-0-40" href="#__codelineno-0-40"></a><span class="w">    </span><span class="n">iolink_device_time_us_fn</span><span class="w"> </span><span class="n">time_us</span><span class="p">;</span>
+</span><span id="__span-0-41"><a id="__codelineno-0-41" name="__codelineno-0-41" href="#__codelineno-0-41"></a><span class="w">    </span><span class="n">iolink_device_lock_fn</span><span class="w"> </span><span class="n">lock</span><span class="p">;</span>
+</span><span id="__span-0-42"><a id="__codelineno-0-42" name="__codelineno-0-42" href="#__codelineno-0-42"></a><span class="w">    </span><span class="n">iolink_device_unlock_fn</span><span class="w"> </span><span class="n">unlock</span><span class="p">;</span>
+</span><span id="__span-0-43"><a id="__codelineno-0-43" name="__codelineno-0-43" href="#__codelineno-0-43"></a><span class="w">    </span><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="n">user</span><span class="p">;</span>
+</span><span id="__span-0-44"><a id="__codelineno-0-44" name="__codelineno-0-44" href="#__codelineno-0-44"></a><span class="p">}</span><span class="w"> </span><span class="n">iolink_device_config_t</span><span class="p">;</span>
+</span><span id="__span-0-45"><a id="__codelineno-0-45" name="__codelineno-0-45" href="#__codelineno-0-45"></a>
+</span><span id="__span-0-46"><a id="__codelineno-0-46" name="__codelineno-0-46" href="#__codelineno-0-46"></a><span class="k">typedef</span><span class="w"> </span><span class="k">struct</span>
+</span><span id="__span-0-47"><a id="__codelineno-0-47" name="__codelineno-0-47" href="#__codelineno-0-47"></a><span class="p">{</span>
+</span><span id="__span-0-48"><a id="__codelineno-0-48" name="__codelineno-0-48" href="#__codelineno-0-48"></a><span class="w">    </span><span class="cm">/* Private fields. Allocate this object directly, but use API functions. */</span>
+</span><span id="__span-0-49"><a id="__codelineno-0-49" name="__codelineno-0-49" href="#__codelineno-0-49"></a><span class="w">    </span><span class="n">iolink_dll_ctx_t</span><span class="w"> </span><span class="n">dll</span><span class="p">;</span>
+</span><span id="__span-0-50"><a id="__codelineno-0-50" name="__codelineno-0-50" href="#__codelineno-0-50"></a><span class="w">    </span><span class="n">iolink_config_t</span><span class="w"> </span><span class="n">stack_config</span><span class="p">;</span>
+</span><span id="__span-0-51"><a id="__codelineno-0-51" name="__codelineno-0-51" href="#__codelineno-0-51"></a><span class="w">    </span><span class="n">iolink_device_info_ctx_t</span><span class="w"> </span><span class="n">device_info</span><span class="p">;</span>
+</span><span id="__span-0-52"><a id="__codelineno-0-52" name="__codelineno-0-52" href="#__codelineno-0-52"></a><span class="w">    </span><span class="n">iolink_params_ctx_t</span><span class="w"> </span><span class="n">params</span><span class="p">;</span>
+</span><span id="__span-0-53"><a id="__codelineno-0-53" name="__codelineno-0-53" href="#__codelineno-0-53"></a><span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">iolink_device_config_t</span><span class="o">*</span><span class="w"> </span><span class="n">config</span><span class="p">;</span>
+</span><span id="__span-0-54"><a id="__codelineno-0-54" name="__codelineno-0-54" href="#__codelineno-0-54"></a><span class="w">    </span><span class="n">iolink_reset_handler_t</span><span class="w"> </span><span class="n">reset_handler</span><span class="p">;</span>
+</span><span id="__span-0-55"><a id="__codelineno-0-55" name="__codelineno-0-55" href="#__codelineno-0-55"></a><span class="w">    </span><span class="kt">uint8_t</span><span class="w"> </span><span class="n">direct_param_page2</span><span class="p">[</span><span class="mi">16</span><span class="p">];</span>
+</span><span id="__span-0-56"><a id="__codelineno-0-56" name="__codelineno-0-56" href="#__codelineno-0-56"></a><span class="p">}</span><span class="w"> </span><span class="n">iolink_device_ctx_t</span><span class="p">;</span>
+</span><span id="__span-0-57"><a id="__codelineno-0-57" name="__codelineno-0-57" href="#__codelineno-0-57"></a>
+</span><span id="__span-0-58"><a id="__codelineno-0-58" name="__codelineno-0-58" href="#__codelineno-0-58"></a><span class="kt">size_t</span><span class="w"> </span><span class="nf">iolink_device_ctx_size</span><span class="p">(</span><span class="kt">void</span><span class="p">);</span>
+</span><span id="__span-0-59"><a id="__codelineno-0-59" name="__codelineno-0-59" href="#__codelineno-0-59"></a><span class="kt">int</span><span class="w"> </span><span class="nf">iolink_device_init</span><span class="p">(</span><span class="n">iolink_device_ctx_t</span><span class="o">*</span><span class="w"> </span><span class="n">ctx</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">iolink_device_config_t</span><span class="o">*</span><span class="w"> </span><span class="n">config</span><span class="p">);</span>
+</span><span id="__span-0-60"><a id="__codelineno-0-60" name="__codelineno-0-60" href="#__codelineno-0-60"></a><span class="kt">void</span><span class="w"> </span><span class="nf">iolink_device_process</span><span class="p">(</span><span class="n">iolink_device_ctx_t</span><span class="o">*</span><span class="w"> </span><span class="n">ctx</span><span class="p">);</span>
+</span><span id="__span-0-61"><a id="__codelineno-0-61" name="__codelineno-0-61" href="#__codelineno-0-61"></a><span class="kt">int</span><span class="w"> </span><span class="nf">iolink_device_pd_input_update</span><span class="p">(</span><span class="n">iolink_device_ctx_t</span><span class="o">*</span><span class="w"> </span><span class="n">ctx</span><span class="p">,</span>
+</span><span id="__span-0-62"><a id="__codelineno-0-62" name="__codelineno-0-62" href="#__codelineno-0-62"></a><span class="w">                                  </span><span class="k">const</span><span class="w"> </span><span class="kt">uint8_t</span><span class="o">*</span><span class="w"> </span><span class="n">data</span><span class="p">,</span>
+</span><span id="__span-0-63"><a id="__codelineno-0-63" name="__codelineno-0-63" href="#__codelineno-0-63"></a><span class="w">                                  </span><span class="kt">size_t</span><span class="w"> </span><span class="n">len</span><span class="p">,</span>
+</span><span id="__span-0-64"><a id="__codelineno-0-64" name="__codelineno-0-64" href="#__codelineno-0-64"></a><span class="w">                                  </span><span class="kt">bool</span><span class="w"> </span><span class="n">valid</span><span class="p">);</span>
+</span><span id="__span-0-65"><a id="__codelineno-0-65" name="__codelineno-0-65" href="#__codelineno-0-65"></a><span class="kt">int</span><span class="w"> </span><span class="nf">iolink_device_pd_output_read</span><span class="p">(</span><span class="n">iolink_device_ctx_t</span><span class="o">*</span><span class="w"> </span><span class="n">ctx</span><span class="p">,</span><span class="w"> </span><span class="kt">uint8_t</span><span class="o">*</span><span class="w"> </span><span class="n">data</span><span class="p">,</span><span class="w"> </span><span class="kt">size_t</span><span class="w"> </span><span class="n">len</span><span class="p">);</span>
+</span><span id="__span-0-66"><a id="__codelineno-0-66" name="__codelineno-0-66" href="#__codelineno-0-66"></a><span class="kt">void</span><span class="w"> </span><span class="nf">iolink_device_set_reset_handler</span><span class="p">(</span><span class="n">iolink_device_ctx_t</span><span class="o">*</span><span class="w"> </span><span class="n">ctx</span><span class="p">,</span><span class="w"> </span><span class="n">iolink_reset_handler_t</span><span class="w"> </span><span class="n">handler</span><span class="p">);</span>
+</span><span id="__span-0-67"><a id="__codelineno-0-67" name="__codelineno-0-67" href="#__codelineno-0-67"></a><span class="n">iolink_events_ctx_t</span><span class="o">*</span><span class="w"> </span><span class="nf">iolink_device_get_events_ctx</span><span class="p">(</span><span class="n">iolink_device_ctx_t</span><span class="o">*</span><span class="w"> </span><span class="n">ctx</span><span class="p">);</span>
+</span><span id="__span-0-68"><a id="__codelineno-0-68" name="__codelineno-0-68" href="#__codelineno-0-68"></a><span class="n">iolink_ds_ctx_t</span><span class="o">*</span><span class="w"> </span><span class="nf">iolink_device_get_ds_ctx</span><span class="p">(</span><span class="n">iolink_device_ctx_t</span><span class="o">*</span><span class="w"> </span><span class="n">ctx</span><span class="p">);</span>
+</span><span id="__span-0-69"><a id="__codelineno-0-69" name="__codelineno-0-69" href="#__codelineno-0-69"></a><span class="n">iolink_dll_state_t</span><span class="w"> </span><span class="nf">iolink_device_get_state</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">iolink_device_ctx_t</span><span class="o">*</span><span class="w"> </span><span class="n">ctx</span><span class="p">);</span>
+</span><span id="__span-0-70"><a id="__codelineno-0-70" name="__codelineno-0-70" href="#__codelineno-0-70"></a><span class="n">iolink_phy_mode_t</span><span class="w"> </span><span class="nf">iolink_device_get_phy_mode</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">iolink_device_ctx_t</span><span class="o">*</span><span class="w"> </span><span class="n">ctx</span><span class="p">);</span>
+</span><span id="__span-0-71"><a id="__codelineno-0-71" name="__codelineno-0-71" href="#__codelineno-0-71"></a><span class="n">iolink_baudrate_t</span><span class="w"> </span><span class="nf">iolink_device_get_baudrate</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">iolink_device_ctx_t</span><span class="o">*</span><span class="w"> </span><span class="n">ctx</span><span class="p">);</span>
+</span><span id="__span-0-72"><a id="__codelineno-0-72" name="__codelineno-0-72" href="#__codelineno-0-72"></a><span class="kt">void</span><span class="w"> </span><span class="nf">iolink_device_get_dll_stats</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">iolink_device_ctx_t</span><span class="o">*</span><span class="w"> </span><span class="n">ctx</span><span class="p">,</span><span class="w"> </span><span class="n">iolink_dll_stats_t</span><span class="o">*</span><span class="w"> </span><span class="n">out_stats</span><span class="p">);</span>
+</span><span id="__span-0-73"><a id="__codelineno-0-73" name="__codelineno-0-73" href="#__codelineno-0-73"></a><span class="kt">void</span><span class="w"> </span><span class="nf">iolink_device_set_timing_enforcement</span><span class="p">(</span><span class="n">iolink_device_ctx_t</span><span class="o">*</span><span class="w"> </span><span class="n">ctx</span><span class="p">,</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="n">enable</span><span class="p">);</span>
+</span><span id="__span-0-74"><a id="__codelineno-0-74" name="__codelineno-0-74" href="#__codelineno-0-74"></a><span class="kt">void</span><span class="w"> </span><span class="nf">iolink_device_set_t_ren_limit_us</span><span class="p">(</span><span class="n">iolink_device_ctx_t</span><span class="o">*</span><span class="w"> </span><span class="n">ctx</span><span class="p">,</span><span class="w"> </span><span class="kt">uint32_t</span><span class="w"> </span><span class="n">limit_us</span><span class="p">);</span>
+</span><span id="__span-0-75"><a id="__codelineno-0-75" name="__codelineno-0-75" href="#__codelineno-0-75"></a><span class="n">iolink_m_seq_type_t</span><span class="w"> </span><span class="nf">iolink_device_get_m_seq_type</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">iolink_device_ctx_t</span><span class="o">*</span><span class="w"> </span><span class="n">ctx</span><span class="p">);</span>
+</span><span id="__span-0-76"><a id="__codelineno-0-76" name="__codelineno-0-76" href="#__codelineno-0-76"></a><span class="kt">uint8_t</span><span class="w"> </span><span class="nf">iolink_device_get_pd_in_len</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">iolink_device_ctx_t</span><span class="o">*</span><span class="w"> </span><span class="n">ctx</span><span class="p">);</span>
+</span><span id="__span-0-77"><a id="__codelineno-0-77" name="__codelineno-0-77" href="#__codelineno-0-77"></a><span class="kt">uint8_t</span><span class="w"> </span><span class="nf">iolink_device_get_pd_out_len</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">iolink_device_ctx_t</span><span class="o">*</span><span class="w"> </span><span class="n">ctx</span><span class="p">);</span>
+</span><span id="__span-0-78"><a id="__codelineno-0-78" name="__codelineno-0-78" href="#__codelineno-0-78"></a><span class="kt">int</span><span class="w"> </span><span class="nf">iolink_device_set_pd_length</span><span class="p">(</span><span class="n">iolink_device_ctx_t</span><span class="o">*</span><span class="w"> </span><span class="n">ctx</span><span class="p">,</span>
+</span><span id="__span-0-79"><a id="__codelineno-0-79" name="__codelineno-0-79" href="#__codelineno-0-79"></a><span class="w">                                </span><span class="kt">uint8_t</span><span class="w"> </span><span class="n">pd_in_len</span><span class="p">,</span>
+</span><span id="__span-0-80"><a id="__codelineno-0-80" name="__codelineno-0-80" href="#__codelineno-0-80"></a><span class="w">                                </span><span class="kt">uint8_t</span><span class="w"> </span><span class="n">pd_out_len</span><span class="p">);</span>
+</span><span id="__span-0-81"><a id="__codelineno-0-81" name="__codelineno-0-81" href="#__codelineno-0-81"></a>
+</span><span id="__span-0-82"><a id="__codelineno-0-82" name="__codelineno-0-82" href="#__codelineno-0-82"></a><span class="cp">#endif</span>
+</span></code></pre></div>
+<p>Keep <code>iolink_device_ctx_size()</code> as a compile/runtime sanity helper, but normal C users can simply declare <code>iolink_device_ctx_t device;</code>.</p>
+<p>Remove direct production use of the old <code>iolink_phy_api_t</code> as part of this migration. New multi-instance code must use <code>iolink_device_phy_t</code> so every callback receives its own per-port <code>user</code> pointer. This is the same ownership rule as UDSLib transport callbacks and prevents active-context globals in LabWired.</p>
+<h2 id="file-structure">File Structure</h2>
+<p>Device stack:</p>
+<ul>
+<li>Create <code>third_party/iolinki/include/iolinki/device.h</code>: reentrant public API.</li>
+<li>Modify <code>third_party/iolinki/include/iolinki/iolink.h</code>: remove singleton public API declarations or turn it into a transition include for <code>device.h</code>.</li>
+<li>Modify <code>third_party/iolinki/include/iolinki/phy.h</code>: introduce or document <code>iolink_device_phy_t</code> as the new user-aware transport model.</li>
+<li>Modify <code>third_party/iolinki/include/iolinki/device_info.h</code>: add <code>iolink_device_info_ctx_t</code>.</li>
+<li>Modify <code>third_party/iolinki/include/iolinki/params.h</code>: add <code>iolink_params_ctx_t</code>.</li>
+<li>Modify <code>third_party/iolinki/include/iolinki/isdu.h</code>: replace implicit global dependencies with backend pointers.</li>
+<li>Modify <code>third_party/iolinki/include/iolinki/data_storage.h</code>: add parameter backend callbacks to <code>iolink_ds_ctx_t</code>.</li>
+<li>Modify <code>third_party/iolinki/include/iolinki/dll.h</code>: add owner/dependency pointer only if needed by ISDU/DLL callbacks.</li>
+<li>Modify <code>third_party/iolinki/src/iolink_core.c</code>: implement <code>iolink_device_*</code> and remove global singleton state.</li>
+<li>Modify <code>third_party/iolinki/src/device_info.c</code>: move default identity, app tag, and access locks into context.</li>
+<li>Modify <code>third_party/iolinki/src/params.c</code>: move writable tags/NVM shadow into context.</li>
+<li>Modify <code>third_party/iolinki/src/isdu.c</code>: route params/device-info/Direct Parameter page 2 through the owning context.</li>
+<li>Modify <code>third_party/iolinki/src/data_storage.c</code>: route parameter image build/apply through context callbacks.</li>
+<li>Create <code>third_party/iolinki/tests/test_reentrant_device.c</code>: public API and isolation tests.</li>
+<li>Create <code>third_party/iolinki/tests/test_multi_device_real_master.c</code>: real master against several real device instances.</li>
+</ul>
+<p>LabWired:</p>
+<ul>
+<li>Modify <code>crates/core/native/iolink_conformance.c</code>: use per-port link state and several <code>iolink_device_ctx_t</code> instances.</li>
+<li>Modify <code>crates/core/src/peripherals/components/iolink_master.rs</code>: assert multi-device native conformance.</li>
+<li>Modify <code>crates/core/build.rs</code>: compile new device-stack files and keep <code>_POSIX_C_SOURCE</code> define.</li>
+</ul>
+<h2 id="task-1-red-test-the-public-reentrant-api">Task 1: Red-Test The Public Reentrant API</h2>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>third_party/iolinki/include/iolinki/device.h</code></li>
+<li>Create: <code>third_party/iolinki/tests/test_reentrant_device.c</code></li>
+<li>
+<p>Modify: <code>third_party/iolinki/tests/CMakeLists.txt</code></p>
+</li>
+<li>
+<p>[ ] <strong>Step 1: Write the failing public API test</strong></p>
+</li>
+</ul>
+<p>Create <code>third_party/iolinki/tests/test_reentrant_device.c</code>:</p>
+<div class="language-c highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;setjmp.h&gt;</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;stdarg.h&gt;</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;stddef.h&gt;</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;stdint.h&gt;</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cmocka.h&gt;</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&quot;iolinki/device.h&quot;</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="k">static</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="nf">noop_user</span><span class="p">(</span><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="n">user</span><span class="p">)</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="p">{</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">    </span><span class="p">(</span><span class="kt">void</span><span class="p">)</span><span class="n">user</span><span class="p">;</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="p">}</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="k">static</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">test_device_context_api_initializes_two_configs</span><span class="p">(</span><span class="kt">void</span><span class="o">**</span><span class="w"> </span><span class="n">state</span><span class="p">)</span>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="p">{</span>
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="w">    </span><span class="p">(</span><span class="kt">void</span><span class="p">)</span><span class="n">state</span><span class="p">;</span>
+</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="w">    </span><span class="n">iolink_device_ctx_t</span><span class="w"> </span><span class="n">dev_a</span><span class="p">;</span>
+</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="w">    </span><span class="n">iolink_device_ctx_t</span><span class="w"> </span><span class="n">dev_b</span><span class="p">;</span>
+</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="w">    </span><span class="k">static</span><span class="w"> </span><span class="n">iolink_device_phy_t</span><span class="w"> </span><span class="n">phy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{.</span><span class="n">init</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">noop_user</span><span class="p">};</span>
+</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a><span class="w">    </span><span class="n">iolink_device_config_t</span><span class="w"> </span><span class="n">cfg_a</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a><span class="w">        </span><span class="p">.</span><span class="n">phy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">phy</span><span class="p">,</span>
+</span><span id="__span-1-24"><a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a><span class="w">        </span><span class="p">.</span><span class="n">stack</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-1-25"><a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a><span class="w">            </span><span class="p">.</span><span class="n">m_seq_type</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">IOLINK_M_SEQ_TYPE_1_1</span><span class="p">,</span>
+</span><span id="__span-1-26"><a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a><span class="w">            </span><span class="p">.</span><span class="n">min_cycle_time</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">10U</span><span class="p">,</span>
+</span><span id="__span-1-27"><a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a><span class="w">            </span><span class="p">.</span><span class="n">pd_in_len</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1U</span><span class="p">,</span>
+</span><span id="__span-1-28"><a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a><span class="w">            </span><span class="p">.</span><span class="n">pd_out_len</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0U</span><span class="p">,</span>
+</span><span id="__span-1-29"><a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a><span class="w">            </span><span class="p">.</span><span class="n">t_pd_us</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0U</span><span class="p">,</span>
+</span><span id="__span-1-30"><a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a><span class="w">        </span><span class="p">},</span>
+</span><span id="__span-1-31"><a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a><span class="w">    </span><span class="p">};</span>
+</span><span id="__span-1-32"><a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a><span class="w">    </span><span class="n">iolink_device_config_t</span><span class="w"> </span><span class="n">cfg_b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-1-33"><a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a><span class="w">        </span><span class="p">.</span><span class="n">phy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">phy</span><span class="p">,</span>
+</span><span id="__span-1-34"><a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a><span class="w">        </span><span class="p">.</span><span class="n">stack</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-1-35"><a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a><span class="w">            </span><span class="p">.</span><span class="n">m_seq_type</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">IOLINK_M_SEQ_TYPE_2_1</span><span class="p">,</span>
+</span><span id="__span-1-36"><a id="__codelineno-1-36" name="__codelineno-1-36" href="#__codelineno-1-36"></a><span class="w">            </span><span class="p">.</span><span class="n">min_cycle_time</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">10U</span><span class="p">,</span>
+</span><span id="__span-1-37"><a id="__codelineno-1-37" name="__codelineno-1-37" href="#__codelineno-1-37"></a><span class="w">            </span><span class="p">.</span><span class="n">pd_in_len</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2U</span><span class="p">,</span>
+</span><span id="__span-1-38"><a id="__codelineno-1-38" name="__codelineno-1-38" href="#__codelineno-1-38"></a><span class="w">            </span><span class="p">.</span><span class="n">pd_out_len</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2U</span><span class="p">,</span>
+</span><span id="__span-1-39"><a id="__codelineno-1-39" name="__codelineno-1-39" href="#__codelineno-1-39"></a><span class="w">            </span><span class="p">.</span><span class="n">t_pd_us</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0U</span><span class="p">,</span>
+</span><span id="__span-1-40"><a id="__codelineno-1-40" name="__codelineno-1-40" href="#__codelineno-1-40"></a><span class="w">        </span><span class="p">},</span>
+</span><span id="__span-1-41"><a id="__codelineno-1-41" name="__codelineno-1-41" href="#__codelineno-1-41"></a><span class="w">    </span><span class="p">};</span>
+</span><span id="__span-1-42"><a id="__codelineno-1-42" name="__codelineno-1-42" href="#__codelineno-1-42"></a>
+</span><span id="__span-1-43"><a id="__codelineno-1-43" name="__codelineno-1-43" href="#__codelineno-1-43"></a><span class="w">    </span><span class="n">assert_true</span><span class="p">(</span><span class="n">iolink_device_ctx_size</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="k">sizeof</span><span class="p">(</span><span class="n">iolink_device_ctx_t</span><span class="p">));</span>
+</span><span id="__span-1-44"><a id="__codelineno-1-44" name="__codelineno-1-44" href="#__codelineno-1-44"></a><span class="w">    </span><span class="n">assert_int_equal</span><span class="p">(</span><span class="n">iolink_device_init</span><span class="p">(</span><span class="o">&amp;</span><span class="n">dev_a</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">cfg_a</span><span class="p">),</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
+</span><span id="__span-1-45"><a id="__codelineno-1-45" name="__codelineno-1-45" href="#__codelineno-1-45"></a><span class="w">    </span><span class="n">assert_int_equal</span><span class="p">(</span><span class="n">iolink_device_init</span><span class="p">(</span><span class="o">&amp;</span><span class="n">dev_b</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">cfg_b</span><span class="p">),</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
+</span><span id="__span-1-46"><a id="__codelineno-1-46" name="__codelineno-1-46" href="#__codelineno-1-46"></a><span class="w">    </span><span class="n">assert_int_equal</span><span class="p">(</span><span class="n">iolink_device_get_pd_in_len</span><span class="p">(</span><span class="o">&amp;</span><span class="n">dev_a</span><span class="p">),</span><span class="w"> </span><span class="mi">1U</span><span class="p">);</span>
+</span><span id="__span-1-47"><a id="__codelineno-1-47" name="__codelineno-1-47" href="#__codelineno-1-47"></a><span class="w">    </span><span class="n">assert_int_equal</span><span class="p">(</span><span class="n">iolink_device_get_pd_out_len</span><span class="p">(</span><span class="o">&amp;</span><span class="n">dev_a</span><span class="p">),</span><span class="w"> </span><span class="mi">0U</span><span class="p">);</span>
+</span><span id="__span-1-48"><a id="__codelineno-1-48" name="__codelineno-1-48" href="#__codelineno-1-48"></a><span class="w">    </span><span class="n">assert_int_equal</span><span class="p">(</span><span class="n">iolink_device_get_pd_in_len</span><span class="p">(</span><span class="o">&amp;</span><span class="n">dev_b</span><span class="p">),</span><span class="w"> </span><span class="mi">2U</span><span class="p">);</span>
+</span><span id="__span-1-49"><a id="__codelineno-1-49" name="__codelineno-1-49" href="#__codelineno-1-49"></a><span class="w">    </span><span class="n">assert_int_equal</span><span class="p">(</span><span class="n">iolink_device_get_pd_out_len</span><span class="p">(</span><span class="o">&amp;</span><span class="n">dev_b</span><span class="p">),</span><span class="w"> </span><span class="mi">2U</span><span class="p">);</span>
+</span><span id="__span-1-50"><a id="__codelineno-1-50" name="__codelineno-1-50" href="#__codelineno-1-50"></a><span class="p">}</span>
+</span><span id="__span-1-51"><a id="__codelineno-1-51" name="__codelineno-1-51" href="#__codelineno-1-51"></a>
+</span><span id="__span-1-52"><a id="__codelineno-1-52" name="__codelineno-1-52" href="#__codelineno-1-52"></a><span class="kt">int</span><span class="w"> </span><span class="nf">main</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
+</span><span id="__span-1-53"><a id="__codelineno-1-53" name="__codelineno-1-53" href="#__codelineno-1-53"></a><span class="p">{</span>
+</span><span id="__span-1-54"><a id="__codelineno-1-54" name="__codelineno-1-54" href="#__codelineno-1-54"></a><span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">struct</span><span class="w"> </span><span class="nc">CMUnitTest</span><span class="w"> </span><span class="n">tests</span><span class="p">[]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-1-55"><a id="__codelineno-1-55" name="__codelineno-1-55" href="#__codelineno-1-55"></a><span class="w">        </span><span class="n">cmocka_unit_test</span><span class="p">(</span><span class="n">test_device_context_api_initializes_two_configs</span><span class="p">),</span>
+</span><span id="__span-1-56"><a id="__codelineno-1-56" name="__codelineno-1-56" href="#__codelineno-1-56"></a><span class="w">    </span><span class="p">};</span>
+</span><span id="__span-1-57"><a id="__codelineno-1-57" name="__codelineno-1-57" href="#__codelineno-1-57"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">cmocka_run_group_tests</span><span class="p">(</span><span class="n">tests</span><span class="p">,</span><span class="w"> </span><span class="nb">NULL</span><span class="p">,</span><span class="w"> </span><span class="nb">NULL</span><span class="p">);</span>
+</span><span id="__span-1-58"><a id="__codelineno-1-58" name="__codelineno-1-58" href="#__codelineno-1-58"></a><span class="p">}</span>
+</span></code></pre></div>
+<ul>
+<li>[ ] <strong>Step 2: Register the failing test</strong></li>
+</ul>
+<p>In <code>third_party/iolinki/tests/CMakeLists.txt</code>, add inside <code>if(CMOCKA_FOUND)</code>:</p>
+<div class="language-cmake highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="w">    </span><span class="nb">add_iolink_test</span><span class="p">(</span><span class="s">test_reentrant_device</span><span class="w"> </span><span class="s">test_reentrant_device.c</span><span class="p">)</span>
+</span></code></pre></div>
+<ul>
+<li>[ ] <strong>Step 3: Verify the red failure</strong></li>
+</ul>
+<p>Run:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>cmake<span class="w"> </span>-S<span class="w"> </span>third_party/iolinki<span class="w"> </span>-B<span class="w"> </span>/tmp/iolinki-reentrant-build<span class="w"> </span>-DBUILD_TESTING<span class="o">=</span>ON
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>cmake<span class="w"> </span>--build<span class="w"> </span>/tmp/iolinki-reentrant-build<span class="w"> </span>--target<span class="w"> </span>test_reentrant_device
+</span></code></pre></div>
+<p>Expected: build fails on missing <code>iolinki/device.h</code> or undefined <code>iolink_device_ctx_t</code>.</p>
+<ul>
+<li>[ ] <strong>Step 4: Add header skeleton only</strong></li>
+</ul>
+<p>Create <code>third_party/iolinki/include/iolinki/device.h</code> with the API from the Public API Shape section.</p>
+<ul>
+<li>[ ] <strong>Step 5: Verify the next failure</strong></li>
+</ul>
+<p>Run:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>cmake<span class="w"> </span>--build<span class="w"> </span>/tmp/iolinki-reentrant-build<span class="w"> </span>--target<span class="w"> </span>test_reentrant_device
+</span></code></pre></div>
+<p>Expected: compile or link failure for missing implementation symbols.</p>
+<ul>
+<li>[ ] <strong>Step 6: Commit the red API test</strong></li>
+</ul>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>git<span class="w"> </span>-C<span class="w"> </span>third_party/iolinki<span class="w"> </span>add<span class="w"> </span>include/iolinki/device.h<span class="w"> </span>tests/test_reentrant_device.c<span class="w"> </span>tests/CMakeLists.txt
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>git<span class="w"> </span>-C<span class="w"> </span>third_party/iolinki<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;test: define reentrant device API expectations&quot;</span>
+</span></code></pre></div>
+<h2 id="task-2-introduce-context-backends-for-device-info-and-parameters">Task 2: Introduce Context Backends For Device Info And Parameters</h2>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Modify: <code>third_party/iolinki/include/iolinki/device_info.h</code></li>
+<li>Modify: <code>third_party/iolinki/include/iolinki/params.h</code></li>
+<li>Modify: <code>third_party/iolinki/src/device_info.c</code></li>
+<li>
+<p>Modify: <code>third_party/iolinki/src/params.c</code></p>
+</li>
+<li>
+<p>[ ] <strong>Step 1: Add context types</strong></p>
+</li>
+</ul>
+<p>In <code>device_info.h</code>, add:</p>
+<div class="language-c highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">typedef</span><span class="w"> </span><span class="k">struct</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="p">{</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">iolink_device_info_t</span><span class="o">*</span><span class="w"> </span><span class="n">configured</span><span class="p">;</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">    </span><span class="n">iolink_device_info_t</span><span class="w"> </span><span class="n">defaults</span><span class="p">;</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">    </span><span class="kt">char</span><span class="w"> </span><span class="n">application_tag</span><span class="p">[</span><span class="mi">33</span><span class="p">];</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">    </span><span class="kt">uint16_t</span><span class="w"> </span><span class="n">access_locks</span><span class="p">;</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="p">}</span><span class="w"> </span><span class="n">iolink_device_info_ctx_t</span><span class="p">;</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="kt">void</span><span class="w"> </span><span class="nf">iolink_device_info_ctx_init</span><span class="p">(</span><span class="n">iolink_device_info_ctx_t</span><span class="o">*</span><span class="w"> </span><span class="n">ctx</span><span class="p">,</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">                                 </span><span class="k">const</span><span class="w"> </span><span class="n">iolink_device_info_t</span><span class="o">*</span><span class="w"> </span><span class="n">configured</span><span class="p">);</span>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="k">const</span><span class="w"> </span><span class="n">iolink_device_info_t</span><span class="o">*</span><span class="w"> </span><span class="nf">iolink_device_info_ctx_get</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">iolink_device_info_ctx_t</span><span class="o">*</span><span class="w"> </span><span class="n">ctx</span><span class="p">);</span>
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="kt">int</span><span class="w"> </span><span class="nf">iolink_device_info_ctx_set_application_tag</span><span class="p">(</span><span class="n">iolink_device_info_ctx_t</span><span class="o">*</span><span class="w"> </span><span class="n">ctx</span><span class="p">,</span>
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">                                               </span><span class="k">const</span><span class="w"> </span><span class="kt">char</span><span class="o">*</span><span class="w"> </span><span class="n">tag</span><span class="p">,</span>
+</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="w">                                               </span><span class="kt">uint8_t</span><span class="w"> </span><span class="n">len</span><span class="p">);</span>
+</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="kt">uint16_t</span><span class="w"> </span><span class="nf">iolink_device_info_ctx_get_access_locks</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">iolink_device_info_ctx_t</span><span class="o">*</span><span class="w"> </span><span class="n">ctx</span><span class="p">);</span>
+</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="kt">void</span><span class="w"> </span><span class="nf">iolink_device_info_ctx_set_access_locks</span><span class="p">(</span><span class="n">iolink_device_info_ctx_t</span><span class="o">*</span><span class="w"> </span><span class="n">ctx</span><span class="p">,</span><span class="w"> </span><span class="kt">uint16_t</span><span class="w"> </span><span class="n">locks</span><span class="p">);</span>
+</span></code></pre></div>
+<p>In <code>params.h</code>, add:</p>
+<div class="language-c highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&quot;iolinki/device_info.h&quot;</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="k">typedef</span><span class="w"> </span><span class="k">struct</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="p">{</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">    </span><span class="kt">char</span><span class="w"> </span><span class="n">application_tag</span><span class="p">[</span><span class="mi">33</span><span class="p">];</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">    </span><span class="kt">char</span><span class="w"> </span><span class="n">function_tag</span><span class="p">[</span><span class="mi">33</span><span class="p">];</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">    </span><span class="kt">char</span><span class="w"> </span><span class="n">location_tag</span><span class="p">[</span><span class="mi">33</span><span class="p">];</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="n">application_tag_valid</span><span class="p">;</span>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="n">function_tag_valid</span><span class="p">;</span>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="n">location_tag_valid</span><span class="p">;</span>
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="w">    </span><span class="n">iolink_device_info_ctx_t</span><span class="o">*</span><span class="w"> </span><span class="n">device_info</span><span class="p">;</span>
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="p">}</span><span class="w"> </span><span class="n">iolink_params_ctx_t</span><span class="p">;</span>
+</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>
+</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="kt">void</span><span class="w"> </span><span class="nf">iolink_params_ctx_init</span><span class="p">(</span><span class="n">iolink_params_ctx_t</span><span class="o">*</span><span class="w"> </span><span class="n">ctx</span><span class="p">,</span><span class="w"> </span><span class="n">iolink_device_info_ctx_t</span><span class="o">*</span><span class="w"> </span><span class="n">device_info</span><span class="p">);</span>
+</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="kt">int</span><span class="w"> </span><span class="nf">iolink_params_ctx_get</span><span class="p">(</span><span class="n">iolink_params_ctx_t</span><span class="o">*</span><span class="w"> </span><span class="n">ctx</span><span class="p">,</span>
+</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="w">                          </span><span class="kt">uint16_t</span><span class="w"> </span><span class="n">index</span><span class="p">,</span>
+</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="w">                          </span><span class="kt">uint8_t</span><span class="w"> </span><span class="n">subindex</span><span class="p">,</span>
+</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="w">                          </span><span class="kt">uint8_t</span><span class="o">*</span><span class="w"> </span><span class="n">buffer</span><span class="p">,</span>
+</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="w">                          </span><span class="kt">size_t</span><span class="w"> </span><span class="n">max_len</span><span class="p">);</span>
+</span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a><span class="kt">int</span><span class="w"> </span><span class="nf">iolink_params_ctx_set</span><span class="p">(</span><span class="n">iolink_params_ctx_t</span><span class="o">*</span><span class="w"> </span><span class="n">ctx</span><span class="p">,</span>
+</span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a><span class="w">                          </span><span class="kt">uint16_t</span><span class="w"> </span><span class="n">index</span><span class="p">,</span>
+</span><span id="__span-7-22"><a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a><span class="w">                          </span><span class="kt">uint8_t</span><span class="w"> </span><span class="n">subindex</span><span class="p">,</span>
+</span><span id="__span-7-23"><a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a><span class="w">                          </span><span class="k">const</span><span class="w"> </span><span class="kt">uint8_t</span><span class="o">*</span><span class="w"> </span><span class="n">data</span><span class="p">,</span>
+</span><span id="__span-7-24"><a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a><span class="w">                          </span><span class="kt">size_t</span><span class="w"> </span><span class="n">len</span><span class="p">,</span>
+</span><span id="__span-7-25"><a id="__codelineno-7-25" name="__codelineno-7-25" href="#__codelineno-7-25"></a><span class="w">                          </span><span class="kt">bool</span><span class="w"> </span><span class="n">persist</span><span class="p">);</span>
+</span><span id="__span-7-26"><a id="__codelineno-7-26" name="__codelineno-7-26" href="#__codelineno-7-26"></a><span class="kt">void</span><span class="w"> </span><span class="nf">iolink_params_ctx_factory_reset</span><span class="p">(</span><span class="n">iolink_params_ctx_t</span><span class="o">*</span><span class="w"> </span><span class="n">ctx</span><span class="p">);</span>
+</span></code></pre></div>
+<ul>
+<li>[ ] <strong>Step 2: Implement context functions and remove singleton storage</strong></li>
+</ul>
+<p>Move existing <code>g_device_info</code>, <code>g_default_info</code>, <code>g_app_tag_buffer</code>, and <code>g_nvm_shadow</code> behavior into context functions. Delete the file-static parameter/device-info state after the context tests are green. Any existing tests that call singleton helpers must be migrated to context helpers in this task.</p>
+<p>The new call shape must be:</p>
+<div class="language-c highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">iolink_device_info_ctx_t</span><span class="w"> </span><span class="n">info</span><span class="p">;</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">iolink_params_ctx_t</span><span class="w"> </span><span class="n">params</span><span class="p">;</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="n">iolink_device_info_ctx_init</span><span class="p">(</span><span class="o">&amp;</span><span class="n">info</span><span class="p">,</span><span class="w"> </span><span class="nb">NULL</span><span class="p">);</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="n">iolink_params_ctx_init</span><span class="p">(</span><span class="o">&amp;</span><span class="n">params</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">info</span><span class="p">);</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="kt">int</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">iolink_params_ctx_get</span><span class="p">(</span><span class="o">&amp;</span><span class="n">params</span><span class="p">,</span><span class="w"> </span><span class="n">index</span><span class="p">,</span><span class="w"> </span><span class="n">subindex</span><span class="p">,</span><span class="w"> </span><span class="n">buffer</span><span class="p">,</span><span class="w"> </span><span class="k">sizeof</span><span class="p">(</span><span class="n">buffer</span><span class="p">));</span>
+</span></code></pre></div>
+<ul>
+<li>[ ] <strong>Step 3: Add context isolation assertions</strong></li>
+</ul>
+<p>Extend <code>test_reentrant_device.c</code> with:</p>
+<div class="language-c highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">static</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">test_parameter_contexts_keep_writable_tags_isolated</span><span class="p">(</span><span class="kt">void</span><span class="o">**</span><span class="w"> </span><span class="n">state</span><span class="p">)</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="p">{</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">    </span><span class="p">(</span><span class="kt">void</span><span class="p">)</span><span class="n">state</span><span class="p">;</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">    </span><span class="n">iolink_device_info_ctx_t</span><span class="w"> </span><span class="n">info_a</span><span class="p">;</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">    </span><span class="n">iolink_device_info_ctx_t</span><span class="w"> </span><span class="n">info_b</span><span class="p">;</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">    </span><span class="n">iolink_params_ctx_t</span><span class="w"> </span><span class="n">params_a</span><span class="p">;</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">    </span><span class="n">iolink_params_ctx_t</span><span class="w"> </span><span class="n">params_b</span><span class="p">;</span>
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="kt">uint8_t</span><span class="w"> </span><span class="n">tag_a</span><span class="p">[]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&quot;DeviceA&quot;</span><span class="p">;</span>
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="kt">uint8_t</span><span class="w"> </span><span class="n">tag_b</span><span class="p">[]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&quot;DeviceB&quot;</span><span class="p">;</span>
+</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="w">    </span><span class="kt">uint8_t</span><span class="w"> </span><span class="n">out_a</span><span class="p">[</span><span class="mi">32</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="mi">0</span><span class="p">};</span>
+</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="w">    </span><span class="kt">uint8_t</span><span class="w"> </span><span class="n">out_b</span><span class="p">[</span><span class="mi">32</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="mi">0</span><span class="p">};</span>
+</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a>
+</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="w">    </span><span class="n">iolink_device_info_ctx_init</span><span class="p">(</span><span class="o">&amp;</span><span class="n">info_a</span><span class="p">,</span><span class="w"> </span><span class="nb">NULL</span><span class="p">);</span>
+</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="w">    </span><span class="n">iolink_device_info_ctx_init</span><span class="p">(</span><span class="o">&amp;</span><span class="n">info_b</span><span class="p">,</span><span class="w"> </span><span class="nb">NULL</span><span class="p">);</span>
+</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a><span class="w">    </span><span class="n">iolink_params_ctx_init</span><span class="p">(</span><span class="o">&amp;</span><span class="n">params_a</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">info_a</span><span class="p">);</span>
+</span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="w">    </span><span class="n">iolink_params_ctx_init</span><span class="p">(</span><span class="o">&amp;</span><span class="n">params_b</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">info_b</span><span class="p">);</span>
+</span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a>
+</span><span id="__span-9-18"><a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a><span class="w">    </span><span class="n">assert_int_equal</span><span class="p">(</span><span class="n">iolink_params_ctx_set</span><span class="p">(</span><span class="o">&amp;</span><span class="n">params_a</span><span class="p">,</span><span class="w"> </span><span class="n">IOLINK_IDX_APPLICATION_TAG</span><span class="p">,</span><span class="w"> </span><span class="mi">0U</span><span class="p">,</span>
+</span><span id="__span-9-19"><a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a><span class="w">                                           </span><span class="n">tag_a</span><span class="p">,</span><span class="w"> </span><span class="k">sizeof</span><span class="p">(</span><span class="n">tag_a</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1U</span><span class="p">,</span><span class="w"> </span><span class="nb">true</span><span class="p">),</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
+</span><span id="__span-9-20"><a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a><span class="w">    </span><span class="n">assert_int_equal</span><span class="p">(</span><span class="n">iolink_params_ctx_set</span><span class="p">(</span><span class="o">&amp;</span><span class="n">params_b</span><span class="p">,</span><span class="w"> </span><span class="n">IOLINK_IDX_APPLICATION_TAG</span><span class="p">,</span><span class="w"> </span><span class="mi">0U</span><span class="p">,</span>
+</span><span id="__span-9-21"><a id="__codelineno-9-21" name="__codelineno-9-21" href="#__codelineno-9-21"></a><span class="w">                                           </span><span class="n">tag_b</span><span class="p">,</span><span class="w"> </span><span class="k">sizeof</span><span class="p">(</span><span class="n">tag_b</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1U</span><span class="p">,</span><span class="w"> </span><span class="nb">true</span><span class="p">),</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
+</span><span id="__span-9-22"><a id="__codelineno-9-22" name="__codelineno-9-22" href="#__codelineno-9-22"></a><span class="w">    </span><span class="n">assert_int_equal</span><span class="p">(</span><span class="n">iolink_params_ctx_get</span><span class="p">(</span><span class="o">&amp;</span><span class="n">params_a</span><span class="p">,</span><span class="w"> </span><span class="n">IOLINK_IDX_APPLICATION_TAG</span><span class="p">,</span><span class="w"> </span><span class="mi">0U</span><span class="p">,</span>
+</span><span id="__span-9-23"><a id="__codelineno-9-23" name="__codelineno-9-23" href="#__codelineno-9-23"></a><span class="w">                                           </span><span class="n">out_a</span><span class="p">,</span><span class="w"> </span><span class="k">sizeof</span><span class="p">(</span><span class="n">out_a</span><span class="p">)),</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="p">)(</span><span class="k">sizeof</span><span class="p">(</span><span class="n">tag_a</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1U</span><span class="p">));</span>
+</span><span id="__span-9-24"><a id="__codelineno-9-24" name="__codelineno-9-24" href="#__codelineno-9-24"></a><span class="w">    </span><span class="n">assert_int_equal</span><span class="p">(</span><span class="n">iolink_params_ctx_get</span><span class="p">(</span><span class="o">&amp;</span><span class="n">params_b</span><span class="p">,</span><span class="w"> </span><span class="n">IOLINK_IDX_APPLICATION_TAG</span><span class="p">,</span><span class="w"> </span><span class="mi">0U</span><span class="p">,</span>
+</span><span id="__span-9-25"><a id="__codelineno-9-25" name="__codelineno-9-25" href="#__codelineno-9-25"></a><span class="w">                                           </span><span class="n">out_b</span><span class="p">,</span><span class="w"> </span><span class="k">sizeof</span><span class="p">(</span><span class="n">out_b</span><span class="p">)),</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="p">)(</span><span class="k">sizeof</span><span class="p">(</span><span class="n">tag_b</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1U</span><span class="p">));</span>
+</span><span id="__span-9-26"><a id="__codelineno-9-26" name="__codelineno-9-26" href="#__codelineno-9-26"></a><span class="w">    </span><span class="n">assert_memory_equal</span><span class="p">(</span><span class="n">out_a</span><span class="p">,</span><span class="w"> </span><span class="n">tag_a</span><span class="p">,</span><span class="w"> </span><span class="k">sizeof</span><span class="p">(</span><span class="n">tag_a</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1U</span><span class="p">);</span>
+</span><span id="__span-9-27"><a id="__codelineno-9-27" name="__codelineno-9-27" href="#__codelineno-9-27"></a><span class="w">    </span><span class="n">assert_memory_equal</span><span class="p">(</span><span class="n">out_b</span><span class="p">,</span><span class="w"> </span><span class="n">tag_b</span><span class="p">,</span><span class="w"> </span><span class="k">sizeof</span><span class="p">(</span><span class="n">tag_b</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1U</span><span class="p">);</span>
+</span><span id="__span-9-28"><a id="__codelineno-9-28" name="__codelineno-9-28" href="#__codelineno-9-28"></a><span class="p">}</span>
+</span></code></pre></div>
+<ul>
+<li>[ ] <strong>Step 4: Verify</strong></li>
+</ul>
+<p>Run:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>cmake<span class="w"> </span>--build<span class="w"> </span>/tmp/iolinki-reentrant-build<span class="w"> </span>--target<span class="w"> </span>test_reentrant_device
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>/tmp/iolinki-reentrant-build/tests/test_reentrant_device
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>ctest<span class="w"> </span>--test-dir<span class="w"> </span>/tmp/iolinki-reentrant-build<span class="w"> </span>--output-on-failure
+</span></code></pre></div>
+<p>Expected: context tests pass; any remaining <code>test_reentrant_device</code> failure is only from missing full <code>iolink_device_*</code> implementation if Task 1 skeleton is still linked.</p>
+<ul>
+<li>[ ] <strong>Step 5: Commit</strong></li>
+</ul>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>git<span class="w"> </span>-C<span class="w"> </span>third_party/iolinki<span class="w"> </span>add<span class="w"> </span>include/iolinki/device_info.h<span class="w"> </span>include/iolinki/params.h<span class="w"> </span>src/device_info.c<span class="w"> </span>src/params.c<span class="w"> </span>tests/test_reentrant_device.c
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>git<span class="w"> </span>-C<span class="w"> </span>third_party/iolinki<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;refactor: add isolated device parameter contexts&quot;</span>
+</span></code></pre></div>
+<h2 id="task-3-implement-iolink_device_ctx_t-core-and-delete-singleton-entry-points">Task 3: Implement <code>iolink_device_ctx_t</code> Core And Delete Singleton Entry Points</h2>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Modify: <code>third_party/iolinki/include/iolinki/iolink.h</code></li>
+<li>Modify: <code>third_party/iolinki/include/iolinki/phy.h</code></li>
+<li>Modify: <code>third_party/iolinki/include/iolinki/dll.h</code></li>
+<li>Modify: <code>third_party/iolinki/src/iolink_core.c</code></li>
+<li>
+<p>Test: <code>third_party/iolinki/tests/test_reentrant_device.c</code></p>
+</li>
+<li>
+<p>[ ] <strong>Step 1: Confirm the public context layout compiles</strong></p>
+</li>
+</ul>
+<p>The complete <code>iolink_device_ctx_t</code> layout lives in <code>device.h</code>. Do not create a separate heap-allocated private object. This matches UDSLib's public caller-owned <code>uds_ctx_t</code> style and keeps embedded allocation explicit.</p>
+<p>Add a user-aware PHY pointer to <code>iolink_dll_ctx_t</code>:</p>
+<div class="language-c highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="k">const</span><span class="w"> </span><span class="n">iolink_device_phy_t</span><span class="o">*</span><span class="w"> </span><span class="n">device_phy</span><span class="p">;</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="kt">uint64_t</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="n">time_us</span><span class="p">)(</span><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="n">user</span><span class="p">);</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="n">time_user</span><span class="p">;</span>
+</span></code></pre></div>
+<p>Remove old <code>const iolink_phy_api_t* phy</code> use from the core once DLL calls use <code>device_phy</code>.</p>
+<ul>
+<li>[ ] <strong>Step 2: Implement instance init</strong></li>
+</ul>
+<p>In <code>iolink_core.c</code>, include <code>device.h</code> and implement:</p>
+<div class="language-c highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="kt">size_t</span><span class="w"> </span><span class="nf">iolink_device_ctx_size</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="p">{</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="k">sizeof</span><span class="p">(</span><span class="n">iolink_device_ctx_t</span><span class="p">);</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="p">}</span>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="kt">int</span><span class="w"> </span><span class="nf">iolink_device_init</span><span class="p">(</span><span class="n">iolink_device_ctx_t</span><span class="o">*</span><span class="w"> </span><span class="n">ctx</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">iolink_device_config_t</span><span class="o">*</span><span class="w"> </span><span class="n">config</span><span class="p">)</span>
+</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="p">{</span>
+</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="w">    </span><span class="k">if</span><span class="p">((</span><span class="n">ctx</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="nb">NULL</span><span class="p">)</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="p">(</span><span class="n">config</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="nb">NULL</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="mi">-1</span><span class="p">;</span>
+</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a><span class="w">    </span><span class="p">}</span>
+</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="w">    </span><span class="n">memset</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="k">sizeof</span><span class="p">(</span><span class="o">*</span><span class="n">ctx</span><span class="p">));</span>
+</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a><span class="w">    </span><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">config</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">config</span><span class="p">;</span>
+</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="w">    </span><span class="n">memcpy</span><span class="p">(</span><span class="o">&amp;</span><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">stack_config</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">config</span><span class="o">-&gt;</span><span class="n">stack</span><span class="p">,</span><span class="w"> </span><span class="k">sizeof</span><span class="p">(</span><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">stack_config</span><span class="p">));</span>
+</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a><span class="w">    </span><span class="n">iolink_device_info_ctx_init</span><span class="p">(</span><span class="o">&amp;</span><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">device_info</span><span class="p">,</span><span class="w"> </span><span class="n">config</span><span class="o">-&gt;</span><span class="n">device_info</span><span class="p">);</span>
+</span><span id="__span-13-15"><a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a><span class="w">    </span><span class="n">iolink_params_ctx_init</span><span class="p">(</span><span class="o">&amp;</span><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">params</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">device_info</span><span class="p">);</span>
+</span><span id="__span-13-16"><a id="__codelineno-13-16" name="__codelineno-13-16" href="#__codelineno-13-16"></a><span class="w">    </span><span class="k">if</span><span class="p">(</span><span class="n">config</span><span class="o">-&gt;</span><span class="n">phy</span><span class="p">.</span><span class="n">init</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="nb">NULL</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-13-17"><a id="__codelineno-13-17" name="__codelineno-13-17" href="#__codelineno-13-17"></a><span class="w">        </span><span class="kt">int</span><span class="w"> </span><span class="n">err</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">config</span><span class="o">-&gt;</span><span class="n">phy</span><span class="p">.</span><span class="n">init</span><span class="p">(</span><span class="n">config</span><span class="o">-&gt;</span><span class="n">phy</span><span class="p">.</span><span class="n">user</span><span class="p">);</span>
+</span><span id="__span-13-18"><a id="__codelineno-13-18" name="__codelineno-13-18" href="#__codelineno-13-18"></a><span class="w">        </span><span class="k">if</span><span class="p">(</span><span class="n">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-13-19"><a id="__codelineno-13-19" name="__codelineno-13-19" href="#__codelineno-13-19"></a><span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="n">err</span><span class="p">;</span>
+</span><span id="__span-13-20"><a id="__codelineno-13-20" name="__codelineno-13-20" href="#__codelineno-13-20"></a><span class="w">        </span><span class="p">}</span>
+</span><span id="__span-13-21"><a id="__codelineno-13-21" name="__codelineno-13-21" href="#__codelineno-13-21"></a><span class="w">    </span><span class="p">}</span>
+</span><span id="__span-13-22"><a id="__codelineno-13-22" name="__codelineno-13-22" href="#__codelineno-13-22"></a><span class="w">    </span><span class="n">iolink_dll_init_device_phy</span><span class="p">(</span><span class="o">&amp;</span><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">dll</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">config</span><span class="o">-&gt;</span><span class="n">phy</span><span class="p">);</span>
+</span><span id="__span-13-23"><a id="__codelineno-13-23" name="__codelineno-13-23" href="#__codelineno-13-23"></a><span class="w">    </span><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">dll</span><span class="p">.</span><span class="n">owner</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ctx</span><span class="p">;</span>
+</span><span id="__span-13-24"><a id="__codelineno-13-24" name="__codelineno-13-24" href="#__codelineno-13-24"></a><span class="w">    </span><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">dll</span><span class="p">.</span><span class="n">time_us</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">config</span><span class="o">-&gt;</span><span class="n">time_us</span><span class="p">;</span>
+</span><span id="__span-13-25"><a id="__codelineno-13-25" name="__codelineno-13-25" href="#__codelineno-13-25"></a><span class="w">    </span><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">dll</span><span class="p">.</span><span class="n">time_user</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">config</span><span class="o">-&gt;</span><span class="n">user</span><span class="p">;</span>
+</span><span id="__span-13-26"><a id="__codelineno-13-26" name="__codelineno-13-26" href="#__codelineno-13-26"></a><span class="w">    </span><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">dll</span><span class="p">.</span><span class="n">m_seq_type</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="kt">uint8_t</span><span class="p">)</span><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">stack_config</span><span class="p">.</span><span class="n">m_seq_type</span><span class="p">;</span>
+</span><span id="__span-13-27"><a id="__codelineno-13-27" name="__codelineno-13-27" href="#__codelineno-13-27"></a><span class="w">    </span><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">dll</span><span class="p">.</span><span class="n">pd_in_len</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">stack_config</span><span class="p">.</span><span class="n">pd_in_len</span><span class="p">;</span>
+</span><span id="__span-13-28"><a id="__codelineno-13-28" name="__codelineno-13-28" href="#__codelineno-13-28"></a><span class="w">    </span><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">dll</span><span class="p">.</span><span class="n">pd_out_len</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">stack_config</span><span class="p">.</span><span class="n">pd_out_len</span><span class="p">;</span>
+</span><span id="__span-13-29"><a id="__codelineno-13-29" name="__codelineno-13-29" href="#__codelineno-13-29"></a><span class="w">    </span><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">dll</span><span class="p">.</span><span class="n">min_cycle_time_us</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="kt">uint32_t</span><span class="p">)</span><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">stack_config</span><span class="p">.</span><span class="n">min_cycle_time</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">100U</span><span class="p">;</span>
+</span><span id="__span-13-30"><a id="__codelineno-13-30" name="__codelineno-13-30" href="#__codelineno-13-30"></a><span class="w">    </span><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">dll</span><span class="p">.</span><span class="n">t_pd_delay_us</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">stack_config</span><span class="p">.</span><span class="n">t_pd_us</span><span class="p">;</span>
+</span><span id="__span-13-31"><a id="__codelineno-13-31" name="__codelineno-13-31" href="#__codelineno-13-31"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+</span><span id="__span-13-32"><a id="__codelineno-13-32" name="__codelineno-13-32" href="#__codelineno-13-32"></a><span class="p">}</span>
+</span></code></pre></div>
+<ul>
+<li>[ ] <strong>Step 3: Replace DLL PHY calls with user-aware calls</strong></li>
+</ul>
+<p>In <code>dll.c</code>, replace direct calls like:</p>
+<div class="language-c highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">phy</span><span class="o">-&gt;</span><span class="n">send</span><span class="p">(</span><span class="n">data</span><span class="p">,</span><span class="w"> </span><span class="n">len</span><span class="p">);</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">phy</span><span class="o">-&gt;</span><span class="n">recv_byte</span><span class="p">(</span><span class="o">&amp;</span><span class="n">byte</span><span class="p">);</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">phy</span><span class="o">-&gt;</span><span class="n">detect_wakeup</span><span class="p">();</span>
+</span></code></pre></div>
+<p>with helpers:</p>
+<div class="language-c highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="k">static</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="nf">dll_phy_send</span><span class="p">(</span><span class="n">iolink_dll_ctx_t</span><span class="o">*</span><span class="w"> </span><span class="n">ctx</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="kt">uint8_t</span><span class="o">*</span><span class="w"> </span><span class="n">data</span><span class="p">,</span><span class="w"> </span><span class="kt">size_t</span><span class="w"> </span><span class="n">len</span><span class="p">)</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="p">{</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">    </span><span class="k">if</span><span class="p">((</span><span class="n">ctx</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="nb">NULL</span><span class="p">)</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="p">(</span><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">device_phy</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="nb">NULL</span><span class="p">)</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="p">(</span><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">device_phy</span><span class="o">-&gt;</span><span class="n">send</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="nb">NULL</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="mi">-1</span><span class="p">;</span>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="w">    </span><span class="p">}</span>
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">device_phy</span><span class="o">-&gt;</span><span class="n">send</span><span class="p">(</span><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">device_phy</span><span class="o">-&gt;</span><span class="n">user</span><span class="p">,</span><span class="w"> </span><span class="n">data</span><span class="p">,</span><span class="w"> </span><span class="n">len</span><span class="p">);</span>
+</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="p">}</span>
+</span></code></pre></div>
+<p>Create equivalent helpers for <code>recv_byte</code>, <code>detect_wakeup</code>, <code>set_mode</code>, <code>set_baudrate</code>, diagnostics, and SIO line control.</p>
+<p>Also replace direct <code>iolink_time_get_us()</code> calls in <code>dll.c</code> with:</p>
+<div class="language-c highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="k">static</span><span class="w"> </span><span class="kt">uint64_t</span><span class="w"> </span><span class="nf">dll_time_us</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">iolink_dll_ctx_t</span><span class="o">*</span><span class="w"> </span><span class="n">ctx</span><span class="p">)</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="p">{</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">    </span><span class="k">if</span><span class="p">((</span><span class="n">ctx</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="nb">NULL</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="p">(</span><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">time_us</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="nb">NULL</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">time_us</span><span class="p">(</span><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">time_user</span><span class="p">);</span>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="w">    </span><span class="p">}</span>
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">iolink_time_get_us</span><span class="p">();</span>
+</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="p">}</span>
+</span></code></pre></div>
+<p>Use optional <code>config-&gt;lock(config-&gt;user)</code> / <code>config-&gt;unlock(config-&gt;user)</code> around public <code>iolink_device_*</code> operations that can race with RX/tick callers. If no lock hooks are provided, the stack remains single-threaded/cooperative as today.</p>
+<ul>
+<li>[ ] <strong>Step 4: Implement instance methods and remove singleton API</strong></li>
+</ul>
+<p>Move current <code>g_dll_ctx</code> behavior to <code>ctx-&gt;dll</code>. Delete the file-static globals:</p>
+<div class="language-c highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="n">g_dll_ctx</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="n">g_config</span>
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="n">g_reset_handler</span>
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="n">g_app_callbacks</span>
+</span></code></pre></div>
+<p>Remove singleton functions from <code>iolink.h</code> and migrate tests/examples to the <code>iolink_device_*</code> equivalents. If keeping source compatibility temporarily is useful during the same task, keep static <code>static</code> helper functions inside tests only; do not leave public singleton APIs in the library.</p>
+<ul>
+<li>[ ] <strong>Step 5: Verify</strong></li>
+</ul>
+<p>Run:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>cmake<span class="w"> </span>--build<span class="w"> </span>/tmp/iolinki-reentrant-build<span class="w"> </span>--target<span class="w"> </span>test_reentrant_device
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>/tmp/iolinki-reentrant-build/tests/test_reentrant_device
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>ctest<span class="w"> </span>--test-dir<span class="w"> </span>/tmp/iolinki-reentrant-build<span class="w"> </span>--output-on-failure
+</span></code></pre></div>
+<p>Expected: public API test and migrated suite pass.</p>
+<ul>
+<li>[ ] <strong>Step 6: Commit</strong></li>
+</ul>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>git<span class="w"> </span>-C<span class="w"> </span>third_party/iolinki<span class="w"> </span>add<span class="w"> </span>include/iolinki/device.h<span class="w"> </span>include/iolinki/iolink.h<span class="w"> </span>include/iolinki/phy.h<span class="w"> </span>include/iolinki/dll.h<span class="w"> </span>src/dll.c<span class="w"> </span>src/iolink_core.c<span class="w"> </span>tests/test_reentrant_device.c
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>git<span class="w"> </span>-C<span class="w"> </span>third_party/iolinki<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;feat: add caller-owned IO-Link device contexts&quot;</span>
+</span></code></pre></div>
+<h2 id="task-4-inject-isdu-dependencies-through-the-device-context">Task 4: Inject ISDU Dependencies Through The Device Context</h2>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Modify: <code>third_party/iolinki/include/iolinki/isdu.h</code></li>
+<li>Modify: <code>third_party/iolinki/src/dll.c</code></li>
+<li>Modify: <code>third_party/iolinki/src/isdu.c</code></li>
+<li>Modify: <code>third_party/iolinki/src/iolink_core.c</code></li>
+<li>
+<p>Test: <code>third_party/iolinki/tests/test_reentrant_device.c</code></p>
+</li>
+<li>
+<p>[ ] <strong>Step 1: Add ISDU backend pointers</strong></p>
+</li>
+</ul>
+<p>In <code>iolink_isdu_ctx_t</code>, replace global access assumptions with:</p>
+<div class="language-c highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="n">device_ctx</span><span class="p">;</span>
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="n">params_ctx</span><span class="p">;</span>
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="n">device_info_ctx</span><span class="p">;</span>
+</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="kt">uint8_t</span><span class="o">*</span><span class="w"> </span><span class="n">direct_param_page2</span><span class="p">;</span>
+</span></code></pre></div>
+<p>Set these in <code>iolink_device_init</code>:</p>
+<div class="language-c highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">dll</span><span class="p">.</span><span class="n">isdu</span><span class="p">.</span><span class="n">device_ctx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ctx</span><span class="p">;</span>
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">dll</span><span class="p">.</span><span class="n">isdu</span><span class="p">.</span><span class="n">params_ctx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">&amp;</span><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">params</span><span class="p">;</span>
+</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">dll</span><span class="p">.</span><span class="n">isdu</span><span class="p">.</span><span class="n">device_info_ctx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">&amp;</span><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">device_info</span><span class="p">;</span>
+</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">dll</span><span class="p">.</span><span class="n">isdu</span><span class="p">.</span><span class="n">direct_param_page2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">direct_param_page2</span><span class="p">;</span>
+</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">dll</span><span class="p">.</span><span class="n">isdu</span><span class="p">.</span><span class="n">event_ctx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">&amp;</span><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">dll</span><span class="p">.</span><span class="n">events</span><span class="p">;</span>
+</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">dll</span><span class="p">.</span><span class="n">isdu</span><span class="p">.</span><span class="n">ds_ctx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">&amp;</span><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">dll</span><span class="p">.</span><span class="n">ds</span><span class="p">;</span>
+</span><span id="__span-21-7"><a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">dll</span><span class="p">.</span><span class="n">isdu</span><span class="p">.</span><span class="n">dll_ctx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">&amp;</span><span class="n">ctx</span><span class="o">-&gt;</span><span class="n">dll</span><span class="p">;</span>
+</span></code></pre></div>
+<ul>
+<li>[ ] <strong>Step 2: Replace global calls in ISDU</strong></li>
+</ul>
+<p>In <code>isdu.c</code>, replace:</p>
+<div class="language-c highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="n">iolink_params_get</span>
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="n">iolink_params_set</span>
+</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="n">iolink_params_factory_reset</span>
+</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="n">iolink_device_info_get</span>
+</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a><span class="n">iolink_device_info_get_access_locks</span>
+</span><span id="__span-22-6"><a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a><span class="n">iolink_device_info_set_access_locks</span>
+</span><span id="__span-22-7"><a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a><span class="n">g_direct_param_page2</span>
+</span></code></pre></div>
+<p>with context-backed calls using <code>ctx-&gt;params_ctx</code>, <code>ctx-&gt;device_info_ctx</code>, and <code>ctx-&gt;direct_param_page2</code>.</p>
+<ul>
+<li>[ ] <strong>Step 3: Add Direct Parameter page 2 isolation assertion</strong></li>
+</ul>
+<p>Add a test that writes different Direct Parameter page 2 data through two ISDU contexts and verifies the buffers differ. Use the existing ISDU direct parameter helpers in <code>isdu.c</code>; if no public helper exists, test through an ISDU write/read transaction in <code>test_reentrant_device.c</code>.</p>
+<ul>
+<li>[ ] <strong>Step 4: Verify</strong></li>
+</ul>
+<p>Run:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>cmake<span class="w"> </span>--build<span class="w"> </span>/tmp/iolinki-reentrant-build<span class="w"> </span>--target<span class="w"> </span>test_reentrant_device
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>/tmp/iolinki-reentrant-build/tests/test_reentrant_device
+</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a>ctest<span class="w"> </span>--test-dir<span class="w"> </span>/tmp/iolinki-reentrant-build<span class="w"> </span>--output-on-failure
+</span></code></pre></div>
+<p>Expected: context isolation and migrated tests pass.</p>
+<ul>
+<li>[ ] <strong>Step 5: Commit</strong></li>
+</ul>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>git<span class="w"> </span>-C<span class="w"> </span>third_party/iolinki<span class="w"> </span>add<span class="w"> </span>include/iolinki/isdu.h<span class="w"> </span>src/dll.c<span class="w"> </span>src/isdu.c<span class="w"> </span>src/iolink_core.c<span class="w"> </span>tests/test_reentrant_device.c
+</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>git<span class="w"> </span>-C<span class="w"> </span>third_party/iolinki<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;refactor: inject ISDU device dependencies&quot;</span>
+</span></code></pre></div>
+<h2 id="task-5-make-data-storage-instance-isolated">Task 5: Make Data Storage Instance-Isolated</h2>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Modify: <code>third_party/iolinki/include/iolinki/data_storage.h</code></li>
+<li>Modify: <code>third_party/iolinki/src/data_storage.c</code></li>
+<li>Modify: <code>third_party/iolinki/src/iolink_core.c</code></li>
+<li>
+<p>Test: <code>third_party/iolinki/tests/test_reentrant_device.c</code></p>
+</li>
+<li>
+<p>[ ] <strong>Step 1: Add DS parameter backend</strong></p>
+</li>
+</ul>
+<p>In <code>data_storage.h</code>, add:</p>
+<div class="language-c highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="k">typedef</span><span class="w"> </span><span class="k">struct</span>
+</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="p">{</span>
+</span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="n">get</span><span class="p">)(</span><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="n">user</span><span class="p">,</span><span class="w"> </span><span class="kt">uint16_t</span><span class="w"> </span><span class="n">index</span><span class="p">,</span><span class="w"> </span><span class="kt">uint8_t</span><span class="w"> </span><span class="n">subindex</span><span class="p">,</span><span class="w"> </span><span class="kt">uint8_t</span><span class="o">*</span><span class="w"> </span><span class="n">buffer</span><span class="p">,</span><span class="w"> </span><span class="kt">size_t</span><span class="w"> </span><span class="n">max_len</span><span class="p">);</span>
+</span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="n">set</span><span class="p">)(</span><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="n">user</span><span class="p">,</span>
+</span><span id="__span-25-5"><a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a><span class="w">               </span><span class="kt">uint16_t</span><span class="w"> </span><span class="n">index</span><span class="p">,</span>
+</span><span id="__span-25-6"><a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a><span class="w">               </span><span class="kt">uint8_t</span><span class="w"> </span><span class="n">subindex</span><span class="p">,</span>
+</span><span id="__span-25-7"><a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a><span class="w">               </span><span class="k">const</span><span class="w"> </span><span class="kt">uint8_t</span><span class="o">*</span><span class="w"> </span><span class="n">data</span><span class="p">,</span>
+</span><span id="__span-25-8"><a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a><span class="w">               </span><span class="kt">size_t</span><span class="w"> </span><span class="n">len</span><span class="p">,</span>
+</span><span id="__span-25-9"><a id="__codelineno-25-9" name="__codelineno-25-9" href="#__codelineno-25-9"></a><span class="w">               </span><span class="kt">bool</span><span class="w"> </span><span class="n">persist</span><span class="p">);</span>
+</span><span id="__span-25-10"><a id="__codelineno-25-10" name="__codelineno-25-10" href="#__codelineno-25-10"></a><span class="w">    </span><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="n">user</span><span class="p">;</span>
+</span><span id="__span-25-11"><a id="__codelineno-25-11" name="__codelineno-25-11" href="#__codelineno-25-11"></a><span class="p">}</span><span class="w"> </span><span class="n">iolink_ds_params_api_t</span><span class="p">;</span>
+</span></code></pre></div>
+<p>Add <code>iolink_ds_params_api_t params;</code> to <code>iolink_ds_ctx_t</code> and:</p>
+<div class="language-c highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="kt">void</span><span class="w"> </span><span class="nf">iolink_ds_set_params_api</span><span class="p">(</span><span class="n">iolink_ds_ctx_t</span><span class="o">*</span><span class="w"> </span><span class="n">ctx</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">iolink_ds_params_api_t</span><span class="o">*</span><span class="w"> </span><span class="n">params</span><span class="p">);</span>
+</span></code></pre></div>
+<ul>
+<li>[ ] <strong>Step 2: Wire device params into DS</strong></li>
+</ul>
+<p>In <code>iolink_core.c</code>, create adapters from <code>iolink_params_ctx_get/set</code> and call <code>iolink_ds_set_params_api(&amp;ctx-&gt;dll.ds, &amp;api)</code> from <code>iolink_device_init</code>.</p>
+<ul>
+<li>[ ] <strong>Step 3: Replace global params in DS</strong></li>
+</ul>
+<p>In <code>data_storage.c</code>, replace <code>iolink_params_get/set</code> with <code>ctx-&gt;params.get/set</code>. Missing callbacks return <code>-1</code>.</p>
+<ul>
+<li>[ ] <strong>Step 4: Add DS isolation test</strong></li>
+</ul>
+<p>In <code>test_reentrant_device.c</code>, initialize two devices, set different Application Tags, call <code>iolink_ds_get_image(iolink_device_get_ds_ctx(dev), &amp;len)</code> for each, and assert the images differ.</p>
+<ul>
+<li>[ ] <strong>Step 5: Verify and commit</strong></li>
+</ul>
+<p>Run:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>cmake<span class="w"> </span>--build<span class="w"> </span>/tmp/iolinki-reentrant-build<span class="w"> </span>--target<span class="w"> </span>test_reentrant_device
+</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>/tmp/iolinki-reentrant-build/tests/test_reentrant_device
+</span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>ctest<span class="w"> </span>--test-dir<span class="w"> </span>/tmp/iolinki-reentrant-build<span class="w"> </span>--output-on-failure
+</span></code></pre></div>
+<p>Then:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>git<span class="w"> </span>-C<span class="w"> </span>third_party/iolinki<span class="w"> </span>add<span class="w"> </span>include/iolinki/data_storage.h<span class="w"> </span>src/data_storage.c<span class="w"> </span>src/iolink_core.c<span class="w"> </span>tests/test_reentrant_device.c
+</span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>git<span class="w"> </span>-C<span class="w"> </span>third_party/iolinki<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;refactor: isolate data storage per device context&quot;</span>
+</span></code></pre></div>
+<h2 id="task-6-prove-real-master-against-several-real-device-contexts">Task 6: Prove Real Master Against Several Real Device Contexts</h2>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>third_party/iolinki/tests/test_multi_device_real_master.c</code></li>
+<li>
+<p>Modify: <code>third_party/iolinki/tests/CMakeLists.txt</code></p>
+</li>
+<li>
+<p>[ ] <strong>Step 1: Add real multi-device conformance harness</strong></p>
+</li>
+</ul>
+<p>Create a harness with per-port state:</p>
+<div class="language-c highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="k">typedef</span><span class="w"> </span><span class="k">struct</span>
+</span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="p">{</span>
+</span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="w">    </span><span class="n">link_queue_t</span><span class="w"> </span><span class="n">master_to_device</span><span class="p">;</span>
+</span><span id="__span-29-4"><a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="w">    </span><span class="n">link_queue_t</span><span class="w"> </span><span class="n">device_to_master</span><span class="p">;</span>
+</span><span id="__span-29-5"><a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a><span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">wakeup_pending</span><span class="p">;</span>
+</span><span id="__span-29-6"><a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a><span class="w">    </span><span class="kt">uint8_t</span><span class="w"> </span><span class="n">observed_pd_out</span><span class="p">[</span><span class="mi">32</span><span class="p">];</span>
+</span><span id="__span-29-7"><a id="__codelineno-29-7" name="__codelineno-29-7" href="#__codelineno-29-7"></a><span class="w">    </span><span class="kt">uint8_t</span><span class="w"> </span><span class="n">observed_pd_out_len</span><span class="p">;</span>
+</span><span id="__span-29-8"><a id="__codelineno-29-8" name="__codelineno-29-8" href="#__codelineno-29-8"></a><span class="w">    </span><span class="kt">uint8_t</span><span class="w"> </span><span class="n">device_ctx_storage</span><span class="p">[</span><span class="mi">512</span><span class="p">];</span>
+</span><span id="__span-29-9"><a id="__codelineno-29-9" name="__codelineno-29-9" href="#__codelineno-29-9"></a><span class="w">    </span><span class="n">iolink_device_ctx_t</span><span class="o">*</span><span class="w"> </span><span class="n">device</span><span class="p">;</span>
+</span><span id="__span-29-10"><a id="__codelineno-29-10" name="__codelineno-29-10" href="#__codelineno-29-10"></a><span class="w">    </span><span class="n">iolink_master_port_t</span><span class="w"> </span><span class="n">master_port</span><span class="p">;</span>
+</span><span id="__span-29-11"><a id="__codelineno-29-11" name="__codelineno-29-11" href="#__codelineno-29-11"></a><span class="w">    </span><span class="n">iolink_device_config_t</span><span class="w"> </span><span class="n">device_config</span><span class="p">;</span>
+</span><span id="__span-29-12"><a id="__codelineno-29-12" name="__codelineno-29-12" href="#__codelineno-29-12"></a><span class="w">    </span><span class="n">iolink_master_config_t</span><span class="w"> </span><span class="n">master_config</span><span class="p">;</span>
+</span><span id="__span-29-13"><a id="__codelineno-29-13" name="__codelineno-29-13" href="#__codelineno-29-13"></a><span class="p">}</span><span class="w"> </span><span class="n">port_pair_t</span><span class="p">;</span>
+</span></code></pre></div>
+<p>Use one <code>iolink_master_controller_t</code> with two or four <code>iolink_master_port_t</code> ports. Each simulated cycle:</p>
+<ol>
+<li>Tick the controller.</li>
+<li>Pump every real <code>iolink_device_ctx_t</code>.</li>
+<li>Poll/tick the controller for received bytes.</li>
+<li>Repeat until every port reaches <code>IOLINK_MASTER_STATE_OPERATE</code>.</li>
+</ol>
+<p>Assertions:</p>
+<div class="language-c highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="n">assert_int_equal</span><span class="p">(</span><span class="n">iolink_master_get_state</span><span class="p">(</span><span class="o">&amp;</span><span class="n">pair_a</span><span class="p">.</span><span class="n">master_port</span><span class="p">),</span><span class="w"> </span><span class="n">IOLINK_MASTER_STATE_OPERATE</span><span class="p">);</span>
+</span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="n">assert_int_equal</span><span class="p">(</span><span class="n">iolink_master_get_state</span><span class="p">(</span><span class="o">&amp;</span><span class="n">pair_b</span><span class="p">.</span><span class="n">master_port</span><span class="p">),</span><span class="w"> </span><span class="n">IOLINK_MASTER_STATE_OPERATE</span><span class="p">);</span>
+</span><span id="__span-30-3"><a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="n">assert_memory_not_equal</span><span class="p">(</span><span class="n">pd_in_a</span><span class="p">,</span><span class="w"> </span><span class="n">pd_in_b</span><span class="p">,</span><span class="w"> </span><span class="n">min_len</span><span class="p">);</span>
+</span><span id="__span-30-4"><a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="n">assert_memory_not_equal</span><span class="p">(</span><span class="n">pair_a</span><span class="p">.</span><span class="n">observed_pd_out</span><span class="p">,</span><span class="w"> </span><span class="n">pair_b</span><span class="p">.</span><span class="n">observed_pd_out</span><span class="p">,</span><span class="w"> </span><span class="n">min_len</span><span class="p">);</span>
+</span></code></pre></div>
+<ul>
+<li>[ ] <strong>Step 2: Keep master/device boundaries clean</strong></li>
+</ul>
+<p>The test may include <code>iolinki_master/master.h</code> and link master sources, but production <code>iolinki</code> must not depend on <code>iolinki-master</code>. Add <code>IOLINKI_MASTER_DIR</code> as an optional CMake test-only path.</p>
+<ul>
+<li>[ ] <strong>Step 3: Register and run</strong></li>
+</ul>
+<p>Run:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a>cmake<span class="w"> </span>-S<span class="w"> </span>third_party/iolinki<span class="w"> </span>-B<span class="w"> </span>/tmp/iolinki-reentrant-build<span class="w"> </span>-DBUILD_TESTING<span class="o">=</span>ON<span class="w"> </span>-DIOLINKI_MASTER_DIR<span class="o">=</span>/home/andrii/projects/iolinki-master
+</span><span id="__span-31-2"><a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a>cmake<span class="w"> </span>--build<span class="w"> </span>/tmp/iolinki-reentrant-build<span class="w"> </span>--target<span class="w"> </span>test_multi_device_real_master
+</span><span id="__span-31-3"><a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a>/tmp/iolinki-reentrant-build/tests/test_multi_device_real_master
+</span><span id="__span-31-4"><a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a>ctest<span class="w"> </span>--test-dir<span class="w"> </span>/tmp/iolinki-reentrant-build<span class="w"> </span>--output-on-failure
+</span></code></pre></div>
+<p>Expected: several independent real devices reach OPERATE against real master ports in one process.</p>
+<ul>
+<li>[ ] <strong>Step 4: Commit</strong></li>
+</ul>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a>git<span class="w"> </span>-C<span class="w"> </span>third_party/iolinki<span class="w"> </span>add<span class="w"> </span>tests/test_multi_device_real_master.c<span class="w"> </span>tests/CMakeLists.txt
+</span><span id="__span-32-2"><a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a>git<span class="w"> </span>-C<span class="w"> </span>third_party/iolinki<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;test: prove real master multi-device conformance&quot;</span>
+</span></code></pre></div>
+<h2 id="task-7-update-labwired-native-conformance">Task 7: Update LabWired Native Conformance</h2>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Modify: <code>crates/core/native/iolink_conformance.c</code></li>
+<li>Modify: <code>crates/core/src/peripherals/components/iolink_master.rs</code></li>
+<li>
+<p>Modify: <code>crates/core/build.rs</code></p>
+</li>
+<li>
+<p>[ ] <strong>Step 1: Add failing Rust FFI test</strong></p>
+</li>
+</ul>
+<p>Add <code>NativeMultiDeviceConformanceResult</code> and FFI for:</p>
+<div class="language-c highlight"><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="kt">int</span><span class="w"> </span><span class="nf">lw_iolm_conformance_run_multi_device</span><span class="p">(</span><span class="n">lw_iolm_multi_device_result_t</span><span class="o">*</span><span class="w"> </span><span class="n">result</span><span class="p">);</span>
+</span></code></pre></div>
+<p>Add Rust test:</p>
+<div class="language-rust highlight"><pre><span></span><code><span id="__span-34-1"><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="cp">#[cfg(feature = </span><span class="s">&quot;iolink-native&quot;</span><span class="cp">)]</span>
+</span><span id="__span-34-2"><a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a><span class="cp">#[test]</span>
+</span><span id="__span-34-3"><a id="__codelineno-34-3" name="__codelineno-34-3" href="#__codelineno-34-3"></a><span class="k">fn</span><span class="w"> </span><span class="nf">native_real_master_runs_several_real_device_stack_instances</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-34-4"><a id="__codelineno-34-4" name="__codelineno-34-4" href="#__codelineno-34-4"></a><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">super</span><span class="p">::</span><span class="n">native</span><span class="p">::</span><span class="n">run_real_multi_device_stack_conformance</span><span class="p">()</span>
+</span><span id="__span-34-5"><a id="__codelineno-34-5" name="__codelineno-34-5" href="#__codelineno-34-5"></a><span class="w">        </span><span class="p">.</span><span class="n">expect</span><span class="p">(</span><span class="s">&quot;real multi-device IO-Link conformance&quot;</span><span class="p">);</span>
+</span><span id="__span-34-6"><a id="__codelineno-34-6" name="__codelineno-34-6" href="#__codelineno-34-6"></a><span class="w">    </span><span class="fm">assert_eq!</span><span class="p">(</span><span class="n">result</span><span class="p">.</span><span class="n">port_count</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">);</span>
+</span><span id="__span-34-7"><a id="__codelineno-34-7" name="__codelineno-34-7" href="#__codelineno-34-7"></a><span class="w">    </span><span class="fm">assert_eq!</span><span class="p">(</span><span class="n">result</span><span class="p">.</span><span class="n">operate_count</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">);</span>
+</span><span id="__span-34-8"><a id="__codelineno-34-8" name="__codelineno-34-8" href="#__codelineno-34-8"></a><span class="w">    </span><span class="fm">assert_ne!</span><span class="p">(</span>
+</span><span id="__span-34-9"><a id="__codelineno-34-9" name="__codelineno-34-9" href="#__codelineno-34-9"></a><span class="w">        </span><span class="o">&amp;</span><span class="n">result</span><span class="p">.</span><span class="n">pd_in_a</span><span class="p">[</span><span class="o">..</span><span class="n">result</span><span class="p">.</span><span class="n">pd_in_len_a</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="kt">usize</span><span class="p">],</span>
+</span><span id="__span-34-10"><a id="__codelineno-34-10" name="__codelineno-34-10" href="#__codelineno-34-10"></a><span class="w">        </span><span class="o">&amp;</span><span class="n">result</span><span class="p">.</span><span class="n">pd_in_b</span><span class="p">[</span><span class="o">..</span><span class="n">result</span><span class="p">.</span><span class="n">pd_in_len_b</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="kt">usize</span><span class="p">]</span>
+</span><span id="__span-34-11"><a id="__codelineno-34-11" name="__codelineno-34-11" href="#__codelineno-34-11"></a><span class="w">    </span><span class="p">);</span>
+</span><span id="__span-34-12"><a id="__codelineno-34-12" name="__codelineno-34-12" href="#__codelineno-34-12"></a><span class="p">}</span>
+</span></code></pre></div>
+<p>Run:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-35-1"><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a><span class="nv">IOLINKI_MASTER_DIR</span><span class="o">=</span>/home/andrii/projects/iolinki-master<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-35-2"><a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a><span class="nv">IOLINKI_DEVICE_DIR</span><span class="o">=</span>/home/andrii/projects/labwired/core/.worktrees/iolink-simulator-conformance/third_party/iolinki<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-35-3"><a id="__codelineno-35-3" name="__codelineno-35-3" href="#__codelineno-35-3"></a>cargo<span class="w"> </span><span class="nb">test</span><span class="w"> </span>-p<span class="w"> </span>labwired-core<span class="w"> </span>--features<span class="w"> </span>iolink-native<span class="w"> </span>native_real_master_runs_several_real_device_stack_instances<span class="w"> </span>--lib<span class="w"> </span>--<span class="w"> </span>--nocapture
+</span></code></pre></div>
+<p>Expected: link failure for missing <code>lw_iolm_conformance_run_multi_device</code>.</p>
+<ul>
+<li>[ ] <strong>Step 2: Implement LabWired helper with per-device link state</strong></li>
+</ul>
+<p>In <code>crates/core/native/iolink_conformance.c</code>, remove shared globals from the multi-device path. Use <code>port_pair_t</code> with its own queues, wakeup flag, observed PD buffers, master port, and <code>iolink_device_ctx_t</code> storage per device.</p>
+<p>Do not hand-author response bytes. All device responses must come from <code>iolink_device_process()</code>.</p>
+<ul>
+<li>[ ] <strong>Step 3: Verify</strong></li>
+</ul>
+<p>Run:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-36-1"><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a><span class="nv">IOLINKI_MASTER_DIR</span><span class="o">=</span>/home/andrii/projects/iolinki-master<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-36-2"><a id="__codelineno-36-2" name="__codelineno-36-2" href="#__codelineno-36-2"></a><span class="nv">IOLINKI_DEVICE_DIR</span><span class="o">=</span>/home/andrii/projects/labwired/core/.worktrees/iolink-simulator-conformance/third_party/iolinki<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-36-3"><a id="__codelineno-36-3" name="__codelineno-36-3" href="#__codelineno-36-3"></a>cargo<span class="w"> </span><span class="nb">test</span><span class="w"> </span>-p<span class="w"> </span>labwired-core<span class="w"> </span>--features<span class="w"> </span>iolink-native<span class="w"> </span>native_<span class="w"> </span>--lib<span class="w"> </span>--<span class="w"> </span>--nocapture
+</span><span id="__span-36-4"><a id="__codelineno-36-4" name="__codelineno-36-4" href="#__codelineno-36-4"></a><span class="nv">IOLINKI_MASTER_DIR</span><span class="o">=</span>/home/andrii/projects/iolinki-master<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-36-5"><a id="__codelineno-36-5" name="__codelineno-36-5" href="#__codelineno-36-5"></a><span class="nv">IOLINKI_DEVICE_DIR</span><span class="o">=</span>/home/andrii/projects/labwired/core/.worktrees/iolink-simulator-conformance/third_party/iolinki<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-36-6"><a id="__codelineno-36-6" name="__codelineno-36-6" href="#__codelineno-36-6"></a>cargo<span class="w"> </span>check<span class="w"> </span>-p<span class="w"> </span>labwired-core<span class="w"> </span>--features<span class="w"> </span>iolink-native
+</span><span id="__span-36-7"><a id="__codelineno-36-7" name="__codelineno-36-7" href="#__codelineno-36-7"></a>git<span class="w"> </span>diff<span class="w"> </span>--check
+</span></code></pre></div>
+<p>Expected: native selector and feature check pass.</p>
+<ul>
+<li>[ ] <strong>Step 4: Commit</strong></li>
+</ul>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-37-1"><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a>git<span class="w"> </span>add<span class="w"> </span>crates/core/native/iolink_conformance.c<span class="w"> </span>crates/core/src/peripherals/components/iolink_master.rs<span class="w"> </span>crates/core/build.rs<span class="w"> </span>third_party/iolinki
+</span><span id="__span-37-2"><a id="__codelineno-37-2" name="__codelineno-37-2" href="#__codelineno-37-2"></a>git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;sim: test real IO-Link master against several device contexts&quot;</span>
+</span></code></pre></div>
+<h2 id="task-8-ci-and-documentation">Task 8: CI And Documentation</h2>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Modify: <code>.github/workflows/core-iolink-native.yml</code></li>
+<li>Modify: <code>third_party/iolinki/docs/API.md</code></li>
+<li>
+<p>Modify: <code>third_party/iolinki/docs/ARCHITECTURE.md</code></p>
+</li>
+<li>
+<p>[ ] <strong>Step 1: Keep hosted native CI</strong></p>
+</li>
+</ul>
+<p>Ensure the workflow still runs:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-38-1"><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cargo test -p labwired-core --features iolink-native native_ --lib -- --nocapture</span>
+</span></code></pre></div>
+<ul>
+<li>[ ] <strong>Step 2: Document UDSLib-style ownership</strong></li>
+</ul>
+<p>Add to <code>docs/API.md</code>:</p>
+<div class="language-markdown highlight"><pre><span></span><code><span id="__span-39-1"><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a><span class="gu">## Reentrant Device Contexts</span>
+</span><span id="__span-39-2"><a id="__codelineno-39-2" name="__codelineno-39-2" href="#__codelineno-39-2"></a>
+</span><span id="__span-39-3"><a id="__codelineno-39-3" name="__codelineno-39-3" href="#__codelineno-39-3"></a>New integrations should use caller-owned <span class="sb">`iolink_device_ctx_t`</span> instances with a
+</span><span id="__span-39-4"><a id="__codelineno-39-4" name="__codelineno-39-4" href="#__codelineno-39-4"></a>borrowed <span class="sb">`iolink_device_config_t`</span>. The stack does not allocate memory and does
+</span><span id="__span-39-5"><a id="__codelineno-39-5" name="__codelineno-39-5" href="#__codelineno-39-5"></a>not own transport, clock, mutex, storage, or application objects. These are
+</span><span id="__span-39-6"><a id="__codelineno-39-6" name="__codelineno-39-6" href="#__codelineno-39-6"></a>provided through callbacks and <span class="sb">`void *user`</span>.
+</span><span id="__span-39-7"><a id="__codelineno-39-7" name="__codelineno-39-7" href="#__codelineno-39-7"></a>
+</span><span id="__span-39-8"><a id="__codelineno-39-8" name="__codelineno-39-8" href="#__codelineno-39-8"></a>The old singleton <span class="sb">`iolink_init()`</span> / <span class="sb">`iolink_process()`</span> API was removed before
+</span><span id="__span-39-9"><a id="__codelineno-39-9" name="__codelineno-39-9" href="#__codelineno-39-9"></a>public adoption. All examples use caller-owned <span class="sb">`iolink_device_ctx_t`</span>.
+</span></code></pre></div>
+<p>Add to <code>docs/ARCHITECTURE.md</code>:</p>
+<div class="language-markdown highlight"><pre><span></span><code><span id="__span-40-1"><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a><span class="gu">## Role And Instance Boundaries</span>
+</span><span id="__span-40-2"><a id="__codelineno-40-2" name="__codelineno-40-2" href="#__codelineno-40-2"></a>
+</span><span id="__span-40-3"><a id="__codelineno-40-3" name="__codelineno-40-3" href="#__codelineno-40-3"></a><span class="sb">`iolinki`</span> owns the IO-Link Device role. <span class="sb">`iolinki-master`</span> owns the IO-Link Master
+</span><span id="__span-40-4"><a id="__codelineno-40-4" name="__codelineno-40-4" href="#__codelineno-40-4"></a>role. Shared code is limited to frame/checksum/protocol helpers and test-only
+</span><span id="__span-40-5"><a id="__codelineno-40-5" name="__codelineno-40-5" href="#__codelineno-40-5"></a>real-stack conformance harnesses.
+</span><span id="__span-40-6"><a id="__codelineno-40-6" name="__codelineno-40-6" href="#__codelineno-40-6"></a>
+</span><span id="__span-40-7"><a id="__codelineno-40-7" name="__codelineno-40-7" href="#__codelineno-40-7"></a>Every simulated or physical IO-Link Device should have one
+</span><span id="__span-40-8"><a id="__codelineno-40-8" name="__codelineno-40-8" href="#__codelineno-40-8"></a><span class="sb">`iolink_device_ctx_t`</span>. Bundled platform PHYs may remain single-port adapters,
+</span><span id="__span-40-9"><a id="__codelineno-40-9" name="__codelineno-40-9" href="#__codelineno-40-9"></a>but protocol state is not global.
+</span></code></pre></div>
+<ul>
+<li>[ ] <strong>Step 3: Final verification</strong></li>
+</ul>
+<p>Run:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-41-1"><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a>cmake<span class="w"> </span>-S<span class="w"> </span>third_party/iolinki<span class="w"> </span>-B<span class="w"> </span>/tmp/iolinki-reentrant-build<span class="w"> </span>-DBUILD_TESTING<span class="o">=</span>ON<span class="w"> </span>-DIOLINKI_MASTER_DIR<span class="o">=</span>/home/andrii/projects/iolinki-master
+</span><span id="__span-41-2"><a id="__codelineno-41-2" name="__codelineno-41-2" href="#__codelineno-41-2"></a>cmake<span class="w"> </span>--build<span class="w"> </span>/tmp/iolinki-reentrant-build
+</span><span id="__span-41-3"><a id="__codelineno-41-3" name="__codelineno-41-3" href="#__codelineno-41-3"></a>ctest<span class="w"> </span>--test-dir<span class="w"> </span>/tmp/iolinki-reentrant-build<span class="w"> </span>--output-on-failure
+</span><span id="__span-41-4"><a id="__codelineno-41-4" name="__codelineno-41-4" href="#__codelineno-41-4"></a><span class="nv">IOLINKI_MASTER_DIR</span><span class="o">=</span>/home/andrii/projects/iolinki-master<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-41-5"><a id="__codelineno-41-5" name="__codelineno-41-5" href="#__codelineno-41-5"></a><span class="nv">IOLINKI_DEVICE_DIR</span><span class="o">=</span>/home/andrii/projects/labwired/core/.worktrees/iolink-simulator-conformance/third_party/iolinki<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-41-6"><a id="__codelineno-41-6" name="__codelineno-41-6" href="#__codelineno-41-6"></a>cargo<span class="w"> </span><span class="nb">test</span><span class="w"> </span>-p<span class="w"> </span>labwired-core<span class="w"> </span>--features<span class="w"> </span>iolink-native<span class="w"> </span>native_<span class="w"> </span>--lib<span class="w"> </span>--<span class="w"> </span>--nocapture
+</span><span id="__span-41-7"><a id="__codelineno-41-7" name="__codelineno-41-7" href="#__codelineno-41-7"></a><span class="nv">IOLINKI_MASTER_DIR</span><span class="o">=</span>/home/andrii/projects/iolinki-master<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-41-8"><a id="__codelineno-41-8" name="__codelineno-41-8" href="#__codelineno-41-8"></a><span class="nv">IOLINKI_DEVICE_DIR</span><span class="o">=</span>/home/andrii/projects/labwired/core/.worktrees/iolink-simulator-conformance/third_party/iolinki<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-41-9"><a id="__codelineno-41-9" name="__codelineno-41-9" href="#__codelineno-41-9"></a>cargo<span class="w"> </span>check<span class="w"> </span>-p<span class="w"> </span>labwired-core<span class="w"> </span>--features<span class="w"> </span>iolink-native
+</span><span id="__span-41-10"><a id="__codelineno-41-10" name="__codelineno-41-10" href="#__codelineno-41-10"></a>git<span class="w"> </span>diff<span class="w"> </span>--check
+</span></code></pre></div>
+<p>Expected: all commands pass.</p>
+<ul>
+<li>[ ] <strong>Step 4: Commit and push</strong></li>
+</ul>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-42-1"><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a>git<span class="w"> </span>add<span class="w"> </span>.github/workflows/core-iolink-native.yml<span class="w"> </span>third_party/iolinki/docs/API.md<span class="w"> </span>third_party/iolinki/docs/ARCHITECTURE.md<span class="w"> </span>third_party/iolinki
+</span><span id="__span-42-2"><a id="__codelineno-42-2" name="__codelineno-42-2" href="#__codelineno-42-2"></a>git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;docs: describe reentrant IO-Link device architecture&quot;</span>
+</span><span id="__span-42-3"><a id="__codelineno-42-3" name="__codelineno-42-3" href="#__codelineno-42-3"></a>git<span class="w"> </span>push
+</span></code></pre></div>
+<h2 id="self-review">Self-Review</h2>
+<p>Coverage:</p>
+<ul>
+<li>UDSLib-style caller-owned contexts and borrowed config: Public API Shape, Tasks 1 and 3.</li>
+<li>Existing <code>iolinki</code> context migration order: Tasks 2 through 5.</li>
+<li>Direct Parameter page 2 global: Task 4.</li>
+<li>Master/device role separation: Scope, Task 6, Task 8 docs.</li>
+<li>LabWired multi-device no-shim conformance: Task 7.</li>
+<li>Hosted CI and documentation: Task 8.</li>
+</ul>
+<p>Quality checks:</p>
+<ul>
+<li>No fake response generation is allowed in the conformance path.</li>
+<li>The plan removes legacy singleton public APIs instead of preserving wrappers.</li>
+<li>The plan treats bundled singleton PHYs as migration targets, not as the core instance model.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.instant", "navigation.tracking", "navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "toc.follow", "search.suggest", "search.highlight", "content.code.copy"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

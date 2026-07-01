@@ -1,0 +1,170 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+# Reference CI Workflow Template for GitLab CI
+#
+# This template shows how to integrate LabWired firmware testing into GitLab CI.
+# Copy this file to .gitlab-ci.yml in your repository and customize.
+
+stages:
+  - build
+  - test
+  - report
+
+variables:
+  # Uncomment when Docker image is published
+  # LABWIRED_IMAGE: ghcr.io/w1ne/labwired:latest
+  CARGO_HOME: ${CI_PROJECT_DIR}/.cargo
+
+# Cache Rust dependencies
+.rust_cache:
+  cache:
+    key: ${CI_COMMIT_REF_SLUG}
+    paths:
+      - .cargo/
+      - target/
+
+# Build firmware
+build:firmware:
+  stage: build
+  image: rust:latest
+  extends: .rust_cache
+
+  before_script:
+    - rustup target add thumbv7m-none-eabi
+
+  script:
+    - cargo build --release --target thumbv7m-none-eabi -p your-firmware
+
+  artifacts:
+    paths:
+      - target/thumbv7m-none-eabi/release/your-firmware
+    expire_in: 1 hour
+
+# Option 1: Test using Docker image (when published)
+# test:docker:
+#   stage: test
+#   image: ${LABWIRED_IMAGE}
+#   dependencies:
+#     - build:firmware
+#
+#   script:
+#     - labwired test --script tests/firmware-test.yaml
+#                     --output-dir test-results
+#                     --no-uart-stdout
+#
+#   artifacts:
+#     when: always
+#     paths:
+#       - test-results/
+#     reports:
+#       junit: test-results/junit.xml
+#     expire_in: 30 days
+
+# Option 2: Test by building LabWired from source
+test:source:
+  stage: test
+  image: rust:latest
+  extends: .rust_cache
+  dependencies:
+    - build:firmware
+
+  before_script:
+    - apt-get update && apt-get install -y git
+    - git clone https://github.com/w1ne/labwired.git /tmp/labwired
+    - cd /tmp/labwired
+    - cargo build --release -p labwired-cli
+    - export PATH="/tmp/labwired/target/release:$PATH"
+    - cd ${CI_PROJECT_DIR}
+
+  script:
+    - labwired test --script tests/firmware-test.yaml
+                    --output-dir test-results
+                    --no-uart-stdout
+
+  artifacts:
+    when: always
+    paths:
+      - test-results/
+    reports:
+      junit: test-results/junit.xml
+    expire_in: 30 days
+
+# Generate test report summary
+report:summary:
+  stage: report
+  image: python:3.11-slim
+  dependencies:
+    - test:source
+
+  script:
+    - |
+      python3 << 'EOF'
+      import json
+      import sys
+
+      try:
+          with open('test-results/result.json', 'r') as f:
+              result = json.load(f)
+
+          status = result.get('status', 'unknown')
+          print(f"Test Status: {status}")
+          print(f"Instructions: {result.get('instructions_executed', 0)}")
+          print(f"Cycles: {result.get('cycles_executed', 0)}")
+
+          if status != 'pass':
+              print(f"Stop Reason: {result.get('stop_reason', 'unknown')}")
+              sys.exit(1)
+      except Exception as e:
+          print(f"Error reading results: {e}")
+          sys.exit(1)
+      EOF
+
+  when: always
+
+# Matrix testing example
+.test_template:
+  stage: test
+  image: rust:latest
+  extends: .rust_cache
+
+  before_script:
+    - rustup target add ${RUST_TARGET}
+    - git clone https://github.com/w1ne/labwired.git /tmp/labwired
+    - cd /tmp/labwired && cargo build --release -p labwired-cli
+    - export PATH="/tmp/labwired/target/release:$PATH"
+    - cd ${CI_PROJECT_DIR}
+
+  script:
+    - cargo build --release --target ${RUST_TARGET} -p your-firmware
+    - labwired test --script ${TEST_SCRIPT}
+                    --output-dir test-results-${RUST_TARGET}
+                    --no-uart-stdout
+
+  artifacts:
+    when: always
+    paths:
+      - test-results-${RUST_TARGET}/
+    reports:
+      junit: test-results-${RUST_TARGET}/junit.xml
+
+test:cortex-m0:
+  extends: .test_template
+  variables:
+    RUST_TARGET: thumbv6m-none-eabi
+    TEST_SCRIPT: tests/cortex-m0-test.yaml
+
+test:cortex-m3:
+  extends: .test_template
+  variables:
+    RUST_TARGET: thumbv7m-none-eabi
+    TEST_SCRIPT: tests/cortex-m3-test.yaml
+
+test:cortex-m4:
+  extends: .test_template
+  variables:
+    RUST_TARGET: thumbv7em-none-eabi
+    TEST_SCRIPT: tests/cortex-m4-test.yaml
