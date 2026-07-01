@@ -16,12 +16,12 @@
     "source_rev": "e8a9047f7917bd6c5bc8d160e98c6d6e1c74fdac"
   },
   "nrf52832.elf": {
-    "sha256": "f551c0e5e56f6dd32af1d9ec2b96a39c7363f428e78a5fde7350038d18a8f182",
-    "source_rev": "e8a9047f7917bd6c5bc8d160e98c6d6e1c74fdac"
+    "sha256": "f8c7e90745fdb5df3b151198e20207e217fbb356cf4319548267a824ec9fd9f4",
+    "source_rev": "0f6c3f549f73eefb0adc4fc958490786fb646ac4"
   },
   "nrf52840.elf": {
-    "sha256": "c7e5eae7a95c2efc4632b36b334429c0ba7654390c58f1e4c80f9c0682ddf129",
-    "source_rev": "e8a9047f7917bd6c5bc8d160e98c6d6e1c74fdac"
+    "sha256": "95104c1dcca3cecfdf0ad3916f990219e44bb3f10018f978d0fb80d9d9a365d0",
+    "source_rev": "0f6c3f549f73eefb0adc4fc958490786fb646ac4"
   },
   "rp2040.elf": {
     "sha256": "ce1865dcb9b6f581ea662642972aa809f09dea36e659b16eb92e4d74c92750d2",
