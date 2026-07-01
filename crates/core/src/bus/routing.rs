@@ -46,6 +46,21 @@ impl SystemBus {
     }
 
     pub(crate) fn resolve_pin_odr(bus: &SystemBus, pin: &str) -> Option<(u64, u8)> {
+        // 1. Chip-declared pin map is authoritative silicon truth. When a chip
+        //    declares any pins, resolution goes THROUGH the map — an undeclared pin
+        //    returns None rather than silently letter-parsing onto a wrong port.
+        if !bus.pin_map.is_empty() {
+            let (gpio_name, bit) = bus.pin_map.get(&pin.to_ascii_uppercase())?;
+            let idx = bus.find_peripheral_index_by_name(gpio_name)?;
+            let base = bus.peripherals[idx].base;
+            let odr_off = bus.peripherals[idx]
+                .dev
+                .as_any()
+                .and_then(|a| a.downcast_ref::<crate::peripherals::gpio::GpioPort>())
+                .map(|g| g.odr_offset())?;
+            return Some((base + odr_off, *bit));
+        }
+        // 2. No chip pin map → standard STM32/Nordic label parse.
         // STM32/Nordic: "PA5" / "P0.13" → per-port GpioPort with an ODR offset.
         if let Some((port_name, bit)) = Self::parse_stm32_pin(pin) {
             if let Some(idx) = bus.find_peripheral_index_by_name(&port_name) {
@@ -98,6 +113,17 @@ impl SystemBus {
     /// Resolve an STM32 pin label to its `(IDR address, bit)` so a sensor can
     /// drive an MCU input line (e.g. the HC-SR04 ECHO pin).
     pub(crate) fn resolve_pin_idr(bus: &SystemBus, pin: &str) -> Option<(u64, u8)> {
+        if !bus.pin_map.is_empty() {
+            let (gpio_name, bit) = bus.pin_map.get(&pin.to_ascii_uppercase())?;
+            let idx = bus.find_peripheral_index_by_name(gpio_name)?;
+            let base = bus.peripherals[idx].base;
+            let idr_off = bus.peripherals[idx]
+                .dev
+                .as_any()
+                .and_then(|a| a.downcast_ref::<crate::peripherals::gpio::GpioPort>())
+                .map(|g| g.idr_offset())?;
+            return Some((base + idr_off, *bit));
+        }
         let (port_name, bit) = Self::parse_stm32_pin(pin)?;
         let idx = bus.find_peripheral_index_by_name(&port_name)?;
         let base = bus.peripherals[idx].base;
