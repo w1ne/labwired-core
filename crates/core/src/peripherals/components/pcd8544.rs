@@ -261,12 +261,33 @@ impl PeripheralKit for Pcd8544Kit {
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
         let cs_pin = ctx.config_str("cs_pin").unwrap_or("PB6").to_string();
         let dc_pin = ctx.config_str("dc_pin").unwrap_or("PC7").to_string();
-        let dc_src = ctx.resolve_pin_odr(&dc_pin);
+        // The PCD8544 has no command/data control byte — it discriminates
+        // command vs framebuffer-data purely by the level of the D/C GPIO line
+        // that the bus latches before each SPI transfer. If that pin can't be
+        // resolved to a *driveable* GPIO output register (a behavioural
+        // `GpioPort` the model can read back), the display would silently latch
+        // D/C low forever: every pixel byte is decoded as a command, the DDRAM
+        // never fills, and the panel renders BLANK even though the firmware
+        // streams real pixel bytes over SPI. That exact silent-blank bit the
+        // FRDM-KW41Z "cow" demo in the browser when its GPIOC was configured as
+        // a *passive declarative* bank (PDOR never reflects PSOR/PCOR, and the
+        // bank isn't a `GpioPort`, so resolution returns `None`). Fail loudly
+        // with an actionable message instead of shipping a dead display.
+        let dc_src = ctx.resolve_pin_odr(&dc_pin).ok_or_else(|| {
+            anyhow::anyhow!(
+                "pcd8544 '{}': D/C pin '{}' does not resolve to a driveable GPIO output. \
+                 The bus latches command-vs-data from this pin's output register, so a passive \
+                 (declarative) or unmapped GPIO leaves D/C stuck low and the display renders blank. \
+                 Wire dc_pin to a behavioural GPIO port (chip peripheral `type: gpio`, e.g. Kinetis \
+                 `profile: kinetis` exposing PDOR).",
+                ctx.device_id(),
+                dc_pin,
+            )
+        })?;
         let spi = ctx.spi()?;
         let mut dev = Pcd8544::new(cs_pin, dc_pin);
-        if let Some((odr_addr, bit)) = dc_src {
-            crate::peripherals::spi::SpiDevice::set_dc_source(&mut dev, odr_addr, bit);
-        }
+        let (odr_addr, bit) = dc_src;
+        crate::peripherals::spi::SpiDevice::set_dc_source(&mut dev, odr_addr, bit);
         spi.attach(Box::new(dev));
         Ok(())
     }
@@ -384,6 +405,47 @@ mod tests {
         );
         // And the commands were NOT misread as data: only one byte was written.
         assert_eq!(lcd.framebuffer()[2 * WIDTH + 6], 0x00);
+    }
+
+    /// Regression (browser "cow" blank): attaching a PCD8544 whose D/C pin
+    /// cannot be resolved to a driveable GPIO output must FAIL LOUDLY, not
+    /// silently attach a display that latches D/C low forever and renders
+    /// blank. This reproduces the FRDM-KW41Z deployed-browser bug where GPIOC
+    /// was a passive *declarative* bank (not a behavioural `GpioPort`), so
+    /// `resolve_pin_odr` returned `None`.
+    #[test]
+    fn attach_errors_when_dc_pin_unresolvable() {
+        use crate::bus::SystemBus;
+        use crate::peripherals::kit::{registry, AttachCtx};
+        use crate::peripherals::spi::Spi;
+        use labwired_config::ExternalDevice;
+        use std::collections::HashMap;
+
+        // Bus with an SPI controller but NO behavioural gpioc — D/C ("PC0")
+        // has nothing driveable to resolve to (the deployed declarative case).
+        let mut bus = SystemBus::empty();
+        bus.add_peripheral("spi0", 0x4002_C000, 0x1000, None, Box::new(Spi::new()));
+
+        let mut cfg = HashMap::new();
+        cfg.insert("cs_pin".to_string(), serde_yaml::Value::from("PC4"));
+        cfg.insert("dc_pin".to_string(), serde_yaml::Value::from("PC0"));
+        let ext = ExternalDevice {
+            id: "lcd".to_string(),
+            r#type: "pcd8544".to_string(),
+            connection: "spi0".to_string(),
+            config: cfg,
+        };
+
+        let kit = registry::lookup("pcd8544").expect("pcd8544 kit registered");
+        let mut ctx = AttachCtx::new(&mut bus, &ext);
+        let err = kit
+            .attach(&mut ctx)
+            .expect_err("unresolvable D/C must error");
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("D/C pin") && msg.contains("blank"),
+            "error must explain the D/C-resolution failure, got: {msg}"
+        );
     }
 
     /// Column-pointer wraps to the next bank at the right edge.
