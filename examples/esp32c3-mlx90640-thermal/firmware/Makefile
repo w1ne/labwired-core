@@ -37,9 +37,9 @@ LDFLAGS := -march=rv32imc_zicsr_zifencei -mabi=ilp32 -nostartfiles \
 # IOLINKI_SOURCES list, minus the POSIX phy_virtual.c / linux platform, plus the
 # baremetal time source) — the same set the iolink-dido ARM build uses.
 IOLINKI_SRC := \
-  $(IOLINKI_DIR)/src/iolink_core.c \
   $(IOLINKI_DIR)/src/phy_generic.c \
   $(IOLINKI_DIR)/src/crc.c \
+  $(IOLINKI_DIR)/src/frame.c \
   $(IOLINKI_DIR)/src/dll.c \
   $(IOLINKI_DIR)/src/isdu.c \
   $(IOLINKI_DIR)/src/events.c \
@@ -47,6 +47,7 @@ IOLINKI_SRC := \
   $(IOLINKI_DIR)/src/params.c \
   $(IOLINKI_DIR)/src/data_storage.c \
   $(IOLINKI_DIR)/src/device_info.c \
+  $(IOLINKI_DIR)/src/device.c \
   $(IOLINKI_DIR)/src/platform_stubs.c \
   $(IOLINKI_DIR)/src/platform/baremetal/time_utils.c
 

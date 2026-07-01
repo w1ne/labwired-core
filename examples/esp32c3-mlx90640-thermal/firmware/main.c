@@ -23,8 +23,8 @@
 #include "MLX90640_I2C_Driver.h"
 #include "c3_uart.h"
 #include "fingerprint.h"
-#include "iolinki/iolink.h"
 #include "iolinki/application.h"
+#include "iolinki/device.h"
 #include "iolinki/events.h"
 #include "phy_c3_iolink.h"
 
@@ -56,6 +56,7 @@ static paramsMLX90640 g_params;
 static uint16_t g_eeprom[832];
 static uint16_t g_frame[834];
 static float g_field[768];
+static iolink_device_ctx_t g_iolink;
 
 /* Pack the verdict into the 9-byte IO-Link process-data frame:
  *   [int16 temp_x100][int16 heatrate_x100][u8 state][u8 health]
@@ -113,7 +114,7 @@ static void print_verdict(const tfs_verdict_t *v) {
  * so the device-side test can confirm the link reached OPERATE. */
 static iolink_dll_state_t g_last_iol_state = (iolink_dll_state_t)0xFF;
 static void trace_iolink_state(void) {
-    iolink_dll_state_t s = iolink_get_state();
+    iolink_dll_state_t s = iolink_device_get_state(&g_iolink);
     if (s != g_last_iol_state) {
         g_last_iol_state = s;
         uart_puts("STATE=");
@@ -133,9 +134,9 @@ static void trace_iolink_state(void) {
 static void iolink_service(uint32_t iters, uint32_t settle) {
     uint32_t operate_run = 0;
     for (uint32_t i = 0; i < iters; i++) {
-        iolink_process();
+        iolink_device_process(&g_iolink);
         trace_iolink_state();
-        if (iolink_get_state() == IOLINK_DLL_STATE_OPERATE) {
+        if (iolink_device_get_state(&g_iolink) == IOLINK_DLL_STATE_OPERATE) {
             if (++operate_run >= settle) {
                 return;
             }
@@ -181,22 +182,23 @@ int main(void) {
      * iolink-dido lesson: a designated-init can leave t_pd_us garbage and arm a bogus
      * power-on delay). pd_in_len=9 matches the verdict frame; m_seq_type 1_1
      * (PD + 1-byte OD) matches the master's `m_seq_type: 1`. */
-    iolink_config_t cfg;
+    iolink_device_config_t cfg;
     memset(&cfg, 0, sizeof(cfg));
-    cfg.m_seq_type = IOLINK_M_SEQ_TYPE_1_1;
-    cfg.min_cycle_time = 0;
-    cfg.pd_in_len = 9;
-    cfg.pd_out_len = 0;
-    cfg.t_pd_us = 0;
-    if (iolink_init(iolink_phy_c3_get(), &cfg) != 0) {
+    cfg.phy = *iolink_phy_c3_get();
+    cfg.stack.m_seq_type = IOLINK_M_SEQ_TYPE_1_1;
+    cfg.stack.min_cycle_time = 0;
+    cfg.stack.pd_in_len = 9;
+    cfg.stack.pd_out_len = 0;
+    cfg.stack.t_pd_us = 0;
+    if (iolink_device_init(&g_iolink, &cfg) != 0) {
         uart_puts("IOLINK INIT FAIL\r\n");
         for (;;) {
         }
     }
     /* Clock frozen + timing enforcement off: the handshake is driven purely by
      * byte arrival, which is what the cycle-stepped simulator models. */
-    iolink_set_timing_enforcement(false);
-    iolink_events_ctx_t *events = iolink_get_events_ctx();
+    iolink_device_set_timing_enforcement(&g_iolink, false);
+    iolink_events_ctx_t *events = iolink_device_get_events_ctx(&g_iolink);
     uart_puts("IOLINK INIT OK\r\n");
 
     tfs_ctx_t ctx;
@@ -212,7 +214,7 @@ int main(void) {
     {
         uint8_t pd0[9];
         memset(pd0, 0, sizeof(pd0));
-        iolink_pd_input_update(pd0, 9, true);
+        iolink_device_pd_input_update(&g_iolink, pd0, 9, true);
         /* Pump until OPERATE is reached (then a short settle), capped. */
         iolink_service(IOLINK_SERVICE_ITERS, IOLINK_SETTLE_PUMPS);
     }
@@ -239,7 +241,7 @@ int main(void) {
         /* Publish the verdict as IO-Link process data the master reads cyclically. */
         uint8_t pd[9];
         pack_pd(&v, pd);
-        iolink_pd_input_update(pd, 9, true);
+        iolink_device_pd_input_update(&g_iolink, pd, 9, true);
 
         /* On the first fault, raise an IO-Link TEMPERATURE diagnostic event. The
          * iolinki DLL sets the operate-status EVENT bit while events are pending,

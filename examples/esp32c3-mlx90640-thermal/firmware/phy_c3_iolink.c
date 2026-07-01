@@ -18,23 +18,26 @@
 #define U1_DR (*(volatile uint32_t *)(UART1_BASE + 0x04u))
 #define SR_RXNE (1u << 5)
 
-static int phy_init(void) {
+static int phy_init(void *user) {
+    (void)user;
     /* The generic UART model needs no explicit enable to TX/RX in the sim. */
     return 0;
 }
 
-static void phy_set_mode(iolink_phy_mode_t mode) { (void)mode; }
+static void phy_set_mode(void *user, iolink_phy_mode_t mode) { (void)user; (void)mode; }
 
-static void phy_set_baudrate(iolink_baudrate_t baudrate) { (void)baudrate; }
+static void phy_set_baudrate(void *user, iolink_baudrate_t baudrate) { (void)user; (void)baudrate; }
 
-static int phy_send(const uint8_t *data, size_t len) {
+static int phy_send(void *user, const uint8_t *data, size_t len) {
+    (void)user;
     for (size_t i = 0; i < len; i++) {
         U1_DR = (uint32_t)data[i];
     }
     return (int)len;
 }
 
-static int phy_recv_byte(uint8_t *byte) {
+static int phy_recv_byte(void *user, uint8_t *byte) {
+    (void)user;
     if (U1_SR & SR_RXNE) {
         *byte = (uint8_t)U1_DR;
         return 1;
@@ -42,9 +45,9 @@ static int phy_recv_byte(uint8_t *byte) {
     return 0;
 }
 
-static int phy_detect_wakeup(void) {
+static int phy_detect_wakeup(void *user) {
     uint8_t b;
-    while (phy_recv_byte(&b) > 0) {
+    while (phy_recv_byte(user, &b) > 0) {
         if (b == 0x55u) {
             return 1;
         }
