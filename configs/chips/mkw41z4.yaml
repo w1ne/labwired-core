@@ -21,6 +21,15 @@ flash:
 ram:
   base: 0x1FFF8000
   size: "128KB"
+pins:
+  PA5: { gpio: gpioc, bit: 16, functions: [{ type: spi, peripheral: spi0, role: sck }] }
+  PA6: { gpio: gpioc, bit: 18, functions: [{ type: spi, peripheral: spi0, role: miso }] }
+  PA7: { gpio: gpioc, bit: 17, functions: [{ type: spi, peripheral: spi0, role: mosi }] }
+  PB1: { gpio: gpioc, bit: 4,  functions: [{ type: spi, peripheral: spi0, role: nss }] }
+  PB2: { gpio: gpioc, bit: 1,  functions: [{ type: gpio, peripheral: gpioc }] }
+  PB6: { gpio: gpioc, bit: 2,  functions: [{ type: i2c, peripheral: i2c1, role: scl }] }
+  PB7: { gpio: gpioc, bit: 3,  functions: [{ type: i2c, peripheral: i2c1, role: sda }] }
+  PC0: { gpio: gpioc, bit: 0,  functions: [{ type: gpio, peripheral: gpioc }] }
 peripherals:
   # --- Console / serial ---
   # Behavioural LPUART (Kinetis layout): DATA writes hit the TX sink, STAT

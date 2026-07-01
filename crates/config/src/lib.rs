@@ -112,6 +112,18 @@ pub struct PeripheralConfig {
     pub config: HashMap<String, serde_yaml::Value>,
 }
 
+/// One entry in a chip's authoritative pin map: which GPIO peripheral this pin's
+/// output register lives on, and the bit within that port's data register. This
+/// is silicon truth (from the SVD / board pinmux) — the pin *label* no longer
+/// implies a port, so a board whose silkscreen labels a `gpioc` pin "PB0" resolves
+/// correctly. Extra YAML fields (e.g. `functions:`, consumed by the app codegen)
+/// are ignored here.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PinLoc {
+    pub gpio: String,
+    pub bit: u8,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ChipDescriptor {
     #[serde(default = "default_schema_version")]
@@ -151,6 +163,11 @@ pub struct ChipDescriptor {
     #[serde(default)]
     pub memory_regions: Vec<NamedMemoryRange>,
     pub peripherals: Vec<PeripheralConfig>,
+    /// Authoritative pin → GPIO map. When present, pin resolution uses this map
+    /// instead of parsing the label letter; an undeclared pin fails to resolve
+    /// (no silent standard-layout fallback). Absent → standard STM32/Nordic parse.
+    #[serde(default)]
+    pub pins: std::collections::BTreeMap<String, PinLoc>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -560,6 +577,7 @@ impl From<labwired_ir::IrDevice> for ChipDescriptor {
                     }
                 })
                 .collect(),
+            pins: std::collections::BTreeMap::new(),
         }
     }
 }
@@ -1360,5 +1378,44 @@ registers:
             }
             other => panic!("expected UdsTester variant, got {:?}", other),
         }
+    }
+}
+
+#[cfg(test)]
+mod pin_map_tests {
+    use super::*;
+
+    #[test]
+    fn chip_descriptor_parses_pins_and_ignores_extra_fields() {
+        let yaml = r#"
+name: "test-chip"
+arch: "arm"
+flash: { base: 0, size: "64K" }
+ram: { base: 0x20000000, size: "16K" }
+peripherals: []
+pins:
+  PC0: { gpio: gpioc, bit: 0, functions: [{ type: gpio, peripheral: gpioc }] }
+  PB6: { gpio: gpioc, bit: 2 }
+"#;
+        let chip: ChipDescriptor = serde_yaml::from_str(yaml).expect("parse chip with pins");
+        assert_eq!(chip.pins.len(), 2);
+        assert_eq!(chip.pins["PC0"].gpio, "gpioc");
+        assert_eq!(chip.pins["PC0"].bit, 0);
+        // `functions:` in the YAML is ignored by PinLoc (serde ignores unknown fields).
+        assert_eq!(chip.pins["PB6"].gpio, "gpioc");
+        assert_eq!(chip.pins["PB6"].bit, 2);
+    }
+
+    #[test]
+    fn chip_without_pins_defaults_to_empty() {
+        let yaml = r#"
+name: "no-pins"
+arch: "arm"
+flash: { base: 0, size: "64K" }
+ram: { base: 0x20000000, size: "16K" }
+peripherals: []
+"#;
+        let chip: ChipDescriptor = serde_yaml::from_str(yaml).expect("parse");
+        assert!(chip.pins.is_empty());
     }
 }

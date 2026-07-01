@@ -78,7 +78,15 @@ impl SystemBus {
             flash_models_ops: false,
             flash_error_flags_idx: None,
             bus_trace: bus_trace::new_log(),
+            pin_map: std::collections::HashMap::new(),
         };
+
+        // Authoritative pin map (silicon truth) — resolution prefers this over the
+        // label-letter parse; see routing::resolve_pin_odr.
+        for (label, loc) in &chip.pins {
+            bus.pin_map
+                .insert(label.to_ascii_uppercase(), (loc.gpio.clone(), loc.bit));
+        }
 
         let mut merged_peripherals = chip.peripherals.clone();
         for m_p in &manifest.peripherals {

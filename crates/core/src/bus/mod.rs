@@ -215,6 +215,9 @@ pub struct SystemBus {
     /// present (never `None`) — empty until at least one peripheral is wired
     /// to it in `from_config`.
     pub bus_trace: bus_trace::BusTraceLog,
+    /// Authoritative pin → (gpio peripheral, bit) map, built from the chip
+    /// config's `pins:`. Empty when the chip declares none (→ label parse).
+    pub(crate) pin_map: std::collections::HashMap<String, (String, u8)>,
 }
 
 pub struct CanDiagnosticTester {
@@ -1675,6 +1678,7 @@ impl SystemBus {
             flash_models_ops: false,
             flash_error_flags_idx: None,
             bus_trace: bus_trace::new_log(),
+            pin_map: std::collections::HashMap::new(),
         };
         bus.rebuild_peripheral_ranges();
         bus
@@ -1717,6 +1721,7 @@ impl SystemBus {
             flash_models_ops: false,
             flash_error_flags_idx: None,
             bus_trace: bus_trace::new_log(),
+            pin_map: std::collections::HashMap::new(),
         };
         bus.rebuild_peripheral_ranges();
         bus
@@ -2487,6 +2492,7 @@ mod tests {
                 clock: None,
                 config: HashMap::new(),
             }],
+            pins: Default::default(),
         };
 
         let mut config = HashMap::new();
@@ -2555,6 +2561,7 @@ mod tests {
                 config: HashMap::new(),
                 clock: None,
             }],
+            pins: Default::default(),
         };
 
         let mut config = HashMap::new();
@@ -2657,6 +2664,7 @@ mod tests {
                 config: HashMap::new(),
                 clock: None,
             }],
+            pins: Default::default(),
         };
 
         let mut config = HashMap::new();
@@ -3459,6 +3467,7 @@ peripherals:
                     config: HashMap::new(),
                 },
             ],
+            pins: Default::default(),
         }
     }
 
@@ -3650,6 +3659,7 @@ peripherals:
             flash_models_ops: false,
             flash_error_flags_idx: None,
             bus_trace: bus_trace::new_log(),
+            pin_map: std::collections::HashMap::new(),
         };
 
         bus.flash.write_u8(0x0800_0000, 0x12);
@@ -3716,6 +3726,7 @@ peripherals:
             flash_models_ops: false,
             flash_error_flags_idx: None,
             bus_trace: bus_trace::new_log(),
+            pin_map: std::collections::HashMap::new(),
         };
         bus.rebuild_peripheral_ranges();
         bus
@@ -3933,6 +3944,7 @@ peripherals:
             flash_models_ops: false,
             flash_error_flags_idx: None,
             bus_trace: bus_trace::new_log(),
+            pin_map: std::collections::HashMap::new(),
         };
         bus.rebuild_peripheral_ranges();
         bus
@@ -4149,6 +4161,7 @@ peripherals:
             flash_models_ops: false,
             flash_error_flags_idx: None,
             bus_trace: bus_trace::new_log(),
+            pin_map: std::collections::HashMap::new(),
         };
 
         bus.rebuild_peripheral_ranges();
@@ -4219,6 +4232,7 @@ peripherals:
             flash_models_ops: false,
             flash_error_flags_idx: None,
             bus_trace: bus_trace::new_log(),
+            pin_map: std::collections::HashMap::new(),
         };
         bus.rebuild_peripheral_ranges();
 
@@ -4858,5 +4872,38 @@ board_io: []
         inject_ecu_reply(&mut bus, 0x222, &[0x03, 0x7F, 0x2E, 0x31]);
         bus.service_can_uds_testers();
         assert_eq!(bus.can_uds_testers[0].state, CanUdsTesterState::Done);
+    }
+}
+
+#[cfg(test)]
+mod pin_map_tests {
+    use super::*;
+    use labwired_config::{ChipDescriptor, SystemManifest};
+
+    fn mkw41z4_bus() -> SystemBus {
+        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../configs/chips/mkw41z4.yaml");
+        let chip = ChipDescriptor::from_file(&path).expect("load mkw41z4");
+        let manifest = SystemManifest {
+            walk_deleted: false,
+            schema_version: "1.0".to_string(),
+            name: "pinmap-test".to_string(),
+            chip: path.to_string_lossy().to_string(),
+            external_devices: vec![],
+            board_io: vec![],
+            debug_uart: None,
+            peripherals: vec![],
+            memory_overrides: Default::default(),
+        };
+        SystemBus::from_config(&chip, &manifest).expect("assemble bus")
+    }
+
+    #[test]
+    fn pin_map_populated_from_chip_pins() {
+        let bus = mkw41z4_bus();
+        assert_eq!(bus.pin_map.get("PC0"), Some(&("gpioc".to_string(), 0u8)));
+        // KW41Z remap: "PB6" labels a gpioc pin, not gpiob.
+        assert_eq!(bus.pin_map.get("PB6"), Some(&("gpioc".to_string(), 2u8)));
+        assert_eq!(bus.pin_map.len(), 8);
     }
 }
