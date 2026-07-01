@@ -24,7 +24,7 @@ mod from_config;
 mod routing;
 mod tick;
 
-pub use bus_trace::{BusPayload, BusTraceEvent, BusTraceLog, I2cSym, new_log};
+pub use bus_trace::{new_log, BusPayload, BusTraceEvent, BusTraceLog, I2cSym};
 
 impl SystemBus {}
 

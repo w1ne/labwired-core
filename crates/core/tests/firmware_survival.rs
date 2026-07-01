@@ -1346,13 +1346,28 @@ fn kw41z_lcd_bus_trace_captures_i2c_and_spi() {
         "no I2C address frame for the FXOS8700 (0x1f) seen on i2c1; events: {events:?}"
     );
 
-    let i2c_data_event = events
-        .iter()
-        .any(|ev| ev.bus == "i2c1" && matches!(&ev.payload, BusPayload::I2c { kind: I2cSym::Data, .. }));
-    assert!(i2c_data_event, "no I2C data event seen on i2c1; events: {events:?}");
+    let i2c_data_event = events.iter().any(|ev| {
+        ev.bus == "i2c1"
+            && matches!(
+                &ev.payload,
+                BusPayload::I2c {
+                    kind: I2cSym::Data,
+                    ..
+                }
+            )
+    });
+    assert!(
+        i2c_data_event,
+        "no I2C data event seen on i2c1; events: {events:?}"
+    );
 
-    let spi_event = events.iter().any(|ev| ev.bus == "spi0" && matches!(&ev.payload, BusPayload::Spi { .. }));
-    assert!(spi_event, "no SPI frame seen on spi0 (PCD8544 LCD); events: {events:?}");
+    let spi_event = events
+        .iter()
+        .any(|ev| ev.bus == "spi0" && matches!(&ev.payload, BusPayload::Spi { .. }));
+    assert!(
+        spi_event,
+        "no SPI frame seen on spi0 (PCD8544 LCD); events: {events:?}"
+    );
 }
 
 #[test]
