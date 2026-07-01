@@ -883,6 +883,91 @@ impl SystemBus {
         Ok(layout)
     }
 
+    /// Resolve the GPIO register layout for a peripheral **deterministically**
+    /// from its declared type, mirroring [`Self::uart_layout_for`]. There is NO
+    /// path that silently mismodels a GPIO port onto STM32F1 by omission — a
+    /// wrong GPIO layout moves the output-data-register offset, and anything
+    /// that latches a pin level from that register (e.g. a SPI display's D/C
+    /// line via [`Self::resolve_pin_odr`]) then samples the wrong address and
+    /// silently misbehaves. The FRDM-KW41Z "cow" LCD blanked exactly this way:
+    /// a `type: gpio` port with no `profile` fell back to Stm32F1 (ODR @0x0C),
+    /// so the D/C line resolved to an address the Kinetis firmware (PDOR @0x00)
+    /// never drives, D/C stayed low, and every pixel byte decoded as a command.
+    ///
+    ///   1. An explicit `config.profile` always wins (author's deliberate choice).
+    ///   2. A type whose silicon layout the *name* pins down routes to it:
+    ///      `*nrf*` → Nordic; `stm32f4`/`*h5*`/`*v2*` → modern STM32;
+    ///      `stm32_gpioport`/`stm32f1`/`stm32f2` and the legacy placeholder
+    ///      ports (`efmgpioport`/`npcx_gpio`/`imxrt_gpio`, historically run on
+    ///      the F1 map) → classic STM32F1.
+    ///   3. The bare vendor-neutral `"gpio"` type (or any other gpio-ish type we
+    ///      do not model) with NO `profile` ERRORS. It is never silently mapped
+    ///      onto STM32F1 by omission.
+    pub(crate) fn gpio_layout_for(
+        p_cfg: &PeripheralConfig,
+    ) -> anyhow::Result<crate::peripherals::gpio::GpioRegisterLayout> {
+        use crate::peripherals::gpio::GpioRegisterLayout;
+
+        // 1. Explicit author override wins, for any GPIO type.
+        if let Some(name) = Self::profile_name(p_cfg)? {
+            return GpioRegisterLayout::from_str(name).map_err(|e| {
+                anyhow::anyhow!(
+                    "Peripheral '{}' has invalid GPIO profile '{}': {}",
+                    p_cfg.id,
+                    name,
+                    e
+                )
+            });
+        }
+
+        // 2. Route the families whose declared type pins down the layout.
+        let raw = p_cfg.r#type.to_ascii_lowercase();
+        let has = |needle: &str| raw.contains(needle);
+        let layout = if has("nrf") {
+            GpioRegisterLayout::Nrf52
+        } else if has("stm32f4") || has("h5") || has("stm32v2") {
+            GpioRegisterLayout::Stm32V2
+        } else if raw == "stm32_gpioport" || has("stm32f1") || has("stm32f2") {
+            GpioRegisterLayout::Stm32F1
+        } else if raw == "efmgpioport" || raw == "npcx_gpio" || raw == "imxrt_gpio" {
+            // Not yet modelled with a dedicated register map; historically ran
+            // on the STM32F1 layout. Kept explicit (by type) so the choice is
+            // visible rather than an omission-driven silent default.
+            GpioRegisterLayout::Stm32F1
+        } else if raw == "gpio" {
+            // 3a. The bare vendor-neutral "gpio" type with no profile is the
+            //     dangerous case (real product chips: KW41Z / STM32 / nRF /
+            //     ESP32) — the author meant a *specific* silicon layout and
+            //     omitting it silently picked STM32F1, corrupting D/C
+            //     resolution (the FRDM-KW41Z "cow" blank). REFUSE to guess.
+            anyhow::bail!(
+                "GPIO peripheral '{}' is declared with the vendor-neutral `type: gpio` but no \
+                 `config.profile`; it will NOT be silently mapped onto STM32F1 (a wrong layout \
+                 moves the output register and blanks a display's D/C line). Choose a layout \
+                 explicitly with `config: {{ profile: <stm32f1|stm32v2|nrf52|kinetis> }}`.",
+                p_cfg.id
+            );
+        } else {
+            // 3b. A vendor-named gpio type we do not model yet (e.g.
+            //     `gaisler_gpio`, `cc2538_gpio`, `mpfs_gpio`, `gpio_esp32`, …),
+            //     used by the strict-onboarding chip ramp. These historically
+            //     ran on the STM32F1 placeholder layout. Keep them loadable so
+            //     onboarding isn't blocked, but WARN loudly instead of failing
+            //     silently — the placeholder is a known-incomplete model, not a
+            //     faithful one. Pin it with `config.profile` (or add a real
+            //     model) to silence this and get correct register behaviour.
+            tracing::warn!(
+                "GPIO type '{}' (peripheral '{}') has no dedicated register model; falling back \
+                 to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — \
+                 set `config.profile` or add a real model for correct behaviour.",
+                p_cfg.r#type,
+                p_cfg.id
+            );
+            GpioRegisterLayout::Stm32F1
+        };
+        Ok(layout)
+    }
+
     fn resolve_peripheral_path(manifest: &SystemManifest, descriptor_path: &str) -> PathBuf {
         let raw = PathBuf::from(descriptor_path);
         if raw.is_absolute() {

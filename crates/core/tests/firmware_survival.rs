@@ -1287,6 +1287,83 @@ fn test_kw41z_lcd_renders_screen() {
     }
 }
 
+/// Regression (browser "cow" blank via the wasm `new_from_config` path):
+///
+/// The FRDM-KW41Z LCD blanked in the deployed browser while the native test
+/// rendered the cow. Root cause was NOT the display model but the GPIO factory:
+/// a `type: gpio` port with no `config.profile` silently defaulted to STM32F1
+/// (ODR @0x0C), so the PCD8544 D/C line — which the bus latches from the
+/// driving GPIO's output register — resolved to an address the Kinetis firmware
+/// (PDOR @0x00) never drives. D/C stayed low, every pixel byte decoded as a
+/// command, and the panel rendered blank. Critically the display attach did
+/// NOT error, because `resolve_pin_odr` DID find a `GpioPort` (just the wrong
+/// family) and returned a valid-but-wrong offset — bypassing the pcd8544
+/// fail-loud guard.
+///
+/// This test locks in BOTH halves of the fix, on the same `SystemBus::from_config`
+/// path the wasm `WasmSimulator::new_from_config` browser entry uses:
+///   1. The real KW41Z config builds gpioc as a *behavioural* Kinetis `GpioPort`
+///      (ODR/PDOR @0x00), and D/C ("PC0") resolves to `gpioc_base + 0x00`.
+///   2. Stripping gpioc's `profile` makes `from_config` FAIL LOUD (no silent
+///      STM32F1 fallback), instead of building a bus that renders a blank panel.
+#[test]
+fn kw41z_gpioc_is_behavioural_kinetis_and_profileless_gpio_errors() {
+    use labwired_core::peripherals::gpio::GpioPort;
+
+    let (chip, manifest) = load_system("mkw41z4", "frdm-kw41z-lcd");
+
+    // --- Half 1: the shipped config yields a behavioural Kinetis GPIOC. ---
+    let bus = SystemBus::from_config(&chip, &manifest).expect("bus builds from real config");
+    let idx = bus
+        .find_peripheral_index_by_name("gpioc")
+        .expect("gpioc peripheral present");
+    let base = bus.peripherals[idx].base;
+    let gpioc = bus.peripherals[idx]
+        .dev
+        .as_any()
+        .and_then(|a| a.downcast_ref::<GpioPort>())
+        .expect("gpioc must be a behavioural GpioPort, not a passive declarative bank");
+    assert_eq!(
+        gpioc.odr_offset(),
+        0x00,
+        "gpioc must use the Kinetis layout (PDOR/output @0x00), not STM32F1 (@0x0C)"
+    );
+    // D/C pin (PC0) must resolve to the Kinetis output register @ base + 0x00.
+    let dc = SystemBus::resolve_pin_odr_pub(&bus, "PC0")
+        .expect("PC0 must resolve to a driveable GPIO output");
+    assert_eq!(
+        dc,
+        (base, 0),
+        "PCD8544 D/C (PC0) must latch from the Kinetis output register at gpioc base + 0x00"
+    );
+
+    // --- Half 2: a profileless bare `type: gpio` must fail loudly. ---
+    let mut broken = chip.clone();
+    let gpioc_cfg = broken
+        .peripherals
+        .iter_mut()
+        .find(|p| p.id == "gpioc")
+        .expect("gpioc in chip descriptor");
+    assert_eq!(gpioc_cfg.r#type, "gpio");
+    gpioc_cfg.config.remove("profile");
+    gpioc_cfg.config.remove("register_layout");
+    let err = match SystemBus::from_config(&broken, &manifest) {
+        Ok(_) => panic!("profileless bare `type: gpio` must NOT silently default to STM32F1"),
+        Err(e) => e,
+    };
+    let msg = format!("{err:#}");
+    assert!(
+        msg.contains("gpioc") && msg.contains("profile"),
+        "error must name the peripheral and demand an explicit profile, got: {msg}"
+    );
+    // The error must surface at bus-construction time (from_config), not after
+    // the machine has run and quietly rendered a blank panel.
+    assert!(
+        msg.contains("STM32F1"),
+        "error should explain it refuses the silent STM32F1 fallback, got: {msg}"
+    );
+}
+
 /// End-to-end proof that the universal bus-trace logic analyzer (Tasks 1-2)
 /// captures REAL transactions from the unmodified KW41Z-LCD demo firmware:
 /// an I2C address frame for the FXOS8700 accelerometer and at least one SPI

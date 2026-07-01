@@ -178,13 +178,11 @@ impl SystemBus {
                 }
                 "gpio" | "stm32_gpioport" | "stm32f4_gpio" | "efmgpioport" | "npcx_gpio"
                 | "imxrt_gpio" => {
-                    let layout: GpioRegisterLayout = if p_cfg.r#type.contains("nrf") {
-                        GpioRegisterLayout::Nrf52
-                    } else if p_cfg.r#type.contains("stm32f4") || p_cfg.r#type.contains("h5") {
-                        GpioRegisterLayout::Stm32V2
-                    } else {
-                        Self::parse_profile_or_default(p_cfg, "GPIO")?
-                    };
+                    // Deterministic, type-driven layout resolution. The bare
+                    // vendor-neutral `gpio` type MUST name a profile; it is never
+                    // silently defaulted onto STM32F1 (which would move the ODR
+                    // offset and blank a display's D/C line — the KW41Z "cow" bug).
+                    let layout: GpioRegisterLayout = Self::gpio_layout_for(p_cfg)?;
                     // For nRF52 ports, an optional `num_pins` config key caps the
                     // valid-pin range (e.g. 16 for nRF52840 P1 which has P1.0–P1.15).
                     // Writes outside that range are discarded; reads return 0.

@@ -30,14 +30,20 @@ peripherals:
     # firmware that forgets to enable it has its register writes dropped on real
     # silicon — modelled here so the sim fails the same way (RM0008 §7.3.7).
     clock: { reg: "apb2enr", bit: 2 }
+    config:
+      profile: "stm32f1"
   - id: "gpiob"
     type: "gpio"
     base_address: 0x40010C00
     size: "1KB"
+    config:
+      profile: "stm32f1"
   - id: "gpioc"
     type: "gpio"
     base_address: 0x40011000
     size: "1KB"
+    config:
+      profile: "stm32f1"
   - id: "systick"
     type: "systick"
     base_address: 0xE000E010

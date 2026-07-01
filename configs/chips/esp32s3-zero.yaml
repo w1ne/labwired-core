@@ -69,6 +69,13 @@ peripherals:
     type: "gpio"
     base_address: 0x60004000
     size: "2KiB"
+    # Placeholder layout: the ESP32-S3 GPIO matrix has no dedicated GpioPort
+    # model yet, and this chip boots via the Xtensa system builder (not the
+    # from_config GPIO path). Pinned explicitly to the classic STM32F1 map it
+    # historically resolved to, so the profile is a visible choice rather than
+    # an omission-driven silent default (see SystemBus::gpio_layout_for).
+    config:
+      profile: "stm32f1"
   - id: "timg0"
     type: "timer_group"
     base_address: 0x6001F000

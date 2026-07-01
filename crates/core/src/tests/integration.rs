@@ -597,7 +597,14 @@ pub mod integration_tests {
                     size: None,
                     irq: None,
                     clock: None,
-                    config: HashMap::new(),
+                    // A bare `type: gpio` must name its layout explicitly — the
+                    // factory no longer silently defaults to STM32F1 (see
+                    // SystemBus::gpio_layout_for). This test only checks the
+                    // size/irq/base defaults, so any valid profile works.
+                    config: HashMap::from([(
+                        "profile".to_string(),
+                        serde_yaml::Value::from("stm32f1"),
+                    )]),
                 },
             ],
         };

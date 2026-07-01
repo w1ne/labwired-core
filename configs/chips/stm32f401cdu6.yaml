@@ -175,26 +175,38 @@ peripherals:
     type: "gpio"
     base_address: 0x40020000
     size: "1KB"
+    config:
+      profile: "stm32v2"
   - id: "gpiob"
     type: "gpio"
     base_address: 0x40020400
     size: "1KB"
+    config:
+      profile: "stm32v2"
   - id: "gpioc"
     type: "gpio"
     base_address: 0x40020800
     size: "1KB"
+    config:
+      profile: "stm32v2"
   - id: "gpiod"
     type: "gpio"
     base_address: 0x40020C00
     size: "1KB"
+    config:
+      profile: "stm32v2"
   - id: "gpioe"
     type: "gpio"
     base_address: 0x40021000
     size: "1KB"
+    config:
+      profile: "stm32v2"
   - id: "gpioh"
     type: "gpio"
     base_address: 0x40021C00
     size: "1KB"
+    config:
+      profile: "stm32v2"
   - id: "otg_fs_global"
     type: "stub"
     base_address: 0x50000000
