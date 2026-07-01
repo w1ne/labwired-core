@@ -49,6 +49,20 @@ Current coverage:
 This is the first bridge between unit tests and a real conformance rig. It is
 still intentionally small.
 
+### Real Device Stack Harness
+
+Status: implemented for one in-memory port.
+
+`tests/test_master_real_iolinki_device.c` links the real vendored `iolinki`
+device stack sources into a test-only library, then connects it to
+`iolinki-master` through in-memory PHY queues. This exercises real master
+startup and cyclic process-data exchange against the real device stack without
+pulling the device singleton into the production master library.
+
+CI runs this through the normal CTest suite. Because the device stack currently
+lives under the LabWired repository, GitHub Actions needs a
+`LABWIRED_CHECKOUT_TOKEN` secret with read access to `w1ne/labwired`.
+
 ### Missing Test Layers
 
 - [x] fake-device Direct Parameter Page 1 capability profiles
@@ -79,6 +93,7 @@ still intentionally small.
 - `test_master_public_flow`
 - `test_master_public_header`
 - `test_master_fake_device`
+- `test_master_real_iolinki_device`
 
 ## Hardware Validation
 

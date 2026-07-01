@@ -54,6 +54,29 @@ if(CMOCKA_FOUND)
     add_executable(test_master_fake_device test_master_fake_device.c fake_iolink_device.c)
     target_link_libraries(test_master_fake_device iolinki_master ${CMOCKA_LIBRARIES})
     add_test(NAME test_master_fake_device COMMAND test_master_fake_device)
+
+    add_library(iolinki_device_stack_for_tests STATIC
+        "${IOLINKI_DEVICE_DIR}/src/device.c"
+        "${IOLINKI_DEVICE_DIR}/src/phy_generic.c"
+        "${IOLINKI_DEVICE_DIR}/src/phy_virtual.c"
+        "${IOLINKI_DEVICE_DIR}/src/dll.c"
+        "${IOLINKI_DEVICE_DIR}/src/isdu.c"
+        "${IOLINKI_DEVICE_DIR}/src/events.c"
+        "${IOLINKI_DEVICE_DIR}/src/platform.c"
+        "${IOLINKI_DEVICE_DIR}/src/params.c"
+        "${IOLINKI_DEVICE_DIR}/src/data_storage.c"
+        "${IOLINKI_DEVICE_DIR}/src/device_info.c"
+        "${IOLINKI_DEVICE_DIR}/src/platform_stubs.c"
+        "${IOLINKI_DEVICE_DIR}/src/platform/linux/time_utils.c"
+        "${IOLINKI_DEVICE_DIR}/src/platform/linux/nvm_mock.c"
+    )
+    target_include_directories(iolinki_device_stack_for_tests PUBLIC "${IOLINKI_DEVICE_DIR}/include")
+    target_link_libraries(iolinki_device_stack_for_tests PUBLIC iolinki_frame_helpers)
+
+    add_executable(test_master_real_iolinki_device test_master_real_iolinki_device.c)
+    target_link_libraries(test_master_real_iolinki_device iolinki_master iolinki_device_stack_for_tests ${CMOCKA_LIBRARIES})
+    add_test(NAME test_master_real_iolinki_device COMMAND test_master_real_iolinki_device)
+
 else()
     message(WARNING "CMocka not found, unit tests will be skipped. Install libcmocka-dev to enable them.")
 endif()

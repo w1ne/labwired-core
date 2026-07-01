@@ -94,9 +94,8 @@ impl NativeIolinkMasterPort {
     }
 }
 
-/// One stack-backed IO-Link device instance, wrapping the real (singleton)
-/// `iolinki` device stack. Only one instance may be alive at a time; see
-/// docs/engineering/iolink-device-stack-isolation.md.
+/// One stack-backed IO-Link device instance, wrapping the real reentrant
+/// `iolinki` device stack.
 #[derive(Debug)]
 pub struct NativeIolinkDevice {
     storage: Vec<u64>,

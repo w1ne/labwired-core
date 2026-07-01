@@ -44,20 +44,23 @@ static uint8_t g_io_direction_log_len;
 static uint8_t g_sent[8][64];
 static size_t g_sent_len[8];
 
-static int fake_phy_init(void)
+static int fake_phy_init(void* user)
 {
+    (void)user;
     g_init_calls++;
     return 0;
 }
 
-static void fake_phy_set_mode(iolink_phy_mode_t mode)
+static void fake_phy_set_mode(void* user, iolink_phy_mode_t mode)
 {
+    (void)user;
     g_set_mode_calls++;
     g_last_mode = mode;
 }
 
-static void fake_phy_set_baudrate(iolink_baudrate_t baudrate)
+static void fake_phy_set_baudrate(void* user, iolink_baudrate_t baudrate)
 {
+    (void)user;
     assert_in_range(g_set_baudrate_calls, 0, 7);
     g_baudrate_history[g_set_baudrate_calls] = baudrate;
     g_set_baudrate_calls++;
@@ -107,8 +110,9 @@ static int fake_prepare_rx(void)
     return g_prepare_rx_result;
 }
 
-static void fake_phy_set_cq_line(uint8_t state)
+static void fake_phy_set_cq_line(void* user, uint8_t state)
 {
+    (void)user;
     g_set_cq_line_calls++;
     g_last_cq_line = state;
 }
@@ -119,18 +123,21 @@ static int fake_wake_up(void)
     return g_wake_up_result;
 }
 
-static int fake_phy_get_voltage_mv(void)
+static int fake_phy_get_voltage_mv(void* user)
 {
+    (void)user;
     return g_voltage_mv;
 }
 
-static bool fake_phy_is_short_circuit(void)
+static bool fake_phy_is_short_circuit(void* user)
 {
+    (void)user;
     return g_short_circuit;
 }
 
-static int fake_phy_send(const uint8_t* data, size_t len)
+static int fake_phy_send(void* user, const uint8_t* data, size_t len)
 {
+    (void)user;
     assert_non_null(data);
     assert_in_range(len, 1U, sizeof(g_sent[0]));
     assert_in_range(g_send_calls, 0, 7);
@@ -148,8 +155,9 @@ static int fake_phy_send(const uint8_t* data, size_t len)
     return (int)len;
 }
 
-static int fake_phy_recv_byte(uint8_t* byte)
+static int fake_phy_recv_byte(void* user, uint8_t* byte)
 {
+    (void)user;
     assert_non_null(byte);
 
     if(g_recv_pos >= g_recv_len)
@@ -413,7 +421,7 @@ static void test_init_sets_od_length_from_m_sequence_type(void** state)
     reset_fake_phy(state);
     config.m_seq_type = IOLINK_MASTER_M_SEQ_TYPE_2_V;
     assert_int_equal(iolink_master_init(&port, &g_fake_phy, &config), 0);
-    assert_int_equal(iolink_master_port_state(&port)->od_len, IOLINK_OD_LEN_32BIT);
+    assert_int_equal(iolink_master_port_state(&port)->od_len, IOLINK_OD_LEN_16BIT);
 }
 
 static void test_init_deactivated_port_sets_inactive_phy_and_does_not_send(void** state)

@@ -47,3 +47,10 @@ To point at another local `iolinki` checkout:
 ```sh
 cmake -S . -B build -DIOLINKI_DEVICE_DIR=/path/to/iolinki
 ```
+
+## License
+
+`iolinki-master` follows the same licensing model as `iolinki`: GPLv3-or-later
+for GPL-compatible use, with a separate commercial license available for
+closed-source/proprietary products. See [`LICENSE`](LICENSE) and
+[`LICENSE.COMMERCIAL`](LICENSE.COMMERCIAL).

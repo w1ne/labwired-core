@@ -1,10 +1,8 @@
 /*
- * Singleton bridge around the real `iolinki` device stack
- * (core/third_party/iolinki). The device stack keeps all state in globals
- * (`iolink_init`/`iolink_process` take no context), so only ONE device
- * instance may be alive at a time. `g_device_in_use` enforces that; multi-port
- * stack-backed devices require the reentrancy work tracked in
- * docs/engineering/iolink-device-stack-isolation.md.
+ * Bridge around the real reentrant `iolinki` device stack
+ * (core/third_party/iolinki). Each LabWired native device owns one
+ * `iolink_device_ctx_t`, so multiple stack-backed devices can run in the same
+ * host process without prefixed duplicate builds or protocol shims.
  *
  * GPL: this links the GPL-3.0-or-later `iolinki` device stack and is only
  * compiled under the (non-default) `iolink-native` feature.
@@ -21,7 +19,7 @@
 #define LW_IOLD_QUEUE_CAP 256U
 
 typedef struct {
-    /* `iolink_init` retains the PHY by pointer, so it must outlive init. */
+    /* `iolink_device_init` copies the config but the PHY callbacks need this context. */
     iolink_phy_api_t phy;
     iolink_device_config_t config;
     iolink_device_ctx_t device;

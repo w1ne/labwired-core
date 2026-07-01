@@ -17,8 +17,9 @@ static int g_send_calls;
 static uint8_t g_sent[8][64];
 static size_t g_sent_len[8];
 
-static int fake_send(const uint8_t* data, size_t len)
+static int fake_send(void* user, const uint8_t* data, size_t len)
 {
+    (void)user;
     assert_non_null(data);
     assert_in_range(g_send_calls, 0, 7);
     assert_in_range(len, 1U, sizeof(g_sent[0]));
@@ -29,8 +30,9 @@ static int fake_send(const uint8_t* data, size_t len)
     return (int)len;
 }
 
-static int fake_recv_byte(uint8_t* byte)
+static int fake_recv_byte(void* user, uint8_t* byte)
 {
+    (void)user;
     assert_non_null(byte);
 
     if(g_rx_pos >= g_rx_len)

@@ -116,10 +116,9 @@ static inline uint8_t iolink_master_od_len_for_type(iolink_master_m_seq_type_t t
 {
     switch(type)
     {
-    case IOLINK_MASTER_M_SEQ_TYPE_2_V:
-        return 4U;
     case IOLINK_MASTER_M_SEQ_TYPE_2_1:
     case IOLINK_MASTER_M_SEQ_TYPE_2_2:
+    case IOLINK_MASTER_M_SEQ_TYPE_2_V:
         return 2U;
     default:
         return 1U;

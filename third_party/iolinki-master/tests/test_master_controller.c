@@ -11,8 +11,9 @@
 static int g_send_calls[2];
 static int g_active_phy;
 
-static int fake_send0(const uint8_t* data, size_t len)
+static int fake_send0(void* user, const uint8_t* data, size_t len)
 {
+    (void)user;
     assert_non_null(data);
     assert_true(len > 0U);
     g_active_phy = 0;
@@ -20,8 +21,9 @@ static int fake_send0(const uint8_t* data, size_t len)
     return (int)len;
 }
 
-static int fake_send1(const uint8_t* data, size_t len)
+static int fake_send1(void* user, const uint8_t* data, size_t len)
 {
+    (void)user;
     assert_non_null(data);
     assert_true(len > 0U);
     g_active_phy = 1;

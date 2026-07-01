@@ -76,7 +76,7 @@ static void test_fake_device_conformance_matrix_nominal_profiles(void** state)
         {IOLINK_MASTER_M_SEQ_TYPE_1_1, 1U, 0U, 1U, 0x11U},
         {IOLINK_MASTER_M_SEQ_TYPE_1_2, 2U, 1U, 1U, 0x22U},
         {IOLINK_MASTER_M_SEQ_TYPE_2_2, 2U, 2U, 2U, 0x33U},
-        {IOLINK_MASTER_M_SEQ_TYPE_2_V, 4U, 3U, 4U, 0x44U},
+        {IOLINK_MASTER_M_SEQ_TYPE_2_V, 4U, 3U, 2U, 0x44U},
     };
     iolink_master_port_t port;
     iolink_master_config_t config = g_config;

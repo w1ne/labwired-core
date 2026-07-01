@@ -296,8 +296,9 @@ static void fake_iolink_device_queue_operate_response(void)
     g_device.rx_pos = 0U;
 }
 
-static int fake_iolink_device_send(const uint8_t* data, size_t len)
+static int fake_iolink_device_send(void* user, const uint8_t* data, size_t len)
 {
+    (void)user;
     if((data == NULL) || (len == 0U))
     {
         return -1;
@@ -331,8 +332,9 @@ static int fake_iolink_device_send(const uint8_t* data, size_t len)
     return (int)len;
 }
 
-static int fake_iolink_device_recv_byte(uint8_t* byte)
+static int fake_iolink_device_recv_byte(void* user, uint8_t* byte)
 {
+    (void)user;
     if(byte == NULL)
     {
         return -1;

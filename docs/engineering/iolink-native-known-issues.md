@@ -13,11 +13,9 @@ writes raced and a callback could read the wrong context → the master-tick tes
 failed nondeterministically (observed reproducibly once the branch sat on
 `origin/main`).
 
-**Fixed:** both routing pointers are now `__thread` (thread-local), so masters
-driven from parallel test threads never collide. `g_device_in_use` stays a
-process-global guard because the device stack keeps true global state
-(`g_dll_ctx`, see issue #6) — only one device may exist process-wide. Verified
-green across repeated full-suite runs.
+**Fixed:** both routing pointers are now `__thread` (thread-local), and the
+device bridge also passes the owning context through PHY `user` pointers. The
+native tests now run multiple real master/device pairs in one process.
 
 ## 2. C stack stores PHY/port by pointer — ownership is fragile
 
@@ -43,14 +41,12 @@ is safe (real frames are always ≥2 bytes) but is an artifact of modeling a
 current pulse as a byte. A cleaner model would represent wake-up out-of-band
 rather than as in-band data.
 
-## 4. Device-stack version coupling is implicit and fragile
+## 4. Device-stack version coupling — FIXED
 
-The vendored master (`iolinki-master` @ `5d3ebe9`) needs the device stack's
-`frame.c`, which only exists at device-stack commit `aec4803` — a **local,
-unpushed** commit. A fresh `git submodule update` checks out the older recorded
-pin (`4b94a35`, no `frame.c`) and the native build breaks. The required
-device-stack commit must be pushed and the submodule pin bumped, or the coupling
-documented in the build. Right now it is tribal knowledge.
+The LabWired submodule now points at the merged `iolinki` mainline reentrant
+device-stack release, and the vendored `iolinki-master` snapshot is refreshed
+from merged upstream `master`. The native build no longer depends on a local,
+unpushed device-stack commit.
 
 ## 5. `iolinki-master` is vendored as a flat copy, not a submodule
 
@@ -66,15 +62,15 @@ shared `frame.c`/`crc.c`/headers). It is correctly gated behind the non-default
 `iolink-native` feature and must never be enabled for `labwired-wasm` or any
 distributable default build. See iolink-device-stack-isolation.md.
 
-## 7. Multi-port is modeled, not stack-backed
+## 7. Multi-port stack backing
 
-`IolinkStation` (Task 6) is a pure-Rust product/profile model. Because the
-device stack is singleton, it does NOT instantiate one real device stack per
-port. The "without sharing state" guarantee in its test is true of the Rust
-wrapper only — it is not evidence that four real device stacks coexist. Real
-multi-port stack-backed behavior needs the device-stack reentrancy work.
+The old singleton blocker is gone. The native unit gate exercises multiple real
+`iolinki-master` ports and multiple real `iolinki` device contexts in one
+process. The firmware-level station gate also runs a real 4-port
+`iolinki-master` firmware against four real device-firmware sensor nodes when
+the ARM ELFs are built.
 
-## 9. `components/` is a flat junk drawer; IO-Link modules should be grouped
+## 8. `components/` is a flat junk drawer; IO-Link modules should be grouped
 
 `peripherals/components/mod.rs` is a flat list of ~30 `pub mod` declarations
 spanning unrelated device families. This implementation added two more
@@ -92,7 +88,7 @@ match the plan and the pre-existing `iolink_master.rs` placement. Regrouping
 also touches the kit registry and the public re-export path
 `peripherals::components::IolinkMaster`.
 
-## 10. Multiport demo is not browser-runnable — catalog entry skipped
+## 9. Multiport demo is not browser-runnable — catalog entry skipped
 
 Plan Task 7 calls for a `packages/playground` catalog entry. The real
 `BoardConfig` interface requires a prebuilt `demoFirmwarePath` ELF — every
@@ -109,10 +105,9 @@ are committed as scaffolding. A real catalog entry needs a master-side demo
 firmware crate compiled to an ARM ELF (the way `al2205-iolink-dido` runs the
 device stack as firmware) — out of scope for this plan.
 
-## 8. Single hard-coded master configuration
+## 10. Limited host-side sensor profiles
 
 `NativeIolinkMasterPort::new_type2_com3` hard-codes M-sequence type 2_1, COM3,
 `min_cycle_time=20`, `response_timeout=3`. The device bridge hard-codes a
-matching config and a 1-byte proximity PD. Any other device profile
-(pressure/distance from the station model, different PD lengths, ISDU) is not
-wired through the bridge yet — those station "profiles" have no native backing.
+matching config and a 1-byte proximity PD. Pressure/distance station profiles
+are still product metadata unless/until they get real C-stack profile adapters.

@@ -10,8 +10,9 @@ static int g_dq_level;
 static int g_di_level = 1;
 static iolink_phy_mode_t g_modes[4];
 
-static int phy0_send(const uint8_t* data, size_t len)
+static int phy0_send(void* user, const uint8_t* data, size_t len)
 {
+    (void)user;
     if((data == NULL) || (len == 0U))
     {
         return -1;
@@ -21,23 +22,27 @@ static int phy0_send(const uint8_t* data, size_t len)
     return (int)len;
 }
 
-static void phy0_set_mode(iolink_phy_mode_t mode)
+static void phy0_set_mode(void* user, iolink_phy_mode_t mode)
 {
+    (void)user;
     g_modes[0] = mode;
 }
 
-static void phy1_set_mode(iolink_phy_mode_t mode)
+static void phy1_set_mode(void* user, iolink_phy_mode_t mode)
 {
+    (void)user;
     g_modes[1] = mode;
 }
 
-static void phy2_set_mode(iolink_phy_mode_t mode)
+static void phy2_set_mode(void* user, iolink_phy_mode_t mode)
 {
+    (void)user;
     g_modes[2] = mode;
 }
 
-static void phy3_set_mode(iolink_phy_mode_t mode)
+static void phy3_set_mode(void* user, iolink_phy_mode_t mode)
 {
+    (void)user;
     g_modes[3] = mode;
 }
 
@@ -46,8 +51,9 @@ static int phy1_read_cq(void)
     return g_di_level;
 }
 
-static void phy2_set_cq(uint8_t level)
+static void phy2_set_cq(void* user, uint8_t level)
 {
+    (void)user;
     g_dq_level = (level != 0U) ? 1 : 0;
 }
 

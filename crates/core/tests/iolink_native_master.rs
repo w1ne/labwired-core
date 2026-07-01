@@ -64,6 +64,58 @@ fn real_master_exchanges_pd_with_one_stack_backed_device() {
 }
 
 #[test]
+fn two_real_master_device_pairs_keep_independent_process_data() {
+    use labwired_core::peripherals::components::iolink_native::{
+        NativeIolinkDevice, NativeIolinkMasterPort, NativeTickEvent,
+    };
+
+    let mut pairs = [
+        (
+            NativeIolinkMasterPort::new_type2_com3(1, 0),
+            NativeIolinkDevice::new_proximity(true),
+            vec![0x01],
+        ),
+        (
+            NativeIolinkMasterPort::new_type2_com3(1, 0),
+            NativeIolinkDevice::new_proximity(false),
+            vec![0x00],
+        ),
+    ];
+
+    let mut done = [false; 2];
+    for tick in 0..900 {
+        let now = tick * 10;
+        for (idx, (master, device, expected_pd)) in pairs.iter_mut().enumerate() {
+            master.tick(NativeTickEvent::CycleDue, now);
+            let master_bytes = master.drain_tx();
+            if !master_bytes.is_empty() {
+                device.feed_master(&master_bytes);
+            }
+            let device_bytes = device.drain_tx();
+            if !device_bytes.is_empty() {
+                master.feed_rx(&device_bytes);
+            }
+            done[idx] = done[idx]
+                || (master.state_name() == "operate" && master.latest_pd() == *expected_pd);
+        }
+
+        if done == [true, true] {
+            return;
+        }
+    }
+
+    let states: Vec<_> = pairs
+        .iter_mut()
+        .map(|(master, _, _)| master.state_name())
+        .collect();
+    let pds: Vec<_> = pairs
+        .iter_mut()
+        .map(|(master, _, _)| master.latest_pd())
+        .collect();
+    panic!("real master/device pairs did not stay independent; done={done:?} states={states:?} pds={pds:02x?}");
+}
+
+#[test]
 fn public_iolink_master_uses_native_backend_when_feature_enabled() {
     let master = labwired_core::peripherals::components::IolinkMaster::new(
         1,
@@ -74,7 +126,7 @@ fn public_iolink_master_uses_native_backend_when_feature_enabled() {
 }
 
 #[test]
-fn four_port_station_reports_connected_profiles_without_sharing_state() {
+fn four_port_station_reports_connected_profiles() {
     let mut station =
         labwired_core::peripherals::components::iolink_station::IolinkStation::new_4port();
     station.connect_proximity(1, true);
