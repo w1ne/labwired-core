@@ -2487,6 +2487,7 @@ mod tests {
                 clock: None,
                 config: HashMap::new(),
             }],
+            pins: Default::default(),
         };
 
         let mut config = HashMap::new();
@@ -2555,6 +2556,7 @@ mod tests {
                 config: HashMap::new(),
                 clock: None,
             }],
+            pins: Default::default(),
         };
 
         let mut config = HashMap::new();
@@ -2657,6 +2659,7 @@ mod tests {
                 config: HashMap::new(),
                 clock: None,
             }],
+            pins: Default::default(),
         };
 
         let mut config = HashMap::new();
@@ -3459,6 +3462,7 @@ peripherals:
                     config: HashMap::new(),
                 },
             ],
+            pins: Default::default(),
         }
     }
 

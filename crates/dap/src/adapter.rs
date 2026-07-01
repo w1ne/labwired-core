@@ -1128,6 +1128,7 @@ mod tests {
                 clock: None,
                 config: HashMap::new(),
             }],
+            pins: Default::default(),
         };
 
         let manifest = labwired_config::SystemManifest {
@@ -1185,6 +1186,7 @@ mod tests {
                 clock: None,
                 config: gpio_config,
             }],
+            pins: Default::default(),
         };
 
         let manifest = labwired_config::SystemManifest {
@@ -1255,6 +1257,7 @@ mod tests {
                 clock: None,
                 config: gpio_config,
             }],
+            pins: Default::default(),
         };
 
         let manifest = labwired_config::SystemManifest {

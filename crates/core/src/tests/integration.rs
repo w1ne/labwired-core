@@ -433,6 +433,7 @@ pub mod integration_tests {
                     config: HashMap::new(),
                 },
             ],
+            pins: Default::default(),
         };
 
         let manifest = SystemManifest {
@@ -607,6 +608,7 @@ pub mod integration_tests {
                     )]),
                 },
             ],
+            pins: Default::default(),
         };
 
         let manifest = SystemManifest {
@@ -669,6 +671,7 @@ pub mod integration_tests {
                 clock: None,
                 config: HashMap::new(),
             }],
+            pins: Default::default(),
         };
 
         let manifest = SystemManifest {
@@ -726,6 +729,7 @@ pub mod integration_tests {
                 clock: None,
                 config: gpio_config,
             }],
+            pins: Default::default(),
         };
 
         let manifest = SystemManifest {
@@ -789,6 +793,7 @@ pub mod integration_tests {
                 clock: None,
                 config: uart_config,
             }],
+            pins: Default::default(),
         };
 
         let manifest = SystemManifest {
@@ -938,6 +943,7 @@ pub mod integration_tests {
                     clock: None,
                 },
             ],
+            pins: Default::default(),
             reset_vector_offset: 0,
             atomic_register_aliases: false,
         };
@@ -998,6 +1004,7 @@ pub mod integration_tests {
                 clock: None,
                 config: rcc_config,
             }],
+            pins: Default::default(),
         };
 
         let manifest = SystemManifest {
@@ -1058,6 +1065,7 @@ pub mod integration_tests {
                 clock: None,
                 config: rcc_config,
             }],
+            pins: Default::default(),
         };
 
         let manifest = SystemManifest {
@@ -1118,6 +1126,7 @@ pub mod integration_tests {
                 clock: None,
                 config: gpio_config,
             }],
+            pins: Default::default(),
         };
 
         let manifest = SystemManifest {
@@ -2303,6 +2312,7 @@ pub mod integration_tests {
                 clock: None,
                 config: HashMap::new(),
             }],
+            pins: Default::default(),
         };
 
         let manifest = SystemManifest {
