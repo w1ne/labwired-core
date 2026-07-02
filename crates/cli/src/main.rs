@@ -598,6 +598,16 @@ struct TestArgs {
     #[arg(long)]
     coverage: bool,
 
+    /// Boot from the real ROM reset vector instead of fast-booting the ELF
+    /// (ESP32-C3: mask ROM → 2nd-stage bootloader → app, exactly like
+    /// silicon — required for Arduino/IDF images, which cannot fast-boot).
+    /// Requires LABWIRED_ESP32C3_FLASH (the merged flash image:
+    /// bootloader@0x0 + partition-table@0x8000 + app@0x10000). The boot ROM
+    /// auto-provisions from the installed ESP toolchain or the vendored
+    /// images; pin via LABWIRED_ESP32C3_ROM[_DATA].
+    #[arg(long)]
+    rom_boot: bool,
+
     /// Write a signable, reproducible run-manifest.json into --output-dir
     /// (input hashes, engine version, result subset, coverage summary, and a
     /// wall-clock-free SHA-256 digest).
@@ -875,7 +885,7 @@ fn main() -> ExitCode {
 
 /// Build an ESP32-C3 ROM-boot machine; `efuse_mac` programs a distinct factory
 /// MAC so multiple instances are distinguishable on the shared VirtualWifi air.
-fn build_c3_rom_boot_machine(
+pub(crate) fn build_c3_rom_boot_machine(
     mut bus: labwired_core::bus::SystemBus,
     efuse_mac: Option<[u8; 6]>,
 ) -> Result<labwired_core::Machine<labwired_core::cpu::RiscV>, ExitCode> {
@@ -890,6 +900,33 @@ fn build_c3_rom_boot_machine(
     // (LABWIRED_ESP32C3_ROM[_DATA], loaded into the chip's rom regions by
     // from_config) and the flash image (LABWIRED_ESP32C3_FLASH).
     use std::sync::{Arc, Mutex};
+    // ROM images: from_config already loaded them into the chip's rom regions
+    // when the LABWIRED_ESP32C3_ROM[_DATA] env pins are set. Otherwise
+    // auto-provision (toolchain ROM ELF, else the vendored images) and write
+    // them into the still-zeroed regions, so --rom-boot works out of the box.
+    if std::env::var("LABWIRED_ESP32C3_ROM").is_err() {
+        use labwired_core::boot::esp32c3_rom as c3rom;
+        let Some(images) = c3rom::provision_rom_images() else {
+            eprintln!(
+                "error: --rom-boot needs the real ESP32-C3 boot ROM, but none was found. \
+                 Install an ESP toolchain (esp32c3_rev3_rom.elf) or set \
+                 LABWIRED_ESP32C3_ROM / LABWIRED_ESP32C3_ROM_DATA."
+            );
+            return Err(ExitCode::from(EXIT_CONFIG_ERROR));
+        };
+        for mem in bus.extra_mem.iter_mut() {
+            let (src, base) = if mem.base_addr == c3rom::IROM_BASE as u64 {
+                (&images.irom, c3rom::IROM_BASE)
+            } else if mem.base_addr == c3rom::DROM_BASE as u64 {
+                (&images.drom, c3rom::DROM_BASE)
+            } else {
+                continue;
+            };
+            let n = src.len().min(mem.data.len());
+            mem.data[..n].copy_from_slice(&src[..n]);
+            tracing::info!("provisioned {n} bytes of C3 boot ROM @ {base:#010x}");
+        }
+    }
     let flash_path = match std::env::var("LABWIRED_ESP32C3_FLASH") {
         Ok(p) => p,
         Err(_) => {
@@ -985,6 +1022,24 @@ fn build_c3_rom_boot_machine(
         0x400,
         None,
         Box::new(labwired_core::peripherals::esp32c3::ana_i2c::Esp32c3AnaI2c::new()),
+    );
+    // USB-Serial-JTAG (0x6004_3000): the BROM's console prints to BOTH UART0
+    // and the USB CDC port — `usb_uart_tx_one_char` busy-polls EP1_CONF
+    // (offset 0x04) for SERIAL_IN_EP_DATA_FREE. The declarative usb_device
+    // stub reads 0 there, wedging boot_prepare's very first ets_printf line
+    // (observed: banner, then a uart/usb tx ping-pong, then ret-to-0). The C3
+    // block is the same IP as the S3's, so the S3 behavioral model (EP1_CONF
+    // always WR_DONE|DATA_FREE, bytes appended/echoed) drops in unchanged.
+    // Echo off: the same console bytes already reach stdout via UART0 — a
+    // second echo here doubles every character.
+    let mut usb_serial = labwired_core::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag::new();
+    usb_serial.set_sink(None, false);
+    bus.add_peripheral(
+        "usb_serial_jtag",
+        0x6004_3000,
+        0x100,
+        None,
+        Box::new(usb_serial),
     );
     // FE/PHY register block (0x6001_1000): libphy's set_rx_gain_table also
     // writes gain/FE config into the gap between uart1 (0x6001_0000) and
@@ -1168,7 +1223,15 @@ fn build_c3_rom_boot_machine(
     // 31 interrupt lines (incl. line 7) are ESP matrix lines, so a
     // self-pending MTIP would collide. mtimecmp=MAX keeps mip bit7 clear.
     cpu.mtimecmp = u64::MAX;
-    Ok(labwired_core::Machine::new(cpu, bus))
+    let mut machine = labwired_core::Machine::new(cpu, bus);
+    // ROM-boot firmware is interrupt-driven (FreeRTOS tick via the interrupt
+    // matrix). Instruction batching freezes peripherals — and interrupt
+    // delivery — across each 10k-step batch, so the scheduler never runs and
+    // the app spins in vPortEnterCritical forever. Cycle-accurate stepping is
+    // required for correctness here, exactly like the cycle-tight GPIO-timing
+    // devices the test loop already exempts.
+    machine.config.batch_mode_enabled = false;
+    Ok(machine)
 }
 
 /// Two-station WiFi run: boot two ESP32-C3 instances with distinct factory MACs

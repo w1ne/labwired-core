@@ -166,12 +166,21 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
         stop_when_assertions_pass: script_stop_when_assertions_pass,
     };
 
-    // Guard against accidentally huge runs from CI misconfiguration.
+    // Guard against accidentally huge runs from CI misconfiguration. The
+    // faithful --rom-boot path spends ~150M steps in the real mask ROM +
+    // 2nd-stage bootloader BEFORE the app runs a single instruction, so it
+    // gets a proportionally higher ceiling (wall-clock caps still apply).
     const MAX_ALLOWED_STEPS: u64 = 50_000_000;
-    if max_steps > MAX_ALLOWED_STEPS {
+    const MAX_ALLOWED_STEPS_ROM_BOOT: u64 = 500_000_000;
+    let max_allowed_steps = if args.rom_boot {
+        MAX_ALLOWED_STEPS_ROM_BOOT
+    } else {
+        MAX_ALLOWED_STEPS
+    };
+    if max_steps > max_allowed_steps {
         let msg = format!(
             "max_steps {} exceeds MAX_ALLOWED_STEPS {}",
-            max_steps, MAX_ALLOWED_STEPS
+            max_steps, max_allowed_steps
         );
         error!("{}", msg);
         write_config_error_outputs(
@@ -470,23 +479,10 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
 
     let metrics = std::sync::Arc::new(labwired_core::metrics::PerformanceMetrics::new());
 
-    macro_rules! setup_and_run {
-        ($cpu:expr) => {{
-            let mut machine = labwired_core::Machine::new($cpu, bus);
+    macro_rules! run_machine {
+        ($machine:expr) => {{
+            let mut machine = $machine;
             machine.observers.push(metrics.clone());
-            if let Err(e) = machine.load_firmware(&program) {
-                return handle_load_error(
-                    &args,
-                    &metrics,
-                    &resolved_limits,
-                    &firmware_bytes,
-                    &uart_tx,
-                    &machine.cpu,
-                    &firmware_path,
-                    system_path.as_ref(),
-                    e,
-                );
-            }
             let fault_evidence = handle_faults(&mut machine.bus, &faults);
             execute_test_loop(
                 &args,
@@ -505,14 +501,48 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
         }};
     }
 
+    macro_rules! setup_and_run {
+        ($cpu:expr) => {{
+            let mut machine = labwired_core::Machine::new($cpu, bus);
+            if let Err(e) = machine.load_firmware(&program) {
+                return handle_load_error(
+                    &args,
+                    &metrics,
+                    &resolved_limits,
+                    &firmware_bytes,
+                    &uart_tx,
+                    &machine.cpu,
+                    &firmware_path,
+                    system_path.as_ref(),
+                    e,
+                );
+            }
+            run_machine!(machine)
+        }};
+    }
+
     let exit_code = match program.arch {
         labwired_core::Arch::Arm => {
             let (cpu, _nvic) = labwired_core::system::cortex_m::configure_cortex_m(&mut bus);
             setup_and_run!(cpu)
         }
         labwired_core::Arch::RiscV => {
-            let cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
-            setup_and_run!(cpu)
+            if args.rom_boot {
+                // Faithful boot: real mask ROM → 2nd-stage bootloader → app,
+                // loading from the flash image (LABWIRED_ESP32C3_FLASH), on
+                // the SAME from_config bus — external devices and assertions
+                // work exactly as on the fast-boot path. The ELF is NOT
+                // loaded into memory (the flash image is the program; the
+                // ELF still feeds symbols/diagnostics).
+                let machine = match crate::build_c3_rom_boot_machine(bus, None) {
+                    Ok(m) => m,
+                    Err(code) => return code,
+                };
+                run_machine!(machine)
+            } else {
+                let cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
+                setup_and_run!(cpu)
+            }
         }
         labwired_core::Arch::XtensaLx7 => {
             // No system manifest present: plain configure path (no external devices).

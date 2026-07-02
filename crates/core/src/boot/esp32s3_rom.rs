@@ -40,15 +40,36 @@ pub struct RomImages {
     pub drom: Vec<u8>,
 }
 
+/// The DRAM window the copy-table reconstruction targets — where the boot
+/// ROM's `.data` lives at runtime. Chip-specific: the S3 range is below; the
+/// C3 module passes its own range into these shared helpers.
+#[derive(Clone, Copy)]
+pub(crate) struct DramWindow {
+    pub lo: u32,
+    pub hi: u32,
+}
+
+const S3_DRAM: DramWindow = DramWindow {
+    lo: DRAM_LO,
+    hi: DRAM_HI,
+};
+
 /// Extract the IROM and DROM flat images from the genuine ROM ELF bytes.
 pub fn extract_rom_images(elf_bytes: &[u8]) -> Result<RomImages, String> {
     let elf = Elf::parse(elf_bytes).map_err(|e| format!("parse ROM ELF: {e}"))?;
-    let irom = build_window(&elf, elf_bytes, IROM_BASE, IROM_SIZE, true);
-    let drom = build_window(&elf, elf_bytes, DROM_BASE, DROM_SIZE, false);
+    let irom = build_window(&elf, elf_bytes, IROM_BASE, IROM_SIZE, true, S3_DRAM);
+    let drom = build_window(&elf, elf_bytes, DROM_BASE, DROM_SIZE, false, S3_DRAM);
     Ok(RomImages { irom, drom })
 }
 
-fn build_window(elf: &Elf, bytes: &[u8], base: u32, size: usize, by_paddr: bool) -> Vec<u8> {
+pub(crate) fn build_window(
+    elf: &Elf,
+    bytes: &[u8],
+    base: u32,
+    size: usize,
+    by_paddr: bool,
+    dram: DramWindow,
+) -> Vec<u8> {
     let mut img = vec![0u8; size];
     let win_end = base + size as u32;
 
@@ -75,7 +96,7 @@ fn build_window(elf: &Elf, bytes: &[u8], base: u32, size: usize, by_paddr: bool)
 
     // 2. Reconstruct the boot ROM's `.data` copy sources (IROM window only).
     if by_paddr {
-        populate_data_copy_sources(elf, bytes, &mut img, base);
+        populate_data_copy_sources(elf, bytes, &mut img, base, dram);
     }
 
     // 3. Overlay PROGBITS sections that live in this window but in no PT_LOAD
@@ -116,7 +137,13 @@ fn progbits_sections<'a>(elf: &Elf, bytes: &'a [u8]) -> Vec<(u32, &'a [u8])> {
 /// Walk the in-image 16-byte copy-table quads (dst_start, dst_end, src, 0) and
 /// fill each `src` LMA in the IROM image with the genuine bytes the matching
 /// DRAM `dst` section holds, so the ROM's own startup copy lands real values.
-fn populate_data_copy_sources(elf: &Elf, bytes: &[u8], irom: &mut [u8], irom_base: u32) {
+fn populate_data_copy_sources(
+    elf: &Elf,
+    bytes: &[u8],
+    irom: &mut [u8],
+    irom_base: u32,
+    dram: DramWindow,
+) {
     let sections = progbits_sections(elf, bytes);
     let vma_read = |addr: u32, n: usize| -> Vec<u8> {
         let mut out = vec![0u8; n];
@@ -141,9 +168,14 @@ fn populate_data_copy_sources(elf: &Elf, bytes: &[u8], irom: &mut [u8], irom_bas
         let dst_e = u32::from_le_bytes(irom[off + 4..off + 8].try_into().unwrap());
         let src = u32::from_le_bytes(irom[off + 8..off + 12].try_into().unwrap());
         let term = u32::from_le_bytes(irom[off + 12..off + 16].try_into().unwrap());
-        let ok = (DRAM_LO..DRAM_HI).contains(&dst_s)
+        // NB: `dst_e <= dram.hi`, inclusive — a copy record's end is exclusive
+        // and the last record may end exactly at the DRAM top (the C3's
+        // `ets_ops_table_ptr` sits at 0x3FCDFFFC..0x3FCE0000; rejecting it
+        // leaves the ROM's ops table null and boot dies in
+        // ets_run_flash_bootloader with a jalr to 0).
+        let ok = (dram.lo..dram.hi).contains(&dst_s)
             && dst_s <= dst_e
-            && dst_e < DRAM_HI
+            && dst_e <= dram.hi
             && irom_base <= src
             && src < irom_hi
             && term == 0
