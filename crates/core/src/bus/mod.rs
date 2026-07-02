@@ -3515,6 +3515,79 @@ board_io: []
         assert_eq!(t.script[0].expect_nrc, None);
     }
 
+    /// Config parsing: a `can-player` external device with inline `data:`
+    /// attaches a `CanLogPlayer` to the bus with the parsed frames.
+    #[test]
+    fn can_player_from_config_attaches_replayer() {
+        let manifest: SystemManifest = serde_yaml::from_str(
+            r#"
+name: "can-player-attach"
+chip: "f103"
+external_devices:
+  - id: "p"
+    type: "can-player"
+    connection: "bxcan1"
+    config:
+      data: "(1.0) can0 123#11\n"
+board_io: []
+"#,
+        )
+        .unwrap();
+        let chip: ChipDescriptor = serde_yaml::from_str(MIN_F103_CHIP).unwrap();
+        let bus = SystemBus::from_config(&chip, &manifest).unwrap();
+        assert_eq!(bus.can_log_players.len(), 1);
+        assert_eq!(bus.can_log_players[0].frames.len(), 1);
+    }
+
+    /// Config parsing: a `can-player` device whose `connection` doesn't name
+    /// a real peripheral on the bus fails with an error naming the device.
+    #[test]
+    fn can_player_from_config_errors_on_missing_connection() {
+        let manifest: SystemManifest = serde_yaml::from_str(
+            r#"
+name: "can-player-bad-conn"
+chip: "f103"
+external_devices:
+  - id: "p"
+    type: "can-player"
+    connection: "nope"
+    config:
+      data: "(1.0) can0 123#11\n"
+board_io: []
+"#,
+        )
+        .unwrap();
+        let chip: ChipDescriptor = serde_yaml::from_str(MIN_F103_CHIP).unwrap();
+        let err = expect_from_config_error(&chip, &manifest);
+        let msg = err.to_string();
+        assert!(msg.contains("can-player 'p'"), "unexpected error: {msg}");
+    }
+
+    /// Config parsing: a `can-player` device with neither `path` nor `data`
+    /// (post config-crate path-inlining, only `data` ever reaches core)
+    /// fails with an error naming both keys.
+    #[test]
+    fn can_player_from_config_errors_when_neither_path_nor_data_present() {
+        let manifest: SystemManifest = serde_yaml::from_str(
+            r#"
+name: "can-player-no-data"
+chip: "f103"
+external_devices:
+  - id: "p"
+    type: "can-player"
+    connection: "bxcan1"
+    config: {}
+board_io: []
+"#,
+        )
+        .unwrap();
+        let chip: ChipDescriptor = serde_yaml::from_str(MIN_F103_CHIP).unwrap();
+        let err = expect_from_config_error(&chip, &manifest);
+        let msg = err.to_string();
+        assert!(msg.contains("path"), "unexpected error: {msg}");
+        assert!(msg.contains("data"), "unexpected error: {msg}");
+    }
+
     /// Parse a minimal chip yaml with the given header lines (name/arch/core).
     fn bit_band_test_chip(header: &str, gpio_base: &str, gpio_profile: &str) -> ChipDescriptor {
         let yaml = format!(

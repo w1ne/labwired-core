@@ -295,8 +295,32 @@ impl ChipDescriptor {
 
 impl SystemManifest {
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
+        let path = path.as_ref();
         let f = std::fs::File::open(path)?;
-        serde_yaml::from_reader(f).context("Failed to parse System Manifest")
+        let mut manifest: SystemManifest =
+            serde_yaml::from_reader(f).context("Failed to parse System Manifest")?;
+        // can-player accepts `path:` as a CLI convenience; core itself only
+        // ever sees `data:` (keeps std::fs out of the sim core → wasm-safe).
+        let base = path.parent().map(|p| p.to_path_buf()).unwrap_or_default();
+        for ext in &mut manifest.external_devices {
+            if ext.r#type == "can-player" {
+                if let Some(p) = ext.config.remove("path") {
+                    let p = p
+                        .as_str()
+                        .ok_or_else(|| {
+                            anyhow::anyhow!("can-player '{}': path must be a string", ext.id)
+                        })?
+                        .to_string();
+                    let full = base.join(&p);
+                    let text = std::fs::read_to_string(&full).map_err(|e| {
+                        anyhow::anyhow!("can-player '{}': cannot read log {:?}: {e}", ext.id, full)
+                    })?;
+                    ext.config
+                        .insert("data".into(), serde_yaml::Value::String(text));
+                }
+            }
+        }
+        Ok(manifest)
     }
 }
 
@@ -1580,5 +1604,40 @@ peripherals: []
 "#;
         let chip: ChipDescriptor = serde_yaml::from_str(yaml).expect("parse");
         assert!(chip.pins.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod can_player_path_inline_tests {
+    use super::*;
+
+    /// `SystemManifest::from_file` inlines a `can-player` device's `path:`
+    /// (resolved relative to the system yaml on disk) into `data:`, so the
+    /// sim core itself only ever consumes inline text (keeps `std::fs` out
+    /// of the wasm-safe core).
+    #[test]
+    fn from_file_inlines_can_player_path_into_data() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("s.log"), "(1.0) can0 123#11\n").unwrap();
+        let yaml = r#"
+name: "t"
+chip: "chip.yaml"
+external_devices:
+  - type: "can-player"
+    id: "p"
+    connection: "bxcan1"
+    config:
+      path: "./s.log"
+board_io: []
+"#;
+        let sys_path = dir.path().join("system.yaml");
+        std::fs::write(&sys_path, yaml).unwrap();
+        let m = SystemManifest::from_file(&sys_path).unwrap();
+        let cfg = &m.external_devices[0].config;
+        assert!(cfg.get("path").is_none());
+        assert_eq!(
+            cfg.get("data").unwrap().as_str().unwrap(),
+            "(1.0) can0 123#11\n"
+        );
     }
 }

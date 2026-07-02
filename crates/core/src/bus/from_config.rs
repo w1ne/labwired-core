@@ -691,6 +691,30 @@ impl SystemBus {
                     }
                     bus.can_uds_testers.push(tester);
                 }
+                "can-player" => {
+                    if bus.find_peripheral_index_by_name(&ext.connection).is_none() {
+                        return Err(anyhow::anyhow!(
+                            "can-player '{}' connection '{}' was not found",
+                            ext.id,
+                            ext.connection
+                        ));
+                    }
+                    let Some(data) = ext.config.get("data").and_then(|v| v.as_str()) else {
+                        return Err(anyhow::anyhow!(
+                            "can-player '{}': set 'path' (a candump .log file) or inline 'data'",
+                            ext.id
+                        ));
+                    };
+                    let tps = Self::yaml_u32(ext.config.get("ticks_per_second"), 1_000_000) as u64;
+                    let player = CanLogPlayer::from_candump(
+                        ext.id.clone(),
+                        ext.connection.clone(),
+                        data,
+                        tps,
+                    )
+                    .map_err(|e| anyhow::anyhow!(e))?;
+                    bus.can_log_players.push(player);
+                }
                 // ntc-thermistor dispatches through the PeripheralKit registry above.
                 _ => {
                     tracing::warn!(
