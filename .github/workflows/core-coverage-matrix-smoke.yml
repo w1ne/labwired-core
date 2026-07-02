@@ -73,6 +73,10 @@ jobs:
             make: examples/canmod-gps-sim/firmware
             script: examples/canmod-gps-sim/canmod-smoke.yaml
             system: examples/canmod-gps-sim/system.yaml
+          - id: f103-j1939-monitor
+            make: examples/f103-j1939-monitor/firmware
+            script: examples/f103-j1939-monitor/j1939-replay.yaml
+            system: examples/f103-j1939-monitor/replay-system.yaml
 
     steps:
       - uses: actions/checkout@v4

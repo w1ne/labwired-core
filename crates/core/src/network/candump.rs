@@ -18,7 +18,9 @@ pub fn parse_candump(text: &str) -> Result<Vec<(f64, CanFrame)>, String> {
         let mut parts = line.split_whitespace();
         let (Some(ts), Some(_iface), Some(frame)) = (parts.next(), parts.next(), parts.next())
         else {
-            return Err(format!("candump line {n}: expected '(<ts>) <iface> <ID>#<DATA>'"));
+            return Err(format!(
+                "candump line {n}: expected '(<ts>) <iface> <ID>#<DATA>'"
+            ));
         };
         let ts: f64 = ts
             .strip_prefix('(')
@@ -77,7 +79,10 @@ mod tests {
         assert_eq!(frames[0].0, 1578925458.8245);
         assert_eq!(frames[0].1.id, 0x0CF00300);
         assert!(frames[0].1.extended);
-        assert_eq!(frames[0].1.data, vec![0xDD, 0, 0, 0xFF, 0xFF, 0xFF, 0x5C, 0xFF]);
+        assert_eq!(
+            frames[0].1.data,
+            vec![0xDD, 0, 0, 0xFF, 0xFF, 0xFF, 0x5C, 0xFF]
+        );
         assert_eq!(frames[1].1.id, 0x123);
         assert!(!frames[1].1.extended);
         assert_eq!(frames[1].1.data.len(), 4);

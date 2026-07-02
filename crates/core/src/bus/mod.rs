@@ -602,7 +602,12 @@ impl CanLogPlayer {
         let t0 = parsed[0].0;
         let mut frames: Vec<(u64, crate::network::CanFrame)> = parsed
             .into_iter()
-            .map(|(t, f)| (((t - t0).max(0.0) * ticks_per_second as f64).round() as u64, f))
+            .map(|(t, f)| {
+                (
+                    ((t - t0).max(0.0) * ticks_per_second as f64).round() as u64,
+                    f,
+                )
+            })
             .collect();
         frames.sort_by_key(|(t, _)| *t);
         Ok(Self {
@@ -1415,8 +1420,7 @@ impl SystemBus {
                     let any = self.peripherals[idx].dev.as_any_mut();
                     match any {
                         Some(a) => {
-                            if let Some(bx) = a.downcast_mut::<crate::peripherals::bxcan::BxCan>()
-                            {
+                            if let Some(bx) = a.downcast_mut::<crate::peripherals::bxcan::BxCan>() {
                                 bx.deliver_rx(frame)
                             } else if let Some(fd) =
                                 a.downcast_mut::<crate::peripherals::fdcan::Fdcan>()
