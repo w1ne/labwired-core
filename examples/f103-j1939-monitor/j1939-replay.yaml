@@ -1,0 +1,20 @@
+schema_version: "1.0"
+inputs:
+  system: "./replay-system.yaml"
+  firmware: "./firmware/build/j1939_monitor.elf"
+limits:
+  max_steps: 9000000
+assertions:
+  - uart_contains: "J1939-MONITOR START"
+  # Per-SA BAM reassembly under REAL interleaved traffic: the engine (SA 00)
+  # and retarder (SA 0F) BAM sessions open 11 ms apart in this slice. A
+  # single-global-session reassembler yields data=030360... here (retarder
+  # bytes inside the engine PGN) and idle_rpm=96.
+  - uart_contains: "BAM sa=00 pgn=FEE3 len=39 data=0013B98033DA201B"
+  - uart_contains: "ENGINE idle_rpm=608"
+  - uart_contains: "BAM sa=0F pgn=FEE1 len=19 data=030360224A804D27"
+  # DM1 from all 9 distinct source addresses in the capture:
+  - uart_contains: "DM1 sa=00 lamps=03"
+  - uart_contains: "DM1 sources=9"
+  - uart_contains: "RX total=5000"
+  - expected_stop_reason: max_steps

@@ -1,0 +1,12 @@
+name: "f103-j1939-monitor"
+chip: "../../configs/chips/stm32f103.yaml"
+external_devices:
+  # Replays an 8s slice of a real CANsub J1939 capture (see captures/README.md)
+  # onto bxCAN at recorded relative timing. 1 tick = 1 µs of recorded time.
+  - type: "can-player"
+    id: "cansub-replay"
+    connection: "bxcan1"
+    config:
+      path: "./captures/j1939-slice-8s.log"
+      ticks_per_second: 1000000
+board_io: []
