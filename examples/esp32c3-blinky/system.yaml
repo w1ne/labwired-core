@@ -1,0 +1,16 @@
+# LabWired - ESP32-C3 Super Mini blinky.
+#
+# The canonical "hello world" for the C3 Super Mini: the firmware enables
+# GPIO8 (the board's user LED) as an output and toggles it forever, narrating
+# each transition over UART0. This is the demo binary the Playground falls
+# back to when a shared/agent C3 lab carries no firmware of its own.
+name: "esp32c3-blinky"
+chip: "../../configs/chips/esp32c3.yaml"
+external_devices: []
+board_io:
+  - id: "status_led"
+    kind: "led"
+    peripheral: "gpio"
+    pin: 8
+    signal: "output"
+    active_high: true
