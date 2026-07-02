@@ -1,3 +1,7 @@
+// LabWired - Firmware Simulation Platform
+// Copyright (C) 2026 Andrii Shylenko
+// SPDX-License-Identifier: MIT
+
 //! candump `.log` parser for the `can-player` external device.
 //!
 //! Exactly one input format, forever (see 2026-07-02 replay-showcase spec):

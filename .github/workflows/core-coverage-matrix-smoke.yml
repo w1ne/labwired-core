@@ -140,6 +140,7 @@ jobs:
             --out-dir "out/coverage-matrix/${{ matrix.id }}/unsupported-audit"
 
       - name: Publish audit summary
+        if: matrix.crate != ''
         run: |
           python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
           import json

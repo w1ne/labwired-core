@@ -2,7 +2,7 @@
 
 An RX-only J1939 node on the STM32F103 bxCAN peripheral (real normal mode,
 accept-all filter — not loopback), fed by the `can-player` external device
-replaying an 8-second slice of a **real** CANsub CANmod.gps/J1939 capture
+replaying an 8-second slice of a **real** CANsub J1939 sample capture
 (see `captures/README.md` for provenance). The firmware reassembles
 multi-packet BAM (Broadcast Announce Message) transport sessions, decodes
 DM1 (active diagnostic trouble code) lamp status from every source address
