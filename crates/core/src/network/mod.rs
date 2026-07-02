@@ -7,6 +7,7 @@
 use crate::SimResult;
 use std::sync::mpsc::{channel, Receiver, Sender};
 
+pub mod candump;
 pub mod egress;
 pub mod mqtt;
 pub mod sim;
