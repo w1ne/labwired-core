@@ -73,6 +73,7 @@ impl SystemBus {
             hcsr04: Vec::new(),
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
+            can_log_players: Vec::new(),
             esp32c3_irq_routing: false,
             riscv_irq_lines: 0,
             flash_models_ops: false,
