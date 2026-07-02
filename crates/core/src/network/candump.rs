@@ -41,6 +41,9 @@ pub fn parse_candump(text: &str) -> Result<Vec<(f64, CanFrame)>, String> {
         if data_str.len() % 2 != 0 {
             return Err(format!("candump line {n}: odd-length hex payload"));
         }
+        if !data_str.is_ascii() {
+            return Err(format!("candump line {n}: non-ASCII characters in payload"));
+        }
         let data = (0..data_str.len())
             .step_by(2)
             .map(|i| u8::from_str_radix(&data_str[i..i + 2], 16))
@@ -108,5 +111,13 @@ mod tests {
     #[test]
     fn rejects_odd_hex_payload() {
         assert!(parse_candump("(1.0) can0 123#ABC\n").is_err());
+    }
+
+    #[test]
+    fn rejects_non_ascii_payload_gracefully() {
+        // 'A' (1 byte) + '€' (3 bytes) = 4 bytes, passes the even-length check,
+        // but must produce Err, not a char-boundary panic.
+        let err = parse_candump("(1.0) can0 123#A€\n").unwrap_err();
+        assert!(err.contains("line 1"), "got: {err}");
     }
 }
