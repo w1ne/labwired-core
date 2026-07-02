@@ -102,7 +102,7 @@ Adding a catalog entry now would ship a broken, unrunnable lab. The parent
 (plan Task 8 Step 4) is N/A. The core demo assets
 (`configs/systems/iolink-multiport-demo.yaml`, `examples/iolink-multiport-demo`)
 are committed as scaffolding. A real catalog entry needs a master-side demo
-firmware crate compiled to an ARM ELF (the way `al2205-iolink-dido` runs the
+firmware crate compiled to an ARM ELF (the way `iolink-dido` runs the
 device stack as firmware) — out of scope for this plan.
 
 ## 10. Limited host-side sensor profiles

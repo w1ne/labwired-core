@@ -1,7 +1,7 @@
-# IO-Link DI/DO IO-Link DI device (simulated)
+# IO-Link DI/DO device (simulated)
 
 Runs the real [`iolinki`](../../third_party/iolinki) IO-Link **device** stack as
-firmware on a simulated STM32L476, modeling an IFM IO-Link DI/DO 8-port IO-Link
+firmware on a simulated STM32L476, modeling an 8-port IO-Link
 **digital-input** hub. A native IO-Link master peer drives the link; the device
 reads 8 digital inputs from a 74HC165 shift register over SPI1 and publishes them
 as cyclic process data.
@@ -22,9 +22,10 @@ native `iolink-master`) and carries the UART bytes.
 make -C firmware            # needs arm-none-eabi-gcc; produces firmware/iolink_dido.elf
 ```
 
-The firmware is plain C with its own startup/linker (no vendor SDK). It is built
-at `-O0` on purpose: this toolchain (arm-none-eabi GCC 10.2) miscompiles local
-aggregate initialisation at `-Os` here.
+The firmware is a standard STM32CubeL4 project (official CMSIS startup, system
+file and NUCLEO-L476RG linker script; set `STM32CUBE_L4_DIR` if the pack is not
+a sibling checkout). It is built at `-O0` on purpose: this toolchain
+(arm-none-eabi GCC 10.2) miscompiles local aggregate initialisation at `-Os` here.
 
 ## Run headless in the simulator
 
