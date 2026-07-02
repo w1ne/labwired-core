@@ -35,9 +35,11 @@ LDFLAGS := -march=rv32imc_zicsr_zifencei -mabi=ilp32 -nostartfiles \
 
 # iolinki IO-Link DEVICE-stack sources compiled ON-TARGET for rv32imc (the CMake
 # IOLINKI_SOURCES list, minus the POSIX phy_virtual.c / linux platform, plus the
-# baremetal time source) — the same set the iolink-dido ARM build uses.
+# baremetal time source) — the same set the iolink-dido ARM build uses. The
+# reentrant stack's device-context entry point is src/device.c (iolink_core.c
+# is gone from the pinned submodule).
 IOLINKI_SRC := \
-  $(IOLINKI_DIR)/src/iolink_core.c \
+  $(IOLINKI_DIR)/src/device.c \
   $(IOLINKI_DIR)/src/phy_generic.c \
   $(IOLINKI_DIR)/src/crc.c \
   $(IOLINKI_DIR)/src/dll.c \

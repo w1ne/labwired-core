@@ -16,6 +16,7 @@ on:
       - "crates/core/tests/world_multichip.rs"
       - "examples/iolink-dido/**"
       - "examples/iolink-station/**"
+      - "examples/esp32c3-mlx90640-thermal/**"
       - "third_party/iolinki"
       - "third_party/iolinki-master/**"
   pull_request:
@@ -35,6 +36,7 @@ on:
       - "crates/core/tests/world_multichip.rs"
       - "examples/iolink-dido/**"
       - "examples/iolink-station/**"
+      - "examples/esp32c3-mlx90640-thermal/**"
       - "third_party/iolinki"
       - "third_party/iolinki-master/**"
   workflow_dispatch:
@@ -84,3 +86,34 @@ jobs:
         with:
           name: labwired-iolink-native
           path: out/iolink
+
+  # Build smoke for the ESP32-C3 thermal-fingerprint firmware, which links the
+  # iolinki DEVICE stack for riscv32. This is the firmware an iolinki submodule
+  # pin bump silently broke (issue #445: iolink_core.c removed by the reentrant
+  # device-context line) — building it here makes the next API-breaking pin
+  # bump fail this workflow instead of the example.
+  thermal-firmware-build:
+    name: esp32c3-mlx90640-thermal firmware build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout LabWired core
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Configure private submodule auth
+        run: git config --global url."https://x-access-token:${{ github.token }}@github.com/".insteadOf "git@github.com:"
+
+      - name: Checkout iolinki device submodule
+        run: git submodule update --init --depth 1 third_party/iolinki
+
+      # The Espressif riscv32 GCC the example's Makefile auto-discovers under
+      # ~/.platformio/packages/toolchain-riscv32-esp (pipx ships on the runner).
+      - name: Install riscv32-esp toolchain via PlatformIO
+        run: |
+          pipx install platformio
+          pio pkg install --global --tool "platformio/toolchain-riscv32-esp"
+          "$HOME/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-gcc" --version
+
+      - name: Build thermal-fingerprint firmware against the pinned iolinki
+        run: make -C examples/esp32c3-mlx90640-thermal/firmware
