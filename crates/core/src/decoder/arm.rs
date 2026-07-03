@@ -2140,24 +2140,48 @@ mod tests {
         //   faa4 f28c  sel   r2, r4, ip(12)
         assert_eq!(
             decode_thumb_32(0xFA82, 0xF24C),
-            Instruction::SimdAddSub8 { rd: 2, rn: 2, rm: 12, op: 1 }
+            Instruction::SimdAddSub8 {
+                rd: 2,
+                rn: 2,
+                rm: 12,
+                op: 1
+            }
         );
         assert_eq!(
             decode_thumb_32(0xFAA4, 0xF28C),
-            Instruction::Sel { rd: 2, rn: 4, rm: 12 }
+            Instruction::Sel {
+                rd: 2,
+                rn: 4,
+                rm: 12
+            }
         );
         // SADD8 r1,r2,r3 = fa82 f103 ; USUB8 r1,r2,r3 = fac2 f143 ; SSUB8 = fac2 f103
         assert_eq!(
             decode_thumb_32(0xFA82, 0xF103),
-            Instruction::SimdAddSub8 { rd: 1, rn: 2, rm: 3, op: 0 }
+            Instruction::SimdAddSub8 {
+                rd: 1,
+                rn: 2,
+                rm: 3,
+                op: 0
+            }
         );
         assert_eq!(
             decode_thumb_32(0xFAC2, 0xF103),
-            Instruction::SimdAddSub8 { rd: 1, rn: 2, rm: 3, op: 2 }
+            Instruction::SimdAddSub8 {
+                rd: 1,
+                rn: 2,
+                rm: 3,
+                op: 2
+            }
         );
         assert_eq!(
             decode_thumb_32(0xFAC2, 0xF143),
-            Instruction::SimdAddSub8 { rd: 1, rn: 2, rm: 3, op: 3 }
+            Instruction::SimdAddSub8 {
+                rd: 1,
+                rn: 2,
+                rm: 3,
+                op: 3
+            }
         );
     }
 

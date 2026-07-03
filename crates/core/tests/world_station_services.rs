@@ -57,7 +57,8 @@ fn build_station_or_skip() -> Option<(World, Vec<u8>)> {
         );
         return None;
     }
-    let env = EnvironmentManifest::from_file(root.join("env-svc.yaml")).expect("parse env-svc.yaml");
+    let env =
+        EnvironmentManifest::from_file(root.join("env-svc.yaml")).expect("parse env-svc.yaml");
     let world = World::from_manifest(env, &root).expect("build station-svc world");
     let mb = std::fs::read(&master_elf).expect("read master elf");
     Some((world, mb))
@@ -294,7 +295,8 @@ fn master_services_isdu_pdout_event_ds_all_pass_on_wire() {
         return;
     }
 
-    let env = EnvironmentManifest::from_file(root.join("env-svc.yaml")).expect("parse env-svc.yaml");
+    let env =
+        EnvironmentManifest::from_file(root.join("env-svc.yaml")).expect("parse env-svc.yaml");
     let mut world = World::from_manifest(env, &root).expect("build station-svc world");
 
     // Resolve observability globals straight from the master ELF symbol table.
@@ -324,7 +326,14 @@ fn master_services_isdu_pdout_event_ds_all_pass_on_wire() {
     let mut done_at = 0u64;
     for i in 0..MAX_STEPS {
         world.step_all();
-        if world.machines.get("master").unwrap().read_u8(a_done).unwrap() == 1 {
+        if world
+            .machines
+            .get("master")
+            .unwrap()
+            .read_u8(a_done)
+            .unwrap()
+            == 1
+        {
             done = true;
             done_at = i;
             break;

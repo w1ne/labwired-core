@@ -64,7 +64,10 @@ impl FidelityReport {
 impl std::fmt::Display for FidelityReport {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.is_empty() {
-            return write!(f, "fidelity: clean (no undecoded instructions or unmapped MMIO)");
+            return write!(
+                f,
+                "fidelity: clean (no undecoded instructions or unmapped MMIO)"
+            );
         }
         writeln!(
             f,
