@@ -199,7 +199,12 @@ boards:
     # and latch LSTIMERx_OVF (TIMERx_CONF/VALUE + INT_* layout diffed against the
     # committed ledc.yaml SVD descriptor). It does not touch the asserted reset-oracle
     # set; this ack covers the new model file until the next full live re-capture.
-    drift_ack: 2026-06-28
+    # 2026-07-03: added Esp32c3I2c::attached_slaves() (esp32c3/i2c.rs) — a pure read
+    # accessor exposing the attached I2C devices so the wasm framebuffer readback
+    # (get_ssd1306_framebuffer) can reach an OLED on the C3 controller. No register,
+    # timing, state, or reset-value change; purely additive getter. This ack covers
+    # the model-file touch; no live re-capture warranted.
+    drift_ack: 2026-07-03
 
   - id: nucleo-l476rg
     doc: docs/boards/nucleo-l476rg.md

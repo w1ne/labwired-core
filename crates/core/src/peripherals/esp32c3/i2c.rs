@@ -212,6 +212,16 @@ impl Esp32c3I2c {
         self.slaves.push(slave);
     }
 
+    /// Borrow the attached I²C slaves. Mirrors the generic `I2c::attached_devices`
+    /// accessor so UI/inspection paths (e.g. the SSD1306 framebuffer readback)
+    /// can enumerate devices on the ESP32-C3 command-list controller the same way
+    /// they do on the STM32 controller. Unlike the generic `I2c`, slaves here are
+    /// held directly (no `RefCell`) because the C3 engine never hands out interior
+    /// mutable references during a transaction.
+    pub fn attached_slaves(&self) -> &[Box<dyn I2cDevice>] {
+        &self.slaves
+    }
+
     fn fifo_status(&self) -> u32 {
         // FIFO_ST (C3 i2c0.yaml): TXFIFO_RADDR at bits 10..14 — esp-hal's
         // estimate_ack_failed_reason reads it to tell address-NACK (raddr <= 1)
