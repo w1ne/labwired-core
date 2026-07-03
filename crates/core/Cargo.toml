@@ -53,6 +53,10 @@ wasmtime = { version = "45", optional = true, default-features = false, features
 
 [features]
 default = []
+# Egress-bridge transport tests that open real localhost sockets (TCP/MQTT/HTTP).
+# Off by default so the standard gate stays hermetic; run with
+# `cargo test -p labwired-core --features net-tests`.
+net-tests = []
 # Enable end-to-end tests that build and run the examples/esp32s3-* firmware
 # crates. Requires the +esp toolchain. Off by default so the standard
 # workspace `cargo test` does not need the ESP toolchain installed.

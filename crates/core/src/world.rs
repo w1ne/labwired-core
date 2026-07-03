@@ -195,6 +195,18 @@ impl World {
                         .attach_uart_stream(b_uart, Box::new(eb))?;
                     world.add_interconnect(Box::new(link));
                 }
+                "egress" => {
+                    let (node, uart, tx, bus) = build_egress(ic)?;
+                    world
+                        .machines
+                        .get_mut(&node)
+                        .with_context(|| format!("egress: unknown node '{node}'"))?
+                        .attach_uart_stream(
+                            &uart,
+                            Box::new(crate::network::egress::tap::EgressTap::new(tx)),
+                        )?;
+                    world.add_interconnect(Box::new(bus));
+                }
                 other => anyhow::bail!("unsupported interconnect type '{other}'"),
             }
         }
@@ -231,6 +243,113 @@ fn load_elf_image(path: &std::path::Path) -> anyhow::Result<crate::memory::Progr
         }
     }
     Ok(image)
+}
+
+/// Build the egress tap channel and `EgressBus` for an `egress` interconnect.
+/// Returns `(node_id, uart_id, tap_sender, bus)`. Transports connect lazily on
+/// first send, so this never blocks on the network.
+#[allow(clippy::type_complexity)]
+fn build_egress(
+    ic: &labwired_config::InterconnectConfig,
+) -> anyhow::Result<(
+    String,
+    String,
+    std::sync::mpsc::Sender<crate::network::egress::EgressItem>,
+    crate::network::egress::bus::EgressBus,
+)> {
+    use crate::network::egress::bus::EgressBus;
+    use crate::network::egress::transport::{EgressTransport, HttpPoster, MqttPublisher, TcpSink};
+    use crate::network::egress::{BufferPolicy, EgressItem, EncodingKind};
+    use anyhow::Context;
+
+    let node = ic
+        .nodes
+        .first()
+        .context("egress needs exactly one node")?
+        .clone();
+    let get = |k: &str| ic.config.get(k).and_then(|v| v.as_str());
+    let uart = get("uart").unwrap_or("usart2").to_string();
+    let encoding = match get("encoding").unwrap_or("raw") {
+        "raw" => EncodingKind::Raw,
+        "ndjson-trace" => EncodingKind::NdjsonTrace,
+        "frames-json" => EncodingKind::FramesJson,
+        other => anyhow::bail!("egress: unknown encoding '{other}'"),
+    };
+    let url = get("url").context("egress: missing 'url'")?.to_string();
+    let transport: Box<dyn EgressTransport> = match get("transport").unwrap_or("tcp") {
+        "tcp" => Box::new(TcpSink::new(url)),
+        "mqtt" => {
+            let (host, port) = parse_mqtt_url(&url)?;
+            let topic = get("topic")
+                .context("egress: mqtt needs 'topic'")?
+                .to_string();
+            Box::new(MqttPublisher::lazy(host, port, topic))
+        }
+        "http" => Box::new(HttpPoster::new(url, 0)?),
+        other => anyhow::bail!("egress: unknown transport '{other}'"),
+    };
+    let policy = BufferPolicy {
+        max: ic
+            .config
+            .get("buffer_max")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as usize)
+            .unwrap_or(BufferPolicy::default().max),
+    };
+    let (tx, rx) = std::sync::mpsc::channel::<EgressItem>();
+    let bus = EgressBus::new(rx, encoding, policy, transport);
+    Ok((node, uart, tx, bus))
+}
+
+/// Parse `mqtt://host:port` → (host, port).
+fn parse_mqtt_url(url: &str) -> anyhow::Result<(String, u16)> {
+    let rest = url.strip_prefix("mqtt://").unwrap_or(url);
+    let (host, port) = rest
+        .rsplit_once(':')
+        .ok_or_else(|| anyhow::anyhow!("mqtt url needs host:port: {url}"))?;
+    Ok((host.to_string(), port.parse()?))
+}
+
+#[cfg(test)]
+mod egress_manifest_tests {
+    use super::*;
+    use labwired_config::InterconnectConfig;
+    use std::collections::HashMap;
+
+    fn cfg(pairs: &[(&str, &str)]) -> InterconnectConfig {
+        let mut config = HashMap::new();
+        for (k, v) in pairs {
+            config.insert(k.to_string(), serde_yaml::Value::String(v.to_string()));
+        }
+        InterconnectConfig {
+            r#type: "egress".to_string(),
+            nodes: vec!["sensor_node".to_string()],
+            config,
+        }
+    }
+
+    #[test]
+    fn parses_tcp_egress_config() {
+        let c = cfg(&[
+            ("uart", "usart2"),
+            ("transport", "tcp"),
+            ("url", "127.0.0.1:9"),
+            ("encoding", "raw"),
+        ]);
+        let (node, uart, _tx, _bus) = build_egress(&c).unwrap();
+        assert_eq!(node, "sensor_node");
+        assert_eq!(uart, "usart2");
+    }
+
+    #[test]
+    fn rejects_unknown_transport() {
+        let c = cfg(&[
+            ("uart", "usart2"),
+            ("transport", "carrier-pigeon"),
+            ("url", "x"),
+        ]);
+        assert!(build_egress(&c).is_err());
+    }
 }
 
 #[cfg(test)]
