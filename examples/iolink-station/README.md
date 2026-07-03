@@ -36,9 +36,12 @@ ticks the wires.
 make -C ../iolink-dido/firmware   # device ELF (iolink_dido.elf)
 make -C master-fw                        # one-port master ELF (master.elf)
 make -C master-fw-4port                  # four-port master ELF (master.elf)
+make -C device-fw-svc                    # service-rich device ELF (device.elf)
+make -C master-fw-svc                    # service-script master ELF (master.elf)
 ```
 
-ELFs are build artifacts (git-ignored).
+ELFs are build artifacts (git-ignored). The `svc` pair needs `STM32CUBE_L4_DIR`
+set (CMSIS from STM32CubeL4); `ci/build.sh` builds all of them.
 
 ## Run the proofs
 
@@ -56,6 +59,33 @@ cargo test --release -p labwired-core --test world_multichip -- --nocapture
 
 The tests read the master's `g_master_state` / `g_master_pd` globals over the bus
 to observe progress; they skip with a message if the ELFs are not built.
+
+## Full service coverage (`svc` pair)
+
+`world_station_services` drives the **whole** `iolinki-master` service surface on
+the wire, not just startup + cyclic PD. A `master-fw-svc` chip runs a phased
+script against a service-rich `device-fw-svc` chip and proves each service after
+OPERATE:
+
+```bash
+STM32CUBE_L4_DIR=$HOME/projects/STM32CubeL4 bash ci/build.sh
+cargo test --release -p labwired-core --test world_station_services -- --nocapture
+```
+
+- **ISDU read** — vendor-name index `0x0010` reads back `"LABWIRED"`.
+- **Cyclic PD output** — the master's PD-out byte is echoed back as the device's
+  PD-in (actuator mirror).
+- **Events** — a device WARNING event (`0x8CA0`) is triggered and read back via
+  `read_event_details` (ISDU `0x001C`).
+- **Data Storage** — an Application-Tag record is written and read back
+  byte-for-byte (ISDU `0x0003`).
+
+This test also asserts the run is **fidelity-clean**: zero undecoded
+instructions and zero unmapped MMIO (`labwired_core::fidelity`). That guard
+caught nothing here only because the underlying simulator gap it targets — the
+Cortex-M4 `UADD8`/`SEL` SIMD instructions newlib's optimised `strlen` relies on —
+was fixed first; before that fix, string ISDU reads silently returned garbage.
+Set `LABWIRED_STRICT_FIDELITY=1` to make the first such gap a hard failure.
 
 ## Manifests
 

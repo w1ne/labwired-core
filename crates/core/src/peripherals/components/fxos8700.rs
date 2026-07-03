@@ -207,6 +207,59 @@ impl I2cDevice for Fxos8700 {
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
     }
+
+    fn as_sim_input_mut(&mut self) -> Option<&mut dyn crate::sim_input::SimInput> {
+        Some(self)
+    }
+}
+
+/// Drivable accelerometer axes, in g. The FXOS8700 accel is 14-bit
+/// left-justified: 1 g = `ONE_G_LJ` (0x1000 = 4096) raw counts. Full-scale is
+/// set by `xyz_data_cfg`; the demo scale is ±2 g, matching the browser panel.
+impl crate::sim_input::SimInput for Fxos8700 {
+    fn input_channels(&self) -> &'static [crate::sim_input::InputChannel] {
+        use crate::sim_input::InputChannel;
+        const CH: &[InputChannel] = &[
+            InputChannel {
+                key: "x",
+                label: "X",
+                unit: "g",
+                min: -2.0,
+                max: 2.0,
+            },
+            InputChannel {
+                key: "y",
+                label: "Y",
+                unit: "g",
+                min: -2.0,
+                max: 2.0,
+            },
+            InputChannel {
+                key: "z",
+                label: "Z",
+                unit: "g",
+                min: -2.0,
+                max: 2.0,
+            },
+        ];
+        CH
+    }
+
+    fn set_input(&mut self, key: &str, value: f64) -> Result<(), crate::sim_input::SimInputError> {
+        self.require_channel(key, value)?;
+        let raw = (value * ONE_G_LJ as f64).round() as i16;
+        let axis = match key {
+            "x" => 0,
+            "y" => 1,
+            "z" => 2,
+            _ => unreachable!("require_channel validated the key"),
+        };
+        self.accel[axis] = raw;
+        // Latch manual so the built-in animation in `read()` stops overwriting
+        // the driven value — same contract as `set_sample`.
+        self.manual = true;
+        Ok(())
+    }
 }
 
 #[cfg(test)]

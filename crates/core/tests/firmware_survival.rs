@@ -1268,12 +1268,14 @@ fn test_kw41z_lcd_renders_screen() {
     let px = |x: usize, y: usize| -> bool { (fb[(y / 8) * 84 + x] >> (y % 8)) & 1 != 0 };
 
     // Head outline: the ellipse's left/right extremes at its vertical center
-    // (cx=42, cy=20, rx=25) must be lit.
-    assert!(px(17, 20) || px(18, 20), "cow head left edge missing");
-    assert!(px(66, 20) || px(67, 20), "cow head right edge missing");
-    // Muzzle nostrils (mx=42, my=29, offsets ±5,-1): two solid dots.
-    assert!(px(37, 28), "left nostril missing");
-    assert!(px(47, 28), "right nostril missing");
+    // (cx=42, calm/grazing cy=22, rx=25) must be lit. The sensor's idle sway
+    // peaks below the ACTIVE threshold, so the boot pose is always the calm
+    // grazing one.
+    assert!(px(17, 22) || px(18, 22), "cow head left edge missing");
+    assert!(px(66, 22) || px(67, 22), "cow head right edge missing");
+    // Muzzle nostrils (mx=42, my=31, offsets ±5,-1): two solid dots.
+    assert!(px(37, 30), "left nostril missing");
+    assert!(px(47, 30), "right nostril missing");
     // The whole cow reads as more than a couple of bars: expect a healthy
     // number of lit framebuffer bytes across the face + banner + meter.
     assert!(
@@ -1285,6 +1287,103 @@ fn test_kw41z_lcd_renders_screen() {
     for x in 0..84 {
         assert!(px(x, 46), "activity meter track missing at column {x}");
     }
+}
+
+/// The demo's whole point, locked in end to end: driving the (interactive)
+/// FXOS8700 must change the rendered cow MACROSCOPICALLY. This guards against
+/// the "demo looks dead" regression class — the calm→active flip moves the
+/// head, swaps the banner for an inverted MOO! band, adds motion lines and a
+/// chunky meter, so a hard tilt must change hundreds of pixels, not a few.
+#[test]
+fn test_kw41z_lcd_cow_reacts_to_tilt() {
+    use labwired_core::peripherals::components::{Fxos8700, Pcd8544};
+    use labwired_core::peripherals::i2c::I2c;
+    use labwired_core::peripherals::spi::Spi;
+
+    let (chip, manifest) = load_system("mkw41z4", "frdm-kw41z-lcd");
+    let mut bus = SystemBus::from_config(&chip, &manifest).expect("bus");
+    let (cpu, _nvic) = configure_cortex_m(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
+    let image = labwired_loader::load_elf(&fixtures().join("kw41z-lcd-activity.elf"))
+        .expect("load lcd elf");
+    machine.load_firmware(&image).expect("load fw");
+
+    let grab_fb = |machine: &Machine<_>| -> Vec<u8> {
+        machine
+            .bus
+            .peripherals
+            .iter()
+            .filter_map(|p| p.dev.as_any().and_then(|a| a.downcast_ref::<Spi>()))
+            .flat_map(|spi| spi.attached_devices.iter())
+            .find_map(|d| d.as_any().and_then(|a| a.downcast_ref::<Pcd8544>()))
+            .expect("PCD8544 attached to an SPI bus")
+            .framebuffer()
+            .to_vec()
+    };
+
+    // Boot to the calm grazing pose (idle sensor sway stays below threshold).
+    for _ in 0..SURVIVAL_CYCLES {
+        if machine.step().is_err() {
+            break;
+        }
+    }
+    let fb_calm = grab_fb(&machine);
+
+    // Latch a hard tilt into the sensor — the same `set_sample` path the
+    // playground sliders use through `set_i2c_sensor_sample`.
+    let mut found = false;
+    for p in machine.bus.peripherals.iter_mut() {
+        let Some(any) = p.dev.as_any_mut() else {
+            continue;
+        };
+        let Some(i2c) = any.downcast_mut::<I2c>() else {
+            continue;
+        };
+        for device in i2c.attached_devices() {
+            let mut device = device.borrow_mut();
+            if let Some(sensor) = device
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<Fxos8700>())
+            {
+                sensor.set_sample(0x2000, -0x2000, 0x1000); // 2 g X, -2 g Y
+                found = true;
+            }
+        }
+    }
+    assert!(found, "no FXOS8700 attached to an I2C bus");
+
+    for _ in 0..SURVIVAL_CYCLES {
+        if machine.step().is_err() {
+            break;
+        }
+    }
+    let fb_active = grab_fb(&machine);
+
+    // ASCII snapshot of the ACTIVE pose (the calm one is dumped by
+    // test_kw41z_lcd_renders_screen) so both moods can be eyeballed.
+    eprintln!("┌{}┐", "─".repeat(84));
+    for bank in 0..6 {
+        for sub in 0..8 {
+            let mut row = String::with_capacity(84);
+            for x in 0..84 {
+                let byte = fb_active[bank * 84 + x];
+                row.push(if (byte >> sub) & 1 != 0 { '#' } else { ' ' });
+            }
+            eprintln!("│{row}│");
+        }
+    }
+    eprintln!("└{}┘", "─".repeat(84));
+
+    let diff: u32 = fb_calm
+        .iter()
+        .zip(fb_active.iter())
+        .map(|(a, b)| (*a ^ *b).count_ones())
+        .sum();
+    assert!(
+        diff >= 300,
+        "cow reaction too subtle: only {diff} pixels changed between calm and hard-tilt \
+         — the demo would look dead in the playground"
+    );
 }
 
 /// Regression (browser "cow" blank via the wasm `new_from_config` path):

@@ -194,27 +194,45 @@ impl WasmSimulator {
             .as_any()
             .ok_or_else(|| JsValue::from_str("Peripheral does not support downcasting"))?;
 
-        let i2c = any
-            .downcast_ref::<labwired_core::peripherals::i2c::I2c>()
-            .ok_or_else(|| {
-                JsValue::from_str(&format!(
-                    "Peripheral '{}' is not an I2C controller",
-                    binding.peripheral
-                ))
-            })?;
-
         let address = binding.i2c_address.unwrap_or(0x3C);
-        for device in i2c.attached_devices() {
-            let device = device.borrow();
-            if device.address() != address {
-                continue;
+
+        // The framebuffer readback has to understand every I²C controller a
+        // supported board can attach an SSD1306 to. STM32 boards use the generic
+        // `I2c`; the ESP32-C3 (leo air-quality lab) uses the command-list
+        // `Esp32c3I2c`. Both attach the OLED via `AttachCtx::attach_i2c_device`,
+        // so both must be enumerable here — otherwise `get_ssd1306_framebuffer`
+        // returns "not an I2C controller" and the OLED renders blank in the
+        // playground/embed even though the device is present and being drawn to.
+        if let Some(i2c) = any.downcast_ref::<labwired_core::peripherals::i2c::I2c>() {
+            for device in i2c.attached_devices() {
+                let device = device.borrow();
+                if device.address() != address {
+                    continue;
+                }
+                if let Some(oled) = device.as_any().and_then(|any| {
+                    any.downcast_ref::<labwired_core::peripherals::components::Ssd1306>()
+                }) {
+                    return Ok(oled.framebuffer().to_vec().into_boxed_slice());
+                }
             }
-            if let Some(oled) = device.as_any().and_then(|any| {
-                any.downcast_ref::<labwired_core::peripherals::components::Ssd1306>()
-            }) {
-                let fb = oled.framebuffer().to_vec().into_boxed_slice();
-                return Ok(fb);
+        } else if let Some(c3) =
+            any.downcast_ref::<labwired_core::peripherals::esp32c3::i2c::Esp32c3I2c>()
+        {
+            for device in c3.attached_slaves() {
+                if device.address() != address {
+                    continue;
+                }
+                if let Some(oled) = device.as_any().and_then(|any| {
+                    any.downcast_ref::<labwired_core::peripherals::components::Ssd1306>()
+                }) {
+                    return Ok(oled.framebuffer().to_vec().into_boxed_slice());
+                }
             }
+        } else {
+            return Err(JsValue::from_str(&format!(
+                "Peripheral '{}' is not an I2C controller",
+                binding.peripheral
+            )));
         }
 
         Err(JsValue::from_str(&format!(

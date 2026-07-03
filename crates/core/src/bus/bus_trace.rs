@@ -164,6 +164,9 @@ impl I2cDevice for TracingI2cDevice {
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         self.inner.as_any_mut()
     }
+    fn as_sim_input_mut(&mut self) -> Option<&mut dyn crate::sim_input::SimInput> {
+        self.inner.as_sim_input_mut()
+    }
 }
 
 pub struct TracingSpiDevice {

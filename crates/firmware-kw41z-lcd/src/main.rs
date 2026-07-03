@@ -79,6 +79,7 @@ fn main() -> ! {
         print_hex(who);
         print(b"\n");
 
+        let mut frame: u32 = 0;
         loop {
             // Read the 6 accel bytes (X/Y/Z MSB:LSB), 14-bit left-justified.
             let mut raw = [0u8; 6];
@@ -86,8 +87,13 @@ fn main() -> ! {
             let ax = ((raw[0] as i16) << 8 | raw[1] as i16) >> 2;
             let ay = ((raw[2] as i16) << 8 | raw[3] as i16) >> 2;
             let az = ((raw[4] as i16) << 8 | raw[5] as i16) >> 2;
+            let _ = az; // Z stays ~constant (gravity) at rest; X/Y drive the mood.
 
-            render_cow(ax, ay, az);
+            let activity = axis_len(ax) + axis_len(ay);
+            let active = activity > ACTIVE_THRESHOLD;
+
+            render_cow(activity, active, frame);
+            frame = frame.wrapping_add(1);
 
             print(b"X=");
             print_dec(ax);
@@ -95,7 +101,13 @@ fn main() -> ! {
             print_dec(ay);
             print(b" Z=");
             print_dec(az);
-            print(b"\n");
+            print(b" ACT=");
+            print_dec(activity as i16);
+            print(if active {
+                b" MOOD=ACTIVE\n"
+            } else {
+                b" MOOD=CALM\n"
+            });
 
             // Coarse pacing so the trace shows a few frames.
             for _ in 0..2000 {
@@ -144,8 +156,10 @@ unsafe fn pcd8544_init() {
 // streamed out in one pass, exactly the way the original bar-graph blitted
 // its bytes. Every shape below is drawn with pure-integer primitives (line /
 // midpoint-ellipse outline / ellipse fill) — deterministic, no floating
-// point, no RNG. The cow is a fixed sprite; only the eyes, the mood banner,
-// and the activity meter change with the sensor reading.
+// point, no RNG. The mood flips the whole composition, not just details: the
+// calm cow grazes (head low, grass, heart banner) while the active cow pops
+// its head up, wobbles ±2 px per frame and gets an inverted "MOO!" band, so
+// the reaction is obvious even on a thumbnail-sized render.
 //
 // At rest the FXOS8700 reports ~0 on X/Y (gravity loads onto Z), so summing
 // the raw X/Y magnitudes IS the deviation from the resting pose — no extra
@@ -153,25 +167,44 @@ unsafe fn pcd8544_init() {
 // "calm" and "active" moods.
 const ACTIVE_THRESHOLD: i32 = 32;
 
-/// Read the FXOS8700 X/Y magnitude and render the cow reacting to it, then
-/// blit the whole framebuffer out over DSPI (same Y=0/X=0 + streamed-bytes
-/// protocol the bar-graph used).
-unsafe fn render_cow(ax: i16, ay: i16, az: i16) {
-    let _ = az; // Z stays ~constant (gravity) at rest; only X/Y drive the mood.
-    let activity = axis_len(ax) + axis_len(ay);
-    let active = activity > ACTIVE_THRESHOLD;
-
+/// Render the cow reacting to the activity level, then blit the whole
+/// framebuffer out over DSPI (same Y=0/X=0 + streamed-bytes protocol the
+/// bar-graph used).
+///
+/// The two moods are deliberately macro-different so the change reads even on
+/// a thumbnail-sized render of the 84x48 panel:
+///   calm   → head drawn LOW (grazing), grass tufts, heart + "MOO :)" banner
+///   active → head drawn HIGH, wide eyes, motion lines, INVERTED "MOO!" band,
+///            and the whole sprite bounces ±2 px per rendered frame.
+unsafe fn render_cow(activity: i32, active: bool, frame: u32) {
     let mut fb: FrameBuffer = [0u8; LCD_BANKS * LCD_W];
-    let (cx, cy) = draw_static_cow(&mut fb);
+
+    // Grazing = head low; alert = head up. Active frames also wobble
+    // horizontally so a shaken cow visibly animates.
+    let dx = if active {
+        if frame & 1 == 0 {
+            2
+        } else {
+            -2
+        }
+    } else {
+        0
+    };
+    let cy_head = if active { 16 } else { 22 };
+
+    let (cx, cy) = draw_static_cow(&mut fb, dx, cy_head);
     draw_eyes(&mut fb, cx, cy, active);
     if active {
-        draw_motion_marks(&mut fb);
-        draw_text(&mut fb, b"MOO!", 40);
+        draw_motion_marks(&mut fb, cy);
+        // Inverted banner: a solid band with "MOO!" knocked out of it.
+        fill_rect(&mut fb, 0, 37, LCD_W as i32 - 1, 44);
+        draw_text_inverted(&mut fb, b"MOO!", 38);
     } else {
-        draw_glyph(&mut fb, &GLYPH_HEART, 3, 40);
-        draw_text(&mut fb, b"MOO :)", 40);
+        draw_grass(&mut fb);
+        draw_glyph(&mut fb, &GLYPH_HEART, 20, 38);
+        draw_text(&mut fb, b"MOO :)", 38);
     }
-    draw_meter(&mut fb, activity);
+    draw_meter(&mut fb, activity, active);
 
     pcd_cmd(0x40); // Y = 0
     pcd_cmd(0x80); // X = 0
@@ -209,6 +242,28 @@ fn set_pixel(fb: &mut FrameBuffer, x: i32, y: i32) {
     }
     let (xu, yu) = (x as usize, y as usize);
     fb[(yu / 8) * LCD_W + xu] |= 1 << (yu % 8);
+}
+
+#[inline(always)]
+fn clear_pixel(fb: &mut FrameBuffer, x: i32, y: i32) {
+    if x < 0 || y < 0 || x as usize >= LCD_W || y as usize >= LCD_H {
+        return;
+    }
+    let (xu, yu) = (x as usize, y as usize);
+    fb[(yu / 8) * LCD_W + xu] &= !(1 << (yu % 8));
+}
+
+#[inline(always)]
+fn fill_rect(fb: &mut FrameBuffer, x0: i32, y0: i32, x1: i32, y1: i32) {
+    let mut y = y0;
+    while y <= y1 {
+        let mut x = x0;
+        while x <= x1 {
+            set_pixel(fb, x, y);
+            x += 1;
+        }
+        y += 1;
+    }
 }
 
 #[inline(always)]
@@ -330,8 +385,9 @@ const GLYPH_COLON: Glyph = Glyph {
     rows: [b"..", b"##", b"..", b"##", b".."],
 };
 const GLYPH_RPAREN: Glyph = Glyph {
+    // Bulges RIGHT of its endpoints — a ')' smile, not a '(' frown.
     width: 3,
-    rows: [b"..#", b".#.", b".#.", b".#.", b"..#"],
+    rows: [b"#..", b".#.", b"..#", b".#.", b"#.."],
 };
 const GLYPH_HEART: Glyph = Glyph {
     width: 5,
@@ -382,12 +438,39 @@ fn draw_text(fb: &mut FrameBuffer, s: &[u8], y0: i32) {
     }
 }
 
+/// Knock a centered banner OUT of an already-filled band (inverted text).
+fn draw_text_inverted(fb: &mut FrameBuffer, s: &[u8], y0: i32) {
+    let total = text_width(s);
+    let mut x = (LCD_W as i32 - total) / 2;
+    for &c in s {
+        let g = glyph_for(c);
+        for (ry, row) in g.rows.iter().enumerate() {
+            for (rx, b) in row.iter().enumerate() {
+                if *b == b'#' {
+                    clear_pixel(fb, x + rx as i32, y0 + ry as i32);
+                }
+            }
+        }
+        x += g.width + 1;
+    }
+}
+
+/// A few 'Λ' grass tufts in the bottom corners, shown only while grazing.
+fn draw_grass(fb: &mut FrameBuffer) {
+    for &x in &[2i32, 10, 66, 74] {
+        draw_line(fb, x, 44, x + 2, 40);
+        draw_line(fb, x + 4, 44, x + 2, 40);
+    }
+}
+
 /// The fixed part of the sprite: rounded head, two ears, horn/tuft ticks, a
-/// muzzle oval with nostrils, and two spots. Returns the head center so
-/// eyes can be positioned relative to it. Eyes are drawn separately since
-/// they are the one part of the "face" that changes with mood.
-fn draw_static_cow(fb: &mut FrameBuffer) -> (i32, i32) {
-    let (cx, cy) = (42, 20);
+/// muzzle oval with nostrils, and two spots. The caller positions the head
+/// (`dx` wobble, `cy` height — low while grazing, high when alert). Returns
+/// the head center so eyes can be positioned relative to it. Eyes are drawn
+/// separately since they are the one part of the "face" that changes with
+/// mood.
+fn draw_static_cow(fb: &mut FrameBuffer, dx: i32, cy: i32) -> (i32, i32) {
+    let cx = 42 + dx;
 
     // Head outline.
     draw_ellipse_outline(fb, cx, cy, 25, 15);
@@ -396,11 +479,13 @@ fn draw_static_cow(fb: &mut FrameBuffer) -> (i32, i32) {
     draw_ellipse_outline(fb, cx - 33, cy - 6, 8, 6);
     draw_ellipse_outline(fb, cx + 33, cy - 6, 8, 6);
 
-    // Horn / tuft ticks above the head's top curve.
-    draw_line(fb, cx - 7, 0, cx - 4, 4);
-    draw_line(fb, cx - 3, 0, cx - 4, 4);
-    draw_line(fb, cx + 7, 0, cx + 4, 4);
-    draw_line(fb, cx + 3, 0, cx + 4, 4);
+    // Horn / tuft ticks above the head's top curve (clip harmlessly at the
+    // panel edge on the highest active head position).
+    let top = cy - 19;
+    draw_line(fb, cx - 7, top, cx - 4, top + 4);
+    draw_line(fb, cx - 3, top, cx - 4, top + 4);
+    draw_line(fb, cx + 7, top, cx + 4, top + 4);
+    draw_line(fb, cx + 3, top, cx + 4, top + 4);
 
     // Muzzle: outline oval nested inside the head, with two nostril dots.
     let (mx, my) = (cx, cy + 9);
@@ -428,22 +513,26 @@ fn draw_eyes(fb: &mut FrameBuffer, cx: i32, cy: i32, active: bool) {
 }
 
 /// Small "shaken" speed-lines flanking the ears, only shown when active.
-fn draw_motion_marks(fb: &mut FrameBuffer) {
+fn draw_motion_marks(fb: &mut FrameBuffer, cy: i32) {
     for i in 0..3i32 {
-        let yb = 8 + i * 5;
+        let yb = cy - 6 + i * 5;
         draw_line(fb, 2, yb, 8, yb - 2);
         draw_line(fb, LCD_W as i32 - 3, yb, LCD_W as i32 - 9, yb - 2);
     }
 }
 
-/// Thin activity meter along the very bottom edge: a full-width track line
-/// plus a fill proportional to `level` (0..=LCD_W).
-fn draw_meter(fb: &mut FrameBuffer, level: i32) {
+/// Activity meter along the very bottom edge: a full-width track line (row
+/// 46) plus a fill proportional to `level` (0..=LCD_W) — one row calm, two
+/// rows (chunkier) while active.
+fn draw_meter(fb: &mut FrameBuffer, level: i32, active: bool) {
     let level = level.clamp(0, LCD_W as i32);
     for x in 0..LCD_W as i32 {
         set_pixel(fb, x, 46);
         if x < level {
             set_pixel(fb, x, 47);
+            if active {
+                set_pixel(fb, x, 45);
+            }
         }
     }
 }

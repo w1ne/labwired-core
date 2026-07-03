@@ -1,0 +1,14 @@
+name: "iolink-station-svc"
+nodes:
+  - id: "master"
+    system: "master/system.yaml"
+    firmware: "master-fw-svc/master.elf"
+  - id: "device1"
+    system: "device-svc/system.yaml"
+    firmware: "device-fw-svc/device.elf"
+interconnects:
+  - type: "uart_cross_link"
+    nodes: ["master", "device1"]
+    config:
+      node_a_uart: "uart2"
+      node_b_uart: "uart2"

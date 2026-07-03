@@ -145,7 +145,8 @@ boards:
     # hash drift only). h563_mmio_diff + h563_conformance pass. No live re-capture.
     # 2026-06-30: additive Kinetis I2C variant (KinetisI2c) + enum arm in i2c.rs for the KW41Z; the STM32 F1/L4 I2C engines are byte-for-byte untouched, stm32h563 diff/conformance unchanged. No live re-capture.
     # 2026-07-01: additive bus-trace device wrappers at I2c/Spi attach + shared BusTraceLog on SystemBus (universal bus analyzer); STM32 register engines byte-for-byte untouched, wrappers only forward (transparent as_any) and activate only when a device+log is attached. Diff/conformance unchanged; no live re-capture.
-    drift_ack: 2026-07-01
+    # 2026-07-03: additive `as_sim_input_mut` default method on the I2cDevice trait (generic SimInput hook) + new SystemBus set_input/list_inputs; STM32 register engines byte-for-byte untouched, the default returns None for all STM32 devices. Diff/conformance unchanged; no live re-capture.
+    drift_ack: 2026-07-03
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -198,7 +199,12 @@ boards:
     # and latch LSTIMERx_OVF (TIMERx_CONF/VALUE + INT_* layout diffed against the
     # committed ledc.yaml SVD descriptor). It does not touch the asserted reset-oracle
     # set; this ack covers the new model file until the next full live re-capture.
-    drift_ack: 2026-06-28
+    # 2026-07-03: added Esp32c3I2c::attached_slaves() (esp32c3/i2c.rs) — a pure read
+    # accessor exposing the attached I2C devices so the wasm framebuffer readback
+    # (get_ssd1306_framebuffer) can reach an OLED on the C3 controller. No register,
+    # timing, state, or reset-value change; purely additive getter. This ack covers
+    # the model-file touch; no live re-capture warranted.
+    drift_ack: 2026-07-03
 
   - id: nucleo-l476rg
     doc: docs/boards/nucleo-l476rg.md
@@ -232,7 +238,8 @@ boards:
     # is untouched. l476_mmio_diff passes unchanged. No live re-capture.
     # 2026-06-30: additive Kinetis I2C variant (KinetisI2c) + enum arm in i2c.rs for the KW41Z; the STM32 F1/L4 I2C engines are byte-for-byte untouched, nucleo-l476rg diff/conformance unchanged. No live re-capture.
     # 2026-07-01: additive bus-trace device wrappers at I2c/Spi attach + shared BusTraceLog on SystemBus (universal bus analyzer); STM32 register engines byte-for-byte untouched, wrappers only forward (transparent as_any) and activate only when a device+log is attached. Diff/conformance unchanged; no live re-capture.
-    drift_ack: 2026-07-01
+    # 2026-07-03: additive `as_sim_input_mut` default method on the I2cDevice trait (generic SimInput hook) + new SystemBus set_input/list_inputs; STM32 register engines byte-for-byte untouched, the default returns None for all STM32 devices. Diff/conformance unchanged; no live re-capture.
+    drift_ack: 2026-07-03
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -314,7 +321,8 @@ boards:
     # firmware updated to enable+wait HSE before selecting it. No live re-capture.
     # 2026-06-30: additive Kinetis I2C variant (KinetisI2c) + enum arm in i2c.rs for the KW41Z; the STM32 F1/L4 I2C engines are byte-for-byte untouched, stm32f103 diff/conformance unchanged. No live re-capture.
     # 2026-07-01: additive bus-trace device wrappers at I2c/Spi attach + shared BusTraceLog on SystemBus (universal bus analyzer); STM32 register engines byte-for-byte untouched, wrappers only forward (transparent as_any) and activate only when a device+log is attached. Diff/conformance unchanged; no live re-capture.
-    drift_ack: 2026-07-01
+    # 2026-07-03: additive `as_sim_input_mut` default method on the I2cDevice trait (generic SimInput hook) + new SystemBus set_input/list_inputs; STM32 register engines byte-for-byte untouched, the default returns None for all STM32 devices. Diff/conformance unchanged; no live re-capture.
+    drift_ack: 2026-07-03
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/afio.rs
@@ -360,7 +368,8 @@ boards:
     # re-capture.
     # 2026-06-30: additive Kinetis I2C variant (KinetisI2c) + enum arm in i2c.rs for the KW41Z; the STM32 F1/L4 I2C engines are byte-for-byte untouched, stm32f407 diff/conformance unchanged. No live re-capture.
     # 2026-07-01: additive bus-trace device wrappers at I2c/Spi attach + shared BusTraceLog on SystemBus (universal bus analyzer); STM32 register engines byte-for-byte untouched, wrappers only forward (transparent as_any) and activate only when a device+log is attached. Diff/conformance unchanged; no live re-capture.
-    drift_ack: 2026-07-01
+    # 2026-07-03: additive `as_sim_input_mut` default method on the I2cDevice trait (generic SimInput hook) + new SystemBus set_input/list_inputs; STM32 register engines byte-for-byte untouched, the default returns None for all STM32 devices. Diff/conformance unchanged; no live re-capture.
+    drift_ack: 2026-07-03
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
