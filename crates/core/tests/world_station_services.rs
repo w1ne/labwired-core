@@ -78,6 +78,11 @@ fn master_services_isdu_pdout_event_ds_all_pass_on_wire() {
     // script runs only after OPERATE, so this needs more headroom than the plain
     // OPERATE proof (5M in world_multichip). Bound is ~3x the measured
     // completion iteration; the loop early-exits the instant g_svc_done flips.
+    // Scope the fidelity accounting to this run: any undecoded instruction or
+    // unmapped MMIO the real firmware hits must be zero (the UADD8/SEL strlen
+    // bug is exactly what this guards against).
+    labwired_core::fidelity::take();
+
     const MAX_STEPS: u64 = 30_000_000;
     let mut done = false;
     let mut done_at = 0u64;
@@ -124,4 +129,15 @@ fn master_services_isdu_pdout_event_ds_all_pass_on_wire() {
     assert_eq!(ds, 1, "data-storage write/readback failed; {flags}");
 
     eprintln!("services on wire: ISDU+PDOUT+EVENT+DS all green (phase {phase}, done at {done_at})");
+
+    // The whole real-firmware run must not have hit a single simulator-coverage
+    // gap. A non-empty report means the model silently skipped an instruction or
+    // swallowed an unmapped access — the class of bug that made string ISDU
+    // reads return garbage until UADD8/SEL were implemented.
+    let fidelity = labwired_core::fidelity::report();
+    eprintln!("{fidelity}");
+    assert!(
+        fidelity.is_empty(),
+        "simulator hit coverage gaps during a real firmware run:\n{fidelity}"
+    );
 }

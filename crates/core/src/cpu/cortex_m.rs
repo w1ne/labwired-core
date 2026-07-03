@@ -1753,6 +1753,11 @@ impl CortexM {
                             h1,
                             h2
                         );
+                        crate::fidelity::record_undecoded(
+                            self.pc,
+                            ((h1 as u64) << 16) | (h2 as u64),
+                            "undecoded T32",
+                        );
                         pc_increment = 4;
                     }
                 }
@@ -2848,6 +2853,7 @@ impl CortexM {
 
                 Instruction::Unknown(op) => {
                     tracing::warn!("Unknown instruction at {:#x}: Opcode {:#06x}", self.pc, op);
+                    crate::fidelity::record_undecoded(self.pc, op as u64, "undecoded T16");
                     pc_increment = 2; // Skip 16-bit
                 }
             }
