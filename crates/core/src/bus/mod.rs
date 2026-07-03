@@ -3592,6 +3592,58 @@ board_io: []
         assert!(msg.contains("data"), "unexpected error: {msg}");
     }
 
+    /// Config parsing: an explicit `ticks_per_second:` on a `can-player`
+    /// device actually reaches the attached `CanLogPlayer` — two frames 1.0s
+    /// apart at 2 ticks/sec rebase to ticks 0 and 2.
+    #[test]
+    fn can_player_from_config_honors_ticks_per_second_override() {
+        let manifest: SystemManifest = serde_yaml::from_str(
+            r#"
+name: "can-player-tps"
+chip: "f103"
+external_devices:
+  - id: "p"
+    type: "can-player"
+    connection: "bxcan1"
+    config:
+      ticks_per_second: 2
+      data: "(1.0) can0 123#11\n(2.0) can0 123#22\n"
+board_io: []
+"#,
+        )
+        .unwrap();
+        let chip: ChipDescriptor = serde_yaml::from_str(MIN_F103_CHIP).unwrap();
+        let bus = SystemBus::from_config(&chip, &manifest).unwrap();
+        assert_eq!(bus.can_log_players[0].frames.len(), 2);
+        assert_eq!(bus.can_log_players[0].frames[0].0, 0);
+        assert_eq!(bus.can_log_players[0].frames[1].0, 2);
+    }
+
+    /// Config parsing: omitting `ticks_per_second:` defaults to
+    /// 1_000_000 ticks/sec — two frames 100µs apart rebase to tick 100.
+    #[test]
+    fn can_player_from_config_defaults_ticks_per_second() {
+        let manifest: SystemManifest = serde_yaml::from_str(
+            r#"
+name: "can-player-tps-default"
+chip: "f103"
+external_devices:
+  - id: "p"
+    type: "can-player"
+    connection: "bxcan1"
+    config:
+      data: "(10.000000) can0 123#11\n(10.000100) can0 123#22\n"
+board_io: []
+"#,
+        )
+        .unwrap();
+        let chip: ChipDescriptor = serde_yaml::from_str(MIN_F103_CHIP).unwrap();
+        let bus = SystemBus::from_config(&chip, &manifest).unwrap();
+        assert_eq!(bus.can_log_players[0].frames.len(), 2);
+        assert_eq!(bus.can_log_players[0].frames[0].0, 0);
+        assert_eq!(bus.can_log_players[0].frames[1].0, 100);
+    }
+
     /// Parse a minimal chip yaml with the given header lines (name/arch/core).
     fn bit_band_test_chip(header: &str, gpio_base: &str, gpio_profile: &str) -> ChipDescriptor {
         let yaml = format!(
@@ -4871,6 +4923,39 @@ board_io: []
         const BASE: u64 = 0x4000_6400;
         let rf0r = bus.read_u32(BASE + RF0R).unwrap();
         assert_ne!(rf0r & 0x3, 0, "RF0R FMP0 must show pending frames");
+    }
+
+    #[test]
+    fn can_log_player_counts_dropped_when_filters_never_opened() {
+        // Same construction idiom as `bus_with_open_bxcan`, minus the filter
+        // banks — the bxCAN is taken out of INIT (so it's "running") but no
+        // filter bank is ever activated (FA1R stays 0), so every delivered
+        // frame is refused by acceptance filtering and must count as
+        // `dropped`, never `delivered`.
+        use crate::peripherals::bxcan::BxCan;
+        const MCR: u64 = 0x000;
+        const BTR: u64 = 0x01C;
+        const VALID_BTR: u32 = 0x00DC_0009;
+        const BASE: u64 = 0x4000_6400;
+
+        let mut bus = SystemBus::empty();
+        bus.add_peripheral("bxcan1", BASE, 0x400, None, Box::new(BxCan::new()));
+        bus.write_u32(BASE + MCR, 1).unwrap();
+        bus.write_u32(BASE + BTR, VALID_BTR).unwrap();
+        bus.write_u32(BASE + MCR, 0).unwrap(); // leave INIT; filters left unconfigured
+
+        let log = "(10.000000) can0 0CF00300#DD0000FFFFFF5CFF\n\
+                   (10.000100) can0 18FEF100#0102030405060708\n";
+        let player =
+            CanLogPlayer::from_candump("p".into(), "bxcan1".into(), log, 1_000_000).unwrap();
+        bus.can_log_players.push(player);
+
+        for _ in 0..101 {
+            bus.service_can_log_players();
+        }
+        assert!(bus.can_log_players[0].is_done());
+        assert_eq!(bus.can_log_players[0].delivered, 0);
+        assert!(bus.can_log_players[0].dropped > 0);
     }
 
     #[test]

@@ -304,6 +304,13 @@ impl SystemManifest {
         let base = path.parent().map(|p| p.to_path_buf()).unwrap_or_default();
         for ext in &mut manifest.external_devices {
             if ext.r#type == "can-player" {
+                if ext.config.contains_key("path") && ext.config.contains_key("data") {
+                    return Err(anyhow::anyhow!(
+                        "can-player '{}': both 'path' and 'data' are set in config; set only one \
+                         ('path' is a CLI convenience that inlines the log into 'data')",
+                        ext.id
+                    ));
+                }
                 if let Some(p) = ext.config.remove("path") {
                     let p = p
                         .as_str()
@@ -1639,5 +1646,79 @@ board_io: []
             cfg.get("data").unwrap().as_str().unwrap(),
             "(1.0) can0 123#11\n"
         );
+    }
+
+    /// Setting both `path:` and `data:` on a `can-player` device is
+    /// ambiguous — silently letting `path` overwrite `data` (the prior
+    /// behavior) hides a config mistake. Must error naming the device id
+    /// and both keys.
+    #[test]
+    fn from_file_errors_when_both_path_and_data_set() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("s.log"), "(1.0) can0 123#11\n").unwrap();
+        let yaml = r#"
+name: "t"
+chip: "chip.yaml"
+external_devices:
+  - type: "can-player"
+    id: "p"
+    connection: "bxcan1"
+    config:
+      path: "./s.log"
+      data: "(1.0) can0 123#11\n"
+board_io: []
+"#;
+        let sys_path = dir.path().join("system.yaml");
+        std::fs::write(&sys_path, yaml).unwrap();
+        let err = SystemManifest::from_file(&sys_path).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("'p'"), "unexpected error: {msg}");
+        assert!(msg.contains("path"), "unexpected error: {msg}");
+        assert!(msg.contains("data"), "unexpected error: {msg}");
+    }
+
+    /// A `path:` pointing at a file that doesn't exist fails with an error
+    /// that names the (resolved) path, not just an opaque io::Error.
+    #[test]
+    fn from_file_errors_on_nonexistent_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let yaml = r#"
+name: "t"
+chip: "chip.yaml"
+external_devices:
+  - type: "can-player"
+    id: "p"
+    connection: "bxcan1"
+    config:
+      path: "./missing.log"
+board_io: []
+"#;
+        let sys_path = dir.path().join("system.yaml");
+        std::fs::write(&sys_path, yaml).unwrap();
+        let err = SystemManifest::from_file(&sys_path).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("missing.log"), "unexpected error: {msg}");
+    }
+
+    /// A non-string `path:` value fails with an error naming the device id.
+    #[test]
+    fn from_file_errors_on_non_string_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let yaml = r#"
+name: "t"
+chip: "chip.yaml"
+external_devices:
+  - type: "can-player"
+    id: "p"
+    connection: "bxcan1"
+    config:
+      path: 123
+board_io: []
+"#;
+        let sys_path = dir.path().join("system.yaml");
+        std::fs::write(&sys_path, yaml).unwrap();
+        let err = SystemManifest::from_file(&sys_path).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("'p'"), "unexpected error: {msg}");
     }
 }

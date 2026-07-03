@@ -186,7 +186,16 @@ typedef struct {
 #define MAX_SESS 4u
 static bam_sess_t sess[MAX_SESS];
 
-static bam_sess_t *sess_for(uint8_t sa)  /* per-SA keying — THE fix */
+/* per-SA keying — THE fix.
+ *
+ * Deliberately scoped: eviction/timeouts are NOT implemented, so an orphan
+ * TP.DT (one with no matching TP.CM open, or one arriving after its session
+ * already completed and was freed) can walk into the fallback slot-0 return
+ * below and pin a session that never gets reclaimed. This capture only has
+ * 2 BAM sources against MAX_SESS=4, so the gap never bites here — a busier
+ * bus (or a malicious/broken sender) could exhaust all 4 slots.
+ */
+static bam_sess_t *sess_for(uint8_t sa)
 {
     uint32_t i;
     for (i = 0u; i < MAX_SESS; i++)
@@ -233,6 +242,10 @@ static void on_frame(uint32_t id, const uint8_t *d, uint32_t len)
         s->size     = (uint16_t) ((uint16_t) d[1] | ((uint16_t) d[2] << 8));
         s->num_pkts = d[3];
         s->got      = 0u;
+        /* Clamp to this monitor's BAM payload cap. For a BAM >64 bytes the
+         * printed "len=" is the CLAMPED size (sizeof s->buf), not the size
+         * TP.CM actually announced — bytes past the cap are dropped by the
+         * reassembly loop below and never appear in the printed payload. */
         if (s->size > sizeof s->buf) s->size = (uint16_t) sizeof s->buf;
     } else if (pgn == PGN_TP_DT && len == 8u) {
         bam_sess_t *s = sess_for(sa);

@@ -40,10 +40,27 @@ pub fn parse_candump(text: &str) -> Result<Vec<(f64, CanFrame)>, String> {
         let (id_str, data_str) = frame
             .split_once('#')
             .ok_or_else(|| format!("candump line {n}: expected '<ID>#<DATA>'"))?;
+        // candump writes remote (RTR) frames as `ID#R` (optionally `R<dlc>`,
+        // e.g. `R8`). Detect this BEFORE the hex-payload checks below, or a
+        // lone 'R' (or 'R8') falls into the misleading "odd-length hex
+        // payload" / "bad hex payload" errors instead of naming the real
+        // cause.
+        if data_str.starts_with('R') {
+            return Err(format!(
+                "candump line {n}: remote (RTR) frames are not supported"
+            ));
+        }
         let id = u32::from_str_radix(id_str, 16)
             .map_err(|e| format!("candump line {n}: bad CAN id '{id_str}': {e}"))?;
         // can-utils convention: 8 hex digits = 29-bit extended, 3 = standard.
         let extended = id_str.len() > 3;
+        if extended {
+            if id > 0x1FFF_FFFF {
+                return Err(format!("candump line {n}: extended CAN id out of range"));
+            }
+        } else if id > 0x7FF {
+            return Err(format!("candump line {n}: standard CAN id out of range"));
+        }
         if data_str.len() % 2 != 0 {
             return Err(format!("candump line {n}: odd-length hex payload"));
         }
@@ -55,6 +72,11 @@ pub fn parse_candump(text: &str) -> Result<Vec<(f64, CanFrame)>, String> {
             .map(|i| u8::from_str_radix(&data_str[i..i + 2], 16))
             .collect::<Result<Vec<u8>, _>>()
             .map_err(|e| format!("candump line {n}: bad hex payload: {e}"))?;
+        if data.len() > 8 {
+            return Err(format!(
+                "candump line {n}: payload longer than 8 bytes (classical CAN max)"
+            ));
+        }
         out.push((
             ts,
             CanFrame {
@@ -128,5 +150,50 @@ mod tests {
         // but must produce Err, not a char-boundary panic.
         let err = parse_candump("(1.0) can0 123#A€\n").unwrap_err();
         assert!(err.contains("line 1"), "got: {err}");
+    }
+
+    #[test]
+    fn rejects_payload_longer_than_8_bytes() {
+        // Classical CAN max DLC is 8 bytes; 9 bytes must be rejected.
+        let err = parse_candump("(1.0) can0 123#0011223344556677889\n").unwrap_err();
+        assert!(err.contains("line 1"), "got: {err}");
+    }
+
+    #[test]
+    fn rejects_standard_id_out_of_range() {
+        // Standard (11-bit) ids top out at 0x7FF; 3 hex digits can encode up
+        // to 0xFFF, so an out-of-range value must be rejected explicitly.
+        let err = parse_candump("(1.0) can0 800#11\n").unwrap_err();
+        assert!(err.contains("line 1"), "got: {err}");
+        assert!(err.contains("standard CAN id out of range"), "got: {err}");
+    }
+
+    #[test]
+    fn rejects_extended_id_out_of_range() {
+        // Extended (29-bit) ids top out at 0x1FFFFFFF; 8 hex digits can
+        // encode up to 0xFFFFFFFF, so an out-of-range value must be rejected.
+        let err = parse_candump("(1.0) can0 20000000#11\n").unwrap_err();
+        assert!(err.contains("line 1"), "got: {err}");
+        assert!(err.contains("extended CAN id out of range"), "got: {err}");
+    }
+
+    #[test]
+    fn rejects_rtr_frames_with_clear_message() {
+        // candump writes remote frames as `ID#R` (optionally `R<dlc>`, e.g.
+        // `R8`). Must be detected before the hex-payload checks so it isn't
+        // misreported as an "odd-length hex payload".
+        let err = parse_candump("(1.0) can0 123#R\n").unwrap_err();
+        assert!(err.contains("line 1"), "got: {err}");
+        assert!(
+            err.contains("remote (RTR) frames are not supported"),
+            "got: {err}"
+        );
+
+        let err_with_dlc = parse_candump("(1.0) can0 123#R8\n").unwrap_err();
+        assert!(err_with_dlc.contains("line 1"), "got: {err_with_dlc}");
+        assert!(
+            err_with_dlc.contains("remote (RTR) frames are not supported"),
+            "got: {err_with_dlc}"
+        );
     }
 }

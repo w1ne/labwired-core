@@ -194,6 +194,7 @@ jobs:
             --required-target stm32f401cdu6 \
             --required-target riscv-ci-fixture \
             --required-target demo-blinky-stm32f103 \
+            --required-target f103-j1939-monitor \
             --min-required-pass-rate 0.80
 
       - name: Publish scoreboard summary
@@ -211,6 +212,7 @@ jobs:
             --required-target stm32f401cdu6 \
             --required-target riscv-ci-fixture \
             --required-target demo-blinky-stm32f103 \
+            --required-target f103-j1939-monitor \
             --min-required-pass-rate 0.80
 
       - name: Upload scoreboard artifacts
