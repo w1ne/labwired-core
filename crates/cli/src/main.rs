@@ -1689,16 +1689,16 @@ fn execute_test_loop<C: labwired_core::Cpu>(
     // wiring. `at_start` fires now; `after_cycles` fires the first loop
     // iteration at or past its cycle threshold. The closure takes `machine` as
     // an argument (captures nothing) so it can be called both here and mid-loop.
-    let apply_stimulus =
-        |machine: &mut labwired_core::Machine<C>, s: &labwired_config::StimulusSpec| {
-            match machine.set_input(&s.target.channel, s.value) {
-                Ok(()) => info!("stimulus: {} = {} applied", s.target.channel, s.value),
-                Err(e) => error!(
-                    "stimulus '{}' = {} could not be applied: {:?}",
-                    s.target.channel, s.value, e
-                ),
-            }
-        };
+    let apply_stimulus = |machine: &mut labwired_core::Machine<C>,
+                          s: &labwired_config::StimulusSpec| {
+        match machine.set_input(&s.target.channel, s.value) {
+            Ok(()) => info!("stimulus: {} = {} applied", s.target.channel, s.value),
+            Err(e) => error!(
+                "stimulus '{}' = {} could not be applied: {:?}",
+                s.target.channel, s.value, e
+            ),
+        }
+    };
     for s in stimuli {
         if matches!(s.trigger, labwired_config::FaultTrigger::AtStart) {
             apply_stimulus(machine, s);
@@ -1720,7 +1720,8 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                 if *fired {
                     continue;
                 }
-                if let labwired_config::FaultTrigger::AfterCycles { cycles: threshold } = s.trigger {
+                if let labwired_config::FaultTrigger::AfterCycles { cycles: threshold } = s.trigger
+                {
                     if cycles >= threshold {
                         apply_stimulus(machine, s);
                         *fired = true;
