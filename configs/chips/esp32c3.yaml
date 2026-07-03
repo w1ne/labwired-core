@@ -100,11 +100,14 @@ peripherals:
     base_address: 0x60009000
     config:
       path: "../peripherals/esp32c3/io_mux.yaml"
+  # Main I²C0 controller — the real Espressif command-list engine
+  # (peripherals::esp32c3::i2c::Esp32c3I2c), so simulated firmware can drive an
+  # attached I²C slave (TMP102 by default; override via the system manifest's
+  # external_devices). Reset values match the silicon capture that the previous
+  # declarative model (peripherals/esp32c3/i2c0.yaml) reproduced.
   - id: "i2c0"
-    type: "declarative"
+    type: "esp32c3_i2c"
     base_address: 0x60013000
-    config:
-      path: "../peripherals/esp32c3/i2c0.yaml"
   - id: "spi2"
     type: "declarative"
     base_address: 0x60024000

@@ -196,6 +196,79 @@ impl SystemBus {
                         Box::new(crate::peripherals::gpio::GpioPort::new_with_layout(layout))
                     }
                 }
+                // ESP32-C3 main I²C0 controller: the real Espressif command-list
+                // engine (peripherals::esp32c3::i2c::Esp32c3I2c), driving attached
+                // I²C slaves via the same FIFO/CMD FSM the S3 uses. Slaves come
+                // from the manifest's `external_devices` (matched by connection ==
+                // this peripheral's id); if none are declared, a TMP102 is attached
+                // at its default address 0x48 so demo firmware / synthetic tests can
+                // reach a live device, mirroring the S3 system builder.
+                "esp32c3_i2c" => {
+                    let mut i2c = crate::peripherals::esp32c3::i2c::Esp32c3I2c::new();
+                    let mut attached = 0usize;
+                    for ext in &manifest.external_devices {
+                        if ext.connection != p_cfg.id {
+                            continue;
+                        }
+                        if let Some(device) = crate::peripherals::components::build_i2c_device(
+                            &ext.r#type,
+                            &ext.config,
+                        ) {
+                            tracing::info!(
+                                "esp32c3 i2c attach: '{}' (type={}) -> '{}'",
+                                ext.id,
+                                ext.r#type,
+                                p_cfg.id
+                            );
+                            i2c.attach_slave(device);
+                            attached += 1;
+                        }
+                    }
+                    if attached == 0 {
+                        i2c.attach_slave(Box::new(
+                            crate::peripherals::esp32s3::tmp102::Tmp102::new(),
+                        ));
+                    }
+                    Box::new(i2c)
+                }
+                // RP2040 Synopsys DW_apb_i2c master (peripherals::rp2040::i2c).
+                // Drives attached I²C slaves through its TX/RX FIFO + master
+                // transaction FSM. Slaves come from the manifest's
+                // `external_devices` (matched by connection == this peripheral's
+                // id); if none are declared, a TMP102 is attached at its default
+                // address 0x48 so demo firmware / synthetic tests can reach a
+                // live device, mirroring the C3/S3 system builders.
+                "rp2040_i2c" => {
+                    let irq = p_cfg.irq.unwrap_or(
+                        crate::peripherals::rp2040::i2c::I2C0_IRQ,
+                    );
+                    let mut i2c = crate::peripherals::rp2040::i2c::Rp2040I2c::with_irq(irq);
+                    let mut attached = 0usize;
+                    for ext in &manifest.external_devices {
+                        if ext.connection != p_cfg.id {
+                            continue;
+                        }
+                        if let Some(device) = crate::peripherals::components::build_i2c_device(
+                            &ext.r#type,
+                            &ext.config,
+                        ) {
+                            tracing::info!(
+                                "rp2040 i2c attach: '{}' (type={}) -> '{}'",
+                                ext.id,
+                                ext.r#type,
+                                p_cfg.id
+                            );
+                            i2c.attach_slave(device);
+                            attached += 1;
+                        }
+                    }
+                    if attached == 0 {
+                        i2c.attach_slave(Box::new(
+                            crate::peripherals::esp32s3::tmp102::Tmp102::new(),
+                        ));
+                    }
+                    Box::new(i2c)
+                }
                 "i2c"
                 | "stm32f1_i2c"
                 | "stm32f2_i2c"

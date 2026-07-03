@@ -243,6 +243,18 @@ impl SystemBus {
         if t == "sam4s_pio" || (t.contains("gpio") && t != "pio") {
             return "gpio".to_string();
         }
+        // ESP32-C3 main I²C0 controller — the real Espressif command-list IP
+        // (peripherals::esp32c3::i2c). Must precede the generic "contains(i2c)"
+        // matcher, which would otherwise coerce it to the STM32-style I2c model
+        // and lose the command-list FSM / attached-slave path.
+        if t == "esp32c3_i2c" {
+            return "esp32c3_i2c".to_string();
+        }
+        // RP2040 Synopsys DW_apb_i2c — must precede the generic "contains(i2c)"
+        // matcher, which would otherwise coerce it to the STM32 I2C model.
+        if t == "rp2040_i2c" || t == "dw_apb_i2c" {
+            return "rp2040_i2c".to_string();
+        }
         if t.contains("i2c") || t.contains("iic") || t.contains("smbus") || t.ends_with("_twi") {
             return "i2c".to_string();
         }

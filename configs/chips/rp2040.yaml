@@ -19,3 +19,8 @@ peripherals:
     base_address: 0x40034000
     config:
       profile: "stm32v2"
+  - id: "i2c0"
+    type: "rp2040_i2c"
+    base_address: 0x40044000
+    size: "4KB"
+    irq: 23

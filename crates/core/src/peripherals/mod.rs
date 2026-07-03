@@ -41,6 +41,7 @@ pub mod quadspi;
 pub mod radio;
 pub mod rcc;
 pub mod rng;
+pub mod rp2040;
 pub mod rtc;
 pub mod rtc_f1;
 pub mod rtc_v3;
