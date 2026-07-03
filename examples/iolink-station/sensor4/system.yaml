@@ -3,6 +3,8 @@
 # verifiable (bit-order-invariant). C/Q (USART2) cross-linked to a master port.
 name: "iolink-sensor4"
 chip: "../../../configs/chips/stm32l476.yaml"
+# Console on USART1 only; C/Q is on USART2 (keep the raw bus out of the serial view).
+debug_uart: "uart1"
 external_devices:
   - id: "di_shifter"
     type: "sn74hc165"

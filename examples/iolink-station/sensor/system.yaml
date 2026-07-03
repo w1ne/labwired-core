@@ -5,6 +5,8 @@
 # is its own chip. A 74HC165 on SPI1 supplies the digital-input process data.
 name: "iolink-sensor"
 chip: "../../../configs/chips/stm32l476.yaml"
+# Console on USART1 only; C/Q is on USART2 (keep the raw bus out of the serial view).
+debug_uart: "uart1"
 external_devices:
   - id: "di_shifter"
     type: "sn74hc165"

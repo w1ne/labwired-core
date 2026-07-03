@@ -5,5 +5,8 @@
 # chip over the wire, not a host model.
 name: "iolink-master"
 chip: "../../../configs/chips/stm32l476.yaml"
+# Console on USART1 only; the IO-Link C/Q ports live on USART2-5, so without this
+# the simulator merges the raw C/Q bus (0x55 wake preamble) into the serial view.
+debug_uart: "uart1"
 external_devices: []
 board_io: []
