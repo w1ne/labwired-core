@@ -244,3 +244,11 @@ opt-level = "s"
 codegen-units = 1
 debug = true
 opt-level = "s"
+
+# The browser simulator cdylib (NOT a firmware crate). A single codegen unit
+# lets LLVM inline across the whole crate for the wasm hot loop; the compile-time
+# cost lands only on this one package. opt-level stays at the release default (3).
+# SIMD/bulk-memory target features and the debug-strip live in .cargo/config.toml
+# and crates/wasm/Cargo.toml's wasm-pack metadata respectively.
+[profile.release.package.labwired-wasm]
+codegen-units = 1

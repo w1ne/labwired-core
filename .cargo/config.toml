@@ -4,3 +4,14 @@
 # present for future target-specific overrides, but do not add a global
 # thumbv6m `-Tlink.x`: doing so passes the linker script twice and duplicates
 # MEMORY regions from memory.x.
+
+# WebAssembly build (labwired-wasm — the browser simulator). Enable the
+# post-MVP wasm features that speed up the sim's hot paths and are baseline in
+# every modern browser: bulk-memory (fast memory.copy/fill for the per-frame
+# framebuffer shuffling), simd128 (autovectorized inner loops), and
+# nontrapping-fptoint (cheaper float→int). This applies ONLY to the wasm32
+# target — native tools and the thumbv*/riscv32 firmware crates are untouched.
+# wasm-opt must be told to accept these opcodes; see the
+# [package.metadata.wasm-pack] block in crates/wasm/Cargo.toml.
+[target.wasm32-unknown-unknown]
+rustflags = ["-C", "target-feature=+bulk-memory,+simd128,+nontrapping-fptoint"]
