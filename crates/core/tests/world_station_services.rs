@@ -44,6 +44,171 @@ fn sym(elf_bytes: &[u8], name: &str) -> u64 {
         .unwrap_or_else(|| panic!("symbol {name} not in ELF")) as u64
 }
 
+// Shared setup for the wire-fault tests: build the station-svc world and read the
+// master ELF bytes, or return `None` (after emitting the skip/fail decision via
+// the shared helper) when the firmwares are not built.
+fn build_station_or_skip() -> Option<(World, Vec<u8>)> {
+    let root = station_root();
+    let master_elf = root.join("master-fw-svc/master.elf");
+    let device_elf = root.join("device-fw-svc/device.elf");
+    if !master_elf.exists() || !device_elf.exists() {
+        skip_or_fail_missing_elfs(
+            "STM32CUBE_L4_DIR=$HOME/projects/STM32CubeL4 bash examples/iolink-station/ci/build.sh",
+        );
+        return None;
+    }
+    let env = EnvironmentManifest::from_file(root.join("env-svc.yaml")).expect("parse env-svc.yaml");
+    let world = World::from_manifest(env, &root).expect("build station-svc world");
+    let mb = std::fs::read(&master_elf).expect("read master elf");
+    Some((world, mb))
+}
+
+// Read a `volatile uint8_t` master global by its resolved ELF address.
+fn master_u8(world: &World, addr: u64) -> u8 {
+    world.machines.get("master").unwrap().read_u8(addr).unwrap()
+}
+
+// Reach the point-to-point C/Q wire as its concrete type for fault injection.
+fn crosslink(world: &mut World) -> &mut labwired_core::network::UartCrossLink {
+    world.interconnects[0]
+        .as_any_mut()
+        .expect("interconnect exposes as_any_mut")
+        .downcast_mut::<labwired_core::network::UartCrossLink>()
+        .expect("interconnect[0] is a UartCrossLink")
+}
+
+// Step every chip to OPERATE (raw master state 3). Returns the iteration it hit.
+fn step_to_operate(world: &mut World, a_state: u64, max_steps: u64) -> u64 {
+    for i in 0..max_steps {
+        world.step_all();
+        if master_u8(world, a_state) == 3 {
+            return i;
+        }
+    }
+    panic!("master never reached OPERATE (state 3) within {max_steps} steps");
+}
+
+// Fault test 1 — a single CRC-corrupted device->master frame must be counted as a
+// checksum error AND survived in place: the master retries and stays in OPERATE,
+// it does NOT fall through to ERROR. (Corrupting exactly 2 bytes flips one frame.)
+#[test]
+fn master_survives_single_crc_corrupted_frame() {
+    let Some((mut world, mb)) = build_station_or_skip() else {
+        return;
+    };
+    let a_state = sym(&mb, "g_master_state");
+    let a_ck = sym(&mb, "g_diag_ck_errors");
+    let a_err = sym(&mb, "g_error_seen");
+
+    let op_at = step_to_operate(&mut world, a_state, 10_000_000);
+    eprintln!("[crc] reached OPERATE at iteration {op_at}");
+
+    // Corrupt the next 2 device->master bytes = exactly one malformed frame.
+    crosslink(&mut world).set_corrupt_b_to_a(2);
+
+    const MAX_AFTER: u64 = 2_000_000;
+    let mut ck_at = None;
+    for i in 0..MAX_AFTER {
+        world.step_all();
+        if master_u8(&world, a_ck) >= 1 {
+            ck_at = Some(i);
+            break;
+        }
+    }
+
+    let ck = master_u8(&world, a_ck);
+    let state = master_u8(&world, a_state);
+    let err = master_u8(&world, a_err);
+    eprintln!("[crc] after corruption: ck_errors={ck} state={state} error_seen={err} counted_at={ck_at:?}");
+
+    assert!(
+        ck >= 1,
+        "checksum error was never counted after a corrupt frame (g_diag_ck_errors={ck}, ran {MAX_AFTER} steps)"
+    );
+    assert_eq!(
+        state, 3,
+        "master dropped out of OPERATE after a single corrupt frame (state={state}); expected retry-in-place"
+    );
+    assert_eq!(
+        err, 0,
+        "master fell through to ERROR on a single corrupt frame (g_error_seen={err}); expected survival"
+    );
+}
+
+// Fault test 2 — sustained CRC corruption on the device->master direction must
+// exhaust the master's rx-retry budget (3 consecutive bad frames), drive the
+// port to ERROR, and fire the firmware's ERROR handler, which counts the event
+// and restarts the port. Because the ERROR handler restarts immediately we key
+// off the sticky g_error_seen / g_restart_count rather than catching state-4 live.
+//
+// NOTE ON SCOPE (verified against the pinned stacks; see the task report):
+//   * We corrupt frames rather than muting the device: a *silent* device is NOT
+//     a detectable fault for this firmware. The master's main loop only issues
+//     IOLINK_MASTER_TICK_CYCLE_DUE ticks (master-fw-svc/main.c) and never a
+//     RESPONSE_TIMEOUT tick, so iolink_master_on_timeout (master_port.c) — the
+//     only path that trips ERROR on a missing reply — never runs. A muted device
+//     leaves the master spinning in OPERATE indefinitely (confirmed: 30M steps).
+//   * We deliberately do NOT assert recovery back to OPERATE. After the restart
+//     the master re-wakes immediately, but the device only re-syncs to a fresh
+//     wake-up after ~1000ms of link *silence* (dll.c inactivity fallback
+//     SDCI->SIO), which the continuously-restarting master never provides. So the
+//     master genuinely stays in STARTUP; asserting recovery would be asserting
+//     behaviour the system does not exhibit. The reachable, real assertion is
+//     that the fault was detected and the ERROR/restart handler fired.
+#[test]
+fn sustained_crc_corruption_drives_master_to_error_and_restart() {
+    let Some((mut world, mb)) = build_station_or_skip() else {
+        return;
+    };
+    let a_state = sym(&mb, "g_master_state");
+    let a_ck = sym(&mb, "g_diag_ck_errors");
+    let a_err = sym(&mb, "g_error_seen");
+    let a_restart = sym(&mb, "g_restart_count");
+
+    let op_at = step_to_operate(&mut world, a_state, 10_000_000);
+    eprintln!("[error] reached OPERATE at iteration {op_at}");
+
+    // Corrupt a long run of device->master bytes: spans several response frames,
+    // so the retry budget (rx_retry_count < 2, then ERROR on the 3rd bad frame)
+    // is exhausted and the port is driven to ERROR.
+    crosslink(&mut world).set_corrupt_b_to_a(32);
+
+    const MAX_AFTER: u64 = 2_000_000;
+    let mut saw_ck = false;
+    let mut restart_at = None;
+    for i in 0..MAX_AFTER {
+        world.step_all();
+        if master_u8(&world, a_ck) >= 1 {
+            saw_ck = true; // checksum errors were counted before the restart reset diagnostics
+        }
+        if master_u8(&world, a_restart) >= 1 {
+            restart_at = Some(i);
+            break;
+        }
+    }
+
+    let restart_at = restart_at
+        .expect("sustained corruption never drove the master to ERROR/restart within 2M steps");
+    let err = master_u8(&world, a_err);
+    let restarts = master_u8(&world, a_restart);
+    eprintln!(
+        "[error] ERROR/restart at iteration {restart_at}; error_seen={err} restart_count={restarts} saw_ck={saw_ck}"
+    );
+
+    assert!(
+        saw_ck,
+        "the master reached ERROR without ever counting a checksum error; the corruption was not the cause"
+    );
+    assert_eq!(
+        err, 1,
+        "sustained corruption did not drive the master to ERROR (g_error_seen={err})"
+    );
+    assert!(
+        restarts >= 1,
+        "the ERROR handler did not fire a restart (g_restart_count={restarts})"
+    );
+}
+
 // Full service script on the wire: ISDU vendor-name read == "LABWIRED", cyclic
 // PD-out echo, event trigger/read (code 0x8CA0), and data-storage round-trip.
 #[test]
