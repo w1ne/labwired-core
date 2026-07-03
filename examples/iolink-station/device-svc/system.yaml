@@ -1,0 +1,10 @@
+# IO-Link service-rich device node: a simulated NUCLEO-L476RG running the real
+# iolinki DEVICE firmware (device-fw-svc/device.elf). Its IO-Link C/Q line
+# (USART2) is connected to a master-chip port by a uart_cross_link in the
+# environment manifest — there is NO host-side master model here; the master is
+# its own chip. Unlike the iolink-dido sensor, this device has NO external
+# shifter: the process data it publishes is the echo of the master's PD-output.
+name: "iolink-sensor-svc"
+chip: "../../../configs/chips/stm32l476.yaml"
+external_devices: []
+board_io: []

@@ -315,6 +315,17 @@ impl CortexM {
         (self.xpsr >> 29) & 1 == 1
     }
 
+    /// APSR.GE[3:0] live in xpsr bits [19:16]; each corresponds to one byte
+    /// lane of a SIMD add/sub and is consumed by SEL. `ge` low nibble = GE[3:0].
+    fn set_ge(&mut self, ge: u32) {
+        self.xpsr &= !(0xF << 16);
+        self.xpsr |= (ge & 0xF) << 16;
+    }
+
+    fn get_ge(&self) -> u32 {
+        (self.xpsr >> 16) & 0xF
+    }
+
     fn get_overflow(&self) -> bool {
         (self.xpsr >> 28) & 1 == 1
     }
@@ -957,6 +968,60 @@ impl CortexM {
                 Instruction::Rbit { rd, rm } => {
                     let val = self.read_reg(rm);
                     let result = val.reverse_bits();
+                    self.write_reg(rd, result);
+                    pc_increment = 4;
+                }
+                Instruction::SimdAddSub8 { rd, rn, rm, op } => {
+                    // Per-byte parallel add/sub; each lane sets one APSR.GE bit.
+                    // op: 0=SADD8 1=UADD8 2=SSUB8 3=USUB8 (ARMv7-M A7.7).
+                    let n = self.read_reg(rn);
+                    let m = self.read_reg(rm);
+                    let mut result = 0u32;
+                    let mut ge = 0u32;
+                    for i in 0..4 {
+                        let nb = ((n >> (i * 8)) & 0xFF) as i32;
+                        let mb = ((m >> (i * 8)) & 0xFF) as i32;
+                        let (byte, ge_bit) = match op {
+                            0 => {
+                                // SADD8: signed add, GE = sum >= 0
+                                let s = (nb as i8 as i32) + (mb as i8 as i32);
+                                ((s as u32) & 0xFF, s >= 0)
+                            }
+                            1 => {
+                                // UADD8: unsigned add, GE = carry out (sum >= 0x100)
+                                let s = nb + mb;
+                                ((s as u32) & 0xFF, s >= 0x100)
+                            }
+                            2 => {
+                                // SSUB8: signed sub, GE = diff >= 0
+                                let d = (nb as i8 as i32) - (mb as i8 as i32);
+                                ((d as u32) & 0xFF, d >= 0)
+                            }
+                            _ => {
+                                // USUB8: unsigned sub, GE = no borrow (nb >= mb)
+                                let d = nb - mb;
+                                ((d as u32) & 0xFF, nb >= mb)
+                            }
+                        };
+                        result |= byte << (i * 8);
+                        if ge_bit {
+                            ge |= 1 << i;
+                        }
+                    }
+                    self.write_reg(rd, result);
+                    self.set_ge(ge);
+                    pc_increment = 4;
+                }
+                Instruction::Sel { rd, rn, rm } => {
+                    // SEL: pick each byte from Rn if its GE bit is set, else Rm.
+                    let n = self.read_reg(rn);
+                    let m = self.read_reg(rm);
+                    let ge = self.get_ge();
+                    let mut result = 0u32;
+                    for i in 0..4 {
+                        let src = if (ge >> i) & 1 == 1 { n } else { m };
+                        result |= ((src >> (i * 8)) & 0xFF) << (i * 8);
+                    }
                     self.write_reg(rd, result);
                     pc_increment = 4;
                 }
@@ -1687,6 +1752,11 @@ impl CortexM {
                             self.pc,
                             h1,
                             h2
+                        );
+                        crate::fidelity::record_undecoded(
+                            self.pc,
+                            ((h1 as u64) << 16) | (h2 as u64),
+                            "undecoded T32",
                         );
                         pc_increment = 4;
                     }
@@ -2783,6 +2853,7 @@ impl CortexM {
 
                 Instruction::Unknown(op) => {
                     tracing::warn!("Unknown instruction at {:#x}: Opcode {:#06x}", self.pc, op);
+                    crate::fidelity::record_undecoded(self.pc, op as u64, "undecoded T16");
                     pc_increment = 2; // Skip 16-bit
                 }
             }
@@ -3241,6 +3312,47 @@ mod tests {
         assert_ne!(cpu.xpsr & V_BIT, 0);
         assert_ne!(cpu.xpsr & N_BIT, 0);
         assert_eq!(cpu.xpsr & C_BIT, 0);
+    }
+
+    #[test]
+    fn test_simd_uadd8_sel_strlen_kernel() {
+        // Reproduces newlib's optimised strlen inner loop, which was silently
+        // NOP'd before UADD8/SEL were modelled (C strings measured as garbage).
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x1000;
+
+        // Word bytes (LE lanes): [0x41 'A', 0x42 'B', 0x43 'C', 0x00 terminator]
+        cpu.r2 = 0x0043_4241;
+        cpu.r12 = 0xFFFF_FFFF; // ip = ~0
+        cpu.r4 = 0;
+
+        // UADD8 r2, r2, ip : GE[i] = (byte + 0xFF >= 0x100) = (byte != 0)
+        run_test_instr(&mut cpu, &mut bus, 0xFA82_F24C, true);
+        assert_eq!(cpu.get_ge(), 0b0111, "GE must flag the three nonzero bytes");
+
+        // SEL r2, r4, ip : GE-set lanes take r4 (0x00), clear lanes take ip (0xFF).
+        // Placed at the next PC (0x1004) so we don't overwrite a prefetched word.
+        assert_eq!(cpu.pc, 0x1004);
+        run_test_instr(&mut cpu, &mut bus, 0xFAA4_F28C, true);
+        assert_eq!(
+            cpu.r2, 0xFF00_0000,
+            "only the null lane (byte 3) becomes 0xFF"
+        );
+    }
+
+    #[test]
+    fn test_simd_usub8_ssub8_ge() {
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x1000;
+        // USUB8 r1, r2, r3 : GE[i] = (Rn.byte >= Rm.byte), result = wrapping diff
+        cpu.r2 = 0x10_05_80_00;
+        cpu.r3 = 0x08_05_7F_01;
+        run_test_instr(&mut cpu, &mut bus, 0xFAC2_F143, true);
+        // lanes: 0x00-0x01=0xFF(borrow,GE0), 0x80-0x7F=0x01(GE1), 0x05-0x05=0(GE1), 0x10-0x08=0x08(GE1)
+        assert_eq!(cpu.r1, 0x08_00_01_FF);
+        assert_eq!(cpu.get_ge(), 0b1110);
     }
 
     #[test]

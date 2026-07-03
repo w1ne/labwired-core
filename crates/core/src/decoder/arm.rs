@@ -432,6 +432,21 @@ pub enum Instruction {
         rd: u8,
         rm: u8,
     }, // REVSH Rd, Rm
+    // SIMD byte add/subtract (set APSR.GE) + SEL. Cortex-M4 DSP extension.
+    // newlib's optimised strlen/strcmp/memchr emit UADD8+SEL, so omitting
+    // these silently corrupts every C-string length computation (found via
+    // an IO-Link ISDU vendor-name read returning garbage).
+    SimdAddSub8 {
+        rd: u8,
+        rn: u8,
+        rm: u8,
+        op: u8, // 0=SADD8 1=UADD8 2=SSUB8 3=USUB8
+    },
+    Sel {
+        rd: u8,
+        rn: u8,
+        rm: u8,
+    }, // SEL Rd, Rn, Rm (per-byte select on APSR.GE)
     Udiv {
         rd: u8,
         rn: u8,
@@ -1669,6 +1684,32 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
         }
     }
 
+    // SIMD byte add/sub + SEL (Cortex-M4 DSP). Encodings (ARMv7-M):
+    //   SADD8 h1=FA8n h2=Fd0m   UADD8 h1=FA8n h2=Fd4m
+    //   SSUB8 h1=FACn h2=Fd0m   USUB8 h1=FACn h2=Fd4m
+    //   SEL   h1=FAAn h2=Fd8m
+    if (h2 & 0xF000) == 0xF000 {
+        let rn = (h1 & 0xF) as u8;
+        let rd = ((h2 >> 8) & 0xF) as u8;
+        let rm = (h2 & 0xF) as u8;
+        let h2op = (h2 >> 4) & 0xF;
+        if (h1 & 0xFFF0) == 0xFA80 && h2op == 0x0 {
+            return Instruction::SimdAddSub8 { rd, rn, rm, op: 0 }; // SADD8
+        }
+        if (h1 & 0xFFF0) == 0xFA80 && h2op == 0x4 {
+            return Instruction::SimdAddSub8 { rd, rn, rm, op: 1 }; // UADD8
+        }
+        if (h1 & 0xFFF0) == 0xFAC0 && h2op == 0x0 {
+            return Instruction::SimdAddSub8 { rd, rn, rm, op: 2 }; // SSUB8
+        }
+        if (h1 & 0xFFF0) == 0xFAC0 && h2op == 0x4 {
+            return Instruction::SimdAddSub8 { rd, rn, rm, op: 3 }; // USUB8
+        }
+        if (h1 & 0xFFF0) == 0xFAA0 && h2op == 0x8 {
+            return Instruction::Sel { rd, rn, rm };
+        }
+    }
+
     // Shift by register (Thumb-2): LSL.W / LSR.W / ASR.W / ROR.W Rd, Rn, Rm.
     // ARM ARM encoding (T2):
     //   1111 1010 0 <op> S nnnn  1111 dddd 0000 mmmm
@@ -2089,6 +2130,58 @@ mod tests {
         assert_eq!(
             decode_thumb_32(0xFA92, 0xF081),
             Instruction::Rev { rd: 0, rm: 2 }
+        );
+    }
+
+    #[test]
+    fn test_decode_simd_uadd8_sel() {
+        // Real newlib strlen encodings (from arm-none-eabi objdump):
+        //   fa82 f24c  uadd8 r2, r2, ip(12)
+        //   faa4 f28c  sel   r2, r4, ip(12)
+        assert_eq!(
+            decode_thumb_32(0xFA82, 0xF24C),
+            Instruction::SimdAddSub8 {
+                rd: 2,
+                rn: 2,
+                rm: 12,
+                op: 1
+            }
+        );
+        assert_eq!(
+            decode_thumb_32(0xFAA4, 0xF28C),
+            Instruction::Sel {
+                rd: 2,
+                rn: 4,
+                rm: 12
+            }
+        );
+        // SADD8 r1,r2,r3 = fa82 f103 ; USUB8 r1,r2,r3 = fac2 f143 ; SSUB8 = fac2 f103
+        assert_eq!(
+            decode_thumb_32(0xFA82, 0xF103),
+            Instruction::SimdAddSub8 {
+                rd: 1,
+                rn: 2,
+                rm: 3,
+                op: 0
+            }
+        );
+        assert_eq!(
+            decode_thumb_32(0xFAC2, 0xF103),
+            Instruction::SimdAddSub8 {
+                rd: 1,
+                rn: 2,
+                rm: 3,
+                op: 2
+            }
+        );
+        assert_eq!(
+            decode_thumb_32(0xFAC2, 0xF143),
+            Instruction::SimdAddSub8 {
+                rd: 1,
+                rn: 2,
+                rm: 3,
+                op: 3
+            }
         );
     }
 

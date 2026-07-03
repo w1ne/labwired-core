@@ -12,6 +12,7 @@ pub mod cosim;
 pub mod coverage;
 pub mod cpu;
 pub mod decoder;
+pub mod fidelity;
 pub mod interrupt;
 pub mod memory;
 pub mod metrics;
