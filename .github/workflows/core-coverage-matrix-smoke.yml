@@ -119,6 +119,13 @@ jobs:
             --output-dir "out/coverage-matrix/${{ matrix.id }}" \
             --no-uart-stdout
 
+      - name: Verify frames against CSS's real DBC
+        if: matrix.make != ''
+        run: |
+          python3 -m pip install --quiet cantools
+          python3 "$(dirname "${{ matrix.script }}")/decode_check.py" \
+            "out/coverage-matrix/${{ matrix.id }}/uart.log"
+
       - name: Run unsupported-instruction audit
         if: matrix.crate != ''
         run: |
