@@ -103,6 +103,7 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
         assertions,
         faults,
         verdict,
+        stimuli,
     ) = match loaded {
         LoadedTestScript::V1_0(script) => (
             Some(script.inputs.firmware),
@@ -117,6 +118,7 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
             script.assertions,
             script.faults,
             script.verdict,
+            script.stimuli,
         ),
         LoadedTestScript::LegacyV1(script) => {
             tracing::warn!(
@@ -135,6 +137,7 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                 script.assertions,
                 Vec::new(),
                 None,
+                Vec::new(),
             )
         }
     };
@@ -360,6 +363,7 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                 &faults,
                 require_fault_fired,
                 fault_evidence,
+                &stimuli,
             );
             // Device-block render readout. Surfaces the attached panel block's
             // REAL render state — refresh_gen AND black-plane ink — so a generic
@@ -497,6 +501,7 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                 &faults,
                 require_fault_fired,
                 fault_evidence,
+                &stimuli,
             )
         }};
     }

@@ -817,6 +817,37 @@ pub struct Verdict {
     pub require_fault_fired: bool,
 }
 
+/// Which input channel a stimulus drives. `channel` is the [`crate::sim_input`]
+/// channel key (e.g. `x` on an accelerometer); `component` is an optional,
+/// advisory hint naming the device for readability. Resolution is by unique
+/// channel key today (the same rule as `Machine::set_input`), so an ambiguous
+/// channel is a run-time error rather than silently picking one.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct StimulusTarget {
+    /// Optional device name, for documentation/disambiguation of the YAML.
+    #[serde(default)]
+    pub component: Option<String>,
+    /// The input channel key to drive.
+    pub channel: String,
+}
+
+/// A declarative input stimulus (schema_version 1.2+): drive `target` to
+/// `value` (in the channel's engineering unit) when `trigger` fires. Reuses the
+/// [`FaultTrigger`] vocabulary; the first cut supports `at_start` and
+/// `after_cycles` (the time-based triggers). The runner applies each stimulus
+/// via the generic `Machine::set_input` path, so it works for any input device
+/// without per-type wiring.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct StimulusSpec {
+    pub target: StimulusTarget,
+    #[serde(default)]
+    pub trigger: FaultTrigger,
+    /// The value to set the channel to, in its engineering unit.
+    pub value: f64,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct TestScript {
@@ -831,6 +862,9 @@ pub struct TestScript {
     /// The safe-behaviour verdict for a fault-injection run (schema_version 1.1+).
     #[serde(default)]
     pub verdict: Option<Verdict>,
+    /// Input stimuli to drive during the run (schema_version 1.2+).
+    #[serde(default)]
+    pub stimuli: Vec<StimulusSpec>,
 }
 
 impl TestScript {
@@ -844,9 +878,9 @@ impl TestScript {
     }
 
     pub fn validate(&self) -> Result<()> {
-        if self.schema_version != "1.0" && self.schema_version != "1.1" {
+        if !matches!(self.schema_version.as_str(), "1.0" | "1.1" | "1.2") {
             anyhow::bail!(
-                "Unsupported schema_version '{}'. Supported versions: '1.0', '1.1'",
+                "Unsupported schema_version '{}'. Supported versions: '1.0', '1.1', '1.2'",
                 self.schema_version
             );
         }
@@ -865,6 +899,34 @@ impl TestScript {
                 "'faults'/'verdict' require schema_version '1.1' (got '{}')",
                 self.schema_version
             );
+        }
+
+        // Input stimuli require schema_version 1.2+.
+        if !self.stimuli.is_empty() && matches!(self.schema_version.as_str(), "1.0" | "1.1") {
+            anyhow::bail!(
+                "'stimuli' require schema_version '1.2' (got '{}')",
+                self.schema_version
+            );
+        }
+        for (i, s) in self.stimuli.iter().enumerate() {
+            if s.target.channel.trim().is_empty() {
+                anyhow::bail!("stimuli[{}]: target.channel cannot be empty", i);
+            }
+            // Only the time-based triggers are wired for stimuli today; the
+            // register-access triggers need a write/read hook we haven't added
+            // for the input path. Fail loud rather than silently never firing.
+            match &s.trigger {
+                FaultTrigger::AtStart | FaultTrigger::AfterCycles { .. } => {}
+                other => anyhow::bail!(
+                    "stimuli[{}]: trigger {:?} is not yet supported for stimuli \
+                     (use at_start or after_cycles)",
+                    i,
+                    other
+                ),
+            }
+            if !s.value.is_finite() {
+                anyhow::bail!("stimuli[{}]: value must be a finite number", i);
+            }
         }
 
         // Structural fault-compiler guardrails. Deeper checks that need the
@@ -1108,6 +1170,92 @@ mod parse_size_tests {
     #[test]
     fn garbage_still_errors() {
         assert!(parse_size("not-a-size").is_err());
+    }
+}
+
+#[cfg(test)]
+mod stimuli_tests {
+    use super::*;
+
+    fn script(schema: &str, stimuli_block: &str) -> String {
+        format!(
+            r#"
+schema_version: "{schema}"
+inputs:
+  firmware: "cow.elf"
+  system: "sys.yaml"
+limits:
+  max_steps: 1000
+{stimuli_block}
+"#
+        )
+    }
+
+    #[test]
+    fn stimuli_parse_and_validate_on_1_2() {
+        let yaml = script(
+            "1.2",
+            r#"stimuli:
+  - target: { component: fxos8700, channel: x }
+    trigger: !after_cycles { cycles: 800000 }
+    value: 2.0
+  - target: { channel: z }
+    value: 1.0
+"#,
+        );
+        let s: TestScript = serde_yaml::from_str(&yaml).unwrap();
+        s.validate().unwrap();
+        assert_eq!(s.stimuli.len(), 2);
+        assert_eq!(s.stimuli[0].target.channel, "x");
+        assert_eq!(s.stimuli[0].target.component.as_deref(), Some("fxos8700"));
+        assert_eq!(s.stimuli[0].value, 2.0);
+        // Default trigger is at_start.
+        assert!(matches!(s.stimuli[1].trigger, FaultTrigger::AtStart));
+    }
+
+    #[test]
+    fn stimuli_require_schema_1_2() {
+        for schema in ["1.0", "1.1"] {
+            let yaml = script(
+                schema,
+                "stimuli:\n  - target: { channel: x }\n    value: 1.0\n",
+            );
+            let s: TestScript = serde_yaml::from_str(&yaml).unwrap();
+            let err = s.validate().unwrap_err().to_string();
+            assert!(err.contains("require schema_version '1.2'"), "{err}");
+        }
+    }
+
+    #[test]
+    fn empty_channel_rejected() {
+        let yaml = script(
+            "1.2",
+            "stimuli:\n  - target: { channel: \"\" }\n    value: 1.0\n",
+        );
+        let s: TestScript = serde_yaml::from_str(&yaml).unwrap();
+        assert!(s
+            .validate()
+            .unwrap_err()
+            .to_string()
+            .contains("channel cannot be empty"));
+    }
+
+    #[test]
+    fn register_triggers_rejected_for_stimuli() {
+        let yaml = script(
+            "1.2",
+            r#"stimuli:
+  - target: { channel: x }
+    trigger: !on_write { register: "FOO" }
+    value: 1.0
+"#,
+        );
+        let s: TestScript = serde_yaml::from_str(&yaml).unwrap();
+        assert!(s
+            .validate()
+            .unwrap_err()
+            .to_string()
+            .contains("not yet supported for stimuli"));
     }
 }
 
