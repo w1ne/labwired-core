@@ -315,9 +315,12 @@ pub fn provision_rom_images() -> Option<RomImages> {
 /// Vendored flat ROM images, embedded at build time. Extracted from
 /// Espressif's published `esp32s3_rev0_rom.elf` by
 /// `scripts/make_esp32s3_rom_bins.py` — see `crates/core/roms/esp32s3/`.
-/// Not compiled into wasm builds (the playground uses the fast-boot path and
-/// must not carry the 512 KiB of ROM in its bundle).
-#[cfg(not(target_arch = "wasm32"))]
+///
+/// Shipped in wasm too (the +512 KiB is the price of a FAITHFUL S3 widget demo:
+/// the playground fast-boots esp-hal apps on the real ROM with zero thunks —
+/// see `system::xtensa::configure_xtensa_esp32s3` + the ROM `.data` init). On
+/// wasm `discover_rom_elf`/the cache path are inert (no fs), so this vendored
+/// blob is the only ROM source there.
 fn vendored_rom_images() -> Option<RomImages> {
     static VENDORED_IROM: &[u8] = include_bytes!("../../roms/esp32s3/esp32s3_rom.bin");
     static VENDORED_DROM: &[u8] = include_bytes!("../../roms/esp32s3/esp32s3_drom.bin");
@@ -327,11 +330,6 @@ fn vendored_rom_images() -> Option<RomImages> {
         irom: VENDORED_IROM.to_vec(),
         drom: VENDORED_DROM.to_vec(),
     })
-}
-
-#[cfg(target_arch = "wasm32")]
-fn vendored_rom_images() -> Option<RomImages> {
-    None
 }
 
 /// Cache directory for extracted ROM images (`$XDG_CACHE_HOME` or `~/.cache`).
