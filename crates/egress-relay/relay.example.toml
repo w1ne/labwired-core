@@ -1,0 +1,7 @@
+# Fixed egress allowlist. The relay forwards ONLY to these targets.
+# Never add caller-supplied hosts — that turns the relay into an open proxy.
+bind = "0.0.0.0:8090"
+
+[[allow]]
+transport = "mqtt"
+url = "mqtt://demo-broker.labwired.internal:1883"
