@@ -32,6 +32,13 @@ pub trait I2cDevice: Send {
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         None
     }
+    /// Runtime-drivable view of this device, if it accepts simulated input.
+    /// Overridden by input devices (accelerometers, …) so the generic
+    /// [`crate::Machine::set_input`] resolver can reach them without a
+    /// downcast. Default `None` = not an input device.
+    fn as_sim_input_mut(&mut self) -> Option<&mut dyn crate::sim_input::SimInput> {
+        None
+    }
 }
 
 /// I2C register layout selector. STM32F1/F2/F4 share the legacy I2C

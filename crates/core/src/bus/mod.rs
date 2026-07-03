@@ -586,6 +586,79 @@ impl Default for SystemBus {
 }
 
 impl SystemBus {
+    /// Discover every drivable input channel across attached devices, tagged
+    /// with the owning peripheral's name — the "what can an agent drive?"
+    /// query behind `labwired_list_inputs` / the browser panel.
+    ///
+    /// Currently walks I²C devices (accelerometers, …); SPI/UART/ADC inputs
+    /// gain the same `as_sim_input_mut` hook as they're added.
+    pub fn list_inputs(&self) -> Vec<(String, crate::sim_input::InputChannel)> {
+        let mut out = Vec::new();
+        for entry in &self.peripherals {
+            let Some(any) = entry.dev.as_any() else {
+                continue;
+            };
+            let Some(i2c) = any.downcast_ref::<crate::peripherals::i2c::I2c>() else {
+                continue;
+            };
+            for cell in i2c.attached_devices() {
+                let mut dev = cell.borrow_mut();
+                if let Some(si) = dev.as_sim_input_mut() {
+                    for ch in si.input_channels() {
+                        out.push((entry.name.clone(), *ch));
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    /// Drive `channel` to `value` (in the channel's engineering unit) on the
+    /// unique attached input device that exposes it. Generic over device type
+    /// via [`crate::sim_input::SimInput`] — no per-type dispatch. Errors if no
+    /// device (or more than one) exposes the channel, or the value is out of
+    /// range.
+    pub fn set_input(
+        &mut self,
+        channel: &str,
+        value: f64,
+    ) -> Result<(), crate::sim_input::SimInputError> {
+        use crate::sim_input::SimInputError;
+        // Count matches first so ambiguity is a typed error, not a silent
+        // "first wins".
+        let matches = self
+            .list_inputs()
+            .iter()
+            .filter(|(_, ch)| ch.key == channel)
+            .count();
+        if matches == 0 {
+            return Err(SimInputError::NoDevice(channel.to_string()));
+        }
+        if matches > 1 {
+            return Err(SimInputError::Ambiguous {
+                channel: channel.to_string(),
+                matches,
+            });
+        }
+        for entry in self.peripherals.iter_mut() {
+            let Some(any) = entry.dev.as_any_mut() else {
+                continue;
+            };
+            let Some(i2c) = any.downcast_mut::<crate::peripherals::i2c::I2c>() else {
+                continue;
+            };
+            for cell in i2c.attached_devices() {
+                let mut dev = cell.borrow_mut();
+                if let Some(si) = dev.as_sim_input_mut() {
+                    if si.input_channels().iter().any(|c| c.key == channel) {
+                        return si.set_input(channel, value);
+                    }
+                }
+            }
+        }
+        Err(SimInputError::NoDevice(channel.to_string()))
+    }
+
     /// Snapshot of the universal bus-transaction trace (logic analyzer):
     /// every I²C/SPI byte recorded so far by peripherals wired to
     /// `self.bus_trace` (see `crate::bus::bus_trace`), oldest first.

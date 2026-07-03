@@ -23,6 +23,7 @@ pub mod physics;
 pub mod runtime_snapshot;
 pub mod sched;
 pub mod signals;
+pub mod sim_input;
 pub mod snapshot;
 pub mod system;
 pub mod trace;
@@ -739,6 +740,26 @@ pub struct Machine<C: Cpu> {
     /// under the `event-scheduler` feature.
     #[allow(dead_code)]
     scheduler_bootstrapped: bool,
+}
+
+impl<C: Cpu> Machine<C> {
+    /// Discover the drivable input channels on this machine (delegates to
+    /// [`bus::SystemBus::list_inputs`]). See [`crate::sim_input`].
+    pub fn list_inputs(&self) -> Vec<(String, crate::sim_input::InputChannel)> {
+        self.bus.list_inputs()
+    }
+
+    /// Drive a simulated input channel to `value` (delegates to
+    /// [`bus::SystemBus::set_input`]). The generic entry point an agent, the
+    /// WASM bridge, or a test-script stimulus calls to steer an input device
+    /// mid-run without knowing its concrete type.
+    pub fn set_input(
+        &mut self,
+        channel: &str,
+        value: f64,
+    ) -> Result<(), crate::sim_input::SimInputError> {
+        self.bus.set_input(channel, value)
+    }
 }
 
 impl<C: Cpu> Machine<C> {
