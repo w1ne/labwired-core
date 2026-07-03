@@ -151,6 +151,19 @@ impl World {
             machine
                 .reset()
                 .map_err(|e| anyhow::anyhow!("node '{}': reset: {e:?}", node.id))?;
+            // Label each node's UART console with its id so the shared stdout
+            // stays readable (line-buffered per node instead of byte-interleaved
+            // across all nodes).
+            let prefix = format!("[{}] ", node.id);
+            for p in machine.bus.peripherals.iter_mut() {
+                if let Some(uart) = p
+                    .dev
+                    .as_any_mut()
+                    .and_then(|any| any.downcast_mut::<crate::peripherals::uart::Uart>())
+                {
+                    uart.set_stdout_prefix(prefix.clone());
+                }
+            }
             world.add_machine(node.id.clone(), Box::new(machine));
         }
 
