@@ -73,6 +73,7 @@ impl crate::Bus for SystemBus {
         if std::env::var("LABWIRED_TRACE_VIOLATIONS").is_ok() {
             eprintln!("BUS_VIOLATION read_u8 addr=0x{:08X}", addr);
         }
+        crate::fidelity::record_unmapped(addr, "read");
         Err(SimulationError::MemoryViolation(addr))
     }
 
@@ -189,6 +190,7 @@ impl crate::Bus for SystemBus {
                         addr, value
                     );
                 }
+                crate::fidelity::record_unmapped(addr, "write");
                 Err(SimulationError::MemoryViolation(addr))
             }
         };

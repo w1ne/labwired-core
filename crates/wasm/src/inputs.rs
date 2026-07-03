@@ -10,6 +10,49 @@ use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
 impl WasmSimulator {
+    /// Generic input-scripting entry point: drive `channel` to `value` (in the
+    /// channel's engineering unit — g, cm, °C …) on the unique attached input
+    /// device that exposes it. Type-agnostic (see `labwired_core::sim_input`),
+    /// so the browser panel, an MCP tool, and a test-script stimulus all share
+    /// ONE surface. Errors if no device (or more than one) exposes the channel,
+    /// or the value is out of range.
+    #[wasm_bindgen]
+    pub fn set_input(&mut self, channel: &str, value: f64) -> Result<(), JsValue> {
+        let machine = self
+            .machine
+            .as_mut()
+            .ok_or_else(|| JsValue::from_str("simulator not initialized"))?;
+        machine
+            .set_input(channel, value)
+            .map_err(|e| JsValue::from_str(&e.to_string()))
+    }
+
+    /// Discover the drivable input channels on the running machine, as JSON:
+    /// `[{"peripheral":"i2c1","key":"x","label":"X","unit":"g","min":-2,"max":2}, …]`.
+    /// The "what can I drive?" query an agent calls before `set_input`.
+    #[wasm_bindgen]
+    pub fn list_inputs(&self) -> Result<JsValue, JsValue> {
+        let machine = self
+            .machine
+            .as_ref()
+            .ok_or_else(|| JsValue::from_str("simulator not initialized"))?;
+        let entries: Vec<serde_json::Value> = machine
+            .list_inputs()
+            .into_iter()
+            .map(|(peripheral, ch)| {
+                serde_json::json!({
+                    "peripheral": peripheral,
+                    "key": ch.key,
+                    "label": ch.label,
+                    "unit": ch.unit,
+                    "min": ch.min,
+                    "max": ch.max,
+                })
+            })
+            .collect();
+        serde_wasm_bindgen::to_value(&entries).map_err(|e| JsValue::from_str(&e.to_string()))
+    }
+
     /// Set the distance (cm) reported by an HC-SR04 ultrasonic sensor — the
     /// host-controlled "hand position" that drives gesture control. Clamped to
     /// the sensor's 2–400 cm range.

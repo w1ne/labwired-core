@@ -14,6 +14,9 @@ on:
       - "crates/core/src/world.rs"
       - "crates/core/tests/iolink_native_master.rs"
       - "crates/core/tests/world_multichip.rs"
+      - "crates/core/tests/world_station_services.rs"
+      - "crates/core/src/network/mod.rs"
+      - "crates/core/src/fidelity.rs"
       - "examples/iolink-dido/**"
       - "examples/iolink-station/**"
       - "examples/esp32c3-mlx90640-thermal/**"
@@ -34,6 +37,9 @@ on:
       - "crates/core/src/world.rs"
       - "crates/core/tests/iolink_native_master.rs"
       - "crates/core/tests/world_multichip.rs"
+      - "crates/core/tests/world_station_services.rs"
+      - "crates/core/src/network/mod.rs"
+      - "crates/core/src/fidelity.rs"
       - "examples/iolink-dido/**"
       - "examples/iolink-station/**"
       - "examples/esp32c3-mlx90640-thermal/**"
@@ -71,7 +77,14 @@ jobs:
           cc --version
           arm-none-eabi-gcc --version
 
-      - name: Native C master UART-boundary tests
+      # LABWIRED_STRICT_FIDELITY makes the first undecoded instruction or
+      # unmapped MMIO access this real firmware hits a hard failure, instead of
+      # a silent skip. This is the early-warning guard for the class of bug that
+      # let newlib's SIMD strlen (UADD8/SEL) run as NOPs and corrupt string
+      # ISDU reads for months.
+      - name: Native C master UART-boundary tests (strict fidelity)
+        env:
+          LABWIRED_STRICT_FIDELITY: "1"
         run: cargo test -p labwired-core --features iolink-native --test iolink_native_master -- --nocapture
 
       - name: Native C master compile check
@@ -79,6 +92,13 @@ jobs:
 
       - name: Multi-chip world tests skip cleanly without prebuilt station ELFs
         run: cargo test -p labwired-core --test world_multichip -- --nocapture
+
+      # Service-coverage world test: skips cleanly here (station ELFs are built
+      # only in the iolinki-master repo's labwired-real-firmware-model job, which
+      # runs it with a fidelity-clean assertion over the full ISDU/PD/event/DS
+      # surface). This step guards the path filter + that it still compiles.
+      - name: Station service-coverage world test skips cleanly without ELFs
+        run: cargo test -p labwired-core --test world_station_services -- --nocapture
 
       - name: Upload LabWired IO-Link simulation artifacts
         if: always()

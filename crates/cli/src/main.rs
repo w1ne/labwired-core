@@ -1632,6 +1632,7 @@ fn execute_test_loop<C: labwired_core::Cpu>(
     faults: &[labwired_config::FaultSpec],
     require_fault_fired: bool,
     mut fault_evidence: Vec<labwired_cli::faults::FaultEvidence>,
+    stimuli: &[labwired_config::StimulusSpec],
 ) -> ExitCode {
     let max_steps = resolved_limits.max_steps;
     let max_cycles = resolved_limits.max_cycles;
@@ -1683,8 +1684,51 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         1
     };
 
+    // Declarative input stimuli (schema_version 1.2). Applied via the generic
+    // `Machine::set_input` path (see `labwired_core::sim_input`), so no per-type
+    // wiring. `at_start` fires now; `after_cycles` fires the first loop
+    // iteration at or past its cycle threshold. The closure takes `machine` as
+    // an argument (captures nothing) so it can be called both here and mid-loop.
+    let apply_stimulus = |machine: &mut labwired_core::Machine<C>,
+                          s: &labwired_config::StimulusSpec| {
+        match machine.set_input(&s.target.channel, s.value) {
+            Ok(()) => info!("stimulus: {} = {} applied", s.target.channel, s.value),
+            Err(e) => error!(
+                "stimulus '{}' = {} could not be applied: {:?}",
+                s.target.channel, s.value, e
+            ),
+        }
+    };
+    for s in stimuli {
+        if matches!(s.trigger, labwired_config::FaultTrigger::AtStart) {
+            apply_stimulus(machine, s);
+        }
+    }
+    // Time-triggered stimuli, each tagged with whether it has fired yet.
+    let mut pending_stimuli: Vec<(&labwired_config::StimulusSpec, bool)> = stimuli
+        .iter()
+        .filter(|s| matches!(s.trigger, labwired_config::FaultTrigger::AfterCycles { .. }))
+        .map(|s| (s, false))
+        .collect();
+
     let mut step = 0;
     while step < max_steps {
+        // Fire any `after_cycles` stimulus whose threshold the run has reached.
+        if !pending_stimuli.is_empty() {
+            let cycles = metrics.get_cycles();
+            for (s, fired) in pending_stimuli.iter_mut() {
+                if *fired {
+                    continue;
+                }
+                if let labwired_config::FaultTrigger::AfterCycles { cycles: threshold } = s.trigger
+                {
+                    if cycles >= threshold {
+                        apply_stimulus(machine, s);
+                        *fired = true;
+                    }
+                }
+            }
+        }
         if !args.breakpoint.is_empty() && args.breakpoint.contains(&machine.cpu.get_pc()) {
             stop_reason = StopReason::Halt;
             steps_executed = step;
