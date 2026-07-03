@@ -111,7 +111,30 @@ int main(void) {
     uint8_t last_pd = 0xFEu;
     for (;;) {
         iolink_master_tick_at(&port, IOLINK_MASTER_TICK_CYCLE_DUE, now);
-        now += 20u; /* 2 ms cycles in 100us units (min_cycle_time) */
+
+        /* Response-timeout scheduling: a real master integration must tell the
+         * stack when a requested reply is overdue — the CYCLE_DUE tick alone
+         * never trips iolink_master_on_timeout, so without this a silent/absent
+         * device is invisible (the port spins in OPERATE forever). Once the
+         * cycle's response_deadline has passed while still awaiting a reply,
+         * issue a RESPONSE_TIMEOUT tick so a muted device is detected, counted
+         * (diagnostics.response_timeouts), and eventually drives the port to
+         * ERROR after the retry budget. The stack self-gates on awaiting_response
+         * so this is a no-op when a reply already arrived. */
+        {
+            iolink_master_timing_t t;
+            if (iolink_master_get_timing(&port, &t) == 0 && t.cycle_timer_valid &&
+                t.awaiting_response &&
+                (int32_t)(now - t.response_deadline_100us) >= 0) {
+                iolink_master_tick_at(&port, IOLINK_MASTER_TICK_RESPONSE_TIMEOUT, now);
+            }
+        }
+
+        /* Advance the virtual clock in fine (100us) steps, not whole cycle
+         * periods: the response-timeout window (response_timeout_100us == 3) is
+         * shorter than one 2 ms cycle, so a coarse per-cycle increment would
+         * step straight over it and never detect an overdue reply. */
+        now += 1u;
 
         g_master_state = (uint8_t)iolink_master_get_state(&port);
 

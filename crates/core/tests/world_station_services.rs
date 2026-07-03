@@ -140,21 +140,6 @@ fn master_survives_single_crc_corrupted_frame() {
 // port to ERROR, and fire the firmware's ERROR handler, which counts the event
 // and restarts the port. Because the ERROR handler restarts immediately we key
 // off the sticky g_error_seen / g_restart_count rather than catching state-4 live.
-//
-// NOTE ON SCOPE (verified against the pinned stacks; see the task report):
-//   * We corrupt frames rather than muting the device: a *silent* device is NOT
-//     a detectable fault for this firmware. The master's main loop only issues
-//     IOLINK_MASTER_TICK_CYCLE_DUE ticks (master-fw-svc/main.c) and never a
-//     RESPONSE_TIMEOUT tick, so iolink_master_on_timeout (master_port.c) — the
-//     only path that trips ERROR on a missing reply — never runs. A muted device
-//     leaves the master spinning in OPERATE indefinitely (confirmed: 30M steps).
-//   * We deliberately do NOT assert recovery back to OPERATE. After the restart
-//     the master re-wakes immediately, but the device only re-syncs to a fresh
-//     wake-up after ~1000ms of link *silence* (dll.c inactivity fallback
-//     SDCI->SIO), which the continuously-restarting master never provides. So the
-//     master genuinely stays in STARTUP; asserting recovery would be asserting
-//     behaviour the system does not exhibit. The reachable, real assertion is
-//     that the fault was detected and the ERROR/restart handler fired.
 #[test]
 fn sustained_crc_corruption_drives_master_to_error_and_restart() {
     let Some((mut world, mb)) = build_station_or_skip() else {
@@ -206,6 +191,92 @@ fn sustained_crc_corruption_drives_master_to_error_and_restart() {
     assert!(
         restarts >= 1,
         "the ERROR handler did not fire a restart (g_restart_count={restarts})"
+    );
+}
+
+// Fault test 3 — a muted (absent/dead) device must be detected. With the device
+// frozen, no response frames arrive; the master's response-timeout scheduling
+// (master-fw-svc issues a RESPONSE_TIMEOUT tick once response_deadline passes)
+// counts response timeouts, exhausts the retry budget, and drives the port to
+// ERROR + restart. We step ONLY the master and tick the wires (the device never
+// advances) to model a silent partner.
+//
+// This is the canonical "dead device" fault and it is only reachable because the
+// firmware schedules RESPONSE_TIMEOUT ticks — a coarse per-cycle clock, or the
+// CYCLE_DUE-only loop it replaced, steps straight over the sub-cycle timeout
+// window and a muted device would (wrongly) look healthy forever.
+//
+// KNOWN GAP, deliberately NOT asserted: the port does NOT recover to OPERATE
+// after the device is un-muted. The ERROR handler restarts immediately and
+// re-wakes, but the device stack only re-syncs to a fresh wake-up after ~1000ms
+// of link *silence* (dll.c SDCI->SIO inactivity fallback), which the
+// continuously-restarting master never provides, so it stays in STARTUP. That is
+// a genuine master/device resync limitation worth a follow-up, not something to
+// paper over here.
+#[test]
+fn master_detects_muted_device_via_response_timeout() {
+    let Some((mut world, mb)) = build_station_or_skip() else {
+        return;
+    };
+    let a_state = sym(&mb, "g_master_state");
+    let a_timeouts = sym(&mb, "g_diag_timeouts");
+    let a_err = sym(&mb, "g_error_seen");
+    let a_restart = sym(&mb, "g_restart_count");
+
+    let op_at = step_to_operate(&mut world, a_state, 10_000_000);
+    eprintln!("[mute] reached OPERATE at iteration {op_at}");
+
+    // Mute the device: advance ONLY the master and tick the wires. The device
+    // CPU never steps, so it emits no response frames.
+    const MAX_MUTE: u64 = 5_000_000;
+    let mut saw_timeout = false;
+    let mut err_at = None;
+    for i in 0..MAX_MUTE {
+        world.machines.get_mut("master").unwrap().step().unwrap();
+        for ic in world.interconnects.iter_mut() {
+            ic.tick().unwrap();
+        }
+        if master_u8(&world, a_timeouts) >= 1 {
+            saw_timeout = true; // a response timeout was counted before the restart reset it
+        }
+        if master_u8(&world, a_err) == 1 {
+            err_at = Some(i);
+            break;
+        }
+    }
+
+    let err_at = err_at.expect("a muted device never drove the master to ERROR within the bound");
+    let timeouts = master_u8(&world, a_timeouts);
+    eprintln!(
+        "[mute] ERROR at iteration {err_at}; saw_timeout={saw_timeout} timeouts_now={timeouts} \
+         error_seen={} state={}",
+        master_u8(&world, a_err),
+        master_u8(&world, a_state)
+    );
+
+    assert!(
+        saw_timeout,
+        "the master reached ERROR without ever counting a response timeout; the mute was not the cause"
+    );
+    assert_eq!(
+        master_u8(&world, a_err),
+        1,
+        "a muted device did not drive the master to ERROR (g_error_seen != 1)"
+    );
+
+    // Keep muting briefly so the ERROR handler's restart is observable.
+    for _ in 0..2_000_000u64 {
+        world.machines.get_mut("master").unwrap().step().unwrap();
+        for ic in world.interconnects.iter_mut() {
+            ic.tick().unwrap();
+        }
+        if master_u8(&world, a_restart) >= 1 {
+            break;
+        }
+    }
+    assert!(
+        master_u8(&world, a_restart) >= 1,
+        "the ERROR handler did not fire a restart after the mute (g_restart_count=0)"
     );
 }
 
