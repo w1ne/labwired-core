@@ -133,6 +133,9 @@ impl WasmSimulator {
         match chip.arch {
             Arch::Arm | Arch::Unknown => Self::new_from_config_arm(&chip, &manifest, firmware),
             Arch::RiscV => Self::new_from_config_riscv(&chip, &manifest, firmware),
+            Arch::Xtensa if chip.name.starts_with("esp32s3") => {
+                Self::new_from_config_xtensa_esp32s3(&manifest, firmware)
+            }
             Arch::Xtensa => Self::new_from_config_xtensa_esp32(&manifest, firmware),
         }
     }
@@ -280,6 +283,73 @@ impl WasmSimulator {
         Ok(WasmSimulator {
             machine: Some(machine),
             board_io,
+            uart_sink,
+            uart_rx_bufs,
+            arch: Arch::Xtensa,
+            esp32_ipi: None,
+            jit_browser_enabled: false,
+            jit_browser_cache: None,
+        })
+    }
+
+    /// ESP32-S3 (Xtensa LX7) bus setup — the FAITHFUL fast-boot path.
+    ///
+    /// `configure_xtensa_esp32s3` installs IRAM/DRAM/RTC/flash-XIP plus the
+    /// real vendored boot ROM (zero thunks; the ROM `.data` init lands
+    /// `rom_cache_internal_table_ptr` so esp-hal's ROM cache calls run for
+    /// real). `fast_boot` then loads the app ELF's segments (identity XIP)
+    /// and synthesises post-bootloader CPU state. Serial output on the S3
+    /// esp-hal apps goes through USB_SERIAL_JTAG, so we route that peripheral's
+    /// sink into the same `uart_sink` the widget's Serial tab reads.
+    fn new_from_config_xtensa_esp32s3(
+        manifest: &SystemManifest,
+        firmware: &[u8],
+    ) -> Result<WasmSimulator, JsValue> {
+        use labwired_core::boot::esp32s3::{fast_boot, BootOpts};
+        use labwired_core::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag;
+        use labwired_core::system::xtensa::{configure_xtensa_esp32s3, Esp32s3Opts};
+
+        let mut bus = SystemBus::new();
+        // Default opts → fast-boot identity XIP + faithful ROM (real_reset_boot
+        // is false; --rom-boot's MMU model is native-CLI only).
+        let wiring = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
+        let mut cpu = wiring.cpu;
+
+        // Route USB-serial-JTAG bytes into the widget's serial sink. esp-hal's
+        // `esp_println`/`println!` on the S3 targets USB_SERIAL_JTAG, not UART0.
+        let uart_sink = Arc::new(Mutex::new(Vec::new()));
+        for p in bus.peripherals.iter_mut() {
+            if p.name == "usb_serial_jtag" {
+                if let Some(any_mut) = p.dev.as_any_mut() {
+                    if let Some(jtag) = any_mut.downcast_mut::<UsbSerialJtag>() {
+                        jtag.set_sink(Some(uart_sink.clone()), false);
+                    }
+                }
+            }
+        }
+        // Also capture UART0 in case a sketch uses the classic UART path.
+        bus.attach_uart_tx_sink(uart_sink.clone(), false);
+        let uart_rx_bufs = bus.attach_uart_rx_source();
+        bus.refresh_peripheral_index();
+
+        fast_boot(
+            firmware,
+            &mut bus,
+            &mut cpu,
+            &BootOpts {
+                stack_top_fallback: 0x3FCD_FFF0,
+                icache_backing: Some(wiring.icache_backing),
+                dcache_backing: Some(wiring.dcache_backing),
+            },
+        )
+        .map_err(|e| JsValue::from_str(&format!("ESP32-S3 fast_boot: {e}")))?;
+
+        let boxed: Box<dyn Cpu> = Box::new(cpu);
+        let machine = Machine::new(boxed, bus);
+
+        Ok(WasmSimulator {
+            machine: Some(machine),
+            board_io: manifest.board_io.clone(),
             uart_sink,
             uart_rx_bufs,
             arch: Arch::Xtensa,
