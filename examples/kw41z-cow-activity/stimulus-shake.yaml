@@ -1,0 +1,29 @@
+## KW41Z CowManager — declarative input stimulus (schema_version 1.2).
+##
+## Boot the cow demo, let it graze for a few million cycles (MOOD=CALM), then
+## drive the FXOS8700 accelerometer's X axis to +2 g partway through the run.
+## The firmware's activity metric crosses its threshold and the cow pops its
+## head up: MOOD=ACTIVE. The whole thing is deterministic and replayable — the
+## same YAML an agent hands to `labwired test` (or drives over MCP) is a CI
+## regression.
+##
+## `stimuli` reuse the fault-trigger vocabulary; today `at_start` and
+## `after_cycles` are wired. The stimulus reaches the sensor through the generic
+## `Machine::set_input` path (crates/core/src/sim_input.rs) — no cow- or
+## FXOS-specific plumbing in the runner.
+schema_version: "1.2"
+inputs:
+  firmware: "../../tests/fixtures/kw41z-lcd-activity.elf"
+  system: "../../configs/systems/frdm-kw41z-lcd.yaml"
+limits:
+  max_steps: 6000000
+  max_uart_bytes: 8000
+stimuli:
+  - target: { component: fxos8700, channel: x }
+    trigger: !after_cycles { cycles: 3000000 }
+    value: 2.0
+assertions:
+  # Grazing before the shake …
+  - uart_regex: "MOOD=CALM"
+  # … head up after it.
+  - uart_regex: "MOOD=ACTIVE"
