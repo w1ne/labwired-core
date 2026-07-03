@@ -12,6 +12,7 @@ members = [
     "crates/config",
     "crates/core",
     "crates/dap",
+    "crates/egress-relay",
     "crates/firmware",
     "crates/firmware-ci-fixture",
     "crates/firmware-comparative-benchmark",
