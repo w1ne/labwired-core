@@ -14,7 +14,7 @@ use crate::peripherals::esp32s3::intmatrix::Esp32s3IntMatrix;
 use crate::peripherals::esp32s3::tmp102::Tmp102;
 use crate::peripherals::esp_xtensa_common::rom_thunks::{self, RomThunkBank};
 use crate::peripherals::esp_xtensa_common::system_stub::{EfuseStub, RtcCntlStub, SystemStub};
-use crate::Cpu;
+use crate::{Bus, Cpu};
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone)]
@@ -23,6 +23,16 @@ pub struct Esp32s3Opts {
     pub dram_size: u32,
     pub flash_size: u32,
     pub cpu_clock_hz: u32,
+    /// Select the flash-XIP model. `true` = real-reset boot (`--rom-boot`): the
+    /// ROM + 2nd-stage bootloader program the hardware MMU, so both cache
+    /// windows alias one physical flash backing and translate through that
+    /// table — exactly as silicon. `false` (default) = fast-boot: the caller
+    /// jumps straight into the app (the bootloader's MMU programming is
+    /// skipped), so each window gets its own identity-mapped backing that
+    /// `fast_boot` populates from the ELF's flash segments. Independent of the
+    /// ROM-image choice: a real ROM is still loaded for its function calls in
+    /// both modes.
+    pub real_reset_boot: bool,
 }
 
 impl Default for Esp32s3Opts {
@@ -32,6 +42,7 @@ impl Default for Esp32s3Opts {
             dram_size: 480 * 1024,
             flash_size: 4 * 1024 * 1024,
             cpu_clock_hz: 80_000_000,
+            real_reset_boot: false,
         }
     }
 }
@@ -151,12 +162,18 @@ fn configure_esp32s3_memmap(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp32s3M
     // window spans the full 32 MiB linear range so the ROM's bootloader-load
     // reads (e.g. virtual 0x3C80_0000) resolve. Fast-boot keeps the legacy
     // per-window static identity mapping over separate 4 MiB backings.
-    // The proper model is selected whenever a real ROM is resolved — either
-    // auto-provisioned from the installed toolchain or pinned via
-    // LABWIRED_ESP32S3_ROM/_DROM. Without a real ROM blob we fall back to
-    // fast-boot XIP with the thunk harness.
+    //
+    // The MMU model is selected for the real-reset (`--rom-boot`) path, where
+    // the ROM + 2nd-stage bootloader actually program DR_REG_MMU_TABLE. For
+    // fast-boot the bootloader's MMU programming is skipped, so an unprogrammed
+    // (all-invalid) table would make every app XIP read return 0 — instead we
+    // use per-window identity backings that `fast_boot` fills from the ELF's
+    // flash segments. This is INDEPENDENT of whether a real ROM is loaded: a
+    // fast-booted app still calls the real ROM (see the ROM block below), it
+    // just reaches its own `.rodata`/`.text` through identity XIP rather than a
+    // table the skipped bootloader never wrote.
     let rom_images = crate::boot::esp32s3_rom::provision_rom_images();
-    let proper_model = rom_images.is_some();
+    let mmu_model = opts.real_reset_boot;
     // Shared flash backing for the proper-model path, loaded from the real
     // flash image so XIP reads (and the SPI-flash controller below) return real
     // bytes. In fast-boot this is unused; the legacy per-window backings apply.
@@ -171,9 +188,9 @@ fn configure_esp32s3_memmap(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp32s3M
         }
         Arc::new(Mutex::new(buf))
     };
-    // Backings exposed on Esp32s3Wiring. In the proper model both windows alias
+    // Backings exposed on Esp32s3Wiring. In the MMU model both windows alias
     // one physical flash backing; in fast-boot they stay independent.
-    let (icache_backing, dcache_backing) = if proper_model {
+    let (icache_backing, dcache_backing) = if mmu_model {
         let mmu_table = new_mmu_table();
         const XIP_WINDOW: u64 = 0x0200_0000; // 32 MiB linear MMU window
         let icache = FlashXipPeripheral::new_mmu(
@@ -245,10 +262,26 @@ fn configure_esp32s3_memmap(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp32s3M
             bus.add_peripheral("rom", 0x4000_0000, 0x6_0000, None, Box::new(rom));
             let drom = RamPeripheral::with_image(0x2_0000, &images.drom);
             bus.add_peripheral("drom", 0x3FF0_0000, 0x2_0000, None, Box::new(drom));
+            // Replicate the ROM reset's `.data` copy into DRAM. fast-boot skips
+            // the ROM's own startup, so its DRAM data structures (e.g.
+            // rom_cache_internal_table_ptr @0x3FCEFFC4) would otherwise stay
+            // null and the real ROM cache helpers esp-hal calls dispatch
+            // through a null table → callx8 0. This lands the genuine values
+            // exactly as silicon does — zero thunks.
+            let init_writes = crate::boot::esp32s3_rom::s3_rom_data_init_writes(&images.irom);
+            let mut init_bytes = 0usize;
+            for (dst, bytes) in &init_writes {
+                for (i, b) in bytes.iter().enumerate() {
+                    let _ = bus.write_u8(*dst as u64 + i as u64, *b);
+                }
+                init_bytes += bytes.len();
+            }
             eprintln!(
-                "configure_xtensa_esp32s3: faithful ROM loaded ({} B IROM, {} B DROM) — real boot ROM, zero thunks",
+                "configure_xtensa_esp32s3: faithful ROM loaded ({} B IROM, {} B DROM) — real boot ROM, zero thunks; ROM .data init: {} records, {} B",
                 images.irom.len(),
-                images.drom.len()
+                images.drom.len(),
+                init_writes.len(),
+                init_bytes
             );
             Esp32s3BootMode::Faithful
         }

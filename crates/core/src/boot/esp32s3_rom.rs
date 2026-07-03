@@ -197,6 +197,64 @@ fn populate_data_copy_sources(
     }
 }
 
+/// Walk the boot ROM's `.data` copy table and return its records as
+/// `(dst_addr, byte_len, src_offset_in_irom)`. Uses the identical 16-byte-quad
+/// (dst_start, dst_end, src, 0) scan and validity heuristic as
+/// `populate_data_copy_sources`, so the two stay in lockstep.
+fn copy_table_records(irom: &[u8], dram: DramWindow) -> Vec<(u32, usize, usize)> {
+    let irom_base = IROM_BASE;
+    let irom_hi = irom_base + irom.len() as u32;
+    let mut recs = Vec::new();
+    let mut off = 0usize;
+    while off + 16 <= irom.len() {
+        let dst_s = u32::from_le_bytes(irom[off..off + 4].try_into().unwrap());
+        let dst_e = u32::from_le_bytes(irom[off + 4..off + 8].try_into().unwrap());
+        let src = u32::from_le_bytes(irom[off + 8..off + 12].try_into().unwrap());
+        let term = u32::from_le_bytes(irom[off + 12..off + 16].try_into().unwrap());
+        let ok = (dram.lo..dram.hi).contains(&dst_s)
+            && dst_s <= dst_e
+            && dst_e <= dram.hi
+            && irom_base <= src
+            && src < irom_hi
+            && term == 0
+            && dst_e - dst_s < 0x1_0000;
+        if ok {
+            let n = (dst_e - dst_s) as usize;
+            if n != 0 {
+                recs.push((dst_s, n, (src - irom_base) as usize));
+            }
+            off += 16;
+        } else {
+            off += 4;
+        }
+    }
+    recs
+}
+
+/// Replicate the ESP32-S3 boot ROM's reset-time `.data` initialization: for
+/// each record in the ROM's copy table, return the genuine source bytes (put in
+/// the IROM image by `populate_data_copy_sources` / extraction) paired with
+/// their DRAM destination, for the caller to write onto the bus.
+///
+/// Fast-boot jumps straight into the app and skips the ROM's own startup, so
+/// without this the ROM's DRAM data structures stay zero. The concrete failure
+/// that motivated it: `rom_cache_internal_table_ptr` @0x3FCEFFC4 stays null, so
+/// the real ROM cache helpers esp-hal's `pre_init` calls
+/// (`rom_config_instruction_cache_mode` etc.) dispatch through
+/// `table[0] -> [+16]` == 0 → `callx8 a8` with a8 == 0 → jump to 0x0. Running
+/// this copy lands the real table pointer (0x3FF1E2B4, in mapped DROM) so those
+/// helpers execute faithfully — zero thunks. Idempotent with a real reset boot,
+/// which performs the same copy itself.
+pub fn s3_rom_data_init_writes(irom: &[u8]) -> Vec<(u32, Vec<u8>)> {
+    copy_table_records(irom, S3_DRAM)
+        .into_iter()
+        .filter_map(|(dst, n, src_off)| {
+            let end = src_off.checked_add(n)?;
+            (end <= irom.len()).then(|| (dst, irom[src_off..end].to_vec()))
+        })
+        .collect()
+}
+
 /// Resolve the ROM images for the faithful path, or `None` to fall back to
 /// the thunk harness.
 ///

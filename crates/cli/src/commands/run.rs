@@ -449,7 +449,12 @@ pub(crate) fn run_firmware(args: RunArgs) -> ExitCode {
 
     // Wire the bus + CPU.
     let mut bus = SystemBus::new();
-    let opts = Esp32s3Opts::default();
+    // `--rom-boot` runs the real ROM from reset, which programs the flash MMU;
+    // select the MMU XIP model for it. Fast-boot uses identity per-window XIP.
+    let opts = Esp32s3Opts {
+        real_reset_boot: args.rom_boot,
+        ..Esp32s3Opts::default()
+    };
     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
     let boot_mode = wiring.boot_mode; // Copy before cpu is moved out of wiring
 

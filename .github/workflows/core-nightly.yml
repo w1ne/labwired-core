@@ -143,17 +143,33 @@ jobs:
           (cd examples/esp32s3-hello-world && cargo build --release)
           (cd examples/esp32s3-i2c-tmp102 && cargo build --release)
 
+      # FAITHFUL path (default, no FASTBOOT): esp-hal apps now boot on the REAL
+      # vendored boot ROM with ZERO thunks. The historical blocker
+      # ("rom_config_instruction_cache_mode jumps to 0") is fixed — fast-boot
+      # skipped the ROM reset's `.data` copy, leaving rom_cache_internal_table_ptr
+      # @0x3FCEFFC4 null; we now replicate that copy (see esp32s3_rom.rs) and use
+      # identity XIP for fast-boot (see Esp32s3Opts.real_reset_boot). The boot
+      # guard asserts no near-null jump through init; hello-world then prints real
+      # serial output through the real ROM.
+      #
+      # Only hello-world runs on the faithful lane: blinky (GPIO) and i2c_tmp102
+      # pace their work with delays, and on the faithful path the real ROM's
+      # ets_delay_us BUSY-WAITS for real (the harness thunk returns instantly),
+      # so those delay loops elapse genuine simulated time and overrun the
+      # harness-tuned step budgets — a fidelity property, not a boot failure.
+      # They stay on the harness lane below (instant delays fit the budget).
+      - name: Run ESP32-S3 faithful (real-ROM, zero-thunk) e2e
+        run: cargo test --release -p labwired-core --features esp32s3-fixtures --test e2e_esp32s3_faithful_boot --test e2e_hello_world
+
       # The tests are gated on --features esp32s3-fixtures and call
       # ensure_firmware_built() which skips the cargo +esp build if the ELF
       # already exists (we built it above). The tests themselves run on the
       # standard host toolchain; only the ELF needs the Xtensa cross-compiler.
-      # LABWIRED_ESP32S3_FASTBOOT=1: these e2e tests verify FIRMWARE LOGIC
-      # (GPIO/UART/I2C behavior) under the thunk fast-boot path. The faithful
-      # ROM path is covered by tier1 rom-boot + brom_boot_smoke; esp-hal apps
-      # crash under fast-boot WITH the real ROM provisioned (open issue:
-      # rom_config_instruction_cache_mode jumps to 0) — the vendored ROM made
-      # that the default everywhere, so opt out explicitly here.
-      - name: Run ESP32-S3 fixtures e2e tests
+      # LABWIRED_ESP32S3_FASTBOOT=1 forces the thunk harness path (real ROM
+      # opted out) — kept as a lane so the harness stays exercised for the
+      # toolchain-less / stripped-firmware case and for the delay-heavy
+      # blinky/i2c timing.
+      - name: Run ESP32-S3 fixtures e2e tests (harness)
         env:
           LABWIRED_ESP32S3_FASTBOOT: "1"
         # Only the three gated e2e binaries — the FASTBOOT opt-out must not
