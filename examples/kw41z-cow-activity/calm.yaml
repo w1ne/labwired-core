@@ -1,0 +1,15 @@
+## KW41Z CowManager — idle baseline (no stimulus).
+##
+## The FRDM-KW41Z + FXOS8700 + Nokia-5110 "cow" demo left to graze. With no
+## input driven, the accelerometer sits near rest and the firmware keeps the
+## cow CALM the whole run. This is the control case for `stimulus-shake.yaml`,
+## which drives the same firmware ACTIVE by injecting a tilt mid-run.
+schema_version: "1.2"
+inputs:
+  firmware: "../../tests/fixtures/kw41z-lcd-activity.elf"
+  system: "../../configs/systems/frdm-kw41z-lcd.yaml"
+limits:
+  max_steps: 6000000
+  max_uart_bytes: 8000
+assertions:
+  - uart_regex: "MOOD=CALM"
