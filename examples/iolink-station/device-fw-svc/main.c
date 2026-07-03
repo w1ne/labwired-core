@@ -19,6 +19,7 @@
 #include "iolinki/device_info.h"
 #include "iolinki/events.h"
 #include "iolinki/iolink.h"
+#include "iolinki/params.h"
 #include "phy_labwired.h"
 #include "debug_uart.h"
 #include <string.h>
@@ -108,6 +109,19 @@ int main(void) {
     cfg.stack.t_pd_us = 0;
     cfg.device_info = &DEVICE_INFO;
     cfg.ds_storage = &DS_STORAGE;
+    /* The ISDU handler serves the mandatory identity indices (vendor_name 0x0010,
+     * etc.) from the stack's LEGACY device-info global via iolink_device_info_get()
+     * (isdu.c:246) — NOT from the per-instance ctx that iolink_device_init()
+     * populates from cfg.device_info. iolink_device_init() does not touch the
+     * legacy global, so without this explicit registration the handler would
+     * serve the built-in k_default_info ("iolinki") instead of our identity.
+     * Register DEVICE_INFO into the legacy global so ISDU 0x0010 reads "LABWIRED". */
+    iolink_device_info_init(&DEVICE_INFO);
+    /* Initialise the parameter subsystem (the ISDU mandatory-index + tag/DS
+     * handlers read through it). iolink_device_init() does NOT do this — the
+     * stack's own unit tests call iolink_params_init() explicitly before any
+     * ISDU read (see third_party/iolinki/tests/test_isdu.c). */
+    iolink_params_init();
     if (iolink_device_init(&device, &cfg) != 0) {
         dbg_puts("IOLINK INIT FAIL\r\n");
         for (;;) {
