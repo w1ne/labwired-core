@@ -1228,7 +1228,10 @@ limits:
 
     #[test]
     fn empty_channel_rejected() {
-        let yaml = script("1.2", "stimuli:\n  - target: { channel: \"\" }\n    value: 1.0\n");
+        let yaml = script(
+            "1.2",
+            "stimuli:\n  - target: { channel: \"\" }\n    value: 1.0\n",
+        );
         let s: TestScript = serde_yaml::from_str(&yaml).unwrap();
         assert!(s
             .validate()
