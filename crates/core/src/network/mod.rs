@@ -15,6 +15,12 @@ pub mod virtual_uart_wire;
 pub trait Interconnect: Send {
     /// Advance the interconnect state.
     fn tick(&mut self) -> SimResult<()>;
+
+    /// Downcast hook for tests/tools that need the concrete interconnect type
+    /// (e.g. to inject faults). Default `None`; concrete types opt in.
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        None
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -112,9 +118,25 @@ pub struct UartCrossLink {
     b_in: Sender<u8>,    // -> node B inbox (RX)
     b_out: Receiver<u8>, // bytes node B's firmware transmitted
     a_in: Sender<u8>,    // -> node A inbox (RX)
+    /// Fault injection: next N bytes forwarded A->B are XORed with 0xFF.
+    corrupt_a_to_b: u32,
+    /// Fault injection: next N bytes forwarded B->A are XORed with 0xFF.
+    corrupt_b_to_a: u32,
 }
 
 impl UartCrossLink {
+    /// Corrupt the next `n` bytes forwarded from node A to node B (each XORed
+    /// with 0xFF), then forward cleanly again.
+    pub fn set_corrupt_a_to_b(&mut self, n: u32) {
+        self.corrupt_a_to_b = n;
+    }
+
+    /// Corrupt the next `n` bytes forwarded from node B to node A (each XORed
+    /// with 0xFF), then forward cleanly again.
+    pub fn set_corrupt_b_to_a(&mut self, n: u32) {
+        self.corrupt_b_to_a = n;
+    }
+
     pub fn new(node_a: String, node_b: String) -> (Self, UartWireEndpoint, UartWireEndpoint) {
         let (a_tx, a_out) = channel(); // A firmware TX -> link
         let (a_in, a_inbox) = channel(); // link -> A RX
@@ -135,6 +157,8 @@ impl UartCrossLink {
             b_in,
             b_out,
             a_in,
+            corrupt_a_to_b: 0,
+            corrupt_b_to_a: 0,
         };
         (link, endpoint_a, endpoint_b)
     }
@@ -143,12 +167,28 @@ impl UartCrossLink {
 impl Interconnect for UartCrossLink {
     fn tick(&mut self) -> SimResult<()> {
         while let Ok(byte) = self.a_out.try_recv() {
+            let byte = if self.corrupt_a_to_b > 0 {
+                self.corrupt_a_to_b -= 1;
+                byte ^ 0xFF
+            } else {
+                byte
+            };
             let _ = self.b_in.send(byte);
         }
         while let Ok(byte) = self.b_out.try_recv() {
+            let byte = if self.corrupt_b_to_a > 0 {
+                self.corrupt_b_to_a -= 1;
+                byte ^ 0xFF
+            } else {
+                byte
+            };
             let _ = self.a_in.send(byte);
         }
         Ok(())
+    }
+
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
     }
 }
 
@@ -172,6 +212,25 @@ mod tests {
         link.tick().unwrap();
         assert_eq!(a.poll(1000), Some(0xAA));
         assert_eq!(a.poll(1000), None);
+    }
+
+    #[test]
+    fn crosslink_corrupts_next_n_bytes_then_forwards_clean() {
+        let (mut link, mut ep_a, mut ep_b) = UartCrossLink::new("a".into(), "b".into());
+        link.set_corrupt_a_to_b(1);
+        ep_a.on_tx_byte(0x55);
+        ep_a.on_tx_byte(0x66);
+        link.tick().unwrap();
+        assert_eq!(ep_b.poll(0), Some(0xAA)); // 0x55 ^ 0xFF
+        assert_eq!(ep_b.poll(0), Some(0x66)); // clean again
+    }
+
+    #[test]
+    fn interconnect_downcasts_to_crosslink() {
+        let (link, _a, _b) = UartCrossLink::new("a".into(), "b".into());
+        let mut boxed: Box<dyn Interconnect> = Box::new(link);
+        let any = boxed.as_any_mut().expect("crosslink exposes as_any_mut");
+        assert!(any.downcast_mut::<UartCrossLink>().is_some());
     }
 }
 
