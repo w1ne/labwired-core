@@ -24,9 +24,16 @@ pub struct EgressBus {
     rx: Receiver<EgressItem>,
     can_sources: Vec<Receiver<CanFrame>>,
     buffer: VecDeque<EgressItem>,
+    /// A payload already encoded but not yet accepted by the worker (endpoint
+    /// backed up). Retried before encoding new items, so each item is encoded
+    /// exactly once regardless of backpressure.
+    pending: Option<Vec<u8>>,
     policy: BufferPolicy,
     encoding: EncodingKind,
     dropped: u64,
+    /// Value of `dropped` at the last emitted warning, so we log on change
+    /// rather than every tick.
+    warned_dropped: u64,
     worker_tx: Option<SyncSender<Vec<u8>>>,
     worker: Option<JoinHandle<()>>,
 }
@@ -48,9 +55,11 @@ impl EgressBus {
             rx,
             can_sources: Vec::new(),
             buffer: VecDeque::new(),
+            pending: None,
             policy,
             encoding,
             dropped: 0,
+            warned_dropped: 0,
             worker_tx: Some(worker_tx),
             worker: Some(worker),
         }
@@ -79,27 +88,46 @@ impl EgressBus {
             self.buffer.pop_front();
             self.dropped += 1;
         }
+        // Surface backpressure loss once per burst instead of dropping silently.
+        if self.dropped > self.warned_dropped {
+            tracing::warn!(
+                dropped = self.dropped,
+                "egress endpoint can't keep up; dropped oldest buffered items"
+            );
+            self.warned_dropped = self.dropped;
+        }
+    }
+
+    /// Try to hand `payload` to the worker. On a full queue the payload is
+    /// stashed in `pending` (never re-encoded); on disconnect it is discarded.
+    fn try_send(&mut self, payload: Vec<u8>) {
+        let Some(tx) = &self.worker_tx else { return };
+        match tx.try_send(payload) {
+            Ok(()) => {}
+            Err(TrySendError::Full(p)) => self.pending = Some(p),
+            Err(TrySendError::Disconnected(_)) => {}
+        }
     }
 }
 
 impl Interconnect for EgressBus {
     fn tick(&mut self) -> SimResult<()> {
         self.drain_sources();
+        // Flush a previously-rejected payload before encoding anything new, so
+        // ordering holds and the worker queue drains in FIFO order.
+        if let Some(pending) = self.pending.take() {
+            self.try_send(pending);
+            if self.pending.is_some() {
+                return Ok(()); // still backed up; don't pile on more work
+            }
+        }
         if self.buffer.is_empty() {
             return Ok(());
         }
-        let items: Vec<EgressItem> = self.buffer.iter().cloned().collect();
+        let items: Vec<EgressItem> = self.buffer.drain(..).collect();
         let payload = encode(self.encoding, &items);
-        if payload.is_empty() {
-            self.buffer.clear();
-            return Ok(());
-        }
-        if let Some(tx) = &self.worker_tx {
-            match tx.try_send(payload) {
-                Ok(()) => self.buffer.clear(),
-                Err(TrySendError::Full(_)) => { /* keep buffered, retry next tick */ }
-                Err(TrySendError::Disconnected(_)) => self.buffer.clear(),
-            }
+        if !payload.is_empty() {
+            self.try_send(payload);
         }
         Ok(())
     }

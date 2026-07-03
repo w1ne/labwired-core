@@ -15,13 +15,12 @@ pub struct HttpPoster {
     host: String,
     port: u16,
     path: String,
-    #[allow(dead_code)]
-    flush_interval_ms: u64,
 }
 
 impl HttpPoster {
     /// `url` like `http://host:8080/ingest`. Only plain HTTP is supported.
-    pub fn new(url: String, flush_interval_ms: u64) -> anyhow::Result<Self> {
+    /// One POST per flushed payload (Connection: close); no batching.
+    pub fn new(url: String) -> anyhow::Result<Self> {
         let rest = url
             .strip_prefix("http://")
             .ok_or_else(|| anyhow::anyhow!("only http:// URLs supported: {url}"))?;
@@ -37,7 +36,6 @@ impl HttpPoster {
             host,
             port,
             path: path.to_string(),
-            flush_interval_ms,
         })
     }
 }
@@ -88,7 +86,7 @@ mod tests {
             line
         });
         let mut poster =
-            HttpPoster::new(format!("http://{}:{}/ingest", addr.ip(), addr.port()), 0).unwrap();
+            HttpPoster::new(format!("http://{}:{}/ingest", addr.ip(), addr.port())).unwrap();
         poster.send(b"body").unwrap();
         assert!(handle.join().unwrap().starts_with("POST /ingest"));
     }
