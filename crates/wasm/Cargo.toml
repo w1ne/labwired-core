@@ -8,6 +8,16 @@ publish = false
 [lib]
 crate-type = ["cdylib"]
 
+# wasm-pack's default release pass is a bare `wasm-opt -O`, which (a) does NOT
+# strip the DWARF debug info the workspace `debug = true` profile bakes in — the
+# shipped bg.wasm was 4.5 MB, roughly half of it debug sections that the browser
+# downloads and never uses — and (b) rejects the bulk-memory/simd128 opcodes we
+# now emit (see .cargo/config.toml). This override strips debug and opts at -O3
+# while allowing the post-MVP features. Keep the feature flags here in sync with
+# the target-feature list in .cargo/config.toml.
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["-O3", "--strip-debug", "--enable-bulk-memory", "--enable-simd", "--enable-nontrapping-float-to-int"]
+
 [dependencies]
 wasm-bindgen = "0.2.92"
 # #124 Phase 4: js-sys exposes `js_sys::WebAssembly::{Module, Instance}` used
