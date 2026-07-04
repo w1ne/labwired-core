@@ -205,7 +205,11 @@ boards:
     # (get_ssd1306_framebuffer) can reach an OLED on the C3 controller. No register,
     # timing, state, or reset-value change; purely additive getter. This ack covers
     # the model-file touch; no live re-capture warranted.
-    drift_ack: 2026-07-03
+    # 2026-07-04: added the universal peripheral-inspect surface to esp32c3/i2c.rs
+    # (register/field/artifact read accessors for the MachineInspect interface). Pure
+    # read-only introspection; no register, timing, state, or reset-value change. This
+    # ack covers the model-file touch; no live re-capture warranted.
+    drift_ack: 2026-07-04
 
   - id: nucleo-l476rg
     doc: docs/boards/nucleo-l476rg.md
