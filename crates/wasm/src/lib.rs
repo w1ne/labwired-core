@@ -133,7 +133,22 @@ impl WasmSimulator {
 
         match chip.arch {
             Arch::Arm | Arch::Unknown => Self::new_from_config_arm(&chip, &manifest, firmware),
-            Arch::RiscV => Self::new_from_config_riscv(&chip, &manifest, firmware),
+            Arch::RiscV => {
+                let blob_map = parse_named_blobs(&blobs);
+                // A board opts into faithful ROM boot by supplying the merged
+                // flash image (`bootloader@0x0 + partition-table@0x8000 +
+                // app@0x10000`) as the `esp32c3_flash` blob — the same on-demand
+                // named-blob idiom the ROM images already use. Its presence is
+                // the trigger (no schema flag needed): with it, the browser boots
+                // the real mask ROM from the reset vector exactly like the native
+                // `--rom-boot` CLI; without it, the pre-existing fast-boot path
+                // runs, treating `firmware` as a bare esp-hal ELF.
+                if blob_map.contains_key("esp32c3_flash") {
+                    Self::new_from_config_riscv_romboot(&chip, &manifest, &blob_map)
+                } else {
+                    Self::new_from_config_riscv(&chip, &manifest, firmware, &blob_map)
+                }
+            }
             Arch::Xtensa if chip.name.starts_with("esp32s3") => {
                 let blob_map = parse_named_blobs(&blobs);
                 Self::new_from_config_xtensa_esp32s3(&manifest, firmware, &blob_map)
@@ -188,15 +203,103 @@ impl WasmSimulator {
     /// RISC-V core via `configure_riscv` and seeds the stack pointer at the top
     /// of DRAM — fast-boot skips the ROM/2nd-stage bootloader that would
     /// normally set SP, so the app's first prologue store would otherwise fault.
+    ///
+    /// The ESP32-C3 boot ROM is injected on demand via `blobs` under
+    /// `esp32c3_irom`/`esp32c3_drom` — the RISC-V analogue of the S3 path's
+    /// `Esp32s3Opts.rom_images`. The chip YAML declares zero-filled `rom` /
+    /// `rom_data` regions (IROM 0x4000_0000, DROM 0x3FF0_0000) that native
+    /// builds fill from env pins or the vendored images; on wasm the vendored
+    /// images are excluded from the bundle, so the browser fetches the two ROM
+    /// bins and passes them here. With the ROM present, esp-hal's ROM function
+    /// calls during init resolve for real (zero thunks) instead of dispatching
+    /// through zeros.
     fn new_from_config_riscv(
         chip: &ChipDescriptor,
         manifest: &SystemManifest,
         firmware: &[u8],
+        blobs: &std::collections::HashMap<String, Vec<u8>>,
     ) -> Result<WasmSimulator, JsValue> {
         let mut bus = SystemBus::from_config(chip, manifest)
             .map_err(|e| JsValue::from_str(&format!("Bus config error: {:#}", e)))?;
 
+        // Inject the on-demand ESP32-C3 boot ROM blobs into the chip's still
+        // zero-filled `rom`/`rom_data` regions, matching how the native
+        // `--rom-boot` path (`build_c3_rom_boot_machine`) provisions them.
+        // Absent blobs (non-C3 RISC-V chips, or the browser not supplying them)
+        // leave the regions zero, preserving the pre-existing fast-boot path.
+        let faithful_c3_rom = {
+            use labwired_core::boot::esp32c3_rom::{c3_rom_data_init_writes, DROM_BASE, IROM_BASE};
+            let mut injected_irom: Option<Vec<u8>> = None;
+            for mem in bus.extra_mem.iter_mut() {
+                let src = if mem.base_addr == IROM_BASE as u64 {
+                    blobs.get("esp32c3_irom")
+                } else if mem.base_addr == DROM_BASE as u64 {
+                    blobs.get("esp32c3_drom")
+                } else {
+                    None
+                };
+                if let Some(src) = src {
+                    let n = src.len().min(mem.data.len());
+                    mem.data[..n].copy_from_slice(&src[..n]);
+                    if mem.base_addr == IROM_BASE as u64 {
+                        injected_irom = Some(src.clone());
+                    }
+                }
+            }
+            // Fast-boot skips the ROM reset's own `.data` copy, so replicate it:
+            // land the ROM's DRAM globals (ROM function tables esp-hal calls
+            // dispatch through) exactly as silicon does — otherwise those calls
+            // jump through a null/garbage pointer. Mirrors the S3 path's
+            // `s3_rom_data_init_writes` in `configure_xtensa_esp32s3`.
+            if let Some(irom) = injected_irom {
+                for (dst, bytes) in c3_rom_data_init_writes(&irom) {
+                    for (i, b) in bytes.iter().enumerate() {
+                        let _ = bus.write_u8(dst as u64 + i as u64, *b);
+                    }
+                }
+                // With the real ROM present, esp-hal's clock bring-up runs the
+                // genuine `rom_i2c_*Reg` helpers, which drive the analog I²C
+                // master / ANA_CONFIG block (0x6000_E000) for the PLL. That
+                // block is not in the chip YAML (it's the same custom model the
+                // native `--rom-boot` builder wires), so add it here on the
+                // faithful path — otherwise the first ROM PLL transaction faults
+                // on an unmapped access. Its FSM-status model lets the ROM's
+                // transaction busy-poll complete.
+                bus.add_peripheral(
+                    "rtc_i2c_ana",
+                    0x6000_E000,
+                    0x400,
+                    None,
+                    Box::new(labwired_core::peripherals::esp32c3::ana_i2c::Esp32c3AnaI2c::new()),
+                );
+                bus.refresh_peripheral_index();
+                true
+            } else {
+                false
+            }
+        };
+
         let uart_sink = Arc::new(Mutex::new(Vec::new()));
+        // On the faithful C3 ROM path, esp-println's `jtag-serial` feature (used
+        // by esp-hal apps) prints through USB_SERIAL_JTAG (0x6004_3000), not
+        // UART0. The chip YAML only has a declarative register stub there, which
+        // never drains bytes, so route the real behavioral model (same IP as the
+        // S3, reused unchanged) into `uart_sink` — mirroring the S3 path — so the
+        // widget's Serial tab shows the app's output. A narrower, later-registered
+        // window overrides the declarative stub.
+        if faithful_c3_rom {
+            use labwired_core::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag;
+            let mut usb_serial = UsbSerialJtag::new();
+            usb_serial.set_sink(Some(uart_sink.clone()), false);
+            bus.add_peripheral(
+                "usb_serial_jtag",
+                0x6004_3000,
+                0x100,
+                None,
+                Box::new(usb_serial),
+            );
+            bus.refresh_peripheral_index();
+        }
         if let Some(debug_uart) = manifest.debug_uart.as_deref() {
             if !bus.attach_uart_tx_sink_named(debug_uart, uart_sink.clone(), false) {
                 bus.attach_uart_tx_sink(uart_sink.clone(), false);
@@ -219,6 +322,100 @@ impl WasmSimulator {
         let sp_top =
             (chip.ram.base + labwired_config::parse_size(&chip.ram.size).unwrap_or(0)) as u32;
         machine.cpu.set_sp(sp_top & !0xF);
+
+        let board_io = manifest.board_io.clone();
+
+        Ok(WasmSimulator {
+            machine: Some(machine),
+            board_io,
+            uart_sink,
+            uart_rx_bufs,
+            arch: Arch::RiscV,
+            esp32_ipi: None,
+            jit_browser_enabled: false,
+            jit_browser_cache: None,
+        })
+    }
+
+    /// RISC-V (ESP32-C3) FAITHFUL ROM-boot path — the browser analogue of the
+    /// native CLI `--rom-boot`. Unlike fast-boot (which jumps straight to an ELF
+    /// app entry), this resets to the BROM vector `0x4000_0000` and runs the
+    /// genuine mask ROM → 2nd-stage bootloader → `app_main()`, loading from a
+    /// merged flash image. Arduino/ESP-IDF images are flash images that run from
+    /// flash via cache/XIP, so they REQUIRE this sequence.
+    ///
+    /// Blobs (all fetched on demand, none baked into the wasm bundle):
+    ///   * `esp32c3_irom` / `esp32c3_drom` — the boot ROM images, injected into
+    ///     the chip's zero-filled `rom`/`rom_data` regions.
+    ///   * `esp32c3_flash` — the merged flash image; this is the actual program.
+    ///
+    /// All peripheral wiring + reset-vector boot is the shared core builder
+    /// [`labwired_core::boot::esp32c3_rom::build_rom_boot_machine`], byte-for-byte
+    /// the same machine the native CLI assembles. Zero thunks.
+    fn new_from_config_riscv_romboot(
+        chip: &ChipDescriptor,
+        manifest: &SystemManifest,
+        blobs: &std::collections::HashMap<String, Vec<u8>>,
+    ) -> Result<WasmSimulator, JsValue> {
+        use labwired_core::boot::esp32c3_rom::{
+            build_rom_boot_machine, inject_rom_regions, RomBootOpts,
+        };
+        use labwired_core::boot::esp32s3_rom::RomImages;
+
+        let mut bus = SystemBus::from_config(chip, manifest)
+            .map_err(|e| JsValue::from_str(&format!("Bus config error: {:#}", e)))?;
+
+        // Provision the boot ROM into the chip's zero-filled rom/rom_data
+        // regions (the native path fills them from env pins / vendored images;
+        // on wasm the browser fetches and passes the two bins). ROM-boot cannot
+        // proceed without the real ROM — the reset vector executes it directly.
+        let (Some(irom), Some(drom)) =
+            (blobs.get("esp32c3_irom"), blobs.get("esp32c3_drom"))
+        else {
+            return Err(JsValue::from_str(
+                "rom-boot needs the ESP32-C3 boot ROM: pass esp32c3_irom + esp32c3_drom blobs",
+            ));
+        };
+        let images = RomImages {
+            irom: irom.clone(),
+            drom: drom.clone(),
+        };
+        if !inject_rom_regions(&mut bus, &images) {
+            return Err(JsValue::from_str(
+                "rom-boot: chip YAML declares no IROM region at 0x40000000 to load the boot ROM",
+            ));
+        }
+
+        let flash_bytes = blobs
+            .get("esp32c3_flash")
+            .expect("esp32c3_flash presence checked by caller")
+            .clone();
+
+        // Capture console output for the widget's Serial tab. The IDF default
+        // console is UART0; esp-hal / jtag-serial apps print through
+        // USB_SERIAL_JTAG. The BROM prints to BOTH, so route both into the same
+        // sink: attach UART0's tx sink here, and hand the sink to the shared
+        // builder so its USB_SERIAL_JTAG model mirrors into it too.
+        let uart_sink = Arc::new(Mutex::new(Vec::new()));
+        if let Some(debug_uart) = manifest.debug_uart.as_deref() {
+            if !bus.attach_uart_tx_sink_named(debug_uart, uart_sink.clone(), false) {
+                bus.attach_uart_tx_sink(uart_sink.clone(), false);
+            }
+        } else {
+            bus.attach_uart_tx_sink(uart_sink.clone(), false);
+        }
+        let uart_rx_bufs = bus.attach_uart_rx_source();
+
+        let machine = build_rom_boot_machine(
+            bus,
+            flash_bytes,
+            RomBootOpts {
+                efuse_mac: None,
+                usb_serial_sink: Some(uart_sink.clone()),
+            },
+            // WasmSimulator holds Machine<Box<dyn Cpu>>; box the concrete RiscV.
+            |c| Box::new(c) as Box<dyn Cpu>,
+        );
 
         let board_io = manifest.board_io.clone();
 
@@ -770,3 +967,162 @@ fn parse_named_blobs(blobs: &JsValue) -> std::collections::HashMap<String, Vec<u
 // WasmGdbEventLoop removed — see `gdb_process_packet` above for the rationale.
 // Restoring this requires `LabwiredTarget` to be implemented for an arch-erased
 // CPU type, which is the follow-up tracked alongside Phase 1.
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod romboot_tests {
+    //! Regression guard for the ESP32-C3 wasm faithful ROM-boot path.
+    //!
+    //! Exercises the exact browser entry [`WasmSimulator::new_from_config_riscv_romboot`]
+    //! on the native test target (a real headless browser isn't available): it
+    //! provisions the boot ROM from the two ROM blobs, injects them into the
+    //! chip's `rom`/`rom_data` regions, hands the merged flash image to the
+    //! shared core builder, resets to `0x4000_0000`, and runs the genuine mask
+    //! ROM → 2nd-stage bootloader → `app_main()`. Asserts it reaches the IDF
+    //! `Calling app_main()` / "Hello world!" banner. Zero thunks.
+    //!
+    //! `#[ignore]` because the faithful path spends ~150M steps in the real ROM
+    //! before `app_main`; run it in release:
+    //!   `cargo test -p labwired-wasm --release romboot -- --ignored --nocapture`
+    use super::*;
+    use labwired_config::{ChipDescriptor, SystemManifest};
+    use std::collections::HashMap;
+    use std::path::PathBuf;
+
+    fn root() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    }
+
+    #[test]
+    #[ignore = "boots the real C3 mask ROM (~150M steps); run with --release --ignored"]
+    fn wasm_romboot_reaches_app_main() {
+        let manifest_dir = root();
+        let chip_yaml =
+            std::fs::read_to_string(manifest_dir.join("../../configs/chips/esp32c3.yaml"))
+                .expect("read esp32c3 chip yaml");
+        let system_yaml =
+            std::fs::read_to_string(manifest_dir.join("../../configs/systems/esp32c3-devkit.yaml"))
+                .expect("read esp32c3-devkit system yaml");
+        let chip: ChipDescriptor = serde_yaml::from_str(&chip_yaml).expect("parse chip yaml");
+        let manifest: SystemManifest =
+            serde_yaml::from_str(&system_yaml).expect("parse system yaml");
+
+        // The browser fetches these on demand; here we read the vendored ROM
+        // bins + the committed IDF hello_world flash image directly.
+        let irom = std::fs::read(manifest_dir.join("../core/roms/esp32c3/esp32c3_rom.bin"))
+            .expect("read vendored C3 IROM");
+        let drom = std::fs::read(manifest_dir.join("../core/roms/esp32c3/esp32c3_drom.bin"))
+            .expect("read vendored C3 DROM");
+        let flash =
+            std::fs::read(manifest_dir.join("tests/fixtures/esp32c3-hello-world-flash.bin"))
+                .expect("read C3 hello_world flash image");
+
+        let mut blobs: HashMap<String, Vec<u8>> = HashMap::new();
+        blobs.insert("esp32c3_irom".into(), irom);
+        blobs.insert("esp32c3_drom".into(), drom);
+        blobs.insert("esp32c3_flash".into(), flash);
+
+        let mut sim = WasmSimulator::new_from_config_riscv_romboot(&chip, &manifest, &blobs)
+            .expect("construct C3 rom-boot WasmSimulator");
+
+        // Step in batches; stop as soon as the app_main banner appears.
+        const BATCH: u32 = 1_000_000;
+        const MAX_STEPS: u64 = 300_000_000;
+        let mut steps: u64 = 0;
+        let mut reached = false;
+        while steps < MAX_STEPS {
+            sim.step(BATCH).expect("step");
+            steps += BATCH as u64;
+            let out = String::from_utf8_lossy(&sim.uart_sink.lock().unwrap()).into_owned();
+            if out.contains("Hello world!") {
+                reached = true;
+                eprintln!("reached app_main at ~{steps} steps");
+                break;
+            }
+        }
+        let out = String::from_utf8_lossy(&sim.uart_sink.lock().unwrap()).into_owned();
+        assert!(
+            reached,
+            "C3 wasm rom-boot did not reach app_main within {MAX_STEPS} steps.\n\
+             --- captured serial ---\n{out}"
+        );
+        assert!(
+            out.contains("Calling app_main()"),
+            "expected IDF 'Calling app_main()' banner; got:\n{out}"
+        );
+    }
+
+    /// Decisive proof the browser OLED lab paints: boot the curated
+    /// `esp32c3-oled-demo` IDF flash image FAITHFULLY through the real mask ROM
+    /// (the exact browser entry `new_from_config_riscv_romboot`), let the
+    /// firmware's register-level SSD1306 driver run, then read the panel's
+    /// GDDRAM back through the same `get_ssd1306_framebuffer` accessor the
+    /// playground/embed uses and assert a non-trivial number of pixels are lit.
+    ///
+    /// Zero thunks: every lit pixel is a byte the firmware pushed via a genuine
+    /// I²C transaction the simulated C3 command-list controller executed against
+    /// the attached SSD1306 model. No hardcoded PCs, no faked framebuffer.
+    ///
+    /// `#[ignore]` for the same reason as the app_main guard (~150M ROM steps);
+    /// run with:
+    ///   `cargo test -p labwired-wasm --release romboot_oled -- --ignored --nocapture`
+    #[test]
+    #[ignore = "boots the real C3 mask ROM then paints the OLED; run with --release --ignored"]
+    fn wasm_romboot_oled_paints() {
+        let manifest_dir = root();
+        let chip_yaml =
+            std::fs::read_to_string(manifest_dir.join("../../configs/chips/esp32c3.yaml"))
+                .expect("read esp32c3 chip yaml");
+        let system_yaml = std::fs::read_to_string(
+            manifest_dir.join("../../configs/systems/esp32c3-oled-demo.yaml"),
+        )
+        .expect("read esp32c3-oled-demo system yaml");
+        let chip: ChipDescriptor = serde_yaml::from_str(&chip_yaml).expect("parse chip yaml");
+        let manifest: SystemManifest =
+            serde_yaml::from_str(&system_yaml).expect("parse system yaml");
+
+        let irom = std::fs::read(manifest_dir.join("../core/roms/esp32c3/esp32c3_rom.bin"))
+            .expect("read vendored C3 IROM");
+        let drom = std::fs::read(manifest_dir.join("../core/roms/esp32c3/esp32c3_drom.bin"))
+            .expect("read vendored C3 DROM");
+        let flash =
+            std::fs::read(manifest_dir.join("tests/fixtures/esp32c3-oled-demo-flash.bin"))
+                .expect("read C3 OLED demo flash image");
+
+        let mut blobs: HashMap<String, Vec<u8>> = HashMap::new();
+        blobs.insert("esp32c3_irom".into(), irom);
+        blobs.insert("esp32c3_drom".into(), drom);
+        blobs.insert("esp32c3_flash".into(), flash);
+
+        let mut sim = WasmSimulator::new_from_config_riscv_romboot(&chip, &manifest, &blobs)
+            .expect("construct C3 rom-boot WasmSimulator");
+
+        // Step until the OLED framebuffer holds a non-trivial picture. The
+        // firmware paints once shortly after app_main; poll the same accessor
+        // the playground uses.
+        const BATCH: u32 = 1_000_000;
+        const MAX_STEPS: u64 = 300_000_000;
+        // "LabWired" + "OLED LAB C3" + frame + bar lights well over this many.
+        const MIN_LIT: usize = 400;
+        let mut steps: u64 = 0;
+        let mut lit = 0usize;
+        let mut painted = false;
+        while steps < MAX_STEPS {
+            sim.step(BATCH).expect("step");
+            steps += BATCH as u64;
+            if let Ok(fb) = sim.get_ssd1306_framebuffer("oled") {
+                lit = fb.iter().map(|b| b.count_ones() as usize).sum();
+                if lit >= MIN_LIT {
+                    painted = true;
+                    eprintln!("OLED painted: {lit} lit pixels at ~{steps} steps");
+                    break;
+                }
+            }
+        }
+        let out = String::from_utf8_lossy(&sim.uart_sink.lock().unwrap()).into_owned();
+        assert!(
+            painted,
+            "C3 OLED lab did not paint (>= {MIN_LIT} lit pixels) within {MAX_STEPS} steps; \
+             last count = {lit}.\n--- captured serial ---\n{out}"
+        );
+    }
+}

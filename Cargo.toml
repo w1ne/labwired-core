@@ -79,13 +79,14 @@ members = [
 # It carries its own [profile.release] (opt-level = "z", lto = true) that is
 # incompatible with the workspace profile, so it must build out-of-workspace.
 #
-# examples/esp32s3-* require the +esp toolchain (xtensa-esp-elf) and live
+# examples/esp32s3-* and examples/esp32c3-* require the +esp toolchain and live
 # entirely outside the standard workspace toolchain.
 exclude = [
     "crates/firmware-hal-test",
     "examples/esp32s3-blinky",
     "examples/esp32s3-hello-world",
     "examples/esp32s3-i2c-tmp102",
+    "examples/esp32c3-hello-world",
     "examples/esp32-epaper-lab",
     "examples/tier1-fixture/esp32s3",
     "examples/tier1-fixture/esp32",
