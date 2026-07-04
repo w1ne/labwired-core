@@ -59,14 +59,16 @@ impl EgressTransport for MqttPublisher {
     }
 }
 
-/// MQTT 3.1.1 CONNECT with clean session, keep-alive 60s, no will/auth.
+/// MQTT 3.1.1 CONNECT with clean session, no will/auth. Keep-alive is 0
+/// (disabled): this QoS-0 fire-and-forget publisher never sends PINGREQ, so
+/// advertising a non-zero interval would be a promise it can't keep.
 fn connect_packet(client_id: &str) -> Vec<u8> {
     let mut var = Vec::new();
     var.extend_from_slice(&[0x00, 0x04]); // "MQTT" length
     var.extend_from_slice(b"MQTT");
     var.push(0x04); // protocol level 4 (3.1.1)
     var.push(0x02); // connect flags: clean session
-    var.extend_from_slice(&[0x00, 0x3C]); // keep-alive 60s
+    var.extend_from_slice(&[0x00, 0x00]); // keep-alive disabled
     let id = client_id.as_bytes();
     var.extend_from_slice(&(id.len() as u16).to_be_bytes());
     var.extend_from_slice(id);

@@ -1,0 +1,21 @@
+[package]
+name = "labwired-egress-relay"
+version.workspace = true
+edition = "2021"
+license.workspace = true
+publish = false
+
+[dependencies]
+labwired-core = { path = "../core" }
+tungstenite = "0.24"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+tracing = "0.1"
+
+[features]
+net-tests = []
+
+[[bin]]
+name = "labwired-egress-relay"
+path = "src/main.rs"
