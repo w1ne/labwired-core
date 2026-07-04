@@ -84,7 +84,7 @@ static int iolink_master_isdu_finish_read(iolink_master_port_t* port,
         return iolink_master_service_result(port, IOLINK_MASTER_ISDU_ERR_DEVICE);
     }
 
-    if((result_len >= 2U) && (iolink_master_port_state(port)->isdu.response[0] == 0x80U))
+    if((result_len >= 2U) && (iolink_master_port_state(port)->isdu.response[0] == IOLINK_MASTER_ISDU_RESPONSE_ERROR))
     {
         iolink_master_port_state(port)->isdu.error = iolink_master_port_state(port)->isdu.response[1];
         iolink_master_port_state(port)->diagnostics.last_isdu_error =
@@ -101,9 +101,10 @@ static int iolink_master_isdu_finish_read(iolink_master_port_t* port,
 
     if(result_len > 0U)
     {
-        memcpy(data, iolink_master_port_state(port)->isdu.response, result_len);
+        (void)memcpy(data, iolink_master_port_state(port)->isdu.response, result_len);
     }
-    *len = result_len;
+    /* Guarded above by `*len < result_len`, so result_len fits in the uint8 out-length. */
+    *len = (uint8_t)result_len;
     iolink_master_isdu_clear(port);
     return iolink_master_service_result(port, IOLINK_MASTER_STATUS_OK);
 }
@@ -118,7 +119,7 @@ static int iolink_master_isdu_finish_write(iolink_master_port_t* port)
         return iolink_master_service_result(port, IOLINK_MASTER_ISDU_ERR_DEVICE);
     }
 
-    if((iolink_master_port_state(port)->isdu.response_len >= 2U) && (iolink_master_port_state(port)->isdu.response[0] == 0x80U))
+    if((iolink_master_port_state(port)->isdu.response_len >= 2U) && (iolink_master_port_state(port)->isdu.response[0] == IOLINK_MASTER_ISDU_RESPONSE_ERROR))
     {
         iolink_master_port_state(port)->isdu.error = iolink_master_port_state(port)->isdu.response[1];
         iolink_master_port_state(port)->diagnostics.last_isdu_error =
@@ -141,7 +142,7 @@ void iolink_master_isdu_fill_od(iolink_master_port_t* port, uint8_t* od, uint8_t
         return;
     }
 
-    memset(od, 0, od_len);
+    (void)memset(od, 0, od_len);
 
     if((iolink_master_port_state(port)->isdu.op == IOLINK_MASTER_ISDU_OP_NONE) || iolink_master_port_state(port)->isdu.request_sent)
     {
@@ -289,18 +290,18 @@ int iolink_master_read_isdu(iolink_master_port_t* port,
     }
 
     iolink_master_isdu_start(port, IOLINK_MASTER_ISDU_OP_READ, index, subindex);
-    iolink_master_port_state(port)->isdu.request[0] = (uint8_t)(IOLINK_ISDU_SERVICE_READ << 4);
+    iolink_master_port_state(port)->isdu.request[0] = (uint8_t)(IOLINK_ISDU_SERVICE_READ << IOLINK_MASTER_ISDU_SERVICE_SHIFT);
     iolink_master_port_state(port)->isdu.request[1] = (uint8_t)(index >> 8);
     iolink_master_port_state(port)->isdu.request[2] = (uint8_t)(index & 0xFFU);
     iolink_master_port_state(port)->isdu.request[3] = subindex;
-    iolink_master_port_state(port)->isdu.request_len = 4U;
+    iolink_master_port_state(port)->isdu.request_len = IOLINK_MASTER_ISDU_READ_HEADER_LEN;
 
     return IOLINK_MASTER_STATUS_PENDING;
 }
 
 int iolink_master_read_device_info(iolink_master_port_t* port)
 {
-    uint8_t page[16];
+    uint8_t page[IOLINK_MASTER_DPP1_LEN];
     uint8_t len = sizeof(page);
     int ret;
 
@@ -361,21 +362,21 @@ int iolink_master_write_isdu(iolink_master_port_t* port,
         return iolink_master_isdu_finish_write(port);
     }
 
-    if(len > (uint8_t)(IOLINK_ISDU_BUFFER_SIZE - 5U))
+    if(len > (uint8_t)(IOLINK_ISDU_BUFFER_SIZE - IOLINK_MASTER_ISDU_WRITE_HEADER_MAX))
     {
         return IOLINK_MASTER_ISDU_ERR_BUFFER_TOO_SMALL;
     }
 
     iolink_master_isdu_start(port, IOLINK_MASTER_ISDU_OP_WRITE, index, subindex);
 
-    if(len >= 15U)
+    if(len >= IOLINK_MASTER_ISDU_LENGTH_NIBBLE_MAX)
     {
-        iolink_master_port_state(port)->isdu.request[pos++] = (uint8_t)((IOLINK_ISDU_SERVICE_WRITE << 4) | 0x0FU);
+        iolink_master_port_state(port)->isdu.request[pos++] = (uint8_t)((IOLINK_ISDU_SERVICE_WRITE << IOLINK_MASTER_ISDU_SERVICE_SHIFT) | IOLINK_MASTER_ISDU_LENGTH_EXTENDED);
         iolink_master_port_state(port)->isdu.request[pos++] = len;
     }
     else
     {
-        iolink_master_port_state(port)->isdu.request[pos++] = (uint8_t)((IOLINK_ISDU_SERVICE_WRITE << 4) | len);
+        iolink_master_port_state(port)->isdu.request[pos++] = (uint8_t)((IOLINK_ISDU_SERVICE_WRITE << IOLINK_MASTER_ISDU_SERVICE_SHIFT) | len);
     }
 
     iolink_master_port_state(port)->isdu.request[pos++] = (uint8_t)(index >> 8);
@@ -384,7 +385,7 @@ int iolink_master_write_isdu(iolink_master_port_t* port,
 
     if(len > 0U)
     {
-        memcpy(&iolink_master_port_state(port)->isdu.request[pos], data, len);
+        (void)memcpy(&iolink_master_port_state(port)->isdu.request[pos], data, len);
         pos = (uint8_t)(pos + len);
     }
 
@@ -450,19 +451,19 @@ static bool iolink_master_ds_next_record(const uint8_t* data,
     uint8_t value_len;
 
     if((data == NULL) || (pos == NULL) || (record == NULL) || (record_len == NULL) ||
-       (*pos > len) || ((uint8_t)(len - *pos) < 4U))
+       (*pos > len) || ((uint8_t)(len - *pos) < IOLINK_MASTER_DS_RECORD_HEADER_LEN))
     {
         return false;
     }
 
-    value_len = data[(uint8_t)(*pos + 3U)];
-    if(value_len > (uint8_t)(len - *pos - 4U))
+    value_len = data[(uint8_t)(*pos + (IOLINK_MASTER_DS_RECORD_HEADER_LEN - 1U))];
+    if(value_len > (uint8_t)(len - *pos - IOLINK_MASTER_DS_RECORD_HEADER_LEN))
     {
         return false;
     }
 
     *record = &data[*pos];
-    *record_len = (uint8_t)(4U + value_len);
+    *record_len = (uint8_t)(IOLINK_MASTER_DS_RECORD_HEADER_LEN + value_len);
     *pos = (uint8_t)(*pos + *record_len);
     return true;
 }
@@ -582,6 +583,10 @@ int iolink_master_verify_data_storage(iolink_master_port_t* port,
     {
         return iolink_master_service_result(port, IOLINK_MASTER_ISDU_ERR_VERIFY_FAILED);
     }
+    else
+    {
+        /* Raw image matched: fall through to the success result. */
+    }
 
     return iolink_master_service_result(port, IOLINK_MASTER_STATUS_OK);
 }
@@ -627,13 +632,13 @@ int iolink_master_ack_event(iolink_master_port_t* port, uint16_t* event_code)
 
 static iolink_master_event_type_t iolink_master_event_type_from_qualifier(uint8_t qualifier)
 {
-    switch((uint8_t)((qualifier >> 4U) & 0x03U))
+    switch((uint8_t)((qualifier >> IOLINK_MASTER_EVENT_QUALIFIER_MODE_SHIFT) & IOLINK_MASTER_EVENT_QUALIFIER_MODE_MASK))
     {
-    case 1U:
+    case IOLINK_MASTER_EVENT_MODE_NOTIFICATION:
         return IOLINK_MASTER_EVENT_TYPE_NOTIFICATION;
-    case 2U:
+    case IOLINK_MASTER_EVENT_MODE_WARNING:
         return IOLINK_MASTER_EVENT_TYPE_WARNING;
-    case 3U:
+    case IOLINK_MASTER_EVENT_MODE_ERROR:
         return IOLINK_MASTER_EVENT_TYPE_ERROR;
     default:
         return IOLINK_MASTER_EVENT_TYPE_UNKNOWN;
@@ -645,7 +650,7 @@ int iolink_master_read_event_details(iolink_master_port_t* port,
                                      uint8_t max_events,
                                      uint8_t* out_count)
 {
-    uint8_t data[24] = {0U};
+    uint8_t data[IOLINK_MASTER_MAX_EVENTS * IOLINK_MASTER_EVENT_ENTRY_LEN] = {0U};
     uint8_t len = sizeof(data);
     uint8_t count;
     uint8_t i;
@@ -662,12 +667,12 @@ int iolink_master_read_event_details(iolink_master_port_t* port,
         return ret;
     }
 
-    if((len % 3U) != 0U)
+    if((len % IOLINK_MASTER_EVENT_ENTRY_LEN) != 0U)
     {
         return IOLINK_MASTER_ISDU_ERR_DEVICE;
     }
 
-    count = (uint8_t)(len / 3U);
+    count = (uint8_t)(len / IOLINK_MASTER_EVENT_ENTRY_LEN);
     *out_count = count;
     iolink_master_port_state(port)->diagnostics.last_event_count = count;
     iolink_master_port_state(port)->diagnostics.last_event_code = 0U;
@@ -678,14 +683,23 @@ int iolink_master_read_event_details(iolink_master_port_t* port,
 
     for(i = 0U; i < count; i++)
     {
-        events[i].qualifier = data[i * 3U];
+        events[i].qualifier = data[i * IOLINK_MASTER_EVENT_ENTRY_LEN];
         events[i].type = iolink_master_event_type_from_qualifier(events[i].qualifier);
-        events[i].code = (uint16_t)(((uint16_t)data[(i * 3U) + 1U] << 8U) |
-                                    data[(i * 3U) + 2U]);
+        events[i].code = (uint16_t)(((uint16_t)data[(i * IOLINK_MASTER_EVENT_ENTRY_LEN) + 1U] << 8U) |
+                                    data[(i * IOLINK_MASTER_EVENT_ENTRY_LEN) + 2U]);
     }
     if(count > 0U)
     {
         iolink_master_port_state(port)->diagnostics.last_event_code = events[count - 1U].code;
+    }
+
+    if(iolink_master_port_state(port)->config.event_handler != NULL)
+    {
+        for(i = 0U; i < count; i++)
+        {
+            iolink_master_port_state(port)->config.event_handler(
+                iolink_master_port_state(port)->config.event_user, &events[i]);
+        }
     }
 
     return IOLINK_MASTER_STATUS_OK;
@@ -735,7 +749,7 @@ static bool iolink_master_block_matches(const iolink_master_port_t* port,
 
 static void iolink_master_block_clear(iolink_master_port_t* port)
 {
-    memset(&iolink_master_port_state(port)->block, 0, sizeof(iolink_master_port_state(port)->block));
+    (void)memset(&iolink_master_port_state(port)->block, 0, sizeof(iolink_master_port_state(port)->block));
 }
 
 int iolink_master_write_parameter_block(iolink_master_port_t* port,
@@ -752,7 +766,7 @@ int iolink_master_write_parameter_block(iolink_master_port_t* port,
         return IOLINK_MASTER_ERR_INVALID_ARG;
     }
 
-    if(len > (uint8_t)(IOLINK_ISDU_BUFFER_SIZE - 5U))
+    if(len > (uint8_t)(IOLINK_ISDU_BUFFER_SIZE - IOLINK_MASTER_ISDU_WRITE_HEADER_MAX))
     {
         return IOLINK_MASTER_ISDU_ERR_BUFFER_TOO_SMALL;
     }
@@ -766,12 +780,16 @@ int iolink_master_write_parameter_block(iolink_master_port_t* port,
         block->len = len;
         if(len > 0U)
         {
-            memcpy(block->data, data, len);
+            (void)memcpy(block->data, data, len);
         }
     }
     else if(!iolink_master_block_matches(port, index, subindex, data, len))
     {
         return iolink_master_service_result(port, IOLINK_MASTER_ISDU_ERR_BUSY);
+    }
+    else
+    {
+        /* Resuming the same block transfer: keep the latched state. */
     }
 
     if(block->step == IOLINK_MASTER_BLOCK_STEP_BEGIN_DOWNLOAD)
@@ -819,6 +837,10 @@ int iolink_master_write_parameter_block(iolink_master_port_t* port,
     else if(ret < 0)
     {
         iolink_master_block_clear(port);
+    }
+    else
+    {
+        /* Still pending: keep the block state for the next call. */
     }
 
     return iolink_master_service_result(port, ret);

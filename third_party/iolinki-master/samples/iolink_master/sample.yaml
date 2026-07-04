@@ -1,0 +1,19 @@
+sample:
+  name: IO-Link Master
+  description: >
+    Minimal IO-Link master built on the iolinki-master stack. Initializes a
+    port, drives it through startup into OPERATE against a trivial in-process
+    fake PHY, and reads back one process-data cycle.
+common:
+  tags: iolink fieldbus industrial
+  harness: console
+tests:
+  sample.iolink.master.loopback:
+    platform_allow:
+      - native_sim
+    integration_platforms:
+      - native_sim
+    harness_config:
+      type: one_line
+      regex:
+        - "Starting iolinki IO-Link master sample"

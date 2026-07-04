@@ -12,6 +12,13 @@
 #define FAKE_IOLINK_DEVICE_OBJECT_MAX_COUNT 4U
 #define FAKE_IOLINK_DEVICE_ISDU_REQUEST_MAX_LEN 8U
 
+/* Coarse link state, used to disambiguate the startup probe (a page-channel
+   Type-0 read seen only once, right after wake-up) from later PREOPERATE ISDU
+   traffic that can carry the same MC bit pattern. */
+#define FAKE_LINK_STARTUP 0U
+#define FAKE_LINK_PREOPERATE 1U
+#define FAKE_LINK_OPERATE 2U
+
 typedef struct
 {
     uint16_t index;
@@ -30,6 +37,7 @@ typedef struct
     uint8_t rx_queue[16];
     uint8_t rx_len;
     uint8_t rx_pos;
+    uint8_t link_state;
     uint32_t wakeup_count;
     uint32_t transition_count;
     uint32_t operate_cycle_count;
@@ -116,7 +124,8 @@ static void fake_iolink_device_prepare_isdu_response(void)
     index = (uint16_t)(((uint16_t)g_device.isdu_request[1] << 8) | g_device.isdu_request[2]);
     subindex = g_device.isdu_request[3];
 
-    if(service == IOLINK_ISDU_SERVICE_READ)
+    /* Accept the spec Table A.12 read I-Service codes (0x9/0xA/0xB). */
+    if((service == 0x09U) || (service == 0x0AU) || (service == 0x0BU))
     {
         object = fake_iolink_device_find_object(index, subindex);
         if(object == NULL)
@@ -132,7 +141,8 @@ static void fake_iolink_device_prepare_isdu_response(void)
         return;
     }
 
-    if(service == IOLINK_ISDU_SERVICE_WRITE)
+    /* Accept the spec Table A.12 write I-Service codes (0x1/0x2/0x3). */
+    if((service == 0x01U) || (service == 0x02U) || (service == 0x03U))
     {
         len = (uint8_t)(g_device.isdu_request[0] & 0x0FU);
         if((len == 0x0FU) || (g_device.isdu_request_len < (uint8_t)(4U + len)) ||
@@ -296,6 +306,17 @@ static void fake_iolink_device_queue_operate_response(void)
     g_device.rx_pos = 0U;
 }
 
+static uint8_t fake_iolink_device_direct_param_octet(uint8_t addr)
+{
+    fake_iolink_device_object_t* page =
+        fake_iolink_device_find_object(IOLINK_IDX_DIRECT_PARAMETERS_1, 0U);
+    if((page != NULL) && (addr < page->len))
+    {
+        return page->data[addr];
+    }
+    return 0U;
+}
+
 static int fake_iolink_device_send(void* user, const uint8_t* data, size_t len)
 {
     (void)user;
@@ -310,20 +331,49 @@ static int fake_iolink_device_send(void* user, const uint8_t* data, size_t len)
         return (int)len;
     }
 
+    /* Spec DeviceOperate: Type-0 WRITE of MasterCommand 0x99 to Direct Parameter
+       address 0x00 on the page channel (MC 0x20). Establishes communication. */
+    if((len == IOLINK_M_SEQ_MIN_LEN) && (data[0] == 0x20U) &&
+       (data[1] == IOLINK_CMD_DEVICE_OPERATE))
+    {
+        g_device.transition_count++;
+        g_device.link_state = FAKE_LINK_OPERATE;
+        return (int)len;
+    }
+
     if(len == IOLINK_M_SEQ_TYPE0_LEN)
     {
-        if(data[0] == IOLINK_MC_TRANSITION_COMMAND)
+        /* Startup probe (spec T1): the first Type-0 frame after wake-up is a page-
+           channel READ of a Direct Parameter octet. Answer it from the Direct
+           Parameter page rather than treating it as ISDU traffic. */
+        if((g_device.link_state == FAKE_LINK_STARTUP) &&
+           ((data[0] & IOLINK_MC_RW_MASK) != 0U) &&
+           ((data[0] & IOLINK_MC_COMM_CHANNEL_MASK) == 0x20U))
         {
-            g_device.transition_count++;
+            g_device.link_state = FAKE_LINK_PREOPERATE;
+            fake_iolink_device_queue_type0(
+                fake_iolink_device_direct_param_octet((uint8_t)(data[0] & IOLINK_MC_ADDR_MASK)));
             return (int)len;
         }
 
+        if(data[0] == IOLINK_MC_TRANSITION_COMMAND)
+        {
+            g_device.transition_count++;
+            g_device.link_state = FAKE_LINK_OPERATE;
+            return (int)len;
+        }
+
+        if(g_device.link_state == FAKE_LINK_STARTUP)
+        {
+            g_device.link_state = FAKE_LINK_PREOPERATE;
+        }
         fake_iolink_device_on_master_od(data[0]);
         fake_iolink_device_queue_type0(fake_iolink_device_next_response_od());
         return (int)len;
     }
 
     g_device.operate_cycle_count++;
+    g_device.link_state = FAKE_LINK_OPERATE;
     if(len > IOLINK_M_SEQ_HEADER_LEN)
     {
         fake_iolink_device_on_master_od(data[IOLINK_M_SEQ_HEADER_LEN]);

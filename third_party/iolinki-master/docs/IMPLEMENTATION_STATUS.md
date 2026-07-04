@@ -19,18 +19,20 @@ Status definitions:
 | Public API shape | Partial | [`include/iolinki_master/master.h`](../include/iolinki_master/master.h), [`tests/test_master_public_header.c`](../tests/test_master_public_header.c), [`tests/test_master_isdu_public.c`](../tests/test_master_isdu_public.c), [`tests/test_master_sio_public.c`](../tests/test_master_sio_public.c) | Add more black-box tests for future service APIs. |
 | Opaque storage/private state | Implemented | [`include/iolinki_master/master.h`](../include/iolinki_master/master.h), [`src/master_internal.h`](../src/master_internal.h) | Tune the public storage sizes once the private state stops moving quickly. |
 | Port lifecycle | Implemented | [`src/master_port.c`](../src/master_port.c), [`tests/test_master_startup.c`](../tests/test_master_startup.c) | Add a public lifecycle example for downstream users. |
-| Startup and baudrate scan | Implemented | [`src/master_port.c`](../src/master_port.c), [`tests/test_master_startup.c`](../tests/test_master_startup.c) | Validate timing and retries against real hardware. |
+| Startup and baudrate scan | Implemented | [`src/master_port.c`](../src/master_port.c), [`tests/test_master_startup.c`](../tests/test_master_startup.c) | Per-baud wake-up retry (`wake_retry_limit`) added; the physical 80us WURQ pulse and t_WU/t_REN/TDMT timing still live in the PHY adapter and remain unverified on silicon. |
 | M-sequence handling | Implemented | [`src/master_port.c`](../src/master_port.c), [`src/master_parameters.c`](../src/master_parameters.c), [`tests/test_master_pd.c`](../tests/test_master_pd.c), [`tests/test_master_startup.c`](../tests/test_master_startup.c), [`tests/test_master_parameters.c`](../tests/test_master_parameters.c) | Real-device validation remains open. |
 | Cyclic process data | Implemented | [`src/master_port.c`](../src/master_port.c), [`tests/test_master_pd.c`](../tests/test_master_pd.c), [`tests/test_master_public_flow.c`](../tests/test_master_public_flow.c) | Add more black-box coverage for configured PD sizes and invalid user buffers. |
 | RX path and retries | Implemented | [`src/master_port.c`](../src/master_port.c), [`tests/test_master_startup.c`](../tests/test_master_startup.c), [`tests/test_master_tick.c`](../tests/test_master_tick.c) | Add line-noise and long-running soak tests with a real PHY. |
 | ISDU read/write | Partial | [`src/master_isdu.c`](../src/master_isdu.c), [`tests/test_master_isdu.c`](../tests/test_master_isdu.c), [`tests/test_master_isdu_public.c`](../tests/test_master_isdu_public.c), [`tests/test_master_fake_device.c`](../tests/test_master_fake_device.c) | Verify behavior against real devices. |
 | Direct Parameter Page 1 | Implemented | [`src/master_parameters.c`](../src/master_parameters.c), [`tests/test_master_parameters.c`](../tests/test_master_parameters.c), [`tests/test_master_isdu.c`](../tests/test_master_isdu.c) | Real-device validation remains open. |
 | Startup device validation | Implemented | [`src/master_parameters.c`](../src/master_parameters.c), [`src/master_port.c`](../src/master_port.c), [`tests/test_master_startup.c`](../tests/test_master_startup.c) | Expand validation once automatic negotiation exists. |
+| Device identity / inspection level | Partial | [`src/master_parameters.c`](../src/master_parameters.c), [`src/master_port.c`](../src/master_port.c), [`tests/test_master_parameters.c`](../tests/test_master_parameters.c) | VendorID/DeviceID checked under `TYPE_COMP`/`IDENTICAL`; the SerialNumber leg that distinguishes `IDENTICAL` (ISDU index 0x0015) is not yet wired. |
 | Diagnostics | Partial | [`include/iolinki_master/master.h`](../include/iolinki_master/master.h), [`src/master_port.c`](../src/master_port.c), [`src/master_isdu.c`](../src/master_isdu.c), [`tests/test_master_pd.c`](../tests/test_master_pd.c), [`tests/test_master_isdu.c`](../tests/test_master_isdu.c) | Add event detail and link-quality metrics. |
 | Multi-port controller | Partial | [`src/master_controller.c`](../src/master_controller.c), [`tests/test_master_controller.c`](../tests/test_master_controller.c), [`examples/master_4port_controller_demo.c`](../examples/master_4port_controller_demo.c) | Define scheduler ownership and port-level runtime policy. |
 | SIO DI/DQ | Partial | [`src/master_sio.c`](../src/master_sio.c), [`tests/test_master_startup.c`](../tests/test_master_startup.c), [`tests/test_master_sio_public.c`](../tests/test_master_sio_public.c) | Validate SIO and mode transitions against real adapters. |
-| Scheduler/timing | Partial | [`src/master_port.c`](../src/master_port.c), [`src/master_controller.c`](../src/master_controller.c), [`tests/test_master_tick.c`](../tests/test_master_tick.c), [`tests/test_master_controller.c`](../tests/test_master_controller.c), [`tests/test_master_public_flow.c`](../tests/test_master_public_flow.c) | Validate timing against hardware captures. |
-| Events | Partial | [`include/iolinki_master/master.h`](../include/iolinki_master/master.h), [`src/master_isdu.c`](../src/master_isdu.c), [`tests/test_master_isdu_public.c`](../tests/test_master_isdu_public.c) | Validate event flows against real devices. |
+| Scheduler/timing | Partial | [`src/master_port.c`](../src/master_port.c), [`src/master_parameters.c`](../src/master_parameters.c), [`src/master_controller.c`](../src/master_controller.c), [`tests/test_master_tick.c`](../tests/test_master_tick.c), [`tests/test_master_controller.c`](../tests/test_master_controller.c), [`tests/test_master_parameters.c`](../tests/test_master_parameters.c) | MasterCycleTime octet (time-base + multiplier) now decoded to 100us for validation and pacing. Validate timing against hardware captures. |
+| Master Command channel/addressing | Implemented | [`src/master_parameters.c`](../src/master_parameters.c), [`src/master_port.c`](../src/master_port.c), [`tests/test_master_parameters.c`](../tests/test_master_parameters.c) | R/W + communication-channel + address encode/decode helpers; the operate transition is composed through them. Page/diagnosis channel services build on this next. |
+| Events | Partial | [`include/iolinki_master/master.h`](../include/iolinki_master/master.h), [`src/master_isdu.c`](../src/master_isdu.c), [`src/master_port.c`](../src/master_port.c), [`tests/test_master_isdu_public.c`](../tests/test_master_isdu_public.c), [`tests/test_master_fake_device.c`](../tests/test_master_fake_device.c) | Optional dispatch callbacks (rising-edge event-pending notify + per-event handler) added; fully autonomous async event servicing and real-device validation remain. |
 | Data Storage | Implemented | [`src/master_isdu.c`](../src/master_isdu.c), [`tests/test_master_isdu_public.c`](../tests/test_master_isdu_public.c), [`tests/test_master_fake_device.c`](../tests/test_master_fake_device.c) | Validate Data Storage restore flows against real devices. |
 | Block parameterization | Implemented | [`src/master_isdu.c`](../src/master_isdu.c), [`tests/test_master_isdu_public.c`](../tests/test_master_isdu_public.c) | Validate block flows against real devices. |
 | Hardware PHY adapters | Open | [`include/iolinki_master/master.h`](../include/iolinki_master/master.h) consumes the dependency PHY contract | Add real master-port hardware adapters outside the protocol core. |
@@ -57,6 +59,11 @@ and gap detail.
 - [x] Startup wake-up, Type 0 idle, transition command, and operate entry.
 - [x] Fixed-baudrate startup.
 - [x] Auto-baudrate scan across COM3/COM2/COM1.
+- [x] Configurable per-baud wake-up retry before scan advance / error.
+- [x] MasterCycleTime octet (time-base + multiplier) decode to 100us units.
+- [x] Master Command R/W + communication-channel + address encode/decode helpers.
+- [x] Rising-edge event-pending dispatch callback.
+- [x] Per-event dispatch callback from event details.
 - [x] Configured cyclic PD input/output.
 - [x] RX accumulation, checksum handling, and retry tracking.
 - [x] ISDU read/write transfer in local tests.
@@ -75,6 +82,7 @@ and gap detail.
 - [x] Fixed Type 2 capability selection for code-0 Direct Parameter profiles.
 - [x] Public requested-config validation against Direct Parameter Page 1.
 - [x] Optional startup device-info validation.
+- [x] Device identity (VendorID/DeviceID) check with `NO_CHECK`/`TYPE_COMP`/`IDENTICAL` inspection levels.
 - [x] Basic diagnostics API.
 - [x] Response timeout counter in public diagnostics.
 - [x] Cycle-slip counter in public diagnostics.
@@ -168,6 +176,35 @@ git diff --check
 Update this file in the same commit as implementation changes when the status of
 a feature changes. Keep the gap column honest: passing local tests does not mean
 hardware or conformance coverage exists.
+
+## Spec Conformance Audit (Interface & System Spec V1.1.5)
+
+Verified against the V1.1.5 spec text on 2026-07-04. Bit-level field encodings
+are conformant: MinCycleTime octet (Table B.3), Direct Parameter Page 1 layout
+(Table B.1), M-sequenceCapability bits (Figure B.3), RevisionID (Figure B.4), and
+the M-sequence control octet — R/W, communication channel, address (Figure A.1,
+Tables A.1/A.2).
+
+**Fixed:** ProcessData descriptor decode now isolates Length to bits 0-4 per
+Table B.6 (previously the SIO bit corrupted the length, and sub-byte bit lengths
+were truncated).
+
+**Known deviations (co-designed with the `iolinki` device stack; a third-party
+conformant device would reject them). Fixing requires a coordinated master+device
+change and will break the on-wire model until both land:**
+
+- **Startup / OPERATE transition.** The spec's startup state machine requires the
+  first message to be `MC = 0xA2` (read MinCycleTime at address 0x02 on the page
+  channel) and the OPERATE transition to be MasterCommand `0x99` "DeviceOperate"
+  (Table B.2) written to address 0x00 on the page channel. The stack instead
+  sends a bare `0x00` probe and a bare `0x0F` transition octet.
+- **ISDU I-Service nibble.** Table A.12 defines Read = `0x9/0xA/0xB` and
+  Write = `0x1/0x2/0x3`. The shared `IOLINK_ISDU_SERVICE_READ 0x08` /
+  `_WRITE 0x09` constants emit `0x8` (reserved) for reads and `0x9` (a *read*
+  code) for writes.
+
+The on-wire `labwired-real-firmware-model` CI proves master↔`iolinki`-device
+interop, not spec conformance: the device mirrors these same conventions.
 
 ## Architecture Priority
 

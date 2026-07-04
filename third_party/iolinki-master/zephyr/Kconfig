@@ -1,0 +1,26 @@
+# Copyright (C) 2026 Andrii Shylenko
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+menuconfig IOLINKI_MASTER
+    bool "IO-Link Master Stack"
+    default y
+    help
+      Enable the iolinki IO-Link Master Stack. This module implements the
+      master-side IO-Link Data Link Layer, ISDU engine, parameter/data-storage
+      handling and SIO fallback, driving a device through a hardware-agnostic
+      PHY abstraction (iolink_phy_api_t). It reuses the shared frame/CRC helper
+      sources and public <iolinki/*.h> headers from the iolinki device stack,
+      which must be present in the same west workspace (see west.yml).
+
+if IOLINKI_MASTER
+
+config IOLINKI_MASTER_CONTROLLER
+    bool "Multi-port master controller helpers"
+    default y
+    help
+      Build the multi-port controller layer (iolink_master_controller_*), which
+      manages an array of ports from a single tick/scheduling entry point. The
+      controller sources are always compiled with the master library; this
+      symbol is provided so applications can gate controller-only code.
+
+endif # IOLINKI_MASTER

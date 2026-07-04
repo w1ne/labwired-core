@@ -1,0 +1,34 @@
+# iolinki-master .clang-format
+# Based on Google, customized for iolinki coding standards (matching the iolinki device stack)
+
+BasedOnStyle: Google
+IndentWidth: 4
+ColumnLimit: 100
+AllowShortFunctionsOnASingleLine: None
+KeepEmptyLinesAtTheStartOfBlocks: false
+
+# Bracing Style
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterClass: true
+  AfterControlStatement: Never
+  AfterEnum: true
+  AfterFunction: true
+  AfterNamespace: true
+  AfterObjCDeclaration: true
+  AfterStruct: true
+  AfterUnion: true
+  BeforeCatch: true
+  BeforeElse: true
+  IndentBraces: false
+  SplitEmptyFunction: true
+  SplitEmptyRecord: true
+  SplitEmptyNamespace: true
+
+# Spacing
+SpaceAfterCStyleCast: true
+SpaceBeforeRangeBasedForLoopColon: true
+SpaceAroundPointerQualifiers: Both
+
+# Sorting
+SortIncludes: Never
