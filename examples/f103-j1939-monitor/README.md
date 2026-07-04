@@ -14,7 +14,8 @@ bug: **keying BAM reassembly sessions by source address (SA), not globally.**
 
 ## The bug this catches
 
-The bundled capture contains two J1939 BAM broadcasts whose Data Transfer
+The bundled capture contains three occurrences of a pair of concurrent
+J1939 BAM broadcasts whose Data Transfer
 (TP.DT) packet streams are genuinely interleaved on the wire — Engine
 Configuration (PGN 0xFEE3) from SA 0x00 and Retarder Configuration
 (PGN 0xFEE1) from SA 0x0F, opening about 10 ms apart, with their TP.DT
