@@ -283,6 +283,27 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
 
     // For Xtensa, short-circuit: build bus + CPU together via build_esp32_system_from_manifest.
     if is_xtensa {
+        // --resume-snapshot is wired for the C3 (RISC-V) rom-boot path only.
+        // The S3 faithful machine has no load_firmware step and populates some
+        // app regions via bootloader copies during the cold boot, so resuming
+        // it needs cache re-derivation work that is deferred; fail loudly rather
+        // than silently restore a partial state. (--capture-app-entry still
+        // works on S3 — it flows through the generic execute_test_loop.)
+        if args.resume_snapshot.is_some() {
+            let msg = "--resume-snapshot is not yet supported for ESP32-S3 (Xtensa); \
+                       cold-boot with --rom-boot instead"
+                .to_string();
+            error!("{}", msg);
+            write_config_error_outputs(
+                &args,
+                Some(&firmware_path),
+                system_path.as_ref(),
+                Some(&firmware_bytes),
+                Some(&resolved_limits),
+                msg,
+            );
+            return ExitCode::from(EXIT_CONFIG_ERROR);
+        }
         if let (Some(sys_path), Some(manifest)) = (system_path.as_ref(), esp32_manifest.as_ref()) {
             let uart_tx = Arc::new(Mutex::new(Vec::new()));
             // Load the ELF up front. The classic-Xtensa path fast-boots it into
@@ -623,7 +644,105 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
             setup_and_run!(cpu)
         }
         labwired_core::Arch::RiscV => {
-            if args.rom_boot {
+            if let Some(snap_path) = &args.resume_snapshot {
+                // ── Resume from a captured app-entry snapshot (no cold boot) ──
+                // Build the SAME faithful rom-boot machine (which loads the real
+                // boot ROM + flash image and wires every peripheral), then stamp
+                // the snapshot on top. take_runtime_snapshot skips the flash/rom
+                // mirrors — they are re-derived here from the freshly-loaded
+                // flash — so restoring REQUIRES the identical firmware, enforced
+                // by the self-key gate below. The snapshot overwrites the CPU's
+                // PC to app-entry, so the mask ROM is never replayed: execution
+                // starts in the application immediately.
+                let snap_bytes = match std::fs::read(snap_path) {
+                    Ok(b) => b,
+                    Err(e) => {
+                        let msg = format!("cannot read resume snapshot {snap_path:?}: {e}");
+                        error!("{}", msg);
+                        write_config_error_outputs(
+                            &args,
+                            Some(&firmware_path),
+                            system_path.as_ref(),
+                            Some(&firmware_bytes),
+                            Some(&resolved_limits),
+                            msg,
+                        );
+                        return ExitCode::from(EXIT_CONFIG_ERROR);
+                    }
+                };
+                let snap = match labwired_core::runtime_snapshot::MachineRuntimeSnapshot::from_bytes(
+                    &snap_bytes,
+                ) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        let msg = format!("invalid resume snapshot {snap_path:?}: {e}");
+                        error!("{}", msg);
+                        write_config_error_outputs(
+                            &args,
+                            Some(&firmware_path),
+                            system_path.as_ref(),
+                            Some(&firmware_bytes),
+                            Some(&resolved_limits),
+                            msg,
+                        );
+                        return ExitCode::from(EXIT_CONFIG_ERROR);
+                    }
+                };
+                let (chip, fw_sha) = match crate::rom_boot_flash_self_key() {
+                    Some(v) => v,
+                    None => {
+                        let msg = "--resume-snapshot needs LABWIRED_ESP32C3_FLASH set (the same \
+                                   flash image the snapshot was captured against)"
+                            .to_string();
+                        error!("{}", msg);
+                        write_config_error_outputs(
+                            &args,
+                            Some(&firmware_path),
+                            system_path.as_ref(),
+                            Some(&firmware_bytes),
+                            Some(&resolved_limits),
+                            msg,
+                        );
+                        return ExitCode::from(EXIT_CONFIG_ERROR);
+                    }
+                };
+                if let Err(e) = snap.validate_self_key(chip, &fw_sha) {
+                    let msg =
+                        format!("resume snapshot self-key mismatch ({e}); cold-boot required");
+                    error!("{}", msg);
+                    write_config_error_outputs(
+                        &args,
+                        Some(&firmware_path),
+                        system_path.as_ref(),
+                        Some(&firmware_bytes),
+                        Some(&resolved_limits),
+                        msg,
+                    );
+                    return ExitCode::from(EXIT_CONFIG_ERROR);
+                }
+                let mut machine = match crate::build_c3_rom_boot_machine(bus, None) {
+                    Ok(m) => m,
+                    Err(code) => return code,
+                };
+                if let Err(e) = machine.apply_runtime_snapshot(&snap) {
+                    let msg = format!("failed to apply resume snapshot: {e}");
+                    error!("{}", msg);
+                    write_config_error_outputs(
+                        &args,
+                        Some(&firmware_path),
+                        system_path.as_ref(),
+                        Some(&firmware_bytes),
+                        Some(&resolved_limits),
+                        msg,
+                    );
+                    return ExitCode::from(EXIT_RUNTIME_ERROR);
+                }
+                eprintln!(
+                    "labwired-riscv: resumed from app-entry snapshot {snap_path:?} (chip {chip}); \
+                     mask-ROM replay skipped"
+                );
+                run_machine!(machine)
+            } else if args.rom_boot {
                 // Faithful boot: real mask ROM → 2nd-stage bootloader → app,
                 // loading from the flash image (LABWIRED_ESP32C3_FLASH), on
                 // the SAME from_config bus — external devices and assertions

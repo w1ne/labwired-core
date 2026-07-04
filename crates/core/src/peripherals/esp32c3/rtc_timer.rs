@@ -113,6 +113,37 @@ impl Peripheral for Esp32c3RtcTimer {
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
     }
+
+    /// Capture the free-running RTC counter + latched readout + register
+    /// window. Boot-critical for a rom-boot resume: IDF RTC-deadline loops
+    /// (e.g. `calibrate_ocode`) exit on a ~10 ms RTC timeout, so the number of
+    /// calibration retries — and hence the exact boot-log lines — depends on
+    /// the counter value carrying across the snapshot.
+    fn runtime_snapshot(&self) -> Vec<u8> {
+        let snap = RtcTimerSnapshot {
+            regs: self.regs.clone(),
+            counter: self.counter.get(),
+            latched: self.latched.get(),
+        };
+        bincode::serialize(&snap).expect("bincode serialize Esp32c3RtcTimer")
+    }
+
+    fn restore_runtime_snapshot(&mut self, bytes: &[u8]) -> SimResult<()> {
+        let snap: RtcTimerSnapshot = bincode::deserialize(bytes).map_err(|e| {
+            crate::SimulationError::NotImplemented(format!("Esp32c3RtcTimer snapshot decode: {e}"))
+        })?;
+        self.regs = snap.regs;
+        self.counter.set(snap.counter);
+        self.latched.set(snap.latched);
+        Ok(())
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct RtcTimerSnapshot {
+    regs: Vec<u32>,
+    counter: u64,
+    latched: u64,
 }
 
 #[cfg(test)]

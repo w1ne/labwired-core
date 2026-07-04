@@ -861,7 +861,26 @@ impl<C: Cpu> Machine<C> {
             })
             .map(|entry| (entry.name.clone(), entry.dev.runtime_snapshot()))
             .collect();
-        runtime_snapshot::MachineRuntimeSnapshot::new(cpu_kind, cpu_data, peripherals)
+        let mut snap =
+            runtime_snapshot::MachineRuntimeSnapshot::new(cpu_kind, cpu_data, peripherals);
+        // RISC-V (ESP32-C3 rom-boot) keeps its live program state — `.data`,
+        // `.bss`, stacks — in the flat SRAM/IRAM linear windows (`bus.ram` +
+        // `bus.extra_mem`), NOT in RamPeripherals like the Xtensa configs. So a
+        // faithful resume must carry those windows. Xtensa/Arm snapshots leave
+        // `memories` empty: their RAM is peripheral-backed (already captured
+        // above) and their linear windows are firmware mirrors re-derived on
+        // load. Untouched (all-zero) extra_mem windows — e.g. the flash-mapped
+        // DROM mirror — are skipped so the blob stays compact.
+        if cpu_kind == runtime_snapshot::CpuKind::RiscV {
+            let mut memories = vec![(self.bus.ram.base_addr, self.bus.ram.data.clone())];
+            for mem in &self.bus.extra_mem {
+                if mem.data.iter().any(|&b| b != 0) {
+                    memories.push((mem.base_addr, mem.data.clone()));
+                }
+            }
+            snap.memories = memories;
+        }
+        snap
     }
 
     /// Restore from a previously-taken runtime snapshot. Bus topology
@@ -888,6 +907,30 @@ impl<C: Cpu> Machine<C> {
                     ))
                 })?;
             entry.dev.restore_runtime_snapshot(blob)?;
+        }
+        // Restore flat linear windows (RISC-V SRAM/IRAM; empty for other
+        // arches). Match each captured window to its live backing by base
+        // address and fail loudly on a topology/size mismatch — a resume must
+        // be applied on the same machine layout it was captured on.
+        for (base, bytes) in &snap.memories {
+            let target = if *base == self.bus.ram.base_addr {
+                Some(&mut self.bus.ram)
+            } else {
+                self.bus.extra_mem.iter_mut().find(|m| m.base_addr == *base)
+            };
+            let mem = target.ok_or_else(|| {
+                SimulationError::NotImplemented(format!(
+                    "apply_runtime_snapshot: no memory window @ {base:#010x} on bus"
+                ))
+            })?;
+            if mem.data.len() != bytes.len() {
+                return Err(SimulationError::NotImplemented(format!(
+                    "apply_runtime_snapshot: memory @ {base:#010x} size {} != snapshot {}",
+                    mem.data.len(),
+                    bytes.len()
+                )));
+            }
+            mem.data.copy_from_slice(bytes);
         }
         Ok(())
     }

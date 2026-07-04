@@ -614,6 +614,26 @@ struct TestArgs {
     #[arg(long)]
     run_manifest: bool,
 
+    /// Faithful rom-boot only: while running the REAL boot (mask ROM →
+    /// 2nd-stage bootloader → app), snapshot the machine the instant control
+    /// reaches the application and write a `.lwrs` resume snapshot here. The
+    /// run then continues to --max-steps as usual, so one cold invocation
+    /// yields BOTH the cached snapshot and the normal serial/cycle evidence.
+    /// App-entry is `call_start_cpu0`/`app_main` (resolved from the ELF), else
+    /// the first PC in the XIP app window [0x4200_0000, 0x4400_0000). The blob
+    /// is self-keyed with the chip + firmware SHA-256 (see --resume-snapshot).
+    #[arg(long)]
+    capture_app_entry: Option<PathBuf>,
+
+    /// Resume from a `.lwrs` snapshot instead of cold-booting: build a fresh
+    /// machine for the same chip, load the SAME firmware/flash, validate the
+    /// snapshot's self-key (chip + firmware SHA-256) against it, then apply it
+    /// and run to --max-steps. Skips the ~150M-step mask-ROM replay entirely.
+    /// On a self-key mismatch this errors out so the caller can fall back to a
+    /// cold boot. Requires the same LABWIRED_ESP32C3_FLASH as the capture.
+    #[arg(long)]
+    resume_snapshot: Option<PathBuf>,
+
     /// Explicitly opt out of sending LABWIRED_API_KEY even if it is set in the environment.
     /// Useful for local development and testing.
     #[arg(long)]
@@ -887,6 +907,30 @@ fn main() -> ExitCode {
         Some(Commands::Fuzz(args)) => commands::fuzz::run_fuzz(args),
         None => commands::run::run_interactive(cli),
     }
+}
+
+/// Resolve the rom-boot self-key — the chip name and the SHA-256 of the flash
+/// image the faithful boot runs — from whichever `LABWIRED_ESP32*_FLASH` env
+/// pin is set. This is the same firmware the resume snapshot must match; it is
+/// stamped into a captured `.lwrs` and re-validated on resume so a snapshot
+/// can never be applied on top of a different chip or firmware. Returns `None`
+/// (so capture/resume are no-ops that fall back to a cold boot) when no flash
+/// image is set — snapshot capture/resume only make sense on `--rom-boot`.
+fn rom_boot_flash_self_key() -> Option<(&'static str, [u8; 32])> {
+    use sha2::{Digest, Sha256};
+    let (chip, path) = if let Ok(p) = std::env::var("LABWIRED_ESP32C3_FLASH") {
+        ("esp32c3", p)
+    } else if let Ok(p) = std::env::var("LABWIRED_ESP32S3_FLASH") {
+        ("esp32s3", p)
+    } else {
+        return None;
+    };
+    let bytes = std::fs::read(&path).ok()?;
+    let mut hasher = Sha256::new();
+    hasher.update(&bytes);
+    let mut out = [0u8; 32];
+    out.copy_from_slice(&hasher.finalize());
+    Some((chip, out))
 }
 
 /// Build an ESP32-C3 ROM-boot machine; `efuse_mac` programs a distinct factory
@@ -1453,8 +1497,75 @@ fn execute_test_loop<C: labwired_core::Cpu>(
     // instead of certifying as passed. A regression (assertions stop passing)
     // resets it, so the pass must be durable.
     let mut assertions_first_passed_at: Option<u64> = None;
+
+    // ── --capture-app-entry: cache a genuine faithful-boot state ─────────
+    // While the REAL rom-boot runs, snapshot the machine the instant control
+    // first reaches the application, write the `.lwrs`, then keep running so
+    // this same cold invocation still emits the normal evidence. The capture
+    // point is a real mid-flight boot state — NOT a hand-modeled handoff.
+    struct AppEntryCapture {
+        path: PathBuf,
+        chip: &'static str,
+        fw_sha: [u8; 32],
+        // App-entry PC resolved from the ELF (`call_start_cpu0`, else
+        // `app_main`); `None` falls back to the XIP app-window detector.
+        target_pc: Option<u32>,
+    }
+    let mut app_entry_capture: Option<AppEntryCapture> =
+        args.capture_app_entry.as_ref().and_then(|path| {
+            let Some((chip, fw_sha)) = rom_boot_flash_self_key() else {
+                error!(
+                    "--capture-app-entry needs a faithful rom-boot (set LABWIRED_ESP32C3_FLASH \
+                     or LABWIRED_ESP32S3_FLASH); skipping capture"
+                );
+                return None;
+            };
+            let target_pc =
+                labwired_loader::resolve_symbol_in_elf(firmware_bytes, "call_start_cpu0")
+                    .or_else(|| labwired_loader::resolve_symbol_in_elf(firmware_bytes, "app_main"));
+            match target_pc {
+                Some(pc) => {
+                    info!("capture-app-entry: chip={chip} app-entry PC 0x{pc:08x} (ELF symbol)")
+                }
+                None => info!(
+                    "capture-app-entry: chip={chip} no call_start_cpu0/app_main symbol; \
+                     using first PC in XIP app window [0x42000000,0x44000000)"
+                ),
+            }
+            Some(AppEntryCapture {
+                path: path.clone(),
+                chip,
+                fw_sha,
+                target_pc,
+            })
+        });
+
     let mut step = 0;
     while step < max_steps {
+        // --capture-app-entry: detect the first instant execution reaches the
+        // application, snapshot the live machine, and write the resume blob.
+        if let Some(cap) = &app_entry_capture {
+            let pc = machine.cpu.get_pc();
+            let reached = cap.target_pc == Some(pc) || (0x4200_0000..0x4400_0000).contains(&pc);
+            if reached {
+                let mut snap = machine.take_runtime_snapshot();
+                snap.set_self_key(cap.chip, cap.fw_sha);
+                if let Some(parent) = cap.path.parent() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
+                match std::fs::write(&cap.path, snap.to_bytes()) {
+                    Ok(()) => info!(
+                        "capture-app-entry: snapshot written to {:?} at app-entry pc=0x{pc:08x} \
+                         (cold-boot step {step})",
+                        cap.path
+                    ),
+                    Err(e) => error!("capture-app-entry: failed to write {:?}: {e}", cap.path),
+                }
+                // Capture once; keep running so the cold invocation still
+                // produces the normal serial/cycle evidence.
+                app_entry_capture = None;
+            }
+        }
         // Fire any `after_cycles` stimulus whose threshold the run has reached.
         if !pending_stimuli.is_empty() {
             let cycles = metrics.get_cycles();

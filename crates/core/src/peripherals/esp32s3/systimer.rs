@@ -110,7 +110,7 @@ const CONF_TARGET0_WORK_EN: u32 = 1 << 24;
 const CONF_TARGET1_WORK_EN: u32 = 1 << 23;
 const CONF_TARGET2_WORK_EN: u32 = 1 << 22;
 
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy, serde::Serialize, serde::Deserialize)]
 struct UnitState {
     counter: u64,
     snapshot: u64,
@@ -123,7 +123,7 @@ struct UnitState {
 /// Pending vs. live separation models real-silicon double-buffering:
 /// firmware writes to TARGETx_HI/LO/period stage values that only commit
 /// to the active alarm on COMPx_LOAD bit-0 write.
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy, serde::Serialize, serde::Deserialize)]
 struct AlarmState {
     /// Live (committed) 64-bit comparison target. Alarm fires when the
     /// selected unit's counter >= this value.
@@ -153,7 +153,7 @@ struct AlarmState {
     unit_sel: bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Systimer {
     /// SYSTIMER_CONF (0x00). SVD reset = 0x46000000 (unit0 work_en; bit 31
     /// CLK_EN is 0 at reset — clock is gated; firmware writes CONF to
@@ -564,6 +564,22 @@ impl Peripheral for Systimer {
 
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
+    }
+
+    /// Capture the full 64-bit counter + comparator state. This is the source
+    /// behind `esp_timer` / `esp_log_timestamp`, so a rom-boot resume that did
+    /// not restore it would print different IDF log timestamps than the cold
+    /// boot — the counter must carry across the snapshot for byte-exact serial.
+    fn runtime_snapshot(&self) -> Vec<u8> {
+        bincode::serialize(self).expect("bincode serialize Systimer")
+    }
+
+    fn restore_runtime_snapshot(&mut self, bytes: &[u8]) -> SimResult<()> {
+        let restored: Systimer = bincode::deserialize(bytes).map_err(|e| {
+            crate::SimulationError::NotImplemented(format!("Systimer snapshot decode: {e}"))
+        })?;
+        *self = restored;
+        Ok(())
     }
 }
 

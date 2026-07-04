@@ -834,6 +834,58 @@ impl Cpu for RiscV {
         }
     }
 
+    fn runtime_snapshot(&self) -> (crate::runtime_snapshot::CpuKind, Vec<u8>) {
+        use crate::runtime_snapshot::RiscVRuntimeSnapshot;
+        let snap = RiscVRuntimeSnapshot {
+            x: self.x,
+            pc: self.pc,
+            mstatus: self.mstatus,
+            mie: self.mie,
+            mip: self.mip,
+            mtvec: self.mtvec,
+            mscratch: self.mscratch,
+            mepc: self.mepc,
+            mcause: self.mcause,
+            mtval: self.mtval,
+            mtime: self.mtime,
+            mtimecmp: self.mtimecmp,
+            reservation: self.reservation,
+        };
+        let bytes = bincode::serialize(&snap).expect("bincode serialize RiscVRuntimeSnapshot");
+        (crate::runtime_snapshot::CpuKind::RiscV, bytes)
+    }
+
+    fn apply_runtime_snapshot(
+        &mut self,
+        kind: crate::runtime_snapshot::CpuKind,
+        bytes: &[u8],
+    ) -> SimResult<()> {
+        use crate::runtime_snapshot::{CpuKind, RiscVRuntimeSnapshot};
+        if kind != CpuKind::RiscV {
+            return Err(crate::SimulationError::NotImplemented(format!(
+                "apply_runtime_snapshot: kind {kind:?} given to RiscV"
+            )));
+        }
+        let snap: RiscVRuntimeSnapshot = bincode::deserialize(bytes).map_err(|e| {
+            crate::SimulationError::NotImplemented(format!("RiscV snapshot decode: {e}"))
+        })?;
+        self.x = snap.x;
+        self.x[0] = 0; // x0 is hardwired to zero regardless of the blob.
+        self.pc = snap.pc;
+        self.mstatus = snap.mstatus;
+        self.mie = snap.mie;
+        self.mip = snap.mip;
+        self.mtvec = snap.mtvec;
+        self.mscratch = snap.mscratch;
+        self.mepc = snap.mepc;
+        self.mcause = snap.mcause;
+        self.mtval = snap.mtval;
+        self.mtime = snap.mtime;
+        self.mtimecmp = snap.mtimecmp;
+        self.reservation = snap.reservation;
+        Ok(())
+    }
+
     fn get_register_names(&self) -> Vec<String> {
         let mut names = Vec::new();
         for i in 0..32 {

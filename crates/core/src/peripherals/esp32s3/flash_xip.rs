@@ -273,6 +273,43 @@ impl Peripheral for Esp32s3MmuTable {
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)
     }
+
+    /// Capture the live MMU page table. This is boot-critical state on the
+    /// rom-boot resume path: the 2nd-stage bootloader programs the
+    /// virtual->flash page mapping here, and the XIP windows (0x4200_0000 /
+    /// 0x3C00_0000) translate through the same shared table. Without it a
+    /// resume would fetch from unmapped flash and decode garbage. The
+    /// registered `mmu_table` peripheral owns the `Arc`, so restoring it here
+    /// also fixes every FlashXip window that shares it.
+    fn runtime_snapshot(&self) -> Vec<u8> {
+        let table = self.table.lock().unwrap();
+        let mut out = Vec::with_capacity(table.len() * 4);
+        for &word in table.iter() {
+            out.extend_from_slice(&word.to_le_bytes());
+        }
+        out
+    }
+
+    fn restore_runtime_snapshot(&mut self, bytes: &[u8]) -> SimResult<()> {
+        if bytes.len() % 4 != 0 {
+            return Err(SimulationError::NotImplemented(format!(
+                "Esp32s3MmuTable snapshot must be a whole number of u32 words, got {} bytes",
+                bytes.len()
+            )));
+        }
+        let mut table = self.table.lock().unwrap();
+        let n = bytes.len() / 4;
+        if n != table.len() {
+            return Err(SimulationError::NotImplemented(format!(
+                "Esp32s3MmuTable snapshot has {n} entries, table has {}",
+                table.len()
+            )));
+        }
+        for (i, chunk) in bytes.chunks_exact(4).enumerate() {
+            table[i] = u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
