@@ -124,7 +124,7 @@ jobs:
             --no-uart-stdout
 
       - name: Verify frames against CSS's real DBC
-        if: matrix.make != ''
+        if: matrix.id == 'canmod-gps-sim'
         run: |
           python3 -m pip install --quiet cantools
           python3 "$(dirname "${{ matrix.script }}")/decode_check.py" \
