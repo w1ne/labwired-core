@@ -124,6 +124,7 @@ impl WasmSimulator {
         system_yaml: &str,
         chip_yaml: &str,
         firmware: &[u8],
+        blobs: JsValue,
     ) -> Result<WasmSimulator, JsValue> {
         let manifest: SystemManifest = serde_yaml::from_str(system_yaml)
             .map_err(|e| JsValue::from_str(&format!("System YAML error: {}", e)))?;
@@ -134,7 +135,8 @@ impl WasmSimulator {
             Arch::Arm | Arch::Unknown => Self::new_from_config_arm(&chip, &manifest, firmware),
             Arch::RiscV => Self::new_from_config_riscv(&chip, &manifest, firmware),
             Arch::Xtensa if chip.name.starts_with("esp32s3") => {
-                Self::new_from_config_xtensa_esp32s3(&manifest, firmware)
+                let blob_map = parse_named_blobs(&blobs);
+                Self::new_from_config_xtensa_esp32s3(&manifest, firmware, &blob_map)
             }
             Arch::Xtensa => Self::new_from_config_xtensa_esp32(&manifest, firmware),
         }
@@ -295,24 +297,42 @@ impl WasmSimulator {
     /// ESP32-S3 (Xtensa LX7) bus setup — the FAITHFUL fast-boot path.
     ///
     /// `configure_xtensa_esp32s3` installs IRAM/DRAM/RTC/flash-XIP plus the
-    /// real vendored boot ROM (zero thunks; the ROM `.data` init lands
+    /// real boot ROM (zero thunks; the ROM `.data` init lands
     /// `rom_cache_internal_table_ptr` so esp-hal's ROM cache calls run for
-    /// real). `fast_boot` then loads the app ELF's segments (identity XIP)
-    /// and synthesises post-bootloader CPU state. Serial output on the S3
-    /// esp-hal apps goes through USB_SERIAL_JTAG, so we route that peripheral's
-    /// sink into the same `uart_sink` the widget's Serial tab reads.
+    /// real). The ROM is NOT baked into the wasm bundle — it is fetched on
+    /// demand and passed in `blobs` under `esp32s3_irom`/`esp32s3_drom`, then
+    /// injected via `Esp32s3Opts.rom_images`. `fast_boot` then loads the app
+    /// ELF's segments (identity XIP) and synthesises post-bootloader CPU state.
+    /// Serial output on the S3 esp-hal apps goes through USB_SERIAL_JTAG, so we
+    /// route that peripheral's sink into the `uart_sink` the widget reads.
     fn new_from_config_xtensa_esp32s3(
         manifest: &SystemManifest,
         firmware: &[u8],
+        blobs: &std::collections::HashMap<String, Vec<u8>>,
     ) -> Result<WasmSimulator, JsValue> {
         use labwired_core::boot::esp32s3::{fast_boot, BootOpts};
+        use labwired_core::boot::esp32s3_rom::RomImages;
         use labwired_core::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag;
         use labwired_core::system::xtensa::{configure_xtensa_esp32s3, Esp32s3Opts};
 
+        // Inject the on-demand ROM blobs (None → configure falls back to the
+        // native provision chain, which is None on wasm → thunk harness).
+        let rom_images = match (blobs.get("esp32s3_irom"), blobs.get("esp32s3_drom")) {
+            (Some(irom), Some(drom)) => Some(RomImages {
+                irom: irom.clone(),
+                drom: drom.clone(),
+            }),
+            _ => None,
+        };
+
         let mut bus = SystemBus::new();
-        // Default opts → fast-boot identity XIP + faithful ROM (real_reset_boot
-        // is false; --rom-boot's MMU model is native-CLI only).
-        let wiring = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
+        // Default XIP model (fast-boot identity; --rom-boot's MMU model is
+        // native-CLI only) + the injected faithful ROM.
+        let opts = Esp32s3Opts {
+            rom_images,
+            ..Esp32s3Opts::default()
+        };
+        let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
         let mut cpu = wiring.cpu;
 
         // Route USB-serial-JTAG bytes into the widget's serial sink. esp-hal's
@@ -718,6 +738,33 @@ extern "C" {
 #[wasm_bindgen]
 pub fn clear_uart_wires() {
     labwired_core::network::virtual_uart_wire::clear_virtual_uart_wires();
+}
+
+/// Parse a JS `{ name: Uint8Array }` object into a `name → bytes` map. Values
+/// that aren't `Uint8Array` are skipped; `null`/`undefined` → empty map.
+///
+/// This is the generic on-demand binary-blob channel: a board fetches only the
+/// assets it needs (e.g. the ESP32-S3 boot ROM) and passes them through
+/// `new_from_config`, so no per-board blob is baked into the shared wasm bundle.
+fn parse_named_blobs(blobs: &JsValue) -> std::collections::HashMap<String, Vec<u8>> {
+    use wasm_bindgen::JsCast;
+    let mut map = std::collections::HashMap::new();
+    if blobs.is_undefined() || blobs.is_null() {
+        return map;
+    }
+    if let Ok(obj) = blobs.clone().dyn_into::<js_sys::Object>() {
+        for entry in js_sys::Object::entries(&obj).iter() {
+            if let Ok(pair) = entry.dyn_into::<js_sys::Array>() {
+                if let (Some(key), Ok(arr)) = (
+                    pair.get(0).as_string(),
+                    pair.get(1).dyn_into::<js_sys::Uint8Array>(),
+                ) {
+                    map.insert(key, arr.to_vec());
+                }
+            }
+        }
+    }
+    map
 }
 
 // WasmGdbEventLoop removed — see `gdb_process_packet` above for the rationale.

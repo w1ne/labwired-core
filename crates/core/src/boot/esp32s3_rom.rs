@@ -35,9 +35,19 @@ const DRAM_LO: u32 = 0x3FC8_8000;
 const DRAM_HI: u32 = 0x3FD0_0000;
 
 /// Flat ROM images ready to load as `RamPeripheral`s at their window bases.
+#[derive(Clone)]
 pub struct RomImages {
     pub irom: Vec<u8>,
     pub drom: Vec<u8>,
+}
+
+impl std::fmt::Debug for RomImages {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RomImages")
+            .field("irom_len", &self.irom.len())
+            .field("drom_len", &self.drom.len())
+            .finish()
+    }
 }
 
 /// The DRAM window the copy-table reconstruction targets — where the boot
@@ -316,11 +326,11 @@ pub fn provision_rom_images() -> Option<RomImages> {
 /// Espressif's published `esp32s3_rev0_rom.elf` by
 /// `scripts/make_esp32s3_rom_bins.py` — see `crates/core/roms/esp32s3/`.
 ///
-/// Shipped in wasm too (the +512 KiB is the price of a FAITHFUL S3 widget demo:
-/// the playground fast-boots esp-hal apps on the real ROM with zero thunks —
-/// see `system::xtensa::configure_xtensa_esp32s3` + the ROM `.data` init). On
-/// wasm `discover_rom_elf`/the cache path are inert (no fs), so this vendored
-/// blob is the only ROM source there.
+/// Native only — the 512 KiB is NOT baked into wasm bundles. The playground
+/// fetches the ROM as an on-demand asset and injects it via
+/// `Esp32s3Opts.rom_images` (see `configure_esp32s3_memmap`), so the shared
+/// wasm engine stays lean for every non-S3 board.
+#[cfg(not(target_arch = "wasm32"))]
 fn vendored_rom_images() -> Option<RomImages> {
     static VENDORED_IROM: &[u8] = include_bytes!("../../roms/esp32s3/esp32s3_rom.bin");
     static VENDORED_DROM: &[u8] = include_bytes!("../../roms/esp32s3/esp32s3_drom.bin");
@@ -330,6 +340,12 @@ fn vendored_rom_images() -> Option<RomImages> {
         irom: VENDORED_IROM.to_vec(),
         drom: VENDORED_DROM.to_vec(),
     })
+}
+
+/// On wasm the ROM is never baked in; it arrives via `Esp32s3Opts.rom_images`.
+#[cfg(target_arch = "wasm32")]
+fn vendored_rom_images() -> Option<RomImages> {
+    None
 }
 
 /// Cache directory for extracted ROM images (`$XDG_CACHE_HOME` or `~/.cache`).
