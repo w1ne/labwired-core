@@ -441,7 +441,11 @@ boards:
     doc: docs/boards/rp2040.md
     chip: configs/chips/rp2040.yaml
     tier: structural
-    note: "Behavioural models for clocks/resets (RESET_DONE/PLL-LOCK/XOSC-STABLE), the 64-bit free-running TIMER, SIO GPIO (drive/readback round-trip), PL022 SPI0 (loopback transfer), and DW_apb_i2c I2C0 (no-slave address-NACK abort), plus the PL011 UART0 console. Each is exercised by the tier-1 fixture (tests/fixtures/tier1/rp2040.elf) which reports clock/timer/gpio/spi/i2c PASS over UART. PIO0 is declared but has no test coverage. No silicon bench."
+    note: "Behavioural models for clocks/resets (RESET_DONE/PLL-LOCK/XOSC-STABLE), the 64-bit free-running TIMER, SIO GPIO (drive/readback round-trip) + hardware spinlocks (SPINLOCK0..31 try-lock/release), PL022 SPI0 (loopback transfer), DW_apb_i2c I2C0 (no-slave address-NACK abort), the XIP_SSI flash controller (boot2 QSPI bring-up: SSI shift engine + W25Q-style RDSR/WREN/WRSR responder, so the stage-2 bootloader and pico-sdk flash_enable_xip_via_boot2 complete), a TBMAN storage stub (running_on_fpga probe), and the PL011 UART0 console. Each is exercised by the tier-1 fixture (tests/fixtures/tier1/rp2040.elf) which reports clock/timer/gpio/spi/i2c PASS over UART. PIO0 is declared but has no test coverage. No silicon bench."
+    # 2026-07-04: added the XIP_SSI flash-controller model + SIO spinlocks +
+    # TBMAN stub to fix the boot2/XIP bus-read fault at 0x18000028. Structural
+    # tier (no silicon bench), so this is documentation, not a re-capture claim.
+    drift_ack: 2026-07-04
     models:
       - configs/chips/rp2040.yaml
       - crates/core/src/peripherals/rp2040

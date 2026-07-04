@@ -85,3 +85,23 @@ peripherals:
     type: "rp2040_sio"
     base_address: 0xD0000000
     size: "4KB"
+  # XIP_SSI: Synopsys DW_apb_ssi flash controller (datasheet §4.10). The
+  # second-stage bootloader (boot2) programs it to bring up the QSPI flash and
+  # switch to execute-in-place; the pico-sdk runtime re-runs a RAM copy of boot2
+  # (flash_enable_xip_via_boot2) during start-up. Behavioural model — a real SSI
+  # shift engine (DR0 clocks a frame each way, SR reports TFE/BUSY/RFNE) with a
+  # W25Q-style flash command responder so boot2's status polling and quad-enable
+  # sequence complete. The XIP window itself (0x10000000) is the directly-mapped
+  # flash image, so instruction fetch + .rodata execute-in-place transparently.
+  - id: "xip_ssi"
+    type: "rp2040_xip_ssi"
+    base_address: 0x18000000
+    size: "4KB"
+  # TBMAN (Test Bench Manager, datasheet §2.20). The pico-sdk runtime probes
+  # TBMAN.PLATFORM in running_on_fpga()/running_on_asic() during clock bring-up.
+  # Storage stub: PLATFORM reads 0, so the FPGA bit (bit 1) is clear and the
+  # runtime takes the ASIC path — the correct behaviour for the simulated part.
+  - id: "tbman"
+    type: "stub"
+    base_address: 0x4006c000
+    size: "4KB"
