@@ -2,8 +2,8 @@
  * f103-j1939-monitor — RX-only J1939 node on bxCAN, silicon-correct
  * normal-mode (NOT loopback) with an accept-all acceptance filter so both
  * standard and 29-bit extended frames reach FIFO0. Fed by the can-player
- * external device replaying a real CANsub capture (candump .log) over the
- * simulated bus; this firmware only listens and decodes.
+ * external device replaying a captured J1939 bus trace (candump .log) over
+ * the simulated bus; this firmware only listens and decodes.
  *
  * UART/CAN init lifted from examples/f103-uds-ecu/firmware/main.c (RCC
  * clock-gating idiom + normal-mode bxCAN bring-up); hex/decimal print
@@ -164,7 +164,7 @@ static bool can_poll(can_frame_t *f)
 /*
  * f103-j1939-monitor — RX-only J1939 node: reassembles BAM transport
  * sessions PER SOURCE ADDRESS and tabulates DM1 lamp status. Fed by the
- * can-player external device replaying a real CANsub capture. Signal
+ * can-player external device replaying a captured J1939 bus trace. Signal
  * layouts hand-decoded from public J1939-71 tables; no DBC involved.
  */
 

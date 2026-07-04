@@ -3,7 +3,7 @@ chip: "../../configs/chips/stm32f103.yaml"
 external_devices:
   # Playground variant: 2s inline slice (wasm has no filesystem).
   - type: "can-player"
-    id: "cansub-replay"
+    id: "capture-replay"
     connection: "bxcan1"
     config:
       ticks_per_second: 1000000

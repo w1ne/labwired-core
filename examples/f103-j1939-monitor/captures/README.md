@@ -1,12 +1,17 @@
 # Capture provenance
 
-`j1939-slice-8s.log` is an 8-second slice (candump format) of a J1939 sample
-capture provided by CSS Electronics (Martin Falch, 2026-07-01) from their
-CANsub webCAN CSV export, converted with `webcan2candump.py` from the
-cansub-replay-ci template. Shared by CSS Electronics for this integration
-work; public redistribution is pending their written confirmation (this PR
-stays draft until then).
+`synthetic-j1939-8s.log` is synthesized by `tools/gen_synthetic_j1939.py`. It
+is deterministic and regenerable, and contains no third-party data.
 
-The slice deliberately contains a concurrently interleaved pair of J1939 BAM
-broadcasts (Engine Configuration from SA 0x00 and Retarder Configuration from
-SA 0x0F) plus DM1 traffic from 9 source addresses.
+Regenerate it (byte-identical output) with:
+```
+python3 tools/gen_synthetic_j1939.py captures/synthetic-j1939-8s.log
+```
+
+The generated traffic (1785 frames over 8 s) contains:
+- engine-speed "noise" frames (PGN 0xF004 every 5 ms, PGN 0xFEF1 every 100 ms)
+- DM1 active-diagnostic-trouble-code broadcasts from 9 source addresses
+- 3 concurrent pairs of interleaved J1939 BAM (multi-packet transport
+  protocol) sessions: Engine Configuration (PGN 0xFEE3, SA 0x00) and Retarder
+  Configuration (PGN 0xFEE1, SA 0x0F), opening ~10 ms apart with their TP.DT
+  frames alternating before either session closes

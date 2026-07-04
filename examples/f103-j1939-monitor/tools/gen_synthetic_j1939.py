@@ -43,11 +43,6 @@ def tick_to_seconds(tick):
     return tick * TICK_S
 
 
-def fmt_id(can_id):
-    """Format a 29-bit extended CAN ID as 8 uppercase hex digits."""
-    return f"{can_id:08X}"
-
-
 def fmt_data(data_bytes):
     """Format a payload as uppercase hex pairs, no separators."""
     return "".join(f"{b:02X}" for b in data_bytes)
