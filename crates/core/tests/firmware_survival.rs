@@ -1702,8 +1702,7 @@ fn test_nucleo_l476rg_arduino_serial_survival() {
     // RCC model sets that flag when PLLSAI1ON (bit 26) is enabled.
     let case = case_by_name("nucleo_l476rg_arduino_serial");
     let firmware = fixtures().join(case.fixture);
-    let (pc, uart_bytes) =
-        run_cortex_m_firmware(case.chip, case.system, firmware, SURVIVAL_CYCLES);
+    let (pc, uart_bytes) = run_cortex_m_firmware(case.chip, case.system, firmware, SURVIVAL_CYCLES);
     assert_pc_in_range(pc, SURVIVAL_CYCLES, case.valid_pc_ranges);
     assert_uart_contains(&uart_bytes, case.expected_uart_output, case.name);
 }
