@@ -1050,4 +1050,79 @@ mod romboot_tests {
             "expected IDF 'Calling app_main()' banner; got:\n{out}"
         );
     }
+
+    /// Decisive proof the browser OLED lab paints: boot the curated
+    /// `esp32c3-oled-demo` IDF flash image FAITHFULLY through the real mask ROM
+    /// (the exact browser entry `new_from_config_riscv_romboot`), let the
+    /// firmware's register-level SSD1306 driver run, then read the panel's
+    /// GDDRAM back through the same `get_ssd1306_framebuffer` accessor the
+    /// playground/embed uses and assert a non-trivial number of pixels are lit.
+    ///
+    /// Zero thunks: every lit pixel is a byte the firmware pushed via a genuine
+    /// I²C transaction the simulated C3 command-list controller executed against
+    /// the attached SSD1306 model. No hardcoded PCs, no faked framebuffer.
+    ///
+    /// `#[ignore]` for the same reason as the app_main guard (~150M ROM steps);
+    /// run with:
+    ///   `cargo test -p labwired-wasm --release romboot_oled -- --ignored --nocapture`
+    #[test]
+    #[ignore = "boots the real C3 mask ROM then paints the OLED; run with --release --ignored"]
+    fn wasm_romboot_oled_paints() {
+        let manifest_dir = root();
+        let chip_yaml =
+            std::fs::read_to_string(manifest_dir.join("../../configs/chips/esp32c3.yaml"))
+                .expect("read esp32c3 chip yaml");
+        let system_yaml = std::fs::read_to_string(
+            manifest_dir.join("../../configs/systems/esp32c3-oled-demo.yaml"),
+        )
+        .expect("read esp32c3-oled-demo system yaml");
+        let chip: ChipDescriptor = serde_yaml::from_str(&chip_yaml).expect("parse chip yaml");
+        let manifest: SystemManifest =
+            serde_yaml::from_str(&system_yaml).expect("parse system yaml");
+
+        let irom = std::fs::read(manifest_dir.join("../core/roms/esp32c3/esp32c3_rom.bin"))
+            .expect("read vendored C3 IROM");
+        let drom = std::fs::read(manifest_dir.join("../core/roms/esp32c3/esp32c3_drom.bin"))
+            .expect("read vendored C3 DROM");
+        let flash =
+            std::fs::read(manifest_dir.join("tests/fixtures/esp32c3-oled-demo-flash.bin"))
+                .expect("read C3 OLED demo flash image");
+
+        let mut blobs: HashMap<String, Vec<u8>> = HashMap::new();
+        blobs.insert("esp32c3_irom".into(), irom);
+        blobs.insert("esp32c3_drom".into(), drom);
+        blobs.insert("esp32c3_flash".into(), flash);
+
+        let mut sim = WasmSimulator::new_from_config_riscv_romboot(&chip, &manifest, &blobs)
+            .expect("construct C3 rom-boot WasmSimulator");
+
+        // Step until the OLED framebuffer holds a non-trivial picture. The
+        // firmware paints once shortly after app_main; poll the same accessor
+        // the playground uses.
+        const BATCH: u32 = 1_000_000;
+        const MAX_STEPS: u64 = 300_000_000;
+        // "LabWired" + "OLED LAB C3" + frame + bar lights well over this many.
+        const MIN_LIT: usize = 400;
+        let mut steps: u64 = 0;
+        let mut lit = 0usize;
+        let mut painted = false;
+        while steps < MAX_STEPS {
+            sim.step(BATCH).expect("step");
+            steps += BATCH as u64;
+            if let Ok(fb) = sim.get_ssd1306_framebuffer("oled") {
+                lit = fb.iter().map(|b| b.count_ones() as usize).sum();
+                if lit >= MIN_LIT {
+                    painted = true;
+                    eprintln!("OLED painted: {lit} lit pixels at ~{steps} steps");
+                    break;
+                }
+            }
+        }
+        let out = String::from_utf8_lossy(&sim.uart_sink.lock().unwrap()).into_owned();
+        assert!(
+            painted,
+            "C3 OLED lab did not paint (>= {MIN_LIT} lit pixels) within {MAX_STEPS} steps; \
+             last count = {lit}.\n--- captured serial ---\n{out}"
+        );
+    }
 }
