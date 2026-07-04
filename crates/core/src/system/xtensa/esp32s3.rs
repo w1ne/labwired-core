@@ -33,6 +33,13 @@ pub struct Esp32s3Opts {
     /// ROM-image choice: a real ROM is still loaded for its function calls in
     /// both modes.
     pub real_reset_boot: bool,
+    /// Caller-injected boot ROM images. When `Some`, used directly instead of
+    /// `provision_rom_images()`. This is how wasm gets the faithful ROM: the
+    /// 512 KiB is NOT baked into the bundle (see
+    /// `esp32s3_rom::vendored_rom_images`, wasm → None) — the playground
+    /// fetches it as an on-demand asset and injects it here. `None` (default)
+    /// → the native provision chain (env pins / toolchain / vendored blob).
+    pub rom_images: Option<crate::boot::esp32s3_rom::RomImages>,
 }
 
 impl Default for Esp32s3Opts {
@@ -43,6 +50,7 @@ impl Default for Esp32s3Opts {
             flash_size: 4 * 1024 * 1024,
             cpu_clock_hz: 80_000_000,
             real_reset_boot: false,
+            rom_images: None,
         }
     }
 }
@@ -172,7 +180,12 @@ fn configure_esp32s3_memmap(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp32s3M
     // fast-booted app still calls the real ROM (see the ROM block below), it
     // just reaches its own `.rodata`/`.text` through identity XIP rather than a
     // table the skipped bootloader never wrote.
-    let rom_images = crate::boot::esp32s3_rom::provision_rom_images();
+    // Caller-injected ROM (wasm's on-demand asset) wins; else the native
+    // provision chain (env pins / toolchain / vendored blob — None on wasm).
+    let rom_images = opts
+        .rom_images
+        .clone()
+        .or_else(crate::boot::esp32s3_rom::provision_rom_images);
     let mmu_model = opts.real_reset_boot;
     // Shared flash backing for the proper-model path, loaded from the real
     // flash image so XIP reads (and the SPI-flash controller below) return real
