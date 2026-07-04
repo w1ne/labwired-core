@@ -174,6 +174,18 @@ fn validate_system(path: &PathBuf) -> ExitCode {
         result.record_check();
     }
 
+    for issue in system.validate_cosim_models() {
+        result.add_error(
+            "INVALID_COSIM_MODEL",
+            issue,
+            Some(
+                "Set a non-empty id, a positive step_ns, and a model path for fmi/external_process adapters"
+                    .to_string(),
+            ),
+            Some("cosim_models[]".to_string()),
+        );
+    }
+
     // 2. Load Referenced Chip
     // Resolving chip path relative to system file
     let chip_path_resolved = if let Some(parent) = path.parent() {

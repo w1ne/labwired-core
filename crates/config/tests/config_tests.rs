@@ -4,7 +4,7 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
-use labwired_config::ChipDescriptor;
+use labwired_config::{ChipDescriptor, CosimAdapter, SystemManifest};
 
 #[test]
 fn test_old_yaml_still_parses() {
@@ -52,4 +52,76 @@ peripherals:
     assert_eq!(desc.peripherals[0].id, "uart1");
     assert_eq!(desc.peripherals[0].size, Some("1KB".to_string()));
     assert_eq!(desc.peripherals[0].irq, Some(37));
+}
+
+#[test]
+fn system_manifest_parses_cosim_models() {
+    let yaml = r#"
+name: "plant-demo"
+chip: "chips/stm32f103.yaml"
+cosim_models:
+  - id: "plant_model"
+    adapter: "external_process"
+    model: "./models/plant.jsonl"
+    step_ns: 10000
+    inputs:
+      rem0_enable: "gpio.rem0"
+      rem1_enable: "gpio.rem1"
+    outputs:
+      v_out: "scope.channel_a"
+      i_out: "meter.output_current"
+    config:
+      protocol: "jsonl"
+external_devices: []
+"#;
+
+    let manifest: SystemManifest = serde_yaml::from_str(yaml).unwrap();
+
+    assert_eq!(manifest.cosim_models.len(), 1);
+    let model = &manifest.cosim_models[0];
+    assert_eq!(model.id, "plant_model");
+    assert_eq!(model.adapter, CosimAdapter::ExternalProcess);
+    assert_eq!(model.model.as_deref(), Some("./models/plant.jsonl"));
+    assert_eq!(model.step_ns, 10_000);
+    assert_eq!(model.inputs["rem0_enable"], "gpio.rem0");
+    assert_eq!(model.outputs["v_out"], "scope.channel_a");
+    assert_eq!(
+        model.config["protocol"],
+        serde_yaml::Value::String("jsonl".to_string())
+    );
+}
+
+#[test]
+fn system_manifest_rejects_incomplete_cosim_model() {
+    let yaml = r#"
+name: "bad-cosim"
+chip: "chips/stm32f103.yaml"
+cosim_models:
+  - id: ""
+    adapter: "fmi"
+    step_ns: 0
+external_devices: []
+"#;
+
+    let manifest: SystemManifest = serde_yaml::from_str(yaml).unwrap();
+    let issues = manifest.validate_cosim_models();
+
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.contains("cosim_models[0].id")),
+        "expected missing id validation issue, got {issues:?}"
+    );
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.contains("cosim_models[0].model")),
+        "expected missing model validation issue, got {issues:?}"
+    );
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.contains("cosim_models[0].step_ns")),
+        "expected invalid step validation issue, got {issues:?}"
+    );
 }

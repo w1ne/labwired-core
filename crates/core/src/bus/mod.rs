@@ -2574,6 +2574,7 @@ mod tests {
             serde_yaml::Value::Number(0x53.into()),
         );
         let manifest = SystemManifest {
+            cosim_models: Vec::new(),
             walk_deleted: false,
             schema_version: "1.0".to_string(),
             name: "adxl345-test".to_string(),
@@ -2643,6 +2644,7 @@ mod tests {
             serde_yaml::Value::Number(0x76.into()),
         );
         let manifest = SystemManifest {
+            cosim_models: Vec::new(),
             walk_deleted: false,
             schema_version: "1.0".to_string(),
             name: "esp32c3-bmp280-test".to_string(),
@@ -2750,6 +2752,7 @@ mod tests {
             serde_yaml::Value::Number(25.0.into()),
         );
         let manifest = SystemManifest {
+            cosim_models: Vec::new(),
             walk_deleted: false,
             schema_version: "1.0".to_string(),
             name: "esp32c3-mlx90640-test".to_string(),
@@ -3419,6 +3422,7 @@ peripherals:
             chip: "unused".to_string(),
             memory_overrides: std::collections::HashMap::new(),
             external_devices: Vec::new(),
+            cosim_models: Vec::new(),
             board_io: Vec::new(),
             debug_uart: None,
             peripherals: Vec::new(),
@@ -3550,6 +3554,7 @@ peripherals:
         config: std::collections::HashMap<String, serde_yaml::Value>,
     ) -> labwired_config::SystemManifest {
         labwired_config::SystemManifest {
+            cosim_models: Vec::new(),
             walk_deleted: false,
             schema_version: "1.0".to_string(),
             name: "adxl345-test".to_string(),
@@ -4963,6 +4968,7 @@ mod pin_map_tests {
             name: "pinmap-test".to_string(),
             chip: path.to_string_lossy().to_string(),
             external_devices: vec![],
+            cosim_models: Vec::new(),
             board_io: vec![],
             debug_uart: None,
             peripherals: vec![],
