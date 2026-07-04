@@ -111,8 +111,11 @@ static void test_tick_drains_rx_before_sending_next_frame(void** state)
     assert_int_equal(iolink_master_tick(&port, false), 1);
     assert_int_equal(iolink_master_get_state(&port), IOLINK_MASTER_STATE_OPERATE);
     assert_int_equal(g_send_calls, 3);
-    assert_int_equal(g_sent_len[2], 2U);
-    assert_int_equal(g_sent[2][0], IOLINK_MC_TRANSITION_COMMAND);
+    assert_int_equal(g_sent_len[2], 3U);
+    assert_int_equal(g_sent[2][0],
+                     iolink_master_encode_master_command(false, IOLINK_MASTER_MC_CHANNEL_PAGE,
+                                                         IOLINK_MASTER_DPP1_OFF_MASTER_COMMAND));
+    assert_int_equal(g_sent[2][1], IOLINK_CMD_DEVICE_OPERATE);
 }
 
 static void test_tick_applies_timeout_before_transmit(void** state)
@@ -170,8 +173,11 @@ static void test_tick_event_cycle_due_transmits_after_rx(void** state)
     assert_int_equal(iolink_master_tick_event(&port, IOLINK_MASTER_TICK_CYCLE_DUE), 1);
     assert_int_equal(iolink_master_get_state(&port), IOLINK_MASTER_STATE_OPERATE);
     assert_int_equal(g_send_calls, 3);
-    assert_int_equal(g_sent_len[2], 2U);
-    assert_int_equal(g_sent[2][0], IOLINK_MC_TRANSITION_COMMAND);
+    assert_int_equal(g_sent_len[2], 3U);
+    assert_int_equal(g_sent[2][0],
+                     iolink_master_encode_master_command(false, IOLINK_MASTER_MC_CHANNEL_PAGE,
+                                                         IOLINK_MASTER_DPP1_OFF_MASTER_COMMAND));
+    assert_int_equal(g_sent[2][1], IOLINK_CMD_DEVICE_OPERATE);
 }
 
 static void test_tick_event_response_timeout_applies_before_transmit(void** state)

@@ -101,7 +101,10 @@ static void test_public_api_drives_startup_and_latches_process_data(void** state
     queue_bytes(startup_resp, sizeof(startup_resp));
     assert_int_equal(iolink_master_tick(&port, false), 1);
     assert_int_equal(iolink_master_get_state(&port), IOLINK_MASTER_STATE_OPERATE);
-    assert_int_equal(g_sent[g_send_calls - 1][0], IOLINK_MC_TRANSITION_COMMAND);
+    /* Transition to OPERATE is the Type-0 DeviceOperate write (MC 0x20, OD 0x99). */
+    assert_int_equal(g_sent[g_send_calls - 1][0],
+                     iolink_master_encode_master_command(false, IOLINK_MASTER_MC_CHANNEL_PAGE, 0x00U));
+    assert_int_equal(g_sent[g_send_calls - 1][1], IOLINK_CMD_DEVICE_OPERATE);
 
     queue_bytes(operate_resp, sizeof(operate_resp));
     assert_int_equal(iolink_master_tick(&port, false), 1);

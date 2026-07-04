@@ -78,8 +78,26 @@ typedef enum
     IOLINK_MASTER_PARAM_ERR_REVISION = -2,
     IOLINK_MASTER_PARAM_ERR_CYCLE_TIME = -3,
     IOLINK_MASTER_PARAM_ERR_PD_SIZE = -4,
-    IOLINK_MASTER_PARAM_ERR_M_SEQUENCE = -5
+    IOLINK_MASTER_PARAM_ERR_M_SEQUENCE = -5,
+    IOLINK_MASTER_PARAM_ERR_VENDOR_ID = -6,
+    IOLINK_MASTER_PARAM_ERR_DEVICE_ID = -7
 } iolink_master_parameter_result_t;
+
+/*
+ * Device-identity inspection level, per the IO-Link port configuration model.
+ * NO_CHECK establishes communication without comparing the device identity.
+ * TYPE_COMP requires the connected device's VendorID and DeviceID to match the
+ * configured expected values (a type-compatible device). IDENTICAL additionally
+ * requires the device SerialNumber to match; the SerialNumber leg is not yet
+ * wired here (it lives in ISDU index 0x0015, not Direct Parameter Page 1), so
+ * IDENTICAL currently enforces the same VendorID/DeviceID check as TYPE_COMP.
+ */
+typedef enum
+{
+    IOLINK_MASTER_INSPECTION_NO_CHECK = 0,
+    IOLINK_MASTER_INSPECTION_TYPE_COMP = 1,
+    IOLINK_MASTER_INSPECTION_IDENTICAL = 2
+} iolink_master_inspection_level_t;
 
 typedef enum
 {
@@ -96,6 +114,41 @@ typedef enum
     IOLINK_MASTER_SIO_ERR_UNSUPPORTED_PHY = -3
 } iolink_master_sio_result_t;
 
+/*
+ * Master Command communication channel, per the IO-Link Master Command octet
+ * layout (`IOLINK_MC_COMM_CHANNEL_MASK`). The channel selects which logical
+ * page/diagnosis/ISDU register a Master Command addresses.
+ */
+typedef enum
+{
+    IOLINK_MASTER_MC_CHANNEL_PROCESS = 0U,
+    IOLINK_MASTER_MC_CHANNEL_PAGE = 1U,
+    IOLINK_MASTER_MC_CHANNEL_DIAGNOSIS = 2U,
+    IOLINK_MASTER_MC_CHANNEL_ISDU = 3U
+} iolink_master_mc_channel_t;
+
+/* Address of the MasterCommand transition register (operate transition = 0x0F). */
+#define IOLINK_MASTER_MC_TRANSITION_ADDR 0x0FU
+
+typedef struct
+{
+    uint8_t qualifier;
+    iolink_master_event_type_t type;
+    uint16_t code;
+} iolink_master_event_t;
+
+/*
+ * Optional event-dispatch callbacks. When set, they turn event handling from a
+ * poll-only model (read `diagnostics.event_pending` yourself) into a dispatch:
+ * `event_pending_handler` fires on the rising edge of the OD Event flag during a
+ * cyclic response, prompting the application to read event details;
+ * `event_handler` fires once per decoded event from
+ * `iolink_master_read_event_details`. Both may be NULL to keep poll-only
+ * behavior. `event_user` is passed through unchanged.
+ */
+typedef void (*iolink_master_event_pending_cb_t)(void* user);
+typedef void (*iolink_master_event_cb_t)(void* user, const iolink_master_event_t* event);
+
 typedef struct
 {
     iolink_master_port_mode_t port_mode;
@@ -106,7 +159,22 @@ typedef struct
     uint8_t pd_out_len;
     bool auto_baudrate;
     bool validate_device_info;
+    iolink_master_inspection_level_t inspection_level;
+    uint16_t expected_vendor_id;
+    uint32_t expected_device_id;
     uint8_t response_timeout_100us;
+    /*
+     * Number of extra wake-up requests to issue at the current baudrate before
+     * giving up (auto-baud: advancing to the next COM rate; fixed baud: erroring).
+     * 0 preserves the historical "one attempt then advance/error" behavior; real
+     * hardware bring-up should set this to a small count (the spec allows the
+     * master to retry the wake-up sequence) so a device that misses the first
+     * WURQ still links up.
+     */
+    uint8_t wake_retry_limit;
+    void* event_user;
+    iolink_master_event_pending_cb_t event_pending_handler;
+    iolink_master_event_cb_t event_handler;
     int (*set_mode_checked)(iolink_phy_mode_t mode);
     int (*set_baudrate_checked)(iolink_baudrate_t baudrate);
     int (*read_cq_line_checked)(void);
@@ -150,6 +218,7 @@ typedef struct
 {
     bool valid;
     uint8_t min_cycle_time;
+    uint16_t min_cycle_time_100us;
     uint8_t mseq_capability;
     bool isdu_supported;
     uint8_t operate_mseq_code;
@@ -163,22 +232,15 @@ typedef struct
     uint32_t device_id;
 } iolink_master_device_info_t;
 
-typedef struct
-{
-    uint8_t qualifier;
-    iolink_master_event_type_t type;
-    uint16_t code;
-} iolink_master_event_t;
-
 /*
  * Opaque storage budgets keep the public ABI caller-owned and heap-free while
  * giving embedded users a fixed RAM ceiling to audit. Port storage carries the
  * protocol buffers and service state; controller storage only tracks a port
  * array reference plus port count.
  */
-#define IOLINK_MASTER_PORT_STORAGE_BUDGET_SIZE 1216U
+#define IOLINK_MASTER_PORT_STORAGE_BUDGET_SIZE 1280U
 #define IOLINK_MASTER_CONTROLLER_STORAGE_BUDGET_SIZE 32U
-#define IOLINK_MASTER_PORT_STORAGE_SIZE 1216U
+#define IOLINK_MASTER_PORT_STORAGE_SIZE 1280U
 #define IOLINK_MASTER_CONTROLLER_STORAGE_SIZE 32U
 
 typedef union
@@ -195,7 +257,18 @@ typedef union
     uint8_t storage[IOLINK_MASTER_CONTROLLER_STORAGE_SIZE];
 } iolink_master_controller_t;
 
-/* Returns OK, INVALID_ARG, or a nonzero PHY init error forwarded from phy->init. */
+/*
+ * Initializes a port for communication.
+ *
+ * Lifetime contract: the config is copied into the port, but the PHY is
+ * retained BY POINTER (the port stores `phy`, not a copy). The
+ * `iolink_phy_api_t` must therefore outlive the port — pass a pointer to
+ * storage with at least the port's lifetime, never an automatic/stack
+ * temporary. (Passing a stack-local PHY compiles fine but dangles on the next
+ * tick.)
+ *
+ * Returns OK, INVALID_ARG, or a nonzero PHY init error forwarded from phy->init.
+ */
 int iolink_master_init(iolink_master_port_t* port,
                        const iolink_phy_api_t* phy,
                        const iolink_master_config_t* config);
@@ -243,6 +316,24 @@ int iolink_master_set_dq(iolink_master_port_t* port, bool level);
 int iolink_master_get_di(const iolink_master_port_t* port, bool* level);
 /* Returns OK or INVALID_ARG; switching to IO-Link restarts startup on the port. */
 int iolink_master_set_port_mode(iolink_master_port_t* port, iolink_master_port_mode_t mode);
+/*
+ * Decodes a MinCycleTime/MasterCycleTime octet (Direct Parameter Page 1 byte
+ * 0x02) into 100us units per the IO-Link time-base encoding: bits 7-6 select the
+ * time base (00 = 0.1ms, 01 = 0.4ms, 10 = 1.6ms) and bits 5-0 the multiplier.
+ * Base 00 maps octet value directly to 100us units; base 01 = 6.4ms + n*0.4ms;
+ * base 10 = 32.0ms + n*1.6ms. The reserved base 11 falls back to the raw octet.
+ */
+uint16_t iolink_master_decode_min_cycle_time_100us(uint8_t octet);
+/* Composes a Master Command octet from R/W direction, communication channel, and 5-bit address. */
+uint8_t iolink_master_encode_master_command(bool read,
+                                            iolink_master_mc_channel_t channel,
+                                            uint8_t address);
+/* Returns true when the Master Command octet is a read (R/W bit set). */
+bool iolink_master_mc_is_read(uint8_t mc);
+/* Returns the communication channel encoded in a Master Command octet. */
+iolink_master_mc_channel_t iolink_master_mc_channel(uint8_t mc);
+/* Returns the 5-bit address encoded in a Master Command octet. */
+uint8_t iolink_master_mc_address(uint8_t mc);
 /* Returns OK, INVALID_ARG, or PARAM_TOO_SHORT. */
 int iolink_master_parse_direct_parameter_page1(const uint8_t* page,
                                                uint8_t len,
@@ -329,7 +420,14 @@ int iolink_master_write_parameter_block(iolink_master_port_t* port,
                                         uint8_t subindex,
                                         const uint8_t* data,
                                         uint8_t len);
-/* Returns OK, INVALID_ARG, or the first per-port init error. */
+/*
+ * Initializes a multi-port controller by init-ing each port from the matching
+ * `phys[i]`/`configs[i]`. Same lifetime contract as iolink_master_init: every
+ * PHY is retained by pointer, so the `phys` array (and the PHYs it points to)
+ * must outlive the controller. The `ports` array must too.
+ *
+ * Returns OK, INVALID_ARG, or the first per-port init error.
+ */
 int iolink_master_controller_init(iolink_master_controller_t* controller,
                                   iolink_master_port_t* ports,
                                   uint8_t port_count,

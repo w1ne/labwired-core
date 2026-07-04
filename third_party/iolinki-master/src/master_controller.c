@@ -18,7 +18,7 @@ int iolink_master_controller_init(iolink_master_controller_t* controller,
         return IOLINK_MASTER_ERR_INVALID_ARG;
     }
 
-    memset(controller, 0, sizeof(*controller));
+    (void)memset(controller, 0, sizeof(*controller));
     state = iolink_master_controller_state(controller);
     state->ports = ports;
     state->port_count = port_count;

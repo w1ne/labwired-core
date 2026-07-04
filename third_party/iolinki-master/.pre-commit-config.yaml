@@ -1,0 +1,47 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+      - id: no-commit-to-branch
+        args: [--branch, master, --branch, main]
+
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v21.1.8
+    hooks:
+      - id: clang-format
+        types_or: [c, header]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.0
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
+
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.11.0.1
+    hooks:
+      - id: shellcheck
+
+  # detect-secrets is added once a `.secrets.baseline` is generated
+  # (`detect-secrets scan > .secrets.baseline`); see the device repo for the
+  # reference configuration.
+
+  - repo: local
+    hooks:
+      - id: unit-tests
+        name: Run Unit Tests
+        entry: bash -c 'if command -v cmake >/dev/null 2>&1; then cmake -B build_test -DCMAKE_BUILD_TYPE=Debug >/dev/null 2>&1 && cmake --build build_test -j$(nproc) >/dev/null 2>&1 && (cd build_test && ctest --output-on-failure); else echo "CMake not found, skipping tests"; fi'
+        language: system
+        pass_filenames: false
+        always_run: false
+        files: '\.(c|h)$'
+      - id: cppcheck
+        name: cppcheck
+        entry: tools/run-cppcheck.sh
+        language: script
+        types_or: [c, header]

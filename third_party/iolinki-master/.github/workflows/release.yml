@@ -1,0 +1,116 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout iolinki-master
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          path: iolinki-master
+
+      - name: Checkout iolinki device stack
+        uses: actions/checkout@v4
+        with:
+          repository: w1ne/iolinki
+          ref: develop
+          path: iolinki-device
+
+      - name: Set up build environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential libcmocka-dev lcov python3
+
+      - name: Extract version info
+        id: version
+        working-directory: iolinki-master
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          TAG=${GITHUB_REF#refs/tags/}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+          PREV_TAG=$(git describe --tags --abbrev=0 ${GITHUB_REF}^ 2>/dev/null || echo "")
+          if [ -z "$PREV_TAG" ]; then
+            PREV_TAG=$(git rev-list --max-parents=0 HEAD)
+          fi
+          echo "prev_tag=$PREV_TAG" >> $GITHUB_OUTPUT
+
+      - name: Build with Coverage
+        run: |
+          cmake -S iolinki-master -B iolinki-master/build \
+            -DCMAKE_BUILD_TYPE=Debug -DENABLE_COVERAGE=ON \
+            -DIOLINKI_DEVICE_DIR="$GITHUB_WORKSPACE/iolinki-device"
+          cmake --build iolinki-master/build
+
+      - name: Run Tests
+        working-directory: iolinki-master
+        run: |
+          cd build
+          ctest --output-on-failure | tee test_output.log
+
+          PASSED=$(grep -oE '[0-9]+% tests passed' test_output.log | grep -oE '[0-9]+' || echo "0")
+          TOTAL=$(grep -oE 'out of [0-9]+' test_output.log | awk '{print $3}' | head -n1 || echo "0")
+          COUNT_PASSED=$(echo "$TOTAL * $PASSED / 100" | bc)
+          echo "{\"total\": $TOTAL, \"passed\": $COUNT_PASSED}" > ../test_stats.json
+
+      - name: Generate Coverage Report
+        working-directory: iolinki-master
+        run: |
+          cd build
+          lcov --capture --directory . --output-file coverage.info --ignore-errors mismatch,gcov || true
+          lcov --remove coverage.info '/usr/*' '*/tests/*' '*/examples/*' '*/iolinki-device/*' \
+            --output-file coverage.filtered.info --ignore-errors unused || true
+          lcov --list coverage.filtered.info > ../coverage_summary.txt 2>/dev/null \
+            || echo "Coverage: N/A" > ../coverage_summary.txt
+          grep "lines\.\.\.\.\.\.:" ../coverage_summary.txt | awk '{print $2}' > ../coverage_percent.txt \
+            || echo "N/A" > ../coverage_percent.txt
+
+      - name: Generate Release Notes
+        working-directory: iolinki-master
+        run: |
+          python3 tools/generate_release_notes.py \
+            "${{ steps.version.outputs.version }}" \
+            "${{ steps.version.outputs.prev_tag }}" \
+            "test_stats.json" \
+            "coverage_percent.txt" > release_notes.md
+          cat release_notes.md
+
+      - name: Generate SBOMs
+        working-directory: iolinki-master
+        run: |
+          export SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)
+          python3 tools/test_generate_sbom.py
+          python3 tools/generate_sbom.py \
+            --version "${{ steps.version.outputs.version }}" \
+            --format cyclonedx \
+            --output "iolinki-master-${{ steps.version.outputs.version }}.cdx.json"
+          python3 tools/generate_sbom.py \
+            --version "${{ steps.version.outputs.version }}" \
+            --format spdx \
+            --output "iolinki-master-${{ steps.version.outputs.version }}.spdx.json"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: iolinki-master ${{ steps.version.outputs.version }}
+          body_path: iolinki-master/release_notes.md
+          draft: false
+          prerelease: false
+          files: |
+            iolinki-master/build/master_loopback_demo
+            iolinki-master/iolinki-master-${{ steps.version.outputs.version }}.cdx.json
+            iolinki-master/iolinki-master-${{ steps.version.outputs.version }}.spdx.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

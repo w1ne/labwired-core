@@ -6,6 +6,7 @@
 
 #include <cmocka.h>
 
+#include "iolinki/protocol.h"
 #include "../src/master_internal.h"
 
 static const uint8_t g_page1[] = {
@@ -83,6 +84,34 @@ static void test_parse_direct_parameter_page1_decodes_zero_and_small_bit_lengths
     assert_int_equal(iolink_master_parse_direct_parameter_page1(page, sizeof(page), &info), 0);
     assert_int_equal(info.pd_in_len, 1U);
     assert_int_equal(info.pd_out_len, 0U);
+}
+
+static void test_parse_direct_parameter_page1_decodes_pd_descriptor_per_table_b6(void** state)
+{
+    uint8_t page[16] = {0U};
+    iolink_master_device_info_t info;
+
+    (void)state;
+
+    /*
+     * ProcessData descriptor per Table B.6, isolating Length to bits 0-4 so the
+     * legal SIO bit (6) and sub-byte bit lengths decode correctly.
+     * ProcessDataIn (0x05): BYTE=1, SIO=1, Length=3 -> 4 octets.
+     * ProcessDataOut (0x06): BYTE=0, SIO=1, Length=4 bits -> 1 octet (round up).
+     */
+    page[0x05] = 0xC3U; /* 1_1_0_00011 */
+    page[0x06] = 0x44U; /* 0_1_0_00100 */
+    assert_int_equal(iolink_master_parse_direct_parameter_page1(page, sizeof(page), &info), 0);
+    assert_int_equal(info.pd_in_len, 4U);
+    assert_int_equal(info.pd_out_len, 1U);
+
+    /* SIO-only descriptor with no Process Data (bit 6 set, Length 0) -> 0 octets. */
+    page[0x05] = 0x40U;
+    /* A 12-bit (BYTE=0) descriptor rounds up to 2 octets. */
+    page[0x06] = 0x0CU;
+    assert_int_equal(iolink_master_parse_direct_parameter_page1(page, sizeof(page), &info), 0);
+    assert_int_equal(info.pd_in_len, 0U);
+    assert_int_equal(info.pd_out_len, 2U);
 }
 
 static void test_parse_direct_parameter_page1_rejects_invalid_args(void** state)
@@ -350,10 +379,198 @@ static void test_select_config_from_device_info_rejects_invalid_inputs(void** st
                      IOLINK_MASTER_PARAM_ERR_M_SEQUENCE);
 }
 
+static void test_validate_config_against_device_info_enforces_device_identity(void** state)
+{
+    iolink_master_device_info_t info;
+    iolink_master_config_t config = g_config;
+
+    (void)state;
+
+    assert_int_equal(iolink_master_parse_direct_parameter_page1(g_page1, sizeof(g_page1), &info),
+                     IOLINK_MASTER_STATUS_OK);
+
+    /* g_page1 advertises operate M-sequence code 5, so use the matching type to
+       get past the compatibility checks and reach the identity check. */
+    config.m_seq_type = IOLINK_MASTER_M_SEQ_TYPE_2_V;
+
+    /* NO_CHECK (the default) ignores a mismatched identity. */
+    config.expected_vendor_id = 0xBEEFU;
+    config.expected_device_id = 0x010203U;
+    assert_int_equal(iolink_master_validate_config_against_device_info(&info, &config),
+                     IOLINK_MASTER_STATUS_OK);
+
+    /* TYPE_COMP accepts the matching VendorID/DeviceID carried in g_page1. */
+    config.inspection_level = IOLINK_MASTER_INSPECTION_TYPE_COMP;
+    config.expected_vendor_id = 0x1234U;
+    config.expected_device_id = 0x56789AU;
+    assert_int_equal(iolink_master_validate_config_against_device_info(&info, &config),
+                     IOLINK_MASTER_STATUS_OK);
+
+    /* A wrong VendorID is rejected with a distinct code. */
+    config.expected_vendor_id = 0x1235U;
+    assert_int_equal(iolink_master_validate_config_against_device_info(&info, &config),
+                     IOLINK_MASTER_PARAM_ERR_VENDOR_ID);
+
+    /* A wrong DeviceID is rejected with a distinct code. */
+    config.expected_vendor_id = 0x1234U;
+    config.expected_device_id = 0x56789BU;
+    assert_int_equal(iolink_master_validate_config_against_device_info(&info, &config),
+                     IOLINK_MASTER_PARAM_ERR_DEVICE_ID);
+
+    /* IDENTICAL enforces the same VendorID/DeviceID match today. */
+    config.inspection_level = IOLINK_MASTER_INSPECTION_IDENTICAL;
+    config.expected_device_id = 0x56789AU;
+    assert_int_equal(iolink_master_validate_config_against_device_info(&info, &config),
+                     IOLINK_MASTER_STATUS_OK);
+    config.expected_vendor_id = 0x0000U;
+    assert_int_equal(iolink_master_validate_config_against_device_info(&info, &config),
+                     IOLINK_MASTER_PARAM_ERR_VENDOR_ID);
+}
+
+static void test_validate_device_info_enforces_configured_identity_on_port(void** state)
+{
+    iolink_master_config_t config = g_config;
+    iolink_master_port_t port;
+
+    (void)state;
+
+    config.m_seq_type = IOLINK_MASTER_M_SEQ_TYPE_2_V;
+    config.inspection_level = IOLINK_MASTER_INSPECTION_TYPE_COMP;
+    config.expected_vendor_id = 0x1234U;
+    config.expected_device_id = 0x56789AU;
+
+    assert_int_equal(iolink_master_init(&port, &g_phy, &config), 0);
+    assert_int_equal(iolink_master_apply_direct_parameter_page1(&port, g_page1, sizeof(g_page1)), 0);
+    assert_int_equal(iolink_master_validate_device_info(&port), IOLINK_MASTER_STATUS_OK);
+
+    config.expected_device_id = 0x000001U;
+    assert_int_equal(iolink_master_init(&port, &g_phy, &config), 0);
+    assert_int_equal(iolink_master_apply_direct_parameter_page1(&port, g_page1, sizeof(g_page1)), 0);
+    assert_int_equal(iolink_master_validate_device_info(&port), IOLINK_MASTER_PARAM_ERR_DEVICE_ID);
+}
+
+static void test_decode_min_cycle_time_octet_covers_all_time_bases(void** state)
+{
+    (void)state;
+
+    /* Base 00 (0.1 ms): the octet value is already the 100us count. */
+    assert_int_equal(iolink_master_decode_min_cycle_time_100us(0x00U), 0U);
+    assert_int_equal(iolink_master_decode_min_cycle_time_100us(0x0AU), 10U);
+    assert_int_equal(iolink_master_decode_min_cycle_time_100us(0x3FU), 63U);
+
+    /* Base 01 (0.4 ms, offset 6.4 ms): 64 + n*4 in 100us units. */
+    assert_int_equal(iolink_master_decode_min_cycle_time_100us(0x40U), 64U);
+    assert_int_equal(iolink_master_decode_min_cycle_time_100us(0x41U), 68U);
+    assert_int_equal(iolink_master_decode_min_cycle_time_100us(0x7FU), 316U);
+
+    /* Base 10 (1.6 ms, offset 32.0 ms): 320 + n*16 in 100us units. */
+    assert_int_equal(iolink_master_decode_min_cycle_time_100us(0x80U), 320U);
+    assert_int_equal(iolink_master_decode_min_cycle_time_100us(0x81U), 336U);
+    assert_int_equal(iolink_master_decode_min_cycle_time_100us(0xBFU), 1328U);
+
+    /* Reserved base 11 falls back to the raw octet rather than inventing timing. */
+    assert_int_equal(iolink_master_decode_min_cycle_time_100us(0xC5U), 0xC5U);
+}
+
+static void test_parse_direct_parameter_page1_decodes_cycle_time_time_base(void** state)
+{
+    uint8_t page[16];
+    iolink_master_device_info_t info;
+
+    (void)state;
+
+    memcpy(page, g_page1, sizeof(page));
+    page[0x02] = 0x41U; /* 0.4 ms base, multiplier 1 -> 6.8 ms. */
+
+    assert_int_equal(iolink_master_parse_direct_parameter_page1(page, sizeof(page), &info), 0);
+    assert_int_equal(info.min_cycle_time, 0x41U);
+    assert_int_equal(info.min_cycle_time_100us, 68U);
+}
+
+static void test_validate_config_compares_decoded_cycle_time(void** state)
+{
+    uint8_t page[16];
+    iolink_master_device_info_t info;
+    iolink_master_config_t config = g_config;
+
+    (void)state;
+
+    memcpy(page, g_page1, sizeof(page));
+    page[0x02] = 0x41U; /* device minimum 6.8 ms = 68 (100us). */
+    page[0x03] = 0x01U; /* ISDU supported, operate M-sequence code 0 (matches type 2_1). */
+
+    assert_int_equal(iolink_master_parse_direct_parameter_page1(page, sizeof(page), &info), 0);
+
+    /* 2.0 ms configured cycle is below the 6.8 ms device minimum: rejected. */
+    config.min_cycle_time = 20U;
+    assert_int_equal(iolink_master_validate_config_against_device_info(&info, &config),
+                     IOLINK_MASTER_PARAM_ERR_CYCLE_TIME);
+
+    /* One 100us tick short still fails; matching the decoded minimum passes. */
+    config.min_cycle_time = 67U;
+    assert_int_equal(iolink_master_validate_config_against_device_info(&info, &config),
+                     IOLINK_MASTER_PARAM_ERR_CYCLE_TIME);
+    config.min_cycle_time = 68U;
+    assert_int_equal(iolink_master_validate_config_against_device_info(&info, &config),
+                     IOLINK_MASTER_STATUS_OK);
+}
+
+static void test_select_config_adopts_decoded_cycle_time_and_clamps(void** state)
+{
+    uint8_t page[16];
+    iolink_master_device_info_t info;
+    iolink_master_config_t config = {
+        .port_mode = IOLINK_MASTER_PORT_MODE_IOLINK,
+        .baudrate = IOLINK_BAUDRATE_COM3,
+    };
+
+    (void)state;
+
+    memcpy(page, g_page1, sizeof(page));
+    page[0x02] = 0x41U; /* decoded 68 (100us). */
+    assert_int_equal(iolink_master_parse_direct_parameter_page1(page, sizeof(page), &info), 0);
+    assert_int_equal(iolink_master_select_config_from_device_info(&info, &config),
+                     IOLINK_MASTER_STATUS_OK);
+    assert_int_equal(config.min_cycle_time, 68U);
+
+    /* A device minimum above 25.5 ms clamps to the uint8 config ceiling. */
+    page[0x02] = 0xBFU; /* decoded 1328 (100us) > 255. */
+    assert_int_equal(iolink_master_parse_direct_parameter_page1(page, sizeof(page), &info), 0);
+    assert_int_equal(iolink_master_select_config_from_device_info(&info, &config),
+                     IOLINK_MASTER_STATUS_OK);
+    assert_int_equal(config.min_cycle_time, 0xFFU);
+}
+
+static void test_master_command_encode_decode_round_trips(void** state)
+{
+    uint8_t mc;
+
+    (void)state;
+
+    mc = iolink_master_encode_master_command(true, IOLINK_MASTER_MC_CHANNEL_ISDU, 0x12U);
+    assert_int_equal(mc, (uint8_t)(IOLINK_MC_RW_MASK | IOLINK_MC_COMM_CHANNEL_MASK | 0x12U));
+    assert_true(iolink_master_mc_is_read(mc));
+    assert_int_equal(iolink_master_mc_channel(mc), IOLINK_MASTER_MC_CHANNEL_ISDU);
+    assert_int_equal(iolink_master_mc_address(mc), 0x12U);
+
+    /* The operate-transition command composes from parts to the legacy 0x0F octet. */
+    assert_int_equal(iolink_master_encode_master_command(false,
+                                                         IOLINK_MASTER_MC_CHANNEL_PROCESS,
+                                                         IOLINK_MASTER_MC_TRANSITION_ADDR),
+                     IOLINK_MC_TRANSITION_COMMAND);
+
+    /* Address masks to 5 bits and a write clears the R/W bit. */
+    mc = iolink_master_encode_master_command(false, IOLINK_MASTER_MC_CHANNEL_PAGE, 0xFFU);
+    assert_false(iolink_master_mc_is_read(mc));
+    assert_int_equal(iolink_master_mc_channel(mc), IOLINK_MASTER_MC_CHANNEL_PAGE);
+    assert_int_equal(iolink_master_mc_address(mc), 0x1FU);
+}
+
 int main(void)
 {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test(test_parse_direct_parameter_page1_decodes_standard_fields),
+        cmocka_unit_test(test_parse_direct_parameter_page1_decodes_pd_descriptor_per_table_b6),
         cmocka_unit_test(test_parse_direct_parameter_page1_decodes_zero_and_small_bit_lengths),
         cmocka_unit_test(test_parse_direct_parameter_page1_rejects_invalid_args),
         cmocka_unit_test(test_apply_direct_parameter_page1_latches_info_on_port),
@@ -365,7 +582,14 @@ int main(void)
         cmocka_unit_test(test_select_config_from_device_info_maps_fixed_type2_profiles),
         cmocka_unit_test(test_select_config_from_device_info_maps_all_public_mseq_profiles),
         cmocka_unit_test(test_validate_config_against_device_info_rejects_incompatible_request),
+        cmocka_unit_test(test_validate_config_against_device_info_enforces_device_identity),
+        cmocka_unit_test(test_validate_device_info_enforces_configured_identity_on_port),
         cmocka_unit_test(test_select_config_from_device_info_rejects_invalid_inputs),
+        cmocka_unit_test(test_decode_min_cycle_time_octet_covers_all_time_bases),
+        cmocka_unit_test(test_parse_direct_parameter_page1_decodes_cycle_time_time_base),
+        cmocka_unit_test(test_validate_config_compares_decoded_cycle_time),
+        cmocka_unit_test(test_select_config_adopts_decoded_cycle_time_and_clamps),
+        cmocka_unit_test(test_master_command_encode_decode_round_trips),
     };
 
     return cmocka_run_group_tests(tests, NULL, NULL);
