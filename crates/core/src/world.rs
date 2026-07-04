@@ -285,7 +285,7 @@ fn build_egress(
                 .to_string();
             Box::new(MqttPublisher::lazy(host, port, topic))
         }
-        "http" => Box::new(HttpPoster::new(url, 0)?),
+        "http" => Box::new(HttpPoster::new(url)?),
         other => anyhow::bail!("egress: unknown transport '{other}'"),
     };
     let policy = BufferPolicy {

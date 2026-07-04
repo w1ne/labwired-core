@@ -12,7 +12,9 @@ firmware TX  →  UART push_tx  →  EgressTap  →  EgressBus  →  worker thre
 
 The sim core only *enqueues*; a worker thread owns the socket. A slow or dead
 endpoint back-pressures into a bounded drop-oldest buffer and **never stalls the
-simulation**, so runs stay deterministic and replayable.
+simulation**, so the *simulation run* stays deterministic and replayable. (What
+reaches the wire is not itself replayable — a slow endpoint drops items, and the
+bus logs a warning with the running drop count rather than losing data silently.)
 
 ## The manifest
 
@@ -37,7 +39,7 @@ interconnects:
 | Transport | `url` | Notes |
 |-----------|-------|-------|
 | `tcp`  | `"127.0.0.1:9000"` | raw bytes to any TCP listener (virtual serial gateway) |
-| `mqtt` | `"mqtt://broker:1883"` | MQTT 3.1.1 QoS 0 PUBLISH to `topic` |
+| `mqtt` | `"mqtt://broker:1883"` | MQTT 3.1.1 QoS 0 PUBLISH to `topic`; unauthenticated, no TLS/keep-alive — point at a broker you control. Prefer `ndjson-trace` (one framed message per reading) over `raw` |
 | `http` | `"http://host:8080/ingest"` | HTTP/1.1 POST per flush |
 
 Encodings: `raw` (bytes verbatim), `ndjson-trace` (one JSON line per byte/frame),
