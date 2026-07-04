@@ -1,13 +1,21 @@
 // LabWired - Firmware Simulation Platform
 // SPDX-License-Identifier: MIT
 
-//! Nordic nRF52 UARTE (UART with EasyDMA).
+//! Nordic nRF52 UARTE (UART with EasyDMA) — and the legacy UART it superseded.
 //!
-//! Source: nRF52840 PS rev 1.7 §6.33 (UARTE). Models the full register
-//! surface including PSEL, BAUDRATE, CONFIG and DMA pointer/maxcnt/amount
-//! registers used by zephyr/nrfx drivers. Dynamic operation (actual byte
-//! transfer, DMA) is not modelled — firmware that programs the peripheral
-//! and reads config registers back will see its writes round-trip.
+//! Source: nRF52840 PS rev 1.7 §6.33 (UARTE) and §6.34 (UART). Both instances
+//! share one MMIO window on silicon (UART0/UARTE0 at 0x4000_2000): a firmware
+//! selects the personality with ENABLE (4 = legacy UART, 8 = UARTE). Their
+//! register maps overlap except for the data path — legacy UART has single-byte
+//! RXD (0x518) / TXD (0x51C) shift registers, whereas UARTE uses EasyDMA
+//! pointer/maxcnt/amount blocks. This one model serves both so an image built
+//! against either driver boots.
+//!
+//! Models the full register surface including PSEL, BAUDRATE, CONFIG and the DMA
+//! pointer/maxcnt/amount registers used by zephyr/nrfx drivers, plus the legacy
+//! single-byte TXD path used by the Adafruit/Arduino nRF52 core. Dynamic RX is
+//! not modelled — firmware that programs the peripheral and reads config
+//! registers back will see its writes round-trip.
 //!
 //! EVENTS: hardware-generated. SW write-1 is ignored; write-0 clears.
 
@@ -44,8 +52,17 @@ const OFF_INTENCLR: u64 = 0x308;
 // Error source (write-1-clear)
 const OFF_ERRORSRC: u64 = 0x480;
 
-// Enable
+// Enable — 4 selects the legacy UART personality, 8 selects UARTE (EasyDMA).
 const OFF_ENABLE: u64 = 0x500;
+const ENABLE_UART_LEGACY: u32 = 4;
+#[cfg(test)]
+const ENABLE_UARTE: u32 = 8;
+
+// Legacy UART single-byte data registers (PS §6.34.13). Present only in the
+// legacy personality; UARTE reuses this address range for EasyDMA and never
+// touches these two words.
+const OFF_RXD_LEGACY: u64 = 0x518;
+const OFF_TXD_LEGACY: u64 = 0x51C;
 
 // PSEL block (0x508..0x518): RTS, TXD, CTS, RXD — reset value = 0xFFFF_FFFF (disconnected)
 const OFF_PSEL_RTS: u64 = 0x508;
@@ -210,6 +227,9 @@ impl Peripheral for Nrf52Uarte {
             OFF_TXD_AMOUNT => self.txd_amount & 0xFFFF,
             // CONFIG: bits [4:0]
             OFF_CONFIG => self.config & 0x1F,
+            // Legacy UART data: TXD is write-only (reads 0), RXD has no modelled
+            // receiver so it reads 0 (no byte pending).
+            OFF_TXD_LEGACY | OFF_RXD_LEGACY => 0,
             _ => self.extra.get(&offset).copied().unwrap_or(0),
         })
     }
@@ -218,8 +238,11 @@ impl Peripheral for Nrf52Uarte {
         match offset {
             // STARTTX arms an EasyDMA TX; the actual buffer read + emit happens
             // in `tick_with_bus` (write_u32 has no bus handle). A 1-byte
-            // poll_out and a multi-byte buffered write both land here.
-            OFF_TASKS_STARTTX => self.tx_pending = true,
+            // poll_out and a multi-byte buffered write both land here. Only the
+            // UARTE personality uses EasyDMA — in legacy UART mode STARTTX just
+            // enables the transmitter and bytes flow through the TXD register.
+            OFF_TASKS_STARTTX if self.enable != ENABLE_UART_LEGACY => self.tx_pending = true,
+            OFF_TASKS_STARTTX => {}
             // STOPTX completes immediately in this model: raise TXSTOPPED so a
             // driver waiting on it (nrfx is_tx_ready) makes progress.
             OFF_TASKS_STOPTX => self.events_txstopped = 1,
@@ -245,6 +268,23 @@ impl Peripheral for Nrf52Uarte {
             OFF_ERRORSRC => self.errorsrc &= !value,
             // Enable
             OFF_ENABLE => self.enable = value & 0xF,
+            // Legacy UART TXD (PS §6.34): writing a byte transmits it through the
+            // shift register and, once the shifter is free for the next byte,
+            // raises EVENTS_TXDRDY. The Adafruit/Arduino nRF52 Uart::write does
+            // `TXD = byte; while (EVENTS_TXDRDY == 0); EVENTS_TXDRDY = 0`, so the
+            // byte must land in the sink and TXDRDY must go high or it spins
+            // forever.
+            // FIDELITY: modeled, NOT HW-validated (2026-07-04) — legacy UART
+            // TXD (0x51C) → EVENTS_TXDRDY (0x11C). nRF52840 PS rev 1.7 §6.34.
+            // Transfer is instantaneous (byte out, TXDRDY immediately); real
+            // silicon raises TXDRDY only after the stop bit at the configured
+            // baud, and TX must have been armed by TASKS_STARTTX.
+            OFF_TXD_LEGACY => {
+                self.emit_byte(value as u8);
+                self.events_txdrdy = 1;
+            }
+            // RXD is a read-only receive register; writes are ignored.
+            OFF_RXD_LEGACY => {}
             // PSEL
             OFF_PSEL_RTS => self.psel_rts = value,
             OFF_PSEL_TXD => self.psel_txd = value,
@@ -349,6 +389,48 @@ mod tests {
         assert_eq!(u.read_u32(OFF_EVENTS_TXSTARTED).unwrap(), 1);
         assert_eq!(u.read_u32(OFF_EVENTS_TXSTOPPED).unwrap(), 1);
         assert!(!u.needs_bus_tick(), "transfer consumes the pending flag");
+    }
+
+    #[test]
+    fn legacy_uart_txd_emits_byte_and_raises_txdrdy() {
+        let mut u = Nrf52Uarte::new();
+        let sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        u.set_sink(Some(sink.clone()), false);
+
+        // Legacy personality: ENABLE = 4.
+        u.write_u32(OFF_ENABLE, ENABLE_UART_LEGACY).unwrap();
+        // TXDRDY starts clear; the write must set it (matching the poll loop).
+        assert_eq!(u.read_u32(OFF_EVENTS_TXDRDY).unwrap(), 0);
+        u.write_u32(OFF_TXD_LEGACY, b'A' as u32).unwrap();
+        assert_eq!(&*sink.lock().unwrap(), b"A", "TXD byte reached the sink");
+        assert_eq!(u.read_u32(OFF_EVENTS_TXDRDY).unwrap(), 1, "TXDRDY raised");
+        assert_eq!(u.read_u32(OFF_TXD_LEGACY).unwrap(), 0, "TXD reads as 0");
+
+        // Driver clears TXDRDY (write-0) before the next byte.
+        u.write_u32(OFF_EVENTS_TXDRDY, 0).unwrap();
+        assert_eq!(u.read_u32(OFF_EVENTS_TXDRDY).unwrap(), 0);
+        u.write_u32(OFF_TXD_LEGACY, b'B' as u32).unwrap();
+        assert_eq!(&*sink.lock().unwrap(), b"AB");
+        assert_eq!(u.read_u32(OFF_EVENTS_TXDRDY).unwrap(), 1);
+    }
+
+    #[test]
+    fn legacy_starttx_does_not_arm_easydma() {
+        let mut u = Nrf52Uarte::new();
+        u.write_u32(OFF_ENABLE, ENABLE_UART_LEGACY).unwrap();
+        u.write_u32(OFF_TASKS_STARTTX, 1).unwrap();
+        assert!(
+            !u.needs_bus_tick(),
+            "legacy mode STARTTX must not trigger an EasyDMA transfer"
+        );
+    }
+
+    #[test]
+    fn uarte_starttx_still_arms_easydma() {
+        let mut u = Nrf52Uarte::new();
+        u.write_u32(OFF_ENABLE, ENABLE_UARTE).unwrap();
+        u.write_u32(OFF_TASKS_STARTTX, 1).unwrap();
+        assert!(u.needs_bus_tick(), "UARTE mode STARTTX arms EasyDMA");
     }
 
     #[test]

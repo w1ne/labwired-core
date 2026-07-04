@@ -72,7 +72,15 @@ boards:
     # read was NOT live-diffed on silicon this session (no BME280 wired to the
     # bench board — only the NACK/no-device path was captured 2026-06-30); a live
     # success-path TWIM+RTC re-capture is tracked.
-    drift_ack: 2026-06-30
+    # 2026-07-04: modeled the legacy UART personality of UART0/UARTE0 — a byte
+    # written to TXD (0x51C) is transmitted and EVENTS_TXDRDY (0x11C) is raised on
+    # the same access, and TASKS_STARTTX no longer arms EasyDMA when ENABLE selects
+    # legacy UART (=4). Unblocks the Adafruit/Arduino nRF52 core's blocking
+    # Uart::write. Additive register behaviour on a path the 2026-06-17 sweep did
+    # not cover (it exercised UARTE EasyDMA, not the legacy TXD shifter); the reset
+    # sweep (conformance/mmio/GPIO/POWER/SPIS/TWIS/RTC/TIMER) is unaffected. No live
+    # SWD re-capture of the legacy-UART TX sequence this session (no bench board).
+    drift_ack: 2026-07-04
     models:
       - crates/core/src/peripherals/nrf52
       - configs/chips/nrf52840.yaml
@@ -96,7 +104,9 @@ boards:
     # 2026-06-30: rides the nRF52840 TWIM/RTC/Cortex-M temporal+clock-domain fixes
     # (Zephyr BME280 ztest now passes in-sim); same silicon. See the nrf52840
     # drift_ack note — success-path live re-capture tracked there.
-    drift_ack: 2026-06-30
+    # 2026-07-04: rides the nrf52840 legacy-UART (UART0/UARTE0) TXD/TXDRDY model;
+    # same silicon. Additive, no live re-capture. See the nrf52840 drift_ack note.
+    drift_ack: 2026-07-04
     models:
       - crates/core/src/peripherals/nrf52
       - configs/chips/nrf52840.yaml
