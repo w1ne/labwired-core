@@ -690,6 +690,21 @@ TICK 3\r\n\
 DONE\r\n",
     },
     SurvivalCase {
+        // Plain Arduino sketch (Serial.begin + Serial.println) built by the
+        // STM32 Arduino core for nucleo_l476rg. Its SystemClock_Config brings up
+        // PLLSAI1 for the 48 MHz clock domain and spins on RCC_CR.PLLSAI1RDY
+        // (bit 27) before the first print — exercises the L4 RCC SAI-PLL ready
+        // path (RM0351 §6.4.1). Prints the banner below to USART2 (PA2/PA3).
+        name: "nucleo_l476rg_arduino_serial",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        chip: "stm32l476",
+        system: "nucleo-l476rg",
+        fixture: "nucleo-l476rg-arduino-serial.elf",
+        valid_pc_ranges: &[(0x0800_0000, 0x080F_FFFF), (0x2000_0000, 0x2001_FFFF)],
+        expected_uart_output: b"verdict=GOOD stm32",
+    },
+    SurvivalCase {
         // TIM1 advanced-control bring-up ("round 10"). Programs the
         // canonical centre-aligned PWM init sequence on TIM1 channel 1:
         //   PSC=79, ARR=999  -> 1 kHz @ 80 MHz
@@ -1677,6 +1692,19 @@ fn test_nucleo_l476rg_cubemx_hal_survival() {
     let (pc, uart_bytes) =
         run_cortex_m_firmware(case.chip, case.system, firmware, SURVIVAL_CYCLES * 4);
     assert_pc_in_range(pc, SURVIVAL_CYCLES * 4, case.valid_pc_ranges);
+    assert_uart_contains(&uart_bytes, case.expected_uart_output, case.name);
+}
+
+#[test]
+fn test_nucleo_l476rg_arduino_serial_survival() {
+    // Regression for the STM32L4 PLLSAI1RDY boot hang: a plain Arduino sketch
+    // hangs in SystemClock_Config polling RCC_CR.PLLSAI1RDY (bit 27) unless the
+    // RCC model sets that flag when PLLSAI1ON (bit 26) is enabled.
+    let case = case_by_name("nucleo_l476rg_arduino_serial");
+    let firmware = fixtures().join(case.fixture);
+    let (pc, uart_bytes) =
+        run_cortex_m_firmware(case.chip, case.system, firmware, SURVIVAL_CYCLES);
+    assert_pc_in_range(pc, SURVIVAL_CYCLES, case.valid_pc_ranges);
     assert_uart_contains(&uart_bytes, case.expected_uart_output, case.name);
 }
 

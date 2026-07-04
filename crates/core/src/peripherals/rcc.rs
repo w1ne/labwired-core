@@ -673,8 +673,9 @@ impl L4Rcc {
         s
     }
     /// L4 CR ready rule: MSI bit0→bit1; HSI16 bit8→bit10; HSE bit16→bit17 gated
-    /// by HSEBYP(bit18); PLL bit24→bit25 gated by the PLLCFGR.PLLSRC clock being
-    /// ready. (Zephyr's LL_RCC_HSI_IsReady polls HSIRDY at bit10.)
+    /// by HSEBYP(bit18); PLL bit24→bit25, PLLSAI1 bit26→bit27, PLLSAI2 bit28→bit29
+    /// all gated by the PLLCFGR.PLLSRC clock being ready. (Zephyr's
+    /// LL_RCC_HSI_IsReady polls HSIRDY at bit10; STM32 HAL polls PLLSAI1RDY.)
     fn ready(&self, mut cr: u32) -> u32 {
         if cr & (1 << 0) != 0 {
             cr |= 1 << 1;
@@ -703,6 +704,25 @@ impl L4Rcc {
             cr |= 1 << 25;
         } else {
             cr &= !(1 << 25);
+        }
+        // FIDELITY: modeled, NOT HW-validated (2026-07-04) — RCC_CR.PLLSAI1RDY
+        // (bit27) follows PLLSAI1ON (bit26); RCC_CR.PLLSAI2RDY (bit29) follows
+        // PLLSAI2ON (bit28). RM0351 §6.4.1 (RCC_CR): each PLLSAIxON enable sets
+        // its RDY flag once the PLL locks. The SAI PLLs share the main PLL input
+        // clock (RCC_PLLCFGR.PLLSRC bits[1:0]), so they can only lock when that
+        // source is ready — gate on src_ready exactly like the main PLL above.
+        // STM32 HAL's RCCEx_PLLSAI1_Config spins on PLLSAI1RDY after setting
+        // PLLSAI1ON (Arduino STM32 core enables PLLSAI1 for the 48 MHz domain);
+        // without this the poll never exits and boot hangs before first print.
+        if cr & (1 << 26) != 0 && src_ready {
+            cr |= 1 << 27;
+        } else {
+            cr &= !(1 << 27);
+        }
+        if cr & (1 << 28) != 0 && src_ready {
+            cr |= 1 << 29;
+        } else {
+            cr &= !(1 << 29);
         }
         cr
     }
@@ -1276,6 +1296,35 @@ mod tests {
             .unwrap();
         rcc.write_u32(0x04, 0b10).unwrap();
         assert_eq!((rcc.read_u32(0x04).unwrap() >> 2) & 0b11, 0b10, "SWS=PLL");
+    }
+
+    #[test]
+    fn test_rcc_l4_sai_pll_ready_flags_follow_enable_bits() {
+        // RM0351 §6.4.1: PLLSAI1ON (bit26)→PLLSAI1RDY (bit27) and PLLSAI2ON
+        // (bit28)→PLLSAI2RDY (bit29), gated on the shared PLL input source.
+        let mut rcc = Rcc::new_with_layout(RccRegisterLayout::Stm32L4);
+        // At reset PLLCFGR.PLLSRC=0 (no clock): enabling PLLSAI1 must NOT lock.
+        rcc.write_u32(0x00, rcc.read_u32(0x00).unwrap() | (1 << 26))
+            .unwrap();
+        assert_eq!(
+            rcc.read_u32(0x00).unwrap() & (1 << 27),
+            0,
+            "PLLSAI1RDY stays clear while PLL source is not ready"
+        );
+        // Select MSI (PLLSRC=01) as the PLL input — MSI is ready at reset.
+        rcc.write_u32(0x0C, 0x1).unwrap();
+        rcc.write_u32(0x00, rcc.read_u32(0x00).unwrap() | (1 << 26) | (1 << 28))
+            .unwrap();
+        let cr = rcc.read_u32(0x00).unwrap();
+        assert_ne!(cr & (1 << 27), 0, "PLLSAI1RDY set once source ready");
+        assert_ne!(cr & (1 << 29), 0, "PLLSAI2RDY set once source ready");
+        // Clearing the enable clears the ready flag.
+        rcc.write_u32(0x00, cr & !(1 << 26)).unwrap();
+        assert_eq!(
+            rcc.read_u32(0x00).unwrap() & (1 << 27),
+            0,
+            "PLLSAI1RDY clears with PLLSAI1ON=0"
+        );
     }
 
     #[test]

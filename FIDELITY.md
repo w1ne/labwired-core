@@ -172,6 +172,19 @@ watchdogs, low-power timers, SysTick with an external reference, UART/SPI
 baud divisors. A driver that derives a timeout from such a counter will mis-fire
 if the model runs the counter at core speed.
 
+## Modeled-but-not-HW-validated register behaviour (pending silicon validation)
+
+Faithful register models added to unblock real firmware, where the *behaviour*
+(a ready flag follows its enable bit) is per the reference manual but the
+**timing** (instant lock vs. silicon's lock/stabilisation delay) and the exact
+gating have **not yet been checked against real hardware**. Each is a candidate
+for the temporal-fidelity treatment above if an interrupt-driven driver ever
+depends on the lock latency.
+
+| Chip | Register.bit | Silicon (RM) | What we model | Status |
+| --- | --- | --- | --- | --- |
+| STM32L476 | `RCC_CR.PLLSAI1RDY` (bit 27) ← `PLLSAI1ON` (bit 26); `RCC_CR.PLLSAI2RDY` (bit 29) ← `PLLSAI2ON` (bit 28) | RM0351 §6.4.1: setting `PLLSAIxON` starts the SAI PLL; hardware sets `PLLSAIxRDY` once it locks (µs-scale delay). The SAI PLLs share the main PLL input clock (`RCC_PLLCFGR.PLLSRC[1:0]`). | `L4Rcc::ready()` (`crates/core/src/peripherals/rcc.rs`) sets `PLLSAIxRDY` the same access the firmware enables `PLLSAIxON`, gated on the shared PLL source being ready — same pattern as the existing main-PLL `PLLRDY` rule. Lock is instantaneous (no delay modeled). | Modeled 2026-07-04, **pending HW validation**. Unblocks the STM32 Arduino core, whose `SystemClock_Config` brings up PLLSAI1 for the 48 MHz domain and spins on `PLLSAI1RDY` before the first `Serial.println` (regression: `test_nucleo_l476rg_arduino_serial_survival`). |
+
 ## Marker convention
 
 Every cheat in the code carries a grep-able marker on the line or block:
