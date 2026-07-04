@@ -78,6 +78,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "rp2040_timer",
     "rp2040_spi",
     "rp2040_i2c",
+    "rp2040_xip_ssi",
     // ESP32-C3 behavioral models (esp32 factory).
     "esp32c3_i2c",
     "esp32c3_spi",
@@ -307,6 +308,7 @@ pub fn try_build(
         "rp2040_sio" => Box::new(crate::peripherals::rp2040::sio::Rp2040Sio::new()),
         "rp2040_spi" => Box::new(crate::peripherals::rp2040::spi::Rp2040Spi::new()),
         "rp2040_i2c" => Box::new(crate::peripherals::rp2040::i2c::Rp2040I2c::new()),
+        "rp2040_xip_ssi" => Box::new(crate::peripherals::rp2040::xip_ssi::Rp2040XipSsi::new()),
         "crc" => {
             // IDR scratch register width: 8-bit on F0/F1/L0, 32-bit
             // on F2+/L4+. YAML: `config: { idr_width: 8 }`; default 32.
