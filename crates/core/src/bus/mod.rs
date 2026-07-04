@@ -1979,6 +1979,13 @@ impl SystemBus {
             // matters there), so `set_sink` only wires the capture buffer.
             if let Some(uart) = any.downcast_mut::<Esp32s3Uart>() {
                 uart.set_sink(Some(sink.clone()));
+                continue;
+            }
+            // RP2040 USB CDC: an Arduino Mbed-OS sketch's default `Serial` is
+            // USB CDC, so the console text arrives on the USB bulk-IN endpoint,
+            // not UART0. Route it into the same capture sink.
+            if let Some(usb) = any.downcast_mut::<crate::peripherals::rp2040::usb::Rp2040Usb>() {
+                usb.set_sink(Some(sink.clone()));
             }
         }
     }

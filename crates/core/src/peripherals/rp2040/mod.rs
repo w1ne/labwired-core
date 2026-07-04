@@ -12,4 +12,5 @@ pub mod i2c;
 pub mod sio;
 pub mod spi;
 pub mod timer;
+pub mod usb;
 pub mod xip_ssi;
