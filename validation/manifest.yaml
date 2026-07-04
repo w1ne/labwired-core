@@ -219,7 +219,13 @@ boards:
     # (register/field/artifact read accessors for the MachineInspect interface). Pure
     # read-only introspection; no register, timing, state, or reset-value change. This
     # ack covers the model-file touch; no live re-capture warranted.
-    drift_ack: 2026-07-04
+    # 2026-07-05: added runtime-snapshot serialization to esp32c3/rtc_timer.rs +
+    # cpu/riscv.rs (take/apply_runtime_snapshot for the app-entry boot cache). Pure
+    # (de)serialization of existing counter/register state, invoked only on
+    # snapshot/resume — normal-run register/timing/reset behaviour is byte-for-byte
+    # unchanged; the reset-state silicon anchor is unaffected. Covers the model-file
+    # touch; no live re-capture warranted.
+    drift_ack: 2026-07-05
 
   - id: nucleo-l476rg
     doc: docs/boards/nucleo-l476rg.md
@@ -420,7 +426,13 @@ boards:
     # Corroborated: the tier1 esp32s3 prebuilt-image rom-boot still passes all
     # self-tests (loads app from 0x10000). No live SWD re-capture this session
     # (no S3 board attached; a real C3 was used to dump the C3 mask ROM).
-    drift_ack: 2026-06-26
+    # 2026-07-05: added runtime-snapshot serialization to esp32s3/flash_xip.rs
+    # (Esp32s3MmuTable) + esp32s3/systimer.rs + the Xtensa CPU snapshot path, for the
+    # app-entry boot cache. Pure (de)serialization of existing MMU/counter/register
+    # state, invoked only on snapshot/resume — normal-run behaviour and the 9-reg
+    # reset-state silicon anchor are byte-for-byte unaffected. Covers the model-file
+    # touch; no live re-capture warranted.
+    drift_ack: 2026-07-05
     models:
       - crates/core/src/peripherals/esp32s3
       - crates/core/src/peripherals/esp_xtensa_common
