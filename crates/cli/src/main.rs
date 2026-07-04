@@ -637,6 +637,12 @@ struct TestResult {
     pub cpu_state: Option<labwired_core::snapshot::CpuSnapshot>,
     firmware_hash: String,
     config: TestConfig,
+    /// Universal inspect block: final-state decoded register + artifact
+    /// metadata for every peripheral (summary mode — framebuffer bytes omitted,
+    /// hashed via `meta.generation`). Absent on config-error runs that never
+    /// built a machine.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    inspect: Option<labwired_core::inspect::MachineInspect>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -1307,6 +1313,7 @@ fn handle_load_error<C: labwired_core::Cpu>(
         &None,
         &None,
         &[],
+        None,
     );
     ExitCode::from(EXIT_RUNTIME_ERROR)
 }
@@ -1806,6 +1813,18 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         error!("require_fault_fired: {n} fault(s) did not fire; run is invalid");
     }
 
+    // Final-state universal inspect block (summary mode: decoded registers +
+    // artifact metadata, framebuffer bytes omitted/hashed). This is the
+    // agent-facing oracle payload — after a run the caller sees the decoded
+    // final register state and which artifacts exist.
+    let inspect_block = machine.inspect(
+        None,
+        &labwired_core::inspect::InspectOpts {
+            include_bytes: false,
+            peripheral: None,
+        },
+    );
+
     write_outputs(
         args,
         status,
@@ -1824,6 +1843,7 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         &trace_observer,
         &coverage_observer,
         &fault_evidence,
+        Some(inspect_block),
     );
 
     if !all_passed
@@ -1857,6 +1877,7 @@ fn write_outputs<C: labwired_core::Cpu>(
     trace_observer: &Option<Arc<labwired_core::trace::TraceObserver>>,
     coverage_observer: &Option<Arc<labwired_core::pc_coverage::PcCoverageObserver>>,
     fault_evidence: &[labwired_cli::faults::FaultEvidence],
+    inspect: Option<labwired_core::inspect::MachineInspect>,
 ) {
     let mut hasher = Sha256::new();
     hasher.update(firmware_bytes);
@@ -1881,6 +1902,7 @@ fn write_outputs<C: labwired_core::Cpu>(
             system: system_path.cloned(),
             script: args.script.clone(),
         },
+        inspect,
     };
 
     if let Some(output_dir) = &args.output_dir {
@@ -2200,6 +2222,7 @@ pub(crate) fn write_config_error_outputs(
             system: system_path.cloned(),
             script: args.script.clone(),
         },
+        inspect: None,
     };
 
     if let Some(output_dir) = &args.output_dir {
