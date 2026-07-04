@@ -418,6 +418,45 @@ impl Peripheral for Esp32c3I2c {
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
     }
+
+    /// Custom inspection: generic register decode plus a `framebuffer` artifact
+    /// for any attached SSD1306 OLED. Same pattern as the generic `I2c`
+    /// controller — the C3 command-list controller walks its own slaves so the
+    /// leo air-quality OLED surfaces through the universal inspect interface.
+    fn inspect(
+        &self,
+        base: u64,
+        name: &str,
+        opts: &crate::inspect::InspectOpts,
+    ) -> crate::inspect::PeripheralInspect {
+        let mut pi = crate::inspect::default_inspect(self, base, name, opts);
+        pi.kind = "i2c".to_string();
+        for dev in self.attached_slaves() {
+            let addr = dev.address();
+            if let Some(oled) = dev
+                .as_any()
+                .and_then(|a| a.downcast_ref::<crate::peripherals::components::Ssd1306>())
+            {
+                let fb = oled.framebuffer();
+                pi.artifacts.push(crate::inspect::Artifact {
+                    kind: "framebuffer".to_string(),
+                    id: format!("i2c@0x{:02x}", addr),
+                    meta: serde_json::json!({
+                        "w": oled.width(),
+                        "h": oled.height(),
+                        "format": "ssd1306_page",
+                        "generation": crate::inspect::artifact_generation(fb),
+                    }),
+                    bytes: if opts.include_bytes {
+                        Some(fb.to_vec())
+                    } else {
+                        None
+                    },
+                });
+            }
+        }
+        pi
+    }
 }
 
 impl Esp32c3I2c {

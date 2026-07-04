@@ -77,6 +77,16 @@ impl Ssd1306 {
         &self.gddram
     }
 
+    /// Panel width in pixels (128).
+    pub fn width(&self) -> usize {
+        WIDTH
+    }
+
+    /// Panel height in pixels (64 — `PAGES` × 8 rows/page).
+    pub fn height(&self) -> usize {
+        PAGES * 8
+    }
+
     pub fn display_on(&self) -> bool {
         self.display_on
     }

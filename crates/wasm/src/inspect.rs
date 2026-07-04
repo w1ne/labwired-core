@@ -722,6 +722,37 @@ impl WasmSimulator {
         serde_wasm_bindgen::to_value(&list).unwrap_or(JsValue::NULL)
     }
 
+    /// Universal inspect: decoded register + artifact state for one peripheral
+    /// (`name = Some`) or all (`name = None`). Serializes a
+    /// [`labwired_core::inspect::MachineInspect`]. In summary mode
+    /// (`include_bytes = false`) large artifact payloads (framebuffers) are
+    /// omitted; each artifact still carries `meta.generation` so the UI can skip
+    /// re-pulling unchanged buffers. Snapshot semantics — reads the current
+    /// paused machine state, side-effect-free.
+    #[wasm_bindgen]
+    pub fn inspect(&self, name: Option<String>, include_bytes: bool) -> JsValue {
+        let machine = self.machine.as_ref().unwrap();
+        let opts = labwired_core::inspect::InspectOpts {
+            include_bytes,
+            peripheral: None,
+        };
+        let mi = machine.inspect(name.as_deref(), &opts);
+        serde_wasm_bindgen::to_value(&mi).unwrap_or(JsValue::NULL)
+    }
+
+    /// Raw escape hatch: read `len` bytes at absolute `addr`, side-effect-free.
+    /// Bytes outside any mapped region read back as `0` here (the honest
+    /// mapped/unmapped markers live on the core [`labwired_core::Machine::peek`]
+    /// / the `inspect` payload; this raw byte view is the fast path).
+    #[wasm_bindgen]
+    pub fn peek(&self, addr: u32, len: u32) -> Box<[u8]> {
+        let machine = self.machine.as_ref().unwrap();
+        machine
+            .peek(addr as u64, len as usize)
+            .to_lossy_bytes()
+            .into_boxed_slice()
+    }
+
     /// Read the IO-Link master peer's live state: `{ link_state, pd_valid,
     /// input_byte }`. Returns `null` if no master is wired.
     #[wasm_bindgen]
