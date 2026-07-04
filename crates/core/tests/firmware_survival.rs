@@ -192,6 +192,22 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"Hello World! rpi_pico",
     },
     SurvivalCase {
+        // Plain Arduino sketch built with the Arduino Mbed-OS RP2040 core (board
+        // `pico`). Exercises the boot2 / XIP bring-up: the pico-sdk runtime keeps
+        // a RAM copy of the stage-2 bootloader (flash_enable_xip_via_boot2) and
+        // re-runs it to configure XIP_SSI (0x18000000) + the QSPI flash before
+        // execute-in-place from the 0x10000000 window. Without the XIP_SSI model
+        // this faulted on the first SSI status poll at 0x18000028.
+        name: "rp2040_arduino_serial",
+        core: "cortex-m0+",
+        family: CpuFamily::CortexM,
+        chip: "rp2040",
+        system: "rp2040-pico",
+        fixture: "rp2040-arduino-serial.elf",
+        valid_pc_ranges: &[(0x1000_0000, 0x101F_FFFF), (0x2000_0000, 0x2004_1FFF)],
+        expected_uart_output: b"verdict=GOOD rp2040",
+    },
+    SurvivalCase {
         name: "nrf52840_demo",
         core: "cortex-m4",
         family: CpuFamily::CortexM,
@@ -1183,6 +1199,29 @@ fn test_rp2040_demo_survival() {
 #[test]
 fn test_rp2040_zephyr_hello_survival() {
     run_survival_case(case_by_name("rp2040_zephyr_hello"));
+}
+
+/// Arduino Mbed-OS RP2040 serial sketch.
+///
+/// The boot2 / XIP bus-read fault at `0x18000028` this PR targets is FIXED: with
+/// the `XIP_SSI` model (+ SIO spinlocks + TBMAN) the image now boots through the
+/// full pico-sdk low-level init and the RTX kernel start (~400k instructions),
+/// versus faulting within the first few hundred.
+///
+/// It is `#[ignore]`d because it does not yet reach the `verdict=GOOD rp2040`
+/// UART token: the Arduino Mbed core needs the RTX kernel tick (the SysTimer) to
+/// pre-initialise the mbed us_ticker during kernel start. LabWired does not yet
+/// drive the RP2040 kernel tick (the chip config stubs SysTick — see the
+/// `systick` note in `configs/chips/rp2040.yaml`), so the first `mbed::Timer`
+/// reset defers ticker init into a `CriticalSectionLock`, where the C-runtime
+/// malloc lock (`__rtos_malloc_lock` → `osMutexAcquire`) is rejected with
+/// `osErrorISR` because `PRIMASK` is set — mbed then traps. This is an RTOS
+/// kernel-tick gap, independent of the boot2/XIP path fixed here. Un-ignore once
+/// the RP2040 kernel tick lands.
+#[test]
+#[ignore]
+fn test_rp2040_arduino_serial_survival() {
+    run_survival_case(case_by_name("rp2040_arduino_serial"));
 }
 
 #[test]
