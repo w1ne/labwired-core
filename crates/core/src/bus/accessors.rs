@@ -9,6 +9,41 @@ use super::*;
 use crate::{SimResult, SimulationError};
 use std::sync::atomic::Ordering;
 
+impl SystemBus {
+    /// Side-effect-free byte read used by the universal inspect `peek`.
+    ///
+    /// Mirrors `read_u8`'s routing (RAM, flash, extra windows, flash boot
+    /// alias, then peripherals) but reads peripherals via
+    /// [`crate::Peripheral::peek`] so read-to-clear registers are never
+    /// perturbed. Returns `None` for any address that no memory region or
+    /// peripheral window covers — the caller renders that as an explicit
+    /// unmapped marker rather than a silent zero.
+    pub fn peek_byte(&self, addr: u64) -> Option<u8> {
+        if let Some(val) = self.ram.read_u8(addr) {
+            return Some(val);
+        }
+        if let Some(val) = self.flash.read_u8(addr) {
+            return Some(val);
+        }
+        for mem in &self.extra_mem {
+            if let Some(val) = mem.read_u8(addr) {
+                return Some(val);
+            }
+        }
+        // Cortex-M boot alias: 0x0 mirrors flash start on many STM32 parts.
+        if self.flash.base_addr != 0 && addr < self.flash.data.len() as u64 {
+            if let Some(val) = self.flash.read_u8(self.flash.base_addr + addr) {
+                return Some(val);
+            }
+        }
+        if let Some(idx) = self.find_peripheral_index(addr) {
+            let p = &self.peripherals[idx];
+            return p.dev.peek(addr - p.base);
+        }
+        None
+    }
+}
+
 impl crate::Bus for SystemBus {
     fn read_u8(&self, addr: u64) -> SimResult<u8> {
         // RAM is always first (hot path, never overlaps a peripheral window).

@@ -1932,6 +1932,7 @@ impl SystemBus {
     pub fn attach_uart_tx_sink(&mut self, sink: Arc<Mutex<Vec<u8>>>, echo_stdout: bool) {
         use crate::peripherals::components::IolinkMaster;
         use crate::peripherals::esp32::uart::Esp32Uart;
+        use crate::peripherals::esp32s3::uart::Esp32s3Uart;
         use crate::peripherals::nrf52::uarte::Nrf52Uarte;
         for p in &mut self.peripherals {
             let Some(any) = p.dev.as_any_mut() else {
@@ -1967,6 +1968,17 @@ impl SystemBus {
             // nRF52 UARTE console (EasyDMA): captured/echoed the same way.
             if let Some(uarte) = any.downcast_mut::<Nrf52Uarte>() {
                 uarte.set_sink(Some(sink.clone()), echo_stdout);
+                continue;
+            }
+            // ESP32-S3 UART0 — the faithful ROM-boot console. The real mask ROM
+            // and 2nd-stage bootloader print their banner/progress here, and
+            // esp-hal's default `esp_println` targets UART0 too. Without this the
+            // faithful S3 boot produces no captured serial (uart.log stays empty).
+            // Its `echo_stdout` is fixed at construction (uart0 defaults to true;
+            // the run service passes --no-uart-stdout, but only the CAPTURE sink
+            // matters there), so `set_sink` only wires the capture buffer.
+            if let Some(uart) = any.downcast_mut::<Esp32s3Uart>() {
+                uart.set_sink(Some(sink.clone()));
             }
         }
     }

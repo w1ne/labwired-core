@@ -71,3 +71,118 @@ fn test_machine_run_cycles() {
     assert_eq!(reason, StopReason::MaxStepsReached);
     assert_eq!(machine.total_cycles, 150);
 }
+
+/// A peripheral that reports a fixed byte from the side-effect-free `peek`.
+#[derive(Debug)]
+struct PeekTag(u8);
+impl crate::Peripheral for PeekTag {
+    fn read(&self, _offset: u64) -> SimResult<u8> {
+        Ok(self.0)
+    }
+    fn write(&mut self, _offset: u64, _value: u8) -> SimResult<()> {
+        Ok(())
+    }
+    fn peek(&self, _offset: u64) -> Option<u8> {
+        Some(self.0)
+    }
+}
+
+/// `Machine::peek` clamps to mapped regions: bytes inside a peripheral window
+/// come back `Mapped`, but an address in an unmodeled gap comes back
+/// `Unmapped` — never a silent zero, so unmodeled space cannot be mistaken for
+/// real data.
+#[test]
+fn machine_peek_marks_unmapped_gaps() {
+    use crate::inspect::PeekByte;
+
+    let cpu = MockCpu::default();
+    let mut bus = crate::bus::SystemBus::new();
+    let base = 0x4000_0000u64;
+    bus.add_peripheral("tag", base, 0x10, None, Box::new(PeekTag(0xAB)));
+    let machine = Machine::new(cpu, bus);
+
+    // In-window: mapped, side-effect-free value.
+    let mapped = machine.peek(base, 4);
+    assert_eq!(
+        mapped.bytes,
+        vec![PeekByte::Mapped(0xAB); 4],
+        "mapped peripheral bytes"
+    );
+
+    // Straddle the window edge (0x4000_0000..0x4000_0010): last two bytes fall
+    // into the unmodeled gap and must be marked Unmapped, not zero.
+    let straddle = machine.peek(base + 0x0E, 4);
+    assert_eq!(
+        straddle.bytes,
+        vec![
+            PeekByte::Mapped(0xAB),
+            PeekByte::Mapped(0xAB),
+            PeekByte::Unmapped,
+            PeekByte::Unmapped,
+        ],
+        "gap past the window is Unmapped, not zero-filled"
+    );
+
+    // Wholly unmapped high address.
+    let gap = machine.peek(0x9000_0000, 2);
+    assert_eq!(gap.bytes, vec![PeekByte::Unmapped, PeekByte::Unmapped]);
+
+    // The lossy raw view (wasm fast path) substitutes 0 for the gap.
+    assert_eq!(straddle.to_lossy_bytes(), vec![0xAB, 0xAB, 0x00, 0x00]);
+}
+
+/// `Machine::inspect` enumerates peripherals, decodes declarative register
+/// schemas, and honors the name filter.
+#[test]
+fn machine_inspect_enumerates_and_filters() {
+    use crate::inspect::InspectOpts;
+    use labwired_config::{Access, PeripheralDescriptor, RegisterDescriptor};
+
+    let desc = PeripheralDescriptor {
+        peripheral: "DEMO".to_string(),
+        version: "1.0".to_string(),
+        registers: vec![RegisterDescriptor {
+            id: "CTRL".to_string(),
+            address_offset: 0,
+            size: 32,
+            access: Access::ReadWrite,
+            reset_value: 0x5,
+            fields: vec![labwired_config::FieldDescriptor {
+                name: "ENABLE".to_string(),
+                bit_range: [0, 0],
+                description: None,
+            }],
+            side_effects: None,
+        }],
+        interrupts: None,
+        timing: None,
+    };
+
+    let cpu = MockCpu::default();
+    let mut bus = crate::bus::SystemBus::new();
+    bus.add_peripheral(
+        "demo",
+        0x5000_0000,
+        0x100,
+        None,
+        Box::new(crate::peripherals::declarative::GenericPeripheral::new(
+            desc,
+        )),
+    );
+    bus.add_peripheral("tag", 0x6000_0000, 0x10, None, Box::new(PeekTag(0xAB)));
+    let machine = Machine::new(cpu, bus);
+
+    // Enumerate all: both peripherals we added are present.
+    let all = machine.inspect(None, &InspectOpts::default());
+    assert!(all.peripherals.iter().any(|p| p.name == "demo"));
+    assert!(all.peripherals.iter().any(|p| p.name == "tag"));
+
+    // Filter to one; declarative schema decodes the named register + field.
+    let one = machine.inspect(Some("demo"), &InspectOpts::default());
+    assert_eq!(one.peripherals.len(), 1);
+    let ctrl = &one.peripherals[0].registers[0];
+    assert_eq!(ctrl.name, "CTRL");
+    assert_eq!(ctrl.value, 0x5);
+    assert_eq!(ctrl.fields[0].name, "ENABLE");
+    assert_eq!(ctrl.fields[0].value, 1);
+}

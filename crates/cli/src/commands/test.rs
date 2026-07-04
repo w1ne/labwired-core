@@ -285,27 +285,10 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
     if is_xtensa {
         if let (Some(sys_path), Some(manifest)) = (system_path.as_ref(), esp32_manifest.as_ref()) {
             let uart_tx = Arc::new(Mutex::new(Vec::new()));
-            let (mut esp_bus, esp_cpu) =
-                match labwired_core::system::builder::build_esp32_system_from_manifest(
-                    manifest, sys_path,
-                ) {
-                    Ok(pair) => pair,
-                    Err(e) => {
-                        let msg = format!("{:#}", e);
-                        error!("{}", msg);
-                        write_config_error_outputs(
-                            &args,
-                            Some(&firmware_path),
-                            system_path.as_ref(),
-                            Some(&firmware_bytes),
-                            Some(&resolved_limits),
-                            msg,
-                        );
-                        return ExitCode::from(EXIT_CONFIG_ERROR);
-                    }
-                };
-            esp_bus.attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
-
+            // Load the ELF up front. The classic-Xtensa path fast-boots it into
+            // memory and jumps to its entry; the faithful S3 ROM-boot path uses
+            // it only for symbol/diagnostic context (the flash image is the
+            // program the real ROM loads).
             let program = match labwired_loader::load_elf(&firmware_path) {
                 Ok(program) => program,
                 Err(e) => {
@@ -324,39 +307,139 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
             };
 
             let metrics = std::sync::Arc::new(labwired_core::metrics::PerformanceMetrics::new());
-            let mut machine = labwired_core::Machine::new(esp_cpu, esp_bus);
-            machine.observers.push(metrics.clone());
-            if let Err(e) = machine.load_firmware(&program) {
-                return handle_load_error(
-                    &args,
-                    &metrics,
-                    &resolved_limits,
-                    &firmware_bytes,
-                    &uart_tx,
-                    &machine.cpu,
-                    &firmware_path,
-                    system_path.as_ref(),
-                    e,
-                );
-            }
-            // ESP32 manifest path: skip BROM emulation and jump directly to
-            // the ELF entry point — matches the wasm/playground path
-            // (`new_from_config_xtensa_esp32`) and the e2e test
-            // (`e2e_esp32_epaper.rs`). The BROM reset vector (0x4000_0400)
-            // is fine for firmware compiled to boot from BROM, but playground
-            // ELFs are pre-linked to start at the app entry.
-            //
-            // Seed SP to the top of DRAM (0x3FFE_0000): Arduino-ESP32 firmware
-            // (call_start_cpu0) expects BROM to have placed SP here before
-            // jumping to the app entry. We skip BROM, so do it ourselves —
-            // matching `install_esp32_arduino_quirks` in the WASM path.
-            // Native Xtensa firmware that sets its own SP will overwrite this
-            // immediately.
-            // CHEAT(SKIP): bypasses the boot ROM and hand-seeds PC/SP — real: the
-            // CPU resets at 0x4000_0400 and the mapped BROM sets up SP and jumps
-            // to the app. See FIDELITY.md §C.
-            machine.cpu.set_pc(program.entry_point as u32);
-            machine.cpu.set_sp(0x3FFE_0000);
+
+            // Distinguish ESP32-S3 (Xtensa LX7) from classic ESP32 (LX6): both
+            // parse to `Arch::Xtensa`, but only S3 has a faithful rom-boot
+            // machine. `--rom-boot` on an S3 chip takes the real-ROM path;
+            // classic ESP32 stays on the legacy fast-boot (its rom-boot is a
+            // separate task).
+            let is_esp32s3 = {
+                let chip_path = sys_path
+                    .parent()
+                    .unwrap_or_else(|| std::path::Path::new("."))
+                    .join(&manifest.chip);
+                labwired_config::ChipDescriptor::from_file(&chip_path)
+                    .map(|c| c.name == "esp32s3")
+                    .unwrap_or(false)
+            };
+
+            let mut machine = if args.rom_boot && is_esp32s3 {
+                // ── Faithful ESP32-S3 ROM boot (mirrors the `run` command) ──
+                // Reset the CPU at the BROM vector 0x40000400 and let the real
+                // mask ROM run: it loads the 2nd-stage bootloader + app from the
+                // flash image (LABWIRED_ESP32S3_FLASH) through the SPI-flash
+                // controller and jumps to the app — exactly like silicon. No
+                // fast_boot, no ELF pre-load, no PC/SP seeding: zero thunks.
+                // Single-core (PRO_CPU): esp-hal apps run entirely on core 0;
+                // the ESP-IDF 2nd-stage bootloader is single-core at boot.
+                use labwired_core::system::xtensa::{
+                    configure_xtensa_esp32s3, Esp32s3BootMode, Esp32s3Opts,
+                };
+                if std::env::var("LABWIRED_ESP32S3_FLASH").is_err() {
+                    let msg =
+                        "--rom-boot needs LABWIRED_ESP32S3_FLASH set (the firmware flash image)"
+                            .to_string();
+                    error!("{}", msg);
+                    write_config_error_outputs(
+                        &args,
+                        Some(&firmware_path),
+                        system_path.as_ref(),
+                        Some(&firmware_bytes),
+                        Some(&resolved_limits),
+                        msg,
+                    );
+                    return ExitCode::from(EXIT_CONFIG_ERROR);
+                }
+                let mut bus = labwired_core::bus::SystemBus::new();
+                let opts = Esp32s3Opts {
+                    real_reset_boot: true,
+                    ..Esp32s3Opts::default()
+                };
+                let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
+                if wiring.boot_mode != Esp32s3BootMode::Faithful {
+                    let msg = "--rom-boot needs the real ESP32-S3 boot ROM, but none was found. \
+                         Install the ESP toolchain or set LABWIRED_ESP32S3_ROM_ELF \
+                         (or pin LABWIRED_ESP32S3_ROM/_DROM)."
+                        .to_string();
+                    error!("{}", msg);
+                    write_config_error_outputs(
+                        &args,
+                        Some(&firmware_path),
+                        system_path.as_ref(),
+                        Some(&firmware_bytes),
+                        Some(&resolved_limits),
+                        msg,
+                    );
+                    return ExitCode::from(EXIT_CONFIG_ERROR);
+                }
+                let mut cpu = wiring.cpu;
+                // The real ROM + firmware install the OF/UF window vectors and
+                // build a proper stack save chain, so use the faithful
+                // per-access overflow / RETW underflow path (no sim shadow
+                // stack) — matching the `run` command's rom-boot path.
+                cpu.faithful_windows = true;
+                bus.attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
+                let mut machine = labwired_core::Machine::new(cpu, bus);
+                machine.observers.push(metrics.clone());
+                // No load_firmware / set_pc: the CPU resets at 0x40000400 and
+                // the mapped ROM boots the app from flash exactly like silicon.
+                machine
+            } else {
+                let (mut esp_bus, esp_cpu) =
+                    match labwired_core::system::builder::build_esp32_system_from_manifest(
+                        manifest, sys_path,
+                    ) {
+                        Ok(pair) => pair,
+                        Err(e) => {
+                            let msg = format!("{:#}", e);
+                            error!("{}", msg);
+                            write_config_error_outputs(
+                                &args,
+                                Some(&firmware_path),
+                                system_path.as_ref(),
+                                Some(&firmware_bytes),
+                                Some(&resolved_limits),
+                                msg,
+                            );
+                            return ExitCode::from(EXIT_CONFIG_ERROR);
+                        }
+                    };
+                esp_bus.attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
+                let mut machine = labwired_core::Machine::new(esp_cpu, esp_bus);
+                machine.observers.push(metrics.clone());
+                if let Err(e) = machine.load_firmware(&program) {
+                    return handle_load_error(
+                        &args,
+                        &metrics,
+                        &resolved_limits,
+                        &firmware_bytes,
+                        &uart_tx,
+                        &machine.cpu,
+                        &firmware_path,
+                        system_path.as_ref(),
+                        e,
+                    );
+                }
+                // ESP32 manifest path: skip BROM emulation and jump directly to
+                // the ELF entry point — matches the wasm/playground path
+                // (`new_from_config_xtensa_esp32`) and the e2e test
+                // (`e2e_esp32_epaper.rs`). The BROM reset vector (0x4000_0400)
+                // is fine for firmware compiled to boot from BROM, but playground
+                // ELFs are pre-linked to start at the app entry.
+                //
+                // Seed SP to the top of DRAM (0x3FFE_0000): Arduino-ESP32
+                // firmware (call_start_cpu0) expects BROM to have placed SP here
+                // before jumping to the app entry. We skip BROM, so do it
+                // ourselves — matching `install_esp32_arduino_quirks` in the WASM
+                // path. Native Xtensa firmware that sets its own SP will
+                // overwrite this immediately.
+                // CHEAT(SKIP): bypasses the boot ROM and hand-seeds PC/SP — real:
+                // the CPU resets at 0x4000_0400 and the mapped BROM sets up SP and
+                // jumps to the app. See FIDELITY.md §C.
+                machine.cpu.set_pc(program.entry_point as u32);
+                machine.cpu.set_sp(0x3FFE_0000);
+                machine
+            };
             let fault_evidence = handle_faults(&mut machine.bus, &faults);
             let exit_code = execute_test_loop(
                 &args,

@@ -13,6 +13,7 @@ pub mod coverage;
 pub mod cpu;
 pub mod decoder;
 pub mod fidelity;
+pub mod inspect;
 pub mod interrupt;
 pub mod memory;
 pub mod metrics;
@@ -442,6 +443,32 @@ pub trait Peripheral: std::fmt::Debug + Send {
     }
     fn restore(&mut self, _state: serde_json::Value) -> SimResult<()> {
         Ok(())
+    }
+
+    /// Optional register-layout schema for the universal inspect interface.
+    /// Declarative peripherals ([`crate::peripherals::declarative::GenericPeripheral`])
+    /// return their descriptor's registers, so every declarative peripheral
+    /// decodes named registers + bitfields for free. Native peripherals may
+    /// return a static map or `None` (then `inspect` yields no schema-decoded
+    /// registers). See [`crate::inspect`].
+    fn describe_registers(&self) -> Option<Vec<crate::inspect::RegisterSchema>> {
+        None
+    }
+
+    /// Uniform, snapshot-semantics inspection. The default decodes
+    /// [`Self::describe_registers`] against live bytes via [`Self::peek`]
+    /// (side-effect-free), so most peripherals need no override. Peripherals
+    /// with non-register artifacts (framebuffers, traces) override this,
+    /// typically by calling [`crate::inspect::default_inspect`] and pushing
+    /// artifacts onto the result. `base`/`name` are supplied by the bus, which
+    /// owns the peripheral's placement.
+    fn inspect(
+        &self,
+        base: u64,
+        name: &str,
+        opts: &crate::inspect::InspectOpts,
+    ) -> crate::inspect::PeripheralInspect {
+        crate::inspect::default_inspect(self, base, name, opts)
     }
 
     /// Binary mid-flight runtime snapshot — captures whatever state this
@@ -1379,6 +1406,42 @@ impl<C: Cpu> Machine<C> {
             .iter()
             .find(|p| p.name == name)
             .map(|p| p.dev.snapshot())
+    }
+
+    /// Universal inspect: enumerate + decode peripheral state (snapshot
+    /// semantics — reads the current paused/post-run machine). `name = Some`
+    /// (or `opts.peripheral`) restricts the walk to one peripheral; `None`
+    /// inspects all. Decode is side-effect-free (uses `peek`, never `read`).
+    /// See [`crate::inspect`].
+    pub fn inspect(
+        &self,
+        name: Option<&str>,
+        opts: &crate::inspect::InspectOpts,
+    ) -> crate::inspect::MachineInspect {
+        let filter = name.or(opts.peripheral.as_deref());
+        let peripherals = self
+            .bus
+            .peripherals
+            .iter()
+            .filter(|entry| filter.is_none_or(|f| entry.name == f))
+            .map(|entry| entry.dev.inspect(entry.base, &entry.name, opts))
+            .collect();
+        crate::inspect::MachineInspect { peripherals }
+    }
+
+    /// Raw escape hatch: read `len` bytes at absolute `addr`, side-effect-free.
+    /// Clamps to mapped regions — bytes outside any memory region or peripheral
+    /// window come back as [`crate::inspect::PeekByte::Unmapped`] rather than a
+    /// silent zero, so unmodeled space is never mistaken for real data.
+    pub fn peek(&self, addr: u64, len: usize) -> crate::inspect::PeekResult {
+        let mut bytes = Vec::with_capacity(len);
+        for i in 0..len as u64 {
+            bytes.push(match self.bus.peek_byte(addr + i) {
+                Some(v) => crate::inspect::PeekByte::Mapped(v),
+                None => crate::inspect::PeekByte::Unmapped,
+            });
+        }
+        crate::inspect::PeekResult { addr, bytes }
     }
 }
 

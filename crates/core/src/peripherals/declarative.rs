@@ -510,6 +510,37 @@ impl Peripheral for GenericPeripheral {
             "data": *self.data.borrow()
         })
     }
+
+    /// Expose the descriptor's register layout to the universal inspect
+    /// interface. This one method makes every declarative peripheral — the
+    /// whole ESP32-C3/S3 register wall — decode named registers + bitfields for
+    /// free (see [`crate::inspect::default_inspect`]).
+    fn describe_registers(&self) -> Option<Vec<crate::inspect::RegisterSchema>> {
+        Some(
+            self.descriptor
+                .registers
+                .iter()
+                .map(|reg| crate::inspect::RegisterSchema {
+                    name: reg.id.clone(),
+                    offset: reg.address_offset,
+                    size: reg.size,
+                    access: match reg.access {
+                        labwired_config::Access::ReadWrite => "rw",
+                        labwired_config::Access::ReadOnly => "ro",
+                        labwired_config::Access::WriteOnly => "wo",
+                    },
+                    fields: reg
+                        .fields
+                        .iter()
+                        .map(|f| crate::inspect::FieldSchema {
+                            name: f.name.clone(),
+                            bits: f.bit_range,
+                        })
+                        .collect(),
+                })
+                .collect(),
+        )
+    }
 }
 
 #[cfg(test)]
@@ -671,6 +702,94 @@ mod tests {
         // Initial reset value 0x12345678. Byte 0 is 0x78.
         assert_eq!(p.read(0x00).unwrap(), 0x78);
         assert_eq!(p.read(0x00).unwrap(), 0x00); // Cleared on read
+    }
+
+    /// The universal inspect interface decodes a REAL esp32c3 declarative
+    /// peripheral (SYSTEM) into NAMED registers with decoded bitfields — the
+    /// whole register wall for free, no bespoke code. Mirrors the proposal's
+    /// worked example: CPU_PER_CONF (offset 8, reset 12) → CPUPERIOD_SEL=0,
+    /// PLL_FREQ_SEL=1.
+    #[test]
+    fn inspect_decodes_named_esp32c3_registers_and_fields() {
+        use crate::inspect::InspectOpts;
+        use crate::Peripheral;
+
+        let yaml = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../configs/peripherals/esp32c3/system.yaml"
+        ));
+        let desc = labwired_config::PeripheralDescriptor::from_yaml(yaml).unwrap();
+        let p = GenericPeripheral::new(desc);
+
+        let pi = p.inspect(0x600C_0000, "system", &InspectOpts::default());
+        assert_eq!(pi.kind, "declarative");
+        assert_eq!(pi.base, 0x600C_0000);
+
+        let cpc = pi
+            .registers
+            .iter()
+            .find(|r| r.name == "CPU_PER_CONF")
+            .expect("CPU_PER_CONF register decoded by name");
+        assert_eq!(cpc.offset, 8);
+        assert_eq!(cpc.value, 12, "live reset word read via peek");
+        assert_eq!(cpc.access, "rw");
+
+        let period = cpc
+            .fields
+            .iter()
+            .find(|f| f.name == "CPUPERIOD_SEL")
+            .expect("CPUPERIOD_SEL field decoded by name");
+        assert_eq!(period.bits, [1, 0]);
+        assert_eq!(period.value, 0);
+
+        let pll = cpc
+            .fields
+            .iter()
+            .find(|f| f.name == "PLL_FREQ_SEL")
+            .expect("PLL_FREQ_SEL field decoded by name");
+        assert_eq!(pll.bits, [2, 2]);
+        assert_eq!(pll.value, 1, "bit 2 of reset value 0b1100 is set");
+    }
+
+    /// Decode must be side-effect-free: `default_inspect` reads via `peek`, not
+    /// `read`, so inspecting a read-to-clear register never perturbs it.
+    #[test]
+    fn inspect_uses_peek_not_read_no_side_effects() {
+        use crate::inspect::InspectOpts;
+        use crate::Peripheral;
+
+        let mut desc = mock_descriptor();
+        // REG1 (offset 0, reset 0x12345678) clears itself when read().
+        desc.registers[0].side_effects = Some(labwired_config::SideEffectsDescriptor {
+            read_action: Some(labwired_config::ReadAction::Clear),
+            write_action: None,
+            on_read: None,
+            on_write: None,
+        });
+        let p = GenericPeripheral::new(desc);
+
+        let reg_value = |pi: &crate::inspect::PeripheralInspect| {
+            pi.registers
+                .iter()
+                .find(|r| r.name == "REG1")
+                .unwrap()
+                .value
+        };
+
+        // Inspecting twice yields the same value — read() would have cleared it.
+        let first = p.inspect(0, "mock", &InspectOpts::default());
+        assert_eq!(reg_value(&first), 0x1234_5678);
+        let second = p.inspect(0, "mock", &InspectOpts::default());
+        assert_eq!(
+            reg_value(&second),
+            0x1234_5678,
+            "inspect is side-effect-free: read-to-clear reg unchanged"
+        );
+
+        // A genuine read() does clear it — proving the side effect exists and
+        // that inspect deliberately avoided it.
+        assert_eq!(p.read(0x00).unwrap(), 0x78);
+        assert_eq!(p.read(0x00).unwrap(), 0x00);
     }
 
     #[test]
