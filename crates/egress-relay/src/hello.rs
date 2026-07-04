@@ -53,11 +53,17 @@ mod tests {
 
     #[test]
     fn allowlist_permits_only_listed_target() {
-        let allow = Allowlist { entries: vec![AllowEntry {
-            transport: "mqtt".into(), url: "mqtt://demo.internal:1883".into(),
-        }] };
+        let allow = Allowlist {
+            entries: vec![AllowEntry {
+                transport: "mqtt".into(),
+                url: "mqtt://demo.internal:1883".into(),
+            }],
+        };
         let ok = parse_hello(r#"{"transport":"mqtt","url":"mqtt://demo.internal:1883","topic":"t","encoding":"raw"}"#).unwrap();
-        let bad = parse_hello(r#"{"transport":"mqtt","url":"mqtt://evil.example:1883","topic":"t","encoding":"raw"}"#).unwrap();
+        let bad = parse_hello(
+            r#"{"transport":"mqtt","url":"mqtt://evil.example:1883","topic":"t","encoding":"raw"}"#,
+        )
+        .unwrap();
         assert!(allow.permits(&ok));
         assert!(!allow.permits(&bad));
     }

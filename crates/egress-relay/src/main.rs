@@ -1,5 +1,5 @@
-use labwired_egress_relay::hello::{AllowEntry, Allowlist};
 use labwired_egress_relay::conn::serve_connection;
+use labwired_egress_relay::hello::{AllowEntry, Allowlist};
 use std::net::TcpListener;
 
 /// Build the fixed allowlist from environment (injectable `get` for tests).
@@ -22,10 +22,16 @@ fn main() -> anyhow::Result<()> {
     tracing::info!(%bind, "egress relay listening");
 
     for stream in listener.incoming() {
-        let stream = match stream { Ok(s) => s, Err(_) => continue };
+        let stream = match stream {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
         let allow = allow.clone();
         std::thread::spawn(move || {
-            let mut ws = match tungstenite::accept(stream) { Ok(w) => w, Err(_) => return };
+            let mut ws = match tungstenite::accept(stream) {
+                Ok(w) => w,
+                Err(_) => return,
+            };
             if let Err(e) = serve_connection(&mut ws, &allow) {
                 tracing::debug!("connection ended: {e:?}");
             }
@@ -36,9 +42,7 @@ fn main() -> anyhow::Result<()> {
 
 fn tracing_subscriber_init() {
     // Best-effort; ignore if a global subscriber already exists.
-    let _ = tracing::subscriber::set_global_default(
-        tracing::subscriber::NoSubscriber::default(),
-    );
+    let _ = tracing::subscriber::set_global_default(tracing::subscriber::NoSubscriber::default());
 }
 
 #[cfg(test)]
@@ -51,7 +55,9 @@ mod tests {
         let env: HashMap<&str, &str> = [
             ("RELAY_ALLOW_TRANSPORT", "mqtt"),
             ("RELAY_ALLOW_URL", "mqtt://demo.internal:1883"),
-        ].into_iter().collect();
+        ]
+        .into_iter()
+        .collect();
         let allow = allow_from_env(|k| env.get(k).map(|s| s.to_string()));
         assert_eq!(allow.entries.len(), 1);
         assert_eq!(allow.entries[0].transport, "mqtt");

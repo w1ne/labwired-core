@@ -36,19 +36,22 @@ mod tests {
 
     #[test]
     fn builds_tcp_transport() {
-        let h = parse_hello(r#"{"transport":"tcp","url":"127.0.0.1:9000","encoding":"raw"}"#).unwrap();
+        let h =
+            parse_hello(r#"{"transport":"tcp","url":"127.0.0.1:9000","encoding":"raw"}"#).unwrap();
         assert!(build_transport(&h).is_ok());
     }
 
     #[test]
     fn mqtt_requires_topic() {
-        let h = parse_hello(r#"{"transport":"mqtt","url":"mqtt://h:1883","encoding":"raw"}"#).unwrap();
+        let h =
+            parse_hello(r#"{"transport":"mqtt","url":"mqtt://h:1883","encoding":"raw"}"#).unwrap();
         assert!(build_transport(&h).is_err());
     }
 
     #[test]
     fn rejects_unknown_transport() {
-        let h = parse_hello(r#"{"transport":"carrier-pigeon","url":"x","encoding":"raw"}"#).unwrap();
+        let h =
+            parse_hello(r#"{"transport":"carrier-pigeon","url":"x","encoding":"raw"}"#).unwrap();
         assert!(build_transport(&h).is_err());
     }
 }
