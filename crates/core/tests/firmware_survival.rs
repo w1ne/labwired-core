@@ -998,15 +998,27 @@ fn assert_uart_contains(uart_bytes: &[u8], expected: &[u8], name: &str) {
 
 fn run_survival_case(case: &SurvivalCase) {
     let firmware = fixtures().join(case.fixture);
+    let cycles = case_cycles(case);
     let (pc, uart_bytes) = match case.family {
-        CpuFamily::CortexM => {
-            run_cortex_m_firmware(case.chip, case.system, firmware, SURVIVAL_CYCLES)
-        }
-        CpuFamily::RiscV => run_riscv_firmware(case.chip, case.system, firmware, SURVIVAL_CYCLES),
+        CpuFamily::CortexM => run_cortex_m_firmware(case.chip, case.system, firmware, cycles),
+        CpuFamily::RiscV => run_riscv_firmware(case.chip, case.system, firmware, cycles),
     };
 
-    assert_pc_in_range(pc, SURVIVAL_CYCLES, case.valid_pc_ranges);
+    assert_pc_in_range(pc, cycles, case.valid_pc_ranges);
     assert_uart_contains(&uart_bytes, case.expected_uart_output, case.name);
+}
+
+/// Per-case cycle budget. Most firmwares emit their banner within the default
+/// window; the RP2040 Arduino Mbed-OS sketch prints over **USB CDC**, and its
+/// `loop()` only sends once per `delay(200)` — so it needs a wider window for a
+/// loop iteration to land after the simulated host finishes USB enumeration and
+/// asserts CDC DTR.
+fn case_cycles(case: &SurvivalCase) -> u32 {
+    if case.name == "rp2040_arduino_serial" {
+        2_000_000
+    } else {
+        SURVIVAL_CYCLES
+    }
 }
 
 /// Run a Cortex-M machine loaded with `firmware_path` for `cycles` steps.
@@ -1216,25 +1228,21 @@ fn test_rp2040_zephyr_hello_survival() {
     run_survival_case(case_by_name("rp2040_zephyr_hello"));
 }
 
-/// Arduino Mbed-OS RP2040 serial sketch.
+/// Arduino Mbed-OS RP2040 serial sketch — full end-to-end over **USB CDC**.
 ///
-/// The boot2 / XIP bus-read fault at `0x18000028` this PR targets is FIXED: with
-/// the `XIP_SSI` model (+ SIO spinlocks + TBMAN) the image now boots through the
-/// full pico-sdk low-level init and the RTX kernel start (~400k instructions),
-/// versus faulting within the first few hundred.
+/// This is the deepest RP2040 path modelled: it exercises the boot2/XIP bring-up
+/// (`XIP_SSI` + SIO spinlocks + TBMAN), the RTX kernel tick (real `systick` +
+/// TIMER alarms), and the whole USB device stack. The sketch's default `Serial`
+/// is USB CDC, so `verdict=GOOD rp2040` is only emitted once the device has been
+/// enumerated by a host and the CDC terminal (DTR) is up. The `rp2040_usb`
+/// peripheral supplies both the device controller and a simulated host that
+/// enumerates the device and asserts DTR, then captures the sketch's bulk-IN
+/// bytes into the UART sink.
 ///
-/// It is `#[ignore]`d because it does not yet reach the `verdict=GOOD rp2040`
-/// UART token: the Arduino Mbed core needs the RTX kernel tick (the SysTimer) to
-/// pre-initialise the mbed us_ticker during kernel start. LabWired does not yet
-/// drive the RP2040 kernel tick (the chip config stubs SysTick — see the
-/// `systick` note in `configs/chips/rp2040.yaml`), so the first `mbed::Timer`
-/// reset defers ticker init into a `CriticalSectionLock`, where the C-runtime
-/// malloc lock (`__rtos_malloc_lock` → `osMutexAcquire`) is rejected with
-/// `osErrorISR` because `PRIMASK` is set — mbed then traps. This is an RTOS
-/// kernel-tick gap, independent of the boot2/XIP path fixed here. Un-ignore once
-/// the RP2040 kernel tick lands.
+/// Uses a wider cycle budget (see `case_cycles`) because the sketch's `loop()`
+/// only transmits once per `delay(200)`, so a loop iteration must land after the
+/// simulated host finishes enumeration.
 #[test]
-#[ignore]
 fn test_rp2040_arduino_serial_survival() {
     run_survival_case(case_by_name("rp2040_arduino_serial"));
 }

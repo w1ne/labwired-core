@@ -5,7 +5,12 @@ registers:
   address_offset: 0
   size: 32
   access: READ_WRITE
-  reset_value: 0
+  # REVISION[31:28]|PART[27:12]|MANUFACTURER[11:0] = 0x20002927: RP2040 (part
+  # 0x0002), Raspberry Pi (0x927), stepping B2 (revision 2). The pico-sdk USB
+  # errata-E5 workaround (rp2040_usb_device_enumeration_fix, run from the USB ISR
+  # on bus reset) asserts manufacturer == 0x927; a zero CHIP_ID trips that assert
+  # inside the ISR and aborts USB enumeration.
+  reset_value: 536881447
   fields:
   - name: MANUFACTURER
     bit_range:
@@ -27,7 +32,8 @@ registers:
   address_offset: 4
   size: 32
   access: READ_WRITE
-  reset_value: 0
+  # ASIC (bit1) set: reads as real silicon, not FPGA.
+  reset_value: 2
   fields:
   - name: FPGA
     bit_range:
