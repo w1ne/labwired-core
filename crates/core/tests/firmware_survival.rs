@@ -218,6 +218,21 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         expected_uart_output: b"NRF52840_SMOKE_OK\n",
     },
     SurvivalCase {
+        // Plain Arduino sketch built with the Adafruit nRF52 core (board
+        // `nrf52840_dk`). Serial.println drives the legacy UART personality of
+        // UART0/UARTE0 (ENABLE=4): it writes each byte to TXD (0x51C) and spins
+        // on EVENTS_TXDRDY (0x11C) until the shifter reports ready. Without the
+        // legacy-TXD model that poll never exits, so no bytes are emitted.
+        name: "nrf52840_arduino_serial",
+        core: "cortex-m4",
+        family: CpuFamily::CortexM,
+        chip: "nrf52840",
+        system: "nrf52840-dk",
+        fixture: "nrf52840-arduino-serial.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x000F_FFFF), (0x2000_0000, 0x2003_FFFF)],
+        expected_uart_output: b"verdict=GOOD nrf52",
+    },
+    SurvivalCase {
         // NXP KW41Z (Cortex-M0+ BLE + 802.15.4). Bare-metal smoke firmware
         // (crates/firmware-kw41z-demo) brings up LPUART0 the way the NXP HAL
         // does — enable CTRL.TE, poll STAT.TDRE, write DATA — and prints the
@@ -1227,6 +1242,11 @@ fn test_rp2040_arduino_serial_survival() {
 #[test]
 fn test_nrf52840_demo_survival() {
     run_survival_case(case_by_name("nrf52840_demo"));
+}
+
+#[test]
+fn test_nrf52840_arduino_serial_survival() {
+    run_survival_case(case_by_name("nrf52840_arduino_serial"));
 }
 
 #[test]
