@@ -44,6 +44,15 @@ fn pend_nvic(
 }
 
 impl SystemBus {
+    fn read_cached_declarative_u32(&self, idx: usize, offset: u64) -> Option<u32> {
+        self.peripherals
+            .get(idx)?
+            .dev
+            .as_any()?
+            .downcast_ref::<crate::peripherals::declarative::GenericPeripheral>()?
+            .peek_u32_raw(offset)
+    }
+
     /// Phase 2B.1 (issue #192): pend an NVIC IRQ on behalf of an event
     /// handler. Mirrors the per-tick `pend_nvic` path but collects
     /// non-NVIC fallthroughs into the supplied vector for the caller to
@@ -118,6 +127,14 @@ impl SystemBus {
         let mut dma_requests = Vec::new();
         let mut dma_signals_out = Vec::new();
 
+        // Some older tests and internal harnesses still mutate
+        // `bus.peripherals` directly instead of going through `add_peripheral`.
+        // Detect that structural drift once here so the cached tick set remains
+        // correct without reinstating the old every-cycle full peripheral walk.
+        if self.peripheral_ranges.len() != self.peripherals.len() {
+            self.rebuild_peripheral_ranges();
+        }
+
         // ── Pre-tick bus-aware pass ─────────────────────────────────────────
         // Some peripherals (currently just RADIO) need to read/write the bus
         // BEFORE their `tick()` runs so the work they schedule (e.g. setting
@@ -156,29 +173,52 @@ impl SystemBus {
         #[cfg(feature = "event-scheduler")]
         let legacy_walk_disabled = self.legacy_walk_disabled;
 
-        for (peripheral_index, p) in self.peripherals.iter_mut().enumerate() {
-            #[cfg(feature = "event-scheduler")]
-            if legacy_walk_disabled {
-                break;
-            }
-            // Phase 2B.2 (issue #192): scheduler-driven peripherals are advanced
-            // lazily via `sync_to` on MMIO access (and by the event drain in
-            // `Machine::step`), never by this per-cycle walk. Skipping them here
-            // is the actual orchestration saving. Gated so the legacy build is
-            // byte-identical.
-            #[cfg(feature = "event-scheduler")]
-            if p.dev.uses_scheduler() {
+        let mut tick_pos = 0;
+        #[cfg(feature = "event-scheduler")]
+        if legacy_walk_disabled {
+            tick_pos = self.legacy_tick_indices.len();
+        }
+        while let Some(&peripheral_index) = self.legacy_tick_indices.get(tick_pos) {
+            let Some((res, irq, base, refresh_after_tick)) =
+                self.peripherals.get_mut(peripheral_index).map(|p| {
+                    // Phase 2B.2 (issue #192): scheduler-driven peripherals are advanced
+                    // lazily via `sync_to` on MMIO access (and by the event drain in
+                    // `Machine::step`), never by this per-cycle walk. Skipping them here
+                    // is the actual orchestration saving. Gated so the legacy build is
+                    // byte-identical.
+                    #[cfg(feature = "event-scheduler")]
+                    if p.dev.uses_scheduler() {
+                        return (
+                            crate::PeripheralTickResult::default(),
+                            p.irq,
+                            p.base,
+                            p.dev.legacy_tick_dynamic(),
+                        );
+                    }
+
+                    if p.ticks_remaining > tick_interval {
+                        p.ticks_remaining -= tick_interval;
+                        return (
+                            crate::PeripheralTickResult::default(),
+                            p.irq,
+                            p.base,
+                            p.dev.legacy_tick_dynamic(),
+                        );
+                    }
+
+                    let res = p.dev.tick();
+                    p.ticks_remaining = res.ticks_until_next.unwrap_or(0);
+                    (res, p.irq, p.base, p.dev.legacy_tick_dynamic())
+                })
+            else {
+                tick_pos += 1;
                 continue;
-            }
-
-            if p.ticks_remaining > tick_interval {
-                p.ticks_remaining -= tick_interval;
-                continue;
-            }
-
-            let res = p.dev.tick();
-
-            p.ticks_remaining = res.ticks_until_next.unwrap_or(0);
+            };
+            let still_active = if refresh_after_tick {
+                self.refresh_legacy_tick_index(peripheral_index)
+            } else {
+                true
+            };
 
             if res.cycles > 0 {
                 costs.push(PeripheralTickCost {
@@ -192,13 +232,14 @@ impl SystemBus {
             }
 
             if let Some(signals) = res.dma_signals {
+                let name = self.peripherals[peripheral_index].name.clone();
                 for sig in signals {
-                    dma_signals_out.push((p.name.clone(), sig));
+                    dma_signals_out.push((name.clone(), sig));
                 }
             }
 
             if res.irq {
-                if let Some(irq) = p.irq {
+                if let Some(irq) = irq {
                     pend_nvic(&self.nvic, &mut interrupts, irq);
                 }
             }
@@ -226,7 +267,11 @@ impl SystemBus {
             // absolute bus addresses so PPI sees them at the same address
             // firmware uses for CH[i].EEP.
             for off in res.fired_events {
-                fired_events_global.push((p.base as u32).wrapping_add(off));
+                fired_events_global.push((base as u32).wrapping_add(off));
+            }
+
+            if still_active {
+                tick_pos += 1;
             }
         }
 
@@ -345,7 +390,15 @@ impl SystemBus {
         // IPI sources (the FreeRTOS yield mechanism).
         let mut asserted: Vec<u32> = source_ids.to_vec();
         for (addr, src) in FROM_CPU {
-            if self.read_u32(addr).map(|v| v & 1 != 0).unwrap_or(false) {
+            let from_cpu = self
+                .esp32c3_system_idx
+                .and_then(|idx| {
+                    let offset = addr.checked_sub(self.peripherals[idx].base)?;
+                    self.read_cached_declarative_u32(idx, offset)
+                })
+                .or_else(|| self.read_u32(addr).ok())
+                .unwrap_or(0);
+            if from_cpu & 1 != 0 {
                 asserted.push(src);
             }
         }
@@ -355,20 +408,20 @@ impl SystemBus {
         // A line fires only while it is enabled AND its priority >= threshold —
         // the C3 enables/masks via these INTC registers, NOT the RISC-V `mie`
         // CSR (FreeRTOS critical sections raise the threshold to mask).
-        let enable = self.read_u32(INTMATRIX_BASE + 0x104).unwrap_or(0);
-        let thresh = self.read_u32(INTMATRIX_BASE + 0x194).unwrap_or(0) & 0xF;
+        let read_intcore = |bus: &SystemBus, offset: u64| {
+            bus.esp32c3_interrupt_core0_idx
+                .and_then(|idx| bus.read_cached_declarative_u32(idx, offset))
+                .or_else(|| bus.read_u32(INTMATRIX_BASE + offset).ok())
+                .unwrap_or(0)
+        };
+        let enable = read_intcore(self, 0x104);
+        let thresh = read_intcore(self, 0x194) & 0xF;
 
         let mut mask = 0u32;
         for src in asserted {
             // MAP register holds the destination CPU interrupt line (1..31).
-            let line = self
-                .read_u32(INTMATRIX_BASE + (src as u64) * 4)
-                .map(|v| v & 0x1F)
-                .unwrap_or(0);
-            let pri = self
-                .read_u32(INTMATRIX_BASE + 0x114 + (line as u64) * 4)
-                .unwrap_or(0)
-                & 0xF;
+            let line = read_intcore(self, (src as u64) * 4) & 0x1F;
+            let pri = read_intcore(self, 0x114 + (line as u64) * 4) & 0xF;
             if src == 0 && std::env::var("LABWIRED_RXBUF_TRACE").is_ok() {
                 use std::sync::atomic::{AtomicU32, Ordering};
                 static N: AtomicU32 = AtomicU32::new(0);
@@ -408,15 +461,10 @@ impl SystemBus {
         // bus (ARM/RISC-V/nRF use the NVIC path and never read
         // `pending_cpu_irqs`) — return without touching any state so the
         // model stays fully self-contained and cannot influence other models.
-        let has_intmatrix = self.peripherals.iter().any(|p| {
-            p.dev
-                .as_any()
-                .and_then(|a| {
-                    a.downcast_ref::<crate::peripherals::esp32s3::intmatrix::Esp32s3IntMatrix>()
-                })
-                .is_some()
-        });
-        if !has_intmatrix {
+        let Some(intmatrix_idx) = self.esp32s3_intmatrix_idx else {
+            return;
+        };
+        if !self.esp32s3_irq_routing {
             return;
         }
         let mut routed = [0u32; 2];
@@ -442,14 +490,11 @@ impl SystemBus {
         self.pending_cpu_irqs = routed;
         // Push the live source-assertion bitmap into the intmatrix peripheral.
         // No-op for buses without an intmatrix registered.
-        for p in self.peripherals.iter_mut() {
-            if let Some(any) = p.dev.as_any_mut() {
-                if let Some(matrix) =
-                    any.downcast_mut::<crate::peripherals::esp32s3::intmatrix::Esp32s3IntMatrix>()
-                {
-                    matrix.set_pending_sources(intr_status);
-                    break;
-                }
+        if let Some(any) = self.peripherals[intmatrix_idx].dev.as_any_mut() {
+            if let Some(matrix) =
+                any.downcast_mut::<crate::peripherals::esp32s3::intmatrix::Esp32s3IntMatrix>()
+            {
+                matrix.set_pending_sources(intr_status);
             }
         }
     }

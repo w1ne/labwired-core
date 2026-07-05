@@ -431,6 +431,21 @@ pub trait Peripheral: std::fmt::Debug + Send {
     fn needs_bus_tick(&self) -> bool {
         false
     }
+    /// True if this peripheral needs the legacy per-tick `tick()` walk.
+    ///
+    /// The conservative default is true: hand-written behavioral peripherals
+    /// keep their existing timing unless they explicitly opt out. Declarative
+    /// register banks override this dynamically so inert descriptors do not
+    /// consume a virtual call on every simulated cycle.
+    fn legacy_tick_active(&self) -> bool {
+        true
+    }
+    /// True if `legacy_tick_active` can change after this peripheral's own
+    /// `tick()` call. Stable peripherals stay in the cached tick set without
+    /// a per-cycle refresh.
+    fn legacy_tick_dynamic(&self) -> bool {
+        false
+    }
     fn as_any(&self) -> Option<&dyn Any> {
         None
     }

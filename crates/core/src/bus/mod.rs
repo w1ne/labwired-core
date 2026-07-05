@@ -117,6 +117,7 @@ pub struct SystemBus {
         crate::peripherals::esp_xtensa_common::rom_thunks::RomThunkFn,
     >,
     peripheral_ranges: Vec<PeripheralRange>,
+    legacy_tick_indices: Vec<usize>,
     peripheral_hint: Cell<Option<usize>>,
     /// Cached index of the classic-ESP32 DPORT peripheral, if one is
     /// registered (`None` otherwise — the common case, incl. every ESP32-S3
@@ -197,6 +198,15 @@ pub struct SystemBus {
     /// recomputed every tick by `aggregate_esp32c3_irqs`. Read by the RISC-V
     /// core via `Bus::external_irq_lines`. 0 when `esp32c3_irq_routing` is false.
     pub riscv_irq_lines: u32,
+    /// ESP32-C3 declarative interrupt banks. Cached separately from S3's
+    /// intmatrix so each chip keeps its own interrupt-controller abstraction.
+    esp32c3_system_idx: Option<usize>,
+    esp32c3_interrupt_core0_idx: Option<usize>,
+    /// ESP32-S3 interrupt routing is present only when the S3 interrupt matrix
+    /// peripheral is registered. Cached separately from C3's RISC-V routing so
+    /// each chip model owns its own interrupt abstraction.
+    pub esp32s3_irq_routing: bool,
+    esp32s3_intmatrix_idx: Option<usize>,
     /// True when a FLASH peripheral on this bus models hardware operations
     /// (H5 sector erase / bank swap) as pending ops that the machine layer must
     /// drain and apply per instruction. Cached in `rebuild_peripheral_ranges`
@@ -1846,6 +1856,7 @@ impl SystemBus {
             clock_gating_bypass: false,
             fault_unclocked: std::collections::HashMap::new(),
             peripheral_ranges: Vec::new(),
+            legacy_tick_indices: Vec::new(),
             peripheral_hint: Cell::new(None),
             last_gpio_in: [0; 2],
             current_cycle: 0,
@@ -1859,6 +1870,10 @@ impl SystemBus {
             can_log_players: Vec::new(),
             esp32c3_irq_routing: false,
             riscv_irq_lines: 0,
+            esp32c3_system_idx: None,
+            esp32c3_interrupt_core0_idx: None,
+            esp32s3_irq_routing: false,
+            esp32s3_intmatrix_idx: None,
             flash_models_ops: false,
             flash_error_flags_idx: None,
             bus_trace: bus_trace::new_log(),
@@ -1890,6 +1905,7 @@ impl SystemBus {
             clock_gating_bypass: false,
             fault_unclocked: std::collections::HashMap::new(),
             peripheral_ranges: Vec::new(),
+            legacy_tick_indices: Vec::new(),
             peripheral_hint: Cell::new(None),
             last_gpio_in: [0; 2],
             current_cycle: 0,
@@ -1903,6 +1919,10 @@ impl SystemBus {
             can_log_players: Vec::new(),
             esp32c3_irq_routing: false,
             riscv_irq_lines: 0,
+            esp32c3_system_idx: None,
+            esp32c3_interrupt_core0_idx: None,
+            esp32s3_irq_routing: false,
+            esp32s3_intmatrix_idx: None,
             flash_models_ops: false,
             flash_error_flags_idx: None,
             bus_trace: bus_trace::new_log(),
@@ -2010,16 +2030,15 @@ impl SystemBus {
     /// `core_id` (0 = PRO_CPU, 1 = APP_CPU) via the registered interrupt
     /// matrix's per-core map table. None if unregistered or unbound.
     pub fn route_irq_source_to_cpu_irq_core(&self, source_id: u32, core_id: u8) -> Option<u8> {
-        for p in &self.peripherals {
-            if let Some(any) = p.dev.as_any() {
-                if let Some(matrix) =
-                    any.downcast_ref::<crate::peripherals::esp32s3::intmatrix::Esp32s3IntMatrix>()
-                {
-                    return matrix.route_for_core(source_id, core_id);
-                }
-            }
-        }
-        None
+        let idx = self.esp32s3_intmatrix_idx?;
+        self.peripherals
+            .get(idx)?
+            .dev
+            .as_any()
+            .and_then(|a| {
+                a.downcast_ref::<crate::peripherals::esp32s3::intmatrix::Esp32s3IntMatrix>()
+            })
+            .and_then(|matrix| matrix.route_for_core(source_id, core_id))
     }
 
     /// Cross-core `FROM_CPU` IPI slots currently asserted for `core_id`,
@@ -2397,6 +2416,7 @@ impl SystemBus {
             self.maybe_arm_hcsr04(idx);
             #[cfg(feature = "event-scheduler")]
             self.collect_scheduled_events(idx);
+            self.refresh_legacy_tick_index(idx);
             return r;
         }
 
@@ -2461,6 +2481,7 @@ impl SystemBus {
             self.maybe_arm_hcsr04(idx);
             #[cfg(feature = "event-scheduler")]
             self.collect_scheduled_events(idx);
+            self.refresh_legacy_tick_index(idx);
             return r;
         }
 
@@ -2473,7 +2494,10 @@ impl SystemBus {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use labwired_config::{ChipDescriptor, SystemManifest};
+    use labwired_config::{
+        Access, ChipDescriptor, PeripheralDescriptor, RegisterDescriptor, SystemManifest,
+        TimingAction, TimingDescriptor, TimingTrigger,
+    };
     use std::path::PathBuf;
 
     /// Minimal fixed-value peripheral for routing tests: reads return a
@@ -2487,6 +2511,156 @@ mod tests {
         fn write(&mut self, _offset: u64, _value: u8) -> crate::SimResult<()> {
             Ok(())
         }
+    }
+
+    fn declarative_descriptor(timing: Option<Vec<TimingDescriptor>>) -> PeripheralDescriptor {
+        PeripheralDescriptor {
+            peripheral: "test".to_string(),
+            version: "1.0".to_string(),
+            registers: vec![
+                RegisterDescriptor {
+                    id: "CTRL".to_string(),
+                    address_offset: 0x00,
+                    size: 32,
+                    access: Access::ReadWrite,
+                    reset_value: 0,
+                    fields: vec![],
+                    side_effects: None,
+                },
+                RegisterDescriptor {
+                    id: "STATUS".to_string(),
+                    address_offset: 0x04,
+                    size: 32,
+                    access: Access::ReadWrite,
+                    reset_value: 0,
+                    fields: vec![],
+                    side_effects: None,
+                },
+            ],
+            interrupts: None,
+            timing,
+        }
+    }
+
+    #[test]
+    fn declarative_peripherals_enter_legacy_tick_set_only_while_events_are_pending() {
+        let mut bus = SystemBus::empty();
+        bus.add_peripheral(
+            "idle_declarative",
+            0x1000,
+            0x100,
+            None,
+            Box::new(crate::peripherals::declarative::GenericPeripheral::new(
+                declarative_descriptor(None),
+            )),
+        );
+        assert!(
+            bus.legacy_tick_indices.is_empty(),
+            "declarative peripherals with no timing events should not be in the hot tick set"
+        );
+
+        bus.add_peripheral(
+            "delayed_declarative",
+            0x2000,
+            0x100,
+            None,
+            Box::new(crate::peripherals::declarative::GenericPeripheral::new(
+                declarative_descriptor(Some(vec![TimingDescriptor {
+                    id: "set-status".to_string(),
+                    trigger: TimingTrigger::Write {
+                        register: "CTRL".to_string(),
+                        value: Some(1),
+                        mask: None,
+                    },
+                    delay_cycles: 0,
+                    action: TimingAction::SetBits {
+                        register: "STATUS".to_string(),
+                        bits: 1,
+                    },
+                    interrupt: None,
+                }])),
+            )),
+        );
+        assert!(
+            bus.legacy_tick_indices.is_empty(),
+            "write-triggered declarative timing is inactive until firmware writes the trigger"
+        );
+
+        bus.write_u32(0x2000, 1).unwrap();
+        assert!(
+            bus.peripherals[1].dev.legacy_tick_active(),
+            "the declarative write should schedule a pending timing event"
+        );
+        assert_eq!(
+            bus.legacy_tick_indices,
+            vec![1],
+            "write-triggered timing should activate only the touched C3/S3 peripheral entry"
+        );
+
+        bus.tick_peripherals_fully();
+        assert_eq!(bus.read_u32(0x2004).unwrap(), 1);
+        assert!(
+            bus.legacy_tick_indices.is_empty(),
+            "one-shot declarative timing should leave the hot tick set after it drains"
+        );
+    }
+
+    #[test]
+    fn c3_and_s3_interrupt_routing_caches_are_separate() {
+        let mut bus = SystemBus::empty();
+        assert!(!bus.esp32c3_irq_routing);
+        assert!(!bus.esp32s3_irq_routing);
+
+        bus.esp32c3_irq_routing = true;
+        bus.refresh_peripheral_index();
+        assert!(bus.esp32c3_irq_routing);
+        assert_eq!(bus.esp32c3_system_idx, None);
+        assert_eq!(bus.esp32c3_interrupt_core0_idx, None);
+        assert!(
+            !bus.esp32s3_irq_routing,
+            "enabling C3 RISC-V routing must not imply an S3 intmatrix model"
+        );
+
+        bus.add_peripheral(
+            "system",
+            0x600C_0000,
+            0x1000,
+            None,
+            Box::new(crate::peripherals::declarative::GenericPeripheral::new(
+                declarative_descriptor(None),
+            )),
+        );
+        bus.add_peripheral(
+            "interrupt_core0",
+            0x600C_2000,
+            0x1000,
+            None,
+            Box::new(crate::peripherals::declarative::GenericPeripheral::new(
+                declarative_descriptor(None),
+            )),
+        );
+        assert_eq!(bus.esp32c3_system_idx, Some(0));
+        assert_eq!(bus.esp32c3_interrupt_core0_idx, Some(1));
+        assert!(
+            !bus.esp32s3_irq_routing,
+            "adding C3 interrupt banks must not imply an S3 intmatrix model"
+        );
+
+        bus.add_peripheral(
+            "intmatrix",
+            0x600C_2000,
+            0x1000,
+            None,
+            Box::new(crate::peripherals::esp32s3::intmatrix::Esp32s3IntMatrix::new()),
+        );
+        assert!(
+            bus.esp32s3_irq_routing,
+            "S3 routing should be cached only when the S3 intmatrix peripheral is present"
+        );
+        assert!(
+            bus.esp32c3_irq_routing,
+            "adding S3 routing must not clear the independent C3 routing flag"
+        );
     }
 
     #[test]
@@ -3973,6 +4147,7 @@ peripherals:
             fault_unclocked: std::collections::HashMap::new(),
             flash_thunks: std::collections::HashMap::new(),
             peripheral_ranges: Vec::new(),
+            legacy_tick_indices: Vec::new(),
             peripheral_hint: Cell::new(None),
             last_gpio_in: [0; 2],
             current_cycle: 0,
@@ -3986,6 +4161,10 @@ peripherals:
             can_log_players: Vec::new(),
             esp32c3_irq_routing: false,
             riscv_irq_lines: 0,
+            esp32c3_system_idx: None,
+            esp32c3_interrupt_core0_idx: None,
+            esp32s3_irq_routing: false,
+            esp32s3_intmatrix_idx: None,
             flash_models_ops: false,
             flash_error_flags_idx: None,
             bus_trace: bus_trace::new_log(),
@@ -4041,6 +4220,7 @@ peripherals:
             fault_unclocked: std::collections::HashMap::new(),
             flash_thunks: std::collections::HashMap::new(),
             peripheral_ranges: Vec::new(),
+            legacy_tick_indices: Vec::new(),
             peripheral_hint: Cell::new(None),
             last_gpio_in: [0; 2],
             current_cycle: 0,
@@ -4054,6 +4234,10 @@ peripherals:
             can_log_players: Vec::new(),
             esp32c3_irq_routing: false,
             riscv_irq_lines: 0,
+            esp32c3_system_idx: None,
+            esp32c3_interrupt_core0_idx: None,
+            esp32s3_irq_routing: false,
+            esp32s3_intmatrix_idx: None,
             flash_models_ops: false,
             flash_error_flags_idx: None,
             bus_trace: bus_trace::new_log(),
@@ -4260,6 +4444,7 @@ peripherals:
             fault_unclocked: std::collections::HashMap::new(),
             flash_thunks: std::collections::HashMap::new(),
             peripheral_ranges: Vec::new(),
+            legacy_tick_indices: Vec::new(),
             peripheral_hint: Cell::new(None),
             last_gpio_in: [0; 2],
             current_cycle: 0,
@@ -4273,6 +4458,10 @@ peripherals:
             can_log_players: Vec::new(),
             esp32c3_irq_routing: false,
             riscv_irq_lines: 0,
+            esp32c3_system_idx: None,
+            esp32c3_interrupt_core0_idx: None,
+            esp32s3_irq_routing: false,
+            esp32s3_intmatrix_idx: None,
             flash_models_ops: false,
             flash_error_flags_idx: None,
             bus_trace: bus_trace::new_log(),
@@ -4478,6 +4667,7 @@ peripherals:
             fault_unclocked: std::collections::HashMap::new(),
             flash_thunks: std::collections::HashMap::new(),
             peripheral_ranges: Vec::new(),
+            legacy_tick_indices: Vec::new(),
             peripheral_hint: Cell::new(None),
             last_gpio_in: [0; 2],
             current_cycle: 0,
@@ -4491,6 +4681,10 @@ peripherals:
             can_log_players: Vec::new(),
             esp32c3_irq_routing: false,
             riscv_irq_lines: 0,
+            esp32c3_system_idx: None,
+            esp32c3_interrupt_core0_idx: None,
+            esp32s3_irq_routing: false,
+            esp32s3_intmatrix_idx: None,
             flash_models_ops: false,
             flash_error_flags_idx: None,
             bus_trace: bus_trace::new_log(),
@@ -4550,6 +4744,7 @@ peripherals:
             fault_unclocked: std::collections::HashMap::new(),
             flash_thunks: std::collections::HashMap::new(),
             peripheral_ranges: Vec::new(),
+            legacy_tick_indices: Vec::new(),
             peripheral_hint: Cell::new(None),
             last_gpio_in: [0; 2],
             current_cycle: 0,
@@ -4563,6 +4758,10 @@ peripherals:
             can_log_players: Vec::new(),
             esp32c3_irq_routing: false,
             riscv_irq_lines: 0,
+            esp32c3_system_idx: None,
+            esp32c3_interrupt_core0_idx: None,
+            esp32s3_irq_routing: false,
+            esp32s3_intmatrix_idx: None,
             flash_models_ops: false,
             flash_error_flags_idx: None,
             bus_trace: bus_trace::new_log(),
