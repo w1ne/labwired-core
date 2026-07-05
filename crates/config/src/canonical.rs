@@ -222,7 +222,11 @@ impl CanonicalConfig {
             0 => return Err(CanonicalError::NoMcuPart),
             1 => {}
             _ => {
-                let ids = mcus.iter().map(|p| p.id.as_str()).collect::<Vec<_>>().join(", ");
+                let ids = mcus
+                    .iter()
+                    .map(|p| p.id.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 return Err(CanonicalError::MultipleMcuParts(ids));
             }
         }
@@ -287,7 +291,12 @@ impl CanonicalConfig {
         }
 
         // Wire-based board_io for the remaining (GPIO) part types.
-        board_io.extend(emit_board_io_from_wires(&board, &wires, mcu_id, &self.parts));
+        board_io.extend(emit_board_io_from_wires(
+            &board,
+            &wires,
+            mcu_id,
+            &self.parts,
+        ));
 
         Ok(build_system_yaml(&external_devices, &board_io))
     }
@@ -418,7 +427,10 @@ fn parse_mcu_pin(pin_label: &str) -> Option<(String, u32)> {
 
     // ESP32/Pico: ^(?:GPIO|GP)(\d+)$ (case-insensitive) → gpio0.
     let lower = pin_label.to_ascii_lowercase();
-    if let Some(rest) = lower.strip_prefix("gpio").or_else(|| lower.strip_prefix("gp")) {
+    if let Some(rest) = lower
+        .strip_prefix("gpio")
+        .or_else(|| lower.strip_prefix("gp"))
+    {
         if !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit()) {
             if let Ok(n) = rest.parse::<u32>() {
                 return Some(("gpio0".to_string(), n));
@@ -666,7 +678,10 @@ mod canonical_tests {
     fn rejects_bad_version() {
         let json = r#"{ "version":2, "parts":[], "connections":[] }"#;
         let err = CanonicalConfig::from_json(json).unwrap_err();
-        assert!(matches!(err, CanonicalError::UnsupportedVersion(2)), "got {err:?}");
+        assert!(
+            matches!(err, CanonicalError::UnsupportedVersion(2)),
+            "got {err:?}"
+        );
     }
 
     #[test]
@@ -675,14 +690,20 @@ mod canonical_tests {
             "parts":[{"id":"m","type":"a"},{"id":"m","type":"b"}],
             "connections":[] }"#;
         let err = CanonicalConfig::from_json(json).unwrap_err();
-        assert!(matches!(err, CanonicalError::DuplicatePartId(ref id) if id == "m"), "got {err:?}");
+        assert!(
+            matches!(err, CanonicalError::DuplicatePartId(ref id) if id == "m"),
+            "got {err:?}"
+        );
     }
 
     #[test]
     fn rejects_empty_part_type() {
         let json = r#"{ "version":1, "parts":[{"id":"m","type":""}], "connections":[] }"#;
         let err = CanonicalConfig::from_json(json).unwrap_err();
-        assert!(matches!(err, CanonicalError::EmptyPartType(ref id) if id == "m"), "got {err:?}");
+        assert!(
+            matches!(err, CanonicalError::EmptyPartType(ref id) if id == "m"),
+            "got {err:?}"
+        );
     }
 
     #[test]
@@ -866,6 +887,9 @@ board_io:
     fn resolve_requires_an_mcu() {
         let json = r#"{ "version":1, "parts":[{"id":"led1","type":"led"}], "connections":[] }"#;
         let cfg = CanonicalConfig::from_json(json).unwrap();
-        assert!(matches!(cfg.resolve().unwrap_err(), CanonicalError::NoMcuPart));
+        assert!(matches!(
+            cfg.resolve().unwrap_err(),
+            CanonicalError::NoMcuPart
+        ));
     }
 }
