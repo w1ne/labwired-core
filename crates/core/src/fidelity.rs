@@ -96,9 +96,8 @@ impl FidelityReport {
     /// shape the CLI emits in `result.json` and the builder/MCP surface as
     /// structured unmodeled-access faults.
     pub fn to_gaps(&self) -> Vec<FidelityGap> {
-        let mut gaps = Vec::with_capacity(
-            self.unmapped_mmio.len() + self.undecoded_instructions.len(),
-        );
+        let mut gaps =
+            Vec::with_capacity(self.unmapped_mmio.len() + self.undecoded_instructions.len());
         for (addr, g) in &self.unmapped_mmio {
             gaps.push(FidelityGap {
                 kind: "unmapped_mmio".to_string(),
@@ -292,7 +291,10 @@ mod tests {
 
         // Round-trips through serde (the wire contract) and skips None fields.
         let json = serde_json::to_string(insn).unwrap();
-        assert!(!json.contains("address"), "None address must be skipped: {json}");
+        assert!(
+            !json.contains("address"),
+            "None address must be skipped: {json}"
+        );
         assert!(json.contains("\"opcode\":\"0xfa80f040\""), "{json}");
         let back: FidelityGap = serde_json::from_str(&json).unwrap();
         assert_eq!(&back, insn);
