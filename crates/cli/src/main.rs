@@ -663,6 +663,12 @@ struct TestResult {
     /// built a machine.
     #[serde(skip_serializing_if = "Option::is_none")]
     inspect: Option<labwired_core::inspect::MachineInspect>,
+    /// Structured coverage gaps the model hit during the run: unmapped MMIO and
+    /// undecoded instructions, flattened from core's thread-local
+    /// `FidelityReport`. Empty (and omitted) on a clean run, so honest runs stay
+    /// clean. The builder maps this into `/run`'s `unmodeled_access[]`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    fidelity: Vec<labwired_core::fidelity::FidelityGap>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -1994,6 +2000,13 @@ fn write_outputs<C: labwired_core::Cpu>(
     hasher.update(firmware_bytes);
     let firmware_hash = format!("{:x}", hasher.finalize());
 
+    // Drain the coverage-gap log for THIS run. `write_outputs` is called
+    // synchronously at the tail of `execute_test_loop`, on the very thread that
+    // ran the sim loop, so this reads the same thread-local the `record_*` calls
+    // populated. `take()` resets it, so it must run exactly once per run — this
+    // is the sole call site on the run path.
+    let fidelity = labwired_core::fidelity::take().to_gaps();
+
     let assertions_for_junit = assertions.clone();
     let result = TestResult {
         result_schema_version: RESULT_SCHEMA_VERSION.to_string(),
@@ -2014,6 +2027,7 @@ fn write_outputs<C: labwired_core::Cpu>(
             script: args.script.clone(),
         },
         inspect,
+        fidelity,
     };
 
     if let Some(output_dir) = &args.output_dir {
@@ -2334,6 +2348,8 @@ pub(crate) fn write_config_error_outputs(
             script: args.script.clone(),
         },
         inspect: None,
+        // Config error: the sim never ran, so there are no coverage gaps to report.
+        fidelity: Vec::new(),
     };
 
     if let Some(output_dir) = &args.output_dir {
