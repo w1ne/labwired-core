@@ -18,7 +18,15 @@ use std::sync::Arc;
 /// drops from ~380M instructions to a few million.
 const CYCLE_SCALE: u64 = 256;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Copy)]
+pub struct RiscVDecodeCacheEntry {
+    pub tag: u32,
+    pub opcode: u32,
+    pub instruction: Instruction,
+    pub inst_len: u8,
+}
+
+#[derive(Debug)]
 pub struct RiscV {
     pub x: [u32; 32], // x0..x31. x0 is correctly hardwired to 0 in logic.
     pub pc: u32,
@@ -42,6 +50,29 @@ pub struct RiscV {
     /// hart any intervening store (including any AMO*) invalidates the
     /// reservation per RISC-V ISA §8.2.
     pub reservation: Option<u32>,
+
+    decode_cache: Box<[Option<RiscVDecodeCacheEntry>; 4096]>,
+}
+
+impl Default for RiscV {
+    fn default() -> Self {
+        Self {
+            x: [0; 32],
+            pc: 0,
+            mstatus: 0,
+            mie: 0,
+            mip: 0,
+            mtvec: 0,
+            mscratch: 0,
+            mepc: 0,
+            mcause: 0,
+            mtval: 0,
+            mtime: 0,
+            mtimecmp: 0,
+            reservation: None,
+            decode_cache: Box::new([None; 4096]),
+        }
+    }
 }
 
 impl RiscV {
@@ -162,8 +193,28 @@ impl Cpu for RiscV {
             observer.on_step_start(self.pc, opcode);
         }
 
-        let instruction = decode_rv32(opcode);
-        let inst_len = if (opcode & 0x3) == 0x3 { 4 } else { 2 };
+        let cache_idx = ((self.pc >> 1) & 0xFFF) as usize;
+        let cached = if _config.decode_cache_enabled {
+            self.decode_cache[cache_idx]
+                .filter(|entry| entry.tag == self.pc && entry.opcode == opcode)
+        } else {
+            None
+        };
+        let (instruction, inst_len) = if let Some(entry) = cached {
+            (entry.instruction, entry.inst_len as u32)
+        } else {
+            let instruction = decode_rv32(opcode);
+            let inst_len = if (opcode & 0x3) == 0x3 { 4 } else { 2 };
+            if _config.decode_cache_enabled {
+                self.decode_cache[cache_idx] = Some(RiscVDecodeCacheEntry {
+                    tag: self.pc,
+                    opcode,
+                    instruction,
+                    inst_len: inst_len as u8,
+                });
+            }
+            (instruction, inst_len)
+        };
         tracing::debug!(
             "PC={:#x}, Op={:#08x}, Instr={:?}, Len={}",
             self.pc,
@@ -1342,5 +1393,36 @@ mod tests {
 
         assert_eq!(machine.cpu.read_reg(10), 42);
         assert_eq!(machine.cpu.pc, 12); // 4 + 4 + 2 + 2 = 12
+    }
+
+    #[test]
+    fn riscv_decode_cache_uses_opcode_tag_for_same_pc_changes() {
+        let mut bus = SystemBus::new();
+        let mut cpu = RiscV::new();
+        bus.flash.data = vec![
+            0x93, 0x00, 0x10, 0x00, // ADDI x1, x0, 1
+        ];
+
+        cpu.pc = 0;
+        let mut machine = Machine::new(cpu, bus);
+        machine.config.decode_cache_enabled = true;
+        let initial_pc = machine.cpu.pc;
+        machine.step().unwrap();
+
+        let cache_idx = ((initial_pc >> 1) & 0xFFF) as usize;
+        let entry = machine.cpu.decode_cache[cache_idx].expect("first step caches decode");
+        assert_eq!(entry.tag, 0);
+        assert_eq!(entry.opcode, 0x0010_0093);
+        assert_eq!(machine.cpu.read_reg(1), 1);
+
+        machine.bus.flash.data = vec![
+            0x93, 0x00, 0x20, 0x00, // ADDI x1, x0, 2
+        ];
+        machine.cpu.pc = 0;
+        machine.step().unwrap();
+
+        let entry = machine.cpu.decode_cache[cache_idx].expect("second step refreshes decode");
+        assert_eq!(entry.opcode, 0x0020_0093);
+        assert_eq!(machine.cpu.read_reg(1), 2);
     }
 }

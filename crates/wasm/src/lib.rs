@@ -390,18 +390,28 @@ impl WasmSimulator {
             .expect("esp32c3_flash presence checked by caller")
             .clone();
 
-        // Capture console output for the widget's Serial tab. The IDF default
-        // console is UART0; esp-hal / jtag-serial apps print through
-        // USB_SERIAL_JTAG. The BROM prints to BOTH, so route both into the same
-        // sink: attach UART0's tx sink here, and hand the sink to the shared
-        // builder so its USB_SERIAL_JTAG model mirrors into it too.
+        // Capture one console for the widget's Serial tab. The C3 boot ROM
+        // prints the same banner to UART0 and USB_SERIAL_JTAG; wiring both into
+        // one browser buffer renders every ROM character twice. Default to
+        // UART0 (Arduino/IDF Serial in hosted labs). A manifest can explicitly
+        // request the USB console with debug_uart: usb_serial_jtag.
         let uart_sink = Arc::new(Mutex::new(Vec::new()));
-        if let Some(debug_uart) = manifest.debug_uart.as_deref() {
-            if !bus.attach_uart_tx_sink_named(debug_uart, uart_sink.clone(), false) {
+        let capture_usb_serial = manifest
+            .debug_uart
+            .as_deref()
+            .map(|debug_uart| {
+                debug_uart.eq_ignore_ascii_case("usb_serial_jtag")
+                    || debug_uart.eq_ignore_ascii_case("usb-serial-jtag")
+            })
+            .unwrap_or(false);
+        if !capture_usb_serial {
+            if let Some(debug_uart) = manifest.debug_uart.as_deref() {
+                if !bus.attach_uart_tx_sink_named(debug_uart, uart_sink.clone(), false) {
+                    bus.attach_uart_tx_sink(uart_sink.clone(), false);
+                }
+            } else {
                 bus.attach_uart_tx_sink(uart_sink.clone(), false);
             }
-        } else {
-            bus.attach_uart_tx_sink(uart_sink.clone(), false);
         }
         let uart_rx_bufs = bus.attach_uart_rx_source();
 
@@ -410,7 +420,7 @@ impl WasmSimulator {
             flash_bytes,
             RomBootOpts {
                 efuse_mac: None,
-                usb_serial_sink: Some(uart_sink.clone()),
+                usb_serial_sink: capture_usb_serial.then(|| uart_sink.clone()),
             },
             // WasmSimulator holds Machine<Box<dyn Cpu>>; box the concrete RiscV.
             |c| Box::new(c) as Box<dyn Cpu>,
@@ -593,11 +603,15 @@ impl WasmSimulator {
             None => return false,
         };
 
-        let snapshot = machine.bus.peripherals[idx].dev.snapshot();
-
-        let register = match binding.kind {
-            BoardIoKind::Led | BoardIoKind::PwmOutput => "odr",
-            BoardIoKind::Button => "idr",
+        let pin_high = match binding.kind {
+            BoardIoKind::Led | BoardIoKind::PwmOutput => machine.bus.peripherals[idx]
+                .dev
+                .read_gpio_output(binding.pin)
+                .unwrap_or(false),
+            BoardIoKind::Button => machine.bus.peripherals[idx]
+                .dev
+                .read_gpio_input(binding.pin)
+                .unwrap_or(false),
             // Analog/bus kinds are not boolean and are exposed through typed state accessors.
             BoardIoKind::AdcInput
             | BoardIoKind::I2cDevice
@@ -606,8 +620,6 @@ impl WasmSimulator {
                 return false;
             }
         };
-        let reg_val = snapshot[register].as_u64().unwrap_or(0) as u32;
-        let pin_high = (reg_val >> binding.pin) & 1 == 1;
 
         if binding.active_high {
             pin_high

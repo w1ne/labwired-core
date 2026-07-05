@@ -401,6 +401,37 @@ impl crate::Peripheral for GpioPort {
         Ok(())
     }
 
+    fn read_gpio_input(&self, pin: u8) -> Option<bool> {
+        if pin >= 32 {
+            return None;
+        }
+        let reg = self.read_reg(self.idr_offset());
+        Some((reg & (1u32 << pin)) != 0)
+    }
+
+    fn read_gpio_output(&self, pin: u8) -> Option<bool> {
+        if pin >= 32 {
+            return None;
+        }
+        let reg = self.read_reg(self.odr_offset());
+        Some((reg & (1u32 << pin)) != 0)
+    }
+
+    fn set_gpio_input(&mut self, pin: u8, level: bool) -> bool {
+        if pin >= 32 {
+            return false;
+        }
+        let offset = self.idr_offset();
+        let mut reg = self.read_reg(offset);
+        if level {
+            reg |= 1u32 << pin;
+        } else {
+            reg &= !(1u32 << pin);
+        }
+        self.write_reg(offset, reg);
+        true
+    }
+
     fn snapshot(&self) -> serde_json::Value {
         // Serialize the active family's register struct directly (flat), so the
         // snapshot keeps registers like `odr` at top level (no variant tag) —

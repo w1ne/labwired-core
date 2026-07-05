@@ -313,7 +313,11 @@ boards:
     # 2026-06-30: additive Kinetis GPIO + DSPI variants in gpio.rs/spi.rs for the KW41Z; the STM32 GPIO/SPI engines are untouched, l073 diff unchanged. No live re-capture.
     # 2026-07-01: additive bus-trace device wrappers at I2c/Spi attach + shared BusTraceLog on SystemBus (universal bus analyzer); STM32 register engines byte-for-byte untouched, wrappers only forward (transparent as_any) and activate only when a device+log is attached. Diff/conformance unchanged; no live re-capture.
     # 2026-07-04: drift is the file-hash of the additive L4 PLLSAI1/2 ready-bit change in rcc.rs (L4Rcc::ready); this board's RCC engine (L0Rcc) is byte-for-byte untouched, stm32l0_mmio_diff unchanged, no live re-capture.
-    drift_ack: 2026-07-04
+    # 2026-07-05: GPIO gained generic board-input capability for simulator UI
+    # controls. L0 GPIO register layout/reset and the pinned l073 mmio paths are
+    # unchanged; input injection is additive and only active when a board IO source
+    # drives a pin. No live re-capture this session.
+    drift_ack: 2026-07-05
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs

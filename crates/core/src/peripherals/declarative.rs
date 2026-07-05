@@ -171,6 +171,42 @@ impl GenericPeripheral {
         true
     }
 
+    fn gpio_reg_offset(&self, id: &str) -> Option<usize> {
+        if !self.descriptor.peripheral.eq_ignore_ascii_case("GPIO") {
+            return None;
+        }
+        self.descriptor
+            .registers
+            .iter()
+            .find(|r| r.id == id && r.size == 32)
+            .map(|r| r.address_offset as usize)
+    }
+
+    fn read_register_storage_u32(&self, offset: usize) -> Option<u32> {
+        let data = self.data.borrow();
+        if offset + 3 >= data.len() {
+            return None;
+        }
+        Some(
+            (data[offset] as u32)
+                | ((data[offset + 1] as u32) << 8)
+                | ((data[offset + 2] as u32) << 16)
+                | ((data[offset + 3] as u32) << 24),
+        )
+    }
+
+    fn write_register_storage_u32(&self, offset: usize, value: u32) -> bool {
+        let mut data = self.data.borrow_mut();
+        if offset + 3 >= data.len() {
+            return false;
+        }
+        data[offset] = (value & 0xFF) as u8;
+        data[offset + 1] = ((value >> 8) & 0xFF) as u8;
+        data[offset + 2] = ((value >> 16) & 0xFF) as u8;
+        data[offset + 3] = ((value >> 24) & 0xFF) as u8;
+        true
+    }
+
     /// Apply any stuck bits that fall on the byte at `offset` to a read value.
     fn apply_stuck_byte(&self, offset: u64, mut byte: u8) -> u8 {
         for s in self.stuck_bits.borrow().iter() {
@@ -547,6 +583,42 @@ impl Peripheral for GenericPeripheral {
             "peripheral": self.descriptor.peripheral,
             "data": *self.data.borrow()
         })
+    }
+
+    fn read_gpio_input(&self, pin: u8) -> Option<bool> {
+        if pin >= 32 {
+            return None;
+        }
+        let offset = self.gpio_reg_offset("IN")?;
+        let value = self.read_register_storage_u32(offset)?;
+        Some((value & (1u32 << pin)) != 0)
+    }
+
+    fn read_gpio_output(&self, pin: u8) -> Option<bool> {
+        if pin >= 32 {
+            return None;
+        }
+        let offset = self.gpio_reg_offset("OUT")?;
+        let value = self.read_register_storage_u32(offset)?;
+        Some((value & (1u32 << pin)) != 0)
+    }
+
+    fn set_gpio_input(&mut self, pin: u8, level: bool) -> bool {
+        if pin >= 32 {
+            return false;
+        }
+        let Some(offset) = self.gpio_reg_offset("IN") else {
+            return false;
+        };
+        let Some(mut value) = self.read_register_storage_u32(offset) else {
+            return false;
+        };
+        if level {
+            value |= 1u32 << pin;
+        } else {
+            value &= !(1u32 << pin);
+        }
+        self.write_register_storage_u32(offset, value)
     }
 
     /// Expose the descriptor's register layout to the universal inspect
