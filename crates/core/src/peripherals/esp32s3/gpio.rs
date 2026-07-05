@@ -356,6 +356,28 @@ impl Peripheral for Esp32s3Gpio {
         PeripheralTickResult::default()
     }
 
+    fn read_gpio_input(&self, pin: u8) -> Option<bool> {
+        if pin >= 32 {
+            return None;
+        }
+        Some((self.in_data & (1u32 << pin)) != 0)
+    }
+
+    fn read_gpio_output(&self, pin: u8) -> Option<bool> {
+        if pin >= 32 {
+            return None;
+        }
+        Some((self.out & (1u32 << pin)) != 0)
+    }
+
+    fn set_gpio_input(&mut self, pin: u8, level: bool) -> bool {
+        if pin >= 32 {
+            return false;
+        }
+        self.set_pin_input(pin, level);
+        true
+    }
+
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)
     }

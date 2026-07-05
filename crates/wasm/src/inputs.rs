@@ -90,23 +90,16 @@ impl WasmSimulator {
                 JsValue::from_str(&format!("Peripheral '{}' not found", binding.peripheral))
             })?;
 
-        // Read the IDR via snapshot, modify the bit, write back via bus
-        let snapshot = machine.bus.peripherals[idx].dev.snapshot();
-        let current_idr = snapshot["idr"].as_u64().unwrap_or(0) as u32;
-
         let pin_high = if binding.active_high { active } else { !active };
-        let new_idr = if pin_high {
-            current_idr | (1 << binding.pin)
-        } else {
-            current_idr & !(1 << binding.pin)
-        };
-
-        // Write IDR through the peripheral's write interface.
-        // Determine IDR offset from layout in snapshot.
-        let layout = snapshot["layout"].as_str().unwrap_or("stm32_f1");
-        let idr_offset: u64 = if layout.contains("v2") { 0x10 } else { 0x08 };
-        let base = machine.bus.peripherals[idx].base;
-        let _ = machine.bus.write_u32(base + idr_offset, new_idr);
+        if !machine.bus.peripherals[idx]
+            .dev
+            .set_gpio_input(binding.pin, pin_high)
+        {
+            return Err(JsValue::from_str(&format!(
+                "Peripheral '{}' does not expose GPIO input control",
+                binding.peripheral
+            )));
+        }
 
         Ok(())
     }
@@ -689,5 +682,69 @@ impl WasmSimulator {
             }
         }
         Err(JsValue::from_str("no 74HC165 shift register attached"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use labwired_core::cpu::riscv::RiscV;
+
+    fn c3_button_sim() -> WasmSimulator {
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let chip_yaml = std::fs::read_to_string(root.join("../../configs/chips/esp32c3.yaml"))
+            .expect("read esp32c3 chip yaml");
+        let chip: ChipDescriptor = serde_yaml::from_str(&chip_yaml).expect("parse chip yaml");
+        let manifest: SystemManifest = serde_yaml::from_str(
+            r#"
+name: "esp32c3-button-test"
+chip: "../chips/esp32c3.yaml"
+board_io:
+  - id: "left"
+    kind: "button"
+    peripheral: "gpio"
+    pin: 2
+    signal: "input"
+    active_high: true
+"#,
+        )
+        .expect("parse system yaml");
+        let mut bus = SystemBus::from_config(&chip, &manifest).expect("construct C3 bus");
+        bus.refresh_peripheral_index();
+        let machine = Machine::new(Box::new(RiscV::new()) as Box<dyn Cpu>, bus);
+
+        WasmSimulator {
+            machine: Some(machine),
+            board_io: manifest.board_io,
+            uart_sink: Arc::new(Mutex::new(Vec::new())),
+            uart_rx_bufs: Vec::new(),
+            arch: Arch::RiscV,
+            esp32_ipi: None,
+            jit_browser_enabled: false,
+            jit_browser_cache: None,
+        }
+    }
+
+    fn button_active(sim: &WasmSimulator) -> bool {
+        let machine = sim.machine.as_ref().expect("machine");
+        let binding = sim
+            .board_io
+            .iter()
+            .find(|b| b.id == "left")
+            .expect("left binding");
+        sim.read_board_io_state(machine, binding)
+    }
+
+    #[test]
+    fn esp32c3_board_io_button_press_updates_gpio_input_state() {
+        let mut sim = c3_button_sim();
+
+        assert!(!button_active(&sim));
+
+        sim.set_board_io_input("left", true).expect("press left");
+        assert!(button_active(&sim));
+
+        sim.set_board_io_input("left", false).expect("release left");
+        assert!(!button_active(&sim));
     }
 }

@@ -422,6 +422,24 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// polarity. Default no-op.
     fn observe_gpio_change(&mut self, _changes: &[(u8, u8, u8)]) {}
 
+    /// GPIO capability: read the firmware-visible input level for `pin`.
+    /// Non-GPIO peripherals return `None`.
+    fn read_gpio_input(&self, _pin: u8) -> Option<bool> {
+        None
+    }
+
+    /// GPIO capability: read the firmware-visible output latch for `pin`.
+    /// Non-GPIO peripherals return `None`.
+    fn read_gpio_output(&self, _pin: u8) -> Option<bool> {
+        None
+    }
+
+    /// GPIO capability: drive an externally controlled input level for `pin`
+    /// (e.g. browser button press). Returns `false` if unsupported.
+    fn set_gpio_input(&mut self, _pin: u8, _level: bool) -> bool {
+        false
+    }
+
     /// Bus-aware tick hook for peripherals that need to read or write the
     /// bus themselves (e.g. Easy DMA on RADIO). Default no-op.
     fn tick_with_bus(&mut self, _bus: &mut dyn Bus) {}
