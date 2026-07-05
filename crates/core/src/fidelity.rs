@@ -20,8 +20,38 @@
 //! Recording only happens on the (rare) gap paths, so there is no cost on the
 //! hot mapped-access / decoded-instruction paths.
 
+use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::collections::BTreeMap;
+
+/// A FLAT, serialisable view of a single coverage gap, shaped for a consumer
+/// list (the CLI's `result.json` → builder `/run` → MCP `unmodeled_access[]`).
+///
+/// This is the additive, wire-facing projection of [`FidelityReport`]. The
+/// in-memory report keys gaps by opcode/address in `BTreeMap`s for dedup/ranking;
+/// this struct unrolls each entry into one record with hex-formatted fields so a
+/// downstream consumer can render "the model did not model X at PC Y, N times"
+/// without knowing the internal keying.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct FidelityGap {
+    /// `"unmapped_mmio"` or `"undecoded_instruction"`.
+    pub kind: String,
+    /// Hex address of the unmapped MMIO access (e.g. `"0x40020000"`).
+    /// `Some` for `unmapped_mmio`, `None` for undecoded instructions.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub address: Option<String>,
+    /// Hex packed opcode of the undecoded instruction (e.g. `"0xfa80f040"`).
+    /// `Some` for `undecoded_instruction`, `None` for MMIO.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opcode: Option<String>,
+    /// Hex PC at the first occurrence (e.g. `"0x08000abc"`; `"0x0"` when the
+    /// site has no PC, as with a bus access).
+    pub first_pc: String,
+    /// Number of times this exact gap was hit.
+    pub count: u64,
+    /// Human-readable classification (mnemonic guess / access kind).
+    pub detail: String,
+}
 
 /// One distinct coverage gap and how often it was hit.
 #[derive(Clone, Debug)]
@@ -58,6 +88,37 @@ impl FidelityReport {
             .map(|g| g.count)
             .sum::<u64>()
             + self.unmapped_mmio.values().map(|g| g.count).sum::<u64>()
+    }
+
+    /// Flatten the report into a serialisable list of [`FidelityGap`]s: every
+    /// unmapped-MMIO entry (address set, opcode absent) followed by every
+    /// undecoded-instruction entry (opcode set, address absent). This is the
+    /// shape the CLI emits in `result.json` and the builder/MCP surface as
+    /// structured unmodeled-access faults.
+    pub fn to_gaps(&self) -> Vec<FidelityGap> {
+        let mut gaps =
+            Vec::with_capacity(self.unmapped_mmio.len() + self.undecoded_instructions.len());
+        for (addr, g) in &self.unmapped_mmio {
+            gaps.push(FidelityGap {
+                kind: "unmapped_mmio".to_string(),
+                address: Some(format!("{addr:#x}")),
+                opcode: None,
+                first_pc: format!("{:#x}", g.first_pc),
+                count: g.count,
+                detail: g.detail.clone(),
+            });
+        }
+        for (opcode, g) in &self.undecoded_instructions {
+            gaps.push(FidelityGap {
+                kind: "undecoded_instruction".to_string(),
+                address: None,
+                opcode: Some(format!("{opcode:#x}")),
+                first_pc: format!("{:#x}", g.first_pc),
+                count: g.count,
+                detail: g.detail.clone(),
+            });
+        }
+        gaps
     }
 }
 
@@ -185,5 +246,57 @@ mod tests {
         let taken = take();
         assert_eq!(taken.total_hits(), 3);
         assert!(report().is_empty());
+    }
+
+    #[test]
+    fn to_gaps_flattens_with_correct_shape() {
+        let mut report = FidelityReport::default();
+        report.unmapped_mmio.insert(
+            0x4002_0000,
+            Gap {
+                count: 3,
+                first_pc: 0,
+                detail: "read_u32".to_string(),
+            },
+        );
+        report.undecoded_instructions.insert(
+            0xFA80_F040,
+            Gap {
+                count: 2,
+                first_pc: 0x0800_0ABC,
+                detail: "uadd8?".to_string(),
+            },
+        );
+
+        let gaps = report.to_gaps();
+        assert_eq!(gaps.len(), 2);
+
+        // unmapped MMIO first: address set, opcode absent.
+        let mmio = &gaps[0];
+        assert_eq!(mmio.kind, "unmapped_mmio");
+        assert_eq!(mmio.address.as_deref(), Some("0x40020000"));
+        assert_eq!(mmio.opcode, None);
+        assert_eq!(mmio.first_pc, "0x0");
+        assert_eq!(mmio.count, 3);
+        assert_eq!(mmio.detail, "read_u32");
+
+        // undecoded instruction next: opcode set, address absent.
+        let insn = &gaps[1];
+        assert_eq!(insn.kind, "undecoded_instruction");
+        assert_eq!(insn.address, None);
+        assert_eq!(insn.opcode.as_deref(), Some("0xfa80f040"));
+        assert_eq!(insn.first_pc, "0x8000abc");
+        assert_eq!(insn.count, 2);
+        assert_eq!(insn.detail, "uadd8?");
+
+        // Round-trips through serde (the wire contract) and skips None fields.
+        let json = serde_json::to_string(insn).unwrap();
+        assert!(
+            !json.contains("address"),
+            "None address must be skipped: {json}"
+        );
+        assert!(json.contains("\"opcode\":\"0xfa80f040\""), "{json}");
+        let back: FidelityGap = serde_json::from_str(&json).unwrap();
+        assert_eq!(&back, insn);
     }
 }
