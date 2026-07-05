@@ -151,6 +151,12 @@ impl SystemBus {
             })
             .collect();
         self.peripheral_ranges.sort_by_key(|r| r.start);
+        self.legacy_tick_indices = self
+            .peripherals
+            .iter()
+            .enumerate()
+            .filter_map(|(index, p)| p.dev.legacy_tick_active().then_some(index))
+            .collect();
         self.peripheral_hint.set(None);
         // Cache the DPORT index (classic-ESP32 only) so the per-step
         // cross-core IPI read is O(1) instead of scanning every peripheral.
@@ -184,10 +190,46 @@ impl SystemBus {
                 .and_then(|a| a.downcast_ref::<crate::peripherals::flash::Flash>())
                 .is_some_and(|f| f.h5_error_flags_enabled())
         });
+        self.esp32c3_system_idx = self
+            .peripherals
+            .iter()
+            .position(|p| p.name == "system" && p.base == 0x600C_0000);
+        self.esp32c3_interrupt_core0_idx = self
+            .peripherals
+            .iter()
+            .position(|p| p.name == "interrupt_core0" && p.base == 0x600C_2000);
+        self.esp32s3_intmatrix_idx = self.peripherals.iter().position(|p| {
+            p.dev
+                .as_any()
+                .and_then(|a| {
+                    a.downcast_ref::<crate::peripherals::esp32s3::intmatrix::Esp32s3IntMatrix>()
+                })
+                .is_some()
+        });
+        self.esp32s3_irq_routing = self.esp32s3_intmatrix_idx.is_some();
     }
 
     pub fn refresh_peripheral_index(&mut self) {
         self.rebuild_peripheral_ranges();
+    }
+
+    pub(crate) fn refresh_legacy_tick_index(&mut self, idx: usize) -> bool {
+        let active = self
+            .peripherals
+            .get(idx)
+            .is_some_and(|p| p.dev.legacy_tick_active());
+        let pos = self.legacy_tick_indices.iter().position(|&i| i == idx);
+        match (active, pos) {
+            (true, None) => {
+                self.legacy_tick_indices.push(idx);
+                self.legacy_tick_indices.sort_unstable();
+            }
+            (false, Some(pos)) => {
+                self.legacy_tick_indices.swap_remove(pos);
+            }
+            _ => {}
+        }
+        active
     }
 
     pub(crate) fn find_peripheral_index(&self, addr: u64) -> Option<usize> {

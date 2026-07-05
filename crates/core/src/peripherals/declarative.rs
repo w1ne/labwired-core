@@ -105,6 +105,20 @@ impl GenericPeripheral {
         &self.descriptor
     }
 
+    pub fn peek_u32_raw(&self, offset: u64) -> Option<u32> {
+        let data = self.data.borrow();
+        let offset = offset as usize;
+        let end = offset.checked_add(4)?;
+        if end > data.len() {
+            return None;
+        }
+        let val = data[offset] as u32
+            | ((data[offset + 1] as u32) << 8)
+            | ((data[offset + 2] as u32) << 16)
+            | ((data[offset + 3] as u32) << 24);
+        Some(self.apply_stuck_u32(offset as u64, val))
+    }
+
     /// Force `reg_id` to `value`, overriding both its live contents and its
     /// declared reset value so the change survives a later reset. This is the
     /// injection point for the `wrong_reset_value` fault. Returns false if no
@@ -271,6 +285,22 @@ impl GenericPeripheral {
                 }
             }
         }
+    }
+
+    fn has_read_trigger(&self) -> bool {
+        self.descriptor.timing.as_ref().is_some_and(|timing| {
+            timing
+                .iter()
+                .any(|hook| matches!(hook.trigger, labwired_config::TimingTrigger::Read { .. }))
+        })
+    }
+
+    fn has_write_trigger(&self) -> bool {
+        self.descriptor.timing.as_ref().is_some_and(|timing| {
+            timing
+                .iter()
+                .any(|hook| matches!(hook.trigger, labwired_config::TimingTrigger::Write { .. }))
+        })
     }
 }
 
@@ -494,6 +524,14 @@ impl Peripheral for GenericPeripheral {
         result.dma_signals = None;
         result.cycles = 0;
         result
+    }
+
+    fn legacy_tick_active(&self) -> bool {
+        !self.inflight_events.borrow().is_empty() || self.has_read_trigger()
+    }
+
+    fn legacy_tick_dynamic(&self) -> bool {
+        !self.has_read_trigger() && self.has_write_trigger()
     }
 
     fn as_any(&self) -> Option<&dyn Any> {
