@@ -603,11 +603,15 @@ impl WasmSimulator {
             None => return false,
         };
 
-        let snapshot = machine.bus.peripherals[idx].dev.snapshot();
-
-        let register = match binding.kind {
-            BoardIoKind::Led | BoardIoKind::PwmOutput => "odr",
-            BoardIoKind::Button => "idr",
+        let pin_high = match binding.kind {
+            BoardIoKind::Led | BoardIoKind::PwmOutput => machine.bus.peripherals[idx]
+                .dev
+                .read_gpio_output(binding.pin)
+                .unwrap_or(false),
+            BoardIoKind::Button => machine.bus.peripherals[idx]
+                .dev
+                .read_gpio_input(binding.pin)
+                .unwrap_or(false),
             // Analog/bus kinds are not boolean and are exposed through typed state accessors.
             BoardIoKind::AdcInput
             | BoardIoKind::I2cDevice
@@ -616,8 +620,6 @@ impl WasmSimulator {
                 return false;
             }
         };
-        let reg_val = snapshot[register].as_u64().unwrap_or(0) as u32;
-        let pin_high = (reg_val >> binding.pin) & 1 == 1;
 
         if binding.active_high {
             pin_high
