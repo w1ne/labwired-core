@@ -9,6 +9,11 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
 
+/// Canonical device config v1 — the single JSON shape the agent builds and both
+/// engines load directly (Phase 1: parse + structural validation; resolve() is
+/// a documented Phase 2 stub).
+pub mod canonical;
+
 fn deserialize_u64_lax<'de, D>(deserializer: D) -> Result<u64, D::Error>
 where
     D: serde::Deserializer<'de>,
