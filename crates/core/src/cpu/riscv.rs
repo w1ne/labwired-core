@@ -1406,9 +1406,10 @@ mod tests {
         cpu.pc = 0;
         let mut machine = Machine::new(cpu, bus);
         machine.config.decode_cache_enabled = true;
+        let initial_pc = machine.cpu.pc;
         machine.step().unwrap();
 
-        let cache_idx = ((0u32 >> 1) & 0xFFF) as usize;
+        let cache_idx = ((initial_pc >> 1) & 0xFFF) as usize;
         let entry = machine.cpu.decode_cache[cache_idx].expect("first step caches decode");
         assert_eq!(entry.tag, 0);
         assert_eq!(entry.opcode, 0x0010_0093);

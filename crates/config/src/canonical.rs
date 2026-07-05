@@ -260,83 +260,87 @@ impl CanonicalConfig {
         // Non-MCU parts, in original order (mirrors `diagram.parts`, which
         // `canonicalToDiagramV1` builds by filtering out the MCU).
         let non_mcu = || self.parts.iter().filter(|p| p.id != mcu.id);
-        let mut push = |ext: Option<String>, bio: Option<String>| {
-            if let Some(e) = ext {
-                external_devices.push(e);
-            }
-            if let Some(b) = bio {
-                board_io.push(b);
-            }
-        };
 
         // The dedicated-emitter loops run in the SAME order as `diagramToConfig`,
         // because both the `external_devices` and `board_io` lists are emitted in
         // this order (byte-order matters).
-
-        // 1. Ultrasonic (HC-SR04).
-        for part in non_mcu() {
-            if part.r#type == "ultrasonic" {
-                let (ext, bio) = emit_ultrasonic(&board, &wires, mcu_id, part);
-                push(ext, bio);
-            }
-        }
-        // 2. PCD8544 (Nokia 5110).
-        for part in non_mcu() {
-            if part.r#type == "pcd8544" {
-                let (ext, bio) = emit_pcd8544(&board, &wires, mcu_id, &part.id);
-                push(ext, bio);
-            }
-        }
-        // 3. SN74HC165 shift register.
-        for part in non_mcu() {
-            if part.r#type == "sn74hc165" {
-                let (ext, bio) = emit_sn74hc165(&board, &wires, mcu_id, part);
-                push(ext, bio);
-            }
-        }
-        // 4. IO-Link master.
-        for part in non_mcu() {
-            if part.r#type == "iolink-master" {
-                let (ext, bio) = emit_iolink_master(&board, &wires, mcu_id, &self.parts, &part.id);
-                push(ext, bio);
-            }
-        }
-        // 5. Legacy I²C devices (adxl345, mpu6050, bme280, oled-ssd1306, …).
-        for part in non_mcu() {
-            let Some(address) = i2c_device_address(&part.r#type) else {
-                continue;
+        {
+            let mut push = |ext: Option<String>, bio: Option<String>| {
+                if let Some(e) = ext {
+                    external_devices.push(e);
+                }
+                if let Some(b) = bio {
+                    board_io.push(b);
+                }
             };
-            let Some(connection) = i2c_peripheral_for_part_wire(&board, &wires, mcu_id, &part.id)
-            else {
-                continue;
-            };
-            let (ed, bio) = emit_legacy_i2c_device(&part.id, &part.r#type, &connection, address);
-            push(Some(ed), Some(bio));
-        }
-        // 6. SPI devices (ili9341, max31855, ssd1680_tricolor_290).
-        for part in non_mcu() {
-            if SPI_DEVICE_TYPES.contains(&part.r#type.as_str()) {
-                let (ext, bio) = emit_spi_device(&board, &wires, mcu_id, &part.id, &part.r#type);
-                push(ext, bio);
-            }
-        }
-        // 7. NEO-6M GPS.
-        for part in non_mcu() {
-            if part.r#type == "neo6m-gps" {
-                let (ext, bio) = emit_neo6m_gps(&board, &wires, mcu_id, &part.id);
-                push(ext, bio);
-            }
-        }
-        // 8. CAN diagnostic tester.
-        for part in non_mcu() {
-            if part.r#type == "can-diagnostic-tool" {
-                let (ext, bio) =
-                    emit_can_diagnostic_tool(&board, &wires, mcu_id, &self.parts, part);
-                push(ext, bio);
-            }
-        }
 
-        drop(push);
+            // 1. Ultrasonic (HC-SR04).
+            for part in non_mcu() {
+                if part.r#type == "ultrasonic" {
+                    let (ext, bio) = emit_ultrasonic(&board, &wires, mcu_id, part);
+                    push(ext, bio);
+                }
+            }
+            // 2. PCD8544 (Nokia 5110).
+            for part in non_mcu() {
+                if part.r#type == "pcd8544" {
+                    let (ext, bio) = emit_pcd8544(&board, &wires, mcu_id, &part.id);
+                    push(ext, bio);
+                }
+            }
+            // 3. SN74HC165 shift register.
+            for part in non_mcu() {
+                if part.r#type == "sn74hc165" {
+                    let (ext, bio) = emit_sn74hc165(&board, &wires, mcu_id, part);
+                    push(ext, bio);
+                }
+            }
+            // 4. IO-Link master.
+            for part in non_mcu() {
+                if part.r#type == "iolink-master" {
+                    let (ext, bio) =
+                        emit_iolink_master(&board, &wires, mcu_id, &self.parts, &part.id);
+                    push(ext, bio);
+                }
+            }
+            // 5. Legacy I²C devices (adxl345, mpu6050, bme280, oled-ssd1306, …).
+            for part in non_mcu() {
+                let Some(address) = i2c_device_address(&part.r#type) else {
+                    continue;
+                };
+                let Some(connection) =
+                    i2c_peripheral_for_part_wire(&board, &wires, mcu_id, &part.id)
+                else {
+                    continue;
+                };
+                let (ed, bio) =
+                    emit_legacy_i2c_device(&part.id, &part.r#type, &connection, address);
+                push(Some(ed), Some(bio));
+            }
+            // 6. SPI devices (ili9341, max31855, ssd1680_tricolor_290).
+            for part in non_mcu() {
+                if SPI_DEVICE_TYPES.contains(&part.r#type.as_str()) {
+                    let (ext, bio) =
+                        emit_spi_device(&board, &wires, mcu_id, &part.id, &part.r#type);
+                    push(ext, bio);
+                }
+            }
+            // 7. NEO-6M GPS.
+            for part in non_mcu() {
+                if part.r#type == "neo6m-gps" {
+                    let (ext, bio) = emit_neo6m_gps(&board, &wires, mcu_id, &part.id);
+                    push(ext, bio);
+                }
+            }
+            // 8. CAN diagnostic tester.
+            for part in non_mcu() {
+                if part.r#type == "can-diagnostic-tool" {
+                    let (ext, bio) =
+                        emit_can_diagnostic_tool(&board, &wires, mcu_id, &self.parts, part);
+                    push(ext, bio);
+                }
+            }
+        }
 
         // 9. Wire-based board_io for all remaining (GPIO/ADC) part types.
         board_io.extend(emit_board_io_from_wires(
