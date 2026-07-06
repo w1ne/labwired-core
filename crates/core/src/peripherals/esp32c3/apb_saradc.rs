@@ -253,6 +253,14 @@ impl Peripheral for Esp32c3ApbSarAdc {
         }
     }
 
+    fn legacy_tick_active(&self) -> bool {
+        self.int_st() != 0
+    }
+
+    fn legacy_tick_dynamic(&self) -> bool {
+        true
+    }
+
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)
     }
@@ -328,14 +336,28 @@ mod tests {
     #[test]
     fn int_st_masks_with_ena_and_emits_source() {
         let mut a = Esp32c3ApbSarAdc::new(APB_SARADC_INTR_SOURCE_ID);
+        assert!(
+            !a.legacy_tick_active(),
+            "idle level-IRQ SARADC must stay out of the legacy tick walk"
+        );
+        assert!(
+            a.legacy_tick_dynamic(),
+            "writes that assert/clear INT_ST must refresh tick membership"
+        );
         a.write_u32(ONETIME_SAMPLE, sar1_oneshot(2)).unwrap();
         assert_eq!(a.read_u32(INT_ST).unwrap(), 0, "ST gated by ENA");
         assert_eq!(a.tick().explicit_irqs, None);
         a.write_u32(INT_ENA, SAR1_DONE_INT).unwrap();
         assert_eq!(a.read_u32(INT_ST).unwrap() & SAR1_DONE_INT, SAR1_DONE_INT);
+        assert!(a.legacy_tick_active(), "asserted INT_ST needs level ticks");
         assert_eq!(
             a.tick().explicit_irqs,
             Some(vec![APB_SARADC_INTR_SOURCE_ID])
+        );
+        a.write_u32(INT_CLR, SAR1_DONE_INT).unwrap();
+        assert!(
+            !a.legacy_tick_active(),
+            "cleared INT_ST can leave tick walk"
         );
     }
 

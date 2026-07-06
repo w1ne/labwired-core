@@ -19,7 +19,7 @@ use labwired_core::peripherals::adc::Adc;
 use labwired_core::system::cortex_m::configure_cortex_m;
 use labwired_core::system::xtensa::configure_xtensa_esp32;
 use labwired_core::Bus;
-use labwired_core::{Cpu, Machine};
+use labwired_core::{Cpu, DebugControl, Machine};
 use labwired_loader::load_elf_bytes;
 use wasm_bindgen::prelude::*;
 
@@ -70,6 +70,20 @@ pub struct WasmSimulator {
     /// Lazy-init at first JIT-able step. Boxed so the typical "JIT off"
     /// path pays no per-instance allocation.
     jit_browser_cache: Option<Box<jit_browser::BrowserJitCache>>,
+}
+
+#[derive(serde::Serialize)]
+struct WasmStepBatchProfile {
+    requested_cycles: u32,
+    executed_cycles: u32,
+    wall_ms: f64,
+    cycles_per_second: f64,
+    cpu_instructions: u64,
+    cpu_batches: u64,
+    peripheral_ticks: u64,
+    peripheral_ticked_entries: u64,
+    bus_tick_entries: u64,
+    legacy_tick_entries: u64,
 }
 
 #[wasm_bindgen]
@@ -735,16 +749,57 @@ impl WasmSimulator {
     #[wasm_bindgen]
     pub fn step_batch(&mut self, max_cycles: u32) -> Result<u32, JsValue> {
         let machine = self.machine();
-        for i in 0..max_cycles {
-            if let Err(e) = machine.step() {
-                return if i > 0 {
-                    Ok(i)
+        let before = machine.total_cycles;
+        match machine.run(Some(max_cycles)) {
+            Ok(_) => Ok((machine.total_cycles - before) as u32),
+            Err(e) => {
+                let executed = (machine.total_cycles - before) as u32;
+                if executed > 0 {
+                    Ok(executed)
                 } else {
                     Err(JsValue::from_str(&format!("Step Error: {}", e)))
-                };
+                }
             }
         }
-        Ok(max_cycles)
+    }
+
+    /// Execute one measured batch and return both wall-clock timing and core
+    /// run-loop counters. Intended for worker/Playwright profiling; normal
+    /// animation still calls `step_batch`.
+    #[wasm_bindgen]
+    pub fn step_batch_profile(&mut self, max_cycles: u32) -> Result<JsValue, JsValue> {
+        let t0 = perf_now();
+        let machine = self.machine();
+        let before = machine.total_cycles;
+        machine.reset_step_profile();
+        let run_result = machine.run(Some(max_cycles));
+        let executed = (machine.total_cycles - before) as u32;
+        let profile = machine.step_profile();
+        let t1 = perf_now();
+
+        if let Err(e) = run_result {
+            if executed == 0 {
+                return Err(JsValue::from_str(&format!("Step Error: {}", e)));
+            }
+        }
+
+        serde_wasm_bindgen::to_value(&WasmStepBatchProfile {
+            requested_cycles: max_cycles,
+            executed_cycles: executed,
+            wall_ms: t1 - t0,
+            cycles_per_second: if t1 > t0 {
+                (executed as f64) * 1000.0 / (t1 - t0)
+            } else {
+                0.0
+            },
+            cpu_instructions: profile.cpu_instructions,
+            cpu_batches: profile.cpu_batches,
+            peripheral_ticks: profile.peripheral_ticks,
+            peripheral_ticked_entries: profile.peripheral_ticked_entries,
+            bus_tick_entries: profile.bus_tick_entries,
+            legacy_tick_entries: profile.legacy_tick_entries,
+        })
+        .map_err(|e| JsValue::from_str(&format!("profile serialize: {e}")))
     }
 
     // ──────────────────────────────────────────────────────────────────────

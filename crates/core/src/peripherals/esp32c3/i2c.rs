@@ -435,6 +435,14 @@ impl Peripheral for Esp32c3I2c {
         }
     }
 
+    fn legacy_tick_active(&self) -> bool {
+        self.int_raw & self.int_ena != 0
+    }
+
+    fn legacy_tick_dynamic(&self) -> bool {
+        true
+    }
+
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)
     }
@@ -694,8 +702,25 @@ mod tests {
     fn int_st_masks_with_int_ena() {
         let mut p = Esp32c3I2c::new();
         p.int_raw = INT_TRANS_COMPLETE | INT_NACK;
+        assert!(
+            !p.legacy_tick_active(),
+            "disabled C3 I2C level IRQs must stay out of the legacy tick walk"
+        );
+        assert!(
+            p.legacy_tick_dynamic(),
+            "C3 I2C updates tick membership when INT_ST changes"
+        );
         p.write_u32(REG_INT_ENA, INT_TRANS_COMPLETE).unwrap();
         assert_eq!(p.read_u32(REG_INT_ST).unwrap(), INT_TRANS_COMPLETE);
+        assert!(
+            p.legacy_tick_active(),
+            "enabled C3 I2C level IRQ must re-enter the legacy tick walk"
+        );
+        p.write_u32(REG_INT_CLR, INT_TRANS_COMPLETE).unwrap();
+        assert!(
+            !p.legacy_tick_active(),
+            "cleared C3 I2C level IRQ must leave the legacy tick walk"
+        );
     }
 
     #[test]

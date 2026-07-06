@@ -44,7 +44,18 @@ fn pend_nvic(
 }
 
 impl SystemBus {
-    fn read_cached_declarative_u32(&self, idx: usize, offset: u64) -> Option<u32> {
+    pub(crate) fn tick_profile_entry_counts(&self) -> (usize, usize) {
+        let bus_tick_entries = self.bus_tick_indices.len();
+        let legacy_tick_entries = if cfg!(feature = "event-scheduler") && self.legacy_walk_disabled
+        {
+            0
+        } else {
+            self.legacy_tick_indices.len()
+        };
+        (bus_tick_entries, legacy_tick_entries)
+    }
+
+    pub(crate) fn read_cached_declarative_u32(&self, idx: usize, offset: u64) -> Option<u32> {
         self.peripherals
             .get(idx)?
             .dev
@@ -144,15 +155,16 @@ impl SystemBus {
         // `&mut self` into `tick_with_bus`; a no-op stub stands in for the
         // duration. `needs_bus_tick` returning false skips this for
         // everyone else at near-zero cost.
-        for i in 0..self.peripherals.len() {
-            if !self.peripherals[i].dev.needs_bus_tick() {
-                continue;
-            }
+        for pos in 0..self.bus_tick_indices.len() {
+            let i = self.bus_tick_indices[pos];
             let placeholder: Box<dyn Peripheral> =
                 Box::new(crate::peripherals::stub::StubPeripheral::new(0));
             let mut dev = std::mem::replace(&mut self.peripherals[i].dev, placeholder);
             dev.tick_with_bus(self);
             self.peripherals[i].dev = dev;
+            if self.peripherals[i].dev.legacy_tick_dynamic() {
+                self.refresh_legacy_tick_index(i);
+            }
         }
 
         // Plan 3: collect ESP32-S3 explicit_irq source IDs during pass 1 so
@@ -206,7 +218,7 @@ impl SystemBus {
                         );
                     }
 
-                    let res = p.dev.tick();
+                    let res = p.dev.tick_elapsed(tick_interval);
                     p.ticks_remaining = res.ticks_until_next.unwrap_or(0);
                     (res, p.irq, p.base, p.dev.legacy_tick_dynamic())
                 })
@@ -301,51 +313,54 @@ impl SystemBus {
             }
         }
 
-        // GPIO edge-detection pass: snapshot the IN registers of GPIO ports
-        // 0 and 1, diff against last-known state, and notify every
-        // peripheral of changed pins.  GPIOTE overrides observe_gpio_change
-        // to drive EVENTS_IN[i] when a channel watches a matching pin.
-        //
-        // We look up peripheral bases by name so the addresses stay valid
-        // even when a chip yaml relocates GPIO ports (e.g. the onboarding
-        // yaml's non-standard gpio1 at 0x50001000).
-        let gpio_bases: [Option<u64>; 2] = [
-            self.find_peripheral_index_by_name("gpio0")
-                .map(|i| self.peripherals[i].base),
-            self.find_peripheral_index_by_name("gpio1")
-                .map(|i| self.peripherals[i].base),
-        ];
-        let mut changes: Vec<(u8, u8, u8)> = Vec::new();
-        let mut current_in = self.last_gpio_in;
-        for (port, base) in gpio_bases.iter().enumerate() {
-            let Some(base) = base else { continue };
-            // GPIO IN register is at offset 0x510 in the Nordic layout.
-            let cur = self.read_u32(*base + 0x510).unwrap_or(0);
-            let prev = self.last_gpio_in[port];
-            let diff = cur ^ prev;
-            if diff != 0 {
-                for pin in 0..32u8 {
-                    if diff & (1 << pin) != 0 {
-                        let level = ((cur >> pin) & 1) as u8;
-                        changes.push((port as u8, pin, level));
+        if !self.esp32c3_irq_routing {
+            // GPIO edge-detection pass: snapshot the IN registers of GPIO ports
+            // 0 and 1, diff against last-known state, and notify every
+            // peripheral of changed pins. GPIOTE overrides observe_gpio_change
+            // to drive EVENTS_IN[i] when a channel watches a matching pin.
+            //
+            // ESP32-C3 does not use this Nordic GPIO/GPIOTE service path; its
+            // board inputs write the C3 GPIO register model directly. Skipping
+            // this block is important because C3 ROM-boot needs very frequent
+            // ticks for interrupt-matrix correctness.
+            let gpio_bases: [Option<u64>; 2] = [
+                self.find_peripheral_index_by_name("gpio0")
+                    .map(|i| self.peripherals[i].base),
+                self.find_peripheral_index_by_name("gpio1")
+                    .map(|i| self.peripherals[i].base),
+            ];
+            let mut changes: Vec<(u8, u8, u8)> = Vec::new();
+            let mut current_in = self.last_gpio_in;
+            for (port, base) in gpio_bases.iter().enumerate() {
+                let Some(base) = base else { continue };
+                // GPIO IN register is at offset 0x510 in the Nordic layout.
+                let cur = self.read_u32(*base + 0x510).unwrap_or(0);
+                let prev = self.last_gpio_in[port];
+                let diff = cur ^ prev;
+                if diff != 0 {
+                    for pin in 0..32u8 {
+                        if diff & (1 << pin) != 0 {
+                            let level = ((cur >> pin) & 1) as u8;
+                            changes.push((port as u8, pin, level));
+                        }
                     }
                 }
+                current_in[port] = cur;
             }
-            current_in[port] = cur;
-        }
-        self.last_gpio_in = current_in;
-        if !changes.is_empty() {
-            for p in self.peripherals.iter_mut() {
-                p.dev.observe_gpio_change(&changes);
+            self.last_gpio_in = current_in;
+            if !changes.is_empty() {
+                for p in self.peripherals.iter_mut() {
+                    p.dev.observe_gpio_change(&changes);
+                }
             }
-        }
 
-        // HC-SR04 service pass: read each sensor's TRIG output level and drive
-        // the computed ECHO input level. Empty list → skipped entirely.
-        self.service_hcsr04();
-        self.service_can_diagnostic_testers();
-        self.service_can_uds_testers();
-        self.service_can_log_players();
+            // HC-SR04 and CAN synthetic services are not present on C3 ROM-boot
+            // labs; keep them off the C3 high-frequency tick path.
+            self.service_hcsr04();
+            self.service_can_diagnostic_testers();
+            self.service_can_uds_testers();
+            self.service_can_log_players();
+        }
 
         (
             interrupts,
@@ -376,38 +391,47 @@ impl SystemBus {
             return;
         }
         const INTMATRIX_BASE: u64 = 0x600C_2000;
-        // SYSTEM FROM_CPU IPI registers → source IDs 50..53 (matching the
-        // INTERRUPT_CORE0 CPU_INTR_FROM_CPU_n_MAP offsets at 200..212).
-        const FROM_CPU: [(u64, u32); 4] = [
-            (0x600C_0028, 50),
-            (0x600C_002C, 51),
-            (0x600C_0030, 52),
-            (0x600C_0034, 53),
-        ];
-
-        // Route peripheral `explicit_irqs` (e.g. the SYSTIMER tick alarm, which
-        // the C3 wiring configures to emit matrix source 37) plus the FROM_CPU
-        // IPI sources (the FreeRTOS yield mechanism).
-        let mut asserted: Vec<u32> = source_ids.to_vec();
-        for (addr, src) in FROM_CPU {
-            let from_cpu = self
-                .esp32c3_system_idx
-                .and_then(|idx| {
-                    let offset = addr.checked_sub(self.peripherals[idx].base)?;
-                    self.read_cached_declarative_u32(idx, offset)
-                })
-                .or_else(|| self.read_u32(addr).ok())
-                .unwrap_or(0);
-            if from_cpu & 1 != 0 {
-                asserted.push(src);
-            }
-        }
+        const FROM_CPU_SOURCE_BASE: u32 = 50;
 
         // INTC control registers (offsets verified against interrupt_core0.yaml):
         //   CPU_INT_ENABLE 0x104, CPU_INT_PRI_n 0x114+n*4, CPU_INT_THRESH 0x194.
         // A line fires only while it is enabled AND its priority >= threshold —
         // the C3 enables/masks via these INTC registers, NOT the RISC-V `mie`
         // CSR (FreeRTOS critical sections raise the threshold to mask).
+        if let Some(cache) = &self.esp32c3_irq_cache {
+            let mut mask = 0u32;
+            let mut route_source = |src: u32| {
+                let Some(&line) = cache.source_line.get(src as usize) else {
+                    return;
+                };
+                if line == 0 || (cache.int_enable & (1u32 << line)) == 0 {
+                    return;
+                }
+                let pri = cache.line_pri.get(line as usize).copied().unwrap_or(0);
+                if pri >= cache.int_thresh {
+                    mask |= 1u32 << line;
+                }
+            };
+
+            for &src in source_ids {
+                route_source(src);
+            }
+            let mut pending = cache.from_cpu_pending;
+            while pending != 0 {
+                let slot = pending.trailing_zeros();
+                route_source(FROM_CPU_SOURCE_BASE + slot);
+                pending &= !(1 << slot);
+            }
+            self.riscv_irq_lines = mask;
+            return;
+        }
+
+        const FROM_CPU: [(u64, u32); 4] = [
+            (0x600C_0028, 50),
+            (0x600C_002C, 51),
+            (0x600C_0030, 52),
+            (0x600C_0034, 53),
+        ];
         let read_intcore = |bus: &SystemBus, offset: u64| {
             bus.esp32c3_interrupt_core0_idx
                 .and_then(|idx| bus.read_cached_declarative_u32(idx, offset))
@@ -418,7 +442,7 @@ impl SystemBus {
         let thresh = read_intcore(self, 0x194) & 0xF;
 
         let mut mask = 0u32;
-        for src in asserted {
+        let mut route_source = |src: u32| {
             // MAP register holds the destination CPU interrupt line (1..31).
             let line = read_intcore(self, (src as u64) * 4) & 0x1F;
             let pri = read_intcore(self, 0x114 + (line as u64) * 4) & 0xF;
@@ -433,10 +457,31 @@ impl SystemBus {
                 }
             }
             if line == 0 || (enable & (1 << line)) == 0 {
-                continue;
+                return;
             }
             if pri >= thresh {
                 mask |= 1u32 << line;
+            }
+        };
+
+        // Route peripheral `explicit_irqs` (e.g. the SYSTIMER tick alarm, which
+        // the C3 wiring configures to emit matrix source 37) plus the FROM_CPU
+        // IPI sources (the FreeRTOS yield mechanism), without allocating on the
+        // no-interrupt hot path.
+        for &src in source_ids {
+            route_source(src);
+        }
+        for (addr, src) in FROM_CPU {
+            let from_cpu = self
+                .esp32c3_system_idx
+                .and_then(|idx| {
+                    let offset = addr.checked_sub(self.peripherals[idx].base)?;
+                    self.read_cached_declarative_u32(idx, offset)
+                })
+                .or_else(|| self.read_u32(addr).ok())
+                .unwrap_or(0);
+            if from_cpu & 1 != 0 {
+                route_source(src);
             }
         }
         self.riscv_irq_lines = mask;
@@ -595,6 +640,10 @@ impl SystemBus {
     pub fn tick_peripherals_fully(&mut self) -> (Vec<u32>, Vec<PeripheralTickCost>) {
         let (mut interrupts, costs, pending_dma, dma_signals, explicit_source_ids) =
             self.tick_peripherals_phase1();
+        if self.esp32c3_irq_routing {
+            self.aggregate_esp32c3_irqs(&explicit_source_ids);
+            return (interrupts, costs);
+        }
         // Plan 3: route ESP32-S3 source IDs through the intmatrix.
         self.aggregate_esp32s3_explicit_irqs(&explicit_source_ids);
         self.aggregate_esp32c3_irqs(&explicit_source_ids);

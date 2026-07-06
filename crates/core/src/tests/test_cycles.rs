@@ -72,6 +72,26 @@ fn test_machine_run_cycles() {
     assert_eq!(machine.total_cycles, 150);
 }
 
+#[test]
+fn machine_run_records_step_profile_counters() {
+    let cpu = MockCpu::default();
+    let bus = crate::bus::SystemBus::new();
+    let mut machine = Machine::new(cpu, bus);
+    machine.config.peripheral_tick_interval = 4;
+
+    machine.reset_step_profile();
+    let reason = machine.run(Some(10)).unwrap();
+    assert_eq!(reason, StopReason::MaxStepsReached);
+
+    let profile = machine.step_profile();
+    assert_eq!(profile.cpu_instructions, 10);
+    assert_eq!(profile.cpu_batches, 3);
+    assert_eq!(profile.peripheral_ticks, 2);
+    assert_eq!(profile.peripheral_ticked_entries, 0);
+    assert_eq!(profile.bus_tick_entries, 0);
+    assert_eq!(profile.legacy_tick_entries, 8);
+}
+
 /// A peripheral that reports a fixed byte from the side-effect-free `peek`.
 #[derive(Debug)]
 struct PeekTag(u8);

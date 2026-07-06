@@ -347,6 +347,14 @@ impl Peripheral for Esp32c3Spi {
         }
     }
 
+    fn legacy_tick_active(&self) -> bool {
+        self.int_st() != 0
+    }
+
+    fn legacy_tick_dynamic(&self) -> bool {
+        true
+    }
+
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)
     }
@@ -531,6 +539,14 @@ mod tests {
     #[test]
     fn int_st_masks_with_ena_and_emits_source() {
         let mut s = Esp32c3Spi::new(SPI2_INTR_SOURCE_ID);
+        assert!(
+            !s.legacy_tick_active(),
+            "idle level-IRQ SPI must stay out of the legacy tick walk"
+        );
+        assert!(
+            s.legacy_tick_dynamic(),
+            "writes that assert/clear INT_ST must refresh tick membership"
+        );
         s.write_u32(MS_DLEN, 8 - 1).unwrap();
         s.write_u32(CMD, USR_BIT).unwrap();
         // No enable yet → ST gated, no source emitted.
@@ -539,9 +555,14 @@ mod tests {
         // Enable TRANS_DONE → ST asserts and the source is emitted.
         s.write_u32(DMA_INT_ENA, TRANS_DONE).unwrap();
         assert_eq!(s.read_u32(DMA_INT_ST).unwrap() & TRANS_DONE, TRANS_DONE);
+        assert!(s.legacy_tick_active(), "asserted INT_ST needs level ticks");
         assert_eq!(s.tick().explicit_irqs, Some(vec![SPI2_INTR_SOURCE_ID]));
         // Clear the raw bit → ST drops, source stops.
         s.write_u32(DMA_INT_CLR, TRANS_DONE).unwrap();
+        assert!(
+            !s.legacy_tick_active(),
+            "cleared INT_ST can leave tick walk"
+        );
         assert_eq!(s.tick().explicit_irqs, None);
     }
 

@@ -466,6 +466,14 @@ impl Peripheral for Esp32c3WifiMac {
         }
     }
 
+    fn legacy_tick_active(&self) -> bool {
+        self.event() != 0
+    }
+
+    fn legacy_tick_dynamic(&self) -> bool {
+        true
+    }
+
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)
     }
@@ -498,11 +506,28 @@ mod tests {
     #[test]
     fn tick_emits_mac_irq_while_event_pending() {
         let mut m = Esp32c3WifiMac::new();
+        assert!(
+            !m.legacy_tick_active(),
+            "idle level-IRQ WiFi MAC must stay out of the legacy tick walk"
+        );
+        assert!(
+            m.legacy_tick_dynamic(),
+            "event-producing bus ticks and W1C clears must refresh tick membership"
+        );
         assert!(m.tick().explicit_irqs.is_none());
         m.set_event(EVENT_RX_DONE);
+        assert!(
+            m.legacy_tick_active(),
+            "pending MAC event needs level ticks"
+        );
         assert_eq!(
             m.tick().explicit_irqs.as_deref(),
             Some(&[MAC_INTR_SOURCE][..])
+        );
+        m.write_u32(EVENT_CLR, EVENT_RX_DONE).unwrap();
+        assert!(
+            !m.legacy_tick_active(),
+            "cleared MAC event can leave tick walk"
         );
     }
 

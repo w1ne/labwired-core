@@ -406,6 +406,13 @@ pub trait Peripheral: std::fmt::Debug + Send {
     fn tick(&mut self) -> PeripheralTickResult {
         PeripheralTickResult::default()
     }
+    /// Advance a peripheral by the number of CPU cycles elapsed since the last
+    /// bus tick. The default preserves the legacy contract: one tick callback
+    /// per bus tick, regardless of the configured interval. Timer peripherals
+    /// that care about elapsed CPU cycles override this.
+    fn tick_elapsed(&mut self, _cycles: u64) -> PeripheralTickResult {
+        self.tick()
+    }
     /// PPI hook: given absolute addresses of events that just fired
     /// across the bus, return absolute addresses of tasks to trigger.
     /// Only the PPI peripheral overrides this; everyone else returns
@@ -748,6 +755,16 @@ pub enum StopReason {
     ManualStop,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct StepProfile {
+    pub cpu_instructions: u64,
+    pub cpu_batches: u64,
+    pub peripheral_ticks: u64,
+    pub peripheral_ticked_entries: u64,
+    pub bus_tick_entries: u64,
+    pub legacy_tick_entries: u64,
+}
+
 pub struct Machine<C: Cpu> {
     pub cpu: C,
     /// Secondary CPU instance — for dual-core SoCs (ESP32, ESP32-S3).
@@ -765,6 +782,7 @@ pub struct Machine<C: Cpu> {
     pub last_breakpoint: Option<u32>,
     pub total_cycles: u64,
     pub config: SimulationConfig,
+    step_profile: StepProfile,
 
     /// Phase 2B.1 (issue #192): event-driven peripheral scheduler. Active
     /// behaviour is gated behind the `event-scheduler` feature; the field
@@ -852,6 +870,7 @@ impl<C: Cpu> Machine<C> {
             last_breakpoint: None,
             total_cycles: 0,
             config: SimulationConfig::default(),
+            step_profile: StepProfile::default(),
             sched: sched::EventScheduler::new(),
             clocks: sched::ClockGraph::new(),
             rtc_cntl_index,
@@ -868,6 +887,22 @@ impl<C: Cpu> Machine<C> {
     pub fn with_secondary_cpu(mut self, cpu1: C) -> Self {
         self.cpu_secondary = Some(cpu1);
         self
+    }
+
+    pub fn reset_step_profile(&mut self) {
+        self.step_profile = StepProfile::default();
+    }
+
+    pub fn step_profile(&self) -> StepProfile {
+        self.step_profile
+    }
+
+    fn record_peripheral_tick_profile(&mut self, cost_entries: usize) {
+        let (bus_tick_entries, legacy_tick_entries) = self.bus.tick_profile_entry_counts();
+        self.step_profile.peripheral_ticks += 1;
+        self.step_profile.peripheral_ticked_entries += cost_entries as u64;
+        self.step_profile.bus_tick_entries += bus_tick_entries as u64;
+        self.step_profile.legacy_tick_entries += legacy_tick_entries as u64;
     }
 
     /// Take a binary mid-flight runtime snapshot of the entire machine —
@@ -965,6 +1000,7 @@ impl<C: Cpu> Machine<C> {
             }
             mem.data.copy_from_slice(bytes);
         }
+        self.bus.refresh_peripheral_index();
         Ok(())
     }
 }
@@ -1071,6 +1107,8 @@ impl<C: Cpu> Machine<C> {
         self.bus.current_cycle = self.total_cycles;
         self.cpu
             .step(&mut self.bus, &self.observers, &self.config)?;
+        self.step_profile.cpu_instructions += 1;
+        self.step_profile.cpu_batches += 1;
         // Dual-core: step the secondary CPU one instruction per
         // primary-CPU instruction (round-robin). Cycle counter only
         // advances for the primary CPU — keeps observer/snapshot
@@ -1094,6 +1132,7 @@ impl<C: Cpu> Machine<C> {
         if self.total_cycles % (self.config.peripheral_tick_interval as u64) == 0 {
             // Propagate peripherals
             let (interrupts, costs) = self.bus.tick_peripherals_fully();
+            self.record_peripheral_tick_profile(costs.len());
             for c in costs {
                 self.total_cycles += c.cycles as u64;
                 if let Some(p) = self.bus.peripherals.get(c.index) {
@@ -1473,6 +1512,7 @@ impl<C: Cpu> Machine<C> {
                 p.dev.restore(state.clone())?;
             }
         }
+        self.bus.refresh_peripheral_index();
         Ok(())
     }
 
@@ -1599,10 +1639,13 @@ impl<C: Cpu> DebugControl for Machine<C> {
 
             steps += executed;
             self.total_cycles += executed as u64;
+            self.step_profile.cpu_instructions += executed as u64;
+            self.step_profile.cpu_batches += 1;
 
             if self.total_cycles % (self.config.peripheral_tick_interval as u64) == 0 {
                 // Propagate peripherals
                 let (interrupts, costs) = self.bus.tick_peripherals_fully();
+                self.record_peripheral_tick_profile(costs.len());
                 for c in costs {
                     self.total_cycles += c.cycles as u64;
                     if let Some(p) = self.bus.peripherals.get(c.index) {
