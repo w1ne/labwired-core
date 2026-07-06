@@ -2,16 +2,21 @@ name: Rust Core Nightly
 
 on:
   schedule:
-    - cron: '0 2 * * *' # 2 AM UTC
+    - cron: '0 2 * * 0' # Sundays 02:00 UTC
   workflow_dispatch:
 
 permissions:
   contents: write
 
+concurrency:
+  group: core-nightly
+  cancel-in-progress: true
+
 jobs:
   validation:
     name: Advanced Validation
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -69,6 +74,7 @@ jobs:
   example-smokes:
     name: Example Smokes (real-output autochecks)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -112,6 +118,7 @@ jobs:
   esp32s3-fixtures-e2e:
     name: ESP32-S3 Fixtures E2E (espup)
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -180,6 +187,7 @@ jobs:
   tier1-fixture-drift:
     name: Tier-1 Fixture Drift Check
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       # Gate to Sundays only for scheduled runs; workflow_dispatch always proceeds.
       - name: Set drift-skip flag on non-Sunday scheduled runs
