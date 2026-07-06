@@ -114,8 +114,8 @@ impl Ssd1306 {
         }
 
         match cmd {
-            0x20 => {
-                self.pending_command = Some(0x20);
+            0x20 | 0x81 | 0x8D | 0xA8 | 0xD3 | 0xD5 | 0xD9 | 0xDA | 0xDB => {
+                self.pending_command = Some(cmd);
                 self.pending_params_remaining = 1;
             }
             0x21 => {
@@ -233,8 +233,6 @@ impl I2cDevice for Ssd1306 {
     fn stop(&mut self) {
         self.register_address_written = false;
         self.control_byte = None;
-        self.pending_command = None;
-        self.pending_params_remaining = 0;
     }
 
     fn as_any(&self) -> Option<&dyn Any> {
@@ -286,5 +284,47 @@ impl PeripheralKit for Ssd1306Kit {
         // attach_i2c_device works on both the STM32 I2c and the ESP32-C3
         // Esp32c3I2c controllers, so the OLED can sit on either family's bus.
         ctx.attach_i2c_device(Box::new(Ssd1306::new(address)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Ssd1306;
+    use crate::peripherals::i2c::I2cDevice;
+
+    fn command(dev: &mut Ssd1306, byte: u8) {
+        dev.write(0x00);
+        dev.write(byte);
+        dev.stop();
+    }
+
+    #[test]
+    fn split_init_and_window_commands_do_not_shift_framebuffer() {
+        let mut dev = Ssd1306::new(0x3c);
+        for cmd in [
+            0xAE, 0xD5, 0x80, 0xA8, 0x3F, 0xD3, 0x00, 0x40, 0x8D, 0x14, 0x20, 0x00, 0xA1,
+            0xC8, 0xDA, 0x12, 0x81, 0xCF, 0xD9, 0xF1, 0xDB, 0x40, 0xA4, 0xA6, 0x2E, 0xAF,
+        ] {
+            command(&mut dev, cmd);
+        }
+
+        for cmd in [0x21, 0, 127, 0x22, 0, 7] {
+            command(&mut dev, cmd);
+        }
+
+        dev.write(0x40);
+        dev.write(0xaa);
+        dev.stop();
+
+        assert_eq!(
+            dev.framebuffer()[0],
+            0xaa,
+            "split Wire command transactions must still start data at column 0"
+        );
+        assert_eq!(
+            dev.framebuffer()[39],
+            0,
+            "init command parameters must not be misread as column-nibble commands"
+        );
     }
 }
