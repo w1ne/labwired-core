@@ -824,6 +824,22 @@ impl Cpu for RiscV {
         Ok(())
     }
 
+    fn step_batch(
+        &mut self,
+        bus: &mut dyn Bus,
+        observers: &[Arc<dyn SimulationObserver>],
+        config: &crate::SimulationConfig,
+        max_count: u32,
+    ) -> SimResult<u32> {
+        for i in 0..max_count {
+            self.step(bus, observers, config)?;
+            if config.idle_fast_forward_enabled && self.idle_fast_forward_budget(bus).is_some() {
+                return Ok(i + 1);
+            }
+        }
+        Ok(max_count)
+    }
+
     fn set_pc(&mut self, val: u32) {
         self.pc = val;
     }
@@ -1293,6 +1309,28 @@ mod tests {
         assert!(
             machine.step_profile().cpu_instructions < 10,
             "fast-forwarded cycles should not retire CPU instructions"
+        );
+    }
+
+    #[test]
+    fn boxed_riscv_batch_preserves_idle_fast_forward_escape() {
+        let mut bus = SystemBus::new();
+        let mut cpu = RiscV::new();
+        bus.flash.data = vec![0; 0x100];
+        bus.write_u32(0x0, 0x1050_0073).unwrap(); // WFI
+        bus.write_u32(0x4, 0xffdf_f06f).unwrap(); // JAL x0, -4
+        cpu.pc = 0x0;
+        cpu.mtimecmp = u64::MAX;
+
+        let mut machine = Machine::new(Box::new(cpu) as Box<dyn Cpu>, bus);
+        machine.config.idle_fast_forward_enabled = true;
+        machine.bus.legacy_walk_disabled = true;
+        machine.run(Some(10)).unwrap();
+
+        assert_eq!(machine.total_cycles, 10);
+        assert!(
+            machine.step_profile().cpu_instructions < 10,
+            "boxed C3 CPU path should still leave the batch loop at WFI so Machine can fast-forward"
         );
     }
 
