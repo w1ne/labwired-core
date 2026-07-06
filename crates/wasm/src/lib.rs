@@ -836,6 +836,14 @@ impl WasmSimulator {
         }
     }
 
+    /// Enable/disable scheduler-safe CPU idle fast-forwarding. Off by default;
+    /// browser callers opt in explicitly after comparing accelerated and
+    /// non-accelerated traces for the target firmware.
+    #[wasm_bindgen]
+    pub fn set_idle_fast_forward_enabled(&mut self, enabled: bool) {
+        self.machine().config.idle_fast_forward_enabled = enabled;
+    }
+
     /// Total number of times the browser JIT has dispatched a
     /// compiled block. Useful for confirming the JIT path actually
     /// fired during a benchmark.

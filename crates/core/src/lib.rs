@@ -258,6 +258,18 @@ pub trait Cpu: Send {
         0
     }
 
+    /// Return the maximum number of idle cycles this CPU may skip now, or
+    /// `None` when it is not architecturally waiting or an interrupt is already
+    /// observable. Machine-level guards decide whether the bus/peripheral side
+    /// is also safe to skip.
+    fn idle_fast_forward_budget(&self, _bus: &dyn Bus) -> Option<u64> {
+        None
+    }
+
+    /// Advance CPU-local time/counters for cycles skipped while idle. The
+    /// default is a no-op for CPUs that do not opt into idle fast-forwarding.
+    fn fast_forward_idle_cycles(&mut self, _cycles: u64) {}
+
     /// Phase 3.2 JIT pilot (issue #124): total number of times any
     /// JIT-compiled block on this CPU has been invoked. Default 0 for
     /// CPUs/builds without JIT support so callers can unconditionally
@@ -357,6 +369,12 @@ impl Cpu for Box<dyn Cpu> {
     }
     fn intlevel(&self) -> u8 {
         (**self).intlevel()
+    }
+    fn idle_fast_forward_budget(&self, bus: &dyn Bus) -> Option<u64> {
+        (**self).idle_fast_forward_budget(bus)
+    }
+    fn fast_forward_idle_cycles(&mut self, cycles: u64) {
+        (**self).fast_forward_idle_cycles(cycles)
     }
     fn jit_hit_count(&self) -> u64 {
         (**self).jit_hit_count()
@@ -903,6 +921,64 @@ impl<C: Cpu> Machine<C> {
         self.step_profile.peripheral_ticked_entries += cost_entries as u64;
         self.step_profile.bus_tick_entries += bus_tick_entries as u64;
         self.step_profile.legacy_tick_entries += legacy_tick_entries as u64;
+    }
+
+    fn try_idle_fast_forward(&mut self, _max_steps: Option<u32>, _steps: u32) -> u32 {
+        if !self.config.idle_fast_forward_enabled
+            || !self.breakpoints.is_empty()
+            || self.bus.requires_cycle_accurate()
+        {
+            return 0;
+        }
+
+        #[cfg(not(feature = "event-scheduler"))]
+        {
+            0
+        }
+
+        #[cfg(feature = "event-scheduler")]
+        {
+            if !self.bus.legacy_walk_disabled {
+                return 0;
+            }
+
+            // Drain first: a due scheduler event may assert an interrupt, in
+            // which case the CPU must resume normally instead of skipping.
+            self.drain_scheduler_events();
+
+            let mut budget = match self.cpu.idle_fast_forward_budget(&self.bus) {
+                Some(budget) if budget > 0 => budget,
+                _ => return 0,
+            };
+            let remaining = _max_steps
+                .map(|limit| limit.saturating_sub(_steps) as u64)
+                .unwrap_or(1_000_000);
+            if remaining == 0 {
+                return 0;
+            }
+            budget = budget.min(remaining);
+
+            let interval = (self.config.peripheral_tick_interval as u64).max(1);
+            let generations = self.bus.peripheral_generations();
+            if let Some(deadline_tick) = self.sched.next_event_deadline(&generations) {
+                let deadline_cycle = deadline_tick.saturating_mul(interval);
+                if deadline_cycle <= self.total_cycles {
+                    return 0;
+                }
+                budget = budget.min(deadline_cycle - self.total_cycles);
+            }
+
+            if budget == 0 {
+                return 0;
+            }
+            let skipped = budget.min(u32::MAX as u64) as u32;
+            self.cpu.fast_forward_idle_cycles(skipped as u64);
+            self.total_cycles += skipped as u64;
+            self.bus.current_cycle = self.total_cycles;
+            self.sched.advance_to(self.total_cycles / interval);
+            self.drain_scheduler_events();
+            skipped
+        }
     }
 
     /// Take a binary mid-flight runtime snapshot of the entire machine —
@@ -1594,6 +1670,12 @@ impl<C: Cpu> DebugControl for Machine<C> {
                 if steps >= limit {
                     return Ok(StopReason::MaxStepsReached);
                 }
+            }
+
+            let skipped = self.try_idle_fast_forward(max_steps, steps);
+            if skipped > 0 {
+                steps += skipped;
+                continue;
             }
 
             // Execute in batch until next peripheral tick or breakpoint/limit

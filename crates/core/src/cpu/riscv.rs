@@ -51,6 +51,7 @@ pub struct RiscV {
     /// reservation per RISC-V ISA §8.2.
     pub reservation: Option<u32>,
 
+    waiting_for_interrupt: bool,
     decode_cache: Box<[Option<RiscVDecodeCacheEntry>; 4096]>,
 }
 
@@ -70,6 +71,7 @@ impl Default for RiscV {
             mtime: 0,
             mtimecmp: 0,
             reservation: None,
+            waiting_for_interrupt: false,
             decode_cache: Box::new([None; 4096]),
         }
     }
@@ -78,6 +80,15 @@ impl Default for RiscV {
 impl RiscV {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    fn update_mtime_after_elapsed_cycles(&mut self, cycles: u64) {
+        self.mtime = self.mtime.wrapping_add(cycles);
+        if self.mtime >= self.mtimecmp {
+            self.mip |= 1 << 7; // MTIP
+        } else {
+            self.mip &= !(1 << 7);
+        }
     }
 
     fn read_reg(&self, n: u8) -> u32 {
@@ -186,6 +197,7 @@ impl Cpu for RiscV {
         observers: &[Arc<dyn SimulationObserver>],
         _config: &crate::SimulationConfig,
     ) -> SimResult<()> {
+        self.waiting_for_interrupt = false;
         let opcode = bus.read_u32(self.pc as u64)?;
 
         let retired_pc = self.pc;
@@ -423,6 +435,7 @@ impl Cpu for RiscV {
                 // Wait-for-interrupt: implemented as a no-op busy-wait. The step
                 // loop already polls pending interrupts every instruction, so
                 // the idle task's WFI spin wakes as soon as a line asserts.
+                self.waiting_for_interrupt = true;
             }
             Instruction::Ecall | Instruction::Ebreak => {
                 // Should trap. For now, we can just log or halt.
@@ -737,12 +750,7 @@ impl Cpu for RiscV {
         }
 
         // Timer update (Internal minimal CLINT)
-        self.mtime = self.mtime.wrapping_add(1);
-        if self.mtime >= self.mtimecmp {
-            self.mip |= 1 << 7; // MTIP
-        } else {
-            self.mip &= !(1 << 7);
-        }
+        self.update_mtime_after_elapsed_cycles(1);
 
         // Check for interrupts. On the ESP32-C3 the custom interrupt controller
         // exposes its 31 sources as CPU interrupt lines 1..31 directly in
@@ -830,6 +838,26 @@ impl Cpu for RiscV {
         // The specific 'exception_num' (IRQ) would be tracked by a PLIC.
         // Since we don't have a PLIC yet, we pend a generic external interrupt.
         self.mip |= 1 << 11;
+    }
+
+    fn idle_fast_forward_budget(&self, bus: &dyn Bus) -> Option<u64> {
+        if !self.waiting_for_interrupt {
+            return None;
+        }
+        if ((self.mip & self.mie) | bus.external_irq_lines()) != 0 {
+            return None;
+        }
+        if self.mtimecmp == u64::MAX {
+            return Some(u64::MAX);
+        }
+        if self.mtime + 1 >= self.mtimecmp {
+            return None;
+        }
+        Some(self.mtimecmp - self.mtime - 1)
+    }
+
+    fn fast_forward_idle_cycles(&mut self, cycles: u64) {
+        self.update_mtime_after_elapsed_cycles(cycles);
     }
 
     fn get_register(&self, id: u8) -> u32 {
@@ -961,6 +989,7 @@ impl Cpu for RiscV {
 mod tests {
     use super::*;
     use crate::bus::SystemBus;
+    use crate::DebugControl;
     use crate::Machine;
 
     #[test]
@@ -1225,6 +1254,46 @@ mod tests {
         let mut machine = Machine::new(cpu, bus);
         machine.step().unwrap();
         assert_eq!(machine.cpu.pc, 0x4, "WFI advances PC like a NOP");
+    }
+
+    #[test]
+    fn test_riscv_wfi_fast_forward_is_off_by_default() {
+        let mut bus = SystemBus::new();
+        let mut cpu = RiscV::new();
+        bus.flash.data = vec![0; 0x100];
+        bus.write_u32(0x0, 0x1050_0073).unwrap(); // WFI
+        bus.write_u32(0x4, 0x0000_006f).unwrap(); // JAL x0, 0
+        cpu.pc = 0x0;
+        cpu.mtimecmp = u64::MAX;
+
+        let mut machine = Machine::new(cpu, bus);
+        machine.bus.legacy_walk_disabled = true;
+        machine.run(Some(10)).unwrap();
+
+        assert_eq!(machine.total_cycles, 10);
+        assert_eq!(machine.step_profile().cpu_instructions, 10);
+    }
+
+    #[test]
+    fn test_riscv_wfi_fast_forward_skips_cpu_work_when_enabled() {
+        let mut bus = SystemBus::new();
+        let mut cpu = RiscV::new();
+        bus.flash.data = vec![0; 0x100];
+        bus.write_u32(0x0, 0x1050_0073).unwrap(); // WFI
+        bus.write_u32(0x4, 0x0000_006f).unwrap(); // JAL x0, 0
+        cpu.pc = 0x0;
+        cpu.mtimecmp = u64::MAX;
+
+        let mut machine = Machine::new(cpu, bus);
+        machine.config.idle_fast_forward_enabled = true;
+        machine.bus.legacy_walk_disabled = true;
+        machine.run(Some(10)).unwrap();
+
+        assert_eq!(machine.total_cycles, 10);
+        assert!(
+            machine.step_profile().cpu_instructions < 10,
+            "fast-forwarded cycles should not retire CPU instructions"
+        );
     }
 
     #[test]
