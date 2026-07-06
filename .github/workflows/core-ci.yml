@@ -9,14 +9,20 @@ on:
       - main
   workflow_dispatch:
 
+concurrency:
+  group: core-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # ── Fast PR gate (REQUIRED) ────────────────────────────────────────────────
   # Formatting, lints, and unit tests only — no firmware cross-builds, no
   # fixture-dependent integration tests, no Tier-1 sims. Target a few minutes so
-  # PRs merge fast. The complete suite runs post-merge in `core-full` below.
+  # PRs merge fast. The complete suite is now opt-in via manual dispatch or a
+  # `[full-ci]` marker on a main-branch commit while Actions quota is tight.
   integrity:
     name: core-integrity
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -59,18 +65,21 @@ jobs:
       # Library unit tests across the workspace. `--lib` skips the no_std
       # firmware bin crates (which only build for thumb targets) and the
       # integration tests under tests/ that need pre-built firmware fixtures —
-      # both run in core-full post-merge.
+      # both run in core-full when explicitly requested.
       - name: Unit tests (no fixtures)
         run: cargo test --workspace --lib
 
   # ── Full suite (NOT a PR gate) ─────────────────────────────────────────────
-  # Runs after merge on main (and on manual dispatch). Builds firmware fixtures,
-  # runs the complete workspace tests, the host-only feature lanes, and the
-  # Tier-1 matrix + ratchet. A regression caught here is fixed forward on main.
+  # Builds firmware fixtures, runs the complete workspace tests, the host-only
+  # feature lanes, and the Tier-1 matrix + ratchet. This is expensive, so keep it
+  # manual/opt-in instead of running it after every merge to main.
   full:
     name: core-full
-    if: github.event_name != 'pull_request'
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-ci]'))
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
