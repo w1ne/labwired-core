@@ -1,12 +1,15 @@
 name: Core Coverage Matrix Smoke
 
 on:
-  # Post-merge: run the full matrix on every push to main so all tests run
-  # after merge even when a PR only touched core crates (the fast PR gate does
-  # not block on this).
   push:
     branches:
       - main
+    paths:
+      - "configs/chips/**"
+      - "configs/systems/**"
+      - "examples/**"
+      - "crates/labwired-models-**"
+      - ".github/workflows/core-coverage-matrix-smoke.yml"
   pull_request:
     branches:
       - main
@@ -18,11 +21,15 @@ on:
       - ".github/workflows/core-coverage-matrix-smoke.yml"
   workflow_dispatch:
 
+concurrency:
+  group: core-coverage-matrix-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   coverage-matrix-smoke:
     name: coverage-matrix-${{ matrix.id }}
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -171,6 +178,7 @@ jobs:
   coverage-matrix-scoreboard:
     name: coverage-matrix-scoreboard
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     needs: coverage-matrix-smoke
     if: always()
     steps:
