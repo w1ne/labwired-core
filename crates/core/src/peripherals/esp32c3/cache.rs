@@ -114,6 +114,10 @@ impl Peripheral for Esp32c3Cache {
         Ok(())
     }
 
+    fn legacy_tick_active(&self) -> bool {
+        false
+    }
+
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)
     }

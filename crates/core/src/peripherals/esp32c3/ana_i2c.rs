@@ -81,6 +81,10 @@ impl Peripheral for Esp32c3AnaI2c {
         Ok(())
     }
 
+    fn legacy_tick_active(&self) -> bool {
+        false
+    }
+
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)
     }
