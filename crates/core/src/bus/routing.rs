@@ -222,14 +222,16 @@ impl SystemBus {
             return;
         };
 
-        let mut cache = crate::bus::Esp32c3IrqCache::default();
-        cache.int_enable = self
-            .read_cached_declarative_u32(int_idx, 0x104)
-            .unwrap_or(0);
-        cache.int_thresh = (self
-            .read_cached_declarative_u32(int_idx, 0x194)
-            .unwrap_or(0)
-            & 0xF) as u8;
+        let mut cache = crate::bus::Esp32c3IrqCache {
+            int_enable: self
+                .read_cached_declarative_u32(int_idx, 0x104)
+                .unwrap_or(0),
+            int_thresh: (self
+                .read_cached_declarative_u32(int_idx, 0x194)
+                .unwrap_or(0)
+                & 0xF) as u8,
+            ..Default::default()
+        };
 
         for src in 0..cache.source_line.len() {
             cache.source_line[src] = (self
