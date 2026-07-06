@@ -16,6 +16,11 @@ pub struct SimulationConfig {
     pub optimized_bus_access: bool,
     /// Enable high-throughput batch execution for the CPU.
     pub batch_mode_enabled: bool,
+    /// Enable scheduler-safe CPU idle fast-forwarding.
+    ///
+    /// Off by default so existing runners keep instruction-for-instruction
+    /// behavior unless they explicitly opt in.
+    pub idle_fast_forward_enabled: bool,
 }
 
 impl Default for SimulationConfig {
@@ -25,6 +30,7 @@ impl Default for SimulationConfig {
             peripheral_tick_interval: 1, // Correctness by default
             optimized_bus_access: true,
             batch_mode_enabled: true,
+            idle_fast_forward_enabled: false,
         }
     }
 }
