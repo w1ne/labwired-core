@@ -155,7 +155,7 @@ impl SystemBus {
             .peripherals
             .iter()
             .enumerate()
-            .filter_map(|(index, p)| p.dev.legacy_tick_active().then_some(index))
+            .filter_map(|(index, p)| Self::legacy_tick_index_active(p).then_some(index))
             .collect();
         self.bus_tick_indices = self
             .peripherals
@@ -315,7 +315,7 @@ impl SystemBus {
         let active = self
             .peripherals
             .get(idx)
-            .is_some_and(|p| p.dev.legacy_tick_active());
+            .is_some_and(Self::legacy_tick_index_active);
         let pos = self.legacy_tick_indices.iter().position(|&i| i == idx);
         match (active, pos) {
             (true, None) => {

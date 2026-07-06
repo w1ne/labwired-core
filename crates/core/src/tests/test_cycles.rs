@@ -89,7 +89,12 @@ fn machine_run_records_step_profile_counters() {
     assert_eq!(profile.peripheral_ticks, 2);
     assert_eq!(profile.peripheral_ticked_entries, 0);
     assert_eq!(profile.bus_tick_entries, 0);
-    assert_eq!(profile.legacy_tick_entries, 8);
+    let expected_legacy_tick_entries = if cfg!(feature = "event-scheduler") {
+        6
+    } else {
+        8
+    };
+    assert_eq!(profile.legacy_tick_entries, expected_legacy_tick_entries);
 }
 
 /// A peripheral that reports a fixed byte from the side-effect-free `peek`.
