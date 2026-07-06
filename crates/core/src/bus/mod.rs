@@ -26,7 +26,22 @@ mod tick;
 
 pub use bus_trace::{new_log, BusPayload, BusTraceEvent, BusTraceLog, I2cSym};
 
-impl SystemBus {}
+impl SystemBus {
+    /// True when CPU idle fast-forward can skip the legacy peripheral walk for
+    /// the skipped window without dropping observable work. Scheduler-driven
+    /// peripherals are safe because the machine clamps to their next deadline;
+    /// inert or currently-inactive legacy peripherals have no tick output to
+    /// lose. Active non-scheduler legacy work blocks fast-forward until the
+    /// normal tick path drains it.
+    #[cfg(feature = "event-scheduler")]
+    pub(crate) fn idle_fast_forward_legacy_safe(&self) -> bool {
+        self.legacy_walk_disabled
+            || self
+                .peripherals
+                .iter()
+                .all(|p| p.dev.uses_scheduler() || !p.dev.legacy_tick_active())
+    }
+}
 
 /// A peripheral's RCC clock-gate, resolved to a concrete RCC register offset +
 /// bit at bus-build time (the symbolic `reg` name from the yaml is mapped to the

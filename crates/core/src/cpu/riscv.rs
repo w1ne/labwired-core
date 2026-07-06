@@ -1262,7 +1262,7 @@ mod tests {
         let mut cpu = RiscV::new();
         bus.flash.data = vec![0; 0x100];
         bus.write_u32(0x0, 0x1050_0073).unwrap(); // WFI
-        bus.write_u32(0x4, 0x0000_006f).unwrap(); // JAL x0, 0
+        bus.write_u32(0x4, 0xffdf_f06f).unwrap(); // JAL x0, -4
         cpu.pc = 0x0;
         cpu.mtimecmp = u64::MAX;
 
@@ -1280,7 +1280,7 @@ mod tests {
         let mut cpu = RiscV::new();
         bus.flash.data = vec![0; 0x100];
         bus.write_u32(0x0, 0x1050_0073).unwrap(); // WFI
-        bus.write_u32(0x4, 0x0000_006f).unwrap(); // JAL x0, 0
+        bus.write_u32(0x4, 0xffdf_f06f).unwrap(); // JAL x0, -4
         cpu.pc = 0x0;
         cpu.mtimecmp = u64::MAX;
 
@@ -1293,6 +1293,54 @@ mod tests {
         assert!(
             machine.step_profile().cpu_instructions < 10,
             "fast-forwarded cycles should not retire CPU instructions"
+        );
+    }
+
+    #[test]
+    fn test_riscv_wfi_fast_forward_wakes_on_systimer_event() {
+        let mut bus = SystemBus::empty();
+        let mut cpu = RiscV::new();
+        bus.flash.data = vec![0; 0x3000];
+        bus.write_u32(0x0, 0x1050_0073).unwrap(); // WFI
+        bus.write_u32(0x4, 0xffdf_f06f).unwrap(); // JAL x0, -4
+        bus.write_u32(0x2000 + 11 * 4, 0x3020_0073).unwrap(); // MRET at machine external IRQ vector
+
+        bus.add_peripheral(
+            "systimer",
+            0x6002_3000,
+            0x100,
+            None,
+            Box::new(
+                crate::peripherals::esp32s3::systimer::Systimer::new_with_source(160_000_000, 11),
+            ),
+        );
+        bus.write_u32(0x6002_3064, 1).unwrap(); // INT_ENA TARGET0
+        bus.write_u32(0x6002_301C, 0).unwrap(); // TARGET0_HI
+        bus.write_u32(0x6002_3020, 3).unwrap(); // TARGET0_LO: 3 SYSTIMER ticks
+        bus.write_u32(0x6002_3050, 1).unwrap(); // COMP0_LOAD
+        let conf = bus.read_u32(0x6002_3000).unwrap();
+        bus.write_u32(0x6002_3000, conf | (1 << 24)).unwrap(); // TARGET0_WORK_EN
+
+        cpu.pc = 0x0;
+        cpu.mtvec = 0x2000 | 1; // vectored machine interrupts
+        cpu.mie = 1 << 11; // MEIE
+        cpu.mstatus = 1 << 3; // MIE
+        cpu.mtimecmp = u64::MAX;
+
+        let mut machine = Machine::new(cpu, bus);
+        machine.config.idle_fast_forward_enabled = true;
+        machine.run(Some(40)).unwrap();
+
+        assert!(
+            machine.step_profile().cpu_instructions < machine.total_cycles,
+            "WFI should skip idle cycles until the SYSTIMER event; retired {} over {} cycles",
+            machine.step_profile().cpu_instructions,
+            machine.total_cycles
+        );
+        assert_ne!(
+            machine.cpu.mcause & 0x8000_0000,
+            0,
+            "the scheduled SYSTIMER event should become an observable interrupt"
         );
     }
 

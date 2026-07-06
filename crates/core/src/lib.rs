@@ -192,8 +192,11 @@ pub trait Cpu: Send {
         config: &SimulationConfig,
         max_count: u32,
     ) -> SimResult<u32> {
-        for _ in 0..max_count {
+        for i in 0..max_count {
             self.step(bus, observers, config)?;
+            if config.idle_fast_forward_enabled && self.idle_fast_forward_budget(bus).is_some() {
+                return Ok(i + 1);
+            }
         }
         Ok(max_count)
     }
@@ -938,7 +941,7 @@ impl<C: Cpu> Machine<C> {
 
         #[cfg(feature = "event-scheduler")]
         {
-            if !self.bus.legacy_walk_disabled {
+            if !self.bus.idle_fast_forward_legacy_safe() {
                 return 0;
             }
 

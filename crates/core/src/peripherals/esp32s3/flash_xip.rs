@@ -206,6 +206,10 @@ impl Peripheral for FlashXipPeripheral {
         Err(SimulationError::MemoryViolation(self.base as u64 + offset))
     }
 
+    fn legacy_tick_active(&self) -> bool {
+        false
+    }
+
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)
     }
@@ -268,6 +272,10 @@ impl Peripheral for Esp32s3MmuTable {
             self.table.lock().unwrap()[i] = value;
         }
         Ok(())
+    }
+
+    fn legacy_tick_active(&self) -> bool {
+        false
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {

@@ -45,6 +45,8 @@ pub struct Esp32c3RtcTimer {
     /// Counter value latched by the most recent TIME_UPDATE write; what the
     /// TIME0/TIME1 readout registers return.
     latched: Cell<u64>,
+    /// Scheduler/elapsed-mode anchor in peripheral-tick units.
+    anchor_tick: Cell<u64>,
 }
 
 impl Default for Esp32c3RtcTimer {
@@ -60,6 +62,7 @@ impl Esp32c3RtcTimer {
             regs: vec![0u32; size_bytes.div_ceil(4)],
             counter: Cell::new(0),
             latched: Cell::new(0),
+            anchor_tick: Cell::new(0),
         }
     }
 
@@ -101,9 +104,28 @@ impl Peripheral for Esp32c3RtcTimer {
     }
 
     fn tick(&mut self) -> crate::PeripheralTickResult {
+        self.tick_elapsed(1)
+    }
+
+    fn tick_elapsed(&mut self, cycles: u64) -> crate::PeripheralTickResult {
         // One slow-clock tick per simulated step — time advances monotonically.
-        self.counter.set(self.counter.get().wrapping_add(1));
+        self.counter.set(self.counter.get().wrapping_add(cycles));
+        self.anchor_tick
+            .set(self.anchor_tick.get().wrapping_add(cycles));
         crate::PeripheralTickResult::default()
+    }
+
+    fn uses_scheduler(&self) -> bool {
+        true
+    }
+
+    fn sync_to(&mut self, tick_now: u64) {
+        if tick_now <= self.anchor_tick.get() {
+            return;
+        }
+        let delta = tick_now - self.anchor_tick.get();
+        self.counter.set(self.counter.get().wrapping_add(delta));
+        self.anchor_tick.set(tick_now);
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {
@@ -124,6 +146,7 @@ impl Peripheral for Esp32c3RtcTimer {
             regs: self.regs.clone(),
             counter: self.counter.get(),
             latched: self.latched.get(),
+            anchor_tick: self.anchor_tick.get(),
         };
         bincode::serialize(&snap).expect("bincode serialize Esp32c3RtcTimer")
     }
@@ -135,6 +158,7 @@ impl Peripheral for Esp32c3RtcTimer {
         self.regs = snap.regs;
         self.counter.set(snap.counter);
         self.latched.set(snap.latched);
+        self.anchor_tick.set(snap.anchor_tick);
         Ok(())
     }
 }
@@ -144,6 +168,8 @@ struct RtcTimerSnapshot {
     regs: Vec<u32>,
     counter: u64,
     latched: u64,
+    #[serde(default)]
+    anchor_tick: u64,
 }
 
 #[cfg(test)]
@@ -182,6 +208,19 @@ mod tests {
         assert_eq!(t.read_u32(TIME_LOW).unwrap(), snap);
         t.write_u32(TIME_UPDATE, TIME_UPDATE_BIT).unwrap();
         assert_eq!(t.read_u32(TIME_LOW).unwrap(), snap + 50);
+    }
+
+    #[test]
+    fn tick_elapsed_matches_repeated_tick() {
+        let mut repeated = Esp32c3RtcTimer::new();
+        let mut elapsed = Esp32c3RtcTimer::new();
+
+        for _ in 0..1000 {
+            repeated.tick();
+        }
+        elapsed.tick_elapsed(1000);
+
+        assert_eq!(rtc_time_get(&mut elapsed), rtc_time_get(&mut repeated));
     }
 
     #[test]

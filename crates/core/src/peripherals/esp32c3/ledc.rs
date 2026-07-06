@@ -137,9 +137,9 @@ impl Timer {
         self.conf & RST_BIT != 0
     }
 
-    /// Advance by one CPU cycle. Returns true if the counter wrapped past its
-    /// period this cycle (an overflow edge).
-    fn advance(&mut self) -> bool {
+    /// Advance by `cycles` CPU cycles. Returns true if the counter wrapped past
+    /// its period at least once during this elapsed window.
+    fn advance_cycles(&mut self, cycles: u64) -> bool {
         if self.in_reset() {
             self.counter = 0;
             self.accum = 0;
@@ -148,17 +148,17 @@ impl Timer {
         if self.paused() {
             return false;
         }
-        self.accum += 1;
+        self.accum = self.accum.saturating_add(cycles);
         let per_count = self.divider();
-        let mut overflowed = false;
-        while self.accum >= per_count {
-            self.accum -= per_count;
-            self.counter += 1;
-            if self.counter >= self.period() {
-                self.counter = 0;
-                overflowed = true;
-            }
+        let counts = self.accum / per_count;
+        self.accum %= per_count;
+        if counts == 0 {
+            return false;
         }
+        let period = self.period() as u64;
+        let next = self.counter as u64 + counts;
+        let overflowed = next >= period;
+        self.counter = (next % period) as u32;
         overflowed
     }
 }
@@ -309,8 +309,12 @@ impl Peripheral for Esp32c3Ledc {
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
+        self.tick_elapsed(1)
+    }
+
+    fn tick_elapsed(&mut self, cycles: u64) -> PeripheralTickResult {
         for (i, timer) in self.timers.iter_mut().enumerate() {
-            if timer.advance() {
+            if timer.advance_cycles(cycles) {
                 self.int_raw |= 1 << i;
             }
         }
@@ -322,6 +326,18 @@ impl Peripheral for Esp32c3Ledc {
             },
             ..PeripheralTickResult::default()
         }
+    }
+
+    fn legacy_tick_active(&self) -> bool {
+        self.int_st() != 0
+            || self
+                .timers
+                .iter()
+                .any(|timer| !timer.in_reset() && !timer.paused())
+    }
+
+    fn legacy_tick_dynamic(&self) -> bool {
+        true
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {
@@ -371,6 +387,32 @@ mod tests {
         // 100 cycles / divider 10 ≈ 10 counts (not 100).
         let v = l.read_u32(TIMER0_VALUE_OFF).unwrap();
         assert_eq!(v, 10, "integer divider gates the count rate");
+    }
+
+    #[test]
+    fn tick_elapsed_matches_repeated_tick() {
+        let mut repeated = Esp32c3Ledc::new(LEDC_INTR_SOURCE_ID);
+        let mut elapsed = Esp32c3Ledc::new(LEDC_INTR_SOURCE_ID);
+        repeated.write_u32(TIMER0_CONF_OFF, conf(4, 2)).unwrap();
+        elapsed.write_u32(TIMER0_CONF_OFF, conf(4, 2)).unwrap();
+        repeated.write_u32(INT_ENA, 1).unwrap();
+        elapsed.write_u32(INT_ENA, 1).unwrap();
+
+        let mut repeated_irq = None;
+        for _ in 0..40 {
+            repeated_irq = repeated.tick().explicit_irqs;
+        }
+        let elapsed_irq = elapsed.tick_elapsed(40).explicit_irqs;
+
+        assert_eq!(
+            elapsed.read_u32(TIMER0_VALUE_OFF).unwrap(),
+            repeated.read_u32(TIMER0_VALUE_OFF).unwrap()
+        );
+        assert_eq!(
+            elapsed.read_u32(INT_RAW).unwrap(),
+            repeated.read_u32(INT_RAW).unwrap()
+        );
+        assert_eq!(elapsed_irq, repeated_irq);
     }
 
     #[test]

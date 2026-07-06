@@ -62,6 +62,10 @@ impl Peripheral for Esp32c3Rng {
         Ok(())
     }
 
+    fn legacy_tick_active(&self) -> bool {
+        false
+    }
+
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)
     }

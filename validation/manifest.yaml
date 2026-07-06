@@ -461,7 +461,12 @@ boards:
     # state, invoked only on snapshot/resume — normal-run behaviour and the 9-reg
     # reset-state silicon anchor are byte-for-byte unaffected. Covers the model-file
     # touch; no live re-capture warranted.
-    drift_ack: 2026-07-05
+    # 2026-07-06: SYSTIMER gained scheduler/elapsed-cycle execution so C3/S3 idle
+    # fast-forward can jump directly to alarm deadlines instead of polling every
+    # CPU cycle. The register layout, reset values (including CONF=0x46000000),
+    # level IRQ semantics, and one-cycle tick equivalence are preserved by offline
+    # elapsed-vs-repeated-tick tests; no live USB-JTAG re-capture this session.
+    drift_ack: 2026-07-06
     models:
       - crates/core/src/peripherals/esp32s3
       - crates/core/src/peripherals/esp_xtensa_common
