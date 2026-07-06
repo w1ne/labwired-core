@@ -14,10 +14,11 @@ mod traces;
 // CortexM and XtensaLx7 are used via Box<dyn Cpu>; the concrete types are
 // only constructed inside the configure_* fns and immediately boxed.
 use labwired_core::decoder::arm::{decode_thumb_16, decode_thumb_32};
-use labwired_core::memory::LinearMemory;
+use labwired_core::memory::{LinearMemory, ProgramImage};
 use labwired_core::peripherals::adc::Adc;
 use labwired_core::system::cortex_m::configure_cortex_m;
 use labwired_core::system::xtensa::configure_xtensa_esp32;
+use labwired_core::Arch as CoreArch;
 use labwired_core::Bus;
 use labwired_core::{Cpu, DebugControl, Machine};
 use labwired_loader::load_elf_bytes;
@@ -84,6 +85,95 @@ struct WasmStepBatchProfile {
     peripheral_ticked_entries: u64,
     bus_tick_entries: u64,
     legacy_tick_entries: u64,
+}
+
+#[cfg(test)]
+const ESP32C3_APP_IMAGE_OFFSET: usize = 0x1_0000;
+const ESP_IMAGE_HEADER_LEN: usize = 24;
+const ESP_IMAGE_MAGIC: u8 = 0xE9;
+const ESP32C3_FLASH_FAST_START_BLOB: &str = "labwired_esp32c3_flash_fast_start";
+
+fn esp32c3_program_image_from_flash_offset(
+    flash: &[u8],
+    offset: usize,
+    label: &str,
+) -> Result<ProgramImage, String> {
+    let image = flash.get(offset..).ok_or_else(|| {
+        format!("ESP32-C3 flash image is smaller than {label} offset {offset:#x}")
+    })?;
+    if image.len() < ESP_IMAGE_HEADER_LEN {
+        return Err(format!("ESP32-C3 {label} image header is truncated"));
+    }
+    if image[0] != ESP_IMAGE_MAGIC {
+        return Err(format!(
+            "ESP32-C3 {label} image has bad magic 0x{:02x} at flash offset {offset:#x}",
+            image[0],
+        ));
+    }
+
+    let segment_count = image[1] as usize;
+    let entry = u32::from_le_bytes(image[4..8].try_into().unwrap()) as u64;
+    let mut program = ProgramImage::new(entry, CoreArch::RiscV);
+    let mut cursor = ESP_IMAGE_HEADER_LEN;
+
+    for index in 0..segment_count {
+        let header = image
+            .get(cursor..cursor + 8)
+            .ok_or_else(|| format!("ESP32-C3 {label} segment {index} header is truncated"))?;
+        let load_addr = u32::from_le_bytes(header[0..4].try_into().unwrap()) as u64;
+        let len = u32::from_le_bytes(header[4..8].try_into().unwrap()) as usize;
+        cursor += 8;
+        let data = image
+            .get(cursor..cursor + len)
+            .ok_or_else(|| format!("ESP32-C3 {label} segment {index} data is truncated"))?;
+        program.add_segment(load_addr, data.to_vec());
+        cursor += len;
+    }
+
+    if program.segments.is_empty() {
+        return Err(format!("ESP32-C3 {label} image has no loadable segments"));
+    }
+
+    Ok(program)
+}
+
+#[cfg(test)]
+fn esp32c3_app_program_image_from_merged_flash(flash: &[u8]) -> Result<ProgramImage, String> {
+    esp32c3_program_image_from_flash_offset(flash, ESP32C3_APP_IMAGE_OFFSET, "app")
+}
+
+fn esp32c3_bootloader_program_image_from_merged_flash(
+    flash: &[u8],
+) -> Result<ProgramImage, String> {
+    esp32c3_program_image_from_flash_offset(flash, 0, "bootloader")
+}
+
+fn load_program_segments_without_reset(
+    machine: &mut labwired_core::Machine<Box<dyn Cpu>>,
+    program_image: &ProgramImage,
+) -> Result<(), String> {
+    for segment in &program_image.segments {
+        if machine.bus.flash.load_from_segment(segment)
+            || machine.bus.ram.load_from_segment(segment)
+            || machine
+                .bus
+                .extra_mem
+                .iter_mut()
+                .any(|m| m.load_from_segment(segment))
+        {
+            continue;
+        }
+
+        for (i, byte) in segment.data.iter().enumerate() {
+            let addr = segment.start_addr + i as u64;
+            machine
+                .bus
+                .write_u8(addr, *byte)
+                .map_err(|e| format!("load segment at {addr:#x}: {e}"))?;
+        }
+    }
+
+    Ok(())
 }
 
 #[wasm_bindgen]
@@ -157,7 +247,11 @@ impl WasmSimulator {
                 // the real mask ROM from the reset vector exactly like the native
                 // `--rom-boot` CLI; without it, the pre-existing fast-boot path
                 // runs, treating `firmware` as a bare esp-hal ELF.
-                if blob_map.contains_key("esp32c3_flash") {
+                if blob_map.contains_key("esp32c3_flash")
+                    && blob_map.contains_key(ESP32C3_FLASH_FAST_START_BLOB)
+                {
+                    Self::new_from_config_riscv_flash_fastboot(&chip, &manifest, &blob_map)
+                } else if blob_map.contains_key("esp32c3_flash") {
                     Self::new_from_config_riscv_romboot(&chip, &manifest, &blob_map)
                 } else {
                     Self::new_from_config_riscv(&chip, &manifest, firmware, &blob_map)
@@ -231,6 +325,111 @@ impl WasmSimulator {
         chip: &ChipDescriptor,
         manifest: &SystemManifest,
         firmware: &[u8],
+        blobs: &std::collections::HashMap<String, Vec<u8>>,
+    ) -> Result<WasmSimulator, JsValue> {
+        let program_image = load_elf_bytes(firmware)
+            .map_err(|e| JsValue::from_str(&format!("Loader Error: {}", e)))?;
+        Self::new_from_config_riscv_program_image(chip, manifest, &program_image, blobs)
+    }
+
+    fn new_from_config_riscv_flash_fastboot(
+        chip: &ChipDescriptor,
+        manifest: &SystemManifest,
+        blobs: &std::collections::HashMap<String, Vec<u8>>,
+    ) -> Result<WasmSimulator, JsValue> {
+        use labwired_core::boot::esp32c3_rom::{
+            build_rom_boot_machine, c3_rom_data_init_writes, inject_rom_regions, RomBootOpts,
+        };
+        use labwired_core::boot::esp32s3_rom::RomImages;
+
+        let mut bus = SystemBus::from_config(chip, manifest)
+            .map_err(|e| JsValue::from_str(&format!("Bus config error: {:#}", e)))?;
+
+        let (Some(irom), Some(drom)) = (blobs.get("esp32c3_irom"), blobs.get("esp32c3_drom"))
+        else {
+            return Err(JsValue::from_str(
+                "C3 flash fast-start needs ESP32-C3 ROM blobs: pass esp32c3_irom + esp32c3_drom",
+            ));
+        };
+        let images = RomImages {
+            irom: irom.clone(),
+            drom: drom.clone(),
+        };
+        if !inject_rom_regions(&mut bus, &images) {
+            return Err(JsValue::from_str(
+                "C3 flash fast-start: chip YAML declares no IROM region at 0x40000000",
+            ));
+        }
+        // The bootloader calls ROM helpers through DRAM tables initialized by
+        // the mask ROM reset code. Because this path skips that reset code, copy
+        // those ROM `.data` records before entering the second-stage bootloader.
+        for (dst, bytes) in c3_rom_data_init_writes(irom) {
+            for (i, b) in bytes.iter().enumerate() {
+                let _ = bus.write_u8(dst as u64 + i as u64, *b);
+            }
+        }
+
+        let flash = blobs
+            .get("esp32c3_flash")
+            .ok_or_else(|| JsValue::from_str("fast-start needs esp32c3_flash"))?;
+        let bootloader_image = esp32c3_bootloader_program_image_from_merged_flash(flash)
+            .map_err(|e| JsValue::from_str(&format!("ESP32-C3 flash fast-start: {e}")))?;
+
+        let uart_sink = Arc::new(Mutex::new(Vec::new()));
+        let capture_usb_serial = manifest
+            .debug_uart
+            .as_deref()
+            .map(|debug_uart| {
+                debug_uart.eq_ignore_ascii_case("usb_serial_jtag")
+                    || debug_uart.eq_ignore_ascii_case("usb-serial-jtag")
+            })
+            .unwrap_or(true);
+        if !capture_usb_serial {
+            if let Some(debug_uart) = manifest.debug_uart.as_deref() {
+                if !bus.attach_uart_tx_sink_named(debug_uart, uart_sink.clone(), false) {
+                    bus.attach_uart_tx_sink(uart_sink.clone(), false);
+                }
+            } else {
+                bus.attach_uart_tx_sink(uart_sink.clone(), false);
+            }
+        }
+        let uart_rx_bufs = bus.attach_uart_rx_source();
+
+        let mut machine = build_rom_boot_machine(
+            bus,
+            flash.clone(),
+            RomBootOpts {
+                efuse_mac: None,
+                usb_serial_sink: capture_usb_serial.then(|| uart_sink.clone()),
+            },
+            |c| Box::new(c) as Box<dyn Cpu>,
+        );
+        load_program_segments_without_reset(&mut machine, &bootloader_image)
+            .map_err(|e| JsValue::from_str(&format!("C3 flash fast-start load: {e}")))?;
+
+        let sp_top =
+            (chip.ram.base + labwired_config::parse_size(&chip.ram.size).unwrap_or(0)) as u32;
+        machine.cpu.set_sp(sp_top & !0xF);
+        machine.cpu.set_pc(bootloader_image.entry_point as u32);
+
+        let board_io = manifest.board_io.clone();
+
+        Ok(WasmSimulator {
+            machine: Some(machine),
+            board_io,
+            uart_sink,
+            uart_rx_bufs,
+            arch: Arch::RiscV,
+            esp32_ipi: None,
+            jit_browser_enabled: false,
+            jit_browser_cache: None,
+        })
+    }
+
+    fn new_from_config_riscv_program_image(
+        chip: &ChipDescriptor,
+        manifest: &SystemManifest,
+        program_image: &ProgramImage,
         blobs: &std::collections::HashMap<String, Vec<u8>>,
     ) -> Result<WasmSimulator, JsValue> {
         let mut bus = SystemBus::from_config(chip, manifest)
@@ -327,15 +526,14 @@ impl WasmSimulator {
         let boxed: Box<dyn Cpu> = Box::new(cpu);
         let mut machine = Machine::new(boxed, bus);
 
-        let program_image = load_elf_bytes(firmware)
-            .map_err(|e| JsValue::from_str(&format!("Loader Error: {}", e)))?;
         machine
-            .load_firmware(&program_image)
+            .load_firmware(program_image)
             .map_err(|e| JsValue::from_str(&format!("Simulation Error: {}", e)))?;
 
         let sp_top =
             (chip.ram.base + labwired_config::parse_size(&chip.ram.size).unwrap_or(0)) as u32;
         machine.cpu.set_sp(sp_top & !0xF);
+        machine.cpu.set_pc(program_image.entry_point as u32);
 
         let board_io = manifest.board_io.clone();
 
@@ -1064,6 +1262,67 @@ mod romboot_tests {
 
     fn root() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    }
+
+    #[test]
+    fn parses_esp32c3_app_segments_from_merged_flash() {
+        let mut flash = vec![0xff; ESP32C3_APP_IMAGE_OFFSET + 256];
+        let app = ESP32C3_APP_IMAGE_OFFSET;
+        flash[app] = ESP_IMAGE_MAGIC;
+        flash[app + 1] = 2;
+        flash[app + 4..app + 8].copy_from_slice(&0x4200_1234u32.to_le_bytes());
+
+        let mut cursor = app + ESP_IMAGE_HEADER_LEN;
+        flash[cursor..cursor + 4].copy_from_slice(&0x3FC8_0010u32.to_le_bytes());
+        flash[cursor + 4..cursor + 8].copy_from_slice(&3u32.to_le_bytes());
+        cursor += 8;
+        flash[cursor..cursor + 3].copy_from_slice(&[1, 2, 3]);
+        cursor += 3;
+
+        flash[cursor..cursor + 4].copy_from_slice(&0x4200_2000u32.to_le_bytes());
+        flash[cursor + 4..cursor + 8].copy_from_slice(&4u32.to_le_bytes());
+        cursor += 8;
+        flash[cursor..cursor + 4].copy_from_slice(&[4, 5, 6, 7]);
+
+        let image = esp32c3_app_program_image_from_merged_flash(&flash).expect("parse app image");
+
+        assert_eq!(image.entry_point, 0x4200_1234);
+        assert_eq!(image.arch, CoreArch::RiscV);
+        assert_eq!(image.segments.len(), 2);
+        assert_eq!(image.segments[0].start_addr, 0x3FC8_0010);
+        assert_eq!(image.segments[0].data, vec![1, 2, 3]);
+        assert_eq!(image.segments[1].start_addr, 0x4200_2000);
+        assert_eq!(image.segments[1].data, vec![4, 5, 6, 7]);
+    }
+
+    #[test]
+    fn rejects_flash_without_esp_app_magic_at_app_offset() {
+        let flash = vec![0xff; ESP32C3_APP_IMAGE_OFFSET + ESP_IMAGE_HEADER_LEN];
+
+        let err = esp32c3_app_program_image_from_merged_flash(&flash).unwrap_err();
+
+        assert!(err.contains("bad magic"), "{err}");
+    }
+
+    #[test]
+    fn parses_esp32c3_bootloader_segments_from_merged_flash() {
+        let mut flash = vec![0xff; 128];
+        flash[0] = ESP_IMAGE_MAGIC;
+        flash[1] = 1;
+        flash[4..8].copy_from_slice(&0x4038_0100u32.to_le_bytes());
+
+        let cursor = ESP_IMAGE_HEADER_LEN;
+        flash[cursor..cursor + 4].copy_from_slice(&0x4038_0100u32.to_le_bytes());
+        flash[cursor + 4..cursor + 8].copy_from_slice(&4u32.to_le_bytes());
+        flash[cursor + 8..cursor + 12].copy_from_slice(&[0x13, 0x00, 0x00, 0x00]);
+
+        let image =
+            esp32c3_bootloader_program_image_from_merged_flash(&flash).expect("parse bootloader");
+
+        assert_eq!(image.entry_point, 0x4038_0100);
+        assert_eq!(image.segments.len(), 1);
+        assert_eq!(image.segments[0].start_addr, 0x4038_0100);
+        assert_eq!(image.segments[0].data, vec![0x13, 0x00, 0x00, 0x00]);
     }
 
     #[test]
