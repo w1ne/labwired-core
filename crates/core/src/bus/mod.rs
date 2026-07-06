@@ -27,6 +27,14 @@ mod tick;
 pub use bus_trace::{new_log, BusPayload, BusTraceEvent, BusTraceLog, I2cSym};
 
 impl SystemBus {
+    #[inline]
+    fn legacy_tick_index_active(p: &PeripheralEntry) -> bool {
+        if cfg!(feature = "event-scheduler") && p.dev.uses_scheduler() {
+            return false;
+        }
+        p.dev.legacy_tick_active()
+    }
+
     /// True when CPU idle fast-forward can skip the legacy peripheral walk for
     /// the skipped window without dropping observable work. Scheduler-driven
     /// peripherals are safe because the machine clamps to their next deadline;
@@ -2650,6 +2658,43 @@ mod tests {
         assert!(
             bus.legacy_tick_indices.is_empty(),
             "one-shot declarative timing should leave the hot tick set after it drains"
+        );
+    }
+
+    #[cfg(feature = "event-scheduler")]
+    #[test]
+    fn scheduler_peripherals_do_not_enter_legacy_tick_index() {
+        #[derive(Debug)]
+        struct SchedulerPeripheral;
+        impl crate::Peripheral for SchedulerPeripheral {
+            fn read(&self, _offset: u64) -> SimResult<u8> {
+                Ok(0)
+            }
+
+            fn write(&mut self, _offset: u64, _value: u8) -> SimResult<()> {
+                Ok(())
+            }
+
+            fn legacy_tick_active(&self) -> bool {
+                true
+            }
+
+            fn uses_scheduler(&self) -> bool {
+                true
+            }
+        }
+
+        let mut bus = SystemBus::empty();
+        bus.add_peripheral("sched", 0x1000, 0x100, None, Box::new(SchedulerPeripheral));
+
+        assert!(
+            bus.legacy_tick_indices.is_empty(),
+            "scheduler-owned peripherals are advanced by the event scheduler, not the legacy tick walk"
+        );
+        assert!(!bus.refresh_legacy_tick_index(0));
+        assert!(
+            bus.legacy_tick_indices.is_empty(),
+            "refresh must not reinsert scheduler-owned peripherals into the legacy tick walk"
         );
     }
 
