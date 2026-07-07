@@ -23,7 +23,10 @@ const SDIO_SELECT: u64 = 0x1C;
 const ENABLE: u64 = 0x20;
 const ENABLE_W1TS: u64 = 0x24;
 const ENABLE_W1TC: u64 = 0x28;
+/// GPIO_STRAP_REG: latched boot-mode straps. The boot ROM reads bit 3 to choose
+/// SPI fast-flash boot; reset seeds it to the board-default flash-boot state.
 const STRAP: u64 = 0x38;
+const STRAP_SPI_FAST_FLASH_BOOT: u32 = 0x0000_0008;
 const IN: u64 = 0x3C;
 const STATUS: u64 = 0x44;
 const STATUS_W1TS: u64 = 0x48;
@@ -39,6 +42,7 @@ pub struct Esp32c3Gpio {
     out: u32,
     sdio_select: u32,
     enable: u32,
+    strap: u32,
     in_data: u32,
     status: u32,
     pin_cfg: [u32; PIN_COUNT as usize],
@@ -53,6 +57,7 @@ impl Esp32c3Gpio {
             out: 0,
             sdio_select: 0,
             enable: 0,
+            strap: STRAP_SPI_FAST_FLASH_BOOT,
             in_data: 0,
             status: 0,
             pin_cfg: [0; PIN_COUNT as usize],
@@ -92,7 +97,7 @@ impl Esp32c3Gpio {
             OUT | OUT_W1TS | OUT_W1TC => self.out,
             SDIO_SELECT => self.sdio_select,
             ENABLE | ENABLE_W1TS | ENABLE_W1TC => self.enable,
-            STRAP => 0,
+            STRAP => self.strap,
             IN => self.in_data,
             STATUS | STATUS_W1TS | STATUS_W1TC => self.status,
             PCPU_INT | PCPU_NMI_INT | CPUSDIO_INT => self.status,
@@ -203,6 +208,7 @@ impl Peripheral for Esp32c3Gpio {
             "odr": self.out,
             "idr": self.in_data,
             "enable": self.enable,
+            "strap": self.strap,
             "status": self.status,
         })
     }
@@ -275,5 +281,14 @@ mod tests {
         gpio.write_u32(PIN0 + 3 * 4, 0x2 << 7).unwrap();
         assert_eq!(gpio.read_word(PIN0 + 3 * 4), 0x2 << 7);
         assert_eq!(gpio.read_word(0x88), 0);
+    }
+
+    #[test]
+    fn reset_strap_selects_spi_flash_boot() {
+        let mut gpio = Esp32c3Gpio::new();
+        assert_eq!(gpio.read_word(STRAP), STRAP_SPI_FAST_FLASH_BOOT);
+
+        gpio.write_u32(STRAP, 0).unwrap();
+        assert_eq!(gpio.read_word(STRAP), STRAP_SPI_FAST_FLASH_BOOT);
     }
 }
