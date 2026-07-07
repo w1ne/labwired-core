@@ -238,7 +238,12 @@ boards:
     # parameters, matching Arduino/Wire traffic; this is an attached device model,
     # not an ESP32-C3 silicon register/reset change. No live USB-JTAG re-capture
     # this session; re-capture remains pending.
-    drift_ack: 2026-07-06
+    # 2026-07-07: C3 ROM-boot RTC and SYSTIMER stay on the legacy tick path under
+    # event-scheduler because the current bus read API cannot sync scheduler-driven
+    # peripherals before read-driven timer snapshots. This restores the same
+    # per-cycle timer freshness as the non-scheduler path and is covered by the
+    # generated Arduino OLED ROM-boot regression; no reset-register silicon change.
+    drift_ack: 2026-07-07
 
   - id: nucleo-l476rg
     doc: docs/boards/nucleo-l476rg.md
@@ -466,7 +471,11 @@ boards:
     # CPU cycle. The register layout, reset values (including CONF=0x46000000),
     # level IRQ semantics, and one-cycle tick equivalence are preserved by offline
     # elapsed-vs-repeated-tick tests; no live USB-JTAG re-capture this session.
-    drift_ack: 2026-07-06
+    # 2026-07-07: SYSTIMER gained a per-instance scheduler-mode flag so C3 ROM boot
+    # can force legacy ticking while the default S3 constructor remains
+    # scheduler-driven. S3 reset values/MMIO semantics are unchanged; unit coverage
+    # asserts default scheduler behaviour and snapshot compatibility.
+    drift_ack: 2026-07-07
     models:
       - crates/core/src/peripherals/esp32s3
       - crates/core/src/peripherals/esp_xtensa_common

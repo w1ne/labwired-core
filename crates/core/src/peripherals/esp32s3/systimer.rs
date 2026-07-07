@@ -185,6 +185,13 @@ pub struct Systimer {
     /// Scheduler/elapsed-mode anchor in peripheral-tick units. The C3 ROM path
     /// uses the default one CPU cycle per peripheral tick.
     last_tick: u64,
+    /// Whether this instance participates in the event scheduler.
+    ///
+    /// C3 firmware commonly reads SYSTIMER through write-UPDATE/read-snapshot
+    /// sequences. The current bus read API cannot sync scheduler-driven
+    /// peripherals before reads, so C3 ROM boot keeps this false and uses the
+    /// legacy per-cycle tick path for fidelity.
+    scheduler_enabled: bool,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -242,6 +249,7 @@ impl SystimerSnapshotV2 {
             date: self.date,
             target0_source: self.target0_source,
             last_tick: self.last_tick,
+            scheduler_enabled: true,
         }
     }
 }
@@ -259,6 +267,7 @@ impl SystimerSnapshotV1 {
             date: self.date,
             target0_source: self.target0_source,
             last_tick: 0,
+            scheduler_enabled: true,
         }
     }
 }
@@ -296,7 +305,18 @@ impl Systimer {
             date: 0x0201_2251,
             target0_source,
             last_tick: 0,
+            scheduler_enabled: true,
         }
+    }
+
+    /// Construct a SYSTIMER that stays on the legacy per-cycle tick path.
+    ///
+    /// This is used by ESP32-C3 ROM boot until scheduler-driven peripherals can
+    /// be synchronized before MMIO reads as well as before writes.
+    pub fn new_with_source_legacy_tick(cpu_clock_hz: u32, target0_source: u32) -> Self {
+        let mut timer = Self::new_with_source(cpu_clock_hz, target0_source);
+        timer.scheduler_enabled = false;
+        timer
     }
 
     fn unit0_running(&self) -> bool {
@@ -672,7 +692,7 @@ impl Peripheral for Systimer {
     }
 
     fn uses_scheduler(&self) -> bool {
-        true
+        self.scheduler_enabled
     }
 
     fn sync_to(&mut self, tick_now: u64) {
@@ -680,6 +700,9 @@ impl Peripheral for Systimer {
     }
 
     fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if !self.scheduler_enabled {
+            return Vec::new();
+        }
         self.next_alarm_delay_cycles()
             .map(|delay| vec![(delay, SYSTIMER_WAKE_TOKEN)])
             .unwrap_or_default()
@@ -717,14 +740,17 @@ impl Peripheral for Systimer {
     }
 
     fn restore_runtime_snapshot(&mut self, bytes: &[u8]) -> SimResult<()> {
+        let scheduler_enabled = self.scheduler_enabled;
         if let Ok(restored) = bincode::deserialize::<SystimerSnapshotV2>(bytes) {
             *self = restored.into_systimer();
+            self.scheduler_enabled = scheduler_enabled;
             return Ok(());
         }
         let restored = bincode::deserialize::<SystimerSnapshotV1>(bytes).map_err(|e| {
             crate::SimulationError::NotImplemented(format!("Systimer snapshot decode: {e}"))
         })?;
         *self = restored.into_systimer();
+        self.scheduler_enabled = scheduler_enabled;
         Ok(())
     }
 }
@@ -818,6 +844,36 @@ mod tests {
 
         assert!(s.uses_scheduler());
         assert_eq!(s.take_scheduled_events(), vec![(30, 0)]);
+    }
+
+    #[test]
+    fn c3_legacy_constructor_stays_off_scheduler() {
+        let mut s = Systimer::new_with_source_legacy_tick(160_000_000, 37);
+
+        assert!(!s.uses_scheduler());
+        assert!(s.take_scheduled_events().is_empty());
+
+        s.tick_elapsed(10);
+        assert_eq!(
+            s.unit0.counter, 1,
+            "legacy mode must still advance the live counter through ticks"
+        );
+    }
+
+    #[test]
+    fn restore_preserves_current_scheduler_mode() {
+        let mut original = Systimer::new_with_source(160_000_000, 37);
+        original.tick_elapsed(25);
+        let bytes = original.runtime_snapshot();
+
+        let mut restored = Systimer::new_with_source_legacy_tick(160_000_000, 37);
+        restored.restore_runtime_snapshot(&bytes).unwrap();
+
+        assert_eq!(restored.unit0.counter, original.unit0.counter);
+        assert!(
+            !restored.uses_scheduler(),
+            "restore must not flip a C3 legacy-tick instance back to scheduler mode"
+        );
     }
 
     #[test]

@@ -116,7 +116,11 @@ impl Peripheral for Esp32c3RtcTimer {
     }
 
     fn uses_scheduler(&self) -> bool {
-        true
+        // The bus read API is intentionally `&self`; until it can sync
+        // scheduler-driven peripherals before reads, this read-driven RTC must
+        // stay on the legacy tick path or firmware delay loops observe stale
+        // time and spin forever.
+        false
     }
 
     fn sync_to(&mut self, tick_now: u64) {
@@ -221,6 +225,17 @@ mod tests {
         elapsed.tick_elapsed(1000);
 
         assert_eq!(rtc_time_get(&mut elapsed), rtc_time_get(&mut repeated));
+    }
+
+    #[test]
+    fn rtc_timer_stays_on_legacy_tick_path() {
+        let t = Esp32c3RtcTimer::new();
+
+        assert!(
+            !t.uses_scheduler(),
+            "RTC timer reads are time-sensitive; until bus reads can sync scheduler-driven \
+             peripherals, the C3 RTC must stay on the legacy tick path"
+        );
     }
 
     #[test]

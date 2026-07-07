@@ -383,7 +383,7 @@ impl WasmSimulator {
                 debug_uart.eq_ignore_ascii_case("usb_serial_jtag")
                     || debug_uart.eq_ignore_ascii_case("usb-serial-jtag")
             })
-            .unwrap_or(true);
+            .unwrap_or(false);
         if !capture_usb_serial {
             if let Some(debug_uart) = manifest.debug_uart.as_deref() {
                 if !bus.attach_uart_tx_sink_named(debug_uart, uart_sink.clone(), false) {
@@ -1042,6 +1042,17 @@ impl WasmSimulator {
         self.machine().config.idle_fast_forward_enabled = enabled;
     }
 
+    /// Set the peripheral tick interval used by `Machine::run`.
+    ///
+    /// `1` is the exact default: tick orchestration runs after every executed
+    /// instruction. Larger values are a bounded browser acceleration knob for
+    /// firmware bring-up paths whose active peripherals are scheduler-driven or
+    /// inactive.
+    #[wasm_bindgen]
+    pub fn set_peripheral_tick_interval(&mut self, interval: u32) {
+        self.machine().config.peripheral_tick_interval = interval.max(1);
+    }
+
     /// Total number of times the browser JIT has dispatched a
     /// compiled block. Useful for confirming the JIT path actually
     /// fired during a benchmark.
@@ -1455,6 +1466,67 @@ mod romboot_tests {
             painted,
             "C3 OLED lab did not paint (>= {MIN_LIT} lit pixels) within {MAX_STEPS} steps; \
              last count = {lit}.\n--- captured serial ---\n{out}"
+        );
+    }
+
+    /// Accelerated C3 flash shares must still run the real app image and paint
+    /// attached devices. This skips the mask-ROM replay, but does not fake the
+    /// OLED: pixels must come from firmware I2C writes into the SSD1306 model.
+    #[test]
+    fn wasm_c3_flash_fast_start_oled_paints_quickly() {
+        let manifest_dir = root();
+        let chip_yaml =
+            std::fs::read_to_string(manifest_dir.join("../../configs/chips/esp32c3.yaml"))
+                .expect("read esp32c3 chip yaml");
+        let system_yaml = std::fs::read_to_string(
+            manifest_dir.join("../../configs/systems/esp32c3-oled-demo.yaml"),
+        )
+        .expect("read esp32c3-oled-demo system yaml");
+        let chip: ChipDescriptor = serde_yaml::from_str(&chip_yaml).expect("parse chip yaml");
+        let manifest: SystemManifest =
+            serde_yaml::from_str(&system_yaml).expect("parse system yaml");
+
+        let irom = std::fs::read(manifest_dir.join("../core/roms/esp32c3/esp32c3_rom.bin"))
+            .expect("read vendored C3 IROM");
+        let drom = std::fs::read(manifest_dir.join("../core/roms/esp32c3/esp32c3_drom.bin"))
+            .expect("read vendored C3 DROM");
+        let flash = std::fs::read(manifest_dir.join("tests/fixtures/esp32c3-oled-demo-flash.bin"))
+            .expect("read C3 OLED demo flash image");
+
+        let mut blobs: HashMap<String, Vec<u8>> = HashMap::new();
+        blobs.insert("esp32c3_irom".into(), irom);
+        blobs.insert("esp32c3_drom".into(), drom);
+        blobs.insert("esp32c3_flash".into(), flash);
+
+        let mut sim = WasmSimulator::new_from_config_riscv_flash_fastboot(&chip, &manifest, &blobs)
+            .expect("construct C3 flash fast-start WasmSimulator");
+
+        const BATCH: u32 = 1_000_000;
+        const MAX_STEPS: u64 = 40_000_000;
+        const MIN_LIT: usize = 400;
+        let mut steps: u64 = 0;
+        let mut lit = 0usize;
+        while steps < MAX_STEPS {
+            sim.step(BATCH).expect("step");
+            steps += BATCH as u64;
+            if let Ok(fb) = sim.get_ssd1306_framebuffer("oled") {
+                lit = fb.iter().map(|b| b.count_ones() as usize).sum();
+                if lit >= MIN_LIT {
+                    let out = String::from_utf8_lossy(&sim.uart_sink.lock().unwrap()).into_owned();
+                    assert!(
+                        out.contains("oled-lab"),
+                        "C3 flash fast-start painted but did not capture UART0 app logs; \
+                         captured serial:\n{out}"
+                    );
+                    return;
+                }
+            }
+        }
+
+        let out = String::from_utf8_lossy(&sim.uart_sink.lock().unwrap()).into_owned();
+        panic!(
+            "C3 flash fast-start did not paint OLED (>= {MIN_LIT} lit pixels) within \
+             {MAX_STEPS} steps; last count = {lit}.\n--- captured serial ---\n{out}"
         );
     }
 }
