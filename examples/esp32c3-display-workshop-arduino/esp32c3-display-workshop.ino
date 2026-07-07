@@ -223,9 +223,23 @@ static void drawAllDisplays(uint8_t hh, uint8_t mm, bool colon) {
   drawI2cDisplays(hh, mm);
 }
 
-void setup() {
+static void workshopSerialBegin() {
   Serial.begin(115200);
-  Serial.println("ESP32-C3 Display Workshop");
+#if defined(ARDUINO_USB_CDC_ON_BOOT) && ARDUINO_USB_CDC_ON_BOOT
+  Serial0.begin(115200);
+#endif
+}
+
+static void workshopSerialPrintln(const char *line) {
+  Serial.println(line);
+#if defined(ARDUINO_USB_CDC_ON_BOOT) && ARDUINO_USB_CDC_ON_BOOT
+  Serial0.println(line);
+#endif
+}
+
+void setup() {
+  workshopSerialBegin();
+  workshopSerialPrintln("ESP32-C3 Display Workshop");
   pinMode(PIN_TM_CLK, OUTPUT);
   pinMode(PIN_TM_DIO, OUTPUT);
   pinMode(PIN_DC, OUTPUT);
@@ -250,4 +264,7 @@ void loop() {
   uint8_t hh = (seconds / 3600) % 24;
   uint8_t mm = (seconds / 60) % 60;
   drawAllDisplays(hh, mm, seconds & 1);
+  char line[24];
+  snprintf(line, sizeof(line), "WORKSHOP_TICK %02u:%02u", hh, mm);
+  workshopSerialPrintln(line);
 }
