@@ -73,6 +73,7 @@ impl SystemBus {
             pending_schedule: Vec::new(),
             legacy_walk_disabled: false,
             hcsr04: Vec::new(),
+            tm1637: Vec::new(),
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
             can_log_players: Vec::new(),

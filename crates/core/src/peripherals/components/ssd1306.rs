@@ -8,9 +8,17 @@ use crate::peripherals::i2c::I2cDevice;
 use std::any::Any;
 
 const WIDTH: usize = 128;
-const PAGES: usize = 8; // 64 rows / 8 rows per page
+/// GDDRAM pages for the 0.96″ 128×64 panel (64 rows / 8 rows per page).
+const PAGES_128X64: usize = 8;
+/// GDDRAM pages for the 0.91″ 128×32 panel (32 rows / 8 rows per page).
+const PAGES_128X32: usize = 4;
 
-/// SSD1306 OLED display controller model (128×64 pixels, I²C).
+/// SSD1306 OLED display controller model (I²C).
+///
+/// Covers both common form factors sold as bare I²C modules: the 0.96″ 128×64
+/// panel (8 GDDRAM pages) and the thinner 0.91″ 128×32 panel (4 pages). The
+/// command set is identical between them — only the page count differs — so the
+/// same model serves both, parameterised by [`Ssd1306::pages`].
 ///
 /// Implements the paged GDDRAM framebuffer with horizontal, vertical, and page
 /// addressing modes.  Control bytes 0x00 (command stream) and 0x40 (data stream)
@@ -18,6 +26,8 @@ const PAGES: usize = 8; // 64 rows / 8 rows per page
 #[derive(Debug, serde::Serialize)]
 pub struct Ssd1306 {
     address: u8,
+    /// GDDRAM page count: 8 for the 128×64 panel, 4 for the 128×32 panel.
+    pages: usize,
     /// Control byte received at the start of the current I²C transaction.
     /// None = waiting for the first byte (which will be the control byte).
     control_byte: Option<u8>,
@@ -50,9 +60,24 @@ impl Default for Ssd1306 {
 }
 
 impl Ssd1306 {
+    /// 0.96″ 128×64 panel (8 GDDRAM pages) — the default SSD1306 form factor.
     pub fn new(address: u8) -> Self {
+        Self::with_pages(address, PAGES_128X64)
+    }
+
+    /// 0.91″ 128×32 panel (4 GDDRAM pages).
+    pub fn new_128x32(address: u8) -> Self {
+        Self::with_pages(address, PAGES_128X32)
+    }
+
+    /// Construct an SSD1306 with an explicit GDDRAM page count. `pages` is
+    /// clamped to 1..=8 so a bad config can never allocate a zero-size or
+    /// out-of-spec framebuffer.
+    pub fn with_pages(address: u8, pages: usize) -> Self {
+        let pages = pages.clamp(1, PAGES_128X64);
         Self {
             address,
+            pages,
             control_byte: None,
             register_address_written: false,
             display_on: false,
@@ -62,15 +87,16 @@ impl Ssd1306 {
             col_start: 0,
             col_end: (WIDTH as u8) - 1,
             page_start: 0,
-            page_end: (PAGES as u8) - 1,
+            page_end: (pages as u8) - 1,
             pending_command: None,
             pending_params_remaining: 0,
             pending_params: [0; 2],
-            gddram: vec![0u8; WIDTH * PAGES],
+            gddram: vec![0u8; WIDTH * pages],
         }
     }
 
-    /// Return the raw GDDRAM framebuffer (1024 bytes: page-major, column-minor).
+    /// Return the raw GDDRAM framebuffer (page-major, column-minor). Length is
+    /// `128 × pages` — 1024 bytes for the 128×64 panel, 512 for the 128×32.
     ///
     /// Pixel (x, y) is bit `(y % 8)` of byte `gddram[(y / 8) * 128 + x]`.
     pub fn framebuffer(&self) -> &[u8] {
@@ -92,9 +118,9 @@ impl Ssd1306 {
         WIDTH
     }
 
-    /// Panel height in pixels (64 — `PAGES` × 8 rows/page).
+    /// Panel height in pixels (`pages` × 8 rows/page — 64 or 32).
     pub fn height(&self) -> usize {
-        PAGES * 8
+        self.pages * 8
     }
 
     pub fn display_on(&self) -> bool {
@@ -287,6 +313,44 @@ impl PeripheralKit for Ssd1306Kit {
     }
 }
 
+// ─── 0.91″ 128×32 variant ───────────────────────────────────────────────────
+
+pub struct Ssd1306Oled091Kit;
+pub static SSD1306_128X32_KIT: Ssd1306Oled091Kit = Ssd1306Oled091Kit;
+
+static SSD1306_128X32_METADATA: KitMetadata = KitMetadata {
+    device_type: "oled-ssd1306-128x32",
+    label: "SSD1306 OLED 0.91″",
+    summary: "0.91″ 128×32 monochrome OLED display over I2C with a paged framebuffer.",
+    detail: "Solomon Systech SSD1306 in the 0.91-inch 128×32 form factor (4 GDDRAM pages). \
+             Identical command set to the 128×64 panel — only the page count differs. \
+             Canonical 0x3C / 0x3D address pair; the WASM bridge surfaces pixel state for the \
+             playground's display overlay.",
+    transport: Transport::I2c,
+    category: Category::I2c,
+    config_keys: &[ConfigKey {
+        name: "i2c_address",
+        ty: ConfigType::Int,
+        doc: "7-bit slave address. Defaults to 0x3C; 0x3D selects the SA0=high variant.",
+    }],
+    labs: &[LabRef {
+        board_id: "ssd1306-128x32-lab",
+        chip: "stm32f103",
+        example_dir: "ssd1306-128x32-lab",
+        demo_elf: "demo-ssd1306-128x32-lab.elf",
+    }],
+};
+
+impl PeripheralKit for Ssd1306Oled091Kit {
+    fn metadata(&self) -> &'static KitMetadata {
+        &SSD1306_128X32_METADATA
+    }
+    fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
+        let address = ctx.i2c_address_or(0x3C)?;
+        ctx.attach_i2c_device(Box::new(Ssd1306::new_128x32(address)))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::Ssd1306;
@@ -325,6 +389,40 @@ mod tests {
             dev.framebuffer()[39],
             0,
             "init command parameters must not be misread as column-nibble commands"
+        );
+    }
+
+    #[test]
+    fn panel_128x32_has_four_pages_and_half_size_framebuffer() {
+        let dev = Ssd1306::new_128x32(0x3c);
+        assert_eq!(dev.width(), 128);
+        assert_eq!(dev.height(), 32, "0.91″ panel is 32 rows tall");
+        assert_eq!(
+            dev.framebuffer().len(),
+            128 * 4,
+            "128×32 GDDRAM is 4 pages (512 bytes), half the 128×64 panel"
+        );
+    }
+
+    #[test]
+    fn panel_128x32_writes_data_into_all_four_pages() {
+        let mut dev = Ssd1306::new_128x32(0x3c);
+        // Horizontal addressing across the full 128×32 window.
+        for cmd in [0x20, 0x00, 0x21, 0, 127, 0x22, 0, 3] {
+            command(&mut dev, cmd);
+        }
+        // Stream one full page-row worth of columns into the last page.
+        for cmd in [0xB3, 0x00, 0x10] {
+            command(&mut dev, cmd);
+        }
+        dev.write(0x40);
+        dev.write(0xff);
+        dev.stop();
+        // Last page starts at byte 3*128 = 384; column 0 there must be lit.
+        assert_eq!(
+            dev.framebuffer()[3 * 128],
+            0xff,
+            "page 3 (rows 24..31) must be addressable on the 128×32 panel"
         );
     }
 }

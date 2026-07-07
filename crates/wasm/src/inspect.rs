@@ -170,11 +170,20 @@ impl WasmSimulator {
     pub fn get_ssd1306_framebuffer(&self, device_id: &str) -> Result<Box<[u8]>, JsValue> {
         let machine = self.machine.as_ref().unwrap();
 
-        // Find the board_io binding for this device.
+        // Find the board_io binding for this device. Both SSD1306 form factors
+        // (128×64 and the 0.91″ 128×32) surface through the same accessor — the
+        // framebuffer length (1024 vs 512 bytes) tells the renderer the panel
+        // height, so one readback path serves both.
         let binding = self
             .board_io
             .iter()
-            .find(|b| b.id == device_id && b.device_type.as_deref() == Some("oled-ssd1306"))
+            .find(|b| {
+                b.id == device_id
+                    && matches!(
+                        b.device_type.as_deref(),
+                        Some("oled-ssd1306") | Some("oled-ssd1306-128x32")
+                    )
+            })
             .ok_or_else(|| {
                 JsValue::from_str(&format!("No oled-ssd1306 board_io binding '{}'", device_id))
             })?;
