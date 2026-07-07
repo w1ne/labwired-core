@@ -165,6 +165,29 @@
       ]
     },
     {
+      "device_type": "oled-ssd1306-128x32",
+      "label": "SSD1306 OLED 0.91″",
+      "summary": "0.91″ 128×32 monochrome OLED display over I2C with a paged framebuffer.",
+      "detail": "Solomon Systech SSD1306 in the 0.91-inch 128×32 form factor (4 GDDRAM pages). Identical command set to the 128×64 panel — only the page count differs. Canonical 0x3C / 0x3D address pair; the WASM bridge surfaces pixel state for the playground's display overlay.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x3C; 0x3D selects the SA0=high variant."
+        }
+      ],
+      "labs": [
+        {
+          "board_id": "ssd1306-128x32-lab",
+          "chip": "stm32f103",
+          "example_dir": "ssd1306-128x32-lab",
+          "demo_elf": "demo-ssd1306-128x32-lab.elf"
+        }
+      ]
+    },
+    {
       "device_type": "ili9341",
       "label": "ILI9341 TFT",
       "summary": "240×320 RGB565 SPI TFT display.",
@@ -264,6 +287,57 @@
           "chip": "stm32l476",
           "example_dir": "iolink-dido",
           "demo_elf": "demo-iolink-dido.elf"
+        }
+      ]
+    },
+    {
+      "device_type": "hc595-7seg",
+      "label": "74HC595 7-Segment (4-digit)",
+      "summary": "4-digit 7-segment LED display driven by two chained 74HC595 shift registers over SPI.",
+      "detail": "The classic blue 4-digit module: a segment 74HC595 and a digit-select 74HC595 in series. Firmware shifts a segment byte then a digit-select byte (16 bits), pulses RCLK (SPI chip-select) to latch, and multiplexes the four digits. The model auto-detects the digit-select byte, decodes the standard a–g/dp segment font, and surfaces the four displayed characters.",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "RCLK latch GPIO pin, wired as SPI chip-select (e.g. \"PA4\"). Defaults to PA4."
+        }
+      ],
+      "labs": [
+        {
+          "board_id": "hc595-7seg-lab",
+          "chip": "stm32f103",
+          "example_dir": "hc595-7seg-lab",
+          "demo_elf": "demo-hc595-7seg-lab.elf"
+        }
+      ]
+    },
+    {
+      "device_type": "tm1637-7seg",
+      "label": "TM1637 7-Segment (4-digit)",
+      "summary": "4-digit 7-segment LED display with the TM1637 2-wire (CLK/DIO) driver.",
+      "detail": "The RobotDyn-style 4-digit clock display. The host bit-bangs two GPIO lines with the TM1637's I²C-like, LSB-first, address-less protocol; the model observes both output pins through the bus write-hook, decodes start/stop/data/ACK framing and the data / address / display-control commands, and renders the four grids through the standard a–g/dp segment font (including the clock colon).",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "clk_pin",
+          "ty": "str",
+          "doc": "CLK GPIO pin the firmware bit-bangs (e.g. \"PA8\"). Defaults to PA8."
+        },
+        {
+          "name": "dio_pin",
+          "ty": "str",
+          "doc": "DIO GPIO pin the firmware bit-bangs (e.g. \"PA9\"). Defaults to PA9."
+        }
+      ],
+      "labs": [
+        {
+          "board_id": "tm1637-7seg-lab",
+          "chip": "stm32f103",
+          "example_dir": "tm1637-7seg-lab",
+          "demo_elf": "demo-tm1637-7seg-lab.elf"
         }
       ]
     },

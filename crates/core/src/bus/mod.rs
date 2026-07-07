@@ -219,6 +219,11 @@ pub struct SystemBus {
     /// per-tick pass (`service_hcsr04`) drives the computed ECHO input level,
     /// touching the bus only on a transition. Empty by default → zero cost.
     pub hcsr04: Vec<crate::peripherals::hc_sr04::HcSr04>,
+    /// TM1637 4-digit 7-segment displays bit-banged over two GPIO lines. Each is
+    /// driven by the CLK/DIO GPIO write-hook (`maybe_clock_tm1637`), which feeds
+    /// line transitions to the display's protocol state machine. Purely
+    /// write-driven (no per-tick pass). Empty by default → zero cost.
+    pub tm1637: Vec<crate::peripherals::components::tm1637_7seg::Tm1637>,
     /// Reusable CAN diagnostic clients declared as external devices. They
     /// inject configured CAN frames into a named FDCAN peripheral once it is
     /// running, so ECU examples can be driven by a virtual off-board tester
@@ -1636,6 +1641,64 @@ impl SystemBus {
         }
     }
 
+    /// Write-hook sibling of [`maybe_arm_hcsr04`](Self::maybe_arm_hcsr04) for
+    /// bit-banged TM1637 displays: after an MMIO write to peripheral `idx`, if
+    /// that peripheral hosts a display's CLK or DIO line, re-read both output
+    /// bits and feed the `(clk, dio)` levels to the display's protocol state
+    /// machine. Both lines are MCU outputs while writing, so every edge the
+    /// firmware bit-bangs arrives as one of these write-hook calls — no polling.
+    fn maybe_clock_tm1637(&mut self, idx: usize) {
+        if self.tm1637.is_empty() {
+            return;
+        }
+        for i in 0..self.tm1637.len() {
+            // Resolve & cache the CLK / DIO GPIO peripheral indices on first use.
+            let clk_idx = match self.tm1637[i].clk_peripheral_idx() {
+                Some(t) => t,
+                None => {
+                    let addr = self.tm1637[i].clk_odr_addr;
+                    match self.find_peripheral_index(addr) {
+                        Some(t) => {
+                            self.tm1637[i].set_clk_peripheral_idx(t);
+                            t
+                        }
+                        None => continue,
+                    }
+                }
+            };
+            let dio_idx = match self.tm1637[i].dio_peripheral_idx() {
+                Some(t) => t,
+                None => {
+                    let addr = self.tm1637[i].dio_odr_addr;
+                    match self.find_peripheral_index(addr) {
+                        Some(t) => {
+                            self.tm1637[i].set_dio_peripheral_idx(t);
+                            t
+                        }
+                        None => continue,
+                    }
+                }
+            };
+            // Only react when this write actually touched the CLK or DIO port.
+            if clk_idx != idx && dio_idx != idx {
+                continue;
+            }
+            let clk_addr = self.tm1637[i].clk_odr_addr;
+            let clk_bit = self.tm1637[i].clk_bit;
+            let dio_addr = self.tm1637[i].dio_odr_addr;
+            let dio_bit = self.tm1637[i].dio_bit;
+            let clk = self
+                .read_u32(clk_addr)
+                .map(|v| (v >> clk_bit) & 1 != 0)
+                .unwrap_or(true);
+            let dio = self
+                .read_u32(dio_addr)
+                .map(|v| (v >> dio_bit) & 1 != 0)
+                .unwrap_or(true);
+            self.tm1637[i].observe_lines(clk, dio);
+        }
+    }
+
     /// Before an SPI transfer, refresh the D/C level of any attached
     /// display that observes a D/C GPIO line (e.g. the PCD8544 Nokia 5110)
     /// by reading the driving GPIO's output bit. No-op for non-SPI writes and
@@ -1912,6 +1975,7 @@ impl SystemBus {
             reset_vector_offset: 0,
             atomic_register_aliases: false,
             hcsr04: Vec::new(),
+            tm1637: Vec::new(),
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
             can_log_players: Vec::new(),
@@ -1963,6 +2027,7 @@ impl SystemBus {
             reset_vector_offset: 0,
             atomic_register_aliases: false,
             hcsr04: Vec::new(),
+            tm1637: Vec::new(),
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
             can_log_players: Vec::new(),
@@ -4250,6 +4315,7 @@ peripherals:
             reset_vector_offset: 0,
             atomic_register_aliases: false,
             hcsr04: Vec::new(),
+            tm1637: Vec::new(),
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
             can_log_players: Vec::new(),
@@ -4325,6 +4391,7 @@ peripherals:
             reset_vector_offset: 0,
             atomic_register_aliases: false,
             hcsr04: Vec::new(),
+            tm1637: Vec::new(),
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
             can_log_players: Vec::new(),
@@ -4551,6 +4618,7 @@ peripherals:
             reset_vector_offset: 0,
             atomic_register_aliases: false,
             hcsr04: Vec::new(),
+            tm1637: Vec::new(),
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
             can_log_players: Vec::new(),
@@ -4776,6 +4844,7 @@ peripherals:
             reset_vector_offset: 0,
             atomic_register_aliases: false,
             hcsr04: Vec::new(),
+            tm1637: Vec::new(),
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
             can_log_players: Vec::new(),
@@ -4855,6 +4924,7 @@ peripherals:
             reset_vector_offset: 0,
             atomic_register_aliases: false,
             hcsr04: Vec::new(),
+            tm1637: Vec::new(),
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
             can_log_players: Vec::new(),

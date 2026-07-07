@@ -1,0 +1,10 @@
+name: "tm1637-7seg-lab"
+chip: "../../configs/chips/stm32f103.yaml"
+external_devices:
+  - id: "seg"
+    type: "tm1637-7seg"
+    # GPIO bit-banged (no SPI/I2C bus); connection names the port the pins live on.
+    connection: "gpioa"
+    config:
+      clk_pin: "PA8"
+      dio_pin: "PA9"

@@ -215,6 +215,7 @@ impl crate::Bus for SystemBus {
                 let p = &mut self.peripherals[idx];
                 let r = p.dev.write(addr - p.base, value);
                 self.maybe_arm_hcsr04(idx);
+                self.maybe_clock_tm1637(idx);
                 #[cfg(feature = "event-scheduler")]
                 self.collect_scheduled_events(idx);
                 r
@@ -395,6 +396,7 @@ impl crate::Bus for SystemBus {
             p.ticks_remaining = 0;
             let r = p.dev.write_u16(addr - p.base, value);
             self.maybe_arm_hcsr04(idx);
+            self.maybe_clock_tm1637(idx);
             #[cfg(feature = "event-scheduler")]
             self.collect_scheduled_events(idx);
             if r.is_ok() {
@@ -468,6 +470,7 @@ impl crate::Bus for SystemBus {
             p.ticks_remaining = 0;
             let r = p.dev.write_u32(addr - p.base, value);
             self.maybe_arm_hcsr04(idx);
+            self.maybe_clock_tm1637(idx);
             #[cfg(feature = "event-scheduler")]
             self.collect_scheduled_events(idx);
             if r.is_ok() {
