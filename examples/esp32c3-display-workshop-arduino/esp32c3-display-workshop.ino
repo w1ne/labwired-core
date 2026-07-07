@@ -17,6 +17,7 @@ static constexpr int PIN_I2C_SCL = 5;
 static constexpr uint8_t OLED_HEIGHT = WORKSHOP_OLED_HEIGHT;
 static constexpr uint8_t OLED_PAGES = OLED_HEIGHT / 8;
 static_assert(OLED_HEIGHT == 32 || OLED_HEIGHT == 64, "WORKSHOP_OLED_HEIGHT must be 32 or 64");
+static constexpr uint32_t DEMO_CLOCK_START_SECONDS = 19UL * 3600UL;
 
 static uint8_t oled[128 * OLED_PAGES];
 static uint32_t lastSecond = 0;
@@ -91,14 +92,14 @@ static void drawDigit(uint8_t *buf, int w, int h, int x, int y, int digitW, int 
   if (seg[6]) fillRect(buf, w, h, x + t, middleY, digitW - 2 * t, t);
 }
 
-static void drawClock(uint8_t *buf, int w, int h, int hh, int mm) {
+static void drawClock(uint8_t *buf, int w, int h, int hh, int mm, int ss) {
   memset(buf, 0, (w * h) / 8);
-  const int digitW = (h >= 48) ? 22 : 18;
-  const int digitH = (h >= 48) ? 44 : 24;
-  const int t = (h >= 48) ? 4 : 2;
-  const int gap = (h >= 48) ? 5 : 4;
-  const int colonGap = (h >= 48) ? 10 : 8;
-  const int totalW = 4 * digitW + 3 * gap + colonGap;
+  const int digitW = (h >= 48) ? 14 : 10;
+  const int digitH = (h >= 48) ? 32 : 20;
+  const int t = 2;
+  const int gap = (h >= 48) ? 3 : 2;
+  const int colonGap = (h >= 48) ? 6 : 4;
+  const int totalW = 6 * digitW + 5 * gap + 2 * colonGap;
   const int x = (w - totalW) / 2;
   const int y = (h - digitH) / 2;
   const int d0 = x;
@@ -106,12 +107,19 @@ static void drawClock(uint8_t *buf, int w, int h, int hh, int mm) {
   const int colonX = d1 + digitW + gap;
   const int d2 = colonX + colonGap;
   const int d3 = d2 + digitW + gap;
+  const int colonX2 = d3 + digitW + gap;
+  const int d4 = colonX2 + colonGap;
+  const int d5 = d4 + digitW + gap;
   drawDigit(buf, w, h, d0, y, digitW, digitH, t, hh / 10);
   drawDigit(buf, w, h, d1, y, digitW, digitH, t, hh % 10);
   fillRect(buf, w, h, colonX, y + digitH / 3, t, t);
   fillRect(buf, w, h, colonX, y + (2 * digitH) / 3, t, t);
   drawDigit(buf, w, h, d2, y, digitW, digitH, t, mm / 10);
   drawDigit(buf, w, h, d3, y, digitW, digitH, t, mm % 10);
+  fillRect(buf, w, h, colonX2, y + digitH / 3, t, t);
+  fillRect(buf, w, h, colonX2, y + (2 * digitH) / 3, t, t);
+  drawDigit(buf, w, h, d4, y, digitW, digitH, t, ss / 10);
+  drawDigit(buf, w, h, d5, y, digitW, digitH, t, ss % 10);
 }
 
 static void oledFlush() {
@@ -123,8 +131,8 @@ static void oledFlush() {
   }
 }
 
-static void drawOled(uint8_t hh, uint8_t mm) {
-  drawClock(oled, 128, OLED_HEIGHT, hh, mm);
+static void drawOled(uint8_t hh, uint8_t mm, uint8_t ss) {
+  drawClock(oled, 128, OLED_HEIGHT, hh, mm, ss);
   oledFlush();
 }
 
@@ -143,23 +151,27 @@ static void workshopSerialPrintln(const char *line) {
 #endif
 }
 
+static void renderClockSeconds(uint32_t displaySeconds) {
+  uint8_t hh = (displaySeconds / 3600) % 24;
+  uint8_t mm = (displaySeconds / 60) % 60;
+  uint8_t ss = displaySeconds % 60;
+  drawOled(hh, mm, ss);
+  char line[32];
+  snprintf(line, sizeof(line), "WORKSHOP_TICK %02u:%02u:%02u", hh, mm, ss);
+  workshopSerialPrintln(line);
+}
+
 void setup() {
   workshopSerialBegin();
   workshopSerialPrintln("ESP32-C3 Display Workshop");
   oledInit();
-  drawOled(12, 34);
-  workshopSerialPrintln("WORKSHOP_TICK 00:00");
+  renderClockSeconds(DEMO_CLOCK_START_SECONDS);
   lastSecond = millis() / 1000;
 }
 
 void loop() {
-  uint32_t seconds = millis() / 1000;
-  if (seconds == lastSecond) return;
-  lastSecond = seconds;
-  uint8_t hh = (seconds / 3600) % 24;
-  uint8_t mm = (seconds / 60) % 60;
-  drawOled(hh, mm);
-  char line[24];
-  snprintf(line, sizeof(line), "WORKSHOP_TICK %02u:%02u", hh, mm);
-  workshopSerialPrintln(line);
+  uint32_t elapsedSeconds = millis() / 1000;
+  if (elapsedSeconds == lastSecond) return;
+  lastSecond = elapsedSeconds;
+  renderClockSeconds(DEMO_CLOCK_START_SECONDS + elapsedSeconds);
 }
