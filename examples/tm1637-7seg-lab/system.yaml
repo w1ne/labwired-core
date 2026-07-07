@@ -8,11 +8,3 @@ external_devices:
     config:
       clk_pin: "PA8"
       dio_pin: "PA9"
-board_io:
-  - id: "seg"
-    kind: "gpio_device"
-    peripheral: "gpioa"
-    pin: 8
-    signal: "input"
-    active_high: true
-    device_type: "tm1637-7seg"
