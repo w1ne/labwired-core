@@ -26,9 +26,41 @@ static constexpr int PIN_CS = 10;
 #define WORKSHOP_OLED_HEIGHT 64
 #endif
 
+#define WORKSHOP_TARGET_ALL 0
+#define WORKSHOP_TARGET_OLED 1
+#define WORKSHOP_TARGET_NOKIA5110 2
+#define WORKSHOP_TARGET_TM1637 3
+#define WORKSHOP_TARGET_EPAPER 4
+
+#ifndef WORKSHOP_DISPLAY_TARGET
+#define WORKSHOP_DISPLAY_TARGET WORKSHOP_TARGET_ALL
+#endif
+
 static constexpr uint8_t OLED_HEIGHT = WORKSHOP_OLED_HEIGHT;
 static constexpr uint8_t OLED_PAGES = OLED_HEIGHT / 8;
 static_assert(OLED_HEIGHT == 32 || OLED_HEIGHT == 64, "WORKSHOP_OLED_HEIGHT must be 32 or 64");
+static_assert(
+  WORKSHOP_DISPLAY_TARGET == WORKSHOP_TARGET_ALL ||
+  WORKSHOP_DISPLAY_TARGET == WORKSHOP_TARGET_OLED ||
+  WORKSHOP_DISPLAY_TARGET == WORKSHOP_TARGET_NOKIA5110 ||
+  WORKSHOP_DISPLAY_TARGET == WORKSHOP_TARGET_TM1637 ||
+  WORKSHOP_DISPLAY_TARGET == WORKSHOP_TARGET_EPAPER,
+  "WORKSHOP_DISPLAY_TARGET must be one of the WORKSHOP_TARGET_* constants"
+);
+
+static constexpr bool USE_OLED =
+  WORKSHOP_DISPLAY_TARGET == WORKSHOP_TARGET_ALL ||
+  WORKSHOP_DISPLAY_TARGET == WORKSHOP_TARGET_OLED;
+static constexpr bool USE_NOKIA =
+  WORKSHOP_DISPLAY_TARGET == WORKSHOP_TARGET_ALL ||
+  WORKSHOP_DISPLAY_TARGET == WORKSHOP_TARGET_NOKIA5110;
+static constexpr bool USE_TM1637 =
+  WORKSHOP_DISPLAY_TARGET == WORKSHOP_TARGET_ALL ||
+  WORKSHOP_DISPLAY_TARGET == WORKSHOP_TARGET_TM1637;
+static constexpr bool USE_EPAPER =
+  WORKSHOP_DISPLAY_TARGET == WORKSHOP_TARGET_ALL ||
+  WORKSHOP_DISPLAY_TARGET == WORKSHOP_TARGET_EPAPER;
+static constexpr bool USE_SPI = USE_NOKIA || USE_EPAPER;
 
 static uint8_t oled[128 * OLED_PAGES];
 static uint8_t nokia[84 * 6];
@@ -172,10 +204,14 @@ static void spiData(uint8_t d) {
   spiSelect(false);
 }
 
-static void nokiaInit() {
+static void spiPanelReset() {
   digitalWrite(PIN_RST, LOW);
   delay(5);
   digitalWrite(PIN_RST, HIGH);
+}
+
+static void nokiaInit() {
+  spiPanelReset();
   spiCommand(0x21);
   spiCommand(0xB8);
   spiCommand(0x14);
@@ -227,9 +263,9 @@ static void drawI2cDisplays(uint8_t hh, uint8_t mm) {
 }
 
 static void drawAllDisplays(uint8_t hh, uint8_t mm, bool colon) {
-  tmDisplay(hh, mm, colon);
-  drawSpiDisplays(hh, mm, false);
-  drawI2cDisplays(hh, mm);
+  if (USE_TM1637) tmDisplay(hh, mm, colon);
+  if (USE_NOKIA) drawSpiDisplays(hh, mm, false);
+  if (USE_OLED) drawI2cDisplays(hh, mm);
 }
 
 static void workshopSerialBegin() {
@@ -250,21 +286,33 @@ static void workshopSerialPrintln(const char *line) {
 void setup() {
   workshopSerialBegin();
   workshopSerialPrintln("ESP32-C3 Display Workshop");
-  pinMode(PIN_TM_CLK, OUTPUT);
-  pinMode(PIN_TM_DIO, OUTPUT);
-  pinMode(PIN_DC, OUTPUT);
-  pinMode(PIN_RST, OUTPUT);
-  pinMode(PIN_CS, OUTPUT);
-  pinMode(PIN_BUSY, INPUT);
-  digitalWrite(PIN_CS, HIGH);
-  tmDisplay(12, 34, true);
-  oledInit();
-  drawI2cDisplays(12, 34);
+  if (USE_TM1637) {
+    pinMode(PIN_TM_CLK, OUTPUT);
+    pinMode(PIN_TM_DIO, OUTPUT);
+    tmDisplay(12, 34, true);
+  }
+  if (USE_OLED) {
+    oledInit();
+    drawI2cDisplays(12, 34);
+  }
+  if (USE_SPI) {
+    pinMode(PIN_DC, OUTPUT);
+    pinMode(PIN_RST, OUTPUT);
+    pinMode(PIN_CS, OUTPUT);
+    if (USE_EPAPER) pinMode(PIN_BUSY, INPUT);
+    digitalWrite(PIN_CS, HIGH);
+    SPI.begin(PIN_SPI_SCK, PIN_SPI_MISO_UNUSED, PIN_SPI_MOSI, PIN_CS);
+    SPI.beginTransaction(SPISettings(2000000, MSBFIRST, SPI_MODE0));
+    if (USE_NOKIA) {
+      nokiaInit();
+      drawSpiDisplays(12, 34, false);
+    }
+    if (USE_EPAPER) {
+      spiPanelReset();
+      epaperPaintOnce();
+    }
+  }
   workshopSerialPrintln("WORKSHOP_TICK 00:00");
-  SPI.begin(PIN_SPI_SCK, PIN_SPI_MISO_UNUSED, PIN_SPI_MOSI, PIN_CS);
-  SPI.beginTransaction(SPISettings(2000000, MSBFIRST, SPI_MODE0));
-  nokiaInit();
-  drawSpiDisplays(12, 34, true);
   lastSecond = millis() / 1000;
 }
 
