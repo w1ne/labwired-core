@@ -6,17 +6,40 @@ use cortex_m_rt::entry;
 use panic_halt as _;
 
 const I2C1_BASE: u32 = 0x4000_5400;
-const UART1_DR: *mut u8 = (0x4001_3800 + 0x04) as *mut u8;
+const GPIOA_BASE: u32 = 0x4001_0800;
+const GPIOB_BASE: u32 = 0x4001_0C00;
+const RCC_BASE: u32 = 0x4002_1000;
+const UART1_BASE: u32 = 0x4001_3800;
 
+const RCC_APB2ENR: *mut u32 = (RCC_BASE + 0x18) as *mut u32;
+const RCC_APB1ENR: *mut u32 = (RCC_BASE + 0x1C) as *mut u32;
+const GPIOA_CRH: *mut u32 = (GPIOA_BASE + 0x04) as *mut u32;
+const GPIOB_CRL: *mut u32 = GPIOB_BASE as *mut u32;
+const UART1_SR: *const u32 = UART1_BASE as *const u32;
+const UART1_DR: *mut u32 = (UART1_BASE + 0x04) as *mut u32;
+const UART1_BRR: *mut u32 = (UART1_BASE + 0x08) as *mut u32;
+const UART1_CR1: *mut u32 = (UART1_BASE + 0x0C) as *mut u32;
 const I2C1_CR1: *mut u32 = (I2C1_BASE + 0x00) as *mut u32;
+const I2C1_CR2: *mut u32 = (I2C1_BASE + 0x04) as *mut u32;
+const I2C1_OAR1: *mut u32 = (I2C1_BASE + 0x08) as *mut u32;
 const I2C1_DR: *mut u32 = (I2C1_BASE + 0x10) as *mut u32;
 const I2C1_SR1: *const u32 = (I2C1_BASE + 0x14) as *const u32;
+const I2C1_SR2: *const u32 = (I2C1_BASE + 0x18) as *const u32;
+const I2C1_CCR: *mut u32 = (I2C1_BASE + 0x1C) as *mut u32;
+const I2C1_TRISE: *mut u32 = (I2C1_BASE + 0x20) as *mut u32;
 
 // SSD1306 at 0x3C → write address 0x78
 const OLED_W: u8 = 0x78;
 
 fn uart_byte(byte: u8) {
-    unsafe { core::ptr::write_volatile(UART1_DR, byte) }
+    unsafe {
+        for _ in 0..1024 {
+            if core::ptr::read_volatile(UART1_SR) & (1 << 7) != 0 {
+                break;
+            }
+        }
+        core::ptr::write_volatile(UART1_DR, byte as u32);
+    }
 }
 
 fn uart_str(value: &str) {
@@ -26,11 +49,40 @@ fn uart_str(value: &str) {
 }
 
 fn i2c_wait(mask: u32) {
-    for _ in 0..128 {
+    for _ in 0..16_000 {
         let sr1 = unsafe { core::ptr::read_volatile(I2C1_SR1) };
         if sr1 & mask != 0 {
             return;
         }
+    }
+}
+
+fn board_init() {
+    unsafe {
+        let apb2 = core::ptr::read_volatile(RCC_APB2ENR);
+        core::ptr::write_volatile(
+            RCC_APB2ENR,
+            apb2 | (1 << 0) | (1 << 2) | (1 << 3) | (1 << 14),
+        );
+        let apb1 = core::ptr::read_volatile(RCC_APB1ENR);
+        core::ptr::write_volatile(RCC_APB1ENR, apb1 | (1 << 21));
+
+        // PA9 = USART1_TX, alternate push-pull 50 MHz.
+        let crh = core::ptr::read_volatile(GPIOA_CRH);
+        core::ptr::write_volatile(GPIOA_CRH, (crh & !(0xF << 4)) | (0xB << 4));
+        // PB6/PB7 = I2C1 SCL/SDA, alternate open-drain 50 MHz.
+        let crl = core::ptr::read_volatile(GPIOB_CRL);
+        core::ptr::write_volatile(GPIOB_CRL, (crl & !(0xFF << 24)) | (0xFF << 24));
+
+        core::ptr::write_volatile(UART1_BRR, 0x45);
+        core::ptr::write_volatile(UART1_CR1, (1 << 13) | (1 << 3));
+
+        core::ptr::write_volatile(I2C1_CR1, 0);
+        core::ptr::write_volatile(I2C1_CR2, 8);
+        core::ptr::write_volatile(I2C1_CCR, 40);
+        core::ptr::write_volatile(I2C1_TRISE, 9);
+        core::ptr::write_volatile(I2C1_OAR1, 1 << 14);
+        core::ptr::write_volatile(I2C1_CR1, 1);
     }
 }
 
@@ -48,11 +100,20 @@ fn i2c_write(byte: u8) {
     i2c_wait(0x0080);
 }
 
+fn i2c_address(byte: u8) {
+    unsafe { core::ptr::write_volatile(I2C1_DR, byte as u32) }
+    i2c_wait(0x0002);
+    unsafe {
+        let _ = core::ptr::read_volatile(I2C1_SR1);
+        let _ = core::ptr::read_volatile(I2C1_SR2);
+    }
+}
+
 /// Send a single command byte to SSD1306.
 /// Control byte 0x00 = command stream.
 fn oled_cmd(cmd: u8) {
     i2c_start();
-    i2c_write(OLED_W);
+    i2c_address(OLED_W);
     i2c_write(0x00); // control: command
     i2c_write(cmd);
     i2c_stop();
@@ -61,7 +122,7 @@ fn oled_cmd(cmd: u8) {
 /// Send a command byte followed by one parameter.
 fn oled_cmd1(cmd: u8, param: u8) {
     i2c_start();
-    i2c_write(OLED_W);
+    i2c_address(OLED_W);
     i2c_write(0x00); // control: command
     i2c_write(cmd);
     i2c_write(param);
@@ -71,7 +132,7 @@ fn oled_cmd1(cmd: u8, param: u8) {
 /// Send a command byte followed by two parameters.
 fn oled_cmd2(cmd: u8, p1: u8, p2: u8) {
     i2c_start();
-    i2c_write(OLED_W);
+    i2c_address(OLED_W);
     i2c_write(0x00); // control: command
     i2c_write(cmd);
     i2c_write(p1);
@@ -107,7 +168,7 @@ fn oled_fill(page_byte: u8) {
     oled_cmd2(0x22, 0x00, 0x07);
 
     i2c_start();
-    i2c_write(OLED_W);
+    i2c_address(OLED_W);
     i2c_write(0x40); // control: data stream
     for _ in 0..(128 * 8) {
         i2c_write(page_byte);
@@ -133,7 +194,7 @@ fn oled_draw_glyph(start_col: u8, page: u8, glyph: &[u8; 5]) {
         oled_cmd(0x10 | (col >> 4));
         // Write 1 data byte for this column
         i2c_start();
-        i2c_write(OLED_W);
+        i2c_address(OLED_W);
         i2c_write(0x40); // data
         i2c_write(col_data);
         i2c_stop();
@@ -156,7 +217,7 @@ fn oled_render_demo() {
     oled_cmd2(0x21, 0x00, 0x7F);
     oled_cmd2(0x22, 0x02, 0x05);
     i2c_start();
-    i2c_write(OLED_W);
+    i2c_address(OLED_W);
     i2c_write(0x40);
     for _ in 0..(128 * 4) {
         i2c_write(0xFF);
@@ -175,6 +236,7 @@ fn oled_render_demo() {
 
 #[entry]
 fn main() -> ! {
+    board_init();
     uart_str("SSD1306 Hello Lab\n");
 
     oled_init();
