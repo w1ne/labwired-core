@@ -1,0 +1,201 @@
+// LabWired - Firmware Simulation Platform
+// Copyright (C) 2026 Andrii Shylenko
+// SPDX-License-Identifier: MIT
+
+//! Tests for in-engine logic-analyzer edge capture (`crate::logic_capture`).
+
+#[cfg(test)]
+mod logic_capture_tests {
+    use crate::cpu::CortexM;
+    use crate::logic_capture::{LogicCapture, LogicEdge, LOGIC_RING_CAPACITY, LOGIC_SAMPLE_INTERVAL};
+    use crate::peripherals::gpio::{GpioPort, GpioRegisterLayout};
+    use crate::{Bus, Machine};
+
+    const GPIO_BASE: u64 = 0x5000_0000;
+    /// V2-layout register offsets used below.
+    const MODER: u64 = 0x00;
+    const ODR: u64 = 0x14;
+    /// A NOP-equivalent Thumb instruction (`movs r0, #0`, LE bytes 00 20) the
+    /// CPU chews through so `step()` advances cycles without side effects.
+    const RAM_BASE: u64 = 0x2000_0000;
+
+    /// Build a Cortex-M machine with a spare V2 GPIO wired at `GPIO_BASE`, its
+    /// pin 0 configured as a push-pull output, and the CPU pointed at a slab of
+    /// harmless instructions in RAM so `step()` makes deterministic progress.
+    fn machine_with_gpio() -> Machine<CortexM> {
+        let mut bus = crate::bus::SystemBus::new();
+        let (cpu, _nvic) = crate::system::cortex_m::configure_cortex_m(&mut bus);
+        bus.add_peripheral(
+            "gpio_test",
+            GPIO_BASE,
+            0x400,
+            None,
+            Box::new(GpioPort::new_with_layout(GpioRegisterLayout::Stm32V2)),
+        );
+        let mut machine = Machine::new(cpu, bus);
+
+        // MODER pin0 = 0b01 (output) so read_gpio_pad(0) reflects ODR bit 0.
+        machine.bus.write_u32(GPIO_BASE + MODER, 0x0000_0001).unwrap();
+
+        // Fill a RAM window with `movs r0, #0` and run from it.
+        for i in 0..256u64 {
+            let byte = if i % 2 == 0 { 0x00 } else { 0x20 };
+            machine.bus.write_u8(RAM_BASE + i, byte).unwrap();
+        }
+        machine.cpu.pc = RAM_BASE as u32;
+        machine
+    }
+
+    fn set_pin0(machine: &mut Machine<CortexM>, level: bool) {
+        machine
+            .bus
+            .write_u32(GPIO_BASE + ODR, if level { 1 } else { 0 })
+            .unwrap();
+    }
+
+    fn step_n(machine: &mut Machine<CortexM>, n: usize) {
+        for _ in 0..n {
+            machine.step().unwrap();
+        }
+    }
+
+    /// Drive a toggle sequence through the step loop and collect the edges.
+    /// Returns `(edges, dropped, now_cycle)`.
+    fn run_scenario(machine: &mut Machine<CortexM>) -> (Vec<LogicEdge>, u64, u64) {
+        let idx = machine
+            .bus
+            .find_peripheral_index_by_name("gpio_test")
+            .unwrap();
+        let initial = machine.logic_watch(&[Some((idx, 0))]);
+        assert_eq!(initial, vec![Some(false)], "pin starts low");
+
+        // Space each toggle well past one sample interval so a sample lands
+        // between transitions and each edge is captured exactly once.
+        let gap = (LOGIC_SAMPLE_INTERVAL as usize) * 3;
+        step_n(machine, gap); // low (== initial): no edge
+        set_pin0(machine, true);
+        step_n(machine, gap); // -> high
+        set_pin0(machine, false);
+        step_n(machine, gap); // -> low
+        set_pin0(machine, true);
+        step_n(machine, gap); // -> high
+
+        let batch = machine.logic_read_edges(0);
+        (batch.edges, batch.dropped, machine.logic_now_cycle())
+    }
+
+    #[test]
+    fn captures_gpio_transitions_with_monotonic_cycles() {
+        let mut machine = machine_with_gpio();
+        let (edges, dropped, now) = run_scenario(&mut machine);
+
+        assert_eq!(dropped, 0, "no overflow in this small scenario");
+        let values: Vec<bool> = edges.iter().map(|e| e.value).collect();
+        assert_eq!(values, vec![true, false, true], "high, low, high");
+
+        // All on channel 0, cycles strictly increasing and non-decreasing vs now.
+        for e in &edges {
+            assert_eq!(e.ch, 0);
+            assert!(e.cycle <= now);
+        }
+        for w in edges.windows(2) {
+            assert!(w[1].cycle > w[0].cycle, "cycles strictly increase");
+        }
+    }
+
+    #[test]
+    fn identical_runs_produce_byte_identical_edge_streams() {
+        let mut a = machine_with_gpio();
+        let mut b = machine_with_gpio();
+        let (edges_a, _, _) = run_scenario(&mut a);
+        let (edges_b, _, _) = run_scenario(&mut b);
+        assert_eq!(edges_a, edges_b, "determinism: same firmware + watch => same edges");
+    }
+
+    #[test]
+    fn unresolvable_refs_are_never_sampled() {
+        let mut machine = machine_with_gpio();
+        let idx = machine
+            .bus
+            .find_peripheral_index_by_name("gpio_test")
+            .unwrap();
+        // Channel 0 unresolvable (None), channel 1 a real pad.
+        let initial = machine.logic_watch(&[None, Some((idx, 0))]);
+        assert_eq!(initial, vec![None, Some(false)]);
+
+        let gap = (LOGIC_SAMPLE_INTERVAL as usize) * 3;
+        step_n(&mut machine, gap);
+        set_pin0(&mut machine, true);
+        step_n(&mut machine, gap);
+
+        let batch = machine.logic_read_edges(0);
+        assert!(batch.edges.iter().all(|e| e.ch == 1), "only channel 1 emits");
+        assert_eq!(batch.edges.len(), 1);
+    }
+
+    #[test]
+    fn cursor_returns_only_new_edges() {
+        let mut machine = machine_with_gpio();
+        let idx = machine
+            .bus
+            .find_peripheral_index_by_name("gpio_test")
+            .unwrap();
+        machine.logic_watch(&[Some((idx, 0))]);
+        let gap = (LOGIC_SAMPLE_INTERVAL as usize) * 3;
+
+        set_pin0(&mut machine, true);
+        step_n(&mut machine, gap);
+        let first = machine.logic_read_edges(0);
+        assert_eq!(first.edges.len(), 1);
+
+        set_pin0(&mut machine, false);
+        step_n(&mut machine, gap);
+        let second = machine.logic_read_edges(first.cursor);
+        assert_eq!(second.edges.len(), 1, "only the new edge since the cursor");
+        assert_eq!(second.edges[0].value, false);
+
+        // Re-reading with the same cursor yields nothing.
+        let again = machine.logic_read_edges(second.cursor);
+        assert!(again.edges.is_empty());
+    }
+
+    /// Ring-buffer overflow at the capture layer: push more edges than capacity,
+    /// assert some were dropped and the newest are retained.
+    #[test]
+    fn ring_buffer_drops_oldest_on_overflow() {
+        let mut cap = LogicCapture::new();
+        cap.install(&[Some((0, 0))], &[Some(false)]);
+
+        let overflow = 100usize;
+        let total = LOGIC_RING_CAPACITY + overflow;
+        // Toggle on every sample so each sample records exactly one edge; space
+        // samples one interval apart so each lands in a fresh cycle bucket.
+        for i in 0..total {
+            let cycle = (i as u64 + 1) * LOGIC_SAMPLE_INTERVAL;
+            let level = i % 2 == 0;
+            cap.sample(cycle, |_, _| Some(level));
+        }
+
+        let batch = cap.read_edges(0);
+        assert_eq!(batch.dropped, overflow as u64, "oldest edges dropped");
+        assert_eq!(batch.edges.len(), LOGIC_RING_CAPACITY, "ring is full, not larger");
+        // Newest edge is the last sample taken.
+        let last = batch.edges.last().unwrap();
+        assert_eq!(last.cycle, total as u64 * LOGIC_SAMPLE_INTERVAL);
+        assert_eq!(batch.cursor, total as u64);
+    }
+
+    /// A pad that reads back as unknown (`None`) records no edges for that
+    /// channel, even across many samples.
+    #[test]
+    fn unknown_pad_records_no_edges() {
+        let mut cap = LogicCapture::new();
+        cap.install(&[Some((0, 0))], &[None]);
+        for i in 0..10 {
+            cap.sample((i + 1) * LOGIC_SAMPLE_INTERVAL, |_, _| None);
+        }
+        let batch = cap.read_edges(0);
+        assert!(batch.edges.is_empty());
+        assert_eq!(batch.dropped, 0);
+    }
+}

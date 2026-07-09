@@ -88,6 +88,104 @@ impl WasmSimulator {
         serde_wasm_bindgen::to_value(&samples).unwrap_or(JsValue::NULL)
     }
 
+    /// Arm deterministic, in-engine logic-analyzer capture for a set of GPIO
+    /// pads. Same ref shape as [`sample_logic_signals`]:
+    /// `[{ kind: "gpio", peripheral, pin }]`.
+    ///
+    /// Each ref is resolved ONCE here (to a peripheral index + pin) so the
+    /// in-loop sampling path never does a string lookup. Unresolvable refs
+    /// (unknown peripheral / non-gpio kind) get `value: null` and are never
+    /// sampled. Installing a watch set resets the capture ring and cursor.
+    ///
+    /// Returns the initial state as `[{ ...ref, ch, value }]` where `ch` is the
+    /// channel index used in edge records (the ref's position) and `value` is
+    /// the current pad level (`bool | null`). Poll new edges with
+    /// [`read_logic_edges`]. Pass an empty array to disarm capture.
+    #[wasm_bindgen]
+    pub fn watch_logic_signals(&mut self, refs: JsValue) -> JsValue {
+        #[derive(serde::Deserialize)]
+        struct Ref {
+            kind: String,
+            peripheral: String,
+            pin: u8,
+        }
+
+        let refs: Vec<Ref> = match serde_wasm_bindgen::from_value(refs) {
+            Ok(r) => r,
+            Err(_) => return JsValue::NULL,
+        };
+
+        let machine = self.machine.as_mut().unwrap();
+        let resolved: Vec<Option<(usize, u8)>> = refs
+            .iter()
+            .map(|r| {
+                if r.kind == "gpio" {
+                    machine
+                        .bus
+                        .find_peripheral_index_by_name(&r.peripheral)
+                        .map(|idx| (idx, r.pin))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let initial = machine.logic_watch(&resolved);
+
+        let out: Vec<serde_json::Value> = refs
+            .iter()
+            .zip(initial)
+            .enumerate()
+            .map(|(ch, (r, value))| {
+                serde_json::json!({
+                    "kind": r.kind,
+                    "peripheral": r.peripheral,
+                    "pin": r.pin,
+                    "ch": ch,
+                    "value": value,
+                })
+            })
+            .collect();
+
+        serde_wasm_bindgen::to_value(&out).unwrap_or(JsValue::NULL)
+    }
+
+    /// Drain logic edges captured since `cursor`. Pass `0` right after
+    /// [`watch_logic_signals`], then pass back the returned `cursor` to receive
+    /// only newer edges.
+    ///
+    /// Returns `{ cursor, dropped, nowCycle, edges: [{ ch, cycle, value }] }`:
+    /// - `cursor` — monotonic edge sequence number to pass back next time.
+    /// - `dropped` — edges lost to ring-buffer overflow since the watch armed.
+    /// - `nowCycle` — current engine cycle, to extend flat traces to "now".
+    /// - `edges` — transitions oldest-first; `cycle` is the engine cycle.
+    ///
+    /// Cycles are emitted as JS numbers (f64), matching the sub-2^53 engine
+    /// cycle counts the playground runs to.
+    #[wasm_bindgen]
+    pub fn read_logic_edges(&self, cursor: f64) -> JsValue {
+        let machine = self.machine.as_ref().unwrap();
+        let batch = machine.logic_read_edges(cursor as u64);
+        let edges: Vec<serde_json::Value> = batch
+            .edges
+            .iter()
+            .map(|e| {
+                serde_json::json!({
+                    "ch": e.ch,
+                    "cycle": e.cycle as f64,
+                    "value": e.value,
+                })
+            })
+            .collect();
+        let out = serde_json::json!({
+            "cursor": batch.cursor as f64,
+            "dropped": batch.dropped as f64,
+            "nowCycle": machine.logic_now_cycle() as f64,
+            "edges": edges,
+        });
+        serde_wasm_bindgen::to_value(&out).unwrap_or(JsValue::NULL)
+    }
+
     /// Get a peripheral's full state snapshot as JSON.
     #[wasm_bindgen]
     pub fn get_peripheral_snapshot(&self, name: &str) -> JsValue {
