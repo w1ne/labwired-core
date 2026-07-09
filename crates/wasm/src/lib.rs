@@ -1018,7 +1018,6 @@ impl WasmSimulator {
     #[deprecated(
         note = "Renamed to install_esp32_arduino_quirks — the bootstrap is generic Arduino-ESP32 glue, not firmware-specific."
     )]
-
     /// #124 Phase 4: enable/disable the browser-side JIT fast-path. When
     /// on, `step_with_esp32_aids` short-circuits any pre-fetch step
     /// whose PC matches the JIT'd hot block (`0x400829cc`) into a wasm

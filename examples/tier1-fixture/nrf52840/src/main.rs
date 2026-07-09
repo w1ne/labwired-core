@@ -60,13 +60,13 @@ const GPIO0_DIRSET: u32 = GPIO0_BASE + 0x518;
 
 // ── CLOCK (nrf_clock, base 0x40000000) ────────────────────────────────────
 const CLOCK_BASE: u32 = 0x4000_0000;
-const CLOCK_TASKS_HFCLKSTART: u32 = CLOCK_BASE + 0x000;
+const CLOCK_TASKS_HFCLKSTART: u32 = CLOCK_BASE;
 const CLOCK_EVENTS_HFCLKSTARTED: u32 = CLOCK_BASE + 0x100;
 const CLOCK_HFCLKRUN: u32 = CLOCK_BASE + 0x408;
 
 // ── TIMER0 (nrf52840_timer, base 0x40008000) ──────────────────────────────
 const TIMER0_BASE: u32 = 0x4000_8000;
-const TIMER0_TASKS_START: u32 = TIMER0_BASE + 0x000;
+const TIMER0_TASKS_START: u32 = TIMER0_BASE;
 const TIMER0_TASKS_CLEAR: u32 = TIMER0_BASE + 0x00C;
 const TIMER0_TASKS_CAPTURE0: u32 = TIMER0_BASE + 0x040;
 const TIMER0_MODE: u32 = TIMER0_BASE + 0x504;
@@ -76,7 +76,7 @@ const TIMER0_CC0: u32 = TIMER0_BASE + 0x540;
 
 // ── RTC0 (nrf52840_rtc, base 0x4000B000) ──────────────────────────────────
 const RTC0_BASE: u32 = 0x4000_B000;
-const RTC0_TASKS_START: u32 = RTC0_BASE + 0x000;
+const RTC0_TASKS_START: u32 = RTC0_BASE;
 const RTC0_TASKS_CLEAR: u32 = RTC0_BASE + 0x008;
 const RTC0_COUNTER: u32 = RTC0_BASE + 0x504;
 const RTC0_PRESCALER: u32 = RTC0_BASE + 0x508;
@@ -114,7 +114,7 @@ const SPI2_TXD_AMOUNT: u32 = SPI2_BASE + 0x54C;
 // deterministic conversion: TASKS_START → STARTED, TASKS_SAMPLE writes
 // RESULT.MAXCNT samples to RESULT.PTR and fires END + RESULTDONE.
 const SAADC_BASE: u32 = 0x4000_7000;
-const SAADC_TASKS_START: u32 = SAADC_BASE + 0x000;
+const SAADC_TASKS_START: u32 = SAADC_BASE;
 const SAADC_TASKS_SAMPLE: u32 = SAADC_BASE + 0x004;
 const SAADC_EVENTS_STARTED: u32 = SAADC_BASE + 0x100;
 const SAADC_EVENTS_END: u32 = SAADC_BASE + 0x104;
@@ -133,7 +133,7 @@ const SAADC_CODE_10BIT: u16 = 853; // (3.0/3.6) * 2^10
 
 // ── WDT (nrf52840_watchdog, base 0x40010000) ──────────────────────────────
 const WDT_BASE: u32 = 0x4001_0000;
-const WDT_TASKS_START: u32 = WDT_BASE + 0x000;
+const WDT_TASKS_START: u32 = WDT_BASE;
 const WDT_EVENTS_TIMEOUT: u32 = WDT_BASE + 0x100;
 const WDT_RUNSTATUS: u32 = WDT_BASE + 0x400;
 const WDT_CRV: u32 = WDT_BASE + 0x504;
@@ -208,8 +208,8 @@ fn uart_dma(bytes: &[u8]) {
     let n = core::cmp::min(bytes.len(), 64);
     unsafe {
         let buf = core::ptr::addr_of_mut!(TX_BUF) as *mut u8;
-        for i in 0..n {
-            core::ptr::write_volatile(buf.add(i), bytes[i]);
+        for (i, byte) in bytes.iter().take(n).enumerate() {
+            core::ptr::write_volatile(buf.add(i), *byte);
         }
         // Clear any stale completion event, then arm + start the EasyDMA TX.
         reg_write(UART0_EVENTS_ENDTX, 0);

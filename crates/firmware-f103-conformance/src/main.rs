@@ -90,14 +90,22 @@ const FAULT_MAGIC: u32 = 0xDEAD_FA17;
 #[no_mangle]
 pub extern "C" fn HardFaultHandler() -> ! {
     unsafe { digest(IDX_DONE, FAULT_MAGIC) };
-    loop {}
+    halt_forever()
 }
 
 #[no_mangle]
 pub extern "C" fn DefaultHandler() -> ! {
     unsafe { digest(IDX_DONE, FAULT_MAGIC) };
-    loop {}
+    halt_forever()
 }
+
+#[inline(never)]
+fn halt_forever() -> ! {
+    loop {
+        core::hint::spin_loop();
+    }
+}
+
 #[inline(always)]
 unsafe fn digest(idx: usize, val: u32) {
     wr(VERDICT + (idx as u32) * 4, val);
@@ -120,7 +128,7 @@ fn main() -> ! {
         test_dma();
         digest(IDX_DONE, DONE_MAGIC); // sentinel — must be last
     }
-    loop {}
+    halt_forever()
 }
 
 /// GPIOA atomic set/reset (BSRR/BRR with BS-over-BR priority) → ODR = 0x001C.
@@ -151,9 +159,9 @@ unsafe fn test_crc() {
     enable_clock(RCC_AHBENR, 1 << 6); // CRCEN
     wr(CRC + 0x08, 1); // CR.RESET
     settle();
-    wr(CRC + 0x00, 0x1234_5678); // DR
-    wr(CRC + 0x00, 0x9ABC_DEF0);
-    digest(IDX_CRC, rd(CRC + 0x00));
+    wr(CRC, 0x1234_5678); // DR
+    wr(CRC, 0x9ABC_DEF0);
+    digest(IDX_CRC, rd(CRC));
 }
 
 /// EXTI software-trigger lines 0+2, then clear line 0 → PR=0x4, SWIER=0x4.
@@ -164,7 +172,7 @@ unsafe fn test_exti() {
     wr(EXTI + 0x0C, 0); // FTSR = 0
     wr(EXTI + 0x14, 0x000F_FFFF); // PR rc_w1: clear all lines
     settle();
-    wr(EXTI + 0x00, 0x5); // IMR lines 0,2
+    wr(EXTI, 0x5); // IMR lines 0,2
     wr(EXTI + 0x10, 0x5); // SWIER -> PR
     wr(EXTI + 0x14, 0x1); // PR rc_w1: clear line 0
     settle();
@@ -190,16 +198,16 @@ unsafe fn test_dma() {
     );
     // Poll TCIF1 (ISR bit 1) with a bounded timeout.
     let mut guard: u32 = 0;
-    while (rd(DMA1 + 0x00) & (1 << 1)) == 0 && guard < 1_000_000 {
+    while (rd(DMA1) & (1 << 1)) == 0 && guard < 1_000_000 {
         guard += 1;
     }
     digest(IDX_DMA_D0, rd(DMA_DST));
     digest(IDX_DMA_D1, rd(DMA_DST + 4));
     digest(IDX_DMA_CNDTR, rd(DMA1 + 0x0C));
-    digest(IDX_DMA_ISR, rd(DMA1 + 0x00));
+    digest(IDX_DMA_ISR, rd(DMA1));
 }
 
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
-    loop {}
+    halt_forever()
 }

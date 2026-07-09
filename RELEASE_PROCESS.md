@@ -65,12 +65,16 @@ This document outlines the standardized process for releasing new versions of La
   - **Title**: `vX.Y.Z: <Key Highlight/Theme>`
   - **Description**: Copy contents from `.github/RELEASE_TEMPLATE.md` and fill it in with details from `CHANGELOG.md`.
 
-### Artifacts (Manual Step until CI is fully automated)
-- [ ] **Build Binaries**:
-  ```bash
-  cargo build --release --bin labwired
-  ```
-- [ ] **Upload Assets**: Attach the binary (and signature if available) to the GitHub Release.
+### Artifacts
+- [ ] **Release Workflow**: Pushing `vX.Y.Z` triggers
+  [`.github/workflows/core-release.yml`](.github/workflows/core-release.yml),
+  which builds CLI archives for Linux and macOS targets and uploads them to the
+  GitHub Release.
+- [ ] **Workflow Verification**: Confirm the release workflow completed and the
+  expected `labwired-vX.Y.Z-<platform>.tar.gz` assets are attached.
+- [ ] **Manual Fallback**: If the release workflow fails, build the CLI locally
+  with `cargo build -p labwired-cli --release`, package the `labwired` binary,
+  and attach the archive manually with a note in the release description.
 
 ## 4. Post-Release
 - [ ] **Announce**: Share the release notes on relevant channels (Discord, Twitter, Internal).
