@@ -34,6 +34,7 @@
 //! digest words. The harness polls `VERDICT[0]` then diffs sim-vs-silicon.
 #![no_std]
 #![no_main]
+#![allow(asm_sub_register)]
 
 use core::ptr::{addr_of_mut, write_volatile};
 use core::sync::atomic::{AtomicU32, Ordering};
@@ -232,7 +233,7 @@ fn main() -> ! {
 
         digest(IDX_DONE, DONE_MAGIC);
     }
-    loop {}
+    halt_forever()
 }
 
 // ── Check 1: SVC delivery + MRS IPSR ───────────────────────────────────────────
@@ -451,5 +452,12 @@ fn nops() {
     // Enough cycles for a pending-and-unmasked exception to be taken.
     for _ in 0..8 {
         cortex_m::asm::nop();
+    }
+}
+
+#[inline(never)]
+fn halt_forever() -> ! {
+    loop {
+        core::hint::spin_loop();
     }
 }

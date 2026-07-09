@@ -564,7 +564,7 @@ unsafe fn i2c_read(addr: u8, reg: u8, buf: &mut [u8]) {
     }
     let _ = read_volatile(I2C1_D); // dummy read kicks the first byte
     i2c_wait_clear();
-    for i in 0..n {
+    for (i, byte) in buf.iter_mut().enumerate().take(n) {
         if i == n - 1 {
             // STOP before the final byte read.
             write_volatile(I2C1_C1, C1_IICEN);
@@ -572,7 +572,7 @@ unsafe fn i2c_read(addr: u8, reg: u8, buf: &mut [u8]) {
             // NAK the byte after this one (the last).
             write_volatile(I2C1_C1, C1_IICEN | C1_MST | C1_TXAK);
         }
-        buf[i] = read_volatile(I2C1_D);
+        *byte = read_volatile(I2C1_D);
         if i != n - 1 {
             i2c_wait_clear();
         }

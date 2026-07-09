@@ -13,7 +13,7 @@
 use labwired_core::bus::SystemBus;
 use labwired_core::peripherals::esp32s3::gpio::GpioObserver;
 use labwired_core::system::xtensa::{configure_xtensa_esp32s3, Esp32s3Opts};
-use labwired_core::{Bus, Cpu};
+use labwired_core::{Bus, Cpu, Machine};
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Default)]
@@ -135,21 +135,16 @@ fn intmatrix_alarm_full_irq_chain() {
 
     cpu.set_pc(IRAM_BASE);
 
-    let observers: Vec<std::sync::Arc<dyn labwired_core::SimulationObserver>> = Vec::new();
+    let mut machine = Machine::new(cpu, bus);
     const MAX_STEPS: u64 = 100_000;
     for _step in 0..MAX_STEPS {
-        if let Err(e) = cpu.step(
-            &mut bus,
-            &observers,
-            &labwired_core::SimulationConfig::default(),
-        ) {
+        if let Err(e) = machine.step() {
             let events = obs.events.lock().unwrap();
             panic!(
                 "CPU step failed at pc=0x{:08x}: {e}; events: {events:?}",
-                cpu.get_pc(),
+                machine.cpu.get_pc(),
             );
         }
-        bus.tick_peripherals_with_costs();
 
         let events = obs.events.lock().unwrap();
         let pin2_count = events.iter().filter(|&&(p, _, _, _)| p == 2).count();
@@ -162,6 +157,6 @@ fn intmatrix_alarm_full_irq_chain() {
     panic!(
         "did not see 3+ transitions on GPIO2 in {MAX_STEPS} steps; \
          events: {events:?}, final PC=0x{:08x}",
-        cpu.get_pc(),
+        machine.cpu.get_pc(),
     );
 }

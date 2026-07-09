@@ -54,7 +54,6 @@ fn probe_foreign_firmware() {
         let pc = machine.cpu.get_pc();
         *pc_hist.entry(pc).or_insert(0) += 1;
         if std::env::var("FOREIGN_CSRTRACE").is_ok() {
-            use labwired_core::Bus;
             let csr = machine.bus.read_u32(0x4002_03E0).unwrap_or(0);
             let cbr1 = machine.bus.read_u32(0x4002_0418).unwrap_or(0);
             let cllr = machine.bus.read_u32(0x4002_044C).unwrap_or(0);
@@ -65,7 +64,6 @@ fn probe_foreign_firmware() {
             }
         }
         if let Some(w) = watch {
-            use labwired_core::Bus;
             if machine.bus.read_u32(w).unwrap_or(0) != 0 {
                 use labwired_core::Cpu;
                 println!(
@@ -111,7 +109,6 @@ fn probe_foreign_firmware() {
         "cpu: primask={} active_exception={} pending={:?}",
         machine.cpu.primask, machine.cpu.active_exception, machine.cpu.pending_exceptions
     );
-    use labwired_core::Bus;
     for (label, addr) in [
         ("TIM12 CR1", 0x4000_1800u64),
         ("TIM12 DIER", 0x4000_180C),

@@ -2,7 +2,33 @@
 
 This roadmap outlines the planned evolution of LabWired Core as we move towards a production-ready ecosystem for professional firmware simulation.
 
-## 🟢 v0.16.0: SoC Factory, Faithful ESP32 Boot & Module Refactor (Current)
+## v0.18.0: Analyzer, IO-Link, Browser Firmware Fidelity & Pin Routing (Current)
+- **Analyzer foundations**: shared trace event stream, attached-device tracing
+  wrappers, JSON/VCD bus trace export, and a universal peripheral inspect
+  interface.
+- **IO-Link execution depth**: native C master bridge, multi-device isolation,
+  cyclic PD-out, real-stack conformance, multi-node worlds, and clearer station
+  observability.
+- **Faithful browser firmware paths**: lazy ESP32-S3/C3 ROM injection, ESP32-C3
+  flash-image ROM boot in WASM, OLED/display workshop labs, and app-entry
+  snapshot resume.
+- **Config and routing hardening**: canonical config resolution ported to Rust,
+  authoritative chip pin maps, and fail-loud routing for GPIO/display pins.
+- **Expanded real-firmware coverage**: KW41Z Zephyr/display labs, RP2040
+  Arduino USB CDC, CAN/J1939 examples, display catalog devices, and a firmware
+  exercise matrix tied to tier-1 scoreboards.
+
+## v0.17.x: CAN, Clock Gating, nRF52 I2C Fidelity & Patch Train
+- **Classical CAN and UDS**: STM32F1 bxCAN loopback/frame trace and a real
+  two-node UDS-oriented CAN bus.
+- **Clock-gated STM32 models**: RCC-gated access for F1/L4 peripherals and
+  improved register-coverage measurement independent of runtime gating.
+- **nRF52 TWIM fixes**: PSEL shadowing, SHORTS bit positions, task resume, event
+  offsets, stop handling, and combined write-read behavior.
+- **Live validation refreshes**: silicon-tier captures and drift acknowledgments
+  for STM32, ESP32-S3, and nRF52 paths.
+
+## v0.16.0: SoC Factory, Faithful ESP32 Boot & Module Refactor
 - **SoC Factory architecture**: per-family peripheral factories + const peripheral table with a thin `from_config` match (generic, nRF52, ESP32 LX6/LX7); adding a chip is a table entry plus a factory hook.
 - **Faithful ESP32 boot**: ESP32-S3 ROM auto-provisioning from the toolchain (loaded by default) and ESP32 (LX6) real-boot de-thunk; `Esp32s3BootMode` telemetry distinguishes Faithful vs Harness.
 - **Silicon-validation & drift gate**: CI compares the model against silicon-derived expectations and fails on drift; auto-generated board status and a data-driven coverage matrix.
