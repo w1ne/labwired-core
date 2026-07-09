@@ -190,8 +190,7 @@ impl PeripheralKit for Bme280Kit {
     }
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
         let address = ctx.i2c_address_or(0x76)?;
-        let i2c = ctx.i2c()?;
-        i2c.attach(Box::new(Bme280::new(address)));
+        ctx.attach_i2c_device(Box::new(Bme280::new(address)))?;
         Ok(())
     }
 }

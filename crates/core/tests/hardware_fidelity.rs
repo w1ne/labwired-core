@@ -134,8 +134,7 @@ fn test_spi_fidelity_in_machine() {
 #[test]
 fn test_i2c_fidelity_in_machine() {
     let mut bus = SystemBus::new();
-    let mut i2c = I2c::new();
-    i2c.attach(Box::new(Mpu6050::new(0x50)));
+    let i2c = I2c::new();
     bus.peripherals.push(PeripheralEntry {
         name: "I2C1".to_string(),
         base: 0x40005400,
@@ -147,6 +146,9 @@ fn test_i2c_fidelity_in_machine() {
         clock_gate: None,
     });
     bus.refresh_peripheral_index();
+    // Attach through the single bus choke point (wraps into the shared trace).
+    bus.attach_i2c_slave("I2C1", Box::new(Mpu6050::new(0x50)))
+        .expect("I2C1 is a generic I2c controller");
 
     // 1. START
     bus.write_u8(0x40005401, 0x01).unwrap(); // CR1 START=1 (bit 8)

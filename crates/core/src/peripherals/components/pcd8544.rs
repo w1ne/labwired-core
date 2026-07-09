@@ -368,7 +368,7 @@ mod tests {
         let mut lcd = Pcd8544::new("PB6".into(), "PC7".into());
         // D/C resolves to GPIOC ODR bit 7 (PC7) — exactly what bus install does.
         SpiDevice::set_dc_source(&mut lcd, GPIOC + ODR, 7);
-        spi.attach(Box::new(lcd));
+        spi.push_device(Box::new(lcd));
         bus.add_peripheral("spi1", SPI1, 0x400, None, Box::new(spi));
 
         // Enable SPE so DR writes kick off transfers.

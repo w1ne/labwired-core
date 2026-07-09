@@ -2,11 +2,22 @@
 //!
 //! A wrapper sits between any I²C/SPI master and its attached device, forwards
 //! every trait call (so behaviour is unchanged, including `as_any` downcasts),
-//! and records each transacted byte into a shared `BusTraceLog`. Because every
-//! family attaches through `I2c::attach` / `Spi::attach`, one wrapper covers
-//! all chips.
+//! and records each transacted byte into a shared [`BusTrace`].
+//!
+//! ## One choke point (no per-callsite `set_bus_trace`)
+//!
+//! A slave is wrapped in exactly ONE place — the free functions [`wrap_i2c`] /
+//! [`wrap_spi`] below — and those are reached through a single funnel:
+//! [`crate::bus::SystemBus::attach_i2c_slave`] /
+//! [`crate::bus::SystemBus::attach_spi_device`]. Controllers no longer carry a
+//! trace handle and their raw `push_slave` / `push_device` methods do NOT wrap;
+//! the only way to hand a controller a slave is through the bus funnel, which
+//! always wraps. That makes it impossible to attach a device that bypasses the
+//! trace: a controller family the funnel does not recognise is a hard error, not
+//! a silently untraced bus (the failure mode that once shipped on ESP32-C3).
 
 use std::collections::VecDeque;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use crate::peripherals::i2c::I2cDevice;
@@ -32,6 +43,11 @@ pub enum BusPayload {
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct BusTraceEvent {
     pub seq: u64,
+    /// Engine cycle counter at the moment the byte transacted, mirrored from the
+    /// bus's `current_cycle` via the shared clock (see [`BusTrace::set_cycle`]).
+    /// Lets the UI time-align protocol decode with sampled waveforms on one
+    /// cycle axis. `0` until the machine has stepped at least once.
+    pub cycle: u64,
     pub bus: String,
     pub payload: BusPayload,
 }
@@ -43,13 +59,14 @@ pub struct BusTraceRing {
 }
 
 impl BusTraceRing {
-    pub fn push(&mut self, bus: &str, payload: BusPayload) {
+    fn push(&mut self, cycle: u64, bus: &str, payload: BusPayload) {
         self.seq = self.seq.wrapping_add(1);
         if self.events.len() >= BUS_TRACE_LIMIT {
             self.events.pop_front();
         }
         self.events.push_back(BusTraceEvent {
             seq: self.seq,
+            cycle,
             bus: bus.to_string(),
             payload,
         });
@@ -59,23 +76,79 @@ impl BusTraceRing {
     }
 }
 
-pub type BusTraceLog = Arc<Mutex<BusTraceRing>>;
-pub fn new_log() -> BusTraceLog {
-    Arc::new(Mutex::new(BusTraceRing::default()))
+/// Shared bus-trace handle: a ring-buffered event log plus a shared cycle clock
+/// the bus advances once per step. Cloning shares both (Arc), so every wrapper
+/// stamping into the log reads the same "now". Cheap to clone.
+#[derive(Clone)]
+pub struct BusTrace {
+    ring: Arc<Mutex<BusTraceRing>>,
+    clock: Arc<AtomicU64>,
+}
+
+impl Default for BusTrace {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl BusTrace {
+    pub fn new() -> Self {
+        Self {
+            ring: Arc::new(Mutex::new(BusTraceRing::default())),
+            clock: Arc::new(AtomicU64::new(0)),
+        }
+    }
+
+    /// Publish the current engine cycle so subsequent trace events are stamped
+    /// with it. Called by the bus once per step from `current_cycle`; a plain
+    /// atomic store, no lock.
+    pub fn set_cycle(&self, cycle: u64) {
+        self.clock.store(cycle, Ordering::Relaxed);
+    }
+
+    /// Record one transacted symbol, stamped with the shared clock's "now".
+    pub fn push(&self, bus: &str, payload: BusPayload) {
+        let cycle = self.clock.load(Ordering::Relaxed);
+        self.ring.lock().unwrap().push(cycle, bus, payload);
+    }
+
+    pub fn snapshot(&self) -> Vec<BusTraceEvent> {
+        self.ring.lock().unwrap().snapshot()
+    }
+}
+
+/// Retained name for the shared handle type; every reference means [`BusTrace`].
+pub type BusTraceLog = BusTrace;
+
+pub fn new_log() -> BusTrace {
+    BusTrace::new()
+}
+
+/// The single point at which an I²C slave is wrapped for tracing. Reached only
+/// through [`crate::bus::SystemBus::attach_i2c_slave`] (and the nRF52 serial mux,
+/// which must attach at build time) — never from a controller's own attach.
+pub fn wrap_i2c(bus: &str, trace: &BusTrace, dev: Box<dyn I2cDevice>) -> Box<dyn I2cDevice> {
+    Box::new(TracingI2cDevice::new(bus.to_string(), trace.clone(), dev))
+}
+
+/// The single point at which a SPI device is wrapped for tracing (see
+/// [`wrap_i2c`]).
+pub fn wrap_spi(bus: &str, trace: &BusTrace, dev: Box<dyn SpiDevice>) -> Box<dyn SpiDevice> {
+    Box::new(TracingSpiDevice::new(bus.to_string(), trace.clone(), dev))
 }
 
 pub struct TracingI2cDevice {
     bus: String,
-    log: BusTraceLog,
+    trace: BusTrace,
     inner: Box<dyn I2cDevice>,
     expect_address: bool, // next write is the address byte (set on start())
 }
 
 impl TracingI2cDevice {
-    pub fn new(bus: String, log: BusTraceLog, inner: Box<dyn I2cDevice>) -> Self {
+    pub fn new(bus: String, trace: BusTrace, inner: Box<dyn I2cDevice>) -> Self {
         Self {
             bus,
-            log,
+            trace,
             inner,
             expect_address: false,
         }
@@ -112,7 +185,7 @@ impl I2cDevice for TracingI2cDevice {
         } else {
             data
         };
-        self.log.lock().unwrap().push(
+        self.trace.push(
             &self.bus,
             BusPayload::I2c {
                 kind,
@@ -123,7 +196,7 @@ impl I2cDevice for TracingI2cDevice {
         // When the first write IS the address frame, the data byte still flows to the
         // device; emit it as a following Data event so no payload byte is lost.
         if matches!(kind, I2cSym::AddrWrite) {
-            self.log.lock().unwrap().push(
+            self.trace.push(
                 &self.bus,
                 BusPayload::I2c {
                     kind: I2cSym::Data,
@@ -138,7 +211,7 @@ impl I2cDevice for TracingI2cDevice {
             // A read transaction: synthesize the address frame (R) before the first byte.
             self.expect_address = false;
             let addr_byte = (self.inner.address() << 1) | 1; // read
-            self.log.lock().unwrap().push(
+            self.trace.push(
                 &self.bus,
                 BusPayload::I2c {
                     kind: I2cSym::AddrRead,
@@ -148,7 +221,7 @@ impl I2cDevice for TracingI2cDevice {
             );
         }
         let b = self.inner.read();
-        self.log.lock().unwrap().push(
+        self.trace.push(
             &self.bus,
             BusPayload::I2c {
                 kind: I2cSym::Data,
@@ -171,13 +244,13 @@ impl I2cDevice for TracingI2cDevice {
 
 pub struct TracingSpiDevice {
     bus: String,
-    log: BusTraceLog,
+    trace: BusTrace,
     inner: Box<dyn SpiDevice>,
 }
 
 impl TracingSpiDevice {
-    pub fn new(bus: String, log: BusTraceLog, inner: Box<dyn SpiDevice>) -> Self {
-        Self { bus, log, inner }
+    pub fn new(bus: String, trace: BusTrace, inner: Box<dyn SpiDevice>) -> Self {
+        Self { bus, trace, inner }
     }
 }
 
@@ -190,9 +263,7 @@ impl SpiDevice for TracingSpiDevice {
     }
     fn transfer(&mut self, mosi: u8) -> u8 {
         let miso = self.inner.transfer(mosi);
-        self.log
-            .lock()
-            .unwrap()
+        self.trace
             .push(&self.bus, BusPayload::Spi { mosi, miso });
         miso
     }
@@ -252,7 +323,7 @@ mod tests {
         let mut w = TracingI2cDevice::new("i2c1".into(), log.clone(), Box::new(Dev { addr: 0x1E }));
         // simulate a master write of one data byte
         I2cDevice::write(&mut w, 0xAF);
-        let snap = log.lock().unwrap().snapshot();
+        let snap = log.snapshot();
         assert_eq!(snap.len(), 1);
         assert_eq!(snap[0].bus, "i2c1");
         match &snap[0].payload {
@@ -265,5 +336,20 @@ mod tests {
             any.downcast_ref::<Dev>().is_some(),
             "as_any must forward to inner"
         );
+    }
+
+    #[test]
+    fn events_are_stamped_with_the_shared_clock_cycle() {
+        let log = new_log();
+        let mut w = TracingI2cDevice::new("i2c1".into(), log.clone(), Box::new(Dev { addr: 0x1E }));
+        // First byte transacts at cycle 0 (clock never advanced).
+        I2cDevice::write(&mut w, 0x01);
+        // Advance the shared clock, then transact again.
+        log.set_cycle(4242);
+        I2cDevice::write(&mut w, 0x02);
+        let snap = log.snapshot();
+        assert_eq!(snap.len(), 2);
+        assert_eq!(snap[0].cycle, 0, "first event predates any step");
+        assert_eq!(snap[1].cycle, 4242, "second event carries the advanced cycle");
     }
 }

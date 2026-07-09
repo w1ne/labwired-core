@@ -12,7 +12,10 @@ use labwired_core::Peripheral;
 fn test_mpu6050_who_am_i() {
     let mut i2c = I2c::new();
     let mpu = Mpu6050::new(0x68);
-    i2c.attach(Box::new(mpu));
+    // Off-bus attach still goes through the mandatory-trace helper (no untraced
+    // attach path); the throwaway trace is unused by this model-level test.
+    let trace = labwired_core::bus::bus_trace::new_log();
+    i2c.attach_traced("i2c1", &trace, Box::new(mpu));
 
     // 1. START
     i2c.write(0x00, 0x01).unwrap(); // PE (Peripheral Enable)

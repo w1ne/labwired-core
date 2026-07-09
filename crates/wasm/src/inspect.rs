@@ -186,6 +186,70 @@ impl WasmSimulator {
         serde_wasm_bindgen::to_value(&out).unwrap_or(JsValue::NULL)
     }
 
+    /// Resolve the signal routing of GPIO pads for the logic analyzer — the
+    /// engine's honest answer to "what is this pad wired to?", replacing UI-side
+    /// pin-NAME regex guessing.
+    ///
+    /// Input: `[{ kind: "gpio", peripheral, pin }]`.
+    /// Output: the same refs each extended with:
+    ///   * `mode`: `"input" | "output" | "af" | "analog" | "unknown"` — derived
+    ///     from the same register truth `read_gpio_pad` reads (STM32 F1 CRL/CRH,
+    ///     V2 MODER+AFR, ESP32-family GPIO-matrix ENABLE + FUNCn_OUT_SEL, nRF52
+    ///     DIR, Kinetis PDDR). `"unknown"` where a family cannot say.
+    ///   * `func`: best-effort signal NAME (`"I2CEXT0_SDA"`, `"FSPICLK"`,
+    ///     `"AF4"`, …) or `null` — never a guess.
+    #[wasm_bindgen]
+    pub fn pin_routing(&self, refs: JsValue) -> JsValue {
+        #[derive(serde::Deserialize)]
+        struct Ref {
+            kind: String,
+            peripheral: String,
+            pin: u8,
+        }
+
+        let machine = self.machine.as_ref().unwrap();
+        let refs: Vec<Ref> = match serde_wasm_bindgen::from_value(refs) {
+            Ok(r) => r,
+            Err(_) => return JsValue::NULL,
+        };
+
+        let out: Vec<serde_json::Value> = refs
+            .iter()
+            .map(|r| {
+                let routing = if r.kind == "gpio" {
+                    machine
+                        .bus
+                        .find_peripheral_index_by_name(&r.peripheral)
+                        .and_then(|idx| machine.bus.peripherals[idx].dev.gpio_routing(r.pin))
+                } else {
+                    None
+                };
+                let (mode, func) = match routing {
+                    Some(rt) => (
+                        serde_json::to_value(rt.mode)
+                            .unwrap_or_else(|_| serde_json::Value::String("unknown".into())),
+                        rt.func
+                            .map(serde_json::Value::String)
+                            .unwrap_or(serde_json::Value::Null),
+                    ),
+                    None => (
+                        serde_json::Value::String("unknown".into()),
+                        serde_json::Value::Null,
+                    ),
+                };
+                serde_json::json!({
+                    "kind": r.kind,
+                    "peripheral": r.peripheral,
+                    "pin": r.pin,
+                    "mode": mode,
+                    "func": func,
+                })
+            })
+            .collect();
+
+        serde_wasm_bindgen::to_value(&out).unwrap_or(JsValue::NULL)
+    }
+
     /// Get a peripheral's full state snapshot as JSON.
     #[wasm_bindgen]
     pub fn get_peripheral_snapshot(&self, name: &str) -> JsValue {

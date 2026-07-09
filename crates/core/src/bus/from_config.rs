@@ -152,6 +152,7 @@ impl SystemBus {
                             &canonical_type,
                             p_cfg,
                             manifest,
+                            &bus.bus_trace,
                         )
                     });
             if let Some(dev) = family_dev {
@@ -172,9 +173,76 @@ impl SystemBus {
             }
             // Cross-vendor / generic peripherals (fallible: size + profile parsing).
             if let Some(dev) =
-                crate::peripherals::generic_factory::try_build(&canonical_type, p_cfg, manifest)?
+                crate::peripherals::generic_factory::try_build(
+                    &canonical_type,
+                    p_cfg,
+                    manifest,
+                    &bus.bus_trace,
+                )?
             {
                 bus.push_peripheral(p_cfg, dev)?;
+                continue;
+            }
+
+            // I²C controllers that carry external slaves. Build the controller,
+            // REGISTER it, then attach every wired slave through the single bus
+            // choke point `attach_i2c_slave`, which wraps each device into the
+            // shared bus trace. There is no per-controller `set_bus_trace` and no
+            // inline wrapping — a family that reaches the bus this way cannot be
+            // silently untraced (the ESP32-C3 blind-bus bug that motivated this).
+            if matches!(
+                canonical_type.as_str(),
+                "i2c" | "stm32f1_i2c"
+                    | "stm32f2_i2c"
+                    | "stm32f4_i2c"
+                    | "stm32f7_i2c"
+                    | "efm32ggi2ccontroller"
+                    | "esp32c3_i2c"
+            ) {
+                let controller: Box<dyn Peripheral> = if canonical_type == "esp32c3_i2c" {
+                    // ESP32-C3 behavioral I²C0 controller (command-list engine);
+                    // the C3 (RISC-V) reaches it through this config loader rather
+                    // than a hand-wired system builder.
+                    Box::new(crate::peripherals::esp32c3::i2c::Esp32c3I2c::new())
+                } else {
+                    let layout: crate::peripherals::i2c::I2cRegisterLayout =
+                        Self::parse_profile_or_default(p_cfg, "I2C")?;
+                    Box::new(crate::peripherals::i2c::I2c::new_with_layout(layout))
+                };
+                bus.push_peripheral(p_cfg, controller)?;
+                for ext in &manifest.external_devices {
+                    if ext.connection != p_cfg.id {
+                        continue;
+                    }
+                    match crate::peripherals::components::build_i2c_device(
+                        &ext.r#type,
+                        &ext.config,
+                    ) {
+                        Some(device) => {
+                            tracing::info!(
+                                "i2c attach: '{}' (type={}) -> '{}'",
+                                ext.id,
+                                ext.r#type,
+                                p_cfg.id
+                            );
+                            bus.attach_i2c_slave(&p_cfg.id, device)?;
+                            attached_i2c_ext_ids.insert(ext.id.as_str());
+                        }
+                        None => {
+                            // Devices migrated to the PeripheralKit contract are
+                            // attached by the kit pass below; their absence here
+                            // is expected. Only warn for types no path handles.
+                            if crate::peripherals::kit::registry::lookup(&ext.r#type).is_none() {
+                                tracing::warn!(
+                                    "i2c attach skipped: unknown device type '{}' for external id '{}' on bus '{}'",
+                                    ext.r#type,
+                                    ext.id,
+                                    p_cfg.id
+                                );
+                            }
+                        }
+                    }
+                }
                 continue;
             }
 
@@ -237,107 +305,6 @@ impl SystemBus {
                     } else {
                         Box::new(crate::peripherals::gpio::GpioPort::new_with_layout(layout))
                     }
-                }
-                "i2c"
-                | "stm32f1_i2c"
-                | "stm32f2_i2c"
-                | "stm32f4_i2c"
-                | "stm32f7_i2c"
-                | "efm32ggi2ccontroller" => {
-                    let layout: crate::peripherals::i2c::I2cRegisterLayout =
-                        Self::parse_profile_or_default(p_cfg, "I2C")?;
-                    let mut i2c = crate::peripherals::i2c::I2c::new_with_layout(layout);
-                    // Wire the shared bus-trace log (universal logic analyzer)
-                    // BEFORE any device is attached below, so every attach call
-                    // wraps its device into the log (see `I2c::attach`).
-                    i2c.set_bus_trace(p_cfg.id.clone(), bus.bus_trace.clone());
-                    for ext in &manifest.external_devices {
-                        if ext.connection != p_cfg.id {
-                            continue;
-                        }
-                        match crate::peripherals::components::build_i2c_device(
-                            &ext.r#type,
-                            &ext.config,
-                        ) {
-                            Some(device) => {
-                                tracing::info!(
-                                    "i2c attach: '{}' (type={}) -> '{}'",
-                                    ext.id,
-                                    ext.r#type,
-                                    p_cfg.id
-                                );
-                                i2c.attach(device);
-                                attached_i2c_ext_ids.insert(ext.id.as_str());
-                            }
-                            None => {
-                                // Devices migrated to the PeripheralKit contract
-                                // are attached by the kit pass below (see the
-                                // `registry::lookup` loop), not by this legacy
-                                // inline factory — so their absence here is
-                                // expected, not an error. Only warn for types
-                                // that no path will handle.
-                                if crate::peripherals::kit::registry::lookup(&ext.r#type).is_none()
-                                {
-                                    tracing::warn!(
-                                        "i2c attach skipped: unknown device type '{}' for external id '{}' on bus '{}'",
-                                        ext.r#type,
-                                        ext.id,
-                                        p_cfg.id
-                                    );
-                                }
-                            }
-                        }
-                    }
-                    Box::new(i2c)
-                }
-                // ESP32-C3 behavioral I²C0 controller (command-list engine).
-                // Same Espressif I²C IP family as the S3; the C3 chip yaml
-                // selects this type for `i2c0` so a slave declared in
-                // `external_devices` (connection: "i2c0") attaches here via the
-                // same `build_i2c_device` factory the STM32 path uses. The C3
-                // (RISC-V) reaches this through the from_config bus loader rather
-                // than a hand-wired system builder.
-                "esp32c3_i2c" => {
-                    let mut i2c = crate::peripherals::esp32c3::i2c::Esp32c3I2c::new();
-                    // Wire the shared bus-trace log (universal logic analyzer)
-                    // BEFORE any device is attached below, so every attach call
-                    // wraps its device into the log — same contract as the
-                    // generic `i2c` arm above.
-                    i2c.set_bus_trace(p_cfg.id.clone(), bus.bus_trace.clone());
-                    for ext in &manifest.external_devices {
-                        if ext.connection != p_cfg.id {
-                            continue;
-                        }
-                        match crate::peripherals::components::build_i2c_device(
-                            &ext.r#type,
-                            &ext.config,
-                        ) {
-                            Some(device) => {
-                                tracing::info!(
-                                    "esp32c3 i2c attach: '{}' (type={}) -> '{}'",
-                                    ext.id,
-                                    ext.r#type,
-                                    p_cfg.id
-                                );
-                                i2c.attach_slave(device);
-                                attached_i2c_ext_ids.insert(ext.id.as_str());
-                            }
-                            None => {
-                                // Kit-contract devices attach via the kit pass
-                                // below; only warn for types no path handles.
-                                if crate::peripherals::kit::registry::lookup(&ext.r#type).is_none()
-                                {
-                                    tracing::warn!(
-                                        "esp32c3 i2c attach skipped: unknown device type '{}' for external id '{}' on bus '{}'",
-                                        ext.r#type,
-                                        ext.id,
-                                        p_cfg.id
-                                    );
-                                }
-                            }
-                        }
-                    }
-                    Box::new(i2c)
                 }
                 // ESP32-C3 behavioral GP-SPI2 controller (CPU/W-buffer
                 // transaction engine). Same Espressif GP-SPI IP family as the
@@ -519,26 +486,9 @@ impl SystemBus {
             bus.push_peripheral(p_cfg, dev)?;
         }
 
-        // Wire the shared bus-trace log (universal logic analyzer) into every
-        // I2C/SPI peripheral built above, by name, BEFORE the PeripheralKit
-        // registry pass below attaches its devices — so those attaches also
-        // wrap into the log. The inline I²C arm above already does this for
-        // itself (so its own attach loop, which runs before this point, is
-        // covered too); this pass additionally covers `Spi` peripherals built
-        // by `generic_factory::try_build` (which has no direct access to
-        // `bus.bus_trace`) and any I²C peripheral re-touched here is a no-op
-        // (same name + same log already set).
-        let trace_log = bus.bus_trace.clone();
-        for entry in &mut bus.peripherals {
-            if let Some(any) = entry.dev.as_any_mut() {
-                if let Some(i2c) = any.downcast_mut::<crate::peripherals::i2c::I2c>() {
-                    i2c.set_bus_trace(entry.name.clone(), trace_log.clone());
-                } else if let Some(spi) = any.downcast_mut::<crate::peripherals::spi::Spi>() {
-                    spi.set_bus_trace(entry.name.clone(), trace_log.clone());
-                }
-            }
-        }
-
+        // Bus-trace wiring is no longer a per-peripheral property: the shared
+        // trace is applied at the single attach choke point (`attach_i2c_slave`
+        // / `attach_spi_device`), so there is nothing to wire here.
         for ext in &manifest.external_devices {
             // Already attached as an I²C slave by a chip-specific i2c path
             // (the `i2c` / `esp32c3_i2c` arms above). Don't let it fall through

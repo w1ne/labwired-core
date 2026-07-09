@@ -474,6 +474,17 @@ pub trait Peripheral: std::fmt::Debug + Send {
             .or_else(|| self.read_gpio_input(pin))
     }
 
+    /// GPIO capability: the routing of `pin` — its direction/`mode` and, when
+    /// resolvable, the peripheral signal `func` it is wired to — derived from the
+    /// SAME register truth [`read_gpio_pad`](Self::read_gpio_pad) reads (no
+    /// fabrication). This is the honest source the UI logic analyzer uses instead
+    /// of guessing signal roles from pin NAMES. `None` for non-GPIO peripherals
+    /// or out-of-range pins; a returned routing may still carry
+    /// `mode = Unknown` / `func = None` where a family cannot say.
+    fn gpio_routing(&self, _pin: u8) -> Option<crate::peripherals::gpio::GpioRouting> {
+        None
+    }
+
     /// GPIO capability: drive an externally controlled input level for `pin`
     /// (e.g. browser button press). Returns `false` if unsupported.
     fn set_gpio_input(&mut self, _pin: u8, _level: bool) -> bool {
@@ -1044,6 +1055,7 @@ impl<C: Cpu> Machine<C> {
             self.cpu.fast_forward_idle_cycles(skipped as u64);
             self.total_cycles += skipped as u64;
             self.bus.current_cycle = self.total_cycles;
+            self.bus.bus_trace.set_cycle(self.total_cycles);
             self.sched.advance_to(self.total_cycles / interval);
             self.drain_scheduler_events();
             skipped
@@ -1250,6 +1262,7 @@ impl<C: Cpu> Machine<C> {
         // (event-scheduler) and the HC-SR04 echo-window timing (always). O(1) —
         // a single field write, not the per-peripheral walk this phase removed.
         self.bus.current_cycle = self.total_cycles;
+        self.bus.bus_trace.set_cycle(self.total_cycles);
         self.cpu
             .step(&mut self.bus, &self.observers, &self.config)?;
         self.step_profile.cpu_instructions += 1;
@@ -1759,6 +1772,7 @@ impl<C: Cpu> DebugControl for Machine<C> {
             // (and tick-time services) can read "now". The batch is bounded by
             // `peripheral_tick_interval`, so intra-batch staleness is < one tick.
             self.bus.current_cycle = current_cycles;
+            self.bus.bus_trace.set_cycle(current_cycles);
             let tick_interval = self.config.peripheral_tick_interval as u64;
             let remaining_until_tick = (tick_interval - (current_cycles % tick_interval)) as u32;
 

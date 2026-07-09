@@ -17,8 +17,6 @@ use labwired_config::ExternalDevice;
 
 use crate::bus::SystemBus;
 use crate::peripherals::adc::Adc;
-use crate::peripherals::esp32c3::i2c::Esp32c3I2c;
-use crate::peripherals::esp32c3::spi::Esp32c3Spi;
 use crate::peripherals::i2c::{I2c, I2cDevice};
 use crate::peripherals::spi::{Spi, SpiDevice};
 use crate::peripherals::uart::Uart;
@@ -106,24 +104,13 @@ impl<'a> AttachCtx<'a> {
     /// buses. Going through this method lets one kit serve a sensor on either
     /// family without caring which bus the system.yaml wired it to.
     pub fn attach_i2c_device(&mut self, device: Box<dyn I2cDevice>) -> Result<()> {
-        let ext = self.ext;
-        let idx = self
-            .bus
-            .find_peripheral_index_by_name(&ext.connection)
-            .ok_or_else(|| missing_connection_err(ext))?;
-        let any = self.bus.peripherals[idx]
-            .dev
-            .as_any_mut()
-            .ok_or_else(|| downcast_err(ext))?;
-        if let Some(i2c) = any.downcast_mut::<I2c>() {
-            i2c.attach(device);
-            return Ok(());
-        }
-        if let Some(c3) = any.downcast_mut::<Esp32c3I2c>() {
-            c3.attach_slave(device);
-            return Ok(());
-        }
-        Err(wrong_transport_err(ext, "I2C"))
+        // Funnel through the single bus choke point, which wraps the device in
+        // the shared bus trace before handing it to whichever I²C controller the
+        // `connection:` resolves to. There is no untraced attach path.
+        let connection = self.ext.connection.clone();
+        self.bus
+            .attach_i2c_slave(&connection, device)
+            .map_err(|_| wrong_transport_err(self.ext, "I2C"))
     }
 
     /// Attach an [`SpiDevice`] to whichever SPI controller the `connection:`
@@ -131,24 +118,11 @@ impl<'a> AttachCtx<'a> {
     /// model. This mirrors [`Self::attach_i2c_device`] for mixed-controller
     /// systems.
     pub fn attach_spi_device(&mut self, device: Box<dyn SpiDevice>) -> Result<()> {
-        let ext = self.ext;
-        let idx = self
-            .bus
-            .find_peripheral_index_by_name(&ext.connection)
-            .ok_or_else(|| missing_connection_err(ext))?;
-        let any = self.bus.peripherals[idx]
-            .dev
-            .as_any_mut()
-            .ok_or_else(|| downcast_err(ext))?;
-        if let Some(spi) = any.downcast_mut::<Spi>() {
-            spi.attach(device);
-            return Ok(());
-        }
-        if let Some(c3) = any.downcast_mut::<Esp32c3Spi>() {
-            c3.attach_device(device);
-            return Ok(());
-        }
-        Err(wrong_transport_err(ext, "SPI"))
+        // Funnel through the single bus choke point (see `attach_i2c_device`).
+        let connection = self.ext.connection.clone();
+        self.bus
+            .attach_spi_device(&connection, device)
+            .map_err(|_| wrong_transport_err(self.ext, "SPI"))
     }
 
     /// Acquire the ADC peripheral declared in the system.yaml `connection:`

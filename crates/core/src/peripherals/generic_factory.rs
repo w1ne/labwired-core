@@ -107,6 +107,7 @@ pub fn try_build(
     canonical_type: &str,
     p_cfg: &PeripheralConfig,
     manifest: &SystemManifest,
+    bus_trace: &crate::bus::bus_trace::BusTrace,
 ) -> anyhow::Result<Option<Box<dyn Peripheral>>> {
     let dev: Box<dyn Peripheral> = match canonical_type {
         "systick" | "arm_generictimer" => {
@@ -245,7 +246,11 @@ pub fn try_build(
                 match crate::peripherals::components::build_spi_device(&ext.r#type, &ext.config) {
                     Some(device) => {
                         tracing::info!("spi attach: '{}' (type=ir) -> '{}'", ext.id, p_cfg.id);
-                        spi.attach(device);
+                        // Wrap through the single trace helper (this factory
+                        // attaches before the peripheral is on the bus).
+                        spi.push_device(crate::bus::bus_trace::wrap_spi(
+                            &p_cfg.id, bus_trace, device,
+                        ));
                     }
                     None => {
                         tracing::warn!(

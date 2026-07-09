@@ -10,10 +10,35 @@
 //! writes use those set/clear registers, and display peripherals read GPIO
 //! output back for CS/DC/bit-banged buses.
 
+use crate::peripherals::gpio::{GpioMode, GpioRouting};
 use crate::{Peripheral, PeripheralTickResult, SimResult};
 
 const PIN_COUNT: u8 = 26;
 const PIN_MASK: u32 = (1u32 << PIN_COUNT) - 1;
+
+/// `GPIO_FUNCn_OUT_SEL_CFG_REG` base (C3 TRM §5.12): per-PAD output routing.
+/// Bits [8:0] select which peripheral output signal drives pad `n`; the sentinel
+/// `SIG_GPIO_OUT` (128) means the pad is a plain GPIO output (GPIO_OUT latch).
+const FUNC_OUT_SEL: u64 = 0x554;
+const SIG_GPIO_OUT: u32 = 128;
+
+/// ESP32-C3 GPIO-matrix OUTPUT signal index → signal name, for the I²C / SPI /
+/// UART signals the logic analyzer cares about (from esp-idf
+/// `soc/esp32c3/include/soc/gpio_sig_map.h`). Unmapped indices → `None` (null,
+/// never a guess).
+fn c3_out_signal_name(idx: u32) -> Option<&'static str> {
+    Some(match idx {
+        6 => "U0TXD",
+        9 => "U1TXD",
+        53 => "I2CEXT0_SCL",
+        54 => "I2CEXT0_SDA",
+        63 => "FSPICLK",
+        64 => "FSPIQ", // FSPI MISO
+        65 => "FSPID", // FSPI MOSI
+        68 => "FSPICS0",
+        _ => return None,
+    })
+}
 
 const BT_SELECT: u64 = 0x00;
 const OUT: u64 = 0x04;
@@ -46,6 +71,9 @@ pub struct Esp32c3Gpio {
     in_data: u32,
     status: u32,
     pin_cfg: [u32; PIN_COUNT as usize],
+    /// `GPIO_FUNCn_OUT_SEL_CFG` per pad — the output-matrix selector read by
+    /// `gpio_routing` to name the signal a pad is wired to.
+    out_sel: [u32; PIN_COUNT as usize],
     cycle: u64,
     anchor_tick: u64,
 }
@@ -61,8 +89,17 @@ impl Esp32c3Gpio {
             in_data: 0,
             status: 0,
             pin_cfg: [0; PIN_COUNT as usize],
+            out_sel: [0; PIN_COUNT as usize],
             cycle: 0,
             anchor_tick: 0,
+        }
+    }
+
+    fn out_sel_index(off: u64) -> Option<usize> {
+        if (FUNC_OUT_SEL..FUNC_OUT_SEL + (PIN_COUNT as u64) * 4).contains(&off) {
+            Some(((off - FUNC_OUT_SEL) / 4) as usize)
+        } else {
+            None
         }
     }
 
@@ -101,9 +138,15 @@ impl Esp32c3Gpio {
             IN => self.in_data,
             STATUS | STATUS_W1TS | STATUS_W1TC => self.status,
             PCPU_INT | PCPU_NMI_INT | CPUSDIO_INT => self.status,
-            off => Self::pin_cfg_index(off)
-                .map(|idx| self.pin_cfg[idx])
-                .unwrap_or(0),
+            off => {
+                if let Some(idx) = Self::out_sel_index(off) {
+                    self.out_sel[idx]
+                } else {
+                    Self::pin_cfg_index(off)
+                        .map(|idx| self.pin_cfg[idx])
+                        .unwrap_or(0)
+                }
+            }
         }
     }
 
@@ -124,7 +167,9 @@ impl Esp32c3Gpio {
             STATUS_W1TC => self.status &= !value,
             PCPU_INT | PCPU_NMI_INT | CPUSDIO_INT => {}
             off => {
-                if let Some(idx) = Self::pin_cfg_index(off) {
+                if let Some(idx) = Self::out_sel_index(off) {
+                    self.out_sel[idx] = value;
+                } else if let Some(idx) = Self::pin_cfg_index(off) {
                     self.pin_cfg[idx] = value;
                 }
             }
@@ -241,6 +286,37 @@ impl Peripheral for Esp32c3Gpio {
         })
     }
 
+    fn gpio_routing(&self, pin: u8) -> Option<GpioRouting> {
+        if pin >= PIN_COUNT {
+            return None;
+        }
+        let mask = 1u32 << pin;
+        if (self.enable & mask) == 0 {
+            // Output driver disabled → the pad is an input. The input matrix
+            // (FUNCn_IN_SEL, indexed by signal) is not tracked, so we cannot name
+            // the signal — func stays None rather than a guess.
+            return Some(GpioRouting {
+                mode: GpioMode::Input,
+                func: None,
+            });
+        }
+        // Output driver enabled: consult the per-pad output-matrix selector.
+        let sig = self.out_sel[pin as usize] & 0x1FF;
+        if sig == SIG_GPIO_OUT {
+            // Pad driven directly by the GPIO_OUT latch — a plain GPIO output.
+            Some(GpioRouting {
+                mode: GpioMode::Output,
+                func: None,
+            })
+        } else {
+            // Pad routed to a peripheral output signal (alternate function).
+            Some(GpioRouting {
+                mode: GpioMode::Af,
+                func: c3_out_signal_name(sig).map(String::from),
+            })
+        }
+    }
+
     fn set_gpio_input(&mut self, pin: u8, level: bool) -> bool {
         if pin >= PIN_COUNT {
             return false;
@@ -304,5 +380,44 @@ mod tests {
 
         gpio.write_u32(STRAP, 0).unwrap();
         assert_eq!(gpio.read_word(STRAP), STRAP_SPI_FAST_FLASH_BOOT);
+    }
+
+    #[test]
+    fn gpio_routing_resolves_the_output_matrix() {
+        use crate::peripherals::gpio::GpioMode;
+        let mut g = Esp32c3Gpio::new();
+
+        // pin5: output driver on + routed to I2CEXT0_SDA (signal index 54) → AF.
+        g.write_u32(ENABLE_W1TS, 1 << 5).unwrap();
+        g.write_u32(FUNC_OUT_SEL + 5 * 4, 54).unwrap();
+        let r5 = g.gpio_routing(5).unwrap();
+        assert_eq!(r5.mode, GpioMode::Af);
+        assert_eq!(r5.func.as_deref(), Some("I2CEXT0_SDA"));
+
+        // pin6: output driver on + GPIO_OUT sentinel (128) → plain output, no func.
+        g.write_u32(ENABLE_W1TS, 1 << 6).unwrap();
+        g.write_u32(FUNC_OUT_SEL + 6 * 4, SIG_GPIO_OUT).unwrap();
+        let r6 = g.gpio_routing(6).unwrap();
+        assert_eq!(r6.mode, GpioMode::Output);
+        assert!(r6.func.is_none());
+
+        // pin7: routed to FSPICLK (index 63).
+        g.write_u32(ENABLE_W1TS, 1 << 7).unwrap();
+        g.write_u32(FUNC_OUT_SEL + 7 * 4, 63).unwrap();
+        assert_eq!(g.gpio_routing(7).unwrap().func.as_deref(), Some("FSPICLK"));
+
+        // pin8: output driver off → input, func unknown (input matrix not tracked).
+        let r8 = g.gpio_routing(8).unwrap();
+        assert_eq!(r8.mode, GpioMode::Input);
+        assert!(r8.func.is_none());
+
+        // pin9: enabled but an unmapped signal index → AF with func null (no guess).
+        g.write_u32(ENABLE_W1TS, 1 << 9).unwrap();
+        g.write_u32(FUNC_OUT_SEL + 9 * 4, 200).unwrap();
+        let r9 = g.gpio_routing(9).unwrap();
+        assert_eq!(r9.mode, GpioMode::Af);
+        assert!(r9.func.is_none());
+
+        assert!(g.gpio_routing(PIN_COUNT).is_none(), "out-of-range pin");
     }
 }
