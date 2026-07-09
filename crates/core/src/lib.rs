@@ -15,6 +15,7 @@ pub mod decoder;
 pub mod fidelity;
 pub mod inspect;
 pub mod interrupt;
+pub mod logic_capture;
 pub mod memory;
 pub mod metrics;
 pub mod multi_core;
@@ -473,6 +474,17 @@ pub trait Peripheral: std::fmt::Debug + Send {
             .or_else(|| self.read_gpio_input(pin))
     }
 
+    /// GPIO capability: the routing of `pin` — its direction/`mode` and, when
+    /// resolvable, the peripheral signal `func` it is wired to — derived from the
+    /// SAME register truth [`read_gpio_pad`](Self::read_gpio_pad) reads (no
+    /// fabrication). This is the honest source the UI logic analyzer uses instead
+    /// of guessing signal roles from pin NAMES. `None` for non-GPIO peripherals
+    /// or out-of-range pins; a returned routing may still carry
+    /// `mode = Unknown` / `func = None` where a family cannot say.
+    fn gpio_routing(&self, _pin: u8) -> Option<crate::peripherals::gpio::GpioRouting> {
+        None
+    }
+
     /// GPIO capability: drive an externally controlled input level for `pin`
     /// (e.g. browser button press). Returns `false` if unsupported.
     fn set_gpio_input(&mut self, _pin: u8, _level: bool) -> bool {
@@ -851,6 +863,13 @@ pub struct Machine<C: Cpu> {
     /// under the `event-scheduler` feature.
     #[allow(dead_code)]
     scheduler_bootstrapped: bool,
+
+    /// In-engine logic-analyzer edge capture (see [`crate::logic_capture`]).
+    /// Empty/inactive by default — the step loop pays a single `is_active`
+    /// check per step and nothing more until `logic_watch` installs a watch
+    /// set. Not part of snapshot/restore: capture is a UI observation stream,
+    /// re-armed by the frontend after a resume.
+    logic_capture: logic_capture::LogicCapture,
 }
 
 impl<C: Cpu> Machine<C> {
@@ -870,6 +889,56 @@ impl<C: Cpu> Machine<C> {
         value: f64,
     ) -> Result<(), crate::sim_input::SimInputError> {
         self.bus.set_input(channel, value)
+    }
+
+    /// Install a logic-analyzer watch set, resetting the capture buffer and
+    /// cursor. `resolved[i]` is `Some((peripheral_index, pin))` for a
+    /// resolvable GPIO ref or `None` for an unresolvable one (never sampled).
+    /// Returns each channel's initial pad level (`None` = unknown), same order
+    /// as `resolved`, so the caller can seed the waveform before the first
+    /// edge. Passing an empty slice disarms capture.
+    pub fn logic_watch(&mut self, resolved: &[Option<(usize, u8)>]) -> Vec<Option<bool>> {
+        let bus = &self.bus;
+        let initial: Vec<Option<bool>> = resolved
+            .iter()
+            .map(|r| {
+                r.and_then(|(idx, pin)| {
+                    bus.peripherals
+                        .get(idx)
+                        .and_then(|p| p.dev.read_gpio_pad(pin))
+                })
+            })
+            .collect();
+        self.logic_capture.install(resolved, &initial);
+        initial
+    }
+
+    /// Drain logic edges newer than `cursor` (see
+    /// [`logic_capture::LogicCapture::read_edges`]).
+    pub fn logic_read_edges(&self, cursor: u64) -> logic_capture::LogicEdgeBatch {
+        self.logic_capture.read_edges(cursor)
+    }
+
+    /// Current engine cycle — the `nowCycle` reported alongside a logic-edge
+    /// read so the UI can extend flat traces to "now".
+    pub fn logic_now_cycle(&self) -> u64 {
+        self.total_cycles
+    }
+
+    /// Sample the watched pads at the current cycle. Hooked into the step loop;
+    /// the leading `is_active` guard is the entire cost when nothing is watched.
+    #[inline]
+    fn logic_sample(&mut self) {
+        if !self.logic_capture.is_active() {
+            return;
+        }
+        let now = self.total_cycles;
+        let bus = &self.bus;
+        self.logic_capture.sample(now, |idx, pin| {
+            bus.peripherals
+                .get(idx)
+                .and_then(|p| p.dev.read_gpio_pad(pin))
+        });
     }
 }
 
@@ -909,6 +978,7 @@ impl<C: Cpu> Machine<C> {
             flash_index,
             scb_index,
             scheduler_bootstrapped: false,
+            logic_capture: logic_capture::LogicCapture::new(),
         }
     }
 
@@ -989,6 +1059,7 @@ impl<C: Cpu> Machine<C> {
             self.cpu.fast_forward_idle_cycles(skipped as u64);
             self.total_cycles += skipped as u64;
             self.bus.current_cycle = self.total_cycles;
+            self.bus.bus_trace.set_cycle(self.total_cycles);
             self.sched.advance_to(self.total_cycles / interval);
             self.drain_scheduler_events();
             skipped
@@ -1195,6 +1266,7 @@ impl<C: Cpu> Machine<C> {
         // (event-scheduler) and the HC-SR04 echo-window timing (always). O(1) —
         // a single field write, not the per-peripheral walk this phase removed.
         self.bus.current_cycle = self.total_cycles;
+        self.bus.bus_trace.set_cycle(self.total_cycles);
         self.cpu
             .step(&mut self.bus, &self.observers, &self.config)?;
         self.step_profile.cpu_instructions += 1;
@@ -1281,6 +1353,12 @@ impl<C: Cpu> Machine<C> {
         // batch/CLI run path (`Machine::run`), which executes cycle-accurately
         // when an H5 op-modeling FLASH is present so this fires per instruction.
         self.apply_pending_flash_op()?;
+
+        // Logic-analyzer edge capture. No-op (one `is_active` check) unless a
+        // watch set is installed. Sampled after the instruction + peripheral
+        // effects of this cycle have landed, so pad levels are the committed
+        // state at `total_cycles`.
+        self.logic_sample();
 
         Ok(())
     }
@@ -1698,6 +1776,7 @@ impl<C: Cpu> DebugControl for Machine<C> {
             // (and tick-time services) can read "now". The batch is bounded by
             // `peripheral_tick_interval`, so intra-batch staleness is < one tick.
             self.bus.current_cycle = current_cycles;
+            self.bus.bus_trace.set_cycle(current_cycles);
             let tick_interval = self.config.peripheral_tick_interval as u64;
             let remaining_until_tick = (tick_interval - (current_cycles % tick_interval)) as u32;
 
@@ -1727,6 +1806,14 @@ impl<C: Cpu> DebugControl for Machine<C> {
             // so the no-breakpoint hot path is unaffected.
             if !self.breakpoints.is_empty() {
                 current_batch = current_batch.min(1);
+            }
+
+            // Logic-analyzer capture: clamp the batch so pad state is observed
+            // at least once per sample interval — otherwise a large batch would
+            // stride past intermediate edges we can only read at batch
+            // boundaries. Cost is paid ONLY while a watch set is active.
+            if self.logic_capture.is_active() {
+                current_batch = current_batch.min(logic_capture::LOGIC_SAMPLE_INTERVAL as u32);
             }
 
             let executed =
@@ -1773,6 +1860,11 @@ impl<C: Cpu> DebugControl for Machine<C> {
             if self.drain_scb_reset_request() {
                 self.reset()?;
             }
+
+            // Logic-analyzer edge capture at the batch boundary (no-op unless a
+            // watch set is installed; the batch was clamped above so this fires
+            // at least once per sample interval).
+            self.logic_sample();
 
             // If we executed less than requested, it means the CPU wanted to exit early (e.g. branch/exception)
             // or we just finished the batch naturally. The loop will continue and check breakpoints/limits.

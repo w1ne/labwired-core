@@ -148,8 +148,7 @@ impl PeripheralKit for Adxl345Kit {
     }
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
         let address = ctx.i2c_address_or(0x53)?;
-        let i2c = ctx.i2c()?;
-        i2c.attach(Box::new(Adxl345::new(address)));
+        ctx.attach_i2c_device(Box::new(Adxl345::new(address)))?;
         Ok(())
     }
 }

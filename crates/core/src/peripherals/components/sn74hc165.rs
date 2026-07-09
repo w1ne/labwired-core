@@ -127,12 +127,11 @@ impl PeripheralKit for Sn74hc165Kit {
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
         let cs_pin = ctx.config_str("cs_pin").unwrap_or("PA4").to_string();
         let inputs = ctx.config_i64("inputs");
-        let spi = ctx.spi()?;
         let mut shifter = Sn74hc165::new(cs_pin);
         if let Some(v) = inputs {
             shifter.set_inputs(v as u8);
         }
-        spi.attach(Box::new(shifter));
+        ctx.attach_spi_device(Box::new(shifter))?;
         Ok(())
     }
 }

@@ -16,6 +16,7 @@ fn vcd_export_emits_one_signal_per_bus_with_byte_values() {
     let events = vec![
         BusTraceEvent {
             seq: 1,
+            cycle: 100,
             bus: "i2c1".into(),
             payload: BusPayload::I2c {
                 kind: I2cSym::AddrWrite,
@@ -25,6 +26,7 @@ fn vcd_export_emits_one_signal_per_bus_with_byte_values() {
         },
         BusTraceEvent {
             seq: 2,
+            cycle: 200,
             bus: "i2c1".into(),
             payload: BusPayload::I2c {
                 kind: I2cSym::Data,
@@ -49,6 +51,7 @@ fn json_export_round_trips_events() {
     use labwired_core::bus::bus_trace::{BusPayload, BusTraceEvent};
     let events = vec![BusTraceEvent {
         seq: 1,
+        cycle: 100,
         bus: "spi0".into(),
         payload: BusPayload::Spi {
             mosi: 0x10,

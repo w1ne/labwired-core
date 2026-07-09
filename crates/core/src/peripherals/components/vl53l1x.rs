@@ -225,8 +225,7 @@ impl PeripheralKit for Vl53l1xKit {
     }
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
         let address = ctx.i2c_address_or(0x29)?;
-        let i2c = ctx.i2c()?;
-        i2c.attach(Box::new(Vl53l1x::new(address)));
+        ctx.attach_i2c_device(Box::new(Vl53l1x::new(address)))?;
         Ok(())
     }
 }

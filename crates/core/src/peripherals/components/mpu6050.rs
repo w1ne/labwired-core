@@ -182,8 +182,7 @@ impl PeripheralKit for Mpu6050Kit {
     }
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
         let address = ctx.i2c_address_or(0x68)?;
-        let i2c = ctx.i2c()?;
-        i2c.attach(Box::new(Mpu6050::new(address)));
+        ctx.attach_i2c_device(Box::new(Mpu6050::new(address)))?;
         Ok(())
     }
 }

@@ -540,14 +540,6 @@ pub struct Spi {
 
     #[serde(skip)]
     pub attached_devices: Vec<Box<dyn SpiDevice>>,
-
-    /// Bus name + shared trace log for the universal logic-analyzer (set via
-    /// `Spi::set_bus_trace`). `None` (default) keeps `attach` unwrapped —
-    /// existing behaviour for every caller that doesn't opt in.
-    #[serde(skip)]
-    bus_name: String,
-    #[serde(skip)]
-    bus_log: Option<crate::bus::bus_trace::BusTraceLog>,
 }
 
 impl core::fmt::Debug for Spi {
@@ -610,24 +602,11 @@ impl Spi {
         self.cr1_mask = Some(mask);
     }
 
-    /// Set the bus name + a clone of the shared bus-trace log (universal logic
-    /// analyzer, see `crate::bus::bus_trace`). Must be called before `attach`
-    /// for an attached device to be wrapped into the log — devices already
-    /// attached are unaffected.
-    pub fn set_bus_trace(&mut self, name: String, log: crate::bus::bus_trace::BusTraceLog) {
-        self.bus_name = name;
-        self.bus_log = Some(log);
-    }
-
-    pub fn attach(&mut self, device: Box<dyn SpiDevice>) {
-        let device = match &self.bus_log {
-            Some(log) => Box::new(crate::bus::bus_trace::TracingSpiDevice::new(
-                self.bus_name.clone(),
-                log.clone(),
-                device,
-            )) as Box<dyn SpiDevice>,
-            None => device,
-        };
+    /// Raw device push — does NOT wrap for tracing. The only caller is the bus
+    /// choke point [`crate::bus::SystemBus::attach_spi_device`], which wraps the
+    /// device first; nothing else should attach directly (that would bypass the
+    /// universal bus trace).
+    pub(crate) fn push_device(&mut self, device: Box<dyn SpiDevice>) {
         self.attached_devices.push(device);
     }
 
@@ -1340,7 +1319,7 @@ mod tests {
     #[test]
     fn fifo_packs_u16_dr_write_into_two_frames() {
         let mut spi = Spi::new_with_layout(SpiRegisterLayout::Stm32Fifo);
-        spi.attach(Box::new(Capture { rx: Vec::new() }));
+        spi.push_device(Box::new(Capture { rx: Vec::new() }));
         spi.write(0x00, 0x40).unwrap(); // CR1: SPE
         spi.write_u16(0x0C, 0x00AB).unwrap(); // 16-bit DR write, DS=8 (reset 0x0700)
         assert_eq!(
@@ -1354,7 +1333,7 @@ mod tests {
     #[test]
     fn fifo_u8_dr_write_is_one_frame() {
         let mut spi = Spi::new_with_layout(SpiRegisterLayout::Stm32Fifo);
-        spi.attach(Box::new(Capture { rx: Vec::new() }));
+        spi.push_device(Box::new(Capture { rx: Vec::new() }));
         spi.write(0x00, 0x40).unwrap();
         spi.write(0x0C, 0xAB).unwrap(); // 8-bit DR write
         assert_eq!(captured(&spi), vec![0xAB], "8-bit DR ⇒ 1 frame");
@@ -1365,7 +1344,7 @@ mod tests {
     #[test]
     fn plain_stm32_does_not_pack() {
         let mut spi = Spi::new_with_layout(SpiRegisterLayout::Stm32);
-        spi.attach(Box::new(Capture { rx: Vec::new() }));
+        spi.push_device(Box::new(Capture { rx: Vec::new() }));
         spi.write(0x00, 0x40).unwrap();
         spi.write_u16(0x0C, 0x00AB).unwrap();
         assert_eq!(captured(&spi), vec![0xAB], "non-FIFO ⇒ 1 frame");
@@ -1570,7 +1549,7 @@ mod tests {
         }
 
         let mut spi = Spi::new_with_layout(SpiRegisterLayout::Nrf52Spim);
-        spi.attach(Box::new(EchoSlave));
+        spi.push_device(Box::new(EchoSlave));
         let mut bus = FlatRamBus::new();
 
         let tx_base: u64 = 0x2000_0400;
@@ -2007,7 +1986,7 @@ mod tests {
     #[test]
     fn stm32h5_tx_engine_transmits_and_completes() {
         let mut spi = h5_master(2);
-        spi.attach(Box::new(Capture { rx: Vec::new() }));
+        spi.push_device(Box::new(Capture { rx: Vec::new() }));
         h5_write(&mut spi, 0x00, (1 << 0) | (1 << 9) | (1 << 12)); // SPE|CSTART|SSI
         h5_write(&mut spi, 0x20, 0x11);
         assert_eq!(h5_read(&spi, 0x14), 0x0001_0012, "CTSIZE 2→1, TXP|TXTF");
@@ -2022,7 +2001,7 @@ mod tests {
     #[test]
     fn stm32h5_txdr_ignored_when_disabled() {
         let mut spi = h5_master(2);
-        spi.attach(Box::new(Capture { rx: Vec::new() }));
+        spi.push_device(Box::new(Capture { rx: Vec::new() }));
         h5_write(&mut spi, 0x20, 0xAB);
         assert_eq!(h5_read(&spi, 0x14), 0x0000_1002, "SR untouched");
         assert!(captured(&spi).is_empty(), "nothing transmitted");
@@ -2034,7 +2013,7 @@ mod tests {
     #[test]
     fn stm32h5_byte_and_halfword_txdr_access_is_one_frame() {
         let mut spi = h5_master(0); // TSIZE=0: endless
-        spi.attach(Box::new(Capture { rx: Vec::new() }));
+        spi.push_device(Box::new(Capture { rx: Vec::new() }));
         h5_write(&mut spi, 0x00, (1 << 0) | (1 << 9) | (1 << 12));
         spi.write(0x20, 0x5A).unwrap(); // byte access → one 8-bit frame
         spi.write_u16(0x20, 0x1234).unwrap(); // halfword access → one frame

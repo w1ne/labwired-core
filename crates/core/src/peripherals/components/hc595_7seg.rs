@@ -223,8 +223,7 @@ impl PeripheralKit for Hc5957SegKit {
     }
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
         let cs_pin = ctx.config_str("cs_pin").unwrap_or("PA4").to_string();
-        let spi = ctx.spi()?;
-        spi.attach(Box::new(Hc5957Seg::new(cs_pin)));
+        ctx.attach_spi_device(Box::new(Hc5957Seg::new(cs_pin)))?;
         Ok(())
     }
 }

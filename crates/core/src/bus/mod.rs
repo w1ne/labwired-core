@@ -784,7 +784,70 @@ impl SystemBus {
     /// every I²C/SPI byte recorded so far by peripherals wired to
     /// `self.bus_trace` (see `crate::bus::bus_trace`), oldest first.
     pub fn bus_trace_snapshot(&self) -> Vec<bus_trace::BusTraceEvent> {
-        self.bus_trace.lock().unwrap().snapshot()
+        self.bus_trace.snapshot()
+    }
+
+    /// The single funnel through which every I²C slave reaches a controller.
+    /// Wraps `dev` in the shared bus trace (via [`bus_trace::wrap_i2c`]) and
+    /// hands the wrapped device to the named controller's raw `push_slave`.
+    /// Because the wrap happens here — before any family dispatch — there is no
+    /// path that attaches a slave untraced: a controller family this dispatch
+    /// does not recognise is a hard error, not a silently invisible bus.
+    pub fn attach_i2c_slave(
+        &mut self,
+        controller: &str,
+        dev: Box<dyn crate::peripherals::i2c::I2cDevice>,
+    ) -> anyhow::Result<()> {
+        let wrapped = bus_trace::wrap_i2c(controller, &self.bus_trace, dev);
+        let idx = self
+            .find_peripheral_index_by_name(controller)
+            .ok_or_else(|| anyhow::anyhow!("attach_i2c_slave: no peripheral '{controller}'"))?;
+        let any = self.peripherals[idx].dev.as_any_mut().ok_or_else(|| {
+            anyhow::anyhow!("attach_i2c_slave: '{controller}' is not downcastable")
+        })?;
+        if let Some(c) = any.downcast_mut::<crate::peripherals::i2c::I2c>() {
+            c.push_slave(wrapped);
+        } else if let Some(c) = any.downcast_mut::<crate::peripherals::esp32c3::i2c::Esp32c3I2c>() {
+            c.push_slave(wrapped);
+        } else if let Some(c) = any.downcast_mut::<crate::peripherals::esp32s3::i2c::Esp32s3I2c>() {
+            c.push_slave(wrapped);
+        } else if let Some(c) = any.downcast_mut::<crate::peripherals::esp32::i2c::Esp32I2c>() {
+            c.push_slave(wrapped);
+        } else if let Some(c) = any.downcast_mut::<crate::peripherals::nrf52::twim::Nrf52Twim>() {
+            c.push_slave(wrapped);
+        } else {
+            anyhow::bail!("attach_i2c_slave: '{controller}' is not an I2C controller");
+        }
+        Ok(())
+    }
+
+    /// The single funnel through which every SPI device reaches a controller —
+    /// the SPI counterpart of [`Self::attach_i2c_slave`]. Wraps then dispatches.
+    pub fn attach_spi_device(
+        &mut self,
+        controller: &str,
+        dev: Box<dyn crate::peripherals::spi::SpiDevice>,
+    ) -> anyhow::Result<()> {
+        let wrapped = bus_trace::wrap_spi(controller, &self.bus_trace, dev);
+        let idx = self
+            .find_peripheral_index_by_name(controller)
+            .ok_or_else(|| anyhow::anyhow!("attach_spi_device: no peripheral '{controller}'"))?;
+        let any = self.peripherals[idx].dev.as_any_mut().ok_or_else(|| {
+            anyhow::anyhow!("attach_spi_device: '{controller}' is not downcastable")
+        })?;
+        if let Some(c) = any.downcast_mut::<crate::peripherals::spi::Spi>() {
+            c.push_device(wrapped);
+        } else if let Some(c) = any.downcast_mut::<crate::peripherals::esp32c3::spi::Esp32c3Spi>() {
+            c.push_device(wrapped);
+        } else if let Some(c) = any.downcast_mut::<crate::peripherals::esp32::spi::Esp32Spi>() {
+            c.push_device(wrapped);
+        } else if let Some(c) = any.downcast_mut::<crate::peripherals::esp32s3::gpspi::Esp32s3Spi>()
+        {
+            c.push_device(wrapped);
+        } else {
+            anyhow::bail!("attach_spi_device: '{controller}' is not a SPI controller");
+        }
+        Ok(())
     }
 
     pub(crate) fn canonical_peripheral_type(raw_type: &str) -> String {

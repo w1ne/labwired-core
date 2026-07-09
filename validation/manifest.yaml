@@ -80,7 +80,8 @@ boards:
     # not cover (it exercised UARTE EasyDMA, not the legacy TXD shifter); the reset
     # sweep (conformance/mmio/GPIO/POWER/SPIS/TWIS/RTC/TIMER) is unaffected. No live
     # SWD re-capture of the legacy-UART TX sequence this session (no bench board).
-    drift_ack: 2026-07-04
+    # 2026-07-10: bus-trace single-choke-point refactor (attach wraps at SystemBus::attach_i2c_slave/attach_spi_device; no per-callsite set_bus_trace) + cycle stamp on trace events + gpio_routing/pin_routing metadata. Additive; oracle output unchanged.
+    drift_ack: 2026-07-10
     models:
       - crates/core/src/peripherals/nrf52
       - configs/chips/nrf52840.yaml
@@ -106,7 +107,8 @@ boards:
     # drift_ack note — success-path live re-capture tracked there.
     # 2026-07-04: rides the nrf52840 legacy-UART (UART0/UARTE0) TXD/TXDRDY model;
     # same silicon. Additive, no live re-capture. See the nrf52840 drift_ack note.
-    drift_ack: 2026-07-04
+    # 2026-07-10: bus-trace single-choke-point refactor (attach wraps at SystemBus::attach_i2c_slave/attach_spi_device; no per-callsite set_bus_trace) + cycle stamp on trace events + gpio_routing/pin_routing metadata. Additive; oracle output unchanged.
+    drift_ack: 2026-07-10
     models:
       - crates/core/src/peripherals/nrf52
       - configs/chips/nrf52840.yaml
@@ -162,7 +164,8 @@ boards:
     # STM32 H5 I2C register/transaction engines are untouched; h563_mmio_diff +
     # h563_conformance remain the pinned coverage. No live re-capture.
     # 2026-07-09: read_gpio_pad — additive, READ-ONLY direction-aware pad probe accessor on the Peripheral trait + GpioPort (universal logic analyzer sampling). No register read/write path, reset value, or byte-path changed; mmio diffs/conformance unchanged. No live re-capture.
-    drift_ack: 2026-07-09
+    # 2026-07-10: bus-trace single-choke-point refactor (attach wraps at SystemBus::attach_i2c_slave/attach_spi_device; no per-callsite set_bus_trace) + cycle stamp on trace events + gpio_routing/pin_routing metadata. Additive; oracle output unchanged.
+    drift_ack: 2026-07-10
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -245,7 +248,8 @@ boards:
     # per-cycle timer freshness as the non-scheduler path and is covered by the
     # generated Arduino OLED ROM-boot regression; no reset-register silicon change.
     # 2026-07-09: universal logic analyzer — additive read_gpio_pad pad probe (ENABLE-mask direction) + I2C controller wraps attached slaves in TracingI2cDevice (shared bus trace) and signals START to the selected slave at address match so traces carry decodable address frames. Register map/reset values byte-for-byte untouched; conformance/e2e unchanged. No live re-capture.
-    drift_ack: 2026-07-09
+    # 2026-07-10: bus-trace single-choke-point refactor (attach wraps at SystemBus::attach_i2c_slave/attach_spi_device; no per-callsite set_bus_trace) + cycle stamp on trace events + gpio_routing/pin_routing metadata. Additive; oracle output unchanged.
+    drift_ack: 2026-07-10
 
   - id: nucleo-l476rg
     doc: docs/boards/nucleo-l476rg.md
@@ -286,7 +290,8 @@ boards:
     # STM32 L4 I2C register/transaction engines are untouched; l476_mmio_diff +
     # l476_parity_diff remain the pinned coverage. No live re-capture.
     # 2026-07-09: read_gpio_pad — additive, READ-ONLY direction-aware pad probe accessor on the Peripheral trait + GpioPort (universal logic analyzer sampling). No register read/write path, reset value, or byte-path changed; mmio diffs/conformance unchanged. No live re-capture.
-    drift_ack: 2026-07-09
+    # 2026-07-10: bus-trace single-choke-point refactor (attach wraps at SystemBus::attach_i2c_slave/attach_spi_device; no per-callsite set_bus_trace) + cycle stamp on trace events + gpio_routing/pin_routing metadata. Additive; oracle output unchanged.
+    drift_ack: 2026-07-10
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -335,7 +340,8 @@ boards:
     # unchanged; input injection is additive and only active when a board IO source
     # drives a pin. No live re-capture this session.
     # 2026-07-09: read_gpio_pad — additive, READ-ONLY direction-aware pad probe accessor on the Peripheral trait + GpioPort (universal logic analyzer sampling). No register read/write path, reset value, or byte-path changed; mmio diffs/conformance unchanged. No live re-capture.
-    drift_ack: 2026-07-09
+    # 2026-07-10: bus-trace single-choke-point refactor (attach wraps at SystemBus::attach_i2c_slave/attach_spi_device; no per-callsite set_bus_trace) + cycle stamp on trace events + gpio_routing/pin_routing metadata. Additive; oracle output unchanged.
+    drift_ack: 2026-07-10
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -381,7 +387,8 @@ boards:
     # STM32 F1 I2C register/transaction engines are untouched; stm32f1_mmio_diff +
     # f103_conformance remain the pinned coverage. No live re-capture.
     # 2026-07-09: read_gpio_pad — additive, READ-ONLY direction-aware pad probe accessor on the Peripheral trait + GpioPort (universal logic analyzer sampling). No register read/write path, reset value, or byte-path changed; mmio diffs/conformance unchanged. No live re-capture.
-    drift_ack: 2026-07-09
+    # 2026-07-10: bus-trace single-choke-point refactor (attach wraps at SystemBus::attach_i2c_slave/attach_spi_device; no per-callsite set_bus_trace) + cycle stamp on trace events + gpio_routing/pin_routing metadata. Additive; oracle output unchanged.
+    drift_ack: 2026-07-10
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/afio.rs
@@ -434,7 +441,8 @@ boards:
     # STM32 F4 I2C register/transaction engines are untouched; stm32f4_mmio_diff +
     # stm32f4_exec_oracle remain the pinned coverage. No live re-capture.
     # 2026-07-09: read_gpio_pad — additive, READ-ONLY direction-aware pad probe accessor on the Peripheral trait + GpioPort (universal logic analyzer sampling). No register read/write path, reset value, or byte-path changed; mmio diffs/conformance unchanged. No live re-capture.
-    drift_ack: 2026-07-09
+    # 2026-07-10: bus-trace single-choke-point refactor (attach wraps at SystemBus::attach_i2c_slave/attach_spi_device; no per-callsite set_bus_trace) + cycle stamp on trace events + gpio_routing/pin_routing metadata. Additive; oracle output unchanged.
+    drift_ack: 2026-07-10
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -482,7 +490,8 @@ boards:
     # scheduler-driven. S3 reset values/MMIO semantics are unchanged; unit coverage
     # asserts default scheduler behaviour and snapshot compatibility.
     # 2026-07-09: universal logic analyzer — additive read_gpio_pad pad probe (ENABLE-mask direction) + I2C controller wraps attached slaves in TracingI2cDevice (shared bus trace) and signals START to the selected slave at address match so traces carry decodable address frames. Register map/reset values byte-for-byte untouched; conformance/e2e unchanged. No live re-capture.
-    drift_ack: 2026-07-09
+    # 2026-07-10: bus-trace single-choke-point refactor (attach wraps at SystemBus::attach_i2c_slave/attach_spi_device; no per-callsite set_bus_trace) + cycle stamp on trace events + gpio_routing/pin_routing metadata. Additive; oracle output unchanged.
+    drift_ack: 2026-07-10
     models:
       - crates/core/src/peripherals/esp32s3
       - crates/core/src/peripherals/esp_xtensa_common

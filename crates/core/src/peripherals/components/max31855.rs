@@ -144,8 +144,7 @@ impl PeripheralKit for Max31855Kit {
     }
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
         let cs_pin = ctx.config_str("cs_pin").unwrap_or("PA4").to_string();
-        let spi = ctx.spi()?;
-        spi.attach(Box::new(Max31855::new(cs_pin)));
+        ctx.attach_spi_device(Box::new(Max31855::new(cs_pin)))?;
         Ok(())
     }
 }

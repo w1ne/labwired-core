@@ -2930,7 +2930,7 @@ mod tests {
         let mut spi = Esp32s3Spi::new(22);
         let log = if with_device {
             let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-            spi.attach(Box::new(XorDevice { seen: seen.clone() }));
+            spi.push_device(Box::new(XorDevice { seen: seen.clone() }));
             Some(seen)
         } else {
             None

@@ -21,6 +21,7 @@ pub fn try_build(
     canonical_type: &str,
     p_cfg: &PeripheralConfig,
     manifest: &SystemManifest,
+    bus_trace: &crate::bus::bus_trace::BusTrace,
 ) -> Option<Box<dyn Peripheral>> {
     let dev: Box<dyn Peripheral> = match canonical_type {
         "nrf52840_uart" => Box::new(crate::peripherals::nrf52::uarte::Nrf52Uarte::new()),
@@ -119,7 +120,12 @@ pub fn try_build(
                             ext.r#type,
                             p_cfg.id
                         );
-                        twim.attach(device);
+                        // Wrap through the single trace helper before the raw
+                        // push — same contract as the bus choke point, since the
+                        // factory attaches before the peripheral is on the bus.
+                        twim.push_slave(crate::bus::bus_trace::wrap_i2c(
+                            &p_cfg.id, bus_trace, device,
+                        ));
                     }
                     None => {
                         tracing::warn!(
@@ -152,7 +158,9 @@ pub fn try_build(
                         ext.r#type,
                         p_cfg.id
                     );
-                    inst.attach_i2c(device);
+                    inst.attach_i2c(crate::bus::bus_trace::wrap_i2c(
+                        &p_cfg.id, bus_trace, device,
+                    ));
                 } else if let Some(device) =
                     crate::peripherals::components::build_spi_device(&ext.r#type, &ext.config)
                 {
@@ -162,7 +170,9 @@ pub fn try_build(
                         ext.r#type,
                         p_cfg.id
                     );
-                    inst.attach_spi(device);
+                    inst.attach_spi(crate::bus::bus_trace::wrap_spi(
+                        &p_cfg.id, bus_trace, device,
+                    ));
                 } else {
                     tracing::warn!(
                         "serial-instance attach skipped: unknown device type '{}' \

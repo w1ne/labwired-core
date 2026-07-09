@@ -178,8 +178,10 @@ impl Esp32c3Spi {
         }
     }
 
-    /// Attach a simulated device to this controller's bus.
-    pub fn attach_device(&mut self, device: Box<dyn SpiDevice>) {
+    /// Raw device push — does NOT wrap for tracing. The only production caller
+    /// is the bus choke point [`crate::bus::SystemBus::attach_spi_device`],
+    /// which wraps first.
+    pub(crate) fn push_device(&mut self, device: Box<dyn SpiDevice>) {
         self.attached_devices.push(device);
     }
 
@@ -516,7 +518,7 @@ mod tests {
             }
         }
         let mut s = Esp32c3Spi::new(SPI2_INTR_SOURCE_ID);
-        s.attach_device(Box::new(Xor(Vec::new())));
+        s.push_device(Box::new(Xor(Vec::new())));
         // MOSI = 0xEFBE_ADDE little-endian → bytes DE AD BE EF.
         s.write_u32(W0, 0xEFBE_ADDE).unwrap();
         s.write_u32(MS_DLEN, 32 - 1).unwrap();
