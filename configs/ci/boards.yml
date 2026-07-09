@@ -9,7 +9,7 @@ boards:
   - id: iolink-station-l476
     kind: firmware-gate
     path: examples/iolink-station
-    apt: [gcc-arm-none-eabi]
+    apt: [gcc-arm-none-eabi, libnewlib-arm-none-eabi]
     packs: [stm32cubel4@v1.18.2]
     submodules: recursive
     gate: true

@@ -63,6 +63,15 @@ def test_cli_emits_json_for_pull_request():
     assert any(e["id"] == "iolink-station-l476" for e in matrix["include"])
 
 
+def test_iolink_station_installs_newlib_for_nano_specs():
+    entries = bm.load_manifest(str(REPO_ROOT / "configs/ci/boards.yml"))
+    iolink = next(e for e in entries if e["id"] == "iolink-station-l476")
+    matrix = bm.to_matrix([iolink])
+    apt = matrix["include"][0]["apt"].split()
+    assert "gcc-arm-none-eabi" in apt
+    assert "libnewlib-arm-none-eabi" in apt
+
+
 def test_cli_exits_nonzero_on_invalid_manifest(tmp_path):
     bad = tmp_path / "boards.yml"
     bad.write_text(

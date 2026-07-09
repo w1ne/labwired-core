@@ -103,7 +103,7 @@ jobs:
             Or with a specific version:
 
             ```sh
-            LABWIRED_VERSION=${{ github.ref_name }} curl -fsSL https://labwired.com/install.sh | sh
+            curl -fsSL https://labwired.com/install.sh | LABWIRED_VERSION=${{ github.ref_name }} sh
             ```
 
             See the [full changelog](CHANGELOG.md) for what's new.
