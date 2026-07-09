@@ -76,10 +76,11 @@ jobs:
       - name: Install apt packages
         if: matrix.apt != ''
         env:
+          DEBIAN_FRONTEND: noninteractive
           APT: ${{ matrix.apt }}
         run: |
-          sudo apt-get update
-          sudo apt-get install -y $APT
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends $APT
 
       - name: Add rust targets
         if: matrix.rust_targets != ''
