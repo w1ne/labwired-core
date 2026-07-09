@@ -269,6 +269,20 @@ impl Peripheral for Esp32Gpio {
         Some((self.out & (1u32 << pin)) != 0)
     }
 
+    fn read_gpio_pad(&self, pin: u8) -> Option<bool> {
+        if pin >= 32 {
+            return None;
+        }
+        let mask = 1u32 << pin;
+        // ENABLE is the output driver: enabled pins show the OUT latch,
+        // everything else shows the (externally driven) input level.
+        Some(if (self.enable & mask) != 0 {
+            (self.out & mask) != 0
+        } else {
+            (self.in_data & mask) != 0
+        })
+    }
+
     fn set_gpio_input(&mut self, pin: u8, level: bool) -> bool {
         if pin >= 32 {
             return false;

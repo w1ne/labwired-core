@@ -2641,4 +2641,84 @@ pub mod integration_tests {
             "straight-line code takes no branch edges"
         );
     }
+
+    /// The browser C3 labs build through `from_config` and attach the OLED via
+    /// the kit pass — the whole chain must land in the shared bus trace or the
+    /// logic analyzer's I²C decoder is blind on ESP32-C3.
+    #[test]
+    fn test_esp32c3_i2c_from_config_kit_attach_records_bus_trace() {
+        let chip = ChipDescriptor {
+            schema_version: "1.0".to_string(),
+            name: "esp32c3-i2c-trace-test".to_string(),
+            arch: Arch::RiscV,
+            core: None,
+            flash: MemoryRange {
+                base: 0x4200_0000,
+                size: "4MB".to_string(),
+            },
+            ram: MemoryRange {
+                base: 0x3FC8_0000,
+                size: "400KB".to_string(),
+            },
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
+            memory_regions: Vec::new(),
+            peripherals: vec![PeripheralConfig {
+                id: "i2c0".to_string(),
+                r#type: "esp32c3_i2c".to_string(),
+                base_address: 0x6001_3000,
+                size: Some("4KB".to_string()),
+                irq: None,
+                clock: None,
+                config: HashMap::new(),
+            }],
+            pins: Default::default(),
+        };
+
+        let mut oled_config = HashMap::new();
+        oled_config.insert(
+            "i2c_address".to_string(),
+            serde_yaml::Value::Number(0x3C.into()),
+        );
+        let manifest = SystemManifest {
+            walk_deleted: false,
+            schema_version: "1.0".to_string(),
+            name: "esp32c3-i2c-trace-test".to_string(),
+            chip: "esp32c3-i2c-trace-test".to_string(),
+            memory_overrides: HashMap::new(),
+            external_devices: vec![labwired_config::ExternalDevice {
+                id: "oled".to_string(),
+                r#type: "oled-ssd1306-128x32".to_string(),
+                connection: "i2c0".to_string(),
+                config: oled_config,
+            }],
+            board_io: Vec::new(),
+            debug_uart: None,
+            peripherals: Vec::new(),
+        };
+
+        let mut bus = crate::bus::SystemBus::from_config(&chip, &manifest).unwrap();
+
+        // Drive one command-list transaction: RSTART; WRITE 2 (addr+W 0x78,
+        // control byte 0x00); STOP — the canonical SSD1306 command prologue.
+        const I2C_BASE: u64 = 0x6001_3000;
+        const REG_CTR: u64 = 0x04;
+        const REG_DATA: u64 = 0x1C;
+        const REG_CMD0: u64 = 0x58;
+        const CTR_TRANS_START: u32 = 1 << 5;
+        let cmd = |opcode: u32, byte_num: u32| (opcode << 11) | byte_num;
+        bus.write_u32(I2C_BASE + REG_CMD0, cmd(6, 0)).unwrap(); // RSTART
+        bus.write_u32(I2C_BASE + REG_CMD0 + 4, cmd(1, 2)).unwrap(); // WRITE 2
+        bus.write_u32(I2C_BASE + REG_CMD0 + 8, cmd(2, 0)).unwrap(); // STOP
+        bus.write_u32(I2C_BASE + REG_DATA, 0x78).unwrap(); // 0x3C << 1
+        bus.write_u32(I2C_BASE + REG_DATA, 0x00).unwrap(); // control byte
+        bus.write_u32(I2C_BASE + REG_CTR, CTR_TRANS_START).unwrap();
+
+        let events = bus.bus_trace_snapshot();
+        assert!(
+            !events.is_empty(),
+            "kit-attached OLED traffic on the C3 controller must reach the bus trace"
+        );
+        assert!(events.iter().all(|event| event.bus == "i2c0"));
+    }
 }

@@ -299,6 +299,11 @@ impl SystemBus {
                 // than a hand-wired system builder.
                 "esp32c3_i2c" => {
                     let mut i2c = crate::peripherals::esp32c3::i2c::Esp32c3I2c::new();
+                    // Wire the shared bus-trace log (universal logic analyzer)
+                    // BEFORE any device is attached below, so every attach call
+                    // wraps its device into the log — same contract as the
+                    // generic `i2c` arm above.
+                    i2c.set_bus_trace(p_cfg.id.clone(), bus.bus_trace.clone());
                     for ext in &manifest.external_devices {
                         if ext.connection != p_cfg.id {
                             continue;

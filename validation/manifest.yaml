@@ -161,7 +161,8 @@ boards:
     # (`ink_bytes`/`lit_pixels`) so browser/OLED proof paths can detect drawn ink.
     # STM32 H5 I2C register/transaction engines are untouched; h563_mmio_diff +
     # h563_conformance remain the pinned coverage. No live re-capture.
-    drift_ack: 2026-07-05
+    # 2026-07-09: read_gpio_pad — additive, READ-ONLY direction-aware pad probe accessor on the Peripheral trait + GpioPort (universal logic analyzer sampling). No register read/write path, reset value, or byte-path changed; mmio diffs/conformance unchanged. No live re-capture.
+    drift_ack: 2026-07-09
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -243,7 +244,8 @@ boards:
     # peripherals before read-driven timer snapshots. This restores the same
     # per-cycle timer freshness as the non-scheduler path and is covered by the
     # generated Arduino OLED ROM-boot regression; no reset-register silicon change.
-    drift_ack: 2026-07-07
+    # 2026-07-09: universal logic analyzer — additive read_gpio_pad pad probe (ENABLE-mask direction) + I2C controller wraps attached slaves in TracingI2cDevice (shared bus trace) and signals START to the selected slave at address match so traces carry decodable address frames. Register map/reset values byte-for-byte untouched; conformance/e2e unchanged. No live re-capture.
+    drift_ack: 2026-07-09
 
   - id: nucleo-l476rg
     doc: docs/boards/nucleo-l476rg.md
@@ -283,7 +285,8 @@ boards:
     # (`ink_bytes`/`lit_pixels`) so browser/OLED proof paths can detect drawn ink.
     # STM32 L4 I2C register/transaction engines are untouched; l476_mmio_diff +
     # l476_parity_diff remain the pinned coverage. No live re-capture.
-    drift_ack: 2026-07-05
+    # 2026-07-09: read_gpio_pad — additive, READ-ONLY direction-aware pad probe accessor on the Peripheral trait + GpioPort (universal logic analyzer sampling). No register read/write path, reset value, or byte-path changed; mmio diffs/conformance unchanged. No live re-capture.
+    drift_ack: 2026-07-09
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -331,7 +334,8 @@ boards:
     # controls. L0 GPIO register layout/reset and the pinned l073 mmio paths are
     # unchanged; input injection is additive and only active when a board IO source
     # drives a pin. No live re-capture this session.
-    drift_ack: 2026-07-05
+    # 2026-07-09: read_gpio_pad — additive, READ-ONLY direction-aware pad probe accessor on the Peripheral trait + GpioPort (universal logic analyzer sampling). No register read/write path, reset value, or byte-path changed; mmio diffs/conformance unchanged. No live re-capture.
+    drift_ack: 2026-07-09
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -376,7 +380,8 @@ boards:
     # (`ink_bytes`/`lit_pixels`) so browser/OLED proof paths can detect drawn ink.
     # STM32 F1 I2C register/transaction engines are untouched; stm32f1_mmio_diff +
     # f103_conformance remain the pinned coverage. No live re-capture.
-    drift_ack: 2026-07-05
+    # 2026-07-09: read_gpio_pad — additive, READ-ONLY direction-aware pad probe accessor on the Peripheral trait + GpioPort (universal logic analyzer sampling). No register read/write path, reset value, or byte-path changed; mmio diffs/conformance unchanged. No live re-capture.
+    drift_ack: 2026-07-09
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/afio.rs
@@ -428,7 +433,8 @@ boards:
     # (`ink_bytes`/`lit_pixels`) so browser/OLED proof paths can detect drawn ink.
     # STM32 F4 I2C register/transaction engines are untouched; stm32f4_mmio_diff +
     # stm32f4_exec_oracle remain the pinned coverage. No live re-capture.
-    drift_ack: 2026-07-05
+    # 2026-07-09: read_gpio_pad — additive, READ-ONLY direction-aware pad probe accessor on the Peripheral trait + GpioPort (universal logic analyzer sampling). No register read/write path, reset value, or byte-path changed; mmio diffs/conformance unchanged. No live re-capture.
+    drift_ack: 2026-07-09
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -475,7 +481,8 @@ boards:
     # can force legacy ticking while the default S3 constructor remains
     # scheduler-driven. S3 reset values/MMIO semantics are unchanged; unit coverage
     # asserts default scheduler behaviour and snapshot compatibility.
-    drift_ack: 2026-07-07
+    # 2026-07-09: universal logic analyzer — additive read_gpio_pad pad probe (ENABLE-mask direction) + I2C controller wraps attached slaves in TracingI2cDevice (shared bus trace) and signals START to the selected slave at address match so traces carry decodable address frames. Register map/reset values byte-for-byte untouched; conformance/e2e unchanged. No live re-capture.
+    drift_ack: 2026-07-09
     models:
       - crates/core/src/peripherals/esp32s3
       - crates/core/src/peripherals/esp_xtensa_common

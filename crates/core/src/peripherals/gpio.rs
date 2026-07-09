@@ -409,6 +409,52 @@ impl crate::Peripheral for GpioPort {
         Some((reg & (1u32 << pin)) != 0)
     }
 
+    fn read_gpio_pad(&self, pin: u8) -> Option<bool> {
+        if pin >= 32 {
+            return None;
+        }
+        let bit = |reg: u32| (reg & (1u32 << pin)) != 0;
+        match self {
+            Self::Stm32F1(g) => {
+                // CRL/CRH: 4 bits per pin — MODE!=0 is an output; CNF 10/11 on
+                // an output pin hands the pad to a peripheral (AF), which this
+                // model doesn't track at wire level.
+                let cr = g.read_reg(if pin < 8 { 0x00 } else { 0x04 });
+                let shift = ((pin % 8) * 4) as u32;
+                let mode = (cr >> shift) & 0b11;
+                let cnf = (cr >> (shift + 2)) & 0b11;
+                if mode == 0 {
+                    Some(bit(g.read_reg(0x08)))
+                } else if cnf >= 0b10 {
+                    None
+                } else {
+                    Some(bit(g.read_reg(0x0C)))
+                }
+            }
+            Self::Stm32V2(g) => {
+                // MODER: 00 input, 01 output, 10 alternate function (wire state
+                // owned by the peripheral — unknown here), 11 analog.
+                let mode = (g.read_reg(0x00) >> (pin * 2)) & 0b11;
+                match mode {
+                    0b01 => Some(bit(g.read_reg(0x14))),
+                    0b10 => None,
+                    _ => Some(bit(g.read_reg(0x10))),
+                }
+            }
+            // The nRF IN read already mixes OUT-through-DIR with latched
+            // inputs — it IS the pad view.
+            Self::Nrf52(g) => Some(bit(g.read_reg(0x510))),
+            Self::Kinetis(g) => {
+                let dir = g.read_reg(0x14);
+                Some(if (dir & (1u32 << pin)) != 0 {
+                    bit(g.read_reg(0x00))
+                } else {
+                    bit(g.read_reg(0x10))
+                })
+            }
+        }
+    }
+
     fn read_gpio_output(&self, pin: u8) -> Option<bool> {
         if pin >= 32 {
             return None;

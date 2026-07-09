@@ -134,6 +134,11 @@ pub struct Esp32s3I2c {
     tx_fifo: std::collections::VecDeque<u8>,
     rx_fifo: RefCell<std::collections::VecDeque<u8>>,
     slaves: Vec<Box<dyn I2cDevice>>,
+    /// Bus-trace identity + shared log; when set, `attach_slave` wraps slaves
+    /// in `TracingI2cDevice` so this controller feeds the same bus trace the
+    /// generic `I2c` does (analyzer waveforms, I²C decoder).
+    bus_name: String,
+    bus_log: Option<crate::bus::bus_trace::BusTraceLog>,
     /// Set when a command-list run sets TRANS_COMPLETE & INT_ENA has it.
     /// Drained by `tick()` into the interrupt-matrix source aggregation.
     irq_pending: bool,
@@ -181,6 +186,8 @@ impl Esp32s3I2c {
             tx_fifo: std::collections::VecDeque::with_capacity(FIFO_CAPACITY),
             rx_fifo: RefCell::new(std::collections::VecDeque::with_capacity(FIFO_CAPACITY)),
             slaves: Vec::new(),
+            bus_name: "i2c0".to_string(),
+            bus_log: None,
             irq_pending: false,
             intr_source_id: I2C0_INTR_SOURCE_ID,
             active_slave: None,
@@ -215,9 +222,25 @@ impl Esp32s3I2c {
         }
     }
 
+    /// Route this controller's transactions into the shared bus-trace log.
+    /// Must be called before `attach_slave` — already-attached slaves are
+    /// not retroactively wrapped.
+    pub fn set_bus_trace(&mut self, name: String, log: crate::bus::bus_trace::BusTraceLog) {
+        self.bus_name = name;
+        self.bus_log = Some(log);
+    }
+
     /// Attach an `I2cDevice` slave. Slaves are matched by address bits at
     /// transaction time; later additions take precedence on duplicate addresses.
     pub fn attach_slave(&mut self, slave: Box<dyn I2cDevice>) {
+        let slave: Box<dyn I2cDevice> = match &self.bus_log {
+            Some(log) => Box::new(crate::bus::bus_trace::TracingI2cDevice::new(
+                self.bus_name.clone(),
+                log.clone(),
+                slave,
+            )),
+            None => slave,
+        };
         self.slaves.push(slave);
     }
 
@@ -498,8 +521,13 @@ impl Esp32s3I2c {
                             // First byte of a WRITE following RSTART is addr+R/W.
                             let addr = b >> 1;
                             active = self.slaves.iter().position(|s| s.address() == addr);
-                            if active.is_some() {
-                                // Slave acknowledged its address.
+                            if let Some(slave_idx) = active {
+                                // Slave acknowledged its address. Signal START
+                                // to the selected device — on the wire the
+                                // START + address frame precedes the data, and
+                                // the bus-trace wrapper reconstructs the
+                                // address frame from this call.
+                                self.slaves[slave_idx].start();
                                 self.sr |= SR_RESP_REC;
                                 expects_addr = false;
                                 // Don't deliver the addr byte to the slave's write().
@@ -510,7 +538,8 @@ impl Esp32s3I2c {
                             // SLAVE_ADDR and put only payload bytes in TXFIFO.
                             // In that shape the first FIFO byte is real data.
                             active = self.find_slave_from_slave_addr_register();
-                            if active.is_some() {
+                            if let Some(slave_idx) = active {
+                                self.slaves[slave_idx].start();
                                 self.sr |= SR_RESP_REC;
                             } else {
                                 self.int_raw |= INT_NACK;
