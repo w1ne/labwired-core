@@ -629,6 +629,9 @@ pub(crate) fn register_esp32s3_peripherals(bus: &mut SystemBus, opts: &Esp32s3Op
     // always, plus an opt-in PCA9685 (LABWIRED_ESP32S3_PCA9685) for the
     // SpiceDispenser servos. Built directly so the slaves are attached.
     let mut i2c0 = Esp32s3I2c::new();
+    // Feed the shared bus-trace log (universal logic analyzer) before any
+    // attach, so every slave below is wrapped into the trace.
+    i2c0.set_bus_trace("i2c0".to_string(), bus.bus_trace.clone());
     i2c0.attach_slave(Box::new(Tmp102::new()));
     if std::env::var("LABWIRED_ESP32S3_PCA9685").is_ok() {
         i2c0.attach_slave(Box::new(

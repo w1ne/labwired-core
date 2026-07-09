@@ -44,6 +44,50 @@ impl WasmSimulator {
         serde_wasm_bindgen::to_value(&states).unwrap_or(JsValue::NULL)
     }
 
+    /// Sample the pad level of GPIO pins for the logic analyzer.
+    /// Input: `[{ kind: "gpio", peripheral, pin }]`.
+    /// Output: the same refs each extended with `value: bool | null` —
+    /// `null` when the pin's wire state is unknown (missing peripheral,
+    /// out-of-range pin, or a pad handed to a bus controller the GPIO
+    /// model doesn't track). Cheap enough to call every UI frame.
+    #[wasm_bindgen]
+    pub fn sample_logic_signals(&self, refs: JsValue) -> JsValue {
+        #[derive(serde::Deserialize)]
+        struct Ref {
+            kind: String,
+            peripheral: String,
+            pin: u8,
+        }
+
+        let machine = self.machine.as_ref().unwrap();
+        let refs: Vec<Ref> = match serde_wasm_bindgen::from_value(refs) {
+            Ok(r) => r,
+            Err(_) => return JsValue::NULL,
+        };
+
+        let samples: Vec<serde_json::Value> = refs
+            .iter()
+            .map(|r| {
+                let value = if r.kind == "gpio" {
+                    machine
+                        .bus
+                        .find_peripheral_index_by_name(&r.peripheral)
+                        .and_then(|idx| machine.bus.peripherals[idx].dev.read_gpio_pad(r.pin))
+                } else {
+                    None
+                };
+                serde_json::json!({
+                    "kind": r.kind,
+                    "peripheral": r.peripheral,
+                    "pin": r.pin,
+                    "value": value,
+                })
+            })
+            .collect();
+
+        serde_wasm_bindgen::to_value(&samples).unwrap_or(JsValue::NULL)
+    }
+
     /// Get a peripheral's full state snapshot as JSON.
     #[wasm_bindgen]
     pub fn get_peripheral_snapshot(&self, name: &str) -> JsValue {

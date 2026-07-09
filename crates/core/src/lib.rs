@@ -462,6 +462,17 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// GPIO capability: the pad level a logic probe clipped to `pin` would
+    /// see — output-driven pins report the output latch, input pins report
+    /// the input level, pins routed to a peripheral (alternate function)
+    /// report `None` when the model can't know the wire state. GPIO models
+    /// with a direction register override this; the default prefers the
+    /// output latch.
+    fn read_gpio_pad(&self, pin: u8) -> Option<bool> {
+        self.read_gpio_output(pin)
+            .or_else(|| self.read_gpio_input(pin))
+    }
+
     /// GPIO capability: drive an externally controlled input level for `pin`
     /// (e.g. browser button press). Returns `false` if unsupported.
     fn set_gpio_input(&mut self, _pin: u8, _level: bool) -> bool {
