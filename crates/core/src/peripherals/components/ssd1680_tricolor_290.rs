@@ -530,6 +530,7 @@ pub struct Ssd1680Tricolor290Kit;
 pub static SSD1680_TRICOLOR_290_KIT: Ssd1680Tricolor290Kit = Ssd1680Tricolor290Kit;
 
 static SSD1680_TRICOLOR_290_METADATA: KitMetadata = KitMetadata {
+    inputs: &[],
     device_type: "ssd1680_tricolor_290",
     label: "SSD1680 Tri-Color E-Paper",
     summary: "2.9\" tri-color (black/white/red) SSD1680 e-paper over SPI.",

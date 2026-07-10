@@ -240,6 +240,7 @@ pub struct Sps30Kit;
 pub static SPS30_KIT: Sps30Kit = Sps30Kit;
 
 static SPS30_METADATA: KitMetadata = KitMetadata {
+    inputs: &[],
     device_type: "sps30",
     label: "Sensirion SPS30 PM",
     summary: "Laser particulate-matter sensor (PM1/2.5/4/10) over I2C.",

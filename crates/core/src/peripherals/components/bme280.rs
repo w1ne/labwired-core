@@ -164,6 +164,7 @@ pub struct Bme280Kit;
 pub static BME280_KIT: Bme280Kit = Bme280Kit;
 
 static BME280_METADATA: KitMetadata = KitMetadata {
+    inputs: &[],
     device_type: "bme280",
     label: "BME280 Weather",
     summary: "Bosch BME280 temp + humidity + pressure sensor over I2C.",

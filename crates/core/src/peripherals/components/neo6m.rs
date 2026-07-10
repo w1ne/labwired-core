@@ -28,6 +28,9 @@ pub struct Neo6mGps {
     time_since_last_sentence_us: u32,
     /// Round-robin sentence type counter so we emit GGA, RMC alternately.
     sentence_index: u8,
+    /// system.yaml `external_devices` id, stamped at attach (see
+    /// [`crate::sim_input::SimInput::component_id`]).
+    component_id: Option<String>,
 }
 
 impl Default for Neo6mGps {
@@ -46,6 +49,7 @@ impl Neo6mGps {
             out_queue: VecDeque::new(),
             time_since_last_sentence_us: 0,
             sentence_index: 0,
+            component_id: None,
         }
     }
 
@@ -163,6 +167,63 @@ impl UartStreamDevice for Neo6mGps {
     fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
         Some(self)
     }
+
+    fn as_sim_input_mut(&mut self) -> Option<&mut dyn crate::sim_input::SimInput> {
+        Some(self)
+    }
+}
+
+/// Drivable position and fix state. Driving `lat` preserves `lon` and vice
+/// versa; `fix` is 0 = no fix (status V), 1 = active fix (status A). One
+/// table backs BOTH the `SimInput` impl and the kit metadata, so the device
+/// schema and the runtime API cannot drift.
+pub const INPUT_CHANNELS: &[crate::sim_input::InputChannel] = &[
+    crate::sim_input::InputChannel {
+        key: "lat",
+        label: "Latitude",
+        unit: "°",
+        min: -90.0,
+        max: 90.0,
+    },
+    crate::sim_input::InputChannel {
+        key: "lon",
+        label: "Longitude",
+        unit: "°",
+        min: -180.0,
+        max: 180.0,
+    },
+    crate::sim_input::InputChannel {
+        key: "fix",
+        label: "Fix",
+        unit: "level",
+        min: 0.0,
+        max: 1.0,
+    },
+];
+
+impl crate::sim_input::SimInput for Neo6mGps {
+    fn input_channels(&self) -> &'static [crate::sim_input::InputChannel] {
+        INPUT_CHANNELS
+    }
+
+    fn set_input(&mut self, key: &str, value: f64) -> Result<(), crate::sim_input::SimInputError> {
+        self.require_channel(key, value)?;
+        let (lat, lon) = self.position();
+        match key {
+            "lat" => self.set_position(value, lon),
+            "lon" => self.set_position(lat, value),
+            "fix" => self.set_fix(value >= 0.5),
+            _ => unreachable!("require_channel validated the key"),
+        }
+        Ok(())
+    }
+    fn component_id(&self) -> Option<&str> {
+        self.component_id.as_deref()
+    }
+
+    fn set_component_id(&mut self, id: String) {
+        self.component_id = Some(id);
+    }
 }
 
 // ─── PeripheralKit registration ────────────────────────────────────────────
@@ -175,6 +236,7 @@ pub struct Neo6mGpsKit;
 pub static NEO6M_KIT: Neo6mGpsKit = Neo6mGpsKit;
 
 static NEO6M_METADATA: KitMetadata = KitMetadata {
+    inputs: INPUT_CHANNELS,
     device_type: "neo6m-gps",
     label: "NEO-6M GPS",
     summary: "GPS module streaming NMEA sentences over UART RX.",
@@ -211,11 +273,12 @@ impl PeripheralKit for Neo6mGpsKit {
         let lat = ctx.config_f64("lat_deg");
         let lon = ctx.config_f64("lon_deg");
 
-        let uart = ctx.uart()?;
         let mut gps = Neo6mGps::new();
         if let (Some(lat), Some(lon)) = (lat, lon) {
             gps.set_position(lat, lon);
         }
+        crate::sim_input::SimInput::set_component_id(&mut gps, ctx.device_id().to_string());
+        let uart = ctx.uart()?;
         uart.attach_stream(Box::new(gps));
         Ok(())
     }

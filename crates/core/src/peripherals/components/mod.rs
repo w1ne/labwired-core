@@ -51,7 +51,7 @@ pub use bme280::Bme280;
 pub use bmp280::Bmp280;
 pub use fxos8700::Fxos8700;
 pub use hc595_7seg::Hc5957Seg;
-pub use i2c_factory::build_i2c_device;
+pub use i2c_factory::{build_external_i2c_device, build_i2c_device};
 pub use ili9341::Ili9341;
 pub use iolink_master::{
     IolinkComSpeed, IolinkFrameKind, IolinkLinkState, IolinkMaster, IolinkXfer,

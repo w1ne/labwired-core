@@ -103,7 +103,13 @@ impl<'a> AttachCtx<'a> {
     /// that called `ctx.i2c()?.attach(...)` directly would only work on STM32
     /// buses. Going through this method lets one kit serve a sensor on either
     /// family without caring which bus the system.yaml wired it to.
-    pub fn attach_i2c_device(&mut self, device: Box<dyn I2cDevice>) -> Result<()> {
+    pub fn attach_i2c_device(&mut self, mut device: Box<dyn I2cDevice>) -> Result<()> {
+        // Input devices get their system.yaml id stamped here (the ONE kit
+        // attach path), so discovery and the stimulus resolver address them
+        // by the name the author wrote (see crate::sim_input).
+        if let Some(si) = device.as_sim_input_mut() {
+            si.set_component_id(self.ext.id.clone());
+        }
         // Funnel through the single bus choke point, which wraps the device in
         // the shared bus trace before handing it to whichever I²C controller the
         // `connection:` resolves to. There is no untraced attach path.
@@ -117,7 +123,11 @@ impl<'a> AttachCtx<'a> {
     /// field resolves to: the generic STM32-style [`Spi`] or the ESP32-C3 GP-SPI
     /// model. This mirrors [`Self::attach_i2c_device`] for mixed-controller
     /// systems.
-    pub fn attach_spi_device(&mut self, device: Box<dyn SpiDevice>) -> Result<()> {
+    pub fn attach_spi_device(&mut self, mut device: Box<dyn SpiDevice>) -> Result<()> {
+        // Same identity stamp as `attach_i2c_device`.
+        if let Some(si) = device.as_sim_input_mut() {
+            si.set_component_id(self.ext.id.clone());
+        }
         // Funnel through the single bus choke point (see `attach_i2c_device`).
         let connection = self.ext.connection.clone();
         self.bus

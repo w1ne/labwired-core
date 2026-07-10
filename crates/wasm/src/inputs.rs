@@ -2,8 +2,13 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! WasmSimulator sensor / board-IO input injectors (HC-SR04, I2C sensors, ADC,
-//! NTC/MAX31855, GPS, SN74HC165). Split out of lib.rs.
+//! WasmSimulator input surface. The STANDARD path is the generic trio
+//! `set_input` / `set_inputs` / `list_inputs` (see `labwired_core::sim_input`)
+//! — it reaches every SimInput device in engineering units; the per-device
+//! setters it replaced are gone. What remains bespoke here is only what is
+//! not channel-shaped yet: board_io button presses (GPIO), NTC temperature
+//! (not bus-resident — seeds the ADC), raw ADC injection, UART byte feed,
+//! plus the read-back queries the browser panels sync from.
 
 use crate::*;
 use wasm_bindgen::prelude::*;
@@ -27,14 +32,47 @@ impl WasmSimulator {
             .map_err(|e| JsValue::from_str(&e.to_string()))
     }
 
-    /// Discover the drivable input channels on the running machine, as JSON:
-    /// `[{"peripheral":"i2c1","key":"x","label":"X","unit":"g","min":-2,"max":2}, …]`.
-    /// The "what can I drive?" query an agent calls before `set_input`.
+    /// Apply several input sets as ONE atomic transaction. `sets` is a JSON
+    /// array of `{channel, value, component?}`; every set is validated first
+    /// and either all apply or none do, with no simulation steps in between —
+    /// the way to drive a multi-channel pose (an IMU's x/y/z, a GPS lat+lon)
+    /// without the firmware observing a torn update, especially from a
+    /// worker-engine bridge where single calls interleave with execution.
     #[wasm_bindgen]
-    pub fn list_inputs(&self) -> Result<JsValue, JsValue> {
+    pub fn set_inputs(&mut self, sets: JsValue) -> Result<(), JsValue> {
+        #[derive(serde::Deserialize)]
+        struct InputSet {
+            channel: String,
+            value: f64,
+            #[serde(default)]
+            component: Option<String>,
+        }
+        let sets: Vec<InputSet> =
+            serde_wasm_bindgen::from_value(sets).map_err(|e| JsValue::from_str(&e.to_string()))?;
         let machine = self
             .machine
-            .as_ref()
+            .as_mut()
+            .ok_or_else(|| JsValue::from_str("simulator not initialized"))?;
+        let refs: Vec<(Option<&str>, &str, f64)> = sets
+            .iter()
+            .map(|s| (s.component.as_deref(), s.channel.as_str(), s.value))
+            .collect();
+        machine
+            .set_inputs(&refs)
+            .map_err(|e| JsValue::from_str(&e.to_string()))
+    }
+
+    /// Discover the drivable input channels on the running machine, as JSON:
+    /// `[{"peripheral":"imu","key":"ax","label":"Accel X","unit":"g","min":-16,"max":16}, …]`.
+    /// `peripheral` is the system.yaml external-device id when stamped (the
+    /// same name `set_input`'s component selector accepts), else the owning
+    /// peripheral's bus name. The "what can I drive?" query an agent calls
+    /// before `set_input`.
+    #[wasm_bindgen]
+    pub fn list_inputs(&mut self) -> Result<JsValue, JsValue> {
+        let machine = self
+            .machine
+            .as_mut()
             .ok_or_else(|| JsValue::from_str("simulator not initialized"))?;
         let entries: Vec<serde_json::Value> = machine
             .list_inputs()
@@ -51,24 +89,6 @@ impl WasmSimulator {
             })
             .collect();
         serde_wasm_bindgen::to_value(&entries).map_err(|e| JsValue::from_str(&e.to_string()))
-    }
-
-    /// Set the distance (cm) reported by an HC-SR04 ultrasonic sensor — the
-    /// host-controlled "hand position" that drives gesture control. Clamped to
-    /// the sensor's 2–400 cm range.
-    #[wasm_bindgen]
-    pub fn set_hcsr04_distance(&mut self, id: &str, distance_cm: f32) -> Result<(), JsValue> {
-        let machine = self
-            .machine
-            .as_mut()
-            .ok_or_else(|| JsValue::from_str("simulator not initialized"))?;
-        for sensor in machine.bus.hcsr04.iter_mut() {
-            if sensor.id == id {
-                sensor.set_distance_cm(distance_cm);
-                return Ok(());
-            }
-        }
-        Err(JsValue::from_str(&format!("No HC-SR04 sensor '{}'", id)))
     }
 
     /// Set an input board_io binding (e.g. button press).
@@ -102,162 +122,6 @@ impl WasmSimulator {
         }
 
         Ok(())
-    }
-
-    /// Set the simulated X/Y/Z sample on an ADXL345 or FXOS8700 attached to an
-    /// I2C peripheral. Looks up the binding in `board_io` by id; the binding
-    /// must have `device_type: "adxl345"` or `device_type: "fxos8700"`.
-    #[wasm_bindgen]
-    pub fn set_i2c_sensor_sample(
-        &mut self,
-        device_id: &str,
-        x: i16,
-        y: i16,
-        z: i16,
-    ) -> Result<(), JsValue> {
-        let binding = self
-            .board_io
-            .iter()
-            .find(|b| {
-                b.id == device_id
-                    && matches!(b.device_type.as_deref(), Some("adxl345") | Some("fxos8700"))
-            })
-            .cloned()
-            .ok_or_else(|| {
-                JsValue::from_str(&format!(
-                    "No ADXL345/FXOS8700 board_io binding '{}'",
-                    device_id
-                ))
-            })?;
-        let device_type = binding.device_type.as_deref().unwrap_or("adxl345");
-
-        let machine = self.machine.as_mut().unwrap();
-        let idx = machine
-            .bus
-            .find_peripheral_index_by_name(&binding.peripheral)
-            .ok_or_else(|| {
-                JsValue::from_str(&format!(
-                    "I2C peripheral '{}' not found",
-                    binding.peripheral
-                ))
-            })?;
-        let any = machine.bus.peripherals[idx]
-            .dev
-            .as_any_mut()
-            .ok_or_else(|| JsValue::from_str("I2C peripheral does not support downcasting"))?;
-        let i2c = any
-            .downcast_mut::<labwired_core::peripherals::i2c::I2c>()
-            .ok_or_else(|| {
-                JsValue::from_str(&format!(
-                    "Peripheral '{}' is not an I2C controller",
-                    binding.peripheral
-                ))
-            })?;
-
-        if device_type == "fxos8700" {
-            let address = binding.i2c_address.unwrap_or(0x1f);
-            for device in i2c.attached_devices() {
-                let mut device = device.borrow_mut();
-                if device.address() != address {
-                    continue;
-                }
-                if let Some(sensor) = device.as_any_mut().and_then(|any| {
-                    any.downcast_mut::<labwired_core::peripherals::components::Fxos8700>()
-                }) {
-                    sensor.set_sample(x, y, z);
-                    return Ok(());
-                }
-            }
-
-            return Err(JsValue::from_str(&format!(
-                "FXOS8700 device at address 0x{:02x} not found on '{}'",
-                address, binding.peripheral
-            )));
-        }
-
-        let address = binding.i2c_address.unwrap_or(0x53);
-        for device in i2c.attached_devices() {
-            let mut device = device.borrow_mut();
-            if device.address() != address {
-                continue;
-            }
-            if let Some(sensor) = device.as_any_mut().and_then(|any| {
-                any.downcast_mut::<labwired_core::peripherals::components::Adxl345>()
-            }) {
-                sensor.set_sample(x, y, z);
-                return Ok(());
-            }
-        }
-
-        Err(JsValue::from_str(&format!(
-            "ADXL345 device at address 0x{:02x} not found on '{}'",
-            address, binding.peripheral
-        )))
-    }
-
-    /// Set the simulated 6-DoF sample on an MPU6050 attached to an I2C peripheral.
-    #[wasm_bindgen]
-    #[allow(clippy::too_many_arguments)]
-    pub fn set_i2c_sensor_sample_6dof(
-        &mut self,
-        device_id: &str,
-        ax: i16,
-        ay: i16,
-        az: i16,
-        gx: i16,
-        gy: i16,
-        gz: i16,
-    ) -> Result<(), JsValue> {
-        let binding = self
-            .board_io
-            .iter()
-            .find(|b| b.id == device_id && b.device_type.as_deref() == Some("mpu6050"))
-            .cloned()
-            .ok_or_else(|| {
-                JsValue::from_str(&format!("No MPU6050 board_io binding '{}'", device_id))
-            })?;
-
-        let machine = self.machine.as_mut().unwrap();
-        let idx = machine
-            .bus
-            .find_peripheral_index_by_name(&binding.peripheral)
-            .ok_or_else(|| {
-                JsValue::from_str(&format!(
-                    "I2C peripheral '{}' not found",
-                    binding.peripheral
-                ))
-            })?;
-        let any = machine.bus.peripherals[idx]
-            .dev
-            .as_any_mut()
-            .ok_or_else(|| JsValue::from_str("I2C peripheral does not support downcasting"))?;
-        let i2c = any
-            .downcast_mut::<labwired_core::peripherals::i2c::I2c>()
-            .ok_or_else(|| {
-                JsValue::from_str(&format!(
-                    "Peripheral '{}' is not an I2C controller",
-                    binding.peripheral
-                ))
-            })?;
-
-        let address = binding.i2c_address.unwrap_or(0x68);
-        for device in i2c.attached_devices() {
-            let mut device = device.borrow_mut();
-            if device.address() != address {
-                continue;
-            }
-            if let Some(sensor) = device.as_any_mut().and_then(|any| {
-                any.downcast_mut::<labwired_core::peripherals::components::Mpu6050>()
-            }) {
-                sensor.set_sample(ax, ay, az, gx, gy, gz);
-                return Ok(());
-            }
-        }
-
-        Err(JsValue::from_str(&format!(
-            "MPU6050 device at address 0x{:02x} not found on '{}'",
-            address, binding.peripheral
-        )))
     }
 
     /// Read back the current sensor data from each I2C sensor declared in `board_io`.
@@ -453,190 +317,6 @@ impl WasmSimulator {
         Ok(())
     }
 
-    /// Set the simulated thermocouple and internal temperatures on a MAX31855 device.
-    #[wasm_bindgen]
-    pub fn set_max31855_temperature(
-        &mut self,
-        device_id: &str,
-        tc_c: f32,
-        internal_c: f32,
-    ) -> Result<(), JsValue> {
-        let binding = self
-            .board_io
-            .iter()
-            .find(|b| b.id == device_id && b.device_type.as_deref() == Some("max31855"))
-            .cloned()
-            .ok_or_else(|| {
-                JsValue::from_str(&format!("No MAX31855 board_io binding '{}'", device_id))
-            })?;
-
-        let machine = self.machine.as_mut().unwrap();
-        let idx = machine
-            .bus
-            .find_peripheral_index_by_name(&binding.peripheral)
-            .ok_or_else(|| {
-                JsValue::from_str(&format!(
-                    "SPI peripheral '{}' not found",
-                    binding.peripheral
-                ))
-            })?;
-        let any = machine.bus.peripherals[idx]
-            .dev
-            .as_any_mut()
-            .ok_or_else(|| JsValue::from_str("SPI peripheral does not support downcasting"))?;
-        let spi = any
-            .downcast_mut::<labwired_core::peripherals::spi::Spi>()
-            .ok_or_else(|| {
-                JsValue::from_str(&format!(
-                    "Peripheral '{}' is not an SPI controller",
-                    binding.peripheral
-                ))
-            })?;
-
-        for device in &mut spi.attached_devices {
-            if let Some(sensor) = device
-                .as_any_mut()
-                .and_then(|a| a.downcast_mut::<labwired_core::peripherals::components::Max31855>())
-            {
-                sensor.set_temperature(tc_c, internal_c);
-                return Ok(());
-            }
-        }
-
-        Err(JsValue::from_str(&format!(
-            "MAX31855 device not found on '{}'",
-            binding.peripheral
-        )))
-    }
-
-    /// Set the simulated position on a NEO-6M GPS module attached to a UART peripheral.
-    ///
-    /// `device_id` must match a `board_io` binding with `device_type: "neo6m-gps"`.
-    #[wasm_bindgen]
-    pub fn set_gps_position(&mut self, device_id: &str, lat: f64, lon: f64) -> Result<(), JsValue> {
-        let binding = self
-            .board_io
-            .iter()
-            .find(|b| b.id == device_id && b.device_type.as_deref() == Some("neo6m-gps"))
-            .cloned()
-            .ok_or_else(|| {
-                JsValue::from_str(&format!("No neo6m-gps board_io binding '{}'", device_id))
-            })?;
-
-        let machine = self.machine.as_mut().unwrap();
-        let idx = machine
-            .bus
-            .find_peripheral_index_by_name(&binding.peripheral)
-            .ok_or_else(|| {
-                JsValue::from_str(&format!(
-                    "UART peripheral '{}' not found",
-                    binding.peripheral
-                ))
-            })?;
-        let any = machine.bus.peripherals[idx]
-            .dev
-            .as_any_mut()
-            .ok_or_else(|| JsValue::from_str("UART peripheral does not support downcasting"))?;
-        let uart = any
-            .downcast_mut::<labwired_core::peripherals::uart::Uart>()
-            .ok_or_else(|| {
-                JsValue::from_str(&format!(
-                    "Peripheral '{}' is not a UART controller",
-                    binding.peripheral
-                ))
-            })?;
-
-        for stream in &mut uart.attached_streams {
-            if let Some(gps) = stream
-                .as_any_mut()
-                .and_then(|a| a.downcast_mut::<labwired_core::peripherals::components::Neo6mGps>())
-            {
-                gps.set_position(lat, lon);
-                return Ok(());
-            }
-        }
-
-        Err(JsValue::from_str(&format!(
-            "Neo6mGps not found on UART '{}'",
-            binding.peripheral
-        )))
-    }
-
-    /// Enable or disable the GPS fix on a NEO-6M module.
-    #[wasm_bindgen]
-    pub fn set_gps_fix(&mut self, device_id: &str, active: bool) -> Result<(), JsValue> {
-        let binding = self
-            .board_io
-            .iter()
-            .find(|b| b.id == device_id && b.device_type.as_deref() == Some("neo6m-gps"))
-            .cloned()
-            .ok_or_else(|| {
-                JsValue::from_str(&format!("No neo6m-gps board_io binding '{}'", device_id))
-            })?;
-
-        let machine = self.machine.as_mut().unwrap();
-        let idx = machine
-            .bus
-            .find_peripheral_index_by_name(&binding.peripheral)
-            .ok_or_else(|| {
-                JsValue::from_str(&format!(
-                    "UART peripheral '{}' not found",
-                    binding.peripheral
-                ))
-            })?;
-        let any = machine.bus.peripherals[idx]
-            .dev
-            .as_any_mut()
-            .ok_or_else(|| JsValue::from_str("UART peripheral does not support downcasting"))?;
-        let uart = any
-            .downcast_mut::<labwired_core::peripherals::uart::Uart>()
-            .ok_or_else(|| {
-                JsValue::from_str(&format!(
-                    "Peripheral '{}' is not a UART controller",
-                    binding.peripheral
-                ))
-            })?;
-
-        for stream in &mut uart.attached_streams {
-            if let Some(gps) = stream
-                .as_any_mut()
-                .and_then(|a| a.downcast_mut::<labwired_core::peripherals::components::Neo6mGps>())
-            {
-                gps.set_fix(active);
-                return Ok(());
-            }
-        }
-
-        Err(JsValue::from_str(&format!(
-            "Neo6mGps not found on UART '{}'",
-            binding.peripheral
-        )))
-    }
-
-    /// Set all 8 digital inputs of the 74HC165 shift register at once
-    /// (bit `i` = channel `i`). Returns an error if no shifter is wired.
-    #[wasm_bindgen]
-    pub fn set_sn74hc165_inputs(&mut self, value: u8) -> Result<(), JsValue> {
-        let machine = self.machine.as_mut().unwrap();
-        for p in &mut machine.bus.peripherals {
-            let Some(any) = p.dev.as_any_mut() else {
-                continue;
-            };
-            let Some(spi) = any.downcast_mut::<labwired_core::peripherals::spi::Spi>() else {
-                continue;
-            };
-            for device in &mut spi.attached_devices {
-                if let Some(sr) = device.as_any_mut().and_then(|a| {
-                    a.downcast_mut::<labwired_core::peripherals::components::Sn74hc165>()
-                }) {
-                    sr.set_inputs(value);
-                    return Ok(());
-                }
-            }
-        }
-        Err(JsValue::from_str("no 74HC165 shift register attached"))
-    }
-
     /// Read the 74HC165's live input byte (bit `i` = channel `i`), or `-1` if
     /// no shifter is wired. Lets the UI reflect the device's real state rather
     /// than tracking it in JS.
@@ -659,29 +339,6 @@ impl WasmSimulator {
             }
         }
         -1
-    }
-
-    /// Toggle a single 74HC165 input channel (0..=7) high or low.
-    #[wasm_bindgen]
-    pub fn set_sn74hc165_channel(&mut self, channel: u8, high: bool) -> Result<(), JsValue> {
-        let machine = self.machine.as_mut().unwrap();
-        for p in &mut machine.bus.peripherals {
-            let Some(any) = p.dev.as_any_mut() else {
-                continue;
-            };
-            let Some(spi) = any.downcast_mut::<labwired_core::peripherals::spi::Spi>() else {
-                continue;
-            };
-            for device in &mut spi.attached_devices {
-                if let Some(sr) = device.as_any_mut().and_then(|a| {
-                    a.downcast_mut::<labwired_core::peripherals::components::Sn74hc165>()
-                }) {
-                    sr.set_channel(channel, high);
-                    return Ok(());
-                }
-            }
-        }
-        Err(JsValue::from_str("no 74HC165 shift register attached"))
     }
 }
 

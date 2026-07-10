@@ -193,6 +193,7 @@ pub struct Hc5957SegKit;
 pub static HC595_7SEG_KIT: Hc5957SegKit = Hc5957SegKit;
 
 static HC595_7SEG_METADATA: KitMetadata = KitMetadata {
+    inputs: &[],
     device_type: "hc595-7seg",
     label: "74HC595 7-Segment (4-digit)",
     summary:
