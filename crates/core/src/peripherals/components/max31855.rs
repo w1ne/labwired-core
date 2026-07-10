@@ -105,6 +105,48 @@ impl SpiDevice for Max31855 {
     fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
         Some(self)
     }
+
+    fn as_sim_input_mut(&mut self) -> Option<&mut dyn crate::sim_input::SimInput> {
+        Some(self)
+    }
+}
+
+/// Drivable temperatures, in °C: the thermocouple hot junction (K-type range)
+/// and the cold-junction/internal sensor. Driving one preserves the other.
+/// One table backs BOTH the `SimInput` impl and the kit metadata, so the
+/// device schema and the runtime API cannot drift.
+pub const INPUT_CHANNELS: &[crate::sim_input::InputChannel] = &[
+    crate::sim_input::InputChannel {
+        key: "temperature",
+        label: "Thermocouple",
+        unit: "°C",
+        min: -200.0,
+        max: 1350.0,
+    },
+    crate::sim_input::InputChannel {
+        key: "internal",
+        label: "Internal",
+        unit: "°C",
+        min: -55.0,
+        max: 125.0,
+    },
+];
+
+impl crate::sim_input::SimInput for Max31855 {
+    fn input_channels(&self) -> &'static [crate::sim_input::InputChannel] {
+        INPUT_CHANNELS
+    }
+
+    fn set_input(&mut self, key: &str, value: f64) -> Result<(), crate::sim_input::SimInputError> {
+        self.require_channel(key, value)?;
+        let (tc, internal) = self.temperature();
+        match key {
+            "temperature" => self.set_temperature(value as f32, internal),
+            "internal" => self.set_temperature(tc, value as f32),
+            _ => unreachable!("require_channel validated the key"),
+        }
+        Ok(())
+    }
 }
 
 // ─── PeripheralKit registration ────────────────────────────────────────────
@@ -117,6 +159,7 @@ pub struct Max31855Kit;
 pub static MAX31855_KIT: Max31855Kit = Max31855Kit;
 
 static MAX31855_METADATA: KitMetadata = KitMetadata {
+    inputs: INPUT_CHANNELS,
     device_type: "max31855",
     label: "MAX31855 Thermocouple",
     summary: "Cold-junction-compensated K-type thermocouple amplifier (read-only SPI).",

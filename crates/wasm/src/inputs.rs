@@ -31,10 +31,10 @@ impl WasmSimulator {
     /// `[{"peripheral":"i2c1","key":"x","label":"X","unit":"g","min":-2,"max":2}, …]`.
     /// The "what can I drive?" query an agent calls before `set_input`.
     #[wasm_bindgen]
-    pub fn list_inputs(&self) -> Result<JsValue, JsValue> {
+    pub fn list_inputs(&mut self) -> Result<JsValue, JsValue> {
         let machine = self
             .machine
-            .as_ref()
+            .as_mut()
             .ok_or_else(|| JsValue::from_str("simulator not initialized"))?;
         let entries: Vec<serde_json::Value> = machine
             .list_inputs()

@@ -109,6 +109,56 @@ impl I2cDevice for Adxl345 {
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
     }
+
+    fn as_sim_input_mut(&mut self) -> Option<&mut dyn crate::sim_input::SimInput> {
+        Some(self)
+    }
+}
+
+/// Drivable accelerometer axes, in g. Full-resolution mode is 3.9 mg/LSB
+/// (256 counts = 1 g — the model's default rest sample is z = 256), physical
+/// full-scale ±16 g. One table backs BOTH the `SimInput` impl and the kit
+/// metadata, so the device schema and the runtime API cannot drift.
+pub const INPUT_CHANNELS: &[crate::sim_input::InputChannel] = &[
+    crate::sim_input::InputChannel {
+        key: "x",
+        label: "X",
+        unit: "g",
+        min: -16.0,
+        max: 16.0,
+    },
+    crate::sim_input::InputChannel {
+        key: "y",
+        label: "Y",
+        unit: "g",
+        min: -16.0,
+        max: 16.0,
+    },
+    crate::sim_input::InputChannel {
+        key: "z",
+        label: "Z",
+        unit: "g",
+        min: -16.0,
+        max: 16.0,
+    },
+];
+
+impl crate::sim_input::SimInput for Adxl345 {
+    fn input_channels(&self) -> &'static [crate::sim_input::InputChannel] {
+        INPUT_CHANNELS
+    }
+
+    fn set_input(&mut self, key: &str, value: f64) -> Result<(), crate::sim_input::SimInputError> {
+        self.require_channel(key, value)?;
+        let raw = (value * 256.0).round() as i16;
+        match key {
+            "x" => self.sample_x = raw,
+            "y" => self.sample_y = raw,
+            "z" => self.sample_z = raw,
+            _ => unreachable!("require_channel validated the key"),
+        }
+        Ok(())
+    }
 }
 
 // ─── PeripheralKit registration ────────────────────────────────────────────
@@ -121,6 +171,7 @@ pub struct Adxl345Kit;
 pub static ADXL345_KIT: Adxl345Kit = Adxl345Kit;
 
 static ADXL345_METADATA: KitMetadata = KitMetadata {
+    inputs: INPUT_CHANNELS,
     device_type: "adxl345",
     label: "ADXL345 Tilt",
     summary: "3-axis ±2/4/8/16 g digital accelerometer over I2C.",

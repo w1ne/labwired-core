@@ -68,6 +68,13 @@ pub trait SpiDevice: Send {
     fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
         None
     }
+    /// Runtime-drivable view of this device, if it accepts simulated input.
+    /// Same contract as the hook on `I2cDevice`: input devices override it so
+    /// the generic [`crate::Machine::set_input`] resolver can reach them
+    /// without a downcast. Default `None` = not an input device.
+    fn as_sim_input_mut(&mut self) -> Option<&mut dyn crate::sim_input::SimInput> {
+        None
+    }
     /// Binary mid-flight snapshot for runtime resume. Default empty;
     /// override for stateful devices (e-paper panels with framebuffers,
     /// thermocouples with cached temperatures, etc.).

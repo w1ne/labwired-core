@@ -226,6 +226,7 @@ pub struct Pcd8544Kit;
 pub static PCD8544_KIT: Pcd8544Kit = Pcd8544Kit;
 
 static PCD8544_METADATA: KitMetadata = KitMetadata {
+    inputs: &[],
     device_type: "pcd8544",
     label: "Nokia 5110 LCD",
     summary: "Nokia 5110 (PCD8544) monochrome 84×48 LCD over SPI.",

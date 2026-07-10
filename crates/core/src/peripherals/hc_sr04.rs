@@ -139,7 +139,33 @@ impl HcSr04 {
     fn cycles_per_us(&self) -> f64 {
         self.cpu_hz as f64 / 1_000_000.0
     }
+}
 
+/// Drivable target distance, in cm (the sensor's physical 2–400 cm window).
+/// HC-SR04 sensors live directly on the bus (`SystemBus::hcsr04`), not behind
+/// a transport trait, so the bus input walk reaches this impl directly and
+/// reports each sensor under its `id`.
+impl crate::sim_input::SimInput for HcSr04 {
+    fn input_channels(&self) -> &'static [crate::sim_input::InputChannel] {
+        use crate::sim_input::InputChannel;
+        const CH: &[InputChannel] = &[InputChannel {
+            key: "distance",
+            label: "Distance",
+            unit: "cm",
+            min: MIN_CM as f64,
+            max: MAX_CM as f64,
+        }];
+        CH
+    }
+
+    fn set_input(&mut self, key: &str, value: f64) -> Result<(), crate::sim_input::SimInputError> {
+        self.require_channel(key, value)?;
+        self.set_distance_cm(value as f32);
+        Ok(())
+    }
+}
+
+impl HcSr04 {
     /// Service the sensor for the current tick: `trig_high` is the live TRIG
     /// output level and `now` the current simulated cycle count. Returns the
     /// level the bus should drive onto the ECHO input pin.

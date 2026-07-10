@@ -2548,6 +2548,7 @@ pub struct QuectelBg770aKit;
 pub static BG770A_KIT: QuectelBg770aKit = QuectelBg770aKit;
 
 static BG770A_METADATA: KitMetadata = KitMetadata {
+    inputs: &[],
     device_type: "bg770a-cellular",
     label: "Quectel BG770A Cellular",
     summary: "LTE-M / NB-IoT cellular modem with the full Quectel AT command surface.",

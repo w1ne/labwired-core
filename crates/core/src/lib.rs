@@ -856,7 +856,7 @@ pub struct Machine<C: Cpu> {
 impl<C: Cpu> Machine<C> {
     /// Discover the drivable input channels on this machine (delegates to
     /// [`bus::SystemBus::list_inputs`]). See [`crate::sim_input`].
-    pub fn list_inputs(&self) -> Vec<(String, crate::sim_input::InputChannel)> {
+    pub fn list_inputs(&mut self) -> Vec<(String, crate::sim_input::InputChannel)> {
         self.bus.list_inputs()
     }
 
@@ -869,7 +869,20 @@ impl<C: Cpu> Machine<C> {
         channel: &str,
         value: f64,
     ) -> Result<(), crate::sim_input::SimInputError> {
-        self.bus.set_input(channel, value)
+        self.bus.set_input(None, channel, value)
+    }
+
+    /// [`Machine::set_input`] narrowed to the device owned by the peripheral
+    /// (or directly-attached sensor id) named `component` — the disambiguator
+    /// a test-script stimulus `target.component` resolves through when two
+    /// devices expose the same channel key.
+    pub fn set_input_on(
+        &mut self,
+        component: &str,
+        channel: &str,
+        value: f64,
+    ) -> Result<(), crate::sim_input::SimInputError> {
+        self.bus.set_input(Some(component), channel, value)
     }
 }
 

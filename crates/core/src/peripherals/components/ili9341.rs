@@ -338,6 +338,7 @@ pub struct Ili9341Kit;
 pub static ILI9341_KIT: Ili9341Kit = Ili9341Kit;
 
 static ILI9341_METADATA: KitMetadata = KitMetadata {
+    inputs: &[],
     device_type: "ili9341",
     label: "ILI9341 TFT",
     summary: "240×320 RGB565 SPI TFT display.",

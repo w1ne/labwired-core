@@ -184,6 +184,33 @@ impl I2cDevice for Vl53l1x {
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
     }
+
+    fn as_sim_input_mut(&mut self) -> Option<&mut dyn crate::sim_input::SimInput> {
+        Some(self)
+    }
+}
+
+/// Drivable target distance, in mm (VL53L1X long-range ceiling ~4 m). One
+/// table backs BOTH the `SimInput` impl and the kit metadata, so the device
+/// schema and the runtime API cannot drift.
+pub const INPUT_CHANNELS: &[crate::sim_input::InputChannel] = &[crate::sim_input::InputChannel {
+    key: "distance",
+    label: "Distance",
+    unit: "mm",
+    min: 0.0,
+    max: 4000.0,
+}];
+
+impl crate::sim_input::SimInput for Vl53l1x {
+    fn input_channels(&self) -> &'static [crate::sim_input::InputChannel] {
+        INPUT_CHANNELS
+    }
+
+    fn set_input(&mut self, key: &str, value: f64) -> Result<(), crate::sim_input::SimInputError> {
+        self.require_channel(key, value)?;
+        self.set_distance_mm(value.round() as u16);
+        Ok(())
+    }
 }
 
 // ─── PeripheralKit registration ────────────────────────────────────────────
@@ -196,6 +223,7 @@ pub struct Vl53l1xKit;
 pub static VL53L1X_KIT: Vl53l1xKit = Vl53l1xKit;
 
 static VL53L1X_METADATA: KitMetadata = KitMetadata {
+    inputs: INPUT_CHANNELS,
     device_type: "vl53l1x",
     label: "VL53L1X ToF",
     summary: "Laser time-of-flight distance sensor over I2C.",

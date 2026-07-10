@@ -81,6 +81,53 @@ impl SpiDevice for Sn74hc165 {
     fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
         Some(self)
     }
+
+    fn as_sim_input_mut(&mut self) -> Option<&mut dyn crate::sim_input::SimInput> {
+        Some(self)
+    }
+}
+
+/// Drivable parallel input channels, one per pin: 0 = low, 1 = high
+/// (values ≥ 0.5 read as high). One table backs BOTH the `SimInput` impl and
+/// the kit metadata, so the device schema and the runtime API cannot drift.
+pub const INPUT_CHANNELS: &[crate::sim_input::InputChannel] = {
+    macro_rules! ch {
+        ($key:literal, $label:literal) => {
+            crate::sim_input::InputChannel {
+                key: $key,
+                label: $label,
+                unit: "level",
+                min: 0.0,
+                max: 1.0,
+            }
+        };
+    }
+    &[
+        ch!("ch0", "D0"),
+        ch!("ch1", "D1"),
+        ch!("ch2", "D2"),
+        ch!("ch3", "D3"),
+        ch!("ch4", "D4"),
+        ch!("ch5", "D5"),
+        ch!("ch6", "D6"),
+        ch!("ch7", "D7"),
+    ]
+};
+
+impl crate::sim_input::SimInput for Sn74hc165 {
+    fn input_channels(&self) -> &'static [crate::sim_input::InputChannel] {
+        INPUT_CHANNELS
+    }
+
+    fn set_input(&mut self, key: &str, value: f64) -> Result<(), crate::sim_input::SimInputError> {
+        self.require_channel(key, value)?;
+        let ch = key
+            .strip_prefix("ch")
+            .and_then(|n| n.parse::<u8>().ok())
+            .expect("require_channel validated the key");
+        self.set_channel(ch, value >= 0.5);
+        Ok(())
+    }
 }
 
 // ─── PeripheralKit registration ────────────────────────────────────────────
@@ -93,6 +140,7 @@ pub struct Sn74hc165Kit;
 pub static SN74HC165_KIT: Sn74hc165Kit = Sn74hc165Kit;
 
 static SN74HC165_METADATA: KitMetadata = KitMetadata {
+    inputs: INPUT_CHANNELS,
     device_type: "sn74hc165",
     label: "74HC165 Shift Register",
     summary: "8-bit parallel-in / serial-out shift register over SPI.",

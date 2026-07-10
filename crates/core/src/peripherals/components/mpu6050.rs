@@ -144,6 +144,79 @@ impl I2cDevice for Mpu6050 {
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
     }
+
+    fn as_sim_input_mut(&mut self) -> Option<&mut dyn crate::sim_input::SimInput> {
+        Some(self)
+    }
+}
+
+/// Drivable 6-DoF channels at the power-on full-scale ranges (the model does
+/// not latch ACCEL_CONFIG/GYRO_CONFIG): accel ±2 g at 16384 LSB/g, gyro
+/// ±250 °/s at 131 LSB/(°/s). One table backs BOTH the `SimInput` impl and
+/// the kit metadata, so the device schema and the runtime API cannot drift.
+pub const INPUT_CHANNELS: &[crate::sim_input::InputChannel] = &[
+    crate::sim_input::InputChannel {
+        key: "ax",
+        label: "Accel X",
+        unit: "g",
+        min: -2.0,
+        max: 2.0,
+    },
+    crate::sim_input::InputChannel {
+        key: "ay",
+        label: "Accel Y",
+        unit: "g",
+        min: -2.0,
+        max: 2.0,
+    },
+    crate::sim_input::InputChannel {
+        key: "az",
+        label: "Accel Z",
+        unit: "g",
+        min: -2.0,
+        max: 2.0,
+    },
+    crate::sim_input::InputChannel {
+        key: "gx",
+        label: "Gyro X",
+        unit: "°/s",
+        min: -250.0,
+        max: 250.0,
+    },
+    crate::sim_input::InputChannel {
+        key: "gy",
+        label: "Gyro Y",
+        unit: "°/s",
+        min: -250.0,
+        max: 250.0,
+    },
+    crate::sim_input::InputChannel {
+        key: "gz",
+        label: "Gyro Z",
+        unit: "°/s",
+        min: -250.0,
+        max: 250.0,
+    },
+];
+
+impl crate::sim_input::SimInput for Mpu6050 {
+    fn input_channels(&self) -> &'static [crate::sim_input::InputChannel] {
+        INPUT_CHANNELS
+    }
+
+    fn set_input(&mut self, key: &str, value: f64) -> Result<(), crate::sim_input::SimInputError> {
+        self.require_channel(key, value)?;
+        match key {
+            "ax" => self.accel_x = (value * 16384.0).round() as i16,
+            "ay" => self.accel_y = (value * 16384.0).round() as i16,
+            "az" => self.accel_z = (value * 16384.0).round() as i16,
+            "gx" => self.gyro_x = (value * 131.0).round() as i16,
+            "gy" => self.gyro_y = (value * 131.0).round() as i16,
+            "gz" => self.gyro_z = (value * 131.0).round() as i16,
+            _ => unreachable!("require_channel validated the key"),
+        }
+        Ok(())
+    }
 }
 
 // ─── PeripheralKit registration ────────────────────────────────────────────
@@ -156,6 +229,7 @@ pub struct Mpu6050Kit;
 pub static MPU6050_KIT: Mpu6050Kit = Mpu6050Kit;
 
 static MPU6050_METADATA: KitMetadata = KitMetadata {
+    inputs: INPUT_CHANNELS,
     device_type: "mpu6050",
     label: "MPU6050 IMU",
     summary: "6-axis gyro + accelerometer over I2C.",

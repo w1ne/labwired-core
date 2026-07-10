@@ -219,6 +219,13 @@ pub struct SystemBus {
     /// per-tick pass (`service_hcsr04`) drives the computed ECHO input level,
     /// touching the bus only on a transition. Empty by default → zero cost.
     pub hcsr04: Vec<crate::peripherals::hc_sr04::HcSr04>,
+    /// `(external-device id, owning peripheral bus name)` for every
+    /// `external_devices` entry attached from config. Lets the stimulus
+    /// resolver accept the device id an author wrote in system.yaml (e.g.
+    /// `fxos8700`) as a `component` selector and translate it to the owning
+    /// peripheral (`i2c1`) the input walk reports under. Empty for hand-built
+    /// buses.
+    pub input_component_aliases: Vec<(String, String)>,
     /// TM1637 4-digit 7-segment displays bit-banged over two GPIO lines. Each is
     /// driven by the CLK/DIO GPIO write-hook (`maybe_clock_tm1637`), which feeds
     /// line transitions to the display's protocol state machine. Purely
@@ -707,53 +714,122 @@ impl Default for SystemBus {
 }
 
 impl SystemBus {
-    /// Discover every drivable input channel across attached devices, tagged
-    /// with the owning peripheral's name — the "what can an agent drive?"
-    /// query behind `labwired_list_inputs` / the browser panel.
+    /// Walk every attached device that accepts simulated input, in bus order,
+    /// calling `f(owner_name, device)` for each. `owner_name` is the owning
+    /// peripheral's bus name for transport-attached devices (I²C / SPI / UART
+    /// stream) and the sensor `id` for devices that live directly on the bus
+    /// (HC-SR04). Stops early when `f` returns `true`.
     ///
-    /// Currently walks I²C devices (accelerometers, …); SPI/UART/ADC inputs
-    /// gain the same `as_sim_input_mut` hook as they're added.
-    pub fn list_inputs(&self) -> Vec<(String, crate::sim_input::InputChannel)> {
-        let mut out = Vec::new();
-        for entry in &self.peripherals {
-            let Some(any) = entry.dev.as_any() else {
+    /// This is the ONE walk behind `list_inputs` / `set_input`, so a new
+    /// transport (or directly-attached input device) added here is picked up
+    /// by discovery, dispatch, the manifest schema consumers, and every
+    /// external surface (test-script stimuli, MCP, WASM) at once.
+    fn for_each_sim_input(
+        &mut self,
+        f: &mut dyn FnMut(&str, &mut dyn crate::sim_input::SimInput) -> bool,
+    ) {
+        for entry in self.peripherals.iter_mut() {
+            let Some(any) = entry.dev.as_any_mut() else {
                 continue;
             };
-            let Some(i2c) = any.downcast_ref::<crate::peripherals::i2c::I2c>() else {
-                continue;
-            };
-            for cell in i2c.attached_devices() {
-                let mut dev = cell.borrow_mut();
-                if let Some(si) = dev.as_sim_input_mut() {
-                    for ch in si.input_channels() {
-                        out.push((entry.name.clone(), *ch));
+            if let Some(i2c) = any.downcast_ref::<crate::peripherals::i2c::I2c>() {
+                for cell in i2c.attached_devices() {
+                    let mut dev = cell.borrow_mut();
+                    if let Some(si) = dev.as_sim_input_mut() {
+                        if f(&entry.name, si) {
+                            return;
+                        }
+                    }
+                }
+            } else if let Some(spi) = any.downcast_mut::<crate::peripherals::spi::Spi>() {
+                for dev in spi.attached_devices.iter_mut() {
+                    if let Some(si) = dev.as_sim_input_mut() {
+                        if f(&entry.name, si) {
+                            return;
+                        }
+                    }
+                }
+            } else if let Some(uart) = any.downcast_mut::<crate::peripherals::uart::Uart>() {
+                for stream in uart.attached_streams.iter_mut() {
+                    if let Some(si) = stream.as_sim_input_mut() {
+                        if f(&entry.name, si) {
+                            return;
+                        }
                     }
                 }
             }
         }
+        for sensor in self.hcsr04.iter_mut() {
+            let id = sensor.id.clone();
+            if f(&id, sensor) {
+                return;
+            }
+        }
+    }
+
+    /// Discover every drivable input channel across attached devices, tagged
+    /// with the owning peripheral's name — the "what can an agent drive?"
+    /// query behind `labwired_list_inputs` / the browser panel / the MCP
+    /// stimulus surface.
+    pub fn list_inputs(&mut self) -> Vec<(String, crate::sim_input::InputChannel)> {
+        let mut out = Vec::new();
+        self.for_each_sim_input(&mut |name, si| {
+            for ch in si.input_channels() {
+                out.push((name.to_string(), *ch));
+            }
+            false
+        });
         out
     }
 
     /// Drive `channel` to `value` (in the channel's engineering unit) on the
     /// unique attached input device that exposes it. Generic over device type
-    /// via [`crate::sim_input::SimInput`] — no per-type dispatch. Errors if no
-    /// device (or more than one) exposes the channel, or the value is out of
-    /// range.
+    /// via [`crate::sim_input::SimInput`] — no per-type dispatch.
+    ///
+    /// `component`, when given, narrows resolution to devices owned by the
+    /// named component — the disambiguator when two devices expose the same
+    /// channel key (e.g. two accelerometers, or `distance` on both a VL53L1X
+    /// and an HC-SR04). It accepts either the external-device id from
+    /// system.yaml (`fxos8700`, via `input_component_aliases`) or the owning
+    /// peripheral's bus name (`i2c1`) / directly-attached sensor id. Errors if
+    /// no device (or more than one, after narrowing) exposes the channel, or
+    /// the value is out of range.
     pub fn set_input(
         &mut self,
+        component: Option<&str>,
         channel: &str,
         value: f64,
     ) -> Result<(), crate::sim_input::SimInputError> {
         use crate::sim_input::SimInputError;
+        // An external-device id aliases the peripheral it is attached to. The
+        // walk reports transport-attached devices under the peripheral's bus
+        // name and bus-direct sensors under their own id, so accept a
+        // component that matches EITHER the reported owner or an id whose
+        // alias points at it.
+        let aliased_owner = component.and_then(|c| {
+            self.input_component_aliases
+                .iter()
+                .find(|(id, _)| id == c)
+                .map(|(_, owner)| owner.clone())
+        });
+        let owner_matches = |name: &str| {
+            component.is_none_or(|c| c == name) || aliased_owner.as_deref() == Some(name)
+        };
         // Count matches first so ambiguity is a typed error, not a silent
         // "first wins".
-        let matches = self
-            .list_inputs()
-            .iter()
-            .filter(|(_, ch)| ch.key == channel)
-            .count();
+        let mut matches = 0usize;
+        self.for_each_sim_input(&mut |name, si| {
+            if owner_matches(name) && si.input_channels().iter().any(|c| c.key == channel) {
+                matches += 1;
+            }
+            false
+        });
         if matches == 0 {
-            return Err(SimInputError::NoDevice(channel.to_string()));
+            let missing = match component {
+                Some(c) => format!("{c}/{channel}"),
+                None => channel.to_string(),
+            };
+            return Err(SimInputError::NoDevice(missing));
         }
         if matches > 1 {
             return Err(SimInputError::Ambiguous {
@@ -761,23 +837,16 @@ impl SystemBus {
                 matches,
             });
         }
-        for entry in self.peripherals.iter_mut() {
-            let Some(any) = entry.dev.as_any_mut() else {
-                continue;
-            };
-            let Some(i2c) = any.downcast_mut::<crate::peripherals::i2c::I2c>() else {
-                continue;
-            };
-            for cell in i2c.attached_devices() {
-                let mut dev = cell.borrow_mut();
-                if let Some(si) = dev.as_sim_input_mut() {
-                    if si.input_channels().iter().any(|c| c.key == channel) {
-                        return si.set_input(channel, value);
-                    }
-                }
+        let mut result = Ok(());
+        self.for_each_sim_input(&mut |name, si| {
+            if owner_matches(name) && si.input_channels().iter().any(|c| c.key == channel) {
+                result = si.set_input(channel, value);
+                true
+            } else {
+                false
             }
-        }
-        Err(SimInputError::NoDevice(channel.to_string()))
+        });
+        result
     }
 
     /// Snapshot of the universal bus-transaction trace (logic analyzer):
@@ -1984,6 +2053,7 @@ impl SystemBus {
             reset_vector_offset: 0,
             atomic_register_aliases: false,
             hcsr04: Vec::new(),
+            input_component_aliases: Vec::new(),
             tm1637: Vec::new(),
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
@@ -2036,6 +2106,7 @@ impl SystemBus {
             reset_vector_offset: 0,
             atomic_register_aliases: false,
             hcsr04: Vec::new(),
+            input_component_aliases: Vec::new(),
             tm1637: Vec::new(),
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
@@ -4324,6 +4395,7 @@ peripherals:
             reset_vector_offset: 0,
             atomic_register_aliases: false,
             hcsr04: Vec::new(),
+            input_component_aliases: Vec::new(),
             tm1637: Vec::new(),
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
@@ -4400,6 +4472,7 @@ peripherals:
             reset_vector_offset: 0,
             atomic_register_aliases: false,
             hcsr04: Vec::new(),
+            input_component_aliases: Vec::new(),
             tm1637: Vec::new(),
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
@@ -4627,6 +4700,7 @@ peripherals:
             reset_vector_offset: 0,
             atomic_register_aliases: false,
             hcsr04: Vec::new(),
+            input_component_aliases: Vec::new(),
             tm1637: Vec::new(),
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
@@ -4853,6 +4927,7 @@ peripherals:
             reset_vector_offset: 0,
             atomic_register_aliases: false,
             hcsr04: Vec::new(),
+            input_component_aliases: Vec::new(),
             tm1637: Vec::new(),
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
@@ -4933,6 +5008,7 @@ peripherals:
             reset_vector_offset: 0,
             atomic_register_aliases: false,
             hcsr04: Vec::new(),
+            input_component_aliases: Vec::new(),
             tm1637: Vec::new(),
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),

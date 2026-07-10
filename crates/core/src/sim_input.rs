@@ -17,8 +17,10 @@
 //! cm, °C …); each device impl owns the conversion to its raw register form, so
 //! that math lives in ONE place per device.
 
-/// Metadata for one drivable channel of an input component.
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// Metadata for one drivable channel of an input component. Serialized
+/// verbatim into the peripherals manifest (device schema), so external
+/// consumers see each device's drivable channels without running a machine.
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
 pub struct InputChannel {
     /// Stable key used to address the channel (e.g. `"x"`, `"distance"`).
     pub key: &'static str,
