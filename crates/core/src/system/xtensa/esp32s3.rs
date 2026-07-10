@@ -628,18 +628,21 @@ pub(crate) fn register_esp32s3_peripherals(bus: &mut SystemBus, opts: &Esp32s3Op
     // I2C0 carries board-specific I2C slaves the factory does not model: TMP102
     // always, plus an opt-in PCA9685 (LABWIRED_ESP32S3_PCA9685) for the
     // SpiceDispenser servos. Built directly so the slaves are attached.
-    let mut i2c0 = Esp32s3I2c::new();
-    // Feed the shared bus-trace log (universal logic analyzer) before any
-    // attach, so every slave below is wrapped into the trace.
-    i2c0.set_bus_trace("i2c0".to_string(), bus.bus_trace.clone());
-    i2c0.attach_slave(Box::new(Tmp102::new()));
+    let i2c0 = Esp32s3I2c::new();
+    // Register first, then attach every slave through the single bus choke point
+    // so each is wrapped into the shared bus trace (universal logic analyzer) —
+    // no per-callsite set_bus_trace ordering to get wrong.
+    bus.add_peripheral("i2c0", I2C0_BASE as u64, I2C0_SIZE, None, Box::new(i2c0));
+    bus.attach_i2c_slave("i2c0", Box::new(Tmp102::new()))
+        .expect("i2c0 just registered as Esp32s3I2c");
     if std::env::var("LABWIRED_ESP32S3_PCA9685").is_ok() {
-        i2c0.attach_slave(Box::new(
-            crate::peripherals::components::pca9685::Pca9685::new(),
-        ));
+        bus.attach_i2c_slave(
+            "i2c0",
+            Box::new(crate::peripherals::components::pca9685::Pca9685::new()),
+        )
+        .expect("i2c0 just registered as Esp32s3I2c");
         eprintln!("configure_xtensa_esp32s3: attached PCA9685 @ 0x40 on I2C0");
     }
-    bus.add_peripheral("i2c0", I2C0_BASE as u64, I2C0_SIZE, None, Box::new(i2c0));
 }
 
 /// Register the default thunk set for esp-hal hello-world boot.

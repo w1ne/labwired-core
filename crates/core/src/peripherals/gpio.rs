@@ -15,6 +15,29 @@
 use crate::SimResult;
 use std::str::FromStr;
 
+/// A pad's electrical role, derived from the GPIO model's direction/mode
+/// registers (never fabricated). `Unknown` is returned where a family's model
+/// cannot decide. Serialized lowercase for the `pin_routing` wasm export.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum GpioMode {
+    Input,
+    Output,
+    /// Pad handed to a peripheral (alternate function / routed via a GPIO matrix).
+    Af,
+    Analog,
+    Unknown,
+}
+
+/// Routing metadata for one GPIO pad: its [`GpioMode`] plus, when the model can
+/// resolve it, the peripheral signal `func` name (`"I2CEXT0_SDA"`, `"AF4"`, …).
+/// `func` is `None` when the model cannot name the signal — null over a guess.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct GpioRouting {
+    pub mode: GpioMode,
+    pub func: Option<String>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GpioRegisterLayout {
@@ -455,6 +478,74 @@ impl crate::Peripheral for GpioPort {
         }
     }
 
+    fn gpio_routing(&self, pin: u8) -> Option<GpioRouting> {
+        if pin >= 32 {
+            return None;
+        }
+        // Mode from the SAME register truth read_gpio_pad reads.
+        let mode = match self {
+            Self::Stm32F1(g) => {
+                // CRL/CRH: 4 bits/pin. MODE==0 → input (CNF 00 = analog, else
+                // digital input); MODE!=0 → output, CNF 10/11 = alternate function.
+                let cr = g.read_reg(if pin < 8 { 0x00 } else { 0x04 });
+                let shift = ((pin % 8) * 4) as u32;
+                let m = (cr >> shift) & 0b11;
+                let cnf = (cr >> (shift + 2)) & 0b11;
+                if m == 0 {
+                    if cnf == 0b00 {
+                        GpioMode::Analog
+                    } else {
+                        GpioMode::Input
+                    }
+                } else if cnf >= 0b10 {
+                    GpioMode::Af
+                } else {
+                    GpioMode::Output
+                }
+            }
+            Self::Stm32V2(g) => {
+                // MODER: 00 input, 01 output, 10 alternate function, 11 analog.
+                match (g.read_reg(0x00) >> (pin * 2)) & 0b11 {
+                    0b00 => GpioMode::Input,
+                    0b01 => GpioMode::Output,
+                    0b10 => GpioMode::Af,
+                    _ => GpioMode::Analog,
+                }
+            }
+            // nRF52 / Kinetis: a plain DIR register (nRF DIR @0x514, Kinetis PDDR
+            // @0x14) — bit set = output, clear = input. No AF concept at the GPIO
+            // port (peripheral routing is elsewhere), so func stays None.
+            Self::Nrf52(g) => {
+                if (g.read_reg(0x514) & (1u32 << pin)) != 0 {
+                    GpioMode::Output
+                } else {
+                    GpioMode::Input
+                }
+            }
+            Self::Kinetis(g) => {
+                if (g.read_reg(0x14) & (1u32 << pin)) != 0 {
+                    GpioMode::Output
+                } else {
+                    GpioMode::Input
+                }
+            }
+        };
+        // func: STM32 V2 exposes an AFR nibble per AF pad → "AF<n>" (no full
+        // AF→signal table; that is out of scope). Everything else: None.
+        let func = match self {
+            Self::Stm32V2(g) if mode == GpioMode::Af => {
+                let (afr_off, sh) = if pin < 8 {
+                    (0x20, (pin * 4) as u32)
+                } else {
+                    (0x24, ((pin - 8) * 4) as u32)
+                };
+                Some(format!("AF{}", (g.read_reg(afr_off) >> sh) & 0xF))
+            }
+            _ => None,
+        };
+        Some(GpioRouting { mode, func })
+    }
+
     fn read_gpio_output(&self, pin: u8) -> Option<bool> {
         if pin >= 32 {
             return None;
@@ -497,6 +588,66 @@ impl crate::Peripheral for GpioPort {
 
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
+    }
+}
+
+#[cfg(test)]
+mod routing_tests {
+    use super::{GpioMode, GpioPort, GpioRegisterLayout};
+    use crate::Peripheral;
+
+    #[test]
+    // Zero-valued nibbles are kept explicit: each term documents one pin's slot
+    // in the register layout the assertions below depend on.
+    #[allow(clippy::identity_op)]
+    fn stm32f1_routing_modes() {
+        let mut g = GpioPort::new_with_layout(GpioRegisterLayout::Stm32F1);
+        // CRL nibbles: pin0 = MODE01/CNF00 (output), pin1 = MODE01/CNF10 (AF),
+        // pin2 = MODE00/CNF00 (analog input), pin3 = MODE00/CNF01 (float input).
+        let crl = 0b0001 | (0b1001 << 4) | (0b0000 << 8) | (0b0100 << 12);
+        g.write_u32(0x00, crl).unwrap();
+        assert_eq!(g.gpio_routing(0).unwrap().mode, GpioMode::Output);
+        let af = g.gpio_routing(1).unwrap();
+        assert_eq!(af.mode, GpioMode::Af);
+        assert!(af.func.is_none(), "F1 has no AF→signal index table");
+        assert_eq!(g.gpio_routing(2).unwrap().mode, GpioMode::Analog);
+        assert_eq!(g.gpio_routing(3).unwrap().mode, GpioMode::Input);
+        assert!(g.gpio_routing(32).is_none(), "out-of-range pin");
+    }
+
+    #[test]
+    // Zero-valued fields kept explicit — same rationale as stm32f1_routing_modes.
+    #[allow(clippy::identity_op)]
+    fn stm32v2_routing_modes_and_af_number() {
+        let mut g = GpioPort::new_with_layout(GpioRegisterLayout::Stm32V2);
+        // MODER: pin0=01 output, pin1=10 AF, pin2=00 input, pin3=11 analog.
+        g.write_u32(0x00, 0b01 | (0b10 << 2) | (0b00 << 4) | (0b11 << 6))
+            .unwrap();
+        // AFRL: pin1 nibble (bits 4..8) = 4 → "AF4".
+        g.write_u32(0x20, 4 << 4).unwrap();
+        assert_eq!(g.gpio_routing(0).unwrap().mode, GpioMode::Output);
+        let af = g.gpio_routing(1).unwrap();
+        assert_eq!(af.mode, GpioMode::Af);
+        assert_eq!(af.func.as_deref(), Some("AF4"));
+        assert_eq!(g.gpio_routing(2).unwrap().mode, GpioMode::Input);
+        assert_eq!(g.gpio_routing(3).unwrap().mode, GpioMode::Analog);
+    }
+
+    #[test]
+    fn nrf52_routing_from_dir() {
+        let mut g = GpioPort::new_with_layout(GpioRegisterLayout::Nrf52);
+        g.write_u32(0x514, 1 << 5).unwrap(); // DIR: pin5 output
+        assert_eq!(g.gpio_routing(5).unwrap().mode, GpioMode::Output);
+        assert!(g.gpio_routing(5).unwrap().func.is_none());
+        assert_eq!(g.gpio_routing(6).unwrap().mode, GpioMode::Input);
+    }
+
+    #[test]
+    fn kinetis_routing_from_pddr() {
+        let mut g = GpioPort::new_with_layout(GpioRegisterLayout::Kinetis);
+        g.write_u32(0x14, 1 << 3).unwrap(); // PDDR: pin3 output
+        assert_eq!(g.gpio_routing(3).unwrap().mode, GpioMode::Output);
+        assert_eq!(g.gpio_routing(4).unwrap().mode, GpioMode::Input);
     }
 }
 

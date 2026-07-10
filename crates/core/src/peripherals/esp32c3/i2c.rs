@@ -135,11 +135,6 @@ pub struct Esp32c3I2c {
     tx_pop_count: usize,
     rx_fifo: RefCell<std::collections::VecDeque<u8>>,
     slaves: Vec<Box<dyn I2cDevice>>,
-    /// Bus-trace identity + shared log; when set, `attach_slave` wraps slaves
-    /// in `TracingI2cDevice` so this controller feeds the same bus trace the
-    /// generic `I2c` does (analyzer waveforms, I²C decoder).
-    bus_name: String,
-    bus_log: Option<crate::bus::bus_trace::BusTraceLog>,
     /// Set when a command-list run sets TRANS_COMPLETE & INT_ENA has it.
     irq_pending: bool,
     /// Interrupt-matrix source this instance asserts (29 for I2C0).
@@ -186,8 +181,6 @@ impl Esp32c3I2c {
             tx_pop_count: 0,
             rx_fifo: RefCell::new(std::collections::VecDeque::with_capacity(FIFO_CAPACITY)),
             slaves: Vec::new(),
-            bus_name: "i2c0".to_string(),
-            bus_log: None,
             irq_pending: false,
             intr_source_id: I2C0_INTR_SOURCE_ID,
             active_slave: None,
@@ -220,25 +213,11 @@ impl Esp32c3I2c {
         }
     }
 
-    /// Route this controller's transactions into the shared bus-trace log.
-    /// Must be called before `attach_slave` — already-attached slaves are
-    /// not retroactively wrapped.
-    pub fn set_bus_trace(&mut self, name: String, log: crate::bus::bus_trace::BusTraceLog) {
-        self.bus_name = name;
-        self.bus_log = Some(log);
-    }
-
-    /// Attach an `I2cDevice` slave. Slaves are matched by address bits at
-    /// transaction time; later additions take precedence on duplicate addresses.
-    pub fn attach_slave(&mut self, slave: Box<dyn I2cDevice>) {
-        let slave: Box<dyn I2cDevice> = match &self.bus_log {
-            Some(log) => Box::new(crate::bus::bus_trace::TracingI2cDevice::new(
-                self.bus_name.clone(),
-                log.clone(),
-                slave,
-            )),
-            None => slave,
-        };
+    /// Raw slave push — does NOT wrap for tracing. The only production caller is
+    /// the bus choke point [`crate::bus::SystemBus::attach_i2c_slave`], which
+    /// wraps first. Slaves are matched by address bits at transaction time;
+    /// later additions take precedence on duplicate addresses.
+    pub(crate) fn push_slave(&mut self, slave: Box<dyn I2cDevice>) {
         self.slaves.push(slave);
     }
 
@@ -906,7 +885,7 @@ mod tests {
     fn write_read_drives_attached_bmp280() {
         let mut p = Esp32c3I2c::new();
         // Default address 0x76.
-        p.attach_slave(Box::new(Bmp280::new(0x76)));
+        p.push_slave(Box::new(Bmp280::new(0x76)));
 
         // Canonical register-pointer read: set pointer to 0xD0 (chip-id), then
         // repeated-start and read one byte. CHIP_ID for BMP280 is 0x58.
@@ -957,7 +936,7 @@ mod tests {
         use crate::peripherals::components::Ssd1306;
 
         let mut p = Esp32c3I2c::new();
-        p.attach_slave(Box::new(Ssd1306::new(0x3C)));
+        p.push_slave(Box::new(Ssd1306::new(0x3C)));
 
         // Same transaction shape as the C3 OLED firmware:
         // RSTART; WRITE 3 (addr+W, control=0x40, one framebuffer byte); STOP.
@@ -985,7 +964,7 @@ mod tests {
         use crate::peripherals::components::Ssd1306;
 
         let mut p = Esp32c3I2c::new();
-        p.attach_slave(Box::new(Ssd1306::new(0x3C)));
+        p.push_slave(Box::new(Ssd1306::new(0x3C)));
 
         // Arduino-ESP32 / ESP-IDF may program SLAVE_ADDR with addr<<1 and
         // write only the SSD1306 payload bytes to TXFIFO: control byte 0x40,
@@ -1015,7 +994,7 @@ mod tests {
         use crate::peripherals::components::Ssd1306;
 
         let mut p = Esp32c3I2c::new();
-        p.attach_slave(Box::new(Ssd1306::new(0x3C)));
+        p.push_slave(Box::new(Ssd1306::new(0x3C)));
 
         // Arduino-ESP32 splits a write: address phase ends with END_DETECT,
         // then payload bytes are sent by a second command-list run.
@@ -1054,7 +1033,7 @@ mod tests {
         // multi-byte READ pulling sequential register-pointer data through the
         // RX FIFO.
         let mut p = Esp32c3I2c::new();
-        p.attach_slave(Box::new(Bmp280::new(0x76)));
+        p.push_slave(Box::new(Bmp280::new(0x76)));
 
         p.write_u32(REG_CMD0, cmd(CMD_RSTART, 0)).unwrap();
         p.write_u32(REG_CMD0 + 4, cmd(CMD_WRITE, 2)).unwrap();
@@ -1081,8 +1060,12 @@ mod tests {
 
         let log = crate::bus::bus_trace::new_log();
         let mut p = Esp32c3I2c::new();
-        p.set_bus_trace("i2c0".to_string(), log.clone());
-        p.attach_slave(Box::new(Bmp280::new(0x76)));
+        // The bus choke point wraps before push; emulate it here.
+        p.push_slave(crate::bus::bus_trace::wrap_i2c(
+            "i2c0",
+            &log,
+            Box::new(Bmp280::new(0x76)),
+        ));
 
         // Same canonical pointer-write transaction as
         // write_read_drives_attached_bmp280: RSTART; WRITE 2; STOP.
@@ -1093,7 +1076,7 @@ mod tests {
         p.write_u32(REG_DATA, 0xD0).unwrap(); // pointer
         p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
 
-        let events = log.lock().unwrap().snapshot();
+        let events = log.snapshot();
         assert!(
             !events.is_empty(),
             "tracing wrapper must record I2C traffic on the C3 controller"

@@ -134,11 +134,6 @@ pub struct Esp32s3I2c {
     tx_fifo: std::collections::VecDeque<u8>,
     rx_fifo: RefCell<std::collections::VecDeque<u8>>,
     slaves: Vec<Box<dyn I2cDevice>>,
-    /// Bus-trace identity + shared log; when set, `attach_slave` wraps slaves
-    /// in `TracingI2cDevice` so this controller feeds the same bus trace the
-    /// generic `I2c` does (analyzer waveforms, I²C decoder).
-    bus_name: String,
-    bus_log: Option<crate::bus::bus_trace::BusTraceLog>,
     /// Set when a command-list run sets TRANS_COMPLETE & INT_ENA has it.
     /// Drained by `tick()` into the interrupt-matrix source aggregation.
     irq_pending: bool,
@@ -186,8 +181,6 @@ impl Esp32s3I2c {
             tx_fifo: std::collections::VecDeque::with_capacity(FIFO_CAPACITY),
             rx_fifo: RefCell::new(std::collections::VecDeque::with_capacity(FIFO_CAPACITY)),
             slaves: Vec::new(),
-            bus_name: "i2c0".to_string(),
-            bus_log: None,
             irq_pending: false,
             intr_source_id: I2C0_INTR_SOURCE_ID,
             active_slave: None,
@@ -222,25 +215,11 @@ impl Esp32s3I2c {
         }
     }
 
-    /// Route this controller's transactions into the shared bus-trace log.
-    /// Must be called before `attach_slave` — already-attached slaves are
-    /// not retroactively wrapped.
-    pub fn set_bus_trace(&mut self, name: String, log: crate::bus::bus_trace::BusTraceLog) {
-        self.bus_name = name;
-        self.bus_log = Some(log);
-    }
-
-    /// Attach an `I2cDevice` slave. Slaves are matched by address bits at
-    /// transaction time; later additions take precedence on duplicate addresses.
-    pub fn attach_slave(&mut self, slave: Box<dyn I2cDevice>) {
-        let slave: Box<dyn I2cDevice> = match &self.bus_log {
-            Some(log) => Box::new(crate::bus::bus_trace::TracingI2cDevice::new(
-                self.bus_name.clone(),
-                log.clone(),
-                slave,
-            )),
-            None => slave,
-        };
+    /// Raw slave push — does NOT wrap for tracing. The only production caller is
+    /// the bus choke point [`crate::bus::SystemBus::attach_i2c_slave`], which
+    /// wraps first. Slaves are matched by address bits at transaction time;
+    /// later additions take precedence on duplicate addresses.
+    pub(crate) fn push_slave(&mut self, slave: Box<dyn I2cDevice>) {
         self.slaves.push(slave);
     }
 
@@ -841,7 +820,7 @@ mod tests {
     #[test]
     fn write_read_drives_attached_tmp102() {
         let mut p = Esp32s3I2c::new();
-        p.attach_slave(Box::new(Tmp102::new()));
+        p.push_slave(Box::new(Tmp102::new()));
 
         // Build the canonical TMP102 read sequence:
         //   RSTART; WRITE 2 (addr+W, pointer=0); RSTART;
@@ -890,7 +869,7 @@ mod tests {
         // Set pointer to CONFIG (0x01) via WRITE, then READ should return
         // CONFIG canned value 0x60A0 high byte then low byte.
         let mut p = Esp32s3I2c::new();
-        p.attach_slave(Box::new(Tmp102::new()));
+        p.push_slave(Box::new(Tmp102::new()));
 
         p.write_u32(REG_CMD0, cmd(CMD_RSTART, 0)).unwrap();
         p.write_u32(REG_CMD0 + 4, cmd(CMD_WRITE, 2)).unwrap();

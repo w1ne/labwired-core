@@ -2492,17 +2492,8 @@ pub mod integration_tests {
         let mut lcd = crate::peripherals::components::Pcd8544::new("GPIO10".into(), "GPIO2".into());
         crate::peripherals::spi::SpiDevice::set_dc_source(&mut lcd, odr_addr, bit);
 
-        let spi_idx = bus
-            .find_peripheral_index_by_name("spi2")
-            .expect("spi2 peripheral");
-        {
-            let spi = bus.peripherals[spi_idx]
-                .dev
-                .as_any_mut()
-                .and_then(|any| any.downcast_mut::<crate::peripherals::esp32c3::spi::Esp32c3Spi>())
-                .expect("esp32c3 spi2");
-            spi.attach_device(Box::new(lcd));
-        }
+        bus.attach_spi_device("spi2", Box::new(lcd))
+            .expect("spi2 is an esp32c3 SPI controller");
 
         const GPIO_BASE: u64 = 0x6000_4000;
         const GPIO_OUT_W1TS: u64 = 0x08;
@@ -2518,6 +2509,9 @@ pub mod integration_tests {
         bus.write_u32(SPI2_BASE + SPI_MS_DLEN, 8 - 1).unwrap();
         bus.write_u32(SPI2_BASE + SPI_CMD, SPI_USR).unwrap();
 
+        let spi_idx = bus
+            .find_peripheral_index_by_name("spi2")
+            .expect("spi2 peripheral");
         let spi = bus.peripherals[spi_idx]
             .dev
             .as_any()
@@ -2720,5 +2714,108 @@ pub mod integration_tests {
             "kit-attached OLED traffic on the C3 controller must reach the bus trace"
         );
         assert!(events.iter().all(|event| event.bus == "i2c0"));
+    }
+
+    /// The choke point, not the callsites: a config-built system records bus
+    /// traffic for TWO different controller families (the generic STM32 `I2c`
+    /// and the ESP32-C3 command-list `Esp32c3I2c`) with no per-family
+    /// `set_bus_trace` anywhere. Both attach their OLED through the single
+    /// `attach_i2c_slave` funnel; if either family's dispatch arm were missing,
+    /// `attach_i2c_slave` would have returned `Err` at build time — never a
+    /// silently untraced bus.
+    #[test]
+    fn test_bus_trace_choke_point_covers_two_families() {
+        fn build_with_oled(i2c_type: &str, profile: Option<&str>) -> crate::bus::SystemBus {
+            let mut i2c_cfg = HashMap::new();
+            if let Some(p) = profile {
+                i2c_cfg.insert(
+                    "profile".to_string(),
+                    serde_yaml::Value::String(p.to_string()),
+                );
+            }
+            let chip = ChipDescriptor {
+                schema_version: "1.0".to_string(),
+                name: "two-family-trace".to_string(),
+                arch: Arch::RiscV,
+                core: None,
+                flash: MemoryRange {
+                    base: 0x4200_0000,
+                    size: "4MB".to_string(),
+                },
+                ram: MemoryRange {
+                    base: 0x3FC8_0000,
+                    size: "400KB".to_string(),
+                },
+                reset_vector_offset: 0,
+                atomic_register_aliases: false,
+                memory_regions: Vec::new(),
+                peripherals: vec![PeripheralConfig {
+                    id: "i2c0".to_string(),
+                    r#type: i2c_type.to_string(),
+                    base_address: 0x4000_5400,
+                    size: Some("4KB".to_string()),
+                    irq: None,
+                    clock: None,
+                    config: i2c_cfg,
+                }],
+                pins: Default::default(),
+            };
+            let mut oled_config = HashMap::new();
+            oled_config.insert(
+                "i2c_address".to_string(),
+                serde_yaml::Value::Number(0x3C.into()),
+            );
+            let manifest = SystemManifest {
+                walk_deleted: false,
+                schema_version: "1.0".to_string(),
+                name: "two-family-trace".to_string(),
+                chip: "two-family-trace".to_string(),
+                memory_overrides: HashMap::new(),
+                external_devices: vec![labwired_config::ExternalDevice {
+                    id: "oled".to_string(),
+                    r#type: "oled-ssd1306-128x32".to_string(),
+                    connection: "i2c0".to_string(),
+                    config: oled_config,
+                }],
+                board_io: Vec::new(),
+                debug_uart: None,
+                peripherals: Vec::new(),
+            };
+            crate::bus::SystemBus::from_config(&chip, &manifest).unwrap()
+        }
+
+        // Family A: ESP32-C3 command-list controller — drive the canonical
+        // SSD1306 command prologue (RSTART; WRITE 2; STOP).
+        let mut c3 = build_with_oled("esp32c3_i2c", None);
+        const BASE: u64 = 0x4000_5400;
+        let cmd = |opcode: u32, byte_num: u32| (opcode << 11) | byte_num;
+        c3.write_u32(BASE + 0x58, cmd(6, 0)).unwrap(); // RSTART
+        c3.write_u32(BASE + 0x58 + 4, cmd(1, 2)).unwrap(); // WRITE 2
+        c3.write_u32(BASE + 0x58 + 8, cmd(2, 0)).unwrap(); // STOP
+        c3.write_u32(BASE + 0x1C, 0x78).unwrap(); // addr 0x3C<<1
+        c3.write_u32(BASE + 0x1C, 0x00).unwrap(); // control byte
+        c3.write_u32(BASE + 0x04, 1 << 5).unwrap(); // CTR.TRANS_START
+        let c3_events = c3.bus_trace_snapshot();
+
+        // Family B: generic STM32 `I2c` (Kinetis byte-oriented layout) — drive
+        // START, address, one data byte through the MMIO register path.
+        let mut km = build_with_oled("i2c", Some("kinetis"));
+        km.write_u8(BASE + 0x02, 0x30).unwrap(); // C1 = MST|TX (START)
+        km.write_u8(BASE + 0x04, 0x78).unwrap(); // D = addr 0x3C<<1 (select+start)
+        km.write_u8(BASE + 0x04, 0x00).unwrap(); // D = data → device.write → trace
+        let km_events = km.bus_trace_snapshot();
+
+        assert!(
+            !c3_events.is_empty(),
+            "ESP32-C3 family must record bus trace through the choke point"
+        );
+        assert!(
+            !km_events.is_empty(),
+            "generic STM32 I2c family must record bus trace through the choke point"
+        );
+        assert!(c3_events.iter().all(|e| e.bus == "i2c0"));
+        assert!(km_events.iter().all(|e| e.bus == "i2c0"));
+        // Every event carries the additive cycle stamp (0 here — no machine step).
+        assert!(c3_events.iter().all(|e| e.cycle == 0));
     }
 }
