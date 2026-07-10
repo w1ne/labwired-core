@@ -7,9 +7,7 @@
 #[cfg(test)]
 mod logic_capture_tests {
     use crate::cpu::CortexM;
-    use crate::logic_capture::{
-        LogicCapture, LogicEdge, LOGIC_RING_CAPACITY, LOGIC_SAMPLE_INTERVAL,
-    };
+    use crate::logic_capture::{LogicCapture, LogicEdge, LOGIC_RING_CAPACITY};
     use crate::peripherals::gpio::{GpioPort, GpioRegisterLayout};
     use crate::{Bus, Machine};
 
@@ -74,9 +72,9 @@ mod logic_capture_tests {
         let initial = machine.logic_watch(&[Some((idx, 0))]);
         assert_eq!(initial, vec![Some(false)], "pin starts low");
 
-        // Space each toggle well past one sample interval so a sample lands
-        // between transitions and each edge is captured exactly once.
-        let gap = (LOGIC_SAMPLE_INTERVAL as usize) * 3;
+        // Sampling is per-cycle, so any spacing captures each edge exactly
+        // once; a few steps of gap keeps the cycle stamps visibly distinct.
+        let gap = 48;
         step_n(machine, gap); // low (== initial): no edge
         set_pin0(machine, true);
         step_n(machine, gap); // -> high
@@ -131,7 +129,7 @@ mod logic_capture_tests {
         let initial = machine.logic_watch(&[None, Some((idx, 0))]);
         assert_eq!(initial, vec![None, Some(false)]);
 
-        let gap = (LOGIC_SAMPLE_INTERVAL as usize) * 3;
+        let gap = 48;
         step_n(&mut machine, gap);
         set_pin0(&mut machine, true);
         step_n(&mut machine, gap);
@@ -152,7 +150,7 @@ mod logic_capture_tests {
             .find_peripheral_index_by_name("gpio_test")
             .unwrap();
         machine.logic_watch(&[Some((idx, 0))]);
-        let gap = (LOGIC_SAMPLE_INTERVAL as usize) * 3;
+        let gap = 48;
 
         set_pin0(&mut machine, true);
         step_n(&mut machine, gap);
@@ -179,10 +177,9 @@ mod logic_capture_tests {
 
         let overflow = 100usize;
         let total = LOGIC_RING_CAPACITY + overflow;
-        // Toggle on every sample so each sample records exactly one edge; space
-        // samples one interval apart so each lands in a fresh cycle bucket.
+        // Toggle on every sample so each sample records exactly one edge.
         for i in 0..total {
-            let cycle = (i as u64 + 1) * LOGIC_SAMPLE_INTERVAL;
+            let cycle = i as u64 + 1;
             let level = i % 2 == 0;
             cap.sample(cycle, |_, _| Some(level));
         }
@@ -196,7 +193,7 @@ mod logic_capture_tests {
         );
         // Newest edge is the last sample taken.
         let last = batch.edges.last().unwrap();
-        assert_eq!(last.cycle, total as u64 * LOGIC_SAMPLE_INTERVAL);
+        assert_eq!(last.cycle, total as u64);
         assert_eq!(batch.cursor, total as u64);
     }
 
@@ -207,10 +204,109 @@ mod logic_capture_tests {
         let mut cap = LogicCapture::new();
         cap.install(&[Some((0, 0))], &[None]);
         for i in 0..10 {
-            cap.sample((i + 1) * LOGIC_SAMPLE_INTERVAL, |_, _| None);
+            cap.sample(i + 1, |_, _| None);
         }
         let batch = cap.read_edges(0);
         assert!(batch.edges.is_empty());
+        assert_eq!(batch.dropped, 0);
+    }
+
+    /// The no-aliasing guarantee on the `step()` path: a pad toggled on EVERY
+    /// cycle produces an edge on EVERY cycle — nothing is sampled away.
+    #[test]
+    fn pad_toggling_every_cycle_produces_every_edge() {
+        let mut machine = machine_with_gpio();
+        let idx = machine
+            .bus
+            .find_peripheral_index_by_name("gpio_test")
+            .unwrap();
+        let initial = machine.logic_watch(&[Some((idx, 0))]);
+        assert_eq!(initial, vec![Some(false)]);
+
+        let toggles = 100usize;
+        for i in 0..toggles {
+            set_pin0(&mut machine, i % 2 == 0); // true, false, true, ...
+            machine.step().unwrap();
+        }
+
+        let batch = machine.logic_read_edges(0);
+        assert_eq!(
+            batch.edges.len(),
+            toggles,
+            "every per-cycle toggle is captured — no aliasing"
+        );
+        for (i, e) in batch.edges.iter().enumerate() {
+            assert_eq!(e.value, i % 2 == 0, "values strictly alternate");
+        }
+        for w in batch.edges.windows(2) {
+            assert_eq!(w[1].cycle - w[0].cycle, 1, "one edge per cycle");
+        }
+        assert_eq!(batch.dropped, 0);
+    }
+
+    /// The no-aliasing guarantee on the batched `Machine::run` path: firmware
+    /// bit-banging a pad on consecutive instructions (str/str/branch loop) has
+    /// every transition captured even with a wide peripheral tick interval —
+    /// the run loop clamps its batch to one instruction while a watch is armed.
+    #[test]
+    fn run_path_captures_bitbang_toggles_without_aliasing() {
+        use crate::DebugControl;
+
+        let mut machine = machine_with_gpio();
+        // Wide tick interval: without the armed batch clamp the run loop would
+        // stride past intermediate toggles and alias them away.
+        machine.config.peripheral_tick_interval = 8;
+
+        // r0 = &ODR, r1 = 1, r2 = 0;  loop: str r1,[r0]; str r2,[r0]; b loop
+        machine.cpu.r0 = (GPIO_BASE + ODR) as u32;
+        machine.cpu.r1 = 1;
+        machine.cpu.r2 = 0;
+        machine.bus.write_u16(RAM_BASE, 0x6001).unwrap(); // str r1, [r0]
+        machine.bus.write_u16(RAM_BASE + 2, 0x6002).unwrap(); // str r2, [r0]
+        machine.bus.write_u16(RAM_BASE + 4, 0xE7FC).unwrap(); // b .-8
+        machine.cpu.pc = RAM_BASE as u32;
+
+        let idx = machine
+            .bus
+            .find_peripheral_index_by_name("gpio_test")
+            .unwrap();
+        machine.logic_watch(&[Some((idx, 0))]);
+
+        let steps = 300u32;
+        machine.run(Some(steps)).unwrap();
+
+        let batch = machine.logic_read_edges(0);
+        // 2 toggles per 3-instruction loop iteration; anything close to that is
+        // alias-free (the old 16-cycle grid captured well under a tenth of it).
+        assert!(
+            batch.edges.len() >= 190,
+            "expected ~200 edges over {steps} cycles, got {}",
+            batch.edges.len()
+        );
+        for (i, e) in batch.edges.iter().enumerate() {
+            assert_eq!(e.value, i % 2 == 0, "values strictly alternate");
+        }
+        for w in batch.edges.windows(2) {
+            assert!(
+                w[1].cycle - w[0].cycle <= 2,
+                "consecutive toggles captured at consecutive boundaries"
+            );
+        }
+    }
+
+    /// Unarmed capture stays on the zero-overhead path: no watch installed
+    /// means no samples, no edges and no ring growth, no matter how much the
+    /// machine runs.
+    #[test]
+    fn unarmed_run_records_nothing() {
+        let mut machine = machine_with_gpio();
+        for i in 0..100 {
+            set_pin0(&mut machine, i % 2 == 0);
+            machine.step().unwrap();
+        }
+        let batch = machine.logic_read_edges(0);
+        assert!(batch.edges.is_empty(), "no watch, no capture");
+        assert_eq!(batch.cursor, 0);
         assert_eq!(batch.dropped, 0);
     }
 }

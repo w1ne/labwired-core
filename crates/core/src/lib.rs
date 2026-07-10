@@ -1008,9 +1008,13 @@ impl<C: Cpu> Machine<C> {
     }
 
     fn try_idle_fast_forward(&mut self, _max_steps: Option<u32>, _steps: u32) -> u32 {
+        // Logic capture disables the skip too: a scheduler event inside the
+        // skipped window could toggle a watched pad, and the per-cycle capture
+        // guarantee must hold even under this opt-in acceleration.
         if !self.config.idle_fast_forward_enabled
             || !self.breakpoints.is_empty()
             || self.bus.requires_cycle_accurate()
+            || self.logic_capture.is_active()
         {
             return 0;
         }
@@ -1808,12 +1812,17 @@ impl<C: Cpu> DebugControl for Machine<C> {
                 current_batch = current_batch.min(1);
             }
 
-            // Logic-analyzer capture: clamp the batch so pad state is observed
-            // at least once per sample interval — otherwise a large batch would
-            // stride past intermediate edges we can only read at batch
-            // boundaries. Cost is paid ONLY while a watch set is active.
+            // Logic-analyzer capture: clamp the batch to one instruction so pad
+            // state is observed at EVERY cycle boundary — pads only change at
+            // instruction/tick boundaries, so this is a complete, alias-free
+            // capture. (An earlier fixed 16-cycle sampling grid aliased any
+            // signal toggling faster than ~32 cycles — bit-banged buses looked
+            // wrong before they looked dropped.) Cost is paid ONLY while a
+            // watch set is active; measured on a real firmware fixture at the
+            // default tick interval it is <= 1.05x, and ~1.4-1.5x at the widest
+            // batching config (see tests/logic_capture_bench.rs).
             if self.logic_capture.is_active() {
-                current_batch = current_batch.min(logic_capture::LOGIC_SAMPLE_INTERVAL as u32);
+                current_batch = current_batch.min(1);
             }
 
             let executed =
@@ -1862,8 +1871,8 @@ impl<C: Cpu> DebugControl for Machine<C> {
             }
 
             // Logic-analyzer edge capture at the batch boundary (no-op unless a
-            // watch set is installed; the batch was clamped above so this fires
-            // at least once per sample interval).
+            // watch set is installed; the batch was clamped to 1 above so this
+            // fires at every cycle boundary while armed).
             self.logic_sample();
 
             // If we executed less than requested, it means the CPU wanted to exit early (e.g. branch/exception)
