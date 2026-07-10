@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! ESP32-C3 I²C0 controller — command-list engine.
+//! ESP32-C3 I²C0 controller — cycle-driven, bit-level command-list engine.
 //!
 //! Mapped at base 0x6001_3000 with size 4 KiB. See ESP32-C3 TRM §16.
 //!
@@ -12,6 +12,38 @@
 //! This model is a C3-correct port of that controller. The register map was
 //! diffed against `configs/peripherals/esp32c3/i2c0.yaml` (the authoritative C3
 //! layout, SVD-sourced) — every offset, field and reset value matches the S3.
+//!
+//! ## Bit-level execution
+//!
+//! A command list kicked by `CTR.TRANS_START` does NOT complete synchronously.
+//! It executes as a bit-level state machine clocked from the machine's step
+//! loop (`tick_elapsed`), stretched over simulated cycles:
+//!
+//! * SCL/SDA timing derives from the controller's REAL clock configuration —
+//!   `CLK_CONF` (source select + integer/fractional divider) plus the
+//!   `SCL_LOW_PERIOD` / `SCL_HIGH_PERIOD` (+ wait-high) / `SDA_HOLD` /
+//!   `SCL_START_HOLD` / `SCL_RSTART_SETUP` / `SCL_STOP_SETUP` /
+//!   `SCL_STOP_HOLD` counters, all in I²C module-clock ticks with the TRM's
+//!   `reg + 1` counter semantics. If firmware leaves them at reset the reset
+//!   values apply — no invented constants.
+//! * SDA carries the real bit pattern: START (SDA falls while SCL high),
+//!   address + R/W bits MSB-first, ACK/NACK, data bytes, repeated START and
+//!   STOP (SDA rises while SCL high).
+//! * Slaves stay byte-level ([`I2cDevice`], wrapped by the bus-trace choke
+//!   point): the engine consults them at byte boundaries — the address is
+//!   resolved (and `start()` signalled) entering the address ACK bit, a
+//!   written byte is delivered entering its ACK bit, a read byte is fetched
+//!   when its first bit starts clocking — and the slave-driven bits (ACK,
+//!   read data) are driven onto SDA from those byte-level answers.
+//! * `TRANS_COMPLETE` / `END_DETECT` / `NACK` interrupts and the COMD
+//!   `command_done` bits assert at the realistic completion time, not at the
+//!   `TRANS_START` write. `SR.BUS_BUSY` reads 1 while a transaction is on the
+//!   wire.
+//!
+//! The driven line levels are published into a shared [`I2cLineLevels`] cell;
+//! the C3 GPIO model reads it for pads whose output matrix routes
+//! `I2CEXT0_SCL` / `I2CEXT0_SDA`, so `read_gpio_pad` (and the in-engine logic
+//! analyzer sampling it) observes the real waveform.
 //!
 //! ## C3-vs-S3 differences
 //!
@@ -44,6 +76,8 @@
 //! All other offsets accept writes silently and read 0.
 
 use std::cell::RefCell;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use crate::peripherals::i2c::I2cDevice;
 use crate::{Peripheral, PeripheralTickResult, SimResult};
@@ -108,6 +142,9 @@ const CTR_CONF_UPGATE: u32 = 1 << 11;
 /// command. esp-hal checks this after TRANS_COMPLETE — if clear it raises
 /// `AcknowledgeCheckFailed(Data)`.
 const SR_RESP_REC: u32 = 1 << 0;
+/// SR bit 4: BUS_BUSY — set while a transaction is on the wire (per the C3
+/// `i2c0.yaml` SR field map).
+const SR_BUS_BUSY: u32 = 1 << 4;
 
 /// COMD bit 31: command_done. Set when a command finishes executing.
 const CMD_DONE_BIT: u32 = 1 << 31;
@@ -120,6 +157,182 @@ const SCL_RST_SLV_EN: u32 = 1 << 0;
 /// ESP32-C3 has 8 COMD slots at offsets 0x58..0x78 (COMD0..COMD7 in the yaml).
 const NUM_CMDS: usize = 8;
 const FIFO_CAPACITY: usize = 32;
+
+// COMD opcodes per ESP32-C3 TRM §16 / esp32c3 PAC `i2c0::comd`:
+//   1 = WRITE, 2 = STOP, 3 = READ, 4 = END, 6 = RSTART
+const OP_WRITE: u32 = 1;
+const OP_STOP: u32 = 2;
+const OP_READ: u32 = 3;
+const OP_END: u32 = 4;
+const OP_RSTART: u32 = 6;
+/// COMD bit 10: ack_value — the ACK level the master drives after a received
+/// (READ) byte. esp-hal sets it high (NACK) on the final read command.
+const CMD_ACK_VALUE_BIT: u32 = 1 << 10;
+
+/// ESP32-C3 CPU clock the engine cycle counter models. `Machine::total_cycles`
+/// advances at CPU-instruction rate; the C3 wiring elsewhere (SYSTIMER: "10 CPU
+/// cycles per 16 MHz tick", `Systimer::new_with_source(160_000_000, …)`) uses
+/// the same 160 MHz convention, so I²C wire time shares one clock base with
+/// the timers firmware uses to measure it.
+const CPU_CLK_HZ: u64 = 160_000_000;
+/// I²C module source clocks selectable via `CLK_CONF.SCLK_SEL` (C3 TRM):
+/// 0 = XTAL_CLK (40 MHz), 1 = RC_FAST_CLK (17.5 MHz).
+const XTAL_CLK_HZ: u64 = 40_000_000;
+const RC_FAST_CLK_HZ: u64 = 17_500_000;
+
+/// Live SDA/SCL levels of the I²C0 bus (wired-AND of controller + slave drive,
+/// idle high — open-drain with pull-ups). The controller bit engine is the only
+/// writer; the C3 GPIO model reads it for pads whose GPIO output matrix
+/// (`FUNCn_OUT_SEL_CFG`) routes `I2CEXT0_SCL` / `I2CEXT0_SDA`, so
+/// `read_gpio_pad` — and the in-engine logic analyzer sampling through it —
+/// observes the real waveform on the routed pads.
+#[derive(Debug)]
+pub struct I2cLineLevels {
+    scl: AtomicBool,
+    sda: AtomicBool,
+}
+
+impl I2cLineLevels {
+    fn new() -> Self {
+        Self {
+            scl: AtomicBool::new(true),
+            sda: AtomicBool::new(true),
+        }
+    }
+
+    pub fn scl(&self) -> bool {
+        self.scl.load(Ordering::Relaxed)
+    }
+
+    pub fn sda(&self) -> bool {
+        self.sda.load(Ordering::Relaxed)
+    }
+
+    fn set(&self, scl: bool, sda: bool) {
+        self.scl.store(scl, Ordering::Relaxed);
+        self.sda.store(sda, Ordering::Relaxed);
+    }
+}
+
+/// Wire timing snapshot, derived from the timing registers at `TRANS_START`.
+/// All phase durations are in I²C module-clock ticks with the TRM's `reg + 1`
+/// down-counter semantics; `num`/`den` express one module tick in engine
+/// cycles as an exact fraction (`CPU_CLK_HZ · divider / source_hz`), so the
+/// engine accumulates time without rounding drift.
+#[derive(Debug, Clone, Copy)]
+struct EngineTiming {
+    /// Engine cycles per module tick = `num / den`.
+    num: u64,
+    den: u64,
+    /// SCL low width (`SCL_LOW_PERIOD + 1`).
+    low: u32,
+    /// SCL high width (`SCL_HIGH_PERIOD + SCL_WAIT_HIGH_PERIOD + 1`).
+    high: u32,
+    /// SDA transition delay after SCL falls (`SDA_HOLD + 1`).
+    sda_hold: u32,
+    /// SDA-low → SCL-low hold after a (repeated) START (`SCL_START_HOLD + 1`).
+    start_hold: u32,
+    /// SCL-high setup before SDA falls on a repeated START
+    /// (`SCL_RSTART_SETUP + 1`).
+    rstart_setup: u32,
+    /// SCL-high setup before SDA rises on STOP (`SCL_STOP_SETUP + 1`).
+    stop_setup: u32,
+    /// Bus-free hold after the STOP condition (`SCL_STOP_HOLD + 1`).
+    stop_hold: u32,
+}
+
+/// Where the bit engine is inside the current wire segment. Every variant maps
+/// to one fixed (SCL, SDA) pair held for a counted number of module ticks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EngineState {
+    /// No transaction on the wire.
+    Idle,
+    /// END pause: command list paused, bus held (SCL low), awaiting the next
+    /// `TRANS_START`.
+    Paused,
+    /// (Repeated) START driven: SDA low, SCL high, holding `start_hold`.
+    StartHold,
+    /// Repeated START, phase 1: SCL low, SDA released (`sda_hold`).
+    RestartRelease,
+    /// Repeated START, phase 2: SCL high with SDA high (`rstart_setup`).
+    RestartSetup,
+    /// Data bit: SCL low, SDA still at the previous level (`sda_hold`).
+    BitLowHold,
+    /// Data bit: SCL low, SDA at this bit's level (rest of `low`).
+    BitLowDrive,
+    /// Data bit: SCL high (`high`).
+    BitHigh,
+    /// STOP, phase 1: SCL low, SDA at the previous level (`sda_hold`).
+    StopLowHold,
+    /// STOP, phase 2: SCL low, SDA pulled low (rest of `low`).
+    StopLowDrive,
+    /// STOP, phase 3: SCL high, SDA still low (`stop_setup`).
+    StopSetup,
+    /// STOP condition driven (SDA rose while SCL high), holding `stop_hold`.
+    StopHold,
+}
+
+/// Cycle-driven bit engine state. Owned by [`Esp32c3I2c`]; ticked from the
+/// machine's peripheral walk via `tick_elapsed`.
+#[derive(Debug)]
+struct BitEngine {
+    state: EngineState,
+    /// Module ticks left in the current segment (≥ 1 while active).
+    ticks_left: u32,
+    /// Engine-cycle fraction accumulator, in units of `1/den` engine cycles.
+    acc: u64,
+    timing: EngineTiming,
+    /// Index of the COMD slot currently executing.
+    cmd_idx: usize,
+    /// Bytes remaining in the current WRITE/READ command.
+    bytes_left: usize,
+    /// The byte currently being clocked (TX byte, or the slave's read answer).
+    cur_byte: u8,
+    /// Bit position inside the current byte: 0..=7 data (MSB first), 8 = ACK.
+    bit_idx: u8,
+    cur_is_read: bool,
+    /// Master ACK level for received bytes (COMD `ack_value`).
+    cur_ack_value: bool,
+    /// The byte being clocked is an address frame.
+    addr_byte: bool,
+    /// A START has been driven and no STOP yet (includes END pauses).
+    bus_held: bool,
+    /// Currently driven line levels (mirror of the shared [`I2cLineLevels`]).
+    scl: bool,
+    sda: bool,
+}
+
+impl BitEngine {
+    fn new() -> Self {
+        Self {
+            state: EngineState::Idle,
+            ticks_left: 0,
+            acc: 0,
+            // Placeholder; recomputed from the registers at every TRANS_START.
+            timing: EngineTiming {
+                num: CPU_CLK_HZ,
+                den: XTAL_CLK_HZ,
+                low: 1,
+                high: 1,
+                sda_hold: 1,
+                start_hold: 9,
+                rstart_setup: 9,
+                stop_setup: 9,
+                stop_hold: 9,
+            },
+            cmd_idx: 0,
+            bytes_left: 0,
+            cur_byte: 0,
+            bit_idx: 0,
+            cur_is_read: false,
+            cur_ack_value: false,
+            addr_byte: false,
+            bus_held: false,
+            scl: true,
+            sda: true,
+        }
+    }
+}
 
 pub struct Esp32c3I2c {
     ctr: u32,
@@ -135,12 +348,15 @@ pub struct Esp32c3I2c {
     tx_pop_count: usize,
     rx_fifo: RefCell<std::collections::VecDeque<u8>>,
     slaves: Vec<Box<dyn I2cDevice>>,
-    /// Set when a command-list run sets TRANS_COMPLETE & INT_ENA has it.
-    irq_pending: bool,
     /// Interrupt-matrix source this instance asserts (29 for I2C0).
     intr_source_id: u32,
     active_slave: Option<usize>,
     expects_addr: bool,
+    /// Cycle-driven bit engine executing the command list on the wire.
+    engine: BitEngine,
+    /// Shared SDA/SCL line levels, read by the C3 GPIO model for matrix-routed
+    /// pads. Created lazily by [`Self::line_levels_arc`] at bus wiring time.
+    lines: Option<Arc<I2cLineLevels>>,
 
     // Config / timing registers — masked storage (reset values per C3 i2c0.yaml).
     reg_scl_low_period: u32,   // 0x00  reset 0x0000_0000  mask 0x0000_01FF
@@ -181,10 +397,11 @@ impl Esp32c3I2c {
             tx_pop_count: 0,
             rx_fifo: RefCell::new(std::collections::VecDeque::with_capacity(FIFO_CAPACITY)),
             slaves: Vec::new(),
-            irq_pending: false,
             intr_source_id: I2C0_INTR_SOURCE_ID,
             active_slave: None,
             expects_addr: true,
+            engine: BitEngine::new(),
+            lines: None,
 
             reg_scl_low_period: 0x0000_0000,
             reg_to: 0x0000_0010,
@@ -244,13 +461,18 @@ impl Esp32c3I2c {
     }
 
     fn status_register(&self) -> u32 {
-        // SR (C3 i2c0.yaml): bit 0 RESP_REC, bits 8..13 RXFIFO_CNT,
-        // bits 14..15 STRETCH_CAUSE (reset 0b11 == yaml reset_value 49152),
-        // bits 18..23 TXFIFO_CNT.
+        // SR (C3 i2c0.yaml): bit 0 RESP_REC, bit 4 BUS_BUSY, bits 8..13
+        // RXFIFO_CNT, bits 14..15 STRETCH_CAUSE (reset 0b11 == yaml
+        // reset_value 49152), bits 18..23 TXFIFO_CNT.
         const SR_STRETCH_CAUSE_RESET: u32 = 0x0000_C000;
         let rx = (self.rx_fifo.borrow().len() as u32) & 0x3F;
         let tx = (self.tx_fifo.len() as u32) & 0x3F;
-        (self.sr & SR_RESP_REC) | SR_STRETCH_CAUSE_RESET | (rx << 8) | (tx << 18)
+        let busy = if self.engine_active() || self.engine.bus_held {
+            SR_BUS_BUSY
+        } else {
+            0
+        };
+        (self.sr & SR_RESP_REC) | busy | SR_STRETCH_CAUSE_RESET | (rx << 8) | (tx << 18)
     }
 
     fn find_slave_from_slave_addr_register(&self) -> Option<usize> {
@@ -279,7 +501,7 @@ impl std::fmt::Debug for Esp32c3I2c {
             .field("int_raw", &self.int_raw)
             .field("int_ena", &self.int_ena)
             .field("slaves_count", &self.slaves.len())
-            .field("irq_pending", &self.irq_pending)
+            .field("engine_state", &self.engine.state)
             .finish()
     }
 }
@@ -353,8 +575,13 @@ impl Peripheral for Esp32c3I2c {
             REG_SCL_LOW_PERIOD => masked_write(&mut self.reg_scl_low_period, value, 0x0000_01FF),
             REG_CTR => {
                 self.ctr = value;
+                if value & CTR_FSM_RST != 0 {
+                    // Master FSM reset: abort any in-flight transaction and
+                    // release the (open-drain) lines back to bus-idle.
+                    self.fsm_reset();
+                }
                 if value & CTR_TRANS_START_BIT != 0 {
-                    self.run_command_list();
+                    self.start_transaction();
                     // Auto-clear TRANS_START like real silicon.
                     self.ctr &= !CTR_TRANS_START_BIT;
                 }
@@ -419,11 +646,30 @@ impl Peripheral for Esp32c3I2c {
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
-        let mut explicit = Vec::new();
+        self.tick_elapsed(1)
+    }
+
+    /// Advance the bit engine by `cycles` engine cycles, then assert the level
+    /// interrupt. The engine converts elapsed engine cycles into I²C
+    /// module-clock ticks through the exact `num/den` fraction snapshotted at
+    /// `TRANS_START`, so wire timing is independent of the peripheral tick
+    /// interval the host chose.
+    fn tick_elapsed(&mut self, cycles: u64) -> PeripheralTickResult {
+        if self.engine_active() {
+            self.engine.acc += cycles.saturating_mul(self.engine.timing.den);
+            while self.engine.acc >= self.engine.timing.num {
+                self.engine.acc -= self.engine.timing.num;
+                self.module_tick();
+                if !self.engine_active() {
+                    self.engine.acc = 0;
+                    break;
+                }
+            }
+        }
         // LEVEL interrupt: assert the I2C0 source every tick while any enabled
         // INT bit is set, mirroring real silicon (INT_RAW stays asserted until
         // the ISR writes INT_CLR).
-        self.irq_pending = false;
+        let mut explicit = Vec::new();
         if self.int_raw & self.int_ena != 0 {
             explicit.push(self.intr_source_id);
         }
@@ -438,7 +684,7 @@ impl Peripheral for Esp32c3I2c {
     }
 
     fn legacy_tick_active(&self) -> bool {
-        self.int_raw & self.int_ena != 0
+        self.engine_active() || self.int_raw & self.int_ena != 0
     }
 
     fn legacy_tick_dynamic(&self) -> bool {
@@ -495,133 +741,359 @@ impl Peripheral for Esp32c3I2c {
     }
 }
 
+// ── Bit engine ───────────────────────────────────────────────────────────────
+//
+// A command list executes on the wire as a chain of fixed-level segments, each
+// a counted number of I²C module-clock ticks. Slaves stay byte-level: the
+// engine consults them exactly at byte boundaries and drives the slave-decided
+// bits (ACK, read data) onto SDA within bit timing, like real silicon.
 impl Esp32c3I2c {
-    /// Walk CMD0..CMD7 from the start, executing each command. A "WRITE"
-    /// whose first byte follows an RSTART is interpreted as `(addr<<1)|R/W`
-    /// and selects the active slave by address bits [7:1]. Subsequent WRITE
-    /// bytes are delivered via `I2cDevice::write`. READ pulls bytes from the
-    /// active slave via `I2cDevice::read` and pushes to the RX FIFO.
-    fn run_command_list(&mut self) {
-        // Opcodes per ESP32-C3 TRM §16 / esp32c3 PAC `i2c0::comd`:
-        //   1 = WRITE, 2 = STOP, 3 = READ, 4 = END, 6 = RSTART
-        const OP_WRITE: u32 = 1;
-        const OP_STOP: u32 = 2;
-        const OP_READ: u32 = 3;
-        const OP_END: u32 = 4;
-        const OP_RSTART: u32 = 6;
+    /// `true` while a transaction is actively clocking on the wire (an END
+    /// pause is NOT active — the engine waits for the next `TRANS_START`).
+    pub(crate) fn engine_active(&self) -> bool {
+        !matches!(self.engine.state, EngineState::Idle | EngineState::Paused)
+    }
 
-        let mut active = self.active_slave;
-        let mut expects_addr = self.expects_addr;
-        let mut last_op_was_end = false;
+    /// Get-or-create the shared line-level cell (bus wiring hands the same
+    /// `Arc` to the C3 GPIO model).
+    pub(crate) fn line_levels_arc(&mut self) -> Arc<I2cLineLevels> {
+        if self.lines.is_none() {
+            let lines = Arc::new(I2cLineLevels::new());
+            lines.set(self.engine.scl, self.engine.sda);
+            self.lines = Some(lines);
+        }
+        self.lines.as_ref().unwrap().clone()
+    }
 
+    fn set_lines(&mut self, scl: bool, sda: bool) {
+        if self.engine.scl != scl || self.engine.sda != sda {
+            self.engine.scl = scl;
+            self.engine.sda = sda;
+            if let Some(lines) = &self.lines {
+                lines.set(scl, sda);
+            }
+        }
+    }
+
+    /// Derive the wire timing from the live clock/timing registers. Reset
+    /// values (the datasheet defaults) apply when firmware never programs
+    /// them — the derivation has no fallback constants of its own.
+    fn timing_from_regs(&self) -> EngineTiming {
+        let clk = self.reg_clk_conf;
+        let div_num = (clk & 0xFF) as u64 + 1;
+        let div_a = ((clk >> 8) & 0x3F) as u64;
+        let div_b = ((clk >> 14) & 0x3F) as u64;
+        let src_hz = if clk & (1 << 20) != 0 {
+            RC_FAST_CLK_HZ
+        } else {
+            XTAL_CLK_HZ
+        };
+        // Fractional divider: module clock = src / (div_num + div_b / div_a);
+        // div_a == 0 disables the fractional part.
+        let (a, b) = if div_a == 0 { (1, 0) } else { (div_a, div_b) };
+        EngineTiming {
+            num: CPU_CLK_HZ * (div_num * a + b),
+            den: src_hz * a,
+            low: (self.reg_scl_low_period & 0x1FF) + 1,
+            high: (self.reg_scl_high_period & 0x1FF) + ((self.reg_scl_high_period >> 9) & 0x7F) + 1,
+            sda_hold: (self.reg_sda_hold & 0x1FF) + 1,
+            start_hold: (self.reg_scl_start_hold & 0x1FF) + 1,
+            rstart_setup: (self.reg_scl_rstart_setup & 0x1FF) + 1,
+            stop_setup: (self.reg_scl_stop_setup & 0x1FF) + 1,
+            stop_hold: (self.reg_scl_stop_hold & 0x1FF) + 1,
+        }
+    }
+
+    /// `CTR.TRANS_START`: snapshot timing and begin executing CMD0..CMD7 on
+    /// the wire. Ignored while a transaction is already clocking (silicon's
+    /// FSM is busy). Resuming from an END pause continues the held bus.
+    fn start_transaction(&mut self) {
+        if self.engine_active() {
+            return;
+        }
+        self.engine.timing = self.timing_from_regs();
+        self.engine.acc = 0;
+        self.engine.cmd_idx = 0;
         // Reset RESP_REC and the TX-FIFO read pointer at the start of a new
         // command-list run.
         self.sr &= !SR_RESP_REC;
         self.tx_pop_count = 0;
+        self.advance_command();
+        self.chase();
+    }
 
-        for idx in 0..self.cmds.len() {
-            let word = self.cmds[idx];
+    /// `CTR.FSM_RST`: abort any in-flight transaction and release the lines.
+    fn fsm_reset(&mut self) {
+        self.engine.state = EngineState::Idle;
+        self.engine.ticks_left = 0;
+        self.engine.acc = 0;
+        self.engine.bus_held = false;
+        self.active_slave = None;
+        self.expects_addr = true;
+        self.set_lines(true, true);
+    }
+
+    /// Enter a wire segment: drive the levels and arm its tick counter.
+    fn enter(&mut self, state: EngineState, ticks: u32, scl: bool, sda: bool) {
+        self.set_lines(scl, sda);
+        self.engine.state = state;
+        self.engine.ticks_left = ticks;
+    }
+
+    /// One I²C module-clock tick.
+    fn module_tick(&mut self) {
+        if !self.engine_active() {
+            return;
+        }
+        self.engine.ticks_left = self.engine.ticks_left.saturating_sub(1);
+        self.chase();
+    }
+
+    /// Run segment transitions until the engine is parked or a non-empty
+    /// segment is armed (zero-length segments — e.g. `low - sda_hold == 0` —
+    /// chain through within the same module tick).
+    fn chase(&mut self) {
+        while self.engine_active() && self.engine.ticks_left == 0 {
+            self.transition();
+        }
+    }
+
+    /// Dispatch the command at `cmd_idx`. Commands with wire time arm their
+    /// first segment; END / reserved / list-exhaustion park the engine.
+    fn advance_command(&mut self) {
+        loop {
+            if self.engine.cmd_idx >= NUM_CMDS {
+                // List ran out without STOP/END: complete the run (legacy
+                // behavioral contract preserved).
+                self.complete_without_stop();
+                return;
+            }
+            let word = self.cmds[self.engine.cmd_idx];
             let opcode = (word >> 11) & 0x7;
             let byte_num = (word & 0xFF) as usize;
             match opcode {
                 OP_RSTART => {
-                    if let Some(slave_idx) = active {
+                    // Frame boundary for the (trace-wrapped) previous slave.
+                    if let Some(slave_idx) = self.active_slave {
                         self.slaves[slave_idx].start();
                     }
-                    expects_addr = true;
-                    active = None;
-                    self.cmds[idx] |= CMD_DONE_BIT;
+                    self.active_slave = None;
+                    self.expects_addr = true;
+                    let t = self.engine.timing;
+                    if self.engine.bus_held {
+                        // Repeated START: release SDA during low, SCL back
+                        // high, then SDA falls.
+                        self.enter(EngineState::RestartRelease, t.sda_hold, false, true);
+                    } else {
+                        // Fresh START from bus-idle: SDA falls while SCL high.
+                        self.engine.bus_held = true;
+                        self.enter(EngineState::StartHold, t.start_hold, true, false);
+                    }
+                    return;
                 }
-                OP_WRITE => {
-                    for i in 0..byte_num {
-                        let b = self.tx_fifo.pop_front().unwrap_or(0);
-                        self.tx_pop_count += 1;
-                        if expects_addr && i == 0 {
-                            // First byte of a WRITE following RSTART is addr+R/W.
-                            let addr = b >> 1;
-                            active = self.slaves.iter().position(|s| s.address() == addr);
-                            if let Some(slave_idx) = active {
-                                // Slave acknowledged its address. Signal START
-                                // to the selected device — on the wire the
-                                // START + address frame precedes the data, and
-                                // the bus-trace wrapper reconstructs the
-                                // address frame from this call.
-                                self.slaves[slave_idx].start();
-                                self.sr |= SR_RESP_REC;
-                                expects_addr = false;
-                                // Don't deliver the addr byte to the slave's write().
-                                continue;
-                            }
-
-                            // ESP-IDF/Arduino can program the address in
-                            // SLAVE_ADDR and put only payload bytes in TXFIFO.
-                            // In that shape the first FIFO byte is real data.
-                            active = self.find_slave_from_slave_addr_register();
-                            if let Some(slave_idx) = active {
-                                self.slaves[slave_idx].start();
-                                self.sr |= SR_RESP_REC;
-                            } else {
-                                self.int_raw |= INT_NACK;
-                                expects_addr = false;
-                                continue;
-                            }
-                            expects_addr = false;
-                        }
-                        if let Some(slave_idx) = active {
-                            self.slaves[slave_idx].write(b);
-                            self.sr |= SR_RESP_REC;
-                        }
+                OP_WRITE | OP_READ => {
+                    if byte_num == 0 {
+                        self.cmds[self.engine.cmd_idx] |= CMD_DONE_BIT;
+                        self.engine.cmd_idx += 1;
+                        continue;
                     }
-                    self.cmds[idx] |= CMD_DONE_BIT;
-                }
-                OP_READ => {
-                    for _ in 0..byte_num {
-                        let b = if let Some(slave_idx) = active {
-                            self.slaves[slave_idx].read()
-                        } else {
-                            0
-                        };
-                        let mut rx = self.rx_fifo.borrow_mut();
-                        if rx.len() < FIFO_CAPACITY {
-                            rx.push_back(b);
-                        }
-                    }
-                    if active.is_some() {
-                        self.sr |= SR_RESP_REC;
-                    }
-                    self.cmds[idx] |= CMD_DONE_BIT;
+                    self.engine.cur_is_read = opcode == OP_READ;
+                    self.engine.cur_ack_value = word & CMD_ACK_VALUE_BIT != 0;
+                    self.engine.bytes_left = byte_num;
+                    self.engine.bus_held = true;
+                    self.begin_byte();
+                    return;
                 }
                 OP_STOP => {
-                    if let Some(slave_idx) = active {
-                        self.slaves[slave_idx].stop();
-                    }
-                    active = None;
-                    expects_addr = true;
-                    self.cmds[idx] |= CMD_DONE_BIT;
-                    break;
+                    let t = self.engine.timing;
+                    let sda = self.engine.sda;
+                    self.enter(EngineState::StopLowHold, t.sda_hold, false, sda);
+                    return;
                 }
                 OP_END => {
-                    last_op_was_end = true;
-                    break;
+                    // Pause the list: SCL parked low (bus held), END_DETECT.
+                    self.engine.state = EngineState::Paused;
+                    self.engine.ticks_left = 0;
+                    if self.engine.bus_held {
+                        let sda = self.engine.sda;
+                        self.set_lines(false, sda);
+                    }
+                    self.int_raw |= INT_END_DETECT;
+                    return;
                 }
-                _ => break, // reserved opcode — terminate
+                _ => {
+                    // Reserved opcode — terminate the run.
+                    self.complete_without_stop();
+                    return;
+                }
             }
         }
+    }
 
-        // END pauses execution and raises END_DETECT (bit 3); STOP (or a command
-        // list that runs out without an explicit END) completes the transaction
-        // and raises TRANS_COMPLETE (bit 7).
-        if last_op_was_end {
-            self.active_slave = active;
-            self.expects_addr = expects_addr;
-            self.int_raw |= INT_END_DETECT;
+    /// Start clocking the next byte of the current WRITE/READ command: fetch
+    /// the byte at the byte boundary (TX FIFO pop, or the slave's `read()`
+    /// answer that the wire then carries bit by bit) and drive SCL low.
+    fn begin_byte(&mut self) {
+        self.engine.bit_idx = 0;
+        self.engine.addr_byte = self.expects_addr && !self.engine.cur_is_read;
+        self.engine.cur_byte = if self.engine.cur_is_read {
+            match self.active_slave {
+                Some(slave_idx) => self.slaves[slave_idx].read(),
+                None => 0,
+            }
         } else {
-            self.active_slave = None;
-            self.expects_addr = true;
-            self.int_raw |= INT_TRANS_COMPLETE;
+            let b = self.tx_fifo.pop_front().unwrap_or(0);
+            self.tx_pop_count += 1;
+            b
+        };
+        let t = self.engine.timing;
+        let sda = self.engine.sda;
+        self.enter(EngineState::BitLowHold, t.sda_hold.min(t.low), false, sda);
+    }
+
+    /// Byte-boundary side effects entering the ACK bit; returns the SDA level
+    /// driven during the ACK bit (low = ACK).
+    fn ack_bit_level(&mut self) -> bool {
+        if self.engine.cur_is_read {
+            // Received byte lands in the RX FIFO; the master drives the ACK
+            // level the command word asked for (COMD.ack_value).
+            let mut rx = self.rx_fifo.borrow_mut();
+            if rx.len() < FIFO_CAPACITY {
+                rx.push_back(self.engine.cur_byte);
+            }
+            drop(rx);
+            return self.engine.cur_ack_value;
         }
-        if self.int_ena & (INT_TRANS_COMPLETE | INT_END_DETECT | INT_NACK) != 0 {
-            self.irq_pending = true;
+        let b = self.engine.cur_byte;
+        if self.engine.addr_byte {
+            // Address frame: resolve the slave by the wire address bits.
+            let addr = b >> 1;
+            self.expects_addr = false;
+            if let Some(slave_idx) = self.slaves.iter().position(|s| s.address() == addr) {
+                // Slave acknowledged its address. Signal START to the selected
+                // device — the bus-trace wrapper reconstructs the address
+                // frame from this call.
+                self.active_slave = Some(slave_idx);
+                self.slaves[slave_idx].start();
+                self.sr |= SR_RESP_REC;
+                return false;
+            }
+            // ESP-IDF/Arduino can program the address in SLAVE_ADDR and put
+            // only payload bytes in TXFIFO. In that shape the first FIFO byte
+            // is real data and is delivered to the slave.
+            if let Some(slave_idx) = self.find_slave_from_slave_addr_register() {
+                self.active_slave = Some(slave_idx);
+                self.slaves[slave_idx].start();
+                self.sr |= SR_RESP_REC;
+                self.slaves[slave_idx].write(b);
+                return false;
+            }
+            self.active_slave = None;
+            self.int_raw |= INT_NACK;
+            return true;
+        }
+        // Data byte of a WRITE.
+        if let Some(slave_idx) = self.active_slave {
+            self.slaves[slave_idx].write(b);
+            self.sr |= SR_RESP_REC;
+            false
+        } else {
+            true
+        }
+    }
+
+    /// The ACK bit finished clocking: advance to the next byte or command.
+    fn finish_byte(&mut self) {
+        self.engine.bytes_left -= 1;
+        if self.engine.bytes_left > 0 {
+            self.begin_byte();
+            return;
+        }
+        if self.engine.cur_is_read && self.active_slave.is_some() {
+            self.sr |= SR_RESP_REC;
+        }
+        self.cmds[self.engine.cmd_idx] |= CMD_DONE_BIT;
+        self.engine.cmd_idx += 1;
+        self.advance_command();
+    }
+
+    /// A list that ran out (or hit a reserved opcode) without STOP/END:
+    /// complete the run and release the open-drain lines to idle.
+    fn complete_without_stop(&mut self) {
+        self.active_slave = None;
+        self.expects_addr = true;
+        self.engine.bus_held = false;
+        self.engine.state = EngineState::Idle;
+        self.engine.ticks_left = 0;
+        self.set_lines(true, true);
+        self.int_raw |= INT_TRANS_COMPLETE;
+    }
+
+    /// The current segment's tick counter expired: drive the next segment.
+    fn transition(&mut self) {
+        let t = self.engine.timing;
+        match self.engine.state {
+            EngineState::Idle | EngineState::Paused => {}
+            EngineState::StartHold => {
+                // START condition held — the RSTART command is done; SCL falls
+                // when the next command's first segment begins.
+                self.cmds[self.engine.cmd_idx] |= CMD_DONE_BIT;
+                self.engine.cmd_idx += 1;
+                self.advance_command();
+            }
+            EngineState::RestartRelease => {
+                self.enter(EngineState::RestartSetup, t.rstart_setup, true, true);
+            }
+            EngineState::RestartSetup => {
+                // SDA falls while SCL high — the repeated START condition.
+                self.enter(EngineState::StartHold, t.start_hold, true, false);
+            }
+            EngineState::BitLowHold => {
+                let sda = if self.engine.bit_idx < 8 {
+                    (self.engine.cur_byte >> (7 - self.engine.bit_idx)) & 1 != 0
+                } else {
+                    // ACK bit: byte-boundary side effects decide the level.
+                    self.ack_bit_level()
+                };
+                let drive = t.low - t.sda_hold.min(t.low);
+                self.enter(EngineState::BitLowDrive, drive, false, sda);
+            }
+            EngineState::BitLowDrive => {
+                let sda = self.engine.sda;
+                self.enter(EngineState::BitHigh, t.high, true, sda);
+            }
+            EngineState::BitHigh => {
+                self.engine.bit_idx += 1;
+                if self.engine.bit_idx <= 8 {
+                    let sda = self.engine.sda;
+                    self.enter(EngineState::BitLowHold, t.sda_hold.min(t.low), false, sda);
+                } else {
+                    self.finish_byte();
+                }
+            }
+            EngineState::StopLowHold => {
+                let drive = t.low - t.sda_hold.min(t.low);
+                self.enter(EngineState::StopLowDrive, drive, false, false);
+            }
+            EngineState::StopLowDrive => {
+                self.enter(EngineState::StopSetup, t.stop_setup, true, false);
+            }
+            EngineState::StopSetup => {
+                // SDA rises while SCL high — the STOP condition.
+                self.enter(EngineState::StopHold, t.stop_hold, true, true);
+            }
+            EngineState::StopHold => {
+                if let Some(slave_idx) = self.active_slave {
+                    self.slaves[slave_idx].stop();
+                }
+                self.active_slave = None;
+                self.expects_addr = true;
+                self.engine.bus_held = false;
+                self.cmds[self.engine.cmd_idx] |= CMD_DONE_BIT;
+                self.engine.state = EngineState::Idle;
+                self.engine.ticks_left = 0;
+                self.int_raw |= INT_TRANS_COMPLETE;
+            }
         }
     }
 }
@@ -643,6 +1115,25 @@ mod tests {
     const CMD_READ: u8 = 3;
     const CMD_END: u8 = 4;
     const CMD_RSTART: u8 = 6;
+
+    /// Clock the bit engine to completion (command lists execute over
+    /// simulated cycles now, not synchronously on the TRANS_START write).
+    fn run_engine(p: &mut Esp32c3I2c) {
+        for _ in 0..1_000_000 {
+            if !p.engine_active() {
+                return;
+            }
+            p.tick_elapsed(64);
+        }
+        panic!("C3 I2C bit engine did not complete");
+    }
+
+    /// Kick TRANS_START and clock the engine until it parks (STOP complete,
+    /// END pause, or list termination).
+    fn start_and_run(p: &mut Esp32c3I2c) {
+        p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
+        run_engine(p);
+    }
 
     #[test]
     fn i2c0_interrupt_source_is_29_not_42() {
@@ -735,7 +1226,7 @@ mod tests {
     fn end_opcode_raises_end_detect_not_trans_complete() {
         let mut p = Esp32c3I2c::new();
         p.write_u32(REG_CMD0, cmd(CMD_END, 0)).unwrap();
-        p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
+        start_and_run(&mut p);
         let int_raw = p.read_u32(REG_INT_RAW).unwrap();
         assert_eq!(
             int_raw & INT_END_DETECT,
@@ -754,7 +1245,7 @@ mod tests {
         let mut p = Esp32c3I2c::new();
         p.write_u32(REG_CMD0, cmd(CMD_RSTART, 0)).unwrap();
         p.write_u32(REG_CMD1_OFFSET, cmd(CMD_STOP, 0)).unwrap();
-        p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
+        start_and_run(&mut p);
         assert_eq!(
             p.read_u32(REG_INT_RAW).unwrap() & INT_TRANS_COMPLETE,
             INT_TRANS_COMPLETE
@@ -765,7 +1256,7 @@ mod tests {
     fn trans_start_auto_clears() {
         let mut p = Esp32c3I2c::new();
         p.write_u32(REG_CMD0, cmd(CMD_END, 0)).unwrap();
-        p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
+        start_and_run(&mut p);
         assert_eq!(p.read_u32(REG_CTR).unwrap() & CTR_TRANS_START_BIT, 0);
     }
 
@@ -820,7 +1311,7 @@ mod tests {
         p.write_u32(REG_CMD0 + 4, cmd(CMD_WRITE, 1)).unwrap();
         p.write_u32(REG_CMD0 + 8, cmd(CMD_STOP, 0)).unwrap();
         p.write_u32(REG_DATA, 0xA0).unwrap(); // some addr+W, no slave
-        p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
+        start_and_run(&mut p);
         assert_eq!(
             p.read_u32(REG_INT_RAW).unwrap() & INT_NACK,
             INT_NACK,
@@ -903,7 +1394,7 @@ mod tests {
         p.write_u32(REG_DATA, 0xD0).unwrap();
         p.write_u32(REG_DATA, 0xED).unwrap();
 
-        p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
+        start_and_run(&mut p);
 
         // Address must have matched (no NACK).
         assert_eq!(
@@ -946,7 +1437,7 @@ mod tests {
         p.write_u32(REG_DATA, 0x78).unwrap(); // 0x3C << 1, write
         p.write_u32(REG_DATA, 0x40).unwrap(); // SSD1306 data stream
         p.write_u32(REG_DATA, 0xAA).unwrap(); // four lit pixels in byte 0
-        p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
+        start_and_run(&mut p);
 
         let pi = p.inspect(0x6001_3000, "i2c0", &InspectOpts::default());
         let fb = pi
@@ -975,7 +1466,7 @@ mod tests {
         p.write_u32(REG_CMD0 + 8, cmd(CMD_STOP, 0)).unwrap();
         p.write_u32(REG_DATA, 0x40).unwrap();
         p.write_u32(REG_DATA, 0xAA).unwrap();
-        p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
+        start_and_run(&mut p);
 
         assert_eq!(p.read_u32(REG_INT_RAW).unwrap() & INT_NACK, 0);
         let pi = p.inspect(0x6001_3000, "i2c0", &InspectOpts::default());
@@ -1002,7 +1493,7 @@ mod tests {
         p.write_u32(REG_CMD0 + 4, cmd(CMD_WRITE, 1)).unwrap();
         p.write_u32(REG_CMD0 + 8, cmd(CMD_END, 0)).unwrap();
         p.write_u32(REG_DATA, 0x78).unwrap();
-        p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
+        start_and_run(&mut p);
         assert_eq!(
             p.read_u32(REG_INT_RAW).unwrap() & INT_END_DETECT,
             INT_END_DETECT
@@ -1014,7 +1505,7 @@ mod tests {
         p.write_u32(REG_CMD0 + 8, 0).unwrap();
         p.write_u32(REG_DATA, 0x40).unwrap();
         p.write_u32(REG_DATA, 0xAA).unwrap();
-        p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
+        start_and_run(&mut p);
 
         assert_eq!(p.read_u32(REG_INT_RAW).unwrap() & INT_NACK, 0);
         let pi = p.inspect(0x6001_3000, "i2c0", &InspectOpts::default());
@@ -1045,13 +1536,103 @@ mod tests {
         p.write_u32(REG_DATA, 0xEC).unwrap(); // addr+W
         p.write_u32(REG_DATA, 0x88).unwrap(); // pointer = calib start
         p.write_u32(REG_DATA, 0xED).unwrap(); // addr+R
-        p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
+        start_and_run(&mut p);
 
         // First four calibration bytes per the Bosch reference block.
         assert_eq!(p.read_u32(REG_DATA).unwrap(), 0x70);
         assert_eq!(p.read_u32(REG_DATA).unwrap(), 0x6B);
         assert_eq!(p.read_u32(REG_DATA).unwrap(), 0x43);
         assert_eq!(p.read_u32(REG_DATA).unwrap(), 0x67);
+    }
+
+    /// The headline fidelity contract: TRANS_COMPLETE does NOT assert on the
+    /// TRANS_START write. The transaction clocks over simulated cycles at the
+    /// rate the (reset-default) clock registers dictate, SR.BUS_BUSY reads 1
+    /// on the wire, and completion lands at the exact analytically-derived
+    /// cycle.
+    #[test]
+    fn trans_complete_asserts_at_derived_wire_time_not_instantly() {
+        let mut p = Esp32c3I2c::new();
+        p.push_slave(Box::new(Bmp280::new(0x76)));
+        p.write_u32(REG_CMD0, cmd(CMD_RSTART, 0)).unwrap();
+        p.write_u32(REG_CMD0 + 4, cmd(CMD_WRITE, 2)).unwrap();
+        p.write_u32(REG_CMD0 + 8, cmd(CMD_STOP, 0)).unwrap();
+        p.write_u32(REG_DATA, 0xEC).unwrap(); // addr+W
+        p.write_u32(REG_DATA, 0xD0).unwrap(); // pointer
+        p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
+
+        assert_eq!(
+            p.read_u32(REG_INT_RAW).unwrap() & INT_TRANS_COMPLETE,
+            0,
+            "TRANS_COMPLETE must not assert instantly on TRANS_START"
+        );
+        assert!(p.engine_active(), "engine must be clocking the wire");
+        assert_eq!(
+            p.read_u32(REG_SR).unwrap() & SR_BUS_BUSY,
+            SR_BUS_BUSY,
+            "SR.BUS_BUSY must read 1 while the transaction is on the wire"
+        );
+
+        let mut cycles = 0u64;
+        while p.engine_active() {
+            p.tick_elapsed(1);
+            cycles += 1;
+            assert!(cycles < 10_000_000, "engine never completed");
+        }
+        // Reset-default timing (datasheet reset values, firmware programmed
+        // nothing): module tick = 4 engine cycles (XTAL 40 MHz, divider 1, on
+        // the 160 MHz cycle base). Wire time in module ticks:
+        //   START:  SCL_START_HOLD 8+1                       =  9
+        //   bits:   2 bytes x 9 bits x (low 0+1 + high 0+0+1) = 36
+        //   STOP:   low 1 + SCL_STOP_SETUP 8+1 + SCL_STOP_HOLD 8+1 = 19
+        // total = 64 module ticks = 256 engine cycles.
+        assert_eq!(
+            cycles, 256,
+            "completion time must derive from the registers"
+        );
+        assert_eq!(
+            p.read_u32(REG_INT_RAW).unwrap() & INT_TRANS_COMPLETE,
+            INT_TRANS_COMPLETE
+        );
+        assert_eq!(p.read_u32(REG_SR).unwrap() & SR_BUS_BUSY, 0);
+    }
+
+    /// Timing derivation follows the PROGRAMMED registers: a 100 kHz-style
+    /// configuration (as esp-hal would write) stretches the same transaction
+    /// accordingly. SCL period = (low + high) module ticks; all counters use
+    /// the TRM's `reg + 1` semantics.
+    #[test]
+    fn scl_timing_follows_programmed_registers() {
+        let mut p = Esp32c3I2c::new();
+        // 400-tick SCL period at 40 MHz module clock = 100 kHz.
+        p.write_u32(REG_SCL_LOW_PERIOD, 199).unwrap(); // low = 200 ticks
+        p.write_u32(REG_SCL_HIGH_PERIOD, 180 | (19 << 9)).unwrap(); // high = 200
+        p.write_u32(REG_SDA_HOLD, 29).unwrap(); // 30 ticks
+        p.write_u32(REG_SCL_START_HOLD, 199).unwrap();
+        p.write_u32(REG_SCL_STOP_SETUP, 199).unwrap();
+        p.write_u32(REG_SCL_STOP_HOLD, 199).unwrap();
+
+        // One-byte write to an absent slave (NACK still clocks all 9 bits).
+        p.write_u32(REG_CMD0, cmd(CMD_RSTART, 0)).unwrap();
+        p.write_u32(REG_CMD0 + 4, cmd(CMD_WRITE, 1)).unwrap();
+        p.write_u32(REG_CMD0 + 8, cmd(CMD_STOP, 0)).unwrap();
+        p.write_u32(REG_DATA, 0xA0).unwrap();
+        p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
+
+        let mut cycles = 0u64;
+        while p.engine_active() {
+            p.tick_elapsed(1);
+            cycles += 1;
+            assert!(cycles < 10_000_000, "engine never completed");
+        }
+        // START 200 + 9 bits x 400 + STOP (200 low + 200 setup + 200 hold)
+        // = 4400 module ticks x 4 engine cycles = 17600 cycles.
+        assert_eq!(cycles, 17_600);
+        assert_eq!(
+            p.read_u32(REG_INT_RAW).unwrap() & INT_NACK,
+            INT_NACK,
+            "absent slave must NACK"
+        );
     }
 
     #[test]
@@ -1074,7 +1655,7 @@ mod tests {
         p.write_u32(REG_CMD0 + 8, cmd(CMD_STOP, 0)).unwrap();
         p.write_u32(REG_DATA, 0xEC).unwrap(); // addr+W
         p.write_u32(REG_DATA, 0xD0).unwrap(); // pointer
-        p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
+        start_and_run(&mut p);
 
         let events = log.snapshot();
         assert!(

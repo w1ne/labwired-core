@@ -10,7 +10,7 @@
  *
  * Sensirion's wire protocol is plain byte streams (not register-addressed): a
  * command write is one transaction, a data read is a separate transaction. The
- * C3 controller runs each command list synchronously into a 32-byte FIFO, so a
+ * C3 controller clocks each command list bit-by-bit into a 32-byte FIFO, so a
  * single read is capped at 32 bytes — every Sensirion read on this board
  * (data-ready 3 B, SCD4x measurement 9 B, SGP41 raw 6 B, SPS30 uint16 30 B)
  * fits inside one transaction.
@@ -57,10 +57,10 @@ static void i2c_reset_fifos(void) {
     I2C_FIFO_CONF = FIFO_RX_RST | FIFO_TX_RST; /* self-clearing in the model */
 }
 
-/* Kick the command list and wait for completion (END / TRANS_COMPLETE). The
- * model runs the whole list synchronously on the TRANS_START write, so status
- * is already set when we read it back; the bounded spin mirrors real silicon.
- * Returns 0 on ACKed completion, 1 on NACK/timeout. */
+/* Kick the command list and busy-wait for completion (END / TRANS_COMPLETE),
+ * exactly as on real silicon: the controller clocks the transaction on the
+ * wire at the rate its timing registers dictate, so the spin runs for the
+ * real wire time. Returns 0 on ACKed completion, 1 on NACK/timeout. */
 static int i2c_run(void) {
     I2C_INT_CLR = 0xFFFFFFFFu;
     I2C_CTR |= CTR_TRANS_START;
