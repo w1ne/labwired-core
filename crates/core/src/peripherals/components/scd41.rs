@@ -187,6 +187,7 @@ pub struct Scd41Kit;
 pub static SCD41_KIT: Scd41Kit = Scd41Kit;
 
 static SCD41_METADATA: KitMetadata = KitMetadata {
+    inputs: &[],
     device_type: "scd41",
     label: "Sensirion SCD41 CO₂",
     summary: "Photoacoustic CO₂ + temperature + humidity sensor over I2C.",

@@ -100,6 +100,7 @@ pub struct NtcThermistorKit;
 pub static NTC_THERMISTOR_KIT: NtcThermistorKit = NtcThermistorKit;
 
 static NTC_THERMISTOR_METADATA: KitMetadata = KitMetadata {
+    inputs: &[],
     device_type: "ntc-thermistor",
     label: "NTC Thermistor",
     summary: "10 kΩ NTC + voltage divider on an ADC channel.",

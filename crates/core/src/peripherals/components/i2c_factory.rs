@@ -15,6 +15,23 @@ use std::path::PathBuf;
 
 use crate::peripherals::i2c::I2cDevice;
 
+/// [`build_i2c_device`] + identity: builds the device for a system.yaml
+/// `external_devices` entry and stamps its id onto the model (when it is an
+/// input device) so discovery and the stimulus resolver can address it by the
+/// name the author wrote (see [`crate::sim_input::SimInput::component_id`]).
+/// Every from-config attach path should use THIS, not the raw builder.
+pub fn build_external_i2c_device(
+    type_str: &str,
+    id: &str,
+    config: &HashMap<String, serde_yaml::Value>,
+) -> Option<Box<dyn I2cDevice>> {
+    let mut dev = build_i2c_device(type_str, config)?;
+    if let Some(si) = dev.as_sim_input_mut() {
+        si.set_component_id(id.to_string());
+    }
+    Some(dev)
+}
+
 pub fn build_i2c_device(
     type_str: &str,
     config: &HashMap<String, serde_yaml::Value>,

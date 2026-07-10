@@ -1476,7 +1476,11 @@ fn execute_test_loop<C: labwired_core::Cpu>(
     // an argument (captures nothing) so it can be called both here and mid-loop.
     let apply_stimulus = |machine: &mut labwired_core::Machine<C>,
                           s: &labwired_config::StimulusSpec| {
-        match machine.set_input(&s.target.channel, s.value) {
+        let result = match s.target.component.as_deref() {
+            Some(component) => machine.set_input_on(component, &s.target.channel, s.value),
+            None => machine.set_input(&s.target.channel, s.value),
+        };
+        match result {
             Ok(()) => info!("stimulus: {} = {} applied", s.target.channel, s.value),
             Err(e) => error!(
                 "stimulus '{}' = {} could not be applied: {:?}",

@@ -213,8 +213,11 @@ impl SystemBus {
                     if ext.connection != p_cfg.id {
                         continue;
                     }
-                    match crate::peripherals::components::build_i2c_device(&ext.r#type, &ext.config)
-                    {
+                    match crate::peripherals::components::build_external_i2c_device(
+                        &ext.r#type,
+                        &ext.id,
+                        &ext.config,
+                    ) {
                         Some(device) => {
                             tracing::info!(
                                 "i2c attach: '{}' (type={}) -> '{}'",

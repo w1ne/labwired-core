@@ -280,6 +280,7 @@ pub struct Ssd1306Kit;
 pub static SSD1306_KIT: Ssd1306Kit = Ssd1306Kit;
 
 static SSD1306_METADATA: KitMetadata = KitMetadata {
+    inputs: &[],
     device_type: "oled-ssd1306",
     label: "SSD1306 OLED",
     summary: "128×64 monochrome OLED display over I2C with a paged framebuffer.",
@@ -319,6 +320,7 @@ pub struct Ssd1306Oled091Kit;
 pub static SSD1306_128X32_KIT: Ssd1306Oled091Kit = Ssd1306Oled091Kit;
 
 static SSD1306_128X32_METADATA: KitMetadata = KitMetadata {
+    inputs: &[],
     device_type: "oled-ssd1306-128x32",
     label: "SSD1306 OLED 0.91″",
     summary: "0.91″ 128×32 monochrome OLED display over I2C with a paged framebuffer.",

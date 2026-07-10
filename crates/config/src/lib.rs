@@ -868,15 +868,17 @@ pub struct Verdict {
     pub require_fault_fired: bool,
 }
 
-/// Which input channel a stimulus drives. `channel` is the [`crate::sim_input`]
-/// channel key (e.g. `x` on an accelerometer); `component` is an optional,
-/// advisory hint naming the device for readability. Resolution is by unique
-/// channel key today (the same rule as `Machine::set_input`), so an ambiguous
-/// channel is a run-time error rather than silently picking one.
+/// Which input channel a stimulus drives. `channel` is the `sim_input`
+/// channel key (e.g. `x` on an accelerometer); `component`, when given,
+/// narrows resolution to the device owned by the peripheral with that bus
+/// name (or the sensor id for directly-attached sensors) — the disambiguator
+/// when two devices expose the same channel key. Without `component`,
+/// resolution is by unique channel key and an ambiguous channel is a run-time
+/// error rather than silently picking one.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct StimulusTarget {
-    /// Optional device name, for documentation/disambiguation of the YAML.
+    /// Optional owning peripheral name / sensor id to disambiguate `channel`.
     #[serde(default)]
     pub component: Option<String>,
     /// The input channel key to drive.

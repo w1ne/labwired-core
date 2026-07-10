@@ -140,6 +140,7 @@ pub struct Sgp41Kit;
 pub static SGP41_KIT: Sgp41Kit = Sgp41Kit;
 
 static SGP41_METADATA: KitMetadata = KitMetadata {
+    inputs: &[],
     device_type: "sgp41",
     label: "Sensirion SGP41 VOC/NOx",
     summary: "MOx gas sensor returning raw VOC/NOx signals over I2C.",

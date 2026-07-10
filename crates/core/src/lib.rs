@@ -875,7 +875,7 @@ pub struct Machine<C: Cpu> {
 impl<C: Cpu> Machine<C> {
     /// Discover the drivable input channels on this machine (delegates to
     /// [`bus::SystemBus::list_inputs`]). See [`crate::sim_input`].
-    pub fn list_inputs(&self) -> Vec<(String, crate::sim_input::InputChannel)> {
+    pub fn list_inputs(&mut self) -> Vec<(String, crate::sim_input::InputChannel)> {
         self.bus.list_inputs()
     }
 
@@ -888,7 +888,33 @@ impl<C: Cpu> Machine<C> {
         channel: &str,
         value: f64,
     ) -> Result<(), crate::sim_input::SimInputError> {
-        self.bus.set_input(channel, value)
+        self.bus.set_input(None, channel, value)
+    }
+
+    /// [`Machine::set_input`] narrowed to the device named `component` — the
+    /// external-device id from system.yaml (stamped onto the model at attach)
+    /// or the owning peripheral's bus name; the disambiguator a test-script
+    /// stimulus `target.component` resolves through when two devices expose
+    /// the same channel key.
+    pub fn set_input_on(
+        &mut self,
+        component: &str,
+        channel: &str,
+        value: f64,
+    ) -> Result<(), crate::sim_input::SimInputError> {
+        self.bus.set_input(Some(component), channel, value)
+    }
+
+    /// Apply several input sets as one atomic transaction (delegates to
+    /// [`bus::SystemBus::set_inputs`]): every set is validated first and
+    /// either all apply or none do, with no execution in between — the way to
+    /// drive a multi-channel pose (an IMU's x/y/z, a GPS lat+lon) without the
+    /// firmware ever observing a torn update.
+    pub fn set_inputs(
+        &mut self,
+        sets: &[(Option<&str>, &str, f64)],
+    ) -> Result<(), crate::sim_input::SimInputError> {
+        self.bus.set_inputs(sets)
     }
 
     /// Install a logic-analyzer watch set, resetting the capture buffer and

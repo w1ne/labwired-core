@@ -265,6 +265,7 @@ pub struct Tm16377SegKit;
 pub static TM1637_7SEG_KIT: Tm16377SegKit = Tm16377SegKit;
 
 static TM1637_7SEG_METADATA: KitMetadata = KitMetadata {
+    inputs: &[],
     device_type: "tm1637-7seg",
     label: "TM1637 7-Segment (4-digit)",
     summary: "4-digit 7-segment LED display with the TM1637 2-wire (CLK/DIO) driver.",
