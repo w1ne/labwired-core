@@ -644,8 +644,17 @@ impl Cpu for CortexM {
         config: &SimulationConfig,
         max_count: u32,
     ) -> SimResult<u32> {
+        // Push-mode logic capture: while armed, the tap clock advances once
+        // per retired instruction (BEFORE executing it) so MMIO pad writes
+        // stamp with the cycle boundary they become observable at. One Arc
+        // clone + flag check per batch when disarmed.
+        let tap = bus.logic_tap().filter(|t| t.push_armed());
+
         if !config.batch_mode_enabled {
             for _ in 0..max_count {
+                if let Some(tap) = &tap {
+                    tap.bump_clock();
+                }
                 self.step(bus, observers, config)?;
             }
             return Ok(max_count);
@@ -671,6 +680,9 @@ impl Cpu for CortexM {
                     }
                 }
                 let old_pc = self.pc;
+                if let Some(tap) = &tap {
+                    tap.bump_clock();
+                }
                 self.step_internal(sysbus, observers, config)?;
                 executed += 1;
                 let pc_diff = self.pc.wrapping_sub(old_pc);
@@ -693,6 +705,9 @@ impl Cpu for CortexM {
                     }
                 }
                 let old_pc = self.pc;
+                if let Some(tap) = &tap {
+                    tap.bump_clock();
+                }
                 self.step_internal(bus, observers, config)?;
                 executed += 1;
                 let pc_diff = self.pc.wrapping_sub(old_pc);

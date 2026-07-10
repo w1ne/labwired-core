@@ -173,7 +173,7 @@ mod logic_capture_tests {
     #[test]
     fn ring_buffer_drops_oldest_on_overflow() {
         let mut cap = LogicCapture::new();
-        cap.install(&[Some((0, 0))], &[Some(false)]);
+        cap.install(&[Some((0, 0))], &[Some(false)], &[false]);
 
         let overflow = 100usize;
         let total = LOGIC_RING_CAPACITY + overflow;
@@ -202,7 +202,7 @@ mod logic_capture_tests {
     #[test]
     fn unknown_pad_records_no_edges() {
         let mut cap = LogicCapture::new();
-        cap.install(&[Some((0, 0))], &[None]);
+        cap.install(&[Some((0, 0))], &[None], &[false]);
         for i in 0..10 {
             cap.sample(i + 1, |_, _| None);
         }
@@ -247,7 +247,9 @@ mod logic_capture_tests {
     /// The no-aliasing guarantee on the batched `Machine::run` path: firmware
     /// bit-banging a pad on consecutive instructions (str/str/branch loop) has
     /// every transition captured even with a wide peripheral tick interval —
-    /// the run loop clamps its batch to one instruction while a watch is armed.
+    /// push-instrumented pads report every write-site transition; polled pads
+    /// get the same guarantee from the armed one-instruction batch clamp (see
+    /// `tests/logic_capture_differential.rs` for the byte-equality oracle).
     #[test]
     fn run_path_captures_bitbang_toggles_without_aliasing() {
         use crate::DebugControl;

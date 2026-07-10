@@ -280,6 +280,12 @@ pub struct SystemBus {
     /// present (never `None`) — empty until at least one peripheral is wired
     /// to it in `from_config`.
     pub bus_trace: bus_trace::BusTraceLog,
+    /// Push-mode logic-capture tap (see [`crate::logic_capture`]): the shared
+    /// handle instrumented peripherals report pad writes into, and whose
+    /// provisional cycle clock the CPU batch loops advance per retired
+    /// instruction while push capture is armed. Always present (cheap when
+    /// disarmed); wired to peripherals by `Machine::logic_watch`.
+    pub logic_tap: crate::logic_capture::LogicTap,
     /// Authoritative pin → (gpio peripheral, bit) map, built from the chip
     /// config's `pins:`. Empty when the chip declares none (→ label parse).
     pub(crate) pin_map: std::collections::HashMap<String, (String, u8)>,
@@ -2211,6 +2217,7 @@ impl SystemBus {
             flash_models_ops: false,
             flash_error_flags_idx: None,
             bus_trace: bus_trace::new_log(),
+            logic_tap: crate::logic_capture::LogicTap::new(),
             pin_map: std::collections::HashMap::new(),
         };
         bus.rebuild_peripheral_ranges();
@@ -2263,6 +2270,7 @@ impl SystemBus {
             flash_models_ops: false,
             flash_error_flags_idx: None,
             bus_trace: bus_trace::new_log(),
+            logic_tap: crate::logic_capture::LogicTap::new(),
             pin_map: std::collections::HashMap::new(),
         };
         bus.rebuild_peripheral_ranges();
@@ -4571,6 +4579,7 @@ peripherals:
             flash_models_ops: false,
             flash_error_flags_idx: None,
             bus_trace: bus_trace::new_log(),
+            logic_tap: crate::logic_capture::LogicTap::new(),
             pin_map: std::collections::HashMap::new(),
         };
 
@@ -4647,6 +4656,7 @@ peripherals:
             flash_models_ops: false,
             flash_error_flags_idx: None,
             bus_trace: bus_trace::new_log(),
+            logic_tap: crate::logic_capture::LogicTap::new(),
             pin_map: std::collections::HashMap::new(),
         };
         bus.rebuild_peripheral_ranges();
@@ -4874,6 +4884,7 @@ peripherals:
             flash_models_ops: false,
             flash_error_flags_idx: None,
             bus_trace: bus_trace::new_log(),
+            logic_tap: crate::logic_capture::LogicTap::new(),
             pin_map: std::collections::HashMap::new(),
         };
         bus.rebuild_peripheral_ranges();
@@ -5100,6 +5111,7 @@ peripherals:
             flash_models_ops: false,
             flash_error_flags_idx: None,
             bus_trace: bus_trace::new_log(),
+            logic_tap: crate::logic_capture::LogicTap::new(),
             pin_map: std::collections::HashMap::new(),
         };
 
@@ -5180,6 +5192,7 @@ peripherals:
             flash_models_ops: false,
             flash_error_flags_idx: None,
             bus_trace: bus_trace::new_log(),
+            logic_tap: crate::logic_capture::LogicTap::new(),
             pin_map: std::collections::HashMap::new(),
         };
         bus.rebuild_peripheral_ranges();

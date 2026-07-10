@@ -831,7 +831,14 @@ impl Cpu for RiscV {
         config: &crate::SimulationConfig,
         max_count: u32,
     ) -> SimResult<u32> {
+        // Push-mode logic capture: advance the tap clock once per retired
+        // instruction while armed, so MMIO pad writes stamp with the cycle
+        // boundary they become observable at (see `crate::logic_capture`).
+        let tap = bus.logic_tap().filter(|t| t.push_armed());
         for i in 0..max_count {
+            if let Some(tap) = &tap {
+                tap.bump_clock();
+            }
             self.step(bus, observers, config)?;
             if config.idle_fast_forward_enabled && self.idle_fast_forward_budget(bus).is_some() {
                 return Ok(i + 1);

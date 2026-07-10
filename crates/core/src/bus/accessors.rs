@@ -45,6 +45,10 @@ impl SystemBus {
 }
 
 impl crate::Bus for SystemBus {
+    fn logic_tap(&self) -> Option<crate::logic_capture::LogicTap> {
+        Some(self.logic_tap.clone())
+    }
+
     fn read_u8(&self, addr: u64) -> SimResult<u8> {
         // RAM is always first (hot path, never overlaps a peripheral window).
         if let Some(val) = self.ram.read_u8(addr) {

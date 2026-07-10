@@ -65,6 +65,20 @@ const PCPU_NMI_INT: u64 = 0x60;
 const CPUSDIO_INT: u64 = 0x64;
 const PIN0: u64 = 0x74;
 
+/// Push-mode logic-capture state for the C3 GPIO (see
+/// [`crate::logic_capture`]): the shared tap, this port's watched
+/// `(pin, channel)` pairs, a pre-write level scratchpad, and the channel
+/// lists last registered with the shared I²C line cell (so registration is
+/// only re-synced when a write actually changes a watched pad's routing).
+#[derive(Debug)]
+struct C3Tap {
+    tap: crate::logic_capture::LogicTap,
+    watched: Vec<(u8, u32)>,
+    scratch: Vec<Option<bool>>,
+    line_scl_chs: Vec<u32>,
+    line_sda_chs: Vec<u32>,
+}
+
 #[derive(Debug)]
 pub struct Esp32c3Gpio {
     bt_select: u32,
@@ -83,6 +97,10 @@ pub struct Esp32c3Gpio {
     /// matrix routes I2CEXT0_SCL/SDA read the wire here instead of the
     /// GPIO_OUT latch.
     i2c_lines: Option<std::sync::Arc<super::i2c::I2cLineLevels>>,
+    /// `Some` while the logic analyzer watches pads on this port in push mode
+    /// (installed via `install_logic_tap`). Not snapshot state — the watch is
+    /// re-armed by the frontend after a resume.
+    tap: Option<C3Tap>,
     cycle: u64,
     anchor_tick: u64,
 }
@@ -100,6 +118,7 @@ impl Esp32c3Gpio {
             pin_cfg: [0; PIN_COUNT as usize],
             out_sel: [0; PIN_COUNT as usize],
             i2c_lines: None,
+            tap: None,
             cycle: 0,
             anchor_tick: 0,
         }
@@ -109,6 +128,103 @@ impl Esp32c3Gpio {
     /// engine drives) so matrix-routed pads carry the real waveform.
     pub(crate) fn set_i2c_lines(&mut self, lines: std::sync::Arc<super::i2c::I2cLineLevels>) {
         self.i2c_lines = Some(lines);
+    }
+
+    /// Direction-aware pad level — the single truth `read_gpio_pad` and the
+    /// push-capture tap both read.
+    fn pad_level(&self, pin: u8) -> Option<bool> {
+        if pin >= PIN_COUNT {
+            return None;
+        }
+        let mask = 1u32 << pin;
+        // ENABLE is the output driver: enabled pins show the driving signal,
+        // everything else shows the (externally driven) input level.
+        if (self.enable & mask) != 0 {
+            // Output matrix: pads routed to the I²C0 controller carry the live
+            // SDA/SCL wire the bit engine drives, not the GPIO_OUT latch.
+            if let Some(lines) = &self.i2c_lines {
+                match self.out_sel[pin as usize] & 0x1FF {
+                    SIG_I2CEXT0_SCL => return Some(lines.scl()),
+                    SIG_I2CEXT0_SDA => return Some(lines.sda()),
+                    _ => {}
+                }
+            }
+            return Some((self.out & mask) != 0);
+        }
+        Some((self.in_data & mask) != 0)
+    }
+
+    /// Record every watched pad's current level before a mutation. No-op (one
+    /// branch) while no tap is installed. The tap is briefly taken out of
+    /// `self` so `pad_level(&self)` can run while the scratchpad is written.
+    #[inline]
+    fn tap_snapshot(&mut self) {
+        let Some(mut t) = self.tap.take() else {
+            return;
+        };
+        for (k, &(pin, _)) in t.watched.iter().enumerate() {
+            t.scratch[k] = self.pad_level(pin);
+        }
+        self.tap = Some(t);
+    }
+
+    /// Report watched pads whose level became known-different since the
+    /// matching [`tap_snapshot`](Self::tap_snapshot), then re-sync the I²C
+    /// line-cell registration if the write changed a watched pad's routing —
+    /// so a pad handed to (or taken from) the I²C matrix keeps pushing edges
+    /// from the correct source afterwards.
+    #[inline]
+    fn tap_report(&mut self) {
+        let Some(t) = self.tap.take() else {
+            return;
+        };
+        for (k, &(pin, ch)) in t.watched.iter().enumerate() {
+            if let Some(level) = self.pad_level(pin) {
+                if t.scratch[k] != Some(level) {
+                    t.tap.push(ch, level);
+                }
+            }
+        }
+        self.tap = Some(t);
+        self.sync_line_tap();
+    }
+
+    /// Channels whose watched pads currently route to the I²C0 SCL / SDA
+    /// output-matrix signals (and are output-enabled) — the pads whose level
+    /// changes are driven by the I²C bit engine rather than GPIO writes.
+    fn routed_line_channels(&self) -> (Vec<u32>, Vec<u32>) {
+        let mut scl = Vec::new();
+        let mut sda = Vec::new();
+        if let Some(t) = &self.tap {
+            for &(pin, ch) in &t.watched {
+                if pin >= PIN_COUNT || (self.enable & (1u32 << pin)) == 0 {
+                    continue;
+                }
+                match self.out_sel[pin as usize] & 0x1FF {
+                    SIG_I2CEXT0_SCL => scl.push(ch),
+                    SIG_I2CEXT0_SDA => sda.push(ch),
+                    _ => {}
+                }
+            }
+        }
+        (scl, sda)
+    }
+
+    /// Push the current routed-channel lists into the shared I²C line cell,
+    /// but only when they changed (avoids mutex traffic on unrelated writes).
+    fn sync_line_tap(&mut self) {
+        let Some(lines) = self.i2c_lines.clone() else {
+            return;
+        };
+        let (scl, sda) = self.routed_line_channels();
+        let Some(t) = &mut self.tap else {
+            return;
+        };
+        if t.line_scl_chs != scl || t.line_sda_chs != sda {
+            t.line_scl_chs = scl.clone();
+            t.line_sda_chs = sda.clone();
+            lines.install_tap(Some(t.tap.clone()), scl, sda);
+        }
     }
 
     fn out_sel_index(off: u64) -> Option<usize> {
@@ -224,7 +340,9 @@ impl Peripheral for Esp32c3Gpio {
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
         let word_off = offset & !3;
         let byte_off = offset & 3;
+        self.tap_snapshot();
         if self.write_byte_special(word_off, byte_off, value) {
+            self.tap_report();
             return Ok(());
         }
         let shift = byte_off * 8;
@@ -232,6 +350,7 @@ impl Peripheral for Esp32c3Gpio {
         word &= !(0xFFu32 << shift);
         word |= (value as u32) << shift;
         self.write_word(word_off, word);
+        self.tap_report();
         Ok(())
     }
 
@@ -243,7 +362,9 @@ impl Peripheral for Esp32c3Gpio {
                 word_off,
                 OUT_W1TS | OUT_W1TC | ENABLE_W1TS | ENABLE_W1TC | STATUS_W1TS | STATUS_W1TC
             ) {
+                self.tap_snapshot();
                 self.write_word(word_off, (value as u32) << shift);
+                self.tap_report();
                 return Ok(());
             }
         }
@@ -253,7 +374,9 @@ impl Peripheral for Esp32c3Gpio {
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         if offset & 3 == 0 {
+            self.tap_snapshot();
             self.write_word(offset, value);
+            self.tap_report();
             Ok(())
         } else {
             for i in 0..4 {
@@ -289,25 +412,7 @@ impl Peripheral for Esp32c3Gpio {
     }
 
     fn read_gpio_pad(&self, pin: u8) -> Option<bool> {
-        if pin >= PIN_COUNT {
-            return None;
-        }
-        let mask = 1u32 << pin;
-        // ENABLE is the output driver: enabled pins show the driving signal,
-        // everything else shows the (externally driven) input level.
-        if (self.enable & mask) != 0 {
-            // Output matrix: pads routed to the I²C0 controller carry the live
-            // SDA/SCL wire the bit engine drives, not the GPIO_OUT latch.
-            if let Some(lines) = &self.i2c_lines {
-                match self.out_sel[pin as usize] & 0x1FF {
-                    SIG_I2CEXT0_SCL => return Some(lines.scl()),
-                    SIG_I2CEXT0_SDA => return Some(lines.sda()),
-                    _ => {}
-                }
-            }
-            return Some((self.out & mask) != 0);
-        }
-        Some((self.in_data & mask) != 0)
+        self.pad_level(pin)
     }
 
     fn gpio_routing(&self, pin: u8) -> Option<GpioRouting> {
@@ -345,7 +450,34 @@ impl Peripheral for Esp32c3Gpio {
         if pin >= PIN_COUNT {
             return false;
         }
+        self.tap_snapshot();
         self.set_pin_input(pin, level);
+        self.tap_report();
+        true
+    }
+
+    fn install_logic_tap(
+        &mut self,
+        tap: &crate::logic_capture::LogicTap,
+        watched: &[(u8, u32)],
+    ) -> bool {
+        if watched.is_empty() {
+            self.tap = None;
+            if let Some(lines) = &self.i2c_lines {
+                lines.install_tap(None, Vec::new(), Vec::new());
+            }
+        } else {
+            self.tap = Some(C3Tap {
+                tap: tap.clone(),
+                watched: watched.to_vec(),
+                scratch: vec![None; watched.len()],
+                // Seeded stale so the sync below always installs the current
+                // routing into the line cell.
+                line_scl_chs: vec![u32::MAX],
+                line_sda_chs: vec![u32::MAX],
+            });
+            self.sync_line_tap();
+        }
         true
     }
 
