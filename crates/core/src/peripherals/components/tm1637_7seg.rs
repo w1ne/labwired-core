@@ -258,7 +258,7 @@ impl Tm1637 {
 // ─── PeripheralKit registration ────────────────────────────────────────────
 
 use crate::peripherals::kit::{
-    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, LabRef, PeripheralKit, Transport,
+    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, PeripheralKit, Transport,
 };
 
 pub struct Tm16377SegKit;
@@ -288,12 +288,11 @@ static TM1637_7SEG_METADATA: KitMetadata = KitMetadata {
             doc: "DIO GPIO pin the firmware bit-bangs (e.g. \"PA9\"). Defaults to PA9.",
         },
     ],
-    labs: &[LabRef {
-        board_id: "tm1637-7seg-lab",
-        chip: "stm32f103",
-        example_dir: "tm1637-7seg-lab",
-        demo_elf: "demo-tm1637-7seg-lab.elf",
-    }],
+    // No lab yet: examples/tm1637-7seg-lab has only a README + system.yaml — no demo
+    // firmware/ELF is built or published. Declaring a LabRef would promise a
+    // one-click demo that 404s (the playground gate rightly rejects it).
+    // Re-add the LabRef when the demo firmware ships.
+    labs: &[],
 };
 
 impl PeripheralKit for Tm16377SegKit {

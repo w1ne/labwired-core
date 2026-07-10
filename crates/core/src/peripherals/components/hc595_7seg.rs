@@ -186,7 +186,7 @@ impl SpiDevice for Hc5957Seg {
 // ─── PeripheralKit registration ────────────────────────────────────────────
 
 use crate::peripherals::kit::{
-    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, LabRef, PeripheralKit, Transport,
+    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, PeripheralKit, Transport,
 };
 
 pub struct Hc5957SegKit;
@@ -210,12 +210,11 @@ static HC595_7SEG_METADATA: KitMetadata = KitMetadata {
         ty: ConfigType::Str,
         doc: "RCLK latch GPIO pin, wired as SPI chip-select (e.g. \"PA4\"). Defaults to PA4.",
     }],
-    labs: &[LabRef {
-        board_id: "hc595-7seg-lab",
-        chip: "stm32f103",
-        example_dir: "hc595-7seg-lab",
-        demo_elf: "demo-hc595-7seg-lab.elf",
-    }],
+    // No lab yet: examples/hc595-7seg-lab has only a README + system.yaml — no demo
+    // firmware/ELF is built or published. Declaring a LabRef would promise a
+    // one-click demo that 404s (the playground gate rightly rejects it).
+    // Re-add the LabRef when the demo firmware ships.
+    labs: &[],
 };
 
 impl PeripheralKit for Hc5957SegKit {

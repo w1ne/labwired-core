@@ -335,12 +335,11 @@ static SSD1306_128X32_METADATA: KitMetadata = KitMetadata {
         ty: ConfigType::Int,
         doc: "7-bit slave address. Defaults to 0x3C; 0x3D selects the SA0=high variant.",
     }],
-    labs: &[LabRef {
-        board_id: "ssd1306-128x32-lab",
-        chip: "stm32f103",
-        example_dir: "ssd1306-128x32-lab",
-        demo_elf: "demo-ssd1306-128x32-lab.elf",
-    }],
+    // No lab yet: examples/ssd1306-128x32-lab has only a README + system.yaml — no demo
+    // firmware/ELF is built or published. Declaring a LabRef would promise a
+    // one-click demo that 404s (the playground gate rightly rejects it).
+    // Re-add the LabRef when the demo firmware ships.
+    labs: &[],
 };
 
 impl PeripheralKit for Ssd1306Oled091Kit {

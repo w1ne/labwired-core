@@ -271,14 +271,7 @@
           "doc": "7-bit slave address. Defaults to 0x3C; 0x3D selects the SA0=high variant."
         }
       ],
-      "labs": [
-        {
-          "board_id": "ssd1306-128x32-lab",
-          "chip": "stm32f103",
-          "example_dir": "ssd1306-128x32-lab",
-          "demo_elf": "demo-ssd1306-128x32-lab.elf"
-        }
-      ],
+      "labs": [],
       "inputs": []
     },
     {
@@ -474,14 +467,7 @@
           "doc": "RCLK latch GPIO pin, wired as SPI chip-select (e.g. \"PA4\"). Defaults to PA4."
         }
       ],
-      "labs": [
-        {
-          "board_id": "hc595-7seg-lab",
-          "chip": "stm32f103",
-          "example_dir": "hc595-7seg-lab",
-          "demo_elf": "demo-hc595-7seg-lab.elf"
-        }
-      ],
+      "labs": [],
       "inputs": []
     },
     {
@@ -503,14 +489,7 @@
           "doc": "DIO GPIO pin the firmware bit-bangs (e.g. \"PA9\"). Defaults to PA9."
         }
       ],
-      "labs": [
-        {
-          "board_id": "tm1637-7seg-lab",
-          "chip": "stm32f103",
-          "example_dir": "tm1637-7seg-lab",
-          "demo_elf": "demo-tm1637-7seg-lab.elf"
-        }
-      ],
+      "labs": [],
       "inputs": []
     },
     {
@@ -688,7 +667,7 @@
       ],
       "labs": [
         {
-          "board_id": "leo-airquality-lab",
+          "board_id": "esp32c3-leo-airquality",
           "chip": "esp32c3",
           "example_dir": "esp32c3-leo-airquality",
           "demo_elf": "demo-esp32c3-leo-airquality.elf"
@@ -732,7 +711,7 @@
       ],
       "labs": [
         {
-          "board_id": "leo-airquality-lab",
+          "board_id": "esp32c3-leo-airquality",
           "chip": "esp32c3",
           "example_dir": "esp32c3-leo-airquality",
           "demo_elf": "demo-esp32c3-leo-airquality.elf"
@@ -771,7 +750,7 @@
       ],
       "labs": [
         {
-          "board_id": "leo-airquality-lab",
+          "board_id": "esp32c3-leo-airquality",
           "chip": "esp32c3",
           "example_dir": "esp32c3-leo-airquality",
           "demo_elf": "demo-esp32c3-leo-airquality.elf"
@@ -810,7 +789,7 @@
       ],
       "labs": [
         {
-          "board_id": "leo-airquality-lab",
+          "board_id": "esp32c3-leo-airquality",
           "chip": "esp32c3",
           "example_dir": "esp32c3-leo-airquality",
           "demo_elf": "demo-esp32c3-leo-airquality.elf"
@@ -854,7 +833,7 @@
       ],
       "labs": [
         {
-          "board_id": "leo-airquality-lab",
+          "board_id": "esp32c3-leo-airquality",
           "chip": "esp32c3",
           "example_dir": "esp32c3-leo-airquality",
           "demo_elf": "demo-esp32c3-leo-airquality.elf"
