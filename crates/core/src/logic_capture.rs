@@ -10,28 +10,27 @@
 //! nondeterministic even though the simulator itself is fully deterministic.
 //!
 //! This module moves capture INSIDE the simulation loop: while a watch set is
-//! active, [`Machine`](crate::Machine) samples the watched pads on a fixed
-//! engine-cycle cadence ([`LOGIC_SAMPLE_INTERVAL`]) and records a `{ch, cycle,
-//! value}` edge ONLY on a transition. Timestamps are engine cycles, so
-//! identical firmware + identical watch config produce byte-identical edge
-//! streams regardless of how the host drives stepping.
+//! active, [`Machine`](crate::Machine) samples the watched pads at EVERY
+//! engine-cycle boundary (the run loop executes one instruction per batch
+//! while armed) and records a `{ch, cycle, value}` edge ONLY on a transition.
+//! Timestamps are engine cycles, so identical firmware + identical watch
+//! config produce byte-identical edge streams regardless of how the host
+//! drives stepping.
+//!
+//! The sampling guarantee: any pad level that persists across at least one
+//! instruction boundary is captured — no aliasing, at any toggle rate. A pad
+//! toggling every cycle yields an edge every cycle (and fills the ring in
+//! [`LOGIC_RING_CAPACITY`] cycles if never drained; overflow drops the OLDEST
+//! edges and counts them, it never distorts the newest). Earlier versions
+//! sampled on a fixed 16-cycle grid, which aliased anything toggling faster
+//! than ~32 cycles — bit-banged buses looked wrong before they looked dropped.
 //!
 //! Everything here is host-frame-independent and allocation-free on the hot
 //! path — the single per-step cost when nothing is watched is one `is_empty`
-//! check on the channel list.
+//! check on the channel list (and the edge ring is only ever allocated once a
+//! transition is actually recorded).
 
 use std::collections::VecDeque;
-
-/// Cycle spacing between logic samples.
-///
-/// A 100 kHz signal on a 40 MHz core has a period of 40e6 / 100e3 = 400 engine
-/// cycles. Sampling every 16 cycles yields 400 / 16 = 25 samples per period
-/// (>= 20, the fidelity target for reconstructing a 100 kHz waveform), while
-/// keeping the sample count — and therefore the per-sample cost when a watch is
-/// active — an order of magnitude below one-sample-per-cycle. It is a power of
-/// two so the bucket division is a shift. A fixed internal constant on purpose:
-/// no config knob to keep the capture contract simple and deterministic.
-pub const LOGIC_SAMPLE_INTERVAL: u64 = 16;
 
 /// Maximum number of edges retained in the ring buffer. On overflow the oldest
 /// edge is dropped (and counted) so capture never grows without bound. 64k
@@ -88,11 +87,6 @@ pub struct LogicCapture {
     /// sequence `next_seq - ring.len()`.
     next_seq: u64,
     dropped: u64,
-    /// Last sampled cycle bucket (`cycle / LOGIC_SAMPLE_INTERVAL`), so a bucket
-    /// is sampled at most once even if the step loop revisits the same cycle
-    /// window across a batch boundary.
-    last_bucket: u64,
-    sampled_once: bool,
 }
 
 impl LogicCapture {
@@ -120,8 +114,6 @@ impl LogicCapture {
         self.ring.clear();
         self.next_seq = 0;
         self.dropped = 0;
-        self.last_bucket = 0;
-        self.sampled_once = false;
     }
 
     /// Sample every watched pad at engine cycle `now`, recording a transition
@@ -130,15 +122,11 @@ impl LogicCapture {
     /// truth as `Peripheral::read_gpio_pad`); a `None` read records nothing.
     ///
     /// Caller guarantees this is only invoked when [`is_active`](Self::is_active).
-    /// At most one sample is taken per `LOGIC_SAMPLE_INTERVAL`-cycle bucket.
+    /// Every call is a real sample — the step loop invokes this at every cycle
+    /// boundary while armed, so no transition that persists across a boundary
+    /// is ever missed. Re-sampling the same cycle is harmless: capture is
+    /// transitions-only, so an unchanged pad records nothing.
     pub fn sample(&mut self, now: u64, read: impl Fn(usize, u8) -> Option<bool>) {
-        let bucket = now / LOGIC_SAMPLE_INTERVAL;
-        if self.sampled_once && bucket == self.last_bucket {
-            return;
-        }
-        self.last_bucket = bucket;
-        self.sampled_once = true;
-
         for i in 0..self.channels.len() {
             let Some((idx, pin)) = self.channels[i].resolved else {
                 continue;
