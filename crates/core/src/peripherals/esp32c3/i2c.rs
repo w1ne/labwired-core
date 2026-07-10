@@ -180,16 +180,31 @@ const CPU_CLK_HZ: u64 = 160_000_000;
 const XTAL_CLK_HZ: u64 = 40_000_000;
 const RC_FAST_CLK_HZ: u64 = 17_500_000;
 
+/// Push-mode logic-capture registration for the I²C line cell: which watch
+/// channels observe pads currently matrix-routed to SCL / SDA. Maintained by
+/// the C3 GPIO model (which owns the routing truth) via
+/// [`I2cLineLevels::install_tap`]; consulted by [`I2cLineLevels::set`] so the
+/// bit engine pushes an edge at the exact moment it drives a line transition.
+#[derive(Debug, Default)]
+struct LineTapState {
+    tap: Option<crate::logic_capture::LogicTap>,
+    scl_chs: Vec<u32>,
+    sda_chs: Vec<u32>,
+}
+
 /// Live SDA/SCL levels of the I²C0 bus (wired-AND of controller + slave drive,
 /// idle high — open-drain with pull-ups). The controller bit engine is the only
 /// writer; the C3 GPIO model reads it for pads whose GPIO output matrix
 /// (`FUNCn_OUT_SEL_CFG`) routes `I2CEXT0_SCL` / `I2CEXT0_SDA`, so
 /// `read_gpio_pad` — and the in-engine logic analyzer sampling through it —
-/// observes the real waveform on the routed pads.
+/// observes the real waveform on the routed pads. With push-mode capture
+/// armed on a routed pad, [`set`](Self::set) additionally reports each line
+/// transition into the shared logic tap (event-driven capture — no polling).
 #[derive(Debug)]
 pub struct I2cLineLevels {
     scl: AtomicBool,
     sda: AtomicBool,
+    tap: std::sync::Mutex<LineTapState>,
 }
 
 impl I2cLineLevels {
@@ -197,6 +212,7 @@ impl I2cLineLevels {
         Self {
             scl: AtomicBool::new(true),
             sda: AtomicBool::new(true),
+            tap: std::sync::Mutex::new(LineTapState::default()),
         }
     }
 
@@ -209,8 +225,43 @@ impl I2cLineLevels {
     }
 
     fn set(&self, scl: bool, sda: bool) {
-        self.scl.store(scl, Ordering::Relaxed);
-        self.sda.store(sda, Ordering::Relaxed);
+        let old_scl = self.scl.swap(scl, Ordering::Relaxed);
+        let old_sda = self.sda.swap(sda, Ordering::Relaxed);
+        if old_scl == scl && old_sda == sda {
+            return;
+        }
+        // A line actually transitioned: report it to any watch channels whose
+        // pads the GPIO matrix currently routes here. Lock taken only on
+        // transitions (module-tick rate, not per engine cycle).
+        let t = self.tap.lock().unwrap();
+        if let Some(tap) = &t.tap {
+            if old_scl != scl {
+                for &ch in &t.scl_chs {
+                    tap.push(ch, scl);
+                }
+            }
+            if old_sda != sda {
+                for &ch in &t.sda_chs {
+                    tap.push(ch, sda);
+                }
+            }
+        }
+    }
+
+    /// Install (or clear, with `tap = None`) the push-capture registration.
+    /// Called by the C3 GPIO model at watch install time and whenever a write
+    /// changes the routing of a watched pad, so the channel lists always
+    /// mirror the live GPIO matrix state.
+    pub(crate) fn install_tap(
+        &self,
+        tap: Option<crate::logic_capture::LogicTap>,
+        scl_chs: Vec<u32>,
+        sda_chs: Vec<u32>,
+    ) {
+        let mut t = self.tap.lock().unwrap();
+        t.tap = tap;
+        t.scl_chs = scl_chs;
+        t.sda_chs = sda_chs;
     }
 }
 

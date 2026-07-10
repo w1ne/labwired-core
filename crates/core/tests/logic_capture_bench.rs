@@ -5,16 +5,19 @@
 //! Timing harness for logic-analyzer capture overhead.
 //!
 //! Not a pass/fail benchmark — it prints wall-clock numbers for capture
-//! disarmed vs armed (4 and 8 watched channels) so the cost of per-cycle
-//! sampling stays measured, not guessed. Two scenarios:
+//! disarmed vs armed (4 and 8 watched channels), in BOTH capture modes
+//! (event-driven push — the default for instrumented peripherals — and the
+//! forced per-cycle poll fallback via `Machine::logic_force_poll_capture`),
+//! so the cost of probing stays measured, not guessed. Two scenarios:
 //!
 //! 1. A real firmware fixture (`stm32f103-blinky.elf`) driven through
 //!    `Machine::run` in wasm-worker-style batches at the default
 //!    `peripheral_tick_interval = 1` — the configuration every playground
 //!    run uses.
 //! 2. A synthetic NOP loop on a bare bus at `peripheral_tick_interval = 64`
-//!    — the maximum-batching case, where arming capture clamps the run-loop
-//!    batch and the clamp cost is at its worst.
+//!    — the maximum-batching case, where arming POLL capture clamps the
+//!    run-loop batch and the clamp cost is at its worst; push capture keeps
+//!    the full batch width and should track the unarmed time.
 //!
 //! Run manually with:
 //!
@@ -126,8 +129,14 @@ fn readable_pads(machine: &Machine<CortexM>, n: usize) -> Vec<Option<(usize, u8)
     panic!("only found {} readable pads, wanted {}", out.len(), n);
 }
 
-fn timed_run(mut machine: Machine<CortexM>, channels: usize, steps: u64) -> (f64, usize, u64) {
+fn timed_run(
+    mut machine: Machine<CortexM>,
+    channels: usize,
+    steps: u64,
+    force_poll: bool,
+) -> (f64, usize, u64) {
     if channels > 0 {
+        machine.logic_force_poll_capture(force_poll);
         let pads = readable_pads(&machine, channels);
         machine.logic_watch(&pads);
     }
@@ -163,18 +172,22 @@ fn bench_logic_capture_overhead() {
         ),
     ];
     for (name, build, steps) in scenarios {
-        let mut base = f64::NAN;
-        for channels in [0usize, 4, 8] {
-            let (secs, edges, dropped) = timed_run(build(), channels, steps);
-            if channels == 0 {
-                base = secs;
+        let (base, edges, dropped) = timed_run(build(), 0, steps, false);
+        println!(
+            "{name} channels=0 (unarmed)   : {base:.3}s \
+             ({:.2} Minstr/s) edges={edges} dropped={dropped}",
+            steps as f64 / base / 1e6,
+        );
+        for channels in [4usize, 8] {
+            for (mode, force_poll) in [("push", false), ("poll", true)] {
+                let (secs, edges, dropped) = timed_run(build(), channels, steps, force_poll);
+                println!(
+                    "{name} channels={channels} mode={mode} : {secs:.3}s \
+                     ({:.2} Minstr/s, {:.2}x vs unarmed) edges={edges} dropped={dropped}",
+                    steps as f64 / secs / 1e6,
+                    secs / base,
+                );
             }
-            println!(
-                "{name} channels={channels} : {secs:.3}s \
-                 ({:.2} Minstr/s, {:.2}x vs unarmed) edges={edges} dropped={dropped}",
-                steps as f64 / secs / 1e6,
-                secs / base,
-            );
         }
     }
 }

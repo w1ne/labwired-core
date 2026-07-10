@@ -193,7 +193,16 @@ pub trait Cpu: Send {
         config: &SimulationConfig,
         max_count: u32,
     ) -> SimResult<u32> {
+        // While push-mode logic capture is armed, the tap clock must advance
+        // once per retired instruction so pad writes stamp with the cycle
+        // boundary they become observable at (see `crate::logic_capture`).
+        // One Arc clone + flag check per batch when idle; a relaxed atomic
+        // increment per instruction while armed.
+        let tap = bus.logic_tap().filter(|t| t.push_armed());
         for i in 0..max_count {
+            if let Some(tap) = &tap {
+                tap.bump_clock();
+            }
             self.step(bus, observers, config)?;
             if config.idle_fast_forward_enabled && self.idle_fast_forward_budget(bus).is_some() {
                 return Ok(i + 1);
@@ -491,6 +500,29 @@ pub trait Peripheral: std::fmt::Debug + Send {
         false
     }
 
+    /// Logic-capture capability: install (or clear) a push-mode logic tap.
+    ///
+    /// `watched` is this peripheral's slice of the machine's watch set as
+    /// `(pin, channel)` pairs (empty ⇒ remove any installed tap). A
+    /// push-instrumented peripheral stores the tap and, from then on, reports
+    /// every watched pad-level change from its own write sites via
+    /// [`logic_capture::LogicTap::push`] — the same direction-aware level
+    /// truth [`read_gpio_pad`](Self::read_gpio_pad) reads.
+    ///
+    /// The return value DECLARES push capability: `true` means "I am
+    /// instrumented; my watched pads need no per-cycle polling" (returned for
+    /// empty `watched` too), `false` (the default) keeps the machine's
+    /// per-cycle poll fallback for channels resolved to this peripheral. This
+    /// is the single source of truth — the machine never keeps a hardcoded
+    /// list of push-capable peripherals.
+    fn install_logic_tap(
+        &mut self,
+        _tap: &logic_capture::LogicTap,
+        _watched: &[(u8, u32)],
+    ) -> bool {
+        false
+    }
+
     /// Bus-aware tick hook for peripherals that need to read or write the
     /// bus themselves (e.g. Easy DMA on RADIO). Default no-op.
     fn tick_with_bus(&mut self, _bus: &mut dyn Bus) {}
@@ -698,6 +730,14 @@ pub trait Bus {
         Ok(())
     }
 
+    /// The bus's shared push-mode logic tap, when it carries one (a cheap
+    /// `Arc` clone). CPU batch loops use it to advance the tap clock once per
+    /// retired instruction while push capture is armed; `None` (the default)
+    /// means no tap and no per-instruction work.
+    fn logic_tap(&self) -> Option<logic_capture::LogicTap> {
+        None
+    }
+
     /// Plan 3: look up a registered ROM thunk by absolute PC. Used by the
     /// Xtensa LX7 `BREAK 1, 14` dispatch to redirect calls into the simulated
     /// ESP32-S3 mask ROM. Default returns None for buses that don't model
@@ -870,6 +910,12 @@ pub struct Machine<C: Cpu> {
     /// set. Not part of snapshot/restore: capture is a UI observation stream,
     /// re-armed by the frontend after a resume.
     logic_capture: logic_capture::LogicCapture,
+    /// Test-only forcing knob (see [`Machine::logic_force_poll_capture`]):
+    /// when `true`, `logic_watch` keeps every channel on the per-cycle poll
+    /// path even for push-instrumented peripherals. This is what the
+    /// differential oracle tests use to compare the two capture modes; it is
+    /// NOT user-facing configuration.
+    logic_force_poll: bool,
 }
 
 impl<C: Cpu> Machine<C> {
@@ -923,7 +969,42 @@ impl<C: Cpu> Machine<C> {
     /// Returns each channel's initial pad level (`None` = unknown), same order
     /// as `resolved`, so the caller can seed the waveform before the first
     /// edge. Passing an empty slice disarms capture.
+    ///
+    /// Each resolvable channel is armed in one of two modes: push
+    /// (event-driven — the owning peripheral accepted
+    /// [`Peripheral::install_logic_tap`] and reports pad writes itself) or the
+    /// per-cycle poll fallback. See [`crate::logic_capture`].
     pub fn logic_watch(&mut self, resolved: &[Option<(usize, u8)>]) -> Vec<Option<bool>> {
+        // Group the watch set per owning peripheral as (pin, channel) pairs.
+        let mut per_peripheral: std::collections::HashMap<usize, Vec<(u8, u32)>> =
+            std::collections::HashMap::new();
+        if !self.logic_force_poll {
+            for (ch, r) in resolved.iter().enumerate() {
+                if let Some((idx, pin)) = *r {
+                    per_peripheral
+                        .entry(idx)
+                        .or_default()
+                        .push((pin, ch as u32));
+                }
+            }
+        }
+
+        // Offer every peripheral its slice of the watch set (empty ⇒ clears a
+        // previously installed tap). Whether a peripheral ACCEPTS is its own
+        // declaration of push capability — no hardcoded list here.
+        let tap = self.bus.logic_tap.clone();
+        let mut push = vec![false; resolved.len()];
+        static EMPTY: [(u8, u32); 0] = [];
+        for (idx, p) in self.bus.peripherals.iter_mut().enumerate() {
+            let watched: &[(u8, u32)] = per_peripheral.get(&idx).map_or(&EMPTY, |v| v.as_slice());
+            let accepted = p.dev.install_logic_tap(&tap, watched);
+            if accepted {
+                for &(_, ch) in watched {
+                    push[ch as usize] = true;
+                }
+            }
+        }
+
         let bus = &self.bus;
         let initial: Vec<Option<bool>> = resolved
             .iter()
@@ -935,8 +1016,27 @@ impl<C: Cpu> Machine<C> {
                 })
             })
             .collect();
-        self.logic_capture.install(resolved, &initial);
+        self.logic_capture.install(resolved, &initial, &push);
+
+        // Arm the tap clock at "the next observation boundary" so pushes that
+        // happen before any stepping (e.g. a paused-machine input change)
+        // stamp where the first post-watch sample would observe them.
+        tap.clear_events();
+        tap.set_clock(self.total_cycles + 1);
+        tap.set_armed(self.logic_capture.push_active());
         initial
+    }
+
+    /// Test-only forcing knob for the differential capture oracle: when
+    /// `true`, subsequent [`logic_watch`](Self::logic_watch) calls keep every
+    /// channel on the per-cycle poll path even where push instrumentation
+    /// exists (the batch clamp and idle-fast-forward disable apply again).
+    /// Takes effect at the next `logic_watch`. Not user-facing configuration —
+    /// it exists so tests can assert push and poll produce byte-identical
+    /// edge streams.
+    #[doc(hidden)]
+    pub fn logic_force_poll_capture(&mut self, force: bool) {
+        self.logic_force_poll = force;
     }
 
     /// Drain logic edges newer than `cursor` (see
@@ -951,20 +1051,39 @@ impl<C: Cpu> Machine<C> {
         self.total_cycles
     }
 
-    /// Sample the watched pads at the current cycle. Hooked into the step loop;
-    /// the leading `is_active` guard is the entire cost when nothing is watched.
+    /// Observe the watched channels at the current cycle boundary: drain the
+    /// push tap (event-driven channels) and sample the polled channels.
+    /// Hooked into the step loop; the leading `is_active` guard is the entire
+    /// cost when nothing is watched.
+    ///
+    /// `boundary` is the engine cycle at the end of the just-executed
+    /// instruction batch, BEFORE any peripheral tick-cost cycles were charged
+    /// — pushes stamped at it are finalised to `total_cycles` ("now"), which
+    /// is where a per-cycle poll would have seen them.
     #[inline]
-    fn logic_sample(&mut self) {
+    fn logic_observe(&mut self, boundary: u64) {
         if !self.logic_capture.is_active() {
             return;
         }
         let now = self.total_cycles;
-        let bus = &self.bus;
-        self.logic_capture.sample(now, |idx, pin| {
-            bus.peripherals
-                .get(idx)
-                .and_then(|p| p.dev.read_gpio_pad(pin))
-        });
+        if self.logic_capture.push_active() {
+            let events = self.bus.logic_tap.take_events();
+            if !events.is_empty() {
+                self.logic_capture.ingest_push(&events, boundary, now);
+            }
+            // Re-arm the provisional stamp at the NEXT boundary so pad writes
+            // arriving while the machine is paused (sim-input, button pushes)
+            // stamp where the first post-resume observation would see them.
+            self.bus.logic_tap.set_clock(now + 1);
+        }
+        if self.logic_capture.poll_active() {
+            let bus = &self.bus;
+            self.logic_capture.sample(now, |idx, pin| {
+                bus.peripherals
+                    .get(idx)
+                    .and_then(|p| p.dev.read_gpio_pad(pin))
+            });
+        }
     }
 }
 
@@ -1005,6 +1124,7 @@ impl<C: Cpu> Machine<C> {
             scb_index,
             scheduler_bootstrapped: false,
             logic_capture: logic_capture::LogicCapture::new(),
+            logic_force_poll: false,
         }
     }
 
@@ -1034,13 +1154,16 @@ impl<C: Cpu> Machine<C> {
     }
 
     fn try_idle_fast_forward(&mut self, _max_steps: Option<u32>, _steps: u32) -> u32 {
-        // Logic capture disables the skip too: a scheduler event inside the
-        // skipped window could toggle a watched pad, and the per-cycle capture
-        // guarantee must hold even under this opt-in acceleration.
+        // POLLED logic capture disables the skip: a scheduler event inside the
+        // skipped window could toggle a watched pad, and the per-cycle poll
+        // guarantee must hold even under this opt-in acceleration. Push-only
+        // watch sets keep the skip — a pad write inside the window happens in
+        // instrumented peripheral code, which pushes its own edge with the
+        // post-skip tap clock (seeded below before the scheduler drain).
         if !self.config.idle_fast_forward_enabled
             || !self.breakpoints.is_empty()
             || self.bus.requires_cycle_accurate()
-            || self.logic_capture.is_active()
+            || self.logic_capture.poll_active()
         {
             return 0;
         }
@@ -1090,6 +1213,14 @@ impl<C: Cpu> Machine<C> {
             self.total_cycles += skipped as u64;
             self.bus.current_cycle = self.total_cycles;
             self.bus.bus_trace.set_cycle(self.total_cycles);
+            // Push-mode logic capture: stamp any pad writes made by the
+            // scheduler events due at the end of the skipped window with the
+            // cycle we skipped to (the events' own deadline — the budget was
+            // clamped to it above), keeping edges deterministic and correctly
+            // placed inside what would otherwise be a silent window.
+            if self.logic_capture.push_active() {
+                self.bus.logic_tap.set_clock(self.total_cycles);
+            }
             self.sched.advance_to(self.total_cycles / interval);
             self.drain_scheduler_events();
             skipped
@@ -1297,6 +1428,13 @@ impl<C: Cpu> Machine<C> {
         // a single field write, not the per-peripheral walk this phase removed.
         self.bus.current_cycle = self.total_cycles;
         self.bus.bus_trace.set_cycle(self.total_cycles);
+        // The cycle boundary this instruction's effects become observable at —
+        // pad writes pushed through the logic tap stamp with it (single-step
+        // path: one instruction, no CPU-side clock bumps needed).
+        let logic_boundary = self.total_cycles;
+        if self.logic_capture.push_active() {
+            self.bus.logic_tap.set_clock(logic_boundary);
+        }
         self.cpu
             .step(&mut self.bus, &self.observers, &self.config)?;
         self.step_profile.cpu_instructions += 1;
@@ -1385,10 +1523,10 @@ impl<C: Cpu> Machine<C> {
         self.apply_pending_flash_op()?;
 
         // Logic-analyzer edge capture. No-op (one `is_active` check) unless a
-        // watch set is installed. Sampled after the instruction + peripheral
+        // watch set is installed. Observed after the instruction + peripheral
         // effects of this cycle have landed, so pad levels are the committed
         // state at `total_cycles`.
-        self.logic_sample();
+        self.logic_observe(logic_boundary);
 
         Ok(())
     }
@@ -1838,17 +1976,25 @@ impl<C: Cpu> DebugControl for Machine<C> {
                 current_batch = current_batch.min(1);
             }
 
-            // Logic-analyzer capture: clamp the batch to one instruction so pad
-            // state is observed at EVERY cycle boundary — pads only change at
-            // instruction/tick boundaries, so this is a complete, alias-free
-            // capture. (An earlier fixed 16-cycle sampling grid aliased any
-            // signal toggling faster than ~32 cycles — bit-banged buses looked
-            // wrong before they looked dropped.) Cost is paid ONLY while a
-            // watch set is active; measured on a real firmware fixture at the
-            // default tick interval it is <= 1.05x, and ~1.4-1.5x at the widest
-            // batching config (see tests/logic_capture_bench.rs).
-            if self.logic_capture.is_active() {
+            // Logic-analyzer POLL fallback: clamp the batch to one instruction
+            // so polled pad state is observed at EVERY cycle boundary — pads
+            // only change at instruction/tick boundaries, so this is a
+            // complete, alias-free capture. (An earlier fixed 16-cycle
+            // sampling grid aliased any signal toggling faster than ~32 cycles
+            // — bit-banged buses looked wrong before they looked dropped.)
+            // Cost is paid ONLY while at least one polled (non-push) channel
+            // is armed; push-instrumented channels report their own edges from
+            // the write sites and keep the full batch width (see
+            // `crate::logic_capture` and tests/logic_capture_bench.rs).
+            if self.logic_capture.poll_active() {
                 current_batch = current_batch.min(1);
+            }
+
+            // Push-mode capture: seed the tap clock at the batch start; the
+            // CPU advances it once per retired instruction so pad writes stamp
+            // with the boundary they become observable at.
+            if self.logic_capture.push_active() {
+                self.bus.logic_tap.set_clock(current_cycles);
             }
 
             let executed =
@@ -1859,6 +2005,10 @@ impl<C: Cpu> DebugControl for Machine<C> {
             self.total_cycles += executed as u64;
             self.step_profile.cpu_instructions += executed as u64;
             self.step_profile.cpu_batches += 1;
+            // The cycle boundary the batch ended at, BEFORE peripheral tick
+            // costs — logic pushes stamped at it are finalised to the
+            // post-cost "now" (see `logic_observe`).
+            let logic_boundary = self.total_cycles;
 
             if self.total_cycles % (self.config.peripheral_tick_interval as u64) == 0 {
                 // Propagate peripherals
@@ -1896,10 +2046,11 @@ impl<C: Cpu> DebugControl for Machine<C> {
                 self.reset()?;
             }
 
-            // Logic-analyzer edge capture at the batch boundary (no-op unless a
-            // watch set is installed; the batch was clamped to 1 above so this
-            // fires at every cycle boundary while armed).
-            self.logic_sample();
+            // Logic-analyzer edge capture at the batch boundary (no-op unless
+            // a watch set is installed): drain push events and, when a polled
+            // channel is armed, sample — the batch was clamped to 1 above in
+            // that case, so polling still fires at every cycle boundary.
+            self.logic_observe(logic_boundary);
 
             // If we executed less than requested, it means the CPU wanted to exit early (e.g. branch/exception)
             // or we just finished the batch naturally. The loop will continue and check breakpoints/limits.

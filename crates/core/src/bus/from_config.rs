@@ -87,6 +87,7 @@ impl SystemBus {
             flash_models_ops: false,
             flash_error_flags_idx: None,
             bus_trace: bus_trace::new_log(),
+            logic_tap: crate::logic_capture::LogicTap::new(),
             pin_map: std::collections::HashMap::new(),
         };
 

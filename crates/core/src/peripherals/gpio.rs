@@ -292,55 +292,17 @@ impl KinetisGpio {
     }
 }
 
-/// GPIO port — one variant per chip family. Register sets are fully isolated.
+/// The per-family register set of a [`GpioPort`]. Register sets are fully
+/// isolated — a register from one family cannot exist on another.
 #[derive(Debug, serde::Serialize)]
-pub enum GpioPort {
+pub enum GpioFamily {
     Stm32F1(F1Gpio),
     Stm32V2(V2Gpio),
     Nrf52(Nrf52Gpio),
     Kinetis(KinetisGpio),
 }
 
-impl Default for GpioPort {
-    fn default() -> Self {
-        Self::Stm32F1(F1Gpio::new())
-    }
-}
-
-impl GpioPort {
-    pub fn new() -> Self {
-        Self::new_with_layout(GpioRegisterLayout::Stm32F1)
-    }
-
-    pub fn new_with_layout(layout: GpioRegisterLayout) -> Self {
-        match layout {
-            GpioRegisterLayout::Stm32F1 => Self::Stm32F1(F1Gpio::new()),
-            GpioRegisterLayout::Stm32V2 => Self::Stm32V2(V2Gpio::default()),
-            GpioRegisterLayout::Nrf52 => Self::Nrf52(Nrf52Gpio::default()),
-            GpioRegisterLayout::Kinetis => Self::Kinetis(KinetisGpio::default()),
-        }
-    }
-
-    /// Build an nRF52-layout GPIO port with an explicit pin count.
-    /// Use this when the port has fewer than 32 physical pins (e.g. P1 = 16).
-    pub fn new_nrf52(num_pins: u32) -> Self {
-        Self::Nrf52(Nrf52Gpio::with_num_pins(num_pins))
-    }
-
-    /// Build a V2-layout GPIO port with explicit MODER/OSPEEDR/PUPDR reset
-    /// values. On real silicon these are per-port (debug pins keep port A off
-    /// the all-analog default; B carries the JTDO pull config; C..G reset to
-    /// 0xFFFFFFFF analog). The chip yaml supplies them via
-    /// `config: { reset_moder / reset_ospeedr / reset_pupdr }`.
-    pub fn new_stm32v2_with_resets(moder: u32, ospeedr: u32, pupdr: u32) -> Self {
-        Self::Stm32V2(V2Gpio {
-            moder,
-            ospeedr,
-            pupdr,
-            ..Default::default()
-        })
-    }
-
+impl GpioFamily {
     fn read_reg(&self, offset: u64) -> u32 {
         match self {
             Self::Stm32F1(g) => g.read_reg(offset),
@@ -359,80 +321,11 @@ impl GpioPort {
         }
     }
 
-    /// Register offset of the output data register (ODR) for this family.
-    /// Used by the bus to resolve a display's D/C line to a concrete address.
-    pub fn odr_offset(&self) -> u64 {
-        match self {
-            Self::Stm32F1(_) => 0x0C,
-            Self::Stm32V2(_) => 0x14,
-            Self::Nrf52(_) => 0x504,
-            Self::Kinetis(_) => 0x00,
-        }
-    }
-
-    /// Register offset of the input data register (IDR) for this family.
-    /// Used by the bus to resolve a sensor's input line (e.g. HC-SR04 ECHO).
-    pub fn idr_offset(&self) -> u64 {
-        match self {
-            Self::Stm32F1(_) => 0x08,
-            Self::Stm32V2(_) => 0x10,
-            Self::Nrf52(_) => 0x510,
-            Self::Kinetis(_) => 0x10,
-        }
-    }
-}
-
-impl crate::Peripheral for GpioPort {
-    fn read(&self, offset: u64) -> SimResult<u8> {
-        let reg_offset = offset & !3;
-        let byte_offset = (offset % 4) as u32;
-        let reg_val = self.read_reg(reg_offset);
-        Ok(((reg_val >> (byte_offset * 8)) & 0xFF) as u8)
-    }
-
-    fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
-        let reg_offset = offset & !3;
-        let byte_offset = (offset % 4) as u32;
-
-        if reg_offset == 0x0C {
-            tracing::trace!("GPIO ODR Write: byte {} = {:#x}", byte_offset, value);
-        }
-
-        let mut reg_val = self.read_reg(reg_offset);
-        let mask = 0xFF << (byte_offset * 8);
-        reg_val &= !mask;
-        reg_val |= (value as u32) << (byte_offset * 8);
-
-        self.write_reg(reg_offset, reg_val);
-        Ok(())
-    }
-
-    fn read_u32(&self, offset: u64) -> SimResult<u32> {
-        Ok(self.read_reg(offset & !3))
-    }
-
-    fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
-        // GPIO data registers are word-access. BSRR (atomic set/reset) only
-        // behaves correctly when the whole 32-bit word is presented at once:
-        // the default byte-decomposition would split BSRR's set half (low 16)
-        // from its reset half (high 16) into separate write_reg calls, so a
-        // pin named in both halves loses the BS-over-BR priority rule (set
-        // wins). Silicon performs the STR as one 32-bit transaction; mirror
-        // that by handing write_reg the full word. Silicon-verified on the
-        // bench STM32F103 (stm32f1_exec_oracle::gpioa_bsrr_set_reset).
-        self.write_reg(offset & !3, value);
-        Ok(())
-    }
-
-    fn read_gpio_input(&self, pin: u8) -> Option<bool> {
-        if pin >= 32 {
-            return None;
-        }
-        let reg = self.read_reg(self.idr_offset());
-        Some((reg & (1u32 << pin)) != 0)
-    }
-
-    fn read_gpio_pad(&self, pin: u8) -> Option<bool> {
+    /// Direction-aware pad level (the logic-probe truth). See
+    /// [`crate::Peripheral::read_gpio_pad`]; kept on the family so the
+    /// push-capture tap can read pre/post-write levels while the tap state is
+    /// mutably borrowed.
+    fn pad_level(&self, pin: u8) -> Option<bool> {
         if pin >= 32 {
             return None;
         }
@@ -477,14 +370,200 @@ impl crate::Peripheral for GpioPort {
             }
         }
     }
+}
+
+/// Push-mode logic-capture state for a [`GpioPort`]: the shared tap plus this
+/// port's watched `(pin, channel)` pairs and a pre-write level scratchpad
+/// (allocated once at install so the write hot path stays allocation-free).
+#[derive(Debug)]
+struct PortTap {
+    tap: crate::logic_capture::LogicTap,
+    watched: Vec<(u8, u32)>,
+    scratch: Vec<Option<bool>>,
+}
+
+/// GPIO port — a per-family register model (see [`GpioFamily`]) plus optional
+/// push-mode logic-capture instrumentation. The chip-yaml `profile` selects
+/// the family; the `Peripheral` impl and the `odr_offset`/`idr_offset` bus
+/// helpers dispatch to the active family.
+#[derive(Debug)]
+pub struct GpioPort {
+    family: GpioFamily,
+    /// `Some` while the logic analyzer watches pads on this port in push mode
+    /// (installed via `install_logic_tap`). Every register write then reports
+    /// watched pad-level changes into the tap. Not snapshot state — the watch
+    /// is re-armed by the frontend after a resume.
+    tap: Option<PortTap>,
+}
+
+impl Default for GpioPort {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl GpioPort {
+    fn from_family(family: GpioFamily) -> Self {
+        Self { family, tap: None }
+    }
+
+    pub fn new() -> Self {
+        Self::new_with_layout(GpioRegisterLayout::Stm32F1)
+    }
+
+    pub fn new_with_layout(layout: GpioRegisterLayout) -> Self {
+        Self::from_family(match layout {
+            GpioRegisterLayout::Stm32F1 => GpioFamily::Stm32F1(F1Gpio::new()),
+            GpioRegisterLayout::Stm32V2 => GpioFamily::Stm32V2(V2Gpio::default()),
+            GpioRegisterLayout::Nrf52 => GpioFamily::Nrf52(Nrf52Gpio::default()),
+            GpioRegisterLayout::Kinetis => GpioFamily::Kinetis(KinetisGpio::default()),
+        })
+    }
+
+    /// Build an nRF52-layout GPIO port with an explicit pin count.
+    /// Use this when the port has fewer than 32 physical pins (e.g. P1 = 16).
+    pub fn new_nrf52(num_pins: u32) -> Self {
+        Self::from_family(GpioFamily::Nrf52(Nrf52Gpio::with_num_pins(num_pins)))
+    }
+
+    /// Build a V2-layout GPIO port with explicit MODER/OSPEEDR/PUPDR reset
+    /// values. On real silicon these are per-port (debug pins keep port A off
+    /// the all-analog default; B carries the JTDO pull config; C..G reset to
+    /// 0xFFFFFFFF analog). The chip yaml supplies them via
+    /// `config: { reset_moder / reset_ospeedr / reset_pupdr }`.
+    pub fn new_stm32v2_with_resets(moder: u32, ospeedr: u32, pupdr: u32) -> Self {
+        Self::from_family(GpioFamily::Stm32V2(V2Gpio {
+            moder,
+            ospeedr,
+            pupdr,
+            ..Default::default()
+        }))
+    }
+
+    fn read_reg(&self, offset: u64) -> u32 {
+        self.family.read_reg(offset)
+    }
+
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        self.family.write_reg(offset, value);
+    }
+
+    /// Register offset of the output data register (ODR) for this family.
+    /// Used by the bus to resolve a display's D/C line to a concrete address.
+    pub fn odr_offset(&self) -> u64 {
+        match &self.family {
+            GpioFamily::Stm32F1(_) => 0x0C,
+            GpioFamily::Stm32V2(_) => 0x14,
+            GpioFamily::Nrf52(_) => 0x504,
+            GpioFamily::Kinetis(_) => 0x00,
+        }
+    }
+
+    /// Register offset of the input data register (IDR) for this family.
+    /// Used by the bus to resolve a sensor's input line (e.g. HC-SR04 ECHO).
+    pub fn idr_offset(&self) -> u64 {
+        match &self.family {
+            GpioFamily::Stm32F1(_) => 0x08,
+            GpioFamily::Stm32V2(_) => 0x10,
+            GpioFamily::Nrf52(_) => 0x510,
+            GpioFamily::Kinetis(_) => 0x10,
+        }
+    }
+
+    /// Record every watched pad's current level before a mutation. No-op (one
+    /// branch) while no tap is installed.
+    #[inline]
+    fn tap_snapshot(&mut self) {
+        if let Some(t) = &mut self.tap {
+            for (k, &(pin, _)) in t.watched.iter().enumerate() {
+                t.scratch[k] = self.family.pad_level(pin);
+            }
+        }
+    }
+
+    /// Report watched pads whose level became known-different since the
+    /// matching [`tap_snapshot`](Self::tap_snapshot). A pad whose level became
+    /// UNknown (e.g. handed to a peripheral) reports nothing — same rule as
+    /// the poll path, which keeps the last known level.
+    #[inline]
+    fn tap_report(&mut self) {
+        if let Some(t) = &mut self.tap {
+            for (k, &(pin, ch)) in t.watched.iter().enumerate() {
+                if let Some(level) = self.family.pad_level(pin) {
+                    if t.scratch[k] != Some(level) {
+                        t.tap.push(ch, level);
+                    }
+                }
+            }
+        }
+    }
+}
+
+impl crate::Peripheral for GpioPort {
+    fn read(&self, offset: u64) -> SimResult<u8> {
+        let reg_offset = offset & !3;
+        let byte_offset = (offset % 4) as u32;
+        let reg_val = self.read_reg(reg_offset);
+        Ok(((reg_val >> (byte_offset * 8)) & 0xFF) as u8)
+    }
+
+    fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        let reg_offset = offset & !3;
+        let byte_offset = (offset % 4) as u32;
+
+        if reg_offset == 0x0C {
+            tracing::trace!("GPIO ODR Write: byte {} = {:#x}", byte_offset, value);
+        }
+
+        let mut reg_val = self.read_reg(reg_offset);
+        let mask = 0xFF << (byte_offset * 8);
+        reg_val &= !mask;
+        reg_val |= (value as u32) << (byte_offset * 8);
+
+        self.tap_snapshot();
+        self.write_reg(reg_offset, reg_val);
+        self.tap_report();
+        Ok(())
+    }
+
+    fn read_u32(&self, offset: u64) -> SimResult<u32> {
+        Ok(self.read_reg(offset & !3))
+    }
+
+    fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        // GPIO data registers are word-access. BSRR (atomic set/reset) only
+        // behaves correctly when the whole 32-bit word is presented at once:
+        // the default byte-decomposition would split BSRR's set half (low 16)
+        // from its reset half (high 16) into separate write_reg calls, so a
+        // pin named in both halves loses the BS-over-BR priority rule (set
+        // wins). Silicon performs the STR as one 32-bit transaction; mirror
+        // that by handing write_reg the full word. Silicon-verified on the
+        // bench STM32F103 (stm32f1_exec_oracle::gpioa_bsrr_set_reset).
+        self.tap_snapshot();
+        self.write_reg(offset & !3, value);
+        self.tap_report();
+        Ok(())
+    }
+
+    fn read_gpio_input(&self, pin: u8) -> Option<bool> {
+        if pin >= 32 {
+            return None;
+        }
+        let reg = self.read_reg(self.idr_offset());
+        Some((reg & (1u32 << pin)) != 0)
+    }
+
+    fn read_gpio_pad(&self, pin: u8) -> Option<bool> {
+        self.family.pad_level(pin)
+    }
 
     fn gpio_routing(&self, pin: u8) -> Option<GpioRouting> {
         if pin >= 32 {
             return None;
         }
         // Mode from the SAME register truth read_gpio_pad reads.
-        let mode = match self {
-            Self::Stm32F1(g) => {
+        let mode = match &self.family {
+            GpioFamily::Stm32F1(g) => {
                 // CRL/CRH: 4 bits/pin. MODE==0 → input (CNF 00 = analog, else
                 // digital input); MODE!=0 → output, CNF 10/11 = alternate function.
                 let cr = g.read_reg(if pin < 8 { 0x00 } else { 0x04 });
@@ -503,7 +582,7 @@ impl crate::Peripheral for GpioPort {
                     GpioMode::Output
                 }
             }
-            Self::Stm32V2(g) => {
+            GpioFamily::Stm32V2(g) => {
                 // MODER: 00 input, 01 output, 10 alternate function, 11 analog.
                 match (g.read_reg(0x00) >> (pin * 2)) & 0b11 {
                     0b00 => GpioMode::Input,
@@ -515,14 +594,14 @@ impl crate::Peripheral for GpioPort {
             // nRF52 / Kinetis: a plain DIR register (nRF DIR @0x514, Kinetis PDDR
             // @0x14) — bit set = output, clear = input. No AF concept at the GPIO
             // port (peripheral routing is elsewhere), so func stays None.
-            Self::Nrf52(g) => {
+            GpioFamily::Nrf52(g) => {
                 if (g.read_reg(0x514) & (1u32 << pin)) != 0 {
                     GpioMode::Output
                 } else {
                     GpioMode::Input
                 }
             }
-            Self::Kinetis(g) => {
+            GpioFamily::Kinetis(g) => {
                 if (g.read_reg(0x14) & (1u32 << pin)) != 0 {
                     GpioMode::Output
                 } else {
@@ -532,8 +611,8 @@ impl crate::Peripheral for GpioPort {
         };
         // func: STM32 V2 exposes an AFR nibble per AF pad → "AF<n>" (no full
         // AF→signal table; that is out of scope). Everything else: None.
-        let func = match self {
-            Self::Stm32V2(g) if mode == GpioMode::Af => {
+        let func = match &self.family {
+            GpioFamily::Stm32V2(g) if mode == GpioMode::Af => {
                 let (afr_off, sh) = if pin < 8 {
                     (0x20, (pin * 4) as u32)
                 } else {
@@ -565,7 +644,26 @@ impl crate::Peripheral for GpioPort {
         } else {
             reg &= !(1u32 << pin);
         }
+        self.tap_snapshot();
         self.write_reg(offset, reg);
+        self.tap_report();
+        true
+    }
+
+    fn install_logic_tap(
+        &mut self,
+        tap: &crate::logic_capture::LogicTap,
+        watched: &[(u8, u32)],
+    ) -> bool {
+        self.tap = if watched.is_empty() {
+            None
+        } else {
+            Some(PortTap {
+                tap: tap.clone(),
+                watched: watched.to_vec(),
+                scratch: vec![None; watched.len()],
+            })
+        };
         true
     }
 
@@ -573,11 +671,11 @@ impl crate::Peripheral for GpioPort {
         // Serialize the active family's register struct directly (flat), so the
         // snapshot keeps registers like `odr` at top level (no variant tag) —
         // matching the pre-split format the snapshot contract depends on.
-        match self {
-            Self::Stm32F1(g) => serde_json::to_value(g),
-            Self::Stm32V2(g) => serde_json::to_value(g),
-            Self::Nrf52(g) => serde_json::to_value(g),
-            Self::Kinetis(g) => serde_json::to_value(g),
+        match &self.family {
+            GpioFamily::Stm32F1(g) => serde_json::to_value(g),
+            GpioFamily::Stm32V2(g) => serde_json::to_value(g),
+            GpioFamily::Nrf52(g) => serde_json::to_value(g),
+            GpioFamily::Kinetis(g) => serde_json::to_value(g),
         }
         .unwrap_or(serde_json::Value::Null)
     }
