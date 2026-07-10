@@ -153,9 +153,9 @@ LEO DONE
 
 ## Model limitation
 
-The C3 I²C controller model runs each transaction synchronously into a 32-byte
-RX FIFO (silicon-accurate). Every read on this board fits one transaction
-(data-ready 3 B, SCD4x measurement 9 B, SGP41 raw 6 B, SPS30 uint16 30 B). The
-SPS30's 60-byte *float* frame would not fit a single synchronous transaction, so
-this example drives the SPS30 in its 30-byte integer output mode — still the real
-vendor driver, real command codes, real CRCs.
+The C3 I²C controller clocks each transaction bit-by-bit at the wire rate its
+timing registers dictate, into a 32-byte RX FIFO (silicon-accurate). Every read
+on this board fits one command-list run (data-ready 3 B, SCD4x measurement 9 B,
+SGP41 raw 6 B, SPS30 uint16 30 B). The SPS30's 60-byte *float* frame would not
+fit a single run's FIFO, so this example drives the SPS30 in its 30-byte integer
+output mode — still the real vendor driver, real command codes, real CRCs.

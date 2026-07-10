@@ -21,6 +21,10 @@ const PIN_MASK: u32 = (1u32 << PIN_COUNT) - 1;
 /// `SIG_GPIO_OUT` (128) means the pad is a plain GPIO output (GPIO_OUT latch).
 const FUNC_OUT_SEL: u64 = 0x554;
 const SIG_GPIO_OUT: u32 = 128;
+/// GPIO-matrix output signal indices of the I²C0 controller (esp-idf
+/// `soc/esp32c3/include/soc/gpio_sig_map.h`).
+const SIG_I2CEXT0_SCL: u32 = 53;
+const SIG_I2CEXT0_SDA: u32 = 54;
 
 /// ESP32-C3 GPIO-matrix OUTPUT signal index → signal name, for the I²C / SPI /
 /// UART signals the logic analyzer cares about (from esp-idf
@@ -74,6 +78,11 @@ pub struct Esp32c3Gpio {
     /// `GPIO_FUNCn_OUT_SEL_CFG` per pad — the output-matrix selector read by
     /// `gpio_routing` to name the signal a pad is wired to.
     out_sel: [u32; PIN_COUNT as usize],
+    /// Live I²C0 SDA/SCL line levels, shared with the C3 I²C bit engine (see
+    /// `crate::bus::SystemBus::wire_esp32c3_i2c_pads`). Pads whose output
+    /// matrix routes I2CEXT0_SCL/SDA read the wire here instead of the
+    /// GPIO_OUT latch.
+    i2c_lines: Option<std::sync::Arc<super::i2c::I2cLineLevels>>,
     cycle: u64,
     anchor_tick: u64,
 }
@@ -90,9 +99,16 @@ impl Esp32c3Gpio {
             status: 0,
             pin_cfg: [0; PIN_COUNT as usize],
             out_sel: [0; PIN_COUNT as usize],
+            i2c_lines: None,
             cycle: 0,
             anchor_tick: 0,
         }
+    }
+
+    /// Wire the shared I²C0 line-level cell (the same `Arc` the C3 I²C bit
+    /// engine drives) so matrix-routed pads carry the real waveform.
+    pub(crate) fn set_i2c_lines(&mut self, lines: std::sync::Arc<super::i2c::I2cLineLevels>) {
+        self.i2c_lines = Some(lines);
     }
 
     fn out_sel_index(off: u64) -> Option<usize> {
@@ -277,13 +293,21 @@ impl Peripheral for Esp32c3Gpio {
             return None;
         }
         let mask = 1u32 << pin;
-        // ENABLE is the output driver: enabled pins show the OUT latch,
+        // ENABLE is the output driver: enabled pins show the driving signal,
         // everything else shows the (externally driven) input level.
-        Some(if (self.enable & mask) != 0 {
-            (self.out & mask) != 0
-        } else {
-            (self.in_data & mask) != 0
-        })
+        if (self.enable & mask) != 0 {
+            // Output matrix: pads routed to the I²C0 controller carry the live
+            // SDA/SCL wire the bit engine drives, not the GPIO_OUT latch.
+            if let Some(lines) = &self.i2c_lines {
+                match self.out_sel[pin as usize] & 0x1FF {
+                    SIG_I2CEXT0_SCL => return Some(lines.scl()),
+                    SIG_I2CEXT0_SDA => return Some(lines.sda()),
+                    _ => {}
+                }
+            }
+            return Some((self.out & mask) != 0);
+        }
+        Some((self.in_data & mask) != 0)
     }
 
     fn gpio_routing(&self, pin: u8) -> Option<GpioRouting> {

@@ -2707,6 +2707,14 @@ pub mod integration_tests {
         bus.write_u32(I2C_BASE + REG_DATA, 0x78).unwrap(); // 0x3C << 1
         bus.write_u32(I2C_BASE + REG_DATA, 0x00).unwrap(); // control byte
         bus.write_u32(I2C_BASE + REG_CTR, CTR_TRANS_START).unwrap();
+        // The C3 controller clocks the list bit-by-bit over simulated cycles;
+        // tick the bus until TRANS_COMPLETE (INT_RAW bit 7) lands.
+        for _ in 0..1_000_000 {
+            if bus.read_u32(I2C_BASE + 0x20).unwrap() & (1 << 7) != 0 {
+                break;
+            }
+            bus.tick_peripherals_fully();
+        }
 
         let events = bus.bus_trace_snapshot();
         assert!(
@@ -2795,6 +2803,14 @@ pub mod integration_tests {
         c3.write_u32(BASE + 0x1C, 0x78).unwrap(); // addr 0x3C<<1
         c3.write_u32(BASE + 0x1C, 0x00).unwrap(); // control byte
         c3.write_u32(BASE + 0x04, 1 << 5).unwrap(); // CTR.TRANS_START
+                                                    // The C3 controller clocks the list bit-by-bit over simulated cycles;
+                                                    // tick the bus until TRANS_COMPLETE (INT_RAW bit 7) lands.
+        for _ in 0..1_000_000 {
+            if c3.read_u32(BASE + 0x20).unwrap() & (1 << 7) != 0 {
+                break;
+            }
+            c3.tick_peripherals_fully();
+        }
         let c3_events = c3.bus_trace_snapshot();
 
         // Family B: generic STM32 `I2c` (Kinetis byte-oriented layout) — drive

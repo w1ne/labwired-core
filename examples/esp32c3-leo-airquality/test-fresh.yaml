@@ -12,7 +12,10 @@ inputs:
   system: "./system-fresh.yaml"
   firmware: "./firmware/leo_airquality.elf"
 limits:
-  max_steps: 5000000
+  # The C3 I2C0 model clocks every transaction bit-by-bit at the wire rate the
+  # timing registers dictate, and the firmware busy-waits on TRANS_COMPLETE like
+  # real silicon - 64 measurement cycles plus OLED renders take ~35M steps.
+  max_steps: 45000000
 assertions:
   # Boot banner + all four sensors brought up over real I²C.
   - uart_contains: "LEO BOOT"

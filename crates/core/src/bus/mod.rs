@@ -821,6 +821,44 @@ impl SystemBus {
         Ok(())
     }
 
+    /// Wire the ESP32-C3 I²C0 bit engine's live SDA/SCL levels into the C3
+    /// GPIO model, so pads whose output matrix routes I2CEXT0_SDA/SCL read the
+    /// real waveform through `read_gpio_pad` (which is what the in-engine
+    /// logic analyzer samples). No-op unless both C3 models are on the bus.
+    pub(crate) fn wire_esp32c3_i2c_pads(&mut self) {
+        use crate::peripherals::esp32c3::gpio::Esp32c3Gpio;
+        use crate::peripherals::esp32c3::i2c::Esp32c3I2c;
+        let i2c_idx = self.peripherals.iter().position(|p| {
+            p.dev
+                .as_any()
+                .map(|a| a.is::<Esp32c3I2c>())
+                .unwrap_or(false)
+        });
+        let gpio_idx = self.peripherals.iter().position(|p| {
+            p.dev
+                .as_any()
+                .map(|a| a.is::<Esp32c3Gpio>())
+                .unwrap_or(false)
+        });
+        let (Some(i2c_idx), Some(gpio_idx)) = (i2c_idx, gpio_idx) else {
+            return;
+        };
+        let lines = self.peripherals[i2c_idx]
+            .dev
+            .as_any_mut()
+            .and_then(|a| a.downcast_mut::<Esp32c3I2c>())
+            .map(|c| c.line_levels_arc());
+        if let (Some(lines), Some(gpio)) = (
+            lines,
+            self.peripherals[gpio_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<Esp32c3Gpio>()),
+        ) {
+            gpio.set_i2c_lines(lines);
+        }
+    }
+
     /// The single funnel through which every SPI device reaches a controller —
     /// the SPI counterpart of [`Self::attach_i2c_slave`]. Wraps then dispatches.
     pub fn attach_spi_device(
@@ -3218,6 +3256,16 @@ mod tests {
         i2c.write_u32(0x1C, 0xED).unwrap(); // addr+R
         i2c.write_u32(0x04, 1 << 5).unwrap(); // TRANS_START
 
+        // The C3 controller now clocks the command list bit-by-bit over
+        // simulated cycles; run the engine to completion.
+        for _ in 0..1_000_000 {
+            if !i2c.engine_active() {
+                break;
+            }
+            i2c.tick_elapsed(64);
+        }
+        assert!(!i2c.engine_active(), "C3 I2C bit engine must complete");
+
         // Address must have matched (no NACK at bit 10) and the chip-id byte
         // must round-trip out of the RX FIFO.
         let int_raw = i2c.read_u32(0x20).unwrap();
@@ -3324,6 +3372,16 @@ mod tests {
         i2c.write_u32(0x1C, 0x30).unwrap(); // reg addr low byte
         i2c.write_u32(0x1C, 0x67).unwrap(); // addr+R (0x33<<1 | 1)
         i2c.write_u32(0x04, 1 << 5).unwrap(); // TRANS_START
+
+        // The C3 controller now clocks the command list bit-by-bit over
+        // simulated cycles; run the engine to completion.
+        for _ in 0..1_000_000 {
+            if !i2c.engine_active() {
+                break;
+            }
+            i2c.tick_elapsed(64);
+        }
+        assert!(!i2c.engine_active(), "C3 I2C bit engine must complete");
 
         let int_raw = i2c.read_u32(0x20).unwrap();
         assert_eq!(
