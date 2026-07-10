@@ -111,13 +111,6 @@ pub struct F1I2c {
     rxne_consumed: Cell<bool>,
     #[serde(skip)]
     read_dr_consumed: Cell<bool>,
-    /// Bus name + shared trace log for the universal logic-analyzer (set via
-    /// `I2c::set_bus_trace`). `None` (default) keeps `attach` unwrapped —
-    /// existing behaviour for every caller that doesn't opt in.
-    #[serde(skip)]
-    bus_name: String,
-    #[serde(skip)]
-    bus_log: Option<crate::bus::bus_trace::BusTraceLog>,
 }
 
 impl Default for F1I2c {
@@ -143,8 +136,6 @@ impl Default for F1I2c {
             stop_requested: false,
             rxne_consumed: Cell::new(false),
             read_dr_consumed: Cell::new(true),
-            bus_name: String::new(),
-            bus_log: None,
         }
     }
 }
@@ -398,13 +389,6 @@ pub struct L4I2c {
     /// data byte is loaded into TXDR (write) — mirrors F1's START→DR ordering.
     #[serde(skip)]
     start_armed: bool,
-    /// Bus name + shared trace log for the universal logic-analyzer (set via
-    /// `I2c::set_bus_trace`). `None` (default) keeps `attach` unwrapped —
-    /// existing behaviour for every caller that doesn't opt in.
-    #[serde(skip)]
-    bus_name: String,
-    #[serde(skip)]
-    bus_log: Option<crate::bus::bus_trace::BusTraceLog>,
 }
 
 impl Default for L4I2c {
@@ -428,8 +412,6 @@ impl Default for L4I2c {
             is_reading: false,
             autoend: false,
             start_armed: false,
-            bus_name: String::new(),
-            bus_log: None,
         }
     }
 }
@@ -673,13 +655,6 @@ pub struct KinetisI2c {
     attached_devices: Vec<RefCell<Box<dyn I2cDevice>>>,
     #[serde(skip)]
     current_target: Option<usize>,
-    /// Bus name + shared trace log for the universal logic-analyzer (set via
-    /// `I2c::set_bus_trace`). `None` (default) keeps `attach` unwrapped —
-    /// existing behaviour for every caller that doesn't opt in.
-    #[serde(skip)]
-    bus_name: String,
-    #[serde(skip)]
-    bus_log: Option<crate::bus::bus_trace::BusTraceLog>,
 }
 
 impl Default for KinetisI2c {
@@ -703,8 +678,6 @@ impl Default for KinetisI2c {
             is_reading: false,
             attached_devices: Vec::new(),
             current_target: None,
-            bus_name: String::new(),
-            bus_log: None,
         }
     }
 }
@@ -884,54 +857,30 @@ impl I2c {
         }
     }
 
-    /// Set the bus name + a clone of the shared bus-trace log (universal logic
-    /// analyzer, see `crate::bus::bus_trace`). Must be called before `attach`
-    /// for an attached device to be wrapped into the log — devices already
-    /// attached are unaffected.
-    pub fn set_bus_trace(&mut self, name: String, log: crate::bus::bus_trace::BusTraceLog) {
-        match self {
-            I2c::Stm32F1(i) => {
-                i.bus_name = name;
-                i.bus_log = Some(log);
-            }
-            I2c::Stm32L4(i) => {
-                i.bus_name = name;
-                i.bus_log = Some(log);
-            }
-            I2c::Kinetis(i) => {
-                i.bus_name = name;
-                i.bus_log = Some(log);
-            }
-        }
+    /// Attach a slave to a bare (off-bus) controller, wrapping it into `trace`.
+    /// The trace handle is mandatory, so there is no untraced attach — this is
+    /// the off-bus counterpart of the on-bus choke point
+    /// [`crate::bus::SystemBus::attach_i2c_slave`], and both funnel through the
+    /// one wrap helper `bus_trace::wrap_i2c`. Used by standalone tests that
+    /// drive an `I2c` directly (no `SystemBus`).
+    pub fn attach_traced(
+        &mut self,
+        bus_name: &str,
+        trace: &crate::bus::bus_trace::BusTrace,
+        device: Box<dyn I2cDevice>,
+    ) {
+        self.push_slave(crate::bus::bus_trace::wrap_i2c(bus_name, trace, device));
     }
 
-    pub fn attach(&mut self, device: Box<dyn I2cDevice>) {
-        let wrap = |name: &str,
-                    log: &Option<crate::bus::bus_trace::BusTraceLog>,
-                    d: Box<dyn I2cDevice>|
-         -> Box<dyn I2cDevice> {
-            match log {
-                Some(l) => Box::new(crate::bus::bus_trace::TracingI2cDevice::new(
-                    name.to_string(),
-                    l.clone(),
-                    d,
-                )),
-                None => d,
-            }
-        };
+    /// Raw slave push — does NOT wrap for tracing. The only caller is the bus
+    /// choke point [`crate::bus::SystemBus::attach_i2c_slave`], which wraps the
+    /// device first; nothing else should attach directly (that would bypass the
+    /// universal bus trace).
+    pub(crate) fn push_slave(&mut self, device: Box<dyn I2cDevice>) {
         match self {
-            Self::Stm32F1(i) => {
-                let d = wrap(&i.bus_name, &i.bus_log, device);
-                i.attached_devices.push(RefCell::new(d));
-            }
-            Self::Stm32L4(i) => {
-                let d = wrap(&i.bus_name, &i.bus_log, device);
-                i.attached_devices.push(RefCell::new(d));
-            }
-            Self::Kinetis(i) => {
-                let d = wrap(&i.bus_name, &i.bus_log, device);
-                i.attached_devices.push(RefCell::new(d));
-            }
+            Self::Stm32F1(i) => i.attached_devices.push(RefCell::new(device)),
+            Self::Stm32L4(i) => i.attached_devices.push(RefCell::new(device)),
+            Self::Kinetis(i) => i.attached_devices.push(RefCell::new(device)),
         }
     }
 
@@ -1074,7 +1023,7 @@ mod tests {
         use crate::peripherals::components::Ssd1306;
 
         let mut i2c = I2c::new();
-        i2c.attach(Box::new(Ssd1306::new(0x3C)));
+        i2c.push_slave(Box::new(Ssd1306::new(0x3C)));
 
         // Summary mode: metadata present, bytes omitted.
         let summary = i2c.inspect(0x4000_5400, "i2c1", &InspectOpts::default());
@@ -1158,7 +1107,7 @@ mod tests {
     fn test_i2c_full_transfer_flow() {
         use crate::peripherals::components::Mpu6050;
         let mut i2c = I2c::new();
-        i2c.attach(Box::new(Mpu6050::new(0x50)));
+        i2c.push_slave(Box::new(Mpu6050::new(0x50)));
 
         i2c.write(0x01, 0x01).unwrap(); // START
         for _ in 0..10 {
@@ -1199,7 +1148,7 @@ mod tests {
         let mut i2c = I2c::new();
         let mut sensor = Adxl345::new(0x53);
         sensor.set_sample(256, -128, 64);
-        i2c.attach(Box::new(sensor));
+        i2c.push_slave(Box::new(sensor));
 
         i2c.write(0x00, 0x01).unwrap();
         i2c.write(0x01, 0x01).unwrap();
@@ -1267,7 +1216,7 @@ mod tests {
     fn test_i2c_single_byte_read_advances_device_once() {
         let reads = Arc::new(AtomicUsize::new(0));
         let mut i2c = I2c::new();
-        i2c.attach(Box::new(CountingDevice::new(0x42, reads.clone())));
+        i2c.push_slave(Box::new(CountingDevice::new(0x42, reads.clone())));
 
         i2c.write(0x01, 0x01).unwrap();
         for _ in 0..10 {
@@ -1356,7 +1305,7 @@ mod tests {
         }
 
         let mut i2c = I2c::new_with_layout(I2cRegisterLayout::Stm32L4);
-        i2c.attach(Box::new(WriteCounter {
+        i2c.push_slave(Box::new(WriteCounter {
             address: 0x3C,
             writes: writes.clone(),
         }));
@@ -1381,12 +1330,11 @@ mod tests {
 
     #[test]
     fn i2c_attach_wraps_device_into_shared_log() {
-        use crate::bus::bus_trace::{new_log, BusPayload};
+        use crate::bus::bus_trace::{new_log, wrap_i2c, BusPayload};
         use crate::Peripheral;
 
         let log = new_log();
         let mut i2c = I2c::Kinetis(KinetisI2c::default());
-        i2c.set_bus_trace("i2c1".into(), log.clone());
 
         // device at 0x1E
         struct D;
@@ -1399,7 +1347,8 @@ mod tests {
             }
             fn write(&mut self, _: u8) {}
         }
-        i2c.attach(Box::new(D));
+        // The bus choke point wraps before push; emulate it here.
+        i2c.push_slave(wrap_i2c("i2c1", &log, Box::new(D)));
 
         // Drive START + addr(W) + one data byte through the Kinetis register
         // model via the public `Peripheral::write` MMIO path (the same path
@@ -1409,7 +1358,7 @@ mod tests {
         i2c.write(0x04, 0x3C).unwrap(); // addr 0x1E + W -> selects device, start()
         i2c.write(0x04, 0xAF).unwrap(); // data -> device.write -> wrapper records
 
-        let snap = log.lock().unwrap().snapshot();
+        let snap = log.snapshot();
         assert!(snap
             .iter()
             .any(|e| matches!(&e.payload, BusPayload::I2c { byte, .. } if *byte == 0xAF)));

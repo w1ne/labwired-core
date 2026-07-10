@@ -47,12 +47,17 @@ impl Nrf52SerialInstance {
         }
     }
 
+    /// Attach an I²C slave. `dev` is expected to already be trace-wrapped by the
+    /// caller (the nRF52 factory wraps via `bus_trace::wrap_i2c`); this only
+    /// forwards to the TWIM's raw push.
     pub fn attach_i2c(&mut self, dev: Box<dyn I2cDevice>) {
-        self.twim.attach(dev);
+        self.twim.push_slave(dev);
     }
 
+    /// Attach a SPI device (already trace-wrapped by the caller); forwards to the
+    /// SPIM's raw push.
     pub fn attach_spi(&mut self, dev: Box<dyn SpiDevice>) {
-        self.spim.attach(dev);
+        self.spim.push_device(dev);
     }
 
     fn active(&self) -> u32 {

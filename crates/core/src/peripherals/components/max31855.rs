@@ -198,10 +198,7 @@ impl PeripheralKit for Max31855Kit {
     }
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
         let cs_pin = ctx.config_str("cs_pin").unwrap_or("PA4").to_string();
-        let mut dev = Max31855::new(cs_pin);
-        crate::sim_input::SimInput::set_component_id(&mut dev, ctx.device_id().to_string());
-        let spi = ctx.spi()?;
-        spi.attach(Box::new(dev));
+        ctx.attach_spi_device(Box::new(Max31855::new(cs_pin)))?;
         Ok(())
     }
 }

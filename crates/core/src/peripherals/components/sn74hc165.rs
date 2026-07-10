@@ -190,9 +190,7 @@ impl PeripheralKit for Sn74hc165Kit {
         if let Some(v) = inputs {
             shifter.set_inputs(v as u8);
         }
-        crate::sim_input::SimInput::set_component_id(&mut shifter, ctx.device_id().to_string());
-        let spi = ctx.spi()?;
-        spi.attach(Box::new(shifter));
+        ctx.attach_spi_device(Box::new(shifter))?;
         Ok(())
     }
 }
