@@ -315,6 +315,109 @@ mod logic_capture_differential_tests {
         }
     }
 
+    // ── STM32 SPI waveform (bit-engine push path) ────────────────────────────
+
+    const SPI1_BASE: u64 = 0x4001_3000;
+    const SPIA_GPIO_BASE: u64 = 0x5000_0000;
+    const SCK_PIN: u8 = 5;
+    const MOSI_PIN: u8 = 7;
+    const SPI_WIRE_BYTES: [u8; 3] = [0x21, 0x0C, 0xA5];
+
+    /// The STM32 SPI1/PA5/PA7 waveform fixture from
+    /// `tests/stm32_spi_waveform.rs`, driven through `Machine::run` batches.
+    /// BR=4 (half-period 16 cycles) keeps every wire transition on a
+    /// tick-interval multiple for all tested intervals.
+    fn stm32_spi_machine(tick_interval: u32) -> Machine<CortexM> {
+        use crate::peripherals::spi::{Spi, SpiRegisterLayout};
+        let mut bus = crate::bus::SystemBus::new();
+        let (cpu, _nvic) = crate::system::cortex_m::configure_cortex_m(&mut bus);
+        // A V2 GPIOA at a dedicated base (the default test-bus "gpioa" is F1).
+        let gpioa_idx = bus.find_peripheral_index_by_name("gpioa").unwrap();
+        bus.peripherals[gpioa_idx].dev =
+            Box::new(GpioPort::new_with_layout(GpioRegisterLayout::Stm32V2));
+        bus.peripherals[gpioa_idx].base = SPIA_GPIO_BASE;
+        bus.rebuild_peripheral_ranges();
+        bus.add_peripheral(
+            "spi1",
+            SPI1_BASE,
+            0x400,
+            None,
+            Box::new(Spi::new_with_layout(SpiRegisterLayout::Stm32Fifo)),
+        );
+        bus.wire_stm32_spi_pads();
+
+        let mut machine = Machine::new(cpu, bus);
+        machine.config.peripheral_tick_interval = tick_interval;
+        machine.bus.config.peripheral_tick_interval = tick_interval;
+        for i in 0..1022u64 {
+            let byte = if i % 2 == 0 { 0x00 } else { 0x20 };
+            machine.bus.write_u8(RAM_BASE + i, byte).unwrap();
+        }
+        machine.bus.write_u8(RAM_BASE + 1022, 0xFF).unwrap();
+        machine.bus.write_u8(RAM_BASE + 1023, 0xE5).unwrap();
+        machine.cpu.pc = RAM_BASE as u32;
+
+        let bus = &mut machine.bus;
+        bus.write_u32(
+            SPIA_GPIO_BASE + MODER,
+            (0b10 << (SCK_PIN * 2)) | (0b10 << (MOSI_PIN * 2)),
+        )
+        .unwrap();
+        bus.write_u32(
+            SPIA_GPIO_BASE + 0x20, // AFRL: AF5 on both pads
+            (5 << (SCK_PIN * 4)) | (5 << (MOSI_PIN * 4)),
+        )
+        .unwrap();
+        // CR1 = MSTR|SSM|SSI|BR=4 (/32)|SPE — mode 0, MSB first, 8-bit.
+        bus.write_u16(
+            SPI1_BASE,
+            (1 << 2) | (1 << 9) | (1 << 8) | (0x4 << 3) | (1 << 6),
+        )
+        .unwrap();
+        machine
+    }
+
+    fn run_stm32_spi(tick_interval: u32, force_poll: bool) -> Vec<LogicEdge> {
+        let mut machine = stm32_spi_machine(tick_interval);
+        machine.logic_force_poll_capture(force_poll);
+        let gpioa_idx = machine.bus.find_peripheral_index_by_name("gpioa").unwrap();
+        let initial =
+            machine.logic_watch(&[Some((gpioa_idx, MOSI_PIN)), Some((gpioa_idx, SCK_PIN))]);
+        assert_eq!(initial, vec![Some(false), Some(false)]);
+
+        // Three bytes back-to-back through the TX FIFO (3 × 8-bit fits the
+        // 4-frame FIFO), then a fixed cycle budget so both modes execute the
+        // identical cycle count. 3 frames × 8 bits × 32 cycles ≈ 768 cycles.
+        for b in SPI_WIRE_BYTES {
+            machine.bus.write_u8(SPI1_BASE + 0x0C, b).unwrap();
+        }
+        for _ in 0..40 {
+            machine.run(Some(100)).unwrap();
+        }
+        machine.logic_read_edges(0).edges
+    }
+
+    /// THE gate, SPI flavour: the bit-level engine's SCK/MOSI waveform on
+    /// AFR-routed pads, pushed from the `SpiLineLevels` cell, must be
+    /// byte-identical to the per-cycle poll of `read_gpio_pad`.
+    #[test]
+    fn stm32_spi_waveform_push_stream_is_byte_identical_to_poll() {
+        for tick_interval in [1u32, 4] {
+            let poll = run_stm32_spi(tick_interval, true);
+            let push = run_stm32_spi(tick_interval, false);
+            let sck_rises = poll.iter().filter(|e| e.ch == 1 && e.value).count();
+            assert_eq!(
+                sck_rises,
+                SPI_WIRE_BYTES.len() * 8,
+                "tick={tick_interval}: full byte stream on the wire (3 bytes x 8 SCK rises)"
+            );
+            assert_eq!(
+                poll, push,
+                "tick={tick_interval}: push SPI waveform must be byte-identical to poll"
+            );
+        }
+    }
+
     // ── Honest fallback: non-instrumented peripherals stay on poll ──────────
 
     /// A minimal GPIO-ish peripheral that deliberately does NOT accept a
