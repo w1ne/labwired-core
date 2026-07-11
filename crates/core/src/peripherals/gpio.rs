@@ -375,11 +375,31 @@ impl GpioFamily {
 /// Push-mode logic-capture state for a [`GpioPort`]: the shared tap plus this
 /// port's watched `(pin, channel)` pairs and a pre-write level scratchpad
 /// (allocated once at install so the write hot path stays allocation-free).
+/// `line_chs` caches, per wired SPI line cell, the channel lists last
+/// registered with that cell (so registration is only re-synced when a write
+/// actually changes a watched pad's routing) — the C3 GPIO pattern.
 #[derive(Debug)]
 struct PortTap {
     tap: crate::logic_capture::LogicTap,
     watched: Vec<(u8, u32)>,
     scratch: Vec<Option<bool>>,
+    line_chs: Vec<[Vec<u32>; 3]>,
+}
+
+/// One AF-routed SPI pad on this port, installed at config-build time by
+/// [`crate::bus::SystemBus::wire_stm32_spi_pads`] from the per-family static
+/// AF table (datasheet AF maps). `af` is the AFR nibble the pad must select
+/// (STM32 V2 ports); `None` on F1 ports, whose pin→signal mapping is fixed
+/// (default, no AFIO remap — remap is not modeled).
+#[derive(Debug, Clone)]
+pub(crate) struct SpiPadRoute {
+    pin: u8,
+    af: Option<u8>,
+    signal: crate::peripherals::spi::SpiSignal,
+    /// Signal name surfaced through `gpio_routing().func` (e.g. "SPI1_SCK").
+    func: &'static str,
+    /// Index into [`GpioPort::spi_cells`].
+    cell: usize,
 }
 
 /// GPIO port — a per-family register model (see [`GpioFamily`]) plus optional
@@ -394,6 +414,11 @@ pub struct GpioPort {
     /// watched pad-level changes into the tap. Not snapshot state — the watch
     /// is re-armed by the frontend after a resume.
     tap: Option<PortTap>,
+    /// SPI line-level cells wired to this port (deduplicated), plus the pads
+    /// routed to them. Installed once at config-build time; empty on buses
+    /// without a wired STM32 SPI.
+    spi_cells: Vec<std::sync::Arc<crate::peripherals::spi::SpiLineLevels>>,
+    spi_routes: Vec<SpiPadRoute>,
 }
 
 impl Default for GpioPort {
@@ -404,7 +429,12 @@ impl Default for GpioPort {
 
 impl GpioPort {
     fn from_family(family: GpioFamily) -> Self {
-        Self { family, tap: None }
+        Self {
+            family,
+            tap: None,
+            spi_cells: Vec::new(),
+            spi_routes: Vec::new(),
+        }
     }
 
     pub fn new() -> Self {
@@ -470,30 +500,180 @@ impl GpioPort {
         }
     }
 
+    /// Register layout of this port (used by the SPI pad-wiring helper to
+    /// select the matching AF table).
+    pub(crate) fn register_layout(&self) -> GpioRegisterLayout {
+        match &self.family {
+            GpioFamily::Stm32F1(_) => GpioRegisterLayout::Stm32F1,
+            GpioFamily::Stm32V2(_) => GpioRegisterLayout::Stm32V2,
+            GpioFamily::Nrf52(_) => GpioRegisterLayout::Nrf52,
+            GpioFamily::Kinetis(_) => GpioRegisterLayout::Kinetis,
+        }
+    }
+
+    /// Install one SPI AF pad route (config-build time; see
+    /// [`crate::bus::SystemBus::wire_stm32_spi_pads`]). Cells are deduplicated
+    /// by identity so several pads of one controller share one entry.
+    pub(crate) fn add_spi_pad_route(
+        &mut self,
+        cell: &std::sync::Arc<crate::peripherals::spi::SpiLineLevels>,
+        pin: u8,
+        af: Option<u8>,
+        signal: crate::peripherals::spi::SpiSignal,
+        func: &'static str,
+    ) {
+        let cell_idx = match self
+            .spi_cells
+            .iter()
+            .position(|c| std::sync::Arc::ptr_eq(c, cell))
+        {
+            Some(i) => i,
+            None => {
+                self.spi_cells.push(cell.clone());
+                self.spi_cells.len() - 1
+            }
+        };
+        self.spi_routes.push(SpiPadRoute {
+            pin,
+            af,
+            signal,
+            func,
+            cell: cell_idx,
+        });
+    }
+
+    /// The active SPI route for `pin`, if the family registers currently hand
+    /// the pad to that SPI signal: V2 = MODER selects AF and the AFR nibble
+    /// selects the route's AF number; F1 = the pin is an AF output (MODE!=0,
+    /// CNF 10/11) on the fixed default mapping. F1 MISO (an input-mode pad on
+    /// real silicon) is intentionally NOT routed — an honest limit, so a plain
+    /// GPIO input on that pin never silently reads the SPI wire.
+    fn active_spi_route<'a>(
+        family: &GpioFamily,
+        routes: &'a [SpiPadRoute],
+        pin: u8,
+    ) -> Option<&'a SpiPadRoute> {
+        routes.iter().find(|r| {
+            if r.pin != pin {
+                return false;
+            }
+            match (family, r.af) {
+                (GpioFamily::Stm32V2(g), Some(af)) => {
+                    if (g.read_reg(0x00) >> (pin * 2)) & 0b11 != 0b10 {
+                        return false;
+                    }
+                    let (afr_off, sh) = if pin < 8 {
+                        (0x20, (pin * 4) as u32)
+                    } else {
+                        (0x24, ((pin - 8) * 4) as u32)
+                    };
+                    ((g.read_reg(afr_off) >> sh) & 0xF) as u8 == af
+                }
+                (GpioFamily::Stm32F1(g), None) => {
+                    let cr = g.read_reg(if pin < 8 { 0x00 } else { 0x04 });
+                    let shift = ((pin % 8) * 4) as u32;
+                    let mode = (cr >> shift) & 0b11;
+                    let cnf = (cr >> (shift + 2)) & 0b11;
+                    mode != 0 && cnf >= 0b10
+                }
+                _ => false,
+            }
+        })
+    }
+
+    /// Direction-aware pad level — the single truth `read_gpio_pad` and the
+    /// push-capture tap both read. Pads whose MODER/AFR (or F1 CNF) route an
+    /// SPI alternate function report the live wire level from the shared
+    /// [`SpiLineLevels`](crate::peripherals::spi::SpiLineLevels) cell; every
+    /// other pad falls back to the family register truth.
+    fn pad_level(&self, pin: u8) -> Option<bool> {
+        if !self.spi_routes.is_empty() {
+            if let Some(r) = Self::active_spi_route(&self.family, &self.spi_routes, pin) {
+                return Some(self.spi_cells[r.cell].level(r.signal));
+            }
+        }
+        self.family.pad_level(pin)
+    }
+
     /// Record every watched pad's current level before a mutation. No-op (one
     /// branch) while no tap is installed.
     #[inline]
     fn tap_snapshot(&mut self) {
-        if let Some(t) = &mut self.tap {
-            for (k, &(pin, _)) in t.watched.iter().enumerate() {
-                t.scratch[k] = self.family.pad_level(pin);
-            }
+        let Some(mut t) = self.tap.take() else {
+            return;
+        };
+        for (k, &(pin, _)) in t.watched.iter().enumerate() {
+            t.scratch[k] = self.pad_level(pin);
         }
+        self.tap = Some(t);
     }
 
     /// Report watched pads whose level became known-different since the
-    /// matching [`tap_snapshot`](Self::tap_snapshot). A pad whose level became
-    /// UNknown (e.g. handed to a peripheral) reports nothing — same rule as
-    /// the poll path, which keeps the last known level.
+    /// matching [`tap_snapshot`](Self::tap_snapshot), then re-sync the SPI
+    /// line-cell registration if the write changed a watched pad's routing —
+    /// so a pad handed to (or taken from) an SPI keeps pushing edges from the
+    /// correct source afterwards. A pad whose level became UNknown reports
+    /// nothing — same rule as the poll path, which keeps the last known level.
     #[inline]
     fn tap_report(&mut self) {
-        if let Some(t) = &mut self.tap {
-            for (k, &(pin, ch)) in t.watched.iter().enumerate() {
-                if let Some(level) = self.family.pad_level(pin) {
-                    if t.scratch[k] != Some(level) {
-                        t.tap.push(ch, level);
-                    }
+        let Some(t) = self.tap.take() else {
+            return;
+        };
+        for (k, &(pin, ch)) in t.watched.iter().enumerate() {
+            if let Some(level) = self.pad_level(pin) {
+                if t.scratch[k] != Some(level) {
+                    t.tap.push(ch, level);
                 }
+            }
+        }
+        self.tap = Some(t);
+        self.sync_spi_line_taps();
+    }
+
+    /// Per-cell channel lists for watched pads currently routed to that
+    /// cell's SCK/MOSI/MISO — the pads whose level changes are driven by the
+    /// SPI bit engine rather than GPIO writes.
+    fn routed_spi_channels(&self) -> Vec<[Vec<u32>; 3]> {
+        use crate::peripherals::spi::SpiSignal;
+        let mut per_cell: Vec<[Vec<u32>; 3]> = self
+            .spi_cells
+            .iter()
+            .map(|_| [Vec::new(), Vec::new(), Vec::new()])
+            .collect();
+        if let Some(t) = &self.tap {
+            for &(pin, ch) in &t.watched {
+                if let Some(r) = Self::active_spi_route(&self.family, &self.spi_routes, pin) {
+                    let slot = match r.signal {
+                        SpiSignal::Sck => 0,
+                        SpiSignal::Mosi => 1,
+                        SpiSignal::Miso => 2,
+                    };
+                    per_cell[r.cell][slot].push(ch);
+                }
+            }
+        }
+        per_cell
+    }
+
+    /// Push the current routed-channel lists into the shared SPI line cells,
+    /// but only where they changed (avoids mutex traffic on unrelated writes).
+    fn sync_spi_line_taps(&mut self) {
+        if self.spi_cells.is_empty() {
+            return;
+        }
+        let per_cell = self.routed_spi_channels();
+        let Some(t) = &mut self.tap else {
+            return;
+        };
+        for (i, chs) in per_cell.into_iter().enumerate() {
+            if t.line_chs[i] != chs {
+                self.spi_cells[i].install_tap(
+                    Some(t.tap.clone()),
+                    chs[0].clone(),
+                    chs[1].clone(),
+                    chs[2].clone(),
+                );
+                t.line_chs[i] = chs;
             }
         }
     }
@@ -554,7 +734,7 @@ impl crate::Peripheral for GpioPort {
     }
 
     fn read_gpio_pad(&self, pin: u8) -> Option<bool> {
-        self.family.pad_level(pin)
+        self.pad_level(pin)
     }
 
     fn gpio_routing(&self, pin: u8) -> Option<GpioRouting> {
@@ -609,18 +789,25 @@ impl crate::Peripheral for GpioPort {
                 }
             }
         };
-        // func: STM32 V2 exposes an AFR nibble per AF pad → "AF<n>" (no full
-        // AF→signal table; that is out of scope). Everything else: None.
-        let func = match &self.family {
-            GpioFamily::Stm32V2(g) if mode == GpioMode::Af => {
+        // func: a pad whose AF routing resolves to a wired SPI signal names it
+        // ("SPI1_SCK"); otherwise STM32 V2 exposes the raw AFR nibble → "AF<n>"
+        // (no full AF→signal table; that is out of scope). Everything else:
+        // None — null over a guess.
+        let func = if mode == GpioMode::Af {
+            if let Some(r) = Self::active_spi_route(&self.family, &self.spi_routes, pin) {
+                Some(r.func.to_string())
+            } else if let GpioFamily::Stm32V2(g) = &self.family {
                 let (afr_off, sh) = if pin < 8 {
                     (0x20, (pin * 4) as u32)
                 } else {
                     (0x24, ((pin - 8) * 4) as u32)
                 };
                 Some(format!("AF{}", (g.read_reg(afr_off) >> sh) & 0xF))
+            } else {
+                None
             }
-            _ => None,
+        } else {
+            None
         };
         Some(GpioRouting { mode, func })
     }
@@ -655,15 +842,26 @@ impl crate::Peripheral for GpioPort {
         tap: &crate::logic_capture::LogicTap,
         watched: &[(u8, u32)],
     ) -> bool {
-        self.tap = if watched.is_empty() {
-            None
+        if watched.is_empty() {
+            self.tap = None;
+            for cell in &self.spi_cells {
+                cell.install_tap(None, Vec::new(), Vec::new(), Vec::new());
+            }
         } else {
-            Some(PortTap {
+            self.tap = Some(PortTap {
                 tap: tap.clone(),
                 watched: watched.to_vec(),
                 scratch: vec![None; watched.len()],
-            })
-        };
+                // Seeded stale so the sync below always installs the current
+                // routing into every wired line cell.
+                line_chs: self
+                    .spi_cells
+                    .iter()
+                    .map(|_| [vec![u32::MAX], vec![u32::MAX], vec![u32::MAX]])
+                    .collect(),
+            });
+            self.sync_spi_line_taps();
+        }
         true
     }
 

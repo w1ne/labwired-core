@@ -93,10 +93,11 @@ fn test_spi_fidelity_in_machine() {
     assert_ne!(sr & 0x80, 0);
 
     // Advance the transfer to completion. Flag-off, the per-cycle walk drives
-    // the SPI countdown (8 bits × 4 divider = 32 ticks). Flag-on, the SPI is
-    // event-scheduled and the walk skips it, so fire its single completion
-    // event exactly as `Machine::drain_scheduler_events` does — swapping the
-    // peripheral out to satisfy the borrow checker.
+    // the SPI bit engine (8 bits × 4 divider = 32 ticks of wire time).
+    // Flag-on, the SPI is event-scheduled and the walk skips it, so drive the
+    // per-transition event chain exactly as `Machine::drain_scheduler_events`
+    // does — advancing scheduler time and re-firing while the engine keeps
+    // rescheduling — swapping the peripheral out to satisfy the borrow checker.
     #[cfg(not(feature = "event-scheduler"))]
     for _ in 0..32 {
         bus.tick_peripherals();
@@ -113,10 +114,19 @@ fn test_spi_fidelity_in_machine() {
             if !bus.peripherals[i].dev.uses_scheduler() {
                 continue;
             }
-            let placeholder: Box<dyn Peripheral> = Box::new(StubPeripheral::new(0));
-            let mut dev = std::mem::replace(&mut bus.peripherals[i].dev, placeholder);
-            dev.on_event(0, &mut sched, &mut bus);
-            bus.peripherals[i].dev = dev;
+            let mut tick = 0u64;
+            loop {
+                tick += 1;
+                sched.advance_to(tick);
+                let placeholder: Box<dyn Peripheral> = Box::new(StubPeripheral::new(0));
+                let mut dev = std::mem::replace(&mut bus.peripherals[i].dev, placeholder);
+                let result = dev.on_event(0, &mut sched, &mut bus);
+                bus.peripherals[i].dev = dev;
+                if result.reschedule_delay.is_none() {
+                    break;
+                }
+                assert!(tick < 10_000, "event chain never completed");
+            }
         }
     }
 
