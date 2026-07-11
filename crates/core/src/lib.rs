@@ -903,6 +903,13 @@ pub struct Machine<C: Cpu> {
     /// under the `event-scheduler` feature.
     #[allow(dead_code)]
     scheduler_bootstrapped: bool,
+    /// Reusable scratch for `drain_scheduler_events`'s HC-SR04 edge harvest, so
+    /// the per-drain (per-cycle at tick interval 1) harvest allocates nothing on
+    /// the steady-state path. Holds `(sensor_idx, rise_tick, fall_tick)` and is
+    /// drained each call. Always present; only used under the `event-scheduler`
+    /// feature.
+    #[allow(dead_code)]
+    hcsr04_edge_scratch: Vec<(usize, u64, u64)>,
 
     /// In-engine logic-analyzer edge capture (see [`crate::logic_capture`]).
     /// Empty/inactive by default — the step loop pays a single `is_active`
@@ -1123,6 +1130,7 @@ impl<C: Cpu> Machine<C> {
             flash_index,
             scb_index,
             scheduler_bootstrapped: false,
+            hcsr04_edge_scratch: Vec::new(),
             logic_capture: logic_capture::LogicCapture::new(),
             logic_force_poll: false,
         }
@@ -1648,9 +1656,40 @@ impl<C: Cpu> Machine<C> {
                 .unwrap_or(0);
             self.sched.schedule(now + delay, idx as u32, token, gen);
         }
+        // HC-SR04: enqueue the ECHO rise/fall edges of any freshly-armed window
+        // as cycle-exact events under the reserved subsystem idx. The sensor is
+        // not a `peripherals[]` entry, so it can't ride the `pending_schedule`
+        // (peripheral-idx) path; it is dispatched below by idx match instead.
+        self.bus
+            .harvest_hcsr04_edges(interval, &mut self.hcsr04_edge_scratch);
+        for (sensor, rise_tick, fall_tick) in self.hcsr04_edge_scratch.drain(..) {
+            self.sched.schedule(
+                rise_tick.max(now),
+                sched::SUBSYSTEM_PERIPHERAL_IDX,
+                sensor as u32,
+                0,
+            );
+            self.sched.schedule(
+                fall_tick.max(now),
+                sched::SUBSYSTEM_PERIPHERAL_IDX,
+                sensor as u32,
+                0,
+            );
+        }
+        // Nothing queued (steady state between an SPI frame / HC-SR04 pulse):
+        // skip the generation snapshot + heap drain entirely — no allocation.
+        if self.sched.is_empty() {
+            return;
+        }
         let generations = self.bus.peripheral_generations();
         let due = self.sched.drain_due(&generations);
         for ev in due {
+            // Bus-subsystem pseudo-peripheral (HC-SR04): no `peripherals[]`
+            // entry — dispatch straight to the shared ECHO choke point.
+            if ev.peripheral_idx == sched::SUBSYSTEM_PERIPHERAL_IDX {
+                self.bus.apply_hcsr04_event(ev.event_token as usize);
+                continue;
+            }
             let idx = ev.peripheral_idx as usize;
             let Some(entry) = self.bus.peripherals.get_mut(idx) else {
                 continue;
@@ -1990,6 +2029,24 @@ impl<C: Cpu> DebugControl for Machine<C> {
                 current_batch = current_batch.min(1);
             }
 
+            // Event-scheduler: end the batch exactly at the next event-scheduled
+            // HC-SR04 ECHO transition, so the post-batch `drain_scheduler_events`
+            // applies it at its exact cycle and a busy-polling firmware observes
+            // it that instruction — never a batch late. This is what lets HC-SR04
+            // drop out of `requires_cycle_accurate` (which pins the batch to one
+            // instruction) while staying correct. No-op at tick interval 1 (batch
+            // is already one instruction and the drain runs every cycle) and when
+            // no echo edge is pending, so the common paths pay nothing.
+            #[cfg(feature = "event-scheduler")]
+            if current_batch > 1 {
+                if let Some(deadline_cycle) = self.bus.next_hcsr04_deadline_cycle() {
+                    let until = deadline_cycle.saturating_sub(self.total_cycles);
+                    // `until == 0` means an edge is due at this exact cycle; take
+                    // one instruction so the drain applies it before advancing.
+                    current_batch = current_batch.min(until.clamp(1, u32::MAX as u64) as u32);
+                }
+            }
+
             // Push-mode capture: seed the tap clock at the batch start; the
             // CPU advances it once per retired instruction so pad writes stamp
             // with the boundary they become observable at.
@@ -2026,6 +2083,17 @@ impl<C: Cpu> DebugControl for Machine<C> {
                     self.cpu.set_exception_pending(irq);
                     tracing::debug!("Exception {} Pend", irq);
                 }
+            }
+
+            // Advance the bus's mirrored cycle to the batch-END cycle before the
+            // drain: scheduler event handlers that read `bus.current_cycle` (e.g.
+            // the HC-SR04 ECHO-edge handler recomputing its level from the window)
+            // must see "now", not the batch-start value seeded above — otherwise
+            // an edge due at the batch boundary is evaluated one batch stale (a
+            // fall would still read high and never transition).
+            #[cfg(feature = "event-scheduler")]
+            {
+                self.bus.current_cycle = self.total_cycles;
             }
 
             #[cfg(feature = "event-scheduler")]

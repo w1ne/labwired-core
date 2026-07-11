@@ -216,6 +216,11 @@ impl SystemBus {
                 .is_some()
         });
         self.esp32s3_irq_routing = self.esp32s3_intmatrix_idx.is_some();
+        // Cache whether the per-cycle GPIO-edge/GPIOTE service pass has any
+        // Nordic port to scan, so `tick_peripherals_fully` can early-out on
+        // walk-free buses without scanning peripherals by name every cycle.
+        self.nordic_gpio_service = self.find_peripheral_index_by_name("gpio0").is_some()
+            || self.find_peripheral_index_by_name("gpio1").is_some();
     }
 
     pub(crate) fn rebuild_esp32c3_irq_cache(&mut self) {
