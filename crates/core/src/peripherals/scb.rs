@@ -4,10 +4,15 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
-use crate::SimResult;
+use crate::{CycleClock, SimResult};
 use std::cell::Cell;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
+
+/// Event token for the ICSR pend-drain chain (the SCB schedules exactly one
+/// kind of event, so a constant token suffices — no arming sequence needed:
+/// claims are idempotent and a duplicate chain dies on an empty latch set).
+const SCB_PEND_DRAIN_TOKEN: u32 = 0;
 
 /// Bundle of CortexM-shared SCB fields. Passed to `Scb::with_shared`
 /// when the CPU and SCB are wired by `configure_cortex_m`.
@@ -82,6 +87,19 @@ pub struct Scb {
     /// Drained by the machine reset routing via drain_reset_request().
     #[serde(skip)]
     pending_reset: Cell<bool>,
+    /// Walk-free plan batch B1: bus cycle clock, attached by the registration
+    /// choke (`configure_cortex_m`). Used purely as the "machine-driven bus"
+    /// marker that flips `uses_scheduler()` — the SCB has no time-derived
+    /// state, so the clock's value is never read. `None` (hand-built test
+    /// buses / feature off) keeps the legacy per-tick drain.
+    #[serde(skip)]
+    clock: Option<CycleClock>,
+    /// True while an ICSR pend-drain event chain is in flight. Ensures exactly
+    /// ONE chain exists no matter how many ICSR writes land before it drains,
+    /// preserving the legacy walk's one-exception-per-cycle pacing (NMI, then
+    /// SysTick, then PendSV on consecutive cycles).
+    #[serde(skip)]
+    drain_chain_armed: bool,
 }
 
 impl Scb {
@@ -130,6 +148,51 @@ impl Scb {
             mpu_mair0: 0,
             mpu_mair1: 0,
             pending_reset: Cell::new(false),
+            clock: None,
+            drain_chain_armed: false,
+        }
+    }
+
+    /// True when the event scheduler owns the ICSR pend-drain (feature on AND
+    /// the bus attached its cycle clock at registration). The single predicate
+    /// both `uses_scheduler()` and the legacy-tick guard branch on, so the two
+    /// drive modes can never mix.
+    #[inline]
+    fn scheduler_mode(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    /// Test/differential knob: detach the cycle clock, pinning the model to
+    /// the legacy walk path (`uses_scheduler() == false`). Lets the
+    /// walk-on-vs-scheduler differential gates build the reference lane from
+    /// the same bus assembly.
+    pub fn force_legacy_walk(&mut self) {
+        self.clock = None;
+        self.drain_chain_armed = false;
+    }
+
+    /// True while any ICSR-latched system exception awaits delivery.
+    #[inline]
+    fn any_pend_latched(&self) -> bool {
+        self.nmi_pending || self.systick_pending || self.pendsv_pending
+    }
+
+    /// Drain ONE latched pend in architectural priority order (NMI > SysTick >
+    /// PendSV — the ARMv7-M priority table), returning its exception number.
+    /// Shared by the legacy `tick()` and the scheduler `on_event` so both
+    /// drive modes deliver identical sequences.
+    fn drain_one_pend(&mut self) -> Option<u32> {
+        if self.nmi_pending {
+            self.nmi_pending = false;
+            Some(2)
+        } else if self.systick_pending {
+            self.systick_pending = false;
+            Some(15)
+        } else if self.pendsv_pending {
+            self.pendsv_pending = false;
+            Some(14)
+        } else {
+            None
         }
     }
 
@@ -295,34 +358,76 @@ impl crate::Peripheral for Scb {
     }
 
     fn tick(&mut self) -> crate::PeripheralTickResult {
-        // Drain pending system-exception bits set by ICSR writes. NMI
-        // takes priority over SysTick over PendSV when multiple are
-        // pending simultaneously (per ARMv7-M priority table).
-        if self.nmi_pending {
-            self.nmi_pending = false;
-            return crate::PeripheralTickResult {
-                system_exception: Some(2),
-                cycles: 1,
-                ..Default::default()
-            };
+        // Never runs in scheduler mode (the walk skips `uses_scheduler()`
+        // peripherals; the guard keeps a stray direct call from racing the
+        // event chain). Legacy mode: drain ONE pending system-exception bit
+        // set by ICSR writes per tick, NMI > SysTick > PendSV.
+        //
+        // B1 tick-cost normalization: the drain used to charge `cycles: 1`
+        // into the tick-cost channel, inflating `total_cycles` by one per
+        // drained pend — a sim artifact (pending a system exception consumes
+        // no core cycles on silicon) incompatible with byte-identity between
+        // the walk and the scheduler path. Both modes now charge zero.
+        if self.scheduler_mode() {
+            return crate::PeripheralTickResult::default();
         }
-        if self.systick_pending {
-            self.systick_pending = false;
-            return crate::PeripheralTickResult {
-                system_exception: Some(15),
-                cycles: 1,
+        match self.drain_one_pend() {
+            Some(exc) => crate::PeripheralTickResult {
+                system_exception: Some(exc),
                 ..Default::default()
-            };
+            },
+            None => crate::PeripheralTickResult::default(),
         }
-        if self.pendsv_pending {
-            self.pendsv_pending = false;
-            return crate::PeripheralTickResult {
-                system_exception: Some(14),
-                cycles: 1,
-                ..Default::default()
-            };
+    }
+
+    fn uses_scheduler(&self) -> bool {
+        // True once the bus attached its cycle clock (event-scheduler builds):
+        // ICSR pends are delivered by write-armed delay-0 events, so the
+        // per-cycle walk has nothing left to do here. Without a clock
+        // (feature off / hand-built buses) stay on the legacy walk.
+        self.scheduler_mode()
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        // Called by the bus after every MMIO write to this peripheral: if the
+        // write latched a pend (ICSR SET bits) and no drain chain is in
+        // flight, arm one at delay 0 — `collect_scheduled_events` converts it
+        // to `current_cycle + 1`, the exact cycle the legacy walk would have
+        // drained the first pend at (interval 1, run path).
+        if !self.scheduler_mode() || !self.any_pend_latched() || self.drain_chain_armed {
+            return Vec::new();
         }
-        crate::PeripheralTickResult::default()
+        self.drain_chain_armed = true;
+        vec![(0, SCB_PEND_DRAIN_TOKEN)]
+    }
+
+    fn on_event(
+        &mut self,
+        _event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        if !self.scheduler_mode() {
+            return crate::sched::EventResult::default();
+        }
+        // Drain ONE pend per event, rescheduling one cycle later while more
+        // remain — replicating the legacy walk's one-exception-per-cycle
+        // pacing (NMI, then SysTick, then PendSV on consecutive cycles).
+        let exc = self.drain_one_pend();
+        self.drain_chain_armed = self.any_pend_latched();
+        crate::sched::EventResult {
+            system_exception: exc,
+            reschedule_delay: if self.drain_chain_armed {
+                Some(1)
+            } else {
+                None
+            },
+            ..Default::default()
+        }
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        self.clock = Some(clock);
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {

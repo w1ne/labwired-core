@@ -29,13 +29,18 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
     bus.nvic = Some(nvic_state.clone());
 
     // Ensure SCB exists (VTOR relocation, ICSR.VECTACTIVE mirror, SHPR1/2/3).
-    let scb = Scb::with_shared(SharedScbState {
+    let mut scb = Scb::with_shared(SharedScbState {
         vtor,
         vectactive,
         shpr1,
         shpr2,
         shpr3,
     });
+    // Walk-free plan batch B1: this install path replaces the placeholder dev
+    // (or pushes directly) and so bypasses the `add_peripheral`/`push_peripheral`
+    // attach chokes — attach the bus cycle clock here explicitly, flipping the
+    // SCB's ICSR pend-drain onto the event scheduler (event-scheduler builds).
+    crate::Peripheral::attach_cycle_clock(&mut scb, bus.cycle_clock.clone());
     if let Some(p) = bus
         .peripherals
         .iter_mut()

@@ -821,15 +821,31 @@ mod walk_free_campaign {
     //! read-sync case). Each later batch (SysTick+SCB, timers, DMA, …) migrates a
     //! slice onto the scheduler, flipping its `uses_scheduler()`, so this expected
     //! set shrinks batch by batch. Keep it in lockstep with the plan's inventory.
+    //!
+    //! Batch **B1** (SysTick + SCB → scheduler) removes `systick` and `scb`
+    //! from the forcing set — but only in `event-scheduler` builds:
+    //! `uses_scheduler()` needs both the feature AND the bus-attached
+    //! [`crate::CycleClock`], so the featureless lane honestly keeps them on
+    //! the walk (the two lists below are cfg-split for exactly that reason).
 
     use crate::bus::SystemBus;
     use crate::system::cortex_m::configure_cortex_m;
     use labwired_config::{ChipDescriptor, SystemManifest};
     use std::path::PathBuf;
 
-    /// Walk-forcing ids on the runtime invaders bus after B0:
-    ///   plan Class-B: systick + 11 timers + 2 dma + 3 i2c + adc + exti + scb + bxcan (21)
-    ///   + core DWT (added by `configure_cortex_m`, lazy-read CYCCNT walker)   = 22.
+    /// Walk-forcing ids on the runtime invaders bus after B1 (event-scheduler
+    /// builds): B0's 22 minus `systick` + `scb` (scheduler-migrated) = 20 —
+    /// the plan's remaining Class-B: 11 timers + 2 dma + 3 i2c + adc + exti +
+    /// bxcan (19) + the core DWT.
+    #[cfg(feature = "event-scheduler")]
+    const EXPECTED_WALK_FORCING: &[&str] = &[
+        "tim1", "tim2", "tim3", "tim4", "tim5", "tim6", "tim7", "tim8", "tim15", "tim16", "tim17",
+        "dma1", "dma2", "i2c1", "i2c2", "i2c3", "adc1", "exti", "can1", "dwt",
+    ];
+
+    /// Featureless builds: the scheduler does not exist, so SysTick and SCB
+    /// stay on the legacy walk — the full post-B0 set of 22.
+    #[cfg(not(feature = "event-scheduler"))]
     const EXPECTED_WALK_FORCING: &[&str] = &[
         "systick", "tim1", "tim2", "tim3", "tim4", "tim5", "tim6", "tim7", "tim8", "tim15",
         "tim16", "tim17", "dma1", "dma2", "i2c1", "i2c2", "i2c3", "adc1", "exti", "scb", "can1",
@@ -852,7 +868,7 @@ mod walk_free_campaign {
     }
 
     #[test]
-    fn b0_remaining_walk_forcing_set_is_exactly_class_b() {
+    fn remaining_walk_forcing_set_matches_campaign_inventory() {
         let bus = invaders_bus_walk_stripped();
 
         let mut forcing: Vec<&str> = bus
@@ -870,7 +886,7 @@ mod walk_free_campaign {
             forcing,
             expected,
             "walk-forcing set (needs_legacy_walk && !uses_scheduler) drifted from the \
-             B0 Class-B inventory.\n  got ({}):      {:?}\n  expected ({}): {:?}\n\
+             campaign inventory (currently: post-B1).\n  got ({}):      {:?}\n  expected ({}): {:?}\n\
              A model newly (un)marked `needs_legacy_walk()` or migrated to the scheduler \
              must update EXPECTED_WALK_FORCING to match the campaign's remaining surface.",
             forcing.len(),
@@ -881,14 +897,15 @@ mod walk_free_campaign {
     }
 
     #[test]
-    fn b0_does_not_flip_walk_deletion() {
-        // Class B still forces the walk, so B0 provably changes zero runtime
-        // behaviour: the bus is NOT walk-deletable yet.
+    fn remaining_class_b_walkers_still_pin_walk_deletion() {
+        // Timers/DMA/I2C/ADC/EXTI/bxCAN (+DWT) still force the walk, so
+        // B1 cannot flip the invaders bus yet: the derivation must stay
+        // conservative until every Class-B walker is migrated.
         let bus = invaders_bus_walk_stripped();
         assert!(
             !bus.derive_walk_deletable(),
-            "invaders bus became walk-deletable after B0, but Class-B walkers remain — \
-             B0 must be pure honest bookkeeping with no behaviour change"
+            "invaders bus became walk-deletable after B1, but Class-B walkers remain — \
+             each batch must be honest bookkeeping with no premature walk deletion"
         );
     }
 }

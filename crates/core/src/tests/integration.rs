@@ -1762,15 +1762,44 @@ pub mod integration_tests {
         assert_eq!(metrics.get_cycles(), 3); // 1 (MOV) + 2 (BL) = 3
     }
 
+    /// Peripheral tick-cost accounting through the observer channel. The cost
+    /// source is a dedicated test peripheral: SysTick used to charge one cycle
+    /// per enabled tick, but that was a sim artifact (real SysTick consumes no
+    /// core cycles) removed by the walk-free B1 migration — asserted below so
+    /// it cannot silently come back and re-skew `total_cycles`.
     #[test]
-    fn test_peripheral_cycle_accounting_systick() {
+    fn test_peripheral_cycle_accounting() {
         use crate::metrics::PerformanceMetrics;
+
+        #[derive(Debug)]
+        struct CostTicker;
+        impl crate::Peripheral for CostTicker {
+            fn read(&self, _offset: u64) -> crate::SimResult<u8> {
+                Ok(0)
+            }
+            fn write(&mut self, _offset: u64, _value: u8) -> crate::SimResult<()> {
+                Ok(())
+            }
+            fn tick(&mut self) -> crate::PeripheralTickResult {
+                crate::PeripheralTickResult {
+                    cycles: 1,
+                    ..Default::default()
+                }
+            }
+        }
 
         let mut machine = create_machine();
         let metrics = std::sync::Arc::new(PerformanceMetrics::new());
         machine.observers.push(metrics.clone());
 
-        // Enable SysTick so it incurs a tick cost each machine step.
+        machine.bus.add_peripheral(
+            "cost_ticker",
+            0x5100_0000,
+            0x100,
+            None,
+            Box::new(CostTicker),
+        );
+        // An ENABLED SysTick must NOT contribute tick cost (B1 normalization).
         machine.bus.write_u32(0xE000_E010, 1).unwrap(); // CSR = ENABLE
 
         // MOV R0, #10 (16-bit)
@@ -1781,8 +1810,9 @@ pub mod integration_tests {
 
         assert_eq!(metrics.get_instructions(), 1);
         assert_eq!(metrics.get_peripheral_cycles_total(), 1);
-        assert_eq!(metrics.get_peripheral_cycles("systick"), 1);
-        assert_eq!(metrics.get_cycles(), 2); // 1 (MOV) + 1 (SysTick tick)
+        assert_eq!(metrics.get_peripheral_cycles("cost_ticker"), 1);
+        assert_eq!(metrics.get_peripheral_cycles("systick"), 0);
+        assert_eq!(metrics.get_cycles(), 2); // 1 (MOV) + 1 (CostTicker tick)
     }
 
     #[test]

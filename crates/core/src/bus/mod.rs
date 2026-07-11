@@ -2948,12 +2948,18 @@ impl SystemBus {
     fn push_peripheral(
         &mut self,
         p_cfg: &labwired_config::PeripheralConfig,
-        dev: Box<dyn Peripheral>,
+        mut dev: Box<dyn Peripheral>,
     ) -> anyhow::Result<()> {
         let size = match &p_cfg.size {
             Some(size) => parse_size(size)?,
             None => 0x1000,
         };
+        // Attach choke point (walk-free plan Part 1): hand the peripheral the
+        // bus's shared cycle clock before it is registered — the `from_config`
+        // twin of the same attach in `add_peripheral`, so descriptor-built
+        // models (SysTick et al.) get read-side lazy sync too. No-op for the
+        // vast majority of models (the default `attach_cycle_clock` discards).
+        dev.attach_cycle_clock(self.cycle_clock.clone());
         self.peripherals.push(PeripheralEntry {
             name: p_cfg.id.clone(),
             base: p_cfg.base_address,

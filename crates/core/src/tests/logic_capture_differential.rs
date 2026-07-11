@@ -128,27 +128,55 @@ mod logic_capture_differential_tests {
         }
     }
 
-    /// Peripheral tick-COST cycles (SysTick charges one cycle per tick while
-    /// enabled) shift the observation cycle past the batch boundary — the
+    /// A legacy walker that charges one tick-cost cycle per walk tick — the
+    /// dedicated cost source for the fixture below. (This role used to be
+    /// played by an armed SysTick, whose `cycles: 1` per enabled tick was a
+    /// sim artifact; the walk-free B1 batch normalised SysTick/SCB to zero
+    /// cost so the walk-on reference and the scheduler path agree
+    /// cycle-for-cycle. The logic-capture cost path itself is still real —
+    /// any future peripheral may charge cost — so it keeps coverage here.)
+    #[derive(Debug)]
+    struct CostTicker;
+
+    impl Peripheral for CostTicker {
+        fn read(&self, _offset: u64) -> SimResult<u8> {
+            Ok(0)
+        }
+        fn write(&mut self, _offset: u64, _value: u8) -> SimResult<()> {
+            Ok(())
+        }
+        fn tick(&mut self) -> crate::PeripheralTickResult {
+            crate::PeripheralTickResult {
+                cycles: 1,
+                ..Default::default()
+            }
+        }
+    }
+
+    /// Peripheral tick-COST cycles (the CostTicker charges one cycle per walk
+    /// tick) shift the observation cycle past the batch boundary — the
     /// poll loop samples only after costs are charged, so push stamps
     /// finalised at the boundary must land on the same post-cost cycle. This
     /// is the only fixture that exercises the boundary→now finalisation with
     /// `now > boundary`.
     #[test]
     fn stm32_bitbang_with_tick_costs_push_stream_is_byte_identical_to_poll() {
-        const SYST_CSR: u64 = 0xE000_E010;
-        const SYST_RVR: u64 = 0xE000_E014;
         let build = |tick_interval: u32| {
             let mut machine = bitbang_machine(tick_interval);
-            machine.bus.write_u32(SYST_RVR, 9).unwrap();
-            machine.bus.write_u32(SYST_CSR, 1).unwrap(); // ENABLE, no interrupt
+            machine.bus.add_peripheral(
+                "cost_ticker",
+                0x5100_0000,
+                0x100,
+                None,
+                Box::new(CostTicker),
+            );
             machine
         };
         for tick_interval in [1u32, 8] {
             let poll = run_bitbang(build(tick_interval), true, 600);
             let push = run_bitbang(build(tick_interval), false, 600);
             assert!(poll.edges.len() >= 300);
-            // SysTick's per-tick cost must actually be in play: with it, some
+            // The CostTicker's per-tick cost must actually be in play: with it, some
             // observation cycles exceed their instruction count.
             assert!(
                 poll.edges.last().unwrap().cycle > 600,
