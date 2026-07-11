@@ -265,6 +265,17 @@ pub struct SystemBus {
     /// `requires_cycle_accurate` — called per run-loop iteration — never scans
     /// peripherals. `false` on every bus without an H5 op-modeling FLASH.
     flash_models_ops: bool,
+    /// Cached in `rebuild_peripheral_ranges`: true when a Nordic `gpio0`/`gpio1`
+    /// port is present, so the per-cycle tick runs the GPIO-edge/GPIOTE service
+    /// pass. Lets `tick_peripherals_fully` decide in O(1) whether the walk-free
+    /// per-cycle tick has any work at all (see `per_cycle_tick_is_trivial`)
+    /// instead of scanning peripherals by name every cycle.
+    nordic_gpio_service: bool,
+    /// Test/diagnostic override: force the legacy per-cycle HC-SR04 service path
+    /// even under the `event-scheduler` feature (disables the scheduled-edge
+    /// path). Set only by the differential determinism test; `false` in every
+    /// real config so the scheduled path is used whenever it is available.
+    pub hcsr04_scheduling_disabled: bool,
     /// Index of the FLASH register peripheral whose opt-in H5 program-error
     /// fidelity gate is enabled, if any. Cached in `rebuild_peripheral_ranges`
     /// (same staleness contract as `rcc_idx`). `None` on every bus where the
@@ -1535,7 +1546,57 @@ impl SystemBus {
     /// CLI/batch run path would record the op in the FLASH cell but never apply
     /// it (no 0xFF fill, no bank swap, no reset).
     pub fn requires_cycle_accurate(&self) -> bool {
-        !self.hcsr04.is_empty() || self.has_iolink_master() || self.flash_models_ops
+        let hcsr04_needs_cycle_accurate = !self.hcsr04.is_empty() && !self.hcsr04_event_scheduled();
+        hcsr04_needs_cycle_accurate || self.has_iolink_master() || self.flash_models_ops
+    }
+
+    /// True when the HC-SR04 echo waveform is driven by the event scheduler
+    /// (rise/fall edges scheduled at their exact cycles and drained by
+    /// `Machine::drain_scheduler_events`) rather than the per-cycle
+    /// `service_hcsr04` pass. Active only under the `event-scheduler` feature on
+    /// a walk-deleted bus (`legacy_walk_disabled`) — the same buses that already
+    /// route every migrated peripheral through the scheduler. On the legacy-walk
+    /// or feature-off path the sensor stays on the per-tick service path and
+    /// `requires_cycle_accurate` keeps batches at one instruction. The
+    /// `hcsr04_scheduling_disabled` override forces the legacy path (differential
+    /// determinism test only).
+    ///
+    /// Gated on `peripheral_tick_interval > 1`: at interval 1 there is no
+    /// instruction batching to unlock (batches are already one instruction), so
+    /// the scheduled path would only add per-cycle drain overhead for no win —
+    /// the proven per-tick service path is kept, byte-for-byte identical to the
+    /// pre-migration build. The scheduled path activates exactly when the browser
+    /// raises the interval to batch, which is when it pays off (see the throughput
+    /// numbers in the migration notes).
+    #[inline]
+    pub(crate) fn hcsr04_event_scheduled(&self) -> bool {
+        cfg!(feature = "event-scheduler")
+            && self.legacy_walk_disabled
+            && !self.hcsr04.is_empty()
+            && !self.hcsr04_scheduling_disabled
+            && self.config.peripheral_tick_interval > 1
+    }
+
+    /// True when the per-cycle tick (`tick_peripherals_fully`) has no orchestration
+    /// work beyond the NVIC scan: the legacy peripheral walk is deleted, no
+    /// bus-aware peripheral needs a pre-tick pass, no Nordic GPIO/GPIOTE service
+    /// is wired, no CAN synthetic testers are attached, and every HC-SR04 (if any)
+    /// is event-scheduled. On such a bus the tick early-outs to just the NVIC
+    /// aggregation, avoiding the phase-1 orchestration and its allocations every
+    /// cycle. Only meaningful under the `event-scheduler` feature (the walk is
+    /// never deleted otherwise).
+    #[cfg(feature = "event-scheduler")]
+    #[inline]
+    fn per_cycle_tick_is_trivial(&self) -> bool {
+        self.legacy_walk_disabled
+            && self.bus_tick_indices.is_empty()
+            && !self.nordic_gpio_service
+            && !self.esp32c3_irq_routing
+            && !self.esp32s3_irq_routing
+            && self.can_diagnostic_testers.is_empty()
+            && self.can_uds_testers.is_empty()
+            && self.can_log_players.is_empty()
+            && (self.hcsr04.is_empty() || self.hcsr04_event_scheduled())
     }
 
     /// True when an IO-Link master peer is attached to any UART. The master is
@@ -1572,28 +1633,90 @@ impl SystemBus {
         if self.hcsr04.is_empty() {
             return;
         }
-        let now = self.current_cycle;
         for i in 0..self.hcsr04.len() {
             // TRIG is no longer polled here — `maybe_arm_hcsr04` arms the window
             // on the GPIO write (cycle-exact, see the note in `Machine::step`).
             // The per-cycle work is two integer comparisons plus, only on a
             // transition, one read-modify-write of the ECHO input bit.
-            let echo_high = self.hcsr04[i].echo_high_at(now);
-            if echo_high == self.hcsr04[i].last_echo_high() {
-                continue;
+            self.drive_hcsr04_echo(i);
+        }
+    }
+
+    /// Drive sensor `i`'s ECHO input register to the level its armed window
+    /// implies at `self.current_cycle`, touching the bus only on a transition.
+    /// The single choke point shared by the per-cycle [`service_hcsr04`] pass and
+    /// the event-scheduler edge handler ([`apply_hcsr04_event`]) — routing both
+    /// through the same `write_u32` keeps logic-analyzer probe capture on the
+    /// ECHO pad byte-identical across the two paths.
+    ///
+    /// [`service_hcsr04`]: Self::service_hcsr04
+    /// [`apply_hcsr04_event`]: Self::apply_hcsr04_event
+    fn drive_hcsr04_echo(&mut self, i: usize) {
+        let now = self.current_cycle;
+        let echo_high = self.hcsr04[i].echo_high_at(now);
+        if echo_high == self.hcsr04[i].last_echo_high() {
+            return;
+        }
+        let echo_addr = self.hcsr04[i].echo_idr_addr;
+        let echo_bit = self.hcsr04[i].echo_bit;
+        let idr = self.read_u32(echo_addr).unwrap_or(0);
+        let new_idr = if echo_high {
+            idr | (1 << echo_bit)
+        } else {
+            idr & !(1 << echo_bit)
+        };
+        if new_idr != idr {
+            let _ = self.write_u32(echo_addr, new_idr);
+        }
+        self.hcsr04[i].set_last_echo_high(echo_high);
+    }
+
+    /// Event-scheduler edge handler: a scheduled ECHO rise/fall for sensor
+    /// `sensor` came due, so drive its ECHO input register to the current
+    /// window level. Recomputing from the window (rather than trusting a
+    /// hard-coded rise/fall) makes the handler idempotent and self-correcting
+    /// through the same choke point the per-cycle pass uses. Called by
+    /// `Machine::drain_scheduler_events` for [`crate::sched::SUBSYSTEM_PERIPHERAL_IDX`]
+    /// events. Out-of-range `sensor` (a sensor removed after scheduling) is a
+    /// no-op.
+    #[cfg(feature = "event-scheduler")]
+    pub(crate) fn apply_hcsr04_event(&mut self, sensor: usize) {
+        if sensor < self.hcsr04.len() {
+            self.drive_hcsr04_echo(sensor);
+        }
+    }
+
+    /// Event-scheduler path: the earliest cycle at which any event-scheduled
+    /// HC-SR04 must next drive its ECHO pad, or `None` when no sensor has a
+    /// pending edge. The run loop clamps its batch to end exactly here so a
+    /// busy-polling firmware observes the edge on time. Scoped to HC-SR04 (not
+    /// every scheduled peripheral): the SPI wire engine self-corrects against
+    /// its anchor when its event fires a batch late, so clamping to it would only
+    /// shrink batches during framebuffer pushes for no correctness gain — HC-SR04
+    /// is the one device that is polled cycle-tight and must not be observed late.
+    #[cfg(feature = "event-scheduler")]
+    pub(crate) fn next_hcsr04_deadline_cycle(&self) -> Option<u64> {
+        if !self.hcsr04_event_scheduled() {
+            return None;
+        }
+        let interval = (self.config.peripheral_tick_interval as u64).max(1);
+        let now = self.current_cycle;
+        self.hcsr04
+            .iter()
+            .filter_map(|s| s.next_edge_deadline_cycle(now, interval))
+            .min()
+    }
+
+    /// Event-scheduler path: harvest any sensor whose echo window was (re)armed
+    /// since the last harvest, returning `(sensor_idx, rise_tick, fall_tick)`
+    /// absolute peripheral-tick deadlines for `Machine::drain_scheduler_events`
+    /// to enqueue. No allocation when nothing was armed.
+    #[cfg(feature = "event-scheduler")]
+    pub(crate) fn harvest_hcsr04_edges(&mut self, interval: u64, out: &mut Vec<(usize, u64, u64)>) {
+        for i in 0..self.hcsr04.len() {
+            if let Some((rise, fall)) = self.hcsr04[i].take_edge_schedule(interval) {
+                out.push((i, rise, fall));
             }
-            let echo_addr = self.hcsr04[i].echo_idr_addr;
-            let echo_bit = self.hcsr04[i].echo_bit;
-            let idr = self.read_u32(echo_addr).unwrap_or(0);
-            let new_idr = if echo_high {
-                idr | (1 << echo_bit)
-            } else {
-                idr & !(1 << echo_bit)
-            };
-            if new_idr != idr {
-                let _ = self.write_u32(echo_addr, new_idr);
-            }
-            self.hcsr04[i].set_last_echo_high(echo_high);
         }
     }
 
@@ -2334,6 +2457,8 @@ impl SystemBus {
             esp32s3_irq_routing: false,
             esp32s3_intmatrix_idx: None,
             flash_models_ops: false,
+            nordic_gpio_service: false,
+            hcsr04_scheduling_disabled: false,
             flash_error_flags_idx: None,
             bus_trace: bus_trace::new_log(),
             logic_tap: crate::logic_capture::LogicTap::new(),
@@ -2387,6 +2512,8 @@ impl SystemBus {
             esp32s3_irq_routing: false,
             esp32s3_intmatrix_idx: None,
             flash_models_ops: false,
+            nordic_gpio_service: false,
+            hcsr04_scheduling_disabled: false,
             flash_error_flags_idx: None,
             bus_trace: bus_trace::new_log(),
             logic_tap: crate::logic_capture::LogicTap::new(),
@@ -4696,6 +4823,8 @@ peripherals:
             esp32s3_irq_routing: false,
             esp32s3_intmatrix_idx: None,
             flash_models_ops: false,
+            nordic_gpio_service: false,
+            hcsr04_scheduling_disabled: false,
             flash_error_flags_idx: None,
             bus_trace: bus_trace::new_log(),
             logic_tap: crate::logic_capture::LogicTap::new(),
@@ -4773,6 +4902,8 @@ peripherals:
             esp32s3_irq_routing: false,
             esp32s3_intmatrix_idx: None,
             flash_models_ops: false,
+            nordic_gpio_service: false,
+            hcsr04_scheduling_disabled: false,
             flash_error_flags_idx: None,
             bus_trace: bus_trace::new_log(),
             logic_tap: crate::logic_capture::LogicTap::new(),
@@ -5001,6 +5132,8 @@ peripherals:
             esp32s3_irq_routing: false,
             esp32s3_intmatrix_idx: None,
             flash_models_ops: false,
+            nordic_gpio_service: false,
+            hcsr04_scheduling_disabled: false,
             flash_error_flags_idx: None,
             bus_trace: bus_trace::new_log(),
             logic_tap: crate::logic_capture::LogicTap::new(),
@@ -5228,6 +5361,8 @@ peripherals:
             esp32s3_irq_routing: false,
             esp32s3_intmatrix_idx: None,
             flash_models_ops: false,
+            nordic_gpio_service: false,
+            hcsr04_scheduling_disabled: false,
             flash_error_flags_idx: None,
             bus_trace: bus_trace::new_log(),
             logic_tap: crate::logic_capture::LogicTap::new(),
@@ -5309,6 +5444,8 @@ peripherals:
             esp32s3_irq_routing: false,
             esp32s3_intmatrix_idx: None,
             flash_models_ops: false,
+            nordic_gpio_service: false,
+            hcsr04_scheduling_disabled: false,
             flash_error_flags_idx: None,
             bus_trace: bus_trace::new_log(),
             logic_tap: crate::logic_capture::LogicTap::new(),

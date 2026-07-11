@@ -78,6 +78,13 @@ pub struct HcSr04 {
     /// a given peripheral write touches this sensor's TRIG line. `None` until
     /// resolved.
     trig_peripheral_idx: Option<usize>,
+    /// Event-scheduler path only: set true by [`observe_trig`](Self::observe_trig)
+    /// on a TRIG rising edge (a fresh echo window was just computed) and cleared
+    /// by [`take_edge_schedule`](Self::take_edge_schedule) once the bus has
+    /// scheduled the window's rise/fall edges as scheduler events. Unused by the
+    /// legacy per-tick service path.
+    #[cfg_attr(not(feature = "event-scheduler"), allow(dead_code))]
+    edge_reschedule_pending: bool,
 }
 
 impl HcSr04 {
@@ -103,6 +110,7 @@ impl HcSr04 {
             echo_end_cycle: 0,
             last_echo_high: false,
             trig_peripheral_idx: None,
+            edge_reschedule_pending: false,
         }
     }
 
@@ -198,8 +206,49 @@ impl HcSr04 {
             let pulse = ((self.distance_cm * US_PER_CM) as f64 * cpu) as u64;
             self.echo_start_cycle = now + delay;
             self.echo_end_cycle = self.echo_start_cycle + pulse.max(1);
+            // Event-scheduler path: flag the fresh window so the bus reschedules
+            // this sensor's ECHO rise/fall as scheduler events. Harmless (unread)
+            // on the legacy per-tick path.
+            self.edge_reschedule_pending = true;
         }
         self.last_trig = trig_high;
+    }
+
+    /// Event-scheduler path: if a fresh echo window was armed since the last
+    /// call, return the absolute peripheral-tick indices at which ECHO should
+    /// rise and fall, and clear the pending flag. The tick of a cycle `c` is
+    /// `ceil(c / interval)` — the first peripheral-tick boundary at or after the
+    /// exact cycle, which is precisely when the legacy per-tick `service_hcsr04`
+    /// (running only at tick boundaries) would first observe the level change.
+    /// At `interval == 1` this is the exact cycle, so the scheduled edges are
+    /// cycle-identical to the per-cycle path. Returns `None` when no new window
+    /// has been armed.
+    #[cfg(feature = "event-scheduler")]
+    pub(crate) fn take_edge_schedule(&mut self, interval: u64) -> Option<(u64, u64)> {
+        if !self.edge_reschedule_pending {
+            return None;
+        }
+        self.edge_reschedule_pending = false;
+        let interval = interval.max(1);
+        Some((
+            self.echo_start_cycle.div_ceil(interval),
+            self.echo_end_cycle.div_ceil(interval),
+        ))
+    }
+
+    /// Event-scheduler path: the cycle of this sensor's next ECHO transition
+    /// strictly after `now`, quantised to the `interval` tick boundary its
+    /// scheduled event fires on (`ceil(edge / interval) * interval`) so the run
+    /// loop can end a batch exactly there. Returns `None` once the armed window
+    /// has fully elapsed (no pending transition) — matching the two edges
+    /// scheduled by [`take_edge_schedule`](Self::take_edge_schedule). Cheap: two
+    /// divides, no allocation.
+    #[cfg(feature = "event-scheduler")]
+    pub(crate) fn next_edge_deadline_cycle(&self, now: u64, interval: u64) -> Option<u64> {
+        let interval = interval.max(1);
+        let rise = self.echo_start_cycle.div_ceil(interval) * interval;
+        let fall = self.echo_end_cycle.div_ceil(interval) * interval;
+        [rise, fall].into_iter().filter(|&c| c > now).min()
     }
 
     /// The ECHO input level for the current cycle: high while `now` is inside the

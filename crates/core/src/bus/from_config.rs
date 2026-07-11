@@ -85,6 +85,8 @@ impl SystemBus {
             esp32s3_irq_routing: false,
             esp32s3_intmatrix_idx: None,
             flash_models_ops: false,
+            nordic_gpio_service: false,
+            hcsr04_scheduling_disabled: false,
             flash_error_flags_idx: None,
             bus_trace: bus_trace::new_log(),
             logic_tap: crate::logic_capture::LogicTap::new(),
