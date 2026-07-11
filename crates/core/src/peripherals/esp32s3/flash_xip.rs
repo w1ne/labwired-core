@@ -184,6 +184,11 @@ impl FlashXipPeripheral {
 }
 
 impl Peripheral for FlashXipPeripheral {
+    // Inert walk: read-only XIP window translating through the shared MMU table on access; tick() is the trait-default no-op.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let r = match self.translate(offset) {
             Some(phys) => {
@@ -240,6 +245,11 @@ impl Esp32s3MmuTable {
 }
 
 impl Peripheral for Esp32s3MmuTable {
+    // Inert walk: MMU page-table register file (entries stored at the write); tick() is the trait-default no-op.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let word = match Self::entry_index(offset & !3) {
             Some(i) => self.table.lock().unwrap()[i],

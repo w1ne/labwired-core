@@ -48,6 +48,11 @@ impl Esp32c3AnaI2c {
 }
 
 impl Peripheral for Esp32c3AnaI2c {
+    // Inert walk: register-backed analog-I²C master; transactions complete at the write (FSM-done forced on read); tick() is the trait-default no-op.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let w = self.read_u32(offset & !3)?;
         Ok((w >> ((offset & 3) * 8)) as u8)
