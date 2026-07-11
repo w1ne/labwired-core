@@ -64,6 +64,13 @@ pub struct ResolvedClockGate {
     pub bit: u8,
 }
 
+/// The `peripheral_tick_interval` recommended for a fully scheduler-driven
+/// (walk-deleted) bus — see [`SystemBus::max_safe_tick_interval`]. Native
+/// throughput plateaus from ~16 up (Phase 1.5 measurements); 64 sits on the
+/// plateau while keeping the worst-case event-observation quantisation (one
+/// interval) small.
+pub const RECOMMENDED_TICK_INTERVAL: u32 = 64;
+
 pub struct PeripheralEntry {
     pub name: String,
     pub base: u64,
@@ -203,9 +210,12 @@ pub struct SystemBus {
     /// Phase 2B.3a (issue #192): write-context schedule requests buffered
     /// during MMIO writes. A scheduler-driven peripheral can't reach the
     /// scheduler from `write`, so after the write the bus collects its
-    /// `take_scheduled_events()` here as `(peripheral_idx, delay_ticks,
-    /// token)`; `Machine::drain_scheduler_events` enqueues and clears them.
-    /// Only populated under the `event-scheduler` feature.
+    /// `take_scheduled_events()` here as `(peripheral_idx, deadline_cycle,
+    /// token)` — an ABSOLUTE CPU-cycle deadline, converted from the
+    /// peripheral's relative delay at collect time (see
+    /// `collect_scheduled_events`); `Machine::drain_scheduler_events` enqueues
+    /// (clamped to its `now`) and clears them. Only populated under the
+    /// `event-scheduler` feature.
     pub pending_schedule: Vec<(usize, u64, u32)>,
     /// Phase 2B.3c (issue #192): when true, `tick_peripherals_phase1` skips the
     /// entire per-cycle peripheral walk — the actual ~2.4x win. Set ONLY for a
@@ -1550,6 +1560,36 @@ impl SystemBus {
         hcsr04_needs_cycle_accurate || self.has_iolink_master() || self.flash_models_ops
     }
 
+    /// The largest `peripheral_tick_interval` this bus can run at without
+    /// losing fidelity: [`RECOMMENDED_TICK_INTERVAL`] when every peripheral is
+    /// scheduler-driven (cycle-exact event deadlines, observation quantised by
+    /// at most one interval), `1` when anything non-relaxable is present.
+    ///
+    /// Non-relaxable arms are checked directly rather than through
+    /// [`Self::requires_cycle_accurate`]: that predicate treats HC-SR04 as
+    /// cycle-accurate until the interval is ALREADY raised above 1
+    /// (`hcsr04_event_scheduled` gates on it), so consulting it at interval 1
+    /// would always answer "stay at 1". HC-SR04 itself is relaxable — its ECHO
+    /// edges become scheduler events (batch-clamped to the exact edge) the
+    /// moment the interval rises — except under the test-only
+    /// `hcsr04_scheduling_disabled` override, which pins the legacy per-tick
+    /// path. Callers (the wasm `recommended_tick_interval` getter) apply the
+    /// result via `set_peripheral_tick_interval` at engine init.
+    pub fn max_safe_tick_interval(&self) -> u32 {
+        #[cfg(feature = "event-scheduler")]
+        {
+            let hcsr04_forced_legacy = !self.hcsr04.is_empty() && self.hcsr04_scheduling_disabled;
+            if self.legacy_walk_disabled
+                && !self.has_iolink_master()
+                && !self.flash_models_ops
+                && !hcsr04_forced_legacy
+            {
+                return RECOMMENDED_TICK_INTERVAL;
+            }
+        }
+        1
+    }
+
     /// True when the HC-SR04 echo waveform is driven by the event scheduler
     /// (rise/fall edges scheduled at their exact cycles and drained by
     /// `Machine::drain_scheduler_events`) rather than the per-cycle
@@ -1708,8 +1748,9 @@ impl SystemBus {
     }
 
     /// Event-scheduler path: harvest any sensor whose echo window was (re)armed
-    /// since the last harvest, returning `(sensor_idx, rise_tick, fall_tick)`
-    /// absolute peripheral-tick deadlines for `Machine::drain_scheduler_events`
+    /// since the last harvest, returning `(sensor_idx, rise_cycle, fall_cycle)`
+    /// absolute cycle deadlines (quantised up to the tick grid — see
+    /// `HcSr04::take_edge_schedule`) for `Machine::drain_scheduler_events`
     /// to enqueue. No allocation when nothing was armed.
     #[cfg(feature = "event-scheduler")]
     pub(crate) fn harvest_hcsr04_edges(&mut self, interval: u64, out: &mut Vec<(usize, u64, u64)>) {
@@ -3096,6 +3137,44 @@ mod tests {
         TimingAction, TimingDescriptor, TimingTrigger,
     };
     use std::path::PathBuf;
+
+    /// `max_safe_tick_interval`: 1 while the legacy walk is live (the default
+    /// bus), the batching recommendation once the walk is deleted, and back to
+    /// 1 when a non-relaxable device (test-only HC-SR04 legacy pin) is present.
+    #[test]
+    fn max_safe_tick_interval_relaxes_only_walk_deleted_buses() {
+        let mut bus = SystemBus::new();
+        assert_eq!(bus.max_safe_tick_interval(), 1, "legacy walk → stay exact");
+
+        bus.legacy_walk_disabled = true;
+        let relaxed = bus.max_safe_tick_interval();
+        if cfg!(feature = "event-scheduler") {
+            assert_eq!(relaxed, RECOMMENDED_TICK_INTERVAL);
+        } else {
+            assert_eq!(relaxed, 1, "feature-off builds never batch");
+        }
+
+        bus.hcsr04.push(crate::peripherals::hc_sr04::HcSr04::new(
+            "dist".into(),
+            0x4800_0014,
+            0,
+            0x4800_0010,
+            1,
+            1_000_000,
+            100.0,
+        ));
+        assert_eq!(
+            bus.max_safe_tick_interval(),
+            relaxed,
+            "HC-SR04 is relaxable (its edges become scheduler events)"
+        );
+        bus.hcsr04_scheduling_disabled = true;
+        assert_eq!(
+            bus.max_safe_tick_interval(),
+            1,
+            "the test-only legacy-pin override must force interval 1"
+        );
+    }
 
     /// Minimal fixed-value peripheral for routing tests: reads return a
     /// constant tag byte, writes are ignored.

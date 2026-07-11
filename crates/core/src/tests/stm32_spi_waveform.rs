@@ -18,6 +18,8 @@ mod stm32_spi_waveform_tests {
     use crate::logic_capture::LogicEdge;
     use crate::peripherals::gpio::{GpioPort, GpioRegisterLayout};
     use crate::peripherals::spi::{Spi, SpiDevice, SpiRegisterLayout};
+    #[cfg(feature = "event-scheduler")]
+    use crate::DebugControl;
     use crate::{Bus, Machine};
 
     const RAM_BASE: u64 = 0x2000_0000;
@@ -240,6 +242,90 @@ mod stm32_spi_waveform_tests {
         assert_eq!(
             busy_cycles, 32,
             "8 bits × 2^(BR+1) = 32 cycles at BR=1 — firmware-visible wire time"
+        );
+    }
+
+    /// Phase 1.6 no-stretch gate, exact flavour: with the scheduler timebase
+    /// in absolute cycles, a 32-cycle frame is STILL exactly 32 firmware-
+    /// visible cycles at `peripheral_tick_interval = 64` when drains run per
+    /// cycle (`step()`). Before the cycle-exact conversion the tick-index
+    /// timebase reinterpreted the engine's cycle delays as tick counts and the
+    /// same frame took ~2048 cycles (×interval stretch).
+    #[cfg(feature = "event-scheduler")]
+    #[test]
+    fn frame_wire_time_does_not_stretch_at_interval_64() {
+        let mut machine = machine();
+        configure(&mut machine);
+        machine.config.peripheral_tick_interval = 64;
+        machine.bus.config.peripheral_tick_interval = 64;
+        machine.bus.write_u8(DR, 0xA5).unwrap();
+        let mut busy_cycles = 0u64;
+        while machine.bus.read_u16(SR).unwrap() & (1 << 7) != 0 {
+            machine.step().unwrap();
+            busy_cycles += 1;
+            assert!(busy_cycles < 10_000, "frame never completed");
+        }
+        assert_eq!(
+            busy_cycles, 32,
+            "cycle-denominated frame time must not scale with the tick interval"
+        );
+    }
+
+    /// Phase 1.6 no-stretch gate, batched flavour: through the real
+    /// `Machine::run` batch loop at interval 64, frame completion is applied
+    /// at the first scheduler drain at/after its exact cycle — the
+    /// firmware-visible wire time is within `N..N+interval` of the exact
+    /// 32-cycle time, never `N×interval`.
+    #[cfg(feature = "event-scheduler")]
+    #[test]
+    fn batched_frame_wire_time_within_one_interval_at_64() {
+        let mut machine = machine();
+        configure(&mut machine);
+        machine.config.peripheral_tick_interval = 64;
+        machine.bus.config.peripheral_tick_interval = 64;
+        machine.bus.write_u8(DR, 0xA5).unwrap();
+        let start = machine.total_cycles;
+        let observed = loop {
+            machine.run(Some(64)).unwrap();
+            if machine.bus.read_u16(SR).unwrap() & (1 << 7) == 0 {
+                break machine.total_cycles;
+            }
+            assert!(
+                machine.total_cycles - start < 10_000,
+                "frame never completed"
+            );
+        };
+        let busy = observed - start;
+        assert!(
+            (32..=32 + 64).contains(&busy),
+            "batched wire time must be the exact 32 cycles plus at most one \
+             interval of drain quantisation, got {busy}"
+        );
+    }
+
+    /// Phase 1.6: the captured SCK/MOSI waveform — every edge cycle — is
+    /// byte-identical at tick interval 64 and interval 1 when observed
+    /// per-cycle. Scheduled wire transitions land at their exact cycles at any
+    /// interval, so batching cannot move them.
+    #[cfg(feature = "event-scheduler")]
+    #[test]
+    fn waveform_edges_identical_across_tick_intervals() {
+        let run = |interval: u32| {
+            let mut machine = machine();
+            configure(&mut machine);
+            machine.config.peripheral_tick_interval = interval;
+            machine.bus.config.peripheral_tick_interval = interval;
+            let gpioa_idx = machine.bus.find_peripheral_index_by_name("gpioa").unwrap();
+            machine.logic_watch(&[Some((gpioa_idx, MOSI_PIN)), Some((gpioa_idx, SCK_PIN))]);
+            for b in WIRE_BYTES {
+                spi_write(&mut machine, b);
+            }
+            machine.logic_read_edges(0).edges
+        };
+        assert_eq!(
+            run(1),
+            run(64),
+            "per-cycle-observed SPI edges must not depend on the tick interval"
         );
     }
 

@@ -297,16 +297,21 @@ mod write_context_scheduling {
         );
 
         // A non-arming-aware peripheral would leave this empty; ours queues
-        // exactly one (peripheral_idx=0, delay=0, ARM_TOKEN) on write.
+        // exactly one (peripheral_idx=0, deadline, ARM_TOKEN) on write. The
+        // peripheral's relative delay 0 becomes the absolute cycle deadline
+        // `current_cycle + 1 + 0` — the cycle the next per-cycle drain runs at
+        // (`current_cycle` is 0 here; no machine is stepping this bus).
         bus.write_u32(0x5000_0000, 1).unwrap();
-        assert_eq!(bus.pending_schedule, vec![(0usize, 0u64, ARM_TOKEN)]);
+        assert_eq!(bus.pending_schedule, vec![(0usize, 1u64, ARM_TOKEN)]);
 
         // A second write re-arms and appends another request (the harvest
-        // cleared `armed` the first time, so this isn't a stale duplicate).
+        // cleared `armed` the first time, so this isn't a stale duplicate),
+        // with the deadline pinned to the (advanced) write cycle.
+        bus.current_cycle = 5;
         bus.write_u32(0x5000_0000, 1).unwrap();
         assert_eq!(
             bus.pending_schedule,
-            vec![(0usize, 0u64, ARM_TOKEN), (0usize, 0u64, ARM_TOKEN)]
+            vec![(0usize, 1u64, ARM_TOKEN), (0usize, 6u64, ARM_TOKEN)]
         );
     }
 }

@@ -704,12 +704,12 @@ pub struct Spi {
     tx_queue: std::collections::VecDeque<u16>,
     #[serde(skip)]
     scheduled: bool,
-    /// Event-scheduler path only: the absolute scheduler tick the engine's
-    /// wire state corresponds to. Anchored by `sync_to` (called by the bus
-    /// before every MMIO write, so a DR write pins the frame start to the
-    /// write tick — identically in clamped and batched runs) and advanced by
-    /// `on_event`. The legacy walk clocks the engine through `tick_elapsed`
-    /// instead and never touches this.
+    /// Event-scheduler path only: the absolute CPU cycle the engine's wire
+    /// state corresponds to. Anchored by `sync_to` (called by the bus with
+    /// `current_cycle` before every MMIO write, so a DR write pins the frame
+    /// start to the batch-start cycle — identically in clamped and batched
+    /// runs) and advanced by `on_event`. The legacy walk clocks the engine
+    /// through `tick_elapsed` instead and never touches this.
     #[serde(skip)]
     anchor_tick: u64,
     /// Shared SCK/MOSI/MISO line levels, read by the STM32 GPIO model for
@@ -1503,9 +1503,9 @@ impl crate::Peripheral for Spi {
     }
 
     /// Event-scheduler path: anchor the engine's wire state to the current
-    /// scheduler tick. The bus calls this before every MMIO write, so a DR
-    /// write pins the frame start to the write tick — and because CPU batches
-    /// never cross a peripheral-tick boundary, that tick is identical whether
+    /// CPU cycle. The bus calls this before every MMIO write, so a DR write
+    /// pins the frame start to the batch-start cycle — and because CPU batches
+    /// never cross a peripheral-tick boundary, that cycle is identical whether
     /// the run loop is clamped (poll capture) or batched (push capture).
     fn sync_to(&mut self, tick_now: u64) {
         if tick_now <= self.anchor_tick {
@@ -1519,11 +1519,14 @@ impl crate::Peripheral for Spi {
     }
 
     /// Event-driven clocking (the walk-deleted path): while a frame is on the
-    /// wire, the engine keeps exactly one event armed at (or just before —
-    /// the drain harvesting this may already be one tick past the write tick)
-    /// its next wire transition. [`Self::on_event`] self-corrects against the
-    /// absolute anchor and re-arms via `reschedule_delay` until the frame
-    /// (and any queued frames) complete.
+    /// wire, the engine keeps exactly one event armed at its next wire
+    /// transition. The returned delay is relative to the just-synced anchor;
+    /// the bus converts it to the absolute deadline `anchor + 1 + delay`, so
+    /// the `- 1` here lands the event exactly at `anchor + half_ticks` — the
+    /// first transition's true cycle at any tick interval. [`Self::on_event`]
+    /// self-corrects against the absolute anchor (a drain may run past the
+    /// deadline by up to one tick interval) and re-arms via `reschedule_delay`
+    /// until the frame (and any queued frames) complete.
     fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
         if self.frame.is_some() && !self.scheduled {
             self.scheduled = true;
@@ -1550,15 +1553,17 @@ impl crate::Peripheral for Spi {
         let now = sched.now();
         let target = self.anchor_tick + f.ticks_left as u64;
         if now < target {
-            // Early wakeup (the arming drain ran past the write tick and the
-            // conservative delay undershot): re-arm at the exact boundary.
+            // Early wakeup (a stale event from before a re-anchor): re-arm at
+            // the exact boundary.
             res.reschedule_delay = Some(target - now);
             self.scheduled = true;
             return res;
         }
-        // Advance the wire to "now" — every segment boundary in the window
-        // lands exactly on its derived tick (drains run at least once per
-        // tick, so this is typically exactly one boundary).
+        // Advance the wire to "now" — at tick interval 1 drains run every
+        // cycle, so this is exactly one boundary; at larger intervals a drain
+        // may arrive up to one interval late and cross several boundaries in
+        // one call, but the boundaries' derived cycles (and the frame's total
+        // wire time) are unchanged.
         let delta = now - self.anchor_tick;
         self.anchor_tick = now;
         if self.stm32_advance_units(delta) {

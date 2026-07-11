@@ -13,7 +13,7 @@ use labwired_core::bus::SystemBus;
 use labwired_core::cpu::cortex_m::CortexM;
 use labwired_core::peripherals::components::Pcd8544;
 use labwired_core::system::cortex_m::configure_cortex_m;
-use labwired_core::Machine;
+use labwired_core::{DebugControl, Machine};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -147,6 +147,41 @@ fn firmware_draws_and_ship_tracks_distance() {
     assert!(
         far < near,
         "ship should move left as the target moves away: near_x={near}, far_x={far}"
+    );
+}
+
+/// Phase 1.6 gate: the splash framebuffer the panel receives over SPI must be
+/// byte-identical at `peripheral_tick_interval = 64` (the browser batching
+/// interval) and interval 1, through the real batched `Machine::run` loop.
+/// Before the cycle-exact scheduler conversion the tick-index timebase
+/// stretched every SPI frame ×interval, so the push was still in flight (or
+/// mis-clocked) at the same cycle budget.
+#[test]
+#[ignore = "slow: builds + runs the Space Invaders firmware in-sim"]
+fn splash_framebuffer_matches_across_tick_intervals() {
+    let elf = ensure_firmware_built();
+    let fb_at = |interval: u32| {
+        let mut machine = build_machine(&elf);
+        machine.config.peripheral_tick_interval = interval;
+        machine.bus.config.peripheral_tick_interval = interval;
+        // Into the splash hold via the batched run loop (see
+        // dump_splash_framebuffer for the budget rationale).
+        while machine.total_cycles < 800_000 {
+            let remaining = (800_000 - machine.total_cycles).min(u32::MAX as u64) as u32;
+            machine.run(Some(remaining)).expect("run");
+        }
+        framebuffer(&machine)
+    };
+    let fb1 = fb_at(1);
+    assert_eq!(fb1.len(), 504);
+    assert!(
+        fb1.iter().any(|&b| b != 0),
+        "splash must be drawn at interval 1"
+    );
+    assert_eq!(
+        fb1,
+        fb_at(64),
+        "splash framebuffer must be byte-identical at tick interval 64"
     );
 }
 
