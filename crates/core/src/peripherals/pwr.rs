@@ -156,6 +156,11 @@ impl Default for Pwr {
 }
 
 impl crate::Peripheral for Pwr {
+    // Inert walk: register bank (voltage scaling resolves in the write path); tick() is the trait-default no-op.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let reg = offset & !3;
         let byte = (offset % 4) as u32;

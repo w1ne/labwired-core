@@ -108,6 +108,11 @@ impl Default for Rtc {
 }
 
 impl crate::Peripheral for Rtc {
+    // Inert walk: register bank; tick() is the trait-default no-op (the counter-timer RTC is rtc_v3, a separate Class-B type).
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let reg = offset & !3;
         let byte = (offset % 4) as u32;
