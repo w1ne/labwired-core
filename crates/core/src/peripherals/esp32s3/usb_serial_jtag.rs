@@ -64,6 +64,11 @@ impl UsbSerialJtag {
 }
 
 impl Peripheral for UsbSerialJtag {
+    // Inert walk: polling-based CDC byte sink (EP1_CONF always ready, no IRQs); tick() is the trait-default no-op.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         match offset {
             // EP1_CONF (4 bytes, LE): always returns 0x0000_0003

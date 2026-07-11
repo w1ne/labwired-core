@@ -259,6 +259,11 @@ impl SpiMemFlash {
 }
 
 impl Peripheral for SpiMemFlash {
+    // Inert walk: flash commands execute atomically at the launching CMD write (trigger bits auto-clear there); tick() is the trait-default no-op.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let word = self.reg(offset & !3);
         Ok(((word >> ((offset & 3) * 8)) & 0xFF) as u8)

@@ -206,6 +206,11 @@ impl Efuse {
 }
 
 impl Peripheral for Efuse {
+    // Inert walk: eFuse register bank; the CMD handshake settles across the write/next-read pair, and tick() is an explicit no-op ("no time-varying state").
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let word_off = (offset & !3) as u32;
         let byte_off = (offset & 3) * 8;

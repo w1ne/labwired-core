@@ -154,6 +154,11 @@ impl Esp32SarAdc {
 }
 
 impl Peripheral for Esp32SarAdc {
+    // Inert walk: conversions complete at the MEAS_START write (result latched there); tick() is an explicit no-op.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let w = self.read_u32(offset & !3)?;
         Ok((w >> ((offset & 3) * 8)) as u8)
