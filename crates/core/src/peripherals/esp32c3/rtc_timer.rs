@@ -20,15 +20,44 @@
 //! reach its designed timeout and continue, exactly as silicon does when the
 //! calibration can't converge.
 //!
-//! The counter advances one tick per simulated CPU step (`tick()` is called
-//! every step at the default `peripheral_tick_interval = 1`). The absolute
+//! ## Time source (walk-free plan Part 1 — first production user)
+//!
+//! The counter advances one tick per simulated CPU cycle; the absolute
 //! slow-clock rate is not modelled — only that time *advances* monotonically,
-//! which is all the deadline comparisons observe. All other registers in the
-//! window are register-backed (writes stored, reads return the last value) so
-//! the rest of RTC_CNTL bring-up (reset-cause seed at `0x38`, ANA config, …)
-//! behaves like the previous declarative stub.
+//! which is all the deadline comparisons observe. Two coexisting drive modes:
+//!
+//! * **Scheduler mode** (`event-scheduler` feature + a [`crate::CycleClock`]
+//!   attached by `SystemBus::add_peripheral`): `uses_scheduler()` is true, the
+//!   per-cycle walk skips this peripheral entirely, and the counter advances
+//!   **lazily** — `advance_to(now)` runs from the write-path `sync_to` choke
+//!   and from the `TIME_UPDATE` latch itself, which pulls "now" from the
+//!   bus-published clock. Freshness contract: the latched value is exact at
+//!   batch boundaries and trails the true cycle by < one
+//!   `peripheral_tick_interval` mid-batch — the same quantisation the legacy
+//!   walk itself exhibits at that interval, so firmware delay loops (which
+//!   re-latch every poll iteration) terminate exactly as before. This is what
+//!   un-pins the walk: the old `uses_scheduler() == false` existed purely
+//!   because a `&self` read could not sync (the historical comment feared
+//!   "firmware delay loops observe stale time and spin forever").
+//!
+//! * **Legacy mode** (feature off, or no clock attached — e.g. hand-built
+//!   test buses that bypass `add_peripheral`): the per-cycle walk drives
+//!   `tick_elapsed(cycles)` and the counter advances eagerly, byte-identical
+//!   to the historical behaviour.
+//!
+//! The two modes are mutually exclusive by construction: `tick_elapsed` is a
+//! no-op while scheduler mode is active (the walk never calls it there — the
+//! guard is defensive), and the lazy `advance_to` path is anchored so repeated
+//! syncs to the same cycle are idempotent. The old code kept a parallel
+//! `anchor_tick` bump inside `tick_elapsed` to feed a then-dead `sync_to`;
+//! that was a double-count trap (relative walk anchor vs absolute cycle
+//! anchor) and is gone — the anchor now belongs exclusively to the lazy path.
+//!
+//! All other registers in the window are register-backed (writes stored,
+//! reads return the last value) so the rest of RTC_CNTL bring-up (reset-cause
+//! seed at `0x38`, ANA config, …) behaves like the previous declarative stub.
 
-use crate::{Peripheral, SimResult};
+use crate::{CycleClock, Peripheral, SimResult};
 use std::cell::Cell;
 
 const TIME_UPDATE: u64 = 0x0C; // bit31 = latch request
@@ -40,13 +69,19 @@ const TIME_UPDATE_BIT: u32 = 1 << 31;
 pub struct Esp32c3RtcTimer {
     /// Register-backed storage for the whole window (non-timer registers).
     regs: Vec<u32>,
-    /// Free-running 48-bit slow-clock counter, advanced once per step.
+    /// Free-running 48-bit slow-clock counter (one tick per CPU cycle).
     counter: Cell<u64>,
     /// Counter value latched by the most recent TIME_UPDATE write; what the
     /// TIME0/TIME1 readout registers return.
     latched: Cell<u64>,
-    /// Scheduler/elapsed-mode anchor in peripheral-tick units.
+    /// Lazy-path anchor: the absolute CPU cycle `counter` was last advanced
+    /// to. Owned exclusively by `advance_to` (scheduler mode); the legacy
+    /// walk never touches it.
     anchor_tick: Cell<u64>,
+    /// Bus-published cycle clock (walk-free plan Part 1). `Some` once
+    /// `SystemBus::add_peripheral` attaches it; `None` keeps the model on
+    /// the legacy walk path.
+    clock: Option<CycleClock>,
 }
 
 impl Default for Esp32c3RtcTimer {
@@ -63,11 +98,52 @@ impl Esp32c3RtcTimer {
             counter: Cell::new(0),
             latched: Cell::new(0),
             anchor_tick: Cell::new(0),
+            clock: None,
         }
     }
 
     pub fn new() -> Self {
         Self::new_sized(0x100)
+    }
+
+    /// True when the event scheduler owns this timer's time base (feature
+    /// on AND bus clock attached). Everything time-related branches on this
+    /// ONE predicate so the two drive modes can never mix.
+    #[inline]
+    fn scheduler_mode(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    /// Lazy advance to absolute CPU cycle `now` — callable from `&self`
+    /// (all mutated state is in `Cell`). Idempotent: repeated calls with the
+    /// same `now` add nothing; `now` older than the anchor is ignored (the
+    /// clock is monotonic within a run; a stale read must never rewind).
+    fn advance_to(&self, now: u64) {
+        let anchor = self.anchor_tick.get();
+        if now <= anchor {
+            return;
+        }
+        self.counter
+            .set(self.counter.get().wrapping_add(now - anchor));
+        self.anchor_tick.set(now);
+    }
+
+    /// Pull "now" from the bus-published clock and advance. No-op without an
+    /// attached clock (legacy mode — the walk advances the counter instead).
+    fn sync_from_clock(&self) {
+        if let Some(clock) = &self.clock {
+            if self.scheduler_mode() {
+                self.advance_to(clock.now());
+            }
+        }
+    }
+
+    /// Test/differential knob: detach the cycle clock, pinning the model to
+    /// the legacy walk path (`uses_scheduler() == false`). Used by the
+    /// walk-on-vs-scheduler differential gates to build the reference config
+    /// from the same bus assembly.
+    pub fn force_legacy_walk(&mut self) {
+        self.clock = None;
     }
 }
 
@@ -94,7 +170,13 @@ impl Peripheral for Esp32c3RtcTimer {
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         if offset == TIME_UPDATE && (value & TIME_UPDATE_BIT) != 0 {
-            // Latch the current counter into the readout registers.
+            // Latch the current counter into the readout registers. In
+            // scheduler mode, first advance to the bus-published "now" so the
+            // latch is fresh-to-batch-start even though the walk no longer
+            // ticks this model. (The bus write path already ran `sync_to`
+            // before this write; the explicit sync keeps direct/unit-test
+            // writes correct too, and is idempotent.)
+            self.sync_from_clock();
             self.latched.set(self.counter.get());
         }
         if let Some(slot) = self.regs.get_mut((offset / 4) as usize) {
@@ -107,29 +189,35 @@ impl Peripheral for Esp32c3RtcTimer {
         self.tick_elapsed(1)
     }
 
+    /// Legacy walk drive: one slow-clock tick per elapsed CPU cycle. Never
+    /// runs in scheduler mode (the walk skips `uses_scheduler()` peripherals;
+    /// the guard below keeps a stray direct call from double-counting against
+    /// the lazy anchor).
     fn tick_elapsed(&mut self, cycles: u64) -> crate::PeripheralTickResult {
-        // One slow-clock tick per simulated step — time advances monotonically.
-        self.counter.set(self.counter.get().wrapping_add(cycles));
-        self.anchor_tick
-            .set(self.anchor_tick.get().wrapping_add(cycles));
+        if !self.scheduler_mode() {
+            self.counter.set(self.counter.get().wrapping_add(cycles));
+        }
         crate::PeripheralTickResult::default()
     }
 
     fn uses_scheduler(&self) -> bool {
-        // The bus read API is intentionally `&self`; until it can sync
-        // scheduler-driven peripherals before reads, this read-driven RTC must
-        // stay on the legacy tick path or firmware delay loops observe stale
-        // time and spin forever.
-        false
+        // True once the bus attached its cycle clock (event-scheduler builds):
+        // reads stay fresh through the lazy `advance_to` path, so the old
+        // "stale time → delay loops spin forever" blocker is gone. Without a
+        // clock (feature off / hand-built buses) stay on the legacy walk.
+        self.scheduler_mode()
     }
 
-    fn sync_to(&mut self, tick_now: u64) {
-        if tick_now <= self.anchor_tick.get() {
-            return;
-        }
-        let delta = tick_now - self.anchor_tick.get();
-        self.counter.set(self.counter.get().wrapping_add(delta));
-        self.anchor_tick.set(tick_now);
+    fn sync_to(&mut self, now_cycle: u64) {
+        self.advance_to(now_cycle);
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        // Anchor at the clock's current value so cycles that elapsed before
+        // attach (normally zero — attach happens at bus assembly) are not
+        // retroactively credited to the counter.
+        self.anchor_tick.set(clock.now());
+        self.clock = Some(clock);
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {
@@ -162,7 +250,19 @@ impl Peripheral for Esp32c3RtcTimer {
         self.regs = snap.regs;
         self.counter.set(snap.counter);
         self.latched.set(snap.latched);
-        self.anchor_tick.set(snap.anchor_tick);
+        // Re-anchor rather than trusting the persisted anchor: a snapshot is
+        // typically resumed on a FRESH machine whose cycle count restarts at
+        // ~0, so a large persisted anchor would make `advance_to(now)` see
+        // `now <= anchor` and freeze the counter for millions of cycles —
+        // silently re-introducing the spin-forever failure the model exists
+        // to prevent. Anchoring to the live clock keeps the restored counter
+        // value (the part boot-log determinism depends on) and resumes
+        // monotonic advance from the resuming machine's "now". The persisted
+        // field is kept in the blob for format stability / legacy readers.
+        match &self.clock {
+            Some(clock) => self.anchor_tick.set(clock.now()),
+            None => self.anchor_tick.set(snap.anchor_tick),
+        }
         Ok(())
     }
 }
@@ -228,13 +328,94 @@ mod tests {
     }
 
     #[test]
-    fn rtc_timer_stays_on_legacy_tick_path() {
+    fn without_clock_stays_on_legacy_tick_path() {
         let t = Esp32c3RtcTimer::new();
-
         assert!(
             !t.uses_scheduler(),
-            "RTC timer reads are time-sensitive; until bus reads can sync scheduler-driven \
-             peripherals, the C3 RTC must stay on the legacy tick path"
+            "no cycle clock attached → the model must stay on the legacy walk \
+             (hand-built buses that bypass add_peripheral keep exact semantics)"
+        );
+    }
+
+    #[cfg(feature = "event-scheduler")]
+    #[test]
+    fn clock_attach_flips_to_scheduler_and_latch_tracks_published_clock() {
+        let clock = CycleClock::default();
+        let mut t = Esp32c3RtcTimer::new();
+        t.attach_cycle_clock(clock.clone());
+        assert!(
+            t.uses_scheduler(),
+            "clock attached under event-scheduler → walk-independent"
+        );
+
+        // The walk no longer drives it; the latch must pull time from the
+        // published clock — this is the exact firmware delay-loop shape the
+        // old comment feared (poll = TIME_UPDATE write + TIME0/1 read).
+        clock.publish(1234);
+        assert_eq!(rtc_time_get(&mut t), 1234, "latch synced to published now");
+        clock.publish(1234 + 4096);
+        assert_eq!(rtc_time_get(&mut t), 1234 + 4096, "monotonic re-latch");
+
+        // Idempotent: re-latching at the same published cycle adds nothing.
+        assert_eq!(rtc_time_get(&mut t), 1234 + 4096);
+    }
+
+    #[cfg(feature = "event-scheduler")]
+    #[test]
+    fn scheduler_mode_write_sync_and_clock_sync_do_not_double_count() {
+        let clock = CycleClock::default();
+        let mut t = Esp32c3RtcTimer::new();
+        t.attach_cycle_clock(clock.clone());
+
+        clock.publish(500);
+        // Bus write path: sync_to(current_cycle) runs before the MMIO write…
+        t.sync_to(500);
+        // …then the TIME_UPDATE latch syncs from the clock again. Same cycle,
+        // so the counter must be advanced exactly once.
+        assert_eq!(rtc_time_get(&mut t), 500);
+
+        // A stray legacy tick in scheduler mode must not double-count either.
+        t.tick_elapsed(64);
+        assert_eq!(
+            rtc_time_get(&mut t),
+            500,
+            "tick_elapsed inert in scheduler mode"
+        );
+    }
+
+    #[cfg(feature = "event-scheduler")]
+    #[test]
+    fn resume_re_anchors_and_keeps_counting() {
+        // Cold machine ran to cycle 150M and snapshotted.
+        let cold_clock = CycleClock::default();
+        let mut cold = Esp32c3RtcTimer::new();
+        cold.attach_cycle_clock(cold_clock.clone());
+        cold_clock.publish(150_000_000);
+        let cold_time = rtc_time_get(&mut cold);
+        assert_eq!(cold_time, 150_000_000);
+        let blob = cold.runtime_snapshot();
+
+        // Resume on a FRESH machine whose cycle count restarts near zero.
+        let warm_clock = CycleClock::default();
+        let mut warm = Esp32c3RtcTimer::new();
+        warm.attach_cycle_clock(warm_clock.clone());
+        warm.restore_runtime_snapshot(&blob).unwrap();
+
+        // The restored counter value carries over…
+        warm_clock.publish(0);
+        assert_eq!(
+            rtc_time_get(&mut warm),
+            cold_time,
+            "counter survives resume"
+        );
+        // …and time keeps advancing from the resuming machine's clock instead
+        // of freezing until it catches up to the persisted 150M anchor (the
+        // stale-anchor spin-forever trap).
+        warm_clock.publish(1_000);
+        assert_eq!(
+            rtc_time_get(&mut warm),
+            cold_time + 1_000,
+            "counter must keep advancing immediately after resume"
         );
     }
 

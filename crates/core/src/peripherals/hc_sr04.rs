@@ -347,17 +347,17 @@ mod tests {
 
         // Pulse TRIG high via BSRR, service at cycle 0 → arms window [200, 6000).
         bus.write_u32(GPIOA + 0x18, 1 << 8).unwrap();
-        bus.current_cycle = 0;
+        bus.set_current_cycle(0);
         bus.service_hcsr04();
         assert_eq!(echo(&bus), 0, "echo still low during trig→echo delay");
 
         // Mid-window: ECHO driven high.
-        bus.current_cycle = 3000;
+        bus.set_current_cycle(3000);
         bus.service_hcsr04();
         assert_eq!(echo(&bus), 1, "echo high mid-pulse");
 
         // Past the window: ECHO back low.
-        bus.current_cycle = 7000;
+        bus.set_current_cycle(7000);
         bus.service_hcsr04();
         assert_eq!(echo(&bus), 0, "echo low after pulse");
     }

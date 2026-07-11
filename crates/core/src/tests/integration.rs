@@ -2355,7 +2355,8 @@ pub mod integration_tests {
         // meaningful in BOTH feature modes.
         let interval = (bus.config.peripheral_tick_interval as u64).max(1);
         for _ in 0..500 {
-            bus.current_cycle += interval;
+            let next = bus.current_cycle + interval;
+            bus.set_current_cycle(next);
             bus.tick_peripherals_with_costs();
         }
 

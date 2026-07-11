@@ -302,7 +302,7 @@ impl crate::Bus for SystemBus {
     fn read_u32(&self, addr: u64) -> SimResult<u32> {
         // Debug (env-gated): trace the driver's reads of a freshly-injected RX
         // buffer, to RE the rx-control header format the RX callback parses.
-        if std::env::var("LABWIRED_RXBUF_TRACE").is_ok() {
+        if crate::peripherals::esp32c3::wifi_mac::rxbuf_trace_enabled() {
             let base = crate::peripherals::esp32c3::wifi_mac::RX_DBG_BUF
                 .load(std::sync::atomic::Ordering::Relaxed) as u64;
             // Trace from 0x100 BEFORE the buffer (to catch the descriptor-list

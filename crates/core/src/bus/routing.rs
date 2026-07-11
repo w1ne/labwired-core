@@ -268,6 +268,11 @@ impl SystemBus {
         }
 
         self.esp32c3_irq_cache = Some(cache);
+        // Keep the routed line mask coherent with the rebuilt cache (no-op
+        // unless C3 routing is active — `recompute` early-outs without it).
+        if self.esp32c3_irq_routing {
+            self.recompute_esp32c3_irq_lines();
+        }
     }
 
     pub(crate) fn sync_esp32c3_irq_cache_write(&mut self, idx: usize, offset: u64) {
@@ -280,8 +285,10 @@ impl SystemBus {
             return;
         };
 
+        let mut inputs_changed = false;
         if Some(idx) == self.esp32c3_interrupt_core0_idx {
             if let Some(cache) = &mut self.esp32c3_irq_cache {
+                inputs_changed = true;
                 match aligned {
                     0x104 => cache.int_enable = value,
                     0x194 => cache.int_thresh = (value & 0xF) as u8,
@@ -304,6 +311,7 @@ impl SystemBus {
             let slot = ((aligned - 0x28) / 4) as u8;
             if slot < 4 {
                 if let Some(cache) = &mut self.esp32c3_irq_cache {
+                    inputs_changed = true;
                     if value & 1 != 0 {
                         cache.from_cpu_pending |= 1 << slot;
                     } else {
@@ -311,6 +319,18 @@ impl SystemBus {
                     }
                 }
             }
+        }
+
+        // Write-choke re-aggregation: a routing-input change (INTC config or
+        // FROM_CPU IPI) updates `riscv_irq_lines` at the write instruction
+        // instead of waiting for the next peripheral tick. At interval 1 the
+        // tick-end rebuild recomputes the same mask before the CPU's next
+        // interrupt check (byte-identical); at interval > 1 this removes the
+        // up-to-one-interval delivery latency for yield/critical-section
+        // transitions and lets a walk-free C3 bus keep IPI routing correct
+        // with no per-cycle aggregation at all.
+        if inputs_changed && self.esp32c3_irq_routing {
+            self.recompute_esp32c3_irq_lines();
         }
     }
 

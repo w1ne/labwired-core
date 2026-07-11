@@ -11,6 +11,7 @@ pub mod config;
 pub mod cosim;
 pub mod coverage;
 pub mod cpu;
+pub mod cycle_clock;
 pub mod decoder;
 pub mod fidelity;
 pub mod inspect;
@@ -34,6 +35,7 @@ pub mod vfi;
 pub mod world;
 
 pub use config::SimulationConfig;
+pub use cycle_clock::CycleClock;
 
 use std::any::Any;
 use std::sync::Arc;
@@ -691,6 +693,20 @@ pub trait Peripheral: std::fmt::Debug + Send {
     fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
         Vec::new()
     }
+
+    /// Walk-free plan Part 1: hand this peripheral the bus's shared
+    /// [`CycleClock`] so `&self` reads can lazily sync `Cell`-held counter
+    /// state to the published "now" (batch-boundary freshness — exact at
+    /// batch boundaries, < one `peripheral_tick_interval` stale mid-batch,
+    /// the same bound as the write-path [`Self::sync_to`]).
+    ///
+    /// Called once by `SystemBus::add_peripheral` at attach time. Default
+    /// no-op: peripherals that don't opt in never see it. A read-polled
+    /// counter model overrides this to store the clock; the conservative
+    /// contract is that WITHOUT an attached clock the model must stay on
+    /// its legacy walk path (`uses_scheduler() == false`), so hand-built
+    /// buses that bypass `add_peripheral` keep the old exact semantics.
+    fn attach_cycle_clock(&mut self, _clock: CycleClock) {}
 }
 
 /// Trait representing the system bus
@@ -1249,7 +1265,7 @@ impl<C: Cpu> Machine<C> {
             let skipped = budget.min(u32::MAX as u64) as u32;
             self.cpu.fast_forward_idle_cycles(skipped as u64);
             self.total_cycles += skipped as u64;
-            self.bus.current_cycle = self.total_cycles;
+            self.bus.set_current_cycle(self.total_cycles);
             self.bus.bus_trace.set_cycle(self.total_cycles);
             // Push-mode logic capture: stamp any pad writes made by the
             // scheduler events due at the end of the skipped window with the
@@ -1463,8 +1479,9 @@ impl<C: Cpu> Machine<C> {
         // Mirror the cycle count into the bus before the CPU executes, so
         // tick-time services can read "now": scheduler-driven peripheral sync
         // (event-scheduler) and the HC-SR04 echo-window timing (always). O(1) —
-        // a single field write, not the per-peripheral walk this phase removed.
-        self.bus.current_cycle = self.total_cycles;
+        // a field write + a relaxed atomic store (the shared read-sync clock),
+        // not the per-peripheral walk this phase removed.
+        self.bus.set_current_cycle(self.total_cycles);
         self.bus.bus_trace.set_cycle(self.total_cycles);
         // The cycle boundary this instruction's effects become observable at —
         // pad writes pushed through the logic tap stamp with it (single-step
@@ -2026,7 +2043,7 @@ impl<C: Cpu> DebugControl for Machine<C> {
             // Mirror the cycle count before the batch so MMIO writes inside it
             // (and tick-time services) can read "now". The batch is bounded by
             // `peripheral_tick_interval`, so intra-batch staleness is < one tick.
-            self.bus.current_cycle = current_cycles;
+            self.bus.set_current_cycle(current_cycles);
             self.bus.bus_trace.set_cycle(current_cycles);
             let tick_interval = self.config.peripheral_tick_interval as u64;
             let remaining_until_tick = (tick_interval - (current_cycles % tick_interval)) as u32;
@@ -2137,7 +2154,7 @@ impl<C: Cpu> DebugControl for Machine<C> {
             // fall would still read high and never transition).
             #[cfg(feature = "event-scheduler")]
             {
-                self.bus.current_cycle = self.total_cycles;
+                self.bus.set_current_cycle(self.total_cycles);
             }
 
             #[cfg(feature = "event-scheduler")]

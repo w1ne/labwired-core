@@ -39,6 +39,17 @@ use std::sync::atomic::AtomicU32;
 /// format). 0 = no delivery yet.
 pub static RX_DBG_BUF: AtomicU32 = AtomicU32::new(0);
 
+/// Process-cached `LABWIRED_RXBUF_TRACE` gate. The trace guard sits on the
+/// hottest path in the engine (`Bus::read_u32` — every load instruction), and
+/// `std::env::var` is a real syscall-backed lookup; checking it per read cost
+/// measurable native/wasm throughput (profiling artifact found on the C3 OLED
+/// lab). The env var is read ONCE per process — set it before launch, as with
+/// any debug trace.
+pub(crate) fn rxbuf_trace_enabled() -> bool {
+    static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ENABLED.get_or_init(|| std::env::var("LABWIRED_RXBUF_TRACE").is_ok())
+}
+
 const MAC_READY: u64 = 0xD14; // bit0 polled by hal_init
 const RX_RING_BASE: u64 = 0x88; // driver writes the RX descriptor-list head here
 /// RX descriptor-reload handshake (`hal_mac_rx_*_dscr_reload`): the driver sets
@@ -346,7 +357,7 @@ impl Esp32c3WifiMac {
                 self.regs[(0x8c / 4) as usize] = next;
                 self.set_event(EVENT_RX_DONE);
                 RX_DBG_BUF.store(buf, std::sync::atomic::Ordering::Relaxed);
-                if std::env::var("LABWIRED_RXBUF_TRACE").is_ok() {
+                if rxbuf_trace_enabled() {
                     eprintln!(
                         "[rxinj] desc={desc:#010x} buf={buf:#010x} total={total} (hdr48+frame{})",
                         frame.len()

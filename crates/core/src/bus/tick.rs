@@ -433,56 +433,53 @@ impl SystemBus {
     /// pushes the per-source assertion bitmap into the intmatrix's
     /// PRO_INTR_STATUS_REG_n mirror via `set_pending_sources`. No-op for buses
     /// without an intmatrix peripheral.
-    /// ESP32-C3 (RISC-V) interrupt routing. Each tick, build the level-sensitive
-    /// bitmask of asserted CPU interrupt lines from the SYSTEM FROM_CPU IPI
-    /// registers (0x600C0028..0x34, bit0) — the mechanism FreeRTOS `vPortYield`
-    /// uses to request a context switch. Each asserted source is routed to a CPU
-    /// line via its INTERRUPT_CORE0 MAP register (0x600C2000 + source*4, low 5
-    /// bits), gated by CPU_INT_ENABLE and per-line priority vs CPU_INT_THRESH.
-    /// The result lands in `riscv_irq_lines`, which the core ORs into `mip`.
-    /// No-op unless `esp32c3_irq_routing` is set (only the C3 rom-boot path sets
-    /// it). Peripheral `explicit_irqs` (e.g. the reused S3 SYSTIMER model) are
-    /// not routed yet — their source IDs don't match the C3 matrix.
+    /// ESP32-C3 (RISC-V) interrupt routing. Each tick, record the bitmap of
+    /// asserting peripheral interrupt-matrix sources (`explicit_irqs` from the
+    /// walk — e.g. the SYSTIMER tick alarm on source 37) and rebuild the
+    /// level-sensitive bitmask of asserted CPU interrupt lines from them plus
+    /// the SYSTEM FROM_CPU IPI registers (0x600C0028..0x34, bit0) — the
+    /// mechanism FreeRTOS `vPortYield` uses to request a context switch. Each
+    /// asserted source is routed to a CPU line via its INTERRUPT_CORE0 MAP
+    /// register (0x600C2000 + source*4, low 5 bits), gated by CPU_INT_ENABLE
+    /// and per-line priority vs CPU_INT_THRESH. The result lands in
+    /// `riscv_irq_lines`, which the core ORs into `mip`. No-op unless
+    /// `esp32c3_irq_routing` is set (only the C3 rom-boot path sets it).
+    ///
+    /// This tick-time pass is no longer the only aggregation point: MMIO
+    /// writes that change the routing inputs (INTC enable/threshold/priority/
+    /// map, FROM_CPU IPI set/clear) re-aggregate immediately from the write
+    /// choke (`sync_esp32c3_irq_cache_write`), so at a tick interval above
+    /// one a mid-batch yield/critical-section change is reflected at the
+    /// write instruction instead of waiting for the tick boundary. Peripheral
+    /// source assert/de-assert stays tick-quantised (≤ one interval — the
+    /// same bound the write-path `sync_to` documents). At interval 1 the
+    /// tick-end rebuild below runs before the CPU's next instruction-boundary
+    /// interrupt check, so behaviour is byte-identical to the pre-choke code.
     fn aggregate_esp32c3_irqs(&mut self, source_ids: &[u32]) {
         if !self.esp32c3_irq_routing {
             return;
         }
-        const INTMATRIX_BASE: u64 = 0x600C_2000;
-        const FROM_CPU_SOURCE_BASE: u32 = 50;
 
-        // INTC control registers (offsets verified against interrupt_core0.yaml):
-        //   CPU_INT_ENABLE 0x104, CPU_INT_PRI_n 0x114+n*4, CPU_INT_THRESH 0x194.
-        // A line fires only while it is enabled AND its priority >= threshold —
-        // the C3 enables/masks via these INTC registers, NOT the RISC-V `mie`
-        // CSR (FreeRTOS critical sections raise the threshold to mask).
-        if let Some(cache) = &self.esp32c3_irq_cache {
-            let mut mask = 0u32;
-            let mut route_source = |src: u32| {
-                let Some(&line) = cache.source_line.get(src as usize) else {
-                    return;
-                };
-                if line == 0 || (cache.int_enable & (1u32 << line)) == 0 {
-                    return;
-                }
-                let pri = cache.line_pri.get(line as usize).copied().unwrap_or(0);
-                if pri >= cache.int_thresh {
-                    mask |= 1u32 << line;
-                }
-            };
+        // Record the level sources asserting THIS tick (rebuilt from scratch,
+        // so a de-asserting source drops out at the tick boundary), then
+        // recompute the routed line mask from the shared choke.
+        let mut asserted = [0u64; 2];
+        for &src in source_ids {
+            let idx = (src / 64) as usize;
+            if idx < asserted.len() {
+                asserted[idx] |= 1u64 << (src % 64);
+            }
+        }
+        self.esp32c3_asserted_sources = asserted;
 
-            for &src in source_ids {
-                route_source(src);
-            }
-            let mut pending = cache.from_cpu_pending;
-            while pending != 0 {
-                let slot = pending.trailing_zeros();
-                route_source(FROM_CPU_SOURCE_BASE + slot);
-                pending &= !(1 << slot);
-            }
-            self.riscv_irq_lines = mask;
+        if self.esp32c3_irq_cache.is_some() {
+            self.recompute_esp32c3_irq_lines();
             return;
         }
 
+        // Fallback for buses without the declarative INTC cache (hand-built
+        // test buses): read the routing registers directly each tick.
+        const INTMATRIX_BASE: u64 = 0x600C_2000;
         const FROM_CPU: [(u64, u32); 4] = [
             (0x600C_0028, 50),
             (0x600C_002C, 51),
@@ -503,16 +500,6 @@ impl SystemBus {
             // MAP register holds the destination CPU interrupt line (1..31).
             let line = read_intcore(self, (src as u64) * 4) & 0x1F;
             let pri = read_intcore(self, 0x114 + (line as u64) * 4) & 0xF;
-            if src == 0 && std::env::var("LABWIRED_RXBUF_TRACE").is_ok() {
-                use std::sync::atomic::{AtomicU32, Ordering};
-                static N: AtomicU32 = AtomicU32::new(0);
-                if N.fetch_add(1, Ordering::Relaxed) < 3 {
-                    eprintln!(
-                        "[macirq] src0 line={line} enable_bit={} pri={pri} thresh={thresh}",
-                        (enable >> line) & 1
-                    );
-                }
-            }
             if line == 0 || (enable & (1 << line)) == 0 {
                 return;
             }
@@ -540,6 +527,54 @@ impl SystemBus {
             if from_cpu & 1 != 0 {
                 route_source(src);
             }
+        }
+        self.riscv_irq_lines = mask;
+    }
+
+    /// Rebuild `riscv_irq_lines` from the cached C3 routing state: the INTC
+    /// register cache (enable/threshold/priority/map — maintained at the MMIO
+    /// write choke), the cached FROM_CPU IPI pending bits, and the peripheral
+    /// sources recorded by the most recent tick. The single aggregation body
+    /// shared by the per-tick pass and the write-choke re-aggregation, so both
+    /// produce identical masks from identical inputs.
+    ///
+    /// INTC control registers (offsets verified against interrupt_core0.yaml):
+    ///   CPU_INT_ENABLE 0x104, CPU_INT_PRI_n 0x114+n*4, CPU_INT_THRESH 0x194.
+    /// A line fires only while it is enabled AND its priority >= threshold —
+    /// the C3 enables/masks via these INTC registers, NOT the RISC-V `mie`
+    /// CSR (FreeRTOS critical sections raise the threshold to mask).
+    pub(crate) fn recompute_esp32c3_irq_lines(&mut self) {
+        const FROM_CPU_SOURCE_BASE: u32 = 50;
+        let Some(cache) = &self.esp32c3_irq_cache else {
+            return;
+        };
+        let mut mask = 0u32;
+        let mut route_source = |src: u32| {
+            let Some(&line) = cache.source_line.get(src as usize) else {
+                return;
+            };
+            if line == 0 || (cache.int_enable & (1u32 << line)) == 0 {
+                return;
+            }
+            let pri = cache.line_pri.get(line as usize).copied().unwrap_or(0);
+            if pri >= cache.int_thresh {
+                mask |= 1u32 << line;
+            }
+        };
+
+        for (word, &bits) in self.esp32c3_asserted_sources.iter().enumerate() {
+            let mut bits = bits;
+            while bits != 0 {
+                let bit = bits.trailing_zeros();
+                route_source(word as u32 * 64 + bit);
+                bits &= !(1u64 << bit);
+            }
+        }
+        let mut pending = cache.from_cpu_pending;
+        while pending != 0 {
+            let slot = pending.trailing_zeros();
+            route_source(FROM_CPU_SOURCE_BASE + slot);
+            pending &= !(1 << slot);
         }
         self.riscv_irq_lines = mask;
     }

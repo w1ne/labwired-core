@@ -206,7 +206,19 @@ pub struct SystemBus {
     /// lazily sync scheduler-driven peripherals (`uses_scheduler() == true`)
     /// to "now" before a register write observes their state. Only consulted
     /// under the `event-scheduler` feature; harmlessly 0 otherwise.
+    ///
+    /// Prefer [`Self::set_current_cycle`] over assigning this field directly:
+    /// the setter also publishes the value into [`Self::cycle_clock`], the
+    /// shared clock `&self` peripheral reads sync against.
     pub current_cycle: u64,
+    /// Walk-free plan Part 1: the shared cycle clock (`Arc<AtomicU64>`)
+    /// published in lock-step with `current_cycle` (via
+    /// [`Self::set_current_cycle`]) and handed to every peripheral at
+    /// [`Self::add_peripheral`] time via `Peripheral::attach_cycle_clock`.
+    /// Lets a `&self` MMIO read lazily sync `Cell`-held counter state to the
+    /// batch-start cycle — the read-side complement of the write-path
+    /// `sync_to`, with the identical "< one tick interval" freshness bound.
+    pub cycle_clock: crate::CycleClock,
     /// Phase 2B.3a (issue #192): write-context schedule requests buffered
     /// during MMIO writes. A scheduler-driven peripheral can't reach the
     /// scheduler from `write`, so after the write the bus collects its
@@ -263,6 +275,15 @@ pub struct SystemBus {
     esp32c3_system_idx: Option<usize>,
     esp32c3_interrupt_core0_idx: Option<usize>,
     esp32c3_irq_cache: Option<Esp32c3IrqCache>,
+    /// Bitmap (128 sources) of the interrupt-matrix source IDs asserted by the
+    /// most recent peripheral tick (`explicit_irqs` from the walk — e.g. the
+    /// SYSTIMER alarm on source 37). Stored so the write-choke re-aggregation
+    /// (`sync_esp32c3_irq_cache_write` → `recompute_esp32c3_irq_lines`) can
+    /// recombine them with the FROM_CPU/INTC state without waiting for the
+    /// next tick. Level semantics: rebuilt from scratch each tick, so a source
+    /// that stops asserting drops out at the next tick boundary (≤ one
+    /// `peripheral_tick_interval` — the same bound as the write path).
+    esp32c3_asserted_sources: [u64; 2],
     /// ESP32-S3 interrupt routing is present only when the S3 interrupt matrix
     /// peripheral is registered. Cached separately from C3's RISC-V routing so
     /// each chip model owns its own interrupt abstraction.
@@ -1625,13 +1646,22 @@ impl SystemBus {
     /// aggregation, avoiding the phase-1 orchestration and its allocations every
     /// cycle. Only meaningful under the `event-scheduler` feature (the walk is
     /// never deleted otherwise).
+    ///
+    /// ESP32-C3 IRQ routing no longer pins this to `false` when the cached
+    /// aggregation is available: on a walk-deleted C3 bus there are no
+    /// tick-produced peripheral sources (nothing walks), and the remaining
+    /// routing inputs — INTC config + FROM_CPU IPI — are re-aggregated at
+    /// their MMIO write choke (`sync_esp32c3_irq_cache_write`), so the
+    /// per-cycle tick genuinely has nothing left to do. Without the cache
+    /// (hand-built buses) the per-tick register-read fallback is the only
+    /// aggregation point, so it keeps the walk-era behaviour.
     #[cfg(feature = "event-scheduler")]
     #[inline]
     fn per_cycle_tick_is_trivial(&self) -> bool {
         self.legacy_walk_disabled
             && self.bus_tick_indices.is_empty()
             && !self.nordic_gpio_service
-            && !self.esp32c3_irq_routing
+            && (!self.esp32c3_irq_routing || self.esp32c3_irq_cache.is_some())
             && !self.esp32s3_irq_routing
             && self.can_diagnostic_testers.is_empty()
             && self.can_uds_testers.is_empty()
@@ -2481,6 +2511,7 @@ impl SystemBus {
             peripheral_hint: Cell::new(None),
             last_gpio_in: [0; 2],
             current_cycle: 0,
+            cycle_clock: crate::CycleClock::default(),
             pending_schedule: Vec::new(),
             legacy_walk_disabled: false,
             reset_vector_offset: 0,
@@ -2495,6 +2526,7 @@ impl SystemBus {
             esp32c3_system_idx: None,
             esp32c3_interrupt_core0_idx: None,
             esp32c3_irq_cache: None,
+            esp32c3_asserted_sources: [0; 2],
             esp32s3_irq_routing: false,
             esp32s3_intmatrix_idx: None,
             flash_models_ops: false,
@@ -2536,6 +2568,7 @@ impl SystemBus {
             peripheral_hint: Cell::new(None),
             last_gpio_in: [0; 2],
             current_cycle: 0,
+            cycle_clock: crate::CycleClock::default(),
             pending_schedule: Vec::new(),
             legacy_walk_disabled: false,
             reset_vector_offset: 0,
@@ -2550,6 +2583,7 @@ impl SystemBus {
             esp32c3_system_idx: None,
             esp32c3_interrupt_core0_idx: None,
             esp32c3_irq_cache: None,
+            esp32c3_asserted_sources: [0; 2],
             esp32s3_irq_routing: false,
             esp32s3_intmatrix_idx: None,
             flash_models_ops: false,
@@ -2562,6 +2596,17 @@ impl SystemBus {
         };
         bus.rebuild_peripheral_ranges();
         bus
+    }
+
+    /// Mirror `Machine::total_cycles` into the bus AND publish it on the
+    /// shared [`crate::CycleClock`] in one step, so the clock `&self`
+    /// peripheral reads sync against can never skew from `current_cycle`.
+    /// All engine refresh points (batch start/end, per-step, idle
+    /// fast-forward) go through here.
+    #[inline]
+    pub fn set_current_cycle(&mut self, cycle: u64) {
+        self.current_cycle = cycle;
+        self.cycle_clock.publish(cycle);
     }
 
     /// Append a peripheral to the bus at runtime. Useful for tests and
@@ -2577,8 +2622,12 @@ impl SystemBus {
         base: u64,
         size: u64,
         irq: Option<u32>,
-        dev: Box<dyn Peripheral>,
+        mut dev: Box<dyn Peripheral>,
     ) {
+        // Attach choke point (walk-free plan Part 1): hand the peripheral the
+        // bus's shared cycle clock before it is registered, so read-side lazy
+        // sync is available from the first instruction.
+        dev.attach_cycle_clock(self.cycle_clock.clone());
         self.peripherals.push(PeripheralEntry {
             name: name.to_string(),
             base,
@@ -3044,11 +3093,17 @@ impl SystemBus {
             self.maybe_latch_dc(idx);
             let p = &mut self.peripherals[idx];
             p.ticks_remaining = 0;
-            let r = p.dev.write_u32(addr - p.base, value);
+            let base = p.base;
+            let r = p.dev.write_u32(addr - base, value);
             self.maybe_arm_hcsr04(idx);
             #[cfg(feature = "event-scheduler")]
             self.collect_scheduled_events(idx);
             if r.is_ok() {
+                // Keep the C3 IRQ routing cache coherent on this inherent
+                // write path too (the Bus-trait accessors already do this) —
+                // host/tooling writes to INTC or FROM_CPU must re-aggregate
+                // exactly like CPU stores.
+                self.sync_esp32c3_irq_cache_write(idx, addr - base);
                 self.refresh_legacy_tick_index(idx);
                 self.refresh_bus_tick_index(idx);
             }
@@ -3112,11 +3167,14 @@ impl SystemBus {
             self.maybe_latch_dc(idx);
             let p = &mut self.peripherals[idx];
             p.ticks_remaining = 0;
-            let r = p.dev.write_u16(addr - p.base, value);
+            let base = p.base;
+            let r = p.dev.write_u16(addr - base, value);
             self.maybe_arm_hcsr04(idx);
             #[cfg(feature = "event-scheduler")]
             self.collect_scheduled_events(idx);
             if r.is_ok() {
+                // Cache coherence — see the write_u32 note above.
+                self.sync_esp32c3_irq_cache_write(idx, addr - base);
                 self.refresh_legacy_tick_index(idx);
                 self.refresh_bus_tick_index(idx);
             }
@@ -4949,6 +5007,7 @@ peripherals:
             peripheral_hint: Cell::new(None),
             last_gpio_in: [0; 2],
             current_cycle: 0,
+            cycle_clock: crate::CycleClock::default(),
             pending_schedule: Vec::new(),
             legacy_walk_disabled: false,
             reset_vector_offset: 0,
@@ -4963,6 +5022,7 @@ peripherals:
             esp32c3_system_idx: None,
             esp32c3_interrupt_core0_idx: None,
             esp32c3_irq_cache: None,
+            esp32c3_asserted_sources: [0; 2],
             esp32s3_irq_routing: false,
             esp32s3_intmatrix_idx: None,
             flash_models_ops: false,
@@ -5028,6 +5088,7 @@ peripherals:
             peripheral_hint: Cell::new(None),
             last_gpio_in: [0; 2],
             current_cycle: 0,
+            cycle_clock: crate::CycleClock::default(),
             pending_schedule: Vec::new(),
             legacy_walk_disabled: false,
             reset_vector_offset: 0,
@@ -5042,6 +5103,7 @@ peripherals:
             esp32c3_system_idx: None,
             esp32c3_interrupt_core0_idx: None,
             esp32c3_irq_cache: None,
+            esp32c3_asserted_sources: [0; 2],
             esp32s3_irq_routing: false,
             esp32s3_intmatrix_idx: None,
             flash_models_ops: false,
@@ -5258,6 +5320,7 @@ peripherals:
             peripheral_hint: Cell::new(None),
             last_gpio_in: [0; 2],
             current_cycle: 0,
+            cycle_clock: crate::CycleClock::default(),
             pending_schedule: Vec::new(),
             legacy_walk_disabled: false,
             reset_vector_offset: 0,
@@ -5272,6 +5335,7 @@ peripherals:
             esp32c3_system_idx: None,
             esp32c3_interrupt_core0_idx: None,
             esp32c3_irq_cache: None,
+            esp32c3_asserted_sources: [0; 2],
             esp32s3_irq_routing: false,
             esp32s3_intmatrix_idx: None,
             flash_models_ops: false,
@@ -5487,6 +5551,7 @@ peripherals:
             peripheral_hint: Cell::new(None),
             last_gpio_in: [0; 2],
             current_cycle: 0,
+            cycle_clock: crate::CycleClock::default(),
             pending_schedule: Vec::new(),
             legacy_walk_disabled: false,
             reset_vector_offset: 0,
@@ -5501,6 +5566,7 @@ peripherals:
             esp32c3_system_idx: None,
             esp32c3_interrupt_core0_idx: None,
             esp32c3_irq_cache: None,
+            esp32c3_asserted_sources: [0; 2],
             esp32s3_irq_routing: false,
             esp32s3_intmatrix_idx: None,
             flash_models_ops: false,
@@ -5570,6 +5636,7 @@ peripherals:
             peripheral_hint: Cell::new(None),
             last_gpio_in: [0; 2],
             current_cycle: 0,
+            cycle_clock: crate::CycleClock::default(),
             pending_schedule: Vec::new(),
             legacy_walk_disabled: false,
             reset_vector_offset: 0,
@@ -5584,6 +5651,7 @@ peripherals:
             esp32c3_system_idx: None,
             esp32c3_interrupt_core0_idx: None,
             esp32c3_irq_cache: None,
+            esp32c3_asserted_sources: [0; 2],
             esp32s3_irq_routing: false,
             esp32s3_intmatrix_idx: None,
             flash_models_ops: false,
