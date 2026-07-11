@@ -87,6 +87,11 @@ impl Default for Rng {
 }
 
 impl crate::Peripheral for Rng {
+    // Inert walk: register bank (output computed on read); tick() is the trait-default no-op.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, _offset: u64) -> SimResult<u8> {
         // RNG.DR has side-effects (drains a word) so a const-self byte
         // read isn't ideal. Most firmware does word reads; for byte-level

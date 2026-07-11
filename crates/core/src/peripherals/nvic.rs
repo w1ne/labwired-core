@@ -92,6 +92,11 @@ impl Nvic {
 }
 
 impl Peripheral for Nvic {
+    // Inert walk: enable/pending register bank; the NVIC pend+enable scan runs in the bus tick loop over shared state, not this peripheral's tick() (the trait-default no-op).
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let reg_idx = (offset / 4) as usize;
         let byte_offset = (offset % 4) as usize;

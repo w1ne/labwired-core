@@ -756,3 +756,104 @@ impl SystemBus {
         (interrupts, costs)
     }
 }
+
+#[cfg(test)]
+mod walk_free_campaign {
+    //! Pins the walk-free STM32 campaign's *remaining surface* on the L476
+    //! nokia5110-invaders bus as it is actually executed (`from_config` +
+    //! `configure_cortex_m`, exactly how every e2e/capture harness builds it).
+    //! The bus is built with any hand `walk_deleted` flag stripped, so the
+    //! assertion reflects only what the models themselves prove — not a manifest
+    //! override.
+    //!
+    //! The walk-forcing set is `needs_legacy_walk() && !uses_scheduler()` — the
+    //! exact predicate `derive_walk_deletable` negates (see this module's parent).
+    //! uart×6 / spi×3 are already event-migrated (`uses_scheduler()==true`) so
+    //! they carry the default `needs_legacy_walk()==true` but do NOT force the
+    //! walk; they are correctly excluded here.
+    //!
+    //! Why `configure_cortex_m`: the Cortex-M core installs the *real* SCB and
+    //! NVIC (the chip descriptor only carries inert placeholders for those ids)
+    //! and appends DWT (CYCCNT), which is not in the descriptor at all. SCB's
+    //! `tick()` drains software-pended exceptions and DWT's advances CYCCNT — both
+    //! real walk work. Omitting this step would hide SCB's real tick and DWT
+    //! entirely and under-report the surface, so the runtime-faithful bus is the
+    //! honest one to pin.
+    //!
+    //! After batch **B0** (Class-A inert sweep) the forcing set is the plan's 21
+    //! Class-B instances still awaiting scheduler migration, PLUS the core DWT
+    //! (a lazy-read CYCCNT counter the plan calls out separately as the purest
+    //! read-sync case). Each later batch (SysTick+SCB, timers, DMA, …) migrates a
+    //! slice onto the scheduler, flipping its `uses_scheduler()`, so this expected
+    //! set shrinks batch by batch. Keep it in lockstep with the plan's inventory.
+
+    use crate::bus::SystemBus;
+    use crate::system::cortex_m::configure_cortex_m;
+    use labwired_config::{ChipDescriptor, SystemManifest};
+    use std::path::PathBuf;
+
+    /// Walk-forcing ids on the runtime invaders bus after B0:
+    ///   plan Class-B: systick + 11 timers + 2 dma + 3 i2c + adc + exti + scb + bxcan (21)
+    ///   + core DWT (added by `configure_cortex_m`, lazy-read CYCCNT walker)   = 22.
+    const EXPECTED_WALK_FORCING: &[&str] = &[
+        "systick", "tim1", "tim2", "tim3", "tim4", "tim5", "tim6", "tim7", "tim8", "tim15",
+        "tim16", "tim17", "dma1", "dma2", "i2c1", "i2c2", "i2c3", "adc1", "exti", "scb", "can1",
+        "dwt",
+    ];
+
+    fn invaders_bus_walk_stripped() -> SystemBus {
+        let system_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../examples/nokia5110-invaders-lab/system.yaml");
+        let mut manifest = SystemManifest::from_file(&system_path).expect("load invaders manifest");
+        // Construct WITHOUT the lab's hand `walk_deleted: true`: the campaign
+        // surface must come from the models, not the manifest escape hatch.
+        manifest.walk_deleted = None;
+        let chip_path = system_path.parent().unwrap().join(&manifest.chip);
+        let chip = ChipDescriptor::from_file(&chip_path).expect("load l476 chip");
+        let mut bus = SystemBus::from_config(&chip, &manifest).expect("build invaders bus");
+        // Install the real SCB/NVIC and the core DWT — the executed bus.
+        let _ = configure_cortex_m(&mut bus);
+        bus
+    }
+
+    #[test]
+    fn b0_remaining_walk_forcing_set_is_exactly_class_b() {
+        let bus = invaders_bus_walk_stripped();
+
+        let mut forcing: Vec<&str> = bus
+            .peripherals
+            .iter()
+            .filter(|p| p.dev.needs_legacy_walk() && !p.dev.uses_scheduler())
+            .map(|p| p.name.as_str())
+            .collect();
+        forcing.sort_unstable();
+
+        let mut expected: Vec<&str> = EXPECTED_WALK_FORCING.to_vec();
+        expected.sort_unstable();
+
+        assert_eq!(
+            forcing,
+            expected,
+            "walk-forcing set (needs_legacy_walk && !uses_scheduler) drifted from the \
+             B0 Class-B inventory.\n  got ({}):      {:?}\n  expected ({}): {:?}\n\
+             A model newly (un)marked `needs_legacy_walk()` or migrated to the scheduler \
+             must update EXPECTED_WALK_FORCING to match the campaign's remaining surface.",
+            forcing.len(),
+            forcing,
+            expected.len(),
+            expected,
+        );
+    }
+
+    #[test]
+    fn b0_does_not_flip_walk_deletion() {
+        // Class B still forces the walk, so B0 provably changes zero runtime
+        // behaviour: the bus is NOT walk-deletable yet.
+        let bus = invaders_bus_walk_stripped();
+        assert!(
+            !bus.derive_walk_deletable(),
+            "invaders bus became walk-deletable after B0, but Class-B walkers remain — \
+             B0 must be pure honest bookkeeping with no behaviour change"
+        );
+    }
+}

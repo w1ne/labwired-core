@@ -689,6 +689,11 @@ impl Default for Flash {
 }
 
 impl crate::Peripheral for Flash {
+    // Inert walk: tick() is the trait-default no-op; H5 erase/bank-swap ops drain via requires_cycle_accurate/drain_pending_op per instruction, never the walk.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let reg = offset & !3;
         let byte = (offset % 4) as u32;

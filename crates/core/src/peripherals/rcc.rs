@@ -1043,6 +1043,11 @@ impl Rcc {
 }
 
 impl crate::Peripheral for Rcc {
+    // Inert walk: clock-control register bank; tick() is the trait-default no-op.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
