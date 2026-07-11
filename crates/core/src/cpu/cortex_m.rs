@@ -697,10 +697,20 @@ impl Cpu for CortexM {
 
         if let Some(sysbus) = bus.as_any_mut().and_then(|a| a.downcast_mut::<SystemBus>()) {
             while executed < max_count {
-                // Break the batch only when a takeable exception is pending:
+                // End the batch early when a takeable exception is pending:
                 // its priority must be strictly higher (smaller number) than
                 // the currently-active one (or 256 = thread mode baseline).
-                if self.pending_exceptions.iter().any(|&w| w != 0) && !self.primask {
+                // Only ONCE the batch has made progress (`executed > 0`) —
+                // at the batch top the pending exception must instead be
+                // DISPATCHED by the `step_internal` below (which takes it
+                // exactly like the single-step path). Breaking at zero made
+                // `Machine::run` return no-progress forever the moment a
+                // walk/scheduler-pended IRQ (e.g. SysTick) became takeable
+                // between batches, wedging every batched IRQ-driven Cortex-M
+                // firmware (walk-free campaign B1 surfaced this — batching is
+                // pointless if an armed SysTick freezes the run loop).
+                if executed > 0 && self.pending_exceptions.iter().any(|&w| w != 0) && !self.primask
+                {
                     if let Some(exc) = self.highest_priority_pending() {
                         let exc_prio = self.exception_priority(exc);
                         let active_prio = self.exception_priority(self.active_exception);
@@ -730,7 +740,11 @@ impl Cpu for CortexM {
             }
         } else {
             while executed < max_count {
-                if self.pending_exceptions.iter().any(|&w| w != 0) && !self.primask {
+                // Same early-out rule as the SystemBus arm above: break only
+                // after progress; at the batch top a takeable pending
+                // exception is dispatched by `step_internal`, never spun on.
+                if executed > 0 && self.pending_exceptions.iter().any(|&w| w != 0) && !self.primask
+                {
                     if let Some(exc) = self.highest_priority_pending() {
                         let exc_prio = self.exception_priority(exc);
                         let active_prio = self.exception_priority(self.active_exception);
