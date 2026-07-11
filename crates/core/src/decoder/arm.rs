@@ -7,6 +7,11 @@
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Instruction {
     Nop,
+    /// Wait For Interrupt (0xBF30). Suspends the core until a wake-up event
+    /// (a sufficiently-prioritised pending exception) arrives; see the
+    /// `CortexM` executor and idle fast-forward. WFE/YIELD/SEV stay `Nop` —
+    /// no event register is modelled.
+    Wfi,
     MovImm {
         rd: u8,
         imm: u8,
@@ -1075,6 +1080,13 @@ pub fn decode_thumb_16(opcode: u16) -> Instruction {
             let mask = (opcode & 0xF) as u8;
             if mask != 0 {
                 return Instruction::It { cond, mask };
+            }
+            // Hint space (mask == 0): the `cond` nibble selects the hint.
+            // 0x3 = WFI, which we model with a real sleep + idle fast-forward.
+            // WFE (0x2)/YIELD (0x1)/SEV (0x4) fall through to Nop: no event
+            // register is modelled, so they have no observable effect.
+            if cond == 0x3 {
+                return Instruction::Wfi;
             }
             return Instruction::Nop;
         }
