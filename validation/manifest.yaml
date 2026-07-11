@@ -165,7 +165,8 @@ boards:
     # h563_conformance remain the pinned coverage. No live re-capture.
     # 2026-07-09: read_gpio_pad — additive, READ-ONLY direction-aware pad probe accessor on the Peripheral trait + GpioPort (universal logic analyzer sampling). No register read/write path, reset value, or byte-path changed; mmio diffs/conformance unchanged. No live re-capture.
     # 2026-07-10: bus-trace single-choke-point refactor (attach wraps at SystemBus::attach_i2c_slave/attach_spi_device; no per-callsite set_bus_trace) + cycle stamp on trace events + gpio_routing/pin_routing metadata. Additive; oracle output unchanged.
-    drift_ack: 2026-07-10
+    # 2026-07-11: STM32 SPI bit-level wire engine — classic/FIFO `Spi` DR writes now clock frames over derived wire time (CR1 BR/CPOL/CPHA/LSBFIRST + CR2.DS/CR1.DFF; SR flags flip at wire time — same firmware-visible completion timing, bits x 2^(BR+1) PCLK cycles, as the previous countdown) and GPIO ports gained read-only SPI AF pad routing (read_gpio_pad reads the live SCK/MOSI/MISO wire per the datasheet AF maps; H5's SPI-v3 model untouched). Register layouts, reset values and byte paths unchanged; mmio diffs/conformance unaffected. No live re-capture.
+    drift_ack: 2026-07-11
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -292,7 +293,8 @@ boards:
     # l476_parity_diff remain the pinned coverage. No live re-capture.
     # 2026-07-09: read_gpio_pad — additive, READ-ONLY direction-aware pad probe accessor on the Peripheral trait + GpioPort (universal logic analyzer sampling). No register read/write path, reset value, or byte-path changed; mmio diffs/conformance unchanged. No live re-capture.
     # 2026-07-10: bus-trace single-choke-point refactor (attach wraps at SystemBus::attach_i2c_slave/attach_spi_device; no per-callsite set_bus_trace) + cycle stamp on trace events + gpio_routing/pin_routing metadata. Additive; oracle output unchanged.
-    drift_ack: 2026-07-10
+    # 2026-07-11: STM32 SPI bit-level wire engine — classic/FIFO `Spi` DR writes now clock frames over derived wire time (CR1 BR/CPOL/CPHA/LSBFIRST + CR2.DS/CR1.DFF; SR flags flip at wire time — same firmware-visible completion timing, bits x 2^(BR+1) PCLK cycles, as the previous countdown) and GPIO ports gained read-only SPI AF pad routing (read_gpio_pad reads the live SCK/MOSI/MISO wire per the datasheet AF maps; H5's SPI-v3 model untouched). Register layouts, reset values and byte paths unchanged; mmio diffs/conformance unaffected. No live re-capture.
+    drift_ack: 2026-07-11
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -342,7 +344,8 @@ boards:
     # drives a pin. No live re-capture this session.
     # 2026-07-09: read_gpio_pad — additive, READ-ONLY direction-aware pad probe accessor on the Peripheral trait + GpioPort (universal logic analyzer sampling). No register read/write path, reset value, or byte-path changed; mmio diffs/conformance unchanged. No live re-capture.
     # 2026-07-10: bus-trace single-choke-point refactor (attach wraps at SystemBus::attach_i2c_slave/attach_spi_device; no per-callsite set_bus_trace) + cycle stamp on trace events + gpio_routing/pin_routing metadata. Additive; oracle output unchanged.
-    drift_ack: 2026-07-10
+    # 2026-07-11: STM32 SPI bit-level wire engine — classic/FIFO `Spi` DR writes now clock frames over derived wire time (CR1 BR/CPOL/CPHA/LSBFIRST + CR2.DS/CR1.DFF; SR flags flip at wire time — same firmware-visible completion timing, bits x 2^(BR+1) PCLK cycles, as the previous countdown) and GPIO ports gained read-only SPI AF pad routing (read_gpio_pad reads the live SCK/MOSI/MISO wire per the datasheet AF maps; H5's SPI-v3 model untouched). Register layouts, reset values and byte paths unchanged; mmio diffs/conformance unaffected. No live re-capture.
+    drift_ack: 2026-07-11
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -389,7 +392,8 @@ boards:
     # f103_conformance remain the pinned coverage. No live re-capture.
     # 2026-07-09: read_gpio_pad — additive, READ-ONLY direction-aware pad probe accessor on the Peripheral trait + GpioPort (universal logic analyzer sampling). No register read/write path, reset value, or byte-path changed; mmio diffs/conformance unchanged. No live re-capture.
     # 2026-07-10: bus-trace single-choke-point refactor (attach wraps at SystemBus::attach_i2c_slave/attach_spi_device; no per-callsite set_bus_trace) + cycle stamp on trace events + gpio_routing/pin_routing metadata. Additive; oracle output unchanged.
-    drift_ack: 2026-07-10
+    # 2026-07-11: STM32 SPI bit-level wire engine — classic/FIFO `Spi` DR writes now clock frames over derived wire time (CR1 BR/CPOL/CPHA/LSBFIRST + CR2.DS/CR1.DFF; SR flags flip at wire time — same firmware-visible completion timing, bits x 2^(BR+1) PCLK cycles, as the previous countdown) and GPIO ports gained read-only SPI AF pad routing (read_gpio_pad reads the live SCK/MOSI/MISO wire per the datasheet AF maps; H5's SPI-v3 model untouched). Register layouts, reset values and byte paths unchanged; mmio diffs/conformance unaffected. No live re-capture.
+    drift_ack: 2026-07-11
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/afio.rs
@@ -443,7 +447,8 @@ boards:
     # stm32f4_exec_oracle remain the pinned coverage. No live re-capture.
     # 2026-07-09: read_gpio_pad — additive, READ-ONLY direction-aware pad probe accessor on the Peripheral trait + GpioPort (universal logic analyzer sampling). No register read/write path, reset value, or byte-path changed; mmio diffs/conformance unchanged. No live re-capture.
     # 2026-07-10: bus-trace single-choke-point refactor (attach wraps at SystemBus::attach_i2c_slave/attach_spi_device; no per-callsite set_bus_trace) + cycle stamp on trace events + gpio_routing/pin_routing metadata. Additive; oracle output unchanged.
-    drift_ack: 2026-07-10
+    # 2026-07-11: STM32 SPI bit-level wire engine — classic/FIFO `Spi` DR writes now clock frames over derived wire time (CR1 BR/CPOL/CPHA/LSBFIRST + CR2.DS/CR1.DFF; SR flags flip at wire time — same firmware-visible completion timing, bits x 2^(BR+1) PCLK cycles, as the previous countdown) and GPIO ports gained read-only SPI AF pad routing (read_gpio_pad reads the live SCK/MOSI/MISO wire per the datasheet AF maps; H5's SPI-v3 model untouched). Register layouts, reset values and byte paths unchanged; mmio diffs/conformance unaffected. No live re-capture.
+    drift_ack: 2026-07-11
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs

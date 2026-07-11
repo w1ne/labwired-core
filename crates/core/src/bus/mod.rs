@@ -977,6 +977,125 @@ impl SystemBus {
         }
     }
 
+    /// Wire the STM32 SPI bit engines' live SCK/MOSI/MISO levels into the
+    /// STM32 GPIO ports, so pads whose MODER/AFR (V2) or CRL/CRH CNF (F1)
+    /// route an SPI alternate function read the real waveform through
+    /// `read_gpio_pad` (which is what the in-engine logic analyzer samples).
+    /// The SPI counterpart of [`Self::wire_esp32c3_i2c_pads`]; no-op on buses
+    /// without a classic/FIFO STM32 SPI.
+    ///
+    /// Signal mapping comes from static per-family AF tables sourced from the
+    /// datasheet alternate-function maps:
+    /// * L4 (FIFO SPI + V2 GPIO): STM32L476 datasheet DS10198 Table 17 —
+    ///   SPI1/SPI2 on AF5, SPI3 on AF6.
+    /// * F4 (classic SPI + V2 GPIO): STM32F407 datasheet DS8626 Table 9 —
+    ///   SPI1/SPI2 on AF5.
+    /// * F1 (classic SPI + F1 GPIO): RM0008 §9.3 default pinout, no AFIO
+    ///   remap (remap is not modeled). F1 MISO pads are input-mode on real
+    ///   silicon and are intentionally not routed (see `GpioPort` docs).
+    pub(crate) fn wire_stm32_spi_pads(&mut self) {
+        use crate::peripherals::gpio::{GpioPort, GpioRegisterLayout};
+        use crate::peripherals::spi::{Spi, SpiSignal};
+        use SpiSignal::{Miso, Mosi, Sck};
+
+        // (spi, port, pin, AF, signal, func) — V2 ports, L4 parts (DS10198
+        // Table 17: SPI1-3).
+        const L4: &[(&str, char, u8, u8, SpiSignal, &str)] = &[
+            ("spi1", 'a', 5, 5, Sck, "SPI1_SCK"),
+            ("spi1", 'a', 6, 5, Miso, "SPI1_MISO"),
+            ("spi1", 'a', 7, 5, Mosi, "SPI1_MOSI"),
+            ("spi1", 'b', 3, 5, Sck, "SPI1_SCK"),
+            ("spi1", 'b', 4, 5, Miso, "SPI1_MISO"),
+            ("spi1", 'b', 5, 5, Mosi, "SPI1_MOSI"),
+            ("spi1", 'e', 13, 5, Sck, "SPI1_SCK"),
+            ("spi1", 'e', 14, 5, Miso, "SPI1_MISO"),
+            ("spi1", 'e', 15, 5, Mosi, "SPI1_MOSI"),
+            ("spi2", 'b', 10, 5, Sck, "SPI2_SCK"),
+            ("spi2", 'b', 13, 5, Sck, "SPI2_SCK"),
+            ("spi2", 'b', 14, 5, Miso, "SPI2_MISO"),
+            ("spi2", 'b', 15, 5, Mosi, "SPI2_MOSI"),
+            ("spi2", 'c', 2, 5, Miso, "SPI2_MISO"),
+            ("spi2", 'c', 3, 5, Mosi, "SPI2_MOSI"),
+            ("spi2", 'd', 1, 5, Sck, "SPI2_SCK"),
+            ("spi2", 'd', 3, 5, Miso, "SPI2_MISO"),
+            ("spi2", 'd', 4, 5, Mosi, "SPI2_MOSI"),
+            ("spi3", 'b', 3, 6, Sck, "SPI3_SCK"),
+            ("spi3", 'b', 4, 6, Miso, "SPI3_MISO"),
+            ("spi3", 'b', 5, 6, Mosi, "SPI3_MOSI"),
+            ("spi3", 'c', 10, 6, Sck, "SPI3_SCK"),
+            ("spi3", 'c', 11, 6, Miso, "SPI3_MISO"),
+            ("spi3", 'c', 12, 6, Mosi, "SPI3_MOSI"),
+        ];
+        // V2 ports, F4 parts (DS8626 Table 9: SPI1-2).
+        const F4: &[(&str, char, u8, u8, SpiSignal, &str)] = &[
+            ("spi1", 'a', 5, 5, Sck, "SPI1_SCK"),
+            ("spi1", 'a', 6, 5, Miso, "SPI1_MISO"),
+            ("spi1", 'a', 7, 5, Mosi, "SPI1_MOSI"),
+            ("spi1", 'b', 3, 5, Sck, "SPI1_SCK"),
+            ("spi1", 'b', 4, 5, Miso, "SPI1_MISO"),
+            ("spi1", 'b', 5, 5, Mosi, "SPI1_MOSI"),
+            ("spi2", 'b', 10, 5, Sck, "SPI2_SCK"),
+            ("spi2", 'b', 13, 5, Sck, "SPI2_SCK"),
+            ("spi2", 'b', 14, 5, Miso, "SPI2_MISO"),
+            ("spi2", 'b', 15, 5, Mosi, "SPI2_MOSI"),
+            ("spi2", 'c', 2, 5, Miso, "SPI2_MISO"),
+            ("spi2", 'c', 3, 5, Mosi, "SPI2_MOSI"),
+        ];
+        // F1 ports (RM0008 §9.3 default mapping, SPI1-2, SCK/MOSI only).
+        const F1: &[(&str, char, u8, SpiSignal, &str)] = &[
+            ("spi1", 'a', 5, Sck, "SPI1_SCK"),
+            ("spi1", 'a', 7, Mosi, "SPI1_MOSI"),
+            ("spi2", 'b', 13, Sck, "SPI2_SCK"),
+            ("spi2", 'b', 15, Mosi, "SPI2_MOSI"),
+        ];
+
+        for spi_name in ["spi1", "spi2", "spi3"] {
+            let Some(spi_idx) = self.find_peripheral_index_by_name(spi_name) else {
+                continue;
+            };
+            let Some((fifo, lines)) = self.peripherals[spi_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<Spi>())
+                .filter(|s| s.is_stm32_wire_layout())
+                .map(|s| (s.is_fifo_layout(), s.line_levels_arc()))
+            else {
+                continue;
+            };
+            for port in ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'] {
+                let Some(gpio_idx) = self.find_peripheral_index_by_name(&format!("gpio{port}"))
+                else {
+                    continue;
+                };
+                let Some(gpio) = self.peripherals[gpio_idx]
+                    .dev
+                    .as_any_mut()
+                    .and_then(|a| a.downcast_mut::<GpioPort>())
+                else {
+                    continue;
+                };
+                match gpio.register_layout() {
+                    GpioRegisterLayout::Stm32V2 => {
+                        let table = if fifo { L4 } else { F4 };
+                        for &(spi, p, pin, af, sig, func) in table {
+                            if spi == spi_name && p == port {
+                                gpio.add_spi_pad_route(&lines, pin, Some(af), sig, func);
+                            }
+                        }
+                    }
+                    GpioRegisterLayout::Stm32F1 => {
+                        for &(spi, p, pin, sig, func) in F1 {
+                            if spi == spi_name && p == port {
+                                gpio.add_spi_pad_route(&lines, pin, None, sig, func);
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
     /// The single funnel through which every SPI device reaches a controller —
     /// the SPI counterpart of [`Self::attach_i2c_slave`]. Wraps then dispatches.
     pub fn attach_spi_device(
