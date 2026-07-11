@@ -92,19 +92,17 @@ impl SystemBus {
     }
 
     /// Phase 2B.2 (issue #192): if the peripheral at `idx` is scheduler-driven,
-    /// advance its lazy state to the current peripheral-tick index before an
-    /// MMIO write observes it. The tick index is `current_cycle /
-    /// peripheral_tick_interval` — the same quantum the legacy walk advanced by
-    /// one per `tick()`. One virtual `uses_scheduler()` call for legacy
-    /// peripherals (false → return); the sync only runs for opted-in ones.
+    /// advance its lazy state to the current CPU cycle (`current_cycle`, the
+    /// batch-start cycle — the same cycle count the legacy walk advances by via
+    /// `tick_elapsed(interval)`) before an MMIO write observes it. One virtual
+    /// `uses_scheduler()` call for legacy peripherals (false → return); the
+    /// sync only runs for opted-in ones.
     #[cfg(feature = "event-scheduler")]
     #[inline]
     pub(crate) fn sync_scheduler_peripheral(&mut self, idx: usize) {
-        let interval = (self.config.peripheral_tick_interval as u64).max(1);
-        let tick_now = self.current_cycle / interval;
         let p = &mut self.peripherals[idx];
         if p.dev.uses_scheduler() {
-            p.dev.sync_to(tick_now);
+            p.dev.sync_to(self.current_cycle);
         }
     }
 
@@ -112,6 +110,17 @@ impl SystemBus {
     /// peripheral, harvest any events it wants scheduled (e.g. a just-armed
     /// TX interrupt) into `pending_schedule` for `Machine` to enqueue. One
     /// virtual `uses_scheduler()` call for legacy peripherals (false → return).
+    ///
+    /// The peripheral's `(delay_cycles, token)` is relative to its just-synced
+    /// state (`sync_to(current_cycle)` ran before the write), so it is
+    /// converted to the absolute cycle deadline `current_cycle + 1 + delay`
+    /// here — pinning the deadline to the write instead of to whenever the
+    /// next scheduler drain happens to run. The `+ 1` preserves the historical
+    /// contract exactly: delays were relative to the next drain, and at tick
+    /// interval 1 the next drain always runs one cycle after the write, so
+    /// interval-1 deadlines are byte-identical to the pre-conversion build. At
+    /// interval > 1 the deadline no longer stretches with the drain cadence —
+    /// an SPI half-period of N cycles stays N cycles.
     #[cfg(feature = "event-scheduler")]
     #[inline]
     pub(crate) fn collect_scheduled_events(&mut self, idx: usize) {
@@ -119,7 +128,8 @@ impl SystemBus {
             return;
         }
         for (delay, token) in self.peripherals[idx].dev.take_scheduled_events() {
-            self.pending_schedule.push((idx, delay, token));
+            self.pending_schedule
+                .push((idx, self.current_cycle + 1 + delay, token));
         }
     }
 

@@ -640,22 +640,27 @@ pub trait Peripheral: std::fmt::Debug + Send {
     }
 
     /// Phase 2B.2 (issue #192): advance a scheduler-driven peripheral's lazy
-    /// state to `tick_now` (the peripheral-tick index — CPU cycles divided by
-    /// `peripheral_tick_interval`, the same quantum the legacy walk advanced
-    /// one step per `tick()` call). Called by the bus immediately before an
-    /// MMIO write observes the peripheral, so a frozen-then-strobed counter
-    /// reads the up-to-date value. Default no-op; only peripherals that opt
-    /// into the scheduler implement it.
-    fn sync_to(&mut self, _tick_now: u64) {}
+    /// state to CPU cycle `now_cycle` (`SystemBus::current_cycle` — the same
+    /// cycle count the legacy walk advances by via `tick_elapsed(interval)`).
+    /// Called by the bus immediately before an MMIO write observes the
+    /// peripheral, so a frozen-then-strobed counter reads the up-to-date
+    /// value. During a CPU batch `current_cycle` holds the batch-start cycle,
+    /// so the sync point trails the true write cycle by less than one
+    /// `peripheral_tick_interval` (exact at interval 1). Default no-op; only
+    /// peripherals that opt into the scheduler implement it.
+    fn sync_to(&mut self, _now_cycle: u64) {}
 
     /// Phase 2B.3a (issue #192): hand the bus any events this peripheral wants
     /// scheduled as a result of the MMIO write that just completed (e.g. a
-    /// UART arming its TX interrupt). Each entry is `(delay_ticks, token)` —
-    /// a delay in peripheral-tick units from "now" and an opaque token the
-    /// peripheral interprets in its own `on_event`. The buffer is drained
-    /// (cleared) by this call. A peripheral can't reach the scheduler from
-    /// `write`, so this is the bootstrap path; `on_event` reschedules itself
-    /// thereafter. Default empty — only write-scheduling peripherals override.
+    /// UART arming its TX interrupt). Each entry is `(delay_cycles, token)` —
+    /// a delay in CPU cycles from the peripheral's just-synced state (the
+    /// `sync_to` cycle) and an opaque token the peripheral interprets in its
+    /// own `on_event`. The bus converts the delay to an absolute cycle
+    /// deadline (see `SystemBus::collect_scheduled_events`). The buffer is
+    /// drained (cleared) by this call. A peripheral can't reach the scheduler
+    /// from `write`, so this is the bootstrap path; `on_event` reschedules
+    /// itself thereafter. Default empty — only write-scheduling peripherals
+    /// override.
     fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
         Vec::new()
     }
@@ -1203,10 +1208,8 @@ impl<C: Cpu> Machine<C> {
             }
             budget = budget.min(remaining);
 
-            let interval = (self.config.peripheral_tick_interval as u64).max(1);
             let generations = self.bus.peripheral_generations();
-            if let Some(deadline_tick) = self.sched.next_event_deadline(&generations) {
-                let deadline_cycle = deadline_tick.saturating_mul(interval);
+            if let Some(deadline_cycle) = self.sched.next_event_deadline(&generations) {
                 if deadline_cycle <= self.total_cycles {
                     return 0;
                 }
@@ -1229,7 +1232,7 @@ impl<C: Cpu> Machine<C> {
             if self.logic_capture.push_active() {
                 self.bus.logic_tap.set_clock(self.total_cycles);
             }
-            self.sched.advance_to(self.total_cycles / interval);
+            self.sched.advance_to(self.total_cycles);
             self.drain_scheduler_events();
             skipped
         }
@@ -1622,55 +1625,69 @@ impl<C: Cpu> Machine<C> {
     /// peripheral event. Called from both `step()` and the batch run loop so
     /// neither path silently strands a scheduler-driven peripheral.
     ///
-    /// The scheduler runs in peripheral-tick units (`total_cycles /
-    /// peripheral_tick_interval`) — the same quantum the legacy walk and
-    /// `sync_to` use — so deadlines are interval-agnostic. Write-context
-    /// schedule requests the bus buffered during this step's MMIO writes
-    /// (`pending_schedule`) are enqueued first: a peripheral can't reach the
-    /// scheduler from `write`, so it hands `(delay_ticks, token)` to the bus
-    /// and we convert to an absolute deadline here.
+    /// The scheduler runs in absolute CPU cycles (`total_cycles`) — the same
+    /// quantum the legacy walk advances by (`tick_elapsed(interval)`) — so
+    /// cycle-denominated peripheral delays (an SPI half-period, a systimer
+    /// alarm) keep their exact meaning at any `peripheral_tick_interval`. An
+    /// event lands at the first drain at or after its exact cycle; drains run
+    /// at least once per CPU batch, so the observation error is bounded by one
+    /// tick interval (and is zero at interval 1, where drains run per cycle).
+    /// Write-context schedule requests the bus buffered during this step's
+    /// MMIO writes (`pending_schedule`) are enqueued first: a peripheral can't
+    /// reach the scheduler from `write`, so the bus buffers an absolute
+    /// cycle deadline (see `collect_scheduled_events`) which is clamped to
+    /// `now` here — a deadline that expired mid-batch fires on this drain.
     #[cfg(feature = "event-scheduler")]
     fn drain_scheduler_events(&mut self) {
         // One-time bootstrap: give every scheduler-driven peripheral a chance
         // to schedule events that arise from *setup* rather than an MMIO write
-        // (e.g. a UART with an RX stream attached before firmware runs).
+        // (e.g. a UART with an RX stream attached before firmware runs). The
+        // returned delays are relative to the peripheral's un-synced state at
+        // cycle `total_cycles`, so the absolute deadline is `total_cycles +
+        // delay` (no +1: unlike the write path there is no "next drain" skew —
+        // this drain is the one converting them).
         if !self.scheduler_bootstrapped {
             self.scheduler_bootstrapped = true;
             for idx in 0..self.bus.peripherals.len() {
                 if self.bus.peripherals[idx].dev.uses_scheduler() {
                     for (delay, token) in self.bus.peripherals[idx].dev.take_scheduled_events() {
-                        self.bus.pending_schedule.push((idx, delay, token));
+                        self.bus
+                            .pending_schedule
+                            .push((idx, self.total_cycles + delay, token));
                     }
                 }
             }
         }
         let interval = (self.config.peripheral_tick_interval as u64).max(1);
-        self.sched.advance_to(self.total_cycles / interval);
+        self.sched.advance_to(self.total_cycles);
         let now = self.sched.now();
-        for (idx, delay, token) in std::mem::take(&mut self.bus.pending_schedule) {
+        for (idx, deadline, token) in std::mem::take(&mut self.bus.pending_schedule) {
             let gen = self
                 .bus
                 .peripherals
                 .get(idx)
                 .map(|p| p.generation)
                 .unwrap_or(0);
-            self.sched.schedule(now + delay, idx as u32, token, gen);
+            self.sched
+                .schedule(deadline.max(now), idx as u32, token, gen);
         }
         // HC-SR04: enqueue the ECHO rise/fall edges of any freshly-armed window
-        // as cycle-exact events under the reserved subsystem idx. The sensor is
-        // not a `peripherals[]` entry, so it can't ride the `pending_schedule`
-        // (peripheral-idx) path; it is dispatched below by idx match instead.
+        // as events under the reserved subsystem idx, at their exact cycles
+        // quantised up to the tick grid (per-tick reference semantics — see
+        // `take_edge_schedule`). The sensor is not a `peripherals[]` entry, so
+        // it can't ride the `pending_schedule` (peripheral-idx) path; it is
+        // dispatched below by idx match instead.
         self.bus
             .harvest_hcsr04_edges(interval, &mut self.hcsr04_edge_scratch);
-        for (sensor, rise_tick, fall_tick) in self.hcsr04_edge_scratch.drain(..) {
+        for (sensor, rise_cycle, fall_cycle) in self.hcsr04_edge_scratch.drain(..) {
             self.sched.schedule(
-                rise_tick.max(now),
+                rise_cycle.max(now),
                 sched::SUBSYSTEM_PERIPHERAL_IDX,
                 sensor as u32,
                 0,
             );
             self.sched.schedule(
-                fall_tick.max(now),
+                fall_cycle.max(now),
                 sched::SUBSYSTEM_PERIPHERAL_IDX,
                 sensor as u32,
                 0,
