@@ -27,6 +27,14 @@ use std::collections::BinaryHeap;
 
 pub type SimCycle = u64;
 
+/// Reserved `peripheral_idx` for bus-subsystem pseudo-peripherals that are NOT
+/// entries in `SystemBus::peripherals` and therefore have no generation slot —
+/// currently the HC-SR04 echo-edge scheduler (`SystemBus::hcsr04`). Events
+/// tagged with this idx are never generation-stale (there is nothing to cancel
+/// them against) and are dispatched by `Machine::drain_scheduler_events` to a
+/// dedicated bus handler rather than `peripherals[idx].on_event`.
+pub const SUBSYSTEM_PERIPHERAL_IDX: u32 = u32::MAX;
+
 #[derive(Debug, Default, Clone)]
 pub struct SchedulerStats {
     /// Count of `schedule()` calls in release mode whose `deadline < now`
@@ -162,7 +170,18 @@ impl EventScheduler {
         out
     }
 
+    /// True once no events remain queued. Lets the per-step drain skip its
+    /// generation snapshot + heap scan entirely when nothing is scheduled.
+    pub fn is_empty(&self) -> bool {
+        self.heap.is_empty()
+    }
+
     fn is_stale(ev: &ScheduledEvent, peripheral_generations: &[u32]) -> bool {
+        // Bus-subsystem pseudo-peripherals (e.g. HC-SR04) have no generation
+        // slot in `peripheral_generations`; they are never generation-cancelled.
+        if ev.peripheral_idx == SUBSYSTEM_PERIPHERAL_IDX {
+            return false;
+        }
         match peripheral_generations.get(ev.peripheral_idx as usize) {
             Some(cur) => *cur != ev.generation,
             // Out-of-range idx (peripheral removed) → treat as stale.

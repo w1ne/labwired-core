@@ -361,7 +361,14 @@ impl SystemBus {
 
             // HC-SR04 and CAN synthetic services are not present on C3 ROM-boot
             // labs; keep them off the C3 high-frequency tick path.
-            self.service_hcsr04();
+            //
+            // When the sensor is event-scheduled, its ECHO edges are driven by
+            // `Machine::drain_scheduler_events` at their exact cycles instead —
+            // skip the per-cycle pass so the two paths don't both drive the pad
+            // (and so a walk-free bus can early-out of the tick entirely).
+            if !self.hcsr04_event_scheduled() {
+                self.service_hcsr04();
+            }
             self.service_can_diagnostic_testers();
             self.service_can_uds_testers();
             self.service_can_log_players();
@@ -643,6 +650,18 @@ impl SystemBus {
     }
 
     pub fn tick_peripherals_fully(&mut self) -> (Vec<u32>, Vec<PeripheralTickCost>) {
+        // Walk-free fast path: on a bus whose per-cycle tick has no orchestration
+        // work (walk deleted, no bus-tick/GPIO/CAN services, HC-SR04 event-
+        // scheduled), the only per-cycle duty left is aggregating enabled+pending
+        // NVIC interrupts. Returning here skips the whole phase-1 pass and its
+        // allocations. `Vec::new()` does not allocate until pushed, so the
+        // no-pending-IRQ case is allocation-free.
+        #[cfg(feature = "event-scheduler")]
+        if self.per_cycle_tick_is_trivial() {
+            let mut interrupts = Vec::new();
+            self.collect_enabled_nvic_interrupts(&mut interrupts);
+            return (interrupts, Vec::new());
+        }
         let (mut interrupts, costs, pending_dma, dma_signals, explicit_source_ids) =
             self.tick_peripherals_phase1();
         if self.esp32c3_irq_routing {
