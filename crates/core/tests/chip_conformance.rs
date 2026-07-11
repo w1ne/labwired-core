@@ -267,7 +267,7 @@ fn root(rel: &str) -> PathBuf {
 
 fn dummy_manifest(path: &str) -> SystemManifest {
     SystemManifest {
-        walk_deleted: false,
+        walk_deleted: Some(false),
         schema_version: "1.0".to_string(),
         name: "chip-conformance".to_string(),
         chip: path.to_string(),

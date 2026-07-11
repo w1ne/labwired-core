@@ -25,7 +25,7 @@ fn h563_machine() -> Machine<labwired_core::cpu::CortexM> {
         .join("../../configs/chips/stm32h563.yaml");
     let chip = ChipDescriptor::from_file(&path).expect("load stm32h563.yaml");
     let manifest = labwired_config::SystemManifest {
-        walk_deleted: false,
+        walk_deleted: Some(false),
         schema_version: "1.0".to_string(),
         name: "flash-h5-ops".to_string(),
         chip: path.to_string_lossy().to_string(),

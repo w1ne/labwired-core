@@ -240,13 +240,24 @@ pub struct SystemManifest {
     pub debug_uart: Option<String>,
     #[serde(default)]
     pub peripherals: Vec<PeripheralConfig>,
-    /// Opt-in: delete the per-cycle peripheral walk for this config (only takes
-    /// effect in `event-scheduler` builds; no-op otherwise). ONLY safe when
-    /// every peripheral the firmware actually drives is event-migrated (SPI,
-    /// UART) or inert for this firmware — the firmware MUST be verified
-    /// byte-identical walk-free first.
+    /// Per-cycle peripheral-walk deletion (only consulted in `event-scheduler`
+    /// builds; no-op otherwise). Three states:
+    ///
+    /// - **absent (`None`)** — the core auto-derives walk-deletability at
+    ///   `from_config` finalize time: the walk is deleted iff EVERY peripheral
+    ///   on the bus is provably walk-independent for all firmware states
+    ///   (scheduler-driven, or its `tick()` is a structural no-op — see the
+    ///   core's `Peripheral::needs_legacy_walk` contract). Conservative: any
+    ///   peripheral that could ever do walk work keeps the walk on.
+    /// - **`Some(true)`** — force the walk deleted (hand opt-in / escape hatch
+    ///   for configs the author verified byte-identical walk-free but that the
+    ///   conservative auto-derivation cannot prove — e.g. a firmware that never
+    ///   arms the timers/ADC/DMA the chip descriptor instantiates).
+    /// - **`Some(false)`** — pin the walk ON, overriding any auto-derivation.
+    ///
+    /// Deserializes from the YAML `walk_deleted:` key; omit it for auto-derive.
     #[serde(default)]
-    pub walk_deleted: bool,
+    pub walk_deleted: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

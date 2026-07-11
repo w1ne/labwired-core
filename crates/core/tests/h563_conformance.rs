@@ -22,7 +22,7 @@ fn h563_bus() -> labwired_core::bus::SystemBus {
         .join("../../configs/chips/stm32h563.yaml");
     let chip = ChipDescriptor::from_file(&path).expect("load chip");
     let manifest = labwired_config::SystemManifest {
-        walk_deleted: false,
+        walk_deleted: Some(false),
         schema_version: "1.0".to_string(),
         name: "h563-conformance".to_string(),
         chip: path.to_string_lossy().to_string(),

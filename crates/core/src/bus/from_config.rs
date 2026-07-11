@@ -712,11 +712,25 @@ impl SystemBus {
         // peripheral (incl. the RCC, needed to map reg-name → offset) is on the
         // bus. Peripherals without a `clock:` field stay ungated.
         bus.resolve_clock_gates(&merged_peripherals)?;
-        // Per-config walk-deletion opt-in. The field is only consulted under the
-        // `event-scheduler` feature (the legacy build always walks), so this is a
-        // no-op there. Safe only because the manifest author verified the
-        // firmware runs byte-identical walk-free (see the walk-identity test).
-        bus.legacy_walk_disabled = manifest.walk_deleted;
+        // Walk-deletion decision (only consulted under the `event-scheduler`
+        // feature; the legacy build always walks, so this is inert there).
+        //
+        //   Some(true)  → force deleted (hand opt-in / escape hatch)
+        //   Some(false) → pin the walk ON, overriding auto-derivation
+        //   None        → auto-derive: delete iff EVERY peripheral is provably
+        //                 walk-independent for all firmware states.
+        //
+        // The auto-derivation is deliberately conservative — see
+        // `derive_walk_deletable`. It only fires when deleting the walk is
+        // byte-identical for ANY reachable firmware state, so it can never
+        // silently starve a peripheral of its per-cycle `tick()`. A hand
+        // `walk_deleted: true` stays honored for configs whose byte-identity is
+        // firmware-specific (the firmware never arms the timers/ADC/DMA the chip
+        // descriptor instantiates) and thus not config-derivable.
+        bus.legacy_walk_disabled = match manifest.walk_deleted {
+            Some(explicit) => explicit,
+            None => bus.derive_walk_deletable(),
+        };
         Ok(bus)
     }
 }

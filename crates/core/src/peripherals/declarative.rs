@@ -570,6 +570,18 @@ impl Peripheral for GenericPeripheral {
         !self.has_read_trigger() && self.has_write_trigger()
     }
 
+    /// A declarative register bank does walk work only when it can hold an
+    /// inflight timed event — which requires a read/write trigger in the
+    /// descriptor (or an event armed at construction). A trigger-free bank's
+    /// `tick()` loop body can never execute, so it is walk-independent for every
+    /// state. Mirrors the `legacy_tick_active`/`legacy_tick_dynamic` reachability
+    /// above: no trigger AND no live event ⇒ can never become tick-active.
+    fn needs_legacy_walk(&self) -> bool {
+        self.has_read_trigger()
+            || self.has_write_trigger()
+            || !self.inflight_events.borrow().is_empty()
+    }
+
     fn as_any(&self) -> Option<&dyn Any> {
         Some(self)
     }

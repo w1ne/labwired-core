@@ -3176,6 +3176,70 @@ mod tests {
         );
     }
 
+    /// `derive_walk_deletable`: an all-scheduler / inert bus derives deletion;
+    /// a single walk-dependent peripheral (native Timer, or an unknown model
+    /// keeping the conservative default) pins the walk on.
+    #[test]
+    fn derive_walk_deletable_is_conservative() {
+        use crate::peripherals::spi::{Spi, SpiRegisterLayout};
+        use crate::peripherals::stub::StubPeripheral;
+        use crate::peripherals::timer::Timer;
+
+        // Start from a truly empty peripheral set (`new()` pre-populates a few).
+        let mut bus = SystemBus::new();
+        bus.peripherals.clear();
+        assert!(bus.derive_walk_deletable(), "empty bus derives deletion");
+
+        // Scheduler-driven (SPI) + inert stub: still deletable.
+        bus.add_peripheral(
+            "spi1",
+            0x4001_3000,
+            0x400,
+            None,
+            Box::new(Spi::new_with_layout(SpiRegisterLayout::Stm32)),
+        );
+        bus.add_peripheral(
+            "syscfg",
+            0x4001_0000,
+            0x400,
+            None,
+            Box::new(StubPeripheral::new(0)),
+        );
+        assert!(
+            bus.derive_walk_deletable(),
+            "scheduler + inert-stub bus is walk-independent"
+        );
+
+        // Add a native Timer (its `tick()` counts once CEN is set — walk work
+        // reachable via MMIO). The bus must NOT derive deletion.
+        bus.add_peripheral("tim2", 0x4000_0000, 0x400, None, Box::new(Timer::new()));
+        assert!(
+            !bus.derive_walk_deletable(),
+            "a native timer is walk-dependent — walk must stay on"
+        );
+    }
+
+    /// The default `needs_legacy_walk() == true` makes an unknown/native model
+    /// (here the fixed-value `TagPeripheral`, which does not override it) pin the
+    /// walk on — the conservative default that prevents silently starving a
+    /// peripheral of ticks.
+    #[test]
+    fn derive_walk_deletable_defaults_conservative_for_unknown_models() {
+        let mut bus = SystemBus::new();
+        bus.peripherals.clear();
+        bus.add_peripheral(
+            "tag",
+            0x4002_0000,
+            0x400,
+            None,
+            Box::new(TagPeripheral(0xAB)),
+        );
+        assert!(
+            !bus.derive_walk_deletable(),
+            "a model that doesn't prove walk-independence keeps the walk"
+        );
+    }
+
     /// Minimal fixed-value peripheral for routing tests: reads return a
     /// constant tag byte, writes are ignored.
     #[derive(Debug)]
@@ -3592,7 +3656,7 @@ mod tests {
             serde_yaml::Value::Number(0x53.into()),
         );
         let manifest = SystemManifest {
-            walk_deleted: false,
+            walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "adxl345-test".to_string(),
             chip: "../chips/stm32f103.yaml".to_string(),
@@ -3661,7 +3725,7 @@ mod tests {
             serde_yaml::Value::Number(0x76.into()),
         );
         let manifest = SystemManifest {
-            walk_deleted: false,
+            walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "esp32c3-bmp280-test".to_string(),
             chip: "../chips/esp32c3.yaml".to_string(),
@@ -3778,7 +3842,7 @@ mod tests {
             serde_yaml::Value::Number(25.0.into()),
         );
         let manifest = SystemManifest {
-            walk_deleted: false,
+            walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "esp32c3-mlx90640-test".to_string(),
             chip: "../chips/esp32c3.yaml".to_string(),
@@ -4576,7 +4640,7 @@ peripherals:
 
     fn empty_manifest() -> SystemManifest {
         SystemManifest {
-            walk_deleted: false,
+            walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "bit-band-test".to_string(),
             chip: "unused".to_string(),
@@ -4713,7 +4777,7 @@ peripherals:
         config: std::collections::HashMap<String, serde_yaml::Value>,
     ) -> labwired_config::SystemManifest {
         labwired_config::SystemManifest {
-            walk_deleted: false,
+            walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "adxl345-test".to_string(),
             chip: "../chips/stm32f103.yaml".to_string(),
@@ -6290,7 +6354,7 @@ mod pin_map_tests {
             .join("../../configs/chips/mkw41z4.yaml");
         let chip = ChipDescriptor::from_file(&path).expect("load mkw41z4");
         let manifest = SystemManifest {
-            walk_deleted: false,
+            walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "pinmap-test".to_string(),
             chip: path.to_string_lossy().to_string(),

@@ -44,6 +44,41 @@ fn pend_nvic(
 }
 
 impl SystemBus {
+    /// Config-time derivation of walk-deletability (issue: browser-perf chain).
+    ///
+    /// Returns `true` iff EVERY peripheral currently on the bus is provably
+    /// *walk-independent for all reachable firmware states* — meaning deleting
+    /// the per-cycle legacy walk (`legacy_tick_indices` iteration in
+    /// `tick_peripherals_phase1`) cannot change any observable output no matter
+    /// what the firmware does. A peripheral qualifies when either:
+    ///
+    /// 1. `uses_scheduler()` — the walk loop already returns `default()` for it
+    ///    every cycle (it is driven by the event scheduler, not the walk), so
+    ///    skipping the whole loop changes nothing; or
+    /// 2. `!needs_legacy_walk()` — its `tick()`/`tick_elapsed()` is a structural
+    ///    no-op for ALL states (a pure register bank, a stub, or a
+    ///    lazily-evaluated model that never mutates observable state from the
+    ///    walk). See the `Peripheral::needs_legacy_walk` contract.
+    ///
+    /// CONSERVATIVE by construction: the default `needs_legacy_walk()` is
+    /// `true`, so any peripheral whose walk-independence is not *proven* (an
+    /// unknown native model, a timer/ADC/DMA/EXTI/SysTick whose `tick()` does
+    /// real work once firmware arms it, a declarative bank with timed inflight
+    /// events) forces `false` here and the walk stays on. Getting this wrong
+    /// would silently starve a peripheral of ticks, so the predicate errs
+    /// entirely toward keeping the walk.
+    ///
+    /// Note this is strictly weaker than a hand `walk_deleted: true`: the hand
+    /// flag can assert firmware-*specific* byte-identity (e.g. "this firmware
+    /// never touches the 11 timers the chip descriptor instantiates"), which no
+    /// config-time predicate can prove. Such configs must keep the explicit
+    /// opt-in.
+    pub(crate) fn derive_walk_deletable(&self) -> bool {
+        self.peripherals
+            .iter()
+            .all(|p| p.dev.uses_scheduler() || !p.dev.needs_legacy_walk())
+    }
+
     pub(crate) fn tick_profile_entry_counts(&self) -> (usize, usize) {
         let bus_tick_entries = self.bus_tick_indices.len();
         let legacy_tick_entries = if cfg!(feature = "event-scheduler") && self.legacy_walk_disabled

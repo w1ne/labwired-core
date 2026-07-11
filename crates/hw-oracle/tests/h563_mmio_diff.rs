@@ -987,7 +987,7 @@ fn build_sim_bus() -> SystemBus {
     let chip = ChipDescriptor::from_file(&chip_path)
         .unwrap_or_else(|e| panic!("load chip {chip_path:?}: {e}"));
     let manifest = SystemManifest {
-        walk_deleted: false,
+        walk_deleted: Some(false),
         schema_version: "1.0".to_string(),
         name: "h563-mmio-diff".to_string(),
         chip: chip_path.to_string_lossy().to_string(),

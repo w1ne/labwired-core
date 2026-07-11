@@ -53,9 +53,18 @@ fn ensure_firmware_built() -> PathBuf {
 }
 
 fn build_machine(elf: &Path) -> Cm {
+    build_machine_with(elf, None)
+}
+
+/// Build the invaders machine, optionally overriding the manifest's
+/// `walk_deleted` field (`None` keeps the yaml's explicit `Some(true)`).
+fn build_machine_with(elf: &Path, walk_deleted: Option<Option<bool>>) -> Cm {
     let system_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../examples/nokia5110-invaders-lab/system.yaml");
-    let manifest = SystemManifest::from_file(&system_path).expect("load manifest");
+    let mut manifest = SystemManifest::from_file(&system_path).expect("load manifest");
+    if let Some(wd) = walk_deleted {
+        manifest.walk_deleted = wd;
+    }
     let chip_path = system_path.parent().unwrap().join(&manifest.chip);
     let chip = ChipDescriptor::from_file(&chip_path).expect("load chip");
     let mut bus = SystemBus::from_config(&chip, &manifest).expect("build bus");
@@ -182,6 +191,67 @@ fn splash_framebuffer_matches_across_tick_intervals() {
         fb1,
         fb_at(64),
         "splash framebuffer must be byte-identical at tick interval 64"
+    );
+}
+
+/// Walk-deletion output-safety differential: the machine built from the invaders
+/// config with the `walk_deleted:` line REMOVED (`None` ⇒ conservative
+/// auto-derivation, which for this config KEEPS the walk on because of the native
+/// timers/SysTick/ADC/DMA/EXTI the descriptor instantiates) must produce
+/// byte-identical observable output — framebuffer AND total_cycles — to the
+/// explicit-flag machine (`Some(true)` ⇒ walk deleted), over 20M+ cycles at the
+/// same tick interval. This proves the hand `walk_deleted: true` opt-in is
+/// output-equivalent to the derived decision (walk-on ≡ walk-off for THIS
+/// firmware), i.e. the flag is a pure performance opt-in, safe to keep or drop
+/// for correctness.
+///
+/// It ALSO documents the perf reality honestly: the explicit-flag bus unlocks
+/// `max_safe_tick_interval == 64` (browser batching), while the flag-removed
+/// (derived) bus stays at 1 — the conservative derivation cannot recover the
+/// firmware-specific batching win, so removing the flag is a throughput
+/// regression even though it is output-safe.
+#[test]
+#[ignore = "slow: builds + runs the Space Invaders firmware in-sim"]
+fn derived_and_explicit_walk_flag_are_output_identical() {
+    let elf = ensure_firmware_built();
+
+    // Explicit Some(true): walk deleted. Derived None: walk kept (conservative).
+    let mut explicit = build_machine_with(&elf, Some(Some(true)));
+    let mut derived = build_machine_with(&elf, Some(None));
+
+    // Honest perf reality: the flag unlocks batching, the derivation does not.
+    if cfg!(feature = "event-scheduler") {
+        assert_eq!(explicit.bus.max_safe_tick_interval(), 64);
+        assert_eq!(
+            derived.bus.max_safe_tick_interval(),
+            1,
+            "conservative derivation keeps the walk for a chip with native timers"
+        );
+    }
+
+    // Run both at interval 1 so the comparison isolates walk-on vs walk-off
+    // (not batching). 20M cycles well past the splash + several game frames.
+    let budget = 20_000_000u64;
+    for m in [&mut explicit, &mut derived] {
+        while m.total_cycles < budget {
+            let remaining = (budget - m.total_cycles).min(u32::MAX as u64) as u32;
+            m.run(Some(remaining)).expect("run");
+        }
+    }
+
+    assert_eq!(
+        explicit.total_cycles, derived.total_cycles,
+        "total_cycles must match walk-deleted vs walk-kept"
+    );
+    let fb_explicit = framebuffer(&explicit);
+    let fb_derived = framebuffer(&derived);
+    assert!(
+        fb_explicit.iter().any(|&b| b != 0),
+        "the firmware must have drawn to the framebuffer"
+    );
+    assert_eq!(
+        fb_explicit, fb_derived,
+        "framebuffer must be byte-identical: walk deletion is output-safe here"
     );
 }
 

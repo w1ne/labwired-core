@@ -37,7 +37,7 @@ fn kw41z_bus() -> SystemBus {
         .join("../../configs/chips/mkw41z4.yaml");
     let chip = ChipDescriptor::from_file(&path).expect("load mkw41z4 chip");
     let manifest = labwired_config::SystemManifest {
-        walk_deleted: false,
+        walk_deleted: Some(false),
         schema_version: "1.0".to_string(),
         name: "kw41z-clock-boot".to_string(),
         chip: path.to_string_lossy().to_string(),

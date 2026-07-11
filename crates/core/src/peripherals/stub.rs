@@ -41,6 +41,12 @@ impl crate::Peripheral for StubPeripheral {
         Ok(())
     }
 
+    /// A stub never overrides `tick()` — it is a literal no-op on the legacy
+    /// walk for every state, so it can never be the reason a bus keeps the walk.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn snapshot(&self) -> serde_json::Value {
         serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
     }

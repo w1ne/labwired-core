@@ -437,7 +437,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
-            walk_deleted: false,
+            walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "test-system".to_string(),
             chip: "test-chip".to_string(),
@@ -612,7 +612,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
-            walk_deleted: false,
+            walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "test-system-2".to_string(),
             chip: "test-chip-2".to_string(),
@@ -675,7 +675,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
-            walk_deleted: false,
+            walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "test-system-3".to_string(),
             chip: "test-chip-3".to_string(),
@@ -733,7 +733,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
-            walk_deleted: false,
+            walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "test-system-gpio-v2".to_string(),
             chip: "test-chip-gpio-v2".to_string(),
@@ -797,7 +797,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
-            walk_deleted: false,
+            walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "test-system-uart-v2".to_string(),
             chip: "test-chip-uart-v2".to_string(),
@@ -949,7 +949,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
-            walk_deleted: false,
+            walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "test-system-two-uarts".to_string(),
             chip: "test-chip-two-uarts".to_string(),
@@ -1008,7 +1008,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
-            walk_deleted: false,
+            walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "test-system-rcc-v2".to_string(),
             chip: "test-chip-rcc-v2".to_string(),
@@ -1069,7 +1069,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
-            walk_deleted: false,
+            walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "test-system-rcc-f4".to_string(),
             chip: "test-chip-rcc-f4".to_string(),
@@ -1130,7 +1130,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
-            walk_deleted: false,
+            walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "test-system-gpio-v2-alias".to_string(),
             chip: "test-chip-gpio-v2-alias".to_string(),
@@ -2316,7 +2316,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
-            walk_deleted: false,
+            walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "test-system".to_string(),
             chip: "esp32c3-timg-test".to_string(),
@@ -2403,7 +2403,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
-            walk_deleted: false,
+            walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "esp32c3-gpio-test".to_string(),
             chip: "esp32c3-gpio-test".to_string(),
@@ -2475,7 +2475,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
-            walk_deleted: false,
+            walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "esp32c3-spi-dc-test".to_string(),
             chip: "esp32c3-spi-dc-test".to_string(),
@@ -2675,7 +2675,7 @@ pub mod integration_tests {
             serde_yaml::Value::Number(0x3C.into()),
         );
         let manifest = SystemManifest {
-            walk_deleted: false,
+            walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "esp32c3-i2c-trace-test".to_string(),
             chip: "esp32c3-i2c-trace-test".to_string(),
@@ -2774,7 +2774,7 @@ pub mod integration_tests {
                 serde_yaml::Value::Number(0x3C.into()),
             );
             let manifest = SystemManifest {
-                walk_deleted: false,
+                walk_deleted: Some(false),
                 schema_version: "1.0".to_string(),
                 name: "two-family-trace".to_string(),
                 chip: "two-family-trace".to_string(),

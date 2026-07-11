@@ -70,7 +70,7 @@ pub(crate) fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode 
         board_io: vec![],
         debug_uart: None,
         peripherals: vec![],
-        walk_deleted: false,
+        walk_deleted: Some(false),
     };
 
     // Two-station WiFi run (env LABWIRED_WIFI_DUAL): boot two C3 instances with

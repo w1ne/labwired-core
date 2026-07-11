@@ -519,7 +519,7 @@ mod tests {
             serde_yaml::Value::String("GPIO5".to_string()),
         );
         let manifest = SystemManifest {
-            walk_deleted: false,
+            walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "test-esp32-epaper".to_string(),
             chip: "esp32.yaml".to_string(),
@@ -591,7 +591,7 @@ mod tests {
             serde_yaml::Value::String("GPIO10".to_string()),
         );
         let manifest = SystemManifest {
-            walk_deleted: false,
+            walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "test-esp32s3-epaper".to_string(),
             chip: "esp32s3.yaml".to_string(),
@@ -643,7 +643,7 @@ mod tests {
         use labwired_config::{ExternalDevice, SystemManifest};
 
         let manifest = SystemManifest {
-            walk_deleted: false,
+            walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "test".to_string(),
             chip: "esp32.yaml".to_string(),
