@@ -679,16 +679,14 @@ impl Cpu for CortexM {
                         }
                     }
                 }
-                let old_pc = self.pc;
                 if let Some(tap) = &tap {
                     tap.bump_clock();
                 }
                 self.step_internal(sysbus, observers, config)?;
                 executed += 1;
-                let pc_diff = self.pc.wrapping_sub(old_pc);
-                if pc_diff != 2 && pc_diff != 4 {
-                    break;
-                }
+                // Taken branches no longer break the batch — the run loop
+                // bounds it to the next peripheral tick, so bouncing back
+                // through `Machine::run` at every branch was pure overhead.
             }
         } else {
             while executed < max_count {
@@ -704,16 +702,11 @@ impl Cpu for CortexM {
                         }
                     }
                 }
-                let old_pc = self.pc;
                 if let Some(tap) = &tap {
                     tap.bump_clock();
                 }
                 self.step_internal(bus, observers, config)?;
                 executed += 1;
-                let pc_diff = self.pc.wrapping_sub(old_pc);
-                if pc_diff != 2 && pc_diff != 4 {
-                    break;
-                }
             }
         }
 
