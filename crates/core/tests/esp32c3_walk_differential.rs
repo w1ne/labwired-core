@@ -27,8 +27,11 @@
 //!
 //! 4. `oled_lab_walk_pinners_after_rtc_migration` — the endgame ledger: on
 //!    the real OLED rom-boot bus, `rtc_cntl_timer` no longer pins the walk
-//!    (`uses_scheduler() == true`), and the remaining pinners are exactly the
-//!    known set (systimer / timg / i2c / …), printed for the campaign report.
+//!    (`uses_scheduler() == true`), and after the C3/ESP32 Class-A inert
+//!    sweep (`needs_legacy_walk() == false` on the verified-inert models) the
+//!    remaining pinners are EXACTLY the verified real workers
+//!    (systimer / i2c0 / ledc / spi2 / apb_saradc / wifi_mac), asserted as an
+//!    exact set so the campaign report stays honest.
 
 #![cfg(feature = "event-scheduler")]
 
@@ -363,28 +366,50 @@ fn oled_lab_native_mips_probe() {
     );
 }
 
-/// Endgame ledger: after the RTC migration, which peripherals still pin the
-/// per-cycle walk on the REAL OLED rom-boot bus? Locks in that
-/// `rtc_cntl_timer` is walk-independent and prints the remaining pinners
-/// (run with `--nocapture` for the list). `max_safe_tick_interval` stays 1
-/// until the ledger empties — asserted so the report stays honest.
+/// Endgame ledger: after the RTC migration + the C3/ESP32 Class-A inert
+/// sweep, which peripherals still pin the per-cycle walk on the REAL OLED
+/// rom-boot bus? Locks in that `rtc_cntl_timer` is walk-independent and that
+/// the remaining pinners are EXACTLY the verified real workers — models whose
+/// tick genuinely mutates state or asserts a level IRQ from the walk:
+///
+///   - `systimer` — free-running counter + FreeRTOS tick alarm, legacy-tick
+///     mode on the C3 (real per-tick counter/alarm work);
+///   - `i2c0` — bit-level wire engine advances mid-transfer in
+///     `tick_elapsed` (num/den module-clock fraction) + level IRQ;
+///   - `ledc` — the four low-speed timers run as live up-counters clocked by
+///     elapsed cycles (OVF latch) + level IRQ;
+///   - `spi2` — `tick()` re-asserts the level interrupt source while
+///     `int_raw & int_ena != 0` (reachable whenever firmware enables a
+///     TRANS_DONE/DMA int), so deleting the walk would starve the IRQ;
+///   - `apb_saradc` — same level-IRQ re-assert pattern from `tick()`
+///     (this is the chip-yaml `esp32c3_apb_saradc` controller; the rom-boot
+///     `apb_saradc` cal window at the same name is inert and no longer pins);
+///   - `wifi_mac` — `tick_with_bus` pumps TX/RX descriptor rings + `tick()`
+///     re-asserts the MAC level interrupt while events are pending.
+///
+/// Every other model on the bus now proves walk-independence itself
+/// (`uses_scheduler()` or a verified `needs_legacy_walk() == false`).
+/// `derive_walk_deletable()` stays false and `max_safe_tick_interval` stays 1
+/// until this set empties — asserted so the report stays honest (zero
+/// behavior change is the point of the Class-A sweep).
 #[test]
 #[ignore = "builds the full rom-boot bus (needs ROM blobs + flash fixture); run with --ignored"]
 fn oled_lab_walk_pinners_after_rtc_migration() {
+    /// The verified real workers still awaiting scheduler migration. A model
+    /// newly marked `needs_legacy_walk() == false` or migrated to the
+    /// scheduler must shrink this set; a model that starts pinning again is a
+    /// regression.
+    const EXPECTED_PINNERS: &[&str] =
+        &["apb_saradc", "i2c0", "ledc", "spi2", "systimer", "wifi_mac"];
+
     let lab = build_oled_lab(1, false);
     let bus = &lab.machine.bus;
 
-    let mut pinners: Vec<String> = Vec::new();
+    let mut pinners: Vec<&str> = Vec::new();
     for p in &bus.peripherals {
         let walk_independent = p.dev.uses_scheduler() || !p.dev.needs_legacy_walk();
         if !walk_independent {
-            pinners.push(format!(
-                "{} (uses_scheduler={}, needs_legacy_walk={}, legacy_tick_active={})",
-                p.name,
-                p.dev.uses_scheduler(),
-                p.dev.needs_legacy_walk(),
-                p.dev.legacy_tick_active()
-            ));
+            pinners.push(p.name.as_str());
         }
     }
     eprintln!("walk pinners on the esp32c3-oled-demo rom-boot bus:");
@@ -394,12 +419,37 @@ fn oled_lab_walk_pinners_after_rtc_migration() {
     eprintln!("max_safe_tick_interval = {}", bus.max_safe_tick_interval());
 
     assert!(
-        !pinners.iter().any(|p| p.starts_with("rtc_cntl_timer ")),
+        !pinners.contains(&"rtc_cntl_timer"),
         "rtc_cntl_timer must no longer pin the walk; pinners: {pinners:?}"
     );
+
+    let mut got = pinners.clone();
+    got.sort_unstable();
+    let mut expected: Vec<&str> = EXPECTED_PINNERS.to_vec();
+    expected.sort_unstable();
+    assert_eq!(
+        got,
+        expected,
+        "walk-pinning set (needs_legacy_walk && !uses_scheduler) drifted from the \
+         verified real-worker ledger on the esp32c3-oled-demo rom-boot bus.\n  \
+         got ({}):      {:?}\n  expected ({}): {:?}\n\
+         A model newly (un)marked `needs_legacy_walk()` or migrated to the scheduler \
+         must update EXPECTED_PINNERS to match the campaign's remaining surface.",
+        got.len(),
+        got,
+        expected.len(),
+        expected,
+    );
+
+    // Zero behavior change: the real workers above still force the walk, so
+    // the OLED bus must NOT flip walk-deletable and must stay on interval 1.
+    // `derive_walk_deletable()` (crate-private) is true iff every peripheral
+    // satisfies `uses_scheduler() || !needs_legacy_walk()` — i.e. iff this
+    // pinner set is empty — so a non-empty set IS the derivation staying
+    // false, and `max_safe_tick_interval() == 1` is its runtime effect.
     assert!(
         !pinners.is_empty(),
-        "ledger must stay honest: other pinners (systimer/timg/i2c/…) remain"
+        "OLED rom-boot bus must not derive walk-deletion while real workers remain"
     );
     assert_eq!(
         bus.max_safe_tick_interval(),

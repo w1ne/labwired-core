@@ -257,6 +257,14 @@ boards:
     # gate removal. Byte-identical to the walk path by committed differentials
     # (esp32c3_walk_differential, esp32c3_rtc_delay_loop); reset oracle unchanged.
     # No live re-capture this session.
+    # 2026-07-11 (Class-A sweep): asserted needs_legacy_walk()==false on the
+    # verified-inert C3 models (ana_i2c, cache, forced_status, reg_block, rng,
+    # sar_adc cal window, sha) — each one's tick() is the trait-default no-op and
+    # all work happens at the MMIO access, so the override is pure walk-scheduling
+    # metadata. i2c0/ledc/spi2/apb_saradc/wifi_mac verified as REAL walk workers
+    # and deliberately left pinning (endgame ledger asserts the exact set). No
+    # register, reset-value, timing or IRQ change; reset oracle unaffected. No
+    # live re-capture warranted.
     drift_ack: 2026-07-11
 
   - id: nucleo-l476rg
@@ -503,7 +511,13 @@ boards:
     # asserts default scheduler behaviour and snapshot compatibility.
     # 2026-07-09: universal logic analyzer — additive read_gpio_pad pad probe (ENABLE-mask direction) + I2C controller wraps attached slaves in TracingI2cDevice (shared bus trace) and signals START to the selected slave at address match so traces carry decodable address frames. Register map/reset values byte-for-byte untouched; conformance/e2e unchanged. No live re-capture.
     # 2026-07-10: bus-trace single-choke-point refactor (attach wraps at SystemBus::attach_i2c_slave/attach_spi_device; no per-callsite set_bus_trace) + cycle stamp on trace events + gpio_routing/pin_routing metadata. Additive; oracle output unchanged.
-    drift_ack: 2026-07-10
+    # 2026-07-11: walk-free Class-A sweep — asserted needs_legacy_walk()==false on
+    # SpiMemFlash, FlashXipPeripheral, Esp32s3MmuTable and UsbSerialJtag (all
+    # verified structurally inert in the per-cycle walk: work happens at the MMIO
+    # access, tick() is the trait-default no-op). Pure walk-scheduling metadata —
+    # no register, reset-value, timing or IRQ change; the 9-reg reset-state
+    # silicon anchor is unaffected. No live re-capture warranted.
+    drift_ack: 2026-07-11
     models:
       - crates/core/src/peripherals/esp32s3
       - crates/core/src/peripherals/esp_xtensa_common
