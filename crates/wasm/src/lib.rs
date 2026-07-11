@@ -1047,9 +1047,28 @@ impl WasmSimulator {
     /// instruction. Larger values are a bounded browser acceleration knob for
     /// firmware bring-up paths whose active peripherals are scheduler-driven or
     /// inactive.
+    ///
+    /// The machine and bus each hold a `SimulationConfig`; both are updated —
+    /// the run loop paces ticks off the machine's copy while the legacy-walk
+    /// quantum (`tick_elapsed(interval)`) and the HC-SR04 event-scheduling
+    /// gate read the bus's, and they must agree or walked peripherals run
+    /// `interval`× slow.
     #[wasm_bindgen]
     pub fn set_peripheral_tick_interval(&mut self, interval: u32) {
-        self.machine().config.peripheral_tick_interval = interval.max(1);
+        let machine = self.machine();
+        machine.config.peripheral_tick_interval = interval.max(1);
+        machine.bus.config.peripheral_tick_interval = interval.max(1);
+    }
+
+    /// The largest `peripheral_tick_interval` this machine's bus can run at
+    /// without losing fidelity (see `SystemBus::max_safe_tick_interval`): a
+    /// batching interval when every peripheral is scheduler-driven, `1` when
+    /// anything non-relaxable (IO-Link master, op-modeling FLASH, a live
+    /// legacy walk) is present. The TS side calls this once at engine init
+    /// and feeds the answer straight into `set_peripheral_tick_interval`.
+    #[wasm_bindgen]
+    pub fn recommended_tick_interval(&mut self) -> u32 {
+        self.machine().bus.max_safe_tick_interval()
     }
 
     /// Total number of times the browser JIT has dispatched a

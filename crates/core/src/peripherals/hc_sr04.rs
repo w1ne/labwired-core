@@ -215,14 +215,16 @@ impl HcSr04 {
     }
 
     /// Event-scheduler path: if a fresh echo window was armed since the last
-    /// call, return the absolute peripheral-tick indices at which ECHO should
-    /// rise and fall, and clear the pending flag. The tick of a cycle `c` is
-    /// `ceil(c / interval)` — the first peripheral-tick boundary at or after the
-    /// exact cycle, which is precisely when the legacy per-tick `service_hcsr04`
-    /// (running only at tick boundaries) would first observe the level change.
-    /// At `interval == 1` this is the exact cycle, so the scheduled edges are
-    /// cycle-identical to the per-cycle path. Returns `None` when no new window
-    /// has been armed.
+    /// call, return the absolute CPU cycles at which ECHO should rise and
+    /// fall, quantised UP to the peripheral-tick grid
+    /// (`ceil(c / interval) * interval` — the first tick boundary at or after
+    /// the exact cycle), and clear the pending flag. That boundary is
+    /// precisely when the legacy per-tick `service_hcsr04` (running only at
+    /// tick boundaries) would first observe the level change, so the scheduled
+    /// path stays byte-identical to the per-tick reference (the differential
+    /// gate in `tests/hcsr04_event_tick_differential.rs`). At `interval == 1`
+    /// this is the exact cycle. Returns `None` when no new window has been
+    /// armed.
     #[cfg(feature = "event-scheduler")]
     pub(crate) fn take_edge_schedule(&mut self, interval: u64) -> Option<(u64, u64)> {
         if !self.edge_reschedule_pending {
@@ -231,8 +233,8 @@ impl HcSr04 {
         self.edge_reschedule_pending = false;
         let interval = interval.max(1);
         Some((
-            self.echo_start_cycle.div_ceil(interval),
-            self.echo_end_cycle.div_ceil(interval),
+            self.echo_start_cycle.div_ceil(interval) * interval,
+            self.echo_end_cycle.div_ceil(interval) * interval,
         ))
     }
 
