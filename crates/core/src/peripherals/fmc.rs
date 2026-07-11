@@ -140,6 +140,11 @@ impl Default for Fmc {
 }
 
 impl crate::Peripheral for Fmc {
+    // Inert walk: external-memory-controller register bank; tick() is the trait-default no-op.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let reg = offset & !3;
         let byte = (offset % 4) as u32;

@@ -112,6 +112,11 @@ impl Default for Quadspi {
 }
 
 impl crate::Peripheral for Quadspi {
+    // Inert walk: register bank with no time-driven state; tick() is the trait-default no-op.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let reg = offset & !3;
         let byte = (offset % 4) as u32;

@@ -680,6 +680,11 @@ impl GpioPort {
 }
 
 impl crate::Peripheral for GpioPort {
+    // Inert walk: pure register + pad bank; pin edges are surfaced by the bus GPIO-diff pass, not tick().
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
