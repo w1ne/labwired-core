@@ -626,8 +626,9 @@ pub(crate) fn register_esp32s3_peripherals(bus: &mut SystemBus, opts: &Esp32s3Op
     }
 
     // I2C0 carries board-specific I2C slaves the factory does not model: TMP102
-    // always, plus an opt-in PCA9685 (LABWIRED_ESP32S3_PCA9685) for the
-    // SpiceDispenser servos. Built directly so the slaves are attached.
+    // always, an SSD1306 OLED @ 0x3C always, plus an opt-in PCA9685
+    // (LABWIRED_ESP32S3_PCA9685) for the SpiceDispenser servos. Built directly
+    // so the slaves are attached.
     let i2c0 = Esp32s3I2c::new();
     // Register first, then attach every slave through the single bus choke point
     // so each is wrapped into the shared bus trace (universal logic analyzer) —
@@ -635,6 +636,16 @@ pub(crate) fn register_esp32s3_peripherals(bus: &mut SystemBus, opts: &Esp32s3Op
     bus.add_peripheral("i2c0", I2C0_BASE as u64, I2C0_SIZE, None, Box::new(i2c0));
     bus.attach_i2c_slave("i2c0", Box::new(Tmp102::new()))
         .expect("i2c0 just registered as Esp32s3I2c");
+    // SSD1306 128x64 OLED @ 0x3C. Mirrors the TMP102 "always attached" pattern:
+    // the panel sits inert at its distinct address until firmware initializes
+    // and draws to it (the S3 OLED lab does; hello-world never addresses 0x3C,
+    // so its framebuffer stays blank and no board_io binding reads it back).
+    // Distinct address from TMP102 (0x48)/PCA9685 (0x40), so no bus contention.
+    bus.attach_i2c_slave(
+        "i2c0",
+        Box::new(crate::peripherals::components::Ssd1306::new(0x3C)),
+    )
+    .expect("i2c0 just registered as Esp32s3I2c");
     if std::env::var("LABWIRED_ESP32S3_PCA9685").is_ok() {
         bus.attach_i2c_slave(
             "i2c0",
