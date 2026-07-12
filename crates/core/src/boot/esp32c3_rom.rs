@@ -486,6 +486,20 @@ pub fn build_rom_boot_machine<C: crate::Cpu, F: FnOnce(crate::cpu::RiscV) -> C>(
     // matrix into the CPU's external interrupt lines. FreeRTOS's first
     // context switch (vPortYield → FROM_CPU SW interrupt) depends on this.
     bus.esp32c3_irq_routing = true;
+    // Re-derive walk-deletion over the COMPLETE rom-boot bus. `from_config`
+    // computed `legacy_walk_disabled` from the chip-yaml peripheral set alone,
+    // BEFORE the rom-boot path appended its real walk workers above (notably the
+    // walk-pinning `wifi_mac`, plus the behavioral rtc_cntl_timer/systimer). Once
+    // every chip-yaml peripheral is scheduler-migrated (the LEDC timer port
+    // emptied the last chip-yaml pinner), that early derivation would read
+    // walk-DELETED and leave the per-cycle walk globally skipped — starving
+    // wifi_mac's tick(). Recomputing here over the full set restores the correct
+    // value (wifi_mac pins → walk enabled → interval 1), keeping the rom-boot
+    // behavior byte-identical to before the migration.
+    #[cfg(feature = "event-scheduler")]
+    {
+        bus.legacy_walk_disabled = bus.derive_walk_deletable();
+    }
     if let Some(mac) = opts.efuse_mac {
         let lo =
             mac[5] as u32 | (mac[4] as u32) << 8 | (mac[3] as u32) << 16 | (mac[2] as u32) << 24;

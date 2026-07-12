@@ -29,11 +29,11 @@
 //!    the real OLED rom-boot bus, `rtc_cntl_timer` no longer pins the walk
 //!    (`uses_scheduler() == true`), and after the C3/ESP32 Class-A inert
 //!    sweep (`needs_legacy_walk() == false` on the verified-inert models) the
-//!    remaining pinners are EXACTLY the verified real workers
-//!    (ledc / wifi_mac), asserted as an
-//!    exact set so the campaign report stays honest. SYSTIMER, I²C0 and the
-//!    level-only pair spi2 + apb_saradc are now scheduler-driven (walk-free C3
-//!    SYSTIMER + I²C0 + spi2/apb_saradc batches) and no longer pin.
+//!    only remaining pinner is the verified real worker `wifi_mac`, asserted as
+//!    an exact set so the campaign report stays honest. SYSTIMER, I²C0, the
+//!    level-only pair spi2 + apb_saradc, and the LEDC timer port are now all
+//!    scheduler-driven (walk-free C3 SYSTIMER + I²C0 + spi2/apb_saradc + ledc
+//!    batches) and no longer pin.
 
 #![cfg(feature = "event-scheduler")]
 
@@ -615,13 +615,14 @@ fn oled_lab_native_mips_probe() {
 /// tick genuinely mutates state or asserts a level IRQ from the walk:
 ///
 ///   (`systimer` — the free-running counter + FreeRTOS tick alarm —, `i2c0`
-///   — the OLED bit-level wire engine —, and the level-only pair `spi2` +
-///   `apb_saradc` are now scheduler-driven and no longer here. The pair export
-///   their level via `matrix_irq_sources` instead of re-emitting it from the
-///   walk's `tick()`; no scheduled events, since their `int_raw` is write-armed
-///   by a transaction / conversion rather than a free-running counter.)
-///   - `ledc` — the four low-speed timers run as live up-counters clocked by
-///     elapsed cycles (OVF latch) + level IRQ;
+///   — the OLED bit-level wire engine —, the level-only pair `spi2` +
+///   `apb_saradc`, and now `ledc` are all scheduler-driven and no longer here.
+///   The level-only pair export their level via `matrix_irq_sources` with no
+///   scheduled events, since their `int_raw` is write-armed by a transaction /
+///   conversion. `ledc` is a genuine timer port: its four low-speed up-counters
+///   advance lazily off the bus-published `CycleClock` and each `LSTIMERx_OVF`
+///   rides a scheduled event that materialises the latch at its exact cycle and
+///   re-arms — the SYSTIMER/STM32 TIMx pattern.)
 ///   - `wifi_mac` — `tick_with_bus` pumps TX/RX descriptor rings + `tick()`
 ///     re-asserts the MAC level interrupt while events are pending.
 ///
@@ -637,7 +638,7 @@ fn oled_lab_walk_pinners_after_rtc_migration() {
     /// newly marked `needs_legacy_walk() == false` or migrated to the
     /// scheduler must shrink this set; a model that starts pinning again is a
     /// regression.
-    const EXPECTED_PINNERS: &[&str] = &["ledc", "wifi_mac"];
+    const EXPECTED_PINNERS: &[&str] = &["wifi_mac"];
 
     let lab = build_oled_lab(1, false, false, false, false);
     let bus = &lab.machine.bus;
