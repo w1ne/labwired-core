@@ -9,6 +9,7 @@ use crate::cpu::CortexM;
 use crate::peripherals::dwt::Dwt;
 use crate::peripherals::nvic::{Nvic, NvicState};
 use crate::peripherals::scb::{Scb, SharedScbState};
+use crate::Peripheral;
 use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
 
@@ -97,7 +98,14 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
     // Ensure DWT exists. Size 0x1000 covers the full CoreSight DWT register space,
     // including the CYCCNT enable bit at offset 0 and CYCCNT at offset 4, as well as
     // extended offsets accessed by some HAL dwt_init routines (e.g. offset 0xfc).
-    let dwt = Dwt::new();
+    // Attach the bus cycle clock so CYCCNT can be derived lazily (walk-free
+    // plan Part 1). DWT is registered by directly manipulating `bus.peripherals`
+    // (not `add_peripheral`), so the attach choke is replicated here — without
+    // it the model stays on the legacy walk. The clone happens before the
+    // `iter_mut` borrow below.
+    let dwt_clock = bus.cycle_clock.clone();
+    let mut dwt = Dwt::new();
+    dwt.attach_cycle_clock(dwt_clock);
     if let Some(p) = bus
         .peripherals
         .iter_mut()

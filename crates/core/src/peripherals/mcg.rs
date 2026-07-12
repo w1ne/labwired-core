@@ -144,6 +144,17 @@ impl Peripheral for Mcg {
         self.regs.get(offset as usize).copied()
     }
 
+    /// Walk-free (kw41z): the MCG is purely combinational — `MCG_S` is
+    /// recomputed from the control bits on every write (`recompute_status`) and
+    /// there is NO `tick()`/`tick_elapsed()` override, so the model has zero
+    /// time-dependent state. The clock modes settle instantaneously (no PLL, no
+    /// lock counter), so the per-cycle walk can never change any observable
+    /// output. Proven inert (`needs_legacy_walk() == false`) by the differential
+    /// gate `crates/core/tests/kw41z_walk_free_differential.rs`.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn as_any(&self) -> Option<&dyn Any> {
         Some(self)
     }

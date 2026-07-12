@@ -981,18 +981,21 @@ mod walk_free_campaign {
     //!
     //! Why `configure_cortex_m`: the Cortex-M core installs the *real* SCB and
     //! NVIC (the chip descriptor only carries inert placeholders for those ids)
-    //! and appends DWT (CYCCNT), which is not in the descriptor at all. SCB's
-    //! `tick()` drains software-pended exceptions and DWT's advances CYCCNT — both
-    //! real walk work. Omitting this step would hide SCB's real tick and DWT
-    //! entirely and under-report the surface, so the runtime-faithful bus is the
-    //! honest one to pin.
+    //! and appends DWT (CYCCNT), which is not in the descriptor at all. In a
+    //! featureless build SCB's `tick()` drains software-pended exceptions and
+    //! DWT's advances CYCCNT — both real walk work. Omitting this step would hide
+    //! SCB's real tick and DWT entirely and under-report the surface, so the
+    //! runtime-faithful bus is the honest one to pin. (Under `event-scheduler`,
+    //! `configure_cortex_m` attaches the bus cycle clock to DWT, migrating it to
+    //! the lazy-read scheduler path — see the cfg-split lists below.)
     //!
     //! After batch **B0** (Class-A inert sweep) the forcing set is the plan's 21
     //! Class-B instances still awaiting scheduler migration, PLUS the core DWT
     //! (a lazy-read CYCCNT counter the plan calls out separately as the purest
-    //! read-sync case). Each later batch (SysTick+SCB, timers, DMA, …) migrates a
-    //! slice onto the scheduler, flipping its `uses_scheduler()`, so this expected
-    //! set shrinks batch by batch. Keep it in lockstep with the plan's inventory.
+    //! read-sync case). Each later batch (SysTick+SCB, timers, DMA, the DWT
+    //! lazy-CYCCNT migration, …) moves a slice onto the scheduler, flipping its
+    //! `uses_scheduler()`, so this expected set shrinks batch by batch. Keep it
+    //! in lockstep with the plan's inventory.
     //!
     //! Batch **B1** (SysTick + SCB → scheduler) removes `systick` and `scb`
     //! from the forcing set — but only in `event-scheduler` builds:
@@ -1006,20 +1009,25 @@ mod walk_free_campaign {
     use std::path::PathBuf;
 
     /// Walk-forcing ids on the runtime invaders bus after B4 (event-scheduler
-    /// builds): B2/B3's 9 minus the 2 `dma*` (scheduler-migrated — per-channel
-    /// element event chains, delay-1 mem2mem self-pacing, request-armed via the
-    /// `route_dma_signal` hook) = 7. The 3 `i2c*` STAY on the walk: their F1/L4/
-    /// Kinetis transaction engines are driven by `&self`-read side effects
-    /// (`rxne_consumed` / `read_dr_consumed` / the Kinetis `D` read) that arm
-    /// subsequent IRQ-raising state transitions, and the bus read path is
-    /// `&self` (cannot schedule events) with event arming only on writes — so a
+    /// builds): the prior 8 (B2/B3 timers + the DWT lazy-CYCCNT migration from
+    /// #522) minus the 2 `dma*` (B4 — per-channel element event chains, delay-1
+    /// mem2mem self-pacing, request-armed via the `route_dma_signal` hook) = 6.
+    /// The 3 `i2c*` STAY on the walk: THIS bus instantiates the STM32 **F1** I2C
+    /// variant, whose transaction engine is a `cycles_remaining` countdown
+    /// driven by `&self`-read side effects (`rxne_consumed` / `read_dr_consumed`)
+    /// that arm subsequent IRQ-raising state transitions. The bus read path is
+    /// `&self` (cannot schedule events) with event arming only on writes, so a
     /// per-byte receive IRQ cannot be delivered through the event path without
     /// dropping it or overrunning the read-gated byte stream (a fidelity loss).
-    /// Per the non-negotiable fidelity rule, I2C stays on the legacy walk. The
-    /// remaining plan Class-B: 3 i2c + adc + exti + bxcan (6) + the core DWT.
+    /// Per the non-negotiable fidelity rule F1/L4 I2C stays on the legacy walk.
+    /// (The NXP **Kinetis** I2C variant — whose `tick()` is a pure level-IRQ
+    /// re-assertion with all byte/device work synchronous in read/write — IS
+    /// migrated in this batch, unblocking the FRDM-KW41Z board flip; the STM32
+    /// countdown engine is the part that cannot.) Remaining plan Class-B on this
+    /// bus: 3 i2c + adc + exti + bxcan.
     #[cfg(feature = "event-scheduler")]
     const EXPECTED_WALK_FORCING: &[&str] = &[
-        "i2c1", "i2c2", "i2c3", "adc1", "exti", "can1", "dwt",
+        "i2c1", "i2c2", "i2c3", "adc1", "exti", "can1",
     ];
 
     /// Featureless builds: the scheduler does not exist, so SysTick and SCB
