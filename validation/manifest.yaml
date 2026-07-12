@@ -267,7 +267,16 @@ boards:
     # and deliberately left pinning (endgame ledger asserts the exact set). No
     # register, reset-value, timing or IRQ change; reset oracle unaffected. No
     # live re-capture warranted.
-    drift_ack: 2026-07-11
+    # 2026-07-12: I2C0 (esp32c3/i2c.rs) walk-free migration — the bit-level engine
+    # now advances via the event scheduler (uses_scheduler + a single self-perpetuating
+    # module-tick event + matrix_irq_sources level export) instead of the per-cycle
+    # walk; the shared advance_engine keeps the num/den module-tick cadence intact so
+    # wire timing stays interval-independent. Byte-identical to the walk path by the
+    # committed differential (oled_lab_i2c0_walk_on_vs_scheduler_is_byte_identical:
+    # serial + total_cycles + SSD1306 framebuffer at interval 1, framebuffer at
+    # interval 64). Register map, reset values, FIFO semantics unchanged; reset oracle
+    # unaffected. No live re-capture this session.
+    drift_ack: 2026-07-12
 
   - id: nucleo-l476rg
     doc: docs/boards/nucleo-l476rg.md
