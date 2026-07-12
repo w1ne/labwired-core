@@ -289,6 +289,23 @@ boards:
     # oled_lab_spi2_apb_saradc_walk_on_vs_scheduler_is_byte_identical (serial +
     # total_cycles + SSD1306 framebuffer at interval 1/64). Register map, reset values,
     # INT/one-shot semantics unchanged; reset oracle unaffected. No live re-capture.
+    # 2026-07-12: ledc (esp32c3/ledc.rs) walk-free migration — the MEDIUM timer port.
+    # Unlike the level-only pair, LEDC is a genuine timer: its four low-speed up-counters
+    # advance and latch LSTIMERx_OVF over time. Migrated off the per-cycle walk with
+    # uses_scheduler + attach_cycle_clock: the counters advance LAZILY in closed form off
+    # the bus-published CycleClock (fresh on every &self read / write-path sync_to / level
+    # poll) and each overflow rides a SCHEDULED event (take_scheduled_events arms the
+    # nearest wrap; on_event materialises the latch at its exact cycle, re-arms the
+    # successor, arm-token kills a stale chain on reconfig), with the level exported via
+    # matrix_irq_sources. All model quirks preserved (RST/PAUSE freeze, 2^DUTY_RES wrap
+    # clamped to 14 bits, integer CLK_DIV divider, sticky W1C OVF latch). Proven
+    # byte-identical to the walk by committed differentials: the in-module scheduler_mode
+    # walk-identity gates (all four counters + INT_RAW + OVF level-assert cycles at
+    # interval 1, plus interval-64 batched + the no-poll event-delivery gate) and the
+    # bus-level c3_ledc_matrix_routing (walk aggregation vs scheduler routing produce the
+    # same riscv_irq_lines for LEDC source 23; force_legacy_walk re-emits the same source;
+    # INT_CLR de-asserts). Register map, reset values and MMIO byte paths unchanged; reset
+    # oracle unaffected. No live re-capture. Remaining C3 walk pinner: wifi_mac only.
     drift_ack: 2026-07-12
 
   - id: nucleo-l476rg
