@@ -4,10 +4,11 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
+mod artifacts;
 mod commands;
 mod wifi_frames;
 use clap::{Parser, Subcommand};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -26,6 +27,7 @@ mod gpio_observer;
 mod size_limited_writer;
 mod vcd_trace;
 
+use artifacts::{AssertionResult, NamedU64, Snapshot, StopReasonDetails, TestConfig, TestResult};
 use labwired_config::{
     load_test_script, LoadedTestScript, StopReason, TestAssertion, TestLimits, UdsTesterDetails,
 };
@@ -640,130 +642,6 @@ struct TestArgs {
     no_key: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct TestResult {
-    result_schema_version: String,
-    status: String,
-    steps_executed: u64,
-    cycles: u64,
-    instructions: u64,
-    stop_reason: StopReason,
-    stop_reason_details: StopReasonDetails,
-    limits: TestLimits,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    message: Option<String>,
-    assertions: Vec<AssertionResult>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cpu_state: Option<labwired_core::snapshot::CpuSnapshot>,
-    firmware_hash: String,
-    config: TestConfig,
-    /// Universal inspect block: final-state decoded register + artifact
-    /// metadata for every peripheral (summary mode — framebuffer bytes omitted,
-    /// hashed via `meta.generation`). Absent on config-error runs that never
-    /// built a machine.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    inspect: Option<labwired_core::inspect::MachineInspect>,
-    /// Structured coverage gaps the model hit during the run: unmapped MMIO and
-    /// undecoded instructions, flattened from core's thread-local
-    /// `FidelityReport`. Empty (and omitted) on a clean run, so honest runs stay
-    /// clean. The builder maps this into `/run`'s `unmodeled_access[]`.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    fidelity: Vec<labwired_core::fidelity::FidelityGap>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct StopReasonDetails {
-    triggered_stop_condition: StopReason,
-    triggered_limit: Option<NamedU64>,
-    observed: Option<NamedU64>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct NamedU64 {
-    name: String,
-    value: u64,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct AssertionResult {
-    assertion: TestAssertion,
-    passed: bool,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct TestConfig {
-    firmware: PathBuf,
-    system: Option<PathBuf>,
-    script: PathBuf,
-}
-
-use labwired_core::snapshot::CpuSnapshot;
-
-#[derive(Debug, Serialize, Deserialize)]
-struct PeripheralSnapshot {
-    name: String,
-    base: u64,
-    size: u64,
-    irq: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    state: Option<serde_json::Value>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-struct InteractiveSnapshotConfig {
-    firmware: PathBuf,
-    system: Option<PathBuf>,
-    max_steps: usize,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-enum Snapshot {
-    Standard {
-        cpu: CpuSnapshot,
-        steps_executed: u64,
-        cycles: u64,
-        instructions: u64,
-        stop_reason: StopReason,
-        stop_reason_details: StopReasonDetails,
-        limits: TestLimits,
-        firmware_hash: String,
-        config: TestConfig,
-    },
-    ConfigError {
-        message: String,
-        stop_reason_details: StopReasonDetails,
-        limits: TestLimits,
-        config: TestConfig,
-    },
-    Interactive {
-        snapshot_schema_version: String,
-        status: String,
-        steps_executed: u64,
-        cycles: u64,
-        instructions: u64,
-        stop_reason: StopReason,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        message: Option<String>,
-        firmware_hash: String,
-        cpu: CpuSnapshot,
-        peripherals: Vec<PeripheralSnapshot>,
-        config: InteractiveSnapshotConfig,
-    },
-}
-
-// snapshot_cortexm_cpu removed, use cpu.snapshot() directly
-
-struct InteractiveSnapshotInputs<'a> {
-    firmware_path: &'a Path,
-    system_path: Option<&'a PathBuf>,
-    max_steps: usize,
-    steps_executed: u64,
-    stop_reason: StopReason,
-    message: Option<String>,
-}
-
 /// Unified error response for agent consumption
 #[derive(Debug, Serialize)]
 struct ErrorResponse {
@@ -805,87 +683,6 @@ pub(crate) fn emit_error(
     }
 }
 
-fn write_interactive_snapshot<C: labwired_core::Cpu>(
-    path: &Path,
-    metrics: &labwired_core::metrics::PerformanceMetrics,
-    machine: &labwired_core::Machine<C>,
-    inputs: InteractiveSnapshotInputs<'_>,
-) {
-    if let Some(parent) = path.parent() {
-        if let Err(e) = std::fs::create_dir_all(parent) {
-            error!("Failed to create snapshot parent dir {:?}: {}", parent, e);
-            return;
-        }
-    }
-
-    let firmware_hash = match std::fs::read(inputs.firmware_path) {
-        Ok(bytes) => {
-            let mut hasher = Sha256::new();
-            hasher.update(&bytes);
-            format!("{:x}", hasher.finalize())
-        }
-        Err(e) => {
-            error!(
-                "Failed to read firmware for snapshot hash {:?}: {}",
-                inputs.firmware_path, e
-            );
-            String::new()
-        }
-    };
-
-    let machine_snapshot = machine.snapshot();
-    let peripherals = machine
-        .bus
-        .peripherals
-        .iter()
-        .map(|p| {
-            let state = machine_snapshot.peripherals.get(&p.name).cloned();
-            PeripheralSnapshot {
-                name: p.name.clone(),
-                base: p.base,
-                size: p.size,
-                irq: p.irq,
-                state,
-            }
-        })
-        .collect::<Vec<_>>();
-
-    let cpu_snapshot = machine.cpu.snapshot();
-
-    let snapshot = Snapshot::Interactive {
-        snapshot_schema_version: "1.0".to_string(),
-        status: if matches!(
-            inputs.stop_reason,
-            StopReason::MemoryViolation | StopReason::DecodeError
-        ) {
-            "error".to_string()
-        } else {
-            "ok".to_string()
-        },
-        steps_executed: inputs.steps_executed,
-        cycles: metrics.get_cycles(),
-        instructions: metrics.get_instructions(),
-        stop_reason: inputs.stop_reason,
-        message: inputs.message,
-        firmware_hash,
-        cpu: cpu_snapshot,
-        peripherals,
-        config: InteractiveSnapshotConfig {
-            firmware: inputs.firmware_path.to_path_buf(),
-            system: inputs.system_path.cloned(),
-            max_steps: inputs.max_steps,
-        },
-    };
-
-    match std::fs::File::create(path) {
-        Ok(f) => {
-            if let Err(e) = serde_json::to_writer_pretty(f, &snapshot) {
-                error!("Failed to write snapshot {:?}: {}", path, e);
-            }
-        }
-        Err(e) => error!("Failed to create snapshot {:?}: {}", path, e),
-    }
-}
 fn main() -> ExitCode {
     let cli = Cli::parse();
 
@@ -2786,5 +2583,36 @@ mod tests {
         };
         let err = evaluate_uds_tester(&testers, &details).unwrap_err();
         assert!(err.contains("ghost-tester"), "missing id in: {err}");
+    }
+
+    #[test]
+    fn config_error_snapshot_keeps_serde_tag() {
+        let snapshot = crate::artifacts::Snapshot::ConfigError {
+            message: "invalid test config".to_string(),
+            stop_reason_details: crate::artifacts::StopReasonDetails {
+                triggered_stop_condition: StopReason::ConfigError,
+                triggered_limit: None,
+                observed: None,
+            },
+            limits: TestLimits {
+                max_steps: 1,
+                max_cycles: None,
+                max_uart_bytes: None,
+                no_progress_steps: None,
+                wall_time_ms: None,
+                max_vcd_bytes: None,
+                stop_when_assertions_pass: false,
+                stop_when_assertions_pass_settle_steps: 0,
+                stop_when_assertions_pass_min_steps: 0,
+            },
+            config: crate::artifacts::TestConfig {
+                firmware: std::path::PathBuf::from("firmware.elf"),
+                system: None,
+                script: std::path::PathBuf::from("test.yaml"),
+            },
+        };
+
+        let json = serde_json::to_value(snapshot).expect("snapshot should serialize");
+        assert_eq!(json["type"], "config_error");
     }
 }

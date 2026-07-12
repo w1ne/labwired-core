@@ -6,6 +6,7 @@
 
 //! `labwired machine` snapshot load/inspect.
 
+use crate::artifacts::Snapshot;
 use crate::*;
 
 pub(crate) fn run_machine_load(args: LoadArgs) -> ExitCode {

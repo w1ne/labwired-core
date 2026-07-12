@@ -6,6 +6,7 @@
 
 //! `labwired run` + interactive (gdb/dap) drivers across ARM / RISC-V / Xtensa.
 
+use crate::artifacts::{write_interactive_snapshot, InteractiveSnapshotInputs};
 use crate::*;
 
 /// Export the bus trace (logic analyzer) captured by `bus`, if
