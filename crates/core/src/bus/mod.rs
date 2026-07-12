@@ -3859,6 +3859,11 @@ mod tests {
         let i2c = any
             .downcast_mut::<crate::peripherals::esp32c3::i2c::Esp32c3I2c>()
             .expect("i2c0 must be the behavioral Esp32c3I2c controller");
+        // This test drives the bit engine directly via `tick_elapsed` (the
+        // legacy walk path) with no Machine event loop; pin it off the scheduler
+        // so the direct drive advances the engine (byte-identical to the
+        // scheduler path, which a Machine drives via `drain_scheduler_events`).
+        i2c.force_legacy_walk();
 
         // Drive the canonical register-pointer read of the BMP280 chip-id
         // (0xD0 → 0x58), exactly as C3 firmware would, through the controller's
@@ -3976,6 +3981,9 @@ mod tests {
         let i2c = any
             .downcast_mut::<crate::peripherals::esp32c3::i2c::Esp32c3I2c>()
             .expect("i2c0 must be the behavioral Esp32c3I2c controller");
+        // Direct `tick_elapsed` drive (legacy walk path), no Machine event loop:
+        // pin off the scheduler so the direct drive advances the engine.
+        i2c.force_legacy_walk();
 
         // 16-bit-addressed read of EEPROM word 0x2430: write the 2-byte big-
         // endian register address (0x24, 0x30), repeated-start, read 2 bytes

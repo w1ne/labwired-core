@@ -2723,6 +2723,20 @@ pub mod integration_tests {
         };
 
         let mut bus = crate::bus::SystemBus::from_config(&chip, &manifest).unwrap();
+        // This test drives the engine through the raw per-cycle bus walk
+        // (`tick_peripherals_fully`) with no Machine `drain_scheduler_events`
+        // loop; the walk skips scheduler-driven peripherals, so pin i2c0 to the
+        // legacy walk path (byte-identical) for the direct drive to advance it.
+        {
+            let idx = bus.find_peripheral_index_by_name("i2c0").unwrap();
+            bus.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .unwrap()
+                .downcast_mut::<crate::peripherals::esp32c3::i2c::Esp32c3I2c>()
+                .unwrap()
+                .force_legacy_walk();
+        }
 
         // Drive one command-list transaction: RSTART; WRITE 2 (addr+W 0x78,
         // control byte 0x00); STOP — the canonical SSD1306 command prologue.
@@ -2827,6 +2841,18 @@ pub mod integration_tests {
         // SSD1306 command prologue (RSTART; WRITE 2; STOP).
         let mut c3 = build_with_oled("esp32c3_i2c", None);
         const BASE: u64 = 0x4000_5400;
+        // Direct raw-bus-walk drive (no Machine scheduler drain): pin i2c0 to the
+        // legacy walk path so `tick_peripherals_fully` advances the engine.
+        {
+            let idx = c3.find_peripheral_index_by_name("i2c0").unwrap();
+            c3.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .unwrap()
+                .downcast_mut::<crate::peripherals::esp32c3::i2c::Esp32c3I2c>()
+                .unwrap()
+                .force_legacy_walk();
+        }
         let cmd = |opcode: u32, byte_num: u32| (opcode << 11) | byte_num;
         c3.write_u32(BASE + 0x58, cmd(6, 0)).unwrap(); // RSTART
         c3.write_u32(BASE + 0x58 + 4, cmd(1, 2)).unwrap(); // WRITE 2

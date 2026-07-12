@@ -30,9 +30,9 @@
 //!    (`uses_scheduler() == true`), and after the C3/ESP32 Class-A inert
 //!    sweep (`needs_legacy_walk() == false` on the verified-inert models) the
 //!    remaining pinners are EXACTLY the verified real workers
-//!    (i2c0 / ledc / spi2 / apb_saradc / wifi_mac), asserted as an
-//!    exact set so the campaign report stays honest. SYSTIMER is now
-//!    scheduler-driven (walk-free C3 SYSTIMER batch) and no longer pins.
+//!    (ledc / spi2 / apb_saradc / wifi_mac), asserted as an
+//!    exact set so the campaign report stays honest. SYSTIMER and I²C0 are now
+//!    scheduler-driven (walk-free C3 SYSTIMER + I²C0 batches) and no longer pin.
 
 #![cfg(feature = "event-scheduler")]
 
@@ -90,9 +90,15 @@ struct OledLab {
 /// Build the OLED lab exactly as the browser fast-start does. `rtc_legacy`
 /// selects the reference config (RTC main timer pinned back onto the
 /// per-cycle walk via `force_legacy_walk`); `systimer_legacy` does the same for
-/// the SYSTIMER (the FreeRTOS-tick source), so a walk-on-vs-scheduler
-/// differential can isolate the SYSTIMER migration.
-fn build_oled_lab(tick_interval: u32, rtc_legacy: bool, systimer_legacy: bool) -> OledLab {
+/// the SYSTIMER (the FreeRTOS-tick source) and `i2c0_legacy` for the I²C0
+/// bit-engine (the OLED bus master), so a walk-on-vs-scheduler differential can
+/// isolate each migration in turn.
+fn build_oled_lab(
+    tick_interval: u32,
+    rtc_legacy: bool,
+    systimer_legacy: bool,
+    i2c0_legacy: bool,
+) -> OledLab {
     let chip = ChipDescriptor::from_file(root().join("../../configs/chips/esp32c3.yaml"))
         .expect("load esp32c3 chip yaml");
     let manifest =
@@ -192,6 +198,20 @@ fn build_oled_lab(tick_interval: u32, rtc_legacy: bool, systimer_legacy: bool) -
         systimer.force_legacy_walk();
     }
 
+    if i2c0_legacy {
+        let idx = machine
+            .bus
+            .find_peripheral_index_by_name("i2c0")
+            .expect("oled bus registers i2c0");
+        machine.bus.peripherals[idx]
+            .dev
+            .as_any_mut()
+            .unwrap()
+            .downcast_mut::<Esp32c3I2c>()
+            .expect("i2c0 is the C3 command-list controller")
+            .force_legacy_walk();
+    }
+
     machine.config.peripheral_tick_interval = tick_interval;
     machine.bus.config.peripheral_tick_interval = tick_interval;
 
@@ -247,9 +267,10 @@ const MIN_LIT: usize = 400;
 #[test]
 #[ignore = "runs the real C3 bootloader + app (~2x30M steps); run with --release --ignored"]
 fn oled_lab_walk_on_vs_scheduler_rtc_is_byte_identical_at_interval_1() {
-    let (walk_cycles, walk_fb, walk_serial) = run_lab(build_oled_lab(1, true, false), PAINT_BUDGET);
+    let (walk_cycles, walk_fb, walk_serial) =
+        run_lab(build_oled_lab(1, true, false, false), PAINT_BUDGET);
     let (sched_cycles, sched_fb, sched_serial) =
-        run_lab(build_oled_lab(1, false, false), PAINT_BUDGET);
+        run_lab(build_oled_lab(1, false, false, false), PAINT_BUDGET);
 
     assert!(
         lit_pixels(&walk_fb) >= MIN_LIT,
@@ -280,8 +301,8 @@ fn oled_lab_walk_on_vs_scheduler_rtc_is_byte_identical_at_interval_1() {
 #[test]
 #[ignore = "runs the real C3 bootloader + app (~2x30M steps); run with --release --ignored"]
 fn oled_lab_framebuffer_is_byte_identical_across_tick_intervals() {
-    let (_, fb_1, _) = run_lab(build_oled_lab(1, false, false), PAINT_BUDGET);
-    let (_, fb_64, serial_64) = run_lab(build_oled_lab(64, false, false), PAINT_BUDGET);
+    let (_, fb_1, _) = run_lab(build_oled_lab(1, false, false, false), PAINT_BUDGET);
+    let (_, fb_64, serial_64) = run_lab(build_oled_lab(64, false, false, false), PAINT_BUDGET);
 
     assert!(
         lit_pixels(&fb_1) >= MIN_LIT,
@@ -314,9 +335,9 @@ fn oled_lab_systimer_walk_on_vs_scheduler_is_byte_identical() {
     for interval in [1u32, 64] {
         // reference: SYSTIMER on the legacy walk; test: SYSTIMER scheduler.
         let (walk_cycles, walk_fb, walk_serial) =
-            run_lab(build_oled_lab(interval, false, true), PAINT_BUDGET);
+            run_lab(build_oled_lab(interval, false, true, false), PAINT_BUDGET);
         let (sched_cycles, sched_fb, sched_serial) =
-            run_lab(build_oled_lab(interval, false, false), PAINT_BUDGET);
+            run_lab(build_oled_lab(interval, false, false, false), PAINT_BUDGET);
 
         assert!(
             lit_pixels(&walk_fb) >= MIN_LIT,
@@ -342,6 +363,67 @@ fn oled_lab_systimer_walk_on_vs_scheduler_is_byte_identical() {
              interval {interval}"
         );
     }
+}
+
+/// I²C0 walk-free gate (the fidelity contract for THIS batch): I²C0 is the OLED
+/// bus master — the SSD1306 GDDRAM is painted entirely through its bit-level
+/// command-list engine, so the framebuffer is the direct downstream observable
+/// of every module tick. Run the REAL demo with I²C0 on the legacy per-cycle
+/// walk (reference) vs scheduler-driven (self-perpetuating module-tick events
+/// routed through the C3 interrupt matrix), RTC + SYSTIMER scheduler in both so
+/// I²C0 is the only variable.
+///
+/// At interval 1 every observable must be BYTE-IDENTICAL: the module ticks fire
+/// at the same cycles, the slave sees the same byte boundaries and the same
+/// SDA/SCL waveform, so serial + total_cycles + framebuffer cannot differ. At
+/// interval 64 the framebuffer must ALSO be byte-identical: I²C0's bounded-stale
+/// `&self` register reads (SR.BUS_BUSY / INT_RAW polled between module-tick
+/// events) never change what the engine actually clocks onto the wire, so the
+/// painted OLED output is interval-independent. This is the cycle-exact identity
+/// that licenses un-pinning I²C0 from the walk.
+#[test]
+#[ignore = "runs the real C3 bootloader + app (~4x30M steps); run with --release --ignored"]
+fn oled_lab_i2c0_walk_on_vs_scheduler_is_byte_identical() {
+    // interval 1: full byte-identity (serial + total_cycles + framebuffer).
+    let (walk_cycles, walk_fb, walk_serial) =
+        run_lab(build_oled_lab(1, false, false, true), PAINT_BUDGET);
+    let (sched_cycles, sched_fb, sched_serial) =
+        run_lab(build_oled_lab(1, false, false, false), PAINT_BUDGET);
+
+    assert!(
+        lit_pixels(&walk_fb) >= MIN_LIT,
+        "reference (I²C0 walk) must paint the OLED at interval 1 (lit={}); serial:\n{}",
+        lit_pixels(&walk_fb),
+        String::from_utf8_lossy(&walk_serial)
+    );
+    assert_eq!(
+        walk_cycles, sched_cycles,
+        "total_cycles must be byte-identical (I²C0 walk vs scheduler) at interval 1"
+    );
+    assert!(
+        walk_serial == sched_serial,
+        "serial stream must be byte-identical (I²C0 walk vs scheduler) at interval 1\n\
+         --- walk ---\n{}\n--- sched ---\n{}",
+        String::from_utf8_lossy(&walk_serial),
+        String::from_utf8_lossy(&sched_serial)
+    );
+    assert!(
+        walk_fb == sched_fb,
+        "SSD1306 framebuffer must be byte-identical (I²C0 walk vs scheduler) at interval 1"
+    );
+
+    // interval 64: bounded-stale reads must leave the painted OLED unchanged.
+    let (_, walk_fb_64, _) = run_lab(build_oled_lab(64, false, false, true), PAINT_BUDGET);
+    let (_, sched_fb_64, _) = run_lab(build_oled_lab(64, false, false, false), PAINT_BUDGET);
+    assert!(
+        walk_fb_64 == sched_fb_64,
+        "SSD1306 framebuffer must be byte-identical (I²C0 walk vs scheduler) at interval 64 \
+         (bounded-stale reads must not change the painted OLED)"
+    );
+    assert!(
+        sched_fb_64 == sched_fb,
+        "I²C0 scheduler framebuffer must be interval-independent (interval 64 == interval 1)"
+    );
 }
 
 /// Task C gate: FROM_CPU IPI + INTC config writes re-aggregate the routed
@@ -420,7 +502,7 @@ fn oled_lab_native_mips_probe() {
         .unwrap_or(1);
     let systimer_legacy = std::env::var("LABWIRED_MIPS_SYSTIMER_LEGACY").as_deref() == Ok("1");
     const STEPS: u64 = 50_000_000;
-    let mut lab = build_oled_lab(interval, false, systimer_legacy);
+    let mut lab = build_oled_lab(interval, false, systimer_legacy, false);
     let start = std::time::Instant::now();
     let mut steps = 0u64;
     while steps < STEPS {
@@ -444,10 +526,9 @@ fn oled_lab_native_mips_probe() {
 /// the remaining pinners are EXACTLY the verified real workers — models whose
 /// tick genuinely mutates state or asserts a level IRQ from the walk:
 ///
-///   (`systimer` — the free-running counter + FreeRTOS tick alarm — is now
-///   scheduler-driven and no longer here.)
-///   - `i2c0` — bit-level wire engine advances mid-transfer in
-///     `tick_elapsed` (num/den module-clock fraction) + level IRQ;
+///   (`systimer` — the free-running counter + FreeRTOS tick alarm — and `i2c0`
+///   — the OLED bit-level wire engine — are now scheduler-driven and no longer
+///   here.)
 ///   - `ledc` — the four low-speed timers run as live up-counters clocked by
 ///     elapsed cycles (OVF latch) + level IRQ;
 ///   - `spi2` — `tick()` re-asserts the level interrupt source while
@@ -471,9 +552,9 @@ fn oled_lab_walk_pinners_after_rtc_migration() {
     /// newly marked `needs_legacy_walk() == false` or migrated to the
     /// scheduler must shrink this set; a model that starts pinning again is a
     /// regression.
-    const EXPECTED_PINNERS: &[&str] = &["apb_saradc", "i2c0", "ledc", "spi2", "wifi_mac"];
+    const EXPECTED_PINNERS: &[&str] = &["apb_saradc", "ledc", "spi2", "wifi_mac"];
 
-    let lab = build_oled_lab(1, false, false);
+    let lab = build_oled_lab(1, false, false, false);
     let bus = &lab.machine.bus;
 
     let mut pinners: Vec<&str> = Vec::new();

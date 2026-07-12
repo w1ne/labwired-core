@@ -80,7 +80,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use crate::peripherals::i2c::I2cDevice;
-use crate::{Peripheral, PeripheralTickResult, SimResult};
+use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 
 pub const I2C0_BASE: u32 = 0x6001_3000;
 pub const I2C0_SIZE: u64 = 0x1000;
@@ -153,6 +153,13 @@ pub const INT_END_DETECT: u32 = 1 << 3;
 pub const INT_TRANS_COMPLETE: u32 = 1 << 7;
 pub const INT_NACK: u32 = 1 << 10;
 const SCL_RST_SLV_EN: u32 = 1 << 0;
+
+/// Event-scheduler token: advance the bit engine by one I²C module-clock tick.
+/// The engine keeps exactly one such event in flight while a transaction is
+/// active (walk-free plan): `take_scheduled_events` bootstraps it from the
+/// `TRANS_START` write and `on_event` re-arms it at the next module tick until
+/// the engine parks. Opaque to the scheduler.
+const I2C_MODULE_TICK_TOKEN: u32 = 0;
 
 /// ESP32-C3 has 8 COMD slots at offsets 0x58..0x78 (COMD0..COMD7 in the yaml).
 const NUM_CMDS: usize = 8;
@@ -409,6 +416,26 @@ pub struct Esp32c3I2c {
     /// pads. Created lazily by [`Self::line_levels_arc`] at bus wiring time.
     lines: Option<Arc<I2cLineLevels>>,
 
+    /// Bus-published cycle clock (walk-free plan). `Some` once
+    /// `SystemBus::add_peripheral` attaches it. Its presence (under the
+    /// `event-scheduler` feature) flips the model onto the event scheduler:
+    /// the per-cycle walk skips it and the bit engine is driven by
+    /// self-perpetuating module-tick events instead. `None` (feature off, a
+    /// hand-built bus, or the differential's `force_legacy_walk`) keeps the
+    /// legacy per-cycle walk. Not serialized — re-attached by the bus.
+    clock: Option<CycleClock>,
+    /// CPU cycle the bit engine has been advanced to (scheduler mode anchor).
+    /// The write path (`sync_to`) and the module-tick event (`on_event`) both
+    /// advance the engine by `now - last_synced` and bump this, so the two
+    /// paths compose without double-counting elapsed cycles.
+    last_synced: u64,
+    /// `true` while exactly one module-tick event is in flight for this engine
+    /// (walk-free plan). Guards against re-bootstrapping a second event on a
+    /// later MMIO write while a transaction is already clocking: only
+    /// `take_scheduled_events` (no event in flight) may arm one, and `on_event`
+    /// re-arms the single successor. Mirrors the generic SPI `scheduled` gate.
+    scheduled: bool,
+
     // Config / timing registers — masked storage (reset values per C3 i2c0.yaml).
     reg_scl_low_period: u32,   // 0x00  reset 0x0000_0000  mask 0x0000_01FF
     reg_to: u32,               // 0x0C  reset 0x0000_0010  mask 0x0000_003F
@@ -453,6 +480,9 @@ impl Esp32c3I2c {
             expects_addr: true,
             engine: BitEngine::new(),
             lines: None,
+            clock: None,
+            last_synced: 0,
+            scheduled: false,
 
             reg_scl_low_period: 0x0000_0000,
             reg_to: 0x0000_0010,
@@ -705,17 +735,14 @@ impl Peripheral for Esp32c3I2c {
     /// module-clock ticks through the exact `num/den` fraction snapshotted at
     /// `TRANS_START`, so wire timing is independent of the peripheral tick
     /// interval the host chose.
+    ///
+    /// This is the LEGACY per-cycle walk path. In scheduler mode
+    /// ([`Self::uses_scheduler`] true) the walk skips this peripheral entirely
+    /// and the engine is driven by module-tick events instead; the guard keeps
+    /// a stray direct call from advancing the engine twice.
     fn tick_elapsed(&mut self, cycles: u64) -> PeripheralTickResult {
-        if self.engine_active() {
-            self.engine.acc += cycles.saturating_mul(self.engine.timing.den);
-            while self.engine.acc >= self.engine.timing.num {
-                self.engine.acc -= self.engine.timing.num;
-                self.module_tick();
-                if !self.engine_active() {
-                    self.engine.acc = 0;
-                    break;
-                }
-            }
+        if !self.uses_scheduler() {
+            self.advance_engine(cycles);
         }
         // LEVEL interrupt: assert the I2C0 source every tick while any enabled
         // INT bit is set, mirroring real silicon (INT_RAW stays asserted until
@@ -740,6 +767,98 @@ impl Peripheral for Esp32c3I2c {
 
     fn legacy_tick_dynamic(&self) -> bool {
         true
+    }
+
+    /// Walk-free plan: driven by the event scheduler once the bus has attached
+    /// its cycle clock (production `add_peripheral` always does, under the
+    /// `event-scheduler` feature). The per-cycle walk then skips this
+    /// peripheral; the bit engine advances via `sync_to` (write path) and
+    /// self-perpetuating module-tick events (`on_event`). Without a clock
+    /// (feature off, a hand-built bus, or `force_legacy_walk`) it stays on the
+    /// legacy walk so those callers keep the old exact semantics.
+    fn uses_scheduler(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    /// Anchor the bit engine to CPU cycle `now`, advancing it over the cycles
+    /// elapsed since the last sync. The bus calls this before every MMIO write
+    /// (so a `TRANS_START` / config / `INT_CLR` write observes the up-to-date
+    /// engine) and it composes with `on_event` through the shared `last_synced`
+    /// anchor without double-counting.
+    fn sync_to(&mut self, now: u64) {
+        if now > self.last_synced {
+            self.advance_engine(now - self.last_synced);
+            self.last_synced = now;
+        }
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        // Anchor at the clock's current value so cycles elapsed before attach
+        // (normally zero — attach happens at bus assembly) are not retroactively
+        // credited to the engine (mirrors the rtc_timer #516 re-anchor contract).
+        self.last_synced = clock.now();
+        self.clock = Some(clock);
+    }
+
+    /// C3 interrupt-matrix level: the I2C0 source while any enabled INT bit is
+    /// set — the exact condition `tick_elapsed` pushes on the legacy walk. In
+    /// scheduler mode the walk no longer re-emits it, so the bus re-derives the
+    /// level from here (`refresh_esp32c3_sched_sources`, polled on the event
+    /// path and the walk-tick aggregation) so the level-sensitive IRQ stays
+    /// routed and de-asserts the tick after firmware writes INT_CLR.
+    fn matrix_irq_sources(&self) -> Vec<u32> {
+        if self.int_raw & self.int_ena != 0 {
+            vec![self.intr_source_id]
+        } else {
+            Vec::new()
+        }
+    }
+
+    /// Bootstrap the single module-tick event when a transaction begins clocking
+    /// and none is in flight. The delay is relative to the just-synced anchor;
+    /// the bus converts it to the absolute deadline `anchor + 1 + delay`, so the
+    /// `- 1` here lands the first module tick exactly at `anchor +
+    /// cycles_to_next_module_tick` — the cycle the walk would fire it, at any
+    /// tick interval (the same anchor calibration the generic SPI engine uses).
+    /// `on_event` re-arms every subsequent tick.
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if self.engine_active() && !self.scheduled {
+            self.scheduled = true;
+            vec![(
+                self.cycles_to_next_module_tick().saturating_sub(1),
+                I2C_MODULE_TICK_TOKEN,
+            )]
+        } else {
+            Vec::new()
+        }
+    }
+
+    /// Fire one module tick at its exact cycle, then re-arm the successor while
+    /// the engine keeps clocking. Advancing to `sched.now()` via the shared
+    /// anchor is delta-based, so a drain that arrives a few cycles late (tick
+    /// interval > 1) or early (a stale event after an intervening write
+    /// re-anchored the engine) self-corrects — the accumulator only ever
+    /// consumes the true elapsed cycles. The reschedule delay carries no `- 1`:
+    /// the event path uses `sched.now() + delay` directly (no `+ 1` anchor
+    /// offset, unlike the write path).
+    fn on_event(
+        &mut self,
+        _event_token: u32,
+        sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        self.scheduled = false;
+        let now = sched.now();
+        if now > self.last_synced {
+            self.advance_engine(now - self.last_synced);
+            self.last_synced = now;
+        }
+        let mut res = crate::sched::EventResult::default();
+        if self.engine_active() {
+            res.reschedule_delay = Some(self.cycles_to_next_module_tick());
+            self.scheduled = true;
+        }
+        res
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {
@@ -889,6 +1008,52 @@ impl Esp32c3I2c {
         self.set_lines(scl, sda);
         self.engine.state = state;
         self.engine.ticks_left = ticks;
+    }
+
+    /// Advance the bit engine by `cycles` engine cycles, firing module ticks as
+    /// the `num/den` accumulator crosses. Shared by BOTH drive paths: the
+    /// legacy per-cycle walk ([`Self::tick_elapsed`]) and the scheduler
+    /// (`sync_to`/`on_event`). The accumulator is in units of `1/den` engine
+    /// cycles; the invariant `acc < num` holds on entry and exit (the `while`
+    /// drains it), so the same cycle→module-tick mapping applies whether one
+    /// cycle or a whole batch is advanced in a single call — the source of the
+    /// walk-vs-scheduler byte-identity.
+    fn advance_engine(&mut self, cycles: u64) {
+        if !self.engine_active() {
+            return;
+        }
+        self.engine.acc += cycles.saturating_mul(self.engine.timing.den);
+        while self.engine.acc >= self.engine.timing.num {
+            self.engine.acc -= self.engine.timing.num;
+            self.module_tick();
+            if !self.engine_active() {
+                self.engine.acc = 0;
+                break;
+            }
+        }
+    }
+
+    /// Engine cycles until the accumulator next reaches `num` — i.e. until the
+    /// next module tick fires, from the current (post-`advance_engine`,
+    /// `acc < num`) state. `ceil((num - acc) / den)`, always ≥ 1 while the
+    /// engine is active (`num/den` ≥ 4). Undefined (returns 0) when parked; only
+    /// called while `engine_active()`.
+    fn cycles_to_next_module_tick(&self) -> u64 {
+        if !self.engine_active() {
+            return 0;
+        }
+        let num = self.engine.timing.num;
+        let den = self.engine.timing.den.max(1);
+        // acc < num invariant → num - acc ≥ 1.
+        (num - self.engine.acc).div_ceil(den)
+    }
+
+    /// Test/differential knob: detach the cycle clock, pinning the model to the
+    /// legacy per-cycle walk (`uses_scheduler() == false`). Used by the
+    /// walk-on-vs-scheduler differential gate to build the reference config from
+    /// the same bus assembly (mirrors `Esp32c3RtcTimer::force_legacy_walk`).
+    pub fn force_legacy_walk(&mut self) {
+        self.clock = None;
     }
 
     /// One I²C module-clock tick.
