@@ -470,6 +470,95 @@ impl WasmSimulator {
         )))
     }
 
+    /// Return the SH1107 GDDRAM framebuffer for the device identified by `device_id`.
+    ///
+    /// `device_id` must match a `board_io` binding with `device_type: "oled-sh1107"`.
+    /// Returns a 2048-byte `Uint8Array` (128 columns × 16 pages, page-major) — the
+    /// same bit layout as the SSD1306, just twice as tall (128 rows).
+    /// Returns a JS error if the device is not found.
+    #[wasm_bindgen]
+    pub fn get_sh1107_framebuffer(&self, device_id: &str) -> Result<Box<[u8]>, JsValue> {
+        let machine = self.machine.as_ref().unwrap();
+
+        let binding = self
+            .board_io
+            .iter()
+            .find(|b| b.id == device_id && b.device_type.as_deref() == Some("oled-sh1107"))
+            .ok_or_else(|| {
+                JsValue::from_str(&format!("No oled-sh1107 board_io binding '{}'", device_id))
+            })?;
+
+        let idx = machine
+            .bus
+            .find_peripheral_index_by_name(&binding.peripheral)
+            .ok_or_else(|| {
+                JsValue::from_str(&format!(
+                    "I2C peripheral '{}' not found",
+                    binding.peripheral
+                ))
+            })?;
+
+        let any = machine.bus.peripherals[idx]
+            .dev
+            .as_any()
+            .ok_or_else(|| JsValue::from_str("Peripheral does not support downcasting"))?;
+
+        let address = binding.i2c_address.unwrap_or(0x3C);
+
+        // Same multi-controller enumeration as the SSD1306 accessor: the SH1107
+        // can sit on the generic STM32 `I2c` or either ESP32 command-list bus, so
+        // all three must be walked or the panel renders blank in the playground.
+        if let Some(i2c) = any.downcast_ref::<labwired_core::peripherals::i2c::I2c>() {
+            for device in i2c.attached_devices() {
+                let device = device.borrow();
+                if device.address() != address {
+                    continue;
+                }
+                if let Some(oled) = device.as_any().and_then(|any| {
+                    any.downcast_ref::<labwired_core::peripherals::components::Sh1107>()
+                }) {
+                    return Ok(oled.framebuffer().to_vec().into_boxed_slice());
+                }
+            }
+        } else if let Some(c3) =
+            any.downcast_ref::<labwired_core::peripherals::esp32c3::i2c::Esp32c3I2c>()
+        {
+            for device in c3.attached_slaves() {
+                if device.address() != address {
+                    continue;
+                }
+                if let Some(oled) = device.as_any().and_then(|any| {
+                    any.downcast_ref::<labwired_core::peripherals::components::Sh1107>()
+                }) {
+                    return Ok(oled.framebuffer().to_vec().into_boxed_slice());
+                }
+            }
+        } else if let Some(s3) =
+            any.downcast_ref::<labwired_core::peripherals::esp32s3::i2c::Esp32s3I2c>()
+        {
+            for device in s3.attached_slaves() {
+                if device.address() != address {
+                    continue;
+                }
+                if let Some(oled) = device.as_any().and_then(|any| {
+                    any.downcast_ref::<labwired_core::peripherals::components::Sh1107>()
+                }) {
+                    return Ok(oled.framebuffer().to_vec().into_boxed_slice());
+                }
+            }
+        } else {
+            return Err(JsValue::from_str(&format!(
+                "Peripheral '{}' is not an I2C controller",
+                binding.peripheral
+            )));
+        }
+
+        Err(JsValue::from_str(&format!(
+            "SH1107 device at address 0x{:02x} not found on '{}'",
+            address, binding.peripheral
+        )))
+    }
+
     /// Return the ILI9341 RGB565 framebuffer for the device identified by `device_id`.
     ///
     /// `device_id` must match a `board_io` binding with `device_type: "ili9341"`.
