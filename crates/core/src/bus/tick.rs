@@ -142,6 +142,15 @@ impl SystemBus {
         if let Some((dma_name, channel)) = target_dma {
             if let Some(p_idx) = self.find_peripheral_index_by_name(dma_name) {
                 self.peripherals[p_idx].dev.dma_request(channel);
+                // Walk-free B4: a routed request makes the channel active. On a
+                // scheduler-driven DMA (walk-skipped) the transfer has to ride
+                // an event, so harvest the freshly-armed element event into
+                // `pending_schedule` at deadline `current_cycle + 1` — the exact
+                // cycle the legacy walk's next tick would have serviced it. No-op
+                // for a legacy-walk DMA (`collect_scheduled_events` guards on
+                // `uses_scheduler()`), so the walk path is unchanged.
+                #[cfg(feature = "event-scheduler")]
+                self.collect_scheduled_events(p_idx);
             }
         }
     }
@@ -996,14 +1005,21 @@ mod walk_free_campaign {
     use labwired_config::{ChipDescriptor, SystemManifest};
     use std::path::PathBuf;
 
-    /// Walk-forcing ids on the runtime invaders bus after B2/B3 (event-
-    /// scheduler builds): B1's 20 minus the 11 `tim*` (scheduler-migrated —
-    /// lazy CNT/SR + scheduled update/compare events) = 9 — the plan's
-    /// remaining Class-B: 2 dma + 3 i2c + adc + exti + bxcan (8) + the core
-    /// DWT.
+    /// Walk-forcing ids on the runtime invaders bus after B4 (event-scheduler
+    /// builds): B2/B3's 9 minus the 2 `dma*` (scheduler-migrated — per-channel
+    /// element event chains, delay-1 mem2mem self-pacing, request-armed via the
+    /// `route_dma_signal` hook) = 7. The 3 `i2c*` STAY on the walk: their F1/L4/
+    /// Kinetis transaction engines are driven by `&self`-read side effects
+    /// (`rxne_consumed` / `read_dr_consumed` / the Kinetis `D` read) that arm
+    /// subsequent IRQ-raising state transitions, and the bus read path is
+    /// `&self` (cannot schedule events) with event arming only on writes — so a
+    /// per-byte receive IRQ cannot be delivered through the event path without
+    /// dropping it or overrunning the read-gated byte stream (a fidelity loss).
+    /// Per the non-negotiable fidelity rule, I2C stays on the legacy walk. The
+    /// remaining plan Class-B: 3 i2c + adc + exti + bxcan (6) + the core DWT.
     #[cfg(feature = "event-scheduler")]
     const EXPECTED_WALK_FORCING: &[&str] = &[
-        "dma1", "dma2", "i2c1", "i2c2", "i2c3", "adc1", "exti", "can1", "dwt",
+        "i2c1", "i2c2", "i2c3", "adc1", "exti", "can1", "dwt",
     ];
 
     /// Featureless builds: the scheduler does not exist, so SysTick and SCB
@@ -1061,13 +1077,13 @@ mod walk_free_campaign {
 
     #[test]
     fn remaining_class_b_walkers_still_pin_walk_deletion() {
-        // DMA/I2C/ADC/EXTI/bxCAN (+DWT) still force the walk, so B2/B3
+        // I2C/ADC/EXTI/bxCAN (+DWT) still force the walk, so B4
         // cannot flip the invaders bus yet: the derivation must stay
         // conservative until every Class-B walker is migrated.
         let bus = invaders_bus_walk_stripped();
         assert!(
             !bus.derive_walk_deletable(),
-            "invaders bus became walk-deletable after B2/B3, but Class-B walkers remain — \
+            "invaders bus became walk-deletable after B4, but Class-B walkers remain — \
              each batch must be honest bookkeeping with no premature walk deletion"
         );
     }
