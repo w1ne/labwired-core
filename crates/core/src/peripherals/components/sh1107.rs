@@ -344,8 +344,8 @@ mod tests {
             dev.write(b);
         }
         dev.stop();
-        assert_eq!(dev.framebuffer()[0 * WIDTH + 5], 0x11);
-        assert_eq!(dev.framebuffer()[1 * WIDTH + 5], 0x22);
+        assert_eq!(dev.framebuffer()[5], 0x11);
+        assert_eq!(dev.framebuffer()[WIDTH + 5], 0x22);
         assert_eq!(dev.framebuffer()[2 * WIDTH + 5], 0x33);
     }
 }
