@@ -335,7 +335,8 @@ fn oled_lab_walk_on_vs_scheduler_rtc_is_byte_identical_at_interval_1() {
 #[ignore = "runs the real C3 bootloader + app (~2x30M steps); run with --release --ignored"]
 fn oled_lab_framebuffer_is_byte_identical_across_tick_intervals() {
     let (_, fb_1, _) = run_lab(build_oled_lab(1, false, false, false, false), PAINT_BUDGET);
-    let (_, fb_64, serial_64) = run_lab(build_oled_lab(64, false, false, false, false), PAINT_BUDGET);
+    let (_, fb_64, serial_64) =
+        run_lab(build_oled_lab(64, false, false, false, false), PAINT_BUDGET);
 
     assert!(
         lit_pixels(&fb_1) >= MIN_LIT,
@@ -367,10 +368,14 @@ fn oled_lab_framebuffer_is_byte_identical_across_tick_intervals() {
 fn oled_lab_systimer_walk_on_vs_scheduler_is_byte_identical() {
     for interval in [1u32, 64] {
         // reference: SYSTIMER on the legacy walk; test: SYSTIMER scheduler.
-        let (walk_cycles, walk_fb, walk_serial) =
-            run_lab(build_oled_lab(interval, false, true, false, false), PAINT_BUDGET);
-        let (sched_cycles, sched_fb, sched_serial) =
-            run_lab(build_oled_lab(interval, false, false, false, false), PAINT_BUDGET);
+        let (walk_cycles, walk_fb, walk_serial) = run_lab(
+            build_oled_lab(interval, false, true, false, false),
+            PAINT_BUDGET,
+        );
+        let (sched_cycles, sched_fb, sched_serial) = run_lab(
+            build_oled_lab(interval, false, false, false, false),
+            PAINT_BUDGET,
+        );
 
         assert!(
             lit_pixels(&walk_fb) >= MIN_LIT,

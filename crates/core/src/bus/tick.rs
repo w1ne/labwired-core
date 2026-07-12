@@ -1283,7 +1283,8 @@ mod c3_level_peripheral_matrix_routing {
         let mut bus = SystemBus::from_config(&chip, &manifest).expect("build c3 devkit bus");
         bus.esp32c3_irq_routing = true;
         bus.refresh_peripheral_index();
-        bus.write_u32(INTMATRIX + (source as u64) * 4, LINE).unwrap();
+        bus.write_u32(INTMATRIX + (source as u64) * 4, LINE)
+            .unwrap();
         bus.write_u32(INTMATRIX + 0x114 + (LINE as u64) * 4, 1)
             .unwrap();
         bus.write_u32(INTMATRIX + 0x194, 1).unwrap();
