@@ -69,6 +69,25 @@ jobs:
       - name: Unit tests (no fixtures)
         run: cargo test --workspace --lib
 
+      # Scheduler-driven interrupt delivery, all three MCU fabrics. This lane
+      # (event-scheduler + jit) previously ran ONLY in core-full, which is how an
+      # ESP32-S3 intmatrix scheduler-delivery hole stayed hidden. These targeted
+      # differential gates (hand-built machines, NO firmware fixtures) pin
+      # walk-vs-scheduler IRQ delivery cycle-for-cycle for the Xtensa intmatrix
+      # (S3), the RISC-V matrix (C3) and the Cortex-M NVIC, so a silent
+      # scheduler-delivery regression on any fabric fails the PR gate. `--lib`
+      # re-runs the labwired-core unit tests under the feature (systimer alarm /
+      # scheduler drain coverage). Fast: the tests run in ~1s; the cost is the
+      # one-time feature-variant compile (shared cache).
+      - name: Feature gate — scheduler IRQ delivery (jit + event-scheduler)
+        run: >
+          cargo test -p labwired-core --features jit,event-scheduler
+          --test intmatrix_alarm
+          --test esp32s3_walk_differential
+          --test esp32c3_walk_differential
+          --test stm32_timer_walk_differential
+          --lib
+
   # ── Full suite (NOT a PR gate) ─────────────────────────────────────────────
   # Builds firmware fixtures, runs the complete workspace tests, the host-only
   # feature lanes, and the Tier-1 matrix + ratchet. This is expensive, so keep it

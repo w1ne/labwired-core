@@ -1698,19 +1698,28 @@ impl<C: Cpu> Machine<C> {
     fn drain_scheduler_events(&mut self) {
         // One-time bootstrap: give every scheduler-driven peripheral a chance
         // to schedule events that arise from *setup* rather than an MMIO write
-        // (e.g. a UART with an RX stream attached before firmware runs). The
-        // returned delays are relative to the peripheral's un-synced state at
-        // cycle `total_cycles`, so the absolute deadline is `total_cycles +
-        // delay` (no +1: unlike the write path there is no "next drain" skew —
-        // this drain is the one converting them).
+        // (e.g. a UART with an RX stream attached before firmware runs, or a
+        // SYSTIMER whose alarm was configured before `run()` started). The
+        // absolute deadline is `total_cycles + delay`, which is only exact if
+        // the returned delay is measured from `total_cycles` — but a peripheral
+        // is anchored at ATTACH (cycle 0) and the first drain can run after the
+        // batch loop has already advanced `total_cycles` (in `run()` the first
+        // batch executes one instruction before this drain). Sync each
+        // peripheral up to `total_cycles` FIRST so its delay is genuinely
+        // relative to now; without this the first scheduled event lands one (or
+        // up to one tick-interval) cycle late versus the legacy per-cycle walk —
+        // the exact off-by-one the ESP32-S3 `intmatrix_alarm`/walk-differential
+        // gate caught on a pre-`run()` alarm config. `sync_to` is idempotent at
+        // cycle 0 (no-op) and the same call the write path already makes, so
+        // steady-state behaviour is unchanged.
         if !self.scheduler_bootstrapped {
             self.scheduler_bootstrapped = true;
+            let now = self.total_cycles;
             for idx in 0..self.bus.peripherals.len() {
                 if self.bus.peripherals[idx].dev.uses_scheduler() {
+                    self.bus.peripherals[idx].dev.sync_to(now);
                     for (delay, token) in self.bus.peripherals[idx].dev.take_scheduled_events() {
-                        self.bus
-                            .pending_schedule
-                            .push((idx, self.total_cycles + delay, token));
+                        self.bus.pending_schedule.push((idx, now + delay, token));
                     }
                 }
             }
@@ -1810,20 +1819,20 @@ impl<C: Cpu> Machine<C> {
                 self.bus.pend_irq_for_event(irq, &mut fallthrough);
             }
         }
-        // ESP32-C3 interrupt-matrix routing arm — beside the Cortex-M
-        // `system_exception` arm below (B1's SysTick path). C3 peripheral IRQs
-        // do NOT go through an NVIC; they assert a LEVEL-sensitive matrix source
-        // that the per-cycle walk normally re-emits each tick. A scheduler-
-        // driven SYSTIMER is skipped by the walk, so the event path owns its
-        // level: re-derive every scheduler-driven peripheral's live matrix
-        // sources (`matrix_irq_sources`) and fold them into `riscv_irq_lines`
-        // here, at the exact firing cycle. `pend_irq_for_event` (NVIC) would
-        // mis-route a matrix source ID as a Cortex-M exception on RISC-V, so the
-        // NVIC path is taken only on non-C3 buses.
-        if self.bus.esp32c3_irq_routing {
-            self.bus.refresh_esp32c3_sched_sources();
-            self.bus.recompute_esp32c3_irq_lines();
-        } else {
+        // Scheduler-driven interrupt delivery — ONE per-fabric choke. A
+        // scheduler-driven peripheral (e.g. the SYSTIMER alarm) is skipped by
+        // the per-cycle walk, so the event path owns delivery of its
+        // LEVEL-sensitive source at the exact firing cycle. Every MCU family
+        // follows the same shape behind `deliver_scheduled_irq_levels`:
+        //   * ESP32-C3 (RISC-V matrix)  → re-derive `matrix_irq_sources` into
+        //     `riscv_irq_lines`;
+        //   * ESP32-S3 (Xtensa intmatrix) → re-derive into `pending_cpu_irqs` +
+        //     the intmatrix INTR_STATUS mirror.
+        // A matrix source ID must NEVER be pended as a Cortex-M NVIC exception
+        // (`pend_irq_for_event` would mis-route it), so the NVIC fallthrough is
+        // taken only when no matrix fabric claimed delivery (the Cortex-M /
+        // nRF SysTick + own-line path).
+        if !self.bus.deliver_scheduled_irq_levels() {
             for irq in &result.explicit_irqs {
                 self.bus.pend_irq_for_event(*irq, &mut fallthrough);
             }

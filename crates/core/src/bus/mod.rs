@@ -300,6 +300,24 @@ pub struct SystemBus {
     /// each chip model owns its own interrupt abstraction.
     pub esp32s3_irq_routing: bool,
     esp32s3_intmatrix_idx: Option<usize>,
+    /// Bitmap (128 sources) of the intmatrix source IDs asserted by the most
+    /// recent peripheral WALK tick (`explicit_irqs`, e.g. a not-yet-migrated
+    /// timer_group source). Persisted — mirror of C3's `esp32c3_asserted_sources`
+    /// — so the event path (`recompute_esp32s3_irq_lines`) can re-derive the
+    /// routed `pending_cpu_irqs` + intmatrix INTR_STATUS mirror from the union of
+    /// walk + scheduler levels without dropping a concurrent walk source. Level
+    /// semantics: rebuilt from scratch each walk tick, so a source that stops
+    /// asserting drops out at the next tick boundary.
+    esp32s3_asserted_sources: [u64; 2],
+    /// S3 intmatrix sources asserted by SCHEDULER-driven peripherals (the
+    /// SYSTIMER alarm once migrated off the walk). The per-cycle walk skips
+    /// scheduler-driven peripherals, so their level would never reach the
+    /// intmatrix; this bitmap is re-derived from `Peripheral::matrix_irq_sources`
+    /// at the event path (`apply_event_result` → `deliver_scheduled_irq_levels`)
+    /// and the walk-tick aggregation, and UNIONED with `esp32s3_asserted_sources`
+    /// in `recompute_esp32s3_irq_lines`. Same level semantics as the C3 field, so
+    /// delivery matches the legacy walk cycle-for-cycle at a given tick interval.
+    esp32s3_sched_asserted_sources: [u64; 2],
     /// True when a FLASH peripheral on this bus models hardware operations
     /// (H5 sector erase / bank swap) as pending ops that the machine layer must
     /// drain and apply per instruction. Cached in `rebuild_peripheral_ranges`
@@ -2541,6 +2559,8 @@ impl SystemBus {
             esp32c3_sched_asserted_sources: [0; 2],
             esp32s3_irq_routing: false,
             esp32s3_intmatrix_idx: None,
+            esp32s3_asserted_sources: [0; 2],
+            esp32s3_sched_asserted_sources: [0; 2],
             flash_models_ops: false,
             nordic_gpio_service: false,
             hcsr04_scheduling_disabled: false,
@@ -2599,6 +2619,8 @@ impl SystemBus {
             esp32c3_sched_asserted_sources: [0; 2],
             esp32s3_irq_routing: false,
             esp32s3_intmatrix_idx: None,
+            esp32s3_asserted_sources: [0; 2],
+            esp32s3_sched_asserted_sources: [0; 2],
             flash_models_ops: false,
             nordic_gpio_service: false,
             hcsr04_scheduling_disabled: false,
@@ -5056,6 +5078,8 @@ peripherals:
             esp32c3_sched_asserted_sources: [0; 2],
             esp32s3_irq_routing: false,
             esp32s3_intmatrix_idx: None,
+            esp32s3_asserted_sources: [0; 2],
+            esp32s3_sched_asserted_sources: [0; 2],
             flash_models_ops: false,
             nordic_gpio_service: false,
             hcsr04_scheduling_disabled: false,
@@ -5138,6 +5162,8 @@ peripherals:
             esp32c3_sched_asserted_sources: [0; 2],
             esp32s3_irq_routing: false,
             esp32s3_intmatrix_idx: None,
+            esp32s3_asserted_sources: [0; 2],
+            esp32s3_sched_asserted_sources: [0; 2],
             flash_models_ops: false,
             nordic_gpio_service: false,
             hcsr04_scheduling_disabled: false,
@@ -5371,6 +5397,8 @@ peripherals:
             esp32c3_sched_asserted_sources: [0; 2],
             esp32s3_irq_routing: false,
             esp32s3_intmatrix_idx: None,
+            esp32s3_asserted_sources: [0; 2],
+            esp32s3_sched_asserted_sources: [0; 2],
             flash_models_ops: false,
             nordic_gpio_service: false,
             hcsr04_scheduling_disabled: false,
@@ -5603,6 +5631,8 @@ peripherals:
             esp32c3_sched_asserted_sources: [0; 2],
             esp32s3_irq_routing: false,
             esp32s3_intmatrix_idx: None,
+            esp32s3_asserted_sources: [0; 2],
+            esp32s3_sched_asserted_sources: [0; 2],
             flash_models_ops: false,
             nordic_gpio_service: false,
             hcsr04_scheduling_disabled: false,
@@ -5689,6 +5719,8 @@ peripherals:
             esp32c3_sched_asserted_sources: [0; 2],
             esp32s3_irq_routing: false,
             esp32s3_intmatrix_idx: None,
+            esp32s3_asserted_sources: [0; 2],
+            esp32s3_sched_asserted_sources: [0; 2],
             flash_models_ops: false,
             nordic_gpio_service: false,
             hcsr04_scheduling_disabled: false,

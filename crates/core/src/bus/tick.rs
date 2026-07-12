@@ -632,6 +632,19 @@ impl SystemBus {
         if !self.esp32c3_irq_routing {
             return;
         }
+        self.esp32c3_sched_asserted_sources = self.poll_scheduler_matrix_sources();
+    }
+
+    /// Shared per-fabric primitive: the interrupt-matrix source-ID bitmap
+    /// asserted RIGHT NOW by every SCHEDULER-driven peripheral on the bus
+    /// (`uses_scheduler()` models, polled via `Peripheral::matrix_irq_sources`).
+    /// Fabric-independent — the C3 (RISC-V matrix) and S3 (Xtensa intmatrix)
+    /// refresh methods both derive their per-fabric `*_sched_asserted_sources`
+    /// bitmap from this ONE poll, so the two fabrics share identical
+    /// level-derivation semantics (rebuilt from scratch → a source that stops
+    /// asserting drops out on the next poll) and only their storage/routing
+    /// differ. Sources ≥ 128 (none on either SoC) are ignored.
+    fn poll_scheduler_matrix_sources(&self) -> [u64; 2] {
         let mut asserted = [0u64; 2];
         for p in &self.peripherals {
             if !p.dev.uses_scheduler() {
@@ -644,7 +657,105 @@ impl SystemBus {
                 }
             }
         }
-        self.esp32c3_sched_asserted_sources = asserted;
+        asserted
+    }
+
+    /// ESP32-S3 twin of [`Self::refresh_esp32c3_sched_sources`]: re-derive the
+    /// intmatrix sources asserted by scheduler-driven peripherals (the SYSTIMER
+    /// alarm once migrated off the walk) into the persistent
+    /// `esp32s3_sched_asserted_sources` bitmap. Rebuilt from scratch each call
+    /// (level semantics), so a source drops out the poll after firmware writes
+    /// INT_CLR. Called from the event path (`deliver_scheduled_irq_levels`,
+    /// exact-cycle delivery) and the walk-tick aggregation (steady-state
+    /// persistence + de-assert). No-op unless the S3 intmatrix is registered.
+    pub(crate) fn refresh_esp32s3_sched_sources(&mut self) {
+        if !self.esp32s3_irq_routing {
+            return;
+        }
+        self.esp32s3_sched_asserted_sources = self.poll_scheduler_matrix_sources();
+    }
+
+    /// Rebuild the ESP32-S3 routed `pending_cpu_irqs` bitmap (per core) and the
+    /// intmatrix `INTR_STATUS` mirror from the UNION of the walk-emitted level
+    /// sources (`esp32s3_asserted_sources`, rebuilt each walk tick) and the
+    /// scheduler-driven levels (`esp32s3_sched_asserted_sources`, re-derived
+    /// from `matrix_irq_sources`). The S3 twin of
+    /// [`Self::recompute_esp32c3_irq_lines`]: the single aggregation body shared
+    /// by the per-tick walk pass (`aggregate_esp32s3_explicit_irqs`) and the
+    /// event-path choke (`deliver_scheduled_irq_levels`), so both produce an
+    /// identical routed bitmap from identical inputs. esp-hal's
+    /// `__level_*_interrupt` reads INTR_STATUS to discover which source fired, so
+    /// the mirror must see the same union as the routed bits. No-op unless the S3
+    /// intmatrix is registered.
+    pub(crate) fn recompute_esp32s3_irq_lines(&mut self) {
+        let Some(intmatrix_idx) = self.esp32s3_intmatrix_idx else {
+            return;
+        };
+        if !self.esp32s3_irq_routing {
+            return;
+        }
+        let mut routed = [0u32; 2];
+        let mut intr_status = [0u32; 4];
+        for word in 0..self.esp32s3_asserted_sources.len() {
+            let mut bits =
+                self.esp32s3_asserted_sources[word] | self.esp32s3_sched_asserted_sources[word];
+            while bits != 0 {
+                let bit = bits.trailing_zeros();
+                let source_id = word as u32 * 64 + bit;
+                bits &= !(1u64 << bit);
+                // Route each asserting source through BOTH cores' map tables;
+                // a source delivers to whichever core(s) bound it (the SMP
+                // cross-core IPI relies on this: source 79 → core 0, 80 → core 1).
+                if let Some(slot) = self.route_irq_source_to_cpu_irq_core(source_id, 0) {
+                    routed[0] |= 1u32 << slot;
+                }
+                if let Some(slot) = self.route_irq_source_to_cpu_irq_core(source_id, 1) {
+                    routed[1] |= 1u32 << slot;
+                }
+                // Mirror into PRO_INTR_STATUS_REG_n so esp-hal's
+                // __level_*_interrupt can discover which source asserted.
+                let reg = (source_id / 32) as usize;
+                if reg < intr_status.len() {
+                    intr_status[reg] |= 1u32 << (source_id & 31);
+                }
+            }
+        }
+        self.pending_cpu_irqs = routed;
+        if let Some(any) = self.peripherals[intmatrix_idx].dev.as_any_mut() {
+            if let Some(matrix) =
+                any.downcast_mut::<crate::peripherals::esp32s3::intmatrix::Esp32s3IntMatrix>()
+            {
+                matrix.set_pending_sources(intr_status);
+            }
+        }
+    }
+
+    /// The ONE per-fabric choke the event path uses to deliver a scheduler-
+    /// driven peripheral's level-sensitive IRQ at its exact firing cycle. Every
+    /// MCU family follows the SAME shape (poll `matrix_irq_sources` → fold the
+    /// level into the fabric's routed state); this method specialises only where
+    /// the interrupt fabric differs, and a new fabric slots in by adding ONE
+    /// branch here:
+    ///   * ESP32-C3 (RISC-V interrupt matrix) → `riscv_irq_lines`;
+    ///   * ESP32-S3 (Xtensa interrupt matrix) → `pending_cpu_irqs` + INTR_STATUS.
+    ///
+    /// Returns `true` when a matrix fabric handled delivery; `false` on an NVIC
+    /// bus (Cortex-M / nRF), where the caller pends the peripheral's explicit
+    /// lines through `pend_irq_for_event` instead (the classic ESP32 DPORT
+    /// fabric is a documented TODO — see the PR body).
+    #[cfg(feature = "event-scheduler")]
+    pub(crate) fn deliver_scheduled_irq_levels(&mut self) -> bool {
+        if self.esp32c3_irq_routing {
+            self.refresh_esp32c3_sched_sources();
+            self.recompute_esp32c3_irq_lines();
+            true
+        } else if self.esp32s3_irq_routing {
+            self.refresh_esp32s3_sched_sources();
+            self.recompute_esp32s3_irq_lines();
+            true
+        } else {
+            false
+        }
     }
 
     fn aggregate_esp32s3_explicit_irqs(&mut self, source_ids: &[u32]) {
@@ -666,42 +777,26 @@ impl SystemBus {
         // bus (ARM/RISC-V/nRF use the NVIC path and never read
         // `pending_cpu_irqs`) — return without touching any state so the
         // model stays fully self-contained and cannot influence other models.
-        let Some(intmatrix_idx) = self.esp32s3_intmatrix_idx else {
-            return;
-        };
-        if !self.esp32s3_irq_routing {
+        if self.esp32s3_intmatrix_idx.is_none() || !self.esp32s3_irq_routing {
             return;
         }
-        let mut routed = [0u32; 2];
-        let mut intr_status = [0u32; 4];
-        for &source_id in source_ids {
-            // Route each asserting source through BOTH cores' map tables;
-            // a source delivers to whichever core(s) bound it (the SMP
-            // cross-core IPI relies on this: source 79 → core 0, 80 → core 1).
-            if let Some(slot) = self.route_irq_source_to_cpu_irq_core(source_id, 0) {
-                routed[0] |= 1u32 << slot;
-            }
-            if let Some(slot) = self.route_irq_source_to_cpu_irq_core(source_id, 1) {
-                routed[1] |= 1u32 << slot;
-            }
-            // Mirror into PRO_INTR_STATUS_REG_n bitmap so esp-hal's
-            // __level_*_interrupt can discover which source asserted.
-            let reg = (source_id / 32) as usize;
-            let bit = source_id & 31;
-            if reg < intr_status.len() {
-                intr_status[reg] |= 1u32 << bit;
+        // Record the walk-emitted level sources asserting THIS tick (rebuilt
+        // from scratch → a de-asserting source drops out at the tick boundary),
+        // re-derive the scheduler-driven peripheral levels (the SYSTIMER alarm
+        // once migrated off the walk — skipped by the per-cycle walk, so the
+        // walk `source_ids` never carry it), then recompute the routed bitmap +
+        // INTR_STATUS mirror from the UNION via the shared body that the event
+        // path also uses. This is the S3 twin of `aggregate_esp32c3_irqs`.
+        let mut asserted = [0u64; 2];
+        for &src in source_ids {
+            let idx = (src / 64) as usize;
+            if idx < asserted.len() {
+                asserted[idx] |= 1u64 << (src % 64);
             }
         }
-        self.pending_cpu_irqs = routed;
-        // Push the live source-assertion bitmap into the intmatrix peripheral.
-        // No-op for buses without an intmatrix registered.
-        if let Some(any) = self.peripherals[intmatrix_idx].dev.as_any_mut() {
-            if let Some(matrix) =
-                any.downcast_mut::<crate::peripherals::esp32s3::intmatrix::Esp32s3IntMatrix>()
-            {
-                matrix.set_pending_sources(intr_status);
-            }
-        }
+        self.esp32s3_asserted_sources = asserted;
+        self.refresh_esp32s3_sched_sources();
+        self.recompute_esp32s3_irq_lines();
     }
 
     /// One DMA source-unit -> destination-unit copy with the STM32H5 GPDMA
