@@ -972,18 +972,21 @@ mod walk_free_campaign {
     //!
     //! Why `configure_cortex_m`: the Cortex-M core installs the *real* SCB and
     //! NVIC (the chip descriptor only carries inert placeholders for those ids)
-    //! and appends DWT (CYCCNT), which is not in the descriptor at all. SCB's
-    //! `tick()` drains software-pended exceptions and DWT's advances CYCCNT — both
-    //! real walk work. Omitting this step would hide SCB's real tick and DWT
-    //! entirely and under-report the surface, so the runtime-faithful bus is the
-    //! honest one to pin.
+    //! and appends DWT (CYCCNT), which is not in the descriptor at all. In a
+    //! featureless build SCB's `tick()` drains software-pended exceptions and
+    //! DWT's advances CYCCNT — both real walk work. Omitting this step would hide
+    //! SCB's real tick and DWT entirely and under-report the surface, so the
+    //! runtime-faithful bus is the honest one to pin. (Under `event-scheduler`,
+    //! `configure_cortex_m` attaches the bus cycle clock to DWT, migrating it to
+    //! the lazy-read scheduler path — see the cfg-split lists below.)
     //!
     //! After batch **B0** (Class-A inert sweep) the forcing set is the plan's 21
     //! Class-B instances still awaiting scheduler migration, PLUS the core DWT
     //! (a lazy-read CYCCNT counter the plan calls out separately as the purest
-    //! read-sync case). Each later batch (SysTick+SCB, timers, DMA, …) migrates a
-    //! slice onto the scheduler, flipping its `uses_scheduler()`, so this expected
-    //! set shrinks batch by batch. Keep it in lockstep with the plan's inventory.
+    //! read-sync case). Each later batch (SysTick+SCB, timers, DMA, the DWT
+    //! lazy-CYCCNT migration, …) moves a slice onto the scheduler, flipping its
+    //! `uses_scheduler()`, so this expected set shrinks batch by batch. Keep it
+    //! in lockstep with the plan's inventory.
     //!
     //! Batch **B1** (SysTick + SCB → scheduler) removes `systick` and `scb`
     //! from the forcing set — but only in `event-scheduler` builds:
@@ -996,14 +999,15 @@ mod walk_free_campaign {
     use labwired_config::{ChipDescriptor, SystemManifest};
     use std::path::PathBuf;
 
-    /// Walk-forcing ids on the runtime invaders bus after B2/B3 (event-
-    /// scheduler builds): B1's 20 minus the 11 `tim*` (scheduler-migrated —
-    /// lazy CNT/SR + scheduled update/compare events) = 9 — the plan's
-    /// remaining Class-B: 2 dma + 3 i2c + adc + exti + bxcan (8) + the core
-    /// DWT.
+    /// Walk-forcing ids on the runtime invaders bus after B2/B3 + the DWT
+    /// lazy-CYCCNT migration (event-scheduler builds): B1's 20 minus the 11
+    /// `tim*` (scheduler-migrated — lazy CNT/SR + scheduled update/compare
+    /// events) minus the core DWT (now a scheduler-driven lazy-read CYCCNT
+    /// counter — `configure_cortex_m` attaches the bus cycle clock) = 8 — the
+    /// plan's remaining Class-B: 2 dma + 3 i2c + adc + exti + bxcan.
     #[cfg(feature = "event-scheduler")]
     const EXPECTED_WALK_FORCING: &[&str] = &[
-        "dma1", "dma2", "i2c1", "i2c2", "i2c3", "adc1", "exti", "can1", "dwt",
+        "dma1", "dma2", "i2c1", "i2c2", "i2c3", "adc1", "exti", "can1",
     ];
 
     /// Featureless builds: the scheduler does not exist, so SysTick and SCB
