@@ -27,6 +27,7 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::bme280::BME280_KIT,
     &components::ssd1306::SSD1306_KIT,
     &components::ssd1306::SSD1306_128X32_KIT,
+    &components::sh1107::SH1107_KIT,
     &components::ili9341::ILI9341_KIT,
     &components::max31855::MAX31855_KIT,
     &components::ssd1680_tricolor_290::SSD1680_TRICOLOR_290_KIT,

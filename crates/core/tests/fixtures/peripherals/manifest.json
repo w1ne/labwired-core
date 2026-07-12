@@ -275,6 +275,23 @@
       "inputs": []
     },
     {
+      "device_type": "oled-sh1107",
+      "label": "SH1107 OLED",
+      "summary": "128×128 monochrome OLED display over I2C with a paged framebuffer.",
+      "detail": "Sino Wealth SH1107 128×128 OLED (e.g. the 1.5\" GME128128-01-IIC module) on the canonical 0x3C / 0x3D address pair. Tracks the 16-page-by-128-column framebuffer; the WASM bridge surfaces pixel state for the playground's display overlay.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x3C; 0x3D selects the SA0=high variant."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
       "device_type": "ili9341",
       "label": "ILI9341 TFT",
       "summary": "240×320 RGB565 SPI TFT display.",
