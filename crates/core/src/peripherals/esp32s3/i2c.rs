@@ -223,6 +223,16 @@ impl Esp32s3I2c {
         self.slaves.push(slave);
     }
 
+    /// Borrow the attached I²C slaves. Mirrors the generic `I2c::attached_devices`
+    /// and `Esp32c3I2c::attached_slaves` accessors so UI/inspection paths (e.g. the
+    /// SSD1306 framebuffer readback) can enumerate devices on the ESP32-S3
+    /// command-list controller the same way they do on the STM32 and ESP32-C3
+    /// controllers. Slaves are held directly (no `RefCell`) because the S3 engine
+    /// never hands out interior mutable references during a transaction.
+    pub fn attached_slaves(&self) -> &[Box<dyn I2cDevice>] {
+        &self.slaves
+    }
+
     fn fifo_status(&self) -> u32 {
         // Per ESP32-S3 PAC `i2c0::fifo_st`:
         //   bits  0..4  RXFIFO_RADDR
@@ -845,6 +855,72 @@ mod tests {
         assert_eq!(
             p.read_u32(REG_INT_RAW).unwrap() & INT_TRANS_COMPLETE,
             INT_TRANS_COMPLETE
+        );
+    }
+
+    /// Regression guard for the S3-OLED-blank-in-embed bug (the ESP32-S3 sibling
+    /// of the ESP32-C3 `leo_oled_i2c_readback` guard). The playground/embed reads
+    /// the OLED framebuffer through `WasmSimulator::get_ssd1306_framebuffer`, which
+    /// enumerates I²C slaves on the named controller. That accessor understood the
+    /// generic STM32 `I2c` and the `Esp32c3I2c`, but NOT the `Esp32s3I2c` — so an
+    /// SSD1306 on an S3 board returned "not an I2C controller" and rendered blank.
+    ///
+    /// This test drives a real GDDRAM write through the S3 command-list engine
+    /// (the exact register path firmware uses) and then reads the framebuffer back
+    /// through `attached_slaves()` — the accessor `inspect.rs` now downcasts to —
+    /// asserting the bytes are the real ones written, not a blank/zero fill.
+    #[test]
+    fn ssd1306_gddram_is_readable_through_esp32s3_i2c() {
+        use crate::peripherals::components::Ssd1306;
+
+        let mut p = Esp32s3I2c::new();
+        p.push_slave(Box::new(Ssd1306::new(0x3C)));
+
+        // Single I²C write to the OLED: RSTART; WRITE 6; STOP.
+        // TX = [addr+W, control=0x40 (data stream), then four GDDRAM bytes].
+        // Default addressing mode is horizontal from (page 0, col 0), so the four
+        // data bytes land at gddram[0..4].
+        p.write_u32(REG_CMD0, cmd(CMD_RSTART, 0)).unwrap();
+        p.write_u32(REG_CMD0 + 4, cmd(CMD_WRITE, 6)).unwrap();
+        p.write_u32(REG_CMD0 + 8, cmd(CMD_STOP, 0)).unwrap();
+
+        p.write_u32(REG_DATA, 0x78).unwrap(); // 0x3C << 1 | W
+        p.write_u32(REG_DATA, 0x40).unwrap(); // Co=0, D/C#=1 → data stream
+        p.write_u32(REG_DATA, 0xFF).unwrap();
+        p.write_u32(REG_DATA, 0x3C).unwrap();
+        p.write_u32(REG_DATA, 0xAA).unwrap();
+        p.write_u32(REG_DATA, 0x55).unwrap();
+
+        p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
+        assert_eq!(
+            p.read_u32(REG_INT_RAW).unwrap() & INT_TRANS_COMPLETE,
+            INT_TRANS_COMPLETE,
+            "the OLED write transaction must complete on the S3 engine"
+        );
+
+        // The exact enumeration path `get_ssd1306_framebuffer` uses for the S3.
+        let oled = p
+            .attached_slaves()
+            .iter()
+            .filter(|d| d.address() == 0x3C)
+            .find_map(|d| d.as_any().and_then(|a| a.downcast_ref::<Ssd1306>()))
+            .expect("an SSD1306 must be reachable at 0x3C through Esp32s3I2c");
+
+        let fb = oled.framebuffer();
+        assert_eq!(
+            fb.len(),
+            1024,
+            "SSD1306 GDDRAM framebuffer must be 128x64/8 = 1024 bytes"
+        );
+        assert_eq!(
+            &fb[0..4],
+            &[0xFF, 0x3C, 0xAA, 0x55],
+            "readback must return the real bytes written through the S3 I2C engine"
+        );
+        assert_eq!(
+            oled.ink_bytes(),
+            4,
+            "exactly the four written bytes are lit"
         );
     }
 
