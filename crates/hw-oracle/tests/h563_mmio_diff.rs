@@ -1019,6 +1019,12 @@ fn sim_masked_read(sim: &mut SystemBus, case: &MmioCase) -> u32 {
             )
         });
     for _ in 0..case.settle_ticks {
+        // Advance the bus cycle clock alongside the walk (one cycle per
+        // tick), exactly as the Machine run loop does at tick interval 1:
+        // scheduler-driven models (the walk-free timers) derive their state
+        // lazily from the published clock instead of the walk.
+        let now = sim.current_cycle + 1;
+        sim.set_current_cycle(now);
         sim.tick_peripherals_fully();
     }
     let v = sim
@@ -1151,8 +1157,12 @@ mod hw {
         write_both(sim, oc, case.write.0, case.write.1);
         // Settle: the sim ticks its peripheral engines; silicon has been
         // running free since the write (each TCL round-trip is ~ms), so a
-        // matching settle on the hardware side is implicit.
+        // matching settle on the hardware side is implicit. The cycle clock
+        // advances alongside the walk (one cycle per tick) so scheduler-
+        // driven models (the walk-free timers) elapse the same time lazily.
         for _ in 0..case.settle_ticks {
+            let now = sim.current_cycle + 1;
+            sim.set_current_cycle(now);
             sim.tick_peripherals_fully();
         }
 

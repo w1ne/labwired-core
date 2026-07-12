@@ -103,8 +103,28 @@ impl SystemBus {
     /// handler. Mirrors the per-tick `pend_nvic` path but collects
     /// non-NVIC fallthroughs into the supplied vector for the caller to
     /// forward to `cpu.set_exception_pending`.
+    ///
+    /// Same-tick CPU visibility (walk-free B2/B3): the legacy walk pends
+    /// ISPR and scans ISPR&ISER into the CPU **in the same
+    /// `tick_peripherals` call**, so a walk-raised IRQ dispatches before the
+    /// very next instruction. The event drain runs after that scan, so an
+    /// event-raised IRQ left only in ISPR would become CPU-visible one tick
+    /// late. To keep event-path IRQ delivery cycle-identical to the walk,
+    /// an ISER-enabled pend is ALSO pushed into `fallthrough` as its
+    /// exception number (16 + position) for the caller's
+    /// `cpu.set_exception_pending` — exactly what the walk's same-tick NVIC
+    /// scan would have produced. A not-yet-enabled pend stays ISPR-only and
+    /// is picked up by the per-tick scan once firmware enables it (identical
+    /// to the walk).
     pub fn pend_irq_for_event(&self, irq: u32, fallthrough: &mut Vec<u32>) {
         pend_nvic(&self.nvic, fallthrough, irq);
+        if let Some(nvic) = &self.nvic {
+            let idx = (irq / 32) as usize;
+            let bit = irq % 32;
+            if idx < 8 && (nvic.iser[idx].load(Ordering::SeqCst) & (1 << bit)) != 0 {
+                fallthrough.push(16 + irq);
+            }
+        }
     }
 
     /// Route a peripheral DMA signal (`source_name` + `request_id`) to its
@@ -881,13 +901,13 @@ mod walk_free_campaign {
     use labwired_config::{ChipDescriptor, SystemManifest};
     use std::path::PathBuf;
 
-    /// Walk-forcing ids on the runtime invaders bus after B1 (event-scheduler
-    /// builds): B0's 22 minus `systick` + `scb` (scheduler-migrated) = 20 —
-    /// the plan's remaining Class-B: 11 timers + 2 dma + 3 i2c + adc + exti +
-    /// bxcan (19) + the core DWT.
+    /// Walk-forcing ids on the runtime invaders bus after B2/B3 (event-
+    /// scheduler builds): B1's 20 minus the 11 `tim*` (scheduler-migrated —
+    /// lazy CNT/SR + scheduled update/compare events) = 9 — the plan's
+    /// remaining Class-B: 2 dma + 3 i2c + adc + exti + bxcan (8) + the core
+    /// DWT.
     #[cfg(feature = "event-scheduler")]
     const EXPECTED_WALK_FORCING: &[&str] = &[
-        "tim1", "tim2", "tim3", "tim4", "tim5", "tim6", "tim7", "tim8", "tim15", "tim16", "tim17",
         "dma1", "dma2", "i2c1", "i2c2", "i2c3", "adc1", "exti", "can1", "dwt",
     ];
 
@@ -946,13 +966,13 @@ mod walk_free_campaign {
 
     #[test]
     fn remaining_class_b_walkers_still_pin_walk_deletion() {
-        // Timers/DMA/I2C/ADC/EXTI/bxCAN (+DWT) still force the walk, so
-        // B1 cannot flip the invaders bus yet: the derivation must stay
+        // DMA/I2C/ADC/EXTI/bxCAN (+DWT) still force the walk, so B2/B3
+        // cannot flip the invaders bus yet: the derivation must stay
         // conservative until every Class-B walker is migrated.
         let bus = invaders_bus_walk_stripped();
         assert!(
             !bus.derive_walk_deletable(),
-            "invaders bus became walk-deletable after B1, but Class-B walkers remain — \
+            "invaders bus became walk-deletable after B2/B3, but Class-B walkers remain — \
              each batch must be honest bookkeeping with no premature walk deletion"
         );
     }

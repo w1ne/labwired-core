@@ -3287,12 +3287,23 @@ mod tests {
             "scheduler + inert-stub bus is walk-independent"
         );
 
-        // Add a native Timer (its `tick()` counts once CEN is set — walk work
-        // reachable via MMIO). The bus must NOT derive deletion.
+        // Add a native Timer pinned to legacy mode (its `tick()` counts once
+        // CEN is set — walk work reachable via MMIO). The bus must NOT derive
+        // deletion. (`add_peripheral` attaches the cycle clock, which under
+        // `event-scheduler` migrates the timer to the scheduler — detach it
+        // so this test keeps pinning the conservative legacy-walker default.)
         bus.add_peripheral("tim2", 0x4000_0000, 0x400, None, Box::new(Timer::new()));
+        let tim_idx = bus.find_peripheral_index_by_name("tim2").unwrap();
+        bus.peripherals[tim_idx]
+            .dev
+            .as_any_mut()
+            .unwrap()
+            .downcast_mut::<Timer>()
+            .unwrap()
+            .force_legacy_walk();
         assert!(
             !bus.derive_walk_deletable(),
-            "a native timer is walk-dependent — walk must stay on"
+            "a legacy-walk native timer is walk-dependent — walk must stay on"
         );
     }
 
