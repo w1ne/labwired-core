@@ -86,6 +86,7 @@ jobs:
           --test esp32s3_walk_differential
           --test esp32c3_walk_differential
           --test stm32_timer_walk_differential
+          --test stm32_dma_walk_differential
           --test kw41z_walk_free_differential
           --lib
 

@@ -37,13 +37,13 @@
 //!    any number of ticks and the tick result is `default()`. This is the
 //!    inertness proof behind their `needs_legacy_walk() == false`.
 //!
-//! 4. `kw41z_board_walk_forcing_set_is_only_i2c1` /
+//! 4. `kw41z_board_walk_forcing_set_is_empty` /
 //!    `kw41z_board_derive_walk_deletable_flips` — the board-config flip status
 //!    on the honestly-assembled FRDM-KW41Z bus (`from_config` +
-//!    `configure_cortex_m`, exactly how the run path builds it). After this
-//!    batch the sole remaining walker is `i2c1` (the shared Kinetis/STM32 I2C
-//!    model, migrated on a parallel branch); the flip assertion is `#[ignore]`d
-//!    until that lands.
+//!    `configure_cortex_m`, exactly how the run path builds it). With the shared
+//!    Kinetis I2C `i2c1` migrated in batch B4 (held-level re-pend event chain),
+//!    the walk-forcing set is now EMPTY and the bus derives walk-deletion with
+//!    no hand flag — the campaign's first full-board flip.
 
 #![cfg(feature = "event-scheduler")]
 
@@ -436,38 +436,25 @@ fn walk_forcing_set(bus: &SystemBus) -> Vec<String> {
     forcing
 }
 
-/// After the mcg/rsim/dwt batch, the ONLY peripheral still forcing the walk on
-/// the kw41z bus is `i2c1` (the shared Kinetis/STM32 I2C model migrated on a
-/// parallel branch). mcg, rsim and dwt are now walk-independent.
+/// After the mcg/rsim/dwt batch AND the shared-I2C (Kinetis) migration in batch
+/// B4, NO peripheral on the kw41z bus forces the walk: `i2c1` is the Kinetis I2C
+/// variant, whose `tick()` is a pure level-IRQ re-assertion now driven by the
+/// held-level re-pend event chain, so it too leaves the walk-forcing set.
 #[test]
-fn kw41z_board_walk_forcing_set_is_only_i2c1() {
+fn kw41z_board_walk_forcing_set_is_empty() {
     let bus = frdm_kw41z_runtime_bus();
     let forcing = walk_forcing_set(&bus);
-    assert_eq!(
-        forcing,
-        vec!["i2c1".to_string()],
-        "expected i2c1 as the sole remaining walk-forcer after the mcg/rsim/dwt batch; \
-         got {forcing:?}"
+    assert!(
+        forcing.is_empty(),
+        "every kw41z walker must be migrated after B4 (i2c1 included); \
+         remaining forcing set: {forcing:?}"
     );
-    // The mcg/rsim/dwt models this batch cleared are genuinely gone from the set.
-    for cleared in ["mcg", "rsim", "dwt"] {
-        assert!(
-            !forcing.iter().any(|n| n == cleared),
-            "{cleared} must no longer force the walk"
-        );
-    }
 }
 
-/// The board flip: once `i2c1` migrates, `derive_walk_deletable()` returns true
-/// for the FRDM-KW41Z bus with no hand flag, making it the FIRST board where the
-/// per-cycle walk is deleted for arbitrary firmware.
-///
-/// `#[ignore]`d pending the shared I2C migration (branch
-/// `perf/walk-free-stm32-dma-i2c`): `i2c1` is the last blocker. After both PRs
-/// merge, remove `#[ignore]` to activate the flip gate.
+/// The board flip: with `i2c1` (Kinetis) migrated, `derive_walk_deletable()`
+/// returns true for the FRDM-KW41Z bus with no hand flag, making it the FIRST
+/// board where the per-cycle walk is deleted for arbitrary firmware.
 #[test]
-#[ignore = "blocked on i2c1 (shared Kinetis/STM32 I2C migration, parallel branch); \
-            activate once that lands and i2c1 leaves the walk-forcing set"]
 fn kw41z_board_derive_walk_deletable_flips() {
     let bus = frdm_kw41z_runtime_bus();
     assert!(
