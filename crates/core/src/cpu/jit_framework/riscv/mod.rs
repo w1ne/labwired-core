@@ -39,8 +39,19 @@ use super::frontend::{BlockPlan, ExitEdge, FrontendRefusal, IsaFrontend};
 use super::side_exit::BailReason;
 use super::{CodeView, Pc};
 
+pub mod emit;
 pub mod host;
+pub mod wasm_encode;
+
 pub use host::{snapshot_state, RiscVJitHost};
+
+// Native (`wasmtime`) execution of emitted blocks lives behind the `jit`
+// feature so the browser build (which cannot pull in wasmtime) still gets
+// the pure-Rust walker + emitter above.
+#[cfg(feature = "jit")]
+pub mod exec;
+#[cfg(feature = "jit")]
+pub use exec::{CompiledBlock, EngineStats, RiscvJitEngine, RiscvWasmJit};
 
 /// Indices into the RISC-V [`StateVec`](super::StateVec) that a batched JIT
 /// run may legitimately compute differently from a per-instruction
@@ -305,18 +316,30 @@ impl IsaFrontend for RiscVFrontend {
         if !code.covers(pc) {
             return Err(FrontendRefusal::PcOutOfRange);
         }
-        let walk = walk_block(pc, code).ok_or(FrontendRefusal::PcOutOfRange)?;
 
-        // A block that subsumes no instruction (its entry is itself an
-        // unmodeled instruction) is not worth installing — the interpreter
-        // handles that single instruction directly.
+        // Chunk C: if the entry instruction is integer-ALU, emit real wasm
+        // for the maximal ALU prefix. The block runs that prefix and
+        // side-exits (fall-through Chain) to `end_pc`, where the interpreter
+        // (or a future compiled block) picks up the first non-ALU
+        // instruction.
+        if let Some(blk) = emit::emit_alu_block(pc, code) {
+            return Ok(BlockPlan {
+                entry_pc: pc,
+                end_pc: blk.end_pc,
+                instr_count: blk.instr_count,
+                code: blk.code,
+                exits: blk.exits,
+            });
+        }
+
+        // Entry is not ALU-emittable (a branch/jump → chunk D, a load/store →
+        // chunk E, or an interpreter-owned op). Fall back to the foundation's
+        // all-bail walk: a correct metadata-only plan with an empty body, so
+        // `is_stub()` is true and the runtime side-exits to the interpreter.
+        let walk = walk_block(pc, code).ok_or(FrontendRefusal::PcOutOfRange)?;
         if walk.instr_count == 0 {
             return Err(FrontendRefusal::BlockTooShort);
         }
-
-        // All-bail: no wasm body yet. The single exit edge carries the
-        // classification's bail reason. `code` is empty, so `is_stub()` is
-        // true and the interpreter runtime side-exits at entry.
         Ok(BlockPlan {
             entry_pc: walk.entry_pc,
             end_pc: walk.end_pc,
@@ -479,17 +502,33 @@ mod tests {
     }
 
     #[test]
-    fn translate_block_produces_stub_plan() {
+    fn translate_block_emits_alu_prefix() {
+        // addi x1,x0,1 ; jal x0,0 (self-loop terminator). Chunk C emits the
+        // addi and stops before the jal (chunk D territory).
         let mut prog = Vec::new();
         w(&mut prog, 0x0010_0093); // addi x1,x0,1
-        w(&mut prog, 0x0000_006f); // jal x0,0 (self-loop terminator)
+        w(&mut prog, 0x0000_006f); // jal x0,0
         let view = CodeView::new(BASE, &prog);
         let plan = RiscVFrontend::new().translate_block(BASE, &view).unwrap();
-        assert!(plan.is_stub(), "all-bail frontend emits no code");
+        assert!(!plan.is_stub(), "ALU entry now emits real wasm");
         assert_eq!(plan.entry_pc, BASE);
-        assert_eq!(plan.instr_count, 2);
-        assert_eq!(plan.end_pc, BASE + 8);
+        assert_eq!(plan.instr_count, 1, "only the addi; jal excluded");
+        assert_eq!(plan.end_pc, BASE + 4, "ends before the jal");
         assert_eq!(plan.exits.len(), 1);
+        assert_eq!(plan.exits[0].wire_code, emit::WIRE_FALL_THROUGH);
+        assert_eq!(&plan.code[0..4], &[0x00, 0x61, 0x73, 0x6d], "wasm magic");
+    }
+
+    #[test]
+    fn translate_block_non_alu_entry_falls_back_to_stub() {
+        // Entry is a jump (chunk D) → no ALU prefix, so the foundation's
+        // all-bail metadata plan is produced.
+        let mut prog = Vec::new();
+        w(&mut prog, 0x0000_006f); // jal x0,0
+        let view = CodeView::new(BASE, &prog);
+        let plan = RiscVFrontend::new().translate_block(BASE, &view).unwrap();
+        assert!(plan.is_stub(), "non-ALU entry stays all-bail");
+        assert_eq!(plan.instr_count, 1);
         assert_eq!(plan.exits[0].reason, BailReason::PartialBlock);
     }
 
