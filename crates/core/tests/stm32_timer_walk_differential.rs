@@ -392,11 +392,7 @@ fn assert_probes_identical(reference: &[Probe], candidate: &[Probe], what: &str)
     }
 }
 
-fn run_differential(
-    load: fn(&mut SystemBus),
-    steps: u64,
-    what: &str,
-) -> (Vec<Probe>, Vec<Probe>) {
+fn run_differential(load: fn(&mut SystemBus), steps: u64, what: &str) -> (Vec<Probe>, Vec<Probe>) {
     let mut walk = build_machine(false, 1);
     load(&mut walk.bus);
     let walk_probes = run_probed(&mut walk, 0x40, steps);
@@ -417,11 +413,8 @@ fn run_differential(
 #[test]
 fn update_irq_firmware_is_byte_identical_at_interval_1() {
     const STEPS: u64 = 4_000;
-    let (walk_probes, _) = run_differential(
-        load_firmware_update_irq,
-        STEPS,
-        "timer update-IRQ firmware",
-    );
+    let (walk_probes, _) =
+        run_differential(load_firmware_update_irq, STEPS, "timer update-IRQ firmware");
     let last = walk_probes.last().unwrap();
     assert!(
         last.isr_count >= 15,
