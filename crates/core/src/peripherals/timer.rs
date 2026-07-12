@@ -400,7 +400,7 @@ impl Timer {
                 if let Some(j) = self.increments_to_value(v, ccr & mask) {
                     // Strict `<` keeps update-event precedence on a tie (the
                     // walk pends the overflow tick itself when UIE is set).
-                    if best.map_or(true, |(b, _)| j < b) {
+                    if best.is_none_or(|(b, _)| j < b) {
                         best = Some((j, false));
                     }
                 }
@@ -1106,10 +1106,7 @@ mod tests {
                     "{what}: state diverged at cycle {c}"
                 );
             }
-            assert_eq!(
-                walk_pends, sched_pends,
-                "{what}: IRQ pend cycles diverged"
-            );
+            assert_eq!(walk_pends, sched_pends, "{what}: IRQ pend cycles diverged");
         }
 
         fn gp32() -> Timer {
