@@ -276,6 +276,19 @@ boards:
     # serial + total_cycles + SSD1306 framebuffer at interval 1, framebuffer at
     # interval 64). Register map, reset values, FIFO semantics unchanged; reset oracle
     # unaffected. No live re-capture this session.
+    # 2026-07-12: spi2 (esp32c3/spi.rs) + apb_saradc (esp32c3/apb_saradc.rs) walk-free
+    # migration — the level-only pair. Both are one-shot LEVEL re-emitters whose int_raw
+    # is write-armed by a transaction / conversion (no free-running counter), so they
+    # migrate off the per-cycle walk with uses_scheduler + a matrix_irq_sources level
+    # export and NO scheduled events (unlike i2c0). The walk-skipped level is re-derived
+    # by the bus each aggregation (refresh_esp32c3_sched_sources), delivering the routed
+    # RISC-V line identically to the legacy walk. Proven byte-identical: the direct
+    # IRQ-delivery gate c3_level_peripheral_matrix_routing (walk vs scheduler produce the
+    # same riscv_irq_lines for spi2 source 19 / apb_saradc source 43, and both de-assert
+    # after INT_CLR) + the quiescent-lab differential
+    # oled_lab_spi2_apb_saradc_walk_on_vs_scheduler_is_byte_identical (serial +
+    # total_cycles + SSD1306 framebuffer at interval 1/64). Register map, reset values,
+    # INT/one-shot semantics unchanged; reset oracle unaffected. No live re-capture.
     drift_ack: 2026-07-12
 
   - id: nucleo-l476rg

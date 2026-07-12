@@ -41,7 +41,7 @@
 
 use std::cell::Cell;
 
-use crate::{Peripheral, PeripheralTickResult, SimResult};
+use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 
 pub const APB_SARADC_BASE: u32 = 0x6004_0000;
 pub const APB_SARADC_SIZE: u64 = 0x1000;
@@ -116,6 +116,18 @@ pub struct Esp32c3ApbSarAdc {
     /// Latched conversion results for SAR1 / SAR2 (the `*DATA_STATUS` regs).
     sar1_data: u32,
     sar2_data: u32,
+    /// Bus-published cycle clock (walk-free plan). `Some` once
+    /// `SystemBus::push_peripheral`/`add_peripheral` attaches it. Its presence
+    /// (under the `event-scheduler` feature) flips the model onto the event
+    /// scheduler: the per-cycle walk skips this peripheral and the bus derives
+    /// its level-sensitive matrix IRQ from [`Self::matrix_irq_sources`] instead
+    /// of the walk's `explicit_irqs`. This one-shot controller has NO
+    /// free-running counter — `int_raw` is write-armed by `convert()` on the
+    /// ONETIME_START strobe — so there are no scheduled events: the migration is
+    /// level-export only. `None` (feature off, a hand-built bus, or the
+    /// differential's `force_legacy_walk`) keeps the legacy per-cycle walk. Not
+    /// serialized — re-attached by the bus.
+    clock: Option<CycleClock>,
 }
 
 impl Default for Esp32c3ApbSarAdc {
@@ -152,7 +164,16 @@ impl Esp32c3ApbSarAdc {
             int_raw: Cell::new(0),
             sar1_data: 0,
             sar2_data: 0,
+            clock: None,
         }
+    }
+
+    /// Test/differential knob: detach the cycle clock, pinning the model to the
+    /// legacy per-cycle walk (`uses_scheduler() == false`). Used by the
+    /// walk-on-vs-scheduler differential gate to build the reference config from
+    /// the same bus assembly (mirrors `Esp32c3I2c::force_legacy_walk`).
+    pub fn force_legacy_walk(&mut self) {
+        self.clock = None;
     }
 
     fn int_st(&self) -> u32 {
@@ -242,6 +263,11 @@ impl Peripheral for Esp32c3ApbSarAdc {
         Ok(())
     }
 
+    /// LEGACY per-cycle walk path: re-assert the level interrupt source while
+    /// any enabled INT bit is set. In scheduler mode ([`Self::uses_scheduler`]
+    /// true) the walk skips this peripheral entirely and the bus re-derives the
+    /// level from [`Self::matrix_irq_sources`] instead; this reporter is a pure
+    /// no-op on state, so a stray call is harmless.
     fn tick(&mut self) -> PeripheralTickResult {
         PeripheralTickResult {
             explicit_irqs: if self.int_st() != 0 {
@@ -259,6 +285,37 @@ impl Peripheral for Esp32c3ApbSarAdc {
 
     fn legacy_tick_dynamic(&self) -> bool {
         true
+    }
+
+    /// Walk-free plan: driven by the event scheduler once the bus has attached
+    /// its cycle clock (production `push_peripheral`/`add_peripheral` always do,
+    /// under the `event-scheduler` feature). The per-cycle walk then skips this
+    /// peripheral; its `int_raw` is write-armed by `convert()` on the
+    /// ONETIME_START strobe (no free-running counter), so there is nothing to
+    /// advance and no event to schedule — only the level export via
+    /// `matrix_irq_sources` is needed. Without a clock (feature off, a
+    /// hand-built bus, or `force_legacy_walk`) it stays on the legacy walk so
+    /// those callers keep the old exact semantics.
+    fn uses_scheduler(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        self.clock = Some(clock);
+    }
+
+    /// C3 interrupt-matrix level: the `APB_SARADC` source while any enabled INT
+    /// bit is set — the exact condition `tick` pushes on the legacy walk. In
+    /// scheduler mode the walk no longer re-emits it, so the bus re-derives the
+    /// level from here (`refresh_esp32c3_sched_sources`, polled on the event
+    /// path and the walk-tick aggregation) so the level-sensitive IRQ stays
+    /// routed and de-asserts the tick after firmware writes INT_CLR.
+    fn matrix_irq_sources(&self) -> Vec<u32> {
+        if self.int_st() != 0 {
+            vec![self.source_id]
+        } else {
+            Vec::new()
+        }
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {
