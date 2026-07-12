@@ -84,6 +84,7 @@ impl SystemBus {
             esp32c3_interrupt_core0_idx: None,
             esp32c3_irq_cache: None,
             esp32c3_asserted_sources: [0; 2],
+            esp32c3_sched_asserted_sources: [0; 2],
             esp32s3_irq_routing: false,
             esp32s3_intmatrix_idx: None,
             flash_models_ops: false,

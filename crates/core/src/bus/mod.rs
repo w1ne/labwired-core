@@ -284,6 +284,17 @@ pub struct SystemBus {
     /// that stops asserting drops out at the next tick boundary (≤ one
     /// `peripheral_tick_interval` — the same bound as the write path).
     esp32c3_asserted_sources: [u64; 2],
+    /// C3 matrix sources asserted by SCHEDULER-driven peripherals (currently
+    /// the SYSTIMER alarm once migrated off the walk). The per-cycle walk
+    /// rebuilds `esp32c3_asserted_sources` from scratch each tick and skips
+    /// scheduler-driven peripherals, so their level would drop every tick;
+    /// this bitmap is re-derived from `Peripheral::matrix_irq_sources` at the
+    /// event path (`apply_event_result`) and the walk-tick aggregation, and
+    /// OR-ed with `esp32c3_asserted_sources` in `recompute_esp32c3_irq_lines`.
+    /// Same level semantics (a source that stops asserting drops out at the
+    /// next re-derivation), so delivery matches the legacy walk cycle-for-cycle
+    /// at a given tick interval.
+    esp32c3_sched_asserted_sources: [u64; 2],
     /// ESP32-S3 interrupt routing is present only when the S3 interrupt matrix
     /// peripheral is registered. Cached separately from C3's RISC-V routing so
     /// each chip model owns its own interrupt abstraction.
@@ -2527,6 +2538,7 @@ impl SystemBus {
             esp32c3_interrupt_core0_idx: None,
             esp32c3_irq_cache: None,
             esp32c3_asserted_sources: [0; 2],
+            esp32c3_sched_asserted_sources: [0; 2],
             esp32s3_irq_routing: false,
             esp32s3_intmatrix_idx: None,
             flash_models_ops: false,
@@ -2584,6 +2596,7 @@ impl SystemBus {
             esp32c3_interrupt_core0_idx: None,
             esp32c3_irq_cache: None,
             esp32c3_asserted_sources: [0; 2],
+            esp32c3_sched_asserted_sources: [0; 2],
             esp32s3_irq_routing: false,
             esp32s3_intmatrix_idx: None,
             flash_models_ops: false,
@@ -5029,6 +5042,7 @@ peripherals:
             esp32c3_interrupt_core0_idx: None,
             esp32c3_irq_cache: None,
             esp32c3_asserted_sources: [0; 2],
+            esp32c3_sched_asserted_sources: [0; 2],
             esp32s3_irq_routing: false,
             esp32s3_intmatrix_idx: None,
             flash_models_ops: false,
@@ -5110,6 +5124,7 @@ peripherals:
             esp32c3_interrupt_core0_idx: None,
             esp32c3_irq_cache: None,
             esp32c3_asserted_sources: [0; 2],
+            esp32c3_sched_asserted_sources: [0; 2],
             esp32s3_irq_routing: false,
             esp32s3_intmatrix_idx: None,
             flash_models_ops: false,
@@ -5342,6 +5357,7 @@ peripherals:
             esp32c3_interrupt_core0_idx: None,
             esp32c3_irq_cache: None,
             esp32c3_asserted_sources: [0; 2],
+            esp32c3_sched_asserted_sources: [0; 2],
             esp32s3_irq_routing: false,
             esp32s3_intmatrix_idx: None,
             flash_models_ops: false,
@@ -5573,6 +5589,7 @@ peripherals:
             esp32c3_interrupt_core0_idx: None,
             esp32c3_irq_cache: None,
             esp32c3_asserted_sources: [0; 2],
+            esp32c3_sched_asserted_sources: [0; 2],
             esp32s3_irq_routing: false,
             esp32s3_intmatrix_idx: None,
             flash_models_ops: false,
@@ -5658,6 +5675,7 @@ peripherals:
             esp32c3_interrupt_core0_idx: None,
             esp32c3_irq_cache: None,
             esp32c3_asserted_sources: [0; 2],
+            esp32c3_sched_asserted_sources: [0; 2],
             esp32s3_irq_routing: false,
             esp32s3_intmatrix_idx: None,
             flash_models_ops: false,

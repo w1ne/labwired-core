@@ -707,6 +707,19 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// its legacy walk path (`uses_scheduler() == false`), so hand-built
     /// buses that bypass `add_peripheral` keep the old exact semantics.
     fn attach_cycle_clock(&mut self, _clock: CycleClock) {}
+
+    /// Walk-free plan (ESP32-C3): the interrupt-matrix source IDs this
+    /// peripheral is asserting RIGHT NOW (level-sensitive). The per-cycle walk
+    /// normally re-emits a level source every tick via `PeripheralTickResult::
+    /// explicit_irqs`, and the bus rebuilds the C3 asserted-source bitmap from
+    /// that each tick. A scheduler-driven peripheral is skipped by the walk, so
+    /// the bus re-derives its live level from this method instead
+    /// (`SystemBus::refresh_esp32c3_sched_sources`, called from the event path
+    /// and the walk-tick aggregation). Default empty — only scheduler-driven
+    /// peripherals that raise C3 matrix IRQs override it.
+    fn matrix_irq_sources(&self) -> Vec<u32> {
+        Vec::new()
+    }
 }
 
 /// Trait representing the system bus
@@ -1797,8 +1810,23 @@ impl<C: Cpu> Machine<C> {
                 self.bus.pend_irq_for_event(irq, &mut fallthrough);
             }
         }
-        for irq in &result.explicit_irqs {
-            self.bus.pend_irq_for_event(*irq, &mut fallthrough);
+        // ESP32-C3 interrupt-matrix routing arm — beside the Cortex-M
+        // `system_exception` arm below (B1's SysTick path). C3 peripheral IRQs
+        // do NOT go through an NVIC; they assert a LEVEL-sensitive matrix source
+        // that the per-cycle walk normally re-emits each tick. A scheduler-
+        // driven SYSTIMER is skipped by the walk, so the event path owns its
+        // level: re-derive every scheduler-driven peripheral's live matrix
+        // sources (`matrix_irq_sources`) and fold them into `riscv_irq_lines`
+        // here, at the exact firing cycle. `pend_irq_for_event` (NVIC) would
+        // mis-route a matrix source ID as a Cortex-M exception on RISC-V, so the
+        // NVIC path is taken only on non-C3 buses.
+        if self.bus.esp32c3_irq_routing {
+            self.bus.refresh_esp32c3_sched_sources();
+            self.bus.recompute_esp32c3_irq_lines();
+        } else {
+            for irq in &result.explicit_irqs {
+                self.bus.pend_irq_for_event(*irq, &mut fallthrough);
+            }
         }
         // Phase 2B.3b: route DMA signals exactly as the legacy tick path does.
         if !result.dma_signals.is_empty() {

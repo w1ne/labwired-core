@@ -90,7 +90,7 @@
 //! That worked for the integration test because the test wrote 79 directly,
 //! but esp-hal binds SYSTIMER_TARGET0 at the PAC-defined source 57.)
 
-use crate::{Peripheral, PeripheralTickResult, SimResult};
+use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 
 const SYSTIMER_CLOCK_HZ: u64 = 16_000_000;
 
@@ -192,6 +192,13 @@ pub struct Systimer {
     /// peripherals before reads, so C3 ROM boot keeps this false and uses the
     /// legacy per-cycle tick path for fidelity.
     scheduler_enabled: bool,
+    /// Bus-published cycle clock (walk-free plan Part 1). `Some` once
+    /// `SystemBus::add_peripheral` attaches it. In scheduler mode the OP-update
+    /// snapshot latch pulls "now" from it so a counter read is fresh even
+    /// though the per-cycle walk no longer ticks this model. Not serialized —
+    /// re-attached by the bus on restore.
+    #[serde(skip)]
+    clock: Option<CycleClock>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -250,6 +257,7 @@ impl SystimerSnapshotV2 {
             target0_source: self.target0_source,
             last_tick: self.last_tick,
             scheduler_enabled: true,
+            clock: None,
         }
     }
 }
@@ -268,6 +276,7 @@ impl SystimerSnapshotV1 {
             target0_source: self.target0_source,
             last_tick: 0,
             scheduler_enabled: true,
+            clock: None,
         }
     }
 }
@@ -306,6 +315,7 @@ impl Systimer {
             target0_source,
             last_tick: 0,
             scheduler_enabled: true,
+            clock: None,
         }
     }
 
@@ -317,6 +327,66 @@ impl Systimer {
         let mut timer = Self::new_with_source(cpu_clock_hz, target0_source);
         timer.scheduler_enabled = false;
         timer
+    }
+
+    /// Test/differential knob: pin this instance back onto the legacy per-cycle
+    /// walk (`uses_scheduler() == false`). Used by the walk-on-vs-scheduler
+    /// differential gate to build the reference config from the same bus
+    /// assembly (mirrors `Esp32c3RtcTimer::force_legacy_walk`).
+    pub fn force_legacy_walk(&mut self) {
+        self.scheduler_enabled = false;
+    }
+
+    /// Scheduler mode advances the counter lazily. Pull "now" from the
+    /// bus-published clock and advance the free-running counters (no alarm
+    /// evaluation — alarms fire at their exact scheduled cycle via `on_event`,
+    /// never off a mere counter read). Idempotent with the write-path
+    /// `sync_to`, which already advanced to the same cycle before an MMIO
+    /// write is observed; this keeps the OP-update snapshot fresh for any read
+    /// path that reaches the latch without a preceding bus sync. No-op in
+    /// legacy mode (the walk owns the counter) or without an attached clock.
+    fn sync_counters_from_clock(&mut self) {
+        if !self.scheduler_enabled {
+            return;
+        }
+        let Some(now) = self.clock.as_ref().map(|c| c.now()) else {
+            return;
+        };
+        if now > self.last_tick {
+            self.advance_cycles(now - self.last_tick);
+            self.last_tick = now;
+        }
+    }
+
+    /// Interrupt-matrix source IDs this SYSTIMER is asserting RIGHT NOW —
+    /// per-alarm `pending && INT_ENA`, the same level condition
+    /// `evaluate_alarms` emits on the legacy walk. In scheduler mode the
+    /// per-cycle walk no longer re-emits this level every tick, so the bus
+    /// re-derives it from here (`SystemBus::refresh_esp32c3_sched_sources`) to
+    /// keep the C3 interrupt matrix level-accurate.
+    fn asserted_matrix_sources(&self) -> Vec<u32> {
+        let mut out = Vec::new();
+        for (i, alarm) in self.unit0_alarms.iter().enumerate() {
+            if alarm.pending && (self.int_ena & (1 << i) != 0) {
+                out.push(self.target0_source + i as u32);
+            }
+        }
+        out
+    }
+
+    /// Restore the (non-serialized) cycle clock and re-anchor the scheduler
+    /// counter to the live clock. A snapshot is typically resumed on a FRESH
+    /// machine whose cycle count restarts near zero; trusting the persisted
+    /// `last_tick` (potentially millions of cycles ahead) would make the next
+    /// `sync_counters_from_clock` see `now <= last_tick` and freeze the counter
+    /// — the same stale-anchor trap the rtc_timer resume fix (#516) avoids. The
+    /// restored counter *value* (what boot-log timestamps depend on) is kept;
+    /// only the advance anchor is rebased to "now".
+    fn reanchor_after_restore(&mut self, clock: Option<CycleClock>) {
+        if let Some(clock) = clock {
+            self.last_tick = clock.now();
+            self.clock = Some(clock);
+        }
     }
 
     fn unit0_running(&self) -> bool {
@@ -556,9 +626,11 @@ impl Systimer {
                 self.sync_alarm_enables_from_conf();
             }
             0x04 if value & (1 << 30) != 0 => {
+                self.sync_counters_from_clock();
                 self.unit0.snapshot = self.unit0.counter;
             }
             0x08 if value & (1 << 30) != 0 => {
+                self.sync_counters_from_clock();
                 self.unit1.snapshot = self.unit1.counter;
             }
 
@@ -699,6 +771,24 @@ impl Peripheral for Systimer {
         self.sync_to_tick(tick_now);
     }
 
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        // Anchor at the clock's current value so cycles elapsed before attach
+        // (normally zero — attach happens at bus assembly) are not
+        // retroactively credited to the counter (mirrors the rtc_timer #516
+        // re-anchor contract).
+        self.last_tick = clock.now();
+        self.clock = Some(clock);
+    }
+
+    /// C3 interrupt-matrix level: the source IDs this SYSTIMER is asserting
+    /// now. Empty unless an alarm is `pending && INT_ENA`. The bus polls this
+    /// from the event path and the walk-tick aggregation so a scheduler-driven
+    /// SYSTIMER keeps its level-sensitive IRQ routed even though the per-cycle
+    /// walk no longer re-emits it.
+    fn matrix_irq_sources(&self) -> Vec<u32> {
+        self.asserted_matrix_sources()
+    }
+
     fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
         if !self.scheduler_enabled {
             return Vec::new();
@@ -741,9 +831,11 @@ impl Peripheral for Systimer {
 
     fn restore_runtime_snapshot(&mut self, bytes: &[u8]) -> SimResult<()> {
         let scheduler_enabled = self.scheduler_enabled;
+        let clock = self.clock.clone();
         if let Ok(restored) = bincode::deserialize::<SystimerSnapshotV2>(bytes) {
             *self = restored.into_systimer();
             self.scheduler_enabled = scheduler_enabled;
+            self.reanchor_after_restore(clock);
             return Ok(());
         }
         let restored = bincode::deserialize::<SystimerSnapshotV1>(bytes).map_err(|e| {
@@ -751,6 +843,7 @@ impl Peripheral for Systimer {
         })?;
         *self = restored.into_systimer();
         self.scheduler_enabled = scheduler_enabled;
+        self.reanchor_after_restore(clock);
         Ok(())
     }
 }

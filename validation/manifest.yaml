@@ -517,7 +517,16 @@ boards:
     # access, tick() is the trait-default no-op). Pure walk-scheduling metadata —
     # no register, reset-value, timing or IRQ change; the 9-reg reset-state
     # silicon anchor is unaffected. No live re-capture warranted.
-    drift_ack: 2026-07-11
+    # 2026-07-12: walk-free C3 SYSTIMER batch — the shared SYSTIMER model
+    # (esp32s3/systimer.rs) gained a bus-published CycleClock handle (fresh
+    # OP-update snapshot on read) + matrix_irq_sources() (live level query) so a
+    # C3 SYSTIMER can migrate off the per-cycle walk: alarms fire as scheduled
+    # events routed through the C3 interrupt matrix. Register layout, reset
+    # values (CONF=0x46000000), alarm/level-IRQ semantics and one-cycle tick
+    # equivalence are preserved (elapsed-vs-repeated + walk-vs-scheduler
+    # differential gates). S3 default construction is unchanged. No live
+    # re-capture warranted.
+    drift_ack: 2026-07-12
     models:
       - crates/core/src/peripherals/esp32s3
       - crates/core/src/peripherals/esp_xtensa_common

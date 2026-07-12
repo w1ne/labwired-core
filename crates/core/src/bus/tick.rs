@@ -471,6 +471,10 @@ impl SystemBus {
             }
         }
         self.esp32c3_asserted_sources = asserted;
+        // Re-derive scheduler-driven peripheral levels (SYSTIMER once migrated
+        // off the walk) so their level-sensitive matrix IRQ persists across
+        // walk ticks and de-asserts the tick after firmware clears it.
+        self.refresh_esp32c3_sched_sources();
 
         if self.esp32c3_irq_cache.is_some() {
             self.recompute_esp32c3_irq_lines();
@@ -514,6 +518,17 @@ impl SystemBus {
         // no-interrupt hot path.
         for &src in source_ids {
             route_source(src);
+        }
+        // Scheduler-driven peripheral levels (SYSTIMER off the walk) — refreshed
+        // into the persistent bitmap above.
+        let sched = self.esp32c3_sched_asserted_sources;
+        for (word, bits) in sched.iter().enumerate() {
+            let mut bits = *bits;
+            while bits != 0 {
+                let bit = bits.trailing_zeros();
+                route_source(word as u32 * 64 + bit);
+                bits &= !(1u64 << bit);
+            }
         }
         for (addr, src) in FROM_CPU {
             let from_cpu = self
@@ -562,8 +577,13 @@ impl SystemBus {
             }
         };
 
-        for (word, &bits) in self.esp32c3_asserted_sources.iter().enumerate() {
-            let mut bits = bits;
+        for word in 0..self.esp32c3_asserted_sources.len() {
+            // Union of walk-emitted level sources (rebuilt each tick) and
+            // scheduler-driven peripheral level sources (re-derived from
+            // `matrix_irq_sources`), so a SYSTIMER migrated off the walk keeps
+            // its level-sensitive alarm IRQ routed.
+            let mut bits =
+                self.esp32c3_asserted_sources[word] | self.esp32c3_sched_asserted_sources[word];
             while bits != 0 {
                 let bit = bits.trailing_zeros();
                 route_source(word as u32 * 64 + bit);
@@ -577,6 +597,34 @@ impl SystemBus {
             pending &= !(1 << slot);
         }
         self.riscv_irq_lines = mask;
+    }
+
+    /// Re-derive the C3 matrix sources asserted by SCHEDULER-driven peripherals
+    /// (skipped by the per-cycle walk) from their live level
+    /// (`Peripheral::matrix_irq_sources`). Rebuilt from scratch — level
+    /// semantics — so a source that stops asserting (e.g. after the SYSTIMER
+    /// alarm's INT_CLR) drops out on the next re-derivation. Called from the
+    /// event path (`Machine::apply_event_result`, exact-cycle delivery) and the
+    /// walk-tick aggregation (steady-state persistence + de-assert). No-op
+    /// unless C3 routing is active. Does NOT recompute — the caller decides
+    /// when to fold this into `riscv_irq_lines`.
+    pub(crate) fn refresh_esp32c3_sched_sources(&mut self) {
+        if !self.esp32c3_irq_routing {
+            return;
+        }
+        let mut asserted = [0u64; 2];
+        for p in &self.peripherals {
+            if !p.dev.uses_scheduler() {
+                continue;
+            }
+            for src in p.dev.matrix_irq_sources() {
+                let idx = (src / 64) as usize;
+                if idx < asserted.len() {
+                    asserted[idx] |= 1u64 << (src % 64);
+                }
+            }
+        }
+        self.esp32c3_sched_asserted_sources = asserted;
     }
 
     fn aggregate_esp32s3_explicit_irqs(&mut self, source_ids: &[u32]) {
@@ -906,6 +954,143 @@ mod walk_free_campaign {
             !bus.derive_walk_deletable(),
             "invaders bus became walk-deletable after B1, but Class-B walkers remain — \
              each batch must be honest bookkeeping with no premature walk deletion"
+        );
+    }
+}
+
+/// Walk-free C3 SYSTIMER batch — the interrupt-matrix ROUTING identity.
+///
+/// A SYSTIMER migrated off the per-cycle walk delivers its alarm as a scheduled
+/// event; the C3 routing arm (`Machine::apply_event_result` → this module's
+/// `refresh_esp32c3_sched_sources` + `recompute_esp32c3_irq_lines`) must route
+/// that level to `riscv_irq_lines` EXACTLY as the legacy walk did when the
+/// SYSTIMER re-emitted source 37 every tick (`aggregate_esp32c3_irqs`). This
+/// pins that equivalence at the bus level (the OLED-lab gate proves it
+/// end-to-end through the real FreeRTOS tick).
+#[cfg(all(test, feature = "event-scheduler"))]
+mod c3_systimer_matrix_routing {
+    use crate::bus::SystemBus;
+    use crate::peripherals::esp32s3::systimer::Systimer;
+    use crate::Peripheral;
+    use labwired_config::{ChipDescriptor, SystemManifest};
+    use std::path::PathBuf;
+
+    const SYSTIMER_BASE: u64 = 0x6002_3000;
+    const INTMATRIX: u64 = 0x600C_2000;
+    const SYSTIMER_TARGET0_SOURCE: u64 = 37;
+    const LINE: u32 = 5;
+
+    /// Build a devkit C3 bus (real `interrupt_core0` → INTC cache), enable C3
+    /// routing, swap the declarative SYSTIMER stub for a real scheduler-driven
+    /// `Systimer`, and route SYSTIMER_TARGET0 (source 37) → CPU line 5.
+    fn setup() -> SystemBus {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let chip = ChipDescriptor::from_file(root.join("../../configs/chips/esp32c3.yaml"))
+            .expect("load esp32c3 chip yaml");
+        let manifest =
+            SystemManifest::from_file(root.join("../../configs/systems/esp32c3-devkit.yaml"))
+                .expect("load esp32c3-devkit system yaml");
+        let mut bus = SystemBus::from_config(&chip, &manifest).expect("build c3 devkit bus");
+
+        // Enable the RISC-V interrupt routing (the ROM-boot path sets this; the
+        // from_config bus does not) and rebuild the INTC cache.
+        bus.esp32c3_irq_routing = true;
+        bus.refresh_peripheral_index();
+
+        // Swap the declarative SYSTIMER stub for the real scheduler model and
+        // hand it the bus clock (as `add_peripheral` would).
+        let idx = bus
+            .find_peripheral_index_by_name("systimer")
+            .expect("devkit bus carries a systimer");
+        let mut dev = Systimer::new_with_source(160_000_000, SYSTIMER_TARGET0_SOURCE as u32);
+        dev.attach_cycle_clock(bus.cycle_clock.clone());
+        bus.peripherals[idx].dev = Box::new(dev);
+        bus.refresh_peripheral_index();
+
+        // Route source 37 → line 5, priority 1, threshold 1, line enabled.
+        bus.write_u32(INTMATRIX + SYSTIMER_TARGET0_SOURCE * 4, LINE)
+            .unwrap();
+        bus.write_u32(INTMATRIX + 0x114 + (LINE as u64) * 4, 1)
+            .unwrap();
+        bus.write_u32(INTMATRIX + 0x194, 1).unwrap();
+        bus.write_u32(INTMATRIX + 0x104, 1 << LINE).unwrap();
+
+        // Arm TARGET0 in target mode at 3 SYSTIMER ticks, enable its IRQ.
+        bus.write_u32(SYSTIMER_BASE + 0x64, 1).unwrap(); // INT_ENA bit0
+        bus.write_u32(SYSTIMER_BASE + 0x1C, 0).unwrap(); // TARGET0_HI
+        bus.write_u32(SYSTIMER_BASE + 0x20, 3).unwrap(); // TARGET0_LO
+        bus.write_u32(SYSTIMER_BASE + 0x50, 1).unwrap(); // COMP0_LOAD
+        let conf = bus.read_u32(SYSTIMER_BASE).unwrap();
+        bus.write_u32(SYSTIMER_BASE, conf | (1 << 24)).unwrap(); // TARGET0_WORK_EN
+        bus
+    }
+
+    fn systimer_mut(bus: &mut SystemBus) -> &mut Systimer {
+        let idx = bus.find_peripheral_index_by_name("systimer").unwrap();
+        bus.peripherals[idx]
+            .dev
+            .as_any_mut()
+            .unwrap()
+            .downcast_mut::<Systimer>()
+            .unwrap()
+    }
+
+    /// The scheduler routing arm and the legacy walk aggregation produce the
+    /// SAME `riscv_irq_lines` for the SAME SYSTIMER level.
+    #[test]
+    fn scheduler_routing_matches_walk_routing_for_same_level() {
+        let mut bus = setup();
+
+        // Advance the SYSTIMER past the target so the alarm latches
+        // pending && int_ena → the model asserts matrix source 37.
+        systimer_mut(&mut bus).sync_to(10_000);
+        assert_eq!(
+            systimer_mut(&mut bus).matrix_irq_sources(),
+            vec![SYSTIMER_TARGET0_SOURCE as u32],
+            "armed+fired SYSTIMER must assert matrix source 37"
+        );
+
+        // Scheduler routing arm (what `apply_event_result` runs on the C3 bus).
+        bus.refresh_esp32c3_sched_sources();
+        bus.recompute_esp32c3_irq_lines();
+        let scheduler_lines = bus.riscv_irq_lines;
+        assert_eq!(
+            scheduler_lines,
+            1 << LINE,
+            "scheduler routing must assert the routed CPU line for source 37"
+        );
+
+        // Legacy walk routing reference: source 37 re-emitted by the walk. Must
+        // land on the identical line mask.
+        bus.aggregate_esp32c3_irqs(&[SYSTIMER_TARGET0_SOURCE as u32]);
+        assert_eq!(
+            bus.riscv_irq_lines, scheduler_lines,
+            "walk aggregation and scheduler routing must produce identical riscv_irq_lines"
+        );
+    }
+
+    /// Clearing the SYSTIMER level (INT_CLR) de-asserts the routed line on the
+    /// next re-derivation — same level semantics as the walk (which stops
+    /// re-emitting the source the tick after INT_CLR).
+    #[test]
+    fn clearing_level_deasserts_routed_line() {
+        let mut bus = setup();
+        systimer_mut(&mut bus).sync_to(10_000);
+        bus.refresh_esp32c3_sched_sources();
+        bus.recompute_esp32c3_irq_lines();
+        assert_eq!(bus.riscv_irq_lines, 1 << LINE);
+
+        // INT_CLR bit0 clears the pending latch → level drops.
+        bus.write_u32(SYSTIMER_BASE + 0x6C, 1).unwrap();
+        assert!(
+            systimer_mut(&mut bus).matrix_irq_sources().is_empty(),
+            "after INT_CLR the SYSTIMER asserts no matrix source"
+        );
+        bus.refresh_esp32c3_sched_sources();
+        bus.recompute_esp32c3_irq_lines();
+        assert_eq!(
+            bus.riscv_irq_lines, 0,
+            "routed line must de-assert once the SYSTIMER level clears"
         );
     }
 }

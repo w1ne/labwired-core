@@ -439,12 +439,16 @@ pub fn build_rom_boot_machine<C: crate::Cpu, F: FnOnce(crate::cpu::RiscV) -> C>(
         // C3 SYSTIMER_TARGET0 routes through the interrupt matrix on source
         // 37 (TARGET1/2 at 38/39), unlike the S3's 57; the FreeRTOS tick
         // alarm fires on that source.
-        Box::new(
-            crate::peripherals::esp32s3::systimer::Systimer::new_with_source_legacy_tick(
-                160_000_000,
-                37,
-            ),
-        ),
+        //
+        // Walk-free (C3 SYSTIMER batch): scheduler mode. The free-running
+        // counter advances lazily (write-path `sync_to` + the OP-update snapshot
+        // pulling the bus-published `CycleClock`, both to the batch-start
+        // cycle), and alarms fire as scheduled events at their exact expiry
+        // cycle, delivered through the C3 interrupt matrix by
+        // `apply_event_result`'s C3 routing arm. This un-pins SYSTIMER from the
+        // per-cycle walk; delivery stays cycle-identical to the legacy walk at
+        // a given tick interval (differential-gated).
+        Box::new(crate::peripherals::esp32s3::systimer::Systimer::new_with_source(160_000_000, 37)),
     );
     // RTC_CNTL main timer (0x6000_8000): the free-running slow-clock counter
     // the IDF reads via rtc_time_get (set TIME_UPDATE @0x0C bit31 to latch,
