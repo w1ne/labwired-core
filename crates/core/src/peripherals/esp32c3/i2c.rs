@@ -149,6 +149,11 @@ const SR_BUS_BUSY: u32 = 1 << 4;
 /// COMD bit 31: command_done. Set when a command finishes executing.
 const CMD_DONE_BIT: u32 = 1 << 31;
 
+/// INT_RAW bit 1: TXFIFO_WM — the TX FIFO is at/below its watermark threshold
+/// (asserted at reset, when the FIFO is empty). Real firmware's ISR services it
+/// to refill the FIFO mid-burst; the bit engine raises it when a WRITE command
+/// underruns so a refilling driver is signalled to feed the stalled transfer.
+pub const INT_TXFIFO_WM: u32 = 1 << 1;
 pub const INT_END_DETECT: u32 = 1 << 3;
 pub const INT_TRANS_COMPLETE: u32 = 1 << 7;
 pub const INT_NACK: u32 = 1 << 10;
@@ -314,6 +319,11 @@ enum EngineState {
     RestartRelease,
     /// Repeated START, phase 2: SCL high with SDA high (`rstart_setup`).
     RestartSetup,
+    /// TX-FIFO underrun during a WRITE: SCL held low (clock-stretch), waiting
+    /// for firmware to refill the TX FIFO. The controller does NOT clock a byte
+    /// until a real one is available — it never fabricates 0x00. Re-checks the
+    /// FIFO every module tick and resumes the byte once it is fed.
+    TxStall,
     /// Data bit: SCL low, SDA still at the previous level (`sda_hold`).
     BitLowHold,
     /// Data bit: SCL low, SDA at this bit's level (rest of `low`).
@@ -1152,16 +1162,33 @@ impl Esp32c3I2c {
     fn begin_byte(&mut self) {
         self.engine.bit_idx = 0;
         self.engine.addr_byte = self.expects_addr && !self.engine.cur_is_read;
-        self.engine.cur_byte = if self.engine.cur_is_read {
-            match self.active_slave {
+        if self.engine.cur_is_read {
+            self.engine.cur_byte = match self.active_slave {
                 Some(slave_idx) => self.slaves[slave_idx].read(),
                 None => 0,
-            }
+            };
         } else {
-            let b = self.tx_fifo.pop_front().unwrap_or(0);
-            self.tx_pop_count += 1;
-            b
-        };
+            // WRITE: pull the next byte from the TX FIFO. On underrun the real
+            // ESP32-C3 controller does NOT invent a 0x00 — it holds SCL low
+            // (clock-stretch) and asserts TXFIFO_WM so firmware's ISR refills,
+            // then resumes clocking the real byte. A `unwrap_or(0)` here would
+            // clock spurious zeros into the slave whenever the FIFO drains
+            // faster than firmware refills it mid-burst (e.g. a 128-byte
+            // SSD1306 page through the 32-byte FIFO), corrupting the transfer.
+            match self.tx_fifo.pop_front() {
+                Some(b) => {
+                    self.tx_pop_count += 1;
+                    self.engine.cur_byte = b;
+                }
+                None => {
+                    // Underrun: signal the watermark and stall until refilled.
+                    self.int_raw |= INT_TXFIFO_WM;
+                    let sda = self.engine.sda;
+                    self.enter(EngineState::TxStall, 1, false, sda);
+                    return;
+                }
+            }
+        }
         let t = self.engine.timing;
         let sda = self.engine.sda;
         self.enter(EngineState::BitLowHold, t.sda_hold.min(t.low), false, sda);
@@ -1250,6 +1277,12 @@ impl Esp32c3I2c {
         let t = self.engine.timing;
         match self.engine.state {
             EngineState::Idle | EngineState::Paused => {}
+            EngineState::TxStall => {
+                // Clock-stretch waiting for a TX-FIFO refill. Retry the byte:
+                // `begin_byte` clocks it if one is now available, or re-arms the
+                // stall (one retry per module tick) while the FIFO is still dry.
+                self.begin_byte();
+            }
             EngineState::StartHold => {
                 // START condition held — the RSTART command is done; SCL falls
                 // when the next command's first segment begins.
@@ -1890,6 +1923,135 @@ mod tests {
                 }
             )),
             "trace must contain an address frame for transaction decode"
+        );
+    }
+
+    /// A realistic SSD1306 pixel-data burst: four full GDDRAM pages
+    /// (128×4 = 512 data bytes) streamed the way a display driver does — each
+    /// transfer is far larger than the 32-byte TX FIFO, so the FIFO underruns
+    /// and must be refilled mid-WRITE (the watermark / OP_END refill the IDF and
+    /// Arduino I²C drivers rely on).
+    ///
+    /// The real ESP32-C3 controller holds SCL low (clock-stretch) on a TX-FIFO
+    /// underrun and resumes when firmware refills; it NEVER invents a 0x00. A
+    /// model that pops a spurious 0x00 on underrun (`pop_front().unwrap_or(0)`)
+    /// clocks bogus bytes into the panel — the extra pixels land in GDDRAM as
+    /// zeros (and shift every real byte that follows), so the OLED reads back an
+    /// all-but-blank framebuffer even though the CPU/serial/LED are healthy.
+    ///
+    /// Every existing OLED test only ever sends a 2–3 byte prologue that fits in
+    /// one FIFO load, so this multi-chunk burst is the first coverage of the
+    /// underrun-refill path.
+    #[test]
+    fn multi_chunk_pixel_burst_delivers_every_byte_to_ssd1306() {
+        use crate::peripherals::components::Ssd1306;
+
+        const ADDR7: u8 = 0x3C;
+        const ADDR_W: u32 = (ADDR7 as u32) << 1; // 0x78, R/W = write
+
+        let mut p = Esp32c3I2c::new();
+        p.push_slave(Box::new(Ssd1306::new(ADDR7)));
+
+        // ── Init: a short command transaction that fits in ONE FIFO load (the
+        //    prologue that already works in the field). Horizontal addressing,
+        //    full 128×64 window, display on. Control byte 0x00 = command stream.
+        let init = [0x20u8, 0x00, 0x21, 0x00, 0x7F, 0x22, 0x00, 0x07, 0xAF];
+        p.write_u32(REG_CMD0, cmd(CMD_RSTART, 0)).unwrap();
+        p.write_u32(REG_CMD0 + 4, cmd(CMD_WRITE, (2 + init.len()) as u8))
+            .unwrap();
+        p.write_u32(REG_CMD0 + 8, cmd(CMD_STOP, 0)).unwrap();
+        p.write_u32(REG_DATA, ADDR_W).unwrap();
+        p.write_u32(REG_DATA, 0x00).unwrap(); // command-stream control byte
+        for b in init {
+            p.write_u32(REG_DATA, b as u32).unwrap();
+        }
+        start_and_run(&mut p);
+        assert_eq!(
+            p.read_u32(REG_INT_RAW).unwrap() & INT_NACK,
+            0,
+            "init prologue must ACK"
+        );
+
+        // ── Pixel data: four full pages. Distinct nonzero pattern so a dropped
+        //    byte (read back as 0x00) or a shifted byte is caught at its exact
+        //    GDDRAM position.
+        const N_PAGES: usize = 4;
+        const DATA_LEN: usize = 128 * N_PAGES; // 512 bytes → N = 4
+        let pattern: Vec<u8> = (0..DATA_LEN).map(|i| ((i % 251) + 1) as u8).collect();
+
+        // Stream one page (128 bytes) per transaction, exactly how
+        // Adafruit_SSD1306 pushes the framebuffer with the 0x40 data control
+        // byte. Each WRITE command is addr(1) + control(1) + 128 data = 130
+        // bytes — over 4× the 32-byte TX FIFO — so it underruns and is refilled
+        // mid-command.
+        for page in 0..N_PAGES {
+            let page_data = &pattern[page * 128..(page + 1) * 128];
+            let mut payload = Vec::with_capacity(2 + 128);
+            payload.push(ADDR_W as u8);
+            payload.push(0x40); // SSD1306 data-stream control byte
+            payload.extend_from_slice(page_data);
+
+            p.write_u32(REG_CMD0, cmd(CMD_RSTART, 0)).unwrap();
+            p.write_u32(REG_CMD0 + 4, cmd(CMD_WRITE, payload.len() as u8))
+                .unwrap();
+            p.write_u32(REG_CMD0 + 8, cmd(CMD_STOP, 0)).unwrap();
+
+            // Preload the TX FIFO to capacity, then kick the transaction.
+            let mut next = 0usize;
+            while next < payload.len() && p.tx_fifo.len() < FIFO_CAPACITY {
+                p.write_u32(REG_DATA, payload[next] as u32).unwrap();
+                next += 1;
+            }
+            p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
+
+            // Clock the engine, refilling the TX FIFO only once it has actually
+            // drained — modelling an ISR that services the watermark / empty
+            // interrupt with real latency. A faithful controller holds SCL low
+            // until the refill lands; a controller that pops 0x00 on underrun
+            // has already clocked bogus bytes into the panel by then.
+            let mut guard = 0u64;
+            while p.engine_active() {
+                if p.tx_fifo.is_empty() && next < payload.len() {
+                    while next < payload.len() && p.tx_fifo.len() < FIFO_CAPACITY {
+                        p.write_u32(REG_DATA, payload[next] as u32).unwrap();
+                        next += 1;
+                    }
+                }
+                p.tick_elapsed(512);
+                guard += 1;
+                assert!(guard < 1_000_000, "engine never completed page {page}");
+            }
+            assert_eq!(
+                next,
+                payload.len(),
+                "every byte of page {page} must have been pulled from the FIFO, \
+                 not fabricated as 0x00 on underrun"
+            );
+            assert_eq!(
+                p.read_u32(REG_INT_RAW).unwrap() & INT_NACK,
+                0,
+                "page {page} data burst must ACK"
+            );
+        }
+
+        // ── Read back GDDRAM: every pixel byte must equal what was written, with
+        //    no spurious 0x00 from a FIFO underrun and no positional shift.
+        let oled = p
+            .attached_slaves()
+            .iter()
+            .find_map(|d| d.as_any().and_then(|a| a.downcast_ref::<Ssd1306>()))
+            .expect("SSD1306 attached");
+        let fb = oled.framebuffer();
+        assert_eq!(
+            &fb[..DATA_LEN],
+            &pattern[..],
+            "multi-chunk pixel burst must land byte-exact in GDDRAM (a 0x00 or a \
+             shift here is the black-OLED underrun bug)"
+        );
+        assert_eq!(
+            oled.ink_bytes(),
+            DATA_LEN,
+            "all {DATA_LEN} written pixel bytes are nonzero and must be lit"
         );
     }
 }
