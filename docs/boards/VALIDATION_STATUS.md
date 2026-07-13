@@ -10,7 +10,7 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 | `nrf52840` | 🟢 silicon-verified | 2026-06-17 | 2026-07-10 | ⚠ drift acked 2026-07-10 (re-capture pending) |
 | `seeed-xiao-nrf52840-sense` | 🟢 silicon-verified | 2026-06-17 | 2026-07-10 | ⚠ drift acked 2026-07-10 (re-capture pending) |
 | `stm32h563` | 🟢 silicon-verified | 2026-06-22 | 2026-07-12 | ⚠ drift acked 2026-07-12 (re-capture pending) |
-| `esp32c3` | 🟢 silicon-verified | 2026-06-17 | 2026-07-12 | ⚠ drift acked 2026-07-12 (re-capture pending) |
+| `esp32c3` | 🟢 silicon-verified | 2026-06-17 | 2026-07-14 | ⚠ drift acked 2026-07-14 (re-capture pending) |
 | `nucleo-l476rg` | 🟢 silicon-verified | 2026-06-20 | 2026-07-12 | ⚠ drift acked 2026-07-12 (re-capture pending) |
 | `nucleo-l073rz` | 🟢 silicon-verified | 2026-06-20 | 2026-07-12 | ⚠ drift acked 2026-07-12 (re-capture pending) |
 | `stm32f103` | 🟢 silicon-verified | 2026-06-20 | 2026-07-12 | ⚠ drift acked 2026-07-12 (re-capture pending) |
@@ -52,7 +52,7 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 - Note: Reset-state oracle, not behavioural. ~40 peripherals declared (NOT 6 as the prose doc says).
 - Silicon: **2026-06-17** on USB-JTAG (built-in, openocd-esp32) — re-verified live — reset oracle re-captured live 2026-06-17: 1123/1123 static registers match committed baseline (13 deltas all in per-chip efuse + live USB-device state, none in the asserted set); esp32c3_reset_values_match_silicon passes
   - offline (CI): esp32c3_reset_conformance::esp32c3_reset_values_match_silicon (79 regs; 366/423 overlap matched silicon)
-- Drift status: **⚠ drift acked 2026-07-12 (re-capture pending)**
+- Drift status: **⚠ drift acked 2026-07-14 (re-capture pending)**
 
 ## `nucleo-l476rg` — 🟢 silicon-verified
 

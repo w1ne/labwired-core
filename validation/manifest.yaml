@@ -329,7 +329,19 @@ boards:
     # rom-boot bus derives walk-DELETED, EXPECTED_PINNERS is empty, and max_safe_tick_interval
     # rises to 64 (native OLED-lab throughput ~5.2 → ~16.2 MIPS). Register map, reset values
     # and MMIO byte paths unchanged; reset oracle unaffected. No live re-capture.
-    drift_ack: 2026-07-12
+    # 2026-07-14: I2C0 (esp32c3/i2c.rs) TX-FIFO underrun correctness fix — begin_byte
+    # no longer fabricates a 0x00 (pop_front().unwrap_or(0)) when the TX FIFO drains
+    # mid-WRITE. It now models the real controller: hold SCL low (clock-stretch),
+    # assert TXFIFO_WM, and resume with the real byte once firmware refills
+    # (new EngineState::TxStall). This only changes behaviour on a TX-FIFO UNDERRUN;
+    # firmware that keeps the FIFO fed (no underrun) is byte-for-byte identical, so
+    # the reset-state oracle and every prior capture/differential are unaffected.
+    # The bug corrupted multi-chunk bursts (e.g. a 128-byte SSD1306 page through the
+    # 32-byte FIFO → black OLED). Register map, reset values, FIFO reset semantics and
+    # the byte-level traced-slave contract are unchanged. A live USB-JTAG re-validation
+    # of the underrun clock-stretch timing is recommended as follow-up (no bench board
+    # this session); this ack covers the model-file change in the interim.
+    drift_ack: 2026-07-14
 
   - id: nucleo-l476rg
     doc: docs/boards/nucleo-l476rg.md
