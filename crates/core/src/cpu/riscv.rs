@@ -18,6 +18,12 @@ use std::sync::Arc;
 /// drops from ~380M instructions to a few million.
 const CYCLE_SCALE: u64 = 256;
 
+/// Chunk H: land on a basic-block entry PC this many times before compiling
+/// it to wasm. Matches the framework default; keeps one-shot init/boot code
+/// on the interpreter and only pays translation cost for genuinely hot loops.
+#[cfg(feature = "jit")]
+const RISCV_JIT_HOT_THRESHOLD: u32 = 50;
+
 #[derive(Debug, Clone, Copy)]
 pub struct RiscVDecodeCacheEntry {
     pub tag: u32,
@@ -53,6 +59,19 @@ pub struct RiscV {
 
     waiting_for_interrupt: bool,
     decode_cache: Box<[Option<RiscVDecodeCacheEntry>; 4096]>,
+
+    /// Chunk H: opt-in RV32IMC wasm-JIT fast path. Mirrors Xtensa's
+    /// `self.jit_enabled`; synced from [`crate::SimulationConfig::riscv_jit_enabled`]
+    /// on each `step_batch` entry. Off by default — the interpreter is the
+    /// behavioral oracle.
+    #[cfg(feature = "jit")]
+    jit_enabled: bool,
+
+    /// Lazily-created JIT engine (block cache + `wasmtime` executor). `None`
+    /// until the first JIT-enabled batch, then reused (and its block cache
+    /// warmed) across batches.
+    #[cfg(feature = "jit")]
+    jit_engine: Option<crate::cpu::jit_framework::riscv::RiscvJitEngine>,
 }
 
 impl Default for RiscV {
@@ -73,6 +92,10 @@ impl Default for RiscV {
             reservation: None,
             waiting_for_interrupt: false,
             decode_cache: Box::new([None; 4096]),
+            #[cfg(feature = "jit")]
+            jit_enabled: false,
+            #[cfg(feature = "jit")]
+            jit_engine: None,
         }
     }
 }
@@ -182,6 +205,182 @@ impl RiscV {
         self.mstatus |= mie << 7; // MPIE <- MIE
         self.mstatus &= !(1 << 3); // MIE <- 0
         self.mstatus |= 0b11 << 11; // MPP <- M-mode
+    }
+}
+
+/// Chunk H: RV32IMC wasm-JIT dispatch helpers for `Machine<RiscV>`.
+///
+/// These drive the [`RiscvJitEngine`](crate::cpu::jit_framework::riscv::RiscvJitEngine)
+/// directly over the machine's raw register file and guest-RAM window
+/// (reached by downcasting the `&mut dyn Bus` back to the concrete
+/// [`SystemBus`](crate::bus::SystemBus)), retiring compiled blocks atomically
+/// while keeping timer/interrupt timing exact.
+#[cfg(feature = "jit")]
+impl RiscV {
+    /// The production correctness gate. The JIT may run only when nothing
+    /// needs per-instruction visibility. Poll-mode logic probes, breakpoints,
+    /// cycle-accurate peripherals, and the next scheduled event already pin
+    /// `Machine::run`'s batch to a single instruction (so the JIT never
+    /// engages for them — see the `max_count > 1` guard in `step_batch`);
+    /// this checks the two rails that do NOT clamp the batch: per-instruction
+    /// observers and push-mode logic taps.
+    fn jit_gate_allows(&self, bus: &dyn Bus, observers: &[Arc<dyn SimulationObserver>]) -> bool {
+        if !observers.is_empty() {
+            return false;
+        }
+        if bus.logic_tap().is_some_and(|t| t.push_armed()) {
+            return false;
+        }
+        // Belt-and-suspenders: a cycle-accurate bus already forces batch == 1
+        // (so we would not be here), but check explicitly in case the caller
+        // ever relaxes that clamp.
+        if let Some(sb) = bus
+            .as_any()
+            .and_then(|a| a.downcast_ref::<crate::bus::SystemBus>())
+        {
+            if sb.requires_cycle_accurate() {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Would a compiled block that retires `n` instructions from the current
+    /// state step *across* an interrupt the interpreter would have taken
+    /// mid-block? If so the caller interprets the stretch instead, so the
+    /// trap lands at exactly the instruction the interpreter would trap on.
+    ///
+    /// The interpreter's interrupt check ([`RiscV::step`] tail) fires only
+    /// when global `mstatus.MIE` is set. Within one `Machine::run` batch the
+    /// external IRQ lines are stable (peripherals tick only *between* batches),
+    /// so the sole source that can *become* pending mid-block is the internal
+    /// CLINT timer: the block advances `mtime` by exactly `n`, so if that
+    /// crosses `mtimecmp` (with the timer unmasked in `mie`) the MTIP edge —
+    /// and its trap — must be observed inside the block.
+    fn block_would_cross_irq(&self, bus: &dyn Bus, n: u32) -> bool {
+        // Interrupts globally disabled: no trap is taken regardless.
+        if (self.mstatus & (1 << 3)) == 0 {
+            return false;
+        }
+        // Something is already pending (or an external line is asserted): the
+        // interpreter would trap within one instruction. Do not batch past it.
+        if (self.mip & self.mie) != 0 || bus.external_irq_lines() != 0 {
+            return true;
+        }
+        // Internal timer edge inside the block's mtime span.
+        let timer_unmasked = (self.mie & (1 << 7)) != 0;
+        timer_unmasked
+            && self.mtime < self.mtimecmp
+            && self.mtimecmp <= self.mtime.wrapping_add(n as u64)
+    }
+
+    /// Drive one batch through the JIT engine, returning the true retired
+    /// instruction count (never past `max_count`). The engine is moved out of
+    /// `self` for the duration so its methods can borrow `self.x` / `self.pc`
+    /// and the bus independently, then it is restored.
+    fn step_batch_jit(
+        &mut self,
+        bus: &mut dyn Bus,
+        observers: &[Arc<dyn SimulationObserver>],
+        config: &crate::SimulationConfig,
+        max_count: u32,
+    ) -> SimResult<u32> {
+        let mut engine = self.jit_engine.take().unwrap_or_else(|| {
+            crate::cpu::jit_framework::riscv::RiscvJitEngine::new(RISCV_JIT_HOT_THRESHOLD)
+        });
+        let out = self.run_jit_loop(&mut engine, bus, observers, config, max_count);
+        self.jit_engine = Some(engine);
+        out
+    }
+
+    /// The JIT dispatch loop body. `engine` is a borrowed handle (moved out of
+    /// `self` by the caller) so `engine.run_ready(pc, &mut self.x, …)` does not
+    /// alias `self`.
+    fn run_jit_loop(
+        &mut self,
+        engine: &mut crate::cpu::jit_framework::riscv::RiscvJitEngine,
+        bus: &mut dyn Bus,
+        observers: &[Arc<dyn SimulationObserver>],
+        config: &crate::SimulationConfig,
+        max_count: u32,
+    ) -> SimResult<u32> {
+        use crate::bus::SystemBus;
+        use crate::cpu::jit_framework::block_cache::Lookup;
+
+        let mut retired: u32 = 0;
+        while retired < max_count {
+            let pc = self.pc as u64;
+            match engine.observe(pc) {
+                Lookup::Ready => {
+                    let n = engine.ready_instr_count(pc).unwrap_or(0);
+                    // Never retire past the batch budget (preserves the
+                    // event/IRQ clamp `Machine::run` already applied), and
+                    // never let a block cross a mid-block interrupt deadline.
+                    let must_interpret =
+                        n == 0 || retired + n > max_count || self.block_would_cross_irq(bus, n);
+                    if must_interpret {
+                        self.step(bus, observers, config)?;
+                        engine.note_interpreted();
+                        retired += 1;
+                    } else if let Some(sb) =
+                        bus.as_any_mut().and_then(|a| a.downcast_mut::<SystemBus>())
+                    {
+                        let (actual_n, next_pc, clear_reservation, needs_interp) =
+                            engine.run_ready(pc, &mut self.x, &mut sb.ram.data);
+                        if clear_reservation {
+                            self.reservation = None;
+                        }
+                        self.pc = next_pc as u32;
+                        // ── THE MTIME FIXUP ──────────────────────────────
+                        // A compiled block retires `actual_n` instructions
+                        // without calling `step`, so it never advanced the
+                        // CLINT `mtime` (the interpreter bumps it 1/instr).
+                        // Advance it by exactly `actual_n` here so the cycle
+                        // CSRs (0xC00/0x802/0x7E2 = mtime*CYCLE_SCALE) and the
+                        // MTIP timer edge stay identical to a per-instruction
+                        // run. This is the analogue of Xtensa's CCOUNT += N-1.
+                        self.update_mtime_after_elapsed_cycles(actual_n as u64);
+                        retired += actual_n;
+                        // Entry-instruction memory fault: nothing retired and
+                        // the PC did not move — interpret one for progress.
+                        if actual_n == 0 && needs_interp {
+                            self.step(bus, observers, config)?;
+                            engine.note_interpreted();
+                            retired += 1;
+                        }
+                    } else {
+                        // Not a `SystemBus` (never happens in production): fall
+                        // back to the interpreter for this instruction.
+                        self.step(bus, observers, config)?;
+                        engine.note_interpreted();
+                        retired += 1;
+                    }
+                }
+                Lookup::Interpret { promote } => {
+                    if promote {
+                        if let Some(sb) = bus.as_any().and_then(|a| a.downcast_ref::<SystemBus>()) {
+                            engine.try_compile_from_bus(pc, sb);
+                        }
+                    }
+                    self.step(bus, observers, config)?;
+                    engine.note_interpreted();
+                    retired += 1;
+                }
+            }
+            // Mirror the interpreter batch's idle fast-forward early-exit so
+            // enabling the JIT never changes when a batch returns short.
+            if config.idle_fast_forward_enabled && self.idle_fast_forward_budget(bus).is_some() {
+                return Ok(retired);
+            }
+        }
+        Ok(retired)
+    }
+
+    /// Accumulated JIT engine stats — `None` if the engine was never created
+    /// (the JIT never ran). Used by the differential merge-gate test to assert
+    /// the compiled path was non-vacuously exercised.
+    pub fn jit_stats(&self) -> Option<crate::cpu::jit_framework::riscv::EngineStats> {
+        self.jit_engine.as_ref().map(|e| e.stats())
     }
 }
 
@@ -831,6 +1030,26 @@ impl Cpu for RiscV {
         config: &crate::SimulationConfig,
         max_count: u32,
     ) -> SimResult<u32> {
+        // ── Chunk H JIT fast-path ─────────────────────────────────────────
+        // When the RV32IMC wasm-JIT is opted in AND nothing needs
+        // per-instruction visibility, drive this batch through the JIT
+        // engine (compiled blocks + interpreter fallback). Off by default,
+        // and only compiled under `jit`; the interpreter loop below is the
+        // reference path (byte-identical to a non-`jit` build when the flag
+        // is off). `max_count <= 1` batches skip the JIT: `Machine::run`
+        // clamps the batch to one instruction precisely when it needs a
+        // per-instruction boundary (breakpoint set, poll-mode logic probe,
+        // cycle-accurate peripheral, next scheduled event), so restricting
+        // the JIT to multi-instruction batches folds all those correctness
+        // rails into one cheap check.
+        #[cfg(feature = "jit")]
+        {
+            self.jit_enabled = config.riscv_jit_enabled;
+            if self.jit_enabled && max_count > 1 && self.jit_gate_allows(bus, observers) {
+                return self.step_batch_jit(bus, observers, config, max_count);
+            }
+        }
+
         // Push-mode logic capture: advance the tap clock once per retired
         // instruction while armed, so MMIO pad writes stamp with the cycle
         // boundary they become observable at (see `crate::logic_capture`).

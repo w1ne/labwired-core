@@ -17,7 +17,7 @@
 //!     entirely through this trait so the framework never reaches into a
 //!     concrete `Cpu`/`Bus`.
 
-use super::{CodeView, Pc, StateVec};
+use super::{Pc, StateVec};
 
 /// Snapshot of the observation surface that must force interpretation.
 ///
@@ -95,10 +95,14 @@ pub trait JitHost {
     /// moves the interpreter's PC to the continuation).
     fn resume_at(&mut self, pc: Pc);
 
-    /// A read-only view of flash-resident code covering `pc`, or `None` if
-    /// `pc` is not in a compilable (flash) region. Backed by
-    /// `Bus::fetch_slice` on the real machine.
-    fn code_view(&self, pc: Pc) -> Option<CodeView<'_>>;
+    /// Materialise up to a block's worth of contiguous guest code bytes
+    /// starting at `pc`, fetched through the SAME path instruction fetch uses
+    /// (so XIP/MMU translation is applied), or `None` if `pc` is not in a
+    /// compilable code region. The dispatch loop builds a
+    /// [`CodeView`](super::CodeView) with `base = pc` from the result. Owned
+    /// (rather than a borrowed slice) so the fetch can translate through an
+    /// MMU-mapped window into a freshly materialised buffer.
+    fn code_bytes(&self, pc: Pc) -> Option<Vec<u8>>;
 
     /// The current safety gate — recomputed every call so a mid-run toggle
     /// (a debugger attaching, a probe arming) takes effect on the next

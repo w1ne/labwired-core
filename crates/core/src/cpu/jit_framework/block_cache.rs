@@ -136,6 +136,16 @@ impl<A> BlockCache<A> {
         self.slots.insert(pc, Slot::Hot { artifact, runs: 0 });
     }
 
+    /// Borrow the compiled artifact for `pc` (if hot) **without** counting a
+    /// run. Used to peek an installed block's metadata (e.g. its instruction
+    /// count) before deciding whether it may run within the caller's budget.
+    pub fn peek(&self, pc: Pc) -> Option<&A> {
+        match self.slots.get(&pc) {
+            Some(Slot::Hot { artifact, .. }) => Some(artifact),
+            _ => None,
+        }
+    }
+
     /// Borrow the compiled artifact for `pc` (if hot) and count a run.
     pub fn run_artifact(&mut self, pc: Pc) -> Option<&mut A> {
         match self.slots.get_mut(&pc) {

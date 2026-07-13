@@ -31,10 +31,16 @@ pub mod xtensa_jit_bytes;
 // cache, side-exit protocol, per-ISA frontend trait, native/browser
 // runtime abstraction, interpreter-fallback hooks, and the differential
 // harness. It carries NO per-ISA codegen: the only frontend is a
-// passthrough that side-exits every block to the interpreter. Gated behind
-// `jit-framework` so default and existing builds are unaffected. See
+// passthrough that side-exits every block to the interpreter.
+//
+// Compiled under EITHER `jit-framework` (the pure-Rust scaffold + lockstep
+// tests) OR `jit` (the production/wasm feature set): chunk H wires the
+// RISC-V frontend's native `wasmtime` executor (`riscv::exec`, itself gated
+// on `jit`) into `Machine<RiscV>`'s dispatch, so the production `jit` build
+// needs this module present too. Both features are off by default, so the
+// default build is unaffected. See
 // `docs/engineering/universal-jit-framework.md`.
-#[cfg(feature = "jit-framework")]
+#[cfg(any(feature = "jit", feature = "jit-framework"))]
 pub mod jit_framework;
 
 pub use cortex_m::CortexM;

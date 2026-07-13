@@ -75,7 +75,7 @@ pub fn differential_cycle_ignore_indices() -> Vec<usize> {
 /// unmodeled instruction), but flash could in principle contain a very long
 /// straight-line run; this keeps the walk — and the eventual emitted body —
 /// bounded regardless.
-const MAX_BLOCK_INSTRS: u32 = 1024;
+pub(crate) const MAX_BLOCK_INSTRS: u32 = 1024;
 
 /// How a single decoded instruction affects the block walk.
 ///

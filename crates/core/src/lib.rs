@@ -910,6 +910,19 @@ pub struct StepProfile {
     pub legacy_tick_entries: u64,
 }
 
+/// No-event batch cap for the RISC-V JIT on a walk-deletable bus (see
+/// `Machine::run`'s batch-widening). Sized so one max-length compiled block
+/// ([`cpu::jit_framework::riscv::MAX_BLOCK_INSTRS`] = 1024 instructions) always
+/// fits in a single batch — otherwise `run_jit_loop`'s `retired + n > max_count`
+/// guard would refuse it and the JIT would never engage. Kept to exactly one
+/// block so peripheral ticks / breakpoint checks still run frequently between
+/// scheduled events; the budget clamps tighter than this whenever an event is
+/// due. Mirrors `cpu::jit_framework::riscv::MAX_BLOCK_INSTRS` (a literal here so
+/// it does not depend on the `jit` feature being enabled alongside
+/// `event-scheduler`; keep the two in sync).
+#[cfg(feature = "event-scheduler")]
+const RISCV_JIT_BATCH_CAP: u32 = 1024;
+
 pub struct Machine<C: Cpu> {
     pub cpu: C,
     /// Secondary CPU instance — for dual-core SoCs (ESP32, ESP32-S3).
@@ -987,6 +1000,16 @@ pub struct Machine<C: Cpu> {
 }
 
 impl<C: Cpu> Machine<C> {
+    /// Whether any logic-analyzer / signal probe is armed (poll or push mode).
+    /// The `jit_framework` [`SafetyGate`](crate::cpu::jit_framework::fallback::SafetyGate)
+    /// reads this to force the interpreter while a probe needs per-cycle pad
+    /// visibility. `logic_capture` is module-private, so this crate-internal
+    /// accessor is how the RISC-V JIT host reaches it.
+    #[cfg(any(feature = "jit", feature = "jit-framework"))]
+    pub(crate) fn logic_probes_active(&self) -> bool {
+        self.logic_capture.poll_active() || self.logic_capture.push_active()
+    }
+
     /// Discover the drivable input channels on this machine (delegates to
     /// [`bus::SystemBus::list_inputs`]). See [`crate::sim_input`].
     pub fn list_inputs(&mut self) -> Vec<(String, crate::sim_input::InputChannel)> {
@@ -2090,6 +2113,38 @@ impl<C: Cpu> DebugControl for Machine<C> {
             } else {
                 remaining_until_tick
             };
+
+            // ── RISC-V JIT batch widening (chunk H) ──────────────────────────
+            // The `peripheral_tick_interval` is a PERFORMANCE knob for
+            // walk-deletable peripherals, not a correctness boundary — scheduled
+            // events are. When the RISC-V JIT is enabled on a walk-deletable bus
+            // (`max_safe_tick_interval() > 1`), an atomic compiled block (up to
+            // `MAX_BLOCK_INSTRS`) must be allowed to retire in one batch even at
+            // a small tick interval; otherwise `run_jit_loop`'s
+            // `retired + n > max_count` guard refuses every block and the JIT
+            // never engages (interpreting everything). Key the budget off the
+            // DISTANCE TO THE NEXT SCHEDULED EVENT instead: a full block fits
+            // when no event is due, and the batch clamps EXACTLY to a due event
+            // otherwise, so the post-batch drain applies it at its exact cycle
+            // (byte-identical to a per-instruction run — the same guarantee the
+            // walk-differential gates prove for interval-vs-1). Gated on
+            // `riscv_jit_enabled`, so it never perturbs the non-JIT interpreter
+            // batching. The safety clamps below (cycle-accurate / breakpoint /
+            // poll-capture) still only ever REDUCE this, so a debugger or probe
+            // pins the batch to one instruction exactly as before.
+            #[cfg(feature = "event-scheduler")]
+            if self.config.riscv_jit_enabled && self.bus.max_safe_tick_interval() > 1 {
+                let mut jit_batch = RISCV_JIT_BATCH_CAP;
+                let generations = self.bus.peripheral_generations();
+                if let Some(deadline) = self.sched.next_event_deadline(&generations) {
+                    let until = deadline.saturating_sub(self.total_cycles);
+                    jit_batch = jit_batch.min(until.clamp(1, u32::MAX as u64) as u32);
+                }
+                if let Some(limit) = max_steps {
+                    jit_batch = jit_batch.min((limit - steps).max(1));
+                }
+                current_batch = jit_batch;
+            }
 
             // Cycle-accurate buses (HC-SR04, IO-Link, H5 op-modeling FLASH) must
             // execute one instruction per batch so per-instruction services —

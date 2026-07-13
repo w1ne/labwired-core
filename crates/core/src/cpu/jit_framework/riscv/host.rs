@@ -13,15 +13,15 @@
 //!
 //! ## Two places the framework API did not match the RISC-V machine
 //!
-//! * **`code_view` is NOT backed by `Bus::fetch_slice`.** `SystemBus`'s
-//!   `fetch_slice` only serves the Xtensa `RamPeripheral` (it downcasts to
-//!   it and returns `None` otherwise), so it yields nothing for a RISC-V
-//!   flash region. We read `bus.flash` (a `LinearMemory` whose `data`
-//!   `Vec<u8>` never reallocates after config) directly instead — which is
-//!   exactly the position-stable, flash-resident code the block cache
-//!   requires. Extending `SystemBus::fetch_slice` to also serve `flash`/the
-//!   C3 XIP peripheral is a later cleanup; it is not needed to prove the
-//!   plumbing.
+//! * **`code_bytes` fetches through the MMU, not raw `flash.data`.** The JIT
+//!   must compile from the exact bytes the interpreter fetches. On the C3 the
+//!   app runs from the 0x4200_0000 XIP window, whose `FlashXipPeripheral`
+//!   MMU-translates every virtual page to a physical flash page — so reading
+//!   `bus.flash.data` directly (the earlier workaround) compiled from the
+//!   wrong bytes (typically zeros → a spurious 1024-instruction runaway
+//!   block). `code_bytes` now materialises the block through
+//!   [`SystemBus::read_code_slice`](crate::bus::SystemBus::read_code_slice),
+//!   the same side-effect-free routing `bus.read_u32(pc)` fetch takes.
 //! * **There is no flash-dirty flag on the bus.** Nothing tracks flash
 //!   writes today, so [`take_flash_dirty`](JitHost::take_flash_dirty) is
 //!   conservatively `false`. That is correct for any run that does not
@@ -32,7 +32,7 @@ use crate::cpu::RiscV;
 use crate::Machine;
 
 use super::super::fallback::{HostStep, JitHost, SafetyGate};
-use super::super::{CodeView, Pc, StateVec};
+use super::super::{Pc, StateVec};
 
 /// Number of `u32` words in a RISC-V [`StateVec`]: `x0..x31` (32) + `pc`
 /// (1) + the eight architectural M-mode CSRs (8).
@@ -109,17 +109,17 @@ impl JitHost for RiscVJitHost<'_> {
         self.machine.cpu.pc = pc as u32;
     }
 
-    fn code_view(&self, pc: Pc) -> Option<CodeView<'_>> {
-        let flash = &self.machine.bus.flash;
-        let base = flash.base_addr;
-        let len = flash.data.len() as u64;
-        if pc >= base && (pc - base) < len {
-            Some(CodeView::new(base, &flash.data))
-        } else {
-            // Not flash-resident (RAM / MMIO / an XIP window we do not map
-            // here) — not compilable; the PC stays on the interpreter.
-            None
-        }
+    fn code_bytes(&self, pc: Pc) -> Option<Vec<u8>> {
+        // Materialise up to one max-length block through the SAME MMU/XIP-aware
+        // fetch path the interpreter uses (`bus.read_code_slice`), so a C3 app
+        // running from the 0x4200_0000 XIP window compiles from the correct,
+        // MMU-translated bytes rather than raw `flash.data`. `None`/too-short
+        // when `pc` is not fetchable code — the PC stays on the interpreter.
+        let bytes = self
+            .machine
+            .bus
+            .read_code_slice(pc, super::MAX_BLOCK_INSTRS as usize * 4);
+        (bytes.len() >= 2).then_some(bytes)
     }
 
     fn safety(&self) -> SafetyGate {
@@ -128,14 +128,12 @@ impl JitHost for RiscVJitHost<'_> {
             observers_active: !self.machine.observers.is_empty(),
             // A block could step over a breakpoint address without stopping.
             breakpoints_active: !self.machine.breakpoints.is_empty(),
-            // Logic-analyzer / DAP-watch taps and cycle-accurate mode are
-            // not surfaced through a stable accessor on this machine yet;
-            // understating them is always safe (it only lets the JIT run
-            // where it is in fact equivalent — the interpreter is the
-            // reference), and the all-bail frontend is byte-identical
-            // regardless. These wire in when the accessors land.
-            probes_active: false,
-            cycle_accurate: false,
+            // A logic-analyzer / DAP-watch tap (poll or push mode) needs
+            // per-cycle pad visibility a batched block elides.
+            probes_active: self.machine.logic_probes_active(),
+            // A cycle-accurate peripheral (HC-SR04, IO-Link, op-modeled FLASH)
+            // needs per-instruction bus services the JIT does not run.
+            cycle_accurate: self.machine.bus.requires_cycle_accurate(),
         }
     }
 

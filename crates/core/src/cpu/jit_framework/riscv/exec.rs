@@ -53,6 +53,7 @@ use super::emit::{
     WIRE_CHAIN_DYNAMIC, WIRE_FALL_THROUGH, WIRE_MEM_FAULT,
 };
 use super::RiscVFrontend;
+use crate::bus::SystemBus;
 
 /// Bytes synced between the guest register file and the imported memory each
 /// block run: `x0..x31` (`128`) plus the one-word dynamic next-PC slot
@@ -283,6 +284,17 @@ pub struct RiscvJitEngine {
     stats: EngineStats,
 }
 
+impl std::fmt::Debug for RiscvJitEngine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // The `wasmtime::Engine` behind `jit` is not `Debug`; surface the
+        // run stats (the only interesting state) and elide the rest.
+        f.debug_struct("RiscvJitEngine")
+            .field("stats", &self.stats)
+            .field("compiled_blocks", &self.cache.compiled_len())
+            .finish_non_exhaustive()
+    }
+}
+
 impl RiscvJitEngine {
     /// New engine with the given hot-promotion threshold.
     pub fn new(hot_threshold: u32) -> Self {
@@ -297,6 +309,105 @@ impl RiscvJitEngine {
     /// Accumulated statistics.
     pub fn stats(&self) -> EngineStats {
         self.stats
+    }
+
+    // ── Production dispatch primitives (chunk H) ──────────────────────────
+    //
+    // The methods below let `RiscV::step_batch` drive the engine directly
+    // over the machine's raw register file + guest-RAM window (via a
+    // downcast `&mut SystemBus`) and its own interpreter, *without* routing
+    // through a `Machine<RiscV>` (which `step_unit` above requires and which
+    // the `Cpu::step_batch` signature cannot hand us). They keep the same
+    // block-cache promotion, executor, and stats as `step_unit`.
+
+    /// Record that dispatch landed on `pc` and decide what to do with it
+    /// (run a ready block, or interpret + maybe promote). See
+    /// [`BlockCache::observe`].
+    pub fn observe(&mut self, pc: Pc) -> Lookup {
+        self.cache.observe(pc)
+    }
+
+    /// The instruction count of the compiled block installed at `pc`, without
+    /// counting a run. `None` if `pc` is not hot. The caller uses this to
+    /// refuse a block that would retire past its instruction budget or across
+    /// a pending interrupt deadline.
+    pub fn ready_instr_count(&self, pc: Pc) -> Option<u32> {
+        self.cache.peek(pc).map(|b| b.instr_count)
+    }
+
+    /// Run the compiled block installed at `pc` against the guest register
+    /// file `x` and guest-RAM window `ram`, mutating both in place. Returns
+    /// `(retired, next_pc, clear_reservation, needs_interpreter)`:
+    ///
+    /// * `retired` — guest instructions the block actually retired (`0` on an
+    ///   entry-instruction memory fault).
+    /// * `next_pc` — the PC the machine must continue from.
+    /// * `clear_reservation` — an inline store executed; caller clears
+    ///   `cpu.reservation`.
+    /// * `needs_interpreter` — the exit is a bail (memory fault / partial);
+    ///   with `retired == 0` the caller interprets one instruction to
+    ///   guarantee forward progress.
+    ///
+    /// Panics only if `pc` is not a ready block (the caller guarantees it via
+    /// a preceding [`observe`](Self::observe) == [`Lookup::Ready`]).
+    pub fn run_ready(
+        &mut self,
+        pc: Pc,
+        x: &mut [u32; 32],
+        ram: &mut [u8],
+    ) -> (u32, Pc, bool, bool) {
+        let block = self.cache.run_artifact(pc).expect("run_ready on a hot PC");
+        let (exit, n, clear_reservation) = block.run(x, ram);
+        self.stats.block_runs += 1;
+        self.stats.block_instrs += n as u64;
+        (
+            n,
+            exit.continuation_pc(),
+            clear_reservation,
+            exit.needs_interpreter(),
+        )
+    }
+
+    /// Count an interpreter-fallback instruction (the caller runs the
+    /// interpreter itself over its own bus).
+    pub fn note_interpreted(&mut self) {
+        self.stats.interpreted += 1;
+    }
+
+    /// Translate + instantiate the block at `pc`, sourcing its bytes through
+    /// the [`SystemBus`]'s MMU/XIP-aware code fetch and binding its guest-RAM
+    /// window, installing the block on success. Any refusal leaves the PC on
+    /// the interpreter — never an error.
+    pub fn try_compile_from_bus(&mut self, pc: Pc, bus: &SystemBus) {
+        // Bind the machine's current guest-RAM window so loads/stores can take
+        // the inline fast path (out-of-window accesses side-exit to the
+        // interpreter's bus, which owns all MMIO).
+        self.frontend
+            .set_ram_window(bus.ram.base_addr as u32, bus.ram.data.len() as u32);
+        // Source block bytes through the SAME MMU/XIP-aware fetch path the
+        // interpreter uses. Reading `bus.flash.data` directly would bypass the
+        // ESP32-C3 XIP MMU (0x4200_0000 → physical flash pages) and compile
+        // from the wrong bytes. Materialising up to one max-length block
+        // (`MAX_BLOCK_INSTRS` × 4 bytes) is amortised across every run of the
+        // hot block, so the per-byte fetch cost is negligible.
+        let code = bus.read_code_slice(pc, super::MAX_BLOCK_INSTRS as usize * 4);
+        if code.len() < 2 {
+            return; // `pc` is not in fetchable code memory
+        }
+        let view = CodeView::new(pc, &code);
+        let Ok((plan, binding)) = self.frontend.translate_block_riscv(pc, &view) else {
+            return;
+        };
+        if let Some(block) = self.jit.compile(&plan, binding) {
+            self.cache.install(pc, block);
+            self.stats.compiled += 1;
+        }
+    }
+
+    /// Drop the entire block cache — the invalidate-all-on-flash-write policy
+    /// (see [`BlockCache::invalidate_all`]).
+    pub fn invalidate_blocks(&mut self) {
+        self.cache.invalidate_all();
     }
 
     /// Advance `machine` by exactly one dispatch unit. Returns the number of
@@ -354,27 +465,7 @@ impl RiscvJitEngine {
     /// Any refusal (non-ALU entry → stub, out-of-flash PC, instantiate
     /// failure) leaves the PC on the interpreter — never an error.
     fn try_compile(&mut self, machine: &Machine<RiscV>, pc: Pc) {
-        let flash = &machine.bus.flash;
-        let base = flash.base_addr;
-        let len = flash.data.len() as u64;
-        if pc < base || (pc - base) >= len {
-            return;
-        }
-        // Bind the machine's current guest-RAM window so loads/stores can take
-        // the inline fast path (out-of-window accesses side-exit to the
-        // interpreter's bus, which owns all MMIO).
-        self.frontend.set_ram_window(
-            machine.bus.ram.base_addr as u32,
-            machine.bus.ram.data.len() as u32,
-        );
-        let view = CodeView::new(base, &flash.data);
-        let Ok((plan, binding)) = self.frontend.translate_block_riscv(pc, &view) else {
-            return;
-        };
-        if let Some(block) = self.jit.compile(&plan, binding) {
-            self.cache.install(pc, block);
-            self.stats.compiled += 1;
-        }
+        self.try_compile_from_bus(pc, &machine.bus);
     }
 }
 

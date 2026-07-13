@@ -32,6 +32,7 @@ use super::fallback::{HostStep, JitHost};
 use super::frontend::IsaFrontend;
 use super::runtime::{JitRuntime, MemoryBinding};
 use super::side_exit::SideExit;
+use super::CodeView;
 
 /// Run statistics for one [`DispatchLoop::run`] invocation. Feeds the
 /// merge-bar measurement (compiled-block coverage) and telemetry.
@@ -180,10 +181,15 @@ impl<F: IsaFrontend, R: JitRuntime> DispatchLoop<F, R> {
     /// instantiate + install it. Any refusal/failure leaves `pc` on the
     /// interpreter — never an error.
     fn try_compile<H: JitHost>(&mut self, host: &mut H, pc: u64) {
-        let Some(view) = host.code_view(pc) else {
+        let Some(bytes) = host.code_bytes(pc) else {
             self.stats.compile_refusals += 1;
             return;
         };
+        if bytes.len() < 2 {
+            self.stats.compile_refusals += 1;
+            return;
+        }
+        let view = CodeView::new(pc, &bytes);
         let plan = match self.frontend.translate_block(pc, &view) {
             Ok(plan) => plan,
             Err(_) => {
@@ -207,7 +213,7 @@ mod tests {
     use crate::cpu::jit_framework::fallback::SafetyGate;
     use crate::cpu::jit_framework::frontend::PassthroughFrontend;
     use crate::cpu::jit_framework::runtime::InterpreterRuntime;
-    use crate::cpu::jit_framework::{CodeView, Pc, StateVec};
+    use crate::cpu::jit_framework::{Pc, StateVec};
 
     /// Minimal looping machine: a `loop_len`-instruction hot loop at
     /// `flash_base`, executed until `total` instructions retire. Each
@@ -261,9 +267,9 @@ mod tests {
         fn resume_at(&mut self, pc: Pc) {
             self.pc = pc;
         }
-        fn code_view(&self, pc: Pc) -> Option<CodeView<'_>> {
+        fn code_bytes(&self, pc: Pc) -> Option<Vec<u8>> {
             if pc >= self.flash_base && (pc - self.flash_base) < self.flash.len() as u64 {
-                Some(CodeView::new(self.flash_base, &self.flash))
+                Some(self.flash[(pc - self.flash_base) as usize..].to_vec())
             } else {
                 None
             }
