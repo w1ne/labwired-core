@@ -276,7 +276,7 @@ fn every_alu_op_matches_interpreter() {
         };
         assert!(!plan.is_stub(), "{name}: expected a compiled ALU block");
         assert_eq!(plan.instr_count, 1, "{name}: one-instruction block");
-        let mut block = jit.compile(&plan).expect("compile");
+        let mut block = jit.compile(&plan, None).expect("compile");
 
         for &(a, b) in &pairs {
             // Interpreter reference.
@@ -290,7 +290,7 @@ fn every_alu_op_matches_interpreter() {
             let mut x = [0u32; 32];
             x[2] = a;
             x[3] = b;
-            let (_exit, n) = block.run(&mut x);
+            let (_exit, n, _clear) = block.run(&mut x, &mut []);
             assert_eq!(n, 1, "{name}: retires one instruction");
             assert_eq!(
                 x[1], want,

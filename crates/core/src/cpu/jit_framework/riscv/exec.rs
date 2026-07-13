@@ -45,27 +45,48 @@ use crate::cpu::RiscV;
 use crate::Machine;
 
 use super::super::block_cache::{BlockCache, Lookup};
-use super::super::frontend::{BlockPlan, IsaFrontend};
+use super::super::frontend::BlockPlan;
 use super::super::side_exit::{BailReason, SideExit};
 use super::super::{CodeView, Pc};
-use super::emit::WIRE_FALL_THROUGH;
+use super::emit::{
+    MemBinding, FAULT_PC_SLOT, FAULT_RETIRED_SLOT, RAM_WINDOW_OFF, RES_FLAG_SLOT,
+    WIRE_FALL_THROUGH, WIRE_MEM_FAULT,
+};
 use super::RiscVFrontend;
 
 /// One instantiated, runnable compiled block: its own `wasmtime` store, the
-/// imported register-file memory, and the exported `run` entry.
+/// imported memory (register file + optional guest-RAM window), and the
+/// exported `run` entry.
 pub struct CompiledBlock {
     store: Store<()>,
     run: TypedFunc<(), i32>,
     regs: Memory,
     end_pc: Pc,
     instr_count: u32,
+    /// Guest-RAM bytes this block syncs in/out around a run (`0` for a
+    /// pure-ALU block, which never touches the RAM window).
+    ram_len: usize,
+    /// Whether the block contains a store (so a set reservation-flag slot is
+    /// worth reading back to clear `cpu.reservation`).
+    has_store: bool,
 }
 
 impl CompiledBlock {
-    /// Run the block against the guest register file `x`, mutating it in
-    /// place. Returns the resolved [`SideExit`] and the number of guest
-    /// instructions the block retired.
-    pub fn run(&mut self, x: &mut [u32; 32]) -> (SideExit, u32) {
+    /// Read a 4-byte little-endian control slot from the imported memory.
+    fn read_slot(&self, off: u32) -> u32 {
+        let mut b = [0u8; 4];
+        self.regs
+            .read(&self.store, off as usize, &mut b)
+            .expect("control-slot read");
+        u32::from_le_bytes(b)
+    }
+
+    /// Run the block against the guest register file `x` and the guest RAM
+    /// bytes `ram` (the machine's `bus.ram.data`), mutating both in place.
+    /// Returns the resolved [`SideExit`], the number of guest instructions the
+    /// block retired, and whether the caller must clear `cpu.reservation`
+    /// (a store executed inline). `ram` is ignored for pure-ALU blocks.
+    pub fn run(&mut self, x: &mut [u32; 32], ram: &mut [u8]) -> (SideExit, u32, bool) {
         let mut bytes = [0u8; 128];
         for (i, w) in x.iter().enumerate() {
             bytes[i * 4..i * 4 + 4].copy_from_slice(&w.to_le_bytes());
@@ -74,10 +95,22 @@ impl CompiledBlock {
             .write(&mut self.store, 0, &bytes)
             .expect("register-file memory write");
 
+        // Sync the guest-RAM window in + clear the reservation flag slot, but
+        // only for blocks that touch memory (pure-ALU blocks skip this).
+        let ram_n = self.ram_len.min(ram.len());
+        if self.ram_len > 0 {
+            self.regs
+                .write(&mut self.store, RAM_WINDOW_OFF as usize, &ram[..ram_n])
+                .expect("guest-RAM seed");
+            self.regs
+                .write(&mut self.store, RES_FLAG_SLOT as usize, &[0u8; 4])
+                .expect("reservation-flag clear");
+        }
+
         let wire = self
             .run
             .call(&mut self.store, ())
-            .expect("compiled ALU block never traps");
+            .expect("compiled block never traps");
 
         self.regs
             .read(&self.store, 0, &mut bytes)
@@ -92,19 +125,48 @@ impl CompiledBlock {
         }
         x[0] = 0; // x0 is hardwired to zero
 
-        let exit = match wire {
-            WIRE_FALL_THROUGH => SideExit::Chain {
-                next_pc: self.end_pc,
-            },
-            // No other edge exists in chunk C; treat an unknown wire as a
-            // conservative bail so a future emit bug can never silently
-            // corrupt state.
-            _ => SideExit::EnterInterpreter {
-                resume_pc: self.end_pc,
-                reason: BailReason::PartialBlock,
-            },
+        let mut clear_reservation = false;
+        if self.ram_len > 0 {
+            self.regs
+                .read(&self.store, RAM_WINDOW_OFF as usize, &mut ram[..ram_n])
+                .expect("guest-RAM writeback");
+            if self.has_store {
+                clear_reservation = self.read_slot(RES_FLAG_SLOT) != 0;
+            }
+        }
+
+        let (exit, n) = match wire {
+            WIRE_FALL_THROUGH => (
+                SideExit::Chain {
+                    next_pc: self.end_pc,
+                },
+                self.instr_count,
+            ),
+            // Memory fault mid-block: the faulting load/store published its own
+            // PC and the count of instructions retired before it. The
+            // interpreter resumes there to perform the real (MMIO) access.
+            WIRE_MEM_FAULT => {
+                let resume_pc = self.read_slot(FAULT_PC_SLOT) as Pc;
+                let retired = self.read_slot(FAULT_RETIRED_SLOT);
+                (
+                    SideExit::EnterInterpreter {
+                        resume_pc,
+                        reason: BailReason::MemoryFault,
+                    },
+                    retired,
+                )
+            }
+            // No other edge exists; treat an unknown wire as a conservative
+            // bail so a future emit bug can never silently corrupt state.
+            _ => (
+                SideExit::EnterInterpreter {
+                    resume_pc: self.end_pc,
+                    reason: BailReason::PartialBlock,
+                },
+                self.instr_count,
+            ),
         };
-        (exit, self.instr_count)
+        (exit, n, clear_reservation)
     }
 }
 
@@ -129,17 +191,30 @@ impl RiscvWasmJit {
         }
     }
 
-    /// Instantiate `plan`'s wasm into a runnable block with its own register
-    /// memory. Returns `None` if the plan is a body-less stub (nothing to
-    /// run) or the bytes fail to validate / instantiate — the caller keeps
-    /// the PC on the interpreter.
-    pub fn compile(&self, plan: &BlockPlan) -> Option<CompiledBlock> {
+    /// Instantiate `plan`'s wasm into a runnable block with its own imported
+    /// memory. `binding` (from
+    /// [`RiscVFrontend::translate_block_riscv`](super::RiscVFrontend::translate_block_riscv))
+    /// is `Some` iff the block contains a load/store, in which case the memory
+    /// is sized to cover the guest-RAM window mapped at [`RAM_WINDOW_OFF`].
+    /// Returns `None` if the plan is a body-less stub or the bytes fail to
+    /// validate / instantiate — the caller keeps the PC on the interpreter.
+    pub fn compile(&self, plan: &BlockPlan, binding: Option<MemBinding>) -> Option<CompiledBlock> {
         if plan.is_stub() {
             return None;
         }
         let module = Module::new(&self.engine, &plan.code).ok()?;
         let mut store = Store::new(&self.engine, ());
-        let regs = Memory::new(&mut store, MemoryType::new(1, None)).ok()?;
+
+        let (ram_len, has_store, pages) = match binding {
+            Some(b) => {
+                let bytes = (RAM_WINDOW_OFF as usize + b.ram_len).max(1);
+                let pages = bytes.div_ceil(65536).max(1) as u32;
+                (b.ram_len, b.has_store, pages)
+            }
+            None => (0usize, false, 1u32),
+        };
+
+        let regs = Memory::new(&mut store, MemoryType::new(pages, None)).ok()?;
         let instance = Instance::new(&mut store, &module, &[regs.into()]).ok()?;
         let run = instance.get_typed_func::<(), i32>(&mut store, "run").ok()?;
         Some(CompiledBlock {
@@ -148,6 +223,8 @@ impl RiscvWasmJit {
             regs,
             end_pc: plan.end_pc,
             instr_count: plan.instr_count,
+            ram_len,
+            has_store,
         })
     }
 }
@@ -211,10 +288,23 @@ impl RiscvJitEngine {
                 let Some(block) = self.cache.run_artifact(pc) else {
                     return self.interpret_one(machine);
                 };
-                let (exit, n) = block.run(&mut machine.cpu.x);
+                // `cpu.x` and `bus.ram.data` are disjoint fields of `machine`.
+                let (exit, n, clear_reservation) =
+                    block.run(&mut machine.cpu.x, &mut machine.bus.ram.data);
+                if clear_reservation {
+                    machine.cpu.reservation = None;
+                }
                 self.stats.block_runs += 1;
                 self.stats.block_instrs += n as u64;
                 machine.cpu.pc = exit.continuation_pc() as u32;
+                // A memory fault on the block's *entry* instruction retires
+                // nothing (`n == 0`) and leaves the PC unchanged. Interpret one
+                // instruction to guarantee forward progress — otherwise the
+                // dispatcher would re-run the same always-faulting block
+                // forever (and a bare `0` reads as a halt).
+                if n == 0 && exit.needs_interpreter() {
+                    return self.interpret_one(machine);
+                }
                 n
             }
             Lookup::Interpret { promote } => {
@@ -247,11 +337,18 @@ impl RiscvJitEngine {
         if pc < base || (pc - base) >= len {
             return;
         }
+        // Bind the machine's current guest-RAM window so loads/stores can take
+        // the inline fast path (out-of-window accesses side-exit to the
+        // interpreter's bus, which owns all MMIO).
+        self.frontend.set_ram_window(
+            machine.bus.ram.base_addr as u32,
+            machine.bus.ram.data.len() as u32,
+        );
         let view = CodeView::new(base, &flash.data);
-        let Ok(plan) = self.frontend.translate_block(pc, &view) else {
+        let Ok((plan, binding)) = self.frontend.translate_block_riscv(pc, &view) else {
             return;
         };
-        if let Some(block) = self.jit.compile(&plan) {
+        if let Some(block) = self.jit.compile(&plan, binding) {
             self.cache.install(pc, block);
             self.stats.compiled += 1;
         }
@@ -280,13 +377,16 @@ mod tests {
         let prog = words(&[enc_addi(1, 0, 7), enc_addi(2, 1, 3), 0x0000_0073]);
         let plan = {
             let view = CodeView::new(0, &prog);
-            RiscVFrontend::new().translate_block(0, &view).unwrap()
+            RiscVFrontend::new()
+                .translate_block_riscv(0, &view)
+                .unwrap()
+                .0
         };
         assert!(!plan.is_stub());
         let jit = RiscvWasmJit::new();
-        let mut block = jit.compile(&plan).expect("compile");
+        let mut block = jit.compile(&plan, None).expect("compile");
         let mut x = [0u32; 32];
-        let (exit, n) = block.run(&mut x);
+        let (exit, n, _clear) = block.run(&mut x, &mut []);
         assert_eq!(n, 2, "two addi retired");
         assert_eq!(x[1], 7);
         assert_eq!(x[2], 10);

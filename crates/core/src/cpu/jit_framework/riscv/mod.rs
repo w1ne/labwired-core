@@ -43,6 +43,7 @@ pub mod emit;
 pub mod host;
 pub mod wasm_encode;
 
+pub use emit::{MemBinding, RamWindow};
 pub use host::{snapshot_state, RiscVJitHost};
 
 // Native (`wasmtime`) execution of emitted blocks lives behind the `jit`
@@ -293,17 +294,85 @@ pub fn walk_block(pc: Pc, code: &CodeView<'_>) -> Option<BlockWalk> {
     }
 }
 
-/// The RV32IMC frontend. **Foundation milestone: all-bail** — it produces a
-/// correct block plan (entry/end PC, instruction count, side-exit map) with
-/// an empty `code` body, so every block side-exits to the interpreter. The
-/// codegen chunks replace the empty body class-by-class.
+/// The RV32IMC frontend. Emits real wasm for the maximal integer-ALU +
+/// load/store prefix at a block entry (chunks C+E); anything else falls back
+/// to a correct metadata-only stub that side-exits to the interpreter.
+///
+/// `ram_window` is the guest-RAM window (`bus.ram`) that loads/stores bind
+/// against for their inline fast path (see [`emit`]). It is `None` on a
+/// frontend constructed with [`RiscVFrontend::new`] — in which case
+/// loads/stores are treated as non-emittable and a block ends before the
+/// first one (the chunk-C behaviour). The [`RiscvJitEngine`] populates it
+/// from the machine's bus before every translation.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct RiscVFrontend;
+pub struct RiscVFrontend {
+    ram_window: Option<RamWindow>,
+}
 
 impl RiscVFrontend {
-    /// Construct the frontend.
+    /// Construct the frontend with no RAM binding (loads/stores stay on the
+    /// interpreter until a window is set).
     pub const fn new() -> Self {
-        RiscVFrontend
+        RiscVFrontend { ram_window: None }
+    }
+
+    /// Construct the frontend bound to a guest-RAM window `(base, len)`.
+    pub const fn with_ram_window(base: u32, len: u32) -> Self {
+        RiscVFrontend {
+            ram_window: Some((base, len)),
+        }
+    }
+
+    /// Set the guest-RAM window loads/stores bind against.
+    pub fn set_ram_window(&mut self, base: u32, len: u32) {
+        self.ram_window = Some((base, len));
+    }
+
+    /// Translate a block, returning both the runtime-neutral [`BlockPlan`] and
+    /// the RISC-V-local [`MemBinding`] the native runtime needs to size + sync
+    /// the RAM-backing memory. The trait [`IsaFrontend::translate_block`] is
+    /// this without the binding.
+    pub fn translate_block_riscv(
+        &self,
+        pc: Pc,
+        code: &CodeView<'_>,
+    ) -> Result<(BlockPlan, Option<MemBinding>), FrontendRefusal> {
+        if !code.covers(pc) {
+            return Err(FrontendRefusal::PcOutOfRange);
+        }
+
+        // Chunks C+E: emit real wasm for the maximal ALU + load/store prefix.
+        // The block runs that prefix and either falls through (Chain to
+        // `end_pc`) or, on an out-of-window access, side-exits with a memory
+        // fault at the faulting instruction.
+        if let Some(blk) = emit::emit_block(pc, code, self.ram_window) {
+            let plan = BlockPlan {
+                entry_pc: pc,
+                end_pc: blk.end_pc,
+                instr_count: blk.instr_count,
+                code: blk.code,
+                exits: blk.exits,
+            };
+            return Ok((plan, blk.binding));
+        }
+
+        // Entry is not emittable (a branch/jump → chunk D, or an
+        // interpreter-owned op). Fall back to the foundation's all-bail walk.
+        let walk = walk_block(pc, code).ok_or(FrontendRefusal::PcOutOfRange)?;
+        if walk.instr_count == 0 {
+            return Err(FrontendRefusal::BlockTooShort);
+        }
+        let plan = BlockPlan {
+            entry_pc: walk.entry_pc,
+            end_pc: walk.end_pc,
+            instr_count: walk.instr_count,
+            code: Vec::new(),
+            exits: vec![ExitEdge {
+                wire_code: 0,
+                reason: walk.bail_reason(),
+            }],
+        };
+        Ok((plan, None))
     }
 }
 
@@ -313,43 +382,7 @@ impl IsaFrontend for RiscVFrontend {
     }
 
     fn translate_block(&self, pc: Pc, code: &CodeView<'_>) -> Result<BlockPlan, FrontendRefusal> {
-        if !code.covers(pc) {
-            return Err(FrontendRefusal::PcOutOfRange);
-        }
-
-        // Chunk C: if the entry instruction is integer-ALU, emit real wasm
-        // for the maximal ALU prefix. The block runs that prefix and
-        // side-exits (fall-through Chain) to `end_pc`, where the interpreter
-        // (or a future compiled block) picks up the first non-ALU
-        // instruction.
-        if let Some(blk) = emit::emit_alu_block(pc, code) {
-            return Ok(BlockPlan {
-                entry_pc: pc,
-                end_pc: blk.end_pc,
-                instr_count: blk.instr_count,
-                code: blk.code,
-                exits: blk.exits,
-            });
-        }
-
-        // Entry is not ALU-emittable (a branch/jump → chunk D, a load/store →
-        // chunk E, or an interpreter-owned op). Fall back to the foundation's
-        // all-bail walk: a correct metadata-only plan with an empty body, so
-        // `is_stub()` is true and the runtime side-exits to the interpreter.
-        let walk = walk_block(pc, code).ok_or(FrontendRefusal::PcOutOfRange)?;
-        if walk.instr_count == 0 {
-            return Err(FrontendRefusal::BlockTooShort);
-        }
-        Ok(BlockPlan {
-            entry_pc: walk.entry_pc,
-            end_pc: walk.end_pc,
-            instr_count: walk.instr_count,
-            code: Vec::new(),
-            exits: vec![ExitEdge {
-                wire_code: 0,
-                reason: walk.bail_reason(),
-            }],
-        })
+        self.translate_block_riscv(pc, code).map(|(plan, _)| plan)
     }
 }
 
