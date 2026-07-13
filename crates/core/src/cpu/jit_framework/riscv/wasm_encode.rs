@@ -70,6 +70,8 @@ pub mod op {
     // ── value / type tags ──────────────────────────────────────────────
     /// `i32` value type tag (also the `if`/`block` result type for i32).
     pub const T_I32: u8 = 0x7f;
+    /// Empty block type (`if`/`block` producing no value): `0x40`.
+    pub const T_EMPTY: u8 = 0x40;
 
     // ── locals / constants ─────────────────────────────────────────────
     pub const LOCAL_GET: u8 = 0x20;
@@ -82,10 +84,18 @@ pub mod op {
     pub const IF: u8 = 0x04;
     pub const ELSE: u8 = 0x05;
     pub const END: u8 = 0x0b;
+    /// Early function return with the current stack as the result.
+    pub const RETURN: u8 = 0x0f;
 
-    // ── memory ─────────────────────────────────────────────────────────
+    // ── memory (memarg = align:uleb offset:uleb; align is a log2 hint) ──
     pub const I32_LOAD: u8 = 0x28;
+    pub const I32_LOAD8_S: u8 = 0x2c;
+    pub const I32_LOAD8_U: u8 = 0x2d;
+    pub const I32_LOAD16_S: u8 = 0x2e;
+    pub const I32_LOAD16_U: u8 = 0x2f;
     pub const I32_STORE: u8 = 0x36;
+    pub const I32_STORE8: u8 = 0x3a;
+    pub const I32_STORE16: u8 = 0x3b;
 
     // ── i32 arithmetic / logic ─────────────────────────────────────────
     pub const I32_EQZ: u8 = 0x45;
@@ -93,6 +103,7 @@ pub mod op {
     pub const I32_NE: u8 = 0x47;
     pub const I32_LT_S: u8 = 0x48;
     pub const I32_LT_U: u8 = 0x49;
+    pub const I32_LE_U: u8 = 0x4d;
     pub const I32_GE_S: u8 = 0x4e;
     pub const I32_GE_U: u8 = 0x4f;
     pub const I32_ADD: u8 = 0x6a;
@@ -130,10 +141,15 @@ pub const RUN_EXPORT: &str = "run";
 /// Assemble the fixed module skeleton around a code body.
 ///
 /// The skeleton is constant across every compiled block (one imported
-/// memory, one exported `run` function returning `i32`); only the code body
-/// and the local count vary. `local_i32_count` is the number of `i32`
-/// locals the body references (the emit core uses 32 — one per `x0..x31`).
-pub fn build_module(local_i32_count: u32, body: &[u8]) -> Vec<u8> {
+/// memory, one exported `run` function returning `i32`); only the code body,
+/// the local count, and the imported memory's minimum page count vary.
+/// `local_i32_count` is the number of `i32` locals the body references (the
+/// emit core uses 32 for `x0..x31`, plus one scratch when it emits memory
+/// ops). `mem_min_pages` is the minimum size (64 KiB pages) the imported
+/// memory must declare — 1 for a register-only (pure-ALU) block, or enough
+/// to cover the guest-RAM window a load/store block binds against (see
+/// [`super::emit`]).
+pub fn build_module(local_i32_count: u32, mem_min_pages: u32, body: &[u8]) -> Vec<u8> {
     let mut m = Vec::with_capacity(64 + body.len());
     // Magic + version.
     m.extend_from_slice(&[0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]);
@@ -157,7 +173,7 @@ pub fn build_module(local_i32_count: u32, body: &[u8]) -> Vec<u8> {
         name(&mut c, REGS_IMPORT_FIELD);
         c.push(0x02); // import kind: memory
         c.push(0x00); // limits: min only (no max)
-        enc::uleb(&mut c, 1); // min 1 page
+        enc::uleb(&mut c, mem_min_pages as u64); // min pages
         section(&mut m, 2, &c);
     }
 
@@ -264,7 +280,7 @@ mod tests {
     fn empty_body_module_has_wasm_magic() {
         // `(i32.const 0)` body — the minimal valid `run`.
         let body = vec![op::I32_CONST, 0x00];
-        let m = build_module(0, &body);
+        let m = build_module(0, 1, &body);
         assert_eq!(&m[0..4], &[0x00, 0x61, 0x73, 0x6d], "wasm magic");
         assert_eq!(&m[4..8], &[0x01, 0x00, 0x00, 0x00], "wasm version 1");
         // Section ids appear in canonical ascending order.
