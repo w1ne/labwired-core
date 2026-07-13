@@ -168,6 +168,114 @@ mod logic_capture_tests {
         assert!(again.edges.is_empty());
     }
 
+    /// Native/wasm parity: the per-channel series the CLI serializes into
+    /// `result.json` (via `build_logic_edges_result`) reproduces, channel by
+    /// channel, the exact `{ch, cycle, value}` edge stream the wasm
+    /// `read_logic_edges` accessor surfaces for the SAME run — both drain the
+    /// identical `logic_read_edges`. The only encoding difference is 0/1 vs bool.
+    #[test]
+    fn cli_edge_series_matches_wasm_edge_stream() {
+        use crate::logic_capture::{build_logic_edges_result, LogicChannelMeta};
+
+        let mut machine = machine_with_gpio();
+        let idx = machine
+            .bus
+            .find_peripheral_index_by_name("gpio_test")
+            .unwrap();
+        let initial = machine.logic_watch(&[Some((idx, 0))]);
+
+        let gap = 48;
+        step_n(&mut machine, gap);
+        set_pin0(&mut machine, true);
+        step_n(&mut machine, gap);
+        set_pin0(&mut machine, false);
+        step_n(&mut machine, gap);
+        set_pin0(&mut machine, true);
+        step_n(&mut machine, gap);
+
+        let now = machine.logic_now_cycle();
+        let batch = machine.logic_read_edges(0);
+        // The exact stream wasm's `read_logic_edges` would emit for this run.
+        let wasm_stream: Vec<(u32, u64, u8)> = batch
+            .edges
+            .iter()
+            .map(|e| (e.ch, e.cycle, u8::from(e.value)))
+            .collect();
+
+        let meta = vec![LogicChannelMeta {
+            ch: 0,
+            peripheral: "gpio_test".to_string(),
+            pin: 0,
+            initial: initial[0],
+        }];
+        let result = build_logic_edges_result(&meta, &batch, now);
+
+        assert_eq!(result.dropped, 0);
+        assert_eq!(result.now_cycle, now);
+        assert_eq!(result.channels.len(), 1);
+        let ch0 = &result.channels[0];
+        assert_eq!(ch0.channel, "CH0");
+        assert_eq!(ch0.peripheral, "gpio_test");
+        assert_eq!(ch0.pin, 0);
+        assert_eq!(ch0.initial, Some(0), "pad starts low");
+
+        // Reconstruct the CLI series back into a flat (ch, cycle, value) stream
+        // and assert it equals the wasm stream edge-for-edge (parity).
+        let cli_stream: Vec<(u32, u64, u8)> = result
+            .channels
+            .iter()
+            .flat_map(|c| c.transitions.iter().map(move |t| (c.ch, t.cycle, t.value)))
+            .collect();
+        assert_eq!(cli_stream, wasm_stream, "CLI series == wasm edge stream");
+        // Sanity: the toggle sequence was high, low, high.
+        assert_eq!(
+            ch0.transitions.iter().map(|t| t.value).collect::<Vec<_>>(),
+            vec![1, 0, 1]
+        );
+    }
+
+    /// `build_logic_edges_result` routes each edge to its channel by `ch`,
+    /// preserves order, encodes value/initial as 0/1, and surfaces the run-level
+    /// `dropped` overflow count (the oracle's fail-loud signal).
+    #[test]
+    fn build_logic_edges_result_routes_and_encodes() {
+        use crate::logic_capture::{
+            build_logic_edges_result, EdgeTransition, LogicChannelMeta, LogicEdge, LogicEdgeBatch,
+        };
+
+        let batch = LogicEdgeBatch {
+            cursor: 5,
+            dropped: 2,
+            edges: vec![
+                LogicEdge { ch: 0, cycle: 10, value: true },
+                LogicEdge { ch: 1, cycle: 12, value: true },
+                LogicEdge { ch: 0, cycle: 15, value: false },
+            ],
+        };
+        let meta = vec![
+            LogicChannelMeta { ch: 0, peripheral: "gpio8".into(), pin: 8, initial: Some(false) },
+            LogicChannelMeta { ch: 1, peripheral: "gpio9".into(), pin: 9, initial: None },
+        ];
+        let r = build_logic_edges_result(&meta, &batch, 20);
+
+        assert_eq!(r.dropped, 2, "overflow count surfaced for fail-loud");
+        assert_eq!(r.now_cycle, 20);
+        assert_eq!(r.channels[0].initial, Some(0));
+        assert_eq!(r.channels[1].initial, None);
+        assert_eq!(
+            r.channels[0].transitions,
+            vec![
+                EdgeTransition { cycle: 10, value: 1 },
+                EdgeTransition { cycle: 15, value: 0 },
+            ]
+        );
+        assert_eq!(
+            r.channels[1].transitions,
+            vec![EdgeTransition { cycle: 12, value: 1 }]
+        );
+        assert!(r.channels.iter().all(|c| c.gaps.is_empty()));
+    }
+
     /// Ring-buffer overflow at the capture layer: push more edges than capacity,
     /// assert some were dropped and the newest are retained.
     #[test]
