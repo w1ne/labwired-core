@@ -51,6 +51,21 @@ fn parse_u32_addr(s: &str) -> Result<u32, String> {
     }
 }
 
+/// Parse a `--watch-gpio` ref `peripheral:pin` into `(peripheral, pin)`. The pin
+/// is a decimal `u8`; the peripheral is any non-empty name resolved against the
+/// bus at run time (`gpio8`, `gpioa`, …). Returns `None` for a malformed ref
+/// (missing colon, empty peripheral, or an out-of-range/non-numeric pin) — the
+/// caller logs and skips it rather than aborting the whole run.
+fn parse_watch_gpio_ref(spec: &str) -> Option<(String, u8)> {
+    let (name, pin) = spec.trim().rsplit_once(':')?;
+    let name = name.trim();
+    if name.is_empty() {
+        return None;
+    }
+    let pin: u8 = pin.trim().parse().ok()?;
+    Some((name.to_string(), pin))
+}
+
 #[derive(Parser, Debug)]
 #[command(
     author,
@@ -640,6 +655,16 @@ struct TestArgs {
     /// Useful for local development and testing.
     #[arg(long)]
     no_key: bool,
+
+    /// Watch a GPIO pad's output for the deterministic logic-analyzer edge
+    /// capture, as `peripheral:pin` (e.g. `gpio8:8`, `gpioa:5`). Repeatable —
+    /// each ref is a channel (CH0, CH1, … in argument order). The captured
+    /// per-channel edge series lands in `result.json`'s `logic_edges` block, so
+    /// the oracle can prove a pad actually toggled / at a given period (the
+    /// prove-blink evidence). Edges are drained from the same in-engine tap the
+    /// browser logic analyzer uses. No watch → zero overhead, no block emitted.
+    #[arg(long = "watch-gpio", value_name = "PERIPHERAL:PIN")]
+    watch_gpio: Vec<String>,
 }
 
 /// Unified error response for agent consumption
@@ -1165,6 +1190,7 @@ fn handle_load_error<C: labwired_core::Cpu>(
         &None,
         &[],
         None,
+        None,
     );
     ExitCode::from(EXIT_RUNTIME_ERROR)
 }
@@ -1256,6 +1282,59 @@ fn execute_test_loop<C: labwired_core::Cpu>(
     let mut prev_pc = machine.cpu.get_pc();
     let mut stuck_counter: u64 = 0;
 
+    // ── --watch-gpio: arm the deterministic logic-analyzer edge capture ──────
+    // Resolve each `peripheral:pin` ref ONCE (to a peripheral index + pin),
+    // exactly as the wasm `watch_logic_signals` accessor does, arm the in-engine
+    // tap, and keep the per-channel identity so the drained edges can be shaped
+    // into `result.json`'s `logic_edges` block after the run. An empty watch set
+    // is a no-op (no channels installed → zero-overhead capture path).
+    let logic_watch_meta: Vec<labwired_core::logic_capture::LogicChannelMeta> = {
+        let refs: Vec<(String, u8)> = args
+            .watch_gpio
+            .iter()
+            .filter_map(|spec| parse_watch_gpio_ref(spec))
+            .collect();
+        if refs.len() != args.watch_gpio.len() {
+            for spec in &args.watch_gpio {
+                if parse_watch_gpio_ref(spec).is_none() {
+                    error!("--watch-gpio: ignoring malformed ref {spec:?} (want `peripheral:pin`)");
+                }
+            }
+        }
+        if refs.is_empty() {
+            Vec::new()
+        } else {
+            let resolved: Vec<Option<(usize, u8)>> = refs
+                .iter()
+                .map(|(name, pin)| {
+                    machine
+                        .bus
+                        .find_peripheral_index_by_name(name)
+                        .map(|idx| (idx, *pin))
+                })
+                .collect();
+            for ((name, _), r) in refs.iter().zip(resolved.iter()) {
+                if r.is_none() {
+                    error!("--watch-gpio: peripheral {name:?} not found on the bus; channel will stay flat");
+                }
+            }
+            let initial = machine.logic_watch(&resolved);
+            refs.iter()
+                .zip(initial)
+                .enumerate()
+                .map(|(ch, ((name, pin), value))| {
+                    labwired_core::logic_capture::LogicChannelMeta {
+                        ch: ch as u32,
+                        peripheral: name.clone(),
+                        pin: *pin,
+                        initial: value,
+                    }
+                })
+                .collect()
+        }
+    };
+    let logic_capture_armed = !logic_watch_meta.is_empty();
+
     let batch_size = if machine.config.batch_mode_enabled
         && args.breakpoint.is_empty()
         && detect_stuck.is_none()
@@ -1264,6 +1343,11 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         // correctly when peripherals tick between every instruction; instruction
         // batching freezes them across the batch and the firmware measures 0.
         && !machine.bus.requires_cycle_accurate()
+        // A logic-analyzer POLL-mode channel must be sampled at EVERY cycle
+        // boundary, so clamp the batch to one instruction while one is armed
+        // (mirrors `Machine::run`). Push-mode channels report their own edges
+        // from the write sites and keep the full batch width.
+        && !machine.logic_poll_active()
     {
         10000.min(max_steps)
     } else {
@@ -1427,6 +1511,11 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         let to_execute = current_batch.min(remaining);
 
         if to_execute > 1 {
+            // Push-mode logic capture: seed the tap clock at the batch start;
+            // the CPU advances it once per retired instruction so pad writes
+            // stamp with the boundary they become observable at (mirrors
+            // `Machine::run`). No-op unless a push-mode watch set is armed.
+            machine.logic_seed_batch_clock(machine.total_cycles);
             match machine.cpu.step_batch(
                 &mut machine.bus,
                 &machine.observers,
@@ -1438,6 +1527,10 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                     step += executed as u64;
                     steps_executed = step;
                     machine.total_cycles += executed as u64;
+                    // Cycle boundary the batch ended at, BEFORE peripheral tick
+                    // costs — pushes stamped here are finalised to the post-cost
+                    // "now" by the observe below (see `Machine::logic_observe`).
+                    let logic_boundary = machine.total_cycles;
 
                     // Cycle-accurate tick propagation for batch runs
                     let tick_interval = machine.config.peripheral_tick_interval as u64;
@@ -1457,6 +1550,15 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                         for irq in interrupts {
                             machine.cpu.set_exception_pending(irq);
                         }
+                    }
+
+                    // Logic-analyzer edge capture at this batch boundary: drain
+                    // the push tap (poll-mode channels force batch=1 → the
+                    // single-step branch's `machine.step()` observes them). Runs
+                    // before the early `continue` below so a partial batch's
+                    // edges are never lost. No-op when nothing is watched.
+                    if logic_capture_armed {
+                        machine.logic_observe_boundary(logic_boundary);
                     }
 
                     // Honor a firmware-requested system reset (AIRCR
@@ -1747,6 +1849,24 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         },
     );
 
+    // Drain the deterministic logic-analyzer edge capture for THIS run and shape
+    // it into the shared per-channel series form. Reading from cursor 0 returns
+    // every retained edge; `dropped` (surfaced in the block) is non-zero only if
+    // the 64k ring overflowed, which the oracle treats as fail-loud. This is the
+    // SAME `logic_read_edges` drain the wasm `read_logic_edges` accessor uses, so
+    // the CLI `result.json` edges and the browser edges are edge-for-edge equal.
+    let logic_edges = if logic_capture_armed {
+        let now_cycle = machine.logic_now_cycle();
+        let batch = machine.logic_read_edges(0);
+        Some(labwired_core::logic_capture::build_logic_edges_result(
+            &logic_watch_meta,
+            &batch,
+            now_cycle,
+        ))
+    } else {
+        None
+    };
+
     write_outputs(
         args,
         status,
@@ -1766,6 +1886,7 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         &coverage_observer,
         &fault_evidence,
         Some(inspect_block),
+        logic_edges,
     );
 
     if !all_passed
@@ -1800,6 +1921,7 @@ fn write_outputs<C: labwired_core::Cpu>(
     coverage_observer: &Option<Arc<labwired_core::pc_coverage::PcCoverageObserver>>,
     fault_evidence: &[labwired_cli::faults::FaultEvidence],
     inspect: Option<labwired_core::inspect::MachineInspect>,
+    logic_edges: Option<labwired_core::logic_capture::LogicEdgesResult>,
 ) {
     let mut hasher = Sha256::new();
     hasher.update(firmware_bytes);
@@ -1833,6 +1955,7 @@ fn write_outputs<C: labwired_core::Cpu>(
         },
         inspect,
         fidelity,
+        logic_edges,
     };
 
     if let Some(output_dir) = &args.output_dir {
@@ -2155,6 +2278,8 @@ pub(crate) fn write_config_error_outputs(
         inspect: None,
         // Config error: the sim never ran, so there are no coverage gaps to report.
         fidelity: Vec::new(),
+        // Nor any logic-analyzer edges — capture never armed.
+        logic_edges: None,
     };
 
     if let Some(output_dir) = &args.output_dir {

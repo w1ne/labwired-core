@@ -238,6 +238,112 @@ pub struct LogicEdgeBatch {
     pub edges: Vec<LogicEdge>,
 }
 
+// ---------------------------------------------------------------------------
+// Serialized edge shape (shared with the TS `ChannelEdgeSeries`)
+// ---------------------------------------------------------------------------
+//
+// The hosted/CLI run path serializes captured edges into `result.json` as a
+// per-channel step series on the ENGINE-CYCLE axis — byte-shape-identical to
+// `packages/board-config`'s `ChannelEdgeSeries` (the ONE definition the browser
+// logic-analyzer export and the oracle also consume). `value` and `initial` are
+// emitted as 0/1 (never `true`/`false`) to match `EdgeLevel = 0 | 1`. The edges
+// themselves are drained from the SAME `LogicCapture::read_edges` the wasm
+// `read_logic_edges` accessor uses, so the two surfaces are edge-for-edge
+// identical (asserted by the native/wasm parity differential test).
+
+/// One recorded transition on the engine-cycle axis. `value` is 0/1 to match the
+/// TS `EdgeLevel`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct EdgeTransition {
+    pub cycle: u64,
+    pub value: u8,
+}
+
+/// One watched channel's captured transitions — the Rust mirror of the TS
+/// `ChannelEdgeSeries` (`packages/board-config`). `initial` is `Some(0|1)` or
+/// `null`; `gaps` lists engine cycles at which the capture ring overflowed
+/// (honest "edges lost here" markers — never interpolated over).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ChannelEdgeSeries {
+    /// Edge-record channel index (the pad's position in the armed watch set).
+    pub ch: u32,
+    /// Logic-analyzer channel id ("CH0"…).
+    pub channel: String,
+    pub peripheral: String,
+    pub pin: u8,
+    /// Pad level at arm time (0/1), or `null` when the engine can't resolve it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub initial: Option<u8>,
+    /// Transitions, oldest-first, each stamped with the engine cycle it occurred at.
+    pub transitions: Vec<EdgeTransition>,
+    /// Engine cycles at which the ring overflowed before this lane's next edge.
+    #[serde(default)]
+    pub gaps: Vec<u64>,
+}
+
+/// The whole logic-edge evidence block embedded in `result.json`. `dropped` is
+/// the cumulative ring-overflow count for the run — the oracle FAILS LOUD when
+/// it is non-zero (edges were lost, so any period/duty/edge assertion would be
+/// evaluated on an incomplete stream).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct LogicEdgesResult {
+    /// Cumulative edges lost to ring-buffer overflow across the whole run.
+    pub dropped: u64,
+    /// Engine cycle at the end of the run (extends flat traces to "now").
+    pub now_cycle: u64,
+    pub channels: Vec<ChannelEdgeSeries>,
+}
+
+/// Per-channel identity resolved at watch time, paired with the drained edge
+/// batch to build a [`LogicEdgesResult`]. `initial[i]`/`peripheral[i]`/`pin[i]`
+/// describe channel `i` (the watch-set position, i.e. the edge `ch`).
+#[derive(Debug, Clone)]
+pub struct LogicChannelMeta {
+    pub ch: u32,
+    pub peripheral: String,
+    pub pin: u8,
+    pub initial: Option<bool>,
+}
+
+/// Shape a drained [`LogicEdgeBatch`] into the shared per-channel series form.
+/// PURE: the edges are grouped by their `ch` onto the pre-resolved channel
+/// metadata. Every edge in `batch` lands on exactly one channel (edges whose
+/// `ch` has no metadata are impossible — `ch` is a watch-set index — but are
+/// dropped defensively rather than panicking). Preserves edge order and value,
+/// so flattening the result back to `(ch, cycle, value)` reproduces `batch.edges`
+/// exactly (the native/wasm parity property).
+pub fn build_logic_edges_result(
+    meta: &[LogicChannelMeta],
+    batch: &LogicEdgeBatch,
+    now_cycle: u64,
+) -> LogicEdgesResult {
+    let mut channels: Vec<ChannelEdgeSeries> = meta
+        .iter()
+        .map(|m| ChannelEdgeSeries {
+            ch: m.ch,
+            channel: format!("CH{}", m.ch),
+            peripheral: m.peripheral.clone(),
+            pin: m.pin,
+            initial: m.initial.map(u8::from),
+            transitions: Vec::new(),
+            gaps: Vec::new(),
+        })
+        .collect();
+    for edge in &batch.edges {
+        if let Some(lane) = channels.iter_mut().find(|c| c.ch == edge.ch) {
+            lane.transitions.push(EdgeTransition {
+                cycle: edge.cycle,
+                value: u8::from(edge.value),
+            });
+        }
+    }
+    LogicEdgesResult {
+        dropped: batch.dropped,
+        now_cycle,
+        channels,
+    }
+}
+
 /// In-engine logic-analyzer capture buffer. Owned by [`Machine`](crate::Machine).
 #[derive(Default)]
 pub struct LogicCapture {

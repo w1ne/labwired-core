@@ -1129,6 +1129,39 @@ impl<C: Cpu> Machine<C> {
         self.total_cycles
     }
 
+    /// `true` while at least one watched channel is on the per-cycle poll
+    /// fallback — the bespoke CLI test loop uses this to clamp its instruction
+    /// batch to one, exactly as [`Machine::run`] does, so polled pads are
+    /// sampled at every cycle boundary. Push-only watch sets keep the full
+    /// batch width (their peripherals report edges from the write sites).
+    #[inline]
+    pub fn logic_poll_active(&self) -> bool {
+        self.logic_capture.poll_active()
+    }
+
+    /// Seed the push-capture tap clock at a batch start, so pad writes during
+    /// the batch stamp with the boundary they become observable at (the CPU
+    /// bumps the clock once per retired instruction while armed). No-op unless
+    /// a push-mode watch set is armed. The bespoke CLI test loop calls this
+    /// before each `cpu.step_batch`, mirroring [`Machine::run`].
+    #[inline]
+    pub fn logic_seed_batch_clock(&self, batch_start_cycle: u64) {
+        if self.logic_capture.push_active() {
+            self.bus.logic_tap.set_clock(batch_start_cycle);
+        }
+    }
+
+    /// Public boundary-observe for run loops that step the CPU directly
+    /// (`cpu.step_batch` / `cpu.step`) instead of via [`Machine::step`] /
+    /// [`Machine::run`], which observe internally. Drains the push tap and
+    /// samples polled channels at `boundary` — the engine cycle at the end of
+    /// the just-executed batch, BEFORE peripheral tick costs. No-op when no
+    /// watch set is armed. See [`Machine::logic_observe`] for the semantics.
+    #[inline]
+    pub fn logic_observe_boundary(&mut self, boundary: u64) {
+        self.logic_observe(boundary);
+    }
+
     /// Observe the watched channels at the current cycle boundary: drain the
     /// push tap (event-driven channels) and sample the polled channels.
     /// Hooked into the step loop; the leading `is_active` guard is the entire

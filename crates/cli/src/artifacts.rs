@@ -46,6 +46,15 @@ pub(crate) struct TestResult {
     /// clean. The builder maps this into `/run`'s `unmodeled_access[]`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) fidelity: Vec<labwired_core::fidelity::FidelityGap>,
+    /// Deterministic logic-analyzer edge capture for the pads named by
+    /// `--watch-gpio`, drained from the SAME in-engine `LogicTap` the wasm
+    /// `read_logic_edges` accessor uses (byte-for-byte parity). Per-channel
+    /// transitions on the engine-cycle axis + a run-level `dropped` overflow
+    /// count. Absent (and omitted) unless at least one pad was watched — the
+    /// builder maps this into the oracle's `gpio` edge evidence for the
+    /// prove-blink `gpio_edges`/`gpio_period`/`gpio_duty` clauses.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) logic_edges: Option<labwired_core::logic_capture::LogicEdgesResult>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
