@@ -21,6 +21,18 @@ pub struct SimulationConfig {
     /// Off by default so existing runners keep instruction-for-instruction
     /// behavior unless they explicitly opt in.
     pub idle_fast_forward_enabled: bool,
+
+    /// Opt into the RISC-V (RV32IMC) wasm-JIT fast path for `Machine<RiscV>`
+    /// (chunk H). Off by default: with it `false` the interpreter runs every
+    /// instruction and behavior is bit-identical to a build without the
+    /// `jit` feature. When `true` *and* the `jit` feature is compiled in
+    /// *and* the correctness SafetyGate allows (no observers / breakpoints /
+    /// logic probes / cycle-accurate peripheral), hot basic blocks are
+    /// compiled to wasm and retired atomically; the interpreter remains the
+    /// oracle for everything the JIT does not model. Has no effect without
+    /// the `jit` feature.
+    #[serde(default)]
+    pub riscv_jit_enabled: bool,
 }
 
 impl Default for SimulationConfig {
@@ -31,6 +43,7 @@ impl Default for SimulationConfig {
             optimized_bus_access: true,
             batch_mode_enabled: true,
             idle_fast_forward_enabled: false,
+            riscv_jit_enabled: false,
         }
     }
 }

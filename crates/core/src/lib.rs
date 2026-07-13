@@ -987,6 +987,16 @@ pub struct Machine<C: Cpu> {
 }
 
 impl<C: Cpu> Machine<C> {
+    /// Whether any logic-analyzer / signal probe is armed (poll or push mode).
+    /// The `jit_framework` [`SafetyGate`](crate::cpu::jit_framework::fallback::SafetyGate)
+    /// reads this to force the interpreter while a probe needs per-cycle pad
+    /// visibility. `logic_capture` is module-private, so this crate-internal
+    /// accessor is how the RISC-V JIT host reaches it.
+    #[cfg(any(feature = "jit", feature = "jit-framework"))]
+    pub(crate) fn logic_probes_active(&self) -> bool {
+        self.logic_capture.poll_active() || self.logic_capture.push_active()
+    }
+
     /// Discover the drivable input channels on this machine (delegates to
     /// [`bus::SystemBus::list_inputs`]). See [`crate::sim_input`].
     pub fn list_inputs(&mut self) -> Vec<(String, crate::sim_input::InputChannel)> {
@@ -2090,6 +2100,21 @@ impl<C: Cpu> DebugControl for Machine<C> {
             } else {
                 remaining_until_tick
             };
+
+            // ── RISC-V JIT batching note (chunk H) ───────────────────────────
+            // The JIT does NOT widen the batch past `remaining_until_tick`. A
+            // widened batch would skip the peripheral-tick boundaries the
+            // interpreter crosses, leaving `bus.current_cycle` (refreshed once
+            // per batch) staler than the interpreter's — and main's lazy
+            // walk-free peripherals (LEDC/wifi_mac) read that clock, so coarse
+            // JIT batching would read counters off-by-one. Keeping the JIT on
+            // the SAME per-tick-interval cadence as the interpreter guarantees
+            // identical `current_cycle` refresh points, hence byte-identity.
+            // A compiled block runs whenever it fits in the current window
+            // (`run_jit_loop`'s `retired + n <= max_count`); raise
+            // `peripheral_tick_interval` toward `max_safe_tick_interval` to make
+            // the window (and thus JIT engagement) larger while both arms stay
+            // byte-identical to interval-1.
 
             // Cycle-accurate buses (HC-SR04, IO-Link, H5 op-modeling FLASH) must
             // execute one instruction per batch so per-instruction services —
