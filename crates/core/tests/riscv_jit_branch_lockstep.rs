@@ -291,13 +291,15 @@ fn assert_terminator_matches(
         "{label}: expected a compiled terminator block"
     );
     assert_eq!(plan.instr_count, 1, "{label}: one-instruction block");
-    let mut block = jit.compile(&plan).expect("compile");
+    // A branch/jump block touches no RAM, so it has no memory binding and syncs
+    // no guest-RAM window (chunk-E `run` signature; `ram` is unused here).
+    let mut block = jit.compile(&plan, None).expect("compile");
 
     let mut x = [0u32; 32];
     for &(r, v) in setup {
         x[r] = v;
     }
-    let (exit, n) = block.run(&mut x);
+    let (exit, n, _clear) = block.run(&mut x, &mut []);
     assert_eq!(n, 1, "{label}: retires one instruction");
     let got_pc = match exit {
         SideExit::Chain { next_pc } => next_pc as u32,
