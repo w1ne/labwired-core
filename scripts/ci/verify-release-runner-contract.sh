@@ -11,6 +11,8 @@ workflow=.github/workflows/core-release.yml
 backfill_workflow=.github/workflows/core-backfill-runner-image.yml
 dockerfile=Dockerfile.ci
 action=.github/actions/labwired-test/action.yml
+renderer=.github/actions/labwired-test/render_report.py
+renderer_test=.github/actions/labwired-test/test_render_report.py
 dockerignore=.dockerignore
 failures=0
 
@@ -79,7 +81,13 @@ require_file "$workflow"
 require_file "$backfill_workflow"
 require_file "$dockerfile"
 require_file "$action"
+require_file "$renderer"
+require_file "$renderer_test"
 require_file "$dockerignore"
+
+if ! python3 "$renderer_test"; then
+  fail 'report renderer unit tests pass'
+fi
 
 require_literal "$workflow" 'tags:' 'release workflow declares a tag trigger'
 require_literal "$workflow" "'v[0-9]+.[0-9]+.[0-9]+'" 'release workflow triggers vMAJOR.MINOR.PATCH tags'
@@ -197,6 +205,37 @@ if [[ -z "$repo_validation_line" || -z "$latest_lookup_line" || "$repo_validatio
   fail 'core action validates the release repository before using GH_TOKEN with gh release view'
 fi
 
+require_literal "$action" 'outputs:' 'core action exposes report outputs'
+require_literal "$action" 'summary-md:' 'core action exposes a Markdown report output'
+require_literal "$action" 'report-html:' 'core action exposes an HTML report output'
+require_literal "$action" 'artifact-url:' 'core action exposes the uploaded artifact URL'
+require_literal "$action" 'exit-code:' 'core action exposes the captured CLI exit code'
+require_literal "$action" 'value: ${{ steps.report.outputs.status }}' 'core action exposes the renderer status'
+require_literal "$action" 'value: ${{ steps.report.outputs.summary_md }}' 'core action exposes the Markdown report path'
+require_literal "$action" 'value: ${{ steps.report.outputs.report_html }}' 'core action exposes the HTML report path'
+require_literal "$action" 'value: ${{ steps.upload.outputs.artifact-url }}' 'core action exposes the uploaded artifact URL'
+require_literal "$action" 'value: ${{ steps.run.outputs.exit_code }}' 'core action exposes the captured CLI exit code'
+require_literal "$action" 'id: run' 'core action identifies the CLI run step'
+require_literal "$action" 'id: install' 'core action identifies the release installation step'
+require_literal "$action" 'id: report' 'core action identifies the report step'
+require_literal "$action" 'id: upload' 'core action identifies the artifact upload step'
+require_literal "$action" 'render_report.py' 'core action invokes the bundled report renderer'
+require_literal "$action" 'GITHUB_STEP_SUMMARY' 'core action appends the report to the job summary'
+require_literal "$action" "always() && inputs.upload-artifacts == 'true'" 'core action uploads artifacts even after a failed test'
+require_literal "$action" 'LABWIRED_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}' 'core action records the workflow run URL'
+require_literal "$action" 'LABWIRED_SOURCE_REVISION: ${{ github.sha }}' 'core action records the source revision'
+require_literal "$action" 'LABWIRED_RELEASE_VERSION: ${{ steps.install.outputs.release_version }}' 'core action records the resolved release'
+require_literal "$action" 'echo "release_version=$ver" >> "$GITHUB_OUTPUT"' 'core action records the resolved release version after installation'
+require_literal "$action" 'LABWIRED_EXIT_CODE: ${{ steps.run.outputs.exit_code }}' 'core action safely passes the captured exit code to its final step'
+require_literal "$action" 'exit "$LABWIRED_EXIT_CODE"' 'core action returns the captured LabWired failure code after reporting'
+
+run_command_block=$'        set +e\n        "${command[@]}"\n        exit_code=$?\n        set -e\n        echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"\n        exit 0'
+require_literal "$action" "$run_command_block" 'core action captures the CLI result before rendering and uploading reports'
+run_command_count=$(grep -F -c '"${command[@]}"' "$action" || true)
+if [[ "$run_command_count" -ne 1 ]]; then
+  fail 'core action does not execute the test command directly outside the captured run lifecycle'
+fi
+
 require_literal "$backfill_workflow" 'workflow_dispatch:' 'runner backfill workflow requires explicit manual dispatch'
 require_literal "$backfill_workflow" 'required: true' 'runner backfill requires an explicit release version'
 require_literal "$backfill_workflow" 'type: string' 'runner backfill version is a string input'
@@ -221,14 +260,25 @@ done
 require_literal docs/ci_integration.md 'w1ne/labwired-core/.github/actions/labwired-test@main' 'CI guide uses the public Core GitHub action'
 require_literal docs/ci_integration.md 'version: v0.18.0' 'CI guide pins the CLI release independently of the public action ref'
 require_literal docs/ci_integration.md 'output-dir: out/labwired' 'CI guide uses the Core action artifact input spelling'
+require_literal docs/ci_integration.md 'steps.labwired.outputs.artifact-url' 'CI guide shows how to consume the automatic artifact URL'
+require_literal docs/ci_integration.md 'if: always()' 'CI guide links the automatic artifact after failed tests'
+require_absent_literal docs/ci_integration.md 'uses: actions/upload-artifact@v4' 'CI guide does not duplicate the action artifact upload'
 require_literal docs/integration-templates/github-actions.yml 'w1ne/labwired-core/.github/actions/labwired-test@main' 'GitHub template uses the public Core action'
 require_literal docs/integration-templates/github-actions.yml 'version: v0.18.0' 'GitHub template pins the CLI release independently of the public action ref'
 require_literal docs/integration-templates/github-actions.yml 'output-dir: out/labwired' 'GitHub template uses the Core action artifact input spelling'
+require_literal docs/integration-templates/github-actions.yml 'steps.labwired.outputs.artifact-url' 'GitHub template shows how to consume the automatic artifact URL'
+require_literal docs/integration-templates/github-actions.yml 'if: always()' 'GitHub template links the automatic artifact after failed tests'
+require_absent_literal docs/integration-templates/github-actions.yml 'uses: actions/upload-artifact@v4' 'GitHub template does not duplicate the action artifact upload'
+require_literal docs/ci_test_runner.md 'steps.labwired.outputs.artifact-url' 'runner guide shows how to consume the automatic artifact URL'
+require_literal docs/ci_test_runner.md 'if: always()' 'runner guide links the automatic artifact after failed tests'
+require_absent_literal docs/ci_test_runner.md 'uses: actions/upload-artifact@v4' 'runner guide does not duplicate the action artifact upload'
 require_literal docs/integration-templates/gitlab-ci.yml 'name: ghcr.io/w1ne/labwired:v0.18.0' 'GitLab template uses the pinned runner image'
 require_literal docs/integration-templates/gitlab-ci.yml 'entrypoint: [""]' 'GitLab template clears the image entrypoint before invoking labwired'
 require_literal .github/actions/labwired-test/README.md 'w1ne/labwired-core/.github/actions/labwired-test@main' 'core action README directs users to the public Core action'
 require_literal .github/actions/labwired-test/README.md 'version: v0.18.0' 'core action README pins the immutable CLI release separately from action source'
 require_literal .github/actions/labwired-test/README.md 'output-dir: out/labwired' 'core action README uses the Core action artifact input spelling'
+require_literal .github/actions/labwired-test/README.md 'steps.labwired.outputs.artifact-url' 'core action README documents the automatic artifact output'
+require_literal .github/actions/labwired-test/README.md 'if: always()' 'core action README links the automatic artifact after failed tests'
 
 if (( failures > 0 )); then
   printf 'Release runner contract failed with %d issue(s).\n' "$failures" >&2

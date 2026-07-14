@@ -1,17 +1,22 @@
 # Core labwired-test action
 
-This directory contains the Core action used by release smoke tests. For a
-public workflow, use the root LabWired action below: it downloads the pinned
-Core release archive rather than compiling Rust on the consumer's runner.
+This directory contains the public Core action used by release smoke tests and
+consumer workflows. It downloads the pinned Core release archive rather than
+compiling Rust on the consumer's runner.
 
 ~~~yaml
-- name: Run LabWired tests
+- id: labwired
+  name: Run LabWired tests
   uses: w1ne/labwired-core/.github/actions/labwired-test@main
   with:
     version: v0.18.0
     script: tests/firmware-test.yaml
     output-dir: out/labwired
     args: --no-uart-stdout
+
+- name: Link the automatic LabWired artifact
+  if: always()
+  run: echo "${{ steps.labwired.outputs.artifact-url }}" >> "$GITHUB_STEP_SUMMARY"
 ~~~
 
 The action source is referenced at `main` because no post-hardening Core action
@@ -22,3 +27,13 @@ release archive named
 The local Core action still uses its hyphenated names for its internal release
 smoke workflow. Its inputs are `script` (required), `version`, `args`, `junit`,
 `output-dir`, `upload-artifacts`, `repo`, and `github-token`.
+
+Every invocation writes `summary.md` and a self-contained `report.html` into
+`output-dir`, appends the Markdown report to the GitHub job summary, and uploads
+the output directory plus the external JUnit path as an artifact by default.
+Set `upload-artifacts: 'false'` only when a caller deliberately does not need a
+workflow artifact.
+
+Use the step outputs when a workflow needs to surface or link the generated
+evidence: `status`, `summary-md`, `report-html`, `artifact-url`, and
+`exit-code`. `artifact-url` is empty when artifact uploads are disabled.

@@ -37,10 +37,28 @@ inputs:
     required: false
     default: ${{ github.token }}
 
+outputs:
+  status:
+    description: "LabWired result status rendered from result.json."
+    value: ${{ steps.report.outputs.status }}
+  summary-md:
+    description: "Path to the generated Markdown run summary."
+    value: ${{ steps.report.outputs.summary_md }}
+  report-html:
+    description: "Path to the generated self-contained HTML report."
+    value: ${{ steps.report.outputs.report_html }}
+  artifact-url:
+    description: "URL for the uploaded LabWired artifact, when uploads are enabled."
+    value: ${{ steps.upload.outputs.artifact-url }}
+  exit-code:
+    description: "Captured LabWired CLI exit code."
+    value: ${{ steps.run.outputs.exit_code }}
+
 runs:
   using: composite
   steps:
     - name: Install LabWired
+      id: install
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.github-token }}
@@ -75,9 +93,11 @@ runs:
         gh release download "$ver" --repo "$repo" --pattern "$asset" --dir "$dir"
         tar -xzf "$dir/$asset" -C "$dir"
         chmod +x "$dir/labwired"
+        echo "release_version=$ver" >> "$GITHUB_OUTPUT"
         echo "$dir" >> "$GITHUB_PATH"
 
     - name: Run LabWired test
+      id: run
       shell: bash
       env:
         LABWIRED_SCRIPT: ${{ inputs.script }}
@@ -94,9 +114,38 @@ runs:
           read -r -a extra_args <<< "$LABWIRED_ARGS"
           command+=("${extra_args[@]}")
         fi
+        set +e
         "${command[@]}"
+        exit_code=$?
+        set -e
+        echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+        exit 0
+
+    - name: Render LabWired report
+      id: report
+      if: ${{ always() }}
+      shell: bash
+      env:
+        LABWIRED_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        LABWIRED_SOURCE_REVISION: ${{ github.sha }}
+        LABWIRED_RELEASE_VERSION: ${{ steps.install.outputs.release_version }}
+        LABWIRED_SCRIPT: ${{ inputs.script }}
+        LABWIRED_RESULT_JSON: ${{ inputs.output-dir }}/result.json
+        LABWIRED_UART_LOG: ${{ inputs.output-dir }}/uart.log
+        LABWIRED_SUMMARY_MD: ${{ inputs.output-dir }}/summary.md
+        LABWIRED_REPORT_HTML: ${{ inputs.output-dir }}/report.html
+      run: |
+        set -euo pipefail
+        python3 "${{ github.action_path }}/render_report.py" \
+          "$LABWIRED_RESULT_JSON" \
+          "$LABWIRED_UART_LOG" \
+          "$LABWIRED_SUMMARY_MD" \
+          "$LABWIRED_REPORT_HTML" \
+          "$GITHUB_OUTPUT"
+        cat "$LABWIRED_SUMMARY_MD" >> "$GITHUB_STEP_SUMMARY"
 
     - name: Upload artifacts
+      id: upload
       if: ${{ always() && inputs.upload-artifacts == 'true' }}
       uses: actions/upload-artifact@v4
       with:
@@ -105,3 +154,19 @@ runs:
           ${{ inputs.output-dir }}
           ${{ inputs.junit }}
         if-no-files-found: ignore
+
+    - name: Propagate LabWired exit code
+      if: ${{ always() }}
+      shell: bash
+      env:
+        LABWIRED_EXIT_CODE: ${{ steps.run.outputs.exit_code }}
+      run: |
+        set -euo pipefail
+        case "$LABWIRED_EXIT_CODE" in
+          ''|0) exit 0 ;;
+          *[!0-9]*)
+            echo "::error::LabWired did not return a numeric exit code."
+            exit 1
+            ;;
+          *) exit "$LABWIRED_EXIT_CODE" ;;
+        esac

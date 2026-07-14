@@ -319,7 +319,8 @@ command described above and writes the same artifact contract.
 Use the public Core action and pin the Core CLI with its version input:
 
 ~~~yaml
-- name: Run LabWired tests
+- id: labwired
+  name: Run LabWired tests
   uses: w1ne/labwired-core/.github/actions/labwired-test@main
   with:
     version: v0.18.0
@@ -327,18 +328,17 @@ Use the public Core action and pin the Core CLI with its version input:
     output-dir: out/artifacts
     args: --no-uart-stdout
 
-- name: Upload artifacts (pass/fail)
+- name: Link the automatic LabWired artifact
   if: always()
-  uses: actions/upload-artifact@v4
-  with:
-    name: labwired-artifacts
-    path: out/artifacts
-    if-no-files-found: warn
+  run: echo "${{ steps.labwired.outputs.artifact-url }}" >> "$GITHUB_STEP_SUMMARY"
 ~~~
 
 The Core action is intentionally referenced at main until a post-hardening
 action tag is published. The version input still selects the immutable Core
-CLI release.
+CLI release. The action automatically appends its Markdown report to the job
+summary and uploads the output directory plus the configured JUnit file, even
+after a failed test. Its `status`, `summary-md`, `report-html`, `artifact-url`,
+and `exit-code` outputs are available through the `labwired` step ID.
 
 ### Docker and GitLab runners
 
