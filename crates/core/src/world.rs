@@ -208,29 +208,23 @@ impl World {
                 .join(&sysman.chip);
             let chip = labwired_config::ChipDescriptor::from_file(&chip_path)
                 .with_context(|| format!("node '{}': chip {:?}", node.id, chip_path))?;
-            if chip.arch != labwired_config::Arch::Arm {
+            if !is_cortex_m_chip(&chip) {
                 anyhow::bail!(
-                    "node '{}': environment worlds currently support only Cortex-M nodes; chip '{}' has architecture {:?}",
+                    "node '{}': environment worlds currently support only Cortex-M nodes; each node requires an explicit Cortex-M core (`chip.arch: arm`, `chip.core: cortex-m*`). chip '{}' has architecture {:?} and core {:?}",
                     node.id,
                     chip.name,
-                    chip.arch
+                    chip.arch,
+                    chip.core
                 );
             }
+            let fw_path = root_dir.join(&node.firmware);
+            let image = load_elf_image(&fw_path)
+                .with_context(|| format!("node '{}': firmware {:?}", node.id, fw_path))?;
+            validate_cortex_m_firmware(&node.id, &chip, &image)?;
             let mut bus = crate::bus::SystemBus::from_config(&chip, &sysman)
                 .with_context(|| format!("node '{}': build bus", node.id))?;
             let (cpu, _nvic) = crate::system::cortex_m::configure_cortex_m(&mut bus);
             let mut machine = Machine::new(cpu, bus);
-            let fw_path = root_dir.join(&node.firmware);
-            let image = load_elf_image(&fw_path)
-                .with_context(|| format!("node '{}': firmware {:?}", node.id, fw_path))?;
-            if image.arch != crate::Arch::Arm {
-                anyhow::bail!(
-                    "node '{}': firmware architecture {:?} is incompatible with Cortex-M system chip '{}'; environment worlds require Arm firmware",
-                    node.id,
-                    image.arch,
-                    chip.name
-                );
-            }
             machine
                 .load_firmware(&image)
                 .map_err(|e| anyhow::anyhow!("node '{}': load firmware: {e:?}", node.id))?;
@@ -349,6 +343,81 @@ impl World {
 
         Ok(world)
     }
+}
+
+fn is_cortex_m_chip(chip: &labwired_config::ChipDescriptor) -> bool {
+    chip.arch == labwired_config::Arch::Arm
+        && chip
+            .core
+            .as_deref()
+            .is_some_and(|core| core.trim().to_ascii_lowercase().starts_with("cortex-m"))
+}
+
+fn validate_cortex_m_firmware(
+    node_id: &str,
+    chip: &labwired_config::ChipDescriptor,
+    image: &crate::memory::ProgramImage,
+) -> anyhow::Result<()> {
+    use anyhow::Context;
+
+    if image.arch != crate::Arch::Arm {
+        anyhow::bail!(
+            "node '{}': firmware architecture {:?} is incompatible with Cortex-M system chip '{}'; environment worlds require an ARM ELF with a valid Cortex-M Thumb reset vector",
+            node_id,
+            image.arch,
+            chip.name
+        );
+    }
+
+    let flash_size = labwired_config::parse_size(&chip.flash.size).with_context(|| {
+        format!(
+            "node '{}': invalid flash size for chip '{}'",
+            node_id, chip.name
+        )
+    })?;
+    let ram_size = labwired_config::parse_size(&chip.ram.size).with_context(|| {
+        format!(
+            "node '{}': invalid RAM size for chip '{}'",
+            node_id, chip.name
+        )
+    })?;
+    let vector_base = chip
+        .flash
+        .base
+        .checked_add(chip.reset_vector_offset)
+        .context("Cortex-M reset vector address overflow")?;
+    let stack_pointer = image_u32_at(image, vector_base);
+    let reset_handler = image_u32_at(image, vector_base.saturating_add(4));
+    let reset_target = reset_handler.map(|handler| u64::from(handler & !1));
+    let valid_stack = stack_pointer.is_some_and(|stack| {
+        let stack = u64::from(stack);
+        stack >= chip.ram.base && stack <= chip.ram.base.saturating_add(ram_size)
+    });
+    let valid_reset = reset_handler.is_some_and(|handler| handler & 1 == 1)
+        && reset_target.is_some_and(|target| {
+            target >= chip.flash.base && target < chip.flash.base.saturating_add(flash_size)
+        });
+    if !valid_stack || !valid_reset {
+        anyhow::bail!(
+            "node '{}': firmware does not contain a valid Cortex-M Thumb reset vector for chip '{}'",
+            node_id,
+            chip.name
+        );
+    }
+
+    Ok(())
+}
+
+fn image_u32_at(image: &crate::memory::ProgramImage, address: u64) -> Option<u32> {
+    let mut bytes = [0_u8; 4];
+    for (index, byte) in bytes.iter_mut().enumerate() {
+        let byte_address = address.checked_add(index as u64)?;
+        *byte = image.segments.iter().find_map(|segment| {
+            let offset = usize::try_from(byte_address.checked_sub(segment.start_addr)?).ok()?;
+            segment.data.get(offset).copied()
+        })?;
+    }
+    Some(u32::from_le_bytes(bytes))
 }
 
 /// Parse an ELF file into a `ProgramImage` using goblin (core cannot depend on

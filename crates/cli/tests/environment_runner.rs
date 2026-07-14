@@ -77,13 +77,21 @@ nodes:
     (environment, firmware, system)
 }
 
-/// A deliberately under-modelled world: the fixture writes UART MMIO, while
-/// this chip exposes no peripherals. It gives the environment runner a real
-/// unmapped-MMIO fidelity event and a runtime stop without mocking either.
-fn write_tiny_two_node_environment(dir: &Path) -> PathBuf {
+/// A valid mixed world: `alpha` writes unmapped UART MMIO, while `beta` runs a
+/// supported UART system and deliberately halts. This keeps fidelity evidence
+/// and a runtime error independent, rather than relying on an invalid image
+/// memory map to manufacture both outcomes.
+fn write_fidelity_and_halt_two_node_environment(dir: &Path) -> PathBuf {
     let root = workspace_root();
-    let firmware = std::fs::canonicalize(root.join("tests/fixtures/uart-ok-thumbv7m.elf"))
-        .expect("fixture firmware");
+    let unmapped_uart_firmware =
+        std::fs::canonicalize(root.join("tests/fixtures/uart-then-bkpt-thumbv7m.elf"))
+            .expect("unmapped UART fixture firmware");
+    let halting_firmware =
+        std::fs::canonicalize(root.join("tests/fixtures/uart-then-bkpt-thumbv7m.elf"))
+            .expect("halting fixture firmware");
+    let supported_system =
+        std::fs::canonicalize(root.join("configs/systems/ci-fixture-uart1.yaml"))
+            .expect("supported UART system fixture");
     let chip = dir.join("tiny-chip.yaml");
     let system = dir.join("tiny-system.yaml");
     let environment = dir.join("tiny-two-node.yaml");
@@ -91,13 +99,14 @@ fn write_tiny_two_node_environment(dir: &Path) -> PathBuf {
     std::fs::write(
         &chip,
         r#"name: "tiny"
-arch: "cortex-m3"
+arch: "arm"
+core: "cortex-m3"
 flash:
   base: 0x0
-  size: "1B"
+  size: "128KB"
 ram:
   base: 0x20000000
-  size: "1KB"
+  size: "128KB"
 peripherals: []
 "#,
     )
@@ -119,11 +128,12 @@ nodes:
     system: "tiny-system.yaml"
     firmware: "{}"
   - id: beta
-    system: "tiny-system.yaml"
+    system: "{}"
     firmware: "{}"
 "#,
-            firmware.display(),
-            firmware.display(),
+            unmapped_uart_firmware.display(),
+            supported_system.display(),
+            halting_firmware.display(),
         ),
     )
     .expect("write tiny environment manifest");
@@ -1113,7 +1123,7 @@ assertions:
 #[test]
 fn environment_runner_prioritizes_failed_assertions_over_runtime_errors() {
     let dir = unique_dir("assertion-before-runtime-error");
-    write_tiny_two_node_environment(&dir);
+    write_fidelity_and_halt_two_node_environment(&dir);
     let output = run_environment_script(
         &dir,
         r#"schema_version: "1.0"
@@ -1136,7 +1146,7 @@ assertions:
     )
     .expect("parse result.json");
     assert_eq!(result["status"], "fail");
-    assert_eq!(result["stop_reason"], "memory_violation");
+    assert_eq!(result["stop_reason"], "halt");
     assert_eq!(result["assertions"][0]["passed"], false);
     let junit = std::fs::read_to_string(dir.join("artifacts/junit.xml")).expect("read junit");
     assert!(junit.contains("failures=\"1\""));
@@ -1148,7 +1158,7 @@ assertions:
 #[test]
 fn environment_runner_surfaces_fidelity_gaps_from_world_execution() {
     let dir = unique_dir("fidelity");
-    write_tiny_two_node_environment(&dir);
+    write_fidelity_and_halt_two_node_environment(&dir);
     let output = run_environment_script(
         &dir,
         r#"schema_version: "1.0"

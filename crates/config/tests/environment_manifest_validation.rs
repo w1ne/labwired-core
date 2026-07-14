@@ -177,25 +177,122 @@ interconnects:
 }
 
 #[test]
-fn environment_manifest_from_file_rejects_unsupported_node_config_overrides() {
-    let error = parse_environment(
-        r#"
+fn environment_manifest_from_file_rejects_every_node_config_overrides_occurrence() {
+    for (name, overrides) in [
+        ("nonempty", "config_overrides:\n      uart2: disabled"),
+        ("empty", "config_overrides: {}"),
+        ("null", "config_overrides: null"),
+    ] {
+        let error = parse_environment(&format!(
+            r#"
 schema_version: "1.0"
 name: two-node
 nodes:
   - id: tester
     system: tester.yaml
     firmware: tester.elf
-    config_overrides:
-      uart2: disabled
-"#,
-    )
-    .unwrap_err();
-    let error = format!("{error:#}");
+    {overrides}
+"#
+        ))
+        .unwrap_err();
+        let error = format!("{error:#}");
 
-    assert!(error.contains("nodes[0].config_overrides"), "{error}");
-    assert!(
-        error.contains("unsupported in environment schema 1.0"),
-        "{error}"
-    );
+        assert!(
+            error.contains("nodes[0].config_overrides"),
+            "{name}: {error}"
+        );
+        assert!(
+            error.contains("unsupported in environment schema 1.0"),
+            "{name}: {error}"
+        );
+    }
+}
+
+#[test]
+fn environment_manifest_from_file_rejects_unknown_and_untyped_interconnect_config() {
+    for (name, yaml, expected) in [
+        (
+            "uart-typo",
+            r#"
+schema_version: "1.0"
+name: two-node
+nodes:
+  - id: tester
+    system: tester.yaml
+    firmware: tester.elf
+  - id: ecu
+    system: ecu.yaml
+    firmware: ecu.elf
+interconnects:
+  - type: uart_cross_link
+    nodes: [tester, ecu]
+    config:
+      node_a_urat: uart2
+"#,
+            "interconnects[0].config.node_a_urat is not supported for uart_cross_link",
+        ),
+        (
+            "uart-nonstring",
+            r#"
+schema_version: "1.0"
+name: two-node
+nodes:
+  - id: tester
+    system: tester.yaml
+    firmware: tester.elf
+  - id: ecu
+    system: ecu.yaml
+    firmware: ecu.elf
+interconnects:
+  - type: uart_cross_link
+    nodes: [tester, ecu]
+    config:
+      node_a_uart: 2
+"#,
+            "interconnects[0].config.node_a_uart must be a non-empty string",
+        ),
+        (
+            "can-unknown-key",
+            r#"
+schema_version: "1.0"
+name: two-node
+nodes:
+  - id: tester
+    system: tester.yaml
+    firmware: tester.elf
+  - id: ecu
+    system: ecu.yaml
+    firmware: ecu.elf
+interconnects:
+  - type: can_bus
+    nodes: [tester, ecu]
+    config:
+      peripheral: fdcan1
+      bitrate: 500000
+"#,
+            "interconnects[0].config.bitrate is not supported for can_bus",
+        ),
+        (
+            "egress-unknown-key",
+            r#"
+schema_version: "1.0"
+name: one-node
+nodes:
+  - id: tester
+    system: tester.yaml
+    firmware: tester.elf
+interconnects:
+  - type: egress
+    nodes: [tester]
+    config:
+      url: 127.0.0.1:9000
+      protcol: tcp
+"#,
+            "interconnects[0].config.protcol is not supported for egress",
+        ),
+    ] {
+        let error = parse_environment(yaml).unwrap_err();
+        let error = format!("{error:#}");
+        assert!(error.contains(expected), "{name}: {error}");
+    }
 }

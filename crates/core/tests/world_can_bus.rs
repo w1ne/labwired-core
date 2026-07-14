@@ -386,6 +386,25 @@ fn uart_cross_link_requires_exactly_two_unique_known_nodes() {
 }
 
 #[test]
+fn world_rejects_unknown_interconnect_config_before_topology_build() {
+    let mut config = HashMap::new();
+    config.insert(
+        "node_a_urat".to_string(),
+        serde_yaml::Value::String("uart2".to_string()),
+    );
+    let error = world_error(quiet_can_environment(interconnect(
+        "uart_cross_link",
+        &["tester", "ecu"],
+        config,
+    )));
+
+    assert!(
+        error.contains("interconnects[0].config.node_a_urat is not supported for uart_cross_link"),
+        "{error}"
+    );
+}
+
+#[test]
 fn egress_requires_exactly_one_known_node() {
     let mut config = HashMap::new();
     config.insert(

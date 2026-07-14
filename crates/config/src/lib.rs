@@ -292,9 +292,16 @@ pub struct InterconnectConfig {
 
 impl EnvironmentManifest {
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let f = std::fs::File::open(path)?;
+        let source = std::fs::read_to_string(path)?;
+        // `NodeConfig` deliberately keeps a plain HashMap for source
+        // compatibility with callers that build worlds in Rust. A YAML key with
+        // an empty mapping would otherwise deserialize identically to an absent
+        // key, so inspect the wire shape before that normalization happens.
+        let wire: serde_yaml::Value =
+            serde_yaml::from_str(&source).context("Failed to parse Environment Manifest")?;
+        reject_explicit_node_config_overrides(&wire)?;
         let manifest: Self =
-            serde_yaml::from_reader(f).context("Failed to parse Environment Manifest")?;
+            serde_yaml::from_str(&source).context("Failed to parse Environment Manifest")?;
         manifest.validate()?;
         Ok(manifest)
     }
@@ -339,8 +346,193 @@ impl EnvironmentManifest {
             }
         }
 
+        for (index, interconnect) in self.interconnects.iter().enumerate() {
+            validate_environment_interconnect_config(index, interconnect)?;
+        }
+
         Ok(())
     }
+}
+
+/// Reject `config_overrides` on the YAML wire before Serde collapses an absent
+/// field, `{}`, and `null` into the same empty `HashMap`. Programmatic callers
+/// cannot express that distinction, but every user-facing environment manifest
+/// passes through [`EnvironmentManifest::from_file`].
+fn reject_explicit_node_config_overrides(wire: &serde_yaml::Value) -> Result<()> {
+    let nodes_key = serde_yaml::Value::String("nodes".to_string());
+    let overrides_key = serde_yaml::Value::String("config_overrides".to_string());
+    let Some(nodes) = wire
+        .as_mapping()
+        .and_then(|manifest| manifest.get(&nodes_key))
+        .and_then(serde_yaml::Value::as_sequence)
+    else {
+        return Ok(());
+    };
+
+    for (index, node) in nodes.iter().enumerate() {
+        if node
+            .as_mapping()
+            .is_some_and(|node| node.contains_key(&overrides_key))
+        {
+            anyhow::bail!(
+                "Environment manifest nodes[{index}].config_overrides is unsupported in environment schema 1.0"
+            );
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_environment_interconnect_config(
+    index: usize,
+    interconnect: &InterconnectConfig,
+) -> Result<()> {
+    let kind = interconnect.r#type.as_str();
+    match kind {
+        "uart_cross_link" => {
+            reject_unknown_interconnect_config_keys(
+                index,
+                kind,
+                &interconnect.config,
+                &["node_a_uart", "node_b_uart"],
+            )?;
+            optional_nonempty_interconnect_string(
+                index,
+                kind,
+                &interconnect.config,
+                "node_a_uart",
+            )?;
+            optional_nonempty_interconnect_string(
+                index,
+                kind,
+                &interconnect.config,
+                "node_b_uart",
+            )?;
+        }
+        "can_bus" => {
+            reject_unknown_interconnect_config_keys(
+                index,
+                kind,
+                &interconnect.config,
+                &["peripheral"],
+            )?;
+            if interconnect
+                .config
+                .get("peripheral")
+                .and_then(serde_yaml::Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .is_none()
+            {
+                anyhow::bail!("can_bus: missing nonblank config.peripheral");
+            }
+        }
+        "egress" => {
+            reject_unknown_interconnect_config_keys(
+                index,
+                kind,
+                &interconnect.config,
+                &[
+                    "uart",
+                    "transport",
+                    "url",
+                    "topic",
+                    "encoding",
+                    "buffer_max",
+                ],
+            )?;
+            optional_nonempty_interconnect_string(index, kind, &interconnect.config, "uart")?;
+            let transport = optional_nonempty_interconnect_string(
+                index,
+                kind,
+                &interconnect.config,
+                "transport",
+            )?
+            .unwrap_or("tcp");
+            let url =
+                optional_nonempty_interconnect_string(index, kind, &interconnect.config, "url")?;
+            if url.is_none() {
+                anyhow::bail!("egress: missing 'url'");
+            }
+            let topic =
+                optional_nonempty_interconnect_string(index, kind, &interconnect.config, "topic")?;
+            match transport {
+                "tcp" | "http" => {
+                    if topic.is_some() {
+                        anyhow::bail!(
+                            "interconnects[{index}].config.topic is supported only for egress transport mqtt"
+                        );
+                    }
+                }
+                "mqtt" => {
+                    if topic.is_none() {
+                        anyhow::bail!("egress: mqtt needs 'topic'");
+                    }
+                }
+                other => anyhow::bail!("egress: unknown transport '{other}'"),
+            }
+            let encoding = optional_nonempty_interconnect_string(
+                index,
+                kind,
+                &interconnect.config,
+                "encoding",
+            )?
+            .unwrap_or("raw");
+            if !matches!(encoding, "raw" | "ndjson-trace" | "frames-json") {
+                anyhow::bail!("egress: unknown encoding '{encoding}'");
+            }
+            if let Some(buffer_max) = interconnect.config.get("buffer_max") {
+                let Some(buffer_max) = buffer_max.as_u64() else {
+                    anyhow::bail!(
+                        "interconnects[{index}].config.buffer_max must be a positive integer"
+                    );
+                };
+                if buffer_max == 0 || usize::try_from(buffer_max).is_err() {
+                    anyhow::bail!(
+                        "interconnects[{index}].config.buffer_max must be a positive integer"
+                    );
+                }
+            }
+        }
+        other => anyhow::bail!("unsupported interconnect type '{other}'"),
+    }
+    Ok(())
+}
+
+fn reject_unknown_interconnect_config_keys(
+    index: usize,
+    kind: &str,
+    config: &HashMap<String, serde_yaml::Value>,
+    allowed: &[&str],
+) -> Result<()> {
+    let mut unknown: Vec<_> = config
+        .keys()
+        .filter(|key| !allowed.contains(&key.as_str()))
+        .collect();
+    unknown.sort();
+    if let Some(key) = unknown.first() {
+        anyhow::bail!("interconnects[{index}].config.{key} is not supported for {kind}");
+    }
+    Ok(())
+}
+
+fn optional_nonempty_interconnect_string<'a>(
+    index: usize,
+    kind: &str,
+    config: &'a HashMap<String, serde_yaml::Value>,
+    key: &str,
+) -> Result<Option<&'a str>> {
+    let Some(value) = config.get(key) else {
+        return Ok(None);
+    };
+    let Some(value) = value
+        .as_str()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        anyhow::bail!("interconnects[{index}].config.{key} must be a non-empty string for {kind}");
+    };
+    Ok(Some(value))
 }
 
 impl ChipDescriptor {
