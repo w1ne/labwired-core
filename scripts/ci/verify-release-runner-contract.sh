@@ -8,6 +8,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo_root"
 
 workflow=.github/workflows/core-release.yml
+backfill_workflow=.github/workflows/core-backfill-runner-image.yml
 dockerfile=Dockerfile.ci
 action=.github/actions/labwired-test/action.yml
 dockerignore=.dockerignore
@@ -75,6 +76,7 @@ job_line() {
 }
 
 require_file "$workflow"
+require_file "$backfill_workflow"
 require_file "$dockerfile"
 require_file "$action"
 require_file "$dockerignore"
@@ -179,6 +181,38 @@ require_literal "$action" 'default: "v0.18.0"' 'core action defaults to the pinn
 require_literal "$action" 'default: "w1ne/labwired-core"' 'core action downloads release archives from the core repository'
 require_literal "$action" 'default: ${{ github.token }}' 'core action defaults its archive download token to the workflow token'
 require_literal "$action" 'GH_TOKEN: ${{ inputs.github-token }}' 'core action passes an explicit or default token to gh release download'
+require_literal "$action" 'LABWIRED_VERSION: ${{ inputs.version }}' 'core action passes the version through an environment binding'
+require_literal "$action" 'LABWIRED_REPO: ${{ inputs.repo }}' 'core action passes the repository through an environment binding'
+require_literal "$action" 'LABWIRED_SCRIPT: ${{ inputs.script }}' 'core action passes the script through an environment binding'
+require_literal "$action" 'LABWIRED_ARGS: ${{ inputs.args }}' 'core action passes extra args through an environment binding'
+require_literal "$action" 'command=(labwired test' 'core action constructs the test command as a Bash array'
+require_literal "$action" 'read -r -a extra_args <<< "$LABWIRED_ARGS"' 'core action splits extra args without shell evaluation'
+require_absent_literal "$action" "ver='\${{ inputs.version }}'" 'core action does not splice the version input into Bash source'
+require_absent_literal "$action" "repo='\${{ inputs.repo }}'" 'core action does not splice the repository input into Bash source'
+require_absent_literal "$action" "--script '\${{ inputs.script }}'" 'core action does not splice the script input into Bash source'
+require_absent_literal "$action" '          ${{ inputs.args }}' 'core action does not splice extra args into Bash source'
+repo_validation_line=$(grep -n -m 1 'repo must use the owner/name form' "$action" | cut -d: -f1 || true)
+latest_lookup_line=$(grep -n -m 1 'gh release view --repo' "$action" | cut -d: -f1 || true)
+if [[ -z "$repo_validation_line" || -z "$latest_lookup_line" || "$repo_validation_line" -ge "$latest_lookup_line" ]]; then
+  fail 'core action validates the release repository before using GH_TOKEN with gh release view'
+fi
+
+require_literal "$backfill_workflow" 'workflow_dispatch:' 'runner backfill workflow requires explicit manual dispatch'
+require_literal "$backfill_workflow" 'required: true' 'runner backfill requires an explicit release version'
+require_literal "$backfill_workflow" 'type: string' 'runner backfill version is a string input'
+require_literal "$backfill_workflow" '[[ "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]' 'runner backfill validates a semver release tag'
+require_literal "$backfill_workflow" 'ref: ${{ inputs.version }}' 'runner backfill checks out the exact released source tag'
+require_literal "$backfill_workflow" 'path: source' 'runner backfill keeps released source in a dedicated directory'
+require_literal "$backfill_workflow" 'path: release-tools' 'runner backfill keeps current release tooling in a dedicated directory'
+require_literal "$backfill_workflow" 'context: ./source' 'runner backfill builds the exact released source context'
+require_literal "$backfill_workflow" 'file: ./release-tools/Dockerfile.ci' 'runner backfill uses current CI runner packaging instructions'
+require_literal "$backfill_workflow" 'ghcr.io/w1ne/labwired:${{ inputs.version }}' 'runner backfill publishes the requested immutable image tag'
+require_absent_literal "$backfill_workflow" 'ghcr.io/w1ne/labwired:latest' 'runner backfill never overwrites the moving latest tag'
+require_literal "$backfill_workflow" 'docker logout ghcr.io || true' 'runner backfill verifies a public anonymous pull'
+require_literal "$backfill_workflow" 'docker pull "ghcr.io/w1ne/labwired:${{ inputs.version }}"' 'runner backfill pulls the immutable tag after publication'
+require_literal "$backfill_workflow" 'examples/ci/dummy-max-steps.yaml' 'runner backfill uses the deterministic CI smoke script'
+require_literal RELEASE_PROCESS.md 'core-backfill-runner-image.yml' 'release process documents the one-time runner image backfill workflow'
+require_literal RELEASE_PROCESS.md 'v0.18.0' 'release process documents the initial v0.18.0 runner image backfill'
 
 for doc in docs/ci_integration.md docs/ci_test_runner.md docs/integration-templates/github-actions.yml docs/integration-templates/gitlab-ci.yml docs/integration-templates/README.md; do
   require_absent_literal "$doc" 'ghcr.io/w1ne/labwired:latest' "$doc does not recommend a mutable runner image tag"
@@ -189,7 +223,8 @@ require_literal docs/integration-templates/github-actions.yml 'w1ne/labwired/.gi
 require_literal docs/integration-templates/github-actions.yml 'version: v0.18.0' 'GitHub template pins the CLI release independently of the root action ref'
 require_literal docs/integration-templates/gitlab-ci.yml 'name: ghcr.io/w1ne/labwired:v0.18.0' 'GitLab template uses the pinned runner image'
 require_literal docs/integration-templates/gitlab-ci.yml 'entrypoint: [""]' 'GitLab template clears the image entrypoint before invoking labwired'
-require_literal .github/actions/labwired-test/README.md 'w1ne/labwired-core/.github/actions/labwired-test@v0.18.0' 'core action README names the core action and its pinned release'
+require_literal .github/actions/labwired-test/README.md 'w1ne/labwired/.github/actions/labwired-test@main' 'core action README directs users to the published root action'
+require_literal .github/actions/labwired-test/README.md 'version: v0.18.0' 'core action README pins the immutable CLI release separately from action source'
 
 if (( failures > 0 )); then
   printf 'Release runner contract failed with %d issue(s).\n' "$failures" >&2
