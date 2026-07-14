@@ -17,7 +17,7 @@ inputs:
     required: false
     default: "w1ne/labwired-core"
   args:
-    description: "Extra flags appended to `labwired test`."
+    description: "Whitespace-separated extra flags appended to `labwired test` (shell quoting is not interpreted)."
     required: false
     default: ""
   junit:
@@ -44,12 +44,22 @@ runs:
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.github-token }}
+        LABWIRED_VERSION: ${{ inputs.version }}
+        LABWIRED_REPO: ${{ inputs.repo }}
       run: |
         set -euo pipefail
-        ver='${{ inputs.version }}'
-        repo='${{ inputs.repo }}'
+        ver="$LABWIRED_VERSION"
+        repo="$LABWIRED_REPO"
+        if ! [[ "$repo" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]]; then
+          echo "::error::repo must use the owner/name form."
+          exit 1
+        fi
         if [ "$ver" = "latest" ]; then
           ver="$(gh release view --repo "$repo" --json tagName -q .tagName)"
+        fi
+        if ! [[ "$ver" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "::error::version must be a vMAJOR.MINOR.PATCH release tag or latest."
+          exit 1
         fi
         case "$(uname -s)-$(uname -m)" in
           Linux-x86_64)            plat=linux-x86_64 ;;
@@ -69,13 +79,22 @@ runs:
 
     - name: Run LabWired test
       shell: bash
+      env:
+        LABWIRED_SCRIPT: ${{ inputs.script }}
+        LABWIRED_JUNIT: ${{ inputs.junit }}
+        LABWIRED_OUTPUT_DIR: ${{ inputs.output-dir }}
+        LABWIRED_ARGS: ${{ inputs.args }}
       run: |
         set -euo pipefail
-        labwired test \
-          --script '${{ inputs.script }}' \
-          --junit '${{ inputs.junit }}' \
-          --output-dir '${{ inputs.output-dir }}' \
-          ${{ inputs.args }}
+        command=(labwired test
+          --script "$LABWIRED_SCRIPT"
+          --junit "$LABWIRED_JUNIT"
+          --output-dir "$LABWIRED_OUTPUT_DIR")
+        if [ -n "$LABWIRED_ARGS" ]; then
+          read -r -a extra_args <<< "$LABWIRED_ARGS"
+          command+=("${extra_args[@]}")
+        fi
+        "${command[@]}"
 
     - name: Upload artifacts
       if: ${{ always() && inputs.upload-artifacts == 'true' }}
