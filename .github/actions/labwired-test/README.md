@@ -7,7 +7,7 @@ compiling Rust on the consumer's runner.
 ~~~yaml
 - id: labwired
   name: Run LabWired tests
-  uses: w1ne/labwired-core/.github/actions/labwired-test@9bb729459a15a885e8b5b523e1f25c9637531b66
+  uses: w1ne/labwired-core/.github/actions/labwired-test@3a13349ad6c4f65b4fa19276f576bc3086b219e6
   with:
     version: v0.18.0
     script: tests/firmware-test.yaml
@@ -20,7 +20,7 @@ compiling Rust on the consumer's runner.
 ~~~
 
 The action source is an immutable action-source pin to
-`9bb729459a15a885e8b5b523e1f25c9637531b66`. The `version: v0.18.0` input
+`3a13349ad6c4f65b4fa19276f576bc3086b219e6`. The `version: v0.18.0` input
 independently pins the immutable Core CLI release archive named
 `labwired-v0.18.0-<platform>.tar.gz`.
 
