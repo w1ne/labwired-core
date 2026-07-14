@@ -1083,14 +1083,16 @@ pub struct EnvTestScript {
     pub limits: TestLimits,
     #[serde(default)]
     pub assertions: Vec<TestAssertion>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub faults: Vec<FaultSpec>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub verdict: Option<Verdict>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub stimuli: Vec<StimulusSpec>,
     #[serde(skip)]
     explicit_limits: EnvExplicitLimits,
+    #[serde(skip)]
+    explicit_unsupported_fields: EnvExplicitUnsupportedFields,
 }
 
 /// A field whose parser records the difference between being absent and being
@@ -1136,6 +1138,13 @@ struct EnvExplicitLimits {
     stop_when_assertions_pass: bool,
     stop_when_assertions_pass_settle_steps: bool,
     stop_when_assertions_pass_min_steps: bool,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct EnvExplicitUnsupportedFields {
+    faults: bool,
+    verdict: bool,
+    stimuli: bool,
 }
 
 /// Serialize only settings that environment scripts can honor. In particular,
@@ -1239,11 +1248,11 @@ struct EnvTestScriptWire {
     #[serde(default)]
     assertions: Vec<TestAssertion>,
     #[serde(default)]
-    faults: Vec<FaultSpec>,
+    faults: FieldPresence<Vec<FaultSpec>>,
     #[serde(default)]
-    verdict: Option<Verdict>,
+    verdict: FieldPresence<Verdict>,
     #[serde(default)]
-    stimuli: Vec<StimulusSpec>,
+    stimuli: FieldPresence<Vec<StimulusSpec>>,
 }
 
 impl<'de> Deserialize<'de> for EnvTestScript {
@@ -1253,15 +1262,21 @@ impl<'de> Deserialize<'de> for EnvTestScript {
     {
         let wire = EnvTestScriptWire::deserialize(deserializer)?;
         let (limits, explicit_limits) = wire.limits.into_parts();
+        let explicit_unsupported_fields = EnvExplicitUnsupportedFields {
+            faults: wire.faults.is_present(),
+            verdict: wire.verdict.is_present(),
+            stimuli: wire.stimuli.is_present(),
+        };
         Ok(Self {
             schema_version: wire.schema_version,
             inputs: wire.inputs,
             limits,
             assertions: wire.assertions,
-            faults: wire.faults,
-            verdict: wire.verdict,
-            stimuli: wire.stimuli,
+            faults: wire.faults.into_value().unwrap_or_default(),
+            verdict: wire.verdict.into_value(),
+            stimuli: wire.stimuli.into_value().unwrap_or_default(),
             explicit_limits,
+            explicit_unsupported_fields,
         })
     }
 }
@@ -1304,13 +1319,13 @@ impl EnvTestScript {
                 "Environment test scripts do not support 'limits.stop_when_assertions_pass_min_steps'"
             );
         }
-        if !self.faults.is_empty() {
+        if self.explicit_unsupported_fields.faults {
             anyhow::bail!("Environment test scripts do not support 'faults'");
         }
-        if self.verdict.is_some() {
+        if self.explicit_unsupported_fields.verdict {
             anyhow::bail!("Environment test scripts do not support 'verdict'");
         }
-        if !self.stimuli.is_empty() {
+        if self.explicit_unsupported_fields.stimuli {
             anyhow::bail!("Environment test scripts do not support 'stimuli'");
         }
 
@@ -1982,6 +1997,9 @@ assertions:
             "stop_when_assertions_pass",
             "stop_when_assertions_pass_settle_steps",
             "stop_when_assertions_pass_min_steps",
+            "faults:",
+            "verdict:",
+            "stimuli:",
         ] {
             assert!(
                 !serialized.contains(option),
@@ -2265,12 +2283,17 @@ assertions:
                 "faults:\n  - id: x\n    kind: missing_clock",
                 "faults",
             ),
+            ("faults-empty", "faults: []", "faults"),
+            ("faults-null", "faults: null", "faults"),
             ("verdict", "verdict: {}", "verdict"),
+            ("verdict-null", "verdict: null", "verdict"),
             (
                 "stimuli",
                 "stimuli:\n  - target: { channel: x }\n    value: 1.0",
                 "stimuli",
             ),
+            ("stimuli-empty", "stimuli: []", "stimuli"),
+            ("stimuli-null", "stimuli: null", "stimuli"),
         ] {
             let script_path = write_temp_file(
                 name,
