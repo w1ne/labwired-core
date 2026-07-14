@@ -2520,6 +2520,43 @@ assertions:
     }
 
     #[test]
+    fn env_script_preserves_explicit_assertion_completion_defaults() {
+        let script: EnvTestScript = serde_yaml::from_str(
+            r#"
+schema_version: "1.0"
+inputs: { env: "twonode-env.yaml" }
+limits:
+  max_steps: 10
+  stop_when_assertions_pass: false
+  stop_when_assertions_pass_settle_steps: 100000
+  stop_when_assertions_pass_min_steps: 0
+assertions:
+  - memory_value: { node: tester, address: 0x20010000, expected_value: 1 }
+"#,
+        )
+        .unwrap();
+
+        script.validate().unwrap();
+        let serialized = serde_yaml::to_string(&script).unwrap();
+        for field in [
+            "stop_when_assertions_pass: false",
+            "stop_when_assertions_pass_settle_steps: 100000",
+            "stop_when_assertions_pass_min_steps: 0",
+        ] {
+            assert!(serialized.contains(field), "missing {field}: {serialized}");
+        }
+
+        let round_tripped: EnvTestScript = serde_yaml::from_str(&serialized).unwrap();
+        round_tripped.validate().unwrap();
+        assert!(!round_tripped.limits.stop_when_assertions_pass);
+        assert_eq!(
+            round_tripped.limits.stop_when_assertions_pass_settle_steps,
+            100_000
+        );
+        assert_eq!(round_tripped.limits.stop_when_assertions_pass_min_steps, 0);
+    }
+
+    #[test]
     fn env_script_rejects_null_assertion_completion_limits() {
         for (name, extra, field) in [
             (
@@ -2553,6 +2590,38 @@ assertions:
                 ),
             );
             let err = load_test_script(&script_path).unwrap_err().to_string();
+            assert!(err.contains(field), "unexpected error: {err}");
+            assert!(err.contains("must not be null"), "unexpected error: {err}");
+        }
+    }
+
+    #[test]
+    fn env_script_preserves_invalid_null_assertion_completion_limits() {
+        for (field, value) in [
+            ("stop_when_assertions_pass", "null"),
+            ("stop_when_assertions_pass_settle_steps", "null"),
+            ("stop_when_assertions_pass_min_steps", "null"),
+        ] {
+            let script: EnvTestScript = serde_yaml::from_str(&format!(
+                r#"
+schema_version: "1.0"
+inputs: {{ env: "twonode-env.yaml" }}
+limits:
+  max_steps: 10
+  {field}: {value}
+assertions:
+  - memory_value: {{ node: tester, address: 0x20010000, expected_value: 1 }}
+"#
+            ))
+            .unwrap();
+
+            let serialized = serde_yaml::to_string(&script).unwrap();
+            assert!(
+                serialized.contains(&format!("{field}: {value}")),
+                "explicit null {field} was lost during serialization: {serialized}"
+            );
+            let round_tripped: EnvTestScript = serde_yaml::from_str(&serialized).unwrap();
+            let err = round_tripped.validate().unwrap_err().to_string();
             assert!(err.contains(field), "unexpected error: {err}");
             assert!(err.contains("must not be null"), "unexpected error: {err}");
         }

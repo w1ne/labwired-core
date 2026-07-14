@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.19.1] - 2026-07-14
+## [0.19.1] - 2026-07-15
 
 ### Fixed
 - **Environment completion**: `inputs.env` scripts can opt into the same
