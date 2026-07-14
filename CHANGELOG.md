@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.1] - 2026-07-14
+
+### Fixed
+- **Environment completion**: `inputs.env` scripts can opt into the same
+  durable assertion-pass stop contract as single-machine runs, including the
+  settling window and minimum-step floor. Node runtime failures and configured
+  limits retain precedence over completion.
+- **CI runner image**: The image now builds against the same Debian/glibc
+  baseline it runs on. The required Core CI check builds and executes the final
+  image before a release tag can be created.
+
+### Changed
+- **Public runner default**: The one-step GitHub Action now defaults to the
+  v0.19.1 immutable CLI release; release smoke exercises both that default and
+  an explicit release pin.
+
 ## [0.19.0] - 2026-07-14
 
 ### Added
