@@ -405,6 +405,10 @@ fn run_world(
     let mut runtime_error = false;
     let mut rounds = 0_u64;
     let mut instructions = 0_u64;
+    // Environment worlds use the same durable assertion-completion contract
+    // as the single-machine runner. A passing snapshot begins a settling
+    // window; a regression restarts it, and a runtime/safety stop always wins.
+    let mut assertions_first_passed_at = None;
 
     while rounds < limits.max_steps {
         let cycles = max_cycles(world);
@@ -444,6 +448,26 @@ fn run_world(
         if let Some(reason) = reached_world_limit_stop(&limits, cycles, uart_bytes, &start) {
             stop_reason = reason;
             break;
+        }
+        if limits.stop_when_assertions_pass {
+            let all_assertions_passed = evaluate_assertions(&script.assertions, world)
+                .iter()
+                .all(|assertion| assertion.passed);
+            if all_assertions_passed {
+                if assertions_first_passed_at.is_none()
+                    && rounds >= limits.stop_when_assertions_pass_min_steps
+                {
+                    assertions_first_passed_at = Some(rounds);
+                }
+            } else {
+                assertions_first_passed_at = None;
+            }
+            if let Some(first) = assertions_first_passed_at {
+                if rounds.saturating_sub(first) >= limits.stop_when_assertions_pass_settle_steps {
+                    stop_reason = StopReason::AssertionsPassed;
+                    break;
+                }
+            }
         }
     }
 
