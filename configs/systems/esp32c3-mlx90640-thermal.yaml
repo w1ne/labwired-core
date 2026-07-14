@@ -10,6 +10,7 @@
 # `build_i2c_device` factory ("mlx90640" arm).
 name: "esp32c3-mlx90640-thermal"
 chip: "../chips/esp32c3.yaml"
+cpu_hz: 160_000_000
 
 external_devices:
   - id: "thermal_cam"

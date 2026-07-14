@@ -633,6 +633,10 @@ impl Peripheral for GenericPeripheral {
         self.write_register_storage_u32(offset, value)
     }
 
+    fn peripheral_descriptor(&self) -> Option<PeripheralDescriptor> {
+        Some(self.descriptor.clone())
+    }
+
     /// Expose the descriptor's register layout to the universal inspect
     /// interface. This one method makes every declarative peripheral — the
     /// whole ESP32-C3/S3 register wall — decode named registers + bitfields for

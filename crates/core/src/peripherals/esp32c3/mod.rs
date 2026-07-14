@@ -11,6 +11,7 @@ pub mod factory;
 pub mod forced_status;
 pub mod gpio;
 pub mod i2c;
+pub mod io_mux;
 pub mod ledc;
 pub mod reg_block;
 pub mod rng;

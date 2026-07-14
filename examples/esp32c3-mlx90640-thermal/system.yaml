@@ -15,6 +15,7 @@
 # blind to this — it classifies purely from the decoded thermal frames.
 name: "esp32c3-mlx90640-thermal-normal"
 chip: "../../configs/chips/esp32c3.yaml"
+cpu_hz: 160_000_000
 
 external_devices:
   - id: "thermal_cam"

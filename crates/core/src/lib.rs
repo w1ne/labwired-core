@@ -613,6 +613,17 @@ pub trait Peripheral: std::fmt::Debug + Send {
         Ok(())
     }
 
+    /// Optional source register descriptor for debugger clients that need the
+    /// config-level layout (including reset values and descriptions), rather
+    /// than the display-oriented [`Self::describe_registers`] schema.
+    ///
+    /// Declarative peripherals return their original descriptor. Behavioral
+    /// peripherals that replace a declarative register surface may do the same
+    /// to keep debugger integrations faithful to the configured chip.
+    fn peripheral_descriptor(&self) -> Option<labwired_config::PeripheralDescriptor> {
+        None
+    }
+
     /// Optional register-layout schema for the universal inspect interface.
     /// Declarative peripherals ([`crate::peripherals::declarative::GenericPeripheral`])
     /// return their descriptor's registers, so every declarative peripheral
@@ -2470,12 +2481,8 @@ impl<C: Cpu> DebugControl for Machine<C> {
         &self,
         name: &str,
     ) -> Option<labwired_config::PeripheralDescriptor> {
-        use crate::peripherals::declarative::GenericPeripheral;
         let entry = self.bus.peripherals.iter().find(|p| p.name == name)?;
-        let gen_p = entry.dev.as_any()?.downcast_ref::<GenericPeripheral>()?;
-        // We need a way to get the descriptor from GenericPeripheral.
-        // It's private currently. Let's make it public or add a getter.
-        Some(gen_p.get_descriptor().clone())
+        entry.dev.peripheral_descriptor()
     }
 
     fn reset(&mut self) -> SimResult<()> {

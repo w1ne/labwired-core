@@ -86,12 +86,20 @@ pub struct Esp32c3Gpio {
     sdio_select: u32,
     enable: u32,
     strap: u32,
-    in_data: u32,
+    /// Host/browser-driven input levels. A bit only has electrical authority
+    /// when the matching `external_drive_mask` bit is set; otherwise the
+    /// IO_MUX pull-up (if any) supplies the released level.
+    external_levels: u32,
+    external_drive_mask: u32,
     status: u32,
     pin_cfg: [u32; PIN_COUNT as usize],
     /// `GPIO_FUNCn_OUT_SEL_CFG` per pad — the output-matrix selector read by
     /// `gpio_routing` to name the signal a pad is wired to.
     out_sel: [u32; PIN_COUNT as usize],
+    /// Shared IO_MUX per-pad register words. This is intentionally separate
+    /// from the output matrix: the pad's weak pull-up is an electrical input
+    /// condition, not a routed peripheral signal.
+    pad_controls: Option<super::io_mux::PadControls>,
     /// Live I²C0 SDA/SCL line levels, shared with the C3 I²C bit engine (see
     /// `crate::bus::SystemBus::wire_esp32c3_i2c_pads`). Pads whose output
     /// matrix routes I2CEXT0_SCL/SDA read the wire here instead of the
@@ -113,10 +121,12 @@ impl Esp32c3Gpio {
             sdio_select: 0,
             enable: 0,
             strap: STRAP_SPI_FAST_FLASH_BOOT,
-            in_data: 0,
+            external_levels: 0,
+            external_drive_mask: 0,
             status: 0,
             pin_cfg: [0; PIN_COUNT as usize],
             out_sel: [0; PIN_COUNT as usize],
+            pad_controls: None,
             i2c_lines: None,
             tap: None,
             cycle: 0,
@@ -128,6 +138,39 @@ impl Esp32c3Gpio {
     /// engine drives) so matrix-routed pads carry the real waveform.
     pub(crate) fn set_i2c_lines(&mut self, lines: std::sync::Arc<super::i2c::I2cLineLevels>) {
         self.i2c_lines = Some(lines);
+    }
+
+    /// Wire the C3 IO_MUX's shared per-pad controls after both peripherals
+    /// exist on the system bus.
+    pub(crate) fn set_pad_controls(&mut self, controls: super::io_mux::PadControls) {
+        self.pad_controls = Some(controls);
+    }
+
+    fn io_mux_pullup_mask(&self) -> u32 {
+        let Some(controls) = &self.pad_controls else {
+            return 0;
+        };
+        controls
+            .read()
+            .expect("ESP32-C3 IO_MUX pad controls poisoned")
+            .iter()
+            .enumerate()
+            .fold(0, |mask, (pin, word)| {
+                if word & (1 << 8) != 0 {
+                    mask | (1 << pin)
+                } else {
+                    mask
+                }
+            })
+    }
+
+    /// Firmware-visible input word. An explicit external drive always beats a
+    /// weak internal pull-up; otherwise the raw IO_MUX `FUN_WPU` bit supplies
+    /// the released level, including its descriptor-defined cold reset.
+    fn effective_input(&self) -> u32 {
+        ((self.external_levels & self.external_drive_mask)
+            | (self.io_mux_pullup_mask() & !self.external_drive_mask))
+            & PIN_MASK
     }
 
     /// Direction-aware pad level — the single truth `read_gpio_pad` and the
@@ -151,14 +194,14 @@ impl Esp32c3Gpio {
             }
             return Some((self.out & mask) != 0);
         }
-        Some((self.in_data & mask) != 0)
+        Some((self.effective_input() & mask) != 0)
     }
 
     /// Record every watched pad's current level before a mutation. No-op (one
     /// branch) while no tap is installed. The tap is briefly taken out of
     /// `self` so `pad_level(&self)` can run while the scratchpad is written.
     #[inline]
-    fn tap_snapshot(&mut self) {
+    pub(crate) fn tap_snapshot(&mut self) {
         let Some(mut t) = self.tap.take() else {
             return;
         };
@@ -174,7 +217,7 @@ impl Esp32c3Gpio {
     /// so a pad handed to (or taken from) the I²C matrix keeps pushing edges
     /// from the correct source afterwards.
     #[inline]
-    fn tap_report(&mut self) {
+    pub(crate) fn tap_report(&mut self) {
         let Some(t) = self.tap.take() else {
             return;
         };
@@ -246,10 +289,11 @@ impl Esp32c3Gpio {
     pub fn set_pin_input(&mut self, pin: u8, level: bool) {
         assert!(pin < PIN_COUNT, "set_pin_input: pin {pin} >= {PIN_COUNT}");
         if level {
-            self.in_data |= 1u32 << pin;
+            self.external_levels |= 1u32 << pin;
         } else {
-            self.in_data &= !(1u32 << pin);
+            self.external_levels &= !(1u32 << pin);
         }
+        self.external_drive_mask |= 1u32 << pin;
     }
 
     fn pin_cfg_index(off: u64) -> Option<usize> {
@@ -267,7 +311,7 @@ impl Esp32c3Gpio {
             SDIO_SELECT => self.sdio_select,
             ENABLE | ENABLE_W1TS | ENABLE_W1TC => self.enable,
             STRAP => self.strap,
-            IN => self.in_data,
+            IN => self.effective_input(),
             STATUS | STATUS_W1TS | STATUS_W1TC => self.status,
             PCPU_INT | PCPU_NMI_INT | CPUSDIO_INT => self.status,
             off => {
@@ -390,7 +434,7 @@ impl Peripheral for Esp32c3Gpio {
         serde_json::json!({
             "layout": "esp32c3",
             "odr": self.out,
-            "idr": self.in_data,
+            "idr": self.effective_input(),
             "enable": self.enable,
             "strap": self.strap,
             "status": self.status,
@@ -401,7 +445,7 @@ impl Peripheral for Esp32c3Gpio {
         if pin >= PIN_COUNT {
             return None;
         }
-        Some((self.in_data & (1u32 << pin)) != 0)
+        Some((self.effective_input() & (1u32 << pin)) != 0)
     }
 
     fn read_gpio_output(&self, pin: u8) -> Option<bool> {
@@ -510,6 +554,8 @@ impl Peripheral for Esp32c3Gpio {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::bus::SystemBus;
+    use labwired_config::{ChipDescriptor, SystemManifest};
 
     #[test]
     fn w1ts_and_w1tc_update_output_register() {
@@ -575,5 +621,355 @@ mod tests {
         assert!(r9.func.is_none());
 
         assert!(g.gpio_routing(PIN_COUNT).is_none(), "out-of-range pin");
+    }
+
+    #[test]
+    fn esp32c3_input_pullup_releases_a_floating_pin_but_external_drive_wins() {
+        const IO_MUX_GPIO4: u64 = 0x6000_9000 + 0x04 + 4 * 4;
+        const GPIO_IN: u64 = 0x6000_4000 + IN;
+
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let chip = ChipDescriptor::from_file(root.join("../../configs/chips/esp32c3.yaml"))
+            .expect("read esp32c3 chip yaml");
+        let manifest: SystemManifest = serde_yaml::from_str(
+            r#"
+name: "esp32c3-input-pullup-test"
+chip: "../chips/esp32c3.yaml"
+"#,
+        )
+        .expect("parse system yaml");
+        let mut bus = SystemBus::from_config(&chip, &manifest).expect("construct C3 bus");
+        let gpio_idx = bus
+            .find_peripheral_index_by_name("gpio")
+            .expect("C3 GPIO is present");
+
+        {
+            let gpio = bus.peripherals[gpio_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|any| any.downcast_mut::<Esp32c3Gpio>())
+                .expect("C3 GPIO model");
+            assert_eq!(
+                gpio.read_gpio_input(4),
+                Some(true),
+                "the cold IO_MUX FUN_WPU bit releases a floating GPIO4"
+            );
+            assert_eq!(gpio.read_gpio_pad(4), Some(true));
+        }
+
+        assert_eq!(bus.read_u32(IO_MUX_GPIO4).unwrap(), 0x0000_0b00);
+        bus.write_u32(IO_MUX_GPIO4, 0x0000_1a02)
+            .expect("emulate Arduino pinMode(GPIO4, INPUT)");
+
+        {
+            let gpio = bus.peripherals[gpio_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|any| any.downcast_mut::<Esp32c3Gpio>())
+                .expect("C3 GPIO model");
+            assert_eq!(gpio.read_gpio_input(4), Some(false), "INPUT clears FUN_WPU");
+            assert_eq!(gpio.read_gpio_pad(4), Some(false));
+        }
+
+        bus.write_u32(IO_MUX_GPIO4, 0x0000_1b02)
+            .expect("emulate Arduino pinMode(GPIO4, INPUT_PULLUP)");
+
+        {
+            let gpio = bus.peripherals[gpio_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|any| any.downcast_mut::<Esp32c3Gpio>())
+                .expect("C3 GPIO model");
+            assert_eq!(gpio.read_gpio_input(4), Some(true), "pull-up releases high");
+            assert_eq!(gpio.read_gpio_pad(4), Some(true));
+            assert_ne!(gpio.snapshot()["idr"].as_u64().unwrap() & (1 << 4), 0);
+        }
+        assert_ne!(bus.read_u32(GPIO_IN).unwrap() & (1 << 4), 0);
+
+        let gpio = bus.peripherals[gpio_idx]
+            .dev
+            .as_any_mut()
+            .and_then(|any| any.downcast_mut::<Esp32c3Gpio>())
+            .expect("C3 GPIO model");
+        assert!(gpio.set_gpio_input(4, false));
+        assert_eq!(gpio.read_gpio_input(4), Some(false), "injected low wins");
+        assert!(gpio.set_gpio_input(4, true));
+        assert_eq!(gpio.read_gpio_input(4), Some(true), "injected high wins");
+    }
+
+    #[test]
+    fn input_pullup_uses_the_same_effective_level_for_logic_capture() {
+        use crate::logic_capture::{LogicTap, PadEvent};
+        use crate::peripherals::esp32c3::io_mux::Esp32c3IoMux;
+
+        let mut io_mux = Esp32c3IoMux::new();
+        io_mux.write_u32(0x04 + 4 * 4, 1 << 8).unwrap();
+        let mut gpio = Esp32c3Gpio::new();
+        gpio.set_pad_controls(io_mux.pad_controls());
+        let tap = LogicTap::new();
+        assert!(gpio.install_logic_tap(&tap, &[(4, 0)]));
+
+        assert!(gpio.set_gpio_input(4, false));
+        assert_eq!(
+            tap.take_events(),
+            vec![PadEvent {
+                ch: 0,
+                cycle: 0,
+                value: false,
+            }]
+        );
+    }
+
+    #[test]
+    fn io_mux_pullup_write_pushes_logic_capture_edge() {
+        use crate::logic_capture::{LogicTap, PadEvent};
+
+        const IO_MUX_GPIO4: u64 = 0x6000_9000 + 0x04 + 4 * 4;
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let chip = ChipDescriptor::from_file(root.join("../../configs/chips/esp32c3.yaml"))
+            .expect("read esp32c3 chip yaml");
+        let manifest: SystemManifest = serde_yaml::from_str(
+            r#"
+name: "esp32c3-input-pullup-capture-test"
+chip: "../chips/esp32c3.yaml"
+"#,
+        )
+        .expect("parse system yaml");
+        let mut bus = SystemBus::from_config(&chip, &manifest).expect("construct C3 bus");
+        let gpio_idx = bus
+            .find_peripheral_index_by_name("gpio")
+            .expect("C3 GPIO is present");
+        crate::Bus::write_u32(&mut bus, IO_MUX_GPIO4, 0x0000_1a02)
+            .expect("firmware configures GPIO4 as INPUT before arming capture");
+        let tap = LogicTap::new();
+        {
+            let gpio = bus.peripherals[gpio_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|any| any.downcast_mut::<Esp32c3Gpio>())
+                .expect("C3 GPIO model");
+            assert!(gpio.install_logic_tap(&tap, &[(4, 0)]));
+            assert_eq!(gpio.read_gpio_pad(4), Some(false));
+        }
+
+        crate::Bus::write_u32(&mut bus, IO_MUX_GPIO4, 0x0000_1b02)
+            .expect("firmware enables GPIO4 FUN_WPU");
+
+        assert_eq!(
+            tap.take_events(),
+            vec![PadEvent {
+                ch: 0,
+                cycle: 0,
+                value: true,
+            }]
+        );
+    }
+
+    #[test]
+    fn io_mux_byte_and_halfword_writes_drive_pullups_and_emit_capture_edges() {
+        use crate::logic_capture::{LogicTap, PadEvent};
+
+        const IO_MUX_GPIO5: u64 = 0x6000_9000 + 0x04 + 5 * 4;
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let chip = ChipDescriptor::from_file(root.join("../../configs/chips/esp32c3.yaml"))
+            .expect("read esp32c3 chip yaml");
+        let manifest: SystemManifest = serde_yaml::from_str(
+            r#"
+name: "esp32c3-input-pullup-width-test"
+chip: "../chips/esp32c3.yaml"
+"#,
+        )
+        .expect("parse system yaml");
+        let mut bus = SystemBus::from_config(&chip, &manifest).expect("construct C3 bus");
+        let gpio_idx = bus
+            .find_peripheral_index_by_name("gpio")
+            .expect("C3 GPIO is present");
+
+        crate::Bus::write_u32(&mut bus, IO_MUX_GPIO5, 0x0000_1a02)
+            .expect("firmware configures GPIO5 as INPUT");
+        assert_eq!(
+            crate::Bus::read_u32(&bus, IO_MUX_GPIO5).unwrap(),
+            0x0000_1a02
+        );
+
+        let tap = LogicTap::new();
+        {
+            let gpio = bus.peripherals[gpio_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|any| any.downcast_mut::<Esp32c3Gpio>())
+                .expect("C3 GPIO model");
+            assert!(gpio.install_logic_tap(&tap, &[(5, 0)]));
+            assert_eq!(gpio.read_gpio_pad(5), Some(false));
+        }
+
+        crate::Bus::write_u8(&mut bus, IO_MUX_GPIO5 + 1, 0x1b)
+            .expect("byte write enables GPIO5 FUN_WPU");
+        assert_eq!(
+            crate::Bus::read_u32(&bus, IO_MUX_GPIO5).unwrap(),
+            0x0000_1b02
+        );
+        assert_eq!(
+            tap.take_events(),
+            vec![PadEvent {
+                ch: 0,
+                cycle: 0,
+                value: true,
+            }]
+        );
+
+        crate::Bus::write_u16(&mut bus, IO_MUX_GPIO5, 0x1a02)
+            .expect("halfword write clears GPIO5 FUN_WPU");
+        assert_eq!(
+            crate::Bus::read_u32(&bus, IO_MUX_GPIO5).unwrap(),
+            0x0000_1a02
+        );
+        assert_eq!(
+            tap.take_events(),
+            vec![PadEvent {
+                ch: 0,
+                cycle: 0,
+                value: false,
+            }]
+        );
+
+        crate::Bus::write_u16(&mut bus, IO_MUX_GPIO5, 0x1b02)
+            .expect("halfword write enables GPIO5 FUN_WPU");
+        assert_eq!(
+            tap.take_events(),
+            vec![PadEvent {
+                ch: 0,
+                cycle: 0,
+                value: true,
+            }]
+        );
+    }
+
+    #[test]
+    fn machine_snapshot_restores_io_mux_pads_date_and_gpio_wiring() {
+        const IO_MUX_PIN_CTRL: u64 = 0x6000_9000;
+        const IO_MUX_GPIO4: u64 = 0x6000_9000 + 0x04 + 4 * 4;
+        const IO_MUX_DATE: u64 = 0x6000_90fc;
+        const GPIO_IN: u64 = 0x6000_4000 + IN;
+
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let chip = ChipDescriptor::from_file(root.join("../../configs/chips/esp32c3.yaml"))
+            .expect("read esp32c3 chip yaml");
+        let manifest: SystemManifest = serde_yaml::from_str(
+            r#"
+name: "esp32c3-input-pullup-machine-snapshot-test"
+chip: "../chips/esp32c3.yaml"
+"#,
+        )
+        .expect("parse system yaml");
+        let mut bus = SystemBus::from_config(&chip, &manifest).expect("construct C3 bus");
+        let cpu = crate::system::riscv::configure_riscv(&mut bus);
+        let mut machine = crate::Machine::new(cpu, bus);
+
+        machine
+            .bus
+            .write_u32(IO_MUX_GPIO4, 0x0000_1a02)
+            .expect("set GPIO4 INPUT");
+        assert_eq!(machine.bus.read_u32(GPIO_IN).unwrap() & (1 << 4), 0);
+
+        machine
+            .bus
+            .write_u32(IO_MUX_GPIO4, 0x0000_1b02)
+            .expect("set GPIO4 INPUT_PULLUP");
+        machine
+            .bus
+            .write_u32(IO_MUX_PIN_CTRL, 0x321)
+            .expect("write IO_MUX PIN_CTRL");
+        machine
+            .bus
+            .write_u32(IO_MUX_DATE, 0x0bad_c0de)
+            .expect("write IO_MUX DATE");
+        let snapshot = machine.snapshot();
+
+        machine
+            .bus
+            .write_u32(IO_MUX_GPIO4, 0x0000_1a02)
+            .expect("mutate GPIO4 back to INPUT");
+        machine
+            .bus
+            .write_u32(IO_MUX_PIN_CTRL, 0x654)
+            .expect("mutate IO_MUX PIN_CTRL");
+        machine
+            .bus
+            .write_u32(IO_MUX_DATE, 0xfeed_face)
+            .expect("mutate IO_MUX DATE");
+        assert_eq!(machine.bus.read_u32(GPIO_IN).unwrap() & (1 << 4), 0);
+
+        machine
+            .apply_snapshot(snapshot)
+            .expect("restore full machine snapshot");
+        assert_ne!(
+            machine.bus.read_u32(GPIO_IN).unwrap() & (1 << 4),
+            0,
+            "GPIO retains the shared IO_MUX pad-control connection after restore"
+        );
+        assert_eq!(machine.bus.read_u32(IO_MUX_GPIO4).unwrap(), 0x0000_1b02);
+        assert_eq!(machine.bus.read_u32(IO_MUX_PIN_CTRL).unwrap(), 0x321);
+        assert_eq!(machine.bus.read_u32(IO_MUX_DATE).unwrap(), 0x0bad_c0de);
+    }
+
+    #[test]
+    fn fresh_machine_runtime_snapshot_restores_io_mux_state_and_gpio_wiring() {
+        const IO_MUX_PIN_CTRL: u64 = 0x6000_9000;
+        const IO_MUX_GPIO4: u64 = 0x6000_9000 + 0x04 + 4 * 4;
+        const IO_MUX_DATE: u64 = 0x6000_90fc;
+        const GPIO_IN: u64 = 0x6000_4000 + IN;
+
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let chip = ChipDescriptor::from_file(root.join("../../configs/chips/esp32c3.yaml"))
+            .expect("read esp32c3 chip yaml");
+        let manifest: SystemManifest = serde_yaml::from_str(
+            r#"
+name: "esp32c3-input-pullup-runtime-snapshot-test"
+chip: "../chips/esp32c3.yaml"
+"#,
+        )
+        .expect("parse system yaml");
+
+        let mut source_bus =
+            SystemBus::from_config(&chip, &manifest).expect("construct source C3 bus");
+        let source_cpu = crate::system::riscv::configure_riscv(&mut source_bus);
+        let mut source = crate::Machine::new(source_cpu, source_bus);
+        source
+            .bus
+            .write_u32(IO_MUX_GPIO4, 0xfeed_1a02)
+            .expect("set source GPIO4 INPUT without FUN_WPU");
+        source
+            .bus
+            .write_u32(IO_MUX_PIN_CTRL, 0xa5a5_f123)
+            .expect("write source IO_MUX PIN_CTRL");
+        source
+            .bus
+            .write_u32(IO_MUX_DATE, 0x0bad_c0de)
+            .expect("write source IO_MUX DATE");
+        assert_eq!(source.bus.read_u32(GPIO_IN).unwrap() & (1 << 4), 0);
+        let snapshot = source.take_runtime_snapshot();
+
+        let mut resumed_bus =
+            SystemBus::from_config(&chip, &manifest).expect("construct fresh C3 bus");
+        let resumed_cpu = crate::system::riscv::configure_riscv(&mut resumed_bus);
+        let mut resumed = crate::Machine::new(resumed_cpu, resumed_bus);
+        assert_ne!(
+            resumed.bus.read_u32(GPIO_IN).unwrap() & (1 << 4),
+            0,
+            "fresh C3 IO_MUX starts with its descriptor FUN_WPU reset"
+        );
+
+        resumed
+            .apply_runtime_snapshot(&snapshot)
+            .expect("restore runtime snapshot into fresh machine");
+        assert_eq!(resumed.bus.read_u32(GPIO_IN).unwrap() & (1 << 4), 0);
+        assert_eq!(
+            resumed.bus.read_u32(IO_MUX_GPIO4).unwrap(),
+            0xfeed_1a02,
+            "the restored IO_MUX state remains shared with GPIO"
+        );
+        assert_eq!(resumed.bus.read_u32(IO_MUX_PIN_CTRL).unwrap(), 0xa5a5_f123);
+        assert_eq!(resumed.bus.read_u32(IO_MUX_DATE).unwrap(), 0x0bad_c0de);
     }
 }

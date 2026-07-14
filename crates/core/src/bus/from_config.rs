@@ -705,6 +705,10 @@ impl SystemBus {
         }
 
         bus.rebuild_peripheral_ranges();
+        // ESP32-C3: share IO_MUX pad controls with GPIO so an Arduino
+        // `INPUT_PULLUP` changes the floating input level. No-op for every
+        // other chip.
+        bus.wire_esp32c3_pad_controls();
         // ESP32-C3: share the I²C0 bit engine's live SDA/SCL line levels with
         // the C3 GPIO model so matrix-routed pads carry the real waveform.
         // No-op for every other chip.

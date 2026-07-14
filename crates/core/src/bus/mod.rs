@@ -1048,6 +1048,93 @@ impl SystemBus {
         }
     }
 
+    /// Wire C3 IO_MUX per-pad controls into C3 GPIO after both models have
+    /// been constructed. The IO_MUX owns the shared register bank; GPIO reads
+    /// `FUN_WPU` from it to model Arduino `INPUT_PULLUP`. No-op on any bus
+    /// without both C3 peripherals.
+    pub(crate) fn wire_esp32c3_pad_controls(&mut self) {
+        use crate::peripherals::esp32c3::gpio::Esp32c3Gpio;
+        use crate::peripherals::esp32c3::io_mux::Esp32c3IoMux;
+
+        let io_mux_idx = self.peripherals.iter().position(|p| {
+            p.dev
+                .as_any()
+                .map(|any| any.is::<Esp32c3IoMux>())
+                .unwrap_or(false)
+        });
+        let gpio_idx = self.peripherals.iter().position(|p| {
+            p.dev
+                .as_any()
+                .map(|any| any.is::<Esp32c3Gpio>())
+                .unwrap_or(false)
+        });
+        let (Some(io_mux_idx), Some(gpio_idx)) = (io_mux_idx, gpio_idx) else {
+            return;
+        };
+
+        let controls = self.peripherals[io_mux_idx]
+            .dev
+            .as_any()
+            .and_then(|any| any.downcast_ref::<Esp32c3IoMux>())
+            .map(Esp32c3IoMux::pad_controls);
+        if let (Some(controls), Some(gpio)) = (
+            controls,
+            self.peripherals[gpio_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|any| any.downcast_mut::<Esp32c3Gpio>()),
+        ) {
+            gpio.set_pad_controls(controls);
+        }
+    }
+
+    /// Bracket a C3 IO_MUX write with GPIO push-capture sampling. A `FUN_WPU`
+    /// write changes an input pad electrically even though the GPIO register
+    /// block itself is not written, so the usual GPIO-local write hooks would
+    /// otherwise miss the edge. The returned GPIO index is passed to
+    /// [`Self::finish_esp32c3_io_mux_write`] after the MMIO write succeeds.
+    pub(crate) fn begin_esp32c3_io_mux_write(&mut self, io_mux_idx: usize) -> Option<usize> {
+        use crate::peripherals::esp32c3::gpio::Esp32c3Gpio;
+        use crate::peripherals::esp32c3::io_mux::Esp32c3IoMux;
+
+        if !self.peripherals.get(io_mux_idx).is_some_and(|p| {
+            p.dev
+                .as_any()
+                .map(|any| any.is::<Esp32c3IoMux>())
+                .unwrap_or(false)
+        }) {
+            return None;
+        }
+        let gpio_idx = self.peripherals.iter().position(|p| {
+            p.dev
+                .as_any()
+                .map(|any| any.is::<Esp32c3Gpio>())
+                .unwrap_or(false)
+        })?;
+        self.peripherals[gpio_idx]
+            .dev
+            .as_any_mut()
+            .and_then(|any| any.downcast_mut::<Esp32c3Gpio>())?
+            .tap_snapshot();
+        Some(gpio_idx)
+    }
+
+    /// Complete a successful C3 IO_MUX write started by
+    /// [`Self::begin_esp32c3_io_mux_write`], pushing any changed pad level to
+    /// the in-engine logic tap.
+    pub(crate) fn finish_esp32c3_io_mux_write(&mut self, gpio_idx: Option<usize>) {
+        let Some(gpio_idx) = gpio_idx else {
+            return;
+        };
+        if let Some(gpio) = self.peripherals[gpio_idx]
+            .dev
+            .as_any_mut()
+            .and_then(|any| any.downcast_mut::<crate::peripherals::esp32c3::gpio::Esp32c3Gpio>())
+        {
+            gpio.tap_report();
+        }
+    }
+
     /// Wire the STM32 SPI bit engines' live SCK/MOSI/MISO levels into the
     /// STM32 GPIO ports, so pads whose MODER/AFR (V2) or CRL/CRH CNF (F1)
     /// route an SPI alternate function read the real waveform through
@@ -3198,10 +3285,17 @@ impl SystemBus {
             #[cfg(feature = "event-scheduler")]
             self.sync_scheduler_peripheral(idx);
             self.maybe_latch_dc(idx);
-            let p = &mut self.peripherals[idx];
-            p.ticks_remaining = 0;
-            let base = p.base;
-            let r = p.dev.write_u32(addr - base, value);
+            let c3_io_mux_capture = self.begin_esp32c3_io_mux_write(idx);
+            let (base, r) = {
+                let p = &mut self.peripherals[idx];
+                p.ticks_remaining = 0;
+                let base = p.base;
+                let r = p.dev.write_u32(addr - base, value);
+                (base, r)
+            };
+            if r.is_ok() {
+                self.finish_esp32c3_io_mux_write(c3_io_mux_capture);
+            }
             self.maybe_arm_hcsr04(idx);
             #[cfg(feature = "event-scheduler")]
             self.collect_scheduled_events(idx);
@@ -3272,10 +3366,17 @@ impl SystemBus {
             #[cfg(feature = "event-scheduler")]
             self.sync_scheduler_peripheral(idx);
             self.maybe_latch_dc(idx);
-            let p = &mut self.peripherals[idx];
-            p.ticks_remaining = 0;
-            let base = p.base;
-            let r = p.dev.write_u16(addr - base, value);
+            let c3_io_mux_capture = self.begin_esp32c3_io_mux_write(idx);
+            let (base, r) = {
+                let p = &mut self.peripherals[idx];
+                p.ticks_remaining = 0;
+                let base = p.base;
+                let r = p.dev.write_u16(addr - base, value);
+                (base, r)
+            };
+            if r.is_ok() {
+                self.finish_esp32c3_io_mux_write(c3_io_mux_capture);
+            }
             self.maybe_arm_hcsr04(idx);
             #[cfg(feature = "event-scheduler")]
             self.collect_scheduled_events(idx);

@@ -14,6 +14,7 @@
 # blind to this scene config.
 name: "esp32c3-leo-airquality-normal"
 chip: "../../configs/chips/esp32c3.yaml"
+cpu_hz: 160_000_000
 
 external_devices:
   # ── Sensirion SCD41: CO₂ + temperature + humidity ─────────────────────────

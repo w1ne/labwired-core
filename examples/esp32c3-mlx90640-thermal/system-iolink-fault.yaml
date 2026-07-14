@@ -13,6 +13,7 @@
 #   - UART1 (0x60010000): the IO-Link C/Q wire — device DLL <-> IO-Link master.
 name: "esp32c3-mlx90640-thermal-iolink-fault"
 chip: "../../configs/chips/esp32c3.yaml"
+cpu_hz: 160_000_000
 
 external_devices:
   - id: "thermal_cam"

@@ -17,6 +17,7 @@
 # fault=NONE, and must NOT raise a temperature event.
 name: "esp32c3-mlx90640-thermal-iolink-normal"
 chip: "../../configs/chips/esp32c3.yaml"
+cpu_hz: 160_000_000
 
 external_devices:
   - id: "thermal_cam"

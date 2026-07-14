@@ -341,7 +341,7 @@ board_io:
     peripheral: "gpio"
     pin: 2
     signal: "input"
-    active_high: true
+    active_high: false
 "#,
         )
         .expect("parse system yaml");
@@ -374,7 +374,14 @@ board_io:
     #[test]
     fn esp32c3_board_io_button_press_updates_gpio_input_state() {
         let mut sim = c3_button_sim();
+        let machine = sim.machine.as_mut().expect("machine");
+        machine
+            .bus
+            .write_u32(0x6000_9000 + 0x04 + 2 * 4, 1 << 8)
+            .expect("enable GPIO2 FUN_WPU");
 
+        // An active-low button with INPUT_PULLUP is released high, so it must
+        // start inactive before the browser injects its first press.
         assert!(!button_active(&sim));
 
         sim.set_board_io_input("left", true).expect("press left");

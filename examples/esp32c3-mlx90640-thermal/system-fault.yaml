@@ -11,6 +11,7 @@
 # hotspot crossing critical_c (OVERTEMP). Thresholds are firmware-side #defines.
 name: "esp32c3-mlx90640-thermal-fault"
 chip: "../../configs/chips/esp32c3.yaml"
+cpu_hz: 160_000_000
 
 external_devices:
   - id: "thermal_cam"

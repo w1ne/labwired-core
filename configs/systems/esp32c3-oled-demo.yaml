@@ -7,6 +7,7 @@
 # twin boots that flash image faithfully through the real mask ROM (rom-boot).
 name: "esp32c3-oled-demo"
 chip: "../chips/esp32c3.yaml"
+cpu_hz: 160_000_000
 
 external_devices:
   # SSD1306 OLED on I2C0 at 0x3C. Attached to the C3 command-list controller by
