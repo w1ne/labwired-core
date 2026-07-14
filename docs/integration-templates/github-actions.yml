@@ -20,7 +20,8 @@ jobs:
       - name: Build firmware
         run: cargo build --release --target thumbv7m-none-eabi -p your-firmware
 
-      - name: Run LabWired test
+      - id: labwired
+        name: Run LabWired test
         uses: w1ne/labwired-core/.github/actions/labwired-test@main
         with:
           version: v0.18.0
@@ -28,13 +29,9 @@ jobs:
           output-dir: out/labwired
           args: --no-uart-stdout
 
-      - name: Upload LabWired artifacts
+      - name: Link the automatic LabWired artifact
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: labwired-artifacts
-          path: out/labwired
-          if-no-files-found: warn
+        run: echo "${{ steps.labwired.outputs.artifact-url }}" >> "$GITHUB_STEP_SUMMARY"
 
 # Advanced alternative: build LabWired from a source checkout only when testing
 # an unreleased LabWired change. For normal firmware CI, keep the pinned release
