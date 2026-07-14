@@ -12,15 +12,35 @@ from pathlib import Path
 
 
 UART_LIMIT_BYTES = 64 * 1024
+RESULT_JSON_LIMIT_BYTES = 1024 * 1024
+ASSERTION_RENDER_LIMIT = 200
+DISPLAY_VALUE_LIMIT = 4096
+SUMMARY_LIMIT_BYTES = 64 * 1024
+SCRIPT_HASH_CHUNK_BYTES = 64 * 1024
 METRIC_KEYS = ("steps_executed", "cycles", "instructions")
+VALUE_TRUNCATION_MARKER = "… [truncated]"
+
+
+def bounded_display(value: object, limit: int = DISPLAY_VALUE_LIMIT) -> tuple[str, bool]:
+    """Return bounded printable report data and whether it was truncated."""
+
+    if value is None:
+        text = "unknown"
+    else:
+        try:
+            text = str(value)
+        except Exception:  # JSON values are plain, but keep diagnostics fail-safe.
+            text = "unavailable"
+
+    if len(text) <= limit:
+        return text, False
+    return f"{text[: limit - len(VALUE_TRUNCATION_MARKER)]}{VALUE_TRUNCATION_MARKER}", True
 
 
 def display(value: object) -> str:
-    """Return untrusted report data as a printable string."""
+    """Return untrusted report data as a bounded printable string."""
 
-    if value is None:
-        return "unknown"
-    return str(value)
+    return bounded_display(value)[0]
 
 
 def markdown_code(value: object) -> str:
@@ -43,12 +63,26 @@ def escaped(value: object) -> str:
     return html.escape(display(value), quote=True)
 
 
-def load_result(path: Path) -> dict:
+def load_result(path: Path) -> tuple[dict, list[str]]:
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
-        return {}
-    return data if isinstance(data, dict) else {}
+        with path.open("rb") as result_file:
+            contents = result_file.read(RESULT_JSON_LIMIT_BYTES + 1)
+    except OSError:
+        return {}, ["result.json is unavailable; report values are unavailable"]
+
+    if len(contents) > RESULT_JSON_LIMIT_BYTES:
+        return {}, [
+            "result.json exceeded the 1048576-byte rendering limit; "
+            "report values are unavailable"
+        ]
+
+    try:
+        data = json.loads(contents.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError):
+        return {}, ["result.json is malformed or unreadable; report values are unavailable"]
+    if not isinstance(data, dict):
+        return {}, ["result.json is not an object; report values are unavailable"]
+    return data, []
 
 
 def read_uart(path: Path) -> str:
@@ -66,21 +100,25 @@ def read_uart(path: Path) -> str:
 
 
 def script_sha256(path_text: str) -> str:
+    digest = hashlib.sha256()
     try:
-        contents = Path(path_text).read_bytes()
+        with Path(path_text).open("rb") as script_file:
+            while chunk := script_file.read(SCRIPT_HASH_CHUNK_BYTES):
+                digest.update(chunk)
     except OSError:
         return "unavailable"
-    return hashlib.sha256(contents).hexdigest()
+    return digest.hexdigest()
 
 
-def assertion_description(assertion: dict) -> str:
+def assertion_description(assertion: dict) -> tuple[str, bool]:
     value = assertion.get("assertion")
     if value is None:
         value = assertion.get("kind", assertion)
     try:
-        return json.dumps(value, ensure_ascii=False, sort_keys=True)
-    except (TypeError, ValueError):
-        return display(value)
+        description = json.dumps(value, ensure_ascii=False, sort_keys=True)
+    except (TypeError, ValueError, RecursionError):
+        description = display(value)
+    return bounded_display(description)
 
 
 def assertion_outcome(assertion: dict) -> str:
@@ -105,12 +143,30 @@ def write_github_output(output, key: str, value: object) -> None:
     output.write(f"{key}<<{delimiter}\n{text}\n{delimiter}\n")
 
 
+def cap_markdown_summary(summary: str) -> str:
+    """Keep the job-summary append below GitHub's per-step size limits."""
+
+    encoded_summary = summary.encode("utf-8")
+    if len(encoded_summary) <= SUMMARY_LIMIT_BYTES:
+        return summary
+
+    notice = (
+        "\n\n> Report summary truncated after 65536 bytes. "
+        "See the HTML report artifact for the bounded report.\n"
+    )
+    prefix_limit = SUMMARY_LIMIT_BYTES - len(notice.encode("utf-8"))
+    prefix = encoded_summary[:prefix_limit].decode("utf-8", errors="ignore").rstrip()
+    return f"{prefix}{notice}"
+
+
 def render_summary(
     status: str,
     stop_reason: str,
     metrics: dict[str, str],
     passed: int,
     failed: int,
+    message: str | None,
+    diagnostics: list[str],
     run_url: str,
     source_revision: str,
     release_version: str,
@@ -128,13 +184,21 @@ def render_summary(
     artifact_lines = "\n".join(
         f"- {markdown_code(path.name)}" for path in (result_json, uart_log, summary_md, report_html)
     )
-    return f"""## LabWired test — {markdown_code(status)}
+    diagnostic_lines: list[str] = []
+    if message is not None:
+        diagnostic_lines.append(f"- Message: {markdown_code(message)}")
+    diagnostic_lines.extend(f"- {diagnostic}" for diagnostic in diagnostics)
+    diagnostics_section = ""
+    if diagnostic_lines:
+        diagnostics_section = f"### Diagnostics\n\n{'\n'.join(diagnostic_lines)}\n\n"
+
+    summary = f"""## LabWired test — {markdown_code(status)}
 
 Verdict: {markdown_code(status)}
 
 Stop reason: {markdown_code(stop_reason)}
 
-### Metrics
+{diagnostics_section}### Metrics
 
 {metric_lines}
 
@@ -154,15 +218,18 @@ Assertions: `{passed}` passed, `{failed}` failed
 
 {artifact_lines}
 """
+    return cap_markdown_summary(summary)
 
 
 def render_html(
     status: str,
     stop_reason: str,
     metrics: dict[str, str],
-    assertions: list[dict],
+    assertions: list[tuple[dict, str]],
     passed: int,
     failed: int,
+    message: str | None,
+    diagnostics: list[str],
     run_url: str,
     source_revision: str,
     release_version: str,
@@ -182,12 +249,28 @@ def render_html(
         "<tr>"
         f"<td>{index}</td>"
         f"<td class=\"{assertion_outcome(assertion)}\">{escaped(assertion_outcome(assertion))}</td>"
-        f"<td><code>{escaped(assertion_description(assertion))}</code></td>"
+        f"<td><code>{escaped(description)}</code></td>"
         "</tr>"
-        for index, assertion in enumerate(assertions, start=1)
+        for index, (assertion, description) in enumerate(assertions, start=1)
     )
     if not assertion_rows:
         assertion_rows = "<tr><td colspan=\"3\">No assertions were recorded.</td></tr>"
+
+    message_html = ""
+    if message is not None:
+        message_html = f"<dl><dt>Message</dt><dd><code>{escaped(message)}</code></dd></dl>"
+    notice_html = ""
+    if diagnostics:
+        notice_html = "<ul>" + "".join(
+            f"<li>{escaped(diagnostic)}</li>" for diagnostic in diagnostics
+        ) + "</ul>"
+    diagnostics_section = ""
+    if message_html or notice_html:
+        diagnostics_section = f"""  <section aria-labelledby=\"diagnostics\">
+    <h2 id=\"diagnostics\">Diagnostics</h2>
+    {message_html}{notice_html}
+  </section>
+"""
 
     return f"""<!doctype html>
 <html lang=\"en\">
@@ -215,7 +298,7 @@ def render_html(
     <p><span class=\"badge {badge_class}\">{escaped(status)}</span></p>
     <p>Stop reason: <code>{escaped(stop_reason)}</code></p>
   </header>
-  <section aria-labelledby=\"metrics\">
+{diagnostics_section}  <section aria-labelledby=\"metrics\">
     <h2 id=\"metrics\">Metrics</h2>
     <div class=\"metrics\">{metric_cards}</div>
   </section>
@@ -239,11 +322,23 @@ def render_html(
   </section>
   <section aria-labelledby=\"uart\">
     <h2 id=\"uart\">UART transcript</h2>
-    <pre>{escaped(uart)}</pre>
+    <pre>{html.escape(uart, quote=True)}</pre>
   </section>
 </body>
 </html>
 """
+
+
+def assertion_diagnostic(total: int) -> str | None:
+    if total <= ASSERTION_RENDER_LIMIT:
+        return None
+    omitted = total - ASSERTION_RENDER_LIMIT
+    noun = "assertion" if omitted == 1 else "assertions"
+    verb = "was" if omitted == 1 else "were"
+    return (
+        f"Only the first {ASSERTION_RENDER_LIMIT} assertions are shown; "
+        f"{omitted} additional {noun} {verb} omitted."
+    )
 
 
 def main() -> None:
@@ -261,23 +356,61 @@ def main() -> None:
     report_html = Path(args.report_html)
     github_output = Path(args.github_output)
 
-    data = load_result(result_json)
-    status = display(data.get("status", "unknown"))
-    stop_reason = display(data.get("stop_reason", "unknown"))
+    data, diagnostics = load_result(result_json)
+    status, status_truncated = bounded_display(data.get("status", "unknown"))
+    stop_reason, stop_reason_truncated = bounded_display(data.get("stop_reason", "unknown"))
     raw_assertions = data.get("assertions", [])
-    assertions = (
-        [assertion for assertion in raw_assertions if isinstance(assertion, dict)]
-        if isinstance(raw_assertions, list)
-        else []
+    assertion_entries = (
+        raw_assertions[:ASSERTION_RENDER_LIMIT] if isinstance(raw_assertions, list) else []
     )
-    passed = sum(assertion.get("passed") is True for assertion in assertions)
-    failed = sum(assertion.get("passed") is False for assertion in assertions)
-    metrics = {key: display(data.get(key, "unknown")) for key in METRIC_KEYS}
-    run_url = os.environ.get("LABWIRED_RUN_URL") or "unavailable"
-    source_revision = os.environ.get("LABWIRED_SOURCE_REVISION") or "unavailable"
-    release_version = os.environ.get("LABWIRED_RELEASE_VERSION") or "unavailable"
-    script = os.environ.get("LABWIRED_SCRIPT", "")
-    digest = script_sha256(script)
+    assertions: list[tuple[dict, str]] = []
+    assertion_description_truncated = False
+    for assertion in assertion_entries:
+        if not isinstance(assertion, dict):
+            continue
+        description, description_truncated = assertion_description(assertion)
+        assertions.append((assertion, description))
+        assertion_description_truncated = assertion_description_truncated or description_truncated
+    passed = sum(assertion.get("passed") is True for assertion, _ in assertions)
+    failed = sum(assertion.get("passed") is False for assertion, _ in assertions)
+    assertion_count = len(raw_assertions) if isinstance(raw_assertions, list) else 0
+    if assertion_notice := assertion_diagnostic(assertion_count):
+        diagnostics.append(assertion_notice)
+
+    metric_values: dict[str, str] = {}
+    metric_truncated = False
+    for key in METRIC_KEYS:
+        metric_values[key], truncated = bounded_display(data.get(key, "unknown"))
+        metric_truncated = metric_truncated or truncated
+
+    message: str | None = None
+    message_truncated = False
+    if "message" in data:
+        message, message_truncated = bounded_display(data["message"])
+
+    raw_run_url = os.environ.get("LABWIRED_RUN_URL") or "unavailable"
+    raw_source_revision = os.environ.get("LABWIRED_SOURCE_REVISION") or "unavailable"
+    raw_release_version = os.environ.get("LABWIRED_RELEASE_VERSION") or "unavailable"
+    raw_script = os.environ.get("LABWIRED_SCRIPT", "")
+    run_url, run_url_truncated = bounded_display(raw_run_url)
+    source_revision, source_revision_truncated = bounded_display(raw_source_revision)
+    release_version, release_version_truncated = bounded_display(raw_release_version)
+    script, script_truncated = bounded_display(raw_script)
+    if any(
+        (
+            status_truncated,
+            stop_reason_truncated,
+            metric_truncated,
+            message_truncated,
+            run_url_truncated,
+            source_revision_truncated,
+            release_version_truncated,
+            script_truncated,
+            assertion_description_truncated,
+        )
+    ):
+        diagnostics.append(f"Report values are capped at {DISPLAY_VALUE_LIMIT} characters.")
+    digest = script_sha256(raw_script)
 
     summary_md.parent.mkdir(parents=True, exist_ok=True)
     report_html.parent.mkdir(parents=True, exist_ok=True)
@@ -285,9 +418,11 @@ def main() -> None:
         render_summary(
             status,
             stop_reason,
-            metrics,
+            metric_values,
             passed,
             failed,
+            message,
+            diagnostics,
             run_url,
             source_revision,
             release_version,
@@ -304,10 +439,12 @@ def main() -> None:
         render_html(
             status,
             stop_reason,
-            metrics,
+            metric_values,
             assertions,
             passed,
             failed,
+            message,
+            diagnostics,
             run_url,
             source_revision,
             release_version,
