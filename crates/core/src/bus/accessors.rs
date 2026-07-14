@@ -553,6 +553,21 @@ impl crate::Bus for SystemBus {
         self.riscv_irq_lines
     }
 
+    #[cfg(feature = "event-scheduler")]
+    fn has_pending_schedule(&self) -> bool {
+        !self.pending_schedule.is_empty()
+    }
+
+    #[cfg(feature = "event-scheduler")]
+    fn current_cycle(&self) -> u64 {
+        self.current_cycle
+    }
+
+    #[cfg(feature = "event-scheduler")]
+    fn publish_cycle(&mut self, cycle: u64) {
+        self.set_current_cycle(cycle);
+    }
+
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)
     }

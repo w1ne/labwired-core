@@ -476,6 +476,9 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                 require_fault_fired,
                 fault_evidence,
                 &stimuli,
+                // Xtensa (ESP32) path: never JIT-eligible (the RV32IMC JIT is
+                // RISC-V only), so keep the exact current observer-based metrics.
+                false,
             );
             // Device-block render readout. Surfaces the attached panel block's
             // REAL render state — refresh_gen AND black-plane ink — so a generic
@@ -598,7 +601,25 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
     macro_rules! run_machine {
         ($machine:expr) => {{
             let mut machine = $machine;
-            machine.observers.push(metrics.clone());
+            // JIT-eligible RISC-V runs source cycles/instructions from the
+            // machine's own counters (see `execute_test_loop`), so the metrics
+            // step observer must NOT be installed — its presence would gate the
+            // RV32IMC JIT's correctness check shut. Every other run keeps the
+            // exact current behavior: metrics is the live per-step observer.
+            // Gate on the `jit-core` build feature, which enables ONLY the core
+            // `jit` feature (NOT `event-scheduler` — see crates/cli/Cargo.toml
+            // for why the scheduler is deliberately left out). The C3
+            // tick-widening path is byte-identical without the scheduler; that
+            // is proven empirically by the differential tests
+            // (riscv_jit_c3_oled_test_differential: JIT on vs off, and
+            // riscv_tick_interval_fidelity_differential: tick interval 1 vs 64),
+            // not by the scheduler. In a plain build `cfg!` is false, so every
+            // run keeps the exact current observer-based, single-step behavior.
+            let jit_eligible = cfg!(feature = "jit-core")
+                && riscv_jit_test_eligible(&args, &resolved_limits, &machine, program.arch);
+            if !jit_eligible {
+                machine.observers.push(metrics.clone());
+            }
             let fault_evidence = handle_faults(&mut machine.bus, &faults);
             execute_test_loop(
                 &args,
@@ -614,6 +635,7 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                 require_fault_fired,
                 fault_evidence,
                 &stimuli,
+                jit_eligible,
             )
         }};
     }

@@ -149,6 +149,21 @@ pub(crate) fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode 
     let bridge = std::env::var("LABWIRED_WIFI_BRIDGE").is_ok()
         || std::env::var("LABWIRED_WIFI_BRIDGE_RE").is_ok();
     let dhcp_trace = std::env::var("LABWIRED_DHCP_TRACE").is_ok();
+
+    // ── Non-instrumented hot path: batch through Machine::run ────────────────
+    // When nothing needs per-instruction visibility (no --break-at, no WiFi
+    // bridge, no DHCP trace), run in batches through `Machine::run` so the
+    // RV32IMC wasm-JIT can engage (it only compiles multi-instruction batches,
+    // and its correctness gate refuses to run when observers/breakpoints/etc.
+    // are present). The debug / bridge / dhcp paths below keep single-stepping
+    // via `machine.step()`, which pins the batch to one instruction and so keeps
+    // the JIT correctly OFF — preserving every existing break/halt-trail/inject
+    // behavior. Byte-identity of the batched (JIT-on) path to the single-step
+    // interpreter is proven by tests/riscv_jit_c3_oled_differential.rs.
+    if !debug && !bridge && !dhcp_trace {
+        return run_firmware_riscv_batched(machine, &args, limit);
+    }
+
     // Find the behavioral wifi_mac model by type (the declarative chip-yaml
     // "wifi_mac" shares the name; routing uses ours via greatest-start-wins, but
     // name lookup would return the declarative one).
@@ -304,6 +319,87 @@ pub(crate) fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode 
                 eprintln!("[trail] {}", trail.join(" -> "));
             }
             break;
+        }
+    }
+
+    export_bus_trace_if_requested(&args.bus_trace_out, &machine.bus);
+    ExitCode::from(EXIT_PASS)
+}
+
+/// The RISC-V (ESP32-C3) non-instrumented hot path: run in batches through
+/// `Machine::run` so the RV32IMC wasm-JIT (core feature `jit`, CLI feature
+/// `jit-core`) can engage on multi-instruction batches. Only reached when no
+/// per-instruction instrumentation (--break-at / WiFi bridge / DHCP trace) is
+/// active, so the JIT's correctness gate (no observers, no push tap, not
+/// cycle-accurate) is satisfied and compiled blocks retire atomically.
+///
+/// The JIT is byte-identical to the single-step interpreter — proven on the
+/// real C3 OLED lab by tests/riscv_jit_c3_oled_differential.rs. It is default-ON
+/// here; set `LABWIRED_RISCV_JIT=0` to force the interpreter (the escape hatch).
+/// Preserves the single-step path's semantics: EXIT_PASS on completion, a halt
+/// ends the run, and the bus trace is exported if requested.
+fn run_firmware_riscv_batched(
+    mut machine: labwired_core::Machine<labwired_core::cpu::RiscV>,
+    args: &RunArgs,
+    limit: u64,
+) -> ExitCode {
+    use labwired_core::bus::RECOMMENDED_TICK_INTERVAL;
+    use labwired_core::DebugControl;
+
+    // Escape hatch: LABWIRED_RISCV_JIT=0 forces the interpreter (default on).
+    let jit_on = std::env::var("LABWIRED_RISCV_JIT").as_deref() != Ok("0");
+
+    // The C3 is walk-deletable at rom-boot: its peripherals are scheduler-driven,
+    // so batching at RECOMMENDED_TICK_INTERVAL (64) is byte-identical to
+    // interval-1 while giving the JIT a batch window wide enough to retire whole
+    // basic blocks between peripheral ticks (see the differential gate). Set on
+    // BOTH machine.config and machine.bus.config, exactly as the gate does.
+    machine.config.peripheral_tick_interval = RECOMMENDED_TICK_INTERVAL;
+    machine.bus.config.peripheral_tick_interval = RECOMMENDED_TICK_INTERVAL;
+    machine.config.riscv_jit_enabled = jit_on;
+    machine.bus.config.riscv_jit_enabled = jit_on;
+
+    // Chunk the run so a u64::MAX `limit` (no --max-steps) stays bounded per
+    // `Machine::run` call. `Machine::run` batches internally at the tick
+    // interval; we only cap the total instruction budget here.
+    const CHUNK: u32 = 4_000_000;
+    let mut ran: u64 = 0;
+    while ran < limit {
+        let n = if limit == u64::MAX {
+            CHUNK
+        } else {
+            CHUNK.min((limit - ran) as u32)
+        };
+        let before = machine.step_profile().cpu_instructions;
+        match machine.run(Some(n)) {
+            Ok(_) => {}
+            Err(e) => {
+                // A halt is the normal end of a fixture run; the fault PC/reason
+                // is only surfaced on the debug (--break-at) path.
+                tracing::debug!("labwired-riscv (batched): halt: {e}");
+                break;
+            }
+        }
+        let delta = machine.step_profile().cpu_instructions - before;
+        ran += delta;
+        // No forward progress (idle with no fast-forward budget): stop rather
+        // than spin re-issuing empty batches up to `limit`.
+        if delta == 0 {
+            break;
+        }
+    }
+
+    // Opt-in non-vacuity / diagnostic: prove the JIT actually compiled and ran
+    // hot blocks on this run (LABWIRED_JIT_STATS=1). Only meaningful in a
+    // `jit-core` build; the accessor does not exist otherwise.
+    #[cfg(feature = "jit-core")]
+    if std::env::var("LABWIRED_JIT_STATS").is_ok() {
+        match machine.cpu.jit_stats() {
+            Some(s) => eprintln!(
+                "[jit-stats] compiled={} block_runs={} block_instrs={} interpreted={}",
+                s.compiled, s.block_runs, s.block_instrs, s.interpreted
+            ),
+            None => eprintln!("[jit-stats] JIT engine never created (interpreter-only run)"),
         }
     }
 
