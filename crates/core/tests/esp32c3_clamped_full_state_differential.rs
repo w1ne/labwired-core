@@ -153,7 +153,10 @@ fn build_oled_lab(tick_interval: u32) -> OledLab {
 }
 
 /// Run exactly `budget` instructions in chunks and return the full snapshot.
-fn run_to_snapshot(mut lab: OledLab, budget: u64) -> (u64, labwired_core::snapshot::MachineSnapshot) {
+fn run_to_snapshot(
+    mut lab: OledLab,
+    budget: u64,
+) -> (u64, labwired_core::snapshot::MachineSnapshot) {
     const CHUNK: u32 = 1_000_000;
     let mut steps = 0u64;
     while steps < budget {
@@ -271,7 +274,8 @@ fn oled_lab_full_state_byte_identical_interval_1_vs_64() {
 
     // cpu_state first (the headline: this is what the CLI gate had to exclude).
     assert_eq!(
-        json_1["cpu"], json_64["cpu"],
+        json_1["cpu"],
+        json_64["cpu"],
         "cpu_state DIVERGED between interval-1 and interval-64.\n--- interval-1 ---\n{}\n\
          --- interval-64 ---\n{}",
         serde_json::to_string_pretty(&json_1["cpu"]).unwrap_or_default(),
