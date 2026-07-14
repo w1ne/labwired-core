@@ -208,6 +208,14 @@ impl World {
                 .join(&sysman.chip);
             let chip = labwired_config::ChipDescriptor::from_file(&chip_path)
                 .with_context(|| format!("node '{}': chip {:?}", node.id, chip_path))?;
+            if chip.arch != labwired_config::Arch::Arm {
+                anyhow::bail!(
+                    "node '{}': environment worlds currently support only Cortex-M nodes; chip '{}' has architecture {:?}",
+                    node.id,
+                    chip.name,
+                    chip.arch
+                );
+            }
             let mut bus = crate::bus::SystemBus::from_config(&chip, &sysman)
                 .with_context(|| format!("node '{}': build bus", node.id))?;
             let (cpu, _nvic) = crate::system::cortex_m::configure_cortex_m(&mut bus);
@@ -215,6 +223,14 @@ impl World {
             let fw_path = root_dir.join(&node.firmware);
             let image = load_elf_image(&fw_path)
                 .with_context(|| format!("node '{}': firmware {:?}", node.id, fw_path))?;
+            if image.arch != crate::Arch::Arm {
+                anyhow::bail!(
+                    "node '{}': firmware architecture {:?} is incompatible with Cortex-M system chip '{}'; environment worlds require Arm firmware",
+                    node.id,
+                    image.arch,
+                    chip.name
+                );
+            }
             machine
                 .load_firmware(&image)
                 .map_err(|e| anyhow::anyhow!("node '{}': load firmware: {e:?}", node.id))?;
@@ -240,8 +256,17 @@ impl World {
         for ic in &manifest.interconnects {
             match ic.r#type.as_str() {
                 "uart_cross_link" => {
-                    let a = ic.nodes.first().context("uart_cross_link needs nodes[0]")?;
-                    let b = ic.nodes.get(1).context("uart_cross_link needs nodes[1]")?;
+                    if ic.nodes.len() != 2 || ic.nodes[0] == ic.nodes[1] {
+                        anyhow::bail!("uart_cross_link: requires exactly two unique nodes");
+                    }
+                    let a = &ic.nodes[0];
+                    let b = &ic.nodes[1];
+                    if !world.machines.contains_key(a) {
+                        anyhow::bail!("uart_cross_link: unknown node '{a}'");
+                    }
+                    if !world.machines.contains_key(b) {
+                        anyhow::bail!("uart_cross_link: unknown node '{b}'");
+                    }
                     let a_uart = ic
                         .config
                         .get("node_a_uart")
@@ -301,6 +326,12 @@ impl World {
                     world.add_interconnect(Box::new(can_bus));
                 }
                 "egress" => {
+                    if ic.nodes.len() != 1 {
+                        anyhow::bail!("egress: requires exactly one node");
+                    }
+                    if !world.machines.contains_key(&ic.nodes[0]) {
+                        anyhow::bail!("egress: unknown node '{}'", ic.nodes[0]);
+                    }
                     let (node, uart, tx, bus) = build_egress(ic)?;
                     world
                         .machines
@@ -334,7 +365,9 @@ fn load_elf_image(path: &std::path::Path) -> anyhow::Result<crate::memory::Progr
     let arch = match elf.header.e_machine {
         goblin::elf::header::EM_ARM => crate::Arch::Arm,
         goblin::elf::header::EM_RISCV => crate::Arch::RiscV,
-        _ => crate::Arch::Arm,
+        machine => anyhow::bail!(
+            "unsupported ELF machine type {machine} in {path:?}; environment worlds support Arm firmware only"
+        ),
     };
     let mut image = crate::memory::ProgramImage::new(elf.entry, arch);
     for ph in &elf.program_headers {

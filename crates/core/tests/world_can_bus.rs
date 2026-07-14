@@ -52,6 +52,18 @@ fn can_bus(nodes: &[&str], peripheral: Option<&str>) -> InterconnectConfig {
     }
 }
 
+fn interconnect(
+    interconnect_type: &str,
+    nodes: &[&str],
+    config: HashMap<String, serde_yaml::Value>,
+) -> InterconnectConfig {
+    InterconnectConfig {
+        r#type: interconnect_type.to_string(),
+        nodes: nodes.iter().map(|node| (*node).to_string()).collect(),
+        config,
+    }
+}
+
 fn environment(interconnect: InterconnectConfig) -> EnvironmentManifest {
     EnvironmentManifest {
         schema_version: "1.0".to_string(),
@@ -336,5 +348,61 @@ fn can_bus_reports_unknown_node_and_missing_or_non_fdcan_peripheral() {
     assert!(
         wrong_kind.contains("can_bus node 'ecu': peripheral 'rcc' is not an FDCAN"),
         "{wrong_kind}"
+    );
+}
+
+#[test]
+fn uart_cross_link_requires_exactly_two_unique_known_nodes() {
+    let third_member = world_error(quiet_can_environment_with_nodes(
+        &["alpha", "beta", "gamma"],
+        interconnect(
+            "uart_cross_link",
+            &["alpha", "beta", "gamma"],
+            HashMap::new(),
+        ),
+    ));
+    assert!(
+        third_member.contains("uart_cross_link: requires exactly two unique nodes"),
+        "{third_member}"
+    );
+
+    let duplicate = world_error(quiet_can_environment_with_nodes(
+        &["alpha", "beta"],
+        interconnect("uart_cross_link", &["alpha", "alpha"], HashMap::new()),
+    ));
+    assert!(
+        duplicate.contains("uart_cross_link: requires exactly two unique nodes"),
+        "{duplicate}"
+    );
+
+    let unknown = world_error(quiet_can_environment_with_nodes(
+        &["alpha", "beta"],
+        interconnect("uart_cross_link", &["alpha", "missing"], HashMap::new()),
+    ));
+    assert!(
+        unknown.contains("uart_cross_link: unknown node 'missing'"),
+        "{unknown}"
+    );
+}
+
+#[test]
+fn egress_requires_exactly_one_known_node() {
+    let mut config = HashMap::new();
+    config.insert(
+        "url".to_string(),
+        serde_yaml::Value::String("127.0.0.1:9".to_string()),
+    );
+    config.insert(
+        "uart".to_string(),
+        serde_yaml::Value::String("uart2".to_string()),
+    );
+    let extra_member = world_error(environment(interconnect(
+        "egress",
+        &["tester", "ecu"],
+        config,
+    )));
+    assert!(
+        extra_member.contains("egress: requires exactly one node"),
+        "{extra_member}"
     );
 }

@@ -409,22 +409,8 @@ fn run_world(
     while rounds < limits.max_steps {
         let cycles = max_cycles(world);
         let uart_bytes = total_uart_bytes(uart_sinks);
-        if limits
-            .wall_time_ms
-            .is_some_and(|limit| start.elapsed().as_millis() >= u128::from(limit))
-        {
-            stop_reason = StopReason::WallTime;
-            break;
-        }
-        if limits.max_cycles.is_some_and(|limit| cycles >= limit) {
-            stop_reason = StopReason::MaxCycles;
-            break;
-        }
-        if limits
-            .max_uart_bytes
-            .is_some_and(|limit| uart_bytes >= limit)
-        {
-            stop_reason = StopReason::MaxUartBytes;
+        if let Some(reason) = reached_world_limit_stop(&limits, cycles, uart_bytes, &start) {
+            stop_reason = reason;
             break;
         }
 
@@ -446,6 +432,17 @@ fn run_world(
             runtime_error = true;
             stop_reason = stop_reason_for_simulation_error(error);
             message = Some(format!("node '{id}': {error}"));
+            break;
+        }
+        // A final allowed world round can itself reach a configured limit.
+        // Check again before the loop condition turns that limit into an
+        // apparently normal `max_steps` pass. Runtime errors above retain
+        // their existing precedence; otherwise wall-time, cycles, then UART
+        // determine the stop reason, matching the pre-round contract.
+        let cycles = max_cycles(world);
+        let uart_bytes = total_uart_bytes(uart_sinks);
+        if let Some(reason) = reached_world_limit_stop(&limits, cycles, uart_bytes, &start) {
+            stop_reason = reason;
             break;
         }
     }
@@ -609,6 +606,34 @@ fn total_uart_bytes(sinks: &BTreeMap<String, Arc<Mutex<Vec<u8>>>>) -> u64 {
         .values()
         .map(|sink| sink.lock().map(|bytes| bytes.len() as u64).unwrap_or(0))
         .sum()
+}
+
+/// Return a configured limit reached at a world-round boundary. The order is
+/// wall-time, maximum cycles, then total captured UART bytes, matching the
+/// runner's established pre-round precedence. Limits are checked both before
+/// and after a round so the final `max_steps` round cannot bypass one.
+fn reached_world_limit_stop(
+    limits: &TestLimits,
+    cycles: u64,
+    uart_bytes: u64,
+    start: &Instant,
+) -> Option<StopReason> {
+    if limits
+        .wall_time_ms
+        .is_some_and(|limit| start.elapsed().as_millis() >= u128::from(limit))
+    {
+        return Some(StopReason::WallTime);
+    }
+    if limits.max_cycles.is_some_and(|limit| cycles >= limit) {
+        return Some(StopReason::MaxCycles);
+    }
+    if limits
+        .max_uart_bytes
+        .is_some_and(|limit| uart_bytes >= limit)
+    {
+        return Some(StopReason::MaxUartBytes);
+    }
+    None
 }
 
 fn render_uart_log(sinks: &BTreeMap<String, Arc<Mutex<Vec<u8>>>>) -> Vec<u8> {

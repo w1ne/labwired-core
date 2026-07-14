@@ -993,6 +993,88 @@ assertions:
 }
 
 #[test]
+fn environment_runner_enforces_uart_safety_limit_on_the_final_world_round() {
+    let dir = unique_dir("max-uart-final-round");
+    let (_environment, _firmware, _system) = write_two_node_environment(&dir);
+    let output = run_environment_script(
+        &dir,
+        r#"schema_version: "1.0"
+inputs:
+  env: "two-node.yaml"
+limits:
+  max_steps: 21
+  max_uart_bytes: 1
+assertions:
+  - memory_value:
+      node: alpha
+      address: 0x20000000
+      expected_value: 0
+"#,
+        &[],
+    );
+
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "the UART safety limit must fail even when it is crossed on the final allowed world round: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let result: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(dir.join("artifacts/result.json")).expect("read result.json"),
+    )
+    .expect("parse result.json");
+    assert_eq!(result["status"], "fail");
+    assert_eq!(result["stop_reason"], "max_uart_bytes");
+    assert_eq!(result["steps_executed"], 21);
+    assert!(
+        result["stop_reason_details"]["observed"]["value"]
+            .as_u64()
+            .is_some_and(|bytes| bytes >= 1),
+        "the result must report the bytes that crossed the safety limit: {result}"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn environment_runner_enforces_cycle_limit_on_the_final_world_round() {
+    let dir = unique_dir("max-cycles-final-round");
+    let (_environment, _firmware, _system) = write_two_node_environment(&dir);
+    let output = run_environment_script(
+        &dir,
+        r#"schema_version: "1.0"
+inputs:
+  env: "two-node.yaml"
+limits:
+  max_steps: 1
+  max_cycles: 1
+assertions:
+  - memory_value:
+      node: alpha
+      address: 0x20000000
+      expected_value: 0
+"#,
+        &[],
+    );
+
+    assert!(
+        output.status.success(),
+        "a cycle-limited world must preserve its normal passing status: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let result: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(dir.join("artifacts/result.json")).expect("read result.json"),
+    )
+    .expect("parse result.json");
+    assert_eq!(result["status"], "pass");
+    assert_eq!(result["stop_reason"], "max_cycles");
+    assert_eq!(result["steps_executed"], 1);
+    assert_eq!(result["cycles"], 1);
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn environment_runner_wall_time_safety_stop_fails_even_when_assertions_pass() {
     let dir = unique_dir("wall-time-safety-stop");
     let (_environment, _firmware, _system) = write_two_node_environment(&dir);

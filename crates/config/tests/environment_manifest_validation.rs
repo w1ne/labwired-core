@@ -175,3 +175,27 @@ interconnects:
         assert!(error.contains(expected), "{name}: {error}");
     }
 }
+
+#[test]
+fn environment_manifest_from_file_rejects_unsupported_node_config_overrides() {
+    let error = parse_environment(
+        r#"
+schema_version: "1.0"
+name: two-node
+nodes:
+  - id: tester
+    system: tester.yaml
+    firmware: tester.elf
+    config_overrides:
+      uart2: disabled
+"#,
+    )
+    .unwrap_err();
+    let error = format!("{error:#}");
+
+    assert!(error.contains("nodes[0].config_overrides"), "{error}");
+    assert!(
+        error.contains("unsupported in environment schema 1.0"),
+        "{error}"
+    );
+}

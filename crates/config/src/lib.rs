@@ -332,6 +332,11 @@ impl EnvironmentManifest {
             if node.firmware.trim().is_empty() {
                 anyhow::bail!("Environment manifest nodes[{index}].firmware must be non-empty");
             }
+            if !node.config_overrides.is_empty() {
+                anyhow::bail!(
+                    "Environment manifest nodes[{index}].config_overrides is unsupported in environment schema 1.0"
+                );
+            }
         }
 
         Ok(())

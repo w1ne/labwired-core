@@ -32,7 +32,7 @@ outputs:
     description: "Path to the generated self-contained HTML report."
     value: ${{ steps.report.outputs.report_html }}
   artifact-url:
-    description: "URL for the uploaded LabWired artifact, when uploads are enabled."
+    description: "URL for the automatically uploaded LabWired artifact."
     value: ${{ steps.upload.outputs.artifact-url }}
   exit-code:
     description: "Captured LabWired CLI exit code."
