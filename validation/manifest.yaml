@@ -341,6 +341,16 @@ boards:
     # the byte-level traced-slave contract are unchanged. A live USB-JTAG re-validation
     # of the underrun clock-stretch timing is recommended as follow-up (no bench board
     # this session); this ack covers the model-file change in the interim.
+    # 2026-07-14: captured live CLOCK RATES over the built-in USB-JTAG
+    # (openocd-esp32) via scripts/hw-capture-esp32c3.sh — SYSTIMER 16.013 MHz
+    # (model 16 MHz, matches) and RTC_CNTL slow clock 136.72 kHz (RC_SLOW
+    # oscillator, SYSTIMER-referenced so it's independent of JTAG/halt overhead).
+    # Recorded the measured RTC rate as RTC_SLOW_HZ_MEASURED (136_700) + an opt-in
+    # Esp32c3RtcTimer::set_slow_clock_hz in esp32c3/rtc_timer.rs; the DEFAULT stays
+    # 1 tick per CPU cycle, so the reset-oracle set, the boot budget and every
+    # prior capture/differential are byte-unchanged. This clock capture is an
+    # OPTIONAL bench / weekly job (NOT a PR gate — hosted CI has no board); re-run
+    # the script on a bench to refresh. Additive model touch, no reset-value change.
     drift_ack: 2026-07-14
 
   - id: nucleo-l476rg
