@@ -788,7 +788,7 @@ chip: "../chips/esp32c3.yaml"
         crate::Bus::write_u32(&mut bus, IO_MUX_GPIO5, 0x0000_1a02)
             .expect("firmware configures GPIO5 as INPUT");
         assert_eq!(
-            crate::Bus::read_u32(&mut bus, IO_MUX_GPIO5).unwrap(),
+            crate::Bus::read_u32(&bus, IO_MUX_GPIO5).unwrap(),
             0x0000_1a02
         );
 
@@ -806,7 +806,7 @@ chip: "../chips/esp32c3.yaml"
         crate::Bus::write_u8(&mut bus, IO_MUX_GPIO5 + 1, 0x1b)
             .expect("byte write enables GPIO5 FUN_WPU");
         assert_eq!(
-            crate::Bus::read_u32(&mut bus, IO_MUX_GPIO5).unwrap(),
+            crate::Bus::read_u32(&bus, IO_MUX_GPIO5).unwrap(),
             0x0000_1b02
         );
         assert_eq!(
@@ -821,7 +821,7 @@ chip: "../chips/esp32c3.yaml"
         crate::Bus::write_u16(&mut bus, IO_MUX_GPIO5, 0x1a02)
             .expect("halfword write clears GPIO5 FUN_WPU");
         assert_eq!(
-            crate::Bus::read_u32(&mut bus, IO_MUX_GPIO5).unwrap(),
+            crate::Bus::read_u32(&bus, IO_MUX_GPIO5).unwrap(),
             0x0000_1a02
         );
         assert_eq!(
