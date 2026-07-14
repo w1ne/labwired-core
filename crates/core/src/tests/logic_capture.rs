@@ -247,14 +247,36 @@ mod logic_capture_tests {
             cursor: 5,
             dropped: 2,
             edges: vec![
-                LogicEdge { ch: 0, cycle: 10, value: true },
-                LogicEdge { ch: 1, cycle: 12, value: true },
-                LogicEdge { ch: 0, cycle: 15, value: false },
+                LogicEdge {
+                    ch: 0,
+                    cycle: 10,
+                    value: true,
+                },
+                LogicEdge {
+                    ch: 1,
+                    cycle: 12,
+                    value: true,
+                },
+                LogicEdge {
+                    ch: 0,
+                    cycle: 15,
+                    value: false,
+                },
             ],
         };
         let meta = vec![
-            LogicChannelMeta { ch: 0, peripheral: "gpio8".into(), pin: 8, initial: Some(false) },
-            LogicChannelMeta { ch: 1, peripheral: "gpio9".into(), pin: 9, initial: None },
+            LogicChannelMeta {
+                ch: 0,
+                peripheral: "gpio8".into(),
+                pin: 8,
+                initial: Some(false),
+            },
+            LogicChannelMeta {
+                ch: 1,
+                peripheral: "gpio9".into(),
+                pin: 9,
+                initial: None,
+            },
         ];
         let r = build_logic_edges_result(&meta, &batch, 20);
 
@@ -265,13 +287,22 @@ mod logic_capture_tests {
         assert_eq!(
             r.channels[0].transitions,
             vec![
-                EdgeTransition { cycle: 10, value: 1 },
-                EdgeTransition { cycle: 15, value: 0 },
+                EdgeTransition {
+                    cycle: 10,
+                    value: 1
+                },
+                EdgeTransition {
+                    cycle: 15,
+                    value: 0
+                },
             ]
         );
         assert_eq!(
             r.channels[1].transitions,
-            vec![EdgeTransition { cycle: 12, value: 1 }]
+            vec![EdgeTransition {
+                cycle: 12,
+                value: 1
+            }]
         );
         assert!(r.channels.iter().all(|c| c.gaps.is_empty()));
     }
