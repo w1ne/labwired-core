@@ -636,6 +636,14 @@ pub struct TestInputs {
     pub system: Option<String>,
 }
 
+/// Inputs for a multi-node environment test. Environment scripts are selected
+/// exclusively by `inputs.env`; they cannot name single-node firmware inputs.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct EnvTestInputs {
+    pub env: String,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct TestLimits {
@@ -717,6 +725,10 @@ pub struct MemoryValueDetails {
     /// Defaults to a 32-bit (u32) word.
     #[serde(default)]
     pub size: Option<u8>,
+    /// Target node for a multi-node environment assertion. Single-node scripts
+    /// leave this unset and continue to use the existing machine path.
+    #[serde(default)]
+    pub node: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -1011,6 +1023,91 @@ impl TestScript {
     }
 }
 
+/// A strict v1.0 script for a multi-node environment world.
+///
+/// The explicit fault, verdict, and stimulus fields are parsed so validation
+/// can reject them diagnostically rather than silently treating them as
+/// unknown or ignoring them in the environment runner.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct EnvTestScript {
+    pub schema_version: String,
+    pub inputs: EnvTestInputs,
+    pub limits: TestLimits,
+    #[serde(default)]
+    pub assertions: Vec<TestAssertion>,
+    #[serde(default)]
+    pub faults: Vec<FaultSpec>,
+    #[serde(default)]
+    pub verdict: Option<Verdict>,
+    #[serde(default)]
+    pub stimuli: Vec<StimulusSpec>,
+}
+
+impl EnvTestScript {
+    pub fn validate(&self) -> Result<()> {
+        if self.schema_version != "1.0" {
+            anyhow::bail!(
+                "Environment test scripts require schema_version '1.0' (got '{}')",
+                self.schema_version
+            );
+        }
+
+        if self.inputs.env.trim().is_empty() {
+            anyhow::bail!("Input 'env' path cannot be empty");
+        }
+
+        if self.limits.max_steps == 0 {
+            anyhow::bail!("Limit 'max_steps' must be greater than zero");
+        }
+
+        if self.limits.no_progress_steps.is_some() {
+            anyhow::bail!("Environment test scripts do not support 'limits.no_progress_steps'");
+        }
+        if self.limits.max_vcd_bytes.is_some() {
+            anyhow::bail!("Environment test scripts do not support 'limits.max_vcd_bytes'");
+        }
+        if self.limits.stop_when_assertions_pass {
+            anyhow::bail!(
+                "Environment test scripts do not support 'limits.stop_when_assertions_pass'"
+            );
+        }
+        if !self.faults.is_empty() {
+            anyhow::bail!("Environment test scripts do not support 'faults'");
+        }
+        if self.verdict.is_some() {
+            anyhow::bail!("Environment test scripts do not support 'verdict'");
+        }
+        if !self.stimuli.is_empty() {
+            anyhow::bail!("Environment test scripts do not support 'stimuli'");
+        }
+
+        if self.assertions.is_empty() {
+            anyhow::bail!("Environment test scripts require at least one assertion");
+        }
+
+        for (index, assertion) in self.assertions.iter().enumerate() {
+            let TestAssertion::MemoryValue(memory) = assertion else {
+                anyhow::bail!(
+                    "Environment test scripts support only memory_value assertions (assertions[{index}])"
+                );
+            };
+            let has_node = memory
+                .memory_value
+                .node
+                .as_deref()
+                .is_some_and(|node| !node.trim().is_empty());
+            if !has_node {
+                anyhow::bail!(
+                    "Environment memory_value assertion at assertions[{index}] requires a non-empty 'node'"
+                );
+            }
+        }
+
+        Ok(())
+    }
+}
+
 /// Per-kind structural validation of a fault spec: that the target shape and the
 /// kind-specific parameters required to lower the fault are present. This is the
 /// config-side half of the fault compiler; silicon-resolution guardrails (does
@@ -1155,16 +1252,44 @@ impl LegacyTestScriptV1 {
 pub enum LoadedTestScript {
     V1_0(TestScript),
     LegacyV1(LegacyTestScriptV1),
+    Env(EnvTestScript),
 }
 
 /// Load a CI test script from YAML.
 ///
 /// Supported formats:
+/// - v1.0 environment: `schema_version: "1.0"` with `inputs.env`.
 /// - v1.0 (frozen): `schema_version: \"1.0\"` with `inputs` + `limits` + `assertions`.
 /// - legacy v1 (deprecated): `schema_version: 1` with `max_steps` at the top level.
 pub fn load_test_script<P: AsRef<Path>>(path: P) -> Result<LoadedTestScript> {
     let contents = std::fs::read_to_string(&path)
         .with_context(|| format!("Failed to read test script at {:?}", path.as_ref()))?;
+
+    // Probe the raw YAML before trying the strict single-node schema. That
+    // keeps TestInputs' deny_unknown_fields boundary intact while making the
+    // two v1.0 input shapes unambiguous.
+    let raw_script: serde_yaml::Value =
+        serde_yaml::from_str(&contents).context("Failed to parse Test Script YAML")?;
+    let raw_inputs = raw_script.get("inputs");
+    let raw_env = raw_inputs.and_then(|inputs| inputs.get("env"));
+    let raw_firmware = raw_inputs.and_then(|inputs| inputs.get("firmware"));
+
+    if raw_env.is_some() && raw_firmware.is_some() {
+        anyhow::bail!(
+            "Test script inputs cannot contain both 'env' and 'firmware'; choose exactly one"
+        );
+    }
+
+    if raw_env.is_some_and(serde_yaml::Value::is_string) {
+        let env_script: EnvTestScript = serde_yaml::from_str(&contents)
+            .context("Failed to parse environment Test Script YAML")?;
+        env_script.validate()?;
+        return Ok(LoadedTestScript::Env(env_script));
+    }
+
+    if raw_inputs.is_some() && raw_env.is_none() && raw_firmware.is_none() {
+        anyhow::bail!("Test script inputs must contain exactly one of 'env' or 'firmware'");
+    }
 
     match serde_yaml::from_str::<TestScript>(&contents) {
         Ok(script) => {
@@ -1172,9 +1297,9 @@ pub fn load_test_script<P: AsRef<Path>>(path: P) -> Result<LoadedTestScript> {
             Ok(LoadedTestScript::V1_0(script))
         }
         Err(v1_err) => {
-            let looks_like_legacy_v1 = serde_yaml::from_str::<serde_yaml::Value>(&contents)
-                .ok()
-                .and_then(|v| v.get("schema_version").cloned())
+            let looks_like_legacy_v1 = raw_script
+                .get("schema_version")
+                .cloned()
                 .map(|v| match v {
                     serde_yaml::Value::Number(n) => n.as_i64() == Some(1) || n.as_u64() == Some(1),
                     serde_yaml::Value::String(s) => s.trim() == "1",
@@ -1537,6 +1662,238 @@ assertions: []
 
         let loaded = load_test_script(&script_path).unwrap();
         assert!(matches!(loaded, LoadedTestScript::LegacyV1(_)));
+    }
+
+    #[test]
+    fn load_env_script_selects_env_variant_and_preserves_allowed_fields() {
+        let script_path = write_temp_file(
+            "env-script",
+            r#"
+schema_version: "1.0"
+inputs:
+  env: "twonode-env.yaml"
+limits:
+  max_steps: 50000
+  max_cycles: 75000
+  max_uart_bytes: 2048
+  wall_time_ms: 3000
+assertions:
+  - memory_value:
+      node: tester
+      address: 0x20010000
+      expected_value: 0xA5
+      size: 1
+"#,
+        );
+
+        let loaded = load_test_script(&script_path).unwrap();
+        match loaded {
+            LoadedTestScript::Env(script) => {
+                assert_eq!(script.inputs.env, "twonode-env.yaml");
+                assert_eq!(script.limits.max_steps, 50_000);
+                assert_eq!(script.limits.max_cycles, Some(75_000));
+                assert_eq!(script.limits.max_uart_bytes, Some(2_048));
+                assert_eq!(script.limits.wall_time_ms, Some(3_000));
+                let TestAssertion::MemoryValue(assertion) = &script.assertions[0] else {
+                    panic!("expected memory_value assertion");
+                };
+                assert_eq!(assertion.memory_value.node.as_deref(), Some("tester"));
+            }
+            other => panic!("expected environment script, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn load_single_node_script_still_selects_v1_0_variant() {
+        let script_path = write_temp_file(
+            "single-node-script",
+            r#"
+schema_version: "1.0"
+inputs:
+  firmware: "fw.elf"
+  system: "system.yaml"
+limits:
+  max_steps: 1000
+"#,
+        );
+
+        assert!(matches!(
+            load_test_script(&script_path).unwrap(),
+            LoadedTestScript::V1_0(_)
+        ));
+    }
+
+    #[test]
+    fn env_script_rejects_missing_or_blank_env_path() {
+        for (name, yaml) in [
+            (
+                "blank-env",
+                r#"
+schema_version: "1.0"
+inputs: { env: "   " }
+limits: { max_steps: 10 }
+assertions:
+  - memory_value: { node: tester, address: 0x20010000, expected_value: 1 }
+"#,
+            ),
+            (
+                "missing-env",
+                r#"
+schema_version: "1.0"
+inputs: {}
+limits: { max_steps: 10 }
+assertions:
+  - memory_value: { node: tester, address: 0x20010000, expected_value: 1 }
+"#,
+            ),
+        ] {
+            let script_path = write_temp_file(name, yaml);
+            let err = load_test_script(&script_path).unwrap_err().to_string();
+            assert!(err.contains("env"), "unexpected error: {err}");
+        }
+    }
+
+    #[test]
+    fn env_script_requires_schema_v1_0_and_positive_step_limit() {
+        for (name, yaml, diagnostic) in [
+            (
+                "wrong-env-schema",
+                r#"
+schema_version: "1.1"
+inputs: { env: "twonode-env.yaml" }
+limits: { max_steps: 10 }
+assertions:
+  - memory_value: { node: tester, address: 0x20010000, expected_value: 1 }
+"#,
+                "schema_version",
+            ),
+            (
+                "zero-env-steps",
+                r#"
+schema_version: "1.0"
+inputs: { env: "twonode-env.yaml" }
+limits: { max_steps: 0 }
+assertions:
+  - memory_value: { node: tester, address: 0x20010000, expected_value: 1 }
+"#,
+                "max_steps",
+            ),
+        ] {
+            let script_path = write_temp_file(name, yaml);
+            let err = load_test_script(&script_path).unwrap_err().to_string();
+            assert!(err.contains(diagnostic), "unexpected error: {err}");
+        }
+    }
+
+    #[test]
+    fn env_script_requires_memory_assertions_with_nodes() {
+        for (name, yaml, diagnostic) in [
+            (
+                "no-assertions",
+                r#"
+schema_version: "1.0"
+inputs: { env: "twonode-env.yaml" }
+limits: { max_steps: 10 }
+"#,
+                "at least one assertion",
+            ),
+            (
+                "missing-node",
+                r#"
+schema_version: "1.0"
+inputs: { env: "twonode-env.yaml" }
+limits: { max_steps: 10 }
+assertions:
+  - memory_value: { address: 0x20010000, expected_value: 1 }
+"#,
+                "node",
+            ),
+            (
+                "blank-node",
+                r#"
+schema_version: "1.0"
+inputs: { env: "twonode-env.yaml" }
+limits: { max_steps: 10 }
+assertions:
+  - memory_value: { node: " ", address: 0x20010000, expected_value: 1 }
+"#,
+                "node",
+            ),
+            (
+                "unsupported-assertion",
+                r#"
+schema_version: "1.0"
+inputs: { env: "twonode-env.yaml" }
+limits: { max_steps: 10 }
+assertions:
+  - uart_contains: "PASS"
+"#,
+                "memory_value",
+            ),
+        ] {
+            let script_path = write_temp_file(name, yaml);
+            let err = load_test_script(&script_path).unwrap_err().to_string();
+            assert!(err.contains(diagnostic), "unexpected error: {err}");
+        }
+    }
+
+    #[test]
+    fn env_script_rejects_combined_firmware_and_env_inputs() {
+        let script_path = write_temp_file(
+            "combined-inputs",
+            r#"
+schema_version: "1.0"
+inputs: { env: "twonode-env.yaml", firmware: "fw.elf" }
+limits: { max_steps: 10 }
+assertions:
+  - memory_value: { node: tester, address: 0x20010000, expected_value: 1 }
+"#,
+        );
+
+        let err = load_test_script(&script_path).unwrap_err().to_string();
+        assert!(err.contains("both") && err.contains("env") && err.contains("firmware"));
+    }
+
+    #[test]
+    fn env_script_rejects_runner_options_it_cannot_honor() {
+        for (name, extra, diagnostic) in [
+            ("no-progress", "  no_progress_steps: 5", "no_progress_steps"),
+            ("vcd", "  max_vcd_bytes: 1024", "max_vcd_bytes"),
+            (
+                "early-pass",
+                "  stop_when_assertions_pass: true",
+                "stop_when_assertions_pass",
+            ),
+            (
+                "faults",
+                "faults:\n  - id: x\n    kind: missing_clock",
+                "faults",
+            ),
+            ("verdict", "verdict: {}", "verdict"),
+            (
+                "stimuli",
+                "stimuli:\n  - target: { channel: x }\n    value: 1.0",
+                "stimuli",
+            ),
+        ] {
+            let script_path = write_temp_file(
+                name,
+                &format!(
+                    r#"
+schema_version: "1.0"
+inputs: {{ env: "twonode-env.yaml" }}
+limits:
+  max_steps: 10
+{extra}
+assertions:
+  - memory_value: {{ node: tester, address: 0x20010000, expected_value: 1 }}
+"#
+                ),
+            );
+
+            let err = load_test_script(&script_path).unwrap_err().to_string();
+            assert!(err.contains(diagnostic), "unexpected error: {err}");
+        }
     }
 
     #[test]
