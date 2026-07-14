@@ -4,7 +4,7 @@
 
 **Goal:** Let an environment YAML opt into the same durable, assertion-based completion contract as the single-machine runner, so a successful multi-node CI run stops after its assertions have remained true for a settling window instead of always consuming `max_steps`.
 
-**Architecture:** Keep the behavior opt-in and retain the existing default (`false`). Accept the three existing `TestLimits` fields for `inputs.env`, evaluate the already-supported node-qualified memory assertions after each successful world round, and emit `AssertionsPassed` only after the configured minimum and settling window. Runtime failures and safety limits remain higher-precedence stops. Release the behavior as v0.19.1 and point the public action/default/docs at that release.
+**Architecture:** Keep the behavior opt-in and retain the existing default (`false`). Accept the three existing `TestLimits` fields for `inputs.env`, evaluate the already-supported node-qualified memory assertions after each successful world round, and emit `AssertionsPassed` only after the configured minimum and settling window. Runtime failures and safety limits remain higher-precedence stops. Release the behavior as v0.19.1, point the public action/default/docs at that release, and repair the OCI image's builder/runtime glibc compatibility before it can be published.
 
 **Tech Stack:** Rust, `labwired-config`, `labwired-cli` environment runner, GitHub Actions release archives, YAML contract tests.
 
@@ -29,6 +29,7 @@
 - [ ] Document environment assertion completion alongside the existing YAML limits reference.
 - [ ] Change the public action default to `v0.19.1`.
 - [ ] Pin Core consumer examples and the static release-runner verifier to the immutable action commit that carries that default.
+- [ ] Use a bookworm Rust builder with the bookworm runtime and add a PR image build/run smoke so an ABI mismatch fails before a public release is made.
 - [ ] Run focused config/CLI tests, formatting/lints, contract verification, and a real two-node smoke before merge.
 
 ### 4. Consume and prove it downstream

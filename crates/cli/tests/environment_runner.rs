@@ -543,6 +543,54 @@ assertions:
 }
 
 #[test]
+fn environment_runner_stops_when_world_assertions_pass_durably() {
+    let dir = unique_dir("assertions-passed");
+    write_two_node_environment(&dir);
+    let output = run_environment_script(
+        &dir,
+        r#"schema_version: "1.0"
+inputs:
+  env: "two-node.yaml"
+limits:
+  max_steps: 100
+  stop_when_assertions_pass: true
+  stop_when_assertions_pass_settle_steps: 2
+  stop_when_assertions_pass_min_steps: 4
+assertions:
+  - memory_value:
+      node: alpha
+      address: 0x20000000
+      expected_value: 0
+"#,
+        &[],
+    );
+
+    assert!(
+        output.status.success(),
+        "early-completion world failed: stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let result: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(dir.join("artifacts/result.json")).expect("read result.json"),
+    )
+    .expect("parse result.json");
+    assert_eq!(result["status"], "pass");
+    assert_eq!(result["stop_reason"], "assertions_passed");
+    assert_eq!(result["steps_executed"], 6);
+    assert!(result["steps_executed"].as_u64().unwrap() < 100);
+    assert_eq!(result["assertions"][0]["passed"], true);
+    assert_eq!(result["limits"]["stop_when_assertions_pass"], true);
+    assert_eq!(
+        result["limits"]["stop_when_assertions_pass_settle_steps"],
+        2
+    );
+    assert_eq!(result["limits"]["stop_when_assertions_pass_min_steps"], 4);
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn environment_runner_records_aggregate_world_metering_after_key_validation() {
     const TEST_KEY: &str = "environment-metering-test-key";
 
@@ -1250,6 +1298,8 @@ inputs:
 limits:
   max_steps: 100
   wall_time_ms: 0
+  stop_when_assertions_pass: true
+  stop_when_assertions_pass_settle_steps: 0
 assertions:
   - memory_value:
       node: alpha
@@ -1320,6 +1370,8 @@ inputs:
   env: "tiny-two-node.yaml"
 limits:
   max_steps: 100
+  stop_when_assertions_pass: true
+  stop_when_assertions_pass_settle_steps: 50
 assertions:
   - memory_value:
       node: alpha
