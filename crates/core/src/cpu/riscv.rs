@@ -307,8 +307,24 @@ impl RiscV {
         use crate::bus::SystemBus;
         use crate::cpu::jit_framework::block_cache::Lookup;
 
+        // Exact-cycle clock (see the interpreter `step_batch`): republish
+        // `batch_start + retired` before each dispatch so an interpreted MMIO
+        // read sees the cycle-exact clock. A compiled block never reads the bus
+        // clock (it touches only registers + RAM), so republishing before it is
+        // harmless, and the arming/reading store is ALWAYS interpreted — hence
+        // JIT-on observes the identical clock at every bus access as JIT-off,
+        // preserving byte-identity while making counter reads exact.
+        #[cfg(feature = "event-scheduler")]
+        let exact_clock = config.peripheral_tick_interval > 1;
+        #[cfg(feature = "event-scheduler")]
+        let batch_start = if exact_clock { bus.current_cycle() } else { 0 };
+
         let mut retired: u32 = 0;
         while retired < max_count {
+            #[cfg(feature = "event-scheduler")]
+            if exact_clock {
+                bus.publish_cycle(batch_start + retired as u64);
+            }
             let pc = self.pc as u64;
             match engine.observe(pc) {
                 Lookup::Ready => {
@@ -372,6 +388,17 @@ impl RiscV {
             if config.idle_fast_forward_enabled && self.idle_fast_forward_budget(bus).is_some() {
                 return Ok(retired);
             }
+            // Mirror the interpreter's Gap #1 mid-batch-arming early-exit (see
+            // `step_batch`). A compiled block never executes an MMIO store, so
+            // `pending_schedule` can only have been populated by an interpreted
+            // instruction (`self.step` above) — the SAME instruction the JIT-off
+            // interpreter would break on. Ending the batch at that identical
+            // point keeps JIT-on byte-identical to JIT-off while making the
+            // just-armed event deliverable at its exact cycle by the next batch.
+            #[cfg(feature = "event-scheduler")]
+            if config.peripheral_tick_interval > 1 && bus.has_pending_schedule() {
+                return Ok(retired);
+            }
         }
         Ok(retired)
     }
@@ -388,6 +415,19 @@ impl Cpu for RiscV {
     fn reset(&mut self, _bus: &mut dyn Bus) -> SimResult<()> {
         self.pc = 0;
         Ok(())
+    }
+
+    /// Mirror the RV32IMC JIT engine's counters into the feature-agnostic
+    /// [`crate::CpuJitStats`] so generic callers can prove non-vacuity. Only
+    /// present under `jit`; without it the trait default (`None`) applies.
+    #[cfg(feature = "jit")]
+    fn jit_engine_stats(&self) -> Option<crate::CpuJitStats> {
+        self.jit_stats().map(|s| crate::CpuJitStats {
+            compiled: s.compiled,
+            block_runs: s.block_runs,
+            block_instrs: s.block_instrs,
+            interpreted: s.interpreted,
+        })
     }
 
     fn step(
@@ -1054,12 +1094,48 @@ impl Cpu for RiscV {
         // instruction while armed, so MMIO pad writes stamp with the cycle
         // boundary they become observable at (see `crate::logic_capture`).
         let tap = bus.logic_tap().filter(|t| t.push_armed());
+        // Exact-cycle clock (event-scheduler, widened interval): the bus mirror
+        // is seeded once per batch by `Machine::run`, so a mid-batch MMIO read of
+        // a lazily-derived counter would see the STALE batch-start cycle. Capture
+        // the batch-start cycle here and republish `batch_start + i` before each
+        // instruction so those reads are cycle-EXACT — identical to interval-1
+        // (where the batch is one instruction). This is what removes the last
+        // cpu_state divergence: a firmware busy-waiting on a lazy counter now
+        // exits its poll on the same instruction at any tick interval. Skipped at
+        // interval 1 (already exact) so that hot path is byte-unchanged.
+        #[cfg(feature = "event-scheduler")]
+        let exact_clock = config.peripheral_tick_interval > 1;
+        #[cfg(feature = "event-scheduler")]
+        let batch_start = if exact_clock { bus.current_cycle() } else { 0 };
         for i in 0..max_count {
             if let Some(tap) = &tap {
                 tap.bump_clock();
             }
+            #[cfg(feature = "event-scheduler")]
+            if exact_clock {
+                bus.publish_cycle(batch_start + i as u64);
+            }
             self.step(bus, observers, config)?;
             if config.idle_fast_forward_enabled && self.idle_fast_forward_budget(bus).is_some() {
+                return Ok(i + 1);
+            }
+            // Event-scheduler Gap #1 (mid-batch arming): if this instruction was
+            // an MMIO write that armed a peripheral event (now sitting in the
+            // bus `pending_schedule`, not yet in the scheduler heap), END the
+            // batch here so `Machine::run`'s post-batch drain enqueues it and the
+            // NEXT batch's `next_event_deadline` clamp delivers it at its exact
+            // absolute cycle — instead of this widened batch overrunning the
+            // deadline and the event firing a batch late (which shifts the ISR
+            // entry instruction and diverges `cpu_state`). Gated on interval > 1:
+            // at interval 1 the batch is already one instruction so this never
+            // fires, keeping the interval-1 hot path (and every walk-identity
+            // gate) byte-unchanged and cost-free. Because compiled JIT blocks
+            // never execute MMIO stores (they touch only registers + RAM), the
+            // arming store is ALWAYS interpreted in both JIT-on and JIT-off, so
+            // mirroring this check in `run_jit_loop` breaks both arms at the same
+            // instruction — the JIT-on/off byte-identity gate is preserved.
+            #[cfg(feature = "event-scheduler")]
+            if config.peripheral_tick_interval > 1 && bus.has_pending_schedule() {
                 return Ok(i + 1);
             }
         }

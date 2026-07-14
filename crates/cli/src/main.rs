@@ -1230,6 +1230,70 @@ fn assertion_currently_passes(
     }
 }
 
+/// Does this `labwired test` run qualify for the RV32IMC wasm-JIT fast path?
+///
+/// True ⇔ the target is RISC-V (ESP32-C3), batch mode is on, and NONE of the
+/// per-instruction-visibility features that force the JIT's correctness gate
+/// shut is active. This is the SAME set of conditions that would otherwise pin
+/// the CLI batch to one instruction (`batch_size` in `execute_test_loop`) or
+/// make `RiscV::jit_gate_allows` refuse to run — folded into one predicate the
+/// caller evaluates BEFORE installing observers, so the eligible path can skip
+/// the metrics step observer entirely (its presence gates the JIT off) and
+/// source cycles/instructions from the machine's own counters instead.
+///
+/// Deliberately conservative: any `--trace`/`--coverage`/`--vcd`/`--breakpoint`/
+/// `--detect-stuck`/`--watch-gpio`, a `stop_when_assertions_pass` early-stop, or
+/// a cycle-accurate/poll-mode peripheral drops the run onto the exact current
+/// observer-based path (`jit_eligible == false`).
+fn riscv_jit_test_eligible<C: labwired_core::Cpu>(
+    args: &TestArgs,
+    limits: &TestLimits,
+    machine: &labwired_core::Machine<C>,
+    arch: labwired_core::Arch,
+) -> bool {
+    // NOTE: `batch_mode_enabled` is deliberately NOT required. The eligible path
+    // drives `Machine::run`, which batches to the peripheral-tick cadence
+    // regardless of that flag — indeed the C3 rom-boot machine turns it OFF (its
+    // fixed-width step_batch loop freezes FreeRTOS), which is exactly the case we
+    // want to accelerate.
+    matches!(arch, labwired_core::Arch::RiscV)
+        && !args.trace
+        && !args.coverage
+        && args.vcd.is_none()
+        && args.breakpoint.is_empty()
+        && args.watch_gpio.is_empty()
+        && args.capture_app_entry.is_none()
+        && limits.no_progress_steps.is_none()
+        && !limits.stop_when_assertions_pass
+        && !machine.bus.requires_cycle_accurate()
+        && !machine.logic_poll_active()
+}
+
+/// Map a core `SimulationError` to the CLI `StopReason`, identically to the
+/// step_batch / step arms of `execute_test_loop`. Shared by the JIT-eligible
+/// `Machine::run` arm so a halt/fault ends the run with the same reason.
+fn map_sim_error_to_stop_reason(e: &labwired_core::SimulationError) -> StopReason {
+    use labwired_core::SimulationError as E;
+    match e {
+        E::MemoryViolation(_) => StopReason::MemoryViolation,
+        E::DecodeError(_) => StopReason::DecodeError,
+        E::Halt => StopReason::Halt,
+        E::SnapshotSchemaMismatch { .. } => StopReason::Exception,
+        E::Other(_) => StopReason::Exception,
+        E::NotImplemented(_) => StopReason::Exception,
+        E::BreakpointHit(_) => StopReason::Halt,
+        E::ExceptionRaised { .. } => StopReason::Exception,
+    }
+}
+
+/// Instruction budget per `Machine::run` call on the JIT-eligible C3 path. The
+/// stimulus/limit checks at the top of `execute_test_loop`'s run loop run once
+/// per chunk, so this bounds their granularity; the chunk is further clamped so
+/// a run never steps PAST the nearest pending cycle threshold (time-triggered
+/// stimulus or `max_cycles`), keeping those firing points cycle-tight and
+/// identical between the JIT-on and JIT-off arms.
+const JIT_RUN_CHUNK: u32 = 1_000_000;
+
 #[allow(clippy::too_many_arguments)]
 fn execute_test_loop<C: labwired_core::Cpu>(
     args: &TestArgs,
@@ -1245,7 +1309,16 @@ fn execute_test_loop<C: labwired_core::Cpu>(
     require_fault_fired: bool,
     mut fault_evidence: Vec<labwired_cli::faults::FaultEvidence>,
     stimuli: &[labwired_config::StimulusSpec],
+    // True when this run qualifies for the RV32IMC wasm-JIT fast path (decided
+    // by `riscv_jit_test_eligible` in the caller): RiscV arch, batch mode, and
+    // NONE of the per-instruction-visibility features that gate the JIT off.
+    // In this mode `metrics` was NOT installed as a step observer (its presence
+    // forces the JIT's correctness gate shut), so the loop mirrors the machine's
+    // own counters into `metrics` before each cycle-sensitive check.
+    jit_eligible: bool,
 ) -> ExitCode {
+    // `Machine::run` (the JIT-eligible arm) is a `DebugControl` trait method.
+    use labwired_core::DebugControl;
     let max_steps = resolved_limits.max_steps;
     let max_cycles = resolved_limits.max_cycles;
     let max_uart_bytes = resolved_limits.max_uart_bytes;
@@ -1334,6 +1407,55 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         }
     };
     let logic_capture_armed = !logic_watch_meta.is_empty();
+
+    // ── JIT-eligible cycle/instruction sourcing (RISC-V / ESP32-C3) ──────────
+    // When eligible, engage the RV32IMC wasm-JIT for this run and source the
+    // metrics counters from the machine's own state (no step observer). Sourcing
+    // cycles from `machine.total_cycles` (not the observer's per-step
+    // `on_step_end` tap) is what makes JIT-on and JIT-off byte-identical:
+    // compiled blocks retire WITHOUT firing `on_step_end`, so an observer would
+    // undercount them. Both JIT arms (`LABWIRED_RISCV_JIT=1` on, default off)
+    // STAY in this same machine-sourced regime, so they are byte-identical
+    // (proven by tests/riscv_jit_c3_oled_test_differential); the metrics numbers
+    // never depend on whether a batch was interpreted or compiled.
+    if jit_eligible {
+        // JIT is OPT-IN (LABWIRED_RISCV_JIT=1), NOT default-on. Measured on the
+        // esp32c3-oled-demo oracle lab, the wasmtime RV32IMC JIT is ~18× SLOWER
+        // than the interpreter here: the hot path is tight FreeRTOS/idle loops
+        // (~1.9 guest instr per compiled-block run), so the per-block-dispatch
+        // FFI overhead dwarfs the interpreted cost and ~⅔ of instructions still
+        // fall back to the interpreter. The genuine speedup on this path is the
+        // tick-interval widening below (Machine::run at the bus max-safe
+        // interval: ~2.6× faster than the pre-change single-step tick-1 oracle),
+        // which is applied UNCONDITIONALLY when eligible. The JIT stays wired,
+        // proven byte-identical, and one env var away for compute-heavy firmware
+        // where straight-line blocks amortize the dispatch cost. See the report.
+        let jit_on = std::env::var("LABWIRED_RISCV_JIT").as_deref() == Ok("1");
+        machine.config.riscv_jit_enabled = jit_on;
+        machine.bus.config.riscv_jit_enabled = jit_on;
+        // Widen the peripheral-tick interval to RECOMMENDED_TICK_INTERVAL so
+        // `Machine::run`'s per-tick batch (`remaining_until_tick`) is wide enough
+        // for compiled blocks to retire, and the peripheral tick count drops
+        // ~64×. The C3 rom-boot peripherals are walk-deletable, so this is
+        // observably identical to interval-1 (esp32c3_walk_differential); the
+        // eligibility gate already excludes any `requires_cycle_accurate` bus.
+        // `max_safe_tick_interval` is NOT used here because it only returns the
+        // wide interval under the `event-scheduler` feature, which the CLI does
+        // not enable (see crates/cli/Cargo.toml). Crucially this is applied to
+        // BOTH JIT arms, so it never perturbs the JIT-on vs JIT-off differential.
+        // TEST-ONLY escape hatch (regression gate riscv_jit_c3_oled_test_differential):
+        // override the widened interval with LABWIRED_TICK_INTERVAL so the
+        // interval-64 (widened) vs interval-1 (baseline) fidelity gate can be
+        // proven empirically with EVERYTHING else identical (same machine-sourced
+        // cycle counting, same eligible code path) — the tick interval is the ONLY
+        // variable. Unset = default (RECOMMENDED_TICK_INTERVAL).
+        let interval = std::env::var("LABWIRED_TICK_INTERVAL")
+            .ok()
+            .and_then(|v| v.parse::<u32>().ok())
+            .unwrap_or(labwired_core::bus::RECOMMENDED_TICK_INTERVAL);
+        machine.config.peripheral_tick_interval = interval;
+        machine.bus.config.peripheral_tick_interval = interval;
+    }
 
     let batch_size = if machine.config.batch_mode_enabled
         && args.breakpoint.is_empty()
@@ -1437,6 +1559,17 @@ fn execute_test_loop<C: labwired_core::Cpu>(
 
     let mut step = 0;
     while step < max_steps {
+        // JIT-eligible path: mirror the machine's authoritative counters into
+        // `metrics` BEFORE the cycle-sensitive checks below (stimulus
+        // `after_cycles`, `max_cycles`), so they fire at exactly the same batch
+        // boundary the observer path would. `step` is the retired-instruction
+        // count (accumulated from `step_batch` return values); `total_cycles`
+        // is the machine's canonical cycle counter. No-op for the non-eligible
+        // path, where `metrics` IS the live step observer.
+        if jit_eligible {
+            metrics.set_cycles(machine.total_cycles);
+            metrics.set_instructions(step);
+        }
         // --capture-app-entry: detect the first instant execution reaches the
         // application, snapshot the live machine, and write the resume blob.
         if let Some(cap) = &app_entry_capture {
@@ -1510,7 +1643,64 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         let current_batch = batch_size as u32;
         let to_execute = current_batch.min(remaining);
 
-        if to_execute > 1 {
+        if jit_eligible {
+            // ── JIT-eligible C3 rom-boot: drive the proven Machine::run engine ──
+            // `build_rom_boot_machine` disables `batch_mode` because the manual
+            // step_batch arm below runs a FIXED-width batch and only ticks
+            // peripherals AFTER it — which freezes interrupt delivery (hence
+            // FreeRTOS) across the batch. `Machine::run` instead batches to the
+            // peripheral-tick cadence (`peripheral_tick_interval`, raised to the
+            // bus's max-safe interval when eligible), delivering interrupts every
+            // tick while dispatching the RV32IMC JIT. This is the EXACT engine
+            // `riscv_jit_c3_oled_test_differential` proves byte-identical JIT-on
+            // vs JIT-off. Run in `JIT_RUN_CHUNK` chunks, clamped so we never step
+            // past the nearest pending cycle threshold, so the stimulus/limit
+            // checks at the loop top fire cycle-tight and identically per arm.
+            let cur = machine.total_cycles;
+            let mut n = remaining.min(JIT_RUN_CHUNK);
+            // Clamp the chunk so a run never steps past the nearest pending cycle
+            // threshold: cycles advance ≥ 1 per instruction, so capping the
+            // instruction budget at `threshold - cur` guarantees the NEXT loop-top
+            // check sees `metrics.get_cycles() >= threshold` and fires it — never
+            // a chunk late. `.max(1)` keeps forward progress at an already-reached
+            // threshold (the check then fires immediately next iteration).
+            for (s, fired) in &pending_stimuli {
+                if !*fired {
+                    if let labwired_config::FaultTrigger::AfterCycles { cycles: t } = s.trigger {
+                        if t > cur {
+                            n = n.min(((t - cur).min(u32::MAX as u64) as u32).max(1));
+                        }
+                    }
+                }
+            }
+            if let Some(limit) = max_cycles {
+                if limit > cur {
+                    n = n.min(((limit - cur).min(u32::MAX as u64) as u32).max(1));
+                }
+            }
+            let before = machine.step_profile().cpu_instructions;
+            match machine.run(Some(n)) {
+                Ok(_) => {
+                    let executed = machine.step_profile().cpu_instructions - before;
+                    step += executed;
+                    steps_executed = step;
+                    // No forward progress (idle spin, no fast-forward budget):
+                    // stop rather than re-issue empty runs up to `max_steps`.
+                    if executed == 0 {
+                        stop_reason = StopReason::Halt;
+                        break;
+                    }
+                }
+                Err(e) => {
+                    sim_error_happened = true;
+                    stop_reason = map_sim_error_to_stop_reason(&e);
+                    if stop_reason != StopReason::Halt {
+                        error!("Simulation error at step {}: {}", step, e);
+                    }
+                    break;
+                }
+            }
+        } else if to_execute > 1 {
             // Push-mode logic capture: seed the tap clock at the batch start;
             // the CPU advances it once per retired instruction so pad writes
             // stamp with the boundary they become observable at (mirrors
@@ -1707,6 +1897,29 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                     }
                 }
             }
+        }
+    }
+
+    // Final counter mirror for the JIT-eligible path: the loop-top sync runs
+    // before the LAST batch, so capture that batch's retired cycles/instructions
+    // here — `result.json` (`cycles`/`instructions`) and `stop_reason_details`
+    // read `metrics` below and must report the true totals.
+    if jit_eligible {
+        metrics.set_cycles(machine.total_cycles);
+        metrics.set_instructions(steps_executed);
+    }
+
+    // Opt-in JIT non-vacuity / diagnostic: prove hot blocks actually compiled
+    // and ran on this oracle run (LABWIRED_JIT_STATS=1). `jit_engine_stats` is a
+    // feature-agnostic Cpu-trait accessor: `Some(..)` only in a `jit-core` build
+    // whose JIT engine was created, `None` otherwise (interpreter-only).
+    if jit_eligible && std::env::var("LABWIRED_JIT_STATS").is_ok() {
+        match machine.cpu.jit_engine_stats() {
+            Some(s) => eprintln!(
+                "[jit-stats] compiled={} block_runs={} block_instrs={} interpreted={}",
+                s.compiled, s.block_runs, s.block_instrs, s.interpreted
+            ),
+            None => eprintln!("[jit-stats] JIT engine never created (interpreter-only run)"),
         }
     }
 

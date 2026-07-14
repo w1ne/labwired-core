@@ -22,9 +22,17 @@
 //!
 //! ## Time source (walk-free plan Part 1 — first production user)
 //!
-//! The counter advances one tick per simulated CPU cycle; the absolute
-//! slow-clock rate is not modelled — only that time *advances* monotonically,
-//! which is all the deadline comparisons observe. Two coexisting drive modes:
+//! The counter advances one tick per simulated CPU cycle; by default the
+//! absolute slow-clock rate is not modelled — only that time *advances*
+//! monotonically, which is all the deadline comparisons observe (and what the
+//! C3 boot budget + every existing test rely on). The real silicon rate — the
+//! internal RC_SLOW oscillator, measured on this board at ~136.7 kHz over the
+//! built-in USB-JTAG (see [`RTC_SLOW_HZ_MEASURED`]) — can be opted into via
+//! [`Esp32c3RtcTimer::set_slow_clock_hz`], which scales the firmware-visible
+//! time down to that rate at readout for firmware that needs absolute RTC
+//! wall-time. (Trade-off: RTC busy-wait delays then span ~1170x more simulated
+//! cycles, since one RTC tick becomes ~1170 CPU cycles.) Two coexisting drive
+//! modes:
 //!
 //! * **Scheduler mode** (`event-scheduler` feature + a [`crate::CycleClock`]
 //!   attached by `SystemBus::add_peripheral`): `uses_scheduler()` is true, the
@@ -65,11 +73,25 @@ const TIME_LOW: u64 = 0x10;
 const TIME_HIGH: u64 = 0x14;
 const TIME_UPDATE_BIT: u32 = 1 << 31;
 
+/// ESP32-C3 CPU clock the internal counter is anchored to (the cycle base the
+/// bus `CycleClock` publishes). Used as the denominator when scaling the
+/// free-running cycle count down to the RTC slow-clock rate.
+pub const CPU_HZ: u64 = 160_000_000;
+
+/// RTC slow-clock rate MEASURED on real silicon (this board, over the built-in
+/// USB-JTAG: SYSTIMER-referenced 16.0 MHz time base gave 136.7 kHz for the
+/// `RTC_CNTL` TIME counter — the internal RC_SLOW oscillator, nominal 150 kHz,
+/// calibrated ~136–137 kHz). At 160 MHz CPU this is ~1170 CPU cycles per RTC
+/// tick. See `Esp32c3RtcTimer::set_slow_clock_hz`.
+pub const RTC_SLOW_HZ_MEASURED: u64 = 136_700;
+
 #[derive(Debug)]
 pub struct Esp32c3RtcTimer {
     /// Register-backed storage for the whole window (non-timer registers).
     regs: Vec<u32>,
-    /// Free-running 48-bit slow-clock counter (one tick per CPU cycle).
+    /// Free-running 48-bit counter tracking RAW elapsed CPU cycles (one step
+    /// per cycle). The firmware-visible slow-clock time is this value scaled by
+    /// `slow_num/slow_den` at readout (default 1:1).
     counter: Cell<u64>,
     /// Counter value latched by the most recent TIME_UPDATE write; what the
     /// TIME0/TIME1 readout registers return.
@@ -82,6 +104,19 @@ pub struct Esp32c3RtcTimer {
     /// `SystemBus::add_peripheral` attaches it; `None` keeps the model on
     /// the legacy walk path.
     clock: Option<CycleClock>,
+    /// Slow-clock scale applied AT READOUT: the latched (firmware-visible) time
+    /// is `counter * slow_num / slow_den`. `counter` itself keeps tracking raw
+    /// elapsed CPU cycles (so all the monotonic/anchor logic is unchanged); only
+    /// the observable value is divided down to the RTC slow-clock rate.
+    ///
+    /// Default `(1, 1)` = one RTC tick per CPU cycle — the historical model
+    /// contract ("slow-clock rate is not modelled; time advances monotonically")
+    /// that every existing test and the C3 boot budget rely on. Call
+    /// [`Self::set_slow_clock_hz`] with [`RTC_SLOW_HZ_MEASURED`] to opt into the
+    /// silicon-faithful rate for firmware that needs absolute RTC wall-time
+    /// (note: RTC busy-wait delays then take ~1170x more simulated cycles).
+    slow_num: u64,
+    slow_den: u64,
 }
 
 impl Default for Esp32c3RtcTimer {
@@ -99,7 +134,30 @@ impl Esp32c3RtcTimer {
             latched: Cell::new(0),
             anchor_tick: Cell::new(0),
             clock: None,
+            slow_num: 1,
+            slow_den: 1,
         }
+    }
+
+    /// Opt into a modelled RTC slow-clock rate of `hz` (relative to the
+    /// [`CPU_HZ`] cycle base). Pass [`RTC_SLOW_HZ_MEASURED`] for the
+    /// silicon-measured ~136.7 kHz. `hz == CPU_HZ` (or leaving the default)
+    /// keeps the 1:1 "monotonic-only" contract. `hz == 0` is ignored.
+    pub fn set_slow_clock_hz(&mut self, hz: u64) {
+        if hz == 0 {
+            return;
+        }
+        self.slow_num = hz;
+        self.slow_den = CPU_HZ;
+    }
+
+    /// Scale a raw elapsed-cycle count down to the modelled RTC slow-clock rate.
+    #[inline]
+    fn to_slow_ticks(&self, cycles: u64) -> u64 {
+        if self.slow_num == self.slow_den {
+            return cycles; // 1:1 fast path — byte-identical to the old model.
+        }
+        (cycles as u128 * self.slow_num as u128 / self.slow_den as u128) as u64
     }
 
     pub fn new() -> Self {
@@ -177,7 +235,9 @@ impl Peripheral for Esp32c3RtcTimer {
             // before this write; the explicit sync keeps direct/unit-test
             // writes correct too, and is idempotent.)
             self.sync_from_clock();
-            self.latched.set(self.counter.get());
+            // Scale the raw elapsed-cycle counter down to the modelled RTC
+            // slow-clock rate at readout (default 1:1 → byte-identical).
+            self.latched.set(self.to_slow_ticks(self.counter.get()));
         }
         if let Some(slot) = self.regs.get_mut((offset / 4) as usize) {
             *slot = value;
@@ -358,6 +418,48 @@ mod tests {
 
         // Idempotent: re-latching at the same published cycle adds nothing.
         assert_eq!(rtc_time_get(&mut t), 1234 + 4096);
+    }
+
+    /// The opt-in silicon-faithful slow-clock rate: after
+    /// `set_slow_clock_hz(RTC_SLOW_HZ_MEASURED)`, the firmware-visible RTC time
+    /// advances at the HW-measured ~136.7 kHz relative to the CPU cycle base —
+    /// NOT 1:1. Locks in the rate captured on real hardware (this board, over
+    /// the built-in USB-JTAG). The default path stays 1:1 (asserted above), so
+    /// this is purely additive and breaks no existing timing.
+    #[cfg(feature = "event-scheduler")]
+    #[test]
+    fn faithful_slow_clock_rate_matches_measured_silicon() {
+        let clock = CycleClock::default();
+        let mut t = Esp32c3RtcTimer::new();
+        t.attach_cycle_clock(clock.clone());
+        t.set_slow_clock_hz(RTC_SLOW_HZ_MEASURED);
+
+        // Advance the CPU cycle base by exactly one second's worth of cycles.
+        clock.publish(CPU_HZ);
+        let ticks = rtc_time_get(&mut t);
+
+        // One CPU-second must read as ~RTC_SLOW_HZ_MEASURED RTC ticks (exact
+        // integer division of CPU_HZ * hz / CPU_HZ == hz here).
+        assert_eq!(
+            ticks, RTC_SLOW_HZ_MEASURED,
+            "faithful RTC rate: 1 CPU-second must read {RTC_SLOW_HZ_MEASURED} ticks, got {ticks}"
+        );
+
+        // Half a second → half the ticks (the scale is linear in elapsed cycles).
+        clock.publish(CPU_HZ + CPU_HZ / 2);
+        let ticks2 = rtc_time_get(&mut t);
+        assert_eq!(
+            ticks2,
+            RTC_SLOW_HZ_MEASURED + RTC_SLOW_HZ_MEASURED / 2,
+            "1.5 CPU-seconds must read 1.5x the RTC ticks"
+        );
+
+        // Sanity: the raw ~1170 CPU-cycles-per-RTC-tick ratio the capture found.
+        let cycles_per_tick = CPU_HZ / RTC_SLOW_HZ_MEASURED;
+        assert!(
+            (1160..=1180).contains(&cycles_per_tick),
+            "measured ratio ~1170 CPU cycles per RTC tick, got {cycles_per_tick}"
+        );
     }
 
     #[cfg(feature = "event-scheduler")]

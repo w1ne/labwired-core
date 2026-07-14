@@ -46,7 +46,16 @@ ureq = { workspace = true }
 default = []
 # Phase 3.2 JIT pilot (issue #124) — pass-through to labwired-core's `jit`
 # feature. Build with `cargo build --release -p labwired-cli --features
-# jit-core` to enable wasmtime-backed JIT for the fillScreen body block.
+# jit-core` to enable the wasmtime-backed RV32IMC JIT.
+#
+# NOTE: this deliberately does NOT pull in `event-scheduler`. Enabling that
+# feature CLI-wide makes scheduler-driven peripherals defer work to events that
+# only `Machine::run` drains — the CLI's non-eligible manual step_batch path
+# does not, so coupling it here regressed unrelated chips (KW41Z stimulus,
+# ESP32/ESP32-S3 tier1 labs). The JIT-eligible C3 path drives `Machine::run` and
+# engages the JIT at its fixed tick window regardless of the scheduler, and the
+# JIT-on vs JIT-off differential is byte-identical either way (both arms tick
+# peripherals identically), so the scheduler is not required for this path.
 jit-core = ["labwired-core/jit"]
 # Swap the built-in fuzzing loop for the LibAFL engine (havoc/splice mutators,
 # map-feedback scheduler, crash objectives). Heavy dependency tree, so opt-in:

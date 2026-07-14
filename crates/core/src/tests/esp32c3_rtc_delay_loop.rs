@@ -15,10 +15,25 @@
 //! bus-published `CycleClock`), at tick interval 1 and 64:
 //!
 //! * both paths TERMINATE (no stale-spin), and
-//! * they terminate at the SAME cycle with the SAME final counter value —
-//!   the walk itself quantises the counter to the tick grid at interval > 1,
-//!   and the lazy read-sync reproduces exactly that grid (batch-start
-//!   freshness == walk-tick freshness), so this holds at interval 64 too.
+//! * they terminate at the SAME cycle at interval 1 AND 64, and
+//! * the scheduler's counter READ is now cycle-EXACT and thus tick-interval
+//!   INDEPENDENT: `sched(1) == sched(64)` for both the termination cycle and
+//!   the final counter value.
+//!
+//! Fidelity note (event-scheduler exact-cycle clock): a lazily-derived counter
+//! read is anchored to `batch_start + retired` (the CPU republishes the exact
+//! cycle before each interpreted instruction — see `Cpu::step_batch`), so a
+//! mid-batch read returns the SAME value at any tick interval. On real silicon
+//! the RTC counter advances every cycle and a read returns the live value, so
+//! this exact read is the faithful behaviour. The LEGACY WALK, by contrast,
+//! only refreshes the counter at tick boundaries, so at interval > 1 its read
+//! is QUANTISED to the tick grid (it reports the last grid value, up to one
+//! interval stale). The two therefore agree at interval 1 (grid == every
+//! cycle) but the walk's final read lags the scheduler's exact read by up to
+//! one interval at interval 64 — the scheduler is the more faithful path, so
+//! this test pins scheduler interval-independence rather than equality to the
+//! coarser walk read at interval > 1. The termination CYCLE still matches the
+//! walk at both intervals (the deadline is crossed at the same cycle).
 
 #![cfg(all(test, feature = "event-scheduler"))]
 
@@ -101,10 +116,14 @@ fn run_delay_loop(mut machine: Machine<RiscV>) -> (bool, u64, u32) {
 }
 
 /// THE gate: the busy-poll delay loop terminates on both drive modes at
-/// interval 1 AND 64 (no stale-spin), and the scheduler path is byte-identical
-/// to the legacy walk — same termination cycle, same final counter read.
+/// interval 1 AND 64 (no stale-spin); the scheduler crosses the deadline at the
+/// SAME cycle as the legacy walk; the scheduler is byte-identical to the walk at
+/// interval 1; and — the property the exact-cycle clock buys — the scheduler is
+/// tick-interval INDEPENDENT (its exact counter read at interval 64 equals its
+/// read at interval 1), whereas the walk's read quantises to the tick grid.
 #[test]
 fn rtc_delay_loop_terminates_and_matches_walk() {
+    let mut sched_by_interval: Vec<(u64, u32)> = Vec::new();
     for tick_interval in [1u32, 64] {
         let (walk_done, walk_cycles, walk_cnt) = run_delay_loop(build_machine(tick_interval, true));
         let (sched_done, sched_cycles, sched_cnt) =
@@ -124,13 +143,33 @@ fn rtc_delay_loop_terminates_and_matches_walk() {
             "interval {tick_interval}: loop exited before the RTC deadline \
              (read {sched_cnt:#x} < {DEADLINE:#x})"
         );
+        // Termination CYCLE is byte-identical to the walk at every interval (the
+        // deadline is crossed at the same cycle; only the reported read value
+        // quantises under the walk at interval > 1).
         assert_eq!(
-            (walk_cycles, walk_cnt),
-            (sched_cycles, sched_cnt),
-            "interval {tick_interval}: scheduler-driven RTC must be byte-identical \
-             to the legacy walk (termination cycle + final counter read)"
+            walk_cycles, sched_cycles,
+            "interval {tick_interval}: scheduler must cross the RTC deadline at \
+             the same cycle as the legacy walk"
         );
+        if tick_interval == 1 {
+            // At interval 1 the walk grid IS every cycle, so the reads match too.
+            assert_eq!(
+                walk_cnt, sched_cnt,
+                "interval 1: scheduler counter read must equal the walk (grid == \
+                 every cycle)"
+            );
+        }
+        sched_by_interval.push((sched_cycles, sched_cnt));
     }
+
+    // The payoff: the scheduler's exact-cycle read makes the WHOLE observation
+    // (termination cycle + final counter value) tick-interval INDEPENDENT.
+    assert_eq!(
+        sched_by_interval[0], sched_by_interval[1],
+        "scheduler-driven RTC must be tick-interval independent \
+         (interval-1 {:?} != interval-64 {:?})",
+        sched_by_interval[0], sched_by_interval[1]
+    );
 }
 
 /// The scheduler path must actually be scheduler-driven (walk-independent) and
