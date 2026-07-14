@@ -591,6 +591,45 @@ assertions:
 }
 
 #[test]
+fn environment_runner_can_complete_on_the_final_allowed_world_round() {
+    let dir = unique_dir("assertions-passed-final-round");
+    write_two_node_environment(&dir);
+    let output = run_environment_script(
+        &dir,
+        r#"schema_version: "1.0"
+inputs:
+  env: "two-node.yaml"
+limits:
+  max_steps: 1
+  stop_when_assertions_pass: true
+  stop_when_assertions_pass_settle_steps: 0
+assertions:
+  - memory_value:
+      node: alpha
+      address: 0x20000000
+      expected_value: 0
+"#,
+        &[],
+    );
+
+    assert!(
+        output.status.success(),
+        "final-round completion failed: stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let result: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(dir.join("artifacts/result.json")).expect("read result.json"),
+    )
+    .expect("parse result.json");
+    assert_eq!(result["status"], "pass");
+    assert_eq!(result["stop_reason"], "assertions_passed");
+    assert_eq!(result["steps_executed"], 1);
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn environment_runner_records_aggregate_world_metering_after_key_validation() {
     const TEST_KEY: &str = "environment-metering-test-key";
 
@@ -1260,6 +1299,8 @@ inputs:
 limits:
   max_steps: 1
   max_cycles: 1
+  stop_when_assertions_pass: true
+  stop_when_assertions_pass_settle_steps: 0
 assertions:
   - memory_value:
       node: alpha

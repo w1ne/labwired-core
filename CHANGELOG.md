@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Environment completion**: `inputs.env` scripts can opt into the same
   durable assertion-pass stop contract as single-machine runs, including the
   settling window and minimum-step floor. Node runtime failures and configured
-  limits retain precedence over completion.
+  wall-time/cycle/UART limits retain precedence over completion.
 - **CI runner image**: The image now builds against the same Debian/glibc
   baseline it runs on. The required Core CI check builds and executes the final
   image before a release tag can be created.

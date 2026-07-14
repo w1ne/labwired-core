@@ -113,8 +113,10 @@ same durable completion contract as a single-machine run. Once every
 node-qualified `memory_value` assertion passes at or after
 `stop_when_assertions_pass_min_steps`, it must remain true for
 `stop_when_assertions_pass_settle_steps` world rounds (default `100000`). A
-regression restarts that window. A runtime failure or a configured limit reached
-on the same round wins over completion; otherwise the result has
+regression restarts that window. A runtime failure or a same-round
+`wall_time_ms`, `max_cycles`, or `max_uart_bytes` limit wins over completion.
+`max_steps` remains the outer execution bound, so completion on its final
+allowed world round reports `assertions_passed`; otherwise the result has
 `stop_reason: assertions_passed`. The three fields are respectively a boolean
 and non-negative integers; explicit YAML `null` is rejected.
 

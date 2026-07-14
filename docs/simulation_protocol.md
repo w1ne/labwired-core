@@ -91,8 +91,9 @@ the first world round at or after `stop_when_assertions_pass_min_steps` where
 all node-qualified assertions pass, and accepts it only after they remain true
 for `stop_when_assertions_pass_settle_steps` rounds (default `100000`). The
 default is `false`; a regression resets the window, and a runtime error or
-configured limit on the same round takes precedence. A durable completion is
-reported as `stop_reason: assertions_passed`.
+same-round `wall_time_ms`, `max_cycles`, or `max_uart_bytes` limit takes
+precedence. `max_steps` remains the outer execution bound, so completion on its
+final allowed world round is reported as `stop_reason: assertions_passed`.
 
 ### 2.2 System Manifest (`system.yaml`)
 
