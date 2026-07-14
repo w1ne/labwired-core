@@ -1322,14 +1322,14 @@ fn execute_test_loop<C: labwired_core::Cpu>(
             refs.iter()
                 .zip(initial)
                 .enumerate()
-                .map(|(ch, ((name, pin), value))| {
-                    labwired_core::logic_capture::LogicChannelMeta {
+                .map(
+                    |(ch, ((name, pin), value))| labwired_core::logic_capture::LogicChannelMeta {
                         ch: ch as u32,
                         peripheral: name.clone(),
                         pin: *pin,
                         initial: value,
-                    }
-                })
+                    },
+                )
                 .collect()
         }
     };
