@@ -14,6 +14,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # This static verifier reads workflow/Dockerfile/action/docs text only; it
+  # intentionally needs neither Docker nor a Rust build.
+  release-runner-contract:
+    name: release-runner-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify release runner contract
+        run: bash scripts/ci/verify-release-runner-contract.sh
+
   # ── Fast PR gate (REQUIRED) ────────────────────────────────────────────────
   # Formatting, lints, and unit tests only — no firmware cross-builds, no
   # fixture-dependent integration tests, no Tier-1 sims. Target a few minutes so
