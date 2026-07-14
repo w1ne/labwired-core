@@ -371,8 +371,16 @@ def main() -> None:
         description, description_truncated = assertion_description(assertion)
         assertions.append((assertion, description))
         assertion_description_truncated = assertion_description_truncated or description_truncated
-    passed = sum(assertion.get("passed") is True for assertion, _ in assertions)
-    failed = sum(assertion.get("passed") is False for assertion, _ in assertions)
+    passed = 0
+    failed = 0
+    if isinstance(raw_assertions, list):
+        for assertion in raw_assertions:
+            if not isinstance(assertion, dict):
+                continue
+            if assertion.get("passed") is True:
+                passed += 1
+            elif assertion.get("passed") is False:
+                failed += 1
     assertion_count = len(raw_assertions) if isinstance(raw_assertions, list) else 0
     if assertion_notice := assertion_diagnostic(assertion_count):
         diagnostics.append(assertion_notice)

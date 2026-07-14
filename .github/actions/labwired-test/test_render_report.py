@@ -244,6 +244,23 @@ class RenderReportTest(unittest.TestCase):
         self.assertIn("assertion-199", report_html)
         self.assertNotIn("assertion-200", report_html)
 
+    def test_omitted_assertion_failure_is_included_in_totals(self) -> None:
+        assertions = [
+            {"assertion": {"uart_contains": f"assertion-{index}"}, "passed": True}
+            for index in range(ASSERTION_RENDER_LIMIT)
+        ]
+        assertions.append(
+            {"assertion": {"uart_contains": "omitted-failure"}, "passed": False}
+        )
+
+        _, summary, report_html, _, _ = self.render(
+            json.dumps({"status": "fail", "assertions": assertions})
+        )
+
+        self.assertIn("Assertions: `200` passed, `1` failed", summary)
+        self.assertIn("200 passed, 1 failed", report_html)
+        self.assertNotIn("omitted-failure", report_html)
+
     def test_config_error_message_is_safely_rendered(self) -> None:
         message = 'invalid <script>alert("owned")</script> & "quoted"'
 
