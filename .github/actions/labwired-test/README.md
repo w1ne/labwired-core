@@ -7,10 +7,10 @@ compiling Rust on the consumer's runner.
 ~~~yaml
 - id: labwired
   name: Run LabWired tests
-  uses: w1ne/labwired-core/.github/actions/labwired-test@3a13349ad6c4f65b4fa19276f576bc3086b219e6
+  uses: w1ne/labwired-core/.github/actions/labwired-test@c6f8c68f0bd8e14b0f7fc04a647f7609b17fdc0f
   with:
-    version: v0.18.0
     script: tests/firmware-test.yaml
+    version: v0.19.0
     output-dir: out/labwired
     args: --no-uart-stdout
 
@@ -20,20 +20,20 @@ compiling Rust on the consumer's runner.
 ~~~
 
 The action source is an immutable action-source pin to
-`3a13349ad6c4f65b4fa19276f576bc3086b219e6`. The `version: v0.18.0` input
-independently pins the immutable Core CLI release archive named
-`labwired-v0.18.0-<platform>.tar.gz`.
+`c6f8c68f0bd8e14b0f7fc04a647f7609b17fdc0f`. The `version` input defaults to
+`v0.19.0` and independently selects the immutable Core CLI release archive
+named `labwired-v0.19.0-<platform>.tar.gz`. The action downloads that public
+archive from the `w1ne/labwired-core` GitHub release with `curl`; it does not
+build Core on the consumer runner.
 
-The local Core action still uses its hyphenated names for its internal release
-smoke workflow. Its inputs are `script` (required), `version`, `args`, `junit`,
-`output-dir`, `upload-artifacts`, `repo`, and `github-token`.
+Its inputs are exactly `script` (required), `version` (default `v0.19.0`),
+`output-dir`, and `args`. `args` is whitespace-separated extra CLI flags; shell
+quoting inside this input is not interpreted.
 
-Every invocation writes `summary.md` and a self-contained `report.html` into
-`output-dir`, appends the Markdown report to the GitHub job summary, and uploads
-the output directory plus the external JUnit path as an artifact by default.
-Set `upload-artifacts: 'false'` only when a caller deliberately does not need a
-workflow artifact.
+Every invocation passes `--junit output-dir/junit.xml`, writes `summary.md` and
+a self-contained `report.html` into `output-dir`, appends the Markdown report to
+the GitHub job summary, and always uploads the entire output directory as an
+artifact, including when the test fails.
 
 Use the step outputs when a workflow needs to surface or link the generated
-evidence: `status`, `summary-md`, `report-html`, `artifact-url`, and
-`exit-code`. `artifact-url` is empty when artifact uploads are disabled.
+evidence: `status`, `summary-md`, `report-html`, `artifact-url`, and `exit-code`.

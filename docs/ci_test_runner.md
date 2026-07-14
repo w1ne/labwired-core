@@ -6,11 +6,93 @@ LabWired provides a CI-friendly runner mode driven by a YAML test script:
 labwired test --script test.yaml
 ```
 
-You can override script inputs with CLI flags:
+Every v1.0 script selects exactly one run shape: a single machine or an
+environment world. The two `inputs` forms are mutually exclusive.
+
+### Single-machine script
+
+Use `inputs.firmware` (and optionally `inputs.system`) to run one machine. A
+per-machine `system.yaml` is the same system manifest consumed by the
+Playground; CI does not use a separate board-description format.
 
 ```bash
 labwired test --firmware path/to/fw.elf --system system.yaml --script test.yaml
 ```
+
+```yaml
+schema_version: "1.0"
+inputs:
+  firmware: "relative/or/absolute/path/to/fw.elf"
+  system: "optional/path/to/system.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "Hello"
+```
+
+`--firmware` and `--system` are single-machine overrides only. They are not
+valid with an environment script.
+
+### Environment/world script
+
+Use `inputs.env` to select an environment manifest. The manifest owns the
+world topology: every node supplies its `id`, the shared-with-Playground
+`system.yaml`, and its firmware ELF. Connectivity belongs only in explicit
+`interconnects`; it is never implied by CLI overrides.
+
+```yaml
+# test.yaml
+schema_version: "1.0"
+inputs:
+  env: "two-node-env.yaml"
+limits:
+  max_steps: 100000
+  max_cycles: 123456     # optional
+  max_uart_bytes: 4096   # optional
+  wall_time_ms: 5000     # optional
+assertions:
+  - memory_value:
+      node: alpha
+      address: 0x20000000
+      expected_value: 0
+      size: 8
+      mask: 0xff
+```
+
+```yaml
+# two-node-env.yaml
+schema_version: "1.0"
+name: "two-node-smoke"
+nodes:
+  - id: alpha
+    system: "systems/alpha.yaml"
+    firmware: "firmware/alpha.elf"
+  - id: beta
+    system: "systems/beta.yaml"
+    firmware: "firmware/beta.elf"
+interconnects:
+  - type: can_bus
+    nodes: [alpha, beta]
+    config:
+      peripheral: can1
+```
+
+An environment assertion must be a node-qualified `memory_value` assertion.
+v0.19 environment worlds are Cortex-M-only: each node's system/chip and
+firmware ELF must be ARM/Cortex-M. A non-Arm system/chip or firmware ELF is
+rejected with a clear configuration error until architecture-specific world
+setup exists.
+`nodes[].config_overrides` is also rejected in environment schema 1.0.
+
+Interconnect membership is validated before the world starts:
+
+- `can_bus` requires a nonblank `config.peripheral` and at least two unique,
+  known nodes.
+- `uart_cross_link` requires exactly two unique, known nodes.
+- `egress` requires exactly one known node.
+
+Environment scripts do not accept single-machine firmware/system overrides or
+topology-affecting CLI options.
 
 ## Exit Codes
 
@@ -49,15 +131,24 @@ assertions:
 Notes:
 - Unknown fields are rejected (script parse/validation returns exit code `2`).
 - Relative `inputs.firmware` / `inputs.system` paths are resolved relative to the directory containing the script file (not the current working directory).
-- CLI flags override script inputs:
+- Relative `inputs.env` is resolved relative to the test script; each node's `system` and `firmware` paths are resolved relative to the environment manifest.
+- For a single-machine script, CLI flags override script inputs:
   - `--firmware` overrides `inputs.firmware`
   - `--system` overrides `inputs.system`
+- For an environment script, `inputs.env` is the only topology input; `--firmware` and `--system` are rejected.
 - CLI flags override script limits:
   - `--max-steps` overrides `limits.max_steps`
   - `--max-cycles` overrides `limits.max_cycles`
   - `--max-uart-bytes` overrides `limits.max_uart_bytes`
   - `--detect-stuck` (alias: `--no-progress`) overrides `limits.no_progress_steps`
 - `--breakpoint <addr>` (repeatable) stops the run when PC matches and sets `stop_reason: halt`.
+
+The single-machine example above permits the documented single-machine
+assertions. Environment scripts are stricter: they require at least one
+node-qualified `memory_value` assertion and support `max_steps`, `max_cycles`,
+`max_uart_bytes`, and `wall_time_ms` limits. They reject
+`limits.no_progress_steps` and single-machine-only controls such as
+`--breakpoint`.
 
 ### Deprecated Legacy Schema (v1)
 
@@ -85,6 +176,7 @@ assertions: []
 - `memory_violation`
 - `decode_error`
 - `halt`
+- `exception`
 - `config_error` (runner failed before simulation started; e.g. script parse/validation error)
 
 Semantics:
@@ -94,7 +186,8 @@ Semantics:
 - If the simulator hits a runtime error stop reason (e.g. `memory_violation`), the run is treated as a runtime error (exit code `3`) unless an `expected_stop_reason` assertion matches the stop reason.
 
 `result.json` uses:
-- `result_schema_version`: version of the `result.json` contract (currently `"1.0"`)
+- `result_schema_version`: the result-union discriminator: `"1.0"` for a single machine or `"1.0-environment"` for an environment world
+- `run_type: "environment"`: present only on the environment arm
 - `stop_reason`: the terminal reason the simulator stopped
 - `stop_reason_details`: which stop condition triggered (+ the limit/observed value when applicable)
 - `limits`: the resolved limits used for the run (after applying any CLI overrides)
@@ -110,8 +203,8 @@ labwired test --script test.yaml --output-dir out/artifacts
 
 Artifacts:
 - `out/artifacts/result.json`: machine-readable summary
-- `out/artifacts/snapshot.json`: machine-readable snapshot of CPU state (or config error details)
-- `out/artifacts/uart.log`: captured UART TX bytes
+- `out/artifacts/snapshot.json`: a CPU snapshot for a single machine, or an environment snapshot with a `nodes` array for a world (also written for config errors)
+- `out/artifacts/uart.log`: captured UART TX bytes; world output is grouped by node
 - `out/artifacts/junit.xml`: JUnit XML report (one testcase for `run` + one per assertion)
 
 Alternatively, you can write JUnit XML to a specific path:
@@ -125,70 +218,47 @@ labwired test --script test.yaml --junit out/junit.xml
 - `--script`: if relative, resolved relative to the current working directory.
 - Script-relative paths:
   - `inputs.firmware`, `inputs.system` (v1.0)
+  - `inputs.env` (environment v1.0)
   - `firmware`, `system` (legacy v1)
   are resolved relative to the directory containing the script file.
+- Environment-manifest-relative paths: each `nodes[].system` and
+  `nodes[].firmware` value is resolved relative to the environment manifest.
 - System manifest-relative paths: `system.yaml` may reference `chip: ...`; this `chip` path is resolved relative to the directory containing the system manifest file.
 - `--output-dir` / `--junit`: if relative, resolved relative to the current working directory.
 
-## `result.json` Contract (v1.0)
+## `result.json` Contract
 
-The runner writes `result.json` only when `--output-dir` is provided (including config/script errors that exit with code `2`).
+The runner writes `result.json` only when `--output-dir` is provided,
+including config/script errors that exit with code `2`. Its top-level shape is
+a discriminated union. Consumers must branch on
+`result_schema_version`—and, for worlds, `run_type`—rather than assuming one
+firmware identity.
 
 ### JSON Schema
 
 ```json
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "LabWired CI runner result.json (v1.0)",
-  "type": "object",
-  "additionalProperties": false,
-  "required": [
-    "result_schema_version",
-    "status",
-    "steps_executed",
-    "cycles",
-    "instructions",
-    "stop_reason",
-    "stop_reason_details",
-    "limits",
-    "assertions",
-    "firmware_hash",
-    "config"
-  ],
-  "properties": {
-    "result_schema_version": {
-      "type": "string",
-      "enum": ["1.0"]
-    },
-    "status": {
-      "type": "string",
-      "enum": ["pass", "fail", "error"]
-    },
-    "steps_executed": { "type": "integer", "minimum": 0 },
-    "cycles": { "type": "integer", "minimum": 0 },
-    "instructions": { "type": "integer", "minimum": 0 },
-    "stop_reason": {
-      "type": "string",
-      "enum": [
-        "config_error",
-        "max_steps",
-        "max_cycles",
-        "max_uart_bytes",
-        "no_progress",
-        "wall_time",
-        "memory_violation",
-        "decode_error",
-        "halt"
-      ]
-    },
-    "message": { "type": ["string", "null"] },
-    "stop_reason_details": {
+  "title": "LabWired CI runner result.json",
+  "$defs": {
+    "common": {
       "type": "object",
-      "additionalProperties": false,
-      "required": ["triggered_stop_condition", "triggered_limit", "observed"],
+      "required": [
+        "status",
+        "steps_executed",
+        "cycles",
+        "instructions",
+        "stop_reason",
+        "stop_reason_details",
+        "limits",
+        "assertions"
+      ],
       "properties": {
-        "triggered_stop_condition": {
-          "type": "string",
+        "status": { "enum": ["pass", "fail", "error"] },
+        "steps_executed": { "type": "integer", "minimum": 0 },
+        "cycles": { "type": "integer", "minimum": 0 },
+        "instructions": { "type": "integer", "minimum": 0 },
+        "stop_reason": {
           "enum": [
             "config_error",
             "max_steps",
@@ -198,132 +268,116 @@ The runner writes `result.json` only when `--output-dir` is provided (including 
             "wall_time",
             "memory_violation",
             "decode_error",
-            "halt"
+            "halt",
+            "exception"
           ]
         },
-        "triggered_limit": {
-          "type": ["object", "null"],
-          "additionalProperties": false,
-          "required": ["name", "value"],
-          "properties": {
-            "name": { "type": "string" },
-            "value": { "type": "integer", "minimum": 0 }
-          }
-        },
-        "observed": {
-          "type": ["object", "null"],
-          "additionalProperties": false,
-          "required": ["name", "value"],
-          "properties": {
-            "name": { "type": "string" },
-            "value": { "type": "integer", "minimum": 0 }
-          }
-        }
+        "stop_reason_details": { "type": "object" },
+        "limits": { "type": "object" },
+        "message": { "type": ["string", "null"] },
+        "assertions": { "type": "array" },
+        "fidelity": { "type": "array" }
       }
     },
-    "limits": {
+    "environment_node": {
       "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "max_steps",
-        "max_cycles",
-        "max_uart_bytes",
-        "no_progress_steps",
-        "wall_time_ms"
-      ],
+      "required": ["id", "system", "firmware", "system_hash", "firmware_hash"],
       "properties": {
-        "max_steps": { "type": "integer", "minimum": 0 },
-        "max_cycles": { "type": ["integer", "null"], "minimum": 0 },
-        "max_uart_bytes": { "type": ["integer", "null"], "minimum": 0 },
-        "no_progress_steps": { "type": ["integer", "null"], "minimum": 0 },
-        "wall_time_ms": { "type": ["integer", "null"], "minimum": 0 }
-      }
-    },
-    "message": {
-      "type": "string",
-      "description": "Present only for config errors / invalid inputs."
-    },
-    "assertions": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["assertion", "passed"],
-        "properties": {
-          "passed": { "type": "boolean" },
-          "assertion": {
-            "oneOf": [
-              {
-                "type": "object",
-                "additionalProperties": false,
-                "required": ["uart_contains"],
-                "properties": { "uart_contains": { "type": "string" } }
-              },
-              {
-                "type": "object",
-                "additionalProperties": false,
-                "required": ["uart_regex"],
-                "properties": { "uart_regex": { "type": "string" } }
-              },
-              {
-                "type": "object",
-                "additionalProperties": false,
-                "required": ["expected_stop_reason"],
-                "properties": {
-                  "expected_stop_reason": {
-                    "type": "string",
-                    "enum": [
-                      "max_steps",
-                      "max_cycles",
-                      "max_uart_bytes",
-                      "no_progress",
-                      "wall_time",
-                      "memory_violation",
-                      "decode_error",
-                      "halt"
-                    ]
-                  }
-                }
-              }
-            ]
-          }
-        }
-      }
-    },
-    "firmware_hash": {
-      "type": "string",
-      "description": "SHA-256 of the firmware ELF bytes (lowercase hex).",
-      "pattern": "^[0-9a-f]{64}$"
-    },
-    "config": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["firmware", "system", "script"],
-      "properties": {
+        "id": { "type": "string" },
+        "system": { "type": "string" },
         "firmware": { "type": "string" },
-        "system": { "type": ["string", "null"] },
-        "script": { "type": "string" }
+        "system_hash": { "type": "string" },
+        "firmware_hash": { "type": "string" }
       }
     }
-  }
+  },
+  "oneOf": [
+    {
+      "title": "single-machine result",
+      "allOf": [
+        { "$ref": "#/$defs/common" },
+        {
+          "type": "object",
+          "required": ["result_schema_version", "firmware_hash", "config"],
+          "properties": {
+            "result_schema_version": { "const": "1.0" },
+            "firmware_hash": {
+              "type": "string",
+              "description": "SHA-256 of the firmware ELF bytes."
+            },
+            "config": {
+              "type": "object",
+              "required": ["firmware", "system", "script"],
+              "properties": {
+                "firmware": { "type": "string" },
+                "system": { "type": ["string", "null"] },
+                "script": { "type": "string" }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "title": "environment/world result",
+      "allOf": [
+        { "$ref": "#/$defs/common" },
+        {
+          "type": "object",
+          "required": ["result_schema_version", "run_type", "config"],
+          "not": { "required": ["firmware_hash"] },
+          "properties": {
+            "result_schema_version": { "const": "1.0-environment" },
+            "run_type": { "const": "environment" },
+            "config": {
+              "type": "object",
+              "required": ["script", "environment", "world_firmware_hash", "nodes"],
+              "properties": {
+                "script": { "type": "string" },
+                "environment": { "type": "string" },
+                "world_firmware_hash": { "type": "string" },
+                "nodes": {
+                  "type": "array",
+                  "items": { "$ref": "#/$defs/environment_node" }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]
 }
 ```
 
+The single-machine arm has the top-level `firmware_hash` and a
+`config.firmware/system/script` provenance object. The environment arm has no
+top-level `firmware_hash`: it identifies the world with
+`config.world_firmware_hash` and records each node's `id`, `system`,
+`firmware`, `system_hash`, and `firmware_hash`. A world config error still
+uses the environment arm; its `nodes` list can be empty when the manifest
+could not be resolved. That includes rejected `config_overrides`, a non-Arm
+system/chip or firmware ELF outside the current Cortex-M-only world boundary,
+and invalid interconnect membership; these produce `status: "error"` with
+`stop_reason: "config_error"` without changing the result-union arm.
+
 ## CI release runners
 
-Use the pinned v0.18.0 release runner in CI. It runs the same labwired test
+Use the pinned v0.19.0 release runner in CI. It runs the same `labwired test`
 command described above and writes the same artifact contract.
 
 ### GitHub Actions
 
-Use the public Core action and pin the Core CLI with its version input:
+Use the public Core action and pin the Core CLI with its version input. Its
+only inputs are required `script`, optional `version` (default
+`v0.19.0`), `output-dir`, and `args`:
 
 ~~~yaml
 - id: labwired
   name: Run LabWired tests
-  uses: w1ne/labwired-core/.github/actions/labwired-test@3a13349ad6c4f65b4fa19276f576bc3086b219e6
+  uses: w1ne/labwired-core/.github/actions/labwired-test@c6f8c68f0bd8e14b0f7fc04a647f7609b17fdc0f
   with:
-    version: v0.18.0
+    version: v0.19.0
     script: examples/ci/dummy-max-steps.yaml
     output-dir: out/artifacts
     args: --no-uart-stdout
@@ -334,21 +388,23 @@ Use the public Core action and pin the Core CLI with its version input:
 ~~~
 
 The Core action is an immutable action-source pin to
-`3a13349ad6c4f65b4fa19276f576bc3086b219e6`; `version: v0.18.0` independently
-pins the immutable Core CLI release. The action automatically appends its
-Markdown report to the job summary and uploads the output directory plus the
-configured JUnit file, even
-after a failed test. Its `status`, `summary-md`, `report-html`, `artifact-url`,
-and `exit-code` outputs are available through the `labwired` step ID.
+`c6f8c68f0bd8e14b0f7fc04a647f7609b17fdc0f`; `version: v0.19.0` independently
+pins the immutable Core CLI release. It downloads that public release archive
+with `curl`, creates `output-dir/junit.xml` plus Markdown and HTML reports,
+appends the Markdown report to the job summary, and always uploads the entire
+output directory—even after a failed test. Its `status`, `summary-md`,
+`report-html`, `artifact-url`, and `exit-code` outputs are available through
+the `labwired` step ID.
 
 ### Docker and GitLab runners
 
 The GHCR image has labwired as its entrypoint. For Docker, pass test directly
-after the pinned image name:
+after the pinned image name. Docker and the Action accept the same test YAML:
+use either a single-machine script or an `inputs.env` world script.
 
 ~~~bash
 docker run --rm -v "$PWD:/workspace" -w /workspace \
-  ghcr.io/w1ne/labwired:v0.18.0 \
+  ghcr.io/w1ne/labwired:v0.19.0 \
   test --script examples/ci/dummy-max-steps.yaml \
        --output-dir out/artifacts \
        --no-uart-stdout
@@ -358,7 +414,7 @@ GitLab should clear that entrypoint and invoke labwired from its job shell:
 
 ~~~yaml
 image:
-  name: ghcr.io/w1ne/labwired:v0.18.0
+  name: ghcr.io/w1ne/labwired:v0.19.0
   entrypoint: [""]
 script:
   - labwired test --script examples/ci/dummy-max-steps.yaml --output-dir out/artifacts --no-uart-stdout

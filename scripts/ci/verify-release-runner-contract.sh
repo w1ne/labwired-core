@@ -194,6 +194,26 @@ if [[ -f "$dockerignore" ]]; then
 fi
 
 require_literal "$action" 'default: "v0.19.0"' 'core action defaults to the supported public release'
+action_inputs=$(awk '
+  /^inputs:$/ { inside = 1; next }
+  inside && /^[^[:space:]]/ { exit }
+  inside && /^  [[:alnum:]][[:alnum:]-]*:$/ {
+    key = $1
+    sub(/:$/, "", key)
+    print key
+  }
+' "$action" | sort)
+if [[ "$action_inputs" != $'args\noutput-dir\nscript\nversion' ]]; then
+  fail 'core action exposes exactly script, version, output-dir, and args inputs'
+fi
+if ! awk '
+  /^  script:$/ { inside = 1; next }
+  inside && /^  [[:alnum:]][[:alnum:]-]*:$/ { exit }
+  inside && /^    required: true$/ { found = 1 }
+  END { exit !found }
+' "$action"; then
+  fail 'core action requires the script input'
+fi
 require_literal "$action" 'https://github.com/w1ne/labwired-core/releases/download/${version}/${asset}' 'core action downloads the fixed public Core release archive'
 require_literal "$action" 'curl --fail --location --retry 3 --retry-delay 2 --output "$archive" "$url"' 'core action downloads archives with curl'
 require_literal "$action" 'version must be a vMAJOR.MINOR.PATCH release tag.' 'core action requires an immutable release version'
@@ -269,6 +289,9 @@ require_literal "$renderer_test" 'test_omitted_assertion_failure_is_included_in_
 require_literal "$renderer_test" 'test_config_error_message_is_safely_rendered' 'renderer tests config-error diagnostics escaping'
 require_literal "$renderer_test" 'test_large_script_hashes_without_reading_the_whole_file' 'renderer tests streamed script hashing'
 require_literal "$renderer_test" 'test_markdown_summary_cap_is_bounded_and_marked' 'renderer tests job-summary caps'
+require_literal "$renderer_test" 'test_renders_environment_result_without_single_machine_provenance' 'renderer tests the environment result union arm'
+require_literal "$renderer_test" '"result_schema_version": "1.0-environment"' 'renderer environment fixture uses the environment result schema'
+require_literal "$renderer_test" '"run_type": "environment"' 'renderer environment fixture distinguishes the environment run type'
 
 require_literal "$environment_smoke_script" 'inputs:' 'release smoke fixture declares inputs'
 require_literal "$environment_smoke_script" 'env: "two-node-env.yaml"' 'release smoke fixture selects the two-node environment through inputs.env'
@@ -297,25 +320,30 @@ require_literal "$backfill_workflow" 'examples/ci/dummy-max-steps.yaml' 'runner 
 require_literal RELEASE_PROCESS.md 'core-backfill-runner-image.yml' 'release process documents the one-time runner image backfill workflow'
 require_literal RELEASE_PROCESS.md 'v0.18.0' 'release process documents the initial v0.18.0 runner image backfill'
 
-safe_action_sha=3a13349ad6c4f65b4fa19276f576bc3086b219e6
+safe_action_sha=c6f8c68f0bd8e14b0f7fc04a647f7609b17fdc0f
+safe_action_version=v0.19.0
 safe_action_ref="w1ne/labwired-core/.github/actions/labwired-test@${safe_action_sha}"
-for doc in docs/ci_integration.md docs/ci_test_runner.md docs/integration-templates/github-actions.yml docs/integration-templates/gitlab-ci.yml docs/integration-templates/README.md; do
+for doc in docs/ci_integration.md docs/ci_test_runner.md docs/integration-templates/github-actions.yml docs/integration-templates/gitlab-ci.yml docs/integration-templates/README.md docs/reference_client_flows.md .github/actions/labwired-test/README.md; do
   require_absent_literal "$doc" 'ghcr.io/w1ne/labwired:latest' "$doc does not recommend a mutable runner image tag"
   require_absent_literal "$doc" 'w1ne/labwired/.github/actions/labwired-test@main' "$doc does not point public users at the private root action"
+  require_absent_literal "$doc" '3a13349ad6c4f65b4fa19276f576bc3086b219e6' "$doc does not retain the superseded public action pin"
+  require_absent_literal "$doc" 'version: v0.18.0' "$doc does not retain the superseded Core release version"
 done
-for doc in .github/actions/labwired-test/README.md docs/ci_integration.md docs/ci_test_runner.md docs/integration-templates/github-actions.yml docs/integration-templates/README.md; do
+for doc in .github/actions/labwired-test/README.md docs/ci_integration.md docs/ci_test_runner.md docs/integration-templates/github-actions.yml docs/integration-templates/README.md docs/reference_client_flows.md; do
   require_absent_literal "$doc" 'w1ne/labwired-core/.github/actions/labwired-test@main' "$doc does not use a mutable public Core action ref"
+  require_absent_literal "$doc" 'labwired/setup-action@v1' "$doc does not use the obsolete setup action"
   require_literal "$doc" "$safe_action_ref" "$doc uses the immutable public Core action ref"
   require_literal "$doc" 'immutable action-source pin' "$doc explains the immutable action source pin"
+  require_literal "$doc" "version: $safe_action_version" "$doc pins the Core CLI release independently of the action source"
 done
 require_literal docs/ci_integration.md "$safe_action_ref" 'CI guide uses the immutable public Core GitHub action'
-require_literal docs/ci_integration.md 'version: v0.18.0' 'CI guide pins the CLI release independently of the public action ref'
+require_literal docs/ci_integration.md "version: $safe_action_version" 'CI guide pins the CLI release independently of the public action ref'
 require_literal docs/ci_integration.md 'output-dir: out/labwired' 'CI guide uses the Core action artifact input spelling'
 require_literal docs/ci_integration.md 'steps.labwired.outputs.artifact-url' 'CI guide shows how to consume the automatic artifact URL'
 require_literal docs/ci_integration.md 'if: always()' 'CI guide links the automatic artifact after failed tests'
 require_absent_literal docs/ci_integration.md 'uses: actions/upload-artifact@v4' 'CI guide does not duplicate the action artifact upload'
 require_literal docs/integration-templates/github-actions.yml "$safe_action_ref" 'GitHub template uses the immutable public Core action'
-require_literal docs/integration-templates/github-actions.yml 'version: v0.18.0' 'GitHub template pins the CLI release independently of the public action ref'
+require_literal docs/integration-templates/github-actions.yml "version: $safe_action_version" 'GitHub template pins the CLI release independently of the public action ref'
 require_literal docs/integration-templates/github-actions.yml 'output-dir: out/labwired' 'GitHub template uses the Core action artifact input spelling'
 require_literal docs/integration-templates/github-actions.yml 'steps.labwired.outputs.artifact-url' 'GitHub template shows how to consume the automatic artifact URL'
 require_literal docs/integration-templates/github-actions.yml 'if: always()' 'GitHub template links the automatic artifact after failed tests'
@@ -323,13 +351,35 @@ require_absent_literal docs/integration-templates/github-actions.yml 'uses: acti
 require_literal docs/ci_test_runner.md 'steps.labwired.outputs.artifact-url' 'runner guide shows how to consume the automatic artifact URL'
 require_literal docs/ci_test_runner.md 'if: always()' 'runner guide links the automatic artifact after failed tests'
 require_absent_literal docs/ci_test_runner.md 'uses: actions/upload-artifact@v4' 'runner guide does not duplicate the action artifact upload'
-require_literal docs/integration-templates/gitlab-ci.yml 'name: ghcr.io/w1ne/labwired:v0.18.0' 'GitLab template uses the pinned runner image'
+require_literal docs/integration-templates/gitlab-ci.yml "name: ghcr.io/w1ne/labwired:$safe_action_version" 'GitLab template uses the pinned runner image'
 require_literal docs/integration-templates/gitlab-ci.yml 'entrypoint: [""]' 'GitLab template clears the image entrypoint before invoking labwired'
 require_literal .github/actions/labwired-test/README.md "$safe_action_ref" 'core action README directs users to the immutable public Core action'
-require_literal .github/actions/labwired-test/README.md 'version: v0.18.0' 'core action README pins the immutable CLI release separately from action source'
+require_literal .github/actions/labwired-test/README.md "version: $safe_action_version" 'core action README pins the immutable CLI release separately from action source'
 require_literal .github/actions/labwired-test/README.md 'output-dir: out/labwired' 'core action README uses the Core action artifact input spelling'
 require_literal .github/actions/labwired-test/README.md 'steps.labwired.outputs.artifact-url' 'core action README documents the automatic artifact output'
 require_literal .github/actions/labwired-test/README.md 'if: always()' 'core action README links the automatic artifact after failed tests'
+require_literal docs/ci_test_runner.md 'oneOf' 'runner guide documents the single-machine/environment result union'
+require_literal docs/ci_test_runner.md '"1.0-environment"' 'runner guide documents the environment result schema version'
+require_literal docs/ci_test_runner.md '"run_type"' 'runner guide documents the environment run discriminator'
+require_literal docs/ci_test_runner.md 'world_firmware_hash' 'runner guide documents world provenance'
+require_literal docs/ci_test_runner.md 'inputs.env' 'runner guide documents environment test inputs'
+require_literal docs/ci_test_runner.md 'config.peripheral' 'runner guide documents the CAN-bus peripheral requirement'
+require_literal docs/ci_test_runner.md 'Cortex-M-only' 'runner guide documents the current world architecture boundary'
+require_literal docs/ci_test_runner.md 'firmware ELF must be ARM/Cortex-M' 'runner guide documents that the Cortex-M boundary covers both node inputs'
+require_literal docs/ci_test_runner.md 'config_overrides' 'runner guide documents that per-node overrides are rejected'
+require_literal docs/ci_test_runner.md 'uart_cross_link' 'runner guide documents UART cross-link membership validation'
+require_literal docs/ci_test_runner.md 'egress' 'runner guide documents egress membership validation'
+require_literal docs/simulation_protocol.md 'schema_version: "1.0"' 'simulation protocol documents the released environment schema'
+require_literal docs/simulation_protocol.md 'world_firmware_hash' 'simulation protocol documents environment provenance'
+require_literal docs/simulation_protocol.md 'config.peripheral' 'simulation protocol documents the CAN-bus peripheral requirement'
+require_literal docs/simulation_protocol.md 'Cortex-M-only' 'simulation protocol documents the current world architecture boundary'
+require_literal docs/simulation_protocol.md 'firmware ELF must be ARM/Cortex-M' 'simulation protocol documents that the Cortex-M boundary covers both node inputs'
+require_literal docs/simulation_protocol.md 'config_overrides' 'simulation protocol documents that per-node overrides are rejected'
+require_literal docs/simulation_protocol.md 'uart_cross_link' 'simulation protocol documents UART cross-link membership validation'
+require_literal docs/simulation_protocol.md 'egress' 'simulation protocol documents egress membership validation'
+require_absent_literal docs/simulation_protocol.md 'Future v1.1' 'simulation protocol does not label released environments as future work'
+require_literal README.md 'LABWIRED_VERSION=v0.19.0' 'public README pins the current release version'
+require_absent_literal README.md 'LABWIRED_VERSION=v0.18.0' 'public README does not retain the superseded release version'
 
 if (( failures > 0 )); then
   printf 'Release runner contract failed with %d issue(s).\n' "$failures" >&2

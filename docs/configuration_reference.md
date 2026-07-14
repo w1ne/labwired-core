@@ -76,6 +76,14 @@ connectors:
     endpoint: "host_console"  # Pipes UART output to simulator stdout
 ```
 
+For an `inputs.env` CI world, each `nodes[].system` value points to this
+same System Manifest format used by the Playground. The environment manifest
+adds node IDs, firmware paths, and explicit interconnects; it does not create a
+second board-configuration dialect. v0.19 world manifests reject
+`nodes[].config_overrides`; each node's system/chip and firmware ELF must be
+ARM/Cortex-M. See the [CI Test Runner](ci_test_runner.md) for the world-test
+schema.
+
 ## 4. CLI Usage
 
 To run a simulation, provide both the firmware and the system manifest:
