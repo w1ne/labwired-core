@@ -53,6 +53,12 @@ wasmtime = { version = "45", optional = true, default-features = false, features
 
 [features]
 default = []
+# ESP32 WiFi/lwIP functional-outcome thunks (`peripherals::esp32s3::wifi_thunks`
+# — canned WL_CONNECTED + simulated sockets). Off by default and NOT in the CI
+# feature set (`jit,event-scheduler`), so this fake WiFi state can never compile
+# into a production/run build; only the `e2e_labwired_wifi` bring-up harness
+# opts in. Run its tests with `--features wifi-thunks`.
+wifi-thunks = []
 # Egress-bridge transport tests that open real localhost sockets (TCP/MQTT/HTTP).
 # Off by default so the standard gate stays hermetic; run with
 # `cargo test -p labwired-core --features net-tests`.

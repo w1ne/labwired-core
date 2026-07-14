@@ -281,13 +281,12 @@ pub struct SnapshotCaptureArgs {
     #[arg(long)]
     pub system: Option<PathBuf>,
 
-    /// Firmware profile to use. Currently only `agentdeck` is supported —
-    /// installs the Arduino-ESP32 / ESP32-classic bootstrap (heap-caps
-    /// thunks, dual-core handshake fakery, IPI bridge, image header,
-    /// SSD1680 tri-color panel attached to spi3 / GPIO5). Each Arduino-ESP32
-    /// firmware has a different set of thunk PCs, so the profile name maps
-    /// to a hand-curated address list inside the binary.
-    #[arg(long, default_value = "agentdeck")]
+    /// Firmware profile to use. Only `arduino-esp32` is supported — installs
+    /// the Arduino-ESP32 / ESP32-classic bootstrap (heap-caps thunks, dual-core
+    /// handshake, IPI bridge, image header) with thunk PCs resolved from the
+    /// ELF symbol table (no hand-curated per-firmware address list). External
+    /// peripherals come from the `--system` board manifest.
+    #[arg(long, default_value = "arduino-esp32")]
     pub profile: String,
 
     /// Print a progress line every N steps. 0 = silent.

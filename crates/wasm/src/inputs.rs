@@ -125,8 +125,12 @@ impl WasmSimulator {
     }
 
     /// Read back the current sensor data from each I2C sensor declared in `board_io`.
-    /// Returns `[{ id, kind: "adxl345", x, y, z }, ...]` or `[{ id, kind: "mpu6050", ax, ay, az, gx, gy, gz }, ...]`
-    /// or `[{ id, kind: "bme280", temperature_c, humidity_pct, pressure_hpa }, ...]`.
+    /// Returns `[{ id, kind: "adxl345", x, y, z }, ...]` or `[{ id, kind: "mpu6050", ax, ay, az, gx, gy, gz }, ...]`.
+    ///
+    /// BME280 is intentionally OMITTED: its component model exposes no
+    /// register-backed temperature/humidity/pressure value to read (static
+    /// factory registers only, not SimInput-drivable). Rather than fabricate a
+    /// number, we emit no entry so the panel shows a tracked gap.
     #[wasm_bindgen]
     pub fn get_i2c_sensor_states(&self) -> JsValue {
         let machine = self.machine.as_ref().unwrap();
@@ -134,7 +138,7 @@ impl WasmSimulator {
 
         for binding in &self.board_io {
             let device_type = match binding.device_type.as_deref() {
-                Some(t) if t == "adxl345" || t == "mpu6050" || t == "bme280" => t,
+                Some(t) if t == "adxl345" || t == "mpu6050" => t,
                 _ => continue,
             };
             let Some(idx) = machine
@@ -191,31 +195,6 @@ impl WasmSimulator {
                             "gx": gx,
                             "gy": gy,
                             "gz": gz,
-                        }));
-                        break;
-                    }
-                }
-            } else if device_type == "bme280" {
-                // Static values: hard-coded factory calibration produces ~25°C / 50%RH / 1013hPa
-                let address = binding.i2c_address.unwrap_or(0x76);
-                for device in i2c.attached_devices() {
-                    let device = device.borrow();
-                    if device.address() != address {
-                        continue;
-                    }
-                    if device
-                        .as_any()
-                        .and_then(|any| {
-                            any.downcast_ref::<labwired_core::peripherals::components::Bme280>()
-                        })
-                        .is_some()
-                    {
-                        states.push(serde_json::json!({
-                            "id": binding.id,
-                            "kind": "bme280",
-                            "temperature_c": 25.0_f64,
-                            "humidity_pct": 50.0_f64,
-                            "pressure_hpa": 1013.0_f64,
                         }));
                         break;
                     }
