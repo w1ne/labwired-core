@@ -178,9 +178,9 @@ bad_field: 123
 }
 
 #[test]
-fn test_env_script_reports_unavailable_runner_as_config_error() {
+fn test_env_script_missing_environment_reports_environment_shaped_config_error() {
     let script = write_temp_file(
-        "script-env-runner-unavailable",
+        "script-env-missing-manifest",
         r#"
 schema_version: "1.0"
 inputs:
@@ -226,14 +226,21 @@ assertions:
     assert!(result["message"]
         .as_str()
         .unwrap_or_default()
-        .contains("environment test scripts"));
+        .contains("failed to load environment"));
+    assert!(result["config"].get("firmware").is_none());
+    assert!(result["config"]["environment"]
+        .as_str()
+        .unwrap_or_default()
+        .ends_with("twonode-env.yaml"));
 
     let snapshot: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(output_dir.join("snapshot.json")).unwrap())
             .unwrap();
-    assert_eq!(snapshot["type"], "config_error");
+    assert_eq!(snapshot["type"], "environment");
+    assert_eq!(snapshot["status"], "error");
     assert!(output_dir.join("uart.log").is_file());
-    assert!(output_dir.join("junit.xml").is_file());
+    let junit = std::fs::read_to_string(output_dir.join("junit.xml")).unwrap();
+    assert!(junit.contains("config error"));
 
     let _ = std::fs::remove_dir_all(&output_dir);
 }

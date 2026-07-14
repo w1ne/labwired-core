@@ -33,6 +33,22 @@ pub trait MachineTrait: Send {
         uart_id: &str,
         dev: Box<dyn crate::peripherals::uart::UartStreamDevice>,
     ) -> anyhow::Result<()>;
+    /// Attach a per-node UART capture sink. The default is intentionally a
+    /// no-op so existing third-party/mock `MachineTrait` implementations stay
+    /// source-compatible; real [`Machine`] instances wire every console UART.
+    fn attach_uart_tx_sink(
+        &mut self,
+        _sink: std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
+        _echo_stdout: bool,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+    /// Return a final machine snapshot for a world artifact. Mocks that do not
+    /// model state may retain the default `None`; concrete machines provide the
+    /// complete snapshot.
+    fn snapshot(&self) -> Option<crate::snapshot::MachineSnapshot> {
+        None
+    }
     /// Attach one endpoint of a `CanBus` to a named FDCAN peripheral. The
     /// default keeps third-party mock machines source-compatible while making
     /// an unsupported topology error explicit.
@@ -81,6 +97,19 @@ impl<C: Cpu + 'static> MachineTrait for Machine<C> {
         dev: Box<dyn crate::peripherals::uart::UartStreamDevice>,
     ) -> anyhow::Result<()> {
         self.bus.attach_uart_stream_by_id(uart_id, dev)
+    }
+
+    fn attach_uart_tx_sink(
+        &mut self,
+        sink: std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
+        echo_stdout: bool,
+    ) -> anyhow::Result<()> {
+        self.bus.attach_uart_tx_sink(sink, echo_stdout);
+        Ok(())
+    }
+
+    fn snapshot(&self) -> Option<crate::snapshot::MachineSnapshot> {
+        Some(Machine::snapshot(self))
     }
 
     fn attach_can_bus(

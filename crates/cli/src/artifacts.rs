@@ -83,6 +83,57 @@ pub(crate) struct TestConfig {
     pub(crate) script: PathBuf,
 }
 
+/// Resolved provenance for one node in an environment run. This is deliberately
+/// not folded into [`TestConfig`]: a multi-node world has no meaningful single
+/// `firmware` field, and emitting one would make a report look like a
+/// single-machine result.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub(crate) struct EnvironmentNodeProvenance {
+    pub(crate) id: String,
+    pub(crate) system: PathBuf,
+    pub(crate) firmware: PathBuf,
+    pub(crate) system_hash: String,
+    pub(crate) firmware_hash: String,
+}
+
+/// Provenance for a multi-node environment run.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub(crate) struct EnvironmentConfig {
+    pub(crate) script: PathBuf,
+    pub(crate) environment: PathBuf,
+    /// Sorted lexically by `id`, independent of manifest declaration order.
+    pub(crate) nodes: Vec<EnvironmentNodeProvenance>,
+}
+
+/// Report-compatible result for a multi-node environment run.
+///
+/// The outer fields deliberately match [`TestResult`] so the released Action
+/// report renderer has one stable result contract. The config shape is explicit
+/// and environment-specific rather than pretending a world has one firmware.
+#[derive(Debug, Serialize, Deserialize)]
+pub(crate) struct EnvironmentTestResult {
+    pub(crate) result_schema_version: String,
+    pub(crate) status: String,
+    pub(crate) steps_executed: u64,
+    pub(crate) cycles: u64,
+    pub(crate) instructions: u64,
+    pub(crate) stop_reason: StopReason,
+    pub(crate) stop_reason_details: StopReasonDetails,
+    pub(crate) limits: TestLimits,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) message: Option<String>,
+    pub(crate) assertions: Vec<AssertionResult>,
+    pub(crate) config: EnvironmentConfig,
+}
+
+/// One final machine state in an environment snapshot.
+#[derive(Debug, Serialize, Deserialize)]
+pub(crate) struct EnvironmentNodeSnapshot {
+    pub(crate) id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) state: Option<labwired_core::snapshot::MachineSnapshot>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct PeripheralSnapshot {
     pub(crate) name: String,
@@ -120,6 +171,22 @@ pub(crate) enum Snapshot {
         stop_reason_details: StopReasonDetails,
         limits: TestLimits,
         config: TestConfig,
+    },
+    /// Multi-node state, used for both completed environment runs and their
+    /// configuration failures. A config error before a world can be built has
+    /// an empty `nodes` vector, but still carries environment-shaped provenance.
+    Environment {
+        status: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        message: Option<String>,
+        steps_executed: u64,
+        cycles: u64,
+        instructions: u64,
+        stop_reason: StopReason,
+        stop_reason_details: StopReasonDetails,
+        limits: TestLimits,
+        config: EnvironmentConfig,
+        nodes: Vec<EnvironmentNodeSnapshot>,
     },
     Interactive {
         snapshot_schema_version: String,

@@ -85,6 +85,9 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
         Err(e) => {
             let msg = format!("{:#}", e);
             error!("{}", msg);
+            if super::environment_test::try_write_load_error_outputs(&args, msg.clone()) {
+                return ExitCode::from(EXIT_CONFIG_ERROR);
+            }
             write_config_error_outputs(&args, None, args.system.as_ref(), None, None, msg);
             return ExitCode::from(EXIT_CONFIG_ERROR);
         }
@@ -147,20 +150,7 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
             )
         }
         LoadedTestScript::Env(script) => {
-            let msg = format!(
-                "environment test scripts are recognized, but multi-node execution is not available in this LabWired build (inputs.env: {:?})",
-                script.inputs.env
-            );
-            error!("{}", msg);
-            write_config_error_outputs(
-                &args,
-                None,
-                args.system.as_ref(),
-                None,
-                Some(&script.limits),
-                msg,
-            );
-            return ExitCode::from(EXIT_CONFIG_ERROR);
+            return super::environment_test::run_environment_test(&args, script);
         }
     };
 
