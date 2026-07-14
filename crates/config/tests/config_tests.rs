@@ -67,3 +67,22 @@ fn memory_value_details_constructor_is_externally_constructible_and_sparse() {
         "ordinary node-less details should stay sparse: {serialized}"
     );
 }
+
+#[test]
+fn memory_value_details_public_fields_remain_struct_literal_constructible() {
+    // This is compiled as a downstream crate. Keep the public struct shape
+    // usable by callers that construct a memory assertion directly.
+    let details = MemoryValueDetails {
+        address: 0x2001_0000,
+        expected_value: 1,
+        mask: None,
+        size: None,
+        node: None,
+    };
+
+    let serialized = serde_yaml::to_string(&details).unwrap();
+    assert!(
+        !serialized.contains("node:"),
+        "ordinary node-less details should stay sparse: {serialized}"
+    );
+}

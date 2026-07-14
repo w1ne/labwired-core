@@ -168,21 +168,22 @@ jobs:
             --workdir /workspace \
             "ghcr.io/w1ne/labwired:${{ github.ref_name }}" \
             test \
-            --script examples/ci/dummy-max-steps.yaml \
+            --script examples/ci/two-node-inputs-env.yaml \
             --output-dir out/release-runner-smoke \
             --no-uart-stdout
           test -s out/release-runner-smoke/result.json
+          test -s out/release-runner-smoke/junit.xml
 
       - name: Run the release archive through the core action
         uses: ./.github/actions/labwired-test
         with:
           version: ${{ github.ref_name }}
-          github-token: ${{ github.token }}
-          script: examples/ci/dummy-max-steps.yaml
+          script: examples/ci/two-node-inputs-env.yaml
           output-dir: out/release-action-smoke
           args: --no-uart-stdout
-          upload-artifacts: 'false'
 
       - name: Verify core action artifacts
         shell: bash
-        run: test -s out/release-action-smoke/result.json
+        run: |
+          test -s out/release-action-smoke/result.json
+          test -s out/release-action-smoke/junit.xml

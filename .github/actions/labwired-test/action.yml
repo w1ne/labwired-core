@@ -9,33 +9,17 @@ inputs:
     description: "Path to the LabWired test script (YAML)."
     required: true
   version:
-    description: "LabWired release tag to use, or 'latest'."
+    description: "Immutable LabWired Core release tag to install."
     required: false
-    default: "v0.18.0"
-  repo:
-    description: "Repository that publishes the LabWired releases."
+    default: "v0.19.0"
+  output-dir:
+    description: "Directory for run artifacts (result.json, uart.log, junit.xml, and reports)."
     required: false
-    default: "w1ne/labwired-core"
+    default: "labwired-artifacts"
   args:
     description: "Whitespace-separated extra flags appended to `labwired test` (shell quoting is not interpreted)."
     required: false
     default: ""
-  junit:
-    description: "Path to write a JUnit XML report."
-    required: false
-    default: "labwired-junit.xml"
-  output-dir:
-    description: "Directory for run artifacts (result.json, uart.log)."
-    required: false
-    default: "labwired-artifacts"
-  upload-artifacts:
-    description: "Upload the output dir + JUnit report as a workflow artifact."
-    required: false
-    default: "true"
-  github-token:
-    description: "Token used to download the release (defaults to the job token)."
-    required: false
-    default: ${{ github.token }}
 
 outputs:
   status:
@@ -61,22 +45,12 @@ runs:
       id: install
       shell: bash
       env:
-        GH_TOKEN: ${{ inputs.github-token }}
         LABWIRED_VERSION: ${{ inputs.version }}
-        LABWIRED_REPO: ${{ inputs.repo }}
       run: |
         set -euo pipefail
-        ver="$LABWIRED_VERSION"
-        repo="$LABWIRED_REPO"
-        if ! [[ "$repo" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]]; then
-          echo "::error::repo must use the owner/name form."
-          exit 1
-        fi
-        if [ "$ver" = "latest" ]; then
-          ver="$(gh release view --repo "$repo" --json tagName -q .tagName)"
-        fi
-        if ! [[ "$ver" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-          echo "::error::version must be a vMAJOR.MINOR.PATCH release tag or latest."
+        version="$LABWIRED_VERSION"
+        if ! [[ "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "::error::version must be a vMAJOR.MINOR.PATCH release tag."
           exit 1
         fi
         case "$(uname -s)-$(uname -m)" in
@@ -86,14 +60,16 @@ runs:
           Darwin-arm64)            plat=darwin-aarch64 ;;
           *) echo "::error::unsupported runner $(uname -s)-$(uname -m)"; exit 1 ;;
         esac
-        asset="labwired-${ver}-${plat}.tar.gz"
+        asset="labwired-${version}-${plat}.tar.gz"
         dir="$RUNNER_TEMP/labwired"
+        archive="$dir/$asset"
+        url="https://github.com/w1ne/labwired-core/releases/download/${version}/${asset}"
         mkdir -p "$dir"
-        echo "Downloading ${asset} from ${repo}@${ver}"
-        gh release download "$ver" --repo "$repo" --pattern "$asset" --dir "$dir"
-        tar -xzf "$dir/$asset" -C "$dir"
+        echo "Downloading ${asset} from the public LabWired Core release"
+        curl --fail --location --retry 3 --retry-delay 2 --output "$archive" "$url"
+        tar -xzf "$archive" -C "$dir"
         chmod +x "$dir/labwired"
-        echo "release_version=$ver" >> "$GITHUB_OUTPUT"
+        echo "release_version=$version" >> "$GITHUB_OUTPUT"
         echo "$dir" >> "$GITHUB_PATH"
 
     - name: Run LabWired test
@@ -101,15 +77,15 @@ runs:
       shell: bash
       env:
         LABWIRED_SCRIPT: ${{ inputs.script }}
-        LABWIRED_JUNIT: ${{ inputs.junit }}
         LABWIRED_OUTPUT_DIR: ${{ inputs.output-dir }}
         LABWIRED_ARGS: ${{ inputs.args }}
       run: |
         set -euo pipefail
+        mkdir -p "$LABWIRED_OUTPUT_DIR"
         command=(labwired test
           --script "$LABWIRED_SCRIPT"
-          --junit "$LABWIRED_JUNIT"
-          --output-dir "$LABWIRED_OUTPUT_DIR")
+          --output-dir "$LABWIRED_OUTPUT_DIR"
+          --junit "$LABWIRED_OUTPUT_DIR/junit.xml")
         if [ -n "$LABWIRED_ARGS" ]; then
           read -r -a extra_args <<< "$LABWIRED_ARGS"
           command+=("${extra_args[@]}")
@@ -146,14 +122,12 @@ runs:
 
     - name: Upload artifacts
       id: upload
-      if: ${{ always() && inputs.upload-artifacts == 'true' }}
+      if: ${{ always() }}
       uses: actions/upload-artifact@v4
       with:
         name: labwired-${{ github.job }}-${{ github.run_id }}
-        path: |
-          ${{ inputs.output-dir }}
-          ${{ inputs.junit }}
-        if-no-files-found: ignore
+        path: ${{ inputs.output-dir }}
+        if-no-files-found: error
 
     - name: Propagate LabWired exit code
       if: ${{ always() }}

@@ -193,6 +193,9 @@ impl World {
     ) -> anyhow::Result<Self> {
         use anyhow::Context;
 
+        manifest
+            .validate()
+            .context("invalid environment manifest")?;
         let mut world = World::new(manifest.name.clone());
 
         for node in &manifest.nodes {

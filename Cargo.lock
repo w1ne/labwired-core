@@ -978,7 +978,7 @@ checksum = "5baebc0774151f905a1a2cc41989300b1e6fbb29aff0ceffa1064fdd3088d582"
 
 [[package]]
 name = "firmware"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
@@ -987,7 +987,7 @@ dependencies = [
 
 [[package]]
 name = "firmware-ci-fixture"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "cortex-m",
  "panic-halt",
@@ -1021,56 +1021,56 @@ version = "0.1.0"
 
 [[package]]
 name = "firmware-f103-i2c-demo"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "panic-halt",
 ]
 
 [[package]]
 name = "firmware-f401-demo"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "panic-halt",
 ]
 
 [[package]]
 name = "firmware-f401cdu6-blackpill-demo"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "panic-halt",
 ]
 
 [[package]]
 name = "firmware-f407-demo"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "panic-halt",
 ]
 
 [[package]]
 name = "firmware-h563-demo"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "panic-halt",
 ]
 
 [[package]]
 name = "firmware-h563-fullchip-demo"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "panic-halt",
 ]
 
 [[package]]
 name = "firmware-h563-io-demo"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "panic-halt",
 ]
 
 [[package]]
 name = "firmware-hil-showcase"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "panic-halt",
 ]
@@ -1102,7 +1102,7 @@ dependencies = [
 
 [[package]]
 name = "firmware-l476-demo"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "panic-halt",
 ]
@@ -1717,7 +1717,7 @@ checksum = "a4933f3f57a8e9d9da04db23fb153356ecaf00cbd14aee46279c33dc80925c37"
 
 [[package]]
 name = "labwired-cli"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -1743,7 +1743,7 @@ dependencies = [
 
 [[package]]
 name = "labwired-codegen"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "anyhow",
  "labwired-ir",
@@ -1754,7 +1754,7 @@ dependencies = [
 
 [[package]]
 name = "labwired-config"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "anyhow",
  "human-size",
@@ -1769,7 +1769,7 @@ dependencies = [
 
 [[package]]
 name = "labwired-core"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "anyhow",
  "bincode 1.3.3",
@@ -1797,7 +1797,7 @@ dependencies = [
 
 [[package]]
 name = "labwired-dap"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "anyhow",
  "base64 0.21.7",
@@ -1815,7 +1815,7 @@ dependencies = [
 
 [[package]]
 name = "labwired-egress-relay"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "anyhow",
  "labwired-core",
@@ -1827,7 +1827,7 @@ dependencies = [
 
 [[package]]
 name = "labwired-fuzz"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "anyhow",
  "labwired-config",
@@ -1839,7 +1839,7 @@ dependencies = [
 
 [[package]]
 name = "labwired-gdbstub"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "anyhow",
  "gdbstub",
@@ -1853,7 +1853,7 @@ dependencies = [
 
 [[package]]
 name = "labwired-hw-oracle"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -1873,7 +1873,7 @@ dependencies = [
 
 [[package]]
 name = "labwired-hw-oracle-macros"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "labwired-hw-oracle",
  "proc-macro2",
@@ -1884,11 +1884,11 @@ dependencies = [
 
 [[package]]
 name = "labwired-hw-runner"
-version = "0.18.0"
+version = "0.19.0"
 
 [[package]]
 name = "labwired-hw-trace"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -1896,7 +1896,7 @@ dependencies = [
 
 [[package]]
 name = "labwired-ir"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -1907,7 +1907,7 @@ dependencies = [
 
 [[package]]
 name = "labwired-loader"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "addr2line 0.21.0",
  "anyhow",
@@ -1920,7 +1920,7 @@ dependencies = [
 
 [[package]]
 name = "labwired-python"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "anyhow",
  "labwired-config",
@@ -1933,7 +1933,7 @@ dependencies = [
 
 [[package]]
 name = "labwired-wasm"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "anyhow",
  "cortex-m",
@@ -2954,7 +2954,7 @@ dependencies = [
 
 [[package]]
 name = "riscv-ci-fixture"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "panic-halt",
  "riscv 0.10.1",
@@ -3385,7 +3385,7 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
 name = "svd-ingestor"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "anyhow",
  "assert_cmd",

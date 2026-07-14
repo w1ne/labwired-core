@@ -6,7 +6,7 @@
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 /// Canonical device config v1 — the single JSON shape the agent builds and both
@@ -261,6 +261,7 @@ pub struct SystemManifest {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct NodeConfig {
     pub id: String,
     pub system: String,   // Path to SystemManifest
@@ -270,6 +271,7 @@ pub struct NodeConfig {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct EnvironmentManifest {
     #[serde(default = "default_schema_version")]
     pub schema_version: String,
@@ -280,6 +282,7 @@ pub struct EnvironmentManifest {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct InterconnectConfig {
     pub r#type: String,     // "uart_cross_link", "virtual_switch", etc.
     pub nodes: Vec<String>, // List of node IDs
@@ -290,7 +293,48 @@ pub struct InterconnectConfig {
 impl EnvironmentManifest {
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let f = std::fs::File::open(path)?;
-        serde_yaml::from_reader(f).context("Failed to parse Environment Manifest")
+        let manifest: Self =
+            serde_yaml::from_reader(f).context("Failed to parse Environment Manifest")?;
+        manifest.validate()?;
+        Ok(manifest)
+    }
+
+    /// Validate the structural contract shared by all environment runners.
+    ///
+    /// Topology-specific checks stay with `World::from_manifest`, where the
+    /// named peripherals and machines are available. This layer rejects input
+    /// that cannot describe an unambiguous world at all.
+    pub fn validate(&self) -> Result<()> {
+        if self.schema_version != "1.0" {
+            anyhow::bail!(
+                "Unsupported environment schema_version '{}'. Supported version: '1.0'",
+                self.schema_version
+            );
+        }
+        if self.name.trim().is_empty() {
+            anyhow::bail!("Environment manifest requires a non-empty name");
+        }
+        if self.nodes.is_empty() {
+            anyhow::bail!("Environment manifest requires at least one node");
+        }
+
+        let mut node_ids = HashSet::with_capacity(self.nodes.len());
+        for (index, node) in self.nodes.iter().enumerate() {
+            if node.id.trim().is_empty() {
+                anyhow::bail!("Environment manifest nodes[{index}].id must be non-empty");
+            }
+            if !node_ids.insert(&node.id) {
+                anyhow::bail!("Environment manifest has duplicate node id '{}'", node.id);
+            }
+            if node.system.trim().is_empty() {
+                anyhow::bail!("Environment manifest nodes[{index}].system must be non-empty");
+            }
+            if node.firmware.trim().is_empty() {
+                anyhow::bail!("Environment manifest nodes[{index}].firmware must be non-empty");
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -725,8 +769,18 @@ pub struct MemoryValueDetails {
     /// Target node for a multi-node environment assertion. Single-node scripts
     /// leave this unset and continue to use the existing machine path.
     pub node: Option<String>,
-    /// Preserves an explicitly supplied `node: null` through serialization.
-    node_was_explicit: bool,
+}
+
+// `MemoryValueDetails` is public and callers historically construct it with a
+// struct literal. Keep that field shape intact while retaining the distinction
+// between an omitted `node` and parsed `node: null`: the latter is an invalid
+// explicit qualifier in single-node scripts and must survive a serde round
+// trip. This reserved private sentinel is created only while deserializing a
+// `node: null` field.
+const EXPLICIT_NULL_NODE_SENTINEL: &str = "\u{0}labwired:explicit-null-node";
+
+fn is_explicit_null_node(node: Option<&str>) -> bool {
+    node == Some(EXPLICIT_NULL_NODE_SENTINEL)
 }
 
 impl MemoryValueDetails {
@@ -741,7 +795,6 @@ impl MemoryValueDetails {
             mask: None,
             size: None,
             node: None,
-            node_was_explicit: false,
         }
     }
 }
@@ -766,10 +819,10 @@ impl Serialize for MemoryValueDetails {
             expected_value: self.expected_value,
             mask: self.mask,
             size: self.size,
-            node: match self.node.as_deref() {
-                Some(node) => Some(Some(node)),
-                None if self.node_was_explicit => Some(None),
-                None => None,
+            node: if is_explicit_null_node(self.node.as_deref()) {
+                Some(None)
+            } else {
+                self.node.as_deref().map(Some)
             },
         }
         .serialize(serializer)
@@ -795,14 +848,16 @@ impl<'de> Deserialize<'de> for MemoryValueDetails {
         D: serde::Deserializer<'de>,
     {
         let wire = MemoryValueDetailsWire::deserialize(deserializer)?;
-        let node_was_explicit = wire.node.is_present();
         Ok(Self {
             address: wire.address,
             expected_value: wire.expected_value,
             mask: wire.mask,
             size: wire.size,
-            node: wire.node.into_value(),
-            node_was_explicit,
+            node: match wire.node {
+                FieldPresence::Absent => None,
+                FieldPresence::Present(Some(node)) => Some(node),
+                FieldPresence::Present(None) => Some(EXPLICIT_NULL_NODE_SENTINEL.to_string()),
+            },
         })
     }
 }
@@ -1022,7 +1077,7 @@ pub struct TestScript {
 fn reject_explicit_memory_nodes(assertions: &[TestAssertion], script_kind: &str) -> Result<()> {
     for (index, assertion) in assertions.iter().enumerate() {
         if let TestAssertion::MemoryValue(memory) = assertion {
-            if memory.memory_value.node_was_explicit || memory.memory_value.node.is_some() {
+            if memory.memory_value.node.is_some() {
                 anyhow::bail!(
                     "{script_kind} test scripts do not support 'node' on memory_value assertions (assertions[{index}])"
                 );
@@ -1526,11 +1581,10 @@ impl EnvTestScript {
                     "Environment test scripts support only memory_value assertions (assertions[{index}])"
                 );
             };
-            let has_node = memory
-                .memory_value
-                .node
-                .as_deref()
-                .is_some_and(|node| !node.trim().is_empty());
+            let has_node =
+                memory.memory_value.node.as_deref().is_some_and(|node| {
+                    !node.trim().is_empty() && !is_explicit_null_node(Some(node))
+                });
             if !has_node {
                 anyhow::bail!(
                     "Environment memory_value assertion at assertions[{index}] requires a non-empty 'node'"

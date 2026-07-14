@@ -13,6 +13,8 @@ dockerfile=Dockerfile.ci
 action=.github/actions/labwired-test/action.yml
 renderer=.github/actions/labwired-test/render_report.py
 renderer_test=.github/actions/labwired-test/test_render_report.py
+environment_smoke_script=examples/ci/two-node-inputs-env.yaml
+environment_smoke_manifest=examples/ci/two-node-env.yaml
 dockerignore=.dockerignore
 failures=0
 
@@ -83,6 +85,8 @@ require_file "$dockerfile"
 require_file "$action"
 require_file "$renderer"
 require_file "$renderer_test"
+require_file "$environment_smoke_script"
+require_file "$environment_smoke_manifest"
 require_file "$dockerignore"
 
 if ! python3 "$renderer_test"; then
@@ -148,6 +152,8 @@ require_block_absent_literal "$smoke_block" 'docker/login-action@v3' 'release sm
 require_block_literal "$smoke_block" 'docker pull "ghcr.io/w1ne/labwired:${{ github.ref_name }}"' 'release smoke anonymously pulls the immutable image'
 require_block_literal "$smoke_block" 'Make the GHCR package public' 'release smoke explains how to fix a private first GHCR package'
 require_block_literal "$smoke_block" 'docker run --rm' 'release smoke runs the image directly'
+require_block_absent_literal "$smoke_block" 'cargo build' 'release smoke does not build Core from source'
+require_block_absent_literal "$smoke_block" 'cross build' 'release smoke does not cross-build Core from source'
 runner_command_block=$(awk '
   /docker run --rm/ { inside = 1 }
   inside { print }
@@ -155,16 +161,18 @@ runner_command_block=$(awk '
 ' <<<"$smoke_block")
 require_block_literal "$runner_command_block" '"ghcr.io/w1ne/labwired:${{ github.ref_name }}"' 'release smoke runs the immutable image that it pulled'
 require_block_absent_literal "$runner_command_block" 'ghcr.io/w1ne/labwired:latest' 'release smoke does not run the mutable latest tag'
-require_block_literal "$smoke_block" 'examples/ci/dummy-max-steps.yaml' 'release smoke uses the deterministic CI script'
+require_block_literal "$smoke_block" 'examples/ci/two-node-inputs-env.yaml' 'release smoke uses the explicit two-node inputs.env script'
 require_block_literal "$smoke_block" 'out/release-runner-smoke' 'release smoke writes runner artifacts to a dedicated directory'
 require_block_literal "$smoke_block" '--no-uart-stdout' 'release smoke suppresses UART output'
 require_block_literal "$smoke_block" 'test -s out/release-runner-smoke/result.json' 'release smoke asserts the runner result JSON exists and is nonempty'
+require_block_literal "$smoke_block" 'test -s out/release-runner-smoke/junit.xml' 'release smoke asserts the OCI runner writes JUnit in its output directory'
 require_block_literal "$smoke_block" 'uses: ./.github/actions/labwired-test' 'release smoke exercises the checked-out core action'
 require_block_literal "$smoke_block" 'version: ${{ github.ref_name }}' 'release smoke pins the core action to the release tag'
-require_block_literal "$smoke_block" 'github-token: ${{ github.token }}' 'release smoke explicitly passes its workflow token to the core action'
+require_block_absent_literal "$smoke_block" 'github-token:' 'release smoke does not need an archive-download token'
 require_block_literal "$smoke_block" 'output-dir: out/release-action-smoke' 'release action smoke writes a dedicated output directory'
-require_block_literal "$smoke_block" "upload-artifacts: 'false'" 'release action smoke avoids duplicate workflow artifacts'
+require_block_absent_literal "$smoke_block" 'upload-artifacts:' 'release action smoke cannot disable artifact uploads'
 require_block_literal "$smoke_block" 'test -s out/release-action-smoke/result.json' 'release smoke asserts the action result JSON exists and is nonempty'
+require_block_literal "$smoke_block" 'test -s out/release-action-smoke/junit.xml' 'release smoke asserts the action writes JUnit in its output directory'
 
 require_literal "$dockerfile" 'FROM rust:1.95-slim AS builder' 'runner image builds with Rust 1.95'
 require_literal "$dockerfile" 'RUN cargo build --release -p labwired-cli --locked' 'runner image builds only the CLI'
@@ -185,25 +193,26 @@ if [[ -f "$dockerignore" ]]; then
   done
 fi
 
-require_literal "$action" 'default: "v0.18.0"' 'core action defaults to the pinned supported release'
-require_literal "$action" 'default: "w1ne/labwired-core"' 'core action downloads release archives from the core repository'
-require_literal "$action" 'default: ${{ github.token }}' 'core action defaults its archive download token to the workflow token'
-require_literal "$action" 'GH_TOKEN: ${{ inputs.github-token }}' 'core action passes an explicit or default token to gh release download'
+require_literal "$action" 'default: "v0.19.0"' 'core action defaults to the supported public release'
+require_literal "$action" 'https://github.com/w1ne/labwired-core/releases/download/${version}/${asset}' 'core action downloads the fixed public Core release archive'
+require_literal "$action" 'curl --fail --location --retry 3 --retry-delay 2 --output "$archive" "$url"' 'core action downloads archives with curl'
+require_literal "$action" 'version must be a vMAJOR.MINOR.PATCH release tag.' 'core action requires an immutable release version'
+for removed_input in repo: junit: upload-artifacts: github-token:; do
+  require_absent_literal "$action" "$removed_input" "core action exposes only the public one-step inputs, not $removed_input"
+done
+require_absent_literal "$action" 'GH_TOKEN' 'core action does not expose a release-download token to a shell'
+require_absent_literal "$action" 'gh release' 'core action does not depend on the gh CLI'
+require_absent_literal "$action" 'latest' 'core action does not resolve a mutable latest release'
 require_literal "$action" 'LABWIRED_VERSION: ${{ inputs.version }}' 'core action passes the version through an environment binding'
-require_literal "$action" 'LABWIRED_REPO: ${{ inputs.repo }}' 'core action passes the repository through an environment binding'
 require_literal "$action" 'LABWIRED_SCRIPT: ${{ inputs.script }}' 'core action passes the script through an environment binding'
 require_literal "$action" 'LABWIRED_ARGS: ${{ inputs.args }}' 'core action passes extra args through an environment binding'
 require_literal "$action" 'command=(labwired test' 'core action constructs the test command as a Bash array'
+require_literal "$action" '--junit "$LABWIRED_OUTPUT_DIR/junit.xml"' 'core action always writes JUnit inside its output directory'
+require_literal "$action" 'mkdir -p "$LABWIRED_OUTPUT_DIR"' 'core action prepares the output directory before running'
 require_literal "$action" 'read -r -a extra_args <<< "$LABWIRED_ARGS"' 'core action splits extra args without shell evaluation'
 require_absent_literal "$action" "ver='\${{ inputs.version }}'" 'core action does not splice the version input into Bash source'
-require_absent_literal "$action" "repo='\${{ inputs.repo }}'" 'core action does not splice the repository input into Bash source'
 require_absent_literal "$action" "--script '\${{ inputs.script }}'" 'core action does not splice the script input into Bash source'
 require_absent_literal "$action" '          ${{ inputs.args }}' 'core action does not splice extra args into Bash source'
-repo_validation_line=$(grep -n -m 1 'repo must use the owner/name form' "$action" | cut -d: -f1 || true)
-latest_lookup_line=$(grep -n -m 1 'gh release view --repo' "$action" | cut -d: -f1 || true)
-if [[ -z "$repo_validation_line" || -z "$latest_lookup_line" || "$repo_validation_line" -ge "$latest_lookup_line" ]]; then
-  fail 'core action validates the release repository before using GH_TOKEN with gh release view'
-fi
 
 require_literal "$action" 'outputs:' 'core action exposes report outputs'
 require_literal "$action" 'summary-md:' 'core action exposes a Markdown report output'
@@ -222,11 +231,13 @@ require_literal "$action" 'id: upload' 'core action identifies the artifact uplo
 require_literal "$action" 'render_report.py' 'core action invokes the bundled report renderer'
 require_literal "$action" 'GITHUB_STEP_SUMMARY' 'core action appends the report to the job summary'
 require_literal "$action" 'cat "$LABWIRED_SUMMARY_MD" >> "$GITHUB_STEP_SUMMARY"' 'core action appends only the renderer-produced summary to the job summary'
-require_literal "$action" "always() && inputs.upload-artifacts == 'true'" 'core action uploads artifacts even after a failed test'
+require_literal "$action" 'if: ${{ always() }}' 'core action always renders and uploads artifacts after a failed test'
+require_literal "$action" 'path: ${{ inputs.output-dir }}' 'core action uploads exactly the configured output directory'
+require_literal "$action" 'if-no-files-found: error' 'core action treats a missing output directory as a workflow error'
 require_literal "$action" 'LABWIRED_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}' 'core action records the workflow run URL'
 require_literal "$action" 'LABWIRED_SOURCE_REVISION: ${{ github.sha }}' 'core action records the source revision'
 require_literal "$action" 'LABWIRED_RELEASE_VERSION: ${{ steps.install.outputs.release_version }}' 'core action records the resolved release'
-require_literal "$action" 'echo "release_version=$ver" >> "$GITHUB_OUTPUT"' 'core action records the resolved release version after installation'
+require_literal "$action" 'echo "release_version=$version" >> "$GITHUB_OUTPUT"' 'core action records the resolved release version after installation'
 require_literal "$action" 'LABWIRED_EXIT_CODE: ${{ steps.run.outputs.exit_code }}' 'core action safely passes the captured exit code to its final step'
 require_literal "$action" 'exit "$LABWIRED_EXIT_CODE"' 'core action returns the captured LabWired failure code after reporting'
 
@@ -258,6 +269,16 @@ require_literal "$renderer_test" 'test_omitted_assertion_failure_is_included_in_
 require_literal "$renderer_test" 'test_config_error_message_is_safely_rendered' 'renderer tests config-error diagnostics escaping'
 require_literal "$renderer_test" 'test_large_script_hashes_without_reading_the_whole_file' 'renderer tests streamed script hashing'
 require_literal "$renderer_test" 'test_markdown_summary_cap_is_bounded_and_marked' 'renderer tests job-summary caps'
+
+require_literal "$environment_smoke_script" 'inputs:' 'release smoke fixture declares inputs'
+require_literal "$environment_smoke_script" 'env: "two-node-env.yaml"' 'release smoke fixture selects the two-node environment through inputs.env'
+require_literal "$environment_smoke_manifest" 'schema_version: "1.0"' 'release smoke environment uses the supported manifest schema'
+two_node_count=$(grep -Ec '^[[:space:]]*-[[:space:]]id:' "$environment_smoke_manifest" || true)
+if [[ "$two_node_count" -ne 2 ]]; then
+  fail 'release smoke environment manifest declares exactly two nodes'
+fi
+require_literal "$environment_smoke_manifest" 'id: alpha' 'release smoke environment includes alpha'
+require_literal "$environment_smoke_manifest" 'id: beta' 'release smoke environment includes beta'
 
 require_literal "$backfill_workflow" 'workflow_dispatch:' 'runner backfill workflow requires explicit manual dispatch'
 require_literal "$backfill_workflow" 'required: true' 'runner backfill requires an explicit release version'

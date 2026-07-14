@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-07-14
+
+### Added
+- **Released multi-node CI runner**: GitHub Actions and OCI release smoke tests
+  can run a complete inputs.env world from YAML and publish a self-contained
+  report bundle without rebuilding LabWired.
+- **Environment result contract**: Multi-node runs write an explicit
+  1.0-environment result schema with per-node provenance and fidelity gaps.
+
+### Fixed
+- **Environment CI safety and evidence**: Strict environment-manifest
+  validation, deterministic snapshot peripheral ordering, explicit CAN
+  peripheral selection, and correct safety-stop / assertion precedence make
+  multi-node evidence reproducible and fail-closed.
+
 ## [0.18.0] - 2026-07-09
 
 ### Added

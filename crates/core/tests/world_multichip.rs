@@ -55,7 +55,7 @@ fn from_manifest_builds_two_cortexm_nodes_and_uart_link() {
         return;
     }
     let env = EnvironmentManifest {
-        schema_version: "1".into(),
+        schema_version: "1.0".into(),
         name: "twonode".into(),
         nodes: vec![
             NodeConfig {

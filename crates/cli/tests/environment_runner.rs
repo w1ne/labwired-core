@@ -74,6 +74,60 @@ nodes:
     (environment, firmware, system)
 }
 
+/// A deliberately under-modelled world: the fixture writes UART MMIO, while
+/// this chip exposes no peripherals. It gives the environment runner a real
+/// unmapped-MMIO fidelity event and a runtime stop without mocking either.
+fn write_tiny_two_node_environment(dir: &Path) -> PathBuf {
+    let root = workspace_root();
+    let firmware = std::fs::canonicalize(root.join("tests/fixtures/uart-ok-thumbv7m.elf"))
+        .expect("fixture firmware");
+    let chip = dir.join("tiny-chip.yaml");
+    let system = dir.join("tiny-system.yaml");
+    let environment = dir.join("tiny-two-node.yaml");
+
+    std::fs::write(
+        &chip,
+        r#"name: "tiny"
+arch: "cortex-m3"
+flash:
+  base: 0x0
+  size: "1B"
+ram:
+  base: 0x20000000
+  size: "1KB"
+peripherals: []
+"#,
+    )
+    .expect("write tiny chip");
+    std::fs::write(
+        &system,
+        r#"name: "tiny-system"
+chip: "tiny-chip.yaml"
+"#,
+    )
+    .expect("write tiny system");
+    std::fs::write(
+        &environment,
+        format!(
+            r#"schema_version: "1.0"
+name: tiny-world
+nodes:
+  - id: alpha
+    system: "tiny-system.yaml"
+    firmware: "{}"
+  - id: beta
+    system: "tiny-system.yaml"
+    firmware: "{}"
+"#,
+            firmware.display(),
+            firmware.display(),
+        ),
+    )
+    .expect("write tiny environment manifest");
+
+    environment
+}
+
 fn assert_sha256(value: &serde_json::Value) {
     let value = value.as_str().expect("SHA-256 string");
     assert_eq!(value.len(), 64, "SHA-256 must be 64 hex characters");
@@ -142,6 +196,8 @@ assertions:
         &std::fs::read_to_string(output_dir.join("result.json")).expect("read result.json"),
     )
     .expect("parse result.json");
+    assert_eq!(result["result_schema_version"], "1.0-environment");
+    assert_eq!(result["run_type"], "environment");
     assert_eq!(result["status"], "pass");
     assert_eq!(result["stop_reason"], "max_steps");
     assert_eq!(result["steps_executed"], 100);
@@ -586,6 +642,43 @@ limits:
 }
 
 #[test]
+fn malformed_inline_environment_script_keeps_environment_artifacts() {
+    let dir = unique_dir("malformed-inline-environment-script");
+    let (_environment, _firmware, _system) = write_two_node_environment(&dir);
+    let output = run_environment_script(
+        &dir,
+        r#"schema_version: "1.0"
+inputs: { env: "two-node.yaml" }
+limits:
+  max_steps: [1
+"#,
+        &[],
+    );
+
+    assert_eq!(output.status.code(), Some(2));
+    let output_dir = dir.join("artifacts");
+    let result: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(output_dir.join("result.json")).expect("read result.json"),
+    )
+    .expect("parse result.json");
+    assert_eq!(result["run_type"], "environment");
+    assert_eq!(result["stop_reason"], "config_error");
+    assert!(result["config"].get("firmware").is_none());
+    assert!(result["config"]["environment"]
+        .as_str()
+        .expect("environment provenance")
+        .ends_with("two-node.yaml"));
+
+    let snapshot: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(output_dir.join("snapshot.json")).expect("read snapshot.json"),
+    )
+    .expect("parse snapshot.json");
+    assert_eq!(snapshot["type"], "environment");
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn malformed_script_without_a_direct_inputs_env_keeps_legacy_artifacts() {
     let dir = unique_dir("ambiguous-malformed-script");
     let (_environment, _firmware, _system) = write_two_node_environment(&dir);
@@ -680,15 +773,17 @@ assertions:
 "#,
         &[],
     );
-    assert!(
-        uart_output.status.success(),
-        "UART-limited world failed: {}",
+    assert_eq!(
+        uart_output.status.code(),
+        Some(1),
+        "a max_uart_bytes safety stop must fail even when memory assertions pass: {}",
         String::from_utf8_lossy(&uart_output.stderr)
     );
     let uart_result: serde_json::Value = serde_json::from_str(
         &std::fs::read_to_string(uart_dir.join("artifacts/result.json")).expect("read UART result"),
     )
     .expect("parse UART result");
+    assert_eq!(uart_result["status"], "fail");
     assert_eq!(uart_result["stop_reason"], "max_uart_bytes");
     assert_eq!(
         uart_result["stop_reason_details"]["triggered_limit"]["name"],
@@ -705,7 +800,122 @@ assertions:
             >= 1
     );
     assert!(uart_result["instructions"].as_u64().unwrap() >= 2);
+    let junit =
+        std::fs::read_to_string(uart_dir.join("artifacts/junit.xml")).expect("read UART junit");
+    assert!(junit.contains("failures=\"1\""));
+    assert!(junit.contains("errors=\"0\""));
 
     let _ = std::fs::remove_dir_all(&cycle_dir);
     let _ = std::fs::remove_dir_all(&uart_dir);
+}
+
+#[test]
+fn environment_runner_wall_time_safety_stop_fails_even_when_assertions_pass() {
+    let dir = unique_dir("wall-time-safety-stop");
+    let (_environment, _firmware, _system) = write_two_node_environment(&dir);
+    let output = run_environment_script(
+        &dir,
+        r#"schema_version: "1.0"
+inputs:
+  env: "two-node.yaml"
+limits:
+  max_steps: 100
+  wall_time_ms: 0
+assertions:
+  - memory_value:
+      node: alpha
+      address: 0x20000000
+      expected_value: 0
+"#,
+        &[],
+    );
+
+    assert_eq!(output.status.code(), Some(1));
+    let result: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(dir.join("artifacts/result.json")).expect("read result.json"),
+    )
+    .expect("parse result.json");
+    assert_eq!(result["status"], "fail");
+    assert_eq!(result["stop_reason"], "wall_time");
+    assert_eq!(result["assertions"][0]["passed"], true);
+    let junit = std::fs::read_to_string(dir.join("artifacts/junit.xml")).expect("read junit");
+    assert!(junit.contains("failures=\"1\""));
+    assert!(junit.contains("errors=\"0\""));
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn environment_runner_prioritizes_failed_assertions_over_runtime_errors() {
+    let dir = unique_dir("assertion-before-runtime-error");
+    write_tiny_two_node_environment(&dir);
+    let output = run_environment_script(
+        &dir,
+        r#"schema_version: "1.0"
+inputs:
+  env: "tiny-two-node.yaml"
+limits:
+  max_steps: 100
+assertions:
+  - memory_value:
+      node: alpha
+      address: 0x20000000
+      expected_value: 1
+"#,
+        &[],
+    );
+
+    assert_eq!(output.status.code(), Some(1));
+    let result: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(dir.join("artifacts/result.json")).expect("read result.json"),
+    )
+    .expect("parse result.json");
+    assert_eq!(result["status"], "fail");
+    assert_eq!(result["stop_reason"], "memory_violation");
+    assert_eq!(result["assertions"][0]["passed"], false);
+    let junit = std::fs::read_to_string(dir.join("artifacts/junit.xml")).expect("read junit");
+    assert!(junit.contains("failures=\"1\""));
+    assert!(junit.contains("errors=\"0\""));
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn environment_runner_surfaces_fidelity_gaps_from_world_execution() {
+    let dir = unique_dir("fidelity");
+    write_tiny_two_node_environment(&dir);
+    let output = run_environment_script(
+        &dir,
+        r#"schema_version: "1.0"
+inputs:
+  env: "tiny-two-node.yaml"
+limits:
+  max_steps: 100
+assertions:
+  - memory_value:
+      node: alpha
+      address: 0x20000000
+      expected_value: 0
+"#,
+        &[],
+    );
+
+    assert_eq!(output.status.code(), Some(3));
+    let result: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(dir.join("artifacts/result.json")).expect("read result.json"),
+    )
+    .expect("parse result.json");
+    let fidelity = result["fidelity"]
+        .as_array()
+        .expect("environment result must surface fidelity gaps");
+    let mmio = fidelity
+        .iter()
+        .find(|gap| gap["kind"] == "unmapped_mmio")
+        .expect("tiny world must report its unmapped UART MMIO access");
+    assert!(mmio["address"]
+        .as_str()
+        .is_some_and(|address| address.starts_with("0x")));
+    assert_eq!(mmio["detail"], "write");
+
+    let _ = std::fs::remove_dir_all(&dir);
 }

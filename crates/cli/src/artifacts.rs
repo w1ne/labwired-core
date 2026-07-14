@@ -117,6 +117,9 @@ pub(crate) struct EnvironmentConfig {
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct EnvironmentTestResult {
     pub(crate) result_schema_version: String,
+    /// Explicitly distinguishes the environment result union arm from the
+    /// single-machine v1.0 result contract.
+    pub(crate) run_type: String,
     pub(crate) status: String,
     pub(crate) steps_executed: u64,
     pub(crate) cycles: u64,
@@ -127,6 +130,11 @@ pub(crate) struct EnvironmentTestResult {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) message: Option<String>,
     pub(crate) assertions: Vec<AssertionResult>,
+    /// Structured model-fidelity gaps observed across the world run. The
+    /// monitor is thread-local, so the environment runner drains it before it
+    /// writes artifacts just as the single-machine runner does.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) fidelity: Vec<labwired_core::fidelity::FidelityGap>,
     pub(crate) config: EnvironmentConfig,
 }
 

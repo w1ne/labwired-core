@@ -9,10 +9,7 @@ use crate::artifacts::{
     AssertionResult, EnvironmentConfig, EnvironmentNodeProvenance, EnvironmentNodeSnapshot,
     EnvironmentTestResult, Snapshot,
 };
-use crate::{
-    build_stop_reason_details, TestArgs, EXIT_CONFIG_ERROR, EXIT_RUNTIME_ERROR,
-    RESULT_SCHEMA_VERSION,
-};
+use crate::{build_stop_reason_details, TestArgs, EXIT_CONFIG_ERROR, EXIT_RUNTIME_ERROR};
 use labwired_config::{EnvTestScript, EnvironmentManifest, StopReason, TestAssertion, TestLimits};
 use labwired_core::world::{MachineTrait, World};
 use sha2::{Digest, Sha256};
@@ -24,11 +21,17 @@ use std::time::{Duration, Instant};
 
 const INVALID_ENVIRONMENT_INPUT_PLACEHOLDER: &str = "__labwired_invalid_inputs_env__.yaml";
 const WORLD_FIRMWARE_HASH_DOMAIN: &[u8] = b"labwired.environment.world-firmware.v1\0";
+const ENVIRONMENT_RESULT_SCHEMA_VERSION: &str = "1.0-environment";
+const ENVIRONMENT_RUN_TYPE: &str = "environment";
 
 /// Entry point kept separate from the single-machine runner so its world
 /// topology and artifact contract cannot accidentally inherit one-firmware
 /// assumptions.
 pub(crate) fn run_environment_test(args: &TestArgs, script: EnvTestScript) -> ExitCode {
+    // Scope the thread-local coverage monitor to this world run. The result
+    // path drains it regardless of whether an output directory was requested.
+    labwired_core::fidelity::reset();
+
     // Wall-time is a run-wide budget: resolving the world and attaching its
     // topology are part of the environment run, not free prelude work.
     let run_started = Instant::now();
@@ -125,9 +128,15 @@ pub(crate) fn run_environment_test(args: &TestArgs, script: EnvTestScript) -> Ex
 /// rejects an otherwise recognizable `inputs.env` script before it can become
 /// an [`EnvTestScript`]. Parsed YAML retains the full `inputs.env` behavior,
 /// while malformed YAML is accepted only for the conservative, direct
-/// `inputs:` / `env:` mapping shape. Other malformed scripts keep the legacy
-/// config-error writer unchanged.
+/// `inputs:` / `env:` mapping shape or a valid inline `inputs: { env: ... }`
+/// shape. Other malformed scripts keep the legacy config-error writer
+/// unchanged.
 pub(crate) fn try_write_load_error_outputs(args: &TestArgs, message: String) -> bool {
+    // This branch never reaches `run_environment_test`, but it still emits
+    // environment-shaped artifacts when a malformed script has a recognizable
+    // `inputs.env`. Keep its thread-local evidence scope equally explicit.
+    labwired_core::fidelity::reset();
+
     let Ok(contents) = std::fs::read_to_string(&args.script) else {
         return false;
     };
@@ -203,8 +212,19 @@ fn recognizable_env_input_from_malformed_yaml(contents: &str) -> Option<serde_ya
         let Some(parent_indent) = inputs_indent else {
             if indent == 0 {
                 if let Some(value) = yaml_mapping_value(trimmed, "inputs") {
-                    if value.trim().is_empty() || value.trim_start().starts_with('#') {
+                    let value = value.trim_start();
+                    if value.is_empty() || value.starts_with('#') {
                         inputs_indent = Some(indent);
+                    } else if value.starts_with('{') {
+                        // Inline mappings are a documented, valid v1.0 input
+                        // form. Parse exactly this line: it proves the inline
+                        // environment selector occurs before the later syntax
+                        // error without attempting to repair the document.
+                        let parsed = serde_yaml::from_str::<serde_yaml::Value>(trimmed).ok()?;
+                        return parsed
+                            .get("inputs")
+                            .and_then(|inputs| inputs.get("env"))
+                            .cloned();
                     }
                 }
             }
@@ -424,12 +444,19 @@ fn run_world(
     let uart_bytes = total_uart_bytes(uart_sinks);
     let assertions = evaluate_assertions(&script.assertions, world);
     let all_assertions_passed = assertions.iter().all(|assertion| assertion.passed);
-    let status = if runtime_error {
-        "error"
-    } else if all_assertions_passed {
-        "pass"
-    } else {
+    let safety_stop_requires_failure = matches!(
+        stop_reason,
+        StopReason::WallTime | StopReason::MaxUartBytes | StopReason::NoProgress
+    );
+    // Mirror the single-machine runner's precedence: a failed assertion is a
+    // test failure even if a runtime fault also occurred; wall/UART/no-progress
+    // limits are safety stops and cannot certify a world as passed.
+    let status = if !all_assertions_passed || safety_stop_requires_failure {
         "fail"
+    } else if runtime_error {
+        "error"
+    } else {
+        "pass"
     };
     let stop_reason_details = build_stop_reason_details(
         &stop_reason,
@@ -442,7 +469,8 @@ fn run_world(
         0,
     );
     let result = EnvironmentTestResult {
-        result_schema_version: RESULT_SCHEMA_VERSION.to_string(),
+        result_schema_version: ENVIRONMENT_RESULT_SCHEMA_VERSION.to_string(),
+        run_type: ENVIRONMENT_RUN_TYPE.to_string(),
         status: status.to_string(),
         steps_executed: rounds,
         cycles,
@@ -452,6 +480,7 @@ fn run_world(
         limits: limits.clone(),
         message,
         assertions,
+        fidelity: labwired_core::fidelity::take().to_gaps(),
         config: config.clone(),
     };
     let snapshot = Snapshot::Environment {
@@ -474,12 +503,12 @@ fn run_world(
         duration,
     );
 
-    if runtime_error {
-        ExitCode::from(EXIT_RUNTIME_ERROR)
-    } else if all_assertions_passed {
-        ExitCode::SUCCESS
-    } else {
+    if !all_assertions_passed || safety_stop_requires_failure {
         ExitCode::from(crate::EXIT_ASSERT_FAIL)
+    } else if runtime_error {
+        ExitCode::from(EXIT_RUNTIME_ERROR)
+    } else {
+        ExitCode::SUCCESS
     }
 }
 
@@ -698,7 +727,8 @@ fn write_config_error(
     let stop_reason = StopReason::ConfigError;
     let details = build_stop_reason_details(&stop_reason, limits, 0, 0, 0, 0, Duration::ZERO, 0);
     let result = EnvironmentTestResult {
-        result_schema_version: RESULT_SCHEMA_VERSION.to_string(),
+        result_schema_version: ENVIRONMENT_RESULT_SCHEMA_VERSION.to_string(),
+        run_type: ENVIRONMENT_RUN_TYPE.to_string(),
         status: "error".to_string(),
         steps_executed: 0,
         cycles: 0,
@@ -708,6 +738,7 @@ fn write_config_error(
         limits: limits.clone(),
         message: Some(message.clone()),
         assertions: Vec::new(),
+        fidelity: labwired_core::fidelity::take().to_gaps(),
         config: config.clone(),
     };
     let empty_sinks = config
@@ -800,6 +831,10 @@ fn write_environment_junit(
     let mut tests = 1_u64;
     let mut failures = 0_u64;
     let mut errors = 0_u64;
+    let safety_stop_requires_failure = matches!(
+        result.stop_reason,
+        StopReason::WallTime | StopReason::MaxUartBytes | StopReason::NoProgress
+    );
     let details = format!(
         "result_schema_version={}\nstop_reason={:?}\nsteps_executed={}\ncycles={}\ninstructions={}\nenvironment={}\nscript={}",
         result.result_schema_version,
@@ -825,6 +860,22 @@ fn write_environment_junit(
             "    <error message=\"{}\">{}</error>\n",
             crate::xml_escape(error_kind),
             crate::xml_escape(result.message.as_deref().unwrap_or(&details))
+        ));
+    } else if result.status == "fail" && safety_stop_requires_failure {
+        failures += 1;
+        cases.push_str(&format!(
+            "    <failure message=\"{}\">{}</failure>\n",
+            crate::xml_escape("safety stop cannot certify a passing environment run"),
+            crate::xml_escape(&details)
+        ));
+    } else if result.status == "fail"
+        && !result.assertions.iter().any(|assertion| !assertion.passed)
+    {
+        failures += 1;
+        cases.push_str(&format!(
+            "    <failure message=\"{}\">{}</failure>\n",
+            crate::xml_escape("failure"),
+            crate::xml_escape(&details)
         ));
     }
     cases.push_str("  </testcase>\n");

@@ -1,0 +1,20 @@
+# Deterministic two-node release smoke fixture. The environment topology stays
+# in the manifest selected by inputs.env, not in CLI overrides.
+schema_version: "1.0"
+inputs:
+  env: "two-node-env.yaml"
+limits:
+  max_steps: 10
+assertions:
+  - memory_value:
+      node: alpha
+      address: 0x20000000
+      expected_value: 0
+      size: 8
+      mask: 0xff
+  - memory_value:
+      node: beta
+      address: 0x20000000
+      expected_value: 0
+      size: 8
+      mask: 0xff
