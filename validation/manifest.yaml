@@ -610,7 +610,18 @@ boards:
     # equivalence are preserved (elapsed-vs-repeated + walk-vs-scheduler
     # differential gates). S3 default construction is unchanged. No live
     # re-capture warranted.
-    drift_ack: 2026-07-12
+    # 2026-07-14: wifi_thunks (esp32s3/wifi_thunks.rs — test-only fake
+    # WL_CONNECTED WiFi outcome + simulated sockets) is now feature-gated behind
+    # an off-by-default `wifi-thunks` Cargo feature and excluded from the default
+    # build and the CI feature set (jit,event-scheduler). This only changes the
+    # esp32s3 module source surface (a `#[cfg(feature = "wifi-thunks")]` gate on
+    # the module declaration); no real silicon behaviour changes — wifi_thunks
+    # was never a live-verified peripheral (it is a functional thunk, not a
+    # register model, and the WiFi MAC/PHY is a closed RF-coprocessor blob with
+    # no executable image). Register map, reset values, MMIO byte paths and the
+    # 9-reg reset-state silicon anchor are byte-for-byte unaffected. No live
+    # re-capture warranted.
+    drift_ack: 2026-07-14
     models:
       - crates/core/src/peripherals/esp32s3
       - crates/core/src/peripherals/esp_xtensa_common
