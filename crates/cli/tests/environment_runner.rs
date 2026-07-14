@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::mpsc;
 use std::thread;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 fn unique_dir(label: &str) -> PathBuf {
     let nonce = SystemTime::now()
@@ -189,6 +189,7 @@ struct CapturedApiRequest {
 struct MeteringApiServer {
     base: String,
     shutdown_tx: mpsc::Sender<()>,
+    request_started_rx: mpsc::Receiver<()>,
     handle: Option<thread::JoinHandle<Vec<CapturedApiRequest>>>,
 }
 
@@ -197,21 +198,29 @@ impl MeteringApiServer {
         &self.base
     }
 
-    fn stop_and_join(mut self) -> Vec<CapturedApiRequest> {
+    fn wait_until_request_started(&self) {
+        self.request_started_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("wait for local metering API request to start");
+    }
+
+    fn shutdown_and_join(&mut self) -> Option<thread::Result<Vec<CapturedApiRequest>>> {
         let _ = self.shutdown_tx.send(());
-        self.handle
-            .take()
+        self.handle.take().map(|handle| handle.join())
+    }
+
+    fn stop_and_join(mut self) -> Vec<CapturedApiRequest> {
+        self.shutdown_and_join()
             .expect("local metering API thread handle")
-            .join()
             .expect("local metering API thread")
     }
 }
 
 impl Drop for MeteringApiServer {
     fn drop(&mut self) {
-        // On an assertion panic, wake the helper instead of leaving a polling
-        // thread alive for the rest of this test process.
-        let _ = self.shutdown_tx.send(());
+        // On an assertion panic, wait for the helper to release its listener
+        // and any bounded in-flight read before unwinding the test.
+        let _ = self.shutdown_and_join();
     }
 }
 
@@ -231,6 +240,7 @@ fn start_metering_api_server() -> MeteringApiServer {
     );
     let (shutdown_tx, shutdown_rx) = mpsc::channel();
     let (ready_tx, ready_rx) = mpsc::sync_channel(0);
+    let (request_started_tx, request_started_rx) = mpsc::channel();
     let handle = thread::spawn(move || {
         ready_tx
             .send(())
@@ -247,6 +257,9 @@ fn start_metering_api_server() -> MeteringApiServer {
                     stream
                         .set_nonblocking(false)
                         .expect("make accepted local API stream blocking");
+                    request_started_tx
+                        .send(())
+                        .expect("signal local metering API request start");
                     let request = read_api_request(&mut stream);
                     let is_valid_key =
                         request.path == "/v1/keys/validate" && request.body["api_key"] == TEST_KEY;
@@ -280,6 +293,7 @@ fn start_metering_api_server() -> MeteringApiServer {
     MeteringApiServer {
         base,
         shutdown_tx,
+        request_started_rx,
         handle: Some(handle),
     }
 }
@@ -375,6 +389,59 @@ fn metering_api_server_waits_for_the_client_instead_of_an_elapsed_deadline() {
     assert_eq!(requests.len(), 1);
     assert_eq!(requests[0].path, "/v1/keys/validate");
     assert_eq!(requests[0].body["api_key"], TEST_KEY);
+}
+
+#[test]
+fn metering_api_server_drop_waits_for_an_inflight_request() {
+    const TEST_KEY: &str = "environment-metering-test-key";
+
+    let server = start_metering_api_server();
+    let address = server
+        .base_url()
+        .strip_prefix("http://")
+        .expect("local metering API base URL")
+        .to_owned();
+    let body = format!(r#"{{"api_key":"{TEST_KEY}"}}"#);
+    let initial_request = format!(
+        "POST /v1/keys/validate HTTP/1.1\r\nHost: {address}\r\nContent-Type: application/json\r\nContent-Length: {}\r\n",
+        body.len()
+    );
+    let mut client = TcpStream::connect(&address).expect("connect delayed local API client");
+    client
+        .write_all(initial_request.as_bytes())
+        .expect("send incomplete local API request");
+    server.wait_until_request_started();
+
+    let (finisher_ready_tx, finisher_ready_rx) = mpsc::sync_channel(0);
+    let finisher = thread::spawn(move || {
+        finisher_ready_tx
+            .send(())
+            .expect("signal delayed client readiness");
+        thread::sleep(Duration::from_millis(250));
+        client
+            .write_all(format!("\r\n{body}").as_bytes())
+            .expect("finish delayed local API request");
+        client
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .expect("set delayed client response timeout");
+        let mut response = String::new();
+        client
+            .read_to_string(&mut response)
+            .expect("read delayed local API response");
+        assert!(response.starts_with("HTTP/1.1 200 OK"));
+    });
+    finisher_ready_rx
+        .recv()
+        .expect("wait for delayed client readiness");
+
+    let started = Instant::now();
+    drop(server);
+    let elapsed = started.elapsed();
+    finisher.join().expect("delayed client thread");
+    assert!(
+        elapsed >= Duration::from_millis(150),
+        "dropping the helper must join the in-flight request thread; elapsed={elapsed:?}"
+    );
 }
 
 #[test]
