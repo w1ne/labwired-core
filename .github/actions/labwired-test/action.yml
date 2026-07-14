@@ -125,7 +125,7 @@ runs:
       if: ${{ always() }}
       uses: actions/upload-artifact@v4
       with:
-        name: labwired-${{ github.job }}-${{ github.run_id }}
+        name: labwired-${{ github.job }}-${{ github.run_id }}-${{ github.action }}
         path: ${{ inputs.output-dir }}
         if-no-files-found: error
 
