@@ -1,14 +1,17 @@
 # CI Integration
 
-This guide details the integration of LabWired firmware simulations into continuous integration (CI) pipelines. By replacing physical hardware with deterministic simulation, teams can achieve scalable, parallelized regression testing.
+LabWired CI runs the same labwired test command locally, in GitHub Actions, and
+in GitLab. Pin the runner release to v0.18.0 so a firmware change is tested
+against a reproducible simulator version.
 
-## 1. Quick Start
+## GitHub Actions
 
-### GitHub Actions
-To enable automated testing on every push, create a workflow file at `.github/workflows/firmware-test.yml`:
+Use the public LabWired action at its published root location and select the
+Core CLI release with the version input:
 
-```yaml
-name: Firmware Simulation
+~~~yaml
+name: Firmware simulation
+
 on: [push, pull_request]
 
 jobs:
@@ -16,105 +19,84 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build Firmware
-        run: cargo build --release --target thumbv7m-none-eabi
-      
-      - name: Run Simulation
+
+      - name: Build firmware
+        run: cargo build --release --target thumbv7m-none-eabi -p firmware
+
+      - name: Run LabWired
         uses: w1ne/labwired/.github/actions/labwired-test@main
         with:
-          script: tests/basic_boot.yaml
-          output_dir: test-results
+          version: v0.18.0
+          script: tests/firmware-test.yaml
+          output_dir: out/labwired
+          # Optional: api-key: ${{ secrets.LABWIRED_API_KEY }}
 
       - name: Upload LabWired artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: labwired-results
-          path: test-results/
-```
+          path: out/labwired
+          if-no-files-found: warn
+~~~
 
-### GitLab CI
-For GitLab, add the following to `.gitlab-ci.yml`:
+The public action reference remains at main because its repository has no
+v0.18.0 tag. The version input is the immutable Core CLI release pin.
 
-```yaml
-test_simulation:
-  image: rust:latest
+## Container runner
+
+The release image has labwired as its entrypoint. Pass test directly after the
+image name; do not repeat labwired in the container command:
+
+~~~bash
+docker run --rm \
+  --volume "$PWD:/workspace" \
+  --workdir /workspace \
+  ghcr.io/w1ne/labwired:v0.18.0 \
+  test --script tests/firmware-test.yaml \
+       --output-dir out/labwired \
+       --no-uart-stdout
+~~~
+
+The image runs as the runtime default user so it can write artifacts into the
+mounted workspace.
+
+## GitLab CI
+
+GitLab must clear the image entrypoint so it can start its normal job shell.
+The active template in [integration-templates/gitlab-ci.yml](integration-templates/gitlab-ci.yml)
+uses the pinned image and then invokes labwired test.
+
+~~~yaml
+test:firmware:
+  image:
+    name: ghcr.io/w1ne/labwired:v0.18.0
+    entrypoint: [""]
   script:
-    - cargo build --release --target thumbv7m-none-eabi
-    - curl -L https://github.com/w1ne/labwired/releases/latest/download/labwired-cli -o labwired
-    - chmod +x labwired
-    - ./labwired test --script tests/basic_boot.yaml
-```
+    - labwired test --script tests/firmware-test.yaml --output-dir out/labwired --no-uart-stdout
+~~~
 
-## 2. Test Script Schema
+## Artifacts and reporting
 
-LabWired uses a YAML-based test definition format to specify inputs, constraints, and assertions.
+Use --output-dir in every environment. A run writes result.json, snapshot.json,
+uart.log, and junit.xml under that directory. Upload the directory with an
+always/failure-safe artifact step so failed assertions retain their diagnostics.
 
-```yaml
-schema_version: "1.0"
+## Advanced: build from source
 
-inputs:
-  firmware: "target/thumbv7m-none-eabi/release/firmware.elf"
-  system: "configs/system.yaml"
+Building labwired-cli from this repository is useful for testing an unreleased
+commit or a local code change. It is intentionally an advanced alternative to
+the pinned release archive or runner image:
 
-limits:
-  max_steps: 100000        # Instruction limit
-  wall_time_ms: 5000       # Real-time timeout
-  max_cycles: 50000000     # Simulation cycle limit
+~~~bash
+cargo build --release -p labwired-cli
+./target/release/labwired test --script tests/firmware-test.yaml --output-dir out/labwired
+~~~
 
-assertions:
-  - uart_contains: "Boot Successful"
-  - expected_stop_reason: "halt"
-```
+## Onboarding KPI tracking
 
-## 3. Integration Patterns
-
-### Matrix Testing
-Validate firmware across multiple compile targets or configurations in parallel.
-
-**GitHub Actions Example:**
-```yaml
-strategy:
-  matrix:
-    target: [thumbv6m-none-eabi, thumbv7m-none-eabi]
-steps:
-  - run: cargo build --target ${{ matrix.target }}
-  - uses: w1ne/labwired/.github/actions/labwired-test@main
-    with:
-      script: tests/${{ matrix.target }}.yaml
-```
-
-### Fault Injection
-Simulate hardware failures (e.g., sensor disconnects) in CI to verify error handling paths that are difficult to trigger on physical devices.
-
-```yaml
-# tests/sensor_fail.yaml
-steps:
-  - run: 100ms
-  - write_peripheral:
-      id: "i2c1"
-      reg: "CR1"
-      value: 0x0000 # Disable I2C controller mid-operation
-  - assert_log: "I2C Error Detected"
-```
-
-## 4. Artifacts and Reporting
-
-The test runner produces machine-readable outputs for integration with CI reporting tools. The
-`labwired-test` GitHub Action fails when assertions fail, after writing these artifacts.
-
-- **`result.json`**: Detailed execution statistics (cycles, instructions, assertion results).
-- **`junit.xml`**: Standard JUnit format for test result visualization in GitHub/GitLab UI.
-- **`uart.log`**: Captured serial output for debugging failures.
-
-Ensure your CI pipeline is configured to archive these artifacts upon failure.
-
-## 5. Onboarding KPI Tracking
-
-For board onboarding competitiveness, `core-onboarding-smoke.yml` runs a deterministic smoke path and emits:
-
-- `onboarding-metrics.json`: elapsed time, failure stage, and first error signature.
-- `onboarding-summary.md`: per-target summary for step output.
-- `onboarding-scoreboard.json` / `onboarding-scoreboard.md`: aggregated run-level view.
-
-This workflow uses a soft threshold (`3600s`) to track time-to-first-smoke without blocking merges.
+For board onboarding competitiveness, core-onboarding-smoke.yml runs a
+deterministic smoke path and emits onboarding-metrics.json,
+onboarding-summary.md, onboarding-scoreboard.json, and
+onboarding-scoreboard.md. Its soft 3600-second threshold tracks
+time-to-first-smoke without blocking merges.

@@ -11,11 +11,11 @@ inputs:
   version:
     description: "LabWired release tag to use, or 'latest'."
     required: false
-    default: "latest"
+    default: "v0.18.0"
   repo:
     description: "Repository that publishes the LabWired releases."
     required: false
-    default: "w1ne/labwired"
+    default: "w1ne/labwired-core"
   args:
     description: "Extra flags appended to `labwired test`."
     required: false

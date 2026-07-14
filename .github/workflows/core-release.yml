@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 jobs:
   build:
@@ -109,3 +110,79 @@ jobs:
             See the [full changelog](CHANGELOG.md) for what's new.
           files: dist/*.tar.gz
           fail_on_unmatched_files: true
+
+  publish:
+    name: Publish CI runner image
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish CI runner image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.ci
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ghcr.io/w1ne/labwired:${{ github.ref_name }}
+            ghcr.io/w1ne/labwired:latest
+          build-args: |
+            VERSION=${{ github.ref_name }}
+            REVISION=${{ github.sha }}
+
+  release-smoke:
+    name: Smoke released archives and runner image
+    needs: [release, publish]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pull the release runner image anonymously
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker logout ghcr.io || true
+          if ! docker pull "ghcr.io/w1ne/labwired:${{ github.ref_name }}"; then
+            echo "::error::Unable to anonymously pull the released runner image. Make the GHCR package public in GitHub Packages, then re-run this release workflow."
+            exit 1
+          fi
+
+      - name: Run the release runner image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            --workdir /workspace \
+            "ghcr.io/w1ne/labwired:${{ github.ref_name }}" \
+            test \
+            --script examples/ci/dummy-max-steps.yaml \
+            --output-dir out/release-runner-smoke \
+            --no-uart-stdout
+          test -s out/release-runner-smoke/result.json
+
+      - name: Run the release archive through the core action
+        uses: ./.github/actions/labwired-test
+        with:
+          version: ${{ github.ref_name }}
+          github-token: ${{ github.token }}
+          script: examples/ci/dummy-max-steps.yaml
+          output-dir: out/release-action-smoke
+          args: --no-uart-stdout
+          upload-artifacts: 'false'
+
+      - name: Verify core action artifacts
+        shell: bash
+        run: test -s out/release-action-smoke/result.json

@@ -68,13 +68,23 @@ This document outlines the standardized process for releasing new versions of La
 ### Artifacts
 - [ ] **Release Workflow**: Pushing `vX.Y.Z` triggers
   [`.github/workflows/core-release.yml`](.github/workflows/core-release.yml),
-  which builds CLI archives for Linux and macOS targets and uploads them to the
-  GitHub Release.
+  which builds CLI archives for Linux and macOS targets, uploads them to the
+  GitHub Release, and publishes the deployable CI runner image.
 - [ ] **Workflow Verification**: Confirm the release workflow completed and the
-  expected `labwired-vX.Y.Z-<platform>.tar.gz` assets are attached.
+  expected `labwired-vX.Y.Z-<platform>.tar.gz` assets are attached. Confirm
+  GHCR also contains the versioned `ghcr.io/w1ne/labwired:vX.Y.Z` runner
+  image. Use that versioned image in CI; the workflow also updates its moving
+  convenience tag.
+- [ ] **First GHCR publication**: After the first successful image push, open
+  the package settings in GitHub Packages and set the GHCR package visibility
+  to public. The release smoke job deliberately performs an anonymous pull; if
+  the package is still private, it fails with this instruction. Change the
+  visibility and re-run the release workflow.
 - [ ] **Manual Fallback**: If the release workflow fails, build the CLI locally
   with `cargo build -p labwired-cli --release`, package the `labwired` binary,
-  and attach the archive manually with a note in the release description.
+  and attach the archive manually with a note in the release description. For
+  the runner image, diagnose the failed publish job rather than retagging an
+  unverified local image.
 
 ## 4. Post-Release
 - [ ] **Announce**: Share the release notes on relevant channels (Discord, Twitter, Internal).

@@ -309,16 +309,24 @@ The runner writes `result.json` only when `--output-dir` is provided (including 
 }
 ```
 
-## GitHub Actions Example
+## CI release runners
 
-```yaml
+Use the pinned v0.18.0 release runner in CI. It runs the same labwired test
+command described above and writes the same artifact contract.
+
+### GitHub Actions
+
+Use the public root action and pin the Core CLI with its version input:
+
+~~~yaml
 - name: Run LabWired tests
-  run: |
-    cargo build --release -p labwired-cli
-    ./target/release/labwired test \
-      --script examples/ci/dummy-max-steps.yaml \
-      --output-dir out/artifacts \
-      --no-uart-stdout
+  uses: w1ne/labwired/.github/actions/labwired-test@main
+  with:
+    version: v0.18.0
+    script: examples/ci/dummy-max-steps.yaml
+    output_dir: out/artifacts
+    # Optional: api-key: ${{ secrets.LABWIRED_API_KEY }}
+
 - name: Upload artifacts (pass/fail)
   if: always()
   uses: actions/upload-artifact@v4
@@ -326,66 +334,41 @@ The runner writes `result.json` only when `--output-dir` is provided (including 
     name: labwired-artifacts
     path: out/artifacts
     if-no-files-found: warn
-```
+~~~
 
-## Copy-Paste Workflow (Composite Action)
+The root action is intentionally referenced at main because that repository
+does not publish a v0.18.0 tag. The version input still selects the immutable
+Core CLI release.
 
-This repo includes a minimal composite action wrapper at `.github/actions/labwired-test` that:
-- builds `labwired` (`crates/cli`)
-- runs `labwired test`
-- emits artifact paths as outputs
-- writes a small summary into the GitHub Actions step summary
-- fails the action when `labwired test` exits nonzero, after writing artifacts and the summary
+### Docker and GitLab runners
 
-Copy-paste this workflow into `.github/workflows/labwired-test.yml`:
+The GHCR image has labwired as its entrypoint. For Docker, pass test directly
+after the pinned image name:
 
-```yaml
-name: LabWired CI Test
+~~~bash
+docker run --rm -v "$PWD:/workspace" -w /workspace \
+  ghcr.io/w1ne/labwired:v0.18.0 \
+  test --script examples/ci/dummy-max-steps.yaml \
+       --output-dir out/artifacts \
+       --no-uart-stdout
+~~~
 
-on:
-  pull_request:
-  push:
-    branches: [ "main" ]
+GitLab should clear that entrypoint and invoke labwired from its job shell:
 
-jobs:
-  labwired-test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+~~~yaml
+image:
+  name: ghcr.io/w1ne/labwired:v0.18.0
+  entrypoint: [""]
+script:
+  - labwired test --script examples/ci/dummy-max-steps.yaml --output-dir out/artifacts --no-uart-stdout
+~~~
 
-      - name: Run labwired test
-        id: labwired
-        uses: ./.github/actions/labwired-test
-        with:
-          script: examples/ci/dummy-max-steps.yaml
-          output_dir: out/artifacts
-          no_uart_stdout: true
-          profile: release
+### Advanced source build
 
-      - name: Upload artifacts (pass/fail)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: labwired-artifacts
-          path: ${{ steps.labwired.outputs.artifacts_dir }}
-          if-no-files-found: warn
-```
+Build from source only when validating an unreleased LabWired commit. It is not
+the normal CI path:
 
-## Local vs CI Parity
-
-CI runs the same `labwired test` command you can run locally; the only CI-specific behavior is how artifacts are uploaded and how the summary is displayed.
-
-Local (native):
-
-```bash
+~~~bash
 cargo build --release -p labwired-cli
 ./target/release/labwired test --script examples/ci/dummy-max-steps.yaml --output-dir out/artifacts --no-uart-stdout
-```
-
-Local (Docker, closest to “clean CI machine”):
-
-```bash
-docker build -t labwired-ci .
-docker run --rm -v "$PWD:/work" -w /work labwired-ci \
-  labwired test --script examples/ci/dummy-max-steps.yaml --output-dir out/artifacts --no-uart-stdout
-```
+~~~
