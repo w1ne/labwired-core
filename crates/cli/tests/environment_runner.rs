@@ -5,9 +5,12 @@
 
 //! Black-box contract tests for the released multi-node `labwired test` runner.
 
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::thread;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 fn unique_dir(label: &str) -> PathBuf {
     let nonce = SystemTime::now()
@@ -140,6 +143,15 @@ fn assert_sha256(value: &serde_json::Value) {
 }
 
 fn run_environment_script(dir: &Path, script: &str, extra_args: &[&str]) -> std::process::Output {
+    run_environment_script_with_env(dir, script, extra_args, &[])
+}
+
+fn run_environment_script_with_env(
+    dir: &Path,
+    script: &str,
+    extra_args: &[&str],
+    environment: &[(&str, &str)],
+) -> std::process::Output {
     let script_path = dir.join("gate.yaml");
     std::fs::write(&script_path, script).expect("write environment test script");
     let output_dir = dir.join("artifacts");
@@ -153,7 +165,120 @@ fn run_environment_script(dir: &Path, script: &str, extra_args: &[&str]) -> std:
         .arg("--output-dir")
         .arg(&output_dir);
     command.args(extra_args);
+    command.envs(environment.iter().copied());
     command.output().expect("run labwired environment test")
+}
+
+#[derive(Debug)]
+struct CapturedApiRequest {
+    path: String,
+    body: serde_json::Value,
+}
+
+/// Starts a tiny, deliberately strict API double. It must see key validation
+/// before the run record, and it only validates the known test key.
+fn start_metering_api_server() -> (String, thread::JoinHandle<Vec<CapturedApiRequest>>) {
+    const TEST_KEY: &str = "environment-metering-test-key";
+
+    let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind local metering API");
+    listener
+        .set_nonblocking(true)
+        .expect("make local metering API nonblocking");
+    let base = format!(
+        "http://{}",
+        listener.local_addr().expect("local API address")
+    );
+    let handle = thread::spawn(move || {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        let mut requests = Vec::new();
+
+        while Instant::now() < deadline && requests.len() < 2 {
+            match listener.accept() {
+                Ok((mut stream, _)) => {
+                    // Accepted sockets inherit the listener's nonblocking
+                    // mode on this platform. The listener needs polling, but
+                    // a complete HTTP request needs blocking reads bounded by
+                    // `read_api_request`'s timeout.
+                    stream
+                        .set_nonblocking(false)
+                        .expect("make accepted local API stream blocking");
+                    let request = read_api_request(&mut stream);
+                    let is_valid_key =
+                        request.path == "/v1/keys/validate" && request.body["api_key"] == TEST_KEY;
+                    let response = if request.path == "/v1/keys/validate" && is_valid_key {
+                        r#"{"valid":true,"workspace_id":"test-workspace","plan":"pro","cycles_quota":1000,"cycles_used_mtd":0}"#
+                    } else if request.path == "/v1/keys/validate" {
+                        r#"{"valid":false}"#
+                    } else {
+                        r#"{}"#
+                    };
+                    write_api_response(&mut stream, response);
+                    requests.push(request);
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    thread::sleep(Duration::from_millis(10));
+                }
+                Err(error) => panic!("accept local metering API request: {error}"),
+            }
+        }
+
+        requests
+    });
+
+    (base, handle)
+}
+
+fn read_api_request(stream: &mut TcpStream) -> CapturedApiRequest {
+    stream
+        .set_read_timeout(Some(Duration::from_secs(2)))
+        .expect("set local API read timeout");
+    let mut reader = BufReader::new(stream.try_clone().expect("clone local API stream"));
+    let mut request_line = String::new();
+    reader
+        .read_line(&mut request_line)
+        .expect("read local API request line");
+    let path = request_line
+        .split_whitespace()
+        .nth(1)
+        .expect("local API request path")
+        .to_string();
+
+    let mut content_length = 0_usize;
+    loop {
+        let mut line = String::new();
+        reader
+            .read_line(&mut line)
+            .expect("read local API request header");
+        if line == "\r\n" {
+            break;
+        }
+        if let Some((name, value)) = line.split_once(':') {
+            if name.eq_ignore_ascii_case("content-length") {
+                content_length = value.trim().parse().expect("parse request content length");
+            }
+        }
+    }
+
+    let mut body = vec![0_u8; content_length];
+    reader
+        .read_exact(&mut body)
+        .expect("read local API request body");
+    CapturedApiRequest {
+        path,
+        body: serde_json::from_slice(&body).expect("parse local API request JSON"),
+    }
+}
+
+fn write_api_response(stream: &mut TcpStream, body: &str) {
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    stream
+        .write_all(response.as_bytes())
+        .expect("write local API response");
+    stream.flush().expect("flush local API response");
 }
 
 #[test]
@@ -250,6 +375,64 @@ assertions:
     assert!(junit.contains("name=\"run\""));
     assert!(junit.contains("name=\"assertion 1:"));
     assert!(junit.contains("name=\"assertion 2:"));
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn environment_runner_records_aggregate_world_metering_after_key_validation() {
+    const TEST_KEY: &str = "environment-metering-test-key";
+
+    let dir = unique_dir("api-metering");
+    write_two_node_environment(&dir);
+    let (api_base, server) = start_metering_api_server();
+    let output = run_environment_script_with_env(
+        &dir,
+        r#"schema_version: "1.0"
+inputs:
+  env: "two-node.yaml"
+limits:
+  max_steps: 10
+assertions:
+  - memory_value:
+      node: alpha
+      address: 0x20000000
+      expected_value: 0
+"#,
+        &[],
+        &[
+            ("LABWIRED_API_KEY", TEST_KEY),
+            ("LABWIRED_API_BASE", &api_base),
+        ],
+    );
+    assert!(
+        output.status.success(),
+        "environment run failed: stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let result: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(dir.join("artifacts/result.json")).expect("read result.json"),
+    )
+    .expect("parse result.json");
+    let requests = server.join().expect("local metering API thread");
+    assert_eq!(
+        requests.len(),
+        2,
+        "expected key validation followed by a run meter record, got {requests:?}"
+    );
+    assert_eq!(requests[0].path, "/v1/keys/validate");
+    assert_eq!(requests[0].body["api_key"], TEST_KEY);
+    assert_eq!(requests[1].path, "/v1/runs");
+    assert_eq!(
+        requests[1].body["firmware_hash"], result["config"]["world_firmware_hash"],
+        "metering must use the aggregate world firmware hash"
+    );
+    assert_eq!(requests[1].body["cycles"], result["cycles"]);
+    assert_eq!(requests[1].body["exit_status"], 0);
+    assert_eq!(requests[1].body["api_key"], TEST_KEY);
+    assert!(requests[1].body["duration_ms"].as_u64().is_some());
 
     let _ = std::fs::remove_dir_all(&dir);
 }

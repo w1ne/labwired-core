@@ -125,7 +125,7 @@ class RenderReportTest(unittest.TestCase):
             json.dumps(
                 {
                     "status": "pass",
-                    "stop_reason": "assertions_passed",
+                    "stop_reason": "max_steps",
                     "cycles": 42,
                     "steps_executed": 84,
                     "instructions": 84,
@@ -153,6 +153,57 @@ class RenderReportTest(unittest.TestCase):
         self.assertIn("<table>", report_html)
         self.assertIn("&lt;assertion&gt;", report_html)
         self.assertIn("abc&lt;123&gt;", report_html)
+
+    def test_renders_environment_result_without_single_machine_provenance(self) -> None:
+        outputs, summary, report_html, _, _ = self.render(
+            json.dumps(
+                {
+                    "result_schema_version": "1.0-environment",
+                    "run_type": "environment",
+                    "status": "pass",
+                    "stop_reason": "max_steps",
+                    "steps_executed": 4_000_000,
+                    "cycles": 4_000_000,
+                    "instructions": 8_000_000,
+                    "assertions": [
+                        {
+                            "assertion": {
+                                "memory_value": {
+                                    "node": "tester",
+                                    "address": 0x2001_0000,
+                                    "expected_value": 0x07FF_FFFF,
+                                }
+                            },
+                            "passed": True,
+                        }
+                    ],
+                    "config": {
+                        "environment": "twonode-env.yaml",
+                        "world_firmware_hash": "world-sha256",
+                        "nodes": [
+                            {
+                                "id": "tester",
+                                "firmware_hash": "tester-sha256",
+                                "system_hash": "tester-system-sha256",
+                            },
+                            {
+                                "id": "ecu",
+                                "firmware_hash": "ecu-sha256",
+                                "system_hash": "ecu-system-sha256",
+                            },
+                        ],
+                    },
+                }
+            )
+        )
+
+        self.assertEqual(outputs["status"], "pass")
+        self.assertIn("Steps Executed", summary)
+        self.assertIn("4000000", summary)
+        self.assertIn("8000000", summary)
+        self.assertIn("Assertions: `1` passed, `0` failed", summary)
+        self.assertIn("tester", report_html)
+        self.assertIn("4000000", report_html)
 
     def test_malformed_or_missing_artifacts_still_produce_unknown_reports(self) -> None:
         for result_contents, uart_contents in (("{ this is not JSON", "UART\n"), (None, None)):

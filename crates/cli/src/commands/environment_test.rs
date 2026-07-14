@@ -24,10 +24,21 @@ const WORLD_FIRMWARE_HASH_DOMAIN: &[u8] = b"labwired.environment.world-firmware.
 const ENVIRONMENT_RESULT_SCHEMA_VERSION: &str = "1.0-environment";
 const ENVIRONMENT_RUN_TYPE: &str = "environment";
 
+/// Values the command dispatcher needs to meter an environment run without
+/// reparsing the artifacts it just wrote.
+pub(crate) struct EnvironmentRunOutcome {
+    pub(crate) exit_code: ExitCode,
+    pub(crate) world_firmware_hash: String,
+    pub(crate) cycles: u64,
+}
+
 /// Entry point kept separate from the single-machine runner so its world
 /// topology and artifact contract cannot accidentally inherit one-firmware
 /// assumptions.
-pub(crate) fn run_environment_test(args: &TestArgs, script: EnvTestScript) -> ExitCode {
+pub(crate) fn run_environment_test(
+    args: &TestArgs,
+    script: EnvTestScript,
+) -> EnvironmentRunOutcome {
     // Scope the thread-local coverage monitor to this world run. The result
     // path drains it regardless of whether an output directory was requested.
     labwired_core::fidelity::reset();
@@ -388,7 +399,7 @@ fn run_world(
     world: &mut World,
     uart_sinks: &BTreeMap<String, Arc<Mutex<Vec<u8>>>>,
     start: Instant,
-) -> ExitCode {
+) -> EnvironmentRunOutcome {
     let mut stop_reason = StopReason::MaxSteps;
     let mut message = None;
     let mut runtime_error = false;
@@ -503,12 +514,17 @@ fn run_world(
         duration,
     );
 
-    if !all_assertions_passed || safety_stop_requires_failure {
+    let exit_code = if !all_assertions_passed || safety_stop_requires_failure {
         ExitCode::from(crate::EXIT_ASSERT_FAIL)
     } else if runtime_error {
         ExitCode::from(EXIT_RUNTIME_ERROR)
     } else {
         ExitCode::SUCCESS
+    };
+    EnvironmentRunOutcome {
+        exit_code,
+        world_firmware_hash: result.config.world_firmware_hash.clone(),
+        cycles,
     }
 }
 
@@ -723,7 +739,8 @@ fn write_config_error(
     limits: &TestLimits,
     config: EnvironmentConfig,
     message: String,
-) -> ExitCode {
+) -> EnvironmentRunOutcome {
+    let world_firmware_hash = config.world_firmware_hash.clone();
     let stop_reason = StopReason::ConfigError;
     let details = build_stop_reason_details(&stop_reason, limits, 0, 0, 0, 0, Duration::ZERO, 0);
     let result = EnvironmentTestResult {
@@ -773,7 +790,11 @@ fn write_config_error(
         &render_uart_log(&empty_sinks),
         Duration::ZERO,
     );
-    ExitCode::from(EXIT_CONFIG_ERROR)
+    EnvironmentRunOutcome {
+        exit_code: ExitCode::from(EXIT_CONFIG_ERROR),
+        world_firmware_hash,
+        cycles: 0,
+    }
 }
 
 fn write_environment_artifacts(

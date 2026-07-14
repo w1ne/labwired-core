@@ -32,6 +32,19 @@ fn handle_faults(
     evidence
 }
 
+/// Encode the public CLI exit contract for best-effort API metering.
+fn metering_exit_status(exit_code: &ExitCode) -> i32 {
+    if *exit_code == ExitCode::from(EXIT_PASS) {
+        0
+    } else if *exit_code == ExitCode::from(EXIT_ASSERT_FAIL) {
+        1
+    } else if *exit_code == ExitCode::from(EXIT_RUNTIME_ERROR) {
+        3
+    } else {
+        2
+    }
+}
+
 pub(crate) fn run_test(args: TestArgs) -> ExitCode {
     // ── API key validation (Pro tier gate) ──────────────────────────────
     // If LABWIRED_API_KEY is set and --no-key is not passed, validate before
@@ -150,7 +163,18 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
             )
         }
         LoadedTestScript::Env(script) => {
-            return super::environment_test::run_environment_test(&args, script);
+            let outcome = super::environment_test::run_environment_test(&args, script);
+            if let Some(ref key) = api_key_opt {
+                let duration_ms = run_start.elapsed().as_millis() as u64;
+                api_client::record_run(
+                    key,
+                    &outcome.world_firmware_hash,
+                    outcome.cycles,
+                    duration_ms,
+                    metering_exit_status(&outcome.exit_code),
+                );
+            }
+            return outcome.exit_code;
         }
     };
 
