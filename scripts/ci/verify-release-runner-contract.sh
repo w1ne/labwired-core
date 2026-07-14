@@ -103,6 +103,23 @@ release_runner_contract_block=$(awk '
 require_block_literal "$release_runner_contract_block" 'actions/checkout@v4' 'release runner contract job checks out the source'
 require_block_literal "$release_runner_contract_block" 'fetch-depth: 0' 'release runner contract job fetches immutable action-source pins'
 
+core_integrity_block=$(awk '
+  $0 == "  integrity:" { inside = 1; next }
+  inside && $0 ~ /^  [[:alnum:]_-]+:$/ { exit }
+  inside { print }
+' "$core_ci_workflow")
+if [[ -z "$core_integrity_block" ]]; then
+  fail 'core-integrity job is present in Core CI'
+fi
+require_block_literal "$core_integrity_block" 'docker build --pull' 'required Core integrity builds the runner image from fresh base layers'
+require_block_literal "$core_integrity_block" '--file Dockerfile.ci' 'required Core integrity uses the CI runner Dockerfile'
+require_block_literal "$core_integrity_block" 'labwired-ci-smoke:local' 'required Core integrity gives the local image a stable tag'
+require_block_literal "$core_integrity_block" 'VERSION=ci-smoke' 'required Core integrity provides OCI version metadata'
+require_block_literal "$core_integrity_block" 'REVISION="$GITHUB_SHA"' 'required Core integrity provides OCI revision metadata'
+require_block_literal "$core_integrity_block" 'docker run --rm labwired-ci-smoke:local --version' 'required Core integrity executes the final image entrypoint'
+require_block_absent_literal "$core_integrity_block" 'docker/login-action@v3' 'required Core integrity does not need registry credentials'
+require_block_absent_literal "$core_integrity_block" 'docker/build-push-action@v6' 'required Core integrity does not publish an untagged PR image'
+
 require_literal "$workflow" 'tags:' 'release workflow declares a tag trigger'
 require_literal "$workflow" "'v[0-9]+.[0-9]+.[0-9]+'" 'release workflow triggers vMAJOR.MINOR.PATCH tags'
 for target in \
@@ -191,13 +208,15 @@ require_block_literal "$smoke_block" 'output-dir: out/release-action-smoke-secon
 require_block_literal "$smoke_block" 'test -s out/release-action-smoke-second/result.json' 'release smoke asserts the second action result JSON exists and is nonempty'
 require_block_literal "$smoke_block" 'test -s out/release-action-smoke-second/junit.xml' 'release smoke asserts the second action writes JUnit in its output directory'
 
-require_literal "$dockerfile" 'FROM rust:1.95-slim AS builder' 'runner image builds with Rust 1.95'
+require_literal "$dockerfile" 'FROM rust:1.95-slim-bookworm AS builder' 'runner image builds with Rust 1.95 on bookworm'
+require_literal "$dockerfile" 'FROM debian:bookworm-slim' 'runner image runtime matches the builder libc baseline'
 require_literal "$dockerfile" 'RUN cargo build --release -p labwired-cli --locked' 'runner image builds only the CLI'
 require_literal "$dockerfile" 'ARG VERSION' 'runner image accepts a release version build argument'
 require_literal "$dockerfile" 'ARG REVISION' 'runner image accepts a source revision build argument'
 require_literal "$dockerfile" 'org.opencontainers.image.source="https://github.com/w1ne/labwired-core"' 'runner image declares its OCI source label'
 require_literal "$dockerfile" 'org.opencontainers.image.version="${VERSION}"' 'runner image declares its OCI version label'
 require_literal "$dockerfile" 'org.opencontainers.image.revision="${REVISION}"' 'runner image declares its OCI revision label'
+require_literal "$dockerfile" 'RUN labwired --version' 'runner image verifies the final runtime can execute the CLI'
 require_literal "$dockerfile" 'ENTRYPOINT ["labwired"]' 'runner image preserves the labwired CLI entrypoint'
 require_absent_literal "$dockerfile" 'USER ' 'runner image leaves the default user unchanged for bind-mounted output directories'
 require_absent_literal "$dockerfile" 'labwired-dap' 'runner image does not ship the DAP binary'

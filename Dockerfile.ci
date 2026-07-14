@@ -9,7 +9,7 @@
 # same command line as a native release archive.
 
 # Stage 1: Builder
-FROM rust:1.95-slim AS builder
+FROM rust:1.95-slim-bookworm AS builder
 
 RUN apt-get update && apt-get install -y \
     pkg-config \
