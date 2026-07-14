@@ -9,8 +9,9 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::mpsc;
 use std::thread;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 fn unique_dir(label: &str) -> PathBuf {
     let nonce = SystemTime::now()
@@ -185,9 +186,39 @@ struct CapturedApiRequest {
     body: serde_json::Value,
 }
 
+struct MeteringApiServer {
+    base: String,
+    shutdown_tx: mpsc::Sender<()>,
+    handle: Option<thread::JoinHandle<Vec<CapturedApiRequest>>>,
+}
+
+impl MeteringApiServer {
+    fn base_url(&self) -> &str {
+        &self.base
+    }
+
+    fn stop_and_join(mut self) -> Vec<CapturedApiRequest> {
+        let _ = self.shutdown_tx.send(());
+        self.handle
+            .take()
+            .expect("local metering API thread handle")
+            .join()
+            .expect("local metering API thread")
+    }
+}
+
+impl Drop for MeteringApiServer {
+    fn drop(&mut self) {
+        // On an assertion panic, wake the helper instead of leaving a polling
+        // thread alive for the rest of this test process.
+        let _ = self.shutdown_tx.send(());
+    }
+}
+
 /// Starts a tiny, deliberately strict API double. It must see key validation
-/// before the run record, and it only validates the known test key.
-fn start_metering_api_server() -> (String, thread::JoinHandle<Vec<CapturedApiRequest>>) {
+/// before the run record, validates only the known test key, and stays alive
+/// until the caller signals that its client process has completed.
+fn start_metering_api_server() -> MeteringApiServer {
     const TEST_KEY: &str = "environment-metering-test-key";
 
     let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind local metering API");
@@ -198,11 +229,15 @@ fn start_metering_api_server() -> (String, thread::JoinHandle<Vec<CapturedApiReq
         "http://{}",
         listener.local_addr().expect("local API address")
     );
+    let (shutdown_tx, shutdown_rx) = mpsc::channel();
+    let (ready_tx, ready_rx) = mpsc::sync_channel(0);
     let handle = thread::spawn(move || {
-        let deadline = Instant::now() + Duration::from_secs(2);
+        ready_tx
+            .send(())
+            .expect("signal local metering API thread started");
         let mut requests = Vec::new();
 
-        while Instant::now() < deadline && requests.len() < 2 {
+        loop {
             match listener.accept() {
                 Ok((mut stream, _)) => {
                     // Accepted sockets inherit the listener's nonblocking
@@ -226,7 +261,10 @@ fn start_metering_api_server() -> (String, thread::JoinHandle<Vec<CapturedApiReq
                     requests.push(request);
                 }
                 Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
-                    thread::sleep(Duration::from_millis(10));
+                    match shutdown_rx.recv_timeout(Duration::from_millis(10)) {
+                        Ok(()) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                        Err(mpsc::RecvTimeoutError::Timeout) => {}
+                    }
                 }
                 Err(error) => panic!("accept local metering API request: {error}"),
             }
@@ -235,7 +273,15 @@ fn start_metering_api_server() -> (String, thread::JoinHandle<Vec<CapturedApiReq
         requests
     });
 
-    (base, handle)
+    ready_rx
+        .recv()
+        .expect("wait for local metering API thread to start");
+
+    MeteringApiServer {
+        base,
+        shutdown_tx,
+        handle: Some(handle),
+    }
 }
 
 fn read_api_request(stream: &mut TcpStream) -> CapturedApiRequest {
@@ -289,6 +335,46 @@ fn write_api_response(stream: &mut TcpStream, body: &str) {
         .write_all(response.as_bytes())
         .expect("write local API response");
     stream.flush().expect("flush local API response");
+}
+
+#[test]
+fn metering_api_server_waits_for_the_client_instead_of_an_elapsed_deadline() {
+    const TEST_KEY: &str = "environment-metering-test-key";
+
+    let server = start_metering_api_server();
+    let api_base = server.base_url().to_owned();
+    // A busy test machine can schedule the child after the old two-second
+    // listener deadline. The server must remain available until this test has
+    // completed its client work, rather than treating elapsed time as a
+    // completion signal.
+    thread::sleep(Duration::from_millis(2_500));
+
+    let address = api_base
+        .strip_prefix("http://")
+        .expect("local metering API base URL");
+    let body = format!(r#"{{"api_key":"{TEST_KEY}"}}"#);
+    let request = format!(
+        "POST /v1/keys/validate HTTP/1.1\r\nHost: {address}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    );
+    let mut client =
+        TcpStream::connect(address).expect("metering API must still accept a delayed test client");
+    client
+        .set_read_timeout(Some(Duration::from_secs(2)))
+        .expect("set delayed client response timeout");
+    client
+        .write_all(request.as_bytes())
+        .expect("send delayed metering API request");
+    let mut response = String::new();
+    client
+        .read_to_string(&mut response)
+        .expect("read delayed metering API response");
+    assert!(response.starts_with("HTTP/1.1 200 OK"));
+
+    let requests = server.stop_and_join();
+    assert_eq!(requests.len(), 1);
+    assert_eq!(requests[0].path, "/v1/keys/validate");
+    assert_eq!(requests[0].body["api_key"], TEST_KEY);
 }
 
 #[test]
@@ -395,7 +481,8 @@ fn environment_runner_records_aggregate_world_metering_after_key_validation() {
 
     let dir = unique_dir("api-metering");
     write_two_node_environment(&dir);
-    let (api_base, server) = start_metering_api_server();
+    let server = start_metering_api_server();
+    let api_base = server.base_url().to_owned();
     let output = run_environment_script_with_env(
         &dir,
         r#"schema_version: "1.0"
@@ -426,7 +513,7 @@ assertions:
         &std::fs::read_to_string(dir.join("artifacts/result.json")).expect("read result.json"),
     )
     .expect("parse result.json");
-    let requests = server.join().expect("local metering API thread");
+    let requests = server.stop_and_join();
     assert_eq!(
         requests.len(),
         2,
