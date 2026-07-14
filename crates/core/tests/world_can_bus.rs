@@ -10,6 +10,7 @@ const FDCAN_RAM: u64 = 0x800;
 const FDCAN_CCCR: u64 = 0x018;
 const FDCAN_RXF0S: u64 = 0x090;
 const FDCAN_TXBAR: u64 = 0x0CC;
+const FDCAN_RX_FIFO0_ELEMENT_BYTES: u64 = 18 * 4;
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -61,10 +62,17 @@ fn environment(interconnect: InterconnectConfig) -> EnvironmentManifest {
 }
 
 fn quiet_can_environment(interconnect: InterconnectConfig) -> EnvironmentManifest {
+    quiet_can_environment_with_nodes(&["tester", "ecu"], interconnect)
+}
+
+fn quiet_can_environment_with_nodes(
+    ids: &[&str],
+    interconnect: InterconnectConfig,
+) -> EnvironmentManifest {
     EnvironmentManifest {
         schema_version: "1.0".to_string(),
-        name: "two-quiet-h5-nodes".to_string(),
-        nodes: vec![quiet_can_node("tester"), quiet_can_node("ecu")],
+        name: "quiet-h5-can-nodes".to_string(),
+        nodes: ids.iter().map(|id| quiet_can_node(id)).collect(),
         interconnects: vec![interconnect],
     }
 }
@@ -92,6 +100,21 @@ fn start_fdcan(machine: &mut dyn MachineTrait) {
     // enable before taking FDCAN out of INIT.
     write_u32(machine, RCC_BASE + RCC_APB1HENR, 1 << 9);
     write_u32(machine, FDCAN_BASE + FDCAN_CCCR, 0);
+}
+
+fn queue_fdcan_tx(machine: &mut dyn MachineTrait, id: u32, payload: u8) {
+    write_u32(machine, FDCAN_BASE + FDCAN_RAM + 0x278, id << 18);
+    write_u32(machine, FDCAN_BASE + FDCAN_RAM + 0x27C, 1 << 16);
+    write_u32(machine, FDCAN_BASE + FDCAN_RAM + 0x280, u32::from(payload));
+    write_u32(machine, FDCAN_BASE + FDCAN_TXBAR, 1);
+}
+
+fn rx_fifo0_frame(machine: &dyn MachineTrait, slot: u64) -> (u32, u8) {
+    let base = FDCAN_BASE + FDCAN_RAM + 0xB0 + slot * FDCAN_RX_FIFO0_ELEMENT_BYTES;
+    (
+        (read_u32(machine, base) >> 18) & 0x7FF,
+        (read_u32(machine, base + 8) & 0xFF) as u8,
+    )
 }
 
 #[test]
@@ -130,11 +153,11 @@ fn manifest_can_bus_routes_a_known_fdcan_frame_without_sender_echo() {
     // Program TX buffer 0 on the tester only. All register accesses go through
     // World -> MachineTrait -> SystemBus; no isolated FDCAN or CanBus endpoint
     // is constructed in this test.
-    let sender = world.machines.get_mut("tester").unwrap();
-    write_u32(sender.as_mut(), FDCAN_BASE + FDCAN_RAM + 0x278, 0x321 << 18);
-    write_u32(sender.as_mut(), FDCAN_BASE + FDCAN_RAM + 0x27C, 1 << 16);
-    write_u32(sender.as_mut(), FDCAN_BASE + FDCAN_RAM + 0x280, 0x0000_00A5);
-    write_u32(sender.as_mut(), FDCAN_BASE + FDCAN_TXBAR, 1);
+    queue_fdcan_tx(
+        world.machines.get_mut("tester").unwrap().as_mut(),
+        0x321,
+        0xA5,
+    );
 
     // Round 1 drains the sender into the manifest-wired CanBus. In round 2 the
     // lexical-first ECU drains the endpoint before the tester takes its turn.
@@ -159,17 +182,61 @@ fn manifest_can_bus_routes_a_known_fdcan_frame_without_sender_echo() {
         1,
         "the distinct manifest-connected node receives exactly one frame"
     );
+    assert_eq!(rx_fifo0_frame(receiver.as_ref(), 0), (0x321, 0xA5));
+}
+
+#[test]
+fn manifest_can_bus_delivery_order_is_lexical_not_yaml_order() {
+    // The bus membership is deliberately reversed. The two transmitters queue
+    // in the same World round and the observer must receive them in lexical
+    // node-ID order, not the incidental `nodes:` order in this manifest.
+    let mut world = World::from_manifest(
+        quiet_can_environment_with_nodes(
+            &["alpha", "observer", "zeta"],
+            can_bus(&["zeta", "observer", "alpha"], Some("fdcan1")),
+        ),
+        &repo_root(),
+    )
+    .expect("the three-node manifest-defined FDCAN topology should build");
+
+    for id in ["alpha", "observer", "zeta"] {
+        start_fdcan(world.machines.get_mut(id).unwrap().as_mut());
+    }
+
+    queue_fdcan_tx(
+        world.machines.get_mut("alpha").unwrap().as_mut(),
+        0x111,
+        0xA1,
+    );
+    queue_fdcan_tx(
+        world.machines.get_mut("zeta").unwrap().as_mut(),
+        0x222,
+        0xB2,
+    );
+
+    for _ in 0..2 {
+        let results = world.step_all();
+        assert!(
+            results.values().all(Result::is_ok),
+            "world round failed: {results:?}"
+        );
+    }
+
+    let observer = world.machines.get("observer").unwrap();
     assert_eq!(
-        (read_u32(receiver.as_ref(), FDCAN_BASE + FDCAN_RAM + 0xB0) >> 18) & 0x7FF,
-        0x321
+        read_u32(observer.as_ref(), FDCAN_BASE + FDCAN_RXF0S) & 0x7F,
+        2,
+        "the passive observer receives both simultaneous sender frames"
     );
     assert_eq!(
-        (read_u32(receiver.as_ref(), FDCAN_BASE + FDCAN_RAM + 0xB4) >> 16) & 0xF,
-        1
+        rx_fifo0_frame(observer.as_ref(), 0),
+        (0x111, 0xA1),
+        "the lexical-first sender is delivered first"
     );
     assert_eq!(
-        read_u32(receiver.as_ref(), FDCAN_BASE + FDCAN_RAM + 0xB8) & 0xFF,
-        0xA5
+        rx_fifo0_frame(observer.as_ref(), 1),
+        (0x222, 0xB2),
+        "the lexical-last sender is delivered second"
     );
 }
 
@@ -216,13 +283,13 @@ fn can_bus_reports_unknown_node_and_missing_or_non_fdcan_peripheral() {
         Some("missing_fdcan"),
     )));
     assert!(
-        missing.contains("can_bus node 'tester': no peripheral 'missing_fdcan'"),
+        missing.contains("can_bus node 'ecu': no peripheral 'missing_fdcan'"),
         "{missing}"
     );
 
     let wrong_kind = world_error(environment(can_bus(&["tester", "ecu"], Some("rcc"))));
     assert!(
-        wrong_kind.contains("can_bus node 'tester': peripheral 'rcc' is not an FDCAN"),
+        wrong_kind.contains("can_bus node 'ecu': peripheral 'rcc' is not an FDCAN"),
         "{wrong_kind}"
     );
 }

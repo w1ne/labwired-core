@@ -53,6 +53,13 @@ and a world-level test proves a receiver gets a frame and the manifest rejects
 an unknown node.  The UDS acceptance assertion remains tester-to-ECU behavior,
 not a self-echo claim.
 
+Each `can_bus` must provide a nonblank string at `config.peripheral`; there is
+no implicit `fdcan1` default. It must name at least two distinct manifest
+nodes. World validates a copied, lexically sorted membership list and attaches
+endpoints in that same order, so permuting YAML `nodes:` membership cannot
+change the delivery order of simultaneous frames. Unknown nodes and missing or
+non-FDCAN peripherals fail with topology-specific diagnostics.
+
 ## Explicit environment-runner contract
 
 `schema_version: "1.0"` accepts exactly one input shape.  A script has either

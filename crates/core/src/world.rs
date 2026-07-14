@@ -6,7 +6,7 @@
 
 use crate::network::Interconnect;
 use crate::{Bus, Cpu, Machine, SimResult};
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 
 /// The orchestrator for a multi-node simulation environment.
 ///
@@ -241,18 +241,23 @@ impl World {
                         .map(str::trim)
                         .filter(|value| !value.is_empty())
                         .context("can_bus: missing nonblank config.peripheral")?;
-                    let unique_nodes: BTreeSet<_> = ic.nodes.iter().collect();
-                    if ic.nodes.len() < 2 || unique_nodes.len() != ic.nodes.len() {
+                    // A manifest's membership order must not alter the behavior
+                    // of an otherwise identical topology. CanBus drains attached
+                    // endpoints in this order, so use the same lexical ordering
+                    // as World::step_all for validation and attachment.
+                    let mut node_ids = ic.nodes.clone();
+                    node_ids.sort();
+                    if node_ids.len() < 2 || node_ids.windows(2).any(|nodes| nodes[0] == nodes[1]) {
                         anyhow::bail!("can_bus: requires at least two unique nodes");
                     }
-                    for node_id in &ic.nodes {
+                    for node_id in &node_ids {
                         if !world.machines.contains_key(node_id) {
                             anyhow::bail!("can_bus: unknown node '{node_id}'");
                         }
                     }
 
                     let mut can_bus = crate::network::CanBus::new();
-                    for node_id in &ic.nodes {
+                    for node_id in &node_ids {
                         let (tx, rx) = can_bus.attach();
                         world
                             .machines

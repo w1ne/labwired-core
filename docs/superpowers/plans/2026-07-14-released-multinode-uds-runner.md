@@ -156,8 +156,11 @@ pub fn attach_can_bus_by_id(&mut self, id: &str, tx: Sender<CanFrame>, rx: Recei
 
 Add `MachineTrait::attach_can_bus`, create one `CanBus` for each
 `interconnects[type=can_bus]`, attach every named node to the configured
-`peripheral` (default `fdcan1`), and error with the node/peripheral name when
-resolution fails. Build Cortex-M world nodes via `configure_cortex_m(&mut bus)`
+nonblank `config.peripheral` (there is no default), and error with the
+node/peripheral name when resolution fails. Require at least two distinct
+nodes, sort a copied membership list lexically before endpoint attachment, and
+therefore make YAML membership permutations unable to reorder simultaneous
+frame delivery. Build Cortex-M world nodes via `configure_cortex_m(&mut bus)`
 instead of `CortexM::new()`. Change world machine storage/stepping and artifact
 iteration to stable node-id order. The receiver test must use a node with no
 transmit source so an own-frame echo cannot satisfy the cross-node proof.
