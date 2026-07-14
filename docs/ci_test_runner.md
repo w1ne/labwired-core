@@ -387,7 +387,7 @@ only inputs are required `script`, optional `version` (default
 ~~~yaml
 - id: labwired
   name: Run LabWired tests
-  uses: w1ne/labwired-core/.github/actions/labwired-test@a26816999aff2a03d44e1a6961898d6af66e79e2
+  uses: w1ne/labwired-core/.github/actions/labwired-test@82c6c78983669f8688f3823db9a81d1c2bdef202
   with:
     version: v0.19.0
     script: examples/ci/dummy-max-steps.yaml
@@ -400,7 +400,7 @@ only inputs are required `script`, optional `version` (default
 ~~~
 
 The Core action is an immutable action-source pin to
-`a26816999aff2a03d44e1a6961898d6af66e79e2`; `version: v0.19.0` independently
+`82c6c78983669f8688f3823db9a81d1c2bdef202`; `version: v0.19.0` independently
 pins the immutable Core CLI release. It downloads that public release archive
 with `curl`, creates `output-dir/junit.xml` plus Markdown and HTML reports,
 appends the Markdown report to the job summary, and always uploads the entire

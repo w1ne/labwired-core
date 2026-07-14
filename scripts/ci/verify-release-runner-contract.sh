@@ -331,7 +331,7 @@ require_literal "$backfill_workflow" 'examples/ci/dummy-max-steps.yaml' 'runner 
 require_literal RELEASE_PROCESS.md 'core-backfill-runner-image.yml' 'release process documents the one-time runner image backfill workflow'
 require_literal RELEASE_PROCESS.md 'v0.18.0' 'release process documents the initial v0.18.0 runner image backfill'
 
-safe_action_sha=a26816999aff2a03d44e1a6961898d6af66e79e2
+safe_action_sha=82c6c78983669f8688f3823db9a81d1c2bdef202
 safe_action_version=v0.19.0
 safe_action_ref="w1ne/labwired-core/.github/actions/labwired-test@${safe_action_sha}"
 for doc in docs/ci_integration.md docs/ci_test_runner.md docs/integration-templates/github-actions.yml docs/integration-templates/gitlab-ci.yml docs/integration-templates/README.md docs/reference_client_flows.md .github/actions/labwired-test/README.md; do
@@ -395,6 +395,7 @@ else
       require_block_absent_literal "$pinned_action" "$removed_input" "pinned action does not expose retired $removed_input input"
     done
     require_block_literal "$pinned_action" 'if: ${{ always() }}' 'pinned action always renders and uploads reports'
+    require_block_literal "$pinned_action" 'name: labwired-${{ github.job }}-${{ github.run_id }}-${{ github.action }}' 'pinned action gives each invocation a unique artifact name'
   fi
   if [[ -n "$pinned_action_readme" ]]; then
     require_block_literal "$pinned_action_readme" '[CI integration guide](../../../docs/ci_integration.md)' 'pinned action README links the canonical consumer guide'

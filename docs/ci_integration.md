@@ -25,7 +25,7 @@ jobs:
 
       - id: labwired
         name: Run LabWired
-        uses: w1ne/labwired-core/.github/actions/labwired-test@a26816999aff2a03d44e1a6961898d6af66e79e2
+        uses: w1ne/labwired-core/.github/actions/labwired-test@82c6c78983669f8688f3823db9a81d1c2bdef202
         with:
           script: tests/firmware-test.yaml
           version: v0.19.0
@@ -38,7 +38,7 @@ jobs:
 ~~~
 
 The public action reference is an immutable action-source pin to
-`a26816999aff2a03d44e1a6961898d6af66e79e2`. Its only inputs are `script`
+`82c6c78983669f8688f3823db9a81d1c2bdef202`. Its only inputs are `script`
 (required), `version` (default `v0.19.0`), `output-dir`, and `args`; it downloads
 the selected public CLI release archive with `curl`. The action writes JUnit to
 `output-dir/junit.xml`, appends `summary.md` to the job summary, and always
