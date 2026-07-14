@@ -489,6 +489,32 @@ impl SystemBus {
         Ok(())
     }
 
+    /// Attach one endpoint of a shared `CanBus` to the named FDCAN peripheral.
+    ///
+    /// This is deliberately a post-build seam: system manifests build each
+    /// node in isolation, while an environment manifest supplies the topology
+    /// only after all of those buses exist. It rejects a missing identifier and
+    /// any non-FDCAN device rather than silently routing a topology edge to a
+    /// wrong peripheral.
+    pub fn attach_can_bus_by_id(
+        &mut self,
+        can_id: &str,
+        tx: std::sync::mpsc::Sender<crate::network::CanFrame>,
+        rx: std::sync::mpsc::Receiver<crate::network::CanFrame>,
+    ) -> anyhow::Result<()> {
+        let idx = self
+            .find_peripheral_index_by_name(can_id)
+            .ok_or_else(|| anyhow::anyhow!("no peripheral '{can_id}'"))?;
+        let any = self.peripherals[idx]
+            .dev
+            .as_any_mut()
+            .ok_or_else(|| anyhow::anyhow!("peripheral '{can_id}' is not an FDCAN"))?;
+        let fdcan = any
+            .downcast_mut::<crate::peripherals::fdcan::Fdcan>()
+            .ok_or_else(|| anyhow::anyhow!("peripheral '{can_id}' is not an FDCAN"))?;
+        fdcan.attach_bus(tx, rx)
+    }
+
     /// Detach a single UART (by peripheral id) from the shared console TX sink.
     ///
     /// `attach_uart_tx_sink` wires the human-readable serial monitor to *every*

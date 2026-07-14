@@ -6,7 +6,7 @@
 
 use crate::network::Interconnect;
 use crate::{Bus, Cpu, Machine, SimResult};
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
 /// The orchestrator for a multi-node simulation environment.
 ///
@@ -33,6 +33,20 @@ pub trait MachineTrait: Send {
         uart_id: &str,
         dev: Box<dyn crate::peripherals::uart::UartStreamDevice>,
     ) -> anyhow::Result<()>;
+    /// Attach one endpoint of a `CanBus` to a named FDCAN peripheral. The
+    /// default keeps third-party mock machines source-compatible while making
+    /// an unsupported topology error explicit.
+    fn attach_can_bus(
+        &mut self,
+        can_id: &str,
+        _tx: std::sync::mpsc::Sender<crate::network::CanFrame>,
+        _rx: std::sync::mpsc::Receiver<crate::network::CanFrame>,
+    ) -> anyhow::Result<()> {
+        anyhow::bail!(
+            "machine '{}' cannot attach CAN bus endpoint '{can_id}'",
+            self.name()
+        )
+    }
 }
 
 impl<C: Cpu + 'static> MachineTrait for Machine<C> {
@@ -68,6 +82,15 @@ impl<C: Cpu + 'static> MachineTrait for Machine<C> {
     ) -> anyhow::Result<()> {
         self.bus.attach_uart_stream_by_id(uart_id, dev)
     }
+
+    fn attach_can_bus(
+        &mut self,
+        can_id: &str,
+        tx: std::sync::mpsc::Sender<crate::network::CanFrame>,
+        rx: std::sync::mpsc::Receiver<crate::network::CanFrame>,
+    ) -> anyhow::Result<()> {
+        self.bus.attach_can_bus_by_id(can_id, tx, rx)
+    }
 }
 
 impl World {
@@ -94,8 +117,15 @@ impl World {
     /// Chandy-Lamport for distributed snapshots.
     pub fn step_all(&mut self) -> HashMap<String, SimResult<()>> {
         let mut results = HashMap::new();
-        for (id, machine) in &mut self.machines {
-            results.insert(id.clone(), machine.step());
+        let mut ids: Vec<_> = self.machines.keys().cloned().collect();
+        ids.sort();
+        for id in ids {
+            let result = self
+                .machines
+                .get_mut(&id)
+                .expect("machine id was collected from this world")
+                .step();
+            results.insert(id, result);
         }
         for interconnect in &mut self.interconnects {
             if let Err(e) = interconnect.tick() {
@@ -107,8 +137,15 @@ impl World {
 
     pub fn reset_all(&mut self) -> HashMap<String, SimResult<()>> {
         let mut results = HashMap::new();
-        for (id, machine) in &mut self.machines {
-            results.insert(id.clone(), machine.reset());
+        let mut ids: Vec<_> = self.machines.keys().cloned().collect();
+        ids.sort();
+        for id in ids {
+            let result = self
+                .machines
+                .get_mut(&id)
+                .expect("machine id was collected from this world")
+                .reset();
+            results.insert(id, result);
         }
         results
     }
@@ -139,9 +176,10 @@ impl World {
                 .join(&sysman.chip);
             let chip = labwired_config::ChipDescriptor::from_file(&chip_path)
                 .with_context(|| format!("node '{}': chip {:?}", node.id, chip_path))?;
-            let bus = crate::bus::SystemBus::from_config(&chip, &sysman)
+            let mut bus = crate::bus::SystemBus::from_config(&chip, &sysman)
                 .with_context(|| format!("node '{}': build bus", node.id))?;
-            let mut machine = Machine::new(crate::cpu::cortex_m::CortexM::new(), bus);
+            let (cpu, _nvic) = crate::system::cortex_m::configure_cortex_m(&mut bus);
+            let mut machine = Machine::new(cpu, bus);
             let fw_path = root_dir.join(&node.firmware);
             let image = load_elf_image(&fw_path)
                 .with_context(|| format!("node '{}': firmware {:?}", node.id, fw_path))?;
@@ -194,6 +232,36 @@ impl World {
                         .with_context(|| format!("uart_cross_link: unknown node '{b}'"))?
                         .attach_uart_stream(b_uart, Box::new(eb))?;
                     world.add_interconnect(Box::new(link));
+                }
+                "can_bus" => {
+                    let peripheral = ic
+                        .config
+                        .get("peripheral")
+                        .and_then(|value| value.as_str())
+                        .map(str::trim)
+                        .filter(|value| !value.is_empty())
+                        .context("can_bus: missing nonblank config.peripheral")?;
+                    let unique_nodes: BTreeSet<_> = ic.nodes.iter().collect();
+                    if ic.nodes.len() < 2 || unique_nodes.len() != ic.nodes.len() {
+                        anyhow::bail!("can_bus: requires at least two unique nodes");
+                    }
+                    for node_id in &ic.nodes {
+                        if !world.machines.contains_key(node_id) {
+                            anyhow::bail!("can_bus: unknown node '{node_id}'");
+                        }
+                    }
+
+                    let mut can_bus = crate::network::CanBus::new();
+                    for node_id in &ic.nodes {
+                        let (tx, rx) = can_bus.attach();
+                        world
+                            .machines
+                            .get_mut(node_id)
+                            .expect("all can_bus nodes were validated above")
+                            .attach_can_bus(peripheral, tx, rx)
+                            .with_context(|| format!("can_bus node '{node_id}'"))?;
+                    }
+                    world.add_interconnect(Box::new(can_bus));
                 }
                 "egress" => {
                     let (node, uart, tx, bus) = build_egress(ic)?;
