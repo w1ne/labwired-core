@@ -205,7 +205,9 @@ fn esp32s3_oled_native_baseline() {
             retired < max_cycles,
             "S3 OLED serial marker was not emitted"
         );
-        let count = CHUNK.min((max_cycles - retired) as u32);
+        let remaining = u32::try_from(max_cycles - retired)
+            .expect("LABWIRED_ESP32S3_OLED_MAX_CYCLES remaining budget must fit in u32");
+        let count = CHUNK.min(remaining);
         machine.run(Some(count)).expect("run S3 OLED completion");
         retired += u64::from(count);
     }
