@@ -13,7 +13,14 @@ semantics, ROM behavior, profile counters, C3 behavior, or the S3 workload.
 
 - Source revision: `cad3febf` (`test: pin complete S3 OLED legacy mapping`)
 - Test: `crates/core/tests/esp32s3_oled_profile.rs`
-- Command:
+- Release build command:
+
+  ```text
+  cargo test -p labwired-core --features event-scheduler \
+    --test esp32s3_oled_profile --release --no-run
+  ```
+
+- Baseline command:
 
   ```text
   target/release/deps/esp32s3_oled_profile-47a2a070db637d37 \
@@ -35,9 +42,33 @@ All three runs passed with identical counters and digests.
 
 The test binary was run with the same S3 setup and a bounded diagnostic budget
 (`LABWIRED_ESP32S3_OLED_MAX_CYCLES=100000000`) plus an intentionally absent
-completion marker. The process was sampled with macOS `sample` for 10 seconds
-and then stopped. This was a profiling run only; it was not added to the
-production workload and did not introduce a simulator timing primitive.
+completion marker. Precisely, the profiling command set
+`LABWIRED_ESP32S3_OLED_SERIAL_MARKER=__never_emitted__`. The curated ELF emits
+the browser S3 completion marker `S3 OLED painted`, not `__never_emitted__`, so
+the test continued until the configured budget rather than stopping at normal
+completion. This changes only the diagnostic run's stopping condition; it does
+not change the firmware, simulator, or production/browser configuration.
+
+The exact profiling command was:
+
+```text
+LABWIRED_ESP32S3_OLED_MAX_CYCLES=100000000 \
+LABWIRED_ESP32S3_OLED_SERIAL_MARKER=__never_emitted__ \
+target/release/deps/esp32s3_oled_profile-47a2a070db637d37 \
+  esp32s3_oled_native_baseline --ignored --nocapture
+```
+
+While that process was running, macOS `sample` was invoked for 10 seconds:
+
+```text
+sample 42889 10 1 -file /tmp/labwired-s3-sample.txt
+```
+
+PID `42889` was the run-specific test process. After sampling, it was
+terminated with `kill 42889`; a reproducible run should substitute the PID
+reported by `ps aux` for the matching test binary. This was a profiling run
+only; it was not added to the production workload and did not introduce a
+simulator timing primitive.
 
 The sample contained 7,595 main execution-thread samples:
 
@@ -63,4 +94,3 @@ and IRQ behavior. No speculative change was made.
 - ESP32-C3 focused unit tests: 122 passed.
 - No hardware parity claim: the connected board was detected previously, but
   OpenOCD capture is unavailable in this environment.
-
