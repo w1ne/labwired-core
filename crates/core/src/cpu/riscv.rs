@@ -1707,6 +1707,10 @@ mod tests {
 
         assert_eq!(machine.total_cycles, 10);
         assert!(
+            machine.idle_fast_forward_cycles_skipped > 0,
+            "idle FF counter must rise when WFI skip fires"
+        );
+        assert!(
             machine.step_profile().cpu_instructions < 10,
             "fast-forwarded cycles should not retire CPU instructions"
         );

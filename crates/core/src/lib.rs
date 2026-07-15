@@ -1000,6 +1000,10 @@ pub struct Machine<C: Cpu> {
     pub breakpoints: std::collections::HashSet<u32>,
     pub last_breakpoint: Option<u32>,
     pub total_cycles: u64,
+    /// Cumulative CPU cycles advanced by idle fast-forward (WFI skip), not
+    /// interpreted. Lets the browser `?perf=1` HUD prove FF is firing; 0 means
+    /// either FF is off or firmware never parks in a skippable idle.
+    pub idle_fast_forward_cycles_skipped: u64,
     pub config: SimulationConfig,
     step_profile: StepProfile,
 
@@ -1300,6 +1304,7 @@ impl<C: Cpu> Machine<C> {
             breakpoints: HashSet::new(),
             last_breakpoint: None,
             total_cycles: 0,
+            idle_fast_forward_cycles_skipped: 0,
             config: SimulationConfig::default(),
             step_profile: StepProfile::default(),
             sched: sched::EventScheduler::new(),
@@ -1395,6 +1400,7 @@ impl<C: Cpu> Machine<C> {
             let skipped = budget.min(u32::MAX as u64) as u32;
             self.cpu.fast_forward_idle_cycles(skipped as u64);
             self.total_cycles += skipped as u64;
+            self.idle_fast_forward_cycles_skipped += skipped as u64;
             self.bus.set_current_cycle(self.total_cycles);
             self.bus.bus_trace.set_cycle(self.total_cycles);
             // Push-mode logic capture: stamp any pad writes made by the

@@ -1048,6 +1048,17 @@ impl WasmSimulator {
         self.machine().config.idle_fast_forward_enabled = enabled;
     }
 
+    /// Cumulative cycles advanced by idle fast-forward (WFI skip), not
+    /// interpreted. Browser `?perf=1` uses this to prove FF is firing; stays
+    /// 0 when FF is off or firmware never parks in a skippable idle.
+    #[wasm_bindgen]
+    pub fn idle_fast_forward_cycles_skipped(&self) -> u64 {
+        self.machine
+            .as_ref()
+            .map(|m| m.idle_fast_forward_cycles_skipped)
+            .unwrap_or(0)
+    }
+
     /// Set the peripheral tick interval used by `Machine::run`.
     ///
     /// `1` is the exact default: tick orchestration runs after every executed
