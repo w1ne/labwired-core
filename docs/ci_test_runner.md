@@ -50,6 +50,9 @@ limits:
   max_cycles: 123456     # optional
   max_uart_bytes: 4096   # optional
   wall_time_ms: 5000     # optional
+  stop_when_assertions_pass: true          # optional; default false
+  stop_when_assertions_pass_settle_steps: 1000  # optional; default 100000
+  stop_when_assertions_pass_min_steps: 1000     # optional; default 0
 assertions:
   - memory_value:
       node: alpha
@@ -105,6 +108,18 @@ Each `config` mapping is closed and type-checked:
 Environment scripts do not accept single-machine firmware/system overrides or
 topology-affecting CLI options.
 
+`stop_when_assertions_pass` is opt-in for an environment world and has the
+same durable completion contract as a single-machine run. Once every
+node-qualified `memory_value` assertion passes at or after
+`stop_when_assertions_pass_min_steps`, it must remain true for
+`stop_when_assertions_pass_settle_steps` world rounds (default `100000`). A
+regression restarts that window. A runtime failure or a same-round
+`wall_time_ms`, `max_cycles`, or `max_uart_bytes` limit wins over completion.
+`max_steps` remains the outer execution bound, so completion on its final
+allowed world round reports `assertions_passed`; otherwise the result has
+`stop_reason: assertions_passed`. The three fields are respectively a boolean
+and non-negative integers; explicit YAML `null` is rejected.
+
 ## Exit Codes
 
 | Code | Meaning | Notes |
@@ -157,7 +172,9 @@ Notes:
 The single-machine example above permits the documented single-machine
 assertions. Environment scripts are stricter: they require at least one
 node-qualified `memory_value` assertion and support `max_steps`, `max_cycles`,
-`max_uart_bytes`, and `wall_time_ms` limits. They reject
+`max_uart_bytes`, `wall_time_ms`, `stop_when_assertions_pass`,
+`stop_when_assertions_pass_settle_steps`, and
+`stop_when_assertions_pass_min_steps` limits. They reject
 `limits.no_progress_steps` and single-machine-only controls such as
 `--breakpoint`.
 
@@ -184,6 +201,7 @@ assertions: []
 - `max_uart_bytes`
 - `no_progress`
 - `wall_time`
+- `assertions_passed`
 - `memory_violation`
 - `decode_error`
 - `halt`
@@ -194,6 +212,8 @@ Semantics:
 - If the simulator hits `wall_time_ms`, the run is treated as an assertion failure (exit code `1`) unless an `expected_stop_reason` assertion matches `wall_time`.
 - If the simulator hits `max_uart_bytes` or `no_progress_steps`, the run is treated as an assertion failure (exit code `1`) unless an `expected_stop_reason` assertion matches (`max_uart_bytes` / `no_progress`).
 - If the simulator hits `max_steps` or `max_cycles`, the run is considered a normal stop (exit code `0`) as long as assertions pass.
+- If opt-in assertion completion reaches its durable settling window, the run
+  stops with `assertions_passed` and passes.
 - If the simulator hits a runtime error stop reason (e.g. `memory_violation`), the run is treated as a runtime error (exit code `3`) unless an `expected_stop_reason` assertion matches the stop reason.
 
 `result.json` uses:
@@ -277,6 +297,7 @@ firmware identity.
             "max_uart_bytes",
             "no_progress",
             "wall_time",
+            "assertions_passed",
             "memory_violation",
             "decode_error",
             "halt",
@@ -375,21 +396,21 @@ configuration; these produce `status: "error"` with `stop_reason:
 
 ## CI release runners
 
-Use the pinned v0.19.0 release runner in CI. It runs the same `labwired test`
+Use the pinned v0.19.1 release runner in CI. It runs the same `labwired test`
 command described above and writes the same artifact contract.
 
 ### GitHub Actions
 
 Use the public Core action and pin the Core CLI with its version input. Its
 only inputs are required `script`, optional `version` (default
-`v0.19.0`), `output-dir`, and `args`:
+`v0.19.1`), `output-dir`, and `args`:
 
 ~~~yaml
 - id: labwired
   name: Run LabWired tests
-  uses: w1ne/labwired-core/.github/actions/labwired-test@82c6c78983669f8688f3823db9a81d1c2bdef202
+  uses: w1ne/labwired-core/.github/actions/labwired-test@fda6a7bfb0328d9909ee07ba53ed05c84901f627
   with:
-    version: v0.19.0
+    version: v0.19.1
     script: examples/ci/dummy-max-steps.yaml
     output-dir: out/artifacts
     args: --no-uart-stdout
@@ -400,7 +421,7 @@ only inputs are required `script`, optional `version` (default
 ~~~
 
 The Core action is an immutable action-source pin to
-`82c6c78983669f8688f3823db9a81d1c2bdef202`; `version: v0.19.0` independently
+`fda6a7bfb0328d9909ee07ba53ed05c84901f627`; `version: v0.19.1` independently
 pins the immutable Core CLI release. It downloads that public release archive
 with `curl`, creates `output-dir/junit.xml` plus Markdown and HTML reports,
 appends the Markdown report to the job summary, and always uploads the entire
@@ -416,7 +437,7 @@ use either a single-machine script or an `inputs.env` world script.
 
 ~~~bash
 docker run --rm -v "$PWD:/workspace" -w /workspace \
-  ghcr.io/w1ne/labwired:v0.19.0 \
+  ghcr.io/w1ne/labwired:v0.19.1 \
   test --script examples/ci/dummy-max-steps.yaml \
        --output-dir out/artifacts \
        --no-uart-stdout
@@ -426,7 +447,7 @@ GitLab should clear that entrypoint and invoke labwired from its job shell:
 
 ~~~yaml
 image:
-  name: ghcr.io/w1ne/labwired:v0.19.0
+  name: ghcr.io/w1ne/labwired:v0.19.1
   entrypoint: [""]
 script:
   - labwired test --script examples/ci/dummy-max-steps.yaml --output-dir out/artifacts --no-uart-stdout

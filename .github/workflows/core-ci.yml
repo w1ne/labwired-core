@@ -106,6 +106,22 @@ jobs:
           --test kw41z_walk_free_differential
           --lib
 
+      # This is deliberately inside the required core-integrity check: every
+      # merge must prove the final OCI runtime can execute the CLI before a
+      # main commit can be tagged for release. Building from fresh base layers
+      # catches builder/runtime ABI drift such as a newer glibc in Rust's slim
+      # image than the release runtime provides.
+      - name: Smoke CI runner image
+        run: |
+          set -euo pipefail
+          docker build --pull \
+            --file Dockerfile.ci \
+            --tag labwired-ci-smoke:local \
+            --build-arg VERSION=ci-smoke \
+            --build-arg REVISION="$GITHUB_SHA" \
+            .
+          docker run --rm labwired-ci-smoke:local --version
+
   # ── Full suite (NOT a PR gate) ─────────────────────────────────────────────
   # Builds firmware fixtures, runs the complete workspace tests, the host-only
   # feature lanes, and the Tier-1 matrix + ratchet. This is expensive, so keep it

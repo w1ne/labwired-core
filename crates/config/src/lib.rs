@@ -1386,8 +1386,8 @@ pub struct EnvTestScript {
 
 /// A field whose parser records the difference between being absent and being
 /// explicitly configured to a default value (or `null`). Environment scripts
-/// use this for single-node-only early-stop tuning: every explicit occurrence
-/// is rejected instead of being normalized away during deserialization.
+/// use it to preserve their strict serialization contract and to distinguish
+/// an absent setting from an invalid explicit `null`.
 #[derive(Debug, Clone, Copy, Default)]
 enum FieldPresence<T> {
     #[default]
@@ -1437,9 +1437,9 @@ struct EnvExplicitUnsupportedFields {
 }
 
 /// Serialization keeps the user-visible environment contract strict in both
-/// directions. Valid scripts omit runner options that environment execution
-/// cannot honor; invalid parsed or programmatically-mutated scripts retain the
-/// unsupported field so a serialize/parse cycle cannot make them look valid.
+/// directions. Valid scripts omit defaulted limits; invalid parsed or
+/// programmatically-mutated unsupported fields remain visible so a
+/// serialize/parse cycle cannot make them look valid.
 #[derive(Serialize)]
 struct SerializableEnvTestScript<'a> {
     schema_version: &'a str,
@@ -1486,7 +1486,7 @@ fn serialize_unsupported_option_limit(
     }
 }
 
-fn serialize_unsupported_bool_limit(
+fn serialize_explicit_bool_limit(
     explicit: FieldPresence<bool>,
     value: bool,
 ) -> Option<Option<bool>> {
@@ -1501,7 +1501,7 @@ fn serialize_unsupported_bool_limit(
     }
 }
 
-fn serialize_unsupported_defaulted_limit(
+fn serialize_explicit_defaulted_limit(
     explicit: FieldPresence<u64>,
     value: u64,
     default: u64,
@@ -1564,16 +1564,16 @@ impl Serialize for EnvTestScript {
                     self.explicit_limits.max_vcd_bytes,
                     self.limits.max_vcd_bytes,
                 ),
-                stop_when_assertions_pass: serialize_unsupported_bool_limit(
+                stop_when_assertions_pass: serialize_explicit_bool_limit(
                     self.explicit_limits.stop_when_assertions_pass,
                     self.limits.stop_when_assertions_pass,
                 ),
-                stop_when_assertions_pass_settle_steps: serialize_unsupported_defaulted_limit(
+                stop_when_assertions_pass_settle_steps: serialize_explicit_defaulted_limit(
                     self.explicit_limits.stop_when_assertions_pass_settle_steps,
                     self.limits.stop_when_assertions_pass_settle_steps,
                     default_stop_settle_steps(),
                 ),
-                stop_when_assertions_pass_min_steps: serialize_unsupported_defaulted_limit(
+                stop_when_assertions_pass_min_steps: serialize_explicit_defaulted_limit(
                     self.explicit_limits.stop_when_assertions_pass_min_steps,
                     self.limits.stop_when_assertions_pass_min_steps,
                     0,
@@ -1598,8 +1598,8 @@ impl Serialize for EnvTestScript {
 }
 
 /// Wire shape for an environment limits block. It resolves to `TestLimits`
-/// after retaining presence information for settings the environment runner
-/// intentionally does not implement.
+/// after retaining presence information for settings whose explicit defaults
+/// and nullability need a stable public contract.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct EnvTestLimits {
@@ -1653,8 +1653,8 @@ impl EnvTestLimits {
 }
 
 /// Strict deserialization wire form for `EnvTestScript`. The public type keeps
-/// `TestLimits` for runners, while this shape preserves which unsupported
-/// early-stop fields were explicitly supplied in YAML.
+/// `TestLimits` for runners, while this shape preserves explicit values needed
+/// for strict serialization and validation.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct EnvTestScriptWire {
@@ -1731,31 +1731,28 @@ impl EnvTestScript {
         if self.explicit_limits.max_vcd_bytes.is_present() || self.limits.max_vcd_bytes.is_some() {
             anyhow::bail!("Environment test scripts do not support 'limits.max_vcd_bytes'");
         }
-        if self.explicit_limits.stop_when_assertions_pass.is_present()
-            || self.limits.stop_when_assertions_pass
-        {
+        if matches!(
+            self.explicit_limits.stop_when_assertions_pass,
+            FieldPresence::Present(None)
+        ) {
             anyhow::bail!(
-                "Environment test scripts do not support 'limits.stop_when_assertions_pass'"
+                "Environment test script limit 'stop_when_assertions_pass' must not be null"
             );
         }
-        if self
-            .explicit_limits
-            .stop_when_assertions_pass_settle_steps
-            .is_present()
-            || self.limits.stop_when_assertions_pass_settle_steps != default_stop_settle_steps()
-        {
+        if matches!(
+            self.explicit_limits.stop_when_assertions_pass_settle_steps,
+            FieldPresence::Present(None)
+        ) {
             anyhow::bail!(
-                "Environment test scripts do not support 'limits.stop_when_assertions_pass_settle_steps'"
+                "Environment test script limit 'stop_when_assertions_pass_settle_steps' must not be null"
             );
         }
-        if self
-            .explicit_limits
-            .stop_when_assertions_pass_min_steps
-            .is_present()
-            || self.limits.stop_when_assertions_pass_min_steps != 0
-        {
+        if matches!(
+            self.explicit_limits.stop_when_assertions_pass_min_steps,
+            FieldPresence::Present(None)
+        ) {
             anyhow::bail!(
-                "Environment test scripts do not support 'limits.stop_when_assertions_pass_min_steps'"
+                "Environment test script limit 'stop_when_assertions_pass_min_steps' must not be null"
             );
         }
         if self.explicit_unsupported_fields.faults.is_present() || !self.faults.is_empty() {
@@ -2476,6 +2473,160 @@ assertions:
         round_tripped.validate().unwrap();
     }
 
+    #[test]
+    fn env_script_accepts_and_round_trips_assertion_completion_limits() {
+        let script: EnvTestScript = serde_yaml::from_str(
+            r#"
+schema_version: "1.0"
+inputs: { env: "twonode-env.yaml" }
+limits:
+  max_steps: 10
+  stop_when_assertions_pass: true
+  stop_when_assertions_pass_settle_steps: 7
+  stop_when_assertions_pass_min_steps: 3
+assertions:
+  - memory_value: { node: tester, address: 0x20010000, expected_value: 1 }
+"#,
+        )
+        .unwrap();
+
+        script.validate().unwrap();
+        assert!(script.limits.stop_when_assertions_pass);
+        assert_eq!(script.limits.stop_when_assertions_pass_settle_steps, 7);
+        assert_eq!(script.limits.stop_when_assertions_pass_min_steps, 3);
+
+        let serialized = serde_yaml::to_string(&script).unwrap();
+        for field in [
+            "stop_when_assertions_pass: true",
+            "stop_when_assertions_pass_settle_steps: 7",
+            "stop_when_assertions_pass_min_steps: 3",
+        ] {
+            assert!(serialized.contains(field), "missing {field}: {serialized}");
+        }
+        let round_tripped: EnvTestScript = serde_yaml::from_str(&serialized).unwrap();
+        round_tripped.validate().unwrap();
+        assert_eq!(
+            round_tripped.limits.stop_when_assertions_pass,
+            script.limits.stop_when_assertions_pass
+        );
+        assert_eq!(
+            round_tripped.limits.stop_when_assertions_pass_settle_steps,
+            script.limits.stop_when_assertions_pass_settle_steps
+        );
+        assert_eq!(
+            round_tripped.limits.stop_when_assertions_pass_min_steps,
+            script.limits.stop_when_assertions_pass_min_steps
+        );
+    }
+
+    #[test]
+    fn env_script_preserves_explicit_assertion_completion_defaults() {
+        let script: EnvTestScript = serde_yaml::from_str(
+            r#"
+schema_version: "1.0"
+inputs: { env: "twonode-env.yaml" }
+limits:
+  max_steps: 10
+  stop_when_assertions_pass: false
+  stop_when_assertions_pass_settle_steps: 100000
+  stop_when_assertions_pass_min_steps: 0
+assertions:
+  - memory_value: { node: tester, address: 0x20010000, expected_value: 1 }
+"#,
+        )
+        .unwrap();
+
+        script.validate().unwrap();
+        let serialized = serde_yaml::to_string(&script).unwrap();
+        for field in [
+            "stop_when_assertions_pass: false",
+            "stop_when_assertions_pass_settle_steps: 100000",
+            "stop_when_assertions_pass_min_steps: 0",
+        ] {
+            assert!(serialized.contains(field), "missing {field}: {serialized}");
+        }
+
+        let round_tripped: EnvTestScript = serde_yaml::from_str(&serialized).unwrap();
+        round_tripped.validate().unwrap();
+        assert!(!round_tripped.limits.stop_when_assertions_pass);
+        assert_eq!(
+            round_tripped.limits.stop_when_assertions_pass_settle_steps,
+            100_000
+        );
+        assert_eq!(round_tripped.limits.stop_when_assertions_pass_min_steps, 0);
+    }
+
+    #[test]
+    fn env_script_rejects_null_assertion_completion_limits() {
+        for (name, extra, field) in [
+            (
+                "early-pass-null",
+                "  stop_when_assertions_pass: null",
+                "stop_when_assertions_pass",
+            ),
+            (
+                "early-pass-settle-null",
+                "  stop_when_assertions_pass_settle_steps: null",
+                "stop_when_assertions_pass_settle_steps",
+            ),
+            (
+                "early-pass-minimum-null",
+                "  stop_when_assertions_pass_min_steps: null",
+                "stop_when_assertions_pass_min_steps",
+            ),
+        ] {
+            let script_path = write_temp_file(
+                name,
+                &format!(
+                    r#"
+schema_version: "1.0"
+inputs: {{ env: "twonode-env.yaml" }}
+limits:
+  max_steps: 10
+{extra}
+assertions:
+  - memory_value: {{ node: tester, address: 0x20010000, expected_value: 1 }}
+"#
+                ),
+            );
+            let err = load_test_script(&script_path).unwrap_err().to_string();
+            assert!(err.contains(field), "unexpected error: {err}");
+            assert!(err.contains("must not be null"), "unexpected error: {err}");
+        }
+    }
+
+    #[test]
+    fn env_script_preserves_invalid_null_assertion_completion_limits() {
+        for (field, value) in [
+            ("stop_when_assertions_pass", "null"),
+            ("stop_when_assertions_pass_settle_steps", "null"),
+            ("stop_when_assertions_pass_min_steps", "null"),
+        ] {
+            let script: EnvTestScript = serde_yaml::from_str(&format!(
+                r#"
+schema_version: "1.0"
+inputs: {{ env: "twonode-env.yaml" }}
+limits:
+  max_steps: 10
+  {field}: {value}
+assertions:
+  - memory_value: {{ node: tester, address: 0x20010000, expected_value: 1 }}
+"#
+            ))
+            .unwrap();
+
+            let serialized = serde_yaml::to_string(&script).unwrap();
+            assert!(
+                serialized.contains(&format!("{field}: {value}")),
+                "explicit null {field} was lost during serialization: {serialized}"
+            );
+            let round_tripped: EnvTestScript = serde_yaml::from_str(&serialized).unwrap();
+            let err = round_tripped.validate().unwrap_err().to_string();
+            assert!(err.contains(field), "unexpected error: {err}");
+            assert!(err.contains("must not be null"), "unexpected error: {err}");
+        }
+    }
+
     fn valid_env_script_for_mutation() -> EnvTestScript {
         serde_yaml::from_str(
             r#"
@@ -2518,21 +2669,6 @@ assertions:
         assert_rejected_and_round_trips_invalid!("max_vcd_bytes", |script: &mut EnvTestScript| {
             script.limits.max_vcd_bytes = Some(1)
         });
-        assert_rejected_and_round_trips_invalid!(
-            "stop_when_assertions_pass",
-            |script: &mut EnvTestScript| script.limits.stop_when_assertions_pass = true
-        );
-        assert_rejected_and_round_trips_invalid!(
-            "stop_when_assertions_pass_settle_steps",
-            |script: &mut EnvTestScript| {
-                script.limits.stop_when_assertions_pass_settle_steps =
-                    default_stop_settle_steps() + 1
-            }
-        );
-        assert_rejected_and_round_trips_invalid!(
-            "stop_when_assertions_pass_min_steps",
-            |script: &mut EnvTestScript| script.limits.stop_when_assertions_pass_min_steps = 1
-        );
         assert_rejected_and_round_trips_invalid!("faults", |script: &mut EnvTestScript| {
             script.faults.push(
                 serde_yaml::from_str(
@@ -2574,24 +2710,6 @@ value: 1.0
                 "",
                 "max_vcd_bytes: null",
                 "max_vcd_bytes",
-            ),
-            (
-                "  stop_when_assertions_pass: false",
-                "",
-                "stop_when_assertions_pass: false",
-                "stop_when_assertions_pass",
-            ),
-            (
-                "  stop_when_assertions_pass_settle_steps: 100000",
-                "",
-                "stop_when_assertions_pass_settle_steps: 100000",
-                "stop_when_assertions_pass_settle_steps",
-            ),
-            (
-                "  stop_when_assertions_pass_min_steps: 0",
-                "",
-                "stop_when_assertions_pass_min_steps: 0",
-                "stop_when_assertions_pass_min_steps",
             ),
             ("", "faults: null", "faults: null", "faults"),
             ("", "faults: []", "faults: []", "faults"),
@@ -2927,41 +3045,6 @@ assertions:
             ),
             ("vcd", "  max_vcd_bytes: 1024", "max_vcd_bytes"),
             ("vcd-null", "  max_vcd_bytes: null", "max_vcd_bytes"),
-            (
-                "early-pass",
-                "  stop_when_assertions_pass: true",
-                "stop_when_assertions_pass",
-            ),
-            (
-                "early-pass-false",
-                "  stop_when_assertions_pass: false",
-                "stop_when_assertions_pass",
-            ),
-            (
-                "early-pass-null",
-                "  stop_when_assertions_pass: null",
-                "stop_when_assertions_pass",
-            ),
-            (
-                "early-pass-settle",
-                "  stop_when_assertions_pass_settle_steps: 100000",
-                "stop_when_assertions_pass_settle_steps",
-            ),
-            (
-                "early-pass-settle-null",
-                "  stop_when_assertions_pass_settle_steps: null",
-                "stop_when_assertions_pass_settle_steps",
-            ),
-            (
-                "early-pass-minimum",
-                "  stop_when_assertions_pass_min_steps: 0",
-                "stop_when_assertions_pass_min_steps",
-            ),
-            (
-                "early-pass-minimum-null",
-                "  stop_when_assertions_pass_min_steps: null",
-                "stop_when_assertions_pass_min_steps",
-            ),
             (
                 "faults",
                 "faults:\n  - id: x\n    kind: missing_clock",

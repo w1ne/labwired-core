@@ -103,6 +103,23 @@ release_runner_contract_block=$(awk '
 require_block_literal "$release_runner_contract_block" 'actions/checkout@v4' 'release runner contract job checks out the source'
 require_block_literal "$release_runner_contract_block" 'fetch-depth: 0' 'release runner contract job fetches immutable action-source pins'
 
+core_integrity_block=$(awk '
+  $0 == "  integrity:" { inside = 1; next }
+  inside && $0 ~ /^  [[:alnum:]_-]+:$/ { exit }
+  inside { print }
+' "$core_ci_workflow")
+if [[ -z "$core_integrity_block" ]]; then
+  fail 'core-integrity job is present in Core CI'
+fi
+require_block_literal "$core_integrity_block" 'docker build --pull' 'required Core integrity builds the runner image from fresh base layers'
+require_block_literal "$core_integrity_block" '--file Dockerfile.ci' 'required Core integrity uses the CI runner Dockerfile'
+require_block_literal "$core_integrity_block" 'labwired-ci-smoke:local' 'required Core integrity gives the local image a stable tag'
+require_block_literal "$core_integrity_block" 'VERSION=ci-smoke' 'required Core integrity provides OCI version metadata'
+require_block_literal "$core_integrity_block" 'REVISION="$GITHUB_SHA"' 'required Core integrity provides OCI revision metadata'
+require_block_literal "$core_integrity_block" 'docker run --rm labwired-ci-smoke:local --version' 'required Core integrity executes the final image entrypoint'
+require_block_absent_literal "$core_integrity_block" 'docker/login-action@v3' 'required Core integrity does not need registry credentials'
+require_block_absent_literal "$core_integrity_block" 'docker/build-push-action@v6' 'required Core integrity does not publish an untagged PR image'
+
 require_literal "$workflow" 'tags:' 'release workflow declares a tag trigger'
 require_literal "$workflow" "'v[0-9]+.[0-9]+.[0-9]+'" 'release workflow triggers vMAJOR.MINOR.PATCH tags'
 for target in \
@@ -177,7 +194,14 @@ require_block_literal "$smoke_block" '--no-uart-stdout' 'release smoke suppresse
 require_block_literal "$smoke_block" 'test -s out/release-runner-smoke/result.json' 'release smoke asserts the runner result JSON exists and is nonempty'
 require_block_literal "$smoke_block" 'test -s out/release-runner-smoke/junit.xml' 'release smoke asserts the OCI runner writes JUnit in its output directory'
 require_block_literal "$smoke_block" 'uses: ./.github/actions/labwired-test' 'release smoke exercises the checked-out core action'
-require_block_literal "$smoke_block" 'version: ${{ github.ref_name }}' 'release smoke pins the core action to the release tag'
+default_action_smoke_block=$(awk '
+  /- name: Run the default release archive through the core action/ { inside = 1 }
+  inside && /^      - name:/ && $0 !~ /Run the default release archive through the core action/ { exit }
+  inside { print }
+' <<<"$smoke_block")
+require_block_literal "$default_action_smoke_block" 'uses: ./.github/actions/labwired-test' 'release smoke exercises the action default'
+require_block_absent_literal "$default_action_smoke_block" 'version:' 'release smoke verifies the action default without an override'
+require_block_literal "$smoke_block" 'version: ${{ github.ref_name }}' 'release smoke separately exercises an explicit release pin'
 require_block_absent_literal "$smoke_block" 'github-token:' 'release smoke does not need an archive-download token'
 require_block_literal "$smoke_block" 'output-dir: out/release-action-smoke' 'release action smoke writes a dedicated output directory'
 require_block_absent_literal "$smoke_block" 'upload-artifacts:' 'release action smoke cannot disable artifact uploads'
@@ -191,13 +215,15 @@ require_block_literal "$smoke_block" 'output-dir: out/release-action-smoke-secon
 require_block_literal "$smoke_block" 'test -s out/release-action-smoke-second/result.json' 'release smoke asserts the second action result JSON exists and is nonempty'
 require_block_literal "$smoke_block" 'test -s out/release-action-smoke-second/junit.xml' 'release smoke asserts the second action writes JUnit in its output directory'
 
-require_literal "$dockerfile" 'FROM rust:1.95-slim AS builder' 'runner image builds with Rust 1.95'
+require_literal "$dockerfile" 'FROM rust:1.95-slim-bookworm AS builder' 'runner image builds with Rust 1.95 on bookworm'
+require_literal "$dockerfile" 'FROM debian:bookworm-slim' 'runner image runtime matches the builder libc baseline'
 require_literal "$dockerfile" 'RUN cargo build --release -p labwired-cli --locked' 'runner image builds only the CLI'
 require_literal "$dockerfile" 'ARG VERSION' 'runner image accepts a release version build argument'
 require_literal "$dockerfile" 'ARG REVISION' 'runner image accepts a source revision build argument'
 require_literal "$dockerfile" 'org.opencontainers.image.source="https://github.com/w1ne/labwired-core"' 'runner image declares its OCI source label'
 require_literal "$dockerfile" 'org.opencontainers.image.version="${VERSION}"' 'runner image declares its OCI version label'
 require_literal "$dockerfile" 'org.opencontainers.image.revision="${REVISION}"' 'runner image declares its OCI revision label'
+require_literal "$dockerfile" 'RUN labwired --version' 'runner image verifies the final runtime can execute the CLI'
 require_literal "$dockerfile" 'ENTRYPOINT ["labwired"]' 'runner image preserves the labwired CLI entrypoint'
 require_absent_literal "$dockerfile" 'USER ' 'runner image leaves the default user unchanged for bind-mounted output directories'
 require_absent_literal "$dockerfile" 'labwired-dap' 'runner image does not ship the DAP binary'
@@ -210,7 +236,7 @@ if [[ -f "$dockerignore" ]]; then
   done
 fi
 
-require_literal "$action" 'default: "v0.19.0"' 'core action defaults to the supported public release'
+require_literal "$action" 'default: "v0.19.1"' 'core action defaults to the supported public release'
 action_inputs=$(awk '
   /^inputs:$/ { inside = 1; next }
   inside && /^[^[:space:]]/ { exit }
@@ -338,14 +364,16 @@ require_literal "$backfill_workflow" 'examples/ci/dummy-max-steps.yaml' 'runner 
 require_literal RELEASE_PROCESS.md 'core-backfill-runner-image.yml' 'release process documents the one-time runner image backfill workflow'
 require_literal RELEASE_PROCESS.md 'v0.18.0' 'release process documents the initial v0.18.0 runner image backfill'
 
-safe_action_sha=82c6c78983669f8688f3823db9a81d1c2bdef202
-safe_action_version=v0.19.0
+safe_action_sha=fda6a7bfb0328d9909ee07ba53ed05c84901f627
+safe_action_version=v0.19.1
 safe_action_ref="w1ne/labwired-core/.github/actions/labwired-test@${safe_action_sha}"
 for doc in docs/ci_integration.md docs/ci_test_runner.md docs/integration-templates/github-actions.yml docs/integration-templates/gitlab-ci.yml docs/integration-templates/README.md docs/reference_client_flows.md .github/actions/labwired-test/README.md; do
   require_absent_literal "$doc" 'ghcr.io/w1ne/labwired:latest' "$doc does not recommend a mutable runner image tag"
   require_absent_literal "$doc" 'w1ne/labwired/.github/actions/labwired-test@main' "$doc does not point public users at the private root action"
   require_absent_literal "$doc" '3a13349ad6c4f65b4fa19276f576bc3086b219e6' "$doc does not retain the superseded public action pin"
+  require_absent_literal "$doc" '82c6c78983669f8688f3823db9a81d1c2bdef202' "$doc does not retain the superseded action pin"
   require_absent_literal "$doc" 'version: v0.18.0' "$doc does not retain the superseded Core release version"
+  require_absent_literal "$doc" 'version: v0.19.0' "$doc does not retain the superseded Core release version"
 done
 for doc in docs/ci_integration.md docs/ci_test_runner.md docs/integration-templates/github-actions.yml docs/integration-templates/README.md docs/reference_client_flows.md; do
   require_absent_literal "$doc" 'w1ne/labwired-core/.github/actions/labwired-test@main' "$doc does not use a mutable public Core action ref"
@@ -384,7 +412,7 @@ else
     fail "immutable action-source commit $safe_action_sha contains its action README"
   fi
   if [[ -n "$pinned_action" ]]; then
-    require_block_literal "$pinned_action" 'default: "v0.19.0"' 'pinned action defaults to the supported public release'
+    require_block_literal "$pinned_action" 'default: "v0.19.1"' 'pinned action defaults to the supported public release'
     require_block_literal "$pinned_action" 'https://github.com/w1ne/labwired-core/releases/download/${version}/${asset}' 'pinned action downloads the public release archive'
     pinned_action_inputs=$(awk '
       /^inputs:$/ { inside = 1; next }
@@ -419,6 +447,9 @@ require_literal docs/ci_test_runner.md '"1.0-environment"' 'runner guide documen
 require_literal docs/ci_test_runner.md '"run_type"' 'runner guide documents the environment run discriminator'
 require_literal docs/ci_test_runner.md 'world_firmware_hash' 'runner guide documents world provenance'
 require_literal docs/ci_test_runner.md 'inputs.env' 'runner guide documents environment test inputs'
+require_literal docs/ci_test_runner.md 'stop_when_assertions_pass' 'runner guide documents opt-in environment assertion completion'
+require_literal docs/ci_test_runner.md 'stop_when_assertions_pass_settle_steps' 'runner guide documents the environment assertion settling window'
+require_literal docs/ci_test_runner.md 'assertions_passed' 'runner guide documents the assertion-completion stop reason'
 require_literal docs/ci_test_runner.md 'config.peripheral' 'runner guide documents the CAN-bus peripheral requirement'
 require_literal docs/ci_test_runner.md 'Cortex-M-only' 'runner guide documents the current world architecture boundary'
 require_literal docs/ci_test_runner.md 'core: cortex-m*' 'runner guide documents the explicit Cortex-M core requirement'
@@ -429,6 +460,8 @@ require_literal docs/ci_test_runner.md 'uart_cross_link' 'runner guide documents
 require_literal docs/ci_test_runner.md 'egress' 'runner guide documents egress membership validation'
 require_literal docs/ci_test_runner.md 'Each `config` mapping is closed and type-checked' 'runner guide documents strict interconnect config mappings'
 require_literal docs/simulation_protocol.md 'schema_version: "1.0"' 'simulation protocol documents the released environment schema'
+require_literal docs/simulation_protocol.md 'stop_when_assertions_pass' 'simulation protocol documents opt-in environment assertion completion'
+require_literal docs/simulation_protocol.md 'assertions_passed' 'simulation protocol documents the assertion-completion stop reason'
 require_literal docs/simulation_protocol.md 'world_firmware_hash' 'simulation protocol documents environment provenance'
 require_literal docs/simulation_protocol.md 'config.peripheral' 'simulation protocol documents the CAN-bus peripheral requirement'
 require_literal docs/simulation_protocol.md 'Cortex-M-only' 'simulation protocol documents the current world architecture boundary'
@@ -442,10 +475,11 @@ require_literal docs/simulation_protocol.md 'strict and closed' 'simulation prot
 require_absent_literal docs/simulation_protocol.md 'Future v1.1' 'simulation protocol does not label released environments as future work'
 require_literal docs/configuration_reference.md 'core: cortex-m*' 'configuration reference documents the explicit Cortex-M core requirement'
 require_literal docs/configuration_reference.md 'including `{}` and `null`' 'configuration reference documents explicit empty and null override rejection'
+require_literal docs/configuration_reference.md 'stop_when_assertions_pass' 'configuration reference documents world assertion completion'
 require_literal examples/egress-demo/README.md 'config` is a closed mapping' 'egress example documents its closed config mapping'
 require_literal examples/egress-demo/README.md 'positive integer' 'egress example documents buffer_max type validation'
-require_literal README.md 'LABWIRED_VERSION=v0.19.0' 'public README pins the current release version'
-require_absent_literal README.md 'LABWIRED_VERSION=v0.18.0' 'public README does not retain the superseded release version'
+require_literal README.md 'LABWIRED_VERSION=v0.19.1' 'public README pins the current release version'
+require_absent_literal README.md 'LABWIRED_VERSION=v0.19.0' 'public README does not retain the superseded release version'
 
 if (( failures > 0 )); then
   printf 'Release runner contract failed with %d issue(s).\n' "$failures" >&2

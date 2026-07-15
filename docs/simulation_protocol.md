@@ -66,6 +66,9 @@ inputs:
   env: "two-node-env.yaml"
 limits:
   max_steps: 100000
+  stop_when_assertions_pass: true
+  stop_when_assertions_pass_settle_steps: 1000  # optional; default 100000
+  stop_when_assertions_pass_min_steps: 1000     # optional; default 0
 assertions:
   - memory_value:
       node: gateway
@@ -82,6 +85,15 @@ Its firmware must be an `EM_ARM` ELF with a valid Cortex-M Thumb reset vector
 at `flash.base + reset_vector_offset`: the initial stack pointer is in RAM and
 the Thumb-bit reset handler is in flash. Anything outside that contract is a
 configuration error before a Cortex-M machine is constructed.
+
+Environment worlds may opt into `stop_when_assertions_pass`. The runner latches
+the first world round at or after `stop_when_assertions_pass_min_steps` where
+all node-qualified assertions pass, and accepts it only after they remain true
+for `stop_when_assertions_pass_settle_steps` rounds (default `100000`). The
+default is `false`; a regression resets the window, and a runtime error or
+same-round `wall_time_ms`, `max_cycles`, or `max_uart_bytes` limit takes
+precedence. `max_steps` remains the outer execution bound, so completion on its
+final allowed world round is reported as `stop_reason: assertions_passed`.
 
 ### 2.2 System Manifest (`system.yaml`)
 
@@ -275,6 +287,7 @@ out of the Execution Loop. Result JSON uses snake-case values:
 - `max_uart_bytes`: Exceeded `max_uart_bytes`.
 - `no_progress`: The single-machine CPU made no progress for its configured limit.
 - `wall_time`: Exceeded `wall_time_ms`.
+- `assertions_passed`: Opt-in assertions remained true through their settling window.
 - `memory_violation`: Accessed unmapped memory or violated access permissions.
 - `decode_error`: Encountered an invalid opcode.
 - `halt`: Reached a software breakpoint or halted intentionally.

@@ -17,7 +17,7 @@ build:firmware:
 test:labwired:
   stage: test
   image:
-    name: ghcr.io/w1ne/labwired:v0.19.0
+    name: ghcr.io/w1ne/labwired:v0.19.1
     entrypoint: [""]
   dependencies:
     - build:firmware

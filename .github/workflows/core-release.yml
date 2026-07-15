@@ -174,15 +174,14 @@ jobs:
           test -s out/release-runner-smoke/result.json
           test -s out/release-runner-smoke/junit.xml
 
-      - name: Run the release archive through the core action
+      - name: Run the default release archive through the core action
         uses: ./.github/actions/labwired-test
         with:
-          version: ${{ github.ref_name }}
           script: examples/ci/two-node-inputs-env.yaml
           output-dir: out/release-action-smoke
           args: --no-uart-stdout
 
-      - name: Run a second release archive through the core action
+      - name: Run an explicit release archive through the core action
         uses: ./.github/actions/labwired-test
         with:
           version: ${{ github.ref_name }}

@@ -87,6 +87,16 @@ Thumb reset vector at `flash.base + reset_vector_offset` (SP in RAM and
 Thumb-bit reset handler in flash). See the [CI Test Runner](ci_test_runner.md)
 for the closed world-interconnect schema.
 
+World completion stays in the `inputs.env` test script, not the manifest. Set
+`limits.stop_when_assertions_pass: true` to opt into a durable early completion:
+all node-qualified assertions must pass at or after the optional
+`stop_when_assertions_pass_min_steps` floor and remain true for the optional
+`stop_when_assertions_pass_settle_steps` window (default `100000`). The default
+is `false`; a same-round runtime failure or `wall_time_ms`, `max_cycles`, or
+`max_uart_bytes` limit takes precedence over `assertions_passed`. `max_steps`
+remains the outer execution bound, so an all-pass final world round reports
+`assertions_passed`.
+
 ## 4. CLI Usage
 
 To run a simulation, provide both the firmware and the system manifest:

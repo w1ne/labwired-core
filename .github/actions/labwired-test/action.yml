@@ -11,7 +11,7 @@ inputs:
   version:
     description: "Immutable LabWired Core release tag to install."
     required: false
-    default: "v0.19.0"
+    default: "v0.19.1"
   output-dir:
     description: "Directory for run artifacts (result.json, uart.log, junit.xml, and reports)."
     required: false
