@@ -741,53 +741,77 @@ impl Cpu for RiscV {
                 return Ok(());
             }
             Instruction::Csrrw { rd, rs1, csr } => {
-                let Some(old) = self.csr_read_or_trap(csr, opcode) else { return Ok(()); };
+                let Some(old) = self.csr_read_or_trap(csr, opcode) else {
+                    return Ok(());
+                };
                 let val = self.read_reg(rs1);
-                if !self.csr_write_or_trap(csr, val, opcode) { return Ok(()); }
+                if !self.csr_write_or_trap(csr, val, opcode) {
+                    return Ok(());
+                }
                 if rd != 0 {
                     self.write_reg(rd, old);
                 }
             }
             Instruction::Csrrs { rd, rs1, csr } => {
-                let Some(old) = self.csr_read_or_trap(csr, opcode) else { return Ok(()); };
+                let Some(old) = self.csr_read_or_trap(csr, opcode) else {
+                    return Ok(());
+                };
                 if rs1 != 0 {
                     let val = self.read_reg(rs1);
-                    if !self.csr_write_or_trap(csr, old | val, opcode) { return Ok(()); }
+                    if !self.csr_write_or_trap(csr, old | val, opcode) {
+                        return Ok(());
+                    }
                 }
                 if rd != 0 {
                     self.write_reg(rd, old);
                 }
             }
             Instruction::Csrrc { rd, rs1, csr } => {
-                let Some(old) = self.csr_read_or_trap(csr, opcode) else { return Ok(()); };
+                let Some(old) = self.csr_read_or_trap(csr, opcode) else {
+                    return Ok(());
+                };
                 if rs1 != 0 {
                     let val = self.read_reg(rs1);
-                    if !self.csr_write_or_trap(csr, old & !val, opcode) { return Ok(()); }
+                    if !self.csr_write_or_trap(csr, old & !val, opcode) {
+                        return Ok(());
+                    }
                 }
                 if rd != 0 {
                     self.write_reg(rd, old);
                 }
             }
             Instruction::Csrrwi { rd, imm, csr } => {
-                let Some(old) = self.csr_read_or_trap(csr, opcode) else { return Ok(()); };
-                if !self.csr_write_or_trap(csr, imm as u32, opcode) { return Ok(()); }
+                let Some(old) = self.csr_read_or_trap(csr, opcode) else {
+                    return Ok(());
+                };
+                if !self.csr_write_or_trap(csr, imm as u32, opcode) {
+                    return Ok(());
+                }
                 if rd != 0 {
                     self.write_reg(rd, old);
                 }
             }
             Instruction::Csrrsi { rd, imm, csr } => {
-                let Some(old) = self.csr_read_or_trap(csr, opcode) else { return Ok(()); };
+                let Some(old) = self.csr_read_or_trap(csr, opcode) else {
+                    return Ok(());
+                };
                 if imm != 0 {
-                    if !self.csr_write_or_trap(csr, old | (imm as u32), opcode) { return Ok(()); }
+                    if !self.csr_write_or_trap(csr, old | (imm as u32), opcode) {
+                        return Ok(());
+                    }
                 }
                 if rd != 0 {
                     self.write_reg(rd, old);
                 }
             }
             Instruction::Csrrci { rd, imm, csr } => {
-                let Some(old) = self.csr_read_or_trap(csr, opcode) else { return Ok(()); };
+                let Some(old) = self.csr_read_or_trap(csr, opcode) else {
+                    return Ok(());
+                };
                 if imm != 0 {
-                    if !self.csr_write_or_trap(csr, old & !(imm as u32), opcode) { return Ok(()); }
+                    if !self.csr_write_or_trap(csr, old & !(imm as u32), opcode) {
+                        return Ok(());
+                    }
                 }
                 if rd != 0 {
                     self.write_reg(rd, old);
@@ -1383,10 +1407,17 @@ mod tests {
         let mut machine = Machine::new(cpu, bus);
         machine.step().unwrap();
 
-        assert_eq!(machine.cpu.mcause, 2, "unsupported CSR must trap as illegal instruction");
+        assert_eq!(
+            machine.cpu.mcause, 2,
+            "unsupported CSR must trap as illegal instruction"
+        );
         assert_eq!(machine.cpu.mtval, read_standard_cycle);
         assert_eq!(machine.cpu.pc, 0x100);
-        assert_eq!(machine.cpu.read_csr(0x7E2), Some(0), "C3 PCCR_MACHINE remains implemented");
+        assert_eq!(
+            machine.cpu.read_csr(0x7E2),
+            Some(0),
+            "C3 PCCR_MACHINE remains implemented"
+        );
     }
 
     #[test]
