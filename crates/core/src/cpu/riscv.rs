@@ -26,8 +26,18 @@ pub struct RiscVDecodeCacheEntry {
     pub inst_len: u8,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RiscVCoreProfile {
+    /// ESP32-C3's machine performance-counter block. It does not implement
+    /// the standard unprivileged `cycle` CSR at 0xC00.
+    Esp32C3,
+    /// Baseline RV32 profile used by generic RISC-V targets.
+    StandardRv32,
+}
+
 #[derive(Debug)]
 pub struct RiscV {
+    pub core_profile: RiscVCoreProfile,
     pub x: [u32; 32], // x0..x31. x0 is correctly hardwired to 0 in logic.
     pub pc: u32,
 
@@ -57,7 +67,14 @@ pub struct RiscV {
 
 impl Default for RiscV {
     fn default() -> Self {
+        Self::new_for(RiscVCoreProfile::Esp32C3)
+    }
+}
+
+impl RiscV {
+    pub fn new_for(core_profile: RiscVCoreProfile) -> Self {
         Self {
+            core_profile,
             x: [0; 32],
             pc: 0,
             mstatus: 0,
@@ -75,11 +92,9 @@ impl Default for RiscV {
             decode_cache: Box::new([None; 4096]),
         }
     }
-}
 
-impl RiscV {
     pub fn new() -> Self {
-        Self::default()
+        Self::new_for(RiscVCoreProfile::Esp32C3)
     }
 
     fn update_mtime_after_elapsed_cycles(&mut self, cycles: u64) {
@@ -105,8 +120,8 @@ impl RiscV {
         }
     }
 
-    fn read_csr(&self, csr: u16) -> u32 {
-        match csr {
+    fn read_csr(&self, csr: u16) -> Option<u32> {
+        Some(match csr {
             0x300 => self.mstatus,
             0x304 => self.mie,
             0x344 => self.mip,
@@ -118,10 +133,8 @@ impl RiscV {
             // Timer CSR stubs (Standard RISC-V shadow non-privileged? No, these are machine mode)
             0xB00 => (self.mtime & 0xFFFFFFFF) as u32,
             0xB80 => (self.mtime >> 32) as u32,
-            // Free-running cycle counters. 0xC00/0xC80 = standard cycle[h];
-            // 0x802 is the ESP32-C3 machine cycle CSR (`ets_delay_us` busy-reads
-            // it as while(now-start < target_cycles)); 0x7E2 is the C3 perf
-            // counter PCCR (bootloader_fill_random reads it as an entropy delta).
+            // The ESP32-C3 exposes its free-running counter at the custom
+            // machine PCCR CSR 0x7E2, not at standard RISC-V cycle CSR 0xC00.
             //
             // These are reported as mtime * CYCLE_SCALE so that cycle-budget
             // delays (which the firmware computes in CPU clocks, e.g. µs*freq)
@@ -130,13 +143,20 @@ impl RiscV {
             // pure delay. Delay loops only need to *complete*, not match wall
             // time, so a coarse cycle estimate is correct in sim; the real-time
             // CLINT timer (mtime vs mtimecmp, CSR 0xB00) stays unscaled.
-            0xC00 | 0x802 | 0x7E2 => (self.mtime.wrapping_mul(CYCLE_SCALE) & 0xFFFFFFFF) as u32,
-            0xC80 => (self.mtime.wrapping_mul(CYCLE_SCALE) >> 32) as u32,
-            _ => 0,
-        }
+            0x7E0 | 0x7E1 | 0x7E2 if self.core_profile == RiscVCoreProfile::Esp32C3 => {
+                (self.mtime.wrapping_mul(CYCLE_SCALE) & 0xFFFFFFFF) as u32
+            }
+            0xC00 if self.core_profile == RiscVCoreProfile::StandardRv32 => {
+                (self.mtime.wrapping_mul(CYCLE_SCALE) & 0xFFFFFFFF) as u32
+            }
+            0xC80 if self.core_profile == RiscVCoreProfile::StandardRv32 => {
+                (self.mtime.wrapping_mul(CYCLE_SCALE) >> 32) as u32
+            }
+            _ => return None,
+        })
     }
 
-    fn write_csr(&mut self, csr: u16, val: u32) {
+    fn write_csr(&mut self, csr: u16, val: u32) -> bool {
         match csr {
             0x300 => self.mstatus = val & 0x0000_1888, // Minimal mstatus (MIE, MPP)
             0x304 => self.mie = val,
@@ -146,7 +166,28 @@ impl RiscV {
             0x341 => self.mepc = val,
             0x342 => self.mcause = val,
             0x343 => self.mtval = val,
-            _ => {}
+            0x7E0 | 0x7E1 | 0x7E2 if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
+            _ => return false,
+        }
+        true
+    }
+
+    fn csr_read_or_trap(&mut self, csr: u16, opcode: u32) -> Option<u32> {
+        let value = self.read_csr(csr);
+        if value.is_none() {
+            self.mtval = opcode;
+            self.handle_trap(2, self.pc);
+        }
+        value
+    }
+
+    fn csr_write_or_trap(&mut self, csr: u16, value: u32, opcode: u32) -> bool {
+        if self.write_csr(csr, value) {
+            true
+        } else {
+            self.mtval = opcode;
+            self.handle_trap(2, self.pc);
+            false
         }
     }
 
@@ -461,53 +502,53 @@ impl Cpu for RiscV {
                 return Ok(());
             }
             Instruction::Csrrw { rd, rs1, csr } => {
-                let old = self.read_csr(csr);
+                let Some(old) = self.csr_read_or_trap(csr, opcode) else { return Ok(()); };
                 let val = self.read_reg(rs1);
-                self.write_csr(csr, val);
+                if !self.csr_write_or_trap(csr, val, opcode) { return Ok(()); }
                 if rd != 0 {
                     self.write_reg(rd, old);
                 }
             }
             Instruction::Csrrs { rd, rs1, csr } => {
-                let old = self.read_csr(csr);
+                let Some(old) = self.csr_read_or_trap(csr, opcode) else { return Ok(()); };
                 if rs1 != 0 {
                     let val = self.read_reg(rs1);
-                    self.write_csr(csr, old | val);
+                    if !self.csr_write_or_trap(csr, old | val, opcode) { return Ok(()); }
                 }
                 if rd != 0 {
                     self.write_reg(rd, old);
                 }
             }
             Instruction::Csrrc { rd, rs1, csr } => {
-                let old = self.read_csr(csr);
+                let Some(old) = self.csr_read_or_trap(csr, opcode) else { return Ok(()); };
                 if rs1 != 0 {
                     let val = self.read_reg(rs1);
-                    self.write_csr(csr, old & !val);
+                    if !self.csr_write_or_trap(csr, old & !val, opcode) { return Ok(()); }
                 }
                 if rd != 0 {
                     self.write_reg(rd, old);
                 }
             }
             Instruction::Csrrwi { rd, imm, csr } => {
-                let old = self.read_csr(csr);
-                self.write_csr(csr, imm as u32);
+                let Some(old) = self.csr_read_or_trap(csr, opcode) else { return Ok(()); };
+                if !self.csr_write_or_trap(csr, imm as u32, opcode) { return Ok(()); }
                 if rd != 0 {
                     self.write_reg(rd, old);
                 }
             }
             Instruction::Csrrsi { rd, imm, csr } => {
-                let old = self.read_csr(csr);
+                let Some(old) = self.csr_read_or_trap(csr, opcode) else { return Ok(()); };
                 if imm != 0 {
-                    self.write_csr(csr, old | (imm as u32));
+                    if !self.csr_write_or_trap(csr, old | (imm as u32), opcode) { return Ok(()); }
                 }
                 if rd != 0 {
                     self.write_reg(rd, old);
                 }
             }
             Instruction::Csrrci { rd, imm, csr } => {
-                let old = self.read_csr(csr);
+                let Some(old) = self.csr_read_or_trap(csr, opcode) else { return Ok(()); };
                 if imm != 0 {
-                    self.write_csr(csr, old & !(imm as u32));
+                    if !self.csr_write_or_trap(csr, old & !(imm as u32), opcode) { return Ok(()); }
                 }
                 if rd != 0 {
                     self.write_reg(rd, old);
@@ -1032,6 +1073,32 @@ mod tests {
 
         assert_eq!(machine.cpu.read_reg(1), 5);
         assert_eq!(machine.cpu.pc, 4);
+    }
+
+    #[test]
+    fn esp32c3_rejects_standard_cycle_csr_but_exposes_pccr_machine() {
+        let mut bus = SystemBus::new();
+        let mut cpu = RiscV::new();
+        // CSRRS x5, x0, cycle (0xC00): standard RISC-V cycle CSR is not
+        // implemented by the ESP32-C3 core; it must raise illegal instruction.
+        let read_standard_cycle = (0xC00u32 << 20) | (5 << 7) | (0b010 << 12) | 0x73;
+        bus.flash.data = read_standard_cycle.to_le_bytes().to_vec();
+        cpu.pc = 0;
+        cpu.mtvec = 0x100;
+        let mut machine = Machine::new(cpu, bus);
+        machine.step().unwrap();
+
+        assert_eq!(machine.cpu.mcause, 2, "unsupported CSR must trap as illegal instruction");
+        assert_eq!(machine.cpu.mtval, read_standard_cycle);
+        assert_eq!(machine.cpu.pc, 0x100);
+        assert_eq!(machine.cpu.read_csr(0x7E2), Some(0), "C3 PCCR_MACHINE remains implemented");
+    }
+
+    #[test]
+    fn standard_rv32_profile_exposes_cycle_csr() {
+        let cpu = RiscV::new_for(RiscVCoreProfile::StandardRv32);
+        assert_eq!(cpu.read_csr(0xC00), Some(0));
+        assert_eq!(cpu.read_csr(0x7E2), None);
     }
 
     #[test]

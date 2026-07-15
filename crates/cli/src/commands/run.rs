@@ -120,6 +120,12 @@ pub(crate) fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode 
         machine
     };
 
+    // Keep the RISC-V fast-boot path observable through the same UART capture
+    // mechanism as ARM/Xtensa. This is an output transport, not a timing or
+    // CPU-model shortcut: the C3 UART peripheral still produces every byte.
+    let uart_sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::<u8>::new()));
+    machine.bus.attach_uart_tx_sink(uart_sink, true);
+
     let break_at: Vec<u32> = args
         .break_at
         .iter()
