@@ -1,4 +1,4 @@
-// Auto-generated: embeds esp32c3 declarative peripheral descriptors into the
+// Auto-generated: embeds esp32c3/rp2040 declarative peripheral descriptors into the
 // binary so SystemBus::from_config can resolve them WITHOUT a filesystem
 // (wasm32 has no std::fs). Native builds still fall back to from_file for any
 // path not embedded here. Keyed by the suffix after 'peripherals/'.
@@ -137,6 +137,9 @@ pub fn lookup(descriptor_path: &str) -> Option<&'static str> {
         "esp32c3/xts_aes.yaml" => Some(include_str!(
             "../../../../configs/peripherals/esp32c3/xts_aes.yaml"
         )),
+        "rp2040/sysinfo.yaml" => Some(include_str!(
+            "../../../../configs/peripherals/rp2040/sysinfo.yaml"
+        )),
         // NXP KW41Z (mkw41z4) declarative descriptors — embedded so the chip's
         // declarative peripherals load in the wasm playground (no std::fs).
         "mkw41z4/gpioa.yaml" => Some(include_str!(
@@ -191,5 +194,16 @@ pub fn lookup(descriptor_path: &str) -> Option<&'static str> {
             "../../../../configs/peripherals/mkw41z4/trng0.yaml"
         )),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::lookup;
+
+    #[test]
+    fn rp2040_sysinfo_descriptor_is_embedded_for_wasm_browser_boot() {
+        assert!(lookup("../peripherals/rp2040/sysinfo.yaml").is_some());
+        assert!(lookup("rp2040/sysinfo.yaml").is_some());
     }
 }
