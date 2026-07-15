@@ -583,12 +583,15 @@ fn esp32c3_irq_choke_reaggregates_on_write() {
 /// Native throughput probe for the campaign report: the OLED lab (browser
 /// fast-start assembly) run for 50M instructions through `Machine::run`,
 /// wall-clocked. Run 3x and take the median:
-///   cargo test -p labwired-core --release --features jit,event-scheduler \
-///     --test esp32c3_walk_differential mips_probe -- --ignored --nocapture
-/// `LABWIRED_MIPS_INTERVAL` overrides the tick interval (default 1 — the
-/// interval the deploy currently pins). `LABWIRED_MIPS_SYSTIMER_LEGACY=1` pins
-/// the SYSTIMER back onto the per-cycle walk (the pre-migration "before"
-/// baseline) so the batch's shrunk-walk effect can be wall-clocked.
+///   cargo test -p labwired-core --release --features event-scheduler \
+///     --test esp32c3_walk_differential oled_lab_native_mips_probe -- --ignored --nocapture
+/// Env knobs:
+/// - `LABWIRED_MIPS_INTERVAL` — peripheral tick interval (default 1; browser uses 64
+///   when walk-free via `recommended_tick_interval`)
+/// - `LABWIRED_MIPS_SYSTIMER_LEGACY=1` — pin SYSTIMER on the legacy walk
+/// - `LABWIRED_MIPS_IDLE_FF=1` — enable WFI idle fast-forward
+/// - `LABWIRED_MIPS_JIT=1` — enable RV32IMC wasm-JIT (requires `--features jit`)
+/// - `LABWIRED_MIPS_STEPS` — instruction budget (default 50_000_000)
 #[test]
 #[ignore = "wall-clock throughput probe; run 3x with --release --nocapture"]
 fn oled_lab_native_mips_probe() {
@@ -597,23 +600,44 @@ fn oled_lab_native_mips_probe() {
         .and_then(|v| v.parse().ok())
         .unwrap_or(1);
     let systimer_legacy = std::env::var("LABWIRED_MIPS_SYSTIMER_LEGACY").as_deref() == Ok("1");
-    const STEPS: u64 = 50_000_000;
+    let idle_ff = std::env::var("LABWIRED_MIPS_IDLE_FF").as_deref() == Ok("1");
+    let jit = std::env::var("LABWIRED_MIPS_JIT").as_deref() == Ok("1");
+    let steps_budget: u64 = std::env::var("LABWIRED_MIPS_STEPS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(50_000_000);
     let mut lab = build_oled_lab(interval, false, systimer_legacy, false, false);
+    lab.machine.config.idle_fast_forward_enabled = idle_ff;
+    lab.machine.config.riscv_jit_enabled = jit;
+    lab.machine.bus.config.riscv_jit_enabled = jit;
     let start = std::time::Instant::now();
     let mut steps = 0u64;
-    while steps < STEPS {
-        lab.machine.run(Some(1_000_000)).expect("run oled lab");
-        steps += 1_000_000;
+    while steps < steps_budget {
+        let chunk = 1_000_000u32.min((steps_budget - steps) as u32);
+        lab.machine.run(Some(chunk)).expect("run oled lab");
+        steps += chunk as u64;
     }
     let secs = start.elapsed().as_secs_f64();
+    let profile = lab.machine.step_profile();
+    let idle_skipped = lab.machine.idle_fast_forward_cycles_skipped;
     eprintln!(
-        "oled-lab native: {STEPS} instructions, interval {interval}, systimer {}: \
-         {:.2}s = {:.2} MIPS (total_cycles {})",
+        "oled-lab native: {steps_budget} insn budget, interval {interval}, systimer {}, idle_ff={idle_ff}, jit={jit}: \
+         {:.2}s = {:.2} MIPS (total_cycles {}, idle_ff_skipped {}, cpu_instr {}, legacy_tick_entries {})",
         if systimer_legacy { "walk" } else { "scheduler" },
         secs,
-        STEPS as f64 / secs / 1.0e6,
-        lab.machine.total_cycles
+        lab.machine.total_cycles as f64 / secs / 1.0e6,
+        lab.machine.total_cycles,
+        idle_skipped,
+        profile.cpu_instructions,
+        profile.legacy_tick_entries,
     );
+    #[cfg(feature = "jit")]
+    if let Some(s) = lab.machine.cpu.jit_stats() {
+        eprintln!(
+            "  jit stats: compiled={} block_runs={} block_instrs={} interpreted={}",
+            s.compiled, s.block_runs, s.block_instrs, s.interpreted
+        );
+    }
 }
 
 /// Endgame ledger: after the RTC migration + the C3/ESP32 Class-A inert

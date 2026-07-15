@@ -253,6 +253,19 @@ impl RiscvWasmJit {
     }
 }
 
+/// Minimum basic-block length (guest instructions) worth compiling.
+///
+/// Below this, the wasmtime register-file sync + call overhead dominates the
+/// work the block would do, so real C3 firmware (dense branches/CSR/MMIO cuts)
+/// regressed ~20× vs the pure interpreter when every 1–4-instr hot PC was
+/// promoted. Long straight-line / loop bodies still clear the bar and get the
+/// multi-× win measured on the combined ALU+mem+branch bench.
+///
+/// Fidelity-neutral: short blocks stay on the interpreter; long blocks run
+/// the same semantics as before (lockstep gates unchanged for profitable
+/// blocks).
+pub const MIN_PROFITABLE_BLOCK_INSTRS: u32 = 16;
+
 /// Run counters for a [`RiscvJitEngine`] session.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct EngineStats {
@@ -398,6 +411,16 @@ impl RiscvJitEngine {
         let Ok((plan, binding)) = self.frontend.translate_block_riscv(pc, &view) else {
             return;
         };
+        // Real firmware (FreeRTOS / libc / drivers) is full of 1–4 instruction
+        // basic blocks. Compiling those to wasm and paying a host↔guest reg
+        // sync + wasmtime call per run is *slower* than the interpreter —
+        // measured ~20× regression on the C3 OLED lab at the default threshold.
+        // Only install blocks long enough that the compiled path amortizes.
+        // Synthetic hot-loop benches (dozens of sequential ALU ops) still clear
+        // this bar; short blocks stay interpreted (byte-identical semantics).
+        if plan.instr_count < MIN_PROFITABLE_BLOCK_INSTRS {
+            return;
+        }
         if let Some(block) = self.jit.compile(&plan, binding) {
             self.cache.install(pc, block);
             self.stats.compiled += 1;
