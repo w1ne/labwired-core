@@ -366,16 +366,18 @@ require_literal "$backfill_workflow" 'examples/ci/dummy-max-steps.yaml' 'runner 
 require_literal RELEASE_PROCESS.md 'core-backfill-runner-image.yml' 'release process documents the one-time runner image backfill workflow'
 require_literal RELEASE_PROCESS.md 'v0.18.0' 'release process documents the initial v0.18.0 runner image backfill'
 
-safe_action_sha=fda6a7bfb0328d9909ee07ba53ed05c84901f627
-safe_action_version=v0.19.1
+safe_action_sha=0cadd18fc9a3c0cbd1ecb0a6ddcd8ce66d56283d
+safe_action_version=v0.19.2
 safe_action_ref="w1ne/labwired-core/.github/actions/labwired-test@${safe_action_sha}"
 for doc in docs/ci_integration.md docs/ci_test_runner.md docs/integration-templates/github-actions.yml docs/integration-templates/gitlab-ci.yml docs/integration-templates/README.md docs/reference_client_flows.md .github/actions/labwired-test/README.md; do
   require_absent_literal "$doc" 'ghcr.io/w1ne/labwired:latest' "$doc does not recommend a mutable runner image tag"
   require_absent_literal "$doc" 'w1ne/labwired/.github/actions/labwired-test@main' "$doc does not point public users at the private root action"
   require_absent_literal "$doc" '3a13349ad6c4f65b4fa19276f576bc3086b219e6' "$doc does not retain the superseded public action pin"
   require_absent_literal "$doc" '82c6c78983669f8688f3823db9a81d1c2bdef202' "$doc does not retain the superseded action pin"
+  require_absent_literal "$doc" 'fda6a7bfb0328d9909ee07ba53ed05c84901f627' "$doc does not retain the superseded action pin"
   require_absent_literal "$doc" 'version: v0.18.0' "$doc does not retain the superseded Core release version"
   require_absent_literal "$doc" 'version: v0.19.0' "$doc does not retain the superseded Core release version"
+  require_absent_literal "$doc" 'v0.19.1' "$doc does not retain the superseded Core release version"
 done
 for doc in docs/ci_integration.md docs/ci_test_runner.md docs/integration-templates/README.md; do
   require_literal "$doc" '--user "$(id -u):$(id -g)"' "$doc keeps bind-mounted container artifacts writable by the caller"
@@ -417,7 +419,7 @@ else
     fail "immutable action-source commit $safe_action_sha contains its action README"
   fi
   if [[ -n "$pinned_action" ]]; then
-    require_block_literal "$pinned_action" 'default: "v0.19.1"' 'pinned action defaults to the supported public release'
+    require_block_literal "$pinned_action" 'default: "v0.19.2"' 'pinned action defaults to the supported public release'
     require_block_literal "$pinned_action" 'https://github.com/w1ne/labwired-core/releases/download/${version}/${asset}' 'pinned action downloads the public release archive'
     pinned_action_inputs=$(awk '
       /^inputs:$/ { inside = 1; next }
@@ -438,6 +440,7 @@ else
     require_block_literal "$pinned_action" 'name: labwired-${{ github.job }}-${{ github.run_id }}-${{ github.action }}' 'pinned action gives each invocation a unique artifact name'
   fi
   if [[ -n "$pinned_action_readme" ]]; then
+    require_block_literal "$pinned_action_readme" 'defaults to `v0.19.2`' 'pinned action README states the supported public release'
     require_block_literal "$pinned_action_readme" '[CI integration guide](../../../docs/ci_integration.md)' 'pinned action README links the canonical consumer guide'
     require_block_literal "$pinned_action_readme" 'intentionally documents the action beside its implementation' 'pinned action README explains its source-local contract'
     require_block_absent_literal "$pinned_action_readme" 'uses: w1ne/labwired-core/.github/actions/labwired-test@' 'pinned action README does not recursively choose its own SHA'
@@ -483,8 +486,10 @@ require_literal docs/configuration_reference.md 'including `{}` and `null`' 'con
 require_literal docs/configuration_reference.md 'stop_when_assertions_pass' 'configuration reference documents world assertion completion'
 require_literal examples/egress-demo/README.md 'config` is a closed mapping' 'egress example documents its closed config mapping'
 require_literal examples/egress-demo/README.md 'positive integer' 'egress example documents buffer_max type validation'
-require_literal README.md 'LABWIRED_VERSION=v0.19.1' 'public README pins the current release version'
-require_absent_literal README.md 'LABWIRED_VERSION=v0.19.0' 'public README does not retain the superseded release version'
+require_literal Cargo.toml 'version = "0.19.2"' 'workspace metadata uses the current release version'
+require_literal CHANGELOG.md '## [0.19.2] - 2026-07-15' 'changelog records the current release version'
+require_literal README.md 'LABWIRED_VERSION=v0.19.2' 'public README pins the current release version'
+require_absent_literal README.md 'LABWIRED_VERSION=v0.19.1' 'public README does not retain the superseded release version'
 
 if (( failures > 0 )); then
   printf 'Release runner contract failed with %d issue(s).\n' "$failures" >&2

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.2] - 2026-07-15
+
+### Fixed
+- **Release runner smoke**: Bind-mounted container runs now preserve the
+  caller's artifact ownership, so the published image and archive-backed
+  GitHub Action can write report bundles in the same workspace.
+
+### Changed
+- **Public runner default**: The GitHub Action, integration templates, and
+  documented release pins now use the verified v0.19.2 runner contract.
+
 ## [0.19.1] - 2026-07-15
 
 ### Fixed

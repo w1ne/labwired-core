@@ -23,10 +23,10 @@ jobs:
       - id: labwired
         name: Run LabWired test
         # This immutable action-source pin is separate from the CLI version below.
-        uses: w1ne/labwired-core/.github/actions/labwired-test@fda6a7bfb0328d9909ee07ba53ed05c84901f627
+        uses: w1ne/labwired-core/.github/actions/labwired-test@0cadd18fc9a3c0cbd1ecb0a6ddcd8ce66d56283d
         with:
           script: tests/firmware-test.yaml
-          version: v0.19.1
+          version: v0.19.2
           output-dir: out/labwired
           args: --no-uart-stdout
 
@@ -36,4 +36,4 @@ jobs:
 
 # Advanced alternative: build LabWired from a source checkout only when testing
 # an unreleased LabWired change. For normal firmware CI, keep the pinned release
-# selected by version: v0.19.1 above.
+# selected by version: v0.19.2 above.

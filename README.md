@@ -32,7 +32,7 @@ examples. Check the per-board docs before assuming a peripheral is modeled:
 Pinned release:
 
 ```sh
-curl -fsSL https://labwired.com/install.sh | LABWIRED_VERSION=v0.19.1 sh
+curl -fsSL https://labwired.com/install.sh | LABWIRED_VERSION=v0.19.2 sh
 labwired --version
 ```
 
@@ -41,7 +41,7 @@ Prefer to inspect the installer first:
 ```sh
 curl -fsSL https://labwired.com/install.sh -o install.sh
 # review install.sh, then:
-LABWIRED_VERSION=v0.19.1 sh install.sh
+LABWIRED_VERSION=v0.19.2 sh install.sh
 ```
 
 Supported host environments:
@@ -52,7 +52,7 @@ Supported host environments:
 
 Install options:
 
-- `LABWIRED_VERSION=v0.19.1` pins the current documented release for a
+- `LABWIRED_VERSION=v0.19.2` pins the current documented release for a
   reproducible install.
 - `LABWIRED_FROM_SOURCE=1` forces a source build.
 - `LABWIRED_INSTALL_DIR=~/.local/bin` changes the install directory.

@@ -1,14 +1,14 @@
 # CI workflow templates
 
-These templates run a pinned LabWired Core v0.19.1 release and preserve the
+These templates run a pinned LabWired Core v0.19.2 release and preserve the
 result.json, uart.log, snapshot.json, and junit.xml artifacts.
 
 ## GitHub Actions
 
 [github-actions.yml](github-actions.yml) is the primary GitHub template. It
 uses the public Core action at
-w1ne/labwired-core/.github/actions/labwired-test@fda6a7bfb0328d9909ee07ba53ed05c84901f627
-as an immutable action-source pin, while `version: v0.19.1` independently pins
+w1ne/labwired-core/.github/actions/labwired-test@0cadd18fc9a3c0cbd1ecb0a6ddcd8ce66d56283d
+as an immutable action-source pin, while `version: v0.19.2` independently pins
 the Core CLI. Its only inputs are `script` (required), `version`, `output-dir`,
 and whitespace-separated `args`. The action downloads the public release archive
 with `curl`, writes JUnit at `output-dir/junit.xml`, renders the GitHub report,
@@ -27,7 +27,7 @@ cp docs/integration-templates/github-actions.yml .github/workflows/firmware-test
 
 ~~~yaml
 image:
-  name: ghcr.io/w1ne/labwired:v0.19.1
+  name: ghcr.io/w1ne/labwired:v0.19.2
   entrypoint: [""]
 ~~~
 
@@ -42,7 +42,7 @@ entrypoint:
 
 ~~~bash
 docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/workspace" -w /workspace \
-  ghcr.io/w1ne/labwired:v0.19.1 \
+  ghcr.io/w1ne/labwired:v0.19.2 \
   test --script tests/firmware-test.yaml --output-dir out/labwired --no-uart-stdout
 ~~~
 
