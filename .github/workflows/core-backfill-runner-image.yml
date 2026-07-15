@@ -82,6 +82,7 @@ jobs:
         run: |
           set -euo pipefail
           docker run --rm \
+            --user "$(id -u):$(id -g)" \
             --volume "$GITHUB_WORKSPACE/source:/workspace" \
             --workdir /workspace \
             "ghcr.io/w1ne/labwired:${{ inputs.version }}" \

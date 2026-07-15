@@ -10,13 +10,13 @@ intentionally documents the action beside its implementation rather than
 choosing its own source SHA: every immutable revision therefore carries its own
 matching input and report contract.
 
-The `version` input defaults to `v0.19.1` and independently selects the
+The `version` input defaults to `v0.19.2` and independently selects the
 immutable Core CLI release archive named
-`labwired-v0.19.1-<platform>.tar.gz`. The action downloads that public archive
+`labwired-v0.19.2-<platform>.tar.gz`. The action downloads that public archive
 from the `w1ne/labwired-core` GitHub release with `curl`; it does not build Core
 on the consumer runner.
 
-Its inputs are exactly `script` (required), `version` (default `v0.19.1`),
+Its inputs are exactly `script` (required), `version` (default `v0.19.2`),
 `output-dir`, and `args`. `args` is whitespace-separated extra CLI flags; shell
 quoting inside this input is not interpreted.
 

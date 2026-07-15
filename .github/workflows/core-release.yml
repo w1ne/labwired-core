@@ -164,6 +164,7 @@ jobs:
         run: |
           set -euo pipefail
           docker run --rm \
+            --user "$(id -u):$(id -g)" \
             --volume "$GITHUB_WORKSPACE:/workspace" \
             --workdir /workspace \
             "ghcr.io/w1ne/labwired:${{ github.ref_name }}" \

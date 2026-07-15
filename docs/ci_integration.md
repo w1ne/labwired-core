@@ -1,7 +1,7 @@
 # CI Integration
 
 LabWired CI runs the same labwired test command locally, in GitHub Actions, and
-in GitLab. Pin the runner release to v0.19.1 so a firmware change is tested
+in GitLab. Pin the runner release to v0.19.2 so a firmware change is tested
 against a reproducible simulator version.
 
 ## GitHub Actions
@@ -25,10 +25,10 @@ jobs:
 
       - id: labwired
         name: Run LabWired
-        uses: w1ne/labwired-core/.github/actions/labwired-test@fda6a7bfb0328d9909ee07ba53ed05c84901f627
+        uses: w1ne/labwired-core/.github/actions/labwired-test@0cadd18fc9a3c0cbd1ecb0a6ddcd8ce66d56283d
         with:
           script: tests/firmware-test.yaml
-          version: v0.19.1
+          version: v0.19.2
           output-dir: out/labwired
           args: --no-uart-stdout
 
@@ -38,8 +38,8 @@ jobs:
 ~~~
 
 The public action reference is an immutable action-source pin to
-`fda6a7bfb0328d9909ee07ba53ed05c84901f627`. Its only inputs are `script`
-(required), `version` (default `v0.19.1`), `output-dir`, and `args`; it downloads
+`0cadd18fc9a3c0cbd1ecb0a6ddcd8ce66d56283d`. Its only inputs are `script`
+(required), `version` (default `v0.19.2`), `output-dir`, and `args`; it downloads
 the selected public CLI release archive with `curl`. The action writes JUnit to
 `output-dir/junit.xml`, appends `summary.md` to the job summary, and always
 uploads the entire output directory, even when the test fails. Its `status`,
@@ -53,18 +53,19 @@ image name; do not repeat labwired in the container command:
 
 ~~~bash
 docker run --rm \
+  --user "$(id -u):$(id -g)" \
   --volume "$PWD:/workspace" \
   --workdir /workspace \
-  ghcr.io/w1ne/labwired:v0.19.1 \
+  ghcr.io/w1ne/labwired:v0.19.2 \
   test --script tests/firmware-test.yaml \
        --output-dir out/labwired \
        --no-uart-stdout
 ~~~
 
-The image runs as the runtime default user so it can write artifacts into the
-mounted workspace. The Docker command and GitHub action accept the same test
-YAML: it can be a single-machine script or a world script that selects its
-environment through `inputs.env`.
+When bind-mounting a workspace, pass the caller UID/GID so generated artifacts
+remain writable on the host. The Docker command and GitHub action accept the
+same test YAML: it can be a single-machine script or a world script that
+selects its environment through `inputs.env`.
 
 ## GitLab CI
 
@@ -75,7 +76,7 @@ uses the pinned image and then invokes labwired test.
 ~~~yaml
 test:firmware:
   image:
-    name: ghcr.io/w1ne/labwired:v0.19.1
+    name: ghcr.io/w1ne/labwired:v0.19.2
     entrypoint: [""]
   script:
     - labwired test --script tests/firmware-test.yaml --output-dir out/labwired --no-uart-stdout
