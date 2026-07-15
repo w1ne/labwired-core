@@ -26,6 +26,8 @@ const GOLDEN_FIRST_PAINT_FNV1A: u64 = 0x41ac26506ebe964b;
 const GOLDEN_SERIAL_FNV1A: u64 = 0xaf2df535cf6fd7e4;
 const GOLDEN_FRAMEBUFFER_FNV1A: u64 = 0xc4eb9ef771b3ded8;
 const GOLDEN_COMPLETION_CYCLES: u64 = 2_139_600;
+const GOLDEN_LEGACY_TICK_MULTIPLIER: u64 = 49;
+const GOLDEN_LEGACY_TICK_ENTRIES: u64 = 104_840_400;
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -235,16 +237,23 @@ fn esp32s3_oled_native_baseline() {
         "completion cycle drifted from the faithful-fast-boot baseline"
     );
 
-    // These counters are deterministic for this fixed 1M-chunk, interval-1
-    // baseline.  They are intentionally golden: a scheduler or interpreter
-    // change must update this benchmark and its observable-output review
-    // together, rather than silently changing the measured workload.
+    // These counters are deterministic for this fixed warmup/completion,
+    // interval-1 baseline. They are intentionally golden: a scheduler or
+    // interpreter change must update this benchmark and its observable-output
+    // review together, rather than silently changing the measured workload.
     assert_eq!(profile.cpu_instructions, machine.total_cycles);
     assert_eq!(profile.cpu_batches, profile.cpu_instructions);
     assert_eq!(profile.peripheral_ticks, machine.total_cycles);
     assert_eq!(profile.peripheral_ticked_entries, 0);
     assert_eq!(profile.bus_tick_entries, 0);
-    assert_eq!(profile.legacy_tick_entries, machine.total_cycles * 48);
+    assert_eq!(
+        profile.legacy_tick_entries,
+        machine.total_cycles * GOLDEN_LEGACY_TICK_MULTIPLIER
+    );
+    assert_eq!(
+        profile.legacy_tick_entries, GOLDEN_LEGACY_TICK_ENTRIES,
+        "legacy tick-entry golden drifted"
+    );
 
     let mips = machine.total_cycles as f64 / elapsed.as_secs_f64() / 1_000_000.0;
     eprintln!(
