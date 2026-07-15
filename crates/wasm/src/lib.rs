@@ -73,6 +73,13 @@ pub struct WasmSimulator {
     jit_browser_cache: Option<Box<jit_browser::BrowserJitCache>>,
 }
 
+/// Public shape returned by `step_batch_profile`.
+///
+/// The six execution counters intentionally mirror `StepProfile` exactly.
+/// `executed_cycles` is the batch boundary observable; workload-specific
+/// markers such as ESP32-S3 OLED first-paint and completion remain outside
+/// this generic API and are measured by the workload harness in the same
+/// simulation pass.
 #[derive(serde::Serialize)]
 struct WasmStepBatchProfile {
     requested_cycles: u32,

@@ -27,6 +27,22 @@ mod tick;
 pub use bus_trace::{new_log, BusPayload, BusTraceEvent, BusTraceLog, I2cSym};
 
 impl SystemBus {
+    /// Describe the currently active legacy per-step entries.
+    ///
+    /// This is intentionally a diagnostic view of the assembled bus, not a
+    /// second execution path.  Consumers use it to tie profile entries back
+    /// to the concrete device window before attempting a scheduler migration.
+    pub fn legacy_tick_entry_descriptors(&self) -> Vec<(String, u64, u64)> {
+        self.legacy_tick_indices
+            .iter()
+            .filter_map(|&idx| {
+                self.peripherals
+                    .get(idx)
+                    .map(|p| (p.name.clone(), p.base, p.size))
+            })
+            .collect()
+    }
+
     #[inline]
     fn legacy_tick_index_active(p: &PeripheralEntry) -> bool {
         if cfg!(feature = "event-scheduler") && p.dev.uses_scheduler() {

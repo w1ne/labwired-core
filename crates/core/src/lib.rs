@@ -967,6 +967,14 @@ pub enum StopReason {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+/// Counters collected during one measured machine run.
+///
+/// These are execution-path counters, not wall-clock or workload markers:
+/// `cpu_instructions` counts retired instructions, `cpu_batches` counts CPU
+/// dispatch batches, and the remaining fields describe peripheral/bus work
+/// driven by that same pass. Workload-specific observables (for example an
+/// OLED first-paint cycle or a serial completion marker) belong to the
+/// workload harness and must not be added here.
 pub struct StepProfile {
     pub cpu_instructions: u64,
     pub cpu_batches: u64,
