@@ -44,5 +44,5 @@ pub mod xtensa_jit_bytes;
 pub mod jit_framework;
 
 pub use cortex_m::CortexM;
-pub use riscv::RiscV;
+pub use riscv::{RiscV, RiscVCoreProfile};
 pub use xtensa_lx7::XtensaLx7;

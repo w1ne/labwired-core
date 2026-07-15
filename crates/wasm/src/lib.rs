@@ -1491,6 +1491,10 @@ mod romboot_tests {
     /// attached devices. This skips the mask-ROM replay, but does not fake the
     /// OLED: pixels must come from firmware I2C writes into the SSD1306 model.
     #[test]
+    #[cfg_attr(
+        not(target_arch = "wasm32"),
+        ignore = "uses wasm-bindgen APIs; run under wasm32"
+    )]
     fn wasm_c3_flash_fast_start_oled_paints_quickly() {
         let manifest_dir = root();
         let chip_yaml =
