@@ -11,7 +11,7 @@ pub mod integration_tests {
     use crate::peripherals::nvic::NvicState;
     use crate::{Bus, Cpu, DebugControl, Machine, Peripheral, SimResult, StopReason};
     use labwired_config::{Arch, ChipDescriptor, MemoryRange, PeripheralConfig, SystemManifest};
-    use std::collections::HashMap;
+    use std::collections::{BTreeMap, HashMap};
     use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
     use std::sync::{Arc, Mutex};
 
@@ -2688,15 +2688,26 @@ pub mod integration_tests {
             reset_vector_offset: 0,
             atomic_register_aliases: false,
             memory_regions: Vec::new(),
-            peripherals: vec![PeripheralConfig {
-                id: "i2c0".to_string(),
-                r#type: "esp32c3_i2c".to_string(),
-                base_address: 0x6001_3000,
-                size: Some("4KB".to_string()),
-                irq: None,
-                clock: None,
-                config: HashMap::new(),
-            }],
+            peripherals: vec![
+                PeripheralConfig {
+                    id: "i2c0".to_string(),
+                    r#type: "esp32c3_i2c".to_string(),
+                    base_address: 0x6001_3000,
+                    size: Some("4KB".to_string()),
+                    irq: None,
+                    clock: None,
+                    config: HashMap::new(),
+                },
+                PeripheralConfig {
+                    id: "gpio".to_string(),
+                    r#type: "esp32c3_gpio".to_string(),
+                    base_address: 0x6000_4000,
+                    size: Some("4KB".to_string()),
+                    irq: None,
+                    clock: None,
+                    config: HashMap::new(),
+                },
+            ],
             pins: Default::default(),
         };
 
@@ -2715,6 +2726,10 @@ pub mod integration_tests {
                 id: "oled".to_string(),
                 r#type: "oled-ssd1306-128x32".to_string(),
                 connection: "i2c0".to_string(),
+                route: BTreeMap::from([
+                    ("sda".to_string(), "GPIO4".to_string()),
+                    ("scl".to_string(), "GPIO5".to_string()),
+                ]),
                 config: oled_config,
             }],
             board_io: Vec::new(),
@@ -2723,6 +2738,14 @@ pub mod integration_tests {
         };
 
         let mut bus = crate::bus::SystemBus::from_config(&chip, &manifest).unwrap();
+        bus.write_u32(0x6000_4000 + 0x24, (1 << 4) | (1 << 5))
+            .unwrap();
+        bus.write_u32(0x6000_4000 + 0x554 + 4 * 4, 54).unwrap();
+        bus.write_u32(0x6000_4000 + 0x554 + 5 * 4, 53).unwrap();
+        bus.write_u32(0x6000_4000 + 0x154 + 54 * 4, (1 << 6) | 4)
+            .unwrap();
+        bus.write_u32(0x6000_4000 + 0x154 + 53 * 4, (1 << 6) | 5)
+            .unwrap();
         // This test drives the engine through the raw per-cycle bus walk
         // (`tick_peripherals_fully`) with no Machine `drain_scheduler_events`
         // loop; the walk skips scheduler-driven peripherals, so pin i2c0 to the
@@ -2786,6 +2809,26 @@ pub mod integration_tests {
                     serde_yaml::Value::String(p.to_string()),
                 );
             }
+            let mut peripherals = vec![PeripheralConfig {
+                id: "i2c0".to_string(),
+                r#type: i2c_type.to_string(),
+                base_address: 0x4000_5400,
+                size: Some("4KB".to_string()),
+                irq: None,
+                clock: None,
+                config: i2c_cfg,
+            }];
+            if i2c_type == "esp32c3_i2c" {
+                peripherals.push(PeripheralConfig {
+                    id: "gpio".to_string(),
+                    r#type: "esp32c3_gpio".to_string(),
+                    base_address: 0x6000_4000,
+                    size: Some("4KB".to_string()),
+                    irq: None,
+                    clock: None,
+                    config: HashMap::new(),
+                });
+            }
             let chip = ChipDescriptor {
                 schema_version: "1.0".to_string(),
                 name: "two-family-trace".to_string(),
@@ -2802,15 +2845,7 @@ pub mod integration_tests {
                 reset_vector_offset: 0,
                 atomic_register_aliases: false,
                 memory_regions: Vec::new(),
-                peripherals: vec![PeripheralConfig {
-                    id: "i2c0".to_string(),
-                    r#type: i2c_type.to_string(),
-                    base_address: 0x4000_5400,
-                    size: Some("4KB".to_string()),
-                    irq: None,
-                    clock: None,
-                    config: i2c_cfg,
-                }],
+                peripherals,
                 pins: Default::default(),
             };
             let mut oled_config = HashMap::new();
@@ -2828,6 +2863,10 @@ pub mod integration_tests {
                     id: "oled".to_string(),
                     r#type: "oled-ssd1306-128x32".to_string(),
                     connection: "i2c0".to_string(),
+                    route: BTreeMap::from([
+                        ("sda".to_string(), "GPIO4".to_string()),
+                        ("scl".to_string(), "GPIO5".to_string()),
+                    ]),
                     config: oled_config,
                 }],
                 board_io: Vec::new(),
@@ -2840,6 +2879,14 @@ pub mod integration_tests {
         // Family A: ESP32-C3 command-list controller — drive the canonical
         // SSD1306 command prologue (RSTART; WRITE 2; STOP).
         let mut c3 = build_with_oled("esp32c3_i2c", None);
+        c3.write_u32(0x6000_4000 + 0x24, (1 << 4) | (1 << 5))
+            .unwrap();
+        c3.write_u32(0x6000_4000 + 0x554 + 4 * 4, 54).unwrap();
+        c3.write_u32(0x6000_4000 + 0x554 + 5 * 4, 53).unwrap();
+        c3.write_u32(0x6000_4000 + 0x154 + 54 * 4, (1 << 6) | 4)
+            .unwrap();
+        c3.write_u32(0x6000_4000 + 0x154 + 53 * 4, (1 << 6) | 5)
+            .unwrap();
         const BASE: u64 = 0x4000_5400;
         // Direct raw-bus-walk drive (no Machine scheduler drain): pin i2c0 to the
         // legacy walk path so `tick_peripherals_fully` advances the engine.

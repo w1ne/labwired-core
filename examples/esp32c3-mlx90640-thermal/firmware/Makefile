@@ -27,10 +27,10 @@ endif
 MLX_DIR ?= ../../../third_party/mlx90640-library
 IOLINKI_DIR ?= ../../../third_party/iolinki
 
-CFLAGS  := -march=rv32imc_zicsr_zifencei -mabi=ilp32 -ffreestanding -O2 -g \
+CFLAGS  := -march=rv32imc -mabi=ilp32 -ffreestanding -O2 -g \
            -Wall -Wextra -ffunction-sections -fdata-sections \
            -I$(MLX_DIR)/headers -I$(IOLINKI_DIR)/include -I.
-LDFLAGS := -march=rv32imc_zicsr_zifencei -mabi=ilp32 -nostartfiles \
+LDFLAGS := -march=rv32imc -mabi=ilp32 -nostartfiles \
            -Wl,--gc-sections -T c3.ld -lm -lgcc
 
 # iolinki IO-Link DEVICE-stack sources compiled ON-TARGET for rv32imc (the CMake

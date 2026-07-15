@@ -6,6 +6,9 @@ external_devices:
   - id: "oled"
     type: "oled-ssd1306-128x32"
     connection: "i2c0"
+    route:
+      sda: "GPIO4"
+      scl: "GPIO5"
     config:
       i2c_address: 0x3C
 

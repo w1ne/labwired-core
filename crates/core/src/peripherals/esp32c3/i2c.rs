@@ -77,7 +77,7 @@
 
 use std::cell::RefCell;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use crate::peripherals::i2c::I2cDevice;
 use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
@@ -93,6 +93,103 @@ pub const I2C0_SIZE: u64 = 0x1000;
 /// NOT the S3's 42 (which is the Xtensa `ets_isr_source_t` ordinal). The C3
 /// `i2c0.yaml` likewise declares `interrupts: { I2C_EXT0: 29 }`.
 pub const I2C0_INTR_SOURCE_ID: u32 = 29;
+
+/// One physical C3 GPIO-matrix route for an I²C device. The system manifest
+/// deliberately names signals rather than target registers; this is the C3
+/// lowering of the target-neutral `route: { sda: GPIOx, scl: GPIOy }` shape.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct C3I2cPadRoute {
+    pub(crate) sda: u8,
+    pub(crate) scl: u8,
+}
+
+impl C3I2cPadRoute {
+    pub(crate) fn from_manifest_route(
+        route: &std::collections::BTreeMap<String, String>,
+    ) -> anyhow::Result<Self> {
+        for signal in route.keys() {
+            if signal != "sda" && signal != "scl" {
+                anyhow::bail!(
+                    "ESP32-C3 I2C route supports only route.sda and route.scl; found route.{signal}"
+                );
+            }
+        }
+
+        fn parse_pad(
+            route: &std::collections::BTreeMap<String, String>,
+            signal: &str,
+        ) -> anyhow::Result<u8> {
+            let label = route.get(signal).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "ESP32-C3 I2C external device requires both route.sda and route.scl"
+                )
+            })?;
+            let pin = label.strip_prefix("GPIO").ok_or_else(|| {
+                anyhow::anyhow!(
+                    "ESP32-C3 I2C route.{signal} must name a C3 GPIO pad such as GPIO4, got '{label}'"
+                )
+            })?;
+            let pin: u8 = pin.parse().map_err(|_| {
+                anyhow::anyhow!(
+                    "ESP32-C3 I2C route.{signal} must name a C3 GPIO pad such as GPIO4, got '{label}'"
+                )
+            })?;
+            if pin >= 26 {
+                anyhow::bail!(
+                    "ESP32-C3 I2C route.{signal}='{label}' is not a supported GPIO-matrix pad"
+                );
+            }
+            Ok(pin)
+        }
+
+        let sda = parse_pad(route, "sda")?;
+        let scl = parse_pad(route, "scl")?;
+        if sda == scl {
+            anyhow::bail!(
+                "ESP32-C3 I2C route.sda and route.scl must use distinct pads (both were GPIO{sda})"
+            );
+        }
+        Ok(Self { sda, scl })
+    }
+}
+
+/// Live C3 GPIO-matrix wiring observed by the I²C controller. GPIO owns the
+/// registers and refreshes this cell on every relevant write; the controller
+/// consults it at address resolution, so a slave responds only when firmware
+/// has configured the same physical SDA/SCL pair declared in the manifest.
+#[derive(Debug, Default)]
+pub(crate) struct C3I2cMatrixRouteState {
+    sda_output_mask: u32,
+    scl_output_mask: u32,
+    sda_input: Option<u8>,
+    scl_input: Option<u8>,
+}
+
+impl C3I2cMatrixRouteState {
+    pub(crate) fn set(
+        &mut self,
+        sda_output_mask: u32,
+        scl_output_mask: u32,
+        sda_input: Option<u8>,
+        scl_input: Option<u8>,
+    ) {
+        self.sda_output_mask = sda_output_mask;
+        self.scl_output_mask = scl_output_mask;
+        self.sda_input = sda_input;
+        self.scl_input = scl_input;
+    }
+
+    fn activates(&self, route: C3I2cPadRoute) -> bool {
+        let sda_mask = 1u32 << route.sda;
+        let scl_mask = 1u32 << route.scl;
+        self.sda_output_mask & sda_mask != 0
+            && self.scl_output_mask & scl_mask != 0
+            && self.sda_input == Some(route.sda)
+            && self.scl_input == Some(route.scl)
+    }
+}
+
+pub(crate) type C3I2cMatrixRoute = Arc<Mutex<C3I2cMatrixRouteState>>;
 
 // Core FSM / status registers
 const REG_CTR: u64 = 0x04;
@@ -416,6 +513,14 @@ pub struct Esp32c3I2c {
     tx_pop_count: usize,
     rx_fifo: RefCell<std::collections::VecDeque<u8>>,
     slaves: Vec<Box<dyn I2cDevice>>,
+    /// Physical pad route for each slave, parallel to `slaves`. `None` is an
+    /// intentional low-level/direct-test attachment; manifest-backed C3
+    /// external devices always carry `Some` and are gated by the GPIO matrix.
+    slave_routes: Vec<Option<C3I2cPadRoute>>,
+    /// Shared live GPIO-matrix state, installed by `SystemBus` once both C3
+    /// GPIO and I²C peripherals exist. A declared route cannot answer until
+    /// firmware programs matching input *and* output matrix entries.
+    matrix_route: Option<C3I2cMatrixRoute>,
     /// Interrupt-matrix source this instance asserts (29 for I2C0).
     intr_source_id: u32,
     active_slave: Option<usize>,
@@ -485,6 +590,8 @@ impl Esp32c3I2c {
             tx_pop_count: 0,
             rx_fifo: RefCell::new(std::collections::VecDeque::with_capacity(FIFO_CAPACITY)),
             slaves: Vec::new(),
+            slave_routes: Vec::new(),
+            matrix_route: None,
             intr_source_id: I2C0_INTR_SOURCE_ID,
             active_slave: None,
             expects_addr: true,
@@ -521,12 +628,25 @@ impl Esp32c3I2c {
         }
     }
 
-    /// Raw slave push — does NOT wrap for tracing. The only production caller is
-    /// the bus choke point [`crate::bus::SystemBus::attach_i2c_slave`], which
-    /// wraps first. Slaves are matched by address bits at transaction time;
-    /// later additions take precedence on duplicate addresses.
+    /// Raw, un-routed slave attachment for direct unit fixtures. Manifest-backed
+    /// C3 devices must use [`Self::push_slave_with_route`] so the GPIO matrix is
+    /// part of their electrical contract.
+    #[cfg(test)]
     pub(crate) fn push_slave(&mut self, slave: Box<dyn I2cDevice>) {
         self.slaves.push(slave);
+        self.slave_routes.push(None);
+    }
+
+    /// Attach a manifest-backed slave with the physical C3 pads it is wired
+    /// to. Unlike [`Self::push_slave`], this device will acknowledge only
+    /// while GPIO's live matrix state matches this exact route.
+    pub(crate) fn push_slave_with_route(
+        &mut self,
+        slave: Box<dyn I2cDevice>,
+        route: C3I2cPadRoute,
+    ) {
+        self.slaves.push(slave);
+        self.slave_routes.push(Some(route));
     }
 
     /// Borrow the attached I²C slaves. Mirrors the generic `I2c::attached_devices`
@@ -537,6 +657,33 @@ impl Esp32c3I2c {
     /// mutable references during a transaction.
     pub fn attached_slaves(&self) -> &[Box<dyn I2cDevice>] {
         &self.slaves
+    }
+
+    /// Share GPIO's live matrix state with this controller after both C3
+    /// peripherals have been constructed on a system bus.
+    pub(crate) fn set_matrix_route_state(&mut self, route: C3I2cMatrixRoute) {
+        self.matrix_route = Some(route);
+    }
+
+    fn slave_route_active(&self, index: usize) -> bool {
+        let Some(Some(route)) = self.slave_routes.get(index).copied() else {
+            return true;
+        };
+        self.matrix_route
+            .as_ref()
+            .map(|state| {
+                state
+                    .lock()
+                    .expect("ESP32-C3 I2C matrix route poisoned")
+                    .activates(route)
+            })
+            .unwrap_or(false)
+    }
+
+    fn find_slave_by_address(&self, address: u8) -> Option<usize> {
+        self.slaves.iter().enumerate().find_map(|(idx, slave)| {
+            (self.slave_route_active(idx) && slave.address() == address).then_some(idx)
+        })
     }
 
     fn fifo_status(&self) -> u32 {
@@ -569,12 +716,12 @@ impl Esp32c3I2c {
     fn find_slave_from_slave_addr_register(&self) -> Option<usize> {
         let raw = self.slave_addr & 0x7FFF;
         if raw <= 0x7F {
-            if let Some(idx) = self.slaves.iter().position(|s| s.address() == raw as u8) {
+            if let Some(idx) = self.find_slave_by_address(raw as u8) {
                 return Some(idx);
             }
         }
         let shifted = ((raw >> 1) & 0x7F) as u8;
-        self.slaves.iter().position(|s| s.address() == shifted)
+        self.find_slave_by_address(shifted)
     }
 }
 
@@ -1212,7 +1359,7 @@ impl Esp32c3I2c {
             // Address frame: resolve the slave by the wire address bits.
             let addr = b >> 1;
             self.expects_addr = false;
-            if let Some(slave_idx) = self.slaves.iter().position(|s| s.address() == addr) {
+            if let Some(slave_idx) = self.find_slave_by_address(addr) {
                 // Slave acknowledged its address. Signal START to the selected
                 // device — the bus-trace wrapper reconstructs the address
                 // frame from this call.
@@ -1350,6 +1497,44 @@ impl Esp32c3I2c {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn manifest_route_rejects_incomplete_or_invalid_c3_pads() {
+        let incomplete =
+            std::collections::BTreeMap::from([("sda".to_string(), "GPIO4".to_string())]);
+        assert!(C3I2cPadRoute::from_manifest_route(&incomplete)
+            .unwrap_err()
+            .to_string()
+            .contains("route.sda and route.scl"));
+
+        let non_c3 = std::collections::BTreeMap::from([
+            ("sda".to_string(), "PB7".to_string()),
+            ("scl".to_string(), "PB6".to_string()),
+        ]);
+        assert!(C3I2cPadRoute::from_manifest_route(&non_c3)
+            .unwrap_err()
+            .to_string()
+            .contains("route.sda"));
+
+        let duplicate = std::collections::BTreeMap::from([
+            ("sda".to_string(), "GPIO4".to_string()),
+            ("scl".to_string(), "GPIO4".to_string()),
+        ]);
+        assert!(C3I2cPadRoute::from_manifest_route(&duplicate)
+            .unwrap_err()
+            .to_string()
+            .contains("distinct pads"));
+
+        let wrong_transport_signal = std::collections::BTreeMap::from([
+            ("sda".to_string(), "GPIO4".to_string()),
+            ("scl".to_string(), "GPIO5".to_string()),
+            ("mosi".to_string(), "GPIO6".to_string()),
+        ]);
+        assert!(C3I2cPadRoute::from_manifest_route(&wrong_transport_signal)
+            .unwrap_err()
+            .to_string()
+            .contains("route.mosi"));
+    }
 
     const REG_CMD1_OFFSET: u64 = REG_CMD0 + 4;
 

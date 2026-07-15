@@ -23,6 +23,9 @@ external_devices:
   - id: "thermal_cam"
     type: "mlx90640"
     connection: "i2c0"
+    route:
+      sda: "GPIO4"
+      scl: "GPIO5"
     config:
       i2c_address: 0x33
       ambient_c: 25.0

@@ -21,6 +21,9 @@ external_devices:
   - id: "scd41"
     type: "scd41"
     connection: "i2c0"
+    route:
+      sda: "GPIO4"
+      scl: "GPIO5"
     config:
       i2c_address: 0x62
       co2_start_ppm: 450.0    # fresh room
@@ -33,6 +36,9 @@ external_devices:
   - id: "sgp41"
     type: "sgp41"
     connection: "i2c0"
+    route:
+      sda: "GPIO4"
+      scl: "GPIO5"
     config:
       i2c_address: 0x59
       voc_sraw_start: 28000.0
@@ -44,6 +50,9 @@ external_devices:
   - id: "sps30"
     type: "sps30"
     connection: "i2c0"
+    route:
+      sda: "GPIO4"
+      scl: "GPIO5"
     config:
       i2c_address: 0x69
       pm2_5_start: 6.0        # µg/m³, clean indoor air
@@ -54,6 +63,9 @@ external_devices:
   - id: "veml7700"
     type: "veml7700"
     connection: "i2c0"
+    route:
+      sda: "GPIO4"
+      scl: "GPIO5"
     config:
       i2c_address: 0x10
       lux_start: 450.0        # daylit room
@@ -67,6 +79,9 @@ external_devices:
   - id: "surface-ir"
     type: "mlx90614"
     connection: "i2c0"
+    route:
+      sda: "GPIO4"
+      scl: "GPIO5"
     config:
       i2c_address: 0x5A
       surface_temp_c: 16.0
@@ -78,9 +93,12 @@ external_devices:
   - id: "oled"
     type: "oled-ssd1306"
     connection: "i2c0"
+    route:
+      sda: "GPIO4"
+      scl: "GPIO5"
     config:
       i2c_address: 0x3C
 
-# All sensors + the OLED are wired purely via the I²C0 `connection:` above; no
-# GPIO board_io binding is needed.
+# Every device declares the physical I²C0 route (SDA=GPIO4, SCL=GPIO5); no
+# GPIO board_io binding is needed for these I²C peripherals.
 board_io: []

@@ -30,6 +30,20 @@
 #define I2C_FIFO_CONF I2C_REG(0x18u)
 #define I2C_CMD0      0x58u
 
+/* Physical I²C0 wiring declared by the Leo system manifests. ESP32-C3 uses a
+ * GPIO matrix, so a controller transaction reaches these pads only after both
+ * its output and input signal paths are programmed. */
+#define GPIO_BASE 0x60004000u
+#define GPIO_REG(o) (*(volatile uint32_t *)(GPIO_BASE + (o)))
+#define GPIO_ENABLE_W1TS GPIO_REG(0x24u)
+#define GPIO_FUNC_IN_SEL 0x154u
+#define GPIO_FUNC_OUT_SEL 0x554u
+#define GPIO_MATRIX_INPUT_SELECT (1u << 6)
+#define I2C0_SCL_SIGNAL 53u
+#define I2C0_SDA_SIGNAL 54u
+#define I2C0_SDA_PIN 4u
+#define I2C0_SCL_PIN 5u
+
 #define CTR_TRANS_START (1u << 5)
 
 #define INT_END_DETECT     (1u << 3)
@@ -57,6 +71,16 @@ static void i2c_reset_fifos(void) {
     I2C_FIFO_CONF = FIFO_RX_RST | FIFO_TX_RST; /* self-clearing in the model */
 }
 
+static void i2c0_gpio_matrix_init(void) {
+    GPIO_ENABLE_W1TS = (1u << I2C0_SDA_PIN) | (1u << I2C0_SCL_PIN);
+    GPIO_REG(GPIO_FUNC_OUT_SEL + I2C0_SDA_PIN * 4u) = I2C0_SDA_SIGNAL;
+    GPIO_REG(GPIO_FUNC_OUT_SEL + I2C0_SCL_PIN * 4u) = I2C0_SCL_SIGNAL;
+    GPIO_REG(GPIO_FUNC_IN_SEL + I2C0_SDA_SIGNAL * 4u) =
+        GPIO_MATRIX_INPUT_SELECT | I2C0_SDA_PIN;
+    GPIO_REG(GPIO_FUNC_IN_SEL + I2C0_SCL_SIGNAL * 4u) =
+        GPIO_MATRIX_INPUT_SELECT | I2C0_SCL_PIN;
+}
+
 /* Kick the command list and busy-wait for completion (END / TRANS_COMPLETE),
  * exactly as on real silicon: the controller clocks the transaction on the
  * wire at the rate its timing registers dictate, so the spin runs for the
@@ -79,6 +103,7 @@ static int i2c_run(void) {
 /* ── Sensirion I²C HAL hooks ──────────────────────────────────────────────── */
 
 void sensirion_i2c_hal_init(void) {
+    i2c0_gpio_matrix_init();
     i2c_reset_fifos();
 }
 

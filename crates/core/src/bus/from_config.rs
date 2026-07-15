@@ -233,7 +233,7 @@ impl SystemBus {
                                 ext.r#type,
                                 p_cfg.id
                             );
-                            bus.attach_i2c_slave(&p_cfg.id, device)?;
+                            bus.attach_i2c_slave_with_route(&p_cfg.id, device, Some(&ext.route))?;
                             attached_i2c_ext_ids.insert(ext.id.as_str());
                         }
                         None => {

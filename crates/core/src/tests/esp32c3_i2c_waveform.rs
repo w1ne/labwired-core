@@ -16,6 +16,7 @@ mod esp32c3_i2c_waveform_tests {
     use crate::logic_capture::LogicEdge;
     use crate::peripherals::components::Ssd1306;
     use crate::{Bus, Machine};
+    use std::collections::BTreeMap;
 
     const RAM_BASE: u64 = 0x2000_0000;
     const I2C_BASE: u64 = 0x6001_3000;
@@ -29,7 +30,9 @@ mod esp32c3_i2c_waveform_tests {
     const SIG_I2CEXT0_SDA: u32 = 54;
 
     const ENABLE_W1TS: u64 = 0x24;
+    const FUNC_IN_SEL: u64 = 0x154;
     const FUNC_OUT_SEL: u64 = 0x554;
+    const MATRIX_INPUT_SELECT: u32 = 1 << 6;
 
     const REG_CTR: u64 = 0x04;
     const REG_DATA: u64 = 0x1C;
@@ -66,7 +69,13 @@ mod esp32c3_i2c_waveform_tests {
             Box::new(crate::peripherals::esp32c3::i2c::Esp32c3I2c::new()),
         );
         // Through the single traced choke point, same as a config-built bus.
-        bus.attach_i2c_slave("i2c0", Box::new(Ssd1306::new(0x3C)))
+        // The fixture's physical OLED is wired to the same matrix pads its
+        // firmware setup below will select.
+        let route = BTreeMap::from([
+            ("sda".to_string(), format!("GPIO{SDA_PIN}")),
+            ("scl".to_string(), format!("GPIO{SCL_PIN}")),
+        ]);
+        bus.attach_i2c_slave_with_route("i2c0", Box::new(Ssd1306::new(0x3C)), Some(&route))
             .unwrap();
         bus.wire_esp32c3_i2c_pads();
 
@@ -100,6 +109,16 @@ mod esp32c3_i2c_waveform_tests {
         bus.write_u32(
             GPIO_BASE + FUNC_OUT_SEL + (SCL_PIN as u64) * 4,
             SIG_I2CEXT0_SCL,
+        )
+        .unwrap();
+        bus.write_u32(
+            GPIO_BASE + FUNC_IN_SEL + u64::from(SIG_I2CEXT0_SDA) * 4,
+            MATRIX_INPUT_SELECT | u32::from(SDA_PIN),
+        )
+        .unwrap();
+        bus.write_u32(
+            GPIO_BASE + FUNC_IN_SEL + u64::from(SIG_I2CEXT0_SCL) * 4,
+            MATRIX_INPUT_SELECT | u32::from(SCL_PIN),
         )
         .unwrap();
         // Timing: low = 200, high = 181 + 19 wait-high = 200 module ticks →

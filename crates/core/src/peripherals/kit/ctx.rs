@@ -115,8 +115,8 @@ impl<'a> AttachCtx<'a> {
         // `connection:` resolves to. There is no untraced attach path.
         let connection = self.ext.connection.clone();
         self.bus
-            .attach_i2c_slave(&connection, device)
-            .map_err(|_| wrong_transport_err(self.ext, "I2C"))
+            .attach_i2c_slave_with_route(&connection, device, Some(&self.ext.route))
+            .map_err(|err| anyhow::anyhow!("{}: {err:#}", wrong_transport_err(self.ext, "I2C")))
     }
 
     /// Attach an [`SpiDevice`] to whichever SPI controller the `connection:`

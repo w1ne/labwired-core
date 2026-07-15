@@ -6,7 +6,7 @@
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::Path;
 
 /// Canonical device config v1 — the single JSON shape the agent builds and both
@@ -180,6 +180,16 @@ pub struct ExternalDevice {
     pub id: String,
     pub r#type: String,
     pub connection: String, // e.g. "uart1", "i2c1"
+    /// Physical signal-to-pad route for a bus-attached device. Signal names
+    /// are transport-generic (`sda`/`scl`, `mosi`/`miso`/`sck`, `tx`/`rx`)
+    /// while pad labels stay target-native (`GPIO4`, `PB7`, ...).
+    ///
+    /// The schema keeps this optional so fixed-pin targets can remain concise;
+    /// target-specific loaders decide when a transport requires it. In
+    /// particular, ESP32-C3 I²C rejects a missing route because its GPIO matrix
+    /// makes the controller-to-pad wiring runtime-configurable.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub route: BTreeMap<String, String>,
     #[serde(default)]
     pub config: HashMap<String, serde_yaml::Value>,
 }
@@ -2316,6 +2326,33 @@ board_io:
 
         let manifest: SystemManifest = serde_yaml::from_str(yaml).unwrap();
         assert_eq!(manifest.board_io[0].kind, BoardIoKind::UartDevice);
+    }
+
+    #[test]
+    fn test_external_device_preserves_target_neutral_bus_signal_route() {
+        let yaml = r#"
+name: "stm32-i2c-route-shape"
+chip: "inline"
+external_devices:
+  - id: "oled"
+    type: "oled-ssd1306-128x32"
+    connection: "i2c1"
+    route:
+      sda: "PB7"
+      scl: "PB6"
+    config:
+      i2c_address: 0x3c
+"#;
+
+        let manifest: SystemManifest = serde_yaml::from_str(yaml).unwrap();
+        let route = &manifest.external_devices[0].route;
+        assert_eq!(route.get("sda").map(String::as_str), Some("PB7"));
+        assert_eq!(route.get("scl").map(String::as_str), Some("PB6"));
+
+        let round_trip = serde_yaml::to_string(&manifest).unwrap();
+        assert!(round_trip.contains("route:"));
+        assert!(round_trip.contains("sda: PB7"));
+        assert!(round_trip.contains("scl: PB6"));
     }
 
     fn write_temp_file(prefix: &str, contents: &str) -> std::path::PathBuf {

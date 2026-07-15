@@ -11,6 +11,20 @@
 #define I2C_FIFO_CONF I2C_REG(0x18u)
 #define I2C_CMD0      0x58u
 
+/* The OLED lab's physical route is SDA=GPIO4 / SCL=GPIO5.  ESP32-C3 I²C0
+ * reaches those pads through the GPIO matrix; both directions must be wired
+ * before the command-list controller can see the panel. */
+#define GPIO_BASE 0x60004000u
+#define GPIO_REG(o) (*(volatile uint32_t *)(GPIO_BASE + (o)))
+#define GPIO_ENABLE_W1TS GPIO_REG(0x24u)
+#define GPIO_FUNC_IN_SEL 0x154u
+#define GPIO_FUNC_OUT_SEL 0x554u
+#define GPIO_MATRIX_INPUT_SELECT (1u << 6)
+#define I2C0_SCL_SIGNAL 53u
+#define I2C0_SDA_SIGNAL 54u
+#define I2C0_SDA_PIN 4u
+#define I2C0_SCL_PIN 5u
+
 #define CTR_TRANS_START (1u << 5)
 #define INT_END_DETECT     (1u << 3)
 #define INT_TRANS_COMPLETE (1u << 7)
@@ -31,6 +45,17 @@ static inline void cmd_slot(uint32_t idx, uint32_t word) {
 static void i2c_reset_fifos(void) {
     I2C_FIFO_CONF = FIFO_RX_RST | FIFO_TX_RST;
 }
+
+static void i2c0_gpio_matrix_init(void) {
+    GPIO_ENABLE_W1TS = (1u << I2C0_SDA_PIN) | (1u << I2C0_SCL_PIN);
+    GPIO_REG(GPIO_FUNC_OUT_SEL + I2C0_SDA_PIN * 4u) = I2C0_SDA_SIGNAL;
+    GPIO_REG(GPIO_FUNC_OUT_SEL + I2C0_SCL_PIN * 4u) = I2C0_SCL_SIGNAL;
+    GPIO_REG(GPIO_FUNC_IN_SEL + I2C0_SDA_SIGNAL * 4u) =
+        GPIO_MATRIX_INPUT_SELECT | I2C0_SDA_PIN;
+    GPIO_REG(GPIO_FUNC_IN_SEL + I2C0_SCL_SIGNAL * 4u) =
+        GPIO_MATRIX_INPUT_SELECT | I2C0_SCL_PIN;
+}
+
 static int i2c_run(void) {
     I2C_INT_CLR = 0xFFFFFFFFu;
     I2C_CTR |= CTR_TRANS_START;
@@ -83,6 +108,7 @@ void ssd1306_init(void) {
         0xA6,       /* normal (non-inverted) */
         0xAF,       /* display on */
     };
+    i2c0_gpio_matrix_init();
     oled_write(seq, (int)sizeof(seq));
 }
 

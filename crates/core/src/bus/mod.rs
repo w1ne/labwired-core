@@ -976,16 +976,29 @@ impl SystemBus {
         self.bus_trace.snapshot()
     }
 
-    /// The single funnel through which every I²C slave reaches a controller.
-    /// Wraps `dev` in the shared bus trace (via [`bus_trace::wrap_i2c`]) and
-    /// hands the wrapped device to the named controller's raw `push_slave`.
-    /// Because the wrap happens here — before any family dispatch — there is no
-    /// path that attaches a slave untraced: a controller family this dispatch
-    /// does not recognise is a hard error, not a silently invisible bus.
+    /// Attach an I²C slave without a physical route. This remains suitable for
+    /// fixed-pin controllers and low-level test fixtures; ESP32-C3 rejects it
+    /// because C3's GPIO matrix makes a controller-only binding ambiguous.
     pub fn attach_i2c_slave(
         &mut self,
         controller: &str,
         dev: Box<dyn crate::peripherals::i2c::I2cDevice>,
+    ) -> anyhow::Result<()> {
+        self.attach_i2c_slave_with_route(controller, dev, None)
+    }
+
+    /// The single funnel through which every manifest-backed I²C slave reaches
+    /// a controller. `route` is a target-neutral signal map (`sda`/`scl` for
+    /// I²C); ESP32-C3 lowers it to real GPIO-matrix pads and rejects missing,
+    /// unsupported, or ambiguous routes instead of silently attaching by bus
+    /// name alone. Other controller families preserve the generic shape for
+    /// forward-compatible physical routing while retaining their fixed-pin
+    /// behavior today.
+    pub fn attach_i2c_slave_with_route(
+        &mut self,
+        controller: &str,
+        dev: Box<dyn crate::peripherals::i2c::I2cDevice>,
+        route: Option<&std::collections::BTreeMap<String, String>>,
     ) -> anyhow::Result<()> {
         let wrapped = bus_trace::wrap_i2c(controller, &self.bus_trace, dev);
         let idx = self
@@ -997,7 +1010,14 @@ impl SystemBus {
         if let Some(c) = any.downcast_mut::<crate::peripherals::i2c::I2c>() {
             c.push_slave(wrapped);
         } else if let Some(c) = any.downcast_mut::<crate::peripherals::esp32c3::i2c::Esp32c3I2c>() {
-            c.push_slave(wrapped);
+            let route = route.ok_or_else(|| {
+                anyhow::anyhow!(
+                    "ESP32-C3 I2C external device on '{controller}' requires both route.sda and route.scl"
+                )
+            })?;
+            let route =
+                crate::peripherals::esp32c3::i2c::C3I2cPadRoute::from_manifest_route(route)?;
+            c.push_slave_with_route(wrapped, route);
         } else if let Some(c) = any.downcast_mut::<crate::peripherals::esp32s3::i2c::Esp32s3I2c>() {
             c.push_slave(wrapped);
         } else if let Some(c) = any.downcast_mut::<crate::peripherals::esp32::i2c::Esp32I2c>() {
@@ -1010,10 +1030,10 @@ impl SystemBus {
         Ok(())
     }
 
-    /// Wire the ESP32-C3 I²C0 bit engine's live SDA/SCL levels into the C3
-    /// GPIO model, so pads whose output matrix routes I2CEXT0_SDA/SCL read the
-    /// real waveform through `read_gpio_pad` (which is what the in-engine
-    /// logic analyzer samples). No-op unless both C3 models are on the bus.
+    /// Wire the ESP32-C3 I²C0 bit engine to C3 GPIO in both directions: GPIO
+    /// reads the live SDA/SCL waveform, while I²C reads GPIO's live input/output
+    /// matrix state before allowing a physically routed slave to acknowledge.
+    /// No-op unless both C3 models are on the bus.
     pub(crate) fn wire_esp32c3_i2c_pads(&mut self) {
         use crate::peripherals::esp32c3::gpio::Esp32c3Gpio;
         use crate::peripherals::esp32c3::i2c::Esp32c3I2c;
@@ -1032,11 +1052,21 @@ impl SystemBus {
         let (Some(i2c_idx), Some(gpio_idx)) = (i2c_idx, gpio_idx) else {
             return;
         };
+        let matrix_route = self.peripherals[gpio_idx]
+            .dev
+            .as_any()
+            .and_then(|a| a.downcast_ref::<Esp32c3Gpio>())
+            .map(|g| g.i2c_matrix_route_state());
         let lines = self.peripherals[i2c_idx]
             .dev
             .as_any_mut()
             .and_then(|a| a.downcast_mut::<Esp32c3I2c>())
-            .map(|c| c.line_levels_arc());
+            .and_then(|c| {
+                matrix_route.map(|route| {
+                    c.set_matrix_route_state(route);
+                    c.line_levels_arc()
+                })
+            });
         if let (Some(lines), Some(gpio)) = (
             lines,
             self.peripherals[gpio_idx]
@@ -3942,6 +3972,7 @@ mod tests {
                 id: "adxl345".to_string(),
                 r#type: "adxl345".to_string(),
                 connection: "i2c1".to_string(),
+                route: Default::default(),
                 config,
             }],
             board_io: Vec::new(),
@@ -3956,6 +3987,239 @@ mod tests {
         assert_eq!(i2c.attached_devices().len(), 1);
     }
 
+    #[test]
+    fn test_esp32c3_i2c_device_requires_declared_physical_route() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let chip = ChipDescriptor::from_file(root.join("../../configs/chips/esp32c3.yaml"))
+            .expect("read ESP32-C3 chip descriptor");
+        let manifest: SystemManifest = serde_yaml::from_str(
+            r#"
+name: "c3-i2c-route-required"
+chip: "../chips/esp32c3.yaml"
+external_devices:
+  - id: "bmp280"
+    type: "bmp280"
+    connection: "i2c0"
+    config:
+      i2c_address: 0x76
+"#,
+        )
+        .expect("parse route-less C3 manifest");
+
+        let err = match SystemBus::from_config(&chip, &manifest) {
+            Ok(_) => panic!("ESP32-C3 I2C must reject a route-less external device"),
+            Err(err) => err,
+        };
+        assert!(
+            err.to_string().contains("route.sda") && err.to_string().contains("route.scl"),
+            "error must tell the author exactly which physical signals are required: {err:#}"
+        );
+    }
+
+    #[test]
+    fn curated_esp32c3_i2c_manifests_declare_physical_routes() {
+        #[derive(serde::Deserialize)]
+        struct DeviceInventory {
+            #[serde(default)]
+            external_devices: Vec<labwired_config::ExternalDevice>,
+        }
+
+        // Upgrade inventory: every curated C3 system that attaches an I²C
+        // device must declare the physical pair. Keep this explicit list next
+        // to the runtime gate so adding a route-less demo cannot silently
+        // restore controller-only behavior.
+        const MANIFESTS: &[&str] = &[
+            "configs/systems/esp32c3-oled-demo.yaml",
+            "configs/systems/esp32c3-oled-128x32-workshop.yaml",
+            "configs/systems/esp32c3-mlx90640-thermal.yaml",
+            "examples/esp32c3-mlx90640-thermal/system.yaml",
+            "examples/esp32c3-mlx90640-thermal/system-fault.yaml",
+            "examples/esp32c3-mlx90640-thermal/system-iolink.yaml",
+            "examples/esp32c3-mlx90640-thermal/system-iolink-fault.yaml",
+            "examples/esp32c3-leo-airquality/system.yaml",
+            "examples/esp32c3-leo-airquality/system-fresh.yaml",
+            "examples/esp32c3-leo-airquality/system-stuffy.yaml",
+        ];
+
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let mut routed_devices = 0usize;
+        for rel in MANIFESTS {
+            let source = std::fs::read_to_string(root.join(rel))
+                .unwrap_or_else(|err| panic!("read curated C3 manifest {rel}: {err}"));
+            let inventory: DeviceInventory = serde_yaml::from_str(&source)
+                .unwrap_or_else(|err| panic!("parse curated C3 manifest {rel}: {err}"));
+            for device in inventory
+                .external_devices
+                .iter()
+                .filter(|device| device.connection == "i2c0")
+            {
+                crate::peripherals::esp32c3::i2c::C3I2cPadRoute::from_manifest_route(
+                    &device.route,
+                )
+                .unwrap_or_else(|err| {
+                    panic!(
+                        "curated C3 manifest {rel} external device '{}' has no usable physical I2C route: {err:#}",
+                        device.id
+                    )
+                });
+                routed_devices += 1;
+            }
+        }
+        assert!(
+            routed_devices > 0,
+            "the C3 route upgrade inventory must exercise at least one I2C device"
+        );
+    }
+
+    #[test]
+    fn test_esp32c3_i2c_gpio_matrix_distinguishes_gpio45_from_gpio67() {
+        use labwired_config::ExternalDevice;
+        use std::collections::{BTreeMap, HashMap};
+
+        const GPIO_BASE: u64 = 0x6000_4000;
+        const GPIO_ENABLE_W1TS: u64 = 0x24;
+        const GPIO_FUNC_IN_SEL: u64 = 0x154;
+        const GPIO_FUNC_OUT_SEL: u64 = 0x554;
+        const MATRIX_INPUT_SELECT: u32 = 1 << 6;
+        const I2C_SCL_SIGNAL: u32 = 53;
+        const I2C_SDA_SIGNAL: u32 = 54;
+        const I2C_BASE: u64 = 0x6001_3000;
+        const I2C_INT_RAW: u64 = 0x20;
+        const I2C_REG_CTR: u64 = 0x04;
+        const I2C_REG_DATA: u64 = 0x1C;
+        const I2C_REG_CMD0: u64 = 0x58;
+        const I2C_INT_NACK: u32 = 1 << 10;
+        const I2C_INT_TRANS_COMPLETE: u32 = 1 << 7;
+
+        fn route(sda: u8, scl: u8) -> BTreeMap<String, String> {
+            BTreeMap::from([
+                ("sda".to_string(), format!("GPIO{sda}")),
+                ("scl".to_string(), format!("GPIO{scl}")),
+            ])
+        }
+
+        fn build_bus(route: BTreeMap<String, String>) -> SystemBus {
+            let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+            let chip = ChipDescriptor::from_file(root.join("../../configs/chips/esp32c3.yaml"))
+                .expect("read ESP32-C3 chip descriptor");
+            let mut config = HashMap::new();
+            config.insert(
+                "i2c_address".to_string(),
+                serde_yaml::Value::Number(0x3C.into()),
+            );
+            let manifest = SystemManifest {
+                walk_deleted: Some(false),
+                schema_version: "1.0".to_string(),
+                name: "c3-physical-i2c-route".to_string(),
+                chip: "../chips/esp32c3.yaml".to_string(),
+                memory_overrides: HashMap::new(),
+                external_devices: vec![ExternalDevice {
+                    id: "oled".to_string(),
+                    r#type: "oled-ssd1306-128x32".to_string(),
+                    connection: "i2c0".to_string(),
+                    route,
+                    config,
+                }],
+                board_io: Vec::new(),
+                debug_uart: None,
+                peripherals: Vec::new(),
+            };
+            let mut bus = SystemBus::from_config(&chip, &manifest).expect("construct C3 bus");
+            let i2c_idx = bus
+                .find_peripheral_index_by_name("i2c0")
+                .expect("C3 I2C0 must be present");
+            bus.peripherals[i2c_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|any| any.downcast_mut::<crate::peripherals::esp32c3::i2c::Esp32c3I2c>())
+                .expect("C3 behavioral I2C0")
+                .force_legacy_walk();
+            bus
+        }
+
+        fn configure_wire_begin_equivalent(bus: &mut SystemBus, sda: u8, scl: u8) {
+            bus.write_u32(GPIO_BASE + GPIO_ENABLE_W1TS, (1 << sda) | (1 << scl))
+                .expect("enable I2C pads");
+            bus.write_u32(
+                GPIO_BASE + GPIO_FUNC_OUT_SEL + u64::from(sda) * 4,
+                I2C_SDA_SIGNAL,
+            )
+            .expect("route SDA output");
+            bus.write_u32(
+                GPIO_BASE + GPIO_FUNC_OUT_SEL + u64::from(scl) * 4,
+                I2C_SCL_SIGNAL,
+            )
+            .expect("route SCL output");
+            bus.write_u32(
+                GPIO_BASE + GPIO_FUNC_IN_SEL + u64::from(I2C_SDA_SIGNAL) * 4,
+                MATRIX_INPUT_SELECT | u32::from(sda),
+            )
+            .expect("route SDA input");
+            bus.write_u32(
+                GPIO_BASE + GPIO_FUNC_IN_SEL + u64::from(I2C_SCL_SIGNAL) * 4,
+                MATRIX_INPUT_SELECT | u32::from(scl),
+            )
+            .expect("route SCL input");
+        }
+
+        fn probe_oled_address(bus: &mut SystemBus) -> u32 {
+            let cmd = |opcode: u32, byte_num: u32| (opcode << 11) | byte_num;
+            bus.write_u32(I2C_BASE + I2C_REG_CMD0, cmd(6, 0))
+                .expect("RSTART");
+            bus.write_u32(I2C_BASE + I2C_REG_CMD0 + 4, cmd(1, 1))
+                .expect("WRITE address");
+            bus.write_u32(I2C_BASE + I2C_REG_CMD0 + 8, cmd(2, 0))
+                .expect("STOP");
+            bus.write_u32(I2C_BASE + I2C_REG_DATA, 0x78)
+                .expect("OLED address byte");
+            bus.write_u32(I2C_BASE + I2C_REG_CTR, 1 << 5)
+                .expect("start I2C transaction");
+            for _ in 0..1_000_000 {
+                let flags = bus.read_u32(I2C_BASE + I2C_INT_RAW).unwrap();
+                if flags & I2C_INT_TRANS_COMPLETE != 0 {
+                    return flags;
+                }
+                bus.tick_peripherals_fully();
+            }
+            panic!("C3 I2C address probe did not complete");
+        }
+
+        // A physical OLED on GPIO4/5 must not be reached by a firmware route
+        // to GPIO6/7; the exact same controller/address starts ACKing only
+        // after the `Wire.begin(4, 5)`-equivalent GPIO-matrix writes.
+        let mut physical_45_wrong_67 = build_bus(route(4, 5));
+        configure_wire_begin_equivalent(&mut physical_45_wrong_67, 6, 7);
+        assert_ne!(
+            probe_oled_address(&mut physical_45_wrong_67) & I2C_INT_NACK,
+            0,
+            "GPIO6/7 must NACK an OLED physically wired to GPIO4/5"
+        );
+        let mut physical_45_right_45 = build_bus(route(4, 5));
+        configure_wire_begin_equivalent(&mut physical_45_right_45, 4, 5);
+        assert_eq!(
+            probe_oled_address(&mut physical_45_right_45) & I2C_INT_NACK,
+            0,
+            "GPIO4/5 must ACK an OLED physically wired to GPIO4/5"
+        );
+
+        // Reverse the physical circuit as well: this proves the pair is not
+        // metadata and that GPIO6/7 has its own observable electrical path.
+        let mut physical_67_wrong_45 = build_bus(route(6, 7));
+        configure_wire_begin_equivalent(&mut physical_67_wrong_45, 4, 5);
+        assert_ne!(
+            probe_oled_address(&mut physical_67_wrong_45) & I2C_INT_NACK,
+            0,
+            "GPIO4/5 must NACK an OLED physically wired to GPIO6/7"
+        );
+        let mut physical_67_right_67 = build_bus(route(6, 7));
+        configure_wire_begin_equivalent(&mut physical_67_right_67, 6, 7);
+        assert_eq!(
+            probe_oled_address(&mut physical_67_right_67) & I2C_INT_NACK,
+            0,
+            "GPIO6/7 must ACK an OLED physically wired to GPIO6/7"
+        );
+    }
+
     /// Wiring guard for the ESP32-C3 behavioral I²C: a chip yaml declaring
     /// `i2c0` as `esp32c3_i2c` plus a system manifest declaring a BMP280 on
     /// `connection: "i2c0"` must attach that slave to the behavioral controller
@@ -3966,7 +4230,7 @@ mod tests {
         use labwired_config::{
             Arch, ChipDescriptor, ExternalDevice, MemoryRange, PeripheralConfig, SystemManifest,
         };
-        use std::collections::HashMap;
+        use std::collections::{BTreeMap, HashMap};
 
         let chip = ChipDescriptor {
             schema_version: "1.0".to_string(),
@@ -3984,15 +4248,26 @@ mod tests {
                 base: 0x3FC8_0000,
                 size: "400KB".to_string(),
             },
-            peripherals: vec![PeripheralConfig {
-                id: "i2c0".to_string(),
-                r#type: "esp32c3_i2c".to_string(),
-                base_address: 0x6001_3000,
-                size: Some("4KB".to_string()),
-                irq: None,
-                config: HashMap::new(),
-                clock: None,
-            }],
+            peripherals: vec![
+                PeripheralConfig {
+                    id: "i2c0".to_string(),
+                    r#type: "esp32c3_i2c".to_string(),
+                    base_address: 0x6001_3000,
+                    size: Some("4KB".to_string()),
+                    irq: None,
+                    config: HashMap::new(),
+                    clock: None,
+                },
+                PeripheralConfig {
+                    id: "gpio".to_string(),
+                    r#type: "esp32c3_gpio".to_string(),
+                    base_address: 0x6000_4000,
+                    size: Some("4KB".to_string()),
+                    irq: None,
+                    config: HashMap::new(),
+                    clock: None,
+                },
+            ],
             pins: Default::default(),
         };
 
@@ -4011,6 +4286,10 @@ mod tests {
                 id: "bmp280".to_string(),
                 r#type: "bmp280".to_string(),
                 connection: "i2c0".to_string(),
+                route: BTreeMap::from([
+                    ("sda".to_string(), "GPIO4".to_string()),
+                    ("scl".to_string(), "GPIO5".to_string()),
+                ]),
                 config,
             }],
             board_io: Vec::new(),
@@ -4019,6 +4298,17 @@ mod tests {
         };
 
         let mut bus = SystemBus::from_config(&chip, &manifest).unwrap();
+        // `Wire.begin(4, 5)`-equivalent GPIO-matrix setup: both output and
+        // input paths must select the manifest's physical pads before the
+        // attached BMP280 can answer.
+        bus.write_u32(0x6000_4000 + 0x24, (1 << 4) | (1 << 5))
+            .unwrap();
+        bus.write_u32(0x6000_4000 + 0x554 + 4 * 4, 54).unwrap();
+        bus.write_u32(0x6000_4000 + 0x554 + 5 * 4, 53).unwrap();
+        bus.write_u32(0x6000_4000 + 0x154 + 54 * 4, (1 << 6) | 4)
+            .unwrap();
+        bus.write_u32(0x6000_4000 + 0x154 + 53 * 4, (1 << 6) | 5)
+            .unwrap();
         let i2c_idx = bus
             .find_peripheral_index_by_name("i2c0")
             .expect("i2c0 must be registered");
@@ -4084,7 +4374,7 @@ mod tests {
         use labwired_config::{
             Arch, ChipDescriptor, ExternalDevice, MemoryRange, PeripheralConfig, SystemManifest,
         };
-        use std::collections::HashMap;
+        use std::collections::{BTreeMap, HashMap};
 
         let chip = ChipDescriptor {
             schema_version: "1.0".to_string(),
@@ -4102,15 +4392,26 @@ mod tests {
                 base: 0x3FC8_0000,
                 size: "400KB".to_string(),
             },
-            peripherals: vec![PeripheralConfig {
-                id: "i2c0".to_string(),
-                r#type: "esp32c3_i2c".to_string(),
-                base_address: 0x6001_3000,
-                size: Some("4KB".to_string()),
-                irq: None,
-                config: HashMap::new(),
-                clock: None,
-            }],
+            peripherals: vec![
+                PeripheralConfig {
+                    id: "i2c0".to_string(),
+                    r#type: "esp32c3_i2c".to_string(),
+                    base_address: 0x6001_3000,
+                    size: Some("4KB".to_string()),
+                    irq: None,
+                    config: HashMap::new(),
+                    clock: None,
+                },
+                PeripheralConfig {
+                    id: "gpio".to_string(),
+                    r#type: "esp32c3_gpio".to_string(),
+                    base_address: 0x6000_4000,
+                    size: Some("4KB".to_string()),
+                    irq: None,
+                    config: HashMap::new(),
+                    clock: None,
+                },
+            ],
             pins: Default::default(),
         };
 
@@ -4133,6 +4434,10 @@ mod tests {
                 id: "thermal_cam".to_string(),
                 r#type: "mlx90640".to_string(),
                 connection: "i2c0".to_string(),
+                route: BTreeMap::from([
+                    ("sda".to_string(), "GPIO4".to_string()),
+                    ("scl".to_string(), "GPIO5".to_string()),
+                ]),
                 config,
             }],
             board_io: Vec::new(),
@@ -4141,6 +4446,14 @@ mod tests {
         };
 
         let mut bus = SystemBus::from_config(&chip, &manifest).unwrap();
+        bus.write_u32(0x6000_4000 + 0x24, (1 << 4) | (1 << 5))
+            .unwrap();
+        bus.write_u32(0x6000_4000 + 0x554 + 4 * 4, 54).unwrap();
+        bus.write_u32(0x6000_4000 + 0x554 + 5 * 4, 53).unwrap();
+        bus.write_u32(0x6000_4000 + 0x154 + 54 * 4, (1 << 6) | 4)
+            .unwrap();
+        bus.write_u32(0x6000_4000 + 0x154 + 53 * 4, (1 << 6) | 5)
+            .unwrap();
         let i2c_idx = bus
             .find_peripheral_index_by_name("i2c0")
             .expect("i2c0 must be registered");
@@ -5071,6 +5384,7 @@ peripherals:
                 id: "sensor1".to_string(),
                 r#type: r#type.to_string(),
                 connection: connection.to_string(),
+                route: Default::default(),
                 config,
             }],
             board_io: Vec::new(),

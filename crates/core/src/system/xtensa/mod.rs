@@ -529,6 +529,7 @@ mod tests {
                 id: "epaper".to_string(),
                 r#type: "ssd1680_tricolor_290".to_string(),
                 connection: "spi3".to_string(),
+                route: Default::default(),
                 config,
             }],
             board_io: vec![],
@@ -601,6 +602,7 @@ mod tests {
                 id: "epaper".to_string(),
                 r#type: "ssd1680_tricolor_290".to_string(),
                 connection: "spi3_s3".to_string(),
+                route: Default::default(),
                 config,
             }],
             board_io: vec![],
@@ -653,6 +655,7 @@ mod tests {
                 id: "epaper".to_string(),
                 r#type: "ssd1680_tricolor_290".to_string(),
                 connection: "spi99".to_string(), // does not exist
+                route: Default::default(),
                 config: std::collections::HashMap::new(),
             }],
             board_io: vec![],

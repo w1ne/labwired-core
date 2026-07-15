@@ -229,7 +229,9 @@ mod logic_capture_differential_tests {
     const SIG_I2CEXT0_SCL: u32 = 53;
     const SIG_I2CEXT0_SDA: u32 = 54;
     const ENABLE_W1TS: u64 = 0x24;
+    const FUNC_IN_SEL: u64 = 0x154;
     const FUNC_OUT_SEL: u64 = 0x554;
+    const MATRIX_INPUT_SELECT: u32 = 1 << 6;
     const REG_CTR: u64 = 0x04;
     const REG_DATA: u64 = 0x1C;
     const REG_CMD0: u64 = 0x58;
@@ -255,7 +257,11 @@ mod logic_capture_differential_tests {
             None,
             Box::new(crate::peripherals::esp32c3::i2c::Esp32c3I2c::new()),
         );
-        bus.attach_i2c_slave("i2c0", Box::new(Ssd1306::new(0x3C)))
+        let route = std::collections::BTreeMap::from([
+            ("sda".to_string(), format!("GPIO{SDA_PIN}")),
+            ("scl".to_string(), format!("GPIO{SCL_PIN}")),
+        ]);
+        bus.attach_i2c_slave_with_route("i2c0", Box::new(Ssd1306::new(0x3C)), Some(&route))
             .unwrap();
         bus.wire_esp32c3_i2c_pads();
 
@@ -284,6 +290,16 @@ mod logic_capture_differential_tests {
         bus.write_u32(
             C3_GPIO_BASE + FUNC_OUT_SEL + (SCL_PIN as u64) * 4,
             SIG_I2CEXT0_SCL,
+        )
+        .unwrap();
+        bus.write_u32(
+            C3_GPIO_BASE + FUNC_IN_SEL + u64::from(SIG_I2CEXT0_SDA) * 4,
+            MATRIX_INPUT_SELECT | u32::from(SDA_PIN),
+        )
+        .unwrap();
+        bus.write_u32(
+            C3_GPIO_BASE + FUNC_IN_SEL + u64::from(SIG_I2CEXT0_SCL) * 4,
+            MATRIX_INPUT_SELECT | u32::from(SCL_PIN),
         )
         .unwrap();
         bus.write_u32(I2C_BASE, 199).unwrap(); // SCL_LOW_PERIOD

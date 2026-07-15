@@ -20,6 +20,11 @@ const PIN_MASK: u32 = (1u32 << PIN_COUNT) - 1;
 /// Bits [8:0] select which peripheral output signal drives pad `n`; the sentinel
 /// `SIG_GPIO_OUT` (128) means the pad is a plain GPIO output (GPIO_OUT latch).
 const FUNC_OUT_SEL: u64 = 0x554;
+/// `GPIO_FUNCn_IN_SEL_CFG_REG` base. The C3 input matrix is indexed by
+/// peripheral signal rather than GPIO pad; I²C0 uses signal indices 53/54.
+const FUNC_IN_SEL: u64 = 0x154;
+const INPUT_SIGNAL_COUNT: usize = 128;
+const MATRIX_INPUT_SELECT: u32 = 1 << 6;
 const SIG_GPIO_OUT: u32 = 128;
 /// GPIO-matrix output signal indices of the I²C0 controller (esp-idf
 /// `soc/esp32c3/include/soc/gpio_sig_map.h`).
@@ -96,6 +101,14 @@ pub struct Esp32c3Gpio {
     /// `GPIO_FUNCn_OUT_SEL_CFG` per pad — the output-matrix selector read by
     /// `gpio_routing` to name the signal a pad is wired to.
     out_sel: [u32; PIN_COUNT as usize],
+    /// `GPIO_FUNCn_IN_SEL_CFG` per peripheral signal. Unlike `out_sel`, this
+    /// matrix is signal-indexed: a programmed entry tells a peripheral which
+    /// physical pad it reads. We retain it so I²C attachment can honor real
+    /// SDA/SCL routing rather than just controller identity.
+    in_sel: [u32; INPUT_SIGNAL_COUNT],
+    /// Live C3 I²C0 matrix state shared with the I²C controller. GPIO owns the
+    /// register words; every matrix/enable write refreshes this cell.
+    i2c_matrix_route: super::i2c::C3I2cMatrixRoute,
     /// Shared IO_MUX per-pad register words. This is intentionally separate
     /// from the output matrix: the pad's weak pull-up is an electrical input
     /// condition, not a routed peripheral signal.
@@ -126,6 +139,10 @@ impl Esp32c3Gpio {
             status: 0,
             pin_cfg: [0; PIN_COUNT as usize],
             out_sel: [0; PIN_COUNT as usize],
+            in_sel: [0; INPUT_SIGNAL_COUNT],
+            i2c_matrix_route: std::sync::Arc::new(std::sync::Mutex::new(
+                super::i2c::C3I2cMatrixRouteState::default(),
+            )),
             pad_controls: None,
             i2c_lines: None,
             tap: None,
@@ -138,6 +155,14 @@ impl Esp32c3Gpio {
     /// engine drives) so matrix-routed pads carry the real waveform.
     pub(crate) fn set_i2c_lines(&mut self, lines: std::sync::Arc<super::i2c::I2cLineLevels>) {
         self.i2c_lines = Some(lines);
+    }
+
+    /// Clone the live GPIO-matrix route cell for the C3 I²C controller. It is
+    /// intentionally shared rather than copied: `Wire.begin(sda, scl)` writes
+    /// GPIO registers after system construction, and the slave gate must see
+    /// those later firmware writes.
+    pub(crate) fn i2c_matrix_route_state(&self) -> super::i2c::C3I2cMatrixRoute {
+        self.i2c_matrix_route.clone()
     }
 
     /// Wire the C3 IO_MUX's shared per-pad controls after both peripherals
@@ -278,6 +303,50 @@ impl Esp32c3Gpio {
         }
     }
 
+    fn in_sel_index(off: u64) -> Option<usize> {
+        if (FUNC_IN_SEL..FUNC_IN_SEL + (INPUT_SIGNAL_COUNT as u64) * 4).contains(&off) {
+            Some(((off - FUNC_IN_SEL) / 4) as usize)
+        } else {
+            None
+        }
+    }
+
+    /// Recompute the two C3 I²C0 signal paths from GPIO's actual matrix
+    /// registers. A device physically wired to a pair responds only when both
+    /// controller outputs are enabled and routed there *and* both controller
+    /// inputs select the same pads.
+    fn refresh_i2c_matrix_route(&mut self) {
+        let mut sda_output_mask = 0u32;
+        let mut scl_output_mask = 0u32;
+        for pin in 0..PIN_COUNT as usize {
+            if self.enable & (1 << pin) == 0 {
+                continue;
+            }
+            match self.out_sel[pin] & 0x1FF {
+                SIG_I2CEXT0_SDA => sda_output_mask |= 1 << pin,
+                SIG_I2CEXT0_SCL => scl_output_mask |= 1 << pin,
+                _ => {}
+            }
+        }
+        let input_pad = |signal: u32| {
+            let word = self.in_sel[signal as usize];
+            if word & MATRIX_INPUT_SELECT == 0 {
+                return None;
+            }
+            let pin = (word & 0x1F) as u8;
+            (pin < PIN_COUNT).then_some(pin)
+        };
+        self.i2c_matrix_route
+            .lock()
+            .expect("ESP32-C3 GPIO I2C matrix route poisoned")
+            .set(
+                sda_output_mask,
+                scl_output_mask,
+                input_pad(SIG_I2CEXT0_SDA),
+                input_pad(SIG_I2CEXT0_SCL),
+            );
+    }
+
     pub fn out_value(&self) -> u32 {
         self.out
     }
@@ -317,6 +386,8 @@ impl Esp32c3Gpio {
             off => {
                 if let Some(idx) = Self::out_sel_index(off) {
                     self.out_sel[idx]
+                } else if let Some(idx) = Self::in_sel_index(off) {
+                    self.in_sel[idx]
                 } else {
                     Self::pin_cfg_index(off)
                         .map(|idx| self.pin_cfg[idx])
@@ -345,11 +416,14 @@ impl Esp32c3Gpio {
             off => {
                 if let Some(idx) = Self::out_sel_index(off) {
                     self.out_sel[idx] = value;
+                } else if let Some(idx) = Self::in_sel_index(off) {
+                    self.in_sel[idx] = value;
                 } else if let Some(idx) = Self::pin_cfg_index(off) {
                     self.pin_cfg[idx] = value;
                 }
             }
         }
+        self.refresh_i2c_matrix_route();
     }
 
     fn write_byte_special(&mut self, word_off: u64, byte_off: u64, value: u8) -> bool {
@@ -386,6 +460,7 @@ impl Peripheral for Esp32c3Gpio {
         let byte_off = offset & 3;
         self.tap_snapshot();
         if self.write_byte_special(word_off, byte_off, value) {
+            self.refresh_i2c_matrix_route();
             self.tap_report();
             return Ok(());
         }
@@ -465,9 +540,10 @@ impl Peripheral for Esp32c3Gpio {
         }
         let mask = 1u32 << pin;
         if (self.enable & mask) == 0 {
-            // Output driver disabled → the pad is an input. The input matrix
-            // (FUNCn_IN_SEL, indexed by signal) is not tracked, so we cannot name
-            // the signal — func stays None rather than a guess.
+            // Output driver disabled → the pad is an input. FUNCn_IN_SEL is
+            // signal-indexed (not pad-indexed), so a pad can feed several
+            // peripheral inputs; the UI intentionally reports no single
+            // function rather than guessing one.
             return Some(GpioRouting {
                 mode: GpioMode::Input,
                 func: None,
