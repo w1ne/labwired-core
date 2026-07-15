@@ -27,10 +27,53 @@ const GOLDEN_SERIAL_FNV1A: u64 = 0xaf2df535cf6fd7e4;
 const GOLDEN_FRAMEBUFFER_FNV1A: u64 = 0xc4eb9ef771b3ded8;
 const GOLDEN_COMPLETION_CYCLES: u64 = 2_139_600;
 // `tick_profile_entry_counts()` counts the active legacy index vector.  The
-// faithful-fast-boot S3 wiring registers 48 such entries; this is a golden
+// faithful-fast-boot S3 wiring registers 37 such entries; this is a golden
 // source-level invariant, not a performance range.
 const GOLDEN_LEGACY_TICK_MULTIPLIER: u64 = 37;
 const GOLDEN_LEGACY_TICK_ENTRIES: u64 = 79_165_200;
+
+// Complete assembled-bus mapping for the OLED workload. The role labels make
+// review failures actionable: entries marked "retained" have observable
+// per-step behavior, while the removed inert classes must never reappear.
+const EXPECTED_LEGACY_S3_OLED_ROLES: &[(&str, &str)] = &[
+    ("intmatrix", "retained: interrupt routing"),
+    ("crosscore_ipi", "retained: SMP doorbell"),
+    ("core1_control", "retained: secondary-core release"),
+    ("extmem", "retained: external-memory timing"),
+    ("system_regs", "retained: S3 system register behavior"),
+    ("system_regs_hi", "retained: S3 system register behavior"),
+    ("rtc_cntl", "retained: RTC calibration/timing"),
+    ("gpio", "retained: GPIO observer cycle timestamps"),
+    ("sens_s3", "retained: S3 sensor model"),
+    ("rng", "retained: RNG model"),
+    ("sha", "retained: SHA accelerator model"),
+    ("pcnt", "retained: pulse-counter timing"),
+    ("ledc", "retained: PWM timing"),
+    ("timg0_s3", "retained: timer-group timing"),
+    ("timg1_s3", "retained: timer-group timing"),
+    ("rmt_s3", "retained: waveform timing"),
+    ("spi2_s3", "retained: SPI timing"),
+    ("spi3_s3", "retained: SPI timing"),
+    ("sar_adc_s3", "retained: ADC behavior"),
+    ("gdma", "retained: DMA behavior"),
+    ("i2s0_s3", "retained: I2S timing"),
+    ("i2s1_s3", "retained: I2S timing"),
+    ("twai", "retained: TWAI timing"),
+    ("aes", "retained: AES accelerator model"),
+    ("rsa", "retained: RSA accelerator model"),
+    ("hmac", "retained: HMAC accelerator model"),
+    ("ds", "retained: DS accelerator model"),
+    ("mcpwm0", "retained: motor-PWM timing"),
+    ("mcpwm1", "retained: motor-PWM timing"),
+    ("sdmmc", "retained: SDMMC timing"),
+    ("lcd_cam", "retained: LCD/CAM timing"),
+    ("usb_otg", "retained: USB OTG behavior"),
+    ("i2c1", "retained: I2C timing"),
+    ("uart0_s3", "retained: UART timing"),
+    ("uart1_s3", "retained: UART timing"),
+    ("uart2_s3", "retained: UART timing"),
+    ("i2c0", "retained: OLED I2C level IRQ timing"),
+];
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -170,6 +213,20 @@ fn esp32s3_oled_native_baseline() {
     let elf = std::fs::read(&elf_path).expect("read curated S3 OLED ELF");
     let (mut machine, serial) = build_machine(&chip, &manifest, &elf);
     let legacy_entries = machine.bus.legacy_tick_entry_descriptors();
+    let mut actual_names: Vec<&str> = legacy_entries
+        .iter()
+        .map(|(name, _, _)| name.as_str())
+        .collect();
+    let mut expected_names: Vec<&str> = EXPECTED_LEGACY_S3_OLED_ROLES
+        .iter()
+        .map(|(name, _)| *name)
+        .collect();
+    actual_names.sort_unstable();
+    expected_names.sort_unstable();
+    assert_eq!(
+        actual_names, expected_names,
+        "complete S3 OLED legacy mapping changed; review each named role"
+    );
     assert!(
         legacy_entries.iter().any(|(name, _, _)| name == "gpio"),
         "GPIO remains on the legacy path because observer timestamps are tick-driven"
@@ -188,6 +245,24 @@ fn esp32s3_oled_native_baseline() {
             .all(|(name, _, _)| name != "usb_serial_jtag"),
         "polling USB serial sink must remain inert for the legacy walk"
     );
+    for removed in [
+        "iram",
+        "dram",
+        "rtc_slow",
+        "rtc_fast",
+        "rom",
+        "drom",
+        "system",
+        "efuse",
+        "low_mmio",
+        "mmio_rest",
+        "io_mux",
+    ] {
+        assert!(
+            legacy_entries.iter().all(|(name, _, _)| name != removed),
+            "inert {removed} must remain removed from the legacy walk"
+        );
+    }
     eprintln!("S3_OLED_LEGACY_ENTRIES {:?}", legacy_entries);
     let max_cycles = std::env::var("LABWIRED_ESP32S3_OLED_MAX_CYCLES")
         .ok()
