@@ -5,6 +5,7 @@
 //! interpreter; it does not add timing, clock, or simulator-only execution
 //! behaviour.
 
+use labwired_config::{Arch, ChipDescriptor, SystemManifest};
 use labwired_core::boot::esp32s3::{fast_boot, BootOpts};
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::XtensaLx7;
@@ -20,6 +21,10 @@ use std::time::Instant;
 const CHUNK: u32 = 1_000_000;
 const DEFAULT_MAX_CYCLES: u64 = 200_000_000;
 const DEFAULT_SERIAL_MARKER: &str = "S3 OLED painted";
+const GOLDEN_FIRST_PAINT_CYCLES: u64 = 2_000_000;
+const GOLDEN_FIRST_PAINT_FNV1A: u64 = 0xc4eb9ef771b3ded8;
+const GOLDEN_SERIAL_FNV1A: u64 = 0xaf2df535cf6fd7e4;
+const GOLDEN_FRAMEBUFFER_FNV1A: u64 = 0xc4eb9ef771b3ded8;
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -66,7 +71,50 @@ fn oled_framebuffer(machine: &Machine<XtensaLx7>) -> Vec<u8> {
         .to_vec()
 }
 
-fn build_machine(elf: &[u8]) -> (Machine<XtensaLx7>, Arc<Mutex<Vec<u8>>>) {
+/// This is the faithful-fast-boot baseline used by the WASM constructor.  It
+/// loads the real S3 ROM images through `Esp32s3Opts` and then uses the
+/// existing `fast_boot` seam, which skips replaying the ROM reset/bootloader.
+/// It must not be described as a full hardware-boot benchmark.
+///
+/// Full ROM boot is a separate benchmark boundary: it must use the
+/// `boot::esp32s3_rom` path and its own fixture/trace golden values.  Keeping
+/// that boundary separate prevents a fast-boot result from being silently
+/// presented as ROM-boot fidelity.
+fn build_machine(
+    chip: &ChipDescriptor,
+    manifest: &SystemManifest,
+    elf: &[u8],
+) -> (Machine<XtensaLx7>, Arc<Mutex<Vec<u8>>>) {
+    assert_eq!(chip.name, "esp32s3");
+    assert_eq!(chip.arch, Arch::Xtensa);
+    assert!(
+        chip.peripherals
+            .iter()
+            .any(|peripheral| peripheral.id == "i2c0"),
+        "S3 chip descriptor must declare i2c0"
+    );
+    let oled = manifest
+        .external_devices
+        .iter()
+        .find(|device| device.id == "oled")
+        .expect("S3 OLED manifest must declare external device 'oled'");
+    assert_eq!(oled.r#type, "oled-ssd1306");
+    assert_eq!(oled.connection, "i2c0");
+    assert_eq!(
+        oled.config
+            .get("i2c_address")
+            .and_then(|value| value.as_u64()),
+        Some(0x3c)
+    );
+    let oled_io = manifest
+        .board_io
+        .iter()
+        .find(|binding| binding.id == "oled")
+        .expect("S3 OLED manifest must declare board_io binding 'oled'");
+    assert_eq!(oled_io.peripheral, "i2c0");
+    assert_eq!(oled_io.i2c_address, Some(0x3c));
+    assert_eq!(oled_io.device_type.as_deref(), Some("oled-ssd1306"));
+
     let mut bus = SystemBus::new();
     let wiring = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
     let serial = Arc::new(Mutex::new(Vec::new()));
@@ -105,21 +153,8 @@ fn esp32s3_oled_native_baseline() {
     let root = repo_root();
     let chip_yaml = root.join("core/configs/chips/esp32s3.yaml");
     let system_yaml = root.join("core/configs/systems/esp32s3-oled-demo.yaml");
-    assert!(
-        chip_yaml.is_file(),
-        "missing S3 chip config: {}",
-        chip_yaml.display()
-    );
-    assert!(
-        system_yaml.is_file(),
-        "missing S3 OLED system config: {}",
-        system_yaml.display()
-    );
-    let system = std::fs::read_to_string(&system_yaml).expect("read S3 OLED system config");
-    assert!(
-        system.contains("i2c_address: 0x3C"),
-        "S3 OLED config must bind 0x3C"
-    );
+    let chip = ChipDescriptor::from_file(&chip_yaml).expect("parse S3 chip descriptor");
+    let manifest = SystemManifest::from_file(&system_yaml).expect("parse S3 OLED manifest");
 
     let elf_path = required_asset(
         "curated OLED ELF",
@@ -127,7 +162,7 @@ fn esp32s3_oled_native_baseline() {
         "packages/playground/public/wasm/demo-esp32s3-oled.elf",
     );
     let elf = std::fs::read(&elf_path).expect("read curated S3 OLED ELF");
-    let (mut machine, serial) = build_machine(&elf);
+    let (mut machine, serial) = build_machine(&chip, &manifest, &elf);
     let max_cycles = std::env::var("LABWIRED_ESP32S3_OLED_MAX_CYCLES")
         .ok()
         .and_then(|value| value.parse().ok())
@@ -164,6 +199,33 @@ fn esp32s3_oled_native_baseline() {
         output_text.contains(&marker),
         "S3 OLED serial marker {marker:?} was not emitted; serial:\n{output_text}"
     );
+
+    let (first_paint_cycles, first_paint_digest) = first_paint.expect("first paint asserted above");
+    assert_eq!(
+        first_paint_cycles, GOLDEN_FIRST_PAINT_CYCLES,
+        "first-paint cycle drifted from the faithful-fast-boot baseline"
+    );
+    assert_eq!(
+        first_paint_digest, GOLDEN_FIRST_PAINT_FNV1A,
+        "first-paint framebuffer digest drifted"
+    );
+    assert_eq!(fnv1a(&output), GOLDEN_SERIAL_FNV1A, "serial digest drifted");
+    assert_eq!(
+        fnv1a(&framebuffer),
+        GOLDEN_FRAMEBUFFER_FNV1A,
+        "final framebuffer digest drifted"
+    );
+
+    // These counters are deterministic for this fixed 1M-chunk, interval-1
+    // baseline.  They are intentionally golden: a scheduler or interpreter
+    // change must update this benchmark and its observable-output review
+    // together, rather than silently changing the measured workload.
+    assert_eq!(profile.cpu_instructions, machine.total_cycles);
+    assert_eq!(profile.cpu_batches, profile.cpu_instructions);
+    assert_eq!(profile.peripheral_ticks, machine.total_cycles);
+    assert_eq!(profile.peripheral_ticked_entries, 0);
+    assert_eq!(profile.bus_tick_entries, 0);
+    assert_eq!(profile.legacy_tick_entries, machine.total_cycles * 48);
 
     let mips = machine.total_cycles as f64 / elapsed.as_secs_f64() / 1_000_000.0;
     eprintln!(
