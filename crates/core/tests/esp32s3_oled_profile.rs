@@ -29,8 +29,8 @@ const GOLDEN_COMPLETION_CYCLES: u64 = 2_139_600;
 // `tick_profile_entry_counts()` counts the active legacy index vector.  The
 // faithful-fast-boot S3 wiring registers 48 such entries; this is a golden
 // source-level invariant, not a performance range.
-const GOLDEN_LEGACY_TICK_MULTIPLIER: u64 = 48;
-const GOLDEN_LEGACY_TICK_ENTRIES: u64 = 102_700_800;
+const GOLDEN_LEGACY_TICK_MULTIPLIER: u64 = 37;
+const GOLDEN_LEGACY_TICK_ENTRIES: u64 = 79_165_200;
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -169,6 +169,26 @@ fn esp32s3_oled_native_baseline() {
     );
     let elf = std::fs::read(&elf_path).expect("read curated S3 OLED ELF");
     let (mut machine, serial) = build_machine(&chip, &manifest, &elf);
+    let legacy_entries = machine.bus.legacy_tick_entry_descriptors();
+    assert!(
+        legacy_entries.iter().any(|(name, _, _)| name == "gpio"),
+        "GPIO remains on the legacy path because observer timestamps are tick-driven"
+    );
+    assert!(
+        legacy_entries.iter().any(|(name, _, _)| name == "i2c0"),
+        "I2C0 remains on the legacy path because its level IRQ is tick-driven"
+    );
+    assert!(
+        legacy_entries.iter().all(|(name, _, _)| name != "systimer"),
+        "scheduler-owned SYSTIMER must not enter the legacy walk"
+    );
+    assert!(
+        legacy_entries
+            .iter()
+            .all(|(name, _, _)| name != "usb_serial_jtag"),
+        "polling USB serial sink must remain inert for the legacy walk"
+    );
+    eprintln!("S3_OLED_LEGACY_ENTRIES {:?}", legacy_entries);
     let max_cycles = std::env::var("LABWIRED_ESP32S3_OLED_MAX_CYCLES")
         .ok()
         .and_then(|value| value.parse().ok())
