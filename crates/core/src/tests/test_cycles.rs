@@ -97,6 +97,30 @@ fn machine_run_records_step_profile_counters() {
     assert_eq!(profile.legacy_tick_entries, expected_legacy_tick_entries);
 }
 
+#[test]
+fn step_profile_serializes_the_standardized_counter_contract() {
+    let profile = crate::StepProfile {
+        cpu_instructions: 1,
+        cpu_batches: 2,
+        peripheral_ticks: 3,
+        peripheral_ticked_entries: 4,
+        bus_tick_entries: 5,
+        legacy_tick_entries: 6,
+    };
+    let value = serde_json::to_value(profile).unwrap();
+    assert_eq!(
+        value,
+        serde_json::json!({
+            "cpu_instructions": 1,
+            "cpu_batches": 2,
+            "peripheral_ticks": 3,
+            "peripheral_ticked_entries": 4,
+            "bus_tick_entries": 5,
+            "legacy_tick_entries": 6,
+        })
+    );
+}
+
 /// A peripheral that reports a fixed byte from the side-effect-free `peek`.
 #[derive(Debug)]
 struct PeekTag(u8);
