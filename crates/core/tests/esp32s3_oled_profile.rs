@@ -13,7 +13,7 @@ use labwired_core::peripherals::components::Ssd1306;
 use labwired_core::peripherals::esp32s3::i2c::Esp32s3I2c;
 use labwired_core::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag;
 use labwired_core::system::xtensa::{configure_xtensa_esp32s3, Esp32s3Opts};
-use labwired_core::{Cpu, DebugControl, Machine};
+use labwired_core::{DebugControl, Machine};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -21,10 +21,11 @@ use std::time::Instant;
 const CHUNK: u32 = 1_000_000;
 const DEFAULT_MAX_CYCLES: u64 = 200_000_000;
 const DEFAULT_SERIAL_MARKER: &str = "S3 OLED painted";
-const GOLDEN_FIRST_PAINT_CYCLES: u64 = 2_000_000;
-const GOLDEN_FIRST_PAINT_FNV1A: u64 = 0xc4eb9ef771b3ded8;
+const GOLDEN_FIRST_PAINT_CYCLES: u64 = 1_139_600;
+const GOLDEN_FIRST_PAINT_FNV1A: u64 = 0x41ac26506ebe964b;
 const GOLDEN_SERIAL_FNV1A: u64 = 0xaf2df535cf6fd7e4;
 const GOLDEN_FRAMEBUFFER_FNV1A: u64 = 0xc4eb9ef771b3ded8;
+const GOLDEN_COMPLETION_CYCLES: u64 = 2_139_600;
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -172,17 +173,36 @@ fn esp32s3_oled_native_baseline() {
 
     machine.reset_step_profile();
     let started = Instant::now();
-    let mut first_paint = None;
-    let mut retired = 0u64;
-    while retired < max_cycles {
-        let count = CHUNK.min((max_cycles - retired) as u32);
-        machine.run(Some(count)).expect("run S3 OLED workload");
-        retired += u64::from(count);
+    // The first coarse checkpoint is a known blank state for this curated
+    // workload.  After it, inspect the framebuffer after every retired
+    // instruction.  This keeps one simulation pass while avoiding the
+    // 1M-instruction timestamp quantisation of the ordinary profile chunks.
+    machine.run(Some(CHUNK)).expect("run S3 OLED warmup");
+    let mut retired = u64::from(CHUNK);
+    assert!(
+        oled_framebuffer(&machine).iter().all(|byte| *byte == 0),
+        "curated S3 OLED painted during the coarse warmup; exact boundary must be re-baselined"
+    );
+    let first_paint = loop {
+        assert!(
+            retired < max_cycles,
+            "S3 OLED did not paint within {max_cycles} cycles"
+        );
+        machine.run(Some(1)).expect("run S3 OLED instruction");
+        retired += 1;
         let framebuffer = oled_framebuffer(&machine);
-        if first_paint.is_none() && framebuffer.iter().any(|byte| *byte != 0) {
-            first_paint = Some((machine.total_cycles, fnv1a(&framebuffer)));
-            break;
+        if framebuffer.iter().any(|byte| *byte != 0) {
+            break (machine.total_cycles, fnv1a(&framebuffer));
         }
+    };
+    while !String::from_utf8_lossy(&serial.lock().unwrap()).contains(&marker) {
+        assert!(
+            retired < max_cycles,
+            "S3 OLED serial marker was not emitted"
+        );
+        let count = CHUNK.min((max_cycles - retired) as u32);
+        machine.run(Some(count)).expect("run S3 OLED completion");
+        retired += u64::from(count);
     }
     let elapsed = started.elapsed();
     let framebuffer = oled_framebuffer(&machine);
@@ -191,16 +211,11 @@ fn esp32s3_oled_native_baseline() {
     let profile = machine.step_profile();
 
     assert!(
-        first_paint.is_some(),
-        "S3 OLED did not paint within {max_cycles} cycles (pc=0x{:08x}); serial:\n{output_text}",
-        machine.cpu.get_pc()
-    );
-    assert!(
         output_text.contains(&marker),
         "S3 OLED serial marker {marker:?} was not emitted; serial:\n{output_text}"
     );
 
-    let (first_paint_cycles, first_paint_digest) = first_paint.expect("first paint asserted above");
+    let (first_paint_cycles, first_paint_digest) = first_paint;
     assert_eq!(
         first_paint_cycles, GOLDEN_FIRST_PAINT_CYCLES,
         "first-paint cycle drifted from the faithful-fast-boot baseline"
@@ -214,6 +229,10 @@ fn esp32s3_oled_native_baseline() {
         fnv1a(&framebuffer),
         GOLDEN_FRAMEBUFFER_FNV1A,
         "final framebuffer digest drifted"
+    );
+    assert_eq!(
+        machine.total_cycles, GOLDEN_COMPLETION_CYCLES,
+        "completion cycle drifted from the faithful-fast-boot baseline"
     );
 
     // These counters are deterministic for this fixed 1M-chunk, interval-1
