@@ -153,6 +153,8 @@ impl RiscV {
             0x341 => self.mepc,
             0x342 => self.mcause,
             0x343 => self.mtval,
+            // Physical Memory Protection (PMP) configuration and address registers (stubs)
+            0x3A0..=0x3A3 | 0x3B0..=0x3BF => 0,
             // Timer CSR stubs (Standard RISC-V shadow non-privileged? No, these are machine mode)
             0xB00 => (self.mtime & 0xFFFFFFFF) as u32,
             0xB80 => (self.mtime >> 32) as u32,
@@ -166,7 +168,7 @@ impl RiscV {
             // pure delay. Delay loops only need to *complete*, not match wall
             // time, so a coarse cycle estimate is correct in sim; the real-time
             // CLINT timer (mtime vs mtimecmp, CSR 0xB00) stays unscaled.
-            0x7E0..=0x7E2 if self.core_profile == RiscVCoreProfile::Esp32C3 => {
+            0x7E0..=0x7E2 | 0x802 if self.core_profile == RiscVCoreProfile::Esp32C3 => {
                 (self.mtime.wrapping_mul(CYCLE_SCALE) & 0xFFFFFFFF) as u32
             }
             0xC00 if self.core_profile == RiscVCoreProfile::StandardRv32 => {
@@ -189,7 +191,9 @@ impl RiscV {
             0x341 => self.mepc = val,
             0x342 => self.mcause = val,
             0x343 => self.mtval = val,
-            0x7E0..=0x7E2 if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
+            // Physical Memory Protection (PMP) configuration and address registers (stubs)
+            0x3A0..=0x3A3 | 0x3B0..=0x3BF => {}
+            0x7E0..=0x7E2 | 0x802 if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
             _ => return false,
         }
         true
