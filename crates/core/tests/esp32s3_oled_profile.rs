@@ -26,8 +26,11 @@ const GOLDEN_FIRST_PAINT_FNV1A: u64 = 0x41ac26506ebe964b;
 const GOLDEN_SERIAL_FNV1A: u64 = 0xaf2df535cf6fd7e4;
 const GOLDEN_FRAMEBUFFER_FNV1A: u64 = 0xc4eb9ef771b3ded8;
 const GOLDEN_COMPLETION_CYCLES: u64 = 2_139_600;
-const GOLDEN_LEGACY_TICK_MULTIPLIER: u64 = 49;
-const GOLDEN_LEGACY_TICK_ENTRIES: u64 = 104_840_400;
+// `tick_profile_entry_counts()` counts the active legacy index vector.  The
+// faithful-fast-boot S3 wiring registers 48 such entries; this is a golden
+// source-level invariant, not a performance range.
+const GOLDEN_LEGACY_TICK_MULTIPLIER: u64 = 48;
+const GOLDEN_LEGACY_TICK_ENTRIES: u64 = 102_700_800;
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
