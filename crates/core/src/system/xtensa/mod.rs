@@ -84,6 +84,17 @@ impl std::fmt::Debug for RamPeripheral {
 }
 
 impl crate::Peripheral for RamPeripheral {
+    // RAM/ROM windows only store and serve bytes. They have no elapsed-time
+    // state, IRQs, DMA, or scheduled events, so the legacy per-step walk is
+    // provably unnecessary for every firmware state.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
+    fn legacy_tick_active(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> crate::SimResult<u8> {
         Ok(*self.data.borrow().get(offset as usize).unwrap_or(&0))
     }
