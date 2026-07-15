@@ -356,7 +356,18 @@ boards:
     # prior capture/differential are byte-unchanged. This clock capture is an
     # OPTIONAL bench / weekly job (NOT a PR gate — hosted CI has no board); re-run
     # the script on a bench to refresh. Additive model touch, no reset-value change.
-    drift_ack: 2026-07-14
+    # 2026-07-15: physical C3 OLED-lab fixture
+    # crates/wasm/tests/fixtures/esp32c3-oled-demo-flash.bin
+    # (SHA-256 d951cc06cdf615d4c6a2dc0197daf9c11509353529ebbe3ab7fbf6d75777dcd0)
+    # was flashed at offset 0x0 with esptool verification on a USB-JTAG ESP32-C3.
+    # USB serial logged `oled-lab app_main entered` and `OLED painted: LabWired`.
+    # After reset-run/wait, live USB-JTAG reads found GPIO_ENABLE=0x00000030,
+    # GPIO4/5 OUT_SEL=0x00000036/0x00000035 and I2CEXT0 SDA/SCL IN_SEL
+    # (signals 54/53)=0x00000044/0x00000045: the active matrix route matches
+    # the physical GPIO4/GPIO5 contract. This does not replace the reset-state
+    # oracle or claim visible OLED photons/I2C ACK; visual or wire-level capture
+    # remains pending.
+    drift_ack: 2026-07-15
 
   - id: nucleo-l476rg
     doc: docs/boards/nucleo-l476rg.md
