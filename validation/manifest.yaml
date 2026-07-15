@@ -593,9 +593,9 @@ boards:
       - "esp32s3_reset_conformance (9 reset regs vs live silicon, firmware-path bus)"
       - "e2e_i2c_tmp102 / e2e_hello_world / xtensa_exec / e2e_esp32_epaper (sim)"
     silicon:
-      last_capture: 2026-06-20
+      last_capture: 2026-07-15
       probe: "USB-JTAG built-in (ESP32-S3-Zero, USB 303a:1001, openocd-esp32, Tensilica tap 0x120034e5)"
-      result: "Live re-capture after the v0.17.0 merge: reset-state oracle 9/9 match live silicon (SYSTIMER CONF 0x46000000 + I2C0 timing block TO/FIFO_CONF/SCL holds/FILTER_CFG), and esp32s3_reset_conformance (sim vs frozen) passes. Supersedes the 2026-06-19 drift_ack."
+      result: "Live OpenOCD re-capture on 2026-07-15: connected ESP32-S3 rev 0.2 (MAC 9c:13:9e:f4:40:c0), both Xtensa JTAG taps examined, and reset-state windows captured for UART0, GPIO, I2C0, RMT, MCPWM0, TIMG0, SYSTIMER, GDMA, SYSTEM, and RTC_CNTL."
     # SPIMEM1 flash-command model fix: SPI_MEM_ADDR_REG is read right-justified
     # (was wrongly >>8) and the dual/quad fast-read opcodes (0x3B/0xBB/0x6B/0xEB)
     # are now decoded, so a 2nd-stage bootloader (MCUboot) reads slot0 and
