@@ -360,6 +360,30 @@ fn oled_lab_framebuffer_is_byte_identical_across_tick_intervals() {
     );
 }
 
+/// Gate 2b: same OLED paint identity at the higher recommended plateau (512).
+/// Walk-deleted + event-scheduler clamp means far-future alarms still fire at
+/// exact cycles; 512 only reduces host drain frequency. Byte-identical FB is
+/// the licence to raise RECOMMENDED_TICK_INTERVAL for native-feel throughput.
+#[test]
+#[ignore = "runs the real C3 bootloader + app (~2x30M steps); run with --release --ignored"]
+fn oled_lab_framebuffer_is_byte_identical_at_tick_512() {
+    let (_, fb_1, _) = run_lab(build_oled_lab(1, false, false, false, false), PAINT_BUDGET);
+    let (_, fb_512, serial_512) =
+        run_lab(build_oled_lab(512, false, false, false, false), PAINT_BUDGET);
+
+    assert!(
+        lit_pixels(&fb_1) >= MIN_LIT,
+        "interval-1 run must paint the OLED"
+    );
+    assert!(
+        fb_1 == fb_512,
+        "SSD1306 framebuffer must be byte-identical at tick 512          (lit@1={}, lit@512={}); serial@512:\n{}",
+        lit_pixels(&fb_1),
+        lit_pixels(&fb_512),
+        String::from_utf8_lossy(&serial_512)
+    );
+}
+
 /// SYSTIMER walk-free gate (the fidelity contract for THIS batch): the
 /// SYSTIMER is the FreeRTOS-tick source, so the OLED demo's serial log, total
 /// cycles and painted framebuffer are all downstream of its alarm delivery.
@@ -620,16 +644,25 @@ fn oled_lab_native_mips_probe() {
     let secs = start.elapsed().as_secs_f64();
     let profile = lab.machine.step_profile();
     let idle_skipped = lab.machine.idle_fast_forward_cycles_skipped;
+    let avg_batch = if profile.cpu_batches > 0 {
+        profile.cpu_instructions as f64 / profile.cpu_batches as f64
+    } else {
+        0.0
+    };
     eprintln!(
         "oled-lab native: {steps_budget} insn budget, interval {interval}, systimer {}, idle_ff={idle_ff}, jit={jit}: \
-         {:.2}s = {:.2} MIPS (total_cycles {}, idle_ff_skipped {}, cpu_instr {}, legacy_tick_entries {})",
+         {:.2}s = {:.2} MIPS (total_cycles {}, idle_ff_skipped {}, cpu_instr {}, batches {}, avg_batch {:.1}, \
+         legacy_tick_entries {}, peri_ticks {})",
         if systimer_legacy { "walk" } else { "scheduler" },
         secs,
         lab.machine.total_cycles as f64 / secs / 1.0e6,
         lab.machine.total_cycles,
         idle_skipped,
         profile.cpu_instructions,
+        profile.cpu_batches,
+        avg_batch,
         profile.legacy_tick_entries,
+        profile.peripheral_ticks,
     );
     #[cfg(feature = "jit")]
     if let Some(s) = lab.machine.cpu.jit_stats() {

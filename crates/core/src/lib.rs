@@ -832,6 +832,17 @@ pub trait Bus {
         false
     }
 
+    /// Earliest absolute cycle among events sitting in `pending_schedule`
+    /// (not yet on the scheduler heap). Used by the CPU batch loop to **clamp**
+    /// the remaining batch to that deadline instead of ending on the first arm
+    /// (far-future timers would otherwise force ~tens-of-instruction batches).
+    /// Fidelity: we still never retire past the deadline without a drain.
+    /// Default `None`.
+    #[cfg(feature = "event-scheduler")]
+    fn earliest_pending_deadline(&self) -> Option<u64> {
+        None
+    }
+
     /// The bus's mirrored "current cycle" (what lazy peripherals read through the
     /// shared `CycleClock`). A CPU batch loop reads this once at batch entry to
     /// learn the batch-start cycle, then republishes the EXACT cycle before each

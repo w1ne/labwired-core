@@ -82,10 +82,13 @@ pub struct ResolvedClockGate {
 
 /// The `peripheral_tick_interval` recommended for a fully scheduler-driven
 /// (walk-deleted) bus — see [`SystemBus::max_safe_tick_interval`]. Native
-/// throughput plateaus from ~16 up (Phase 1.5 measurements); 64 sits on the
-/// plateau while keeping the worst-case event-observation quantisation (one
-/// interval) small.
-pub const RECOMMENDED_TICK_INTERVAL: u32 = 64;
+/// C3 OLED throughput keeps climbing through a few hundred (host drain tax
+/// falls as `avg_batch` tracks the interval) and plateaus near 512–1k.
+/// SSD1306 framebuffer stays byte-identical to interval 1 at 512 (see
+/// `oled_lab_framebuffer_is_byte_identical_at_tick_512`). Event delivery is
+/// still exact via the scheduler deadline clamp; 512 only reduces how often
+/// the host runs the empty walk-deleted tick.
+pub const RECOMMENDED_TICK_INTERVAL: u32 = 512;
 
 pub struct PeripheralEntry {
     pub name: String,
