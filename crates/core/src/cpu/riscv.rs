@@ -236,6 +236,8 @@ impl RiscV {
             // ROM. The observed writes discard the old values; any silicon
             // side effects are not modeled.
             0x800 | 0x801 if self.core_profile == RiscVCoreProfile::Esp32C3 => 0,
+            // This emulator exposes one hart, whose architectural ID is zero.
+            0xF14 => 0,
             0x300 => self.mstatus,
             0x304 => self.mie,
             0x344 => self.mip,
@@ -1480,6 +1482,8 @@ mod tests {
     const CLEAR_USTATUS: u32 = 0x0000_1073;
     const C3_ROM_INIT_CSR_800: u32 = 0x8002_9073;
     const C3_ROM_INIT_CSR_801: u32 = 0x8012_9073;
+    const READ_MHARTID_X7: u32 = 0xf140_23f3;
+    const WRITE_MHARTID_X5: u32 = 0xf142_9073;
 
     #[test]
     fn test_riscv_addi() {
@@ -1627,6 +1631,44 @@ mod tests {
         assert_eq!(cpu.read_csr(0xC00), Some(0));
         assert_eq!(cpu.read_csr(0x7E2), None);
         assert_eq!(cpu.read_csr(0x000), None);
+    }
+
+    #[test]
+    fn mhartid_reads_zero_for_all_riscv_profiles() {
+        for profile in [RiscVCoreProfile::StandardRv32, RiscVCoreProfile::Esp32C3] {
+            let mut bus = SystemBus::new();
+            bus.flash.data = READ_MHARTID_X7.to_le_bytes().to_vec();
+            let mut cpu = RiscV::new_for(profile);
+            cpu.pc = 0;
+            let mut machine = Machine::new(cpu, bus);
+
+            machine.step().unwrap();
+
+            assert_eq!(machine.cpu.pc, 4, "profile={profile:?}");
+            assert_eq!(machine.cpu.read_reg(7), 0, "profile={profile:?}");
+            assert_eq!(machine.cpu.mcause, 0, "profile={profile:?}");
+            assert_eq!(machine.cpu.mtval, 0, "profile={profile:?}");
+        }
+    }
+
+    #[test]
+    fn mhartid_write_traps_for_all_riscv_profiles() {
+        for profile in [RiscVCoreProfile::StandardRv32, RiscVCoreProfile::Esp32C3] {
+            let mut bus = SystemBus::new();
+            bus.flash.data = WRITE_MHARTID_X5.to_le_bytes().to_vec();
+            let mut cpu = RiscV::new_for(profile);
+            cpu.pc = 0;
+            cpu.mtvec = 0x100;
+            cpu.x[5] = 1;
+            let mut machine = Machine::new(cpu, bus);
+            assert_eq!(machine.cpu.read_csr(0xF14), Some(0));
+
+            machine.step().unwrap();
+
+            assert_eq!(machine.cpu.mcause, 2, "profile={profile:?}");
+            assert_eq!(machine.cpu.mtval, WRITE_MHARTID_X5, "profile={profile:?}");
+            assert_eq!(machine.cpu.pc, 0x100, "profile={profile:?}");
+        }
     }
 
     #[test]
