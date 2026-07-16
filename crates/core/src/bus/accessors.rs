@@ -83,7 +83,9 @@ impl crate::Bus for SystemBus {
                     return Ok(0); // unclocked peripheral reads 0 (silicon gating)
                 }
                 let p = &self.peripherals[idx];
-                return p.dev.read(addr - p.base);
+                let off = addr - p.base;
+                self.note_mmio_activity(idx, off);
+                return p.dev.read(off);
             }
         } else {
             // Peripherals first so an MMU-translating FlashXip window overrides a
@@ -94,7 +96,9 @@ impl crate::Bus for SystemBus {
                     return Ok(0); // unclocked peripheral reads 0 (silicon gating)
                 }
                 let p = &self.peripherals[idx];
-                return p.dev.read(addr - p.base);
+                let off = addr - p.base;
+                self.note_mmio_activity(idx, off);
+                return p.dev.read(off);
             }
             if let Some(val) = self.flash.read_u8(addr) {
                 return Ok(val);
@@ -213,13 +217,15 @@ impl crate::Bus for SystemBus {
                     // bits never change and the firmware visibly stalls.
                     return Ok(());
                 }
+                let off = addr - self.peripherals[idx].base;
+                self.note_mmio_activity(idx, off);
                 #[cfg(feature = "event-scheduler")]
                 self.sync_scheduler_peripheral(idx);
                 self.maybe_latch_dc(idx);
                 let c3_io_mux_capture = self.begin_esp32c3_io_mux_write(idx);
                 let r = {
                     let p = &mut self.peripherals[idx];
-                    p.dev.write(addr - p.base, value)
+                    p.dev.write(off, value)
                 };
                 if r.is_ok() {
                     self.finish_esp32c3_io_mux_write(c3_io_mux_capture);
@@ -295,18 +301,18 @@ impl crate::Bus for SystemBus {
                 if !self.is_peripheral_clocked(idx) {
                     return Ok(0);
                 }
-                return self.peripherals[idx]
-                    .dev
-                    .read_u16(addr - self.peripherals[idx].base);
+                let off = addr - self.peripherals[idx].base;
+                self.note_mmio_activity(idx, off);
+                return self.peripherals[idx].dev.read_u16(off);
             }
         } else {
             if let Some(idx) = self.find_peripheral_index(addr) {
                 if !self.is_peripheral_clocked(idx) {
                     return Ok(0);
                 }
-                return self.peripherals[idx]
-                    .dev
-                    .read_u16(addr - self.peripherals[idx].base);
+                let off = addr - self.peripherals[idx].base;
+                self.note_mmio_activity(idx, off);
+                return self.peripherals[idx].dev.read_u16(off);
             }
             if let Some(val) = extra_mem_half(self) {
                 return Ok(val);
@@ -391,18 +397,18 @@ impl crate::Bus for SystemBus {
                 if !self.is_peripheral_clocked(idx) {
                     return Ok(0);
                 }
-                return self.peripherals[idx]
-                    .dev
-                    .read_u32(addr - self.peripherals[idx].base);
+                let off = addr - self.peripherals[idx].base;
+                self.note_mmio_activity(idx, off);
+                return self.peripherals[idx].dev.read_u32(off);
             }
         } else {
             if let Some(idx) = self.find_peripheral_index(addr) {
                 if !self.is_peripheral_clocked(idx) {
                     return Ok(0);
                 }
-                return self.peripherals[idx]
-                    .dev
-                    .read_u32(addr - self.peripherals[idx].base);
+                let off = addr - self.peripherals[idx].base;
+                self.note_mmio_activity(idx, off);
+                return self.peripherals[idx].dev.read_u32(off);
             }
             // IRAM / ROM / RTC after peripherals so XIP FlashXip still wins on
             // 0x4200_0000 / 0x3C00_0000 over zero-filled extra_mem twins.
@@ -432,6 +438,8 @@ impl crate::Bus for SystemBus {
             if !self.is_peripheral_clocked(idx) {
                 return Ok(()); // unclocked peripheral: write dropped (gating)
             }
+            let off = addr - self.peripherals[idx].base;
+            self.note_mmio_activity(idx, off);
             #[cfg(feature = "event-scheduler")]
             self.sync_scheduler_peripheral(idx);
             self.maybe_latch_dc(idx);
@@ -439,7 +447,7 @@ impl crate::Bus for SystemBus {
             let r = {
                 let p = &mut self.peripherals[idx];
                 p.ticks_remaining = 0;
-                p.dev.write_u16(addr - p.base, value)
+                p.dev.write_u16(off, value)
             };
             if r.is_ok() {
                 self.finish_esp32c3_io_mux_write(c3_io_mux_capture);
@@ -512,6 +520,8 @@ impl crate::Bus for SystemBus {
             if !self.is_peripheral_clocked(idx) {
                 return Ok(()); // unclocked peripheral: write dropped (gating)
             }
+            let off = addr - self.peripherals[idx].base;
+            self.note_mmio_activity(idx, off);
             #[cfg(feature = "event-scheduler")]
             self.sync_scheduler_peripheral(idx);
             self.maybe_latch_dc(idx);
@@ -519,7 +529,7 @@ impl crate::Bus for SystemBus {
             let r = {
                 let p = &mut self.peripherals[idx];
                 p.ticks_remaining = 0;
-                p.dev.write_u32(addr - p.base, value)
+                p.dev.write_u32(off, value)
             };
             if r.is_ok() {
                 self.finish_esp32c3_io_mux_write(c3_io_mux_capture);

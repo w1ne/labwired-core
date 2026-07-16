@@ -1410,8 +1410,18 @@ impl<C: Cpu> Machine<C> {
             // which case the CPU must resume normally instead of skipping.
             self.drain_scheduler_events();
 
-            let mut budget = match self.cpu.idle_fast_forward_budget(&self.bus) {
+            // Two coalesce sources under the same idle-FF flag:
+            // 1) Architectural WFI / wait-for-interrupt (existing).
+            // 2) Pure freerunning SYSTIMER poll (Arduino millis /
+            //    esp_timer_get_time busy-wait). Device time still advances to
+            //    the next scheduled event — timer values stay honest; we only
+            //    skip interpreting the empty spin. Disqualified if the prior
+            //    batch touched any non-timer peripheral MMIO.
+            let wfi_budget = self.cpu.idle_fast_forward_budget(&self.bus);
+            let timer_poll = self.bus.take_timer_poll_coalesce_eligible();
+            let mut budget = match wfi_budget {
                 Some(budget) if budget > 0 => budget,
+                _ if timer_poll => u64::MAX,
                 _ => return 0,
             };
             let remaining = _max_steps
@@ -1428,9 +1438,16 @@ impl<C: Cpu> Machine<C> {
                     return 0;
                 }
                 budget = budget.min(deadline_cycle - self.total_cycles);
+            } else if timer_poll && wfi_budget.is_none() {
+                // No scheduled event and not WFI: cap pure millis spins so a
+                // single batch cannot leap the whole step budget when the heap
+                // is empty (still advances real device time, just bounded).
+                budget = budget.min(1_000_000);
             }
 
-            if budget == 0 {
+            // Tiny windows are not worth the skip bookkeeping on the timer-poll
+            // path (WFI may still skip short waits).
+            if budget == 0 || (timer_poll && wfi_budget.is_none() && budget < 1024) {
                 return 0;
             }
             let skipped = budget.min(u32::MAX as u64) as u32;
@@ -2233,6 +2250,10 @@ impl<C: Cpu> DebugControl for Machine<C> {
                 steps += skipped;
                 continue;
             }
+
+            // Fresh MMIO-activity window for the upcoming batch (timer-poll
+            // coalesce reads the previous batch's counters in try_idle above).
+            self.bus.reset_mmio_activity_counters();
 
             // Execute in batch until next peripheral tick or breakpoint/limit
             let current_cycles = self.total_cycles;

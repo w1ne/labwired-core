@@ -65,6 +65,56 @@ impl SystemBus {
                 .iter()
                 .all(|p| p.dev.uses_scheduler() || !p.dev.legacy_tick_active())
     }
+
+    /// Clear batch-local MMIO activity counters (call before each CPU batch).
+    #[inline]
+    pub fn reset_mmio_activity_counters(&self) {
+        self.timer_poll_mmio.set(0);
+        self.non_timer_mmio.set(0);
+    }
+
+    /// True when the just-finished batch only touched freerunning SYSTIMER
+    /// snapshot regs (Arduino `millis` / `esp_timer_get_time` poll pattern).
+    /// Consumes and clears the counters.
+    #[inline]
+    pub fn take_timer_poll_coalesce_eligible(&self) -> bool {
+        let timer = self.timer_poll_mmio.replace(0);
+        let other = self.non_timer_mmio.replace(0);
+        // OP update + at least one VALUE read is the common poll shape.
+        timer >= 2 && other == 0
+    }
+
+    /// Classify a peripheral access for timer-poll coalesce bookkeeping.
+    #[inline]
+    pub(crate) fn note_mmio_activity(&self, peri_idx: usize, offset: u64) {
+        let Some(p) = self.peripherals.get(peri_idx) else {
+            return;
+        };
+        if p.name == "systimer" && Self::is_systimer_freerunning_poll_offset(offset) {
+            self.timer_poll_mmio
+                .set(self.timer_poll_mmio.get().saturating_add(1));
+            return;
+        }
+        // XIP/flash windows are side-effect-free code/rodata — loading a
+        // constant from DROM during millis() must not disqualify coalesce.
+        if p.name.contains("xip") || p.name.contains("flash") || p.name == "extmem" {
+            return;
+        }
+        self.non_timer_mmio
+            .set(self.non_timer_mmio.get().saturating_add(1));
+    }
+
+    /// SYSTIMER UNIT0/1 OP + VALUE_* — freerunning snapshot path used by
+    /// esp_timer / Arduino millis. Alarm/load/conf registers are NOT included
+    /// (those arm real work and must disqualify coalesce).
+    #[inline]
+    fn is_systimer_freerunning_poll_offset(offset: u64) -> bool {
+        matches!(
+            offset,
+            0x04 | 0x08 | // UNIT0_OP, UNIT1_OP
+            0x40 | 0x44 | 0x48 | 0x4C // UNIT0/1 VALUE_HI/LO
+        )
+    }
 }
 
 /// A peripheral's RCC clock-gate, resolved to a concrete RCC register offset +
@@ -259,6 +309,14 @@ pub struct SystemBus {
     /// (clamped to its `now`) and clears them. Only populated under the
     /// `event-scheduler` feature.
     pub pending_schedule: Vec<(usize, u64, u32)>,
+    /// Batch-local count of freerunning SYSTIMER snapshot MMIO (UNIT*_OP /
+    /// UNIT*_VALUE_*). Paired with [`Self::non_timer_mmio`] so idle-FF can
+    /// coalesce Arduino `millis()` / `esp_timer_get_time` busy-polls without
+    /// faking the timer value (device cycles still advance to the next event).
+    timer_poll_mmio: std::cell::Cell<u32>,
+    /// Batch-local count of all other peripheral MMIO. Any non-zero value
+    /// disqualifies timer-poll coalesce for that batch.
+    non_timer_mmio: std::cell::Cell<u32>,
     /// Phase 2B.3c (issue #192): when true, `tick_peripherals_phase1` skips the
     /// entire per-cycle peripheral walk — the actual ~2.4x win. Set ONLY for a
     /// config whose every peripheral is migrated (`uses_scheduler`) or inert
@@ -2691,6 +2749,8 @@ impl SystemBus {
             current_cycle: 0,
             cycle_clock: crate::CycleClock::default(),
             pending_schedule: Vec::new(),
+            timer_poll_mmio: std::cell::Cell::new(0),
+            non_timer_mmio: std::cell::Cell::new(0),
             legacy_walk_disabled: false,
             reset_vector_offset: 0,
             atomic_register_aliases: false,
@@ -2753,6 +2813,8 @@ impl SystemBus {
             current_cycle: 0,
             cycle_clock: crate::CycleClock::default(),
             pending_schedule: Vec::new(),
+            timer_poll_mmio: std::cell::Cell::new(0),
+            non_timer_mmio: std::cell::Cell::new(0),
             legacy_walk_disabled: false,
             reset_vector_offset: 0,
             atomic_register_aliases: false,
@@ -3467,6 +3529,45 @@ mod tests {
         TimingAction, TimingDescriptor, TimingTrigger,
     };
     use std::path::PathBuf;
+
+    #[test]
+    fn timer_poll_coalesce_eligible_only_for_pure_systimer_snapshot_batches() {
+        let mut bus = SystemBus::new();
+        bus.add_peripheral(
+            "systimer",
+            0x6002_3000,
+            0x1000,
+            None,
+            Box::new(crate::peripherals::esp32s3::systimer::Systimer::new(
+                160_000_000,
+            )),
+        );
+        bus.add_peripheral(
+            "flash_drom_xip",
+            0x3C00_0000,
+            0x1000,
+            None,
+            Box::new(crate::peripherals::stub::StubPeripheral::new(0x1000)),
+        );
+        let sys_idx = bus.find_peripheral_index_by_name("systimer").unwrap();
+        let xip_idx = bus.find_peripheral_index_by_name("flash_drom_xip").unwrap();
+
+        bus.reset_mmio_activity_counters();
+        bus.note_mmio_activity(sys_idx, 0x04); // UNIT0_OP
+        bus.note_mmio_activity(sys_idx, 0x44); // UNIT0_VALUE_LO
+        bus.note_mmio_activity(xip_idx, 0x10); // rodata-like — ignored
+        assert!(
+            bus.take_timer_poll_coalesce_eligible(),
+            "pure systimer snapshot + XIP loads should coalesce"
+        );
+
+        bus.reset_mmio_activity_counters();
+        bus.note_mmio_activity(sys_idx, 0x04);
+        bus.note_mmio_activity(sys_idx, 0x44);
+        // Alarm conf is real work — disqualifies.
+        bus.note_mmio_activity(sys_idx, 0x34);
+        assert!(!bus.take_timer_poll_coalesce_eligible());
+    }
 
     /// `max_safe_tick_interval`: 1 while the legacy walk is live (the default
     /// bus), the batching recommendation once the walk is deleted, and back to
@@ -5586,6 +5687,8 @@ peripherals:
             current_cycle: 0,
             cycle_clock: crate::CycleClock::default(),
             pending_schedule: Vec::new(),
+            timer_poll_mmio: std::cell::Cell::new(0),
+            non_timer_mmio: std::cell::Cell::new(0),
             legacy_walk_disabled: false,
             reset_vector_offset: 0,
             atomic_register_aliases: false,
@@ -5672,6 +5775,8 @@ peripherals:
             current_cycle: 0,
             cycle_clock: crate::CycleClock::default(),
             pending_schedule: Vec::new(),
+            timer_poll_mmio: std::cell::Cell::new(0),
+            non_timer_mmio: std::cell::Cell::new(0),
             legacy_walk_disabled: false,
             reset_vector_offset: 0,
             atomic_register_aliases: false,
@@ -5909,6 +6014,8 @@ peripherals:
             current_cycle: 0,
             cycle_clock: crate::CycleClock::default(),
             pending_schedule: Vec::new(),
+            timer_poll_mmio: std::cell::Cell::new(0),
+            non_timer_mmio: std::cell::Cell::new(0),
             legacy_walk_disabled: false,
             reset_vector_offset: 0,
             atomic_register_aliases: false,
@@ -6145,6 +6252,8 @@ peripherals:
             current_cycle: 0,
             cycle_clock: crate::CycleClock::default(),
             pending_schedule: Vec::new(),
+            timer_poll_mmio: std::cell::Cell::new(0),
+            non_timer_mmio: std::cell::Cell::new(0),
             legacy_walk_disabled: false,
             reset_vector_offset: 0,
             atomic_register_aliases: false,
@@ -6235,6 +6344,8 @@ peripherals:
             current_cycle: 0,
             cycle_clock: crate::CycleClock::default(),
             pending_schedule: Vec::new(),
+            timer_poll_mmio: std::cell::Cell::new(0),
+            non_timer_mmio: std::cell::Cell::new(0),
             legacy_walk_disabled: false,
             reset_vector_offset: 0,
             atomic_register_aliases: false,
