@@ -36,10 +36,8 @@ implementation and compatibility boundaries:
   `crates/cli/src/commands/snapshot.rs` contain specialized bare-CPU ESP
   bring-up and snapshot loops; these are explicitly outside the ordinary
   machine frontend path.
-- `crates/hw-oracle/src/lib.rs` and `crates/hw-oracle/src/riscv.rs` are
-  specialist bare-CPU hardware validation oracles. The ARM Thumb simulator
-  path in `crates/hw-oracle/src/arm_thumb.rs` uses `Machine::advance` so its
-  cycle clock, peripheral ticks, and scheduled events match production.
+- `crates/hw-oracle/src/lib.rs`, `crates/hw-oracle/src/arm_thumb.rs`, and
+  `crates/hw-oracle/src/riscv.rs` are bare-CPU hardware validation oracles.
 
 Ordinary WASM wrappers and `DebugControl::run` have no direct CPU-step path;
 they enter through the authoritative machine boundary.

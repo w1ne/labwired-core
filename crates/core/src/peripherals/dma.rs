@@ -134,6 +134,28 @@ impl Dma1 {
         cfg!(feature = "event-scheduler") && self.clock.is_some()
     }
 
+    fn tick_channels_once(&mut self) -> PeripheralTickResult {
+        let mut dma_requests: Option<Vec<DmaRequest>> = None;
+        let mut irq = false;
+
+        for i in 0..7 {
+            let (req, chan_irq) = self.service_channel_once(i);
+            if let Some(r) = req {
+                dma_requests.get_or_insert_with(Vec::new).push(r);
+            }
+            irq |= chan_irq;
+        }
+
+        PeripheralTickResult {
+            irq,
+            // B4 tick-cost normalization: charge zero in every state so the
+            // walk-on reference and scheduler path agree cycle-for-cycle.
+            cycles: 0,
+            dma_requests,
+            ..Default::default()
+        }
+    }
+
     /// Test/differential knob: detach the cycle clock, pinning the model to the
     /// legacy walk path (`uses_scheduler() == false`). Used by the walk-on-vs-
     /// scheduler differential gates to build the reference config from the same
@@ -356,25 +378,15 @@ impl Peripheral for Dma1 {
             return PeripheralTickResult::default();
         }
 
-        let mut dma_requests: Option<Vec<DmaRequest>> = None;
-        let mut irq = false;
+        self.tick_channels_once()
+    }
 
-        for i in 0..7 {
-            let (req, chan_irq) = self.service_channel_once(i);
-            if let Some(r) = req {
-                dma_requests.get_or_insert_with(Vec::new).push(r);
-            }
-            irq |= chan_irq;
-        }
-
-        PeripheralTickResult {
-            irq,
-            // B4 tick-cost normalization: charge zero in every state so the
-            // walk-on reference and the scheduler path agree cycle-for-cycle.
-            cycles: 0,
-            dma_requests,
-            ..Default::default()
-        }
+    fn tick_elapsed_forced(&mut self, _cycles: u64) -> PeripheralTickResult {
+        // Hardware-oracle settle mode freezes the CPU and intentionally asks
+        // for the pre-scheduler one-element transition. This never runs from
+        // production Machine execution, where the event chain remains the
+        // sole owner of scheduler-mode DMA pacing.
+        self.tick_channels_once()
     }
 
     fn uses_scheduler(&self) -> bool {

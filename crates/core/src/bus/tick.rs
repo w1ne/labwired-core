@@ -213,6 +213,7 @@ impl SystemBus {
     #[allow(clippy::type_complexity)]
     fn tick_peripherals_phase1(
         &mut self,
+        force_scheduler_walk: bool,
     ) -> (
         Vec<u32>,
         Vec<PeripheralTickCost>,
@@ -277,12 +278,32 @@ impl SystemBus {
         #[cfg(feature = "event-scheduler")]
         let legacy_walk_disabled = self.legacy_walk_disabled;
 
+        // The hardware-oracle compatibility path must reproduce the legacy
+        // full walk even when scheduler-driven entries were intentionally
+        // omitted from `legacy_tick_indices`. Reconstruct the pre-scheduler
+        // active set in original peripheral-index order; ordering matters for
+        // collected MMIO, DMA, event, and IRQ effects. The production path
+        // keeps using the allocation-free cached slice.
+        let forced_tick_indices = if force_scheduler_walk {
+            self.peripherals
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, p)| p.dev.legacy_tick_active().then_some(idx))
+                .collect()
+        } else {
+            Vec::new()
+        };
+
         let mut tick_pos = 0;
         #[cfg(feature = "event-scheduler")]
-        if legacy_walk_disabled {
+        if legacy_walk_disabled && !force_scheduler_walk {
             tick_pos = self.legacy_tick_indices.len();
         }
-        while let Some(&peripheral_index) = self.legacy_tick_indices.get(tick_pos) {
+        while let Some(peripheral_index) = if force_scheduler_walk {
+            forced_tick_indices.get(tick_pos).copied()
+        } else {
+            self.legacy_tick_indices.get(tick_pos).copied()
+        } {
             let Some((res, irq, base, refresh_after_tick)) =
                 self.peripherals.get_mut(peripheral_index).map(|p| {
                     // Phase 2B.2 (issue #192): scheduler-driven peripherals are advanced
@@ -291,7 +312,7 @@ impl SystemBus {
                     // is the actual orchestration saving. Gated so the legacy build is
                     // byte-identical.
                     #[cfg(feature = "event-scheduler")]
-                    if p.dev.uses_scheduler() {
+                    if p.dev.uses_scheduler() && !force_scheduler_walk {
                         return (
                             crate::PeripheralTickResult::default(),
                             p.irq,
@@ -310,7 +331,11 @@ impl SystemBus {
                         );
                     }
 
-                    let res = p.dev.tick_elapsed(tick_interval);
+                    let res = if force_scheduler_walk {
+                        p.dev.tick_elapsed_forced(tick_interval)
+                    } else {
+                        p.dev.tick_elapsed(tick_interval)
+                    };
                     p.ticks_remaining = res.ticks_until_next.unwrap_or(0);
                     (res, p.irq, p.base, p.dev.legacy_tick_dynamic())
                 })
@@ -374,7 +399,10 @@ impl SystemBus {
                 fired_events_global.push((base as u32).wrapping_add(off));
             }
 
-            if still_active {
+            // Forced mode walks a fixed one-shot snapshot. Refresh the normal
+            // cache for future production ticks, but always advance this
+            // snapshot cursor even when a dynamic entry just became inactive.
+            if force_scheduler_walk || still_active {
                 tick_pos += 1;
             }
         }
@@ -922,7 +950,7 @@ impl SystemBus {
         &mut self,
     ) -> (Vec<u32>, Vec<PeripheralTickCost>, Vec<DmaRequest>) {
         let (mut interrupts, costs, dma_requests, _dma_signals, explicit_source_ids) =
-            self.tick_peripherals_phase1();
+            self.tick_peripherals_phase1(false);
         // Plan 3: route ESP32-S3 source IDs through the intmatrix and update
         // the pending cpu IRQ bitmap + intmatrix INTR_STATUS mirror.
         self.aggregate_esp32s3_explicit_irqs(&explicit_source_ids);
@@ -933,6 +961,25 @@ impl SystemBus {
     }
 
     pub fn tick_peripherals_fully(&mut self) -> (Vec<u32>, Vec<PeripheralTickCost>) {
+        self.tick_peripherals_fully_impl(false)
+    }
+
+    /// Advances one peripheral-only tick while deliberately bypassing the
+    /// event-scheduler walk deletion.
+    ///
+    /// This is a specialized compatibility boundary for hardware-oracle
+    /// harnesses that freeze a bare CPU and settle autonomous peripherals.
+    /// Production machine execution must use [`Self::tick_peripherals_fully`]
+    /// through `Machine::advance` instead.
+    #[doc(hidden)]
+    pub fn tick_peripherals_fully_forced(&mut self) -> (Vec<u32>, Vec<PeripheralTickCost>) {
+        self.tick_peripherals_fully_impl(true)
+    }
+
+    fn tick_peripherals_fully_impl(
+        &mut self,
+        force_scheduler_walk: bool,
+    ) -> (Vec<u32>, Vec<PeripheralTickCost>) {
         // Walk-free fast path: on a bus whose per-cycle tick has no orchestration
         // work (walk deleted, no bus-tick/GPIO/CAN services, HC-SR04 event-
         // scheduled), the only per-cycle duty left is aggregating enabled+pending
@@ -940,13 +987,13 @@ impl SystemBus {
         // allocations. `Vec::new()` does not allocate until pushed, so the
         // no-pending-IRQ case is allocation-free.
         #[cfg(feature = "event-scheduler")]
-        if self.per_cycle_tick_is_trivial() {
+        if !force_scheduler_walk && self.per_cycle_tick_is_trivial() {
             let mut interrupts = Vec::new();
             self.collect_enabled_nvic_interrupts(&mut interrupts);
             return (interrupts, Vec::new());
         }
         let (mut interrupts, costs, pending_dma, dma_signals, explicit_source_ids) =
-            self.tick_peripherals_phase1();
+            self.tick_peripherals_phase1(force_scheduler_walk);
         if self.esp32c3_irq_routing {
             self.aggregate_esp32c3_irqs(&explicit_source_ids);
             return (interrupts, costs);
@@ -992,6 +1039,124 @@ impl SystemBus {
         self.collect_enabled_nvic_interrupts(&mut interrupts);
 
         (interrupts, costs)
+    }
+}
+
+#[cfg(test)]
+mod forced_oracle_walk_tests {
+    use super::SystemBus;
+    use crate::{Peripheral, PeripheralTickResult, SimResult};
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, Mutex,
+    };
+
+    #[derive(Debug)]
+    struct OrderedTick {
+        value: u32,
+        scheduler: bool,
+        order: Arc<Mutex<Vec<u32>>>,
+    }
+
+    impl Peripheral for OrderedTick {
+        fn read(&self, _offset: u64) -> SimResult<u8> {
+            Ok(0)
+        }
+
+        fn write(&mut self, _offset: u64, _value: u8) -> SimResult<()> {
+            Ok(())
+        }
+
+        fn tick(&mut self) -> PeripheralTickResult {
+            self.order.lock().unwrap().push(self.value);
+            PeripheralTickResult::default()
+        }
+
+        fn uses_scheduler(&self) -> bool {
+            self.scheduler
+        }
+    }
+
+    #[derive(Debug)]
+    struct OneShotDynamic {
+        active: bool,
+        ticks: Arc<AtomicUsize>,
+    }
+
+    impl Peripheral for OneShotDynamic {
+        fn read(&self, _offset: u64) -> SimResult<u8> {
+            Ok(0)
+        }
+
+        fn write(&mut self, _offset: u64, _value: u8) -> SimResult<()> {
+            Ok(())
+        }
+
+        fn tick(&mut self) -> PeripheralTickResult {
+            self.ticks.fetch_add(1, Ordering::SeqCst);
+            self.active = false;
+            PeripheralTickResult::default()
+        }
+
+        fn legacy_tick_active(&self) -> bool {
+            self.active
+        }
+
+        fn legacy_tick_dynamic(&self) -> bool {
+            true
+        }
+    }
+
+    #[test]
+    fn forced_walk_preserves_registration_order_across_drive_modes() {
+        let order = Arc::new(Mutex::new(Vec::new()));
+        let mut bus = SystemBus::empty();
+        bus.add_peripheral(
+            "scheduler_first",
+            0x1000,
+            0x100,
+            None,
+            Box::new(OrderedTick {
+                value: 1,
+                scheduler: true,
+                order: order.clone(),
+            }),
+        );
+        bus.add_peripheral(
+            "legacy_second",
+            0x2000,
+            0x100,
+            None,
+            Box::new(OrderedTick {
+                value: 2,
+                scheduler: false,
+                order: order.clone(),
+            }),
+        );
+
+        bus.tick_peripherals_fully_forced();
+
+        assert_eq!(*order.lock().unwrap(), vec![1, 2]);
+    }
+
+    #[test]
+    fn forced_walk_advances_past_dynamic_entry_that_turns_inactive() {
+        let ticks = Arc::new(AtomicUsize::new(0));
+        let mut bus = SystemBus::empty();
+        bus.add_peripheral(
+            "one_shot",
+            0x1000,
+            0x100,
+            None,
+            Box::new(OneShotDynamic {
+                active: true,
+                ticks: ticks.clone(),
+            }),
+        );
+
+        bus.tick_peripherals_fully_forced();
+
+        assert_eq!(ticks.load(Ordering::SeqCst), 1);
     }
 }
 

@@ -491,6 +491,17 @@ pub trait Peripheral: std::fmt::Debug + Send {
     fn tick_elapsed(&mut self, _cycles: u64) -> PeripheralTickResult {
         self.tick()
     }
+    /// Specialized compatibility hook for a bare-CPU hardware oracle that
+    /// freezes the CPU and settles peripherals through their historical walk
+    /// even when the production event scheduler owns them.
+    ///
+    /// The default preserves ordinary tick behavior. Scheduler-driven models
+    /// whose regular `tick` deliberately no-ops may override this to expose
+    /// their legacy one-tick transition to that oracle only.
+    #[doc(hidden)]
+    fn tick_elapsed_forced(&mut self, cycles: u64) -> PeripheralTickResult {
+        self.tick_elapsed(cycles)
+    }
     /// PPI hook: given absolute addresses of events that just fired
     /// across the bus, return absolute addresses of tasks to trigger.
     /// Only the PPI peripheral overrides this; everyone else returns
