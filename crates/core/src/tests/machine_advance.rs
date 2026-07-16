@@ -1,9 +1,10 @@
 use crate::runtime_snapshot::CpuKind;
 use crate::snapshot::{ArmCpuSnapshot, CpuSnapshot};
 use crate::{
-    Bus, Cpu, DebugControl, Machine, SimResult, SimulationConfig, SimulationError,
-    SimulationObserver, StepProfile, StopReason,
+    AdvanceRequest, BatchPolicy, BreakpointPolicy, Bus, Cpu, DebugControl, IdlePolicy, Machine,
+    SimResult, SimulationConfig, SimulationError, SimulationObserver, StepProfile, StopReason,
 };
+use std::num::NonZeroU32;
 use std::sync::Arc;
 
 #[derive(Debug, Default)]
@@ -334,4 +335,51 @@ fn legacy_dual_core_halted_primary_still_consumes_one_scheduling_quantum() {
     assert_eq!(machine.cpu_secondary.as_ref().map(|cpu| cpu.steps), Some(1));
     assert_eq!(machine.total_cycles, 1);
     assert_eq!(machine.step_profile().cpu_instructions, 1);
+}
+
+#[test]
+fn single_request_is_one_non_batched_non_idle_quantum() {
+    let request = AdvanceRequest::single();
+
+    assert_eq!(request.limits().fuel, Some(1));
+    assert_eq!(request.limits().simulated_cycles, None);
+    assert_eq!(request.breakpoint_policy(), BreakpointPolicy::Ignore);
+    assert_eq!(request.idle_policy(), IdlePolicy::Disabled);
+    assert_eq!(
+        request.batch_policy(),
+        BatchPolicy::AtMost(NonZeroU32::new(1).unwrap())
+    );
+    assert!(request.is_single());
+}
+
+#[test]
+fn run_request_preserves_optional_fuel() {
+    let request = AdvanceRequest::run(Some(64));
+
+    assert_eq!(request.limits().fuel, Some(64));
+    assert_eq!(request.limits().simulated_cycles, None);
+    assert_eq!(AdvanceRequest::run(None).limits().fuel, None);
+    assert_eq!(request.breakpoint_policy(), BreakpointPolicy::Honor);
+    assert_eq!(request.idle_policy(), IdlePolicy::Configured);
+    assert_eq!(request.batch_policy(), BatchPolicy::Auto);
+    assert!(!request.is_single());
+}
+
+#[test]
+fn request_builders_override_only_their_policy() {
+    let cap = NonZeroU32::new(7).unwrap();
+    let request = AdvanceRequest::single()
+        .with_cycle_limit(9)
+        .with_batch_cap(cap)
+        .with_breakpoints(BreakpointPolicy::Honor);
+
+    assert_eq!(request.limits().fuel, Some(1));
+    assert_eq!(request.limits().simulated_cycles, Some(9));
+    assert_eq!(request.batch_policy(), BatchPolicy::AtMost(cap));
+    assert_eq!(request.breakpoint_policy(), BreakpointPolicy::Honor);
+    assert_eq!(request.idle_policy(), IdlePolicy::Disabled);
+    assert!(
+        request.is_single(),
+        "builders must preserve boundary timing mode"
+    );
 }
