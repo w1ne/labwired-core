@@ -610,7 +610,10 @@ impl crate::Bus for SystemBus {
     }
 
     fn earliest_pending_deadline(&self) -> Option<u64> {
-        self.pending_schedule.iter().map(|(_, deadline, _)| *deadline).min()
+        self.pending_schedule
+            .iter()
+            .map(|(_, deadline, _)| *deadline)
+            .min()
     }
 
     #[cfg(feature = "event-scheduler")]

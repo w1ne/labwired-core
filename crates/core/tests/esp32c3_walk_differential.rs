@@ -368,8 +368,10 @@ fn oled_lab_framebuffer_is_byte_identical_across_tick_intervals() {
 #[ignore = "runs the real C3 bootloader + app (~2x30M steps); run with --release --ignored"]
 fn oled_lab_framebuffer_is_byte_identical_at_tick_512() {
     let (_, fb_1, _) = run_lab(build_oled_lab(1, false, false, false, false), PAINT_BUDGET);
-    let (_, fb_512, serial_512) =
-        run_lab(build_oled_lab(512, false, false, false, false), PAINT_BUDGET);
+    let (_, fb_512, serial_512) = run_lab(
+        build_oled_lab(512, false, false, false, false),
+        PAINT_BUDGET,
+    );
 
     assert!(
         lit_pixels(&fb_1) >= MIN_LIT,
@@ -804,7 +806,11 @@ fn oled_lab_sim_serial_vs_silicon_report() {
     let s = String::from_utf8_lossy(&lab.serial.lock().unwrap()).to_string();
     let fb = ssd1306_framebuffer(&lab.machine);
     eprintln!("=== SIM vs silicon report (same flash image) ===");
-    eprintln!("wall_s={wall:.3} total_cycles={} lit_pixels={}", lab.machine.total_cycles, lit_pixels(&fb));
+    eprintln!(
+        "wall_s={wall:.3} total_cycles={} lit_pixels={}",
+        lab.machine.total_cycles,
+        lit_pixels(&fb)
+    );
     eprintln!("cpu_freq_line={freq_line:?}");
     eprintln!(
         "app_main entered @ cycles={entered:?} device_ms≈{:.1}",
@@ -826,6 +832,12 @@ fn oled_lab_sim_serial_vs_silicon_report() {
             eprintln!("SIM| {line}");
         }
     }
-    assert!(painted.is_some(), "sim must reach OLED painted like silicon");
-    assert!(lit_pixels(&fb) >= MIN_LIT, "sim framebuffer must light pixels");
+    assert!(
+        painted.is_some(),
+        "sim must reach OLED painted like silicon"
+    );
+    assert!(
+        lit_pixels(&fb) >= MIN_LIT,
+        "sim framebuffer must light pixels"
+    );
 }
