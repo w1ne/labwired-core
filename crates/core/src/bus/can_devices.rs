@@ -3,7 +3,8 @@
 // SPDX-License-Identifier: MIT
 
 //! CAN diagnostic / UDS / log-player helpers attached to the bus.
-//! MCU-agnostic host-side test devices (not SoC peripheral models).
+//! MCU-agnostic host-side test devices (not SoC peripheral models), plus the
+//! per-tick `SystemBus` service methods that drive them.
 
 pub struct CanDiagnosticTester {
     pub id: String,
@@ -404,5 +405,349 @@ impl CanLogPlayer {
 
     pub fn is_done(&self) -> bool {
         self.next_idx >= self.frames.len()
+    }
+}
+
+use super::SystemBus;
+
+impl SystemBus {
+    pub(crate) fn service_can_diagnostic_testers(&mut self) {
+        if self.can_diagnostic_testers.is_empty() {
+            return;
+        }
+
+        for i in 0..self.can_diagnostic_testers.len() {
+            if self.can_diagnostic_testers[i].sent {
+                continue;
+            }
+
+            let connection = self.can_diagnostic_testers[i].connection.clone();
+            let Some(idx) = self.find_peripheral_index_by_name(&connection) else {
+                continue;
+            };
+            let Some(fdcan) = self.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .and_then(|any| any.downcast_mut::<crate::peripherals::fdcan::Fdcan>())
+            else {
+                continue;
+            };
+
+            let frame = crate::network::CanFrame {
+                id: self.can_diagnostic_testers[i].request_id,
+                data: self.can_diagnostic_testers[i].request_data.clone(),
+                extended: false,
+                fd: self.can_diagnostic_testers[i].request_data.len() > 8,
+                bitrate_switch: self.can_diagnostic_testers[i].request_data.len() > 8,
+                remote: false,
+            };
+            if fdcan.receive_frame(frame) {
+                self.can_diagnostic_testers[i].sent = true;
+            }
+        }
+    }
+
+    /// Per-tick service for the stateful ISO-TP/UDS testers. For each tester:
+    /// resolve its peripheral by name, drain the ECU's outbound `tx_frames`,
+    /// advance the FSM, and inject the next ISO-TP frame (filter-gated) when due.
+    ///
+    /// Works against both bxCAN (`deliver_rx`) and FDCAN (`receive_frame`); the
+    /// downcast picks whichever is wired. A filtered/dropped injection (return
+    /// `false`) leaves the FSM parked on the same send so it retries next tick —
+    /// important on the first ticks before the ECU has configured its filter.
+    pub(crate) fn service_can_uds_testers(&mut self) {
+        if self.can_uds_testers.is_empty() {
+            return;
+        }
+
+        for i in 0..self.can_uds_testers.len() {
+            if self.can_uds_testers[i].is_terminal() {
+                continue;
+            }
+
+            // Timeout guard so a broken/silent ECU never hangs the sim.
+            self.can_uds_testers[i].ticks += 1;
+            if self.can_uds_testers[i].ticks > self.can_uds_testers[i].max_ticks {
+                self.can_uds_testers[i].state = CanUdsTesterState::Failed;
+                continue;
+            }
+
+            let connection = self.can_uds_testers[i].connection.clone();
+            let Some(idx) = self.find_peripheral_index_by_name(&connection) else {
+                continue;
+            };
+
+            // Drain the ECU's outbound frames and feed the FSM. `observe_ecu_frame`
+            // may return a payload to inject (e.g. the CF unblocked by FlowControl);
+            // the actual injection happens below so both peripheral kinds share one
+            // filter-gated send path.
+            let request_id = self.can_uds_testers[i].request_id;
+            let mut pending_inject: Option<Vec<u8>> = None;
+
+            // Resolve the peripheral once; reborrow per phase to satisfy the
+            // borrow checker (drain, then inject).
+            let drained: Vec<crate::network::CanFrame> = {
+                let any = self.peripherals[idx].dev.as_any_mut();
+                match any {
+                    Some(a) => {
+                        if let Some(bx) = a.downcast_mut::<crate::peripherals::bxcan::BxCan>() {
+                            bx.tx_frames.drain(..).collect()
+                        } else if let Some(fd) =
+                            a.downcast_mut::<crate::peripherals::fdcan::Fdcan>()
+                        {
+                            fd.tx_frames.drain(..).collect()
+                        } else {
+                            continue;
+                        }
+                    }
+                    None => continue,
+                }
+            };
+
+            for frame in &drained {
+                if let Some(payload) =
+                    self.can_uds_testers[i].observe_ecu_frame(frame.id, &frame.data)
+                {
+                    pending_inject = Some(payload);
+                }
+            }
+
+            // Decide what (if anything) to inject this tick.
+            let has_script = !self.can_uds_testers[i].script.is_empty();
+            let to_send: Option<Vec<u8>> = if has_script {
+                match self.can_uds_testers[i].state {
+                    CanUdsTesterState::Start => {
+                        // Build request frames for the current script step.
+                        let frames = self.can_uds_testers[i].build_request_frames();
+                        if let Some((first, rest)) = frames.split_first() {
+                            // Queue any CFs for later (after FlowControl).
+                            self.can_uds_testers[i].pending_cfs = rest.to_vec();
+                            Some(first.clone())
+                        } else {
+                            None
+                        }
+                    }
+                    // Use the observe result when an FC arrived this tick, or
+                    // the front of pending_cfs when additional CFs remain from
+                    // a previous tick's FC (no new ECU frame → pending_inject
+                    // is None but the queue is non-empty).
+                    CanUdsTesterState::AwaitFc => pending_inject
+                        .or_else(|| self.can_uds_testers[i].pending_cfs.first().cloned()),
+                    // ECU sent a FirstFrame this tick; observe_ecu_frame_script
+                    // already set state=AwaitMultiResp and returned the FlowControl
+                    // in pending_inject. Forward it so the ECU can send its CFs.
+                    CanUdsTesterState::AwaitMultiResp => pending_inject,
+                    _ => None,
+                }
+            } else {
+                match self.can_uds_testers[i].state {
+                    CanUdsTesterState::Start => Some(self.can_uds_testers[i].first_frame.clone()),
+                    CanUdsTesterState::AwaitFc => pending_inject,
+                    _ => None,
+                }
+            };
+
+            let Some(payload) = to_send else {
+                continue;
+            };
+
+            let frame = crate::network::CanFrame::classic(request_id, payload);
+            let injected = {
+                let any = self.peripherals[idx].dev.as_any_mut();
+                match any {
+                    Some(a) => {
+                        if let Some(bx) = a.downcast_mut::<crate::peripherals::bxcan::BxCan>() {
+                            bx.deliver_rx(frame)
+                        } else if let Some(fd) =
+                            a.downcast_mut::<crate::peripherals::fdcan::Fdcan>()
+                        {
+                            fd.receive_frame(frame)
+                        } else {
+                            false
+                        }
+                    }
+                    None => false,
+                }
+            };
+
+            if injected {
+                // Advance only on a successful (accepted) injection; otherwise
+                // stay parked and retry next tick.
+                let has_script = !self.can_uds_testers[i].script.is_empty();
+                match self.can_uds_testers[i].state {
+                    CanUdsTesterState::Start if has_script => {
+                        // SF (no pending CFs) → go straight to AwaitResp.
+                        // FF (pending CFs queued) → go to AwaitFc.
+                        if self.can_uds_testers[i].pending_cfs.is_empty() {
+                            self.can_uds_testers[i].state = CanUdsTesterState::AwaitResp;
+                        } else {
+                            self.can_uds_testers[i].state = CanUdsTesterState::AwaitFc;
+                        }
+                    }
+                    CanUdsTesterState::Start => {
+                        self.can_uds_testers[i].state = CanUdsTesterState::AwaitFc
+                    }
+                    CanUdsTesterState::AwaitFc if has_script => {
+                        // Pop the CF that was just successfully injected.
+                        if !self.can_uds_testers[i].pending_cfs.is_empty() {
+                            self.can_uds_testers[i].pending_cfs.remove(0);
+                        }
+                        // Only advance to AwaitResp once all CFs have been sent.
+                        if self.can_uds_testers[i].pending_cfs.is_empty() {
+                            self.can_uds_testers[i].state = CanUdsTesterState::AwaitResp;
+                        }
+                    }
+                    CanUdsTesterState::AwaitFc => {
+                        self.can_uds_testers[i].state = CanUdsTesterState::AwaitResp
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    /// Per-tick service for deterministic CAN log replay nodes. For each
+    /// player, advance its tick counter and deliver every due frame
+    /// (`due_tick < now`) into the connected peripheral, filter-gated the
+    /// same way a real bus would drop unmatched frames.
+    pub(crate) fn service_can_log_players(&mut self) {
+        if self.can_log_players.is_empty() {
+            return;
+        }
+        for i in 0..self.can_log_players.len() {
+            self.can_log_players[i].ticks += 1;
+            if self.can_log_players[i].is_done() {
+                continue;
+            }
+            let connection = self.can_log_players[i].connection.clone();
+            let Some(idx) = self.find_peripheral_index_by_name(&connection) else {
+                continue;
+            };
+            let now = self.can_log_players[i].ticks;
+            while !self.can_log_players[i].is_done()
+                && self.can_log_players[i].frames[self.can_log_players[i].next_idx].0 < now
+            {
+                let j = self.can_log_players[i].next_idx;
+                let frame = self.can_log_players[i].frames[j].1.clone();
+                let accepted = {
+                    let any = self.peripherals[idx].dev.as_any_mut();
+                    match any {
+                        Some(a) => {
+                            if let Some(bx) = a.downcast_mut::<crate::peripherals::bxcan::BxCan>() {
+                                bx.deliver_rx(frame)
+                            } else if let Some(fd) =
+                                a.downcast_mut::<crate::peripherals::fdcan::Fdcan>()
+                            {
+                                fd.receive_frame(frame)
+                            } else {
+                                false
+                            }
+                        }
+                        None => false,
+                    }
+                };
+                if accepted {
+                    self.can_log_players[i].delivered += 1;
+                } else {
+                    self.can_log_players[i].dropped += 1;
+                }
+                self.can_log_players[i].next_idx += 1;
+            }
+        }
+    }
+
+    pub(crate) fn yaml_u32(value: Option<&serde_yaml::Value>, default: u32) -> u32 {
+        match value {
+            Some(serde_yaml::Value::Number(n)) => n.as_u64().map(|v| v as u32).unwrap_or(default),
+            Some(serde_yaml::Value::String(s)) => {
+                let s = s.trim();
+                if let Some(hex) = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")) {
+                    u32::from_str_radix(&hex.replace('_', ""), 16).unwrap_or(default)
+                } else {
+                    s.replace('_', "").parse::<u32>().unwrap_or(default)
+                }
+            }
+            _ => default,
+        }
+    }
+
+    pub(crate) fn yaml_bytes(value: Option<&serde_yaml::Value>, default: &[u8]) -> Vec<u8> {
+        match value {
+            Some(serde_yaml::Value::Sequence(seq)) => seq
+                .iter()
+                .map(|value| Self::yaml_u32(Some(value), 0) as u8)
+                .collect(),
+            Some(serde_yaml::Value::String(s)) => s
+                .split(|c: char| c.is_ascii_whitespace() || c == ',' || c == ':')
+                .filter(|part| !part.is_empty())
+                .map(|part| {
+                    let part = part.trim();
+                    if let Some(hex) = part.strip_prefix("0x").or_else(|| part.strip_prefix("0X")) {
+                        match u8::from_str_radix(hex, 16) {
+                            Ok(b) => b,
+                            Err(_) => {
+                                tracing::warn!(
+                                    "[uds-tester] malformed send byte {:?}, treating as 0x00",
+                                    part
+                                );
+                                0
+                            }
+                        }
+                    } else {
+                        u8::from_str_radix(part, 16)
+                            .unwrap_or_else(|_| part.parse::<u8>().unwrap_or(0))
+                    }
+                })
+                .collect(),
+            _ => default.to_vec(),
+        }
+    }
+
+    /// Parse an expect string such as `"51 01 .."` into a mask vector.
+    /// `".."` becomes `None` (wildcard); any other token is parsed as a hex
+    /// byte and becomes `Some(byte)`.
+    pub(crate) fn parse_expect(s: &str) -> Vec<Option<u8>> {
+        s.split_ascii_whitespace()
+            .map(|tok| {
+                if tok == ".." {
+                    None
+                } else {
+                    let hex = tok.trim_start_matches("0x").trim_start_matches("0X");
+                    match u8::from_str_radix(hex, 16) {
+                        Ok(b) => Some(b),
+                        Err(_) => {
+                            tracing::warn!(
+                                "[uds-tester] malformed expect token {:?}, treating as 0x00",
+                                tok
+                            );
+                            Some(0)
+                        }
+                    }
+                }
+            })
+            .collect()
+    }
+
+    /// Parse an optional YAML `script:` sequence into a `Vec<UdsStep>`.
+    pub(crate) fn parse_script(value: Option<&serde_yaml::Value>) -> Vec<UdsStep> {
+        let seq = match value {
+            Some(serde_yaml::Value::Sequence(s)) => s,
+            _ => return Vec::new(),
+        };
+        seq.iter()
+            .map(|entry| {
+                let send = Self::yaml_bytes(entry.get("send"), &[]);
+                let expect_str = entry.get("expect").and_then(|v| v.as_str()).unwrap_or("");
+                let expect = Self::parse_expect(expect_str);
+                let expect_nrc = entry
+                    .get("expect_nrc")
+                    .map(|v| Self::yaml_u32(Some(v), 0) as u8);
+                UdsStep {
+                    send,
+                    expect,
+                    expect_nrc,
+                }
+            })
+            .collect()
     }
 }
