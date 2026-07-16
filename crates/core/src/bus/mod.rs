@@ -187,6 +187,13 @@ pub struct SystemBus {
     legacy_tick_indices: Vec<usize>,
     bus_tick_indices: Vec<usize>,
     peripheral_hint: Cell<Option<usize>>,
+    /// Last **winning** peripheral window from [`find_peripheral_index`]:
+    /// `(range_ord, start, end, peri_index)` where `range_ord` is the index
+    /// into `peripheral_ranges`. Same-window sequential accesses are O(1) when
+    /// the next sorted range starts past `addr` (no narrower window can win).
+    /// Cleared on range rebuild. Fidelity: greatest-start-wins, history-independent
+    /// (see `overlapping_windows_route_history_independently`).
+    last_route: Cell<Option<(usize, u64, u64, usize)>>,
     /// Cached index of the classic-ESP32 DPORT peripheral, if one is
     /// registered (`None` otherwise — the common case, incl. every ESP32-S3
     /// bus). Recomputed in `rebuild_peripheral_ranges` on each peripheral
@@ -2671,6 +2678,7 @@ impl SystemBus {
             legacy_tick_indices: Vec::new(),
             bus_tick_indices: Vec::new(),
             peripheral_hint: Cell::new(None),
+            last_route: Cell::new(None),
             last_gpio_in: [0; 2],
             current_cycle: 0,
             cycle_clock: crate::CycleClock::default(),
@@ -2731,6 +2739,7 @@ impl SystemBus {
             legacy_tick_indices: Vec::new(),
             bus_tick_indices: Vec::new(),
             peripheral_hint: Cell::new(None),
+            last_route: Cell::new(None),
             last_gpio_in: [0; 2],
             current_cycle: 0,
             cycle_clock: crate::CycleClock::default(),
@@ -5562,6 +5571,7 @@ peripherals:
             legacy_tick_indices: Vec::new(),
             bus_tick_indices: Vec::new(),
             peripheral_hint: Cell::new(None),
+            last_route: Cell::new(None),
             last_gpio_in: [0; 2],
             current_cycle: 0,
             cycle_clock: crate::CycleClock::default(),
@@ -5646,6 +5656,7 @@ peripherals:
             legacy_tick_indices: Vec::new(),
             bus_tick_indices: Vec::new(),
             peripheral_hint: Cell::new(None),
+            last_route: Cell::new(None),
             last_gpio_in: [0; 2],
             current_cycle: 0,
             cycle_clock: crate::CycleClock::default(),
@@ -5881,6 +5892,7 @@ peripherals:
             legacy_tick_indices: Vec::new(),
             bus_tick_indices: Vec::new(),
             peripheral_hint: Cell::new(None),
+            last_route: Cell::new(None),
             last_gpio_in: [0; 2],
             current_cycle: 0,
             cycle_clock: crate::CycleClock::default(),
@@ -6115,6 +6127,7 @@ peripherals:
             legacy_tick_indices: Vec::new(),
             bus_tick_indices: Vec::new(),
             peripheral_hint: Cell::new(None),
+            last_route: Cell::new(None),
             last_gpio_in: [0; 2],
             current_cycle: 0,
             cycle_clock: crate::CycleClock::default(),
@@ -6203,6 +6216,7 @@ peripherals:
             legacy_tick_indices: Vec::new(),
             bus_tick_indices: Vec::new(),
             peripheral_hint: Cell::new(None),
+            last_route: Cell::new(None),
             last_gpio_in: [0; 2],
             current_cycle: 0,
             cycle_clock: crate::CycleClock::default(),
