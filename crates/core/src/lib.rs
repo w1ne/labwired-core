@@ -717,9 +717,10 @@ pub trait Peripheral: std::fmt::Debug + Send {
     ) {
     }
 
-    /// Phase 2B.1: when `true`, `Machine::step` skips this peripheral's
-    /// legacy `tick()` walk and relies on the scheduler to drive it. Default
-    /// `false` preserves existing per-cycle tick behaviour.
+    /// Phase 2B.1: when `true`, the authoritative [`Machine::advance`]
+    /// lifecycle skips this peripheral's legacy `tick()` walk and relies on
+    /// the scheduler to drive it. Default `false` preserves existing per-cycle
+    /// tick behaviour.
     fn uses_scheduler(&self) -> bool {
         false
     }
@@ -1253,36 +1254,14 @@ impl<C: Cpu> Machine<C> {
     }
 
     /// `true` while at least one watched channel is on the per-cycle poll
-    /// fallback — the bespoke CLI test loop uses this to clamp its instruction
-    /// batch to one, exactly as [`Machine::run`] does, so polled pads are
-    /// sampled at every cycle boundary. Push-only watch sets keep the full
-    /// batch width (their peripherals report edges from the write sites).
+    /// fallback. Frontends inspect this when choosing an outer request batch
+    /// limit; [`Machine::advance`] independently clamps each internal batch to
+    /// one so polled pads are sampled at every cycle boundary. Push-only watch
+    /// sets keep the full batch width because their peripherals report edges
+    /// from the write sites.
     #[inline]
     pub fn logic_poll_active(&self) -> bool {
         self.logic_capture.poll_active()
-    }
-
-    /// Seed the push-capture tap clock at a batch start, so pad writes during
-    /// the batch stamp with the boundary they become observable at (the CPU
-    /// bumps the clock once per retired instruction while armed). No-op unless
-    /// a push-mode watch set is armed. The bespoke CLI test loop calls this
-    /// before each `cpu.step_batch`, mirroring [`Machine::run`].
-    #[inline]
-    pub fn logic_seed_batch_clock(&self, batch_start_cycle: u64) {
-        if self.logic_capture.push_active() {
-            self.bus.logic_tap.set_clock(batch_start_cycle);
-        }
-    }
-
-    /// Public boundary-observe for run loops that step the CPU directly
-    /// (`cpu.step_batch` / `cpu.step`) instead of via [`Machine::step`] /
-    /// [`Machine::run`], which observe internally. Drains the push tap and
-    /// samples polled channels at `boundary` — the engine cycle at the end of
-    /// the just-executed batch, BEFORE peripheral tick costs. No-op when no
-    /// watch set is armed. See [`Machine::logic_observe`] for the semantics.
-    #[inline]
-    pub fn logic_observe_boundary(&mut self, boundary: u64) {
-        self.logic_observe(boundary);
     }
 
     /// Observe the watched channels at the current cycle boundary: drain the
@@ -1707,127 +1686,11 @@ impl<C: Cpu> Machine<C> {
         self.advance(AdvanceRequest::single()).map(|_| ())
     }
 
-    // Differential oracle for Machine::advance parity tests. Direct CPU
-    // stepping is deliberately retained only under cfg(test); production
-    // frontends must enter through Machine::advance.
-    #[cfg(test)]
-    pub(crate) fn step_legacy_for_test(&mut self) -> SimResult<()> {
-        self.total_cycles += 1;
-        // Mirror the cycle count into the bus before the CPU executes, so
-        // tick-time services can read "now": scheduler-driven peripheral sync
-        // (event-scheduler) and the HC-SR04 echo-window timing (always). O(1) —
-        // a field write + a relaxed atomic store (the shared read-sync clock),
-        // not the per-peripheral walk this phase removed.
-        self.bus.set_current_cycle(self.total_cycles);
-        self.bus.bus_trace.set_cycle(self.total_cycles);
-        // The cycle boundary this instruction's effects become observable at —
-        // pad writes pushed through the logic tap stamp with it (single-step
-        // path: one instruction, no CPU-side clock bumps needed).
-        let logic_boundary = self.total_cycles;
-        if self.logic_capture.push_active() {
-            self.bus.logic_tap.set_clock(logic_boundary);
-        }
-        self.cpu
-            .step(&mut self.bus, &self.observers, &self.config)?;
-        self.step_profile.cpu_instructions += 1;
-        self.step_profile.cpu_batches += 1;
-        // Dual-core: step the secondary CPU one instruction per
-        // primary-CPU instruction (round-robin). Cycle counter only
-        // advances for the primary CPU — keeps observer/snapshot
-        // semantics stable. Errors on CPU 1 bubble up the same way.
-        if let Some(cpu1) = self.cpu_secondary.as_mut() {
-            // CPU 0 may have just called `ets_set_appcpu_boot_addr` to
-            // release APP_CPU from reset-hold. The thunk stashed the
-            // boot address in a thread-local; drain it here, apply to
-            // the secondary CPU's PC, and unhalt so the next round-robin
-            // tick starts executing from that address.
-            if let Some(boot_addr) =
-                crate::peripherals::esp_xtensa_common::rom_thunks::APPCPU_BOOT_ADDR
-                    .with(|s| s.take())
-            {
-                cpu1.set_pc(boot_addr);
-                cpu1.unhalt();
-            }
-            cpu1.step(&mut self.bus, &self.observers, &self.config)?;
-        }
-
-        if self.total_cycles % (self.config.peripheral_tick_interval as u64) == 0 {
-            // Propagate peripherals
-            let (interrupts, costs) = self.bus.tick_peripherals_fully();
-            self.record_peripheral_tick_profile(costs.len());
-            for c in costs {
-                self.total_cycles += c.cycles as u64;
-                if let Some(p) = self.bus.peripherals.get(c.index) {
-                    for observer in &self.observers {
-                        observer.on_peripheral_tick(&p.name, c.cycles);
-                    }
-                }
-            }
-            for irq in interrupts {
-                self.cpu.set_exception_pending(irq);
-                tracing::debug!("Exception {} Pend", irq);
-            }
-        }
-
-        // Phase 2B.1 (issue #192): event-driven peripheral scheduler.
-        // With the `event-scheduler` flag OFF this block compiles out
-        // entirely and behaviour matches pre-2B `main`. With the flag ON
-        // and no peripheral opted in (`uses_scheduler() == false` for
-        // everyone) the drain is a no-op — the legacy `tick()` walk
-        // above still drives every peripheral until each migrates.
-        #[cfg(feature = "event-scheduler")]
-        self.drain_scheduler_events();
-
-        // RTC_CNTL software system reset (OPTIONS0 bit 31 / `SW_SYS_RST`).
-        // The ESP32 BROM's `_rtc_trigger_sw_system_reset` writes this bit
-        // and expects execution NOT to return from the store — on real
-        // silicon the CPU restarts at the reset vector. We drain the
-        // request between instructions so neither the CPU nor any
-        // peripheral observes a half-applied state. Reset vector for the
-        // ESP32 rev3 BROM `_ResetVector` is fixed at `0x4000_0400`; SP is
-        // re-seeded to the top of DRAM the BROM uses (`0x3FFE_0000`),
-        // matching the smoke-test cold-boot setup.
-        if self.drain_rtc_cntl_reset_request() {
-            self.cpu.set_pc(0x4000_0400);
-            self.cpu.set_sp(0x3FFE_0000);
-            tracing::debug!("RTC_CNTL SW_SYS_RST: CPU re-pointed at reset vector 0x40000400");
-        }
-
-        // Cortex-M SCB system reset (AIRCR.SYSRESETREQ with the VECTKEY).
-        // Firmware that asks for a reboot (e.g. a UDS ECUReset) writes
-        // AIRCR and does not expect the store to return; on real silicon the
-        // core restarts through the vector table. We drain the latch here, at
-        // the same clean instruction boundary as RTC_CNTL — after the
-        // AIRCR-writing store and any pending peripheral effects of this
-        // instruction have been applied — then reuse the power-on reset
-        // machinery so MSP/PC reload from vector[0]/vector[1] via the CPU
-        // reset path. No-op on non-Cortex-M targets (no SCB on the bus).
-        if self.drain_scb_reset_request() {
-            self.reset()?;
-            tracing::debug!("SCB SYSRESETREQ: CPU rebooted through vector table");
-        }
-
-        // H5 FLASH pending ops: sector erase fills flash with 0xFF; bank-swap
-        // swaps the two 1 MB banks in the flash buffer then re-runs reset so
-        // the CPU boots from the new bank-1 vector table. Also drained on the
-        // batch/CLI run path (`Machine::run`), which executes cycle-accurately
-        // when an H5 op-modeling FLASH is present so this fires per instruction.
-        self.apply_pending_flash_op()?;
-
-        // Logic-analyzer edge capture. No-op (one `is_active` check) unless a
-        // watch set is installed. Observed after the instruction + peripheral
-        // effects of this cycle have landed, so pad levels are the committed
-        // state at `total_cycles`.
-        self.logic_observe(logic_boundary);
-
-        Ok(())
-    }
-
     /// Drain and apply the single pending H5 FLASH hardware operation, if any.
     ///
     /// The FLASH peripheral records at most one op per instruction (in a `Cell`);
     /// this helper must therefore run once per instruction so no op is lost. It
-    /// is called from both `step()` and the `Machine::run` batch loop body. The
+    /// is called from the authoritative `Machine::advance` batch loop. The
     /// run loop clamps its batch to 1 when `requires_cycle_accurate()` is true
     /// (which an H5 op-modeling FLASH forces), preserving the one-op-per-
     /// instruction invariant and the correct erase-before-program ordering.
@@ -1903,8 +1766,9 @@ impl<C: Cpu> Machine<C> {
     }
 
     /// Phase 2B.1/2B.3a (issue #192): advance the scheduler and fire every due
-    /// peripheral event. Called from both `step()` and the batch run loop so
-    /// neither path silently strands a scheduler-driven peripheral.
+    /// peripheral event. The authoritative [`Machine::advance`] lifecycle
+    /// calls this after each committed CPU batch so no scheduler-driven
+    /// peripheral is silently stranded.
     ///
     /// The scheduler runs in absolute CPU cycles (`total_cycles`) — the same
     /// quantum the legacy walk advances by (`tick_elapsed(interval)`) — so
@@ -1913,27 +1777,28 @@ impl<C: Cpu> Machine<C> {
     /// event lands at the first drain at or after its exact cycle; drains run
     /// at least once per CPU batch, so the observation error is bounded by one
     /// tick interval (and is zero at interval 1, where drains run per cycle).
-    /// Write-context schedule requests the bus buffered during this step's
-    /// MMIO writes (`pending_schedule`) are enqueued first: a peripheral can't
-    /// reach the scheduler from `write`, so the bus buffers an absolute
-    /// cycle deadline (see `collect_scheduled_events`) which is clamped to
-    /// `now` here — a deadline that expired mid-batch fires on this drain.
+    /// Write-context schedule requests the bus buffered during the committed
+    /// batch's MMIO writes (`pending_schedule`) are enqueued first: a
+    /// peripheral can't reach the scheduler from `write`, so the bus buffers
+    /// an absolute cycle deadline (see `collect_scheduled_events`) which is
+    /// clamped to `now` here — a deadline that expired mid-batch fires on this
+    /// drain.
     #[cfg(feature = "event-scheduler")]
     fn drain_scheduler_events(&mut self) {
         // One-time bootstrap: give every scheduler-driven peripheral a chance
         // to schedule events that arise from *setup* rather than an MMIO write
-        // (e.g. a UART with an RX stream attached before firmware runs, or a
-        // SYSTIMER whose alarm was configured before `run()` started). The
+        // (e.g. a UART with an RX stream attached before firmware advances, or
+        // a SYSTIMER whose alarm was configured before `Machine::advance`). The
         // absolute deadline is `total_cycles + delay`, which is only exact if
         // the returned delay is measured from `total_cycles` — but a peripheral
-        // is anchored at ATTACH (cycle 0) and the first drain can run after the
-        // batch loop has already advanced `total_cycles` (in `run()` the first
-        // batch executes one instruction before this drain). Sync each
+        // is anchored at ATTACH (cycle 0) and the first drain can run after
+        // `Machine::advance` has committed its first batch and advanced
+        // `total_cycles`. Sync each
         // peripheral up to `total_cycles` FIRST so its delay is genuinely
         // relative to now; without this the first scheduled event lands one (or
         // up to one tick-interval) cycle late versus the legacy per-cycle walk —
         // the exact off-by-one the ESP32-S3 `intmatrix_alarm`/walk-differential
-        // gate caught on a pre-`run()` alarm config. `sync_to` is idempotent at
+        // gate caught on a pre-advance alarm config. `sync_to` is idempotent at
         // cycle 0 (no-op) and the same call the write path already makes, so
         // steady-state behaviour is unchanged.
         if !self.scheduler_bootstrapped {
@@ -2125,13 +1990,13 @@ impl<C: Cpu> Machine<C> {
     }
 
     /// Returns true (and clears the latch) if the registered SCB peripheral
-    /// has a pending SYSRESETREQ — an AIRCR write with the correct VECTKEY
-    /// and the SYSRESETREQ bit set (`Scb::write_reg`, offset 0x0C). Used by
-    /// `step()` to honor a firmware-requested system reset at a clean
-    /// instruction boundary. Uses the cached `scb_index` resolved at
-    /// construction — non-Cortex-M configs (no SCB on the bus) short-circuit
-    /// to `false` without touching the peripheral vector at all.
-    pub fn drain_scb_reset_request(&self) -> bool {
+    /// has a pending SYSRESETREQ — an AIRCR write with the correct VECTKEY and
+    /// the SYSRESETREQ bit set (`Scb::write_reg`, offset 0x0C). The
+    /// authoritative [`Machine::advance`] lifecycle drains this latch at a
+    /// clean committed instruction boundary. Uses the cached `scb_index`
+    /// resolved at construction — non-Cortex-M configs (no SCB on the bus)
+    /// short-circuit to `false` without touching the peripheral vector at all.
+    pub(crate) fn drain_scb_reset_request(&self) -> bool {
         let Some(idx) = self.scb_index else {
             return false;
         };
@@ -2255,287 +2120,6 @@ impl<C: Cpu> Machine<C> {
             });
         }
         crate::inspect::PeekResult { addr, bytes }
-    }
-}
-
-impl<C: Cpu> Machine<C> {
-    // Differential oracle for Machine::advance parity tests. This preserves
-    // the former lifecycle under cfg(test) and is not a frontend entry point.
-    #[cfg(test)]
-    pub(crate) fn run_legacy_for_test(&mut self, max_steps: Option<u32>) -> SimResult<StopReason> {
-        let mut steps = 0;
-
-        loop {
-            // Check breakpoints BEFORE batch
-            let pc = self.cpu.get_pc();
-            let pc_aligned = pc & !1;
-
-            if self.breakpoints.contains(&pc_aligned) && self.last_breakpoint != Some(pc_aligned) {
-                self.last_breakpoint = Some(pc_aligned);
-                return Ok(StopReason::Breakpoint(pc));
-            }
-
-            // We are executing, so clear the "last hit" sticky BP
-            self.last_breakpoint = None;
-
-            if let Some(limit) = max_steps {
-                if steps >= limit {
-                    return Ok(StopReason::MaxStepsReached);
-                }
-            }
-
-            let skipped = self.try_idle_fast_forward(
-                max_steps.map(u64::from),
-                u64::from(steps),
-                !self.breakpoints.is_empty(),
-            ) as u32;
-            if skipped > 0 {
-                steps += skipped;
-                continue;
-            }
-
-            // Fresh MMIO-activity window for the upcoming batch (timer-poll
-            // coalesce reads the previous batch's counters in try_idle above).
-            self.bus.reset_mmio_activity_counters();
-
-            // Execute in batch until next peripheral tick or breakpoint/limit
-            let current_cycles = self.total_cycles;
-            // Mirror the cycle count before the batch so MMIO writes inside it
-            // (and tick-time services) can read "now". The batch is bounded by
-            // `peripheral_tick_interval`, so intra-batch staleness is < one tick.
-            self.bus.set_current_cycle(current_cycles);
-            self.bus.bus_trace.set_cycle(current_cycles);
-            let tick_interval = self.config.peripheral_tick_interval as u64;
-            let remaining_until_tick = (tick_interval - (current_cycles % tick_interval)) as u32;
-
-            let mut current_batch = if let Some(limit) = max_steps {
-                remaining_until_tick.min(limit - steps)
-            } else {
-                remaining_until_tick
-            };
-
-            // ── RISC-V JIT batching note (chunk H) ───────────────────────────
-            // The JIT does NOT widen the batch past `remaining_until_tick`. A
-            // widened batch would skip the peripheral-tick boundaries the
-            // interpreter crosses, leaving `bus.current_cycle` (refreshed once
-            // per batch) staler than the interpreter's — and main's lazy
-            // walk-free peripherals (LEDC/wifi_mac) read that clock, so coarse
-            // JIT batching would read counters off-by-one. Keeping the JIT on
-            // the SAME per-tick-interval cadence as the interpreter guarantees
-            // identical `current_cycle` refresh points, hence byte-identity.
-            // A compiled block runs whenever it fits in the current window
-            // (`run_jit_loop`'s `retired + n <= max_count`); raise
-            // `peripheral_tick_interval` toward `max_safe_tick_interval` to make
-            // the window (and thus JIT engagement) larger while both arms stay
-            // byte-identical to interval-1.
-
-            // Cycle-accurate buses (HC-SR04, IO-Link, H5 op-modeling FLASH) must
-            // execute one instruction per batch so per-instruction services —
-            // notably the H5 FLASH pending-op drain below — fire on every
-            // instruction. Without this clamp the FLASH op would be recorded in
-            // the peripheral cell but applied at most once per tick interval (or
-            // not at all), losing all but the last op and breaking erase-before-
-            // program ordering.
-            if self.bus.requires_cycle_accurate() {
-                current_batch = current_batch.min(1);
-            }
-
-            // Breakpoints are only checked at batch boundaries (top of loop). If
-            // any breakpoint is set, clamp the batch to one instruction so a
-            // breakpoint whose PC lies inside a batch is caught at exactly that
-            // PC instead of being executed past and noticed only at the next
-            // boundary (the GDB "continue never stops" bug). This per-instruction
-            // cost applies ONLY while breakpoints are set, i.e. under a debugger,
-            // so the no-breakpoint hot path is unaffected.
-            if !self.breakpoints.is_empty() {
-                current_batch = current_batch.min(1);
-            }
-
-            // Logic-analyzer POLL fallback: clamp the batch to one instruction
-            // so polled pad state is observed at EVERY cycle boundary — pads
-            // only change at instruction/tick boundaries, so this is a
-            // complete, alias-free capture. (An earlier fixed 16-cycle
-            // sampling grid aliased any signal toggling faster than ~32 cycles
-            // — bit-banged buses looked wrong before they looked dropped.)
-            // Cost is paid ONLY while at least one polled (non-push) channel
-            // is armed; push-instrumented channels report their own edges from
-            // the write sites and keep the full batch width (see
-            // `crate::logic_capture` and tests/logic_capture_bench.rs).
-            if self.logic_capture.poll_active() {
-                current_batch = current_batch.min(1);
-            }
-
-            // Event-scheduler: end the batch exactly at the next event-scheduled
-            // HC-SR04 ECHO transition, so the post-batch `drain_scheduler_events`
-            // applies it at its exact cycle and a busy-polling firmware observes
-            // it that instruction — never a batch late. This is what lets HC-SR04
-            // drop out of `requires_cycle_accurate` (which pins the batch to one
-            // instruction) while staying correct. No-op at tick interval 1 (batch
-            // is already one instruction and the drain runs every cycle) and when
-            // no echo edge is pending, so the common paths pay nothing.
-            #[cfg(feature = "event-scheduler")]
-            if current_batch > 1 {
-                if let Some(deadline_cycle) = self.bus.next_hcsr04_deadline_cycle() {
-                    let until = deadline_cycle.saturating_sub(self.total_cycles);
-                    // `until == 0` means an edge is due at this exact cycle; take
-                    // one instruction so the drain applies it before advancing.
-                    current_batch = current_batch.min(until.clamp(1, u32::MAX as u64) as u32);
-                }
-            }
-
-            // Event-scheduler GENERAL clamp (Phase 0): end the batch exactly at
-            // the next scheduled peripheral event of ANY kind — SYSTIMER/TIMx
-            // alarms, SPI/UART frame edges, DMA elements, the LEDC overflow
-            // latch, and the HC-SR04 ECHO edges above — so the post-batch
-            // `drain_scheduler_events` applies it at its EXACT absolute cycle
-            // instead of at whatever coarse tick boundary the widened batch
-            // happened to land on. This generalises the single-peripheral
-            // HC-SR04 clamp directly above to the whole scheduler heap.
-            //
-            // With it, a wide `peripheral_tick_interval` delivers every event
-            // (and thus pends every IRQ, and thus enters every ISR) at the
-            // IDENTICAL cycle it would at interval 1: the CPU is never allowed
-            // to retire an instruction at a cycle past a pending event's
-            // deadline before that event fires. That makes ALL OBSERVABLE state
-            // — every peripheral snapshot (framebuffer, counters, GPIO…),
-            // memory, and `total_cycles` — byte-identical to interval-1 BY
-            // CONSTRUCTION (proven by esp32c3_clamped_full_state_differential).
-            //
-            // The `cpu_state` register snapshot (pc/mepc/GPRs) is NOT covered
-            // and provably cannot be: firmware that busy-waits on a lazy,
-            // tick-refreshed free-running counter (RTC/SYSTIMER) reads a value
-            // up to (interval-1) cycles stale, so a data-dependent branch can
-            // retire at a different pc at the same `total_cycles` — a property
-            // of the counter READ path, not event delivery, unclosable by any
-            // clamp short of ticking every cycle. That residual is exactly why
-            // the CLI fidelity gate excludes `cpu_state`: its exclusion is
-            // principled, not a workaround for an incomplete clamp.
-            //
-            // The `next_event_deadline` lookup is O(1) when the heap top is
-            // live (BinaryHeap peek) — still GATE on `peripheral_tick_interval
-            // > 1`: at interval 1 the batch is already one instruction (the
-            // drain runs every cycle and delivers events exactly), so the
-            // call would be pure wasted cost on the hot interval-1 path.
-            // `current_batch > 1` further skips whenever an earlier clamp
-            // (cycle-accurate bus, breakpoint, poll capture, HC-SR04) already
-            // pinned the batch to one instruction.
-            //
-            // NOTE: this does NOT cover an event a firmware ARMS via an MMIO
-            // write partway through THIS batch — that event is only enqueued at
-            // the post-batch drain, so it is not in the heap when this scan
-            // runs. That mid-batch-scheduling case is handled separately after
-            // `step_batch` returns (see the `pending_schedule` re-clamp below).
-            #[cfg(feature = "event-scheduler")]
-            if self.config.peripheral_tick_interval > 1 && current_batch > 1 {
-                self.refresh_generation_scratch();
-                if let Some(dl) = self.sched.next_event_deadline(&self.generation_scratch) {
-                    if dl > self.total_cycles {
-                        current_batch = current_batch.min((dl - self.total_cycles) as u32);
-                    } else {
-                        // Already due at/behind `now`: take one instruction so
-                        // the post-batch drain fires it before advancing further.
-                        current_batch = current_batch.min(1);
-                    }
-                }
-            }
-
-            // Push-mode capture: seed the tap clock at the batch start; the
-            // CPU advances it once per retired instruction so pad writes stamp
-            // with the boundary they become observable at.
-            if self.logic_capture.push_active() {
-                self.bus.logic_tap.set_clock(current_cycles);
-            }
-
-            let executed =
-                self.cpu
-                    .step_batch(&mut self.bus, &self.observers, &self.config, current_batch)?;
-
-            steps += executed;
-            self.total_cycles += executed as u64;
-            self.step_profile.cpu_instructions += executed as u64;
-            self.step_profile.cpu_batches += 1;
-
-            // Exact-cycle clock cleanup: `step_batch` republished the bus clock
-            // per interpreted instruction for cycle-exact mid-batch reads, so on
-            // return it sits at an implementation-dependent value (the last
-            // interpreted instruction's cycle under the interpreter, the last
-            // block's START cycle under the JIT — they differ). Everything below
-            // (the peripheral-tick block, which can read `current_cycle`) must
-            // see one arm-INDEPENDENT value, and it must be the SAME value main
-            // showed there before this optimisation: the batch-START cycle
-            // (`current_cycles`, seeded at the top of the loop). Restore it here
-            // so the tick path is byte-identical to main and to itself across
-            // the JIT-on/off arms; the drain below re-advances the clock to the
-            // batch-end cycle exactly as before.
-            #[cfg(feature = "event-scheduler")]
-            self.bus.set_current_cycle(current_cycles);
-            // The cycle boundary the batch ended at, BEFORE peripheral tick
-            // costs — logic pushes stamped at it are finalised to the
-            // post-cost "now" (see `logic_observe`).
-            let logic_boundary = self.total_cycles;
-
-            if self.total_cycles % (self.config.peripheral_tick_interval as u64) == 0 {
-                // Propagate peripherals
-                let (interrupts, costs) = self.bus.tick_peripherals_fully();
-                self.record_peripheral_tick_profile(costs.len());
-                for c in costs {
-                    self.total_cycles += c.cycles as u64;
-                    if let Some(p) = self.bus.peripherals.get(c.index) {
-                        for observer in &self.observers {
-                            observer.on_peripheral_tick(&p.name, c.cycles);
-                        }
-                    }
-                }
-                for irq in interrupts {
-                    self.cpu.set_exception_pending(irq);
-                    tracing::debug!("Exception {} Pend", irq);
-                }
-            }
-
-            // Advance the bus's mirrored cycle to the batch-END cycle before the
-            // drain: scheduler event handlers that read `bus.current_cycle` (e.g.
-            // the HC-SR04 ECHO-edge handler recomputing its level from the window)
-            // must see "now", not the batch-start value seeded above — otherwise
-            // an edge due at the batch boundary is evaluated one batch stale (a
-            // fall would still read high and never transition).
-            #[cfg(feature = "event-scheduler")]
-            {
-                self.bus.set_current_cycle(self.total_cycles);
-            }
-
-            #[cfg(feature = "event-scheduler")]
-            self.drain_scheduler_events();
-
-            // Apply any pending H5 FLASH op recorded by the instructions just
-            // executed. On a cycle-accurate bus the batch is clamped to 1 above,
-            // so this runs per instruction (matching `step()`); this is the path
-            // the CLI test runner and `Machine::run` take, where the op would
-            // otherwise never be applied.
-            self.apply_pending_flash_op()?;
-
-            // Honor a firmware-requested system reset (AIRCR SYSRESETREQ with
-            // VECTKEY) latched by the instructions just executed. `step()` drains
-            // this on every instruction boundary; the batched `run` path must do
-            // the same on every batch return or the reboot never fires.
-            if self.drain_scb_reset_request() {
-                self.reset()?;
-            }
-
-            // Logic-analyzer edge capture at the batch boundary (no-op unless
-            // a watch set is installed): drain push events and, when a polled
-            // channel is armed, sample — the batch was clamped to 1 above in
-            // that case, so polling still fires at every cycle boundary.
-            self.logic_observe(logic_boundary);
-
-            // If we executed less than requested, it means the CPU wanted to exit early (e.g. branch/exception)
-            // or we just finished the batch naturally. The loop will continue and check breakpoints/limits.
-            if executed == 0 && current_batch > 0 {
-                // If the CPU makes no progress but says Ok(0), we might need to investigate.
-                // For now, assume it's valid (e.g. waiting for something).
-                break;
-            }
-        }
-        Ok(StopReason::StepDone)
     }
 }
 

@@ -1,8 +1,7 @@
-//! Boundary and parity tests for the authoritative `Machine::advance` lifecycle.
+//! Permanent boundary and adapter tests for the authoritative
+//! `Machine::advance` lifecycle.
 //!
-//! The `cfg(test)` legacy helpers intentionally retain direct CPU stepping as
-//! differential oracles. Production callers must not copy that orchestration;
-//! they enter through `Machine::advance` (or its single-step adapter).
+//! Production callers enter through `Machine::advance` or its public adapters.
 
 use crate::bus::SystemBus;
 use crate::runtime_snapshot::CpuKind;
@@ -285,10 +284,10 @@ fn counting_dual_core_machine() -> Machine<CountingCpu> {
 }
 
 #[test]
-fn legacy_step_advances_both_cores_once() {
+fn step_adapter_advances_both_cores_once() {
     let mut machine = counting_dual_core_machine();
 
-    machine.step().expect("legacy step should succeed");
+    machine.step().expect("step should succeed");
 
     assert_eq!(machine.cpu.steps, 1);
     assert_eq!(machine.cpu_secondary.as_ref().map(|cpu| cpu.steps), Some(1));
@@ -296,24 +295,11 @@ fn legacy_step_advances_both_cores_once() {
 }
 
 #[test]
-fn legacy_run_currently_omits_secondary_core() {
-    let mut machine = counting_dual_core_machine();
-
-    let reason = machine
-        .run_legacy_for_test(Some(4))
-        .expect("legacy run should succeed");
-
-    assert_eq!(reason, StopReason::MaxStepsReached);
-    assert_eq!(machine.cpu.steps, 4);
-    assert_eq!(machine.cpu_secondary.as_ref().map(|cpu| cpu.steps), Some(0));
-}
-
-#[test]
-fn legacy_single_step_publishes_and_profiles_one_cycle() {
+fn step_adapter_publishes_and_profiles_one_cycle() {
     let mut machine = Machine::new(CountingCpu::default(), crate::bus::SystemBus::new());
     machine.reset_step_profile();
 
-    machine.step().expect("legacy step should succeed");
+    machine.step().expect("step should succeed");
 
     assert_eq!(machine.total_cycles, 1);
     assert_eq!(machine.bus.current_cycle, 1);
@@ -325,7 +311,7 @@ fn legacy_single_step_publishes_and_profiles_one_cycle() {
 #[test]
 fn reset_step_profile_clears_dirty_counters() {
     let mut machine = Machine::new(CountingCpu::default(), crate::bus::SystemBus::new());
-    machine.step().expect("legacy step should succeed");
+    machine.step().expect("step should succeed");
     assert_ne!(machine.step_profile(), StepProfile::default());
 
     machine.reset_step_profile();
@@ -391,11 +377,11 @@ fn counting_cpu_register_names_match_cortex_m() {
 }
 
 #[test]
-fn legacy_dual_core_halted_primary_still_consumes_one_scheduling_quantum() {
+fn step_adapter_with_halted_primary_still_consumes_one_scheduling_quantum() {
     let mut machine = counting_dual_core_machine();
     machine.cpu.halt();
 
-    machine.step().expect("legacy step should succeed");
+    machine.step().expect("step should succeed");
 
     assert_eq!(machine.cpu.steps, 0);
     assert_eq!(machine.cpu_secondary.as_ref().map(|cpu| cpu.steps), Some(1));
@@ -689,15 +675,8 @@ fn zero_tick_interval_matches_interval_one() {
 }
 
 #[test]
-fn primary_error_in_single_mode_preserves_legacy_precommit() {
-    let mut legacy = Machine::new(
-        CountingCpu {
-            fail_step: true,
-            ..Default::default()
-        },
-        SystemBus::new(),
-    );
-    let mut unified = Machine::new(
+fn primary_error_in_single_mode_preserves_precommit_state() {
+    let mut machine = Machine::new(
         CountingCpu {
             fail_step: true,
             ..Default::default()
@@ -705,11 +684,16 @@ fn primary_error_in_single_mode_preserves_legacy_precommit() {
         SystemBus::new(),
     );
 
-    assert!(legacy.step_legacy_for_test().is_err());
-    assert!(unified.advance(AdvanceRequest::single()).is_err());
-    assert_eq!(unified.total_cycles, legacy.total_cycles);
-    assert_eq!(unified.bus.current_cycle, legacy.bus.current_cycle);
-    assert_eq!(unified.step_profile(), legacy.step_profile());
+    let error = machine.advance(AdvanceRequest::single()).unwrap_err();
+
+    assert!(matches!(
+        error,
+        SimulationError::Other(ref message)
+            if message == "CountingCpu injected step failure"
+    ));
+    assert_eq!(machine.total_cycles, 1);
+    assert_eq!(machine.bus.current_cycle, 1);
+    assert_eq!(machine.step_profile(), StepProfile::default());
 }
 
 #[test]
@@ -970,16 +954,16 @@ fn terminal_idle_skip_flushes_pending_push_observation() {
 }
 
 #[test]
-fn unified_single_core_run_matches_legacy_run_oracle() {
-    let mut legacy = Machine::new(CountingCpu::default(), SystemBus::new());
-    let mut unified = Machine::new(CountingCpu::default(), SystemBus::new());
-    legacy.config.peripheral_tick_interval = 64;
-    unified.config.peripheral_tick_interval = 64;
+fn debug_run_adapter_matches_advance_single_core_contract() {
+    let mut adapter = Machine::new(CountingCpu::default(), SystemBus::new());
+    let mut direct = Machine::new(CountingCpu::default(), SystemBus::new());
+    adapter.config.peripheral_tick_interval = 64;
+    direct.config.peripheral_tick_interval = 64;
 
-    let legacy_stop = legacy.run_legacy_for_test(Some(7)).unwrap();
-    let report = unified.advance(AdvanceRequest::run(Some(7))).unwrap();
+    let adapter_stop = adapter.run(Some(7)).unwrap();
+    let report = direct.advance(AdvanceRequest::run(Some(7))).unwrap();
 
-    assert_eq!(legacy_stop, StopReason::MaxStepsReached);
+    assert_eq!(adapter_stop, StopReason::MaxStepsReached);
     assert_eq!(report.stop, AdvanceStop::FuelLimit);
     assert_eq!(report.fuel_consumed, 7);
     assert_eq!(report.primary_steps, 7);
@@ -988,25 +972,25 @@ fn unified_single_core_run_matches_legacy_run_oracle() {
     assert_eq!(report.idle_cycles, 0);
     assert_eq!(report.cpu_batches, 1);
     assert_eq!(
-        serde_json::to_value(unified.cpu.snapshot()).unwrap(),
-        serde_json::to_value(legacy.cpu.snapshot()).unwrap()
+        serde_json::to_value(direct.cpu.snapshot()).unwrap(),
+        serde_json::to_value(adapter.cpu.snapshot()).unwrap()
     );
     assert_eq!(
-        serde_json::to_value(unified.snapshot()).unwrap(),
-        serde_json::to_value(legacy.snapshot()).unwrap()
+        serde_json::to_value(direct.snapshot()).unwrap(),
+        serde_json::to_value(adapter.snapshot()).unwrap()
     );
-    assert_eq!(unified.total_cycles, legacy.total_cycles);
-    assert_eq!(unified.bus.current_cycle, legacy.bus.current_cycle);
-    assert_eq!(unified.step_profile(), legacy.step_profile());
+    assert_eq!(direct.total_cycles, adapter.total_cycles);
+    assert_eq!(direct.bus.current_cycle, adapter.bus.current_cycle);
+    assert_eq!(direct.step_profile(), adapter.step_profile());
 }
 
 #[test]
-fn advance_single_is_byte_identical_to_legacy_step() {
-    let mut legacy = counting_dual_core_machine();
-    let mut unified = counting_dual_core_machine();
+fn step_adapter_matches_advance_single_contract() {
+    let mut adapter = counting_dual_core_machine();
+    let mut direct = counting_dual_core_machine();
 
-    legacy.step_legacy_for_test().unwrap();
-    let report = unified.advance(AdvanceRequest::single()).unwrap();
+    adapter.step().unwrap();
+    let report = direct.advance(AdvanceRequest::single()).unwrap();
 
     assert_eq!(report.stop, AdvanceStop::FuelLimit);
     assert_eq!((report.primary_steps, report.secondary_steps), (1, 1));
@@ -1015,20 +999,20 @@ fn advance_single_is_byte_identical_to_legacy_step() {
     assert_eq!(report.idle_cycles, 0);
     assert_eq!(report.cpu_batches, 1);
     assert_eq!(
-        serde_json::to_value(unified.cpu.snapshot()).unwrap(),
-        serde_json::to_value(legacy.cpu.snapshot()).unwrap()
+        serde_json::to_value(direct.cpu.snapshot()).unwrap(),
+        serde_json::to_value(adapter.cpu.snapshot()).unwrap()
     );
     assert_eq!(
-        serde_json::to_value(unified.cpu_secondary.as_ref().unwrap().snapshot()).unwrap(),
-        serde_json::to_value(legacy.cpu_secondary.as_ref().unwrap().snapshot()).unwrap()
+        serde_json::to_value(direct.cpu_secondary.as_ref().unwrap().snapshot()).unwrap(),
+        serde_json::to_value(adapter.cpu_secondary.as_ref().unwrap().snapshot()).unwrap()
     );
     assert_eq!(
-        serde_json::to_value(unified.snapshot()).unwrap(),
-        serde_json::to_value(legacy.snapshot()).unwrap()
+        serde_json::to_value(direct.snapshot()).unwrap(),
+        serde_json::to_value(adapter.snapshot()).unwrap()
     );
-    assert_eq!(unified.total_cycles, legacy.total_cycles);
-    assert_eq!(unified.bus.current_cycle, legacy.bus.current_cycle);
-    assert_eq!(unified.step_profile(), legacy.step_profile());
+    assert_eq!(direct.total_cycles, adapter.total_cycles);
+    assert_eq!(direct.bus.current_cycle, adapter.bus.current_cycle);
+    assert_eq!(direct.step_profile(), adapter.step_profile());
 }
 
 fn arm_synthetic_push_channel(machine: &mut Machine<CountingCpu>) {
@@ -1042,119 +1026,84 @@ fn arm_synthetic_push_channel(machine: &mut Machine<CountingCpu>) {
 
 #[test]
 fn advance_single_preserves_paused_push_same_boundary_last_write_wins() {
-    let mut legacy = Machine::new(CountingCpu::default(), SystemBus::new());
-    let mut unified = Machine::new(CountingCpu::default(), SystemBus::new());
-    legacy.cpu.push_level = Some(false);
-    unified.cpu.push_level = Some(false);
-    arm_synthetic_push_channel(&mut legacy);
-    arm_synthetic_push_channel(&mut unified);
+    let mut machine = Machine::new(CountingCpu::default(), SystemBus::new());
+    machine.cpu.push_level = Some(false);
+    arm_synthetic_push_channel(&mut machine);
 
-    legacy.bus.logic_tap.push(0, true);
-    unified.bus.logic_tap.push(0, true);
-    legacy.step_legacy_for_test().unwrap();
-    unified.advance(AdvanceRequest::single()).unwrap();
+    machine.bus.logic_tap.push(0, true);
+    machine.advance(AdvanceRequest::single()).unwrap();
 
-    let legacy_batch = legacy.logic_read_edges(0);
-    let unified_batch = unified.logic_read_edges(0);
-    assert_eq!(unified_batch.cursor, legacy_batch.cursor);
-    assert_eq!(unified_batch.dropped, legacy_batch.dropped);
-    assert_eq!(unified_batch.edges, legacy_batch.edges);
+    let batch = machine.logic_read_edges(0);
     assert!(
-        unified_batch.edges.is_empty(),
+        batch.edges.is_empty(),
         "paused true then instruction false at one boundary must be invisible"
     );
-    assert_eq!(unified.total_cycles, legacy.total_cycles);
-    assert_eq!(unified.bus.current_cycle, legacy.bus.current_cycle);
-    assert_eq!(unified.step_profile(), legacy.step_profile());
+    assert_eq!(machine.total_cycles, 1);
+    assert_eq!(machine.bus.current_cycle, 1);
+    assert_eq!(machine.step_profile().cpu_instructions, 1);
 }
 
 #[test]
 fn advance_single_preserves_primary_accounting_on_secondary_error() {
-    let mut legacy = counting_dual_core_machine();
-    let mut unified = counting_dual_core_machine();
-    legacy.cpu_secondary.as_mut().unwrap().fail_step = true;
-    unified.cpu_secondary.as_mut().unwrap().fail_step = true;
-    legacy.config.peripheral_tick_interval = 1;
-    unified.config.peripheral_tick_interval = 1;
+    let mut machine = counting_dual_core_machine();
+    machine.cpu_secondary.as_mut().unwrap().fail_step = true;
+    machine.config.peripheral_tick_interval = 1;
 
-    let legacy_error = legacy.step_legacy_for_test().unwrap_err();
-    let unified_error = unified.advance(AdvanceRequest::single()).unwrap_err();
+    let error = machine.advance(AdvanceRequest::single()).unwrap_err();
 
-    assert_eq!(unified_error.to_string(), legacy_error.to_string());
-    assert_eq!(
-        serde_json::to_value(unified.cpu.snapshot()).unwrap(),
-        serde_json::to_value(legacy.cpu.snapshot()).unwrap()
-    );
-    assert_eq!(
-        serde_json::to_value(unified.cpu_secondary.as_ref().unwrap().snapshot()).unwrap(),
-        serde_json::to_value(legacy.cpu_secondary.as_ref().unwrap().snapshot()).unwrap()
-    );
-    assert_eq!(
-        serde_json::to_value(unified.snapshot()).unwrap(),
-        serde_json::to_value(legacy.snapshot()).unwrap()
-    );
-    assert_eq!(unified.total_cycles, legacy.total_cycles);
-    assert_eq!(unified.bus.current_cycle, legacy.bus.current_cycle);
-    assert_eq!(unified.step_profile(), legacy.step_profile());
-    assert_eq!(unified.step_profile().cpu_instructions, 1);
-    assert_eq!(unified.step_profile().cpu_batches, 1);
-    assert_eq!(unified.step_profile().peripheral_ticks, 0);
+    assert!(matches!(
+        error,
+        SimulationError::Other(ref message)
+            if message == "CountingCpu injected step failure"
+    ));
+    assert_eq!(machine.cpu.steps, 1);
+    assert_eq!(machine.cpu_secondary.as_ref().unwrap().steps, 0);
+    assert_eq!(machine.total_cycles, 1);
+    assert_eq!(machine.bus.current_cycle, 1);
+    assert_eq!(machine.step_profile().cpu_instructions, 1);
+    assert_eq!(machine.step_profile().cpu_batches, 1);
+    assert_eq!(machine.step_profile().peripheral_ticks, 0);
 }
 
-fn assert_real_cpu_single_step_matches<C: Cpu>(factory: impl Fn() -> Machine<C>) {
-    let mut legacy = factory();
-    let mut unified = factory();
+fn assert_real_cpu_step_adapter_boundary<C: Cpu>(mut machine: Machine<C>, expected_pc: u32) {
+    machine.step().unwrap();
 
-    legacy.step_legacy_for_test().unwrap();
-    let report = unified.advance(AdvanceRequest::single()).unwrap();
-
-    assert_eq!(report.stop, AdvanceStop::FuelLimit);
-    assert_eq!(report.primary_steps, 1);
-    assert_eq!(
-        serde_json::to_value(legacy.cpu.snapshot()).unwrap(),
-        serde_json::to_value(unified.cpu.snapshot()).unwrap()
-    );
-    assert_eq!(
-        serde_json::to_value(legacy.snapshot()).unwrap(),
-        serde_json::to_value(unified.snapshot()).unwrap()
-    );
-    assert_eq!(legacy.total_cycles, unified.total_cycles);
-    assert_eq!(legacy.bus.current_cycle, unified.bus.current_cycle);
-    assert_eq!(legacy.step_profile(), unified.step_profile());
+    assert_eq!(machine.cpu.get_pc(), expected_pc);
+    assert_eq!(machine.total_cycles, 1);
+    assert_eq!(machine.bus.current_cycle, 1);
+    assert_eq!(machine.step_profile().cpu_instructions, 1);
+    assert_eq!(machine.step_profile().cpu_batches, 1);
 }
 
 #[test]
-fn arm_single_step_matches_legacy_boundary() {
-    assert_real_cpu_single_step_matches(|| {
-        let mut bus = SystemBus::new();
-        let (mut cpu, _) = crate::system::cortex_m::configure_cortex_m(&mut bus);
-        bus.write_u16(0, 0xBF00).unwrap();
-        cpu.set_pc(0);
-        Machine::new(cpu, bus)
-    });
+fn arm_step_adapter_commits_one_boundary() {
+    let mut bus = SystemBus::new();
+    let (mut cpu, _) = crate::system::cortex_m::configure_cortex_m(&mut bus);
+    bus.write_u16(0, 0xBF00).unwrap();
+    cpu.set_pc(0);
+
+    assert_real_cpu_step_adapter_boundary(Machine::new(cpu, bus), 2);
 }
 
 #[test]
-fn riscv_single_step_matches_legacy_boundary() {
-    assert_real_cpu_single_step_matches(|| {
-        let mut bus = SystemBus::new();
-        let mut cpu = crate::system::riscv::configure_riscv(&mut bus);
-        bus.write_u32(0, 0x0000_0013).unwrap();
-        cpu.set_pc(0);
-        Machine::new(cpu, bus)
-    });
+fn riscv_step_adapter_commits_one_boundary() {
+    let mut bus = SystemBus::new();
+    let mut cpu = crate::system::riscv::configure_riscv(&mut bus);
+    bus.write_u32(0, 0x0000_0013).unwrap();
+    cpu.set_pc(0);
+
+    assert_real_cpu_step_adapter_boundary(Machine::new(cpu, bus), 4);
 }
 
 #[test]
-fn xtensa_single_step_matches_legacy_boundary() {
-    assert_real_cpu_single_step_matches(|| {
-        let mut bus = SystemBus::new();
-        let mut cpu = crate::cpu::xtensa_lx7::XtensaLx7::new();
-        bus.write_u8(0, 0x3d).unwrap();
-        bus.write_u8(1, 0xf0).unwrap();
-        cpu.set_pc(0);
-        Machine::new(cpu, bus)
-    });
+fn xtensa_step_adapter_commits_one_boundary() {
+    let mut bus = SystemBus::new();
+    let mut cpu = crate::cpu::xtensa_lx7::XtensaLx7::new();
+    bus.write_u8(0, 0x3d).unwrap();
+    bus.write_u8(1, 0xf0).unwrap();
+    cpu.set_pc(0);
+
+    assert_real_cpu_step_adapter_boundary(Machine::new(cpu, bus), 2);
 }
 
 struct AppCpuBootAddrReset;

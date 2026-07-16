@@ -19,10 +19,8 @@ implementation and compatibility boundaries:
 
 - `crates/core/src/machine/boundary.rs` is the internal CPU execution primitive
   owned by `Machine::advance`; it is not a frontend entry point.
-- `crates/core/src/lib.rs` retains `step_legacy_for_test` and
-  `run_legacy_for_test` only as `cfg(test)` differential oracles. CPU trait
-  implementations, the default `step_batch` helper, and CPU unit helpers
-  likewise operate below or outside the frontend boundary. The direct calls in
+- CPU trait implementations, the default `step_batch` helper, and CPU unit
+  helpers operate below or outside the frontend boundary. The direct calls in
   `crates/core/src/peripherals/esp_xtensa_common/rom_thunks.rs` are unit-test
   helpers.
 - `crates/core/src/vfi.rs` provides the specialist standalone `ShadowEngine`.
@@ -33,9 +31,7 @@ implementation and compatibility boundaries:
   `MultiCoreMachine::step_all` engine. It directly steps each core, ticks its
   peripherals once, and routes interrupts according to that engine's own
   policy; it is outside the `Machine` frontend lifecycle.
-- `crates/cli/src/main.rs` retains direct stepping only in the temporary,
-  test-selected `ExecutionEngine::Legacy` fidelity branch. The default
-  `ExecutionEngine::Unified` branch uses `Machine::advance`.
+- `crates/cli/src/main.rs` uses `Machine::advance` for bounded test execution.
 - `crates/cli/src/commands/run.rs` and
   `crates/cli/src/commands/snapshot.rs` contain specialized bare-CPU ESP
   bring-up and snapshot loops; these are explicitly outside the ordinary

@@ -1251,7 +1251,7 @@ fn riscv_jit_test_eligible<C: labwired_core::Cpu>(
     arch: labwired_core::Arch,
 ) -> bool {
     // NOTE: `batch_mode_enabled` is deliberately NOT required. The eligible path
-    // drives `Machine::run`, which batches to the peripheral-tick cadence
+    // drives `Machine::advance`, which batches to the peripheral-tick cadence
     // regardless of that flag — indeed the C3 rom-boot machine turns it OFF (its
     // fixed-width step_batch loop freezes FreeRTOS), which is exactly the case we
     // want to accelerate.
@@ -1268,9 +1268,8 @@ fn riscv_jit_test_eligible<C: labwired_core::Cpu>(
         && !machine.logic_poll_active()
 }
 
-/// Map a core `SimulationError` to the CLI `StopReason`, identically to the
-/// step_batch / step arms of `execute_test_loop`. Shared by the JIT-eligible
-/// `Machine::run` arm so a halt/fault ends the run with the same reason.
+/// Map a core `SimulationError` to the CLI `StopReason` so a halt or fault from
+/// `Machine::advance` ends the run with the CLI's established reason.
 fn map_sim_error_to_stop_reason(e: &labwired_core::SimulationError) -> StopReason {
     use labwired_core::SimulationError as E;
     match e {
@@ -1285,36 +1284,13 @@ fn map_sim_error_to_stop_reason(e: &labwired_core::SimulationError) -> StopReaso
     }
 }
 
-/// Instruction budget per `Machine::run` call on the JIT-eligible C3 path. The
+/// Instruction budget per `Machine::advance` call on the JIT-eligible C3 path. The
 /// stimulus/limit checks at the top of `execute_test_loop`'s run loop run once
 /// per chunk, so this bounds their granularity; the chunk is further clamped so
 /// a run never steps PAST the nearest pending cycle threshold (time-triggered
 /// stimulus or `max_cycles`), keeping those firing points cycle-tight and
 /// identical between the JIT-on and JIT-off arms.
 const JIT_RUN_CHUNK: u32 = 1_000_000;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ExecutionEngine {
-    Legacy,
-    Unified,
-}
-
-impl ExecutionEngine {
-    fn from_test_environment() -> Self {
-        match std::env::var("LABWIRED_TEST_EXECUTOR").as_deref() {
-            Ok("legacy") => Self::Legacy,
-            Ok("unified") => Self::Unified,
-            Ok(_) | Err(_) => Self::Unified,
-        }
-    }
-
-    fn marker(self) -> &'static str {
-        match self {
-            Self::Legacy => "executor=legacy",
-            Self::Unified => "executor=unified",
-        }
-    }
-}
 
 #[allow(clippy::too_many_arguments)]
 fn execute_test_loop<C: labwired_core::Cpu>(
@@ -1339,10 +1315,6 @@ fn execute_test_loop<C: labwired_core::Cpu>(
     // own counters into `metrics` before each cycle-sensitive check.
     jit_eligible: bool,
 ) -> ExitCode {
-    // `Machine::run` (the JIT-eligible arm) is a `DebugControl` trait method.
-    use labwired_core::DebugControl;
-    let execution_engine = ExecutionEngine::from_test_environment();
-    eprintln!("{}", execution_engine.marker());
     let max_steps = resolved_limits.max_steps;
     let max_cycles = resolved_limits.max_cycles;
     let max_uart_bytes = resolved_limits.max_uart_bytes;
@@ -1451,7 +1423,7 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         // (~1.9 guest instr per compiled-block run), so the per-block-dispatch
         // FFI overhead dwarfs the interpreted cost and ~⅔ of instructions still
         // fall back to the interpreter. The genuine speedup on this path is the
-        // tick-interval widening below (Machine::run at the bus max-safe
+        // tick-interval widening below (`Machine::advance` at the bus max-safe
         // interval: ~2.6× faster than the pre-change single-step tick-1 oracle),
         // which is applied UNCONDITIONALLY when eligible. The JIT stays wired,
         // proven byte-identical, and one env var away for compute-heavy firmware
@@ -1460,7 +1432,7 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         machine.config.riscv_jit_enabled = jit_on;
         machine.bus.config.riscv_jit_enabled = jit_on;
         // Widen the peripheral-tick interval to RECOMMENDED_TICK_INTERVAL so
-        // `Machine::run`'s per-tick batch (`remaining_until_tick`) is wide enough
+        // `Machine::advance`'s per-tick batch is wide enough
         // for compiled blocks to retire, and the peripheral tick count drops
         // ~64×. The C3 rom-boot peripherals are walk-deletable, so this is
         // observably identical to interval-1 (esp32c3_walk_differential); the
@@ -1493,7 +1465,7 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         && !machine.bus.requires_cycle_accurate()
         // A logic-analyzer POLL-mode channel must be sampled at EVERY cycle
         // boundary, so clamp the batch to one instruction while one is armed
-        // (mirrors `Machine::run`). Push-mode channels report their own edges
+        // (mirrors `Machine::advance`). Push-mode channels report their own edges
         // from the write sites and keep the full batch width.
         && !machine.logic_poll_active()
     {
@@ -1669,275 +1641,48 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         let current_batch = batch_size as u32;
         let to_execute = current_batch.min(remaining);
 
-        match execution_engine {
-            ExecutionEngine::Legacy => {
-                // BEGIN TEMPORARY LEGACY TEST EXECUTOR
-                // This test-selected fidelity oracle is the CLI's sole direct
-                // CPU-step path and therefore owns its manual clock, tick,
-                // reset, flash, profiling, and observation orchestration. The
-                // production Unified branch below enters through
-                // Machine::advance and must not reproduce this lifecycle.
-                if jit_eligible {
-                    // ── JIT-eligible C3 rom-boot: drive the proven Machine::run engine ──
-                    // `build_rom_boot_machine` disables `batch_mode` because the manual
-                    // step_batch arm below runs a FIXED-width batch and only ticks
-                    // peripherals AFTER it — which freezes interrupt delivery (hence
-                    // FreeRTOS) across the batch. `Machine::run` instead batches to the
-                    // peripheral-tick cadence (`peripheral_tick_interval`, raised to the
-                    // bus's max-safe interval when eligible), delivering interrupts every
-                    // tick while dispatching the RV32IMC JIT. This is the EXACT engine
-                    // `riscv_jit_c3_oled_test_differential` proves byte-identical JIT-on
-                    // vs JIT-off. Run in `JIT_RUN_CHUNK` chunks, clamped so we never step
-                    // past the nearest pending cycle threshold, so the stimulus/limit
-                    // checks at the loop top fire cycle-tight and identically per arm.
-                    let cur = machine.total_cycles;
-                    let mut n = remaining.min(JIT_RUN_CHUNK);
-                    // Clamp the chunk so a run never steps past the nearest pending cycle
-                    // threshold: cycles advance ≥ 1 per instruction, so capping the
-                    // instruction budget at `threshold - cur` guarantees the NEXT loop-top
-                    // check sees `metrics.get_cycles() >= threshold` and fires it — never
-                    // a chunk late. `.max(1)` keeps forward progress at an already-reached
-                    // threshold (the check then fires immediately next iteration).
-                    for (s, fired) in &pending_stimuli {
-                        if !*fired {
-                            if let labwired_config::FaultTrigger::AfterCycles { cycles: t } =
-                                s.trigger
-                            {
-                                if t > cur {
-                                    n = n.min(((t - cur).min(u32::MAX as u64) as u32).max(1));
-                                }
-                            }
-                        }
+        let (mut limit, batch_cap) = if jit_eligible {
+            let chunk = remaining.min(JIT_RUN_CHUNK);
+            (u64::from(chunk), chunk)
+        } else {
+            (u64::from(to_execute), current_batch)
+        };
+        let current_cycle = machine.total_cycles;
+        for (stimulus, fired) in &pending_stimuli {
+            if !*fired {
+                if let labwired_config::FaultTrigger::AfterCycles { cycles } = stimulus.trigger {
+                    if cycles > current_cycle {
+                        limit = limit.min(cycles - current_cycle);
                     }
-                    if let Some(limit) = max_cycles {
-                        if limit > cur {
-                            n = n.min(((limit - cur).min(u32::MAX as u64) as u32).max(1));
-                        }
-                    }
-                    let before = machine.step_profile().cpu_instructions;
-                    match machine.run(Some(n)) {
-                        Ok(_) => {
-                            let executed = machine.step_profile().cpu_instructions - before;
-                            step += executed;
-                            steps_executed = step;
-                            // No forward progress (idle spin, no fast-forward budget):
-                            // stop rather than re-issue empty runs up to `max_steps`.
-                            if executed == 0 {
-                                stop_reason = StopReason::Halt;
-                                break;
-                            }
-                        }
-                        Err(e) => {
-                            sim_error_happened = true;
-                            stop_reason = map_sim_error_to_stop_reason(&e);
-                            if stop_reason != StopReason::Halt {
-                                error!("Simulation error at step {}: {}", step, e);
-                            }
-                            break;
-                        }
-                    }
-                } else if to_execute > 1 {
-                    // Push-mode logic capture: seed the tap clock at the batch start;
-                    // the CPU advances it once per retired instruction so pad writes
-                    // stamp with the boundary they become observable at (mirrors
-                    // `Machine::run`). No-op unless a push-mode watch set is armed.
-                    machine.logic_seed_batch_clock(machine.total_cycles);
-                    match machine.cpu.step_batch(
-                        &mut machine.bus,
-                        &machine.observers,
-                        &machine.config,
-                        to_execute,
-                    ) {
-                        Ok(executed) => {
-                            let prev_cycles = machine.total_cycles;
-                            step += executed as u64;
-                            steps_executed = step;
-                            machine.total_cycles += executed as u64;
-                            // Cycle boundary the batch ended at, BEFORE peripheral tick
-                            // costs — pushes stamped here are finalised to the post-cost
-                            // "now" by the observe below (see `Machine::logic_observe`).
-                            let logic_boundary = machine.total_cycles;
-
-                            // Cycle-accurate tick propagation for batch runs
-                            let tick_interval = machine.config.peripheral_tick_interval as u64;
-                            let ticks_before = prev_cycles / tick_interval;
-                            let ticks_after = machine.total_cycles / tick_interval;
-
-                            for _ in ticks_before..ticks_after {
-                                let (interrupts, costs) = machine.bus.tick_peripherals_fully();
-                                for c in costs {
-                                    machine.total_cycles += c.cycles as u64;
-                                    if let Some(p) = machine.bus.peripherals.get(c.index) {
-                                        for observer in &machine.observers {
-                                            observer.on_peripheral_tick(&p.name, c.cycles);
-                                        }
-                                    }
-                                }
-                                for irq in interrupts {
-                                    machine.cpu.set_exception_pending(irq);
-                                }
-                            }
-
-                            // Logic-analyzer edge capture at this batch boundary: drain
-                            // the push tap (poll-mode channels force batch=1 → the
-                            // single-step branch's `machine.step()` observes them). Runs
-                            // before the early `continue` below so a partial batch's
-                            // edges are never lost. No-op when nothing is watched.
-                            if logic_capture_armed {
-                                machine.logic_observe_boundary(logic_boundary);
-                            }
-
-                            // Honor a firmware-requested system reset (AIRCR
-                            // SYSRESETREQ with VECTKEY) latched by the batch just
-                            // executed. The single-step `else` branch gets this via
-                            // `machine.step()`; the batched path must drain it
-                            // explicitly or the reboot never fires.
-                            if machine.drain_scb_reset_request() {
-                                if let Err(e) = machine.reset() {
-                                    sim_error_happened = true;
-                                    stop_reason = match e {
-                                labwired_core::SimulationError::MemoryViolation(_) => {
-                                    StopReason::MemoryViolation
-                                }
-                                labwired_core::SimulationError::DecodeError(_) => {
-                                    StopReason::DecodeError
-                                }
-                                labwired_core::SimulationError::Halt => StopReason::Halt,
-                                labwired_core::SimulationError::SnapshotSchemaMismatch {
-                                    ..
-                                } => StopReason::Exception,
-                                labwired_core::SimulationError::Other(_) => StopReason::Exception,
-                                labwired_core::SimulationError::NotImplemented(_) => {
-                                    StopReason::Exception
-                                }
-                                labwired_core::SimulationError::BreakpointHit(_) => {
-                                    StopReason::Halt
-                                }
-                                labwired_core::SimulationError::ExceptionRaised { .. } => {
-                                    StopReason::Exception
-                                }
-                            };
-                                    error!("Reset error at step {}: {}", step, e);
-                                    break;
-                                }
-                            }
-
-                            if executed < to_execute {
-                                // Bailed out early (e.g. exception/branch)
-                                continue;
-                            }
-                        }
-                        Err(e) => {
-                            sim_error_happened = true;
-                            stop_reason = match e {
-                                labwired_core::SimulationError::MemoryViolation(_) => {
-                                    StopReason::MemoryViolation
-                                }
-                                labwired_core::SimulationError::DecodeError(_) => {
-                                    StopReason::DecodeError
-                                }
-                                labwired_core::SimulationError::Halt => StopReason::Halt,
-                                labwired_core::SimulationError::SnapshotSchemaMismatch {
-                                    ..
-                                } => StopReason::Exception,
-                                labwired_core::SimulationError::Other(_) => StopReason::Exception,
-                                labwired_core::SimulationError::NotImplemented(_) => {
-                                    StopReason::Exception
-                                }
-                                labwired_core::SimulationError::BreakpointHit(_) => {
-                                    StopReason::Halt
-                                }
-                                labwired_core::SimulationError::ExceptionRaised { .. } => {
-                                    StopReason::Exception
-                                }
-                            };
-                            if stop_reason != StopReason::Halt {
-                                error!("Simulation error at step {}: {}", step, e);
-                            }
-                            break;
-                        }
-                    }
-                } else {
-                    steps_executed = step + 1;
-                    if let Err(e) = machine.step() {
-                        sim_error_happened = true;
-                        stop_reason = match e {
-                            labwired_core::SimulationError::MemoryViolation(_) => {
-                                StopReason::MemoryViolation
-                            }
-                            labwired_core::SimulationError::DecodeError(_) => {
-                                StopReason::DecodeError
-                            }
-                            labwired_core::SimulationError::Halt => StopReason::Halt,
-                            labwired_core::SimulationError::SnapshotSchemaMismatch { .. } => {
-                                StopReason::Exception
-                            }
-                            labwired_core::SimulationError::Other(_) => StopReason::Exception,
-                            labwired_core::SimulationError::NotImplemented(_) => {
-                                StopReason::Exception
-                            }
-                            labwired_core::SimulationError::BreakpointHit(_) => StopReason::Halt,
-                            labwired_core::SimulationError::ExceptionRaised { .. } => {
-                                StopReason::Exception
-                            }
-                        };
-                        if stop_reason != StopReason::Halt {
-                            error!("Simulation error at step {}: {}", step, e);
-                        }
-                        break;
-                    }
-                    step += 1;
                 }
-                // END TEMPORARY LEGACY TEST EXECUTOR
             }
-            ExecutionEngine::Unified => {
-                let (mut limit, batch_cap) = if jit_eligible {
-                    let chunk = remaining.min(JIT_RUN_CHUNK);
-                    (u64::from(chunk), chunk)
-                } else {
-                    (u64::from(to_execute), current_batch)
-                };
-                let current_cycle = machine.total_cycles;
-                for (stimulus, fired) in &pending_stimuli {
-                    if !*fired {
-                        if let labwired_config::FaultTrigger::AfterCycles { cycles } =
-                            stimulus.trigger
-                        {
-                            if cycles > current_cycle {
-                                limit = limit.min(cycles - current_cycle);
-                            }
-                        }
-                    }
+        }
+        if let Some(cycle_limit) = max_cycles {
+            if cycle_limit > current_cycle {
+                limit = limit.min(cycle_limit - current_cycle);
+            }
+        }
+        let request = labwired_core::AdvanceRequest::run(Some(limit.max(1)))
+            .with_batch_cap(
+                std::num::NonZeroU32::new(batch_cap.max(1)).expect("advance batch cap is non-zero"),
+            )
+            .with_breakpoints(labwired_core::BreakpointPolicy::Ignore);
+        match machine.advance(request) {
+            Ok(report) => {
+                step += report.primary_steps;
+                steps_executed = step;
+                if report.primary_steps == 0 && report.idle_cycles == 0 {
+                    stop_reason = StopReason::Halt;
+                    break;
                 }
-                if let Some(cycle_limit) = max_cycles {
-                    if cycle_limit > current_cycle {
-                        limit = limit.min(cycle_limit - current_cycle);
-                    }
+            }
+            Err(error) => {
+                sim_error_happened = true;
+                stop_reason = map_sim_error_to_stop_reason(&error);
+                if stop_reason != StopReason::Halt {
+                    error!("Simulation error at step {}: {}", step, error);
                 }
-                let request = labwired_core::AdvanceRequest::run(Some(limit.max(1)))
-                    .with_batch_cap(
-                        std::num::NonZeroU32::new(batch_cap.max(1))
-                            .expect("advance batch cap is non-zero"),
-                    )
-                    .with_breakpoints(labwired_core::BreakpointPolicy::Ignore);
-                match machine.advance(request) {
-                    Ok(report) => {
-                        step += report.primary_steps;
-                        steps_executed = step;
-                        if report.primary_steps == 0 && report.idle_cycles == 0 {
-                            stop_reason = StopReason::Halt;
-                            break;
-                        }
-                    }
-                    Err(error) => {
-                        sim_error_happened = true;
-                        stop_reason = map_sim_error_to_stop_reason(&error);
-                        if stop_reason != StopReason::Halt {
-                            error!("Simulation error at step {}: {}", step, error);
-                        }
-                        break;
-                    }
-                }
+                break;
             }
         }
 
