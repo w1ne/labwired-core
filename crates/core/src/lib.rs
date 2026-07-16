@@ -1698,10 +1698,18 @@ impl<C: Cpu> Machine<C> {
         Ok(())
     }
 
+    /// Advances one primary-CPU boundary through the authoritative lifecycle.
+    ///
+    /// This compatibility adapter delegates to [`Machine::advance`]. Frontends
+    /// that need bounded runs or stop reports should call `advance` directly;
+    /// they must not reproduce the lifecycle with direct [`Cpu::step`] calls.
     pub fn step(&mut self) -> SimResult<()> {
         self.advance(AdvanceRequest::single()).map(|_| ())
     }
 
+    // Differential oracle for Machine::advance parity tests. Direct CPU
+    // stepping is deliberately retained only under cfg(test); production
+    // frontends must enter through Machine::advance.
     #[cfg(test)]
     pub(crate) fn step_legacy_for_test(&mut self) -> SimResult<()> {
         self.total_cycles += 1;
@@ -2251,6 +2259,8 @@ impl<C: Cpu> Machine<C> {
 }
 
 impl<C: Cpu> Machine<C> {
+    // Differential oracle for Machine::advance parity tests. This preserves
+    // the former lifecycle under cfg(test) and is not a frontend entry point.
     #[cfg(test)]
     pub(crate) fn run_legacy_for_test(&mut self, max_steps: Option<u32>) -> SimResult<StopReason> {
         let mut steps = 0;

@@ -1672,6 +1672,11 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         match execution_engine {
             ExecutionEngine::Legacy => {
                 // BEGIN TEMPORARY LEGACY TEST EXECUTOR
+                // This test-selected fidelity oracle is the CLI's sole direct
+                // CPU-step path and therefore owns its manual clock, tick,
+                // reset, flash, profiling, and observation orchestration. The
+                // production Unified branch below enters through
+                // Machine::advance and must not reproduce this lifecycle.
                 if jit_eligible {
                     // ── JIT-eligible C3 rom-boot: drive the proven Machine::run engine ──
                     // `build_rom_boot_machine` disables `batch_mode` because the manual
