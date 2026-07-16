@@ -134,10 +134,19 @@ impl EventScheduler {
     /// cancelled). Returns `None` if the heap is empty or only contains stale
     /// entries. Does not mutate the heap.
     ///
-    /// `BinaryHeap` iteration order is unspecified, so this scans all entries
-    /// to find the minimum live deadline. Called at most once per step; the
-    /// hot path is `drain_due`.
+    /// Hot path: `BinaryHeap<Reverse<_>>` peeks the minimum deadline in O(1).
+    /// When that top entry is live (the common case — lazy cancel is rare),
+    /// return it immediately. Only if the top is stale do we fall back to a
+    /// full scan for the next live deadline.
     pub fn next_event_deadline(&self, peripheral_generations: &[u32]) -> Option<SimCycle> {
+        let Some(Reverse(top)) = self.heap.peek() else {
+            return None;
+        };
+        if !Self::is_stale(top, peripheral_generations) {
+            return Some(top.deadline);
+        }
+        // Top is stale: find the earliest live entry (iteration order is not
+        // sorted — must scan).
         let mut best: Option<SimCycle> = None;
         for Reverse(ev) in self.heap.iter() {
             if Self::is_stale(ev, peripheral_generations) {
@@ -156,6 +165,13 @@ impl EventScheduler {
     /// generation) are popped and silently discarded. Returned in
     /// `(deadline asc, event_id asc)` order.
     pub fn drain_due(&mut self, peripheral_generations: &[u32]) -> Vec<ScheduledEvent> {
+        // Nothing due: return without allocating. `Vec::new()` is non-allocating
+        // but this also skips the peek loop setup when the heap is empty.
+        match self.heap.peek() {
+            None => return Vec::new(),
+            Some(Reverse(top)) if top.deadline > self.now => return Vec::new(),
+            _ => {}
+        }
         let mut out = Vec::new();
         while let Some(Reverse(top)) = self.heap.peek() {
             if top.deadline > self.now {
