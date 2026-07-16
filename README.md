@@ -7,7 +7,7 @@ peripherals, buses, sensors, displays, and protocol devices. The goal is not to
 replace every hardware test. The goal is to move the fast, repeatable part of
 firmware bring-up and regression testing into a local and CI-friendly simulator.
 
-[![Documentation](https://img.shields.io/badge/docs-latest-blue.svg)](https://labwired.com/docs/)
+[![Documentation](https://img.shields.io/badge/docs-latest-blue.svg)](https://docs.labwired.com/)
 
 ## What You Can Do
 

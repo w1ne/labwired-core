@@ -7,8 +7,7 @@
 //! Egress bridge: stream simulated peripheral output out to a real backend.
 //!
 //! The deterministic sim core only enqueues [`EgressItem`]s; a worker thread
-//! owned by the transport performs the blocking network write. See
-//! `docs/superpowers/specs/2026-07-03-egress-bridge-design.md`.
+//! owned by the transport performs the blocking network write.
 
 pub mod bus;
 pub mod encoding;
