@@ -70,6 +70,16 @@ pub struct RiscV {
     waiting_for_interrupt: bool,
     decode_cache: Box<[Option<RiscVDecodeCacheEntry>; 4096]>,
 
+    /// Side-effect-free instruction-fetch window over flash-XIP (and linear
+    /// code memories). Avoids per-instruction `find_peripheral_index` + dyn
+    /// dispatch — the post-XIP-opt profile hotspot on C3 OLED. Only filled
+    /// from read-only code paths (FlashXIP / RAM / flash linear); MMIO never
+    /// enters the window, so FIFO clear-on-read and other side effects stay
+    /// on the normal bus path for data accesses.
+    fetch_base: u32,
+    fetch_len: u16,
+    fetch_bytes: [u8; FETCH_WINDOW_BYTES],
+
     /// Chunk H: opt-in RV32IMC wasm-JIT fast path. Mirrors Xtensa's
     /// `self.jit_enabled`; synced from [`crate::SimulationConfig::riscv_jit_enabled`]
     /// on each `step_batch` entry. Off by default — the interpreter is the
@@ -83,6 +93,9 @@ pub struct RiscV {
     #[cfg(feature = "jit")]
     jit_engine: Option<crate::cpu::jit_framework::riscv::RiscvJitEngine>,
 }
+
+/// Bytes of guest code held in the interpreter fetch window (power of two).
+const FETCH_WINDOW_BYTES: usize = 256;
 
 impl Default for RiscV {
     fn default() -> Self {
@@ -109,10 +122,81 @@ impl RiscV {
             reservation: None,
             waiting_for_interrupt: false,
             decode_cache: Box::new([None; 4096]),
+            fetch_base: 0,
+            fetch_len: 0,
+            fetch_bytes: [0; FETCH_WINDOW_BYTES],
             #[cfg(feature = "jit")]
             jit_enabled: false,
             #[cfg(feature = "jit")]
             jit_engine: None,
+        }
+    }
+
+    /// Fetch a little-endian u32 instruction word at `self.pc`, preferring the
+    /// local code window (same bytes as `bus.read_u32(pc)` for XIP/RAM/flash).
+    fn fetch_opcode_u32(&mut self, bus: &mut dyn Bus) -> SimResult<u32> {
+        let pc = self.pc;
+        let off = pc.wrapping_sub(self.fetch_base);
+        if (off as u64) < self.fetch_len as u64 && (off as u64) + 4 <= self.fetch_len as u64 {
+            let i = off as usize;
+            return Ok(u32::from_le_bytes([
+                self.fetch_bytes[i],
+                self.fetch_bytes[i + 1],
+                self.fetch_bytes[i + 2],
+                self.fetch_bytes[i + 3],
+            ]));
+        }
+        self.refill_fetch_window(bus, pc);
+        let off = pc.wrapping_sub(self.fetch_base);
+        if (off as u64) < self.fetch_len as u64 && (off as u64) + 4 <= self.fetch_len as u64 {
+            let i = off as usize;
+            return Ok(u32::from_le_bytes([
+                self.fetch_bytes[i],
+                self.fetch_bytes[i + 1],
+                self.fetch_bytes[i + 2],
+                self.fetch_bytes[i + 3],
+            ]));
+        }
+        // Window could not cover `pc` (non-code memory) — fall back to the bus.
+        bus.read_u32(pc as u64)
+    }
+
+    /// Fill [`fetch_bytes`] from side-effect-free code memory starting near `pc`.
+    /// On failure / non-code, sets `fetch_len = 0` so the caller uses `bus.read_u32`.
+    fn refill_fetch_window(&mut self, bus: &mut dyn Bus, pc: u32) {
+        self.fetch_len = 0;
+        // Align down so sequential execution reuses the window across branches
+        // within the same 256-byte line when possible.
+        let base = pc & !((FETCH_WINDOW_BYTES as u32) - 1);
+
+        let Some(sb) = bus
+            .as_any()
+            .and_then(|a| a.downcast_ref::<crate::bus::SystemBus>())
+        else {
+            return;
+        };
+
+        // Flash-XIP only (ESP32-C3 app at 0x4200_0000). We deliberately do
+        // **not** window linear RAM/flash: unit tests and self-modifying sequences
+        // patch guest code under the PC and expect the next `step` to see the
+        // new bytes; a RAM window would go stale. XIP flash is immutable for
+        // the current SPI model (program/erase only touch status regs), so a
+        // window is byte-identical to repeated `bus.read_u32` there.
+        if let Some(idx) = sb.find_peripheral_index(base as u64) {
+            let p = &sb.peripherals[idx];
+            if let Some(xip) = p.dev.as_any().and_then(|a| {
+                a.downcast_ref::<crate::peripherals::esp32s3::flash_xip::FlashXipPeripheral>()
+            }) {
+                let end = p.base.saturating_add(p.size);
+                if (base as u64) >= p.base && (base as u64) + 4 <= end {
+                    let max = ((end - base as u64) as usize).min(FETCH_WINDOW_BYTES);
+                    let mut buf = [0u8; FETCH_WINDOW_BYTES];
+                    xip.read_span((base as u64) - p.base, &mut buf[..max]);
+                    self.fetch_base = base;
+                    self.fetch_bytes = buf;
+                    self.fetch_len = max as u16;
+                }
+            }
         }
     }
 
@@ -482,7 +566,7 @@ impl Cpu for RiscV {
         _config: &crate::SimulationConfig,
     ) -> SimResult<()> {
         self.waiting_for_interrupt = false;
-        let opcode = bus.read_u32(self.pc as u64)?;
+        let opcode = self.fetch_opcode_u32(bus)?;
 
         let retired_pc = self.pc;
         for observer in observers {

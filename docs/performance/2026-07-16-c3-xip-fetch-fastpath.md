@@ -32,12 +32,22 @@ This is **model** cost, not firmware — same bytes, same MMU semantics.
 
 No firmware changes, no fake timers, no skipped I²C.
 
-## Results
+## Results (cumulative on this branch)
 
-| Tick interval | Before (main) | After |
-|---------------|---------------|-------|
-| 64 | **14.6 MIPS** | **22.3 MIPS** (~1.5×) |
-| 1 | ~5.2 MIPS | **6.0 MIPS** |
+| Tick interval | main (before) | word+xlat cache | +page mirror | +RV fetch window |
+|---------------|---------------|-----------------|--------------|------------------|
+| 64 | **14.6 MIPS** | 22.3 (~1.5×) | 24.0 | **~27.4 MIPS (~1.9×)** |
+| 1 | ~5.2 MIPS | 6.0 | 6.1 | ~6.0 |
+
+Additional on this branch after the first landing:
+
+4. **Lock-free physical-page mirror** — one 64 KiB host page filled under the
+   backing mutex; steady-state fetches copy from the mirror (SPI does not
+   mutate the flash Vec today; `invalidate_page_mirror` is ready if that changes).
+5. **RISC-V 256-byte instruction-fetch window** — bulk XIP/`read_span` into the
+   CPU; sequential execution skips per-instruction `find_peripheral_index`
+   (the post-XIP profile hotspot). Only side-effect-free code memory; MMIO
+   data paths unchanged.
 
 Probe:
 

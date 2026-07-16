@@ -21,11 +21,73 @@
 //! though writes are forbidden in Plan 2 — would be coherent.
 
 use crate::{Peripheral, SimResult, SimulationError};
+use std::cell::UnsafeCell;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 const PAGE_SIZE: u32 = 64 * 1024;
 const PAGE_TABLE_ENTRIES: usize = 64;
+const PAGE_BYTES: usize = PAGE_SIZE as usize;
+
+/// One mirrored physical flash page for lock-free instruction fetch.
+///
+/// # Safety / threading
+/// LabWired runs one `Machine` on one thread. The mirror is filled under the
+/// flash-backing mutex and then read without locks. `UnsafeCell` makes the
+/// byte array interior-mutable; [`Sync`] is asserted because the only writer
+/// is the same thread that reads (no concurrent fill vs fetch).
+struct PageMirror {
+    /// Physical page index currently held, or `u32::MAX` if empty.
+    phys: AtomicU32,
+    bytes: UnsafeCell<[u8; PAGE_BYTES]>,
+}
+
+// SAFETY: single-threaded Machine ownership (see struct docs).
+unsafe impl Sync for PageMirror {}
+
+impl std::fmt::Debug for PageMirror {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PageMirror")
+            .field("phys", &self.phys.load(Ordering::Relaxed))
+            .finish_non_exhaustive()
+    }
+}
+
+impl PageMirror {
+    fn empty() -> Self {
+        Self {
+            phys: AtomicU32::new(u32::MAX),
+            bytes: UnsafeCell::new([0u8; PAGE_BYTES]),
+        }
+    }
+
+    fn matches(&self, phys_page: u32) -> bool {
+        self.phys.load(Ordering::Acquire) == phys_page
+    }
+
+    /// Copy `src` (exactly one physical page, zero-padded if short) into the
+    /// mirror and publish `phys_page`.
+    fn fill(&self, phys_page: u32, src: &[u8]) {
+        // SAFETY: exclusive fill on the Machine thread; no concurrent read_bytes
+        // mid-fill (read_bytes calls fill then reads, never re-enters).
+        let dst = unsafe { &mut *self.bytes.get() };
+        let n = src.len().min(PAGE_BYTES);
+        dst[..n].copy_from_slice(&src[..n]);
+        if n < PAGE_BYTES {
+            dst[n..].fill(0);
+        }
+        self.phys.store(phys_page, Ordering::Release);
+    }
+
+    /// Read `len` bytes at `in_page` into `out`. Caller must ensure `matches`.
+    fn copy_from(&self, in_page: usize, out: &mut [u8]) {
+        debug_assert!(in_page + out.len() <= PAGE_BYTES);
+        // SAFETY: page published with Release; caller checked matches() with
+        // Acquire. Single-threaded Machine: no concurrent fill.
+        let src = unsafe { &*self.bytes.get() };
+        out.copy_from_slice(&src[in_page..in_page + out.len()]);
+    }
+}
 
 /// ESP32-S3 hardware MMU constants (soc/esp32s3 `ext_mem_defs.h`). The flash
 /// cache MMU has 512 entries of 64 KiB each, covering a 32 MiB linear window
@@ -108,6 +170,12 @@ pub struct FlashXipPeripheral {
     xlat_gen: AtomicU64,
     xlat_entry_id: AtomicU32,
     xlat_phys_page: AtomicU32,
+    /// Mirrored physical page — steady-state instruction fetch never takes
+    /// `backing`'s mutex (profile: ~half of post-word-read_u32 cost was
+    /// `pthread_mutex_lock` on the flash Vec). Filled under the backing lock
+    /// on miss; SPI flash does not mutate the Vec today (program/erase only
+    /// update status regs), so the mirror stays coherent for current models.
+    page_mirror: PageMirror,
 }
 
 // Manual Clone: atomics copy by load; cache is a hint so a clone starting cold
@@ -123,6 +191,7 @@ impl Clone for FlashXipPeripheral {
             xlat_gen: AtomicU64::new(0),
             xlat_entry_id: AtomicU32::new(u32::MAX),
             xlat_phys_page: AtomicU32::new(0),
+            page_mirror: PageMirror::empty(),
         }
     }
 }
@@ -146,6 +215,7 @@ impl FlashXipPeripheral {
             xlat_gen: AtomicU64::new(0),
             xlat_entry_id: AtomicU32::new(u32::MAX),
             xlat_phys_page: AtomicU32::new(0),
+            page_mirror: PageMirror::empty(),
         }
     }
 
@@ -239,10 +309,30 @@ impl FlashXipPeripheral {
         Some(phys_page as u64 * PAGE_SIZE as u64 + in_page)
     }
 
+    /// Ensure the page mirror holds `phys_page`, filling from `backing` on miss.
+    fn ensure_page_mirror(&self, phys_page: u32) {
+        if self.page_mirror.matches(phys_page) {
+            return;
+        }
+        let backing = self.backing.lock().unwrap();
+        // Re-check under the lock in case of nested fills (should not happen).
+        if self.page_mirror.matches(phys_page) {
+            return;
+        }
+        let start = (phys_page as usize).saturating_mul(PAGE_BYTES);
+        let end = (start + PAGE_BYTES).min(backing.len());
+        let slice = if start < backing.len() {
+            &backing[start..end]
+        } else {
+            &[][..]
+        };
+        self.page_mirror.fill(phys_page, slice);
+    }
+
     /// Read consecutive bytes starting at window `offset` into `out`.
-    /// One MMU translate (often cached) + one backing lock for an in-page
-    /// span — the instruction-fetch case. Always reads through `backing` so
-    /// SPI flash programming stays coherent without a separate invalidate.
+    /// One MMU translate (often cached) + lock-free page-mirror hit for the
+    /// in-page instruction-fetch case. Mirror miss takes the backing mutex once
+    /// per physical page (64 KiB of guest code).
     fn read_bytes(&self, offset: u64, out: &mut [u8]) {
         if out.is_empty() {
             return;
@@ -252,24 +342,38 @@ impl FlashXipPeripheral {
             return;
         };
         let in_page = (offset % PAGE_SIZE as u64) as usize;
-        if in_page + out.len() <= PAGE_SIZE as usize {
-            let backing = self.backing.lock().unwrap();
-            let start = phys0 as usize;
-            for (i, b) in out.iter_mut().enumerate() {
-                *b = *backing.get(start + i).unwrap_or(&0);
-            }
+        if in_page + out.len() <= PAGE_BYTES {
+            let phys_page = (phys0 / PAGE_SIZE as u64) as u32;
+            self.ensure_page_mirror(phys_page);
+            self.page_mirror.copy_from(in_page, out);
             return;
         }
-        // Rare: multi-page span — fall back to per-byte translate.
+        // Rare: multi-page span — fall back to per-byte path via mirror.
         for (i, b) in out.iter_mut().enumerate() {
-            *b = match self.translate(offset + i as u64) {
+            match self.translate(offset + i as u64) {
                 Some(phys) => {
-                    let backing = self.backing.lock().unwrap();
-                    *backing.get(phys as usize).unwrap_or(&0)
+                    let phys_page = (phys / PAGE_SIZE as u64) as u32;
+                    let in_p = (phys % PAGE_SIZE as u64) as usize;
+                    self.ensure_page_mirror(phys_page);
+                    let mut one = [0u8; 1];
+                    self.page_mirror.copy_from(in_p, &mut one);
+                    *b = one[0];
                 }
-                None => 0,
-            };
+                None => *b = 0,
+            }
         }
+    }
+
+    /// Drop the mirrored page (call if a future SPI path mutates flash bytes).
+    #[allow(dead_code)]
+    pub fn invalidate_page_mirror(&self) {
+        self.page_mirror.phys.store(u32::MAX, Ordering::Release);
+    }
+
+    /// Bulk read for the CPU instruction-fetch window. Same bytes as
+    /// repeated `read_u32` / `read` over the span (translate + page mirror).
+    pub(crate) fn read_span(&self, offset: u64, out: &mut [u8]) {
+        self.read_bytes(offset, out);
     }
 }
 

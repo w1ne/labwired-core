@@ -647,7 +647,12 @@ boards:
     # no executable image). Register map, reset values, MMIO byte paths and the
     # 9-reg reset-state silicon anchor are byte-for-byte unaffected. No live
     # re-capture warranted.
-    drift_ack: 2026-07-14
+    # 2026-07-16: Flash-XIP instruction-fetch fast path (word-sized read_u32,
+    # generation-keyed MMU page-translation cache, lock-free physical-page
+    # mirror). Same MMU entry semantics and same flash bytes as before — pure
+    # host-side speed; the 9-reg reset-state silicon anchor is unaffected.
+    # No live re-capture warranted.
+    drift_ack: 2026-07-16
     models:
       - crates/core/src/peripherals/esp32s3
       - crates/core/src/peripherals/esp_xtensa_common
