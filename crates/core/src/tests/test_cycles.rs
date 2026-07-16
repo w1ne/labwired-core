@@ -80,7 +80,7 @@ fn legacy_run_breakpoint_stickiness_allows_one_step_then_rearms() {
     machine.set_pc(0x1001);
     machine.add_breakpoint(0x1000);
 
-    let first = machine.run(None).unwrap();
+    let first = machine.run(Some(1)).unwrap();
     assert_eq!(first, StopReason::Breakpoint(0x1001));
 
     let stepped = machine.run(Some(1)).unwrap();
@@ -88,7 +88,7 @@ fn legacy_run_breakpoint_stickiness_allows_one_step_then_rearms() {
     assert_eq!(machine.get_pc(), 0x1003);
 
     machine.set_pc(0x1001);
-    let rearmed = machine.run(None).unwrap();
+    let rearmed = machine.run(Some(1)).unwrap();
     assert_eq!(rearmed, StopReason::Breakpoint(0x1001));
 }
 

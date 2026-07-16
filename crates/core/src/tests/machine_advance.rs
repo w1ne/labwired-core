@@ -1,7 +1,8 @@
 use crate::runtime_snapshot::CpuKind;
 use crate::snapshot::{ArmCpuSnapshot, CpuSnapshot};
 use crate::{
-    Bus, Cpu, DebugControl, Machine, SimResult, SimulationConfig, SimulationObserver, StopReason,
+    Bus, Cpu, DebugControl, Machine, SimResult, SimulationConfig, SimulationError,
+    SimulationObserver, StepProfile, StopReason,
 };
 use std::sync::Arc;
 
@@ -105,43 +106,106 @@ impl Cpu for CountingCpu {
     }
 
     fn runtime_snapshot(&self) -> (CpuKind, Vec<u8>) {
-        let state = (
-            self.pc,
-            self.sp,
-            self.steps,
-            self.pending.clone(),
-            self.halted,
-        );
-        (
-            CpuKind::ArmCortexM,
-            bincode::serialize(&state).unwrap_or_default(),
-        )
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&self.pc.to_le_bytes());
+        bytes.extend_from_slice(&self.sp.to_le_bytes());
+        bytes.extend_from_slice(&self.steps.to_le_bytes());
+        bytes.push(u8::from(self.halted));
+        bytes.extend_from_slice(&(self.pending.len() as u64).to_le_bytes());
+        for word in &self.pending {
+            bytes.extend_from_slice(&word.to_le_bytes());
+        }
+        (CpuKind::ArmCortexM, bytes)
     }
 
     fn apply_runtime_snapshot(&mut self, kind: CpuKind, bytes: &[u8]) -> SimResult<()> {
-        if kind == CpuKind::ArmCortexM {
-            if let Ok((pc, sp, steps, pending, halted)) =
-                bincode::deserialize::<(u32, u32, u32, Vec<u64>, bool)>(bytes)
-            {
-                self.pc = pc;
-                self.sp = sp;
-                self.steps = steps;
-                self.pending = pending;
-                self.halted = halted;
-            }
+        if kind != CpuKind::ArmCortexM {
+            return Err(SimulationError::NotImplemented(format!(
+                "CountingCpu runtime snapshot has wrong CPU kind: {kind:?}"
+            )));
         }
+
+        const HEADER_LEN: usize = 21;
+        if bytes.len() < HEADER_LEN {
+            return Err(SimulationError::NotImplemented(format!(
+                "CountingCpu runtime snapshot is truncated: {} bytes",
+                bytes.len()
+            )));
+        }
+
+        let read_u32 = |offset: usize| {
+            let mut raw = [0_u8; 4];
+            raw.copy_from_slice(&bytes[offset..offset + 4]);
+            u32::from_le_bytes(raw)
+        };
+        let mut pending_len_raw = [0_u8; 8];
+        pending_len_raw.copy_from_slice(&bytes[13..21]);
+        let pending_len = usize::try_from(u64::from_le_bytes(pending_len_raw)).map_err(|_| {
+            SimulationError::NotImplemented(
+                "CountingCpu runtime snapshot pending length does not fit usize".to_string(),
+            )
+        })?;
+        let expected_len = pending_len
+            .checked_mul(8)
+            .and_then(|pending_bytes| HEADER_LEN.checked_add(pending_bytes))
+            .ok_or_else(|| {
+                SimulationError::NotImplemented(
+                    "CountingCpu runtime snapshot length overflow".to_string(),
+                )
+            })?;
+        if bytes.len() != expected_len {
+            return Err(SimulationError::NotImplemented(format!(
+                "CountingCpu runtime snapshot length mismatch: expected {expected_len}, got {}",
+                bytes.len()
+            )));
+        }
+        let halted = match bytes[12] {
+            0 => false,
+            1 => true,
+            value => {
+                return Err(SimulationError::NotImplemented(format!(
+                    "CountingCpu runtime snapshot has invalid halted flag: {value}"
+                )));
+            }
+        };
+        let mut pending = Vec::with_capacity(pending_len);
+        for chunk in bytes[HEADER_LEN..].chunks_exact(8) {
+            let mut raw = [0_u8; 8];
+            raw.copy_from_slice(chunk);
+            pending.push(u64::from_le_bytes(raw));
+        }
+
+        self.pc = read_u32(0);
+        self.sp = read_u32(4);
+        self.steps = read_u32(8);
+        self.pending = pending;
+        self.halted = halted;
         Ok(())
     }
 
     fn get_register_names(&self) -> Vec<String> {
-        (0..16).map(|id| format!("r{id}")).collect()
+        (0..=12)
+            .map(|id| format!("R{id}"))
+            .chain(["SP", "LR", "PC"].into_iter().map(String::from))
+            .collect()
     }
 
     fn index_of_register(&self, name: &str) -> Option<u8> {
-        name.strip_prefix('r')?
+        if name.eq_ignore_ascii_case("SP") {
+            return Some(13);
+        }
+        if name.eq_ignore_ascii_case("LR") {
+            return Some(14);
+        }
+        if name.eq_ignore_ascii_case("PC") {
+            return Some(15);
+        }
+        let id = name
+            .strip_prefix('R')
+            .or_else(|| name.strip_prefix('r'))?
             .parse::<u8>()
-            .ok()
-            .filter(|id| *id < 16)
+            .ok()?;
+        (id <= 12).then_some(id)
     }
 
     fn halt(&mut self) {
@@ -192,6 +256,71 @@ fn legacy_single_step_publishes_and_profiles_one_cycle() {
     let profile = machine.step_profile();
     assert_eq!(profile.cpu_instructions, 1);
     assert_eq!(profile.cpu_batches, 1);
+}
+
+#[test]
+fn reset_step_profile_clears_dirty_counters() {
+    let mut machine = Machine::new(CountingCpu::default(), crate::bus::SystemBus::new());
+    machine.step().expect("legacy step should succeed");
+    assert_ne!(machine.step_profile(), StepProfile::default());
+
+    machine.reset_step_profile();
+
+    assert_eq!(machine.step_profile(), StepProfile::default());
+}
+
+#[test]
+fn counting_cpu_runtime_snapshot_round_trips() {
+    let source = CountingCpu {
+        pc: 0x1234_5678,
+        sp: 0x2000_0100,
+        steps: 42,
+        pending: vec![0x8000_0000_0000_0001, 0x55AA],
+        halted: true,
+    };
+    let (kind, bytes) = source.runtime_snapshot();
+    let mut restored = CountingCpu::default();
+
+    restored
+        .apply_runtime_snapshot(kind, &bytes)
+        .expect("valid CountingCpu runtime snapshot should restore");
+
+    assert_eq!(restored.pc, source.pc);
+    assert_eq!(restored.sp, source.sp);
+    assert_eq!(restored.steps, source.steps);
+    assert_eq!(restored.pending, source.pending);
+    assert_eq!(restored.halted, source.halted);
+}
+
+#[test]
+fn counting_cpu_runtime_snapshot_rejects_malformed_or_wrong_kind() {
+    let mut cpu = CountingCpu::default();
+
+    assert!(matches!(
+        cpu.apply_runtime_snapshot(CpuKind::ArmCortexM, &[0; 3]),
+        Err(SimulationError::NotImplemented(_))
+    ));
+    assert!(matches!(
+        cpu.apply_runtime_snapshot(CpuKind::RiscV, &[]),
+        Err(SimulationError::NotImplemented(_))
+    ));
+}
+
+#[test]
+fn counting_cpu_register_names_match_cortex_m() {
+    let cpu = CountingCpu::default();
+    let expected: Vec<String> = (0..=12)
+        .map(|id| format!("R{id}"))
+        .chain(["SP", "LR", "PC"].into_iter().map(String::from))
+        .collect();
+
+    assert_eq!(cpu.get_register_names(), expected);
+    assert_eq!(cpu.index_of_register("r0"), Some(0));
+    assert_eq!(cpu.index_of_register("R12"), Some(12));
+    assert_eq!(cpu.index_of_register("sp"), Some(13));
+    assert_eq!(cpu.index_of_register("Lr"), Some(14));
+    assert_eq!(cpu.index_of_register("pc"), Some(15));
+    assert_eq!(cpu.index_of_register("R13"), None);
 }
 
 #[test]
