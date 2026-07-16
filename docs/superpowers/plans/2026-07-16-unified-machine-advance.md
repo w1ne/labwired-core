@@ -1040,7 +1040,7 @@ Expected: all non-ignored tests pass.
 
 ```bash
 cargo test -p labwired-core --features event-scheduler --test systick_walk_differential --test stm32_timer_walk_differential --test stm32_dma_walk_differential --test esp32s3_walk_differential -- --nocapture
-cargo test --release -p labwired-core --features jit,event-scheduler --test riscv_jit_c3_oled_differential -- --ignored --nocapture
+cargo test --release -p labwired-core --features jit,event-scheduler --test riscv_jit_c3_oled_differential jit_vs_interpreter_c3_oled_is_byte_identical_and_non_vacuous -- --exact --ignored --nocapture
 ```
 
 Expected: PASS with nonzero JIT-path evidence.
@@ -1085,7 +1085,7 @@ cargo test -p labwired-core machine_advance -- --nocapture
 cargo test -p labwired-core scb_reset -- --nocapture
 cargo test -p labwired-cli --test runner --test outputs --test snapshots --test determinism -- --nocapture
 cargo test -p labwired-wasm machine_advance_tests -- --nocapture
-rg -n "LABWIRED_TEST_EXECUTOR|ExecutionEngine|step_legacy_for_test" crates
+rg -n "LABWIRED_TEST_EXECUTOR|ExecutionEngine|step_legacy_for_test|run_legacy_for_test|TEMPORARY LEGACY TEST EXECUTOR|executor=(legacy|unified)" crates
 ```
 
 Expected: tests PASS and the final `rg` has no matches.
@@ -1100,10 +1100,10 @@ git commit -m "refactor(core): remove legacy execution loops"
 - [ ] **Step 8: Run repository-standard final verification**
 
 ```bash
-EXCLUDES="--exclude firmware-armv6m-hello --exclude firmware-stm32f103-blinky --exclude firmware-stm32f103-uart --exclude firmware-armv6m-ci-fixture --exclude firmware-armv7m-benchmark --exclude firmware-f401-demo --exclude firmware-h563-demo --exclude firmware-h563-fullchip-demo --exclude firmware-h563-io-demo --exclude firmware-hil-showcase --exclude firmware-nrf52832-demo --exclude firmware-rp2040-pio-onboarding --exclude firmware-rv32i-ci-fixture --exclude firmware-rv32i-hello"
-cargo build --workspace $EXCLUDES
-cargo test --workspace $EXCLUDES
-cargo clippy --workspace $EXCLUDES -- -D warnings
+cargo check --workspace --exclude firmware --exclude firmware-ci-fixture --exclude riscv-ci-fixture
+cargo test --workspace --lib
+cargo test --workspace --exclude firmware --exclude firmware-ci-fixture --exclude riscv-ci-fixture
+cargo clippy -p labwired-core -p labwired-cli -p labwired-wasm --all-targets -- -D warnings
 cargo fmt --all -- --check
 git diff --check
 ```
