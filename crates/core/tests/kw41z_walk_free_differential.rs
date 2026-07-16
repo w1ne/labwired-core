@@ -23,13 +23,11 @@
 //!
 //! 2. `dwt_cyccnt_reads_are_bounded_and_live_at_interval_64` — the same firmware
 //!    with the scheduler lane batched at tick interval 64 vs the walk-on
-//!    interval-1 golden reference. A mid-batch CYCCNT read quantises to the
-//!    batch-start grid (the documented ≤ one-interval bound the write-path
-//!    `sync_to` ships), so per-instruction state is NOT byte-compared — instead
-//!    every read is proven to (a) never run AHEAD of the true walk, (b) trail it
-//!    by strictly less than one interval, and (c) stay LIVE (a frozen CYCCNT
-//!    under walk-deletion would be a fidelity bug). `total_cycles` is identical,
-//!    proving the migration introduced no timing artifact.
+//!    interval-1 golden reference. A bare Cortex-M + DWT fixture avoids the SCB
+//!    reset-fidelity clamp, and the step profile proves that wide batches really
+//!    formed. Mid-batch CYCCNT reads quantise to the batch-start grid, so every
+//!    read stays within one interval of the walk reference and the trace stays
+//!    live. `total_cycles` remains identical.
 //!
 //! 3. `mcg_tick_is_a_genuine_no_op` / `rsim_tick_is_a_genuine_no_op` — the two
 //!    combinational Kinetis models are driven through their real boot register
@@ -148,6 +146,33 @@ fn build_machine(scheduler: bool, tick_interval: u32) -> Machine<CortexM> {
     machine
 }
 
+/// Bare Cortex-M + DWT fixture for the wide-batch gate. Omitting SCB is
+/// intentional: an attached SCB activates reset-fidelity planning, which
+/// clamps batches to one instruction. The DWT still receives the real shared
+/// bus cycle clock through `add_peripheral`, so this isolates the batched lazy
+/// clock behavior the gate is meant to prove.
+fn build_batchable_dwt_machine(scheduler: bool, tick_interval: u32) -> Machine<CortexM> {
+    let mut bus = SystemBus::new();
+    bus.add_peripheral("dwt", DWT_BASE, 0x1000, None, Box::new(Dwt::new()));
+
+    if !scheduler {
+        let idx = bus.find_peripheral_index_by_name("dwt").unwrap();
+        bus.peripherals[idx]
+            .dev
+            .as_any_mut()
+            .unwrap()
+            .downcast_mut::<Dwt>()
+            .unwrap()
+            .force_legacy_walk();
+    }
+
+    let mut machine = Machine::new(CortexM::new(), bus);
+    machine.config.peripheral_tick_interval = tick_interval;
+    machine.bus.config.peripheral_tick_interval = tick_interval;
+    machine.cpu.sp = INITIAL_SP;
+    machine
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Probe {
     step: u64,
@@ -227,17 +252,12 @@ fn dwt_cyccnt_is_byte_identical_at_interval_1() {
 }
 
 /// Gate 2: scheduler @ interval 64 vs walk-on interval-1 golden reference, run
-/// as a SINGLE batched call each (so 64-wide batches actually form). Both lanes
-/// execute the same instruction stream, so the CYCCNT sample at buffer index `i`
-/// is read at the same true cycle in both. The walk trace is a smooth ramp; the
-/// scheduler trace is a staircase (each 64-cycle batch reads the batch-start
-/// value), proving: (a) batching engaged (plateaus), (b) every read differs from
-/// the true walk by strictly less than one interval in EITHER direction (the
-/// documented batch-boundary freshness bound — reads quantise to batch-start and
-/// the enabling CTRL write is likewise synced to batch-start, so a read may sit
-/// slightly ahead near a batch edge; interval 1 is byte-exact, gate 1), and
-/// (c) CYCCNT stays LIVE — a frozen CYCCNT under walk-deletion would be a
-/// fidelity bug. `total_cycles` is identical, proving no timing artifact.
+/// as a SINGLE batched call each. Both lanes use the bare Cortex-M + DWT fixture
+/// so SCB reset fidelity cannot clamp them to one instruction. The scheduler
+/// step profile proves wide batches formed (`cpu_batches` is nonzero and
+/// strictly less than `cpu_instructions`); its CYCCNT staircase independently
+/// shows batch-start quantisation. Every sample stays within one interval of the
+/// walk reference, the trace stays live, and `total_cycles` stays identical.
 #[test]
 fn dwt_cyccnt_reads_are_bounded_and_live_at_interval_64() {
     const STEPS: u64 = 4_000;
@@ -246,12 +266,12 @@ fn dwt_cyccnt_reads_are_bounded_and_live_at_interval_64() {
     // both lanes have written every slot we read.
     const N_SAMPLES: u64 = 800;
 
-    let mut walk = build_machine(false, 1);
+    let mut walk = build_batchable_dwt_machine(false, 1);
     load_firmware_cyccnt_buffer(&mut walk.bus);
     walk.cpu.pc = 0x40;
     walk.run(Some(STEPS as u32)).unwrap();
 
-    let mut sched = build_machine(true, INTERVAL as u32);
+    let mut sched = build_batchable_dwt_machine(true, INTERVAL as u32);
     load_firmware_cyccnt_buffer(&mut sched.bus);
     sched.cpu.pc = 0x40;
     sched.run(Some(STEPS as u32)).unwrap();
@@ -259,6 +279,21 @@ fn dwt_cyccnt_reads_are_bounded_and_live_at_interval_64() {
     assert_eq!(
         walk.total_cycles, sched.total_cycles,
         "total_cycles must match (no timing artifact from the migration)"
+    );
+    let profile = sched.step_profile();
+    assert_eq!(
+        profile.cpu_instructions, STEPS,
+        "the single scheduler run must retire the requested instruction budget"
+    );
+    assert!(
+        profile.cpu_batches > 0,
+        "the scheduler run must execute at least one CPU batch"
+    );
+    assert!(
+        profile.cpu_batches < profile.cpu_instructions,
+        "interval-64 batching must be non-vacuous (batches={}, instructions={})",
+        profile.cpu_batches,
+        profile.cpu_instructions
     );
 
     let read_buf = |m: &Machine<CortexM>| -> Vec<u32> {
@@ -275,20 +310,14 @@ fn dwt_cyccnt_reads_are_bounded_and_live_at_interval_64() {
         if i > 0 {
             assert!(w[i] >= w[i - 1], "walk CYCCNT rewound at sample {i}");
             assert!(s[i] >= s[i - 1], "scheduler CYCCNT rewound at sample {i}");
-            // The walk (interval 1) is a strict ramp — no plateaus.
             assert!(
                 w[i] > w[i - 1],
                 "walk CYCCNT must strictly advance at sample {i}"
             );
-            // The scheduler quantises: a batch of reads shares the batch-start
-            // value → at least one plateau across the run.
             if s[i] == s[i - 1] {
                 saw_plateau = true;
             }
         }
-        // Bounded by strictly less than one interval in either direction
-        // (reads quantise to batch-start; the enabling CTRL write is synced to
-        // batch-start too, so a read can sit slightly ahead near a batch edge).
         let diff = (w[i] as i64 - s[i] as i64).unsigned_abs();
         assert!(
             diff < INTERVAL,
@@ -302,7 +331,7 @@ fn dwt_cyccnt_reads_are_bounded_and_live_at_interval_64() {
 
     assert!(
         saw_plateau,
-        "interval-64 batching did not engage (no CYCCNT plateau — was the batch clamped to 1?)"
+        "interval-64 CYCCNT must show batch-start quantisation"
     );
     // Live, not frozen: the scheduler counter climbs well past zero.
     assert!(
