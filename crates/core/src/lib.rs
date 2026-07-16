@@ -17,6 +17,7 @@ pub mod fidelity;
 pub mod inspect;
 pub mod interrupt;
 pub mod logic_capture;
+pub mod machine;
 pub mod memory;
 pub mod metrics;
 pub mod multi_core;
@@ -36,6 +37,10 @@ pub mod world;
 
 pub use config::SimulationConfig;
 pub use cycle_clock::CycleClock;
+pub use machine::{
+    AdvanceLimits, AdvanceReport, AdvanceRequest, AdvanceStop, BatchPolicy, BreakpointPolicy,
+    IdlePolicy,
+};
 
 use std::any::Any;
 use std::sync::Arc;
