@@ -412,7 +412,11 @@ boards:
     # 2026-07-11: STM32 SPI bit-level wire engine — classic/FIFO `Spi` DR writes now clock frames over derived wire time (CR1 BR/CPOL/CPHA/LSBFIRST + CR2.DS/CR1.DFF; SR flags flip at wire time — same firmware-visible completion timing, bits x 2^(BR+1) PCLK cycles, as the previous countdown) and GPIO ports gained read-only SPI AF pad routing (read_gpio_pad reads the live SCK/MOSI/MISO wire per the datasheet AF maps; H5's SPI-v3 model untouched). Register layouts, reset values and byte paths unchanged; mmio diffs/conformance unaffected. No live re-capture.
     # 2026-07-12: STM32 TIMx walk-free migration (timer.rs) — event-scheduler builds now derive CNT/SR lazily from the bus cycle clock (exact closed-form walk replay incl. the enabled-flag counter freeze) and deliver update/compare IRQs via scheduled events; the legacy walk path is byte-identical, pinned by committed differentials (stm32_timer_walk_differential + in-module walk-identity gates). The tick-cost sim artifact (cycles:1 charged on overflow/held-level ticks) is removed in both modes. Register layout, reset values and MMIO byte paths unchanged; mmio diffs/conformance unaffected. No live re-capture.
     # 2026-07-12: STM32 DMA1/DMA2 walk-free migration (dma.rs) + NXP Kinetis I2C walk-free migration (i2c.rs) — event-scheduler builds drive DMA element transfers via per-channel scheduled events (delay-1 mem2mem self-pacing, request-armed via route_dma_signal) and the Kinetis I2C level IRQ via a held-level re-pend chain; both are byte-identical to the walk, pinned by committed differentials (stm32_dma_walk_differential + in-module dma/i2c walk-identity gates). The DMA tick-cost sim artifact (cycles:1 per transferring tick) is removed in both modes. STM32 F1/L4 I2C transaction engines and H5 GPDMA are untouched and stay on the walk. Register layout, reset values and MMIO byte paths unchanged; mmio diffs/conformance unaffected. No live re-capture.
-    drift_ack: 2026-07-12
+    # 2026-07-17: DMA's forced-tick compatibility adapter is restricted to the
+    # bare-CPU hardware-oracle settle loop; the Machine lifecycle and normal DMA
+    # execution are unchanged. The frozen-settle and scheduler regressions pass.
+    # No live re-capture was run this session.
+    drift_ack: 2026-07-17
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -465,7 +469,11 @@ boards:
     # 2026-07-11: STM32 SPI bit-level wire engine — classic/FIFO `Spi` DR writes now clock frames over derived wire time (CR1 BR/CPOL/CPHA/LSBFIRST + CR2.DS/CR1.DFF; SR flags flip at wire time — same firmware-visible completion timing, bits x 2^(BR+1) PCLK cycles, as the previous countdown) and GPIO ports gained read-only SPI AF pad routing (read_gpio_pad reads the live SCK/MOSI/MISO wire per the datasheet AF maps; H5's SPI-v3 model untouched). Register layouts, reset values and byte paths unchanged; mmio diffs/conformance unaffected. No live re-capture.
     # 2026-07-12: STM32 TIMx walk-free migration (timer.rs) — event-scheduler builds now derive CNT/SR lazily from the bus cycle clock (exact closed-form walk replay incl. the enabled-flag counter freeze) and deliver update/compare IRQs via scheduled events; the legacy walk path is byte-identical, pinned by committed differentials (stm32_timer_walk_differential + in-module walk-identity gates). The tick-cost sim artifact (cycles:1 charged on overflow/held-level ticks) is removed in both modes. Register layout, reset values and MMIO byte paths unchanged; mmio diffs/conformance unaffected. No live re-capture.
     # 2026-07-12: STM32 DMA1/DMA2 walk-free migration (dma.rs) + NXP Kinetis I2C walk-free migration (i2c.rs) — event-scheduler builds drive DMA element transfers via per-channel scheduled events (delay-1 mem2mem self-pacing, request-armed via route_dma_signal) and the Kinetis I2C level IRQ via a held-level re-pend chain; both are byte-identical to the walk, pinned by committed differentials (stm32_dma_walk_differential + in-module dma/i2c walk-identity gates). The DMA tick-cost sim artifact (cycles:1 per transferring tick) is removed in both modes. STM32 F1/L4 I2C transaction engines and H5 GPDMA are untouched and stay on the walk. Register layout, reset values and MMIO byte paths unchanged; mmio diffs/conformance unaffected. No live re-capture.
-    drift_ack: 2026-07-12
+    # 2026-07-17: DMA's forced-tick compatibility adapter is restricted to the
+    # bare-CPU hardware-oracle settle loop; the Machine lifecycle and normal DMA
+    # execution are unchanged. The frozen-settle and scheduler regressions pass.
+    # No live re-capture was run this session.
+    drift_ack: 2026-07-17
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -515,7 +523,11 @@ boards:
     # 2026-07-11: STM32 SPI bit-level wire engine — classic/FIFO `Spi` DR writes now clock frames over derived wire time (CR1 BR/CPOL/CPHA/LSBFIRST + CR2.DS/CR1.DFF; SR flags flip at wire time — same firmware-visible completion timing, bits x 2^(BR+1) PCLK cycles, as the previous countdown) and GPIO ports gained read-only SPI AF pad routing (read_gpio_pad reads the live SCK/MOSI/MISO wire per the datasheet AF maps; H5's SPI-v3 model untouched). Register layouts, reset values and byte paths unchanged; mmio diffs/conformance unaffected. No live re-capture.
     # 2026-07-12: STM32 TIMx walk-free migration (timer.rs) — event-scheduler builds now derive CNT/SR lazily from the bus cycle clock (exact closed-form walk replay incl. the enabled-flag counter freeze) and deliver update/compare IRQs via scheduled events; the legacy walk path is byte-identical, pinned by committed differentials (stm32_timer_walk_differential + in-module walk-identity gates). The tick-cost sim artifact (cycles:1 charged on overflow/held-level ticks) is removed in both modes. Register layout, reset values and MMIO byte paths unchanged; mmio diffs/conformance unaffected. No live re-capture.
     # 2026-07-12: STM32 DMA1/DMA2 walk-free migration (dma.rs) + NXP Kinetis I2C walk-free migration (i2c.rs) — event-scheduler builds drive DMA element transfers via per-channel scheduled events (delay-1 mem2mem self-pacing, request-armed via route_dma_signal) and the Kinetis I2C level IRQ via a held-level re-pend chain; both are byte-identical to the walk, pinned by committed differentials (stm32_dma_walk_differential + in-module dma/i2c walk-identity gates). The DMA tick-cost sim artifact (cycles:1 per transferring tick) is removed in both modes. STM32 F1/L4 I2C transaction engines and H5 GPDMA are untouched and stay on the walk. Register layout, reset values and MMIO byte paths unchanged; mmio diffs/conformance unaffected. No live re-capture.
-    drift_ack: 2026-07-12
+    # 2026-07-17: DMA's forced-tick compatibility adapter is restricted to the
+    # bare-CPU hardware-oracle settle loop; the Machine lifecycle and normal DMA
+    # execution are unchanged. The frozen-settle and scheduler regressions pass.
+    # No live re-capture was run this session.
+    drift_ack: 2026-07-17
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/afio.rs
@@ -572,7 +584,11 @@ boards:
     # 2026-07-11: STM32 SPI bit-level wire engine — classic/FIFO `Spi` DR writes now clock frames over derived wire time (CR1 BR/CPOL/CPHA/LSBFIRST + CR2.DS/CR1.DFF; SR flags flip at wire time — same firmware-visible completion timing, bits x 2^(BR+1) PCLK cycles, as the previous countdown) and GPIO ports gained read-only SPI AF pad routing (read_gpio_pad reads the live SCK/MOSI/MISO wire per the datasheet AF maps; H5's SPI-v3 model untouched). Register layouts, reset values and byte paths unchanged; mmio diffs/conformance unaffected. No live re-capture.
     # 2026-07-12: STM32 TIMx walk-free migration (timer.rs) — event-scheduler builds now derive CNT/SR lazily from the bus cycle clock (exact closed-form walk replay incl. the enabled-flag counter freeze) and deliver update/compare IRQs via scheduled events; the legacy walk path is byte-identical, pinned by committed differentials (stm32_timer_walk_differential + in-module walk-identity gates). The tick-cost sim artifact (cycles:1 charged on overflow/held-level ticks) is removed in both modes. Register layout, reset values and MMIO byte paths unchanged; mmio diffs/conformance unaffected. No live re-capture.
     # 2026-07-12: STM32 DMA1/DMA2 walk-free migration (dma.rs) + NXP Kinetis I2C walk-free migration (i2c.rs) — event-scheduler builds drive DMA element transfers via per-channel scheduled events (delay-1 mem2mem self-pacing, request-armed via route_dma_signal) and the Kinetis I2C level IRQ via a held-level re-pend chain; both are byte-identical to the walk, pinned by committed differentials (stm32_dma_walk_differential + in-module dma/i2c walk-identity gates). The DMA tick-cost sim artifact (cycles:1 per transferring tick) is removed in both modes. STM32 F1/L4 I2C transaction engines and H5 GPDMA are untouched and stay on the walk. Register layout, reset values and MMIO byte paths unchanged; mmio diffs/conformance unaffected. No live re-capture.
-    drift_ack: 2026-07-12
+    # 2026-07-17: DMA's forced-tick compatibility adapter is restricted to the
+    # bare-CPU hardware-oracle settle loop; the Machine lifecycle and normal DMA
+    # execution are unchanged. The frozen-settle and scheduler regressions pass.
+    # No live re-capture was run this session.
+    drift_ack: 2026-07-17
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
