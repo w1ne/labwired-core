@@ -229,6 +229,9 @@ impl RiscV {
 
     fn read_csr(&self, csr: u16) -> Option<u32> {
         Some(match csr {
+            // The ESP32-C3 ROM clears ustatus during reset. This emulator runs
+            // only in machine mode, so no user-status bits can become active.
+            0x000 if self.core_profile == RiscVCoreProfile::Esp32C3 => 0,
             0x300 => self.mstatus,
             0x304 => self.mie,
             0x344 => self.mip,
@@ -267,6 +270,8 @@ impl RiscV {
 
     fn write_csr(&mut self, csr: u16, val: u32) -> bool {
         match csr {
+            // See read_csr: accept the ROM's reset-time clear as a no-op.
+            0x000 if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
             0x300 => self.mstatus = val & 0x0000_1888, // Minimal mstatus (MIE, MPP)
             0x304 => self.mie = val,
             0x344 => self.mip = val,
@@ -1464,6 +1469,10 @@ mod tests {
     use crate::DebugControl;
     use crate::Machine;
 
+    /// CSRRW x0, ustatus (0x000), x0: emitted by the ESP32-C3 ROM before
+    /// mtvec is initialized.
+    const CLEAR_USTATUS: u32 = 0x0000_1073;
+
     #[test]
     fn test_riscv_addi() {
         let mut bus = SystemBus::new();
@@ -1510,10 +1519,43 @@ mod tests {
     }
 
     #[test]
+    fn esp32c3_accepts_rom_ustatus_clear_before_mtvec_initialization() {
+        let mut bus = SystemBus::new();
+        let mut cpu = RiscV::new_for(RiscVCoreProfile::Esp32C3);
+        bus.flash.data = CLEAR_USTATUS.to_le_bytes().to_vec();
+        cpu.pc = 0;
+        let mut machine = Machine::new(cpu, bus);
+
+        machine.step().unwrap();
+
+        assert_eq!(machine.cpu.pc, 4, "ustatus write must not trap");
+        assert_eq!(machine.cpu.mcause, 0);
+        assert_eq!(machine.cpu.mtval, 0);
+        assert_eq!(machine.cpu.read_csr(0x000), Some(0));
+    }
+
+    #[test]
+    fn standard_rv32_rejects_esp32c3_rom_ustatus_clear() {
+        let mut bus = SystemBus::new();
+        let mut cpu = RiscV::new_for(RiscVCoreProfile::StandardRv32);
+        bus.flash.data = CLEAR_USTATUS.to_le_bytes().to_vec();
+        cpu.pc = 0;
+        cpu.mtvec = 0x100;
+        let mut machine = Machine::new(cpu, bus);
+
+        machine.step().unwrap();
+
+        assert_eq!(machine.cpu.mcause, 2);
+        assert_eq!(machine.cpu.mtval, CLEAR_USTATUS);
+        assert_eq!(machine.cpu.pc, 0x100);
+    }
+
+    #[test]
     fn standard_rv32_profile_exposes_cycle_csr() {
         let cpu = RiscV::new_for(RiscVCoreProfile::StandardRv32);
         assert_eq!(cpu.read_csr(0xC00), Some(0));
         assert_eq!(cpu.read_csr(0x7E2), None);
+        assert_eq!(cpu.read_csr(0x000), None);
     }
 
     #[test]
