@@ -111,57 +111,9 @@ const CONF_TARGET0_WORK_EN: u32 = 1 << 24;
 const CONF_TARGET1_WORK_EN: u32 = 1 << 23;
 const CONF_TARGET2_WORK_EN: u32 = 1 << 22;
 
-/// Byte offsets within the SYSTIMER block (ESP32-S3 TRM §16.5 / esp32s3-pac).
-/// Single source of truth for `read_word` / `write_word` and access-class.
-mod regs {
-    pub const CONF: u64 = 0x00;
-    pub const UNIT0_OP: u64 = 0x04;
-    pub const UNIT1_OP: u64 = 0x08;
-    pub const UNIT0_LOAD_HI: u64 = 0x0C;
-    pub const UNIT0_LOAD_LO: u64 = 0x10;
-    pub const UNIT1_LOAD_HI: u64 = 0x14;
-    pub const UNIT1_LOAD_LO: u64 = 0x18;
-    pub const TARGET0_HI: u64 = 0x1C;
-    pub const TARGET0_LO: u64 = 0x20;
-    pub const TARGET1_HI: u64 = 0x24;
-    pub const TARGET1_LO: u64 = 0x28;
-    pub const TARGET2_HI: u64 = 0x2C;
-    pub const TARGET2_LO: u64 = 0x30;
-    pub const TARGET0_CONF: u64 = 0x34;
-    pub const TARGET1_CONF: u64 = 0x38;
-    pub const TARGET2_CONF: u64 = 0x3C;
-    pub const UNIT0_VALUE_HI: u64 = 0x40;
-    pub const UNIT0_VALUE_LO: u64 = 0x44;
-    pub const UNIT1_VALUE_HI: u64 = 0x48;
-    pub const UNIT1_VALUE_LO: u64 = 0x4C;
-    pub const COMP0_LOAD: u64 = 0x50;
-    pub const COMP1_LOAD: u64 = 0x54;
-    pub const COMP2_LOAD: u64 = 0x58;
-    pub const UNIT0_LOAD: u64 = 0x5C;
-    pub const UNIT1_LOAD: u64 = 0x60;
-    pub const INT_ENA: u64 = 0x64;
-    pub const INT_RAW: u64 = 0x68;
-    pub const INT_CLR: u64 = 0x6C;
-    pub const INT_ST: u64 = 0x70;
-    pub const REAL_TARGET0_LO: u64 = 0x74;
-    pub const REAL_TARGET0_HI: u64 = 0x78;
-    pub const REAL_TARGET1_LO: u64 = 0x7C;
-    pub const REAL_TARGET1_HI: u64 = 0x80;
-    pub const REAL_TARGET2_LO: u64 = 0x84;
-    pub const REAL_TARGET2_HI: u64 = 0x88;
-    pub const DATE: u64 = 0xFC;
-
-    /// Freerunning snapshot path used by esp_timer / Arduino `millis`.
-    /// Derived from the named offsets above — do not duplicate magic numbers.
-    pub const FREERUNNING_POLL: &[u64] = &[
-        UNIT0_OP,
-        UNIT1_OP,
-        UNIT0_VALUE_HI,
-        UNIT0_VALUE_LO,
-        UNIT1_VALUE_HI,
-        UNIT1_VALUE_LO,
-    ];
-}
+/// SVD-derived register offsets (`scripts/gen_esp_systimer_regs.py`).
+#[path = "systimer_regs.rs"]
+mod regs;
 
 /// UNIT*_OP bit 30 — trigger snapshot update.
 const OP_UPDATE_BIT: u32 = 1 << 30;
@@ -1492,5 +1444,112 @@ mod tests {
             s.unit0_alarms[0].enabled,
             "alarm 0 enabled after CONF write"
         );
+    }
+}
+
+#[cfg(test)]
+mod regs_svd_tests {
+    //! Offline gate: `systimer_regs.rs` must match the checked-in S3 SVD.
+    //! Regenerate with: `python3 scripts/gen_esp_systimer_regs.py`
+
+    use super::regs;
+
+    fn svd_xml() -> String {
+        // labwired-core package lives at crates/core; fixtures at tests/fixtures.
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let candidates = [
+            root.join("../../tests/fixtures/svd/esp32s3.svd"),
+            root.join("tests/fixtures/svd/esp32s3.svd"),
+        ];
+        for p in &candidates {
+            if p.exists() {
+                return std::fs::read_to_string(p).expect("read svd");
+            }
+        }
+        panic!(
+            "esp32s3.svd not found; tried {:?}",
+            candidates
+                .iter()
+                .map(|p| p.display().to_string())
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn generated_offsets_match_svd() {
+        let xml = svd_xml();
+        // Parse SYSTIMER peripheral offsets from SVD (lightweight).
+        let mut in_systimer = false;
+        let mut depth = 0i32;
+        let mut svd_map: std::collections::HashMap<String, u64> = Default::default();
+        let mut cur_name: Option<String> = None;
+        for line in xml.lines() {
+            let t = line.trim();
+            if t.contains("<name>SYSTIMER</name>") {
+                in_systimer = true;
+                depth = 0;
+                continue;
+            }
+            if !in_systimer {
+                continue;
+            }
+            if t.starts_with("<peripheral") {
+                depth += 1;
+            }
+            if t.starts_with("</peripheral>") {
+                if depth == 0 {
+                    break;
+                }
+                depth -= 1;
+            }
+            if let Some(n) = t
+                .strip_prefix("<name>")
+                .and_then(|s| s.strip_suffix("</name>"))
+            {
+                if !n.contains("INT_MAP") {
+                    cur_name = Some(n.to_string());
+                }
+            }
+            if let Some(off) = t
+                .strip_prefix("<addressOffset>")
+                .and_then(|s| s.strip_suffix("</addressOffset>"))
+            {
+                if let Some(name) = cur_name.take() {
+                    let v = u64::from_str_radix(
+                        off.trim_start_matches("0x").trim_start_matches("0X"),
+                        16,
+                    )
+                    .or_else(|_| off.parse::<u64>())
+                    .unwrap_or_else(|_| panic!("bad offset {off} for {name}"));
+                    svd_map.insert(name, v);
+                }
+            }
+        }
+        assert!(!svd_map.is_empty(), "parsed no SYSTIMER regs from SVD");
+
+        let expected = [
+            ("CONF", regs::CONF),
+            ("UNIT0_OP", regs::UNIT0_OP),
+            ("UNIT1_OP", regs::UNIT1_OP),
+            ("UNIT0_VALUE_HI", regs::UNIT0_VALUE_HI),
+            ("UNIT0_VALUE_LO", regs::UNIT0_VALUE_LO),
+            ("UNIT1_VALUE_HI", regs::UNIT1_VALUE_HI),
+            ("UNIT1_VALUE_LO", regs::UNIT1_VALUE_LO),
+            ("DATE", regs::DATE),
+            ("INT_ENA", regs::INT_ENA),
+            ("REAL_TARGET0_LO", regs::REAL_TARGET0_LO),
+        ];
+        for (name, got) in expected {
+            let want = *svd_map
+                .get(name)
+                .unwrap_or_else(|| panic!("SVD missing register {name}"));
+            assert_eq!(got, want, "offset mismatch for {name}");
+        }
+        for &off in regs::FREERUNNING_POLL {
+            assert!(
+                svd_map.values().any(|&v| v == off),
+                "FREERUNNING_POLL offset {off:#x} not in SVD map"
+            );
+        }
     }
 }
