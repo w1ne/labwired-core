@@ -83,11 +83,15 @@ mod scb_reset_tests {
         m.bus.write_u32(0x0000_0000, MSP).unwrap();
         m.bus.write_u32(0x0000_0004, RESET_ADDR | 1).unwrap(); // Thumb bit set
 
-        // After the reboot the core lands at the reset vector. Put a tight
-        // self-loop (`b .` == 0xE7FE) there so any post-reset steps keep PC
-        // pinned at RESET_ADDR, making the final state a deterministic proof
-        // of the reboot regardless of how many steps the batch ran.
-        m.bus.write_u16(RESET_ADDR as u64, 0xE7FE).unwrap();
+        // After the first instruction boundary drains the reset, the remaining
+        // seven scheduling quanta execute from the reset vector. Eight NOPs make the
+        // final PC prove both the reset boundary and the adapter's continued
+        // execution, rather than hiding either behind a self-loop.
+        for offset in (0..16).step_by(2) {
+            m.bus
+                .write_u16((RESET_ADDR + offset) as u64, 0xBF00)
+                .unwrap();
+        }
 
         // Firmware's pre-reset code: a NOP, then it would spin. We seed a NOP
         // self-loop at the start PC too, but the AIRCR latch is already armed,
@@ -97,25 +101,31 @@ mod scb_reset_tests {
         m.bus.write_u16((PC + 2) as u64, 0xE7FE).unwrap(); // b . (spin)
         m.cpu.set_pc(PC);
         m.cpu.set_sp(0x2000_8000);
+        m.config.peripheral_tick_interval = 64;
 
         // Arm the reset latch via the exact MMIO path firmware uses.
         m.bus
             .write_u32(SCB_AIRCR, (0x05FA << 16) | (1 << 2))
             .unwrap();
 
-        // Drive the BATCHED path. A small step budget is enough: the first
-        // batch boundary must drain the latch and reboot.
+        // Drive the run adapter. A small step budget is enough: the first
+        // instruction boundary must drain the latch and reboot.
         m.run(Some(8)).unwrap();
 
         assert_eq!(
             m.cpu.get_pc() & !1,
-            RESET_ADDR,
-            "PC must reload from vector[1] (reset vector) after SYSRESETREQ on the batched run path"
+            RESET_ADDR + 14,
+            "seven post-reset NOPs must retire after the first batch drains SYSRESETREQ"
         );
         assert_eq!(
             m.cpu.get_register(13),
             MSP,
             "SP must reload from vector[0] (MSP) after SYSRESETREQ on the batched run path"
+        );
+        assert_eq!(
+            m.step_profile().cpu_batches,
+            8,
+            "SCB presence permanently clamps execution to clean reset boundaries"
         );
     }
 

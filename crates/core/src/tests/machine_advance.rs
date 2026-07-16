@@ -2,9 +2,9 @@ use crate::bus::SystemBus;
 use crate::runtime_snapshot::CpuKind;
 use crate::snapshot::{ArmCpuSnapshot, CpuSnapshot};
 use crate::{
-    AdvanceRequest, AdvanceStop, BatchPolicy, BreakpointPolicy, Bus, Cpu, DebugControl, IdlePolicy,
-    Machine, SimResult, SimulationConfig, SimulationError, SimulationObserver, StepProfile,
-    StopReason,
+    AdvanceReport, AdvanceRequest, AdvanceStop, BatchPolicy, BreakpointPolicy, Bus, Cpu,
+    DebugControl, IdlePolicy, Machine, SimResult, SimulationConfig, SimulationError,
+    SimulationObserver, StepProfile, StopReason,
 };
 use std::num::NonZeroU32;
 use std::sync::Arc;
@@ -20,6 +20,11 @@ struct CountingCpu {
     fail_step: bool,
     // Non-architectural push-capture injection; intentionally omitted from snapshots.
     push_level: Option<bool>,
+    // Non-architectural execution probes; intentionally omitted from snapshots.
+    zero_batch: bool,
+    fail_batch_after: Option<u32>,
+    idle_budget: Option<u64>,
+    idle_skipped: u64,
 }
 
 impl Cpu for CountingCpu {
@@ -51,6 +56,34 @@ impl Cpu for CountingCpu {
             self.pc = self.pc.wrapping_add(2);
         }
         Ok(())
+    }
+
+    fn step_batch(
+        &mut self,
+        bus: &mut dyn Bus,
+        observers: &[Arc<dyn SimulationObserver>],
+        config: &SimulationConfig,
+        max_count: u32,
+    ) -> SimResult<u32> {
+        if self.zero_batch {
+            return Ok(0);
+        }
+        let tap = bus.logic_tap().filter(|tap| tap.push_armed());
+        for i in 0..max_count {
+            if self.fail_batch_after == Some(i) {
+                return Err(SimulationError::Other(
+                    "CountingCpu injected batch failure".to_string(),
+                ));
+            }
+            if let Some(tap) = &tap {
+                tap.bump_clock();
+            }
+            self.step(bus, observers, config)?;
+            if config.idle_fast_forward_enabled && self.idle_fast_forward_budget(bus).is_some() {
+                return Ok(i + 1);
+            }
+        }
+        Ok(max_count)
     }
 
     fn set_pc(&mut self, val: u32) {
@@ -230,6 +263,14 @@ impl Cpu for CountingCpu {
     fn unhalt(&mut self) {
         self.halted = false;
     }
+
+    fn idle_fast_forward_budget(&self, _bus: &dyn Bus) -> Option<u64> {
+        self.idle_budget
+    }
+
+    fn fast_forward_idle_cycles(&mut self, cycles: u64) {
+        self.idle_skipped += cycles;
+    }
 }
 
 fn counting_dual_core_machine() -> Machine<CountingCpu> {
@@ -252,7 +293,9 @@ fn legacy_step_advances_both_cores_once() {
 fn legacy_run_currently_omits_secondary_core() {
     let mut machine = counting_dual_core_machine();
 
-    let reason = machine.run(Some(4)).expect("legacy run should succeed");
+    let reason = machine
+        .run_legacy_for_test(Some(4))
+        .expect("legacy run should succeed");
 
     assert_eq!(reason, StopReason::MaxStepsReached);
     assert_eq!(machine.cpu.steps, 4);
@@ -294,6 +337,7 @@ fn counting_cpu_runtime_snapshot_round_trips() {
         halted: true,
         fail_step: false,
         push_level: None,
+        ..Default::default()
     };
     let (kind, bytes) = source.runtime_snapshot();
     let mut restored = CountingCpu::default();
@@ -401,65 +445,553 @@ fn request_builders_override_only_their_policy() {
 }
 
 #[test]
-fn advance_rejects_every_request_outside_exact_single_contract_without_mutation() {
-    let unsupported = [
-        ("run", AdvanceRequest::run(Some(1))),
-        ("cycle limit", AdvanceRequest::single().with_cycle_limit(0)),
-        (
-            "breakpoint override",
-            AdvanceRequest::single().with_breakpoints(BreakpointPolicy::Honor),
-        ),
-        (
-            "batch cap",
-            AdvanceRequest::single().with_batch_cap(NonZeroU32::new(2).unwrap()),
-        ),
-    ];
+fn advance_report_constructor_assigns_every_field() {
+    let report = AdvanceReport::new(AdvanceStop::NoProgress, 1, 2, 3, 4, 5, 6);
 
-    for (case, request) in unsupported {
-        let mut machine = counting_dual_core_machine();
-        let machine_before = serde_json::to_value(machine.snapshot()).unwrap();
-        let primary_before = serde_json::to_value(machine.cpu.snapshot()).unwrap();
-        let secondary_before =
-            serde_json::to_value(machine.cpu_secondary.as_ref().unwrap().snapshot()).unwrap();
-        let cycles_before = machine.total_cycles;
-        let bus_cycle_before = machine.bus.current_cycle;
-        let profile_before = machine.step_profile();
+    assert_eq!(report.stop, AdvanceStop::NoProgress);
+    assert_eq!(report.fuel_consumed, 1);
+    assert_eq!(report.primary_steps, 2);
+    assert_eq!(report.secondary_steps, 3);
+    assert_eq!(report.elapsed_cycles, 4);
+    assert_eq!(report.idle_cycles, 5);
+    assert_eq!(report.cpu_batches, 6);
+}
 
-        let error = machine.advance(request).unwrap_err();
+#[test]
+fn run_advances_in_capped_batches_and_reports_progress() {
+    let mut machine = Machine::new(CountingCpu::default(), SystemBus::new());
+    machine.config.peripheral_tick_interval = 64;
 
-        assert!(
-            matches!(error, SimulationError::NotImplemented(_)),
-            "{case}: unsupported requests must return an explicit error"
-        );
-        assert_eq!(
-            serde_json::to_value(machine.snapshot()).unwrap(),
-            machine_before,
-            "{case}: machine snapshot changed"
-        );
-        assert_eq!(
-            serde_json::to_value(machine.cpu.snapshot()).unwrap(),
-            primary_before,
-            "{case}: primary CPU changed"
-        );
-        assert_eq!(
-            serde_json::to_value(machine.cpu_secondary.as_ref().unwrap().snapshot()).unwrap(),
-            secondary_before,
-            "{case}: secondary CPU changed"
-        );
-        assert_eq!(
-            machine.total_cycles, cycles_before,
-            "{case}: cycles changed"
-        );
-        assert_eq!(
-            machine.bus.current_cycle, bus_cycle_before,
-            "{case}: bus cycle changed"
-        );
-        assert_eq!(
-            machine.step_profile(),
-            profile_before,
-            "{case}: profile changed"
-        );
+    let report = machine
+        .advance(AdvanceRequest::run(Some(7)).with_batch_cap(NonZeroU32::new(3).unwrap()))
+        .unwrap();
+
+    assert_eq!(report.stop, AdvanceStop::FuelLimit);
+    assert_eq!(report.fuel_consumed, 7);
+    assert_eq!(report.primary_steps, 7);
+    assert_eq!(report.secondary_steps, 0);
+    assert_eq!(report.elapsed_cycles, 7);
+    assert_eq!(report.idle_cycles, 0);
+    assert_eq!(report.cpu_batches, 3);
+    assert_eq!(machine.cpu.steps, 7);
+    assert_eq!(machine.step_profile().cpu_instructions, 7);
+    assert_eq!(machine.step_profile().cpu_batches, 3);
+}
+
+#[test]
+fn unified_run_advances_both_cores_one_quantum_at_a_time() {
+    let mut machine = counting_dual_core_machine();
+    machine.config.peripheral_tick_interval = 64;
+
+    let report = machine.advance(AdvanceRequest::run(Some(4))).unwrap();
+
+    assert_eq!(report.stop, AdvanceStop::FuelLimit);
+    assert_eq!((report.primary_steps, report.secondary_steps), (4, 4));
+    assert_eq!((report.fuel_consumed, report.elapsed_cycles), (4, 4));
+    assert_eq!(report.cpu_batches, 4);
+    assert_eq!(machine.cpu.steps, 4);
+    assert_eq!(machine.cpu_secondary.as_ref().unwrap().steps, 4);
+    assert_eq!(machine.step_profile().cpu_instructions, 4);
+    assert_eq!(machine.step_profile().cpu_batches, 4);
+}
+
+#[test]
+fn debug_run_adapter_uses_unified_dual_core_execution() {
+    let mut machine = counting_dual_core_machine();
+
+    assert_eq!(machine.run(Some(4)).unwrap(), StopReason::MaxStepsReached);
+    assert_eq!(machine.cpu.steps, 4);
+    assert_eq!(machine.cpu_secondary.as_ref().unwrap().steps, 4);
+    assert_eq!(machine.total_cycles, 4);
+}
+
+#[test]
+fn cycle_limit_stops_at_atomic_batch_boundary() {
+    let mut machine = Machine::new(CountingCpu::default(), SystemBus::new());
+    machine.config.peripheral_tick_interval = 64;
+
+    let report = machine
+        .advance(AdvanceRequest::run(None).with_cycle_limit(3))
+        .unwrap();
+
+    assert_eq!(report.stop, AdvanceStop::CycleLimit);
+    assert_eq!(report.elapsed_cycles, 3);
+    assert_eq!(report.fuel_consumed, 3);
+}
+
+#[test]
+fn zero_cycle_limit_does_not_mutate_machine() {
+    let mut machine = counting_dual_core_machine();
+    let before = serde_json::to_value(machine.snapshot()).unwrap();
+
+    let report = machine
+        .advance(AdvanceRequest::run(None).with_cycle_limit(0))
+        .unwrap();
+
+    assert_eq!(report.stop, AdvanceStop::CycleLimit);
+    assert_eq!(report.fuel_consumed, 0);
+    assert_eq!(report.elapsed_cycles, 0);
+    assert_eq!(serde_json::to_value(machine.snapshot()).unwrap(), before);
+    assert_eq!(machine.step_profile(), StepProfile::default());
+}
+
+#[test]
+fn fuel_wins_when_fuel_and_cycle_limits_are_reached_together() {
+    let mut machine = Machine::new(CountingCpu::default(), SystemBus::new());
+
+    let report = machine
+        .advance(AdvanceRequest::run(Some(3)).with_cycle_limit(3))
+        .unwrap();
+
+    assert_eq!(report.stop, AdvanceStop::FuelLimit);
+    assert_eq!((report.fuel_consumed, report.elapsed_cycles), (3, 3));
+}
+
+#[test]
+fn breakpoint_wins_when_reached_exactly_at_fuel_limit() {
+    let mut machine = Machine::new(CountingCpu::default(), SystemBus::new());
+    machine.add_breakpoint(4);
+
+    let report = machine.advance(AdvanceRequest::run(Some(2))).unwrap();
+
+    assert_eq!(report.stop, AdvanceStop::Breakpoint(4));
+    assert_eq!(report.fuel_consumed, 2);
+    assert_eq!(report.primary_steps, 2);
+    assert_eq!(report.elapsed_cycles, 2);
+    assert_eq!(machine.last_breakpoint, Some(4));
+
+    let mut adapter = Machine::new(CountingCpu::default(), SystemBus::new());
+    adapter.add_breakpoint(4);
+    assert_eq!(adapter.run(Some(2)).unwrap(), StopReason::Breakpoint(4));
+}
+
+#[test]
+fn honor_breakpoint_stops_before_current_pc_and_inside_wide_window() {
+    let mut current = Machine::new(CountingCpu::default(), SystemBus::new());
+    current.add_breakpoint(0);
+    let report = current.advance(AdvanceRequest::run(Some(8))).unwrap();
+    assert_eq!(report.stop, AdvanceStop::Breakpoint(0));
+    assert_eq!(report.primary_steps, 0);
+
+    let mut inside = Machine::new(CountingCpu::default(), SystemBus::new());
+    inside.config.peripheral_tick_interval = 64;
+    inside.add_breakpoint(4);
+    let report = inside.advance(AdvanceRequest::run(Some(8))).unwrap();
+    assert_eq!(report.stop, AdvanceStop::Breakpoint(4));
+    assert_eq!(report.primary_steps, 2);
+    assert_eq!(inside.cpu.pc, 4);
+}
+
+#[test]
+fn ignore_breakpoints_neither_stops_nor_touches_sticky_state() {
+    let mut machine = Machine::new(CountingCpu::default(), SystemBus::new());
+    machine.add_breakpoint(0);
+    machine.last_breakpoint = Some(0);
+
+    let report = machine
+        .advance(AdvanceRequest::run(Some(2)).with_breakpoints(BreakpointPolicy::Ignore))
+        .unwrap();
+
+    assert_eq!(report.stop, AdvanceStop::FuelLimit);
+    assert_eq!(report.primary_steps, 2);
+    assert_eq!(machine.last_breakpoint, Some(0));
+}
+
+#[test]
+fn ignored_single_at_sticky_halted_pc_preserves_rearm_sequence() {
+    let mut machine = Machine::new(CountingCpu::default(), SystemBus::new());
+    machine.cpu.halt();
+    machine.add_breakpoint(0);
+    assert_eq!(
+        machine.advance(AdvanceRequest::run(Some(1))).unwrap().stop,
+        AdvanceStop::Breakpoint(0)
+    );
+
+    machine.advance(AdvanceRequest::single()).unwrap();
+    assert_eq!(machine.last_breakpoint, Some(0));
+    assert_eq!(
+        machine.advance(AdvanceRequest::run(Some(1))).unwrap().stop,
+        AdvanceStop::Breakpoint(0)
+    );
+}
+
+#[test]
+fn zero_progress_restores_clocks_and_does_not_profile_a_batch() {
+    let mut machine = Machine::new(
+        CountingCpu {
+            zero_batch: true,
+            ..Default::default()
+        },
+        SystemBus::new(),
+    );
+    machine.total_cycles = 9;
+    machine.bus.set_current_cycle(9);
+
+    let report = machine.advance(AdvanceRequest::run(Some(4))).unwrap();
+
+    assert_eq!(report.stop, AdvanceStop::NoProgress);
+    assert_eq!(report.primary_steps, 0);
+    assert_eq!(report.cpu_batches, 0);
+    assert_eq!(machine.total_cycles, 9);
+    assert_eq!(machine.bus.current_cycle, 9);
+    assert_eq!(machine.step_profile(), StepProfile::default());
+}
+
+#[test]
+fn debug_reset_resets_both_cores() {
+    let mut machine = counting_dual_core_machine();
+    machine.cpu.pc = 0x1111;
+    machine.cpu.sp = 0x2222;
+    machine.cpu.steps = 3;
+    machine.cpu.pending.push(1);
+    machine.cpu.halted = true;
+    let secondary = machine.cpu_secondary.as_mut().unwrap();
+    secondary.pc = 0x3333;
+    secondary.sp = 0x4444;
+    secondary.steps = 5;
+    secondary.pending.push(2);
+    secondary.halted = true;
+
+    DebugControl::reset(&mut machine).unwrap();
+
+    assert_eq!(
+        (machine.cpu.pc, machine.cpu.sp, machine.cpu.steps),
+        (0, 0, 0)
+    );
+    assert!(machine.cpu.pending.is_empty());
+    assert!(!machine.cpu.halted);
+    let secondary = machine.cpu_secondary.as_ref().unwrap();
+    assert_eq!((secondary.pc, secondary.sp, secondary.steps), (0, 0, 0));
+    assert!(secondary.pending.is_empty());
+    assert!(!secondary.halted);
+}
+
+#[test]
+fn zero_tick_interval_matches_interval_one() {
+    let mut zero = Machine::new(CountingCpu::default(), SystemBus::new());
+    let mut one = Machine::new(CountingCpu::default(), SystemBus::new());
+    zero.config.peripheral_tick_interval = 0;
+    one.config.peripheral_tick_interval = 1;
+
+    let zero_report = zero.advance(AdvanceRequest::run(Some(3))).unwrap();
+    let one_report = one.advance(AdvanceRequest::run(Some(3))).unwrap();
+
+    assert_eq!(zero_report, one_report);
+    assert_eq!(zero.cpu.steps, one.cpu.steps);
+    assert_eq!(zero.total_cycles, one.total_cycles);
+    assert_eq!(zero.step_profile(), one.step_profile());
+}
+
+#[test]
+fn primary_error_in_single_mode_preserves_legacy_precommit() {
+    let mut legacy = Machine::new(
+        CountingCpu {
+            fail_step: true,
+            ..Default::default()
+        },
+        SystemBus::new(),
+    );
+    let mut unified = Machine::new(
+        CountingCpu {
+            fail_step: true,
+            ..Default::default()
+        },
+        SystemBus::new(),
+    );
+
+    assert!(legacy.step_legacy_for_test().is_err());
+    assert!(unified.advance(AdvanceRequest::single()).is_err());
+    assert_eq!(unified.total_cycles, legacy.total_cycles);
+    assert_eq!(unified.bus.current_cycle, legacy.bus.current_cycle);
+    assert_eq!(unified.step_profile(), legacy.step_profile());
+}
+
+#[test]
+fn cpu_error_preserves_pending_scb_reset_and_aircr_fields() {
+    const AIRCR: u64 = 0xE000_ED0C;
+    const PRIGROUP: u32 = 5 << 8;
+    let mut bus = SystemBus::new();
+    let (_cpu, _nvic) = crate::system::cortex_m::configure_cortex_m(&mut bus);
+    let mut machine = Machine::new(
+        CountingCpu {
+            fail_step: true,
+            ..Default::default()
+        },
+        bus,
+    );
+    machine
+        .bus
+        .write_u32(AIRCR, (0x05fa << 16) | PRIGROUP | (1 << 2))
+        .unwrap();
+
+    assert!(machine.advance(AdvanceRequest::run(Some(1))).is_err());
+
+    assert_eq!(machine.bus.read_u32(AIRCR).unwrap() & 0x700, PRIGROUP);
+    assert_ne!(machine.bus.read_u32(AIRCR).unwrap() & (1 << 2), 0);
+}
+
+#[test]
+fn mid_batch_error_keeps_cpu_partial_progress_uncommitted() {
+    let mut machine = Machine::new(
+        CountingCpu {
+            fail_batch_after: Some(2),
+            ..Default::default()
+        },
+        SystemBus::new(),
+    );
+    machine.config.peripheral_tick_interval = 64;
+
+    assert!(machine.advance(AdvanceRequest::run(Some(4))).is_err());
+    assert_eq!(machine.cpu.steps, 2);
+    assert_eq!(machine.total_cycles, 0);
+    assert_eq!(machine.bus.current_cycle, 0);
+    assert_eq!(machine.step_profile(), StepProfile::default());
+}
+
+fn rtc_reset_machine() -> Machine<CountingCpu> {
+    use crate::peripherals::esp32::rtc_cntl::RtcCntl;
+
+    let mut bus = SystemBus::new();
+    bus.add_peripheral(
+        "rtc_cntl",
+        u64::from(RtcCntl::BASE),
+        0x1000,
+        None,
+        Box::new(RtcCntl::new()),
+    );
+    let mut machine = Machine::new(CountingCpu::default(), bus);
+    machine.config.peripheral_tick_interval = 64;
+    machine
+        .bus
+        .write_u32(u64::from(RtcCntl::BASE), 1 << 31)
+        .unwrap();
+    machine
+}
+
+#[test]
+fn rtc_reset_is_drained_at_the_first_unified_boundary() {
+    let mut machine = rtc_reset_machine();
+
+    let report = machine.advance(AdvanceRequest::run(Some(8))).unwrap();
+
+    assert_eq!(report.stop, AdvanceStop::FuelLimit);
+    assert_eq!(report.fuel_consumed, 8);
+    assert_eq!(report.primary_steps, 8);
+    assert_eq!(report.secondary_steps, 0);
+    assert_eq!(report.elapsed_cycles, 8);
+    assert_eq!(report.idle_cycles, 0);
+    assert_eq!(report.cpu_batches, 8);
+    assert_eq!(machine.cpu.pc, 0x4000_0400 + 14);
+    assert_eq!(machine.cpu.sp, 0x3FFE_0000);
+}
+
+#[test]
+fn rtc_reset_is_drained_through_debug_run_adapter() {
+    let mut machine = rtc_reset_machine();
+
+    assert_eq!(machine.run(Some(8)).unwrap(), StopReason::MaxStepsReached);
+    assert_eq!(machine.cpu.pc, 0x4000_0400 + 14);
+    assert_eq!(machine.cpu.sp, 0x3FFE_0000);
+}
+
+#[test]
+fn run_batch_cap_one_preserves_paused_push_last_write_wins() {
+    let mut machine = Machine::new(CountingCpu::default(), SystemBus::new());
+    machine.cpu.push_level = Some(false);
+    arm_synthetic_push_channel(&mut machine);
+    machine.bus.logic_tap.push(0, true);
+
+    let report = machine
+        .advance(
+            AdvanceRequest::run(Some(1))
+                .with_batch_cap(NonZeroU32::new(1).unwrap())
+                .with_breakpoints(BreakpointPolicy::Ignore),
+        )
+        .unwrap();
+
+    assert_eq!(report.cpu_batches, 1);
+    assert!(machine.logic_read_edges(0).edges.is_empty());
+}
+
+#[test]
+fn push_capture_does_not_clamp_scb_free_auto_batch() {
+    let mut machine = Machine::new(CountingCpu::default(), SystemBus::new());
+    machine.config.peripheral_tick_interval = 64;
+    machine.cpu.push_level = Some(true);
+    arm_synthetic_push_channel(&mut machine);
+
+    let request = AdvanceRequest::run(Some(8));
+    assert_eq!(request.batch_policy(), BatchPolicy::Auto);
+    let report = machine.advance(request).unwrap();
+    let profile = machine.step_profile();
+    let edges = machine.logic_read_edges(0).edges;
+
+    assert_eq!(report.stop, AdvanceStop::FuelLimit);
+    assert_eq!(report.primary_steps, 8);
+    assert_eq!(report.cpu_batches, 1);
+    assert_eq!(profile.cpu_instructions, 8);
+    assert_eq!(profile.cpu_batches, 1);
+    assert_eq!(machine.total_cycles, 8);
+    assert_eq!(edges.len(), 1);
+    assert_eq!((edges[0].ch, edges[0].cycle, edges[0].value), (0, 1, true));
+    assert!(profile.cpu_batches < profile.cpu_instructions);
+}
+
+#[test]
+fn run_dual_stamps_both_cores_at_one_end_boundary() {
+    let mut machine = counting_dual_core_machine();
+    machine.cpu.push_level = Some(true);
+    machine.cpu_secondary.as_mut().unwrap().push_level = Some(false);
+    arm_synthetic_push_channel(&mut machine);
+
+    let report = machine.advance(AdvanceRequest::run(Some(1))).unwrap();
+
+    assert_eq!((report.primary_steps, report.secondary_steps), (1, 1));
+    assert!(
+        machine.logic_read_edges(0).edges.is_empty(),
+        "primary true and secondary false at the same end boundary collapse to the final level"
+    );
+}
+
+#[derive(Debug)]
+struct CostTicker;
+
+impl crate::Peripheral for CostTicker {
+    fn read(&self, _offset: u64) -> SimResult<u8> {
+        Ok(0)
     }
+
+    fn write(&mut self, _offset: u64, _value: u8) -> SimResult<()> {
+        Ok(())
+    }
+
+    fn tick(&mut self) -> crate::PeripheralTickResult {
+        crate::PeripheralTickResult {
+            cycles: 1,
+            ..Default::default()
+        }
+    }
+}
+
+#[test]
+fn cycle_limit_allows_atomic_boundary_tick_cost_overshoot() {
+    let mut bus = SystemBus::new();
+    bus.add_peripheral("cost", 0x5100_0000, 0x100, None, Box::new(CostTicker));
+    let mut machine = Machine::new(CountingCpu::default(), bus);
+    machine.config.peripheral_tick_interval = 1;
+
+    let report = machine
+        .advance(AdvanceRequest::run(None).with_cycle_limit(1))
+        .unwrap();
+
+    assert_eq!(report.stop, AdvanceStop::CycleLimit);
+    assert_eq!(report.primary_steps, 1);
+    assert_eq!(report.fuel_consumed, 1);
+    assert_eq!(report.elapsed_cycles, 2);
+    assert_eq!(machine.step_profile().peripheral_ticks, 1);
+}
+
+#[cfg(feature = "event-scheduler")]
+#[test]
+fn idle_fast_forward_is_reconciled_in_report_and_cpu() {
+    let mut bus = SystemBus::new();
+    bus.peripherals.clear();
+    let mut machine = Machine::new(
+        CountingCpu {
+            idle_budget: Some(5),
+            ..Default::default()
+        },
+        bus,
+    );
+    machine.config.idle_fast_forward_enabled = true;
+
+    let report = machine.advance(AdvanceRequest::run(Some(5))).unwrap();
+
+    assert_eq!(report.stop, AdvanceStop::FuelLimit);
+    assert_eq!(report.fuel_consumed, 5);
+    assert_eq!(report.idle_cycles, 5);
+    assert_eq!(report.primary_steps, 0);
+    assert_eq!(report.cpu_batches, 0);
+    assert_eq!(report.elapsed_cycles, 5);
+    assert_eq!(machine.cpu.idle_skipped, 5);
+    assert_eq!(machine.idle_fast_forward_cycles_skipped, 5);
+}
+
+#[cfg(feature = "event-scheduler")]
+#[test]
+fn ignored_breakpoint_does_not_block_idle_fast_forward() {
+    let mut bus = SystemBus::new();
+    bus.peripherals.clear();
+    let mut machine = Machine::new(
+        CountingCpu {
+            idle_budget: Some(3),
+            ..Default::default()
+        },
+        bus,
+    );
+    machine.config.idle_fast_forward_enabled = true;
+    machine.add_breakpoint(0);
+
+    let report = machine
+        .advance(AdvanceRequest::run(Some(3)).with_breakpoints(BreakpointPolicy::Ignore))
+        .unwrap();
+
+    assert_eq!(report.idle_cycles, 3);
+    assert_eq!(machine.cpu.steps, 0);
+    assert_eq!(machine.last_breakpoint, None);
+}
+
+#[cfg(feature = "event-scheduler")]
+#[test]
+fn terminal_idle_skip_flushes_pending_push_observation() {
+    let mut bus = SystemBus::new();
+    bus.peripherals.clear();
+    let mut machine = Machine::new(
+        CountingCpu {
+            idle_budget: Some(2),
+            ..Default::default()
+        },
+        bus,
+    );
+    machine.config.idle_fast_forward_enabled = true;
+    arm_synthetic_push_channel(&mut machine);
+    machine.bus.logic_tap.push(0, true);
+
+    let report = machine.advance(AdvanceRequest::run(Some(2))).unwrap();
+
+    assert_eq!(report.idle_cycles, 2);
+    assert_eq!(machine.logic_read_edges(0).edges.len(), 1);
+}
+
+#[test]
+fn unified_single_core_run_matches_legacy_run_oracle() {
+    let mut legacy = Machine::new(CountingCpu::default(), SystemBus::new());
+    let mut unified = Machine::new(CountingCpu::default(), SystemBus::new());
+    legacy.config.peripheral_tick_interval = 64;
+    unified.config.peripheral_tick_interval = 64;
+
+    let legacy_stop = legacy.run_legacy_for_test(Some(7)).unwrap();
+    let report = unified.advance(AdvanceRequest::run(Some(7))).unwrap();
+
+    assert_eq!(legacy_stop, StopReason::MaxStepsReached);
+    assert_eq!(report.stop, AdvanceStop::FuelLimit);
+    assert_eq!(report.fuel_consumed, 7);
+    assert_eq!(report.primary_steps, 7);
+    assert_eq!(report.secondary_steps, 0);
+    assert_eq!(report.elapsed_cycles, 7);
+    assert_eq!(report.idle_cycles, 0);
+    assert_eq!(report.cpu_batches, 1);
+    assert_eq!(
+        serde_json::to_value(unified.cpu.snapshot()).unwrap(),
+        serde_json::to_value(legacy.cpu.snapshot()).unwrap()
+    );
+    assert_eq!(
+        serde_json::to_value(unified.snapshot()).unwrap(),
+        serde_json::to_value(legacy.snapshot()).unwrap()
+    );
+    assert_eq!(unified.total_cycles, legacy.total_cycles);
+    assert_eq!(unified.bus.current_cycle, legacy.bus.current_cycle);
+    assert_eq!(unified.step_profile(), legacy.step_profile());
 }
 
 #[test]

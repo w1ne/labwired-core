@@ -1409,7 +1409,12 @@ impl<C: Cpu> Machine<C> {
         }
     }
 
-    fn try_idle_fast_forward(&mut self, _max_steps: Option<u32>, _steps: u32) -> u32 {
+    fn try_idle_fast_forward(
+        &mut self,
+        _max_steps: Option<u64>,
+        _steps: u64,
+        breakpoints_block_idle: bool,
+    ) -> u64 {
         // POLLED logic capture disables the skip: a scheduler event inside the
         // skipped window could toggle a watched pad, and the per-cycle poll
         // guarantee must hold even under this opt-in acceleration. Push-only
@@ -1417,7 +1422,7 @@ impl<C: Cpu> Machine<C> {
         // instrumented peripheral code, which pushes its own edge with the
         // post-skip tap clock (seeded below before the scheduler drain).
         if !self.config.idle_fast_forward_enabled
-            || !self.breakpoints.is_empty()
+            || breakpoints_block_idle
             || self.bus.requires_cycle_accurate()
             || self.logic_capture.poll_active()
         {
@@ -1455,7 +1460,7 @@ impl<C: Cpu> Machine<C> {
                 _ => return 0,
             };
             let remaining = _max_steps
-                .map(|limit| limit.saturating_sub(_steps) as u64)
+                .map(|limit| limit.saturating_sub(_steps))
                 .unwrap_or(1_000_000);
             if remaining == 0 {
                 return 0;
@@ -1496,7 +1501,7 @@ impl<C: Cpu> Machine<C> {
             }
             self.sched.advance_to(self.total_cycles);
             self.drain_scheduler_events();
-            skipped
+            u64::from(skipped)
         }
     }
 
@@ -2245,20 +2250,9 @@ impl<C: Cpu> Machine<C> {
     }
 }
 
-impl<C: Cpu> DebugControl for Machine<C> {
-    fn add_breakpoint(&mut self, addr: u32) {
-        self.breakpoints.insert(addr);
-    }
-
-    fn remove_breakpoint(&mut self, addr: u32) {
-        self.breakpoints.remove(&addr);
-    }
-
-    fn clear_breakpoints(&mut self) {
-        self.breakpoints.clear();
-    }
-
-    fn run(&mut self, max_steps: Option<u32>) -> SimResult<StopReason> {
+impl<C: Cpu> Machine<C> {
+    #[cfg(test)]
+    pub(crate) fn run_legacy_for_test(&mut self, max_steps: Option<u32>) -> SimResult<StopReason> {
         let mut steps = 0;
 
         loop {
@@ -2280,7 +2274,11 @@ impl<C: Cpu> DebugControl for Machine<C> {
                 }
             }
 
-            let skipped = self.try_idle_fast_forward(max_steps, steps);
+            let skipped = self.try_idle_fast_forward(
+                max_steps.map(u64::from),
+                u64::from(steps),
+                !self.breakpoints.is_empty(),
+            ) as u32;
             if skipped > 0 {
                 steps += skipped;
                 continue;
@@ -2529,7 +2527,29 @@ impl<C: Cpu> DebugControl for Machine<C> {
         }
         Ok(StopReason::StepDone)
     }
+}
 
+impl<C: Cpu> DebugControl for Machine<C> {
+    fn add_breakpoint(&mut self, addr: u32) {
+        self.breakpoints.insert(addr);
+    }
+
+    fn remove_breakpoint(&mut self, addr: u32) {
+        self.breakpoints.remove(&addr);
+    }
+
+    fn clear_breakpoints(&mut self) {
+        self.breakpoints.clear();
+    }
+
+    fn run(&mut self, max_steps: Option<u32>) -> SimResult<StopReason> {
+        let report = self.advance(AdvanceRequest::run(max_steps.map(u64::from)))?;
+        Ok(match report.stop {
+            AdvanceStop::Breakpoint(pc) => StopReason::Breakpoint(pc),
+            AdvanceStop::FuelLimit => StopReason::MaxStepsReached,
+            AdvanceStop::CycleLimit | AdvanceStop::NoProgress => StopReason::StepDone,
+        })
+    }
     fn step_single(&mut self) -> SimResult<StopReason> {
         self.step()?;
         Ok(StopReason::StepDone)
@@ -2592,7 +2612,7 @@ impl<C: Cpu> DebugControl for Machine<C> {
     }
 
     fn reset(&mut self) -> SimResult<()> {
-        self.cpu.reset(&mut self.bus)
+        Machine::reset(self)
     }
 
     fn snapshot(&self) -> snapshot::MachineSnapshot {

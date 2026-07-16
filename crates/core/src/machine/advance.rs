@@ -1,48 +1,137 @@
 //! Owns the authoritative advance loop and stop/report accounting.
 
-use crate::{AdvanceReport, AdvanceRequest, AdvanceStop, Cpu, Machine, SimResult, SimulationError};
+use super::boundary::ExecutionMode;
+use crate::{
+    AdvanceReport, AdvanceRequest, AdvanceStop, BreakpointPolicy, Cpu, IdlePolicy, Machine,
+    SimResult,
+};
+
+#[derive(Default)]
+struct AdvanceState {
+    fuel_consumed: u64,
+    primary_steps: u64,
+    secondary_steps: u64,
+    idle_cycles: u64,
+    cpu_batches: u64,
+}
+
+impl AdvanceState {
+    fn report(&self, stop: AdvanceStop, elapsed_cycles: u64) -> AdvanceReport {
+        AdvanceReport::new(
+            stop,
+            self.fuel_consumed,
+            self.primary_steps,
+            self.secondary_steps,
+            elapsed_cycles,
+            self.idle_cycles,
+            self.cpu_batches,
+        )
+    }
+}
 
 impl<C: Cpu> Machine<C> {
+    /// Advances the machine through its authoritative execution path.
+    ///
+    /// Normal stop conditions are checked before the next unit of work, in
+    /// this order: honored breakpoint, fuel limit, then simulated-cycle limit.
+    /// Fuel counts primary scheduling quanta plus cycles skipped by idle fast
+    /// forward. A simulated-cycle limit is observed only at committed machine
+    /// boundaries: CPU work is planned not to exceed the remaining budget, but
+    /// an atomic boundary may charge peripheral costs and therefore report an
+    /// `elapsed_cycles` value beyond that limit.
+    ///
+    /// On a normal stop, the returned [`AdvanceReport`] accounts for all
+    /// successfully committed primary and secondary steps, idle cycles, CPU
+    /// batches, fuel, and elapsed machine cycles. A CPU batch that returns
+    /// `Ok(0)` stops with [`AdvanceStop::NoProgress`]. CPU errors instead return
+    /// `Err` without rollback; according to the [`Cpu`] contract, the CPU may
+    /// already have retired part of a batch, and direct execution may already
+    /// have published its boundary clocks.
+    ///
+    /// A request with no fuel or simulated-cycle limit can run indefinitely.
+    /// Callers must arrange an honored breakpoint, CPU progress termination,
+    /// or external termination when issuing such a request.
     pub fn advance(&mut self, request: AdvanceRequest) -> SimResult<AdvanceReport> {
-        // Task 3 temporarily supports only the exact policy set produced by
-        // `single()`. Equality here validates that public contract; it must not
-        // be reused to infer boundary timing. Task 4 removes this guard when it
-        // implements run requests and policy overrides.
-        if request != AdvanceRequest::single() {
-            return Err(SimulationError::NotImplemented(
-                "Machine::advance currently supports only exact single-step requests".to_string(),
-            ));
-        }
-
         let start_cycles = self.total_cycles;
-        self.total_cycles += 1;
-        // Mirror the cycle count into the bus before the CPU executes, so
-        // tick-time services can read "now": scheduler-driven peripheral sync
-        // (event-scheduler) and the HC-SR04 echo-window timing (always). O(1) —
-        // a field write + a relaxed atomic store (the shared read-sync clock),
-        // not the per-peripheral walk this phase removed.
-        self.bus.set_current_cycle(self.total_cycles);
-        self.bus.bus_trace.set_cycle(self.total_cycles);
-        // The cycle boundary this instruction's effects become observable at —
-        // pad writes pushed through the logic tap stamp with it (single-step
-        // path: one instruction, no CPU-side clock bumps needed).
-        let logic_boundary = self.total_cycles;
-        if self.logic_capture.push_active() {
-            self.bus.logic_tap.set_clock(logic_boundary);
+        let mut state = AdvanceState::default();
+
+        loop {
+            let elapsed = self.total_cycles - start_cycles;
+
+            if request.breakpoint_policy() == BreakpointPolicy::Honor {
+                let pc = self.cpu.get_pc();
+                let aligned = pc & !1;
+                if self.breakpoints.contains(&aligned) && self.last_breakpoint != Some(aligned) {
+                    self.last_breakpoint = Some(aligned);
+                    return Ok(state.report(AdvanceStop::Breakpoint(pc), elapsed));
+                }
+                self.last_breakpoint = None;
+            }
+
+            if request
+                .limits()
+                .fuel
+                .is_some_and(|limit| state.fuel_consumed >= limit)
+            {
+                return Ok(state.report(AdvanceStop::FuelLimit, elapsed));
+            }
+            if request
+                .limits()
+                .simulated_cycles
+                .is_some_and(|limit| elapsed >= limit)
+            {
+                return Ok(state.report(AdvanceStop::CycleLimit, elapsed));
+            }
+
+            if request.idle_policy() == IdlePolicy::Configured {
+                let fuel_remaining = request
+                    .limits()
+                    .fuel
+                    .map(|limit| limit.saturating_sub(state.fuel_consumed));
+                let cycle_remaining = request
+                    .limits()
+                    .simulated_cycles
+                    .map(|limit| limit.saturating_sub(elapsed));
+                let skip_limit = match (fuel_remaining, cycle_remaining) {
+                    (Some(a), Some(b)) => Some(a.min(b)),
+                    (Some(a), None) | (None, Some(a)) => Some(a),
+                    (None, None) => None,
+                };
+                let skipped = self.try_idle_fast_forward(
+                    skip_limit,
+                    0,
+                    request.breakpoint_policy() == BreakpointPolicy::Honor
+                        && !self.breakpoints.is_empty(),
+                );
+                if skipped > 0 {
+                    state.fuel_consumed += skipped;
+                    state.idle_cycles += skipped;
+                    self.logic_observe(self.total_cycles);
+                    continue;
+                }
+            }
+
+            self.bus.reset_mmio_activity_counters();
+            let count = self.plan_cpu_window(request, state.fuel_consumed, elapsed);
+            debug_assert!(count > 0);
+            let mode = if request.is_single() {
+                ExecutionMode::SingleDirect
+            } else if self.cpu_secondary.is_some() {
+                ExecutionMode::RunDual
+            } else {
+                ExecutionMode::RunBatch
+            };
+            let batch_start = self.total_cycles;
+            let progress = self.execute_cpu_window(mode, count)?;
+            if progress.primary_steps == 0 {
+                return Ok(state.report(AdvanceStop::NoProgress, self.total_cycles - start_cycles));
+            }
+
+            self.commit_advance_boundary(mode, batch_start, progress)?;
+            state.fuel_consumed += u64::from(progress.primary_steps);
+            state.primary_steps += u64::from(progress.primary_steps);
+            state.secondary_steps += u64::from(progress.secondary_steps);
+            state.cpu_batches += 1;
         }
-
-        let progress = self.execute_cpu_window(1)?;
-        self.record_cpu_progress(progress.primary_steps);
-        self.commit_advance_boundary(logic_boundary)?;
-
-        Ok(AdvanceReport {
-            stop: AdvanceStop::FuelLimit,
-            fuel_consumed: 1,
-            primary_steps: u64::from(progress.primary_steps),
-            secondary_steps: u64::from(progress.secondary_steps),
-            elapsed_cycles: self.total_cycles - start_cycles,
-            idle_cycles: 0,
-            cpu_batches: 1,
-        })
     }
 }

@@ -44,7 +44,9 @@ pub struct AdvanceLimits {
     ///
     /// `None` allows unbounded fuel consumption.
     pub fuel: Option<u64>,
-    /// Maximum simulated machine cycles that may elapse.
+    /// Maximum simulated machine cycles that may elapse before starting the
+    /// next atomic execution boundary. Peripheral costs committed with the
+    /// final boundary may make the reported elapsed time exceed this value.
     ///
     /// `None` disables the simulated-cycle budget.
     pub simulated_cycles: Option<u64>,
@@ -145,7 +147,6 @@ impl AdvanceRequest {
     }
 
     /// Reports whether this request preserves single-step boundary timing.
-    #[allow(dead_code)] // Consumed by the advance engine in the next task.
     pub(crate) fn is_single(self) -> bool {
         self.mode == AdvanceMode::Single
     }
@@ -183,4 +184,27 @@ pub struct AdvanceReport {
     pub idle_cycles: u64,
     /// Successful CPU execution batches committed.
     pub cpu_batches: u64,
+}
+
+impl AdvanceReport {
+    /// Builds a complete report without an intermediate partial state.
+    pub(crate) fn new(
+        stop: AdvanceStop,
+        fuel_consumed: u64,
+        primary_steps: u64,
+        secondary_steps: u64,
+        elapsed_cycles: u64,
+        idle_cycles: u64,
+        cpu_batches: u64,
+    ) -> Self {
+        Self {
+            stop,
+            fuel_consumed,
+            primary_steps,
+            secondary_steps,
+            elapsed_cycles,
+            idle_cycles,
+            cpu_batches,
+        }
+    }
 }

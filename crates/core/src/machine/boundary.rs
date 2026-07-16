@@ -2,6 +2,13 @@
 
 use crate::{Cpu, Machine, SimResult};
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ExecutionMode {
+    SingleDirect,
+    RunBatch,
+    RunDual,
+}
+
 #[derive(Clone, Copy)]
 pub(crate) struct CoreProgress {
     pub primary_steps: u32,
@@ -9,8 +16,44 @@ pub(crate) struct CoreProgress {
 }
 
 impl<C: Cpu> Machine<C> {
-    pub(crate) fn execute_cpu_window(&mut self, count: u32) -> SimResult<CoreProgress> {
-        debug_assert_eq!(count, 1);
+    pub(crate) fn execute_cpu_window(
+        &mut self,
+        mode: ExecutionMode,
+        count: u32,
+    ) -> SimResult<CoreProgress> {
+        match mode {
+            ExecutionMode::SingleDirect | ExecutionMode::RunDual => {
+                debug_assert_eq!(count, 1);
+                self.total_cycles += 1;
+                self.bus.set_current_cycle(self.total_cycles);
+                self.bus.bus_trace.set_cycle(self.total_cycles);
+                if self.logic_capture.push_active() {
+                    self.bus.logic_tap.set_clock(self.total_cycles);
+                }
+            }
+            ExecutionMode::RunBatch => {
+                self.bus.set_current_cycle(self.total_cycles);
+                self.bus.bus_trace.set_cycle(self.total_cycles);
+                if self.logic_capture.push_active() {
+                    self.bus.logic_tap.set_clock(self.total_cycles);
+                }
+                let executed =
+                    self.cpu
+                        .step_batch(&mut self.bus, &self.observers, &self.config, count)?;
+                if executed == 0 {
+                    self.bus.set_current_cycle(self.total_cycles);
+                    self.bus.bus_trace.set_cycle(self.total_cycles);
+                    if self.logic_capture.push_active() {
+                        self.bus.logic_tap.set_clock(self.total_cycles + 1);
+                    }
+                }
+                return Ok(CoreProgress {
+                    primary_steps: executed,
+                    secondary_steps: 0,
+                });
+            }
+        }
+
         if self.cpu_secondary.is_none() {
             self.cpu
                 .step(&mut self.bus, &self.observers, &self.config)?;
@@ -55,8 +98,25 @@ impl<C: Cpu> Machine<C> {
         }
     }
 
-    pub(crate) fn commit_advance_boundary(&mut self, logic_boundary: u64) -> SimResult<()> {
-        if self.total_cycles % (self.config.peripheral_tick_interval as u64) == 0 {
+    pub(crate) fn commit_advance_boundary(
+        &mut self,
+        mode: ExecutionMode,
+        _batch_start: u64,
+        progress: CoreProgress,
+    ) -> SimResult<()> {
+        if mode == ExecutionMode::RunBatch {
+            self.total_cycles += u64::from(progress.primary_steps);
+        }
+        self.record_cpu_progress(progress.primary_steps);
+
+        #[cfg(feature = "event-scheduler")]
+        if mode == ExecutionMode::RunBatch {
+            self.bus.set_current_cycle(_batch_start);
+        }
+
+        let logic_boundary = self.total_cycles;
+        let tick_interval = u64::from(self.config.peripheral_tick_interval.max(1));
+        if self.total_cycles % tick_interval == 0 {
             // Propagate peripherals
             let (interrupts, costs) = self.bus.tick_peripherals_fully();
             self.record_peripheral_tick_profile(costs.len());
@@ -81,7 +141,10 @@ impl<C: Cpu> Machine<C> {
         // everyone) the drain is a no-op — the legacy `tick()` walk
         // above still drives every peripheral until each migrates.
         #[cfg(feature = "event-scheduler")]
-        self.drain_scheduler_events();
+        {
+            self.bus.set_current_cycle(self.total_cycles);
+            self.drain_scheduler_events();
+        }
 
         // RTC_CNTL software system reset (OPTIONS0 bit 31 / `SW_SYS_RST`).
         // The ESP32 BROM's `_rtc_trigger_sw_system_reset` writes this bit
@@ -108,6 +171,11 @@ impl<C: Cpu> Machine<C> {
         // machinery so MSP/PC reload from vector[0]/vector[1] via the CPU
         // reset path. No-op on non-Cortex-M targets (no SCB on the bus).
         if self.drain_scb_reset_request() {
+            // AIRCR.SYSRESETREQ is self-clearing across the reset. Clear the
+            // modeled readback bit too so later boundaries do not retrigger it.
+            if let Some(index) = self.scb_index {
+                self.bus.peripherals[index].dev.write_u32(0x0c, 0)?;
+            }
             self.reset()?;
             tracing::debug!("SCB SYSRESETREQ: CPU rebooted through vector table");
         }
