@@ -1694,6 +1694,11 @@ impl<C: Cpu> Machine<C> {
     }
 
     pub fn step(&mut self) -> SimResult<()> {
+        self.advance(AdvanceRequest::single()).map(|_| ())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn step_legacy_for_test(&mut self) -> SimResult<()> {
         self.total_cycles += 1;
         // Mirror the cycle count into the bus before the CPU executes, so
         // tick-time services can read "now": scheduler-driven peripheral sync

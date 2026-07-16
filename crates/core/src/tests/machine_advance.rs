@@ -1,8 +1,10 @@
+use crate::bus::SystemBus;
 use crate::runtime_snapshot::CpuKind;
 use crate::snapshot::{ArmCpuSnapshot, CpuSnapshot};
 use crate::{
-    AdvanceRequest, BatchPolicy, BreakpointPolicy, Bus, Cpu, DebugControl, IdlePolicy, Machine,
-    SimResult, SimulationConfig, SimulationError, SimulationObserver, StepProfile, StopReason,
+    AdvanceRequest, AdvanceStop, BatchPolicy, BreakpointPolicy, Bus, Cpu, DebugControl, IdlePolicy,
+    Machine, SimResult, SimulationConfig, SimulationError, SimulationObserver, StepProfile,
+    StopReason,
 };
 use std::num::NonZeroU32;
 use std::sync::Arc;
@@ -14,6 +16,10 @@ struct CountingCpu {
     steps: u32,
     pending: Vec<u64>,
     halted: bool,
+    // Non-architectural test injection; intentionally omitted from snapshots.
+    fail_step: bool,
+    // Non-architectural push-capture injection; intentionally omitted from snapshots.
+    push_level: Option<bool>,
 }
 
 impl Cpu for CountingCpu {
@@ -28,10 +34,18 @@ impl Cpu for CountingCpu {
 
     fn step(
         &mut self,
-        _bus: &mut dyn Bus,
+        bus: &mut dyn Bus,
         _observers: &[Arc<dyn SimulationObserver>],
         _config: &SimulationConfig,
     ) -> SimResult<()> {
+        if self.fail_step {
+            return Err(SimulationError::Other(
+                "CountingCpu injected step failure".to_string(),
+            ));
+        }
+        if let Some(level) = self.push_level {
+            bus.logic_tap().unwrap().push(0, level);
+        }
         if !self.halted {
             self.steps += 1;
             self.pc = self.pc.wrapping_add(2);
@@ -278,6 +292,8 @@ fn counting_cpu_runtime_snapshot_round_trips() {
         steps: 42,
         pending: vec![0x8000_0000_0000_0001, 0x55AA],
         halted: true,
+        fail_step: false,
+        push_level: None,
     };
     let (kind, bytes) = source.runtime_snapshot();
     let mut restored = CountingCpu::default();
@@ -382,4 +398,248 @@ fn request_builders_override_only_their_policy() {
         request.is_single(),
         "builders must preserve boundary timing mode"
     );
+}
+
+#[test]
+fn advance_rejects_every_request_outside_exact_single_contract_without_mutation() {
+    let unsupported = [
+        ("run", AdvanceRequest::run(Some(1))),
+        ("cycle limit", AdvanceRequest::single().with_cycle_limit(0)),
+        (
+            "breakpoint override",
+            AdvanceRequest::single().with_breakpoints(BreakpointPolicy::Honor),
+        ),
+        (
+            "batch cap",
+            AdvanceRequest::single().with_batch_cap(NonZeroU32::new(2).unwrap()),
+        ),
+    ];
+
+    for (case, request) in unsupported {
+        let mut machine = counting_dual_core_machine();
+        let machine_before = serde_json::to_value(machine.snapshot()).unwrap();
+        let primary_before = serde_json::to_value(machine.cpu.snapshot()).unwrap();
+        let secondary_before =
+            serde_json::to_value(machine.cpu_secondary.as_ref().unwrap().snapshot()).unwrap();
+        let cycles_before = machine.total_cycles;
+        let bus_cycle_before = machine.bus.current_cycle;
+        let profile_before = machine.step_profile();
+
+        let error = machine.advance(request).unwrap_err();
+
+        assert!(
+            matches!(error, SimulationError::NotImplemented(_)),
+            "{case}: unsupported requests must return an explicit error"
+        );
+        assert_eq!(
+            serde_json::to_value(machine.snapshot()).unwrap(),
+            machine_before,
+            "{case}: machine snapshot changed"
+        );
+        assert_eq!(
+            serde_json::to_value(machine.cpu.snapshot()).unwrap(),
+            primary_before,
+            "{case}: primary CPU changed"
+        );
+        assert_eq!(
+            serde_json::to_value(machine.cpu_secondary.as_ref().unwrap().snapshot()).unwrap(),
+            secondary_before,
+            "{case}: secondary CPU changed"
+        );
+        assert_eq!(
+            machine.total_cycles, cycles_before,
+            "{case}: cycles changed"
+        );
+        assert_eq!(
+            machine.bus.current_cycle, bus_cycle_before,
+            "{case}: bus cycle changed"
+        );
+        assert_eq!(
+            machine.step_profile(),
+            profile_before,
+            "{case}: profile changed"
+        );
+    }
+}
+
+#[test]
+fn advance_single_is_byte_identical_to_legacy_step() {
+    let mut legacy = counting_dual_core_machine();
+    let mut unified = counting_dual_core_machine();
+
+    legacy.step_legacy_for_test().unwrap();
+    let report = unified.advance(AdvanceRequest::single()).unwrap();
+
+    assert_eq!(report.stop, AdvanceStop::FuelLimit);
+    assert_eq!((report.primary_steps, report.secondary_steps), (1, 1));
+    assert_eq!(report.fuel_consumed, 1);
+    assert_eq!(report.elapsed_cycles, 1);
+    assert_eq!(report.idle_cycles, 0);
+    assert_eq!(report.cpu_batches, 1);
+    assert_eq!(
+        serde_json::to_value(unified.cpu.snapshot()).unwrap(),
+        serde_json::to_value(legacy.cpu.snapshot()).unwrap()
+    );
+    assert_eq!(
+        serde_json::to_value(unified.cpu_secondary.as_ref().unwrap().snapshot()).unwrap(),
+        serde_json::to_value(legacy.cpu_secondary.as_ref().unwrap().snapshot()).unwrap()
+    );
+    assert_eq!(
+        serde_json::to_value(unified.snapshot()).unwrap(),
+        serde_json::to_value(legacy.snapshot()).unwrap()
+    );
+    assert_eq!(unified.total_cycles, legacy.total_cycles);
+    assert_eq!(unified.bus.current_cycle, legacy.bus.current_cycle);
+    assert_eq!(unified.step_profile(), legacy.step_profile());
+}
+
+fn arm_synthetic_push_channel(machine: &mut Machine<CountingCpu>) {
+    machine
+        .logic_capture
+        .install(&[Some((usize::MAX, 0))], &[Some(false)], &[true]);
+    machine.bus.logic_tap.clear_events();
+    machine.bus.logic_tap.set_clock(machine.total_cycles + 1);
+    machine.bus.logic_tap.set_armed(true);
+}
+
+#[test]
+fn advance_single_preserves_paused_push_same_boundary_last_write_wins() {
+    let mut legacy = Machine::new(CountingCpu::default(), SystemBus::new());
+    let mut unified = Machine::new(CountingCpu::default(), SystemBus::new());
+    legacy.cpu.push_level = Some(false);
+    unified.cpu.push_level = Some(false);
+    arm_synthetic_push_channel(&mut legacy);
+    arm_synthetic_push_channel(&mut unified);
+
+    legacy.bus.logic_tap.push(0, true);
+    unified.bus.logic_tap.push(0, true);
+    legacy.step_legacy_for_test().unwrap();
+    unified.advance(AdvanceRequest::single()).unwrap();
+
+    let legacy_batch = legacy.logic_read_edges(0);
+    let unified_batch = unified.logic_read_edges(0);
+    assert_eq!(unified_batch.cursor, legacy_batch.cursor);
+    assert_eq!(unified_batch.dropped, legacy_batch.dropped);
+    assert_eq!(unified_batch.edges, legacy_batch.edges);
+    assert!(
+        unified_batch.edges.is_empty(),
+        "paused true then instruction false at one boundary must be invisible"
+    );
+    assert_eq!(unified.total_cycles, legacy.total_cycles);
+    assert_eq!(unified.bus.current_cycle, legacy.bus.current_cycle);
+    assert_eq!(unified.step_profile(), legacy.step_profile());
+}
+
+#[test]
+fn advance_single_preserves_primary_accounting_on_secondary_error() {
+    let mut legacy = counting_dual_core_machine();
+    let mut unified = counting_dual_core_machine();
+    legacy.cpu_secondary.as_mut().unwrap().fail_step = true;
+    unified.cpu_secondary.as_mut().unwrap().fail_step = true;
+    legacy.config.peripheral_tick_interval = 1;
+    unified.config.peripheral_tick_interval = 1;
+
+    let legacy_error = legacy.step_legacy_for_test().unwrap_err();
+    let unified_error = unified.advance(AdvanceRequest::single()).unwrap_err();
+
+    assert_eq!(unified_error.to_string(), legacy_error.to_string());
+    assert_eq!(
+        serde_json::to_value(unified.cpu.snapshot()).unwrap(),
+        serde_json::to_value(legacy.cpu.snapshot()).unwrap()
+    );
+    assert_eq!(
+        serde_json::to_value(unified.cpu_secondary.as_ref().unwrap().snapshot()).unwrap(),
+        serde_json::to_value(legacy.cpu_secondary.as_ref().unwrap().snapshot()).unwrap()
+    );
+    assert_eq!(
+        serde_json::to_value(unified.snapshot()).unwrap(),
+        serde_json::to_value(legacy.snapshot()).unwrap()
+    );
+    assert_eq!(unified.total_cycles, legacy.total_cycles);
+    assert_eq!(unified.bus.current_cycle, legacy.bus.current_cycle);
+    assert_eq!(unified.step_profile(), legacy.step_profile());
+    assert_eq!(unified.step_profile().cpu_instructions, 1);
+    assert_eq!(unified.step_profile().cpu_batches, 1);
+    assert_eq!(unified.step_profile().peripheral_ticks, 0);
+}
+
+fn assert_real_cpu_single_step_matches<C: Cpu>(factory: impl Fn() -> Machine<C>) {
+    let mut legacy = factory();
+    let mut unified = factory();
+
+    legacy.step_legacy_for_test().unwrap();
+    let report = unified.advance(AdvanceRequest::single()).unwrap();
+
+    assert_eq!(report.stop, AdvanceStop::FuelLimit);
+    assert_eq!(report.primary_steps, 1);
+    assert_eq!(
+        serde_json::to_value(legacy.cpu.snapshot()).unwrap(),
+        serde_json::to_value(unified.cpu.snapshot()).unwrap()
+    );
+    assert_eq!(
+        serde_json::to_value(legacy.snapshot()).unwrap(),
+        serde_json::to_value(unified.snapshot()).unwrap()
+    );
+    assert_eq!(legacy.total_cycles, unified.total_cycles);
+    assert_eq!(legacy.bus.current_cycle, unified.bus.current_cycle);
+    assert_eq!(legacy.step_profile(), unified.step_profile());
+}
+
+#[test]
+fn arm_single_step_matches_legacy_boundary() {
+    assert_real_cpu_single_step_matches(|| {
+        let mut bus = SystemBus::new();
+        let (mut cpu, _) = crate::system::cortex_m::configure_cortex_m(&mut bus);
+        bus.write_u16(0, 0xBF00).unwrap();
+        cpu.set_pc(0);
+        Machine::new(cpu, bus)
+    });
+}
+
+#[test]
+fn riscv_single_step_matches_legacy_boundary() {
+    assert_real_cpu_single_step_matches(|| {
+        let mut bus = SystemBus::new();
+        let mut cpu = crate::system::riscv::configure_riscv(&mut bus);
+        bus.write_u32(0, 0x0000_0013).unwrap();
+        cpu.set_pc(0);
+        Machine::new(cpu, bus)
+    });
+}
+
+#[test]
+fn xtensa_single_step_matches_legacy_boundary() {
+    assert_real_cpu_single_step_matches(|| {
+        let mut bus = SystemBus::new();
+        let mut cpu = crate::cpu::xtensa_lx7::XtensaLx7::new();
+        bus.write_u8(0, 0x3d).unwrap();
+        bus.write_u8(1, 0xf0).unwrap();
+        cpu.set_pc(0);
+        Machine::new(cpu, bus)
+    });
+}
+
+struct AppCpuBootAddrReset;
+
+impl Drop for AppCpuBootAddrReset {
+    fn drop(&mut self) {
+        crate::peripherals::esp_xtensa_common::rom_thunks::APPCPU_BOOT_ADDR
+            .with(|slot| slot.set(None));
+    }
+}
+
+#[test]
+fn unified_single_releases_and_steps_app_cpu() {
+    let _reset = AppCpuBootAddrReset;
+    let mut machine = counting_dual_core_machine();
+    machine.cpu_secondary.as_mut().unwrap().halt();
+    crate::peripherals::esp_xtensa_common::rom_thunks::APPCPU_BOOT_ADDR
+        .with(|slot| slot.set(Some(0x4008_0000)));
+
+    machine.advance(AdvanceRequest::single()).unwrap();
+
+    let cpu1 = machine.cpu_secondary.as_ref().unwrap();
+    assert!(!cpu1.halted);
+    assert_eq!(cpu1.pc, 0x4008_0002);
+    assert_eq!(cpu1.steps, 1);
 }
