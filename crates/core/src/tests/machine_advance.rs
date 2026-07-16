@@ -1,3 +1,9 @@
+//! Boundary and parity tests for the authoritative `Machine::advance` lifecycle.
+//!
+//! The `cfg(test)` legacy helpers intentionally retain direct CPU stepping as
+//! differential oracles. Production callers must not copy that orchestration;
+//! they enter through `Machine::advance` (or its single-step adapter).
+
 use crate::bus::SystemBus;
 use crate::runtime_snapshot::CpuKind;
 use crate::snapshot::{ArmCpuSnapshot, CpuSnapshot};

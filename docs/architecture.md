@@ -4,6 +4,47 @@ A reference for the engine's runtime internals. For the high-level subsystem tou
 
 LabWired is a modular execution engine designed to decouple the CPU core from the memory and peripheral bus. This design enables the simulation of multi-architecture systems within a unified peripheral environment.
 
+### Authoritative machine advancement
+
+Ordinary native, CLI-test, debugger, and WASM execution enters through
+`Machine::advance`. It owns batch planning, CPU0/CPU1 scheduling, cycle
+publication, peripheral ticks, scheduler delivery, software reset, flash
+operations, profiling, and logic observation. Frontends inspect the machine
+between bounded calls for assertions, stimuli, UART limits, and artifacts, but
+must not call `Cpu::step` directly.
+
+The remaining direct CPU advancement sites are deliberately limited to these
+implementation, compatibility, and test boundaries:
+
+- `crates/core/src/machine/boundary.rs` is the internal CPU execution primitive
+  owned by `Machine::advance`; it is not a frontend entry point.
+- `crates/core/src/lib.rs` retains `step_legacy_for_test` and
+  `run_legacy_for_test` only as `cfg(test)` differential oracles. CPU trait
+  implementations, the default `step_batch` helper, and CPU unit helpers
+  likewise operate below or outside the frontend boundary. The direct calls in
+  `crates/core/src/peripherals/esp_xtensa_common/rom_thunks.rs` are unit-test
+  helpers.
+- `crates/core/src/vfi.rs` provides the specialist standalone `ShadowEngine`.
+  Its lockstep operation deliberately owns direct stepping of the golden and
+  shadow CPUs plus parity comparison; its caller owns the surrounding bus and
+  peripheral lifecycle. It is not an ordinary `Machine` frontend.
+- `crates/core/src/multi_core.rs` provides the specialist standalone
+  `MultiCoreMachine::step_all` engine. It directly steps each core, ticks its
+  peripherals once, and routes interrupts according to that engine's own
+  policy; it is outside the `Machine` frontend lifecycle.
+- `crates/cli/src/main.rs` retains direct stepping only in the temporary,
+  test-selected `ExecutionEngine::Legacy` fidelity branch. The default
+  `ExecutionEngine::Unified` branch uses `Machine::advance`.
+- `crates/cli/src/commands/run.rs` and
+  `crates/cli/src/commands/snapshot.rs` contain specialized bare-CPU ESP
+  bring-up and snapshot loops; these are explicitly outside the ordinary
+  machine frontend path.
+- `crates/hw-oracle/src/lib.rs`, `crates/hw-oracle/src/arm_thumb.rs`, and
+  `crates/hw-oracle/src/riscv.rs` are bare-CPU hardware validation oracles.
+
+Ordinary WASM wrappers and `DebugControl::run` have no direct CPU-step path;
+they enter through the authoritative machine boundary.
+
 ## 1. Core Execution Engine (`labwired-core`)
 
 The `labwired-core` crate provides the central execution loop and state management.
