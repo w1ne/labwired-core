@@ -356,7 +356,7 @@ fn run_firmware_riscv_batched(
     let jit_on = std::env::var("LABWIRED_RISCV_JIT").as_deref() != Ok("0");
 
     // The C3 is walk-deletable at rom-boot: its peripherals are scheduler-driven,
-    // so batching at RECOMMENDED_TICK_INTERVAL (64) is byte-identical to
+    // so batching at RECOMMENDED_TICK_INTERVAL is byte-identical to
     // interval-1 while giving the JIT a batch window wide enough to retire whole
     // basic blocks between peripheral ticks (see the differential gate). Set on
     // BOTH machine.config and machine.bus.config, exactly as the gate does.

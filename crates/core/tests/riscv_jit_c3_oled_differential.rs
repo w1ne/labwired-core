@@ -148,7 +148,7 @@ fn build_oled_lab(jit_enabled: bool) -> OledLab {
     machine.cpu.set_pc(bootloader.entry_point as u32);
 
     // Run at the C3's walk-deletable production tick interval
-    // (RECOMMENDED_TICK_INTERVAL = 64): i2c0/systimer/etc. are scheduler-driven,
+    // (RECOMMENDED_TICK_INTERVAL): i2c0/systimer/etc. are scheduler-driven,
     // so peripherals need not tick every cycle. BOTH arms use this identical
     // interval. This is deliberately MODEST — well below the JIT's 1024-instr
     // block size — to prove Fix 2 engages the JIT: with the batch budget keyed

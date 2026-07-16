@@ -165,6 +165,12 @@ impl SystemBus {
             .enumerate()
             .filter_map(|(index, p)| p.dev.needs_bus_tick().then_some(index))
             .collect();
+        self.scheduler_driver_indices = self
+            .peripherals
+            .iter()
+            .enumerate()
+            .filter_map(|(index, p)| p.dev.uses_scheduler().then_some(index))
+            .collect();
         self.peripheral_hint.set(None);
         self.last_route.set(None);
         // Cache the DPORT index (classic-ESP32 only) so the per-step
@@ -371,6 +377,13 @@ impl SystemBus {
     }
 
     pub(crate) fn refresh_legacy_tick_index(&mut self, idx: usize) -> bool {
+        // Walk-deleted buses never consult `legacy_tick_indices` (the walk is
+        // off). Skip the trait calls + linear index scan on every MMIO write —
+        // the post-#555 C3 OLED hot path was spending more samples here than
+        // in the write itself once fetch/route optims landed.
+        if self.legacy_walk_disabled {
+            return false;
+        }
         let active = self
             .peripherals
             .get(idx)
@@ -390,10 +403,13 @@ impl SystemBus {
     }
 
     pub(crate) fn refresh_bus_tick_index(&mut self, idx: usize) -> bool {
-        let active = self
-            .peripherals
-            .get(idx)
-            .is_some_and(|p| p.dev.needs_bus_tick());
+        // Fast reject: most C3 models never arm the bus-tick path. Avoid the
+        // linear membership scan when the peripheral still reports inactive
+        // and is not already tracked (the common steady-state write).
+        let Some(p) = self.peripherals.get(idx) else {
+            return false;
+        };
+        let active = p.dev.needs_bus_tick();
         let pos = self.bus_tick_indices.iter().position(|&i| i == idx);
         match (active, pos) {
             (true, None) => {
@@ -403,6 +419,7 @@ impl SystemBus {
             (false, Some(pos)) => {
                 self.bus_tick_indices.remove(pos);
             }
+            (false, None) => return false,
             _ => {}
         }
         active

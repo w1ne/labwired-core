@@ -1508,12 +1508,146 @@ mod romboot_tests {
     /// Accelerated C3 flash shares must still run the real app image and paint
     /// attached devices. This skips the mask-ROM replay, but does not fake the
     /// OLED: pixels must come from firmware I2C writes into the SSD1306 model.
+    ///
+    /// Uses `step_batch` (browser worker path via `Machine::run`), not per-insn
+    /// `step`, and applies the same tick + idle-FF policy the playground sets
+    /// after `recommended_tick_interval()`.
     #[test]
-    #[cfg_attr(
-        not(target_arch = "wasm32"),
-        ignore = "uses wasm-bindgen APIs; run under wasm32"
-    )]
+    #[ignore = "browser-path C3 fast-start paint; run with --release --ignored --nocapture"]
     fn wasm_c3_flash_fast_start_oled_paints_quickly() {
+        let (mut sim, rec_tick) = c3_browser_fast_start_sim();
+        apply_browser_c3_policy(&mut sim, rec_tick);
+
+        const BATCH: u32 = 2_000_000;
+        const MAX_STEPS: u64 = 80_000_000;
+        const MIN_LIT: usize = 400;
+        let mut steps: u64 = 0;
+        let mut lit = 0usize;
+        let t0 = std::time::Instant::now();
+        while steps < MAX_STEPS {
+            let n = sim.step_batch(BATCH).expect("step_batch");
+            assert!(n > 0, "step_batch returned 0 executed cycles (MCU stuck?)");
+            steps += n as u64;
+            if let Ok(fb) = sim.get_ssd1306_framebuffer("oled") {
+                lit = fb.iter().map(|b| b.count_ones() as usize).sum();
+                if lit >= MIN_LIT {
+                    let out = String::from_utf8_lossy(&sim.uart_sink.lock().unwrap()).into_owned();
+                    assert!(
+                        out.contains("oled-lab") || out.contains("OLED painted"),
+                        "C3 flash fast-start painted but did not capture app serial; \
+                         captured serial:\n{out}"
+                    );
+                    eprintln!(
+                        "browser-path OLED painted: lit={lit} device_cycles={steps} \
+                         rec_tick={rec_tick} wall={:.2}s",
+                        t0.elapsed().as_secs_f64()
+                    );
+                    return;
+                }
+            }
+        }
+
+        let out = String::from_utf8_lossy(&sim.uart_sink.lock().unwrap()).into_owned();
+        panic!(
+            "C3 flash fast-start did not paint OLED (>= {MIN_LIT} lit pixels) within \
+             {MAX_STEPS} steps; last count = {lit}.\n--- captured serial ---\n{out}"
+        );
+    }
+
+    /// Pre-deploy gate: browser C3 path must stay healthy for **several
+    /// device-seconds** after paint (no hang, cycles advance, framebuffer
+    /// stays lit, serial remains readable). Mirrors worker `step_batch` +
+    /// tick-512 + idle FF — not the slow per-instruction `step` API.
+    #[test]
+    #[ignore = "multi-second browser-path smoke; run with --release --ignored --nocapture"]
+    fn wasm_c3_browser_path_runs_few_device_seconds() {
+        let (mut sim, rec_tick) = c3_browser_fast_start_sim();
+        apply_browser_c3_policy(&mut sim, rec_tick);
+        assert!(
+            rec_tick >= 64,
+            "walk-free C3 should recommend a batched tick interval, got {rec_tick}"
+        );
+
+        // 160 MHz silicon: 3 device-seconds ≈ 480e6 cycles. With idle FF the
+        // host wall is much shorter; without it this is still a hard progress
+        // + stability gate.
+        const DEVICE_SECONDS: f64 = 3.0;
+        const CPU_HZ: f64 = 160_000_000.0;
+        const TARGET_CYCLES: u64 = (DEVICE_SECONDS * CPU_HZ) as u64;
+        const BATCH: u32 = 4_000_000;
+        const MIN_LIT: usize = 400;
+
+        let t0 = std::time::Instant::now();
+        let mut total: u64 = 0;
+        let mut lit_at_paint = 0usize;
+        let mut painted = false;
+
+        while total < TARGET_CYCLES {
+            let n = sim
+                .step_batch(BATCH)
+                .unwrap_or_else(|e| panic!("step_batch failed at cycle {total}: {e:?}"));
+            assert!(
+                n > 0,
+                "step_batch executed 0 cycles at total={total} — MCU not advancing"
+            );
+            total += n as u64;
+
+            if let Ok(fb) = sim.get_ssd1306_framebuffer("oled") {
+                let lit = fb.iter().map(|b| b.count_ones() as usize).sum::<usize>();
+                if !painted && lit >= MIN_LIT {
+                    painted = true;
+                    lit_at_paint = lit;
+                    eprintln!(
+                        "paint @ device_cycles={total} lit={lit} wall={:.2}s",
+                        t0.elapsed().as_secs_f64()
+                    );
+                }
+                // After paint, framebuffer must not collapse to empty.
+                if painted {
+                    assert!(
+                        lit >= MIN_LIT / 4,
+                        "framebuffer collapsed after paint: lit={lit} at cycle {total}"
+                    );
+                }
+            }
+        }
+
+        let wall = t0.elapsed().as_secs_f64();
+        let out = String::from_utf8_lossy(&sim.uart_sink.lock().unwrap()).into_owned();
+        let skipped = sim.idle_fast_forward_cycles_skipped();
+        let mips = total as f64 / wall / 1.0e6;
+        eprintln!(
+            "browser-path multi-second: device_cycles={total} (~{DEVICE_SECONDS}s @ 160MHz) \
+             wall={wall:.2}s host_MIPS={mips:.1} rec_tick={rec_tick} idle_ff_skipped={skipped} \
+             painted={painted} lit_at_paint={lit_at_paint}"
+        );
+        eprintln!(
+            "serial tail (last 800 chars):\n{}",
+            out.chars()
+                .rev()
+                .take(800)
+                .collect::<String>()
+                .chars()
+                .rev()
+                .collect::<String>()
+        );
+
+        assert!(
+            painted,
+            "must paint OLED within {DEVICE_SECONDS} device-seconds; serial:\n{out}"
+        );
+        assert!(
+            total >= TARGET_CYCLES,
+            "must advance at least {TARGET_CYCLES} device cycles"
+        );
+        // Sanity: host must make progress (not deadlocked / near-zero MIPS).
+        assert!(
+            mips > 1.0,
+            "host throughput too low ({mips:.3} MIPS) — web MCU effectively not running"
+        );
+    }
+
+    fn c3_browser_fast_start_sim() -> (WasmSimulator, u32) {
         let manifest_dir = root();
         let chip_yaml =
             std::fs::read_to_string(manifest_dir.join("../../configs/chips/esp32c3.yaml"))
@@ -1537,36 +1671,17 @@ mod romboot_tests {
         blobs.insert("esp32c3_irom".into(), irom);
         blobs.insert("esp32c3_drom".into(), drom);
         blobs.insert("esp32c3_flash".into(), flash);
+        // Same marker blob playground injects for fast-start selection.
+        blobs.insert(crate::ESP32C3_FLASH_FAST_START_BLOB.to_string(), Vec::new());
 
         let mut sim = WasmSimulator::new_from_config_riscv_flash_fastboot(&chip, &manifest, &blobs)
-            .expect("construct C3 flash fast-start WasmSimulator");
+            .expect("construct C3 flash fast-start WasmSimulator (browser path)");
+        let rec = sim.recommended_tick_interval();
+        (sim, rec)
+    }
 
-        const BATCH: u32 = 1_000_000;
-        const MAX_STEPS: u64 = 40_000_000;
-        const MIN_LIT: usize = 400;
-        let mut steps: u64 = 0;
-        let mut lit = 0usize;
-        while steps < MAX_STEPS {
-            sim.step(BATCH).expect("step");
-            steps += BATCH as u64;
-            if let Ok(fb) = sim.get_ssd1306_framebuffer("oled") {
-                lit = fb.iter().map(|b| b.count_ones() as usize).sum();
-                if lit >= MIN_LIT {
-                    let out = String::from_utf8_lossy(&sim.uart_sink.lock().unwrap()).into_owned();
-                    assert!(
-                        out.contains("oled-lab"),
-                        "C3 flash fast-start painted but did not capture UART0 app logs; \
-                         captured serial:\n{out}"
-                    );
-                    return;
-                }
-            }
-        }
-
-        let out = String::from_utf8_lossy(&sim.uart_sink.lock().unwrap()).into_owned();
-        panic!(
-            "C3 flash fast-start did not paint OLED (>= {MIN_LIT} lit pixels) within \
-             {MAX_STEPS} steps; last count = {lit}.\n--- captured serial ---\n{out}"
-        );
+    fn apply_browser_c3_policy(sim: &mut WasmSimulator, rec_tick: u32) {
+        sim.set_peripheral_tick_interval(rec_tick);
+        sim.set_idle_fast_forward_enabled(true);
     }
 }

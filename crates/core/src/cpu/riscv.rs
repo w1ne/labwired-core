@@ -517,16 +517,15 @@ impl RiscV {
             if config.idle_fast_forward_enabled && self.idle_fast_forward_budget(bus).is_some() {
                 return Ok(retired);
             }
-            // Mirror the interpreter's Gap #1 mid-batch-arming early-exit (see
-            // `step_batch`). A compiled block never executes an MMIO store, so
-            // `pending_schedule` can only have been populated by an interpreted
-            // instruction (`self.step` above) — the SAME instruction the JIT-off
-            // interpreter would break on. Ending the batch at that identical
-            // point keeps JIT-on byte-identical to JIT-off while making the
-            // just-armed event deliverable at its exact cycle by the next batch.
+            // Mirror the interpreter's Gap #1 deadline clamp (see `step_batch`).
             #[cfg(feature = "event-scheduler")]
-            if config.peripheral_tick_interval > 1 && bus.has_pending_schedule() {
-                return Ok(retired);
+            if config.peripheral_tick_interval > 1 {
+                if let Some(dl) = bus.earliest_pending_deadline() {
+                    let max_ret = dl.saturating_sub(batch_start);
+                    if (retired as u64) >= max_ret {
+                        return Ok(retired);
+                    }
+                }
             }
         }
         Ok(retired)
@@ -1256,7 +1255,17 @@ impl Cpu for RiscV {
         let exact_clock = config.peripheral_tick_interval > 1;
         #[cfg(feature = "event-scheduler")]
         let batch_start = if exact_clock { bus.current_cycle() } else { 0 };
-        for i in 0..max_count {
+        // Gap #1: mid-batch arming. Clamp remaining work to the earliest pending
+        // absolute deadline instead of ending on the first arm — far-future
+        // timers (FreeRTOS tick, etc.) used to force ~60-insn batches and tank
+        // host MIPS. We still never retire past the deadline without a drain
+        // (same delivery cycle as the immediate-end policy).
+        #[cfg(feature = "event-scheduler")]
+        let mut limit = max_count;
+        #[cfg(not(feature = "event-scheduler"))]
+        let limit = max_count;
+        let mut i = 0u32;
+        while i < limit {
             if let Some(tap) = &tap {
                 tap.bump_clock();
             }
@@ -1265,30 +1274,26 @@ impl Cpu for RiscV {
                 bus.publish_cycle(batch_start + i as u64);
             }
             self.step(bus, observers, config)?;
+            i += 1;
             if config.idle_fast_forward_enabled && self.idle_fast_forward_budget(bus).is_some() {
-                return Ok(i + 1);
+                return Ok(i);
             }
-            // Event-scheduler Gap #1 (mid-batch arming): if this instruction was
-            // an MMIO write that armed a peripheral event (now sitting in the
-            // bus `pending_schedule`, not yet in the scheduler heap), END the
-            // batch here so `Machine::run`'s post-batch drain enqueues it and the
-            // NEXT batch's `next_event_deadline` clamp delivers it at its exact
-            // absolute cycle — instead of this widened batch overrunning the
-            // deadline and the event firing a batch late (which shifts the ISR
-            // entry instruction and diverges `cpu_state`). Gated on interval > 1:
-            // at interval 1 the batch is already one instruction so this never
-            // fires, keeping the interval-1 hot path (and every walk-identity
-            // gate) byte-unchanged and cost-free. Because compiled JIT blocks
-            // never execute MMIO stores (they touch only registers + RAM), the
-            // arming store is ALWAYS interpreted in both JIT-on and JIT-off, so
-            // mirroring this check in `run_jit_loop` breaks both arms at the same
-            // instruction — the JIT-on/off byte-identity gate is preserved.
             #[cfg(feature = "event-scheduler")]
-            if config.peripheral_tick_interval > 1 && bus.has_pending_schedule() {
-                return Ok(i + 1);
+            if exact_clock {
+                if let Some(dl) = bus.earliest_pending_deadline() {
+                    // After `i` instructions, total_cycles will be batch_start+i.
+                    // Do not advance total_cycles past `dl` before drain enqueues.
+                    let max_ret = dl.saturating_sub(batch_start);
+                    if (i as u64) >= max_ret {
+                        return Ok(i);
+                    }
+                    if max_ret < u32::MAX as u64 {
+                        limit = limit.min(max_ret as u32);
+                    }
+                }
             }
         }
-        Ok(max_count)
+        Ok(i)
     }
 
     fn set_pc(&mut self, val: u32) {

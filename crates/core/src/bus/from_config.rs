@@ -67,6 +67,7 @@ impl SystemBus {
             peripheral_ranges: Vec::new(),
             legacy_tick_indices: Vec::new(),
             bus_tick_indices: Vec::new(),
+            scheduler_driver_indices: Vec::new(),
             peripheral_hint: Cell::new(None),
             last_route: Cell::new(None),
             last_gpio_in: [0; 2],

@@ -360,6 +360,32 @@ fn oled_lab_framebuffer_is_byte_identical_across_tick_intervals() {
     );
 }
 
+/// Gate 2b: same OLED paint identity at the higher recommended plateau (512).
+/// Walk-deleted + event-scheduler clamp means far-future alarms still fire at
+/// exact cycles; 512 only reduces host drain frequency. Byte-identical FB is
+/// the licence to raise RECOMMENDED_TICK_INTERVAL for native-feel throughput.
+#[test]
+#[ignore = "runs the real C3 bootloader + app (~2x30M steps); run with --release --ignored"]
+fn oled_lab_framebuffer_is_byte_identical_at_tick_512() {
+    let (_, fb_1, _) = run_lab(build_oled_lab(1, false, false, false, false), PAINT_BUDGET);
+    let (_, fb_512, serial_512) = run_lab(
+        build_oled_lab(512, false, false, false, false),
+        PAINT_BUDGET,
+    );
+
+    assert!(
+        lit_pixels(&fb_1) >= MIN_LIT,
+        "interval-1 run must paint the OLED"
+    );
+    assert!(
+        fb_1 == fb_512,
+        "SSD1306 framebuffer must be byte-identical at tick 512          (lit@1={}, lit@512={}); serial@512:\n{}",
+        lit_pixels(&fb_1),
+        lit_pixels(&fb_512),
+        String::from_utf8_lossy(&serial_512)
+    );
+}
+
 /// SYSTIMER walk-free gate (the fidelity contract for THIS batch): the
 /// SYSTIMER is the FreeRTOS-tick source, so the OLED demo's serial log, total
 /// cycles and painted framebuffer are all downstream of its alarm delivery.
@@ -620,16 +646,25 @@ fn oled_lab_native_mips_probe() {
     let secs = start.elapsed().as_secs_f64();
     let profile = lab.machine.step_profile();
     let idle_skipped = lab.machine.idle_fast_forward_cycles_skipped;
+    let avg_batch = if profile.cpu_batches > 0 {
+        profile.cpu_instructions as f64 / profile.cpu_batches as f64
+    } else {
+        0.0
+    };
     eprintln!(
         "oled-lab native: {steps_budget} insn budget, interval {interval}, systimer {}, idle_ff={idle_ff}, jit={jit}: \
-         {:.2}s = {:.2} MIPS (total_cycles {}, idle_ff_skipped {}, cpu_instr {}, legacy_tick_entries {})",
+         {:.2}s = {:.2} MIPS (total_cycles {}, idle_ff_skipped {}, cpu_instr {}, batches {}, avg_batch {:.1}, \
+         legacy_tick_entries {}, peri_ticks {})",
         if systimer_legacy { "walk" } else { "scheduler" },
         secs,
         lab.machine.total_cycles as f64 / secs / 1.0e6,
         lab.machine.total_cycles,
         idle_skipped,
         profile.cpu_instructions,
+        profile.cpu_batches,
+        avg_batch,
         profile.legacy_tick_entries,
+        profile.peripheral_ticks,
     );
     #[cfg(feature = "jit")]
     if let Some(s) = lab.machine.cpu.jit_stats() {
@@ -730,5 +765,79 @@ fn oled_lab_walk_pinners_after_rtc_migration() {
         bus.max_safe_tick_interval() > 1,
         "bus must recommend an interval > 1 now that every pinner is migrated (got {})",
         bus.max_safe_tick_interval()
+    );
+}
+
+/// Live silicon cross-check helper: run the same flash image the bench board
+/// just booted (`esp32c3-oled-demo-flash.bin`) and print serial markers + device
+/// time so an operator can diff against USB UART from `/dev/cu.usbmodem*`.
+#[test]
+#[ignore = "operator bench report; run with --release --ignored --nocapture"]
+fn oled_lab_sim_serial_vs_silicon_report() {
+    use std::time::Instant;
+    let t0 = Instant::now();
+    let mut lab = build_oled_lab(512, false, false, false, false);
+    lab.machine.config.idle_fast_forward_enabled = true;
+    lab.machine.bus.config.idle_fast_forward_enabled = true;
+    // Match browser recommended interval after #557.
+    lab.machine.config.peripheral_tick_interval = 512;
+    lab.machine.bus.config.peripheral_tick_interval = 512;
+
+    let mut entered = None;
+    let mut painted = None;
+    let mut freq_line = None;
+    for _ in 0..80 {
+        lab.machine.run(Some(2_000_000)).expect("run");
+        let s = String::from_utf8_lossy(&lab.serial.lock().unwrap()).to_string();
+        if entered.is_none() && s.contains("app_main entered") {
+            entered = Some(lab.machine.total_cycles);
+        }
+        if freq_line.is_none() {
+            if let Some(line) = s.lines().find(|l| l.contains("cpu freq")) {
+                freq_line = Some(line.to_string());
+            }
+        }
+        if painted.is_none() && s.contains("OLED painted") {
+            painted = Some(lab.machine.total_cycles);
+            break;
+        }
+    }
+    let wall = t0.elapsed().as_secs_f64();
+    let s = String::from_utf8_lossy(&lab.serial.lock().unwrap()).to_string();
+    let fb = ssd1306_framebuffer(&lab.machine);
+    eprintln!("=== SIM vs silicon report (same flash image) ===");
+    eprintln!(
+        "wall_s={wall:.3} total_cycles={} lit_pixels={}",
+        lab.machine.total_cycles,
+        lit_pixels(&fb)
+    );
+    eprintln!("cpu_freq_line={freq_line:?}");
+    eprintln!(
+        "app_main entered @ cycles={entered:?} device_ms≈{:.1}",
+        entered.map(|c| c as f64 / 160_000.0).unwrap_or(0.0)
+    );
+    eprintln!(
+        "OLED painted @ cycles={painted:?} device_ms≈{:.1}",
+        painted.map(|c| c as f64 / 160_000.0).unwrap_or(0.0)
+    );
+    for line in s.lines() {
+        if line.contains("oled-lab")
+            || line.contains("cpu freq")
+            || line.contains("chip revision")
+            || line.contains("Chip rev")
+            || line.contains("app_main")
+            || line.contains("OLED painted")
+            || line.contains("Project name")
+        {
+            eprintln!("SIM| {line}");
+        }
+    }
+    assert!(
+        painted.is_some(),
+        "sim must reach OLED painted like silicon"
+    );
+    assert!(
+        lit_pixels(&fb) >= MIN_LIT,
+        "sim framebuffer must light pixels"
     );
 }

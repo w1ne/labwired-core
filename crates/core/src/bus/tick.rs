@@ -668,6 +668,24 @@ impl SystemBus {
     /// differ. Sources ≥ 128 (none on either SoC) are ignored.
     fn poll_scheduler_matrix_sources(&self) -> [u64; 2] {
         let mut asserted = [0u64; 2];
+        // Prefer the cached scheduler-driver index list (filled in
+        // `rebuild_peripheral_ranges`) so a walk-deleted C3 bus does not
+        // virtual-dispatch `uses_scheduler` across every peripheral on every
+        // MMIO write that re-derives levels.
+        if !self.scheduler_driver_indices.is_empty() {
+            for &i in &self.scheduler_driver_indices {
+                let Some(p) = self.peripherals.get(i) else {
+                    continue;
+                };
+                for src in p.dev.matrix_irq_sources() {
+                    let idx = (src / 64) as usize;
+                    if idx < asserted.len() {
+                        asserted[idx] |= 1u64 << (src % 64);
+                    }
+                }
+            }
+            return asserted;
+        }
         for p in &self.peripherals {
             if !p.dev.uses_scheduler() {
                 continue;

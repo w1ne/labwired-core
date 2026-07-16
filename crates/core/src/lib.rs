@@ -832,6 +832,17 @@ pub trait Bus {
         false
     }
 
+    /// Earliest absolute cycle among events sitting in `pending_schedule`
+    /// (not yet on the scheduler heap). Used by the CPU batch loop to **clamp**
+    /// the remaining batch to that deadline instead of ending on the first arm
+    /// (far-future timers would otherwise force ~tens-of-instruction batches).
+    /// Fidelity: we still never retire past the deadline without a drain.
+    /// Default `None`.
+    #[cfg(feature = "event-scheduler")]
+    fn earliest_pending_deadline(&self) -> Option<u64> {
+        None
+    }
+
     /// The bus's mirrored "current cycle" (what lazy peripherals read through the
     /// shared `CycleClock`). A CPU batch loop reads this once at batch entry to
     /// learn the batch-start cycle, then republishes the EXACT cycle before each
@@ -1049,6 +1060,11 @@ pub struct Machine<C: Cpu> {
     /// feature.
     #[allow(dead_code)]
     hcsr04_edge_scratch: Vec<(usize, u64, u64)>,
+    /// Reusable generation snapshot for `next_event_deadline` / `drain_due`.
+    /// Avoids allocating a fresh `Vec` on every batch / drain (was a real
+    /// host-side tax at tick-512: one alloc + full peripheral walk per batch).
+    #[allow(dead_code)]
+    generation_scratch: Vec<u32>,
 
     /// In-engine logic-analyzer edge capture (see [`crate::logic_capture`]).
     /// Empty/inactive by default — the step loop pays a single `is_active`
@@ -1314,6 +1330,7 @@ impl<C: Cpu> Machine<C> {
             scb_index,
             scheduler_bootstrapped: false,
             hcsr04_edge_scratch: Vec::new(),
+            generation_scratch: Vec::new(),
             logic_capture: logic_capture::LogicCapture::new(),
             logic_force_poll: false,
         }
@@ -1342,6 +1359,25 @@ impl<C: Cpu> Machine<C> {
         self.step_profile.peripheral_ticked_entries += cost_entries as u64;
         self.step_profile.bus_tick_entries += bus_tick_entries as u64;
         self.step_profile.legacy_tick_entries += legacy_tick_entries as u64;
+    }
+
+    /// Refresh [`Self::generation_scratch`] from the bus (no alloc after the
+    /// first call once the peripheral count is stable). Replaces
+    /// `bus.peripheral_generations()` on the per-batch deadline clamp and
+    /// drain hot paths. Callers then pass `&self.generation_scratch`.
+    #[cfg(feature = "event-scheduler")]
+    fn refresh_generation_scratch(&mut self) {
+        let n = self.bus.peripherals.len();
+        if self.generation_scratch.len() != n {
+            self.generation_scratch.resize(n, 0);
+        }
+        for (dst, p) in self
+            .generation_scratch
+            .iter_mut()
+            .zip(self.bus.peripherals.iter())
+        {
+            *dst = p.generation;
+        }
     }
 
     fn try_idle_fast_forward(&mut self, _max_steps: Option<u32>, _steps: u32) -> u32 {
@@ -1386,8 +1422,8 @@ impl<C: Cpu> Machine<C> {
             }
             budget = budget.min(remaining);
 
-            let generations = self.bus.peripheral_generations();
-            if let Some(deadline_cycle) = self.sched.next_event_deadline(&generations) {
+            self.refresh_generation_scratch();
+            if let Some(deadline_cycle) = self.sched.next_event_deadline(&self.generation_scratch) {
                 if deadline_cycle <= self.total_cycles {
                     return 0;
                 }
@@ -1887,8 +1923,8 @@ impl<C: Cpu> Machine<C> {
         if self.sched.is_empty() {
             return;
         }
-        let generations = self.bus.peripheral_generations();
-        let due = self.sched.drain_due(&generations);
+        self.refresh_generation_scratch();
+        let due = self.sched.drain_due(&self.generation_scratch);
         for ev in due {
             // Bus-subsystem pseudo-peripheral (HC-SR04): no `peripherals[]`
             // entry — dispatch straight to the shared ECHO choke point.
@@ -2311,14 +2347,14 @@ impl<C: Cpu> DebugControl for Machine<C> {
             // the CLI fidelity gate excludes `cpu_state`: its exclusion is
             // principled, not a workaround for an incomplete clamp.
             //
-            // The `next_event_deadline` heap scan is O(heap) per batch, so we
-            // GATE the whole clamp on `peripheral_tick_interval > 1`: at
-            // interval 1 the batch is already one instruction (the drain runs
-            // every cycle and delivers events exactly), so the scan would be
-            // pure wasted cost on the hot interval-1 path the deploy pins.
-            // `current_batch > 1` further skips the scan whenever an earlier
-            // clamp (cycle-accurate bus, breakpoint, poll capture, HC-SR04)
-            // already pinned the batch to one instruction.
+            // The `next_event_deadline` lookup is O(1) when the heap top is
+            // live (BinaryHeap peek) — still GATE on `peripheral_tick_interval
+            // > 1`: at interval 1 the batch is already one instruction (the
+            // drain runs every cycle and delivers events exactly), so the
+            // call would be pure wasted cost on the hot interval-1 path.
+            // `current_batch > 1` further skips whenever an earlier clamp
+            // (cycle-accurate bus, breakpoint, poll capture, HC-SR04) already
+            // pinned the batch to one instruction.
             //
             // NOTE: this does NOT cover an event a firmware ARMS via an MMIO
             // write partway through THIS batch — that event is only enqueued at
@@ -2327,8 +2363,8 @@ impl<C: Cpu> DebugControl for Machine<C> {
             // `step_batch` returns (see the `pending_schedule` re-clamp below).
             #[cfg(feature = "event-scheduler")]
             if self.config.peripheral_tick_interval > 1 && current_batch > 1 {
-                let generations = self.bus.peripheral_generations();
-                if let Some(dl) = self.sched.next_event_deadline(&generations) {
+                self.refresh_generation_scratch();
+                if let Some(dl) = self.sched.next_event_deadline(&self.generation_scratch) {
                     if dl > self.total_cycles {
                         current_batch = current_batch.min((dl - self.total_cycles) as u32);
                     } else {
