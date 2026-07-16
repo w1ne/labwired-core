@@ -162,6 +162,14 @@ primary CPU scheduling quantum or an idle-fast-forwarded cycle. It is not named
 "instructions" because current `run(max_steps)` counts idle skips against the
 same limit.
 
+`simulated_cycles` is checked at committed machine boundaries. CPU planning
+never knowingly crosses the remaining budget, but an instruction that lands on
+a peripheral tick may reveal an indivisible tick cost only while committing
+that boundary. The report therefore stops at the first committed boundary at or
+beyond the limit; `elapsed_cycles` may exceed the requested value by that atomic
+peripheral cost. This is deterministic boundary overshoot, not an additional
+CPU quantum.
+
 `AdvanceRequest::single()` means one primary scheduling quantum, breakpoint
 ignore, idle fast-forward disabled, and batch cap one. This preserves debugger
 single-step behavior.
@@ -218,11 +226,14 @@ and skipped-cycle telemetry.
 
 ### CPU execution
 
-Single-core machines retain `Cpu::step_batch`, including JIT eligibility.
-Dual-core machines always execute one primary instruction, drain and apply a
-pending APP_CPU release address, then execute one secondary instruction on the
-same bus. This preserves the existing `Machine::step` ordering and prevents a
-CPU0 batch from starving CPU1.
+Run-mode single-core machines retain `Cpu::step_batch`, including JIT
+eligibility and its per-instruction clock rails. Single-step requests use
+`Cpu::step` so their already-published end boundary is not bumped a second time.
+Dual-core machines always execute one direct primary instruction, drain and
+apply a pending APP_CPU release address, then execute one direct secondary
+instruction on the same bus. Their one-quantum run boundary follows repeated
+`Machine::step` timing. This preserves the existing single-step ordering and
+prevents a CPU0 batch from starving CPU1.
 
 The first slice preserves the existing `Cpu::step_batch` error contract. Exact
 partial-retirement reporting on a mid-batch error requires a separate `Cpu`

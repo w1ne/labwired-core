@@ -523,6 +523,20 @@ Expected: old run fails CPU1/RTC assertions.
 
 - [ ] **Step 3: Implement safe planning**
 
+Before implementing the loop, preserve three distinct execution modes. A
+single request publishes and seeds the end boundary then calls `Cpu::step`; a
+single-core run publishes and seeds the batch start then calls
+`Cpu::step_batch`; a dual-core run executes one direct lockstep quantum using
+repeated-step end-boundary timing. Do not infer the execution primitive from
+`count == 1`, because a capped run batch and a single request have different
+clock semantics.
+
+Cycle limits stop at the first committed boundary at or beyond the limit. The
+planner does not cross the remaining CPU-cycle budget, but an indivisible
+peripheral tick cost discovered during that boundary may deterministically
+overshoot it; tests must assert the reported overshoot and that no additional
+CPU quantum executes.
+
 ```rust
 pub(crate) struct AdvanceState { pub fuel_consumed: u64, pub start_cycles: u64 }
 
@@ -681,7 +695,7 @@ cargo test -p labwired-core machine_advance -- --nocapture
 cargo test -p labwired-core rtc_reset -- --nocapture
 cargo test -p labwired-core scb_reset -- --nocapture
 cargo test -p labwired-core --features event-scheduler --test systick_walk_differential --test stm32_timer_walk_differential --test stm32_dma_walk_differential --test esp32s3_walk_differential -- --nocapture
-cargo test --release -p labwired-core --features jit --test riscv_jit_c3_oled_differential -- --ignored --nocapture
+cargo test --release -p labwired-core --features jit,event-scheduler --test riscv_jit_c3_oled_differential jit_vs_interpreter_c3_oled_is_byte_identical_and_non_vacuous -- --exact --ignored --nocapture
 ```
 
 Expected: PASS. Missing fixture-backed ignored gates are reported, never counted as passing.
