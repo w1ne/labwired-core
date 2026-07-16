@@ -383,6 +383,11 @@ impl Peripheral for FlashXipPeripheral {
         false
     }
 
+    /// Code/rodata XIP has no side effects; ignore for host poll-coalesce.
+    fn mmio_access_class(&self, _offset: u64) -> crate::MmioAccessClass {
+        crate::MmioAccessClass::SideEffectFree
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let mut b = [0u8; 1];
         self.read_bytes(offset, &mut b);

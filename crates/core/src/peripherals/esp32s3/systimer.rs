@@ -728,6 +728,18 @@ fn set_alarm_conf(alarm: &mut AlarmState, value: u32) {
 }
 
 impl Peripheral for Systimer {
+    /// Freerunning UNIT snapshot regs only — Arduino millis / esp_timer poll.
+    /// Alarm/load/conf stay SideEffecting so arming work never coalesces.
+    fn mmio_access_class(&self, offset: u64) -> crate::MmioAccessClass {
+        let word = offset & !3;
+        match word {
+            0x04 | 0x08 | // UNIT0_OP, UNIT1_OP
+            0x40 | 0x44 | 0x48 | 0x4C // UNIT0/1 VALUE_HI/LO
+            => crate::MmioAccessClass::FreerunningTimerPoll,
+            _ => crate::MmioAccessClass::SideEffecting,
+        }
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let word_off = offset & !3;
         let byte_off = (offset & 3) * 8;
