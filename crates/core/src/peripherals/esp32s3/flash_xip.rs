@@ -271,7 +271,7 @@ impl FlashXipPeripheral {
         if let Some(mmu) = &self.mmu_table {
             let vaddr = self.base.wrapping_add(offset as u32);
             // entry_id = (vaddr & vaddr_mask) >> 16  (mmu_ll_get_entry_id)
-            let entry_id = ((vaddr & self.fmt.vaddr_mask) >> 16) as u32;
+            let entry_id = (vaddr & self.fmt.vaddr_mask) >> 16;
             let in_page = (vaddr & (PAGE_SIZE - 1)) as u64;
             let gen = mmu.generation.load(Ordering::Acquire);
             // Hot path: same MMU generation + same page → reuse phys_page with
