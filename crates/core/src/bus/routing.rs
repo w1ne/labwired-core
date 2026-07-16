@@ -166,6 +166,7 @@ impl SystemBus {
             .filter_map(|(index, p)| p.dev.needs_bus_tick().then_some(index))
             .collect();
         self.peripheral_hint.set(None);
+        self.last_route.set(None);
         // Cache the DPORT index (classic-ESP32 only) so the per-step
         // cross-core IPI read is O(1) instead of scanning every peripheral.
         self.dport_idx = self.peripherals.iter().position(|p| {
@@ -413,15 +414,33 @@ impl SystemBus {
         // to the last-registered entry). This makes routing a pure function
         // of the address.
         //
-        // The hint cache deliberately does NOT short-circuit on containment:
-        // with layered windows (a narrow per-peripheral twin inside a broad
-        // catch-all stub) a hint seeded by a broad-only access also CONTAINS
-        // the twin's addresses, so a containment-only check hijacks them to
-        // the catch-all and routing becomes a function of access history —
-        // see bus::tests::overlapping_windows_route_history_independently.
-        // The canonical path is already cheap: one partition_point (O(log n))
-        // and, in the common non-overlapped case, one containment check.
+        // Hot path: reuse the last winning window when `addr` still falls
+        // inside it AND no narrower (greater-start) window steals `addr`.
+        // When the next sorted range starts after `addr`, that check is O(1).
+        if self.peripheral_ranges.len() == self.peripherals.len() {
+            if let Some((ord, start, end, index)) = self.last_route.get() {
+                if addr >= start && addr < end {
+                    let next_start = self
+                        .peripheral_ranges
+                        .get(ord + 1)
+                        .map(|r| r.start)
+                        .unwrap_or(u64::MAX);
+                    if next_start > addr {
+                        // No window has start in (start, addr] — ours still wins.
+                        self.peripheral_hint.set(Some(index));
+                        return Some(index);
+                    }
+                    // Possible nesting: only scan (ord, pos] for a stealer.
+                    if !self.narrower_after(ord, start, addr) {
+                        self.peripheral_hint.set(Some(index));
+                        return Some(index);
+                    }
+                }
+            }
+        }
+
         let mut idx = None;
+        let mut won: Option<(usize, u64, u64)> = None; // (range_ord, start, end)
         if self.peripheral_ranges.len() == self.peripherals.len() {
             let pos = self
                 .peripheral_ranges
@@ -429,9 +448,10 @@ impl SystemBus {
             // Walk backwards through the candidate starts: the nearest
             // (greatest-start) window may have already ENDED below `addr`
             // while a broader, earlier-started window still covers it.
-            for range in self.peripheral_ranges[..pos].iter().rev() {
+            for (ord, range) in self.peripheral_ranges[..pos].iter().enumerate().rev() {
                 if addr < range.end {
                     idx = Some(range.index);
+                    won = Some((ord, range.start, range.end));
                     break;
                 }
             }
@@ -457,7 +477,26 @@ impl SystemBus {
         }
 
         self.peripheral_hint.set(idx);
+        if let (Some(i), Some((ord, s, e))) = (idx, won) {
+            self.last_route.set(Some((ord, s, e, i)));
+        } else {
+            self.last_route.set(None);
+        }
         idx
+    }
+
+    /// True if some range after `outer_ord` with `start > outer_start` covers
+    /// `addr` (would beat the cached window under greatest-start-wins).
+    fn narrower_after(&self, outer_ord: usize, outer_start: u64, addr: u64) -> bool {
+        for range in self.peripheral_ranges.iter().skip(outer_ord + 1) {
+            if range.start > addr {
+                break;
+            }
+            if range.start > outer_start && addr < range.end {
+                return true;
+            }
+        }
+        false
     }
 
     pub fn find_peripheral_index_by_name(&self, name: &str) -> Option<usize> {

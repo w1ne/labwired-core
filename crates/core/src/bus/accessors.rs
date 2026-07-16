@@ -265,7 +265,8 @@ impl crate::Bus for SystemBus {
             return Ok(val);
         }
         // See read_u32: with optimized_bus_access off, peripherals (FlashXip)
-        // win over the plain flash region at the same XIP address.
+        // win over the plain flash region at the same XIP address. extra_mem
+        // always gets a word path (IRAM etc. never conflict with XIP windows).
         let flash_and_alias = |s: &Self| -> Option<u16> {
             if let Some(val) = s.flash.read_u16(addr) {
                 return Some(val);
@@ -275,8 +276,19 @@ impl crate::Bus for SystemBus {
             }
             None
         };
+        let extra_mem_half = |s: &Self| -> Option<u16> {
+            for mem in &s.extra_mem {
+                if let Some(val) = mem.read_u16(addr) {
+                    return Some(val);
+                }
+            }
+            None
+        };
         if self.config.optimized_bus_access {
             if let Some(val) = flash_and_alias(self) {
+                return Ok(val);
+            }
+            if let Some(val) = extra_mem_half(self) {
                 return Ok(val);
             }
             if let Some(idx) = self.find_peripheral_index(addr) {
@@ -295,6 +307,9 @@ impl crate::Bus for SystemBus {
                 return self.peripherals[idx]
                     .dev
                     .read_u16(addr - self.peripherals[idx].base);
+            }
+            if let Some(val) = extra_mem_half(self) {
+                return Ok(val);
             }
             if let Some(val) = flash_and_alias(self) {
                 return Ok(val);
@@ -345,7 +360,9 @@ impl crate::Bus for SystemBus {
         // MMU-translating FlashXip window overrides the zero-filled flash at the
         // same XIP address — otherwise a 4-byte instruction fetch at an XIP
         // address reads 0, misdecodes as 2-byte and the PC drifts (mirrors the
-        // read_u8 fix). The fallback to per-byte read_u8 covers either order.
+        // read_u8 fix). Linear extra_mem (IRAM/ROM/RTC) never conflicts with
+        // those XIP windows, so it always gets a word-sized fast path — the
+        // previous fall-through did 4× find_peripheral via read_u8.
         let flash_and_alias = |s: &Self| -> Option<u32> {
             if let Some(val) = s.flash.read_u32(addr) {
                 return Some(val);
@@ -355,8 +372,19 @@ impl crate::Bus for SystemBus {
             }
             None
         };
+        let extra_mem_word = |s: &Self| -> Option<u32> {
+            for mem in &s.extra_mem {
+                if let Some(val) = mem.read_u32(addr) {
+                    return Some(val);
+                }
+            }
+            None
+        };
         if self.config.optimized_bus_access {
             if let Some(val) = flash_and_alias(self) {
+                return Ok(val);
+            }
+            if let Some(val) = extra_mem_word(self) {
                 return Ok(val);
             }
             if let Some(idx) = self.find_peripheral_index(addr) {
@@ -375,6 +403,11 @@ impl crate::Bus for SystemBus {
                 return self.peripherals[idx]
                     .dev
                     .read_u32(addr - self.peripherals[idx].base);
+            }
+            // IRAM / ROM / RTC after peripherals so XIP FlashXip still wins on
+            // 0x4200_0000 / 0x3C00_0000 over zero-filled extra_mem twins.
+            if let Some(val) = extra_mem_word(self) {
+                return Ok(val);
             }
             if let Some(val) = flash_and_alias(self) {
                 return Ok(val);
