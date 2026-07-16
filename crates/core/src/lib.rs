@@ -420,6 +420,23 @@ impl Cpu for Box<dyn Cpu> {
 }
 
 /// Trait representing a memory-mapped peripheral
+/// Host-side classification of one MMIO access for idle/coalesce policy.
+///
+/// **CPU-agnostic:** the bus never hardcodes chip register maps. Each
+/// peripheral model opts in via [`Peripheral::mmio_access_class`]. Default is
+/// [`SideEffecting`](MmioAccessClass::SideEffecting) so unknown devices never
+/// get accelerated and one CPU's optim path cannot silently affect another.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MmioAccessClass {
+    /// May change peripheral or world state — disqualifies poll-coalesce.
+    SideEffecting,
+    /// Freerunning timer snapshot only (busy-poll loops). Coalesce-eligible
+    /// under idle FF; device time still advances to the next event.
+    FreerunningTimerPoll,
+    /// Side-effect-free window (e.g. XIP code/rodata). Ignored for bookkeeping.
+    SideEffectFree,
+}
+
 pub trait Peripheral: std::fmt::Debug + Send {
     fn read(&self, offset: u64) -> SimResult<u8>;
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()>;
@@ -728,11 +745,11 @@ pub trait Peripheral: std::fmt::Debug + Send {
         Vec::new()
     }
 
-    /// Walk-free plan Part 1: hand this peripheral the bus's shared
-    /// [`CycleClock`] so `&self` reads can lazily sync `Cell`-held counter
-    /// state to the published "now" (batch-boundary freshness — exact at
-    /// batch boundaries, < one `peripheral_tick_interval` stale mid-batch,
-    /// the same bound as the write-path [`Self::sync_to`]).
+    /// Hand this peripheral the bus's shared [`CycleClock`] so `&self` reads
+    /// can lazily sync `Cell`-held counter state to the published "now"
+    /// (batch-boundary freshness — exact at batch boundaries, < one
+    /// `peripheral_tick_interval` stale mid-batch, the same bound as the
+    /// write-path [`Self::sync_to`]).
     ///
     /// Called once by `SystemBus::add_peripheral` at attach time. Default
     /// no-op: peripherals that don't opt in never see it. A read-polled
@@ -741,6 +758,13 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// its legacy walk path (`uses_scheduler() == false`), so hand-built
     /// buses that bypass `add_peripheral` keep the old exact semantics.
     fn attach_cycle_clock(&mut self, _clock: CycleClock) {}
+
+    /// Classify an MMIO access at `offset` for host idle/coalesce policy.
+    /// Default [`MmioAccessClass::SideEffecting`] — only models that are
+    /// proven poll-safe (or proven side-effect-free) override this.
+    fn mmio_access_class(&self, _offset: u64) -> MmioAccessClass {
+        MmioAccessClass::SideEffecting
+    }
 
     /// Walk-free plan (ESP32-C3): the interrupt-matrix source IDs this
     /// peripheral is asserting RIGHT NOW (level-sensitive). The per-cycle walk
@@ -1410,8 +1434,19 @@ impl<C: Cpu> Machine<C> {
             // which case the CPU must resume normally instead of skipping.
             self.drain_scheduler_events();
 
-            let mut budget = match self.cpu.idle_fast_forward_budget(&self.bus) {
+            // Two coalesce sources under the same idle-FF flag:
+            // 1) Architectural WFI / wait-for-interrupt (existing).
+            // 2) Pure freerunning-timer poll batches (peripherals opt in via
+            //    MmioAccessClass::FreerunningTimerPoll — e.g. ESP SYSTIMER
+            //    snapshot regs for Arduino millis). Device time still advances
+            //    to the next scheduled event; we only skip empty spin. Bus
+            //    stays CPU-agnostic: chip register maps live in peripheral
+            //    models, not SystemBus.
+            let wfi_budget = self.cpu.idle_fast_forward_budget(&self.bus);
+            let timer_poll = self.bus.take_timer_poll_coalesce_eligible();
+            let mut budget = match wfi_budget {
                 Some(budget) if budget > 0 => budget,
+                _ if timer_poll => u64::MAX,
                 _ => return 0,
             };
             let remaining = _max_steps
@@ -1428,9 +1463,16 @@ impl<C: Cpu> Machine<C> {
                     return 0;
                 }
                 budget = budget.min(deadline_cycle - self.total_cycles);
+            } else if timer_poll && wfi_budget.is_none() {
+                // No scheduled event and not WFI: cap pure millis spins so a
+                // single batch cannot leap the whole step budget when the heap
+                // is empty (still advances real device time, just bounded).
+                budget = budget.min(1_000_000);
             }
 
-            if budget == 0 {
+            // Tiny windows are not worth the skip bookkeeping on the timer-poll
+            // path (WFI may still skip short waits).
+            if budget == 0 || (timer_poll && wfi_budget.is_none() && budget < 1024) {
                 return 0;
             }
             let skipped = budget.min(u32::MAX as u64) as u32;
@@ -2233,6 +2275,10 @@ impl<C: Cpu> DebugControl for Machine<C> {
                 steps += skipped;
                 continue;
             }
+
+            // Fresh MMIO-activity window for the upcoming batch (timer-poll
+            // coalesce reads the previous batch's counters in try_idle above).
+            self.bus.reset_mmio_activity_counters();
 
             // Execute in batch until next peripheral tick or breakpoint/limit
             let current_cycles = self.total_cycles;

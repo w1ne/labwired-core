@@ -14,6 +14,10 @@ mod traces;
 // CortexM and XtensaLx7 are used via Box<dyn Cpu>; the concrete types are
 // only constructed inside the configure_* fns and immediately boxed.
 use labwired_core::decoder::arm::{decode_thumb_16, decode_thumb_32};
+use labwired_core::decoder::riscv::{decode_rv32, decode_rv32c};
+use labwired_core::decoder::xtensa;
+use labwired_core::decoder::xtensa_length;
+use labwired_core::decoder::xtensa_narrow;
 use labwired_core::memory::{LinearMemory, ProgramImage};
 use labwired_core::peripherals::adc::Adc;
 use labwired_core::system::cortex_m::configure_cortex_m;
@@ -933,20 +937,68 @@ impl WasmSimulator {
     #[wasm_bindgen]
     pub fn get_disassembly(&self) -> String {
         let machine = self.machine.as_ref().unwrap();
-        let pc = machine.cpu.get_pc() & !1;
-        match machine.bus.read_u16(pc as u64) {
-            Ok(h1) => {
-                let is_32bit = (h1 & 0xE000) == 0xE000 && (h1 & 0x1800) != 0;
-                if is_32bit {
-                    match machine.bus.read_u16(pc as u64 + 2) {
-                        Ok(h2) => format!("{:?}", decode_thumb_32(h1, h2)),
-                        Err(_) => "?? (Error reading h2)".to_string(),
+        let pc = machine.cpu.get_pc();
+        match self.arch {
+            // ESP32-C3 / generic RV32: use the RISC-V decoder. The previous path
+            // always ran Thumb decode, so C3 Trace showed ARM-looking ops and
+            // frequent `Unknown32` against real RISC-V encodings.
+            Arch::RiscV => {
+                let pc = pc & !1;
+                match machine.bus.read_u16(pc as u64) {
+                    Ok(lo) => {
+                        // RV32C: least-significant two bits != 0b11 ⇒ 16-bit.
+                        if lo & 0b11 != 0b11 {
+                            format!("{:?}", decode_rv32c(lo))
+                        } else {
+                            match machine.bus.read_u16(pc as u64 + 2) {
+                                Ok(hi) => {
+                                    let word = (u32::from(hi) << 16) | u32::from(lo);
+                                    format!("{:?}", decode_rv32(word))
+                                }
+                                Err(_) => "?? (Error reading RV hi half)".to_string(),
+                            }
+                        }
                     }
-                } else {
-                    format!("{:?}", decode_thumb_16(h1))
+                    Err(_) => "?? (Error reading RV instruction)".to_string(),
                 }
             }
-            Err(_) => "?? (Error reading h1)".to_string(),
+            Arch::Xtensa => {
+                // Match the LX7 fetch path: length from byte0, then narrow/wide.
+                match machine.bus.read_u8(pc as u64) {
+                    Ok(b0) => {
+                        let len = xtensa_length::instruction_length(b0);
+                        if len == 2 {
+                            match machine.bus.read_u16(pc as u64) {
+                                Ok(hw) => format!("{:?}", xtensa_narrow::decode_narrow(hw)),
+                                Err(_) => "?? (Error reading Xtensa narrow)".to_string(),
+                            }
+                        } else {
+                            match machine.bus.read_u32(pc as u64) {
+                                Ok(w) => format!("{:?}", xtensa::decode(w)),
+                                Err(_) => "?? (Error reading Xtensa wide)".to_string(),
+                            }
+                        }
+                    }
+                    Err(_) => "?? (Error reading Xtensa instruction)".to_string(),
+                }
+            }
+            Arch::Arm | Arch::Unknown => {
+                let pc = pc & !1;
+                match machine.bus.read_u16(pc as u64) {
+                    Ok(h1) => {
+                        let is_32bit = (h1 & 0xE000) == 0xE000 && (h1 & 0x1800) != 0;
+                        if is_32bit {
+                            match machine.bus.read_u16(pc as u64 + 2) {
+                                Ok(h2) => format!("{:?}", decode_thumb_32(h1, h2)),
+                                Err(_) => "?? (Error reading h2)".to_string(),
+                            }
+                        } else {
+                            format!("{:?}", decode_thumb_16(h1))
+                        }
+                    }
+                    Err(_) => "?? (Error reading h1)".to_string(),
+                }
+            }
         }
     }
 
@@ -1683,5 +1735,37 @@ mod romboot_tests {
     fn apply_browser_c3_policy(sim: &mut WasmSimulator, rec_tick: u32) {
         sim.set_peripheral_tick_interval(rec_tick);
         sim.set_idle_fast_forward_enabled(true);
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod disasm_arch_tests {
+    use labwired_core::decoder::arm::{decode_thumb_16, decode_thumb_32};
+    use labwired_core::decoder::riscv::{decode_rv32, decode_rv32c};
+
+    /// ADDI x1, x0, 1 — must surface as RISC-V Addi, not Thumb Unknown32.
+    #[test]
+    fn rv32_addi_is_not_thumb_unknown32() {
+        let word: u32 = 0x0010_0093;
+        let rv = format!("{:?}", decode_rv32(word));
+        assert!(rv.contains("Addi"), "expected Addi, got {rv}");
+        let lo = word as u16;
+        let hi = (word >> 16) as u16;
+        let thumb = format!("{:?}", decode_thumb_32(lo, hi));
+        // The old wasm path always used Thumb: that is the bug users saw as
+        // Unknown32 / Lsl / BranchCond on C3 ROM+app addresses.
+        assert!(
+            thumb.contains("Unknown") || !rv.eq_ignore_ascii_case(&thumb),
+            "thumb decode of RV word should not look like a real RV Addi: thumb={thumb} rv={rv}"
+        );
+    }
+
+    #[test]
+    fn rv32c_caddi_decodes() {
+        // c.addi x8, 1 — common compressed form; just ensure decode path is live.
+        let hw: u16 = 0x0505;
+        let s = format!("{:?}", decode_rv32c(hw));
+        assert!(!s.is_empty());
+        let _ = decode_thumb_16(hw);
     }
 }
