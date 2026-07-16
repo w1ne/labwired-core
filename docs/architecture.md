@@ -13,8 +13,9 @@ operations, profiling, and logic observation. Frontends inspect the machine
 between bounded calls for assertions, stimuli, UART limits, and artifacts, but
 must not call `Cpu::step` directly.
 
-The remaining direct CPU advancement sites are deliberately limited to these
-implementation, compatibility, and test boundaries:
+Outside CPU implementations and test-only integration/unit harnesses, the
+remaining direct CPU advancement sites are deliberately limited to these
+implementation and compatibility boundaries:
 
 - `crates/core/src/machine/boundary.rs` is the internal CPU execution primitive
   owned by `Machine::advance`; it is not a frontend entry point.
