@@ -100,7 +100,7 @@ impl CanUdsTester {
     pub const DEFAULT_CONSECUTIVE_FRAME: [u8; 8] = [0x21, 0x44, 0x55, 0x66, 0x77, 0x88, 0x55, 0x55];
     const DEFAULT_MAX_TICKS: u64 = 200_000;
 
-    pub(crate) fn new(id: String, connection: String) -> Self {
+    pub fn new(id: String, connection: String) -> Self {
         Self {
             id,
             connection,
