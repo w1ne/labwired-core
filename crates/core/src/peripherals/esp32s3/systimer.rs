@@ -90,7 +90,7 @@
 //! That worked for the integration test because the test wrote 79 directly,
 //! but esp-hal binds SYSTIMER_TARGET0 at the PAC-defined source 57.)
 
-use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
+use crate::{CycleClock, MmioAccessClass, Peripheral, PeripheralTickResult, SimResult};
 
 const SYSTIMER_CLOCK_HZ: u64 = 16_000_000;
 
@@ -110,6 +110,63 @@ const ALARM_PERIOD_MODE_BIT: u32 = 1 << 30;
 const CONF_TARGET0_WORK_EN: u32 = 1 << 24;
 const CONF_TARGET1_WORK_EN: u32 = 1 << 23;
 const CONF_TARGET2_WORK_EN: u32 = 1 << 22;
+
+/// Byte offsets within the SYSTIMER block (ESP32-S3 TRM §16.5 / esp32s3-pac).
+/// Single source of truth for `read_word` / `write_word` and access-class.
+mod regs {
+    pub const CONF: u64 = 0x00;
+    pub const UNIT0_OP: u64 = 0x04;
+    pub const UNIT1_OP: u64 = 0x08;
+    pub const UNIT0_LOAD_HI: u64 = 0x0C;
+    pub const UNIT0_LOAD_LO: u64 = 0x10;
+    pub const UNIT1_LOAD_HI: u64 = 0x14;
+    pub const UNIT1_LOAD_LO: u64 = 0x18;
+    pub const TARGET0_HI: u64 = 0x1C;
+    pub const TARGET0_LO: u64 = 0x20;
+    pub const TARGET1_HI: u64 = 0x24;
+    pub const TARGET1_LO: u64 = 0x28;
+    pub const TARGET2_HI: u64 = 0x2C;
+    pub const TARGET2_LO: u64 = 0x30;
+    pub const TARGET0_CONF: u64 = 0x34;
+    pub const TARGET1_CONF: u64 = 0x38;
+    pub const TARGET2_CONF: u64 = 0x3C;
+    pub const UNIT0_VALUE_HI: u64 = 0x40;
+    pub const UNIT0_VALUE_LO: u64 = 0x44;
+    pub const UNIT1_VALUE_HI: u64 = 0x48;
+    pub const UNIT1_VALUE_LO: u64 = 0x4C;
+    pub const COMP0_LOAD: u64 = 0x50;
+    pub const COMP1_LOAD: u64 = 0x54;
+    pub const COMP2_LOAD: u64 = 0x58;
+    pub const UNIT0_LOAD: u64 = 0x5C;
+    pub const UNIT1_LOAD: u64 = 0x60;
+    pub const INT_ENA: u64 = 0x64;
+    pub const INT_RAW: u64 = 0x68;
+    pub const INT_CLR: u64 = 0x6C;
+    pub const INT_ST: u64 = 0x70;
+    pub const REAL_TARGET0_LO: u64 = 0x74;
+    pub const REAL_TARGET0_HI: u64 = 0x78;
+    pub const REAL_TARGET1_LO: u64 = 0x7C;
+    pub const REAL_TARGET1_HI: u64 = 0x80;
+    pub const REAL_TARGET2_LO: u64 = 0x84;
+    pub const REAL_TARGET2_HI: u64 = 0x88;
+    pub const DATE: u64 = 0xFC;
+
+    /// Freerunning snapshot path used by esp_timer / Arduino `millis`.
+    /// Derived from the named offsets above — do not duplicate magic numbers.
+    pub const FREERUNNING_POLL: &[u64] = &[
+        UNIT0_OP,
+        UNIT1_OP,
+        UNIT0_VALUE_HI,
+        UNIT0_VALUE_LO,
+        UNIT1_VALUE_HI,
+        UNIT1_VALUE_LO,
+    ];
+}
+
+/// UNIT*_OP bit 30 — trigger snapshot update.
+const OP_UPDATE_BIT: u32 = 1 << 30;
+/// UNIT*_OP bit 29 — VALUE_VALID (snapshot ready).
+const OP_VALUE_VALID_BIT: u32 = 1 << 29;
 
 #[derive(Debug, Default, Clone, Copy, serde::Serialize, serde::Deserialize)]
 struct UnitState {
@@ -501,73 +558,47 @@ impl Systimer {
     }
 
     fn read_word(&self, offset: u64) -> u32 {
+        use regs::*;
         match offset {
-            0x00 => self.conf,
-            // OP regs: real silicon asserts bit 29 (TIMER_UNITn_VALUE_VALID)
-            // once the requested snapshot has settled (typically a few cycles
-            // after the bit-30 trigger write). esp-hal's Delay loop polls
-            // bit 29 to wait for the snapshot to be ready before reading the
-            // VALUE registers. We model the snapshot as instantaneous and
-            // always assert bit 29.
-            0x04 | 0x08 => 1u32 << 29,
+            CONF => self.conf,
+            // OP: silicon asserts VALUE_VALID after snapshot; we model instant.
+            UNIT0_OP | UNIT1_OP => OP_VALUE_VALID_BIT,
 
-            // ── LOAD pending registers (TRM offsets) ──
-            0x0C => self.unit0.load_hi,
-            0x10 => self.unit0.load_lo,
-            0x14 => self.unit1.load_hi,
-            0x18 => self.unit1.load_lo,
+            UNIT0_LOAD_HI => self.unit0.load_hi,
+            UNIT0_LOAD_LO => self.unit0.load_lo,
+            UNIT1_LOAD_HI => self.unit1.load_hi,
+            UNIT1_LOAD_LO => self.unit1.load_lo,
 
-            // ── TARGETx HI/LO (TRM offsets) ──
-            // Reads return the *pending* (most recently written) value, per
-            // PAC convention — readback shows what firmware just wrote, not
-            // the live committed value.
-            0x1C => (self.unit0_alarms[0].pending_target >> 32) as u32,
-            0x20 => (self.unit0_alarms[0].pending_target & 0xFFFF_FFFF) as u32,
-            0x24 => (self.unit0_alarms[1].pending_target >> 32) as u32,
-            0x28 => (self.unit0_alarms[1].pending_target & 0xFFFF_FFFF) as u32,
-            0x2C => (self.unit0_alarms[2].pending_target >> 32) as u32,
-            0x30 => (self.unit0_alarms[2].pending_target & 0xFFFF_FFFF) as u32,
+            // TARGETx HI/LO: pending (most recently written), PAC convention.
+            TARGET0_HI => (self.unit0_alarms[0].pending_target >> 32) as u32,
+            TARGET0_LO => (self.unit0_alarms[0].pending_target & 0xFFFF_FFFF) as u32,
+            TARGET1_HI => (self.unit0_alarms[1].pending_target >> 32) as u32,
+            TARGET1_LO => (self.unit0_alarms[1].pending_target & 0xFFFF_FFFF) as u32,
+            TARGET2_HI => (self.unit0_alarms[2].pending_target >> 32) as u32,
+            TARGET2_LO => (self.unit0_alarms[2].pending_target & 0xFFFF_FFFF) as u32,
 
-            // ── TARGETx_CONF (TRM offsets) ──
-            // Reads expose pending period (so esp-hal's read-modify-write
-            // sequences see the value they just staged).
-            0x34 => alarm_conf_word_pending(&self.unit0_alarms[0]),
-            0x38 => alarm_conf_word_pending(&self.unit0_alarms[1]),
-            0x3C => alarm_conf_word_pending(&self.unit0_alarms[2]),
+            TARGET0_CONF => alarm_conf_word_pending(&self.unit0_alarms[0]),
+            TARGET1_CONF => alarm_conf_word_pending(&self.unit0_alarms[1]),
+            TARGET2_CONF => alarm_conf_word_pending(&self.unit0_alarms[2]),
 
-            // ── VALUE snapshot registers ──
-            0x40 => (self.unit0.snapshot >> 32) as u32,
-            0x44 => (self.unit0.snapshot & 0xFFFF_FFFF) as u32,
-            0x48 => (self.unit1.snapshot >> 32) as u32,
-            0x4C => (self.unit1.snapshot & 0xFFFF_FFFF) as u32,
+            UNIT0_VALUE_HI => (self.unit0.snapshot >> 32) as u32,
+            UNIT0_VALUE_LO => (self.unit0.snapshot & 0xFFFF_FFFF) as u32,
+            UNIT1_VALUE_HI => (self.unit1.snapshot >> 32) as u32,
+            UNIT1_VALUE_LO => (self.unit1.snapshot & 0xFFFF_FFFF) as u32,
 
-            // 0x50/0x54/0x58 COMPx_LOAD are write-only commit triggers; reads
-            // return 0 on real silicon.
+            // COMPx_LOAD / UNITx_LOAD are write-only; reads return 0.
+            INT_ENA => self.int_ena,
+            INT_RAW => self.int_raw_word(),
+            INT_ST => self.int_raw_word() & self.int_ena,
 
-            // 0x5C/0x60 UNITx_LOAD are write-only commit triggers.
+            REAL_TARGET0_LO => (self.unit0_alarms[0].target & 0xFFFF_FFFF) as u32,
+            REAL_TARGET0_HI => ((self.unit0_alarms[0].target >> 32) & 0x000F_FFFF) as u32,
+            REAL_TARGET1_LO => (self.unit0_alarms[1].target & 0xFFFF_FFFF) as u32,
+            REAL_TARGET1_HI => ((self.unit0_alarms[1].target >> 32) & 0x000F_FFFF) as u32,
+            REAL_TARGET2_LO => (self.unit0_alarms[2].target & 0xFFFF_FFFF) as u32,
+            REAL_TARGET2_HI => ((self.unit0_alarms[2].target >> 32) & 0x000F_FFFF) as u32,
 
-            // ── Interrupt registers (TRM offsets) ──
-            0x64 => self.int_ena,
-            0x68 => self.int_raw_word(),
-            // 0x6C INT_CLR is W1C; reads as 0.
-            0x70 => self.int_raw_word() & self.int_ena,
-
-            // ── REAL_TARGETx_LO/HI (0x74..0x88) ──
-            // Read-only: reflect the live committed target for each alarm.
-            // Layout per TRM: REAL_TARGET0_LO at 0x74, REAL_TARGET0_HI at 0x78,
-            // REAL_TARGET1_LO at 0x7C, REAL_TARGET1_HI at 0x80,
-            // REAL_TARGET2_LO at 0x84, REAL_TARGET2_HI at 0x88.
-            0x74 => (self.unit0_alarms[0].target & 0xFFFF_FFFF) as u32,
-            0x78 => ((self.unit0_alarms[0].target >> 32) & 0x000F_FFFF) as u32,
-            0x7C => (self.unit0_alarms[1].target & 0xFFFF_FFFF) as u32,
-            0x80 => ((self.unit0_alarms[1].target >> 32) & 0x000F_FFFF) as u32,
-            0x84 => (self.unit0_alarms[2].target & 0xFFFF_FFFF) as u32,
-            0x88 => ((self.unit0_alarms[2].target >> 32) & 0x000F_FFFF) as u32,
-
-            // ── DATE (0xFC) ──
-            // Silicon-validated revision register. RW; returns reset value
-            // 0x02012251 unless firmware has overwritten it.
-            0xFC => self.date,
+            DATE => self.date,
 
             _ => 0,
         }
@@ -620,77 +651,68 @@ impl Systimer {
     }
 
     fn write_word(&mut self, offset: u64, value: u32) {
+        use regs::*;
         match offset {
-            0x00 => {
+            CONF => {
                 self.conf = value;
                 self.sync_alarm_enables_from_conf();
             }
-            0x04 if value & (1 << 30) != 0 => {
+            UNIT0_OP if value & OP_UPDATE_BIT != 0 => {
                 self.sync_counters_from_clock();
                 self.unit0.snapshot = self.unit0.counter;
             }
-            0x08 if value & (1 << 30) != 0 => {
+            UNIT1_OP if value & OP_UPDATE_BIT != 0 => {
                 self.sync_counters_from_clock();
                 self.unit1.snapshot = self.unit1.counter;
             }
 
-            // ── LOAD pending registers (TRM offsets) ──
-            0x0C => self.unit0.load_hi = value,
-            0x10 => self.unit0.load_lo = value,
-            0x14 => self.unit1.load_hi = value,
-            0x18 => self.unit1.load_lo = value,
+            UNIT0_LOAD_HI => self.unit0.load_hi = value,
+            UNIT0_LOAD_LO => self.unit0.load_lo = value,
+            UNIT1_LOAD_HI => self.unit1.load_hi = value,
+            UNIT1_LOAD_LO => self.unit1.load_lo = value,
 
-            // ── TARGETx HI/LO ──
             // Stage pending target; commit on COMPx_LOAD.
-            0x1C => set_pending_target_hi(&mut self.unit0_alarms[0], value),
-            0x20 => set_pending_target_lo(&mut self.unit0_alarms[0], value),
-            0x24 => set_pending_target_hi(&mut self.unit0_alarms[1], value),
-            0x28 => set_pending_target_lo(&mut self.unit0_alarms[1], value),
-            0x2C => set_pending_target_hi(&mut self.unit0_alarms[2], value),
-            0x30 => set_pending_target_lo(&mut self.unit0_alarms[2], value),
+            TARGET0_HI => set_pending_target_hi(&mut self.unit0_alarms[0], value),
+            TARGET0_LO => set_pending_target_lo(&mut self.unit0_alarms[0], value),
+            TARGET1_HI => set_pending_target_hi(&mut self.unit0_alarms[1], value),
+            TARGET1_LO => set_pending_target_lo(&mut self.unit0_alarms[1], value),
+            TARGET2_HI => set_pending_target_hi(&mut self.unit0_alarms[2], value),
+            TARGET2_LO => set_pending_target_lo(&mut self.unit0_alarms[2], value),
 
-            // ── TARGETx_CONF ──
-            0x34 => set_alarm_conf(&mut self.unit0_alarms[0], value),
-            0x38 => set_alarm_conf(&mut self.unit0_alarms[1], value),
-            0x3C => set_alarm_conf(&mut self.unit0_alarms[2], value),
+            TARGET0_CONF => set_alarm_conf(&mut self.unit0_alarms[0], value),
+            TARGET1_CONF => set_alarm_conf(&mut self.unit0_alarms[1], value),
+            TARGET2_CONF => set_alarm_conf(&mut self.unit0_alarms[2], value),
 
-            // ── COMPx_LOAD: commit pending writes into live alarm ──
-            0x50 if value & 1 != 0 => {
+            COMP0_LOAD if value & 1 != 0 => {
                 self.commit_alarm(0);
             }
-            0x54 if value & 1 != 0 => {
+            COMP1_LOAD if value & 1 != 0 => {
                 self.commit_alarm(1);
             }
-            0x58 if value & 1 != 0 => {
+            COMP2_LOAD if value & 1 != 0 => {
                 self.commit_alarm(2);
             }
 
-            // ── UNITx_LOAD commit (TRM offsets) ──
-            0x5C if value & 1 != 0 => {
+            UNIT0_LOAD if value & 1 != 0 => {
                 self.unit0.counter =
                     ((self.unit0.load_hi as u64) << 32) | (self.unit0.load_lo as u64);
             }
-            0x60 if value & 1 != 0 => {
+            UNIT1_LOAD if value & 1 != 0 => {
                 self.unit1.counter =
                     ((self.unit1.load_hi as u64) << 32) | (self.unit1.load_lo as u64);
             }
 
-            // ── Interrupt registers (TRM offsets) ──
-            0x64 => self.int_ena = value & 0x7,
-            // 0x68 INT_RAW is read-only on real silicon; ignore writes.
-            0x6C => {
-                // INT_CLR: write-1-to-clear pending bits.
+            INT_ENA => self.int_ena = value & 0x7,
+            // INT_RAW is read-only on real silicon; ignore writes.
+            INT_CLR => {
                 for (i, alarm) in self.unit0_alarms.iter_mut().enumerate() {
                     if value & (1 << i) != 0 {
                         alarm.pending = false;
                     }
                 }
             }
-            // 0x70 INT_ST is read-only.
-            // 0x74..0x88 REAL_TARGETx are read-only; ignore writes.
-
-            // ── DATE (0xFC) — RW ──
-            0xFC => self.date = value,
+            // INT_ST / REAL_TARGETx are read-only; ignore writes.
+            DATE => self.date = value,
 
             _ => {}
         }
@@ -728,15 +750,13 @@ fn set_alarm_conf(alarm: &mut AlarmState, value: u32) {
 }
 
 impl Peripheral for Systimer {
-    /// Freerunning UNIT snapshot regs only — Arduino millis / esp_timer poll.
-    /// Alarm/load/conf stay SideEffecting so arming work never coalesces.
-    fn mmio_access_class(&self, offset: u64) -> crate::MmioAccessClass {
+    /// Freerunning snapshot path only — offsets from [`regs::FREERUNNING_POLL`].
+    fn mmio_access_class(&self, offset: u64) -> MmioAccessClass {
         let word = offset & !3;
-        match word {
-            0x04 | 0x08 | // UNIT0_OP, UNIT1_OP
-            0x40 | 0x44 | 0x48 | 0x4C // UNIT0/1 VALUE_HI/LO
-            => crate::MmioAccessClass::FreerunningTimerPoll,
-            _ => crate::MmioAccessClass::SideEffecting,
+        if regs::FREERUNNING_POLL.contains(&word) {
+            MmioAccessClass::FreerunningTimerPoll
+        } else {
+            MmioAccessClass::SideEffecting
         }
     }
 
