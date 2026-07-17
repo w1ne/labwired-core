@@ -48,35 +48,52 @@ impl SystemBus {
     /// One code byte at `addr`, or `None` if `addr` is not side-effect-free
     /// code memory. See [`Self::read_code_slice`].
     fn read_code_byte(&self, addr: u64) -> Option<u8> {
-        // Linear code/data memories are side-effect free; check them in the
-        // same precedence `read_u32`'s optimized path uses (ranges are
-        // disjoint, so precedence only picks the one backing store).
+        // RAM is always the highest-priority linear backing store and never
+        // aliases an XIP window.
         if let Some(b) = self.ram.read_u8(addr) {
             return Some(b);
         }
-        if let Some(b) = self.flash.read_u8(addr) {
-            return Some(b);
-        }
-        for mem in &self.extra_mem {
-            if let Some(b) = mem.read_u8(addr) {
-                return Some(b);
-            }
-        }
-        // Flash-XIP window: read-only, MMU-translated exactly as the CPU's
-        // instruction fetch routes it. Restricting to the XIP peripheral keeps
-        // this fetch side-effect free — no MMIO is ever touched.
-        if let Some(idx) = self.find_peripheral_index(addr) {
-            let p = &self.peripherals[idx];
-            if p.dev
+
+        // A side-effect-free read of the Flash-XIP peripheral: MMU-translated
+        // exactly as the CPU's instruction fetch routes it. This MUST be
+        // tried before the plain flash region, mirroring the precedence
+        // `read_u32`/`read_u8` use when `optimized_bus_access` is off (the C3
+        // rom-boot config): the XIP window and a zero-filled linear-flash twin
+        // occupy the SAME virtual address (0x4200_0000), and only the XIP read
+        // MMU-translates to the real flash page. Checking `self.flash` first
+        // returned `Some(0)` for the whole C3 app image, so the JIT compiled
+        // (or here, walked) from all-zero bytes — `0x0000` decodes to an
+        // illegal `c.addi4spn`, i.e. `Unknown` — and every hot XIP block was
+        // silently kept on the interpreter. Restricting to the FlashXip
+        // peripheral keeps this fetch side-effect free (no MMIO is touched).
+        let xip_byte = |s: &Self| -> Option<u8> {
+            let idx = s.find_peripheral_index(addr)?;
+            let p = &s.peripherals[idx];
+            p.dev
                 .as_any()
                 .and_then(|a| {
                     a.downcast_ref::<crate::peripherals::esp32s3::flash_xip::FlashXipPeripheral>()
                 })
                 .is_some()
-            {
-                return p.dev.read(addr - p.base).ok();
-            }
+                .then(|| p.dev.read(addr - p.base).ok())
+                .flatten()
+        };
+        let flash_byte = |s: &Self| -> Option<u8> { s.flash.read_u8(addr) };
+        let extra_byte =
+            |s: &Self| -> Option<u8> { s.extra_mem.iter().find_map(|mem| mem.read_u8(addr)) };
+
+        // Follow `read_u32`'s two precedence orders exactly so the walked bytes
+        // are byte-identical to what the interpreter fetches.
+        if self.config.optimized_bus_access {
+            flash_byte(self)
+                .or_else(|| extra_byte(self))
+                .or_else(|| xip_byte(self))
+        } else {
+            // IRAM/ROM/RTC (extra_mem) after the XIP peripheral so FlashXip
+            // still wins on 0x4200_0000 over zero-filled extra_mem twins.
+            xip_byte(self)
+                .or_else(|| extra_byte(self))
+                .or_else(|| flash_byte(self))
         }
-        None
     }
 }
