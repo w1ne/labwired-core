@@ -379,7 +379,15 @@ boards:
     # the physical GPIO4/GPIO5 contract. This does not replace the reset-state
     # oracle or claim visible OLED photons/I2C ACK; visual or wire-level capture
     # remains pending.
-    drift_ack: 2026-07-15
+    # 2026-07-18: bus access-method consolidation — deleted the stale duplicate
+    # inherent SystemBus::{read,write}_u{16,32} shadow in bus/mmio_words.rs; all
+    # direct-SystemBus callers now route through the single Bus-trait impl. Pure
+    # refactor: byte-identical over 30M instructions on the C3 OLED differential
+    # gate, register/IRQ/elapsed semantics unchanged. Additionally re-validated
+    # LIVE on real C3 silicon this date (USB-JTAG/openocd + esptool): boot->paint
+    # UART parity vs sim ("OLED painted: LabWired"), SYSTIMER 16.34 MHz and the
+    # known RC_SLOW ~148 kHz board deviation captured — consistent with prior.
+    drift_ack: 2026-07-18
 
   - id: nucleo-l476rg
     doc: docs/boards/nucleo-l476rg.md
@@ -680,7 +688,13 @@ boards:
     # mirror). Same MMU entry semantics and same flash bytes as before — pure
     # host-side speed; the 9-reg reset-state silicon anchor is unaffected.
     # No live re-capture warranted.
-    drift_ack: 2026-07-16
+    # 2026-07-18: bus access-method consolidation — deleted the stale duplicate
+    # inherent SystemBus::{read,write}_u{16,32} shadow in bus/mmio_words.rs; all
+    # direct-SystemBus callers route through the single Bus-trait impl. Pure
+    # refactor, additive/behaviour-neutral; the 9-reg reset-state anchor is
+    # unaffected. No S3 board attached this session (no live re-capture); C3
+    # sibling silicon re-validated live this date. See esp32c3 drift_ack.
+    drift_ack: 2026-07-18
     models:
       - crates/core/src/peripherals/esp32s3
       - crates/core/src/peripherals/esp_xtensa_common
