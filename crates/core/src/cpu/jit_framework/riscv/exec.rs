@@ -48,6 +48,7 @@ use super::super::block_cache::{BlockCache, Lookup};
 use super::super::frontend::BlockPlan;
 use super::super::side_exit::{BailReason, SideExit};
 use super::super::{CodeView, Pc};
+use super::cutstats;
 use super::emit::{
     MemBinding, FAULT_PC_SLOT, FAULT_RETIRED_SLOT, NEXT_PC_SLOT, RAM_WINDOW_OFF, RES_FLAG_SLOT,
     WIRE_CHAIN_DYNAMIC, WIRE_FALL_THROUGH, WIRE_MEM_FAULT,
@@ -266,6 +267,26 @@ impl RiscvWasmJit {
 /// blocks).
 pub const MIN_PROFITABLE_BLOCK_INSTRS: u32 = 16;
 
+/// The profitability floor actually applied, allowing `LW_JIT_MIN_BLOCK` to
+/// override [`MIN_PROFITABLE_BLOCK_INSTRS`] for coverage sweeps.
+///
+/// This is a **measurement knob, not a product surface**: with the env var
+/// unset it returns the shipped constant, so the default build behaves
+/// exactly as before. It exists because the honest way to rank coverage
+/// causes is to sweep the floor on the real lab rather than reason about it.
+/// The value is read once and cached.
+pub fn min_profitable_block_instrs() -> u32 {
+    use std::sync::OnceLock;
+    static V: OnceLock<u32> = OnceLock::new();
+    *V.get_or_init(|| {
+        std::env::var("LW_JIT_MIN_BLOCK")
+            .ok()
+            .and_then(|s| s.parse::<u32>().ok())
+            .filter(|v| *v >= 1)
+            .unwrap_or(MIN_PROFITABLE_BLOCK_INSTRS)
+    })
+}
+
 /// Run counters for a [`RiscvJitEngine`] session.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct EngineStats {
@@ -418,13 +439,76 @@ impl RiscvJitEngine {
         // Only install blocks long enough that the compiled path amortizes.
         // Synthetic hot-loop benches (dozens of sequential ALU ops) still clear
         // this bar; short blocks stay interpreted (byte-identical semantics).
-        if plan.instr_count < MIN_PROFITABLE_BLOCK_INSTRS {
+        if plan.instr_count < min_profitable_block_instrs() {
             return;
         }
         if let Some(block) = self.jit.compile(&plan, binding) {
             self.cache.install(pc, block);
             self.stats.compiled += 1;
         }
+    }
+
+    /// Diagnostic: blame one interpreted instruction at `pc` on a cut cause.
+    ///
+    /// Only does work under `LW_JIT_CUT_STATS=1`; see
+    /// [`super::cutstats`]. It re-walks the block at `pc` to name the
+    /// instruction that terminated it, which is far too expensive for the
+    /// production path and is why this is env-gated rather than always-on.
+    pub fn note_cut(&self, pc: Pc, bus: &SystemBus, hinted: Option<cutstats::InterpReason>) {
+        use super::{classify, walk_block, InstrClass};
+        if !cutstats::enabled() {
+            return;
+        }
+        // Real basic blocks here are 1-4 instructions and the profitability
+        // floor we sweep tops out at 16, so a short window characterises the
+        // walk termination exactly while keeping this ~16x cheaper than the
+        // full MAX_BLOCK_INSTRS fetch (which allocates 4KB per interpreted
+        // instruction and makes the diagnostic run unusably slow). A block
+        // longer than this reads as `RanOffView`, which is itself the answer
+        // we want: it was not cut by an instruction.
+        const DIAG_WINDOW: usize = 128;
+        let code = bus.read_code_slice(pc, DIAG_WINDOW);
+        if code.len() < 2 {
+            cutstats::note(cutstats::InterpReason::FrontendRefused, "-", 0);
+            return;
+        }
+        let view = CodeView::new(pc, &code);
+        let Some(walk) = walk_block(pc, &view) else {
+            cutstats::note(cutstats::InterpReason::FrontendRefused, "-", 0);
+            return;
+        };
+        // Name the instruction the walk stopped at: for a zero-length walk
+        // that is the entry instruction itself; otherwise it is whatever sits
+        // at `end_pc` (an unmodeled cut) or the terminator just before it.
+        let blame_pc = walk.end_pc;
+        let blame = match view.from(blame_pc) {
+            Some(b) if b.len() >= 2 => {
+                let low = u16::from_le_bytes([b[0], b[1]]);
+                let word = if super::inst_len(low) == 4 && b.len() >= 4 {
+                    u32::from_le_bytes([b[0], b[1], b[2], b[3]])
+                } else {
+                    low as u32
+                };
+                let inst = crate::decoder::riscv::decode_rv32(word);
+                if walk.instr_count == 0 || classify(&inst) == InstrClass::Unmodeled {
+                    if matches!(inst, crate::decoder::riscv::Instruction::Unknown(_)) {
+                        cutstats::note_word(blame_pc, word);
+                    }
+                    cutstats::mnemonic(&inst)
+                } else {
+                    "block-end"
+                }
+            }
+            _ => "-",
+        };
+        let reason = hinted.unwrap_or(if walk.instr_count == 0 {
+            cutstats::InterpReason::EntryUnmodeled
+        } else if walk.instr_count < min_profitable_block_instrs() {
+            cutstats::InterpReason::BelowMinBlock
+        } else {
+            cutstats::InterpReason::NotHotYet
+        });
+        cutstats::note(reason, blame, walk.instr_count);
     }
 
     /// Drop the entire block cache — the invalidate-all-on-flash-write policy

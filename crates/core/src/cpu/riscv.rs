@@ -477,6 +477,24 @@ impl RiscV {
                     let must_interpret =
                         n == 0 || retired + n > max_count || self.block_would_cross_irq(bus, n);
                     if must_interpret {
+                        if crate::cpu::jit_framework::riscv::cutstats::enabled() {
+                            if let Some(sb) =
+                                bus.as_any().and_then(|a| a.downcast_ref::<SystemBus>())
+                            {
+                                use crate::cpu::jit_framework::riscv::cutstats::InterpReason;
+                                engine.note_cut(
+                                    pc,
+                                    sb,
+                                    Some(if n == 0 {
+                                        InterpReason::ZeroLength
+                                    } else if retired + n > max_count {
+                                        InterpReason::BatchBudget
+                                    } else {
+                                        InterpReason::IrqCross
+                                    }),
+                                );
+                            }
+                        }
                         self.step(bus, observers, config)?;
                         engine.note_interpreted();
                         retired += 1;
@@ -515,9 +533,15 @@ impl RiscV {
                     }
                 }
                 Lookup::Interpret { promote } => {
-                    if promote {
+                    // Only downcast when there is a reason to: a promotion (rare,
+                    // once per hot PC) or the env-gated coverage diagnostic. The
+                    // steady interpret path pays nothing extra.
+                    if promote || crate::cpu::jit_framework::riscv::cutstats::enabled() {
                         if let Some(sb) = bus.as_any().and_then(|a| a.downcast_ref::<SystemBus>()) {
-                            engine.try_compile_from_bus(pc, sb);
+                            if promote {
+                                engine.try_compile_from_bus(pc, sb);
+                            }
+                            engine.note_cut(pc, sb, None);
                         }
                     }
                     self.step(bus, observers, config)?;

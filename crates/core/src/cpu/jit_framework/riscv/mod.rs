@@ -39,6 +39,7 @@ use super::frontend::{BlockPlan, ExitEdge, FrontendRefusal, IsaFrontend};
 use super::side_exit::BailReason;
 use super::{CodeView, Pc};
 
+pub mod cutstats;
 pub mod emit;
 pub mod host;
 pub mod wasm_encode;
