@@ -676,7 +676,7 @@ mod tests {
         // Lay out a 1-entry RX ring in RAM: desc @ 0x3fca4904, buffer @ 0x3fca4980.
         let mut bus = SystemBus::new();
         bus.ram.base_addr = 0x3fc8_0000;
-        bus.ram.data = vec![0u8; 0x40000];
+        bus.ram.data = vec![0u8; 0x40000].into();
         let desc = 0x3fca_4904u32;
         let buf = 0x3fca_4980u32;
         bus.write_u32(desc as u64, DESC_OWNER | 1600).unwrap(); // owner, cap=1600
