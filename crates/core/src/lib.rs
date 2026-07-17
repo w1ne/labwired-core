@@ -1123,6 +1123,32 @@ pub struct Machine<C: Cpu> {
     /// host-side tax at tick-512: one alloc + full peripheral walk per batch).
     #[allow(dead_code)]
     generation_scratch: Vec<u32>,
+    /// Reusable scratch for the per-tick `tick_peripherals_fully` interrupt
+    /// harvest, so the steady-state peripheral tick pushes pending NVIC IRQs
+    /// into a retained buffer instead of allocating a fresh `Vec` every tick
+    /// (the ~731k `RawVec::grow_one` the callgrind profile blamed on the C3
+    /// SYSTIMER tick). Cleared, not reallocated, each tick. Same pattern as
+    /// [`Self::hcsr04_edge_scratch`].
+    tick_irq_scratch: Vec<u32>,
+    /// Reusable scratch for the per-tick peripheral-cost list, paired with
+    /// [`Self::tick_irq_scratch`]. Empty on the walk-free fast path.
+    tick_cost_scratch: Vec<bus::PeripheralTickCost>,
+    /// Reusable scratch for `drain_scheduler_events`'s pending-schedule harvest.
+    /// Swapped with `bus.pending_schedule` and drained in place so the drain
+    /// reuses the buffer's capacity instead of `mem::take` freeing and later
+    /// reallocating a fresh `Vec` every time write-context events were buffered.
+    /// Semantics are identical (same entries, same order). Always present; only
+    /// used under the `event-scheduler` feature.
+    #[allow(dead_code)]
+    pending_schedule_scratch: Vec<(usize, u64, u32)>,
+    /// Reusable no-op stand-in for the peripheral swap-out dance in
+    /// `drain_scheduler_events` (a peripheral's `on_event` needs `&mut self.bus`,
+    /// so the peripheral is temporarily replaced by a stub). Held here and
+    /// swapped in/out so the hot scheduler event path (the ESP32-C3 SYSTIMER
+    /// alarm fires one per drain) does not `Box::new` + free a fresh stub every
+    /// event. Always `Some` between events. Only used under `event-scheduler`.
+    #[allow(dead_code)]
+    event_placeholder: Option<Box<dyn Peripheral>>,
 
     /// In-engine logic-analyzer edge capture (see [`crate::logic_capture`]).
     /// Empty/inactive by default — the step loop pays a single `is_active`
@@ -1367,6 +1393,10 @@ impl<C: Cpu> Machine<C> {
             scheduler_bootstrapped: false,
             hcsr04_edge_scratch: Vec::new(),
             generation_scratch: Vec::new(),
+            tick_irq_scratch: Vec::new(),
+            tick_cost_scratch: Vec::new(),
+            pending_schedule_scratch: Vec::new(),
+            event_placeholder: Some(Box::new(crate::peripherals::stub::StubPeripheral::new(0))),
             logic_capture: logic_capture::LogicCapture::new(),
             logic_force_poll: false,
         }
@@ -1844,7 +1874,14 @@ impl<C: Cpu> Machine<C> {
         let interval = (self.config.peripheral_tick_interval as u64).max(1);
         self.sched.advance_to(self.total_cycles);
         let now = self.sched.now();
-        for (idx, deadline, token) in std::mem::take(&mut self.bus.pending_schedule) {
+        // Swap the buffered schedule out into retained scratch (instead of
+        // `mem::take`, which frees the buffer's capacity each drain) and drain
+        // it in place — same entries, same order, but the capacity is reused.
+        std::mem::swap(
+            &mut self.bus.pending_schedule,
+            &mut self.pending_schedule_scratch,
+        );
+        for (idx, deadline, token) in self.pending_schedule_scratch.drain(..) {
             let gen = self
                 .bus
                 .peripherals
@@ -1891,17 +1928,22 @@ impl<C: Cpu> Machine<C> {
                 continue;
             }
             let idx = ev.peripheral_idx as usize;
-            let Some(entry) = self.bus.peripherals.get_mut(idx) else {
+            if idx >= self.bus.peripherals.len() {
                 continue;
-            };
+            }
             // Swap the peripheral out so we can pass `&mut self.bus` into
             // `on_event` without holding two simultaneous mutable borrows.
-            // Same dance the bus uses for `tick_with_bus`.
-            let placeholder: Box<dyn Peripheral> =
-                Box::new(crate::peripherals::stub::StubPeripheral::new(0));
-            let mut dev = std::mem::replace(&mut entry.dev, placeholder);
+            // Same dance the bus uses for `tick_with_bus`, but the stub stand-in
+            // is reused from `event_placeholder` instead of allocated per event.
+            let stub = self
+                .event_placeholder
+                .take()
+                .expect("event_placeholder present between events");
+            let mut dev = std::mem::replace(&mut self.bus.peripherals[idx].dev, stub);
             let result = dev.on_event(ev.event_token, &mut self.sched, &mut self.bus);
-            self.bus.peripherals[idx].dev = dev;
+            // Put the real peripheral back and reclaim the stub for reuse.
+            let stub_back = std::mem::replace(&mut self.bus.peripherals[idx].dev, dev);
+            self.event_placeholder = Some(stub_back);
             // Phase 2B.3b: a level-triggered peripheral re-arms its own event
             // (same token) while it has active work. We own the (idx,
             // generation) the scheduler needs, so we do it here.
