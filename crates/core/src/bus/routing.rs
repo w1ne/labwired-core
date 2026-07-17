@@ -173,6 +173,7 @@ impl SystemBus {
             .collect();
         self.peripheral_hint.set(None);
         self.last_route.set(None);
+        self.last_gap.set(None);
         // Cache the DPORT index (classic-ESP32 only) so the per-step
         // cross-core IPI read is O(1) instead of scanning every peripheral.
         self.dport_idx = self.peripherals.iter().position(|p| {
@@ -442,6 +443,13 @@ impl SystemBus {
         // inside it AND no narrower (greater-start) window steals `addr`.
         // When the next sorted range starts after `addr`, that check is O(1).
         if self.peripheral_ranges.len() == self.peripherals.len() {
+            // Negative cache: a known peripheral-free gap answers misses O(1).
+            if let Some((gs, ge)) = self.last_gap.get() {
+                if addr >= gs && addr < ge {
+                    self.peripheral_hint.set(None);
+                    return None;
+                }
+            }
             if let Some((ord, start, end, index)) = self.last_route.get() {
                 if addr >= start && addr < end {
                     let next_start = self
@@ -505,6 +513,28 @@ impl SystemBus {
             self.last_route.set(Some((ord, s, e, i)));
         } else {
             self.last_route.set(None);
+            // Miss: cache the surrounding peripheral-free gap. `pos` ranges
+            // start <= addr and (since none covered `addr`) all end <= addr,
+            // so the gap floor is their greatest end; the ceiling is the next
+            // range's start. No window can cover any address in between.
+            if self.peripheral_ranges.len() == self.peripherals.len() {
+                let pos = self
+                    .peripheral_ranges
+                    .partition_point(|range| range.start <= addr);
+                let floor = self.peripheral_ranges[..pos]
+                    .iter()
+                    .map(|r| r.end)
+                    .max()
+                    .unwrap_or(0);
+                let ceil = self
+                    .peripheral_ranges
+                    .get(pos)
+                    .map(|r| r.start)
+                    .unwrap_or(u64::MAX);
+                if floor <= addr && addr < ceil {
+                    self.last_gap.set(Some((floor, ceil)));
+                }
+            }
         }
         idx
     }
