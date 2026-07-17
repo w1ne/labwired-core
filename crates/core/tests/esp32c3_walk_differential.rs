@@ -96,13 +96,17 @@ struct OledLab {
 /// the SYSTIMER (the FreeRTOS-tick source), `i2c0_legacy` for the I²C0
 /// bit-engine (the OLED bus master), and `spi_adc_legacy` for the level-only
 /// pair (`spi2` + `apb_saradc`, migrated together), so a walk-on-vs-scheduler
-/// differential can isolate each migration in turn.
+/// differential can isolate each migration in turn. `uart0_legacy` does the same
+/// for the shared `Uart`, whose scheduler path skips wakeups that only hold an
+/// unobservable level-triggered own-IRQ (`has_active_work`); the walk reference
+/// ticks it every cycle unconditionally.
 fn build_oled_lab(
     tick_interval: u32,
     rtc_legacy: bool,
     systimer_legacy: bool,
     i2c0_legacy: bool,
     spi_adc_legacy: bool,
+    uart0_legacy: bool,
 ) -> OledLab {
     let chip = ChipDescriptor::from_file(root().join("../../configs/chips/esp32c3.yaml"))
         .expect("load esp32c3 chip yaml");
@@ -245,6 +249,20 @@ fn build_oled_lab(
             .force_legacy_walk();
     }
 
+    if uart0_legacy {
+        let idx = machine
+            .bus
+            .find_peripheral_index_by_name("uart0")
+            .expect("oled bus registers uart0");
+        machine.bus.peripherals[idx]
+            .dev
+            .as_any_mut()
+            .unwrap()
+            .downcast_mut::<labwired_core::peripherals::uart::Uart>()
+            .expect("uart0 is the shared Uart model")
+            .force_legacy_walk();
+    }
+
     // Any `*_legacy` reference above pinned a peripheral back onto the walk with
     // `force_legacy_walk` AFTER the rom-boot path derived walk-deletion over the
     // (then all-scheduler) peripheral set. Now that `wifi_mac` is migrated the
@@ -308,10 +326,14 @@ const MIN_LIT: usize = 400;
 #[test]
 #[ignore = "runs the real C3 bootloader + app (~2x30M steps); run with --release --ignored"]
 fn oled_lab_walk_on_vs_scheduler_rtc_is_byte_identical_at_interval_1() {
-    let (walk_cycles, walk_fb, walk_serial) =
-        run_lab(build_oled_lab(1, true, false, false, false), PAINT_BUDGET);
-    let (sched_cycles, sched_fb, sched_serial) =
-        run_lab(build_oled_lab(1, false, false, false, false), PAINT_BUDGET);
+    let (walk_cycles, walk_fb, walk_serial) = run_lab(
+        build_oled_lab(1, true, false, false, false, false),
+        PAINT_BUDGET,
+    );
+    let (sched_cycles, sched_fb, sched_serial) = run_lab(
+        build_oled_lab(1, false, false, false, false, false),
+        PAINT_BUDGET,
+    );
 
     assert!(
         lit_pixels(&walk_fb) >= MIN_LIT,
@@ -342,9 +364,14 @@ fn oled_lab_walk_on_vs_scheduler_rtc_is_byte_identical_at_interval_1() {
 #[test]
 #[ignore = "runs the real C3 bootloader + app (~2x30M steps); run with --release --ignored"]
 fn oled_lab_framebuffer_is_byte_identical_across_tick_intervals() {
-    let (_, fb_1, _) = run_lab(build_oled_lab(1, false, false, false, false), PAINT_BUDGET);
-    let (_, fb_64, serial_64) =
-        run_lab(build_oled_lab(64, false, false, false, false), PAINT_BUDGET);
+    let (_, fb_1, _) = run_lab(
+        build_oled_lab(1, false, false, false, false, false),
+        PAINT_BUDGET,
+    );
+    let (_, fb_64, serial_64) = run_lab(
+        build_oled_lab(64, false, false, false, false, false),
+        PAINT_BUDGET,
+    );
 
     assert!(
         lit_pixels(&fb_1) >= MIN_LIT,
@@ -367,9 +394,12 @@ fn oled_lab_framebuffer_is_byte_identical_across_tick_intervals() {
 #[test]
 #[ignore = "runs the real C3 bootloader + app (~2x30M steps); run with --release --ignored"]
 fn oled_lab_framebuffer_is_byte_identical_at_tick_512() {
-    let (_, fb_1, _) = run_lab(build_oled_lab(1, false, false, false, false), PAINT_BUDGET);
+    let (_, fb_1, _) = run_lab(
+        build_oled_lab(1, false, false, false, false, false),
+        PAINT_BUDGET,
+    );
     let (_, fb_512, serial_512) = run_lab(
-        build_oled_lab(512, false, false, false, false),
+        build_oled_lab(512, false, false, false, false, false),
         PAINT_BUDGET,
     );
 
@@ -403,11 +433,11 @@ fn oled_lab_systimer_walk_on_vs_scheduler_is_byte_identical() {
     for interval in [1u32, 64] {
         // reference: SYSTIMER on the legacy walk; test: SYSTIMER scheduler.
         let (walk_cycles, walk_fb, walk_serial) = run_lab(
-            build_oled_lab(interval, false, true, false, false),
+            build_oled_lab(interval, false, true, false, false, false),
             PAINT_BUDGET,
         );
         let (sched_cycles, sched_fb, sched_serial) = run_lab(
-            build_oled_lab(interval, false, false, false, false),
+            build_oled_lab(interval, false, false, false, false, false),
             PAINT_BUDGET,
         );
 
@@ -457,10 +487,14 @@ fn oled_lab_systimer_walk_on_vs_scheduler_is_byte_identical() {
 #[ignore = "runs the real C3 bootloader + app (~4x30M steps); run with --release --ignored"]
 fn oled_lab_i2c0_walk_on_vs_scheduler_is_byte_identical() {
     // interval 1: full byte-identity (serial + total_cycles + framebuffer).
-    let (walk_cycles, walk_fb, walk_serial) =
-        run_lab(build_oled_lab(1, false, false, true, false), PAINT_BUDGET);
-    let (sched_cycles, sched_fb, sched_serial) =
-        run_lab(build_oled_lab(1, false, false, false, false), PAINT_BUDGET);
+    let (walk_cycles, walk_fb, walk_serial) = run_lab(
+        build_oled_lab(1, false, false, true, false, false),
+        PAINT_BUDGET,
+    );
+    let (sched_cycles, sched_fb, sched_serial) = run_lab(
+        build_oled_lab(1, false, false, false, false, false),
+        PAINT_BUDGET,
+    );
 
     assert!(
         lit_pixels(&walk_fb) >= MIN_LIT,
@@ -485,8 +519,14 @@ fn oled_lab_i2c0_walk_on_vs_scheduler_is_byte_identical() {
     );
 
     // interval 64: bounded-stale reads must leave the painted OLED unchanged.
-    let (_, walk_fb_64, _) = run_lab(build_oled_lab(64, false, false, true, false), PAINT_BUDGET);
-    let (_, sched_fb_64, _) = run_lab(build_oled_lab(64, false, false, false, false), PAINT_BUDGET);
+    let (_, walk_fb_64, _) = run_lab(
+        build_oled_lab(64, false, false, true, false, false),
+        PAINT_BUDGET,
+    );
+    let (_, sched_fb_64, _) = run_lab(
+        build_oled_lab(64, false, false, false, false, false),
+        PAINT_BUDGET,
+    );
     assert!(
         walk_fb_64 == sched_fb_64,
         "SSD1306 framebuffer must be byte-identical (I²C0 walk vs scheduler) at interval 64 \
@@ -511,10 +551,14 @@ fn oled_lab_i2c0_walk_on_vs_scheduler_is_byte_identical() {
 #[ignore = "runs the real C3 bootloader + app (~4x30M steps); run with --release --ignored"]
 fn oled_lab_spi2_apb_saradc_walk_on_vs_scheduler_is_byte_identical() {
     // interval 1: full byte-identity (serial + total_cycles + framebuffer).
-    let (walk_cycles, walk_fb, walk_serial) =
-        run_lab(build_oled_lab(1, false, false, false, true), PAINT_BUDGET);
-    let (sched_cycles, sched_fb, sched_serial) =
-        run_lab(build_oled_lab(1, false, false, false, false), PAINT_BUDGET);
+    let (walk_cycles, walk_fb, walk_serial) = run_lab(
+        build_oled_lab(1, false, false, false, true, false),
+        PAINT_BUDGET,
+    );
+    let (sched_cycles, sched_fb, sched_serial) = run_lab(
+        build_oled_lab(1, false, false, false, false, false),
+        PAINT_BUDGET,
+    );
 
     assert!(
         lit_pixels(&walk_fb) >= MIN_LIT,
@@ -536,8 +580,14 @@ fn oled_lab_spi2_apb_saradc_walk_on_vs_scheduler_is_byte_identical() {
     );
 
     // interval 64: the quiescent pair must still not perturb the painted OLED.
-    let (_, walk_fb_64, _) = run_lab(build_oled_lab(64, false, false, false, true), PAINT_BUDGET);
-    let (_, sched_fb_64, _) = run_lab(build_oled_lab(64, false, false, false, false), PAINT_BUDGET);
+    let (_, walk_fb_64, _) = run_lab(
+        build_oled_lab(64, false, false, false, true, false),
+        PAINT_BUDGET,
+    );
+    let (_, sched_fb_64, _) = run_lab(
+        build_oled_lab(64, false, false, false, false, false),
+        PAINT_BUDGET,
+    );
     assert!(
         walk_fb_64 == sched_fb_64,
         "SSD1306 framebuffer must be byte-identical (spi2/apb_saradc walk vs scheduler) at interval 64"
@@ -632,7 +682,7 @@ fn oled_lab_native_mips_probe() {
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(50_000_000);
-    let mut lab = build_oled_lab(interval, false, systimer_legacy, false, false);
+    let mut lab = build_oled_lab(interval, false, systimer_legacy, false, false, false);
     lab.machine.config.idle_fast_forward_enabled = idle_ff;
     lab.machine.config.riscv_jit_enabled = jit;
     lab.machine.bus.config.riscv_jit_enabled = jit;
@@ -712,7 +762,7 @@ fn oled_lab_walk_pinners_after_rtc_migration() {
     /// a regression.
     const EXPECTED_PINNERS: &[&str] = &[];
 
-    let lab = build_oled_lab(1, false, false, false, false);
+    let lab = build_oled_lab(1, false, false, false, false, false);
     let bus = &lab.machine.bus;
 
     let mut pinners: Vec<&str> = Vec::new();
@@ -776,7 +826,7 @@ fn oled_lab_walk_pinners_after_rtc_migration() {
 fn oled_lab_sim_serial_vs_silicon_report() {
     use std::time::Instant;
     let t0 = Instant::now();
-    let mut lab = build_oled_lab(512, false, false, false, false);
+    let mut lab = build_oled_lab(512, false, false, false, false, false);
     lab.machine.config.idle_fast_forward_enabled = true;
     lab.machine.bus.config.idle_fast_forward_enabled = true;
     // Match browser recommended interval after #557.
@@ -839,5 +889,72 @@ fn oled_lab_sim_serial_vs_silicon_report() {
     assert!(
         lit_pixels(&fb) >= MIN_LIT,
         "sim framebuffer must light pixels"
+    );
+}
+
+/// GROUND-TRUTH GATE for the `Uart::has_active_work` IRQ-observability gate.
+///
+/// The shared `Uart` re-armed a scheduler event EVERY guest cycle for as long as
+/// TXEIE/TCIE was set (`reschedule_delay: Some(1)`), faithfully reproducing the
+/// legacy per-cycle `tick()`. On the C3 that wakeup is provably inert: the chip
+/// yaml declares `uart0` with no `irq:`, the machine DROPS `EventResult::
+/// raise_own_irq` when the entry has no IRQ, and the generic `Uart` exports no
+/// `matrix_irq_sources`, so nothing downstream can observe it. With no RX stream
+/// and no pending DMA, `advance_one_tick` mutates nothing either — it is a pure
+/// function of `cr1`. So the model now skips those wakeups, which restored batch
+/// widths (mean 1.38 → 19.4 on the shipped display-workshop lab).
+///
+/// "Provably inert" has to be proven, not asserted. The legacy walk is the
+/// pre-scheduler ground truth: it ticks `uart0` every single cycle,
+/// unconditionally, exactly as the old scheduler path did. If skipping those
+/// wakeups changed ANY guest-visible byte, this differential diverges.
+#[test]
+#[ignore = "runs the real C3 bootloader + app (~4x30M steps); run with --release --ignored"]
+fn oled_lab_uart0_walk_on_vs_scheduler_is_byte_identical() {
+    // interval 1: full byte-identity (serial + total_cycles + framebuffer).
+    let (walk_cycles, walk_fb, walk_serial) = run_lab(
+        build_oled_lab(1, false, false, false, false, true),
+        PAINT_BUDGET,
+    );
+    let (sched_cycles, sched_fb, sched_serial) = run_lab(
+        build_oled_lab(1, false, false, false, false, false),
+        PAINT_BUDGET,
+    );
+
+    assert!(
+        lit_pixels(&walk_fb) >= MIN_LIT,
+        "reference (uart0 walk) must paint the OLED at interval 1 (lit={}); serial:\n{}",
+        lit_pixels(&walk_fb),
+        String::from_utf8_lossy(&walk_serial)
+    );
+    assert_eq!(
+        walk_cycles, sched_cycles,
+        "total_cycles must be byte-identical (uart0 walk vs scheduler) at interval 1"
+    );
+    assert!(
+        walk_serial == sched_serial,
+        "serial stream must be byte-identical (uart0 walk vs scheduler) at interval 1\n\
+         --- walk ---\n{}\n--- sched ---\n{}",
+        String::from_utf8_lossy(&walk_serial),
+        String::from_utf8_lossy(&sched_serial)
+    );
+    assert!(
+        walk_fb == sched_fb,
+        "SSD1306 framebuffer must be byte-identical (uart0 walk vs scheduler) at interval 1"
+    );
+
+    // interval 64: the batched path the browser actually runs must paint the
+    // same pixels as the per-cycle walk reference.
+    let (_, walk_fb_64, _) = run_lab(
+        build_oled_lab(64, false, false, false, false, true),
+        PAINT_BUDGET,
+    );
+    let (_, sched_fb_64, _) = run_lab(
+        build_oled_lab(64, false, false, false, false, false),
+        PAINT_BUDGET,
+    );
+    assert!(
+        walk_fb_64 == sched_fb_64,
+        "SSD1306 framebuffer must be byte-identical (uart0 walk vs scheduler) at interval 64"
     );
 }

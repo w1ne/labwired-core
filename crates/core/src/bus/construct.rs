@@ -97,6 +97,7 @@ impl SystemBus {
             esp32s3_asserted_sources: [0; 2],
             esp32s3_sched_asserted_sources: [0; 2],
             flash_models_ops: false,
+            iolink_master_attached: false,
             nordic_gpio_service: false,
             hcsr04_scheduling_disabled: false,
             flash_error_flags_idx: None,
@@ -161,6 +162,7 @@ impl SystemBus {
             esp32s3_asserted_sources: [0; 2],
             esp32s3_sched_asserted_sources: [0; 2],
             flash_models_ops: false,
+            iolink_master_attached: false,
             nordic_gpio_service: false,
             hcsr04_scheduling_disabled: false,
             flash_error_flags_idx: None,
@@ -202,6 +204,8 @@ impl SystemBus {
         // bus's shared cycle clock before it is registered, so read-side lazy
         // sync is available from the first instruction.
         dev.attach_cycle_clock(self.cycle_clock.clone());
+        // Twin of the `push_peripheral` attach — see there.
+        dev.attach_irq_line(irq);
         self.peripherals.push(PeripheralEntry {
             name: name.to_string(),
             base,
@@ -534,6 +538,10 @@ impl SystemBus {
         // models (SysTick et al.) get read-side lazy sync too. No-op for the
         // vast majority of models (the default `attach_cycle_clock` discards).
         dev.attach_cycle_clock(self.cycle_clock.clone());
+        // Same choke point, same contract: tell the model whether its own-IRQ is
+        // wired, so one whose only per-cycle wakeup holds a level-triggered IRQ
+        // can stop scheduling itself on a bus where that pend is dropped.
+        dev.attach_irq_line(p_cfg.irq);
         self.peripherals.push(PeripheralEntry {
             name: p_cfg.id.clone(),
             base: p_cfg.base_address,

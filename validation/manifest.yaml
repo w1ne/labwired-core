@@ -173,7 +173,19 @@ boards:
     # inter-node wire instead of an inert topology. This changes dynamic CAN
     # frame delivery, which the reset/MMIO/flash capture does not cover. A live
     # H563 FDCAN data-path re-diff remains tracked; no probe was attached here.
-    drift_ack: 2026-07-14
+    # 2026-07-17: shared uart.rs gained `irq_wired` (set at the bus attach choke
+    # points), gating the per-cycle scheduler wakeup a held level-triggered
+    # TXEIE/TCIE requests. THIS BOARD IS UNTOUCHED: its USARTs declare real IRQ
+    # lines (uart1 irq:58, uart2 irq:59, uart3 irq:60 in configs/chips/stm32h563.yaml),
+    # so attach_irq_line sets irq_wired=true and has_active_work returns exactly what
+    # it did before — identical cadence. The flag also DEFAULTS to true, so any bus
+    # bypassing the choke points keeps the legacy behaviour; only stale `false` could
+    # matter and no path produces it. Only the ESP32-C3 changes, whose yaml declares
+    # uart0 with NO irq: (making those wakeups provably unobservable). Register
+    # layout, reset values and byte paths unchanged; stm32_timer (5/5) + stm32_dma
+    # (2/2) differentials and h563_mmio_diff/conformance pass unchanged. Drift is the
+    # shared-file hash only. No live re-capture (no H563 probe attached this session).
+    drift_ack: 2026-07-17
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs

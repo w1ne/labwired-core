@@ -94,6 +94,7 @@ impl SystemBus {
             esp32s3_asserted_sources: [0; 2],
             esp32s3_sched_asserted_sources: [0; 2],
             flash_models_ops: false,
+            iolink_master_attached: false,
             nordic_gpio_service: false,
             hcsr04_scheduling_disabled: false,
             flash_error_flags_idx: None,
