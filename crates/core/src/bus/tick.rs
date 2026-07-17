@@ -964,6 +964,33 @@ impl SystemBus {
         self.tick_peripherals_fully_impl(false)
     }
 
+    /// Allocation-free twin of [`Self::tick_peripherals_fully`]: writes the
+    /// pending interrupts and per-peripheral costs into caller-owned scratch
+    /// buffers (cleared first, then filled) instead of returning fresh `Vec`s.
+    /// The per-tick machine hot path (`Machine::commit_advance_boundary`) uses
+    /// this with retained scratch so the steady-state SYSTIMER tick allocates
+    /// nothing. Behaviour is byte-identical to `tick_peripherals_fully`; the
+    /// walk-free fast path below mirrors `tick_peripherals_fully_impl`.
+    pub fn tick_peripherals_fully_into(
+        &mut self,
+        interrupts: &mut Vec<u32>,
+        costs: &mut Vec<PeripheralTickCost>,
+    ) {
+        interrupts.clear();
+        costs.clear();
+        // Walk-free fast path (mirror of `tick_peripherals_fully_impl`): the
+        // only per-cycle duty is aggregating enabled+pending NVIC interrupts,
+        // pushed directly into the retained buffer (zero alloc after warmup).
+        #[cfg(feature = "event-scheduler")]
+        if self.per_cycle_tick_is_trivial() {
+            self.collect_enabled_nvic_interrupts(interrupts);
+            return;
+        }
+        let (mut i, mut c) = self.tick_peripherals_fully_impl(false);
+        interrupts.append(&mut i);
+        costs.append(&mut c);
+    }
+
     /// Advances one peripheral-only tick while deliberately bypassing the
     /// event-scheduler walk deletion.
     ///
