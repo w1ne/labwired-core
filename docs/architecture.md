@@ -65,8 +65,9 @@ pub trait Cpu {
 ```
 
 The system currently implements:
-- **Cortex-M (ARMv7-M)**: Supports Thumb-2 instruction decoding.
-- **RISC-V (RV32I)**: Supports base integer instruction set.
+- **Cortex-M (ARMv7-M / ARMv6-M)**: Supports Thumb-2 instruction decoding.
+- **RISC-V (RV32IMC)**: Base integer set plus M/C extensions (e.g. the ESP32-C3 core).
+- **Xtensa (LX7)**: Powers the ESP32-S3 targets.
 
 ### Memory Model
 The memory system uses a linear addressing model mapped to host memory regions.
@@ -93,6 +94,7 @@ To achieve high MIPS (Million Instructions Per Second) for autonomous agents, La
 - **Instruction Decode Cache**: A direct-mapped cache in the CPU core that avoids re-decoding instructions on every hit.
 - **Multi-Byte Bus Fast-Path**: Specialized 16/32-bit access methods in `SystemBus` that bypass the virtual `read_u8` loop for memory regions (RAM/Flash).
 - **Batched Ticking**: Configurable `peripheral_tick_interval`. Ticking every N cycles instead of every instruction significantly reduces virtual call overhead in the hot path.
+- **Event-Driven Scheduling**: Peripherals that know their next deadline register wake-ups with the event scheduler (`crates/core/src/sched/`) instead of being polled every tick, eliminating the per-cycle peripheral walk on idle blocks.
 
 Defaults and gating are controlled via `SimulationConfig`. Setting `peripheral_tick_interval` to 1 and disabling caches restores strict cycle-accurate behavior for time-sensitive firmware.
 

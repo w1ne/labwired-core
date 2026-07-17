@@ -17,7 +17,7 @@ graph TD
         Loader --> Machine
         RustModel --> Machine
         
-        Machine --> CPU[CPU (ARM/RISC-V)]
+        Machine --> CPU[CPU (ARM/RISC-V/Xtensa)]
         Machine --> Bus[System Bus]
         Bus --> Memory
         Bus --> Peripherals
@@ -46,7 +46,7 @@ The simulation runtime. It is `no_std` compatible and designed for deterministic
 
 ### Components
 *   **Machine**: The top-level container holding CPU, Bus, and Peripherals.
-*   **Cpu Trait**: Abstract interface allowing `Cortex-M` or `RISC-V` implementations to be swapped.
+*   **Cpu Trait**: Abstract interface allowing `Cortex-M`, `RISC-V`, or `Xtensa` implementations to be swapped.
 *   **SystemBus**: dynamically routes memory accesses (`read`/`write`) to:
     *   **Linear Memory**: RAM/Flash (byte arrays).
     *   **Peripherals**: Structs implementing the `Peripheral` trait.
@@ -57,10 +57,11 @@ To satisfy Rust's borrow checker and ensure determinism:
 2.  **Resolution Phase**: The Bus processes these requests, modifying memory or triggering CPU exceptions.
 
 ## 3. Peripheral Modeling
-We prioritize **Tier 1 Devices** for deep support:
-*   **STM32F4** (Cortex-M4)
-*   **RP2040** (Dual Cortex-M0+)
-*   **nRF52** (Cortex-M4F)
+Coverage is intentionally uneven — depth is driven per chip rather than uniformly.
+The chip family spans Cortex-M (STM32F1/F4/G4/H5/L0/L4/WB, nRF52/53), RISC-V
+(ESP32-C3), and Xtensa (ESP32-S3); see
+[`docs/coverage_scoreboard.md`](coverage_scoreboard.md) for the live per-chip
+conformance and validation matrices.
 
 Peripherals are implemented as Rust structs that mimic hardware logic (registers, bitfields, state machines).
 
