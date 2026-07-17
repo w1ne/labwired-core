@@ -28,7 +28,7 @@
 //! not want to maintain. Compiling only flash-resident code is what makes
 //! "invalidate everything, rarely" cheap and correct.
 
-use std::collections::HashMap;
+use crate::hashers::FxHashMap;
 
 use super::Pc;
 
@@ -49,7 +49,7 @@ enum Slot<A> {
 /// (e.g. a `wasmtime` instance, or a `js_sys::WebAssembly.Instance`
 /// wrapper) — the cache is agnostic to it.
 pub struct BlockCache<A> {
-    slots: HashMap<Pc, Slot<A>>,
+    slots: FxHashMap<Pc, Slot<A>>,
     hot_threshold: u32,
     /// Monotonic count of full invalidations (telemetry).
     generation: u64,
@@ -76,7 +76,7 @@ impl<A> BlockCache<A> {
     /// New cache with an explicit promotion threshold.
     pub fn new(hot_threshold: u32) -> Self {
         Self {
-            slots: HashMap::new(),
+            slots: FxHashMap::default(),
             hot_threshold: hot_threshold.max(1),
             generation: 0,
         }

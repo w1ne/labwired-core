@@ -607,13 +607,6 @@ impl Cpu for RiscV {
             }
             (instruction, inst_len)
         };
-        tracing::debug!(
-            "PC={:#x}, Op={:#08x}, Instr={:?}, Len={}",
-            self.pc,
-            opcode,
-            instruction,
-            inst_len
-        );
 
         let mut next_pc = self.pc.wrapping_add(inst_len);
 
