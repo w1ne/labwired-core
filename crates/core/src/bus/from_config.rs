@@ -70,6 +70,7 @@ impl SystemBus {
             scheduler_driver_indices: Vec::new(),
             peripheral_hint: Cell::new(None),
             last_route: Cell::new(None),
+            last_gap: Cell::new(None),
             last_gpio_in: [0; 2],
             current_cycle: 0,
             cycle_clock: crate::CycleClock::default(),
