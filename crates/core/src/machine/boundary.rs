@@ -117,10 +117,15 @@ impl<C: Cpu> Machine<C> {
         let logic_boundary = self.total_cycles;
         let tick_interval = u64::from(self.config.peripheral_tick_interval.max(1));
         if self.total_cycles % tick_interval == 0 {
-            // Propagate peripherals
-            let (interrupts, costs) = self.bus.tick_peripherals_fully();
+            // Propagate peripherals. Reuse retained scratch buffers (swapped
+            // out via `mem::take` so the borrow checker sees them as owned
+            // locals) instead of letting the bus allocate a fresh Vec per tick.
+            let mut interrupts = std::mem::take(&mut self.tick_irq_scratch);
+            let mut costs = std::mem::take(&mut self.tick_cost_scratch);
+            self.bus
+                .tick_peripherals_fully_into(&mut interrupts, &mut costs);
             self.record_peripheral_tick_profile(costs.len());
-            for c in costs {
+            for c in costs.iter() {
                 self.total_cycles += c.cycles as u64;
                 if let Some(p) = self.bus.peripherals.get(c.index) {
                     for observer in &self.observers {
@@ -128,10 +133,13 @@ impl<C: Cpu> Machine<C> {
                     }
                 }
             }
-            for irq in interrupts {
+            for &irq in interrupts.iter() {
                 self.cpu.set_exception_pending(irq);
                 tracing::debug!("Exception {} Pend", irq);
             }
+            // Return the buffers (with their grown capacity) for reuse next tick.
+            self.tick_irq_scratch = interrupts;
+            self.tick_cost_scratch = costs;
         }
 
         // Phase 2B.1 (issue #192): event-driven peripheral scheduler.

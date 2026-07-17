@@ -33,10 +33,27 @@ struct StuckBit {
 /// register layout and access permissions.
 ///
 /// This allows for rapid modeling of memory-mapped peripherals without writing custom Rust code.
+/// Sentinel for "no register covers this byte" in [`GenericPeripheral::reg_at_byte`].
+const NO_REG: u32 = u32::MAX;
+
 #[derive(Debug)]
 pub struct GenericPeripheral {
     descriptor: PeripheralDescriptor,
     data: RefCell<Vec<u8>>,
+    /// O(1) offset->register resolution, built once in [`GenericPeripheral::new`].
+    ///
+    /// Direct-mapped by byte offset: `reg_at_byte[b]` holds the index (into
+    /// `descriptor.registers`) of the FIRST register, in declaration order, whose
+    /// `[address_offset, address_offset + size/8)` span covers byte `b`, or
+    /// [`NO_REG`]. "First match wins" mirrors the former linear scan exactly, so
+    /// this is a drop-in replacement for the O(n) per-access scan.
+    ///
+    /// Byte (not word) granularity is required: some registers are 8/16-bit and
+    /// some offsets are not word-aligned. Sized to `max_addr` — the same window
+    /// the `data` backing store already allocates — so it never over-allocates
+    /// relative to the peripheral's declared address space. Registers are static
+    /// after construction, so the table is built once and never rebuilt.
+    reg_at_byte: Vec<u32>,
     inflight_events: RefCell<Vec<InflightEvent>>,
     stuck_bits: RefCell<Vec<StuckBit>>,
 }
@@ -77,9 +94,24 @@ impl GenericPeripheral {
             }
         }
 
+        // Build the O(1) offset->register lookup once. Earlier registers claim
+        // their bytes first, so an overlap resolves to the same register the old
+        // linear scan would have found (first match wins).
+        let mut reg_at_byte = vec![NO_REG; max_addr as usize];
+        for (idx, reg) in descriptor.registers.iter().enumerate() {
+            let start = reg.address_offset as usize;
+            let end = start + (reg.size as usize / 8);
+            for slot in reg_at_byte[start..end].iter_mut() {
+                if *slot == NO_REG {
+                    *slot = idx as u32;
+                }
+            }
+        }
+
         let p = Self {
             descriptor,
             data: RefCell::new(data),
+            reg_at_byte,
             inflight_events: RefCell::new(Vec::new()),
             stuck_bits: RefCell::new(Vec::new()),
         };
@@ -103,6 +135,17 @@ impl GenericPeripheral {
 
     pub fn get_descriptor(&self) -> &labwired_config::PeripheralDescriptor {
         &self.descriptor
+    }
+
+    /// Resolves `offset` to the index of the register covering that byte in O(1),
+    /// or `None` if no register does. Replaces the former O(n) linear scan; see
+    /// [`GenericPeripheral::reg_at_byte`] for the "first match wins" semantics.
+    #[inline]
+    fn reg_index_at(&self, offset: u64) -> Option<usize> {
+        match self.reg_at_byte.get(offset as usize) {
+            Some(&idx) if idx != NO_REG => Some(idx as usize),
+            _ => None,
+        }
     }
 
     pub fn peek_u32_raw(&self, offset: u64) -> Option<u32> {
@@ -342,83 +385,83 @@ impl GenericPeripheral {
 
 impl Peripheral for GenericPeripheral {
     fn read(&self, offset: u64) -> SimResult<u8> {
-        // Find register containing this offset
-        for reg in &self.descriptor.registers {
-            let reg_start = reg.address_offset;
-            let reg_end = reg_start + (reg.size as u64 / 8);
-            if offset >= reg_start && offset < reg_end {
-                if reg.access == labwired_config::Access::WriteOnly {
-                    return Ok(0);
-                }
-
-                let mut data = self.data.borrow_mut();
-                let val = data[offset as usize];
-
-                // Side Effects: ReadAction
-                if let Some(side_effects) = &reg.side_effects {
-                    if let Some(labwired_config::ReadAction::Clear) = side_effects.read_action {
-                        data[offset as usize] = 0;
-                    }
-                }
-
-                self.check_triggers(&reg.id, false, None);
-
-                return Ok(self.apply_stuck_byte(offset, val));
+        // Resolve the containing register in O(1) (see `reg_at_byte`).
+        if let Some(idx) = self.reg_index_at(offset) {
+            let reg = &self.descriptor.registers[idx];
+            if reg.access == labwired_config::Access::WriteOnly {
+                return Ok(0);
             }
+
+            let mut data = self.data.borrow_mut();
+            let val = data[offset as usize];
+
+            // Side Effects: ReadAction
+            if let Some(side_effects) = &reg.side_effects {
+                if let Some(labwired_config::ReadAction::Clear) = side_effects.read_action {
+                    data[offset as usize] = 0;
+                }
+            }
+
+            self.check_triggers(&reg.id, false, None);
+
+            return Ok(self.apply_stuck_byte(offset, val));
         }
         Ok(0)
     }
 
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
-        // Find register containing this offset
-        for reg in &self.descriptor.registers {
+        // Resolve the containing register in O(1) (see `reg_at_byte`).
+        if let Some(idx) = self.reg_index_at(offset) {
+            let reg = &self.descriptor.registers[idx];
             let reg_start = reg.address_offset;
-            let reg_end = reg_start + (reg.size as u64 / 8);
-            if offset >= reg_start && offset < reg_end {
-                if reg.access == labwired_config::Access::ReadOnly {
-                    return Ok(());
-                }
-
-                let mut data = self.data.borrow_mut();
-
-                // Side Effects: WriteAction
-                if let Some(side_effects) = &reg.side_effects {
-                    match side_effects.write_action {
-                        Some(labwired_config::WriteAction::WriteOneToClear) => {
-                            data[offset as usize] &= !value;
-                        }
-                        Some(labwired_config::WriteAction::WriteZeroToClear) => {
-                            data[offset as usize] &= value;
-                        }
-                        _ => {
-                            data[offset as usize] = value;
-                        }
-                    }
-                } else {
-                    data[offset as usize] = value;
-                }
-
-                // For triggers, we need the full register value being written (ideally).
-                // But GenericPeripheral writes byte-by-byte.
-                // This is a limitation: multi-byte write triggers might be tricky.
-                // However, most SVD tools/emulators assume 32-bit writes for control registers.
-                // Let's at least trigger on the byte write.
-                // Calculate the shift for this byte within the register
-                let byte_offset = (offset - reg_start) * 8;
-                let shifted_val = (value as u32) << byte_offset;
-                self.check_triggers(&reg.id, true, Some(shifted_val));
-
+            if reg.access == labwired_config::Access::ReadOnly {
                 return Ok(());
             }
+
+            let mut data = self.data.borrow_mut();
+
+            // Side Effects: WriteAction
+            if let Some(side_effects) = &reg.side_effects {
+                match side_effects.write_action {
+                    Some(labwired_config::WriteAction::WriteOneToClear) => {
+                        data[offset as usize] &= !value;
+                    }
+                    Some(labwired_config::WriteAction::WriteZeroToClear) => {
+                        data[offset as usize] &= value;
+                    }
+                    _ => {
+                        data[offset as usize] = value;
+                    }
+                }
+            } else {
+                data[offset as usize] = value;
+            }
+
+            // For triggers, we need the full register value being written (ideally).
+            // But GenericPeripheral writes byte-by-byte.
+            // This is a limitation: multi-byte write triggers might be tricky.
+            // However, most SVD tools/emulators assume 32-bit writes for control registers.
+            // Let's at least trigger on the byte write.
+            // Calculate the shift for this byte within the register
+            let byte_offset = (offset - reg_start) * 8;
+            let shifted_val = (value as u32) << byte_offset;
+            self.check_triggers(&reg.id, true, Some(shifted_val));
+
+            return Ok(());
         }
         Ok(())
     }
 
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
-        for reg in &self.descriptor.registers {
-            let reg_start = reg.address_offset;
-            let reg_end = reg_start + (reg.size as u64 / 8);
-            if offset >= reg_start && offset + 3 < reg_end {
+        // O(1) resolve, then require the full 32-bit access to fit inside that one
+        // register (the old scan's `offset + 3 < reg_end` condition). Registers do
+        // not overlap, so the byte-`offset` register is the only candidate: if it
+        // does not contain all four bytes, no register does and we fall through to
+        // the per-byte path below, byte-identical to the old miss behavior.
+        if let Some(idx) = self.reg_index_at(offset) {
+            let reg = &self.descriptor.registers[idx];
+            let reg_end = reg.address_offset + (reg.size as u64 / 8);
+            if offset + 3 < reg_end {
                 if reg.access == labwired_config::Access::WriteOnly {
                     return Ok(0);
                 }
@@ -453,10 +496,12 @@ impl Peripheral for GenericPeripheral {
     }
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
-        for reg in &self.descriptor.registers {
-            let reg_start = reg.address_offset;
-            let reg_end = reg_start + (reg.size as u64 / 8);
-            if offset >= reg_start && offset + 3 < reg_end {
+        // O(1) resolve + full-fit check, matching `read_u32`; non-fitting or
+        // unmapped accesses fall through to the per-byte path unchanged.
+        if let Some(idx) = self.reg_index_at(offset) {
+            let reg = &self.descriptor.registers[idx];
+            let reg_end = reg.address_offset + (reg.size as u64 / 8);
+            if offset + 3 < reg_end {
                 if reg.access == labwired_config::Access::ReadOnly {
                     return Ok(());
                 }
@@ -507,15 +552,13 @@ impl Peripheral for GenericPeripheral {
     }
 
     fn peek(&self, offset: u64) -> Option<u8> {
-        for reg in &self.descriptor.registers {
-            let reg_start = reg.address_offset;
-            let reg_end = reg_start + (reg.size as u64 / 8);
-            if offset >= reg_start && offset < reg_end {
-                if reg.access == labwired_config::Access::WriteOnly {
-                    return Some(0);
-                }
-                return self.data.borrow().get(offset as usize).copied();
+        // O(1) resolve (see `reg_at_byte`); side-effect-free by contract.
+        if let Some(idx) = self.reg_index_at(offset) {
+            let reg = &self.descriptor.registers[idx];
+            if reg.access == labwired_config::Access::WriteOnly {
+                return Some(0);
             }
+            return self.data.borrow().get(offset as usize).copied();
         }
         Some(0)
     }
