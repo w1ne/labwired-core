@@ -2185,6 +2185,7 @@ fn test_flash_boot_alias_read_and_write() {
         esp32s3_asserted_sources: [0; 2],
         esp32s3_sched_asserted_sources: [0; 2],
         flash_models_ops: false,
+        iolink_master_attached: false,
         nordic_gpio_service: false,
         hcsr04_scheduling_disabled: false,
         flash_error_flags_idx: None,
@@ -2273,6 +2274,7 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         esp32s3_asserted_sources: [0; 2],
         esp32s3_sched_asserted_sources: [0; 2],
         flash_models_ops: false,
+        iolink_master_attached: false,
         nordic_gpio_service: false,
         hcsr04_scheduling_disabled: false,
         flash_error_flags_idx: None,
@@ -2512,6 +2514,7 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         esp32s3_asserted_sources: [0; 2],
         esp32s3_sched_asserted_sources: [0; 2],
         flash_models_ops: false,
+        iolink_master_attached: false,
         nordic_gpio_service: false,
         hcsr04_scheduling_disabled: false,
         flash_error_flags_idx: None,
@@ -2750,6 +2753,7 @@ fn test_peripheral_range_index_lookup() {
         esp32s3_asserted_sources: [0; 2],
         esp32s3_sched_asserted_sources: [0; 2],
         flash_models_ops: false,
+        iolink_master_attached: false,
         nordic_gpio_service: false,
         hcsr04_scheduling_disabled: false,
         flash_error_flags_idx: None,
@@ -2842,6 +2846,7 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         esp32s3_asserted_sources: [0; 2],
         esp32s3_sched_asserted_sources: [0; 2],
         flash_models_ops: false,
+        iolink_master_attached: false,
         nordic_gpio_service: false,
         hcsr04_scheduling_disabled: false,
         flash_error_flags_idx: None,
@@ -3594,4 +3599,73 @@ fn uds_tester_expect_nrc_negative_response_completes() {
     inject_ecu_reply(&mut bus, 0x222, &[0x03, 0x7F, 0x2E, 0x31]);
     bus.service_can_uds_testers();
     assert_eq!(bus.can_uds_testers[0].state, CanUdsTesterState::Done);
+}
+
+/// The `iolink_master_attached` cache backing `has_iolink_master` (and thus
+/// `requires_cycle_accurate`, which the run loop consults per batch plan / per
+/// step / per idle-FF check) must never disagree with the authoritative
+/// `scan_iolink_master` nested scan. A stale `false` would let a bus that must
+/// run cycle-accurate be batched, silently changing IO-Link timing — a fidelity
+/// break, not a perf regression. Pin every mutation path that can flip it.
+#[test]
+fn iolink_master_cache_tracks_every_mutation_path() {
+    use crate::peripherals::components::{IolinkComSpeed, IolinkMaster};
+
+    // Empty bus: nothing attached, nothing to find.
+    let mut bus = SystemBus::empty();
+    assert_eq!(bus.has_iolink_master(), bus.scan_iolink_master());
+    assert!(!bus.has_iolink_master());
+
+    // `add_peripheral` funnels through `rebuild_peripheral_ranges`. A plain
+    // UART carries no master, so the answer stays false.
+    bus.add_peripheral(
+        "uart0",
+        0x4000_0000,
+        0x1000,
+        None,
+        Box::new(crate::peripherals::uart::Uart::new()),
+    );
+    assert_eq!(bus.has_iolink_master(), bus.scan_iolink_master());
+    assert!(!bus.has_iolink_master());
+    assert!(!bus.requires_cycle_accurate());
+
+    // THE STALENESS SEAM: the post-build stream attach. This mutates a UART's
+    // `attached_streams` without touching the peripheral SET, so nothing else
+    // would rebuild the cache.
+    bus.attach_uart_stream_by_id(
+        "uart0",
+        Box::new(IolinkMaster::new(1, 1, IolinkComSpeed::Com2)),
+    )
+    .expect("attach IO-Link master to uart0");
+    assert_eq!(
+        bus.has_iolink_master(),
+        bus.scan_iolink_master(),
+        "attach_uart_stream_by_id must refresh the iolink cache"
+    );
+    assert!(bus.has_iolink_master());
+    assert!(
+        bus.requires_cycle_accurate(),
+        "an attached IO-Link master must force cycle-accurate execution"
+    );
+
+    // A later peripheral-set mutation re-derives the cache; it must not clobber
+    // the master discovered through the stream seam back to false.
+    bus.add_peripheral(
+        "uart1",
+        0x4000_1000,
+        0x1000,
+        None,
+        Box::new(crate::peripherals::uart::Uart::new()),
+    );
+    assert_eq!(bus.has_iolink_master(), bus.scan_iolink_master());
+    assert!(
+        bus.has_iolink_master(),
+        "rebuild_peripheral_ranges must not lose the attached master"
+    );
+
+    // `refresh_peripheral_index` is the documented escape hatch for code that
+    // mutates the `pub peripherals` vector by hand.
+    bus.refresh_peripheral_index();
+    assert_eq!(bus.has_iolink_master(), bus.scan_iolink_master());
+    assert!(bus.has_iolink_master());
 }

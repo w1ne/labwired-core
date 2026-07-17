@@ -776,6 +776,23 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// buses that bypass `add_peripheral` keep the old exact semantics.
     fn attach_cycle_clock(&mut self, _clock: CycleClock) {}
 
+    /// Tell the peripheral which NVIC/matrix line it was registered with (the
+    /// `irq` of its `PeripheralEntry`), or `None` when the descriptor wired
+    /// none. Called once at the same attach choke points as
+    /// [`Peripheral::attach_cycle_clock`] (`add_peripheral` / `push_peripheral`).
+    ///
+    /// Exists because [`crate::sched::EventResult::raise_own_irq`] is DROPPED by
+    /// the machine when the entry has no `irq` (`lib.rs`, `apply_event_result`):
+    /// a model whose only reason to wake per cycle is holding a level-triggered
+    /// own-IRQ is doing provably unobservable work on such a bus, and can stop
+    /// scheduling itself. Only the shared `Uart` opts in today.
+    ///
+    /// Default no-op, and the conservative contract matches
+    /// `attach_cycle_clock`: a model that never receives this must assume its
+    /// IRQ *is* wired and keep its legacy wakeup cadence, so hand-built buses
+    /// that bypass the choke points keep the old exact semantics.
+    fn attach_irq_line(&mut self, _irq: Option<u32>) {}
+
     /// Classify an MMIO access at `offset` for host idle/coalesce policy.
     /// Default [`MmioAccessClass::SideEffecting`] — only models that are
     /// proven poll-safe (or proven side-effect-free) override this.
