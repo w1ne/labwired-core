@@ -480,11 +480,17 @@ impl RiscV {
                         self.step(bus, observers, config)?;
                         engine.note_interpreted();
                         retired += 1;
-                    } else if let Some(sb) =
-                        bus.as_any_mut().and_then(|a| a.downcast_mut::<SystemBus>())
+                    } else if bus
+                        .as_any_mut()
+                        .and_then(|a| a.downcast_mut::<SystemBus>())
+                        .is_some()
                     {
+                        // The block writes guest RAM in place through the JIT's
+                        // shared wasm memory (which *is* `sb.ram.data`), so only
+                        // the register file is handed over. The downcast still
+                        // gates the path: a non-`SystemBus` never bound the JIT.
                         let (actual_n, next_pc, clear_reservation, needs_interp) =
-                            engine.run_ready(pc, &mut self.x, &mut sb.ram.data);
+                            engine.run_ready(pc, &mut self.x);
                         if clear_reservation {
                             self.reservation = None;
                         }
@@ -1494,7 +1500,8 @@ mod tests {
         // 000000000101 00000 000 00001 0010011 -> 0x00500093
         bus.flash.data = vec![
             0x93, 0x00, 0x50, 0x00, // ADDI x1, x0, 5
-        ];
+        ]
+        .into();
 
         cpu.pc = 0x0000_0000;
         let mut machine = Machine::new(cpu, bus);
@@ -1511,7 +1518,7 @@ mod tests {
         // CSRRS x5, x0, cycle (0xC00): standard RISC-V cycle CSR is not
         // implemented by the ESP32-C3 core; it must raise illegal instruction.
         let read_standard_cycle = (0xC00u32 << 20) | (5 << 7) | (0b010 << 12) | 0x73;
-        bus.flash.data = read_standard_cycle.to_le_bytes().to_vec();
+        bus.flash.data = read_standard_cycle.to_le_bytes().to_vec().into();
         cpu.pc = 0;
         cpu.mtvec = 0x100;
         let mut machine = Machine::new(cpu, bus);
@@ -1534,7 +1541,7 @@ mod tests {
     fn esp32c3_accepts_rom_ustatus_clear_before_mtvec_initialization() {
         let mut bus = SystemBus::new();
         let mut cpu = RiscV::new_for(RiscVCoreProfile::Esp32C3);
-        bus.flash.data = CLEAR_USTATUS.to_le_bytes().to_vec();
+        bus.flash.data = CLEAR_USTATUS.to_le_bytes().to_vec().into();
         cpu.pc = 0;
         let mut machine = Machine::new(cpu, bus);
 
@@ -1550,7 +1557,7 @@ mod tests {
     fn standard_rv32_rejects_esp32c3_rom_ustatus_clear() {
         let mut bus = SystemBus::new();
         let mut cpu = RiscV::new_for(RiscVCoreProfile::StandardRv32);
-        bus.flash.data = CLEAR_USTATUS.to_le_bytes().to_vec();
+        bus.flash.data = CLEAR_USTATUS.to_le_bytes().to_vec().into();
         cpu.pc = 0;
         cpu.mtvec = 0x100;
         let mut machine = Machine::new(cpu, bus);
@@ -1572,7 +1579,8 @@ mod tests {
             0x73, 0x90, 0x02, 0x80, // csrrw x0, 0x800, x5
             0x85, 0x42, // c.li x5, 1
             0x73, 0x90, 0x12, 0x80, // csrrw x0, 0x801, x5
-        ];
+        ]
+        .into();
         let mut cpu = RiscV::new_for(RiscVCoreProfile::Esp32C3);
         cpu.pc = ROM_PC;
         let mut machine = Machine::new(cpu, bus);
@@ -1609,7 +1617,7 @@ mod tests {
 
         for (profile, opcode, csr) in cases {
             let mut bus = SystemBus::new();
-            bus.flash.data = opcode.to_le_bytes().to_vec();
+            bus.flash.data = opcode.to_le_bytes().to_vec().into();
             let mut cpu = RiscV::new_for(profile);
             cpu.pc = 0;
             cpu.mtvec = 0x100;
@@ -1637,7 +1645,7 @@ mod tests {
     fn mhartid_reads_zero_for_all_riscv_profiles() {
         for profile in [RiscVCoreProfile::StandardRv32, RiscVCoreProfile::Esp32C3] {
             let mut bus = SystemBus::new();
-            bus.flash.data = READ_MHARTID_X7.to_le_bytes().to_vec();
+            bus.flash.data = READ_MHARTID_X7.to_le_bytes().to_vec().into();
             let mut cpu = RiscV::new_for(profile);
             cpu.pc = 0;
             let mut machine = Machine::new(cpu, bus);
@@ -1655,7 +1663,7 @@ mod tests {
     fn mhartid_write_traps_for_all_riscv_profiles() {
         for profile in [RiscVCoreProfile::StandardRv32, RiscVCoreProfile::Esp32C3] {
             let mut bus = SystemBus::new();
-            bus.flash.data = WRITE_MHARTID_X5.to_le_bytes().to_vec();
+            bus.flash.data = WRITE_MHARTID_X5.to_le_bytes().to_vec().into();
             let mut cpu = RiscV::new_for(profile);
             cpu.pc = 0;
             cpu.mtvec = 0x100;
@@ -1723,7 +1731,8 @@ mod tests {
             0x13, 0x01, 0x10,
             0x00, // ADDI x3, x0, 1 (0x00100193) - wait this is ADDI x3, x0, 1.
             0x13, 0x02, 0x10, 0x00, // ADDI x4, x0, 1 (0x00100213).
-        ];
+        ]
+        .into();
 
         cpu.pc = 0x0000_0000;
         let mut machine = Machine::new(cpu, bus);
@@ -1760,7 +1769,7 @@ mod tests {
         cpu.mtimecmp = 5;
 
         // Reset memory to hold our test program
-        bus.flash.data = vec![0; 0x3000];
+        bus.flash.data = vec![0; 0x3000].into();
         // 0x0: JAL x0, 0 (Infinite loop)
         bus.write_u32(0x0, 0x0000006F).unwrap();
         // 0x2000: ADDI x10, x10, 1
@@ -1811,7 +1820,7 @@ mod tests {
         cpu.mstatus = 1 << 3; // MIE
         cpu.mtimecmp = 3;
 
-        bus.flash.data = vec![0; 0x3000];
+        bus.flash.data = vec![0; 0x3000].into();
         // Straight-line code: every step advances PC by 4, next_pc != pc.
         // 0x0:  ADDI x10, x10, 1     ; x10 = 1
         // 0x4:  ADDI x10, x10, 1     ; x10 = 2, mtime hits mtimecmp here
@@ -1863,7 +1872,7 @@ mod tests {
         cpu.mstatus = 1 << 3; // MIE
         cpu.mtimecmp = u64::MAX; // no CLINT timer interference
 
-        bus.flash.data = vec![0; 0x3000];
+        bus.flash.data = vec![0; 0x3000].into();
         // NOP loop at 0x0 (ADDI x0,x0,0) and the per-line handlers are NOPs+MRET.
         bus.write_u32(0x0, 0x00000013).unwrap();
         bus.write_u32(0x4, 0x00000013).unwrap();
@@ -1908,7 +1917,7 @@ mod tests {
         );
         let mut bus = SystemBus::new();
         let mut cpu = RiscV::new();
-        bus.flash.data = vec![0; 0x100];
+        bus.flash.data = vec![0; 0x100].into();
         bus.write_u32(0x0, 0x1050_0073).unwrap(); // WFI
         cpu.pc = 0x0;
         let mut machine = Machine::new(cpu, bus);
@@ -1920,7 +1929,7 @@ mod tests {
     fn test_riscv_wfi_fast_forward_is_off_by_default() {
         let mut bus = SystemBus::new();
         let mut cpu = RiscV::new();
-        bus.flash.data = vec![0; 0x100];
+        bus.flash.data = vec![0; 0x100].into();
         bus.write_u32(0x0, 0x1050_0073).unwrap(); // WFI
         bus.write_u32(0x4, 0xffdf_f06f).unwrap(); // JAL x0, -4
         cpu.pc = 0x0;
@@ -1938,7 +1947,7 @@ mod tests {
     fn test_riscv_wfi_fast_forward_skips_cpu_work_when_enabled() {
         let mut bus = SystemBus::new();
         let mut cpu = RiscV::new();
-        bus.flash.data = vec![0; 0x100];
+        bus.flash.data = vec![0; 0x100].into();
         bus.write_u32(0x0, 0x1050_0073).unwrap(); // WFI
         bus.write_u32(0x4, 0xffdf_f06f).unwrap(); // JAL x0, -4
         cpu.pc = 0x0;
@@ -1970,7 +1979,7 @@ mod tests {
     fn boxed_riscv_batch_preserves_idle_fast_forward_escape() {
         let mut bus = SystemBus::new();
         let mut cpu = RiscV::new();
-        bus.flash.data = vec![0; 0x100];
+        bus.flash.data = vec![0; 0x100].into();
         bus.write_u32(0x0, 0x1050_0073).unwrap(); // WFI
         bus.write_u32(0x4, 0xffdf_f06f).unwrap(); // JAL x0, -4
         cpu.pc = 0x0;
@@ -1998,7 +2007,7 @@ mod tests {
     fn test_riscv_wfi_fast_forward_wakes_on_systimer_event() {
         let mut bus = SystemBus::empty();
         let mut cpu = RiscV::new();
-        bus.flash.data = vec![0; 0x3000];
+        bus.flash.data = vec![0; 0x3000].into();
         bus.write_u32(0x0, 0x1050_0073).unwrap(); // WFI
         bus.write_u32(0x4, 0xffdf_f06f).unwrap(); // JAL x0, -4
         bus.write_u32(0x2000 + 11 * 4, 0x3020_0073).unwrap(); // MRET at machine external IRQ vector
@@ -2061,7 +2070,7 @@ mod tests {
         // Put the program at flash 0x0.
         let mut bus = SystemBus::new();
         let mut cpu = RiscV::new();
-        bus.flash.data = vec![0; 0x200];
+        bus.flash.data = vec![0; 0x200].into();
 
         // Helper: encode an R-type (opcode=0x2F) atomic. All RV32A word
         // atomics share funct3 = 0b010.
@@ -2148,7 +2157,8 @@ mod tests {
             0x93, 0x00, 0xA0, 0x00, // ADDI x1, x0, 10
             0x13, 0x01, 0x50, 0x00, // ADDI x2, x0, 5
             0xB3, 0x81, 0x20, 0x02, // MUL x3, x1, x2
-        ];
+        ]
+        .into();
 
         cpu.pc = 0x0;
         let mut machine = Machine::new(cpu, bus);
@@ -2173,7 +2183,8 @@ mod tests {
         bus.flash.data = vec![
             0x95, 0x00, // C.ADDI x1, 5
             0x13, 0x02, 0x50, 0x00, // ADDI x4, x0, 5 (for alignment check)
-        ];
+        ]
+        .into();
 
         cpu.pc = 0x0;
         let mut machine = Machine::new(cpu, bus);
@@ -2206,7 +2217,8 @@ mod tests {
             0x44, 0xC0, // C.SW x9, 4(x8)
             0x48, 0x40, // C.LW x10, 4(x8)
             0x00, 0x00, 0x00, 0x00, // Padding
-        ];
+        ]
+        .into();
 
         cpu.pc = 0x0;
         cpu.write_reg(2, 0x20001000); // Initialize SP just in case
@@ -2226,7 +2238,8 @@ mod tests {
         let mut cpu = RiscV::new();
         bus.flash.data = vec![
             0x93, 0x00, 0x10, 0x00, // ADDI x1, x0, 1
-        ];
+        ]
+        .into();
 
         cpu.pc = 0;
         let mut machine = Machine::new(cpu, bus);
@@ -2242,7 +2255,8 @@ mod tests {
 
         machine.bus.flash.data = vec![
             0x93, 0x00, 0x20, 0x00, // ADDI x1, x0, 2
-        ];
+        ]
+        .into();
         machine.cpu.pc = 0;
         machine.step().unwrap();
 

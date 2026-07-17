@@ -12,6 +12,9 @@ pub struct Segment {
     pub data: Vec<u8>,
 }
 
+pub mod guest_buf;
+pub use guest_buf::{GuestBuf, JIT_PREFIX_BYTES, WASM_PAGE_BYTES};
+
 use crate::Arch;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -35,16 +38,23 @@ impl ProgramImage {
     }
 }
 
-/// A simple flat memory storage
+/// A simple flat memory storage.
+///
+/// `data` is a [`GuestBuf`], not a `Vec<u8>`: it derefs to the guest bytes
+/// exactly like a `Vec` did, but its allocation is shaped so the RV32IMC
+/// wasm-JIT can import it *directly* as a wasm linear memory. That is what
+/// lets a compiled block and the interpreter share one copy of guest RAM
+/// instead of marshalling the whole window in and out around every block run.
+/// See [`guest_buf`] for the layout and the aliasing-soundness argument.
 pub struct LinearMemory {
-    pub data: Vec<u8>,
+    pub data: GuestBuf,
     pub base_addr: u64,
 }
 
 impl LinearMemory {
     pub fn new(size: usize, base_addr: u64) -> Self {
         Self {
-            data: vec![0; size],
+            data: GuestBuf::new(size),
             base_addr,
         }
     }

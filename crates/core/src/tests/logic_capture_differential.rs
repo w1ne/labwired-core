@@ -627,7 +627,7 @@ mod logic_capture_differential_tests {
         use crate::cpu::RiscV;
         let build = || {
             let mut bus = crate::bus::SystemBus::new();
-            bus.flash.data = vec![0; 0x100];
+            bus.flash.data = vec![0; 0x100].into();
             bus.add_peripheral(
                 "gpio_test",
                 GPIO_BASE,

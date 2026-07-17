@@ -62,7 +62,7 @@ const DONE_PC: u32 = 0x18;
 /// ```
 fn build_machine(tick_interval: u32, legacy_walk: bool) -> Machine<RiscV> {
     let mut bus = crate::bus::SystemBus::new();
-    bus.flash.data = vec![0; 0x100];
+    bus.flash.data = vec![0; 0x100].into();
     // add_peripheral attaches the bus cycle clock → scheduler mode under the
     // event-scheduler feature. `force_legacy_walk` detaches it, restoring the
     // reference per-cycle-walk drive.

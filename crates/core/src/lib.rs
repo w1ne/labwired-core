@@ -1547,10 +1547,10 @@ impl<C: Cpu> Machine<C> {
         // load. Untouched (all-zero) extra_mem windows — e.g. the flash-mapped
         // DROM mirror — are skipped so the blob stays compact.
         if cpu_kind == runtime_snapshot::CpuKind::RiscV {
-            let mut memories = vec![(self.bus.ram.base_addr, self.bus.ram.data.clone())];
+            let mut memories = vec![(self.bus.ram.base_addr, self.bus.ram.data.to_vec())];
             for mem in &self.bus.extra_mem {
                 if mem.data.iter().any(|&b| b != 0) {
-                    memories.push((mem.base_addr, mem.data.clone()));
+                    memories.push((mem.base_addr, mem.data.to_vec()));
                 }
             }
             snap.memories = memories;
