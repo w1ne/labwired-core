@@ -51,6 +51,7 @@
 
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
+use labwired_core::Bus;
 use std::path::PathBuf;
 
 /// Curated silicon-corroborated reset values (descriptor == live C3), drawn

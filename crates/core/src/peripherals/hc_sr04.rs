@@ -320,6 +320,7 @@ mod tests {
     fn echo_driven_through_bus() {
         use crate::bus::SystemBus;
         use crate::peripherals::gpio::{GpioPort, GpioRegisterLayout};
+        use crate::Bus;
 
         const GPIOA: u64 = 0x4800_0000; // stm32v2: ODR @ 0x14, IDR @ 0x10, BSRR @ 0x18
         let echo_bit = 9u8; // PA9 (ECHO input)

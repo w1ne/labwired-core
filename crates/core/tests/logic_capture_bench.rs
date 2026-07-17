@@ -29,6 +29,7 @@ use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::peripherals::gpio::{GpioPort, GpioRegisterLayout};
 use labwired_core::system::cortex_m::configure_cortex_m;
+use labwired_core::Bus;
 use labwired_core::{cpu::CortexM, DebugControl, Machine};
 use std::path::PathBuf;
 use std::time::Instant;

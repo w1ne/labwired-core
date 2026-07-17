@@ -28,6 +28,7 @@
 
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
+use labwired_core::Bus;
 use std::path::PathBuf;
 
 /// One chip's conformance inputs. `reset_oracle` and `behavior_gate` are `None`

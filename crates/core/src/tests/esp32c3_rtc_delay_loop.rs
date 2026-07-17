@@ -39,7 +39,7 @@
 
 use crate::cpu::RiscV;
 use crate::peripherals::esp32c3::rtc_timer::Esp32c3RtcTimer;
-use crate::{Cpu, DebugControl, Machine};
+use crate::{Bus, Cpu, DebugControl, Machine};
 
 const RTC_BASE: u64 = 0x6000_8000;
 /// The delay-loop deadline in RTC counter ticks (== CPU cycles in this model).

@@ -115,6 +115,7 @@ impl Peripheral for UsbSerialJtag {
 mod tests {
     use super::*;
     use crate::bus::SystemBus;
+    use crate::Bus;
 
     #[test]
     fn ep1_conf_reads_constant() {

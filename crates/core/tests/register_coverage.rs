@@ -29,7 +29,7 @@
 
 use labwired_config::{Arch, ChipDescriptor};
 use labwired_core::bus::SystemBus;
-use labwired_core::{system, Machine};
+use labwired_core::{system, Bus, Machine};
 use std::path::PathBuf;
 
 /// All supported chips: (name, chip yaml, optional in-tree SVD).

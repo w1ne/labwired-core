@@ -1304,6 +1304,7 @@ mod walk_free_campaign {
 mod c3_systimer_matrix_routing {
     use crate::bus::SystemBus;
     use crate::peripherals::esp32s3::systimer::Systimer;
+    use crate::Bus;
     use crate::Peripheral;
     use labwired_config::{ChipDescriptor, SystemManifest};
     use std::path::PathBuf;
@@ -1446,6 +1447,7 @@ mod c3_level_peripheral_matrix_routing {
     use crate::bus::SystemBus;
     use crate::peripherals::esp32c3::apb_saradc::{Esp32c3ApbSarAdc, APB_SARADC_INTR_SOURCE_ID};
     use crate::peripherals::esp32c3::spi::{Esp32c3Spi, SPI2_INTR_SOURCE_ID, TRANS_DONE};
+    use crate::Bus;
     use labwired_config::{ChipDescriptor, SystemManifest};
     use std::path::PathBuf;
 
@@ -1659,6 +1661,7 @@ mod c3_level_peripheral_matrix_routing {
 mod c3_ledc_matrix_routing {
     use crate::bus::SystemBus;
     use crate::peripherals::esp32c3::ledc::{Esp32c3Ledc, LEDC_BASE, LEDC_INTR_SOURCE_ID};
+    use crate::Bus;
     use crate::Peripheral;
     use labwired_config::{ChipDescriptor, SystemManifest};
     use std::path::PathBuf;
@@ -1822,6 +1825,7 @@ mod c3_ledc_matrix_routing {
 mod c3_wifi_mac_matrix_routing {
     use crate::bus::SystemBus;
     use crate::peripherals::esp32c3::wifi_mac::Esp32c3WifiMac;
+    use crate::Bus;
     use crate::Peripheral;
     use labwired_config::{ChipDescriptor, SystemManifest};
     use std::path::PathBuf;

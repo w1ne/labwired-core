@@ -22,6 +22,7 @@
 
 use labwired_config::ChipDescriptor;
 use labwired_core::bus::SystemBus;
+use labwired_core::Bus;
 
 // Peripherals at the non-secure alias the cpuapp DT uses (peripheral@50000000).
 const CLOCK: u64 = 0x5000_5000;

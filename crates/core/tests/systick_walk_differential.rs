@@ -41,6 +41,7 @@ use labwired_core::cpu::CortexM;
 use labwired_core::peripherals::scb::Scb;
 use labwired_core::peripherals::systick::Systick;
 use labwired_core::system::cortex_m::configure_cortex_m;
+use labwired_core::Bus;
 use labwired_core::{DebugControl, Machine, Peripheral};
 
 /// ISR increment target.

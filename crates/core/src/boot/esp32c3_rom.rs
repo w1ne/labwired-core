@@ -23,6 +23,7 @@
 //! overlay for sections in no PT_LOAD segment.
 
 use super::esp32s3_rom::{build_window, DramWindow, RomImages};
+use crate::Bus; // seed writes below route through the single Bus-trait accessor
 use goblin::elf::Elf;
 use std::path::PathBuf;
 

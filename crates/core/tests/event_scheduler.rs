@@ -256,6 +256,7 @@ fn machine_step_parity_with_no_scheduler_users() {
 #[cfg(feature = "event-scheduler")]
 mod write_context_scheduling {
     use labwired_core::bus::SystemBus;
+    use labwired_core::Bus;
     use labwired_core::{Peripheral, SimResult};
 
     const ARM_TOKEN: u32 = 0xE5;

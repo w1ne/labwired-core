@@ -6,7 +6,7 @@
 
 #[cfg(test)]
 mod scb_reset_tests {
-    use crate::{Cpu, DebugControl, Machine};
+    use crate::{Bus, Cpu, DebugControl, Machine};
 
     /// AIRCR address: SCB base (0xE000_ED00) + 0x0C.
     const SCB_AIRCR: u64 = 0xE000_ED0C;

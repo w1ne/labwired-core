@@ -1,5 +1,6 @@
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::peripherals::i2c::I2c;
+use labwired_core::Bus;
 use std::path::PathBuf;
 
 #[test]

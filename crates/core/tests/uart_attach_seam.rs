@@ -3,6 +3,7 @@
 
 use labwired_core::bus::SystemBus;
 use labwired_core::peripherals::uart::UartStreamDevice;
+use labwired_core::Bus;
 use std::sync::{Arc, Mutex};
 
 struct Recorder(Arc<Mutex<Vec<u8>>>);

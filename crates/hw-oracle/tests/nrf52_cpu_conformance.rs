@@ -20,6 +20,7 @@
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::system::cortex_m::configure_cortex_m;
+use labwired_core::Bus;
 use labwired_core::Machine;
 use labwired_loader::load_elf;
 use std::path::{Path, PathBuf};

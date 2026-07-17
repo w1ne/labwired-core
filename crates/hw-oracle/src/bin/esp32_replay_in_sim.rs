@@ -38,7 +38,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use clap::Parser;
 use labwired_core::bus::SystemBus;
 use labwired_core::system::xtensa::configure_xtensa_esp32;
-use labwired_core::{Cpu, Machine};
+use labwired_core::{Bus, Cpu, Machine};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;

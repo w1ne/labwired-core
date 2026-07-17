@@ -16,6 +16,7 @@
 //! produce identical lines on the board (VCP) and in the simulator.
 
 use labwired_config::ChipDescriptor;
+use labwired_core::Bus;
 
 fn h563_bus() -> labwired_core::bus::SystemBus {
     let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))

@@ -16,6 +16,7 @@
 
 use labwired_config::ChipDescriptor;
 use labwired_core::bus::SystemBus;
+use labwired_core::Bus;
 
 // Absolute MMIO addresses on the boot path.
 const RSIM_CONTROL: u64 = 0x4005_9000;

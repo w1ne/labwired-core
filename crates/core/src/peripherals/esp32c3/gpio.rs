@@ -631,6 +631,7 @@ impl Peripheral for Esp32c3Gpio {
 mod tests {
     use super::*;
     use crate::bus::SystemBus;
+    use crate::Bus;
     use labwired_config::{ChipDescriptor, SystemManifest};
 
     #[test]

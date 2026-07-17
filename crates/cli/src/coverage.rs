@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use labwired_core::coverage::{probe_peripheral, Access, ProbeReg, ProbeTarget, RegStatus};
+use labwired_core::Bus; // BusTarget probes via the single Bus-trait accessor
 use serde::{Deserialize, Serialize};
 use svd_parser::svd::{Peripheral, Register, RegisterCluster};
 

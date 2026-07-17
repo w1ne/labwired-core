@@ -3,6 +3,7 @@
 
 use labwired_config::{Arch, ChipDescriptor};
 use labwired_core::system;
+use labwired_core::Bus;
 use labwired_core::Cpu;
 use labwired_core::Machine;
 use std::fs;
