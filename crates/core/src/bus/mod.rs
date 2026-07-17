@@ -374,6 +374,23 @@ pub struct SystemBus {
     /// `requires_cycle_accurate` — called per run-loop iteration — never scans
     /// peripherals. `false` on every bus without an H5 op-modeling FLASH.
     flash_models_ops: bool,
+    /// True when an IO-Link master peer is attached to any UART on this bus
+    /// (see [`SystemBus::has_iolink_master`]). Cached because the underlying
+    /// probe is a NESTED scan — every peripheral, `as_any` + downcast to
+    /// `Uart`, then every UART's `attached_streams` downcast to `IolinkMaster`
+    /// — while `requires_cycle_accurate` consults it per batch plan
+    /// (`machine/plan.rs`), per step (`cpu/riscv.rs`) and in the idle
+    /// fast-forward check (`lib.rs`). Uncached it cost ~55% of wall on the
+    /// shipped ESP32-C3 lab purely to answer "no".
+    ///
+    /// Staleness contract: recomputed by `rebuild_peripheral_ranges` (which
+    /// every peripheral-set mutation funnels through, incl. `add_peripheral`)
+    /// AND by `attach_uart_stream_by_id`, the only post-build seam that appends
+    /// to a UART's `attached_streams`. Code that mutates the `pub peripherals`
+    /// vector or a UART's streams by hand must call `refresh_peripheral_index`
+    /// to re-derive it — the same contract already carried by `flash_models_ops`
+    /// and `dport_idx`/`rcc_idx`. `bus/tests_main.rs` pins every path.
+    iolink_master_attached: bool,
     /// Cached in `rebuild_peripheral_ranges`: true when a Nordic `gpio0`/`gpio1`
     /// port is present, so the per-cycle tick runs the GPIO-edge/GPIOTE service
     /// pass. Lets `tick_peripherals_fully` decide in O(1) whether the walk-free

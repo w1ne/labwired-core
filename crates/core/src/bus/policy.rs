@@ -41,6 +41,17 @@ impl SystemBus {
     /// layer, an invariant that only holds at batch size 1. Without this the
     /// CLI/batch run path would record the op in the FLASH cell but never apply
     /// it (no 0xFF fill, no bank swap, no reset).
+    ///
+    /// HOT: called per batch plan (`machine/plan.rs`), per interpreted step
+    /// (`cpu/riscv.rs`) and in the idle fast-forward check (`lib.rs`), so every
+    /// clause must be O(1). Two of the three read bools cached at bus
+    /// build/mutation (`iolink_master_attached`, `flash_models_ops`); the
+    /// HC-SR04 clause is deliberately NOT cached because it is run-dynamic —
+    /// `hcsr04_event_scheduled` gates on `config.peripheral_tick_interval`,
+    /// which the wasm engine (`set_peripheral_tick_interval`) and the
+    /// differential tests change after build. It stays cheap on its own terms:
+    /// a `Vec::is_empty` plus a few bool/int reads, no scan and no downcast.
+    #[inline]
     pub fn requires_cycle_accurate(&self) -> bool {
         let hcsr04_needs_cycle_accurate = !self.hcsr04.is_empty() && !self.hcsr04_event_scheduled();
         hcsr04_needs_cycle_accurate || self.has_iolink_master() || self.flash_models_ops
@@ -140,8 +151,26 @@ impl SystemBus {
     /// inter-frame gap. Under instruction batching the UART would tick only once
     /// per ~10k-instruction batch, stretching the handshake to hundreds of
     /// millions of steps; ticking per instruction keeps it well within the
-    /// runner's step budget. Cheap: called once at loop setup.
+    /// runner's step budget.
+    ///
+    /// O(1): reads the `iolink_master_attached` bool cached at every
+    /// peripheral-set mutation (`rebuild_peripheral_ranges`) and at the
+    /// post-build stream seam (`attach_uart_stream_by_id`); the nested scan
+    /// itself lives in [`Self::scan_iolink_master`]. This is NOT a
+    /// once-at-setup predicate — an earlier doc comment claimed so and was
+    /// wrong: `requires_cycle_accurate` calls it per batch plan
+    /// (`machine/plan.rs`), per step (`cpu/riscv.rs`) and in the idle
+    /// fast-forward check (`lib.rs`), so the scan ran millions of times per
+    /// run and dominated the profile of buses with no IO-Link at all.
+    #[inline]
     pub(crate) fn has_iolink_master(&self) -> bool {
+        self.iolink_master_attached
+    }
+
+    /// The authoritative nested scan behind `iolink_master_attached`. Only the
+    /// cache-refresh points call this; every hot-path reader goes through
+    /// [`Self::has_iolink_master`].
+    pub(crate) fn scan_iolink_master(&self) -> bool {
         use crate::peripherals::components::IolinkMaster;
         for p in &self.peripherals {
             let Some(any) = p.dev.as_any() else { continue };
