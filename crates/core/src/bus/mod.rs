@@ -213,6 +213,13 @@ pub struct SystemBus {
     /// Cleared on range rebuild. Fidelity: greatest-start-wins, history-independent
     /// (see `overlapping_windows_route_history_independently`).
     last_route: Cell<Option<(usize, u64, u64, usize)>>,
+    /// Negative route cache: a `[start, end)` address gap proven to contain
+    /// NO peripheral window. Instruction fetch (XIP/flash) and plain RAM
+    /// traffic miss the peripheral map on every access; without this they
+    /// re-scan `peripheral_ranges` each time and cache nothing (the miss path
+    /// clears `last_route`). Same staleness contract as `last_route`: cleared
+    /// on range rebuild.
+    last_gap: Cell<Option<(u64, u64)>>,
     /// Cached index of the classic-ESP32 DPORT peripheral, if one is
     /// registered (`None` otherwise — the common case, incl. every ESP32-S3
     /// bus). Recomputed in `rebuild_peripheral_ranges` on each peripheral
