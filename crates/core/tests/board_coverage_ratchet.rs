@@ -212,11 +212,8 @@ const KNOWN_GAPS: &[(&str, Class)] = &[
     // here is satisfied by ANY timer/IRQ walk-diff or oracle; add DMA coverage
     // only if/when the DMA block is modelled.
     ("rp2040", Class::Exec),
-    // STM32F401 (BlackPill / demo) ships but its executing coverage is only
-    // `firmware_survival::test_stm32f401_blinky_survival`. The F4 exec-oracle /
-    // mmio-diff target real F407 silicon, not F401. Fill with an F401 walk
-    // differential or an F401 mmio-diff/exec-oracle.
-    ("stm32f401", Class::Exec),
+    // STM32F401 executing-fidelity is now covered by stm32f401_walk_differential.
+    // (F401 cold-reset value divergences vs RM0368 tracked separately in issue #576.)
 ];
 
 fn core_crate_root() -> PathBuf {
