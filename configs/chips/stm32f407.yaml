@@ -215,3 +215,25 @@ peripherals:
       # authoritative source. REV_ID=0x1001 = "Rev 1", the most common
       # silicon revision for STM32F407V/Z/IG.
       idcode: 0x10016413
+  # DMA1 / DMA2 — stream-based DMA controllers (RM0090 §10). Eight streams each;
+  # DMA2 additionally supports memory-to-memory transfers (RM0090 §10.3.3). Each
+  # stream has its own NVIC vector — the F4 stream lines are non-contiguous
+  # (stm32f407xx.h), so they are listed explicitly per stream. Clocked from
+  # RCC_AHB1ENR (DMA1EN bit 21, DMA2EN bit 22).
+  - id: "dma1"
+    type: "stm32f4_dma"
+    base_address: 0x40026000
+    size: "1KB"
+    clock: { reg: "ahb1enr", bit: 21 }
+    config:
+      # DMA1_Stream0..7 NVIC positions (stm32f407xx.h): 11..17, then 47.
+      stream_irqs: [11, 12, 13, 14, 15, 16, 17, 47]
+  - id: "dma2"
+    type: "stm32f4_dma"
+    base_address: 0x40026400
+    size: "1KB"
+    clock: { reg: "ahb1enr", bit: 22 }
+    config:
+      dma2: true
+      # DMA2_Stream0..7 NVIC positions (stm32f407xx.h): 56..60, then 68..70.
+      stream_irqs: [56, 57, 58, 59, 60, 68, 69, 70]

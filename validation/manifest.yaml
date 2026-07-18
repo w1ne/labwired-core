@@ -515,7 +515,13 @@ boards:
     # bare-CPU hardware-oracle settle loop; the Machine lifecycle and normal DMA
     # execution are unchanged. The frozen-settle and scheduler regressions pass.
     # No live re-capture was run this session.
-    drift_ack: 2026-07-17
+    # 2026-07-18: drift is the file-hash of the F401 cold-reset fix in rcc.rs
+    # (F4Rcc::new CR reset 0x03 -> 0x83, restoring the HSITRIM default per
+    # RM0368/RM0090 §6.3.1). This board's RCC engine (L0Rcc) is byte-for-byte
+    # untouched — the change is confined to the F4 variant — so l0_mmio_diff is
+    # unchanged. Same rationale as the 2026-07-04 L4-only rcc.rs entry above.
+    # No live re-capture.
+    drift_ack: 2026-07-18
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs

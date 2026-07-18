@@ -61,6 +61,14 @@ pub enum FlashRegisterLayout {
     /// ACR=0x13, OPTCR=1, NSCR=1, OPTSR_CUR=0x2D30EDF8 (this part's option
     /// bytes, representative).
     Stm32H5,
+    /// STM32F4 (RM0368 §3.8, STM32F401). Distinct from both F1 and L4: the
+    /// prefetch/cache ACR has NO PRFTBE→PRFTBS read-back mirror (bits read back
+    /// as written), and the reset values differ from every other family —
+    /// ACR=0x0000_0000 (all acceleration off), SR=0, CR=0x8000_0000 (LOCK at
+    /// bit 31, not bit 7 like F1), OPTCR=0x0000_0014 (ST SVD default). Register
+    /// file: ACR@0x00, KEYR@0x04, OPTKEYR@0x08, SR@0x0C, CR@0x10, OPTCR@0x14.
+    /// Reset values pinned to the STM32F401 CMSIS SVD (RM0368 §3.8).
+    Stm32F4,
 }
 
 impl FromStr for FlashRegisterLayout {
@@ -70,8 +78,9 @@ impl FromStr for FlashRegisterLayout {
             "stm32l4" | "l4" => Ok(Self::Stm32L4),
             "stm32f1" | "f1" | "legacy" => Ok(Self::Stm32F1),
             "stm32h5" | "h5" => Ok(Self::Stm32H5),
+            "stm32f4" | "f4" => Ok(Self::Stm32F4),
             _ => Err(format!(
-                "unsupported FLASH register layout '{}'; supported: stm32l4, stm32f1",
+                "unsupported FLASH register layout '{}'; supported: stm32l4, stm32f1, stm32f4, stm32h5",
                 value
             )),
         }
@@ -216,6 +225,14 @@ impl Flash {
             FlashRegisterLayout::Stm32F1 => (0x0000_0030u32, 0x0000_0080u32, 0x0000_0000u32),
             // NSCR (the only modeled control reg) reset 0x1; OPTSR_CUR via optr.
             FlashRegisterLayout::Stm32H5 => (0x0000_0013u32, 0x0000_0001u32, 0x2D30_EDF8u32),
+            // F401 (RM0368 §3.8 / STM32F401 CMSIS SVD): ACR=0 (no
+            // prefetch/cache/latency out of reset), CR=0x8000_0000 (LOCK bit
+            // 31), OPTCR=0x0000_0014. NB: RM0368 §3.8.6 prints the option-byte-
+            // loaded value 0x0FFF_AAED, but the ST CMSIS SVD (the reset-
+            // conformance oracle) pins the clean default 0x0000_0014 — the
+            // option bytes are loaded from flash at reset release, so the
+            // architectural reset value is 0x14.
+            FlashRegisterLayout::Stm32F4 => (0x0000_0000u32, 0x8000_0000u32, 0x0000_0014u32),
         };
         Self {
             layout,
@@ -457,6 +474,20 @@ impl Flash {
                 _ => 0,
             };
         }
+        // ─── F4 layout (isolated; RM0368 §3.8) ──────────────────────────
+        if matches!(self.layout, FlashRegisterLayout::Stm32F4) {
+            return match offset {
+                // ACR: LATENCY/PRFTEN/ICEN/DCEN read back as written (no F1-style
+                // PRFTBE→PRFTBS mirror). HAL/Zephyr set LATENCY then read it back.
+                0x00 => self.acr,
+                0x04 => 0,         // KEYR write-only
+                0x08 => 0,         // OPTKEYR write-only
+                0x0C => self.sr,   // SR; BSY (bit 16) is RO, never busy in sim.
+                0x10 => self.cr,   // CR; LOCK at bit 31.
+                0x14 => self.optr, // OPTCR
+                _ => 0,
+            };
+        }
         // ─── H5 layout (isolated; interface regs only) ──────────────────
         if matches!(self.layout, FlashRegisterLayout::Stm32H5) {
             return match offset {
@@ -605,6 +636,44 @@ impl Flash {
                 0x0C => self.sr &= !(value & 0x0000_0034),
                 0x10 => self.cr = value,
                 0x14 => {} // AR — accept; sim doesn't program flash pages
+                _ => {}
+            }
+            return;
+        }
+        // ─── F4 layout (isolated; RM0368 §3.8) ──────────────────────────
+        if matches!(self.layout, FlashRegisterLayout::Stm32F4) {
+            match offset {
+                // ACR writable: LATENCY[3:0], PRFTEN(8), ICEN(9), DCEN(10),
+                // ICRST(11), DCRST(12) = mask 0x1F0F. HAL sets LATENCY then
+                // reads it straight back.
+                0x00 => self.acr = value & 0x0000_1F0F,
+                // KEYR — unlocks CR.LOCK (bit 31 on F4).
+                0x04 => {
+                    self.key_state = match (self.key_state, value) {
+                        (KeyUnlockState::Locked, FLASH_KEY1) => KeyUnlockState::HalfUnlocked,
+                        (KeyUnlockState::HalfUnlocked, FLASH_KEY2) => {
+                            self.cr &= !(1 << 31);
+                            KeyUnlockState::Unlocked
+                        }
+                        _ => KeyUnlockState::Locked,
+                    };
+                }
+                // OPTKEYR — unlocks OPTCR.OPTLOCK (bit 0).
+                0x08 => {
+                    self.optkey_state = match (self.optkey_state, value) {
+                        (KeyUnlockState::Locked, OPTKEY1) => KeyUnlockState::HalfUnlocked,
+                        (KeyUnlockState::HalfUnlocked, OPTKEY2) => {
+                            self.optr &= !1;
+                            KeyUnlockState::Unlocked
+                        }
+                        _ => KeyUnlockState::Locked,
+                    };
+                }
+                // SR: EOP(0)/OPERR(1)/WRPERR(4)/PGAERR(5)/PGPERR(6)/PGSERR(7)/
+                // RDERR(8) are rc_w1. BSY (bit 16) RO.
+                0x0C => self.sr &= !(value & 0x0000_01F3),
+                0x10 => self.cr = value,
+                0x14 => self.optr = value,
                 _ => {}
             }
             return;

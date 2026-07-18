@@ -29,6 +29,17 @@ peripherals:
     size: "4KB"
     config:
       path: "../peripherals/rp2040/sysinfo.yaml"
+  # DMA controller (datasheet §2.5, base 0x50000000). Twelve channels; each a
+  # transfer engine with READ_ADDR / WRITE_ADDR / TRANS_COUNT / CTRL_TRIG and
+  # the four aliased register windows (AL1/AL2/AL3). Behavioural model — real
+  # memory-to-memory byte movement over the chip bus for TREQ_PERMANENT
+  # channels: address increment, TRANS_COUNT decrement, CHAIN_TO handoff, and
+  # INTS0/INTS1 completion IRQ aggregation onto DMA_IRQ_0 (NVIC 11) /
+  # DMA_IRQ_1 (NVIC 12). Paced (DREQ) transfers are a documented follow-up.
+  - id: "dma"
+    type: "rp2040_dma"
+    base_address: 0x50000000
+    size: "4KB"
   - id: "pio0"
     type: "pio"
     base_address: 0x50200000

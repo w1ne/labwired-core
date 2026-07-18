@@ -397,6 +397,110 @@ impl crate::Peripheral for PwrWba {
     }
 }
 
+/// PWR — STM32F4 layout (RM0368 §5.4, STM32F401). Only two registers exist:
+/// PWR_CR (0x00) and PWR_CSR (0x04) — none of the L4 CR1..CR4 / PUCRx surface.
+/// Reset values pinned to the STM32F401 CMSIS SVD (the reset-conformance
+/// oracle): CR = 0x0000_0000, CSR = 0x0000_0000. (RM0368 §5.4.1 prints CR =
+/// 0x0000_8000 for the VOS = Scale-2 default, but the ST SVD — and the
+/// register_coverage gate built from it — pin CR = 0; VOSRDY is asserted only
+/// after firmware programs a scale, below.)
+///
+/// Foreign firmware (HAL / Zephyr) enables the PWR clock, programs PWR_CR.VOS,
+/// then spins on PWR_CSR.VOSRDY (bit 14) before touching the PLL. Voltage
+/// scaling completes instantly in the sim: any write to PWR_CR latches VOSRDY,
+/// so the reset read still returns 0 (matching silicon) but the boot poll
+/// resolves as soon as firmware selects a scale.
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
+pub struct PwrF4 {
+    cr: u32,
+    csr: u32,
+}
+
+impl PwrF4 {
+    pub fn new() -> Self {
+        Self { cr: 0, csr: 0 }
+    }
+
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x00 => self.cr,
+            0x04 => self.csr,
+            _ => 0,
+        }
+    }
+
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            // CR writable bits: VOS[15:14], ADCDC1(13), MRLVDS(11), LPLVDS(10),
+            // FPDS(9), DBP(8), PLS[7:5], PVDE(4), PDDS(1), LPDS(0). CSBF(3) and
+            // CWUF(2) are write-only strobes that always read 0; bit 12 and
+            // [31:16] are reserved. Selecting a voltage scale asserts VOSRDY.
+            0x00 => {
+                self.cr = value & 0x0000_EFF3;
+                self.csr |= 1 << 14; // VOSRDY — scaling completes instantly
+            }
+            // CSR: EWUP (bit 8) and BRE (bit 9) are the only writable bits;
+            // VOSRDY/BRR/PVDO/SBF/WUF are hardware status.
+            0x04 => self.csr = (self.csr & !0x0000_0300) | (value & 0x0000_0300),
+            _ => {}
+        }
+    }
+}
+
+impl crate::Peripheral for PwrF4 {
+    // Inert walk: pure register bank (voltage scaling resolves in the write path).
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
+    fn read(&self, offset: u64) -> SimResult<u8> {
+        let reg = offset & !3;
+        let byte = (offset % 4) as u32;
+        Ok(((self.read_reg(reg) >> (byte * 8)) & 0xFF) as u8)
+    }
+    fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        let reg = offset & !3;
+        let byte = (offset % 4) as u32;
+        let mut v = self.read_reg(reg);
+        let mask: u32 = 0xFF << (byte * 8);
+        v = (v & !mask) | ((value as u32) << (byte * 8));
+        self.write_reg(reg, v);
+        Ok(())
+    }
+    fn snapshot(&self) -> serde_json::Value {
+        serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+}
+
+#[cfg(test)]
+mod f4_tests {
+    use super::PwrF4;
+    use crate::Peripheral;
+
+    #[test]
+    fn pwr_f4_reset_matches_rm0368() {
+        let pwr = PwrF4::new();
+        // STM32F401 CMSIS SVD (register_coverage oracle).
+        assert_eq!(pwr.read_u32(0x00).unwrap(), 0x0000_0000, "PWR_CR reset");
+        assert_eq!(pwr.read_u32(0x04).unwrap(), 0x0000_0000, "PWR_CSR reset");
+        // The L4 CR3 / SR2 / PUCRx surface must not exist on F4.
+        assert_eq!(pwr.read_u32(0x08).unwrap(), 0, "no register at 0x08");
+        assert_eq!(pwr.read_u32(0x14).unwrap(), 0, "no register at 0x14");
+    }
+
+    #[test]
+    fn pwr_f4_vosrdy_sets_on_scale_select() {
+        let mut pwr = PwrF4::new();
+        // Firmware selects Scale 1 (VOS = 0b11) then polls VOSRDY.
+        pwr.write_u32(0x00, 0x0000_C000).unwrap();
+        assert_ne!(
+            pwr.read_u32(0x04).unwrap() & (1 << 14),
+            0,
+            "VOSRDY asserted"
+        );
+    }
+}
+
 #[cfg(test)]
 mod l0_tests {
     use super::PwrL0;

@@ -12,14 +12,14 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 | `stm32h563` | 🟢 silicon-verified | 2026-06-22 | 2026-07-18 | ⚠ drift acked 2026-07-18 (re-capture pending) |
 | `esp32c3` | 🟢 silicon-verified | 2026-06-17 | 2026-07-18 | ⚠ drift acked 2026-07-18 (re-capture pending) |
 | `nucleo-l476rg` | 🟢 silicon-verified | 2026-06-20 | 2026-07-18 | ⚠ drift acked 2026-07-18 (re-capture pending) |
-| `nucleo-l073rz` | 🟢 silicon-verified | 2026-06-20 | 2026-07-17 | ⚠ drift acked 2026-07-17 (re-capture pending) |
+| `nucleo-l073rz` | 🟢 silicon-verified | 2026-06-20 | 2026-07-18 | ⚠ drift acked 2026-07-18 (re-capture pending) |
 | `stm32f103` | 🟢 silicon-verified | 2026-06-20 | 2026-07-18 | ⚠ drift acked 2026-07-18 (re-capture pending) |
 | `stm32f407` | 🟢 silicon-smoke | 2026-06-20 | 2026-07-18 | ⚠ drift acked 2026-07-18 (re-capture pending) |
 | `esp32s3` | 🟢 silicon-verified | 2026-07-15 | 2026-07-18 | ⚠ drift acked 2026-07-18 (re-capture pending) |
-| `stm32f401` | 🟡 smoke-manual | — | 2026-06-27 | no silicon capture |
+| `stm32f401` | 🟡 smoke-manual | — | 2026-07-18 | no silicon capture |
 | `stm32wba52` | 🟡 smoke-manual | — | 2026-06-27 | no silicon capture |
 | `nrf52832` | ⚪ structural | — | 2026-06-27 | no silicon capture |
-| `rp2040` | ⚪ structural | — | 2026-07-04 | no silicon capture |
+| `rp2040` | ⚪ structural | — | 2026-07-18 | no silicon capture |
 | `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | 2026-07-11 | no silicon capture |
 
 ## `nrf52840` — 🟢 silicon-verified
@@ -70,7 +70,7 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 - Silicon: **2026-06-20** on ST-LINK V2.1 (NUCLEO-L073RZ over SWD) — Live re-capture after the v0.17.0 merge: l0_mmio_diff 20/20, 0 divergence (RCC/GPIO/SPI1/TIM2/TIM21, incl. the TIM2-16-bit fix). Supersedes the 2026-06-19 drift_ack.
   - offline (CI): stm32l0_mmio_diff::{l0_mmio_sim_only,l0_parity_sim_only}
   - offline (CI): firmware_survival L073 smoke case
-- Drift status: **⚠ drift acked 2026-07-17 (re-capture pending)**
+- Drift status: **⚠ drift acked 2026-07-18 (re-capture pending)**
 
 ## `stm32f103` — 🟢 silicon-verified
 
