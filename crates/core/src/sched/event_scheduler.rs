@@ -163,14 +163,28 @@ impl EventScheduler {
     /// generation) are popped and silently discarded. Returned in
     /// `(deadline asc, event_id asc)` order.
     pub fn drain_due(&mut self, peripheral_generations: &[u32]) -> Vec<ScheduledEvent> {
-        // Nothing due: return without allocating. `Vec::new()` is non-allocating
-        // but this also skips the peek loop setup when the heap is empty.
+        let mut out = Vec::new();
+        self.drain_due_into(peripheral_generations, &mut out);
+        out
+    }
+
+    /// Push-based twin of [`Self::drain_due`]: append the due events into a
+    /// CALLER-OWNED buffer instead of returning a freshly-allocated `Vec`. The
+    /// per-batch drain (`Machine::drain_scheduler_events`) passes retained
+    /// scratch so the steady-state SYSTIMER tick — which drains at least one
+    /// event nearly every batch — no longer allocates. `out` is cleared first.
+    pub fn drain_due_into(
+        &mut self,
+        peripheral_generations: &[u32],
+        out: &mut Vec<ScheduledEvent>,
+    ) {
+        out.clear();
+        // Nothing due: return without touching the heap loop.
         match self.heap.peek() {
-            None => return Vec::new(),
-            Some(Reverse(top)) if top.deadline > self.now => return Vec::new(),
+            None => return,
+            Some(Reverse(top)) if top.deadline > self.now => return,
             _ => {}
         }
-        let mut out = Vec::new();
         while let Some(Reverse(top)) = self.heap.peek() {
             if top.deadline > self.now {
                 break;
@@ -181,7 +195,6 @@ impl EventScheduler {
             }
             out.push(ev);
         }
-        out
     }
 
     /// True once no events remain queued. Lets the per-step drain skip its

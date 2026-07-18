@@ -1141,6 +1141,14 @@ pub struct Machine<C: Cpu> {
     /// used under the `event-scheduler` feature.
     #[allow(dead_code)]
     pending_schedule_scratch: Vec<(usize, u64, u32)>,
+    /// Reusable scratch for the due-events batch drained out of the scheduler
+    /// each `drain_scheduler_events`. Taken out, filled by
+    /// `EventScheduler::drain_due_into`, iterated, then restored — so the
+    /// steady-state SYSTIMER tick (which drains an event nearly every batch)
+    /// reuses the buffer's capacity instead of allocating a fresh `Vec` per
+    /// drain. Always present; only used under the `event-scheduler` feature.
+    #[allow(dead_code)]
+    due_events_scratch: Vec<sched::ScheduledEvent>,
     /// Reusable no-op stand-in for the peripheral swap-out dance in
     /// `drain_scheduler_events` (a peripheral's `on_event` needs `&mut self.bus`,
     /// so the peripheral is temporarily replaced by a stub). Held here and
@@ -1396,6 +1404,7 @@ impl<C: Cpu> Machine<C> {
             tick_irq_scratch: Vec::new(),
             tick_cost_scratch: Vec::new(),
             pending_schedule_scratch: Vec::new(),
+            due_events_scratch: Vec::new(),
             event_placeholder: Some(Box::new(crate::peripherals::stub::StubPeripheral::new(0))),
             logic_capture: logic_capture::LogicCapture::new(),
             logic_force_poll: false,
@@ -1919,8 +1928,13 @@ impl<C: Cpu> Machine<C> {
             return;
         }
         self.refresh_generation_scratch();
-        let due = self.sched.drain_due(&self.generation_scratch);
-        for ev in due {
+        // Fill the retained scratch (taken out so `on_event` below can borrow
+        // `&mut self.sched` / `&mut self.bus`) instead of allocating a fresh
+        // `Vec` per drain; restored at the end with its capacity intact.
+        let mut due = std::mem::take(&mut self.due_events_scratch);
+        self.sched
+            .drain_due_into(&self.generation_scratch, &mut due);
+        for ev in due.drain(..) {
             // Bus-subsystem pseudo-peripheral (HC-SR04): no `peripherals[]`
             // entry — dispatch straight to the shared ECHO choke point.
             if ev.peripheral_idx == sched::SUBSYSTEM_PERIPHERAL_IDX {
@@ -1955,6 +1969,8 @@ impl<C: Cpu> Machine<C> {
             }
             self.apply_event_result(idx, result);
         }
+        // `drain(..)` above emptied it but kept its capacity; restore for reuse.
+        self.due_events_scratch = due;
     }
 
     /// Phase 2B.1 (issue #192): fan out the side-effects produced by a
