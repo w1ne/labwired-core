@@ -1,0 +1,23 @@
+[package]
+name = "openai-deck-s3"
+version = "0.1.0"
+edition = "2021"
+authors = ["Andrii Shylenko"]
+license = "MIT"
+description = "ESP32-S3 OpenAI macro deck (SH1107 OLED + 10 keys) for the LabWired simulator and real silicon."
+
+[[bin]]
+name = "openai-deck-s3"
+path = "src/main.rs"
+
+[dependencies]
+esp-hal       = { version = "1.1", features = ["esp32s3", "unstable"] }
+esp-println   = { version = "0.17", default-features = false, features = ["esp32s3", "jtag-serial", "colors", "critical-section"] }
+esp-backtrace = { version = "0.19", features = ["esp32s3", "panic-handler", "println"] }
+critical-section = "1.2"
+
+[profile.release]
+opt-level     = "s"
+lto           = "thin"
+codegen-units = 1
+debug         = false  # web demo asset — fast_boot uses ELF program headers + stack_top_fallback, no DWARF needed
