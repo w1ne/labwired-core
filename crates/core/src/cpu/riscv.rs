@@ -2103,7 +2103,7 @@ mod tests {
 
         let mut bus = SystemBus::new();
         let mut cpu = RiscV::new();
-        bus.flash.data = vec![0; 0x100];
+        bus.flash.data = vec![0; 0x100].into();
 
         // Program:
         //   LUI  x5, 0x60023      ; SYSTIMER base
