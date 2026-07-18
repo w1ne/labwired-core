@@ -23,7 +23,7 @@
 //! whose generation snapshot no longer matches.
 
 use std::cmp::Reverse;
-use std::collections::BinaryHeap;
+use std::collections::{BinaryHeap, HashSet};
 
 pub type SimCycle = u64;
 
@@ -71,6 +71,24 @@ pub struct EventScheduler {
     heap: BinaryHeap<Reverse<ScheduledEvent>>,
     next_event_id: u64,
     stats: SchedulerStats,
+    /// Membership index for identical-event de-duplication, keyed by
+    /// `(peripheral_idx, event_token, generation, deadline)`. Kept in exact sync
+    /// with `heap`: a key is present here iff a live heap entry with that key
+    /// exists. Lets `schedule` reject a byte-for-byte duplicate in O(1).
+    ///
+    /// Level-triggered peripherals re-arm the *same* wake on every MMIO poll.
+    /// The ESP32 SYSTIMER is the pathological case: Arduino `millis()`/`micros()`
+    /// polls it every loop iteration (an UPDATE-write that runs the scheduler
+    /// harvest), each poll re-emitting the identical alarm wake at the same
+    /// deadline. Nothing generation-cancels them, so they piled into `heap`
+    /// without bound — every per-batch `next_event_deadline` / `drain_due` /
+    /// push-pop then cost O(heap), degrading a run to O(cycles²). Collapsing
+    /// byte-identical duplicates keeps `heap` bounded while preserving delivery:
+    /// a genuinely distinct wake (any different key component — most importantly
+    /// a different deadline, e.g. the initial bootstrap arm vs a write-path arm,
+    /// or a period rollover) is still enqueued and still fires at its exact
+    /// cycle. Only exact duplicates of an already-queued wake are dropped.
+    queued: HashSet<(u32, u32, u32, SimCycle)>,
 }
 
 impl EventScheduler {
@@ -117,6 +135,18 @@ impl EventScheduler {
         } else {
             deadline
         };
+        // Reject a byte-for-byte duplicate of an event already queued. A
+        // level-triggered peripheral re-arming the identical wake every poll
+        // would otherwise pile redundant entries into `heap` unbounded (see the
+        // `queued` field). The retained entry fires at the identical cycle, so
+        // delivery is unchanged; only the redundant copies are dropped.
+        if !self
+            .queued
+            .insert((peripheral_idx, event_token, generation, clamped))
+        {
+            // Already queued — return the id the caller ignores anyway.
+            return self.next_event_id;
+        }
         let event_id = self.next_event_id;
         self.next_event_id += 1;
         self.heap.push(Reverse(ScheduledEvent {
@@ -190,6 +220,14 @@ impl EventScheduler {
                 break;
             }
             let Reverse(ev) = self.heap.pop().unwrap();
+            // Keep the dedup index in lockstep with the heap: this key leaves the
+            // heap now, so an identical wake may be re-armed after it fires.
+            self.queued.remove(&(
+                ev.peripheral_idx,
+                ev.event_token,
+                ev.generation,
+                ev.deadline,
+            ));
             if Self::is_stale(&ev, peripheral_generations) {
                 continue;
             }
@@ -214,5 +252,69 @@ impl EventScheduler {
             // Out-of-range idx (peripheral removed) → treat as stale.
             None => true,
         }
+    }
+}
+
+#[cfg(test)]
+mod dedup_tests {
+    use super::*;
+
+    const GENS: &[u32] = &[0, 0, 0, 0];
+
+    #[test]
+    fn identical_wakes_are_deduped_but_the_heap_still_fires_once() {
+        // Regression for the O(n²) slowdown: a level-triggered peripheral
+        // (e.g. the SYSTIMER polled by Arduino millis()) re-arms the identical
+        // wake on every poll. Those byte-for-byte duplicates must NOT pile up.
+        let mut s = EventScheduler::new();
+        for _ in 0..1000 {
+            s.schedule(100, 3, 0, 0);
+        }
+        assert_eq!(
+            s.heap.len(),
+            1,
+            "identical wakes must collapse to one entry"
+        );
+
+        s.advance_to(100);
+        let due = s.drain_due(GENS);
+        assert_eq!(due.len(), 1, "the single retained wake fires exactly once");
+        assert!(s.is_empty());
+        // After it fires, the same key may be armed again.
+        s.schedule(200, 3, 0, 0);
+        assert_eq!(s.heap.len(), 1);
+    }
+
+    #[test]
+    fn distinct_wakes_are_all_kept() {
+        // Only EXACT duplicates collapse. A different deadline (the bootstrap-vs
+        // write-path +1, or a period rollover), token, peripheral, or generation
+        // is a distinct wake that must still be enqueued and fire at its cycle.
+        let mut s = EventScheduler::new();
+        s.schedule(100, 3, 0, 0); // baseline
+        s.schedule(101, 3, 0, 0); // different deadline
+        s.schedule(100, 3, 1, 0); // different token
+        s.schedule(100, 4, 0, 0); // different peripheral
+        s.schedule(100, 3, 0, 7); // different generation
+        s.schedule(100, 3, 0, 0); // exact dup of baseline → dropped
+        assert_eq!(
+            s.heap.len(),
+            5,
+            "five distinct wakes, one duplicate dropped"
+        );
+    }
+
+    #[test]
+    fn requeue_after_drain_is_allowed() {
+        // The dedup index must stay in lockstep with the heap: once an event is
+        // drained, an identical wake can be armed again (steady-state re-arm).
+        let mut s = EventScheduler::new();
+        s.schedule(10, 2, 0, 0);
+        s.advance_to(10);
+        assert_eq!(s.drain_due(GENS).len(), 1);
+        // Same key again at a later deadline: not suppressed.
+        s.schedule(20, 2, 0, 0);
+        s.advance_to(20);
+        assert_eq!(s.drain_due(GENS).len(), 1);
     }
 }
