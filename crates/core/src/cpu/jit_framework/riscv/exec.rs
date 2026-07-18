@@ -488,24 +488,6 @@ impl RiscvWasmJit {
 /// stream and the framebuffer byte for byte).
 pub const MIN_PROFITABLE_BLOCK_INSTRS: u32 = 2;
 
-/// The effective profitability threshold: [`MIN_PROFITABLE_BLOCK_INSTRS`]
-/// unless `LW_JIT_MIN_BLOCK` overrides it.
-///
-/// The override exists so the coverage bench can sweep the threshold without
-/// a rebuild; it is read once and cached. It only ever changes *which* blocks
-/// are compiled — never what they do — so it cannot affect fidelity.
-fn min_profitable_block_instrs() -> u32 {
-    use std::sync::OnceLock;
-    static V: OnceLock<u32> = OnceLock::new();
-    *V.get_or_init(|| {
-        std::env::var("LW_JIT_MIN_BLOCK")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .filter(|&n| n >= 1)
-            .unwrap_or(MIN_PROFITABLE_BLOCK_INSTRS)
-    })
-}
-
 /// The profitability floor actually applied, allowing `LW_JIT_MIN_BLOCK` to
 /// override [`MIN_PROFITABLE_BLOCK_INSTRS`] for coverage sweeps.
 ///
