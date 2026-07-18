@@ -11,7 +11,7 @@
 //! output back for CS/DC/bit-banged buses.
 
 use crate::peripherals::gpio::{GpioMode, GpioRouting};
-use crate::{Peripheral, PeripheralTickResult, SimResult};
+use crate::{MmioAccessClass, Peripheral, PeripheralTickResult, SimResult};
 
 const PIN_COUNT: u8 = 26;
 const PIN_MASK: u32 = (1u32 << PIN_COUNT) - 1;
@@ -448,6 +448,30 @@ impl Default for Esp32c3Gpio {
 }
 
 impl Peripheral for Esp32c3Gpio {
+    /// Classify the input-data register (`IN`, 0x3C) and the boot-strap latch
+    /// (`STRAP`) as pure freerunning samples: reading them observes pad levels
+    /// without mutating any peripheral or world state. This lets the idle
+    /// fast-forward *timer-poll coalesce* survive a firmware idle loop that
+    /// samples a button (`digitalRead`) alongside a `millis()`/SYSTIMER poll —
+    /// e.g. the Arduino watch/clock demos, whose `loop()` spins on `millis()`
+    /// while polling MODE/SET buttons. Without this, every such iteration books
+    /// a side-effecting MMIO access, `take_timer_poll_coalesce_eligible()`
+    /// returns false, and idle FF never engages — so the idle wait is simulated
+    /// cycle-by-cycle (hundreds of millions of real cycles per device-second)
+    /// and the guest's time source barely advances. The bus stays CPU-agnostic:
+    /// this is the same [`MmioAccessClass`] opt-in the SYSTIMER model uses for
+    /// its snapshot registers, not a chip-specific rule baked into the bus.
+    ///
+    /// Only genuinely inert reads are marked side-effect-free; every write and
+    /// every status/interrupt register stays [`SideEffecting`](MmioAccessClass::SideEffecting)
+    /// so a display bit-bang or an INT_ST poll still disqualifies the skip.
+    fn mmio_access_class(&self, offset: u64) -> MmioAccessClass {
+        match offset & !3 {
+            IN | STRAP => MmioAccessClass::SideEffectFree,
+            _ => MmioAccessClass::SideEffecting,
+        }
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let word_off = offset & !3;
         let byte_off = (offset & 3) * 8;

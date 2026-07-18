@@ -2020,6 +2020,140 @@ mod tests {
         }
     }
 
+    /// Regression for the frozen ESP32-C3 watch/clock demos: a firmware idle
+    /// loop that busy-polls the SYSTIMER (`millis()`) **while also sampling a
+    /// GPIO button** (`digitalRead`) must still let idle fast-forward coalesce
+    /// the spin. Before the GPIO `mmio_access_class` fix, the button read booked
+    /// a side-effecting MMIO access every iteration, so
+    /// `take_timer_poll_coalesce_eligible()` returned false and idle FF never
+    /// engaged — the wait was simulated cycle-by-cycle and the guest's time
+    /// source crawled (hundreds of millions of real cycles per device-second).
+    ///
+    /// This drives the exact shape (SYSTIMER OP-update + VALUE read + GPIO IN
+    /// read, no WFI, no armed alarm) through `Machine::advance` and asserts BOTH
+    /// that the skip engages AND that the SYSTIMER counter still tracks the
+    /// advanced cycle (single source of truth: it derives from `current_cycle`).
+    #[test]
+    fn c3_systimer_busy_poll_with_gpio_read_still_idle_fast_forwards() {
+        // RV32 encoders.
+        fn lui(rd: u32, imm20: u32) -> u32 {
+            (imm20 << 12) | (rd << 7) | 0x37
+        }
+        fn sw(rs2: u32, imm: i32, rs1: u32) -> u32 {
+            let imm = imm as u32;
+            ((imm >> 5 & 0x7f) << 25)
+                | (rs2 << 20)
+                | (rs1 << 15)
+                | (0b010 << 12)
+                | ((imm & 0x1f) << 7)
+                | 0x23
+        }
+        fn lw(rd: u32, imm: i32, rs1: u32) -> u32 {
+            let imm = imm as u32;
+            ((imm & 0xfff) << 20) | (rs1 << 15) | (0b010 << 12) | (rd << 7) | 0x03
+        }
+        fn jal(rd: u32, off: i32) -> u32 {
+            let o = off as u32;
+            ((o >> 20 & 1) << 31)
+                | ((o >> 1 & 0x3ff) << 21)
+                | ((o >> 11 & 1) << 20)
+                | ((o >> 12 & 0xff) << 12)
+                | (rd << 7)
+                | 0x6f
+        }
+
+        // SYSTIMER at 0x6002_3000 (source 37, C3), GPIO at 0x6000_4000.
+        const SYSTIMER_BASE: u64 = 0x6002_3000;
+        const GPIO_BASE: u64 = 0x6000_4000;
+        const OP: u64 = 0x04; // UNIT0_OP (write UPDATE bit 30)
+        const VALUE_LO: u64 = 0x44; // UNIT0_VALUE_LO
+        const GPIO_IN: u64 = 0x3C; // input data register (digitalRead)
+
+        let mut bus = SystemBus::new();
+        let mut cpu = RiscV::new();
+        bus.flash.data = vec![0; 0x100];
+
+        // Program:
+        //   LUI  x5, 0x60023      ; SYSTIMER base
+        //   LUI  x6, 0x60004      ; GPIO base
+        //   LUI  x7, 0x40000      ; UPDATE bit (1<<30)
+        // L: SW   x7, 4(x5)       ; UNIT0_OP <- UPDATE   (freerunning poll)
+        //   LW   x8, 0x44(x5)     ; VALUE_LO             (freerunning poll)
+        //   LW   x9, 0x3C(x6)     ; GPIO IN              (button sample)
+        //   JAL  x0, L            ; spin
+        let prog = [
+            lui(5, 0x60023),
+            lui(6, 0x60004),
+            lui(7, 0x40000),
+            sw(7, OP as i32, 5),
+            lw(8, VALUE_LO as i32, 5),
+            lw(9, GPIO_IN as i32, 6),
+            jal(0, -12),
+        ];
+        for (i, word) in prog.iter().enumerate() {
+            bus.write_u32((i as u64) * 4, *word).unwrap();
+        }
+
+        bus.add_peripheral(
+            "systimer",
+            SYSTIMER_BASE,
+            0x100,
+            None,
+            Box::new(
+                crate::peripherals::esp32s3::systimer::Systimer::new_with_source(160_000_000, 37),
+            ),
+        );
+        bus.add_peripheral(
+            "gpio",
+            GPIO_BASE,
+            0x1000,
+            None,
+            Box::new(crate::peripherals::esp32c3::gpio::Esp32c3Gpio::new()),
+        );
+
+        cpu.pc = 0x0;
+
+        let mut machine = Machine::new(Box::new(cpu) as Box<dyn Cpu>, bus);
+        machine.config.idle_fast_forward_enabled = true;
+        machine.bus.legacy_walk_disabled = true;
+        // Mirror the browser policy (`apply_browser_c3_policy`): the walk-free C3
+        // batches at the recommended tick interval. The timer-poll coalesce only
+        // sees ≥2 polls per batch when batches are wider than one instruction.
+        machine.config.peripheral_tick_interval = crate::bus::RECOMMENDED_TICK_INTERVAL;
+
+        const TARGET: u32 = 2_000_000;
+        machine.run(Some(TARGET)).unwrap();
+        assert_eq!(machine.total_cycles, u64::from(TARGET));
+
+        // Read the SYSTIMER counter back the way firmware does (UPDATE then
+        // read the snapshot). At 160 MHz that is ~10 CPU cycles per 16 MHz tick.
+        machine.bus.write_u32(SYSTIMER_BASE + OP, 1 << 30).unwrap();
+        let count = machine.bus.read_u32(SYSTIMER_BASE + VALUE_LO).unwrap() as u64;
+
+        if cfg!(feature = "event-scheduler") {
+            assert!(
+                machine.idle_fast_forward_cycles_skipped > 0,
+                "idle FF must coalesce a SYSTIMER busy-poll even when the loop also \
+                 samples a GPIO button (skipped = {})",
+                machine.idle_fast_forward_cycles_skipped
+            );
+            assert!(
+                machine.step_profile().cpu_instructions < u64::from(TARGET),
+                "the spin must be skipped, not fully simulated: retired {} over {} cycles",
+                machine.step_profile().cpu_instructions,
+                TARGET
+            );
+            // SYSTIMER count must track the advanced cycle (single source of
+            // truth). ~2M cycles / 10 ≈ 200k ticks; allow generous slack.
+            assert!(
+                count > 100_000,
+                "SYSTIMER counter must advance across the skipped window, got {count}"
+            );
+        } else {
+            assert_eq!(machine.idle_fast_forward_cycles_skipped, 0);
+        }
+    }
+
     #[test]
     fn test_riscv_wfi_fast_forward_wakes_on_systimer_event() {
         let mut bus = SystemBus::empty();
