@@ -11,7 +11,7 @@
 // directly by the WASM value-injection bridge), the conversion engine and the
 // per-channel injected inputs are architecture-independent and stay shared.
 
-use crate::{Peripheral, PeripheralTickResult, SimResult};
+use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 use std::any::Any;
 use std::str::FromStr;
 
@@ -111,6 +111,14 @@ pub struct Adc {
     conversion_time: u32,
     /// Per-channel injected values (12-bit counts). 0xFFFF = "no injection".
     channel_inputs: [u16; 18],
+
+    /// Bus-published cycle clock (walk-free campaign). `Some` once attached →
+    /// event-schedulable; `None` keeps the legacy walk.
+    #[serde(skip)]
+    clock: Option<CycleClock>,
+    /// Scheduler mode: `true` while the conversion-countdown event is live.
+    #[serde(skip)]
+    chain_live: bool,
 }
 
 impl Adc {
@@ -138,7 +146,56 @@ impl Adc {
             cycles_remaining: 0,
             conversion_time: 14,
             channel_inputs: [0xFFFF; 18],
+            clock: None,
+            chain_live: false,
         }
+    }
+
+    #[inline]
+    fn scheduler_mode(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    /// Test/differential knob: detach the clock, pinning the model to the legacy
+    /// walk (the walk-on reference for the differential gate).
+    pub fn force_legacy_walk(&mut self) {
+        self.clock = None;
+    }
+
+    /// One cycle of the F1 conversion countdown. Returns whether an EOC IRQ
+    /// should be raised this cycle. Shared verbatim by the legacy walk `tick()`
+    /// and the scheduler `on_event`, so the two routes are identical by
+    /// construction.
+    fn advance_conversion(&mut self) -> bool {
+        let mut irq = false;
+        if self.converting {
+            if self.cycles_remaining > 0 {
+                self.cycles_remaining -= 1;
+            } else {
+                self.converting = false;
+                let (cr1, cr2) = self.f1_ctrl();
+
+                // Injected channel value if available; else increment DR for
+                // visual feedback. SQR3 ch fallback uses CR2 low bits (legacy).
+                let ch = (cr2 & 0x1F) as usize;
+                if ch < self.channel_inputs.len() && self.channel_inputs[ch] != 0xFFFF {
+                    self.dr = self.channel_inputs[ch] as u32;
+                } else {
+                    self.dr = (self.dr + 1) & 0xFFF;
+                }
+
+                self.sr |= 1 << 1; // EOC
+
+                if (cr1 & (1 << 5)) != 0 {
+                    irq = true; // EOCIE
+                }
+                // Continuous mode (CONT bit1 + ADON bit0).
+                if (cr2 & (1 << 1)) != 0 && (cr2 & 1) != 0 {
+                    self.start_conversion();
+                }
+            }
+        }
+        irq
     }
 
     /// Inject a millivolt reading for a specific ADC channel. The next
@@ -313,41 +370,76 @@ impl Peripheral for Adc {
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
-        let mut irq = false;
-        let mut cycles = 0;
-
-        if self.converting {
-            cycles = 1;
-            if self.cycles_remaining > 0 {
-                self.cycles_remaining -= 1;
-            } else {
-                self.converting = false;
-                let (cr1, cr2) = self.f1_ctrl();
-
-                // Injected channel value if available; else increment DR for
-                // visual feedback. SQR3 ch fallback uses CR2 low bits (legacy).
-                let ch = (cr2 & 0x1F) as usize;
-                if ch < self.channel_inputs.len() && self.channel_inputs[ch] != 0xFFFF {
-                    self.dr = self.channel_inputs[ch] as u32;
-                } else {
-                    self.dr = (self.dr + 1) & 0xFFF;
-                }
-
-                self.sr |= 1 << 1; // EOC
-
-                if (cr1 & (1 << 5)) != 0 {
-                    irq = true; // EOCIE
-                }
-                // Continuous mode (CONT bit1 + ADON bit0).
-                if (cr2 & (1 << 1)) != 0 && (cr2 & 1) != 0 {
-                    self.start_conversion();
-                }
-            }
+        // Scheduler-mode instances are walk-skipped; the event chain owns the
+        // conversion countdown. Guard against a stray direct call.
+        if self.scheduler_mode() {
+            return PeripheralTickResult::default();
         }
-
+        let irq = self.advance_conversion();
+        // Tick-cost normalization (mirrors SysTick B1): the legacy model charged
+        // `cycles: 1` per converting tick into `total_cycles` — a sim artifact (a
+        // real ADC conversion runs on the ADC clock and consumes zero *core*
+        // cycles) that is structurally incompatible with deleting the walk (the
+        // scheduler never runs a per-cycle tick to charge it). Both modes now
+        // charge zero, so the walk-on reference and the scheduler path agree
+        // cycle-for-cycle.
         PeripheralTickResult {
             irq,
-            cycles,
+            cycles: 0,
+            ..Default::default()
+        }
+    }
+
+    fn uses_scheduler(&self) -> bool {
+        self.scheduler_mode()
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        !self.scheduler_mode()
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        self.clock = Some(clock);
+    }
+
+    fn sync_to(&mut self, _now_cycle: u64) {
+        // No lazily-accumulated state: the conversion countdown is advanced
+        // cycle-by-cycle by the event chain (drained up to the current cycle by
+        // `Machine::step` before any MMIO access observes DR/SR).
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        // Arm the conversion-countdown chain the moment a write starts a
+        // conversion (`converting` set by SWSTART on F1). L4 converts
+        // synchronously in `write` and never sets `converting`, so it arms
+        // nothing. delay-0 → deadline `current_cycle + 1` = the walk's next tick.
+        if self.scheduler_mode() && self.converting && !self.chain_live {
+            self.chain_live = true;
+            vec![(0u64, 0u32)]
+        } else {
+            Vec::new()
+        }
+    }
+
+    fn on_event(
+        &mut self,
+        _event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        if !self.scheduler_mode() {
+            return crate::sched::EventResult::default();
+        }
+        // Run one cycle of the SAME conversion countdown the walk runs and pend
+        // the EOC line on its verdict. Continuous mode re-arms `converting` in
+        // `advance_conversion`, so re-check it AFTER and perpetuate at delay 1
+        // while still converting; stop when the conversion completes (single
+        // shot) so idle fast-forward engages.
+        let irq = self.advance_conversion();
+        self.chain_live = self.converting;
+        crate::sched::EventResult {
+            raise_own_irq: irq,
+            reschedule_delay: self.converting.then_some(1),
             ..Default::default()
         }
     }
@@ -476,6 +568,22 @@ mod tests {
     }
 
     #[test]
+    fn tick_cost_is_normalized_to_zero_while_converting() {
+        // The legacy `cycles: 1` per converting tick is gone in BOTH modes.
+        let mut adc = Adc::new();
+        adc.write(0x08, 1).unwrap(); // ADON
+        adc.write(0x0B, 1 << 6).unwrap(); // SWSTART
+        assert!(adc.converting);
+        for _ in 0..14 {
+            assert_eq!(
+                adc.tick().cycles,
+                0,
+                "converting tick must charge zero cost"
+            );
+        }
+    }
+
+    #[test]
     fn test_l4_adc_code_helpers() {
         assert_eq!(l4_resolution_bits(0), 12);
         assert_eq!(l4_resolution_bits(1 << 3), 10);
@@ -484,5 +592,103 @@ mod tests {
         assert_eq!(l4_adc_code(12), 3723);
         assert_eq!(l4_adc_code(10), 930);
         assert_ne!(l4_adc_code(12), l4_adc_code(10));
+    }
+}
+
+// ── Walk-free differential: F1 ADC conversion engine walk vs scheduler ────────
+#[cfg(all(test, feature = "event-scheduler"))]
+mod scheduler_diff {
+    use super::*;
+
+    #[derive(Clone, Copy)]
+    enum Op {
+        Write(u64, u8),
+    }
+
+    fn build(scheduler: bool) -> Adc {
+        let mut adc = Adc::new(); // F1
+        adc.set_channel_input(3, 1650); // deterministic conversion result on ch3
+        if scheduler {
+            adc.attach_cycle_clock(CycleClock::default());
+        }
+        adc
+    }
+
+    /// Drive the SAME op script against (a) the per-cycle walk and (b) the event
+    /// path; assert the register snapshot AND the EOC-IRQ pend cycles are
+    /// identical every cycle. The conversion countdown, DR latch, EOC flag and
+    /// continuous-mode restart must all line up cycle-for-cycle.
+    fn assert_walk_identical(script: &[(u64, Op)], cycles: u64) {
+        let mut walk = build(false);
+        let mut sched = build(true);
+        let clock = sched.clock.clone().unwrap();
+
+        let mut events: Vec<(u64, u32)> = Vec::new();
+        let bus = &mut crate::bus::SystemBus::new();
+        let mut walk_pends = Vec::new();
+        let mut sched_pends = Vec::new();
+
+        for c in 1..=cycles {
+            for (sc, Op::Write(off, val)) in script.iter().copied() {
+                if sc == c {
+                    walk.write(off, val).unwrap();
+                    sched.write(off, val).unwrap();
+                    for (delay, token) in sched.take_scheduled_events() {
+                        events.push((c - 1 + 1 + delay, token));
+                    }
+                }
+            }
+
+            if walk.tick().irq {
+                walk_pends.push(c);
+            }
+
+            clock.publish(c);
+            let due: Vec<(u64, u32)> = events.iter().copied().filter(|(d, _)| *d <= c).collect();
+            events.retain(|(d, _)| *d > c);
+            let mut esched = crate::sched::EventScheduler::new();
+            esched.advance_to(c);
+            for (_, token) in due {
+                let res = sched.on_event(token, &mut esched, bus);
+                if res.raise_own_irq {
+                    sched_pends.push(c);
+                }
+                if let Some(delay) = res.reschedule_delay {
+                    events.push((c + delay, token));
+                }
+            }
+
+            assert_eq!(
+                walk.snapshot(),
+                sched.snapshot(),
+                "register snapshot diverged at cycle {c}"
+            );
+        }
+        assert_eq!(walk_pends, sched_pends, "EOC-IRQ pend cycles diverged");
+    }
+
+    #[test]
+    fn f1_single_conversion_walk_identity() {
+        // EOCIE + ADON + SWSTART on channel 3 → 14-cycle countdown → EOC + DR.
+        let script = [
+            (1u64, Op::Write(0x04, 1 << 5)), // CR1.EOCIE
+            (1, Op::Write(0x08, 1 | 3)),     // CR2.ADON, SQR-fallback channel 3
+            (2, Op::Write(0x0B, 1 << 6)),    // CR2.SWSTART (bit 30) → convert
+            (20, Op::Write(0x00, 0)),        // read-back settle (no-op SR write)
+        ];
+        assert_walk_identical(&script, 26);
+    }
+
+    #[test]
+    fn f1_continuous_conversion_walk_identity() {
+        // CONT + ADON: after the first EOC the engine re-arms and converts again,
+        // so the chain must perpetuate across multiple completions.
+        let script = [
+            (1u64, Op::Write(0x04, 1 << 5)),        // CR1.EOCIE
+            (1, Op::Write(0x08, 1 | (1 << 1) | 3)), // CR2.ADON | CONT | channel 3
+            (2, Op::Write(0x0B, 1 << 6)),           // SWSTART → first conversion
+        ];
+        // 2 + 15 + 15 + 15 ≈ 47 cycles covers three back-to-back conversions.
+        assert_walk_identical(&script, 50);
     }
 }

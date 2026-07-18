@@ -1263,10 +1263,19 @@ mod walk_free_campaign {
     /// EXTI (`exti`) NO LONGER forces the walk: its held-level `explicit_irqs`
     /// re-emission is driven by a delay-1 self-perpetuating event chain (armed on
     /// the MMIO write that raises a masked pending line, stopping when firmware
-    /// clears PR). Byte-identical proof: `exti::scheduler_diff`. Remaining plan
-    /// Class-B on this bus: adc.
+    /// clears PR). Byte-identical proof: `exti::scheduler_diff`.
+    ///
+    /// ADC (`adc1`) NO LONGER forces the walk: its F1 conversion countdown is
+    /// event-scheduled (delay-1 chain armed on SWSTART, perpetuating through
+    /// continuous mode), and the legacy `cycles: 1` per-converting-tick cost is
+    /// normalized to zero in BOTH modes (SysTick B1 pattern) so `total_cycles`
+    /// agrees. Byte-identical proof: `adc::scheduler_diff`.
+    ///
+    /// The forcing set is now EMPTY — with every Class-B walker migrated the
+    /// runtime invaders (L476) bus derives walk-deletion with no hand flag: the
+    /// campaign's full STM32 board flip.
     #[cfg(feature = "event-scheduler")]
-    const EXPECTED_WALK_FORCING: &[&str] = &["adc1"];
+    const EXPECTED_WALK_FORCING: &[&str] = &[];
 
     /// Featureless builds: the scheduler does not exist, so SysTick and SCB
     /// stay on the legacy walk. bxCAN (`can1`) is excluded regardless of the
@@ -1323,16 +1332,17 @@ mod walk_free_campaign {
     }
 
     #[test]
-    fn remaining_class_b_walkers_still_pin_walk_deletion() {
-        // I2C/ADC/EXTI still force the walk, so the invaders bus cannot
-        // flip yet: the derivation must stay conservative until every
-        // Class-B walker is migrated. (bxCAN no longer forces it — its
-        // walk work is gated on an attached CanBus interconnect.)
+    fn invaders_bus_now_flips_with_every_class_b_migrated() {
+        // With I2C, EXTI and ADC all event-scheduled, the runtime invaders
+        // (L476) bus has an EMPTY walk-forcing set and derives walk-deletion
+        // with no hand `walk_deleted` flag — the campaign's full STM32 board
+        // flip. (bxCAN never forced it here — its walk work is gated on an
+        // attached CanBus interconnect, absent on this bus.)
         let bus = invaders_bus_walk_stripped();
         assert!(
-            !bus.derive_walk_deletable(),
-            "invaders bus became walk-deletable after B4, but Class-B walkers remain — \
-             each batch must be honest bookkeeping with no premature walk deletion"
+            bus.derive_walk_deletable(),
+            "invaders bus should be walk-deletable once every Class-B walker \
+             (i2c/exti/adc) is migrated and the forcing set is empty"
         );
     }
 }
