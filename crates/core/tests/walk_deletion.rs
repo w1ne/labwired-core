@@ -45,21 +45,34 @@ fn nokia_explicit_flag_reaches_bus() {
     );
 }
 
-/// Auto-derivation is CONSERVATIVE at the real-config level: with the Nokia lab's
-/// explicit flag REMOVED (`None`), the bus does NOT derive walk-deletion, because
-/// the stm32l476 descriptor instantiates native timers / SysTick / ADC / DMA /
-/// EXTI / CAN whose `tick()` does real work once firmware arms them. Their
-/// byte-identity walk-free is a *firmware-specific* fact (this firmware never arms
-/// them) that no config-time predicate can prove — so the walk stays on and the
-/// explicit flag remains load-bearing.
+/// Auto-derivation with the Nokia lab's explicit flag REMOVED (`None`).
+///
+/// The stm32l476 descriptor instantiates native timers / SysTick / ADC / DMA /
+/// EXTI / I2C / CAN. The walk-free campaign migrated every one of them to the
+/// event scheduler (each proven byte-identical walk-free for ALL firmware states
+/// by its own walk-vs-scheduler differential), so the model-level predicate
+/// `derive_walk_deletable` now legitimately flips:
+///
+///   * `event-scheduler` builds: every peripheral reports `uses_scheduler()`
+///     (or `!needs_legacy_walk()`), the forcing set is empty, and the bus
+///     auto-derives walk-deletion with no hand flag — the explicit
+///     `walk_deleted: true` is now redundant, not load-bearing.
+///   * featureless builds: the scheduler does not exist, so the migrated models
+///     honestly stay on the walk and derivation keeps it on.
 #[test]
-fn nokia_without_flag_does_not_auto_derive_deletion() {
+fn nokia_without_flag_auto_derivation_tracks_scheduler_feature() {
     let (chip, mut manifest) = nokia();
     manifest.walk_deleted = None; // simulate removing the yaml line
     let bus = SystemBus::from_config(&chip, &manifest).expect("build bus");
+    #[cfg(feature = "event-scheduler")]
+    assert!(
+        bus.legacy_walk_disabled,
+        "every L476 peripheral is now event-scheduled → derivation deletes the walk"
+    );
+    #[cfg(not(feature = "event-scheduler"))]
     assert!(
         !bus.legacy_walk_disabled,
-        "conservative derivation must keep the walk (native timers are armable)"
+        "featureless build has no scheduler → migrated models stay on the walk"
     );
 }
 
