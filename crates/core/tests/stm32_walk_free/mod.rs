@@ -196,10 +196,22 @@ pub fn assert_walk_free_boot_identical(
     cycles: u64,
     snapshot_every: u64,
 ) {
-    let (walk_snaps, walk_uart) =
-        run_lane(chip_name, system_name, fixture, true, cycles, snapshot_every);
-    let (sched_snaps, sched_uart) =
-        run_lane(chip_name, system_name, fixture, false, cycles, snapshot_every);
+    let (walk_snaps, walk_uart) = run_lane(
+        chip_name,
+        system_name,
+        fixture,
+        true,
+        cycles,
+        snapshot_every,
+    );
+    let (sched_snaps, sched_uart) = run_lane(
+        chip_name,
+        system_name,
+        fixture,
+        false,
+        cycles,
+        snapshot_every,
+    );
 
     assert_eq!(
         walk_snaps.len(),
@@ -208,7 +220,8 @@ pub fn assert_walk_free_boot_identical(
     );
     for (i, (w, s)) in walk_snaps.iter().zip(sched_snaps.iter()).enumerate() {
         assert_eq!(
-            w, s,
+            w,
+            s,
             "{chip_name}: walk-vs-scheduler diverged at snapshot {i} \
              (window ~{} instructions)\n  walk={w:?}\n  sched={s:?}",
             (i as u64 + 1) * snapshot_every
