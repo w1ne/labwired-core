@@ -47,6 +47,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "exti",
     "afio",
     "dma",
+    "stm32f4_dma",
     "gpdma",
     "adc",
     "pio",
@@ -367,6 +368,33 @@ pub fn try_build(
         }
         "afio" => Box::new(crate::peripherals::afio::Afio::new()),
         "dma" | "stm32dma" => Box::new(crate::peripherals::dma::Dma1::new()),
+        // STM32F4 stream-based DMA (RM0090 §10). `config: { dma2: true }` marks
+        // the DMA2 instance (memory-to-memory capable); `config: { stream_irqs:
+        // [..8..] }` routes each stream to its own NVIC vector (F4 stream IRQs
+        // are non-contiguous, e.g. DMA1_Stream7 = 47).
+        "stm32f4_dma" => {
+            let mut dma = crate::peripherals::stm32f4_dma::StreamDma::new();
+            if p_cfg
+                .config
+                .get("dma2")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
+            {
+                dma = dma.as_dma2();
+            }
+            if let Some(arr) = p_cfg
+                .config
+                .get("stream_irqs")
+                .and_then(|v| v.as_sequence())
+            {
+                let irqs: Vec<u32> = arr
+                    .iter()
+                    .filter_map(|v| v.as_u64().map(|n| n as u32))
+                    .collect();
+                dma = dma.with_stream_irqs(irqs);
+            }
+            Box::new(dma)
+        }
         "gpdma" => {
             // `config: { irq_base: N }` routes channel n to NVIC
             // line N + n (H563 GPDMA1: 27..34). Without it the
