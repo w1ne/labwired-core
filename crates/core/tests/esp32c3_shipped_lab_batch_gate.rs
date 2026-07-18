@@ -31,18 +31,33 @@
 //! It is also the *direct* proxy for this failure class: the pathology IS the
 //! batch collapsing toward 1.
 //!
+//! Generalized over the shipped labs
+//! =================================
+//! The per-lab table + budget lives in `docs/coverage/lab-perf-budget.json`
+//! (one row per shipped lab: chip/system yaml, flash basename, and the
+//! `min_mean_batch` / `min_lit_px` / `min_idle_ff_ratio` floors). This test
+//! runs every `boot: "esp32c3-rom"` row through the exact browser fast-start
+//! policy and asserts each floor. Adding a shipped lab is a JSON row, not a code
+//! change. Other boot kinds SKIP until their boot path is wired here.
+//!
 //! Cross-repo note
 //! ===============
-//! The flash image lives in the SUPERPROJECT, not here, and is deliberately not
-//! vendored into core (one artifact, one home — a copy would drift silently and
-//! reintroduce exactly the skew this file exists to catch). The gate resolves
-//! the image in this order:
-//! 1. `$LABWIRED_C3_SHIPPED_FLASH` — explicit override (what CI should set);
-//! 2. the sibling superproject checkout, when core is a submodule inside it.
+//! The flash images live in the SUPERPROJECT (`packages/playground/public/wasm/`),
+//! not here, and are deliberately not vendored into core (one artifact, one home
+//! — a copy would drift silently and reintroduce exactly the skew this file
+//! exists to catch). Each row resolves its image in this order:
+//! 1. `$LABWIRED_WASM_DIR/<basename>` — the superproject CI sets this once so
+//!    every lab resolves (what the SUPERPROJECT PR CI should export);
+//! 2. `$LABWIRED_C3_SHIPPED_FLASH` — legacy single-image override (128x64 only);
+//! 3. the sibling superproject checkout, when core is a submodule inside it.
 //!
-//! If neither resolves the test SKIPS loudly rather than failing, so a
-//! standalone core checkout stays green. The superproject CI must set the env
-//! var (or run with the playground present) for this gate to bite.
+//! If none resolves, the row SKIPS loudly rather than failing, so a standalone
+//! core checkout stays green. This is `#[ignore]`d + `event-scheduler`-gated, so
+//! it does NOT run in core-ci's default lanes; the SUPERPROJECT PR CI runs it:
+//!   cargo test -p labwired-core --release --features event-scheduler \
+//!     --test esp32c3_shipped_lab_batch_gate -- --ignored --nocapture
+//! with `LABWIRED_WASM_DIR=packages/playground/public/wasm` exported. That is the
+//! only environment where the shipped binaries are present for the gate to bite.
 
 #![cfg(feature = "event-scheduler")]
 
@@ -64,21 +79,40 @@ fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-/// The image the deployed playground boots. See the module docs for why this is
-/// resolved rather than vendored.
-fn shipped_flash_path() -> Option<PathBuf> {
-    if let Ok(p) = std::env::var("LABWIRED_C3_SHIPPED_FLASH") {
-        let p = PathBuf::from(p);
-        assert!(
-            p.exists(),
-            "LABWIRED_C3_SHIPPED_FLASH points at a missing file: {}",
-            p.display()
-        );
-        return Some(p);
+/// Resolve a SHIPPED flash image by basename. See the module docs for why these
+/// live in the superproject and are resolved rather than vendored into core.
+///
+/// Resolution order:
+///   1. `$LABWIRED_WASM_DIR/<basename>` — the superproject CI points this at
+///      `packages/playground/public/wasm/` so every lab resolves at once.
+///   2. `$LABWIRED_C3_SHIPPED_FLASH` — legacy single-image override; only honored
+///      for the 128x64 primary lab it was introduced for.
+///   3. the sibling superproject checkout, when core is a submodule inside it.
+///
+/// Returns `None` (test SKIPS) when the image is absent, so a standalone core
+/// checkout stays green.
+fn shipped_flash_path(basename: &str) -> Option<PathBuf> {
+    if let Ok(dir) = std::env::var("LABWIRED_WASM_DIR") {
+        let p = PathBuf::from(dir).join(basename);
+        if p.exists() {
+            return Some(p);
+        }
+    }
+    if basename == "demo-esp32c3-display-workshop-flash.bin" {
+        if let Ok(p) = std::env::var("LABWIRED_C3_SHIPPED_FLASH") {
+            let p = PathBuf::from(p);
+            assert!(
+                p.exists(),
+                "LABWIRED_C3_SHIPPED_FLASH points at a missing file: {}",
+                p.display()
+            );
+            return Some(p);
+        }
     }
     // core/crates/core → core → <superproject>
     let sibling = root()
-        .join("../../../packages/playground/public/wasm/demo-esp32c3-display-workshop-flash.bin");
+        .join("../../../packages/playground/public/wasm")
+        .join(basename);
     sibling.exists().then_some(sibling)
 }
 
@@ -109,12 +143,11 @@ struct Lab {
 /// The browser fast-start assembly, verbatim (`esp32c3_walk_differential`'s
 /// `build_oled_lab`), but pointed at `flash_path` and running the EXACT browser
 /// policy (`apply_browser_c3_policy`: recommended tick interval + idle FF).
-fn build_lab(flash_path: &PathBuf) -> Lab {
-    let chip = ChipDescriptor::from_file(root().join("../../configs/chips/esp32c3.yaml"))
-        .expect("load esp32c3 chip yaml");
-    let manifest =
-        SystemManifest::from_file(root().join("../../configs/systems/esp32c3-oled-demo.yaml"))
-            .expect("load esp32c3-oled-demo system yaml");
+fn build_lab(chip_yaml: &str, system_yaml: &str, flash_path: &PathBuf) -> Lab {
+    let chip = ChipDescriptor::from_file(root().join("../..").join(chip_yaml))
+        .unwrap_or_else(|e| panic!("load chip yaml {chip_yaml}: {e}"));
+    let manifest = SystemManifest::from_file(root().join("../..").join(system_yaml))
+        .unwrap_or_else(|e| panic!("load system yaml {system_yaml}: {e}"));
     let mut bus = SystemBus::from_config(&chip, &manifest).expect("build oled bus");
 
     let irom = std::fs::read(root().join("roms/esp32c3/esp32c3_rom.bin")).expect("read C3 IROM");
@@ -206,77 +239,148 @@ fn ssd1306_lit_pixels(machine: &Machine<RiscV>) -> usize {
 
 const BUDGET: u64 = 30_000_000;
 
-/// Floor for the shipped lab's mean batch width.
+/// One row of the committed per-lab budget (`docs/coverage/lab-perf-budget.json`).
+struct LabBudget {
+    lab: String,
+    boot: String,
+    chip_yaml: String,
+    system_yaml: String,
+    flash_basename: String,
+    min_mean_batch: f64,
+    min_lit_px: usize,
+    min_idle_ff_ratio: f64,
+}
+
+fn budget_path() -> PathBuf {
+    root().join("../../docs/coverage/lab-perf-budget.json")
+}
+
+/// Parse the committed budget. The budget file is authoritative — a lab with no
+/// row here is not gated, and a row is a *contract* the shipped binary must meet.
+fn load_budget() -> Vec<LabBudget> {
+    let raw = std::fs::read_to_string(budget_path())
+        .unwrap_or_else(|e| panic!("read {}: {e}", budget_path().display()));
+    let json: serde_json::Value = serde_json::from_str(&raw).expect("budget json parses");
+    json["labs"]
+        .as_array()
+        .expect("budget.labs is an array")
+        .iter()
+        .map(|row| LabBudget {
+            lab: row["lab"].as_str().expect("lab").to_string(),
+            boot: row["boot"].as_str().expect("boot").to_string(),
+            chip_yaml: row["chip_yaml"].as_str().expect("chip_yaml").to_string(),
+            system_yaml: row["system_yaml"]
+                .as_str()
+                .expect("system_yaml")
+                .to_string(),
+            flash_basename: row["flash_basename"]
+                .as_str()
+                .expect("flash_basename")
+                .to_string(),
+            min_mean_batch: row["min_mean_batch"].as_f64().expect("min_mean_batch"),
+            min_lit_px: row["min_lit_px"].as_u64().expect("min_lit_px") as usize,
+            min_idle_ff_ratio: row["min_idle_ff_ratio"]
+                .as_f64()
+                .expect("min_idle_ff_ratio"),
+        })
+        .collect()
+}
+
+/// The batch-collapse throughput gate for the firmware users actually boot,
+/// generalized over every shipped lab in the committed budget.
 ///
-/// Measured on this branch: **19.42**. Before the UART wakeup fix: **1.376**
-/// (the shipped regression), and the theoretical floor of the collapse is 1.0.
-/// 8.0 sits 5.8x above the broken value and 2.4x below the healthy one, so it
-/// cannot flake (the metric is deterministic — this margin absorbs legitimate
-/// firmware/model churn, not host noise) yet still trips long before a collapse
-/// toward 1 could reach users. The remaining clamp owner is `i2c0` at its
-/// module clock (CPU/4), which bounds any honest future value near ~4 during
-/// active I²C traffic; 8.0 stays above that only because traffic is bursty.
-/// If a legitimate change drives this below 8, re-measure and move it
-/// deliberately — do not delete the gate.
-const MIN_MEAN_BATCH: f64 = 8.0;
-
-/// The OLED must still paint: a fast engine that renders nothing is not a pass.
-const MIN_LIT: usize = 400;
-
+/// Only `boot: "esp32c3-rom"` rows run today — that ROM-boot path is the only
+/// one wired here. Other boot kinds (ELF-loaded ARM labs, esp32s3 Xtensa) SKIP
+/// with a note until their boot machinery is added; their binaries also live in
+/// the superproject, not core. Rows whose flash image is not resolvable SKIP
+/// cleanly so a standalone core checkout stays green — the SUPERPROJECT CI sets
+/// `LABWIRED_WASM_DIR=packages/playground/public/wasm` for the gate to bite.
 #[test]
-#[ignore = "runs the real C3 bootloader + shipped app (~30M steps); run with --release --ignored"]
-fn shipped_c3_display_workshop_lab_keeps_batching() {
-    let Some(flash) = shipped_flash_path() else {
-        eprintln!(
-            "SKIP: shipped C3 flash image not found. Set LABWIRED_C3_SHIPPED_FLASH \
-             to <superproject>/packages/playground/public/wasm/\
-             demo-esp32c3-display-workshop-flash.bin, or run with the superproject \
-             checked out around this submodule. This gate is the ONLY one that \
-             exercises the firmware users actually boot."
-        );
-        return;
-    };
-    eprintln!("shipped flash: {}", flash.display());
+#[ignore = "runs real shipped bootloaders (~30M steps/lab); run with --release --ignored"]
+fn shipped_labs_keep_batching() {
+    let budget = load_budget();
+    let mut ran = 0usize;
+    let mut failures: Vec<String> = Vec::new();
 
-    let mut lab = build_lab(&flash);
-    lab.machine.reset_step_profile();
-    let mut fuel: u64 = 0;
-    while fuel < BUDGET {
-        let n = 1_000_000u32.min((BUDGET - fuel) as u32);
-        lab.machine.run(Some(n)).expect("run shipped C3 lab");
-        fuel += u64::from(n);
+    for b in &budget {
+        if b.boot != "esp32c3-rom" {
+            eprintln!(
+                "SKIP {}: boot kind '{}' not wired in this gate yet (superproject binary + \
+                 boot path pending).",
+                b.lab, b.boot
+            );
+            continue;
+        }
+        let Some(flash) = shipped_flash_path(&b.flash_basename) else {
+            eprintln!(
+                "SKIP {}: shipped flash '{}' not found. Set LABWIRED_WASM_DIR to \
+                 <superproject>/packages/playground/public/wasm/, or run with the \
+                 superproject checked out around this submodule.",
+                b.lab, b.flash_basename
+            );
+            continue;
+        };
+        eprintln!("{}: shipped flash {}", b.lab, flash.display());
+
+        let mut lab = build_lab(&b.chip_yaml, &b.system_yaml, &flash);
+        lab.machine.reset_step_profile();
+        let mut fuel: u64 = 0;
+        while fuel < BUDGET {
+            let n = 1_000_000u32.min((BUDGET - fuel) as u32);
+            lab.machine.run(Some(n)).expect("run shipped lab");
+            fuel += u64::from(n);
+        }
+
+        let profile = lab.machine.step_profile();
+        let mean_batch = profile.cpu_instructions as f64 / profile.cpu_batches.max(1) as f64;
+        let lit = ssd1306_lit_pixels(&lab.machine);
+        let idle_ff_ratio = lab.machine.idle_fast_forward_cycles_skipped as f64
+            / lab.machine.total_cycles.max(1) as f64;
+
+        eprintln!(
+            "SHIPPED_LAB_GATE {} mean_batch={mean_batch:.3} (min {}) lit_px={lit} (min {}) \
+             idle_ff_ratio={idle_ff_ratio:.3} (min {}) batches={} interpreted={} total_cycles={}",
+            b.lab,
+            b.min_mean_batch,
+            b.min_lit_px,
+            b.min_idle_ff_ratio,
+            profile.cpu_batches,
+            profile.cpu_instructions,
+            lab.machine.total_cycles,
+        );
+
+        if lit < b.min_lit_px {
+            failures.push(format!(
+                "{}: OLED painted only {lit} px (min {}) — a fast engine that renders \
+                 nothing is not a pass",
+                b.lab, b.min_lit_px
+            ));
+        }
+        if mean_batch < b.min_mean_batch {
+            failures.push(format!(
+                "{}: batch width collapsed to {mean_batch:.3} (min {}). Some peripheral is \
+                 scheduling an event every ~{mean_batch:.1} guest instructions — the shipped \
+                 regression class. MEASURE the owner (`EventScheduler::next_event_deadline`) \
+                 before assuming it is the UART.",
+                b.lab, b.min_mean_batch
+            ));
+        }
+        if idle_ff_ratio < b.min_idle_ff_ratio {
+            failures.push(format!(
+                "{}: idle fast-forward ratio {idle_ff_ratio:.3} below floor {} — the browser \
+                 fast-start policy stopped skipping idle time.",
+                b.lab, b.min_idle_ff_ratio
+            ));
+        }
+        ran += 1;
     }
 
-    let profile = lab.machine.step_profile();
-    let mean_batch = profile.cpu_instructions as f64 / profile.cpu_batches.max(1) as f64;
-    let lit = ssd1306_lit_pixels(&lab.machine);
-    let rtf_hint = lab.machine.total_cycles as f64 / 160e6;
-
-    eprintln!(
-        "SHIPPED_C3_GATE mean_batch={mean_batch:.3} (min {MIN_MEAN_BATCH}) batches={} \
-         interpreted={} idle_ff={} total_cycles={} guest_ms={:.1} lit_px={lit}",
-        profile.cpu_batches,
-        profile.cpu_instructions,
-        lab.machine.idle_fast_forward_cycles_skipped,
-        lab.machine.total_cycles,
-        rtf_hint * 1000.0,
-    );
-
-    assert!(
-        lit >= MIN_LIT,
-        "shipped lab must still paint the OLED (lit={lit}, min {MIN_LIT}) — a fast \
-         engine that renders nothing is not a pass"
-    );
-    assert!(
-        mean_batch >= MIN_MEAN_BATCH,
-        "SHIPPED C3 lab batch width collapsed to {mean_batch:.3} (min {MIN_MEAN_BATCH}).\n\
-         This is the regression that shipped once already: some peripheral is \
-         scheduling an event every ~{mean_batch:.1} guest instructions, which pinned \
-         the browser to ~RTF 0.003 (a guest second costing ~5.5 wall minutes).\n\
-         MEASURE the owner before assuming it is the UART again — attribute batch \
-         clamps by peripheral (`EventScheduler::next_event_deadline`) rather than \
-         guessing. Last time the owner was `uart0`, holding a per-cycle wakeup to \
-         re-assert a level-triggered IRQ that the C3 bus does not even wire \
-         (see `Uart::has_active_work`)."
-    );
+    if ran == 0 {
+        eprintln!(
+            "SKIP: no shipped flash image resolved — this gate exercises the firmware \
+             users actually boot and needs the superproject binaries present."
+        );
+        return;
+    }
+    assert!(failures.is_empty(), "\n{}", failures.join("\n"));
 }
