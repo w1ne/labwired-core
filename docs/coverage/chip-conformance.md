@@ -17,7 +17,7 @@ Reg match = verifiable cold-reset registers reproduced. "Excluded" = registers a
 | rp2040 | **L1** | ✓ | 14 | — | — | firmware_survival::test_rp2040_demo_survival |
 | stm32f103 | **L1** | ✓ | 31 | — | — | stm32f1_exec_oracle |
 | stm32f401 | **L1** | ✓ | 15 | — | — | firmware_survival::test_stm32f401_blinky_survival |
-| stm32f407 | **L1** | ✓ | 27 | — | — | firmware_survival::test_nucleo_f407_smoke_survival |
+| stm32f407 | **L1** | ✓ | 29 | — | — | firmware_survival::test_nucleo_f407_smoke_survival |
 | stm32g474re | **L0** | ✓ | 20 | — | — | — |
 | stm32h563 | **L1** | ✓ | 37 | — | — | firmware_survival::test_stm32h563_demo_survival |
 | stm32l073 | **L2** | ✓ | 42 | 55/55 (100%) | 5 | firmware_survival::test_nucleo_l073rz_smoke_survival |
