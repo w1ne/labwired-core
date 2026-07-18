@@ -296,6 +296,73 @@ impl WasmSimulator {
         Ok(())
     }
 
+    /// Set the simulated wiper position on a potentiometer attached to an ADC channel.
+    ///
+    /// All divider math lives in Rust core (Potentiometer::wiper_output_mv).
+    /// This function only validates the position, recomputes wiper_mv via core,
+    /// and injects the result into the ADC peripheral's channel.
+    ///
+    /// `device_id` must match a `board_io` binding with `device_type: "potentiometer"`.
+    /// `position_pct` must be in 0..=100.
+    #[wasm_bindgen]
+    pub fn set_potentiometer(
+        &mut self,
+        device_id: &str,
+        position_pct: f32,
+    ) -> Result<(), JsValue> {
+        use labwired_core::peripherals::components::Potentiometer;
+
+        if !(0.0..=100.0).contains(&position_pct) {
+            return Err(JsValue::from_str(&format!(
+                "potentiometer position {} out of range (0..=100)",
+                position_pct
+            )));
+        }
+
+        // Find the board_io binding for this device.
+        let binding = self
+            .board_io
+            .iter()
+            .find(|b| b.id == device_id && b.device_type.as_deref() == Some("potentiometer"))
+            .cloned()
+            .ok_or_else(|| {
+                JsValue::from_str(&format!(
+                    "No potentiometer board_io binding '{}'",
+                    device_id
+                ))
+            })?;
+
+        let channel = binding.pin;
+
+        // Build a temporary pot model to compute the millivolt output — all math in core.
+        let mv = Potentiometer::new(channel, position_pct).wiper_output_mv();
+
+        // Inject the computed millivolt value into the matching ADC peripheral's channel.
+        let machine = self.machine.as_mut().unwrap();
+        let idx = machine
+            .bus
+            .find_peripheral_index_by_name(&binding.peripheral)
+            .ok_or_else(|| {
+                JsValue::from_str(&format!(
+                    "ADC peripheral '{}' not found",
+                    binding.peripheral
+                ))
+            })?;
+        let any = machine.bus.peripherals[idx]
+            .dev
+            .as_any_mut()
+            .ok_or_else(|| JsValue::from_str("ADC peripheral does not support downcasting"))?;
+        let adc = any.downcast_mut::<Adc>().ok_or_else(|| {
+            JsValue::from_str(&format!(
+                "Peripheral '{}' is not an ADC",
+                binding.peripheral
+            ))
+        })?;
+
+        adc.set_channel_input(channel, mv);
+        Ok(())
+    }
+
     /// Read the 74HC165's live input byte (bit `i` = channel `i`), or `-1` if
     /// no shifter is wired. Lets the UI reflect the device's real state rather
     /// than tracking it in JS.

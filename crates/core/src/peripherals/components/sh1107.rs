@@ -214,7 +214,7 @@ impl I2cDevice for Sh1107 {
 // ─── PeripheralKit registration ────────────────────────────────────────────
 
 use crate::peripherals::kit::{
-    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, PeripheralKit, Transport,
+    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, LabRef, PeripheralKit, Transport,
 };
 
 pub struct Sh1107Kit;
@@ -235,7 +235,12 @@ static SH1107_METADATA: KitMetadata = KitMetadata {
         ty: ConfigType::Int,
         doc: "7-bit slave address. Defaults to 0x3C; 0x3D selects the SA0=high variant.",
     }],
-    labs: &[],
+    labs: &[LabRef {
+        board_id: "openai-deck-s3",
+        chip: "esp32s3",
+        example_dir: "openai-deck-s3",
+        demo_elf: "demo-openai-deck-s3.elf",
+    }],
 };
 
 impl PeripheralKit for Sh1107Kit {
