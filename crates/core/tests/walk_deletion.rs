@@ -11,6 +11,10 @@
 
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
+#[allow(unused_imports)]
+use labwired_core::bus::RECOMMENDED_TICK_INTERVAL;
+#[allow(unused_imports)]
+use labwired_core::Peripheral;
 use std::path::PathBuf;
 
 fn root(rel: &str) -> PathBuf {
@@ -86,6 +90,46 @@ fn explicit_false_pins_walk_on() {
         !bus.legacy_walk_disabled,
         "walk_deleted: false must pin the walk on"
     );
+}
+
+/// The headline campaign result: a real **stm32f103** lab bus, built exactly the
+/// way the run path does (`from_config` + `configure_cortex_m`) with any hand
+/// `walk_deleted` flag stripped, auto-derives walk-deletion under
+/// `event-scheduler` — the whole f103 peripheral set (i2c/exti/adc migrated,
+/// rtc/afio/bxcan no-op-gated, timers/dma/systick from earlier batches) is now
+/// walk-free, so the browser fast path lifts recommended_tick_interval 1→512 and
+/// engages idle fast-forward. Featureless builds honestly keep the walk.
+#[test]
+fn f103_lab_bus_flips_walk_deletable_under_scheduler() {
+    let chip = ChipDescriptor::from_file(root("configs/chips/stm32f103.yaml"))
+        .expect("load stm32f103 chip");
+    let mut manifest = SystemManifest::from_file(root("examples/ssd1306-hello-lab/system.yaml"))
+        .expect("load f103 i2c lab manifest");
+    manifest.walk_deleted = None; // derive from the models, not the manifest hatch
+    let mut bus = SystemBus::from_config(&chip, &manifest).expect("build f103 bus");
+    let _ = labwired_core::system::cortex_m::configure_cortex_m(&mut bus);
+
+    let forcing: Vec<&str> = bus
+        .peripherals
+        .iter()
+        .filter(|p| p.dev.needs_legacy_walk() && !p.dev.uses_scheduler())
+        .map(|p| p.name.as_str())
+        .collect();
+
+    #[cfg(feature = "event-scheduler")]
+    {
+        assert!(
+            forcing.is_empty(),
+            "f103 lab bus still has walk-forcing peripherals: {forcing:?}"
+        );
+        assert_eq!(bus.max_safe_tick_interval(), RECOMMENDED_TICK_INTERVAL);
+    }
+    #[cfg(not(feature = "event-scheduler"))]
+    {
+        // Featureless: the migrated models stay on the walk (no scheduler).
+        assert!(!forcing.is_empty());
+        assert_eq!(bus.max_safe_tick_interval(), 1);
+    }
 }
 
 /// A manifest without the field parses to `None` (auto-derive), not a hard-coded

@@ -579,7 +579,12 @@ boards:
     # cases, exti::scheduler_diff, adc::scheduler_diff — registers + read bytes +
     # NVIC-pend cycles). The ADC tick-cost sim artifact (cycles:1 per converting
     # tick) is removed in BOTH modes (SysTick B1 pattern; a real conversion runs
-    # on the ADC clock, zero core cycles). Featureless builds keep the walk.
+    # on the ADC clock, zero core cycles). Additionally the F1 RTC (rtc_f1.rs) —
+    # a pure register bank with NO tick() override (its default per-cycle callback
+    # is a proven no-op) — gets needs_legacy_walk()=false (the AFIO no-op-bank
+    # pattern), which was the LAST walker on every f103 lab bus: the full f103
+    # board now flips walk-deletable (recommended_tick_interval 1→512, idle
+    # fast-forward). All byte-identical; featureless builds keep the walk.
     # Register layout, reset values and MMIO byte paths unchanged; stm32f1_mmio_diff
     # (102/102) + f103_conformance pass unchanged. No live re-capture.
     drift_ack: 2026-07-18
