@@ -67,53 +67,51 @@ impl LinearMemory {
     }
 
     pub fn read_u16(&self, addr: u64) -> Option<u16> {
-        if addr >= self.base_addr && addr + 1 < self.base_addr + self.data.len() as u64 {
-            let offset = (addr - self.base_addr) as usize;
-            let bytes = [self.data[offset], self.data[offset + 1]];
-            Some(u16::from_le_bytes(bytes))
-        } else {
-            None
-        }
+        // Single bounds check via a slice range (was two separately
+        // bounds-checked per-byte indexes). Byte-identical: `get(off..off+2)`
+        // is `Some` iff `off + 2 <= len` iff `addr + 1 < base + len` — the
+        // original guard — and returns `None` for any out-of-range address.
+        let offset = addr.checked_sub(self.base_addr)? as usize;
+        let bytes = self.data.get(offset..offset.checked_add(2)?)?;
+        Some(u16::from_le_bytes(bytes.try_into().unwrap()))
     }
 
     pub fn read_u32(&self, addr: u64) -> Option<u32> {
-        if addr >= self.base_addr && addr + 3 < self.base_addr + self.data.len() as u64 {
-            let offset = (addr - self.base_addr) as usize;
-            let bytes = [
-                self.data[offset],
-                self.data[offset + 1],
-                self.data[offset + 2],
-                self.data[offset + 3],
-            ];
-            Some(u32::from_le_bytes(bytes))
-        } else {
-            None
-        }
+        // Single bounds check for the whole word — see `read_u16`.
+        let offset = addr.checked_sub(self.base_addr)? as usize;
+        let bytes = self.data.get(offset..offset.checked_add(4)?)?;
+        Some(u32::from_le_bytes(bytes.try_into().unwrap()))
     }
 
     pub fn write_u16(&mut self, addr: u64, value: u16) -> bool {
-        if addr >= self.base_addr && addr + 1 < self.base_addr + self.data.len() as u64 {
-            let offset = (addr - self.base_addr) as usize;
-            let bytes = value.to_le_bytes();
-            self.data[offset] = bytes[0];
-            self.data[offset + 1] = bytes[1];
-            true
-        } else {
-            false
+        let Some(offset) = addr.checked_sub(self.base_addr).map(|o| o as usize) else {
+            return false;
+        };
+        match offset
+            .checked_add(2)
+            .and_then(|end| self.data.get_mut(offset..end))
+        {
+            Some(slot) => {
+                slot.copy_from_slice(&value.to_le_bytes());
+                true
+            }
+            None => false,
         }
     }
 
     pub fn write_u32(&mut self, addr: u64, value: u32) -> bool {
-        if addr >= self.base_addr && addr + 3 < self.base_addr + self.data.len() as u64 {
-            let offset = (addr - self.base_addr) as usize;
-            let bytes = value.to_le_bytes();
-            self.data[offset] = bytes[0];
-            self.data[offset + 1] = bytes[1];
-            self.data[offset + 2] = bytes[2];
-            self.data[offset + 3] = bytes[3];
-            true
-        } else {
-            false
+        let Some(offset) = addr.checked_sub(self.base_addr).map(|o| o as usize) else {
+            return false;
+        };
+        match offset
+            .checked_add(4)
+            .and_then(|end| self.data.get_mut(offset..end))
+        {
+            Some(slot) => {
+                slot.copy_from_slice(&value.to_le_bytes());
+                true
+            }
+            None => false,
         }
     }
 
