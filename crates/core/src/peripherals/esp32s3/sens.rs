@@ -113,9 +113,14 @@ const MEAS_START_SAR: u32 = 1 << 17;
 const MEAS_DONE_SAR: u32 = 1 << 16;
 /// `SENS_MEAS*_DATA_SAR` (bits [15:0], RO) — conversion result.
 const MEAS_DATA_MASK: u32 = 0x0000_FFFF;
-/// Fixed plausible reading latched on every oneshot: mid-scale of the 12-bit
-/// SAR range. Deterministic — LabWired runs must be reproducible.
+/// Fixed plausible reading latched on an oneshot when no analog source is
+/// injected on the selected channel: mid-scale of the 12-bit SAR range.
+/// Deterministic — LabWired runs must be reproducible.
 const MEAS_DATA_FIXED: u32 = 0x800;
+/// `SENS_SAR1_EN_PAD` (bits [30:19] of `SAR_MEAS1_CTRL2`) — the 12-bit channel
+/// enable mask esp-hal sets to `1 << channel` before launching a oneshot.
+const SAR1_EN_PAD_S: u32 = 19;
+const SAR1_EN_PAD_M: u32 = 0x0FFF;
 
 /// One word past the last architected register (`SAR_SARDATE` @ 0x1FC).
 const NWORDS: usize = 0x200 / 4;
@@ -173,6 +178,12 @@ pub struct Esp32s3Sens {
     /// Register file for the architected map (word-indexed; holes stay 0 and
     /// are never read back — `spec()` gates both directions).
     regs: [u32; NWORDS],
+    /// Per-ADC1-channel injected 12-bit counts (CH0..9 = GPIO1..10). `0xFFFF` =
+    /// "no injection" → fall back to `MEAS_DATA_FIXED`. A potentiometer/analog
+    /// source writes its wiper here so `analogRead()` returns a controllable,
+    /// position-driven value instead of the fixed mid-scale placeholder. This is
+    /// the SENS path esp-hal's ESP32-S3 ADC oneshot actually reads.
+    channel_inputs: [u16; 10],
 }
 
 impl std::fmt::Debug for Esp32s3Sens {
@@ -202,7 +213,20 @@ impl Esp32s3Sens {
             }
             w += 1;
         }
-        Self { regs }
+        Self {
+            regs,
+            channel_inputs: [0xFFFF; 10],
+        }
+    }
+
+    /// Inject a millivolt reading for an ADC1 channel (CH0..9 = GPIO1..10). The
+    /// next SENS oneshot that selects this channel returns the equivalent 12-bit
+    /// count (3.3 V Vref) instead of the fixed mid-scale placeholder.
+    pub fn set_channel_input(&mut self, channel: u8, millivolts: u16) {
+        if (channel as usize) < self.channel_inputs.len() {
+            let count = ((millivolts as u32 * 4095) / 3300).min(4095) as u16;
+            self.channel_inputs[channel as usize] = count;
+        }
     }
 
     fn reg(&self, off: u64) -> u32 {
@@ -242,11 +266,30 @@ impl Esp32s3Sens {
         self.set_reg_masked(off, value);
         let stored = self.reg(off);
         let updated = if value & MEAS_START_SAR != 0 {
-            (stored & !MEAS_DATA_MASK) | MEAS_DONE_SAR | MEAS_DATA_FIXED
+            (stored & !MEAS_DATA_MASK) | MEAS_DONE_SAR | self.meas_data(off, stored)
         } else {
             stored & !MEAS_DONE_SAR
         };
         self.set_reg_raw(off, updated);
+    }
+
+    /// The 12-bit result to latch for a oneshot on `off`: the injected value for
+    /// the selected ADC1 channel if one is set, else the fixed mid-scale sample.
+    /// Only ADC1 (`SAR_MEAS1_CTRL2`) carries per-channel injection today; ADC2
+    /// keeps the fixed placeholder.
+    fn meas_data(&self, off: u64, stored: u32) -> u32 {
+        if off != SAR_MEAS1_CTRL2 {
+            return MEAS_DATA_FIXED;
+        }
+        let en_pad = (stored >> SAR1_EN_PAD_S) & SAR1_EN_PAD_M;
+        if en_pad == 0 {
+            return MEAS_DATA_FIXED;
+        }
+        let channel = en_pad.trailing_zeros() as usize;
+        match self.channel_inputs.get(channel) {
+            Some(&c) if c != 0xFFFF => (c as u32) & MEAS_DATA_MASK,
+            _ => MEAS_DATA_FIXED,
+        }
     }
 }
 

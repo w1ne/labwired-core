@@ -14,14 +14,32 @@ name: "openai-deck-s3"
 chip: "../../configs/chips/esp32s3.yaml"
 
 external_devices:
-  # SH1107 128x128 OLED on I2C0 at 0x3D (SA0=high). Attached by the native test
-  # harness to the command-list Esp32s3I2c at i2c0; the firmware's register-level
-  # driver drives it with genuine I2C transactions.
+  # SH1107 128x128 OLED on I2C0 at 0x3D (SA0=high). Wired from this manifest by
+  # attach_esp32_external_devices; the firmware's register-level driver drives it
+  # with genuine I2C transactions.
   - id: "oled"
     type: "oled-sh1107"
     connection: "i2c0"
     config:
       i2c_address: 0x3D
+
+  # Rotary knob → temperature. A potentiometer wiper on ADC1 channel 0 (GPIO1).
+  # attach_esp32_external_devices seeds the SAR-ADC channel from the position, so
+  # the firmware's analogRead() returns the wiper voltage.
+  - id: "knob"
+    type: "potentiometer"
+    connection: "sar_adc_s3"
+    config:
+      channel: 0
+      initial_position_pct: 60.0
+
+  # Slide fader → max-tokens. A potentiometer wiper on ADC1 channel 1 (GPIO2).
+  - id: "fader"
+    type: "potentiometer"
+    connection: "sar_adc_s3"
+    config:
+      channel: 1
+      initial_position_pct: 40.0
 
 board_io:
   # Framebuffer readback binding. The S3 GPIO matrix routes I2C0 SDA/SCL to

@@ -108,6 +108,18 @@ external_devices:
     connection: i2c0
     config:
       i2c_address: 0x3D
+  - id: knob
+    type: potentiometer
+    connection: sar_adc_s3
+    config:
+      channel: 0
+      initial_position_pct: 60.0
+  - id: fader
+    type: potentiometer
+    connection: sar_adc_s3
+    config:
+      channel: 1
+      initial_position_pct: 40.0
 "#,
     )
     .expect("parse inline deck manifest");
@@ -197,6 +209,15 @@ external_devices:
     assert!(
         saw_key && text.contains("KEY1 PRESS action=SLOT1"),
         "expected a 'KEY1 PRESS action=SLOT1' line after pressing GPIO{KEY1_GPIO}; serial:\n{text}"
+    );
+
+    // The two pots are seeded from the manifest (knob 60 %, fader 40 %) through
+    // the SENS ADC, and the firmware's analogRead maps them: knob → temperature,
+    // fader → max-tokens. Exact values prove the manifest→factory→SENS→firmware
+    // path, not a mid-scale placeholder (0x800 → temp=1.00 max_tokens=2048).
+    assert!(
+        text.contains("PARAMS knob_raw=2457 fader_raw=1638 temp=1.20 max_tokens=1638"),
+        "expected the pot-driven PARAMS line (knob 60 %, fader 40 %); serial:\n{text}"
     );
 
     let lit_after_press = oled_lit_pixels(&bus);

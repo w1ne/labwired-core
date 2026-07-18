@@ -842,6 +842,7 @@ dependencies = [
  "esp-backtrace",
  "esp-hal",
  "esp-println",
+ "nb 1.1.0",
 ]
 
 [[package]]

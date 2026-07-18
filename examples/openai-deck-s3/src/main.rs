@@ -32,6 +32,7 @@
 
 use esp_backtrace as _;
 use esp_hal::{
+    analog::adc::{Adc, AdcConfig, Attenuation},
     gpio::{Input, InputConfig},
     i2c::master::{Config as I2cConfig, I2c},
     main,
@@ -252,6 +253,27 @@ fn main() -> ! {
     oled_init(&mut i2c);
     render_deck(&mut i2c);
     println!("openai-deck-s3: OLED ready");
+
+    // Two analog controls: a rotary knob (temperature) and a slide fader
+    // (max-tokens), read once at startup off ADC1. Knob = GPIO1 (ADC1_CH0),
+    // fader = GPIO2 (ADC1_CH1) — free pins (keys use 4-7/10-15, I²C uses 8/9).
+    let mut adc_cfg = AdcConfig::new();
+    let mut knob = adc_cfg.enable_pin(p.GPIO1, Attenuation::_11dB);
+    let mut fader = adc_cfg.enable_pin(p.GPIO2, Attenuation::_11dB);
+    let mut adc1 = Adc::new(p.ADC1, adc_cfg);
+    let knob_raw: u16 = nb::block!(adc1.read_oneshot(&mut knob)).unwrap();
+    let fader_raw: u16 = nb::block!(adc1.read_oneshot(&mut fader)).unwrap();
+    // Map: knob → temperature 0.00..2.00; fader → max_tokens 0..4096.
+    let temp_centi = (knob_raw as u32 * 200) / 4095;
+    let max_tokens = (fader_raw as u32 * 4096) / 4095;
+    println!(
+        "PARAMS knob_raw={} fader_raw={} temp={}.{:02} max_tokens={}",
+        knob_raw,
+        fader_raw,
+        temp_centi / 100,
+        temp_centi % 100,
+        max_tokens,
+    );
 
     // Edge-detected polling loop. On a rising edge emit the host-protocol line
     // and highlight the cell; on a falling edge redraw the cell normally.
