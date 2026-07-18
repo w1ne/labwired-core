@@ -185,7 +185,16 @@ boards:
     # layout, reset values and byte paths unchanged; stm32_timer (5/5) + stm32_dma
     # (2/2) differentials and h563_mmio_diff/conformance pass unchanged. Drift is the
     # shared-file hash only. No live re-capture (no H563 probe attached this session).
-    drift_ack: 2026-07-17
+    # 2026-07-18: STM32 I2C + EXTI + ADC walk-free migration (walk-free campaign).
+    # H563 maps I2C to the L4/modern engine (now event-scheduled via a delay-1
+    # BUSY-gated chain) and shares the ADC file (F1 conversion-cost artifact
+    # normalized to zero in both modes; the L4/modern ADC path this board uses
+    # converts synchronously in write and is untouched). Both are byte-identical to
+    # the walk, pinned by i2c::kinetis_scheduler l4_* + adc::scheduler_diff.
+    # Featureless builds keep the walk. Register layout, reset values and byte
+    # paths unchanged; h563_mmio_diff/conformance pass unchanged. Drift is the
+    # shared-file hash only. No live re-capture.
+    drift_ack: 2026-07-18
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -436,13 +445,26 @@ boards:
     # bare-CPU hardware-oracle settle loop; the Machine lifecycle and normal DMA
     # execution are unchanged. The frozen-settle and scheduler regressions pass.
     # No live re-capture was run this session.
-    drift_ack: 2026-07-17
+    # 2026-07-18: STM32 L4 I2C + EXTI + ADC walk-free migration (walk-free
+    # campaign). event-scheduler builds now event-schedule the L4 I2C transaction
+    # engine (delay-1 self-perpetuating chain, BUSY-gated), the EXTI held-level
+    # explicit_irqs re-emission (incl. bank-2 wakeup lines), and the F1-shared ADC
+    # conversion countdown, so the L476's whole peripheral set is walk-free — the
+    # runtime invaders bus now auto-derives walk-deletion with no hand flag. The
+    # legacy walk path is byte-identical, pinned by committed differentials
+    # (i2c::kinetis_scheduler l4_* cases, exti::scheduler_diff l4 case,
+    # adc::scheduler_diff). The ADC tick-cost sim artifact is removed in BOTH modes
+    # (SysTick B1 pattern). Featureless builds keep the walk. Register layout,
+    # reset values and MMIO byte paths unchanged; l476_mmio_diff + l476_parity_diff
+    # pass unchanged. No live re-capture.
+    drift_ack: 2026-07-18
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
       - crates/core/src/peripherals/uart.rs
       - crates/core/src/peripherals/spi.rs
       - crates/core/src/peripherals/i2c.rs
+      - crates/core/src/peripherals/exti.rs
       - crates/core/src/peripherals/timer.rs
       - crates/core/src/peripherals/dma.rs
       - crates/core/src/peripherals/adc.rs
@@ -547,7 +569,20 @@ boards:
     # bare-CPU hardware-oracle settle loop; the Machine lifecycle and normal DMA
     # execution are unchanged. The frozen-settle and scheduler regressions pass.
     # No live re-capture was run this session.
-    drift_ack: 2026-07-17
+    # 2026-07-18: STM32 F1 I2C + EXTI + ADC walk-free migration (walk-free
+    # campaign). event-scheduler builds now event-schedule the F1 I2C transaction
+    # engine (delay-1 self-perpetuating chain; the read-gated receive is caught by
+    # the already-live chain — no byte dropped), the EXTI held-level explicit_irqs
+    # re-emission, and the F1 ADC conversion countdown, so the F103's whole
+    # peripheral set is walk-free. The legacy walk path is byte-identical, pinned
+    # by committed walk-vs-scheduler differentials (i2c::kinetis_scheduler f1_*
+    # cases, exti::scheduler_diff, adc::scheduler_diff — registers + read bytes +
+    # NVIC-pend cycles). The ADC tick-cost sim artifact (cycles:1 per converting
+    # tick) is removed in BOTH modes (SysTick B1 pattern; a real conversion runs
+    # on the ADC clock, zero core cycles). Featureless builds keep the walk.
+    # Register layout, reset values and MMIO byte paths unchanged; stm32f1_mmio_diff
+    # (102/102) + f103_conformance pass unchanged. No live re-capture.
+    drift_ack: 2026-07-18
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/afio.rs
@@ -555,6 +590,7 @@ boards:
       - crates/core/src/peripherals/uart.rs
       - crates/core/src/peripherals/spi.rs
       - crates/core/src/peripherals/i2c.rs
+      - crates/core/src/peripherals/exti.rs
       - crates/core/src/peripherals/timer.rs
       - crates/core/src/peripherals/dma.rs
       - crates/core/src/peripherals/adc.rs
@@ -608,7 +644,15 @@ boards:
     # bare-CPU hardware-oracle settle loop; the Machine lifecycle and normal DMA
     # execution are unchanged. The frozen-settle and scheduler regressions pass.
     # No live re-capture was run this session.
-    drift_ack: 2026-07-17
+    # 2026-07-18: STM32 F1 I2C walk-free migration (walk-free campaign) — the F1
+    # I2C transaction engine (this board's I2C variant) is now event-scheduled via
+    # a delay-1 self-perpetuating chain; the read-gated receive is caught by the
+    # already-live chain with no byte dropped. The legacy walk path is
+    # byte-identical, pinned by the i2c::kinetis_scheduler f1_* differentials.
+    # Featureless builds keep the walk. Register layout, reset values and MMIO byte
+    # paths unchanged; stm32f4_mmio_diff (RCC/GPIO/SPI/TIM, not I2C — I2C stays
+    # smoke-tier) passes unchanged. No live re-capture.
+    drift_ack: 2026-07-18
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
