@@ -53,6 +53,7 @@ pub mod sai;
 pub mod scb;
 pub mod sdmmc;
 pub mod spi;
+pub mod stm32f4_dma;
 pub mod stub;
 pub mod systick;
 pub mod timer;
