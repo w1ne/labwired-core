@@ -94,11 +94,25 @@ fn openai_deck_s3_renders_and_reports_key_press() {
     let mut bus = SystemBus::new();
     let wiring = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
 
-    // Attach the SH1107 at 0x3D. The default S3 wiring already put an SSD1306 at
-    // 0x3C; adding the SH1107 at its SA0=high address keeps them collision-free
-    // (Esp32s3I2c dispatches a transaction to the first slave matching the addr).
-    bus.attach_i2c_slave("i2c0", Box::new(Sh1107::new(OLED_ADDR)))
-        .expect("attach SH1107 to i2c0");
+    // Wire the SH1107 the SAME way the app does: from the manifest's declared
+    // `external_devices`, through the generic `attach_esp32_external_devices`
+    // factory — NOT an out-of-band `attach_i2c_slave`. A pass therefore proves the
+    // real product path (app/CLI) renders the deck, not a test-only bypass.
+    let manifest: labwired_config::SystemManifest = serde_yaml::from_str(
+        r#"
+name: openai-deck-s3
+chip: esp32s3
+external_devices:
+  - id: oled
+    type: oled-sh1107
+    connection: i2c0
+    config:
+      i2c_address: 0x3D
+"#,
+    )
+    .expect("parse inline deck manifest");
+    labwired_core::system::xtensa::attach_esp32_external_devices(&mut bus, &manifest)
+        .expect("attach SH1107 from manifest");
     bus.refresh_peripheral_index();
 
     // Sink USB-Serial-JTAG for the host-protocol assertions.

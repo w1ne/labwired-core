@@ -11,6 +11,27 @@ use crate::cpu::xtensa_lx7::XtensaLx7;
 use crate::peripherals::esp_xtensa_common::rom_thunks;
 use crate::Bus;
 
+/// Build an I2C-attached external device from its manifest declaration, or
+/// `None` if `ext.type` is not a known I2C device (so the caller falls through
+/// to the SPI path). The panel is addressed by `config.i2c_address` — a real
+/// board-level fact, not a builder default — so a manifest declaring an SH1107
+/// on `i2c0` at 0x3D gets exactly that, on every path that wires the manifest.
+fn build_i2c_external_device(
+    ext: &labwired_config::ExternalDevice,
+) -> Option<Box<dyn crate::peripherals::i2c::I2cDevice>> {
+    match ext.r#type.as_str() {
+        "oled-sh1107" => {
+            let addr = ext
+                .config
+                .get("i2c_address")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0x3D) as u8;
+            Some(Box::new(crate::peripherals::components::Sh1107::new(addr)))
+        }
+        _ => None,
+    }
+}
+
 /// Attach external devices declared in `manifest.external_devices` to an
 /// ESP32-classic bus that was already set up by `configure_xtensa_esp32`.
 ///
@@ -28,6 +49,22 @@ pub fn attach_esp32_external_devices(
     use crate::peripherals::spi::SpiDevice;
 
     for ext in &manifest.external_devices {
+        // I2C-attached devices are wired to an I2C controller by `connection`
+        // and addressed by `config.i2c_address` — the SPI cs_pin/dc_pin framing
+        // below is meaningless for them, so handle and `continue` first. This is
+        // how a manifest that declares an SH1107 on i2c0 gets the panel wired,
+        // instead of the builder hardcoding "every board always has one".
+        if let Some(dev) = build_i2c_external_device(ext) {
+            bus.attach_i2c_slave(&ext.connection, dev).map_err(|_| {
+                anyhow::anyhow!(
+                    "External I2C device '{}' connection '{}' is not an ESP32 I2C peripheral",
+                    ext.id,
+                    ext.connection
+                )
+            })?;
+            continue;
+        }
+
         let cs_pin = ext
             .config
             .get("cs_pin")
