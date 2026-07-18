@@ -1257,17 +1257,23 @@ mod walk_free_campaign {
     /// re-assertion with all byte/device work synchronous in read/write — IS
     /// migrated in this batch, unblocking the FRDM-KW41Z board flip; the STM32
     /// countdown engine is the part that cannot.) Remaining plan Class-B on this
-    /// bus: 3 i2c + adc + exti + bxcan.
+    /// bus: 3 i2c + adc + exti.
+    ///
+    /// bxCAN (`can1`) NO LONGER forces the walk: its `tick()` only drains a
+    /// `CanBus` mpsc interconnect, so `needs_legacy_walk()` now reports
+    /// `bus_rx.is_some()` — false on this bus (no multi-node CanBus is wired;
+    /// can-player replay is pushed by `service_can_log_players`, not the tick).
     #[cfg(feature = "event-scheduler")]
-    const EXPECTED_WALK_FORCING: &[&str] = &["i2c1", "i2c2", "i2c3", "adc1", "exti", "can1"];
+    const EXPECTED_WALK_FORCING: &[&str] = &["i2c1", "i2c2", "i2c3", "adc1", "exti"];
 
     /// Featureless builds: the scheduler does not exist, so SysTick and SCB
-    /// stay on the legacy walk — the full post-B0 set of 22.
+    /// stay on the legacy walk. bxCAN (`can1`) is excluded regardless of the
+    /// feature — its walk-forcing is gated on an attached interconnect, not the
+    /// scheduler.
     #[cfg(not(feature = "event-scheduler"))]
     const EXPECTED_WALK_FORCING: &[&str] = &[
         "systick", "tim1", "tim2", "tim3", "tim4", "tim5", "tim6", "tim7", "tim8", "tim15",
-        "tim16", "tim17", "dma1", "dma2", "i2c1", "i2c2", "i2c3", "adc1", "exti", "scb", "can1",
-        "dwt",
+        "tim16", "tim17", "dma1", "dma2", "i2c1", "i2c2", "i2c3", "adc1", "exti", "scb", "dwt",
     ];
 
     fn invaders_bus_walk_stripped() -> SystemBus {
@@ -1316,9 +1322,10 @@ mod walk_free_campaign {
 
     #[test]
     fn remaining_class_b_walkers_still_pin_walk_deletion() {
-        // I2C/ADC/EXTI/bxCAN (+DWT) still force the walk, so B4
-        // cannot flip the invaders bus yet: the derivation must stay
-        // conservative until every Class-B walker is migrated.
+        // I2C/ADC/EXTI still force the walk, so the invaders bus cannot
+        // flip yet: the derivation must stay conservative until every
+        // Class-B walker is migrated. (bxCAN no longer forces it — its
+        // walk work is gated on an attached CanBus interconnect.)
         let bus = invaders_bus_walk_stripped();
         assert!(
             !bus.derive_walk_deletable(),
