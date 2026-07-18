@@ -1,0 +1,21 @@
+# LabWired — SpiceDispenser board WITH the PCA9685 twin attached.
+#
+# Same board as system.yaml, but the PCA9685 I2C PWM expander is declared as an
+# external device so the factory wires it (replaces the old
+# LABWIRED_ESP32S3_PCA9685=1 env hack — no builder-baked attach).
+#
+# Two validation states, both manifest-driven:
+#   system.yaml           — bare board, no expander: the driver logs
+#                           i2c_master_transmit ESP_ERR_INVALID_STATE (matches
+#                           real hardware with no PCA9685 populated).
+#   system-pca9685.yaml    — expander present: the dispense loop's I2C writes ACK.
+name: "spice-dispenser-pca9685"
+chip: "../../configs/chips/esp32s3-zero.yaml"
+
+# ESP32-S3 GPIO5 (SDA) / GPIO6 (SCL) --> PCA9685 @ I2C 0x40, 400 kHz, 50 Hz PWM.
+external_devices:
+  - id: "pca9685"
+    type: "pca9685"
+    connection: "i2c0"
+    config:
+      i2c_address: 0x40

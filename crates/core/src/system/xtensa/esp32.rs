@@ -19,15 +19,24 @@ use crate::Bus;
 fn build_i2c_external_device(
     ext: &labwired_config::ExternalDevice,
 ) -> Option<Box<dyn crate::peripherals::i2c::I2cDevice>> {
+    let addr = |default: u8| {
+        ext.config
+            .get("i2c_address")
+            .and_then(|v| v.as_u64())
+            .map(|a| a as u8)
+            .unwrap_or(default)
+    };
     match ext.r#type.as_str() {
-        "oled-sh1107" => {
-            let addr = ext
-                .config
-                .get("i2c_address")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0x3D) as u8;
-            Some(Box::new(crate::peripherals::components::Sh1107::new(addr)))
-        }
+        "oled-sh1107" => Some(Box::new(crate::peripherals::components::Sh1107::new(addr(
+            0x3D,
+        )))),
+        "oled-ssd1306" => Some(Box::new(crate::peripherals::components::Ssd1306::new(
+            addr(0x3C),
+        ))),
+        "tmp102" => Some(Box::new(crate::peripherals::esp32s3::tmp102::Tmp102::new())),
+        "pca9685" => Some(Box::new(
+            crate::peripherals::components::pca9685::Pca9685::new(),
+        )),
         _ => None,
     }
 }

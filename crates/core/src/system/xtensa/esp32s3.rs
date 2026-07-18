@@ -11,7 +11,6 @@ use crate::peripherals::esp32s3::flash_xip::{new_mmu_table, Esp32s3MmuTable, Fla
 use crate::peripherals::esp32s3::gpio::{Esp32s3Gpio, GpioObserver};
 use crate::peripherals::esp32s3::i2c::{Esp32s3I2c, I2C0_BASE, I2C0_SIZE};
 use crate::peripherals::esp32s3::intmatrix::Esp32s3IntMatrix;
-use crate::peripherals::esp32s3::tmp102::Tmp102;
 use crate::peripherals::esp_xtensa_common::rom_thunks::{self, RomThunkBank};
 use crate::peripherals::esp_xtensa_common::system_stub::{EfuseStub, RtcCntlStub, SystemStub};
 use crate::{Bus, Cpu};
@@ -625,35 +624,12 @@ pub(crate) fn register_esp32s3_peripherals(bus: &mut SystemBus, opts: &Esp32s3Op
         bus.add_peripheral(id, base, size, None, dev);
     }
 
-    // I2C0 carries board-specific I2C slaves the factory does not model: TMP102
-    // always, an SSD1306 OLED @ 0x3C always, plus an opt-in PCA9685
-    // (LABWIRED_ESP32S3_PCA9685) for the SpiceDispenser servos. Built directly
-    // so the slaves are attached.
+    // Register the on-chip I2C0 controller. Off-chip I2C slaves (TMP102, SSD1306,
+    // SH1107, PCA9685, …) are NOT attached here — they are wired from the board
+    // manifest's `external_devices` by `attach_esp32_external_devices`, the same
+    // way real hardware is: the board says what's on the bus, not the SoC config.
     let i2c0 = Esp32s3I2c::new();
-    // Register first, then attach every slave through the single bus choke point
-    // so each is wrapped into the shared bus trace (universal logic analyzer) —
-    // no per-callsite set_bus_trace ordering to get wrong.
     bus.add_peripheral("i2c0", I2C0_BASE as u64, I2C0_SIZE, None, Box::new(i2c0));
-    bus.attach_i2c_slave("i2c0", Box::new(Tmp102::new()))
-        .expect("i2c0 just registered as Esp32s3I2c");
-    // SSD1306 128x64 OLED @ 0x3C. Mirrors the TMP102 "always attached" pattern:
-    // the panel sits inert at its distinct address until firmware initializes
-    // and draws to it (the S3 OLED lab does; hello-world never addresses 0x3C,
-    // so its framebuffer stays blank and no board_io binding reads it back).
-    // Distinct address from TMP102 (0x48)/PCA9685 (0x40), so no bus contention.
-    bus.attach_i2c_slave(
-        "i2c0",
-        Box::new(crate::peripherals::components::Ssd1306::new(0x3C)),
-    )
-    .expect("i2c0 just registered as Esp32s3I2c");
-    if std::env::var("LABWIRED_ESP32S3_PCA9685").is_ok() {
-        bus.attach_i2c_slave(
-            "i2c0",
-            Box::new(crate::peripherals::components::pca9685::Pca9685::new()),
-        )
-        .expect("i2c0 just registered as Esp32s3I2c");
-        eprintln!("configure_xtensa_esp32s3: attached PCA9685 @ 0x40 on I2C0");
-    }
 }
 
 /// Register the default thunk set for esp-hal hello-world boot.

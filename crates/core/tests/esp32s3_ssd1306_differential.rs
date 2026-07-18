@@ -54,10 +54,27 @@ fn cmd(opcode: u32, byte_num: u8) -> u32 {
     ((opcode & 0x7) << 11) | u32::from(byte_num)
 }
 
-/// Assemble the same bus the browser twin boots (SSD1306 attached @ 0x3C).
+/// Assemble the same bus the browser twin boots. The SSD1306 @ 0x3C is wired
+/// from the board manifest through `attach_esp32_external_devices` — the SAME
+/// path the app/CLI use — not a hardcoded builder attach.
 fn build_bus() -> SystemBus {
     let mut bus = SystemBus::new();
     let _wiring = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
+    let manifest: labwired_config::SystemManifest = serde_yaml::from_str(
+        r#"
+name: esp32s3-ssd1306
+chip: esp32s3
+external_devices:
+  - id: oled
+    type: oled-ssd1306
+    connection: i2c0
+    config:
+      i2c_address: 0x3C
+"#,
+    )
+    .expect("parse ssd1306 manifest");
+    labwired_core::system::xtensa::attach_esp32_external_devices(&mut bus, &manifest)
+        .expect("attach SSD1306 from manifest");
     bus.refresh_peripheral_index();
     bus
 }

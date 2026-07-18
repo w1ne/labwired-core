@@ -26,7 +26,8 @@ bootloader, and the app entry jump.
 
 After `entry 0x403c88b8`, the model boots the full ESP-IDF/Arduino app: ROM
 `memory_layout` bring-up, the SMP scheduler, `Wire`/`i2c_master` init, and the
-dispense loop. Attaching the PCA9685 twin (`LABWIRED_ESP32S3_PCA9685=1`):
+dispense loop. Attaching the PCA9685 twin (run with `--system system-pca9685.yaml`,
+which declares the expander so the factory wires it):
 
 - **Real hardware (bare board, no PCA9685):** the dispense loop logs
   `i2c_master_transmit failed: ESP_ERR_INVALID_STATE` — the real driver runs but

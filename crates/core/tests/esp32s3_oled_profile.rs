@@ -166,6 +166,10 @@ fn build_machine(
 
     let mut bus = SystemBus::new();
     let wiring = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
+    // Wire the manifest's declared SSD1306 through the generic factory (no
+    // hardcoded builder attach) — the manifest is esp32s3-oled-demo.yaml.
+    labwired_core::system::xtensa::attach_esp32_external_devices(&mut bus, manifest)
+        .expect("attach S3 OLED from manifest");
     let serial = Arc::new(Mutex::new(Vec::new()));
 
     for peripheral in &mut bus.peripherals {

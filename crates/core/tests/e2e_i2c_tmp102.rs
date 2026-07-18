@@ -62,6 +62,23 @@ fn i2c_tmp102_firmware_runs_and_prints_temperature() {
     let mut bus = SystemBus::new();
     let wiring = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
 
+    // Wire the TMP102 from a board manifest through the generic factory — the
+    // same path app/CLI use — instead of relying on a hardcoded builder attach.
+    let manifest: labwired_config::SystemManifest = serde_yaml::from_str(
+        r#"
+name: esp32s3-tmp102
+chip: esp32s3
+external_devices:
+  - id: tmp102
+    type: tmp102
+    connection: i2c0
+"#,
+    )
+    .expect("parse tmp102 manifest");
+    labwired_core::system::xtensa::attach_esp32_external_devices(&mut bus, &manifest)
+        .expect("attach TMP102 from manifest");
+    bus.refresh_peripheral_index();
+
     let obs = Arc::new(RecordingObserver::default());
     wiring.add_gpio_observer(&mut bus, obs.clone());
 
