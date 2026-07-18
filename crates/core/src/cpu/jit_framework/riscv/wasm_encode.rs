@@ -81,9 +81,15 @@ pub mod op {
     pub const DROP: u8 = 0x1a;
 
     // ── structured control flow ────────────────────────────────────────
+    pub const BLOCK: u8 = 0x02;
+    pub const LOOP: u8 = 0x03;
     pub const IF: u8 = 0x04;
     pub const ELSE: u8 = 0x05;
     pub const END: u8 = 0x0b;
+    /// Unconditional branch to the enclosing structure at the given depth.
+    pub const BR: u8 = 0x0c;
+    /// Branch-if (pops an i32 condition) to the given depth.
+    pub const BR_IF: u8 = 0x0d;
     /// Early function return with the current stack as the result.
     pub const RETURN: u8 = 0x0f;
 
@@ -103,6 +109,7 @@ pub mod op {
     pub const I32_NE: u8 = 0x47;
     pub const I32_LT_S: u8 = 0x48;
     pub const I32_LT_U: u8 = 0x49;
+    pub const I32_GT_S: u8 = 0x4a;
     pub const I32_LE_U: u8 = 0x4d;
     pub const I32_GE_S: u8 = 0x4e;
     pub const I32_GE_U: u8 = 0x4f;

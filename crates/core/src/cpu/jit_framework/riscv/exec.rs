@@ -202,6 +202,12 @@ pub struct CompiledBlock {
     /// Whether the block contains a store (so a set reservation-flag slot is
     /// worth reading back to clear `cpu.reservation`).
     has_store: bool,
+    /// Whether this is a fused **trace** (superblock): the runtime writes the
+    /// retired-instruction budget to [`BUDGET_SLOT`] before the call so the
+    /// interior dispatch loop can exit at a deadline. `false` for a single
+    /// basic block (which ignores the budget). See
+    /// [`super::emit::emit_trace`].
+    is_trace: bool,
 }
 
 impl CompiledBlock {
@@ -234,7 +240,12 @@ impl RiscvWasmJit {
     /// the one-word dynamic next-PC slot ([`NEXT_PC_SLOT`], word 32) a
     /// [`WIRE_CHAIN_DYNAMIC`] block writes its resolved continuation to; the
     /// memory-fault control slots (words 33/34/35) are read on demand below.
-    pub fn run(&mut self, block: &CompiledBlock, x: &mut [u32; 32]) -> (SideExit, u32, bool) {
+    pub fn run(
+        &mut self,
+        block: &CompiledBlock,
+        x: &mut [u32; 32],
+        budget: u32,
+    ) -> (SideExit, u32, bool) {
         let mut bytes = [0u8; REG_SYNC_BYTES];
         for (i, w) in x.iter().enumerate() {
             bytes[i * 4..i * 4 + 4].copy_from_slice(&w.to_le_bytes());
@@ -242,6 +253,14 @@ impl RiscvWasmJit {
         self.memory
             .write(&mut self.store, 0, &bytes)
             .expect("register-file memory write");
+
+        // A trace reads the retired-instruction budget from a dedicated slot;
+        // a single block ignores it, so we only pay the write for traces.
+        if block.is_trace {
+            self.memory
+                .write(&mut self.store, super::emit::BUDGET_SLOT as usize, &budget.to_le_bytes())
+                .expect("budget-slot write");
+        }
 
         if block.has_store {
             self.memory
@@ -285,7 +304,14 @@ impl RiscvWasmJit {
                 let s = NEXT_PC_SLOT as usize;
                 let next_pc =
                     u32::from_le_bytes([bytes[s], bytes[s + 1], bytes[s + 2], bytes[s + 3]]) as Pc;
-                (SideExit::Chain { next_pc }, block.instr_count)
+                // A single block retires its fixed `instr_count`; a trace
+                // retires a runtime-variable count it published to the slot.
+                let retired = if block.is_trace {
+                    self.read_slot(super::emit::TRACE_RETIRED_SLOT)
+                } else {
+                    block.instr_count
+                };
+                (SideExit::Chain { next_pc }, retired)
             }
             // Memory fault mid-block: the faulting load/store published its own
             // PC and the count of instructions retired before it. The
@@ -415,6 +441,25 @@ impl RiscvWasmJit {
         plan: &BlockPlan,
         binding: Option<MemBinding>,
     ) -> Option<CompiledBlock> {
+        self.compile_inner(plan, binding, false)
+    }
+
+    /// Like [`compile`](Self::compile) but marks the artifact as a fused trace
+    /// (superblock), so the runtime hands it a retired-instruction budget.
+    pub fn compile_trace(
+        &mut self,
+        plan: &BlockPlan,
+        binding: Option<MemBinding>,
+    ) -> Option<CompiledBlock> {
+        self.compile_inner(plan, binding, true)
+    }
+
+    fn compile_inner(
+        &mut self,
+        plan: &BlockPlan,
+        binding: Option<MemBinding>,
+        is_trace: bool,
+    ) -> Option<CompiledBlock> {
         if plan.is_stub() {
             return None;
         }
@@ -429,6 +474,7 @@ impl RiscvWasmJit {
             end_pc: plan.end_pc,
             instr_count: plan.instr_count,
             has_store: binding.is_some_and(|b| b.has_store),
+            is_trace,
         })
     }
 }
@@ -505,6 +551,19 @@ pub fn min_profitable_block_instrs() -> u32 {
             .and_then(|s| s.parse::<u32>().ok())
             .filter(|v| *v >= 1)
             .unwrap_or(MIN_PROFITABLE_BLOCK_INSTRS)
+    })
+}
+
+/// Whether superblock/trace fusion is enabled (Milestone 1). **Off by
+/// default** — set `LW_JIT_TRACE=1` to enable. Read once and cached. The
+/// interpreter path and the per-block JIT are untouched when off.
+pub fn trace_enabled() -> bool {
+    use std::sync::OnceLock;
+    static V: OnceLock<bool> = OnceLock::new();
+    *V.get_or_init(|| {
+        std::env::var("LW_JIT_TRACE")
+            .ok()
+            .is_some_and(|s| s == "1" || s.eq_ignore_ascii_case("true"))
     })
 }
 
@@ -614,13 +673,13 @@ impl RiscvJitEngine {
     ///
     /// Panics only if `pc` is not a ready block (the caller guarantees it via
     /// a preceding [`observe`](Self::observe) == [`Lookup::Ready`]).
-    pub fn run_ready(&mut self, pc: Pc, x: &mut [u32; 32]) -> (u32, Pc, bool, bool) {
+    pub fn run_ready(&mut self, pc: Pc, x: &mut [u32; 32], budget: u32) -> (u32, Pc, bool, bool) {
         let block = self.cache.run_artifact(pc).expect("run_ready on a hot PC");
         let jit = self
             .jit
             .as_mut()
             .expect("a ready block implies a bound JIT");
-        let (exit, n, clear_reservation) = jit.run(block, x);
+        let (exit, n, clear_reservation) = jit.run(block, x, budget);
         self.stats.block_runs += 1;
         self.stats.block_instrs += n as u64;
         (
@@ -668,11 +727,36 @@ impl RiscvJitEngine {
         // from the wrong bytes. Materialising up to one max-length block
         // (`MAX_BLOCK_INSTRS` × 4 bytes) is amortised across every run of the
         // hot block, so the per-byte fetch cost is negligible.
-        let code = bus.read_code_slice(pc, super::MAX_BLOCK_INSTRS as usize * 4);
+        // Traces follow static branches across basic-block boundaries, so they
+        // need a wider fetch than a single block; a plain block only needs
+        // MAX_BLOCK_INSTRS. Over-fetching is amortised across every run.
+        let fetch_instrs = if trace_enabled() {
+            super::emit::MAX_TRACE_INSTRS as usize
+        } else {
+            super::MAX_BLOCK_INSTRS as usize
+        };
+        let code = bus.read_code_slice(pc, fetch_instrs * 4);
         if code.len() < 2 {
             return; // `pc` is not in fetchable code memory
         }
         let view = CodeView::new(pc, &code);
+        // Trace fusion (Milestone 1, off by default). When the entry block ends
+        // in a static terminator, fuse the statically-reachable region into one
+        // wasm function (registers stay in locals across interior boundaries).
+        // Falls through to the per-block path when no fusion is possible.
+        if trace_enabled() {
+            if let Some((plan, binding)) = self.frontend.translate_trace_riscv(pc, &view) {
+                if plan.instr_count >= min_profitable_block_instrs() {
+                    if let Some(jit) = self.jit.as_mut() {
+                        if let Some(block) = jit.compile_trace(&plan, binding) {
+                            self.cache.install(pc, block);
+                            self.stats.compiled += 1;
+                            return;
+                        }
+                    }
+                }
+            }
+        }
         let Ok((plan, binding)) = self.frontend.translate_block_riscv(pc, &view) else {
             return;
         };
@@ -779,8 +863,11 @@ impl RiscvJitEngine {
                     return self.interpret_one(machine);
                 };
                 // The block reaches `machine.bus.ram.data` through the shared
-                // wasm memory, so only the register file crosses here.
-                let (exit, n, clear_reservation) = jit.run(block, &mut machine.cpu.x);
+                // wasm memory, so only the register file crosses here. `step_unit`
+                // is a per-unit test/debug driver with no deadline context; trace
+                // compilation is off by default here, so an unbounded budget is
+                // safe (a single block ignores it).
+                let (exit, n, clear_reservation) = jit.run(block, &mut machine.cpu.x, u32::MAX);
                 if clear_reservation {
                     machine.cpu.reservation = None;
                 }
@@ -873,7 +960,7 @@ mod tests {
         let mut jit = RiscvWasmJit::new(&ram).expect("guest-backed jit");
         let block = jit.compile(&plan, None).expect("compile");
         let mut x = [0u32; 32];
-        let (exit, n, _clear) = jit.run(&block, &mut x);
+        let (exit, n, _clear) = jit.run(&block, &mut x, u32::MAX);
         assert_eq!(n, 2, "two addi retired");
         assert_eq!(x[1], 7);
         assert_eq!(x[2], 10);
@@ -909,7 +996,7 @@ mod tests {
         let block = jit.compile(&plan, binding).expect("compile");
         let mut x = [0u32; 32];
         x[1] = BASE;
-        let (_exit, n, _clear) = jit.run(&block, &mut x);
+        let (_exit, n, _clear) = jit.run(&block, &mut x, u32::MAX);
 
         assert_eq!(n, 3, "lw + addi + sw retired");
         assert_eq!(

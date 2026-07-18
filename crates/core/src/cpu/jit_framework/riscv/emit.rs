@@ -380,6 +380,382 @@ pub fn emit_block(pc: Pc, code: &CodeView<'_>, window: Option<RamWindow>) -> Opt
     })
 }
 
+// ── Superblock / trace fusion (Milestone 1) ────────────────────────────────
+//
+// See [`emit_trace`] for the deadline-correctness design.
+
+/// Byte offset of the **retired-instruction budget** slot a trace reads at
+/// entry. The host writes the number of instructions the trace may retire
+/// before it must return control (see the design note on [`emit_trace`]). Sits
+/// past every other control slot (`RES_FLAG_SLOT` ends at 144) and below the
+/// RAM window (256), so it aliases nothing.
+pub const BUDGET_SLOT: u32 = 144;
+
+/// Byte offset where a trace publishes the number of instructions it actually
+/// retired on a [`WIRE_CHAIN_DYNAMIC`] exit. Unlike a single basic block
+/// (which retires a fixed `instr_count`), a trace retires a runtime-variable
+/// count — the sum of the interior blocks it ran before exiting — so the
+/// runtime reads this slot rather than the artifact's static count. (The
+/// memory-fault path already publishes its retired-so-far via
+/// [`FAULT_RETIRED_SLOT`].)
+pub const TRACE_RETIRED_SLOT: u32 = 148;
+
+/// wasm local holding the trace's resolved *next PC* (the interior dispatch
+/// key). `x0..x31` = locals 0..31, [`SCRATCH_LOCAL`] = 32.
+const NEXT_LOCAL: u32 = REG_LOCALS + 1;
+/// wasm local counting instructions retired by fully-completed interior blocks.
+const RETIRED_LOCAL: u32 = REG_LOCALS + 2;
+/// wasm local holding the entry budget loaded from [`BUDGET_SLOT`].
+const BUDGET_LOCAL: u32 = REG_LOCALS + 3;
+/// Locals a trace declares: `x0..x31` + scratch + next + retired + budget.
+const TRACE_LOCALS: u32 = REG_LOCALS + 4;
+
+/// Backstop caps on trace size (a trace is otherwise bounded by hitting a
+/// dynamic terminator / unmodeled cut / out-of-window edge).
+const MAX_TRACE_BLOCKS: usize = 32;
+pub const MAX_TRACE_INSTRS: u32 = 2048;
+
+/// One basic block fused into a trace: its entry PC, straight-line ops, and
+/// optional control-flow terminator.
+struct TraceBlock {
+    entry_pc: u32,
+    ops: Vec<Op>,
+    /// `(inst, byte-length)`; `None` for a fall-through block (ran into an
+    /// unmodeled cut / view end — the trace exits to the host there).
+    terminator: Option<(Instruction, u64)>,
+    /// PC of the terminator (== one past the last body op).
+    prefix_end: u32,
+    /// Guest instructions the block retires (ops + terminator).
+    instr_count: u32,
+}
+
+/// Statically-known successor PCs of a terminator sitting at `pc` (its own PC),
+/// `ilen` bytes long. Empty for a dynamic terminator (`JALR`/`C.JR`/`C.JALR`),
+/// which the trace cannot follow — it exits to the host and the interpreter
+/// resolves the target.
+fn static_successors(inst: &Instruction, pc: u32, ilen: u64) -> Vec<Pc> {
+    use Instruction::*;
+    let taken = |imm: i32| pc.wrapping_add(imm as u32) as Pc;
+    let fall = (pc as u64) + ilen;
+    match *inst {
+        Beq { imm, .. } | Bne { imm, .. } | Blt { imm, .. } | Bge { imm, .. }
+        | Bltu { imm, .. } | Bgeu { imm, .. } => vec![taken(imm), fall],
+        CBeqz { imm, .. } | CBnez { imm, .. } => vec![taken(imm), fall],
+        Jal { imm, .. } => vec![taken(imm)],
+        CJ { imm } => vec![taken(imm)],
+        // Dynamic — the trace ends here.
+        Jalr { .. } | CJr { .. } | CJalr { .. } => vec![],
+        _ => vec![],
+    }
+}
+
+/// Walk a single block at `pc` (the maximal emittable body prefix plus at most
+/// one terminator), returning `None` if `pc` is not compilable (no body op and
+/// no emittable terminator — the interpreter owns it).
+fn walk_trace_block(pc: Pc, code: &CodeView<'_>, mem_ok: bool) -> Option<TraceBlock> {
+    let ops = walk_ops(pc, code, mem_ok);
+    let prefix_end = pc + ops.iter().map(|o| inst_len_of(o.pc, code)).sum::<u64>();
+    let terminator =
+        decode_at(prefix_end, code).filter(|(inst, _)| is_terminator_emittable(inst));
+    if ops.is_empty() && terminator.is_none() {
+        return None;
+    }
+    let instr_count = ops.len() as u32 + terminator.is_some() as u32;
+    Some(TraceBlock {
+        entry_pc: pc as u32,
+        ops,
+        terminator,
+        prefix_end: prefix_end as u32,
+        instr_count,
+    })
+}
+
+/// Greedily collect the trace rooted at `entry`, following only *static*
+/// control-flow edges (branches / `JAL` / `C.J` with compile-time targets)
+/// that stay inside the fetched `code` view. `blocks[0]` is always the entry
+/// block. Stops at a dynamic terminator, an unmodeled cut, an out-of-view edge,
+/// or the [`MAX_TRACE_BLOCKS`]/[`MAX_TRACE_INSTRS`] caps.
+fn collect_trace(entry: Pc, code: &CodeView<'_>, mem_ok: bool) -> Vec<TraceBlock> {
+    let mut blocks: Vec<TraceBlock> = Vec::new();
+    let mut seen: Vec<u32> = Vec::new();
+    let mut queue: Vec<Pc> = vec![entry];
+    let mut total = 0u32;
+    while let Some(pc) = queue.pop() {
+        if seen.contains(&(pc as u32)) {
+            continue;
+        }
+        let Some(block) = walk_trace_block(pc, code, mem_ok) else {
+            continue; // edge into a non-compilable PC — trace exits there.
+        };
+        seen.push(pc as u32);
+        total += block.instr_count;
+        if let Some((tinst, tlen)) = &block.terminator {
+            for succ in static_successors(tinst, block.prefix_end, *tlen) {
+                if !seen.contains(&(succ as u32)) && code.covers(succ) {
+                    queue.push(succ);
+                }
+            }
+        }
+        blocks.push(block);
+        if blocks.len() >= MAX_TRACE_BLOCKS || total >= MAX_TRACE_INSTRS {
+            break;
+        }
+    }
+    blocks
+}
+
+/// Harvest the union register read/write sets and memory facts of a trace by
+/// dry-emitting every block into a throwaway [`Body`] (its buffer is
+/// discarded). The unions drive the single entry-load / exit-store and the
+/// fault-path writeback (every write-local must be prologue-loaded so a
+/// re-store of an untaken write is a no-op).
+fn harvest_trace(blocks: &[TraceBlock], window: Option<RamWindow>) -> ([bool; 32], [bool; 32], bool, bool) {
+    let mut b = Body {
+        window,
+        ..Body::default()
+    };
+    for blk in blocks {
+        for op in &blk.ops {
+            b.emit_instruction(op.pc, &op.inst);
+        }
+        if let Some((tinst, tlen)) = &blk.terminator {
+            b.emit_terminator(blk.prefix_end, *tlen as u32, tinst);
+        }
+    }
+    (b.reads, b.writes, b.has_mem, b.has_store)
+}
+
+/// Emit a fused **trace** (superblock) rooted at `pc`: many basic blocks in one
+/// wasm function, guest registers kept in locals across every interior block
+/// boundary, interior control flow resolved by an if-chain dispatch loop on a
+/// `$next` PC local. Returns `None` when the trace would be a single block
+/// (no interior fusion possible — the caller uses the per-block path) or the
+/// entry is not compilable.
+///
+/// ## Deadline-safe atomic retirement (the correctness contract)
+///
+/// A fused trace retires many guest instructions in one host call. To stay
+/// byte-identical to the per-instruction interpreter it must **never retire
+/// past a point where the interpreter would have stopped** — the batch budget
+/// (`max_count`), or a timer/IRQ trap. The per-block JIT enforces this by
+/// *refusing* to run a block that would cross such a point (`retired + n >
+/// max_count || block_would_cross_irq(bus, n)` in `run_jit_loop`) and
+/// single-stepping instead. A trace generalises that guard to the interior.
+///
+/// The host computes a single **retired-instruction budget** at trace entry —
+/// `min(max_count - retired, mtimecmp - mtime - 1 [iff the M-timer trap is
+/// armed])` — and writes it to [`BUDGET_SLOT`]; the trace loads it into
+/// `$budget`. This is exact because inside a trace *nothing but the retired
+/// count advances the clock*: `mtime` is bumped by the host afterward by
+/// exactly the retired count, and mtimecmp/mip/mie/mstatus/external-lines are
+/// mutated only by CSR writes, traps, or MMIO — all of which are unmodeled or
+/// out-of-window and therefore **exit the trace**. So "instructions retired"
+/// and "cycles until the next deadline" are the same unit, and the budget
+/// computed once at entry stays valid for the whole trace.
+///
+/// Before running each interior block `k` (retiring `n_k`), the trace checks
+/// `$retired + n_k > $budget`; if so it exits to the host at block `k`'s entry
+/// PC having retired only the fully-completed prior blocks — exactly what the
+/// per-block guard would have done. The host then single-steps, so the trap /
+/// batch edge lands on the identical instruction as a pure interpreter run.
+///
+/// Every rare edge exits to the host exactly as the per-block path does: a
+/// dynamic terminator (`JALR`/`C.JR`) writes its resolved PC to `$next` and,
+/// finding no interior match, falls out to the [`WIRE_CHAIN_DYNAMIC`] exit; an
+/// out-of-window load/store publishes its fault and returns [`WIRE_MEM_FAULT`];
+/// an unmodeled cut is never fused (the block simply isn't in the trace) so its
+/// predecessor exits to the host at it.
+pub fn emit_trace(pc: Pc, code: &CodeView<'_>, window: Option<RamWindow>) -> Option<EmittedBlock> {
+    let mem_ok = window.is_some();
+    let blocks = collect_trace(pc, code, mem_ok);
+    // A trace is only worthwhile when the entry block ends in a *static*
+    // terminator (so the dispatch loop can re-enter an interior block, e.g. a
+    // hot loop's back-edge). Otherwise the per-block path already covers it.
+    let entry_static = blocks
+        .first()
+        .and_then(|b| b.terminator.as_ref())
+        .is_some_and(|(t, l)| !static_successors(t, blocks[0].prefix_end, *l).is_empty());
+    if blocks.len() < 2 && !(blocks.len() == 1 && entry_static) {
+        return None;
+    }
+    if !entry_static {
+        return None;
+    }
+
+    let (u_reads, u_writes, has_mem, has_store) = harvest_trace(&blocks, window);
+    // Every written register is also read (prologue-loaded), so a full
+    // union-write flush at any exit re-stores an unmodified original as a no-op.
+    let mut load_set = u_reads;
+    for r in 0..32 {
+        load_set[r] |= u_writes[r];
+    }
+
+    let entry_instr_count = blocks[0].instr_count;
+    let entry_end_pc = blocks[0].prefix_end as u64
+        + blocks[0].terminator.as_ref().map_or(0, |(_, l)| *l);
+
+    // ── Emit the body into a Body with trace wiring. ──────────────────────
+    let mut t = Body {
+        window,
+        trace_next_local: Some(NEXT_LOCAL),
+        trace_union_writes: Some(u_writes),
+        ..Body::default()
+    };
+
+    // Prologue: load the union live-in / maybe-written regs into locals.
+    let mut expr: Vec<u8> = Vec::new();
+    for r in 1..32u8 {
+        if load_set[r as usize] {
+            expr.push(op::I32_CONST);
+            enc::sleb(&mut expr, (r as i64) * 4);
+            expr.push(op::I32_LOAD);
+            enc::uleb(&mut expr, 2);
+            enc::uleb(&mut expr, 0);
+            expr.push(op::LOCAL_SET);
+            enc::uleb(&mut expr, r as u64);
+        }
+    }
+    // $budget = load BUDGET_SLOT
+    expr.push(op::I32_CONST);
+    enc::sleb(&mut expr, BUDGET_SLOT as i64);
+    expr.push(op::I32_LOAD);
+    enc::uleb(&mut expr, 2);
+    enc::uleb(&mut expr, 0);
+    expr.push(op::LOCAL_SET);
+    enc::uleb(&mut expr, BUDGET_LOCAL as u64);
+    // $next = entry_pc  ($retired defaults to 0)
+    expr.push(op::I32_CONST);
+    enc::sleb(&mut expr, pc as i64);
+    expr.push(op::LOCAL_SET);
+    enc::uleb(&mut expr, NEXT_LOCAL as u64);
+
+    // Dispatch loop.
+    expr.push(op::LOOP);
+    expr.push(op::T_EMPTY);
+    for blk in &blocks {
+        // if ($next == entry_pc) { ... }
+        expr.push(op::LOCAL_GET);
+        enc::uleb(&mut expr, NEXT_LOCAL as u64);
+        expr.push(op::I32_CONST);
+        enc::sleb(&mut expr, blk.entry_pc as i64);
+        expr.push(op::I32_EQ);
+        expr.push(op::IF);
+        expr.push(op::T_EMPTY);
+
+        // Budget: if ($retired + n_k > $budget) { /*exit*/ } else { run }
+        expr.push(op::LOCAL_GET);
+        enc::uleb(&mut expr, RETIRED_LOCAL as u64);
+        expr.push(op::I32_CONST);
+        enc::sleb(&mut expr, blk.instr_count as i64);
+        expr.push(op::I32_ADD);
+        expr.push(op::LOCAL_GET);
+        enc::uleb(&mut expr, BUDGET_LOCAL as u64);
+        expr.push(op::I32_GT_S);
+        expr.push(op::IF);
+        expr.push(op::T_EMPTY);
+        // then: over budget — nothing (fall through to exit; $next == entry_pc).
+        expr.push(op::ELSE);
+
+        // ── block body on locals ──
+        t.buf.clear();
+        t.trace_retired = Some((RETIRED_LOCAL, t.emitted));
+        for op in &blk.ops {
+            t.emit_instruction(op.pc, &op.inst);
+        }
+        match &blk.terminator {
+            Some((tinst, tlen)) => t.emit_terminator(blk.prefix_end, *tlen as u32, tinst),
+            // Fall-through block: continue at end_pc (an unmodeled cut / view
+            // end) — dispatch will find no match and exit to the host there.
+            None => t.next_pc_const(blk.prefix_end as i32),
+        }
+        expr.extend_from_slice(&t.buf);
+
+        // $retired += n_k
+        expr.push(op::LOCAL_GET);
+        enc::uleb(&mut expr, RETIRED_LOCAL as u64);
+        expr.push(op::I32_CONST);
+        enc::sleb(&mut expr, blk.instr_count as i64);
+        expr.push(op::I32_ADD);
+        expr.push(op::LOCAL_SET);
+        enc::uleb(&mut expr, RETIRED_LOCAL as u64);
+
+        // continue the dispatch loop: br to $L (loop=depth 2: else(0) if(1) loop(2))
+        expr.push(op::BR);
+        enc::uleb(&mut expr, 2);
+
+        expr.push(op::END); // budget if
+        expr.push(op::END); // dispatch if
+    }
+    expr.push(op::END); // loop
+
+    // ── Exit tail: flush union-writes, publish $next, return CHAIN_DYNAMIC ──
+    for r in 1..32u8 {
+        if u_writes[r as usize] {
+            expr.push(op::I32_CONST);
+            enc::sleb(&mut expr, (r as i64) * 4);
+            expr.push(op::LOCAL_GET);
+            enc::uleb(&mut expr, r as u64);
+            expr.push(op::I32_STORE);
+            enc::uleb(&mut expr, 2);
+            enc::uleb(&mut expr, 0);
+        }
+    }
+    expr.push(op::I32_CONST);
+    enc::sleb(&mut expr, NEXT_PC_SLOT as i64);
+    expr.push(op::LOCAL_GET);
+    enc::uleb(&mut expr, NEXT_LOCAL as u64);
+    expr.push(op::I32_STORE);
+    enc::uleb(&mut expr, 2);
+    enc::uleb(&mut expr, 0);
+    // Publish the actual retired count for the runtime's mtime/retired fixup.
+    expr.push(op::I32_CONST);
+    enc::sleb(&mut expr, TRACE_RETIRED_SLOT as i64);
+    expr.push(op::LOCAL_GET);
+    enc::uleb(&mut expr, RETIRED_LOCAL as u64);
+    expr.push(op::I32_STORE);
+    enc::uleb(&mut expr, 2);
+    enc::uleb(&mut expr, 0);
+    expr.push(op::I32_CONST);
+    enc::sleb(&mut expr, WIRE_CHAIN_DYNAMIC as i64);
+
+    let binding = if has_mem {
+        let (_base, len) = window.expect("mem op emitted without a RAM window");
+        Some(MemBinding {
+            ram_len: len as usize,
+            has_store,
+        })
+    } else {
+        None
+    };
+    let mem_pages = match &binding {
+        Some(b) => (RAM_WINDOW_OFF as usize + b.ram_len)
+            .max(1)
+            .div_ceil(65536)
+            .max(1) as u32,
+        None => 1,
+    };
+    let code_bytes = build_module(TRACE_LOCALS, mem_pages, &expr);
+
+    let mut exits = vec![ExitEdge {
+        wire_code: WIRE_CHAIN_DYNAMIC,
+        reason: BailReason::PartialBlock,
+    }];
+    if has_mem {
+        exits.push(ExitEdge {
+            wire_code: WIRE_MEM_FAULT,
+            reason: BailReason::MemoryFault,
+        });
+    }
+
+    Some(EmittedBlock {
+        code: code_bytes,
+        end_pc: entry_end_pc,
+        instr_count: entry_instr_count,
+        exits,
+        binding,
+    })
+}
+
 /// Decode the instruction at `pc` in `code`, returning it with its byte
 /// length. `None` if `pc` is outside the view or a 4-byte instruction runs
 /// past its end.
@@ -491,6 +867,22 @@ struct Body {
     /// Count of instructions fully emitted so far — the retired-so-far value
     /// a mid-block fault publishes.
     emitted: u32,
+    // ── trace-mode wiring (all `None`/`0` for a single-block emit) ────────
+    /// When `Some(idx)`, terminators write their resolved next PC into wasm
+    /// local `idx` (`$next`) instead of the [`NEXT_PC_SLOT`] memory slot, so
+    /// the enclosing dispatch loop can `br_table`/if-chain on it. See
+    /// [`emit_trace`].
+    trace_next_local: Option<u32>,
+    /// When `Some((idx, block_start))`, a mid-block memory fault publishes
+    /// `FAULT_RETIRED = local[idx] + (self.emitted - block_start)` — the
+    /// trace's running retired count (fully-retired prior blocks, in the local)
+    /// plus the count of this block's instructions retired before the fault —
+    /// rather than the single-block `self.emitted`.
+    trace_retired: Option<(u32, u32)>,
+    /// When `Some(set)`, a fault flushes the whole trace-union write set (every
+    /// write-local is prologue-loaded, so re-storing an unmodified one is a
+    /// no-op) instead of only the intra-block `writes_before` snapshot.
+    trace_union_writes: Option<[bool; 32]>,
 }
 
 impl Body {
@@ -671,8 +1063,15 @@ impl Body {
     /// instructions before this one, publish the resume PC + retired count,
     /// and return [`WIRE_MEM_FAULT`].
     fn emit_fault(&mut self, pc: u32, writes_before: &[bool; 32]) {
+        // Trace mode flushes the whole trace-union write set (every write-local
+        // is prologue-loaded, so re-storing an unmodified one is a no-op),
+        // because registers written by *earlier fused blocks* live only in
+        // locals and must reach memory on any exit. Single-block mode flushes
+        // just the intra-block `writes_before` snapshot (the faulting op and
+        // everything after it are left to the interpreter).
+        let flush = self.trace_union_writes.unwrap_or(*writes_before);
         for r in 1..32u8 {
-            if writes_before[r as usize] {
+            if flush[r as usize] {
                 self.i32_const((r as i32) * 4);
                 self.buf.push(op::LOCAL_GET);
                 enc::uleb(&mut self.buf, r as u64);
@@ -682,7 +1081,23 @@ impl Body {
             }
         }
         self.store_const_at(FAULT_PC_SLOT, pc as i32);
-        self.store_const_at(FAULT_RETIRED_SLOT, self.emitted as i32);
+        match self.trace_retired {
+            // Single block: retired-so-far is the compile-time emit count.
+            None => self.store_const_at(FAULT_RETIRED_SLOT, self.emitted as i32),
+            // Trace: FAULT_RETIRED = $retired (fully-retired prior blocks) plus
+            // this block's compile-time offset to the faulting instruction.
+            Some((retired_local, block_start)) => {
+                let block_base = self.emitted - block_start;
+                self.i32_const(FAULT_RETIRED_SLOT as i32);
+                self.buf.push(op::LOCAL_GET);
+                enc::uleb(&mut self.buf, retired_local as u64);
+                self.i32_const(block_base as i32);
+                self.buf.push(op::I32_ADD);
+                self.buf.push(op::I32_STORE);
+                enc::uleb(&mut self.buf, 2);
+                enc::uleb(&mut self.buf, 0);
+            }
+        }
         self.i32_const(WIRE_MEM_FAULT);
         self.buf.push(op::RETURN);
     }
@@ -929,27 +1344,46 @@ impl Body {
         self.emitted += 1;
     }
 
-    /// Store the `i32` currently on the stack (below it: the [`NEXT_PC_SLOT`]
-    /// address) to the dynamic next-PC slot.
-    fn store_next_pc(&mut self) {
-        self.buf.push(op::I32_STORE);
-        enc::uleb(&mut self.buf, 2); // align = 2 (4-byte)
-        enc::uleb(&mut self.buf, 0); // offset = 0 (address already == slot)
+    /// Begin committing a resolved next PC. In single-block mode this pushes
+    /// the [`NEXT_PC_SLOT`] store address (so the value computed next sits above
+    /// it for the closing `i32.store`); in trace mode it pushes nothing (the
+    /// value is captured by a closing `local.set $next`). See [`end_next_pc`].
+    fn begin_next_pc(&mut self) {
+        if self.trace_next_local.is_none() {
+            self.i32_const(NEXT_PC_SLOT);
+        }
     }
 
-    /// Write a **constant** next PC to the slot (`Jal`, `C.J`, and the two
-    /// arms of a conditional branch all resolve to compile-time addresses).
+    /// Close a next-PC commit opened by [`begin_next_pc`], consuming the value
+    /// on the stack: `i32.store` to the slot (single-block) or `local.set $next`
+    /// (trace). Byte-identical to the previous `store_next_pc` in slot mode.
+    fn end_next_pc(&mut self) {
+        match self.trace_next_local {
+            None => {
+                self.buf.push(op::I32_STORE);
+                enc::uleb(&mut self.buf, 2); // align = 2 (4-byte)
+                enc::uleb(&mut self.buf, 0); // offset = 0 (address == slot)
+            }
+            Some(idx) => {
+                self.buf.push(op::LOCAL_SET);
+                enc::uleb(&mut self.buf, idx as u64);
+            }
+        }
+    }
+
+    /// Write a **constant** next PC (`Jal`, `C.J`, and the two arms of a
+    /// conditional branch all resolve to compile-time addresses).
     fn next_pc_const(&mut self, v: i32) {
-        self.i32_const(NEXT_PC_SLOT);
+        self.begin_next_pc();
         self.i32_const(v);
-        self.store_next_pc();
+        self.end_next_pc();
     }
 
     /// Emit a two-register conditional branch: `next = cmp(rs1,rs2) ? pc+imm
     /// : pc+ilen`, stored to the slot. `cmp` is the wasm predicate opcode
     /// (`I32_EQ`, `I32_LT_S`, …) mirroring the interpreter's comparison.
     fn cond_branch(&mut self, rs1: u8, rs2: u8, cmp: u8, pc: u32, ilen: u32, imm: i32) {
-        self.i32_const(NEXT_PC_SLOT); // store address (stays below the `if`)
+        self.begin_next_pc(); // store address (stays below the `if`) in slot mode
         self.read(rs1);
         self.read(rs2);
         self.buf.push(cmp);
@@ -958,13 +1392,13 @@ impl Body {
         self.buf.push(op::ELSE);
         self.i32_const(pc.wrapping_add(ilen) as i32); // not taken
         self.buf.push(op::END);
-        self.store_next_pc();
+        self.end_next_pc();
     }
 
     /// Emit a compressed compare-with-zero branch (`C.BEQZ`/`C.BNEZ`):
     /// `next = (rs1 == 0)==want_zero ? pc+imm : pc+ilen`.
     fn cond_branch_zero(&mut self, rs1: u8, want_zero: bool, pc: u32, ilen: u32, imm: i32) {
-        self.i32_const(NEXT_PC_SLOT);
+        self.begin_next_pc();
         self.read(rs1);
         // `C.BEQZ` takes when rs1 == 0 → test with `i32.eqz`; `C.BNEZ` takes
         // when rs1 != 0 → the raw value is already truthy for `if`.
@@ -976,7 +1410,7 @@ impl Body {
         self.buf.push(op::ELSE);
         self.i32_const(pc.wrapping_add(ilen) as i32); // not taken
         self.buf.push(op::END);
-        self.store_next_pc();
+        self.end_next_pc();
     }
 
     /// Emit `rs1 & !1` (jump-target low-bit mask) onto the stack.
@@ -1014,13 +1448,13 @@ impl Body {
             // Indirect jump: next = (rs1 + imm) & !1, computed BEFORE the link
             // write so `jalr rd, rd, imm` reads the pre-write rs1.
             Jalr { rd, rs1, imm } => {
-                self.i32_const(NEXT_PC_SLOT);
+                self.begin_next_pc();
                 self.read(rs1);
                 self.i32_const(imm);
                 self.buf.push(op::I32_ADD);
                 self.i32_const(!1);
                 self.buf.push(op::I32_AND);
-                self.store_next_pc();
+                self.end_next_pc();
                 self.i32_const(pc.wrapping_add(ilen) as i32);
                 self.write(rd);
             }
@@ -1028,15 +1462,15 @@ impl Body {
             CJ { imm } => self.next_pc_const(pc.wrapping_add(imm as u32) as i32),
             // C.JR: next = rs1 & !1 (no link).
             CJr { rs1 } => {
-                self.i32_const(NEXT_PC_SLOT);
+                self.begin_next_pc();
                 self.read_masked(rs1);
-                self.store_next_pc();
+                self.end_next_pc();
             }
             // C.JALR: next = rs1 & !1; link x1 = pc + 2 (always 2-byte).
             CJalr { rs1 } => {
-                self.i32_const(NEXT_PC_SLOT);
+                self.begin_next_pc();
                 self.read_masked(rs1);
-                self.store_next_pc();
+                self.end_next_pc();
                 self.i32_const(pc.wrapping_add(2) as i32);
                 self.write(1);
             }

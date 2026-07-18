@@ -399,6 +399,37 @@ impl RiscV {
     /// CLINT timer: the block advances `mtime` by exactly `n`, so if that
     /// crosses `mtimecmp` (with the timer unmasked in `mie`) the MTIP edge —
     /// and its trap — must be observed inside the block.
+    /// Retired-instruction budget handed to a fused trace (superblock): the
+    /// most instructions it may retire before it must return control to this
+    /// loop. It mirrors the per-block guards (`retired + n > max_count` and
+    /// `block_would_cross_irq`) at trace-interior granularity.
+    ///
+    /// `batch_remaining` is `max_count - retired` (the batch/event-deadline
+    /// budget the caller already applied). The timer term is exact because
+    /// inside a trace nothing but the retired count advances `mtime`, and
+    /// `mtimecmp`/`mie`/`mstatus` are mutated only by CSR/MMIO/trap — all of
+    /// which exit the trace — so the value is valid for the whole trace. When
+    /// the timer trap is not armed (interrupts globally off, `MTIE` clear, or
+    /// `mtime` already past `mtimecmp`) only the batch budget bounds it.
+    ///
+    /// The "already pending / external line asserted" case is *not* handled
+    /// here: it is caught by the entry `block_would_cross_irq` guard, which
+    /// single-steps and never runs the trace.
+    #[cfg(feature = "jit")]
+    fn trace_budget(&self, batch_remaining: u32) -> u32 {
+        let timer_armed = (self.mstatus & (1 << 3)) != 0
+            && (self.mie & (1 << 7)) != 0
+            && self.mtime < self.mtimecmp;
+        if timer_armed {
+            // Largest cumulative retired count that keeps mtime+n < mtimecmp,
+            // i.e. does not reach the timer edge: mtimecmp - mtime - 1.
+            let timer_budget = self.mtimecmp.saturating_sub(self.mtime).saturating_sub(1);
+            batch_remaining.min(timer_budget.min(u64::from(u32::MAX)) as u32)
+        } else {
+            batch_remaining
+        }
+    }
+
     fn block_would_cross_irq(&self, bus: &dyn Bus, n: u32) -> bool {
         // Interrupts globally disabled: no trap is taken regardless.
         if (self.mstatus & (1 << 3)) == 0 {
@@ -507,8 +538,9 @@ impl RiscV {
                         // shared wasm memory (which *is* `sb.ram.data`), so only
                         // the register file is handed over. The downcast still
                         // gates the path: a non-`SystemBus` never bound the JIT.
+                        let budget = self.trace_budget(max_count - retired);
                         let (actual_n, next_pc, clear_reservation, needs_interp) =
-                            engine.run_ready(pc, &mut self.x);
+                            engine.run_ready(pc, &mut self.x, budget);
                         if clear_reservation {
                             self.reservation = None;
                         }

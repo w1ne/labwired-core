@@ -333,6 +333,29 @@ impl RiscVFrontend {
     /// the RISC-V-local [`MemBinding`] the native runtime needs to size + sync
     /// the RAM-backing memory. The trait [`IsaFrontend::translate_block`] is
     /// this without the binding.
+    /// Translate a fused **trace** (superblock) rooted at `pc` — many basic
+    /// blocks in one wasm function following static control-flow edges (see
+    /// [`emit::emit_trace`]). Returns `None` when no interior fusion is possible
+    /// at `pc` (the caller falls back to [`translate_block_riscv`]). The
+    /// returned plan's `instr_count`/`end_pc` describe the **entry** block (the
+    /// host guards trace entry exactly as it guards a single block); the trace
+    /// retires a runtime-variable count bounded by the budget it is handed.
+    pub fn translate_trace_riscv(
+        &self,
+        pc: Pc,
+        code: &CodeView<'_>,
+    ) -> Option<(BlockPlan, Option<MemBinding>)> {
+        let blk = emit::emit_trace(pc, code, self.ram_window)?;
+        let plan = BlockPlan {
+            entry_pc: pc,
+            end_pc: blk.end_pc,
+            instr_count: blk.instr_count,
+            code: blk.code,
+            exits: blk.exits,
+        };
+        Some((plan, blk.binding))
+    }
+
     pub fn translate_block_riscv(
         &self,
         pc: Pc,
