@@ -201,7 +201,16 @@ const SHIPPED: &[Board] = &[
 const KNOWN_GAPS: &[(&str, Class)] = &[
     // RP2040 ships (firmware-rp2040-demo, rp2040-pio-onboarding) but has only a
     // `firmware_survival` boot test — no walk differential or silicon oracle for
-    // its SysTick/PIO/IRQ path. Fill with `crates/core/tests/rp2040_walk_differential.rs`.
+    // its core SysTick/PIO/IRQ path. Fill with
+    // `crates/core/tests/rp2040_walk_differential.rs`.
+    //
+    // NOTE — this is a TEST gap on the timer/IRQ path, NOT a DMA gap. RP2040 DMA
+    // is not modelled at all (there is no `dma` block in `configs/chips/rp2040.yaml`),
+    // so it is a MODELING gap, tracked separately. This ratchet deliberately does
+    // not demand a DMA differential for RP2040: gating a test for a peripheral the
+    // chip does not model would be a false blocker. The executing-fidelity class
+    // here is satisfied by ANY timer/IRQ walk-diff or oracle; add DMA coverage
+    // only if/when the DMA block is modelled.
     ("rp2040", Class::Exec),
     // STM32F401 (BlackPill / demo) ships but its executing coverage is only
     // `firmware_survival::test_stm32f401_blinky_survival`. The F4 exec-oracle /

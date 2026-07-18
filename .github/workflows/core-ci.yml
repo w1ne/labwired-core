@@ -85,6 +85,15 @@ jobs:
       - name: Unit tests (no fixtures)
         run: cargo test --workspace --lib
 
+      # Board-coverage ratchet: a cheap static/naming scan (no fixtures, no
+      # firmware build) that fails if a SHIPPED chip lacks its required coverage
+      # classes — reset conformance, an executing-fidelity test, and a display
+      # assertion where it drives a shipped display lab. Missing coverage is only
+      # allowed via the shrink-only KNOWN_GAPS allowlist inside the test; a new
+      # uncovered board, or a filled gap left stale in the allowlist, fails here.
+      - name: Board-coverage ratchet (static naming scan)
+        run: cargo test -p labwired-core --test board_coverage_ratchet -- --nocapture
+
       # Scheduler-driven interrupt delivery, all three MCU fabrics. This lane
       # (event-scheduler + jit) previously ran ONLY in core-full, which is how an
       # ESP32-S3 intmatrix scheduler-delivery hole stayed hidden. These targeted
