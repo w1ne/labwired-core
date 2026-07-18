@@ -235,16 +235,16 @@ impl Rp2040Dma {
             0x00 => (Reg::ReadAddr, false),
             0x04 => (Reg::WriteAddr, false),
             0x08 => (Reg::TransCount, false),
-            0x0c => (Reg::Ctrl, true), // CTRL_TRIG
+            0x0c => (Reg::Ctrl, true),  // CTRL_TRIG
             0x10 => (Reg::Ctrl, false), // AL1_CTRL
             0x14 => (Reg::ReadAddr, false),
             0x18 => (Reg::WriteAddr, false),
             0x1c => (Reg::TransCount, true), // AL1_TRANS_COUNT_TRIG
-            0x20 => (Reg::Ctrl, false), // AL2_CTRL
+            0x20 => (Reg::Ctrl, false),      // AL2_CTRL
             0x24 => (Reg::TransCount, false),
             0x28 => (Reg::ReadAddr, false),
             0x2c => (Reg::WriteAddr, true), // AL2_WRITE_ADDR_TRIG
-            0x30 => (Reg::Ctrl, false), // AL3_CTRL
+            0x30 => (Reg::Ctrl, false),     // AL3_CTRL
             0x34 => (Reg::WriteAddr, false),
             0x38 => (Reg::TransCount, false),
             0x3c => (Reg::ReadAddr, true), // AL3_READ_ADDR_TRIG
@@ -611,7 +611,11 @@ mod tests {
         // incr read, fixed write (INCR_WRITE clear) — last byte wins at dst.
         dma.write_word(CTRL_TRIG, ctrl(true, 0, true, false, 0));
         drain(&mut dma, &mut bus);
-        assert_eq!(bus.read_u8(dst as u64).unwrap(), 4, "fixed dst holds last byte");
+        assert_eq!(
+            bus.read_u8(dst as u64).unwrap(),
+            4,
+            "fixed dst holds last byte"
+        );
         assert_eq!(dma.read_word(WRITE_ADDR), dst, "write addr did not advance");
     }
 
@@ -623,8 +627,10 @@ mod tests {
         let src1 = 0x2000_3000u32;
         let dst1 = 0x2000_4000u32;
         for i in 0..4u32 {
-            bus.write_u8(src0 as u64 + i as u64, 0xA0 | i as u8).unwrap();
-            bus.write_u8(src1 as u64 + i as u64, 0xB0 | i as u8).unwrap();
+            bus.write_u8(src0 as u64 + i as u64, 0xA0 | i as u8)
+                .unwrap();
+            bus.write_u8(src1 as u64 + i as u64, 0xB0 | i as u8)
+                .unwrap();
         }
         let mut dma = Rp2040Dma::new();
         // Channel 1 pre-armed (enabled, permanent TREQ) but NOT triggered.
@@ -659,7 +665,10 @@ mod tests {
         // Ack channel 0 via INTS0 write-1-clear.
         dma.write_word(INTS0, 0b001);
         assert_eq!(dma.intr, 0b100, "INTS0 W1C cleared channel 0 raw bit");
-        assert!(dma.tick().explicit_irqs.is_none(), "line 0 clears after ack");
+        assert!(
+            dma.tick().explicit_irqs.is_none(),
+            "line 0 clears after ack"
+        );
     }
 
     #[test]
@@ -680,7 +689,11 @@ mod tests {
         dma.write_word(TRANS_COUNT, 1);
         dma.write_word(CTRL_TRIG, ctrl(true, 0, true, true, 0) | CTRL_IRQ_QUIET);
         drain(&mut dma, &mut bus);
-        assert_eq!(bus.read_u8(0x2000_2000).unwrap(), 0x5A, "transfer still ran");
+        assert_eq!(
+            bus.read_u8(0x2000_2000).unwrap(),
+            0x5A,
+            "transfer still ran"
+        );
         assert_eq!(dma.read_word(INTR), 0, "IRQ_QUIET suppresses the raw latch");
     }
 
@@ -693,7 +706,10 @@ mod tests {
         // TREQ_SEL = 0 (a paced DREQ), EN set, triggered: must NOT start.
         let paced = CTRL_EN; // treq_sel field left 0
         dma.write_word(CTRL_TRIG, paced);
-        assert!(!dma.any_busy(), "paced channel waits for a DREQ we don't source");
+        assert!(
+            !dma.any_busy(),
+            "paced channel waits for a DREQ we don't source"
+        );
     }
 
     #[test]
@@ -721,6 +737,10 @@ mod tests {
         dma.write_word(WRITE_ADDR, 0x2000_2000);
         dma.write_word(TRANS_COUNT, 50);
         dma.write_word(CTRL_TRIG, ctrl(true, 0, true, true, 0));
-        assert_ne!(dma.read_word(CTRL_TRIG) & CTRL_BUSY, 0, "BUSY set mid-transfer");
+        assert_ne!(
+            dma.read_word(CTRL_TRIG) & CTRL_BUSY,
+            0,
+            "BUSY set mid-transfer"
+        );
     }
 }
