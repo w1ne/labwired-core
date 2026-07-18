@@ -779,6 +779,13 @@ impl WasmSimulator {
         // Also capture UART0 in case a sketch uses the classic UART path.
         bus.attach_uart_tx_sink(uart_sink.clone(), false);
         let uart_rx_bufs = bus.attach_uart_rx_source();
+
+        // Wire any devices the manifest declares (e.g. an SH1107 OLED on i2c0) —
+        // the same factory the classic-ESP32 and native builder paths use. Without
+        // this, an S3 board's `external_devices` were silently dropped and the
+        // panel never rendered. Connect the blocks the manifest says are wired.
+        labwired_core::system::xtensa::attach_esp32_external_devices(&mut bus, manifest)
+            .map_err(|e| JsValue::from_str(&format!("ESP32-S3 external_devices: {:#}", e)))?;
         bus.refresh_peripheral_index();
 
         fast_boot(
