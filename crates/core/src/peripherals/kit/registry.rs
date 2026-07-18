@@ -37,6 +37,7 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::pcd8544::PCD8544_KIT,
     &components::iolink_master::IOLINK_MASTER_KIT,
     &components::ntc_thermistor::NTC_THERMISTOR_KIT,
+    &components::potentiometer::POTENTIOMETER_KIT,
     &components::vl53l1x::VL53L1X_KIT,
     // Leo air-quality board sensors (ESP32-C3 I²C).
     &components::scd41::SCD41_KIT,
