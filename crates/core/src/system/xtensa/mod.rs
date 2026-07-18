@@ -454,13 +454,36 @@ mod tests {
     }
 
     #[test]
-    fn configure_registers_i2c0_with_tmp102_attached() {
+    fn configure_registers_i2c0_and_factory_attaches_manifest_tmp102() {
         let mut bus = SystemBus::new();
         let _wiring = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
 
         // I2C0 should be present at 0x6001_3000.
         let names: Vec<_> = bus.peripherals.iter().map(|p| p.name.as_str()).collect();
         assert!(names.contains(&"i2c0"), "i2c0 missing; have: {names:?}");
+
+        // The TMP102 is NOT hardcoded by the builder — it is wired from the board
+        // manifest's external_devices through the generic factory, exactly as the
+        // app/CLI do. Declare it, attach it, then probe below.
+        let manifest = labwired_config::SystemManifest {
+            walk_deleted: Some(false),
+            schema_version: "1.0".to_string(),
+            name: "test-s3-tmp102".to_string(),
+            chip: "esp32s3.yaml".to_string(),
+            memory_overrides: std::collections::HashMap::new(),
+            peripherals: vec![],
+            external_devices: vec![labwired_config::ExternalDevice {
+                id: "tmp102".to_string(),
+                r#type: "tmp102".to_string(),
+                connection: "i2c0".to_string(),
+                route: Default::default(),
+                config: std::collections::HashMap::new(),
+            }],
+            board_io: vec![],
+            debug_uart: None,
+        };
+        attach_esp32_external_devices(&mut bus, &manifest)
+            .expect("attach TMP102 from manifest must succeed");
 
         // The attached TMP102 should respond at address 0x48 by setting
         // INT_NACK to 0 after a one-byte write probe.
