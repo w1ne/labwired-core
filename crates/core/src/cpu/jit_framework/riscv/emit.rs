@@ -429,6 +429,31 @@ struct TraceBlock {
     instr_count: u32,
 }
 
+/// Return site (the PC immediately after the call) of a **linking direct call**
+/// — a `JAL`/`C.JAL` that writes a link register (`ra`=x1 or `t0`=x5).
+///
+/// This is the address the callee's `ret` (a dynamic `JALR`/`C.JR` on `ra`)
+/// jumps back to. Milestone 2 queues it into the trace so that, once the callee
+/// has been fused (via the call's *static* target — see [`static_successors`]),
+/// the callee's `ret` re-dispatches **in-wasm** to this site instead of paying a
+/// host round-trip: the interior dispatch loop's `$next == entry_pc` equality is
+/// the inline-cache guard, and a return to any other address simply misses and
+/// exits to the host exactly as before. Deadline budget, register-liveness union
+/// and the exit-flush already cover every fused block, so the spliced return site
+/// inherits all of M1's correctness for free.
+///
+/// `None` for non-linking jumps and branches (no call/return pairing to exploit)
+/// and for `C.JALR`/indirect `JALR` calls, whose target is dynamic — their
+/// callee is never fused, so their return site could never be reached in-wasm
+/// and splicing it would only bloat the trace.
+fn call_return_site(inst: &Instruction, pc: u32, ilen: u64) -> Option<Pc> {
+    use Instruction::*;
+    match *inst {
+        Jal { rd, .. } if rd == 1 || rd == 5 => Some((pc as u64).wrapping_add(ilen) as Pc),
+        _ => None,
+    }
+}
+
 /// Statically-known successor PCs of a terminator sitting at `pc` (its own PC),
 /// `ilen` bytes long. Empty for a dynamic terminator (`JALR`/`C.JR`/`C.JALR`),
 /// which the trace cannot follow — it exits to the host and the interpreter
@@ -493,6 +518,18 @@ fn collect_trace(entry: Pc, code: &CodeView<'_>, mem_ok: bool) -> Vec<TraceBlock
             for succ in static_successors(tinst, block.prefix_end, *tlen) {
                 if !seen.contains(&(succ as u32)) && code.covers(succ) {
                     queue.push(succ);
+                }
+            }
+            // M2 — JALR/return inline caching. Also queue the RETURN SITE of a
+            // linking direct call so the fused callee's `ret` re-dispatches
+            // in-wasm (guarded by the loop's `$next == entry_pc` equality)
+            // instead of exiting to the host. Byte-identity is preserved: a
+            // return whose resolved target is not a fused block entry misses the
+            // dispatch and exits exactly as M1, and every spliced block is
+            // covered by the same deadline budget / liveness union / exit flush.
+            if let Some(site) = call_return_site(tinst, block.prefix_end, *tlen) {
+                if !seen.contains(&(site as u32)) && code.covers(site) {
+                    queue.push(site);
                 }
             }
         }
@@ -1517,6 +1554,73 @@ mod tests {
     const BASE: Pc = 0x4200_0000;
     const RAM_BASE: u32 = 0x8000_0000;
     const RAM_LEN: u32 = 0x1_0000;
+
+    fn enc_jal(rd: u32, imm: i32) -> u32 {
+        let u = imm as u32;
+        ((u >> 20 & 1) << 31)
+            | ((u >> 1 & 0x3ff) << 21)
+            | ((u >> 11 & 1) << 20)
+            | ((u >> 12 & 0xff) << 12)
+            | (rd << 7)
+            | 0x6f
+    }
+    fn enc_jalr(rd: u32, rs1: u32, imm: i32) -> u32 {
+        ((imm as u32 & 0xfff) << 20) | (rs1 << 15) | (rd << 7) | 0x67
+    }
+
+    /// M2 return-site splicing: `call_return_site` links only for `JAL ra/t0`.
+    #[test]
+    fn call_return_site_only_for_linking_jal() {
+        // jal ra, +12  → return site = pc + 4
+        let ra = decode_rv32(enc_jal(1, 12));
+        assert_eq!(call_return_site(&ra, BASE as u32, 4), Some(BASE + 4));
+        // jal t0, +12  → also a call (x5 link)
+        let t0 = decode_rv32(enc_jal(5, 12));
+        assert_eq!(call_return_site(&t0, BASE as u32, 4), Some(BASE + 4));
+        // jal x0, +12  → plain jump, no link → not a call
+        let j = decode_rv32(enc_jal(0, 12));
+        assert_eq!(call_return_site(&j, BASE as u32, 4), None);
+        // jalr is dynamic-target — excluded from static splicing
+        let jr = decode_rv32(enc_jalr(1, 6, 0));
+        assert_eq!(call_return_site(&jr, BASE as u32, 4), None);
+    }
+
+    /// M2 mechanism: a hot loop that `JAL ra`-calls a fused helper gets the
+    /// helper's RETURN SITE spliced into the same trace, so the helper's `ret`
+    /// re-dispatches in-wasm. Without the splice the trace would stop at 2
+    /// blocks (entry + helper) and the ret would exit to the host.
+    #[test]
+    fn collect_trace_splices_direct_call_return_site() {
+        // BASE+0 : addi t0,t0,1          (loop-header body)
+        // BASE+4 : jal  ra, +12          (call helper at BASE+16; ret site BASE+8)
+        // BASE+8 : addi t1,t1,1          (continuation after the call)
+        // BASE+12: jal  x0, -12          (back-edge to BASE+0 → entry is static)
+        // BASE+16: addi t2,t2,1          (helper body)
+        // BASE+20: jalr x0, ra, 0        (ret)
+        let prog = view(&[
+            enc_addi(5, 5, 1),
+            enc_jal(1, 12),
+            enc_addi(6, 6, 1),
+            enc_jal(0, -12),
+            enc_addi(7, 7, 1),
+            enc_jalr(0, 1, 0),
+        ]);
+        let cv = CodeView::new(BASE, &prog);
+        let entries: Vec<u32> = collect_trace(BASE, &cv, false)
+            .iter()
+            .map(|b| b.entry_pc)
+            .collect();
+        assert!(
+            entries.contains(&(BASE as u32 + 8)),
+            "return site BASE+8 must be fused; got blocks {entries:x?}"
+        );
+        assert!(
+            entries.contains(&(BASE as u32 + 16)),
+            "helper BASE+16 must be fused; got blocks {entries:x?}"
+        );
+        // A full trace emits and validates in wasmtime (see cfg(jit) test below).
+        assert!(emit_trace(BASE, &cv, None).is_some(), "trace must form");
+    }
 
     fn enc_addi(rd: u32, rs1: u32, imm: i32) -> u32 {
         ((imm as u32 & 0xFFF) << 20) | (rs1 << 15) | (rd << 7) | 0x13
