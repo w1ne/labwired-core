@@ -156,6 +156,7 @@ impl GuestBuf {
     ///
     /// The caller must only touch the returned region while no `&`/`&mut`
     /// borrow of this `GuestBuf` is live — see the module docs.
+    #[allow(dead_code)] // live only on the JIT path; exercised by unit tests
     pub(crate) unsafe fn raw_shared(&self) -> (*mut u8, usize, Arc<dyn Send + Sync>) {
         let alloc = Arc::clone(&self.alloc);
         let ptr = alloc.ptr.as_ptr();
@@ -166,6 +167,7 @@ impl GuestBuf {
     /// Stable identity of the underlying allocation. The JIT compares this
     /// across compiles to notice a buffer swap (e.g. a test replacing
     /// `bus.ram.data`) and re-bind instead of addressing a stale allocation.
+    #[allow(dead_code)] // live only on the JIT path; exercised by unit tests
     pub(crate) fn alloc_id(&self) -> usize {
         Arc::as_ptr(&self.alloc) as usize
     }

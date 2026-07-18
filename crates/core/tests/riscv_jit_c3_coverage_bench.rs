@@ -202,20 +202,102 @@ fn build_oled_lab(jit_enabled: bool) -> OledLab {
 /// have (dozens of sequential ALU ops). This measures what fraction of the
 /// shipped lab's retired instructions actually land in compiled blocks — the
 /// Amdahl ceiling for ANY JIT backend, browser or native.
+/// Single-arm run for deterministic (callgrind) Ir measurement. Selects the
+/// arm with LW_BENCH_ARM=interp|jit and budget with LW_BENCH_N. Warms past the
+/// paint, then runs a fixed timed budget so callgrind's Ir over the whole
+/// process is dominated by the measured window. Prints guest-instr count so
+/// Ir/guest-instr can be computed from the callgrind total.
+#[test]
+#[ignore = "callgrind harness; run under valgrind"]
+fn c3_oled_single_arm() {
+    let arm = std::env::var("LW_BENCH_ARM").unwrap_or_else(|_| "jit".into());
+    let jit = arm == "jit";
+    let total = env_n(4_000_000);
+    let mut lab = build_oled_lab(jit);
+    lab.machine.run(Some(total)).expect("run");
+    let text = String::from_utf8_lossy(&lab.serial.lock().unwrap()).into_owned();
+    assert!(text.contains("OLED painted: LabWired"), "never painted");
+    println!("arm={arm} total={total} guest instr");
+}
+
+fn env_n(default: u32) -> u32 {
+    std::env::var("LW_BENCH_N")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(default)
+}
+
+/// Warm steady-state timing: compile the hot set FIRST (warmup window, not
+/// timed), then time an equal execution window. Separates one-time cranelift
+/// compilation from steady-state execution so the ratio reflects the compiled
+/// path amortized over a real session (billions of instrs), not startup.
+#[test]
+#[ignore = "benchmark; run with --ignored --nocapture"]
+fn c3_oled_jit_warm_walltime() {
+    use std::time::Instant;
+    let warm = env_n(10_000_000);
+    let timed = env_n(10_000_000);
+
+    let mut interp = build_oled_lab(false);
+    interp.machine.run(Some(warm)).expect("interp warm");
+    let t0 = Instant::now();
+    interp.machine.run(Some(timed)).expect("interp timed");
+    let interp_dt = t0.elapsed();
+
+    let mut jit = build_oled_lab(true);
+    jit.machine.run(Some(warm)).expect("jit warm");
+    let s_warm = jit.machine.cpu.jit_engine_stats().expect("stats");
+    let t1 = Instant::now();
+    jit.machine.run(Some(timed)).expect("jit timed");
+    let jit_dt = t1.elapsed();
+    let s = jit.machine.cpu.jit_engine_stats().expect("stats");
+
+    // Coverage over the TIMED window only.
+    let bi = s.block_instrs - s_warm.block_instrs;
+    let it = s.interpreted - s_warm.interpreted;
+    let total = bi + it;
+    let coverage = if total > 0 {
+        bi as f64 / total as f64 * 100.0
+    } else {
+        0.0
+    };
+    let interp_mips = f64::from(timed) / interp_dt.as_secs_f64() / 1e6;
+    let jit_mips = f64::from(timed) / jit_dt.as_secs_f64() / 1e6;
+    println!("--- WARM C3 OLED lab, warm={warm} timed={timed} guest instr ---");
+    println!("interp: {interp_dt:?} ({interp_mips:.1} MIPS)");
+    println!("jit   : {jit_dt:?} ({jit_mips:.1} MIPS)");
+    println!(
+        "ratio : {:.2}x",
+        interp_dt.as_secs_f64() / jit_dt.as_secs_f64()
+    );
+    println!(
+        "coverage(timed window): {coverage:.2}% (block_instrs={bi} interpreted={it} \
+         compiled_total={} block_runs_total={})",
+        s.compiled, s.block_runs
+    );
+    for (name, lab) in [("interp", &interp), ("jit", &jit)] {
+        let serial = lab.serial.lock().expect("serial lock");
+        assert!(
+            String::from_utf8_lossy(&serial).contains("OLED painted: LabWired"),
+            "{name} arm never reached the paint"
+        );
+    }
+}
+
 #[test]
 #[ignore = "benchmark; run with --ignored --nocapture"]
 fn c3_oled_jit_coverage_and_walltime() {
     use std::time::Instant;
-    const N: u32 = 20_000_000;
+    let n: u32 = env_n(20_000_000);
 
     let mut interp = build_oled_lab(false);
     let t0 = Instant::now();
-    interp.machine.run(Some(N)).expect("interpreter run");
+    interp.machine.run(Some(n)).expect("interpreter run");
     let interp_dt = t0.elapsed();
 
     let mut jit = build_oled_lab(true);
     let t1 = Instant::now();
-    jit.machine.run(Some(N)).expect("jit run");
+    jit.machine.run(Some(n)).expect("jit run");
     let jit_dt = t1.elapsed();
 
     let s = jit
@@ -229,10 +311,10 @@ fn c3_oled_jit_coverage_and_walltime() {
     } else {
         0.0
     };
-    let interp_mips = f64::from(N) / interp_dt.as_secs_f64() / 1e6;
-    let jit_mips = f64::from(N) / jit_dt.as_secs_f64() / 1e6;
+    let interp_mips = f64::from(n) / interp_dt.as_secs_f64() / 1e6;
+    let jit_mips = f64::from(n) / jit_dt.as_secs_f64() / 1e6;
 
-    println!("--- REAL C3 OLED lab, {N} guest instr ---");
+    println!("--- REAL C3 OLED lab, {n} guest instr ---");
     println!("interp: {interp_dt:?} ({interp_mips:.1} MIPS)");
     println!("jit   : {jit_dt:?} ({jit_mips:.1} MIPS)");
     println!(
