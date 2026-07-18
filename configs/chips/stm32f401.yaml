@@ -27,12 +27,19 @@ peripherals:
     size: "1KB"
     config:
       profile: "stm32v2"
+      # SWD/JTAG defaults (RM0368 §8.4 / STM32F401 SVD): PA13/14/15 in AF mode.
+      reset_moder: 0xA8000000
+      reset_pupdr: 0x64000000
   - id: "gpiob"
     type: "gpio"
     base_address: 0x40020400
     size: "1KB"
     config:
       profile: "stm32v2"
+      # JTAG defaults (RM0368 §8.4 / STM32F401 SVD): PB3 (JTDO/SWO), PB4 (NJTRST).
+      reset_moder: 0x00000280
+      reset_ospeedr: 0x000000C0
+      reset_pupdr: 0x00000100
   - id: "gpioc"
     type: "gpio"
     base_address: 0x40020800
@@ -57,11 +64,18 @@ peripherals:
     base_address: 0x40023C00
     size: "1KB"
     config:
-      profile: "f1"
+      # F4 embedded-flash interface (RM0368 §3.8): ACR reset 0 (no F1-style
+      # prefetch default), CR LOCK at bit 31, OPTCR present. The F1 profile's
+      # 0x30 ACR default and bit-7 LOCK are silicon-wrong for F401.
+      profile: "stm32f4"
   - id: "pwr"
     type: "pwr"
     base_address: 0x40007000
     size: "1KB"
+    config:
+      # F4 PWR (RM0368 §5.4): only PWR_CR/PWR_CSR exist, both reset 0. The
+      # default L4 model surfaced CR1=0x200 / CR3=0x8000 and phantom PUCRx regs.
+      profile: "stm32f4"
   - id: "uart1"
     type: "uart"
     base_address: 0x40011000
