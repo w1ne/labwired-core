@@ -81,6 +81,7 @@ impl SystemBus {
             legacy_walk_disabled: false,
             hcsr04: Vec::new(),
             tm1637: Vec::new(),
+            seven_segment: Vec::new(),
             analog_inputs: Vec::new(),
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),

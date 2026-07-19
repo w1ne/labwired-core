@@ -805,6 +805,39 @@ impl WasmSimulator {
             .ok_or_else(|| JsValue::from_str(&format!("TM1637 device '{}' not found", device_id)))
     }
 
+    /// Return the character shown on the direct-drive 7-segment digit
+    /// identified by `device_id`.
+    ///
+    /// `device_id` must match a `board_io` binding with `device_type:
+    /// "seven-segment"`. Returns the single decoded character, with `'.'`
+    /// appended when the decimal point is lit — so a blank digit is `" "`,
+    /// a lit `0` is `"0"`, and `0` with the dp is `"0."`. An unrecognised
+    /// segment pattern decodes to `"?"` rather than silently blanking.
+    ///
+    /// The lit-segment mask is polarity-normalised by the model (COM low =
+    /// common cathode, COM high = common anode), so the text reads the same
+    /// either way it is wired.
+    #[wasm_bindgen]
+    pub fn get_seven_segment_text(&self, device_id: &str) -> Result<String, JsValue> {
+        let machine = self.machine.as_ref().unwrap();
+        machine
+            .bus
+            .seven_segment
+            .iter()
+            .find(|dev| dev.id == device_id)
+            .map(|dev| {
+                let mut text = String::new();
+                text.push(dev.ch());
+                if dev.decimal_point() {
+                    text.push('.');
+                }
+                text
+            })
+            .ok_or_else(|| {
+                JsValue::from_str(&format!("7-segment device '{}' not found", device_id))
+            })
+    }
+
     /// Return the SSD1680 tri-color e-paper framebuffer for the device identified by `device_id`.
     ///
     /// `device_id` must match a `board_io` binding with `device_type: "ssd1680_tricolor_290"`.

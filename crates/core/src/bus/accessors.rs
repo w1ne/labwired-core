@@ -232,6 +232,7 @@ impl crate::Bus for SystemBus {
                 }
                 self.maybe_arm_hcsr04(idx);
                 self.maybe_clock_tm1637(idx);
+                self.maybe_sample_seven_segment(idx);
                 #[cfg(feature = "event-scheduler")]
                 self.collect_scheduled_events(idx);
                 r
@@ -454,6 +455,7 @@ impl crate::Bus for SystemBus {
             }
             self.maybe_arm_hcsr04(idx);
             self.maybe_clock_tm1637(idx);
+            self.maybe_sample_seven_segment(idx);
             #[cfg(feature = "event-scheduler")]
             self.collect_scheduled_events(idx);
             if r.is_ok() {
@@ -536,6 +538,7 @@ impl crate::Bus for SystemBus {
             }
             self.maybe_arm_hcsr04(idx);
             self.maybe_clock_tm1637(idx);
+            self.maybe_sample_seven_segment(idx);
             #[cfg(feature = "event-scheduler")]
             self.collect_scheduled_events(idx);
             if r.is_ok() {

@@ -186,6 +186,7 @@ impl CanonicalConfig {
     /// All TS emitters are ported: legacy I²C devices ([`emit_legacy_i2c_device`]),
     /// GPIO/ADC `board_io` from point-to-point wires ([`emit_board_io_from_wires`]),
     /// SPI devices ([`emit_spi_device`]), ultrasonic ([`emit_ultrasonic`]),
+    /// the direct-drive seven-segment ([`emit_seven_segment`]),
     /// pcd8544 ([`emit_pcd8544`]), sn74hc165 ([`emit_sn74hc165`]), iolink-master
     /// ([`emit_iolink_master`]), neo6m-gps ([`emit_neo6m_gps`]) and the CAN
     /// diagnostic tester ([`emit_can_diagnostic_tool`]). They are invoked in the
@@ -278,6 +279,13 @@ impl CanonicalConfig {
             for part in non_mcu() {
                 if part.r#type == "ultrasonic" {
                     let (ext, bio) = emit_ultrasonic(&board, &wires, mcu_id, part);
+                    push(ext, bio);
+                }
+            }
+            // 1b. Direct-drive seven-segment (nine GPIO pins).
+            for part in non_mcu() {
+                if part.r#type == "seven-segment" {
+                    let (ext, bio) = emit_seven_segment(&wires, mcu_id, &part.id);
                     push(ext, bio);
                 }
             }
@@ -445,9 +453,14 @@ fn i2c_device_address(part_type: &str) -> Option<u32> {
 /// verbatim, including the `i2c_device`/`spi_device`/`uart_device` kinds:
 /// [`emit_board_io_from_wires`] mirrors the TS emitter, which skips the legacy
 /// I²C set, the [`SPI_DEVICE_TYPES`] set and the dedicated-emitter parts, then
-/// emits whatever kind remains for any other wired part (e.g. a `pca9685` or
-/// `seven-segment` wired straight to GPIO). `adc_input` remaps its peripheral to
-/// the pin's ADC controller in that emitter.
+/// emits whatever kind remains for any other wired part (e.g. a `pca9685` wired
+/// straight to GPIO). `adc_input` remaps its peripheral to the pin's ADC
+/// controller in that emitter.
+///
+/// Parts the CATALOG gives no `boardIoKind` return `None` — including the
+/// direct-drive displays `seven-segment` and `tm1637-7seg`, which are owned by
+/// dedicated emitters ([`emit_seven_segment`]) rather than the generic
+/// `board_io` path.
 fn board_io_kind(part_type: &str) -> Option<&'static str> {
     match part_type {
         "led" | "rgb-led" => Some("led"),
@@ -464,7 +477,6 @@ fn board_io_kind(part_type: &str) -> Option<&'static str> {
         | "max31855"
         | "neopixel"
         | "pcd8544"
-        | "seven-segment"
         | "sn74hc165"
         | "ssd1680_tricolor_290"
         | "uc8151d_tricolor_290" => Some("spi_device"),
@@ -931,6 +943,51 @@ fn emit_ultrasonic(
     (Some(ext), None)
 }
 
+/// Emit the `external_devices` fragment for a direct-drive `seven-segment` part
+/// (port of `emitSevenSegment`).
+///
+/// Nine pins go straight to GPIO. Unlike the TM1637, the pins need NOT share one
+/// GPIO peripheral — the kit resolves each pin's output register independently,
+/// so `connection` carries the COM pin's peripheral purely as the grouping key.
+/// A–G and COM are required (any unwired one emits nothing); DP is optional and
+/// is simply omitted from `config` when unwired.
+fn emit_seven_segment(
+    wires: &[Wire],
+    mcu_id: &str,
+    part_id: &str,
+) -> (Option<String>, Option<String>) {
+    const SEGS: [&str; 7] = ["A", "B", "C", "D", "E", "F", "G"];
+
+    let mut seg_pins: Vec<&str> = Vec::with_capacity(SEGS.len());
+    for seg in SEGS {
+        let Some(pin) = mcu_pin_for_part_pin(wires, mcu_id, part_id, seg) else {
+            return (None, None);
+        };
+        seg_pins.push(pin);
+    }
+    let Some(com_pin) = mcu_pin_for_part_pin(wires, mcu_id, part_id, "COM") else {
+        return (None, None);
+    };
+    // `gpioForMcuPin` — the COM pin's GPIO peripheral is the grouping key.
+    let Some((com_peripheral, _)) = parse_mcu_pin(com_pin) else {
+        return (None, None);
+    };
+    let dp_pin = mcu_pin_for_part_pin(wires, mcu_id, part_id, "DP");
+
+    let seg_config = SEGS
+        .iter()
+        .zip(&seg_pins)
+        .map(|(seg, pin)| format!("      {}_pin: \"{pin}\"", seg.to_ascii_lowercase()))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let dp_config = dp_pin.map_or_else(String::new, |p| format!("\n      dp_pin: \"{p}\""));
+
+    let ext = format!(
+        "  - id: \"{part_id}\"\n    type: \"seven-segment\"\n    connection: \"{com_peripheral}\"\n    config:\n{seg_config}{dp_config}\n      com_pin: \"{com_pin}\""
+    );
+    (Some(ext), None)
+}
+
 /// Emit the `external_devices` + `board_io` fragments for a pcd8544 part (port of
 /// `emitPcd8544`).
 fn emit_pcd8544(
@@ -1114,6 +1171,7 @@ fn emit_board_io_from_wires(
         "neo6m-gps",
         "can-transceiver",
         "can-diagnostic-tool",
+        "seven-segment",
     ];
 
     let mut entries = Vec::new();
@@ -1725,6 +1783,84 @@ board_io:
     active_high: true
 "#;
 
+    const FIXTURE_SEVEN_SEGMENT: &str = r#"{
+      "version": 1,
+      "parts": [
+        { "id": "mcu", "type": "nucleo-f401re" },
+        { "id": "seg", "type": "seven-segment" }
+      ],
+      "connections": [
+        ["mcu:PA0", "seg:A"],
+        ["mcu:PA1", "seg:B"],
+        ["mcu:PA4", "seg:C"],
+        ["mcu:PA5", "seg:D"],
+        ["mcu:PA6", "seg:E"],
+        ["mcu:PA7", "seg:F"],
+        ["mcu:PA8", "seg:G"],
+        ["mcu:PA9", "seg:DP"],
+        ["mcu:PB0", "seg:COM"]
+      ]
+    }"#;
+
+    const EXPECTED_SEVEN_SEGMENT: &str = r#"name: "playground-board"
+chip: "inline"
+external_devices:
+  - id: "seg"
+    type: "seven-segment"
+    connection: "gpiob"
+    config:
+      a_pin: "PA0"
+      b_pin: "PA1"
+      c_pin: "PA4"
+      d_pin: "PA5"
+      e_pin: "PA6"
+      f_pin: "PA7"
+      g_pin: "PA8"
+      dp_pin: "PA9"
+      com_pin: "PB0"
+board_io:
+  []
+"#;
+
+    /// DP is optional: the same panel with `DP` left unwired drops the
+    /// `dp_pin:` line and emits everything else unchanged.
+    const FIXTURE_SEVEN_SEGMENT_NO_DP: &str = r#"{
+      "version": 1,
+      "parts": [
+        { "id": "mcu", "type": "nucleo-f401re" },
+        { "id": "seg", "type": "seven-segment" }
+      ],
+      "connections": [
+        ["mcu:PA0", "seg:A"],
+        ["mcu:PA1", "seg:B"],
+        ["mcu:PA4", "seg:C"],
+        ["mcu:PA5", "seg:D"],
+        ["mcu:PA6", "seg:E"],
+        ["mcu:PA7", "seg:F"],
+        ["mcu:PA8", "seg:G"],
+        ["mcu:PB0", "seg:COM"]
+      ]
+    }"#;
+
+    const EXPECTED_SEVEN_SEGMENT_NO_DP: &str = r#"name: "playground-board"
+chip: "inline"
+external_devices:
+  - id: "seg"
+    type: "seven-segment"
+    connection: "gpiob"
+    config:
+      a_pin: "PA0"
+      b_pin: "PA1"
+      c_pin: "PA4"
+      d_pin: "PA5"
+      e_pin: "PA6"
+      f_pin: "PA7"
+      g_pin: "PA8"
+      com_pin: "PB0"
+board_io:
+  []
+"#;
+
     /// THE parity gate: for each fixture, the Rust `resolve()` must produce the
     /// exact `systemYaml` the TS oracle emits (byte-for-byte). Every fixture
     /// under packages/board-config/test/fixtures/canonical/*.json that has a
@@ -1757,6 +1893,16 @@ board_io:
                 EXPECTED_CAN_DIAGNOSTIC_TOOL,
             ),
             ("adc-input", FIXTURE_ADC_INPUT, EXPECTED_ADC_INPUT),
+            (
+                "seven-segment",
+                FIXTURE_SEVEN_SEGMENT,
+                EXPECTED_SEVEN_SEGMENT,
+            ),
+            (
+                "seven-segment-no-dp",
+                FIXTURE_SEVEN_SEGMENT_NO_DP,
+                EXPECTED_SEVEN_SEGMENT_NO_DP,
+            ),
         ] {
             let cfg = CanonicalConfig::from_json(fixture)
                 .unwrap_or_else(|e| panic!("{name}: fixture failed to parse/validate: {e}"));
