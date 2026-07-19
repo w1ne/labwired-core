@@ -30,6 +30,7 @@ so `git log -- <path>` resolves dates.
 from __future__ import annotations
 
 import argparse
+import difflib
 import subprocess
 import sys
 from datetime import date, datetime
@@ -178,9 +179,22 @@ def main() -> int:
     if args.check:
         existing = OUT_DOC.read_text() if OUT_DOC.exists() else ""
         if existing != rendered:
+            # Print the actual difference. This doc is rendered partly from git
+            # commit dates, so a checkout whose history differs from yours can
+            # fail this gate while it passes locally — and "is out of date" on
+            # its own gives a CI reader nothing to act on.
+            diff = "".join(
+                difflib.unified_diff(
+                    existing.splitlines(keepends=True),
+                    rendered.splitlines(keepends=True),
+                    fromfile=f"{OUT_DOC.name} (committed)",
+                    tofile=f"{OUT_DOC.name} (regenerated here)",
+                )
+            )
             print(
                 f"ERROR: {OUT_DOC.relative_to(CORE_ROOT)} is out of date.\n"
-                "       Run: python3 scripts/generate_validation_status.py",
+                "       Run: python3 scripts/generate_validation_status.py\n"
+                f"{diff}",
                 file=sys.stderr,
             )
             rc = 1
