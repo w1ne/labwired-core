@@ -15,8 +15,12 @@ inputs:
 limits:
   # The C3 I2C0 model clocks every transaction bit-by-bit at the wire rate the
   # timing registers dictate, and the firmware busy-waits on TRANS_COMPLETE like
-  # real silicon - 64 measurement cycles plus OLED renders take ~35M steps.
-  max_steps: 45000000
+  # real silicon. MEASURED: one measurement cycle costs ~343.8k core cycles, so
+  # the 64 samples + the OLED renders run to `LEO DONE` and the final frame dump
+  # at ~8.65M steps / ~22.6M cycles. 12M steps leaves ~38 % headroom; anything
+  # far above that just burns the post-DONE idle spin (2 cycles/instruction) and
+  # pushes the `cycles` counter far past the window the stimuli ladder lives in.
+  max_steps: 12000000
 assertions:
   # Boot banner + all four sensors brought up over real I²C.
   - uart_contains: "LEO BOOT"
@@ -40,319 +44,334 @@ assertions:
 # ONE way to move a reading, `set_input` (see labwired_core::sim_input). The
 # room's story is therefore written here, as a ladder of driven values on the
 # devices' real engineering-unit channels.
+#
+# PACING (measured, not guessed). `after_cycles` is the only time trigger the
+# stimuli schema offers, so every rung is an absolute cycle count and it MUST
+# sit inside the window in which the firmware is still sampling. That window was
+# measured against this exact firmware ELF by probing it with a 250k-cycle
+# ladder of marker values and reading back which `t=` sample each one reached:
+#
+#   sample t=4 reads at 1.25M cycles ... sample t=60 reads at 20.5M cycles
+#   => ~343.8k cycles per measurement cycle; all 64 samples done by ~21M cycles.
+#
+# The 15 rungs below are the original first-order glide sampled every 4th
+# measurement cycle, each placed at the measured read cycle of samples
+# t = 4, 8, 12 ... 60. A rung placed past ~21M cycles fires after the firmware
+# has stopped measuring and is DEAD: it changes no reading, and a scenario built
+# from dead rungs passes (or fails) for reasons that have nothing to do with it.
 stimuli:
   - target: { component: "scd41", channel: "co2" }
-    trigger: !after_cycles { cycles: 7300000 }
+    trigger: !after_cycles { cycles: 1250000 }
     value: 833
   - target: { component: "scd41", channel: "co2" }
-    trigger: !after_cycles { cycles: 13100000 }
+    trigger: !after_cycles { cycles: 2500000 }
     value: 1107
   - target: { component: "scd41", channel: "co2" }
-    trigger: !after_cycles { cycles: 18900000 }
+    trigger: !after_cycles { cycles: 3750000 }
     value: 1304
   - target: { component: "scd41", channel: "co2" }
-    trigger: !after_cycles { cycles: 24700000 }
+    trigger: !after_cycles { cycles: 5250000 }
     value: 1444
   - target: { component: "scd41", channel: "co2" }
-    trigger: !after_cycles { cycles: 30500000 }
+    trigger: !after_cycles { cycles: 6500000 }
     value: 1545
   - target: { component: "scd41", channel: "co2" }
-    trigger: !after_cycles { cycles: 36300000 }
+    trigger: !after_cycles { cycles: 7750000 }
     value: 1618
   - target: { component: "scd41", channel: "co2" }
-    trigger: !after_cycles { cycles: 42100000 }
+    trigger: !after_cycles { cycles: 9000000 }
     value: 1669
   - target: { component: "scd41", channel: "co2" }
-    trigger: !after_cycles { cycles: 47900000 }
+    trigger: !after_cycles { cycles: 10250000 }
     value: 1706
   - target: { component: "scd41", channel: "co2" }
-    trigger: !after_cycles { cycles: 53700000 }
+    trigger: !after_cycles { cycles: 11750000 }
     value: 1733
   - target: { component: "scd41", channel: "co2" }
-    trigger: !after_cycles { cycles: 59500000 }
+    trigger: !after_cycles { cycles: 13000000 }
     value: 1752
   - target: { component: "scd41", channel: "co2" }
-    trigger: !after_cycles { cycles: 65300000 }
+    trigger: !after_cycles { cycles: 14250000 }
     value: 1766
   - target: { component: "scd41", channel: "co2" }
-    trigger: !after_cycles { cycles: 71100000 }
+    trigger: !after_cycles { cycles: 15750000 }
     value: 1775
   - target: { component: "scd41", channel: "co2" }
-    trigger: !after_cycles { cycles: 76900000 }
+    trigger: !after_cycles { cycles: 17250000 }
     value: 1782
   - target: { component: "scd41", channel: "co2" }
-    trigger: !after_cycles { cycles: 82700000 }
+    trigger: !after_cycles { cycles: 18750000 }
     value: 1787
   - target: { component: "scd41", channel: "co2" }
-    trigger: !after_cycles { cycles: 88500000 }
+    trigger: !after_cycles { cycles: 20500000 }
     value: 1791
   - target: { component: "scd41", channel: "humidity" }
-    trigger: !after_cycles { cycles: 7300000 }
+    trigger: !after_cycles { cycles: 1250000 }
     value: 52.2
   - target: { component: "scd41", channel: "humidity" }
-    trigger: !after_cycles { cycles: 13100000 }
+    trigger: !after_cycles { cycles: 2500000 }
     value: 57.9
   - target: { component: "scd41", channel: "humidity" }
-    trigger: !after_cycles { cycles: 18900000 }
+    trigger: !after_cycles { cycles: 3750000 }
     value: 62.3
   - target: { component: "scd41", channel: "humidity" }
-    trigger: !after_cycles { cycles: 24700000 }
+    trigger: !after_cycles { cycles: 5250000 }
     value: 65.7
   - target: { component: "scd41", channel: "humidity" }
-    trigger: !after_cycles { cycles: 30500000 }
+    trigger: !after_cycles { cycles: 6500000 }
     value: 68.4
   - target: { component: "scd41", channel: "humidity" }
-    trigger: !after_cycles { cycles: 36300000 }
+    trigger: !after_cycles { cycles: 7750000 }
     value: 70.5
   - target: { component: "scd41", channel: "humidity" }
-    trigger: !after_cycles { cycles: 42100000 }
+    trigger: !after_cycles { cycles: 9000000 }
     value: 72.2
   - target: { component: "scd41", channel: "humidity" }
-    trigger: !after_cycles { cycles: 47900000 }
+    trigger: !after_cycles { cycles: 10250000 }
     value: 73.4
   - target: { component: "scd41", channel: "humidity" }
-    trigger: !after_cycles { cycles: 53700000 }
+    trigger: !after_cycles { cycles: 11750000 }
     value: 74.4
   - target: { component: "scd41", channel: "humidity" }
-    trigger: !after_cycles { cycles: 59500000 }
+    trigger: !after_cycles { cycles: 13000000 }
     value: 75.2
   - target: { component: "scd41", channel: "humidity" }
-    trigger: !after_cycles { cycles: 65300000 }
+    trigger: !after_cycles { cycles: 14250000 }
     value: 75.8
   - target: { component: "scd41", channel: "humidity" }
-    trigger: !after_cycles { cycles: 71100000 }
+    trigger: !after_cycles { cycles: 15750000 }
     value: 76.3
   - target: { component: "scd41", channel: "humidity" }
-    trigger: !after_cycles { cycles: 76900000 }
+    trigger: !after_cycles { cycles: 17250000 }
     value: 76.7
   - target: { component: "scd41", channel: "humidity" }
-    trigger: !after_cycles { cycles: 82700000 }
+    trigger: !after_cycles { cycles: 18750000 }
     value: 77.0
   - target: { component: "scd41", channel: "humidity" }
-    trigger: !after_cycles { cycles: 88500000 }
+    trigger: !after_cycles { cycles: 20500000 }
     value: 77.2
   - target: { component: "scd41", channel: "temperature" }
-    trigger: !after_cycles { cycles: 7300000 }
+    trigger: !after_cycles { cycles: 1250000 }
     value: 21.2
   - target: { component: "scd41", channel: "temperature" }
-    trigger: !after_cycles { cycles: 13100000 }
+    trigger: !after_cycles { cycles: 2500000 }
     value: 21.3
   - target: { component: "scd41", channel: "temperature" }
-    trigger: !after_cycles { cycles: 18900000 }
+    trigger: !after_cycles { cycles: 3750000 }
     value: 21.4
   - target: { component: "scd41", channel: "temperature" }
-    trigger: !after_cycles { cycles: 24700000 }
+    trigger: !after_cycles { cycles: 5250000 }
     value: 21.5
   - target: { component: "scd41", channel: "temperature" }
-    trigger: !after_cycles { cycles: 30500000 }
+    trigger: !after_cycles { cycles: 6500000 }
     value: 21.6
   - target: { component: "scd41", channel: "temperature" }
-    trigger: !after_cycles { cycles: 36300000 }
+    trigger: !after_cycles { cycles: 7750000 }
     value: 21.6
   - target: { component: "scd41", channel: "temperature" }
-    trigger: !after_cycles { cycles: 42100000 }
+    trigger: !after_cycles { cycles: 9000000 }
     value: 21.7
   - target: { component: "scd41", channel: "temperature" }
-    trigger: !after_cycles { cycles: 47900000 }
+    trigger: !after_cycles { cycles: 10250000 }
     value: 21.7
   - target: { component: "scd41", channel: "temperature" }
-    trigger: !after_cycles { cycles: 53700000 }
+    trigger: !after_cycles { cycles: 11750000 }
     value: 21.8
   - target: { component: "scd41", channel: "temperature" }
-    trigger: !after_cycles { cycles: 59500000 }
+    trigger: !after_cycles { cycles: 13000000 }
     value: 21.8
   - target: { component: "scd41", channel: "temperature" }
-    trigger: !after_cycles { cycles: 65300000 }
+    trigger: !after_cycles { cycles: 14250000 }
     value: 21.8
   - target: { component: "scd41", channel: "temperature" }
-    trigger: !after_cycles { cycles: 71100000 }
+    trigger: !after_cycles { cycles: 15750000 }
     value: 21.9
   - target: { component: "scd41", channel: "temperature" }
-    trigger: !after_cycles { cycles: 76900000 }
+    trigger: !after_cycles { cycles: 17250000 }
     value: 21.9
   - target: { component: "scd41", channel: "temperature" }
-    trigger: !after_cycles { cycles: 82700000 }
+    trigger: !after_cycles { cycles: 18750000 }
     value: 21.9
   - target: { component: "scd41", channel: "temperature" }
-    trigger: !after_cycles { cycles: 88500000 }
+    trigger: !after_cycles { cycles: 20500000 }
     value: 21.9
   - target: { component: "surface-ir", channel: "surface_temp" }
-    trigger: !after_cycles { cycles: 7300000 }
+    trigger: !after_cycles { cycles: 1250000 }
     value: 13.73
   - target: { component: "surface-ir", channel: "surface_temp" }
-    trigger: !after_cycles { cycles: 13100000 }
+    trigger: !after_cycles { cycles: 2500000 }
     value: 12.11
   - target: { component: "surface-ir", channel: "surface_temp" }
-    trigger: !after_cycles { cycles: 18900000 }
+    trigger: !after_cycles { cycles: 3750000 }
     value: 10.94
   - target: { component: "surface-ir", channel: "surface_temp" }
-    trigger: !after_cycles { cycles: 24700000 }
+    trigger: !after_cycles { cycles: 5250000 }
     value: 10.11
   - target: { component: "surface-ir", channel: "surface_temp" }
-    trigger: !after_cycles { cycles: 30500000 }
+    trigger: !after_cycles { cycles: 6500000 }
     value: 9.51
   - target: { component: "surface-ir", channel: "surface_temp" }
-    trigger: !after_cycles { cycles: 36300000 }
+    trigger: !after_cycles { cycles: 7750000 }
     value: 9.08
   - target: { component: "surface-ir", channel: "surface_temp" }
-    trigger: !after_cycles { cycles: 42100000 }
+    trigger: !after_cycles { cycles: 9000000 }
     value: 8.77
   - target: { component: "surface-ir", channel: "surface_temp" }
-    trigger: !after_cycles { cycles: 47900000 }
+    trigger: !after_cycles { cycles: 10250000 }
     value: 8.56
   - target: { component: "surface-ir", channel: "surface_temp" }
-    trigger: !after_cycles { cycles: 53700000 }
+    trigger: !after_cycles { cycles: 11750000 }
     value: 8.40
   - target: { component: "surface-ir", channel: "surface_temp" }
-    trigger: !after_cycles { cycles: 59500000 }
+    trigger: !after_cycles { cycles: 13000000 }
     value: 8.28
   - target: { component: "surface-ir", channel: "surface_temp" }
-    trigger: !after_cycles { cycles: 65300000 }
+    trigger: !after_cycles { cycles: 14250000 }
     value: 8.20
   - target: { component: "surface-ir", channel: "surface_temp" }
-    trigger: !after_cycles { cycles: 71100000 }
+    trigger: !after_cycles { cycles: 15750000 }
     value: 8.15
   - target: { component: "surface-ir", channel: "surface_temp" }
-    trigger: !after_cycles { cycles: 76900000 }
+    trigger: !after_cycles { cycles: 17250000 }
     value: 8.10
   - target: { component: "surface-ir", channel: "surface_temp" }
-    trigger: !after_cycles { cycles: 82700000 }
+    trigger: !after_cycles { cycles: 18750000 }
     value: 8.08
   - target: { component: "surface-ir", channel: "surface_temp" }
-    trigger: !after_cycles { cycles: 88500000 }
+    trigger: !after_cycles { cycles: 20500000 }
     value: 8.05
   - target: { component: "veml7700", channel: "lux" }
-    trigger: !after_cycles { cycles: 7300000 }
+    trigger: !after_cycles { cycles: 1250000 }
     value: 347.9
   - target: { component: "veml7700", channel: "lux" }
-    trigger: !after_cycles { cycles: 13100000 }
+    trigger: !after_cycles { cycles: 2500000 }
     value: 274.8
   - target: { component: "veml7700", channel: "lux" }
-    trigger: !after_cycles { cycles: 18900000 }
+    trigger: !after_cycles { cycles: 3750000 }
     value: 222.4
   - target: { component: "veml7700", channel: "lux" }
-    trigger: !after_cycles { cycles: 24700000 }
+    trigger: !after_cycles { cycles: 5250000 }
     value: 184.8
   - target: { component: "veml7700", channel: "lux" }
-    trigger: !after_cycles { cycles: 30500000 }
+    trigger: !after_cycles { cycles: 6500000 }
     value: 157.9
   - target: { component: "veml7700", channel: "lux" }
-    trigger: !after_cycles { cycles: 36300000 }
+    trigger: !after_cycles { cycles: 7750000 }
     value: 138.7
   - target: { component: "veml7700", channel: "lux" }
-    trigger: !after_cycles { cycles: 42100000 }
+    trigger: !after_cycles { cycles: 9000000 }
     value: 124.9
   - target: { component: "veml7700", channel: "lux" }
-    trigger: !after_cycles { cycles: 47900000 }
+    trigger: !after_cycles { cycles: 10250000 }
     value: 115.0
   - target: { component: "veml7700", channel: "lux" }
-    trigger: !after_cycles { cycles: 53700000 }
+    trigger: !after_cycles { cycles: 11750000 }
     value: 107.9
   - target: { component: "veml7700", channel: "lux" }
-    trigger: !after_cycles { cycles: 59500000 }
+    trigger: !after_cycles { cycles: 13000000 }
     value: 102.8
   - target: { component: "veml7700", channel: "lux" }
-    trigger: !after_cycles { cycles: 65300000 }
+    trigger: !after_cycles { cycles: 14250000 }
     value: 99.2
   - target: { component: "veml7700", channel: "lux" }
-    trigger: !after_cycles { cycles: 71100000 }
+    trigger: !after_cycles { cycles: 15750000 }
     value: 96.6
   - target: { component: "veml7700", channel: "lux" }
-    trigger: !after_cycles { cycles: 76900000 }
+    trigger: !after_cycles { cycles: 17250000 }
     value: 94.7
   - target: { component: "veml7700", channel: "lux" }
-    trigger: !after_cycles { cycles: 82700000 }
+    trigger: !after_cycles { cycles: 18750000 }
     value: 93.4
   - target: { component: "veml7700", channel: "lux" }
-    trigger: !after_cycles { cycles: 88500000 }
+    trigger: !after_cycles { cycles: 20500000 }
     value: 92.4
   - target: { component: "sps30", channel: "pm2_5" }
-    trigger: !after_cycles { cycles: 7300000 }
+    trigger: !after_cycles { cycles: 1250000 }
     value: 15.64
   - target: { component: "sps30", channel: "pm2_5" }
-    trigger: !after_cycles { cycles: 13100000 }
+    trigger: !after_cycles { cycles: 2500000 }
     value: 22.55
   - target: { component: "sps30", channel: "pm2_5" }
-    trigger: !after_cycles { cycles: 18900000 }
+    trigger: !after_cycles { cycles: 3750000 }
     value: 27.50
   - target: { component: "sps30", channel: "pm2_5" }
-    trigger: !after_cycles { cycles: 24700000 }
+    trigger: !after_cycles { cycles: 5250000 }
     value: 31.04
   - target: { component: "sps30", channel: "pm2_5" }
-    trigger: !after_cycles { cycles: 30500000 }
+    trigger: !after_cycles { cycles: 6500000 }
     value: 33.58
   - target: { component: "sps30", channel: "pm2_5" }
-    trigger: !after_cycles { cycles: 36300000 }
+    trigger: !after_cycles { cycles: 7750000 }
     value: 35.40
   - target: { component: "sps30", channel: "pm2_5" }
-    trigger: !after_cycles { cycles: 42100000 }
+    trigger: !after_cycles { cycles: 9000000 }
     value: 36.71
   - target: { component: "sps30", channel: "pm2_5" }
-    trigger: !after_cycles { cycles: 47900000 }
+    trigger: !after_cycles { cycles: 10250000 }
     value: 37.64
   - target: { component: "sps30", channel: "pm2_5" }
-    trigger: !after_cycles { cycles: 53700000 }
+    trigger: !after_cycles { cycles: 11750000 }
     value: 38.31
   - target: { component: "sps30", channel: "pm2_5" }
-    trigger: !after_cycles { cycles: 59500000 }
+    trigger: !after_cycles { cycles: 13000000 }
     value: 38.79
   - target: { component: "sps30", channel: "pm2_5" }
-    trigger: !after_cycles { cycles: 65300000 }
+    trigger: !after_cycles { cycles: 14250000 }
     value: 39.13
   - target: { component: "sps30", channel: "pm2_5" }
-    trigger: !after_cycles { cycles: 71100000 }
+    trigger: !after_cycles { cycles: 15750000 }
     value: 39.38
   - target: { component: "sps30", channel: "pm2_5" }
-    trigger: !after_cycles { cycles: 76900000 }
+    trigger: !after_cycles { cycles: 17250000 }
     value: 39.55
   - target: { component: "sps30", channel: "pm2_5" }
-    trigger: !after_cycles { cycles: 82700000 }
+    trigger: !after_cycles { cycles: 18750000 }
     value: 39.68
   - target: { component: "sps30", channel: "pm2_5" }
-    trigger: !after_cycles { cycles: 88500000 }
+    trigger: !after_cycles { cycles: 20500000 }
     value: 39.77
   - target: { component: "sgp41", channel: "voc_sraw" }
-    trigger: !after_cycles { cycles: 7300000 }
+    trigger: !after_cycles { cycles: 1250000 }
     value: 29702
   - target: { component: "sgp41", channel: "voc_sraw" }
-    trigger: !after_cycles { cycles: 13100000 }
+    trigger: !after_cycles { cycles: 2500000 }
     value: 30921
   - target: { component: "sgp41", channel: "voc_sraw" }
-    trigger: !after_cycles { cycles: 18900000 }
+    trigger: !after_cycles { cycles: 3750000 }
     value: 31794
   - target: { component: "sgp41", channel: "voc_sraw" }
-    trigger: !after_cycles { cycles: 24700000 }
+    trigger: !after_cycles { cycles: 5250000 }
     value: 32420
   - target: { component: "sgp41", channel: "voc_sraw" }
-    trigger: !after_cycles { cycles: 30500000 }
+    trigger: !after_cycles { cycles: 6500000 }
     value: 32868
   - target: { component: "sgp41", channel: "voc_sraw" }
-    trigger: !after_cycles { cycles: 36300000 }
+    trigger: !after_cycles { cycles: 7750000 }
     value: 33189
   - target: { component: "sgp41", channel: "voc_sraw" }
-    trigger: !after_cycles { cycles: 42100000 }
+    trigger: !after_cycles { cycles: 9000000 }
     value: 33419
   - target: { component: "sgp41", channel: "voc_sraw" }
-    trigger: !after_cycles { cycles: 47900000 }
+    trigger: !after_cycles { cycles: 10250000 }
     value: 33584
   - target: { component: "sgp41", channel: "voc_sraw" }
-    trigger: !after_cycles { cycles: 53700000 }
+    trigger: !after_cycles { cycles: 11750000 }
     value: 33702
   - target: { component: "sgp41", channel: "voc_sraw" }
-    trigger: !after_cycles { cycles: 59500000 }
+    trigger: !after_cycles { cycles: 13000000 }
     value: 33786
   - target: { component: "sgp41", channel: "voc_sraw" }
-    trigger: !after_cycles { cycles: 65300000 }
+    trigger: !after_cycles { cycles: 14250000 }
     value: 33847
   - target: { component: "sgp41", channel: "voc_sraw" }
-    trigger: !after_cycles { cycles: 71100000 }
+    trigger: !after_cycles { cycles: 15750000 }
     value: 33890
   - target: { component: "sgp41", channel: "voc_sraw" }
-    trigger: !after_cycles { cycles: 76900000 }
+    trigger: !after_cycles { cycles: 17250000 }
     value: 33921
   - target: { component: "sgp41", channel: "voc_sraw" }
-    trigger: !after_cycles { cycles: 82700000 }
+    trigger: !after_cycles { cycles: 18750000 }
     value: 33944
   - target: { component: "sgp41", channel: "voc_sraw" }
-    trigger: !after_cycles { cycles: 88500000 }
+    trigger: !after_cycles { cycles: 20500000 }
     value: 33960
