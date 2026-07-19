@@ -664,6 +664,48 @@
       ]
     },
     {
+      "device_type": "ldr",
+      "label": "Photoresistor (LDR)",
+      "summary": "CdS photoresistor + voltage divider on an ADC channel.",
+      "detail": "Light-dependent-resistor model (R = 10 kΩ at 10 lx, gamma = 0.7) as the top leg of a 10 kΩ pull-down divider. Drive the `lux` channel at runtime and the ADC channel follows through the real resistance→voltage math: dark reads near 0 V, bright reads toward Vref. Starts at 100 lx (dim indoor light).",
+      "transport": "analog",
+      "category": "analog",
+      "config_keys": [
+        {
+          "name": "channel",
+          "ty": "int",
+          "doc": "ADC channel index (0..N). Defaults to 0."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "lux",
+          "label": "Illuminance",
+          "unit": "lx",
+          "min": 0.0,
+          "max": 100000.0
+        }
+      ]
+    },
+    {
+      "device_type": "74hc595",
+      "label": "74HC595 Shift Register (8-bit output)",
+      "summary": "8-bit serial-in / parallel-out shift register over SPI.",
+      "detail": "Lets a host MCU drive 8 outputs (QA..QH) through one SPI byte: SER→MOSI, SRCLK→SCK, RCLK→chip-select. Firmware shifts a byte then pulses RCLK to latch it onto the pins; the parallel outputs hold until that latch. Bit 7 = QH, bit 0 = QA (MSB-first).",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "RCLK latch GPIO pin, wired as SPI chip-select (e.g. \"PA4\"). Defaults to PA4."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
       "device_type": "vl53l1x",
       "label": "VL53L1X ToF",
       "summary": "Laser time-of-flight distance sensor over I2C.",
