@@ -415,7 +415,7 @@ mod tests {
         use crate::sim_input::SimInput;
         let mut d = Sps30::new_default(SPS30_ADDR);
         send(&mut d, &[0x00, 0x10, 0x03, 0x00, crc8(&[0x03, 0x00])]);
-        let mut read_pm = |d: &mut Sps30| {
+        let read_pm = |d: &mut Sps30| {
             send(d, &[0x03, 0x00]);
             let b = read_n(d, 60);
             (

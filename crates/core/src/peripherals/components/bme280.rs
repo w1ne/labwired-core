@@ -82,7 +82,7 @@ impl Bme280Calib {
         let dig_t2 = self.dig_t2 as i32;
         let dig_t3 = self.dig_t3 as i32;
         let var1 = (((adc_t >> 3) - (dig_t1 << 1)) * dig_t2) >> 11;
-        let var2 = ((((adc_t >> 4) - dig_t1) * ((adc_t >> 4) - dig_t1)) >> 12) * dig_t3 >> 14;
+        let var2 = (((((adc_t >> 4) - dig_t1) * ((adc_t >> 4) - dig_t1)) >> 12) * dig_t3) >> 14;
         var1 + var2
     }
 
@@ -574,7 +574,7 @@ mod tests {
             let t1 = self.dig_t1 as i32;
             let var1 = (((adc_t >> 3) - (t1 << 1)) * self.dig_t2 as i32) >> 11;
             let var2 =
-                ((((adc_t >> 4) - t1) * ((adc_t >> 4) - t1)) >> 12) * self.dig_t3 as i32 >> 14;
+                (((((adc_t >> 4) - t1) * ((adc_t >> 4) - t1)) >> 12) * self.dig_t3 as i32) >> 14;
             var1 + var2
         }
 
