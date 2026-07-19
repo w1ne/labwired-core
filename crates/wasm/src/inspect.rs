@@ -470,6 +470,99 @@ impl WasmSimulator {
         )))
     }
 
+    /// Return the visible text of the LCD1602 identified by `device_id`.
+    ///
+    /// `device_id` must match a `board_io` binding with `device_type: "lcd1602"`.
+    /// Returns exactly 32 characters — row 0 then row 1, no separator — so the
+    /// caller slices `[0..16]` and `[16..32]`. A display the firmware has not
+    /// switched on reads as all spaces, matching the dark panel.
+    /// Returns a JS error if the device is not found.
+    #[wasm_bindgen]
+    pub fn get_lcd1602_text(&self, device_id: &str) -> Result<String, JsValue> {
+        let machine = self.machine.as_ref().unwrap();
+
+        let binding = self
+            .board_io
+            .iter()
+            .find(|b| b.id == device_id && b.device_type.as_deref() == Some("lcd1602"))
+            .ok_or_else(|| {
+                JsValue::from_str(&format!("No lcd1602 board_io binding '{}'", device_id))
+            })?;
+
+        let idx = machine
+            .bus
+            .find_peripheral_index_by_name(&binding.peripheral)
+            .ok_or_else(|| {
+                JsValue::from_str(&format!(
+                    "I2C peripheral '{}' not found",
+                    binding.peripheral
+                ))
+            })?;
+
+        let any = machine.bus.peripherals[idx]
+            .dev
+            .as_any()
+            .ok_or_else(|| JsValue::from_str("Peripheral does not support downcasting"))?;
+
+        // Default matches the kit's own default: 0x27, the PCF8574T backpack.
+        let address = binding.i2c_address.unwrap_or(0x27);
+
+        // Same controller coverage as `get_ssd1306_framebuffer`: STM32 boards use
+        // the generic `I2c`, the ESP32-C3 and ESP32-S3 use their own command-list
+        // controllers. All attach character LCDs through the bus I²C choke point,
+        // so all three must be enumerable here — otherwise the panel renders blank
+        // in the playground even though the device is present and being written to.
+        if let Some(i2c) = any.downcast_ref::<labwired_core::peripherals::i2c::I2c>() {
+            for device in i2c.attached_devices() {
+                let device = device.borrow();
+                if device.address() != address {
+                    continue;
+                }
+                if let Some(lcd) = device.as_any().and_then(|any| {
+                    any.downcast_ref::<labwired_core::peripherals::components::Lcd1602>()
+                }) {
+                    return Ok(lcd.text());
+                }
+            }
+        } else if let Some(c3) =
+            any.downcast_ref::<labwired_core::peripherals::esp32c3::i2c::Esp32c3I2c>()
+        {
+            for device in c3.attached_slaves() {
+                if device.address() != address {
+                    continue;
+                }
+                if let Some(lcd) = device.as_any().and_then(|any| {
+                    any.downcast_ref::<labwired_core::peripherals::components::Lcd1602>()
+                }) {
+                    return Ok(lcd.text());
+                }
+            }
+        } else if let Some(s3) =
+            any.downcast_ref::<labwired_core::peripherals::esp32s3::i2c::Esp32s3I2c>()
+        {
+            for device in s3.attached_slaves() {
+                if device.address() != address {
+                    continue;
+                }
+                if let Some(lcd) = device.as_any().and_then(|any| {
+                    any.downcast_ref::<labwired_core::peripherals::components::Lcd1602>()
+                }) {
+                    return Ok(lcd.text());
+                }
+            }
+        } else {
+            return Err(JsValue::from_str(&format!(
+                "Peripheral '{}' is not an I2C controller",
+                binding.peripheral
+            )));
+        }
+
+        Err(JsValue::from_str(&format!(
+            "LCD1602 device at address 0x{:02x} not found on '{}'",
+            address, binding.peripheral
+        )))
+    }
+
     /// Return the SH1107 GDDRAM framebuffer for the device identified by `device_id`.
     ///
     /// `device_id` must match a `board_io` binding with `device_type: "oled-sh1107"`.

@@ -48,6 +48,7 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::veml7700::VEML7700_KIT,
     &components::mlx90614::MLX90614_KIT,
     &components::max7219::MAX7219_KIT,
+    &components::lcd1602::LCD1602_KIT,
 ];
 
 /// Borrow the registry slice.

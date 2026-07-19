@@ -21,6 +21,7 @@ pub mod iolink_station;
 pub mod ir_component;
 pub mod ir_core;
 pub mod ir_spi_component;
+pub mod lcd1602;
 pub mod ldr;
 pub mod max31855;
 pub mod max7219;
@@ -63,6 +64,7 @@ pub use iolink_master::{
 };
 pub use ir_component::IrI2cComponent;
 pub use ir_spi_component::IrSpiComponent;
+pub use lcd1602::Lcd1602;
 pub use ldr::Ldr;
 pub use max31855::Max31855;
 pub use max7219::Max7219;
