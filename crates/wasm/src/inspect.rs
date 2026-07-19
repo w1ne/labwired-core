@@ -984,6 +984,90 @@ impl WasmSimulator {
         })
     }
 
+    /// Return the MAX7219 LED-matrix framebuffer for the device identified by `device_id`.
+    ///
+    /// `device_id` must match a `board_io` binding with `device_type: "led-matrix"`.
+    /// Returns an 8-byte `Uint8Array`: one byte per matrix row, row 0 first,
+    /// bit 7 = the leftmost column (`SEG A` on the driver). The bytes already
+    /// account for shutdown (all zero) and display test (all `0xFF`), so the
+    /// renderer can paint them directly.
+    /// Returns a JS error if the device is not found.
+    #[wasm_bindgen]
+    pub fn get_led_matrix_framebuffer(&self, device_id: &str) -> Result<Box<[u8]>, JsValue> {
+        let machine = self.machine.as_ref().unwrap();
+
+        let binding = self
+            .board_io
+            .iter()
+            .find(|b| b.id == device_id && b.device_type.as_deref() == Some("led-matrix"))
+            .ok_or_else(|| {
+                JsValue::from_str(&format!("No led-matrix board_io binding '{}'", device_id))
+            })?;
+
+        let idx = machine
+            .bus
+            .find_peripheral_index_by_name(&binding.peripheral)
+            .ok_or_else(|| {
+                JsValue::from_str(&format!(
+                    "SPI peripheral '{}' not found",
+                    binding.peripheral
+                ))
+            })?;
+
+        let any = machine.bus.peripherals[idx]
+            .dev
+            .as_any()
+            .ok_or_else(|| JsValue::from_str("Peripheral does not support downcasting"))?;
+
+        // Cover every SPI controller a supported board can hang a MAX7219 off:
+        // the generic STM32-shape `Spi`, the ESP32 `Esp32Spi` and the ESP32-C3
+        // `Esp32c3Spi` — the same set the SSD1680 readback enumerates. Missing
+        // one here renders the matrix blank even though the device is present
+        // and being driven.
+        let rows = if let Some(spi) = any.downcast_ref::<labwired_core::peripherals::spi::Spi>() {
+            spi.attached_devices.iter().find_map(|dev| {
+                dev.as_any()
+                    .and_then(|a| {
+                        a.downcast_ref::<labwired_core::peripherals::components::Max7219>()
+                    })
+                    .map(|m| m.framebuffer())
+            })
+        } else if let Some(spi) =
+            any.downcast_ref::<labwired_core::peripherals::esp32::spi::Esp32Spi>()
+        {
+            spi.attached_devices.iter().find_map(|dev| {
+                dev.as_any()
+                    .and_then(|a| {
+                        a.downcast_ref::<labwired_core::peripherals::components::Max7219>()
+                    })
+                    .map(|m| m.framebuffer())
+            })
+        } else if let Some(spi) =
+            any.downcast_ref::<labwired_core::peripherals::esp32c3::spi::Esp32c3Spi>()
+        {
+            spi.attached_devices().iter().find_map(|dev| {
+                dev.as_any()
+                    .and_then(|a| {
+                        a.downcast_ref::<labwired_core::peripherals::components::Max7219>()
+                    })
+                    .map(|m| m.framebuffer())
+            })
+        } else {
+            return Err(JsValue::from_str(&format!(
+                "Peripheral '{}' is not an SPI controller",
+                binding.peripheral
+            )));
+        };
+
+        let rows = rows.ok_or_else(|| {
+            JsValue::from_str(&format!(
+                "MAX7219 device not found on SPI peripheral '{}'",
+                binding.peripheral
+            ))
+        })?;
+        Ok(rows.to_vec().into_boxed_slice())
+    }
+
     /// Read back the current state of each SPI sensor declared in `board_io`.
     /// Returns `[{ id, kind: "max31855", tc_c, internal_c }, ...]`.
     #[wasm_bindgen]

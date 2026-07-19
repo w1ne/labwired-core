@@ -990,6 +990,23 @@
           "max": 125.0
         }
       ]
+    },
+    {
+      "device_type": "led-matrix",
+      "label": "MAX7219 8×8 LED Matrix",
+      "summary": "8×8 LED matrix driven by a MAX7219 serial display driver over SPI.",
+      "detail": "The common 8×8 dot-matrix module built around a MAX7219 common-cathode display driver. Firmware clocks 16 bits per transaction — an address byte then a data byte — and pulses CS/LOAD to latch. Digit registers 0x01–0x08 are the eight matrix rows, so digit RAM is the framebuffer; the model also tracks decode mode, intensity, scan limit, shutdown and display test, blanking or flooding the readback the way the real part drives the panel.",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "CS/LOAD GPIO pin, wired as SPI chip-select (e.g. \"PA4\"). Defaults to PA4."
+        }
+      ],
+      "labs": [],
+      "inputs": []
     }
   ]
 }
