@@ -182,7 +182,6 @@ impl<'a> AttachCtx<'a> {
         Ok(())
     }
 
-
     /// Resolve an STM32 pin label (e.g. `"PC7"`) to its `(ODR address, bit)`
     /// so a SPI display can sample the host's D/C line directly from the
     /// driving GPIO's output register. Returns None for unknown ports or

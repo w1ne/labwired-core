@@ -107,7 +107,11 @@ fn two_potentiometers_are_individually_addressable() {
         .into_iter()
         .filter(|(_, ch)| ch.key == "position")
         .collect();
-    assert_eq!(positions.len(), 2, "expected knob + fader, got {positions:?}");
+    assert_eq!(
+        positions.len(),
+        2,
+        "expected knob + fader, got {positions:?}"
+    );
     let owners: Vec<_> = positions.iter().map(|(o, _)| o.as_str()).collect();
     assert!(
         owners.contains(&"knob") && owners.contains(&"fader"),

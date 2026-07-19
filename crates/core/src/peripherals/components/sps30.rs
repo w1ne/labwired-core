@@ -418,7 +418,11 @@ mod tests {
         let mut read_pm = |d: &mut Sps30| {
             send(d, &[0x03, 0x00]);
             let b = read_n(d, 60);
-            (decode_float(&b, 0), decode_float(&b, 1), decode_float(&b, 3))
+            (
+                decode_float(&b, 0),
+                decode_float(&b, 1),
+                decode_float(&b, 3),
+            )
         };
         for _ in 0..20 {
             let (_, pm2_5, _) = read_pm(&mut d);
@@ -429,11 +433,17 @@ mod tests {
         assert!((pm2_5 - 22.0).abs() < 1e-3, "driven PM2.5: {pm2_5}");
         // The other bins are independent channels: driving PM2.5 alone leaves
         // them where they were seeded.
-        assert!((pm1_0 - 6.0 * 0.78).abs() < 1e-3, "pm1_0 unchanged: {pm1_0}");
+        assert!(
+            (pm1_0 - 6.0 * 0.78).abs() < 1e-3,
+            "pm1_0 unchanged: {pm1_0}"
+        );
         d.set_input("pm10", 30.0).unwrap();
         let (_, _, pm10_after) = read_pm(&mut d);
         assert!((pm10 - 6.0 * 1.18).abs() < 1e-3);
-        assert!((pm10_after - 30.0).abs() < 1e-3, "driven PM10: {pm10_after}");
+        assert!(
+            (pm10_after - 30.0).abs() < 1e-3,
+            "driven PM10: {pm10_after}"
+        );
     }
 
     #[test]

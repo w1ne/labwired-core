@@ -55,8 +55,8 @@ impl SystemBus {
             c.push_slave(wrapped);
         } else if let Some(c) = any.downcast_mut::<crate::peripherals::nrf52::twim::Nrf52Twim>() {
             c.push_slave(wrapped);
-        } else if let Some(c) = any
-            .downcast_mut::<crate::peripherals::nrf52::serial_instance::Nrf52SerialInstance>()
+        } else if let Some(c) =
+            any.downcast_mut::<crate::peripherals::nrf52::serial_instance::Nrf52SerialInstance>()
         {
             // SPIM0/TWIM0 share one MMIO window; an I²C slave belongs to the
             // TWIM half. The nRF52 factory attaches manifest-declared externals
@@ -345,8 +345,8 @@ impl SystemBus {
         } else if let Some(c) = any.downcast_mut::<crate::peripherals::esp32s3::gpspi::Esp32s3Spi>()
         {
             c.push_device(wrapped);
-        } else if let Some(c) = any
-            .downcast_mut::<crate::peripherals::nrf52::serial_instance::Nrf52SerialInstance>()
+        } else if let Some(c) =
+            any.downcast_mut::<crate::peripherals::nrf52::serial_instance::Nrf52SerialInstance>()
         {
             // The SPIM half of the shared SPIM0/TWIM0 window.
             c.attach_spi(wrapped);

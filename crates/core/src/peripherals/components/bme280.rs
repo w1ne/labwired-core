@@ -113,7 +113,8 @@ impl Bme280Calib {
     /// Compensated humidity in Q22.10 %RH (Bosch `_H_int32` output; %RH = ret/1024).
     pub fn compensate_h(&self, adc_h: i32, t_fine: i32) -> u32 {
         let mut v: i32 = t_fine - 76_800;
-        v = ((((adc_h << 14) - ((self.dig_h4 as i32) << 20) - ((self.dig_h5 as i32) * v)) + 16_384)
+        v = ((((adc_h << 14) - ((self.dig_h4 as i32) << 20) - ((self.dig_h5 as i32) * v))
+            + 16_384)
             >> 15)
             * (((((((v * (self.dig_h6 as i32)) >> 10)
                 * (((v * (self.dig_h3 as i32)) >> 11) + 32_768))
@@ -301,7 +302,13 @@ impl Bme280 {
             self.calib.dig_p9 as u16,
         ];
         // Little-endian byte `n` of `word`.
-        let byte_of = |word: u16, n: u8| if n == 0 { word as u8 } else { (word >> 8) as u8 };
+        let byte_of = |word: u16, n: u8| {
+            if n == 0 {
+                word as u8
+            } else {
+                (word >> 8) as u8
+            }
+        };
 
         match reg {
             // Calibration coefficients (T): 0x88..0x8D

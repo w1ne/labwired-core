@@ -130,9 +130,7 @@ impl SystemBus {
             // `entry.name` is borrowed for the closure while `entry.dev` is
             // borrowed mutably by the seam, so split the borrow explicitly.
             let name = &entry.name;
-            let stop = entry
-                .dev
-                .for_each_attached_sim_input(&mut |si| f(name, si));
+            let stop = entry.dev.for_each_attached_sim_input(&mut |si| f(name, si));
             if stop {
                 return;
             }
