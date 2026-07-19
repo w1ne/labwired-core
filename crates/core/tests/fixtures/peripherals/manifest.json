@@ -539,6 +539,63 @@
       "inputs": []
     },
     {
+      "device_type": "seven-segment",
+      "label": "7-Segment Display (single digit)",
+      "summary": "Bare single-digit 7-segment LED display driven straight from nine GPIO pins.",
+      "detail": "The raw display with no driver chip: segment pins A–G plus DP and one common pin, each wired directly to a GPIO. The model samples all nine output registers after every write to a hosting port and recomputes the lit segments combinationally — there is no protocol or state machine. COM polarity is inferred from the level the firmware holds the common pin at: COM low means common cathode (a segment lights when its pin is HIGH), COM high means common anode (a segment lights when its pin is LOW). The readback always reports which segments are lit regardless of wiring, decoded to a character through the standard a–g/dp segment font.",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "a_pin",
+          "ty": "str",
+          "doc": "GPIO pin driving segment A (e.g. \"PA0\"). Defaults to PA0."
+        },
+        {
+          "name": "b_pin",
+          "ty": "str",
+          "doc": "GPIO pin driving segment B (e.g. \"PA1\"). Defaults to PA1."
+        },
+        {
+          "name": "c_pin",
+          "ty": "str",
+          "doc": "GPIO pin driving segment C (e.g. \"PA2\"). Defaults to PA2."
+        },
+        {
+          "name": "d_pin",
+          "ty": "str",
+          "doc": "GPIO pin driving segment D (e.g. \"PA3\"). Defaults to PA3."
+        },
+        {
+          "name": "e_pin",
+          "ty": "str",
+          "doc": "GPIO pin driving segment E (e.g. \"PA4\"). Defaults to PA4."
+        },
+        {
+          "name": "f_pin",
+          "ty": "str",
+          "doc": "GPIO pin driving segment F (e.g. \"PA5\"). Defaults to PA5."
+        },
+        {
+          "name": "g_pin",
+          "ty": "str",
+          "doc": "GPIO pin driving segment G (e.g. \"PA6\"). Defaults to PA6."
+        },
+        {
+          "name": "dp_pin",
+          "ty": "str",
+          "doc": "GPIO pin driving the decimal point (e.g. \"PA7\"). Defaults to PA7."
+        },
+        {
+          "name": "com_pin",
+          "ty": "str",
+          "doc": "GPIO pin driving the common pin (e.g. \"PA8\"). Its level selects the wiring: low = common cathode, high = common anode. Defaults to PA8."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
       "device_type": "pcd8544",
       "label": "Nokia 5110 LCD",
       "summary": "Nokia 5110 (PCD8544) monochrome 84×48 LCD over SPI.",

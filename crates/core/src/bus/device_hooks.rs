@@ -204,6 +204,80 @@ impl SystemBus {
         }
     }
 
+    /// Write-hook sibling of [`maybe_clock_tm1637`](Self::maybe_clock_tm1637)
+    /// for direct-drive 7-segment digits: after an MMIO write to peripheral
+    /// `idx`, if that peripheral hosts any of the display's nine pins, re-read
+    /// all eight segment output bits plus COM and recompute the lit segments.
+    ///
+    /// Unlike the TM1637 there is no protocol here — the digit is combinational
+    /// logic, so the hook simply resamples. COM polarity (low = common cathode,
+    /// high = common anode) is resolved inside
+    /// [`SevenSegment::observe_levels`](crate::peripherals::components::seven_segment::SevenSegment::observe_levels).
+    pub(crate) fn maybe_sample_seven_segment(&mut self, idx: usize) {
+        if self.seven_segment.is_empty() {
+            return;
+        }
+        for i in 0..self.seven_segment.len() {
+            // Resolve & cache the nine GPIO peripheral indices on first use.
+            let mut relevant = false;
+            let mut resolved = true;
+            for s in 0..crate::peripherals::components::seven_segment::SEGMENTS {
+                let seg_idx = match self.seven_segment[i].seg_peripheral_idx(s) {
+                    Some(t) => t,
+                    None => {
+                        let addr = self.seven_segment[i].seg_odr[s].0;
+                        match self.find_peripheral_index(addr) {
+                            Some(t) => {
+                                self.seven_segment[i].set_seg_peripheral_idx(s, t);
+                                t
+                            }
+                            None => {
+                                resolved = false;
+                                break;
+                            }
+                        }
+                    }
+                };
+                relevant |= seg_idx == idx;
+            }
+            if !resolved {
+                continue;
+            }
+            let com_idx = match self.seven_segment[i].com_peripheral_idx() {
+                Some(t) => t,
+                None => {
+                    let addr = self.seven_segment[i].com_odr_addr;
+                    match self.find_peripheral_index(addr) {
+                        Some(t) => {
+                            self.seven_segment[i].set_com_peripheral_idx(t);
+                            t
+                        }
+                        None => continue,
+                    }
+                }
+            };
+            relevant |= com_idx == idx;
+            // Only react when this write actually touched one of the pins' ports.
+            if !relevant {
+                continue;
+            }
+            let read_pin = |bus: &Self, addr: u64, bit: u8| {
+                bus.read_u32(addr)
+                    .map(|v| (v >> bit) & 1 != 0)
+                    .unwrap_or(false)
+            };
+            let seg_odr = self.seven_segment[i].seg_odr;
+            let levels: [bool; crate::peripherals::components::seven_segment::SEGMENTS] =
+                std::array::from_fn(|s| read_pin(self, seg_odr[s].0, seg_odr[s].1));
+            let com = read_pin(
+                self,
+                self.seven_segment[i].com_odr_addr,
+                self.seven_segment[i].com_bit,
+            );
+            self.seven_segment[i].observe_levels(levels, com);
+        }
+    }
+
     /// Before an SPI transfer, refresh the D/C level of any attached
     /// display that observes a D/C GPIO line (e.g. the PCD8544 Nokia 5110)
     /// by reading the driving GPIO's output bit. No-op for non-SPI writes and

@@ -36,6 +36,8 @@ pub mod potentiometer;
 pub mod scd41;
 pub mod sensirion;
 pub mod servo;
+pub mod seven_seg_font;
+pub mod seven_segment;
 pub mod sgp41;
 pub mod sh1107;
 pub mod shm_i2c;
