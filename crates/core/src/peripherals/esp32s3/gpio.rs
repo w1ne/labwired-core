@@ -117,6 +117,40 @@ const PIN_WMASK: u32 = 0x0003_FF9F;
 /// One word past the last architected register (`REG_DATE` @ 0x6FC).
 const NWORDS: usize = 0x700 / 4;
 
+/// Number of GPIO pads with a `FUNCn_OUT_SEL_CFG` entry (GPIO0..53).
+const PAD_COUNT: u8 = 54;
+/// `GPIO_FUNCn_OUT_SEL_CFG.out_sel` field width: bits [8:0] pick which internal
+/// peripheral output signal drives pad `n` (ESP32-S3 TRM §5.4 GPIO matrix).
+const OUT_SEL_MASK: u32 = 0x1FF;
+/// `out_sel` sentinel meaning "pad driven directly by the `GPIO_OUT` latch"
+/// (plain GPIO output, matrix bypassed). esp-idf `SIG_GPIO_OUT_IDX`; note this
+/// is 256 on the S3, not 128 as on the C3. It is also the reset value of every
+/// `FUNCn_OUT_SEL_CFG` register (see `spec()` → 0x100).
+const SIG_GPIO_OUT: u32 = 256;
+
+/// GPIO-matrix OUTPUT signal indices of the RMT TX channels (esp-idf
+/// `soc/esp32s3/include/soc/gpio_sig_map.h` — `RMT_SIG_OUT0..3_IDX`; on the S3
+/// the RMT in/out share one matrix index per channel). A timed RMT channel
+/// finds the pad it drives by calling
+/// [`Esp32s3Gpio::pads_for_output_signal`] with its channel's index.
+pub const RMT_SIG_OUT0: u32 = 81;
+pub const RMT_SIG_OUT1: u32 = 82;
+pub const RMT_SIG_OUT2: u32 = 83;
+pub const RMT_SIG_OUT3: u32 = 84;
+
+/// GPIO-matrix OUTPUT signal index → name, for the signals the S3 model cares
+/// about (currently the RMT TX channels). Unmapped indices → `None` (never a
+/// guess), matching the C3 `c3_out_signal_name` convention.
+fn s3_out_signal_name(idx: u32) -> Option<&'static str> {
+    Some(match idx {
+        RMT_SIG_OUT0 => "RMT_SIG_OUT0",
+        RMT_SIG_OUT1 => "RMT_SIG_OUT1",
+        RMT_SIG_OUT2 => "RMT_SIG_OUT2",
+        RMT_SIG_OUT3 => "RMT_SIG_OUT3",
+        _ => return None,
+    })
+}
+
 /// `(reset value, writable-bit mask)` for the architected register at word
 /// index `word` (offset `word * 4`), exactly per the ESP32-S3 SVD `GPIO`
 /// block; `None` = hole in the register map (reads 0, ignores writes).
@@ -241,6 +275,31 @@ impl Esp32s3Gpio {
             self.apply_out1(new_out1);
         }
         true
+    }
+
+    /// The GPIO-matrix output selector for pad `pin` (`FUNCn_OUT_SEL_CFG.out_sel`,
+    /// bits [8:0]) — which internal peripheral output signal drives the pad, or
+    /// [`SIG_GPIO_OUT`] (256) for a plain GPIO output. `None` for `pin >= 54`.
+    fn out_sel(&self, pin: u8) -> Option<u32> {
+        if pin >= PAD_COUNT {
+            return None;
+        }
+        Some(self.reg(FUNC0_OUT_SEL_CFG + (pin as u64) * 4) & OUT_SEL_MASK)
+    }
+
+    /// Pads (0..=53) whose GPIO-matrix output selector routes peripheral output
+    /// `signal_idx` to the pad — the faithful S3 output-matrix lookup an RMT
+    /// channel uses to discover which GPIO its waveform reaches (call with
+    /// [`RMT_SIG_OUT0`]..[`RMT_SIG_OUT3`]). A signal may fan out to several pads,
+    /// so every match is returned, in ascending pad order.
+    ///
+    /// Passing [`SIG_GPIO_OUT`] (256) would match every pad still at its reset
+    /// selector — callers resolving a *peripheral* signal never do that.
+    pub fn pads_for_output_signal(&self, signal_idx: u32) -> Vec<u8> {
+        let want = signal_idx & OUT_SEL_MASK;
+        (0..PAD_COUNT)
+            .filter(|&pin| self.out_sel(pin) == Some(want))
+            .collect()
     }
 
     /// Set the input level on `pin` (0..=31). Used by tests / future
@@ -470,18 +529,35 @@ impl Peripheral for Esp32s3Gpio {
 
     fn gpio_routing(&self, pin: u8) -> Option<crate::peripherals::gpio::GpioRouting> {
         use crate::peripherals::gpio::{GpioMode, GpioRouting};
-        if pin >= 32 {
+        if pin >= PAD_COUNT {
             return None;
         }
-        // ENABLE is the output driver. The S3 GPIO model does not track the
-        // output matrix (FUNCn_OUT_SEL arrays are documented-but-unmodeled), so it
-        // reports direction only; func stays None (honest "can't say").
-        let mode = if (self.enable & (1u32 << pin)) != 0 {
-            GpioMode::Output
+        // Output driver enable lives in ENABLE (bank 0) / ENABLE1 (bank 1).
+        let enabled = if pin < 32 {
+            (self.enable & (1u32 << pin)) != 0
         } else {
-            GpioMode::Input
+            (self.reg(ENABLE1) & (1u32 << (pin - 32))) != 0
         };
-        Some(GpioRouting { mode, func: None })
+        if !enabled {
+            return Some(GpioRouting {
+                mode: GpioMode::Input,
+                func: None,
+            });
+        }
+        // Output enabled: consult the GPIO-matrix output selector. The reset
+        // sentinel (SIG_GPIO_OUT) means the pad is a plain GPIO output driven by
+        // the OUT latch; any other index is a routed peripheral signal (e.g. an
+        // RMT channel) → report it as an alternate function, naming it when known.
+        match self.out_sel(pin) {
+            Some(SIG_GPIO_OUT) | None => Some(GpioRouting {
+                mode: GpioMode::Output,
+                func: None,
+            }),
+            Some(sig) => Some(GpioRouting {
+                mode: GpioMode::Af,
+                func: s3_out_signal_name(sig).map(String::from),
+            }),
+        }
     }
 
     fn set_gpio_input(&mut self, pin: u8, level: bool) -> bool {
@@ -942,6 +1018,50 @@ mod tests {
             vec![(48, false, true, 3), (48, true, false, 12)],
             "drive_pad_output must fire GPIO48 observer edges with timing"
         );
+    }
+
+    // ── Task 2: GPIO-matrix output routing (FUNCn_OUT_SEL) ───────────────
+
+    /// The output-matrix lookup resolves which pad(s) a peripheral output signal
+    /// drives: route GPIO48 (and a fan-out pad) to RMT channel 0 and assert the
+    /// lookup finds them. This is what a Stage-2 RMT channel calls to learn its
+    /// pad instead of trusting board config.
+    #[test]
+    fn func_out_sel_routes_rmt_signal_to_pad() {
+        let mut g = Esp32s3Gpio::new();
+        // Reset: no pad routes an RMT signal (all sit at SIG_GPIO_OUT).
+        assert!(g.pads_for_output_signal(RMT_SIG_OUT0).is_empty());
+        // Route GPIO48 (onboard NeoPixel) to RMT channel 0's output signal.
+        write_u32(&mut g, FUNC0_OUT_SEL_CFG + 48 * 4, RMT_SIG_OUT0);
+        assert_eq!(g.pads_for_output_signal(RMT_SIG_OUT0), vec![48]);
+        // A signal can fan out to multiple pads; results are pad-ascending.
+        write_u32(&mut g, FUNC0_OUT_SEL_CFG + 5 * 4, RMT_SIG_OUT0);
+        assert_eq!(g.pads_for_output_signal(RMT_SIG_OUT0), vec![5, 48]);
+        // Other RMT channels stay unrouted.
+        assert!(g.pads_for_output_signal(RMT_SIG_OUT1).is_empty());
+    }
+
+    /// `gpio_routing` now reads the output matrix: a routed RMT pad reports
+    /// `Af` + the signal name, an enabled-but-unrouted pad reports plain
+    /// `Output`, and a disabled pad reports `Input` — across both banks.
+    #[test]
+    fn gpio_routing_reports_rmt_af_and_plain_gpio() {
+        use crate::peripherals::gpio::GpioMode;
+        let mut g = Esp32s3Gpio::new();
+        // Enable GPIO48 output (ENABLE1 bit 16) and route it to RMT_SIG_OUT2.
+        write_u32(&mut g, ENABLE1_W1TS, 1 << 16);
+        write_u32(&mut g, FUNC0_OUT_SEL_CFG + 48 * 4, RMT_SIG_OUT2);
+        let r48 = g.gpio_routing(48).unwrap();
+        assert_eq!(r48.mode, GpioMode::Af);
+        assert_eq!(r48.func.as_deref(), Some("RMT_SIG_OUT2"));
+        // Enable GPIO5 output, leave the reset selector → plain GPIO output.
+        write_u32(&mut g, ENABLE_W1TS, 1 << 5);
+        let r5 = g.gpio_routing(5).unwrap();
+        assert_eq!(r5.mode, GpioMode::Output);
+        assert!(r5.func.is_none(), "unrouted enabled pad is plain GPIO");
+        // Disabled pad → Input; out-of-range → None.
+        assert_eq!(g.gpio_routing(6).unwrap().mode, GpioMode::Input);
+        assert!(g.gpio_routing(54).is_none());
     }
 
     #[test]
