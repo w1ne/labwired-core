@@ -52,6 +52,15 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_esp32c3_demo_survival"),
     },
     ChipConf {
+        name: "nrf54l15",
+        yaml: "configs/chips/nrf54l15.yaml",
+        // No silicon capture: nothing here has been diffed against a real
+        // nRF54L15 over SWD. Every register value is MDK/SVD-derived, which is
+        // authoritative for the map but is not the same as measured silicon.
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_nrf54l15_zephyr_survival"),
+    },
+    ChipConf {
         name: "esp32",
         yaml: "configs/chips/esp32.yaml",
         reset_oracle: None,

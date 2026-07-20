@@ -85,17 +85,26 @@ peripherals:
     size: "4KB"
     irq: 17
 
-  # GPIO P0/P1 — note the nRF5340 GPIO base is the unusual 0x_0842_500 offset,
-  # NOT 0x50000000 as on nRF52840.
+  # GPIO P0/P1 — the nRF5340 GPIO block sits at 0x5084_2000, far from the rest
+  # of the peripheral window.
+  #
+  # The devicetree says gpio0@50842500 / gpio1@50842800, but a Nordic GPIO DT
+  # node points at the OUT register, which is peripheral_base + 0x500 — so the
+  # bases below are the DT addresses minus 0x500. The gpio model uses
+  # peripheral-relative offsets (OUT 0x504, OUTSET 0x508, DIRSET 0x518), so
+  # mapping the DT address directly would put every GPIO register 0x500 too
+  # high. That is a silent failure: UART still works and the boot still
+  # completes, only the pins never move. Found while onboarding the nRF54L15,
+  # which has the identical layout quirk.
   - id: "gpio0"
     type: "gpio"
-    base_address: 0x50842500
+    base_address: 0x50842000
     size: "4KB"
     config:
       profile: "nrf52"
   - id: "gpio1"
     type: "gpio"
-    base_address: 0x50842800
+    base_address: 0x50842300
     size: "4KB"
     config:
       profile: "nrf52"

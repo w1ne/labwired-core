@@ -142,6 +142,23 @@ impl Nrf52Timer {
 }
 
 impl Peripheral for Nrf52Timer {
+    /// Not in the per-cycle walk while idle. `tick()` above early-returns a
+    /// default `PeripheralTickResult` in exactly this state, so skipping the
+    /// visit removes dispatch and never an effect — byte-identical.
+    ///
+    /// A stopped timer, or one in COUNTER mode (which advances only on TASKS_COUNT, an MMIO write), has nothing to advance per cycle.
+    ///
+    /// Paired with `legacy_tick_dynamic() -> true` because this condition can
+    /// change during the model's own tick; the bus also re-arms via
+    /// `refresh_legacy_tick_index()` on every MMIO write, which is what makes
+    /// the wake path (a firmware write to the start/trigger task) safe.
+    fn legacy_tick_active(&self) -> bool {
+        self.running && self.mode == MODE_TIMER
+    }
+
+    fn legacy_tick_dynamic(&self) -> bool {
+        true
+    }
     fn read(&self, _offset: u64) -> SimResult<u8> {
         Ok(0)
     }

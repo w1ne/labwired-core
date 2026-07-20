@@ -89,7 +89,21 @@ boards:
     # no register read/write path changed. Reset values, register layout and
     # byte paths are unchanged; the mmio/conformance diffs pass unchanged.
     # Drift is the shared-file commit date only. No live re-capture.
-    drift_ack: 2026-07-19
+    # 2026-07-20: per-cycle-walk participation only. Six shared peripheral
+    # models (gpio, stub, nrf52 timer/egu/temp/uarte) gained
+    # `legacy_tick_active()` / `legacy_tick_dynamic()` overrides so peripherals
+    # that do nothing are skipped by the legacy walk (nRF54L15 measured
+    # 2.74M -> 5.09M IPS). PURELY ADDITIVE: `git diff origin/main..HEAD` over
+    # those six files shows +12/+18 and **0 removed lines** — no existing method
+    # body was touched, so no register read/write path, reset value or layout
+    # changed. A peripheral is skipped ONLY in states where its `tick()` already
+    # returned a default PeripheralTickResult (or where it overrides no tick at
+    # all), and the bus re-arms the entry via `refresh_legacy_tick_index()` on
+    # any MMIO write. GPIOTE was tried the same way and REVERTED — its tick()
+    # detects IN edges rather than draining a queue, and
+    # nrf52840_onboarding_gpiote_event_in_fires_on_edge caught it. Offline
+    # oracle/mmio/conformance suites pass unchanged. No live re-capture.
+    drift_ack: 2026-07-20
     models:
       - crates/core/src/peripherals/nrf52
       - configs/chips/nrf52840.yaml
@@ -124,7 +138,21 @@ boards:
     # no register read/write path changed. Reset values, register layout and
     # byte paths are unchanged; the mmio/conformance diffs pass unchanged.
     # Drift is the shared-file commit date only. No live re-capture.
-    drift_ack: 2026-07-19
+    # 2026-07-20: per-cycle-walk participation only. Six shared peripheral
+    # models (gpio, stub, nrf52 timer/egu/temp/uarte) gained
+    # `legacy_tick_active()` / `legacy_tick_dynamic()` overrides so peripherals
+    # that do nothing are skipped by the legacy walk (nRF54L15 measured
+    # 2.74M -> 5.09M IPS). PURELY ADDITIVE: `git diff origin/main..HEAD` over
+    # those six files shows +12/+18 and **0 removed lines** — no existing method
+    # body was touched, so no register read/write path, reset value or layout
+    # changed. A peripheral is skipped ONLY in states where its `tick()` already
+    # returned a default PeripheralTickResult (or where it overrides no tick at
+    # all), and the bus re-arms the entry via `refresh_legacy_tick_index()` on
+    # any MMIO write. GPIOTE was tried the same way and REVERTED — its tick()
+    # detects IN edges rather than draining a queue, and
+    # nrf52840_onboarding_gpiote_event_in_fires_on_edge caught it. Offline
+    # oracle/mmio/conformance suites pass unchanged. No live re-capture.
+    drift_ack: 2026-07-20
     models:
       - crates/core/src/peripherals/nrf52
       - configs/chips/nrf52840.yaml
@@ -218,7 +246,21 @@ boards:
     # no register read/write path changed. Reset values, register layout and
     # byte paths are unchanged; the mmio/conformance diffs pass unchanged.
     # Drift is the shared-file commit date only. No live re-capture.
-    drift_ack: 2026-07-19
+    # 2026-07-20: per-cycle-walk participation only. Six shared peripheral
+    # models (gpio, stub, nrf52 timer/egu/temp/uarte) gained
+    # `legacy_tick_active()` / `legacy_tick_dynamic()` overrides so peripherals
+    # that do nothing are skipped by the legacy walk (nRF54L15 measured
+    # 2.74M -> 5.09M IPS). PURELY ADDITIVE: `git diff origin/main..HEAD` over
+    # those six files shows +12/+18 and **0 removed lines** — no existing method
+    # body was touched, so no register read/write path, reset value or layout
+    # changed. A peripheral is skipped ONLY in states where its `tick()` already
+    # returned a default PeripheralTickResult (or where it overrides no tick at
+    # all), and the bus re-arms the entry via `refresh_legacy_tick_index()` on
+    # any MMIO write. GPIOTE was tried the same way and REVERTED — its tick()
+    # detects IN edges rather than draining a queue, and
+    # nrf52840_onboarding_gpiote_event_in_fires_on_edge caught it. Offline
+    # oracle/mmio/conformance suites pass unchanged. No live re-capture.
+    drift_ack: 2026-07-20
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -428,7 +470,21 @@ boards:
     # no register read/write path changed. Reset values, register layout and
     # byte paths are unchanged; the mmio/conformance diffs pass unchanged.
     # Drift is the shared-file commit date only. No live re-capture.
-    drift_ack: 2026-07-19
+    # 2026-07-20: per-cycle-walk participation only. Six shared peripheral
+    # models (gpio, stub, nrf52 timer/egu/temp/uarte) gained
+    # `legacy_tick_active()` / `legacy_tick_dynamic()` overrides so peripherals
+    # that do nothing are skipped by the legacy walk (nRF54L15 measured
+    # 2.74M -> 5.09M IPS). PURELY ADDITIVE: `git diff origin/main..HEAD` over
+    # those six files shows +12/+18 and **0 removed lines** — no existing method
+    # body was touched, so no register read/write path, reset value or layout
+    # changed. A peripheral is skipped ONLY in states where its `tick()` already
+    # returned a default PeripheralTickResult (or where it overrides no tick at
+    # all), and the bus re-arms the entry via `refresh_legacy_tick_index()` on
+    # any MMIO write. GPIOTE was tried the same way and REVERTED — its tick()
+    # detects IN edges rather than draining a queue, and
+    # nrf52840_onboarding_gpiote_event_in_fires_on_edge caught it. Offline
+    # oracle/mmio/conformance suites pass unchanged. No live re-capture.
+    drift_ack: 2026-07-20
 
   - id: nucleo-l476rg
     doc: docs/boards/nucleo-l476rg.md
@@ -497,7 +553,21 @@ boards:
     # no register read/write path changed. Reset values, register layout and
     # byte paths are unchanged; the mmio/conformance diffs pass unchanged.
     # Drift is the shared-file commit date only. No live re-capture.
-    drift_ack: 2026-07-19
+    # 2026-07-20: per-cycle-walk participation only. Six shared peripheral
+    # models (gpio, stub, nrf52 timer/egu/temp/uarte) gained
+    # `legacy_tick_active()` / `legacy_tick_dynamic()` overrides so peripherals
+    # that do nothing are skipped by the legacy walk (nRF54L15 measured
+    # 2.74M -> 5.09M IPS). PURELY ADDITIVE: `git diff origin/main..HEAD` over
+    # those six files shows +12/+18 and **0 removed lines** — no existing method
+    # body was touched, so no register read/write path, reset value or layout
+    # changed. A peripheral is skipped ONLY in states where its `tick()` already
+    # returned a default PeripheralTickResult (or where it overrides no tick at
+    # all), and the bus re-arms the entry via `refresh_legacy_tick_index()` on
+    # any MMIO write. GPIOTE was tried the same way and REVERTED — its tick()
+    # detects IN edges rather than draining a queue, and
+    # nrf52840_onboarding_gpiote_event_in_fires_on_edge caught it. Offline
+    # oracle/mmio/conformance suites pass unchanged. No live re-capture.
+    drift_ack: 2026-07-20
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -569,7 +639,21 @@ boards:
     # no register read/write path changed. Reset values, register layout and
     # byte paths are unchanged; the mmio/conformance diffs pass unchanged.
     # Drift is the shared-file commit date only. No live re-capture.
-    drift_ack: 2026-07-19
+    # 2026-07-20: per-cycle-walk participation only. Six shared peripheral
+    # models (gpio, stub, nrf52 timer/egu/temp/uarte) gained
+    # `legacy_tick_active()` / `legacy_tick_dynamic()` overrides so peripherals
+    # that do nothing are skipped by the legacy walk (nRF54L15 measured
+    # 2.74M -> 5.09M IPS). PURELY ADDITIVE: `git diff origin/main..HEAD` over
+    # those six files shows +12/+18 and **0 removed lines** — no existing method
+    # body was touched, so no register read/write path, reset value or layout
+    # changed. A peripheral is skipped ONLY in states where its `tick()` already
+    # returned a default PeripheralTickResult (or where it overrides no tick at
+    # all), and the bus re-arms the entry via `refresh_legacy_tick_index()` on
+    # any MMIO write. GPIOTE was tried the same way and REVERTED — its tick()
+    # detects IN edges rather than draining a queue, and
+    # nrf52840_onboarding_gpiote_event_in_fires_on_edge caught it. Offline
+    # oracle/mmio/conformance suites pass unchanged. No live re-capture.
+    drift_ack: 2026-07-20
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -649,7 +733,21 @@ boards:
     # no register read/write path changed. Reset values, register layout and
     # byte paths are unchanged; the mmio/conformance diffs pass unchanged.
     # Drift is the shared-file commit date only. No live re-capture.
-    drift_ack: 2026-07-19
+    # 2026-07-20: per-cycle-walk participation only. Six shared peripheral
+    # models (gpio, stub, nrf52 timer/egu/temp/uarte) gained
+    # `legacy_tick_active()` / `legacy_tick_dynamic()` overrides so peripherals
+    # that do nothing are skipped by the legacy walk (nRF54L15 measured
+    # 2.74M -> 5.09M IPS). PURELY ADDITIVE: `git diff origin/main..HEAD` over
+    # those six files shows +12/+18 and **0 removed lines** — no existing method
+    # body was touched, so no register read/write path, reset value or layout
+    # changed. A peripheral is skipped ONLY in states where its `tick()` already
+    # returned a default PeripheralTickResult (or where it overrides no tick at
+    # all), and the bus re-arms the entry via `refresh_legacy_tick_index()` on
+    # any MMIO write. GPIOTE was tried the same way and REVERTED — its tick()
+    # detects IN edges rather than draining a queue, and
+    # nrf52840_onboarding_gpiote_event_in_fires_on_edge caught it. Offline
+    # oracle/mmio/conformance suites pass unchanged. No live re-capture.
+    drift_ack: 2026-07-20
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/afio.rs
@@ -727,7 +825,21 @@ boards:
     # no register read/write path changed. Reset values, register layout and
     # byte paths are unchanged; the mmio/conformance diffs pass unchanged.
     # Drift is the shared-file commit date only. No live re-capture.
-    drift_ack: 2026-07-19
+    # 2026-07-20: per-cycle-walk participation only. Six shared peripheral
+    # models (gpio, stub, nrf52 timer/egu/temp/uarte) gained
+    # `legacy_tick_active()` / `legacy_tick_dynamic()` overrides so peripherals
+    # that do nothing are skipped by the legacy walk (nRF54L15 measured
+    # 2.74M -> 5.09M IPS). PURELY ADDITIVE: `git diff origin/main..HEAD` over
+    # those six files shows +12/+18 and **0 removed lines** — no existing method
+    # body was touched, so no register read/write path, reset value or layout
+    # changed. A peripheral is skipped ONLY in states where its `tick()` already
+    # returned a default PeripheralTickResult (or where it overrides no tick at
+    # all), and the bus re-arms the entry via `refresh_legacy_tick_index()` on
+    # any MMIO write. GPIOTE was tried the same way and REVERTED — its tick()
+    # detects IN edges rather than draining a queue, and
+    # nrf52840_onboarding_gpiote_event_in_fires_on_edge caught it. Offline
+    # oracle/mmio/conformance suites pass unchanged. No live re-capture.
+    drift_ack: 2026-07-20
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs

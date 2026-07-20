@@ -334,6 +334,34 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         valid_pc_ranges: &[(0x0000_0000, 0x000F_FFFF), (0x2000_0000, 0x2007_FFFF)],
         expected_uart_output: b"Hello World! nrf5340dk/nrf5340/cpuapp",
     },
+    // nRF54L15: RRAM-based (NVM at 0x0, 1524 KB) rather than flash, and the
+    // 256 KB SRAM puts the initial SP at 0x2004_0000. The PC range covers
+    // RRAM; the firmware spins in main after the banner.
+    SurvivalCase {
+        name: "nrf54l15_smoke",
+        core: "cortex-m33",
+        family: CpuFamily::CortexM,
+        chip: "nrf54l15",
+        system: "nrf54l15dk",
+        fixture: "nrf54l15-smoke.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x0017_CFFF), (0x2000_0000, 0x2003_FFFF)],
+        expected_uart_output: b"nRF54L15 boot OK",
+    },
+    // Unmodified upstream Zephyr v4.4 hello_world for nrf54l15dk/nrf54l15/cpuapp.
+    // This is the tier marker: the profile satisfies the real nrfx/Zephyr boot
+    // path (TAMPC approtect gate, nRF54L CLOCK XO/LFCLK, GRTC, and the
+    // nRF54L-generation UARTE with its DMA.TX cluster), not just firmware
+    // written against the simulator's own assumptions.
+    SurvivalCase {
+        name: "nrf54l15_zephyr",
+        core: "cortex-m33",
+        family: CpuFamily::CortexM,
+        chip: "nrf54l15",
+        system: "nrf54l15dk",
+        fixture: "nrf54l15-zephyr-hello.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x0017_CFFF), (0x2000_0000, 0x2003_FFFF)],
+        expected_uart_output: b"Hello World! nrf54l15dk/nrf54l15/cpuapp",
+    },
     SurvivalCase {
         name: "nrf52832_demo",
         core: "cortex-m4",
@@ -1265,6 +1293,66 @@ fn test_nrf52832_demo_survival() {
 #[test]
 fn test_nrf5340_zephyr_survival() {
     run_survival_case(case_by_name("nrf5340_zephyr"));
+}
+
+#[test]
+fn test_nrf54l15_smoke_survival() {
+    run_survival_case(case_by_name("nrf54l15_smoke"));
+}
+
+/// End-to-end proof that GPIO reaches the pin, not just that the CPU survived.
+///
+/// This exists because the UART banner alone does NOT catch the most likely
+/// nRF54L15 profile bug. A Nordic GPIO devicetree node points at the OUT
+/// register (peripheral base + 0x500), so mapping the DT address as the
+/// peripheral base puts every GPIO register 0x500 too high. UART still works,
+/// the banner still prints, the survival test still passes — and the LED
+/// silently never lights. That mistake was made and caught here.
+#[test]
+fn test_nrf54l15_lights_dk_led0() {
+    use labwired_core::Bus;
+
+    // DK LED0 is P2.09 (board DT nrf54l15dk_common.dtsi, GPIO_ACTIVE_HIGH).
+    // Mapped P2 base = MDK NRF_P2_S_BASE (0x5005_0400) - 0x504, so the gpio
+    // model's nRF52-relative offsets land on the real registers: OUT ends up at
+    // 0x5005_0400 and DIR at 0x5005_0410, which is where the MDK puts them on
+    // this family (NRF_GPIO_Type has OUT at +0x000 here, unlike nRF52/nRF5340).
+    const GPIO_P2: u64 = 0x5004_FEFC;
+    const GPIO_OUT: u64 = 0x504;
+    const GPIO_DIR: u64 = 0x514;
+    const LED0: u32 = 1 << 9;
+
+    let (chip, manifest) = load_system("nrf54l15", "nrf54l15dk");
+    let mut bus = SystemBus::from_config(&chip, &manifest).expect("bus");
+    let (cpu, _nvic) = configure_cortex_m(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
+    let image =
+        labwired_loader::load_elf(&fixtures().join("nrf54l15-smoke.elf")).expect("load smoke elf");
+    machine.load_firmware(&image).expect("load fw");
+    for _ in 0..SURVIVAL_CYCLES {
+        if machine.step().is_err() {
+            break;
+        }
+    }
+
+    let dir = machine.bus.read_u32(GPIO_P2 + GPIO_DIR).expect("read DIR");
+    let out = machine.bus.read_u32(GPIO_P2 + GPIO_OUT).expect("read OUT");
+
+    assert_ne!(
+        dir & LED0,
+        0,
+        "P2.09 was never configured as an output (DIRSET did not land)"
+    );
+    assert_ne!(
+        out & LED0,
+        0,
+        "P2.09 is an output but was never driven high — DK LED0 stayed dark"
+    );
+}
+
+#[test]
+fn test_nrf54l15_zephyr_survival() {
+    run_survival_case(case_by_name("nrf54l15_zephyr"));
 }
 
 #[test]
