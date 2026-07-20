@@ -125,7 +125,7 @@ const RX_STATUS_IDLE: u32 = 0x0006_00C0;
 
 // ── CHnCONF0 (TX, n=0..3) bit fields ──────────────────────────────────────
 /// TX_START — bit 0 (WT, self-clearing): start sending data on the channel.
-const TX_START_BIT: u32 = 1 << 0;
+pub const TX_START_BIT: u32 = 1 << 0;
 /// CONF_UPDATE — bit 24 (WT): config-sync strobe; self-clears.
 const TX_CONF_UPDATE_BIT: u32 = 1 << 24;
 /// Write-trigger bits in TX CONF0 that self-clear after a write (so they never
