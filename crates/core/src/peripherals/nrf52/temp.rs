@@ -35,6 +35,17 @@ impl Nrf52Temp {
 }
 
 impl Peripheral for Nrf52Temp {
+    /// Not in the per-cycle walk: this model overrides neither `tick()` nor
+    /// `tick_elapsed()`, so every visit ran the default no-op and returned a
+    /// default `PeripheralTickResult`. Skipping it removes dispatch, never an
+    /// effect — byte-identical by construction.
+    ///
+    /// Safe against the "sleeps and never wakes" trap: the bus calls
+    /// `refresh_legacy_tick_index()` on every MMIO write, so if this model ever
+    /// gains a tick and a state-dependent condition, a firmware write re-arms it.
+    fn legacy_tick_active(&self) -> bool {
+        false
+    }
     fn read(&self, _offset: u64) -> SimResult<u8> {
         Ok(0)
     }

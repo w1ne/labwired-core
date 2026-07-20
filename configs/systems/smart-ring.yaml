@@ -1,0 +1,80 @@
+# LabWired - Open smart-ring platform (reference system)
+#
+# A wearable ring built on the nRF54L15: IMU + PPG heart rate + temperature +
+# capacitive touch + haptic motor + BLE + rechargeable battery.
+#
+# Every sensor hangs off TWIM21 (I²C). That is the realistic topology for a ring:
+# board area is the binding constraint, so one shared bus wins over per-sensor
+# SPI unless a sensor's data rate forces the issue. The PPG is the one that
+# eventually will — a MAX30102 streaming both channels at 400 Hz is the first
+# thing to move to its own bus if the I²C budget gets tight.
+#
+# Not modelled here: the BLE radio (LabWired does not model the nRF54L radio)
+# and the battery/charger. Firmware that needs those must stub them; see
+# docs/boards/nrf54l15.md for the honest fidelity table.
+name: "smart-ring"
+chip: "../chips/nrf54l15.yaml"
+
+external_devices:
+  # IMU — motion, step counting, and the gate for adaptive PPG sampling
+  # (only measure heart rate when the wearer is still, which is worth more
+  # battery than any MCU-side optimisation).
+  - id: "imu"
+    type: "mpu6050"
+    connection: "twi21"
+    config:
+      i2c_address: 0x68
+
+  # PPG heart-rate sensor. Drive at runtime with the `bpm` and `perfusion`
+  # SimInput channels; dropping perfusion below ~0.2 % simulates poor skin
+  # contact, which is the failure a real ring spends most of its time fighting.
+  - id: "ppg"
+    type: "max30102"
+    connection: "twi21"
+    config:
+      i2c_address: 0x57
+
+  # Capacitive touch — the ring's only user input. Drive with `touch1`..`touch8`
+  # as a percentage of full-scale delta; below 50 % moves the delta count
+  # without asserting the status bit, which is how you exercise debounce.
+  - id: "touch"
+    type: "cap1188"
+    connection: "twi21"
+    config:
+      i2c_address: 0x29
+
+  # Haptic driver for the vibrator motor. An actuator, not an input: assert on
+  # it with is_driven() / total_drive_time_us().
+  - id: "haptic"
+    type: "drv2605"
+    connection: "twi21"
+    config:
+      i2c_address: 0x5A
+
+# Temperature comes from the SoC's on-die TEMP peripheral, already in the chip
+# profile at 0x500D_7000.
+#
+# Worth stating plainly, because it is a real design flaw and not a modelling
+# shortcut: on an actual ring the on-die sensor measures the *die*, which is
+# heated by the MCU, the PPG LEDs and the motor. It is a poor proxy for skin
+# temperature. A shipping design puts a dedicated sensor on the skin-contact
+# surface, thermally isolated from the electronics. This system uses the on-die
+# sensor because it needs no extra model, and firmware written against it should
+# treat the reading as "device temperature", not "body temperature".
+
+board_io:
+  # The motor's enable line, in addition to the DRV2605's I²C control path.
+  - id: "motor_enable"
+    kind: "led"
+    peripheral: "gpio1"
+    pin: 11
+    signal: "output"
+    active_high: true
+
+  # Charger-attached detect.
+  - id: "charger_detect"
+    kind: "button"
+    peripheral: "gpio1"
+    pin: 12
+    signal: "input"
+    active_high: true
