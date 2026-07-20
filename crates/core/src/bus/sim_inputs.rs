@@ -141,6 +141,12 @@ impl SystemBus {
                 return;
             }
         }
+        for sensor in self.dht22.iter_mut() {
+            let id = sensor.id.clone();
+            if f(&id, sensor) {
+                return;
+            }
+        }
         for analog in self.analog_inputs.iter_mut() {
             let connection = analog.connection.clone();
             if f(&connection, analog.source.as_mut()) {

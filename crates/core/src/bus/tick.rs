@@ -474,8 +474,8 @@ impl SystemBus {
                 }
             }
 
-            // HC-SR04 and CAN synthetic services are not present on C3 ROM-boot
-            // labs; keep them off the C3 high-frequency tick path.
+            // HC-SR04, DHT22 and CAN synthetic services are not present on C3
+            // ROM-boot labs; keep them off the C3 high-frequency tick path.
             //
             // When the sensor is event-scheduled, its ECHO edges are driven by
             // `Machine::drain_scheduler_events` at their exact cycles instead —
@@ -484,6 +484,7 @@ impl SystemBus {
             if !self.hcsr04_event_scheduled() {
                 self.service_hcsr04();
             }
+            self.service_dht22();
             self.service_can_diagnostic_testers();
             self.service_can_uds_testers();
             self.service_can_log_players();

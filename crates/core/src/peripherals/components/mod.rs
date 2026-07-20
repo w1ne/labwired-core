@@ -9,6 +9,7 @@ pub mod aht20;
 pub mod bg770a;
 pub mod bme280;
 pub mod bmp280;
+pub mod dht22;
 pub mod fxos8700;
 pub mod hc595;
 pub mod hc595_7seg;

@@ -231,6 +231,8 @@ impl crate::Bus for SystemBus {
                     self.finish_esp32c3_io_mux_write(c3_io_mux_capture);
                 }
                 self.maybe_arm_hcsr04(idx);
+                self.maybe_start_dht22(idx);
+                self.maybe_start_dht22(idx);
                 self.maybe_clock_tm1637(idx);
                 self.maybe_sample_seven_segment(idx);
                 #[cfg(feature = "event-scheduler")]
@@ -454,6 +456,7 @@ impl crate::Bus for SystemBus {
                 self.finish_esp32c3_io_mux_write(c3_io_mux_capture);
             }
             self.maybe_arm_hcsr04(idx);
+            self.maybe_start_dht22(idx);
             self.maybe_clock_tm1637(idx);
             self.maybe_sample_seven_segment(idx);
             #[cfg(feature = "event-scheduler")]
@@ -537,6 +540,7 @@ impl crate::Bus for SystemBus {
                 self.finish_esp32c3_io_mux_write(c3_io_mux_capture);
             }
             self.maybe_arm_hcsr04(idx);
+            self.maybe_start_dht22(idx);
             self.maybe_clock_tm1637(idx);
             self.maybe_sample_seven_segment(idx);
             #[cfg(feature = "event-scheduler")]

@@ -146,6 +146,102 @@ impl SystemBus {
         }
     }
 
+    /// Service all DHT22 sensors for one tick: compute each sensor's pad level
+    /// from its (write-hook-armed) transition schedule and drive it onto the
+    /// data pin's input register, touching the bus only on a level transition.
+    /// The host side is NOT polled here — `maybe_start_dht22` observes it on the
+    /// GPIO write, which is cycle-exact (see `Machine::step`). No-op when no
+    /// sensors are wired.
+    ///
+    /// Exact mirror of [`service_hcsr04`](Self::service_hcsr04); the DHT22 is
+    /// the same shape of device (drives a pin the MCU samples as an input), so
+    /// it reuses the same drive mechanism rather than inventing a parallel one.
+    pub(crate) fn service_dht22(&mut self) {
+        if self.dht22.is_empty() {
+            return;
+        }
+        for i in 0..self.dht22.len() {
+            self.drive_dht22_line(i);
+        }
+    }
+
+    /// Drive sensor `i`'s data pin input register to the level its armed
+    /// schedule implies at `self.current_cycle`, touching the bus only on a
+    /// transition. Single choke point (as with
+    /// [`drive_hcsr04_echo`](Self::drive_hcsr04_echo)) so logic-analyzer probe
+    /// capture on the data pad stays consistent.
+    ///
+    /// Note the level is the *wired-AND* of both drivers on this open-drain
+    /// line — see [`Dht22::pad_high_at`](crate::peripherals::components::dht22::Dht22::pad_high_at)
+    /// — so while the MCU holds the line low the pad reads low, and the firmware
+    /// reads back its own start pulse.
+    fn drive_dht22_line(&mut self, i: usize) {
+        let now = self.current_cycle;
+        let pad_high = self.dht22[i].pad_high_at(now);
+        if pad_high == self.dht22[i].last_pad_high() {
+            return;
+        }
+        let idr_addr = self.dht22[i].data_idr_addr;
+        let bit = self.dht22[i].data_bit;
+        let idr = self.read_u32(idr_addr).unwrap_or(0);
+        let new_idr = if pad_high {
+            idr | (1 << bit)
+        } else {
+            idr & !(1 << bit)
+        };
+        if new_idr != idr {
+            let _ = self.write_u32(idr_addr, new_idr);
+        }
+        self.dht22[i].set_last_pad_high(pad_high);
+    }
+
+    /// Write-hook sibling of [`maybe_arm_hcsr04`](Self::maybe_arm_hcsr04) for
+    /// the DHT22: after an MMIO write to peripheral `idx`, if that peripheral is
+    /// the GPIO hosting any sensor's data line, re-read the data pin's ODR bit
+    /// and feed it to the sensor's start-pulse state machine at
+    /// `now = self.current_cycle`.
+    ///
+    /// The host only changes the line via a GPIO write, so edge detection on the
+    /// write is exactly equivalent to a per-cycle poll — the same argument that
+    /// makes `maybe_arm_hcsr04` cycle-exact. Observing the ODR bit is the same
+    /// open-drain approximation the TM1637 model makes: firmware releases the
+    /// line either by driving the bit high or by switching the pin to input, and
+    /// the common `esp-hal`/HAL DHT drivers do the former.
+    pub(crate) fn maybe_start_dht22(&mut self, idx: usize) {
+        if self.dht22.is_empty() {
+            return;
+        }
+        let now = self.current_cycle;
+        for i in 0..self.dht22.len() {
+            // Resolve & cache the data GPIO's peripheral index on first use.
+            let data_idx = match self.dht22[i].data_peripheral_idx() {
+                Some(t) => t,
+                None => {
+                    let addr = self.dht22[i].data_odr_addr;
+                    match self.find_peripheral_index(addr) {
+                        Some(t) => {
+                            self.dht22[i].set_data_peripheral_idx(t);
+                            t
+                        }
+                        None => continue,
+                    }
+                }
+            };
+            if data_idx != idx {
+                continue;
+            }
+            let odr_addr = self.dht22[i].data_odr_addr;
+            let bit = self.dht22[i].data_bit;
+            // Default high: an unreadable ODR means "released" (pull-up wins),
+            // which is the safe idle state rather than a spurious start pulse.
+            let host_high = self
+                .read_u32(odr_addr)
+                .map(|v| (v >> bit) & 1 != 0)
+                .unwrap_or(true);
+            self.dht22[i].observe_line(host_high, now);
+        }
+    }
+
     /// Write-hook sibling of [`maybe_arm_hcsr04`](Self::maybe_arm_hcsr04) for
     /// bit-banged TM1637 displays: after an MMIO write to peripheral `idx`, if
     /// that peripheral hosts a display's CLK or DIO line, re-read both output

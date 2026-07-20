@@ -299,6 +299,12 @@ pub struct SystemBus {
     /// per-tick pass (`service_hcsr04`) drives the computed ECHO input level,
     /// touching the bus only on a transition. Empty by default → zero cost.
     pub hcsr04: Vec<crate::peripherals::hc_sr04::HcSr04>,
+    /// DHT22 / AM2302 one-wire temperature+humidity sensors. The frame is armed
+    /// by the data-pin GPIO write-hook (`maybe_start_dht22`) when the firmware
+    /// closes a >=1 ms start pulse; a cheap per-tick pass (`service_dht22`)
+    /// drives the wired-AND pad level onto the pin's input register, touching
+    /// the bus only on a transition. Empty by default -> zero cost.
+    pub dht22: Vec<crate::peripherals::components::dht22::Dht22>,
     /// TM1637 4-digit 7-segment displays bit-banged over two GPIO lines. Each is
     /// driven by the CLK/DIO GPIO write-hook (`maybe_clock_tm1637`), which feeds
     /// line transitions to the display's protocol state machine. Purely
