@@ -47,6 +47,24 @@ impl crate::Peripheral for StubPeripheral {
         false
     }
 
+    /// ...and for the same reason it does not belong in the per-cycle walk SET
+    /// either. `needs_legacy_walk()` above only says a stub cannot *block*
+    /// walk-deletion; this says it should not be *visited*.
+    ///
+    /// Byte-identical by construction: `StubPeripheral` does not override
+    /// `tick()`/`tick_elapsed()`, so every visit returned a default
+    /// `PeripheralTickResult` and changed nothing. Skipping it removes only the
+    /// dispatch, never an effect. `ticks_remaining` is reset on MMIO access
+    /// anyway, and a stub has no state that evolves between accesses.
+    ///
+    /// This matters because chip profiles legitimately carry many stub windows
+    /// (trim/config blocks that firmware pokes but never polls): the nRF54L15
+    /// has 9, and visiting them dominated its per-cycle cost — the walk was
+    /// slower for peripherals that do nothing than for the ones that do.
+    fn legacy_tick_active(&self) -> bool {
+        false
+    }
+
     fn snapshot(&self) -> serde_json::Value {
         serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
     }

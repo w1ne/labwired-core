@@ -680,6 +680,18 @@ impl GpioPort {
 }
 
 impl crate::Peripheral for GpioPort {
+
+    /// Not in the per-cycle walk: this model overrides neither `tick()` nor
+    /// `tick_elapsed()`, so every visit ran the default no-op and returned a
+    /// default `PeripheralTickResult`. Skipping it removes dispatch, never an
+    /// effect — byte-identical by construction.
+    ///
+    /// Safe against the "sleeps and never wakes" trap: the bus calls
+    /// `refresh_legacy_tick_index()` on every MMIO write, so if this model ever
+    /// gains a tick and a state-dependent condition, a firmware write re-arms it.
+    fn legacy_tick_active(&self) -> bool {
+        false
+    }
     // Inert walk: pure register + pad bank; pin edges are surfaced by the bus GPIO-diff pass, not tick().
     fn needs_legacy_walk(&self) -> bool {
         false

@@ -37,6 +37,24 @@ impl Nrf52Egu {
 }
 
 impl Peripheral for Nrf52Egu {
+
+    /// Not in the per-cycle walk while idle. `tick()` above early-returns a
+    /// default `PeripheralTickResult` in exactly this state, so skipping the
+    /// visit removes dispatch and never an effect — byte-identical.
+    ///
+    /// EGU is purely software-triggered: with no pending trigger there is nothing to fire, and a trigger arrives as an MMIO write.
+    ///
+    /// Paired with `legacy_tick_dynamic() -> true` because this condition can
+    /// change during the model's own tick; the bus also re-arms via
+    /// `refresh_legacy_tick_index()` on every MMIO write, which is what makes
+    /// the wake path (a firmware write to the start/trigger task) safe.
+    fn legacy_tick_active(&self) -> bool {
+        self.pending_triggers != 0
+    }
+
+    fn legacy_tick_dynamic(&self) -> bool {
+        true
+    }
     fn read(&self, _offset: u64) -> SimResult<u8> {
         Ok(0)
     }
