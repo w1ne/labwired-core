@@ -192,3 +192,30 @@ fn timer_and_temp_and_grtc_windows_are_reachable() {
     let _ = bus.read_u32(TEMP);
     let _ = bus.read_u32(GRTC);
 }
+
+/// Regression probe for a PRE-EXISTING nRF5340 profile bug found while
+/// onboarding the nRF54L15 (kept here because this is where the reasoning
+/// lives; move it if the nRF5340 profile is fixed).
+///
+/// `configs/chips/nrf5340.yaml` maps GPIO P0 at 0x5084_2500, which is the
+/// DEVICETREE address — i.e. the OUT register — not the peripheral base. By
+/// the same +0x500 rule this file documents, the base should be 0x5084_2000.
+/// If this test fails, the nRF5340 GPIO registers are all 0x500 too high and
+/// its LEDs cannot be driven either.
+#[test]
+fn nrf5340_gpio_base_follows_the_same_plus_0x500_rule() {
+    let path =
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../configs/chips/nrf5340.yaml");
+    let chip = ChipDescriptor::from_file(&path).expect("load nrf5340 chip");
+    let gpio0 = chip
+        .peripherals
+        .iter()
+        .find(|p| p.id == "gpio0")
+        .expect("nrf5340 gpio0");
+
+    assert_eq!(
+        gpio0.base_address, 0x5084_2000,
+        "nRF5340 GPIO P0 base should be the DT address 0x5084_2500 minus 0x500; \
+         mapping the DT address directly puts every GPIO register 0x500 too high"
+    );
+}
