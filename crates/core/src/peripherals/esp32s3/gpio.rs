@@ -51,11 +51,12 @@
 //! pin transition. Observers receive `(pin, from, to, sim_cycle)` and
 //! must not panic.
 //!
-//! Both the firmware OUT-register write path (`apply_out`) and the
-//! peripheral-driven `drive_pad_output` seam (RMT Stage 1 — what a timed
-//! WS2812/RMT playback engine will call) funnel through the SAME `apply_out`
-//! chokepoint, so an observer captures pad-level edges identically no matter
-//! which source flips the pad.
+//! Both the firmware OUT-register write path (`apply_out` for bank-0 GPIO0..31,
+//! `apply_out1` for bank-1 GPIO32..53) and the peripheral-driven
+//! `drive_pad_output` seam (RMT Stage 1 — what a timed WS2812/RMT playback
+//! engine will call) funnel through those SAME chokepoints, so an observer
+//! captures pad-level edges identically no matter which source or bank flips the
+//! pad. Bank 1 matters because the onboard NeoPixel on most S3 boards is GPIO48.
 
 use crate::{Peripheral, PeripheralTickResult, SimResult};
 use std::sync::Arc;
@@ -162,6 +163,10 @@ pub struct Esp32s3Gpio {
     regs: [u32; NWORDS],
     enable: u32,
     out: u32,
+    /// Bank-1 output latch for GPIO32..53 (bits 0..21 = pins 32..53), masked to
+    /// [`BANK1_MASK`]. Served in place of `regs[OUT1/4]` so `apply_out1` can fire
+    /// observers on bank-1 pad transitions (e.g. the onboard NeoPixel on GPIO48).
+    out1: u32,
     in_data: u32,
     int_enable: u32,
     int_type: [u8; 32],
@@ -183,6 +188,7 @@ impl Esp32s3Gpio {
             regs,
             enable: 0,
             out: 0,
+            out1: 0,
             in_data: 0,
             int_enable: 0,
             int_type: [0; 32],
@@ -195,32 +201,45 @@ impl Esp32s3Gpio {
         self.observers.push(obs);
     }
 
-    /// Drive output pad `pin` (0..=31) to `level` from a *peripheral* source
+    /// Drive output pad `pin` (0..=48) to `level` from a *peripheral* source
     /// (e.g. the RMT / LED-strip output matrix bit-banging a WS2812 line),
-    /// routing the transition through the SAME `apply_out` chokepoint — and
-    /// therefore the same [`GpioObserver`] notification — a firmware OUT-register
-    /// write takes. This is the RMT-Stage-1 output seam: a timed playback engine
-    /// (Stage 2) calls this at each scheduled edge cycle and the observer sees
-    /// `(pin, from, to, sim_cycle)` exactly as it would for a CPU-driven toggle.
+    /// routing the transition through the SAME `apply_out` / `apply_out1`
+    /// chokepoint — and therefore the same [`GpioObserver`] notification — a
+    /// firmware OUT-register write takes. This is the RMT-Stage-1 output seam: a
+    /// timed playback engine (Stage 2) calls this at each scheduled edge cycle
+    /// and the observer sees `(pin, from, to, sim_cycle)` exactly as it would for
+    /// a CPU-driven toggle.
     ///
-    /// Costs nothing when `level` leaves the pad unchanged (`apply_out`
-    /// early-outs on `diff == 0`). Returns `false` for out-of-range pins.
+    /// `pin < 32` drives bank-0 (`OUT`); `32..=48` drives bank-1 (`OUT1`, bit =
+    /// `pin - 32`) — the onboard NeoPixel on most S3 boards is GPIO48. Costs
+    /// nothing when `level` leaves the pad unchanged (both appliers early-out on
+    /// `diff == 0`). Returns `false` for `pin > 48`.
     ///
-    /// NOTE: this updates the OUT latch bit for `pin`, so a subsequent
-    /// `read_gpio_output`/`read_gpio_pad` reflects the peripheral-driven level.
-    /// It does not touch ENABLE — Stage 1 assumes the pad is already configured
-    /// as an output; GPIO-matrix `FUNCn_OUT_SEL` routing stays unmodeled.
+    /// NOTE: this updates the OUT/OUT1 latch bit for `pin`, so a subsequent
+    /// `read_gpio_output` (bank 0) or `OUT1` read (bank 1) reflects the
+    /// peripheral-driven level. It does not touch ENABLE — Stage 1 assumes the
+    /// pad is already configured as an output.
     pub fn drive_pad_output(&mut self, pin: u8, level: bool) -> bool {
-        if pin >= 32 {
+        if pin > 48 {
             return false;
         }
-        let mask = 1u32 << pin;
-        let new_out = if level {
-            self.out | mask
+        if pin < 32 {
+            let mask = 1u32 << pin;
+            let new_out = if level {
+                self.out | mask
+            } else {
+                self.out & !mask
+            };
+            self.apply_out(new_out);
         } else {
-            self.out & !mask
-        };
-        self.apply_out(new_out);
+            let mask = 1u32 << (pin - 32);
+            let new_out1 = if level {
+                self.out1 | mask
+            } else {
+                self.out1 & !mask
+            };
+            self.apply_out1(new_out1);
+        }
         true
     }
 
@@ -257,6 +276,32 @@ impl Esp32s3Gpio {
         }
     }
 
+    /// Internal: apply a new bank-1 `out1` value (masked to [`BANK1_MASK`]),
+    /// firing observers for each flipped bit as `pin = 32 + bit`. Mirrors
+    /// [`apply_out`] exactly — same `diff == 0` early-out, same `sim_cycle`
+    /// stamp — so a GPIO32..53 pad transition (register write or peripheral
+    /// drive) reaches observers identically to a bank-0 one.
+    fn apply_out1(&mut self, new_out1: u32) {
+        let old = self.out1;
+        let new = new_out1 & BANK1_MASK;
+        self.out1 = new;
+        let diff = old ^ new;
+        if diff == 0 {
+            return;
+        }
+        for bit in 0u8..22 {
+            let mask = 1u32 << bit;
+            if diff & mask != 0 {
+                let from = old & mask != 0;
+                let to = new & mask != 0;
+                let pin = 32 + bit;
+                for obs in &self.observers {
+                    obs.on_pin_change(pin, from, to, self.cycle);
+                }
+            }
+        }
+    }
+
     /// Architected register-file read; holes read 0.
     fn reg(&self, off: u64) -> u32 {
         let w = (off / 4) as usize;
@@ -285,11 +330,12 @@ impl Esp32s3Gpio {
             OUT | OUT_W1TS | OUT_W1TC => self.out,
             ENABLE | ENABLE_W1TS | ENABLE_W1TC => self.enable,
             IN => self.in_data,
-            OUT1_W1TS | OUT1_W1TC => self.reg(OUT1),
+            // OUT1 and its W1TS/W1TC views read the behavioral bank-1 latch.
+            OUT1 | OUT1_W1TS | OUT1_W1TC => self.out1,
             ENABLE1_W1TS | ENABLE1_W1TC => self.reg(ENABLE1),
             STATUS_W1TS | STATUS_W1TC => self.reg(STATUS),
             STATUS1_W1TS | STATUS1_W1TC => self.reg(STATUS1),
-            // Everything else (incl. STRAP, OUT1, IN1, PINn, FUNCn_*_SEL_CFG)
+            // Everything else (incl. STRAP, IN1, PINn, FUNCn_*_SEL_CFG)
             // is served by the register file; holes read 0.
             off => self.reg(off),
         }
@@ -308,10 +354,13 @@ impl Esp32s3Gpio {
             // same cell `set_pin_input` drives (the TRM documents the
             // register as RO on silicon; firmware never writes it).
             IN => self.in_data = value,
+            // OUT1 (bank-1 output latch) routes through apply_out1 so GPIO32..53
+            // pad transitions fire observers, mirroring the bank-0 OUT path.
+            OUT1 => self.apply_out1(value),
+            OUT1_W1TS => self.apply_out1(self.out1 | value),
+            OUT1_W1TC => self.apply_out1(self.out1 & !value),
             // Second-bank W1TS/W1TC arithmetic targets the primary register;
             // the spec wmask confines the effect to the architected bits.
-            OUT1_W1TS => self.set_reg_masked(OUT1, self.reg(OUT1) | value),
-            OUT1_W1TC => self.set_reg_masked(OUT1, self.reg(OUT1) & !value),
             ENABLE1_W1TS => self.set_reg_masked(ENABLE1, self.reg(ENABLE1) | value),
             ENABLE1_W1TC => self.set_reg_masked(ENABLE1, self.reg(ENABLE1) & !value),
             STATUS_W1TS => self.set_reg_masked(STATUS, self.reg(STATUS) | value),
@@ -836,16 +885,63 @@ mod tests {
         );
     }
 
-    /// Out-of-range pins are rejected without touching state or observers.
+    /// Out-of-range pins (> 48) are rejected without touching state/observers;
+    /// pin 48 (onboard NeoPixel) is accepted.
     #[test]
-    fn drive_pad_output_rejects_out_of_range_pin() {
+    fn drive_pad_output_rejects_pins_above_48() {
         let mut g = Esp32s3Gpio::new();
         let obs = Arc::new(TestObserver::default());
         g.add_observer(obs.clone());
-        assert!(!g.drive_pad_output(32, true));
+        assert!(!g.drive_pad_output(49, true));
         assert!(!g.drive_pad_output(200, false));
-        assert!(obs.events.lock().unwrap().is_empty());
-        assert_eq!(g.out, 0, "rejected drive must not alter OUT");
+        assert!(g.drive_pad_output(48, true), "pin 48 is a valid bank-1 pad");
+        // Only the pin-48 edge should be recorded.
+        let events = obs.events.lock().unwrap();
+        assert_eq!(*events, vec![(48, false, true, 0)]);
+    }
+
+    /// Bank-1 (GPIO32..53) proof: a GPIO48 edge reaches the observer both via an
+    /// OUT1 register write AND via `drive_pad_output`, with correct timing —
+    /// this is the onboard-NeoPixel pin on most S3 boards.
+    #[test]
+    fn bank1_gpio48_edges_reach_observer_with_timing() {
+        // Route A: OUT1 register writes (bit 16 = pin 48).
+        let mut g = Esp32s3Gpio::new();
+        let obs = Arc::new(TestObserver::default());
+        g.add_observer(obs.clone());
+        for _ in 0..7 {
+            g.tick();
+        }
+        write_u32(&mut g, OUT1_W1TS, 1 << 16); // pin 48: 0->1 @ cycle 7
+        for _ in 0..5 {
+            g.tick();
+        }
+        write_u32(&mut g, OUT1_W1TC, 1 << 16); // pin 48: 1->0 @ cycle 12
+        assert_eq!(read_u32(&g, OUT1), 0, "OUT1 reads back the bank-1 latch");
+        assert_eq!(
+            *obs.events.lock().unwrap(),
+            vec![(48, false, true, 7), (48, true, false, 12)],
+            "OUT1 register write must fire GPIO48 observer edges with timing"
+        );
+
+        // Route B: peripheral drive via drive_pad_output.
+        let mut g2 = Esp32s3Gpio::new();
+        let obs2 = Arc::new(TestObserver::default());
+        g2.add_observer(obs2.clone());
+        for _ in 0..3 {
+            g2.tick();
+        }
+        assert!(g2.drive_pad_output(48, true)); // 0->1 @ 3
+        for _ in 0..9 {
+            g2.tick();
+        }
+        assert!(g2.drive_pad_output(48, false)); // 1->0 @ 12
+        assert_eq!(read_u32(&g2, OUT1), 0);
+        assert_eq!(
+            *obs2.events.lock().unwrap(),
+            vec![(48, false, true, 3), (48, true, false, 12)],
+            "drive_pad_output must fire GPIO48 observer edges with timing"
+        );
     }
 
     #[test]
