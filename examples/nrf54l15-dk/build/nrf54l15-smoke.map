@@ -36,7 +36,7 @@ LOAD build/main.o
  .isr_vector    0x00000000       0x40 build/startup.o
                 0x00000000                g_vectors
 
-.text           0x00000040      0x13c
+.text           0x00000040      0x16c
  *(.text .text.*)
  .text.Default_Handler
                 0x00000040        0x2 build/startup.o
@@ -54,46 +54,46 @@ LOAD build/main.o
                 0x00000044       0x40 build/startup.o
                 0x00000044                Reset_Handler
  .text.uarte_write
-                0x00000084       0x44 build/main.o
+                0x00000084       0x48 build/main.o
  .text.startup.main
-                0x000000c8       0x54 build/main.o
-                0x000000c8                main
+                0x000000cc       0x60 build/main.o
+                0x000000cc                main
  *(.rodata .rodata.*)
  .rodata.main.str1.1
-                0x0000011c       0x5f build/main.o
-                0x0000017c                        . = ALIGN (0x4)
- *fill*         0x0000017b        0x1 
-                0x0000017c                        _sidata = LOADADDR (.data)
+                0x0000012c       0x7e build/main.o
+                0x000001ac                        . = ALIGN (0x4)
+ *fill*         0x000001aa        0x2 
+                0x000001ac                        _sidata = LOADADDR (.data)
 
-.glue_7         0x0000017c        0x0
- .glue_7        0x0000017c        0x0 linker stubs
+.glue_7         0x000001ac        0x0
+ .glue_7        0x000001ac        0x0 linker stubs
 
-.glue_7t        0x0000017c        0x0
- .glue_7t       0x0000017c        0x0 linker stubs
+.glue_7t        0x000001ac        0x0
+ .glue_7t       0x000001ac        0x0 linker stubs
 
-.vfp11_veneer   0x0000017c        0x0
- .vfp11_veneer  0x0000017c        0x0 linker stubs
+.vfp11_veneer   0x000001ac        0x0
+ .vfp11_veneer  0x000001ac        0x0 linker stubs
 
-.v4_bx          0x0000017c        0x0
- .v4_bx         0x0000017c        0x0 linker stubs
+.v4_bx          0x000001ac        0x0
+ .v4_bx         0x000001ac        0x0 linker stubs
 
-.iplt           0x0000017c        0x0
- .iplt          0x0000017c        0x0 build/startup.o
+.iplt           0x000001ac        0x0
+ .iplt          0x000001ac        0x0 build/startup.o
 
-.rel.dyn        0x0000017c        0x0
- .rel.iplt      0x0000017c        0x0 build/startup.o
+.rel.dyn        0x000001ac        0x0
+ .rel.iplt      0x000001ac        0x0 build/startup.o
 
-.data           0x20000000        0x0 load address 0x0000017c
+.data           0x20000000        0x0 load address 0x000001ac
                 0x20000000                        . = ALIGN (0x4)
                 0x20000000                        _sdata = .
  *(.data .data.*)
                 0x20000000                        . = ALIGN (0x4)
                 0x20000000                        _edata = .
 
-.igot.plt       0x20000000        0x0 load address 0x0000017c
+.igot.plt       0x20000000        0x0 load address 0x000001ac
  .igot.plt      0x20000000        0x0 build/startup.o
 
-.bss            0x20000000       0x80 load address 0x0000017c
+.bss            0x20000000       0x80 load address 0x000001ac
                 0x20000000                        . = ALIGN (0x4)
                 0x20000000                        _sbss = .
  *(.bss .bss.*)
@@ -107,9 +107,9 @@ LOAD build/main.o
 OUTPUT(build/nrf54l15-smoke.elf elf32-littlearm)
 LOAD linker stubs
 
-.debug_info     0x00000000      0x39e
+.debug_info     0x00000000      0x3b2
  .debug_info    0x00000000      0x180 build/startup.o
- .debug_info    0x00000180      0x21e build/main.o
+ .debug_info    0x00000180      0x232 build/main.o
 
 .debug_abbrev   0x00000000      0x2a5
  .debug_abbrev  0x00000000      0x111 build/startup.o
@@ -135,22 +135,22 @@ LOAD linker stubs
  .debug_rnglists
                 0x00000019       0x37 build/main.o
 
-.debug_macro    0x00000000      0xf17
+.debug_macro    0x00000000      0xf29
  .debug_macro   0x00000000       0x24 build/startup.o
  .debug_macro   0x00000024      0xae4 build/startup.o
  .debug_macro   0x00000b08      0x34e build/startup.o
  .debug_macro   0x00000e56       0x2d build/main.o
- .debug_macro   0x00000e83       0x94 build/main.o
+ .debug_macro   0x00000e83       0xa6 build/main.o
 
-.debug_line     0x00000000      0x2ea
+.debug_line     0x00000000      0x2f3
  .debug_line    0x00000000      0x113 build/startup.o
- .debug_line    0x00000113      0x1d7 build/main.o
+ .debug_line    0x00000113      0x1e0 build/main.o
 
-.debug_str      0x00000000     0x3bd4
- .debug_str     0x00000000     0x3bd4 build/startup.o
+.debug_str      0x00000000     0x3c50
+ .debug_str     0x00000000     0x3c50 build/startup.o
                                0x39cb (size before relaxing)
- .debug_str     0x00003bd4        0x0 build/main.o
-                               0x3cbb (size before relaxing)
+ .debug_str     0x00003c50        0x0 build/main.o
+                               0x3d37 (size before relaxing)
 
 .comment        0x00000000       0x12
  .comment       0x00000000       0x12 build/startup.o

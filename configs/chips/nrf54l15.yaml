@@ -29,7 +29,7 @@
 #   2. Timekeeping is the GRTC (Global RTC), not RTC0/RTC1. There is no nRF52
 #      RTC on this part, so the nRF52 RTC model is deliberately NOT mapped.
 #
-# Peripheral models: UARTE, TIMER, GPIO, TEMP, EGU and GPIOTE keep the nRF52
+# Peripheral models: TIMER, GPIO, TEMP, EGU and GPIOTE keep the nRF52
 # register layouts, so the existing behavioural models are reused verbatim at
 # the nRF54L bases (same approach nrf5340.yaml takes). Blocks that are new to
 # this family, or that the current boot paths only poke without polling, are
@@ -49,21 +49,33 @@ ram:
 
 peripherals:
   # ── UARTE ──────────────────────────────────────────────────────────────
-  # UARTE20 is the nRF54L15-DK console (routed to the on-board VCP). EasyDMA
-  # TX walks TXD.PTR/MAXCNT out of RAM exactly as on nRF52, so the nRF52 UARTE
-  # model is reused unchanged.
+  # UARTE20 is the nRF54L15-DK console (routed to the on-board VCP).
+  #
+  # This family needs its OWN UARTE model — it is not the nRF52 block at a new
+  # base. EasyDMA moved into a DMA.{RX,TX} register cluster and the whole
+  # task/event surface was renumbered: the TX kick is TASKS_DMA.TX.START at
+  # 0x050 (nRF52: STARTTX 0x008), completion is EVENTS_DMA.TX.END at 0x168
+  # (nRF52: ENDTX 0x120), EVENTS_TXSTOPPED is 0x130 (nRF52: 0x158), and the
+  # buffer descriptors are DMA.TX.PTR/MAXCNT at 0x73C/0x740 (nRF52:
+  # 0x544/0x548).
+  #
+  # ENABLE (0x500) and BAUDRATE (0x524) coincidentally land on the same
+  # offsets in both generations, which is what disguised the incompatibility:
+  # the nRF52 model accepted the enable/baud writes and looked alive, then
+  # never saw the DMA start task — unmodified Zephyr hung in
+  # uarte_tx_path_init() spinning on EVENTS_TXSTOPPED at 0x130.
   #
   # NOTE: uart20/spi20/twi20 are the same 0x500C6000 instance in three
   # personalities — the DT declares all three at one address and expects
   # exactly one to be enabled. Only the UARTE personality is mapped here;
   # mapping a SPIM model at the same base would collide.
   - id: "uart20"
-    type: "nrf52840_uart"
+    type: "nrf54l_uarte"
     base_address: 0x500C6000
     size: "4KB"
     irq: 198
   - id: "uart30"
-    type: "nrf52840_uart"
+    type: "nrf54l_uarte"
     base_address: 0x50104000
     size: "4KB"
     irq: 260
@@ -125,34 +137,47 @@ peripherals:
   # The DK's LEDs are on P2 and P1, so a wrong width here silently breaks the
   # board_io bindings rather than faulting.
   #
-  # BASE ADDRESS SUBTLETY — read before "fixing" these values:
-  # A Nordic GPIO devicetree node points at the OUT register, which sits at
-  # peripheral_base + 0x500, NOT at the peripheral base. The DT gives
-  # gpio0@10a000 / gpio1@d8200 / gpio2@50400 (absolute 0x5010A000 / 0x500D8200 /
-  # 0x50050400), so the peripheral bases mapped here are those minus 0x500. The
-  # gpio model uses peripheral-relative offsets (OUT 0x504, OUTSET 0x508,
-  # IN 0x510, DIR 0x514, DIRSET 0x518), so this is what makes a firmware write
-  # to the DT address land on the right register.
-  # Mapping the DT address directly instead puts every GPIO register 0x500 too
-  # high; UART still works, so the mistake survives a boot test and only shows
-  # up as an LED that never lights.
+  # BASE ADDRESS — read before "fixing" these values.
+  #
+  # Nordic changed the GPIO port struct EVERY generation, so there is no single
+  # rule to carry across the family. What the MDK actually says:
+  #
+  #   part      NRF_Pn base    OUT offset within the struct
+  #   nRF52840  0x50000000     +0x504   (RESERVED[321] prefix)
+  #   nRF5340   0x50842500     +0x004   (RESERVED[1] prefix)
+  #   nRF54L15  0x500D8200     +0x000   (no prefix at all)
+  #
+  # LabWired's gpio model uses the nRF52 peripheral-relative offsets (OUT 0x504,
+  # OUTSET 0x508, IN 0x510, DIR 0x514, DIRSET 0x518), so the base mapped here
+  # must be chosen so those offsets land on the real registers:
+  #
+  #   mapped_base = MDK_base - 0x504
+  #
+  # P0 0x5010A000-0x504=0x50109AFC, P1 0x500D8200-0x504=0x500D7CFC,
+  # P2 0x50050400-0x504=0x5004FEFC. Verified against the MDK
+  # nrf54l15_global.h (NRF_P0/P1/P2_S_BASE) and nrf54l15_types.h
+  # (NRF_GPIO_Type, OUT at 0x000).
+  #
+  # This is silent when wrong: UART still works and the board still boots, only
+  # the pins never move — which is why firmware_survival asserts DIR and OUT at
+  # the pin after booting a real ELF rather than trusting the banner.
   - id: "gpio0"
     type: "gpio"
-    base_address: 0x50109B00
+    base_address: 0x50109AFC
     size: "4KB"
     config:
       profile: "nrf52"
       num_pins: 7
   - id: "gpio1"
     type: "gpio"
-    base_address: 0x500D7D00
+    base_address: 0x500D7CFC
     size: "4KB"
     config:
       profile: "nrf52"
       num_pins: 17
   - id: "gpio2"
     type: "gpio"
-    base_address: 0x5004FF00
+    base_address: 0x5004FEFC
     size: "4KB"
     config:
       profile: "nrf52"
@@ -222,25 +247,60 @@ peripherals:
 
   # ── Benign stub windows ────────────────────────────────────────────────
 
-  # CLOCK / POWER share peripheral id 0x10E000.
+  # CLOCK — oscillator control. A DEDICATED nRF54L model, not the nRF52 one.
   #
-  # Mapped to the shared nRF CLOCK model rather than a stub because the nRF54L15
-  # devicetree binds this node as `compatible = "nordic,nrf-clock"` — the same
-  # binding the nRF52/nRF5340 driver uses — so Zephyr drives it through the same
-  # nrfx paths and busy-loops on EVENTS_HFCLKSTARTED / EVENTS_LFCLKSTARTED.
-  # A zero-returning stub hangs that loop forever.
+  # The devicetree binds this as `compatible = "nordic,nrf-clock"`, the same
+  # binding nRF52/nRF5340 use, and that is misleading: the nRF54L block replaced
+  # the HFCLK/LFCLK task pair with an XO/PLL/LFCLK trio and moved every status
+  # register. TASKS_LFCLKSTART is 0x010 (nRF52: 0x008), EVENTS_LFCLKSTARTED is
+  # 0x108 (0x104), LFCLK.STAT is 0x44C (LFCLKSTAT 0x418) and LFCLK.SRC is 0x440
+  # (LFCLKSRC 0x518). XO.STAT happens to land on 0x40C, the nRF52 HFCLKSTAT
+  # offset — a coincidence that let the nRF52 model look like it worked right
+  # up until Zephyr hung in lfclk_spinwait().
   #
-  # Caveat, and the reason this is worth re-checking on silicon: the nRF54L
-  # oscillator control block is NOT identical to nRF52 (it has its own
-  # LFXO/HFXO configuration surface, see the DT `nordic,nrf54l-lfxo` /
-  # `nordic,nrf54l-hfxo` nodes). What is reused here is the start-task ->
-  # started-event handshake the boot path depends on. Anything that reads back a
-  # specific oscillator configuration field is NOT modelled faithfully yet.
-  - id: "clock_power"
-    type: "nrf52_clock"
+  # Source: MDK SVD GLOBAL_CLOCK_S + nrf54l15_application_peripherals.h field
+  # positions (LFCLK_STAT.STATE bit 16, .SRC bits 1:0).
+  - id: "clock"
+    type: "nrf54l_clock"
     base_address: 0x5010E000
     size: "4KB"
     irq: 261
+
+  # TAMPC — tamper controller, and the block that gates APPROTECT.
+  #
+  # Zephyr's SystemInit calls nrf54l_handle_approtect_signal() (Nordic MDK
+  # system_nrf54l_approtect.h) which READS the protect-domain signal registers
+  # at +0x500/0x508/0x510/0x518 before writing them. An unmapped window faulted
+  # the bus here on the first Zephyr boot attempt.
+  #
+  # Zero is the correct value, not merely a convenient one: the MDK treats
+  # "signal locked AND high" as an invalid state and deliberately hangs the part
+  # (it starts WDT30 with a minimum counter and spins in while(1) waiting for
+  # the reset). Reading zero means "not locked", which is the unprovisioned /
+  # APPROTECT-disabled development part — the state a simulator should model.
+  # A stub that returned 0xFFFFFFFF here would boot into that deliberate hang
+  # and look like a simulator bug.
+  #
+  # Base is nRF54L15-specific: NRF_TAMPC_S_BASE = 0x500DC000 in the MDK's
+  # nrf54l15_global.h. Other nRF54L parts put TAMPC elsewhere (0x500EF000 on
+  # nRF54LC10/LM20), so do not copy this address across the family.
+  - id: "tampc"
+    type: "nrf54l_tampc_stub"
+    base_address: 0x500DC000
+    size: "4KB"
+
+  # WDT30 / WDT31 — mapped so the MDK's approtect-invalid-state path (which
+  # pokes WDT30 to force a reset) writes somewhere real rather than faulting.
+  # Not reached on a healthy boot; present so a fault here means a genuine
+  # problem rather than a missing window.
+  - id: "wdt30"
+    type: "nrf54l_wdt_stub"
+    base_address: 0x50108000
+    size: "4KB"
+  - id: "wdt31"
+    type: "nrf54l_wdt_stub"
+    base_address: 0x50109000
+    size: "4KB"
 
   # RRAM controller — NVM write/erase control. Reads as zero; a firmware that
   # only executes from RRAM never needs it, but the window must exist so a

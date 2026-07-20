@@ -321,6 +321,7 @@ impl SystemBus {
         use crate::peripherals::esp32::uart::Esp32Uart;
         use crate::peripherals::esp32s3::uart::Esp32s3Uart;
         use crate::peripherals::nrf52::uarte::Nrf52Uarte;
+        use crate::peripherals::nrf54l::uarte::Nrf54lUarte;
         for p in &mut self.peripherals {
             let Some(any) = p.dev.as_any_mut() else {
                 continue;
@@ -354,6 +355,13 @@ impl SystemBus {
             }
             // nRF52 UARTE console (EasyDMA): captured/echoed the same way.
             if let Some(uarte) = any.downcast_mut::<Nrf52Uarte>() {
+                uarte.set_sink(Some(sink.clone()), echo_stdout);
+                continue;
+            }
+            // nRF54L UARTE console (EasyDMA in the DMA.TX cluster). A separate
+            // model from the nRF52 one — same console role, different silicon
+            // register map — so it needs its own downcast arm here.
+            if let Some(uarte) = any.downcast_mut::<Nrf54lUarte>() {
                 uarte.set_sink(Some(sink.clone()), echo_stdout);
                 continue;
             }

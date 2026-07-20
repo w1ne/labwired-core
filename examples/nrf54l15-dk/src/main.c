@@ -49,17 +49,18 @@ static void uarte_write(const char *s)
         return;
     }
 
-    UARTE_EVENTS_ENDTX(UARTE20_BASE) = 0;
-    UARTE_TXD_PTR(UARTE20_BASE)      = (uint32_t)(uintptr_t)tx_buf;
-    UARTE_TXD_MAXCNT(UARTE20_BASE)   = len;
-    UARTE_TASKS_STARTTX(UARTE20_BASE) = 1;
+    UARTE_EVENTS_DMA_TX_END(UARTE20_BASE)  = 0;
+    UARTE_EVENTS_TXSTOPPED(UARTE20_BASE)   = 0;
+    UARTE_DMA_TX_PTR(UARTE20_BASE)         = (uint32_t)(uintptr_t)tx_buf;
+    UARTE_DMA_TX_MAXCNT(UARTE20_BASE)      = len;
+    UARTE_TASKS_DMA_TX_START(UARTE20_BASE) = 1;
 
-    while (UARTE_EVENTS_ENDTX(UARTE20_BASE) == 0) {
-        /* EasyDMA completes in the model on the tick the task is written. */
+    /* Wait for the transfer to complete, the same way Zephyr's driver does. */
+    while (UARTE_EVENTS_DMA_TX_END(UARTE20_BASE) == 0) {
     }
 
-    UARTE_EVENTS_ENDTX(UARTE20_BASE) = 0;
-    UARTE_TASKS_STOPTX(UARTE20_BASE) = 1;
+    UARTE_EVENTS_DMA_TX_END(UARTE20_BASE)  = 0;
+    UARTE_TASKS_DMA_TX_STOP(UARTE20_BASE)  = 1;
 }
 
 static void led_init_and_set(void)
@@ -76,6 +77,7 @@ int main(void)
     uarte_write("nRF54L15 boot OK\r\n");
     uarte_write("core=cortex-m33 rram=1524K ram=256K\r\n");
     uarte_write("uarte20@0x500C6000 gpio2@0x50050400\r\n");
+    uarte_write("regs from MDK/SVD, not nRF52\r\n");
 
     for (;;) {
     }

@@ -405,6 +405,12 @@ fn every_shipped_descriptor_is_ratcheted() {
         "stm32wba52",    // WBA early onboarding, not shipped
         "nrf52832",      // covered by nrf52840 family; not a catalog board
         "nrf5340",       // dual-core, not a shipped catalog board
+        // Boots unmodified upstream Zephyr and has bus-level conformance +
+        // survival coverage, but NOT the executing-fidelity class this gate
+        // requires for SHIPPED: there is no walk-vs-scheduler differential and
+        // no silicon oracle for its GRTC/IRQ path. Surviving a boot is not the
+        // same as being right. Promote it only when that differential exists.
+        "nrf54l15",
     ];
     // configs/chips id -> ratchet chip id (kw41z ships as mkw41z4.yaml).
     fn to_ratchet_id(stem: &str) -> &str {

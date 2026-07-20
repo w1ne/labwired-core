@@ -347,6 +347,21 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         valid_pc_ranges: &[(0x0000_0000, 0x0017_CFFF), (0x2000_0000, 0x2003_FFFF)],
         expected_uart_output: b"nRF54L15 boot OK",
     },
+    // Unmodified upstream Zephyr v4.4 hello_world for nrf54l15dk/nrf54l15/cpuapp.
+    // This is the tier marker: the profile satisfies the real nrfx/Zephyr boot
+    // path (TAMPC approtect gate, nRF54L CLOCK XO/LFCLK, GRTC, and the
+    // nRF54L-generation UARTE with its DMA.TX cluster), not just firmware
+    // written against the simulator's own assumptions.
+    SurvivalCase {
+        name: "nrf54l15_zephyr",
+        core: "cortex-m33",
+        family: CpuFamily::CortexM,
+        chip: "nrf54l15",
+        system: "nrf54l15dk",
+        fixture: "nrf54l15-zephyr-hello.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x0017_CFFF), (0x2000_0000, 0x2003_FFFF)],
+        expected_uart_output: b"Hello World! nrf54l15dk/nrf54l15/cpuapp",
+    },
     SurvivalCase {
         name: "nrf52832_demo",
         core: "cortex-m4",
@@ -1298,8 +1313,11 @@ fn test_nrf54l15_lights_dk_led0() {
     use labwired_core::Bus;
 
     // DK LED0 is P2.09 (board DT nrf54l15dk_common.dtsi, GPIO_ACTIVE_HIGH).
-    // P2 peripheral base = DT 0x5005_0400 - 0x500.
-    const GPIO_P2: u64 = 0x5004_FF00;
+    // Mapped P2 base = MDK NRF_P2_S_BASE (0x5005_0400) - 0x504, so the gpio
+    // model's nRF52-relative offsets land on the real registers: OUT ends up at
+    // 0x5005_0400 and DIR at 0x5005_0410, which is where the MDK puts them on
+    // this family (NRF_GPIO_Type has OUT at +0x000 here, unlike nRF52/nRF5340).
+    const GPIO_P2: u64 = 0x5004_FEFC;
     const GPIO_OUT: u64 = 0x504;
     const GPIO_DIR: u64 = 0x514;
     const LED0: u32 = 1 << 9;
@@ -1330,6 +1348,11 @@ fn test_nrf54l15_lights_dk_led0() {
         0,
         "P2.09 is an output but was never driven high — DK LED0 stayed dark"
     );
+}
+
+#[test]
+fn test_nrf54l15_zephyr_survival() {
+    run_survival_case(case_by_name("nrf54l15_zephyr"));
 }
 
 #[test]

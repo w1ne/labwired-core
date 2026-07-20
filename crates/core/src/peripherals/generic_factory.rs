@@ -97,6 +97,10 @@ pub const MODEL_TYPES: &[&str] = &[
     "nrf52840_twis",
     "nrf52840_uart",
     "nrf52_gpiote",
+    // nRF54L behavioral models (nrf54l factory). Listed here so the fuzzy
+    // `contains("uart")` heuristic cannot coerce `nrf54l_uarte` onto the
+    // generic STM32 UART layout — it is a distinct silicon register map.
+    "nrf54l_uarte",
 ];
 
 /// True if `t` is already a canonical model-type name (see [`MODEL_TYPES`]).

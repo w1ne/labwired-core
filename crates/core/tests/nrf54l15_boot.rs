@@ -47,9 +47,11 @@ const FICR: u64 = 0x00FF_C000;
 const UICR: u64 = 0x00FF_D000;
 const RRAMC: u64 = 0x5004_B000;
 
-// UARTE register offsets (nRF52-compatible layout, reused on this family).
+// UARTE register offsets — the nRF54L layout (MDK SVD `GLOBAL_UARTE20_S`),
+// NOT the nRF52 one. ENABLE and BAUDRATE happen to share their nRF52 offsets;
+// PSEL moved to 0x604.. and EasyDMA moved into the DMA.{RX,TX} cluster.
 const UARTE_ENABLE: u64 = 0x500;
-const UARTE_PSEL_TXD: u64 = 0x50C;
+const UARTE_PSEL_TXD: u64 = 0x604;
 const UARTE_BAUDRATE: u64 = 0x524;
 const UARTE_ENABLE_UARTE: u32 = 8;
 
@@ -292,5 +294,51 @@ fn clock_events_are_software_clearable() {
         bus.read_u32(CLOCK + EVENTS_HFCLKSTARTED).unwrap(),
         0,
         "writing 0 must clear the event"
+    );
+}
+
+/// Replicates Zephyr's `uarte_tx_path_init()` (drivers/serial/uart_nrfx_uarte.c)
+/// against UARTE20, because that function is where an unmodified Zephyr boot
+/// first spins:
+///
+///   enable -> tx_buffer_set(ptr, LEN 0) -> DMA.TX.START -> wait EVENTS_TXSTOPPED
+///
+/// The zero-length transfer is the interesting part: the driver deliberately
+/// arms a 0-byte EasyDMA transfer just to drive the TX path into a known
+/// stopped state. A model that only completes transfers with len > 0 leaves
+/// TXSTOPPED clear and the driver spins forever.
+///
+/// The offsets below are the nRF54L ones (SVD `GLOBAL_UARTE20_S`). Driving the
+/// nRF52 offsets here is what made the original mapping look correct: the
+/// nRF52 STARTTX/ENDTX/TXSTOPPED addresses are dead words on this silicon.
+#[test]
+fn uarte_zero_length_tx_still_raises_txstopped() {
+    const UARTE_TASKS_DMA_TX_START: u64 = 0x050;
+    const UARTE_EVENTS_TXSTOPPED: u64 = 0x130;
+    const UARTE_EVENTS_DMA_TX_END: u64 = 0x168;
+    const UARTE_DMA_TX_PTR: u64 = 0x73C;
+    const UARTE_DMA_TX_MAXCNT: u64 = 0x740;
+
+    let mut bus = nrf54l15_bus();
+
+    bus.write_u32(UARTE20 + UARTE_ENABLE, UARTE_ENABLE_UARTE)
+        .unwrap();
+    // Point at RAM, length ZERO — exactly what the driver does.
+    bus.write_u32(UARTE20 + UARTE_DMA_TX_PTR, 0x2000_0100)
+        .unwrap();
+    bus.write_u32(UARTE20 + UARTE_DMA_TX_MAXCNT, 0).unwrap();
+    bus.write_u32(UARTE20 + UARTE_TASKS_DMA_TX_START, 1).unwrap();
+
+    bus.tick_peripherals_fully();
+
+    assert_ne!(
+        bus.read_u32(UARTE20 + UARTE_EVENTS_DMA_TX_END).unwrap(),
+        0,
+        "a zero-length EasyDMA transfer must still complete and raise DMA.TX.END"
+    );
+    assert_ne!(
+        bus.read_u32(UARTE20 + UARTE_EVENTS_TXSTOPPED).unwrap(),
+        0,
+        "TXSTOPPED must be raised — Zephyr's uarte_tx_path_init spins on it"
     );
 }

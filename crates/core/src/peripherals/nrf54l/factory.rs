@@ -9,8 +9,11 @@
 //! [`try_build`] owns the arms for blocks that are new to the nRF54L family,
 //! so `bus::from_config` does not carry them (mirrors
 //! `peripherals::nrf52::factory`). Peripherals that stayed register-compatible
-//! with nRF52 — UARTE, TIMER, GPIO, TEMP, EGU, GPIOTE — are still built by the
-//! nRF52 factory at their nRF54L bases and are deliberately not duplicated here.
+//! with nRF52 — TIMER, GPIO, TEMP, EGU, GPIOTE — are still built by the nRF52
+//! factory at their nRF54L bases and are deliberately not duplicated here.
+//! UARTE is *not* one of them: the nRF54L generation moved EasyDMA into a
+//! `DMA.{RX,TX}` cluster and renumbered the tasks/events, so it has its own
+//! model here (see [`super::uarte`]).
 
 use crate::Peripheral;
 use labwired_config::PeripheralConfig;
@@ -33,6 +36,8 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
                 num_cc,
             ))
         }
+        "nrf54l_uarte" => Box::new(crate::peripherals::nrf54l::uarte::Nrf54lUarte::new()),
+        "nrf54l_clock" => Box::new(crate::peripherals::nrf54l::clock::Nrf54lClock::new()),
         _ => return None,
     };
     Some(dev)
