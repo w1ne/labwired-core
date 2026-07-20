@@ -388,7 +388,7 @@ mod tests {
         }
 
         // Drive `detents`, poll-decode across `cycles`, return recovered detents.
-        let mut drive_and_decode = |bus: &mut SystemBus, detents: i64, start: u64, cycles: u64| {
+        let drive_and_decode = |bus: &mut SystemBus, detents: i64, start: u64, cycles: u64| {
             bus.rotary_encoders[0].set_position_detents(detents);
             let mut last = sample(bus, clk_bit, dt_bit);
             let mut quarter = 0i32;
