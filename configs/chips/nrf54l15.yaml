@@ -222,12 +222,22 @@ peripherals:
 
   # ── Benign stub windows ────────────────────────────────────────────────
 
-  # CLOCK / POWER share peripheral id 0x10E000. The nRF54L clock block is not
-  # register-compatible with the nRF52 CLOCK (different oscillator control), so
-  # the nRF52 model is deliberately NOT reused here; a bare-metal boot running
-  # from the default HFINT does not touch it.
+  # CLOCK / POWER share peripheral id 0x10E000.
+  #
+  # Mapped to the shared nRF CLOCK model rather than a stub because the nRF54L15
+  # devicetree binds this node as `compatible = "nordic,nrf-clock"` — the same
+  # binding the nRF52/nRF5340 driver uses — so Zephyr drives it through the same
+  # nrfx paths and busy-loops on EVENTS_HFCLKSTARTED / EVENTS_LFCLKSTARTED.
+  # A zero-returning stub hangs that loop forever.
+  #
+  # Caveat, and the reason this is worth re-checking on silicon: the nRF54L
+  # oscillator control block is NOT identical to nRF52 (it has its own
+  # LFXO/HFXO configuration surface, see the DT `nordic,nrf54l-lfxo` /
+  # `nordic,nrf54l-hfxo` nodes). What is reused here is the start-task ->
+  # started-event handshake the boot path depends on. Anything that reads back a
+  # specific oscillator configuration field is NOT modelled faithfully yet.
   - id: "clock_power"
-    type: "nrf54l_clock_stub"
+    type: "nrf52_clock"
     base_address: 0x5010E000
     size: "4KB"
     irq: 261

@@ -219,3 +219,78 @@ fn nrf5340_gpio_base_follows_the_same_plus_0x500_rule() {
          mapping the DT address directly puts every GPIO register 0x500 too high"
     );
 }
+
+// ── CLOCK ────────────────────────────────────────────────────────────────
+// The nRF54L15 devicetree binds clock@10e000 as `compatible = "nordic,nrf-clock"`
+// — the same binding nRF52/nRF5340 use — so Zephyr's clock_control drives it
+// through the same nrfx paths and BUSY-LOOPS on the STARTED events. A
+// zero-returning stub hangs that loop forever, which is why this block is a
+// behavioural model and why these assertions exist.
+const CLOCK: u64 = 0x5010_E000;
+const TASKS_HFCLKSTART: u64 = 0x000;
+const TASKS_LFCLKSTART: u64 = 0x008;
+const EVENTS_HFCLKSTARTED: u64 = 0x100;
+const EVENTS_LFCLKSTARTED: u64 = 0x104;
+const HFCLKSTAT: u64 = 0x40C;
+const LFCLKSRC: u64 = 0x518;
+
+#[test]
+fn hfclk_start_raises_started_event() {
+    let mut bus = nrf54l15_bus();
+
+    assert_eq!(
+        bus.read_u32(CLOCK + EVENTS_HFCLKSTARTED).unwrap(),
+        0,
+        "HFCLKSTARTED must be clear before the start task"
+    );
+
+    bus.write_u32(CLOCK + TASKS_HFCLKSTART, 1).unwrap();
+    // HFCLKSTAT.STATE reflects the running oscillator immediately, but the
+    // STARTED event settles on the peripheral tick — the same few-cycle delay
+    // silicon has, and the reason the driver spins rather than reading once.
+    bus.tick_peripherals_fully();
+
+    assert_ne!(
+        bus.read_u32(CLOCK + EVENTS_HFCLKSTARTED).unwrap(),
+        0,
+        "HFCLKSTART must raise HFCLKSTARTED — Zephyr's clock_control spins on this"
+    );
+    assert_ne!(
+        bus.read_u32(CLOCK + HFCLKSTAT).unwrap() & (1 << 16),
+        0,
+        "HFCLKSTAT.STATE must report running"
+    );
+}
+
+#[test]
+fn lfclk_start_raises_started_event() {
+    let mut bus = nrf54l15_bus();
+
+    bus.write_u32(CLOCK + LFCLKSRC, 1).unwrap(); // Xtal
+    bus.write_u32(CLOCK + TASKS_LFCLKSTART, 1).unwrap();
+    bus.tick_peripherals_fully();
+
+    assert_ne!(
+        bus.read_u32(CLOCK + EVENTS_LFCLKSTARTED).unwrap(),
+        0,
+        "LFCLKSTART must raise LFCLKSTARTED — the GRTC/kernel-tick init spins on this"
+    );
+}
+
+#[test]
+fn clock_events_are_software_clearable() {
+    // Standard Nordic semantics: writing 0 clears an EVENTS_ register. A model
+    // that latched them would make the second boot-time wait spin forever.
+    let mut bus = nrf54l15_bus();
+
+    bus.write_u32(CLOCK + TASKS_HFCLKSTART, 1).unwrap();
+    bus.tick_peripherals_fully();
+    assert_ne!(bus.read_u32(CLOCK + EVENTS_HFCLKSTARTED).unwrap(), 0);
+
+    bus.write_u32(CLOCK + EVENTS_HFCLKSTARTED, 0).unwrap();
+    assert_eq!(
+        bus.read_u32(CLOCK + EVENTS_HFCLKSTARTED).unwrap(),
+        0,
+        "writing 0 must clear the event"
+    );
+}
