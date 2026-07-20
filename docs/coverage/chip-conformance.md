@@ -7,7 +7,7 @@ Reg match = verifiable cold-reset registers reproduced. "Excluded" = registers a
 | Chip | Level | Estate | Peripherals | Reg match (verifiable) | Excluded | Behavior gate |
 |------|-------|--------|-------------|------------------------|----------|---------------|
 | esp32c3 | **L2** | ✓ | 39 | 364/402 (90%) | 190 | firmware_survival::test_esp32c3_demo_survival |
-| nrf54l15 | **L1** | ✓ | 27 | — | — | firmware_survival::test_nrf54l15_zephyr_survival |
+| nrf54l15 | **L1** | ✓ | 28 | — | — | firmware_survival::test_nrf54l15_zephyr_survival |
 | esp32 | **L0** | ✓ | 14 | — | — | — |
 | esp32s3 | **L0** | ✓ | 10 | — | — | — |
 | esp32s3-zero | **L0** | ✓ | 17 | — | — | — |

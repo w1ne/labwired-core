@@ -41,6 +41,20 @@
 use crate::peripherals::i2c::I2cDevice;
 use crate::{Bus, PeripheralTickResult, SimResult};
 
+/// The GRTC SYSCOUNTER low word (GRTC base 0x500E_2000 + 0x720). It counts at
+/// 1 MHz, so its value is microseconds directly — and it is the SAME clock the
+/// firmware reads for time (`board_time_us`). The TWIM advances its slaves
+/// against this, not the raw CPU cycle clock, so a sensor's sample clock and the
+/// firmware's sense of time cannot drift apart: whatever the GRTC reads, the PPG
+/// sees the identical elapsed microseconds. (Tying the slave clock to the CPU
+/// cycle counter instead makes them diverge by the build's cycles-per-
+/// instruction, which is exactly the leaky abstraction this avoids.)
+///
+/// Low word only: 32 bits of microseconds is ~71 minutes — far longer than any
+/// inter-service gap — and reading one word avoids perturbing the
+/// SYSCOUNTERL-latches-SYSCOUNTERH read pairing the firmware depends on.
+const GRTC_SYSCOUNTERL: u64 = 0x500E_2720;
+
 // ── Tasks ────────────────────────────────────────────────────────────────
 const OFF_TASKS_STOP: u64 = 0x004;
 const OFF_TASKS_SUSPEND: u64 = 0x00C;
@@ -137,6 +151,15 @@ pub struct Nrf54lTwim {
 
     /// Attached I²C slaves, addressed by their 7-bit address.
     slaves: Vec<Box<dyn I2cDevice>>,
+
+    /// Per-slave GRTC timestamp (µs) at which each slave was last advanced to
+    /// "now". Parallel to `slaves`. `u64::MAX` means "not yet serviced", so the
+    /// first transaction seeds the mark instead of charging the slave for all
+    /// the time since boot. A slave is advanced by the microseconds elapsed on
+    /// the GRTC since this mark, immediately before it is serviced — so a late
+    /// poll (e.g. after a BLE connection-event ISR) sees the samples that
+    /// accrued while the CPU was away.
+    last_us: Vec<u64>,
 }
 
 impl std::fmt::Debug for Nrf54lTwim {
@@ -156,10 +179,36 @@ impl Nrf54lTwim {
 
     pub fn push_slave(&mut self, slave: Box<dyn I2cDevice>) {
         self.slaves.push(slave);
+        // u64::MAX = "not yet serviced": the first transaction seeds the mark to
+        // the current GRTC time rather than advancing the slave by all of it.
+        self.last_us.push(u64::MAX);
     }
 
     fn slave_index(&self, addr: u8) -> Option<usize> {
         self.slaves.iter().position(|s| s.address() == addr)
+    }
+
+    /// The firmware's own clock: the GRTC SYSCOUNTER (µs), read via the bus.
+    /// Returns 0 if no GRTC is mapped (unit tests without one), which leaves
+    /// slaves un-advanced.
+    fn grtc_now_us(bus: &dyn Bus) -> u64 {
+        bus.read_u32(GRTC_SYSCOUNTERL).unwrap_or(0) as u64
+    }
+
+    /// Advance slave `idx` to the current GRTC time before servicing it. The
+    /// first service seeds the mark (no advance); each later service hands over
+    /// the microseconds elapsed on the GRTC since the previous one.
+    fn advance_slave_to_now(&mut self, idx: usize, bus: &dyn Bus) {
+        let now_us = Self::grtc_now_us(bus);
+        let last = self.last_us[idx];
+        if last == u64::MAX {
+            self.last_us[idx] = now_us;
+            return;
+        }
+        if now_us > last {
+            self.slaves[idx].advance_time_us(now_us - last);
+            self.last_us[idx] = now_us;
+        }
     }
 
     fn event_bitmap(&self) -> u32 {
@@ -212,6 +261,7 @@ impl Nrf54lTwim {
             return;
         };
 
+        self.advance_slave_to_now(idx, bus);
         self.slaves[idx].start();
         for i in 0..len {
             if let Ok(b) = bus.read_u8(self.dma_tx_ptr as u64 + i as u64) {
@@ -241,6 +291,7 @@ impl Nrf54lTwim {
             return;
         };
 
+        self.advance_slave_to_now(idx, bus);
         for i in 0..len {
             let b = self.slaves[idx].read();
             let _ = bus.write_u8(self.dma_rx_ptr as u64 + i as u64, b);
@@ -454,6 +505,120 @@ mod tests {
         let mut bus = SystemBus::empty();
         bus.ram = LinearMemory::new(256, 0x2000_0000);
         (twim, bus)
+    }
+
+    /// A slave that records the total wall-clock it was advanced by. Used to
+    /// prove the TWIM hands a slave the time that elapsed while the CPU was busy
+    /// elsewhere — the mechanism that makes a starved PPG FIFO overflow.
+    struct TimedSensor {
+        advanced_us: std::sync::Arc<std::sync::atomic::AtomicU64>,
+        addr_written: bool,
+    }
+
+    impl I2cDevice for TimedSensor {
+        fn address(&self) -> u8 {
+            0x57
+        }
+        fn read(&mut self) -> u8 {
+            0xAB
+        }
+        fn write(&mut self, _data: u8) {
+            self.addr_written = true;
+        }
+        fn stop(&mut self) {
+            self.addr_written = false;
+        }
+        fn advance_time_us(&mut self, us: u64) {
+            self.advanced_us
+                .fetch_add(us, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+
+    /// Drive one repeated-START register read against the slave at `addr`.
+    fn drive_read(twim: &mut Nrf54lTwim, bus: &mut SystemBus, addr: u32) {
+        bus.write_u8(0x2000_0000, 0x00).unwrap();
+        twim.write_u32(OFF_ENABLE, ENABLE_TWIM).unwrap();
+        twim.write_u32(OFF_ADDRESS, addr).unwrap();
+        twim.write_u32(OFF_SHORTS, SHORT_LASTTX_DMA_RX_START | SHORT_LASTRX_STOP)
+            .unwrap();
+        twim.write_u32(OFF_DMA_TX_PTR, 0x2000_0000).unwrap();
+        twim.write_u32(OFF_DMA_TX_MAXCNT, 1).unwrap();
+        twim.write_u32(OFF_DMA_RX_PTR, 0x2000_0010).unwrap();
+        twim.write_u32(OFF_DMA_RX_MAXCNT, 1).unwrap();
+        twim.write_u32(OFF_TASKS_DMA_TX_START, 1).unwrap();
+        twim.tick_with_bus(bus);
+    }
+
+    /// Map a stand-in GRTC SYSCOUNTER the TWIM can read as the firmware's clock,
+    /// and set it to `us` microseconds.
+    fn set_grtc_us(bus: &mut SystemBus, us: u32) {
+        if bus.extra_mem.is_empty() {
+            bus.extra_mem.push(LinearMemory::new(0x800, 0x500E_2000));
+        }
+        bus.write_u32(GRTC_SYSCOUNTERL, us).unwrap();
+    }
+
+    #[test]
+    fn slave_advances_by_grtc_time_elapsed_while_cpu_was_busy() {
+        use std::sync::atomic::Ordering;
+        use std::sync::{atomic::AtomicU64, Arc};
+
+        let advanced = Arc::new(AtomicU64::new(0));
+        let mut twim = Nrf54lTwim::new();
+        twim.push_slave(Box::new(TimedSensor {
+            advanced_us: advanced.clone(),
+            addr_written: false,
+        }));
+        let mut bus = SystemBus::empty();
+        bus.ram = LinearMemory::new(256, 0x2000_0000);
+
+        // t = 0: the first service seeds the mark and must NOT advance the slave
+        // (else it would be charged for all the time since boot).
+        set_grtc_us(&mut bus, 0);
+        drive_read(&mut twim, &mut bus, 0x57);
+        assert_eq!(
+            advanced.load(Ordering::Relaxed),
+            0,
+            "the first service seeds the mark, it does not advance"
+        );
+
+        // 1 ms of GRTC time passes with NO transaction — the CPU is off in a BLE
+        // connection-event ISR. The next service must hand the slave that 1 ms,
+        // which is the catch-up that overflows a starved FIFO.
+        set_grtc_us(&mut bus, 1000);
+        drive_read(&mut twim, &mut bus, 0x57);
+        assert_eq!(
+            advanced.load(Ordering::Relaxed),
+            1000,
+            "the slave must be advanced by the 1 ms that elapsed on the GRTC \
+             while the CPU was busy"
+        );
+    }
+
+    #[test]
+    fn no_grtc_mapped_means_no_wall_clock_advance() {
+        use std::sync::atomic::Ordering;
+        use std::sync::{atomic::AtomicU64, Arc};
+
+        // No GRTC mapped: grtc_now_us reads 0 forever, so after the seed the
+        // slave is never advanced — byte-identical to the pre-seam behaviour.
+        let advanced = Arc::new(AtomicU64::new(0));
+        let mut twim = Nrf54lTwim::new();
+        twim.push_slave(Box::new(TimedSensor {
+            advanced_us: advanced.clone(),
+            addr_written: false,
+        }));
+        let mut bus = SystemBus::empty();
+        bus.ram = LinearMemory::new(256, 0x2000_0000);
+
+        drive_read(&mut twim, &mut bus, 0x57);
+        drive_read(&mut twim, &mut bus, 0x57);
+
+        assert_eq!(
+            advanced.load(Ordering::Relaxed),
+            0,
+            "no GRTC → slaves keep the old transaction-only behaviour"
+        );
     }
 
     #[test]

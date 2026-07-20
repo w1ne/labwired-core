@@ -619,6 +619,15 @@ impl I2cDevice for Max30102 {
     fn as_sim_input_mut(&mut self) -> Option<&mut dyn crate::sim_input::SimInput> {
         Some(self)
     }
+
+    /// Wall-clock time source (see [`I2cDevice::advance_time_us`]). Delegates to
+    /// [`Max30102::advance_us`], which fills the FIFO at the configured sample
+    /// rate and increments OVF_COUNTER on overrun — so a master that advances
+    /// the PPG to "now" before each read makes a CPU-starved drain loop overflow
+    /// exactly as the silicon would.
+    fn advance_time_us(&mut self, us: u64) {
+        self.advance_us(us);
+    }
 }
 
 /// Drivable PPG channels. `bpm` sets the pulse rate of the synthesised

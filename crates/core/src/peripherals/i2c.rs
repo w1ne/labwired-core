@@ -39,6 +39,22 @@ pub trait I2cDevice: Send {
     fn as_sim_input_mut(&mut self) -> Option<&mut dyn crate::sim_input::SimInput> {
         None
     }
+
+    /// Advance this device's free-running sample/measurement clock by `us`
+    /// microseconds of wall-clock time.
+    ///
+    /// Real sensors sample on their own oscillator, independent of when the CPU
+    /// gets around to reading them: a PPG FIFO keeps filling at its configured
+    /// rate whether or not firmware is draining it. A bus master that knows the
+    /// elapsed wall-clock calls this on a slave immediately before servicing it,
+    /// so a *late* poll observes exactly the samples that accrued while the CPU
+    /// was busy elsewhere — and a FIFO that was allowed to overrun reports the
+    /// overflow it really would have. Without this hook a model only advances on
+    /// the very transactions that would have prevented the overflow, which hides
+    /// precisely the CPU-starvation failures worth simulating.
+    ///
+    /// Default no-op: a purely register-mapped device has no clock to advance.
+    fn advance_time_us(&mut self, _us: u64) {}
 }
 
 /// I2C register layout selector. STM32F1/F2/F4 share the legacy I2C

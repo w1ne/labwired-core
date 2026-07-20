@@ -107,6 +107,21 @@ peripherals:
     size: "4KB"
     irq: 200
 
+  # ── SysTick ────────────────────────────────────────────────────────────
+  # The 24-bit ARMv8-M architectural SysTick timer, part of the Cortex-M33
+  # core (SCS block at 0xE000_E010), NOT an nRF peripheral. It raises system
+  # exception 15 — no NVIC line — and needs no vector table beyond the
+  # architectural entries. `configure_cortex_m` installs SCB/NVIC/DWT but not
+  # SysTick, so it is declared here (the M33 genuinely has it) to give firmware
+  # a periodic core interrupt. The smart-ring firmware uses it to model a BLE
+  # connection-event ISR: a periodic exception that busy-holds the CPU for a
+  # connection-event window, demonstrating how radio contention starves the
+  # sensor drain loop and overflows the PPG FIFO (see smart-ring.yaml).
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    size: "16B"
+
   # ── TIMER ──────────────────────────────────────────────────────────────
   # cc-num differs per instance on this family (DT `cc-num`): TIMER10 has 8,
   # TIMER20..22 have 6. The nRF52 model defaults to 4, so both are explicit.

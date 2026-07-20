@@ -38,6 +38,14 @@ pub fn build_i2c_device(
 ) -> Option<Box<dyn I2cDevice>> {
     match type_str.to_ascii_lowercase().as_str() {
         "tmp102" => Some(Box::new(crate::peripherals::esp32s3::tmp102::Tmp102::new())),
+        "tmp117" => {
+            use crate::peripherals::components::tmp117::{Tmp117, TMP117_ADDR};
+            let address = config
+                .get("i2c_address")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(TMP117_ADDR as u64) as u8;
+            Some(Box::new(Tmp117::new(address)))
+        }
         "mpu6050" => {
             let address = config
                 .get("i2c_address")
@@ -46,6 +54,14 @@ pub fn build_i2c_device(
             Some(Box::new(crate::peripherals::components::Mpu6050::new(
                 address,
             )))
+        }
+        "bmi270" => {
+            use crate::peripherals::components::bmi270::{Bmi270, BMI270_ADDR};
+            let address = config
+                .get("i2c_address")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(BMI270_ADDR as u64) as u8;
+            Some(Box::new(Bmi270::new(address)))
         }
         "fxos8700" => {
             let address = config
@@ -209,6 +225,36 @@ mod tests {
         let cfg = HashMap::new();
         let dev = build_i2c_device("tmp102", &cfg).expect("tmp102 should build");
         assert_eq!(dev.address(), 0x48);
+    }
+
+    #[test]
+    fn bmi270_built_at_default_and_override_address() {
+        let cfg = HashMap::new();
+        assert_eq!(build_i2c_device("bmi270", &cfg).unwrap().address(), 0x68);
+        let mut cfg = HashMap::new();
+        cfg.insert(
+            "i2c_address".to_string(),
+            serde_yaml::Value::Number(serde_yaml::Number::from(0x69)),
+        );
+        assert_eq!(build_i2c_device("bmi270", &cfg).unwrap().address(), 0x69);
+    }
+
+    #[test]
+    fn tmp117_built_at_default_and_override_address() {
+        let cfg = HashMap::new();
+        assert_eq!(build_i2c_device("tmp117", &cfg).unwrap().address(), 0x48);
+        let mut cfg = HashMap::new();
+        cfg.insert(
+            "i2c_address".to_string(),
+            serde_yaml::Value::Number(serde_yaml::Number::from(0x4A)),
+        );
+        assert_eq!(build_i2c_device("tmp117", &cfg).unwrap().address(), 0x4A);
+        // component_id stamped on the SimInput input device.
+        let mut dev = build_external_i2c_device("tmp117", "tsensor", &HashMap::new()).unwrap();
+        assert_eq!(
+            dev.as_sim_input_mut().unwrap().component_id(),
+            Some("tsensor")
+        );
     }
 
     #[test]

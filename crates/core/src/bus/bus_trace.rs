@@ -166,6 +166,15 @@ impl I2cDevice for TracingI2cDevice {
     fn stop(&mut self) {
         self.inner.stop();
     }
+    /// Forward the wall-clock advance to the wrapped device. Without this the
+    /// trace wrapper swallows the master's `advance_time_us` call (the trait
+    /// default is a no-op), so a real sensor behind the trace — e.g. a MAX30102
+    /// on the nRF54L TWIM — would never advance its own sample clock and its
+    /// FIFO could never overrun under CPU starvation. Completing the wall-clock
+    /// change means the wrapper must be transparent to it.
+    fn advance_time_us(&mut self, us: u64) {
+        self.inner.advance_time_us(us);
+    }
     fn write(&mut self, data: u8) {
         // The master selects this device by address, then calls start() + write()/read().
         // The wrapper reconstructs the framing universally: the FIRST transfer after a
@@ -337,6 +346,52 @@ mod tests {
         assert!(
             any.downcast_ref::<Dev>().is_some(),
             "as_any must forward to inner"
+        );
+    }
+
+    /// Regression guard: the trace wrapper MUST forward `advance_time_us` to the
+    /// inner device. Every I²C slave on the nRF54L TWIM is wrapped here, so a
+    /// wrapper that swallows the master's wall-clock advance leaves a real
+    /// sensor's sample clock frozen — its FIFO can never overrun under CPU
+    /// starvation, and the whole BLE-contention model silently reads zero. The
+    /// production path is `factory → wrap_i2c → TWIM`, which the TWIM's own
+    /// unit test (an *unwrapped* mock) does not exercise; this closes that gap.
+    #[test]
+    fn tracing_i2c_wrapper_forwards_advance_time_us() {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        use std::sync::Arc;
+
+        struct Timed {
+            advanced_us: Arc<AtomicU64>,
+        }
+        impl I2cDevice for Timed {
+            fn address(&self) -> u8 {
+                0x57
+            }
+            fn read(&mut self) -> u8 {
+                0
+            }
+            fn write(&mut self, _b: u8) {}
+            fn advance_time_us(&mut self, us: u64) {
+                self.advanced_us.fetch_add(us, Ordering::Relaxed);
+            }
+        }
+
+        let advanced = Arc::new(AtomicU64::new(0));
+        let mut w = wrap_i2c(
+            "twi21",
+            &new_log(),
+            Box::new(Timed {
+                advanced_us: advanced.clone(),
+            }),
+        );
+
+        I2cDevice::advance_time_us(&mut *w, 1234);
+
+        assert_eq!(
+            advanced.load(Ordering::Relaxed),
+            1234,
+            "the trace wrapper must be transparent to advance_time_us"
         );
     }
 
