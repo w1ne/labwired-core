@@ -1,0 +1,215 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# Nordic nRF54L15 — APPLICATION core (Cortex-M33, 128 MHz).
+#
+# Source references:
+# - Address map, IRQ numbers, GPIO widths and TIMER cc-num are taken from the
+#   Zephyr devicetree `dts/vendor/nordic/nrf54l_05_10_15.dtsi` (+ nrf54l15.dtsi
+#   for the memory sizes). That is the exact view the firmware is linked
+#   against, which is the same sourcing rule used for nrf5340.yaml.
+# - Cross-checked against the nRF54L15 Product Specification memory map.
+#
+# Address map note — this is the thing to get right:
+#   All peripherals sit behind a single `global_peripherals` node with
+#   `ranges = <0x0 0x50000000 0x10000000>`, so a devicetree `reg = <0xc6000 ...>`
+#   is absolute address 0x500C6000. 0x5000_0000 is the SECURE alias and is the
+#   devicetree default; 0x4000_0000 is the non-secure alias, selected in the DT
+#   by USE_NON_SECURE_ADDRESS_MAP. This profile maps the SECURE view, which is
+#   what a TF-M-less bare-metal or `nrf54l15dk/nrf54l15/cpuapp` build uses.
+#   FICR/UICR and the RRAM controller are NOT in that window and carry their own
+#   absolute addresses.
+#
+# Two nRF54L-family differences from nRF52/nRF5340 that matter:
+#   1. NVM is RRAM (resistive), not FLASH, based at 0x0 with a dedicated
+#      RRAM controller at 0x5004B000 — there is no NVMC.
+#   2. Timekeeping is the GRTC (Global RTC), not RTC0/RTC1. There is no nRF52
+#      RTC on this part, so the nRF52 RTC model is deliberately NOT mapped.
+#
+# Peripheral models: UARTE, TIMER, GPIO, TEMP, EGU and GPIOTE keep the nRF52
+# register layouts, so the existing behavioural models are reused verbatim at
+# the nRF54L bases (same approach nrf5340.yaml takes). Blocks that are new to
+# this family, or that the current boot paths only poke without polling, are
+# mapped as benign stub windows so a write/readback never faults the bus.
+name: "nrf54l15"
+arch: "arm"
+core: "cortex-m33"
+
+# RRAM, not flash. 1524 KB — an odd size, and it is correct: see
+# nrf54l15.dtsi, `cpuapp_rram: reg = <0x0 DT_SIZE_K(1524)>`.
+flash:
+  base: 0x00000000
+  size: "1524KB"
+ram:
+  base: 0x20000000
+  size: "256KB"
+
+peripherals:
+  # ── UARTE ──────────────────────────────────────────────────────────────
+  # UARTE20 is the nRF54L15-DK console (routed to the on-board VCP). EasyDMA
+  # TX walks TXD.PTR/MAXCNT out of RAM exactly as on nRF52, so the nRF52 UARTE
+  # model is reused unchanged.
+  #
+  # NOTE: uart20/spi20/twi20 are the same 0x500C6000 instance in three
+  # personalities — the DT declares all three at one address and expects
+  # exactly one to be enabled. Only the UARTE personality is mapped here;
+  # mapping a SPIM model at the same base would collide.
+  - id: "uart20"
+    type: "nrf52840_uart"
+    base_address: 0x500C6000
+    size: "4KB"
+    irq: 198
+  - id: "uart30"
+    type: "nrf52840_uart"
+    base_address: 0x50104000
+    size: "4KB"
+    irq: 260
+
+  # ── TIMER ──────────────────────────────────────────────────────────────
+  # cc-num differs per instance on this family (DT `cc-num`): TIMER10 has 8,
+  # TIMER20..22 have 6. The nRF52 model defaults to 4, so both are explicit.
+  - id: "timer10"
+    type: "nrf52840_timer"
+    base_address: 0x50085000
+    size: "4KB"
+    irq: 133
+    config:
+      num_cc: 8
+  - id: "timer20"
+    type: "nrf52840_timer"
+    base_address: 0x500CA000
+    size: "4KB"
+    irq: 202
+    config:
+      num_cc: 6
+  - id: "timer21"
+    type: "nrf52840_timer"
+    base_address: 0x500CB000
+    size: "4KB"
+    irq: 203
+    config:
+      num_cc: 6
+  - id: "timer22"
+    type: "nrf52840_timer"
+    base_address: 0x500CC000
+    size: "4KB"
+    irq: 204
+    config:
+      num_cc: 6
+
+  # ── GPIO ───────────────────────────────────────────────────────────────
+  # Port widths are NOT uniform on this part (DT `ngpios`): P0=7, P1=17, P2=11.
+  # The DK's LEDs are on P2 and P1, so a wrong width here silently breaks the
+  # board_io bindings rather than faulting.
+  - id: "gpio0"
+    type: "gpio"
+    base_address: 0x5010A000
+    size: "4KB"
+    config:
+      profile: "nrf52"
+      num_pins: 7
+  - id: "gpio1"
+    type: "gpio"
+    base_address: 0x500D8200
+    size: "4KB"
+    config:
+      profile: "nrf52"
+      num_pins: 17
+  - id: "gpio2"
+    type: "gpio"
+    base_address: 0x50050400
+    size: "4KB"
+    config:
+      profile: "nrf52"
+      num_pins: 11
+
+  # ── TEMP ───────────────────────────────────────────────────────────────
+  # Die temperature sensor; same task/event + RESULT layout as nRF52.
+  - id: "temp"
+    type: "nrf52840_temp"
+    base_address: 0x500D7000
+    size: "4KB"
+    irq: 215
+
+  # ── EGU ────────────────────────────────────────────────────────────────
+  - id: "egu10"
+    type: "nrf52840_egu"
+    base_address: 0x50087000
+    size: "4KB"
+    irq: 135
+  - id: "egu20"
+    type: "nrf52840_egu"
+    base_address: 0x500C9000
+    size: "4KB"
+    irq: 201
+
+  # ── GPIOTE ─────────────────────────────────────────────────────────────
+  - id: "gpiote20"
+    type: "nrf52_gpiote"
+    base_address: 0x500DA000
+    size: "4KB"
+  - id: "gpiote30"
+    type: "nrf52_gpiote"
+    base_address: 0x5010C000
+    size: "4KB"
+
+  # ── Benign stub windows ────────────────────────────────────────────────
+  # GRTC — the Global RTC replaces RTC0/RTC1 on this family and is what Zephyr
+  # drives the kernel tick from. A stub is sufficient for a bare-metal boot
+  # that does not use it, and is NOT sufficient for a Zephyr boot: the tick
+  # init polls SYSCOUNTER. Promoting this to a behavioural model is the next
+  # step for Zephyr support, and is called out in docs/boards/nrf54l15.md.
+  - id: "grtc"
+    type: "nrf54l_grtc_stub"
+    base_address: 0x500E2000
+    size: "4KB"
+
+  # CLOCK / POWER share peripheral id 0x10E000. The nRF54L clock block is not
+  # register-compatible with the nRF52 CLOCK (different oscillator control), so
+  # the nRF52 model is deliberately NOT reused here; a bare-metal boot running
+  # from the default HFINT does not touch it.
+  - id: "clock_power"
+    type: "nrf54l_clock_stub"
+    base_address: 0x5010E000
+    size: "4KB"
+    irq: 261
+
+  # RRAM controller — NVM write/erase control. Reads as zero; a firmware that
+  # only executes from RRAM never needs it, but the window must exist so a
+  # config readback does not fault.
+  - id: "rramc"
+    type: "nrf54l_rramc_stub"
+    base_address: 0x5004B000
+    size: "4KB"
+
+  # Regulators (DCDC/LDO selection) — write-only on the boot path.
+  - id: "regulators"
+    type: "nrf54l_regulators_stub"
+    base_address: 0x50120000
+    size: "4KB"
+
+  # DPPIC / PPIB — event routing fabric. Poked during peripheral init but not
+  # polled for a settled value on a UART smoke boot.
+  - id: "dppic20"
+    type: "nrf54l_dppic_stub"
+    base_address: 0x500C2000
+    size: "4KB"
+  - id: "dppic30"
+    type: "nrf54l_dppic_stub"
+    base_address: 0x50102000
+    size: "4KB"
+
+  # FICR / UICR — factory and user info. NOT inside the 0x5000_0000 window;
+  # these are absolute (DT: ficr@ffc000, uicr@ffd000). Unprovisioned UICR reads
+  # as zero, which the boot path accepts.
+  - id: "ficr"
+    type: "nrf54l_ficr_stub"
+    base_address: 0x00FFC000
+    size: "4KB"
+  - id: "uicr"
+    type: "nrf54l_uicr_stub"
+    base_address: 0x00FFD000
+    size: "4KB"

@@ -1,0 +1,10 @@
+# LabWired - nRF54L15-DK System Configuration
+#
+# Maps to Zephyr board target `nrf54l15dk/nrf54l15/cpuapp` (application core).
+#
+# UARTE20 is the DK console: it is routed to the on-board interface MCU's
+# virtual COM port, which is why the smoke firmware and the boot test both
+# expect the banner on uart20 rather than uart30.
+name: "nrf54l15dk"
+chip: "../chips/nrf54l15.yaml"
+peripherals: []
