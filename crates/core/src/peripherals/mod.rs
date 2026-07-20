@@ -36,6 +36,7 @@ pub mod kit;
 pub mod lptim;
 pub mod mcg;
 pub mod nrf52;
+pub mod nrf54l;
 pub mod nvic;
 pub mod pio;
 pub mod pwr;

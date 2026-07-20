@@ -172,6 +172,9 @@ impl SystemBus {
                             manifest,
                             &bus.bus_trace,
                         )
+                    })
+                    .or_else(|| {
+                        crate::peripherals::nrf54l::factory::try_build(&canonical_type, p_cfg)
                     });
             if let Some(dev) = family_dev {
                 // The nRF52 serial-instance mux (SPIM0/TWIM0) attaches all

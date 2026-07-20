@@ -81,7 +81,7 @@ fn nrf54l15_bus() -> SystemBus {
 
 #[test]
 fn memory_map_is_rram_at_zero_with_256k_sram() {
-    let chip = ChipDescriptor::from_file(&nrf54l15_chip_path()).expect("load chip");
+    let chip = ChipDescriptor::from_file(nrf54l15_chip_path()).expect("load chip");
 
     // RRAM, not flash: based at 0x0, and 1524 KB is the real (odd) size.
     assert_eq!(chip.flash.base, 0x0000_0000, "RRAM must be based at 0x0");
@@ -105,7 +105,7 @@ fn memory_map_is_rram_at_zero_with_256k_sram() {
 
 #[test]
 fn core_is_cortex_m33() {
-    let chip = ChipDescriptor::from_file(&nrf54l15_chip_path()).expect("load chip");
+    let chip = ChipDescriptor::from_file(nrf54l15_chip_path()).expect("load chip");
     assert_eq!(chip.core.as_deref(), Some("cortex-m33"));
     assert!(matches!(chip.arch, labwired_config::Arch::Arm));
 }

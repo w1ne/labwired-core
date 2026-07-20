@@ -57,6 +57,41 @@ pub fn build_i2c_device(
             )))
         }
         "aht20" => Some(Box::new(crate::peripherals::components::Aht20::new())),
+        // ── Smart-ring sensor/actuator set ──────────────────────────────────
+        "max30102" => {
+            use crate::peripherals::components::max30102::{Max30102, MAX30102_ADDR};
+            let address = config
+                .get("i2c_address")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(MAX30102_ADDR as u64) as u8;
+            let mut dev = Max30102::new(address);
+            if let Some(seed) = config.get("seed").and_then(|v| v.as_u64()) {
+                dev = dev.with_seed(seed as u32);
+            }
+            if let Some(bpm) = config.get("heart_rate_bpm").and_then(|v| v.as_f64()) {
+                dev = dev.with_heart_rate_bpm(bpm);
+            }
+            if let Some(on) = config.get("transaction_advance").and_then(|v| v.as_bool()) {
+                dev.set_transaction_advance(on);
+            }
+            Some(Box::new(dev))
+        }
+        "cap1188" => {
+            use crate::peripherals::components::cap1188::{Cap1188, CAP1188_ADDR};
+            let address = config
+                .get("i2c_address")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(CAP1188_ADDR as u64) as u8;
+            Some(Box::new(Cap1188::new(address)))
+        }
+        "drv2605" | "drv2605l" => {
+            use crate::peripherals::components::drv2605::{Drv2605, DRV2605_ADDR};
+            let address = config
+                .get("i2c_address")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(DRV2605_ADDR as u64) as u8;
+            Some(Box::new(Drv2605::new(address)))
+        }
         // scd41 / sgp41 / sps30 / veml7700 are onboarded through the
         // PeripheralKit registry (peripherals/kit), which dispatches them on
         // both the STM32 and ESP32-C3 I²C buses — no legacy arm needed here.
@@ -185,6 +220,57 @@ mod tests {
         );
         let dev = build_i2c_device("mpu6050", &cfg).expect("mpu6050 should build");
         assert_eq!(dev.address(), 0x69);
+    }
+
+    #[test]
+    fn smart_ring_devices_build_at_their_default_addresses() {
+        let cfg = HashMap::new();
+        assert_eq!(build_i2c_device("max30102", &cfg).unwrap().address(), 0x57);
+        assert_eq!(build_i2c_device("cap1188", &cfg).unwrap().address(), 0x29);
+        assert_eq!(build_i2c_device("drv2605", &cfg).unwrap().address(), 0x5A);
+        assert_eq!(build_i2c_device("drv2605l", &cfg).unwrap().address(), 0x5A);
+    }
+
+    #[test]
+    fn smart_ring_addresses_override_from_config() {
+        let mut cfg = HashMap::new();
+        cfg.insert(
+            "i2c_address".to_string(),
+            serde_yaml::Value::Number(serde_yaml::Number::from(0x2A)),
+        );
+        assert_eq!(build_i2c_device("cap1188", &cfg).unwrap().address(), 0x2A);
+    }
+
+    #[test]
+    fn max30102_config_keys_reach_the_model() {
+        use crate::peripherals::components::Max30102;
+        let mut cfg = HashMap::new();
+        cfg.insert(
+            "heart_rate_bpm".to_string(),
+            serde_yaml::Value::Number(serde_yaml::Number::from(95.0)),
+        );
+        cfg.insert(
+            "seed".to_string(),
+            serde_yaml::Value::Number(serde_yaml::Number::from(42)),
+        );
+        let dev = build_i2c_device("max30102", &cfg).expect("max30102 should build");
+        let ppg = dev
+            .as_any()
+            .and_then(|a| a.downcast_ref::<Max30102>())
+            .expect("model is a Max30102");
+        assert_eq!(ppg.heart_rate_bpm(), 95.0);
+    }
+
+    #[test]
+    fn external_attach_stamps_the_component_id_on_input_devices() {
+        let cfg = HashMap::new();
+        let mut dev = build_external_i2c_device("max30102", "ppg", &cfg).expect("builds");
+        let si = dev.as_sim_input_mut().expect("max30102 is a SimInput");
+        assert_eq!(si.component_id(), Some("ppg"));
+
+        let mut touch = build_external_i2c_device("cap1188", "touchpad", &cfg).expect("builds");
+        let si = touch.as_sim_input_mut().expect("cap1188 is a SimInput");
+        assert_eq!(si.component_id(), Some("touchpad"));
     }
 
     #[test]
