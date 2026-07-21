@@ -90,6 +90,7 @@ fn two_potentiometers_are_individually_addressable() {
     let chip_path = root("configs/chips/stm32f103.yaml");
     let chip = ChipDescriptor::from_file(&chip_path).expect("load chip descriptor");
     let manifest = SystemManifest {
+        cosim_models: Vec::new(),
         walk_deleted: Some(false),
         schema_version: "1.0".to_string(),
         name: "two-pots".to_string(),

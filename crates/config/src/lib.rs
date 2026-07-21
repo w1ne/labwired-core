@@ -196,6 +196,34 @@ pub struct ExternalDevice {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
+pub enum CosimAdapter {
+    ExternalProcess,
+    Fmi,
+    Mock,
+}
+
+fn default_cosim_step_ns() -> u64 {
+    1_000
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CosimModelConfig {
+    pub id: String,
+    pub adapter: CosimAdapter,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    #[serde(default = "default_cosim_step_ns")]
+    pub step_ns: u64,
+    #[serde(default)]
+    pub inputs: HashMap<String, String>,
+    #[serde(default)]
+    pub outputs: HashMap<String, String>,
+    #[serde(default)]
+    pub config: HashMap<String, serde_yaml::Value>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
 pub enum BoardIoKind {
     Led,
     Button,
@@ -244,6 +272,8 @@ pub struct SystemManifest {
     pub memory_overrides: HashMap<String, String>,
     #[serde(default)]
     pub external_devices: Vec<ExternalDevice>,
+    #[serde(default)]
+    pub cosim_models: Vec<CosimModelConfig>,
     #[serde(default)]
     pub board_io: Vec<BoardIoBinding>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -595,6 +625,35 @@ impl SystemManifest {
             }
         }
         Ok(manifest)
+    }
+
+    pub fn validate_cosim_models(&self) -> Vec<String> {
+        let mut issues = Vec::new();
+
+        for (index, model) in self.cosim_models.iter().enumerate() {
+            let location = format!("cosim_models[{index}]");
+            if model.id.trim().is_empty() {
+                issues.push(format!("{location}.id must be a non-empty identifier"));
+            }
+            if model.step_ns == 0 {
+                issues.push(format!("{location}.step_ns must be greater than zero"));
+            }
+            if matches!(
+                model.adapter,
+                CosimAdapter::ExternalProcess | CosimAdapter::Fmi
+            ) && model
+                .model
+                .as_deref()
+                .is_none_or(|path| path.trim().is_empty())
+            {
+                issues.push(format!(
+                    "{location}.model is required for {:?} adapters",
+                    model.adapter
+                ));
+            }
+        }
+
+        issues
     }
 }
 

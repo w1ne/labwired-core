@@ -68,6 +68,7 @@ pub(crate) fn run_firmware_riscv(args: RunArgs, _chip_yaml: String) -> ExitCode 
         chip: args.chip.to_string_lossy().into_owned(),
         memory_overrides: Default::default(),
         external_devices: vec![],
+        cosim_models: Vec::new(),
         board_io: vec![],
         debug_uart: None,
         peripherals: vec![],

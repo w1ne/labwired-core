@@ -43,6 +43,7 @@ fn kw41z_bus() -> SystemBus {
         name: "kw41z-clock-boot".to_string(),
         chip: path.to_string_lossy().to_string(),
         external_devices: vec![],
+        cosim_models: Vec::new(),
         board_io: vec![],
         debug_uart: None,
         peripherals: vec![],

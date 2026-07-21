@@ -1,0 +1,29 @@
+name: "cosim-plant-demo"
+chip: "../../configs/chips/stm32f103.yaml"
+cosim_models:
+  - id: "discrete_plant"
+    adapter: "external_process"
+    model: "./models/discrete-plant.py"
+    step_ns: 10000
+    inputs:
+      channel0_enabled: "plant.channels.0.enabled"
+      channel1_enabled: "plant.channels.1.enabled"
+      channel2_enabled: "plant.channels.2.enabled"
+      channel3_enabled: "plant.channels.3.enabled"
+      channel4_enabled: "plant.channels.4.enabled"
+      channel5_enabled: "plant.channels.5.enabled"
+      channel6_enabled: "plant.channels.6.enabled"
+      channel7_enabled: "plant.channels.7.enabled"
+      channel8_enabled: "plant.channels.8.enabled"
+      channel9_enabled: "plant.channels.9.enabled"
+      channel10_enabled: "plant.channels.10.enabled"
+      channel11_enabled: "plant.channels.11.enabled"
+      disabled_channels: "scenario.disabled_channels"
+    outputs:
+      v_out: "plant.output.voltage"
+      i_out: "plant.output.current"
+      active_channels: "plant.active_channels"
+    config:
+      protocol: "jsonl"
+      purpose: "Generic reduced-order discrete plant demonstrating the co-simulation contract"
+external_devices: []

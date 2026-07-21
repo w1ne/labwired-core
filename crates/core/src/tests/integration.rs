@@ -437,6 +437,7 @@ pub mod integration_tests {
             chip: "test-chip".to_string(),
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
+            cosim_models: Vec::new(),
             board_io: Vec::new(),
             debug_uart: None,
             peripherals: Vec::new(),
@@ -612,6 +613,7 @@ pub mod integration_tests {
             chip: "test-chip-2".to_string(),
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
+            cosim_models: Vec::new(),
             board_io: Vec::new(),
             debug_uart: None,
             peripherals: Vec::new(),
@@ -675,6 +677,7 @@ pub mod integration_tests {
             chip: "test-chip-3".to_string(),
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
+            cosim_models: Vec::new(),
             board_io: Vec::new(),
             debug_uart: None,
             peripherals: Vec::new(),
@@ -733,6 +736,7 @@ pub mod integration_tests {
             chip: "test-chip-gpio-v2".to_string(),
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
+            cosim_models: Vec::new(),
             board_io: Vec::new(),
             debug_uart: None,
             peripherals: Vec::new(),
@@ -797,6 +801,7 @@ pub mod integration_tests {
             chip: "test-chip-uart-v2".to_string(),
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
+            cosim_models: Vec::new(),
             board_io: Vec::new(),
             debug_uart: None,
             peripherals: Vec::new(),
@@ -949,6 +954,7 @@ pub mod integration_tests {
             chip: "test-chip-two-uarts".to_string(),
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
+            cosim_models: Vec::new(),
             board_io: Vec::new(),
             debug_uart: Some("uart1".to_string()),
             peripherals: Vec::new(),
@@ -1008,6 +1014,7 @@ pub mod integration_tests {
             chip: "test-chip-rcc-v2".to_string(),
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
+            cosim_models: Vec::new(),
             board_io: Vec::new(),
             debug_uart: None,
             peripherals: Vec::new(),
@@ -1069,6 +1076,7 @@ pub mod integration_tests {
             chip: "test-chip-rcc-f4".to_string(),
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
+            cosim_models: Vec::new(),
             board_io: Vec::new(),
             debug_uart: None,
             peripherals: Vec::new(),
@@ -1130,6 +1138,7 @@ pub mod integration_tests {
             chip: "test-chip-gpio-v2-alias".to_string(),
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
+            cosim_models: Vec::new(),
             board_io: Vec::new(),
             debug_uart: None,
             peripherals: Vec::new(),
@@ -2344,6 +2353,7 @@ pub mod integration_tests {
             chip: "esp32c3-timg-test".to_string(),
             memory_overrides: HashMap::new(),
             external_devices: Vec::new(),
+            cosim_models: Vec::new(),
             board_io: Vec::new(),
             debug_uart: None,
             peripherals: Vec::new(),
@@ -2426,6 +2436,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
+            cosim_models: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "esp32c3-gpio-test".to_string(),
@@ -2498,6 +2509,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
+            cosim_models: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "esp32c3-spi-dc-test".to_string(),
@@ -2709,6 +2721,7 @@ pub mod integration_tests {
             serde_yaml::Value::Number(0x3C.into()),
         );
         let manifest = SystemManifest {
+            cosim_models: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "esp32c3-i2c-trace-test".to_string(),
@@ -2846,6 +2859,7 @@ pub mod integration_tests {
                 serde_yaml::Value::Number(0x3C.into()),
             );
             let manifest = SystemManifest {
+                cosim_models: Vec::new(),
                 walk_deleted: Some(false),
                 schema_version: "1.0".to_string(),
                 name: "two-family-trace".to_string(),

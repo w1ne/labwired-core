@@ -70,6 +70,7 @@ fn nrf54l15_bus() -> SystemBus {
     let path = nrf54l15_chip_path();
     let chip = ChipDescriptor::from_file(&path).expect("load nrf54l15 chip");
     let manifest = labwired_config::SystemManifest {
+        cosim_models: Vec::new(),
         walk_deleted: Some(false),
         schema_version: "1.0".to_string(),
         name: "nrf54l15-boot".to_string(),

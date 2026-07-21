@@ -4,7 +4,7 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
-use labwired_config::{ChipDescriptor, MemoryValueDetails};
+use labwired_config::{ChipDescriptor, CosimAdapter, MemoryValueDetails, SystemManifest};
 
 #[test]
 fn test_old_yaml_still_parses() {
@@ -55,6 +55,43 @@ peripherals:
 }
 
 #[test]
+fn system_manifest_parses_cosim_models() {
+    let yaml = r#"
+name: "plant-demo"
+chip: "chips/stm32f103.yaml"
+cosim_models:
+  - id: "plant_model"
+    adapter: "external_process"
+    model: "./models/plant.jsonl"
+    step_ns: 10000
+    inputs:
+      rem0_enable: "gpio.rem0"
+      rem1_enable: "gpio.rem1"
+    outputs:
+      v_out: "scope.channel_a"
+      i_out: "meter.output_current"
+    config:
+      protocol: "jsonl"
+external_devices: []
+"#;
+
+    let manifest: SystemManifest = serde_yaml::from_str(yaml).unwrap();
+
+    assert_eq!(manifest.cosim_models.len(), 1);
+    let model = &manifest.cosim_models[0];
+    assert_eq!(model.id, "plant_model");
+    assert_eq!(model.adapter, CosimAdapter::ExternalProcess);
+    assert_eq!(model.model.as_deref(), Some("./models/plant.jsonl"));
+    assert_eq!(model.step_ns, 10_000);
+    assert_eq!(model.inputs["rem0_enable"], "gpio.rem0");
+    assert_eq!(model.outputs["v_out"], "scope.channel_a");
+    assert_eq!(
+        model.config["protocol"],
+        serde_yaml::Value::String("jsonl".to_string())
+    );
+}
+
+#[test]
 fn memory_value_details_constructor_is_externally_constructible_and_sparse() {
     let details = MemoryValueDetails::new(0x2001_0000, 1);
     assert_eq!(details.mask, None);
@@ -65,6 +102,41 @@ fn memory_value_details_constructor_is_externally_constructible_and_sparse() {
     assert!(
         !serialized.contains("node:"),
         "ordinary node-less details should stay sparse: {serialized}"
+    );
+}
+
+#[test]
+fn system_manifest_rejects_incomplete_cosim_model() {
+    let yaml = r#"
+name: "bad-cosim"
+chip: "chips/stm32f103.yaml"
+cosim_models:
+  - id: ""
+    adapter: "fmi"
+    step_ns: 0
+external_devices: []
+"#;
+
+    let manifest: SystemManifest = serde_yaml::from_str(yaml).unwrap();
+    let issues = manifest.validate_cosim_models();
+
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.contains("cosim_models[0].id")),
+        "expected missing id validation issue, got {issues:?}"
+    );
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.contains("cosim_models[0].model")),
+        "expected missing model validation issue, got {issues:?}"
+    );
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.contains("cosim_models[0].step_ns")),
+        "expected invalid step validation issue, got {issues:?}"
     );
 }
 

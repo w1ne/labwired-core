@@ -25,6 +25,7 @@ fn f401_bus() -> labwired_core::bus::SystemBus {
         .join("../../configs/chips/stm32f401.yaml");
     let chip = ChipDescriptor::from_file(&path).expect("load chip");
     let manifest = labwired_config::SystemManifest {
+        cosim_models: Vec::new(),
         walk_deleted: Some(false),
         schema_version: "1.0".to_string(),
         name: "stm32f401-conformance".to_string(),
