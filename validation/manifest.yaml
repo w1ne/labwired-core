@@ -1027,3 +1027,21 @@ boards:
       - configs/chips/nrf5340.yaml
       - crates/core/src/peripherals/nrf52
       - crates/core/src/peripherals/scb.rs
+
+  - id: stm32h735
+    doc: docs/boards/stm32h735.md
+    chip: configs/chips/stm32h735.yaml
+    tier: sim-validated
+    note: "STM32H735VG — the FIRST fully-modelled Cortex-M7 chip in LabWired. H7-family (RM0468: GPIO @ 0x5802_0000, RCC @ 0x5802_4400, flash interface @ 0x5200_2000, DBGMCU @ 0x5C00_1000), 1 MiB flash, DTCM/AXI SRAM. Introduces a new H7 RCC register layout (rcc.rs Stm32H7 — enable block 0xD4..0xF4, BDCR 0x70, CSR 0x74, oscillator/PLL ready gating + source-ready-gated SYSCLK switch) and reuses the shared H7/H5 peripheral IP (gpio stm32v2, uart stm32v2, spi stm32h5, i2c h5, timer). The tier-1 fixture (tests/fixtures/tier1/stm32h735.elf) drives raw-register self-tests and reports clock/gpio/timer/pwm/i2c/spi/wdt/irq PASS + a working UART over USART3. SIM-DERIVED: every reset value/behaviour is reference-manual-derived — there is NO H735 bench part and NO silicon diff. H7 DMA/ADC/RTC/FDCAN and PWR/FLASH VOSRDY/bank-2 fidelity are not modelled (documented in the chip yaml)."
+    offline_tests:
+      - "tier1 fixture (clock/gpio/timer/pwm/i2c/spi/wdt/irq PASS + uart via TIER1 done)"
+      - "io-smoke (examples/stm32h735-smoke: asserts the TIER1 transcript over UART)"
+      - "chip_conformance (estate OK — no peripheral window faults)"
+    models:
+      - configs/chips/stm32h735.yaml
+      - crates/core/src/peripherals/rcc.rs
+      - crates/core/src/peripherals/gpio.rs
+      - crates/core/src/peripherals/uart.rs
+      - crates/core/src/peripherals/spi.rs
+      - crates/core/src/peripherals/i2c.rs
+      - crates/core/src/peripherals/timer.rs

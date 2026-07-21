@@ -21,6 +21,7 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 | `nrf52832` | ⚪ structural | — | 2026-06-27 | no silicon capture |
 | `rp2040` | ⚪ structural | — | 2026-07-18 | no silicon capture |
 | `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | 2026-07-20 | no silicon capture |
+| `stm32h735` | 🔵 sim-validated (deep model, no HW diff) | — | 2026-07-20 | no silicon capture |
 
 ## `nrf52840` — 🟢 silicon-verified
 
@@ -134,4 +135,14 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 - Silicon: none — not validated against real hardware.
   - offline (CI): firmware_survival::test_nrf5340_zephyr_survival (real Zephyr ELF boots + banner)
   - offline (CI): nrf5340_clock_boot (HFCLK/LFCLK started-event polls + non-secure alias mapping)
+- Drift status: **no silicon capture**
+
+## `stm32h735` — 🔵 sim-validated (deep model, no HW diff)
+
+- Doc: [`docs/boards/stm32h735.md`](stm32h735.md)  ·  Chip: `configs/chips/stm32h735.yaml`
+- Note: STM32H735VG — the FIRST fully-modelled Cortex-M7 chip in LabWired. H7-family (RM0468: GPIO @ 0x5802_0000, RCC @ 0x5802_4400, flash interface @ 0x5200_2000, DBGMCU @ 0x5C00_1000), 1 MiB flash, DTCM/AXI SRAM. Introduces a new H7 RCC register layout (rcc.rs Stm32H7 — enable block 0xD4..0xF4, BDCR 0x70, CSR 0x74, oscillator/PLL ready gating + source-ready-gated SYSCLK switch) and reuses the shared H7/H5 peripheral IP (gpio stm32v2, uart stm32v2, spi stm32h5, i2c h5, timer). The tier-1 fixture (tests/fixtures/tier1/stm32h735.elf) drives raw-register self-tests and reports clock/gpio/timer/pwm/i2c/spi/wdt/irq PASS + a working UART over USART3. SIM-DERIVED: every reset value/behaviour is reference-manual-derived — there is NO H735 bench part and NO silicon diff. H7 DMA/ADC/RTC/FDCAN and PWR/FLASH VOSRDY/bank-2 fidelity are not modelled (documented in the chip yaml).
+- Silicon: none — not validated against real hardware.
+  - offline (CI): tier1 fixture (clock/gpio/timer/pwm/i2c/spi/wdt/irq PASS + uart via TIER1 done)
+  - offline (CI): io-smoke (examples/stm32h735-smoke: asserts the TIER1 transcript over UART)
+  - offline (CI): chip_conformance (estate OK — no peripheral window faults)
 - Drift status: **no silicon capture**

@@ -31,6 +31,9 @@ pub enum RccRegisterLayout {
     /// STM32H5 family (RM0481). Register offsets and reset values verified on
     /// NUCLEO-H563ZI silicon over SWD (`scripts/hw-capture-stm32h563.sh`).
     Stm32H5,
+    /// STM32H7 family (RM0468 / RM0433 — H723/733/725/735/730, H74x/75x).
+    /// Reference-manual-derived; not silicon-verified (no H7 bench part).
+    Stm32H7,
     /// STM32L4 family (RM0351). Verified on NUCLEO-L476RG over SWD.
     Stm32L4,
     /// STM32L0 family (RM0367). Verified on NUCLEO-L073RZ over SWD.
@@ -47,10 +50,11 @@ impl FromStr for RccRegisterLayout {
             "stm32f4" | "f4" => Ok(Self::Stm32F4),
             "stm32v2" | "v2" | "modern" | "stm32-modern" => Ok(Self::Stm32V2),
             "h5" | "stm32h5" => Ok(Self::Stm32H5),
+            "h7" | "stm32h7" => Ok(Self::Stm32H7),
             "stm32l4" | "l4" => Ok(Self::Stm32L4),
             "stm32l0" | "l0" => Ok(Self::Stm32L0),
             _ => Err(format!(
-                "unsupported RCC register layout '{}'; supported: stm32f1, stm32f4, stm32v2, stm32h5, stm32l4, stm32l0",
+                "unsupported RCC register layout '{}'; supported: stm32f1, stm32f4, stm32v2, stm32h5, stm32h7, stm32l4, stm32l0",
                 value
             )),
         }
@@ -649,6 +653,290 @@ impl RccModel for H5Rcc {
     }
 }
 
+// ── STM32H7 ─────────────────────────────────────────────────────────────────
+// Register offsets per RM0468 (STM32H723/733/725/735/730) / RM0433. The
+// enable-register block (0xD4..0xF4), BDCR (0x70) and CSR (0x74) are identical
+// across the H7 line; the domain/PLL/CCIPR configuration registers are modelled
+// as plain read/write storage so HAL read-modify-write bring-up round-trips.
+//
+// NOT silicon-verified: LabWired has no H735 bench part. Reset values are
+// reference-manual-derived (RM0468 §8.7). The live behaviour that firmware
+// depends on — oscillator/PLL ready gating in CR, source-ready-gated SYSCLK
+// switch (SW→SWS) in CFGR, LSE/LSI ready in BDCR/CSR, and clock-enable
+// round-trip — is modelled; clock *frequencies* are not.
+#[derive(Debug, serde::Serialize)]
+pub struct H7Rcc {
+    cr: u32,        // 0x00
+    hsicfgr: u32,   // 0x04
+    crrcr: u32,     // 0x08
+    csicfgr: u32,   // 0x0C
+    cfgr: u32,      // 0x10 — SW[2:0] → SWS[5:3]
+    d1cfgr: u32,    // 0x18 (RM0468: CDCFGR1)
+    d2cfgr: u32,    // 0x1C (CDCFGR2)
+    d3cfgr: u32,    // 0x20 (SRDCFGR)
+    pllckselr: u32, // 0x28 — reset 0x02020200
+    pllcfgr: u32,   // 0x2C — reset 0x01FF0000
+    pll1divr: u32,  // 0x30 — reset 0x01010280
+    pll1fracr: u32, // 0x34
+    pll2divr: u32,  // 0x38 — reset 0x01010280
+    pll2fracr: u32, // 0x3C
+    pll3divr: u32,  // 0x40 — reset 0x01010280
+    pll3fracr: u32, // 0x44
+    d1ccipr: u32,   // 0x4C (CDCCIPR)
+    d2ccip1r: u32,  // 0x50 (CDCCIP1R)
+    d2ccip2r: u32,  // 0x54 (CDCCIP2R)
+    d3ccipr: u32,   // 0x58 (SRDCCIPR)
+    cier: u32,      // 0x60
+    cifr: u32,      // 0x64
+    cicr: u32,      // 0x68
+    bdcr: u32,      // 0x70 — LSE/RTC backup domain
+    csr: u32,       // 0x74 — LSI
+    ahb3rstr: u32,  // 0x7C
+    ahb1rstr: u32,  // 0x80
+    ahb2rstr: u32,  // 0x84
+    ahb4rstr: u32,  // 0x88
+    apb3rstr: u32,  // 0x8C
+    apb1lrstr: u32, // 0x90
+    apb1hrstr: u32, // 0x94
+    apb2rstr: u32,  // 0x98
+    apb4rstr: u32,  // 0x9C
+    rsr: u32,       // 0xD0 — reset-cause flags
+    ahb3enr: u32,   // 0xD4
+    ahb1enr: u32,   // 0xD8
+    ahb2enr: u32,   // 0xDC
+    ahb4enr: u32,   // 0xE0
+    apb3enr: u32,   // 0xE4
+    apb1lenr: u32,  // 0xE8
+    apb1henr: u32,  // 0xEC
+    apb2enr: u32,   // 0xF0
+    apb4enr: u32,   // 0xF4
+}
+
+/// H7 CR ready rule (RM0468 §8.7.2): each oscillator/PLL ON bit auto-sets its
+/// RDY bit — HSI 0→2, CSI 7→8, HSI48 12→13, HSE 16→17, PLL1 24→25, PLL2 26→27,
+/// PLL3 28→29. HSIDIVF (bit 5) tracks HSION (divider update instantaneous in
+/// the model), and the domain-clock-ready bits D1CKRDY/D2CKRDY (14/15) read
+/// ready so HAL bring-up that polls them proceeds.
+fn h7_cr_ready(mut cr: u32) -> u32 {
+    for &(on, rdy) in &[
+        (0u32, 2u32),
+        (7, 8),
+        (12, 13),
+        (16, 17),
+        (24, 25),
+        (26, 27),
+        (28, 29),
+    ] {
+        if cr & (1 << on) != 0 {
+            cr |= 1 << rdy;
+        } else {
+            cr &= !(1 << rdy);
+        }
+    }
+    if cr & 1 != 0 {
+        cr |= 1 << 5;
+    } else {
+        cr &= !(1 << 5);
+    }
+    cr | (1 << 14) | (1 << 15)
+}
+
+impl H7Rcc {
+    fn new() -> Self {
+        Self {
+            cr: h7_cr_ready(0x0000_0001), // HSION → HSIRDY|HSIDIVF (= 0x25)
+            hsicfgr: 0x4000_0000,
+            crrcr: 0,
+            csicfgr: 0x2000_0000,
+            cfgr: 0,
+            d1cfgr: 0,
+            d2cfgr: 0,
+            d3cfgr: 0,
+            pllckselr: 0x0202_0200,
+            pllcfgr: 0x01FF_0000,
+            pll1divr: 0x0101_0280,
+            pll1fracr: 0,
+            pll2divr: 0x0101_0280,
+            pll2fracr: 0,
+            pll3divr: 0x0101_0280,
+            pll3fracr: 0,
+            d1ccipr: 0,
+            d2ccip1r: 0,
+            d2ccip2r: 0,
+            d3ccipr: 0,
+            cier: 0,
+            cifr: 0,
+            cicr: 0,
+            bdcr: 0,
+            csr: 0,
+            ahb3rstr: 0,
+            ahb1rstr: 0,
+            ahb2rstr: 0,
+            ahb4rstr: 0,
+            apb3rstr: 0,
+            apb1lrstr: 0,
+            apb1hrstr: 0,
+            apb2rstr: 0,
+            apb4rstr: 0,
+            rsr: 0,
+            ahb3enr: 0,
+            ahb1enr: 0,
+            ahb2enr: 0,
+            ahb4enr: 0,
+            apb3enr: 0,
+            apb1lenr: 0,
+            apb1henr: 0,
+            apb2enr: 0,
+            apb4enr: 0,
+        }
+    }
+}
+
+impl RccModel for H7Rcc {
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x00 => self.cr,
+            0x04 => self.hsicfgr,
+            0x08 => self.crrcr,
+            0x0C => self.csicfgr,
+            0x10 => self.cfgr,
+            0x18 => self.d1cfgr,
+            0x1C => self.d2cfgr,
+            0x20 => self.d3cfgr,
+            0x28 => self.pllckselr,
+            0x2C => self.pllcfgr,
+            0x30 => self.pll1divr,
+            0x34 => self.pll1fracr,
+            0x38 => self.pll2divr,
+            0x3C => self.pll2fracr,
+            0x40 => self.pll3divr,
+            0x44 => self.pll3fracr,
+            0x4C => self.d1ccipr,
+            0x50 => self.d2ccip1r,
+            0x54 => self.d2ccip2r,
+            0x58 => self.d3ccipr,
+            0x60 => self.cier,
+            0x64 => self.cifr,
+            0x68 => self.cicr,
+            0x70 => self.bdcr,
+            0x74 => self.csr,
+            0x7C => self.ahb3rstr,
+            0x80 => self.ahb1rstr,
+            0x84 => self.ahb2rstr,
+            0x88 => self.ahb4rstr,
+            0x8C => self.apb3rstr,
+            0x90 => self.apb1lrstr,
+            0x94 => self.apb1hrstr,
+            0x98 => self.apb2rstr,
+            0x9C => self.apb4rstr,
+            0xD0 => self.rsr,
+            0xD4 => self.ahb3enr,
+            0xD8 => self.ahb1enr,
+            0xDC => self.ahb2enr,
+            0xE0 => self.ahb4enr,
+            0xE4 => self.apb3enr,
+            0xE8 => self.apb1lenr,
+            0xEC => self.apb1henr,
+            0xF0 => self.apb2enr,
+            0xF4 => self.apb4enr,
+            _ => 0,
+        }
+    }
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            0x00 => self.cr = h7_cr_ready(value),
+            0x04 => self.hsicfgr = value,
+            0x08 => self.crrcr = value,
+            0x0C => self.csicfgr = value,
+            // SW[2:0] → SWS[5:3] only when the requested source is ready in CR
+            // (source→RDY bit: HSI→2, CSI→8, HSE→17, PLL1→25). Mirrors the H5
+            // gate so firmware that switches SYSCLK to an un-readied source
+            // never sees the switch complete.
+            0x10 => {
+                let sw = value & 0x7;
+                let ready = match sw {
+                    0 => self.cr & (1 << 2) != 0,
+                    1 => self.cr & (1 << 8) != 0,
+                    2 => self.cr & (1 << 17) != 0,
+                    3 => self.cr & (1 << 25) != 0,
+                    _ => false,
+                };
+                let sws = if ready {
+                    sw << 3
+                } else {
+                    self.cfgr & (0x7 << 3)
+                };
+                self.cfgr = (value & !(0x7 << 3)) | sws;
+            }
+            0x18 => self.d1cfgr = value,
+            0x1C => self.d2cfgr = value,
+            0x20 => self.d3cfgr = value,
+            0x28 => self.pllckselr = value,
+            0x2C => self.pllcfgr = value,
+            0x30 => self.pll1divr = value,
+            0x34 => self.pll1fracr = value,
+            0x38 => self.pll2divr = value,
+            0x3C => self.pll2fracr = value,
+            0x40 => self.pll3divr = value,
+            0x44 => self.pll3fracr = value,
+            0x4C => self.d1ccipr = value,
+            0x50 => self.d2ccip1r = value,
+            0x54 => self.d2ccip2r = value,
+            0x58 => self.d3ccipr = value,
+            0x60 => self.cier = value,
+            0x64 => self.cifr = value,
+            // CICR is write-1-to-clear against CIFR; model the ack.
+            0x68 => {
+                self.cifr &= !value;
+                self.cicr = 0;
+            }
+            // BDCR ready rule: LSEON bit0 → LSERDY bit1 (RM0468 §8.7.28).
+            0x70 => {
+                let mut bdcr = value;
+                if bdcr & 1 != 0 {
+                    bdcr |= 1 << 1;
+                } else {
+                    bdcr &= !(1 << 1);
+                }
+                self.bdcr = bdcr;
+            }
+            // CSR: LSION bit0 → LSIRDY bit1 (RM0468 §8.7.29).
+            0x74 => {
+                let mut csr = value;
+                if csr & 1 != 0 {
+                    csr |= 1 << 1;
+                } else {
+                    csr &= !(1 << 1);
+                }
+                self.csr = csr;
+            }
+            0x7C => self.ahb3rstr = value,
+            0x80 => self.ahb1rstr = value,
+            0x84 => self.ahb2rstr = value,
+            0x88 => self.ahb4rstr = value,
+            0x8C => self.apb3rstr = value,
+            0x90 => self.apb1lrstr = value,
+            0x94 => self.apb1hrstr = value,
+            0x98 => self.apb2rstr = value,
+            0x9C => self.apb4rstr = value,
+            0xD0 => self.rsr = value,
+            0xD4 => self.ahb3enr = value,
+            0xD8 => self.ahb1enr = value,
+            0xDC => self.ahb2enr = value,
+            0xE0 => self.ahb4enr = value,
+            0xE4 => self.apb3enr = value,
+            0xE8 => self.apb1lenr = value,
+            0xEC => self.apb1henr = value,
+            0xF0 => self.apb2enr = value,
+            0xF4 => self.apb4enr = value,
+            _ => {}
+        }
+    }
+    fn snapshot(&self) -> serde_json::Value {
+        serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+}
+
 // ── STM32L4 ─────────────────────────────────────────────────────────────────
 #[derive(Debug, Default, serde::Serialize)]
 pub struct L4Rcc {
@@ -922,6 +1210,7 @@ pub enum Rcc {
     Stm32F4(F4Rcc),
     Stm32V2(V2Rcc),
     Stm32H5(H5Rcc),
+    Stm32H7(H7Rcc),
     Stm32L4(L4Rcc),
     Stm32L0(L0Rcc),
 }
@@ -943,6 +1232,7 @@ impl Rcc {
             RccRegisterLayout::Stm32F4 => Self::Stm32F4(F4Rcc::new()),
             RccRegisterLayout::Stm32V2 => Self::Stm32V2(V2Rcc::new()),
             RccRegisterLayout::Stm32H5 => Self::Stm32H5(H5Rcc::new()),
+            RccRegisterLayout::Stm32H7 => Self::Stm32H7(H7Rcc::new()),
             RccRegisterLayout::Stm32L4 => Self::Stm32L4(L4Rcc::new()),
             RccRegisterLayout::Stm32L0 => Self::Stm32L0(L0Rcc::new()),
         }
@@ -1008,6 +1298,22 @@ impl Rcc {
                 "apb3enr" => Some(0xA8),
                 _ => None,
             },
+            // H7: AHB3ENR@0xD4, AHB1ENR@0xD8, AHB2ENR@0xDC, AHB4ENR@0xE0,
+            // APB3ENR@0xE4, APB1LENR@0xE8, APB1HENR@0xEC, APB2ENR@0xF0,
+            // APB4ENR@0xF4 (RM0468 §8.7). The enable block is identical across
+            // the H7 line.
+            Self::Stm32H7(_) => match r.as_str() {
+                "ahb3enr" => Some(0xD4),
+                "ahb1enr" | "ahbenr" => Some(0xD8),
+                "ahb2enr" => Some(0xDC),
+                "ahb4enr" => Some(0xE0),
+                "apb3enr" => Some(0xE4),
+                "apb1enr" | "apb1lenr" => Some(0xE8),
+                "apb1henr" => Some(0xEC),
+                "apb2enr" => Some(0xF0),
+                "apb4enr" => Some(0xF4),
+                _ => None,
+            },
         }
     }
 
@@ -1028,6 +1334,7 @@ impl Rcc {
             Self::Stm32F4(r) => r,
             Self::Stm32V2(r) => r,
             Self::Stm32H5(r) => r,
+            Self::Stm32H7(r) => r,
             Self::Stm32L4(r) => r,
             Self::Stm32L0(r) => r,
         }
@@ -1039,6 +1346,7 @@ impl Rcc {
             Self::Stm32F4(r) => r,
             Self::Stm32V2(r) => r,
             Self::Stm32H5(r) => r,
+            Self::Stm32H7(r) => r,
             Self::Stm32L4(r) => r,
             Self::Stm32L0(r) => r,
         }

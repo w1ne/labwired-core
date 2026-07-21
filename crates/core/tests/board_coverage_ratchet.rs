@@ -411,6 +411,11 @@ fn every_shipped_descriptor_is_ratcheted() {
         // no silicon oracle for its GRTC/IRQ path. Surviving a boot is not the
         // same as being right. Promote it only when that differential exists.
         "nrf54l15",
+        // First Cortex-M7 chip; sim-derived (RM0468, no bench part). Has a
+        // tier-1 fixture + io-smoke, but not yet a bundled-configs.ts catalog
+        // board and no silicon oracle. Promote when it ships in the playground
+        // catalog and gains an executing-fidelity differential.
+        "stm32h735",
     ];
     // configs/chips id -> ratchet chip id (kw41z ships as mkw41z4.yaml).
     fn to_ratchet_id(stem: &str) -> &str {

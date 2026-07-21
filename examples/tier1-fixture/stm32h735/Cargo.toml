@@ -1,0 +1,30 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+# Standalone crate (own [workspace]) so it builds out-of-workspace with an
+# explicit --target, mirroring examples/tier1-fixture/stm32h563.
+[workspace]
+members = []
+
+[package]
+name = "tier1-fixture-stm32h735"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "stm32h735 Tier-1 fixture firmware: raw-register peripheral self-tests reporting over USART3 via the TIER1 protocol."
+
+[dependencies]
+cortex-m-rt = "0.7"
+panic-halt = "0.2"
+
+[[bin]]
+name = "tier1-fixture-stm32h735"
+path = "src/main.rs"
+test = false
+bench = false
+
+[profile.release]
+debug = true   # keep DWARF so the simulator can resolve symbols
