@@ -615,73 +615,9 @@ impl SystemBus {
                         distance_cm,
                     ));
                 }
-                "dht22" | "am2302" => {
-                    // One-wire temperature/humidity sensor — no SPI/I2C
-                    // connection. Like the HC-SR04 it DRIVES a pin the MCU
-                    // samples as an input, so it lives directly on the bus:
-                    // the data pin's GPIO write-hook (`maybe_start_dht22`)
-                    // watches for the >=1 ms start pulse, and the per-tick pass
-                    // (`service_gpio_devices`) drives the reply frame onto the pin's
-                    // input register. Both `temperature` and `humidity` are
-                    // host-controlled through the standard stimulus API.
-                    let data = ext
-                        .config
-                        .get("data_pin")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("PA8")
-                        .to_string();
-                    let temperature_c = ext
-                        .config
-                        .get("temperature_c")
-                        .and_then(|v| v.as_f64())
-                        .unwrap_or(22.0) as f32;
-                    let humidity_pct = ext
-                        .config
-                        .get("humidity_pct")
-                        .and_then(|v| v.as_f64())
-                        .unwrap_or(50.0) as f32;
-                    let cpu_hz = ext
-                        .config
-                        .get("cpu_hz")
-                        .and_then(|v| v.as_u64())
-                        .unwrap_or(80_000_000);
-
-                    // The one wire is bidirectional: the ODR bit is how the
-                    // host drives it, the IDR bit is where the sensor drives
-                    // back. Same pin, same bit, two registers.
-                    let (odr_addr, odr_bit) =
-                        Self::resolve_pin_odr(&bus, &data).ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "DHT22 '{}' data_pin '{}' could not be resolved to a GPIO output",
-                                ext.id,
-                                data
-                            )
-                        })?;
-                    let (idr_addr, idr_bit) =
-                        Self::resolve_pin_idr(&bus, &data).ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "DHT22 '{}' data_pin '{}' could not be resolved to a GPIO input",
-                                ext.id,
-                                data
-                            )
-                        })?;
-                    debug_assert_eq!(
-                        odr_bit, idr_bit,
-                        "ODR and IDR of one pin must share a bit index"
-                    );
-
-                    bus.gpio_devices.push(Box::new(
-                        crate::peripherals::components::dht22::Dht22::new(
-                            ext.id.clone(),
-                            odr_addr,
-                            idr_addr,
-                            odr_bit,
-                            cpu_hz,
-                            temperature_c,
-                            humidity_pct,
-                        ),
-                    ));
-                }
+                // dht22 / am2302 now dispatches through the declarative device
+                // path above (configs/devices/dht22.yaml, `one_wire` primitive) —
+                // see super::declarative_device.
                 // rotary-encoder / rotary_encoder now dispatches through the
                 // declarative device path above (configs/devices/rotary_encoder.yaml,
                 // `quadrature` primitive) — see super::declarative_device.

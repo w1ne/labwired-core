@@ -21,9 +21,10 @@
 //! hand-written arm. Adding a device that reuses an existing primitive is then
 //! one YAML file — no new Rust in the attach path.
 //!
-//! Phase 1 migrates the rotary encoder (`quadrature`). Keypad / DHT22 / HC-SR04
-//! follow as their primitives are given descriptors; the emitter unification
-//! (both engines reading the descriptor's `emit:` block) is the next step.
+//! Migrated so far: rotary encoder (`quadrature`), 4×4 keypad (`matrix`), and
+//! DHT22/AM2302 (`one_wire`). HC-SR04 (`pulse_echo`) follows; the emitter
+//! unification (both engines reading the descriptor's `emit:` block) is the
+//! separate next step.
 
 use super::SystemBus;
 use anyhow::{anyhow, Context, Result};
@@ -39,6 +40,7 @@ fn embedded_yaml(device_type: &str) -> Option<&'static str> {
             "../../../../configs/devices/rotary_encoder.yaml"
         )),
         "keypad" => Some(include_str!("../../../../configs/devices/keypad.yaml")),
+        "dht22" | "am2302" => Some(include_str!("../../../../configs/devices/dht22.yaml")),
         _ => None,
     }
 }
@@ -68,12 +70,56 @@ impl SystemBus {
         match desc.behavior.primitive.as_str() {
             "quadrature" => self.attach_quadrature(ext, desc),
             "matrix" => self.attach_matrix(ext, desc),
+            "one_wire" => self.attach_one_wire(ext, desc),
             other => Err(anyhow!(
                 "declarative device '{}' names unknown primitive '{}'",
                 ext.id,
                 other
             )),
         }
+    }
+
+    /// `one_wire` primitive → [`Dht22`]. Reproduces the former `"dht22"`/
+    /// `"am2302"` arm: the single `data` role resolves to BOTH the pin's output
+    /// (ODR, host drive) and input (IDR, sensor reply) register — one
+    /// bidirectional wire — and temperature/humidity are host-controlled through
+    /// the standard stimulus API.
+    fn attach_one_wire(&mut self, ext: &ExternalDevice, desc: &DeviceDescriptor) -> Result<()> {
+        let data = self.pin_config(ext, desc, "data", "PA8")?;
+        let cpu_hz = param_u64(desc, ext, "cpu_hz", 80_000_000);
+        let temperature_c = param_f64(desc, ext, "temperature_c", 22.0) as f32;
+        let humidity_pct = param_f64(desc, ext, "humidity_pct", 50.0) as f32;
+
+        let (odr_addr, odr_bit) = Self::resolve_pin_odr(self, &data).ok_or_else(|| {
+            anyhow!(
+                "DHT22 '{}' data_pin '{}' could not be resolved to a GPIO output",
+                ext.id,
+                data
+            )
+        })?;
+        let (idr_addr, idr_bit) = Self::resolve_pin_idr(self, &data).ok_or_else(|| {
+            anyhow!(
+                "DHT22 '{}' data_pin '{}' could not be resolved to a GPIO input",
+                ext.id,
+                data
+            )
+        })?;
+        debug_assert_eq!(
+            odr_bit, idr_bit,
+            "ODR and IDR of one pin must share a bit index"
+        );
+
+        self.gpio_devices
+            .push(Box::new(crate::peripherals::components::dht22::Dht22::new(
+                ext.id.clone(),
+                odr_addr,
+                idr_addr,
+                odr_bit,
+                cpu_hz,
+                temperature_c,
+                humidity_pct,
+            )));
+        Ok(())
     }
 
     /// `matrix` primitive → [`Keypad`]. Reproduces the former `"keypad"` arm:
@@ -233,5 +279,23 @@ fn param_u64(desc: &DeviceDescriptor, ext: &ExternalDevice, name: &str, fallback
     ext.config
         .get(config_key)
         .and_then(|v| v.as_u64())
+        .unwrap_or(default)
+}
+
+/// Read an `f64` primitive param (temperature, humidity): same `{key, default}`
+/// descriptor shape as [`param_u64`], overridden by `config[key]` when present.
+fn param_f64(desc: &DeviceDescriptor, ext: &ExternalDevice, name: &str, fallback: f64) -> f64 {
+    let (config_key, default) = match desc.behavior.params.get(name) {
+        Some(v) => (
+            v.get("key").and_then(|k| k.as_str()).unwrap_or(name),
+            v.get("default")
+                .and_then(|d| d.as_f64())
+                .unwrap_or(fallback),
+        ),
+        None => (name, fallback),
+    };
+    ext.config
+        .get(config_key)
+        .and_then(|v| v.as_f64())
         .unwrap_or(default)
 }

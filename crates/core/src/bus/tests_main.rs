@@ -769,6 +769,56 @@ board_io: []
     );
 }
 
+/// The `dht22`/`am2302` external device dispatches through the DECLARATIVE
+/// device path (`configs/devices/dht22.yaml`, `one_wire` primitive). This locks
+/// that seam: the single bidirectional data pin must resolve to BOTH the GPIO
+/// output (ODR) and input (IDR) register, and cpu_hz must thread from config —
+/// exactly what the deleted hand-written arm produced.
+#[test]
+fn test_from_config_attaches_dht22_via_declarative_descriptor() {
+    use crate::peripherals::components::dht22::Dht22;
+
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let chip = ChipDescriptor::from_file(root.join("../../configs/chips/stm32f103.yaml"))
+        .expect("read STM32F103 chip descriptor");
+    // Both `type:` spellings must resolve to the same declarative descriptor.
+    for type_str in ["dht22", "am2302"] {
+        let manifest: SystemManifest = serde_yaml::from_str(&format!(
+            r#"
+name: "dht22-declarative"
+chip: "../chips/stm32f103.yaml"
+external_devices:
+  - id: "sensor"
+    type: "{type_str}"
+    connection: "gpio"
+    config:
+      data_pin: "PA8"
+      cpu_hz: 8000000
+      temperature_c: 25.0
+      humidity_pct: 60.0
+board_io: []
+"#
+        ))
+        .expect("parse dht22 manifest");
+
+        let bus = SystemBus::from_config(&chip, &manifest).expect("build bus with dht22");
+        let sensors: Vec<&Dht22> = bus.gpio_devices_of::<Dht22>().collect();
+        assert_eq!(
+            sensors.len(),
+            1,
+            "exactly one Dht22 attached for type '{type_str}'"
+        );
+        let s = sensors[0];
+        assert_eq!(s.id, "sensor");
+        assert_eq!(s.data_bit, 8, "data_pin PA8 → bit 8");
+        assert_ne!(
+            s.data_odr_addr, s.data_idr_addr,
+            "one bidirectional wire resolves to distinct ODR and IDR registers"
+        );
+        assert_eq!(s.cpu_hz, 8_000_000, "cpu_hz sourced from config");
+    }
+}
+
 #[test]
 fn curated_esp32c3_i2c_manifests_declare_physical_routes() {
     #[derive(serde::Deserialize)]
