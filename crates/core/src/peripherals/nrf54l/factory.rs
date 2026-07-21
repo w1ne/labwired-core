@@ -37,9 +37,16 @@ pub fn try_build(
                 .and_then(|v| v.as_u64())
                 .map(|n| n as usize)
                 .unwrap_or(12);
-            Box::new(crate::peripherals::nrf54l::grtc::Nrf54lGrtc::new_with_cc(
-                num_cc,
-            ))
+            // The chip profile's `irq` is GRTC_0's NVIC position; the model
+            // routes INTEN group `g` to `irq + g` (GRTC_0..3). nrfx on the
+            // secure app core enables the kernel tick in group 2 and expects it
+            // on GRTC_2 = irq + 2, so this base MUST reach the model.
+            let irq_base = p_cfg
+                .irq
+                .unwrap_or(crate::peripherals::nrf54l::grtc::GRTC_IRQ_BASE_DEFAULT);
+            Box::new(
+                crate::peripherals::nrf54l::grtc::Nrf54lGrtc::new_with_cc_and_irq(num_cc, irq_base),
+            )
         }
         "nrf54l_uarte" => Box::new(crate::peripherals::nrf54l::uarte::Nrf54lUarte::new()),
         "nrf54l_twim" => {

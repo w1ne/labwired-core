@@ -255,10 +255,15 @@ peripherals:
   # cc-num = 12 comes from the Zephyr DT node `grtc@e2000` and matches the MDK
   # `GRTC_CC_MaxCount`.
   #
-  # IRQ: the MDK IRQn table gives GRTC_0..GRTC_3 = 226..229. The Zephyr DT node
-  # carries no `interrupts` property (the per-CPU group is picked by
-  # GRTC_IRQ_GROUP in the nrfx config), so GRTC_0 is mapped here and the model
-  # collapses all four interrupt groups onto it. Needs bench confirmation.
+  # IRQ: the MDK IRQn table gives GRTC_0..GRTC_3 = 226..229 — FOUR independent
+  # interrupt lines, one per INTEN group. `irq` below is GRTC_0 (the base); the
+  # model routes a compare enabled in INTEN group `g` to GRTC_g = irq + g. This
+  # is load-bearing: nrfx on the secure app core sets `GRTC_IRQ_GROUP = 2`
+  # (nrf54l15 MDK interim header), enables the kernel-tick compare via INTENSET2,
+  # and connects `DT_IRQN(GRTC_NODE)` = GRTC_2 = 228 (the first entry of the
+  # resolved cpuapp devicetree `interrupts`). Collapsing all groups onto GRTC_0
+  # (226) — which Zephyr never enables in the NVIC — left the tickless kernel
+  # tick permanently undelivered, so the model must pend the group's own line.
   - id: "grtc"
     type: "nrf54l_grtc"
     base_address: 0x500E2000

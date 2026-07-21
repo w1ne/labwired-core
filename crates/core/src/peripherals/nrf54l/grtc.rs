@@ -159,6 +159,17 @@ pub const CPU_HZ_DEFAULT: u32 = 128_000_000;
 /// sets this to 1 so small tick counts advance the counter.
 pub const CYCLES_PER_SYSCOUNTER_TICK: u32 = CPU_HZ_DEFAULT / SYSCOUNTER_HZ;
 
+/// NVIC position of GRTC_0 on the nRF54L15 application core (MDK IRQn table:
+/// GRTC_0..GRTC_3 = 226..229). The four INTEN groups drive four *independent*
+/// interrupt lines: a compare enabled in INTEN group `g` asserts GRTC_`g` =
+/// `GRTC_IRQ_BASE + g`. Zephyr/nrfx on the secure app core uses
+/// `GRTC_IRQ_GROUP = 2` (nrf54l15 MDK interim header), so the kernel tick
+/// compare is enabled via INTENSET2 and delivered on GRTC_2 = 228 — which is
+/// exactly the first entry of the resolved devicetree `interrupts` property
+/// and the line `DT_IRQN(GRTC_NODE)` connects. Routing the generic peripheral
+/// IRQ (GRTC_0 = 226) instead left the tick permanently undelivered.
+pub const GRTC_IRQ_BASE_DEFAULT: u32 = 226;
+
 /// Nordic nRF54L GRTC — behavioural SYSCOUNTER + compare-channel model.
 #[derive(Debug)]
 pub struct Nrf54lGrtc {
@@ -195,6 +206,12 @@ pub struct Nrf54lGrtc {
     /// INTEN[0..3] — one enable word per interrupt group.
     inten: [u32; NUM_INT_GROUPS],
 
+    /// NVIC position of GRTC_0. Interrupt group `g` pends `irq_base + g` (the
+    /// four GRTC lines are independent). Taken from the chip profile's `irq`
+    /// field so the model never hard-codes a family constant; defaults to
+    /// [`GRTC_IRQ_BASE_DEFAULT`] (226) for the nRF54L15 app core.
+    irq_base: u32,
+
     // Config/state registers with no modelled behaviour: written by drivers,
     // read back verbatim.
     shorts: u32,
@@ -229,6 +246,7 @@ impl Default for Nrf54lGrtc {
             cc_en: [0u32; MAX_CC],
             events_compare: [0u32; MAX_CC],
             inten: [0u32; NUM_INT_GROUPS],
+            irq_base: GRTC_IRQ_BASE_DEFAULT,
             shorts: 0,
             evten: 0,
             mode: 0,
@@ -254,6 +272,18 @@ impl Nrf54lGrtc {
     pub fn new_with_cc(num_cc: usize) -> Self {
         Self {
             num_cc: num_cc.clamp(1, MAX_CC),
+            ..Self::default()
+        }
+    }
+
+    /// Construct with an explicit CC count and the NVIC position of GRTC_0
+    /// (interrupt group `g` pends `irq_base + g`). The chip profile's `irq`
+    /// field feeds `irq_base`; falls back to [`GRTC_IRQ_BASE_DEFAULT`] when the
+    /// profile omits it.
+    pub fn new_with_cc_and_irq(num_cc: usize, irq_base: u32) -> Self {
+        Self {
+            num_cc: num_cc.clamp(1, MAX_CC),
+            irq_base,
             ..Self::default()
         }
     }
@@ -367,7 +397,13 @@ impl Nrf54lGrtc {
         self.cycle_accum %= self.cycles_per_tick;
         self.counter = self.counter.wrapping_add(increments) & COUNTER_MASK;
 
-        let mut irq = false;
+        // Each INTEN group drives an independent GRTC line (GRTC_g =
+        // irq_base + g), so a fired compare pends the line of *every* group
+        // whose enable bit is set — not one collapsed generic IRQ. nrfx on the
+        // secure app core enables the kernel-tick compare in group 2, so the
+        // tick is delivered on GRTC_2; collapsing all groups onto GRTC_0 left
+        // it undelivered. Accumulate per group and de-dup into explicit_irqs.
+        let mut pended_groups = 0u32;
         let mut fired_events = Vec::new();
         for i in 0..self.num_cc {
             if self.cc_en[i] & CCEN_ACTIVE == 0 {
@@ -379,14 +415,39 @@ impl Nrf54lGrtc {
                 self.events_compare[i] = 1;
                 fired_events.push(OFF_EVENTS_COMPARE0 as u32 + 4 * i as u32);
                 let bit = 1u32 << (INTEN_COMPARE_SHIFT + i as u32);
-                if self.inten.iter().any(|g| g & bit != 0) {
-                    irq = true;
+                for (g, group) in self.inten.iter().enumerate() {
+                    if group & bit != 0 {
+                        pended_groups |= 1 << g;
+                    }
+                }
+                // A fired compare is one-shot: the hardware clears CCEN.ACTIVE
+                // so the channel does not re-fire the instant firmware clears
+                // EVENTS_COMPARE (which would double-tick the kernel). The sole
+                // exception is CC0 running as an auto-reload interval timer,
+                // where the deadline advances by INTERVAL and the channel stays
+                // armed. Both match Nordic's `nhw_GRTC_compare_reached`.
+                if i == 0 && self.interval != 0 {
+                    let next = self.cc_value(0).wrapping_add(self.interval as u64);
+                    self.set_cc_value(0, next);
+                } else {
+                    self.cc_en[i] &= !CCEN_ACTIVE;
                 }
             }
         }
 
+        let explicit_irqs = if pended_groups != 0 {
+            Some(
+                (0..NUM_INT_GROUPS as u32)
+                    .filter(|g| pended_groups & (1 << g) != 0)
+                    .map(|g| self.irq_base + g)
+                    .collect(),
+            )
+        } else {
+            None
+        };
+
         PeripheralTickResult {
-            irq,
+            explicit_irqs,
             cycles: cycles as u32,
             fired_events,
             ..Default::default()
@@ -511,6 +572,9 @@ impl Peripheral for Nrf54lGrtc {
                 if i < self.num_cc {
                     let now = self.counter;
                     self.set_cc_value(i, now);
+                    // Triggering the capture task disables the compare feature
+                    // on that channel (Nordic `NHW_GRTC` CAPTURE side effect).
+                    self.cc_en[i] &= !CCEN_ACTIVE;
                 }
             }
             OFF_TASKS_START if value & 1 != 0 => self.task_started = true,
@@ -571,11 +635,29 @@ impl Peripheral for Nrf54lGrtc {
                 let reg = (offset - OFF_CC0) % CC_STRIDE;
                 if i < self.num_cc {
                     match reg {
-                        0x0 => self.cc_l[i] = value,
-                        0x4 => self.cc_h[i] = value & CCH_VALUE_MASK,
+                        // Arming is a WRITE SIDE EFFECT of CCL/CCH/CCADD, not a
+                        // separate CCEN write — this is how the GRTC actually
+                        // arms, and the reason nrfx/Zephyr's `nrf_grtc_sys_-
+                        // counter_cc_set` (CCL then CCH, never CCEN) works.
+                        // Verified against Nordic's own HW model
+                        // (`bsim_hw_models/.../NHW_GRTC.c`
+                        // `nhw_GRTC_regw_sideeffects_CC_{CCL,CCH,CCADD}`):
+                        //   * writing CCL DISABLES the channel (CCEN.ACTIVE←0),
+                        //   * writing CCH ENABLES it (CCEN.ACTIVE←1),
+                        //   * writing CCADD ENABLES it.
+                        // The CCL-then-CCH order leaves the channel armed with
+                        // the freshly written 52-bit value.
+                        0x0 => {
+                            self.cc_l[i] = value;
+                            self.cc_en[i] &= !CCEN_ACTIVE;
+                        }
+                        0x4 => {
+                            self.cc_h[i] = value & CCH_VALUE_MASK;
+                            self.cc_en[i] |= CCEN_ACTIVE;
+                        }
                         // CCADD: add VALUE to either the live SYSCOUNTER
                         // (REFERENCE=SYSCOUNTER) or the current CC
-                        // (REFERENCE=CC), and store the result in CC[i].
+                        // (REFERENCE=CC), store the result in CC[i], and arm.
                         0x8 => {
                             let base = if value & CCADD_REFERENCE_CC != 0 {
                                 self.cc_value(i)
@@ -584,7 +666,10 @@ impl Peripheral for Nrf54lGrtc {
                             };
                             let sum = base.wrapping_add((value & CCADD_VALUE_MASK) as u64);
                             self.set_cc_value(i, sum);
+                            self.cc_en[i] |= CCEN_ACTIVE;
                         }
+                        // Direct CCEN write still honoured (the disable in
+                        // nrfx's cc_channel_prepare and any bare-metal arm).
                         _ => self.cc_en[i] = value & CCEN_ACTIVE,
                     }
                 }
@@ -773,7 +858,9 @@ mod tests {
 
         let mut irqs = 0;
         for _ in 0..12 {
-            if g.tick().irq {
+            if let Some(lines) = g.tick().explicit_irqs {
+                // Group 0's compare pends GRTC_0 = irq_base (226 by default).
+                assert_eq!(lines, vec![GRTC_IRQ_BASE_DEFAULT]);
                 irqs += 1;
             }
         }
@@ -787,6 +874,92 @@ mod tests {
     }
 
     #[test]
+    fn compare_pends_the_group_that_enabled_it() {
+        // nrfx on the secure app core enables the kernel-tick compare in INTEN
+        // group 2 and expects it on GRTC_2 = irq_base + 2. A compare enabled in
+        // group g must pend exactly line irq_base + g — not a collapsed GRTC_0.
+        let mut g = Nrf54lGrtc::new_with_cc_and_irq(12, GRTC_IRQ_BASE_DEFAULT);
+        // Arm CC[6] the way nrfx does: CCL then CCH (the CCH write arms it).
+        g.write_u32(cc_reg(6, 0x0), 5).unwrap();
+        g.write_u32(cc_reg(6, 0x4), 0).unwrap();
+        // INTENSET2.COMPARE6.
+        g.write_u32(OFF_INTEN0 + 2 * INT_GROUP_STRIDE + 0x4, 1 << 6)
+            .unwrap();
+        g.write_u32(OFF_MODE, MODE_SYSCOUNTEREN).unwrap();
+
+        let mut pended = None;
+        for _ in 0..(6 * CYCLES_PER_SYSCOUNTER_TICK) {
+            if let Some(lines) = g.tick().explicit_irqs {
+                pended = Some(lines);
+                break;
+            }
+        }
+        assert_eq!(
+            pended,
+            Some(vec![GRTC_IRQ_BASE_DEFAULT + 2]),
+            "a group-2 compare must pend GRTC_2 = irq_base + 2"
+        );
+    }
+
+    #[test]
+    fn writing_cch_arms_and_writing_ccl_disarms() {
+        // The arm bit is a write side effect of CCL/CCH, exactly how nrfx's
+        // `nrf_grtc_sys_counter_cc_set` (CCL then CCH, never CCEN) arms the
+        // system-timer compare.
+        let mut g = Nrf54lGrtc::new_fast();
+        g.write_u32(cc_reg(3, 0x0), 4).unwrap(); // CCL → disarmed
+        assert_eq!(g.read_u32(cc_reg(3, 0xC)).unwrap(), 0, "CCL write disarms");
+        g.write_u32(cc_reg(3, 0x4), 0).unwrap(); // CCH → armed
+        assert_eq!(
+            g.read_u32(cc_reg(3, 0xC)).unwrap(),
+            CCEN_ACTIVE,
+            "CCH write arms the channel"
+        );
+        g.write_u32(OFF_INTEN0 + 0x4, 1 << 3).unwrap();
+        g.write_u32(OFF_TASKS_START, 1).unwrap();
+        let mut fired = false;
+        for _ in 0..8 {
+            if g.tick().explicit_irqs.is_some() {
+                fired = true;
+            }
+        }
+        assert!(fired, "a CCH-armed compare must fire");
+    }
+
+    #[test]
+    fn fired_compare_is_one_shot_and_does_not_refire_after_event_clear() {
+        // After a compare fires the hardware clears CCEN.ACTIVE, so clearing
+        // EVENTS_COMPARE (as the ISR does) must NOT immediately re-fire — that
+        // would double-tick the kernel.
+        let mut g = Nrf54lGrtc::new_fast();
+        g.write_u32(cc_reg(0, 0x0), 3).unwrap();
+        g.write_u32(cc_reg(0, 0x4), 0).unwrap(); // arm CC[0] at 3
+        g.write_u32(OFF_INTEN0 + 0x4, 1 << 0).unwrap();
+        g.write_u32(OFF_TASKS_START, 1).unwrap();
+
+        let mut irqs = 0;
+        for _ in 0..5 {
+            if g.tick().explicit_irqs.is_some() {
+                irqs += 1;
+            }
+        }
+        assert_eq!(irqs, 1);
+        assert_eq!(
+            g.read_u32(cc_reg(0, 0xC)).unwrap(),
+            0,
+            "CCEN.ACTIVE must self-clear on fire (one-shot)"
+        );
+        // ISR clears the event; the counter is still past the stale CC.
+        g.write_u32(OFF_EVENTS_COMPARE0, 0).unwrap();
+        for _ in 0..5 {
+            assert!(
+                g.tick().explicit_irqs.is_none(),
+                "a one-shot compare must not re-fire after event clear"
+            );
+        }
+    }
+
+    #[test]
     fn compare_does_not_interrupt_when_disabled() {
         let mut g = Nrf54lGrtc::new_fast();
         g.write_u32(cc_reg(0, 0x0), 5).unwrap();
@@ -796,7 +969,7 @@ mod tests {
 
         let mut irqs = 0;
         for _ in 0..12 {
-            if g.tick().irq {
+            if g.tick().explicit_irqs.is_some() {
                 irqs += 1;
             }
         }
@@ -817,7 +990,7 @@ mod tests {
         g.write_u32(OFF_INTEN0 + 0x4, 1 << 0).unwrap();
         g.write_u32(OFF_TASKS_START, 1).unwrap();
         for _ in 0..10 {
-            assert!(!g.tick().irq);
+            assert!(g.tick().explicit_irqs.is_none());
         }
         assert_eq!(g.read_u32(OFF_EVENTS_COMPARE0).unwrap(), 0);
     }
