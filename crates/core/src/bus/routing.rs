@@ -112,6 +112,21 @@ impl SystemBus {
         Some(num)
     }
 
+    /// Parse an ESP32-S3 GPIO label ("GPIO48", "gpio8", "IO17", or a bare "48")
+    /// into its pin number, accepting both banks (0..=48 — GPIO48 is the onboard
+    /// NeoPixel on most S3 boards). Unlike [`parse_esp32_gpio_pin`] (classic
+    /// ESP32, low bank only) this reaches bank 1, matching
+    /// [`Esp32s3Gpio`](crate::peripherals::esp32s3::gpio::Esp32s3Gpio)'s
+    /// `drive_pad_output` range.
+    pub(crate) fn parse_esp32s3_gpio_pin(pin: &str) -> Option<u8> {
+        let digits = pin
+            .trim()
+            .trim_start_matches(|c: char| c.is_ascii_alphabetic())
+            .trim();
+        let num: u8 = digits.parse().ok()?;
+        (num <= 48).then_some(num)
+    }
+
     /// Resolve an STM32 pin label to its `(IDR address, bit)` so a sensor can
     /// drive an MCU input line (e.g. the HC-SR04 ECHO pin).
     pub(crate) fn resolve_pin_idr(bus: &SystemBus, pin: &str) -> Option<(u64, u8)> {

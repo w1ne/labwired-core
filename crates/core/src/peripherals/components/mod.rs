@@ -58,6 +58,7 @@ pub mod tmp117;
 pub mod uc8151d_tricolor_290;
 pub mod veml7700;
 pub mod vl53l1x;
+pub mod ws2812;
 
 pub use adxl345::Adxl345;
 pub use aht20::Aht20;

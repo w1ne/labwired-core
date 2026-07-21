@@ -312,6 +312,11 @@ pub struct SystemBus {
     ///
     /// [`service_gpio_devices`]: Self::service_gpio_devices
     pub gpio_devices: Vec<Box<dyn BusResidentDevice>>,
+    /// WS2812 / NeoPixel strips. Each is installed as a GPIO observer on its data
+    /// pin (ESP32-S3 only today — the RMT drives the pad), so decode is fully
+    /// edge-driven with no per-tick pass. Held here as `Arc` clones purely so the
+    /// UI/oracle can read the decoded pixels back. Empty by default → zero cost.
+    pub ws2812: Vec<std::sync::Arc<crate::peripherals::components::ws2812::Ws2812>>,
     /// TM1637 4-digit 7-segment displays bit-banged over two GPIO lines. Each is
     /// driven by the CLK/DIO GPIO write-hook (`maybe_clock_tm1637`), which feeds
     /// line transitions to the display's protocol state machine. Purely

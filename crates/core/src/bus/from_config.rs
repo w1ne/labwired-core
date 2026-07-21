@@ -81,6 +81,7 @@ impl SystemBus {
             legacy_walk_disabled: false,
             hcsr04: Vec::new(),
             gpio_devices: Vec::new(),
+            ws2812: Vec::new(),
             tm1637: Vec::new(),
             seven_segment: Vec::new(),
             analog_inputs: Vec::new(),
@@ -791,6 +792,53 @@ impl SystemBus {
                             col_idr,
                         ),
                     ));
+                }
+                "neopixel" | "ws2812" => {
+                    // Addressable LED strip driven by a single-wire, self-clocked
+                    // bit-stream on ONE GPIO. On the ESP32-S3 the RMT peripheral
+                    // generates that waveform and the GPIO matrix (FUNC_OUT_SEL)
+                    // routes it to the pad; this decoder attaches as a GPIO
+                    // observer on the data pin and reconstructs pixels from the
+                    // edge timing — purely edge-driven, no per-tick pass. On
+                    // non-S3 boards there is no RMT→pad drive path yet, so the
+                    // strip is stored for readback but simply never sees an edge.
+                    let data = ext
+                        .config
+                        .get("data_pin")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("GPIO48")
+                        .to_string();
+                    let num_pixels = ext
+                        .config
+                        .get("num_pixels")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(1) as usize;
+                    let cpu_hz = ext
+                        .config
+                        .get("cpu_hz")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(160_000_000);
+                    let pin = Self::parse_esp32s3_gpio_pin(&data).ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "neopixel '{}' data_pin '{}' could not be parsed to an ESP32-S3 GPIO (0..=48)",
+                            ext.id,
+                            data
+                        )
+                    })?;
+                    let strip =
+                        std::sync::Arc::new(crate::peripherals::components::ws2812::Ws2812::new(
+                            pin, num_pixels, cpu_hz,
+                        ));
+                    // Install as a GPIO observer on the S3 GPIO peripheral, if one
+                    // is registered (walk-free: filters by pin internally).
+                    if let Some(idx) = bus.find_peripheral_index_by_name("gpio") {
+                        if let Some(gpio) = bus.peripherals[idx].dev.as_any_mut().and_then(|a| {
+                            a.downcast_mut::<crate::peripherals::esp32s3::gpio::Esp32s3Gpio>()
+                        }) {
+                            gpio.add_observer(strip.clone());
+                        }
+                    }
+                    bus.ws2812.push(strip);
                 }
                 "can-diagnostic-tester" | "uds-diagnostic-tester" => {
                     if bus.find_peripheral_index_by_name(&ext.connection).is_none() {

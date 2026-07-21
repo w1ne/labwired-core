@@ -92,7 +92,11 @@
 //! SYSTIMER model (keeps the bus aggregator bit asserted until firmware ACKs at
 //! the source via INT_CLR).
 
-use crate::{Peripheral, PeripheralTickResult, SimResult};
+use crate::bus::SystemBus;
+use crate::peripherals::esp32s3::gpio::{
+    Esp32s3Gpio, RMT_SIG_OUT0, RMT_SIG_OUT1, RMT_SIG_OUT2, RMT_SIG_OUT3,
+};
+use crate::{Bus, Peripheral, PeripheralTickResult, SimResult};
 
 /// Number of TX channels (0..3).
 const TX_CHANNELS: usize = 4;
@@ -121,7 +125,7 @@ const RX_STATUS_IDLE: u32 = 0x0006_00C0;
 
 // ── CHnCONF0 (TX, n=0..3) bit fields ──────────────────────────────────────
 /// TX_START — bit 0 (WT, self-clearing): start sending data on the channel.
-const TX_START_BIT: u32 = 1 << 0;
+pub const TX_START_BIT: u32 = 1 << 0;
 /// CONF_UPDATE — bit 24 (WT): config-sync strobe; self-clears.
 const TX_CONF_UPDATE_BIT: u32 = 1 << 24;
 /// Write-trigger bits in TX CONF0 that self-clear after a write (so they never
@@ -148,6 +152,46 @@ const INT_VALID_MASK: u32 = 0x3FFF_FFFF;
 /// INT_RAW bit index of `CHn_TX_END` for TX channel `n` (0..3).
 const fn tx_end_bit(n: usize) -> u32 {
     1 << n
+}
+
+// ── RMT symbol (entry) bit layout — one 32-bit RMTMEM word = two pulses ────
+// Each entry encodes back-to-back pulses `(duration0, level0)`, `(duration1,
+// level1)`: durations are 15-bit counts of RMT-clock ticks, levels are the pad
+// output during that span. A pulse with `duration == 0` is the END marker.
+/// 15-bit duration field mask (bits [14:0] for pulse 0, [30:16] for pulse 1).
+const ENTRY_DUR_MASK: u32 = 0x7FFF;
+
+/// GPIO-matrix output signal index of RMT TX channel `ch` (0..3) — what a routed
+/// pad's `FUNCn_OUT_SEL` selects to receive this channel's waveform.
+const fn rmt_out_signal(ch: usize) -> u32 {
+    match ch {
+        0 => RMT_SIG_OUT0,
+        1 => RMT_SIG_OUT1,
+        2 => RMT_SIG_OUT2,
+        _ => RMT_SIG_OUT3,
+    }
+}
+
+/// A timed TX playback in flight: the decoded pad-level edge schedule of one TX
+/// channel, advanced one edge at a time by [`Esp32s3Rmt::tick_with_bus`] so the
+/// routed GPIO pad emits real bit-level edges an observer (a future WS2812
+/// decoder) can capture. Only `edges` that actually *change* the pad level are
+/// recorded; `offset_cycle` is measured in sim cycles from playback start.
+#[derive(Debug)]
+struct TxPlayback {
+    /// GPIO-matrix output signal of the transmitting channel (RMT_SIG_OUTn).
+    signal: u32,
+    /// Ascending `(offset_cycle, new_level)` pad transitions (changes only).
+    edges: Vec<(u64, bool)>,
+    /// Index of the next edge to emit.
+    next: usize,
+    /// Sim cycles elapsed since playback started (incremented per bus tick).
+    play_cycle: u64,
+    /// Pads the signal is routed to (`FUNCn_OUT_SEL`), resolved on the first
+    /// bus tick. Empty after resolution ⇒ the channel drives no pad.
+    pads: Vec<u8>,
+    /// False until the routed pads have been resolved from the GPIO matrix.
+    resolved: bool,
 }
 
 #[derive(Debug)]
@@ -212,6 +256,13 @@ pub struct Esp32s3Rmt {
     int_raw: u32,
     /// INT_ENA (0x78). Per-channel interrupt enable.
     int_ena: u32,
+
+    /// Active timed TX playback, if any (RMT Stage 2). Armed on a `TX_START`
+    /// write when the channel's RMTMEM holds a non-empty symbol sequence;
+    /// `None` when idle, so an idle RMT reports `needs_bus_tick() == false` and
+    /// costs the bus-tick pass nothing. At most one channel plays at a time —
+    /// a limitation adequate for single-strip WS2812 (the Stage-3 target).
+    playback: Option<TxPlayback>,
 }
 
 impl Esp32s3Rmt {
@@ -254,6 +305,7 @@ impl Esp32s3Rmt {
             tx_sim: 0,
             int_raw: 0,
             int_ena: 0,
+            playback: None,
         }
     }
 
@@ -404,6 +456,82 @@ impl Esp32s3Rmt {
         self.int_raw & self.int_ena
     }
 
+    /// Sim cycles per RMT-clock tick for TX channel `ch` — its `DIV_CNT`
+    /// (`CHnCONF0[15:8]`, min 1). The model treats the RMT source clock as one
+    /// tick per sim cycle, so a symbol duration of `d` RMT ticks spans
+    /// `d * DIV_CNT` sim cycles. (The SYS_CONF fractional divider is not applied
+    /// — a documented Stage-2 approximation; integer `DIV_CNT` carries the WS2812
+    /// bit-timing that matters.)
+    fn cycles_per_rmt_tick(&self, ch: usize) -> u64 {
+        (((self.tx_conf0[ch] >> 8) & 0xFF) as u64).max(1)
+    }
+
+    /// Decode TX channel `ch`'s RMTMEM window into an ascending list of pad
+    /// level *transitions* `(offset_cycle, new_level)`. Walks entries from the
+    /// channel's window base until an END marker (`duration == 0`) or the window
+    /// end; each entry contributes two `(duration, level)` pulses. The line
+    /// starts at the idle level (low); only actual changes are emitted, so a
+    /// run of same-level pulses collapses to nothing.
+    fn decode_tx_edges(&self, ch: usize) -> Vec<(u64, bool)> {
+        let base = ch * RMT_BLOCK_WORDS;
+        let len = self.mem_window_words(ch);
+        let per_tick = self.cycles_per_rmt_tick(ch);
+        let mut edges = Vec::new();
+        let mut level = false; // idle low
+        let mut offset = 0u64;
+        for i in 0..len {
+            let w = self.mem[base + i];
+            for (dur, lvl) in [
+                ((w & ENTRY_DUR_MASK) as u64, (w >> 15) & 1 != 0),
+                (((w >> 16) & ENTRY_DUR_MASK) as u64, (w >> 31) & 1 != 0),
+            ] {
+                if dur == 0 {
+                    return edges; // END marker terminates the sequence
+                }
+                if lvl != level {
+                    edges.push((offset, lvl));
+                    level = lvl;
+                }
+                offset += dur * per_tick;
+            }
+        }
+        edges
+    }
+
+    /// Arm a timed pad playback for TX channel `ch` (called on a `TX_START`
+    /// write, alongside the instantaneous `TX_END` latch). Decodes the channel's
+    /// symbols; if they produce at least one pad edge, stores the schedule so the
+    /// bus-tick pass plays it out on the routed pad. An empty schedule (idle RAM)
+    /// leaves `playback` untouched, so `needs_bus_tick` stays false.
+    fn arm_tx_playback(&mut self, ch: usize) {
+        let edges = self.decode_tx_edges(ch);
+        if edges.is_empty() {
+            return;
+        }
+        self.playback = Some(TxPlayback {
+            signal: rmt_out_signal(ch),
+            edges,
+            next: 0,
+            play_cycle: 0,
+            pads: Vec::new(),
+            resolved: false,
+        });
+    }
+
+    /// Borrow the sibling ESP32-S3 GPIO peripheral off the bus (during the
+    /// `tick_with_bus` swap dance this RMT is lent `&mut SystemBus`, which still
+    /// holds the GPIO), run `f` against it, and return its result. `None` if the
+    /// bus is not a `SystemBus` or carries no `Esp32s3Gpio` named "gpio".
+    fn with_gpio<R>(bus: &mut dyn Bus, f: impl FnOnce(&mut Esp32s3Gpio) -> R) -> Option<R> {
+        let sb = bus.as_any_mut()?.downcast_mut::<SystemBus>()?;
+        let idx = sb.find_peripheral_index_by_name("gpio")?;
+        let gpio = sb.peripherals[idx]
+            .dev
+            .as_any_mut()?
+            .downcast_mut::<Esp32s3Gpio>()?;
+        Some(f(gpio))
+    }
+
     fn read_word(&self, offset: u64) -> u32 {
         if let Some(i) = Self::tx_conf0_index(offset) {
             return self.tx_conf0[i];
@@ -478,6 +606,11 @@ impl Esp32s3Rmt {
             // self-cleared above.
             if value & TX_START_BIT != 0 {
                 self.int_raw |= tx_end_bit(i);
+                // RMT Stage 2: also arm a timed pad playback so the routed GPIO
+                // emits real bit-level edges over the symbols' true duration.
+                // TX_END above stays instantaneous (completion polling is
+                // unchanged); the waveform plays out in parallel for observers.
+                self.arm_tx_playback(i);
             }
             // CONF_UPDATE alone (without TX_START) just syncs config — no
             // completion event. (Bit is consumed regardless; nothing to do.)
@@ -582,6 +715,66 @@ impl Peripheral for Esp32s3Rmt {
         PeripheralTickResult {
             explicit_irqs,
             ..PeripheralTickResult::default()
+        }
+    }
+
+    /// Bus-tick opt-in: active only while a timed playback is in flight, so an
+    /// idle RMT is never added to the bus's `bus_tick_indices` and the per-cycle
+    /// pass costs nothing. `refresh_bus_tick_index` (run after every MMIO write)
+    /// arms this the moment `TX_START` loads a playback and disarms it when the
+    /// last edge has played.
+    fn needs_bus_tick(&self) -> bool {
+        self.playback.is_some()
+    }
+
+    /// Play out the armed TX waveform onto the routed GPIO pad(s), one bus tick
+    /// at a time. On the first tick the routed pads are resolved from the GPIO
+    /// matrix (`FUNCn_OUT_SEL`); if the channel is not routed to any pad the
+    /// playback is dropped (nothing to drive). Thereafter each edge whose
+    /// scheduled offset has arrived is driven via
+    /// [`Esp32s3Gpio::drive_pad_output`], reaching every registered
+    /// `GpioObserver` with the correct sim-cycle timing.
+    fn tick_with_bus(&mut self, bus: &mut dyn Bus) {
+        if self.playback.is_none() {
+            return;
+        }
+        // Resolve routed pads on the first bus tick of the playback.
+        if !self.playback.as_ref().unwrap().resolved {
+            let signal = self.playback.as_ref().unwrap().signal;
+            let pads =
+                Self::with_gpio(bus, |g| g.pads_for_output_signal(signal)).unwrap_or_default();
+            let pb = self.playback.as_mut().unwrap();
+            pb.resolved = true;
+            pb.pads = pads;
+            if pb.pads.is_empty() {
+                self.playback = None; // channel drives no pad — nothing to play
+                return;
+            }
+        }
+        // Collect the edges due at or before the current play cycle.
+        let (levels, done) = {
+            let pb = self.playback.as_mut().unwrap();
+            let now = pb.play_cycle;
+            let mut levels = Vec::new();
+            while pb.next < pb.edges.len() && pb.edges[pb.next].0 <= now {
+                levels.push(pb.edges[pb.next].1);
+                pb.next += 1;
+            }
+            pb.play_cycle += 1;
+            (levels, pb.next >= pb.edges.len())
+        };
+        if !levels.is_empty() {
+            let pads = self.playback.as_ref().unwrap().pads.clone();
+            Self::with_gpio(bus, |g| {
+                for level in levels {
+                    for &pad in &pads {
+                        g.drive_pad_output(pad, level);
+                    }
+                }
+            });
+        }
+        if done {
+            self.playback = None;
         }
     }
 
@@ -1125,6 +1318,173 @@ mod tests {
         r.write(last, 0x34).unwrap();
         r.write(last + 1, 0x12).unwrap();
         assert_eq!(r.read_word(last), 0x0000_1234);
+    }
+
+    // ── RMT Stage 2: timed pad playback → GpioObserver ────────────────────
+
+    /// Symbol decode is pure: entries → ascending pad-level transitions, honoring
+    /// the idle level, END markers, and the DIV_CNT sim-cycle scaling.
+    #[test]
+    fn decode_tx_edges_builds_timed_transition_list() {
+        let mut r = rmt();
+        // DIV_CNT=1, MEM_SIZE=1 on CH0.
+        r.write_word(0x20, (1 << 8) | (1 << 16));
+        // E0: (3,H)(2,L)  E1: (4,H)(2,L)  E2: END. Idle low.
+        r.mem[0] = 3 | (1 << 15) | (2 << 16);
+        r.mem[1] = 4 | (1 << 15) | (2 << 16);
+        r.mem[2] = 0;
+        // Cumulative offsets: H@0, L@3, H@(3+2)=5, L@(5+4)=9.
+        assert_eq!(
+            r.decode_tx_edges(0),
+            vec![(0, true), (3, false), (5, true), (9, false)]
+        );
+
+        // DIV_CNT=4 scales every offset by 4.
+        r.write_word(0x20, (4 << 8) | (1 << 16));
+        assert_eq!(
+            r.decode_tx_edges(0),
+            vec![(0, true), (12, false), (20, true), (36, false)]
+        );
+
+        // A leading same-as-idle (low) pulse emits no edge until the first high.
+        r.write_word(0x20, (1 << 8) | (1 << 16));
+        r.mem[0] = 5 | (2 << 16) | (1 << 31); // (5,L)(2,H) — level0 low (bit15=0)
+        r.mem[1] = 0;
+        assert_eq!(r.decode_tx_edges(0), vec![(5, true)]);
+    }
+
+    /// End-to-end: an RMT TX channel routed to GPIO48 through the output matrix
+    /// drives the pad with the exact timed edge sequence its symbols encode, and
+    /// a GpioObserver captures every edge with correct sim-cycle timing. This is
+    /// the RMT → pad → observer foundation a WS2812 decoder (Stage 3) sits on.
+    #[test]
+    fn tx_playback_drives_routed_pad_with_timed_edges() {
+        use crate::peripherals::esp32s3::gpio::{Esp32s3Gpio, GpioObserver, RMT_SIG_OUT0};
+        use std::sync::{Arc, Mutex};
+
+        #[derive(Debug, Default)]
+        struct Rec {
+            events: Mutex<Vec<(u8, bool, bool, u64)>>,
+        }
+        impl GpioObserver for Rec {
+            fn on_pin_change(&self, pin: u8, from: bool, to: bool, cyc: u64) {
+                self.events.lock().unwrap().push((pin, from, to, cyc));
+            }
+        }
+
+        const GPIO_BASE: u64 = 0x6000_4000;
+        const RMT_BASE: u64 = 0x6001_6000;
+        // GPIO48's FUNC_OUT_SEL_CFG (base 0x554, stride 4).
+        const FUNC_OUT_SEL48: u64 = GPIO_BASE + 0x554 + 48 * 4;
+
+        let mut bus = SystemBus::new();
+        bus.add_peripheral(
+            "gpio",
+            GPIO_BASE,
+            0x1000,
+            None,
+            Box::new(Esp32s3Gpio::new()),
+        );
+        bus.add_peripheral("rmt", RMT_BASE, 0x1000, Some(40), Box::new(rmt()));
+
+        // Register a recording observer on the GPIO pad.
+        let obs = Arc::new(Rec::default());
+        {
+            let idx = bus.find_peripheral_index_by_name("gpio").unwrap();
+            let g = bus.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .unwrap()
+                .downcast_mut::<Esp32s3Gpio>()
+                .unwrap();
+            g.add_observer(obs.clone());
+        }
+
+        // Route GPIO48 (onboard NeoPixel) to RMT channel 0's output signal.
+        bus.write_u32(FUNC_OUT_SEL48, RMT_SIG_OUT0).unwrap();
+
+        // Load a 2-entry symbol sequence into CH0's RMTMEM (direct aperture,
+        // 0x400). Entry = dur0 | lvl0<<15 | dur1<<16 | lvl1<<31.
+        //   E0: (3,H)(2,L)  E1: (4,H)(2,L)  E2: END → H@0, L@3, H@5, L@9.
+        bus.write_u32(RMT_BASE + 0x400, 3 | (1 << 15) | (2 << 16))
+            .unwrap();
+        bus.write_u32(RMT_BASE + 0x404, 4 | (1 << 15) | (2 << 16))
+            .unwrap();
+        bus.write_u32(RMT_BASE + 0x408, 0).unwrap();
+
+        // Configure CH0 (DIV_CNT=1, MEM_SIZE=1) THEN start — the byte-decomposed
+        // write path arms the playback when the TX_START byte lands, capturing
+        // the just-written DIV/MEM.
+        bus.write_u32(RMT_BASE + 0x20, (1 << 8) | (1 << 16))
+            .unwrap();
+        bus.write_u32(RMT_BASE + 0x20, TX_START_BIT | (1 << 8) | (1 << 16))
+            .unwrap();
+
+        // One bus tick per sim cycle; edge at offset D lands at sim cycle D.
+        for _ in 0..12 {
+            bus.tick_peripherals();
+        }
+
+        assert_eq!(
+            *obs.events.lock().unwrap(),
+            vec![
+                (48, false, true, 0),
+                (48, true, false, 3),
+                (48, false, true, 5),
+                (48, true, false, 9),
+            ],
+            "RMT must drive GPIO48 with the exact timed edge sequence"
+        );
+        // Playback drained → the RMT drops off the bus-tick pass (idle cost 0).
+        let idx = bus.find_peripheral_index_by_name("rmt").unwrap();
+        let r = bus.peripherals[idx]
+            .dev
+            .as_any()
+            .unwrap()
+            .downcast_ref::<Esp32s3Rmt>()
+            .unwrap();
+        assert!(!r.needs_bus_tick(), "playback finished → no more bus ticks");
+    }
+
+    /// An unrouted TX channel (no pad selects its signal) plays nothing: the
+    /// playback resolves to no pad and is dropped, so nothing is driven and the
+    /// bus-tick opt-out disengages. Guards the byte-identical rule — an RMT
+    /// TX_START with the GPIO matrix at reset must not disturb any pad.
+    #[test]
+    fn tx_playback_without_routing_drives_no_pad() {
+        use crate::peripherals::esp32s3::gpio::Esp32s3Gpio;
+
+        const GPIO_BASE: u64 = 0x6000_4000;
+        const RMT_BASE: u64 = 0x6001_6000;
+
+        let mut bus = SystemBus::new();
+        bus.add_peripheral(
+            "gpio",
+            GPIO_BASE,
+            0x1000,
+            None,
+            Box::new(Esp32s3Gpio::new()),
+        );
+        bus.add_peripheral("rmt", RMT_BASE, 0x1000, Some(40), Box::new(rmt()));
+
+        // Load symbols but DO NOT route any pad to an RMT signal.
+        bus.write_u32(RMT_BASE + 0x400, 3 | (1 << 15) | (2 << 16))
+            .unwrap();
+        bus.write_u32(RMT_BASE + 0x404, 0).unwrap();
+        bus.write_u32(RMT_BASE + 0x20, (1 << 8) | (1 << 16))
+            .unwrap();
+        bus.write_u32(RMT_BASE + 0x20, TX_START_BIT | (1 << 8) | (1 << 16))
+            .unwrap();
+
+        for _ in 0..8 {
+            bus.tick_peripherals();
+        }
+
+        // No pad was driven: GPIO OUT (bank 0) and OUT1 (bank 1) stay 0.
+        assert_eq!(bus.read_u32(GPIO_BASE + 0x04).unwrap(), 0, "OUT untouched");
+        assert_eq!(bus.read_u32(GPIO_BASE + 0x10).unwrap(), 0, "OUT1 untouched");
+        // TX_END still latched instantaneously (completion path unchanged).
+        assert_eq!(bus.read_u32(RMT_BASE + 0x70).unwrap(), tx_end_bit(0));
     }
 
     #[test]

@@ -312,6 +312,13 @@ impl CanonicalConfig {
                     push(ext, bio);
                 }
             }
+            // 1b2. NeoPixel / WS2812 addressable strip (single GPIO data wire).
+            for part in non_mcu() {
+                if part.r#type == "neopixel" || part.r#type == "ws2812" {
+                    let (ext, bio) = emit_neopixel(&board, &wires, mcu_id, part);
+                    push(ext, bio);
+                }
+            }
             // 2. PCD8544 (Nokia 5110).
             for part in non_mcu() {
                 if part.r#type == "pcd8544" {
@@ -1033,6 +1040,49 @@ fn emit_dht22(
     (Some(ext), None)
 }
 
+/// Emit the `external_devices` fragment for a `neopixel` / `ws2812` addressable
+/// LED strip (port target for the TS `emitNeopixel`).
+///
+/// A NeoPixel is driven by a single-wire, self-clocked bit-stream a GPIO pad
+/// carries (on the ESP32-S3 the RMT peripheral generates it and the GPIO matrix
+/// routes it to the pad). Like the DHT22 it therefore cannot be a `board_io`
+/// entry — the decoder needs the data pin plus the firmware clock (`cpu_hz`,
+/// from [`sim_cpu_hz`]) to time WS2812 bit cells — so it leaves the generic
+/// `board_io` path (it is in the wire-emitter skip set) for this dedicated
+/// emitter.
+///
+/// The data pin is resolved from the wire on the part's data-in pin (`DIN`, with
+/// `DATA`/`IN` accepted as aliases). `num_pixels` comes from the `pixels` /
+/// `num_pixels` attr (default 1). Emits no `board_io`.
+///
+/// NOTE: the RMT→pad→observer drive path exists only on ESP32-S3 today. On other
+/// boards the device is still emitted (and read back as an idle strip) but no
+/// model drives its pad — see the engine's `from_config` neopixel arm.
+fn emit_neopixel(
+    board: &str,
+    wires: &[Wire],
+    mcu_id: &str,
+    part: &CanonicalPart,
+) -> (Option<String>, Option<String>) {
+    let data = ["DIN", "DATA", "IN"]
+        .iter()
+        .find_map(|p| mcu_pin_for_part_pin(wires, mcu_id, &part.id, p));
+    let Some(data) = data else {
+        return (None, None);
+    };
+    let num_pixels = attr_string(part, "pixels")
+        .or_else(|| attr_string(part, "num_pixels"))
+        .and_then(|s| s.trim().parse::<u64>().ok())
+        .filter(|n| *n > 0)
+        .unwrap_or(1);
+    let cpu_hz = sim_cpu_hz(board);
+    let ext = format!(
+        "  - id: \"{}\"\n    type: \"neopixel\"\n    connection: \"gpio\"\n    config:\n      data_pin: \"{data}\"\n      num_pixels: {num_pixels}\n      cpu_hz: {cpu_hz}",
+        part.id
+    );
+    (Some(ext), None)
+}
+
 /// Emit the `external_devices` + `board_io` fragments for a `rotary-encoder`
 /// (port of `emitRotaryEncoder`).
 ///
@@ -1374,6 +1424,11 @@ fn emit_board_io_from_wires(
         "can-transceiver",
         "can-diagnostic-tool",
         "seven-segment",
+        // NeoPixel/WS2812 own a dedicated emitter (`emit_neopixel`); the catalog
+        // `boardIoKind` still lists it as `spi_device`, which is WRONG for a
+        // single-wire WS2812 line, so it must be skipped here.
+        "neopixel",
+        "ws2812",
     ];
 
     let mut entries = Vec::new();
@@ -2347,6 +2402,64 @@ board_io:
 
     /// DP is optional: the same panel with `DP` left unwired drops the
     /// `dp_pin:` line and emits everything else unchanged.
+    /// NeoPixel on an esp32-s3-zero: single data wire (GPIO48, the onboard
+    /// pixel), default 1 pixel. `cpu_hz` is the S3 core default (80 MHz via
+    /// [`sim_cpu_hz`]); the top-level pacing line is omitted (only esp32c3 emits
+    /// it). No `board_io` — the dedicated emitter owns it (skip set).
+    const FIXTURE_NEOPIXEL: &str = r#"{
+      "version": 1,
+      "parts": [
+        { "id": "mcu", "type": "esp32-s3-zero" },
+        { "id": "np", "type": "neopixel" }
+      ],
+      "connections": [
+        ["mcu:GPIO48", "np:DIN"],
+        ["mcu:5V", "np:VCC"],
+        ["mcu:GND", "np:GND"]
+      ]
+    }"#;
+
+    const EXPECTED_NEOPIXEL: &str = r#"name: "playground-board"
+chip: "inline"
+external_devices:
+  - id: "np"
+    type: "neopixel"
+    connection: "gpio"
+    config:
+      data_pin: "GPIO48"
+      num_pixels: 1
+      cpu_hz: 80000000
+board_io:
+  []
+"#;
+
+    /// NeoPixel strip with an explicit `pixels` attr on a low GPIO — pins the
+    /// `num_pixels` attr read and a non-48 data pin.
+    const FIXTURE_NEOPIXEL_STRIP: &str = r#"{
+      "version": 1,
+      "parts": [
+        { "id": "mcu", "type": "esp32-s3-zero" },
+        { "id": "strip", "type": "neopixel", "attrs": { "pixels": "8" } }
+      ],
+      "connections": [
+        ["mcu:GPIO8", "strip:DIN"]
+      ]
+    }"#;
+
+    const EXPECTED_NEOPIXEL_STRIP: &str = r#"name: "playground-board"
+chip: "inline"
+external_devices:
+  - id: "strip"
+    type: "neopixel"
+    connection: "gpio"
+    config:
+      data_pin: "GPIO8"
+      num_pixels: 8
+      cpu_hz: 80000000
+board_io:
+  []
+"#;
+
     const FIXTURE_SEVEN_SEGMENT_NO_DP: &str = r#"{
       "version": 1,
       "parts": [
@@ -2455,6 +2568,12 @@ board_io:
                 "seven-segment-no-dp",
                 FIXTURE_SEVEN_SEGMENT_NO_DP,
                 EXPECTED_SEVEN_SEGMENT_NO_DP,
+            ),
+            ("neopixel", FIXTURE_NEOPIXEL, EXPECTED_NEOPIXEL),
+            (
+                "neopixel-strip",
+                FIXTURE_NEOPIXEL_STRIP,
+                EXPECTED_NEOPIXEL_STRIP,
             ),
         ] {
             let cfg = CanonicalConfig::from_json(fixture)
