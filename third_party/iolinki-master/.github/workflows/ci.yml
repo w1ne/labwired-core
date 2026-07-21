@@ -1,0 +1,340 @@
+name: iolinki-master CI
+
+on:
+  push:
+    branches:
+      - master
+      - main
+  pull_request:
+    branches:
+      - master
+      - main
+  workflow_dispatch:
+
+jobs:
+  ctest:
+    name: cmake-ctest
+    # Pluto's repo runner is named `pluto-labwired-ci-runner` and exposes these labels.
+    runs-on: [self-hosted, Linux, X64, ci]
+    steps:
+      - name: Checkout iolinki-master
+        uses: actions/checkout@v4
+        with:
+          path: iolinki-master
+
+      - name: Checkout iolinki device stack
+        uses: actions/checkout@v4
+        with:
+          repository: w1ne/iolinki
+          ref: develop
+          path: iolinki-device
+
+      - name: Configure device stack path
+        run: |
+          set -euo pipefail
+          dir="$GITHUB_WORKSPACE/iolinki-device"
+          test -d "$dir/include/iolinki"
+          test -f "$dir/src/frame.c"
+          test -f "$dir/src/device.c"
+          echo "IOLINKI_DEVICE_DIR=$dir" >> "$GITHUB_ENV"
+          echo "Using iolinki device stack at $dir"
+
+      - name: Ensure test dependencies
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+
+          toolbin="$RUNNER_TEMP/toolbin"
+          mkdir -p "$toolbin"
+
+          if ! command -v cc >/dev/null 2>&1; then
+            if command -v clang >/dev/null 2>&1; then
+              printf '#!/usr/bin/env bash\nexec clang "$@"\n' > "$toolbin/cc"
+              chmod +x "$toolbin/cc"
+              export PATH="$toolbin:$PATH"
+              echo "$toolbin" >> "$GITHUB_PATH"
+              echo "Created cc shim to clang."
+            else
+              zig_bin="$HOME/.local/zig/zig"
+
+              if [ -x "$zig_bin" ]; then
+                echo "Reusing existing Zig toolchain at $zig_bin."
+              else
+                for tool in curl tar sha256sum; do
+                  if ! command -v "$tool" >/dev/null 2>&1; then
+                    echo "::error::$tool is required to bootstrap a C compiler on the Pluto runner."
+                    exit 1
+                  fi
+                done
+
+                case "$(uname -m)" in
+                  x86_64)
+                    zig_pkg="zig-linux-x86_64-0.13.0"
+                    zig_sha="d45312e61ebcc48032b77bc4cf7fd6915c11fa16e4aad116b66c9468211230ea"
+                    ;;
+                  aarch64|arm64)
+                    zig_pkg="zig-linux-aarch64-0.13.0"
+                    zig_sha="041ac42323837eb5624068acd8b00cd5777dac4cf91179e8dad7a7e90dd0c556"
+                    ;;
+                  *)
+                    echo "::error::No C compiler is installed and Zig bootstrap is unsupported for $(uname -m)."
+                    exit 1
+                    ;;
+                esac
+
+                zig_dir="$RUNNER_TEMP/zig"
+                zig_archive="$RUNNER_TEMP/${zig_pkg}.tar.xz"
+                rm -rf "$zig_dir" "$zig_archive"
+                mkdir -p "$zig_dir"
+                curl --connect-timeout 20 --max-time 180 -fsSL \
+                  "https://ziglang.org/download/0.13.0/${zig_pkg}.tar.xz" \
+                  -o "$zig_archive"
+                echo "${zig_sha}  ${zig_archive}" | sha256sum --check --strict
+                tar -xf "$zig_archive" -C "$zig_dir" --strip-components=1
+                zig_bin="$zig_dir/zig"
+                echo "Downloaded Zig toolchain to $zig_dir."
+              fi
+
+              printf '#!/usr/bin/env bash\nexec %q cc "$@"\n' "$zig_bin" > "$toolbin/cc"
+              printf '#!/usr/bin/env bash\nexec %q ar "$@"\n' "$zig_bin" > "$toolbin/ar"
+              printf '#!/usr/bin/env bash\nexec %q ranlib "$@"\n' "$zig_bin" > "$toolbin/ranlib"
+              chmod +x "$toolbin/cc" "$toolbin/ar" "$toolbin/ranlib"
+              export PATH="$toolbin:$PATH"
+              echo "$toolbin" >> "$GITHUB_PATH"
+              echo "Created cc/ar/ranlib shims to Zig."
+            fi
+          fi
+
+          if ! command -v cmake >/dev/null 2>&1; then
+            for tool in curl tar; do
+              if ! command -v "$tool" >/dev/null 2>&1; then
+                echo "::error::$tool is required to bootstrap CMake on the Pluto runner."
+                exit 1
+              fi
+            done
+
+            case "$(uname -m)" in
+              x86_64)
+                cmake_pkg="cmake-3.30.9-linux-x86_64"
+                ;;
+              *)
+                echo "::error::CMake is not installed and bootstrap is unsupported for $(uname -m)."
+                exit 1
+                ;;
+            esac
+
+            cmake_dir="$RUNNER_TEMP/cmake"
+            cmake_archive="$RUNNER_TEMP/${cmake_pkg}.tar.gz"
+            rm -rf "$cmake_dir" "$cmake_archive"
+            mkdir -p "$cmake_dir"
+            curl --connect-timeout 20 --max-time 180 -fsSL \
+              "https://cmake.org/files/v3.30/${cmake_pkg}.tar.gz" \
+              -o "$cmake_archive"
+            tar -xf "$cmake_archive" -C "$cmake_dir" --strip-components=1
+            export PATH="$cmake_dir/bin:$PATH"
+            echo "$cmake_dir/bin" >> "$GITHUB_PATH"
+            cmake --version
+          fi
+
+          if ! command -v ninja >/dev/null 2>&1; then
+            ninja_archive="$RUNNER_TEMP/ninja-linux.zip"
+            rm -f "$ninja_archive" "$toolbin/ninja"
+            curl --connect-timeout 20 --max-time 180 -fL \
+              https://github.com/ninja-build/ninja/releases/download/v1.12.1/ninja-linux.zip \
+              -o "$ninja_archive"
+            cmake -E tar xf "$ninja_archive" --format=zip
+            mv ninja "$toolbin/ninja"
+            chmod +x "$toolbin/ninja"
+            export PATH="$toolbin:$PATH"
+            echo "$toolbin" >> "$GITHUB_PATH"
+            ninja --version
+          fi
+
+          export CMAKE_GENERATOR=Ninja
+          echo "CMAKE_GENERATOR=Ninja" >> "$GITHUB_ENV"
+
+          if command -v cc >/dev/null 2>&1 \
+            && command -v cmake >/dev/null 2>&1 \
+            && command -v pkg-config >/dev/null 2>&1 \
+            && pkg-config --exists cmocka; then
+            echo "CMake, C compiler, pkg-config, and CMocka are already available."
+            exit 0
+          fi
+
+          if command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y build-essential cmake pkg-config libcmocka-dev
+            exit 0
+          fi
+
+          for tool in cc cmake ninja curl tar; do
+            if ! command -v "$tool" >/dev/null 2>&1; then
+              echo "::error::$tool is required on the Pluto runner."
+              exit 1
+            fi
+          done
+
+          prefix="$RUNNER_TEMP/cmocka"
+          src="$RUNNER_TEMP/cmocka-1.1.7"
+          archive="$RUNNER_TEMP/cmocka-1.1.7.tar.xz"
+
+          if ! pkg-config --exists cmocka; then
+            rm -rf "$prefix" "$src" "$archive"
+            curl --connect-timeout 20 --max-time 180 -fsSL \
+              https://cmocka.org/files/1.1/cmocka-1.1.7.tar.xz \
+              -o "$archive"
+            tar -xf "$archive" -C "$RUNNER_TEMP"
+            cmake -S "$src" -B "$src/build" \
+              -DCMAKE_INSTALL_PREFIX="$prefix" \
+              -DWITH_STATIC_LIB=ON \
+              -DWITH_EXAMPLES=OFF \
+              -DUNIT_TESTING=OFF
+            cmake --build "$src/build" --target install
+          fi
+
+          echo "PKG_CONFIG_PATH=$prefix/lib/pkgconfig:$prefix/lib64/pkgconfig:${PKG_CONFIG_PATH:-}" >> "$GITHUB_ENV"
+          echo "CMAKE_PREFIX_PATH=$prefix:${CMAKE_PREFIX_PATH:-}" >> "$GITHUB_ENV"
+
+      - name: Configure
+        run: |
+          cmake -S iolinki-master -B iolinki-master/build \
+            -DIOLINKI_DEVICE_DIR="$IOLINKI_DEVICE_DIR"
+
+      - name: Build
+        run: cmake --build iolinki-master/build
+
+      - name: Test
+        run: ctest --test-dir iolinki-master/build --output-on-failure
+
+  # Non-blocking: the Zephyr simulation build uses a multi-GB toolchain image and
+  # west-pulls Zephyr + the iolinki device stack, which can exhaust a free
+  # runner. It is intentionally NOT a required check and is allowed to fail
+  # without blocking merges (mirrors the iolinki device repo's zephyr-validation
+  # job). It builds the native_sim iolink_master sample to prove the Zephyr
+  # module integration.
+  zephyr-validation:
+    name: zephyr-validation
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    container:
+      image: zephyrprojectrtos/zephyr-build:latest
+      options: --user root
+    env:
+      ZEPHYR_TOOLCHAIN_VARIANT: host
+    steps:
+      - name: Free up disk space
+        run: |
+          rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+                 /usr/local/.ghcup /usr/local/share/boost \
+                 /usr/local/lib/node_modules /usr/lib/google-cloud-sdk || true
+          df -h
+
+      - name: Checkout iolinki-master
+        uses: actions/checkout@v4
+        with:
+          path: iolinki-master
+
+      - name: Initialize west workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Use the master's own west.yml (self: iolinki-master) as the manifest,
+          # pulling Zephyr and the iolinki device stack alongside it.
+          west init -l iolinki-master
+          west update --narrow -o=--depth=1
+          west zephyr-export
+
+      - name: Build native_sim sample
+        shell: bash
+        run: |
+          set -euo pipefail
+          west build -p auto -b native_sim iolinki-master/samples/iolink_master
+
+  sbom-tools:
+    name: sbom-tools
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout iolinki-master
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Run SBOM generator self-test
+        run: python3 tools/test_generate_sbom.py
+
+  labwired-model:
+    name: labwired-real-firmware-model
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout iolinki-master
+        uses: actions/checkout@v4
+        with:
+          path: iolinki-master
+
+      - name: Checkout LabWired core
+        uses: actions/checkout@v4
+        with:
+          repository: w1ne/labwired-core
+          ref: main
+          path: labwired-core
+          submodules: recursive
+
+      - name: Overlay current master stack into LabWired
+        run: |
+          set -euo pipefail
+          rm -rf labwired-core/third_party/iolinki-master
+          mkdir -p labwired-core/third_party/iolinki-master
+          tar -C iolinki-master \
+            --exclude .git \
+            --exclude build \
+            -cf - . | tar -C labwired-core/third_party/iolinki-master -xf -
+          git -C labwired-core status --short -- third_party/iolinki-master
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+
+      - name: Cache LabWired dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: iolinki-master-labwired-model
+          workspaces: |
+            labwired-core -> target
+
+      - name: Install firmware toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi libnewlib-arm-none-eabi
+
+      - name: Fetch STM32CubeL4 pack
+        uses: ./labwired-core/.github/actions/fetch-pack
+        with:
+          pack: stm32cubel4@v1.18.2
+
+      - name: Build real IO-Link station firmware
+        working-directory: labwired-core
+        run: examples/iolink-station/ci/build.sh
+
+      - name: Run LabWired multiport model
+        working-directory: labwired-core
+        env:
+          CARGO_TERM_COLOR: never
+        run: |
+          set -o pipefail
+          examples/iolink-station/ci/test.sh 2>&1 | tee multiport-report.txt
+
+      # The report is the tee'd test log (per-node prefixed console output)
+      # plus the exact firmware ELFs that ran in the model.
+      - name: Upload LabWired IO-Link artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iolinki-master-labwired-model
+          path: |
+            labwired-core/multiport-report.txt
+            labwired-core/examples/iolink-station/master-fw/master.elf
+            labwired-core/examples/iolink-station/master-fw-4port/master.elf
+            labwired-core/examples/iolink-dido/firmware/iolink_dido.elf
+          if-no-files-found: warn

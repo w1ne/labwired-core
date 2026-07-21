@@ -95,6 +95,11 @@ pub struct CortexM {
     /// (D0..D15 = pairs of S regs) is NOT modelled; firmware compiled for
     /// `-mfpu=fpv4-sp-d16` only emits single-precision ops anyway.
     pub fpu_s: [u32; 32],
+    /// True while the core is suspended in WFI sleep. Set by the `Wfi`
+    /// executor when no wake-up event is pending, cleared at the top of every
+    /// `step_internal`. Gates idle fast-forward; transient (not snapshotted),
+    /// mirroring the RISC-V `waiting_for_interrupt` flag.
+    sleeping: bool,
 }
 
 impl Default for CortexM {
@@ -134,6 +139,7 @@ impl Default for CortexM {
             nvic_state: None,
             decode_cache: Box::new([None; 4096]),
             fpu_s: [0u32; 32],
+            sleeping: false,
         }
     }
 }
@@ -382,6 +388,26 @@ impl CortexM {
     #[inline]
     fn faultmask_blocks(&self, exc: u32) -> bool {
         self.faultmask && exc != 2
+    }
+
+    /// ARMv7-M WFI wake-up condition: a pending exception whose priority would
+    /// preempt the current execution priority *if it were unmasked*. This
+    /// deliberately ignores PRIMASK — the canonical `__disable_irq(); wfi();`
+    /// idle pattern must wake on a pend even though PRIMASK blocks the actual
+    /// entry (the core then falls through without taking the exception).
+    /// BASEPRI/FAULTMASK still gate: an exception they suppress would not
+    /// preempt, so it is not a wake event. Mirrors the takeable-exception break
+    /// in `step_batch`, minus the `!self.primask` guard.
+    fn wfi_wake_pending(&self) -> bool {
+        if !self.pending_exceptions.iter().any(|&w| w != 0) {
+            return false;
+        }
+        let Some(exc) = self.highest_priority_pending() else {
+            return false;
+        };
+        let exc_prio = self.exception_priority(exc);
+        let active_prio = self.exception_priority(self.active_exception);
+        exc_prio < active_prio && !self.masked_by_basepri(exc_prio) && !self.faultmask_blocks(exc)
     }
 
     /// True when the live `sp` is the Process stack: Thread mode with
@@ -644,9 +670,25 @@ impl Cpu for CortexM {
         config: &SimulationConfig,
         max_count: u32,
     ) -> SimResult<u32> {
+        // Push-mode logic capture: while armed, the tap clock advances once
+        // per retired instruction (BEFORE executing it) so MMIO pad writes
+        // stamp with the cycle boundary they become observable at. One Arc
+        // clone + flag check per batch when disarmed.
+        let tap = bus.logic_tap().filter(|t| t.push_armed());
+
         if !config.batch_mode_enabled {
-            for _ in 0..max_count {
+            for i in 0..max_count {
+                if let Some(tap) = &tap {
+                    tap.bump_clock();
+                }
                 self.step(bus, observers, config)?;
+                // WFI idle escape: leave the batch once the core is sleeping so
+                // `Machine::run` can fast-forward the idle window (mirrors the
+                // batch paths below and the RISC-V core).
+                if config.idle_fast_forward_enabled && self.idle_fast_forward_budget(bus).is_some()
+                {
+                    return Ok(i + 1);
+                }
             }
             return Ok(max_count);
         }
@@ -655,10 +697,20 @@ impl Cpu for CortexM {
 
         if let Some(sysbus) = bus.as_any_mut().and_then(|a| a.downcast_mut::<SystemBus>()) {
             while executed < max_count {
-                // Break the batch only when a takeable exception is pending:
+                // End the batch early when a takeable exception is pending:
                 // its priority must be strictly higher (smaller number) than
                 // the currently-active one (or 256 = thread mode baseline).
-                if self.pending_exceptions.iter().any(|&w| w != 0) && !self.primask {
+                // Only ONCE the batch has made progress (`executed > 0`) —
+                // at the batch top the pending exception must instead be
+                // DISPATCHED by the `step_internal` below (which takes it
+                // exactly like the single-step path). Breaking at zero made
+                // `Machine::run` return no-progress forever the moment a
+                // walk/scheduler-pended IRQ (e.g. SysTick) became takeable
+                // between batches, wedging every batched IRQ-driven Cortex-M
+                // firmware (walk-free campaign B1 surfaced this — batching is
+                // pointless if an armed SysTick freezes the run loop).
+                if executed > 0 && self.pending_exceptions.iter().any(|&w| w != 0) && !self.primask
+                {
                     if let Some(exc) = self.highest_priority_pending() {
                         let exc_prio = self.exception_priority(exc);
                         let active_prio = self.exception_priority(self.active_exception);
@@ -670,17 +722,29 @@ impl Cpu for CortexM {
                         }
                     }
                 }
-                let old_pc = self.pc;
+                if let Some(tap) = &tap {
+                    tap.bump_clock();
+                }
                 self.step_internal(sysbus, observers, config)?;
                 executed += 1;
-                let pc_diff = self.pc.wrapping_sub(old_pc);
-                if pc_diff != 2 && pc_diff != 4 {
+                // Taken branches no longer break the batch — the run loop bounds
+                // it to the next peripheral tick, so bouncing back through
+                // `Machine::run` at every branch was pure overhead. Only WFI
+                // sleep leaves the batch, so the machine can fast-forward the
+                // idle window.
+                if config.idle_fast_forward_enabled
+                    && self.idle_fast_forward_budget(sysbus).is_some()
+                {
                     break;
                 }
             }
         } else {
             while executed < max_count {
-                if self.pending_exceptions.iter().any(|&w| w != 0) && !self.primask {
+                // Same early-out rule as the SystemBus arm above: break only
+                // after progress; at the batch top a takeable pending
+                // exception is dispatched by `step_internal`, never spun on.
+                if executed > 0 && self.pending_exceptions.iter().any(|&w| w != 0) && !self.primask
+                {
                     if let Some(exc) = self.highest_priority_pending() {
                         let exc_prio = self.exception_priority(exc);
                         let active_prio = self.exception_priority(self.active_exception);
@@ -692,17 +756,39 @@ impl Cpu for CortexM {
                         }
                     }
                 }
-                let old_pc = self.pc;
+                if let Some(tap) = &tap {
+                    tap.bump_clock();
+                }
                 self.step_internal(bus, observers, config)?;
                 executed += 1;
-                let pc_diff = self.pc.wrapping_sub(old_pc);
-                if pc_diff != 2 && pc_diff != 4 {
+                if config.idle_fast_forward_enabled && self.idle_fast_forward_budget(bus).is_some()
+                {
                     break;
                 }
             }
         }
 
         Ok(executed)
+    }
+
+    fn idle_fast_forward_budget(&self, _bus: &dyn Bus) -> Option<u64> {
+        // Only fast-forward while the core sleeps in WFI and no wake-up event
+        // has arrived. A pending wake exception (evaluated ignoring PRIMASK)
+        // resumes normal execution: the machine must re-enter `step` so the
+        // core either takes the exception or, under PRIMASK, falls through it.
+        if !self.sleeping || self.wfi_wake_pending() {
+            return None;
+        }
+        // Cortex-M has no core-local timer to bound the skip (SysTick lives on
+        // the bus). Offer an unbounded budget; `Machine::run` clamps it to the
+        // next scheduler deadline, exactly as it does for a RISC-V core whose
+        // mtimecmp is disabled.
+        Some(u64::MAX)
+    }
+
+    fn fast_forward_idle_cycles(&mut self, _cycles: u64) {
+        // Cortex-M keeps no core-local cycle counter (unlike RISC-V mtime); the
+        // machine owns `total_cycles` and advances it. Nothing to do here.
     }
 }
 
@@ -714,6 +800,9 @@ impl CortexM {
         _observers: &[Arc<dyn SimulationObserver>],
         config: &SimulationConfig,
     ) -> SimResult<()> {
+        // Leave WFI sleep before this step commits: the flag is re-armed only if
+        // this instruction is itself a WFI with no wake event pending.
+        self.sleeping = false;
         // Check for pending exceptions before executing instruction.
         // Use real ARMv7-M priority dispatch: pick the highest-priority
         // pending exception (smallest numeric priority value), and only
@@ -1763,6 +1852,17 @@ impl CortexM {
                 }
 
                 Instruction::Nop => { /* Do nothing */ }
+                Instruction::Wfi => {
+                    // ARMv7-M WFI: complete as a NOP if a wake-up event is
+                    // already pending, otherwise suspend the core until one
+                    // arrives. Wake-up ignores PRIMASK (see `wfi_wake_pending`);
+                    // `Machine::run` fast-forwards the idle window while
+                    // `self.sleeping` holds. PC has already advanced past the
+                    // WFI like any other 16-bit hint.
+                    if !self.wfi_wake_pending() {
+                        self.sleeping = true;
+                    }
+                }
                 Instruction::MovImm { rd, imm } => {
                     self.write_reg(rd, imm as u32);
                     if !it_block_instruction {
@@ -2984,7 +3084,7 @@ fn sbc_with_flags(op1: u32, op2: u32, carry_in: u32) -> (u32, bool, bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{DmaRequest, SimulationConfig};
+    use crate::{DmaRequest, Machine, SimulationConfig};
     use std::collections::HashMap;
 
     struct MockBus {
@@ -4429,5 +4529,195 @@ mod tests {
         assert_eq!(cpu.active_exception, 0);
         assert_eq!(cpu.sp, 0x8000, "MSP restored");
         assert_eq!(cpu.control & 0x2, 0, "SPSEL stays MSP");
+    }
+
+    #[test]
+    fn wfi_decodes_and_retires_like_nop() {
+        // 0xBF30 must decode to the dedicated WFI variant (not the hint-space
+        // Nop) and, with no wake event pending, arm the sleep flag while still
+        // advancing PC like any 16-bit hint.
+        assert_eq!(decode_thumb_16(0xBF30), Instruction::Wfi);
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x1000;
+        run_test_instr(&mut cpu, &mut bus, 0xBF30, false); // WFI
+        assert_eq!(cpu.pc, 0x1002, "WFI advances PC like a NOP");
+        assert!(
+            cpu.idle_fast_forward_budget(&bus).is_some(),
+            "WFI with no pending event arms idle sleep"
+        );
+    }
+
+    #[test]
+    fn wfi_is_nop_when_wake_already_pending() {
+        // If a wake-up event is already pending when WFI retires, WFI completes
+        // as a plain NOP and never arms sleep. PRIMASK is set only so the
+        // pending IRQ isn't taken before the WFI retires — this isolates the
+        // WFI arm's wake-pending branch.
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x1000;
+        cpu.primask = true;
+        cpu.set_exception_pending(16); // IRQ0 pending (priority 0xFF < 256)
+        run_test_instr(&mut cpu, &mut bus, 0xBF30, false); // WFI
+        assert_eq!(cpu.pc, 0x1002, "WFI retires like a NOP");
+        assert!(
+            cpu.idle_fast_forward_budget(&bus).is_none(),
+            "an already-pending wake event means WFI does not arm sleep"
+        );
+    }
+
+    #[test]
+    fn wfi_wakes_and_takes_exception_when_primask_clear() {
+        // WFI with nothing pending sleeps; a subsequently-pended exception is a
+        // wake event (budget clears), and with PRIMASK clear the next step
+        // vectors into the handler.
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x1000;
+        cpu.sp = 0x8000;
+        bus.write_u16(0x1000, 0xBF30).unwrap(); // WFI
+        let cfg = bus.config.clone();
+
+        cpu.step_internal(&mut bus, &[], &cfg).unwrap();
+        assert_eq!(cpu.pc, 0x1002, "WFI retires like a NOP");
+        assert!(
+            cpu.idle_fast_forward_budget(&bus).is_some(),
+            "core is sleeping"
+        );
+
+        // SysTick (exception 15) pends while the core sleeps.
+        bus.write_u32(15 * 4, 0x5000 | 1).unwrap(); // VTOR=0 → vector[15]
+        cpu.set_exception_pending(15);
+        assert!(
+            cpu.idle_fast_forward_budget(&bus).is_none(),
+            "a pended exception wakes the core"
+        );
+
+        cpu.step_internal(&mut bus, &[], &cfg).unwrap();
+        assert_eq!(
+            cpu.active_exception, 15,
+            "PRIMASK clear → the exception is taken"
+        );
+        assert_eq!(cpu.pc, 0x5000, "vectored into the SysTick handler");
+    }
+
+    #[test]
+    fn wfi_primask_set_wakes_without_taking() {
+        // The canonical `__disable_irq(); wfi();` idle pattern: PRIMASK is set,
+        // so a pended exception must WAKE the core (budget clears) but must NOT
+        // be taken — the core falls through to the instruction after WFI and the
+        // exception stays pending.
+        let mut cpu = CortexM::new();
+        let mut bus = MockBus::new();
+        cpu.pc = 0x1000;
+        cpu.sp = 0x8000;
+        cpu.primask = true; // __disable_irq()
+        bus.write_u16(0x1000, 0xBF30).unwrap(); // WFI
+        bus.write_u16(0x1002, 0xBF00).unwrap(); // NOP (the fall-through target)
+        let cfg = bus.config.clone();
+
+        cpu.step_internal(&mut bus, &[], &cfg).unwrap();
+        assert_eq!(cpu.pc, 0x1002);
+        assert!(
+            cpu.idle_fast_forward_budget(&bus).is_some(),
+            "core sleeps even with PRIMASK set"
+        );
+
+        bus.write_u32(15 * 4, 0x5000 | 1).unwrap();
+        cpu.set_exception_pending(15);
+        assert!(
+            cpu.idle_fast_forward_budget(&bus).is_none(),
+            "wake-on-pend fires despite PRIMASK"
+        );
+
+        cpu.step_internal(&mut bus, &[], &cfg).unwrap();
+        assert_eq!(
+            cpu.active_exception, 0,
+            "PRIMASK blocks entry: the exception is NOT taken"
+        );
+        assert_eq!(cpu.pc, 0x1004, "core falls through past the WFI");
+        assert!(
+            cpu.pending_exceptions[0] & (1 << 15) != 0,
+            "the masked exception stays pending"
+        );
+    }
+
+    /// Build the minimal `WFI; b .-2` idle loop on a real `SystemBus` and run it
+    /// with the legacy walk disabled so idle fast-forward is legal.
+    fn wfi_idle_machine(ff: bool) -> Machine<CortexM> {
+        let mut bus = SystemBus::new();
+        bus.write_u16(0x0, 0xBF30).unwrap(); // WFI
+        bus.write_u16(0x2, 0xE7FD).unwrap(); // B -> 0x0
+        let mut cpu = CortexM::new();
+        cpu.pc = 0x0;
+        cpu.sp = 0x8000;
+        let mut machine = Machine::new(cpu, bus);
+        machine.config.idle_fast_forward_enabled = ff;
+        machine.bus.legacy_walk_disabled = true;
+        machine
+    }
+
+    #[test]
+    fn wfi_fast_forward_is_off_by_default() {
+        use crate::DebugControl;
+        let mut machine = wfi_idle_machine(false);
+        machine.run(Some(10)).unwrap();
+        assert_eq!(machine.total_cycles, 10);
+        assert_eq!(
+            machine.step_profile().cpu_instructions,
+            10,
+            "without fast-forward every idle cycle retires an instruction"
+        );
+    }
+
+    #[test]
+    fn wfi_fast_forward_skips_cpu_work_when_enabled() {
+        // Requires the idle fast-forward machinery (event-scheduler feature),
+        // which the `--workspace` and `--features event-scheduler` CI lanes
+        // build. Determinism: total_cycles is identical to the off case; only
+        // the retired-instruction count drops.
+        use crate::DebugControl;
+        let mut off = wfi_idle_machine(false);
+        off.run(Some(10)).unwrap();
+
+        let mut on = wfi_idle_machine(true);
+        on.run(Some(10)).unwrap();
+
+        assert_eq!(
+            on.total_cycles, off.total_cycles,
+            "idle fast-forward must not change total_cycles"
+        );
+        assert_eq!(on.total_cycles, 10);
+        if cfg!(feature = "event-scheduler") {
+            assert!(
+                on.step_profile().cpu_instructions < off.step_profile().cpu_instructions,
+                "fast-forwarded cycles should not retire CPU instructions"
+            );
+        }
+    }
+
+    #[test]
+    fn boxed_cortexm_batch_preserves_idle_fast_forward_escape() {
+        // The `Box<dyn Cpu>` forwarding must still leave the batch loop at WFI so
+        // the machine can fast-forward (the WASM runtime holds a boxed CPU).
+        use crate::DebugControl;
+        let mut bus = SystemBus::new();
+        bus.write_u16(0x0, 0xBF30).unwrap(); // WFI
+        bus.write_u16(0x2, 0xE7FD).unwrap(); // B -> 0x0
+        let mut cpu = CortexM::new();
+        cpu.pc = 0x0;
+        cpu.sp = 0x8000;
+        let mut machine = Machine::new(Box::new(cpu) as Box<dyn Cpu>, bus);
+        machine.config.idle_fast_forward_enabled = true;
+        machine.bus.legacy_walk_disabled = true;
+        machine.run(Some(10)).unwrap();
+        assert_eq!(machine.total_cycles, 10);
+        if cfg!(feature = "event-scheduler") {
+            assert!(
+                machine.step_profile().cpu_instructions < 10,
+                "boxed CPU path should still leave the batch loop at WFI"
+            );
+        }
     }
 }

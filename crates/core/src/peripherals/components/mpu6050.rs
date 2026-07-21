@@ -24,8 +24,17 @@ pub struct Mpu6050 {
     gyro_y: i16,
     gyro_z: i16,
 
+    // Full-scale config registers, latched so the input conversion follows
+    // what the firmware actually configured (not an assumed power-on scale).
+    accel_config: u8,
+    gyro_config: u8,
+
     // Internal state tracking for I2C register pointer
     register_address_written: bool,
+
+    /// system.yaml `external_devices` id, stamped at attach (see
+    /// [`crate::sim_input::SimInput::component_id`]).
+    component_id: Option<String>,
 }
 
 impl Default for Mpu6050 {
@@ -50,7 +59,10 @@ impl Mpu6050 {
             gyro_y: 0x0020,
             gyro_z: 0x0030,
 
+            accel_config: 0,
+            gyro_config: 0,
             register_address_written: false,
+            component_id: None,
         }
     }
 
@@ -70,6 +82,9 @@ impl Mpu6050 {
             0x47 => (self.gyro_z >> 8) as u8,
             0x48 => (self.gyro_z & 0xFF) as u8,
 
+            0x1B => self.gyro_config,
+            0x1C => self.accel_config,
+
             0x6B => self.pwr_mgmt_1,
             0x75 => self.who_am_i,
             _ => 0,
@@ -77,8 +92,11 @@ impl Mpu6050 {
     }
 
     fn write_register(&mut self, reg: u8, value: u8) {
-        if reg == 0x6B {
-            self.pwr_mgmt_1 = value;
+        match reg {
+            0x1B => self.gyro_config = value,
+            0x1C => self.accel_config = value,
+            0x6B => self.pwr_mgmt_1 = value,
+            _ => {}
         }
     }
 
@@ -144,6 +162,98 @@ impl I2cDevice for Mpu6050 {
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
     }
+
+    fn as_sim_input_mut(&mut self) -> Option<&mut dyn crate::sim_input::SimInput> {
+        Some(self)
+    }
+}
+
+/// Drivable 6-DoF channels. The conversion follows the LIVE full-scale the
+/// firmware configured (ACCEL_CONFIG AFS_SEL: ±2/4/8/16 g at 16384/8192/
+/// 4096/2048 LSB/g; GYRO_CONFIG FS_SEL: ±250/500/1000/2000 °/s at 131/65.5/
+/// 32.8/16.4 LSB/(°/s)). The schema range below is the hardware maximum;
+/// values beyond the configured full-scale saturate, like the silicon. One
+/// table backs BOTH the `SimInput` impl and the kit metadata, so the device
+/// schema and the runtime API cannot drift.
+pub const INPUT_CHANNELS: &[crate::sim_input::InputChannel] = &[
+    crate::sim_input::InputChannel {
+        key: "ax",
+        label: "Accel X",
+        unit: "g",
+        min: -16.0,
+        max: 16.0,
+    },
+    crate::sim_input::InputChannel {
+        key: "ay",
+        label: "Accel Y",
+        unit: "g",
+        min: -16.0,
+        max: 16.0,
+    },
+    crate::sim_input::InputChannel {
+        key: "az",
+        label: "Accel Z",
+        unit: "g",
+        min: -16.0,
+        max: 16.0,
+    },
+    crate::sim_input::InputChannel {
+        key: "gx",
+        label: "Gyro X",
+        unit: "°/s",
+        min: -2000.0,
+        max: 2000.0,
+    },
+    crate::sim_input::InputChannel {
+        key: "gy",
+        label: "Gyro Y",
+        unit: "°/s",
+        min: -2000.0,
+        max: 2000.0,
+    },
+    crate::sim_input::InputChannel {
+        key: "gz",
+        label: "Gyro Z",
+        unit: "°/s",
+        min: -2000.0,
+        max: 2000.0,
+    },
+];
+
+impl crate::sim_input::SimInput for Mpu6050 {
+    fn input_channels(&self) -> &'static [crate::sim_input::InputChannel] {
+        INPUT_CHANNELS
+    }
+
+    fn set_input(&mut self, key: &str, value: f64) -> Result<(), crate::sim_input::SimInputError> {
+        self.require_channel(key, value)?;
+        let afs = ((self.accel_config >> 3) & 0x03) as u32;
+        let accel_fs = (2 << afs) as f64; // ±2/4/8/16 g
+        let accel_lsb_per_g = (16384 >> afs) as f64;
+        let fs = ((self.gyro_config >> 3) & 0x03) as u32;
+        let gyro_fs = (250 << fs) as f64; // ±250/500/1000/2000 °/s
+        let gyro_lsb_per_dps = 131.0 / (1 << fs) as f64;
+        let accel = |v: f64| (v.clamp(-accel_fs, accel_fs) * accel_lsb_per_g).round() as i16;
+        let gyro = |v: f64| (v.clamp(-gyro_fs, gyro_fs) * gyro_lsb_per_dps).round() as i16;
+        match key {
+            "ax" => self.accel_x = accel(value),
+            "ay" => self.accel_y = accel(value),
+            "az" => self.accel_z = accel(value),
+            "gx" => self.gyro_x = gyro(value),
+            "gy" => self.gyro_y = gyro(value),
+            "gz" => self.gyro_z = gyro(value),
+            _ => unreachable!("require_channel validated the key"),
+        }
+        Ok(())
+    }
+
+    fn component_id(&self) -> Option<&str> {
+        self.component_id.as_deref()
+    }
+
+    fn set_component_id(&mut self, id: String) {
+        self.component_id = Some(id);
+    }
 }
 
 // ─── PeripheralKit registration ────────────────────────────────────────────
@@ -156,6 +266,7 @@ pub struct Mpu6050Kit;
 pub static MPU6050_KIT: Mpu6050Kit = Mpu6050Kit;
 
 static MPU6050_METADATA: KitMetadata = KitMetadata {
+    inputs: INPUT_CHANNELS,
     device_type: "mpu6050",
     label: "MPU6050 IMU",
     summary: "6-axis gyro + accelerometer over I2C.",
@@ -182,8 +293,7 @@ impl PeripheralKit for Mpu6050Kit {
     }
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
         let address = ctx.i2c_address_or(0x68)?;
-        let i2c = ctx.i2c()?;
-        i2c.attach(Box::new(Mpu6050::new(address)));
+        ctx.attach_i2c_device(Box::new(Mpu6050::new(address)))?;
         Ok(())
     }
 }

@@ -6,3 +6,20 @@ CTestTestfile.cmake
 Makefile
 *.a
 *.o
+
+# Doxygen output
+docs/api/
+doxygen.log
+
+# Release artifacts
+*.cdx.json
+*.spdx.json
+coverage*.info
+coverage*.txt
+
+# Python
+__pycache__/
+*.pyc
+
+# Agent worktrees / scratch
+.claude/

@@ -80,6 +80,13 @@ pub struct KitMetadata {
     /// e-paper model used in both an STM32 and ESP32 example). The first
     /// entry is treated as the primary lab by tooling that wants a default.
     pub labs: &'static [LabRef],
+    /// Drivable input channels this device accepts at runtime through the
+    /// generic stimulus API ([`crate::sim_input::SimInput`] →
+    /// `Machine::set_input` → test-script `stimuli:` / MCP `run_lab`). Part
+    /// of the device schema: the SAME static table backs the device's
+    /// `SimInput` impl, so the manifest cannot advertise channels the model
+    /// doesn't serve. Empty = not an input device.
+    pub inputs: &'static [crate::sim_input::InputChannel],
 }
 
 #[derive(Debug, Clone, Copy, serde::Serialize)]

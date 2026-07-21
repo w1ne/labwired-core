@@ -84,7 +84,10 @@ impl Esp32Spi {
         Self::default()
     }
 
-    pub fn attach(&mut self, device: Box<dyn SpiDevice>) {
+    /// Raw device push — does NOT wrap for tracing. The only production caller
+    /// is the bus choke point [`crate::bus::SystemBus::attach_spi_device`],
+    /// which wraps first.
+    pub(crate) fn push_device(&mut self, device: Box<dyn SpiDevice>) {
         self.attached_devices.push(device);
     }
 
@@ -185,6 +188,11 @@ impl Esp32Spi {
 }
 
 impl Peripheral for Esp32Spi {
+    // Inert walk: SPI transactions run atomically at the launching CMD write (USR auto-clears there); tick() is an explicit no-op.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let word_off = offset & !3;
         let byte_off = (offset & 3) * 8;
@@ -299,6 +307,20 @@ impl Peripheral for Esp32Spi {
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
     }
+
+    fn for_each_attached_sim_input(
+        &mut self,
+        f: &mut dyn FnMut(&mut dyn crate::sim_input::SimInput) -> bool,
+    ) -> bool {
+        for dev in self.attached_devices.iter_mut() {
+            if let Some(si) = dev.as_sim_input_mut() {
+                if f(si) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
 }
 
 #[cfg(test)]
@@ -369,7 +391,7 @@ mod tests {
     #[test]
     fn cmd_usr_streams_mosi_bytes_to_attached_device() {
         let mut spi = Esp32Spi::new();
-        spi.attach(Box::new(Recorder::default()));
+        spi.push_device(Box::new(Recorder::default()));
 
         // Stream 5 bytes: 0x12, 0x34, 0x56, 0x78, 0x9A.
         write32(&mut spi, FIFO_START, 0x78_56_34_12); // bytes 0..3
@@ -396,7 +418,7 @@ mod tests {
     #[test]
     fn cmd_usr_without_usr_mosi_bit_does_not_send_bytes() {
         let mut spi = Esp32Spi::new();
-        spi.attach(Box::new(Recorder::default()));
+        spi.push_device(Box::new(Recorder::default()));
 
         write32(&mut spi, FIFO_START, 0xDE_AD_BE_EF);
         write32(&mut spi, REG_USER, 0); // USR_MOSI cleared

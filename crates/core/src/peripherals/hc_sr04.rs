@@ -78,6 +78,13 @@ pub struct HcSr04 {
     /// a given peripheral write touches this sensor's TRIG line. `None` until
     /// resolved.
     trig_peripheral_idx: Option<usize>,
+    /// Event-scheduler path only: set true by [`observe_trig`](Self::observe_trig)
+    /// on a TRIG rising edge (a fresh echo window was just computed) and cleared
+    /// by [`take_edge_schedule`](Self::take_edge_schedule) once the bus has
+    /// scheduled the window's rise/fall edges as scheduler events. Unused by the
+    /// legacy per-tick service path.
+    #[cfg_attr(not(feature = "event-scheduler"), allow(dead_code))]
+    edge_reschedule_pending: bool,
 }
 
 impl HcSr04 {
@@ -103,6 +110,7 @@ impl HcSr04 {
             echo_end_cycle: 0,
             last_echo_high: false,
             trig_peripheral_idx: None,
+            edge_reschedule_pending: false,
         }
     }
 
@@ -139,7 +147,38 @@ impl HcSr04 {
     fn cycles_per_us(&self) -> f64 {
         self.cpu_hz as f64 / 1_000_000.0
     }
+}
 
+/// Drivable target distance, in cm (the sensor's physical 2–400 cm window).
+/// HC-SR04 sensors live directly on the bus (`SystemBus::hcsr04`), not behind
+/// a transport trait, so the bus input walk reaches this impl directly and
+/// reports each sensor under its `id`.
+impl crate::sim_input::SimInput for HcSr04 {
+    fn input_channels(&self) -> &'static [crate::sim_input::InputChannel] {
+        use crate::sim_input::InputChannel;
+        const CH: &[InputChannel] = &[InputChannel {
+            key: "distance",
+            label: "Distance",
+            unit: "cm",
+            min: MIN_CM as f64,
+            max: MAX_CM as f64,
+        }];
+        CH
+    }
+
+    fn set_input(&mut self, key: &str, value: f64) -> Result<(), crate::sim_input::SimInputError> {
+        self.require_channel(key, value)?;
+        self.set_distance_cm(value as f32);
+        Ok(())
+    }
+
+    fn component_id(&self) -> Option<&str> {
+        // Constructed with its system.yaml id (from_config) — already identity.
+        Some(&self.id)
+    }
+}
+
+impl HcSr04 {
     /// Service the sensor for the current tick: `trig_high` is the live TRIG
     /// output level and `now` the current simulated cycle count. Returns the
     /// level the bus should drive onto the ECHO input pin.
@@ -167,8 +206,51 @@ impl HcSr04 {
             let pulse = ((self.distance_cm * US_PER_CM) as f64 * cpu) as u64;
             self.echo_start_cycle = now + delay;
             self.echo_end_cycle = self.echo_start_cycle + pulse.max(1);
+            // Event-scheduler path: flag the fresh window so the bus reschedules
+            // this sensor's ECHO rise/fall as scheduler events. Harmless (unread)
+            // on the legacy per-tick path.
+            self.edge_reschedule_pending = true;
         }
         self.last_trig = trig_high;
+    }
+
+    /// Event-scheduler path: if a fresh echo window was armed since the last
+    /// call, return the absolute CPU cycles at which ECHO should rise and
+    /// fall, quantised UP to the peripheral-tick grid
+    /// (`ceil(c / interval) * interval` — the first tick boundary at or after
+    /// the exact cycle), and clear the pending flag. That boundary is
+    /// precisely when the legacy per-tick `service_hcsr04` (running only at
+    /// tick boundaries) would first observe the level change, so the scheduled
+    /// path stays byte-identical to the per-tick reference (the differential
+    /// gate in `tests/hcsr04_event_tick_differential.rs`). At `interval == 1`
+    /// this is the exact cycle. Returns `None` when no new window has been
+    /// armed.
+    #[cfg(feature = "event-scheduler")]
+    pub(crate) fn take_edge_schedule(&mut self, interval: u64) -> Option<(u64, u64)> {
+        if !self.edge_reschedule_pending {
+            return None;
+        }
+        self.edge_reschedule_pending = false;
+        let interval = interval.max(1);
+        Some((
+            self.echo_start_cycle.div_ceil(interval) * interval,
+            self.echo_end_cycle.div_ceil(interval) * interval,
+        ))
+    }
+
+    /// Event-scheduler path: the cycle of this sensor's next ECHO transition
+    /// strictly after `now`, quantised to the `interval` tick boundary its
+    /// scheduled event fires on (`ceil(edge / interval) * interval`) so the run
+    /// loop can end a batch exactly there. Returns `None` once the armed window
+    /// has fully elapsed (no pending transition) — matching the two edges
+    /// scheduled by [`take_edge_schedule`](Self::take_edge_schedule). Cheap: two
+    /// divides, no allocation.
+    #[cfg(feature = "event-scheduler")]
+    pub(crate) fn next_edge_deadline_cycle(&self, now: u64, interval: u64) -> Option<u64> {
+        let interval = interval.max(1);
+        let rise = self.echo_start_cycle.div_ceil(interval) * interval;
+        let fall = self.echo_end_cycle.div_ceil(interval) * interval;
+        [rise, fall].into_iter().filter(|&c| c > now).min()
     }
 
     /// The ECHO input level for the current cycle: high while `now` is inside the
@@ -238,6 +320,7 @@ mod tests {
     fn echo_driven_through_bus() {
         use crate::bus::SystemBus;
         use crate::peripherals::gpio::{GpioPort, GpioRegisterLayout};
+        use crate::Bus;
 
         const GPIOA: u64 = 0x4800_0000; // stm32v2: ODR @ 0x14, IDR @ 0x10, BSRR @ 0x18
         let echo_bit = 9u8; // PA9 (ECHO input)
@@ -265,17 +348,17 @@ mod tests {
 
         // Pulse TRIG high via BSRR, service at cycle 0 → arms window [200, 6000).
         bus.write_u32(GPIOA + 0x18, 1 << 8).unwrap();
-        bus.current_cycle = 0;
+        bus.set_current_cycle(0);
         bus.service_hcsr04();
         assert_eq!(echo(&bus), 0, "echo still low during trig→echo delay");
 
         // Mid-window: ECHO driven high.
-        bus.current_cycle = 3000;
+        bus.set_current_cycle(3000);
         bus.service_hcsr04();
         assert_eq!(echo(&bus), 1, "echo high mid-pulse");
 
         // Past the window: ECHO back low.
-        bus.current_cycle = 7000;
+        bus.set_current_cycle(7000);
         bus.service_hcsr04();
         assert_eq!(echo(&bus), 0, "echo low after pulse");
     }

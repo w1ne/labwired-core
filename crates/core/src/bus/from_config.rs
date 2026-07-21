@@ -65,19 +65,47 @@ impl SystemBus {
             clock_gating_bypass: false,
             fault_unclocked: std::collections::HashMap::new(),
             peripheral_ranges: Vec::new(),
+            legacy_tick_indices: Vec::new(),
+            bus_tick_indices: Vec::new(),
+            scheduler_driver_indices: Vec::new(),
+            matrix_source_scratch: Vec::new(),
             peripheral_hint: Cell::new(None),
+            last_route: Cell::new(None),
+            last_gap: Cell::new(None),
             last_gpio_in: [0; 2],
             current_cycle: 0,
+            cycle_clock: crate::CycleClock::default(),
             pending_schedule: Vec::new(),
+            freerunning_timer_poll_mmio: Cell::new(0),
+            side_effecting_mmio: Cell::new(0),
             legacy_walk_disabled: false,
             hcsr04: Vec::new(),
+            gpio_devices: Vec::new(),
+            ws2812: Vec::new(),
+            tm1637: Vec::new(),
+            seven_segment: Vec::new(),
+            analog_inputs: Vec::new(),
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
+            can_log_players: Vec::new(),
             esp32c3_irq_routing: false,
             riscv_irq_lines: 0,
+            esp32c3_system_idx: None,
+            esp32c3_interrupt_core0_idx: None,
+            esp32c3_irq_cache: None,
+            esp32c3_asserted_sources: [0; 2],
+            esp32c3_sched_asserted_sources: [0; 2],
+            esp32s3_irq_routing: false,
+            esp32s3_intmatrix_idx: None,
+            esp32s3_asserted_sources: [0; 2],
+            esp32s3_sched_asserted_sources: [0; 2],
             flash_models_ops: false,
+            iolink_master_attached: false,
+            nordic_gpio_service: false,
+            hcsr04_scheduling_disabled: false,
             flash_error_flags_idx: None,
             bus_trace: bus_trace::new_log(),
+            logic_tap: crate::logic_capture::LogicTap::new(),
             pin_map: std::collections::HashMap::new(),
         };
 
@@ -133,20 +161,46 @@ impl SystemBus {
             // Per-family factories own their peripheral arms in their own modules,
             // so this central match stops growing (and shrinks as families migrate
             // out). Try them first; unmigrated families fall through to the match.
-            let family_dev = crate::peripherals::esp32s3::factory::try_build(
-                &canonical_type,
-                p_cfg,
-            )
-            .or_else(|| {
-                crate::peripherals::nrf52::factory::try_build(&canonical_type, p_cfg, manifest)
-            });
+            let family_dev =
+                crate::peripherals::esp32s3::factory::try_build(&canonical_type, p_cfg)
+                    .or_else(|| {
+                        crate::peripherals::esp32c3::factory::try_build(&canonical_type, p_cfg)
+                    })
+                    .or_else(|| {
+                        crate::peripherals::nrf52::factory::try_build(
+                            &canonical_type,
+                            p_cfg,
+                            manifest,
+                            &bus.bus_trace,
+                        )
+                    })
+                    .or_else(|| {
+                        crate::peripherals::nrf54l::factory::try_build(
+                            &canonical_type,
+                            p_cfg,
+                            manifest,
+                            &bus.bus_trace,
+                        )
+                    });
             if let Some(dev) = family_dev {
                 // The nRF52 serial-instance mux (SPIM0/TWIM0) attaches all
                 // external devices connected to the shared MMIO window itself,
                 // so mark them here so the kit registry pass below does not
                 // try to attach them a second time (which would fail because
                 // Nrf52SerialInstance is not an I2c/Esp32c3I2c).
-                if canonical_type == "nrf52_serial_instance" {
+                //
+                // The standalone TWIM model does the same thing in its own
+                // factory arm and needs the same bookkeeping. Without it a
+                // device on a TWIM bus is attached twice when its type is in
+                // the kit registry (mpu6050), and emits a bogus "Unsupported
+                // external device" WARN when it is not (max30102, cap1188,
+                // drv2605) — despite having been attached correctly. Found
+                // while bringing up the nRF54L15 smart-ring system.
+                if canonical_type == "nrf52_serial_instance"
+                    || canonical_type == "nrf52840_twim"
+                    || canonical_type == "nrf52_twim"
+                    || canonical_type == "nrf54l_twim"
+                {
                     for ext in &manifest.external_devices {
                         if ext.connection == p_cfg.id {
                             attached_i2c_ext_ids.insert(ext.id.as_str());
@@ -157,10 +211,77 @@ impl SystemBus {
                 continue;
             }
             // Cross-vendor / generic peripherals (fallible: size + profile parsing).
-            if let Some(dev) =
-                crate::peripherals::generic_factory::try_build(&canonical_type, p_cfg, manifest)?
-            {
+            if let Some(dev) = crate::peripherals::generic_factory::try_build(
+                &canonical_type,
+                p_cfg,
+                manifest,
+                &bus.bus_trace,
+            )? {
                 bus.push_peripheral(p_cfg, dev)?;
+                continue;
+            }
+
+            // I²C controllers that carry external slaves. Build the controller,
+            // REGISTER it, then attach every wired slave through the single bus
+            // choke point `attach_i2c_slave`, which wraps each device into the
+            // shared bus trace. There is no per-controller `set_bus_trace` and no
+            // inline wrapping — a family that reaches the bus this way cannot be
+            // silently untraced (the ESP32-C3 blind-bus bug that motivated this).
+            if matches!(
+                canonical_type.as_str(),
+                "i2c"
+                    | "stm32f1_i2c"
+                    | "stm32f2_i2c"
+                    | "stm32f4_i2c"
+                    | "stm32f7_i2c"
+                    | "efm32ggi2ccontroller"
+                    | "esp32c3_i2c"
+            ) {
+                let controller: Box<dyn Peripheral> = if canonical_type == "esp32c3_i2c" {
+                    // ESP32-C3 behavioral I²C0 controller (command-list engine);
+                    // the C3 (RISC-V) reaches it through this config loader rather
+                    // than a hand-wired system builder.
+                    Box::new(crate::peripherals::esp32c3::i2c::Esp32c3I2c::new())
+                } else {
+                    let layout: crate::peripherals::i2c::I2cRegisterLayout =
+                        Self::parse_profile_or_default(p_cfg, "I2C")?;
+                    Box::new(crate::peripherals::i2c::I2c::new_with_layout(layout))
+                };
+                bus.push_peripheral(p_cfg, controller)?;
+                for ext in &manifest.external_devices {
+                    if ext.connection != p_cfg.id {
+                        continue;
+                    }
+                    match crate::peripherals::components::build_external_i2c_device(
+                        &ext.r#type,
+                        &ext.id,
+                        &ext.config,
+                    ) {
+                        Some(device) => {
+                            tracing::info!(
+                                "i2c attach: '{}' (type={}) -> '{}'",
+                                ext.id,
+                                ext.r#type,
+                                p_cfg.id
+                            );
+                            bus.attach_i2c_slave_with_route(&p_cfg.id, device, Some(&ext.route))?;
+                            attached_i2c_ext_ids.insert(ext.id.as_str());
+                        }
+                        None => {
+                            // Devices migrated to the PeripheralKit contract are
+                            // attached by the kit pass below; their absence here
+                            // is expected. Only warn for types no path handles.
+                            if crate::peripherals::kit::registry::lookup(&ext.r#type).is_none() {
+                                tracing::warn!(
+                                    "i2c attach skipped: unknown device type '{}' for external id '{}' on bus '{}'",
+                                    ext.r#type,
+                                    ext.id,
+                                    p_cfg.id
+                                );
+                            }
+                        }
+                    }
+                }
                 continue;
             }
 
@@ -223,102 +344,6 @@ impl SystemBus {
                     } else {
                         Box::new(crate::peripherals::gpio::GpioPort::new_with_layout(layout))
                     }
-                }
-                "i2c"
-                | "stm32f1_i2c"
-                | "stm32f2_i2c"
-                | "stm32f4_i2c"
-                | "stm32f7_i2c"
-                | "efm32ggi2ccontroller" => {
-                    let layout: crate::peripherals::i2c::I2cRegisterLayout =
-                        Self::parse_profile_or_default(p_cfg, "I2C")?;
-                    let mut i2c = crate::peripherals::i2c::I2c::new_with_layout(layout);
-                    // Wire the shared bus-trace log (universal logic analyzer)
-                    // BEFORE any device is attached below, so every attach call
-                    // wraps its device into the log (see `I2c::attach`).
-                    i2c.set_bus_trace(p_cfg.id.clone(), bus.bus_trace.clone());
-                    for ext in &manifest.external_devices {
-                        if ext.connection != p_cfg.id {
-                            continue;
-                        }
-                        match crate::peripherals::components::build_i2c_device(
-                            &ext.r#type,
-                            &ext.config,
-                        ) {
-                            Some(device) => {
-                                tracing::info!(
-                                    "i2c attach: '{}' (type={}) -> '{}'",
-                                    ext.id,
-                                    ext.r#type,
-                                    p_cfg.id
-                                );
-                                i2c.attach(device);
-                                attached_i2c_ext_ids.insert(ext.id.as_str());
-                            }
-                            None => {
-                                // Devices migrated to the PeripheralKit contract
-                                // are attached by the kit pass below (see the
-                                // `registry::lookup` loop), not by this legacy
-                                // inline factory — so their absence here is
-                                // expected, not an error. Only warn for types
-                                // that no path will handle.
-                                if crate::peripherals::kit::registry::lookup(&ext.r#type).is_none()
-                                {
-                                    tracing::warn!(
-                                        "i2c attach skipped: unknown device type '{}' for external id '{}' on bus '{}'",
-                                        ext.r#type,
-                                        ext.id,
-                                        p_cfg.id
-                                    );
-                                }
-                            }
-                        }
-                    }
-                    Box::new(i2c)
-                }
-                // ESP32-C3 behavioral I²C0 controller (command-list engine).
-                // Same Espressif I²C IP family as the S3; the C3 chip yaml
-                // selects this type for `i2c0` so a slave declared in
-                // `external_devices` (connection: "i2c0") attaches here via the
-                // same `build_i2c_device` factory the STM32 path uses. The C3
-                // (RISC-V) reaches this through the from_config bus loader rather
-                // than a hand-wired system builder.
-                "esp32c3_i2c" => {
-                    let mut i2c = crate::peripherals::esp32c3::i2c::Esp32c3I2c::new();
-                    for ext in &manifest.external_devices {
-                        if ext.connection != p_cfg.id {
-                            continue;
-                        }
-                        match crate::peripherals::components::build_i2c_device(
-                            &ext.r#type,
-                            &ext.config,
-                        ) {
-                            Some(device) => {
-                                tracing::info!(
-                                    "esp32c3 i2c attach: '{}' (type={}) -> '{}'",
-                                    ext.id,
-                                    ext.r#type,
-                                    p_cfg.id
-                                );
-                                i2c.attach_slave(device);
-                                attached_i2c_ext_ids.insert(ext.id.as_str());
-                            }
-                            None => {
-                                // Kit-contract devices attach via the kit pass
-                                // below; only warn for types no path handles.
-                                if crate::peripherals::kit::registry::lookup(&ext.r#type).is_none()
-                                {
-                                    tracing::warn!(
-                                        "esp32c3 i2c attach skipped: unknown device type '{}' for external id '{}' on bus '{}'",
-                                        ext.r#type,
-                                        ext.id,
-                                        p_cfg.id
-                                    );
-                                }
-                            }
-                        }
-                    }
-                    Box::new(i2c)
                 }
                 // ESP32-C3 behavioral GP-SPI2 controller (CPU/W-buffer
                 // transaction engine). Same Espressif GP-SPI IP family as the
@@ -500,26 +525,9 @@ impl SystemBus {
             bus.push_peripheral(p_cfg, dev)?;
         }
 
-        // Wire the shared bus-trace log (universal logic analyzer) into every
-        // I2C/SPI peripheral built above, by name, BEFORE the PeripheralKit
-        // registry pass below attaches its devices — so those attaches also
-        // wrap into the log. The inline I²C arm above already does this for
-        // itself (so its own attach loop, which runs before this point, is
-        // covered too); this pass additionally covers `Spi` peripherals built
-        // by `generic_factory::try_build` (which has no direct access to
-        // `bus.bus_trace`) and any I²C peripheral re-touched here is a no-op
-        // (same name + same log already set).
-        let trace_log = bus.bus_trace.clone();
-        for entry in &mut bus.peripherals {
-            if let Some(any) = entry.dev.as_any_mut() {
-                if let Some(i2c) = any.downcast_mut::<crate::peripherals::i2c::I2c>() {
-                    i2c.set_bus_trace(entry.name.clone(), trace_log.clone());
-                } else if let Some(spi) = any.downcast_mut::<crate::peripherals::spi::Spi>() {
-                    spi.set_bus_trace(entry.name.clone(), trace_log.clone());
-                }
-            }
-        }
-
+        // Bus-trace wiring is no longer a per-peripheral property: the shared
+        // trace is applied at the single attach choke point (`attach_i2c_slave`
+        // / `attach_spi_device`), so there is nothing to wire here.
         for ext in &manifest.external_devices {
             // Already attached as an I²C slave by a chip-specific i2c path
             // (the `i2c` / `esp32c3_i2c` arms above). Don't let it fall through
@@ -598,6 +606,239 @@ impl SystemBus {
                         cpu_hz,
                         distance_cm,
                     ));
+                }
+                "dht22" | "am2302" => {
+                    // One-wire temperature/humidity sensor — no SPI/I2C
+                    // connection. Like the HC-SR04 it DRIVES a pin the MCU
+                    // samples as an input, so it lives directly on the bus:
+                    // the data pin's GPIO write-hook (`maybe_start_dht22`)
+                    // watches for the >=1 ms start pulse, and the per-tick pass
+                    // (`service_gpio_devices`) drives the reply frame onto the pin's
+                    // input register. Both `temperature` and `humidity` are
+                    // host-controlled through the standard stimulus API.
+                    let data = ext
+                        .config
+                        .get("data_pin")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("PA8")
+                        .to_string();
+                    let temperature_c = ext
+                        .config
+                        .get("temperature_c")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(22.0) as f32;
+                    let humidity_pct = ext
+                        .config
+                        .get("humidity_pct")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(50.0) as f32;
+                    let cpu_hz = ext
+                        .config
+                        .get("cpu_hz")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(80_000_000);
+
+                    // The one wire is bidirectional: the ODR bit is how the
+                    // host drives it, the IDR bit is where the sensor drives
+                    // back. Same pin, same bit, two registers.
+                    let (odr_addr, odr_bit) =
+                        Self::resolve_pin_odr(&bus, &data).ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "DHT22 '{}' data_pin '{}' could not be resolved to a GPIO output",
+                                ext.id,
+                                data
+                            )
+                        })?;
+                    let (idr_addr, idr_bit) =
+                        Self::resolve_pin_idr(&bus, &data).ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "DHT22 '{}' data_pin '{}' could not be resolved to a GPIO input",
+                                ext.id,
+                                data
+                            )
+                        })?;
+                    debug_assert_eq!(
+                        odr_bit, idr_bit,
+                        "ODR and IDR of one pin must share a bit index"
+                    );
+
+                    bus.gpio_devices.push(Box::new(
+                        crate::peripherals::components::dht22::Dht22::new(
+                            ext.id.clone(),
+                            odr_addr,
+                            idr_addr,
+                            odr_bit,
+                            cpu_hz,
+                            temperature_c,
+                            humidity_pct,
+                        ),
+                    ));
+                }
+                "rotary-encoder" | "rotary_encoder" => {
+                    // Incremental quadrature knob. Like the HC-SR04/DHT22 it
+                    // DRIVES pins the MCU samples as inputs (CLK/DT), so it lives
+                    // directly on the bus and the per-tick pass
+                    // (`service_gpio_devices`) walks the Gray sequence onto the
+                    // two input registers. Rotation is host-controlled through the
+                    // standard `position` stimulus channel. The push switch (SW)
+                    // is a plain board_io button, emitted separately.
+                    let clk = ext
+                        .config
+                        .get("clk_pin")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("PA0")
+                        .to_string();
+                    let dt = ext
+                        .config
+                        .get("dt_pin")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("PA1")
+                        .to_string();
+                    let cpu_hz = ext
+                        .config
+                        .get("cpu_hz")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(80_000_000);
+
+                    let (clk_idr_addr, clk_bit) =
+                        Self::resolve_pin_idr(&bus, &clk).ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "rotary-encoder '{}' clk_pin '{}' could not be resolved to a GPIO input",
+                                ext.id,
+                                clk
+                            )
+                        })?;
+                    let (dt_idr_addr, dt_bit) =
+                        Self::resolve_pin_idr(&bus, &dt).ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "rotary-encoder '{}' dt_pin '{}' could not be resolved to a GPIO input",
+                                ext.id,
+                                dt
+                            )
+                        })?;
+
+                    bus.gpio_devices.push(Box::new(
+                        crate::peripherals::components::rotary_encoder::RotaryEncoder::new(
+                            ext.id.clone(),
+                            clk_idr_addr,
+                            clk_bit,
+                            dt_idr_addr,
+                            dt_bit,
+                            cpu_hz,
+                        ),
+                    ));
+                }
+                "keypad" => {
+                    // 4×4 matrix keypad. Like the rotary encoder / DHT22 it
+                    // DRIVES pins the MCU samples as inputs (the columns) while
+                    // OBSERVING pins the MCU drives as outputs (the rows), so it
+                    // lives directly on the bus and the per-tick pass
+                    // (`service_gpio_devices`) reads the row ODR bits and drives the
+                    // column IDR bits. The pressed key is host-controlled through
+                    // the standard `key` stimulus channel (index row*4+col).
+                    let read_pins = |field: &str| -> anyhow::Result<Vec<String>> {
+                        let arr = ext.config.get(field).and_then(|v| v.as_sequence());
+                        let Some(arr) = arr else {
+                            return Err(anyhow::anyhow!(
+                                "keypad '{}' config is missing a '{}' list",
+                                ext.id,
+                                field
+                            ));
+                        };
+                        let pins: Vec<String> = arr
+                            .iter()
+                            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                            .collect();
+                        if pins.len() != 4 {
+                            return Err(anyhow::anyhow!(
+                                "keypad '{}' expects exactly 4 '{}' entries, got {}",
+                                ext.id,
+                                field,
+                                pins.len()
+                            ));
+                        }
+                        Ok(pins)
+                    };
+                    let row_pins = read_pins("row_pins")?;
+                    let col_pins = read_pins("col_pins")?;
+
+                    // Rows are MCU outputs the keypad observes → resolve to ODR.
+                    let mut row_odr = [(0u64, 0u8); 4];
+                    for (i, pin) in row_pins.iter().enumerate() {
+                        row_odr[i] = Self::resolve_pin_odr(&bus, pin).ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "keypad '{}' row_pin '{}' could not be resolved to a GPIO output",
+                                ext.id,
+                                pin
+                            )
+                        })?;
+                    }
+                    // Columns are MCU inputs the keypad drives → resolve to IDR.
+                    let mut col_idr = [(0u64, 0u8); 4];
+                    for (i, pin) in col_pins.iter().enumerate() {
+                        col_idr[i] = Self::resolve_pin_idr(&bus, pin).ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "keypad '{}' col_pin '{}' could not be resolved to a GPIO input",
+                                ext.id,
+                                pin
+                            )
+                        })?;
+                    }
+
+                    bus.gpio_devices.push(Box::new(
+                        crate::peripherals::components::keypad::Keypad::new(
+                            ext.id.clone(),
+                            row_odr,
+                            col_idr,
+                        ),
+                    ));
+                }
+                "neopixel" | "ws2812" => {
+                    // Addressable LED strip driven by a single-wire, self-clocked
+                    // bit-stream on ONE GPIO. On the ESP32-S3 the RMT peripheral
+                    // generates that waveform and the GPIO matrix (FUNC_OUT_SEL)
+                    // routes it to the pad; this decoder attaches as a GPIO
+                    // observer on the data pin and reconstructs pixels from the
+                    // edge timing — purely edge-driven, no per-tick pass. On
+                    // non-S3 boards there is no RMT→pad drive path yet, so the
+                    // strip is stored for readback but simply never sees an edge.
+                    let data = ext
+                        .config
+                        .get("data_pin")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("GPIO48")
+                        .to_string();
+                    let num_pixels = ext
+                        .config
+                        .get("num_pixels")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(1) as usize;
+                    let cpu_hz = ext
+                        .config
+                        .get("cpu_hz")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(160_000_000);
+                    let pin = Self::parse_esp32s3_gpio_pin(&data).ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "neopixel '{}' data_pin '{}' could not be parsed to an ESP32-S3 GPIO (0..=48)",
+                            ext.id,
+                            data
+                        )
+                    })?;
+                    let strip =
+                        std::sync::Arc::new(crate::peripherals::components::ws2812::Ws2812::new(
+                            pin, num_pixels, cpu_hz,
+                        ));
+                    // Install as a GPIO observer on the S3 GPIO peripheral, if one
+                    // is registered (walk-free: filters by pin internally).
+                    if let Some(idx) = bus.find_peripheral_index_by_name("gpio") {
+                        if let Some(gpio) = bus.peripherals[idx].dev.as_any_mut().and_then(|a| {
+                            a.downcast_mut::<crate::peripherals::esp32s3::gpio::Esp32s3Gpio>()
+                        }) {
+                            gpio.add_observer(strip.clone());
+                        }
+                    }
+                    bus.ws2812.push(strip);
                 }
                 "can-diagnostic-tester" | "uds-diagnostic-tester" => {
                     if bus.find_peripheral_index_by_name(&ext.connection).is_none() {
@@ -690,6 +931,30 @@ impl SystemBus {
                     }
                     bus.can_uds_testers.push(tester);
                 }
+                "can-player" => {
+                    if bus.find_peripheral_index_by_name(&ext.connection).is_none() {
+                        return Err(anyhow::anyhow!(
+                            "can-player '{}' connection '{}' was not found",
+                            ext.id,
+                            ext.connection
+                        ));
+                    }
+                    let Some(data) = ext.config.get("data").and_then(|v| v.as_str()) else {
+                        return Err(anyhow::anyhow!(
+                            "can-player '{}': set 'path' (a candump .log file) or inline 'data'",
+                            ext.id
+                        ));
+                    };
+                    let tps = Self::yaml_u32(ext.config.get("ticks_per_second"), 1_000_000) as u64;
+                    let player = CanLogPlayer::from_candump(
+                        ext.id.clone(),
+                        ext.connection.clone(),
+                        data,
+                        tps,
+                    )
+                    .map_err(|e| anyhow::anyhow!(e))?;
+                    bus.can_log_players.push(player);
+                }
                 // ntc-thermistor dispatches through the PeripheralKit registry above.
                 _ => {
                     tracing::warn!(
@@ -704,15 +969,41 @@ impl SystemBus {
         }
 
         bus.rebuild_peripheral_ranges();
+        // ESP32-C3: share IO_MUX pad controls with GPIO so an Arduino
+        // `INPUT_PULLUP` changes the floating input level. No-op for every
+        // other chip.
+        bus.wire_esp32c3_pad_controls();
+        // ESP32-C3: share the I²C0 bit engine's live SDA/SCL line levels with
+        // the C3 GPIO model so matrix-routed pads carry the real waveform.
+        // No-op for every other chip.
+        bus.wire_esp32c3_i2c_pads();
+        // STM32: share each classic/FIFO SPI bit engine's live SCK/MOSI/MISO
+        // line levels with the STM32 GPIO ports so AF-routed pads carry the
+        // real waveform. No-op for every other chip.
+        bus.wire_stm32_spi_pads();
         // Resolve declared per-peripheral RCC clock-gates now that every
         // peripheral (incl. the RCC, needed to map reg-name → offset) is on the
         // bus. Peripherals without a `clock:` field stay ungated.
         bus.resolve_clock_gates(&merged_peripherals)?;
-        // Per-config walk-deletion opt-in. The field is only consulted under the
-        // `event-scheduler` feature (the legacy build always walks), so this is a
-        // no-op there. Safe only because the manifest author verified the
-        // firmware runs byte-identical walk-free (see the walk-identity test).
-        bus.legacy_walk_disabled = manifest.walk_deleted;
+        // Walk-deletion decision (only consulted under the `event-scheduler`
+        // feature; the legacy build always walks, so this is inert there).
+        //
+        //   Some(true)  → force deleted (hand opt-in / escape hatch)
+        //   Some(false) → pin the walk ON, overriding auto-derivation
+        //   None        → auto-derive: delete iff EVERY peripheral is provably
+        //                 walk-independent for all firmware states.
+        //
+        // The auto-derivation is deliberately conservative — see
+        // `derive_walk_deletable`. It only fires when deleting the walk is
+        // byte-identical for ANY reachable firmware state, so it can never
+        // silently starve a peripheral of its per-cycle `tick()`. A hand
+        // `walk_deleted: true` stays honored for configs whose byte-identity is
+        // firmware-specific (the firmware never arms the timers/ADC/DMA the chip
+        // descriptor instantiates) and thus not config-derivable.
+        bus.legacy_walk_disabled = match manifest.walk_deleted {
+            Some(explicit) => explicit,
+            None => bus.derive_walk_deletable(),
+        };
         Ok(bus)
     }
 }

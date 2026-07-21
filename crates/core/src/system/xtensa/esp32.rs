@@ -11,6 +11,36 @@ use crate::cpu::xtensa_lx7::XtensaLx7;
 use crate::peripherals::esp_xtensa_common::rom_thunks;
 use crate::Bus;
 
+/// Build an I2C-attached external device from its manifest declaration, or
+/// `None` if `ext.type` is not a known I2C device (so the caller falls through
+/// to the SPI path). The panel is addressed by `config.i2c_address` — a real
+/// board-level fact, not a builder default — so a manifest declaring an SH1107
+/// on `i2c0` at 0x3D gets exactly that, on every path that wires the manifest.
+fn build_i2c_external_device(
+    ext: &labwired_config::ExternalDevice,
+) -> Option<Box<dyn crate::peripherals::i2c::I2cDevice>> {
+    let addr = |default: u8| {
+        ext.config
+            .get("i2c_address")
+            .and_then(|v| v.as_u64())
+            .map(|a| a as u8)
+            .unwrap_or(default)
+    };
+    match ext.r#type.as_str() {
+        "oled-sh1107" => Some(Box::new(crate::peripherals::components::Sh1107::new(addr(
+            0x3D,
+        )))),
+        "oled-ssd1306" => Some(Box::new(crate::peripherals::components::Ssd1306::new(
+            addr(0x3C),
+        ))),
+        "tmp102" => Some(Box::new(crate::peripherals::esp32s3::tmp102::Tmp102::new())),
+        "pca9685" => Some(Box::new(
+            crate::peripherals::components::pca9685::Pca9685::new(),
+        )),
+        _ => None,
+    }
+}
+
 /// Attach external devices declared in `manifest.external_devices` to an
 /// ESP32-classic bus that was already set up by `configure_xtensa_esp32`.
 ///
@@ -28,6 +58,38 @@ pub fn attach_esp32_external_devices(
     use crate::peripherals::spi::SpiDevice;
 
     for ext in &manifest.external_devices {
+        // I2C-attached devices are wired to an I2C controller by `connection`
+        // and addressed by `config.i2c_address` — the SPI cs_pin/dc_pin framing
+        // below is meaningless for them, so handle and `continue` first. This is
+        // how a manifest that declares an SH1107 on i2c0 gets the panel wired,
+        // instead of the builder hardcoding "every board always has one".
+        if let Some(dev) = build_i2c_external_device(ext) {
+            bus.attach_i2c_slave(&ext.connection, dev).map_err(|_| {
+                anyhow::anyhow!(
+                    "External I2C device '{}' connection '{}' is not an ESP32 I2C peripheral",
+                    ext.id,
+                    ext.connection
+                )
+            })?;
+            continue;
+        }
+
+        // Potentiometer: an analog wiper on a SAR-ADC channel. It is not a bus
+        // slave — it drives the ADC channel's injected level, so `analogRead()`
+        // on that channel returns the wiper voltage.
+        //
+        // Delegated to the potentiometer kit rather than re-parsing config
+        // here: the kit is what retains the model on the bus, and that
+        // retention is what makes `set_input("position", …)` reach it. A second
+        // copy of this wiring would silently produce a pot that reads correctly
+        // at boot but cannot be driven.
+        if ext.r#type == "potentiometer" {
+            use crate::peripherals::kit::PeripheralKit;
+            let mut ctx = crate::peripherals::kit::AttachCtx::new(bus, ext);
+            crate::peripherals::components::potentiometer::POTENTIOMETER_KIT.attach(&mut ctx)?;
+            continue;
+        }
+
         let cs_pin = ext
             .config
             .get("cs_pin")
@@ -88,39 +150,17 @@ pub fn attach_esp32_external_devices(
             }
         }
 
-        let idx = bus
-            .find_peripheral_index_by_name(&ext.connection)
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "External device '{}' references missing connection '{}'",
-                    ext.id,
-                    ext.connection
-                )
-            })?;
-        let any = bus.peripherals[idx].dev.as_any_mut().ok_or_else(|| {
+        // Funnel through the single bus choke point, which wraps `panel` in the
+        // shared bus trace and dispatches to whichever SPI controller the
+        // `connection:` resolves to (classic `Esp32Spi` spi2/spi3 or the GP-SPI
+        // `Esp32s3Spi` spi2_s3/spi3_s3). No untraced attach path.
+        bus.attach_spi_device(&ext.connection, panel).map_err(|_| {
             anyhow::anyhow!(
-                "External device '{}' connection '{}' cannot be downcast",
+                "External device '{}' connection '{}' is not an ESP32 SPI peripheral",
                 ext.id,
                 ext.connection
             )
         })?;
-        // ESP32-classic buses register `Esp32Spi` controllers (spi2/spi3);
-        // ESP32-S3 buses register the GP-SPI model `Esp32s3Spi`
-        // (spi2_s3/spi3_s3). Both expose the same `attach` surface, so a
-        // manifest can wire an external device to either family's SPI.
-        if let Some(spi) = any.downcast_mut::<crate::peripherals::esp32::spi::Esp32Spi>() {
-            spi.attach(panel);
-        } else if let Some(spi) =
-            any.downcast_mut::<crate::peripherals::esp32s3::gpspi::Esp32s3Spi>()
-        {
-            spi.attach(panel);
-        } else {
-            anyhow::bail!(
-                "External device '{}' connection '{}' is not an ESP32 SPI peripheral",
-                ext.id,
-                ext.connection
-            );
-        }
     }
     Ok(())
 }
@@ -525,9 +565,15 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     // canonical register-pointer device, lets firmware drive a full
     // write-pointer / repeated-start / read transaction and read back genuine
     // device data (CHIP_ID 0x58). Source 49 = ETS_I2C_EXT0_INTR_SOURCE.
-    let mut i2c0 = crate::peripherals::esp32::i2c::Esp32I2c::new();
-    i2c0.attach_slave(Box::new(crate::peripherals::components::Bmp280::new(0x76)));
+    let i2c0 = crate::peripherals::esp32::i2c::Esp32I2c::new();
     bus.add_peripheral("i2c0", 0x3FF5_3000, 0x1000, None, Box::new(i2c0));
+    // Register first, then attach through the single bus choke point so the
+    // slave is wrapped into the shared bus trace (universal logic analyzer).
+    bus.attach_i2c_slave(
+        "i2c0",
+        Box::new(crate::peripherals::components::Bmp280::new(0x76)),
+    )
+    .expect("i2c0 just registered as Esp32I2c");
 
     // SYSCON (TRM §13.2) — system controller. Owns SYSCLK_CONF, TICK_CONF,
     // SARADC_CTRL, FRONT_END_MEM_PD, and the RND_DATA TRNG output the BROM

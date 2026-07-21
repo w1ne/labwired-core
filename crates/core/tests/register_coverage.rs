@@ -29,7 +29,7 @@
 
 use labwired_config::{Arch, ChipDescriptor};
 use labwired_core::bus::SystemBus;
-use labwired_core::{system, Machine};
+use labwired_core::{system, Bus, Machine};
 use std::path::PathBuf;
 
 /// All supported chips: (name, chip yaml, optional in-tree SVD).
@@ -124,7 +124,7 @@ fn root(rel: &str) -> PathBuf {
 
 fn dummy_manifest(path: &str) -> labwired_config::SystemManifest {
     labwired_config::SystemManifest {
-        walk_deleted: false,
+        walk_deleted: Some(false),
         schema_version: "1.0".to_string(),
         name: "coverage".to_string(),
         chip: path.to_string(),

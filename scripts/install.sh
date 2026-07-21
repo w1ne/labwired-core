@@ -268,7 +268,7 @@ main() {
   printf '%s  Installation complete!%s\n' "${bld}${cyn}" "${rst}"
   printf '\n'
   printf '  Run:  %s%s --version%s\n'      "$bld" "$BINARY_NAME" "$rst"
-  printf '  Docs: %shttps://labwired.com/docs/%s\n\n' "$cyn" "$rst"
+  printf '  Docs: %shttps://docs.labwired.com/%s\n\n' "$cyn" "$rst"
 
   if ! command -v "$BINARY_NAME" >/dev/null 2>&1; then
     warn "Restart your shell or run:  source ~/.bashrc  (or ~/.zshrc)"

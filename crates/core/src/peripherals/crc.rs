@@ -100,6 +100,11 @@ impl Default for Crc {
 }
 
 impl crate::Peripheral for Crc {
+    // Inert walk: register bank (CRC computed on write); tick() is the trait-default no-op.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let reg = offset & !3;
         let byte = (offset % 4) as u32;

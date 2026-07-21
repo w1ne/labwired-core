@@ -16,13 +16,14 @@
 //! produce identical lines on the board (VCP) and in the simulator.
 
 use labwired_config::ChipDescriptor;
+use labwired_core::Bus;
 
 fn h563_bus() -> labwired_core::bus::SystemBus {
     let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../configs/chips/stm32h563.yaml");
     let chip = ChipDescriptor::from_file(&path).expect("load chip");
     let manifest = labwired_config::SystemManifest {
-        walk_deleted: false,
+        walk_deleted: Some(false),
         schema_version: "1.0".to_string(),
         name: "h563-conformance".to_string(),
         chip: path.to_string_lossy().to_string(),

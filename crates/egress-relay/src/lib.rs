@@ -1,5 +1,4 @@
-//! Fixed-target WebSocket egress relay. See
-//! `docs/superpowers/specs/2026-07-04-browser-egress-ws-relay-design.md`.
+//! Fixed-target WebSocket egress relay.
 pub mod build;
 pub mod conn;
 pub mod hello;

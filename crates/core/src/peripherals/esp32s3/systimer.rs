@@ -90,13 +90,14 @@
 //! That worked for the integration test because the test wrote 79 directly,
 //! but esp-hal binds SYSTIMER_TARGET0 at the PAC-defined source 57.)
 
-use crate::{Peripheral, PeripheralTickResult, SimResult};
+use crate::{CycleClock, MmioAccessClass, Peripheral, PeripheralTickResult, SimResult};
 
 const SYSTIMER_CLOCK_HZ: u64 = 16_000_000;
 
 /// SYSTIMER interrupt-matrix source ID for TARGET0 (per esp32s3-pac
 /// `Interrupt::SYSTIMER_TARGET0 = 57`).  TARGET1/2 follow at +1/+2.
 const SYSTIMER_TARGET0_SOURCE: u32 = 57;
+const SYSTIMER_WAKE_TOKEN: u32 = 0;
 
 /// Mask for the 26-bit `period` field in TARGETx_CONF.
 const ALARM_PERIOD_MASK: u32 = 0x03FF_FFFF;
@@ -110,7 +111,16 @@ const CONF_TARGET0_WORK_EN: u32 = 1 << 24;
 const CONF_TARGET1_WORK_EN: u32 = 1 << 23;
 const CONF_TARGET2_WORK_EN: u32 = 1 << 22;
 
-#[derive(Debug, Default, Clone, Copy)]
+/// SVD-derived register offsets (`scripts/gen_esp_systimer_regs.py`).
+#[path = "systimer_regs.rs"]
+mod regs;
+
+/// UNIT*_OP bit 30 — trigger snapshot update.
+const OP_UPDATE_BIT: u32 = 1 << 30;
+/// UNIT*_OP bit 29 — VALUE_VALID (snapshot ready).
+const OP_VALUE_VALID_BIT: u32 = 1 << 29;
+
+#[derive(Debug, Default, Clone, Copy, serde::Serialize, serde::Deserialize)]
 struct UnitState {
     counter: u64,
     snapshot: u64,
@@ -123,7 +133,7 @@ struct UnitState {
 /// Pending vs. live separation models real-silicon double-buffering:
 /// firmware writes to TARGETx_HI/LO/period stage values that only commit
 /// to the active alarm on COMPx_LOAD bit-0 write.
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy, serde::Serialize, serde::Deserialize)]
 struct AlarmState {
     /// Live (committed) 64-bit comparison target. Alarm fires when the
     /// selected unit's counter >= this value.
@@ -153,7 +163,7 @@ struct AlarmState {
     unit_sel: bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Systimer {
     /// SYSTIMER_CONF (0x00). SVD reset = 0x46000000 (unit0 work_en; bit 31
     /// CLK_EN is 0 at reset — clock is gated; firmware writes CONF to
@@ -181,6 +191,103 @@ pub struct Systimer {
     /// this same IP but its matrix source IDs are 37/38/39, so the C3 wiring
     /// constructs the model with `new_with_source(_, 37)`.
     target0_source: u32,
+    /// Scheduler/elapsed-mode anchor in peripheral-tick units. The C3 ROM path
+    /// uses the default one CPU cycle per peripheral tick.
+    last_tick: u64,
+    /// Whether this instance participates in the event scheduler.
+    ///
+    /// C3 firmware commonly reads SYSTIMER through write-UPDATE/read-snapshot
+    /// sequences. The current bus read API cannot sync scheduler-driven
+    /// peripherals before reads, so C3 ROM boot keeps this false and uses the
+    /// legacy per-cycle tick path for fidelity.
+    scheduler_enabled: bool,
+    /// Bus-published cycle clock (walk-free plan Part 1). `Some` once
+    /// `SystemBus::add_peripheral` attaches it. In scheduler mode the OP-update
+    /// snapshot latch pulls "now" from it so a counter read is fresh even
+    /// though the per-cycle walk no longer ticks this model. Not serialized —
+    /// re-attached by the bus on restore.
+    #[serde(skip)]
+    clock: Option<CycleClock>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct SystimerSnapshotV2 {
+    conf: u32,
+    unit0: UnitState,
+    unit1: UnitState,
+    cpu_clock_hz: u32,
+    cpu_cycle_accum: u64,
+    unit0_alarms: [AlarmState; 3],
+    int_ena: u32,
+    date: u32,
+    target0_source: u32,
+    last_tick: u64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct SystimerSnapshotV1 {
+    conf: u32,
+    unit0: UnitState,
+    unit1: UnitState,
+    cpu_clock_hz: u32,
+    cpu_cycle_accum: u64,
+    unit0_alarms: [AlarmState; 3],
+    int_ena: u32,
+    date: u32,
+    target0_source: u32,
+}
+
+impl SystimerSnapshotV2 {
+    fn from_systimer(s: &Systimer) -> Self {
+        Self {
+            conf: s.conf,
+            unit0: s.unit0,
+            unit1: s.unit1,
+            cpu_clock_hz: s.cpu_clock_hz,
+            cpu_cycle_accum: s.cpu_cycle_accum,
+            unit0_alarms: s.unit0_alarms,
+            int_ena: s.int_ena,
+            date: s.date,
+            target0_source: s.target0_source,
+            last_tick: s.last_tick,
+        }
+    }
+
+    fn into_systimer(self) -> Systimer {
+        Systimer {
+            conf: self.conf,
+            unit0: self.unit0,
+            unit1: self.unit1,
+            cpu_clock_hz: self.cpu_clock_hz,
+            cpu_cycle_accum: self.cpu_cycle_accum,
+            unit0_alarms: self.unit0_alarms,
+            int_ena: self.int_ena,
+            date: self.date,
+            target0_source: self.target0_source,
+            last_tick: self.last_tick,
+            scheduler_enabled: true,
+            clock: None,
+        }
+    }
+}
+
+impl SystimerSnapshotV1 {
+    fn into_systimer(self) -> Systimer {
+        Systimer {
+            conf: self.conf,
+            unit0: self.unit0,
+            unit1: self.unit1,
+            cpu_clock_hz: self.cpu_clock_hz,
+            cpu_cycle_accum: self.cpu_cycle_accum,
+            unit0_alarms: self.unit0_alarms,
+            int_ena: self.int_ena,
+            date: self.date,
+            target0_source: self.target0_source,
+            last_tick: 0,
+            scheduler_enabled: true,
+            clock: None,
+        }
+    }
 }
 
 impl Systimer {
@@ -215,6 +322,77 @@ impl Systimer {
             // Silicon-validated date/revision register (read via OpenOCD).
             date: 0x0201_2251,
             target0_source,
+            last_tick: 0,
+            scheduler_enabled: true,
+            clock: None,
+        }
+    }
+
+    /// Construct a SYSTIMER that stays on the legacy per-cycle tick path.
+    ///
+    /// This is used by ESP32-C3 ROM boot until scheduler-driven peripherals can
+    /// be synchronized before MMIO reads as well as before writes.
+    pub fn new_with_source_legacy_tick(cpu_clock_hz: u32, target0_source: u32) -> Self {
+        let mut timer = Self::new_with_source(cpu_clock_hz, target0_source);
+        timer.scheduler_enabled = false;
+        timer
+    }
+
+    /// Test/differential knob: pin this instance back onto the legacy per-cycle
+    /// walk (`uses_scheduler() == false`). Used by the walk-on-vs-scheduler
+    /// differential gate to build the reference config from the same bus
+    /// assembly (mirrors `Esp32c3RtcTimer::force_legacy_walk`).
+    pub fn force_legacy_walk(&mut self) {
+        self.scheduler_enabled = false;
+    }
+
+    /// Scheduler mode advances the counter lazily. Pull "now" from the
+    /// bus-published clock and advance the free-running counters (no alarm
+    /// evaluation — alarms fire at their exact scheduled cycle via `on_event`,
+    /// never off a mere counter read). Idempotent with the write-path
+    /// `sync_to`, which already advanced to the same cycle before an MMIO
+    /// write is observed; this keeps the OP-update snapshot fresh for any read
+    /// path that reaches the latch without a preceding bus sync. No-op in
+    /// legacy mode (the walk owns the counter) or without an attached clock.
+    fn sync_counters_from_clock(&mut self) {
+        if !self.scheduler_enabled {
+            return;
+        }
+        let Some(now) = self.clock.as_ref().map(|c| c.now()) else {
+            return;
+        };
+        if now > self.last_tick {
+            self.advance_cycles(now - self.last_tick);
+            self.last_tick = now;
+        }
+    }
+
+    /// Interrupt-matrix source IDs this SYSTIMER is asserting RIGHT NOW —
+    /// per-alarm `pending && INT_ENA`, the same level condition
+    /// `evaluate_alarms` emits on the legacy walk. In scheduler mode the
+    /// per-cycle walk no longer re-emits this level every tick, so the bus
+    /// re-derives it from here (`SystemBus::refresh_esp32c3_sched_sources`) to
+    /// keep the C3 interrupt matrix level-accurate.
+    fn asserted_matrix_sources_into(&self, out: &mut Vec<u32>) {
+        for (i, alarm) in self.unit0_alarms.iter().enumerate() {
+            if alarm.pending && (self.int_ena & (1 << i) != 0) {
+                out.push(self.target0_source + i as u32);
+            }
+        }
+    }
+
+    /// Restore the (non-serialized) cycle clock and re-anchor the scheduler
+    /// counter to the live clock. A snapshot is typically resumed on a FRESH
+    /// machine whose cycle count restarts near zero; trusting the persisted
+    /// `last_tick` (potentially millions of cycles ahead) would make the next
+    /// `sync_counters_from_clock` see `now <= last_tick` and freeze the counter
+    /// — the same stale-anchor trap the rtc_timer resume fix (#516) avoids. The
+    /// restored counter *value* (what boot-log timestamps depend on) is kept;
+    /// only the advance anchor is rebased to "now".
+    fn reanchor_after_restore(&mut self, clock: Option<CycleClock>) {
+        if let Some(clock) = clock {
+            self.last_tick = clock.now();
+            self.clock = Some(clock);
         }
     }
 
@@ -226,74 +404,151 @@ impl Systimer {
         self.conf & (1 << 29) != 0
     }
 
+    fn cpu_per_systimer(&self) -> u64 {
+        (self.cpu_clock_hz as u64)
+            .saturating_div(SYSTIMER_CLOCK_HZ)
+            .max(1)
+    }
+
+    fn advance_cycles(&mut self, cycles: u64) {
+        if cycles == 0 {
+            return;
+        }
+        self.cpu_cycle_accum = self.cpu_cycle_accum.saturating_add(cycles);
+        let cpu_per_systimer = self.cpu_per_systimer();
+        if self.cpu_cycle_accum < cpu_per_systimer {
+            return;
+        }
+        let ticks = self.cpu_cycle_accum / cpu_per_systimer;
+        self.cpu_cycle_accum %= cpu_per_systimer;
+        if self.unit0_running() {
+            self.unit0.counter = self.unit0.counter.wrapping_add(ticks);
+        }
+        if self.unit1_running() {
+            self.unit1.counter = self.unit1.counter.wrapping_add(ticks);
+        }
+    }
+
+    fn evaluate_alarms(&mut self) -> Vec<u32> {
+        // ── Alarm checks ──
+        // For each enabled alarm, on the rising edge from `counter < target` to
+        // `counter >= target` we set the pending bit and bump the target for
+        // period-mode alarms. IRQ delivery is level-sensitive while
+        // `pending && int_ena`, matching the legacy tick path.
+        let mut explicit_irqs = Vec::new();
+        let unit0_counter = self.unit0.counter;
+        let unit1_counter = self.unit1.counter;
+        for (i, alarm) in self.unit0_alarms.iter_mut().enumerate() {
+            if !alarm.enabled {
+                continue;
+            }
+            let counter = if alarm.unit_sel {
+                unit1_counter
+            } else {
+                unit0_counter
+            };
+            if alarm.period_mode && alarm.period > 0 {
+                if counter >= alarm.target {
+                    alarm.pending = true;
+                    alarm.target = counter.saturating_add(alarm.period);
+                }
+            } else if counter >= alarm.target && !alarm.edge_latched {
+                alarm.edge_latched = true;
+                alarm.pending = true;
+            }
+            if alarm.pending && (self.int_ena & (1 << i) != 0) {
+                explicit_irqs.push(self.target0_source + i as u32);
+            }
+        }
+        explicit_irqs
+    }
+
+    fn sync_to_tick(&mut self, tick_now: u64) -> Vec<u32> {
+        if tick_now > self.last_tick {
+            self.advance_cycles(tick_now - self.last_tick);
+            self.last_tick = tick_now;
+        }
+        self.evaluate_alarms()
+    }
+
+    fn next_alarm_delay_cycles(&self) -> Option<u64> {
+        let cpu_per_systimer = self.cpu_per_systimer();
+        let mut best: Option<u64> = None;
+        for (i, alarm) in self.unit0_alarms.iter().enumerate() {
+            if alarm.pending && (self.int_ena & (1 << i) != 0) {
+                return Some(0);
+            }
+            if !alarm.enabled || alarm.pending {
+                continue;
+            }
+            let running = if alarm.unit_sel {
+                self.unit1_running()
+            } else {
+                self.unit0_running()
+            };
+            if !running {
+                continue;
+            }
+            let counter = if alarm.unit_sel {
+                self.unit1.counter
+            } else {
+                self.unit0.counter
+            };
+            let systimer_ticks = alarm.target.saturating_sub(counter);
+            let cycles = if systimer_ticks == 0 {
+                0
+            } else {
+                systimer_ticks
+                    .saturating_mul(cpu_per_systimer)
+                    .saturating_sub(self.cpu_cycle_accum.min(cpu_per_systimer - 1))
+            };
+            best = Some(best.map_or(cycles, |cur| cur.min(cycles)));
+        }
+        best
+    }
+
     fn read_word(&self, offset: u64) -> u32 {
+        use regs::*;
         match offset {
-            0x00 => self.conf,
-            // OP regs: real silicon asserts bit 29 (TIMER_UNITn_VALUE_VALID)
-            // once the requested snapshot has settled (typically a few cycles
-            // after the bit-30 trigger write). esp-hal's Delay loop polls
-            // bit 29 to wait for the snapshot to be ready before reading the
-            // VALUE registers. We model the snapshot as instantaneous and
-            // always assert bit 29.
-            0x04 | 0x08 => 1u32 << 29,
+            CONF => self.conf,
+            // OP: silicon asserts VALUE_VALID after snapshot; we model instant.
+            UNIT0_OP | UNIT1_OP => OP_VALUE_VALID_BIT,
 
-            // ── LOAD pending registers (TRM offsets) ──
-            0x0C => self.unit0.load_hi,
-            0x10 => self.unit0.load_lo,
-            0x14 => self.unit1.load_hi,
-            0x18 => self.unit1.load_lo,
+            UNIT0_LOAD_HI => self.unit0.load_hi,
+            UNIT0_LOAD_LO => self.unit0.load_lo,
+            UNIT1_LOAD_HI => self.unit1.load_hi,
+            UNIT1_LOAD_LO => self.unit1.load_lo,
 
-            // ── TARGETx HI/LO (TRM offsets) ──
-            // Reads return the *pending* (most recently written) value, per
-            // PAC convention — readback shows what firmware just wrote, not
-            // the live committed value.
-            0x1C => (self.unit0_alarms[0].pending_target >> 32) as u32,
-            0x20 => (self.unit0_alarms[0].pending_target & 0xFFFF_FFFF) as u32,
-            0x24 => (self.unit0_alarms[1].pending_target >> 32) as u32,
-            0x28 => (self.unit0_alarms[1].pending_target & 0xFFFF_FFFF) as u32,
-            0x2C => (self.unit0_alarms[2].pending_target >> 32) as u32,
-            0x30 => (self.unit0_alarms[2].pending_target & 0xFFFF_FFFF) as u32,
+            // TARGETx HI/LO: pending (most recently written), PAC convention.
+            TARGET0_HI => (self.unit0_alarms[0].pending_target >> 32) as u32,
+            TARGET0_LO => (self.unit0_alarms[0].pending_target & 0xFFFF_FFFF) as u32,
+            TARGET1_HI => (self.unit0_alarms[1].pending_target >> 32) as u32,
+            TARGET1_LO => (self.unit0_alarms[1].pending_target & 0xFFFF_FFFF) as u32,
+            TARGET2_HI => (self.unit0_alarms[2].pending_target >> 32) as u32,
+            TARGET2_LO => (self.unit0_alarms[2].pending_target & 0xFFFF_FFFF) as u32,
 
-            // ── TARGETx_CONF (TRM offsets) ──
-            // Reads expose pending period (so esp-hal's read-modify-write
-            // sequences see the value they just staged).
-            0x34 => alarm_conf_word_pending(&self.unit0_alarms[0]),
-            0x38 => alarm_conf_word_pending(&self.unit0_alarms[1]),
-            0x3C => alarm_conf_word_pending(&self.unit0_alarms[2]),
+            TARGET0_CONF => alarm_conf_word_pending(&self.unit0_alarms[0]),
+            TARGET1_CONF => alarm_conf_word_pending(&self.unit0_alarms[1]),
+            TARGET2_CONF => alarm_conf_word_pending(&self.unit0_alarms[2]),
 
-            // ── VALUE snapshot registers ──
-            0x40 => (self.unit0.snapshot >> 32) as u32,
-            0x44 => (self.unit0.snapshot & 0xFFFF_FFFF) as u32,
-            0x48 => (self.unit1.snapshot >> 32) as u32,
-            0x4C => (self.unit1.snapshot & 0xFFFF_FFFF) as u32,
+            UNIT0_VALUE_HI => (self.unit0.snapshot >> 32) as u32,
+            UNIT0_VALUE_LO => (self.unit0.snapshot & 0xFFFF_FFFF) as u32,
+            UNIT1_VALUE_HI => (self.unit1.snapshot >> 32) as u32,
+            UNIT1_VALUE_LO => (self.unit1.snapshot & 0xFFFF_FFFF) as u32,
 
-            // 0x50/0x54/0x58 COMPx_LOAD are write-only commit triggers; reads
-            // return 0 on real silicon.
+            // COMPx_LOAD / UNITx_LOAD are write-only; reads return 0.
+            INT_ENA => self.int_ena,
+            INT_RAW => self.int_raw_word(),
+            INT_ST => self.int_raw_word() & self.int_ena,
 
-            // 0x5C/0x60 UNITx_LOAD are write-only commit triggers.
+            REAL_TARGET0_LO => (self.unit0_alarms[0].target & 0xFFFF_FFFF) as u32,
+            REAL_TARGET0_HI => ((self.unit0_alarms[0].target >> 32) & 0x000F_FFFF) as u32,
+            REAL_TARGET1_LO => (self.unit0_alarms[1].target & 0xFFFF_FFFF) as u32,
+            REAL_TARGET1_HI => ((self.unit0_alarms[1].target >> 32) & 0x000F_FFFF) as u32,
+            REAL_TARGET2_LO => (self.unit0_alarms[2].target & 0xFFFF_FFFF) as u32,
+            REAL_TARGET2_HI => ((self.unit0_alarms[2].target >> 32) & 0x000F_FFFF) as u32,
 
-            // ── Interrupt registers (TRM offsets) ──
-            0x64 => self.int_ena,
-            0x68 => self.int_raw_word(),
-            // 0x6C INT_CLR is W1C; reads as 0.
-            0x70 => self.int_raw_word() & self.int_ena,
-
-            // ── REAL_TARGETx_LO/HI (0x74..0x88) ──
-            // Read-only: reflect the live committed target for each alarm.
-            // Layout per TRM: REAL_TARGET0_LO at 0x74, REAL_TARGET0_HI at 0x78,
-            // REAL_TARGET1_LO at 0x7C, REAL_TARGET1_HI at 0x80,
-            // REAL_TARGET2_LO at 0x84, REAL_TARGET2_HI at 0x88.
-            0x74 => (self.unit0_alarms[0].target & 0xFFFF_FFFF) as u32,
-            0x78 => ((self.unit0_alarms[0].target >> 32) & 0x000F_FFFF) as u32,
-            0x7C => (self.unit0_alarms[1].target & 0xFFFF_FFFF) as u32,
-            0x80 => ((self.unit0_alarms[1].target >> 32) & 0x000F_FFFF) as u32,
-            0x84 => (self.unit0_alarms[2].target & 0xFFFF_FFFF) as u32,
-            0x88 => ((self.unit0_alarms[2].target >> 32) & 0x000F_FFFF) as u32,
-
-            // ── DATE (0xFC) ──
-            // Silicon-validated revision register. RW; returns reset value
-            // 0x02012251 unless firmware has overwritten it.
-            0xFC => self.date,
+            DATE => self.date,
 
             _ => 0,
         }
@@ -346,75 +601,68 @@ impl Systimer {
     }
 
     fn write_word(&mut self, offset: u64, value: u32) {
+        use regs::*;
         match offset {
-            0x00 => {
+            CONF => {
                 self.conf = value;
                 self.sync_alarm_enables_from_conf();
             }
-            0x04 if value & (1 << 30) != 0 => {
+            UNIT0_OP if value & OP_UPDATE_BIT != 0 => {
+                self.sync_counters_from_clock();
                 self.unit0.snapshot = self.unit0.counter;
             }
-            0x08 if value & (1 << 30) != 0 => {
+            UNIT1_OP if value & OP_UPDATE_BIT != 0 => {
+                self.sync_counters_from_clock();
                 self.unit1.snapshot = self.unit1.counter;
             }
 
-            // ── LOAD pending registers (TRM offsets) ──
-            0x0C => self.unit0.load_hi = value,
-            0x10 => self.unit0.load_lo = value,
-            0x14 => self.unit1.load_hi = value,
-            0x18 => self.unit1.load_lo = value,
+            UNIT0_LOAD_HI => self.unit0.load_hi = value,
+            UNIT0_LOAD_LO => self.unit0.load_lo = value,
+            UNIT1_LOAD_HI => self.unit1.load_hi = value,
+            UNIT1_LOAD_LO => self.unit1.load_lo = value,
 
-            // ── TARGETx HI/LO ──
             // Stage pending target; commit on COMPx_LOAD.
-            0x1C => set_pending_target_hi(&mut self.unit0_alarms[0], value),
-            0x20 => set_pending_target_lo(&mut self.unit0_alarms[0], value),
-            0x24 => set_pending_target_hi(&mut self.unit0_alarms[1], value),
-            0x28 => set_pending_target_lo(&mut self.unit0_alarms[1], value),
-            0x2C => set_pending_target_hi(&mut self.unit0_alarms[2], value),
-            0x30 => set_pending_target_lo(&mut self.unit0_alarms[2], value),
+            TARGET0_HI => set_pending_target_hi(&mut self.unit0_alarms[0], value),
+            TARGET0_LO => set_pending_target_lo(&mut self.unit0_alarms[0], value),
+            TARGET1_HI => set_pending_target_hi(&mut self.unit0_alarms[1], value),
+            TARGET1_LO => set_pending_target_lo(&mut self.unit0_alarms[1], value),
+            TARGET2_HI => set_pending_target_hi(&mut self.unit0_alarms[2], value),
+            TARGET2_LO => set_pending_target_lo(&mut self.unit0_alarms[2], value),
 
-            // ── TARGETx_CONF ──
-            0x34 => set_alarm_conf(&mut self.unit0_alarms[0], value),
-            0x38 => set_alarm_conf(&mut self.unit0_alarms[1], value),
-            0x3C => set_alarm_conf(&mut self.unit0_alarms[2], value),
+            TARGET0_CONF => set_alarm_conf(&mut self.unit0_alarms[0], value),
+            TARGET1_CONF => set_alarm_conf(&mut self.unit0_alarms[1], value),
+            TARGET2_CONF => set_alarm_conf(&mut self.unit0_alarms[2], value),
 
-            // ── COMPx_LOAD: commit pending writes into live alarm ──
-            0x50 if value & 1 != 0 => {
+            COMP0_LOAD if value & 1 != 0 => {
                 self.commit_alarm(0);
             }
-            0x54 if value & 1 != 0 => {
+            COMP1_LOAD if value & 1 != 0 => {
                 self.commit_alarm(1);
             }
-            0x58 if value & 1 != 0 => {
+            COMP2_LOAD if value & 1 != 0 => {
                 self.commit_alarm(2);
             }
 
-            // ── UNITx_LOAD commit (TRM offsets) ──
-            0x5C if value & 1 != 0 => {
+            UNIT0_LOAD if value & 1 != 0 => {
                 self.unit0.counter =
                     ((self.unit0.load_hi as u64) << 32) | (self.unit0.load_lo as u64);
             }
-            0x60 if value & 1 != 0 => {
+            UNIT1_LOAD if value & 1 != 0 => {
                 self.unit1.counter =
                     ((self.unit1.load_hi as u64) << 32) | (self.unit1.load_lo as u64);
             }
 
-            // ── Interrupt registers (TRM offsets) ──
-            0x64 => self.int_ena = value & 0x7,
-            // 0x68 INT_RAW is read-only on real silicon; ignore writes.
-            0x6C => {
-                // INT_CLR: write-1-to-clear pending bits.
+            INT_ENA => self.int_ena = value & 0x7,
+            // INT_RAW is read-only on real silicon; ignore writes.
+            INT_CLR => {
                 for (i, alarm) in self.unit0_alarms.iter_mut().enumerate() {
                     if value & (1 << i) != 0 {
                         alarm.pending = false;
                     }
                 }
             }
-            // 0x70 INT_ST is read-only.
-            // 0x74..0x88 REAL_TARGETx are read-only; ignore writes.
-
-            // ── DATE (0xFC) — RW ──
-            0xFC => self.date = value,
+            // INT_ST / REAL_TARGETx are read-only; ignore writes.
+            DATE => self.date = value,
 
             _ => {}
         }
@@ -452,6 +700,16 @@ fn set_alarm_conf(alarm: &mut AlarmState, value: u32) {
 }
 
 impl Peripheral for Systimer {
+    /// Freerunning snapshot path only — offsets from [`regs::FREERUNNING_POLL`].
+    fn mmio_access_class(&self, offset: u64) -> MmioAccessClass {
+        let word = offset & !3;
+        if regs::FREERUNNING_POLL.contains(&word) {
+            MmioAccessClass::FreerunningTimerPoll
+        } else {
+            MmioAccessClass::SideEffecting
+        }
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let word_off = offset & !3;
         let byte_off = (offset & 3) * 8;
@@ -472,82 +730,11 @@ impl Peripheral for Systimer {
     /// One CPU cycle elapses per `tick`. Convert to SYSTIMER ticks at 16 MHz.
     /// At 80 MHz CPU clock, 5 CPU cycles == 1 SYSTIMER tick.
     fn tick(&mut self) -> PeripheralTickResult {
-        self.cpu_cycle_accum += 1;
-        let cpu_per_systimer = (self.cpu_clock_hz as u64)
-            .saturating_div(SYSTIMER_CLOCK_HZ)
-            .max(1);
-        if self.cpu_cycle_accum >= cpu_per_systimer {
-            let ticks = self.cpu_cycle_accum / cpu_per_systimer;
-            self.cpu_cycle_accum %= cpu_per_systimer;
-            if self.unit0_running() {
-                self.unit0.counter = self.unit0.counter.wrapping_add(ticks);
-            }
-            if self.unit1_running() {
-                self.unit1.counter = self.unit1.counter.wrapping_add(ticks);
-            }
-        }
+        self.tick_elapsed(1)
+    }
 
-        // ── Alarm checks ──
-        // For each enabled alarm, on the rising edge from
-        // `counter < target` to `counter >= target` we set the pending bit
-        // and bump the target for period-mode alarms.
-        //
-        // IRQ delivery is *level-sensitive*: as long as `pending && int_ena`,
-        // we keep emitting the SYSTIMER source ID on every tick. This
-        // matches real-silicon behaviour where the peripheral's IRQ line
-        // stays asserted until firmware writes INT_CLR. Without this,
-        // dispatch_irq's one-shot clear of `bus.pending_cpu_irqs` would
-        // race the firmware's own INTERRUPT-SR read inside the ISR — by
-        // the time __level_1_interrupt iterates through pending sources,
-        // both the bus aggregator bit and the SR bit are 0, so the ISR
-        // exits without invoking the user handler. (Plan 3 Task 10 case
-        // study — the ISR ran but never called alarm_isr; INT_RAW stayed
-        // sticky, and the LED never toggled.)
-        let mut explicit_irqs = Vec::new();
-        let unit0_counter = self.unit0.counter;
-        let unit1_counter = self.unit1.counter;
-        for (i, alarm) in self.unit0_alarms.iter_mut().enumerate() {
-            if !alarm.enabled {
-                continue;
-            }
-            let counter = if alarm.unit_sel {
-                unit1_counter
-            } else {
-                unit0_counter
-            };
-            // Fire when the counter reaches the target.
-            //
-            // PERIOD (auto-reload) mode is handled INDEPENDENTLY of
-            // `edge_latched`: real silicon re-arms automatically every
-            // `period` counts with no firmware intervention (no COMP_LOAD).
-            // We must not gate it behind `edge_latched`, because the FreeRTOS
-            // tick first arms the alarm one-shot, lets it fire once (latching
-            // edge_latched), THEN flips it to period mode via
-            // `systimer_ll_enable_alarm_period` with no COMP_LOAD — leaving a
-            // stale `edge_latched=true` and `target=0` that would wedge the
-            // alarm forever (one tick, then silence → idle cores never wake).
-            // On each period fire we rebase `target = counter + period`, which
-            // both keeps it periodic and repairs a stale/zero initial target.
-            if alarm.period_mode && alarm.period > 0 {
-                if counter >= alarm.target {
-                    alarm.pending = true;
-                    alarm.target = counter.saturating_add(alarm.period);
-                }
-            } else if counter >= alarm.target && !alarm.edge_latched {
-                // One-shot: fire once, latch until firmware re-arms (COMP_LOAD).
-                alarm.edge_latched = true;
-                alarm.pending = true;
-            }
-            // Level-sensitive IRQ: while pending && int_ena, emit the
-            // source on every tick. The bus aggregator OR's into
-            // pending_cpu_irqs, which dispatch_irq clears on entry — but
-            // because we re-emit each tick, the firmware sees a stable
-            // pending_cpu_irqs/INTERRUPT bit while it iterates handlers.
-            if alarm.pending && (self.int_ena & (1 << i) != 0) {
-                explicit_irqs.push(self.target0_source + i as u32);
-            }
-        }
-
+    fn tick_elapsed(&mut self, cycles: u64) -> PeripheralTickResult {
+        let explicit_irqs = self.sync_to_tick(self.last_tick.saturating_add(cycles));
         PeripheralTickResult {
             explicit_irqs: if explicit_irqs.is_empty() {
                 None
@@ -558,12 +745,88 @@ impl Peripheral for Systimer {
         }
     }
 
+    fn uses_scheduler(&self) -> bool {
+        self.scheduler_enabled
+    }
+
+    fn sync_to(&mut self, tick_now: u64) {
+        self.sync_to_tick(tick_now);
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        // Anchor at the clock's current value so cycles elapsed before attach
+        // (normally zero — attach happens at bus assembly) are not
+        // retroactively credited to the counter (mirrors the rtc_timer #516
+        // re-anchor contract).
+        self.last_tick = clock.now();
+        self.clock = Some(clock);
+    }
+
+    /// C3 interrupt-matrix level: the source IDs this SYSTIMER is asserting
+    /// now. Empty unless an alarm is `pending && INT_ENA`. The bus polls this
+    /// from the event path and the walk-tick aggregation so a scheduler-driven
+    /// SYSTIMER keeps its level-sensitive IRQ routed even though the per-cycle
+    /// walk no longer re-emits it.
+    fn matrix_irq_sources_into(&self, out: &mut Vec<u32>) {
+        self.asserted_matrix_sources_into(out);
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if !self.scheduler_enabled {
+            return Vec::new();
+        }
+        self.next_alarm_delay_cycles()
+            .map(|delay| vec![(delay, SYSTIMER_WAKE_TOKEN)])
+            .unwrap_or_default()
+    }
+
+    fn on_event(
+        &mut self,
+        _event_token: u32,
+        sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        let explicit_irqs = self.sync_to_tick(sched.now());
+        crate::sched::EventResult {
+            explicit_irqs,
+            reschedule_delay: self.next_alarm_delay_cycles(),
+            ..Default::default()
+        }
+    }
+
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)
     }
 
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
+    }
+
+    /// Capture the full 64-bit counter + comparator state. This is the source
+    /// behind `esp_timer` / `esp_log_timestamp`, so a rom-boot resume that did
+    /// not restore it would print different IDF log timestamps than the cold
+    /// boot — the counter must carry across the snapshot for byte-exact serial.
+    fn runtime_snapshot(&self) -> Vec<u8> {
+        bincode::serialize(&SystimerSnapshotV2::from_systimer(self))
+            .expect("bincode serialize Systimer")
+    }
+
+    fn restore_runtime_snapshot(&mut self, bytes: &[u8]) -> SimResult<()> {
+        let scheduler_enabled = self.scheduler_enabled;
+        let clock = self.clock.clone();
+        if let Ok(restored) = bincode::deserialize::<SystimerSnapshotV2>(bytes) {
+            *self = restored.into_systimer();
+            self.scheduler_enabled = scheduler_enabled;
+            self.reanchor_after_restore(clock);
+            return Ok(());
+        }
+        let restored = bincode::deserialize::<SystimerSnapshotV1>(bytes).map_err(|e| {
+            crate::SimulationError::NotImplemented(format!("Systimer snapshot decode: {e}"))
+        })?;
+        *self = restored.into_systimer();
+        self.scheduler_enabled = scheduler_enabled;
+        self.reanchor_after_restore(clock);
+        Ok(())
     }
 }
 
@@ -614,6 +877,104 @@ mod tests {
             s.tick();
         }
         assert_eq!(s.unit0.counter, 1);
+    }
+
+    #[test]
+    fn tick_elapsed_matches_repeated_tick_for_counter_and_alarm() {
+        let mut repeated = Systimer::new_with_source(160_000_000, 37);
+        let mut elapsed = Systimer::new_with_source(160_000_000, 37);
+
+        repeated.write_word(0x64, 1);
+        elapsed.write_word(0x64, 1);
+
+        repeated.write_word(0x1C, 0);
+        repeated.write_word(0x20, 2);
+        repeated.write_word(0x50, 1);
+        repeated.write_word(0x00, repeated.read_word(0x00) | (1 << 24));
+
+        elapsed.write_word(0x1C, 0);
+        elapsed.write_word(0x20, 2);
+        elapsed.write_word(0x50, 1);
+        elapsed.write_word(0x00, elapsed.read_word(0x00) | (1 << 24));
+
+        let mut repeated_irq = None;
+        for _ in 0..30 {
+            repeated_irq = repeated.tick().explicit_irqs;
+        }
+        let elapsed_irq = elapsed.tick_elapsed(30).explicit_irqs;
+
+        assert_eq!(elapsed.unit0.counter, repeated.unit0.counter);
+        assert_eq!(elapsed.read_word(0x68), repeated.read_word(0x68));
+        assert_eq!(elapsed_irq, repeated_irq);
+    }
+
+    #[test]
+    fn alarm_arm_schedules_next_deadline() {
+        let mut s = Systimer::new_with_source(160_000_000, 37);
+        s.write_word(0x64, 1);
+        s.write_word(0x1C, 0);
+        s.write_word(0x20, 3);
+        s.write_word(0x50, 1);
+        s.write_word(0x00, s.read_word(0x00) | (1 << 24));
+
+        assert!(s.uses_scheduler());
+        assert_eq!(s.take_scheduled_events(), vec![(30, 0)]);
+    }
+
+    #[test]
+    fn c3_legacy_constructor_stays_off_scheduler() {
+        let mut s = Systimer::new_with_source_legacy_tick(160_000_000, 37);
+
+        assert!(!s.uses_scheduler());
+        assert!(s.take_scheduled_events().is_empty());
+
+        s.tick_elapsed(10);
+        assert_eq!(
+            s.unit0.counter, 1,
+            "legacy mode must still advance the live counter through ticks"
+        );
+    }
+
+    #[test]
+    fn restore_preserves_current_scheduler_mode() {
+        let mut original = Systimer::new_with_source(160_000_000, 37);
+        original.tick_elapsed(25);
+        let bytes = original.runtime_snapshot();
+
+        let mut restored = Systimer::new_with_source_legacy_tick(160_000_000, 37);
+        restored.restore_runtime_snapshot(&bytes).unwrap();
+
+        assert_eq!(restored.unit0.counter, original.unit0.counter);
+        assert!(
+            !restored.uses_scheduler(),
+            "restore must not flip a C3 legacy-tick instance back to scheduler mode"
+        );
+    }
+
+    #[test]
+    fn restore_accepts_pre_scheduler_snapshot() {
+        let mut original = Systimer::new_with_source(160_000_000, 37);
+        original.tick_elapsed(25);
+        let old = SystimerSnapshotV1 {
+            conf: original.conf,
+            unit0: original.unit0,
+            unit1: original.unit1,
+            cpu_clock_hz: original.cpu_clock_hz,
+            cpu_cycle_accum: original.cpu_cycle_accum,
+            unit0_alarms: original.unit0_alarms,
+            int_ena: original.int_ena,
+            date: original.date,
+            target0_source: original.target0_source,
+        };
+        let bytes = bincode::serialize(&old).unwrap();
+
+        let mut restored = Systimer::new_with_source(80_000_000, 57);
+        restored.restore_runtime_snapshot(&bytes).unwrap();
+
+        assert_eq!(restored.unit0.counter, original.unit0.counter);
+        assert_eq!(restored.cpu_cycle_accum, original.cpu_cycle_accum);
+        assert_eq!(restored.target0_source, 37);
+        assert_eq!(restored.last_tick, 0);
     }
 
     #[test]
@@ -1081,5 +1442,112 @@ mod tests {
             s.unit0_alarms[0].enabled,
             "alarm 0 enabled after CONF write"
         );
+    }
+}
+
+#[cfg(test)]
+mod regs_svd_tests {
+    //! Offline gate: `systimer_regs.rs` must match the checked-in S3 SVD.
+    //! Regenerate with: `python3 scripts/gen_esp_systimer_regs.py`
+
+    use super::regs;
+
+    fn svd_xml() -> String {
+        // labwired-core package lives at crates/core; fixtures at tests/fixtures.
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let candidates = [
+            root.join("../../tests/fixtures/svd/esp32s3.svd"),
+            root.join("tests/fixtures/svd/esp32s3.svd"),
+        ];
+        for p in &candidates {
+            if p.exists() {
+                return std::fs::read_to_string(p).expect("read svd");
+            }
+        }
+        panic!(
+            "esp32s3.svd not found; tried {:?}",
+            candidates
+                .iter()
+                .map(|p| p.display().to_string())
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn generated_offsets_match_svd() {
+        let xml = svd_xml();
+        // Parse SYSTIMER peripheral offsets from SVD (lightweight).
+        let mut in_systimer = false;
+        let mut depth = 0i32;
+        let mut svd_map: std::collections::HashMap<String, u64> = Default::default();
+        let mut cur_name: Option<String> = None;
+        for line in xml.lines() {
+            let t = line.trim();
+            if t.contains("<name>SYSTIMER</name>") {
+                in_systimer = true;
+                depth = 0;
+                continue;
+            }
+            if !in_systimer {
+                continue;
+            }
+            if t.starts_with("<peripheral") {
+                depth += 1;
+            }
+            if t.starts_with("</peripheral>") {
+                if depth == 0 {
+                    break;
+                }
+                depth -= 1;
+            }
+            if let Some(n) = t
+                .strip_prefix("<name>")
+                .and_then(|s| s.strip_suffix("</name>"))
+            {
+                if !n.contains("INT_MAP") {
+                    cur_name = Some(n.to_string());
+                }
+            }
+            if let Some(off) = t
+                .strip_prefix("<addressOffset>")
+                .and_then(|s| s.strip_suffix("</addressOffset>"))
+            {
+                if let Some(name) = cur_name.take() {
+                    let v = u64::from_str_radix(
+                        off.trim_start_matches("0x").trim_start_matches("0X"),
+                        16,
+                    )
+                    .or_else(|_| off.parse::<u64>())
+                    .unwrap_or_else(|_| panic!("bad offset {off} for {name}"));
+                    svd_map.insert(name, v);
+                }
+            }
+        }
+        assert!(!svd_map.is_empty(), "parsed no SYSTIMER regs from SVD");
+
+        let expected = [
+            ("CONF", regs::CONF),
+            ("UNIT0_OP", regs::UNIT0_OP),
+            ("UNIT1_OP", regs::UNIT1_OP),
+            ("UNIT0_VALUE_HI", regs::UNIT0_VALUE_HI),
+            ("UNIT0_VALUE_LO", regs::UNIT0_VALUE_LO),
+            ("UNIT1_VALUE_HI", regs::UNIT1_VALUE_HI),
+            ("UNIT1_VALUE_LO", regs::UNIT1_VALUE_LO),
+            ("DATE", regs::DATE),
+            ("INT_ENA", regs::INT_ENA),
+            ("REAL_TARGET0_LO", regs::REAL_TARGET0_LO),
+        ];
+        for (name, got) in expected {
+            let want = *svd_map
+                .get(name)
+                .unwrap_or_else(|| panic!("SVD missing register {name}"));
+            assert_eq!(got, want, "offset mismatch for {name}");
+        }
+        for &off in regs::FREERUNNING_POLL {
+            assert!(
+                svd_map.values().any(|&v| v == off),
+                "FREERUNNING_POLL offset {off:#x} not in SVD map"
+            );
+        }
     }
 }

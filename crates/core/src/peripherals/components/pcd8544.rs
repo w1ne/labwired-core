@@ -226,6 +226,7 @@ pub struct Pcd8544Kit;
 pub static PCD8544_KIT: Pcd8544Kit = Pcd8544Kit;
 
 static PCD8544_METADATA: KitMetadata = KitMetadata {
+    inputs: &[],
     device_type: "pcd8544",
     label: "Nokia 5110 LCD",
     summary: "Nokia 5110 (PCD8544) monochrome 84×48 LCD over SPI.",
@@ -284,11 +285,10 @@ impl PeripheralKit for Pcd8544Kit {
                 dc_pin,
             )
         })?;
-        let spi = ctx.spi()?;
         let mut dev = Pcd8544::new(cs_pin, dc_pin);
         let (odr_addr, bit) = dc_src;
         crate::peripherals::spi::SpiDevice::set_dc_source(&mut dev, odr_addr, bit);
-        spi.attach(Box::new(dev));
+        ctx.attach_spi_device(Box::new(dev))?;
         Ok(())
     }
 }
@@ -296,6 +296,7 @@ impl PeripheralKit for Pcd8544Kit {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Bus;
 
     /// Drive a realistic init + pixel-write sequence and assert the D/C line
     /// correctly steers command vs data, the addressing advances, and the
@@ -369,20 +370,43 @@ mod tests {
         let mut lcd = Pcd8544::new("PB6".into(), "PC7".into());
         // D/C resolves to GPIOC ODR bit 7 (PC7) — exactly what bus install does.
         SpiDevice::set_dc_source(&mut lcd, GPIOC + ODR, 7);
-        spi.attach(Box::new(lcd));
+        spi.push_device(Box::new(lcd));
         bus.add_peripheral("spi1", SPI1, 0x400, None, Box::new(spi));
 
         // Enable SPE so DR writes kick off transfers.
         bus.write_u16(SPI1 + CR1, 1 << 6).unwrap();
 
+        // Clock the bit engine until the frame leaves the wire — the same
+        // wait-for-BSY a real driver performs between bytes (a DR write no
+        // longer completes instantly).
+        fn clock_out(bus: &mut SystemBus) {
+            let idx = bus.find_peripheral_index_by_name("spi1").unwrap();
+            for _ in 0..10_000 {
+                let spi = bus.peripherals[idx]
+                    .dev
+                    .as_any()
+                    .unwrap()
+                    .downcast_ref::<Spi>()
+                    .unwrap();
+                if !spi.transfer_active() {
+                    return;
+                }
+                bus.peripherals[idx].dev.tick_elapsed(1);
+            }
+            panic!("SPI frame never completed");
+        }
+
         // D/C low (PC7=0, the reset state): two command bytes position the
         // cursor at bank 2, column 5.
         bus.write_u16(SPI1 + DR, 0x40 | 2).unwrap(); // set Y (bank) = 2
+        clock_out(&mut bus);
         bus.write_u16(SPI1 + DR, 0x80 | 5).unwrap(); // set X (col)  = 5
+        clock_out(&mut bus);
 
         // Drive PC7 high (D/C = data) via BSRR, then stream a data byte.
         bus.write_u32(GPIOC + BSRR, 1 << 7).unwrap();
         bus.write_u16(SPI1 + DR, 0xAB).unwrap();
+        clock_out(&mut bus);
 
         // Inspect the attached panel's framebuffer through the bus.
         let idx = bus.find_peripheral_index_by_name("spi1").unwrap();
@@ -433,6 +457,7 @@ mod tests {
             id: "lcd".to_string(),
             r#type: "pcd8544".to_string(),
             connection: "spi0".to_string(),
+            route: Default::default(),
             config: cfg,
         };
 

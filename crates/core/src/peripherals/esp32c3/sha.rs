@@ -113,6 +113,11 @@ impl Esp32c3Sha {
 }
 
 impl Peripheral for Esp32c3Sha {
+    // Inert walk: SHA-256 compression runs atomically at the START/CONTINUE write (BUSY reads 0); tick() is the trait-default no-op.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let w = self.read_u32(offset & !3)?;
         Ok((w >> ((offset & 3) * 8)) as u8)
@@ -158,6 +163,10 @@ impl Peripheral for Esp32c3Sha {
             _ => {}
         }
         Ok(())
+    }
+
+    fn legacy_tick_active(&self) -> bool {
+        false
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {

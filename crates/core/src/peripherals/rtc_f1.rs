@@ -106,6 +106,19 @@ impl crate::Peripheral for RtcF1 {
         self.write_reg(reg, v);
         Ok(())
     }
+    fn needs_legacy_walk(&self) -> bool {
+        // The STM32F1 RTC is modelled as a plain register bank: CNT/DIV/CRL only
+        // change on MMIO access (there is NO `tick()` override, so the per-cycle
+        // walk callback is the default no-op — the counter does not free-run in
+        // this model). Deleting the walk is therefore byte-identical for every
+        // reachable firmware state (the walk did nothing for it), so the RTC must
+        // not pin the whole STM32F1 bus onto the per-cycle walk. This was the last
+        // walker on every f103 lab bus — with it gone the full f103 board flips
+        // walk-deletable (see the walk_free_campaign / perf acceptance). Mirrors
+        // the AFIO no-op-bank fix.
+        false
+    }
+
     fn snapshot(&self) -> serde_json::Value {
         serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
     }
@@ -133,6 +146,26 @@ mod tests {
         assert_eq!(read32(&r, 0x1C), 0, "CNTL");
         // CRL is NOT the L4 DR (0x2101) — that was the bug this model fixes.
         assert_ne!(read32(&r, 0x04), 0x2101);
+    }
+
+    #[test]
+    fn tick_is_a_genuine_no_op_so_walk_is_deletable() {
+        // The RTC is a pure register bank: drive it through a boot-like write
+        // sequence, then tick it many times — the snapshot must be byte-identical
+        // before and after, and the tick result must be default(). This is the
+        // inertness proof behind `needs_legacy_walk() == false`.
+        let mut r = RtcF1::new();
+        r.write(0x00, 0x7).unwrap(); // CRH: all IE bits
+        r.write(0x0C, 0xFF).unwrap(); // PRLL
+        r.write(0x18, 0x12).unwrap(); // CNTH
+        r.write(0x1C, 0x34).unwrap(); // CNTL
+        assert!(!r.needs_legacy_walk());
+        let before = r.snapshot();
+        for _ in 0..1000 {
+            let res = r.tick();
+            assert!(!res.irq && res.cycles == 0, "tick must be inert");
+        }
+        assert_eq!(before, r.snapshot(), "no tick may mutate RTC state");
     }
 
     #[test]

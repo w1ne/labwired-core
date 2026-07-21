@@ -28,7 +28,7 @@ const UNMODELLED_UART_TYPES: &[&str] = &[];
 
 fn dummy_manifest(path: &str) -> SystemManifest {
     SystemManifest {
-        walk_deleted: false,
+        walk_deleted: Some(false),
         schema_version: "1.0".into(),
         name: "uart-parity".into(),
         chip: path.into(),

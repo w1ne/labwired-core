@@ -338,6 +338,7 @@ pub struct Ili9341Kit;
 pub static ILI9341_KIT: Ili9341Kit = Ili9341Kit;
 
 static ILI9341_METADATA: KitMetadata = KitMetadata {
+    inputs: &[],
     device_type: "ili9341",
     label: "ILI9341 TFT",
     summary: "240×320 RGB565 SPI TFT display.",
@@ -365,8 +366,7 @@ impl PeripheralKit for Ili9341Kit {
     }
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
         let cs_pin = ctx.config_str("cs_pin").unwrap_or("PA4").to_string();
-        let spi = ctx.spi()?;
-        spi.attach(Box::new(Ili9341::new(cs_pin)));
+        ctx.attach_spi_device(Box::new(Ili9341::new(cs_pin)))?;
         Ok(())
     }
 }

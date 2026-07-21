@@ -53,6 +53,12 @@ wasmtime = { version = "45", optional = true, default-features = false, features
 
 [features]
 default = []
+# ESP32 WiFi/lwIP functional-outcome thunks (`peripherals::esp32s3::wifi_thunks`
+# — canned WL_CONNECTED + simulated sockets). Off by default and NOT in the CI
+# feature set (`jit,event-scheduler`), so this fake WiFi state can never compile
+# into a production/run build; only the `e2e_labwired_wifi` bring-up harness
+# opts in. Run its tests with `--features wifi-thunks`.
+wifi-thunks = []
 # Egress-bridge transport tests that open real localhost sockets (TCP/MQTT/HTTP).
 # Off by default so the standard gate stays hermetic; run with
 # `cargo test -p labwired-core --features net-tests`.
@@ -65,6 +71,13 @@ esp32s3-fixtures = []
 # run via wasmtime native, side-exit on branch. Off by default — the wasm
 # build target and the standard test suite both run on the interpreter.
 jit = ["dep:wasmtime"]
+# Speed plan Phase 2 (#124 follow-on): ISA-agnostic universal-dispatch JIT
+# framework scaffold (`crates/core/src/cpu/jit_framework/`). Pure-Rust, no
+# extra deps — it carries the shared block cache, side-exit protocol,
+# per-ISA frontend trait, native/browser runtime abstraction, interpreter
+# fallback, and differential harness, but ZERO per-ISA codegen. Off by
+# default so nothing else changes. See docs/engineering/universal-jit-framework.md.
+jit-framework = []
 # Phase 2B.1 (issue #192): event-driven peripheral scheduler. The
 # scheduler types (`crates/core/src/sched/`) and the `Peripheral` trait
 # extensions compile in unconditionally; this flag toggles the runtime

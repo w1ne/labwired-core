@@ -245,15 +245,67 @@ impl Peripheral for Esp32Gpio {
     }
 
     fn snapshot(&self) -> serde_json::Value {
-        // ODR-shaped snapshot lets the WasmSimulator board_io polling path
-        // read GPIO output state via the same {"odr": <bits>} contract used
-        // by STM32 GPIO ports — no special-casing in JS.
+        // Keep the public snapshot compact and human-readable. Browser board_io
+        // uses the GPIO capability methods below, not these field names.
         serde_json::json!({
             "layout": "esp32_classic",
             "odr": self.out,
             "idr": self.in_data,
             "enable": self.enable,
         })
+    }
+
+    fn read_gpio_input(&self, pin: u8) -> Option<bool> {
+        if pin >= 32 {
+            return None;
+        }
+        Some((self.in_data & (1u32 << pin)) != 0)
+    }
+
+    fn read_gpio_output(&self, pin: u8) -> Option<bool> {
+        if pin >= 32 {
+            return None;
+        }
+        Some((self.out & (1u32 << pin)) != 0)
+    }
+
+    fn read_gpio_pad(&self, pin: u8) -> Option<bool> {
+        if pin >= 32 {
+            return None;
+        }
+        let mask = 1u32 << pin;
+        // ENABLE is the output driver: enabled pins show the OUT latch,
+        // everything else shows the (externally driven) input level.
+        Some(if (self.enable & mask) != 0 {
+            (self.out & mask) != 0
+        } else {
+            (self.in_data & mask) != 0
+        })
+    }
+
+    fn gpio_routing(&self, pin: u8) -> Option<crate::peripherals::gpio::GpioRouting> {
+        use crate::peripherals::gpio::{GpioMode, GpioRouting};
+        if pin >= 32 {
+            return None;
+        }
+        // ENABLE is the output driver. The classic ESP32 GPIO model does not
+        // track the output matrix (FUNCn_OUT_SEL), so it can report direction but
+        // cannot distinguish a plain-GPIO output from a peripheral-routed one, nor
+        // name the signal — func stays None (honest "can't say").
+        let mode = if (self.enable & (1u32 << pin)) != 0 {
+            GpioMode::Output
+        } else {
+            GpioMode::Input
+        };
+        Some(GpioRouting { mode, func: None })
+    }
+
+    fn set_gpio_input(&mut self, pin: u8, level: bool) -> bool {
+        if pin >= 32 {
+            return false;
+        }
+        self.set_pin_input(pin, level);
+        true
     }
 
     fn tick(&mut self) -> PeripheralTickResult {

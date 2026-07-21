@@ -113,7 +113,14 @@ fn main() -> ! {
         // Sentinel written LAST so the harness knows all tests ran.
         digest(IDX_DONE, DONE_MAGIC);
     }
-    loop {}
+    halt_forever()
+}
+
+#[inline(never)]
+fn halt_forever() -> ! {
+    loop {
+        core::hint::spin_loop();
+    }
 }
 
 // ── Test: GPIO0 ───────────────────────────────────────────────────────────────
@@ -155,7 +162,7 @@ unsafe fn test_timer0() {
     wr(TIMER0_BASE + 0x508, 3); // BITMODE = 32-bit
     wr(TIMER0_BASE + 0x00C, 1); // TASKS_CLEAR
     settle();
-    wr(TIMER0_BASE + 0x000, 1); // TASKS_START (required even in counter mode)
+    wr(TIMER0_BASE, 1); // TASKS_START (required even in counter mode)
     settle();
     // Pulse TASKS_COUNT 7 times.
     for _ in 0..7u32 {
@@ -185,8 +192,8 @@ unsafe fn test_ecb() {
     let ptr = &raw const ECB_BUF as u32;
     wr(ECB_BASE + 0x504, ptr); // ECBDATAPTR
     wr(ECB_BASE + 0x100, 0); // clear EVENTS_ENDECB
-    wr(ECB_BASE + 0x000, 1); // TASKS_STARTECB
-                             // Bounded wait on EVENTS_ENDECB.
+    wr(ECB_BASE, 1); // TASKS_STARTECB
+                     // Bounded wait on EVENTS_ENDECB.
     let mut guard: u32 = 0;
     while rd(ECB_BASE + 0x100) == 0 && guard < 2_000_000 {
         guard += 1;
@@ -224,11 +231,8 @@ unsafe fn test_gpiote() {
     // GPIOTE CONFIG[0]: MODE=Task(3), PSEL=8, PORT=0(GPIO0), POLARITY=LoToHi(1), OUTINIT=0
     // bit pattern: bits[1:0]=3, bits[12:8]=8, bit[13]=0, bits[17:16]=1, bit[20]=0
     // = 0x0001_0803
-    let config: u32 = (3 << 0)  // MODE = Task
-        | (8 << 8)               // PSEL = pin 8
-        | (0 << 13)              // PORT = GPIO0
-        | (1 << 16)              // POLARITY = LoToHi (SET task → pin high)
-        | (0 << 20); // OUTINIT = low
+    // MODE=Task, PSEL=8, PORT=GPIO0, POLARITY=LoToHi, OUTINIT=low.
+    let config: u32 = 3 | (8 << 8) | (1 << 16);
     wr(GPIOTE_BASE + 0x510, config); // CONFIG[0]
     settle();
 
@@ -251,14 +255,14 @@ unsafe fn test_gpiote() {
 // -50°C..100°C → raw [-200, 400]. Liveness + sanity only.
 unsafe fn test_temp() {
     wr(TEMP_BASE + 0x100, 0); // clear EVENTS_DATARDY
-    wr(TEMP_BASE + 0x000, 1); // TASKS_START
+    wr(TEMP_BASE, 1); // TASKS_START
     let mut guard: u32 = 0;
     while rd(TEMP_BASE + 0x100) == 0 && guard < 2_000_000 {
         guard += 1;
     }
     let in_range: u32 = if rd(TEMP_BASE + 0x100) != 0 {
         let raw = rd(TEMP_BASE + 0x508) as i32;
-        if raw >= -200 && raw <= 400 {
+        if (-200..=400).contains(&raw) {
             1
         } else {
             0
@@ -281,7 +285,7 @@ unsafe fn test_temp() {
 // (non-deterministic). IDX_RNG_LIVE = 1 if VALRDY fired, else 0.
 unsafe fn test_rng() {
     wr(RNG_BASE + 0x100, 0); // clear EVENTS_VALRDY
-    wr(RNG_BASE + 0x000, 1); // TASKS_START
+    wr(RNG_BASE, 1); // TASKS_START
     let mut guard: u32 = 0;
     while rd(RNG_BASE + 0x100) == 0 && guard < 2_000_000 {
         guard += 1;

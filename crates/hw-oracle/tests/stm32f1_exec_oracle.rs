@@ -53,7 +53,7 @@ const RCC_AHBENR_DMA1EN: u32 = 1 << 0;
 
 /// DMA1 (RM0008 §13): controller + channel-1 register block.
 const DMA1_BASE: u32 = 0x4002_0000;
-const DMA1_ISR: u32 = DMA1_BASE + 0x00; // interrupt status (GIF/TCIF/HTIF/TEIF ×7)
+const DMA1_ISR: u32 = DMA1_BASE; // interrupt status (GIF/TCIF/HTIF/TEIF ×7)
 const DMA1_CCR1: u32 = DMA1_BASE + 0x08; // channel-1 config
 const DMA1_CNDTR1: u32 = DMA1_BASE + 0x0C; // channel-1 transfer count
 const DMA1_CPAR1: u32 = DMA1_BASE + 0x10; // channel-1 "peripheral" address
@@ -73,7 +73,7 @@ const DMA_DST: u32 = 0x2000_0200;
 
 /// GPIOA (RM0008): config + output-data + atomic set/reset registers.
 const GPIOA_BASE: u32 = 0x4001_0800;
-const GPIOA_CRL: u32 = GPIOA_BASE + 0x00; // pin config, pins 0..7
+const GPIOA_CRL: u32 = GPIOA_BASE; // pin config, pins 0..7
 const GPIOA_CRH: u32 = GPIOA_BASE + 0x04; // pin config, pins 8..15
 const GPIOA_ODR: u32 = GPIOA_BASE + 0x0C; // output data
 const GPIOA_BSRR: u32 = GPIOA_BASE + 0x10; // atomic set (lo16) / reset (hi16)
@@ -87,7 +87,7 @@ const DBGMCU_CR: u32 = 0xE004_2004;
 
 /// CRC unit (RM0008): data register + control.
 const CRC_BASE: u32 = 0x4002_3000;
-const CRC_DR: u32 = CRC_BASE + 0x00; // data in / CRC result out
+const CRC_DR: u32 = CRC_BASE; // data in / CRC result out
 const CRC_IDR: u32 = CRC_BASE + 0x04; // independent data register (8-bit on F1)
 const CRC_CR: u32 = CRC_BASE + 0x08; // control (RESET = bit 0)
 
@@ -105,7 +105,7 @@ const IWDG_RLR: u32 = IWDG_BASE + 0x08; // reload (write-protected)
 
 /// EXTI (RM0008 §10): software-interrupt + pending registers.
 const EXTI_BASE: u32 = 0x4001_0400;
-const EXTI_IMR: u32 = EXTI_BASE + 0x00; // interrupt mask
+const EXTI_IMR: u32 = EXTI_BASE; // interrupt mask
 const EXTI_SWIER: u32 = EXTI_BASE + 0x10; // software interrupt event
 const EXTI_PR: u32 = EXTI_BASE + 0x14; // pending (rc_w1)
 

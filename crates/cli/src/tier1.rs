@@ -2,8 +2,7 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! Tier-1 chip × peripheral validation matrix (spec:
-//! labwired docs/superpowers/specs/2026-06-07-tier1-chip-matrix-design.md).
+//! Tier-1 chip × peripheral validation matrix.
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};

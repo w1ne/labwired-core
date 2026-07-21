@@ -44,14 +44,16 @@ fn external_arduino_esp32_firmware_drives_panel_in_sim() {
     let cpu = configure_xtensa_esp32(&mut bus);
 
     // Wire the SSD1680 to spi3, same as the e-paper lab.
-    let spi3_idx = bus
-        .find_peripheral_index_by_name("spi3")
-        .expect("spi3 registered");
-    let any = bus.peripherals[spi3_idx].dev.as_any_mut().unwrap();
-    let spi3 = any.downcast_mut::<Esp32Spi>().unwrap();
-    spi3.attach(Box::new(Ssd1680Tricolor290::new("GPIO5")));
+    bus.attach_spi_device("spi3", Box::new(Ssd1680Tricolor290::new("GPIO5")))
+        .expect("spi3 is an Esp32Spi controller");
     // Capture every byte on the wire so we can diagnose missing panel state.
-    spi3.enable_byte_capture(256);
+    {
+        let spi3_idx = bus.find_peripheral_index_by_name("spi3").unwrap();
+        let any = bus.peripherals[spi3_idx].dev.as_any_mut().unwrap();
+        any.downcast_mut::<Esp32Spi>()
+            .unwrap()
+            .enable_byte_capture(256);
+    }
 
     bus.refresh_peripheral_index();
     let mut machine = Machine::new(cpu, bus);

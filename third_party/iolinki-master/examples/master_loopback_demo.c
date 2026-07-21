@@ -73,7 +73,10 @@ static int demo_phy_send(void* user, const uint8_t* data, size_t len)
         return (int)len;
     }
 
-    if((len == IOLINK_M_SEQ_TYPE0_LEN) && (data[0] == 0x00U))
+    /* Startup probe (spec T1): Type-0 READ of a Direct Parameter octet on the
+       page channel (MC 0xA2). Answer with a valid 2-octet Type-0 frame. */
+    if((len == IOLINK_M_SEQ_TYPE0_LEN) && ((data[0] & IOLINK_MC_RW_MASK) != 0U) &&
+       ((data[0] & IOLINK_MC_COMM_CHANNEL_MASK) == 0x20U))
     {
         response[0] = 0x00U;
         response[1] = iolink_checksum_ck(response[0], 0U);
@@ -81,7 +84,10 @@ static int demo_phy_send(void* user, const uint8_t* data, size_t len)
         return (int)len;
     }
 
-    if((len == IOLINK_M_SEQ_TYPE0_LEN) && (data[0] == IOLINK_MC_TRANSITION_COMMAND))
+    /* Transition to OPERATE: Type-0 DeviceOperate write (MC 0x20, OD 0x99); no
+       response per spec. */
+    if((len == IOLINK_M_SEQ_MIN_LEN) && (data[0] == 0x20U) &&
+       (data[1] == IOLINK_CMD_DEVICE_OPERATE))
     {
         return (int)len;
     }

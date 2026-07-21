@@ -4,8 +4,8 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use serde::{Deserialize, Serialize, Serializer};
+use std::collections::{BTreeMap, HashMap};
 
 /// On-disk schema version for `MachineSnapshot`. Bump whenever the wire
 /// format changes in a non-backwards-compatible way (new required fields,
@@ -21,11 +21,23 @@ fn default_schema_version() -> u32 {
     0
 }
 
+fn serialize_peripherals<S>(
+    peripherals: &HashMap<String, serde_json::Value>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let ordered = peripherals.iter().collect::<BTreeMap<_, _>>();
+    ordered.serialize(serializer)
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MachineSnapshot {
     #[serde(default = "default_schema_version")]
     pub schema_version: u32,
     pub cpu: CpuSnapshot,
+    #[serde(serialize_with = "serialize_peripherals")]
     pub peripherals: HashMap<String, serde_json::Value>,
     // Future: metrics
 }
@@ -83,4 +95,42 @@ pub struct XtensaLx7CpuSnapshot {
     pub window_start: u16,
     /// VECBASE SR value.
     pub vecbase: u32,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn arm_cpu() -> CpuSnapshot {
+        CpuSnapshot::Arm(ArmCpuSnapshot {
+            registers: Vec::new(),
+            pc: 0,
+            xpsr: 0,
+            primask: false,
+            pending_exceptions: 0,
+            pending_exceptions_hi: Vec::new(),
+            vtor: 0,
+        })
+    }
+
+    #[test]
+    fn snapshot_json_orders_peripherals_by_name() {
+        let mut peripherals = HashMap::new();
+        for name in ["zeta", "beta", "alpha", "gamma"] {
+            peripherals.insert(name.to_owned(), serde_json::json!({ "name": name }));
+        }
+
+        let snapshot = MachineSnapshot {
+            schema_version: SCHEMA_VERSION,
+            cpu: arm_cpu(),
+            peripherals,
+        };
+
+        let json = serde_json::to_string(&snapshot).expect("serialize snapshot");
+        let alpha = json.find("\"alpha\"").expect("alpha key");
+        let beta = json.find("\"beta\"").expect("beta key");
+        let gamma = json.find("\"gamma\"").expect("gamma key");
+        let zeta = json.find("\"zeta\"").expect("zeta key");
+        assert!(alpha < beta && beta < gamma && gamma < zeta, "{json}");
+    }
 }

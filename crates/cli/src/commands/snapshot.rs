@@ -17,11 +17,12 @@ pub(crate) fn run_snapshot(args: SnapshotArgs) -> ExitCode {
 /// Drive a firmware mid-flight in a headless sim and write a runtime
 /// snapshot blob. The playground reads the same blob to skip cold boot.
 ///
-/// The `agentdeck` profile mirrors what
-/// `WasmSimulator::install_esp32_arduino_quirks` plus `step_with_esp32_aids`
+/// The `arduino-esp32` profile mirrors what
+/// `WasmSimulator::install_arduino_esp32_quirks` plus `step_with_esp32_aids`
 /// do on the web side — same configure_xtensa_esp32 bus, same handshake,
 /// same thunk setup, same IPI bridge cadence — so the captured state will
-/// resume bit-identically inside the browser.
+/// resume bit-identically inside the browser. Thunk PCs are resolved from the
+/// ELF symbol table (no hand-curated per-firmware address list).
 pub(crate) fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     use labwired_core::bus::SystemBus;
     use labwired_core::peripherals::components::{Ssd1680Tricolor290, Uc8151dTricolor290};
@@ -31,9 +32,9 @@ pub(crate) fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     use labwired_core::{Machine, SimulationError};
     use labwired_loader::{extract_arduino_esp32_thunks, load_elf_bytes};
 
-    if args.profile != "agentdeck" && args.profile != "arduino-esp32" {
+    if args.profile != "arduino-esp32" {
         eprintln!(
-            "error: unknown profile '{p}' — supported: 'agentdeck' (preset-PC profile — hardcoded thunk addresses for a specific firmware build), 'arduino-esp32' (any Arduino-ESP32 ELF with symbols intact, auto-discovers thunk PCs)",
+            "error: unknown profile '{p}' — supported: 'arduino-esp32' (any Arduino-ESP32 ELF with symbols intact, auto-discovers thunk PCs)",
             p = args.profile
         );
         return ExitCode::from(EXIT_CONFIG_ERROR);
@@ -95,10 +96,8 @@ pub(crate) fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     // FreeRTOS spins in `vListInsert` forever. Attach a secondary CPU
     // (PRID=0xABAB, halted at construction, released by
     // `ets_set_appcpu_boot_addr` during PRO_CPU boot).
-    if args.profile == "arduino-esp32" {
-        let cpu1 = labwired_core::cpu::xtensa_lx7::XtensaLx7::new_app_cpu();
-        machine.cpu_secondary = Some(Box::new(cpu1));
-    }
+    let cpu1 = labwired_core::cpu::xtensa_lx7::XtensaLx7::new_app_cpu();
+    machine.cpu_secondary = Some(Box::new(cpu1));
 
     // Load firmware FIRST — load_firmware writes ELF segments into bus
     // memory, so any bytes we write before this risk being clobbered.
@@ -148,15 +147,11 @@ pub(crate) fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     }
 
     // Arduino-ESP32 bootstrap — keep in sync with
-    // `wasm/src/lib.rs::install_esp32_arduino_quirks` and the e2e test.
+    // `wasm/src/lib.rs::install_arduino_esp32_quirks` and the e2e test.
     machine.cpu.set_sp(0x3FFE_0000);
-    // Handshake-byte pre-paint. Two paths:
-    //   * `agentdeck` profile — use the exact byte addresses the original
-    //     install_esp32_arduino_quirks wrote, byte-for-byte. the reference firmware's
-    //     ELF is stripped, so symbol auto-discovery returns nothing.
-    //   * `arduino-esp32` profile — resolve s_resume_cores / s_cpu_up /
-    //     s_cpu_inited / s_system_inited / s_other_cpu_startup_done from
-    //     the ELF symbol table and write 0x01 to both bytes of each.
+    // Handshake-byte pre-paint: resolve s_resume_cores / s_cpu_up /
+    // s_cpu_inited / s_system_inited / s_other_cpu_startup_done from the ELF
+    // symbol table and write 0x01 to both bytes of each.
     // Dual-core handshake pre-seed + 10k-cycle keep-alive — now only a FALLBACK
     // for when APP_CPU is halted (`LABWIRED_NO_DUALCORE=1`). By default we run
     // the real second core, which executes the firmware's own `call_start_cpu1`
@@ -168,79 +163,51 @@ pub(crate) fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     // `LABWIRED_PRESEED_HANDSHAKE=1`.
     let preseed_handshake = std::env::var("LABWIRED_NO_DUALCORE").is_ok()
         || std::env::var("LABWIRED_PRESEED_HANDSHAKE").is_ok();
-    let (s_resume_cores, s_cpu_up, s_cpu_inited, s_system_inited, s_other_cpu_startup_done);
-    if args.profile == "agentdeck" {
-        s_resume_cores = 0;
-        s_cpu_up = 0;
-        s_cpu_inited = 0;
-        s_system_inited = 0;
-        s_other_cpu_startup_done = 0;
-        if preseed_handshake {
-            let _ = machine.bus.write_u8(0x3FFC_6F04, 0x01); // s_cpu_up[1]
-            let _ = machine.bus.write_u8(0x3FFC_6F01, 0x01); // s_cpu_inited[0]
-            let _ = machine.bus.write_u8(0x3FFC_6F02, 0x01); // s_cpu_inited[1]
-            let _ = machine.bus.write_u8(0x3FFC_6FFD, 0x01); // s_system_inited[0]
-            let _ = machine.bus.write_u8(0x3FFC_6FFE, 0x01); // s_system_inited[1]
-            let _ = machine.bus.write_u8(0x3FFC_7190, 0x01); // s_other_cpu_startup_done
-            let _ = machine.bus.write_u8(0x400E_90DE, 0x08); // loopTask -> PRO_CPU
-                                                             // Re-assert the same flags the instant PRO_CPU releases APP_CPU
-                                                             // (models APP_CPU bring-up; see rom_thunks::ets_set_appcpu_boot_addr).
-            rom_thunks::set_appcpu_up_flags(vec![
-                0x3FFC_6F04,
-                0x3FFC_6F01,
-                0x3FFC_6F02,
-                0x3FFC_6FFD,
-                0x3FFC_6FFE,
-                0x3FFC_7190,
-            ]);
+    let s_resume_cores = resolve_data("s_resume_cores", 0);
+    let s_cpu_up = resolve_data("s_cpu_up", 0);
+    let s_cpu_inited = resolve_data("s_cpu_inited", 0);
+    let s_system_inited = resolve_data("s_system_inited", 0);
+    let s_other_cpu_startup_done = resolve_data("s_other_cpu_startup_done", 0);
+    if preseed_handshake {
+        if s_resume_cores != 0 {
+            let _ = machine.bus.write_u8(s_resume_cores as u64, 0x01);
         }
-    } else {
-        s_resume_cores = resolve_data("s_resume_cores", 0);
-        s_cpu_up = resolve_data("s_cpu_up", 0);
-        s_cpu_inited = resolve_data("s_cpu_inited", 0);
-        s_system_inited = resolve_data("s_system_inited", 0);
-        s_other_cpu_startup_done = resolve_data("s_other_cpu_startup_done", 0);
-        if preseed_handshake {
-            if s_resume_cores != 0 {
-                let _ = machine.bus.write_u8(s_resume_cores as u64, 0x01);
-            }
-            if s_cpu_up != 0 {
-                let _ = machine.bus.write_u8(s_cpu_up as u64, 0x01);
-                let _ = machine.bus.write_u8(s_cpu_up as u64 + 1, 0x01);
-            }
-            if s_cpu_inited != 0 {
-                let _ = machine.bus.write_u8(s_cpu_inited as u64, 0x01);
-                let _ = machine.bus.write_u8(s_cpu_inited as u64 + 1, 0x01);
-            }
-            if s_system_inited != 0 {
-                let _ = machine.bus.write_u8(s_system_inited as u64, 0x01);
-                let _ = machine.bus.write_u8(s_system_inited as u64 + 1, 0x01);
-            }
-            if s_other_cpu_startup_done != 0 {
-                let _ = machine.bus.write_u8(s_other_cpu_startup_done as u64, 0x01);
-            }
-            // Re-assert these flags the instant PRO_CPU releases APP_CPU, so
-            // newer arduino-esp32 cores (whose `start_other_core` spin-waits
-            // with a tight timeout) see APP_CPU "up" without depending on the
-            // coarse 10k-cycle keep-alive below. Models APP_CPU bring-up; see
-            // rom_thunks::ets_set_appcpu_boot_addr.
-            let mut appcpu_up_flags: Vec<u32> = Vec::new();
-            for (base, two_byte) in [
-                (s_cpu_up, true),
-                (s_cpu_inited, true),
-                (s_system_inited, true),
-                (s_resume_cores, false),
-                (s_other_cpu_startup_done, false),
-            ] {
-                if base != 0 {
-                    appcpu_up_flags.push(base);
-                    if two_byte {
-                        appcpu_up_flags.push(base + 1);
-                    }
+        if s_cpu_up != 0 {
+            let _ = machine.bus.write_u8(s_cpu_up as u64, 0x01);
+            let _ = machine.bus.write_u8(s_cpu_up as u64 + 1, 0x01);
+        }
+        if s_cpu_inited != 0 {
+            let _ = machine.bus.write_u8(s_cpu_inited as u64, 0x01);
+            let _ = machine.bus.write_u8(s_cpu_inited as u64 + 1, 0x01);
+        }
+        if s_system_inited != 0 {
+            let _ = machine.bus.write_u8(s_system_inited as u64, 0x01);
+            let _ = machine.bus.write_u8(s_system_inited as u64 + 1, 0x01);
+        }
+        if s_other_cpu_startup_done != 0 {
+            let _ = machine.bus.write_u8(s_other_cpu_startup_done as u64, 0x01);
+        }
+        // Re-assert these flags the instant PRO_CPU releases APP_CPU, so
+        // newer arduino-esp32 cores (whose `start_other_core` spin-waits
+        // with a tight timeout) see APP_CPU "up" without depending on the
+        // coarse 10k-cycle keep-alive below. Models APP_CPU bring-up; see
+        // rom_thunks::ets_set_appcpu_boot_addr.
+        let mut appcpu_up_flags: Vec<u32> = Vec::new();
+        for (base, two_byte) in [
+            (s_cpu_up, true),
+            (s_cpu_inited, true),
+            (s_system_inited, true),
+            (s_resume_cores, false),
+            (s_other_cpu_startup_done, false),
+        ] {
+            if base != 0 {
+                appcpu_up_flags.push(base);
+                if two_byte {
+                    appcpu_up_flags.push(base + 1);
                 }
             }
-            rom_thunks::set_appcpu_up_flags(appcpu_up_flags);
         }
+        rom_thunks::set_appcpu_up_flags(appcpu_up_flags);
     }
     // RTC XTAL-freq probe = 40 MHz.
     let _ = machine.bus.write_u32(0x3FF4_80B0, 0x0050_0050);
@@ -323,8 +290,6 @@ pub(crate) fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     // HardwareSerial::begin only exists when the sketch called Serial.begin().
     if let Some(&pc) = symbol_addrs.get("HardwareSerial::begin(unsigned long, unsigned int, signed char, signed char, bool, unsigned long, unsigned char)") {
         thunks.push((pc, rom_thunks::nop_return_zero));
-    } else if args.profile == "agentdeck" {
-        thunks.push((0x400e_2280, rom_thunks::nop_return_zero));
     }
     // Real-silicon noreturn functions — abort_halt prints diagnostics and
     // halts the CPU instead of returning. Without this, stubbing them as
@@ -519,20 +484,15 @@ pub(crate) fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     // displaced slots while the AR file has the callee's data, so the
     // HAL walk reads garbage (callee's a1 is often 0 → store to
     // 0xfffffff0 traps). The custom thunk emulates the spill using
-    // shadow-stack snapshots when available. Only wired for
-    // arduino-esp32 profile — agentdeck's call path doesn't hit the
-    // crash, and replacing the real function with the thunk regresses
-    // a working flow (spill writes valid save-area data the callee
-    // later reads).
-    if args.profile == "arduino-esp32" {
-        // Only the `_nw` leaf (the spill loop that would trap) is thunked;
-        // the `xthal_window_spill` wrapper is a thin CALL{n}-entered
-        // PS-save shell that must run natively (its real ENTRY/RETW manage
-        // the window). Thunking the wrapper returns via a0 = the caller's
-        // return address, corrupting the first-task dispatch.
-        if let Some(&pc) = symbol_addrs.get("xthal_window_spill_nw") {
-            thunks.push((pc, rom_thunks::xthal_window_spill_thunk));
-        }
+    // shadow-stack snapshots when available.
+    //
+    // Only the `_nw` leaf (the spill loop that would trap) is thunked;
+    // the `xthal_window_spill` wrapper is a thin CALL{n}-entered
+    // PS-save shell that must run natively (its real ENTRY/RETW manage
+    // the window). Thunking the wrapper returns via a0 = the caller's
+    // return address, corrupting the first-task dispatch.
+    if let Some(&pc) = symbol_addrs.get("xthal_window_spill_nw") {
+        thunks.push((pc, rom_thunks::xthal_window_spill_thunk));
     }
     // xQueueCreateMutexStatic returns the caller's static buffer as the
     // handle. Callers (esp_newlib_locks_init in particular) assert that the
@@ -560,15 +520,10 @@ pub(crate) fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
     if let Some(&pc) = symbol_addrs.get("xQueueGenericSend") {
         thunks.push((pc, rom_thunks::return_pd_true));
     }
-    // ulTaskGenericNotifyTake — gated to arduino-esp32 only.
-    // the reference firmware has its own well-modeled lock-acquire path that
-    // expects a proper "block-then-wake" semantic; stubbing it to
-    // return pdTRUE causes the lock-acquire to skip its setup and
-    // later trip __assert_func inside lock_acquire_generic.
-    if args.profile == "arduino-esp32" {
-        if let Some(&pc) = symbol_addrs.get("ulTaskGenericNotifyTake") {
-            thunks.push((pc, rom_thunks::return_pd_true));
-        }
+    // ulTaskGenericNotifyTake — force pdTRUE so the lock-acquire's
+    // "block-then-wake" wait returns immediately in the single-render-path sim.
+    if let Some(&pc) = symbol_addrs.get("ulTaskGenericNotifyTake") {
+        thunks.push((pc, rom_thunks::return_pd_true));
     }
     if let Some(&pc) = symbol_addrs.get("spiStartBus") {
         thunks.push((pc, rom_thunks::spi_start_bus_fake));
@@ -600,15 +555,6 @@ pub(crate) fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
         if let Some(&pc) = symbol_addrs.get("vListInsert") {
             thunks.push((pc, rom_thunks::vlist_insert_debug));
         }
-    }
-    // the reference firmware-only WiFi + sendHello thunks. Only install for that profile
-    // — sketches without those symbols wouldn't trip them anyway.
-    if args.profile == "agentdeck" {
-        thunks.extend_from_slice(&[
-            (0x400d_de98, rom_thunks::nop_return_zero), // WifiWsLink::begin
-            (0x400d_dccc, rom_thunks::nop_return_zero), // WifiWsLink::loop
-            (0x400e_0034, rom_thunks::nop_return_zero), // anon-ns sendHello
-        ]);
     }
     eprintln!(
         "labwired-cli snapshot: installing {} thunks ({} resolved from ELF symbols)",
@@ -702,36 +648,25 @@ pub(crate) fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
         }
         // Re-stamp the dual-core handshake bytes every 10k cycles so
         // start_other_core / do_other_cpu_settings keep seeing them as
-        // "up." preset-PC path: byte-for-byte mirror of the original
-        // install_esp32_arduino_quirks. Auto-discovery path: write to
-        // each resolved symbol's [0]+[1] slots.
+        // "up." Write to each resolved symbol's [0]+[1] slots.
         if preseed_handshake && i.is_multiple_of(10_000) {
-            if args.profile == "agentdeck" {
-                let _ = machine.bus.write_u8(0x3FFC_6F04, 0x01);
-                let _ = machine.bus.write_u8(0x3FFC_6F01, 0x01);
-                let _ = machine.bus.write_u8(0x3FFC_6F02, 0x01);
-                let _ = machine.bus.write_u8(0x3FFC_6FFD, 0x01);
-                let _ = machine.bus.write_u8(0x3FFC_6FFE, 0x01);
-                let _ = machine.bus.write_u8(0x3FFC_7190, 0x01);
-            } else {
-                if s_resume_cores != 0 {
-                    let _ = machine.bus.write_u8(s_resume_cores as u64, 0x01);
-                }
-                if s_cpu_up != 0 {
-                    let _ = machine.bus.write_u8(s_cpu_up as u64, 0x01);
-                    let _ = machine.bus.write_u8(s_cpu_up as u64 + 1, 0x01);
-                }
-                if s_cpu_inited != 0 {
-                    let _ = machine.bus.write_u8(s_cpu_inited as u64, 0x01);
-                    let _ = machine.bus.write_u8(s_cpu_inited as u64 + 1, 0x01);
-                }
-                if s_system_inited != 0 {
-                    let _ = machine.bus.write_u8(s_system_inited as u64, 0x01);
-                    let _ = machine.bus.write_u8(s_system_inited as u64 + 1, 0x01);
-                }
-                if s_other_cpu_startup_done != 0 {
-                    let _ = machine.bus.write_u8(s_other_cpu_startup_done as u64, 0x01);
-                }
+            if s_resume_cores != 0 {
+                let _ = machine.bus.write_u8(s_resume_cores as u64, 0x01);
+            }
+            if s_cpu_up != 0 {
+                let _ = machine.bus.write_u8(s_cpu_up as u64, 0x01);
+                let _ = machine.bus.write_u8(s_cpu_up as u64 + 1, 0x01);
+            }
+            if s_cpu_inited != 0 {
+                let _ = machine.bus.write_u8(s_cpu_inited as u64, 0x01);
+                let _ = machine.bus.write_u8(s_cpu_inited as u64 + 1, 0x01);
+            }
+            if s_system_inited != 0 {
+                let _ = machine.bus.write_u8(s_system_inited as u64, 0x01);
+                let _ = machine.bus.write_u8(s_system_inited as u64 + 1, 0x01);
+            }
+            if s_other_cpu_startup_done != 0 {
+                let _ = machine.bus.write_u8(s_other_cpu_startup_done as u64, 0x01);
             }
         }
         match machine.cpu.step(&mut machine.bus, &observers, &config) {
@@ -863,11 +798,10 @@ pub(crate) fn run_snapshot_capture(args: SnapshotCaptureArgs) -> ExitCode {
         }
     }
 
-    // Sanity-check the captured state — for an `agentdeck` profile we
-    // expect the SSD1680 panel to have been driven through at least one
-    // refresh cycle by the time the snapshot lands. Print this so the
-    // operator can tell "yes, this snapshot is post-paint" without
-    // re-running the playground.
+    // Sanity-check the captured state — we expect the panel to have been
+    // driven through at least one refresh cycle by the time the snapshot
+    // lands. Print this so the operator can tell "yes, this snapshot is
+    // post-paint" without re-running the playground.
     if let Some(idx) = machine.bus.find_peripheral_index_by_name("spi3") {
         if let Some(any) = machine.bus.peripherals[idx].dev.as_any() {
             if let Some(spi3) = any.downcast_ref::<Esp32Spi>() {

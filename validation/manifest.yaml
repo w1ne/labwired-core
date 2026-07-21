@@ -80,7 +80,30 @@ boards:
     # not cover (it exercised UARTE EasyDMA, not the legacy TXD shifter); the reset
     # sweep (conformance/mmio/GPIO/POWER/SPIS/TWIS/RTC/TIMER) is unaffected. No live
     # SWD re-capture of the legacy-UART TX sequence this session (no bench board).
-    drift_ack: 2026-07-04
+    # 2026-07-10: bus-trace single-choke-point refactor (attach wraps at SystemBus::attach_i2c_slave/attach_spi_device; no per-callsite set_bus_trace) + cycle stamp on trace events + gpio_routing/pin_routing metadata. Additive; oracle output unchanged.
+    # 2026-07-19: unified stimulus interface — every bus controller gained a
+    # `for_each_attached_sim_input` impl (and TWIM/SPIM gained `as_any` +
+    # attached-device accessors) so SimInput reaches devices without
+    # downcasting. PURELY ADDITIVE: `git diff` over every model file listed
+    # below shows 0 removed lines — no existing method body was modified, so
+    # no register read/write path changed. Reset values, register layout and
+    # byte paths are unchanged; the mmio/conformance diffs pass unchanged.
+    # Drift is the shared-file commit date only. No live re-capture.
+    # 2026-07-20: per-cycle-walk participation only. Six shared peripheral
+    # models (gpio, stub, nrf52 timer/egu/temp/uarte) gained
+    # `legacy_tick_active()` / `legacy_tick_dynamic()` overrides so peripherals
+    # that do nothing are skipped by the legacy walk (nRF54L15 measured
+    # 2.74M -> 5.09M IPS). PURELY ADDITIVE: `git diff origin/main..HEAD` over
+    # those six files shows +12/+18 and **0 removed lines** — no existing method
+    # body was touched, so no register read/write path, reset value or layout
+    # changed. A peripheral is skipped ONLY in states where its `tick()` already
+    # returned a default PeripheralTickResult (or where it overrides no tick at
+    # all), and the bus re-arms the entry via `refresh_legacy_tick_index()` on
+    # any MMIO write. GPIOTE was tried the same way and REVERTED — its tick()
+    # detects IN edges rather than draining a queue, and
+    # nrf52840_onboarding_gpiote_event_in_fires_on_edge caught it. Offline
+    # oracle/mmio/conformance suites pass unchanged. No live re-capture.
+    drift_ack: 2026-07-20
     models:
       - crates/core/src/peripherals/nrf52
       - configs/chips/nrf52840.yaml
@@ -106,7 +129,30 @@ boards:
     # drift_ack note — success-path live re-capture tracked there.
     # 2026-07-04: rides the nrf52840 legacy-UART (UART0/UARTE0) TXD/TXDRDY model;
     # same silicon. Additive, no live re-capture. See the nrf52840 drift_ack note.
-    drift_ack: 2026-07-04
+    # 2026-07-10: bus-trace single-choke-point refactor (attach wraps at SystemBus::attach_i2c_slave/attach_spi_device; no per-callsite set_bus_trace) + cycle stamp on trace events + gpio_routing/pin_routing metadata. Additive; oracle output unchanged.
+    # 2026-07-19: unified stimulus interface — every bus controller gained a
+    # `for_each_attached_sim_input` impl (and TWIM/SPIM gained `as_any` +
+    # attached-device accessors) so SimInput reaches devices without
+    # downcasting. PURELY ADDITIVE: `git diff` over every model file listed
+    # below shows 0 removed lines — no existing method body was modified, so
+    # no register read/write path changed. Reset values, register layout and
+    # byte paths are unchanged; the mmio/conformance diffs pass unchanged.
+    # Drift is the shared-file commit date only. No live re-capture.
+    # 2026-07-20: per-cycle-walk participation only. Six shared peripheral
+    # models (gpio, stub, nrf52 timer/egu/temp/uarte) gained
+    # `legacy_tick_active()` / `legacy_tick_dynamic()` overrides so peripherals
+    # that do nothing are skipped by the legacy walk (nRF54L15 measured
+    # 2.74M -> 5.09M IPS). PURELY ADDITIVE: `git diff origin/main..HEAD` over
+    # those six files shows +12/+18 and **0 removed lines** — no existing method
+    # body was touched, so no register read/write path, reset value or layout
+    # changed. A peripheral is skipped ONLY in states where its `tick()` already
+    # returned a default PeripheralTickResult (or where it overrides no tick at
+    # all), and the bus re-arms the entry via `refresh_legacy_tick_index()` on
+    # any MMIO write. GPIOTE was tried the same way and REVERTED — its tick()
+    # detects IN edges rather than draining a queue, and
+    # nrf52840_onboarding_gpiote_event_in_fires_on_edge caught it. Offline
+    # oracle/mmio/conformance suites pass unchanged. No live re-capture.
+    drift_ack: 2026-07-20
     models:
       - crates/core/src/peripherals/nrf52
       - configs/chips/nrf52840.yaml
@@ -157,7 +203,64 @@ boards:
     # 2026-07-01: additive bus-trace device wrappers at I2c/Spi attach + shared BusTraceLog on SystemBus (universal bus analyzer); STM32 register engines byte-for-byte untouched, wrappers only forward (transparent as_any) and activate only when a device+log is attached. Diff/conformance unchanged; no live re-capture.
     # 2026-07-03: additive `as_sim_input_mut` default method on the I2cDevice trait (generic SimInput hook) + new SystemBus set_input/list_inputs; STM32 register engines byte-for-byte untouched, the default returns None for all STM32 devices. Diff/conformance unchanged; no live re-capture.
     # 2026-07-04: drift is the file-hash of the additive L4 PLLSAI1/2 ready-bit change in rcc.rs (L4Rcc::ready); this board's RCC engine (H5Rcc) is byte-for-byte untouched, h563_mmio_diff + h563_conformance unchanged, no live re-capture.
-    drift_ack: 2026-07-04
+    # 2026-07-05: shared i2c.rs gained SSD1306 inspect artifact metadata
+    # (`ink_bytes`/`lit_pixels`) so browser/OLED proof paths can detect drawn ink.
+    # STM32 H5 I2C register/transaction engines are untouched; h563_mmio_diff +
+    # h563_conformance remain the pinned coverage. No live re-capture.
+    # 2026-07-09: read_gpio_pad — additive, READ-ONLY direction-aware pad probe accessor on the Peripheral trait + GpioPort (universal logic analyzer sampling). No register read/write path, reset value, or byte-path changed; mmio diffs/conformance unchanged. No live re-capture.
+    # 2026-07-10: bus-trace single-choke-point refactor (attach wraps at SystemBus::attach_i2c_slave/attach_spi_device; no per-callsite set_bus_trace) + cycle stamp on trace events + gpio_routing/pin_routing metadata. Additive; oracle output unchanged.
+    # 2026-07-11: STM32 SPI bit-level wire engine — classic/FIFO `Spi` DR writes now clock frames over derived wire time (CR1 BR/CPOL/CPHA/LSBFIRST + CR2.DS/CR1.DFF; SR flags flip at wire time — same firmware-visible completion timing, bits x 2^(BR+1) PCLK cycles, as the previous countdown) and GPIO ports gained read-only SPI AF pad routing (read_gpio_pad reads the live SCK/MOSI/MISO wire per the datasheet AF maps; H5's SPI-v3 model untouched). Register layouts, reset values and byte paths unchanged; mmio diffs/conformance unaffected. No live re-capture.
+    # 2026-07-12: STM32 TIMx walk-free migration (timer.rs) — event-scheduler builds now derive CNT/SR lazily from the bus cycle clock (exact closed-form walk replay incl. the enabled-flag counter freeze) and deliver update/compare IRQs via scheduled events; the legacy walk path is byte-identical, pinned by committed differentials (stm32_timer_walk_differential + in-module walk-identity gates). The tick-cost sim artifact (cycles:1 charged on overflow/held-level ticks) is removed in both modes. Register layout, reset values and MMIO byte paths unchanged; mmio diffs/conformance unaffected. No live re-capture.
+    # 2026-07-12: STM32 DMA1/DMA2 walk-free migration (dma.rs) + NXP Kinetis I2C walk-free migration (i2c.rs) — event-scheduler builds drive DMA element transfers via per-channel scheduled events (delay-1 mem2mem self-pacing, request-armed via route_dma_signal) and the Kinetis I2C level IRQ via a held-level re-pend chain; both are byte-identical to the walk, pinned by committed differentials (stm32_dma_walk_differential + in-module dma/i2c walk-identity gates). The DMA tick-cost sim artifact (cycles:1 per transferring tick) is removed in both modes. STM32 F1/L4 I2C transaction engines and H5 GPDMA are untouched and stay on the walk. Register layout, reset values and MMIO byte paths unchanged; mmio diffs/conformance unaffected. No live re-capture.
+    # 2026-07-14: FDCAN gained the post-construction endpoint binding used by
+    # environment CAN worlds, so a named H563 FDCAN participates in the real
+    # inter-node wire instead of an inert topology. This changes dynamic CAN
+    # frame delivery, which the reset/MMIO/flash capture does not cover. A live
+    # H563 FDCAN data-path re-diff remains tracked; no probe was attached here.
+    # 2026-07-17: shared uart.rs gained `irq_wired` (set at the bus attach choke
+    # points), gating the per-cycle scheduler wakeup a held level-triggered
+    # TXEIE/TCIE requests. THIS BOARD IS UNTOUCHED: its USARTs declare real IRQ
+    # lines (uart1 irq:58, uart2 irq:59, uart3 irq:60 in configs/chips/stm32h563.yaml),
+    # so attach_irq_line sets irq_wired=true and has_active_work returns exactly what
+    # it did before — identical cadence. The flag also DEFAULTS to true, so any bus
+    # bypassing the choke points keeps the legacy behaviour; only stale `false` could
+    # matter and no path produces it. Only the ESP32-C3 changes, whose yaml declares
+    # uart0 with NO irq: (making those wakeups provably unobservable). Register
+    # layout, reset values and byte paths unchanged; stm32_timer (5/5) + stm32_dma
+    # (2/2) differentials and h563_mmio_diff/conformance pass unchanged. Drift is the
+    # shared-file hash only. No live re-capture (no H563 probe attached this session).
+    # 2026-07-18: STM32 I2C + EXTI + ADC walk-free migration (walk-free campaign).
+    # H563 maps I2C to the L4/modern engine (now event-scheduled via a delay-1
+    # BUSY-gated chain) and shares the ADC file (F1 conversion-cost artifact
+    # normalized to zero in both modes; the L4/modern ADC path this board uses
+    # converts synchronously in write and is untouched). Both are byte-identical to
+    # the walk, pinned by i2c::kinetis_scheduler l4_* + adc::scheduler_diff.
+    # Featureless builds keep the walk. Register layout, reset values and byte
+    # paths unchanged; h563_mmio_diff/conformance pass unchanged. Drift is the
+    # shared-file hash only. No live re-capture.
+    # 2026-07-19: unified stimulus interface — every bus controller gained a
+    # `for_each_attached_sim_input` impl (and TWIM/SPIM gained `as_any` +
+    # attached-device accessors) so SimInput reaches devices without
+    # downcasting. PURELY ADDITIVE: `git diff` over every model file listed
+    # below shows 0 removed lines — no existing method body was modified, so
+    # no register read/write path changed. Reset values, register layout and
+    # byte paths are unchanged; the mmio/conformance diffs pass unchanged.
+    # Drift is the shared-file commit date only. No live re-capture.
+    # 2026-07-20: per-cycle-walk participation only. Six shared peripheral
+    # models (gpio, stub, nrf52 timer/egu/temp/uarte) gained
+    # `legacy_tick_active()` / `legacy_tick_dynamic()` overrides so peripherals
+    # that do nothing are skipped by the legacy walk (nRF54L15 measured
+    # 2.74M -> 5.09M IPS). PURELY ADDITIVE: `git diff origin/main..HEAD` over
+    # those six files shows +12/+18 and **0 removed lines** — no existing method
+    # body was touched, so no register read/write path, reset value or layout
+    # changed. A peripheral is skipped ONLY in states where its `tick()` already
+    # returned a default PeripheralTickResult (or where it overrides no tick at
+    # all), and the bus re-arms the entry via `refresh_legacy_tick_index()` on
+    # any MMIO write. GPIOTE was tried the same way and REVERTED — its tick()
+    # detects IN edges rather than draining a queue, and
+    # nrf52840_onboarding_gpiote_event_in_fires_on_edge caught it. Offline
+    # oracle/mmio/conformance suites pass unchanged. No live re-capture.
+    drift_ack: 2026-07-20
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -215,7 +318,173 @@ boards:
     # (get_ssd1306_framebuffer) can reach an OLED on the C3 controller. No register,
     # timing, state, or reset-value change; purely additive getter. This ack covers
     # the model-file touch; no live re-capture warranted.
-    drift_ack: 2026-07-03
+    # 2026-07-04: added the universal peripheral-inspect surface to esp32c3/i2c.rs
+    # (register/field/artifact read accessors for the MachineInspect interface). Pure
+    # read-only introspection; no register, timing, state, or reset-value change. This
+    # ack covers the model-file touch; no live re-capture warranted.
+    # 2026-07-05: added runtime-snapshot serialization to esp32c3/rtc_timer.rs +
+    # cpu/riscv.rs (take/apply_runtime_snapshot for the app-entry boot cache). Pure
+    # (de)serialization of existing counter/register state, invoked only on
+    # snapshot/resume — normal-run register/timing/reset behaviour is byte-for-byte
+    # unchanged; the reset-state silicon anchor is unaffected. Covers the model-file
+    # touch; no live re-capture warranted.
+    # 2026-07-06: C3 run-loop/peripheral optimizations cache bus-tick and IRQ
+    # routing indices and dynamically trim idle legacy IRQ tick walks. They skip
+    # redundant polling work but keep MMIO-visible register, IRQ-source, and
+    # elapsed-cycle semantics intact; covered by offline C3 IRQ and browser OLED
+    # ROM-boot tests. SSD1306 command parsing now preserves multi-byte command
+    # state across split I2C transactions and consumes common init command
+    # parameters, matching Arduino/Wire traffic; this is an attached device model,
+    # not an ESP32-C3 silicon register/reset change. No live USB-JTAG re-capture
+    # this session; re-capture remains pending.
+    # 2026-07-07: C3 ROM-boot RTC and SYSTIMER stay on the legacy tick path under
+    # event-scheduler because the current bus read API cannot sync scheduler-driven
+    # peripherals before read-driven timer snapshots. This restores the same
+    # per-cycle timer freshness as the non-scheduler path and is covered by the
+    # generated Arduino OLED ROM-boot regression; no reset-register silicon change.
+    # 2026-07-09: universal logic analyzer — additive read_gpio_pad pad probe (ENABLE-mask direction) + I2C controller wraps attached slaves in TracingI2cDevice (shared bus trace) and signals START to the selected slave at address match so traces carry decodable address frames. Register map/reset values byte-for-byte untouched; conformance/e2e unchanged. No live re-capture.
+    # 2026-07-10: bus-trace single-choke-point refactor (attach wraps at SystemBus::attach_i2c_slave/attach_spi_device; no per-callsite set_bus_trace) + cycle stamp on trace events + gpio_routing/pin_routing metadata. Additive; oracle output unchanged.
+    # 2026-07-10: I2C0 (esp32c3/i2c.rs) upgraded to a cycle-driven BIT-LEVEL engine: command lists now execute over simulated cycles with SCL/SDA timing derived from the real CLK_CONF / SCL_*_PERIOD / SDA_HOLD / START / STOP counters (TRM reg+1 semantics; datasheet reset values when firmware leaves them unprogrammed). TRANS_COMPLETE/END_DETECT/NACK and COMD command_done assert at the derived wire time (no longer instantly) and SR.BUS_BUSY reads 1 while on the wire. Register map, reset values, FIFO semantics and the byte-level traced-slave contract are unchanged — the reset oracle is unaffected. esp32c3/gpio.rs additionally reads the shared I2C line levels for pads matrix-routed to I2CEXT0_SDA/SCL so read_gpio_pad carries the real waveform (logic analyzer). Covered by analytic wire-time unit tests, the waveform-vs-bus-trace agreement test, and the leo e2e (OLED paints identically). No live re-capture this session.
+    # 2026-07-11: RTC timer walk-free migration (lazy cycle-clock advance replacing
+    # per-tick counting; TIME_UPDATE latch semantics unchanged; resume re-anchors to
+    # the live clock) + write-choke C3 IRQ re-aggregation + per-load env-var trace
+    # gate removal. Byte-identical to the walk path by committed differentials
+    # (esp32c3_walk_differential, esp32c3_rtc_delay_loop); reset oracle unchanged.
+    # No live re-capture this session.
+    # 2026-07-11 (Class-A sweep): asserted needs_legacy_walk()==false on the
+    # verified-inert C3 models (ana_i2c, cache, forced_status, reg_block, rng,
+    # sar_adc cal window, sha) — each one's tick() is the trait-default no-op and
+    # all work happens at the MMIO access, so the override is pure walk-scheduling
+    # metadata. i2c0/ledc/spi2/apb_saradc/wifi_mac verified as REAL walk workers
+    # and deliberately left pinning (endgame ledger asserts the exact set). No
+    # register, reset-value, timing or IRQ change; reset oracle unaffected. No
+    # live re-capture warranted.
+    # 2026-07-12: I2C0 (esp32c3/i2c.rs) walk-free migration — the bit-level engine
+    # now advances via the event scheduler (uses_scheduler + a single self-perpetuating
+    # module-tick event + matrix_irq_sources level export) instead of the per-cycle
+    # walk; the shared advance_engine keeps the num/den module-tick cadence intact so
+    # wire timing stays interval-independent. Byte-identical to the walk path by the
+    # committed differential (oled_lab_i2c0_walk_on_vs_scheduler_is_byte_identical:
+    # serial + total_cycles + SSD1306 framebuffer at interval 1, framebuffer at
+    # interval 64). Register map, reset values, FIFO semantics unchanged; reset oracle
+    # unaffected. No live re-capture this session.
+    # 2026-07-12: spi2 (esp32c3/spi.rs) + apb_saradc (esp32c3/apb_saradc.rs) walk-free
+    # migration — the level-only pair. Both are one-shot LEVEL re-emitters whose int_raw
+    # is write-armed by a transaction / conversion (no free-running counter), so they
+    # migrate off the per-cycle walk with uses_scheduler + a matrix_irq_sources level
+    # export and NO scheduled events (unlike i2c0). The walk-skipped level is re-derived
+    # by the bus each aggregation (refresh_esp32c3_sched_sources), delivering the routed
+    # RISC-V line identically to the legacy walk. Proven byte-identical: the direct
+    # IRQ-delivery gate c3_level_peripheral_matrix_routing (walk vs scheduler produce the
+    # same riscv_irq_lines for spi2 source 19 / apb_saradc source 43, and both de-assert
+    # after INT_CLR) + the quiescent-lab differential
+    # oled_lab_spi2_apb_saradc_walk_on_vs_scheduler_is_byte_identical (serial +
+    # total_cycles + SSD1306 framebuffer at interval 1/64). Register map, reset values,
+    # INT/one-shot semantics unchanged; reset oracle unaffected. No live re-capture.
+    # 2026-07-12: ledc (esp32c3/ledc.rs) walk-free migration — the MEDIUM timer port.
+    # Unlike the level-only pair, LEDC is a genuine timer: its four low-speed up-counters
+    # advance and latch LSTIMERx_OVF over time. Migrated off the per-cycle walk with
+    # uses_scheduler + attach_cycle_clock: the counters advance LAZILY in closed form off
+    # the bus-published CycleClock (fresh on every &self read / write-path sync_to / level
+    # poll) and each overflow rides a SCHEDULED event (take_scheduled_events arms the
+    # nearest wrap; on_event materialises the latch at its exact cycle, re-arms the
+    # successor, arm-token kills a stale chain on reconfig), with the level exported via
+    # matrix_irq_sources. All model quirks preserved (RST/PAUSE freeze, 2^DUTY_RES wrap
+    # clamped to 14 bits, integer CLK_DIV divider, sticky W1C OVF latch). Proven
+    # byte-identical to the walk by committed differentials: the in-module scheduler_mode
+    # walk-identity gates (all four counters + INT_RAW + OVF level-assert cycles at
+    # interval 1, plus interval-64 batched + the no-poll event-delivery gate) and the
+    # bus-level c3_ledc_matrix_routing (walk aggregation vs scheduler routing produce the
+    # same riscv_irq_lines for LEDC source 23; force_legacy_walk re-emits the same source;
+    # INT_CLR de-asserts). Register map, reset values and MMIO byte paths unchanged; reset
+    # oracle unaffected. No live re-capture. Remaining C3 walk pinner: wifi_mac only.
+    # 2026-07-12: wifi_mac (esp32c3/wifi_mac.rs) walk-free migration — the LAST C3 walk
+    # pinner, on TWO axes. (1) The MAC interrupt LEVEL (matrix source 0, asserted while a
+    # MAC event is pending) migrates off the walk with uses_scheduler + a matrix_irq_sources
+    # export (the level-only pattern); on a walk-DELETED bus the write-armed EVENT_CLR
+    # acknowledge is re-derived at the MMIO write choke (sync_esp32c3_irq_cache_write, gated
+    # on legacy_walk_disabled) so the level de-asserts without a walk tick. (2) The
+    # descriptor-ring PUMP (tick_with_bus) is honestly gated: needs_bus_tick() is now true
+    # only while WiFi is up (rx_ring != 0 / a pending TX / medium mode) instead of
+    # unconditionally, so an idle MAC (WiFi off — the OLED demo never enables WiFi) arms
+    # nothing and the bus is walk-DELETABLE. No new event machinery: the pump rides the
+    # existing write-armed, self-perpetuating bus-tick path (refresh_bus_tick_index). The
+    # WiFi frame-moving model is byte-for-byte preserved (no thunk change). Proven
+    # byte-identical to the walk by committed differentials: the WiFi-exercising pump
+    # differential c3_wifi_mac_walk_differential (TX ring + RX ring delivery byte-identical
+    # walk-vs-scheduler at interval 1 AND 64, non-vacuity = frames moved) + the direct
+    # IRQ-delivery gate c3_wifi_mac_matrix_routing (walk aggregation vs scheduler routing
+    # produce the same riscv_irq_lines for MAC source 0; force_legacy_walk re-emits the same
+    # source; EVENT_CLR de-asserts at the write choke on a walk-deleted bus) + the OLED
+    # rom-boot lab (serial + total_cycles + SSD1306 framebuffer byte-identical at interval 1
+    # and the now-unlocked interval 64). THE UNLOCK: with wifi_mac migrated the C3 OLED
+    # rom-boot bus derives walk-DELETED, EXPECTED_PINNERS is empty, and max_safe_tick_interval
+    # rises to 64 (native OLED-lab throughput ~5.2 → ~16.2 MIPS). Register map, reset values
+    # and MMIO byte paths unchanged; reset oracle unaffected. No live re-capture.
+    # 2026-07-14: I2C0 (esp32c3/i2c.rs) TX-FIFO underrun correctness fix — begin_byte
+    # no longer fabricates a 0x00 (pop_front().unwrap_or(0)) when the TX FIFO drains
+    # mid-WRITE. It now models the real controller: hold SCL low (clock-stretch),
+    # assert TXFIFO_WM, and resume with the real byte once firmware refills
+    # (new EngineState::TxStall). This only changes behaviour on a TX-FIFO UNDERRUN;
+    # firmware that keeps the FIFO fed (no underrun) is byte-for-byte identical, so
+    # the reset-state oracle and every prior capture/differential are unaffected.
+    # The bug corrupted multi-chunk bursts (e.g. a 128-byte SSD1306 page through the
+    # 32-byte FIFO → black OLED). Register map, reset values, FIFO reset semantics and
+    # the byte-level traced-slave contract are unchanged. A live USB-JTAG re-validation
+    # of the underrun clock-stretch timing is recommended as follow-up (no bench board
+    # this session); this ack covers the model-file change in the interim.
+    # 2026-07-14: captured live CLOCK RATES over the built-in USB-JTAG
+    # (openocd-esp32) via scripts/hw-capture-esp32c3.sh — SYSTIMER 16.013 MHz
+    # (model 16 MHz, matches) and RTC_CNTL slow clock 136.72 kHz (RC_SLOW
+    # oscillator, SYSTIMER-referenced so it's independent of JTAG/halt overhead).
+    # Recorded the measured RTC rate as RTC_SLOW_HZ_MEASURED (136_700) + an opt-in
+    # Esp32c3RtcTimer::set_slow_clock_hz in esp32c3/rtc_timer.rs; the DEFAULT stays
+    # 1 tick per CPU cycle, so the reset-oracle set, the boot budget and every
+    # prior capture/differential are byte-unchanged. This clock capture is an
+    # OPTIONAL bench / weekly job (NOT a PR gate — hosted CI has no board); re-run
+    # the script on a bench to refresh. Additive model touch, no reset-value change.
+    # 2026-07-15: physical C3 OLED-lab fixture
+    # crates/wasm/tests/fixtures/esp32c3-oled-demo-flash.bin
+    # (SHA-256 d951cc06cdf615d4c6a2dc0197daf9c11509353529ebbe3ab7fbf6d75777dcd0)
+    # was flashed at offset 0x0 with esptool verification on a USB-JTAG ESP32-C3.
+    # USB serial logged `oled-lab app_main entered` and `OLED painted: LabWired`.
+    # After reset-run/wait, live USB-JTAG reads found GPIO_ENABLE=0x00000030,
+    # GPIO4/5 OUT_SEL=0x00000036/0x00000035 and I2CEXT0 SDA/SCL IN_SEL
+    # (signals 54/53)=0x00000044/0x00000045: the active matrix route matches
+    # the physical GPIO4/GPIO5 contract. This does not replace the reset-state
+    # oracle or claim visible OLED photons/I2C ACK; visual or wire-level capture
+    # remains pending.
+    # 2026-07-18: bus access-method consolidation — deleted the stale duplicate
+    # inherent SystemBus::{read,write}_u{16,32} shadow in bus/mmio_words.rs; all
+    # direct-SystemBus callers now route through the single Bus-trait impl. Pure
+    # refactor: byte-identical over 30M instructions on the C3 OLED differential
+    # gate, register/IRQ/elapsed semantics unchanged. Additionally re-validated
+    # LIVE on real C3 silicon this date (USB-JTAG/openocd + esptool): boot->paint
+    # UART parity vs sim ("OLED painted: LabWired"), SYSTIMER 16.34 MHz and the
+    # known RC_SLOW ~148 kHz board deviation captured — consistent with prior.
+    # 2026-07-19: unified stimulus interface — every bus controller gained a
+    # `for_each_attached_sim_input` impl (and TWIM/SPIM gained `as_any` +
+    # attached-device accessors) so SimInput reaches devices without
+    # downcasting. PURELY ADDITIVE: `git diff` over every model file listed
+    # below shows 0 removed lines — no existing method body was modified, so
+    # no register read/write path changed. Reset values, register layout and
+    # byte paths are unchanged; the mmio/conformance diffs pass unchanged.
+    # Drift is the shared-file commit date only. No live re-capture.
+    # 2026-07-20: per-cycle-walk participation only. Six shared peripheral
+    # models (gpio, stub, nrf52 timer/egu/temp/uarte) gained
+    # `legacy_tick_active()` / `legacy_tick_dynamic()` overrides so peripherals
+    # that do nothing are skipped by the legacy walk (nRF54L15 measured
+    # 2.74M -> 5.09M IPS). PURELY ADDITIVE: `git diff origin/main..HEAD` over
+    # those six files shows +12/+18 and **0 removed lines** — no existing method
+    # body was touched, so no register read/write path, reset value or layout
+    # changed. A peripheral is skipped ONLY in states where its `tick()` already
+    # returned a default PeripheralTickResult (or where it overrides no tick at
+    # all), and the bus re-arms the entry via `refresh_legacy_tick_index()` on
+    # any MMIO write. GPIOTE was tried the same way and REVERTED — its tick()
+    # detects IN edges rather than draining a queue, and
+    # nrf52840_onboarding_gpiote_event_in_fires_on_edge caught it. Offline
+    # oracle/mmio/conformance suites pass unchanged. No live re-capture.
+    drift_ack: 2026-07-20
 
   - id: nucleo-l476rg
     doc: docs/boards/nucleo-l476rg.md
@@ -251,13 +520,61 @@ boards:
     # 2026-07-01: additive bus-trace device wrappers at I2c/Spi attach + shared BusTraceLog on SystemBus (universal bus analyzer); STM32 register engines byte-for-byte untouched, wrappers only forward (transparent as_any) and activate only when a device+log is attached. Diff/conformance unchanged; no live re-capture.
     # 2026-07-03: additive `as_sim_input_mut` default method on the I2cDevice trait (generic SimInput hook) + new SystemBus set_input/list_inputs; STM32 register engines byte-for-byte untouched, the default returns None for all STM32 devices. Diff/conformance unchanged; no live re-capture.
     # 2026-07-04: modeled RCC_CR PLLSAI1RDY(bit27)←PLLSAI1ON, PLLSAI2RDY(bit29)←PLLSAI2ON (RM0351 §6.4.1) so STM32 Arduino HAL PLLSAI1 (48 MHz domain) bring-up completes instead of HAL_TIMEOUT. Additive ready-bit behavior; pending live HW re-capture.
-    drift_ack: 2026-07-04
+    # 2026-07-05: shared i2c.rs gained SSD1306 inspect artifact metadata
+    # (`ink_bytes`/`lit_pixels`) so browser/OLED proof paths can detect drawn ink.
+    # STM32 L4 I2C register/transaction engines are untouched; l476_mmio_diff +
+    # l476_parity_diff remain the pinned coverage. No live re-capture.
+    # 2026-07-09: read_gpio_pad — additive, READ-ONLY direction-aware pad probe accessor on the Peripheral trait + GpioPort (universal logic analyzer sampling). No register read/write path, reset value, or byte-path changed; mmio diffs/conformance unchanged. No live re-capture.
+    # 2026-07-10: bus-trace single-choke-point refactor (attach wraps at SystemBus::attach_i2c_slave/attach_spi_device; no per-callsite set_bus_trace) + cycle stamp on trace events + gpio_routing/pin_routing metadata. Additive; oracle output unchanged.
+    # 2026-07-11: STM32 SPI bit-level wire engine — classic/FIFO `Spi` DR writes now clock frames over derived wire time (CR1 BR/CPOL/CPHA/LSBFIRST + CR2.DS/CR1.DFF; SR flags flip at wire time — same firmware-visible completion timing, bits x 2^(BR+1) PCLK cycles, as the previous countdown) and GPIO ports gained read-only SPI AF pad routing (read_gpio_pad reads the live SCK/MOSI/MISO wire per the datasheet AF maps; H5's SPI-v3 model untouched). Register layouts, reset values and byte paths unchanged; mmio diffs/conformance unaffected. No live re-capture.
+    # 2026-07-12: STM32 TIMx walk-free migration (timer.rs) — event-scheduler builds now derive CNT/SR lazily from the bus cycle clock (exact closed-form walk replay incl. the enabled-flag counter freeze) and deliver update/compare IRQs via scheduled events; the legacy walk path is byte-identical, pinned by committed differentials (stm32_timer_walk_differential + in-module walk-identity gates). The tick-cost sim artifact (cycles:1 charged on overflow/held-level ticks) is removed in both modes. Register layout, reset values and MMIO byte paths unchanged; mmio diffs/conformance unaffected. No live re-capture.
+    # 2026-07-12: STM32 DMA1/DMA2 walk-free migration (dma.rs) + NXP Kinetis I2C walk-free migration (i2c.rs) — event-scheduler builds drive DMA element transfers via per-channel scheduled events (delay-1 mem2mem self-pacing, request-armed via route_dma_signal) and the Kinetis I2C level IRQ via a held-level re-pend chain; both are byte-identical to the walk, pinned by committed differentials (stm32_dma_walk_differential + in-module dma/i2c walk-identity gates). The DMA tick-cost sim artifact (cycles:1 per transferring tick) is removed in both modes. STM32 F1/L4 I2C transaction engines and H5 GPDMA are untouched and stay on the walk. Register layout, reset values and MMIO byte paths unchanged; mmio diffs/conformance unaffected. No live re-capture.
+    # 2026-07-17: DMA's forced-tick compatibility adapter is restricted to the
+    # bare-CPU hardware-oracle settle loop; the Machine lifecycle and normal DMA
+    # execution are unchanged. The frozen-settle and scheduler regressions pass.
+    # No live re-capture was run this session.
+    # 2026-07-18: STM32 L4 I2C + EXTI + ADC walk-free migration (walk-free
+    # campaign). event-scheduler builds now event-schedule the L4 I2C transaction
+    # engine (delay-1 self-perpetuating chain, BUSY-gated), the EXTI held-level
+    # explicit_irqs re-emission (incl. bank-2 wakeup lines), and the F1-shared ADC
+    # conversion countdown, so the L476's whole peripheral set is walk-free — the
+    # runtime invaders bus now auto-derives walk-deletion with no hand flag. The
+    # legacy walk path is byte-identical, pinned by committed differentials
+    # (i2c::kinetis_scheduler l4_* cases, exti::scheduler_diff l4 case,
+    # adc::scheduler_diff). The ADC tick-cost sim artifact is removed in BOTH modes
+    # (SysTick B1 pattern). Featureless builds keep the walk. Register layout,
+    # reset values and MMIO byte paths unchanged; l476_mmio_diff + l476_parity_diff
+    # pass unchanged. No live re-capture.
+    # 2026-07-19: unified stimulus interface — every bus controller gained a
+    # `for_each_attached_sim_input` impl (and TWIM/SPIM gained `as_any` +
+    # attached-device accessors) so SimInput reaches devices without
+    # downcasting. PURELY ADDITIVE: `git diff` over every model file listed
+    # below shows 0 removed lines — no existing method body was modified, so
+    # no register read/write path changed. Reset values, register layout and
+    # byte paths are unchanged; the mmio/conformance diffs pass unchanged.
+    # Drift is the shared-file commit date only. No live re-capture.
+    # 2026-07-20: per-cycle-walk participation only. Six shared peripheral
+    # models (gpio, stub, nrf52 timer/egu/temp/uarte) gained
+    # `legacy_tick_active()` / `legacy_tick_dynamic()` overrides so peripherals
+    # that do nothing are skipped by the legacy walk (nRF54L15 measured
+    # 2.74M -> 5.09M IPS). PURELY ADDITIVE: `git diff origin/main..HEAD` over
+    # those six files shows +12/+18 and **0 removed lines** — no existing method
+    # body was touched, so no register read/write path, reset value or layout
+    # changed. A peripheral is skipped ONLY in states where its `tick()` already
+    # returned a default PeripheralTickResult (or where it overrides no tick at
+    # all), and the bus re-arms the entry via `refresh_legacy_tick_index()` on
+    # any MMIO write. GPIOTE was tried the same way and REVERTED — its tick()
+    # detects IN edges rather than draining a queue, and
+    # nrf52840_onboarding_gpiote_event_in_fires_on_edge caught it. Offline
+    # oracle/mmio/conformance suites pass unchanged. No live re-capture.
+    drift_ack: 2026-07-20
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
       - crates/core/src/peripherals/uart.rs
       - crates/core/src/peripherals/spi.rs
       - crates/core/src/peripherals/i2c.rs
+      - crates/core/src/peripherals/exti.rs
       - crates/core/src/peripherals/timer.rs
       - crates/core/src/peripherals/dma.rs
       - crates/core/src/peripherals/adc.rs
@@ -295,7 +612,48 @@ boards:
     # 2026-06-30: additive Kinetis GPIO + DSPI variants in gpio.rs/spi.rs for the KW41Z; the STM32 GPIO/SPI engines are untouched, l073 diff unchanged. No live re-capture.
     # 2026-07-01: additive bus-trace device wrappers at I2c/Spi attach + shared BusTraceLog on SystemBus (universal bus analyzer); STM32 register engines byte-for-byte untouched, wrappers only forward (transparent as_any) and activate only when a device+log is attached. Diff/conformance unchanged; no live re-capture.
     # 2026-07-04: drift is the file-hash of the additive L4 PLLSAI1/2 ready-bit change in rcc.rs (L4Rcc::ready); this board's RCC engine (L0Rcc) is byte-for-byte untouched, stm32l0_mmio_diff unchanged, no live re-capture.
-    drift_ack: 2026-07-04
+    # 2026-07-05: GPIO gained generic board-input capability for simulator UI
+    # controls. L0 GPIO register layout/reset and the pinned l073 mmio paths are
+    # unchanged; input injection is additive and only active when a board IO source
+    # drives a pin. No live re-capture this session.
+    # 2026-07-09: read_gpio_pad — additive, READ-ONLY direction-aware pad probe accessor on the Peripheral trait + GpioPort (universal logic analyzer sampling). No register read/write path, reset value, or byte-path changed; mmio diffs/conformance unchanged. No live re-capture.
+    # 2026-07-10: bus-trace single-choke-point refactor (attach wraps at SystemBus::attach_i2c_slave/attach_spi_device; no per-callsite set_bus_trace) + cycle stamp on trace events + gpio_routing/pin_routing metadata. Additive; oracle output unchanged.
+    # 2026-07-11: STM32 SPI bit-level wire engine — classic/FIFO `Spi` DR writes now clock frames over derived wire time (CR1 BR/CPOL/CPHA/LSBFIRST + CR2.DS/CR1.DFF; SR flags flip at wire time — same firmware-visible completion timing, bits x 2^(BR+1) PCLK cycles, as the previous countdown) and GPIO ports gained read-only SPI AF pad routing (read_gpio_pad reads the live SCK/MOSI/MISO wire per the datasheet AF maps; H5's SPI-v3 model untouched). Register layouts, reset values and byte paths unchanged; mmio diffs/conformance unaffected. No live re-capture.
+    # 2026-07-12: STM32 TIMx walk-free migration (timer.rs) — event-scheduler builds now derive CNT/SR lazily from the bus cycle clock (exact closed-form walk replay incl. the enabled-flag counter freeze) and deliver update/compare IRQs via scheduled events; the legacy walk path is byte-identical, pinned by committed differentials (stm32_timer_walk_differential + in-module walk-identity gates). The tick-cost sim artifact (cycles:1 charged on overflow/held-level ticks) is removed in both modes. Register layout, reset values and MMIO byte paths unchanged; mmio diffs/conformance unaffected. No live re-capture.
+    # 2026-07-12: STM32 DMA1/DMA2 walk-free migration (dma.rs) + NXP Kinetis I2C walk-free migration (i2c.rs) — event-scheduler builds drive DMA element transfers via per-channel scheduled events (delay-1 mem2mem self-pacing, request-armed via route_dma_signal) and the Kinetis I2C level IRQ via a held-level re-pend chain; both are byte-identical to the walk, pinned by committed differentials (stm32_dma_walk_differential + in-module dma/i2c walk-identity gates). The DMA tick-cost sim artifact (cycles:1 per transferring tick) is removed in both modes. STM32 F1/L4 I2C transaction engines and H5 GPDMA are untouched and stay on the walk. Register layout, reset values and MMIO byte paths unchanged; mmio diffs/conformance unaffected. No live re-capture.
+    # 2026-07-17: DMA's forced-tick compatibility adapter is restricted to the
+    # bare-CPU hardware-oracle settle loop; the Machine lifecycle and normal DMA
+    # execution are unchanged. The frozen-settle and scheduler regressions pass.
+    # No live re-capture was run this session.
+    # 2026-07-18: drift is the file-hash of the F401 cold-reset fix in rcc.rs
+    # (F4Rcc::new CR reset 0x03 -> 0x83, restoring the HSITRIM default per
+    # RM0368/RM0090 §6.3.1). This board's RCC engine (L0Rcc) is byte-for-byte
+    # untouched — the change is confined to the F4 variant — so l0_mmio_diff is
+    # unchanged. Same rationale as the 2026-07-04 L4-only rcc.rs entry above.
+    # No live re-capture.
+    # 2026-07-19: unified stimulus interface — every bus controller gained a
+    # `for_each_attached_sim_input` impl (and TWIM/SPIM gained `as_any` +
+    # attached-device accessors) so SimInput reaches devices without
+    # downcasting. PURELY ADDITIVE: `git diff` over every model file listed
+    # below shows 0 removed lines — no existing method body was modified, so
+    # no register read/write path changed. Reset values, register layout and
+    # byte paths are unchanged; the mmio/conformance diffs pass unchanged.
+    # Drift is the shared-file commit date only. No live re-capture.
+    # 2026-07-20: per-cycle-walk participation only. Six shared peripheral
+    # models (gpio, stub, nrf52 timer/egu/temp/uarte) gained
+    # `legacy_tick_active()` / `legacy_tick_dynamic()` overrides so peripherals
+    # that do nothing are skipped by the legacy walk (nRF54L15 measured
+    # 2.74M -> 5.09M IPS). PURELY ADDITIVE: `git diff origin/main..HEAD` over
+    # those six files shows +12/+18 and **0 removed lines** — no existing method
+    # body was touched, so no register read/write path, reset value or layout
+    # changed. A peripheral is skipped ONLY in states where its `tick()` already
+    # returned a default PeripheralTickResult (or where it overrides no tick at
+    # all), and the bus re-arms the entry via `refresh_legacy_tick_index()` on
+    # any MMIO write. GPIOTE was tried the same way and REVERTED — its tick()
+    # detects IN edges rather than draining a queue, and
+    # nrf52840_onboarding_gpiote_event_in_fires_on_edge caught it. Offline
+    # oracle/mmio/conformance suites pass unchanged. No live re-capture.
+    drift_ack: 2026-07-20
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -336,7 +694,60 @@ boards:
     # 2026-07-01: additive bus-trace device wrappers at I2c/Spi attach + shared BusTraceLog on SystemBus (universal bus analyzer); STM32 register engines byte-for-byte untouched, wrappers only forward (transparent as_any) and activate only when a device+log is attached. Diff/conformance unchanged; no live re-capture.
     # 2026-07-03: additive `as_sim_input_mut` default method on the I2cDevice trait (generic SimInput hook) + new SystemBus set_input/list_inputs; STM32 register engines byte-for-byte untouched, the default returns None for all STM32 devices. Diff/conformance unchanged; no live re-capture.
     # 2026-07-04: drift is the file-hash of the additive L4 PLLSAI1/2 ready-bit change in rcc.rs (L4Rcc::ready); this board's RCC engine (F1Rcc) is byte-for-byte untouched, stm32f1_mmio_diff + f103_conformance unchanged, no live re-capture.
-    drift_ack: 2026-07-04
+    # 2026-07-05: shared i2c.rs gained SSD1306 inspect artifact metadata
+    # (`ink_bytes`/`lit_pixels`) so browser/OLED proof paths can detect drawn ink.
+    # STM32 F1 I2C register/transaction engines are untouched; stm32f1_mmio_diff +
+    # f103_conformance remain the pinned coverage. No live re-capture.
+    # 2026-07-09: read_gpio_pad — additive, READ-ONLY direction-aware pad probe accessor on the Peripheral trait + GpioPort (universal logic analyzer sampling). No register read/write path, reset value, or byte-path changed; mmio diffs/conformance unchanged. No live re-capture.
+    # 2026-07-10: bus-trace single-choke-point refactor (attach wraps at SystemBus::attach_i2c_slave/attach_spi_device; no per-callsite set_bus_trace) + cycle stamp on trace events + gpio_routing/pin_routing metadata. Additive; oracle output unchanged.
+    # 2026-07-11: STM32 SPI bit-level wire engine — classic/FIFO `Spi` DR writes now clock frames over derived wire time (CR1 BR/CPOL/CPHA/LSBFIRST + CR2.DS/CR1.DFF; SR flags flip at wire time — same firmware-visible completion timing, bits x 2^(BR+1) PCLK cycles, as the previous countdown) and GPIO ports gained read-only SPI AF pad routing (read_gpio_pad reads the live SCK/MOSI/MISO wire per the datasheet AF maps; H5's SPI-v3 model untouched). Register layouts, reset values and byte paths unchanged; mmio diffs/conformance unaffected. No live re-capture.
+    # 2026-07-12: STM32 TIMx walk-free migration (timer.rs) — event-scheduler builds now derive CNT/SR lazily from the bus cycle clock (exact closed-form walk replay incl. the enabled-flag counter freeze) and deliver update/compare IRQs via scheduled events; the legacy walk path is byte-identical, pinned by committed differentials (stm32_timer_walk_differential + in-module walk-identity gates). The tick-cost sim artifact (cycles:1 charged on overflow/held-level ticks) is removed in both modes. Register layout, reset values and MMIO byte paths unchanged; mmio diffs/conformance unaffected. No live re-capture.
+    # 2026-07-12: STM32 DMA1/DMA2 walk-free migration (dma.rs) + NXP Kinetis I2C walk-free migration (i2c.rs) — event-scheduler builds drive DMA element transfers via per-channel scheduled events (delay-1 mem2mem self-pacing, request-armed via route_dma_signal) and the Kinetis I2C level IRQ via a held-level re-pend chain; both are byte-identical to the walk, pinned by committed differentials (stm32_dma_walk_differential + in-module dma/i2c walk-identity gates). The DMA tick-cost sim artifact (cycles:1 per transferring tick) is removed in both modes. STM32 F1/L4 I2C transaction engines and H5 GPDMA are untouched and stay on the walk. Register layout, reset values and MMIO byte paths unchanged; mmio diffs/conformance unaffected. No live re-capture.
+    # 2026-07-17: DMA's forced-tick compatibility adapter is restricted to the
+    # bare-CPU hardware-oracle settle loop; the Machine lifecycle and normal DMA
+    # execution are unchanged. The frozen-settle and scheduler regressions pass.
+    # No live re-capture was run this session.
+    # 2026-07-18: STM32 F1 I2C + EXTI + ADC walk-free migration (walk-free
+    # campaign). event-scheduler builds now event-schedule the F1 I2C transaction
+    # engine (delay-1 self-perpetuating chain; the read-gated receive is caught by
+    # the already-live chain — no byte dropped), the EXTI held-level explicit_irqs
+    # re-emission, and the F1 ADC conversion countdown, so the F103's whole
+    # peripheral set is walk-free. The legacy walk path is byte-identical, pinned
+    # by committed walk-vs-scheduler differentials (i2c::kinetis_scheduler f1_*
+    # cases, exti::scheduler_diff, adc::scheduler_diff — registers + read bytes +
+    # NVIC-pend cycles). The ADC tick-cost sim artifact (cycles:1 per converting
+    # tick) is removed in BOTH modes (SysTick B1 pattern; a real conversion runs
+    # on the ADC clock, zero core cycles). Additionally the F1 RTC (rtc_f1.rs) —
+    # a pure register bank with NO tick() override (its default per-cycle callback
+    # is a proven no-op) — gets needs_legacy_walk()=false (the AFIO no-op-bank
+    # pattern), which was the LAST walker on every f103 lab bus: the full f103
+    # board now flips walk-deletable (recommended_tick_interval 1→512, idle
+    # fast-forward). All byte-identical; featureless builds keep the walk.
+    # Register layout, reset values and MMIO byte paths unchanged; stm32f1_mmio_diff
+    # (102/102) + f103_conformance pass unchanged. No live re-capture.
+    # 2026-07-19: unified stimulus interface — every bus controller gained a
+    # `for_each_attached_sim_input` impl (and TWIM/SPIM gained `as_any` +
+    # attached-device accessors) so SimInput reaches devices without
+    # downcasting. PURELY ADDITIVE: `git diff` over every model file listed
+    # below shows 0 removed lines — no existing method body was modified, so
+    # no register read/write path changed. Reset values, register layout and
+    # byte paths are unchanged; the mmio/conformance diffs pass unchanged.
+    # Drift is the shared-file commit date only. No live re-capture.
+    # 2026-07-20: per-cycle-walk participation only. Six shared peripheral
+    # models (gpio, stub, nrf52 timer/egu/temp/uarte) gained
+    # `legacy_tick_active()` / `legacy_tick_dynamic()` overrides so peripherals
+    # that do nothing are skipped by the legacy walk (nRF54L15 measured
+    # 2.74M -> 5.09M IPS). PURELY ADDITIVE: `git diff origin/main..HEAD` over
+    # those six files shows +12/+18 and **0 removed lines** — no existing method
+    # body was touched, so no register read/write path, reset value or layout
+    # changed. A peripheral is skipped ONLY in states where its `tick()` already
+    # returned a default PeripheralTickResult (or where it overrides no tick at
+    # all), and the bus re-arms the entry via `refresh_legacy_tick_index()` on
+    # any MMIO write. GPIOTE was tried the same way and REVERTED — its tick()
+    # detects IN edges rather than draining a queue, and
+    # nrf52840_onboarding_gpiote_event_in_fires_on_edge caught it. Offline
+    # oracle/mmio/conformance suites pass unchanged. No live re-capture.
+    drift_ack: 2026-07-20
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/afio.rs
@@ -344,6 +755,7 @@ boards:
       - crates/core/src/peripherals/uart.rs
       - crates/core/src/peripherals/spi.rs
       - crates/core/src/peripherals/i2c.rs
+      - crates/core/src/peripherals/exti.rs
       - crates/core/src/peripherals/timer.rs
       - crates/core/src/peripherals/dma.rs
       - crates/core/src/peripherals/adc.rs
@@ -384,7 +796,50 @@ boards:
     # 2026-07-01: additive bus-trace device wrappers at I2c/Spi attach + shared BusTraceLog on SystemBus (universal bus analyzer); STM32 register engines byte-for-byte untouched, wrappers only forward (transparent as_any) and activate only when a device+log is attached. Diff/conformance unchanged; no live re-capture.
     # 2026-07-03: additive `as_sim_input_mut` default method on the I2cDevice trait (generic SimInput hook) + new SystemBus set_input/list_inputs; STM32 register engines byte-for-byte untouched, the default returns None for all STM32 devices. Diff/conformance unchanged; no live re-capture.
     # 2026-07-04: drift is the file-hash of the additive L4 PLLSAI1/2 ready-bit change in rcc.rs (L4Rcc::ready); this board's RCC engine (F4Rcc) is byte-for-byte untouched, stm32f4_mmio_diff + stm32f4_exec_oracle unchanged, no live re-capture.
-    drift_ack: 2026-07-04
+    # 2026-07-05: shared i2c.rs gained SSD1306 inspect artifact metadata
+    # (`ink_bytes`/`lit_pixels`) so browser/OLED proof paths can detect drawn ink.
+    # STM32 F4 I2C register/transaction engines are untouched; stm32f4_mmio_diff +
+    # stm32f4_exec_oracle remain the pinned coverage. No live re-capture.
+    # 2026-07-09: read_gpio_pad — additive, READ-ONLY direction-aware pad probe accessor on the Peripheral trait + GpioPort (universal logic analyzer sampling). No register read/write path, reset value, or byte-path changed; mmio diffs/conformance unchanged. No live re-capture.
+    # 2026-07-10: bus-trace single-choke-point refactor (attach wraps at SystemBus::attach_i2c_slave/attach_spi_device; no per-callsite set_bus_trace) + cycle stamp on trace events + gpio_routing/pin_routing metadata. Additive; oracle output unchanged.
+    # 2026-07-11: STM32 SPI bit-level wire engine — classic/FIFO `Spi` DR writes now clock frames over derived wire time (CR1 BR/CPOL/CPHA/LSBFIRST + CR2.DS/CR1.DFF; SR flags flip at wire time — same firmware-visible completion timing, bits x 2^(BR+1) PCLK cycles, as the previous countdown) and GPIO ports gained read-only SPI AF pad routing (read_gpio_pad reads the live SCK/MOSI/MISO wire per the datasheet AF maps; H5's SPI-v3 model untouched). Register layouts, reset values and byte paths unchanged; mmio diffs/conformance unaffected. No live re-capture.
+    # 2026-07-12: STM32 TIMx walk-free migration (timer.rs) — event-scheduler builds now derive CNT/SR lazily from the bus cycle clock (exact closed-form walk replay incl. the enabled-flag counter freeze) and deliver update/compare IRQs via scheduled events; the legacy walk path is byte-identical, pinned by committed differentials (stm32_timer_walk_differential + in-module walk-identity gates). The tick-cost sim artifact (cycles:1 charged on overflow/held-level ticks) is removed in both modes. Register layout, reset values and MMIO byte paths unchanged; mmio diffs/conformance unaffected. No live re-capture.
+    # 2026-07-12: STM32 DMA1/DMA2 walk-free migration (dma.rs) + NXP Kinetis I2C walk-free migration (i2c.rs) — event-scheduler builds drive DMA element transfers via per-channel scheduled events (delay-1 mem2mem self-pacing, request-armed via route_dma_signal) and the Kinetis I2C level IRQ via a held-level re-pend chain; both are byte-identical to the walk, pinned by committed differentials (stm32_dma_walk_differential + in-module dma/i2c walk-identity gates). The DMA tick-cost sim artifact (cycles:1 per transferring tick) is removed in both modes. STM32 F1/L4 I2C transaction engines and H5 GPDMA are untouched and stay on the walk. Register layout, reset values and MMIO byte paths unchanged; mmio diffs/conformance unaffected. No live re-capture.
+    # 2026-07-17: DMA's forced-tick compatibility adapter is restricted to the
+    # bare-CPU hardware-oracle settle loop; the Machine lifecycle and normal DMA
+    # execution are unchanged. The frozen-settle and scheduler regressions pass.
+    # No live re-capture was run this session.
+    # 2026-07-18: STM32 F1 I2C walk-free migration (walk-free campaign) — the F1
+    # I2C transaction engine (this board's I2C variant) is now event-scheduled via
+    # a delay-1 self-perpetuating chain; the read-gated receive is caught by the
+    # already-live chain with no byte dropped. The legacy walk path is
+    # byte-identical, pinned by the i2c::kinetis_scheduler f1_* differentials.
+    # Featureless builds keep the walk. Register layout, reset values and MMIO byte
+    # paths unchanged; stm32f4_mmio_diff (RCC/GPIO/SPI/TIM, not I2C — I2C stays
+    # smoke-tier) passes unchanged. No live re-capture.
+    # 2026-07-19: unified stimulus interface — every bus controller gained a
+    # `for_each_attached_sim_input` impl (and TWIM/SPIM gained `as_any` +
+    # attached-device accessors) so SimInput reaches devices without
+    # downcasting. PURELY ADDITIVE: `git diff` over every model file listed
+    # below shows 0 removed lines — no existing method body was modified, so
+    # no register read/write path changed. Reset values, register layout and
+    # byte paths are unchanged; the mmio/conformance diffs pass unchanged.
+    # Drift is the shared-file commit date only. No live re-capture.
+    # 2026-07-20: per-cycle-walk participation only. Six shared peripheral
+    # models (gpio, stub, nrf52 timer/egu/temp/uarte) gained
+    # `legacy_tick_active()` / `legacy_tick_dynamic()` overrides so peripherals
+    # that do nothing are skipped by the legacy walk (nRF54L15 measured
+    # 2.74M -> 5.09M IPS). PURELY ADDITIVE: `git diff origin/main..HEAD` over
+    # those six files shows +12/+18 and **0 removed lines** — no existing method
+    # body was touched, so no register read/write path, reset value or layout
+    # changed. A peripheral is skipped ONLY in states where its `tick()` already
+    # returned a default PeripheralTickResult (or where it overrides no tick at
+    # all), and the bus re-arms the entry via `refresh_legacy_tick_index()` on
+    # any MMIO write. GPIOTE was tried the same way and REVERTED — its tick()
+    # detects IN edges rather than draining a queue, and
+    # nrf52840_onboarding_gpiote_event_in_fires_on_edge caught it. Offline
+    # oracle/mmio/conformance suites pass unchanged. No live re-capture.
+    drift_ack: 2026-07-20
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -405,9 +860,9 @@ boards:
       - "esp32s3_reset_conformance (9 reset regs vs live silicon, firmware-path bus)"
       - "e2e_i2c_tmp102 / e2e_hello_world / xtensa_exec / e2e_esp32_epaper (sim)"
     silicon:
-      last_capture: 2026-06-20
+      last_capture: 2026-07-15
       probe: "USB-JTAG built-in (ESP32-S3-Zero, USB 303a:1001, openocd-esp32, Tensilica tap 0x120034e5)"
-      result: "Live re-capture after the v0.17.0 merge: reset-state oracle 9/9 match live silicon (SYSTIMER CONF 0x46000000 + I2C0 timing block TO/FIFO_CONF/SCL holds/FILTER_CFG), and esp32s3_reset_conformance (sim vs frozen) passes. Supersedes the 2026-06-19 drift_ack."
+      result: "Live OpenOCD re-capture on 2026-07-15: connected ESP32-S3 rev 0.2 (MAC 9c:13:9e:f4:40:c0), both Xtensa JTAG taps examined, and reset-state windows captured for UART0, GPIO, I2C0, RMT, MCPWM0, TIMG0, SYSTIMER, GDMA, SYSTEM, and RTC_CNTL."
     # SPIMEM1 flash-command model fix: SPI_MEM_ADDR_REG is read right-justified
     # (was wrongly >>8) and the dual/quad fast-read opcodes (0x3B/0xBB/0x6B/0xEB)
     # are now decoded, so a 2nd-stage bootloader (MCUboot) reads slot0 and
@@ -416,7 +871,106 @@ boards:
     # Corroborated: the tier1 esp32s3 prebuilt-image rom-boot still passes all
     # self-tests (loads app from 0x10000). No live SWD re-capture this session
     # (no S3 board attached; a real C3 was used to dump the C3 mask ROM).
-    drift_ack: 2026-06-26
+    # 2026-07-05: added runtime-snapshot serialization to esp32s3/flash_xip.rs
+    # (Esp32s3MmuTable) + esp32s3/systimer.rs + the Xtensa CPU snapshot path, for the
+    # app-entry boot cache. Pure (de)serialization of existing MMU/counter/register
+    # state, invoked only on snapshot/resume — normal-run behaviour and the 9-reg
+    # reset-state silicon anchor are byte-for-byte unaffected. Covers the model-file
+    # touch; no live re-capture warranted.
+    # 2026-07-06: SYSTIMER gained scheduler/elapsed-cycle execution so C3/S3 idle
+    # fast-forward can jump directly to alarm deadlines instead of polling every
+    # CPU cycle. The register layout, reset values (including CONF=0x46000000),
+    # level IRQ semantics, and one-cycle tick equivalence are preserved by offline
+    # elapsed-vs-repeated-tick tests; no live USB-JTAG re-capture this session.
+    # 2026-07-07: SYSTIMER gained a per-instance scheduler-mode flag so C3 ROM boot
+    # can force legacy ticking while the default S3 constructor remains
+    # scheduler-driven. S3 reset values/MMIO semantics are unchanged; unit coverage
+    # asserts default scheduler behaviour and snapshot compatibility.
+    # 2026-07-09: universal logic analyzer — additive read_gpio_pad pad probe (ENABLE-mask direction) + I2C controller wraps attached slaves in TracingI2cDevice (shared bus trace) and signals START to the selected slave at address match so traces carry decodable address frames. Register map/reset values byte-for-byte untouched; conformance/e2e unchanged. No live re-capture.
+    # 2026-07-10: bus-trace single-choke-point refactor (attach wraps at SystemBus::attach_i2c_slave/attach_spi_device; no per-callsite set_bus_trace) + cycle stamp on trace events + gpio_routing/pin_routing metadata. Additive; oracle output unchanged.
+    # 2026-07-11: walk-free Class-A sweep — asserted needs_legacy_walk()==false on
+    # SpiMemFlash, FlashXipPeripheral, Esp32s3MmuTable and UsbSerialJtag (all
+    # verified structurally inert in the per-cycle walk: work happens at the MMIO
+    # access, tick() is the trait-default no-op). Pure walk-scheduling metadata —
+    # no register, reset-value, timing or IRQ change; the 9-reg reset-state
+    # silicon anchor is unaffected. No live re-capture warranted.
+    # 2026-07-12: walk-free C3 SYSTIMER batch — the shared SYSTIMER model
+    # (esp32s3/systimer.rs) gained a bus-published CycleClock handle (fresh
+    # OP-update snapshot on read) + matrix_irq_sources() (live level query) so a
+    # C3 SYSTIMER can migrate off the per-cycle walk: alarms fire as scheduled
+    # events routed through the C3 interrupt matrix. Register layout, reset
+    # values (CONF=0x46000000), alarm/level-IRQ semantics and one-cycle tick
+    # equivalence are preserved (elapsed-vs-repeated + walk-vs-scheduler
+    # differential gates). S3 default construction is unchanged. No live
+    # re-capture warranted.
+    # 2026-07-14: wifi_thunks (esp32s3/wifi_thunks.rs — test-only fake
+    # WL_CONNECTED WiFi outcome + simulated sockets) is now feature-gated behind
+    # an off-by-default `wifi-thunks` Cargo feature and excluded from the default
+    # build and the CI feature set (jit,event-scheduler). This only changes the
+    # esp32s3 module source surface (a `#[cfg(feature = "wifi-thunks")]` gate on
+    # the module declaration); no real silicon behaviour changes — wifi_thunks
+    # was never a live-verified peripheral (it is a functional thunk, not a
+    # register model, and the WiFi MAC/PHY is a closed RF-coprocessor blob with
+    # no executable image). Register map, reset values, MMIO byte paths and the
+    # 9-reg reset-state silicon anchor are byte-for-byte unaffected. No live
+    # re-capture warranted.
+    # 2026-07-16: Flash-XIP instruction-fetch fast path (word-sized read_u32,
+    # generation-keyed MMU page-translation cache, lock-free physical-page
+    # mirror). Same MMU entry semantics and same flash bytes as before — pure
+    # host-side speed; the 9-reg reset-state silicon anchor is unaffected.
+    # No live re-capture warranted.
+    # 2026-07-18: bus access-method consolidation — deleted the stale duplicate
+    # inherent SystemBus::{read,write}_u{16,32} shadow in bus/mmio_words.rs; all
+    # direct-SystemBus callers route through the single Bus-trait impl. Pure
+    # refactor, additive/behaviour-neutral; the 9-reg reset-state anchor is
+    # unaffected. No S3 board attached this session (no live re-capture); C3
+    # sibling silicon re-validated live this date. See esp32c3 drift_ack.
+    # 2026-07-19: unified stimulus interface — every bus controller gained a
+    # `for_each_attached_sim_input` impl (and TWIM/SPIM gained `as_any` +
+    # attached-device accessors) so SimInput reaches devices without
+    # downcasting. PURELY ADDITIVE: `git diff` over every model file listed
+    # below shows 0 removed lines — no existing method body was modified, so
+    # no register read/write path changed. Reset values, register layout and
+    # byte paths are unchanged; the mmio/conformance diffs pass unchanged.
+    # Drift is the shared-file commit date only. No live re-capture.
+    # 2026-07-20: RMT — RMTMEM is now backed by real memory. The parent maps a
+    # 0x1000 window, so offsets 0x400..0xA00 already routed into the peripheral
+    # and fell through the read/write catch-alls, silently DISCARDING every
+    # ESP-IDF rmt_tx symbol write. Those writes now persist in a flat [u32;384]
+    # store that the APB CHnDATA FIFO port and direct RMTMEM access alias, as
+    # silicon does. Purely additive for anything previously observable: no
+    # existing register's behaviour changed and TX_START still latches
+    # CHn_TX_END synchronously (no waveform playback, no GPIO, no clock change).
+    # One reset value DID change: TX CONF0 was 0x0017_0200, a nibble
+    # transposition of 0x0071_0200 that contradicted its own comment on two
+    # fields (it decoded to MEM_SIZE=7 and left CARRIER_OUT_LV/bit22 clear,
+    # while the comment named MEM_SIZE=1 and CARRIER_OUT_LV=1). Harmless while
+    # MEM_SIZE was unused; load-bearing once MEM_SIZE drives windowing, where it
+    # gave every TX channel a 336-word window at reset and let a CH0 FIFO burst
+    # overwrite channels 1-6. This is NOT covered by the silicon anchor: the
+    # 2026-07-15 capture recorded RESET-STATE windows, and the RMT block is
+    # clock-gated at reset so silicon reads 0 across 0x60016000..0x600160ff
+    # (chip_conformance excludes exactly that range on that basis) — the
+    # constant is only observable after the clock is ungated. Verified this
+    # session, not asserted: hw-oracle esp32s3_reset_values_match_silicon passes
+    # (1 passed, 0 filtered) and chip_conformance_ratchet passes, both unchanged.
+    # No S3 board attached; no live re-capture warranted.
+    # 2026-07-21: RMT->GPIO NeoPixel path (Stages 1-3). Additive-only against the
+    # reset-state silicon anchor: (a) new `Esp32s3Gpio::drive_pad_output` +
+    # `apply_out1` extend the existing OUT/OUT1 observer chokepoint to fire on
+    # peripheral-driven pad edges (bank 0 AND bank 1 / GPIO32-48) — observers only
+    # fire when one is registered, and no reset value or OUT/OUT1 byte path
+    # changed; (b) `FUNCn_OUT_SEL_CFG` output-routing lookup only READS existing
+    # registers; (c) the RMT peripheral now plays decoded RMTMEM symbols out as
+    # timed pad edges, but ONLY after a post-reset TX_START (gated: idle RMT never
+    # enters the bus tick set), so the clock-gated-at-reset RMT window the anchor
+    # records (silicon reads 0 across 0x60016000..0x600160ff) is untouched; (d)
+    # the WS2812 decoder is a passive GpioObserver, no register surface. Verified
+    # this session, not asserted: `esp32s3_walk_differential` is byte-identical (2
+    # passed), `esp32s3_reset_conformance`/`reset_values_match_silicon` unchanged,
+    # full core lib suite 2329 green. No S3 board attached; no live re-capture
+    # warranted — the new behaviour is post-reset and outside the anchored window.
+    drift_ack: 2026-07-21
     models:
       - crates/core/src/peripherals/esp32s3
       - crates/core/src/peripherals/esp_xtensa_common

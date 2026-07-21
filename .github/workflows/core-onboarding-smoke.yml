@@ -1,12 +1,15 @@
 name: Core Onboarding Smoke
 
 on:
-  # Post-merge: run the full matrix on every push to main so all tests run
-  # after merge even when a PR only touched core crates (the fast PR gate does
-  # not block on this).
   push:
     branches:
       - main
+    paths:
+      - "configs/chips/**"
+      - "configs/systems/**"
+      - "examples/**"
+      - "crates/labwired-models-**"
+      - ".github/workflows/core-onboarding-smoke.yml"
   pull_request:
     branches:
       - main
@@ -18,11 +21,15 @@ on:
       - ".github/workflows/core-onboarding-smoke.yml"
   workflow_dispatch:
 
+concurrency:
+  group: core-onboarding-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   onboarding-smoke:
     name: onboarding-${{ matrix.id }}
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -86,6 +93,7 @@ jobs:
   onboarding-scoreboard:
     name: onboarding-scoreboard
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     needs: onboarding-smoke
     if: always()
     steps:

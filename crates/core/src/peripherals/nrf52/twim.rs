@@ -238,10 +238,19 @@ impl Nrf52Twim {
         Self::default()
     }
 
-    /// Attach an I2C device.  The device is matched by its 7-bit address when
-    /// `ADDRESS` is set and a STARTTX/STARTRX task fires.
-    pub fn attach(&mut self, device: Box<dyn I2cDevice>) {
+    /// Raw slave push — does NOT wrap for tracing. Callers are the bus choke
+    /// point [`crate::bus::SystemBus::attach_i2c_slave`] and the nRF52 serial
+    /// mux, both of which wrap first. The device is matched by its 7-bit address
+    /// when `ADDRESS` is set and a STARTTX/STARTRX task fires.
+    pub(crate) fn push_slave(&mut self, device: Box<dyn I2cDevice>) {
         self.attached_devices.push(RefCell::new(device));
+    }
+
+    /// The attached I²C slaves, in attach order. Mirrors
+    /// [`crate::peripherals::i2c::I2c::attached_devices`] so callers can reach
+    /// a device by a path independent of the sim-input walk.
+    pub fn attached_devices(&self) -> &[RefCell<Box<dyn I2cDevice>>] {
+        &self.attached_devices
     }
 
     /// Find the first attached device whose `address()` matches `addr7`.
@@ -631,6 +640,34 @@ impl Peripheral for Nrf52Twim {
             ..Default::default()
         }
     }
+
+    /// Required for [`crate::bus::SystemBus::attach_i2c_slave`] to downcast to
+    /// `Nrf52Twim`. Without these, that downcast can never match and attaching
+    /// any I²C slave to a TWIM controller fails loudly at attach time — which
+    /// removed the whole nRF52 board line from programmatic attach.
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
+
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
+    }
+
+    /// TWIM holds its slaves behind `RefCell`, like the generic `I2c`.
+    fn for_each_attached_sim_input(
+        &mut self,
+        f: &mut dyn FnMut(&mut dyn crate::sim_input::SimInput) -> bool,
+    ) -> bool {
+        for cell in self.attached_devices.iter_mut() {
+            let mut dev = cell.borrow_mut();
+            if let Some(si) = dev.as_sim_input_mut() {
+                if f(si) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -916,7 +953,7 @@ mod tests {
     #[test]
     fn twim_tx_reads_ram_and_sets_amount() {
         let mut t = Nrf52Twim::new();
-        t.attach(Box::new(RecordingDevice::new(0x48, vec![])));
+        t.push_slave(Box::new(RecordingDevice::new(0x48, vec![])));
         let mut bus = FlatRam::new();
 
         let tx_base: u64 = 0x2000_0000;
@@ -988,7 +1025,7 @@ mod tests {
     fn twim_tx_delivers_correct_bytes_to_device() {
         let tx_data: [u8; 4] = [0xDE, 0xAD, 0xBE, 0xEF];
         let mut t = Nrf52Twim::new();
-        t.attach(Box::new(RecordingDevice::new(0x10, vec![])));
+        t.push_slave(Box::new(RecordingDevice::new(0x10, vec![])));
         let mut bus = FlatRam::new();
         let tx_base: u64 = 0x2000_0200;
         bus.write_slice(tx_base, &tx_data);
@@ -1016,7 +1053,7 @@ mod tests {
     fn twim_rx_fills_ram_and_sets_amount() {
         let read_seq: Vec<u8> = vec![0x11, 0x22, 0x33, 0x44];
         let mut t = Nrf52Twim::new();
-        t.attach(Box::new(RecordingDevice::new(0x68, read_seq.clone())));
+        t.push_slave(Box::new(RecordingDevice::new(0x68, read_seq.clone())));
         let mut bus = FlatRam::new();
 
         let rx_base: u64 = 0x2000_0300;
@@ -1088,7 +1125,7 @@ mod tests {
     #[test]
     fn short_lasttx_stop_fires_stopped() {
         let mut t = Nrf52Twim::new();
-        t.attach(Box::new(RecordingDevice::new(0x20, vec![])));
+        t.push_slave(Box::new(RecordingDevice::new(0x20, vec![])));
         let mut bus = FlatRam::new();
         let tx_base: u64 = 0x2000_0500;
         bus.write_slice(tx_base, &[0x01, 0x02]);
@@ -1115,7 +1152,7 @@ mod tests {
     #[test]
     fn short_lasttx_suspend_fires_suspended() {
         let mut t = Nrf52Twim::new();
-        t.attach(Box::new(RecordingDevice::new(0x76, vec![])));
+        t.push_slave(Box::new(RecordingDevice::new(0x76, vec![])));
         let mut bus = FlatRam::new();
         let tx_base: u64 = 0x2000_0500;
         bus.write_slice(tx_base, &[0xD0]); // register address byte
@@ -1153,7 +1190,7 @@ mod tests {
     fn twim_resume_after_suspend_starts_followon_rx() {
         let read_seq: Vec<u8> = vec![0x60]; // BME280 chip-id
         let mut t = Nrf52Twim::new();
-        t.attach(Box::new(RecordingDevice::new(0x76, read_seq.clone())));
+        t.push_slave(Box::new(RecordingDevice::new(0x76, read_seq.clone())));
         let mut bus = FlatRam::new();
         let tx_base: u64 = 0x2000_0500;
         let rx_base: u64 = 0x2000_0600;
@@ -1204,7 +1241,7 @@ mod tests {
     #[test]
     fn short_lastrx_stop_fires_stopped() {
         let mut t = Nrf52Twim::new();
-        t.attach(Box::new(RecordingDevice::new(0x21, vec![0xAA, 0xBB])));
+        t.push_slave(Box::new(RecordingDevice::new(0x21, vec![0xAA, 0xBB])));
         let mut bus = FlatRam::new();
         let rx_base: u64 = 0x2000_0600;
 
@@ -1230,7 +1267,7 @@ mod tests {
     fn short_lasttx_startrx_chains_into_rx() {
         let read_seq: Vec<u8> = vec![0x55, 0x66];
         let mut t = Nrf52Twim::new();
-        t.attach(Box::new(RecordingDevice::new(0x30, read_seq.clone())));
+        t.push_slave(Box::new(RecordingDevice::new(0x30, read_seq.clone())));
         let mut bus = FlatRam::new();
 
         let tx_base: u64 = 0x2000_0700;
@@ -1275,7 +1312,7 @@ mod tests {
     #[test]
     fn short_lastrx_starttx_chains_into_tx() {
         let mut t = Nrf52Twim::new();
-        t.attach(Box::new(RecordingDevice::new(0x31, vec![0xAA])));
+        t.push_slave(Box::new(RecordingDevice::new(0x31, vec![0xAA])));
         let mut bus = FlatRam::new();
 
         let tx_base: u64 = 0x2000_0900;
@@ -1335,7 +1372,7 @@ mod tests {
         write32(&mut t, OFF_ADDRESS, 0x48);
         write32(&mut t, OFF_TXD_PTR, tx_base as u32);
         write32(&mut t, OFF_TXD_MAXCNT, 1);
-        t.attach(Box::new(RecordingDevice::new(0x48, vec![])));
+        t.push_slave(Box::new(RecordingDevice::new(0x48, vec![])));
         write32(&mut t, OFF_TASKS_STARTTX, 1);
         run_leg(&mut t, &mut bus);
 
@@ -1359,7 +1396,7 @@ mod tests {
     #[test]
     fn twim_tx_zero_length() {
         let mut t = Nrf52Twim::new();
-        t.attach(Box::new(RecordingDevice::new(0x48, vec![])));
+        t.push_slave(Box::new(RecordingDevice::new(0x48, vec![])));
         let mut bus = FlatRam::new();
 
         write32(&mut t, OFF_ENABLE, 6);
@@ -1385,7 +1422,7 @@ mod tests {
     #[test]
     fn twim_rx_zero_length() {
         let mut t = Nrf52Twim::new();
-        t.attach(Box::new(RecordingDevice::new(0x48, vec![])));
+        t.push_slave(Box::new(RecordingDevice::new(0x48, vec![])));
         let mut bus = FlatRam::new();
 
         write32(&mut t, OFF_ENABLE, 6);
@@ -1411,7 +1448,7 @@ mod tests {
     #[test]
     fn irq_raised_when_inten_set_and_event_fires() {
         let mut t = Nrf52Twim::new();
-        t.attach(Box::new(RecordingDevice::new(0x48, vec![])));
+        t.push_slave(Box::new(RecordingDevice::new(0x48, vec![])));
         let mut bus = FlatRam::new();
         let tx_base: u64 = 0x2000_0C00;
         bus.write_slice(tx_base, &[0xAB]);

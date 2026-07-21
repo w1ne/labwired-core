@@ -30,6 +30,6 @@ pub struct EventResult {
     /// Phase 2B.3b: re-arm this same event after `delay_ticks` (using the
     /// just-fired `event_token`). Lets a level-triggered peripheral perpetuate
     /// itself while it has active work, then stop by returning `None`. The
-    /// `Machine` drain loop owns the (idx, generation) needed to reschedule.
+    /// `Machine` drain loop owns the idx needed to reschedule.
     pub reschedule_delay: Option<u64>,
 }

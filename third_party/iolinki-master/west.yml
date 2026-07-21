@@ -1,0 +1,46 @@
+# Copyright (C) 2026 Andrii Shylenko
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Standalone west manifest for iolinki-master.
+#
+# This manifest lets you use iolinki-master as the manifest repository of a
+# fresh west workspace, pulling in Zephyr and the iolinki device stack (which
+# supplies the shared frame/CRC helpers and public headers) alongside it:
+#
+#     west init -m https://github.com/w1ne/iolinki-master --mr main iolinki-ws
+#     cd iolinki-ws
+#     west update
+#     west build -b native_sim iolinki-master/samples/iolink_master
+#
+# The pinned Zephyr revision below tracks Zephyr 'main'; the master core uses
+# only portable C99 and no Zephyr APIs directly, so it builds across Zephyr 3.7
+# LTS through main. The native_sim sample is verified to compile and link green
+# in CI (see the zephyr-validation job in .github/workflows/ci.yml).
+#
+# For production, do NOT use this file: add iolinki-master and iolinki as
+# projects entries in your OWN west.yml pinned to your chosen Zephyr/SDK.
+manifest:
+  self:
+    # iolinki-master is the manifest repo; it is also a Zephyr module via
+    # zephyr/module.yml.
+    path: iolinki-master
+    west-commands: ""
+
+  remotes:
+    - name: zephyrproject-rtos
+      url-base: https://github.com/zephyrproject-rtos
+    - name: w1ne
+      url-base: https://github.com/w1ne
+
+  projects:
+    # The iolinki device stack is a Zephyr module too; the master reuses its
+    # frame/CRC helper sources and <iolinki/*.h> headers.
+    - name: iolinki
+      remote: w1ne
+      revision: develop
+      path: iolinki
+
+    - name: zephyr
+      remote: zephyrproject-rtos
+      revision: main
+      import: true

@@ -452,6 +452,7 @@ mod ram_peripheral {
 fn capture_sim_state(case: &RiscVOracleCase) -> RiscVOracleState {
     use labwired_core::bus::SystemBus;
     use labwired_core::cpu::riscv::RiscV;
+    use labwired_core::Bus;
     use labwired_core::Cpu;
     use ram_peripheral::RamPeripheral;
 

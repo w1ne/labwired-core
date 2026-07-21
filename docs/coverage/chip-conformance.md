@@ -7,6 +7,7 @@ Reg match = verifiable cold-reset registers reproduced. "Excluded" = registers a
 | Chip | Level | Estate | Peripherals | Reg match (verifiable) | Excluded | Behavior gate |
 |------|-------|--------|-------------|------------------------|----------|---------------|
 | esp32c3 | **L2** | ✓ | 39 | 364/402 (90%) | 190 | firmware_survival::test_esp32c3_demo_survival |
+| nrf54l15 | **L1** | ✓ | 28 | — | — | firmware_survival::test_nrf54l15_zephyr_survival |
 | esp32 | **L0** | ✓ | 14 | — | — | — |
 | esp32s3 | **L0** | ✓ | 10 | — | — | — |
 | esp32s3-zero | **L0** | ✓ | 17 | — | — | — |
@@ -14,10 +15,10 @@ Reg match = verifiable cold-reset registers reproduced. "Excluded" = registers a
 | nrf52832 | **L1** | ✓ | 10 | — | — | firmware_survival::test_nrf52832_demo_survival |
 | nrf52840 | **L1** | ✓ | 49 | — | — | firmware_survival::test_nrf52840_demo_survival |
 | nrf5340 | **L1** | ✓ | 20 | — | — | firmware_survival::test_nrf5340_zephyr_survival |
-| rp2040 | **L1** | ✓ | 10 | — | — | firmware_survival::test_rp2040_demo_survival |
+| rp2040 | **L1** | ✓ | 15 | — | — | firmware_survival::test_rp2040_demo_survival |
 | stm32f103 | **L1** | ✓ | 31 | — | — | stm32f1_exec_oracle |
 | stm32f401 | **L1** | ✓ | 15 | — | — | firmware_survival::test_stm32f401_blinky_survival |
-| stm32f407 | **L1** | ✓ | 27 | — | — | firmware_survival::test_nucleo_f407_smoke_survival |
+| stm32f407 | **L1** | ✓ | 29 | — | — | firmware_survival::test_nucleo_f407_smoke_survival |
 | stm32g474re | **L0** | ✓ | 20 | — | — | — |
 | stm32h563 | **L1** | ✓ | 37 | — | — | firmware_survival::test_stm32h563_demo_survival |
 | stm32l073 | **L2** | ✓ | 42 | 55/55 (100%) | 5 | firmware_survival::test_nucleo_l073rz_smoke_survival |

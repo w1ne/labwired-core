@@ -47,6 +47,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "exti",
     "afio",
     "dma",
+    "stm32f4_dma",
     "gpdma",
     "adc",
     "pio",
@@ -76,12 +77,16 @@ pub const MODEL_TYPES: &[&str] = &[
     "fmc",
     // RP2040 native peripherals (built here).
     "rp2040_timer",
+    "rp2040_dma",
     "rp2040_spi",
     "rp2040_i2c",
     "rp2040_xip_ssi",
+    "rp2040_usb",
     // ESP32-C3 behavioral models (esp32 factory).
     "esp32c3_i2c",
     "esp32c3_spi",
+    "esp32c3_gpio",
+    "esp32c3_io_mux",
     "esp32c3_apb_saradc",
     "esp32c3_ledc",
     // nRF52 behavioral models (nrf52 factory).
@@ -92,6 +97,11 @@ pub const MODEL_TYPES: &[&str] = &[
     "nrf52840_twis",
     "nrf52840_uart",
     "nrf52_gpiote",
+    // nRF54L behavioral models (nrf54l factory). Listed here so the fuzzy
+    // `contains("uart")` heuristic cannot coerce `nrf54l_uarte` onto the
+    // generic STM32 UART layout — it is a distinct silicon register map.
+    "nrf54l_uarte",
+    "nrf54l_twim",
 ];
 
 /// True if `t` is already a canonical model-type name (see [`MODEL_TYPES`]).
@@ -105,6 +115,7 @@ pub fn try_build(
     canonical_type: &str,
     p_cfg: &PeripheralConfig,
     manifest: &SystemManifest,
+    bus_trace: &crate::bus::bus_trace::BusTrace,
 ) -> anyhow::Result<Option<Box<dyn Peripheral>>> {
     let dev: Box<dyn Peripheral> = match canonical_type {
         "systick" | "arm_generictimer" => {
@@ -243,7 +254,11 @@ pub fn try_build(
                 match crate::peripherals::components::build_spi_device(&ext.r#type, &ext.config) {
                     Some(device) => {
                         tracing::info!("spi attach: '{}' (type=ir) -> '{}'", ext.id, p_cfg.id);
-                        spi.attach(device);
+                        // Wrap through the single trace helper (this factory
+                        // attaches before the peripheral is on the bus).
+                        spi.push_device(crate::bus::bus_trace::wrap_spi(
+                            &p_cfg.id, bus_trace, device,
+                        ));
                     }
                     None => {
                         tracing::warn!(
@@ -266,6 +281,9 @@ pub fn try_build(
                 Some("stm32l0") | Some("l0") => Box::new(crate::peripherals::pwr::PwrL0::new()),
                 // WBA: VOSR (0x0C) VOS→VOSRDY handshake the SoC init polls.
                 Some("stm32wba") | Some("wba") => Box::new(crate::peripherals::pwr::PwrWba::new()),
+                // F4 has only PWR_CR/PWR_CSR (RM0368 §5.4) — a distinct reset
+                // shape from the L4 CR1..CR4 / PUCRx set.
+                Some("stm32f4") | Some("f4") => Box::new(crate::peripherals::pwr::PwrF4::new()),
                 _ => Box::new(crate::peripherals::pwr::Pwr::new()),
             }
         }
@@ -305,10 +323,12 @@ pub fn try_build(
             p_cfg.base_address,
         )),
         "rp2040_timer" => Box::new(crate::peripherals::rp2040::timer::Rp2040Timer::new()),
+        "rp2040_dma" => Box::new(crate::peripherals::rp2040::dma::Rp2040Dma::new()),
         "rp2040_sio" => Box::new(crate::peripherals::rp2040::sio::Rp2040Sio::new()),
         "rp2040_spi" => Box::new(crate::peripherals::rp2040::spi::Rp2040Spi::new()),
         "rp2040_i2c" => Box::new(crate::peripherals::rp2040::i2c::Rp2040I2c::new()),
         "rp2040_xip_ssi" => Box::new(crate::peripherals::rp2040::xip_ssi::Rp2040XipSsi::new()),
+        "rp2040_usb" => Box::new(crate::peripherals::rp2040::usb::Rp2040Usb::new()),
         "crc" => {
             // IDR scratch register width: 8-bit on F0/F1/L0, 32-bit
             // on F2+/L4+. YAML: `config: { idr_width: 8 }`; default 32.
@@ -358,6 +378,33 @@ pub fn try_build(
         }
         "afio" => Box::new(crate::peripherals::afio::Afio::new()),
         "dma" | "stm32dma" => Box::new(crate::peripherals::dma::Dma1::new()),
+        // STM32F4 stream-based DMA (RM0090 §10). `config: { dma2: true }` marks
+        // the DMA2 instance (memory-to-memory capable); `config: { stream_irqs:
+        // [..8..] }` routes each stream to its own NVIC vector (F4 stream IRQs
+        // are non-contiguous, e.g. DMA1_Stream7 = 47).
+        "stm32f4_dma" => {
+            let mut dma = crate::peripherals::stm32f4_dma::StreamDma::new();
+            if p_cfg
+                .config
+                .get("dma2")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
+            {
+                dma = dma.as_dma2();
+            }
+            if let Some(arr) = p_cfg
+                .config
+                .get("stream_irqs")
+                .and_then(|v| v.as_sequence())
+            {
+                let irqs: Vec<u32> = arr
+                    .iter()
+                    .filter_map(|v| v.as_u64().map(|n| n as u32))
+                    .collect();
+                dma = dma.with_stream_irqs(irqs);
+            }
+            Box::new(dma)
+        }
         "gpdma" => {
             // `config: { irq_base: N }` routes channel n to NVIC
             // line N + n (H563 GPDMA1: 27..34). Without it the

@@ -40,6 +40,13 @@ pub trait UartStreamDevice: Send {
     fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
         None
     }
+    /// Runtime-drivable view of this device, if it accepts simulated input.
+    /// Same contract as the hook on `I2cDevice`: input devices override it so
+    /// the generic [`crate::Machine::set_input`] resolver can reach them
+    /// without a downcast. Default `None` = not an input device.
+    fn as_sim_input_mut(&mut self) -> Option<&mut dyn crate::sim_input::SimInput> {
+        None
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize)]
@@ -671,6 +678,33 @@ pub struct Uart {
     /// under the `event-scheduler` feature (flag-off drives via `tick()`).
     #[serde(skip)]
     scheduled: bool,
+    /// Whether this UART was registered with an IRQ line (`PeripheralEntry::irq`).
+    /// Set at the bus attach choke points via `attach_irq_line`.
+    ///
+    /// `true` by DEFAULT — the conservative value. `has_active_work` uses it to
+    /// decide whether holding a level-triggered TXEIE/TCIE is worth a per-cycle
+    /// wakeup: the machine drops `raise_own_irq` when the entry has no `irq`, so
+    /// on such a bus (e.g. the ESP32-C3, whose chip yaml declares `uart0` with no
+    /// `irq:` and whose intmatrix never reads this model — it implements no
+    /// `matrix_irq_sources`) those wakeups are provably unobservable. Defaulting
+    /// to `true` means any bus that bypasses the choke points keeps the exact
+    /// legacy cadence.
+    ///
+    /// ⚠️ `true`-by-default holds only because the CONSTRUCTOR sets it. `Uart`
+    /// derives `Serialize` ALONE — there is no `Deserialize`. If you ever add
+    /// one, `#[serde(skip)]` will populate this from `bool::default()` == FALSE,
+    /// which is the UNSAFE direction: a restored UART would silently stop
+    /// scheduling real IRQ wakeups on buses that DO wire an IRQ (STM32 et al),
+    /// dropping interrupts with no error. Adding `Deserialize` REQUIRES
+    /// `#[serde(skip, default = "…")]` returning `true`. Stale `true` is merely
+    /// slow; stale `false` breaks fidelity.
+    #[serde(skip)]
+    irq_wired: bool,
+    /// Test/differential knob: pin this model to the legacy per-cycle walk
+    /// (`uses_scheduler() == false`). `false` in every real config. See
+    /// [`Uart::force_legacy_walk`].
+    #[serde(skip)]
+    legacy_walk_forced: bool,
 }
 
 impl core::fmt::Debug for Uart {
@@ -720,7 +754,24 @@ impl Uart {
             trace_seq: 0,
             elapsed_us: 0,
             scheduled: false,
+            // Conservative until the bus says otherwise (see `attach_irq_line`).
+            irq_wired: true,
+            legacy_walk_forced: false,
         }
+    }
+
+    /// Test/differential knob: pin the UART to the legacy per-cycle walk
+    /// (`uses_scheduler() == false`), so the bus drives it through `tick()`
+    /// every cycle — the exact pre-scheduler semantics. Used by
+    /// `esp32c3_walk_differential` to build the ground-truth reference config
+    /// from the same bus assembly (mirrors `Esp32c3I2c::force_legacy_walk`).
+    ///
+    /// This is the reference the `has_active_work` IRQ gate is proven against:
+    /// the walk ticks this model every cycle unconditionally, so if skipping
+    /// unobservable scheduler wakeups changed ANY guest-visible byte, the
+    /// walk-on-vs-scheduler differential would diverge.
+    pub fn force_legacy_walk(&mut self) {
+        self.legacy_walk_forced = true;
     }
 
     /// Attach a stream device to the UART RX path.
@@ -740,7 +791,21 @@ impl Uart {
     fn has_active_work(&self) -> bool {
         let txeie_set = (self.cr1 & self.txeie_mask()) != 0 && self.txeie_mask() != 0;
         let tcie_set = (self.cr1 & self.tcie_mask()) != 0 && self.tcie_mask() != 0;
-        txeie_set || tcie_set || !self.attached_streams.is_empty() || self.dma_tx_pending
+        // The TXEIE/TCIE arm's ONLY product is `raise_own_irq` — `advance_one_tick`
+        // feeds it nowhere else, and it mutates no state on this path (the
+        // `elapsed_us`/stream bookkeeping lives behind the `attached_streams`
+        // arm, the DMA signal behind `dma_tx_pending`). The machine DROPS
+        // `raise_own_irq` when the entry carries no `irq` (`apply_event_result`),
+        // so on an IRQ-less bus a wakeup held open by TXEIE/TCIE alone can
+        // neither pend a line nor change a byte: it is unobservable work. Skip
+        // scheduling it there, and keep the exact legacy cadence everywhere the
+        // line is actually wired (`irq_wired` defaults to `true`).
+        //
+        // This narrows WAKEUPS only. Event DELIVERY is untouched: the moment an
+        // MMIO write gives the UART real work (a stream byte to pace, a DMA TX),
+        // `take_scheduled_events` re-arms at the same cycle it always did.
+        let level_irq_observable = self.irq_wired && (txeie_set || tcie_set);
+        level_irq_observable || !self.attached_streams.is_empty() || self.dma_tx_pending
     }
 
     /// Phase 2B.3b: one tick-equivalent of work, shared verbatim by the legacy
@@ -1068,7 +1133,14 @@ impl crate::Peripheral for Uart {
     /// cycle; `take_scheduled_events` / `on_event` drive it instead. With the
     /// feature off this is ignored and `tick()` still runs.
     fn uses_scheduler(&self) -> bool {
-        true
+        !self.legacy_walk_forced
+    }
+
+    /// Record whether a line was wired, so `has_active_work` can tell a
+    /// level-triggered own-IRQ that someone observes from one that the machine
+    /// will drop on the floor. See the field docs on `irq_wired`.
+    fn attach_irq_line(&mut self, irq: Option<u32>) {
+        self.irq_wired = irq.is_some();
     }
 
     /// Hand the bus a single self-perpetuating WAKE event when the UART has
@@ -1143,6 +1215,22 @@ impl crate::Peripheral for Uart {
 
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
+    }
+
+    /// UART's attachables are byte streams (GPS, modem), not addressed slaves,
+    /// but they carry stimulus channels the same way.
+    fn for_each_attached_sim_input(
+        &mut self,
+        f: &mut dyn FnMut(&mut dyn crate::sim_input::SimInput) -> bool,
+    ) -> bool {
+        for stream in self.attached_streams.iter_mut() {
+            if let Some(si) = stream.as_sim_input_mut() {
+                if f(si) {
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     fn snapshot(&self) -> serde_json::Value {
@@ -1524,5 +1612,95 @@ mod v2_irq_gating_tests {
         assert!(uart.tick().irq, "TXEIE must pend");
         uart.write_u32(0x00, 0x2000_004D).unwrap(); // TCIE instead
         assert!(uart.tick().irq, "TCIE must pend");
+    }
+}
+
+/// Wakeup-observability gates: when may a `Uart` hold a per-cycle scheduler
+/// wakeup open just to re-assert a level-triggered own-IRQ?
+#[cfg(test)]
+mod wakeup_observability_tests {
+    use super::*;
+    use crate::Peripheral;
+
+    // ── IRQ-observability gate for the per-cycle wakeup ──────────────────
+    // A `Uart` holding TXEIE/TCIE re-arms a scheduler event EVERY guest cycle
+    // (`reschedule_delay: Some(1)`), which pins the whole machine's batch width
+    // to 1. That is the right thing to do when someone can observe the level:
+    // the machine pends the entry's `irq`. It is pure waste when the entry has
+    // NO irq, because `apply_event_result` drops `raise_own_irq` on the floor —
+    // and on that path `advance_one_tick` mutates nothing either. The ESP32-C3
+    // is exactly that bus (chip yaml declares `uart0` with no `irq:`), where
+    // this cost ~97% of all batch clamps and held the shipped display-workshop
+    // lab at RTF 0.003.
+    //
+    // These pin the decision table so the collapse cannot come back.
+
+    #[test]
+    fn irqless_uart_holding_txeie_schedules_no_wakeups() {
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::Stm32F1);
+        uart.attach_irq_line(None); // the C3 `uart0` case
+        uart.write(0x0C, 1 << 7).unwrap(); // TXEIE
+
+        assert!(
+            uart.take_scheduled_events().is_empty(),
+            "an IRQ-less UART must not arm a per-cycle wakeup for a level nobody \
+             can observe (the machine drops `raise_own_irq` with no entry irq)"
+        );
+        assert!(
+            !uart.has_active_work(),
+            "TXEIE alone is not 'active work' when the own-IRQ is unobservable"
+        );
+    }
+
+    #[test]
+    fn irq_wired_uart_holding_txeie_still_wakes_every_cycle() {
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::Stm32F1);
+        uart.attach_irq_line(Some(37)); // a real NVIC line (e.g. an STM32 lab)
+        uart.write(0x0C, 1 << 7).unwrap(); // TXEIE
+
+        assert_eq!(
+            uart.take_scheduled_events(),
+            vec![(0, UART_WAKE_TOKEN)],
+            "a wired level-triggered IRQ must keep its exact legacy cadence"
+        );
+    }
+
+    #[test]
+    fn uart_defaults_to_wiring_its_irq_when_never_told() {
+        // Buses that bypass the attach choke points (hand-built `PeripheralEntry`
+        // literals) never call `attach_irq_line`. The conservative default must
+        // preserve the legacy cadence — same contract as `attach_cycle_clock`.
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::Stm32F1);
+        uart.write(0x0C, 1 << 7).unwrap(); // TXEIE, no attach_irq_line call
+        assert!(
+            uart.has_active_work(),
+            "without an explicit attach, a UART must assume its IRQ is wired"
+        );
+    }
+
+    #[test]
+    fn irqless_uart_still_wakes_for_real_work() {
+        // The gate narrows ONLY the unobservable-level arm. Anything that
+        // actually mutates state or emits bytes must still be scheduled.
+        struct Silent;
+        impl UartStreamDevice for Silent {
+            fn poll(&mut self, _elapsed_us: u32) -> Option<u8> {
+                None
+            }
+            fn on_tx_byte(&mut self, _byte: u8) {}
+        }
+
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::Stm32F1);
+        uart.attach_irq_line(None);
+        uart.attach_stream(Box::new(Silent));
+        assert!(
+            uart.has_active_work(),
+            "an attached RX stream is real work (byte pacing) regardless of IRQ wiring"
+        );
+        assert_eq!(
+            uart.take_scheduled_events(),
+            vec![(0, UART_WAKE_TOKEN)],
+            "stream pacing must still arm on an IRQ-less bus"
+        );
     }
 }

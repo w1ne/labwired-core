@@ -45,6 +45,11 @@ impl Esp32c3Rng {
 }
 
 impl Peripheral for Esp32c3Rng {
+    // Inert walk: xorshift state advances on read, never in the walk; tick() is the trait-default no-op.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let w = self.next_word();
         Ok((w >> ((offset & 3) * 8)) as u8)
@@ -60,6 +65,10 @@ impl Peripheral for Esp32c3Rng {
 
     fn write_u32(&mut self, _offset: u64, _value: u32) -> SimResult<()> {
         Ok(())
+    }
+
+    fn legacy_tick_active(&self) -> bool {
+        false
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {

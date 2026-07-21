@@ -17,9 +17,8 @@ use labwired_config::ExternalDevice;
 
 use crate::bus::SystemBus;
 use crate::peripherals::adc::Adc;
-use crate::peripherals::esp32c3::i2c::Esp32c3I2c;
 use crate::peripherals::i2c::{I2c, I2cDevice};
-use crate::peripherals::spi::Spi;
+use crate::peripherals::spi::{Spi, SpiDevice};
 use crate::peripherals::uart::Uart;
 
 pub struct AttachCtx<'a> {
@@ -104,25 +103,36 @@ impl<'a> AttachCtx<'a> {
     /// that called `ctx.i2c()?.attach(...)` directly would only work on STM32
     /// buses. Going through this method lets one kit serve a sensor on either
     /// family without caring which bus the system.yaml wired it to.
-    pub fn attach_i2c_device(&mut self, device: Box<dyn I2cDevice>) -> Result<()> {
-        let ext = self.ext;
-        let idx = self
-            .bus
-            .find_peripheral_index_by_name(&ext.connection)
-            .ok_or_else(|| missing_connection_err(ext))?;
-        let any = self.bus.peripherals[idx]
-            .dev
-            .as_any_mut()
-            .ok_or_else(|| downcast_err(ext))?;
-        if let Some(i2c) = any.downcast_mut::<I2c>() {
-            i2c.attach(device);
-            return Ok(());
+    pub fn attach_i2c_device(&mut self, mut device: Box<dyn I2cDevice>) -> Result<()> {
+        // Input devices get their system.yaml id stamped here (the ONE kit
+        // attach path), so discovery and the stimulus resolver address them
+        // by the name the author wrote (see crate::sim_input).
+        if let Some(si) = device.as_sim_input_mut() {
+            si.set_component_id(self.ext.id.clone());
         }
-        if let Some(c3) = any.downcast_mut::<Esp32c3I2c>() {
-            c3.attach_slave(device);
-            return Ok(());
+        // Funnel through the single bus choke point, which wraps the device in
+        // the shared bus trace before handing it to whichever I²C controller the
+        // `connection:` resolves to. There is no untraced attach path.
+        let connection = self.ext.connection.clone();
+        self.bus
+            .attach_i2c_slave_with_route(&connection, device, Some(&self.ext.route))
+            .map_err(|err| anyhow::anyhow!("{}: {err:#}", wrong_transport_err(self.ext, "I2C")))
+    }
+
+    /// Attach an [`SpiDevice`] to whichever SPI controller the `connection:`
+    /// field resolves to: the generic STM32-style [`Spi`] or the ESP32-C3 GP-SPI
+    /// model. This mirrors [`Self::attach_i2c_device`] for mixed-controller
+    /// systems.
+    pub fn attach_spi_device(&mut self, mut device: Box<dyn SpiDevice>) -> Result<()> {
+        // Same identity stamp as `attach_i2c_device`.
+        if let Some(si) = device.as_sim_input_mut() {
+            si.set_component_id(self.ext.id.clone());
         }
-        Err(wrong_transport_err(ext, "I2C"))
+        // Funnel through the single bus choke point (see `attach_i2c_device`).
+        let connection = self.ext.connection.clone();
+        self.bus
+            .attach_spi_device(&connection, device)
+            .map_err(|_| wrong_transport_err(self.ext, "SPI"))
     }
 
     /// Acquire the ADC peripheral declared in the system.yaml `connection:`
@@ -140,6 +150,36 @@ impl<'a> AttachCtx<'a> {
             .ok_or_else(|| downcast_err(ext))?;
         any.downcast_mut::<Adc>()
             .ok_or_else(|| wrong_transport_err(ext, "ADC"))
+    }
+
+    /// Attach an analog stimulus source (potentiometer wiper, thermistor
+    /// divider) to `channel` of whichever ADC the `connection:` field names.
+    ///
+    /// The model is *retained* on the bus rather than being used once to
+    /// compute a boot level and dropped — that retention is what makes the
+    /// part drivable at runtime through `set_input`. The current level is
+    /// seeded immediately so the firmware sees a correct value before any
+    /// stimulus arrives.
+    pub fn attach_analog_source(
+        &mut self,
+        channel: u8,
+        mut source: Box<dyn crate::bus::sim_inputs::AnalogSource>,
+    ) -> Result<()> {
+        // Same identity stamp as `attach_i2c_device`.
+        source.set_component_id(self.ext.id.clone());
+        let connection = self.ext.connection.clone();
+        let mv = source.output_mv();
+        if !self.bus.seed_adc_channel(&connection, channel, mv) {
+            return Err(wrong_transport_err(self.ext, "ADC"));
+        }
+        self.bus
+            .analog_inputs
+            .push(crate::bus::sim_inputs::AnalogInputSource {
+                connection,
+                channel,
+                source,
+            });
+        Ok(())
     }
 
     /// Resolve an STM32 pin label (e.g. `"PC7"`) to its `(ODR address, bit)`

@@ -25,12 +25,12 @@
 //! init 0) over `[addr·W, cmd, addr·R, LSB, MSB]`, so a driver that validates the
 //! checksum (as good MLX drivers do) sees a correct one.
 //!
-//! The default scene drops the surface from a mild 18 °C toward a cold 10 °C
-//! (a winter evening window) while the SCD41's air RH climbs into the 70s — so
-//! the surface crosses below the dew point partway through the run and the
-//! firmware's condensation flag fires live, mirroring the CO₂ story.
+//! Both temperatures are externally driven variables: they change only when
+//! something drives them through the ONE stimulus contract,
+//! [`crate::sim_input::SimInput`] (channels `surface_temp`, `ambient_temp`).
+//! Config only seeds their initial values. Driving the surface below the air's
+//! dew point is what makes the firmware's condensation flag fire.
 
-use crate::peripherals::components::air_scene::Ramp;
 use crate::peripherals::i2c::I2cDevice;
 
 pub const MLX90614_ADDR: u8 = 0x5A;
@@ -63,9 +63,9 @@ fn smbus_pec(bytes: &[u8]) -> u8 {
 /// MLX90614 model.
 pub struct Mlx90614 {
     address: u8,
-    /// Surface (object) temperature, °C — the cold spot, drifts colder.
-    surface: Ramp,
-    /// Ambient (chip) temperature, °C — roughly the room air temperature.
+    /// Surface (object) temperature, °C — the cold spot. Externally driven.
+    surface: f64,
+    /// Ambient (chip) temperature, °C — roughly the room air. Externally driven.
     ambient: f64,
     /// RAM command selected by the preceding write (0x06 Ta / 0x07 TOBJ1 …).
     pointer: u8,
@@ -75,45 +75,40 @@ pub struct Mlx90614 {
     response: [u8; 3],
     read_byte_idx: usize,
     latched: bool,
+    /// system.yaml `external_devices` id, stamped at attach.
+    component_id: Option<String>,
 }
 
 impl Mlx90614 {
-    /// `surface_start`/`surface_target` in °C, `ambient` in °C, `alpha` the
-    /// per-read ramp rate (surface cools when `target < start`).
-    pub fn new(
-        address: u8,
-        surface_start: f64,
-        surface_target: f64,
-        ambient: f64,
-        alpha: f64,
-    ) -> Self {
+    /// `surface` and `ambient` are the initial temperatures in °C.
+    pub fn new(address: u8, surface: f64, ambient: f64) -> Self {
         let address = if address == 0 { MLX90614_ADDR } else { address };
         Self {
             address,
-            surface: Ramp::new(surface_start, surface_target, alpha),
+            surface,
             ambient,
             pointer: CMD_TOBJ1,
             write_buf: Vec::with_capacity(2),
             response: [0; 3],
             read_byte_idx: 0,
             latched: false,
+            component_id: None,
         }
     }
 
-    /// Winter-evening cold window: surface 18 → 10 °C, room air ~22 °C.
+    /// Plausible winter-evening defaults: a 18 °C window in ~22 °C room air.
     pub fn new_default(address: u8) -> Self {
-        Self::new(address, 18.0, 10.0, 22.0, 0.08)
+        Self::new(address, 18.0, 22.0)
     }
 
-    /// Latch the 3-byte response for the selected RAM command. Advances the
-    /// surface ramp exactly once per TOBJ read (Ta reads don't move the scene).
+    /// Latch the 3-byte response for the selected RAM command.
     fn latch_response(&mut self) {
         let raw = match self.pointer {
-            CMD_TOBJ1 | CMD_TOBJ2 => celsius_to_raw(self.surface.advance()),
+            CMD_TOBJ1 | CMD_TOBJ2 => celsius_to_raw(self.surface),
             CMD_TA => celsius_to_raw(self.ambient),
             // Unknown RAM/EEPROM address: report the surface so a probing driver
             // still gets plausible data rather than zero.
-            _ => celsius_to_raw(self.surface.value()),
+            _ => celsius_to_raw(self.surface),
         };
         let lsb = (raw & 0xFF) as u8;
         let msb = (raw >> 8) as u8;
@@ -127,7 +122,7 @@ impl Mlx90614 {
 
     /// Current surface temperature, °C (for tests / inspection).
     pub fn surface_temp_c(&self) -> f64 {
-        self.surface.value()
+        self.surface
     }
 }
 
@@ -178,6 +173,54 @@ impl I2cDevice for Mlx90614 {
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
     }
+
+    fn as_sim_input_mut(&mut self) -> Option<&mut dyn crate::sim_input::SimInput> {
+        Some(self)
+    }
+}
+
+/// Drivable channels, in °C. Ranges are the MLX90614's specified measurement
+/// spans: -70..380 °C for the object, -40..125 °C for the chip's own ambient.
+/// ONE table backs BOTH the `SimInput` impl and the kit metadata.
+pub const INPUT_CHANNELS: &[crate::sim_input::InputChannel] = &[
+    crate::sim_input::InputChannel {
+        key: "surface_temp",
+        label: "Surface temperature",
+        unit: "°C",
+        min: -70.0,
+        max: 380.0,
+    },
+    crate::sim_input::InputChannel {
+        key: "ambient_temp",
+        label: "Ambient temperature",
+        unit: "°C",
+        min: -40.0,
+        max: 125.0,
+    },
+];
+
+impl crate::sim_input::SimInput for Mlx90614 {
+    fn input_channels(&self) -> &'static [crate::sim_input::InputChannel] {
+        INPUT_CHANNELS
+    }
+
+    fn set_input(&mut self, key: &str, value: f64) -> Result<(), crate::sim_input::SimInputError> {
+        self.require_channel(key, value)?;
+        match key {
+            "surface_temp" => self.surface = value,
+            "ambient_temp" => self.ambient = value,
+            _ => unreachable!("require_channel validated the key"),
+        }
+        Ok(())
+    }
+
+    fn component_id(&self) -> Option<&str> {
+        self.component_id.as_deref()
+    }
+
+    fn set_component_id(&mut self, id: String) {
+        self.component_id = Some(id);
+    }
 }
 
 // ─── PeripheralKit registration ────────────────────────────────────────────
@@ -190,14 +233,16 @@ pub struct Mlx90614Kit;
 pub static MLX90614_KIT: Mlx90614Kit = Mlx90614Kit;
 
 static MLX90614_METADATA: KitMetadata = KitMetadata {
+    inputs: INPUT_CHANNELS,
     device_type: "mlx90614",
     label: "Melexis MLX90614 IR Temp",
     summary: "Single-point IR (non-contact) thermometer over SMBus/I2C.",
     detail: "Melexis MLX90614 at address 0x5A. Reports an SMBus read-word (LSB, MSB, \
              PEC) for ambient (0x06) and object/surface (0x07) temperature, encoded \
-             raw×0.02 K with a correct CRC-8 PEC. The surface temperature follows a \
-             ramp (cools toward a cold window by default), letting firmware compute \
-             the dew point and flag surface condensation the air humidity misses.",
+             raw×0.02 K with a correct CRC-8 PEC. Both temperatures are externally \
+             driven inputs (channels surface_temp / ambient_temp); driving the surface \
+             below the air dew point is what makes firmware flag the surface \
+             condensation an air-only humidity index misses.",
     transport: Transport::I2c,
     category: Category::I2c,
     config_keys: &[
@@ -209,26 +254,18 @@ static MLX90614_METADATA: KitMetadata = KitMetadata {
         ConfigKey {
             name: "surface_temp_c",
             ty: ConfigType::Float,
-            doc: "Surface (object) temperature at the first reading, °C. Default 18.",
-        },
-        ConfigKey {
-            name: "surface_temp_target_c",
-            ty: ConfigType::Float,
-            doc: "Surface temperature the ramp approaches, °C (cools below start). Default 10.",
+            doc: "Initial surface (object) temperature, °C. Default 18. Drive it at \
+                  runtime with the `surface_temp` input channel.",
         },
         ConfigKey {
             name: "ambient_temp_c",
             ty: ConfigType::Float,
-            doc: "Ambient (chip) temperature reported on the Ta channel, °C. Default 22.",
-        },
-        ConfigKey {
-            name: "ramp_alpha",
-            ty: ConfigType::Float,
-            doc: "Per-read approach rate 0..1 (0 = flat scene). Default 0.08.",
+            doc: "Initial ambient (chip) temperature reported on Ta, °C. Default 22. \
+                  Runtime channel: `ambient_temp`.",
         },
     ],
     labs: &[LabRef {
-        board_id: "leo-airquality-lab",
+        board_id: "esp32c3-leo-airquality",
         chip: "esp32c3",
         example_dir: "esp32c3-leo-airquality",
         demo_elf: "demo-esp32c3-leo-airquality.elf",
@@ -241,17 +278,9 @@ impl PeripheralKit for Mlx90614Kit {
     }
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
         let address = ctx.i2c_address_or(MLX90614_ADDR)?;
-        let surface_start = ctx.config_f64("surface_temp_c").unwrap_or(18.0);
-        let surface_target = ctx.config_f64("surface_temp_target_c").unwrap_or(10.0);
+        let surface = ctx.config_f64("surface_temp_c").unwrap_or(18.0);
         let ambient = ctx.config_f64("ambient_temp_c").unwrap_or(22.0);
-        let alpha = ctx.config_f64("ramp_alpha").unwrap_or(0.08);
-        ctx.attach_i2c_device(Box::new(Mlx90614::new(
-            address,
-            surface_start,
-            surface_target,
-            ambient,
-            alpha,
-        )))
+        ctx.attach_i2c_device(Box::new(Mlx90614::new(address, surface, ambient)))
     }
 }
 
@@ -295,22 +324,33 @@ mod tests {
         let mut d = Mlx90614::new_default(MLX90614_ADDR);
         let (ta1, _) = read_word(&mut d, CMD_TA);
         let (ta2, _) = read_word(&mut d, CMD_TA);
-        assert_eq!(ta1, ta2, "Ta is flat (ambient does not ramp)");
+        assert_eq!(ta1, ta2, "Ta holds until driven");
         assert!((raw_to_celsius(ta1) - 22.0).abs() < 0.1, "Ta ≈ 22 °C");
     }
 
     #[test]
-    fn surface_cools_over_reads() {
+    fn surface_holds_until_driven() {
+        use crate::sim_input::SimInput;
         let mut d = Mlx90614::new_default(MLX90614_ADDR);
-        let (first, _) = read_word(&mut d, CMD_TOBJ1);
-        let mut last = first;
-        for _ in 0..60 {
-            last = read_word(&mut d, CMD_TOBJ1).0;
+        let first = raw_to_celsius(read_word(&mut d, CMD_TOBJ1).0);
+        for _ in 0..20 {
+            let t = raw_to_celsius(read_word(&mut d, CMD_TOBJ1).0);
+            assert!((t - first).abs() < 0.01, "no self-running scene: {t:.2}");
         }
-        let t0 = raw_to_celsius(first);
-        let t1 = raw_to_celsius(last);
-        assert!(t1 < t0, "surface cools: {t0:.1} -> {t1:.1} °C");
-        assert!(t1 < 11.0, "settles toward 10 °C: {t1:.1}");
+        d.set_input("surface_temp", 8.0).unwrap();
+        let cold = raw_to_celsius(read_word(&mut d, CMD_TOBJ1).0);
+        assert!((cold - 8.0).abs() < 0.02, "driven to 8 °C: {cold:.2}");
+        d.set_input("ambient_temp", 21.0).unwrap();
+        let ta = raw_to_celsius(read_word(&mut d, CMD_TA).0);
+        assert!((ta - 21.0).abs() < 0.02, "driven Ta: {ta:.2}");
+    }
+
+    #[test]
+    fn out_of_range_input_is_rejected() {
+        use crate::sim_input::SimInput;
+        let mut d = Mlx90614::new_default(MLX90614_ADDR);
+        assert!(d.set_input("ambient_temp", 200.0).is_err());
+        assert!(d.set_input("object_temp", 20.0).is_err());
     }
 
     #[test]
@@ -333,7 +373,7 @@ mod tests {
     fn known_vector_encodes_celsius() {
         // 36.5 °C → raw = (36.5 + 273.15) * 50 ≈ 15482.4999 (f64) → 15482.
         // Decodes back to 36.49 °C, within the part's 0.02 °C quantisation.
-        let d = Mlx90614::new(MLX90614_ADDR, 36.5, 36.5, 22.0, 0.0);
+        let d = Mlx90614::new(MLX90614_ADDR, 36.5, 22.0);
         assert_eq!(celsius_to_raw(d.surface_temp_c()), 15482);
         assert!((raw_to_celsius(15482) - 36.5).abs() < 0.02);
     }

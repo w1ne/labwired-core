@@ -64,40 +64,8 @@ run_case() {
   fi
 
   local fp
-  fp="$(python3 - "$result_json" "$snapshot_json" "$uart_log" <<'PY'
-import hashlib
-import json
-import pathlib
-import sys
-
-result_path = pathlib.Path(sys.argv[1])
-snapshot_path = pathlib.Path(sys.argv[2])
-uart_path = pathlib.Path(sys.argv[3])
-
-result = json.loads(result_path.read_text())
-snapshot = json.loads(snapshot_path.read_text())
-uart = uart_path.read_text()
-
-payload = {
-    "result": {
-        "status": result.get("status"),
-        "stop_reason": result.get("stop_reason"),
-        "steps_executed": result.get("steps_executed"),
-        "cycles": result.get("cycles"),
-        "instructions": result.get("instructions"),
-        "limits": result.get("limits"),
-        "assertions": result.get("assertions"),
-        "stop_reason_details": result.get("stop_reason_details"),
-    },
-    "cpu": snapshot.get("cpu"),
-    "peripherals": snapshot.get("peripherals"),
-    "uart": uart,
-}
-
-blob = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
-print(hashlib.sha256(blob).hexdigest())
-PY
-)"
+  fp="$(python3 "$CORE_DIR/scripts/trace_drift_fingerprint.py" \
+    "$result_json" "$snapshot_json" "$uart_log")"
 
   echo "$fp" >"$fingerprint_file"
 

@@ -19,15 +19,17 @@
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::system::cortex_m::configure_cortex_m;
-use labwired_core::{Bus, Machine};
+use labwired_core::Bus;
+use labwired_core::Machine;
 use labwired_loader::load_elf;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 const VERDICT_ADDR: u32 = 0x2000_3000;
 const DONE_MAGIC: u32 = 0xC0DE_F103;
 /// Digest words compared (index 0 = DONE sentinel, 1..=10 = per-peripheral).
 const DIGEST_WORDS: usize = 11;
 /// Human labels for the digest, for a readable gap report.
+#[allow(dead_code)]
 const LABELS: [&str; DIGEST_WORDS] = [
     "DONE",
     "gpio_odr",
@@ -59,7 +61,7 @@ fn firmware_elf() -> Option<PathBuf> {
 }
 
 /// Run the firmware on the full-chip simulator and return the digest block.
-fn run_sim(elf: &PathBuf) -> Vec<u32> {
+fn run_sim(elf: &Path) -> Vec<u32> {
     let chip_path = repo_root().join("configs/chips/stm32f103.yaml");
     let system_path = repo_root().join("configs/systems/stm32f103-bare.yaml");
     let chip = ChipDescriptor::from_file(&chip_path).expect("load chip");

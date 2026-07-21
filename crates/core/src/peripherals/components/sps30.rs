@@ -20,10 +20,12 @@
 //!   `0xD206` read_device_status_register → 2 words / `0x8004`
 //!   read_auto_cleaning_interval → 2 words
 //!
-//! PM2.5 mass advances along a [`Ramp`]; the other bins are derived from it with
-//! fixed ratios so the whole particle picture moves together.
+//! The four mass concentrations are externally driven variables — they change
+//! only when something drives them through the ONE stimulus contract,
+//! [`crate::sim_input::SimInput`] (`pm1_0`, `pm2_5`, `pm4_0`, `pm10`). The
+//! number concentrations and the typical particle size stay derived from PM2.5,
+//! as the model has always done. Config seeds the initial mass distribution.
 
-use crate::peripherals::components::air_scene::Ramp;
 use crate::peripherals::components::sensirion::{crc8, encode_words};
 use crate::peripherals::i2c::I2cDevice;
 
@@ -46,33 +48,52 @@ enum Mode {
 }
 
 /// SPS30 model.
+/// Bin ratios of a typical urban aerosol, relative to PM2.5. Used to seed the
+/// other mass bins from a single `pm2_5` config value; each bin is independently
+/// drivable afterwards.
+const PM1_0_RATIO: f64 = 0.78;
+const PM4_0_RATIO: f64 = 1.10;
+const PM10_RATIO: f64 = 1.18;
+
+/// SPS30 model.
 pub struct Sps30 {
     address: u8,
-    pm2_5: Ramp,
+    /// Mass concentrations in µg/m³. Externally driven (see `SimInput`).
+    pm1_0: f64,
+    pm2_5: f64,
+    pm4_0: f64,
+    pm10: f64,
     mode: Mode,
     running: bool,
     write_buf: Vec<u8>,
     read_buf: Vec<u8>,
     read_idx: usize,
+    /// system.yaml `external_devices` id, stamped at attach.
+    component_id: Option<String>,
 }
 
 impl Sps30 {
-    /// `pm2_5_start`/`pm2_5_target` in µg/m³; `alpha` per-read ramp rate.
-    pub fn new(address: u8, pm2_5_start: f64, pm2_5_target: f64, alpha: f64) -> Self {
+    /// Seed the mass bins from a PM2.5 value in µg/m³, using the typical
+    /// urban-aerosol size distribution for the other bins.
+    pub fn new(address: u8, pm2_5: f64) -> Self {
         let address = if address == 0 { SPS30_ADDR } else { address };
         Self {
             address,
-            pm2_5: Ramp::new(pm2_5_start, pm2_5_target, alpha),
+            pm1_0: pm2_5 * PM1_0_RATIO,
+            pm2_5,
+            pm4_0: pm2_5 * PM4_0_RATIO,
+            pm10: pm2_5 * PM10_RATIO,
             mode: Mode::Float,
             running: false,
             write_buf: Vec::with_capacity(8),
             read_buf: Vec::new(),
             read_idx: 0,
+            component_id: None,
         }
     }
 
     pub fn new_default(address: u8) -> Self {
-        Self::new(address, 6.0, 22.0, 0.08)
+        Self::new(address, 6.0)
     }
 
     /// Encode one IEEE-754 float as the SPS30 clocks it: big-endian, split into
@@ -86,14 +107,14 @@ impl Sps30 {
         }
     }
 
-    /// Build the 10-value measurement payload from the current PM2.5 ramp.
+    /// Build the 10-value measurement payload from the current concentrations.
     fn measured_values(&mut self) -> Vec<u8> {
-        let pm2_5 = self.pm2_5.advance().max(0.0);
-        // Fixed bin ratios (typical urban aerosol) so all bins track PM2.5.
-        let pm1_0 = pm2_5 * 0.78;
-        let pm4_0 = pm2_5 * 1.10;
-        let pm10 = pm2_5 * 1.18;
-        // Number concentrations (#/cm³) scale roughly with mass.
+        let pm1_0 = self.pm1_0.max(0.0);
+        let pm2_5 = self.pm2_5.max(0.0);
+        let pm4_0 = self.pm4_0.max(0.0);
+        let pm10 = self.pm10.max(0.0);
+        // Number concentrations (#/cm³) scale roughly with PM2.5 mass; the
+        // SPS30's optical count model is not simulated.
         let n0_5 = pm2_5 * 3.5;
         let n1_0 = pm2_5 * 4.0;
         let n2_5 = pm2_5 * 4.1;
@@ -114,8 +135,8 @@ impl Sps30 {
                 buf
             }
             Mode::Uint16 => {
-                // uint16 mode: mass ×10? No — datasheet sends integers directly
-                // (µg/m³, #/cm³, nm for size). Size in nm to keep precision.
+                // uint16 mode: datasheet sends integers directly (µg/m³, #/cm³,
+                // nm for size). Size in nm to keep precision.
                 let words: Vec<u16> = values
                     .iter()
                     .enumerate()
@@ -228,6 +249,70 @@ impl I2cDevice for Sps30 {
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
     }
+
+    fn as_sim_input_mut(&mut self) -> Option<&mut dyn crate::sim_input::SimInput> {
+        Some(self)
+    }
+}
+
+/// Drivable channels: the four mass concentrations the SPS30 actually reports,
+/// in µg/m³. The 1000 µg/m³ ceiling is the datasheet's specified mass range.
+/// ONE table backs BOTH the `SimInput` impl and the kit metadata.
+pub const INPUT_CHANNELS: &[crate::sim_input::InputChannel] = &[
+    crate::sim_input::InputChannel {
+        key: "pm1_0",
+        label: "PM1.0",
+        unit: "µg/m³",
+        min: 0.0,
+        max: 1000.0,
+    },
+    crate::sim_input::InputChannel {
+        key: "pm2_5",
+        label: "PM2.5",
+        unit: "µg/m³",
+        min: 0.0,
+        max: 1000.0,
+    },
+    crate::sim_input::InputChannel {
+        key: "pm4_0",
+        label: "PM4.0",
+        unit: "µg/m³",
+        min: 0.0,
+        max: 1000.0,
+    },
+    crate::sim_input::InputChannel {
+        key: "pm10",
+        label: "PM10",
+        unit: "µg/m³",
+        min: 0.0,
+        max: 1000.0,
+    },
+];
+
+impl crate::sim_input::SimInput for Sps30 {
+    fn input_channels(&self) -> &'static [crate::sim_input::InputChannel] {
+        INPUT_CHANNELS
+    }
+
+    fn set_input(&mut self, key: &str, value: f64) -> Result<(), crate::sim_input::SimInputError> {
+        self.require_channel(key, value)?;
+        match key {
+            "pm1_0" => self.pm1_0 = value,
+            "pm2_5" => self.pm2_5 = value,
+            "pm4_0" => self.pm4_0 = value,
+            "pm10" => self.pm10 = value,
+            _ => unreachable!("require_channel validated the key"),
+        }
+        Ok(())
+    }
+
+    fn component_id(&self) -> Option<&str> {
+        self.component_id.as_deref()
+    }
+
+    fn set_component_id(&mut self, id: String) {
+        self.component_id = Some(id);
+    }
 }
 
 // ─── PeripheralKit registration ────────────────────────────────────────────
@@ -240,13 +325,15 @@ pub struct Sps30Kit;
 pub static SPS30_KIT: Sps30Kit = Sps30Kit;
 
 static SPS30_METADATA: KitMetadata = KitMetadata {
+    inputs: INPUT_CHANNELS,
     device_type: "sps30",
     label: "Sensirion SPS30 PM",
     summary: "Laser particulate-matter sensor (PM1/2.5/4/10) over I2C.",
     detail: "Sensirion SPS30 at fixed address 0x69, speaking the real Sensirion \
              command protocol with CRC-8 (poly 0x31) in both float and uint16 output \
-             modes. PM2.5 mass advances along a configurable ramp and the other size \
-             bins track it. Drive it in uint16 mode on the ESP32-C3 (30-byte frame \
+             modes. The four mass concentrations are externally driven inputs \
+             (channels pm1_0 / pm2_5 / pm4_0 / pm10); config seeds them from one \
+             pm2_5 value. Drive it in uint16 mode on the ESP32-C3 (30-byte frame \
              fits the controller's 32-byte FIFO).",
     transport: Transport::I2c,
     category: Category::I2c,
@@ -257,23 +344,15 @@ static SPS30_METADATA: KitMetadata = KitMetadata {
             doc: "7-bit slave address. Defaults to the SPS30 fixed address 0x69.",
         },
         ConfigKey {
-            name: "pm2_5_start",
+            name: "pm2_5",
             ty: ConfigType::Float,
-            doc: "PM2.5 mass at the first reading, µg/m³ (clean air). Default 6.0.",
-        },
-        ConfigKey {
-            name: "pm2_5_target",
-            ty: ConfigType::Float,
-            doc: "PM2.5 mass the ramp approaches, µg/m³. Default 22.0.",
-        },
-        ConfigKey {
-            name: "ramp_alpha",
-            ty: ConfigType::Float,
-            doc: "Per-read approach rate 0..1 (0 = flat scene). Default 0.08.",
+            doc: "Initial PM2.5 mass, µg/m³. Default 6.0 (clean indoor air). The other \
+                  mass bins are seeded from it with the typical urban-aerosol ratios; \
+                  each bin is drivable at runtime via its own input channel.",
         },
     ],
     labs: &[LabRef {
-        board_id: "leo-airquality-lab",
+        board_id: "esp32c3-leo-airquality",
         chip: "esp32c3",
         example_dir: "esp32c3-leo-airquality",
         demo_elf: "demo-esp32c3-leo-airquality.elf",
@@ -286,10 +365,8 @@ impl PeripheralKit for Sps30Kit {
     }
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
         let address = ctx.i2c_address_or(SPS30_ADDR)?;
-        let pm_start = ctx.config_f64("pm2_5_start").unwrap_or(6.0);
-        let pm_target = ctx.config_f64("pm2_5_target").unwrap_or(22.0);
-        let alpha = ctx.config_f64("ramp_alpha").unwrap_or(0.08);
-        ctx.attach_i2c_device(Box::new(Sps30::new(address, pm_start, pm_target, alpha)))
+        let pm2_5 = ctx.config_f64("pm2_5").unwrap_or(6.0);
+        ctx.attach_i2c_device(Box::new(Sps30::new(address, pm2_5)))
     }
 }
 
@@ -334,22 +411,47 @@ mod tests {
     }
 
     #[test]
-    fn pm2_5_is_second_value_and_climbs() {
+    fn pm2_5_is_second_value_and_holds_until_driven() {
+        use crate::sim_input::SimInput;
         let mut d = Sps30::new_default(SPS30_ADDR);
         send(&mut d, &[0x00, 0x10, 0x03, 0x00, crc8(&[0x03, 0x00])]);
-        let mut first = 0.0f32;
-        let mut last = 0.0f32;
-        for i in 0..60 {
-            send(&mut d, &[0x03, 0x00]);
-            let b = read_n(&mut d, 60);
-            let pm2_5 = decode_float(&b, 1); // index 1 = PM2.5 mass
-            if i == 0 {
-                first = pm2_5;
-            }
-            last = pm2_5;
+        let read_pm = |d: &mut Sps30| {
+            send(d, &[0x03, 0x00]);
+            let b = read_n(d, 60);
+            (
+                decode_float(&b, 0),
+                decode_float(&b, 1),
+                decode_float(&b, 3),
+            )
+        };
+        for _ in 0..20 {
+            let (_, pm2_5, _) = read_pm(&mut d);
+            assert!((pm2_5 - 6.0).abs() < 1e-4, "no self-running scene: {pm2_5}");
         }
-        assert!((5.0..10.0).contains(&first), "starts fresh-ish: {first}");
-        assert!(last > 18.0, "PM2.5 climbs toward target: {last}");
+        d.set_input("pm2_5", 22.0).unwrap();
+        let (pm1_0, pm2_5, pm10) = read_pm(&mut d);
+        assert!((pm2_5 - 22.0).abs() < 1e-3, "driven PM2.5: {pm2_5}");
+        // The other bins are independent channels: driving PM2.5 alone leaves
+        // them where they were seeded.
+        assert!(
+            (pm1_0 - 6.0 * 0.78).abs() < 1e-3,
+            "pm1_0 unchanged: {pm1_0}"
+        );
+        d.set_input("pm10", 30.0).unwrap();
+        let (_, _, pm10_after) = read_pm(&mut d);
+        assert!((pm10 - 6.0 * 1.18).abs() < 1e-3);
+        assert!(
+            (pm10_after - 30.0).abs() < 1e-3,
+            "driven PM10: {pm10_after}"
+        );
+    }
+
+    #[test]
+    fn out_of_range_input_is_rejected() {
+        use crate::sim_input::SimInput;
+        let mut d = Sps30::new_default(SPS30_ADDR);
+        assert!(d.set_input("pm2_5", 2000.0).is_err());
+        assert!(d.set_input("pm0_3", 1.0).is_err());
     }
 
     #[test]

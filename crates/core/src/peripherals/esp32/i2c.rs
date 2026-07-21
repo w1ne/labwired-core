@@ -150,9 +150,11 @@ impl Esp32I2c {
         }
     }
 
-    /// Attach an `I2cDevice` slave. Slaves are matched by 7-bit address at
-    /// transaction time; later additions take precedence on duplicate addresses.
-    pub fn attach_slave(&mut self, slave: Box<dyn I2cDevice>) {
+    /// Raw slave push — does NOT wrap for tracing. The only production caller is
+    /// the bus choke point [`crate::bus::SystemBus::attach_i2c_slave`], which
+    /// wraps first. Slaves are matched by 7-bit address at transaction time;
+    /// later additions take precedence on duplicate addresses.
+    pub(crate) fn push_slave(&mut self, slave: Box<dyn I2cDevice>) {
         self.slaves.push(slave);
     }
 
@@ -291,6 +293,20 @@ impl Peripheral for Esp32I2c {
 
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
+    }
+
+    fn for_each_attached_sim_input(
+        &mut self,
+        f: &mut dyn FnMut(&mut dyn crate::sim_input::SimInput) -> bool,
+    ) -> bool {
+        for slave in self.slaves.iter_mut() {
+            if let Some(si) = slave.as_sim_input_mut() {
+                if f(si) {
+                    return true;
+                }
+            }
+        }
+        false
     }
 }
 
@@ -547,7 +563,7 @@ mod tests {
         // A WRITE of 2 bytes following RSTART consumes 2 TX-FIFO bytes; the
         // FIFO_ST TXFIFO_START_ADDR field (bits 14..10) reports that pointer.
         let mut p = Esp32I2c::new();
-        p.attach_slave(Box::new(crate::peripherals::components::Bmp280::new(0x76)));
+        p.push_slave(Box::new(crate::peripherals::components::Bmp280::new(0x76)));
         p.write_u32(REG_CMD0, cmd(CMD_RSTART, 0)).unwrap();
         p.write_u32(REG_CMD0 + 4, cmd(CMD_WRITE, 2)).unwrap();
         p.write_u32(REG_CMD0 + 8, cmd(CMD_STOP, 0)).unwrap();
@@ -567,7 +583,7 @@ mod tests {
     fn write_read_drives_attached_bmp280() {
         let mut p = Esp32I2c::new();
         // Default address 0x76.
-        p.attach_slave(Box::new(Bmp280::new(0x76)));
+        p.push_slave(Box::new(Bmp280::new(0x76)));
 
         // Canonical register-pointer read: set pointer to 0xD0 (chip-id), then
         // repeated-start and read one byte. CHIP_ID for BMP280 is 0x58.

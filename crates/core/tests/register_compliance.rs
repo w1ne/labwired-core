@@ -3,6 +3,7 @@
 
 use labwired_config::{Arch, ChipDescriptor};
 use labwired_core::system;
+use labwired_core::Bus;
 use labwired_core::Cpu;
 use labwired_core::Machine;
 use std::fs;
@@ -46,7 +47,7 @@ fn validate_chip(path: &PathBuf) -> anyhow::Result<()> {
 
     // Create Manual System Manifest
     let dummy_manifest = labwired_config::SystemManifest {
-        walk_deleted: false,
+        walk_deleted: Some(false),
         schema_version: "1.0".to_string(),
         name: "test-bench".to_string(),
         chip: path.to_string_lossy().to_string(),

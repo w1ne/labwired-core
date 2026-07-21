@@ -1,0 +1,20 @@
+name: "esp32c3-epaper-workshop"
+chip: "../chips/esp32c3.yaml"
+cpu_hz: 160_000_000
+
+external_devices:
+  - id: "epaper"
+    type: "ssd1680_tricolor_290"
+    connection: "spi2"
+    config:
+      cs_pin: "GPIO10"
+      dc_pin: "GPIO2"
+
+board_io:
+  - id: "epaper"
+    kind: "spi_device"
+    peripheral: "spi2"
+    pin: 10
+    signal: "input"
+    active_high: true
+    device_type: "ssd1680_tricolor_290"

@@ -1,0 +1,23 @@
+name: "esp32c3-oled-128x32-workshop"
+chip: "../chips/esp32c3.yaml"
+cpu_hz: 160_000_000
+
+external_devices:
+  - id: "oled"
+    type: "oled-ssd1306-128x32"
+    connection: "i2c0"
+    route:
+      sda: "GPIO4"
+      scl: "GPIO5"
+    config:
+      i2c_address: 0x3C
+
+board_io:
+  - id: "oled"
+    kind: "i2c_device"
+    peripheral: "i2c0"
+    pin: 4
+    signal: "input"
+    active_high: true
+    i2c_address: 0x3C
+    device_type: "oled-ssd1306-128x32"

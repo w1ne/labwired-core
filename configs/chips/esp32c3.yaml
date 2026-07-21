@@ -53,10 +53,9 @@ peripherals:
     base_address: 0x60000000
     size: "512B"
   - id: "gpio"
-    type: "declarative"
+    type: "esp32c3_gpio"
     base_address: 0x60004000
-    config:
-      path: "../peripherals/esp32c3/gpio.yaml"
+    size: "4KB"
   - id: "timg0"
     type: "esp32_timg"
     base_address: 0x6001F000
@@ -96,7 +95,7 @@ peripherals:
     config:
       path: "../peripherals/esp32c3/systimer.yaml"
   - id: "io_mux"
-    type: "declarative"
+    type: "esp32c3_io_mux"
     base_address: 0x60009000
     config:
       path: "../peripherals/esp32c3/io_mux.yaml"

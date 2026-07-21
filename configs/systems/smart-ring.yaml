@@ -1,0 +1,129 @@
+# LabWired - Open smart-ring platform (reference system)
+#
+# A wearable ring built on the nRF54L15: IMU + PPG heart rate + skin
+# temperature + a single capacitive-touch button + haptic motor + BLE +
+# rechargeable battery.
+#
+# ── Realistic BOM (the point of this system) ──────────────────────────────
+# The sensor set below is what a shipping ring actually carries, not the
+# cheapest part that answers a WHO_AM_I:
+#
+#   imu   BMI270  (0x68)  — a real low-power wearable IMU with a HARDWARE step
+#                           counter (feature engine). Steps are the ring's
+#                           headline metric; counting them in silicon instead
+#                           of integrating accel on the MCU is what makes an
+#                           always-on pedometer fit the power budget.
+#   ppg   MAX30102 (0x57) — reflective pulse-oximetry front-end, unchanged.
+#   temp  TMP117  (0x48)  — a dedicated skin-contact temperature sensor. This
+#                           REPLACES the SoC on-die TEMP peripheral, which
+#                           measures the DIE (heated by the MCU, the PPG LEDs
+#                           and the motor) and is a poor proxy for body
+#                           temperature. A real ring puts a TMP117-class part
+#                           on the skin-contact surface, thermally isolated
+#                           from the electronics — so the firmware reads BODY
+#                           temperature, not device temperature.
+#   haptic DRV2605 (0x5A) — haptic motor driver, unchanged.
+#   touch  AT42QT1010-class 1-channel cap sensor on ONE GPIO line (gpio1 P13).
+#                           A ring has exactly one touch target, so an 8-channel
+#                           I²C part (the old CAP1188) is silicon and bus budget
+#                           spent on seven channels that do not exist. A real
+#                           1-channel self-cap sensor exposes a single logic
+#                           output — one GPIO, no I²C address — so it is a
+#                           board_io input here, not an external_device.
+#
+# The three I²C sensors + the haptic driver hang off TWIM21. That is the
+# realistic topology for a ring: board area is the binding constraint, so one
+# shared bus wins over per-sensor SPI unless a sensor's data rate forces the
+# issue. The PPG is the one that eventually will — a MAX30102 streaming both
+# channels at a high rate is the first thing to move to its own bus if the I²C
+# budget gets tight.
+#
+# ── Fidelity honesty note ─────────────────────────────────────────────────
+# Not modelled as RF: the BLE radio (LabWired does not model the nRF54L radio)
+# and the battery/charger. Firmware that needs those must stub them; see
+# docs/boards/nrf54l15.md for the honest fidelity table.
+#
+# BLE contention IS modelled — but at the TIMING level, not the RF level. The
+# firmware runs a BLE connection event as a periodic SysTick ISR that holds the
+# CPU for a connection-event window. While the CPU is stuck in that ISR it
+# cannot drain the PPG FIFO; the TWIM advances each I²C slave's sample clock by
+# the real wall-clock elapsed since that slave's last transaction, so when the
+# firmware finally polls the PPG it advances the whole stalled interval at once
+# and the 32-deep FIFO overflows (OVF_COUNTER, reg 0x05) — exactly as silicon
+# would. This reproduces the "PPG unreliable under BLE load" class of bug as a
+# DIGITAL/timing fault (CPU starvation + poll jitter), NOT the analog
+# supply-noise coupling from radio TX current, which a digital simulator cannot
+# represent.
+name: "smart-ring"
+chip: "../chips/nrf54l15.yaml"
+
+external_devices:
+  # IMU — motion, HARDWARE step counting, and the gate for adaptive PPG
+  # sampling (only measure heart rate when the wearer is still, which is worth
+  # more battery than any MCU-side optimisation). The BMI270's step counter is
+  # read through its feature-engine page (FEAT_PAGE=6, 4 LE bytes at 0x30).
+  - id: "imu"
+    type: "bmi270"
+    connection: "twi21"
+    config:
+      i2c_address: 0x68
+
+  # PPG heart-rate sensor. Drive at runtime with the `bpm` and `perfusion`
+  # SimInput channels; dropping perfusion below ~0.2 % simulates poor skin
+  # contact, which is the failure a real ring spends most of its time fighting.
+  #
+  # transaction_advance is turned OFF: that flag is a stand-in clock for buses
+  # that give a slave no time hook, but the nRF54L TWIM DOES advance this slave
+  # by real wall-clock (advance_time_us) on every transaction. Leaving both on
+  # would double-count the sample clock. With it off, the FIFO fills purely
+  # from elapsed time — which is what makes the BLE-contention overflow honest.
+  - id: "ppg"
+    type: "max30102"
+    connection: "twi21"
+    config:
+      i2c_address: 0x57
+      transaction_advance: false
+
+  # Skin temperature — a dedicated on-body sensor, 16-bit big-endian registers,
+  # 7.8125 m°C/LSB. Replaces the on-die TEMP peripheral (see header).
+  - id: "temp"
+    type: "tmp117"
+    connection: "twi21"
+    config:
+      i2c_address: 0x48
+
+  # Haptic driver for the vibrator motor. An actuator, not an input: assert on
+  # it with is_driven() / total_drive_time_us().
+  - id: "haptic"
+    type: "drv2605"
+    connection: "twi21"
+    config:
+      i2c_address: 0x5A
+
+board_io:
+  # The ring's ONE user input: a single-channel capacitive-touch sensor
+  # (AT42QT1010-class) whose output is one GPIO line, not an I²C device. No
+  # stimulus is driven here, so the firmware reads it low — which still proves
+  # the GPIO input path end to end.
+  - id: "touch"
+    kind: "button"
+    peripheral: "gpio1"
+    pin: 13
+    signal: "input"
+    active_high: true
+
+  # The motor's enable line, in addition to the DRV2605's I²C control path.
+  - id: "motor_enable"
+    kind: "led"
+    peripheral: "gpio1"
+    pin: 11
+    signal: "output"
+    active_high: true
+
+  # Charger-attached detect.
+  - id: "charger_detect"
+    kind: "button"
+    peripheral: "gpio1"
+    pin: 12
+    signal: "input"
+    active_high: true

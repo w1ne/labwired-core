@@ -22,6 +22,7 @@
 
 use labwired_config::ChipDescriptor;
 use labwired_core::bus::SystemBus;
+use labwired_core::Bus;
 
 // Peripherals at the non-secure alias the cpuapp DT uses (peripheral@50000000).
 const CLOCK: u64 = 0x5000_5000;
@@ -41,7 +42,7 @@ fn nrf5340_bus() -> SystemBus {
         .join("../../configs/chips/nrf5340.yaml");
     let chip = ChipDescriptor::from_file(&path).expect("load nrf5340 chip");
     let manifest = labwired_config::SystemManifest {
-        walk_deleted: false,
+        walk_deleted: Some(false),
         schema_version: "1.0".to_string(),
         name: "nrf5340-clock-boot".to_string(),
         chip: path.to_string_lossy().to_string(),

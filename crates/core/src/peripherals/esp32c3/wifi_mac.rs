@@ -29,7 +29,7 @@
 //! This is the SimNet-facing endpoint of the bridge; the frame source/sink (a
 //! frame-level `VirtualAp`) pushes/pulls via `queue_rx_frame` / `take_tx_frames`.
 
-use crate::{Bus, Peripheral, PeripheralTickResult, SimResult};
+use crate::{Bus, CycleClock, Peripheral, PeripheralTickResult, SimResult};
 use std::collections::VecDeque;
 use std::sync::atomic::AtomicU32;
 
@@ -38,6 +38,17 @@ use std::sync::atomic::AtomicU32;
 /// the driver's reads relative to the buffer (RE'ing the rx-control header
 /// format). 0 = no delivery yet.
 pub static RX_DBG_BUF: AtomicU32 = AtomicU32::new(0);
+
+/// Process-cached `LABWIRED_RXBUF_TRACE` gate. The trace guard sits on the
+/// hottest path in the engine (`Bus::read_u32` — every load instruction), and
+/// `std::env::var` is a real syscall-backed lookup; checking it per read cost
+/// measurable native/wasm throughput (profiling artifact found on the C3 OLED
+/// lab). The env var is read ONCE per process — set it before launch, as with
+/// any debug trace.
+pub(crate) fn rxbuf_trace_enabled() -> bool {
+    static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ENABLED.get_or_init(|| std::env::var("LABWIRED_RXBUF_TRACE").is_ok())
+}
 
 const MAC_READY: u64 = 0xD14; // bit0 polled by hal_init
 const RX_RING_BASE: u64 = 0x88; // driver writes the RX descriptor-list head here
@@ -123,6 +134,22 @@ pub struct Esp32c3WifiMac {
     medium_mac: Option<[u8; 6]>,
     /// Tick counter for periodic beacon injection in medium mode.
     medium_beacon_ctr: u32,
+    /// Bus-published cycle clock (walk-free plan). `Some` once
+    /// [`SystemBus::add_peripheral`](crate::bus::SystemBus) attaches it (under
+    /// the `event-scheduler` feature); its presence flips the model onto the
+    /// event-scheduler drive mode. In that mode the per-cycle legacy walk skips
+    /// this peripheral: the MAC interrupt LEVEL (source 0, asserted while an
+    /// event is pending) is exported through [`Self::matrix_irq_sources`] and
+    /// re-derived by the bus (`refresh_esp32c3_sched_sources`, run on the event
+    /// path and — crucially, on a walk-DELETED bus — at the MMIO write choke so
+    /// the level de-asserts after `EVENT_CLR`), rather than re-emitted every
+    /// tick by [`Self::tick`]. The descriptor-ring PUMP is orthogonal: it rides
+    /// the write-armed, self-perpetuating bus-tick path
+    /// ([`Self::needs_bus_tick`]), so it costs nothing while WiFi is idle. `None`
+    /// (feature off, a hand-built bus, or the differential's
+    /// [`Self::force_legacy_walk`]) keeps the legacy per-cycle walk. Not
+    /// serialized — re-attached by the bus.
+    clock: Option<CycleClock>,
 }
 
 impl Default for Esp32c3WifiMac {
@@ -144,7 +171,25 @@ impl Esp32c3WifiMac {
             medium_mode: false,
             medium_mac: None,
             medium_beacon_ctr: 0,
+            clock: None,
         }
+    }
+
+    /// True when the event scheduler owns this block's interrupt-level drive
+    /// (feature on AND bus clock attached). One predicate so the walk and
+    /// scheduler drive modes can never mix, mirroring the C3 SARADC/I²C/LEDC
+    /// migrations.
+    #[inline]
+    fn scheduler_mode(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    /// Test/differential knob: detach the cycle clock, pinning the model to the
+    /// legacy per-cycle walk (`uses_scheduler() == false`). Used by the
+    /// walk-on-vs-scheduler differential gates to build the reference config
+    /// from the same bus assembly (mirrors `Esp32c3ApbSarAdc::force_legacy_walk`).
+    pub fn force_legacy_walk(&mut self) {
+        self.clock = None;
     }
 
     /// Attach this MAC to the shared [`virtual_wifi`] medium. Enables medium
@@ -346,7 +391,7 @@ impl Esp32c3WifiMac {
                 self.regs[(0x8c / 4) as usize] = next;
                 self.set_event(EVENT_RX_DONE);
                 RX_DBG_BUF.store(buf, std::sync::atomic::Ordering::Relaxed);
-                if std::env::var("LABWIRED_RXBUF_TRACE").is_ok() {
+                if rxbuf_trace_enabled() {
                     eprintln!(
                         "[rxinj] desc={desc:#010x} buf={buf:#010x} total={total} (hdr48+frame{})",
                         frame.len()
@@ -428,8 +473,35 @@ impl Peripheral for Esp32c3WifiMac {
         Ok(())
     }
 
+    /// Walk-free plan (the descriptor-ring PUMP axis): the bus runs
+    /// [`Self::tick_with_bus`] only while WiFi is actually up, so an idle MAC
+    /// (WiFi off / unconfigured — the OLED demo never enables WiFi) arms NOTHING
+    /// and drops out of the bus-tick set. This is what lets a walk-DELETED C3
+    /// bus take the trivial per-cycle path (`per_cycle_tick_is_trivial` requires
+    /// an empty `bus_tick_indices`).
+    ///
+    /// Each condition is a WRITE-ARMED / setup flag re-consulted by the bus's
+    /// existing `refresh_bus_tick_index` (called after every MMIO write and
+    /// after every `tick_with_bus`), so no new event machinery is needed:
+    ///
+    /// * `rx_ring != 0` — the driver enabled the RX ring by writing its head to
+    ///   `0x88` (an MMIO write, so it arms the pump through the write choke) and
+    ///   the ring stays live for the whole WiFi session. Keying RX on the ring
+    ///   (NOT `pending_rx`) is deliberate: `queue_rx_frame` is a non-MMIO
+    ///   bridge/medium injection that can't refresh the index — but a frame can
+    ///   only be delivered once the ring exists, and once it does the MAC is
+    ///   already resident, so externally-queued frames are pumped without any
+    ///   extra re-arm. RX-down (ring never enabled) ⇒ idle.
+    /// * `!pending_tx.is_empty()` — a driver PLCP0 kick write (`0xC000_0000`
+    ///   bits) queued a frame to transmit; the pump drains it and drops out.
+    /// * `medium_mode` — a two-C3 medium station polls its shared inbox and
+    ///   beacons each tick; the toggle is one-time setup (`attach_to_medium`),
+    ///   which rebuilds the tick index once.
+    ///
+    /// The set is self-perpetuating: after every `tick_with_bus` the bus calls
+    /// `refresh_bus_tick_index`, so the pump keeps ticking until it has drained.
     fn needs_bus_tick(&self) -> bool {
-        true
+        self.rx_ring != 0 || !self.pending_tx.is_empty() || self.medium_mode
     }
 
     fn tick_with_bus(&mut self, bus: &mut dyn Bus) {
@@ -452,10 +524,14 @@ impl Peripheral for Esp32c3WifiMac {
         self.deliver_one_rx(bus);
     }
 
+    /// LEGACY per-cycle walk path (the interrupt-LEVEL axis): re-assert the MAC
+    /// interrupt source while an event is pending so `wDev_ProcessFiq` runs and
+    /// clears it via `EVENT_CLR`. In scheduler mode ([`Self::uses_scheduler`]
+    /// true) the walk skips this peripheral and the bus re-derives the level
+    /// from [`Self::matrix_irq_sources`] instead; this reporter is a pure no-op
+    /// on state, so a stray call is harmless. Matches the SYSTIMER/SARADC level
+    /// delivery model.
     fn tick(&mut self) -> PeripheralTickResult {
-        // Level-sensitive: while an RX (or other) event is pending, keep
-        // asserting the MAC interrupt source so wDev_ProcessFiq runs and clears
-        // it via EVENT_CLR. Matches the SYSTIMER alarm delivery model.
         if self.event() != 0 {
             PeripheralTickResult {
                 explicit_irqs: Some(vec![MAC_INTR_SOURCE]),
@@ -463,6 +539,54 @@ impl Peripheral for Esp32c3WifiMac {
             }
         } else {
             PeripheralTickResult::default()
+        }
+    }
+
+    fn legacy_tick_active(&self) -> bool {
+        self.event() != 0
+    }
+
+    fn legacy_tick_dynamic(&self) -> bool {
+        true
+    }
+
+    /// Walk-free plan: driven by the event scheduler once the bus has attached
+    /// its cycle clock (production `add_peripheral` always does, under the
+    /// `event-scheduler` feature). The per-cycle walk then skips this
+    /// peripheral's interrupt-level reporter; the MAC level is exported through
+    /// [`Self::matrix_irq_sources`] and re-derived by the bus. Without a clock
+    /// (feature off, a hand-built bus, or `force_legacy_walk`) it stays on the
+    /// legacy walk so those callers keep the old exact semantics.
+    fn uses_scheduler(&self) -> bool {
+        self.scheduler_mode()
+    }
+
+    /// The MAC interrupt LEVEL — re-asserting source 0 every walk tick while an
+    /// event is pending — is fully reproduced in scheduler mode by the level
+    /// export ([`Self::matrix_irq_sources`]) + the write-choke re-derivation, so
+    /// the walk is unnecessary there. The descriptor-ring pump does NOT need the
+    /// legacy walk either: it rides the write-armed bus-tick path
+    /// ([`Self::needs_bus_tick`]), which is orthogonal to the walk. In legacy
+    /// mode (no clock / feature off) the walk does real level work and the
+    /// conservative `true` stands.
+    fn needs_legacy_walk(&self) -> bool {
+        !self.scheduler_mode()
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        self.clock = Some(clock);
+    }
+
+    /// C3 interrupt-matrix level: the MAC source (0) while an event is pending —
+    /// the exact condition [`Self::tick`] pushes on the legacy walk. In
+    /// scheduler mode the walk no longer re-emits it, so the bus re-derives the
+    /// level from here (`refresh_esp32c3_sched_sources`, polled on the event
+    /// path and at the MMIO write choke) so the level-sensitive IRQ stays routed
+    /// and de-asserts the tick/write after firmware clears the event via
+    /// `EVENT_CLR`.
+    fn matrix_irq_sources_into(&self, out: &mut Vec<u32>) {
+        if self.event() != 0 {
+            out.push(MAC_INTR_SOURCE);
         }
     }
 
@@ -498,11 +622,28 @@ mod tests {
     #[test]
     fn tick_emits_mac_irq_while_event_pending() {
         let mut m = Esp32c3WifiMac::new();
+        assert!(
+            !m.legacy_tick_active(),
+            "idle level-IRQ WiFi MAC must stay out of the legacy tick walk"
+        );
+        assert!(
+            m.legacy_tick_dynamic(),
+            "event-producing bus ticks and W1C clears must refresh tick membership"
+        );
         assert!(m.tick().explicit_irqs.is_none());
         m.set_event(EVENT_RX_DONE);
+        assert!(
+            m.legacy_tick_active(),
+            "pending MAC event needs level ticks"
+        );
         assert_eq!(
             m.tick().explicit_irqs.as_deref(),
             Some(&[MAC_INTR_SOURCE][..])
+        );
+        m.write_u32(EVENT_CLR, EVENT_RX_DONE).unwrap();
+        assert!(
+            !m.legacy_tick_active(),
+            "cleared MAC event can leave tick walk"
         );
     }
 

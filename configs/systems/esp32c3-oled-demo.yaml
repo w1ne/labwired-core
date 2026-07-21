@@ -1,0 +1,36 @@
+# LabWired - ESP32-C3 + SSD1306 OLED lab.
+#
+# The user's real lab (share k72DJPSUG0JV): an ESP32-C3 Super Mini drives a
+# 128x64 SSD1306 OLED over the behavioral I2C0 controller (0x60013000). The
+# panel sits at 0x3C on SDA=GPIO4 / SCL=GPIO5 (3V3 / GND power). The curated
+# `esp32c3-oled-demo` IDF firmware paints the "LabWired" wordmark; the browser
+# twin boots that flash image faithfully through the real mask ROM (rom-boot).
+name: "esp32c3-oled-demo"
+chip: "../chips/esp32c3.yaml"
+cpu_hz: 160_000_000
+
+external_devices:
+  # SSD1306 OLED on I2C0 at 0x3C. Attached to the C3 command-list controller by
+  # SystemBus::from_config (connection: "i2c0"); the firmware's register-level
+  # driver drives it with genuine I2C transactions.
+  - id: "oled"
+    type: "oled-ssd1306"
+    connection: "i2c0"
+    route:
+      sda: "GPIO4"
+      scl: "GPIO5"
+    config:
+      i2c_address: 0x3C
+
+board_io:
+  # Framebuffer readback binding (WasmSimulator::get_ssd1306_framebuffer). The
+  # C3 GPIO matrix must route I2C0 SDA/SCL to the declared GPIO4/GPIO5 pads
+  # before the behavioral controller can reach this panel.
+  - id: "oled"
+    kind: "i2c_device"
+    peripheral: "i2c0"
+    pin: 4
+    signal: "input"
+    active_high: true
+    i2c_address: 0x3C
+    device_type: "oled-ssd1306"

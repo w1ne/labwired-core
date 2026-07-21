@@ -1132,7 +1132,7 @@ mod tests {
         };
 
         let manifest = labwired_config::SystemManifest {
-            walk_deleted: false,
+            walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "test-system".to_string(),
             chip: "test-chip".to_string(),
@@ -1191,7 +1191,7 @@ mod tests {
         };
 
         let manifest = labwired_config::SystemManifest {
-            walk_deleted: false,
+            walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "test-system".to_string(),
             chip: "test-chip".to_string(),
@@ -1263,7 +1263,7 @@ mod tests {
         };
 
         let manifest = labwired_config::SystemManifest {
-            walk_deleted: false,
+            walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "test-system".to_string(),
             chip: "test-chip".to_string(),

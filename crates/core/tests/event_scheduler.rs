@@ -17,40 +17,38 @@ fn drained_ids(out: &[ScheduledEvent]) -> Vec<u64> {
 fn empty_scheduler() {
     let mut sched = EventScheduler::new();
     assert_eq!(sched.now(), 0);
-    assert_eq!(sched.next_event_deadline(&[]), None);
-    assert!(sched.drain_due(&[]).is_empty());
+    assert_eq!(sched.next_event_deadline(), None);
+    assert!(sched.drain_due().is_empty());
 }
 
 #[test]
 fn single_event_visible_then_drained() {
     let mut sched = EventScheduler::new();
-    let gens = [0u32];
-    sched.schedule(100, 0, 0xAB, 0);
+    sched.schedule(100, 0, 0xAB);
 
-    assert_eq!(sched.next_event_deadline(&gens), Some(100));
+    assert_eq!(sched.next_event_deadline(), Some(100));
     // Before deadline: no events drained, but heap unchanged.
-    assert!(sched.drain_due(&gens).is_empty());
-    assert_eq!(sched.next_event_deadline(&gens), Some(100));
+    assert!(sched.drain_due().is_empty());
+    assert_eq!(sched.next_event_deadline(), Some(100));
 
     sched.advance_to(100);
-    let out = sched.drain_due(&gens);
+    let out = sched.drain_due();
     assert_eq!(out.len(), 1);
     assert_eq!(out[0].event_token, 0xAB);
-    assert_eq!(sched.next_event_deadline(&gens), None);
+    assert_eq!(sched.next_event_deadline(), None);
 }
 
 #[test]
 fn multi_event_deadline_order() {
     let mut sched = EventScheduler::new();
-    let gens = [0u32];
-    sched.schedule(300, 0, 3, 0);
-    sched.schedule(100, 0, 1, 0);
-    sched.schedule(200, 0, 2, 0);
+    sched.schedule(300, 0, 3);
+    sched.schedule(100, 0, 1);
+    sched.schedule(200, 0, 2);
 
-    assert_eq!(sched.next_event_deadline(&gens), Some(100));
+    assert_eq!(sched.next_event_deadline(), Some(100));
 
     sched.advance_to(500);
-    let out = sched.drain_due(&gens);
+    let out = sched.drain_due();
     let tokens: Vec<u32> = out.iter().map(|e| e.event_token).collect();
     assert_eq!(tokens, vec![1, 2, 3]);
 }
@@ -58,57 +56,16 @@ fn multi_event_deadline_order() {
 #[test]
 fn same_deadline_deterministic_by_event_id() {
     let mut sched = EventScheduler::new();
-    let gens = [0u32];
     // Schedule in (1, 2) order at the same deadline; event_id is monotonic
     // so drain must yield them in (1, 2) order regardless of insertion side
     // effects.
-    let id_a = sched.schedule(100, 0, 1, 0);
-    let id_b = sched.schedule(100, 0, 2, 0);
+    let id_a = sched.schedule(100, 0, 1);
+    let id_b = sched.schedule(100, 0, 2);
     assert!(id_b > id_a);
 
     sched.advance_to(100);
-    let out = sched.drain_due(&gens);
+    let out = sched.drain_due();
     assert_eq!(drained_ids(&out), vec![id_a, id_b]);
-}
-
-#[test]
-fn lazy_cancel_via_generation_bump() {
-    let mut sched = EventScheduler::new();
-    sched.schedule(100, 0, 1, 0);
-    sched.schedule(100, 0, 2, 0);
-
-    // Bump peripheral 0's generation → both events become stale.
-    let gens = [1u32];
-    assert_eq!(sched.next_event_deadline(&gens), None);
-
-    sched.advance_to(100);
-    assert!(sched.drain_due(&gens).is_empty());
-    // Heap is now empty (stale entries are popped on drain).
-    assert_eq!(sched.next_event_deadline(&[0u32]), None);
-}
-
-#[test]
-fn lazy_cancel_partial() {
-    let mut sched = EventScheduler::new();
-    // peripheral 0 stale, peripheral 1 fresh.
-    sched.schedule(100, 0, 1, 0);
-    sched.schedule(100, 1, 2, 0);
-    let gens = [1u32, 0u32];
-
-    sched.advance_to(100);
-    let out = sched.drain_due(&gens);
-    let tokens: Vec<u32> = out.iter().map(|e| e.event_token).collect();
-    assert_eq!(tokens, vec![2]);
-}
-
-#[test]
-fn stale_idx_out_of_range_is_dropped() {
-    let mut sched = EventScheduler::new();
-    sched.schedule(100, 5, 0xFF, 0);
-
-    sched.advance_to(100);
-    // Empty generation snapshot → out-of-range idx treated as stale.
-    assert!(sched.drain_due(&[]).is_empty());
 }
 
 #[test]
@@ -124,7 +81,7 @@ fn past_deadline_clamps_in_release_and_counts() {
     // assertion isn't compiled in.
     #[cfg(not(debug_assertions))]
     {
-        sched.schedule(50, 0, 1, 0);
+        sched.schedule(50, 0, 1);
         assert_eq!(sched.stats().past_schedule_clamps, 1);
         let out = sched.drain_due(&[0u32]);
         assert_eq!(out.len(), 1);
@@ -144,18 +101,17 @@ fn reentrant_schedule_during_drain_semantics() {
     // (event_id higher → strict order). Confirms the documented
     // reentrancy model: same-deadline events are ordered by event_id.
     let mut sched = EventScheduler::new();
-    let gens = [0u32];
-    let id_a = sched.schedule(100, 0, 1, 0);
+    let id_a = sched.schedule(100, 0, 1);
 
     sched.advance_to(100);
-    let first = sched.drain_due(&gens);
+    let first = sched.drain_due();
     assert_eq!(drained_ids(&first), vec![id_a]);
 
     // Equivalent to "handler called schedule(now, ...) mid-drain": the new
     // event has a higher event_id and lands in the next drain.
-    let id_b = sched.schedule(100, 0, 2, 0);
+    let id_b = sched.schedule(100, 0, 2);
     assert!(id_b > id_a);
-    let second = sched.drain_due(&gens);
+    let second = sched.drain_due();
     assert_eq!(drained_ids(&second), vec![id_b]);
 }
 
@@ -256,6 +212,7 @@ fn machine_step_parity_with_no_scheduler_users() {
 #[cfg(feature = "event-scheduler")]
 mod write_context_scheduling {
     use labwired_core::bus::SystemBus;
+    use labwired_core::Bus;
     use labwired_core::{Peripheral, SimResult};
 
     const ARM_TOKEN: u32 = 0xE5;
@@ -297,16 +254,21 @@ mod write_context_scheduling {
         );
 
         // A non-arming-aware peripheral would leave this empty; ours queues
-        // exactly one (peripheral_idx=0, delay=0, ARM_TOKEN) on write.
+        // exactly one (peripheral_idx=0, deadline, ARM_TOKEN) on write. The
+        // peripheral's relative delay 0 becomes the absolute cycle deadline
+        // `current_cycle + 1 + 0` — the cycle the next per-cycle drain runs at
+        // (`current_cycle` is 0 here; no machine is stepping this bus).
         bus.write_u32(0x5000_0000, 1).unwrap();
-        assert_eq!(bus.pending_schedule, vec![(0usize, 0u64, ARM_TOKEN)]);
+        assert_eq!(bus.pending_schedule, vec![(0usize, 1u64, ARM_TOKEN)]);
 
         // A second write re-arms and appends another request (the harvest
-        // cleared `armed` the first time, so this isn't a stale duplicate).
+        // cleared `armed` the first time, so this isn't a stale duplicate),
+        // with the deadline pinned to the (advanced) write cycle.
+        bus.current_cycle = 5;
         bus.write_u32(0x5000_0000, 1).unwrap();
         assert_eq!(
             bus.pending_schedule,
-            vec![(0usize, 0u64, ARM_TOKEN), (0usize, 0u64, ARM_TOKEN)]
+            vec![(0usize, 1u64, ARM_TOKEN), (0usize, 6u64, ARM_TOKEN)]
         );
     }
 }

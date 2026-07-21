@@ -243,11 +243,12 @@ impl Esp32s3Spi {
         }
     }
 
-    /// Attach a simulated device to this controller's bus (same surface as
-    /// `Esp32Spi::attach`; reachable from config-level external-device
-    /// wiring via `attach_esp32_external_devices` in `system/xtensa.rs`,
-    /// which downcasts to either SPI model).
-    pub fn attach(&mut self, device: Box<dyn SpiDevice>) {
+    /// Raw device push — does NOT wrap for tracing. The only production caller
+    /// is the bus choke point [`crate::bus::SystemBus::attach_spi_device`],
+    /// which wraps first. Reachable from config-level external-device wiring via
+    /// `attach_esp32_external_devices` in `system/xtensa.rs`, which downcasts to
+    /// either SPI model.
+    pub(crate) fn push_device(&mut self, device: Box<dyn SpiDevice>) {
         self.attached_devices.push(device);
     }
 
@@ -499,6 +500,20 @@ impl Peripheral for Esp32s3Spi {
 
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
+    }
+
+    fn for_each_attached_sim_input(
+        &mut self,
+        f: &mut dyn FnMut(&mut dyn crate::sim_input::SimInput) -> bool,
+    ) -> bool {
+        for dev in self.attached_devices.iter_mut() {
+            if let Some(si) = dev.as_sim_input_mut() {
+                if f(si) {
+                    return true;
+                }
+            }
+        }
+        false
     }
 }
 
@@ -800,7 +815,7 @@ mod tests {
             }
         }
         let mut s = Esp32s3Spi::new(SPI3_SOURCE);
-        s.attach(Box::new(Xor(Vec::new())));
+        s.push_device(Box::new(Xor(Vec::new())));
         s.write_u32(DMA_CONF, SPI_DMA_TX_ENA | SPI_DMA_RX_ENA)
             .unwrap();
         s.write_u32(MS_DLEN, 4 * 8 - 1).unwrap();

@@ -9,14 +9,36 @@ on:
       - main
   workflow_dispatch:
 
+concurrency:
+  group: core-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  # This static verifier reads workflow/Dockerfile/action/docs text only; it
+  # intentionally needs neither Docker nor a Rust build.
+  release-runner-contract:
+    name: release-runner-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The static contract verifier inspects the immutable action-source
+          # commit referenced by consumer documentation.
+          fetch-depth: 0
+
+      - name: Verify release runner contract
+        run: bash scripts/ci/verify-release-runner-contract.sh
+
   # ── Fast PR gate (REQUIRED) ────────────────────────────────────────────────
   # Formatting, lints, and unit tests only — no firmware cross-builds, no
   # fixture-dependent integration tests, no Tier-1 sims. Target a few minutes so
-  # PRs merge fast. The complete suite runs post-merge in `core-full` below.
+  # PRs merge fast. The complete suite is now opt-in via manual dispatch or a
+  # `[full-ci]` marker on a main-branch commit while Actions quota is tight.
   integrity:
     name: core-integrity
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -59,18 +81,67 @@ jobs:
       # Library unit tests across the workspace. `--lib` skips the no_std
       # firmware bin crates (which only build for thumb targets) and the
       # integration tests under tests/ that need pre-built firmware fixtures —
-      # both run in core-full post-merge.
+      # both run in core-full when explicitly requested.
       - name: Unit tests (no fixtures)
         run: cargo test --workspace --lib
 
+      # Board-coverage ratchet: a cheap static/naming scan (no fixtures, no
+      # firmware build) that fails if a SHIPPED chip lacks its required coverage
+      # classes — reset conformance, an executing-fidelity test, and a display
+      # assertion where it drives a shipped display lab. Missing coverage is only
+      # allowed via the shrink-only KNOWN_GAPS allowlist inside the test; a new
+      # uncovered board, or a filled gap left stale in the allowlist, fails here.
+      - name: Board-coverage ratchet (static naming scan)
+        run: cargo test -p labwired-core --test board_coverage_ratchet -- --nocapture
+
+      # Scheduler-driven interrupt delivery, all three MCU fabrics. This lane
+      # (event-scheduler + jit) previously ran ONLY in core-full, which is how an
+      # ESP32-S3 intmatrix scheduler-delivery hole stayed hidden. These targeted
+      # differential gates (hand-built machines, NO firmware fixtures) pin
+      # walk-vs-scheduler IRQ delivery cycle-for-cycle for the Xtensa intmatrix
+      # (S3), the RISC-V matrix (C3) and the Cortex-M NVIC, so a silent
+      # scheduler-delivery regression on any fabric fails the PR gate. `--lib`
+      # re-runs the labwired-core unit tests under the feature (systimer alarm /
+      # scheduler drain coverage). Fast: the tests run in ~1s; the cost is the
+      # one-time feature-variant compile (shared cache).
+      - name: Feature gate — scheduler IRQ delivery (jit + event-scheduler)
+        run: >
+          cargo test -p labwired-core --features jit,event-scheduler
+          --test intmatrix_alarm
+          --test esp32s3_walk_differential
+          --test esp32c3_walk_differential
+          --test stm32_timer_walk_differential
+          --test stm32_dma_walk_differential
+          --test kw41z_walk_free_differential
+          --lib
+
+      # This is deliberately inside the required core-integrity check: every
+      # merge must prove the final OCI runtime can execute the CLI before a
+      # main commit can be tagged for release. Building from fresh base layers
+      # catches builder/runtime ABI drift such as a newer glibc in Rust's slim
+      # image than the release runtime provides.
+      - name: Smoke CI runner image
+        run: |
+          set -euo pipefail
+          docker build --pull \
+            --file Dockerfile.ci \
+            --tag labwired-ci-smoke:local \
+            --build-arg VERSION=ci-smoke \
+            --build-arg REVISION="$GITHUB_SHA" \
+            .
+          docker run --rm labwired-ci-smoke:local --version
+
   # ── Full suite (NOT a PR gate) ─────────────────────────────────────────────
-  # Runs after merge on main (and on manual dispatch). Builds firmware fixtures,
-  # runs the complete workspace tests, the host-only feature lanes, and the
-  # Tier-1 matrix + ratchet. A regression caught here is fixed forward on main.
+  # Builds firmware fixtures, runs the complete workspace tests, the host-only
+  # feature lanes, and the Tier-1 matrix + ratchet. This is expensive, so keep it
+  # manual/opt-in instead of running it after every merge to main.
   full:
     name: core-full
-    if: github.event_name != 'pull_request'
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-ci]'))
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 

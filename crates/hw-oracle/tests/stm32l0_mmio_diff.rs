@@ -39,6 +39,7 @@
 
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
+use labwired_core::Bus;
 use std::path::PathBuf;
 
 // ── RCC (0x4002_1000, RM0367 §7 — L0 layout) ─────────────────────────────────

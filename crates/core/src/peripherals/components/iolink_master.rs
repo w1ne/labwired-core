@@ -514,6 +514,7 @@ pub struct IolinkMasterKit;
 pub static IOLINK_MASTER_KIT: IolinkMasterKit = IolinkMasterKit;
 
 static IOLINK_MASTER_METADATA: KitMetadata = KitMetadata {
+    inputs: &[],
     device_type: "iolink-master",
     label: "IO-Link Master",
     summary: "IO-Link master state machine over UART.",

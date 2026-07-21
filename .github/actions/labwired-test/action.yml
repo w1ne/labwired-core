@@ -9,47 +9,49 @@ inputs:
     description: "Path to the LabWired test script (YAML)."
     required: true
   version:
-    description: "LabWired release tag to use, or 'latest'."
+    description: "Immutable LabWired Core release tag to install."
     required: false
-    default: "latest"
-  repo:
-    description: "Repository that publishes the LabWired releases."
-    required: false
-    default: "w1ne/labwired"
-  args:
-    description: "Extra flags appended to `labwired test`."
-    required: false
-    default: ""
-  junit:
-    description: "Path to write a JUnit XML report."
-    required: false
-    default: "labwired-junit.xml"
+    default: "v0.19.2"
   output-dir:
-    description: "Directory for run artifacts (result.json, uart.log)."
+    description: "Directory for run artifacts (result.json, uart.log, junit.xml, and reports)."
     required: false
     default: "labwired-artifacts"
-  upload-artifacts:
-    description: "Upload the output dir + JUnit report as a workflow artifact."
+  args:
+    description: "Whitespace-separated extra flags appended to `labwired test` (shell quoting is not interpreted)."
     required: false
-    default: "true"
-  github-token:
-    description: "Token used to download the release (defaults to the job token)."
-    required: false
-    default: ${{ github.token }}
+    default: ""
+
+outputs:
+  status:
+    description: "LabWired result status rendered from result.json."
+    value: ${{ steps.report.outputs.status }}
+  summary-md:
+    description: "Path to the generated Markdown run summary."
+    value: ${{ steps.report.outputs.summary_md }}
+  report-html:
+    description: "Path to the generated self-contained HTML report."
+    value: ${{ steps.report.outputs.report_html }}
+  artifact-url:
+    description: "URL for the automatically uploaded LabWired artifact."
+    value: ${{ steps.upload.outputs.artifact-url }}
+  exit-code:
+    description: "Captured LabWired CLI exit code."
+    value: ${{ steps.run.outputs.exit_code }}
 
 runs:
   using: composite
   steps:
     - name: Install LabWired
+      id: install
       shell: bash
       env:
-        GH_TOKEN: ${{ inputs.github-token }}
+        LABWIRED_VERSION: ${{ inputs.version }}
       run: |
         set -euo pipefail
-        ver='${{ inputs.version }}'
-        repo='${{ inputs.repo }}'
-        if [ "$ver" = "latest" ]; then
-          ver="$(gh release view --repo "$repo" --json tagName -q .tagName)"
+        version="$LABWIRED_VERSION"
+        if ! [[ "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "::error::version must be a vMAJOR.MINOR.PATCH release tag."
+          exit 1
         fi
         case "$(uname -s)-$(uname -m)" in
           Linux-x86_64)            plat=linux-x86_64 ;;
@@ -58,31 +60,87 @@ runs:
           Darwin-arm64)            plat=darwin-aarch64 ;;
           *) echo "::error::unsupported runner $(uname -s)-$(uname -m)"; exit 1 ;;
         esac
-        asset="labwired-${ver}-${plat}.tar.gz"
+        asset="labwired-${version}-${plat}.tar.gz"
         dir="$RUNNER_TEMP/labwired"
+        archive="$dir/$asset"
+        url="https://github.com/w1ne/labwired-core/releases/download/${version}/${asset}"
         mkdir -p "$dir"
-        echo "Downloading ${asset} from ${repo}@${ver}"
-        gh release download "$ver" --repo "$repo" --pattern "$asset" --dir "$dir"
-        tar -xzf "$dir/$asset" -C "$dir"
+        echo "Downloading ${asset} from the public LabWired Core release"
+        curl --fail --location --retry 3 --retry-delay 2 --output "$archive" "$url"
+        tar -xzf "$archive" -C "$dir"
         chmod +x "$dir/labwired"
+        echo "release_version=$version" >> "$GITHUB_OUTPUT"
         echo "$dir" >> "$GITHUB_PATH"
 
     - name: Run LabWired test
+      id: run
       shell: bash
+      env:
+        LABWIRED_SCRIPT: ${{ inputs.script }}
+        LABWIRED_OUTPUT_DIR: ${{ inputs.output-dir }}
+        LABWIRED_ARGS: ${{ inputs.args }}
       run: |
         set -euo pipefail
-        labwired test \
-          --script '${{ inputs.script }}' \
-          --junit '${{ inputs.junit }}' \
-          --output-dir '${{ inputs.output-dir }}' \
-          ${{ inputs.args }}
+        mkdir -p "$LABWIRED_OUTPUT_DIR"
+        command=(labwired test
+          --script "$LABWIRED_SCRIPT"
+          --output-dir "$LABWIRED_OUTPUT_DIR"
+          --junit "$LABWIRED_OUTPUT_DIR/junit.xml")
+        if [ -n "$LABWIRED_ARGS" ]; then
+          read -r -a extra_args <<< "$LABWIRED_ARGS"
+          command+=("${extra_args[@]}")
+        fi
+        set +e
+        "${command[@]}"
+        exit_code=$?
+        set -e
+        echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+        exit 0
+
+    - name: Render LabWired report
+      id: report
+      if: ${{ always() }}
+      shell: bash
+      env:
+        LABWIRED_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        LABWIRED_SOURCE_REVISION: ${{ github.sha }}
+        LABWIRED_RELEASE_VERSION: ${{ steps.install.outputs.release_version }}
+        LABWIRED_SCRIPT: ${{ inputs.script }}
+        LABWIRED_RESULT_JSON: ${{ inputs.output-dir }}/result.json
+        LABWIRED_UART_LOG: ${{ inputs.output-dir }}/uart.log
+        LABWIRED_SUMMARY_MD: ${{ inputs.output-dir }}/summary.md
+        LABWIRED_REPORT_HTML: ${{ inputs.output-dir }}/report.html
+      run: |
+        set -euo pipefail
+        python3 "${{ github.action_path }}/render_report.py" \
+          "$LABWIRED_RESULT_JSON" \
+          "$LABWIRED_UART_LOG" \
+          "$LABWIRED_SUMMARY_MD" \
+          "$LABWIRED_REPORT_HTML" \
+          "$GITHUB_OUTPUT"
+        cat "$LABWIRED_SUMMARY_MD" >> "$GITHUB_STEP_SUMMARY"
 
     - name: Upload artifacts
-      if: ${{ always() && inputs.upload-artifacts == 'true' }}
+      id: upload
+      if: ${{ always() }}
       uses: actions/upload-artifact@v4
       with:
-        name: labwired-${{ github.job }}-${{ github.run_id }}
-        path: |
-          ${{ inputs.output-dir }}
-          ${{ inputs.junit }}
-        if-no-files-found: ignore
+        name: labwired-${{ github.job }}-${{ github.run_id }}-${{ github.action }}
+        path: ${{ inputs.output-dir }}
+        if-no-files-found: error
+
+    - name: Propagate LabWired exit code
+      if: ${{ always() }}
+      shell: bash
+      env:
+        LABWIRED_EXIT_CODE: ${{ steps.run.outputs.exit_code }}
+      run: |
+        set -euo pipefail
+        case "$LABWIRED_EXIT_CODE" in
+          ''|0) exit 0 ;;
+          *[!0-9]*)
+            echo "::error::LabWired did not return a numeric exit code."
+            exit 1
+            ;;
+          *) exit "$LABWIRED_EXIT_CODE" ;;
+        esac

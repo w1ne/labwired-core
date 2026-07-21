@@ -7,6 +7,118 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.2] - 2026-07-15
+
+### Fixed
+- **Release runner smoke**: Bind-mounted container runs now preserve the
+  caller's artifact ownership, so the published image and archive-backed
+  GitHub Action can write report bundles in the same workspace.
+
+### Changed
+- **Public runner default**: The GitHub Action, integration templates, and
+  documented release pins now use the verified v0.19.2 runner contract.
+
+## [0.19.1] - 2026-07-15
+
+### Fixed
+- **Environment completion**: `inputs.env` scripts can opt into the same
+  durable assertion-pass stop contract as single-machine runs, including the
+  settling window and minimum-step floor. Node runtime failures and configured
+  wall-time/cycle/UART limits retain precedence over completion.
+- **CI runner image**: The image now builds against the same Debian/glibc
+  baseline it runs on. The required Core CI check builds and executes the final
+  image before a release tag can be created.
+
+### Changed
+- **Public runner default**: The one-step GitHub Action now defaults to the
+  v0.19.1 immutable CLI release; release smoke exercises both that default and
+  an explicit release pin.
+
+## [0.19.0] - 2026-07-14
+
+### Added
+- **Released multi-node CI runner**: GitHub Actions and OCI release smoke tests
+  can run a complete inputs.env world from YAML and publish a self-contained
+  report bundle without rebuilding LabWired.
+- **Environment result contract**: Multi-node runs write an explicit
+  1.0-environment result schema with per-node provenance and fidelity gaps.
+
+### Fixed
+- **Environment CI safety and evidence**: Strict environment-manifest
+  validation, deterministic snapshot peripheral ordering, explicit CAN
+  peripheral selection, and correct safety-stop / assertion precedence make
+  multi-node evidence reproducible and fail-closed.
+
+## [0.18.0] - 2026-07-09
+
+### Added
+- **Bus-agnostic Component IR**: Declarative component models can now share one
+  engine across I2C and read-only SPI devices.
+- **One-step SVD ingestion**: `labwired asset ingest-svd` converts vendor SVD
+  input into a runnable declarative chip path.
+- **Native IO-Link simulation path**: LabWired can bridge to the native C
+  IO-Link master, run cyclic PD-out frames, isolate multiple device contexts,
+  and execute multi-node IO-Link worlds in CI.
+- **Firmware exercise matrix**: Added an explicit matrix for which real
+  firmware paths exercise each modeled board/peripheral capability, backed by
+  generated tier-1 scoreboards.
+- **KW41Z Zephyr and display coverage**: Added unmodified Zephyr hello,
+  FXOS8700 activity, Nokia 5110 display, and visible activity-display examples.
+- **Generic input and stimuli flow**: Added `SimInput` channels and declarative
+  input stimuli so tests can drive modeled sensors and inputs mid-run.
+- **Bus trace and analyzer exports**: Added a shared trace event stream,
+  universal tracing wrappers for attached I2C/SPI devices, WASM trace draining,
+  and CLI JSON/VCD export via `--bus-trace-out`.
+- **Peripheral egress bridge and relay**: Simulated peripheral output can be
+  forwarded through validated MQTT/TCP/HTTP-style egress flows.
+- **Faithful ESP32-C3 / ESP32-S3 browser paths**: Added lazy ROM injection,
+  flash-image ROM boot in WASM, ESP32-C3 SSD1306/OLED paint proof, and
+  `labwired test --rom-boot` coverage for faithful ESP targets.
+- **Universal peripheral inspect interface**: Added a common inspection surface
+  for machine/peripheral state, including ESP32-C3 inspect integration.
+- **Snapshot app-entry cache**: Faithful ESP32-C3 boot can be cached at app
+  entry and resumed for faster interactive startup.
+- **Additional examples and devices**: Added RP2040 Arduino Mbed-OS USB CDC,
+  CAN player replay, F103 J1939 monitor, CANmod GPS simulation, display catalog
+  devices, and ESP32-C3 display workshop labs.
+
+### Changed
+- **Unified pin mapping**: Chip descriptors now carry an authoritative `pins`
+  map; runtime routing resolves through that map instead of parsing pin names or
+  falling back silently.
+- **Canonical config loading**: Rust `resolve()` now follows the TypeScript
+  oracle for byte-identical canonical config behavior.
+- **IO-Link wire conformance**: Device and master pins were aligned to the
+  V1.1.5 spec-conformant wire mapping.
+- **Browser runtime performance**: WASM builds use smaller/faster settings,
+  lazy ROM loading, idle fast-forward, cached C3 tick/IRQ routing, and batched
+  RISC-V stepping.
+- **Test runner stop semantics**: Assertion-pass stop handling now supports a
+  settle window and minimum-step floor for more stable scripted runs.
+- **Release-facing README**: Rewrote the project README around concrete
+  capabilities, examples, validation scope, and a verified smoke command.
+
+### Fixed
+- **IO-Link correctness and observability**: Repaired IO-Link debug/analyzer
+  flow, native stack routing, multi-device state isolation, station console
+  labeling, station USART scoping, and the four-port master PHY ABI.
+- **nRF52 firmware fidelity**: Modeled TWIM transfer latency, both write-read
+  paths, RTC LFCLK timing, and legacy UART TXD behavior for Arduino output.
+- **Cortex-M and instruction fidelity**: Cleared stale pending exception bits
+  after NVIC ICPR, fixed LDM T1 writeback when the base register is in the
+  register list, and covered CPU arithmetic behavior used by IO-Link flows.
+- **ESP32-C3 / SSD1306 paths**: Fixed OLED I2C transactions, split-command
+  SSD1306 state, dynamic bus tick caching, GPIO flash boot strap values,
+  read-fresh ROM-boot timers, scheduler tick walking, and workshop firmware
+  display/serial behavior.
+- **STM32 and RP2040 bring-up**: Modeled STM32L476 PLLSAI ready bits for
+  Arduino HAL boot and RP2040 XIP_SSI for boot2/XIP completion.
+- **Modeling failures become explicit**: PCD8544 D/C pin resolution and
+  vendor-neutral GPIO routing now fail loudly instead of guessing a fallback.
+- **CI and packaging stability**: Restored strict onboarding smoke gates, pinned
+  the thumbv6m smoke linker path, reduced unnecessary GitHub Actions usage, and
+  aligned the published LabWired action failure policy.
+
 ## [0.17.10] - 2026-06-29
 
 ### Fixed

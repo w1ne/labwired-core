@@ -4,6 +4,44 @@ A reference for the engine's runtime internals. For the high-level subsystem tou
 
 LabWired is a modular execution engine designed to decouple the CPU core from the memory and peripheral bus. This design enables the simulation of multi-architecture systems within a unified peripheral environment.
 
+### Authoritative machine advancement
+
+Ordinary native, CLI-test, debugger, and WASM execution enters through
+`Machine::advance`. It owns batch planning, CPU0/CPU1 scheduling, cycle
+publication, peripheral ticks, scheduler delivery, software reset, flash
+operations, profiling, and logic observation. Frontends inspect the machine
+between bounded calls for assertions, stimuli, UART limits, and artifacts, but
+must not call `Cpu::step` directly.
+
+Outside CPU implementations and test-only integration/unit harnesses, the
+remaining direct CPU advancement sites are deliberately limited to these
+implementation and compatibility boundaries:
+
+- `crates/core/src/machine/boundary.rs` is the internal CPU execution primitive
+  owned by `Machine::advance`; it is not a frontend entry point.
+- CPU trait implementations, the default `step_batch` helper, and CPU unit
+  helpers operate below or outside the frontend boundary. The direct calls in
+  `crates/core/src/peripherals/esp_xtensa_common/rom_thunks.rs` are unit-test
+  helpers.
+- `crates/core/src/vfi.rs` provides the specialist standalone `ShadowEngine`.
+  Its lockstep operation deliberately owns direct stepping of the golden and
+  shadow CPUs plus parity comparison; its caller owns the surrounding bus and
+  peripheral lifecycle. It is not an ordinary `Machine` frontend.
+- `crates/core/src/multi_core.rs` provides the specialist standalone
+  `MultiCoreMachine::step_all` engine. It directly steps each core, ticks its
+  peripherals once, and routes interrupts according to that engine's own
+  policy; it is outside the `Machine` frontend lifecycle.
+- `crates/cli/src/main.rs` uses `Machine::advance` for bounded test execution.
+- `crates/cli/src/commands/run.rs` and
+  `crates/cli/src/commands/snapshot.rs` contain specialized bare-CPU ESP
+  bring-up and snapshot loops; these are explicitly outside the ordinary
+  machine frontend path.
+- `crates/hw-oracle/src/lib.rs`, `crates/hw-oracle/src/arm_thumb.rs`, and
+  `crates/hw-oracle/src/riscv.rs` are bare-CPU hardware validation oracles.
+
+Ordinary WASM wrappers and `DebugControl::run` have no direct CPU-step path;
+they enter through the authoritative machine boundary.
+
 ## 1. Core Execution Engine (`labwired-core`)
 
 The `labwired-core` crate provides the central execution loop and state management.
@@ -27,8 +65,9 @@ pub trait Cpu {
 ```
 
 The system currently implements:
-- **Cortex-M (ARMv7-M)**: Supports Thumb-2 instruction decoding.
-- **RISC-V (RV32I)**: Supports base integer instruction set.
+- **Cortex-M (ARMv7-M / ARMv6-M)**: Supports Thumb-2 instruction decoding.
+- **RISC-V (RV32IMC)**: Base integer set plus M/C extensions (e.g. the ESP32-C3 core).
+- **Xtensa (LX7)**: Powers the ESP32-S3 targets.
 
 ### Memory Model
 The memory system uses a linear addressing model mapped to host memory regions.
@@ -55,6 +94,7 @@ To achieve high MIPS (Million Instructions Per Second) for autonomous agents, La
 - **Instruction Decode Cache**: A direct-mapped cache in the CPU core that avoids re-decoding instructions on every hit.
 - **Multi-Byte Bus Fast-Path**: Specialized 16/32-bit access methods in `SystemBus` that bypass the virtual `read_u8` loop for memory regions (RAM/Flash).
 - **Batched Ticking**: Configurable `peripheral_tick_interval`. Ticking every N cycles instead of every instruction significantly reduces virtual call overhead in the hot path.
+- **Event-Driven Scheduling**: Peripherals that know their next deadline register wake-ups with the event scheduler (`crates/core/src/sched/`) instead of being polled every tick, eliminating the per-cycle peripheral walk on idle blocks.
 
 Defaults and gating are controlled via `SimulationConfig`. Setting `peripheral_tick_interval` to 1 and disabling caches restores strict cycle-accurate behavior for time-sensitive firmware.
 

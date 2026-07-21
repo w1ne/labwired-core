@@ -1,14 +1,17 @@
 # CI Integration
 
-This guide details the integration of LabWired firmware simulations into continuous integration (CI) pipelines. By replacing physical hardware with deterministic simulation, teams can achieve scalable, parallelized regression testing.
+LabWired CI runs the same labwired test command locally, in GitHub Actions, and
+in GitLab. Pin the runner release to v0.19.2 so a firmware change is tested
+against a reproducible simulator version.
 
-## 1. Quick Start
+## GitHub Actions
 
-### GitHub Actions
-To enable automated testing on every push, create a workflow file at `.github/workflows/firmware-test.yml`:
+Use the public LabWired Core action and select the Core CLI release with its
+version input:
 
-```yaml
-name: Firmware Simulation
+~~~yaml
+name: Firmware simulation
+
 on: [push, pull_request]
 
 jobs:
@@ -16,97 +19,92 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build Firmware
-        run: cargo build --release --target thumbv7m-none-eabi
-      
-      - name: Run Simulation
-        uses: w1ne/labwired/.github/actions/labwired-test@main
+
+      - name: Build firmware
+        run: cargo build --release --target thumbv7m-none-eabi -p firmware
+
+      - id: labwired
+        name: Run LabWired
+        uses: w1ne/labwired-core/.github/actions/labwired-test@0cadd18fc9a3c0cbd1ecb0a6ddcd8ce66d56283d
         with:
-          script: tests/basic_boot.yaml
-          artifact_name: test-results
-```
+          script: tests/firmware-test.yaml
+          version: v0.19.2
+          output-dir: out/labwired
+          args: --no-uart-stdout
 
-### GitLab CI
-For GitLab, add the following to `.gitlab-ci.yml`:
+      - name: Link the automatic LabWired artifact
+        if: always()
+        run: echo "${{ steps.labwired.outputs.artifact-url }}" >> "$GITHUB_STEP_SUMMARY"
+~~~
 
-```yaml
-test_simulation:
-  image: rust:latest
+The public action reference is an immutable action-source pin to
+`0cadd18fc9a3c0cbd1ecb0a6ddcd8ce66d56283d`. Its only inputs are `script`
+(required), `version` (default `v0.19.2`), `output-dir`, and `args`; it downloads
+the selected public CLI release archive with `curl`. The action writes JUnit to
+`output-dir/junit.xml`, appends `summary.md` to the job summary, and always
+uploads the entire output directory, even when the test fails. Its `status`,
+`summary-md`, `report-html`, `artifact-url`, and `exit-code` outputs are
+available through the `labwired` step ID.
+
+## Container runner
+
+The release image has labwired as its entrypoint. Pass test directly after the
+image name; do not repeat labwired in the container command:
+
+~~~bash
+docker run --rm \
+  --user "$(id -u):$(id -g)" \
+  --volume "$PWD:/workspace" \
+  --workdir /workspace \
+  ghcr.io/w1ne/labwired:v0.19.2 \
+  test --script tests/firmware-test.yaml \
+       --output-dir out/labwired \
+       --no-uart-stdout
+~~~
+
+When bind-mounting a workspace, pass the caller UID/GID so generated artifacts
+remain writable on the host. The Docker command and GitHub action accept the
+same test YAML: it can be a single-machine script or a world script that
+selects its environment through `inputs.env`.
+
+## GitLab CI
+
+GitLab must clear the image entrypoint so it can start its normal job shell.
+The active template in [integration-templates/gitlab-ci.yml](integration-templates/gitlab-ci.yml)
+uses the pinned image and then invokes labwired test.
+
+~~~yaml
+test:firmware:
+  image:
+    name: ghcr.io/w1ne/labwired:v0.19.2
+    entrypoint: [""]
   script:
-    - cargo build --release --target thumbv7m-none-eabi
-    - curl -L https://github.com/w1ne/labwired/releases/latest/download/labwired-cli -o labwired
-    - chmod +x labwired
-    - ./labwired test --script tests/basic_boot.yaml
-```
+    - labwired test --script tests/firmware-test.yaml --output-dir out/labwired --no-uart-stdout
+~~~
 
-## 2. Test Script Schema
+## Artifacts and reporting
 
-LabWired uses a YAML-based test definition format to specify inputs, constraints, and assertions.
+Use --output-dir in every environment. A run writes result.json, snapshot.json,
+uart.log, and JUnit output under that directory. The GitHub action fixes the
+JUnit path at `output-dir/junit.xml`, adds a failure-safe job summary and report,
+and always uploads the directory; other CI environments should retain the
+directory so failed assertions keep their diagnostics.
 
-```yaml
-schema_version: "1.0"
+## Advanced: build from source
 
-inputs:
-  firmware: "target/thumbv7m-none-eabi/release/firmware.elf"
-  system: "configs/system.yaml"
+Building labwired-cli from this repository is useful for testing an unreleased
+commit or a local code change. It is intentionally an advanced alternative to
+the pinned release archive or runner image:
 
-limits:
-  max_steps: 100000        # Instruction limit
-  wall_time_ms: 5000       # Real-time timeout
-  max_cycles: 50000000     # Simulation cycle limit
+~~~bash
+cargo build --release -p labwired-cli
+./target/release/labwired test --script tests/firmware-test.yaml --output-dir out/labwired
+~~~
 
-assertions:
-  - uart_contains: "Boot Successful"
-  - expected_stop_reason: "halt"
-```
+## Onboarding KPI tracking
 
-## 3. Integration Patterns
-
-### Matrix Testing
-Validate firmware across multiple compile targets or configurations in parallel.
-
-**GitHub Actions Example:**
-```yaml
-strategy:
-  matrix:
-    target: [thumbv6m-none-eabi, thumbv7m-none-eabi]
-steps:
-  - run: cargo build --target ${{ matrix.target }}
-  - uses: w1ne/labwired/.github/actions/labwired-test@main
-    with:
-      script: tests/${{ matrix.target }}.yaml
-```
-
-### Fault Injection
-Simulate hardware failures (e.g., sensor disconnects) in CI to verify error handling paths that are difficult to trigger on physical devices.
-
-```yaml
-# tests/sensor_fail.yaml
-steps:
-  - run: 100ms
-  - write_peripheral:
-      id: "i2c1"
-      reg: "CR1"
-      value: 0x0000 # Disable I2C controller mid-operation
-  - assert_log: "I2C Error Detected"
-```
-
-## 4. Artifacts and Reporting
-
-The test runner produces machine-readable outputs for integration with CI reporting tools.
-
-- **`result.json`**: Detailed execution statistics (cycles, instructions, assertion results).
-- **`junit.xml`**: Standard JUnit format for test result visualization in GitHub/GitLab UI.
-- **`uart.log`**: Captured serial output for debugging failures.
-
-Ensure your CI pipeline is configured to archive these artifacts upon failure.
-
-## 5. Onboarding KPI Tracking
-
-For board onboarding competitiveness, `core-onboarding-smoke.yml` runs a deterministic smoke path and emits:
-
-- `onboarding-metrics.json`: elapsed time, failure stage, and first error signature.
-- `onboarding-summary.md`: per-target summary for step output.
-- `onboarding-scoreboard.json` / `onboarding-scoreboard.md`: aggregated run-level view.
-
-This workflow uses a soft threshold (`3600s`) to track time-to-first-smoke without blocking merges.
+For board onboarding competitiveness, core-onboarding-smoke.yml runs a
+deterministic smoke path and emits onboarding-metrics.json,
+onboarding-summary.md, onboarding-scoreboard.json, and
+onboarding-scoreboard.md. Its soft 3600-second threshold tracks
+time-to-first-smoke without blocking merges.

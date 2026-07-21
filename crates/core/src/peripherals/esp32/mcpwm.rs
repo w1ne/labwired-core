@@ -173,6 +173,11 @@ impl Mcpwm {
 }
 
 impl Peripheral for Mcpwm {
+    // Inert walk: MCPWM register bank (duty introspection, no waveform generation modeled); tick() is an explicit no-op.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let word = self.word(offset & !3);
         Ok(((word >> ((offset & 3) * 8)) & 0xFF) as u8)

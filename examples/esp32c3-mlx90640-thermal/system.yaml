@@ -15,11 +15,15 @@
 # blind to this — it classifies purely from the decoded thermal frames.
 name: "esp32c3-mlx90640-thermal-normal"
 chip: "../../configs/chips/esp32c3.yaml"
+cpu_hz: 160_000_000
 
 external_devices:
   - id: "thermal_cam"
     type: "mlx90640"
     connection: "i2c0"
+    route:
+      sda: "GPIO4"
+      scl: "GPIO5"
     config:
       i2c_address: 0x33
 
@@ -35,6 +39,6 @@ external_devices:
       # cooling_fault_at_s omitted → cooling never fails → bounded ~49 °C plateau.
       frame_period_s: 4.0      # simulated time advanced per captured frame
 
-# The thermal camera is wired purely via the I²C0 `connection:` above; no GPIO
-# board_io binding is needed.
+# The thermal camera declares its physical I²C0 route (SDA=GPIO4, SCL=GPIO5);
+# no GPIO board_io binding is needed.
 board_io: []

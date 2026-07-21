@@ -18,8 +18,32 @@ use std::sync::Arc;
 /// drops from ~380M instructions to a few million.
 const CYCLE_SCALE: u64 = 256;
 
-#[derive(Debug, Default)]
+/// Chunk H: land on a basic-block entry PC this many times before compiling
+/// it to wasm. Matches the framework default; keeps one-shot init/boot code
+/// on the interpreter and only pays translation cost for genuinely hot loops.
+#[cfg(feature = "jit")]
+const RISCV_JIT_HOT_THRESHOLD: u32 = 50;
+
+#[derive(Debug, Clone, Copy)]
+pub struct RiscVDecodeCacheEntry {
+    pub tag: u32,
+    pub opcode: u32,
+    pub instruction: Instruction,
+    pub inst_len: u8,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RiscVCoreProfile {
+    /// ESP32-C3's machine performance-counter block. It does not implement
+    /// the standard unprivileged `cycle` CSR at 0xC00.
+    Esp32C3,
+    /// Baseline RV32 profile used by generic RISC-V targets.
+    StandardRv32,
+}
+
+#[derive(Debug)]
 pub struct RiscV {
+    pub core_profile: RiscVCoreProfile,
     pub x: [u32; 32], // x0..x31. x0 is correctly hardwired to 0 in logic.
     pub pc: u32,
 
@@ -42,11 +66,151 @@ pub struct RiscV {
     /// hart any intervening store (including any AMO*) invalidates the
     /// reservation per RISC-V ISA §8.2.
     pub reservation: Option<u32>,
+
+    waiting_for_interrupt: bool,
+    decode_cache: Box<[Option<RiscVDecodeCacheEntry>; 4096]>,
+
+    /// Side-effect-free instruction-fetch window over flash-XIP (and linear
+    /// code memories). Avoids per-instruction `find_peripheral_index` + dyn
+    /// dispatch — the post-XIP-opt profile hotspot on C3 OLED. Only filled
+    /// from read-only code paths (FlashXIP / RAM / flash linear); MMIO never
+    /// enters the window, so FIFO clear-on-read and other side effects stay
+    /// on the normal bus path for data accesses.
+    fetch_base: u32,
+    fetch_len: u16,
+    fetch_bytes: [u8; FETCH_WINDOW_BYTES],
+
+    /// Chunk H: opt-in RV32IMC wasm-JIT fast path. Mirrors Xtensa's
+    /// `self.jit_enabled`; synced from [`crate::SimulationConfig::riscv_jit_enabled`]
+    /// on each `step_batch` entry. Off by default — the interpreter is the
+    /// behavioral oracle.
+    #[cfg(feature = "jit")]
+    jit_enabled: bool,
+
+    /// Lazily-created JIT engine (block cache + `wasmtime` executor). `None`
+    /// until the first JIT-enabled batch, then reused (and its block cache
+    /// warmed) across batches.
+    #[cfg(feature = "jit")]
+    jit_engine: Option<crate::cpu::jit_framework::riscv::RiscvJitEngine>,
+}
+
+/// Bytes of guest code held in the interpreter fetch window (power of two).
+const FETCH_WINDOW_BYTES: usize = 256;
+
+impl Default for RiscV {
+    fn default() -> Self {
+        Self::new_for(RiscVCoreProfile::Esp32C3)
+    }
 }
 
 impl RiscV {
+    pub fn new_for(core_profile: RiscVCoreProfile) -> Self {
+        Self {
+            core_profile,
+            x: [0; 32],
+            pc: 0,
+            mstatus: 0,
+            mie: 0,
+            mip: 0,
+            mtvec: 0,
+            mscratch: 0,
+            mepc: 0,
+            mcause: 0,
+            mtval: 0,
+            mtime: 0,
+            mtimecmp: 0,
+            reservation: None,
+            waiting_for_interrupt: false,
+            decode_cache: Box::new([None; 4096]),
+            fetch_base: 0,
+            fetch_len: 0,
+            fetch_bytes: [0; FETCH_WINDOW_BYTES],
+            #[cfg(feature = "jit")]
+            jit_enabled: false,
+            #[cfg(feature = "jit")]
+            jit_engine: None,
+        }
+    }
+
+    /// Fetch a little-endian u32 instruction word at `self.pc`, preferring the
+    /// local code window (same bytes as `bus.read_u32(pc)` for XIP/RAM/flash).
+    fn fetch_opcode_u32(&mut self, bus: &mut dyn Bus) -> SimResult<u32> {
+        let pc = self.pc;
+        let off = pc.wrapping_sub(self.fetch_base);
+        if (off as u64) < self.fetch_len as u64 && (off as u64) + 4 <= self.fetch_len as u64 {
+            let i = off as usize;
+            return Ok(u32::from_le_bytes([
+                self.fetch_bytes[i],
+                self.fetch_bytes[i + 1],
+                self.fetch_bytes[i + 2],
+                self.fetch_bytes[i + 3],
+            ]));
+        }
+        self.refill_fetch_window(bus, pc);
+        let off = pc.wrapping_sub(self.fetch_base);
+        if (off as u64) < self.fetch_len as u64 && (off as u64) + 4 <= self.fetch_len as u64 {
+            let i = off as usize;
+            return Ok(u32::from_le_bytes([
+                self.fetch_bytes[i],
+                self.fetch_bytes[i + 1],
+                self.fetch_bytes[i + 2],
+                self.fetch_bytes[i + 3],
+            ]));
+        }
+        // Window could not cover `pc` (non-code memory) — fall back to the bus.
+        bus.read_u32(pc as u64)
+    }
+
+    /// Fill [`fetch_bytes`] from side-effect-free code memory starting near `pc`.
+    /// On failure / non-code, sets `fetch_len = 0` so the caller uses `bus.read_u32`.
+    fn refill_fetch_window(&mut self, bus: &mut dyn Bus, pc: u32) {
+        self.fetch_len = 0;
+        // Align down so sequential execution reuses the window across branches
+        // within the same 256-byte line when possible.
+        let base = pc & !((FETCH_WINDOW_BYTES as u32) - 1);
+
+        let Some(sb) = bus
+            .as_any()
+            .and_then(|a| a.downcast_ref::<crate::bus::SystemBus>())
+        else {
+            return;
+        };
+
+        // Flash-XIP only (ESP32-C3 app at 0x4200_0000). We deliberately do
+        // **not** window linear RAM/flash: unit tests and self-modifying sequences
+        // patch guest code under the PC and expect the next `step` to see the
+        // new bytes; a RAM window would go stale. XIP flash is immutable for
+        // the current SPI model (program/erase only touch status regs), so a
+        // window is byte-identical to repeated `bus.read_u32` there.
+        if let Some(idx) = sb.find_peripheral_index(base as u64) {
+            let p = &sb.peripherals[idx];
+            if let Some(xip) = p.dev.as_any().and_then(|a| {
+                a.downcast_ref::<crate::peripherals::esp32s3::flash_xip::FlashXipPeripheral>()
+            }) {
+                let end = p.base.saturating_add(p.size);
+                if (base as u64) >= p.base && (base as u64) + 4 <= end {
+                    let max = ((end - base as u64) as usize).min(FETCH_WINDOW_BYTES);
+                    let mut buf = [0u8; FETCH_WINDOW_BYTES];
+                    xip.read_span((base as u64) - p.base, &mut buf[..max]);
+                    self.fetch_base = base;
+                    self.fetch_bytes = buf;
+                    self.fetch_len = max as u16;
+                }
+            }
+        }
+    }
+
     pub fn new() -> Self {
-        Self::default()
+        Self::new_for(RiscVCoreProfile::Esp32C3)
+    }
+
+    fn update_mtime_after_elapsed_cycles(&mut self, cycles: u64) {
+        self.mtime = self.mtime.wrapping_add(cycles);
+        if self.mtime >= self.mtimecmp {
+            self.mip |= 1 << 7; // MTIP
+        } else {
+            self.mip &= !(1 << 7);
+        }
     }
 
     fn read_reg(&self, n: u8) -> u32 {
@@ -63,8 +227,17 @@ impl RiscV {
         }
     }
 
-    fn read_csr(&self, csr: u16) -> u32 {
-        match csr {
+    fn read_csr(&self, csr: u16) -> Option<u32> {
+        Some(match csr {
+            // The ESP32-C3 ROM clears ustatus during reset. This emulator runs
+            // only in machine mode, so no user-status bits can become active.
+            0x000 if self.core_profile == RiscVCoreProfile::Esp32C3 => 0,
+            // Undocumented vendor ROM-init CSRs observed in the ESP32-C3 mask
+            // ROM. The observed writes discard the old values; any silicon
+            // side effects are not modeled.
+            0x800 | 0x801 if self.core_profile == RiscVCoreProfile::Esp32C3 => 0,
+            // This emulator exposes one hart, whose architectural ID is zero.
+            0xF14 => 0,
             0x300 => self.mstatus,
             0x304 => self.mie,
             0x344 => self.mip,
@@ -73,13 +246,13 @@ impl RiscV {
             0x341 => self.mepc,
             0x342 => self.mcause,
             0x343 => self.mtval,
+            // Physical Memory Protection (PMP) configuration and address registers (stubs)
+            0x3A0..=0x3A3 | 0x3B0..=0x3BF => 0,
             // Timer CSR stubs (Standard RISC-V shadow non-privileged? No, these are machine mode)
             0xB00 => (self.mtime & 0xFFFFFFFF) as u32,
             0xB80 => (self.mtime >> 32) as u32,
-            // Free-running cycle counters. 0xC00/0xC80 = standard cycle[h];
-            // 0x802 is the ESP32-C3 machine cycle CSR (`ets_delay_us` busy-reads
-            // it as while(now-start < target_cycles)); 0x7E2 is the C3 perf
-            // counter PCCR (bootloader_fill_random reads it as an entropy delta).
+            // The ESP32-C3 exposes its free-running counter at the custom
+            // machine PCCR CSR 0x7E2, not at standard RISC-V cycle CSR 0xC00.
             //
             // These are reported as mtime * CYCLE_SCALE so that cycle-budget
             // delays (which the firmware computes in CPU clocks, e.g. µs*freq)
@@ -88,14 +261,25 @@ impl RiscV {
             // pure delay. Delay loops only need to *complete*, not match wall
             // time, so a coarse cycle estimate is correct in sim; the real-time
             // CLINT timer (mtime vs mtimecmp, CSR 0xB00) stays unscaled.
-            0xC00 | 0x802 | 0x7E2 => (self.mtime.wrapping_mul(CYCLE_SCALE) & 0xFFFFFFFF) as u32,
-            0xC80 => (self.mtime.wrapping_mul(CYCLE_SCALE) >> 32) as u32,
-            _ => 0,
-        }
+            0x7E0..=0x7E2 | 0x802 if self.core_profile == RiscVCoreProfile::Esp32C3 => {
+                (self.mtime.wrapping_mul(CYCLE_SCALE) & 0xFFFFFFFF) as u32
+            }
+            0xC00 if self.core_profile == RiscVCoreProfile::StandardRv32 => {
+                (self.mtime.wrapping_mul(CYCLE_SCALE) & 0xFFFFFFFF) as u32
+            }
+            0xC80 if self.core_profile == RiscVCoreProfile::StandardRv32 => {
+                (self.mtime.wrapping_mul(CYCLE_SCALE) >> 32) as u32
+            }
+            _ => return None,
+        })
     }
 
-    fn write_csr(&mut self, csr: u16, val: u32) {
+    fn write_csr(&mut self, csr: u16, val: u32) -> bool {
         match csr {
+            // See read_csr: accept the ROM's reset-time clear as a no-op.
+            0x000 if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
+            // See read_csr: accept the ROM-init writes and discard their values.
+            0x800 | 0x801 if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
             0x300 => self.mstatus = val & 0x0000_1888, // Minimal mstatus (MIE, MPP)
             0x304 => self.mie = val,
             0x344 => self.mip = val,
@@ -104,7 +288,30 @@ impl RiscV {
             0x341 => self.mepc = val,
             0x342 => self.mcause = val,
             0x343 => self.mtval = val,
-            _ => {}
+            // Physical Memory Protection (PMP) configuration and address registers (stubs)
+            0x3A0..=0x3A3 | 0x3B0..=0x3BF => {}
+            0x7E0..=0x7E2 | 0x802 if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
+            _ => return false,
+        }
+        true
+    }
+
+    fn csr_read_or_trap(&mut self, csr: u16, opcode: u32) -> Option<u32> {
+        let value = self.read_csr(csr);
+        if value.is_none() {
+            self.mtval = opcode;
+            self.handle_trap(2, self.pc);
+        }
+        value
+    }
+
+    fn csr_write_or_trap(&mut self, csr: u16, value: u32, opcode: u32) -> bool {
+        if self.write_csr(csr, value) {
+            true
+        } else {
+            self.mtval = opcode;
+            self.handle_trap(2, self.pc);
+            false
         }
     }
 
@@ -143,10 +350,225 @@ impl RiscV {
     }
 }
 
+/// Chunk H: RV32IMC wasm-JIT dispatch helpers for `Machine<RiscV>`.
+///
+/// These drive the [`RiscvJitEngine`](crate::cpu::jit_framework::riscv::RiscvJitEngine)
+/// directly over the machine's raw register file and guest-RAM window
+/// (reached by downcasting the `&mut dyn Bus` back to the concrete
+/// [`SystemBus`](crate::bus::SystemBus)), retiring compiled blocks atomically
+/// while keeping timer/interrupt timing exact.
+#[cfg(feature = "jit")]
+impl RiscV {
+    /// The production correctness gate. The JIT may run only when nothing
+    /// needs per-instruction visibility. Poll-mode logic probes, breakpoints,
+    /// cycle-accurate peripherals, and the next scheduled event already pin
+    /// `Machine::run`'s batch to a single instruction (so the JIT never
+    /// engages for them — see the `max_count > 1` guard in `step_batch`);
+    /// this checks the two rails that do NOT clamp the batch: per-instruction
+    /// observers and push-mode logic taps.
+    fn jit_gate_allows(&self, bus: &dyn Bus, observers: &[Arc<dyn SimulationObserver>]) -> bool {
+        if !observers.is_empty() {
+            return false;
+        }
+        if bus.logic_tap().is_some_and(|t| t.push_armed()) {
+            return false;
+        }
+        // Belt-and-suspenders: a cycle-accurate bus already forces batch == 1
+        // (so we would not be here), but check explicitly in case the caller
+        // ever relaxes that clamp.
+        if let Some(sb) = bus
+            .as_any()
+            .and_then(|a| a.downcast_ref::<crate::bus::SystemBus>())
+        {
+            if sb.requires_cycle_accurate() {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Would a compiled block that retires `n` instructions from the current
+    /// state step *across* an interrupt the interpreter would have taken
+    /// mid-block? If so the caller interprets the stretch instead, so the
+    /// trap lands at exactly the instruction the interpreter would trap on.
+    ///
+    /// The interpreter's interrupt check ([`RiscV::step`] tail) fires only
+    /// when global `mstatus.MIE` is set. Within one `Machine::run` batch the
+    /// external IRQ lines are stable (peripherals tick only *between* batches),
+    /// so the sole source that can *become* pending mid-block is the internal
+    /// CLINT timer: the block advances `mtime` by exactly `n`, so if that
+    /// crosses `mtimecmp` (with the timer unmasked in `mie`) the MTIP edge —
+    /// and its trap — must be observed inside the block.
+    fn block_would_cross_irq(&self, bus: &dyn Bus, n: u32) -> bool {
+        // Interrupts globally disabled: no trap is taken regardless.
+        if (self.mstatus & (1 << 3)) == 0 {
+            return false;
+        }
+        // Something is already pending (or an external line is asserted): the
+        // interpreter would trap within one instruction. Do not batch past it.
+        if (self.mip & self.mie) != 0 || bus.external_irq_lines() != 0 {
+            return true;
+        }
+        // Internal timer edge inside the block's mtime span.
+        let timer_unmasked = (self.mie & (1 << 7)) != 0;
+        timer_unmasked
+            && self.mtime < self.mtimecmp
+            && self.mtimecmp <= self.mtime.wrapping_add(n as u64)
+    }
+
+    /// Drive one batch through the JIT engine, returning the true retired
+    /// instruction count (never past `max_count`). The engine is moved out of
+    /// `self` for the duration so its methods can borrow `self.x` / `self.pc`
+    /// and the bus independently, then it is restored.
+    fn step_batch_jit(
+        &mut self,
+        bus: &mut dyn Bus,
+        observers: &[Arc<dyn SimulationObserver>],
+        config: &crate::SimulationConfig,
+        max_count: u32,
+    ) -> SimResult<u32> {
+        let mut engine = self.jit_engine.take().unwrap_or_else(|| {
+            crate::cpu::jit_framework::riscv::RiscvJitEngine::new(RISCV_JIT_HOT_THRESHOLD)
+        });
+        let out = self.run_jit_loop(&mut engine, bus, observers, config, max_count);
+        self.jit_engine = Some(engine);
+        out
+    }
+
+    /// The JIT dispatch loop body. `engine` is a borrowed handle (moved out of
+    /// `self` by the caller) so `engine.run_ready(pc, &mut self.x, …)` does not
+    /// alias `self`.
+    fn run_jit_loop(
+        &mut self,
+        engine: &mut crate::cpu::jit_framework::riscv::RiscvJitEngine,
+        bus: &mut dyn Bus,
+        observers: &[Arc<dyn SimulationObserver>],
+        config: &crate::SimulationConfig,
+        max_count: u32,
+    ) -> SimResult<u32> {
+        use crate::bus::SystemBus;
+        use crate::cpu::jit_framework::block_cache::Lookup;
+
+        // Exact-cycle clock (see the interpreter `step_batch`): republish
+        // `batch_start + retired` before each dispatch so an interpreted MMIO
+        // read sees the cycle-exact clock. A compiled block never reads the bus
+        // clock (it touches only registers + RAM), so republishing before it is
+        // harmless, and the arming/reading store is ALWAYS interpreted — hence
+        // JIT-on observes the identical clock at every bus access as JIT-off,
+        // preserving byte-identity while making counter reads exact.
+        #[cfg(feature = "event-scheduler")]
+        let exact_clock = config.peripheral_tick_interval > 1;
+        #[cfg(feature = "event-scheduler")]
+        let batch_start = if exact_clock { bus.current_cycle() } else { 0 };
+
+        let mut retired: u32 = 0;
+        while retired < max_count {
+            #[cfg(feature = "event-scheduler")]
+            if exact_clock {
+                bus.publish_cycle(batch_start + retired as u64);
+            }
+            let pc = self.pc as u64;
+            match engine.observe(pc) {
+                Lookup::Ready => {
+                    let n = engine.ready_instr_count(pc).unwrap_or(0);
+                    // Never retire past the batch budget (preserves the
+                    // event/IRQ clamp `Machine::run` already applied), and
+                    // never let a block cross a mid-block interrupt deadline.
+                    let must_interpret =
+                        n == 0 || retired + n > max_count || self.block_would_cross_irq(bus, n);
+                    if must_interpret {
+                        self.step(bus, observers, config)?;
+                        engine.note_interpreted();
+                        retired += 1;
+                    } else if let Some(sb) =
+                        bus.as_any_mut().and_then(|a| a.downcast_mut::<SystemBus>())
+                    {
+                        let (actual_n, next_pc, clear_reservation, needs_interp) =
+                            engine.run_ready(pc, &mut self.x, &mut sb.ram.data);
+                        if clear_reservation {
+                            self.reservation = None;
+                        }
+                        self.pc = next_pc as u32;
+                        // ── THE MTIME FIXUP ──────────────────────────────
+                        // A compiled block retires `actual_n` instructions
+                        // without calling `step`, so it never advanced the
+                        // CLINT `mtime` (the interpreter bumps it 1/instr).
+                        // Advance it by exactly `actual_n` here so the cycle
+                        // CSRs (0xC00/0x802/0x7E2 = mtime*CYCLE_SCALE) and the
+                        // MTIP timer edge stay identical to a per-instruction
+                        // run. This is the analogue of Xtensa's CCOUNT += N-1.
+                        self.update_mtime_after_elapsed_cycles(actual_n as u64);
+                        retired += actual_n;
+                        // Entry-instruction memory fault: nothing retired and
+                        // the PC did not move — interpret one for progress.
+                        if actual_n == 0 && needs_interp {
+                            self.step(bus, observers, config)?;
+                            engine.note_interpreted();
+                            retired += 1;
+                        }
+                    } else {
+                        // Not a `SystemBus` (never happens in production): fall
+                        // back to the interpreter for this instruction.
+                        self.step(bus, observers, config)?;
+                        engine.note_interpreted();
+                        retired += 1;
+                    }
+                }
+                Lookup::Interpret { promote } => {
+                    if promote {
+                        if let Some(sb) = bus.as_any().and_then(|a| a.downcast_ref::<SystemBus>()) {
+                            engine.try_compile_from_bus(pc, sb);
+                        }
+                    }
+                    self.step(bus, observers, config)?;
+                    engine.note_interpreted();
+                    retired += 1;
+                }
+            }
+            // Mirror the interpreter batch's idle fast-forward early-exit so
+            // enabling the JIT never changes when a batch returns short.
+            if config.idle_fast_forward_enabled && self.idle_fast_forward_budget(bus).is_some() {
+                return Ok(retired);
+            }
+            // Mirror the interpreter's Gap #1 deadline clamp (see `step_batch`).
+            #[cfg(feature = "event-scheduler")]
+            if config.peripheral_tick_interval > 1 {
+                if let Some(dl) = bus.earliest_pending_deadline() {
+                    let max_ret = dl.saturating_sub(batch_start);
+                    if (retired as u64) >= max_ret {
+                        return Ok(retired);
+                    }
+                }
+            }
+        }
+        Ok(retired)
+    }
+
+    /// Accumulated JIT engine stats — `None` if the engine was never created
+    /// (the JIT never ran). Used by the differential merge-gate test to assert
+    /// the compiled path was non-vacuously exercised.
+    pub fn jit_stats(&self) -> Option<crate::cpu::jit_framework::riscv::EngineStats> {
+        self.jit_engine.as_ref().map(|e| e.stats())
+    }
+}
+
 impl Cpu for RiscV {
     fn reset(&mut self, _bus: &mut dyn Bus) -> SimResult<()> {
         self.pc = 0;
         Ok(())
+    }
+
+    /// Mirror the RV32IMC JIT engine's counters into the feature-agnostic
+    /// [`crate::CpuJitStats`] so generic callers can prove non-vacuity. Only
+    /// present under `jit`; without it the trait default (`None`) applies.
+    #[cfg(feature = "jit")]
+    fn jit_engine_stats(&self) -> Option<crate::CpuJitStats> {
+        self.jit_stats().map(|s| crate::CpuJitStats {
+            compiled: s.compiled,
+            block_runs: s.block_runs,
+            block_instrs: s.block_instrs,
+            interpreted: s.interpreted,
+        })
     }
 
     fn step(
@@ -155,15 +577,36 @@ impl Cpu for RiscV {
         observers: &[Arc<dyn SimulationObserver>],
         _config: &crate::SimulationConfig,
     ) -> SimResult<()> {
-        let opcode = bus.read_u32(self.pc as u64)?;
+        self.waiting_for_interrupt = false;
+        let opcode = self.fetch_opcode_u32(bus)?;
 
         let retired_pc = self.pc;
         for observer in observers {
             observer.on_step_start(self.pc, opcode);
         }
 
-        let instruction = decode_rv32(opcode);
-        let inst_len = if (opcode & 0x3) == 0x3 { 4 } else { 2 };
+        let cache_idx = ((self.pc >> 1) & 0xFFF) as usize;
+        let cached = if _config.decode_cache_enabled {
+            self.decode_cache[cache_idx]
+                .filter(|entry| entry.tag == self.pc && entry.opcode == opcode)
+        } else {
+            None
+        };
+        let (instruction, inst_len) = if let Some(entry) = cached {
+            (entry.instruction, entry.inst_len as u32)
+        } else {
+            let instruction = decode_rv32(opcode);
+            let inst_len = if (opcode & 0x3) == 0x3 { 4 } else { 2 };
+            if _config.decode_cache_enabled {
+                self.decode_cache[cache_idx] = Some(RiscVDecodeCacheEntry {
+                    tag: self.pc,
+                    opcode,
+                    instruction,
+                    inst_len: inst_len as u8,
+                });
+            }
+            (instruction, inst_len)
+        };
         tracing::debug!(
             "PC={:#x}, Op={:#08x}, Instr={:?}, Len={}",
             self.pc,
@@ -372,6 +815,7 @@ impl Cpu for RiscV {
                 // Wait-for-interrupt: implemented as a no-op busy-wait. The step
                 // loop already polls pending interrupts every instruction, so
                 // the idle task's WFI spin wakes as soon as a line asserts.
+                self.waiting_for_interrupt = true;
             }
             Instruction::Ecall | Instruction::Ebreak => {
                 // Should trap. For now, we can just log or halt.
@@ -397,53 +841,73 @@ impl Cpu for RiscV {
                 return Ok(());
             }
             Instruction::Csrrw { rd, rs1, csr } => {
-                let old = self.read_csr(csr);
+                let Some(old) = self.csr_read_or_trap(csr, opcode) else {
+                    return Ok(());
+                };
                 let val = self.read_reg(rs1);
-                self.write_csr(csr, val);
+                if !self.csr_write_or_trap(csr, val, opcode) {
+                    return Ok(());
+                }
                 if rd != 0 {
                     self.write_reg(rd, old);
                 }
             }
             Instruction::Csrrs { rd, rs1, csr } => {
-                let old = self.read_csr(csr);
+                let Some(old) = self.csr_read_or_trap(csr, opcode) else {
+                    return Ok(());
+                };
                 if rs1 != 0 {
                     let val = self.read_reg(rs1);
-                    self.write_csr(csr, old | val);
+                    if !self.csr_write_or_trap(csr, old | val, opcode) {
+                        return Ok(());
+                    }
                 }
                 if rd != 0 {
                     self.write_reg(rd, old);
                 }
             }
             Instruction::Csrrc { rd, rs1, csr } => {
-                let old = self.read_csr(csr);
+                let Some(old) = self.csr_read_or_trap(csr, opcode) else {
+                    return Ok(());
+                };
                 if rs1 != 0 {
                     let val = self.read_reg(rs1);
-                    self.write_csr(csr, old & !val);
+                    if !self.csr_write_or_trap(csr, old & !val, opcode) {
+                        return Ok(());
+                    }
                 }
                 if rd != 0 {
                     self.write_reg(rd, old);
                 }
             }
             Instruction::Csrrwi { rd, imm, csr } => {
-                let old = self.read_csr(csr);
-                self.write_csr(csr, imm as u32);
+                let Some(old) = self.csr_read_or_trap(csr, opcode) else {
+                    return Ok(());
+                };
+                if !self.csr_write_or_trap(csr, imm as u32, opcode) {
+                    return Ok(());
+                }
                 if rd != 0 {
                     self.write_reg(rd, old);
                 }
             }
             Instruction::Csrrsi { rd, imm, csr } => {
-                let old = self.read_csr(csr);
-                if imm != 0 {
-                    self.write_csr(csr, old | (imm as u32));
+                let Some(old) = self.csr_read_or_trap(csr, opcode) else {
+                    return Ok(());
+                };
+                if imm != 0 && !self.csr_write_or_trap(csr, old | (imm as u32), opcode) {
+                    return Ok(());
                 }
                 if rd != 0 {
                     self.write_reg(rd, old);
                 }
             }
             Instruction::Csrrci { rd, imm, csr } => {
-                let old = self.read_csr(csr);
-                if imm != 0 {
-                    self.write_csr(csr, old & !(imm as u32));
+                let Some(old) = self.csr_read_or_trap(csr, opcode) else {
+                    return Ok(());
+                };
+                if imm != 0 && !self.csr_write_or_trap(csr, old & !(imm as u32), opcode) {
+                    return Ok(());
                 }
                 if rd != 0 {
                     self.write_reg(rd, old);
@@ -686,12 +1150,7 @@ impl Cpu for RiscV {
         }
 
         // Timer update (Internal minimal CLINT)
-        self.mtime = self.mtime.wrapping_add(1);
-        if self.mtime >= self.mtimecmp {
-            self.mip |= 1 << 7; // MTIP
-        } else {
-            self.mip &= !(1 << 7);
-        }
+        self.update_mtime_after_elapsed_cycles(1);
 
         // Check for interrupts. On the ESP32-C3 the custom interrupt controller
         // exposes its 31 sources as CPU interrupt lines 1..31 directly in
@@ -765,6 +1224,91 @@ impl Cpu for RiscV {
         Ok(())
     }
 
+    fn step_batch(
+        &mut self,
+        bus: &mut dyn Bus,
+        observers: &[Arc<dyn SimulationObserver>],
+        config: &crate::SimulationConfig,
+        max_count: u32,
+    ) -> SimResult<u32> {
+        // ── Chunk H JIT fast-path ─────────────────────────────────────────
+        // When the RV32IMC wasm-JIT is opted in AND nothing needs
+        // per-instruction visibility, drive this batch through the JIT
+        // engine (compiled blocks + interpreter fallback). Off by default,
+        // and only compiled under `jit`; the interpreter loop below is the
+        // reference path (byte-identical to a non-`jit` build when the flag
+        // is off). `max_count <= 1` batches skip the JIT: `Machine::run`
+        // clamps the batch to one instruction precisely when it needs a
+        // per-instruction boundary (breakpoint set, poll-mode logic probe,
+        // cycle-accurate peripheral, next scheduled event), so restricting
+        // the JIT to multi-instruction batches folds all those correctness
+        // rails into one cheap check.
+        #[cfg(feature = "jit")]
+        {
+            self.jit_enabled = config.riscv_jit_enabled;
+            if self.jit_enabled && max_count > 1 && self.jit_gate_allows(bus, observers) {
+                return self.step_batch_jit(bus, observers, config, max_count);
+            }
+        }
+
+        // Push-mode logic capture: advance the tap clock once per retired
+        // instruction while armed, so MMIO pad writes stamp with the cycle
+        // boundary they become observable at (see `crate::logic_capture`).
+        let tap = bus.logic_tap().filter(|t| t.push_armed());
+        // Exact-cycle clock (event-scheduler, widened interval): the bus mirror
+        // is seeded once per batch by `Machine::run`, so a mid-batch MMIO read of
+        // a lazily-derived counter would see the STALE batch-start cycle. Capture
+        // the batch-start cycle here and republish `batch_start + i` before each
+        // instruction so those reads are cycle-EXACT — identical to interval-1
+        // (where the batch is one instruction). This is what removes the last
+        // cpu_state divergence: a firmware busy-waiting on a lazy counter now
+        // exits its poll on the same instruction at any tick interval. Skipped at
+        // interval 1 (already exact) so that hot path is byte-unchanged.
+        #[cfg(feature = "event-scheduler")]
+        let exact_clock = config.peripheral_tick_interval > 1;
+        #[cfg(feature = "event-scheduler")]
+        let batch_start = if exact_clock { bus.current_cycle() } else { 0 };
+        // Gap #1: mid-batch arming. Clamp remaining work to the earliest pending
+        // absolute deadline instead of ending on the first arm — far-future
+        // timers (FreeRTOS tick, etc.) used to force ~60-insn batches and tank
+        // host MIPS. We still never retire past the deadline without a drain
+        // (same delivery cycle as the immediate-end policy).
+        #[cfg(feature = "event-scheduler")]
+        let mut limit = max_count;
+        #[cfg(not(feature = "event-scheduler"))]
+        let limit = max_count;
+        let mut i = 0u32;
+        while i < limit {
+            if let Some(tap) = &tap {
+                tap.bump_clock();
+            }
+            #[cfg(feature = "event-scheduler")]
+            if exact_clock {
+                bus.publish_cycle(batch_start + i as u64);
+            }
+            self.step(bus, observers, config)?;
+            i += 1;
+            if config.idle_fast_forward_enabled && self.idle_fast_forward_budget(bus).is_some() {
+                return Ok(i);
+            }
+            #[cfg(feature = "event-scheduler")]
+            if exact_clock {
+                if let Some(dl) = bus.earliest_pending_deadline() {
+                    // After `i` instructions, total_cycles will be batch_start+i.
+                    // Do not advance total_cycles past `dl` before drain enqueues.
+                    let max_ret = dl.saturating_sub(batch_start);
+                    if (i as u64) >= max_ret {
+                        return Ok(i);
+                    }
+                    if max_ret < u32::MAX as u64 {
+                        limit = limit.min(max_ret as u32);
+                    }
+                }
+            }
+        }
+        Ok(i)
+    }
+
     fn set_pc(&mut self, val: u32) {
         self.pc = val;
     }
@@ -779,6 +1323,26 @@ impl Cpu for RiscV {
         // The specific 'exception_num' (IRQ) would be tracked by a PLIC.
         // Since we don't have a PLIC yet, we pend a generic external interrupt.
         self.mip |= 1 << 11;
+    }
+
+    fn idle_fast_forward_budget(&self, bus: &dyn Bus) -> Option<u64> {
+        if !self.waiting_for_interrupt {
+            return None;
+        }
+        if ((self.mip & self.mie) | bus.external_irq_lines()) != 0 {
+            return None;
+        }
+        if self.mtimecmp == u64::MAX {
+            return Some(u64::MAX);
+        }
+        if self.mtime + 1 >= self.mtimecmp {
+            return None;
+        }
+        Some(self.mtimecmp - self.mtime - 1)
+    }
+
+    fn fast_forward_idle_cycles(&mut self, cycles: u64) {
+        self.update_mtime_after_elapsed_cycles(cycles);
     }
 
     fn get_register(&self, id: u8) -> u32 {
@@ -834,6 +1398,58 @@ impl Cpu for RiscV {
         }
     }
 
+    fn runtime_snapshot(&self) -> (crate::runtime_snapshot::CpuKind, Vec<u8>) {
+        use crate::runtime_snapshot::RiscVRuntimeSnapshot;
+        let snap = RiscVRuntimeSnapshot {
+            x: self.x,
+            pc: self.pc,
+            mstatus: self.mstatus,
+            mie: self.mie,
+            mip: self.mip,
+            mtvec: self.mtvec,
+            mscratch: self.mscratch,
+            mepc: self.mepc,
+            mcause: self.mcause,
+            mtval: self.mtval,
+            mtime: self.mtime,
+            mtimecmp: self.mtimecmp,
+            reservation: self.reservation,
+        };
+        let bytes = bincode::serialize(&snap).expect("bincode serialize RiscVRuntimeSnapshot");
+        (crate::runtime_snapshot::CpuKind::RiscV, bytes)
+    }
+
+    fn apply_runtime_snapshot(
+        &mut self,
+        kind: crate::runtime_snapshot::CpuKind,
+        bytes: &[u8],
+    ) -> SimResult<()> {
+        use crate::runtime_snapshot::{CpuKind, RiscVRuntimeSnapshot};
+        if kind != CpuKind::RiscV {
+            return Err(crate::SimulationError::NotImplemented(format!(
+                "apply_runtime_snapshot: kind {kind:?} given to RiscV"
+            )));
+        }
+        let snap: RiscVRuntimeSnapshot = bincode::deserialize(bytes).map_err(|e| {
+            crate::SimulationError::NotImplemented(format!("RiscV snapshot decode: {e}"))
+        })?;
+        self.x = snap.x;
+        self.x[0] = 0; // x0 is hardwired to zero regardless of the blob.
+        self.pc = snap.pc;
+        self.mstatus = snap.mstatus;
+        self.mie = snap.mie;
+        self.mip = snap.mip;
+        self.mtvec = snap.mtvec;
+        self.mscratch = snap.mscratch;
+        self.mepc = snap.mepc;
+        self.mcause = snap.mcause;
+        self.mtval = snap.mtval;
+        self.mtime = snap.mtime;
+        self.mtimecmp = snap.mtimecmp;
+        self.reservation = snap.reservation;
+        Ok(())
+    }
+
     fn get_register_names(&self) -> Vec<String> {
         let mut names = Vec::new();
         for i in 0..32 {
@@ -858,7 +1474,16 @@ impl Cpu for RiscV {
 mod tests {
     use super::*;
     use crate::bus::SystemBus;
+    use crate::DebugControl;
     use crate::Machine;
+
+    /// CSRRW x0, ustatus (0x000), x0: emitted by the ESP32-C3 ROM before
+    /// mtvec is initialized.
+    const CLEAR_USTATUS: u32 = 0x0000_1073;
+    const C3_ROM_INIT_CSR_800: u32 = 0x8002_9073;
+    const C3_ROM_INIT_CSR_801: u32 = 0x8012_9073;
+    const READ_MHARTID_X7: u32 = 0xf140_23f3;
+    const WRITE_MHARTID_X5: u32 = 0xf142_9073;
 
     #[test]
     fn test_riscv_addi() {
@@ -877,6 +1502,173 @@ mod tests {
 
         assert_eq!(machine.cpu.read_reg(1), 5);
         assert_eq!(machine.cpu.pc, 4);
+    }
+
+    #[test]
+    fn esp32c3_rejects_standard_cycle_csr_but_exposes_pccr_machine() {
+        let mut bus = SystemBus::new();
+        let mut cpu = RiscV::new();
+        // CSRRS x5, x0, cycle (0xC00): standard RISC-V cycle CSR is not
+        // implemented by the ESP32-C3 core; it must raise illegal instruction.
+        let read_standard_cycle = (0xC00u32 << 20) | (5 << 7) | (0b010 << 12) | 0x73;
+        bus.flash.data = read_standard_cycle.to_le_bytes().to_vec();
+        cpu.pc = 0;
+        cpu.mtvec = 0x100;
+        let mut machine = Machine::new(cpu, bus);
+        machine.step().unwrap();
+
+        assert_eq!(
+            machine.cpu.mcause, 2,
+            "unsupported CSR must trap as illegal instruction"
+        );
+        assert_eq!(machine.cpu.mtval, read_standard_cycle);
+        assert_eq!(machine.cpu.pc, 0x100);
+        assert_eq!(
+            machine.cpu.read_csr(0x7E2),
+            Some(0),
+            "C3 PCCR_MACHINE remains implemented"
+        );
+    }
+
+    #[test]
+    fn esp32c3_accepts_rom_ustatus_clear_before_mtvec_initialization() {
+        let mut bus = SystemBus::new();
+        let mut cpu = RiscV::new_for(RiscVCoreProfile::Esp32C3);
+        bus.flash.data = CLEAR_USTATUS.to_le_bytes().to_vec();
+        cpu.pc = 0;
+        let mut machine = Machine::new(cpu, bus);
+
+        machine.step().unwrap();
+
+        assert_eq!(machine.cpu.pc, 4, "ustatus write must not trap");
+        assert_eq!(machine.cpu.mcause, 0);
+        assert_eq!(machine.cpu.mtval, 0);
+        assert_eq!(machine.cpu.read_csr(0x000), Some(0));
+    }
+
+    #[test]
+    fn standard_rv32_rejects_esp32c3_rom_ustatus_clear() {
+        let mut bus = SystemBus::new();
+        let mut cpu = RiscV::new_for(RiscVCoreProfile::StandardRv32);
+        bus.flash.data = CLEAR_USTATUS.to_le_bytes().to_vec();
+        cpu.pc = 0;
+        cpu.mtvec = 0x100;
+        let mut machine = Machine::new(cpu, bus);
+
+        machine.step().unwrap();
+
+        assert_eq!(machine.cpu.mcause, 2);
+        assert_eq!(machine.cpu.mtval, CLEAR_USTATUS);
+        assert_eq!(machine.cpu.pc, 0x100);
+    }
+
+    #[test]
+    fn esp32c3_accepts_exact_rom_init_csrs_before_mtvec_initialization() {
+        const ROM_PC: u32 = 0x4000_1ea4;
+        let mut bus = SystemBus::new();
+        bus.flash = crate::memory::LinearMemory::new(12, ROM_PC as u64);
+        bus.flash.data = vec![
+            0x85, 0x42, // c.li x5, 1
+            0x73, 0x90, 0x02, 0x80, // csrrw x0, 0x800, x5
+            0x85, 0x42, // c.li x5, 1
+            0x73, 0x90, 0x12, 0x80, // csrrw x0, 0x801, x5
+        ];
+        let mut cpu = RiscV::new_for(RiscVCoreProfile::Esp32C3);
+        cpu.pc = ROM_PC;
+        let mut machine = Machine::new(cpu, bus);
+
+        machine.step().unwrap();
+        assert_eq!(machine.cpu.pc, 0x4000_1ea6);
+        assert_eq!(machine.cpu.read_reg(5), 1);
+        machine.step().unwrap();
+        assert_eq!(machine.cpu.pc, 0x4000_1eaa);
+        assert_eq!(machine.cpu.read_reg(0), 0);
+        machine.step().unwrap();
+        assert_eq!(machine.cpu.pc, 0x4000_1eac);
+        machine.step().unwrap();
+        assert_eq!(machine.cpu.pc, 0x4000_1eb0);
+        assert_eq!(machine.cpu.read_reg(0), 0);
+        assert_eq!(machine.cpu.mcause, 0);
+        assert_eq!(machine.cpu.mtval, 0);
+
+        for csr in [0x800, 0x801] {
+            assert_eq!(machine.cpu.read_csr(csr), Some(0));
+            assert!(machine.cpu.write_csr(csr, u32::MAX));
+            assert_eq!(machine.cpu.read_csr(csr), Some(0));
+        }
+    }
+
+    #[test]
+    fn c3_rom_init_csrs_do_not_widen_custom_csr_acceptance() {
+        let cases = [
+            (RiscVCoreProfile::Esp32C3, 0x7ff2_9073, 0x7ff),
+            (RiscVCoreProfile::Esp32C3, 0x8062_9073, 0x806),
+            (RiscVCoreProfile::StandardRv32, C3_ROM_INIT_CSR_800, 0x800),
+            (RiscVCoreProfile::StandardRv32, C3_ROM_INIT_CSR_801, 0x801),
+        ];
+
+        for (profile, opcode, csr) in cases {
+            let mut bus = SystemBus::new();
+            bus.flash.data = opcode.to_le_bytes().to_vec();
+            let mut cpu = RiscV::new_for(profile);
+            cpu.pc = 0;
+            cpu.mtvec = 0x100;
+            cpu.x[5] = 1;
+            let mut machine = Machine::new(cpu, bus);
+
+            machine.step().unwrap();
+
+            assert_eq!(machine.cpu.mcause, 2, "profile={profile:?} csr={csr:#x}");
+            assert_eq!(machine.cpu.mtval, opcode);
+            assert_eq!(machine.cpu.pc, 0x100);
+            assert_eq!(machine.cpu.read_csr(csr), None);
+        }
+    }
+
+    #[test]
+    fn standard_rv32_profile_exposes_cycle_csr() {
+        let cpu = RiscV::new_for(RiscVCoreProfile::StandardRv32);
+        assert_eq!(cpu.read_csr(0xC00), Some(0));
+        assert_eq!(cpu.read_csr(0x7E2), None);
+        assert_eq!(cpu.read_csr(0x000), None);
+    }
+
+    #[test]
+    fn mhartid_reads_zero_for_all_riscv_profiles() {
+        for profile in [RiscVCoreProfile::StandardRv32, RiscVCoreProfile::Esp32C3] {
+            let mut bus = SystemBus::new();
+            bus.flash.data = READ_MHARTID_X7.to_le_bytes().to_vec();
+            let mut cpu = RiscV::new_for(profile);
+            cpu.pc = 0;
+            let mut machine = Machine::new(cpu, bus);
+
+            machine.step().unwrap();
+
+            assert_eq!(machine.cpu.pc, 4, "profile={profile:?}");
+            assert_eq!(machine.cpu.read_reg(7), 0, "profile={profile:?}");
+            assert_eq!(machine.cpu.mcause, 0, "profile={profile:?}");
+            assert_eq!(machine.cpu.mtval, 0, "profile={profile:?}");
+        }
+    }
+
+    #[test]
+    fn mhartid_write_traps_for_all_riscv_profiles() {
+        for profile in [RiscVCoreProfile::StandardRv32, RiscVCoreProfile::Esp32C3] {
+            let mut bus = SystemBus::new();
+            bus.flash.data = WRITE_MHARTID_X5.to_le_bytes().to_vec();
+            let mut cpu = RiscV::new_for(profile);
+            cpu.pc = 0;
+            cpu.mtvec = 0x100;
+            cpu.x[5] = 1;
+            let mut machine = Machine::new(cpu, bus);
+            assert_eq!(machine.cpu.read_csr(0xF14), Some(0));
+
+            machine.step().unwrap();
+
+            assert_eq!(machine.cpu.mcause, 2, "profile={profile:?}");
+            assert_eq!(machine.cpu.mtval, WRITE_MHARTID_X5, "profile={profile:?}");
+            assert_eq!(machine.cpu.pc, 0x100, "profile={profile:?}");
+        }
     }
 
     #[test]
@@ -1125,6 +1917,276 @@ mod tests {
     }
 
     #[test]
+    fn test_riscv_wfi_fast_forward_is_off_by_default() {
+        let mut bus = SystemBus::new();
+        let mut cpu = RiscV::new();
+        bus.flash.data = vec![0; 0x100];
+        bus.write_u32(0x0, 0x1050_0073).unwrap(); // WFI
+        bus.write_u32(0x4, 0xffdf_f06f).unwrap(); // JAL x0, -4
+        cpu.pc = 0x0;
+        cpu.mtimecmp = u64::MAX;
+
+        let mut machine = Machine::new(cpu, bus);
+        machine.bus.legacy_walk_disabled = true;
+        machine.run(Some(10)).unwrap();
+
+        assert_eq!(machine.total_cycles, 10);
+        assert_eq!(machine.step_profile().cpu_instructions, 10);
+    }
+
+    #[test]
+    fn test_riscv_wfi_fast_forward_skips_cpu_work_when_enabled() {
+        let mut bus = SystemBus::new();
+        let mut cpu = RiscV::new();
+        bus.flash.data = vec![0; 0x100];
+        bus.write_u32(0x0, 0x1050_0073).unwrap(); // WFI
+        bus.write_u32(0x4, 0xffdf_f06f).unwrap(); // JAL x0, -4
+        cpu.pc = 0x0;
+        cpu.mtimecmp = u64::MAX;
+
+        let mut machine = Machine::new(cpu, bus);
+        machine.config.idle_fast_forward_enabled = true;
+        machine.bus.legacy_walk_disabled = true;
+        machine.run(Some(10)).unwrap();
+
+        assert_eq!(machine.total_cycles, 10);
+        if cfg!(feature = "event-scheduler") {
+            assert!(
+                machine.idle_fast_forward_cycles_skipped > 0,
+                "idle FF counter must rise when WFI skip fires"
+            );
+            assert!(
+                machine.step_profile().cpu_instructions < 10,
+                "fast-forwarded cycles should not retire CPU instructions"
+            );
+        } else {
+            // Without the event scheduler, idle fast-forward intentionally remains inactive.
+            assert_eq!(machine.idle_fast_forward_cycles_skipped, 0);
+            assert_eq!(machine.step_profile().cpu_instructions, 10);
+        }
+    }
+
+    #[test]
+    fn boxed_riscv_batch_preserves_idle_fast_forward_escape() {
+        let mut bus = SystemBus::new();
+        let mut cpu = RiscV::new();
+        bus.flash.data = vec![0; 0x100];
+        bus.write_u32(0x0, 0x1050_0073).unwrap(); // WFI
+        bus.write_u32(0x4, 0xffdf_f06f).unwrap(); // JAL x0, -4
+        cpu.pc = 0x0;
+        cpu.mtimecmp = u64::MAX;
+
+        let mut machine = Machine::new(Box::new(cpu) as Box<dyn Cpu>, bus);
+        machine.config.idle_fast_forward_enabled = true;
+        machine.bus.legacy_walk_disabled = true;
+        machine.run(Some(10)).unwrap();
+
+        assert_eq!(machine.total_cycles, 10);
+        if cfg!(feature = "event-scheduler") {
+            assert!(
+                machine.step_profile().cpu_instructions < 10,
+                "boxed C3 CPU path should still leave the batch loop at WFI so Machine can fast-forward"
+            );
+            assert!(machine.idle_fast_forward_cycles_skipped > 0);
+        } else {
+            assert_eq!(machine.step_profile().cpu_instructions, 10);
+            assert_eq!(machine.idle_fast_forward_cycles_skipped, 0);
+        }
+    }
+
+    /// Regression for the frozen ESP32-C3 watch/clock demos: a firmware idle
+    /// loop that busy-polls the SYSTIMER (`millis()`) **while also sampling a
+    /// GPIO button** (`digitalRead`) must still let idle fast-forward coalesce
+    /// the spin. Before the GPIO `mmio_access_class` fix, the button read booked
+    /// a side-effecting MMIO access every iteration, so
+    /// `take_timer_poll_coalesce_eligible()` returned false and idle FF never
+    /// engaged — the wait was simulated cycle-by-cycle and the guest's time
+    /// source crawled (hundreds of millions of real cycles per device-second).
+    ///
+    /// This drives the exact shape (SYSTIMER OP-update + VALUE read + GPIO IN
+    /// read, no WFI, no armed alarm) through `Machine::advance` and asserts BOTH
+    /// that the skip engages AND that the SYSTIMER counter still tracks the
+    /// advanced cycle (single source of truth: it derives from `current_cycle`).
+    #[test]
+    fn c3_systimer_busy_poll_with_gpio_read_still_idle_fast_forwards() {
+        // RV32 encoders.
+        fn lui(rd: u32, imm20: u32) -> u32 {
+            (imm20 << 12) | (rd << 7) | 0x37
+        }
+        fn sw(rs2: u32, imm: i32, rs1: u32) -> u32 {
+            let imm = imm as u32;
+            ((imm >> 5 & 0x7f) << 25)
+                | (rs2 << 20)
+                | (rs1 << 15)
+                | (0b010 << 12)
+                | ((imm & 0x1f) << 7)
+                | 0x23
+        }
+        fn lw(rd: u32, imm: i32, rs1: u32) -> u32 {
+            let imm = imm as u32;
+            ((imm & 0xfff) << 20) | (rs1 << 15) | (0b010 << 12) | (rd << 7) | 0x03
+        }
+        fn jal(rd: u32, off: i32) -> u32 {
+            let o = off as u32;
+            ((o >> 20 & 1) << 31)
+                | ((o >> 1 & 0x3ff) << 21)
+                | ((o >> 11 & 1) << 20)
+                | ((o >> 12 & 0xff) << 12)
+                | (rd << 7)
+                | 0x6f
+        }
+
+        // SYSTIMER at 0x6002_3000 (source 37, C3), GPIO at 0x6000_4000.
+        const SYSTIMER_BASE: u64 = 0x6002_3000;
+        const GPIO_BASE: u64 = 0x6000_4000;
+        const OP: u64 = 0x04; // UNIT0_OP (write UPDATE bit 30)
+        const VALUE_LO: u64 = 0x44; // UNIT0_VALUE_LO
+        const GPIO_IN: u64 = 0x3C; // input data register (digitalRead)
+
+        let mut bus = SystemBus::new();
+        let mut cpu = RiscV::new();
+        bus.flash.data = vec![0; 0x100];
+
+        // Program:
+        //   LUI  x5, 0x60023      ; SYSTIMER base
+        //   LUI  x6, 0x60004      ; GPIO base
+        //   LUI  x7, 0x40000      ; UPDATE bit (1<<30)
+        // L: SW   x7, 4(x5)       ; UNIT0_OP <- UPDATE   (freerunning poll)
+        //   LW   x8, 0x44(x5)     ; VALUE_LO             (freerunning poll)
+        //   LW   x9, 0x3C(x6)     ; GPIO IN              (button sample)
+        //   JAL  x0, L            ; spin
+        let prog = [
+            lui(5, 0x60023),
+            lui(6, 0x60004),
+            lui(7, 0x40000),
+            sw(7, OP as i32, 5),
+            lw(8, VALUE_LO as i32, 5),
+            lw(9, GPIO_IN as i32, 6),
+            jal(0, -12),
+        ];
+        for (i, word) in prog.iter().enumerate() {
+            bus.write_u32((i as u64) * 4, *word).unwrap();
+        }
+
+        bus.add_peripheral(
+            "systimer",
+            SYSTIMER_BASE,
+            0x100,
+            None,
+            Box::new(
+                crate::peripherals::esp32s3::systimer::Systimer::new_with_source(160_000_000, 37),
+            ),
+        );
+        bus.add_peripheral(
+            "gpio",
+            GPIO_BASE,
+            0x1000,
+            None,
+            Box::new(crate::peripherals::esp32c3::gpio::Esp32c3Gpio::new()),
+        );
+
+        cpu.pc = 0x0;
+
+        let mut machine = Machine::new(Box::new(cpu) as Box<dyn Cpu>, bus);
+        machine.config.idle_fast_forward_enabled = true;
+        machine.bus.legacy_walk_disabled = true;
+        // Mirror the browser policy (`apply_browser_c3_policy`): the walk-free C3
+        // batches at the recommended tick interval. The timer-poll coalesce only
+        // sees ≥2 polls per batch when batches are wider than one instruction.
+        machine.config.peripheral_tick_interval = crate::bus::RECOMMENDED_TICK_INTERVAL;
+
+        const TARGET: u32 = 2_000_000;
+        machine.run(Some(TARGET)).unwrap();
+        assert_eq!(machine.total_cycles, u64::from(TARGET));
+
+        // Read the SYSTIMER counter back the way firmware does (UPDATE then
+        // read the snapshot). At 160 MHz that is ~10 CPU cycles per 16 MHz tick.
+        machine.bus.write_u32(SYSTIMER_BASE + OP, 1 << 30).unwrap();
+        let count = machine.bus.read_u32(SYSTIMER_BASE + VALUE_LO).unwrap() as u64;
+
+        if cfg!(feature = "event-scheduler") {
+            assert!(
+                machine.idle_fast_forward_cycles_skipped > 0,
+                "idle FF must coalesce a SYSTIMER busy-poll even when the loop also \
+                 samples a GPIO button (skipped = {})",
+                machine.idle_fast_forward_cycles_skipped
+            );
+            assert!(
+                machine.step_profile().cpu_instructions < u64::from(TARGET),
+                "the spin must be skipped, not fully simulated: retired {} over {} cycles",
+                machine.step_profile().cpu_instructions,
+                TARGET
+            );
+            // SYSTIMER count must track the advanced cycle (single source of
+            // truth). ~2M cycles / 10 ≈ 200k ticks; allow generous slack.
+            assert!(
+                count > 100_000,
+                "SYSTIMER counter must advance across the skipped window, got {count}"
+            );
+        } else {
+            assert_eq!(machine.idle_fast_forward_cycles_skipped, 0);
+        }
+    }
+
+    #[test]
+    fn test_riscv_wfi_fast_forward_wakes_on_systimer_event() {
+        let mut bus = SystemBus::empty();
+        let mut cpu = RiscV::new();
+        bus.flash.data = vec![0; 0x3000];
+        bus.write_u32(0x0, 0x1050_0073).unwrap(); // WFI
+        bus.write_u32(0x4, 0xffdf_f06f).unwrap(); // JAL x0, -4
+        bus.write_u32(0x2000 + 11 * 4, 0x3020_0073).unwrap(); // MRET at machine external IRQ vector
+
+        bus.add_peripheral(
+            "systimer",
+            0x6002_3000,
+            0x100,
+            None,
+            Box::new(
+                crate::peripherals::esp32s3::systimer::Systimer::new_with_source(160_000_000, 11),
+            ),
+        );
+        bus.write_u32(0x6002_3064, 1).unwrap(); // INT_ENA TARGET0
+        bus.write_u32(0x6002_301C, 0).unwrap(); // TARGET0_HI
+        bus.write_u32(0x6002_3020, 3).unwrap(); // TARGET0_LO: 3 SYSTIMER ticks
+        bus.write_u32(0x6002_3050, 1).unwrap(); // COMP0_LOAD
+        let conf = bus.read_u32(0x6002_3000).unwrap();
+        bus.write_u32(0x6002_3000, conf | (1 << 24)).unwrap(); // TARGET0_WORK_EN
+
+        cpu.pc = 0x0;
+        cpu.mtvec = 0x2000 | 1; // vectored machine interrupts
+        cpu.mie = 1 << 11; // MEIE
+        cpu.mstatus = 1 << 3; // MIE
+        cpu.mtimecmp = u64::MAX;
+
+        let mut machine = Machine::new(cpu, bus);
+        machine.config.idle_fast_forward_enabled = true;
+        machine.run(Some(40)).unwrap();
+
+        assert_eq!(machine.total_cycles, 40);
+        if cfg!(feature = "event-scheduler") {
+            assert!(machine.idle_fast_forward_cycles_skipped > 0);
+            assert!(
+                machine.step_profile().cpu_instructions < machine.total_cycles,
+                "WFI should skip idle cycles until the SYSTIMER event; retired {} over {} cycles",
+                machine.step_profile().cpu_instructions,
+                machine.total_cycles
+            );
+        } else {
+            assert_eq!(machine.idle_fast_forward_cycles_skipped, 0);
+            assert_eq!(
+                machine.step_profile().cpu_instructions,
+                machine.total_cycles
+            );
+        }
+        assert_ne!(
+            machine.cpu.mcause & 0x8000_0000,
+            0,
+            "the scheduled SYSTIMER event should become an observable interrupt"
+        );
+    }
+
+    #[test]
     fn test_riscv_rv32a_atomics() {
         // Smoke-test the RV32A word atomics. Build a small program in RAM and
         // run instructions by placing them in flash one at a time via step().
@@ -1290,5 +2352,36 @@ mod tests {
 
         assert_eq!(machine.cpu.read_reg(10), 42);
         assert_eq!(machine.cpu.pc, 12); // 4 + 4 + 2 + 2 = 12
+    }
+
+    #[test]
+    fn riscv_decode_cache_uses_opcode_tag_for_same_pc_changes() {
+        let mut bus = SystemBus::new();
+        let mut cpu = RiscV::new();
+        bus.flash.data = vec![
+            0x93, 0x00, 0x10, 0x00, // ADDI x1, x0, 1
+        ];
+
+        cpu.pc = 0;
+        let mut machine = Machine::new(cpu, bus);
+        machine.config.decode_cache_enabled = true;
+        let initial_pc = machine.cpu.pc;
+        machine.step().unwrap();
+
+        let cache_idx = ((initial_pc >> 1) & 0xFFF) as usize;
+        let entry = machine.cpu.decode_cache[cache_idx].expect("first step caches decode");
+        assert_eq!(entry.tag, 0);
+        assert_eq!(entry.opcode, 0x0010_0093);
+        assert_eq!(machine.cpu.read_reg(1), 1);
+
+        machine.bus.flash.data = vec![
+            0x93, 0x00, 0x20, 0x00, // ADDI x1, x0, 2
+        ];
+        machine.cpu.pc = 0;
+        machine.step().unwrap();
+
+        let entry = machine.cpu.decode_cache[cache_idx].expect("second step refreshes decode");
+        assert_eq!(entry.opcode, 0x0020_0093);
+        assert_eq!(machine.cpu.read_reg(1), 2);
     }
 }

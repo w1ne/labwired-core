@@ -16,7 +16,7 @@
 // attached-device list exist on both because both families genuinely have
 // them. The chip-yaml `profile` selects the variant.
 
-use crate::SimResult;
+use crate::{CycleClock, SimResult};
 use std::cell::{Cell, RefCell};
 use std::str::FromStr;
 
@@ -39,6 +39,22 @@ pub trait I2cDevice: Send {
     fn as_sim_input_mut(&mut self) -> Option<&mut dyn crate::sim_input::SimInput> {
         None
     }
+
+    /// Advance this device's free-running sample/measurement clock by `us`
+    /// microseconds of wall-clock time.
+    ///
+    /// Real sensors sample on their own oscillator, independent of when the CPU
+    /// gets around to reading them: a PPG FIFO keeps filling at its configured
+    /// rate whether or not firmware is draining it. A bus master that knows the
+    /// elapsed wall-clock calls this on a slave immediately before servicing it,
+    /// so a *late* poll observes exactly the samples that accrued while the CPU
+    /// was busy elsewhere — and a FIFO that was allowed to overrun reports the
+    /// overflow it really would have. Without this hook a model only advances on
+    /// the very transactions that would have prevented the overflow, which hides
+    /// precisely the CPU-starvation failures worth simulating.
+    ///
+    /// Default no-op: a purely register-mapped device has no clock to advance.
+    fn advance_time_us(&mut self, _us: u64) {}
 }
 
 /// I2C register layout selector. STM32F1/F2/F4 share the legacy I2C
@@ -111,13 +127,19 @@ pub struct F1I2c {
     rxne_consumed: Cell<bool>,
     #[serde(skip)]
     read_dr_consumed: Cell<bool>,
-    /// Bus name + shared trace log for the universal logic-analyzer (set via
-    /// `I2c::set_bus_trace`). `None` (default) keeps `attach` unwrapped —
-    /// existing behaviour for every caller that doesn't opt in.
+
+    /// Bus-published cycle clock (walk-free campaign). `Some` once the bus
+    /// registration choke attaches it; `None` keeps the model on the legacy
+    /// walk. Mirrors the Kinetis variant — see `F1I2c::scheduler_mode`.
     #[serde(skip)]
-    bus_name: String,
+    clock: Option<CycleClock>,
+    /// Scheduler mode only: `true` while the per-cycle transaction-engine event
+    /// is live in the scheduler heap. Armed when the transaction becomes active
+    /// (a write starts a countdown, or a `&self` receive read latches a re-arm);
+    /// self-perpetuates at delay 1 while the transfer stays active, stops when it
+    /// returns fully idle. Same held-level self-pacing the Kinetis variant uses.
     #[serde(skip)]
-    bus_log: Option<crate::bus::bus_trace::BusTraceLog>,
+    chain_live: bool,
 }
 
 impl Default for F1I2c {
@@ -143,13 +165,37 @@ impl Default for F1I2c {
             stop_requested: false,
             rxne_consumed: Cell::new(false),
             read_dr_consumed: Cell::new(true),
-            bus_name: String::new(),
-            bus_log: None,
+            clock: None,
+            chain_live: false,
         }
     }
 }
 
 impl F1I2c {
+    /// True when the event scheduler owns this controller's transaction engine
+    /// (feature on AND bus clock attached).
+    #[inline]
+    fn scheduler_mode(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    /// Cycles on which the legacy `tick()` does observable work: any in-flight
+    /// countdown (`state != Idle`), the master transfer window (SR2.BUSY), a
+    /// pending `&self`-read RXNE re-arm, or a deferred STOP. Outside this window
+    /// `tick()` is a proven no-op (the `rxne_consumed` drain and the countdown
+    /// are the only side effects, and both are gated by exactly these flags), so
+    /// the event chain may stop and let idle fast-forward engage — while any
+    /// extra idle cycle it does run is observationally inert. Over-covering is
+    /// therefore always safe; this predicate is deliberately generous so a
+    /// receive re-arm latched by a `&self` DR read is never missed.
+    #[inline]
+    fn active(&self) -> bool {
+        self.state != I2cState::Idle
+            || (self.sr2 & 0x0002) != 0 // BUSY: master transfer in flight
+            || self.rxne_consumed.get()
+            || self.stop_requested
+    }
+
     fn read_reg(&self, offset: u64) -> u32 {
         match offset {
             0x00 => self.cr1,
@@ -398,13 +444,13 @@ pub struct L4I2c {
     /// data byte is loaded into TXDR (write) — mirrors F1's START→DR ordering.
     #[serde(skip)]
     start_armed: bool,
-    /// Bus name + shared trace log for the universal logic-analyzer (set via
-    /// `I2c::set_bus_trace`). `None` (default) keeps `attach` unwrapped —
-    /// existing behaviour for every caller that doesn't opt in.
+
+    /// Bus-published cycle clock (walk-free campaign) — see `L4I2c::scheduler_mode`.
     #[serde(skip)]
-    bus_name: String,
+    clock: Option<CycleClock>,
+    /// Scheduler mode: `true` while the per-cycle engine event is live.
     #[serde(skip)]
-    bus_log: Option<crate::bus::bus_trace::BusTraceLog>,
+    chain_live: bool,
 }
 
 impl Default for L4I2c {
@@ -428,13 +474,28 @@ impl Default for L4I2c {
             is_reading: false,
             autoend: false,
             start_armed: false,
-            bus_name: String::new(),
-            bus_log: None,
+            clock: None,
+            chain_live: false,
         }
     }
 }
 
 impl L4I2c {
+    /// True when the event scheduler owns this controller's engine.
+    #[inline]
+    fn scheduler_mode(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    /// Cycles on which the legacy `tick()` does observable work: an in-flight
+    /// countdown or the BUSY master-transfer window. The L4 read path is pure
+    /// (no `&self` side effects), so the write-armed countdown plus BUSY fully
+    /// bound the engine. Outside this window `tick()` returns immediately.
+    #[inline]
+    fn active(&self) -> bool {
+        self.state != I2cState::Idle || (self.isr & (1 << 15)) != 0
+    }
+
     fn read_reg(&self, offset: u64) -> u32 {
         match offset {
             0x00 => self.cr1,
@@ -673,13 +734,21 @@ pub struct KinetisI2c {
     attached_devices: Vec<RefCell<Box<dyn I2cDevice>>>,
     #[serde(skip)]
     current_target: Option<usize>,
-    /// Bus name + shared trace log for the universal logic-analyzer (set via
-    /// `I2c::set_bus_trace`). `None` (default) keeps `attach` unwrapped —
-    /// existing behaviour for every caller that doesn't opt in.
+
+    /// Bus-published cycle clock (walk-free plan Part 1). `Some` once the bus
+    /// registration choke attaches it; `None` keeps the model on the legacy
+    /// walk. Only the Kinetis variant migrates (see the `I2c` `Peripheral`
+    /// impl): its `tick()` is a pure level-IRQ re-assertion, all byte/device
+    /// work being synchronous in read/write, so the timer/systimer held-level
+    /// re-pend event pattern reproduces it cycle-exactly.
     #[serde(skip)]
-    bus_name: String,
+    clock: Option<CycleClock>,
+    /// Scheduler mode only: `true` while the level-check event is live in the
+    /// scheduler heap. Armed when IICIE becomes set; self-perpetuates at delay
+    /// 1 while IICIE stays set (so a `&self` `D`-read that latches IICIF is
+    /// caught the next cycle — exactly like the walk), stops when IICIE clears.
     #[serde(skip)]
-    bus_log: Option<crate::bus::bus_trace::BusTraceLog>,
+    chain_live: bool,
 }
 
 impl Default for KinetisI2c {
@@ -703,13 +772,26 @@ impl Default for KinetisI2c {
             is_reading: false,
             attached_devices: Vec::new(),
             current_target: None,
-            bus_name: String::new(),
-            bus_log: None,
+            clock: None,
+            chain_live: false,
         }
     }
 }
 
 impl KinetisI2c {
+    /// True when the event scheduler owns this controller's level IRQ (feature
+    /// on AND bus clock attached).
+    #[inline]
+    fn scheduler_mode(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    /// The level the legacy `tick()` re-asserts every cycle: IICIF latched AND
+    /// IICIE enabled.
+    #[inline]
+    fn irq_level(&self) -> bool {
+        (self.s.get() & KI_S_IICIF) != 0 && (self.c1 & KI_C1_IICIE) != 0
+    }
     /// Mark a byte transfer complete: TCF + IICIF latch; RXAK mirrors the slave ack.
     fn byte_complete(&self, acked: bool) {
         let mut s = self.s.get() | KI_S_TCF | KI_S_IICIF;
@@ -884,54 +966,30 @@ impl I2c {
         }
     }
 
-    /// Set the bus name + a clone of the shared bus-trace log (universal logic
-    /// analyzer, see `crate::bus::bus_trace`). Must be called before `attach`
-    /// for an attached device to be wrapped into the log — devices already
-    /// attached are unaffected.
-    pub fn set_bus_trace(&mut self, name: String, log: crate::bus::bus_trace::BusTraceLog) {
-        match self {
-            I2c::Stm32F1(i) => {
-                i.bus_name = name;
-                i.bus_log = Some(log);
-            }
-            I2c::Stm32L4(i) => {
-                i.bus_name = name;
-                i.bus_log = Some(log);
-            }
-            I2c::Kinetis(i) => {
-                i.bus_name = name;
-                i.bus_log = Some(log);
-            }
-        }
+    /// Attach a slave to a bare (off-bus) controller, wrapping it into `trace`.
+    /// The trace handle is mandatory, so there is no untraced attach — this is
+    /// the off-bus counterpart of the on-bus choke point
+    /// [`crate::bus::SystemBus::attach_i2c_slave`], and both funnel through the
+    /// one wrap helper `bus_trace::wrap_i2c`. Used by standalone tests that
+    /// drive an `I2c` directly (no `SystemBus`).
+    pub fn attach_traced(
+        &mut self,
+        bus_name: &str,
+        trace: &crate::bus::bus_trace::BusTrace,
+        device: Box<dyn I2cDevice>,
+    ) {
+        self.push_slave(crate::bus::bus_trace::wrap_i2c(bus_name, trace, device));
     }
 
-    pub fn attach(&mut self, device: Box<dyn I2cDevice>) {
-        let wrap = |name: &str,
-                    log: &Option<crate::bus::bus_trace::BusTraceLog>,
-                    d: Box<dyn I2cDevice>|
-         -> Box<dyn I2cDevice> {
-            match log {
-                Some(l) => Box::new(crate::bus::bus_trace::TracingI2cDevice::new(
-                    name.to_string(),
-                    l.clone(),
-                    d,
-                )),
-                None => d,
-            }
-        };
+    /// Raw slave push — does NOT wrap for tracing. The only caller is the bus
+    /// choke point [`crate::bus::SystemBus::attach_i2c_slave`], which wraps the
+    /// device first; nothing else should attach directly (that would bypass the
+    /// universal bus trace).
+    pub(crate) fn push_slave(&mut self, device: Box<dyn I2cDevice>) {
         match self {
-            Self::Stm32F1(i) => {
-                let d = wrap(&i.bus_name, &i.bus_log, device);
-                i.attached_devices.push(RefCell::new(d));
-            }
-            Self::Stm32L4(i) => {
-                let d = wrap(&i.bus_name, &i.bus_log, device);
-                i.attached_devices.push(RefCell::new(d));
-            }
-            Self::Kinetis(i) => {
-                let d = wrap(&i.bus_name, &i.bus_log, device);
-                i.attached_devices.push(RefCell::new(d));
-            }
+            Self::Stm32F1(i) => i.attached_devices.push(RefCell::new(device)),
+            Self::Stm32L4(i) => i.attached_devices.push(RefCell::new(device)),
+            Self::Kinetis(i) => i.attached_devices.push(RefCell::new(device)),
         }
     }
 
@@ -941,6 +999,38 @@ impl I2c {
             Self::Stm32F1(i) => &i.attached_devices,
             Self::Stm32L4(i) => &i.attached_devices,
             Self::Kinetis(i) => &i.attached_devices,
+        }
+    }
+
+    /// True when the event scheduler owns this instance's IRQ delivery. All
+    /// three variants migrate. Kinetis: its `tick()` is a pure level-IRQ
+    /// re-assertion. STM32 F1/L4: their `cycles_remaining` transaction engine is
+    /// self-paced by a delay-1 event chain that runs `tick()` every cycle while
+    /// the transfer is *active* (see `F1I2c::active`) — the SAME held-level
+    /// self-perpetuating pattern Kinetis uses. The `&self`-read side effects
+    /// (`rxne_consumed` / device byte pulls) mutate `Cell`/`RefCell` state that
+    /// the already-live chain's next `on_event` observes exactly as the walk's
+    /// next `tick()` would, so no event needs arming from the read path. Idle
+    /// fast-forward still engages: the chain stops the moment the transfer goes
+    /// fully idle (BUSY clear, no countdown), which on a real lab is between
+    /// transactions when the firmware is not busy-polling anyway.
+    #[inline]
+    fn scheduler_mode(&self) -> bool {
+        match self {
+            Self::Stm32F1(i) => i.scheduler_mode(),
+            Self::Stm32L4(i) => i.scheduler_mode(),
+            Self::Kinetis(i) => i.scheduler_mode(),
+        }
+    }
+
+    /// Test/differential knob: detach the cycle clock, pinning the model to the
+    /// legacy walk path. Used by the walk-on-vs-scheduler differential gates to
+    /// build the reference config from the same assembly.
+    pub fn force_legacy_walk(&mut self) {
+        match self {
+            Self::Stm32F1(i) => i.clock = None,
+            Self::Stm32L4(i) => i.clock = None,
+            Self::Kinetis(i) => i.clock = None,
         }
     }
 }
@@ -964,6 +1054,11 @@ impl crate::Peripheral for I2c {
     }
 
     fn tick(&mut self) -> crate::PeripheralTickResult {
+        // Scheduler-mode instances are walk-skipped (the guard keeps a stray
+        // direct call from double-advancing the engine the event chain owns).
+        if self.scheduler_mode() {
+            return crate::PeripheralTickResult::default();
+        }
         let irq = match self {
             Self::Stm32F1(i) => i.tick(),
             Self::Stm32L4(i) => i.tick(),
@@ -973,6 +1068,149 @@ impl crate::Peripheral for I2c {
             irq,
             cycles: 0,
             ..Default::default()
+        }
+    }
+
+    fn uses_scheduler(&self) -> bool {
+        // Any variant with a bus clock attached (event-scheduler builds). See
+        // `I2c::scheduler_mode`.
+        self.scheduler_mode()
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        // Scheduler-mode: the transaction engine (F1/L4) or level re-assertion
+        // (Kinetis) is fully driven by the event chain, so the walk is
+        // unnecessary. Feature off / no clock: real per-cycle walk work → `true`.
+        !self.scheduler_mode()
+    }
+
+    fn sync_to(&mut self, _now_cycle: u64) {
+        // No lazily-accumulated state to reconcile: the F1/L4 transaction
+        // countdown is advanced cycle-by-cycle by the self-perpetuating event
+        // chain (drained up to the current cycle by `Machine::step` before any
+        // MMIO access observes it), and the Kinetis registers / device byte
+        // stream / IICIF all mutate synchronously in read/write. Explicit no-op
+        // for symmetry with the other scheduler-migrated models.
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        match self {
+            Self::Kinetis(i) => {
+                if !i.scheduler_mode() {
+                    return Vec::new();
+                }
+                // Arm the self-perpetuating level-check the moment interrupts are
+                // armed (IICIE set) and no chain is live. The chain then re-polls
+                // every cycle while IICIE stays set (delay-0 → deadline
+                // `current_cycle + 1`, the cycle the legacy walk's next tick would
+                // first check the level), so a `&self` `D`-read that latches IICIF
+                // is picked up the next cycle, exactly as the walk would. The
+                // `chain_live` guard prevents duplicate chains across the multiple
+                // C1/D/S writes of a transfer.
+                if (i.c1 & KI_C1_IICIE) != 0 && !i.chain_live {
+                    i.chain_live = true;
+                    vec![(0u64, 0u32)]
+                } else {
+                    Vec::new()
+                }
+            }
+            // STM32 F1/L4: arm the per-cycle transaction-engine chain the moment
+            // a write makes the transfer active (START/DR countdown, BUSY). The
+            // chain then self-perpetuates every cycle while the transfer stays
+            // active — including across the `&self` receive reads that cannot arm
+            // an event themselves (their re-arm is caught by the already-live
+            // chain's next `on_event`, exactly as the walk's next tick would).
+            // delay-0 → deadline `current_cycle + 1` = the walk's next tick.
+            Self::Stm32F1(i) => {
+                if i.scheduler_mode() && i.active() && !i.chain_live {
+                    i.chain_live = true;
+                    vec![(0u64, 0u32)]
+                } else {
+                    Vec::new()
+                }
+            }
+            Self::Stm32L4(i) => {
+                if i.scheduler_mode() && i.active() && !i.chain_live {
+                    i.chain_live = true;
+                    vec![(0u64, 0u32)]
+                } else {
+                    Vec::new()
+                }
+            }
+        }
+    }
+
+    fn on_event(
+        &mut self,
+        _event_token: u32,
+        sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        let _ = sched;
+        match self {
+            Self::Kinetis(i) => {
+                if !i.scheduler_mode() {
+                    return crate::sched::EventResult::default();
+                }
+                // Pend the peripheral's own NVIC line while the level
+                // (IICIF & IICIE) is asserted — the event-path equivalent of the
+                // legacy `tick()` returning its level bool every cycle. Perpetuate
+                // at delay 1 while IICIE stays set so a byte completion latched by
+                // a `&self` read is caught the next cycle; stop when firmware
+                // disables IICIE.
+                let iicie = (i.c1 & KI_C1_IICIE) != 0;
+                i.chain_live = iicie;
+                crate::sched::EventResult {
+                    raise_own_irq: i.irq_level(),
+                    reschedule_delay: iicie.then_some(1),
+                    ..Default::default()
+                }
+            }
+            // STM32 F1: run one cycle of the transaction engine — byte-for-byte
+            // the same `F1I2c::tick()` the walk runs — and pend the NVIC line on
+            // its IRQ verdict. Re-check `active()` AFTER the tick (it may have
+            // just delivered the last byte and cleared BUSY) and perpetuate at
+            // delay 1 while still active; stop when fully idle so fast-forward can
+            // engage. An extra idle cycle would be inert, so the tight stop is
+            // safe. The `on_event` runs at the same per-cycle cadence as the walk,
+            // so the countdown timing and IRQ edges are identical.
+            Self::Stm32F1(i) => {
+                if !i.scheduler_mode() {
+                    return crate::sched::EventResult::default();
+                }
+                let irq = i.tick();
+                let active = i.active();
+                i.chain_live = active;
+                crate::sched::EventResult {
+                    raise_own_irq: irq,
+                    reschedule_delay: active.then_some(1),
+                    ..Default::default()
+                }
+            }
+            Self::Stm32L4(i) => {
+                if !i.scheduler_mode() {
+                    return crate::sched::EventResult::default();
+                }
+                let irq = i.tick();
+                let active = i.active();
+                i.chain_live = active;
+                crate::sched::EventResult {
+                    raise_own_irq: irq,
+                    reschedule_delay: active.then_some(1),
+                    ..Default::default()
+                }
+            }
+        }
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        // All three variants opt into the scheduler once the bus attaches its
+        // clock (event-scheduler builds); featureless builds ignore it via
+        // `scheduler_mode`.
+        match self {
+            Self::Stm32F1(i) => i.clock = Some(clock),
+            Self::Stm32L4(i) => i.clock = Some(clock),
+            Self::Kinetis(i) => i.clock = Some(clock),
         }
     }
 
@@ -1000,6 +1238,69 @@ impl crate::Peripheral for I2c {
         Some(self)
     }
 
+    /// Slaves live behind `RefCell` here (the transaction engine hands out
+    /// interior-mutable borrows mid-transfer), so the walk borrows each cell in
+    /// turn rather than taking one long `&mut` over the vector.
+    fn for_each_attached_sim_input(
+        &mut self,
+        f: &mut dyn FnMut(&mut dyn crate::sim_input::SimInput) -> bool,
+    ) -> bool {
+        for cell in self.attached_devices() {
+            let mut dev = cell.borrow_mut();
+            if let Some(si) = dev.as_sim_input_mut() {
+                if f(si) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// Custom inspection: the generic register decode plus a `framebuffer`
+    /// artifact for any attached SSD1306 OLED. This is the pattern the ~10
+    /// bespoke `get_*_framebuffer` wasm accessors generalize into — the
+    /// controller walks its own attached devices and emits panel artifacts, one
+    /// code path instead of a bespoke accessor per panel. Summary mode omits the
+    /// bytes and carries a cheap `generation` hash so callers skip unchanged
+    /// buffers.
+    fn inspect(
+        &self,
+        base: u64,
+        name: &str,
+        opts: &crate::inspect::InspectOpts,
+    ) -> crate::inspect::PeripheralInspect {
+        let mut pi = crate::inspect::default_inspect(self, base, name, opts);
+        pi.kind = "i2c".to_string();
+        for dev_cell in self.attached_devices() {
+            let dev = dev_cell.borrow();
+            let addr = dev.address();
+            if let Some(oled) = dev
+                .as_any()
+                .and_then(|a| a.downcast_ref::<crate::peripherals::components::Ssd1306>())
+            {
+                let fb = oled.framebuffer();
+                pi.artifacts.push(crate::inspect::Artifact {
+                    kind: "framebuffer".to_string(),
+                    id: format!("i2c@0x{:02x}", addr),
+                    meta: serde_json::json!({
+                        "w": oled.width(),
+                        "h": oled.height(),
+                        "format": "ssd1306_page",
+                        "generation": crate::inspect::artifact_generation(fb),
+                        "ink_bytes": oled.ink_bytes(),
+                        "lit_pixels": oled.lit_pixels(),
+                    }),
+                    bytes: if opts.include_bytes {
+                        Some(fb.to_vec())
+                    } else {
+                        None
+                    },
+                });
+            }
+        }
+        pi
+    }
+
     fn snapshot(&self) -> serde_json::Value {
         match self {
             Self::Stm32F1(i) => serde_json::to_value(i),
@@ -1018,6 +1319,57 @@ mod tests {
         atomic::{AtomicUsize, Ordering},
         Arc,
     };
+
+    /// The I2C controller's custom `inspect()` emits a `framebuffer` artifact
+    /// for an attached SSD1306 OLED: metadata always present; the (large) byte
+    /// payload only when `include_bytes` is requested. This is the pattern that
+    /// generalizes the bespoke `get_*_framebuffer` accessors.
+    #[test]
+    fn inspect_emits_ssd1306_framebuffer_artifact() {
+        use crate::inspect::InspectOpts;
+        use crate::peripherals::components::Ssd1306;
+
+        let mut i2c = I2c::new();
+        i2c.push_slave(Box::new(Ssd1306::new(0x3C)));
+
+        // Summary mode: metadata present, bytes omitted.
+        let summary = i2c.inspect(0x4000_5400, "i2c1", &InspectOpts::default());
+        assert_eq!(summary.kind, "i2c");
+        let fb = summary
+            .artifacts
+            .iter()
+            .find(|a| a.kind == "framebuffer")
+            .expect("framebuffer artifact present");
+        assert_eq!(fb.id, "i2c@0x3c");
+        assert_eq!(fb.meta["w"], 128);
+        assert_eq!(fb.meta["h"], 64);
+        assert_eq!(fb.meta["format"], "ssd1306_page");
+        assert!(
+            fb.meta["generation"].is_u64(),
+            "cheap change-detection hash"
+        );
+        assert!(fb.bytes.is_none(), "bytes omitted in summary mode");
+
+        // include_bytes: full GDDRAM payload attached.
+        let full = i2c.inspect(
+            0x4000_5400,
+            "i2c1",
+            &InspectOpts {
+                include_bytes: true,
+                peripheral: None,
+            },
+        );
+        let fb = full
+            .artifacts
+            .iter()
+            .find(|a| a.kind == "framebuffer")
+            .expect("framebuffer artifact present");
+        assert_eq!(
+            fb.bytes.as_ref().map(|b| b.len()),
+            Some(128 * 8),
+            "1024-byte page-major GDDRAM"
+        );
+    }
 
     struct CountingDevice {
         address: u8,
@@ -1062,7 +1414,7 @@ mod tests {
     fn test_i2c_full_transfer_flow() {
         use crate::peripherals::components::Mpu6050;
         let mut i2c = I2c::new();
-        i2c.attach(Box::new(Mpu6050::new(0x50)));
+        i2c.push_slave(Box::new(Mpu6050::new(0x50)));
 
         i2c.write(0x01, 0x01).unwrap(); // START
         for _ in 0..10 {
@@ -1103,7 +1455,7 @@ mod tests {
         let mut i2c = I2c::new();
         let mut sensor = Adxl345::new(0x53);
         sensor.set_sample(256, -128, 64);
-        i2c.attach(Box::new(sensor));
+        i2c.push_slave(Box::new(sensor));
 
         i2c.write(0x00, 0x01).unwrap();
         i2c.write(0x01, 0x01).unwrap();
@@ -1171,7 +1523,7 @@ mod tests {
     fn test_i2c_single_byte_read_advances_device_once() {
         let reads = Arc::new(AtomicUsize::new(0));
         let mut i2c = I2c::new();
-        i2c.attach(Box::new(CountingDevice::new(0x42, reads.clone())));
+        i2c.push_slave(Box::new(CountingDevice::new(0x42, reads.clone())));
 
         i2c.write(0x01, 0x01).unwrap();
         for _ in 0..10 {
@@ -1260,7 +1612,7 @@ mod tests {
         }
 
         let mut i2c = I2c::new_with_layout(I2cRegisterLayout::Stm32L4);
-        i2c.attach(Box::new(WriteCounter {
+        i2c.push_slave(Box::new(WriteCounter {
             address: 0x3C,
             writes: writes.clone(),
         }));
@@ -1285,12 +1637,11 @@ mod tests {
 
     #[test]
     fn i2c_attach_wraps_device_into_shared_log() {
-        use crate::bus::bus_trace::{new_log, BusPayload};
+        use crate::bus::bus_trace::{new_log, wrap_i2c, BusPayload};
         use crate::Peripheral;
 
         let log = new_log();
         let mut i2c = I2c::Kinetis(KinetisI2c::default());
-        i2c.set_bus_trace("i2c1".into(), log.clone());
 
         // device at 0x1E
         struct D;
@@ -1303,7 +1654,8 @@ mod tests {
             }
             fn write(&mut self, _: u8) {}
         }
-        i2c.attach(Box::new(D));
+        // The bus choke point wraps before push; emulate it here.
+        i2c.push_slave(wrap_i2c("i2c1", &log, Box::new(D)));
 
         // Drive START + addr(W) + one data byte through the Kinetis register
         // model via the public `Peripheral::write` MMIO path (the same path
@@ -1313,9 +1665,395 @@ mod tests {
         i2c.write(0x04, 0x3C).unwrap(); // addr 0x1E + W -> selects device, start()
         i2c.write(0x04, 0xAF).unwrap(); // data -> device.write -> wrapper records
 
-        let snap = log.lock().unwrap().snapshot();
+        let snap = log.snapshot();
         assert!(snap
             .iter()
             .any(|e| matches!(&e.payload, BusPayload::I2c { byte, .. } if *byte == 0xAF)));
+    }
+}
+
+// ── Walk-free (batch B4) differential: Kinetis level-IRQ walk vs scheduler ────
+#[cfg(all(test, feature = "event-scheduler"))]
+mod kinetis_scheduler {
+    use super::*;
+    use crate::Peripheral;
+
+    /// A slave that returns an incrementing byte pattern on each read (so a
+    /// master-receive advances observably) and records writes.
+    struct RampDevice {
+        address: u8,
+        next: std::cell::Cell<u8>,
+    }
+    impl I2cDevice for RampDevice {
+        fn address(&self) -> u8 {
+            self.address
+        }
+        fn read(&mut self) -> u8 {
+            let v = self.next.get();
+            self.next.set(v.wrapping_add(1));
+            v
+        }
+        fn write(&mut self, _data: u8) {}
+    }
+
+    fn ramp_slave() -> Box<dyn I2cDevice> {
+        Box::new(RampDevice {
+            address: 0x1E,
+            next: std::cell::Cell::new(0x40),
+        })
+    }
+
+    fn kinetis(scheduler: bool) -> I2c {
+        let mut i2c = I2c::new_with_layout(I2cRegisterLayout::Kinetis);
+        i2c.push_slave(ramp_slave());
+        if scheduler {
+            i2c.attach_cycle_clock(CycleClock::default());
+        }
+        i2c
+    }
+
+    fn f1(scheduler: bool) -> I2c {
+        let mut i2c = I2c::new_with_layout(I2cRegisterLayout::Stm32F1);
+        i2c.push_slave(ramp_slave());
+        if scheduler {
+            i2c.attach_cycle_clock(CycleClock::default());
+        }
+        i2c
+    }
+
+    fn l4(scheduler: bool) -> I2c {
+        let mut i2c = I2c::new_with_layout(I2cRegisterLayout::Stm32L4);
+        i2c.push_slave(ramp_slave());
+        if scheduler {
+            i2c.attach_cycle_clock(CycleClock::default());
+        }
+        i2c
+    }
+
+    /// Clone the bus clock a scheduler-mode instance latched (any variant).
+    fn clock_of(i2c: &I2c) -> CycleClock {
+        match i2c {
+            I2c::Stm32F1(i) => i.clock.clone(),
+            I2c::Stm32L4(i) => i.clock.clone(),
+            I2c::Kinetis(i) => i.clock.clone(),
+        }
+        .expect("scheduler-mode instance has a clock")
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    enum Op {
+        Write(u64, u8),
+        Read(u64),
+    }
+
+    /// Drive a scheduler-mode Kinetis I2C exactly the way `Machine` +
+    /// `SystemBus` do at tick interval 1: publish the clock each cycle, arm
+    /// write-harvested events at `cycle + 1 + delay`, and drain due events
+    /// through `on_event` (rescheduling at `now + delay`), recording the cycles
+    /// the level chain pends the own-IRQ.
+    struct SchedHarness {
+        i2c: I2c,
+        clock: CycleClock,
+        bus: crate::bus::SystemBus,
+        events: Vec<(u64, u32)>,
+        now: u64,
+        pends: Vec<u64>,
+    }
+
+    impl SchedHarness {
+        fn new(build: &dyn Fn(bool) -> I2c) -> Self {
+            let i2c = build(true);
+            let clock = clock_of(&i2c);
+            Self {
+                i2c,
+                clock,
+                bus: crate::bus::SystemBus::new(),
+                events: Vec::new(),
+                now: 0,
+                pends: Vec::new(),
+            }
+        }
+
+        fn write(&mut self, off: u64, val: u8) {
+            self.i2c.sync_to(self.now);
+            self.i2c.write(off, val).unwrap();
+            for (delay, token) in self.i2c.take_scheduled_events() {
+                self.events.push((self.now + 1 + delay, token));
+            }
+        }
+
+        /// A `&self` register read — never arms an event (mirrors the bus read
+        /// path); a `D` read that latches IICIF is caught by the already-live
+        /// perpetual chain.
+        fn read(&mut self, off: u64) -> u8 {
+            self.i2c.read(off).unwrap()
+        }
+
+        fn step(&mut self) {
+            self.now += 1;
+            self.clock.publish(self.now);
+            let due: Vec<(u64, u32)> = self
+                .events
+                .iter()
+                .copied()
+                .filter(|(d, _)| *d <= self.now)
+                .collect();
+            self.events.retain(|(d, _)| *d > self.now);
+            let mut sched = crate::sched::EventScheduler::new();
+            sched.advance_to(self.now);
+            for (_, token) in due {
+                let res = self.i2c.on_event(token, &mut sched, &mut self.bus);
+                if res.raise_own_irq {
+                    self.pends.push(self.now);
+                }
+                if let Some(delay) = res.reschedule_delay {
+                    self.events.push((self.now + delay, token));
+                }
+            }
+        }
+    }
+
+    /// Legacy per-tick oracle.
+    fn walk_tick(i2c: &mut I2c) -> bool {
+        i2c.tick().irq
+    }
+
+    /// The heart of the gate: replay the SAME op script against (a) the legacy
+    /// per-tick walk and (b) the event path, comparing the full register
+    /// snapshot AND every returned read byte at every cycle, plus the exact set
+    /// of NVIC-pend cycles. An `Op` scheduled at cycle `c` is applied before
+    /// that cycle's tick.
+    fn assert_walk_identical_with(
+        build: &dyn Fn(bool) -> I2c,
+        script: &[(u64, Op)],
+        cycles: u64,
+        what: &str,
+    ) {
+        let mut walk = build(false);
+        let mut sched = SchedHarness::new(build);
+        let mut walk_pends: Vec<u64> = Vec::new();
+
+        for c in 1..=cycles {
+            for (sc, op) in script {
+                if *sc == c {
+                    match *op {
+                        Op::Write(off, val) => {
+                            walk.write(off, val).unwrap();
+                            sched.now = c - 1;
+                            sched.write(off, val);
+                        }
+                        Op::Read(off) => {
+                            let w = walk.read(off).unwrap();
+                            sched.now = c - 1;
+                            let s = sched.read(off);
+                            assert_eq!(w, s, "{what}: read(0x{off:02x}) diverged at cycle {c}");
+                        }
+                    }
+                }
+            }
+            if walk_tick(&mut walk) {
+                walk_pends.push(c);
+            }
+            sched.now = c - 1;
+            sched.step();
+            assert_eq!(
+                walk.snapshot(),
+                sched.i2c.snapshot(),
+                "{what}: register state diverged at cycle {c}"
+            );
+        }
+        assert_eq!(walk_pends, sched.pends, "{what}: NVIC pend cycles diverged");
+    }
+
+    /// Kinetis-variant convenience wrapper.
+    fn assert_walk_identical(script: &[(u64, Op)], cycles: u64, what: &str) {
+        assert_walk_identical_with(&kinetis, script, cycles, what);
+    }
+
+    #[test]
+    fn clock_attach_flips_to_scheduler_and_walk_tick_is_inert() {
+        let mut i2c = kinetis(true);
+        assert!(i2c.uses_scheduler());
+        assert!(!i2c.needs_legacy_walk());
+        // Latch a level (address byte with IICIE) then confirm tick() is inert.
+        i2c.write(0x02, KI_C1_MST | KI_C1_TX | KI_C1_IICIE).unwrap();
+        i2c.write(0x04, 0x3C).unwrap(); // address → byte_complete sets IICIF
+        assert!(!i2c.tick().irq, "tick must be inert in scheduler mode");
+    }
+
+    #[test]
+    fn all_three_variants_flip_to_scheduler_and_walk_tick_is_inert() {
+        // With a clock attached (event-scheduler builds) every I2C variant now
+        // migrates: the F1/L4 transaction engine is self-paced by the same
+        // held-level event chain the Kinetis variant uses, so the per-cycle walk
+        // is no longer needed. The walk-guarded `tick()` is inert in that mode.
+        for build in [&f1 as &dyn Fn(bool) -> I2c, &l4, &kinetis] {
+            let mut i2c = build(true);
+            assert!(i2c.uses_scheduler());
+            assert!(!i2c.needs_legacy_walk());
+            assert!(
+                !i2c.tick().irq && i2c.tick().cycles == 0,
+                "walk tick must be inert in scheduler mode"
+            );
+            // Clock detached (differential reference / featureless): back to walk.
+            i2c.force_legacy_walk();
+            assert!(!i2c.uses_scheduler());
+            assert!(i2c.needs_legacy_walk());
+        }
+    }
+
+    // ── STM32 F1 transaction-engine walk-vs-scheduler byte identity ───────────
+
+    /// Master WRITE: START → address(W) → data byte → STOP, with ITEVTEN|ITBUFEN
+    /// enabled so the completion IRQs are pend-compared. Every register snapshot,
+    /// read byte and NVIC-pend cycle must be byte-identical between the per-cycle
+    /// walk and the event-scheduled engine.
+    #[test]
+    fn f1_master_write_walk_identity() {
+        let addr_w = 0x1E << 1; // 0x3C
+        let script = [
+            (1u64, Op::Write(0x05, 0x06)), // CR2 = ITEVTEN|ITBUFEN (bits 9,10)
+            (1, Op::Write(0x01, 0x01)),    // CR1.START (bit 8)
+            (4, Op::Read(0x14)),           // poll SR1 (SB)
+            (5, Op::Write(0x10, addr_w)),  // DR = address(W) → AddressPending
+            (28, Op::Read(0x14)),          // poll SR1 (ADDR/TXE)
+            (28, Op::Read(0x18)),          // poll SR2 (MSL/BUSY)
+            (30, Op::Write(0x10, 0xAF)),   // DR = data byte → DataPending
+            (54, Op::Read(0x14)),          // poll SR1 (TXE/BTF)
+            (56, Op::Write(0x01, 0x02)),   // CR1.STOP (bit 9)
+        ];
+        assert_walk_identical_with(&f1, &script, 64, "f1 master write");
+    }
+
+    /// Master READ: START → address(R) → multi-byte receive (the `&self` DR-read
+    /// path that the prior model claimed could not be event-scheduled) → STOP.
+    /// The receive bytes come straight from the device in `read()`; the engine
+    /// only paces the START/ADDR/first-byte countdowns. The already-live chain
+    /// keeps the register state identical across the read-gated stream.
+    #[test]
+    fn f1_master_read_multibyte_walk_identity() {
+        let addr_r = (0x1E << 1) | 1; // 0x3D
+        let script = [
+            (1u64, Op::Write(0x05, 0x06)), // CR2 = ITEVTEN|ITBUFEN
+            (1, Op::Write(0x01, 0x01)),    // START
+            (5, Op::Write(0x10, addr_r)),  // DR = address(R) → AddressPending(read)
+            (30, Op::Read(0x14)),          // poll SR1 (ADDR)
+            (54, Op::Read(0x14)),          // poll SR1 (RXNE after first byte)
+            (54, Op::Read(0x10)),          // read byte 0 (buffered dr)
+            (55, Op::Read(0x10)),          // read byte 1 (device pull)
+            (56, Op::Read(0x10)),          // read byte 2 (device pull)
+            (57, Op::Read(0x18)),          // SR2 still BUSY
+            (58, Op::Write(0x01, 0x02)),   // STOP
+        ];
+        assert_walk_identical_with(&f1, &script, 66, "f1 master read multibyte");
+    }
+
+    /// Address NACK (no slave at the addressed target) — the AF/MSL/BUSY latch
+    /// and the ITERREN-gated error IRQ must match. Uses a mismatched address so
+    /// `current_target` is `None`.
+    #[test]
+    fn f1_address_nack_walk_identity() {
+        let script = [
+            (1u64, Op::Write(0x05, 0x01)), // CR2 ITERREN (bit 8) → byte at offset 0x05
+            (1, Op::Write(0x01, 0x01)),    // START
+            (5, Op::Write(0x10, 0x40)),    // DR = address 0x20<<1 (no device) → NACK
+            (30, Op::Read(0x14)),          // poll SR1 (AF)
+            (30, Op::Read(0x18)),          // poll SR2 (MSL/BUSY held)
+            (32, Op::Write(0x01, 0x02)),   // STOP releases the bus
+        ];
+        assert_walk_identical_with(&f1, &script, 40, "f1 address NACK");
+    }
+
+    // ── STM32 L4 transaction-engine walk-vs-scheduler byte identity ───────────
+
+    /// L4 master WRITE via CR2 START/AUTOEND + TXDR, with TCIE|NACKIE enabled.
+    #[test]
+    fn l4_master_write_walk_identity() {
+        // CR1.PE (bit0) | TCIE (bit6) | NACKIE (bit4) = 0x51.
+        // CR2 = SADD(0x1E<<1) | NBYTES=1<<16 | AUTOEND<<25 | START<<13.
+        let cr2: u32 = ((0x1E << 1) as u32) | (1 << 16) | (1 << 25) | (1 << 13);
+        let script = [
+            (1u64, Op::Write(0x00, 0x51)), // CR1 = PE|TCIE|NACKIE
+            (2, Op::Write(0x04, (cr2 & 0xFF) as u8)),
+            (2, Op::Write(0x05, ((cr2 >> 8) & 0xFF) as u8)),
+            (2, Op::Write(0x06, ((cr2 >> 16) & 0xFF) as u8)),
+            (2, Op::Write(0x07, ((cr2 >> 24) & 0xFF) as u8)), // START latches BUSY
+            (3, Op::Read(0x19)),                              // ISR byte3 (BUSY bit15)
+            (4, Op::Write(0x28, 0xAF)),                       // TXDR → AddressPending
+            (28, Op::Read(0x18)),                             // ISR byte0 (TXE/TC)
+            (28, Op::Read(0x19)),                             // ISR byte3 (BUSY cleared by AUTOEND)
+        ];
+        assert_walk_identical_with(&l4, &script, 36, "l4 master write");
+    }
+
+    /// L4 address NACK (no device) — NACKF + AUTOEND STOPF, NACKIE IRQ.
+    #[test]
+    fn l4_address_nack_walk_identity() {
+        let cr2: u32 = ((0x20 << 1) as u32) | (1 << 16) | (1 << 25) | (1 << 13);
+        let script = [
+            (1u64, Op::Write(0x00, 0x51)), // CR1 = PE|TCIE|NACKIE
+            (2, Op::Write(0x04, (cr2 & 0xFF) as u8)),
+            (2, Op::Write(0x05, ((cr2 >> 8) & 0xFF) as u8)),
+            (2, Op::Write(0x06, ((cr2 >> 16) & 0xFF) as u8)),
+            (2, Op::Write(0x07, ((cr2 >> 24) & 0xFF) as u8)),
+            (4, Op::Write(0x28, 0xAF)), // TXDR → AddressPending → NACK
+            (28, Op::Read(0x18)),       // ISR (NACKF/STOPF)
+            (28, Op::Read(0x19)),       // ISR byte3 (BUSY)
+        ];
+        assert_walk_identical_with(&l4, &script, 36, "l4 address NACK");
+    }
+
+    #[test]
+    fn master_write_level_irq_walk_identity() {
+        // START, address (byte_complete latches IICIF), enable IICIE (level
+        // high), let it pend for a few cycles (ISR latency), clear IICIF + send
+        // a data byte (re-latch), clear again, then STOP.
+        let addr_w = 0x1E << 1; // write
+        let script = [
+            (1u64, Op::Write(0x02, KI_C1_MST | KI_C1_TX)), // START
+            (1, Op::Write(0x04, addr_w)),                  // address → IICIF
+            (2, Op::Write(0x02, KI_C1_MST | KI_C1_TX | KI_C1_IICIE)), // enable IICIE
+            (6, Op::Write(0x03, KI_S_IICIF)),              // ISR clears IICIF
+            (6, Op::Write(0x04, 0xAA)),                    // next byte → IICIF
+            (11, Op::Write(0x03, KI_S_IICIF)),             // clear
+            (11, Op::Write(0x04, 0xBB)),                   // byte → IICIF
+            (16, Op::Write(0x03, KI_S_IICIF)),             // clear
+            (17, Op::Write(0x02, 0)),                      // STOP (MST 1→0)
+        ];
+        assert_walk_identical(&script, 24, "kinetis master write level IRQ");
+    }
+
+    #[test]
+    fn master_read_dread_latches_irq_walk_identity() {
+        // The crux: a master-receive `D` read latches IICIF via a `&self` read
+        // (which cannot arm an event) — the already-live perpetual level chain
+        // must pend on the SAME cycle as the walk.
+        let addr_r = (0x1E << 1) | 1; // read
+        let script = [
+            (1u64, Op::Write(0x02, KI_C1_MST | KI_C1_TX | KI_C1_IICIE)), // START + IICIE
+            (1, Op::Write(0x04, addr_r)), // address(R) → IICIF, is_reading
+            (5, Op::Write(0x03, KI_S_IICIF)), // ISR clears IICIF
+            (5, Op::Write(0x02, KI_C1_MST | KI_C1_IICIE)), // TX=0 → enter RX (rx_dummy_pending)
+            (6, Op::Read(0x04)),          // dummy read → IICIF (bus release)
+            (10, Op::Write(0x03, KI_S_IICIF)), // clear
+            (11, Op::Read(0x04)),         // data read → device byte + IICIF
+            (15, Op::Write(0x03, KI_S_IICIF)), // clear
+            (16, Op::Read(0x04)),         // data read → IICIF
+            (20, Op::Write(0x03, KI_S_IICIF)), // clear
+            (21, Op::Write(0x02, 0)),     // STOP
+        ];
+        assert_walk_identical(&script, 28, "kinetis master read D-latch level IRQ");
+    }
+
+    #[test]
+    fn iicie_disabled_never_pends_walk_identity() {
+        // IICIF latched but IICIE never set: the level is low, no pend in either
+        // mode, and the chain must not even arm.
+        let script = [
+            (1u64, Op::Write(0x02, KI_C1_MST | KI_C1_TX)), // START, no IICIE
+            (1, Op::Write(0x04, 0x1E << 1)),               // address → IICIF (but IICIE off)
+            (5, Op::Write(0x04, 0x55)),                    // byte → IICIF
+        ];
+        assert_walk_identical(&script, 12, "kinetis IICIE-off no pend");
     }
 }

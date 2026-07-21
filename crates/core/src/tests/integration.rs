@@ -11,7 +11,7 @@ pub mod integration_tests {
     use crate::peripherals::nvic::NvicState;
     use crate::{Bus, Cpu, DebugControl, Machine, Peripheral, SimResult, StopReason};
     use labwired_config::{Arch, ChipDescriptor, MemoryRange, PeripheralConfig, SystemManifest};
-    use std::collections::HashMap;
+    use std::collections::{BTreeMap, HashMap};
     use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
     use std::sync::{Arc, Mutex};
 
@@ -205,7 +205,6 @@ pub mod integration_tests {
             irq: None,
             dev: Box::new(RecordingPeripheral::new()),
             ticks_remaining: 0,
-            generation: 0,
             clock_gate: None,
         });
 
@@ -225,7 +224,6 @@ pub mod integration_tests {
             irq: None,
             dev: Box::new(RecordingPeripheral::new()),
             ticks_remaining: 0,
-            generation: 0,
             clock_gate: None,
         });
 
@@ -273,7 +271,6 @@ pub mod integration_tests {
                 reads: reads.clone(),
             }),
             ticks_remaining: 0,
-            generation: 0,
             clock_gate: None,
         });
 
@@ -300,7 +297,6 @@ pub mod integration_tests {
             irq: Some(16),
             dev: Box::new(RecordingPeripheral::with_tick(true)),
             ticks_remaining: 0,
-            generation: 0,
             clock_gate: None,
         });
 
@@ -330,7 +326,6 @@ pub mod integration_tests {
             irq: Some(16),
             dev: Box::new(RecordingPeripheral::with_tick(true)),
             ticks_remaining: 0,
-            generation: 0,
             clock_gate: None,
         });
 
@@ -376,7 +371,6 @@ pub mod integration_tests {
                 tick_count: tick_count.clone(),
             }),
             ticks_remaining: 0,
-            generation: 0,
             clock_gate: None,
         });
 
@@ -437,7 +431,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
-            walk_deleted: false,
+            walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "test-system".to_string(),
             chip: "test-chip".to_string(),
@@ -613,7 +607,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
-            walk_deleted: false,
+            walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "test-system-2".to_string(),
             chip: "test-chip-2".to_string(),
@@ -677,7 +671,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
-            walk_deleted: false,
+            walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "test-system-3".to_string(),
             chip: "test-chip-3".to_string(),
@@ -736,7 +730,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
-            walk_deleted: false,
+            walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "test-system-gpio-v2".to_string(),
             chip: "test-chip-gpio-v2".to_string(),
@@ -801,7 +795,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
-            walk_deleted: false,
+            walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "test-system-uart-v2".to_string(),
             chip: "test-chip-uart-v2".to_string(),
@@ -954,7 +948,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
-            walk_deleted: false,
+            walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "test-system-two-uarts".to_string(),
             chip: "test-chip-two-uarts".to_string(),
@@ -1014,7 +1008,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
-            walk_deleted: false,
+            walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "test-system-rcc-v2".to_string(),
             chip: "test-chip-rcc-v2".to_string(),
@@ -1076,7 +1070,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
-            walk_deleted: false,
+            walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "test-system-rcc-f4".to_string(),
             chip: "test-chip-rcc-f4".to_string(),
@@ -1138,7 +1132,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
-            walk_deleted: false,
+            walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "test-system-gpio-v2-alias".to_string(),
             chip: "test-chip-gpio-v2-alias".to_string(),
@@ -1582,7 +1576,6 @@ pub mod integration_tests {
             irq: Some(irq_num),
             dev: Box::new(crate::peripherals::stub::StubPeripheral::new(0)),
             ticks_remaining: 0,
-            generation: 0,
             clock_gate: None,
         });
         // (Note: StubPeripheral::tick returns false. I should use a more active one or just pend manually)
@@ -1771,15 +1764,44 @@ pub mod integration_tests {
         assert_eq!(metrics.get_cycles(), 3); // 1 (MOV) + 2 (BL) = 3
     }
 
+    /// Peripheral tick-cost accounting through the observer channel. The cost
+    /// source is a dedicated test peripheral: SysTick used to charge one cycle
+    /// per enabled tick, but that was a sim artifact (real SysTick consumes no
+    /// core cycles) removed by the walk-free B1 migration — asserted below so
+    /// it cannot silently come back and re-skew `total_cycles`.
     #[test]
-    fn test_peripheral_cycle_accounting_systick() {
+    fn test_peripheral_cycle_accounting() {
         use crate::metrics::PerformanceMetrics;
+
+        #[derive(Debug)]
+        struct CostTicker;
+        impl crate::Peripheral for CostTicker {
+            fn read(&self, _offset: u64) -> crate::SimResult<u8> {
+                Ok(0)
+            }
+            fn write(&mut self, _offset: u64, _value: u8) -> crate::SimResult<()> {
+                Ok(())
+            }
+            fn tick(&mut self) -> crate::PeripheralTickResult {
+                crate::PeripheralTickResult {
+                    cycles: 1,
+                    ..Default::default()
+                }
+            }
+        }
 
         let mut machine = create_machine();
         let metrics = std::sync::Arc::new(PerformanceMetrics::new());
         machine.observers.push(metrics.clone());
 
-        // Enable SysTick so it incurs a tick cost each machine step.
+        machine.bus.add_peripheral(
+            "cost_ticker",
+            0x5100_0000,
+            0x100,
+            None,
+            Box::new(CostTicker),
+        );
+        // An ENABLED SysTick must NOT contribute tick cost (B1 normalization).
         machine.bus.write_u32(0xE000_E010, 1).unwrap(); // CSR = ENABLE
 
         // MOV R0, #10 (16-bit)
@@ -1790,8 +1812,9 @@ pub mod integration_tests {
 
         assert_eq!(metrics.get_instructions(), 1);
         assert_eq!(metrics.get_peripheral_cycles_total(), 1);
-        assert_eq!(metrics.get_peripheral_cycles("systick"), 1);
-        assert_eq!(metrics.get_cycles(), 2); // 1 (MOV) + 1 (SysTick tick)
+        assert_eq!(metrics.get_peripheral_cycles("cost_ticker"), 1);
+        assert_eq!(metrics.get_peripheral_cycles("systick"), 0);
+        assert_eq!(metrics.get_cycles(), 2); // 1 (MOV) + 1 (CostTicker tick)
     }
 
     #[test]
@@ -2118,7 +2141,6 @@ pub mod integration_tests {
             irq: Some(18), // ADC1_2 global interrupt
             dev: Box::new(Adc::new()),
             ticks_remaining: 0,
-            generation: 0,
             clock_gate: None,
         });
 
@@ -2325,7 +2347,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
-            walk_deleted: false,
+            walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "test-system".to_string(),
             chip: "esp32c3-timg-test".to_string(),
@@ -2365,7 +2387,8 @@ pub mod integration_tests {
         // meaningful in BOTH feature modes.
         let interval = (bus.config.peripheral_tick_interval as u64).max(1);
         for _ in 0..500 {
-            bus.current_cycle += interval;
+            let next = bus.current_cycle + interval;
+            bus.set_current_cycle(next);
             bus.tick_peripherals_with_costs();
         }
 
@@ -2379,6 +2402,169 @@ pub mod integration_tests {
         assert!(
             count > 0,
             "TIMG0 T0 counter must have advanced after 500 ticks with EN set, got {count}"
+        );
+    }
+
+    #[test]
+    fn test_esp32c3_gpio_w1ts_w1tc_drive_output_readback() {
+        let chip = ChipDescriptor {
+            schema_version: "1.0".to_string(),
+            name: "esp32c3-gpio-test".to_string(),
+            arch: Arch::RiscV,
+            core: None,
+            flash: MemoryRange {
+                base: 0x4200_0000,
+                size: "4MB".to_string(),
+            },
+            ram: MemoryRange {
+                base: 0x3FC8_0000,
+                size: "400KB".to_string(),
+            },
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
+            memory_regions: Vec::new(),
+            peripherals: vec![PeripheralConfig {
+                id: "gpio".to_string(),
+                r#type: "esp32c3_gpio".to_string(),
+                base_address: 0x6000_4000,
+                size: Some("4KB".to_string()),
+                irq: None,
+                clock: None,
+                config: HashMap::new(),
+            }],
+            pins: Default::default(),
+        };
+
+        let manifest = SystemManifest {
+            cosim_models: Vec::new(),
+            walk_deleted: Some(false),
+            schema_version: "1.0".to_string(),
+            name: "esp32c3-gpio-test".to_string(),
+            chip: "esp32c3-gpio-test".to_string(),
+            memory_overrides: HashMap::new(),
+            external_devices: Vec::new(),
+            board_io: Vec::new(),
+            debug_uart: None,
+            peripherals: Vec::new(),
+        };
+
+        let mut bus = crate::bus::SystemBus::from_config(&chip, &manifest).unwrap();
+        const GPIO_BASE: u64 = 0x6000_4000;
+        const GPIO_OUT: u64 = 0x04;
+        const GPIO_OUT_W1TS: u64 = 0x08;
+        const GPIO_OUT_W1TC: u64 = 0x0C;
+
+        bus.write_u32(GPIO_BASE + GPIO_OUT_W1TS, (1 << 4) | (1 << 5))
+            .unwrap();
+        assert_eq!(
+            bus.read_u32(GPIO_BASE + GPIO_OUT).unwrap() & ((1 << 4) | (1 << 5)),
+            (1 << 4) | (1 << 5)
+        );
+
+        bus.write_u32(GPIO_BASE + GPIO_OUT_W1TC, 1 << 4).unwrap();
+        let out = bus.read_u32(GPIO_BASE + GPIO_OUT).unwrap();
+        assert_eq!(out & (1 << 4), 0, "target pin should clear");
+        assert_eq!(out & (1 << 5), 1 << 5, "other output pins must survive");
+    }
+
+    #[test]
+    fn test_esp32c3_spi_latches_pcd8544_dc_from_gpio_output() {
+        let chip = ChipDescriptor {
+            schema_version: "1.0".to_string(),
+            name: "esp32c3-spi-dc-test".to_string(),
+            arch: Arch::RiscV,
+            core: None,
+            flash: MemoryRange {
+                base: 0x4200_0000,
+                size: "4MB".to_string(),
+            },
+            ram: MemoryRange {
+                base: 0x3FC8_0000,
+                size: "400KB".to_string(),
+            },
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
+            memory_regions: Vec::new(),
+            peripherals: vec![
+                PeripheralConfig {
+                    id: "gpio".to_string(),
+                    r#type: "esp32c3_gpio".to_string(),
+                    base_address: 0x6000_4000,
+                    size: Some("4KB".to_string()),
+                    irq: None,
+                    clock: None,
+                    config: HashMap::new(),
+                },
+                PeripheralConfig {
+                    id: "spi2".to_string(),
+                    r#type: "esp32c3_spi".to_string(),
+                    base_address: 0x6002_4000,
+                    size: Some("4KB".to_string()),
+                    irq: None,
+                    clock: None,
+                    config: HashMap::new(),
+                },
+            ],
+            pins: Default::default(),
+        };
+
+        let manifest = SystemManifest {
+            cosim_models: Vec::new(),
+            walk_deleted: Some(false),
+            schema_version: "1.0".to_string(),
+            name: "esp32c3-spi-dc-test".to_string(),
+            chip: "esp32c3-spi-dc-test".to_string(),
+            memory_overrides: HashMap::new(),
+            external_devices: Vec::new(),
+            board_io: Vec::new(),
+            debug_uart: None,
+            peripherals: Vec::new(),
+        };
+
+        let mut bus = crate::bus::SystemBus::from_config(&chip, &manifest).unwrap();
+        let (odr_addr, bit) =
+            crate::bus::SystemBus::resolve_pin_odr_pub(&bus, "GPIO2").expect("GPIO2 ODR");
+        let mut lcd = crate::peripherals::components::Pcd8544::new("GPIO10".into(), "GPIO2".into());
+        crate::peripherals::spi::SpiDevice::set_dc_source(&mut lcd, odr_addr, bit);
+
+        bus.attach_spi_device("spi2", Box::new(lcd))
+            .expect("spi2 is an esp32c3 SPI controller");
+
+        const GPIO_BASE: u64 = 0x6000_4000;
+        const GPIO_OUT_W1TS: u64 = 0x08;
+        const SPI2_BASE: u64 = 0x6002_4000;
+        const SPI_CMD: u64 = 0x00;
+        const SPI_MS_DLEN: u64 = 0x1C;
+        const SPI_W0: u64 = 0x98;
+        const SPI_USR: u32 = 1 << 24;
+
+        // D/C high means the following SPI byte is display RAM data.
+        bus.write_u32(GPIO_BASE + GPIO_OUT_W1TS, 1 << 2).unwrap();
+        bus.write_u32(SPI2_BASE + SPI_W0, 0xFF).unwrap();
+        bus.write_u32(SPI2_BASE + SPI_MS_DLEN, 8 - 1).unwrap();
+        bus.write_u32(SPI2_BASE + SPI_CMD, SPI_USR).unwrap();
+
+        let spi_idx = bus
+            .find_peripheral_index_by_name("spi2")
+            .expect("spi2 peripheral");
+        let spi = bus.peripherals[spi_idx]
+            .dev
+            .as_any()
+            .and_then(|any| any.downcast_ref::<crate::peripherals::esp32c3::spi::Esp32c3Spi>())
+            .expect("esp32c3 spi2");
+        let lcd = spi
+            .attached_devices()
+            .iter()
+            .find_map(|device| {
+                device
+                    .as_any()
+                    .and_then(|any| any.downcast_ref::<crate::peripherals::components::Pcd8544>())
+            })
+            .expect("attached pcd8544");
+        assert_eq!(
+            lcd.framebuffer()[0],
+            0xFF,
+            "C3 SPI must latch PCD8544 D/C from GPIO2 before transfer"
         );
     }
 
@@ -2483,5 +2669,279 @@ pub mod integration_tests {
             cov.edges().is_empty(),
             "straight-line code takes no branch edges"
         );
+    }
+
+    /// The browser C3 labs build through `from_config` and attach the OLED via
+    /// the kit pass — the whole chain must land in the shared bus trace or the
+    /// logic analyzer's I²C decoder is blind on ESP32-C3.
+    #[test]
+    fn test_esp32c3_i2c_from_config_kit_attach_records_bus_trace() {
+        let chip = ChipDescriptor {
+            schema_version: "1.0".to_string(),
+            name: "esp32c3-i2c-trace-test".to_string(),
+            arch: Arch::RiscV,
+            core: None,
+            flash: MemoryRange {
+                base: 0x4200_0000,
+                size: "4MB".to_string(),
+            },
+            ram: MemoryRange {
+                base: 0x3FC8_0000,
+                size: "400KB".to_string(),
+            },
+            reset_vector_offset: 0,
+            atomic_register_aliases: false,
+            memory_regions: Vec::new(),
+            peripherals: vec![
+                PeripheralConfig {
+                    id: "i2c0".to_string(),
+                    r#type: "esp32c3_i2c".to_string(),
+                    base_address: 0x6001_3000,
+                    size: Some("4KB".to_string()),
+                    irq: None,
+                    clock: None,
+                    config: HashMap::new(),
+                },
+                PeripheralConfig {
+                    id: "gpio".to_string(),
+                    r#type: "esp32c3_gpio".to_string(),
+                    base_address: 0x6000_4000,
+                    size: Some("4KB".to_string()),
+                    irq: None,
+                    clock: None,
+                    config: HashMap::new(),
+                },
+            ],
+            pins: Default::default(),
+        };
+
+        let mut oled_config = HashMap::new();
+        oled_config.insert(
+            "i2c_address".to_string(),
+            serde_yaml::Value::Number(0x3C.into()),
+        );
+        let manifest = SystemManifest {
+            cosim_models: Vec::new(),
+            walk_deleted: Some(false),
+            schema_version: "1.0".to_string(),
+            name: "esp32c3-i2c-trace-test".to_string(),
+            chip: "esp32c3-i2c-trace-test".to_string(),
+            memory_overrides: HashMap::new(),
+            external_devices: vec![labwired_config::ExternalDevice {
+                id: "oled".to_string(),
+                r#type: "oled-ssd1306-128x32".to_string(),
+                connection: "i2c0".to_string(),
+                route: BTreeMap::from([
+                    ("sda".to_string(), "GPIO4".to_string()),
+                    ("scl".to_string(), "GPIO5".to_string()),
+                ]),
+                config: oled_config,
+            }],
+            board_io: Vec::new(),
+            debug_uart: None,
+            peripherals: Vec::new(),
+        };
+
+        let mut bus = crate::bus::SystemBus::from_config(&chip, &manifest).unwrap();
+        bus.write_u32(0x6000_4000 + 0x24, (1 << 4) | (1 << 5))
+            .unwrap();
+        bus.write_u32(0x6000_4000 + 0x554 + 4 * 4, 54).unwrap();
+        bus.write_u32(0x6000_4000 + 0x554 + 5 * 4, 53).unwrap();
+        bus.write_u32(0x6000_4000 + 0x154 + 54 * 4, (1 << 6) | 4)
+            .unwrap();
+        bus.write_u32(0x6000_4000 + 0x154 + 53 * 4, (1 << 6) | 5)
+            .unwrap();
+        // This test drives the engine through the raw per-cycle bus walk
+        // (`tick_peripherals_fully`) with no Machine `drain_scheduler_events`
+        // loop; the walk skips scheduler-driven peripherals, so pin i2c0 to the
+        // legacy walk path (byte-identical) for the direct drive to advance it.
+        {
+            let idx = bus.find_peripheral_index_by_name("i2c0").unwrap();
+            bus.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .unwrap()
+                .downcast_mut::<crate::peripherals::esp32c3::i2c::Esp32c3I2c>()
+                .unwrap()
+                .force_legacy_walk();
+        }
+
+        // Drive one command-list transaction: RSTART; WRITE 2 (addr+W 0x78,
+        // control byte 0x00); STOP — the canonical SSD1306 command prologue.
+        const I2C_BASE: u64 = 0x6001_3000;
+        const REG_CTR: u64 = 0x04;
+        const REG_DATA: u64 = 0x1C;
+        const REG_CMD0: u64 = 0x58;
+        const CTR_TRANS_START: u32 = 1 << 5;
+        let cmd = |opcode: u32, byte_num: u32| (opcode << 11) | byte_num;
+        bus.write_u32(I2C_BASE + REG_CMD0, cmd(6, 0)).unwrap(); // RSTART
+        bus.write_u32(I2C_BASE + REG_CMD0 + 4, cmd(1, 2)).unwrap(); // WRITE 2
+        bus.write_u32(I2C_BASE + REG_CMD0 + 8, cmd(2, 0)).unwrap(); // STOP
+        bus.write_u32(I2C_BASE + REG_DATA, 0x78).unwrap(); // 0x3C << 1
+        bus.write_u32(I2C_BASE + REG_DATA, 0x00).unwrap(); // control byte
+        bus.write_u32(I2C_BASE + REG_CTR, CTR_TRANS_START).unwrap();
+        // The C3 controller clocks the list bit-by-bit over simulated cycles;
+        // tick the bus until TRANS_COMPLETE (INT_RAW bit 7) lands.
+        for _ in 0..1_000_000 {
+            if bus.read_u32(I2C_BASE + 0x20).unwrap() & (1 << 7) != 0 {
+                break;
+            }
+            bus.tick_peripherals_fully();
+        }
+
+        let events = bus.bus_trace_snapshot();
+        assert!(
+            !events.is_empty(),
+            "kit-attached OLED traffic on the C3 controller must reach the bus trace"
+        );
+        assert!(events.iter().all(|event| event.bus == "i2c0"));
+    }
+
+    /// The choke point, not the callsites: a config-built system records bus
+    /// traffic for TWO different controller families (the generic STM32 `I2c`
+    /// and the ESP32-C3 command-list `Esp32c3I2c`) with no per-family
+    /// `set_bus_trace` anywhere. Both attach their OLED through the single
+    /// `attach_i2c_slave` funnel; if either family's dispatch arm were missing,
+    /// `attach_i2c_slave` would have returned `Err` at build time — never a
+    /// silently untraced bus.
+    #[test]
+    fn test_bus_trace_choke_point_covers_two_families() {
+        fn build_with_oled(i2c_type: &str, profile: Option<&str>) -> crate::bus::SystemBus {
+            let mut i2c_cfg = HashMap::new();
+            if let Some(p) = profile {
+                i2c_cfg.insert(
+                    "profile".to_string(),
+                    serde_yaml::Value::String(p.to_string()),
+                );
+            }
+            let mut peripherals = vec![PeripheralConfig {
+                id: "i2c0".to_string(),
+                r#type: i2c_type.to_string(),
+                base_address: 0x4000_5400,
+                size: Some("4KB".to_string()),
+                irq: None,
+                clock: None,
+                config: i2c_cfg,
+            }];
+            if i2c_type == "esp32c3_i2c" {
+                peripherals.push(PeripheralConfig {
+                    id: "gpio".to_string(),
+                    r#type: "esp32c3_gpio".to_string(),
+                    base_address: 0x6000_4000,
+                    size: Some("4KB".to_string()),
+                    irq: None,
+                    clock: None,
+                    config: HashMap::new(),
+                });
+            }
+            let chip = ChipDescriptor {
+                schema_version: "1.0".to_string(),
+                name: "two-family-trace".to_string(),
+                arch: Arch::RiscV,
+                core: None,
+                flash: MemoryRange {
+                    base: 0x4200_0000,
+                    size: "4MB".to_string(),
+                },
+                ram: MemoryRange {
+                    base: 0x3FC8_0000,
+                    size: "400KB".to_string(),
+                },
+                reset_vector_offset: 0,
+                atomic_register_aliases: false,
+                memory_regions: Vec::new(),
+                peripherals,
+                pins: Default::default(),
+            };
+            let mut oled_config = HashMap::new();
+            oled_config.insert(
+                "i2c_address".to_string(),
+                serde_yaml::Value::Number(0x3C.into()),
+            );
+            let manifest = SystemManifest {
+                cosim_models: Vec::new(),
+                walk_deleted: Some(false),
+                schema_version: "1.0".to_string(),
+                name: "two-family-trace".to_string(),
+                chip: "two-family-trace".to_string(),
+                memory_overrides: HashMap::new(),
+                external_devices: vec![labwired_config::ExternalDevice {
+                    id: "oled".to_string(),
+                    r#type: "oled-ssd1306-128x32".to_string(),
+                    connection: "i2c0".to_string(),
+                    route: BTreeMap::from([
+                        ("sda".to_string(), "GPIO4".to_string()),
+                        ("scl".to_string(), "GPIO5".to_string()),
+                    ]),
+                    config: oled_config,
+                }],
+                board_io: Vec::new(),
+                debug_uart: None,
+                peripherals: Vec::new(),
+            };
+            crate::bus::SystemBus::from_config(&chip, &manifest).unwrap()
+        }
+
+        // Family A: ESP32-C3 command-list controller — drive the canonical
+        // SSD1306 command prologue (RSTART; WRITE 2; STOP).
+        let mut c3 = build_with_oled("esp32c3_i2c", None);
+        c3.write_u32(0x6000_4000 + 0x24, (1 << 4) | (1 << 5))
+            .unwrap();
+        c3.write_u32(0x6000_4000 + 0x554 + 4 * 4, 54).unwrap();
+        c3.write_u32(0x6000_4000 + 0x554 + 5 * 4, 53).unwrap();
+        c3.write_u32(0x6000_4000 + 0x154 + 54 * 4, (1 << 6) | 4)
+            .unwrap();
+        c3.write_u32(0x6000_4000 + 0x154 + 53 * 4, (1 << 6) | 5)
+            .unwrap();
+        const BASE: u64 = 0x4000_5400;
+        // Direct raw-bus-walk drive (no Machine scheduler drain): pin i2c0 to the
+        // legacy walk path so `tick_peripherals_fully` advances the engine.
+        {
+            let idx = c3.find_peripheral_index_by_name("i2c0").unwrap();
+            c3.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .unwrap()
+                .downcast_mut::<crate::peripherals::esp32c3::i2c::Esp32c3I2c>()
+                .unwrap()
+                .force_legacy_walk();
+        }
+        let cmd = |opcode: u32, byte_num: u32| (opcode << 11) | byte_num;
+        c3.write_u32(BASE + 0x58, cmd(6, 0)).unwrap(); // RSTART
+        c3.write_u32(BASE + 0x58 + 4, cmd(1, 2)).unwrap(); // WRITE 2
+        c3.write_u32(BASE + 0x58 + 8, cmd(2, 0)).unwrap(); // STOP
+        c3.write_u32(BASE + 0x1C, 0x78).unwrap(); // addr 0x3C<<1
+        c3.write_u32(BASE + 0x1C, 0x00).unwrap(); // control byte
+        c3.write_u32(BASE + 0x04, 1 << 5).unwrap(); // CTR.TRANS_START
+                                                    // The C3 controller clocks the list bit-by-bit over simulated cycles;
+                                                    // tick the bus until TRANS_COMPLETE (INT_RAW bit 7) lands.
+        for _ in 0..1_000_000 {
+            if c3.read_u32(BASE + 0x20).unwrap() & (1 << 7) != 0 {
+                break;
+            }
+            c3.tick_peripherals_fully();
+        }
+        let c3_events = c3.bus_trace_snapshot();
+
+        // Family B: generic STM32 `I2c` (Kinetis byte-oriented layout) — drive
+        // START, address, one data byte through the MMIO register path.
+        let mut km = build_with_oled("i2c", Some("kinetis"));
+        km.write_u8(BASE + 0x02, 0x30).unwrap(); // C1 = MST|TX (START)
+        km.write_u8(BASE + 0x04, 0x78).unwrap(); // D = addr 0x3C<<1 (select+start)
+        km.write_u8(BASE + 0x04, 0x00).unwrap(); // D = data → device.write → trace
+        let km_events = km.bus_trace_snapshot();
+
+        assert!(
+            !c3_events.is_empty(),
+            "ESP32-C3 family must record bus trace through the choke point"
+        );
+        assert!(
+            !km_events.is_empty(),
+            "generic STM32 I2c family must record bus trace through the choke point"
+        );
+        assert!(c3_events.iter().all(|e| e.bus == "i2c0"));
+        assert!(km_events.iter().all(|e| e.bus == "i2c0"));
+        // Every event carries the additive cycle stamp (0 here — no machine step).
+        assert!(c3_events.iter().all(|e| e.cycle == 0));
     }
 }

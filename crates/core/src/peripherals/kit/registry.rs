@@ -26,13 +26,21 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::mpu6050::MPU6050_KIT,
     &components::bme280::BME280_KIT,
     &components::ssd1306::SSD1306_KIT,
+    &components::ssd1306::SSD1306_128X32_KIT,
+    &components::sh1107::SH1107_KIT,
     &components::ili9341::ILI9341_KIT,
     &components::max31855::MAX31855_KIT,
     &components::ssd1680_tricolor_290::SSD1680_TRICOLOR_290_KIT,
     &components::sn74hc165::SN74HC165_KIT,
+    &components::hc595_7seg::HC595_7SEG_KIT,
+    &components::tm1637_7seg::TM1637_7SEG_KIT,
+    &components::seven_segment::SEVEN_SEGMENT_KIT,
     &components::pcd8544::PCD8544_KIT,
     &components::iolink_master::IOLINK_MASTER_KIT,
     &components::ntc_thermistor::NTC_THERMISTOR_KIT,
+    &components::potentiometer::POTENTIOMETER_KIT,
+    &components::ldr::LDR_KIT,
+    &components::hc595::HC595_KIT,
     &components::vl53l1x::VL53L1X_KIT,
     // Leo air-quality board sensors (ESP32-C3 I²C).
     &components::scd41::SCD41_KIT,
@@ -40,6 +48,8 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::sps30::SPS30_KIT,
     &components::veml7700::VEML7700_KIT,
     &components::mlx90614::MLX90614_KIT,
+    &components::max7219::MAX7219_KIT,
+    &components::lcd1602::LCD1602_KIT,
 ];
 
 /// Borrow the registry slice.

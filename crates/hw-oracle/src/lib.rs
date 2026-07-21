@@ -632,6 +632,7 @@ fn capture_sim_state(case: &OracleCase) -> OracleState {
     use labwired_core::bus::SystemBus;
     use labwired_core::cpu::xtensa_lx7::XtensaLx7;
     use labwired_core::cpu::xtensa_sr::{EPC1 as EPC1_SR, EXCCAUSE as EXCCAUSE_SR};
+    use labwired_core::Bus;
     use labwired_core::{Cpu, SimulationError};
     use ram_peripheral::RamPeripheral;
 
@@ -730,8 +731,7 @@ fn capture_sim_state(case: &OracleCase) -> OracleState {
     {
         use labwired_core::peripherals::esp32s3::i2c::{Esp32s3I2c, I2C0_BASE, I2C0_SIZE};
         use labwired_core::peripherals::esp32s3::tmp102::Tmp102;
-        let mut i2c0 = Esp32s3I2c::new();
-        i2c0.attach_slave(Box::new(Tmp102::new()));
+        let i2c0 = Esp32s3I2c::new();
         bus.add_peripheral(
             "oracle_i2c0",
             I2C0_BASE as u64,
@@ -739,6 +739,9 @@ fn capture_sim_state(case: &OracleCase) -> OracleState {
             None,
             Box::new(i2c0),
         );
+        // Attach through the single bus choke point (wraps into the shared trace).
+        bus.attach_i2c_slave("oracle_i2c0", Box::new(Tmp102::new()))
+            .expect("oracle_i2c0 just registered as Esp32s3I2c");
     }
 
     let mut cpu = XtensaLx7::new();

@@ -216,11 +216,11 @@ pub struct ThumbOracleCase {
     /// after it. Set via [`ThumbOracleCase::entry_offset`].
     pub entry_offset: u32,
     /// Drive the sim's peripherals **live** during execution: after each CPU
-    /// step, tick all peripherals and pend any IRQs they raise into the CPU
-    /// (mirroring `Machine::step`), and build the CPU with the Cortex-M system
-    /// block (shared NVIC/VTOR) so it can actually take them. Required for
-    /// interrupt-delivery oracles; default off, so static oracles are
-    /// unaffected. On silicon this is automatic. Set via
+    /// step, tick all peripherals and pend any IRQs they raise into the CPU,
+    /// and build the CPU with the Cortex-M system block (shared NVIC/VTOR) so
+    /// it can actually take them. Required for interrupt-delivery oracles;
+    /// default off, so static oracles are unaffected. On silicon this is
+    /// automatic. Set via
     /// [`ThumbOracleCase::live_peripherals`].
     pub live_peripherals: bool,
 }
@@ -940,18 +940,26 @@ fn run_capture(
         });
     }
 
-    // Step until PC settles on the B-self terminator (or limit).
+    // Step until PC settles on the B-self terminator (or limit). This is a
+    // specialized bare-CPU oracle boundary: when live peripherals are enabled,
+    // publish one cycle before each instruction so attached lazy-clock models
+    // (notably DWT under `event-scheduler`) observe advancing simulated time.
     let sim_config = labwired_core::SimulationConfig::default();
+    let mut live_cycle = 0u64;
     let mut last_pc = cpu.pc;
     let mut stable_count: u32 = 0;
     for _ in 0..MAX_STEPS {
+        if case.live_peripherals {
+            live_cycle += 1;
+            bus.set_current_cycle(live_cycle);
+        }
         cpu.step(&mut bus, &[], &sim_config)
             .unwrap_or_else(|e| panic!("thumb oracle sim error at pc=0x{:08X}: {e:?}", cpu.pc));
-        // Interrupt-delivery mode: after each instruction, advance peripherals
-        // and pend any IRQs they raise so the CPU takes them on the next step —
-        // mirroring `Machine::step`. On silicon this happens autonomously.
+        // Force the compatibility walk even when the event-scheduler feature
+        // deletes production's legacy walk. This oracle intentionally owns its
+        // bare-CPU/peripheral lifecycle instead of draining Machine events.
         if case.live_peripherals {
-            let (interrupts, _costs) = bus.tick_peripherals_fully();
+            let (interrupts, _costs) = bus.tick_peripherals_fully_forced();
             for irq in interrupts {
                 cpu.set_exception_pending(irq);
             }
@@ -970,9 +978,11 @@ fn run_capture(
     // Let any autonomous engine the program armed (DMA mem-to-mem, …) run to
     // completion before the snapshot.  On silicon these run concurrently and
     // have long finished by the breakpoint halt; in sim they advance one
-    // element per peripheral tick, so we tick explicitly here.
+    // element per peripheral tick, so tick explicitly with the CPU frozen.
     for _ in 0..case.settle_ticks {
-        let _ = bus.tick_peripherals_fully();
+        live_cycle += 1;
+        bus.set_current_cycle(live_cycle);
+        let _ = bus.tick_peripherals_fully_forced();
     }
 
     // Build end state.
@@ -1250,6 +1260,62 @@ pub fn run_diff(case: ThumbOracleCase) {
 #[cfg(test)]
 mod encoder_tests {
     use super::*;
+
+    #[derive(Debug, Default)]
+    struct DelayedIrq {
+        ticks: u32,
+    }
+
+    impl labwired_core::Peripheral for DelayedIrq {
+        fn read(&self, _offset: u64) -> labwired_core::SimResult<u8> {
+            Ok(0)
+        }
+
+        fn write(&mut self, _offset: u64, _value: u8) -> labwired_core::SimResult<()> {
+            Ok(())
+        }
+
+        fn tick(&mut self) -> labwired_core::PeripheralTickResult {
+            self.ticks += 1;
+            labwired_core::PeripheralTickResult {
+                irq: self.ticks == 20,
+                ..Default::default()
+            }
+        }
+    }
+
+    #[test]
+    fn settle_ticks_freeze_cpu_even_when_an_irq_becomes_pending() {
+        const NVIC_ISER0: u32 = 0xE000_E100;
+        const IRQ: u32 = 6;
+
+        let prog = vec![
+            Thumb::W(movw_imm16(0, (NVIC_ISER0 & 0xFFFF) as u16)),
+            Thumb::W(movt_imm16(0, (NVIC_ISER0 >> 16) as u16)),
+            Thumb::W(movw_imm16(1, (1 << IRQ) as u16)),
+            Thumb::W(movt_imm16(1, 0)),
+            Thumb::H(str_imm5(1, 0, 0)),
+        ];
+        let halt_pc = PROG_BASE_HW + assemble(&prog).len() as u32;
+
+        let case = ThumbOracleCase::mixed(&prog)
+            .sim_bus(|| {
+                let mut bus = labwired_core::bus::SystemBus::new();
+                bus.add_peripheral(
+                    "delayed_irq",
+                    0x5000_0000,
+                    0x100,
+                    Some(IRQ),
+                    Box::new(DelayedIrq::default()),
+                );
+                bus
+            })
+            .live_peripherals(true)
+            .settle_ticks(32);
+
+        let state = capture_sim_state(&case);
+        state.assert_pc(halt_pc);
+    }
 
     // Encodings cross-checked against ARMv7-M ARM (DDI 0403E.e).
 

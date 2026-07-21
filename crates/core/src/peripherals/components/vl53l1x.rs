@@ -56,6 +56,9 @@ pub struct Vl53l1x {
     distance_mm: u16,
     /// True once firmware has written `SYSTEM__MODE_START` (ranging running).
     ranging: bool,
+    /// system.yaml `external_devices` id, stamped at attach (see
+    /// [`crate::sim_input::SimInput::component_id`]).
+    component_id: Option<String>,
 }
 
 impl Default for Vl53l1x {
@@ -72,6 +75,7 @@ impl Vl53l1x {
             addr_bytes: 0,
             distance_mm: 500,
             ranging: false,
+            component_id: None,
         }
     }
 
@@ -184,6 +188,40 @@ impl I2cDevice for Vl53l1x {
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
     }
+
+    fn as_sim_input_mut(&mut self) -> Option<&mut dyn crate::sim_input::SimInput> {
+        Some(self)
+    }
+}
+
+/// Drivable target distance, in mm (VL53L1X long-range ceiling ~4 m). One
+/// table backs BOTH the `SimInput` impl and the kit metadata, so the device
+/// schema and the runtime API cannot drift.
+pub const INPUT_CHANNELS: &[crate::sim_input::InputChannel] = &[crate::sim_input::InputChannel {
+    key: "distance",
+    label: "Distance",
+    unit: "mm",
+    min: 0.0,
+    max: 4000.0,
+}];
+
+impl crate::sim_input::SimInput for Vl53l1x {
+    fn input_channels(&self) -> &'static [crate::sim_input::InputChannel] {
+        INPUT_CHANNELS
+    }
+
+    fn set_input(&mut self, key: &str, value: f64) -> Result<(), crate::sim_input::SimInputError> {
+        self.require_channel(key, value)?;
+        self.set_distance_mm(value.round() as u16);
+        Ok(())
+    }
+    fn component_id(&self) -> Option<&str> {
+        self.component_id.as_deref()
+    }
+
+    fn set_component_id(&mut self, id: String) {
+        self.component_id = Some(id);
+    }
 }
 
 // ─── PeripheralKit registration ────────────────────────────────────────────
@@ -196,6 +234,7 @@ pub struct Vl53l1xKit;
 pub static VL53L1X_KIT: Vl53l1xKit = Vl53l1xKit;
 
 static VL53L1X_METADATA: KitMetadata = KitMetadata {
+    inputs: INPUT_CHANNELS,
     device_type: "vl53l1x",
     label: "VL53L1X ToF",
     summary: "Laser time-of-flight distance sensor over I2C.",
@@ -225,8 +264,7 @@ impl PeripheralKit for Vl53l1xKit {
     }
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
         let address = ctx.i2c_address_or(0x29)?;
-        let i2c = ctx.i2c()?;
-        i2c.attach(Box::new(Vl53l1x::new(address)));
+        ctx.attach_i2c_device(Box::new(Vl53l1x::new(address)))?;
         Ok(())
     }
 }

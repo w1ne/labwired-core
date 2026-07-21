@@ -17,8 +17,10 @@
 //! cm, °C …); each device impl owns the conversion to its raw register form, so
 //! that math lives in ONE place per device.
 
-/// Metadata for one drivable channel of an input component.
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// Metadata for one drivable channel of an input component. Serialized
+/// verbatim into the peripherals manifest (device schema), so external
+/// consumers see each device's drivable channels without running a machine.
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
 pub struct InputChannel {
     /// Stable key used to address the channel (e.g. `"x"`, `"distance"`).
     pub key: &'static str,
@@ -88,6 +90,20 @@ pub trait SimInput {
 
     /// Apply `value` (in the channel's `unit`) to channel `key`.
     fn set_input(&mut self, key: &str, value: f64) -> Result<(), SimInputError>;
+
+    /// This device instance's identity: the `external_devices` id the author
+    /// wrote in system.yaml (e.g. `fxos8700`), stamped at attach time via
+    /// [`SimInput::set_component_id`]. Discovery reports it as the owner and
+    /// the stimulus resolver matches `component` against it, so the name an
+    /// author writes is the name the API speaks — and two devices on the same
+    /// bus stay individually addressable. `None` for hand-built devices.
+    fn component_id(&self) -> Option<&str> {
+        None
+    }
+
+    /// Stamp the config-file identity onto this instance (called once at
+    /// attach). Default no-op for devices that don't store one.
+    fn set_component_id(&mut self, _id: String) {}
 
     /// Range-check helper: returns the matching channel or a typed error.
     fn require_channel(&self, key: &str, value: f64) -> Result<InputChannel, SimInputError> {

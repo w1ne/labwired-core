@@ -71,6 +71,11 @@ impl Esp32c3Cache {
 }
 
 impl Peripheral for Esp32c3Cache {
+    // Inert walk: cache ops complete atomically at the launching write (done bits forced on read); tick() is the trait-default no-op.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let w = self.read_u32(offset & !3)?;
         Ok((w >> ((offset & 3) * 8)) as u8)
@@ -112,6 +117,10 @@ impl Peripheral for Esp32c3Cache {
             self.regs[i] = value;
         }
         Ok(())
+    }
+
+    fn legacy_tick_active(&self) -> bool {
+        false
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {

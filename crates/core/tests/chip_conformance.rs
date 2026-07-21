@@ -28,6 +28,7 @@
 
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
+use labwired_core::Bus;
 use std::path::PathBuf;
 
 /// One chip's conformance inputs. `reset_oracle` and `behavior_gate` are `None`
@@ -49,6 +50,15 @@ const CHIPS: &[ChipConf] = &[
         yaml: "configs/chips/esp32c3.yaml",
         reset_oracle: Some("scripts/hw-oracle/captures/esp32c3/20260611T161223Z/reg_oracle.json"),
         behavior_gate: Some("firmware_survival::test_esp32c3_demo_survival"),
+    },
+    ChipConf {
+        name: "nrf54l15",
+        yaml: "configs/chips/nrf54l15.yaml",
+        // No silicon capture: nothing here has been diffed against a real
+        // nRF54L15 over SWD. Every register value is MDK/SVD-derived, which is
+        // authoritative for the map but is not the same as measured silicon.
+        reset_oracle: None,
+        behavior_gate: Some("firmware_survival::test_nrf54l15_zephyr_survival"),
     },
     ChipConf {
         name: "esp32",
@@ -267,7 +277,7 @@ fn root(rel: &str) -> PathBuf {
 
 fn dummy_manifest(path: &str) -> SystemManifest {
     SystemManifest {
-        walk_deleted: false,
+        walk_deleted: Some(false),
         schema_version: "1.0".to_string(),
         name: "chip-conformance".to_string(),
         chip: path.to_string(),

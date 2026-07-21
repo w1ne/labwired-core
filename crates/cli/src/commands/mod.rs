@@ -4,6 +4,7 @@ pub mod asset;
 pub mod codegen;
 pub mod cosim;
 pub mod coverage;
+pub mod environment_test;
 pub mod fuzz;
 pub mod machine;
 pub mod run;

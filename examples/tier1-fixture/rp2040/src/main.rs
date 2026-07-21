@@ -34,7 +34,7 @@ use panic_halt as _;
 // RP2040's actual UART IP). In that layout the data register (UARTDR) sits at
 // offset 0x00 — writing a byte here enqueues it for transmission.
 const UART0_BASE: u32 = 0x4003_4000;
-const UART0_TDR: u32 = UART0_BASE + 0x00;
+const UART0_TDR: u32 = UART0_BASE;
 
 // ── CLOCKS / RESETS (rp2040_clkrst, datasheet §2.14) ──────────────────────
 //
@@ -43,7 +43,7 @@ const UART0_TDR: u32 = UART0_BASE + 0x00;
 // APB/AHB window, so the RP2040 atomic CLR alias (+0x3000) is honoured by the
 // bus. The PLLs report LOCK and the crystal oscillator reports STABLE.
 const RESETS_BASE: u32 = 0x4000_c000;
-const RESETS_RESET: u32 = RESETS_BASE + 0x0;
+const RESETS_RESET: u32 = RESETS_BASE;
 const RESETS_RESET_CLR: u32 = RESETS_BASE + 0x3000; // atomic clear alias
 const RESETS_RESET_DONE: u32 = RESETS_BASE + 0x8;
 const RESETS_IO_BANK0: u32 = 1 << 5; // a representative peripheral reset bit

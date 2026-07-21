@@ -37,7 +37,7 @@ use std::path::PathBuf;
 // EXTI is at 0x4001_3C00 on F4 (vs 0x4001_0400 on F1). NVIC/SCB/DWT are
 // core-level (same addresses on every Cortex-M).
 const EXTI_BASE: u32 = 0x4001_3C00;
-const EXTI_IMR: u32 = EXTI_BASE + 0x00;
+const EXTI_IMR: u32 = EXTI_BASE;
 const EXTI_SWIER: u32 = EXTI_BASE + 0x10;
 const EXTI_PR: u32 = EXTI_BASE + 0x14;
 

@@ -29,6 +29,9 @@ pub struct NtcThermistor {
     beta: f32,           // 3950.0
     r_pulldown_ohm: f32, // 10 000.0
     v_ref_mv: f32,       // 3300.0
+    /// system.yaml `external_devices` id, stamped at attach (see
+    /// [`crate::sim_input::SimInput::component_id`]).
+    component_id: Option<String>,
 }
 
 impl Default for NtcThermistor {
@@ -47,6 +50,7 @@ impl NtcThermistor {
             beta: 3950.0,
             r_pulldown_ohm: 10_000.0,
             v_ref_mv: 3300.0,
+            component_id: None,
         }
     }
 
@@ -90,6 +94,46 @@ impl NtcThermistor {
     }
 }
 
+/// The sensed temperature. Range is the usable span of a 10 kΩ / B=3950 NTC.
+/// One table backs BOTH the `SimInput` impl and the kit metadata, so the
+/// device schema and the runtime API cannot drift.
+pub const INPUT_CHANNELS: &[crate::sim_input::InputChannel] = &[crate::sim_input::InputChannel {
+    key: "temperature",
+    label: "Temperature",
+    unit: "°C",
+    min: -55.0,
+    max: 150.0,
+}];
+
+impl crate::sim_input::SimInput for NtcThermistor {
+    fn input_channels(&self) -> &'static [crate::sim_input::InputChannel] {
+        INPUT_CHANNELS
+    }
+
+    fn set_input(&mut self, key: &str, value: f64) -> Result<(), crate::sim_input::SimInputError> {
+        self.require_channel(key, value)?;
+        // Only the temperature moves; the beta-equation resistance and the
+        // divider that turns it into a voltage are unchanged and still live in
+        // `divider_output_mv`.
+        self.set_temperature(value as f32);
+        Ok(())
+    }
+
+    fn component_id(&self) -> Option<&str> {
+        self.component_id.as_deref()
+    }
+
+    fn set_component_id(&mut self, id: String) {
+        self.component_id = Some(id);
+    }
+}
+
+impl crate::bus::sim_inputs::AnalogSource for NtcThermistor {
+    fn output_mv(&self) -> u16 {
+        self.divider_output_mv()
+    }
+}
+
 // ─── PeripheralKit registration ────────────────────────────────────────────
 
 use crate::peripherals::kit::{
@@ -100,26 +144,21 @@ pub struct NtcThermistorKit;
 pub static NTC_THERMISTOR_KIT: NtcThermistorKit = NtcThermistorKit;
 
 static NTC_THERMISTOR_METADATA: KitMetadata = KitMetadata {
+    inputs: INPUT_CHANNELS,
     device_type: "ntc-thermistor",
     label: "NTC Thermistor",
     summary: "10 kΩ NTC + voltage divider on an ADC channel.",
-    detail: "Beta-equation thermistor model. Constructor takes a channel + initial temperature; \
-             the kit seeds the ADC channel with the corresponding divider voltage. Live updates \
-             come from the WASM bridge as the host moves the temperature slider.",
+    detail: "Beta-equation thermistor model (R0 = 10 kΩ at 25 °C, B = 3950) feeding a 10 kΩ \
+             pull-down divider. Drive the `temperature` channel (°C) at runtime and the ADC \
+             channel follows through the real resistance→voltage math. Starts at 25 °C, where \
+             the divider sits at exactly Vref/2.",
     transport: Transport::Analog,
     category: Category::Analog,
-    config_keys: &[
-        ConfigKey {
-            name: "channel",
-            ty: ConfigType::Int,
-            doc: "ADC channel index (0..N). Defaults to 0.",
-        },
-        ConfigKey {
-            name: "initial_temperature_c",
-            ty: ConfigType::Float,
-            doc: "Initial temperature in °C used to seed the channel voltage. Defaults to 25.0.",
-        },
-    ],
+    config_keys: &[ConfigKey {
+        name: "channel",
+        ty: ConfigType::Int,
+        doc: "ADC channel index (0..N). Defaults to 0.",
+    }],
     labs: &[LabRef {
         board_id: "ntc-thermistor-lab",
         chip: "stm32f103",
@@ -134,13 +173,9 @@ impl PeripheralKit for NtcThermistorKit {
     }
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
         let channel = ctx.config_i64("channel").unwrap_or(0).clamp(0, 255) as u8;
-        let initial_temp_c = ctx.config_f64("initial_temperature_c").unwrap_or(25.0) as f32;
-        // Compute the divider voltage up front; the NtcThermistor instance
-        // itself is not stored — the bus seeds the ADC channel once and the
-        // wasm bridge mutates that channel directly on host stimulus.
-        let mv = NtcThermistor::new(channel, initial_temp_c).divider_output_mv();
-        let adc = ctx.adc()?;
-        adc.set_channel_input(channel, mv);
+        // Retained on the bus so `set_input("temperature", …)` can drive it;
+        // the divider level is seeded from the 25 °C default at attach.
+        ctx.attach_analog_source(channel, Box::new(NtcThermistor::new(channel, 25.0)))?;
         Ok(())
     }
 }

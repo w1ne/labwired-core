@@ -130,12 +130,8 @@ fn machine_runtime_snapshot_roundtrips_through_serialization() {
     let cpu = configure_xtensa_esp32(&mut bus);
 
     // Attach an SSD1680 to spi3 so the snapshot covers the SPI-device path.
-    let spi3_idx = bus
-        .find_peripheral_index_by_name("spi3")
-        .expect("spi3 registered");
-    let any = bus.peripherals[spi3_idx].dev.as_any_mut().unwrap();
-    let spi3 = any.downcast_mut::<Esp32Spi>().unwrap();
-    spi3.attach(Box::new(Ssd1680Tricolor290::new("GPIO5")));
+    bus.attach_spi_device("spi3", Box::new(Ssd1680Tricolor290::new("GPIO5")))
+        .expect("spi3 is an Esp32Spi controller");
     bus.refresh_peripheral_index();
 
     let mut machine = Machine::new(cpu, bus);
@@ -214,12 +210,8 @@ fn agentdeck_snapshot_file_restores_post_paint_panel() {
     // Build a fresh machine matching the the reference firmware topology.
     let mut bus = SystemBus::new();
     let cpu = configure_xtensa_esp32(&mut bus);
-    let spi3_idx = bus
-        .find_peripheral_index_by_name("spi3")
-        .expect("spi3 registered");
-    let any = bus.peripherals[spi3_idx].dev.as_any_mut().unwrap();
-    let spi3 = any.downcast_mut::<Esp32Spi>().unwrap();
-    spi3.attach(Box::new(Ssd1680Tricolor290::new("GPIO5")));
+    bus.attach_spi_device("spi3", Box::new(Ssd1680Tricolor290::new("GPIO5")))
+        .expect("spi3 is an Esp32Spi controller");
     bus.refresh_peripheral_index();
 
     let boxed: Box<dyn Cpu> = Box::new(cpu);

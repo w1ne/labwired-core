@@ -213,11 +213,7 @@ pub struct Fdcan {
     trace_seq: u64,
     #[serde(skip)]
     trace: VecDeque<FdcanTraceFrame>,
-    /// `CanBus` interconnect endpoints (`new_with_bus`). NOTE: the
-    /// current CanBus broadcasts to every attached node including the
-    /// transmitter; a real CAN node does not receive its own frame.
-    /// Harmless for now (the echo lands in the own RX FIFO), fixed
-    /// when the network layer carries source tags.
+    /// `CanBus` interconnect endpoints (`new_with_bus` / `attach_bus`).
     #[serde(skip)]
     bus_tx: Option<Sender<CanFrame>>,
     #[serde(skip)]
@@ -273,9 +269,28 @@ impl Fdcan {
     /// each tick (while the protocol is running).
     pub fn new_with_bus(tx: Sender<CanFrame>, rx: Receiver<CanFrame>) -> Self {
         let mut dev = Self::new();
-        dev.bus_tx = Some(tx);
-        dev.bus_rx = Some(rx);
+        dev.attach_bus(tx, rx)
+            .expect("a newly constructed FDCAN has no CAN bus attachment");
         dev
+    }
+
+    /// Bind this FDCAN to one `CanBus` endpoint after construction.
+    ///
+    /// `SystemBus::from_config` builds peripherals before `World` knows the
+    /// environment topology, so a world needs this post-construction seam.
+    /// Rebinding is rejected rather than silently dropping the original
+    /// endpoint and any queued inbound frames.
+    pub fn attach_bus(
+        &mut self,
+        tx: Sender<CanFrame>,
+        rx: Receiver<CanFrame>,
+    ) -> anyhow::Result<()> {
+        if self.bus_tx.is_some() || self.bus_rx.is_some() {
+            anyhow::bail!("FDCAN is already attached to a CAN bus");
+        }
+        self.bus_tx = Some(tx);
+        self.bus_rx = Some(rx);
+        Ok(())
     }
 
     pub fn trace_snapshot(&self, peripheral: &str) -> Vec<FdcanTraceFrame> {

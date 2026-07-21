@@ -9,7 +9,46 @@ use super::*;
 use crate::{SimResult, SimulationError};
 use std::sync::atomic::Ordering;
 
+impl SystemBus {
+    /// Side-effect-free byte read used by the universal inspect `peek`.
+    ///
+    /// Mirrors `read_u8`'s routing (RAM, flash, extra windows, flash boot
+    /// alias, then peripherals) but reads peripherals via
+    /// [`crate::Peripheral::peek`] so read-to-clear registers are never
+    /// perturbed. Returns `None` for any address that no memory region or
+    /// peripheral window covers — the caller renders that as an explicit
+    /// unmapped marker rather than a silent zero.
+    pub fn peek_byte(&self, addr: u64) -> Option<u8> {
+        if let Some(val) = self.ram.read_u8(addr) {
+            return Some(val);
+        }
+        if let Some(val) = self.flash.read_u8(addr) {
+            return Some(val);
+        }
+        for mem in &self.extra_mem {
+            if let Some(val) = mem.read_u8(addr) {
+                return Some(val);
+            }
+        }
+        // Cortex-M boot alias: 0x0 mirrors flash start on many STM32 parts.
+        if self.flash.base_addr != 0 && addr < self.flash.data.len() as u64 {
+            if let Some(val) = self.flash.read_u8(self.flash.base_addr + addr) {
+                return Some(val);
+            }
+        }
+        if let Some(idx) = self.find_peripheral_index(addr) {
+            let p = &self.peripherals[idx];
+            return p.dev.peek(addr - p.base);
+        }
+        None
+    }
+}
+
 impl crate::Bus for SystemBus {
+    fn logic_tap(&self) -> Option<crate::logic_capture::LogicTap> {
+        Some(self.logic_tap.clone())
+    }
+
     fn read_u8(&self, addr: u64) -> SimResult<u8> {
         // RAM is always first (hot path, never overlaps a peripheral window).
         if let Some(val) = self.ram.read_u8(addr) {
@@ -44,7 +83,9 @@ impl crate::Bus for SystemBus {
                     return Ok(0); // unclocked peripheral reads 0 (silicon gating)
                 }
                 let p = &self.peripherals[idx];
-                return p.dev.read(addr - p.base);
+                let off = addr - p.base;
+                self.note_mmio_activity(idx, off);
+                return p.dev.read(off);
             }
         } else {
             // Peripherals first so an MMU-translating FlashXip window overrides a
@@ -55,7 +96,9 @@ impl crate::Bus for SystemBus {
                     return Ok(0); // unclocked peripheral reads 0 (silicon gating)
                 }
                 let p = &self.peripherals[idx];
-                return p.dev.read(addr - p.base);
+                let off = addr - p.base;
+                self.note_mmio_activity(idx, off);
+                return p.dev.read(off);
             }
             if let Some(val) = self.flash.read_u8(addr) {
                 return Ok(val);
@@ -174,12 +217,24 @@ impl crate::Bus for SystemBus {
                     // bits never change and the firmware visibly stalls.
                     return Ok(());
                 }
+                let off = addr - self.peripherals[idx].base;
+                self.note_mmio_activity(idx, off);
                 #[cfg(feature = "event-scheduler")]
                 self.sync_scheduler_peripheral(idx);
                 self.maybe_latch_dc(idx);
-                let p = &mut self.peripherals[idx];
-                let r = p.dev.write(addr - p.base, value);
+                let c3_io_mux_capture = self.begin_esp32c3_io_mux_write(idx);
+                let r = {
+                    let p = &mut self.peripherals[idx];
+                    p.dev.write(off, value)
+                };
+                if r.is_ok() {
+                    self.finish_esp32c3_io_mux_write(c3_io_mux_capture);
+                }
                 self.maybe_arm_hcsr04(idx);
+                self.maybe_start_dht22(idx);
+                self.maybe_start_dht22(idx);
+                self.maybe_clock_tm1637(idx);
+                self.maybe_sample_seven_segment(idx);
                 #[cfg(feature = "event-scheduler")]
                 self.collect_scheduled_events(idx);
                 r
@@ -198,7 +253,11 @@ impl crate::Bus for SystemBus {
         if res.is_ok() {
             // Wake up the peripheral
             if let Some(idx) = self.find_peripheral_index(addr) {
+                let base = self.peripherals[idx].base;
+                self.sync_esp32c3_irq_cache_write(idx, addr - base);
                 self.peripherals[idx].ticks_remaining = 0;
+                self.refresh_legacy_tick_index(idx);
+                self.refresh_bus_tick_index(idx);
             }
 
             // Trigger observers
@@ -215,7 +274,8 @@ impl crate::Bus for SystemBus {
             return Ok(val);
         }
         // See read_u32: with optimized_bus_access off, peripherals (FlashXip)
-        // win over the plain flash region at the same XIP address.
+        // win over the plain flash region at the same XIP address. extra_mem
+        // always gets a word path (IRAM etc. never conflict with XIP windows).
         let flash_and_alias = |s: &Self| -> Option<u16> {
             if let Some(val) = s.flash.read_u16(addr) {
                 return Some(val);
@@ -225,26 +285,40 @@ impl crate::Bus for SystemBus {
             }
             None
         };
+        let extra_mem_half = |s: &Self| -> Option<u16> {
+            for mem in &s.extra_mem {
+                if let Some(val) = mem.read_u16(addr) {
+                    return Some(val);
+                }
+            }
+            None
+        };
         if self.config.optimized_bus_access {
             if let Some(val) = flash_and_alias(self) {
+                return Ok(val);
+            }
+            if let Some(val) = extra_mem_half(self) {
                 return Ok(val);
             }
             if let Some(idx) = self.find_peripheral_index(addr) {
                 if !self.is_peripheral_clocked(idx) {
                     return Ok(0);
                 }
-                return self.peripherals[idx]
-                    .dev
-                    .read_u16(addr - self.peripherals[idx].base);
+                let off = addr - self.peripherals[idx].base;
+                self.note_mmio_activity(idx, off);
+                return self.peripherals[idx].dev.read_u16(off);
             }
         } else {
             if let Some(idx) = self.find_peripheral_index(addr) {
                 if !self.is_peripheral_clocked(idx) {
                     return Ok(0);
                 }
-                return self.peripherals[idx]
-                    .dev
-                    .read_u16(addr - self.peripherals[idx].base);
+                let off = addr - self.peripherals[idx].base;
+                self.note_mmio_activity(idx, off);
+                return self.peripherals[idx].dev.read_u16(off);
+            }
+            if let Some(val) = extra_mem_half(self) {
+                return Ok(val);
             }
             if let Some(val) = flash_and_alias(self) {
                 return Ok(val);
@@ -258,7 +332,7 @@ impl crate::Bus for SystemBus {
     fn read_u32(&self, addr: u64) -> SimResult<u32> {
         // Debug (env-gated): trace the driver's reads of a freshly-injected RX
         // buffer, to RE the rx-control header format the RX callback parses.
-        if std::env::var("LABWIRED_RXBUF_TRACE").is_ok() {
+        if crate::peripherals::esp32c3::wifi_mac::rxbuf_trace_enabled() {
             let base = crate::peripherals::esp32c3::wifi_mac::RX_DBG_BUF
                 .load(std::sync::atomic::Ordering::Relaxed) as u64;
             // Trace from 0x100 BEFORE the buffer (to catch the descriptor-list
@@ -295,7 +369,9 @@ impl crate::Bus for SystemBus {
         // MMU-translating FlashXip window overrides the zero-filled flash at the
         // same XIP address — otherwise a 4-byte instruction fetch at an XIP
         // address reads 0, misdecodes as 2-byte and the PC drifts (mirrors the
-        // read_u8 fix). The fallback to per-byte read_u8 covers either order.
+        // read_u8 fix). Linear extra_mem (IRAM/ROM/RTC) never conflicts with
+        // those XIP windows, so it always gets a word-sized fast path — the
+        // previous fall-through did 4× find_peripheral via read_u8.
         let flash_and_alias = |s: &Self| -> Option<u32> {
             if let Some(val) = s.flash.read_u32(addr) {
                 return Some(val);
@@ -305,26 +381,42 @@ impl crate::Bus for SystemBus {
             }
             None
         };
+        let extra_mem_word = |s: &Self| -> Option<u32> {
+            for mem in &s.extra_mem {
+                if let Some(val) = mem.read_u32(addr) {
+                    return Some(val);
+                }
+            }
+            None
+        };
         if self.config.optimized_bus_access {
             if let Some(val) = flash_and_alias(self) {
+                return Ok(val);
+            }
+            if let Some(val) = extra_mem_word(self) {
                 return Ok(val);
             }
             if let Some(idx) = self.find_peripheral_index(addr) {
                 if !self.is_peripheral_clocked(idx) {
                     return Ok(0);
                 }
-                return self.peripherals[idx]
-                    .dev
-                    .read_u32(addr - self.peripherals[idx].base);
+                let off = addr - self.peripherals[idx].base;
+                self.note_mmio_activity(idx, off);
+                return self.peripherals[idx].dev.read_u32(off);
             }
         } else {
             if let Some(idx) = self.find_peripheral_index(addr) {
                 if !self.is_peripheral_clocked(idx) {
                     return Ok(0);
                 }
-                return self.peripherals[idx]
-                    .dev
-                    .read_u32(addr - self.peripherals[idx].base);
+                let off = addr - self.peripherals[idx].base;
+                self.note_mmio_activity(idx, off);
+                return self.peripherals[idx].dev.read_u32(off);
+            }
+            // IRAM / ROM / RTC after peripherals so XIP FlashXip still wins on
+            // 0x4200_0000 / 0x3C00_0000 over zero-filled extra_mem twins.
+            if let Some(val) = extra_mem_word(self) {
+                return Ok(val);
             }
             if let Some(val) = flash_and_alias(self) {
                 return Ok(val);
@@ -349,15 +441,32 @@ impl crate::Bus for SystemBus {
             if !self.is_peripheral_clocked(idx) {
                 return Ok(()); // unclocked peripheral: write dropped (gating)
             }
+            let off = addr - self.peripherals[idx].base;
+            self.note_mmio_activity(idx, off);
             #[cfg(feature = "event-scheduler")]
             self.sync_scheduler_peripheral(idx);
             self.maybe_latch_dc(idx);
-            let p = &mut self.peripherals[idx];
-            p.ticks_remaining = 0;
-            let r = p.dev.write_u16(addr - p.base, value);
+            let c3_io_mux_capture = self.begin_esp32c3_io_mux_write(idx);
+            let r = {
+                let p = &mut self.peripherals[idx];
+                p.ticks_remaining = 0;
+                p.dev.write_u16(off, value)
+            };
+            if r.is_ok() {
+                self.finish_esp32c3_io_mux_write(c3_io_mux_capture);
+            }
             self.maybe_arm_hcsr04(idx);
+            self.maybe_start_dht22(idx);
+            self.maybe_clock_tm1637(idx);
+            self.maybe_sample_seven_segment(idx);
             #[cfg(feature = "event-scheduler")]
             self.collect_scheduled_events(idx);
+            if r.is_ok() {
+                let base = self.peripherals[idx].base;
+                self.sync_esp32c3_irq_cache_write(idx, addr - base);
+                self.refresh_legacy_tick_index(idx);
+                self.refresh_bus_tick_index(idx);
+            }
             return r;
         }
         self.write_u8(addr, (value & 0xFF) as u8)?;
@@ -416,15 +525,32 @@ impl crate::Bus for SystemBus {
             if !self.is_peripheral_clocked(idx) {
                 return Ok(()); // unclocked peripheral: write dropped (gating)
             }
+            let off = addr - self.peripherals[idx].base;
+            self.note_mmio_activity(idx, off);
             #[cfg(feature = "event-scheduler")]
             self.sync_scheduler_peripheral(idx);
             self.maybe_latch_dc(idx);
-            let p = &mut self.peripherals[idx];
-            p.ticks_remaining = 0;
-            let r = p.dev.write_u32(addr - p.base, value);
+            let c3_io_mux_capture = self.begin_esp32c3_io_mux_write(idx);
+            let r = {
+                let p = &mut self.peripherals[idx];
+                p.ticks_remaining = 0;
+                p.dev.write_u32(off, value)
+            };
+            if r.is_ok() {
+                self.finish_esp32c3_io_mux_write(c3_io_mux_capture);
+            }
             self.maybe_arm_hcsr04(idx);
+            self.maybe_start_dht22(idx);
+            self.maybe_clock_tm1637(idx);
+            self.maybe_sample_seven_segment(idx);
             #[cfg(feature = "event-scheduler")]
             self.collect_scheduled_events(idx);
+            if r.is_ok() {
+                let base = self.peripherals[idx].base;
+                self.sync_esp32c3_irq_cache_write(idx, addr - base);
+                self.refresh_legacy_tick_index(idx);
+                self.refresh_bus_tick_index(idx);
+            }
             return r;
         }
         self.write_u8(addr, (value & 0xFF) as u8)?;
@@ -493,6 +619,29 @@ impl crate::Bus for SystemBus {
 
     fn external_irq_lines(&self) -> u32 {
         self.riscv_irq_lines
+    }
+
+    #[cfg(feature = "event-scheduler")]
+    fn has_pending_schedule(&self) -> bool {
+        !self.pending_schedule.is_empty()
+    }
+
+    #[cfg(feature = "event-scheduler")]
+    fn earliest_pending_deadline(&self) -> Option<u64> {
+        self.pending_schedule
+            .iter()
+            .map(|(_, deadline, _)| *deadline)
+            .min()
+    }
+
+    #[cfg(feature = "event-scheduler")]
+    fn current_cycle(&self) -> u64 {
+        self.current_cycle
+    }
+
+    #[cfg(feature = "event-scheduler")]
+    fn publish_cycle(&mut self, cycle: u64) {
+        self.set_current_cycle(cycle);
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {

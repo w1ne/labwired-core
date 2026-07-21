@@ -234,7 +234,10 @@ pub struct F4Rcc {
 impl F4Rcc {
     fn new() -> Self {
         Self {
-            cr: classic_cr_ready(1 << 0),
+            // CR reset = 0x0000_0083 (RM0368 §6.3.1 / RM0090 §6.3.1): HSION
+            // (bit 0), HSIRDY (bit 1, auto), HSITRIM = 0x10 default (bits 7:3 =
+            // 0x80). The bare 1<<0 dropped the HSITRIM default and read 0x03.
+            cr: classic_cr_ready(0x0000_0083),
             // PLLCFGR reset = 0x24003010 (RM0090 §6.3.2) — the factory default
             // PLL config word; firmware reads it back before reconfiguring.
             pllcfgr: 0x2400_3010,
@@ -1043,6 +1046,11 @@ impl Rcc {
 }
 
 impl crate::Peripheral for Rcc {
+    // Inert walk: clock-control register bank; tick() is the trait-default no-op.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;

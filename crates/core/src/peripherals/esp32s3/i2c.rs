@@ -98,6 +98,8 @@ const REG_SCL_STRETCH_CONF: u64 = 0x84;
 const REG_DATE: u64 = 0xF8;
 
 const CTR_TRANS_START_BIT: u32 = 1 << 5;
+/// CTR bit 10: FSM_RST — write-trigger master FSM reset.
+const CTR_FSM_RST: u32 = 1 << 10;
 /// CTR bit 11: CONF_UPGATE — self-clearing config-sync trigger.
 const CTR_CONF_UPGATE: u32 = 1 << 11;
 
@@ -114,6 +116,7 @@ const CMD_DONE_BIT: u32 = 1 << 31;
 pub const INT_END_DETECT: u32 = 1 << 3;
 pub const INT_TRANS_COMPLETE: u32 = 1 << 7;
 pub const INT_NACK: u32 = 1 << 10;
+const SCL_RST_SLV_EN: u32 = 1 << 0;
 
 /// ESP32-S3 has 8 COMD slots at offsets 0x58..0x78. Higher offsets are
 /// SCL/SP timing registers that we accept-and-ignore.
@@ -136,6 +139,8 @@ pub struct Esp32s3I2c {
     irq_pending: bool,
     /// Interrupt-matrix source this instance asserts: 42 for I2C0, 43 for I2C1.
     intr_source_id: u32,
+    active_slave: Option<usize>,
+    expects_addr: bool,
 
     // Config / timing registers — masked storage (SVD-accurate reset values).
     // On write: stored = (stored & !mask) | (value & mask).  Reserved bits
@@ -178,6 +183,8 @@ impl Esp32s3I2c {
             slaves: Vec::new(),
             irq_pending: false,
             intr_source_id: I2C0_INTR_SOURCE_ID,
+            active_slave: None,
+            expects_addr: true,
 
             // Config / timing registers initialised to SVD reset values.
             reg_scl_low_period: 0x0000_0000,
@@ -208,10 +215,28 @@ impl Esp32s3I2c {
         }
     }
 
-    /// Attach an `I2cDevice` slave. Slaves are matched by address bits at
-    /// transaction time; later additions take precedence on duplicate addresses.
-    pub fn attach_slave(&mut self, slave: Box<dyn I2cDevice>) {
+    /// Raw slave push — does NOT wrap for tracing. The only production caller is
+    /// the bus choke point [`crate::bus::SystemBus::attach_i2c_slave`], which
+    /// wraps first. Slaves are matched by address bits at transaction time;
+    /// later additions take precedence on duplicate addresses.
+    pub(crate) fn push_slave(&mut self, slave: Box<dyn I2cDevice>) {
         self.slaves.push(slave);
+    }
+
+    /// Borrow the attached I²C slaves. Mirrors the generic `I2c::attached_devices`
+    /// and `Esp32c3I2c::attached_slaves` accessors so UI/inspection paths (e.g. the
+    /// SSD1306 framebuffer readback) can enumerate devices on the ESP32-S3
+    /// command-list controller the same way they do on the STM32 and ESP32-C3
+    /// controllers. Slaves are held directly (no `RefCell`) because the S3 engine
+    /// never hands out interior mutable references during a transaction.
+    pub fn attached_slaves(&self) -> &[Box<dyn I2cDevice>] {
+        &self.slaves
+    }
+
+    /// Mutable counterpart of [`Self::attached_slaves`] — see
+    /// `Esp32c3I2c::attached_slaves_mut` for why this exists.
+    pub fn attached_slaves_mut(&mut self) -> &mut [Box<dyn I2cDevice>] {
+        &mut self.slaves
     }
 
     fn fifo_status(&self) -> u32 {
@@ -237,6 +262,17 @@ impl Esp32s3I2c {
         let rx = (self.rx_fifo.borrow().len() as u32) & 0x3F;
         let tx = (self.tx_fifo.len() as u32) & 0x3F;
         (self.sr & SR_RESP_REC) | SR_STRETCH_CAUSE_RESET | (rx << 8) | (tx << 18)
+    }
+
+    fn find_slave_from_slave_addr_register(&self) -> Option<usize> {
+        let raw = self.slave_addr & 0x7FFF;
+        if raw <= 0x7F {
+            if let Some(idx) = self.slaves.iter().position(|s| s.address() == raw as u8) {
+                return Some(idx);
+            }
+        }
+        let shifted = ((raw >> 1) & 0x7F) as u8;
+        self.slaves.iter().position(|s| s.address() == shifted)
     }
 }
 
@@ -339,7 +375,7 @@ impl Peripheral for Esp32s3I2c {
                 // driver writes it and polls for it to clear; if it stays set the
                 // driver concludes the controller is wedged and aborts the
                 // transfer (ESP_ERR_INVALID_STATE). esp-hal never sets it.
-                self.ctr &= !CTR_CONF_UPGATE;
+                self.ctr &= !(CTR_FSM_RST | CTR_CONF_UPGATE);
             }
             REG_TO => masked_write(&mut self.reg_to, value, 0x0000_003F),
             REG_SLAVE_ADDR => self.slave_addr = value,
@@ -384,7 +420,12 @@ impl Peripheral for Esp32s3I2c {
             REG_SCL_MAIN_ST_TIME_OUT => {
                 masked_write(&mut self.reg_scl_main_st_time_out, value, 0x0000_001F)
             }
-            REG_SCL_SP_CONF => masked_write(&mut self.reg_scl_sp_conf, value, 0x0000_00FF),
+            REG_SCL_SP_CONF => {
+                masked_write(&mut self.reg_scl_sp_conf, value, 0x0000_00FF);
+                // SCL_RST_SLV_EN is R/W/SC. Arduino's S3 bus-clear helper
+                // writes it and then polls until hardware clears it.
+                self.reg_scl_sp_conf &= !SCL_RST_SLV_EN;
+            }
             REG_SCL_STRETCH_CONF => {
                 masked_write(&mut self.reg_scl_stretch_conf, value, 0x0000_3FFF)
             }
@@ -427,6 +468,20 @@ impl Peripheral for Esp32s3I2c {
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
     }
+
+    fn for_each_attached_sim_input(
+        &mut self,
+        f: &mut dyn FnMut(&mut dyn crate::sim_input::SimInput) -> bool,
+    ) -> bool {
+        for slave in self.slaves.iter_mut() {
+            if let Some(si) = slave.as_sim_input_mut() {
+                if f(si) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
 }
 
 impl Esp32s3I2c {
@@ -444,10 +499,10 @@ impl Esp32s3I2c {
         const OP_END: u32 = 4;
         const OP_RSTART: u32 = 6;
 
-        // Index into self.slaves of the currently-selected device, or
-        // None if no address has been latched yet (or just after RSTART).
-        let mut active: Option<usize> = None;
-        let mut expects_addr = true;
+        // Index into self.slaves of the currently-selected device. END pauses
+        // the command list, so the selected slave can carry into the next run.
+        let mut active = self.active_slave;
+        let mut expects_addr = self.expects_addr;
         let mut last_op_was_end = false;
         let mut hit_stop = false;
 
@@ -475,15 +530,32 @@ impl Esp32s3I2c {
                             // First byte of a WRITE following RSTART is addr+R/W.
                             let addr = b >> 1;
                             active = self.slaves.iter().position(|s| s.address() == addr);
-                            if active.is_none() {
-                                self.int_raw |= INT_NACK;
-                            } else {
-                                // Slave acknowledged its address.
+                            if let Some(slave_idx) = active {
+                                // Slave acknowledged its address. Signal START
+                                // to the selected device — on the wire the
+                                // START + address frame precedes the data, and
+                                // the bus-trace wrapper reconstructs the
+                                // address frame from this call.
+                                self.slaves[slave_idx].start();
                                 self.sr |= SR_RESP_REC;
+                                expects_addr = false;
+                                // Don't deliver the addr byte to the slave's write().
+                                continue;
+                            }
+
+                            // ESP-IDF/Arduino can program the address in
+                            // SLAVE_ADDR and put only payload bytes in TXFIFO.
+                            // In that shape the first FIFO byte is real data.
+                            active = self.find_slave_from_slave_addr_register();
+                            if let Some(slave_idx) = active {
+                                self.slaves[slave_idx].start();
+                                self.sr |= SR_RESP_REC;
+                            } else {
+                                self.int_raw |= INT_NACK;
+                                expects_addr = false;
+                                continue;
                             }
                             expects_addr = false;
-                            // Don't deliver the addr byte to the slave's write().
-                            continue;
                         }
                         if let Some(slave_idx) = active {
                             self.slaves[slave_idx].write(b);
@@ -514,6 +586,8 @@ impl Esp32s3I2c {
                     if let Some(slave_idx) = active {
                         self.slaves[slave_idx].stop();
                     }
+                    active = None;
+                    expects_addr = true;
                     self.cmds[idx] |= CMD_DONE_BIT;
                     hit_stop = true;
                     break;
@@ -531,12 +605,18 @@ impl Esp32s3I2c {
         // TRANS_COMPLETE (bit 7). esp-hal blocks on (END_DETECT | TX_COMPLETE)
         // and uses END_DETECT to chain phase 2 of a write_read.
         if last_op_was_end {
+            self.active_slave = active;
+            self.expects_addr = expects_addr;
             self.int_raw |= INT_END_DETECT;
         } else if hit_stop {
+            self.active_slave = None;
+            self.expects_addr = true;
             self.int_raw |= INT_TRANS_COMPLETE;
         } else {
             // Empty cmd list or reserved opcode — set TRANS_COMPLETE so the
             // driver's wait loop unblocks rather than hanging.
+            self.active_slave = None;
+            self.expects_addr = true;
             self.int_raw |= INT_TRANS_COMPLETE;
         }
         if self.int_ena & (INT_TRANS_COMPLETE | INT_END_DETECT | INT_NACK) != 0 {
@@ -770,7 +850,7 @@ mod tests {
     #[test]
     fn write_read_drives_attached_tmp102() {
         let mut p = Esp32s3I2c::new();
-        p.attach_slave(Box::new(Tmp102::new()));
+        p.push_slave(Box::new(Tmp102::new()));
 
         // Build the canonical TMP102 read sequence:
         //   RSTART; WRITE 2 (addr+W, pointer=0); RSTART;
@@ -798,6 +878,72 @@ mod tests {
         );
     }
 
+    /// Regression guard for the S3-OLED-blank-in-embed bug (the ESP32-S3 sibling
+    /// of the ESP32-C3 `leo_oled_i2c_readback` guard). The playground/embed reads
+    /// the OLED framebuffer through `WasmSimulator::get_ssd1306_framebuffer`, which
+    /// enumerates I²C slaves on the named controller. That accessor understood the
+    /// generic STM32 `I2c` and the `Esp32c3I2c`, but NOT the `Esp32s3I2c` — so an
+    /// SSD1306 on an S3 board returned "not an I2C controller" and rendered blank.
+    ///
+    /// This test drives a real GDDRAM write through the S3 command-list engine
+    /// (the exact register path firmware uses) and then reads the framebuffer back
+    /// through `attached_slaves()` — the accessor `inspect.rs` now downcasts to —
+    /// asserting the bytes are the real ones written, not a blank/zero fill.
+    #[test]
+    fn ssd1306_gddram_is_readable_through_esp32s3_i2c() {
+        use crate::peripherals::components::Ssd1306;
+
+        let mut p = Esp32s3I2c::new();
+        p.push_slave(Box::new(Ssd1306::new(0x3C)));
+
+        // Single I²C write to the OLED: RSTART; WRITE 6; STOP.
+        // TX = [addr+W, control=0x40 (data stream), then four GDDRAM bytes].
+        // Default addressing mode is horizontal from (page 0, col 0), so the four
+        // data bytes land at gddram[0..4].
+        p.write_u32(REG_CMD0, cmd(CMD_RSTART, 0)).unwrap();
+        p.write_u32(REG_CMD0 + 4, cmd(CMD_WRITE, 6)).unwrap();
+        p.write_u32(REG_CMD0 + 8, cmd(CMD_STOP, 0)).unwrap();
+
+        p.write_u32(REG_DATA, 0x78).unwrap(); // 0x3C << 1 | W
+        p.write_u32(REG_DATA, 0x40).unwrap(); // Co=0, D/C#=1 → data stream
+        p.write_u32(REG_DATA, 0xFF).unwrap();
+        p.write_u32(REG_DATA, 0x3C).unwrap();
+        p.write_u32(REG_DATA, 0xAA).unwrap();
+        p.write_u32(REG_DATA, 0x55).unwrap();
+
+        p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
+        assert_eq!(
+            p.read_u32(REG_INT_RAW).unwrap() & INT_TRANS_COMPLETE,
+            INT_TRANS_COMPLETE,
+            "the OLED write transaction must complete on the S3 engine"
+        );
+
+        // The exact enumeration path `get_ssd1306_framebuffer` uses for the S3.
+        let oled = p
+            .attached_slaves()
+            .iter()
+            .filter(|d| d.address() == 0x3C)
+            .find_map(|d| d.as_any().and_then(|a| a.downcast_ref::<Ssd1306>()))
+            .expect("an SSD1306 must be reachable at 0x3C through Esp32s3I2c");
+
+        let fb = oled.framebuffer();
+        assert_eq!(
+            fb.len(),
+            1024,
+            "SSD1306 GDDRAM framebuffer must be 128x64/8 = 1024 bytes"
+        );
+        assert_eq!(
+            &fb[0..4],
+            &[0xFF, 0x3C, 0xAA, 0x55],
+            "readback must return the real bytes written through the S3 I2C engine"
+        );
+        assert_eq!(
+            oled.ink_bytes(),
+            4,
+            "exactly the four written bytes are lit"
+        );
+    }
+
     #[test]
     fn write_with_unmatched_address_sets_nack_int() {
         let mut p = Esp32s3I2c::new();
@@ -819,7 +965,7 @@ mod tests {
         // Set pointer to CONFIG (0x01) via WRITE, then READ should return
         // CONFIG canned value 0x60A0 high byte then low byte.
         let mut p = Esp32s3I2c::new();
-        p.attach_slave(Box::new(Tmp102::new()));
+        p.push_slave(Box::new(Tmp102::new()));
 
         p.write_u32(REG_CMD0, cmd(CMD_RSTART, 0)).unwrap();
         p.write_u32(REG_CMD0 + 4, cmd(CMD_WRITE, 2)).unwrap();
@@ -920,9 +1066,9 @@ mod tests {
         p.write_u32(REG_FILTER_CFG, 0xFFFF_FFFF).unwrap();
         assert_eq!(p.read_u32(REG_FILTER_CFG).unwrap(), 0x0000_03FF);
 
-        // SCL_SP_CONF: mask 0xFF.
+        // SCL_SP_CONF: mask 0xFF, with SCL_RST_SLV_EN bit 0 self-clearing.
         p.write_u32(REG_SCL_SP_CONF, 0xFFFF_FFFF).unwrap();
-        assert_eq!(p.read_u32(REG_SCL_SP_CONF).unwrap(), 0x0000_00FF);
+        assert_eq!(p.read_u32(REG_SCL_SP_CONF).unwrap(), 0x0000_00FE);
 
         // TO: mask 0x3F — bits 6..31 are reserved, read back reset (0x10 & ~0x3F == 0,
         // so reserved bits are 0; full write reads back 0x3F only).

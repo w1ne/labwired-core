@@ -1,65 +1,81 @@
 # LabWired Core
 
-Deterministic firmware simulator for ARM Cortex-M, RISC-V, and Xtensa (ESP32 / ESP32-S3) — the same ELF runs on hardware and in the simulator.
+LabWired Core runs embedded firmware in a deterministic simulated hardware lab.
 
-[![Documentation](https://img.shields.io/badge/docs-latest-blue.svg)](https://labwired.com/docs/)
+It loads real firmware ELFs and executes them against modeled chips, boards,
+peripherals, buses, sensors, displays, and protocol devices. The goal is not to
+replace every hardware test. The goal is to move the fast, repeatable part of
+firmware bring-up and regression testing into a local and CI-friendly simulator.
 
-## Why this exists
+[![Documentation](https://img.shields.io/badge/docs-latest-blue.svg)](https://docs.labwired.com/)
 
-Most firmware simulators let you boot a binary and stop there. LabWired goes further:
+## What You Can Do
 
-- **Hardware-validated reset + UART parity.** A real NUCLEO-H563ZI board is captured via OpenOCD+GDB and diffed against the simulator running the same firmware ELF. The committed report — [`determinism_report_h563.json`](examples/nucleo-h563zi/golden-reference/determinism_report_h563.json) — documents the verified scope (post-reset architectural alignment + UART byte parity over the smoke run) and explicitly notes what isn't verified (step-by-step PC sequence past reset — OpenOCD's sampling can't resolve every executed instruction on real silicon). For deeper byte-parity evidence under continuous execution, see the NUCLEO-L476RG survival traces (`firmware-l476-demo/`).
-- **Deterministic by construction.** Same firmware → same trace, byte-for-byte, across runs and machines. Trace SHA-256 hashes are CI-gated.
-- **Production-grade debug.** GDB Remote Serial Protocol stub *and* a native VS Code Debug Adapter Protocol server — breakpoints, register inspect, expression evaluation, all without hardware.
-- **Silicon-validated fidelity.** Peripheral models continuously diffed against real hardware; high-MIPS host execution when iteration speed matters. See [`docs/architecture.md`](docs/architecture.md) for the perf gates.
+| Use case | Where to start | What LabWired provides |
+| --- | --- | --- |
+| Run firmware without a board | [`labwired run`](docs/cli_reference.md) | ELF loading, system manifests, UART/GPIO output, traces, snapshots |
+| Gate firmware behavior in CI | [`labwired test`](docs/ci_test_runner.md) | YAML test scripts, assertions, exit codes, artifacts, JUnit output |
+| Debug firmware without hardware | [Debugging](docs/debugging.md), [GDB](docs/gdb_integration.md) | GDB RSP and VS Code DAP support for breakpoints and register inspection |
+| Model board-level I/O | [`examples/demo-blinky`](examples/demo-blinky/README.md) | External I2C/SPI-style device attachment, board I/O mapping, deterministic checks |
+| Validate simulator behavior against hardware | [`examples/nucleo-h563zi`](examples/nucleo-h563zi/README.md) | Hardware and simulator traces, UART logs, reproducible validation reports |
+| Add or audit chip support | [Board onboarding](docs/board_onboarding_playbook.md), [coverage](docs/coverage_scoreboard.md) | Chip/system YAML, target support rubric, smoke coverage, catalog metadata |
 
-## Featured demo: NUCLEO-H563ZI
-
-Same firmware ELF runs on a real STM32H563ZI Nucleo and on the simulator. UART output matches. Reset-state architectural alignment verified. The captured artifacts (HW trace, sim trace, sim run result, UART log, determinism report) are committed alongside the firmware that produced them: [`examples/nucleo-h563zi/`](examples/nucleo-h563zi/).
-
-## What this repo owns
-
-- Simulation engine correctness and determinism.
-- Chip/system model execution (`configs/chips`, `configs/systems`).
-- Hardware-target validation metadata for catalog consumers.
+Supported targets are intentionally uneven. ARM Cortex-M and RISC-V have the
+deepest CI coverage today; selected ESP32/Xtensa paths exist for specific
+examples. Check the per-board docs before assuming a peripheral is modeled:
+[docs/boards](docs/boards/).
 
 ## Quick Start
 
-### Install
+### Install the CLI
 
-Pinned release (recommended):
+Pinned release:
 
 ```sh
-curl -fsSL https://labwired.com/install.sh | LABWIRED_VERSION=v0.16.0 sh
+curl -fsSL https://labwired.com/install.sh | LABWIRED_VERSION=v0.19.2 sh
 labwired --version
 ```
 
-Prefer to read the script first:
+Prefer to inspect the installer first:
 
 ```sh
 curl -fsSL https://labwired.com/install.sh -o install.sh
 # review install.sh, then:
-LABWIRED_VERSION=v0.16.0 sh install.sh
+LABWIRED_VERSION=v0.19.2 sh install.sh
 ```
 
 Supported host environments:
+
 - Linux
 - macOS
 - Windows via WSL2
 
 Install options:
 
-- `LABWIRED_VERSION=v0.16.0` pins a release (omit for latest).
-- `LABWIRED_FROM_SOURCE=1` forces source build.
-- `LABWIRED_INSTALL_DIR=~/.local/bin` overrides install dir.
+- `LABWIRED_VERSION=v0.19.2` pins the current documented release for a
+  reproducible install.
+- `LABWIRED_FROM_SOURCE=1` forces a source build.
+- `LABWIRED_INSTALL_DIR=~/.local/bin` changes the install directory.
 
-### Run a deterministic test script
+### Run the CI smoke example from a source checkout
+
+The bundled smoke script expects the fixture firmware to exist in `target/`.
+From the repository root:
 
 ```sh
-labwired test --script examples/ci/uart-ok.yaml --output-dir results
+rustup target add thumbv6m-none-eabi
+cargo build -p firmware-ci-fixture --release --target thumbv6m-none-eabi
+cargo run -q -p labwired-cli -- test \
+  --script examples/ci/uart-ok.yaml \
+  --output-dir /tmp/labwired-readme-smoke \
+  --no-uart-stdout
 ```
 
-### Build from source
+That script runs the fixture firmware against
+[`configs/systems/ci-fixture-uart1.yaml`](configs/systems/ci-fixture-uart1.yaml)
+and asserts that UART output contains `OK`.
+
+### Build the simulator from source
 
 ```sh
 rustup target add thumbv6m-none-eabi thumbv7m-none-eabi riscv32i-unknown-none-elf
@@ -67,46 +83,104 @@ cargo build --release -p labwired-cli
 ./target/release/labwired --version
 ```
 
-## CI At A Glance
+## Examples
 
-### Required merge gate
+Start with examples that have a clear system manifest, firmware path, and smoke
+test:
 
-- `.github/workflows/core-ci.yml`: fmt, clippy, build, and integration tests on every PR to `main`.
+- [CI UART smoke](examples/ci/README.md): minimal `labwired test` scripts for
+  deterministic pass/fail behavior.
+- [Blinky + TMP102](examples/demo-blinky/README.md): STM32F103 firmware talking
+  to a virtual TMP102 sensor over I2C.
+- [NUCLEO-H563ZI](examples/nucleo-h563zi/README.md): same demo story on the
+  simulator and a physical STM32H563ZI Nucleo board, with committed validation
+  artifacts.
+- [NUCLEO-L476RG](examples/nucleo-l476rg/README.md): survival and validation
+  traces for an STM32 Nucleo target.
+- [Seeed XIAO nRF52840 Sense](examples/seeed-xiao-nrf52840-sense/README.md):
+  nRF52840 board coverage with UART/GPIO/SPI smoke paths.
+- [UDS on STM32F103](examples/f103-uds-ecu/README.md) and
+  [UDS on STM32H563](examples/h563-uds-ecu/README.md): CAN/UDS-oriented
+  firmware examples.
+- [IO-Link DIDO](examples/iolink-dido/README.md): IO-Link device-oriented
+  system wiring and smoke test.
 
-### Quality signals
+For the broader list, see [docs/demos.md](docs/demos.md). Treat each example's
+README and validation file as the source of truth for what is actually modeled.
 
-- `core-coverage.yml`: coverage verification.
-- `core-unsupported-audit.yml`: unsupported instruction audits.
-- `core-nightly.yml`: broader nightly validation.
-- `core-validate-hw-targets.yml`: full onboarding target sweep, emits `out/hw-target-validation/summary.{json,md}`, and refreshes onboarding validation metadata.
+## Validation Model
 
-### Board model signals
+LabWired distinguishes between three levels of confidence:
 
-- `core-board-ci-fixture-arm.yml`: ARM fixture smoke coverage.
-- `core-board-ci-fixture-riscv.yml`: RISC-V fixture smoke coverage.
-- `core-board-nucleo-h563zi.yml`: H563 io-smoke and fullchip-smoke.
+- **Modeled**: a chip, peripheral, bus, or external device has simulator logic
+  behind it and can execute firmware behavior.
+- **Smoke-tested**: a repository test or example script exercises that model
+  and checks observable output.
+- **Hardware-compared**: captured hardware behavior is compared with simulator
+  behavior for a documented scope.
 
-## Validation Structure
+The H563 example is the best place to inspect hardware-comparison artifacts:
 
-- PR smoke and scoreboard: `core-onboarding-smoke.yml`.
-- Full target sweep for catalog metadata: `core-validate-hw-targets.yml`.
-- Policy and downstream contract: [docs/catalog_validation.md](./docs/catalog_validation.md).
+- [`examples/nucleo-h563zi/golden-reference/determinism_report_h563.json`](examples/nucleo-h563zi/golden-reference/determinism_report_h563.json)
+- [`examples/nucleo-h563zi/VALIDATION.md`](examples/nucleo-h563zi/VALIDATION.md)
+- [`docs/golden_reference.md`](docs/golden_reference.md)
 
-## Key Docs
+Those reports are evidence for the scope they describe. They are not a blanket
+claim that every instruction, peripheral, or timing path matches hardware.
 
-- [Docs Index](./docs/index.md)
-- [Architecture](./docs/architecture.md)
-- [Board Onboarding Playbook](./docs/board_onboarding_playbook.md)
-- [CI Integration Guide](./docs/ci_integration.md)
-- [Release Strategy](./docs/release_strategy.md)
-- [Agents Manual](./docs/agents.md)
+## Repository Scope
 
-## Other demos
+This repository owns the core simulator and its validation assets:
 
-- [Blinky + I2C Sensor Demo](examples/demo-blinky/README.md) — STM32F103 + virtual TMP102 over I2C.
-- [STM32 Case Study](docs/case_study_stm32.md) — debugging firmware without hardware, end-to-end.
-- [Demo Index](docs/demos.md) — full list of bundled examples.
+- CPU, bus, memory, peripheral, and external device execution.
+- Chip and system descriptors in [`configs/chips`](configs/chips/) and
+  [`configs/systems`](configs/systems/).
+- CLI, test runner, debug adapters, and snapshot/trace tooling.
+- Hardware-target validation metadata consumed by catalog and app surfaces.
+
+Application UI, hosted playground behavior, and product-specific surfaces live
+outside this core package.
+
+## CI and Release Signals
+
+The main merge gate is [`.github/workflows/core-ci.yml`](.github/workflows/core-ci.yml):
+formatting, linting, build, and integration tests.
+
+Additional workflows publish narrower signals:
+
+- [`core-board-ci.yml`](.github/workflows/core-board-ci.yml): board/example
+  smoke coverage.
+- [`core-coverage.yml`](.github/workflows/core-coverage.yml): coverage checks.
+- [`core-unsupported-audit.yml`](.github/workflows/core-unsupported-audit.yml):
+  unsupported instruction audits.
+- [`core-nightly.yml`](.github/workflows/core-nightly.yml): broader scheduled
+  validation.
+- [`core-validate-hw-targets.yml`](.github/workflows/core-validate-hw-targets.yml):
+  onboarding target sweep and catalog metadata.
+
+For release mechanics, see [RELEASE_PROCESS.md](RELEASE_PROCESS.md) and
+[RELEASE_READINESS_CHECKLIST.md](RELEASE_READINESS_CHECKLIST.md).
+
+## Documentation
+
+- [Docs index](docs/index.md)
+- [Architecture overview](docs/architecture_overview.md)
+- [Engine architecture](docs/architecture.md)
+- [CLI reference](docs/cli_reference.md)
+- [CI test runner](docs/ci_test_runner.md)
+- [Configuration reference](docs/configuration_reference.md)
+- [Board onboarding playbook](docs/board_onboarding_playbook.md)
+- [Target support rubric](docs/target_support_rubric.md)
+- [Debugging](docs/debugging.md)
+- [PlatformIO integration](docs/platformio_integration.md)
+- [Agents manual](docs/agents.md)
+
+## Contributing
+
+Use [CONTRIBUTING.md](CONTRIBUTING.md) for repository workflow and
+[docs/agents.md](docs/agents.md) for AI-agent-specific guidance. For security
+issues, see [SECURITY.md](SECURITY.md).
 
 ## License
 
-MIT
+MIT. See [LICENSE](LICENSE).

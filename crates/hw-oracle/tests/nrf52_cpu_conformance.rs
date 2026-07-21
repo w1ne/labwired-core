@@ -20,9 +20,10 @@
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::system::cortex_m::configure_cortex_m;
+use labwired_core::Bus;
 use labwired_core::Machine;
 use labwired_loader::load_elf;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// RAM address of the verdict block written by the firmware.
 const VERDICT_ADDR: u32 = 0x2000_3000;
@@ -123,7 +124,7 @@ fn build_sim_bus() -> SystemBus {
     SystemBus::from_config(&chip, &manifest).unwrap_or_else(|e| panic!("build sim bus: {e}"))
 }
 
-fn run_sim(elf: &PathBuf) -> Vec<u32> {
+fn run_sim(elf: &Path) -> Vec<u32> {
     let mut bus = build_sim_bus();
     let (cpu, _nvic) = configure_cortex_m(&mut bus);
     let mut machine = Machine::new(cpu, bus);

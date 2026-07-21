@@ -4,10 +4,11 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
+mod artifacts;
 mod commands;
 mod wifi_frames;
 use clap::{Parser, Subcommand};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -26,6 +27,7 @@ mod gpio_observer;
 mod size_limited_writer;
 mod vcd_trace;
 
+use artifacts::{AssertionResult, NamedU64, Snapshot, StopReasonDetails, TestConfig, TestResult};
 use labwired_config::{
     load_test_script, LoadedTestScript, StopReason, TestAssertion, TestLimits, UdsTesterDetails,
 };
@@ -47,6 +49,21 @@ fn parse_u32_addr(s: &str) -> Result<u32, String> {
     } else {
         u32::from_str(trimmed).map_err(|e| format!("Invalid address '{}': {}", s, e))
     }
+}
+
+/// Parse a `--watch-gpio` ref `peripheral:pin` into `(peripheral, pin)`. The pin
+/// is a decimal `u8`; the peripheral is any non-empty name resolved against the
+/// bus at run time (`gpio8`, `gpioa`, …). Returns `None` for a malformed ref
+/// (missing colon, empty peripheral, or an out-of-range/non-numeric pin) — the
+/// caller logs and skips it rather than aborting the whole run.
+fn parse_watch_gpio_ref(spec: &str) -> Option<(String, u8)> {
+    let (name, pin) = spec.trim().rsplit_once(':')?;
+    let name = name.trim();
+    if name.is_empty() {
+        return None;
+    }
+    let pin: u8 = pin.trim().parse().ok()?;
+    Some((name.to_string(), pin))
 }
 
 #[derive(Parser, Debug)]
@@ -268,13 +285,12 @@ pub struct SnapshotCaptureArgs {
     #[arg(long)]
     pub system: Option<PathBuf>,
 
-    /// Firmware profile to use. Currently only `agentdeck` is supported —
-    /// installs the Arduino-ESP32 / ESP32-classic bootstrap (heap-caps
-    /// thunks, dual-core handshake fakery, IPI bridge, image header,
-    /// SSD1680 tri-color panel attached to spi3 / GPIO5). Each Arduino-ESP32
-    /// firmware has a different set of thunk PCs, so the profile name maps
-    /// to a hand-curated address list inside the binary.
-    #[arg(long, default_value = "agentdeck")]
+    /// Firmware profile to use. Only `arduino-esp32` is supported — installs
+    /// the Arduino-ESP32 / ESP32-classic bootstrap (heap-caps thunks, dual-core
+    /// handshake, IPI bridge, image header) with thunk PCs resolved from the
+    /// ELF symbol table (no hand-curated per-firmware address list). External
+    /// peripherals come from the `--system` board manifest.
+    #[arg(long, default_value = "arduino-esp32")]
     pub profile: String,
 
     /// Print a progress line every N steps. 0 = silent.
@@ -593,8 +609,8 @@ struct TestArgs {
     vcd: Option<PathBuf>,
 
     /// Maximum number of instructions to trace
-    #[arg(long, default_value = "100000")]
-    trace_max: usize,
+    #[arg(long)]
+    trace_max: Option<usize>,
 
     /// Collect firmware statement coverage. Writes coverage.info (LCOV) and
     /// coverage.json into --output-dir. Distinct from `labwired coverage`,
@@ -618,122 +634,40 @@ struct TestArgs {
     #[arg(long)]
     run_manifest: bool,
 
+    /// Faithful rom-boot only: while running the REAL boot (mask ROM →
+    /// 2nd-stage bootloader → app), snapshot the machine the instant control
+    /// reaches the application and write a `.lwrs` resume snapshot here. The
+    /// run then continues to --max-steps as usual, so one cold invocation
+    /// yields BOTH the cached snapshot and the normal serial/cycle evidence.
+    /// App-entry is `call_start_cpu0`/`app_main` (resolved from the ELF), else
+    /// the first PC in the XIP app window [0x4200_0000, 0x4400_0000). The blob
+    /// is self-keyed with the chip + firmware SHA-256 (see --resume-snapshot).
+    #[arg(long)]
+    capture_app_entry: Option<PathBuf>,
+
+    /// Resume from a `.lwrs` snapshot instead of cold-booting: build a fresh
+    /// machine for the same chip, load the SAME firmware/flash, validate the
+    /// snapshot's self-key (chip + firmware SHA-256) against it, then apply it
+    /// and run to --max-steps. Skips the ~150M-step mask-ROM replay entirely.
+    /// On a self-key mismatch this errors out so the caller can fall back to a
+    /// cold boot. Requires the same LABWIRED_ESP32C3_FLASH as the capture.
+    #[arg(long)]
+    resume_snapshot: Option<PathBuf>,
+
     /// Explicitly opt out of sending LABWIRED_API_KEY even if it is set in the environment.
     /// Useful for local development and testing.
     #[arg(long)]
     no_key: bool,
-}
 
-#[derive(Debug, Serialize, Deserialize)]
-struct TestResult {
-    result_schema_version: String,
-    status: String,
-    steps_executed: u64,
-    cycles: u64,
-    instructions: u64,
-    stop_reason: StopReason,
-    stop_reason_details: StopReasonDetails,
-    limits: TestLimits,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    message: Option<String>,
-    assertions: Vec<AssertionResult>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cpu_state: Option<labwired_core::snapshot::CpuSnapshot>,
-    firmware_hash: String,
-    config: TestConfig,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct StopReasonDetails {
-    triggered_stop_condition: StopReason,
-    triggered_limit: Option<NamedU64>,
-    observed: Option<NamedU64>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct NamedU64 {
-    name: String,
-    value: u64,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct AssertionResult {
-    assertion: TestAssertion,
-    passed: bool,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct TestConfig {
-    firmware: PathBuf,
-    system: Option<PathBuf>,
-    script: PathBuf,
-}
-
-use labwired_core::snapshot::CpuSnapshot;
-
-#[derive(Debug, Serialize, Deserialize)]
-struct PeripheralSnapshot {
-    name: String,
-    base: u64,
-    size: u64,
-    irq: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    state: Option<serde_json::Value>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-struct InteractiveSnapshotConfig {
-    firmware: PathBuf,
-    system: Option<PathBuf>,
-    max_steps: usize,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-enum Snapshot {
-    Standard {
-        cpu: CpuSnapshot,
-        steps_executed: u64,
-        cycles: u64,
-        instructions: u64,
-        stop_reason: StopReason,
-        stop_reason_details: StopReasonDetails,
-        limits: TestLimits,
-        firmware_hash: String,
-        config: TestConfig,
-    },
-    ConfigError {
-        message: String,
-        stop_reason_details: StopReasonDetails,
-        limits: TestLimits,
-        config: TestConfig,
-    },
-    Interactive {
-        snapshot_schema_version: String,
-        status: String,
-        steps_executed: u64,
-        cycles: u64,
-        instructions: u64,
-        stop_reason: StopReason,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        message: Option<String>,
-        firmware_hash: String,
-        cpu: CpuSnapshot,
-        peripherals: Vec<PeripheralSnapshot>,
-        config: InteractiveSnapshotConfig,
-    },
-}
-
-// snapshot_cortexm_cpu removed, use cpu.snapshot() directly
-
-struct InteractiveSnapshotInputs<'a> {
-    firmware_path: &'a Path,
-    system_path: Option<&'a PathBuf>,
-    max_steps: usize,
-    steps_executed: u64,
-    stop_reason: StopReason,
-    message: Option<String>,
+    /// Watch a GPIO pad's output for the deterministic logic-analyzer edge
+    /// capture, as `peripheral:pin` (e.g. `gpio8:8`, `gpioa:5`). Repeatable —
+    /// each ref is a channel (CH0, CH1, … in argument order). The captured
+    /// per-channel edge series lands in `result.json`'s `logic_edges` block, so
+    /// the oracle can prove a pad actually toggled / at a given period (the
+    /// prove-blink evidence). Edges are drained from the same in-engine tap the
+    /// browser logic analyzer uses. No watch → zero overhead, no block emitted.
+    #[arg(long = "watch-gpio", value_name = "PERIPHERAL:PIN")]
+    watch_gpio: Vec<String>,
 }
 
 /// Unified error response for agent consumption
@@ -777,87 +711,6 @@ pub(crate) fn emit_error(
     }
 }
 
-fn write_interactive_snapshot<C: labwired_core::Cpu>(
-    path: &Path,
-    metrics: &labwired_core::metrics::PerformanceMetrics,
-    machine: &labwired_core::Machine<C>,
-    inputs: InteractiveSnapshotInputs<'_>,
-) {
-    if let Some(parent) = path.parent() {
-        if let Err(e) = std::fs::create_dir_all(parent) {
-            error!("Failed to create snapshot parent dir {:?}: {}", parent, e);
-            return;
-        }
-    }
-
-    let firmware_hash = match std::fs::read(inputs.firmware_path) {
-        Ok(bytes) => {
-            let mut hasher = Sha256::new();
-            hasher.update(&bytes);
-            format!("{:x}", hasher.finalize())
-        }
-        Err(e) => {
-            error!(
-                "Failed to read firmware for snapshot hash {:?}: {}",
-                inputs.firmware_path, e
-            );
-            String::new()
-        }
-    };
-
-    let machine_snapshot = machine.snapshot();
-    let peripherals = machine
-        .bus
-        .peripherals
-        .iter()
-        .map(|p| {
-            let state = machine_snapshot.peripherals.get(&p.name).cloned();
-            PeripheralSnapshot {
-                name: p.name.clone(),
-                base: p.base,
-                size: p.size,
-                irq: p.irq,
-                state,
-            }
-        })
-        .collect::<Vec<_>>();
-
-    let cpu_snapshot = machine.cpu.snapshot();
-
-    let snapshot = Snapshot::Interactive {
-        snapshot_schema_version: "1.0".to_string(),
-        status: if matches!(
-            inputs.stop_reason,
-            StopReason::MemoryViolation | StopReason::DecodeError
-        ) {
-            "error".to_string()
-        } else {
-            "ok".to_string()
-        },
-        steps_executed: inputs.steps_executed,
-        cycles: metrics.get_cycles(),
-        instructions: metrics.get_instructions(),
-        stop_reason: inputs.stop_reason,
-        message: inputs.message,
-        firmware_hash,
-        cpu: cpu_snapshot,
-        peripherals,
-        config: InteractiveSnapshotConfig {
-            firmware: inputs.firmware_path.to_path_buf(),
-            system: inputs.system_path.cloned(),
-            max_steps: inputs.max_steps,
-        },
-    };
-
-    match std::fs::File::create(path) {
-        Ok(f) => {
-            if let Err(e) = serde_json::to_writer_pretty(f, &snapshot) {
-                error!("Failed to write snapshot {:?}: {}", path, e);
-            }
-        }
-        Err(e) => error!("Failed to create snapshot {:?}: {}", path, e),
-    }
-}
 fn main() -> ExitCode {
     let cli = Cli::parse();
 
@@ -888,6 +741,30 @@ fn main() -> ExitCode {
     }
 }
 
+/// Resolve the rom-boot self-key — the chip name and the SHA-256 of the flash
+/// image the faithful boot runs — from whichever `LABWIRED_ESP32*_FLASH` env
+/// pin is set. This is the same firmware the resume snapshot must match; it is
+/// stamped into a captured `.lwrs` and re-validated on resume so a snapshot
+/// can never be applied on top of a different chip or firmware. Returns `None`
+/// (so capture/resume are no-ops that fall back to a cold boot) when no flash
+/// image is set — snapshot capture/resume only make sense on `--rom-boot`.
+fn rom_boot_flash_self_key() -> Option<(&'static str, [u8; 32])> {
+    use sha2::{Digest, Sha256};
+    let (chip, path) = if let Ok(p) = std::env::var("LABWIRED_ESP32C3_FLASH") {
+        ("esp32c3", p)
+    } else if let Ok(p) = std::env::var("LABWIRED_ESP32S3_FLASH") {
+        ("esp32s3", p)
+    } else {
+        return None;
+    };
+    let bytes = std::fs::read(&path).ok()?;
+    let mut hasher = Sha256::new();
+    hasher.update(&bytes);
+    let mut out = [0u8; 32];
+    out.copy_from_slice(&hasher.finalize());
+    Some((chip, out))
+}
+
 /// Build an ESP32-C3 ROM-boot machine; `efuse_mac` programs a distinct factory
 /// MAC so multiple instances are distinguishable on the shared VirtualWifi air.
 pub(crate) fn build_c3_rom_boot_machine(
@@ -904,7 +781,6 @@ pub(crate) fn build_c3_rom_boot_machine(
     // like silicon. "Run the binary, don't thunk it." Requires the real ROM
     // (LABWIRED_ESP32C3_ROM[_DATA], loaded into the chip's rom regions by
     // from_config) and the flash image (LABWIRED_ESP32C3_FLASH).
-    use std::sync::{Arc, Mutex};
     // ROM images: from_config already loaded them into the chip's rom regions
     // when the LABWIRED_ESP32C3_ROM[_DATA] env pins are set. Otherwise
     // auto-provision (toolchain ROM ELF, else the vendored images) and write
@@ -954,289 +830,18 @@ pub(crate) fn build_c3_rom_boot_machine(
         flash_bytes.len(),
         flash_path
     );
-    let backing = Arc::new(Mutex::new(flash_bytes));
-    // Route reads through peripherals first: the fast path checks the
-    // chip's `flash`/`drom` memory-regions (zero-filled in rom-boot) before
-    // peripherals, which would shadow the FlashXip windows we install at the
-    // same XIP addresses. Disabling it lets the MMU-translating FlashXip
-    // serve 0x4200_0000 / 0x3C00_0000 from the real flash image.
-    bus.config.optimized_bus_access = false;
-    // SPIMEM1 flash-command controller (0x6000_2000) backed by the real
-    // image, overriding the declarative stub — a narrower, later-registered
-    // window wins, so the BROM's READ/RDID/RDSR commands return real bytes.
-    // The C3's SPI1 shares the S3's SPIMEM register layout, so the S3 model
-    // drops in unchanged.
-    bus.add_peripheral(
-        "spimem1_flash",
-        0x6000_2000,
-        0x100,
-        None,
-        Box::new(
-            labwired_core::peripherals::esp32s3::spi_mem_flash::SpiMemFlash::new(backing.clone()),
-        ),
-    );
-    // SPIMEM0 (0x6000_3000) — the cache's auto-fetch MSPI controller. Back
-    // it with the same flash image too, in case the BROM's bootloader load
-    // path issues commands here rather than on SPIMEM1.
-    bus.add_peripheral(
-        "spimem0_flash",
-        0x6000_3000,
-        0x100,
-        None,
-        Box::new(
-            labwired_core::peripherals::esp32s3::spi_mem_flash::SpiMemFlash::new(backing.clone()),
-        ),
-    );
-    // Flash cache MMU: the 2nd-stage bootloader programs the virtual→flash
-    // page table at 0x600C_5000, then runs the app from the XIP windows
-    // (IROM 0x4200_0000, DROM 0x3C00_0000). Model the real MMU table shared
-    // with two FlashXip windows that translate through it (C3 entry format:
-    // invalid=BIT(8), 0xFF page field, 8 MiB span) over the flash image —
-    // so the app executes from flash exactly like silicon.
-    use labwired_core::peripherals::esp32s3::flash_xip::{
-        new_mmu_table, Esp32s3MmuTable, FlashXipPeripheral, MMU_FMT_C3,
-    };
-    let mmu_table = new_mmu_table();
-    bus.add_peripheral(
-        "mmu_table",
-        0x600C_5000,
-        0x800,
-        None,
-        Box::new(Esp32s3MmuTable::new(mmu_table.clone())),
-    );
-    // EXTMEM cache controller (0x600C_4000): auto-completes the cache
-    // invalidate/sync launch→done handshake the ROM busy-polls (offset 0x28,
-    // launch bit0 / done bit1). Overrides the declarative stub, which never
-    // asserts done and spins Cache_Invalidate_ICache_Items forever.
-    bus.add_peripheral(
-        "extmem_cache",
-        0x600C_4000,
-        0x400,
-        None,
-        Box::new(labwired_core::peripherals::esp32c3::cache::Esp32c3Cache::new()),
-    );
-    // Analog I²C master / ANA_CONFIG block (0x6000_E000, DR_REG_I2C_ANA_MST_BASE):
-    // rom_i2c_writeReg drives it (read-modify-write of ANA_CONFIG regs) during
-    // PHY/clock bring-up; the libphy full RF calibration also touches regs up
-    // past 0x6000_E130, so the window spans 0x400. The model reports the
-    // master FSM status (0x50 bits[26:24]=7, idle/done) so the ROM's
-    // transaction busy-poll exits; all other regs are register-backed.
-    bus.add_peripheral(
-        "rtc_i2c_ana",
-        0x6000_E000,
-        0x400,
-        None,
-        Box::new(labwired_core::peripherals::esp32c3::ana_i2c::Esp32c3AnaI2c::new()),
-    );
-    // USB-Serial-JTAG (0x6004_3000): the BROM's console prints to BOTH UART0
-    // and the USB CDC port — `usb_uart_tx_one_char` busy-polls EP1_CONF
-    // (offset 0x04) for SERIAL_IN_EP_DATA_FREE. The declarative usb_device
-    // stub reads 0 there, wedging boot_prepare's very first ets_printf line
-    // (observed: banner, then a uart/usb tx ping-pong, then ret-to-0). The C3
-    // block is the same IP as the S3's, so the S3 behavioral model (EP1_CONF
-    // always WR_DONE|DATA_FREE, bytes appended/echoed) drops in unchanged.
-    // Echo off: the same console bytes already reach stdout via UART0 — a
-    // second echo here doubles every character.
-    let mut usb_serial = labwired_core::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag::new();
-    usb_serial.set_sink(None, false);
-    bus.add_peripheral(
-        "usb_serial_jtag",
-        0x6004_3000,
-        0x100,
-        None,
-        Box::new(usb_serial),
-    );
-    // FE/PHY register block (0x6001_1000): libphy's set_rx_gain_table also
-    // writes gain/FE config into the gap between uart1 (0x6001_0000) and
-    // i2c0 (0x6001_3000). Register-backed storage for those RF tables.
-    bus.add_peripheral(
-        "wifi_fe",
-        0x6001_1000,
-        0x2000,
-        None,
-        Box::new(labwired_core::peripherals::esp32c3::reg_block::Esp32c3RegBlock::new(0x2000)),
-    );
-    // Baseband/RF register block (0x6001_C000): libphy writes the RX gain
-    // table and other BB/RF config here (set_rx_gain_table). Unmapped, the
-    // gain-table store faults. Register-backed window up to the declarative
-    // peripheral at 0x6001_CC00. (RF air-gap: storage is enough — there's
-    // no real RF that would act on these values.)
-    bus.add_peripheral(
-        "wifi_bb",
-        0x6001_C000,
-        0xC00,
-        None,
-        Box::new(labwired_core::peripherals::esp32c3::reg_block::Esp32c3RegBlock::new(0xC00)),
-    );
-    // Radio front-end PLL-lock status (RADIO_FE 0x6000_6000 + 0x174, bit16):
-    // the libphy pll_cal launches the BBPLL/RF PLL then busy-polls this bit
-    // for lock; without real RF it never sets and pll_cal spins/retries
-    // ("pll_cal exceeds 2ms!!!"). Force-assert it (RF air-gap cut) over just
-    // that one word, leaving the declarative radio_fe descriptors intact.
-    bus.add_peripheral(
-        "radio_fe_pll_lock",
-        0x6000_6174,
-        0x4,
-        None,
-        Box::new(
-            labwired_core::peripherals::esp32c3::forced_status::Esp32c3ForcedStatus::new(
-                0x4,
-                vec![(0x0, 1 << 16)],
-            ),
-        ),
-    );
-    // WiFi MAC (WIFI_MAC 0x6003_3000, 12 KiB) — behavioral model for the
-    // MAC <-> SimNet bridge: register-backed bring-up, MAC-ready bit (0xD14
-    // b0, polled by hal_init), RX descriptor-ring DMA + RX-frame injection,
-    // and MAC interrupt (matrix source 0) on RX-done. Overrides the
-    // declarative wifi_mac window. See docs/esp32c3_wifi_mac_bridge.md.
-    bus.add_peripheral(
-        "wifi_mac",
-        0x6003_3000,
-        0x3000,
-        None,
-        Box::new(labwired_core::peripherals::esp32c3::wifi_mac::Esp32c3WifiMac::new()),
-    );
-    // Hardware RNG data register (WDEV_RND_REG, 0x6002_60B0): yields a fresh
-    // word per read. bootloader_fill_random XORs successive reads and
-    // process_segments refills ram_obfs_value until non-zero — a constant
-    // RNG gives 0 and spins forever. Override the SYSCON stub at this word.
-    bus.add_peripheral(
-        "wdev_rnd",
-        0x6002_60B0,
-        0x4,
-        None,
-        Box::new(labwired_core::peripherals::esp32c3::rng::Esp32c3Rng::new()),
-    );
-    // SHA accelerator (0x6003_B000): the 2nd-stage bootloader verifies the
-    // app image's appended SHA-256 with it; an unmodelled (zero) digest
-    // makes it reject the image. Real SHA-256 block compression here.
-    bus.add_peripheral(
-        "sha",
-        0x6003_B000,
-        0x100,
-        None,
-        Box::new(labwired_core::peripherals::esp32c3::sha::Esp32c3Sha::new()),
-    );
-    bus.add_peripheral(
-        "flash_irom_xip",
-        0x4200_0000,
-        0x80_0000, // 8 MiB I-cache window
-        None,
-        Box::new(FlashXipPeripheral::new_mmu_fmt(
-            backing.clone(),
-            0x4200_0000,
-            mmu_table.clone(),
-            MMU_FMT_C3,
-        )),
-    );
-    bus.add_peripheral(
-        "flash_drom_xip",
-        0x3C00_0000,
-        0x80_0000, // 8 MiB D-cache window
-        None,
-        Box::new(FlashXipPeripheral::new_mmu_fmt(
-            backing.clone(),
-            0x3C00_0000,
-            mmu_table.clone(),
-            MMU_FMT_C3,
-        )),
-    );
-    // SAR ADC (APB_SARADC, 0x6004_0000): the IDF's adc_hal_self_calibration
-    // triggers single conversions and polls a data-valid flag (0x44 bit31/
-    // bit30) before reading the result; the declarative stub never asserts
-    // it, so read_cal_channel spins forever after spi_flash init. Model
-    // conversions as instant (valid flags set, mid-scale sample) so the
-    // bounded cal search converges and boot continues.
-    bus.add_peripheral(
-        "apb_saradc",
-        0x6004_0000,
-        0x100,
-        None,
-        Box::new(labwired_core::peripherals::esp32c3::sar_adc::Esp32c3SarAdc::new()),
-    );
-    // SYSTIMER (0x6002_3000): the 16 MHz free-running counter behind
-    // esp_timer and the FreeRTOS tick. systimer_hal_get_counter_value sets
-    // UNITx_OP bit30 (UPDATE) then polls bit29 (VALUE_VALID) before reading
-    // the snapshot; the declarative stub never asserts VALUE_VALID, so the
-    // counter read spins forever right after heap_init. The C3 SYSTIMER is
-    // the same IP as the S3 (identical register layout), so the S3 model
-    // drops in: it asserts VALUE_VALID, advances the counter, and supports
-    // the alarm/IRQ path FreeRTOS needs. Clocked relative to the 160 MHz
-    // CPU (10 CPU cycles per 16 MHz tick).
-    bus.add_peripheral(
-        "systimer",
-        0x6002_3000,
-        0x100,
-        None,
-        // C3 SYSTIMER_TARGET0 routes through the interrupt matrix on source
-        // 37 (TARGET1/2 at 38/39), unlike the S3's 57; the FreeRTOS tick
-        // alarm fires on that source.
-        Box::new(
-            labwired_core::peripherals::esp32s3::systimer::Systimer::new_with_source(
-                160_000_000,
-                37,
-            ),
-        ),
-    );
-    // RTC_CNTL main timer (0x6000_8000): the free-running slow-clock counter
-    // the IDF reads via rtc_time_get (set TIME_UPDATE @0x0C bit31 to latch,
-    // read TIME0 @0x10 / TIME1 @0x14). A frozen counter makes every
-    // RTC-deadline wait spin forever — most notably calibrate_ocode, which
-    // polls a regi2c comparator that never settles without real RF and
-    // relies on a ~10 ms RTC timeout to give up and continue. A real
-    // advancing timer lets that loop (and other RTC delays) reach the
-    // timeout exactly as silicon does. Overrides the declarative RTC_CNTL
-    // stub for this window; non-timer regs stay register-backed so the
-    // reset-cause seed at 0x38 below still reads back.
-    bus.add_peripheral(
-        "rtc_cntl_timer",
-        0x6000_8000,
-        0x100,
-        None,
-        Box::new(labwired_core::peripherals::esp32c3::rtc_timer::Esp32c3RtcTimer::new()),
-    );
-    // Seed the power-on hardware reset state the BROM reads to decide it's a
-    // normal flash boot (silicon has this at reset; the sim starts zeroed):
-    //   * RTC_CNTL reset-cause (0x6000_8038, bits[5:0]) = 1 (POWERON_RESET).
-    //     rtc_get_reset_reason returns this; BROM main treats reset_reason 0
-    //     as an error and bails (ret to 0) — 1 lets it continue to flash.
-    //   * GPIO_STRAP (0x6000_4038) bit3 = SPI fast-flash-boot (matches the
-    //     Xtensa rom-boot strap).
-    let _ = bus.write_u32(0x6000_8038, 0x0000_0001);
-    let _ = bus.write_u32(0x6000_4038, 0x0000_0008);
-    //   * eFuse wafer version (EFUSE_RD_MAC_SPI_SYS_3 @ 0x6000_8850,
-    //     WAFER_VERSION_MINOR_LO bits[20:18]) = 4 → chip rev v0.4. The real
-    //     C3 is v0.4; without it eFuse reads v0.0 and the 2nd-stage
-    //     bootloader rejects the app ("requires chip rev >= v0.3").
-    let _ = bus.write_u32(0x6000_8850, 0x0010_0000);
-    // Enable C3 RISC-V interrupt routing: the bus routes asserted peripheral
-    // sources + the SYSTEM FROM_CPU IPI registers through the INTERRUPT_CORE0
-    // matrix into the CPU's external interrupt lines. FreeRTOS's first
-    // context switch (vPortYield → FROM_CPU SW interrupt) depends on this.
-    bus.esp32c3_irq_routing = true;
-    if let Some(mac) = efuse_mac {
-        let lo =
-            mac[5] as u32 | (mac[4] as u32) << 8 | (mac[3] as u32) << 16 | (mac[2] as u32) << 24;
-        let hi = mac[1] as u32 | (mac[0] as u32) << 8;
-        let _ = bus.write_u32(0x6000_8844, lo);
-        let _ = bus.write_u32(0x6000_8848, hi);
-    }
-    let mut cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
-    cpu.set_pc(0x4000_0000);
-    // Disable the internal CLINT timer: the C3 has no standard MTIP — its
-    // 31 interrupt lines (incl. line 7) are ESP matrix lines, so a
-    // self-pending MTIP would collide. mtimecmp=MAX keeps mip bit7 clear.
-    cpu.mtimecmp = u64::MAX;
-    let mut machine = labwired_core::Machine::new(cpu, bus);
-    // ROM-boot firmware is interrupt-driven (FreeRTOS tick via the interrupt
-    // matrix). Instruction batching freezes peripherals — and interrupt
-    // delivery — across each 10k-step batch, so the scheduler never runs and
-    // the app spins in vPortEnterCritical forever. Cycle-accurate stepping is
-    // required for correctness here, exactly like the cycle-tight GPIO-timing
-    // devices the test loop already exempts.
-    machine.config.batch_mode_enabled = false;
-    Ok(machine)
+    // All the faithful peripheral wiring + reset-vector boot lives in the
+    // shared core builder so the wasm browser path reuses it byte-for-byte.
+    Ok(labwired_core::boot::esp32c3_rom::build_rom_boot_machine(
+        bus,
+        flash_bytes,
+        labwired_core::boot::esp32c3_rom::RomBootOpts {
+            efuse_mac,
+            ..Default::default()
+        },
+        // Native keeps the concrete RiscV CPU (the wasm path boxes it).
+        |c| c,
+    ))
 }
 
 /// Two-station WiFi run: boot two ESP32-C3 instances with distinct factory MACs
@@ -1289,6 +894,10 @@ fn run_two_c3_wifi(
                 uart.set_stdout_prefix(label);
             }
         }
+        // `attach_to_medium` flips the MAC's `needs_bus_tick()` on (medium
+        // stations poll their inbox + beacon each tick) but is a non-MMIO
+        // toggle, so rebuild the bus tick-index once to make the MAC resident.
+        m.bus.refresh_peripheral_index();
     }
 
     let limit = args.max_steps.unwrap_or(u64::MAX);
@@ -1584,6 +1193,8 @@ fn handle_load_error<C: labwired_core::Cpu>(
         &None,
         &None,
         &[],
+        None,
+        None,
     );
     ExitCode::from(EXIT_RUNTIME_ERROR)
 }
@@ -1623,6 +1234,69 @@ fn assertion_currently_passes(
     }
 }
 
+/// Does this `labwired test` run qualify for the RV32IMC wasm-JIT fast path?
+///
+/// True ⇔ the target is RISC-V (ESP32-C3), batch mode is on, and NONE of the
+/// per-instruction-visibility features that force the JIT's correctness gate
+/// shut is active. This is the SAME set of conditions that would otherwise pin
+/// the CLI batch to one instruction (`batch_size` in `execute_test_loop`) or
+/// make `RiscV::jit_gate_allows` refuse to run — folded into one predicate the
+/// caller evaluates BEFORE installing observers, so the eligible path can skip
+/// the metrics step observer entirely (its presence gates the JIT off) and
+/// source cycles/instructions from the machine's own counters instead.
+///
+/// Deliberately conservative: any `--trace`/`--coverage`/`--vcd`/`--breakpoint`/
+/// `--detect-stuck`/`--watch-gpio`, a `stop_when_assertions_pass` early-stop, or
+/// a cycle-accurate/poll-mode peripheral drops the run onto the exact current
+/// observer-based path (`jit_eligible == false`).
+fn riscv_jit_test_eligible<C: labwired_core::Cpu>(
+    args: &TestArgs,
+    limits: &TestLimits,
+    machine: &labwired_core::Machine<C>,
+    arch: labwired_core::Arch,
+) -> bool {
+    // NOTE: `batch_mode_enabled` is deliberately NOT required. The eligible path
+    // drives `Machine::advance`, which batches to the peripheral-tick cadence
+    // regardless of that flag — indeed the C3 rom-boot machine turns it OFF (its
+    // fixed-width step_batch loop freezes FreeRTOS), which is exactly the case we
+    // want to accelerate.
+    matches!(arch, labwired_core::Arch::RiscV)
+        && !args.trace
+        && !args.coverage
+        && args.vcd.is_none()
+        && args.breakpoint.is_empty()
+        && args.watch_gpio.is_empty()
+        && args.capture_app_entry.is_none()
+        && limits.no_progress_steps.is_none()
+        && !limits.stop_when_assertions_pass
+        && !machine.bus.requires_cycle_accurate()
+        && !machine.logic_poll_active()
+}
+
+/// Map a core `SimulationError` to the CLI `StopReason` so a halt or fault from
+/// `Machine::advance` ends the run with the CLI's established reason.
+fn map_sim_error_to_stop_reason(e: &labwired_core::SimulationError) -> StopReason {
+    use labwired_core::SimulationError as E;
+    match e {
+        E::MemoryViolation(_) => StopReason::MemoryViolation,
+        E::DecodeError(_) => StopReason::DecodeError,
+        E::Halt => StopReason::Halt,
+        E::SnapshotSchemaMismatch { .. } => StopReason::Exception,
+        E::Other(_) => StopReason::Exception,
+        E::NotImplemented(_) => StopReason::Exception,
+        E::BreakpointHit(_) => StopReason::Halt,
+        E::ExceptionRaised { .. } => StopReason::Exception,
+    }
+}
+
+/// Instruction budget per `Machine::advance` call on the JIT-eligible C3 path. The
+/// stimulus/limit checks at the top of `execute_test_loop`'s run loop run once
+/// per chunk, so this bounds their granularity; the chunk is further clamped so
+/// a run never steps PAST the nearest pending cycle threshold (time-triggered
+/// stimulus or `max_cycles`), keeping those firing points cycle-tight and
+/// identical between the JIT-on and JIT-off arms.
+const JIT_RUN_CHUNK: u32 = 1_000_000;
+
 #[allow(clippy::too_many_arguments)]
 fn execute_test_loop<C: labwired_core::Cpu>(
     args: &TestArgs,
@@ -1638,6 +1312,13 @@ fn execute_test_loop<C: labwired_core::Cpu>(
     require_fault_fired: bool,
     mut fault_evidence: Vec<labwired_cli::faults::FaultEvidence>,
     stimuli: &[labwired_config::StimulusSpec],
+    // True when this run qualifies for the RV32IMC wasm-JIT fast path (decided
+    // by `riscv_jit_test_eligible` in the caller): RiscV arch, batch mode, and
+    // NONE of the per-instruction-visibility features that gate the JIT off.
+    // In this mode `metrics` was NOT installed as a step observer (its presence
+    // forces the JIT's correctness gate shut), so the loop mirrors the machine's
+    // own counters into `metrics` before each cycle-sensitive check.
+    jit_eligible: bool,
 ) -> ExitCode {
     let max_steps = resolved_limits.max_steps;
     let max_cycles = resolved_limits.max_cycles;
@@ -1650,7 +1331,9 @@ fn execute_test_loop<C: labwired_core::Cpu>(
     let mut steps_executed: u64 = 0;
 
     let trace_observer = if args.trace {
-        let obs = Arc::new(labwired_core::trace::TraceObserver::new(args.trace_max));
+        let obs = Arc::new(labwired_core::trace::TraceObserver::new(
+            args.trace_max.unwrap_or(100_000),
+        ));
         machine.observers.push(obs.clone());
         Some(obs)
     } else {
@@ -1675,6 +1358,108 @@ fn execute_test_loop<C: labwired_core::Cpu>(
     let mut prev_pc = machine.cpu.get_pc();
     let mut stuck_counter: u64 = 0;
 
+    // ── --watch-gpio: arm the deterministic logic-analyzer edge capture ──────
+    // Resolve each `peripheral:pin` ref ONCE (to a peripheral index + pin),
+    // exactly as the wasm `watch_logic_signals` accessor does, arm the in-engine
+    // tap, and keep the per-channel identity so the drained edges can be shaped
+    // into `result.json`'s `logic_edges` block after the run. An empty watch set
+    // is a no-op (no channels installed → zero-overhead capture path).
+    let logic_watch_meta: Vec<labwired_core::logic_capture::LogicChannelMeta> = {
+        let refs: Vec<(String, u8)> = args
+            .watch_gpio
+            .iter()
+            .filter_map(|spec| parse_watch_gpio_ref(spec))
+            .collect();
+        if refs.len() != args.watch_gpio.len() {
+            for spec in &args.watch_gpio {
+                if parse_watch_gpio_ref(spec).is_none() {
+                    error!("--watch-gpio: ignoring malformed ref {spec:?} (want `peripheral:pin`)");
+                }
+            }
+        }
+        if refs.is_empty() {
+            Vec::new()
+        } else {
+            let resolved: Vec<Option<(usize, u8)>> = refs
+                .iter()
+                .map(|(name, pin)| {
+                    machine
+                        .bus
+                        .find_peripheral_index_by_name(name)
+                        .map(|idx| (idx, *pin))
+                })
+                .collect();
+            for ((name, _), r) in refs.iter().zip(resolved.iter()) {
+                if r.is_none() {
+                    error!("--watch-gpio: peripheral {name:?} not found on the bus; channel will stay flat");
+                }
+            }
+            let initial = machine.logic_watch(&resolved);
+            refs.iter()
+                .zip(initial)
+                .enumerate()
+                .map(
+                    |(ch, ((name, pin), value))| labwired_core::logic_capture::LogicChannelMeta {
+                        ch: ch as u32,
+                        peripheral: name.clone(),
+                        pin: *pin,
+                        initial: value,
+                    },
+                )
+                .collect()
+        }
+    };
+    let logic_capture_armed = !logic_watch_meta.is_empty();
+
+    // ── JIT-eligible cycle/instruction sourcing (RISC-V / ESP32-C3) ──────────
+    // When eligible, engage the RV32IMC wasm-JIT for this run and source the
+    // metrics counters from the machine's own state (no step observer). Sourcing
+    // cycles from `machine.total_cycles` (not the observer's per-step
+    // `on_step_end` tap) is what makes JIT-on and JIT-off byte-identical:
+    // compiled blocks retire WITHOUT firing `on_step_end`, so an observer would
+    // undercount them. Both JIT arms (`LABWIRED_RISCV_JIT=1` on, default off)
+    // STAY in this same machine-sourced regime, so they are byte-identical
+    // (proven by tests/riscv_jit_c3_oled_test_differential); the metrics numbers
+    // never depend on whether a batch was interpreted or compiled.
+    if jit_eligible {
+        // JIT is OPT-IN (LABWIRED_RISCV_JIT=1), NOT default-on. Measured on the
+        // esp32c3-oled-demo oracle lab, the wasmtime RV32IMC JIT is ~18× SLOWER
+        // than the interpreter here: the hot path is tight FreeRTOS/idle loops
+        // (~1.9 guest instr per compiled-block run), so the per-block-dispatch
+        // FFI overhead dwarfs the interpreted cost and ~⅔ of instructions still
+        // fall back to the interpreter. The genuine speedup on this path is the
+        // tick-interval widening below (`Machine::advance` at the bus max-safe
+        // interval: ~2.6× faster than the pre-change single-step tick-1 oracle),
+        // which is applied UNCONDITIONALLY when eligible. The JIT stays wired,
+        // proven byte-identical, and one env var away for compute-heavy firmware
+        // where straight-line blocks amortize the dispatch cost. See the report.
+        let jit_on = std::env::var("LABWIRED_RISCV_JIT").as_deref() == Ok("1");
+        machine.config.riscv_jit_enabled = jit_on;
+        machine.bus.config.riscv_jit_enabled = jit_on;
+        // Widen the peripheral-tick interval to RECOMMENDED_TICK_INTERVAL so
+        // `Machine::advance`'s per-tick batch is wide enough
+        // for compiled blocks to retire, and the peripheral tick count drops
+        // ~64×. The C3 rom-boot peripherals are walk-deletable, so this is
+        // observably identical to interval-1 (esp32c3_walk_differential); the
+        // eligibility gate already excludes any `requires_cycle_accurate` bus.
+        // `max_safe_tick_interval` is NOT used here because it only returns the
+        // wide interval under the `event-scheduler` feature, which the CLI does
+        // not enable (see crates/cli/Cargo.toml). Crucially this is applied to
+        // BOTH JIT arms, so it never perturbs the JIT-on vs JIT-off differential.
+        // TEST-ONLY escape hatch (regression gate riscv_jit_c3_oled_test_differential):
+        // override the widened interval with LABWIRED_TICK_INTERVAL so the
+        // interval-64 (widened) vs interval-1 (baseline) fidelity gate can be
+        // proven empirically with EVERYTHING else identical (same machine-sourced
+        // cycle counting, same eligible code path) — the tick interval is the ONLY
+        // variable. Unset = default (RECOMMENDED_TICK_INTERVAL).
+        let interval = std::env::var("LABWIRED_TICK_INTERVAL")
+            .ok()
+            .and_then(|v| v.parse::<u32>().ok())
+            .unwrap_or(labwired_core::bus::RECOMMENDED_TICK_INTERVAL);
+        machine.config.peripheral_tick_interval = interval;
+        machine.bus.config.peripheral_tick_interval = interval;
+    }
+
     let batch_size = if machine.config.batch_mode_enabled
         && args.breakpoint.is_empty()
         && detect_stuck.is_none()
@@ -1683,6 +1468,11 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         // correctly when peripherals tick between every instruction; instruction
         // batching freezes them across the batch and the firmware measures 0.
         && !machine.bus.requires_cycle_accurate()
+        // A logic-analyzer POLL-mode channel must be sampled at EVERY cycle
+        // boundary, so clamp the batch to one instruction while one is armed
+        // (mirrors `Machine::advance`). Push-mode channels report their own edges
+        // from the write sites and keep the full batch width.
+        && !machine.logic_poll_active()
     {
         10000.min(max_steps)
     } else {
@@ -1696,7 +1486,11 @@ fn execute_test_loop<C: labwired_core::Cpu>(
     // an argument (captures nothing) so it can be called both here and mid-loop.
     let apply_stimulus = |machine: &mut labwired_core::Machine<C>,
                           s: &labwired_config::StimulusSpec| {
-        match machine.set_input(&s.target.channel, s.value) {
+        let result = match s.target.component.as_deref() {
+            Some(component) => machine.set_input_on(component, &s.target.channel, s.value),
+            None => machine.set_input(&s.target.channel, s.value),
+        };
+        match result {
             Ok(()) => info!("stimulus: {} = {} applied", s.target.channel, s.value),
             Err(e) => error!(
                 "stimulus '{}' = {} could not be applied: {:?}",
@@ -1723,8 +1517,86 @@ fn execute_test_loop<C: labwired_core::Cpu>(
     // instead of certifying as passed. A regression (assertions stop passing)
     // resets it, so the pass must be durable.
     let mut assertions_first_passed_at: Option<u64> = None;
+
+    // ── --capture-app-entry: cache a genuine faithful-boot state ─────────
+    // While the REAL rom-boot runs, snapshot the machine the instant control
+    // first reaches the application, write the `.lwrs`, then keep running so
+    // this same cold invocation still emits the normal evidence. The capture
+    // point is a real mid-flight boot state — NOT a hand-modeled handoff.
+    struct AppEntryCapture {
+        path: PathBuf,
+        chip: &'static str,
+        fw_sha: [u8; 32],
+        // App-entry PC resolved from the ELF (`call_start_cpu0`, else
+        // `app_main`); `None` falls back to the XIP app-window detector.
+        target_pc: Option<u32>,
+    }
+    let mut app_entry_capture: Option<AppEntryCapture> =
+        args.capture_app_entry.as_ref().and_then(|path| {
+            let Some((chip, fw_sha)) = rom_boot_flash_self_key() else {
+                error!(
+                    "--capture-app-entry needs a faithful rom-boot (set LABWIRED_ESP32C3_FLASH \
+                     or LABWIRED_ESP32S3_FLASH); skipping capture"
+                );
+                return None;
+            };
+            let target_pc =
+                labwired_loader::resolve_symbol_in_elf(firmware_bytes, "call_start_cpu0")
+                    .or_else(|| labwired_loader::resolve_symbol_in_elf(firmware_bytes, "app_main"));
+            match target_pc {
+                Some(pc) => {
+                    info!("capture-app-entry: chip={chip} app-entry PC 0x{pc:08x} (ELF symbol)")
+                }
+                None => info!(
+                    "capture-app-entry: chip={chip} no call_start_cpu0/app_main symbol; \
+                     using first PC in XIP app window [0x42000000,0x44000000)"
+                ),
+            }
+            Some(AppEntryCapture {
+                path: path.clone(),
+                chip,
+                fw_sha,
+                target_pc,
+            })
+        });
+
     let mut step = 0;
     while step < max_steps {
+        // JIT-eligible path: mirror the machine's authoritative counters into
+        // `metrics` BEFORE the cycle-sensitive checks below (stimulus
+        // `after_cycles`, `max_cycles`), so they fire at exactly the same batch
+        // boundary the observer path would. `step` is the retired-instruction
+        // count (accumulated from `step_batch` return values); `total_cycles`
+        // is the machine's canonical cycle counter. No-op for the non-eligible
+        // path, where `metrics` IS the live step observer.
+        if jit_eligible {
+            metrics.set_cycles(machine.total_cycles);
+            metrics.set_instructions(step);
+        }
+        // --capture-app-entry: detect the first instant execution reaches the
+        // application, snapshot the live machine, and write the resume blob.
+        if let Some(cap) = &app_entry_capture {
+            let pc = machine.cpu.get_pc();
+            let reached = cap.target_pc == Some(pc) || (0x4200_0000..0x4400_0000).contains(&pc);
+            if reached {
+                let mut snap = machine.take_runtime_snapshot();
+                snap.set_self_key(cap.chip, cap.fw_sha);
+                if let Some(parent) = cap.path.parent() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
+                match std::fs::write(&cap.path, snap.to_bytes()) {
+                    Ok(()) => info!(
+                        "capture-app-entry: snapshot written to {:?} at app-entry pc=0x{pc:08x} \
+                         (cold-boot step {step})",
+                        cap.path
+                    ),
+                    Err(e) => error!("capture-app-entry: failed to write {:?}: {e}", cap.path),
+                }
+                // Capture once; keep running so the cold invocation still
+                // produces the normal serial/cycle evidence.
+                app_entry_capture = None;
+            }
+        }
         // Fire any `after_cycles` stimulus whose threshold the run has reached.
         if !pending_stimuli.is_empty() {
             let cycles = metrics.get_cycles();
@@ -1774,127 +1646,49 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         let current_batch = batch_size as u32;
         let to_execute = current_batch.min(remaining);
 
-        if to_execute > 1 {
-            match machine.cpu.step_batch(
-                &mut machine.bus,
-                &machine.observers,
-                &machine.config,
-                to_execute,
-            ) {
-                Ok(executed) => {
-                    let prev_cycles = machine.total_cycles;
-                    step += executed as u64;
-                    steps_executed = step;
-                    machine.total_cycles += executed as u64;
-
-                    // Cycle-accurate tick propagation for batch runs
-                    let tick_interval = machine.config.peripheral_tick_interval as u64;
-                    let ticks_before = prev_cycles / tick_interval;
-                    let ticks_after = machine.total_cycles / tick_interval;
-
-                    for _ in ticks_before..ticks_after {
-                        let (interrupts, costs) = machine.bus.tick_peripherals_fully();
-                        for c in costs {
-                            machine.total_cycles += c.cycles as u64;
-                            if let Some(p) = machine.bus.peripherals.get(c.index) {
-                                for observer in &machine.observers {
-                                    observer.on_peripheral_tick(&p.name, c.cycles);
-                                }
-                            }
-                        }
-                        for irq in interrupts {
-                            machine.cpu.set_exception_pending(irq);
-                        }
-                    }
-
-                    // Honor a firmware-requested system reset (AIRCR
-                    // SYSRESETREQ with VECTKEY) latched by the batch just
-                    // executed. The single-step `else` branch gets this via
-                    // `machine.step()`; the batched path must drain it
-                    // explicitly or the reboot never fires.
-                    if machine.drain_scb_reset_request() {
-                        if let Err(e) = machine.reset() {
-                            sim_error_happened = true;
-                            stop_reason = match e {
-                                labwired_core::SimulationError::MemoryViolation(_) => {
-                                    StopReason::MemoryViolation
-                                }
-                                labwired_core::SimulationError::DecodeError(_) => {
-                                    StopReason::DecodeError
-                                }
-                                labwired_core::SimulationError::Halt => StopReason::Halt,
-                                labwired_core::SimulationError::SnapshotSchemaMismatch {
-                                    ..
-                                } => StopReason::Exception,
-                                labwired_core::SimulationError::Other(_) => StopReason::Exception,
-                                labwired_core::SimulationError::NotImplemented(_) => {
-                                    StopReason::Exception
-                                }
-                                labwired_core::SimulationError::BreakpointHit(_) => {
-                                    StopReason::Halt
-                                }
-                                labwired_core::SimulationError::ExceptionRaised { .. } => {
-                                    StopReason::Exception
-                                }
-                            };
-                            error!("Reset error at step {}: {}", step, e);
-                            break;
-                        }
-                    }
-
-                    if executed < to_execute {
-                        // Bailed out early (e.g. exception/branch)
-                        continue;
+        let (mut limit, batch_cap) = if jit_eligible {
+            let chunk = remaining.min(JIT_RUN_CHUNK);
+            (u64::from(chunk), chunk)
+        } else {
+            (u64::from(to_execute), current_batch)
+        };
+        let current_cycle = machine.total_cycles;
+        for (stimulus, fired) in &pending_stimuli {
+            if !*fired {
+                if let labwired_config::FaultTrigger::AfterCycles { cycles } = stimulus.trigger {
+                    if cycles > current_cycle {
+                        limit = limit.min(cycles - current_cycle);
                     }
                 }
-                Err(e) => {
-                    sim_error_happened = true;
-                    stop_reason = match e {
-                        labwired_core::SimulationError::MemoryViolation(_) => {
-                            StopReason::MemoryViolation
-                        }
-                        labwired_core::SimulationError::DecodeError(_) => StopReason::DecodeError,
-                        labwired_core::SimulationError::Halt => StopReason::Halt,
-                        labwired_core::SimulationError::SnapshotSchemaMismatch { .. } => {
-                            StopReason::Exception
-                        }
-                        labwired_core::SimulationError::Other(_) => StopReason::Exception,
-                        labwired_core::SimulationError::NotImplemented(_) => StopReason::Exception,
-                        labwired_core::SimulationError::BreakpointHit(_) => StopReason::Halt,
-                        labwired_core::SimulationError::ExceptionRaised { .. } => {
-                            StopReason::Exception
-                        }
-                    };
-                    if stop_reason != StopReason::Halt {
-                        error!("Simulation error at step {}: {}", step, e);
-                    }
+            }
+        }
+        if let Some(cycle_limit) = max_cycles {
+            if cycle_limit > current_cycle {
+                limit = limit.min(cycle_limit - current_cycle);
+            }
+        }
+        let request = labwired_core::AdvanceRequest::run(Some(limit.max(1)))
+            .with_batch_cap(
+                std::num::NonZeroU32::new(batch_cap.max(1)).expect("advance batch cap is non-zero"),
+            )
+            .with_breakpoints(labwired_core::BreakpointPolicy::Ignore);
+        match machine.advance(request) {
+            Ok(report) => {
+                step += report.primary_steps;
+                steps_executed = step;
+                if report.primary_steps == 0 && report.idle_cycles == 0 {
+                    stop_reason = StopReason::Halt;
                     break;
                 }
             }
-        } else {
-            steps_executed = step + 1;
-            if let Err(e) = machine.step() {
+            Err(error) => {
                 sim_error_happened = true;
-                stop_reason = match e {
-                    labwired_core::SimulationError::MemoryViolation(_) => {
-                        StopReason::MemoryViolation
-                    }
-                    labwired_core::SimulationError::DecodeError(_) => StopReason::DecodeError,
-                    labwired_core::SimulationError::Halt => StopReason::Halt,
-                    labwired_core::SimulationError::SnapshotSchemaMismatch { .. } => {
-                        StopReason::Exception
-                    }
-                    labwired_core::SimulationError::Other(_) => StopReason::Exception,
-                    labwired_core::SimulationError::NotImplemented(_) => StopReason::Exception,
-                    labwired_core::SimulationError::BreakpointHit(_) => StopReason::Halt,
-                    labwired_core::SimulationError::ExceptionRaised { .. } => StopReason::Exception,
-                };
+                stop_reason = map_sim_error_to_stop_reason(&error);
                 if stop_reason != StopReason::Halt {
-                    error!("Simulation error at step {}: {}", step, e);
+                    error!("Simulation error at step {}: {}", step, error);
                 }
                 break;
             }
-            step += 1;
         }
 
         // Check no_progress (PC stuck) - only if batching disabled or not possible
@@ -1953,6 +1747,29 @@ fn execute_test_loop<C: labwired_core::Cpu>(
                     }
                 }
             }
+        }
+    }
+
+    // Final counter mirror for the JIT-eligible path: the loop-top sync runs
+    // before the LAST batch, so capture that batch's retired cycles/instructions
+    // here — `result.json` (`cycles`/`instructions`) and `stop_reason_details`
+    // read `metrics` below and must report the true totals.
+    if jit_eligible {
+        metrics.set_cycles(machine.total_cycles);
+        metrics.set_instructions(steps_executed);
+    }
+
+    // Opt-in JIT non-vacuity / diagnostic: prove hot blocks actually compiled
+    // and ran on this oracle run (LABWIRED_JIT_STATS=1). `jit_engine_stats` is a
+    // feature-agnostic Cpu-trait accessor: `Some(..)` only in a `jit-core` build
+    // whose JIT engine was created, `None` otherwise (interpreter-only).
+    if jit_eligible && std::env::var("LABWIRED_JIT_STATS").is_ok() {
+        match machine.cpu.jit_engine_stats() {
+            Some(s) => eprintln!(
+                "[jit-stats] compiled={} block_runs={} block_instrs={} interpreted={}",
+                s.compiled, s.block_runs, s.block_instrs, s.interpreted
+            ),
+            None => eprintln!("[jit-stats] JIT engine never created (interpreter-only run)"),
         }
     }
 
@@ -2083,6 +1900,36 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         error!("require_fault_fired: {n} fault(s) did not fire; run is invalid");
     }
 
+    // Final-state universal inspect block (summary mode: decoded registers +
+    // artifact metadata, framebuffer bytes omitted/hashed). This is the
+    // agent-facing oracle payload — after a run the caller sees the decoded
+    // final register state and which artifacts exist.
+    let inspect_block = machine.inspect(
+        None,
+        &labwired_core::inspect::InspectOpts {
+            include_bytes: false,
+            peripheral: None,
+        },
+    );
+
+    // Drain the deterministic logic-analyzer edge capture for THIS run and shape
+    // it into the shared per-channel series form. Reading from cursor 0 returns
+    // every retained edge; `dropped` (surfaced in the block) is non-zero only if
+    // the 64k ring overflowed, which the oracle treats as fail-loud. This is the
+    // SAME `logic_read_edges` drain the wasm `read_logic_edges` accessor uses, so
+    // the CLI `result.json` edges and the browser edges are edge-for-edge equal.
+    let logic_edges = if logic_capture_armed {
+        let now_cycle = machine.logic_now_cycle();
+        let batch = machine.logic_read_edges(0);
+        Some(labwired_core::logic_capture::build_logic_edges_result(
+            &logic_watch_meta,
+            &batch,
+            now_cycle,
+        ))
+    } else {
+        None
+    };
+
     write_outputs(
         args,
         status,
@@ -2101,6 +1948,8 @@ fn execute_test_loop<C: labwired_core::Cpu>(
         &trace_observer,
         &coverage_observer,
         &fault_evidence,
+        Some(inspect_block),
+        logic_edges,
     );
 
     if !all_passed
@@ -2134,10 +1983,19 @@ fn write_outputs<C: labwired_core::Cpu>(
     trace_observer: &Option<Arc<labwired_core::trace::TraceObserver>>,
     coverage_observer: &Option<Arc<labwired_core::pc_coverage::PcCoverageObserver>>,
     fault_evidence: &[labwired_cli::faults::FaultEvidence],
+    inspect: Option<labwired_core::inspect::MachineInspect>,
+    logic_edges: Option<labwired_core::logic_capture::LogicEdgesResult>,
 ) {
     let mut hasher = Sha256::new();
     hasher.update(firmware_bytes);
     let firmware_hash = format!("{:x}", hasher.finalize());
+
+    // Drain the coverage-gap log for THIS run. `write_outputs` is called
+    // synchronously at the tail of `execute_test_loop`, on the very thread that
+    // ran the sim loop, so this reads the same thread-local the `record_*` calls
+    // populated. `take()` resets it, so it must run exactly once per run — this
+    // is the sole call site on the run path.
+    let fidelity = labwired_core::fidelity::take().to_gaps();
 
     let assertions_for_junit = assertions.clone();
     let result = TestResult {
@@ -2158,6 +2016,9 @@ fn write_outputs<C: labwired_core::Cpu>(
             system: system_path.cloned(),
             script: args.script.clone(),
         },
+        inspect,
+        fidelity,
+        logic_edges,
     };
 
     if let Some(output_dir) = &args.output_dir {
@@ -2477,6 +2338,11 @@ pub(crate) fn write_config_error_outputs(
             system: system_path.cloned(),
             script: args.script.clone(),
         },
+        inspect: None,
+        // Config error: the sim never ran, so there are no coverage gaps to report.
+        fidelity: Vec::new(),
+        // Nor any logic-analyzer edges — capture never armed.
+        logic_edges: None,
     };
 
     if let Some(output_dir) = &args.output_dir {
@@ -2909,5 +2775,36 @@ mod tests {
         };
         let err = evaluate_uds_tester(&testers, &details).unwrap_err();
         assert!(err.contains("ghost-tester"), "missing id in: {err}");
+    }
+
+    #[test]
+    fn config_error_snapshot_keeps_serde_tag() {
+        let snapshot = crate::artifacts::Snapshot::ConfigError {
+            message: "invalid test config".to_string(),
+            stop_reason_details: crate::artifacts::StopReasonDetails {
+                triggered_stop_condition: StopReason::ConfigError,
+                triggered_limit: None,
+                observed: None,
+            },
+            limits: TestLimits {
+                max_steps: 1,
+                max_cycles: None,
+                max_uart_bytes: None,
+                no_progress_steps: None,
+                wall_time_ms: None,
+                max_vcd_bytes: None,
+                stop_when_assertions_pass: false,
+                stop_when_assertions_pass_settle_steps: 0,
+                stop_when_assertions_pass_min_steps: 0,
+            },
+            config: crate::artifacts::TestConfig {
+                firmware: std::path::PathBuf::from("firmware.elf"),
+                system: None,
+                script: std::path::PathBuf::from("test.yaml"),
+            },
+        };
+
+        let json = serde_json::to_value(snapshot).expect("snapshot should serialize");
+        assert_eq!(json["type"], "config_error");
     }
 }

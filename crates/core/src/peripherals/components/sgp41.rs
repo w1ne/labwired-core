@@ -18,10 +18,11 @@
 //! - `0x3615` turn_heater_off (no response)
 //! - `0x3682` get_serial_number → 3 words
 //!
-//! The VOC raw signal advances along a [`Ramp`] each `measure_raw_signals`, so
-//! the firmware's VOC Index drifts as the room's air load changes.
+//! The raw signals are externally driven variables: they change only when
+//! something drives them through the ONE stimulus contract,
+//! [`crate::sim_input::SimInput`] (`voc_sraw`, `nox_sraw`). The config block
+//! only seeds their initial values.
 
-use crate::peripherals::components::air_scene::Ramp;
 use crate::peripherals::components::sensirion::encode_words;
 use crate::peripherals::i2c::I2cDevice;
 
@@ -36,30 +37,35 @@ const CMD_GET_SERIAL: u16 = 0x3682;
 /// SGP41 model.
 pub struct Sgp41 {
     address: u8,
-    voc_sraw: Ramp,
-    nox_sraw: Ramp,
+    /// Raw VOC signal in SRAW ticks. Externally driven (see `SimInput`).
+    voc_sraw: f64,
+    /// Raw NOx signal in SRAW ticks. Externally driven.
+    nox_sraw: f64,
     write_buf: Vec<u8>,
     read_buf: Vec<u8>,
     read_idx: usize,
+    /// system.yaml `external_devices` id, stamped at attach.
+    component_id: Option<String>,
 }
 
 impl Sgp41 {
-    /// `voc_start`/`voc_target` are raw SRAW ticks (~20000..40000 typical);
-    /// `nox` is a steady NOx raw tick value; `alpha` the per-measure ramp rate.
-    pub fn new(address: u8, voc_start: f64, voc_target: f64, nox: f64, alpha: f64) -> Self {
+    /// `voc_sraw` / `nox_sraw` are the initial raw SRAW ticks the part reports
+    /// (~20000..40000 typical for VOC, ~16000 for NOx).
+    pub fn new(address: u8, voc_sraw: f64, nox_sraw: f64) -> Self {
         let address = if address == 0 { SGP41_ADDR } else { address };
         Self {
             address,
-            voc_sraw: Ramp::new(voc_start, voc_target, alpha),
-            nox_sraw: Ramp::new(nox, nox, 0.0),
+            voc_sraw,
+            nox_sraw,
             write_buf: Vec::with_capacity(8),
             read_buf: Vec::new(),
             read_idx: 0,
+            component_id: None,
         }
     }
 
     pub fn new_default(address: u8) -> Self {
-        Self::new(address, 28000.0, 34000.0, 16000.0, 0.08)
+        Self::new(address, 28000.0, 16000.0)
     }
 
     fn dispatch(&mut self, cmd: u16) {
@@ -67,14 +73,13 @@ impl Sgp41 {
         self.read_idx = 0;
         match cmd {
             CMD_EXECUTE_CONDITIONING => {
-                // Conditioning returns only the VOC raw signal; don't advance —
-                // it runs before measurement starts.
-                let voc = self.voc_sraw.value().round().clamp(0.0, 65535.0) as u16;
+                // Conditioning returns only the VOC raw signal.
+                let voc = self.voc_sraw.round().clamp(0.0, 65535.0) as u16;
                 self.read_buf = encode_words(&[voc]);
             }
             CMD_MEASURE_RAW => {
-                let voc = self.voc_sraw.advance().round().clamp(0.0, 65535.0) as u16;
-                let nox = self.nox_sraw.advance().round().clamp(0.0, 65535.0) as u16;
+                let voc = self.voc_sraw.round().clamp(0.0, 65535.0) as u16;
+                let nox = self.nox_sraw.round().clamp(0.0, 65535.0) as u16;
                 self.read_buf = encode_words(&[voc, nox]);
             }
             CMD_EXECUTE_SELF_TEST => {
@@ -128,6 +133,55 @@ impl I2cDevice for Sgp41 {
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
     }
+
+    fn as_sim_input_mut(&mut self) -> Option<&mut dyn crate::sim_input::SimInput> {
+        Some(self)
+    }
+}
+
+/// Drivable channels. The SGP41's native output IS the raw tick, so that is the
+/// engineering unit here — the VOC Index conversion runs on the host, in the
+/// firmware's Gas Index Algorithm, exactly as on real hardware. ONE table backs
+/// BOTH the `SimInput` impl and the kit metadata.
+pub const INPUT_CHANNELS: &[crate::sim_input::InputChannel] = &[
+    crate::sim_input::InputChannel {
+        key: "voc_sraw",
+        label: "VOC raw",
+        unit: "ticks",
+        min: 0.0,
+        max: 65535.0,
+    },
+    crate::sim_input::InputChannel {
+        key: "nox_sraw",
+        label: "NOx raw",
+        unit: "ticks",
+        min: 0.0,
+        max: 65535.0,
+    },
+];
+
+impl crate::sim_input::SimInput for Sgp41 {
+    fn input_channels(&self) -> &'static [crate::sim_input::InputChannel] {
+        INPUT_CHANNELS
+    }
+
+    fn set_input(&mut self, key: &str, value: f64) -> Result<(), crate::sim_input::SimInputError> {
+        self.require_channel(key, value)?;
+        match key {
+            "voc_sraw" => self.voc_sraw = value,
+            "nox_sraw" => self.nox_sraw = value,
+            _ => unreachable!("require_channel validated the key"),
+        }
+        Ok(())
+    }
+
+    fn component_id(&self) -> Option<&str> {
+        self.component_id.as_deref()
+    }
+
+    fn set_component_id(&mut self, id: String) {
+        self.component_id = Some(id);
+    }
 }
 
 // ─── PeripheralKit registration ────────────────────────────────────────────
@@ -140,13 +194,15 @@ pub struct Sgp41Kit;
 pub static SGP41_KIT: Sgp41Kit = Sgp41Kit;
 
 static SGP41_METADATA: KitMetadata = KitMetadata {
+    inputs: INPUT_CHANNELS,
     device_type: "sgp41",
     label: "Sensirion SGP41 VOC/NOx",
     summary: "MOx gas sensor returning raw VOC/NOx signals over I2C.",
     detail: "Sensirion SGP41 at fixed address 0x59, speaking the real Sensirion \
              command protocol with CRC-8 (poly 0x31). Returns raw SRAW_VOC / SRAW_NOX \
              ticks that the on-host Sensirion Gas Index Algorithm converts to a VOC \
-             Index; the raw VOC signal advances along a configurable ramp.",
+             Index. The raw signals are externally driven inputs (channels voc_sraw / \
+             nox_sraw); config only seeds their initial values.",
     transport: Transport::I2c,
     category: Category::I2c,
     config_keys: &[
@@ -156,28 +212,19 @@ static SGP41_METADATA: KitMetadata = KitMetadata {
             doc: "7-bit slave address. Defaults to the SGP41 fixed address 0x59.",
         },
         ConfigKey {
-            name: "voc_sraw_start",
+            name: "voc_sraw",
             ty: ConfigType::Float,
-            doc: "Raw VOC tick at the first measurement (~20000..40000). Default 28000.",
-        },
-        ConfigKey {
-            name: "voc_sraw_target",
-            ty: ConfigType::Float,
-            doc: "Raw VOC tick the ramp approaches. Default 34000.",
+            doc: "Initial raw VOC tick (~20000..40000). Default 28000. Drive it at \
+                  runtime with the `voc_sraw` input channel.",
         },
         ConfigKey {
             name: "nox_sraw",
             ty: ConfigType::Float,
-            doc: "Steady raw NOx tick value. Default 16000.",
-        },
-        ConfigKey {
-            name: "ramp_alpha",
-            ty: ConfigType::Float,
-            doc: "Per-measurement approach rate 0..1 (0 = flat scene). Default 0.08.",
+            doc: "Initial raw NOx tick. Default 16000. Runtime channel: `nox_sraw`.",
         },
     ],
     labs: &[LabRef {
-        board_id: "leo-airquality-lab",
+        board_id: "esp32c3-leo-airquality",
         chip: "esp32c3",
         example_dir: "esp32c3-leo-airquality",
         demo_elf: "demo-esp32c3-leo-airquality.elf",
@@ -190,13 +237,9 @@ impl PeripheralKit for Sgp41Kit {
     }
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
         let address = ctx.i2c_address_or(SGP41_ADDR)?;
-        let voc_start = ctx.config_f64("voc_sraw_start").unwrap_or(28000.0);
-        let voc_target = ctx.config_f64("voc_sraw_target").unwrap_or(34000.0);
-        let nox = ctx.config_f64("nox_sraw").unwrap_or(16000.0);
-        let alpha = ctx.config_f64("ramp_alpha").unwrap_or(0.08);
-        ctx.attach_i2c_device(Box::new(Sgp41::new(
-            address, voc_start, voc_target, nox, alpha,
-        )))
+        let voc_sraw = ctx.config_f64("voc_sraw").unwrap_or(28000.0);
+        let nox_sraw = ctx.config_f64("nox_sraw").unwrap_or(16000.0);
+        ctx.attach_i2c_device(Box::new(Sgp41::new(address, voc_sraw, nox_sraw)))
     }
 }
 
@@ -233,20 +276,31 @@ mod tests {
     }
 
     #[test]
-    fn voc_raw_climbs_with_air_load() {
+    fn raw_signals_hold_until_driven() {
+        use crate::sim_input::SimInput;
         let mut d = Sgp41::new_default(SGP41_ADDR);
-        let mut first = 0u16;
-        let mut last = 0u16;
-        for i in 0..60 {
-            send_cmd(&mut d, CMD_MEASURE_RAW);
-            let b = read_n(&mut d, 6);
-            let voc = ((b[0] as u16) << 8) | b[1] as u16;
-            if i == 0 {
-                first = voc;
-            }
-            last = voc;
+        let read_voc = |d: &mut Sgp41| {
+            send_cmd(d, CMD_MEASURE_RAW);
+            let b = read_n(d, 6);
+            (
+                ((b[0] as u16) << 8) | b[1] as u16,
+                ((b[3] as u16) << 8) | b[4] as u16,
+            )
+        };
+        for _ in 0..20 {
+            assert_eq!(read_voc(&mut d), (28000, 16000), "no self-running scene");
         }
-        assert!(last > first, "VOC raw should rise: {first} -> {last}");
+        d.set_input("voc_sraw", 34000.0).unwrap();
+        d.set_input("nox_sraw", 21000.0).unwrap();
+        assert_eq!(read_voc(&mut d), (34000, 21000));
+    }
+
+    #[test]
+    fn out_of_range_input_is_rejected() {
+        use crate::sim_input::SimInput;
+        let mut d = Sgp41::new_default(SGP41_ADDR);
+        assert!(d.set_input("voc_sraw", 70000.0).is_err());
+        assert!(d.set_input("voc_index", 100.0).is_err());
     }
 
     #[test]

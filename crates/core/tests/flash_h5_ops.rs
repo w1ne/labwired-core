@@ -14,7 +14,7 @@
 use labwired_config::ChipDescriptor;
 use labwired_core::peripherals::flash::h5;
 use labwired_core::system::cortex_m::configure_cortex_m;
-use labwired_core::{Cpu, DebugControl, Machine};
+use labwired_core::{Bus, Cpu, DebugControl, Machine};
 
 /// FLASH interface peripheral base address (RM0481, stm32h563.yaml).
 const FLASH_BASE: u64 = 0x4002_2000;
@@ -25,7 +25,7 @@ fn h563_machine() -> Machine<labwired_core::cpu::CortexM> {
         .join("../../configs/chips/stm32h563.yaml");
     let chip = ChipDescriptor::from_file(&path).expect("load stm32h563.yaml");
     let manifest = labwired_config::SystemManifest {
-        walk_deleted: false,
+        walk_deleted: Some(false),
         schema_version: "1.0".to_string(),
         name: "flash-h5-ops".to_string(),
         chip: path.to_string_lossy().to_string(),

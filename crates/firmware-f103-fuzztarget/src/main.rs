@@ -43,15 +43,22 @@ unsafe fn rd8(addr: u32) -> u8 {
     read_volatile(addr as *const u8)
 }
 
+#[inline(never)]
+fn halt_forever() -> ! {
+    loop {
+        core::hint::spin_loop();
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn HardFaultHandler() -> ! {
     unsafe { wr(VERDICT, FAULT_MAGIC) };
-    loop {}
+    halt_forever()
 }
 #[no_mangle]
 pub extern "C" fn DefaultHandler() -> ! {
     unsafe { wr(VERDICT, FAULT_MAGIC) };
-    loop {}
+    halt_forever()
 }
 
 #[no_mangle]
@@ -66,7 +73,7 @@ fn main() -> ! {
         parse(len);
         wr(VERDICT, DONE_MAGIC);
     }
-    loop {}
+    halt_forever()
 }
 
 /// Walk the frame stream. Bounds the per-frame data read to the remaining input

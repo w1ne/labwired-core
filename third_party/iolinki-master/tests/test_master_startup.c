@@ -592,6 +592,58 @@ static void test_fixed_baudrate_startup_timeout_enters_error(void** state)
     assert_int_equal(g_set_baudrate_calls, 1);
 }
 
+static void test_wake_retry_limit_reissues_wake_before_error_on_fixed_baud(void** state)
+{
+    iolink_master_port_t port;
+    iolink_master_config_t config = g_config;
+
+    (void)state;
+
+    config.wake_retry_limit = 2U;
+
+    assert_int_equal(iolink_master_init(&port, &g_fake_phy, &config), 0);
+
+    /* Each timeout re-arms the wake-up (step back to 0) at the same baudrate. */
+    assert_int_equal(iolink_master_on_timeout(&port), IOLINK_MASTER_STATUS_PENDING);
+    assert_int_equal(iolink_master_port_state(&port)->startup.step, 0U);
+    assert_int_equal(iolink_master_port_state(&port)->startup.wake_attempts, 1U);
+    assert_int_equal(iolink_master_get_state(&port), IOLINK_MASTER_STATE_STARTUP);
+
+    assert_int_equal(iolink_master_on_timeout(&port), IOLINK_MASTER_STATUS_PENDING);
+    assert_int_equal(iolink_master_port_state(&port)->startup.wake_attempts, 2U);
+    assert_int_equal(iolink_master_get_state(&port), IOLINK_MASTER_STATE_STARTUP);
+
+    /* Wake budget exhausted on a fixed baudrate: enter error, never re-baud. */
+    assert_int_equal(iolink_master_on_timeout(&port), -2);
+    assert_int_equal(iolink_master_get_state(&port), IOLINK_MASTER_STATE_ERROR);
+    assert_int_equal(g_set_baudrate_calls, 1);
+}
+
+static void test_wake_retry_exhausts_per_baud_then_advances_scan(void** state)
+{
+    iolink_master_port_t port;
+    iolink_master_config_t config = g_config;
+
+    (void)state;
+
+    config.auto_baudrate = true;
+    config.wake_retry_limit = 1U;
+
+    assert_int_equal(iolink_master_init(&port, &g_fake_phy, &config), 0);
+    assert_int_equal(g_baudrate_history[0], IOLINK_BAUDRATE_COM3);
+
+    /* One wake retry at COM3 before the scan is allowed to advance. */
+    assert_int_equal(iolink_master_on_timeout(&port), IOLINK_MASTER_STATUS_PENDING);
+    assert_int_equal(iolink_master_port_state(&port)->startup.wake_attempts, 1U);
+    assert_int_equal(g_set_baudrate_calls, 1);
+
+    /* Budget spent: advance to COM2 and reset the per-baud wake counter. */
+    assert_int_equal(iolink_master_on_timeout(&port), IOLINK_MASTER_STATUS_PENDING);
+    assert_int_equal(g_set_baudrate_calls, 2);
+    assert_int_equal(g_baudrate_history[1], IOLINK_BAUDRATE_COM2);
+    assert_int_equal(iolink_master_port_state(&port)->startup.wake_attempts, 0U);
+}
+
 static void test_restart_reenters_startup_and_clears_runtime_state(void** state)
 {
     iolink_master_port_t port;
@@ -783,7 +835,11 @@ static void test_process_startup_waits_for_type0_response_before_preoperate(void
     assert_int_equal(g_sent[0][0], 0x55U);
 
     iolink_master_process(&port);
-    expected_len = iolink_frame_encode_type0(0x00U, expected, sizeof(expected));
+    /* Startup probe: Type-0 READ of MinCycleTime on the page channel (MC 0xA2). */
+    expected_len = iolink_frame_encode_type0(
+        iolink_master_encode_master_command(true, IOLINK_MASTER_MC_CHANNEL_PAGE,
+                                            IOLINK_MASTER_DPP1_OFF_MIN_CYCLE_TIME),
+        expected, sizeof(expected));
     assert_int_equal(expected_len, 2);
     assert_int_equal(g_send_calls, 2);
     assert_int_equal(g_sent_len[1], (size_t)expected_len);
@@ -797,8 +853,13 @@ static void test_process_startup_waits_for_type0_response_before_preoperate(void
     assert_int_equal(iolink_master_get_state(&port), IOLINK_MASTER_STATE_PREOPERATE);
 
     iolink_master_process(&port);
-    expected_len = iolink_frame_encode_type0(IOLINK_MC_TRANSITION_COMMAND, expected, sizeof(expected));
-    assert_int_equal(expected_len, 2);
+    /* Transition to OPERATE: Type-0 WRITE of MasterCommand DeviceOperate (0x99)
+       to Direct Parameter address 0x00 on the page channel (MC 0x20). */
+    expected_len = iolink_frame_encode_type0_write(
+        iolink_master_encode_master_command(false, IOLINK_MASTER_MC_CHANNEL_PAGE,
+                                            IOLINK_MASTER_DPP1_OFF_MASTER_COMMAND),
+        IOLINK_CMD_DEVICE_OPERATE, expected, sizeof(expected));
+    assert_int_equal(expected_len, 3);
     assert_int_equal(g_send_calls, 3);
     assert_int_equal(g_sent_len[2], (size_t)expected_len);
     assert_memory_equal(g_sent[2], expected, (size_t)expected_len);
@@ -1124,6 +1185,10 @@ int main(void)
             test_auto_baudrate_timeout_propagates_adapter_rx_flush_failure,
             reset_fake_phy),
         cmocka_unit_test_setup(test_fixed_baudrate_startup_timeout_enters_error,
+                               reset_fake_phy),
+        cmocka_unit_test_setup(test_wake_retry_limit_reissues_wake_before_error_on_fixed_baud,
+                               reset_fake_phy),
+        cmocka_unit_test_setup(test_wake_retry_exhausts_per_baud_then_advances_scan,
                                reset_fake_phy),
         cmocka_unit_test_setup(test_restart_reenters_startup_and_clears_runtime_state,
                                reset_fake_phy),

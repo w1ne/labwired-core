@@ -1,0 +1,22 @@
+name: "hc595-7seg-lab"
+chip: "../../configs/chips/stm32f103.yaml"
+peripherals:
+  - id: "spi1"
+    type: "spi"
+    base_address: 0x40013000
+    size: "1KB"
+    irq: 35
+external_devices:
+  - id: "seg"
+    type: "hc595-7seg"
+    connection: "spi1"
+    config:
+      cs_pin: "PA4"
+board_io:
+  - id: "seg"
+    kind: "spi_device"
+    peripheral: "spi1"
+    pin: 4
+    signal: "input"
+    active_high: true
+    device_type: "hc595-7seg"

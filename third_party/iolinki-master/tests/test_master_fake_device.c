@@ -20,10 +20,30 @@ static const iolink_master_config_t g_config = {
     .auto_baudrate = false,
 };
 
+static uint32_t g_event_pending_calls;
+static uint32_t g_event_dispatch_calls;
+static iolink_master_event_t g_last_dispatched_event;
+
+static void on_event_pending(void* user)
+{
+    (void)user;
+    g_event_pending_calls++;
+}
+
+static void on_event(void* user, const iolink_master_event_t* event)
+{
+    (void)user;
+    g_event_dispatch_calls++;
+    g_last_dispatched_event = *event;
+}
+
 static int reset_fixture(void** state)
 {
     (void)state;
     fake_iolink_device_reset(0xA5U, 1U, 1U);
+    g_event_pending_calls = 0U;
+    g_event_dispatch_calls = 0U;
+    memset(&g_last_dispatched_event, 0, sizeof(g_last_dispatched_event));
     return 0;
 }
 
@@ -300,6 +320,76 @@ static void test_fake_device_ack_event_reads_event_code(void** state)
     assert_int_equal(event_code, 0x1803U);
     assert_int_equal(iolink_master_get_diagnostics(&port, &diagnostics), 0);
     assert_int_equal(diagnostics.last_event_code, 0x1803U);
+}
+
+static void test_fake_device_dispatches_event_pending_on_rising_edge(void** state)
+{
+    iolink_master_port_t port;
+    iolink_master_config_t config = g_config;
+
+    (void)state;
+
+    config.event_pending_handler = on_event_pending;
+    fake_iolink_device_set_event_pending(true);
+
+    assert_int_equal(iolink_master_init(&port, fake_iolink_device_phy(), &config), 0);
+    assert_int_equal(iolink_master_tick_event(&port, IOLINK_MASTER_TICK_CYCLE_DUE), 0);
+    assert_int_equal(iolink_master_tick_event(&port, IOLINK_MASTER_TICK_CYCLE_DUE), 0);
+    assert_int_equal(iolink_master_tick_event(&port, IOLINK_MASTER_TICK_NONE), 1);
+    assert_int_equal(iolink_master_tick_event(&port, IOLINK_MASTER_TICK_CYCLE_DUE), 0);
+    assert_int_equal(iolink_master_get_state(&port), IOLINK_MASTER_STATE_OPERATE);
+
+    /* The first operate response carrying the OD Event flag dispatches once. */
+    assert_int_equal(iolink_master_tick_event(&port, IOLINK_MASTER_TICK_CYCLE_DUE), 0);
+    assert_int_equal(iolink_master_tick_event(&port, IOLINK_MASTER_TICK_NONE), 1);
+    assert_int_equal(g_event_pending_calls, 1U);
+
+    /* The flag stays set on later cycles: dispatch is edge-triggered, not level. */
+    assert_int_equal(iolink_master_tick_event(&port, IOLINK_MASTER_TICK_CYCLE_DUE), 0);
+    assert_int_equal(iolink_master_tick_event(&port, IOLINK_MASTER_TICK_NONE), 1);
+    assert_int_equal(g_event_pending_calls, 1U);
+}
+
+static void test_fake_device_dispatches_decoded_events_to_handler(void** state)
+{
+    iolink_master_port_t port;
+    iolink_master_config_t config = g_config;
+    iolink_master_event_t events[1];
+    uint8_t count = 0U;
+    const uint8_t details[] = {0xE2U, 0x42U, 0x10U};
+    uint8_t i;
+
+    (void)state;
+
+    memset(events, 0, sizeof(events));
+    config.event_handler = on_event;
+    fake_iolink_device_set_event_pending(true);
+    fake_iolink_device_set_isdu_object(IOLINK_IDX_DETAILED_DEVICE_STATUS, 0U, details,
+                                       sizeof(details));
+
+    assert_int_equal(iolink_master_init(&port, fake_iolink_device_phy(), &config), 0);
+    assert_int_equal(iolink_master_tick_event(&port, IOLINK_MASTER_TICK_CYCLE_DUE), 0);
+    assert_int_equal(iolink_master_tick_event(&port, IOLINK_MASTER_TICK_CYCLE_DUE), 0);
+    assert_int_equal(iolink_master_tick_event(&port, IOLINK_MASTER_TICK_NONE), 1);
+    assert_int_equal(iolink_master_tick_event(&port, IOLINK_MASTER_TICK_CYCLE_DUE), 0);
+    assert_int_equal(iolink_master_get_state(&port), IOLINK_MASTER_STATE_OPERATE);
+
+    assert_int_equal(iolink_master_read_event_details(&port, events, 1U, &count),
+                     IOLINK_MASTER_STATUS_PENDING);
+
+    for(i = 0U; i < 13U; i++)
+    {
+        assert_int_equal(iolink_master_tick_event(&port, IOLINK_MASTER_TICK_CYCLE_DUE), 0);
+        assert_int_equal(iolink_master_tick_event(&port, IOLINK_MASTER_TICK_NONE), 1);
+    }
+
+    assert_int_equal(iolink_master_read_event_details(&port, events, 1U, &count),
+                     IOLINK_MASTER_STATUS_OK);
+    assert_int_equal(count, 1U);
+    assert_int_equal(g_event_dispatch_calls, 1U);
+    assert_int_equal(g_last_dispatched_event.qualifier, 0xE2U);
+    assert_int_equal(g_last_dispatched_event.type, IOLINK_MASTER_EVENT_TYPE_WARNING);
+    assert_int_equal(g_last_dispatched_event.code, 0x4210U);
 }
 
 static void test_fake_device_serves_isdu_object_dictionary_read(void** state)
@@ -637,6 +727,10 @@ int main(void)
         cmocka_unit_test_setup(test_fake_device_serves_event_details,
                                reset_fixture),
         cmocka_unit_test_setup(test_fake_device_ack_event_reads_event_code,
+                               reset_fixture),
+        cmocka_unit_test_setup(test_fake_device_dispatches_event_pending_on_rising_edge,
+                               reset_fixture),
+        cmocka_unit_test_setup(test_fake_device_dispatches_decoded_events_to_handler,
                                reset_fixture),
         cmocka_unit_test_setup(test_fake_device_serves_isdu_object_dictionary_read,
                                reset_fixture),

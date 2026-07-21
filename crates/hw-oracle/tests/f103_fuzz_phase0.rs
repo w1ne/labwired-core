@@ -19,9 +19,10 @@
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::system::cortex_m::configure_cortex_m;
-use labwired_core::{Bus, Machine};
+use labwired_core::Bus;
+use labwired_core::Machine;
 use labwired_loader::load_elf;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 const FUZZ_LEN: u32 = 0x2000_2800;
 const FUZZ_DATA: u32 = 0x2000_2804;
@@ -37,7 +38,7 @@ const CLEAN: &[u8] = &[b'P', 0, b'A', 3, 1, 2, 3];
 /// return faults. (Zero filler wouldn't fault: PC=0 is a valid flash alias.)
 fn crash_input() -> Vec<u8> {
     let mut v = vec![b'C', 64];
-    v.extend(std::iter::repeat(0xFF).take(64));
+    v.extend(std::iter::repeat_n(0xFF, 64));
     v
 }
 
@@ -65,7 +66,7 @@ fn packed(input: &[u8]) -> Vec<u32> {
 }
 
 /// Run the fuzz target in sim on `input`; return the verdict word.
-fn run_sim(elf: &PathBuf, input: &[u8]) -> u32 {
+fn run_sim(elf: &Path, input: &[u8]) -> u32 {
     let chip = ChipDescriptor::from_file(repo_root().join("configs/chips/stm32f103.yaml")).unwrap();
     let system_path = repo_root().join("configs/systems/stm32f103-bare.yaml");
     let mut manifest = SystemManifest::from_file(&system_path).unwrap();

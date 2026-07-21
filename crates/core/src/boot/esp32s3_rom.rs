@@ -211,8 +211,11 @@ fn populate_data_copy_sources(
 /// `(dst_addr, byte_len, src_offset_in_irom)`. Uses the identical 16-byte-quad
 /// (dst_start, dst_end, src, 0) scan and validity heuristic as
 /// `populate_data_copy_sources`, so the two stay in lockstep.
-fn copy_table_records(irom: &[u8], dram: DramWindow) -> Vec<(u32, usize, usize)> {
-    let irom_base = IROM_BASE;
+pub(crate) fn copy_table_records(
+    irom: &[u8],
+    irom_base: u32,
+    dram: DramWindow,
+) -> Vec<(u32, usize, usize)> {
     let irom_hi = irom_base + irom.len() as u32;
     let mut recs = Vec::new();
     let mut off = 0usize;
@@ -256,7 +259,20 @@ fn copy_table_records(irom: &[u8], dram: DramWindow) -> Vec<(u32, usize, usize)>
 /// helpers execute faithfully — zero thunks. Idempotent with a real reset boot,
 /// which performs the same copy itself.
 pub fn s3_rom_data_init_writes(irom: &[u8]) -> Vec<(u32, Vec<u8>)> {
-    copy_table_records(irom, S3_DRAM)
+    rom_data_init_writes(irom, IROM_BASE, S3_DRAM)
+}
+
+/// Shared back-end for [`s3_rom_data_init_writes`] and the ESP32-C3 analogue
+/// [`super::esp32c3_rom::c3_rom_data_init_writes`]: walk the ROM's `.data` copy
+/// table and pair each record's genuine source bytes with its DRAM destination.
+/// The two chips use the same reset-time copy-table format and the same IROM
+/// base; only the DRAM window differs.
+pub(crate) fn rom_data_init_writes(
+    irom: &[u8],
+    irom_base: u32,
+    dram: DramWindow,
+) -> Vec<(u32, Vec<u8>)> {
+    copy_table_records(irom, irom_base, dram)
         .into_iter()
         .filter_map(|(dst, n, src_off)| {
             let end = src_off.checked_add(n)?;

@@ -25,10 +25,12 @@
 //! - T   [°C]  = `-45 + 175 * word / 65535`
 //! - RH  [%]   = `100 * word / 65535`
 //!
-//! The CO₂ value advances along a [`Ramp`] each `read_measurement`, so a normal
-//! scenario climbs from fresh toward stuffy and the firmware verdict flips.
+//! The reported CO₂ / temperature / humidity are externally driven variables:
+//! they change only when something drives them through the ONE stimulus
+//! contract, [`crate::sim_input::SimInput`] (`co2`, `temperature`, `humidity`)
+//! — test-script `stimuli:`, the MCP, or the WASM bridge. The config block only
+//! seeds the initial value.
 
-use crate::peripherals::components::air_scene::Ramp;
 use crate::peripherals::components::sensirion::encode_words;
 use crate::peripherals::i2c::I2cDevice;
 
@@ -46,49 +48,44 @@ const CMD_PERFORM_SELF_TEST: u16 = 0x3639;
 /// SCD41 model.
 pub struct Scd41 {
     address: u8,
-    co2: Ramp,
-    temp_c: Ramp,
-    rh: Ramp,
+    /// CO₂ the part reports, ppm. Externally driven (see `SimInput`).
+    co2_ppm: f64,
+    /// Air temperature the part reports, °C. Externally driven.
+    temp_c: f64,
+    /// Relative humidity the part reports, %RH. Externally driven.
+    rh_pct: f64,
     periodic_running: bool,
     /// Bytes the master has written this transaction (command + params).
     write_buf: Vec<u8>,
     /// Response bytes queued by the last command; drained by `read()`.
     read_buf: Vec<u8>,
     read_idx: usize,
+    /// system.yaml `external_devices` id, stamped at attach (see
+    /// [`crate::sim_input::SimInput::component_id`]).
+    component_id: Option<String>,
 }
 
 impl Scd41 {
-    /// Build with explicit scene parameters. `co2_start`/`co2_target` in ppm,
-    /// `alpha` the per-measurement ramp rate (0 = flat scene).
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        address: u8,
-        co2_start: f64,
-        co2_target: f64,
-        alpha: f64,
-        temp_c: f64,
-        rh: f64,
-        rh_target: f64,
-    ) -> Self {
+    /// Build with the initial values the part reports until something drives
+    /// it. `co2_ppm` in ppm, `temp_c` in °C, `rh_pct` in %RH.
+    pub fn new(address: u8, co2_ppm: f64, temp_c: f64, rh_pct: f64) -> Self {
         let address = if address == 0 { SCD41_ADDR } else { address };
         Self {
             address,
-            co2: Ramp::new(co2_start, co2_target, alpha),
-            // Temperature/humidity drift upward as a room fills; pin them flat if
-            // alpha is 0 so a "frozen" scenario stays put. The humidity target is
-            // configurable so a damp room can climb into mold-favorable range.
-            temp_c: Ramp::new(temp_c, temp_c + 1.5, alpha * 0.5),
-            rh: Ramp::new(rh, rh_target, alpha * 0.5),
+            co2_ppm,
+            temp_c,
+            rh_pct,
             periodic_running: false,
             write_buf: Vec::with_capacity(8),
             read_buf: Vec::new(),
             read_idx: 0,
+            component_id: None,
         }
     }
 
-    /// Default fresh→stuffy scenario: 450 → 1400 ppm at 22 °C / 45 → 51 %RH.
+    /// Plausible fresh-room defaults: 450 ppm at 22 °C / 45 %RH.
     pub fn new_default(address: u8) -> Self {
-        Self::new(address, 450.0, 1400.0, 0.08, 22.0, 45.0, 51.0)
+        Self::new(address, 450.0, 22.0, 45.0)
     }
 
     fn encode_temperature(t_c: f64) -> u16 {
@@ -113,9 +110,9 @@ impl Scd41 {
                 self.read_buf = encode_words(&[0x8006]);
             }
             CMD_READ_MEASUREMENT => {
-                let co2 = self.co2.advance().round().clamp(0.0, 40000.0) as u16;
-                let t = Self::encode_temperature(self.temp_c.advance());
-                let rh = Self::encode_humidity(self.rh.advance());
+                let co2 = self.co2_ppm.round().clamp(0.0, 40000.0) as u16;
+                let t = Self::encode_temperature(self.temp_c);
+                let rh = Self::encode_humidity(self.rh_pct);
                 self.read_buf = encode_words(&[co2, t, rh]);
             }
             CMD_GET_SERIAL => {
@@ -175,6 +172,65 @@ impl I2cDevice for Scd41 {
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
     }
+
+    fn as_sim_input_mut(&mut self) -> Option<&mut dyn crate::sim_input::SimInput> {
+        Some(self)
+    }
+}
+
+/// Drivable channels, in real engineering units. ONE table backs BOTH the
+/// `SimInput` impl and the kit metadata, so the device schema and the runtime
+/// API cannot drift.
+pub const INPUT_CHANNELS: &[crate::sim_input::InputChannel] = &[
+    crate::sim_input::InputChannel {
+        key: "co2",
+        label: "CO₂",
+        unit: "ppm",
+        // Datasheet output range for the SCD41 (§1.1): 400..5000 ppm specified,
+        // 0..40000 ppm reportable over the 16-bit word.
+        min: 0.0,
+        max: 40000.0,
+    },
+    crate::sim_input::InputChannel {
+        key: "temperature",
+        label: "Temperature",
+        unit: "°C",
+        // The word encoding spans -45..130 °C exactly.
+        min: -45.0,
+        max: 130.0,
+    },
+    crate::sim_input::InputChannel {
+        key: "humidity",
+        label: "Humidity",
+        unit: "%RH",
+        min: 0.0,
+        max: 100.0,
+    },
+];
+
+impl crate::sim_input::SimInput for Scd41 {
+    fn input_channels(&self) -> &'static [crate::sim_input::InputChannel] {
+        INPUT_CHANNELS
+    }
+
+    fn set_input(&mut self, key: &str, value: f64) -> Result<(), crate::sim_input::SimInputError> {
+        self.require_channel(key, value)?;
+        match key {
+            "co2" => self.co2_ppm = value,
+            "temperature" => self.temp_c = value,
+            "humidity" => self.rh_pct = value,
+            _ => unreachable!("require_channel validated the key"),
+        }
+        Ok(())
+    }
+
+    fn component_id(&self) -> Option<&str> {
+        self.component_id.as_deref()
+    }
+
+    fn set_component_id(&mut self, id: String) {
+        self.component_id = Some(id);
+    }
 }
 
 // ─── PeripheralKit registration ────────────────────────────────────────────
@@ -187,14 +243,16 @@ pub struct Scd41Kit;
 pub static SCD41_KIT: Scd41Kit = Scd41Kit;
 
 static SCD41_METADATA: KitMetadata = KitMetadata {
+    inputs: INPUT_CHANNELS,
     device_type: "scd41",
     label: "Sensirion SCD41 CO₂",
     summary: "Photoacoustic CO₂ + temperature + humidity sensor over I2C.",
     detail: "Sensirion SCD41 at fixed address 0x62, speaking the real Sensirion \
              command protocol (16-bit commands, 16-bit words + CRC-8 poly 0x31), so \
-             the unmodified Sensirion SCD4x vendor driver decodes it on-target. CO₂ \
-             advances along a configurable ramp each read_measurement, so a closed \
-             room climbs from fresh toward stuffy and the firmware verdict flips.",
+             the unmodified Sensirion SCD4x vendor driver decodes it on-target. The \
+             reported CO₂, temperature and humidity are externally driven inputs \
+             (channels co2 / temperature / humidity); config only seeds their initial \
+             values.",
     transport: Transport::I2c,
     category: Category::I2c,
     config_keys: &[
@@ -204,39 +262,24 @@ static SCD41_METADATA: KitMetadata = KitMetadata {
             doc: "7-bit slave address. Defaults to the SCD41 fixed address 0x62.",
         },
         ConfigKey {
-            name: "co2_start_ppm",
+            name: "co2_ppm",
             ty: ConfigType::Float,
-            doc: "CO₂ the ramp starts from, ppm (fresh-room baseline). Default 450.",
-        },
-        ConfigKey {
-            name: "co2_target_ppm",
-            ty: ConfigType::Float,
-            doc: "CO₂ the ramp approaches, ppm (closed-room steady state). Default 1400.",
-        },
-        ConfigKey {
-            name: "ramp_alpha",
-            ty: ConfigType::Float,
-            doc: "Per-measurement approach rate 0..1 (0 = flat scene). Default 0.08.",
+            doc: "Initial CO₂ the part reports, ppm. Default 450. Drive it at runtime \
+                  with the `co2` input channel.",
         },
         ConfigKey {
             name: "temp_c",
             ty: ConfigType::Float,
-            doc: "Starting temperature, °C. Default 22.0.",
+            doc: "Initial temperature, °C. Default 22.0. Runtime channel: `temperature`.",
         },
         ConfigKey {
             name: "rh_pct",
             ty: ConfigType::Float,
-            doc: "Starting relative humidity, %. Default 45.0.",
-        },
-        ConfigKey {
-            name: "rh_target_pct",
-            ty: ConfigType::Float,
-            doc: "Steady-state relative humidity the room climbs toward, %. \
-                  Default rh_pct + 6. Raise above 60 for a damp, mold-favorable room.",
+            doc: "Initial relative humidity, %. Default 45.0. Runtime channel: `humidity`.",
         },
     ],
     labs: &[LabRef {
-        board_id: "leo-airquality-lab",
+        board_id: "esp32c3-leo-airquality",
         chip: "esp32c3",
         example_dir: "esp32c3-leo-airquality",
         demo_elf: "demo-esp32c3-leo-airquality.elf",
@@ -249,15 +292,10 @@ impl PeripheralKit for Scd41Kit {
     }
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
         let address = ctx.i2c_address_or(SCD41_ADDR)?;
-        let co2_start = ctx.config_f64("co2_start_ppm").unwrap_or(450.0);
-        let co2_target = ctx.config_f64("co2_target_ppm").unwrap_or(1400.0);
-        let alpha = ctx.config_f64("ramp_alpha").unwrap_or(0.08);
+        let co2_ppm = ctx.config_f64("co2_ppm").unwrap_or(450.0);
         let temp_c = ctx.config_f64("temp_c").unwrap_or(22.0);
-        let rh = ctx.config_f64("rh_pct").unwrap_or(45.0);
-        let rh_target = ctx.config_f64("rh_target_pct").unwrap_or(rh + 6.0);
-        ctx.attach_i2c_device(Box::new(Scd41::new(
-            address, co2_start, co2_target, alpha, temp_c, rh, rh_target,
-        )))
+        let rh_pct = ctx.config_f64("rh_pct").unwrap_or(45.0);
+        ctx.attach_i2c_device(Box::new(Scd41::new(address, co2_ppm, temp_c, rh_pct)))
     }
 }
 
@@ -295,27 +333,53 @@ mod tests {
     }
 
     #[test]
-    fn first_co2_word_is_near_fresh_start() {
+    fn first_co2_word_is_the_seeded_value() {
         let mut d = Scd41::new_default(SCD41_ADDR);
         send_cmd(&mut d, CMD_READ_MEASUREMENT);
         let b = read_n(&mut d, 9);
         let co2 = ((b[0] as u16) << 8) | b[1] as u16;
-        assert!(
-            (450..=600).contains(&co2),
-            "first read is fresh-ish, got {co2}"
-        );
+        assert_eq!(co2, 450, "reports the seeded value, got {co2}");
     }
 
     #[test]
-    fn co2_climbs_toward_stuffy_over_many_reads() {
+    fn co2_holds_until_something_drives_it() {
+        // No self-running scene: repeated reads return the same value. The ONLY
+        // way the number moves is set_input.
+        use crate::sim_input::SimInput;
         let mut d = Scd41::new_default(SCD41_ADDR);
-        let mut last = 0u16;
-        for _ in 0..80 {
+        for _ in 0..20 {
             send_cmd(&mut d, CMD_READ_MEASUREMENT);
             let b = read_n(&mut d, 9);
-            last = ((b[0] as u16) << 8) | b[1] as u16;
+            assert_eq!(((b[0] as u16) << 8) | b[1] as u16, 450);
         }
-        assert!(last > 1300, "CO₂ should approach 1400 ppm, got {last}");
+        d.set_input("co2", 1400.0).unwrap();
+        send_cmd(&mut d, CMD_READ_MEASUREMENT);
+        let b = read_n(&mut d, 9);
+        assert_eq!(((b[0] as u16) << 8) | b[1] as u16, 1400);
+    }
+
+    #[test]
+    fn driven_temperature_and_humidity_land_in_the_words() {
+        use crate::sim_input::SimInput;
+        let mut d = Scd41::new_default(SCD41_ADDR);
+        d.set_input("temperature", 31.5).unwrap();
+        d.set_input("humidity", 72.0).unwrap();
+        send_cmd(&mut d, CMD_READ_MEASUREMENT);
+        let b = read_n(&mut d, 9);
+        let t_word = ((b[3] as u16) << 8) | b[4] as u16;
+        let rh_word = ((b[6] as u16) << 8) | b[7] as u16;
+        let t_c = -45.0 + 175.0 * (t_word as f64) / 65535.0;
+        let rh = 100.0 * (rh_word as f64) / 65535.0;
+        assert!((t_c - 31.5).abs() < 0.01, "decoded {t_c:.3} °C");
+        assert!((rh - 72.0).abs() < 0.01, "decoded {rh:.3} %RH");
+    }
+
+    #[test]
+    fn out_of_range_input_is_rejected() {
+        use crate::sim_input::SimInput;
+        let mut d = Scd41::new_default(SCD41_ADDR);
+        assert!(d.set_input("humidity", 150.0).is_err());
+        assert!(d.set_input("nope", 1.0).is_err());
     }
 
     #[test]
@@ -359,28 +423,22 @@ mod tests {
             b.iter().all(|&x| x == 0xFF),
             "no response queued for single-shot"
         );
-        // The next real read_measurement should still start near the fresh value.
+        // The next real read_measurement still reports the seeded value.
         send_cmd(&mut d, CMD_READ_MEASUREMENT);
         let m = read_n(&mut d, 9);
         let co2 = ((m[0] as u16) << 8) | m[1] as u16;
-        assert!(
-            (450..=600).contains(&co2),
-            "scene not advanced by single-shot: {co2}"
-        );
+        assert_eq!(co2, 450, "single-shot must not perturb the value: {co2}");
     }
 
     #[test]
-    fn flat_scenario_holds_co2() {
-        let mut d = Scd41::new(SCD41_ADDR, 800.0, 800.0, 0.0, 22.0, 45.0, 45.0);
+    fn seeded_config_values_are_reported_verbatim() {
+        let mut d = Scd41::new(SCD41_ADDR, 800.0, 22.0, 45.0);
         let mut seen = vec![];
         for _ in 0..5 {
             send_cmd(&mut d, CMD_READ_MEASUREMENT);
             let b = read_n(&mut d, 9);
             seen.push(((b[0] as u16) << 8) | b[1] as u16);
         }
-        assert!(
-            seen.iter().all(|&v| v == 800),
-            "flat scene holds 800 ppm: {seen:?}"
-        );
+        assert!(seen.iter().all(|&v| v == 800), "holds 800 ppm: {seen:?}");
     }
 }

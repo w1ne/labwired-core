@@ -258,6 +258,11 @@ impl Dport {
 }
 
 impl Peripheral for Dport {
+    // Inert walk: DPORT register bank (clock gating / intr-matrix mapping / cache plumbing, all write-settled); tick() is the trait-default no-op.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let word_off = (offset & !3) as u32;
         let byte_off = (offset & 3) * 8;

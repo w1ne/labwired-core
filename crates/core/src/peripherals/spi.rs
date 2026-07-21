@@ -15,6 +15,8 @@
 use crate::{Bus, SimResult};
 use std::any::Any;
 use std::str::FromStr;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 /// Trait implemented by simulated SPI devices (peripherals attached to an SPI bus).
 ///
@@ -66,6 +68,13 @@ pub trait SpiDevice: Send {
         None
     }
     fn as_any_mut(&mut self) -> Option<&mut dyn Any> {
+        None
+    }
+    /// Runtime-drivable view of this device, if it accepts simulated input.
+    /// Same contract as the hook on `I2cDevice`: input devices override it so
+    /// the generic [`crate::Machine::set_input`] resolver can reach them
+    /// without a downcast. Default `None` = not an input device.
+    fn as_sim_input_mut(&mut self) -> Option<&mut dyn crate::sim_input::SimInput> {
         None
     }
     /// Binary mid-flight snapshot for runtime resume. Default empty;
@@ -124,9 +133,184 @@ impl FromStr for SpiRegisterLayout {
     }
 }
 
-/// Event token for the one-shot SPI transfer-completion event (the SPI has a
-/// single kind of scheduled wakeup, so the value is arbitrary).
+/// Event token for the SPI bit engine's next-wire-transition event (the SPI
+/// has a single kind of scheduled wakeup, so the value is arbitrary).
 const SPI_DONE_TOKEN: u32 = 0;
+
+// ── STM32 SPI wire (bit-level engine) ────────────────────────────────────────
+//
+// The classic/FIFO STM32 SPI no longer completes a DR write instantly: a bit
+// engine clocks the frame on the wire over simulated cycles, mirroring the
+// ESP32-C3 I²C bit-level engine (core#507). SCK timing derives from CR1
+// BR[2:0] against the peripheral clock (this simulator's cycle base models
+// PCLK, the same convention every other STM32 peripheral here uses):
+// f_SCK = f_PCLK / 2^(BR+1), so one SCK half-period is 2^BR peripheral-clock
+// cycles and a frame is `bits × 2^(BR+1)` cycles. CPOL sets the idle level,
+// CPHA selects the sample edge (data is driven for the whole bit period;
+// sample = leading edge at CPHA=0, trailing edge at CPHA=1), LSBFIRST picks
+// the shift direction, and the frame size comes from CR2.DS on FIFO ports
+// (L4/F7/G4) or CR1.DFF on classic ports (F1/F4) — datasheet reset values
+// apply when firmware never programs them.
+//
+// Slaves stay byte-level ([`SpiDevice`], behind the TracingSpiDevice choke
+// point): the engine consults them once per frame, at the frame boundary
+// where the frame starts clocking, and the byte the device answers is what
+// MISO carries bit-by-bit during that SAME frame — full duplex, like real
+// silicon exchanging shift registers. (Frames wider than 8 bits still
+// exchange one byte with the byte-level device; the wire carries the full
+// programmed frame — an honest limit of the byte-level device contract.)
+
+/// SPI signal roles on the wire, used by the GPIO AF pad routing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpiSignal {
+    Sck,
+    Mosi,
+    Miso,
+}
+
+/// Push-mode logic-capture registration for the SPI line cell: which watch
+/// channels observe pads currently AF-routed to SCK / MOSI / MISO. Maintained
+/// by the STM32 GPIO model (which owns the routing truth) via
+/// [`SpiLineLevels::install_tap`]; consulted by [`SpiLineLevels::set`] so the
+/// bit engine pushes an edge at the exact moment it drives a line transition
+/// (event-driven capture, same pattern as the C3 `I2cLineLevels`).
+#[derive(Debug, Default)]
+struct SpiLineTapState {
+    tap: Option<crate::logic_capture::LogicTap>,
+    sck_chs: Vec<u32>,
+    mosi_chs: Vec<u32>,
+    miso_chs: Vec<u32>,
+}
+
+/// Live SCK/MOSI/MISO levels of one STM32 SPI controller's wire. The
+/// controller bit engine is the only writer; the STM32 `GpioPort` reads it for
+/// pads whose MODER/AFR (or F1 CRL/CRH CNF) route this SPI's alternate
+/// function, so `read_gpio_pad` — and the in-engine logic analyzer sampling
+/// through it — observes the real waveform on the routed pads. With push-mode
+/// capture armed on a routed pad, [`set`](Self::set) additionally reports each
+/// line transition into the shared logic tap at drive time.
+#[derive(Debug)]
+pub struct SpiLineLevels {
+    sck: AtomicBool,
+    mosi: AtomicBool,
+    miso: AtomicBool,
+    tap: std::sync::Mutex<SpiLineTapState>,
+}
+
+impl SpiLineLevels {
+    fn new(sck_idle: bool) -> Self {
+        Self {
+            sck: AtomicBool::new(sck_idle),
+            mosi: AtomicBool::new(false),
+            miso: AtomicBool::new(false),
+            tap: std::sync::Mutex::new(SpiLineTapState::default()),
+        }
+    }
+
+    pub fn sck(&self) -> bool {
+        self.sck.load(Ordering::Relaxed)
+    }
+
+    pub fn mosi(&self) -> bool {
+        self.mosi.load(Ordering::Relaxed)
+    }
+
+    pub fn miso(&self) -> bool {
+        self.miso.load(Ordering::Relaxed)
+    }
+
+    pub fn level(&self, signal: SpiSignal) -> bool {
+        match signal {
+            SpiSignal::Sck => self.sck(),
+            SpiSignal::Mosi => self.mosi(),
+            SpiSignal::Miso => self.miso(),
+        }
+    }
+
+    fn set(&self, sck: bool, mosi: bool, miso: bool) {
+        let old_sck = self.sck.swap(sck, Ordering::Relaxed);
+        let old_mosi = self.mosi.swap(mosi, Ordering::Relaxed);
+        let old_miso = self.miso.swap(miso, Ordering::Relaxed);
+        if old_sck == sck && old_mosi == mosi && old_miso == miso {
+            return;
+        }
+        // A line actually transitioned: report it to any watch channels whose
+        // pads the GPIO AF routing currently maps here. Lock taken only on
+        // transitions (segment-boundary rate, not per engine cycle).
+        let t = self.tap.lock().unwrap();
+        if let Some(tap) = &t.tap {
+            if old_sck != sck {
+                for &ch in &t.sck_chs {
+                    tap.push(ch, sck);
+                }
+            }
+            if old_mosi != mosi {
+                for &ch in &t.mosi_chs {
+                    tap.push(ch, mosi);
+                }
+            }
+            if old_miso != miso {
+                for &ch in &t.miso_chs {
+                    tap.push(ch, miso);
+                }
+            }
+        }
+    }
+
+    /// Install (or clear, with `tap = None`) the push-capture registration.
+    /// Called by the STM32 GPIO model at watch install time and whenever a
+    /// write changes the routing of a watched pad, so the channel lists always
+    /// mirror the live MODER/AFR state.
+    pub(crate) fn install_tap(
+        &self,
+        tap: Option<crate::logic_capture::LogicTap>,
+        sck_chs: Vec<u32>,
+        mosi_chs: Vec<u32>,
+        miso_chs: Vec<u32>,
+    ) {
+        let mut t = self.tap.lock().unwrap();
+        t.tap = tap;
+        t.sck_chs = sck_chs;
+        t.mosi_chs = mosi_chs;
+        t.miso_chs = miso_chs;
+    }
+}
+
+/// Wire timing snapshot, derived from the live CR1/CR2 registers at frame
+/// start (datasheet reset values apply when firmware never programs them —
+/// no invented constants).
+#[derive(Debug, Clone, Copy, serde::Serialize)]
+struct FrameTiming {
+    /// SCK half-period in peripheral-clock cycles = `2^BR` (CR1 BR[5:3]).
+    half_ticks: u32,
+    /// Frame size in bits: CR2.DS+1 on FIFO ports, CR1.DFF ? 16 : 8 on
+    /// classic ports.
+    bits: u8,
+    /// CR1.CPOL — SCK idle level.
+    cpol: bool,
+    /// CR1.CPHA — sample on leading (0) or trailing (1) edge.
+    cpha: bool,
+    /// CR1.LSBFIRST — shift direction.
+    lsb_first: bool,
+}
+
+/// The frame currently shifting on the wire. Every bit period is two counted
+/// half-periods; the (SCK, MOSI, MISO) levels are a pure function of this
+/// state (see [`Spi::stm32_frame_levels`]).
+#[derive(Debug, Clone, Copy, serde::Serialize)]
+struct ActiveFrame {
+    t: FrameTiming,
+    /// The full frame value clocked out on MOSI.
+    mosi: u16,
+    /// The full frame value clocked in on MISO (the slave's byte answer).
+    miso: u16,
+    /// Bit currently on the wire, 0-based in shift order.
+    bit_idx: u8,
+    /// Second half of the current bit period.
+    second_half: bool,
+    /// Peripheral-clock cycles left in the current half-period.
+    ticks_left: u32,
+}
 
 /// STM32 SPI register file (F1/F4/L0 classic and L4/F7/G4 FIFO share this map;
 /// `fifo` selects the FIFO DS/data-packing behaviour). H5/H7 use the separate
@@ -511,14 +695,31 @@ impl Default for SpiRegs {
 pub struct Spi {
     regs: SpiRegs,
 
-    // Shared transfer-engine state (architecture-independent).
-    transfer_in_progress: bool,
-    transfer_cycles_remaining: u32,
-    transfer_buffer: u8,
+    // STM32 bit-engine state (classic/FIFO layout only; the other register
+    // families keep their own transfer semantics).
+    /// The frame currently clocking on the wire, if any.
+    frame: Option<ActiveFrame>,
+    /// Frames queued behind the wire (FIFO data packing, back-to-back DR
+    /// writes). Each entry is one full frame value.
+    tx_queue: std::collections::VecDeque<u16>,
     #[serde(skip)]
     scheduled: bool,
-    /// When true, completed transfers also load `transfer_buffer` into the RX
-    /// path (`dr` + RXNE), as if MOSI were jumpered to MISO. Defaults false.
+    /// Event-scheduler path only: the absolute CPU cycle the engine's wire
+    /// state corresponds to. Anchored by `sync_to` (called by the bus with
+    /// `current_cycle` before every MMIO write, so a DR write pins the frame
+    /// start to the batch-start cycle — identically in clamped and batched
+    /// runs) and advanced by `on_event`. The legacy walk clocks the engine
+    /// through `tick_elapsed` instead and never touches this.
+    #[serde(skip)]
+    anchor_tick: u64,
+    /// Shared SCK/MOSI/MISO line levels, read by the STM32 GPIO model for
+    /// AF-routed pads. Created lazily by [`Self::line_levels_arc`] at bus
+    /// wiring time; `None` when no pads are wired (the engine still runs —
+    /// only the wire publication is skipped).
+    #[serde(skip)]
+    lines: Option<Arc<SpiLineLevels>>,
+    /// When true, completed transfers also load the transmitted frame into the
+    /// RX path (`dr` + RXNE), as if MOSI were jumpered to MISO. Defaults false.
     loopback: bool,
 
     /// nRF52 SPIM: set when TASKS_START is written; cleared after
@@ -540,21 +741,14 @@ pub struct Spi {
 
     #[serde(skip)]
     pub attached_devices: Vec<Box<dyn SpiDevice>>,
-
-    /// Bus name + shared trace log for the universal logic-analyzer (set via
-    /// `Spi::set_bus_trace`). `None` (default) keeps `attach` unwrapped —
-    /// existing behaviour for every caller that doesn't opt in.
-    #[serde(skip)]
-    bus_name: String,
-    #[serde(skip)]
-    bus_log: Option<crate::bus::bus_trace::BusTraceLog>,
 }
 
 impl core::fmt::Debug for Spi {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Spi")
             .field("regs", &self.regs)
-            .field("transfer_in_progress", &self.transfer_in_progress)
+            .field("frame", &self.frame)
+            .field("tx_queue_len", &self.tx_queue.len())
             .field("loopback", &self.loopback)
             .field("attached_devices", &self.attached_devices.len())
             .finish()
@@ -610,24 +804,11 @@ impl Spi {
         self.cr1_mask = Some(mask);
     }
 
-    /// Set the bus name + a clone of the shared bus-trace log (universal logic
-    /// analyzer, see `crate::bus::bus_trace`). Must be called before `attach`
-    /// for an attached device to be wrapped into the log — devices already
-    /// attached are unaffected.
-    pub fn set_bus_trace(&mut self, name: String, log: crate::bus::bus_trace::BusTraceLog) {
-        self.bus_name = name;
-        self.bus_log = Some(log);
-    }
-
-    pub fn attach(&mut self, device: Box<dyn SpiDevice>) {
-        let device = match &self.bus_log {
-            Some(log) => Box::new(crate::bus::bus_trace::TracingSpiDevice::new(
-                self.bus_name.clone(),
-                log.clone(),
-                device,
-            )) as Box<dyn SpiDevice>,
-            None => device,
-        };
+    /// Raw device push — does NOT wrap for tracing. The only caller is the bus
+    /// choke point [`crate::bus::SystemBus::attach_spi_device`], which wraps the
+    /// device first; nothing else should attach directly (that would bypass the
+    /// universal bus trace).
+    pub(crate) fn push_device(&mut self, device: Box<dyn SpiDevice>) {
         self.attached_devices.push(device);
     }
 
@@ -649,6 +830,15 @@ impl Spi {
                 let cr1_mask = self.cr1_mask.unwrap_or(0xFFFF);
                 if let SpiRegs::Stm32(r) = &mut self.regs {
                     r.cr1 = value & cr1_mask;
+                }
+                // A CPOL change while the wire is idle re-drives the SCK idle
+                // level (real silicon drives SCK = CPOL as soon as the pad is
+                // handed to the SPI).
+                if self.frame.is_none() {
+                    if let Some(lines) = &self.lines {
+                        let cpol = value & (1 << 1) != 0;
+                        lines.set(cpol, lines.mosi(), lines.miso());
+                    }
                 }
             }
             0x04 => {
@@ -687,33 +877,32 @@ impl Spi {
             }
             0x0C => {
                 // DR write goes to the TX path only. Starts a transfer iff SPE.
+                // The frame does NOT complete here: the bit engine clocks it on
+                // the wire over `bits × 2^(BR+1)` peripheral-clock cycles.
                 let cr1 = match &self.regs {
                     SpiRegs::Stm32(r) => r.cr1,
                     _ => 0,
                 };
                 if (cr1 & (1 << 6)) != 0 {
+                    let fifo = matches!(&self.regs, SpiRegs::Stm32(r) if r.fifo);
                     if let SpiRegs::Stm32(r) = &mut self.regs {
                         r.sr &= !0x0002; // Clear TXE
                         r.sr |= 0x0080; // Set BSY
                     }
-                    self.transfer_in_progress = true;
-                    let br = (cr1 >> 3) & 0x7;
-                    let divider = 1u32 << (br + 1);
-                    self.transfer_cycles_remaining = 8 * divider;
-                    self.transfer_buffer = (value & 0xFF) as u8;
-
-                    // v1 routing: broadcast to all attached devices, use last
-                    // non-zero response.
-                    if !self.attached_devices.is_empty() {
-                        let mosi = self.transfer_buffer;
-                        let mut miso: u8 = 0;
-                        for dev in &mut self.attached_devices {
-                            let resp = dev.transfer(mosi);
-                            if resp != 0 {
-                                miso = resp;
-                            }
-                        }
-                        self.transfer_buffer = miso;
+                    if self.frame.is_some() && !fifo && !self.tx_queue.is_empty() {
+                        // Classic single-buffer TX: a DR write while TXE=0
+                        // overwrites the waiting byte (RM0008 — the shifting
+                        // frame is unaffected).
+                        *self.tx_queue.back_mut().unwrap() = value;
+                    } else if fifo && self.tx_queue.len() >= 4 {
+                        // FIFO parts: the 32-bit TX FIFO is full — the write
+                        // is lost (RM0351 §40.4.9). Conservative frame-count
+                        // bound (4 × 8-bit frames).
+                    } else {
+                        self.tx_queue.push_back(value);
+                    }
+                    if self.frame.is_none() {
+                        self.stm32_start_next_frame();
                     }
                 }
             }
@@ -764,7 +953,6 @@ impl Spi {
                 // PUSHR: low 16 bits are the frame data. PCD8544 and most SPI
                 // peripherals here clock 8-bit frames, so deliver the low byte.
                 let mosi = (value & 0xFF) as u8;
-                self.transfer_buffer = mosi;
                 let mut miso: u8 = 0;
                 for dev in &mut self.attached_devices {
                     let resp = dev.transfer(mosi);
@@ -935,6 +1123,218 @@ impl Spi {
     }
 }
 
+// ── STM32 bit engine ─────────────────────────────────────────────────────────
+//
+// A frame executes on the wire as a chain of fixed-level half-period segments.
+// Slaves stay byte-level: the engine consults them exactly once per frame (at
+// the boundary where the frame starts clocking) and the answered byte is what
+// MISO carries bit-by-bit during that same frame.
+impl Spi {
+    /// `true` while a frame is clocking on the wire. Production code reads
+    /// SR.BSY instead; tests clock the engine against this directly.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn transfer_active(&self) -> bool {
+        self.frame.is_some()
+    }
+
+    /// `true` when this instance carries the classic/FIFO STM32 register file
+    /// (the layouts the bit engine drives). The H5 "SPI v3" IP and the other
+    /// vendor layouts are separate models.
+    pub(crate) fn is_stm32_wire_layout(&self) -> bool {
+        matches!(self.regs, SpiRegs::Stm32(_))
+    }
+
+    /// `true` for the FIFO (L4/F7/G4) flavour of the STM32 layout.
+    pub(crate) fn is_fifo_layout(&self) -> bool {
+        matches!(&self.regs, SpiRegs::Stm32(r) if r.fifo)
+    }
+
+    /// Get-or-create the shared line-level cell (bus wiring hands the same
+    /// `Arc` to the STM32 GPIO ports carrying this SPI's AF pads).
+    pub(crate) fn line_levels_arc(&mut self) -> Arc<SpiLineLevels> {
+        if self.lines.is_none() {
+            let cpol = matches!(&self.regs, SpiRegs::Stm32(r) if r.cr1 & (1 << 1) != 0);
+            self.lines = Some(Arc::new(SpiLineLevels::new(cpol)));
+        }
+        self.lines.as_ref().unwrap().clone()
+    }
+
+    /// Derive the wire timing from the live registers. Reset values (the
+    /// datasheet defaults: BR=0 → f_PCLK/2, CPOL=CPHA=0, MSB first, 8-bit
+    /// frames — CR2 reset 0x0700 on FIFO ports, CR1.DFF=0 on classic ports)
+    /// apply when firmware never programs them.
+    fn stm32_frame_timing(&self) -> FrameTiming {
+        let (cr1, cr2, fifo) = match &self.regs {
+            SpiRegs::Stm32(r) => (r.cr1, r.cr2, r.fifo),
+            _ => (0, 0, false),
+        };
+        let br = (cr1 >> 3) & 0x7;
+        let bits = if fifo {
+            // CR2.DS[3:0]: frame = DS+1 bits. Values below 0b0011 are reserved
+            // and forced to 0b0111 (8-bit) at write time; reset is 0x0700.
+            (((cr2 >> 8) & 0xF) as u8) + 1
+        } else if cr1 & (1 << 11) != 0 {
+            16 // CR1.DFF
+        } else {
+            8
+        };
+        FrameTiming {
+            half_ticks: 1u32 << br,
+            bits,
+            cpol: cr1 & (1 << 1) != 0,
+            cpha: cr1 & 1 != 0,
+            lsb_first: cr1 & (1 << 7) != 0,
+        }
+    }
+
+    /// The (SCK, MOSI, MISO) levels the wire carries in the current frame
+    /// state. SCK: idle = CPOL; the bit period's active half is the second
+    /// half at CPHA=0 (leading edge = sample) and the first half at CPHA=1
+    /// (leading edge = shift, trailing = sample). Data lines hold the bit
+    /// value for the whole bit period.
+    fn stm32_frame_levels(f: &ActiveFrame) -> (bool, bool, bool) {
+        let active_half = f.second_half != f.t.cpha;
+        let sck = if active_half { !f.t.cpol } else { f.t.cpol };
+        let bit = |v: u16| {
+            if f.t.lsb_first {
+                (v >> f.bit_idx) & 1 != 0
+            } else {
+                (v >> (f.t.bits - 1 - f.bit_idx)) & 1 != 0
+            }
+        };
+        (sck, bit(f.mosi), bit(f.miso))
+    }
+
+    /// Publish the current frame-state levels into the shared line cell (the
+    /// cell pushes any transition into the logic tap at this exact moment).
+    fn stm32_drive_levels(&self) {
+        let (Some(f), Some(lines)) = (&self.frame, &self.lines) else {
+            return;
+        };
+        let (sck, mosi, miso) = Self::stm32_frame_levels(f);
+        lines.set(sck, mosi, miso);
+    }
+
+    /// Dequeue the next pending frame onto the wire. Consults the byte-level
+    /// devices at this frame boundary: the broadcast answer (last non-zero
+    /// response, same routing rule as always) is the byte MISO clocks out
+    /// during this frame.
+    fn stm32_start_next_frame(&mut self) {
+        let Some(value) = self.tx_queue.pop_front() else {
+            return;
+        };
+        let t = self.stm32_frame_timing();
+        let mask = if t.bits >= 16 {
+            0xFFFF
+        } else {
+            (1u16 << t.bits) - 1
+        };
+        let mosi = value & mask;
+        let miso = if !self.attached_devices.is_empty() {
+            let mosi_byte = (mosi & 0xFF) as u8;
+            let mut miso_byte = 0u8;
+            for dev in &mut self.attached_devices {
+                let resp = dev.transfer(mosi_byte);
+                if resp != 0 {
+                    miso_byte = resp;
+                }
+            }
+            miso_byte as u16
+        } else if self.loopback {
+            mosi
+        } else {
+            0
+        };
+        self.frame = Some(ActiveFrame {
+            t,
+            mosi,
+            miso,
+            bit_idx: 0,
+            second_half: false,
+            ticks_left: t.half_ticks,
+        });
+        self.stm32_drive_levels();
+    }
+
+    /// Advance the wire by `units` peripheral-clock cycles. Returns `true`
+    /// when a completed frame wants the TXE interrupt raised (CR2.TXEIE).
+    fn stm32_advance_units(&mut self, mut units: u64) -> bool {
+        let mut irq = false;
+        while units > 0 {
+            let Some(f) = &mut self.frame else { break };
+            let step = (f.ticks_left as u64).min(units);
+            f.ticks_left -= step as u32;
+            units -= step;
+            if f.ticks_left == 0 {
+                self.stm32_segment_boundary(&mut irq);
+            }
+        }
+        irq
+    }
+
+    /// The current half-period expired: drive the next segment, or complete
+    /// the frame at derived wire time (RXNE/BSY/TXE flip HERE, not at the DR
+    /// write).
+    fn stm32_segment_boundary(&mut self, irq: &mut bool) {
+        let Some(mut f) = self.frame.take() else {
+            return;
+        };
+        if !f.second_half {
+            f.second_half = true;
+            f.ticks_left = f.t.half_ticks;
+            self.frame = Some(f);
+            self.stm32_drive_levels();
+            return;
+        }
+        if f.bit_idx + 1 < f.t.bits {
+            f.bit_idx += 1;
+            f.second_half = false;
+            f.ticks_left = f.t.half_ticks;
+            self.frame = Some(f);
+            self.stm32_drive_levels();
+            return;
+        }
+        // Frame complete: exchange lands in the RX path. A wired slave drove
+        // its byte onto MISO during the frame; loopback mirrors MOSI. Without
+        // either, RXNE stays clear (real silicon: no MISO data).
+        let deliver_rx = self.loopback || !self.attached_devices.is_empty();
+        if let SpiRegs::Stm32(r) = &mut self.regs {
+            if deliver_rx {
+                r.dr = f.miso;
+                r.sr |= 0x0001; // RXNE
+            }
+        }
+        if !self.tx_queue.is_empty() {
+            // Back-to-back: the next queued frame starts on the very next
+            // cycle (BSY stays set, TXE stays clear).
+            self.stm32_start_next_frame();
+            return;
+        }
+        self.frame = None;
+        if let SpiRegs::Stm32(r) = &mut self.regs {
+            r.sr &= !0x0080; // Clear BSY
+            r.sr |= 0x0002; // Set TXE
+            if (r.cr2 & (1 << 7)) != 0 {
+                *irq = true; // TXEIE
+            }
+        }
+        // Wire idles: SCK returns to CPOL (the trailing edge of the last
+        // bit); MOSI/MISO hold their last driven level, like real pads.
+        if let Some(lines) = &self.lines {
+            lines.set(f.t.cpol, lines.mosi(), lines.miso());
+        }
+    }
+
+    /// Peripheral-clock cycles until the engine's next wire transition (the
+    /// scheduling quantum for the event-driven path). 0 when idle.
+    fn stm32_next_transition_ticks(&self) -> u64 {
+        self.frame
+            .as_ref()
+            .map(|f| f.ticks_left.max(1) as u64)
+            .unwrap_or(0)
+    }
+}
+
 impl crate::Peripheral for Spi {
     fn read(&self, offset: u64) -> SimResult<u8> {
         let reg_offset = offset & !3;
@@ -1102,10 +1502,38 @@ impl crate::Peripheral for Spi {
         true
     }
 
+    /// Event-scheduler path: anchor the engine's wire state to the current
+    /// CPU cycle. The bus calls this before every MMIO write, so a DR write
+    /// pins the frame start to the batch-start cycle — and because CPU batches
+    /// never cross a peripheral-tick boundary, that cycle is identical whether
+    /// the run loop is clamped (poll capture) or batched (push capture).
+    fn sync_to(&mut self, tick_now: u64) {
+        if tick_now <= self.anchor_tick {
+            return;
+        }
+        let delta = tick_now - self.anchor_tick;
+        self.anchor_tick = tick_now;
+        if self.frame.is_some() {
+            self.stm32_advance_units(delta);
+        }
+    }
+
+    /// Event-driven clocking (the walk-deleted path): while a frame is on the
+    /// wire, the engine keeps exactly one event armed at its next wire
+    /// transition. The returned delay is relative to the just-synced anchor;
+    /// the bus converts it to the absolute deadline `anchor + 1 + delay`, so
+    /// the `- 1` here lands the event exactly at `anchor + half_ticks` — the
+    /// first transition's true cycle at any tick interval. [`Self::on_event`]
+    /// self-corrects against the absolute anchor (a drain may run past the
+    /// deadline by up to one tick interval) and re-arms via `reschedule_delay`
+    /// until the frame (and any queued frames) complete.
     fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
-        if self.transfer_in_progress && !self.scheduled {
+        if self.frame.is_some() && !self.scheduled {
             self.scheduled = true;
-            vec![(self.transfer_cycles_remaining as u64, SPI_DONE_TOKEN)]
+            vec![(
+                self.stm32_next_transition_ticks().saturating_sub(1),
+                SPI_DONE_TOKEN,
+            )]
         } else {
             Vec::new()
         }
@@ -1114,28 +1542,36 @@ impl crate::Peripheral for Spi {
     fn on_event(
         &mut self,
         _event_token: u32,
-        _sched: &mut crate::sched::EventScheduler,
+        sched: &mut crate::sched::EventScheduler,
         _bus: &mut dyn crate::Bus,
     ) -> crate::sched::EventResult {
         self.scheduled = false;
-        if !self.transfer_in_progress {
+        let Some(f) = &self.frame else {
             return crate::sched::EventResult::default();
-        }
-        self.transfer_in_progress = false;
-        self.transfer_cycles_remaining = 0;
-        let deliver_rx = self.loopback || !self.attached_devices.is_empty();
-        let buf = self.transfer_buffer;
+        };
         let mut res = crate::sched::EventResult::default();
-        if let SpiRegs::Stm32(r) = &mut self.regs {
-            r.sr &= !0x0080; // Clear BSY
-            r.sr |= 0x0002; // Set TXE
-            if deliver_rx {
-                r.dr = buf as u16;
-                r.sr |= 0x0001; // RXNE
-            }
-            if (r.cr2 & (1 << 7)) != 0 {
-                res.raise_own_irq = true; // TXEIE
-            }
+        let now = sched.now();
+        let target = self.anchor_tick + f.ticks_left as u64;
+        if now < target {
+            // Early wakeup (a stale event from before a re-anchor): re-arm at
+            // the exact boundary.
+            res.reschedule_delay = Some(target - now);
+            self.scheduled = true;
+            return res;
+        }
+        // Advance the wire to "now" — at tick interval 1 drains run every
+        // cycle, so this is exactly one boundary; at larger intervals a drain
+        // may arrive up to one interval late and cross several boundaries in
+        // one call, but the boundaries' derived cycles (and the frame's total
+        // wire time) are unchanged.
+        let delta = now - self.anchor_tick;
+        self.anchor_tick = now;
+        if self.stm32_advance_units(delta) {
+            res.raise_own_irq = true; // TXEIE at frame completion
+        }
+        if self.frame.is_some() {
+            res.reschedule_delay = Some(self.stm32_next_transition_ticks());
+            self.scheduled = true;
         }
         res
     }
@@ -1227,6 +1663,14 @@ impl crate::Peripheral for Spi {
     }
 
     fn tick(&mut self) -> crate::PeripheralTickResult {
+        self.tick_elapsed(1)
+    }
+
+    /// Legacy-walk clocking (non-event-scheduler builds): advance the bit
+    /// engine by the elapsed peripheral-clock cycles. The event-scheduler
+    /// build never calls this for the SPI (the walk skips scheduler-driven
+    /// peripherals), so the two clocking paths cannot double-advance.
+    fn tick_elapsed(&mut self, cycles: u64) -> crate::PeripheralTickResult {
         let mut irq = false;
         let mut fired: Vec<u32> = Vec::new();
 
@@ -1256,28 +1700,9 @@ impl crate::Peripheral for Spi {
             };
         }
 
-        // ── STM32 SPI: cycle-counted shift-register transfer ─────────────────
-        if self.transfer_in_progress {
-            self.transfer_cycles_remaining = self.transfer_cycles_remaining.saturating_sub(1);
-            if self.transfer_cycles_remaining == 0 {
-                self.transfer_in_progress = false;
-                let deliver_rx = self.loopback || !self.attached_devices.is_empty();
-                let buf = self.transfer_buffer;
-                if let SpiRegs::Stm32(r) = &mut self.regs {
-                    r.sr &= !0x0080; // Clear BSY
-                    r.sr |= 0x0002; // Set TXE
-                    if deliver_rx {
-                        // A wired slave drove its byte onto MISO (already in
-                        // `transfer_buffer`); loopback mirrors MOSI. Either way
-                        // the firmware sees RXNE high with the received byte.
-                        r.dr = buf as u16;
-                        r.sr |= 0x0001; // RXNE
-                    }
-                    if (r.cr2 & (1 << 7)) != 0 {
-                        irq = true; // TXEIE
-                    }
-                }
-            }
+        // ── STM32 SPI: bit engine clocks the frame on the wire ───────────────
+        if self.frame.is_some() && self.stm32_advance_units(cycles) {
+            irq = true; // TXEIE at frame completion
         }
 
         crate::PeripheralTickResult {
@@ -1297,6 +1722,20 @@ impl crate::Peripheral for Spi {
 
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
+    }
+
+    fn for_each_attached_sim_input(
+        &mut self,
+        f: &mut dyn FnMut(&mut dyn crate::sim_input::SimInput) -> bool,
+    ) -> bool {
+        for dev in self.attached_devices.iter_mut() {
+            if let Some(si) = dev.as_sim_input_mut() {
+                if f(si) {
+                    return true;
+                }
+            }
+        }
+        false
     }
 }
 
@@ -1335,14 +1774,28 @@ mod tests {
             .clone()
     }
 
+    /// Clock the bit engine to completion (DR writes no longer complete
+    /// instantly — the frame is stretched over simulated cycles).
+    fn run_engine(spi: &mut Spi) {
+        for _ in 0..1_000_000 {
+            if !spi.transfer_active() {
+                return;
+            }
+            spi.tick_elapsed(8);
+        }
+        panic!("STM32 SPI bit engine did not complete");
+    }
+
     /// FIFO-family SPI: a 16-bit DR write at DS=8 packs TWO frames — the
-    /// silicon behaviour that broke the real Nokia 5110 panel.
+    /// silicon behaviour that broke the real Nokia 5110 panel. The second
+    /// frame clocks back-to-back after the first on the wire.
     #[test]
     fn fifo_packs_u16_dr_write_into_two_frames() {
         let mut spi = Spi::new_with_layout(SpiRegisterLayout::Stm32Fifo);
-        spi.attach(Box::new(Capture { rx: Vec::new() }));
+        spi.push_device(Box::new(Capture { rx: Vec::new() }));
         spi.write(0x00, 0x40).unwrap(); // CR1: SPE
         spi.write_u16(0x0C, 0x00AB).unwrap(); // 16-bit DR write, DS=8 (reset 0x0700)
+        run_engine(&mut spi);
         assert_eq!(
             captured(&spi),
             vec![0xAB, 0x00],
@@ -1354,9 +1807,10 @@ mod tests {
     #[test]
     fn fifo_u8_dr_write_is_one_frame() {
         let mut spi = Spi::new_with_layout(SpiRegisterLayout::Stm32Fifo);
-        spi.attach(Box::new(Capture { rx: Vec::new() }));
+        spi.push_device(Box::new(Capture { rx: Vec::new() }));
         spi.write(0x00, 0x40).unwrap();
         spi.write(0x0C, 0xAB).unwrap(); // 8-bit DR write
+        run_engine(&mut spi);
         assert_eq!(captured(&spi), vec![0xAB], "8-bit DR ⇒ 1 frame");
     }
 
@@ -1365,9 +1819,10 @@ mod tests {
     #[test]
     fn plain_stm32_does_not_pack() {
         let mut spi = Spi::new_with_layout(SpiRegisterLayout::Stm32);
-        spi.attach(Box::new(Capture { rx: Vec::new() }));
+        spi.push_device(Box::new(Capture { rx: Vec::new() }));
         spi.write(0x00, 0x40).unwrap();
         spi.write_u16(0x0C, 0x00AB).unwrap();
+        run_engine(&mut spi);
         assert_eq!(captured(&spi), vec![0xAB], "non-FIFO ⇒ 1 frame");
     }
 
@@ -1399,6 +1854,109 @@ mod tests {
         // No slave wired → no MISO data → RXNE stays clear, DR reads 0.
         assert_eq!(sr & 0x01, 0, "RXNE NOT set without a slave");
         assert_eq!(spi.read(0x0C).unwrap(), 0x00, "DR=0 with no MISO data");
+    }
+
+    /// Analytic wire time: a frame completes at EXACTLY `bits × 2^(BR+1)`
+    /// peripheral-clock cycles, for two BR settings (and 16-bit DFF frames on
+    /// the classic port take twice the clocks of 8-bit ones).
+    #[test]
+    fn frame_completes_at_exact_derived_cycle_for_two_br_settings() {
+        // (CR1 BR bits, expected cycles for an 8-bit frame)
+        for (br, expected) in [(0u16, 8 * 2u64), (4u16, 8 * 32u64)] {
+            let mut spi = Spi::new();
+            spi.write_u16(0x00, (1 << 6) | (br << 3)).unwrap(); // SPE | BR
+            spi.write(0x0C, 0xA5).unwrap();
+            let mut cycles = 0u64;
+            while spi.transfer_active() {
+                spi.tick_elapsed(1);
+                cycles += 1;
+                assert!(cycles < 1_000_000, "engine never completed");
+            }
+            assert_eq!(
+                cycles, expected,
+                "BR={br}: 8-bit frame must complete at bits × 2^(BR+1) cycles"
+            );
+        }
+        // Classic 16-bit frames (CR1.DFF): twice the clocks at the same BR.
+        let mut spi = Spi::new();
+        spi.write_u16(0x00, (1 << 6) | (1 << 3) | (1 << 11))
+            .unwrap(); // SPE|BR=1|DFF
+        spi.write_u16(0x0C, 0xBEEF).unwrap();
+        let mut cycles = 0u64;
+        while spi.transfer_active() {
+            spi.tick_elapsed(1);
+            cycles += 1;
+            assert!(cycles < 1_000_000, "engine never completed");
+        }
+        assert_eq!(cycles, 16 * 4, "DFF frame = 16 bits × 2^(BR+1) cycles");
+    }
+
+    /// Mode-3 + LSBFIRST wire shape: SCK idles HIGH (CPOL=1), data is driven
+    /// on the leading (falling) edge and sampled on the trailing (rising)
+    /// edge (CPHA=1), and the bit order is LSB first. Decoding the MOSI line
+    /// at every SCK rising edge must reproduce the written byte.
+    #[test]
+    fn mode3_lsbfirst_waveform_samples_on_trailing_edge() {
+        let mut spi = Spi::new();
+        let lines = spi.line_levels_arc();
+        // CR1: SPE | CPOL | CPHA | LSBFIRST, BR=0 (half-period = 1 cycle).
+        spi.write_u16(0x00, (1 << 6) | (1 << 1) | 1 | (1 << 7))
+            .unwrap();
+        assert!(lines.sck(), "idle SCK level must be CPOL = 1");
+
+        spi.write(0x0C, 0xB4).unwrap();
+        let mut prev = lines.sck();
+        let mut bits = Vec::new();
+        for _ in 0..16 {
+            spi.tick_elapsed(1);
+            let sck = lines.sck();
+            if sck && !prev {
+                bits.push(lines.mosi()); // sample on the trailing (rising) edge
+            }
+            prev = sck;
+        }
+        assert!(!spi.transfer_active(), "16 half-periods complete the frame");
+        assert!(lines.sck(), "SCK returns to the CPOL idle level");
+        assert_eq!(bits.len(), 8, "8 trailing edges per 8-bit frame");
+        let byte = bits
+            .iter()
+            .enumerate()
+            .fold(0u8, |acc, (i, &b)| acc | (u8::from(b) << i));
+        assert_eq!(byte, 0xB4, "LSB-first decode at the mode-3 sample edges");
+    }
+
+    /// Full-duplex fidelity: the byte the slave answers at the frame boundary
+    /// is what lands in DR when the SAME frame finishes clocking — not a byte
+    /// from a previous frame, and not delivered before wire time.
+    #[test]
+    fn slave_answer_clocks_back_during_the_same_frame() {
+        struct Sequenced {
+            next: u8,
+        }
+        impl SpiDevice for Sequenced {
+            fn transfer(&mut self, _mosi: u8) -> u8 {
+                let out = self.next;
+                self.next = self.next.wrapping_add(1);
+                out
+            }
+            fn cs_pin(&self) -> &str {
+                ""
+            }
+        }
+        let mut spi = Spi::new();
+        spi.push_device(Box::new(Sequenced { next: 0x51 }));
+        spi.write(0x00, 0x48).unwrap(); // SPE | BR=1
+        spi.write(0x0C, 0x01).unwrap();
+        assert_eq!(
+            spi.read(0x08).unwrap() & 0x01,
+            0,
+            "RXNE must not assert before the frame finishes on the wire"
+        );
+        run_engine(&mut spi);
+        assert_eq!(spi.read(0x0C).unwrap(), 0x51, "first frame's answer");
+        spi.write(0x0C, 0x02).unwrap();
+        run_engine(&mut spi);
+        assert_eq!(spi.read(0x0C).unwrap(), 0x52, "second frame's answer");
     }
 
     // ── nRF52 SPIM EasyDMA unit tests ─────────────────────────────────────────
@@ -1570,7 +2128,7 @@ mod tests {
         }
 
         let mut spi = Spi::new_with_layout(SpiRegisterLayout::Nrf52Spim);
-        spi.attach(Box::new(EchoSlave));
+        spi.push_device(Box::new(EchoSlave));
         let mut bus = FlatRamBus::new();
 
         let tx_base: u64 = 0x2000_0400;
@@ -2007,7 +2565,7 @@ mod tests {
     #[test]
     fn stm32h5_tx_engine_transmits_and_completes() {
         let mut spi = h5_master(2);
-        spi.attach(Box::new(Capture { rx: Vec::new() }));
+        spi.push_device(Box::new(Capture { rx: Vec::new() }));
         h5_write(&mut spi, 0x00, (1 << 0) | (1 << 9) | (1 << 12)); // SPE|CSTART|SSI
         h5_write(&mut spi, 0x20, 0x11);
         assert_eq!(h5_read(&spi, 0x14), 0x0001_0012, "CTSIZE 2→1, TXP|TXTF");
@@ -2022,7 +2580,7 @@ mod tests {
     #[test]
     fn stm32h5_txdr_ignored_when_disabled() {
         let mut spi = h5_master(2);
-        spi.attach(Box::new(Capture { rx: Vec::new() }));
+        spi.push_device(Box::new(Capture { rx: Vec::new() }));
         h5_write(&mut spi, 0x20, 0xAB);
         assert_eq!(h5_read(&spi, 0x14), 0x0000_1002, "SR untouched");
         assert!(captured(&spi).is_empty(), "nothing transmitted");
@@ -2034,7 +2592,7 @@ mod tests {
     #[test]
     fn stm32h5_byte_and_halfword_txdr_access_is_one_frame() {
         let mut spi = h5_master(0); // TSIZE=0: endless
-        spi.attach(Box::new(Capture { rx: Vec::new() }));
+        spi.push_device(Box::new(Capture { rx: Vec::new() }));
         h5_write(&mut spi, 0x00, (1 << 0) | (1 << 9) | (1 << 12));
         spi.write(0x20, 0x5A).unwrap(); // byte access → one 8-bit frame
         spi.write_u16(0x20, 0x1234).unwrap(); // halfword access → one frame

@@ -58,6 +58,10 @@ pub struct Fxos8700 {
     /// built-in "grazing cow" animation stops overwriting it on every
     /// burst-read (live UI input must stick, not be animated away).
     manual: bool,
+
+    /// system.yaml `external_devices` id, stamped at attach (see
+    /// [`crate::sim_input::SimInput::component_id`]).
+    component_id: Option<String>,
 }
 
 impl Default for Fxos8700 {
@@ -81,6 +85,7 @@ impl Fxos8700 {
             accel: [0, 0, ONE_G_LJ],
             mag: [0, 0, 0],
             manual: false,
+            component_id: None,
         };
         s.refresh_pose();
         s
@@ -214,8 +219,11 @@ impl I2cDevice for Fxos8700 {
 }
 
 /// Drivable accelerometer axes, in g. The FXOS8700 accel is 14-bit
-/// left-justified: 1 g = `ONE_G_LJ` (0x1000 = 4096) raw counts. Full-scale is
-/// set by `xyz_data_cfg`; the demo scale is ±2 g, matching the browser panel.
+/// left-justified: at the ±2 g default full-scale 1 g = `ONE_G_LJ` (0x1000 =
+/// 4096) raw counts. The conversion follows the LIVE `xyz_data_cfg` FS bits
+/// the firmware wrote (±2/±4/±8 g halve the counts-per-g each step) — the
+/// schema range below is the hardware maximum (±8 g); a value beyond the
+/// currently configured full-scale saturates, exactly like the silicon.
 impl crate::sim_input::SimInput for Fxos8700 {
     fn input_channels(&self) -> &'static [crate::sim_input::InputChannel] {
         use crate::sim_input::InputChannel;
@@ -224,22 +232,22 @@ impl crate::sim_input::SimInput for Fxos8700 {
                 key: "x",
                 label: "X",
                 unit: "g",
-                min: -2.0,
-                max: 2.0,
+                min: -8.0,
+                max: 8.0,
             },
             InputChannel {
                 key: "y",
                 label: "Y",
                 unit: "g",
-                min: -2.0,
-                max: 2.0,
+                min: -8.0,
+                max: 8.0,
             },
             InputChannel {
                 key: "z",
                 label: "Z",
                 unit: "g",
-                min: -2.0,
-                max: 2.0,
+                min: -8.0,
+                max: 8.0,
             },
         ];
         CH
@@ -247,7 +255,11 @@ impl crate::sim_input::SimInput for Fxos8700 {
 
     fn set_input(&mut self, key: &str, value: f64) -> Result<(), crate::sim_input::SimInputError> {
         self.require_channel(key, value)?;
-        let raw = (value * ONE_G_LJ as f64).round() as i16;
+        // Live full-scale from xyz_data_cfg FS bits: 0=±2g, 1=±4g, 2=±8g.
+        let fs = (self.xyz_data_cfg & 0x03).min(2) as u32;
+        let counts_per_g = (ONE_G_LJ as f64) / (1 << fs) as f64;
+        let full_scale = (2 << fs) as f64;
+        let raw = (value.clamp(-full_scale, full_scale) * counts_per_g).round() as i16;
         let axis = match key {
             "x" => 0,
             "y" => 1,
@@ -259,6 +271,14 @@ impl crate::sim_input::SimInput for Fxos8700 {
         // the driven value — same contract as `set_sample`.
         self.manual = true;
         Ok(())
+    }
+
+    fn component_id(&self) -> Option<&str> {
+        self.component_id.as_deref()
+    }
+
+    fn set_component_id(&mut self, id: String) {
+        self.component_id = Some(id);
     }
 }
 

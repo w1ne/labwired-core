@@ -3,8 +3,10 @@
 This firmware samples an NTC thermistor on ADC1 channel 0 through LabWired's
 simulated ADC path on STM32F103, printing the raw 12-bit conversion result each
 iteration. It is the minimal "analog sensor" example — no I²C/SPI bus, just a
-single ADC read against a modeled thermistor whose initial temperature is set in
-`system.yaml` (`initial_temperature_c: 25.0`).
+single ADC read against a modeled thermistor. The thermistor starts at 25 degC
+and is driven at runtime through the standard stimulus API - `set_input` on the
+`temperature` channel (degC), from a test script's `stimuli:`, the MCP, or the
+WASM bridge.
 
 Run from the repo root:
 

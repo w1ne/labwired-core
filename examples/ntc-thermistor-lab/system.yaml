@@ -6,7 +6,6 @@ external_devices:
     connection: "adc1"
     config:
       channel: 0
-      initial_temperature_c: 25.0
 board_io:
   - id: "thermistor"
     kind: "adc_input"

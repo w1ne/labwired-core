@@ -85,6 +85,8 @@ impl SystemBus {
                 .map(|a| {
                     a.downcast_ref::<crate::peripherals::esp32::gpio::Esp32Gpio>()
                         .is_some()
+                        || a.downcast_ref::<crate::peripherals::esp32c3::gpio::Esp32c3Gpio>()
+                            .is_some()
                 })
                 .unwrap_or(false);
             if is_esp32 {
@@ -108,6 +110,21 @@ impl SystemBus {
             return None;
         }
         Some(num)
+    }
+
+    /// Parse an ESP32-S3 GPIO label ("GPIO48", "gpio8", "IO17", or a bare "48")
+    /// into its pin number, accepting both banks (0..=48 — GPIO48 is the onboard
+    /// NeoPixel on most S3 boards). Unlike [`parse_esp32_gpio_pin`] (classic
+    /// ESP32, low bank only) this reaches bank 1, matching
+    /// [`Esp32s3Gpio`](crate::peripherals::esp32s3::gpio::Esp32s3Gpio)'s
+    /// `drive_pad_output` range.
+    pub(crate) fn parse_esp32s3_gpio_pin(pin: &str) -> Option<u8> {
+        let digits = pin
+            .trim()
+            .trim_start_matches(|c: char| c.is_ascii_alphabetic())
+            .trim();
+        let num: u8 = digits.parse().ok()?;
+        (num <= 48).then_some(num)
     }
 
     /// Resolve an STM32 pin label to its `(IDR address, bit)` so a sensor can
@@ -151,7 +168,27 @@ impl SystemBus {
             })
             .collect();
         self.peripheral_ranges.sort_by_key(|r| r.start);
+        self.legacy_tick_indices = self
+            .peripherals
+            .iter()
+            .enumerate()
+            .filter_map(|(index, p)| Self::legacy_tick_index_active(p).then_some(index))
+            .collect();
+        self.bus_tick_indices = self
+            .peripherals
+            .iter()
+            .enumerate()
+            .filter_map(|(index, p)| p.dev.needs_bus_tick().then_some(index))
+            .collect();
+        self.scheduler_driver_indices = self
+            .peripherals
+            .iter()
+            .enumerate()
+            .filter_map(|(index, p)| p.dev.uses_scheduler().then_some(index))
+            .collect();
         self.peripheral_hint.set(None);
+        self.last_route.set(None);
+        self.last_gap.set(None);
         // Cache the DPORT index (classic-ESP32 only) so the per-step
         // cross-core IPI read is O(1) instead of scanning every peripheral.
         self.dport_idx = self.peripherals.iter().position(|p| {
@@ -175,6 +212,13 @@ impl SystemBus {
                 .and_then(|a| a.downcast_ref::<crate::peripherals::flash::Flash>())
                 .is_some_and(|f| f.models_ops())
         });
+        // Cache whether an IO-Link master is attached to any UART. The probe is
+        // a nested scan (peripherals → downcast Uart → streams → downcast
+        // IolinkMaster), and `requires_cycle_accurate` asks per batch plan, per
+        // step and per idle-FF check — so it is answered from this bool instead
+        // of walking the bus every time. `attach_uart_stream_by_id` refreshes it
+        // too: it is the only post-build path that appends a UART stream.
+        self.iolink_master_attached = self.scan_iolink_master();
         // Cache the index of a FLASH peripheral whose opt-in H5 program-error
         // gate is on, so the flash-region write path can validate programs
         // without scanning. `None` (gate off) ⇒ that path is unchanged.
@@ -184,10 +228,224 @@ impl SystemBus {
                 .and_then(|a| a.downcast_ref::<crate::peripherals::flash::Flash>())
                 .is_some_and(|f| f.h5_error_flags_enabled())
         });
+        self.esp32c3_system_idx = self
+            .peripherals
+            .iter()
+            .position(|p| p.name == "system" && p.base == 0x600C_0000);
+        self.esp32c3_interrupt_core0_idx = self
+            .peripherals
+            .iter()
+            .position(|p| p.name == "interrupt_core0" && p.base == 0x600C_2000);
+        self.rebuild_esp32c3_irq_cache();
+        self.esp32s3_intmatrix_idx = self.peripherals.iter().position(|p| {
+            p.dev
+                .as_any()
+                .and_then(|a| {
+                    a.downcast_ref::<crate::peripherals::esp32s3::intmatrix::Esp32s3IntMatrix>()
+                })
+                .is_some()
+        });
+        self.esp32s3_irq_routing = self.esp32s3_intmatrix_idx.is_some();
+        // Cache whether the per-cycle GPIO-edge/GPIOTE service pass has any
+        // Nordic port to scan, so `tick_peripherals_fully` can early-out on
+        // walk-free buses without scanning peripherals by name every cycle.
+        self.nordic_gpio_service = self.find_peripheral_index_by_name("gpio0").is_some()
+            || self.find_peripheral_index_by_name("gpio1").is_some();
+    }
+
+    pub(crate) fn rebuild_esp32c3_irq_cache(&mut self) {
+        let Some(int_idx) = self.esp32c3_interrupt_core0_idx else {
+            self.esp32c3_irq_cache = None;
+            return;
+        };
+
+        let mut cache = crate::bus::Esp32c3IrqCache {
+            int_enable: self
+                .read_cached_declarative_u32(int_idx, 0x104)
+                .unwrap_or(0),
+            int_thresh: (self
+                .read_cached_declarative_u32(int_idx, 0x194)
+                .unwrap_or(0)
+                & 0xF) as u8,
+            ..Default::default()
+        };
+
+        for src in 0..cache.source_line.len() {
+            cache.source_line[src] = (self
+                .read_cached_declarative_u32(int_idx, (src as u64) * 4)
+                .unwrap_or(0)
+                & 0x1F) as u8;
+        }
+        for line in 0..cache.line_pri.len() {
+            cache.line_pri[line] = (self
+                .read_cached_declarative_u32(int_idx, 0x114 + (line as u64) * 4)
+                .unwrap_or(0)
+                & 0xF) as u8;
+        }
+
+        if let Some(system_idx) = self.esp32c3_system_idx {
+            for n in 0..4 {
+                let offset = 0x28 + (n as u64) * 4;
+                if self
+                    .read_cached_declarative_u32(system_idx, offset)
+                    .unwrap_or(0)
+                    & 1
+                    != 0
+                {
+                    cache.from_cpu_pending |= 1 << n;
+                }
+            }
+        }
+
+        self.esp32c3_irq_cache = Some(cache);
+        // Keep the routed line mask coherent with the rebuilt cache (no-op
+        // unless C3 routing is active — `recompute` early-outs without it).
+        if self.esp32c3_irq_routing {
+            self.recompute_esp32c3_irq_lines();
+        }
+    }
+
+    pub(crate) fn sync_esp32c3_irq_cache_write(&mut self, idx: usize, offset: u64) {
+        // Walk-free de-assert glue (the last-walker bus addition): once the C3
+        // bus is walk-DELETED (every peripheral migrated → `legacy_walk_disabled`)
+        // the per-cycle walk no longer re-derives scheduler-driven peripheral
+        // LEVELS each tick (`aggregate_esp32c3_irqs` stops running on the trivial
+        // tick path). A write-armed level — an INT_RAW set by a transaction, or
+        // the MAC event, and above all the acknowledge that CLEARS it
+        // (INT_CLR / EVENT_CLR) — must therefore re-derive the routed line mask
+        // AT THE WRITE, or a level would latch forever and re-enter its ISR. Do
+        // it here, at the shared MMIO write choke, but ONLY for a
+        // scheduler-driven peripheral (an ordinary register write pays nothing).
+        //
+        // Gated on `legacy_walk_disabled`: on a walk-ON bus the per-tick
+        // aggregation already owns level derivation and `esp32c3_asserted_sources`
+        // carries the walk-emitted sources — recomputing mid-instruction from
+        // that (stale until the next tick rebuilds it) would perturb routing, so
+        // the choke stays off there. On a walk-DELETED bus the walk never runs,
+        // so `esp32c3_asserted_sources` is inert and the recompute is the clean,
+        // authoritative level derivation. `recompute_esp32c3_irq_lines` also
+        // no-ops without the INTC cache, keeping this inert on hand-built buses.
+        #[cfg(feature = "event-scheduler")]
+        if self.legacy_walk_disabled
+            && self.esp32c3_irq_routing
+            && self
+                .peripherals
+                .get(idx)
+                .is_some_and(|p| p.dev.uses_scheduler())
+        {
+            self.refresh_esp32c3_sched_sources();
+            self.recompute_esp32c3_irq_lines();
+        }
+
+        if self.esp32c3_irq_cache.is_none() {
+            return;
+        }
+
+        let aligned = offset & !3;
+        let Some(value) = self.read_cached_declarative_u32(idx, aligned) else {
+            return;
+        };
+
+        let mut inputs_changed = false;
+        if Some(idx) == self.esp32c3_interrupt_core0_idx {
+            if let Some(cache) = &mut self.esp32c3_irq_cache {
+                inputs_changed = true;
+                match aligned {
+                    0x104 => cache.int_enable = value,
+                    0x194 => cache.int_thresh = (value & 0xF) as u8,
+                    0x114..=0x190 if (aligned - 0x114) % 4 == 0 => {
+                        let line = ((aligned - 0x114) / 4) as usize;
+                        if let Some(pri) = cache.line_pri.get_mut(line) {
+                            *pri = (value & 0xF) as u8;
+                        }
+                    }
+                    off if off % 4 == 0 => {
+                        let src = (off / 4) as usize;
+                        if let Some(line) = cache.source_line.get_mut(src) {
+                            *line = (value & 0x1F) as u8;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        } else if Some(idx) == self.esp32c3_system_idx && (0x28..=0x34).contains(&aligned) {
+            let slot = ((aligned - 0x28) / 4) as u8;
+            if slot < 4 {
+                if let Some(cache) = &mut self.esp32c3_irq_cache {
+                    inputs_changed = true;
+                    if value & 1 != 0 {
+                        cache.from_cpu_pending |= 1 << slot;
+                    } else {
+                        cache.from_cpu_pending &= !(1 << slot);
+                    }
+                }
+            }
+        }
+
+        // Write-choke re-aggregation: a routing-input change (INTC config or
+        // FROM_CPU IPI) updates `riscv_irq_lines` at the write instruction
+        // instead of waiting for the next peripheral tick. At interval 1 the
+        // tick-end rebuild recomputes the same mask before the CPU's next
+        // interrupt check (byte-identical); at interval > 1 this removes the
+        // up-to-one-interval delivery latency for yield/critical-section
+        // transitions and lets a walk-free C3 bus keep IPI routing correct
+        // with no per-cycle aggregation at all.
+        if inputs_changed && self.esp32c3_irq_routing {
+            self.recompute_esp32c3_irq_lines();
+        }
     }
 
     pub fn refresh_peripheral_index(&mut self) {
         self.rebuild_peripheral_ranges();
+    }
+
+    pub(crate) fn refresh_legacy_tick_index(&mut self, idx: usize) -> bool {
+        // Walk-deleted buses never consult `legacy_tick_indices` (the walk is
+        // off). Skip the trait calls + linear index scan on every MMIO write —
+        // the post-#555 C3 OLED hot path was spending more samples here than
+        // in the write itself once fetch/route optims landed.
+        if self.legacy_walk_disabled {
+            return false;
+        }
+        let active = self
+            .peripherals
+            .get(idx)
+            .is_some_and(Self::legacy_tick_index_active);
+        let pos = self.legacy_tick_indices.iter().position(|&i| i == idx);
+        match (active, pos) {
+            (true, None) => {
+                self.legacy_tick_indices.push(idx);
+                self.legacy_tick_indices.sort_unstable();
+            }
+            (false, Some(pos)) => {
+                self.legacy_tick_indices.swap_remove(pos);
+            }
+            _ => {}
+        }
+        active
+    }
+
+    pub(crate) fn refresh_bus_tick_index(&mut self, idx: usize) -> bool {
+        // Fast reject: most C3 models never arm the bus-tick path. Avoid the
+        // linear membership scan when the peripheral still reports inactive
+        // and is not already tracked (the common steady-state write).
+        let Some(p) = self.peripherals.get(idx) else {
+            return false;
+        };
+        let active = p.dev.needs_bus_tick();
+        let pos = self.bus_tick_indices.iter().position(|&i| i == idx);
+        match (active, pos) {
+            (true, None) => {
+                self.bus_tick_indices.push(idx);
+                self.bus_tick_indices.sort_unstable();
+            }
+            (false, Some(pos)) => {
+                self.bus_tick_indices.remove(pos);
+            }
+            (false, None) => return false,
+            _ => {}
+        }
+        active
     }
 
     pub(crate) fn find_peripheral_index(&self, addr: u64) -> Option<usize> {
@@ -196,15 +454,40 @@ impl SystemBus {
         // to the last-registered entry). This makes routing a pure function
         // of the address.
         //
-        // The hint cache deliberately does NOT short-circuit on containment:
-        // with layered windows (a narrow per-peripheral twin inside a broad
-        // catch-all stub) a hint seeded by a broad-only access also CONTAINS
-        // the twin's addresses, so a containment-only check hijacks them to
-        // the catch-all and routing becomes a function of access history —
-        // see bus::tests::overlapping_windows_route_history_independently.
-        // The canonical path is already cheap: one partition_point (O(log n))
-        // and, in the common non-overlapped case, one containment check.
+        // Hot path: reuse the last winning window when `addr` still falls
+        // inside it AND no narrower (greater-start) window steals `addr`.
+        // When the next sorted range starts after `addr`, that check is O(1).
+        if self.peripheral_ranges.len() == self.peripherals.len() {
+            // Negative cache: a known peripheral-free gap answers misses O(1).
+            if let Some((gs, ge)) = self.last_gap.get() {
+                if addr >= gs && addr < ge {
+                    self.peripheral_hint.set(None);
+                    return None;
+                }
+            }
+            if let Some((ord, start, end, index)) = self.last_route.get() {
+                if addr >= start && addr < end {
+                    let next_start = self
+                        .peripheral_ranges
+                        .get(ord + 1)
+                        .map(|r| r.start)
+                        .unwrap_or(u64::MAX);
+                    if next_start > addr {
+                        // No window has start in (start, addr] — ours still wins.
+                        self.peripheral_hint.set(Some(index));
+                        return Some(index);
+                    }
+                    // Possible nesting: only scan (ord, pos] for a stealer.
+                    if !self.narrower_after(ord, start, addr) {
+                        self.peripheral_hint.set(Some(index));
+                        return Some(index);
+                    }
+                }
+            }
+        }
+
         let mut idx = None;
+        let mut won: Option<(usize, u64, u64)> = None; // (range_ord, start, end)
         if self.peripheral_ranges.len() == self.peripherals.len() {
             let pos = self
                 .peripheral_ranges
@@ -212,9 +495,10 @@ impl SystemBus {
             // Walk backwards through the candidate starts: the nearest
             // (greatest-start) window may have already ENDED below `addr`
             // while a broader, earlier-started window still covers it.
-            for range in self.peripheral_ranges[..pos].iter().rev() {
+            for (ord, range) in self.peripheral_ranges[..pos].iter().enumerate().rev() {
                 if addr < range.end {
                     idx = Some(range.index);
+                    won = Some((ord, range.start, range.end));
                     break;
                 }
             }
@@ -240,7 +524,48 @@ impl SystemBus {
         }
 
         self.peripheral_hint.set(idx);
+        if let (Some(i), Some((ord, s, e))) = (idx, won) {
+            self.last_route.set(Some((ord, s, e, i)));
+        } else {
+            self.last_route.set(None);
+            // Miss: cache the surrounding peripheral-free gap. `pos` ranges
+            // start <= addr and (since none covered `addr`) all end <= addr,
+            // so the gap floor is their greatest end; the ceiling is the next
+            // range's start. No window can cover any address in between.
+            if self.peripheral_ranges.len() == self.peripherals.len() {
+                let pos = self
+                    .peripheral_ranges
+                    .partition_point(|range| range.start <= addr);
+                let floor = self.peripheral_ranges[..pos]
+                    .iter()
+                    .map(|r| r.end)
+                    .max()
+                    .unwrap_or(0);
+                let ceil = self
+                    .peripheral_ranges
+                    .get(pos)
+                    .map(|r| r.start)
+                    .unwrap_or(u64::MAX);
+                if floor <= addr && addr < ceil {
+                    self.last_gap.set(Some((floor, ceil)));
+                }
+            }
+        }
         idx
+    }
+
+    /// True if some range after `outer_ord` with `start > outer_start` covers
+    /// `addr` (would beat the cached window under greatest-start-wins).
+    fn narrower_after(&self, outer_ord: usize, outer_start: u64, addr: u64) -> bool {
+        for range in self.peripheral_ranges.iter().skip(outer_ord + 1) {
+            if range.start > addr {
+                break;
+            }
+            if range.start > outer_start && addr < range.end {
+                return true;
+            }
+        }
+        false
     }
 
     pub fn find_peripheral_index_by_name(&self, name: &str) -> Option<usize> {
@@ -269,7 +594,40 @@ impl SystemBus {
             .ok_or_else(|| anyhow::anyhow!("peripheral '{uart_id}' is not a UART"))?;
         uart.set_sink(None, false);
         uart.attach_stream(dev);
+        // This is the one post-build path that appends to a UART's
+        // `attached_streams`, so the `iolink_master_attached` cache that
+        // `requires_cycle_accurate` reads would otherwise go stale here — a
+        // stale `false` would batch a bus that must run cycle-accurate and
+        // silently change IO-Link timing. Re-derive it from the streams we just
+        // mutated. Cheap: attaching is a wiring-time operation, not a hot path.
+        self.iolink_master_attached = self.scan_iolink_master();
         Ok(())
+    }
+
+    /// Attach one endpoint of a shared `CanBus` to the named FDCAN peripheral.
+    ///
+    /// This is deliberately a post-build seam: system manifests build each
+    /// node in isolation, while an environment manifest supplies the topology
+    /// only after all of those buses exist. It rejects a missing identifier and
+    /// any non-FDCAN device rather than silently routing a topology edge to a
+    /// wrong peripheral.
+    pub fn attach_can_bus_by_id(
+        &mut self,
+        can_id: &str,
+        tx: std::sync::mpsc::Sender<crate::network::CanFrame>,
+        rx: std::sync::mpsc::Receiver<crate::network::CanFrame>,
+    ) -> anyhow::Result<()> {
+        let idx = self
+            .find_peripheral_index_by_name(can_id)
+            .ok_or_else(|| anyhow::anyhow!("no peripheral '{can_id}'"))?;
+        let any = self.peripherals[idx]
+            .dev
+            .as_any_mut()
+            .ok_or_else(|| anyhow::anyhow!("peripheral '{can_id}' is not an FDCAN"))?;
+        let fdcan = any
+            .downcast_mut::<crate::peripherals::fdcan::Fdcan>()
+            .ok_or_else(|| anyhow::anyhow!("peripheral '{can_id}' is not an FDCAN"))?;
+        fdcan.attach_bus(tx, rx)
     }
 
     /// Detach a single UART (by peripheral id) from the shared console TX sink.

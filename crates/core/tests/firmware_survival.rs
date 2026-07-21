@@ -334,6 +334,34 @@ const SURVIVAL_CASES: &[SurvivalCase] = &[
         valid_pc_ranges: &[(0x0000_0000, 0x000F_FFFF), (0x2000_0000, 0x2007_FFFF)],
         expected_uart_output: b"Hello World! nrf5340dk/nrf5340/cpuapp",
     },
+    // nRF54L15: RRAM-based (NVM at 0x0, 1524 KB) rather than flash, and the
+    // 256 KB SRAM puts the initial SP at 0x2004_0000. The PC range covers
+    // RRAM; the firmware spins in main after the banner.
+    SurvivalCase {
+        name: "nrf54l15_smoke",
+        core: "cortex-m33",
+        family: CpuFamily::CortexM,
+        chip: "nrf54l15",
+        system: "nrf54l15dk",
+        fixture: "nrf54l15-smoke.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x0017_CFFF), (0x2000_0000, 0x2003_FFFF)],
+        expected_uart_output: b"nRF54L15 boot OK",
+    },
+    // Unmodified upstream Zephyr v4.4 hello_world for nrf54l15dk/nrf54l15/cpuapp.
+    // This is the tier marker: the profile satisfies the real nrfx/Zephyr boot
+    // path (TAMPC approtect gate, nRF54L CLOCK XO/LFCLK, GRTC, and the
+    // nRF54L-generation UARTE with its DMA.TX cluster), not just firmware
+    // written against the simulator's own assumptions.
+    SurvivalCase {
+        name: "nrf54l15_zephyr",
+        core: "cortex-m33",
+        family: CpuFamily::CortexM,
+        chip: "nrf54l15",
+        system: "nrf54l15dk",
+        fixture: "nrf54l15-zephyr-hello.elf",
+        valid_pc_ranges: &[(0x0000_0000, 0x0017_CFFF), (0x2000_0000, 0x2003_FFFF)],
+        expected_uart_output: b"Hello World! nrf54l15dk/nrf54l15/cpuapp",
+    },
     SurvivalCase {
         name: "nrf52832_demo",
         core: "cortex-m4",
@@ -998,15 +1026,27 @@ fn assert_uart_contains(uart_bytes: &[u8], expected: &[u8], name: &str) {
 
 fn run_survival_case(case: &SurvivalCase) {
     let firmware = fixtures().join(case.fixture);
+    let cycles = case_cycles(case);
     let (pc, uart_bytes) = match case.family {
-        CpuFamily::CortexM => {
-            run_cortex_m_firmware(case.chip, case.system, firmware, SURVIVAL_CYCLES)
-        }
-        CpuFamily::RiscV => run_riscv_firmware(case.chip, case.system, firmware, SURVIVAL_CYCLES),
+        CpuFamily::CortexM => run_cortex_m_firmware(case.chip, case.system, firmware, cycles),
+        CpuFamily::RiscV => run_riscv_firmware(case.chip, case.system, firmware, cycles),
     };
 
-    assert_pc_in_range(pc, SURVIVAL_CYCLES, case.valid_pc_ranges);
+    assert_pc_in_range(pc, cycles, case.valid_pc_ranges);
     assert_uart_contains(&uart_bytes, case.expected_uart_output, case.name);
+}
+
+/// Per-case cycle budget. Most firmwares emit their banner within the default
+/// window; the RP2040 Arduino Mbed-OS sketch prints over **USB CDC**, and its
+/// `loop()` only sends once per `delay(200)` — so it needs a wider window for a
+/// loop iteration to land after the simulated host finishes USB enumeration and
+/// asserts CDC DTR.
+fn case_cycles(case: &SurvivalCase) -> u32 {
+    if case.name == "rp2040_arduino_serial" {
+        2_000_000
+    } else {
+        SURVIVAL_CYCLES
+    }
 }
 
 /// Run a Cortex-M machine loaded with `firmware_path` for `cycles` steps.
@@ -1216,25 +1256,21 @@ fn test_rp2040_zephyr_hello_survival() {
     run_survival_case(case_by_name("rp2040_zephyr_hello"));
 }
 
-/// Arduino Mbed-OS RP2040 serial sketch.
+/// Arduino Mbed-OS RP2040 serial sketch — full end-to-end over **USB CDC**.
 ///
-/// The boot2 / XIP bus-read fault at `0x18000028` this PR targets is FIXED: with
-/// the `XIP_SSI` model (+ SIO spinlocks + TBMAN) the image now boots through the
-/// full pico-sdk low-level init and the RTX kernel start (~400k instructions),
-/// versus faulting within the first few hundred.
+/// This is the deepest RP2040 path modelled: it exercises the boot2/XIP bring-up
+/// (`XIP_SSI` + SIO spinlocks + TBMAN), the RTX kernel tick (real `systick` +
+/// TIMER alarms), and the whole USB device stack. The sketch's default `Serial`
+/// is USB CDC, so `verdict=GOOD rp2040` is only emitted once the device has been
+/// enumerated by a host and the CDC terminal (DTR) is up. The `rp2040_usb`
+/// peripheral supplies both the device controller and a simulated host that
+/// enumerates the device and asserts DTR, then captures the sketch's bulk-IN
+/// bytes into the UART sink.
 ///
-/// It is `#[ignore]`d because it does not yet reach the `verdict=GOOD rp2040`
-/// UART token: the Arduino Mbed core needs the RTX kernel tick (the SysTimer) to
-/// pre-initialise the mbed us_ticker during kernel start. LabWired does not yet
-/// drive the RP2040 kernel tick (the chip config stubs SysTick — see the
-/// `systick` note in `configs/chips/rp2040.yaml`), so the first `mbed::Timer`
-/// reset defers ticker init into a `CriticalSectionLock`, where the C-runtime
-/// malloc lock (`__rtos_malloc_lock` → `osMutexAcquire`) is rejected with
-/// `osErrorISR` because `PRIMASK` is set — mbed then traps. This is an RTOS
-/// kernel-tick gap, independent of the boot2/XIP path fixed here. Un-ignore once
-/// the RP2040 kernel tick lands.
+/// Uses a wider cycle budget (see `case_cycles`) because the sketch's `loop()`
+/// only transmits once per `delay(200)`, so a loop iteration must land after the
+/// simulated host finishes enumeration.
 #[test]
-#[ignore]
 fn test_rp2040_arduino_serial_survival() {
     run_survival_case(case_by_name("rp2040_arduino_serial"));
 }
@@ -1257,6 +1293,66 @@ fn test_nrf52832_demo_survival() {
 #[test]
 fn test_nrf5340_zephyr_survival() {
     run_survival_case(case_by_name("nrf5340_zephyr"));
+}
+
+#[test]
+fn test_nrf54l15_smoke_survival() {
+    run_survival_case(case_by_name("nrf54l15_smoke"));
+}
+
+/// End-to-end proof that GPIO reaches the pin, not just that the CPU survived.
+///
+/// This exists because the UART banner alone does NOT catch the most likely
+/// nRF54L15 profile bug. A Nordic GPIO devicetree node points at the OUT
+/// register (peripheral base + 0x500), so mapping the DT address as the
+/// peripheral base puts every GPIO register 0x500 too high. UART still works,
+/// the banner still prints, the survival test still passes — and the LED
+/// silently never lights. That mistake was made and caught here.
+#[test]
+fn test_nrf54l15_lights_dk_led0() {
+    use labwired_core::Bus;
+
+    // DK LED0 is P2.09 (board DT nrf54l15dk_common.dtsi, GPIO_ACTIVE_HIGH).
+    // Mapped P2 base = MDK NRF_P2_S_BASE (0x5005_0400) - 0x504, so the gpio
+    // model's nRF52-relative offsets land on the real registers: OUT ends up at
+    // 0x5005_0400 and DIR at 0x5005_0410, which is where the MDK puts them on
+    // this family (NRF_GPIO_Type has OUT at +0x000 here, unlike nRF52/nRF5340).
+    const GPIO_P2: u64 = 0x5004_FEFC;
+    const GPIO_OUT: u64 = 0x504;
+    const GPIO_DIR: u64 = 0x514;
+    const LED0: u32 = 1 << 9;
+
+    let (chip, manifest) = load_system("nrf54l15", "nrf54l15dk");
+    let mut bus = SystemBus::from_config(&chip, &manifest).expect("bus");
+    let (cpu, _nvic) = configure_cortex_m(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
+    let image =
+        labwired_loader::load_elf(&fixtures().join("nrf54l15-smoke.elf")).expect("load smoke elf");
+    machine.load_firmware(&image).expect("load fw");
+    for _ in 0..SURVIVAL_CYCLES {
+        if machine.step().is_err() {
+            break;
+        }
+    }
+
+    let dir = machine.bus.read_u32(GPIO_P2 + GPIO_DIR).expect("read DIR");
+    let out = machine.bus.read_u32(GPIO_P2 + GPIO_OUT).expect("read OUT");
+
+    assert_ne!(
+        dir & LED0,
+        0,
+        "P2.09 was never configured as an output (DIRSET did not land)"
+    );
+    assert_ne!(
+        out & LED0,
+        0,
+        "P2.09 is an output but was never driven high — DK LED0 stayed dark"
+    );
+}
+
+#[test]
+fn test_nrf54l15_zephyr_survival() {
+    run_survival_case(case_by_name("nrf54l15_zephyr"));
 }
 
 #[test]

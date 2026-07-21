@@ -49,6 +49,26 @@ impl PerformanceMetrics {
         self.instruction_count.load(Ordering::SeqCst)
     }
 
+    /// Overwrite the instruction counter from an authoritative external source.
+    ///
+    /// Used by the JIT-eligible CLI test path, which does NOT install this
+    /// object as a per-step observer (the observer presence gates the RV32IMC
+    /// JIT off). Instead it sources the retired-instruction count directly from
+    /// the machine's own batch return values, so the count stays exact whether
+    /// a batch was interpreted or compiled. See `execute_test_loop`.
+    pub fn set_instructions(&self, instructions: u64) {
+        self.instruction_count.store(instructions, Ordering::SeqCst);
+    }
+
+    /// Overwrite the cycle counter from an authoritative external source
+    /// (`Machine::total_cycles`). Peer to [`Self::set_instructions`]: the
+    /// JIT-eligible test path can't rely on the per-step `on_step_end` tap
+    /// (compiled blocks retire without firing it), so it mirrors the machine's
+    /// canonical cycle counter here before each stimulus/limit check.
+    pub fn set_cycles(&self, cycles: u64) {
+        self.cycle_count.store(cycles, Ordering::SeqCst);
+    }
+
     pub fn get_cycles(&self) -> u64 {
         self.cycle_count.load(Ordering::SeqCst)
     }

@@ -367,6 +367,15 @@ pub fn decode_rv32c(inst: u16) -> Instruction {
                               | (((inst >> 6) & 0x1) << 2)   // imm[2]
                               | (((inst >> 5) & 0x1) << 3); // imm[3]
                     let rd = (((inst >> 2) & 0x7) + 8) as u8;
+                    // The all-zeros encoding (nzuimm == 0, i.e. `inst == 0x0000`)
+                    // is RESERVED/ILLEGAL per the RISC-V spec — c.addi4spn
+                    // requires a nonzero nzuimm. Decode it as Unknown so both the
+                    // interpreter and JIT trap on it instead of silently running
+                    // a bogus `addi rd,sp,0`. Real firmware never executes zero
+                    // padding as code; a block that walks into it must terminate.
+                    if imm == 0 {
+                        return Instruction::Unknown(inst as u32);
+                    }
                     Instruction::CAddi4spn {
                         rd,
                         imm: imm as u32,

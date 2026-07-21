@@ -76,15 +76,8 @@ fn firmware_drives_panel_to_ereader_bitmap() {
 
     // Attach SSD1680 panel to SPI3 — mirrors what
     // `WasmSimulator::attach_esp32_external_devices` does for the playground.
-    let spi3_idx = bus
-        .find_peripheral_index_by_name("spi3")
-        .expect("spi3 must be registered by configure_xtensa_esp32");
-    let any = bus.peripherals[spi3_idx]
-        .dev
-        .as_any_mut()
-        .expect("spi3 supports downcast");
-    let spi = any.downcast_mut::<Esp32Spi>().expect("spi3 is Esp32Spi");
-    spi.attach(Box::new(Ssd1680Tricolor290::new("GPIO5")));
+    bus.attach_spi_device("spi3", Box::new(Ssd1680Tricolor290::new("GPIO5")))
+        .expect("spi3 is an Esp32Spi controller");
 
     bus.refresh_peripheral_index();
 

@@ -34,6 +34,7 @@
 
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
+use labwired_core::Bus;
 use std::path::PathBuf;
 
 // ── RCC (0x4002_1000) ────────────────────────────────────────────────────────
@@ -69,12 +70,12 @@ const PC8: u32 = 1 << 8; // free pin on the Nucleo morpho header
 
 // ── SPI1 (0x4001_3000) ─────────────────────────────────────────────────────────
 const SPI1_BASE: u32 = 0x4001_3000;
-const SPI1_CR1: u32 = SPI1_BASE + 0x00;
+const SPI1_CR1: u32 = SPI1_BASE;
 const SPI1_CR2: u32 = SPI1_BASE + 0x04;
 
 // ── TIM2 (0x4000_0000, 32-bit GP timer) ─────────────────────────────────────────
 const TIM2_BASE: u32 = 0x4000_0000;
-const TIM2_CR1: u32 = TIM2_BASE + 0x00;
+const TIM2_CR1: u32 = TIM2_BASE;
 const TIM2_PSC: u32 = TIM2_BASE + 0x28;
 const TIM2_ARR: u32 = TIM2_BASE + 0x2C;
 
@@ -256,7 +257,7 @@ const PARITY_REGS: &[ParityReg] = &[
     // PA13/PA14 carry SWD — never swept here, the J-Link rides on them.)
     ParityReg {
         label: "GPIOD MODER",
-        addr: GPIOD_BASE + 0x00,
+        addr: GPIOD_BASE,
         mask: 0xFFFF_FFFF,
     },
     ParityReg {
@@ -291,7 +292,7 @@ const PARITY_REGS: &[ParityReg] = &[
     },
     ParityReg {
         label: "GPIOE MODER",
-        addr: GPIOE_BASE + 0x00,
+        addr: GPIOE_BASE,
         mask: 0xFFFF_FFFF,
     },
     ParityReg {
@@ -317,7 +318,7 @@ const PARITY_REGS: &[ParityReg] = &[
     // SPI control registers (CR2 bit 15 reserved on L4 → masked out).
     ParityReg {
         label: "SPI1 CR1",
-        addr: SPI1_BASE + 0x00,
+        addr: SPI1_BASE,
         mask: 0x0000_FFFF,
     },
     ParityReg {
@@ -329,7 +330,7 @@ const PARITY_REGS: &[ParityReg] = &[
     },
     ParityReg {
         label: "SPI2 CR1",
-        addr: SPI2_BASE + 0x00,
+        addr: SPI2_BASE,
         mask: 0x0000_FFFF,
     },
     ParityReg {
@@ -339,7 +340,7 @@ const PARITY_REGS: &[ParityReg] = &[
     },
     ParityReg {
         label: "SPI3 CR1",
-        addr: SPI3_BASE + 0x00,
+        addr: SPI3_BASE,
         mask: 0x0000_FFFF,
     },
     ParityReg {

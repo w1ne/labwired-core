@@ -15,6 +15,7 @@ use labwired_core::peripherals::components::{Ssd1680Tricolor290, Uc8151dTricolor
 use labwired_core::peripherals::esp32::spi::Esp32Spi;
 use labwired_core::peripherals::spi::SpiDevice;
 use labwired_core::system::xtensa::configure_xtensa_esp32;
+use labwired_core::Bus;
 
 const SPI3_BASE: u64 = 0x3FF6_5000;
 const GPIO_BASE: u64 = 0x3FF4_4000;
@@ -60,9 +61,8 @@ fn attach_panel_with_dc(bus: &mut SystemBus, panel: Box<dyn SpiDevice>) -> usize
         .expect("configure_xtensa_esp32 registers spi3");
     let mut panel = panel;
     panel.set_dc_source(dc_src.0, dc_src.1);
-    let any = bus.peripherals[spi3_idx].dev.as_any_mut().unwrap();
-    let spi3 = any.downcast_mut::<Esp32Spi>().unwrap();
-    spi3.attach(panel);
+    bus.attach_spi_device("spi3", panel)
+        .expect("spi3 is an Esp32Spi controller");
     bus.refresh_peripheral_index();
     spi3_idx
 }

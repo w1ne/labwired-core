@@ -4,7 +4,7 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
-use labwired_config::{ChipDescriptor, CosimAdapter, SystemManifest};
+use labwired_config::{ChipDescriptor, CosimAdapter, MemoryValueDetails, SystemManifest};
 
 #[test]
 fn test_old_yaml_still_parses() {
@@ -92,6 +92,20 @@ external_devices: []
 }
 
 #[test]
+fn memory_value_details_constructor_is_externally_constructible_and_sparse() {
+    let details = MemoryValueDetails::new(0x2001_0000, 1);
+    assert_eq!(details.mask, None);
+    assert_eq!(details.size, None);
+    assert_eq!(details.node, None);
+
+    let serialized = serde_yaml::to_string(&details).unwrap();
+    assert!(
+        !serialized.contains("node:"),
+        "ordinary node-less details should stay sparse: {serialized}"
+    );
+}
+
+#[test]
 fn system_manifest_rejects_incomplete_cosim_model() {
     let yaml = r#"
 name: "bad-cosim"
@@ -123,5 +137,24 @@ external_devices: []
             .iter()
             .any(|issue| issue.contains("cosim_models[0].step_ns")),
         "expected invalid step validation issue, got {issues:?}"
+    );
+}
+
+#[test]
+fn memory_value_details_public_fields_remain_struct_literal_constructible() {
+    // This is compiled as a downstream crate. Keep the public struct shape
+    // usable by callers that construct a memory assertion directly.
+    let details = MemoryValueDetails {
+        address: 0x2001_0000,
+        expected_value: 1,
+        mask: None,
+        size: None,
+        node: None,
+    };
+
+    let serialized = serde_yaml::to_string(&details).unwrap();
+    assert!(
+        !serialized.contains("node:"),
+        "ordinary node-less details should stay sparse: {serialized}"
     );
 }

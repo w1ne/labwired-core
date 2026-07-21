@@ -42,7 +42,8 @@
           "example_dir": "quectel-bg770a-lab",
           "demo_elf": "demo-quectel-bg770a-lab.elf"
         }
-      ]
+      ],
+      "inputs": []
     },
     {
       "device_type": "neo6m-gps",
@@ -70,6 +71,29 @@
           "example_dir": "neo6m-gps-lab",
           "demo_elf": "demo-neo6m-gps-lab.elf"
         }
+      ],
+      "inputs": [
+        {
+          "key": "lat",
+          "label": "Latitude",
+          "unit": "°",
+          "min": -90.0,
+          "max": 90.0
+        },
+        {
+          "key": "lon",
+          "label": "Longitude",
+          "unit": "°",
+          "min": -180.0,
+          "max": 180.0
+        },
+        {
+          "key": "fix",
+          "label": "Fix",
+          "unit": "level",
+          "min": 0.0,
+          "max": 1.0
+        }
       ]
     },
     {
@@ -92,6 +116,29 @@
           "chip": "stm32f103",
           "example_dir": "adxl345-sensor-lab",
           "demo_elf": "demo-adxl345-sensor-lab.elf"
+        }
+      ],
+      "inputs": [
+        {
+          "key": "x",
+          "label": "X",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0
+        },
+        {
+          "key": "y",
+          "label": "Y",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0
+        },
+        {
+          "key": "z",
+          "label": "Z",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0
         }
       ]
     },
@@ -116,13 +163,57 @@
           "example_dir": "mpu6050-sensor-lab",
           "demo_elf": "demo-mpu6050-sensor-lab.elf"
         }
+      ],
+      "inputs": [
+        {
+          "key": "ax",
+          "label": "Accel X",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0
+        },
+        {
+          "key": "ay",
+          "label": "Accel Y",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0
+        },
+        {
+          "key": "az",
+          "label": "Accel Z",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0
+        },
+        {
+          "key": "gx",
+          "label": "Gyro X",
+          "unit": "°/s",
+          "min": -2000.0,
+          "max": 2000.0
+        },
+        {
+          "key": "gy",
+          "label": "Gyro Y",
+          "unit": "°/s",
+          "min": -2000.0,
+          "max": 2000.0
+        },
+        {
+          "key": "gz",
+          "label": "Gyro Z",
+          "unit": "°/s",
+          "min": -2000.0,
+          "max": 2000.0
+        }
       ]
     },
     {
       "device_type": "bme280",
       "label": "BME280 Weather",
       "summary": "Bosch BME280 temp + humidity + pressure sensor over I2C.",
-      "detail": "Returns the same factory dummy readings the real silicon ships with (≈25 °C, 50 % RH, sea-level pressure). Real-time stimulus comes from the WASM bridge.",
+      "detail": "Serves factory calibration coefficients plus raw ADC words, exactly like the silicon; the firmware driver recovers engineering units by running Bosch's compensation formulas. Stimulus takes °C / %RH / hPa and inverts that same compensation against the same coefficients, so a real driver reads back what was set. Defaults to 25 °C / 50 %RH / 1013.25 hPa.",
       "transport": "i2c",
       "category": "i2c",
       "config_keys": [
@@ -138,6 +229,29 @@
           "chip": "stm32f103",
           "example_dir": "bme280-weather-lab",
           "demo_elf": "demo-bme280-weather-lab.elf"
+        }
+      ],
+      "inputs": [
+        {
+          "key": "temperature",
+          "label": "Temperature",
+          "unit": "°C",
+          "min": -40.0,
+          "max": 85.0
+        },
+        {
+          "key": "humidity",
+          "label": "Humidity",
+          "unit": "%RH",
+          "min": 0.0,
+          "max": 100.0
+        },
+        {
+          "key": "pressure",
+          "label": "Pressure",
+          "unit": "hPa",
+          "min": 300.0,
+          "max": 1100.0
         }
       ]
     },
@@ -162,7 +276,49 @@
           "example_dir": "ssd1306-hello-lab",
           "demo_elf": "demo-ssd1306-hello-lab.elf"
         }
-      ]
+      ],
+      "inputs": []
+    },
+    {
+      "device_type": "oled-ssd1306-128x32",
+      "label": "SSD1306 OLED 0.91″",
+      "summary": "0.91″ 128×32 monochrome OLED display over I2C with a paged framebuffer.",
+      "detail": "Solomon Systech SSD1306 in the 0.91-inch 128×32 form factor (4 GDDRAM pages). Identical command set to the 128×64 panel — only the page count differs. Canonical 0x3C / 0x3D address pair; the WASM bridge surfaces pixel state for the playground's display overlay.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x3C; 0x3D selects the SA0=high variant."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "oled-sh1107",
+      "label": "SH1107 OLED",
+      "summary": "128×128 monochrome OLED display over I2C with a paged framebuffer.",
+      "detail": "Sino Wealth SH1107 128×128 OLED (e.g. the 1.5\" GME128128-01-IIC module) on the canonical 0x3C / 0x3D address pair. Tracks the 16-page-by-128-column framebuffer; the WASM bridge surfaces pixel state for the playground's display overlay.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x3C; 0x3D selects the SA0=high variant."
+        }
+      ],
+      "labs": [
+        {
+          "board_id": "openai-deck-s3",
+          "chip": "esp32s3",
+          "example_dir": "openai-deck-s3",
+          "demo_elf": "demo-openai-deck-s3.elf"
+        }
+      ],
+      "inputs": []
     },
     {
       "device_type": "ili9341",
@@ -185,7 +341,8 @@
           "example_dir": "ili9341-tft-lab",
           "demo_elf": "demo-ili9341-tft-lab.elf"
         }
-      ]
+      ],
+      "inputs": []
     },
     {
       "device_type": "max31855",
@@ -207,6 +364,22 @@
           "chip": "stm32f103",
           "example_dir": "max31855-thermocouple-lab",
           "demo_elf": "demo-max31855-thermocouple-lab.elf"
+        }
+      ],
+      "inputs": [
+        {
+          "key": "temperature",
+          "label": "Thermocouple",
+          "unit": "°C",
+          "min": -200.0,
+          "max": 1350.0
+        },
+        {
+          "key": "internal",
+          "label": "Internal",
+          "unit": "°C",
+          "min": -55.0,
+          "max": 125.0
         }
       ]
     },
@@ -237,7 +410,8 @@
           "example_dir": "esp32-epaper-lab",
           "demo_elf": "demo-esp32-epaper-lab.elf"
         }
-      ]
+      ],
+      "inputs": []
     },
     {
       "device_type": "sn74hc165",
@@ -265,7 +439,161 @@
           "example_dir": "iolink-dido",
           "demo_elf": "demo-iolink-dido.elf"
         }
+      ],
+      "inputs": [
+        {
+          "key": "ch0",
+          "label": "D0",
+          "unit": "level",
+          "min": 0.0,
+          "max": 1.0
+        },
+        {
+          "key": "ch1",
+          "label": "D1",
+          "unit": "level",
+          "min": 0.0,
+          "max": 1.0
+        },
+        {
+          "key": "ch2",
+          "label": "D2",
+          "unit": "level",
+          "min": 0.0,
+          "max": 1.0
+        },
+        {
+          "key": "ch3",
+          "label": "D3",
+          "unit": "level",
+          "min": 0.0,
+          "max": 1.0
+        },
+        {
+          "key": "ch4",
+          "label": "D4",
+          "unit": "level",
+          "min": 0.0,
+          "max": 1.0
+        },
+        {
+          "key": "ch5",
+          "label": "D5",
+          "unit": "level",
+          "min": 0.0,
+          "max": 1.0
+        },
+        {
+          "key": "ch6",
+          "label": "D6",
+          "unit": "level",
+          "min": 0.0,
+          "max": 1.0
+        },
+        {
+          "key": "ch7",
+          "label": "D7",
+          "unit": "level",
+          "min": 0.0,
+          "max": 1.0
+        }
       ]
+    },
+    {
+      "device_type": "hc595-7seg",
+      "label": "74HC595 7-Segment (4-digit)",
+      "summary": "4-digit 7-segment LED display driven by two chained 74HC595 shift registers over SPI.",
+      "detail": "The classic blue 4-digit module: a segment 74HC595 and a digit-select 74HC595 in series. Firmware shifts a segment byte then a digit-select byte (16 bits), pulses RCLK (SPI chip-select) to latch, and multiplexes the four digits. The model auto-detects the digit-select byte, decodes the standard a–g/dp segment font, and surfaces the four displayed characters.",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "RCLK latch GPIO pin, wired as SPI chip-select (e.g. \"PA4\"). Defaults to PA4."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "tm1637-7seg",
+      "label": "TM1637 7-Segment (4-digit)",
+      "summary": "4-digit 7-segment LED display with the TM1637 2-wire (CLK/DIO) driver.",
+      "detail": "The RobotDyn-style 4-digit clock display. The host bit-bangs two GPIO lines with the TM1637's I²C-like, LSB-first, address-less protocol; the model observes both output pins through the bus write-hook, decodes start/stop/data/ACK framing and the data / address / display-control commands, and renders the four grids through the standard a–g/dp segment font (including the clock colon).",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "clk_pin",
+          "ty": "str",
+          "doc": "CLK GPIO pin the firmware bit-bangs (e.g. \"PA8\"). Defaults to PA8."
+        },
+        {
+          "name": "dio_pin",
+          "ty": "str",
+          "doc": "DIO GPIO pin the firmware bit-bangs (e.g. \"PA9\"). Defaults to PA9."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "seven-segment",
+      "label": "7-Segment Display (single digit)",
+      "summary": "Bare single-digit 7-segment LED display driven straight from nine GPIO pins.",
+      "detail": "The raw display with no driver chip: segment pins A–G plus DP and one common pin, each wired directly to a GPIO. The model samples all nine output registers after every write to a hosting port and recomputes the lit segments combinationally — there is no protocol or state machine. COM polarity is inferred from the level the firmware holds the common pin at: COM low means common cathode (a segment lights when its pin is HIGH), COM high means common anode (a segment lights when its pin is LOW). The readback always reports which segments are lit regardless of wiring, decoded to a character through the standard a–g/dp segment font.",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "a_pin",
+          "ty": "str",
+          "doc": "GPIO pin driving segment A (e.g. \"PA0\"). Defaults to PA0."
+        },
+        {
+          "name": "b_pin",
+          "ty": "str",
+          "doc": "GPIO pin driving segment B (e.g. \"PA1\"). Defaults to PA1."
+        },
+        {
+          "name": "c_pin",
+          "ty": "str",
+          "doc": "GPIO pin driving segment C (e.g. \"PA2\"). Defaults to PA2."
+        },
+        {
+          "name": "d_pin",
+          "ty": "str",
+          "doc": "GPIO pin driving segment D (e.g. \"PA3\"). Defaults to PA3."
+        },
+        {
+          "name": "e_pin",
+          "ty": "str",
+          "doc": "GPIO pin driving segment E (e.g. \"PA4\"). Defaults to PA4."
+        },
+        {
+          "name": "f_pin",
+          "ty": "str",
+          "doc": "GPIO pin driving segment F (e.g. \"PA5\"). Defaults to PA5."
+        },
+        {
+          "name": "g_pin",
+          "ty": "str",
+          "doc": "GPIO pin driving segment G (e.g. \"PA6\"). Defaults to PA6."
+        },
+        {
+          "name": "dp_pin",
+          "ty": "str",
+          "doc": "GPIO pin driving the decimal point (e.g. \"PA7\"). Defaults to PA7."
+        },
+        {
+          "name": "com_pin",
+          "ty": "str",
+          "doc": "GPIO pin driving the common pin (e.g. \"PA8\"). Its level selects the wiring: low = common cathode, high = common anode. Defaults to PA8."
+        }
+      ],
+      "labs": [],
+      "inputs": []
     },
     {
       "device_type": "pcd8544",
@@ -293,7 +621,8 @@
           "example_dir": "nokia5110-invaders-lab",
           "demo_elf": "demo-nokia5110-invaders-lab.elf"
         }
-      ]
+      ],
+      "inputs": []
     },
     {
       "device_type": "iolink-master",
@@ -331,13 +660,14 @@
           "example_dir": "iolink-dido",
           "demo_elf": "demo-iolink-dido.elf"
         }
-      ]
+      ],
+      "inputs": []
     },
     {
       "device_type": "ntc-thermistor",
       "label": "NTC Thermistor",
       "summary": "10 kΩ NTC + voltage divider on an ADC channel.",
-      "detail": "Beta-equation thermistor model. Constructor takes a channel + initial temperature; the kit seeds the ADC channel with the corresponding divider voltage. Live updates come from the WASM bridge as the host moves the temperature slider.",
+      "detail": "Beta-equation thermistor model (R0 = 10 kΩ at 25 °C, B = 3950) feeding a 10 kΩ pull-down divider. Drive the `temperature` channel (°C) at runtime and the ADC channel follows through the real resistance→voltage math. Starts at 25 °C, where the divider sits at exactly Vref/2.",
       "transport": "analog",
       "category": "analog",
       "config_keys": [
@@ -345,11 +675,6 @@
           "name": "channel",
           "ty": "int",
           "doc": "ADC channel index (0..N). Defaults to 0."
-        },
-        {
-          "name": "initial_temperature_c",
-          "ty": "float",
-          "doc": "Initial temperature in °C used to seed the channel voltage. Defaults to 25.0."
         }
       ],
       "labs": [
@@ -359,7 +684,83 @@
           "example_dir": "ntc-thermistor-lab",
           "demo_elf": "demo-ntc-thermistor-lab.elf"
         }
+      ],
+      "inputs": [
+        {
+          "key": "temperature",
+          "label": "Temperature",
+          "unit": "°C",
+          "min": -55.0,
+          "max": 150.0
+        }
       ]
+    },
+    {
+      "device_type": "potentiometer",
+      "label": "Potentiometer",
+      "summary": "3-pin linear potentiometer on an ADC channel (rotary or slide).",
+      "detail": "Linear voltage-divider model: the wiper taps off Vref * position/100. Drive the `position` channel (0..100 %) at runtime and the ADC channel follows through the real divider math. Starts centred at 50 %. A rotary pot and a slide pot are electrically identical and share this model.",
+      "transport": "analog",
+      "category": "analog",
+      "config_keys": [
+        {
+          "name": "channel",
+          "ty": "int",
+          "doc": "ADC channel index (0..N). Defaults to 0."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "position",
+          "label": "Position",
+          "unit": "%",
+          "min": 0.0,
+          "max": 100.0
+        }
+      ]
+    },
+    {
+      "device_type": "ldr",
+      "label": "Photoresistor (LDR)",
+      "summary": "CdS photoresistor + voltage divider on an ADC channel.",
+      "detail": "Light-dependent-resistor model (R = 10 kΩ at 10 lx, gamma = 0.7) as the top leg of a 10 kΩ pull-down divider. Drive the `lux` channel at runtime and the ADC channel follows through the real resistance→voltage math: dark reads near 0 V, bright reads toward Vref. Starts at 100 lx (dim indoor light).",
+      "transport": "analog",
+      "category": "analog",
+      "config_keys": [
+        {
+          "name": "channel",
+          "ty": "int",
+          "doc": "ADC channel index (0..N). Defaults to 0."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "lux",
+          "label": "Illuminance",
+          "unit": "lx",
+          "min": 0.0,
+          "max": 100000.0
+        }
+      ]
+    },
+    {
+      "device_type": "74hc595",
+      "label": "74HC595 Shift Register (8-bit output)",
+      "summary": "8-bit serial-in / parallel-out shift register over SPI.",
+      "detail": "Lets a host MCU drive 8 outputs (QA..QH) through one SPI byte: SER→MOSI, SRCLK→SCK, RCLK→chip-select. Firmware shifts a byte then pulses RCLK to latch it onto the pins; the parallel outputs hold until that latch. Bit 7 = QH, bit 0 = QA (MSB-first).",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "RCLK latch GPIO pin, wired as SPI chip-select (e.g. \"PA4\"). Defaults to PA4."
+        }
+      ],
+      "labs": [],
+      "inputs": []
     },
     {
       "device_type": "vl53l1x",
@@ -382,13 +783,22 @@
           "example_dir": "vl53l1x-tof-lab",
           "demo_elf": "demo-vl53l1x-tof-lab.elf"
         }
+      ],
+      "inputs": [
+        {
+          "key": "distance",
+          "label": "Distance",
+          "unit": "mm",
+          "min": 0.0,
+          "max": 4000.0
+        }
       ]
     },
     {
       "device_type": "scd41",
       "label": "Sensirion SCD41 CO₂",
       "summary": "Photoacoustic CO₂ + temperature + humidity sensor over I2C.",
-      "detail": "Sensirion SCD41 at fixed address 0x62, speaking the real Sensirion command protocol (16-bit commands, 16-bit words + CRC-8 poly 0x31), so the unmodified Sensirion SCD4x vendor driver decodes it on-target. CO₂ advances along a configurable ramp each read_measurement, so a closed room climbs from fresh toward stuffy and the firmware verdict flips.",
+      "detail": "Sensirion SCD41 at fixed address 0x62, speaking the real Sensirion command protocol (16-bit commands, 16-bit words + CRC-8 poly 0x31), so the unmodified Sensirion SCD4x vendor driver decodes it on-target. The reported CO₂, temperature and humidity are externally driven inputs (channels co2 / temperature / humidity); config only seeds their initial values.",
       "transport": "i2c",
       "category": "i2c",
       "config_keys": [
@@ -398,42 +808,50 @@
           "doc": "7-bit slave address. Defaults to the SCD41 fixed address 0x62."
         },
         {
-          "name": "co2_start_ppm",
+          "name": "co2_ppm",
           "ty": "float",
-          "doc": "CO₂ the ramp starts from, ppm (fresh-room baseline). Default 450."
-        },
-        {
-          "name": "co2_target_ppm",
-          "ty": "float",
-          "doc": "CO₂ the ramp approaches, ppm (closed-room steady state). Default 1400."
-        },
-        {
-          "name": "ramp_alpha",
-          "ty": "float",
-          "doc": "Per-measurement approach rate 0..1 (0 = flat scene). Default 0.08."
+          "doc": "Initial CO₂ the part reports, ppm. Default 450. Drive it at runtime with the `co2` input channel."
         },
         {
           "name": "temp_c",
           "ty": "float",
-          "doc": "Starting temperature, °C. Default 22.0."
+          "doc": "Initial temperature, °C. Default 22.0. Runtime channel: `temperature`."
         },
         {
           "name": "rh_pct",
           "ty": "float",
-          "doc": "Starting relative humidity, %. Default 45.0."
-        },
-        {
-          "name": "rh_target_pct",
-          "ty": "float",
-          "doc": "Steady-state relative humidity the room climbs toward, %. Default rh_pct + 6. Raise above 60 for a damp, mold-favorable room."
+          "doc": "Initial relative humidity, %. Default 45.0. Runtime channel: `humidity`."
         }
       ],
       "labs": [
         {
-          "board_id": "leo-airquality-lab",
+          "board_id": "esp32c3-leo-airquality",
           "chip": "esp32c3",
           "example_dir": "esp32c3-leo-airquality",
           "demo_elf": "demo-esp32c3-leo-airquality.elf"
+        }
+      ],
+      "inputs": [
+        {
+          "key": "co2",
+          "label": "CO₂",
+          "unit": "ppm",
+          "min": 0.0,
+          "max": 40000.0
+        },
+        {
+          "key": "temperature",
+          "label": "Temperature",
+          "unit": "°C",
+          "min": -45.0,
+          "max": 130.0
+        },
+        {
+          "key": "humidity",
+          "label": "Humidity",
+          "unit": "%RH",
+          "min": 0.0,
+          "max": 100.0
         }
       ]
     },
@@ -441,7 +859,7 @@
       "device_type": "sgp41",
       "label": "Sensirion SGP41 VOC/NOx",
       "summary": "MOx gas sensor returning raw VOC/NOx signals over I2C.",
-      "detail": "Sensirion SGP41 at fixed address 0x59, speaking the real Sensirion command protocol with CRC-8 (poly 0x31). Returns raw SRAW_VOC / SRAW_NOX ticks that the on-host Sensirion Gas Index Algorithm converts to a VOC Index; the raw VOC signal advances along a configurable ramp.",
+      "detail": "Sensirion SGP41 at fixed address 0x59, speaking the real Sensirion command protocol with CRC-8 (poly 0x31). Returns raw SRAW_VOC / SRAW_NOX ticks that the on-host Sensirion Gas Index Algorithm converts to a VOC Index. The raw signals are externally driven inputs (channels voc_sraw / nox_sraw); config only seeds their initial values.",
       "transport": "i2c",
       "category": "i2c",
       "config_keys": [
@@ -451,32 +869,38 @@
           "doc": "7-bit slave address. Defaults to the SGP41 fixed address 0x59."
         },
         {
-          "name": "voc_sraw_start",
+          "name": "voc_sraw",
           "ty": "float",
-          "doc": "Raw VOC tick at the first measurement (~20000..40000). Default 28000."
-        },
-        {
-          "name": "voc_sraw_target",
-          "ty": "float",
-          "doc": "Raw VOC tick the ramp approaches. Default 34000."
+          "doc": "Initial raw VOC tick (~20000..40000). Default 28000. Drive it at runtime with the `voc_sraw` input channel."
         },
         {
           "name": "nox_sraw",
           "ty": "float",
-          "doc": "Steady raw NOx tick value. Default 16000."
-        },
-        {
-          "name": "ramp_alpha",
-          "ty": "float",
-          "doc": "Per-measurement approach rate 0..1 (0 = flat scene). Default 0.08."
+          "doc": "Initial raw NOx tick. Default 16000. Runtime channel: `nox_sraw`."
         }
       ],
       "labs": [
         {
-          "board_id": "leo-airquality-lab",
+          "board_id": "esp32c3-leo-airquality",
           "chip": "esp32c3",
           "example_dir": "esp32c3-leo-airquality",
           "demo_elf": "demo-esp32c3-leo-airquality.elf"
+        }
+      ],
+      "inputs": [
+        {
+          "key": "voc_sraw",
+          "label": "VOC raw",
+          "unit": "ticks",
+          "min": 0.0,
+          "max": 65535.0
+        },
+        {
+          "key": "nox_sraw",
+          "label": "NOx raw",
+          "unit": "ticks",
+          "min": 0.0,
+          "max": 65535.0
         }
       ]
     },
@@ -484,7 +908,7 @@
       "device_type": "sps30",
       "label": "Sensirion SPS30 PM",
       "summary": "Laser particulate-matter sensor (PM1/2.5/4/10) over I2C.",
-      "detail": "Sensirion SPS30 at fixed address 0x69, speaking the real Sensirion command protocol with CRC-8 (poly 0x31) in both float and uint16 output modes. PM2.5 mass advances along a configurable ramp and the other size bins track it. Drive it in uint16 mode on the ESP32-C3 (30-byte frame fits the controller's 32-byte FIFO).",
+      "detail": "Sensirion SPS30 at fixed address 0x69, speaking the real Sensirion command protocol with CRC-8 (poly 0x31) in both float and uint16 output modes. The four mass concentrations are externally driven inputs (channels pm1_0 / pm2_5 / pm4_0 / pm10); config seeds them from one pm2_5 value. Drive it in uint16 mode on the ESP32-C3 (30-byte frame fits the controller's 32-byte FIFO).",
       "transport": "i2c",
       "category": "i2c",
       "config_keys": [
@@ -494,27 +918,47 @@
           "doc": "7-bit slave address. Defaults to the SPS30 fixed address 0x69."
         },
         {
-          "name": "pm2_5_start",
+          "name": "pm2_5",
           "ty": "float",
-          "doc": "PM2.5 mass at the first reading, µg/m³ (clean air). Default 6.0."
-        },
-        {
-          "name": "pm2_5_target",
-          "ty": "float",
-          "doc": "PM2.5 mass the ramp approaches, µg/m³. Default 22.0."
-        },
-        {
-          "name": "ramp_alpha",
-          "ty": "float",
-          "doc": "Per-read approach rate 0..1 (0 = flat scene). Default 0.08."
+          "doc": "Initial PM2.5 mass, µg/m³. Default 6.0 (clean indoor air). The other mass bins are seeded from it with the typical urban-aerosol ratios; each bin is drivable at runtime via its own input channel."
         }
       ],
       "labs": [
         {
-          "board_id": "leo-airquality-lab",
+          "board_id": "esp32c3-leo-airquality",
           "chip": "esp32c3",
           "example_dir": "esp32c3-leo-airquality",
           "demo_elf": "demo-esp32c3-leo-airquality.elf"
+        }
+      ],
+      "inputs": [
+        {
+          "key": "pm1_0",
+          "label": "PM1.0",
+          "unit": "µg/m³",
+          "min": 0.0,
+          "max": 1000.0
+        },
+        {
+          "key": "pm2_5",
+          "label": "PM2.5",
+          "unit": "µg/m³",
+          "min": 0.0,
+          "max": 1000.0
+        },
+        {
+          "key": "pm4_0",
+          "label": "PM4.0",
+          "unit": "µg/m³",
+          "min": 0.0,
+          "max": 1000.0
+        },
+        {
+          "key": "pm10",
+          "label": "PM10",
+          "unit": "µg/m³",
+          "min": 0.0,
+          "max": 1000.0
         }
       ]
     },
@@ -522,7 +966,7 @@
       "device_type": "veml7700",
       "label": "Vishay VEML7700 Light",
       "summary": "Ambient-light sensor (lux) over I2C.",
-      "detail": "Vishay VEML7700 at fixed address 0x10, a register-pointer device with 16-bit little-endian words. Reports a raw ALS count the firmware scales to lux at the default gain ×1 / 100 ms resolution (0.0576 lux/count). Light follows a configurable ramp (dims toward evening by default).",
+      "detail": "Vishay VEML7700 at fixed address 0x10, a register-pointer device with 16-bit little-endian words. Reports a raw ALS count the firmware scales to lux at the default gain ×1 / 100 ms resolution (0.0576 lux/count). The illuminance is an externally driven input (channel lux); config only seeds its initial value.",
       "transport": "i2c",
       "category": "i2c",
       "config_keys": [
@@ -532,27 +976,26 @@
           "doc": "7-bit slave address. Defaults to the VEML7700 fixed address 0x10."
         },
         {
-          "name": "lux_start",
+          "name": "lux",
           "ty": "float",
-          "doc": "Ambient light at the first reading, lux (daylit room). Default 450."
-        },
-        {
-          "name": "lux_target",
-          "ty": "float",
-          "doc": "Lux the ramp approaches (dims when below start). Default 90."
-        },
-        {
-          "name": "ramp_alpha",
-          "ty": "float",
-          "doc": "Per-read approach rate 0..1 (0 = flat scene). Default 0.08."
+          "doc": "Initial illuminance, lux. Default 450 (daylit room). Drive it at runtime with the `lux` input channel."
         }
       ],
       "labs": [
         {
-          "board_id": "leo-airquality-lab",
+          "board_id": "esp32c3-leo-airquality",
           "chip": "esp32c3",
           "example_dir": "esp32c3-leo-airquality",
           "demo_elf": "demo-esp32c3-leo-airquality.elf"
+        }
+      ],
+      "inputs": [
+        {
+          "key": "lux",
+          "label": "Illuminance",
+          "unit": "lx",
+          "min": 0.0,
+          "max": 120000.0
         }
       ]
     },
@@ -560,7 +1003,7 @@
       "device_type": "mlx90614",
       "label": "Melexis MLX90614 IR Temp",
       "summary": "Single-point IR (non-contact) thermometer over SMBus/I2C.",
-      "detail": "Melexis MLX90614 at address 0x5A. Reports an SMBus read-word (LSB, MSB, PEC) for ambient (0x06) and object/surface (0x07) temperature, encoded raw×0.02 K with a correct CRC-8 PEC. The surface temperature follows a ramp (cools toward a cold window by default), letting firmware compute the dew point and flag surface condensation the air humidity misses.",
+      "detail": "Melexis MLX90614 at address 0x5A. Reports an SMBus read-word (LSB, MSB, PEC) for ambient (0x06) and object/surface (0x07) temperature, encoded raw×0.02 K with a correct CRC-8 PEC. Both temperatures are externally driven inputs (channels surface_temp / ambient_temp); driving the surface below the air dew point is what makes firmware flag the surface condensation an air-only humidity index misses.",
       "transport": "i2c",
       "category": "i2c",
       "config_keys": [
@@ -572,32 +1015,72 @@
         {
           "name": "surface_temp_c",
           "ty": "float",
-          "doc": "Surface (object) temperature at the first reading, °C. Default 18."
-        },
-        {
-          "name": "surface_temp_target_c",
-          "ty": "float",
-          "doc": "Surface temperature the ramp approaches, °C (cools below start). Default 10."
+          "doc": "Initial surface (object) temperature, °C. Default 18. Drive it at runtime with the `surface_temp` input channel."
         },
         {
           "name": "ambient_temp_c",
           "ty": "float",
-          "doc": "Ambient (chip) temperature reported on the Ta channel, °C. Default 22."
-        },
-        {
-          "name": "ramp_alpha",
-          "ty": "float",
-          "doc": "Per-read approach rate 0..1 (0 = flat scene). Default 0.08."
+          "doc": "Initial ambient (chip) temperature reported on Ta, °C. Default 22. Runtime channel: `ambient_temp`."
         }
       ],
       "labs": [
         {
-          "board_id": "leo-airquality-lab",
+          "board_id": "esp32c3-leo-airquality",
           "chip": "esp32c3",
           "example_dir": "esp32c3-leo-airquality",
           "demo_elf": "demo-esp32c3-leo-airquality.elf"
         }
+      ],
+      "inputs": [
+        {
+          "key": "surface_temp",
+          "label": "Surface temperature",
+          "unit": "°C",
+          "min": -70.0,
+          "max": 380.0
+        },
+        {
+          "key": "ambient_temp",
+          "label": "Ambient temperature",
+          "unit": "°C",
+          "min": -40.0,
+          "max": 125.0
+        }
       ]
+    },
+    {
+      "device_type": "led-matrix",
+      "label": "MAX7219 8×8 LED Matrix",
+      "summary": "8×8 LED matrix driven by a MAX7219 serial display driver over SPI.",
+      "detail": "The common 8×8 dot-matrix module built around a MAX7219 common-cathode display driver. Firmware clocks 16 bits per transaction — an address byte then a data byte — and pulses CS/LOAD to latch. Digit registers 0x01–0x08 are the eight matrix rows, so digit RAM is the framebuffer; the model also tracks decode mode, intensity, scan limit, shutdown and display test, blanking or flooding the readback the way the real part drives the panel.",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "CS/LOAD GPIO pin, wired as SPI chip-select (e.g. \"PA4\"). Defaults to PA4."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "lcd1602",
+      "label": "LCD1602 Character Display (I2C)",
+      "summary": "16×2 HD44780 character LCD behind a PCF8574 I2C backpack.",
+      "detail": "The ubiquitous blue/green 1602 module with an I2C adapter soldered on. Each I2C byte is a PCF8574 P-port snapshot (P7..P4 = D7..D4, P3 = backlight, P2 = E, P1 = RW, P0 = RS); the HD44780 latches a nibble on every falling edge of E and two latches make one instruction or character. The model tracks the full 80-byte DDRAM, the address counter, entry mode, display/cursor/blink flags and the backlight line, and the WASM bridge surfaces the visible 32 characters for the playground's display overlay.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address of the PCF8574 backpack. Defaults to 0x27 (PCF8574T); 0x3F is the other common strapping (PCF8574AT)."
+        }
+      ],
+      "labs": [],
+      "inputs": []
     }
   ]
 }

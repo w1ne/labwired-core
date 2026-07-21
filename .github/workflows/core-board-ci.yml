@@ -3,15 +3,38 @@ name: Core Board CI
 on:
   push:
     branches: [main]
+    paths:
+      - "configs/**"
+      - "examples/**"
+      - "hil/**"
+      - "platformio/**"
+      - "scripts/ci/board_matrix.py"
+      - "scripts/generate_tier1_scoreboard.py"
+      - "docs/coverage/tier1-matrix.json"
+      - ".github/workflows/core-board-ci.yml"
   pull_request:
     branches: [main]
+    paths:
+      - "configs/**"
+      - "examples/**"
+      - "hil/**"
+      - "platformio/**"
+      - "scripts/ci/board_matrix.py"
+      - "scripts/generate_tier1_scoreboard.py"
+      - "docs/coverage/tier1-matrix.json"
+      - ".github/workflows/core-board-ci.yml"
   schedule:
-    - cron: "0 3 * * *"
+    - cron: "0 3 * * 0"
   workflow_dispatch:
+
+concurrency:
+  group: core-board-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   setup:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       matrix: ${{ steps.gen.outputs.matrix }}
     steps:
@@ -30,6 +53,7 @@ jobs:
   board:
     needs: setup
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
@@ -52,10 +76,11 @@ jobs:
       - name: Install apt packages
         if: matrix.apt != ''
         env:
+          DEBIAN_FRONTEND: noninteractive
           APT: ${{ matrix.apt }}
         run: |
-          sudo apt-get update
-          sudo apt-get install -y $APT
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends $APT
 
       - name: Add rust targets
         if: matrix.rust_targets != ''
@@ -94,6 +119,7 @@ jobs:
   # whoever changed the matrix must commit the regenerated scoreboard.
   coverage-staleness:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

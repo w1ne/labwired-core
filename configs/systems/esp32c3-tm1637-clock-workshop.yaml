@@ -1,0 +1,11 @@
+name: "esp32c3-tm1637-clock-workshop"
+chip: "../chips/esp32c3.yaml"
+cpu_hz: 160_000_000
+
+external_devices:
+  - id: "seg"
+    type: "tm1637-7seg"
+    connection: "gpio"
+    config:
+      clk_pin: "GPIO0"
+      dio_pin: "GPIO1"

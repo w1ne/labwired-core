@@ -19,6 +19,27 @@ reset_vector_offset: 0x100
 # The RP2040 HAL drives register setup through atomic SET/CLR/XOR aliases.
 atomic_register_aliases: true
 peripherals:
+  # SYSINFO (datasheet §2.21). Read-only identity block; the only load-bearing
+  # register is CHIP_ID, which the pico-sdk USB errata-E5 workaround reads (from
+  # the USB ISR on bus reset) and asserts carries the Raspberry Pi manufacturer
+  # id — a zero here aborts USB enumeration inside the ISR.
+  - id: "sysinfo"
+    type: "declarative"
+    base_address: 0x40000000
+    size: "4KB"
+    config:
+      path: "../peripherals/rp2040/sysinfo.yaml"
+  # DMA controller (datasheet §2.5, base 0x50000000). Twelve channels; each a
+  # transfer engine with READ_ADDR / WRITE_ADDR / TRANS_COUNT / CTRL_TRIG and
+  # the four aliased register windows (AL1/AL2/AL3). Behavioural model — real
+  # memory-to-memory byte movement over the chip bus for TREQ_PERMANENT
+  # channels: address increment, TRANS_COUNT decrement, CHAIN_TO handoff, and
+  # INTS0/INTS1 completion IRQ aggregation onto DMA_IRQ_0 (NVIC 11) /
+  # DMA_IRQ_1 (NVIC 12). Paced (DREQ) transfers are a documented follow-up.
+  - id: "dma"
+    type: "rp2040_dma"
+    base_address: 0x50000000
+    size: "4KB"
   - id: "pio0"
     type: "pio"
     base_address: 0x50200000
@@ -68,12 +89,13 @@ peripherals:
     type: "rp2040_i2c"
     base_address: 0x40044000
     size: "4KB"
-  # Cortex-M0+ SysTick (SCS). A storage stub: Zephyr's tick driver configures
-  # it during boot but the console banner prints before the first tick, and the
-  # behavioural SysTick model fires its exception too early for this boot path.
-  # Driving the kernel tick on the RP2040 is left as follow-up work.
+  # Cortex-M0+ SysTick (SCS). Behavioural model: the ARMv7-M SysTick timer
+  # (edge-triggered — raises system exception 15 only on the count-down to
+  # zero, and only while ENABLE+TICKINT are set). The Arduino Mbed-OS core
+  # drives the RTX kernel tick off SysTick, so a storage stub left the RTOS
+  # without a scheduler tick and it faulted on the first mutex lock.
   - id: "systick"
-    type: "stub"
+    type: "systick"
     base_address: 0xE000E010
     size: "16B"
   # Single-cycle IO (SIO): GPIO out/oe via direct + set/clr/xor registers
@@ -97,6 +119,18 @@ peripherals:
     type: "rp2040_xip_ssi"
     base_address: 0x18000000
     size: "4KB"
+  # USB device controller (datasheet §4.1). One window spans both the 4KB DPRAM
+  # (0x50100000) and the register block (0x50110000); the atomic SET/CLR/XOR
+  # aliases resolve into it. Behavioural model with an attached simulated USB
+  # host: it enumerates the device (GET_DESCRIPTOR / SET_ADDRESS /
+  # SET_CONFIGURATION) then asserts CDC DTR (SET_CONTROL_LINE_STATE), which is
+  # what flips the Arduino Mbed-OS core's `_terminal_connected` so `Serial`
+  # (USB CDC) actually transmits — the sketch's bulk-IN bytes are captured off
+  # the CDC data endpoint. Raises USBCTRL_IRQ (NVIC 5).
+  - id: "usbctrl"
+    type: "rp2040_usb"
+    base_address: 0x50100000
+    size: "80KB"
   # TBMAN (Test Bench Manager, datasheet §2.20). The pico-sdk runtime probes
   # TBMAN.PLATFORM in running_on_fpga()/running_on_asic() during clock bring-up.
   # Storage stub: PLATFORM reads 0, so the FPGA bit (bit 1) is clear and the

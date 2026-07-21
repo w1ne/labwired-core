@@ -46,8 +46,46 @@
 //! divider/resolution, which is the property under test. Channels, `CONF`, and
 //! `DATE` remain register-backed — this model adds the live timer the
 //! declarative descriptor lacks, nothing more.
+//!
+//! ## Drive modes (walk-free plan — the C3 timer-port batch)
+//!
+//! Two mutually exclusive time sources, selected by ONE predicate
+//! (`scheduler_mode`), mirroring the SYSTIMER / STM32 TIMx timer ports:
+//!
+//! * **Scheduler mode** (`event-scheduler` feature + a [`crate::CycleClock`]
+//!   attached by `SystemBus::add_peripheral`): `uses_scheduler()` is true and
+//!   the per-cycle walk skips this peripheral entirely. The four up-counters are
+//!   advanced **lazily** — `advance_to(now)` runs from the write-path `sync_to`
+//!   choke, from every `&self` register read, and from the level poll
+//!   (`matrix_irq_sources`), pulling "now" from the bus-published clock. The
+//!   advance is closed-form (the accumulator already converts an arbitrary
+//!   elapsed-cycle window into counts in O(1)), so a read observes fresh
+//!   counter/`INT_RAW` state without any walk. The next `LSTIMERx_OVF` is
+//!   armed as a **scheduled event** (`take_scheduled_events` → the nearest
+//!   overflow among the running timers); `on_event` materialises the latch at
+//!   its exact cycle and re-arms the successor, so the OVF interrupt is
+//!   delivered through the C3 interrupt matrix (`matrix_irq_sources` re-derived
+//!   by the bus) even when firmware never polls the block. An arm-token
+//!   (`arm_seq`, bumped on every re-arm) kills a stale in-flight event after a
+//!   config write changes the period/divider/enable.
+//!
+//! * **Legacy mode** (feature off, or no clock attached — e.g. hand-built test
+//!   buses that bypass `add_peripheral`, or the differential's
+//!   `force_legacy_walk`): the per-cycle walk drives `tick_elapsed(cycles)` and
+//!   the counters advance eagerly, byte-identical to the historical model.
+//!
+//! The two modes are mutually exclusive: `tick_elapsed` is a no-op while
+//! scheduler mode is active (the walk never calls it there — the guard is
+//! defensive), and the lazy `advance_to` path is anchored so repeated syncs to
+//! the same cycle are idempotent. All model quirks are preserved across both
+//! modes: the `RST`/`PAUSE` freeze, the `2^DUTY_RES` wrap point (clamped to the
+//! 14-bit counter), the integer `CLK_DIV` divider, and the sticky W1C `OVF`
+//! latch. Every counter read, `INT_RAW`/`INT_ST` value and OVF-IRQ cycle is
+//! byte-identical to the walk-driven reference at tick interval 1.
 
-use crate::{Peripheral, PeripheralTickResult, SimResult};
+use std::cell::Cell;
+
+use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 
 pub const LEDC_BASE: u32 = 0x6001_9000;
 pub const LEDC_SIZE: u64 = 0x400;
@@ -106,10 +144,14 @@ const OVF_INT_MASK: u32 = 0xF;
 struct Timer {
     /// `TIMERx_CONF` raw value (config readback).
     conf: u32,
-    /// Live up-counter (the value `TIMERx_VALUE.CNT` returns).
-    counter: u32,
-    /// Sub-count accumulator: CPU cycles elapsed toward the next count.
-    accum: u64,
+    /// Live up-counter (the value `TIMERx_VALUE.CNT` returns). `Cell` so the
+    /// scheduler-mode `&self` read/level-poll path can lazily advance it to the
+    /// bus-published clock; in legacy mode only `tick_elapsed`/`write_u32`
+    /// mutate it.
+    counter: Cell<u32>,
+    /// Sub-count accumulator: CPU cycles elapsed toward the next count. `Cell`
+    /// for the same lazy `&self` advance.
+    accum: Cell<u64>,
 }
 
 impl Timer {
@@ -137,29 +179,61 @@ impl Timer {
         self.conf & RST_BIT != 0
     }
 
-    /// Advance by one CPU cycle. Returns true if the counter wrapped past its
-    /// period this cycle (an overflow edge).
-    fn advance(&mut self) -> bool {
+    /// True while this timer is clocking (neither held in reset nor paused) —
+    /// the only state in which it can advance and overflow.
+    fn running(&self) -> bool {
+        !self.in_reset() && !self.paused()
+    }
+
+    /// Advance by `cycles` CPU cycles. Returns true if the counter wrapped past
+    /// its period at least once during this elapsed window. `&self` (all mutated
+    /// state is in `Cell`) so it serves both the legacy walk and the lazy
+    /// scheduler-mode advance. Closed-form: the accumulator converts an
+    /// arbitrary elapsed window into counts in O(1), which is exactly what makes
+    /// `advance_cycles(N) == N × advance_cycles(1)` (the sticky OVF latch does
+    /// not care how many times it wrapped within the window).
+    fn advance_cycles(&self, cycles: u64) -> bool {
         if self.in_reset() {
-            self.counter = 0;
-            self.accum = 0;
+            self.counter.set(0);
+            self.accum.set(0);
             return false;
         }
         if self.paused() {
             return false;
         }
-        self.accum += 1;
+        let accum = self.accum.get().saturating_add(cycles);
         let per_count = self.divider();
-        let mut overflowed = false;
-        while self.accum >= per_count {
-            self.accum -= per_count;
-            self.counter += 1;
-            if self.counter >= self.period() {
-                self.counter = 0;
-                overflowed = true;
-            }
+        let counts = accum / per_count;
+        self.accum.set(accum % per_count);
+        if counts == 0 {
+            return false;
         }
+        let period = self.period() as u64;
+        let next = self.counter.get() as u64 + counts;
+        let overflowed = next >= period;
+        self.counter.set((next % period) as u32);
         overflowed
+    }
+
+    /// Cycles from the current state until this timer's NEXT `LSTIMERx_OVF`
+    /// (the exact cycle the per-cycle walk would latch it), or `None` when the
+    /// timer is not clocking. The counter overflows once its value reaches the
+    /// period; that needs `need_counts` more counts, and each count consumes
+    /// `divider` cycles net of the accumulator already banked — so the first
+    /// wrap is exactly `need_counts * divider - accum` cycles away (always
+    /// `>= 1`, since `accum < divider`).
+    fn cycles_to_overflow(&self) -> Option<u64> {
+        if !self.running() {
+            return None;
+        }
+        let period = self.period() as u64;
+        let counter = self.counter.get() as u64;
+        // `counter < period` in the normal case; a config write that shrinks the
+        // period below the live counter overflows on the very next count (the
+        // walk's `next >= period` fires immediately), so clamp `need_counts` to
+        // at least 1.
+        let need_counts = period.saturating_sub(counter).max(1);
+        Some(need_counts * self.divider() - self.accum.get())
     }
 }
 
@@ -172,10 +246,26 @@ pub struct Esp32c3Ledc {
     regs: Vec<u32>,
     timers: [Timer; NUM_TIMERS],
     /// Latched raw interrupt bits (`INT_RAW`); only `LSTIMERx_OVF` ([3:0]) are
-    /// driven by this model.
-    int_raw: u32,
+    /// driven by this model. `Cell` so the scheduler-mode lazy advance (a
+    /// `&self` read / level poll) can latch a freshly-materialised overflow.
+    int_raw: Cell<u32>,
     /// `INT_ENA` mask.
     int_ena: u32,
+    /// Lazy-path anchor: the absolute CPU cycle the timers were last advanced
+    /// to. Owned exclusively by `advance_to` (scheduler mode); the legacy walk
+    /// never touches it.
+    anchor: Cell<u64>,
+    /// Arming-sequence token, bumped on every `take_scheduled_events`, so an
+    /// in-flight overflow event scheduled under an older configuration dies on
+    /// arrival (token mismatch) instead of racing the fresh chain.
+    arm_seq: u32,
+    /// Bus-published cycle clock (walk-free plan). `Some` once
+    /// `SystemBus::add_peripheral` attaches it (under the `event-scheduler`
+    /// feature); its presence flips the model onto the event scheduler. `None`
+    /// (feature off, a hand-built bus, or the differential's
+    /// `force_legacy_walk`) keeps the legacy per-cycle walk. Not serialized —
+    /// re-attached by the bus.
+    clock: Option<CycleClock>,
 }
 
 impl Default for Esp32c3Ledc {
@@ -190,11 +280,11 @@ impl std::fmt::Debug for Esp32c3Ledc {
             f,
             "Esp32c3Ledc(src={}, int_raw=0x{:x}, cnt=[{},{},{},{}])",
             self.source_id,
-            self.int_raw,
-            self.timers[0].counter,
-            self.timers[1].counter,
-            self.timers[2].counter,
-            self.timers[3].counter
+            self.int_raw.get(),
+            self.timers[0].counter.get(),
+            self.timers[1].counter.get(),
+            self.timers[2].counter.get(),
+            self.timers[3].counter.get()
         )
     }
 }
@@ -218,13 +308,75 @@ impl Esp32c3Ledc {
             source_id,
             regs,
             timers,
-            int_raw: 0,
+            int_raw: Cell::new(0),
             int_ena: 0,
+            anchor: Cell::new(0),
+            arm_seq: 0,
+            clock: None,
         }
     }
 
+    /// True when the event scheduler owns this block's time base (feature on
+    /// AND bus clock attached). Everything time-related branches on this ONE
+    /// predicate so the two drive modes can never mix.
+    #[inline]
+    fn scheduler_mode(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    /// Test/differential knob: detach the cycle clock, pinning the model to the
+    /// legacy per-cycle walk (`uses_scheduler() == false`). Used by the
+    /// walk-on-vs-scheduler differential gates to build the reference config
+    /// from the same bus assembly (mirrors `Esp32c3I2c::force_legacy_walk`).
+    pub fn force_legacy_walk(&mut self) {
+        self.clock = None;
+    }
+
+    /// Lazy advance every timer to absolute CPU cycle `now` — callable from
+    /// `&self` (all mutated state is in `Cell`). Idempotent: repeated calls with
+    /// the same `now` add nothing; a `now` older than the anchor is ignored (the
+    /// clock is monotonic within a run; a stale read must never rewind). Latches
+    /// `LSTIMERx_OVF` for any timer that wraps in the elapsed window — exactly
+    /// what the per-cycle walk does, materialised in closed form.
+    fn advance_to(&self, now: u64) {
+        let anchor = self.anchor.get();
+        if now <= anchor {
+            return;
+        }
+        let delta = now - anchor;
+        self.anchor.set(now);
+        let mut raw = self.int_raw.get();
+        for (i, timer) in self.timers.iter().enumerate() {
+            if timer.advance_cycles(delta) {
+                raw |= 1 << i;
+            }
+        }
+        self.int_raw.set(raw);
+    }
+
+    /// Pull "now" from the bus-published clock and advance. No-op without an
+    /// attached clock (legacy mode — the walk advances the counters instead).
+    fn sync_from_clock(&self) {
+        if self.scheduler_mode() {
+            if let Some(clock) = &self.clock {
+                self.advance_to(clock.now());
+            }
+        }
+    }
+
+    /// Cycles until the NEAREST overflow among the running timers (the next
+    /// cycle any `LSTIMERx_OVF` latches), or `None` when every timer is
+    /// stopped. This is what a single in-flight event is armed for; `on_event`
+    /// re-arms the successor after each fire.
+    fn cycles_to_next_overflow(&self) -> Option<u64> {
+        self.timers
+            .iter()
+            .filter_map(|t| t.cycles_to_overflow())
+            .min()
+    }
+
     fn int_st(&self) -> u32 {
-        self.int_raw & self.int_ena
+        self.int_raw.get() & self.int_ena
     }
 
     /// If `offset` is a timer register, return `(timer index, is_value_reg)`.
@@ -257,16 +409,21 @@ impl Peripheral for Esp32c3Ledc {
     }
 
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
+        // Scheduler mode: bring every lazy counter up to the published "now"
+        // first, so a polled TIMERx_VALUE / INT_RAW read observes fresh time
+        // (exact at interval 1; batch-boundary fresh otherwise). No-op in
+        // legacy mode (the walk already advanced the counters).
+        self.sync_from_clock();
         let off = offset & !3;
         if let Some((idx, is_value)) = Self::timer_at(off) {
             return Ok(if is_value {
-                self.timers[idx].counter & CNT_MASK
+                self.timers[idx].counter.get() & CNT_MASK
             } else {
                 self.timers[idx].conf
             });
         }
         Ok(match off {
-            INT_RAW => self.int_raw,
+            INT_RAW => self.int_raw.get(),
             INT_ST => self.int_st(),
             INT_ENA => self.int_ena,
             INT_CLR => 0, // write-only
@@ -275,6 +432,13 @@ impl Peripheral for Esp32c3Ledc {
     }
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        // Bring the lazy counters up to "now" BEFORE the config change lands, so
+        // a period/divider/enable rewrite (or an INT_CLR acknowledge) applies to
+        // the up-to-date counter/INT_RAW state — the closed-form window must
+        // never straddle a settings change. The bus write choke already ran
+        // `sync_to(current_cycle)`; this keeps direct/unit-test writes correct
+        // too, and is idempotent. No-op in legacy mode.
+        self.sync_from_clock();
         let off = offset & !3;
         if let Some((idx, is_value)) = Self::timer_at(off) {
             if is_value {
@@ -284,8 +448,8 @@ impl Peripheral for Esp32c3Ledc {
                 // applying DUTY_RES/CLK_DIV immediately is sufficient here.
                 self.timers[idx].conf = value & !PARA_UP_BIT;
                 if value & RST_BIT != 0 {
-                    self.timers[idx].counter = 0;
-                    self.timers[idx].accum = 0;
+                    self.timers[idx].counter.set(0);
+                    self.timers[idx].accum.set(0);
                 }
             }
             return Ok(());
@@ -293,7 +457,8 @@ impl Peripheral for Esp32c3Ledc {
         match off {
             // R/WTC and W1C: writing 1s clears those latched overflow bits.
             INT_RAW | INT_CLR => {
-                self.int_raw &= !(value & OVF_INT_MASK);
+                self.int_raw
+                    .set(self.int_raw.get() & !(value & OVF_INT_MASK));
             }
             INT_ENA => {
                 self.int_ena = value & OVF_INT_MASK;
@@ -309,10 +474,24 @@ impl Peripheral for Esp32c3Ledc {
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
-        for (i, timer) in self.timers.iter_mut().enumerate() {
-            if timer.advance() {
-                self.int_raw |= 1 << i;
+        self.tick_elapsed(1)
+    }
+
+    /// LEGACY per-cycle walk drive: advance every timer by `cycles` and latch
+    /// any overflow, then re-assert the level interrupt while enabled. In
+    /// scheduler mode ([`Self::uses_scheduler`] true) the walk skips this
+    /// peripheral entirely and the counters advance via the lazy `sync_to` /
+    /// scheduled-event path instead; the guard keeps a stray direct call from
+    /// double-counting against the lazy anchor.
+    fn tick_elapsed(&mut self, cycles: u64) -> PeripheralTickResult {
+        if !self.scheduler_mode() {
+            let mut raw = self.int_raw.get();
+            for (i, timer) in self.timers.iter().enumerate() {
+                if timer.advance_cycles(cycles) {
+                    raw |= 1 << i;
+                }
             }
+            self.int_raw.set(raw);
         }
         PeripheralTickResult {
             explicit_irqs: if self.int_st() != 0 {
@@ -322,6 +501,113 @@ impl Peripheral for Esp32c3Ledc {
             },
             ..PeripheralTickResult::default()
         }
+    }
+
+    fn legacy_tick_active(&self) -> bool {
+        self.int_st() != 0 || self.timers.iter().any(|timer| timer.running())
+    }
+
+    fn legacy_tick_dynamic(&self) -> bool {
+        true
+    }
+
+    /// Walk-free plan: driven by the event scheduler once the bus has attached
+    /// its cycle clock (production `add_peripheral` always does, under the
+    /// `event-scheduler` feature). The per-cycle walk then skips this
+    /// peripheral; the counters advance via `sync_to` (write path) + lazy reads,
+    /// and each `LSTIMERx_OVF` rides a scheduled event (`take_scheduled_events`
+    /// / `on_event`) so the IRQ is delivered at its exact cycle even when
+    /// firmware never polls. Without a clock (feature off, a hand-built bus, or
+    /// `force_legacy_walk`) it stays on the legacy walk so those callers keep
+    /// the old exact semantics.
+    fn uses_scheduler(&self) -> bool {
+        self.scheduler_mode()
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        // Every effect of the legacy `tick_elapsed` (prescaled up-count, sticky
+        // OVF latch, level-IRQ re-assert) is reproduced in scheduler mode by the
+        // lazy advance + scheduled overflow events, so the walk is unnecessary
+        // there. In legacy mode (no clock / feature off) the walk does real work
+        // and the conservative `true` stands.
+        !self.scheduler_mode()
+    }
+
+    /// Anchor every timer's lazy state to CPU cycle `now_cycle`, advancing over
+    /// the cycles elapsed since the last sync. The bus calls this before every
+    /// MMIO write (so a config / INT_CLR write observes up-to-date counters) and
+    /// it composes with `on_event` through the shared `anchor` without
+    /// double-counting.
+    fn sync_to(&mut self, now_cycle: u64) {
+        if self.scheduler_mode() {
+            self.advance_to(now_cycle);
+        }
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        // Anchor at the clock's current value so cycles that elapsed before
+        // attach (normally zero — attach happens at bus assembly) are not
+        // retroactively credited to the counters (the #516 re-anchor contract).
+        self.anchor.set(clock.now());
+        self.clock = Some(clock);
+    }
+
+    /// C3 interrupt-matrix level: the `LEDC` source while any enabled OVF bit is
+    /// latched — the exact condition `tick_elapsed` pushes on the legacy walk.
+    /// Syncs the lazy counters first so an overflow that just came due is
+    /// reflected (the bus polls this on the event path and every walk-tick
+    /// aggregation, `refresh_esp32c3_sched_sources`), keeping the level-sensitive
+    /// IRQ routed and de-asserting the tick after firmware writes INT_CLR.
+    fn matrix_irq_sources_into(&self, out: &mut Vec<u32>) {
+        self.sync_from_clock();
+        if self.int_st() != 0 {
+            out.push(self.source_id);
+        }
+    }
+
+    /// Arm the nearest overflow as a single in-flight event. A fresh `arm_seq`
+    /// generation is stamped on every call so an event scheduled under an older
+    /// configuration (before this write) dies on arrival (token mismatch in
+    /// `on_event`). The delay is relative to the just-synced anchor; the bus
+    /// converts it to the absolute deadline `anchor + 1 + delay`, so the
+    /// `saturating_sub(1)` lands the fire exactly at `anchor +
+    /// cycles_to_next_overflow` — the cycle the walk would latch it (mirrors the
+    /// generic `+ 1` write-path anchor offset). `on_event` re-arms thereafter.
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if !self.scheduler_mode() {
+            return Vec::new();
+        }
+        self.arm_seq = self.arm_seq.wrapping_add(1);
+        match self.cycles_to_next_overflow() {
+            Some(cycles) => vec![(cycles.saturating_sub(1), self.arm_seq)],
+            None => Vec::new(),
+        }
+    }
+
+    /// Fire the nearest overflow at its exact cycle: advance every timer to the
+    /// drain cycle (materialising the latch this event was scheduled for), then
+    /// re-arm the successor while any timer is still clocking. The counters do
+    /// not freeze on a latched IRQ (LEDC keeps free-running), so the chain is
+    /// purely about delivering each OVF level at the right cycle; the bus
+    /// re-derives the matrix source from `matrix_irq_sources` after this handler.
+    /// The reschedule delay carries no `- 1`: the event path uses `sched.now() +
+    /// delay` directly (no `+ 1` anchor offset, unlike the write path).
+    fn on_event(
+        &mut self,
+        event_token: u32,
+        sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        if !self.scheduler_mode() || event_token != self.arm_seq {
+            // Stale chain (re-armed since this event was scheduled): die.
+            return crate::sched::EventResult::default();
+        }
+        self.advance_to(sched.now());
+        let mut res = crate::sched::EventResult::default();
+        if let Some(cycles) = self.cycles_to_next_overflow() {
+            res.reschedule_delay = Some(cycles);
+        }
+        res
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {
@@ -371,6 +657,32 @@ mod tests {
         // 100 cycles / divider 10 ≈ 10 counts (not 100).
         let v = l.read_u32(TIMER0_VALUE_OFF).unwrap();
         assert_eq!(v, 10, "integer divider gates the count rate");
+    }
+
+    #[test]
+    fn tick_elapsed_matches_repeated_tick() {
+        let mut repeated = Esp32c3Ledc::new(LEDC_INTR_SOURCE_ID);
+        let mut elapsed = Esp32c3Ledc::new(LEDC_INTR_SOURCE_ID);
+        repeated.write_u32(TIMER0_CONF_OFF, conf(4, 2)).unwrap();
+        elapsed.write_u32(TIMER0_CONF_OFF, conf(4, 2)).unwrap();
+        repeated.write_u32(INT_ENA, 1).unwrap();
+        elapsed.write_u32(INT_ENA, 1).unwrap();
+
+        let mut repeated_irq = None;
+        for _ in 0..40 {
+            repeated_irq = repeated.tick().explicit_irqs;
+        }
+        let elapsed_irq = elapsed.tick_elapsed(40).explicit_irqs;
+
+        assert_eq!(
+            elapsed.read_u32(TIMER0_VALUE_OFF).unwrap(),
+            repeated.read_u32(TIMER0_VALUE_OFF).unwrap()
+        );
+        assert_eq!(
+            elapsed.read_u32(INT_RAW).unwrap(),
+            repeated.read_u32(INT_RAW).unwrap()
+        );
+        assert_eq!(elapsed_irq, repeated_irq);
     }
 
     #[test]
@@ -456,5 +768,339 @@ mod tests {
         // CH0_DUTY @ 0x08.
         l.write_u32(0x08, 0x0007_FFFF).unwrap();
         assert_eq!(l.read_u32(0x08).unwrap(), 0x0007_FFFF);
+    }
+
+    #[test]
+    fn without_clock_stays_on_legacy_tick_path() {
+        let l = Esp32c3Ledc::new(LEDC_INTR_SOURCE_ID);
+        assert!(
+            !l.uses_scheduler(),
+            "no cycle clock attached → the model must stay on the legacy walk \
+             (hand-built buses that bypass add_peripheral keep exact semantics)"
+        );
+        assert!(l.needs_legacy_walk());
+    }
+
+    /// Walk-free timer-port fidelity gate: the lazy closed-form advance + the
+    /// scheduled-overflow event chain must reproduce the legacy per-cycle walk
+    /// EXACTLY — every TIMERx_VALUE read, INT_RAW value and OVF level-assert
+    /// cycle byte-identical at tick interval 1.
+    #[cfg(feature = "event-scheduler")]
+    mod scheduler_mode {
+        use super::*;
+        use crate::CycleClock;
+
+        const TIMER1_CONF_OFF: u64 = 0xB0;
+
+        /// Drive a scheduler-mode LEDC exactly the way `Machine` + `SystemBus`
+        /// do at tick interval 1: publish the clock each cycle, convert
+        /// write-armed events at `cycle + 1 + delay`, drain due events through
+        /// `on_event` (rescheduling at `now + delay`).
+        struct SchedHarness {
+            ledc: Esp32c3Ledc,
+            clock: CycleClock,
+            sched: crate::sched::EventScheduler,
+            bus: crate::bus::SystemBus,
+            /// (deadline, token) — at most one live chain plus stale tokens.
+            events: Vec<(u64, u32)>,
+            now: u64,
+        }
+
+        impl SchedHarness {
+            fn new() -> Self {
+                let clock = CycleClock::default();
+                let mut ledc = Esp32c3Ledc::new(LEDC_INTR_SOURCE_ID);
+                ledc.attach_cycle_clock(clock.clone());
+                Self {
+                    ledc,
+                    clock,
+                    sched: crate::sched::EventScheduler::new(),
+                    bus: crate::bus::SystemBus::new(),
+                    events: Vec::new(),
+                    now: 0,
+                }
+            }
+
+            /// MMIO write at the current cycle, through the bus chokes' contract:
+            /// sync first, write, then harvest `(delay, token)` as
+            /// `now + 1 + delay` (the `collect_scheduled_events` identity).
+            fn write(&mut self, off: u64, val: u32) {
+                self.ledc.sync_to(self.now);
+                self.ledc.write_u32(off, val).unwrap();
+                for (delay, token) in self.ledc.take_scheduled_events() {
+                    self.events.push((self.now + 1 + delay, token));
+                }
+            }
+
+            /// Advance one cycle and drain due events.
+            fn step(&mut self) {
+                self.now += 1;
+                self.clock.publish(self.now);
+                self.sched.advance_to(self.now);
+                let due: Vec<(u64, u32)> = self
+                    .events
+                    .iter()
+                    .copied()
+                    .filter(|(d, _)| *d <= self.now)
+                    .collect();
+                self.events.retain(|(d, _)| *d > self.now);
+                for (_, token) in due {
+                    let res = self.ledc.on_event(token, &mut self.sched, &mut self.bus);
+                    if let Some(delay) = res.reschedule_delay {
+                        self.events.push((self.now + delay, token));
+                    }
+                }
+            }
+
+            /// Event-materialised INT_RAW — read WITHOUT syncing, so it reflects
+            /// only what the scheduled events latched (proves delivery without a
+            /// polling read).
+            fn event_int_raw(&self) -> u32 {
+                self.ledc.int_raw.get()
+            }
+
+            /// Synced MMIO read (the real firmware read path).
+            fn read(&self, off: u64) -> u32 {
+                self.ledc.read_u32(off).unwrap()
+            }
+        }
+
+        /// Replay the SAME register-write script against (a) the legacy per-tick
+        /// walk and (b) the lazy closed-form + event-chain scheduler path,
+        /// comparing all four counters + INT_RAW at EVERY cycle and the exact set
+        /// of OVF level-assert cycles. Returns the count of cycles the OVF level
+        /// was asserted in the reference run (for the caller's non-vacuity gate).
+        fn assert_walk_identical(script: &[(u64, u64, u32)], cycles: u64, what: &str) -> usize {
+            let mut walk = Esp32c3Ledc::new(LEDC_INTR_SOURCE_ID); // no clock → legacy
+            let mut sched = SchedHarness::new();
+            let mut walk_assert: Vec<u64> = Vec::new();
+            let mut sched_assert: Vec<u64> = Vec::new();
+
+            for c in 1..=cycles {
+                sched.now = c - 1;
+                for &(sc, off, val) in script {
+                    if sc == c {
+                        walk.write_u32(off, val).unwrap();
+                        sched.now = c - 1;
+                        sched.write(off, val);
+                    }
+                }
+                sched.now = c - 1;
+
+                // Walk reference: tick at cycle c.
+                if walk.tick().explicit_irqs.is_some() {
+                    walk_assert.push(c);
+                }
+                // Scheduler: advance to cycle c (drain events), then poll the
+                // matrix level exactly as the bus aggregation does.
+                sched.step();
+                if !sched.ledc.matrix_irq_sources().is_empty() {
+                    sched_assert.push(c);
+                }
+
+                // Byte-identity of every observable timer register.
+                for t in 0..NUM_TIMERS as u64 {
+                    let voff = 0xA4 + t * 8;
+                    assert_eq!(
+                        walk.read_u32(voff).unwrap(),
+                        sched.read(voff),
+                        "{what}: TIMER{t} counter diverged at cycle {c}"
+                    );
+                }
+                assert_eq!(
+                    walk.read_u32(INT_RAW).unwrap(),
+                    sched.read(INT_RAW),
+                    "{what}: INT_RAW diverged at cycle {c}"
+                );
+                assert_eq!(
+                    walk.read_u32(INT_ST).unwrap(),
+                    sched.read(INT_ST),
+                    "{what}: INT_ST diverged at cycle {c}"
+                );
+            }
+            assert_eq!(
+                walk_assert, sched_assert,
+                "{what}: OVF level-assert cycles diverged"
+            );
+            walk_assert.len()
+        }
+
+        #[test]
+        fn clock_attach_flips_to_scheduler() {
+            let mut l = Esp32c3Ledc::new(LEDC_INTR_SOURCE_ID);
+            l.attach_cycle_clock(CycleClock::default());
+            assert!(l.uses_scheduler(), "clock attached → walk-independent");
+            assert!(!l.needs_legacy_walk());
+        }
+
+        #[test]
+        fn single_timer_update_walk_identity() {
+            // period 16, divider 1, OVF int enabled: overflows every 16 cycles.
+            let script = [
+                (1u64, TIMER0_CONF_OFF, conf(4, 1)),
+                (1, INT_ENA, 1),
+                // ISR clears the OVF a while after the first fire.
+                (40, INT_CLR, 1),
+            ];
+            let fired = assert_walk_identical(&script, 120, "single-timer period 16 div 1");
+            assert!(fired > 0, "non-vacuity: the timer must actually overflow");
+        }
+
+        #[test]
+        fn divided_timer_walk_identity() {
+            // period 8, divider 5: overflow at cycle 8*5 = 40, then every 40.
+            let script = [
+                (1u64, TIMER0_CONF_OFF, conf(3, 5)),
+                (1, INT_ENA, 1),
+                (100, INT_CLR, 1),
+            ];
+            let fired = assert_walk_identical(&script, 200, "divided period 8 div 5");
+            assert!(fired > 0, "non-vacuity: the divided timer must overflow");
+        }
+
+        #[test]
+        fn two_timers_different_periods_walk_identity() {
+            // Timer0 period 16 div 1 (OVF@16,32,…), Timer1 period 8 div 3
+            // (OVF@24,48,…); both OVF ints enabled — proves the single min-event
+            // chain materialises EACH timer's overflow at its own cycle.
+            let script = [
+                (1u64, TIMER0_CONF_OFF, conf(4, 1)),
+                (1, TIMER1_CONF_OFF, conf(3, 3)),
+                (1, INT_ENA, 0b11),
+                (200, INT_CLR, 0b11),
+            ];
+            let fired = assert_walk_identical(&script, 300, "two timers 16/1 + 8/3");
+            assert!(fired > 0, "non-vacuity: both timers must overflow");
+        }
+
+        #[test]
+        fn pause_and_reset_midrun_walk_identity() {
+            let running = conf(4, 1);
+            let script = [
+                (1u64, TIMER0_CONF_OFF, running),
+                (1, INT_ENA, 1),
+                (10, TIMER0_CONF_OFF, running | PAUSE_BIT), // freeze
+                (30, TIMER0_CONF_OFF, running),             // resume from frozen phase
+                (60, INT_CLR, 1),
+                (70, TIMER0_CONF_OFF, running | RST_BIT), // hold at 0
+                (90, TIMER0_CONF_OFF, running),           // release
+            ];
+            let fired = assert_walk_identical(&script, 200, "pause/reset mid-run");
+            assert!(
+                fired > 0,
+                "non-vacuity: the timer must overflow across the run"
+            );
+        }
+
+        #[test]
+        fn disabled_int_still_latches_int_raw_walk_identity() {
+            // OVF int DISABLED (INT_ENA=0): INT_RAW must still latch on wrap
+            // (sticky), byte-identical to the walk, but the level never asserts.
+            let script = [(1u64, TIMER0_CONF_OFF, conf(4, 1))];
+            let fired = assert_walk_identical(&script, 80, "disabled-int latch");
+            assert_eq!(fired, 0, "no enabled int → the matrix level never asserts");
+        }
+
+        #[test]
+        fn interval_64_batched_matches_walk() {
+            // Both the walk reference and the scheduler drain quantise to the
+            // batch grid at interval 64: advance both by 64-cycle jumps and
+            // assert INT_RAW + counters agree at every batch boundary. period 16
+            // div 1 → overflows resolve inside each batch, so the sticky latch
+            // must match.
+            let mut walk = Esp32c3Ledc::new(LEDC_INTR_SOURCE_ID);
+            let clock = CycleClock::default();
+            let mut sched = Esp32c3Ledc::new(LEDC_INTR_SOURCE_ID);
+            sched.attach_cycle_clock(clock.clone());
+
+            walk.write_u32(TIMER0_CONF_OFF, conf(4, 1)).unwrap();
+            walk.write_u32(INT_ENA, 1).unwrap();
+            clock.publish(0);
+            sched.sync_to(0);
+            sched.write_u32(TIMER0_CONF_OFF, conf(4, 1)).unwrap();
+            sched.write_u32(INT_ENA, 1).unwrap();
+
+            let mut any_ovf = false;
+            for b in 1..=20u64 {
+                let now = b * 64;
+                walk.tick_elapsed(64);
+                clock.publish(now);
+                // A read syncs the scheduler counters to the batch boundary.
+                assert_eq!(
+                    walk.read_u32(TIMER0_VALUE_OFF).unwrap(),
+                    sched.read_u32(TIMER0_VALUE_OFF).unwrap(),
+                    "interval-64 counter diverged at cycle {now}"
+                );
+                assert_eq!(
+                    walk.read_u32(INT_RAW).unwrap(),
+                    sched.read_u32(INT_RAW).unwrap(),
+                    "interval-64 INT_RAW diverged at cycle {now}"
+                );
+                if walk.read_u32(INT_RAW).unwrap() & 1 != 0 {
+                    any_ovf = true;
+                }
+            }
+            assert!(
+                any_ovf,
+                "non-vacuity: the timer must overflow at interval 64"
+            );
+        }
+
+        #[test]
+        fn on_event_delivers_overflow_without_polling() {
+            // The headline event-path proof: with NO MMIO poll, the scheduled
+            // event must latch LSTIMER0_OVF at the exact overflow cycle and
+            // re-arm the successor. period 16 div 1 → OVF at cycle 16, 32, …
+            let mut h = SchedHarness::new();
+            h.write(TIMER0_CONF_OFF, conf(4, 1));
+            h.write(INT_ENA, 1);
+
+            for _ in 0..15 {
+                h.step();
+            }
+            assert_eq!(
+                h.event_int_raw() & 1,
+                0,
+                "no overflow before cycle 16 (event-materialised, no poll)"
+            );
+            h.step(); // cycle 16
+            assert_eq!(
+                h.event_int_raw() & 1,
+                1,
+                "the scheduled event latched LSTIMER0_OVF at cycle 16 with no MMIO poll"
+            );
+
+            // Advance to just before the next overflow, clear, and confirm the
+            // re-armed chain latches the next wrap at cycle 32.
+            for _ in 0..15 {
+                h.step();
+            }
+            h.write(INT_CLR, 1); // now = 31
+            assert_eq!(h.event_int_raw() & 1, 0, "INT_CLR cleared the latch");
+            h.step(); // cycle 32
+            assert_eq!(
+                h.event_int_raw() & 1,
+                1,
+                "the event chain re-armed and latched the next overflow at cycle 32"
+            );
+        }
+
+        #[test]
+        fn stale_event_dies_after_reconfig() {
+            let mut h = SchedHarness::new();
+            h.write(TIMER0_CONF_OFF, conf(4, 1));
+            let old_token = h.events.last().unwrap().1;
+            // Reconfigure (period change): the fresh arm bumps the token, so the
+            // in-flight event must die on arrival.
+            h.write(TIMER0_CONF_OFF, conf(6, 1));
+            let new_token = h.events.last().unwrap().1;
+            assert_ne!(old_token, new_token, "reconfig must re-stamp the arm token");
+
+            let res = h.ledc.on_event(old_token, &mut h.sched, &mut h.bus);
+            assert!(
+                res.reschedule_delay.is_none(),
+                "a stale-token event must not raise or respawn"
+            );
+        }
     }
 }

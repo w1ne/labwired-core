@@ -178,6 +178,74 @@ bad_field: 123
 }
 
 #[test]
+fn test_env_script_missing_environment_reports_environment_shaped_config_error() {
+    let script = write_temp_file(
+        "script-env-missing-manifest",
+        r#"
+schema_version: "1.0"
+inputs:
+  env: "twonode-env.yaml"
+limits:
+  max_steps: 10
+assertions:
+  - memory_value:
+      node: tester
+      address: 0x20010000
+      expected_value: 1
+"#,
+    );
+
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let output_dir =
+        std::env::temp_dir().join(format!("labwired-tests-env-config-error-{}", nonce));
+    let _ = std::fs::remove_dir_all(&output_dir);
+
+    let output = Command::new(env!("CARGO_BIN_EXE_labwired"))
+        .args([
+            "test",
+            "--script",
+            script.to_str().unwrap(),
+            "--no-uart-stdout",
+            "--output-dir",
+            output_dir.to_str().unwrap(),
+        ])
+        .output()
+        .expect("Failed to execute command");
+
+    assert_eq!(output.status.code(), Some(2)); // EXIT_CONFIG_ERROR
+
+    let result: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(output_dir.join("result.json")).unwrap())
+            .unwrap();
+    assert_eq!(result["status"], "error");
+    assert_eq!(result["stop_reason"], "config_error");
+    assert_eq!(result["limits"]["max_steps"], 10);
+    assert!(result["message"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("failed to load environment"));
+    assert!(result["config"].get("firmware").is_none());
+    assert!(result["config"]["environment"]
+        .as_str()
+        .unwrap_or_default()
+        .ends_with("twonode-env.yaml"));
+
+    let snapshot: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(output_dir.join("snapshot.json")).unwrap())
+            .unwrap();
+    assert_eq!(snapshot["type"], "environment");
+    assert_eq!(snapshot["status"], "error");
+    assert!(output_dir.join("uart.log").is_file());
+    let junit = std::fs::read_to_string(output_dir.join("junit.xml")).unwrap();
+    assert!(junit.contains("config error"));
+
+    let _ = std::fs::remove_dir_all(&output_dir);
+}
+
+#[test]
 fn test_cli_test_mode_junit_flag_writes_file() {
     let fw_abs = std::fs::canonicalize("../../tests/fixtures/uart-ok-thumbv7m.elf").unwrap();
     let script = write_temp_file(
@@ -318,6 +386,96 @@ assertions:
 
     // Should pass because we expect memory_violation stop reason
     assert!(output.status.success());
+}
+
+#[test]
+fn test_cli_result_json_surfaces_fidelity_on_unmapped_access() {
+    // A firmware that writes to a UART address the tiny chip does NOT map hits an
+    // unmapped-MMIO access, which core records via fidelity::record_unmapped
+    // before returning a MemoryViolation. That gap must surface as a structured
+    // `fidelity` entry in result.json (the builder maps it to unmodeled_access[]).
+    let fw_abs = std::fs::canonicalize("../../tests/fixtures/uart-ok-thumbv7m.elf").unwrap();
+    let base_dir = std::env::temp_dir()
+        .join("labwired-tests")
+        .join(format!("fidelity-{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&base_dir);
+
+    let chip_path = base_dir.join("chip.yaml");
+    std::fs::write(
+        &chip_path,
+        r#"
+name: "tiny"
+arch: "cortex-m3"
+flash:
+  base: 0x0
+  size: "1B"
+ram:
+  base: 0x20000000
+  size: "1KB"
+peripherals: []
+"#,
+    )
+    .unwrap();
+
+    let system_path = base_dir.join("system.yaml");
+    std::fs::write(
+        &system_path,
+        r#"
+name: "tiny-system"
+chip: "chip.yaml"
+"#,
+    )
+    .unwrap();
+
+    let script = write_temp_file(
+        "script-fidelity",
+        &format!(
+            r#"
+schema_version: "1.0"
+inputs:
+  firmware: "{}"
+limits:
+  max_steps: 1000
+"#,
+            fw_abs.to_str().unwrap()
+        ),
+    );
+
+    let output_dir = base_dir.join("artifacts");
+    let _ = std::fs::remove_dir_all(&output_dir);
+
+    let _ = Command::new(env!("CARGO_BIN_EXE_labwired"))
+        .args([
+            "test",
+            "--system",
+            system_path.to_str().unwrap(),
+            "--script",
+            script.to_str().unwrap(),
+            "--no-uart-stdout",
+            "--output-dir",
+            output_dir.to_str().unwrap(),
+        ])
+        .output()
+        .expect("Failed to execute command");
+
+    let result_content = std::fs::read_to_string(output_dir.join("result.json")).unwrap();
+    let result: serde_json::Value = serde_json::from_str(&result_content).unwrap();
+
+    let fidelity = result["fidelity"]
+        .as_array()
+        .expect("result.json must carry a non-empty `fidelity` array on an unmapped access");
+    assert!(!fidelity.is_empty(), "expected at least one fidelity gap");
+    let mmio = fidelity
+        .iter()
+        .find(|g| g["kind"] == "unmapped_mmio")
+        .expect("expected an unmapped_mmio gap");
+    assert!(mmio["address"].as_str().unwrap().starts_with("0x"));
+    assert!(mmio["opcode"].is_null(), "mmio gap must omit opcode");
+    assert!(mmio["first_pc"].as_str().unwrap().starts_with("0x"));
+    assert!(mmio["count"].as_u64().unwrap() >= 1);
+    assert_eq!(mmio["detail"], "write");
+
+    let _ = std::fs::remove_dir_all(&base_dir);
 }
 
 #[test]

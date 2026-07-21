@@ -11,7 +11,7 @@
 // (or be tricked into addressing) bank-2 state. Bank-1 IRQ routing, shared by
 // both families, lives in one stateless helper.
 
-use crate::{Peripheral, PeripheralTickResult, SimResult};
+use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 use std::any::Any;
 use std::str::FromStr;
 
@@ -117,6 +117,14 @@ fn route_bank1_irqs(active1: u32, irqs: &mut Vec<u32>) {
 pub struct F1Exti {
     bank1: ExtiBank,
     line_mask: u32,
+
+    /// Bus-published cycle clock (walk-free campaign). `Some` once attached →
+    /// event-schedulable; `None` keeps the legacy walk.
+    #[serde(skip)]
+    clock: Option<CycleClock>,
+    /// Scheduler mode: `true` while the held-level re-emit event is live.
+    #[serde(skip)]
+    chain_live: bool,
 }
 
 impl Default for F1Exti {
@@ -124,6 +132,8 @@ impl Default for F1Exti {
         Self {
             bank1: ExtiBank::default(),
             line_mask: 0x000F_FFFF, // 20 lines
+            clock: None,
+            chain_live: false,
         }
     }
 }
@@ -133,6 +143,11 @@ impl Default for F1Exti {
 pub struct L4Exti {
     bank1: ExtiBank,
     bank2: ExtiBank,
+
+    #[serde(skip)]
+    clock: Option<CycleClock>,
+    #[serde(skip)]
+    chain_live: bool,
 }
 
 impl L4Exti {
@@ -220,6 +235,87 @@ impl Exti {
             },
         }
     }
+
+    /// The set of NVIC IRQ lines the held level asserts this cycle — exactly the
+    /// list `tick()` re-emits. Shared by the legacy walk and the event chain so
+    /// both routes are byte-identical by construction.
+    fn pending_irqs(&self) -> Vec<u32> {
+        let mut irqs = Vec::new();
+        match self {
+            Self::Stm32F1(e) => {
+                let active1 = e.bank1.pr & e.bank1.imr;
+                if active1 != 0 {
+                    route_bank1_irqs(active1, &mut irqs);
+                }
+            }
+            Self::Stm32L4(e) => {
+                let active1 = e.bank1.pr & e.bank1.imr;
+                let active2 = e.bank2.pr & e.bank2.imr;
+                if active1 != 0 {
+                    route_bank1_irqs(active1, &mut irqs);
+                }
+                if active2 != 0 {
+                    // Bank-2 wakeup lines → their peripheral's NVIC IRQ
+                    // (RM0351 §13.3). Lines without an entry are tracked at the
+                    // register level but don't synthesize an IRQ yet.
+                    for &(line, irq) in &[
+                        (35u32, 70u32), // LPUART1 wakeup
+                        (36, 31),       // I2C1 wakeup
+                        (37, 33),       // I2C2 wakeup
+                        (38, 72),       // I2C3 wakeup
+                        (39, 37),       // USART1 wakeup
+                    ] {
+                        if (active2 >> (line - 32)) & 1 != 0 {
+                            irqs.push(irq);
+                        }
+                    }
+                }
+            }
+        }
+        irqs
+    }
+
+    /// True while the held level is asserted (any masked pending line). Outside
+    /// this window `tick()` emits nothing, so the event chain may stop and let
+    /// idle fast-forward engage; firmware clearing PR (rc_w1) drops it.
+    fn active(&self) -> bool {
+        match self {
+            Self::Stm32F1(e) => (e.bank1.pr & e.bank1.imr) != 0,
+            Self::Stm32L4(e) => (e.bank1.pr & e.bank1.imr) != 0 || (e.bank2.pr & e.bank2.imr) != 0,
+        }
+    }
+
+    #[inline]
+    fn scheduler_mode(&self) -> bool {
+        let clock = match self {
+            Self::Stm32F1(e) => &e.clock,
+            Self::Stm32L4(e) => &e.clock,
+        };
+        cfg!(feature = "event-scheduler") && clock.is_some()
+    }
+
+    fn set_chain_live(&mut self, live: bool) {
+        match self {
+            Self::Stm32F1(e) => e.chain_live = live,
+            Self::Stm32L4(e) => e.chain_live = live,
+        }
+    }
+
+    fn chain_live(&self) -> bool {
+        match self {
+            Self::Stm32F1(e) => e.chain_live,
+            Self::Stm32L4(e) => e.chain_live,
+        }
+    }
+
+    /// Test/differential knob: detach the clock, pinning the model to the legacy
+    /// walk (the walk-on reference for the differential gate).
+    pub fn force_legacy_walk(&mut self) {
+        match self {
+            Self::Stm32F1(e) => e.clock = None,
+            Self::Stm32L4(e) => e.clock = None,
+        }
+    }
 }
 
 impl Peripheral for Exti {
@@ -260,41 +356,74 @@ impl Peripheral for Exti {
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
-        let mut irqs = Vec::new();
-        match self {
-            Self::Stm32F1(e) => {
-                let active1 = e.bank1.pr & e.bank1.imr;
-                if active1 != 0 {
-                    route_bank1_irqs(active1, &mut irqs);
-                }
-            }
-            Self::Stm32L4(e) => {
-                let active1 = e.bank1.pr & e.bank1.imr;
-                let active2 = e.bank2.pr & e.bank2.imr;
-                if active1 != 0 {
-                    route_bank1_irqs(active1, &mut irqs);
-                }
-                if active2 != 0 {
-                    // Bank-2 wakeup lines → their peripheral's NVIC IRQ
-                    // (RM0351 §13.3). Lines without an entry are tracked at
-                    // the register level but don't synthesize an IRQ yet.
-                    for &(line, irq) in &[
-                        (35u32, 70u32), // LPUART1 wakeup
-                        (36, 31),       // I2C1 wakeup
-                        (37, 33),       // I2C2 wakeup
-                        (38, 72),       // I2C3 wakeup
-                        (39, 37),       // USART1 wakeup
-                    ] {
-                        if (active2 >> (line - 32)) & 1 != 0 {
-                            irqs.push(irq);
-                        }
-                    }
-                }
-            }
+        // Scheduler-mode instances are walk-skipped; the event chain owns the
+        // held-level re-emission. Guard against a stray direct call.
+        if self.scheduler_mode() {
+            return PeripheralTickResult::default();
         }
-
+        let irqs = self.pending_irqs();
         PeripheralTickResult {
             explicit_irqs: (!irqs.is_empty()).then_some(irqs),
+            ..Default::default()
+        }
+    }
+
+    fn uses_scheduler(&self) -> bool {
+        self.scheduler_mode()
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        !self.scheduler_mode()
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        match self {
+            Self::Stm32F1(e) => e.clock = Some(clock),
+            Self::Stm32L4(e) => e.clock = Some(clock),
+        }
+    }
+
+    fn sync_to(&mut self, _now_cycle: u64) {
+        // No lazily-accumulated state: PR/IMR mutate synchronously in write, and
+        // the held level is re-derived from them every cycle by the event chain.
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        // Arm the held-level re-emit chain the moment a write raises a masked
+        // pending line (SWIER→PR, or IMR unmasking a pending PR). Every EXTI
+        // PR-setting path today is an MMIO write (SWIER edge-detect or a direct
+        // PR/IMR write), so `take_scheduled_events` — drained after every MMIO
+        // write — always catches the activation. (`trigger_line`, the external
+        // GPIO-edge injector, has no runtime caller; were it ever wired to a bus
+        // path, that path must re-arm the chain the same way, since a `&mut`
+        // injector cannot itself return events.) delay-0 → deadline
+        // `current_cycle + 1` = the walk's next tick.
+        if self.scheduler_mode() && self.active() && !self.chain_live() {
+            self.set_chain_live(true);
+            vec![(0u64, 0u32)]
+        } else {
+            Vec::new()
+        }
+    }
+
+    fn on_event(
+        &mut self,
+        _event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        if !self.scheduler_mode() {
+            return crate::sched::EventResult::default();
+        }
+        // Re-emit the held level every cycle while any masked line stays pending
+        // — the event-path equivalent of the legacy `tick()` returning its
+        // `explicit_irqs` each cycle. Perpetuate at delay 1 while active; stop
+        // when firmware clears PR (rc_w1), letting fast-forward engage.
+        let active = self.active();
+        self.set_chain_live(active);
+        crate::sched::EventResult {
+            explicit_irqs: self.pending_irqs(),
+            reschedule_delay: active.then_some(1),
             ..Default::default()
         }
     }
@@ -367,6 +496,25 @@ mod tests {
     }
 
     #[test]
+    fn all_variants_flip_to_scheduler_when_clock_attached() {
+        for layout in [ExtiRegisterLayout::Stm32F1, ExtiRegisterLayout::Stm32L4] {
+            let mut e = Exti::new_with_layout(layout);
+            assert!(e.needs_legacy_walk() && !e.uses_scheduler());
+            e.attach_cycle_clock(crate::CycleClock::default());
+            #[cfg(feature = "event-scheduler")]
+            {
+                assert!(e.uses_scheduler() && !e.needs_legacy_walk());
+                // Held level latched, but the walk tick is inert in scheduler mode.
+                e.write_u32(0x00, 1).unwrap();
+                e.write_u32(0x10, 1).unwrap();
+                assert!(e.tick().explicit_irqs.is_none());
+                e.force_legacy_walk();
+                assert!(e.needs_legacy_walk() && !e.uses_scheduler());
+            }
+        }
+    }
+
+    #[test]
     fn f1_word_write_pr_clear_is_atomic_and_clears_swier() {
         // Whole-word access (as a 32-bit STR performs). SWIER=0x5 software-
         // triggers lines 0 and 2 -> PR=0x5; an rc_w1 word-write of 0x1 clears
@@ -384,5 +532,139 @@ mod tests {
             0x4,
             "SWIER line 0 cleared with PR"
         );
+    }
+}
+
+// ── Walk-free differential: held-level EXTI walk vs scheduler ────────────────
+#[cfg(all(test, feature = "event-scheduler"))]
+mod scheduler_diff {
+    use super::*;
+    use crate::Peripheral;
+
+    #[derive(Clone, Copy)]
+    enum Op {
+        /// 32-bit register write at cycle (as firmware STRs it).
+        Write(u64, u32),
+    }
+
+    fn build(layout: ExtiRegisterLayout, scheduler: bool) -> Exti {
+        let mut e = Exti::new_with_layout(layout);
+        if scheduler {
+            e.attach_cycle_clock(CycleClock::default());
+        }
+        e
+    }
+
+    /// Drive the SAME op script against (a) the per-cycle walk and (b) the event
+    /// path; assert the emitted IRQ set AND the register snapshot are identical
+    /// every cycle. An `Op` scheduled at cycle `c` is applied before that cycle's
+    /// tick. This is the held-level analogue of the I2C `kinetis_scheduler` gate.
+    fn assert_walk_identical(layout: ExtiRegisterLayout, script: &[(u64, Op)], cycles: u64) {
+        let mut walk = build(layout, false);
+        let mut sched = build(layout, true);
+        let clock = match &sched {
+            Exti::Stm32F1(e) => e.clock.clone(),
+            Exti::Stm32L4(e) => e.clock.clone(),
+        }
+        .unwrap();
+
+        // (deadline_cycle, token) event queue, driven exactly like Machine +
+        // SystemBus at tick interval 1.
+        let mut events: Vec<(u64, u32)> = Vec::new();
+        let bus = &mut crate::bus::SystemBus::new();
+
+        for c in 1..=cycles {
+            for (sc, Op::Write(off, val)) in script.iter().copied() {
+                if sc == c {
+                    walk.write_u32(off, val).unwrap();
+                    // Scheduler: write, then harvest events at cycle+1+delay
+                    // (`now == c - 1` at the point of the write).
+                    sched.write_u32(off, val).unwrap();
+                    for (delay, token) in sched.take_scheduled_events() {
+                        events.push((c - 1 + 1 + delay, token));
+                    }
+                }
+            }
+
+            // Walk: tick emits the held level this cycle.
+            let walk_irqs = walk.tick().explicit_irqs.unwrap_or_default();
+
+            // Scheduler: publish the clock, drain due events through on_event.
+            clock.publish(c);
+            let due: Vec<(u64, u32)> = events.iter().copied().filter(|(d, _)| *d <= c).collect();
+            events.retain(|(d, _)| *d > c);
+            let mut esched = crate::sched::EventScheduler::new();
+            esched.advance_to(c);
+            let mut sched_irqs = Vec::new();
+            for (_, token) in due {
+                let res = sched.on_event(token, &mut esched, bus);
+                sched_irqs.extend(res.explicit_irqs);
+                if let Some(delay) = res.reschedule_delay {
+                    events.push((c + delay, token));
+                }
+            }
+
+            assert_eq!(
+                walk_irqs, sched_irqs,
+                "emitted IRQ set diverged at cycle {c}"
+            );
+            assert_eq!(
+                walk.snapshot(),
+                sched.snapshot(),
+                "register snapshot diverged at cycle {c}"
+            );
+        }
+    }
+
+    #[test]
+    fn f1_swier_hold_and_clear_walk_identity() {
+        // IMR lines 0,2; SWIER trigger → PR held (IRQs re-emit every cycle);
+        // firmware clears PR line 0 (rc_w1) mid-hold; then clears line 2.
+        let script = [
+            (1u64, Op::Write(0x00, 0x5)), // IMR lines 0,2
+            (1, Op::Write(0x10, 0x5)),    // SWIER lines 0,2 → PR (held level)
+            (5, Op::Write(0x14, 0x1)),    // clear PR line 0 → EXTI0 stops
+            (9, Op::Write(0x14, 0x4)),    // clear PR line 2 → level drops
+        ];
+        assert_walk_identical(ExtiRegisterLayout::Stm32F1, &script, 14);
+    }
+
+    #[test]
+    fn f1_grouped_irq_line_walk_identity() {
+        // Lines in the EXTI9_5 group (shared IRQ 23) plus EXTI15_10 (IRQ 40).
+        let script = [
+            (1u64, Op::Write(0x00, (1 << 7) | (1 << 12))), // IMR lines 7,12
+            (1, Op::Write(0x10, (1 << 7) | (1 << 12))),    // SWIER → PR
+            (6, Op::Write(0x14, 1 << 7)),                  // clear line 7 (IRQ23 drops)
+            (9, Op::Write(0x14, 1 << 12)),                 // clear line 12 (IRQ40 drops)
+        ];
+        assert_walk_identical(ExtiRegisterLayout::Stm32F1, &script, 14);
+    }
+
+    #[test]
+    fn l4_bank2_wakeup_hold_walk_identity() {
+        // Bank-2 line 36 (I2C1 wakeup → IRQ 31) plus a bank-1 line, held and
+        // cleared independently across banks.
+        let script = [
+            (1u64, Op::Write(0x00, 1 << 1)), // IMR1 line 1
+            (1, Op::Write(0x10, 1 << 1)),    // SWIER1 → PR1
+            (1, Op::Write(0x20, 1 << 4)),    // IMR2 line 36
+            (1, Op::Write(0x30, 1 << 4)),    // SWIER2 → PR2 (I2C1 wakeup)
+            (6, Op::Write(0x14, 1 << 1)),    // clear bank-1
+            (10, Op::Write(0x34, 1 << 4)),   // clear bank-2
+        ];
+        assert_walk_identical(ExtiRegisterLayout::Stm32L4, &script, 15);
+    }
+
+    #[test]
+    fn imr_unmask_after_pending_arms_walk_identity() {
+        // PR set while masked (no IRQ), THEN IMR unmasks it — the write that
+        // raises the level must arm the chain. Validates the arming predicate.
+        let script = [
+            (1u64, Op::Write(0x10, 0x2)), // SWIER line 1 → PR (but IMR=0 → masked)
+            (5, Op::Write(0x00, 0x2)),    // IMR line 1 → level rises here
+            (9, Op::Write(0x14, 0x2)),    // clear
+        ];
+        assert_walk_identical(ExtiRegisterLayout::Stm32F1, &script, 13);
     }
 }

@@ -1,0 +1,7 @@
+# Keep the image small and the boot deterministic for the browser twin.
+CONFIG_IDF_TARGET="esp32c3"
+# Single-app layout, no OTA — smallest partition table.
+CONFIG_PARTITION_TABLE_SINGLE_APP=y
+# Log through the default console so the rom-boot test can see the banners.
+CONFIG_BOOTLOADER_LOG_LEVEL_INFO=y
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y

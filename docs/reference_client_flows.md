@@ -12,11 +12,11 @@ The primary use-case for the Simulation Protocol is deterministic, headless regr
 
 ### The CI Flow
 1. **Trigger**: A developer pushes code or opens a Pull Request.
-2. **Setup**: The CI runner checks out the code, builds the firmware (e.g., `cargo build` or `make`), and downloads the `labwired-cli`.
-3. **Execution**: The runner invokes `labwired test` parsing a predefined `test_script.yaml`.
+2. **Setup**: The CI runner checks out the code, builds the firmware (e.g., `cargo build` or `make`), and the public Core action downloads a pinned `labwired-cli` release archive.
+3. **Execution**: The runner invokes `labwired test` with a predefined test YAML. The YAML can describe one machine directly or select a multi-node world through `inputs.env`.
 4. **Assertion**: LabWired executes the simulation deterministically and asserts against the defined limits (cycles, UART output).
-5. **Reporting**: LabWired exits with standard POSIX codes and emits strict artifact files (`result.json`, `junit.xml`, `trace.vcd`). 
-6. **Integration**: CI systems natively ingest `junit.xml` to display inline success/failure on the Pull Request.
+5. **Reporting**: LabWired exits with standard POSIX codes. The action writes JUnit to `output-dir/junit.xml`, renders a Markdown summary and HTML report, and uploads the complete output directory even on failure.
+6. **Integration**: CI systems can ingest `junit.xml` to display inline success/failure on the Pull Request.
 
 ### Reference Configuration (`.github/workflows/sim.yml`)
 
@@ -34,24 +34,24 @@ jobs:
       - name: Build Firmware
         run: cargo build --release --target thumbv7em-none-eabihf
         
-      # Step 2: Install LabWired
-      - name: Install LabWired CLI
-        uses: labwired/setup-action@v1
+      # Step 2: Run the public immutable Core action
+      - id: labwired
+        name: Run LabWired CLI
+        uses: w1ne/labwired-core/.github/actions/labwired-test@0cadd18fc9a3c0cbd1ecb0a6ddcd8ce66d56283d
         with:
-          version: 'latest'
-          
-      # Step 3: Run the deterministic protocol headless
-      - name: Run Simulation
-        run: labwired test --script tests/hardware_validation.yaml
-        
-      # Step 4: Archive deterministic artifacts (VCD traces) on failure
-      - name: Upload Traces
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: failure-traces
-          path: trace.vcd
+          script: tests/hardware_validation.yaml
+          version: v0.19.2
+          output-dir: out/labwired
+          args: --no-uart-stdout
 ```
+
+The action source is an immutable action-source pin. It has exactly four inputs:
+`script` (required), `version` (default `v0.19.2`), `output-dir`, and
+`args`. It downloads the selected public release
+with `curl`; callers do not need to add a token, repository, JUnit, or artifact
+upload setting. It automatically uploads `out/labwired/`, including
+`out/labwired/junit.xml`, and exposes the report and artifact URL through the
+step outputs.
 
 ---
 

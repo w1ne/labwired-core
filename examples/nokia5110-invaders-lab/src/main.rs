@@ -23,6 +23,7 @@
 
 #![no_std]
 #![no_main]
+#![allow(static_mut_refs)]
 
 use core::ptr::{read_volatile, write_volatile};
 use cortex_m_rt::entry;
@@ -40,7 +41,6 @@ const GPIOA_BRR: *mut u32 = (0x4800_0000 + 0x28) as *mut u32;
 
 const GPIOB_MODER: *mut u32 = 0x4800_0400 as *mut u32;
 const GPIOB_IDR: *const u32 = (0x4800_0400 + 0x10) as *const u32;
-const GPIOB_BSRR: *mut u32 = (0x4800_0400 + 0x18) as *mut u32;
 const GPIOB_BRR: *mut u32 = (0x4800_0400 + 0x28) as *mut u32;
 
 const GPIOC_MODER: *mut u32 = 0x4800_0800 as *mut u32;

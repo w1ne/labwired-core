@@ -1,0 +1,6 @@
+name: iolinki_master
+build:
+  kconfig: zephyr/Kconfig
+  cmake: zephyr
+samples:
+  - samples/iolink_master

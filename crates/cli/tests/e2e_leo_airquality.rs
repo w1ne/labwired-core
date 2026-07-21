@@ -43,7 +43,15 @@ fn run_leo(script_rel: &str) -> LeoRun {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let out_dir = std::env::temp_dir().join(format!("labwired-leo-{nonce}"));
+    // Scenario name in the dir: the two tests run in parallel threads, and a
+    // clock-tick nonce collision would make them share one result.json
+    // (interleaved writes -> unparseable JSON).
+    let scenario = script_rel
+        .rsplit('/')
+        .next()
+        .unwrap_or(script_rel)
+        .replace(['.', '/'], "-");
+    let out_dir = std::env::temp_dir().join(format!("labwired-leo-{scenario}-{nonce}"));
     std::fs::create_dir_all(&out_dir).expect("create out dir");
 
     let output = Command::new(env!("CARGO_BIN_EXE_labwired"))
@@ -125,6 +133,19 @@ fn leo_normal_scenario_boots_all_sensors_and_flips_verdict() {
     // "air quality is good" to "crack a window" as decoded CO₂ crosses 1000 ppm.
     assert_contains(&run.uart, "air quality is good", ctx);
     assert_contains(&run.uart, "crack a window", ctx);
+
+    // ...and stops there. The NORMAL room's CO₂ ladder asymptotes at 1394 ppm,
+    // deliberately just under the 1400 ppm "ventilate now" threshold, so this is
+    // what separates NORMAL from STUFFY. Without it the scenario would still
+    // pass if the ladder were re-paced or re-scaled into the stuffy range —
+    // exactly the vacuous pass that hid the mis-paced stimuli ladder before.
+    assert!(
+        !run.uart.contains("ventilate now"),
+        "{ctx}: NORMAL must stay below the 1400 ppm 'ventilate now' threshold \
+         (that is the STUFFY scenario); the CO₂ ladder tops out at 1394 ppm\n\
+         --- uart ---\n{}",
+        run.uart
+    );
 
     // Mold Index: as the closed room's humidity climbs into the mold-favorable
     // band, the derived mold risk escalates from low — the metric Leo's
