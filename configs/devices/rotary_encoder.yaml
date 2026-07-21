@@ -1,0 +1,39 @@
+# Declarative descriptor — incremental (quadrature) rotary encoder, EC11-style.
+#
+# The encoder DRIVES two MCU input pins (CLK/DT) a quarter-cycle out of phase;
+# its irreducible algorithm is the Gray-code detent walk, provided by the
+# `quadrature` primitive (crate::peripherals::components::rotary_encoder). This
+# descriptor supplies everything around that primitive as data: the device type,
+# the pin bindings, and the canvas-compiler emit mapping. The push switch (SW)
+# is an ordinary momentary button and is emitted separately as plain board_io.
+type: rotary_encoder
+
+# --- Runtime behavior (consumed by bus/declarative_device.rs) --------------
+behavior:
+  primitive: quadrature
+  # Abstract quadrature channels A/B → the config keys carrying their pad label.
+  pins:
+    a: clk_pin
+    b: dt_pin
+  params:
+    # CPU clock used to convert the internal edge interval (µs) → cycles.
+    cpu_hz: { key: cpu_hz, default: 80000000 }
+
+# --- Display / manifest metadata (phase 2: derives KitMetadata) ------------
+metadata:
+  label: "Rotary encoder"
+  summary: "Incremental quadrature knob (EC11)"
+  category: gpio
+  # Drivable stimulus channels (must match the primitive's SimInput impl).
+  inputs:
+    - { key: position, label: "Position", unit: detents, min: -1000, max: 1000 }
+
+# --- Canvas-compiler emit mapping (phase 2: unifies the TS/Rust emitters) ---
+# Both engines derive the external_devices block from this, killing the
+# hand-mirrored emit_rotary_encoder / emitRotaryEncoder pair.
+emit:
+  connection: gpio
+  config:
+    - { key: clk_pin, from_part_pin: [CLK, A] }
+    - { key: dt_pin, from_part_pin: [DT, B] }
+    - { key: cpu_hz, from: sim_cpu_hz }

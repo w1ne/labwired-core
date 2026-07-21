@@ -545,6 +545,14 @@ impl SystemBus {
                 kit.attach(&mut ctx)?;
                 continue;
             }
+            // Second-pass: the GPIO / pin-timing family migrated to declarative
+            // `configs/devices/*.yaml` descriptors. `attach_declarative_device`
+            // resolves the descriptor's pin bindings and instantiates the named
+            // primitive — no hand-written arm here.
+            if let Some(desc) = super::declarative_device::lookup(&ext.r#type)? {
+                bus.attach_declarative_device(ext, &desc)?;
+                continue;
+            }
             match ext.r#type.as_str() {
                 // ili9341, adxl345/mpu6050/bme280/oled-ssd1306, neo6m-gps,
                 // and bg770a-cellular dispatch through the PeripheralKit
@@ -674,60 +682,9 @@ impl SystemBus {
                         ),
                     ));
                 }
-                "rotary-encoder" | "rotary_encoder" => {
-                    // Incremental quadrature knob. Like the HC-SR04/DHT22 it
-                    // DRIVES pins the MCU samples as inputs (CLK/DT), so it lives
-                    // directly on the bus and the per-tick pass
-                    // (`service_gpio_devices`) walks the Gray sequence onto the
-                    // two input registers. Rotation is host-controlled through the
-                    // standard `position` stimulus channel. The push switch (SW)
-                    // is a plain board_io button, emitted separately.
-                    let clk = ext
-                        .config
-                        .get("clk_pin")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("PA0")
-                        .to_string();
-                    let dt = ext
-                        .config
-                        .get("dt_pin")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("PA1")
-                        .to_string();
-                    let cpu_hz = ext
-                        .config
-                        .get("cpu_hz")
-                        .and_then(|v| v.as_u64())
-                        .unwrap_or(80_000_000);
-
-                    let (clk_idr_addr, clk_bit) =
-                        Self::resolve_pin_idr(&bus, &clk).ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "rotary-encoder '{}' clk_pin '{}' could not be resolved to a GPIO input",
-                                ext.id,
-                                clk
-                            )
-                        })?;
-                    let (dt_idr_addr, dt_bit) =
-                        Self::resolve_pin_idr(&bus, &dt).ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "rotary-encoder '{}' dt_pin '{}' could not be resolved to a GPIO input",
-                                ext.id,
-                                dt
-                            )
-                        })?;
-
-                    bus.gpio_devices.push(Box::new(
-                        crate::peripherals::components::rotary_encoder::RotaryEncoder::new(
-                            ext.id.clone(),
-                            clk_idr_addr,
-                            clk_bit,
-                            dt_idr_addr,
-                            dt_bit,
-                            cpu_hz,
-                        ),
-                    ));
-                }
+                // rotary-encoder / rotary_encoder now dispatches through the
+                // declarative device path above (configs/devices/rotary_encoder.yaml,
+                // `quadrature` primitive) — see super::declarative_device.
                 "keypad" => {
                     // 4×4 matrix keypad. Like the rotary encoder / DHT22 it
                     // DRIVES pins the MCU samples as inputs (the columns) while
