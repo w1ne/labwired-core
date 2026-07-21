@@ -685,71 +685,9 @@ impl SystemBus {
                 // rotary-encoder / rotary_encoder now dispatches through the
                 // declarative device path above (configs/devices/rotary_encoder.yaml,
                 // `quadrature` primitive) — see super::declarative_device.
-                "keypad" => {
-                    // 4×4 matrix keypad. Like the rotary encoder / DHT22 it
-                    // DRIVES pins the MCU samples as inputs (the columns) while
-                    // OBSERVING pins the MCU drives as outputs (the rows), so it
-                    // lives directly on the bus and the per-tick pass
-                    // (`service_gpio_devices`) reads the row ODR bits and drives the
-                    // column IDR bits. The pressed key is host-controlled through
-                    // the standard `key` stimulus channel (index row*4+col).
-                    let read_pins = |field: &str| -> anyhow::Result<Vec<String>> {
-                        let arr = ext.config.get(field).and_then(|v| v.as_sequence());
-                        let Some(arr) = arr else {
-                            return Err(anyhow::anyhow!(
-                                "keypad '{}' config is missing a '{}' list",
-                                ext.id,
-                                field
-                            ));
-                        };
-                        let pins: Vec<String> = arr
-                            .iter()
-                            .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                            .collect();
-                        if pins.len() != 4 {
-                            return Err(anyhow::anyhow!(
-                                "keypad '{}' expects exactly 4 '{}' entries, got {}",
-                                ext.id,
-                                field,
-                                pins.len()
-                            ));
-                        }
-                        Ok(pins)
-                    };
-                    let row_pins = read_pins("row_pins")?;
-                    let col_pins = read_pins("col_pins")?;
-
-                    // Rows are MCU outputs the keypad observes → resolve to ODR.
-                    let mut row_odr = [(0u64, 0u8); 4];
-                    for (i, pin) in row_pins.iter().enumerate() {
-                        row_odr[i] = Self::resolve_pin_odr(&bus, pin).ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "keypad '{}' row_pin '{}' could not be resolved to a GPIO output",
-                                ext.id,
-                                pin
-                            )
-                        })?;
-                    }
-                    // Columns are MCU inputs the keypad drives → resolve to IDR.
-                    let mut col_idr = [(0u64, 0u8); 4];
-                    for (i, pin) in col_pins.iter().enumerate() {
-                        col_idr[i] = Self::resolve_pin_idr(&bus, pin).ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "keypad '{}' col_pin '{}' could not be resolved to a GPIO input",
-                                ext.id,
-                                pin
-                            )
-                        })?;
-                    }
-
-                    bus.gpio_devices.push(Box::new(
-                        crate::peripherals::components::keypad::Keypad::new(
-                            ext.id.clone(),
-                            row_odr,
-                            col_idr,
-                        ),
-                    ));
-                }
+                // keypad now dispatches through the declarative device path above
+                // (configs/devices/keypad.yaml, `matrix` primitive) — see
+                // super::declarative_device.
                 "neopixel" | "ws2812" => {
                     // Addressable LED strip driven by a single-wire, self-clocked
                     // bit-stream on ONE GPIO. On the ESP32-S3 the RMT peripheral

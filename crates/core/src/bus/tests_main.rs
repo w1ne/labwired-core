@@ -685,6 +685,90 @@ board_io: []
     }
 }
 
+/// The `keypad` external device dispatches through the DECLARATIVE device path
+/// (`configs/devices/keypad.yaml`, `matrix` primitive). This locks that seam: a
+/// keypad in a system.yaml must still land a `Keypad` on the bus with its four
+/// ROW pins resolved to GPIO outputs (ODR) and four COLUMN pins to inputs (IDR),
+/// exactly what the deleted hand-written arm produced.
+#[test]
+fn test_from_config_attaches_keypad_via_declarative_descriptor() {
+    use crate::peripherals::components::keypad::Keypad;
+
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let chip = ChipDescriptor::from_file(root.join("../../configs/chips/stm32f103.yaml"))
+        .expect("read STM32F103 chip descriptor");
+    let manifest: SystemManifest = serde_yaml::from_str(
+        r#"
+name: "keypad-declarative"
+chip: "../chips/stm32f103.yaml"
+external_devices:
+  - id: "pad"
+    type: "keypad"
+    connection: "gpio"
+    config:
+      row_pins: ["PA0", "PA1", "PA2", "PA3"]
+      col_pins: ["PA4", "PA5", "PA6", "PA7"]
+board_io: []
+"#,
+    )
+    .expect("parse keypad manifest");
+
+    let bus = SystemBus::from_config(&chip, &manifest).expect("build bus with keypad");
+    let pads: Vec<&Keypad> = bus.gpio_devices_of::<Keypad>().collect();
+    assert_eq!(pads.len(), 1, "exactly one Keypad attached");
+    let pad = pads[0];
+    assert_eq!(pad.id, "pad");
+    // Rows PA0..PA3 → GPIOA ODR bits 0..3; cols PA4..PA7 → GPIOA IDR bits 4..7.
+    for i in 0..4 {
+        assert_eq!(pad.row_odr[i].1, i as u8, "row {i} → ODR bit {i}");
+        assert_eq!(
+            pad.col_idr[i].1,
+            (i + 4) as u8,
+            "col {i} → IDR bit {}",
+            i + 4
+        );
+    }
+    // Rows on the ODR, cols on the IDR — distinct register offsets on the same port.
+    assert_ne!(
+        pad.row_odr[0].0, pad.col_idr[0].0,
+        "rows drive ODR, cols read IDR — different registers"
+    );
+}
+
+/// A keypad descriptor with the wrong number of pins is rejected with the same
+/// message the hand-written arm gave — the declarative path preserves the
+/// validation, keyed on the config field name.
+#[test]
+fn test_declarative_keypad_rejects_wrong_pin_count() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let chip = ChipDescriptor::from_file(root.join("../../configs/chips/stm32f103.yaml"))
+        .expect("read STM32F103 chip descriptor");
+    let manifest: SystemManifest = serde_yaml::from_str(
+        r#"
+name: "keypad-bad"
+chip: "../chips/stm32f103.yaml"
+external_devices:
+  - id: "pad"
+    type: "keypad"
+    connection: "gpio"
+    config:
+      row_pins: ["PA0", "PA1", "PA2"]
+      col_pins: ["PA4", "PA5", "PA6", "PA7"]
+board_io: []
+"#,
+    )
+    .expect("parse keypad manifest");
+
+    let err = match SystemBus::from_config(&chip, &manifest) {
+        Ok(_) => panic!("3-row keypad must be rejected"),
+        Err(e) => e.to_string(),
+    };
+    assert!(
+        err.contains("expects exactly 4 'row_pins'") && err.contains("got 3"),
+        "error must name the field and count: {err}"
+    );
+}
+
 #[test]
 fn curated_esp32c3_i2c_manifests_declare_physical_routes() {
     #[derive(serde::Deserialize)]
