@@ -406,6 +406,20 @@ impl Peripheral for Nrf54lUarte {
         }
     }
 
+    /// `tick()` only tracks the level-held IRQ edge; when the level equals what
+    /// was last observed it is a genuine no-op. Reporting that (instead of the
+    /// always-active default) drops the UARTE out of the per-cycle walk while
+    /// idle and — critically — lets idle fast-forward engage during a
+    /// tickless-idle WFI window. Walk-identical: every skipped cycle is one
+    /// where `tick()` would have recomputed the same level and emitted no IRQ.
+    fn legacy_tick_active(&self) -> bool {
+        (self.pending_mask() & self.inten != 0) != self.irq_level
+    }
+
+    fn legacy_tick_dynamic(&self) -> bool {
+        true
+    }
+
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)
     }

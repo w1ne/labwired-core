@@ -276,6 +276,22 @@ impl Peripheral for Nrf52Gpiote {
         }
     }
 
+    /// `tick()` is a genuine no-op (the early return above) unless it has a
+    /// pending GPIO write, IN event, or IN-mask to deliver. Reporting exactly
+    /// that condition (instead of the always-active default) drops the GPIOTE
+    /// out of the per-cycle walk while idle and lets idle fast-forward engage
+    /// during a tickless-idle WFI window — byte-identical, since every skipped
+    /// cycle is one where `tick()` would have taken its no-op early return.
+    fn legacy_tick_active(&self) -> bool {
+        !self.pending_gpio_writes.is_empty()
+            || !self.pending_in_events.is_empty()
+            || self.pending_in_mask != 0
+    }
+
+    fn legacy_tick_dynamic(&self) -> bool {
+        true
+    }
+
     fn observe_gpio_change(&mut self, changes: &[(u8, u8, u8)]) {
         for &(port, pin, new_level) in changes {
             for ch in 0..8usize {

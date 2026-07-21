@@ -431,11 +431,42 @@ impl crate::Peripheral for Nrf54lTwim {
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
+        // The ONLY thing tick() does is re-assert the level-held IRQ while an
+        // enabled event (STOPPED/ERROR) is latched — the transfer itself runs
+        // in `tick_with_bus`. Charge ZERO cost: a TWIM consumes no core cycles
+        // (real EasyDMA runs on the bus), and a non-zero cost would inflate
+        // `total_cycles` and so perturb the clock-derived nRF54L GRTC
+        // SYSCOUNTER that firmware reads for time.
         PeripheralTickResult {
-            cycles: 1,
             irq: self.inten & self.event_bitmap() != 0,
             ..Default::default()
         }
+    }
+
+    /// The legacy per-cycle walk only needs this peripheral while `tick()` has
+    /// output — i.e. while an enabled event holds the IRQ level. With nothing
+    /// latched-and-enabled `tick()` is a genuine no-op, so the model drops out
+    /// of the walk (and stops blocking idle fast-forward). This is provably
+    /// walk-identical: every cycle skipped is one where `tick()` returned
+    /// `irq: false` with zero cost. An armed EasyDMA transfer runs on the
+    /// separate `needs_bus_tick` path and its wall-clock slave advance happens
+    /// at transaction time via a bus GRTC read, not a per-cycle tick — so a
+    /// pending transfer does not need the legacy walk either.
+    fn legacy_tick_active(&self) -> bool {
+        self.inten & self.event_bitmap() != 0
+    }
+
+    /// `legacy_tick_active` depends on mutable event/INTEN state, so the bus
+    /// must re-check it after each tick rather than caching it once.
+    fn legacy_tick_dynamic(&self) -> bool {
+        true
+    }
+
+    /// `tick()` does real work (the level IRQ) whenever an enabled event is
+    /// latched, so the walk is behaviorally significant and must not be
+    /// statically deleted; `legacy_tick_active` handles the per-instant skip.
+    fn needs_legacy_walk(&self) -> bool {
+        true
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {
