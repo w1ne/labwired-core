@@ -99,6 +99,7 @@ fn rp2040_bus() -> SystemBus {
     let chip = ChipDescriptor::from_file(&chip_path)
         .unwrap_or_else(|e| panic!("load chip {chip_path:?}: {e}"));
     let manifest = SystemManifest {
+        cosim_models: Vec::new(),
         walk_deleted: Some(false),
         schema_version: "1.0".to_string(),
         name: "rp2040-timer-exec-oracle".to_string(),

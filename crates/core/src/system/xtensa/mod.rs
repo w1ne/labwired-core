@@ -466,6 +466,7 @@ mod tests {
         // manifest's external_devices through the generic factory, exactly as the
         // app/CLI do. Declare it, attach it, then probe below.
         let manifest = labwired_config::SystemManifest {
+            cosim_models: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "test-s3-tmp102".to_string(),
@@ -553,6 +554,7 @@ mod tests {
             serde_yaml::Value::String("GPIO5".to_string()),
         );
         let manifest = SystemManifest {
+            cosim_models: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "test-esp32-epaper".to_string(),
@@ -626,6 +628,7 @@ mod tests {
             serde_yaml::Value::String("GPIO10".to_string()),
         );
         let manifest = SystemManifest {
+            cosim_models: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "test-esp32s3-epaper".to_string(),
@@ -679,6 +682,7 @@ mod tests {
         use labwired_config::{ExternalDevice, SystemManifest};
 
         let manifest = SystemManifest {
+            cosim_models: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
             name: "test".to_string(),

@@ -97,6 +97,17 @@ impl Peripheral for Nvic {
         false
     }
 
+    // The NVIC's own `tick()` is the trait-default no-op (see above), so it is
+    // never "active" for the per-cycle walk. Report that explicitly: the
+    // default `legacy_tick_active() == true` kept this inert register bank in
+    // the walk set AND — because idle fast-forward's `legacy_safe` gate keys on
+    // `legacy_tick_active` — spuriously blocked idle FF on EVERY Cortex-M board.
+    // Overriding to `false` is byte-identical (removing a no-op tick changes
+    // nothing) and consistent with `needs_legacy_walk() == false` above.
+    fn legacy_tick_active(&self) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let reg_idx = (offset / 4) as usize;
         let byte_offset = (offset % 4) as usize;

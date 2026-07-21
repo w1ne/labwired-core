@@ -545,6 +545,14 @@ impl SystemBus {
                 kit.attach(&mut ctx)?;
                 continue;
             }
+            // Second-pass: the GPIO / pin-timing family migrated to declarative
+            // `configs/devices/*.yaml` descriptors. `attach_declarative_device`
+            // resolves the descriptor's pin bindings and instantiates the named
+            // primitive — no hand-written arm here.
+            if let Some(desc) = super::declarative_device::lookup(&ext.r#type)? {
+                bus.attach_declarative_device(ext, &desc)?;
+                continue;
+            }
             match ext.r#type.as_str() {
                 // ili9341, adxl345/mpu6050/bme280/oled-ssd1306, neo6m-gps,
                 // and bg770a-cellular dispatch through the PeripheralKit
@@ -607,192 +615,15 @@ impl SystemBus {
                         distance_cm,
                     ));
                 }
-                "dht22" | "am2302" => {
-                    // One-wire temperature/humidity sensor — no SPI/I2C
-                    // connection. Like the HC-SR04 it DRIVES a pin the MCU
-                    // samples as an input, so it lives directly on the bus:
-                    // the data pin's GPIO write-hook (`maybe_start_dht22`)
-                    // watches for the >=1 ms start pulse, and the per-tick pass
-                    // (`service_gpio_devices`) drives the reply frame onto the pin's
-                    // input register. Both `temperature` and `humidity` are
-                    // host-controlled through the standard stimulus API.
-                    let data = ext
-                        .config
-                        .get("data_pin")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("PA8")
-                        .to_string();
-                    let temperature_c = ext
-                        .config
-                        .get("temperature_c")
-                        .and_then(|v| v.as_f64())
-                        .unwrap_or(22.0) as f32;
-                    let humidity_pct = ext
-                        .config
-                        .get("humidity_pct")
-                        .and_then(|v| v.as_f64())
-                        .unwrap_or(50.0) as f32;
-                    let cpu_hz = ext
-                        .config
-                        .get("cpu_hz")
-                        .and_then(|v| v.as_u64())
-                        .unwrap_or(80_000_000);
-
-                    // The one wire is bidirectional: the ODR bit is how the
-                    // host drives it, the IDR bit is where the sensor drives
-                    // back. Same pin, same bit, two registers.
-                    let (odr_addr, odr_bit) =
-                        Self::resolve_pin_odr(&bus, &data).ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "DHT22 '{}' data_pin '{}' could not be resolved to a GPIO output",
-                                ext.id,
-                                data
-                            )
-                        })?;
-                    let (idr_addr, idr_bit) =
-                        Self::resolve_pin_idr(&bus, &data).ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "DHT22 '{}' data_pin '{}' could not be resolved to a GPIO input",
-                                ext.id,
-                                data
-                            )
-                        })?;
-                    debug_assert_eq!(
-                        odr_bit, idr_bit,
-                        "ODR and IDR of one pin must share a bit index"
-                    );
-
-                    bus.gpio_devices.push(Box::new(
-                        crate::peripherals::components::dht22::Dht22::new(
-                            ext.id.clone(),
-                            odr_addr,
-                            idr_addr,
-                            odr_bit,
-                            cpu_hz,
-                            temperature_c,
-                            humidity_pct,
-                        ),
-                    ));
-                }
-                "rotary-encoder" | "rotary_encoder" => {
-                    // Incremental quadrature knob. Like the HC-SR04/DHT22 it
-                    // DRIVES pins the MCU samples as inputs (CLK/DT), so it lives
-                    // directly on the bus and the per-tick pass
-                    // (`service_gpio_devices`) walks the Gray sequence onto the
-                    // two input registers. Rotation is host-controlled through the
-                    // standard `position` stimulus channel. The push switch (SW)
-                    // is a plain board_io button, emitted separately.
-                    let clk = ext
-                        .config
-                        .get("clk_pin")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("PA0")
-                        .to_string();
-                    let dt = ext
-                        .config
-                        .get("dt_pin")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("PA1")
-                        .to_string();
-                    let cpu_hz = ext
-                        .config
-                        .get("cpu_hz")
-                        .and_then(|v| v.as_u64())
-                        .unwrap_or(80_000_000);
-
-                    let (clk_idr_addr, clk_bit) =
-                        Self::resolve_pin_idr(&bus, &clk).ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "rotary-encoder '{}' clk_pin '{}' could not be resolved to a GPIO input",
-                                ext.id,
-                                clk
-                            )
-                        })?;
-                    let (dt_idr_addr, dt_bit) =
-                        Self::resolve_pin_idr(&bus, &dt).ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "rotary-encoder '{}' dt_pin '{}' could not be resolved to a GPIO input",
-                                ext.id,
-                                dt
-                            )
-                        })?;
-
-                    bus.gpio_devices.push(Box::new(
-                        crate::peripherals::components::rotary_encoder::RotaryEncoder::new(
-                            ext.id.clone(),
-                            clk_idr_addr,
-                            clk_bit,
-                            dt_idr_addr,
-                            dt_bit,
-                            cpu_hz,
-                        ),
-                    ));
-                }
-                "keypad" => {
-                    // 4×4 matrix keypad. Like the rotary encoder / DHT22 it
-                    // DRIVES pins the MCU samples as inputs (the columns) while
-                    // OBSERVING pins the MCU drives as outputs (the rows), so it
-                    // lives directly on the bus and the per-tick pass
-                    // (`service_gpio_devices`) reads the row ODR bits and drives the
-                    // column IDR bits. The pressed key is host-controlled through
-                    // the standard `key` stimulus channel (index row*4+col).
-                    let read_pins = |field: &str| -> anyhow::Result<Vec<String>> {
-                        let arr = ext.config.get(field).and_then(|v| v.as_sequence());
-                        let Some(arr) = arr else {
-                            return Err(anyhow::anyhow!(
-                                "keypad '{}' config is missing a '{}' list",
-                                ext.id,
-                                field
-                            ));
-                        };
-                        let pins: Vec<String> = arr
-                            .iter()
-                            .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                            .collect();
-                        if pins.len() != 4 {
-                            return Err(anyhow::anyhow!(
-                                "keypad '{}' expects exactly 4 '{}' entries, got {}",
-                                ext.id,
-                                field,
-                                pins.len()
-                            ));
-                        }
-                        Ok(pins)
-                    };
-                    let row_pins = read_pins("row_pins")?;
-                    let col_pins = read_pins("col_pins")?;
-
-                    // Rows are MCU outputs the keypad observes → resolve to ODR.
-                    let mut row_odr = [(0u64, 0u8); 4];
-                    for (i, pin) in row_pins.iter().enumerate() {
-                        row_odr[i] = Self::resolve_pin_odr(&bus, pin).ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "keypad '{}' row_pin '{}' could not be resolved to a GPIO output",
-                                ext.id,
-                                pin
-                            )
-                        })?;
-                    }
-                    // Columns are MCU inputs the keypad drives → resolve to IDR.
-                    let mut col_idr = [(0u64, 0u8); 4];
-                    for (i, pin) in col_pins.iter().enumerate() {
-                        col_idr[i] = Self::resolve_pin_idr(&bus, pin).ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "keypad '{}' col_pin '{}' could not be resolved to a GPIO input",
-                                ext.id,
-                                pin
-                            )
-                        })?;
-                    }
-
-                    bus.gpio_devices.push(Box::new(
-                        crate::peripherals::components::keypad::Keypad::new(
-                            ext.id.clone(),
-                            row_odr,
-                            col_idr,
-                        ),
-                    ));
-                }
+                // dht22 / am2302 now dispatches through the declarative device
+                // path above (configs/devices/dht22.yaml, `one_wire` primitive) —
+                // see super::declarative_device.
+                // rotary-encoder / rotary_encoder now dispatches through the
+                // declarative device path above (configs/devices/rotary_encoder.yaml,
+                // `quadrature` primitive) — see super::declarative_device.
+                // keypad now dispatches through the declarative device path above
+                // (configs/devices/keypad.yaml, `matrix` primitive) — see
+                // super::declarative_device.
                 "neopixel" | "ws2812" => {
                     // Addressable LED strip driven by a single-wire, self-clocked
                     // bit-stream on ONE GPIO. On the ESP32-S3 the RMT peripheral

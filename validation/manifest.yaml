@@ -103,7 +103,19 @@ boards:
     # detects IN edges rather than draining a queue, and
     # nrf52840_onboarding_gpiote_event_in_fires_on_edge caught it. Offline
     # oracle/mmio/conformance suites pass unchanged. No live re-capture.
-    drift_ack: 2026-07-20
+    # 2026-07-21: GPIOTE now DOES opt out of the walk — but safely, unlike the
+    # reverted attempt. `legacy_tick_active()` returns true whenever any queue
+    # is non-empty (pending_gpio_writes / pending_in_events / pending_in_mask),
+    # so it stays in the walk exactly when its tick() has an IN edge or GPIO
+    # write to deliver, and drops out ONLY when genuinely idle (all queues
+    # empty, tick() takes its no-op early return). NVIC also opted out (its
+    # tick() is the trait-default no-op). PURELY ADDITIVE: +16/+11, 0 removed
+    # lines — no register read/write path, reset value or layout touched.
+    # EVIDENCE it is byte-identical: nrf52840_onboarding_gpiote_event_in_fires_
+    # on_edge (the exact test that caught the reverted attempt) passes, and all
+    # cross-chip walk-vs-scheduler byte-identical differentials pass (82 walk
+    # tests + f401/h563/l073/l476 Zephyr-boot). No live re-capture required.
+    drift_ack: 2026-07-21
     models:
       - crates/core/src/peripherals/nrf52
       - configs/chips/nrf52840.yaml
@@ -152,7 +164,9 @@ boards:
     # detects IN edges rather than draining a queue, and
     # nrf52840_onboarding_gpiote_event_in_fires_on_edge caught it. Offline
     # oracle/mmio/conformance suites pass unchanged. No live re-capture.
-    drift_ack: 2026-07-20
+    # 2026-07-21: rides the nrf52840 GPIOTE/NVIC walk opt-out (same silicon);
+    # queue-state-gated, byte-identical. See the nrf52840 drift_ack note.
+    drift_ack: 2026-07-21
     models:
       - crates/core/src/peripherals/nrf52
       - configs/chips/nrf52840.yaml
@@ -260,7 +274,8 @@ boards:
     # detects IN edges rather than draining a queue, and
     # nrf52840_onboarding_gpiote_event_in_fires_on_edge caught it. Offline
     # oracle/mmio/conformance suites pass unchanged. No live re-capture.
-    drift_ack: 2026-07-20
+    # 2026-07-21: shared rcc.rs / pwr.rs gained the ADDITIVE STM32H7 RCC layout + PwrH7 (new enum variants for the stm32h735 onboarding). This board's RCC/PWR family structs are byte-for-byte untouched; the h735 work also added Cortex-M7 double-precision VFP decode (previously Unknown32), which no existing decode path uses. Its conformance/survival gates + 2189 core lib tests pass unchanged. No silicon re-capture.
+    drift_ack: 2026-07-21
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -567,7 +582,8 @@ boards:
     # detects IN edges rather than draining a queue, and
     # nrf52840_onboarding_gpiote_event_in_fires_on_edge caught it. Offline
     # oracle/mmio/conformance suites pass unchanged. No live re-capture.
-    drift_ack: 2026-07-20
+    # 2026-07-21: shared rcc.rs / pwr.rs gained the ADDITIVE STM32H7 RCC layout + PwrH7 (new enum variants for the stm32h735 onboarding). This board's RCC/PWR family structs are byte-for-byte untouched; the h735 work also added Cortex-M7 double-precision VFP decode (previously Unknown32), which no existing decode path uses. Its conformance/survival gates + 2189 core lib tests pass unchanged. No silicon re-capture.
+    drift_ack: 2026-07-21
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -653,7 +669,8 @@ boards:
     # detects IN edges rather than draining a queue, and
     # nrf52840_onboarding_gpiote_event_in_fires_on_edge caught it. Offline
     # oracle/mmio/conformance suites pass unchanged. No live re-capture.
-    drift_ack: 2026-07-20
+    # 2026-07-21: shared rcc.rs / pwr.rs gained the ADDITIVE STM32H7 RCC layout + PwrH7 (new enum variants for the stm32h735 onboarding). This board's RCC/PWR family structs are byte-for-byte untouched; the h735 work also added Cortex-M7 double-precision VFP decode (previously Unknown32), which no existing decode path uses. Its conformance/survival gates + 2189 core lib tests pass unchanged. No silicon re-capture.
+    drift_ack: 2026-07-21
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -747,7 +764,8 @@ boards:
     # detects IN edges rather than draining a queue, and
     # nrf52840_onboarding_gpiote_event_in_fires_on_edge caught it. Offline
     # oracle/mmio/conformance suites pass unchanged. No live re-capture.
-    drift_ack: 2026-07-20
+    # 2026-07-21: shared rcc.rs / pwr.rs gained the ADDITIVE STM32H7 RCC layout + PwrH7 (new enum variants for the stm32h735 onboarding). This board's RCC/PWR family structs are byte-for-byte untouched; the h735 work also added Cortex-M7 double-precision VFP decode (previously Unknown32), which no existing decode path uses. Its conformance/survival gates + 2189 core lib tests pass unchanged. No silicon re-capture.
+    drift_ack: 2026-07-21
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/afio.rs
@@ -839,7 +857,8 @@ boards:
     # detects IN edges rather than draining a queue, and
     # nrf52840_onboarding_gpiote_event_in_fires_on_edge caught it. Offline
     # oracle/mmio/conformance suites pass unchanged. No live re-capture.
-    drift_ack: 2026-07-20
+    # 2026-07-21: shared rcc.rs / pwr.rs gained the ADDITIVE STM32H7 RCC layout + PwrH7 (new enum variants for the stm32h735 onboarding). This board's RCC/PWR family structs are byte-for-byte untouched; the h735 work also added Cortex-M7 double-precision VFP decode (previously Unknown32), which no existing decode path uses. Its conformance/survival gates + 2189 core lib tests pass unchanged. No silicon re-capture.
+    drift_ack: 2026-07-21
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs

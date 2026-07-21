@@ -149,6 +149,10 @@ enum Commands {
     /// Run the Tier-1 chip × peripheral validation matrix and export it.
     Tier1Matrix(Tier1MatrixArgs),
 
+    /// Step a manifest-declared co-simulation model through the real
+    /// runner/adapter chain and print the routed outputs.
+    CosimStep(commands::cosim::CosimStepArgs),
+
     /// Coverage-guided fuzz a firmware in the silicon-validated simulator.
     ///
     /// Mutates an input byte stream injected into the firmware's RAM buffer,
@@ -731,6 +735,7 @@ fn main() -> ExitCode {
         Some(Commands::Snapshot(args)) => commands::snapshot::run_snapshot(args),
         Some(Commands::Coverage(args)) => commands::coverage::run_coverage(args),
         Some(Commands::Tier1Matrix(args)) => commands::tier1::run_tier1_matrix(args),
+        Some(Commands::CosimStep(args)) => commands::cosim::run_cosim_step(args),
         Some(Commands::Fuzz(args)) => commands::fuzz::run_fuzz(args),
         None => commands::run::run_interactive(cli),
     }

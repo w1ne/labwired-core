@@ -1,0 +1,33 @@
+# Declarative descriptor — 4×4 matrix keypad (sixteen passive switches).
+#
+# A membrane keypad has no chip: each key shorts a row to a column while
+# pressed. Firmware animates the matrix (drive rows LOW one at a time, read
+# columns) — so the device OBSERVES four MCU output pins (rows) and DRIVES four
+# MCU input pins (columns). That row-drive/column-read scan is the irreducible
+# `matrix` primitive (crate::peripherals::components::keypad). The keypad does
+# not self-time (it is combinational), so it carries no cpu_hz.
+type: keypad
+
+# --- Runtime behavior (consumed by bus/declarative_device.rs) --------------
+behavior:
+  primitive: matrix
+  # List-valued pin roles: each binds to a config key holding a 4-entry list.
+  # rows resolve to GPIO outputs (ODR, observed); cols to inputs (IDR, driven).
+  pins:
+    rows: row_pins
+    cols: col_pins
+
+# --- Display / manifest metadata (phase 2: derives KitMetadata) ------------
+metadata:
+  label: "Matrix keypad"
+  summary: "4×4 membrane keypad (row-drive / column-read)"
+  category: gpio
+  inputs:
+    - { key: key, label: "Key", unit: index, min: -1, max: 15 }
+
+# --- Canvas-compiler emit mapping (phase 2: unifies the TS/Rust emitters) ---
+emit:
+  connection: gpio
+  config:
+    - { key: row_pins, from_part_pins: [R1, R2, R3, R4] }
+    - { key: col_pins, from_part_pins: [C1, C2, C3, C4] }

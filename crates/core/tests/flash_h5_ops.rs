@@ -30,6 +30,7 @@ fn h563_machine() -> Machine<labwired_core::cpu::CortexM> {
         name: "flash-h5-ops".to_string(),
         chip: path.to_string_lossy().to_string(),
         external_devices: vec![],
+        cosim_models: Vec::new(),
         board_io: vec![],
         debug_uart: None,
         peripherals: vec![],

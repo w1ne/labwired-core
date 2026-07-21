@@ -472,6 +472,20 @@ impl SystemBus {
                 for p in self.peripherals.iter_mut() {
                     p.dev.observe_gpio_change(&changes);
                 }
+                // A GPIO edge can make a dynamic peripheral (e.g. GPIOTE)
+                // newly walk-active through `observe_gpio_change` — a
+                // CROSS-peripheral activation that the per-MMIO-write refresh
+                // choke never observes. Refresh the legacy-tick index of every
+                // dynamic peripheral so a freshly-armed GPIOTE re-enters the
+                // walk and drains its EVENTS_IN on the next tick (before this,
+                // a GPIOTE that opts out of the walk while idle would never be
+                // re-added and its input event would be lost). Guarded by an
+                // actual edge, so this is off the steady-state hot path.
+                for idx in 0..self.peripherals.len() {
+                    if self.peripherals[idx].dev.legacy_tick_dynamic() {
+                        self.refresh_legacy_tick_index(idx);
+                    }
+                }
             }
 
             // HC-SR04, DHT22 and CAN synthetic services are not present on C3

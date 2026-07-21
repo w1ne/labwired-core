@@ -190,6 +190,7 @@ fn build_sim_bus() -> SystemBus {
         name: "esp32c3-reset-conformance".to_string(),
         chip: chip_path.to_string_lossy().to_string(),
         external_devices: vec![],
+        cosim_models: Vec::new(),
         board_io: vec![],
         debug_uart: None,
         peripherals: vec![],

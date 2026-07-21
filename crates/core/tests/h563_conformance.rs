@@ -28,6 +28,7 @@ fn h563_bus() -> labwired_core::bus::SystemBus {
         name: "h563-conformance".to_string(),
         chip: path.to_string_lossy().to_string(),
         external_devices: vec![],
+        cosim_models: Vec::new(),
         board_io: vec![],
         debug_uart: None,
         peripherals: vec![],

@@ -1,0 +1,37 @@
+# Declarative descriptor — DHT22 / AM2302 one-wire temperature+humidity sensor.
+#
+# A single bidirectional data line: the MCU pulls it low >=1 ms to request a
+# reading, then the sensor drives back a 40-bit frame with microsecond bit-cell
+# timing. That framed-bit protocol is the irreducible `one_wire` primitive
+# (crate::peripherals::components::dht22) — the sensor self-times off cpu_hz, so
+# cpu_hz must be the real firmware clock. Temperature and humidity are
+# host-controlled through the standard stimulus API.
+type: dht22
+
+# --- Runtime behavior (consumed by bus/declarative_device.rs) --------------
+behavior:
+  primitive: one_wire
+  # The one wire is bidirectional: `data` resolves to BOTH the pin's output
+  # (ODR, how the host drives it) and input (IDR, where the sensor replies).
+  pins:
+    data: data_pin
+  params:
+    cpu_hz: { key: cpu_hz, default: 80000000 }
+    temperature_c: { key: temperature_c, default: 22.0 }
+    humidity_pct: { key: humidity_pct, default: 50.0 }
+
+# --- Display / manifest metadata (phase 2: derives KitMetadata) ------------
+metadata:
+  label: "DHT22 / AM2302"
+  summary: "One-wire temperature + humidity sensor"
+  category: gpio
+  inputs:
+    - { key: temperature, label: "Temperature", unit: "°C", min: -40, max: 80 }
+    - { key: humidity, label: "Humidity", unit: "%", min: 0, max: 100 }
+
+# --- Canvas-compiler emit mapping (phase 2: unifies the TS/Rust emitters) ---
+emit:
+  connection: gpio
+  config:
+    - { key: data_pin, from_part_pin: [DATA, DAT, OUT] }
+    - { key: cpu_hz, from: sim_cpu_hz }

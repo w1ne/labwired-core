@@ -196,6 +196,34 @@ pub struct ExternalDevice {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
+pub enum CosimAdapter {
+    ExternalProcess,
+    Fmi,
+    Mock,
+}
+
+fn default_cosim_step_ns() -> u64 {
+    1_000
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CosimModelConfig {
+    pub id: String,
+    pub adapter: CosimAdapter,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    #[serde(default = "default_cosim_step_ns")]
+    pub step_ns: u64,
+    #[serde(default)]
+    pub inputs: HashMap<String, String>,
+    #[serde(default)]
+    pub outputs: HashMap<String, String>,
+    #[serde(default)]
+    pub config: HashMap<String, serde_yaml::Value>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
 pub enum BoardIoKind {
     Led,
     Button,
@@ -244,6 +272,8 @@ pub struct SystemManifest {
     pub memory_overrides: HashMap<String, String>,
     #[serde(default)]
     pub external_devices: Vec<ExternalDevice>,
+    #[serde(default)]
+    pub cosim_models: Vec<CosimModelConfig>,
     #[serde(default)]
     pub board_io: Vec<BoardIoBinding>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -596,6 +626,35 @@ impl SystemManifest {
         }
         Ok(manifest)
     }
+
+    pub fn validate_cosim_models(&self) -> Vec<String> {
+        let mut issues = Vec::new();
+
+        for (index, model) in self.cosim_models.iter().enumerate() {
+            let location = format!("cosim_models[{index}]");
+            if model.id.trim().is_empty() {
+                issues.push(format!("{location}.id must be a non-empty identifier"));
+            }
+            if model.step_ns == 0 {
+                issues.push(format!("{location}.step_ns must be greater than zero"));
+            }
+            if matches!(
+                model.adapter,
+                CosimAdapter::ExternalProcess | CosimAdapter::Fmi
+            ) && model
+                .model
+                .as_deref()
+                .is_none_or(|path| path.trim().is_empty())
+            {
+                issues.push(format!(
+                    "{location}.model is required for {:?} adapters",
+                    model.adapter
+                ));
+            }
+        }
+
+        issues
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
@@ -704,6 +763,57 @@ pub struct PeripheralDescriptor {
     pub interrupts: Option<std::collections::HashMap<String, u32>>,
     #[serde(default)]
     pub timing: Option<Vec<TimingDescriptor>>,
+}
+
+/// Declarative descriptor for a GPIO / pin-timing external device — the family
+/// that DRIVES pins the MCU samples as inputs (rotary encoder, matrix keypad,
+/// DHT22, HC-SR04, NeoPixel). Unlike register-mapped [`PeripheralDescriptor`]
+/// peripherals, these live directly on the [`SystemBus`] as bus-resident
+/// devices (or GPIO observers) and each carries a genuinely irreducible timing
+/// algorithm — the **primitive** (quadrature walk, matrix reflect, one-wire
+/// frame, …). This descriptor makes EVERYTHING AROUND the primitive data: the
+/// device `type`, its pin bindings, and (later) the canvas-compiler emit
+/// mapping. A device that reuses an existing primitive is then one YAML file
+/// with zero Rust in either engine.
+///
+/// The struct deserializes only the fields the current implementation wires.
+/// Serde ignores unknown keys, so a descriptor YAML may already carry
+/// `metadata:` / `emit:` sections (documenting the full intent) before the code
+/// that consumes them exists.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DeviceDescriptor {
+    /// `type:` string in a system.yaml `external_devices` entry. Unique across
+    /// all declarative device descriptors.
+    pub r#type: String,
+    /// Runtime behavior: which irreducible primitive backs this device and how
+    /// its abstract pin roles bind to `config:` keys.
+    pub behavior: DeviceBehavior,
+}
+
+/// The runtime half of a [`DeviceDescriptor`]: the primitive to instantiate and
+/// how to source its pins/params from the placed device's `config:` block.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DeviceBehavior {
+    /// Name of the irreducible Rust primitive to instantiate — e.g.
+    /// `"quadrature"` (rotary encoder). The `bus/declarative_device.rs`
+    /// attach dispatch matches on this.
+    pub primitive: String,
+    /// Abstract pin role → the `config:` key that carries its pad label. For
+    /// the quadrature primitive: `{ "a": "clk_pin", "b": "dt_pin" }`. Ordered
+    /// (BTreeMap) so attach is deterministic.
+    #[serde(default)]
+    pub pins: std::collections::BTreeMap<String, String>,
+    /// Optional scalar params (with their `config:` key and default) the
+    /// primitive needs beyond pins — e.g. `cpu_hz`. Kept as raw YAML values so
+    /// the primitive decides the concrete type.
+    #[serde(default)]
+    pub params: std::collections::BTreeMap<String, serde_yaml::Value>,
+}
+
+impl DeviceDescriptor {
+    pub fn from_yaml(yaml: &str) -> Result<Self> {
+        serde_yaml::from_str(yaml).context("Failed to parse Device Descriptor")
+    }
 }
 
 impl PeripheralDescriptor {
