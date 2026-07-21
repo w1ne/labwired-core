@@ -95,10 +95,22 @@ fn smart_ring_firmware_reads_all_four_sensor_ids_over_i2c() {
     // Each line carries the ACTUAL byte(s) read back over TWIM. Asserting the
     // full `-> id=... ack=Y [OK]` tail proves the model responded AND matched.
     let expected_lines = [
-        ("BMI270", "imu    BMI270    addr=0x68 reg=0x00 -> id=0x24 ack=Y [OK]"),
-        ("MAX30102", "ppg    MAX30102  addr=0x57 reg=0xff -> id=0x15 ack=Y [OK]"),
-        ("TMP117", "temp   TMP117   addr=0x48 reg=0x0f -> id=0x0117 ack=Y [OK]"),
-        ("DRV2605", "haptic DRV2605   addr=0x5a reg=0x00 -> id=0xe0 ack=Y [OK]"),
+        (
+            "BMI270",
+            "imu    BMI270    addr=0x68 reg=0x00 -> id=0x24 ack=Y [OK]",
+        ),
+        (
+            "MAX30102",
+            "ppg    MAX30102  addr=0x57 reg=0xff -> id=0x15 ack=Y [OK]",
+        ),
+        (
+            "TMP117",
+            "temp   TMP117   addr=0x48 reg=0x0f -> id=0x0117 ack=Y [OK]",
+        ),
+        (
+            "DRV2605",
+            "haptic DRV2605   addr=0x5a reg=0x00 -> id=0xe0 ack=Y [OK]",
+        ),
     ];
 
     for (sensor, line) in expected_lines {
