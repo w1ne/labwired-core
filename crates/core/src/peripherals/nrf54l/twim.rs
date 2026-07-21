@@ -292,6 +292,19 @@ impl Nrf54lTwim {
         };
 
         self.advance_slave_to_now(idx, bus);
+        // Model the (repeated) START that re-addresses the slave for the read
+        // phase. On silicon every RX leg begins with an address+R byte; the
+        // write leg (do_tx) already signals its START via `start()`, but the RX
+        // leg did not, so the bus-trace wrapper never saw a read-direction
+        // address frame and the logic-analyzer/I²C panel decoded reads as bare
+        // Data with no AddrRead — the same boundary the ESP32-C3 controller
+        // emits at OP_RSTART. This is observability-only and byte-identical: the
+        // four smart-ring slaves (BMI270/MAX30102/DRV2605) use the default
+        // no-op `start()`, and TMP117's `start()` only re-zeroes its
+        // read_phase/writes-since-start framing counters (already 0 entering the
+        // read, and never the register pointer), so no returned byte changes.
+        // The trace wrapper turns this into the AddrRead frame it was missing.
+        self.slaves[idx].start();
         for i in 0..len {
             let b = self.slaves[idx].read();
             let _ = bus.write_u8(self.dma_rx_ptr as u64 + i as u64, b);
@@ -681,6 +694,64 @@ mod tests {
             twim.read_u32(OFF_EVENTS_STOPPED).unwrap(),
             0,
             "LASTRX_STOP must end the transaction"
+        );
+    }
+
+    /// Logic-analyzer regression guard: a repeated-START register read against
+    /// a trace-wrapped slave must produce BOTH a write-direction and a
+    /// read-direction address frame in the bus trace — not just raw Data. The
+    /// TWIM previously signalled `start()` only on the write leg, so the read
+    /// leg decoded as bare Data with no `AddrRead` and the I²C panel could not
+    /// tell the transaction's direction (empty/undecodable for all four ring
+    /// sensors). This also pins that the returned byte is unchanged, i.e. the
+    /// added `start()` is observability-only.
+    #[test]
+    fn bus_trace_emits_addr_read_frame_for_repeated_start_read() {
+        use crate::bus::bus_trace::{new_log, wrap_i2c, BusPayload, I2cSym};
+
+        let mut twim = Nrf54lTwim::new();
+        let mut sensor = FakeSensor::default();
+        sensor.regs[0x75] = 0x68; // WHO_AM_I
+        let log = new_log();
+        // The bus choke point wraps before push; emulate it here.
+        twim.push_slave(wrap_i2c("twi21", &log, Box::new(sensor)));
+
+        let mut bus = SystemBus::empty();
+        bus.ram = LinearMemory::new(256, 0x2000_0000);
+        bus.write_u8(0x2000_0000, 0x75).unwrap(); // register pointer in RAM
+
+        twim.write_u32(OFF_ENABLE, ENABLE_TWIM).unwrap();
+        twim.write_u32(OFF_ADDRESS, 0x68).unwrap();
+        twim.write_u32(OFF_SHORTS, SHORT_LASTTX_DMA_RX_START | SHORT_LASTRX_STOP)
+            .unwrap();
+        twim.write_u32(OFF_DMA_TX_PTR, 0x2000_0000).unwrap();
+        twim.write_u32(OFF_DMA_TX_MAXCNT, 1).unwrap();
+        twim.write_u32(OFF_DMA_RX_PTR, 0x2000_0010).unwrap();
+        twim.write_u32(OFF_DMA_RX_MAXCNT, 1).unwrap();
+        twim.write_u32(OFF_TASKS_DMA_TX_START, 1).unwrap();
+        twim.tick_with_bus(&mut bus);
+
+        // Byte behaviour is unchanged: WHO_AM_I still returns through the
+        // trace-wrapped slave exactly as in the un-wrapped read test.
+        assert_eq!(bus.read_u8(0x2000_0010).unwrap(), 0x68);
+
+        let events = log.snapshot();
+        assert!(events.iter().all(|e| e.bus == "twi21"));
+        // Write leg → write-direction address frame (addr << 1).
+        assert!(
+            events.iter().any(|e| matches!(
+                &e.payload,
+                BusPayload::I2c { kind: I2cSym::AddrWrite, byte, .. } if *byte == 0x68 << 1
+            )),
+            "missing AddrWrite address frame: {events:?}"
+        );
+        // Repeated-START read leg → read-direction address frame ((addr<<1)|1).
+        assert!(
+            events.iter().any(|e| matches!(
+                &e.payload,
+                BusPayload::I2c { kind: I2cSym::AddrRead, byte, .. } if *byte == (0x68 << 1) | 1
+            )),
+            "missing AddrRead address frame for the repeated-START read: {events:?}"
         );
     }
 
