@@ -693,8 +693,100 @@ pub enum Instruction {
         sm: u8,
     },
 
+    // -------- VFP load/store multiple + double-precision (Cortex-M7 FPv5-D16) --------
+    // The register file is `fpu_s: [u32; 32]` (S0..S31); a double Dn occupies the
+    // consecutive pair (fpu_s[2n], fpu_s[2n+1]), so both single and double transfers
+    // reduce to moving `count` consecutive 32-bit words starting at S-index `s_first`.
+    /// VSTM / VPUSH — store `count` 32-bit FP words. `add` = increment (IA) vs
+    /// decrement-before (DB); `wback` writes the updated base back to `rn`.
+    VfpStoreMultiple {
+        rn: u8,
+        s_first: u8,
+        count: u8,
+        add: bool,
+        wback: bool,
+    },
+    /// VLDM / VPOP — load `count` 32-bit FP words (see `VfpStoreMultiple`).
+    VfpLoadMultiple {
+        rn: u8,
+        s_first: u8,
+        count: u8,
+        add: bool,
+        wback: bool,
+    },
+    /// VLDR.F64 Dd, [Rn, #±imm8*4] — `dd` is the low S-index (2*Dd).
+    Vldr64 {
+        dd: u8,
+        rn: u8,
+        imm: u16,
+        add: bool,
+    },
+    /// VSTR.F64 Dd, [Rn, #±imm8*4].
+    Vstr64 {
+        dd: u8,
+        rn: u8,
+        imm: u16,
+        add: bool,
+    },
+    /// VMOV.F64 Dd, Dm — register-to-register double move (`dd`/`dm` low S-index).
+    VmovF64Reg {
+        dd: u8,
+        dm: u8,
+    },
+    /// VMOV Dm, Rt, Rt2 — pack two GP registers into a double.
+    VmovDRtRt2 {
+        dm: u8,
+        rt: u8,
+        rt2: u8,
+    },
+    /// VMOV Rt, Rt2, Dm — unpack a double into two GP registers.
+    VmovRtRt2D {
+        rt: u8,
+        rt2: u8,
+        dm: u8,
+    },
+    /// VADD.F64 Dd, Dn, Dm (S-indices of the low words).
+    VaddF64 {
+        dd: u8,
+        dn: u8,
+        dm: u8,
+    },
+    /// VSUB.F64 Dd, Dn, Dm.
+    VsubF64 {
+        dd: u8,
+        dn: u8,
+        dm: u8,
+    },
+    /// VMUL.F64 Dd, Dn, Dm.
+    VmulF64 {
+        dd: u8,
+        dn: u8,
+        dm: u8,
+    },
+    /// VDIV.F64 Dd, Dn, Dm.
+    VdivF64 {
+        dd: u8,
+        dn: u8,
+        dm: u8,
+    },
+
     Unknown(u16),
     Unknown32(u16, u16),
+}
+
+/// Low S-register indices (2*Dreg) of the three operands of a double-precision
+/// VFP data-processing encoding: `1110 111o oDoo nnnn dddd 1011 NoMo mmmm`.
+fn vfp_dp_regs(h1: u16, h2: u16) -> (u8, u8, u8) {
+    let d = (h1 >> 6) & 1;
+    let n = (h2 >> 7) & 1;
+    let m = (h2 >> 5) & 1;
+    let vn = (h1 & 0xF) as u8;
+    let vd = ((h2 >> 12) & 0xF) as u8;
+    let vm = (h2 & 0xF) as u8;
+    let dd = (((d as u8) << 4) | vd) << 1;
+    let dn = (((n as u8) << 4) | vn) << 1;
+    let dm = (((m as u8) << 4) | vm) << 1;
+    (dd, dn, dm)
 }
 
 /// Decodes a 16-bit Thumb instruction
@@ -1387,6 +1479,125 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
         let sd = (vd << 1) | (d as u8);
         let sm = (vm << 1) | (m as u8);
         return Instruction::VmovF32Reg { sd, sm };
+    }
+
+    // -------- VFP double-precision + load/store multiple (Cortex-M7 FPv5-D16) --------
+    // Double-precision shares the encoding of the single-precision ops above but
+    // with h2[11:8] = 1011 (single is 1010). A double Dn maps to the S-register
+    // pair (2n, 2n+1), so `dd`/`dn`/`dm` below are the LOW S-index (2*Dreg).
+
+    // VLDR.F64 / VSTR.F64 (T1): 1110 1101 UD0L nnnn dddd 1011 imm8
+    if (h1 & 0xFF30) == 0xED10 && (h2 & 0x0F00) == 0x0B00 {
+        let u = (h1 >> 7) & 1;
+        let d = (h1 >> 6) & 1;
+        let rn = (h1 & 0xF) as u8;
+        let vd = ((h2 >> 12) & 0xF) as u8;
+        let dd = (((d as u8) << 4) | vd) << 1;
+        return Instruction::Vldr64 {
+            dd,
+            rn,
+            imm: (h2 & 0xFF) << 2,
+            add: u != 0,
+        };
+    }
+    if (h1 & 0xFF30) == 0xED00 && (h2 & 0x0F00) == 0x0B00 {
+        let u = (h1 >> 7) & 1;
+        let d = (h1 >> 6) & 1;
+        let rn = (h1 & 0xF) as u8;
+        let vd = ((h2 >> 12) & 0xF) as u8;
+        let dd = (((d as u8) << 4) | vd) << 1;
+        return Instruction::Vstr64 {
+            dd,
+            rn,
+            imm: (h2 & 0xFF) << 2,
+            add: u != 0,
+        };
+    }
+
+    // VLDM/VSTM/VPUSH/VPOP (register list), single (S=0) or double (S=1):
+    //   1110 110P UDWL nnnn dddd 101S imm8   (imm8 = number of 32-bit words)
+    // The P=1,W=0 offset form is VLDR/VSTR (single-register), matched above.
+    if (h1 & 0xFE00) == 0xEC00 && (h2 & 0x0E00) == 0x0A00 {
+        let p = (h1 >> 8) & 1;
+        let u = (h1 >> 7) & 1;
+        let d = (h1 >> 6) & 1;
+        let w = (h1 >> 5) & 1;
+        let l = (h1 >> 4) & 1;
+        let rn = (h1 & 0xF) as u8;
+        let vd = ((h2 >> 12) & 0xF) as u8;
+        let s = (h2 >> 8) & 1;
+        let imm8 = (h2 & 0xFF) as u8;
+        if !(p == 1 && w == 0) {
+            let s_first = if s == 0 {
+                (vd << 1) | (d as u8)
+            } else {
+                (((d as u8) << 4) | vd) << 1
+            };
+            let add = u != 0;
+            let wback = w != 0;
+            return if l == 1 {
+                Instruction::VfpLoadMultiple {
+                    rn,
+                    s_first,
+                    count: imm8,
+                    add,
+                    wback,
+                }
+            } else {
+                Instruction::VfpStoreMultiple {
+                    rn,
+                    s_first,
+                    count: imm8,
+                    add,
+                    wback,
+                }
+            };
+        }
+    }
+
+    // VMOV.F64 Dd, Dm: 1110 1110 1D11 0000 dddd 1011 01M0 mmmm
+    if (h1 & 0xFFB0) == 0xEEB0 && (h1 & 0x000F) == 0x0000 && (h2 & 0x0FD0) == 0x0B40 {
+        let d = (h1 >> 6) & 1;
+        let m = (h2 >> 5) & 1;
+        let vd = ((h2 >> 12) & 0xF) as u8;
+        let vm = (h2 & 0xF) as u8;
+        let dd = (((d as u8) << 4) | vd) << 1;
+        let dm = (((m as u8) << 4) | vm) << 1;
+        return Instruction::VmovF64Reg { dd, dm };
+    }
+
+    // VMOV Dm,Rt,Rt2 (L=0) / VMOV Rt,Rt2,Dm (L=1):
+    //   1110 1100 010L tttt tttt 1011 00M1 mmmm
+    if (h1 & 0xFFE0) == 0xEC40 && (h2 & 0x0FD0) == 0x0B10 {
+        let l = (h1 >> 4) & 1;
+        let rt2 = (h1 & 0xF) as u8;
+        let rt = ((h2 >> 12) & 0xF) as u8;
+        let m = (h2 >> 5) & 1;
+        let vm = (h2 & 0xF) as u8;
+        let dm = (((m as u8) << 4) | vm) << 1;
+        return if l == 1 {
+            Instruction::VmovRtRt2D { rt, rt2, dm }
+        } else {
+            Instruction::VmovDRtRt2 { dm, rt, rt2 }
+        };
+    }
+
+    // VMUL.F64 / VADD.F64 / VSUB.F64 / VDIV.F64 — three-register double arithmetic.
+    if (h1 & 0xFFB0) == 0xEE20 && (h2 & 0x0F50) == 0x0B00 {
+        let (dd, dn, dm) = vfp_dp_regs(h1, h2);
+        return Instruction::VmulF64 { dd, dn, dm };
+    }
+    if (h1 & 0xFFB0) == 0xEE30 && (h2 & 0x0F10) == 0x0B00 {
+        let (dd, dn, dm) = vfp_dp_regs(h1, h2);
+        return if (h2 >> 6) & 1 == 0 {
+            Instruction::VaddF64 { dd, dn, dm }
+        } else {
+            Instruction::VsubF64 { dd, dn, dm }
+        };
+    }
+    if (h1 & 0xFFB0) == 0xEE80 && (h2 & 0x0F50) == 0x0B00 {
+        let (dd, dn, dm) = vfp_dp_regs(h1, h2);
+        return Instruction::VdivF64 { dd, dn, dm };
     }
 
     // ------------------------------------------------------------------
