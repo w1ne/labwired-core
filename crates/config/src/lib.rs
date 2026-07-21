@@ -788,6 +788,77 @@ pub struct DeviceDescriptor {
     /// Runtime behavior: which irreducible primitive backs this device and how
     /// its abstract pin roles bind to `config:` keys.
     pub behavior: DeviceBehavior,
+    /// How the canvas compiler emits this device's `external_devices` (and any
+    /// auxiliary `board_io`) block. When present, BOTH engines (the Rust
+    /// `canonical.rs` emitter and the TypeScript `compile()` emitter) derive the
+    /// block from this single spec instead of a hand-mirrored pair.
+    #[serde(default)]
+    pub emit: Option<DeviceEmit>,
+}
+
+/// The canvas-compiler emit spec for a declarative device — the single source
+/// both engines interpret. A `config` entry sources its value one of four ways
+/// (a wired MCU pin, a list of wired pins, a computed board value, or a parsed
+/// part attribute); a device that also needs an auxiliary `board_io` entry
+/// (e.g. a rotary encoder's push switch) lists it under `board_io`.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DeviceEmit {
+    /// The emitted `type:` string. Defaults to the descriptor `type` when
+    /// omitted — set it only when they differ (e.g. descriptor `rotary_encoder`
+    /// emits `rotary-encoder`; part `ultrasonic` emits `hc-sr04`).
+    #[serde(default)]
+    pub device_type: Option<String>,
+    /// The emitted `connection:` (e.g. `"gpio"`).
+    pub connection: String,
+    /// Ordered `config:` entries. The whole device emits nothing if any entry
+    /// whose source is a pin binding cannot be resolved (all pin bindings are
+    /// required — a partially-wired device is not emitted).
+    pub config: Vec<EmitConfig>,
+    /// Auxiliary `board_io` entries (e.g. a rotary encoder's SW button). Each is
+    /// optional — an unwired one is simply skipped.
+    #[serde(default)]
+    pub board_io: Vec<EmitBoardIo>,
+}
+
+/// One emitted `config:` entry. Exactly one of the `from_*` sources applies,
+/// checked in declaration order; `default` supplies the fallback for `from_attr`.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct EmitConfig {
+    /// The emitted key (e.g. `clk_pin`, `cpu_hz`).
+    pub key: String,
+    /// Source: the first of these part-pin names that is wired to the MCU
+    /// supplies a quoted pad label; if none is wired the whole device is
+    /// skipped. Mutually exclusive with the other sources.
+    #[serde(default)]
+    pub from_part_pin: Option<Vec<String>>,
+    /// Source: every listed part-pin must be wired; emits a `["p1", "p2", …]`
+    /// list. If any is unwired the whole device is skipped.
+    #[serde(default)]
+    pub from_part_pins: Option<Vec<String>>,
+    /// Source: a computed board value by name — `"sim_cpu_hz"` (the firmware
+    /// clock) or `"echo_pacing_cpu_hz"` (the HC-SR04 echo-pacing override).
+    #[serde(default)]
+    pub from: Option<String>,
+    /// Source: a numeric part attribute of this name, parsed as f64.
+    #[serde(default)]
+    pub from_attr: Option<String>,
+    /// Fallback for `from_attr` when the attribute is absent or non-numeric.
+    #[serde(default)]
+    pub default: Option<f64>,
+}
+
+/// One auxiliary `board_io` entry emitted alongside the device (e.g. a rotary
+/// encoder's momentary push switch). Skipped when its pin is unwired.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct EmitBoardIo {
+    /// The first of these part-pin names wired to the MCU supplies the pad.
+    pub from_part_pin: Vec<String>,
+    /// The emitted `kind:` (e.g. `"button"`).
+    pub kind: String,
+    /// The emitted `signal:` (e.g. `"input"`).
+    pub signal: String,
+    /// The emitted `active_high:`.
+    pub active_high: bool,
 }
 
 /// The runtime half of a [`DeviceDescriptor`]: the primitive to instantiate and
@@ -813,6 +884,35 @@ pub struct DeviceBehavior {
 impl DeviceDescriptor {
     pub fn from_yaml(yaml: &str) -> Result<Self> {
         serde_yaml::from_str(yaml).context("Failed to parse Device Descriptor")
+    }
+
+    /// Look up and parse the embedded descriptor for a device `type:` string
+    /// (accepts either spelling for the encoder). Returns `Ok(None)` for a type
+    /// with no declarative descriptor. This is the SINGLE embed point — both the
+    /// runtime attach path (`core`'s `bus/declarative_device.rs`) and the canvas
+    /// emitter (`canonical.rs`) resolve descriptors through here, so there is one
+    /// source of truth for the `configs/devices/*.yaml` set.
+    pub fn embedded(device_type: &str) -> Result<Option<Self>> {
+        match embedded_device_yaml(device_type) {
+            Some(yaml) => Ok(Some(Self::from_yaml(yaml).with_context(|| {
+                format!("Failed to parse embedded device descriptor for '{device_type}'")
+            })?)),
+            None => Ok(None),
+        }
+    }
+}
+
+/// The embedded `configs/devices/*.yaml` descriptors, keyed by `type:` string.
+/// `include_str!` bundles them so wasm builds (no `std::fs`) resolve them too.
+pub fn embedded_device_yaml(device_type: &str) -> Option<&'static str> {
+    match device_type {
+        "rotary_encoder" | "rotary-encoder" => {
+            Some(include_str!("../../../configs/devices/rotary_encoder.yaml"))
+        }
+        "keypad" => Some(include_str!("../../../configs/devices/keypad.yaml")),
+        "dht22" | "am2302" => Some(include_str!("../../../configs/devices/dht22.yaml")),
+        "hc-sr04" | "hcsr04" => Some(include_str!("../../../configs/devices/hc_sr04.yaml")),
+        _ => None,
     }
 }
 

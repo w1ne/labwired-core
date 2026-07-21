@@ -28,35 +28,16 @@
 //! step.
 
 use super::SystemBus;
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use labwired_config::{DeviceDescriptor, ExternalDevice};
-
-/// The embedded device descriptors, keyed by their `type:` string. Embedded via
-/// `include_str!` so the wasm build (no `std::fs`) resolves them too — the same
-/// approach as [`embedded_descriptors`](super::embedded_descriptors) for
-/// register peripherals.
-fn embedded_yaml(device_type: &str) -> Option<&'static str> {
-    match device_type {
-        "rotary_encoder" | "rotary-encoder" => Some(include_str!(
-            "../../../../configs/devices/rotary_encoder.yaml"
-        )),
-        "keypad" => Some(include_str!("../../../../configs/devices/keypad.yaml")),
-        "dht22" | "am2302" => Some(include_str!("../../../../configs/devices/dht22.yaml")),
-        "hc-sr04" | "hcsr04" => Some(include_str!("../../../../configs/devices/hc_sr04.yaml")),
-        _ => None,
-    }
-}
 
 /// Parse the declarative descriptor for `device_type`, if one is embedded.
 /// Returns `Ok(None)` when the type is not declarative (the caller then falls
-/// through to the legacy hand-written arms).
+/// through to the legacy hand-written arms). Descriptors are embedded ONCE in
+/// the config crate ([`DeviceDescriptor::embedded`]) so the runtime attach path
+/// and the canvas emitter share one source.
 pub(crate) fn lookup(device_type: &str) -> Result<Option<DeviceDescriptor>> {
-    match embedded_yaml(device_type) {
-        Some(yaml) => Ok(Some(DeviceDescriptor::from_yaml(yaml).with_context(
-            || format!("Failed to parse declarative device descriptor for '{device_type}'"),
-        )?)),
-        None => Ok(None),
-    }
+    DeviceDescriptor::embedded(device_type)
 }
 
 impl SystemBus {

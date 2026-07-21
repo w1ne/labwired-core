@@ -33,8 +33,10 @@ metadata:
 # firmware times the echo itself, so the stretched clock is tolerated. Phase 2
 # must preserve that when it derives the emit from this descriptor.
 emit:
+  device_type: hc-sr04 # canvas part type is `ultrasonic`; emitted type is hc-sr04
   connection: gpio
   config:
-    - { key: trig_pin, from_part_pin: [TRIG, TRG] }
-    - { key: echo_pin, from_part_pin: [ECHO, ECH] }
+    - { key: trig_pin, from_part_pin: [TRIG] }
+    - { key: echo_pin, from_part_pin: [ECHO] }
+    - { key: distance_cm, from_attr: distance, default: 100 }
     - { key: cpu_hz, from: echo_pacing_cpu_hz }
