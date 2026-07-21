@@ -38,6 +38,7 @@ fn embedded_yaml(device_type: &str) -> Option<&'static str> {
         "rotary_encoder" | "rotary-encoder" => Some(include_str!(
             "../../../../configs/devices/rotary_encoder.yaml"
         )),
+        "keypad" => Some(include_str!("../../../../configs/devices/keypad.yaml")),
         _ => None,
     }
 }
@@ -66,12 +67,52 @@ impl SystemBus {
     ) -> Result<()> {
         match desc.behavior.primitive.as_str() {
             "quadrature" => self.attach_quadrature(ext, desc),
+            "matrix" => self.attach_matrix(ext, desc),
             other => Err(anyhow!(
                 "declarative device '{}' names unknown primitive '{}'",
                 ext.id,
                 other
             )),
         }
+    }
+
+    /// `matrix` primitive → [`Keypad`]. Reproduces the former `"keypad"` arm:
+    /// the `rows` role binds to a 4-entry list of GPIO **output** pads (ODR,
+    /// which the keypad observes) and `cols` to a 4-entry list of GPIO **input**
+    /// pads (IDR, which it drives); the pressed key is host-controlled through
+    /// the `key` stimulus channel.
+    fn attach_matrix(&mut self, ext: &ExternalDevice, desc: &DeviceDescriptor) -> Result<()> {
+        use crate::peripherals::components::keypad::{Keypad, COLS, ROWS};
+
+        let row_pins = self.pin_list_config(ext, desc, "rows")?;
+        let col_pins = self.pin_list_config(ext, desc, "cols")?;
+
+        // Rows are MCU outputs the keypad observes → resolve to ODR.
+        let mut row_odr = [(0u64, 0u8); ROWS];
+        for (i, pin) in row_pins.iter().enumerate() {
+            row_odr[i] = Self::resolve_pin_odr(self, pin).ok_or_else(|| {
+                anyhow!(
+                    "keypad '{}' row_pin '{}' could not be resolved to a GPIO output",
+                    ext.id,
+                    pin
+                )
+            })?;
+        }
+        // Columns are MCU inputs the keypad drives → resolve to IDR.
+        let mut col_idr = [(0u64, 0u8); COLS];
+        for (i, pin) in col_pins.iter().enumerate() {
+            col_idr[i] = Self::resolve_pin_idr(self, pin).ok_or_else(|| {
+                anyhow!(
+                    "keypad '{}' col_pin '{}' could not be resolved to a GPIO input",
+                    ext.id,
+                    pin
+                )
+            })?;
+        }
+
+        self.gpio_devices
+            .push(Box::new(Keypad::new(ext.id.clone(), row_odr, col_idr)));
+        Ok(())
     }
 
     /// `quadrature` primitive → [`RotaryEncoder`]. Reproduces the former
@@ -134,6 +175,45 @@ impl SystemBus {
             .and_then(|v| v.as_str())
             .unwrap_or(default)
             .to_string())
+    }
+
+    /// Resolve a list-valued pin role (e.g. the keypad's `rows`/`cols`): read
+    /// the `config:` key the descriptor binds it to as a 4-entry list of pad
+    /// labels. Errors — keyed on the config field name — mirror the former
+    /// hand-written `keypad` arm exactly.
+    fn pin_list_config(
+        &self,
+        ext: &ExternalDevice,
+        desc: &DeviceDescriptor,
+        role: &str,
+    ) -> Result<Vec<String>> {
+        const EXPECTED: usize = 4;
+        let key = desc.behavior.pins.get(role).ok_or_else(|| {
+            anyhow!(
+                "declarative device '{}' descriptor is missing pin role '{}'",
+                ext.id,
+                role
+            )
+        })?;
+        let arr = ext
+            .config
+            .get(key)
+            .and_then(|v| v.as_sequence())
+            .ok_or_else(|| anyhow!("keypad '{}' config is missing a '{}' list", ext.id, key))?;
+        let pins: Vec<String> = arr
+            .iter()
+            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+            .collect();
+        if pins.len() != EXPECTED {
+            return Err(anyhow!(
+                "keypad '{}' expects exactly {} '{}' entries, got {}",
+                ext.id,
+                EXPECTED,
+                key,
+                pins.len()
+            ));
+        }
+        Ok(pins)
     }
 }
 
