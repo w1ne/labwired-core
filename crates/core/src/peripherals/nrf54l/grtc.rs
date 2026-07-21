@@ -44,6 +44,46 @@
 //! event are emitted only on the event register's 0→1 transition, so a CC
 //! left matching does not storm the NVIC every tick.
 //!
+//! ## Drive modes (walk-free plan Part 2 — idle fast-forward)
+//!
+//! Two mutually exclusive time sources, selected by ONE predicate
+//! (`scheduler_mode`), exactly like the SysTick / ESP32-C3 RTC exemplars:
+//!
+//! * **Scheduler mode** (`event-scheduler` feature + a [`CycleClock`] attached
+//!   at bus registration): `uses_scheduler()` is true, the per-cycle walk skips
+//!   this peripheral, and
+//!   - the SYSCOUNTER is **derived lazily** from the bus-published cycle clock
+//!     (`advance_to`) — a `&self` read advances `Cell`-held state to "now", so
+//!     Zephyr's `sys_clock_cycle_get` polling SYSCOUNTER observes fresh time
+//!     without any walk;
+//!   - each armed `CC[n]` compare is scheduled as a wake event at its exact
+//!     SYSCOUNTER deadline. `on_event` claims the fire (pending the group IRQ
+//!     GRTC_g = `irq_base + g`) and reschedules the next armed compare, so the
+//!     kernel tick is delivered at its exact cycle with no cumulative drift —
+//!     and idle fast-forward can skip the whole idle window straight to the
+//!     next deadline (the FF budget clamps to `next_event_deadline`).
+//!
+//! * **Legacy mode** (feature off, or no clock attached — hand-built test
+//!   buses): the per-cycle walk drives `tick()` and the counter advances
+//!   eagerly, byte-identical to the historical model.
+//!
+//! The compare LATCH (`EVENTS_COMPARE[n]`, the CCEN.ACTIVE self-clear, and the
+//! CC0 auto-reload) is materialised in `advance_to` in BOTH modes' shared
+//! `advance_and_eval` core, so a mid-window `&self` read of EVENTS_COMPARE is
+//! consistent with the freshly-derived counter. Only the IRQ *delivery* rides
+//! the scheduled event (batch-boundary quantised at tick interval > 1, exact at
+//! interval 1) — the same split SysTick uses for COUNTFLAG vs exception-15.
+//!
+//! ### Tick-cost normalization
+//!
+//! The legacy model charged the elapsed cycles into the peripheral tick-cost
+//! channel on every advance while running, inflating `total_cycles` by an
+//! amount the scheduler path (which never ticks) cannot reproduce — a sim
+//! artifact (a free-running counter consumes zero core cycles). Both modes now
+//! charge zero cost, so the walk-on reference and the scheduler path agree
+//! cycle-for-cycle. The SYSCOUNTER value firmware reads is unchanged (it always
+//! tracked the *input* cycles, never this returned cost).
+//!
 //! What is deliberately NOT modelled: the low-frequency timer
 //! (RTCOUNTER/RTCOMPARE), the PWM block, CLKOUT generation, DPPI
 //! SUBSCRIBE/PUBLISH routing, and the sleep/wake arbitration behind
@@ -63,7 +103,7 @@
 
 use std::cell::Cell;
 
-use crate::{Peripheral, PeripheralTickResult, SimResult};
+use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 
 // ── Register offsets (MDK `NRF_GRTC_Type`, nrf54l15_types.h) ─────────────────
 
@@ -159,6 +199,21 @@ pub const CPU_HZ_DEFAULT: u32 = 128_000_000;
 /// sets this to 1 so small tick counts advance the counter.
 pub const CYCLES_PER_SYSCOUNTER_TICK: u32 = CPU_HZ_DEFAULT / SYSCOUNTER_HZ;
 
+/// Maximum CPU-cycle horizon a single scheduled compare wake may reach. A
+/// GRTC compare can be armed at an effectively-unreachable deadline (Zephyr's
+/// tickless idle programs the SYSCOUNTER compare at ~2^43 for "sleep until an
+/// interrupt"). A scheduled event at that cycle would NEVER drain — the
+/// scheduler has no cancel, so a superseded far wake is only reclaimed when it
+/// fires — so each such arm/disarm would leak a permanent live event and trip
+/// the per-peripheral residency ceiling. Capping the wake to this horizon and
+/// re-evaluating in `on_event` (which fires the compare only once the counter
+/// actually reaches it) bounds every event's deadline, so stale wakes drain
+/// within one horizon. Chosen larger than a typical kernel-tick period (~1.3 M
+/// cycles = 10 ms at 128 MHz) so normal ticks schedule at their exact deadline
+/// and idle fast-forward skips the whole tick window in one hop; only the rare
+/// unreachable idle compare is chunked.
+const MAX_SCHEDULE_HORIZON: u64 = 1 << 21;
+
 /// NVIC position of GRTC_0 on the nRF54L15 application core (MDK IRQn table:
 /// GRTC_0..GRTC_3 = 226..229). The four INTEN groups drive four *independent*
 /// interrupt lines: a compare enabled in INTEN group `g` asserts GRTC_`g` =
@@ -171,19 +226,21 @@ pub const CYCLES_PER_SYSCOUNTER_TICK: u32 = CPU_HZ_DEFAULT / SYSCOUNTER_HZ;
 pub const GRTC_IRQ_BASE_DEFAULT: u32 = 226;
 
 /// Nordic nRF54L GRTC — behavioural SYSCOUNTER + compare-channel model.
-#[derive(Debug)]
 pub struct Nrf54lGrtc {
     /// Number of CC / EVENTS_COMPARE / TASKS_CAPTURE channels present.
     /// nRF54L15 has 12 (DT `cc-num`, `GRTC_CC_MaxCount`). Default: 12.
     num_cc: usize,
 
-    /// The 52-bit free-running SYSCOUNTER.
-    counter: u64,
+    /// The 52-bit free-running SYSCOUNTER. `Cell` so the scheduler-mode `&self`
+    /// read path can lazily advance it to the bus-published clock. In legacy
+    /// mode only `tick()` mutates it.
+    counter: Cell<u64>,
     /// Set by TASKS_START, cleared by TASKS_STOP.
     task_started: bool,
 
-    /// CPU-cycle accumulator feeding the 1 MHz SYSCOUNTER tick.
-    cycle_accum: u32,
+    /// CPU-cycle accumulator feeding the 1 MHz SYSCOUNTER tick. `Cell` for the
+    /// same lazy `&self` advance as `counter`.
+    cycle_accum: Cell<u32>,
     /// CPU cycles per SYSCOUNTER increment; 1 in `new_fast()`.
     cycles_per_tick: u32,
 
@@ -198,10 +255,14 @@ pub struct Nrf54lGrtc {
     prev_read_high: Cell<u32>,
     overflow_latch: Cell<bool>,
 
-    cc_l: [u32; MAX_CC],
-    cc_h: [u32; MAX_CC],
-    cc_en: [u32; MAX_CC],
-    events_compare: [u32; MAX_CC],
+    /// CC channel state. `Cell` per element so the lazy `&self` `advance_to`
+    /// can materialise the compare latch (EVENTS_COMPARE), the CCEN.ACTIVE
+    /// one-shot self-clear, and the CC0 auto-reload consistently with the
+    /// freshly-derived counter.
+    cc_l: [Cell<u32>; MAX_CC],
+    cc_h: [Cell<u32>; MAX_CC],
+    cc_en: [Cell<u32>; MAX_CC],
+    events_compare: [Cell<u32>; MAX_CC],
 
     /// INTEN[0..3] — one enable word per interrupt group.
     inten: [u32; NUM_INT_GROUPS],
@@ -227,24 +288,66 @@ pub struct Nrf54lGrtc {
     publish_compare: [u32; MAX_CC],
     /// SYSCOUNTER[n].ACTIVE — the keep-awake request, stored per domain view.
     syscounter_active: [u32; NUM_SYSCOUNTER_VIEWS as usize],
+
+    // ── Scheduler integration (walk-free plan) ─────────────────────────────
+    /// Lazy-path anchor: the absolute published cycle the counter state was
+    /// last advanced to. Owned by `advance_to` (scheduler mode); the legacy
+    /// walk never touches it.
+    anchor: Cell<u64>,
+    /// Interrupt groups (`irq_base + g`) whose compare fired but whose IRQ has
+    /// not yet been claimed by the event drain. `on_event` translates these
+    /// into `explicit_irqs`; pends merge in the NVIC ISPR exactly as multiple
+    /// per-cycle walk pends do.
+    pending_irq_groups: Cell<u32>,
+    /// Bitmap (bit `i` = channel `i`) of EVENTS_COMPARE that fired but whose
+    /// PPI `fired_events` have not yet been claimed by the event drain.
+    pending_fired: Cell<u32>,
+    /// Arming-sequence token: bumped when the scheduled compare deadline
+    /// changes so an in-flight event chain scheduled under an older
+    /// configuration dies on arrival (token mismatch) instead of racing the
+    /// fresh chain.
+    arm_seq: u32,
+    /// Absolute cycle of the currently-scheduled compare wake, or `None` when
+    /// nothing is scheduled. A compare's absolute deadline is INVARIANT as the
+    /// counter advances (`anchor + cycles_until` is constant for a fixed CC),
+    /// so an MMIO write that does not change the next compare re-derives the
+    /// same value and schedules NOTHING — without this the GRTC re-armed on
+    /// every register write and piled far-future events past the scheduler's
+    /// per-peripheral residency ceiling.
+    scheduled_deadline: Cell<Option<u64>>,
+    /// Bus-published cycle clock. `Some` once the bus registration choke
+    /// attaches it; `None` keeps the model on the legacy walk path.
+    clock: Option<CycleClock>,
+}
+
+impl std::fmt::Debug for Nrf54lGrtc {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Nrf54lGrtc")
+            .field("num_cc", &self.num_cc)
+            .field("counter", &self.counter.get())
+            .field("running", &self.running())
+            .field("mode", &self.mode)
+            .field("scheduler", &self.scheduler_mode())
+            .finish()
+    }
 }
 
 impl Default for Nrf54lGrtc {
     fn default() -> Self {
         Self {
             num_cc: MAX_CC,
-            counter: 0,
+            counter: Cell::new(0),
             task_started: false,
-            cycle_accum: 0,
+            cycle_accum: Cell::new(0),
             cycles_per_tick: CYCLES_PER_SYSCOUNTER_TICK,
             high_latch: Cell::new(0),
             high_latched: Cell::new(false),
             prev_read_high: Cell::new(0),
             overflow_latch: Cell::new(false),
-            cc_l: [0u32; MAX_CC],
-            cc_h: [0u32; MAX_CC],
-            cc_en: [0u32; MAX_CC],
-            events_compare: [0u32; MAX_CC],
+            cc_l: std::array::from_fn(|_| Cell::new(0)),
+            cc_h: std::array::from_fn(|_| Cell::new(0)),
+            cc_en: std::array::from_fn(|_| Cell::new(0)),
+            events_compare: std::array::from_fn(|_| Cell::new(0)),
             inten: [0u32; NUM_INT_GROUPS],
             irq_base: GRTC_IRQ_BASE_DEFAULT,
             shorts: 0,
@@ -259,6 +362,12 @@ impl Default for Nrf54lGrtc {
             subscribe_capture: [0u32; MAX_CC],
             publish_compare: [0u32; MAX_CC],
             syscounter_active: [0u32; NUM_SYSCOUNTER_VIEWS as usize],
+            anchor: Cell::new(0),
+            pending_irq_groups: Cell::new(0),
+            pending_fired: Cell::new(0),
+            arm_seq: 0,
+            scheduled_deadline: Cell::new(None),
+            clock: None,
         }
     }
 }
@@ -304,7 +413,23 @@ impl Nrf54lGrtc {
     /// through `tick()` alone would take 2^32 calls.
     #[cfg(test)]
     fn set_counter(&mut self, value: u64) {
-        self.counter = value & COUNTER_MASK;
+        self.counter.set(value & COUNTER_MASK);
+    }
+
+    /// True when the event scheduler owns this GRTC's time base (feature on AND
+    /// bus clock attached). Everything time-related branches on this ONE
+    /// predicate so the two drive modes can never mix.
+    #[inline]
+    fn scheduler_mode(&self) -> bool {
+        cfg!(feature = "event-scheduler") && self.clock.is_some()
+    }
+
+    /// Test/differential knob: detach the cycle clock, pinning the model to the
+    /// legacy walk path (`uses_scheduler() == false`). Used by the walk-on-vs-
+    /// scheduler differential gate to build the reference lane from the same
+    /// bus assembly.
+    pub fn force_legacy_walk(&mut self) {
+        self.clock = None;
     }
 
     /// The SYSCOUNTER runs when either enable path is asserted — see the
@@ -322,7 +447,7 @@ impl Nrf54lGrtc {
     fn event_bitmap(&self) -> u32 {
         let mut bits = 0u32;
         for i in 0..self.num_cc {
-            if self.events_compare[i] != 0 {
+            if self.events_compare[i].get() != 0 {
                 bits |= 1 << (INTEN_COMPARE_SHIFT + i as u32);
             }
         }
@@ -331,20 +456,21 @@ impl Nrf54lGrtc {
 
     /// The 52-bit compare value of channel `i`.
     fn cc_value(&self, i: usize) -> u64 {
-        ((self.cc_h[i] & CCH_VALUE_MASK) as u64) << 32 | self.cc_l[i] as u64
+        ((self.cc_h[i].get() & CCH_VALUE_MASK) as u64) << 32 | self.cc_l[i].get() as u64
     }
 
     /// Write a 52-bit value into channel `i`'s CCL/CCH pair.
-    fn set_cc_value(&mut self, i: usize, value: u64) {
+    fn set_cc_value(&self, i: usize, value: u64) {
         let value = value & COUNTER_MASK;
-        self.cc_l[i] = value as u32;
-        self.cc_h[i] = ((value >> 32) as u32) & CCH_VALUE_MASK;
+        self.cc_l[i].set(value as u32);
+        self.cc_h[i].set(((value >> 32) as u32) & CCH_VALUE_MASK);
     }
 
     /// Read SYSCOUNTERL and latch the high word so the paired SYSCOUNTERH
     /// read cannot tear across a 32-bit rollover.
     fn read_syscounter_low(&self) -> u32 {
-        let high = ((self.counter >> 32) as u32) & SYSCOUNTERH_VALUE_MASK;
+        let counter = self.counter.get();
+        let high = ((counter >> 32) as u32) & SYSCOUNTERH_VALUE_MASK;
         // OVERFLOW reflects a low-word rollover since the previous read.
         // Semantics unconfirmed on silicon — see the module docs.
         let overflow = self.high_latched.get() && high != self.prev_read_high.get();
@@ -352,7 +478,7 @@ impl Nrf54lGrtc {
         self.prev_read_high.set(high);
         self.high_latch.set(high);
         self.high_latched.set(true);
-        self.counter as u32
+        counter as u32
     }
 
     /// Read SYSCOUNTERH: the value latched by the last SYSCOUNTERL read if
@@ -363,7 +489,7 @@ impl Nrf54lGrtc {
         let value = if self.high_latched.get() {
             self.high_latch.get()
         } else {
-            ((self.counter >> 32) as u32) & SYSCOUNTERH_VALUE_MASK
+            ((self.counter.get() >> 32) as u32) & SYSCOUNTERH_VALUE_MASK
         };
         let overflow = if self.overflow_latch.get() {
             SYSCOUNTERH_OVERFLOW_BIT
@@ -375,45 +501,50 @@ impl Nrf54lGrtc {
         ((value & SYSCOUNTERH_VALUE_MASK) | overflow) & !SYSCOUNTERH_BUSY_BIT
     }
 
-    /// Advance the SYSCOUNTER by `cycles` CPU cycles and evaluate compares.
-    fn advance(&mut self, cycles: u64) -> PeripheralTickResult {
+    /// Shared closed-form advance used by BOTH drive modes: consume `cycles`
+    /// CPU cycles, advance the 1 MHz SYSCOUNTER, and evaluate every armed
+    /// compare against the new value. Mutates only `Cell`-held state (callable
+    /// from `&self`), so the lazy read path replays the walk EXACTLY.
+    ///
+    /// Returns `(pended_groups, fired_channels)` for THIS call:
+    ///   * `pended_groups` — bitmap over interrupt groups `g` whose enabled
+    ///     compare fired (→ GRTC_`g` = `irq_base + g`);
+    ///   * `fired_channels` — bitmap over channels whose EVENTS_COMPARE went
+    ///     0→1 (→ PPI `fired_events`).
+    ///
+    /// The legacy `tick()` delivers these immediately; `advance_to` accumulates
+    /// them into the pending `Cell`s for the next event drain to claim.
+    fn advance_and_eval(&self, cycles: u64) -> (u32, u32) {
         if !self.running() {
-            return PeripheralTickResult {
-                cycles: cycles as u32,
-                ..Default::default()
-            };
+            return (0, 0);
         }
-
-        self.cycle_accum = self
-            .cycle_accum
-            .wrapping_add(cycles.min(u32::MAX as u64) as u32);
-        let increments = (self.cycle_accum / self.cycles_per_tick) as u64;
+        let total = self.cycle_accum.get() as u64 + cycles;
+        let cpt = self.cycles_per_tick as u64;
+        let increments = total / cpt;
+        self.cycle_accum.set((total % cpt) as u32);
         if increments == 0 {
-            return PeripheralTickResult {
-                cycles: cycles as u32,
-                ..Default::default()
-            };
+            return (0, 0);
         }
-        self.cycle_accum %= self.cycles_per_tick;
-        self.counter = self.counter.wrapping_add(increments) & COUNTER_MASK;
+        let new = self.counter.get().wrapping_add(increments) & COUNTER_MASK;
+        self.counter.set(new);
 
         // Each INTEN group drives an independent GRTC line (GRTC_g =
         // irq_base + g), so a fired compare pends the line of *every* group
         // whose enable bit is set — not one collapsed generic IRQ. nrfx on the
         // secure app core enables the kernel-tick compare in group 2, so the
         // tick is delivered on GRTC_2; collapsing all groups onto GRTC_0 left
-        // it undelivered. Accumulate per group and de-dup into explicit_irqs.
+        // it undelivered. Accumulate per group.
         let mut pended_groups = 0u32;
-        let mut fired_events = Vec::new();
+        let mut fired = 0u32;
         for i in 0..self.num_cc {
-            if self.cc_en[i] & CCEN_ACTIVE == 0 {
+            if self.cc_en[i].get() & CCEN_ACTIVE == 0 {
                 continue;
             }
             // GRTC compares are absolute deadlines, so this is `>=`, and the
             // IRQ is emitted only on the event's 0→1 edge.
-            if self.counter >= self.cc_value(i) && self.events_compare[i] == 0 {
-                self.events_compare[i] = 1;
-                fired_events.push(OFF_EVENTS_COMPARE0 as u32 + 4 * i as u32);
+            if new >= self.cc_value(i) && self.events_compare[i].get() == 0 {
+                self.events_compare[i].set(1);
+                fired |= 1 << i;
                 let bit = 1u32 << (INTEN_COMPARE_SHIFT + i as u32);
                 for (g, group) in self.inten.iter().enumerate() {
                     if group & bit != 0 {
@@ -430,28 +561,84 @@ impl Nrf54lGrtc {
                     let next = self.cc_value(0).wrapping_add(self.interval as u64);
                     self.set_cc_value(0, next);
                 } else {
-                    self.cc_en[i] &= !CCEN_ACTIVE;
+                    self.cc_en[i].set(self.cc_en[i].get() & !CCEN_ACTIVE);
                 }
             }
         }
+        (pended_groups, fired)
+    }
 
-        let explicit_irqs = if pended_groups != 0 {
-            Some(
-                (0..NUM_INT_GROUPS as u32)
-                    .filter(|g| pended_groups & (1 << g) != 0)
-                    .map(|g| self.irq_base + g)
-                    .collect(),
-            )
-        } else {
-            None
-        };
-
-        PeripheralTickResult {
-            explicit_irqs,
-            cycles: cycles as u32,
-            fired_events,
-            ..Default::default()
+    /// Lazy advance to absolute published cycle `now` — callable from `&self`
+    /// (all mutated state is in `Cell`). Idempotent; a `now` older than the
+    /// anchor is ignored (the clock is monotonic within a run). The advanced
+    /// window always has constant MODE/CCx/INTEN/INTERVAL: every MMIO write
+    /// syncs first (bus `sync_to` choke), so settings changes never straddle a
+    /// window. Fired compares are accumulated into the pending `Cell`s for the
+    /// event drain.
+    fn advance_to(&self, now: u64) {
+        let anchor = self.anchor.get();
+        if now <= anchor {
+            return;
         }
+        self.anchor.set(now);
+        let (groups, fired) = self.advance_and_eval(now - anchor);
+        if groups != 0 {
+            self.pending_irq_groups
+                .set(self.pending_irq_groups.get() | groups);
+        }
+        if fired != 0 {
+            self.pending_fired.set(self.pending_fired.get() | fired);
+        }
+    }
+
+    /// Pull "now" from the bus-published clock and advance. No-op without an
+    /// attached clock (legacy mode — the walk advances the counter instead).
+    fn sync_from_clock(&self) {
+        if let Some(clock) = &self.clock {
+            if self.scheduler_mode() {
+                self.advance_to(clock.now());
+            }
+        }
+    }
+
+    /// CPU cycles from the CURRENT (just-synced) state until the next armed,
+    /// un-fired compare first fires, or `None` when nothing is armed. A compare
+    /// whose deadline already lies at/behind the counter fires on the next
+    /// SYSCOUNTER increment (the walk only evaluates on an increment), so its
+    /// distance is the cycles to that increment.
+    fn cycles_until_next_compare(&self) -> Option<u64> {
+        if !self.running() {
+            return None;
+        }
+        let cur = self.counter.get();
+        let cpt = self.cycles_per_tick as u64;
+        let accum = self.cycle_accum.get() as u64;
+        let mut best: Option<u64> = None;
+        for i in 0..self.num_cc {
+            if self.cc_en[i].get() & CCEN_ACTIVE == 0 || self.events_compare[i].get() != 0 {
+                continue;
+            }
+            let cc = self.cc_value(i);
+            // Increments needed for `new >= cc`: a deadline at/behind the
+            // counter fires on the very next increment (1); otherwise exactly
+            // `cc - cur` increments reach it.
+            let increments = if cc > cur { cc - cur } else { 1 };
+            // Cycles to the `increments`-th SYSCOUNTER tick from the current
+            // fractional phase: `increments * cpt - accum` (always >= 1 since
+            // accum < cpt).
+            let cycles = increments.saturating_mul(cpt).saturating_sub(accum);
+            best = Some(best.map_or(cycles, |b| b.min(cycles)));
+        }
+        best
+    }
+
+    /// Absolute cycle at which the next armed compare fires, or `None`. Because
+    /// the counter is synced to `anchor` before this is read (write/on_event
+    /// choke), `anchor + cycles_until` is the fixed absolute deadline — the
+    /// value re-writes must agree on to avoid rescheduling redundantly.
+    fn next_compare_abs_deadline(&self) -> Option<u64> {
+        self.cycles_until_next_compare()
+            .map(|d| self.anchor.get() + d)
     }
 }
 
@@ -465,6 +652,10 @@ impl Peripheral for Nrf54lGrtc {
     }
 
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
+        // Scheduler mode: advance the lazy counter (and materialise any compare
+        // it crossed) to the published "now" first, so a polled SYSCOUNTER /
+        // EVENTS_COMPARE read observes fresh, self-consistent time.
+        self.sync_from_clock();
         Ok(match offset {
             // Tasks are write-only, read-as-zero.
             OFF_TASKS_CAPTURE0..=OFF_TASKS_CAPTURE_LAST => 0,
@@ -484,7 +675,7 @@ impl Peripheral for Nrf54lGrtc {
             OFF_EVENTS_COMPARE0..=OFF_EVENTS_COMPARE_LAST if offset.is_multiple_of(4) => {
                 let i = ((offset - OFF_EVENTS_COMPARE0) / 4) as usize;
                 if i < self.num_cc {
-                    self.events_compare[i]
+                    self.events_compare[i].get()
                 } else {
                     0
                 }
@@ -525,10 +716,10 @@ impl Peripheral for Nrf54lGrtc {
                     0
                 } else {
                     match reg {
-                        0x0 => self.cc_l[i],
-                        0x4 => self.cc_h[i] & CCH_VALUE_MASK,
+                        0x0 => self.cc_l[i].get(),
+                        0x4 => self.cc_h[i].get() & CCH_VALUE_MASK,
                         0x8 => 0, // CCADD, write-only
-                        _ => self.cc_en[i] & CCEN_ACTIVE,
+                        _ => self.cc_en[i].get() & CCEN_ACTIVE,
                     }
                 }
             }
@@ -570,18 +761,18 @@ impl Peripheral for Nrf54lGrtc {
             {
                 let i = ((offset - OFF_TASKS_CAPTURE0) / 4) as usize;
                 if i < self.num_cc {
-                    let now = self.counter;
+                    let now = self.counter.get();
                     self.set_cc_value(i, now);
                     // Triggering the capture task disables the compare feature
                     // on that channel (Nordic `NHW_GRTC` CAPTURE side effect).
-                    self.cc_en[i] &= !CCEN_ACTIVE;
+                    self.cc_en[i].set(self.cc_en[i].get() & !CCEN_ACTIVE);
                 }
             }
             OFF_TASKS_START if value & 1 != 0 => self.task_started = true,
             OFF_TASKS_STOP if value & 1 != 0 => self.task_started = false,
             OFF_TASKS_CLEAR if value & 1 != 0 => {
-                self.counter = 0;
-                self.cycle_accum = 0;
+                self.counter.set(0);
+                self.cycle_accum.set(0);
                 self.high_latched.set(false);
                 self.overflow_latch.set(false);
                 self.prev_read_high.set(0);
@@ -596,11 +787,13 @@ impl Peripheral for Nrf54lGrtc {
             }
 
             // EVENTS_COMPARE[i]: hardware-generated; write-1 is ignored,
-            // write-0 clears.
+            // write-0 clears. Clearing the event does NOT retract an IRQ edge
+            // already latched into `pending_irq_groups` — silicon keeps a pend
+            // the NVIC already saw.
             OFF_EVENTS_COMPARE0..=OFF_EVENTS_COMPARE_LAST if offset.is_multiple_of(4) => {
                 let i = ((offset - OFF_EVENTS_COMPARE0) / 4) as usize;
                 if i < self.num_cc && value == 0 {
-                    self.events_compare[i] = 0;
+                    self.events_compare[i].set(0);
                 }
             }
 
@@ -648,12 +841,12 @@ impl Peripheral for Nrf54lGrtc {
                         // The CCL-then-CCH order leaves the channel armed with
                         // the freshly written 52-bit value.
                         0x0 => {
-                            self.cc_l[i] = value;
-                            self.cc_en[i] &= !CCEN_ACTIVE;
+                            self.cc_l[i].set(value);
+                            self.cc_en[i].set(self.cc_en[i].get() & !CCEN_ACTIVE);
                         }
                         0x4 => {
-                            self.cc_h[i] = value & CCH_VALUE_MASK;
-                            self.cc_en[i] |= CCEN_ACTIVE;
+                            self.cc_h[i].set(value & CCH_VALUE_MASK);
+                            self.cc_en[i].set(self.cc_en[i].get() | CCEN_ACTIVE);
                         }
                         // CCADD: add VALUE to either the live SYSCOUNTER
                         // (REFERENCE=SYSCOUNTER) or the current CC
@@ -662,15 +855,15 @@ impl Peripheral for Nrf54lGrtc {
                             let base = if value & CCADD_REFERENCE_CC != 0 {
                                 self.cc_value(i)
                             } else {
-                                self.counter
+                                self.counter.get()
                             };
                             let sum = base.wrapping_add((value & CCADD_VALUE_MASK) as u64);
                             self.set_cc_value(i, sum);
-                            self.cc_en[i] |= CCEN_ACTIVE;
+                            self.cc_en[i].set(self.cc_en[i].get() | CCEN_ACTIVE);
                         }
                         // Direct CCEN write still honoured (the disable in
                         // nrfx's cc_channel_prepare and any bare-metal arm).
-                        _ => self.cc_en[i] = value & CCEN_ACTIVE,
+                        _ => self.cc_en[i].set(value & CCEN_ACTIVE),
                     }
                 }
             }
@@ -699,17 +892,173 @@ impl Peripheral for Nrf54lGrtc {
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
-        self.advance(1)
+        self.legacy_advance(1)
     }
 
     fn tick_elapsed(&mut self, cycles: u64) -> PeripheralTickResult {
-        self.advance(cycles)
+        self.legacy_advance(cycles)
+    }
+
+    fn uses_scheduler(&self) -> bool {
+        // True once the bus attached its cycle clock (event-scheduler builds):
+        // reads stay fresh through the lazy `advance_to` path and compare IRQs
+        // ride scheduled events, so the walk is unnecessary AND idle
+        // fast-forward can skip idle windows to the next compare deadline.
+        // Without a clock (feature off / hand-built buses) stay on the legacy
+        // walk with exact historical semantics.
+        self.scheduler_mode()
+    }
+
+    fn needs_legacy_walk(&self) -> bool {
+        // In scheduler mode everything the walk did (SYSCOUNTER advance +
+        // compare latch/IRQ) is event-expressible, so the walk is deletable.
+        // In legacy mode the walk does real work and the conservative `true`
+        // stands.
+        !self.scheduler_mode()
+    }
+
+    fn sync_to(&mut self, now_cycle: u64) {
+        if self.scheduler_mode() {
+            self.advance_to(now_cycle);
+        }
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        if !self.scheduler_mode() {
+            return Vec::new();
+        }
+        if self.pending_irq_groups.get() != 0 || self.pending_fired.get() != 0 {
+            // A compare already materialised (a read synced past its deadline
+            // before this write): deliver it at the next drain. Rare (needs a
+            // read between the deadline and the drain), so a fresh token here
+            // does not pile up.
+            self.arm_seq = self.arm_seq.wrapping_add(1);
+            return vec![(0, self.arm_seq)];
+        }
+        // Reschedule ONLY when the next compare's absolute deadline changed
+        // (a CC arm/disarm, a MODE/START toggle, a TASKS_CLEAR, a reload). A
+        // write that leaves the next compare where it was re-derives the same
+        // absolute deadline and schedules nothing — the existing live event
+        // still fires at the right cycle, and the residency ceiling holds.
+        let abs = self.next_compare_abs_deadline();
+        if abs == self.scheduled_deadline.get() {
+            return Vec::new();
+        }
+        // The deadline moved: invalidate the old chain (token bump → it dies on
+        // arrival) and record the new TRUE deadline for the next write's dedup.
+        self.arm_seq = self.arm_seq.wrapping_add(1);
+        self.scheduled_deadline.set(abs);
+        // `collect_scheduled_events` converts to `current_cycle + 1 + delay`;
+        // the fire lands `d` CPU cycles after the just-synced state, i.e. at
+        // absolute cycle `current_cycle + d` — hence `d - 1` (d >= 1 always).
+        // The wake itself is capped to the horizon (a far compare re-evaluates
+        // in `on_event`); the dedup key above stays the TRUE deadline.
+        self.cycles_until_next_compare()
+            .map(|d| vec![(d.min(MAX_SCHEDULE_HORIZON).saturating_sub(1), self.arm_seq)])
+            .unwrap_or_default()
+    }
+
+    fn on_event(
+        &mut self,
+        event_token: u32,
+        sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        if !self.scheduler_mode() || event_token != self.arm_seq {
+            // Stale chain (re-armed since this event was scheduled): die.
+            return crate::sched::EventResult::default();
+        }
+        // Bring the lazy counter up to the drain cycle; this materialises the
+        // compare(s) this event was scheduled for.
+        self.advance_to(sched.now());
+        let groups = self.pending_irq_groups.replace(0);
+        let fired = self.pending_fired.replace(0);
+
+        // Each set group bit `g` pends its own GRTC line (`irq_base + g`),
+        // routed through the same `pend_irq_for_event` choke the legacy walk's
+        // `explicit_irqs` use.
+        let explicit_irqs = (0..NUM_INT_GROUPS as u32)
+            .filter(|g| groups & (1 << g) != 0)
+            .map(|g| self.irq_base + g)
+            .collect();
+        // PPI: one `fired_events` offset per channel whose EVENTS_COMPARE went
+        // 0→1, exactly as the walk returned them.
+        let fired_events = (0..self.num_cc)
+            .filter(|&i| fired & (1 << i) != 0)
+            .map(|i| OFF_EVENTS_COMPARE0 as u32 + 4 * i as u32)
+            .collect();
+
+        // Perpetuate the chain from the just-synced state: the delay is
+        // measured from `sched.now()`, so the next compare lands at its exact
+        // absolute cycle — no cumulative drift at any interval. Record its TRUE
+        // absolute deadline (for the write-path dedup) but wake at the capped
+        // horizon: a compare farther than the horizon re-evaluates here without
+        // firing until the counter actually reaches it, so no unreachable wake
+        // ever lingers.
+        let reschedule = self.cycles_until_next_compare();
+        self.scheduled_deadline
+            .set(reschedule.map(|d| sched.now() + d));
+        crate::sched::EventResult {
+            explicit_irqs,
+            fired_events,
+            reschedule_delay: reschedule.map(|d| d.min(MAX_SCHEDULE_HORIZON)),
+            ..Default::default()
+        }
+    }
+
+    fn attach_cycle_clock(&mut self, clock: CycleClock) {
+        // Anchor at the clock's current value so cycles that elapsed before
+        // attach (normally zero — attach happens at bus assembly) are not
+        // retroactively replayed into the counter.
+        self.anchor.set(clock.now());
+        self.clock = Some(clock);
+    }
+
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
+
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
     }
 
     // NOTE: `mmio_access_class` is deliberately left at the default
     // `SideEffecting`. SYSCOUNTERL looks like a free-running timer poll, but
     // reading it latches SYSCOUNTERH — coalescing those reads would drop the
     // latch and reintroduce exactly the tearing this model exists to prevent.
+}
+
+impl Nrf54lGrtc {
+    /// Legacy per-cycle walk advance. Never runs in scheduler mode (the walk
+    /// skips `uses_scheduler()` peripherals; the guard keeps a stray direct
+    /// call from corrupting the lazily-anchored state). Charges ZERO tick cost
+    /// so `total_cycles` is byte-identical to the scheduler path (see the
+    /// tick-cost normalization note in the module docs).
+    fn legacy_advance(&mut self, cycles: u64) -> PeripheralTickResult {
+        if self.scheduler_mode() {
+            return PeripheralTickResult::default();
+        }
+        let (groups, fired) = self.advance_and_eval(cycles);
+        let explicit_irqs = if groups != 0 {
+            Some(
+                (0..NUM_INT_GROUPS as u32)
+                    .filter(|g| groups & (1 << g) != 0)
+                    .map(|g| self.irq_base + g)
+                    .collect(),
+            )
+        } else {
+            None
+        };
+        let fired_events = (0..self.num_cc)
+            .filter(|&i| fired & (1 << i) != 0)
+            .map(|i| OFF_EVENTS_COMPARE0 as u32 + 4 * i as u32)
+            .collect();
+        PeripheralTickResult {
+            explicit_irqs,
+            fired_events,
+            ..Default::default()
+        }
+    }
 }
 
 #[cfg(test)]
@@ -794,7 +1143,7 @@ mod tests {
 
         // The counter rolls into the high word between the paired reads.
         g.tick();
-        assert_eq!(g.counter, 0x1_0000_0000);
+        assert_eq!(g.counter.get(), 0x1_0000_0000);
 
         let high = g.read_u32(SYSCOUNTERH).unwrap() & SYSCOUNTERH_VALUE_MASK;
         assert_eq!(
@@ -1192,5 +1541,195 @@ mod tests {
             SYSCOUNTER_HZ / 1000,
             "1 ms of CPU time must be 1000 SYSCOUNTER ticks"
         );
+    }
+
+    #[test]
+    fn legacy_tick_charges_zero_cost() {
+        // Tick-cost normalization: a free-running counter consumes no core
+        // cycles, so the walk must charge zero (the scheduler path can't
+        // reproduce a per-tick cost, and total_cycles must agree across modes).
+        let mut g = Nrf54lGrtc::new();
+        g.write_u32(OFF_TASKS_START, 1).unwrap();
+        assert_eq!(g.tick().cycles, 0);
+        assert_eq!(g.tick_elapsed(256).cycles, 0);
+    }
+
+    #[test]
+    fn without_clock_stays_on_legacy_tick_path() {
+        let g = Nrf54lGrtc::new();
+        assert!(
+            !g.uses_scheduler(),
+            "no cycle clock attached → the model must stay on the legacy walk"
+        );
+        assert!(g.needs_legacy_walk());
+    }
+
+    #[cfg(feature = "event-scheduler")]
+    mod scheduler_mode {
+        use super::*;
+
+        fn armed_scheduler() -> (Nrf54lGrtc, CycleClock) {
+            let clock = CycleClock::default();
+            let mut g = Nrf54lGrtc::new_fast(); // 1 CPU cycle per SYSCOUNTER tick
+            g.attach_cycle_clock(clock.clone());
+            (g, clock)
+        }
+
+        #[test]
+        fn clock_attach_flips_to_scheduler_and_walk_tick_is_inert() {
+            let (mut g, _clock) = armed_scheduler();
+            assert!(g.uses_scheduler(), "clock attached → walk-independent");
+            assert!(!g.needs_legacy_walk());
+            g.write_u32(OFF_MODE, MODE_SYSCOUNTEREN).unwrap();
+            // A stray walk tick must not double-count against the lazy anchor.
+            let r = g.tick();
+            assert!(r.explicit_irqs.is_none());
+            assert_eq!(
+                g.read_u32(SYSCOUNTERL).unwrap(),
+                0,
+                "tick inert in scheduler mode; counter derives from the clock"
+            );
+        }
+
+        #[test]
+        fn lazy_syscounter_read_tracks_published_clock_exactly() {
+            let (mut g, clock) = armed_scheduler();
+            g.write_u32(OFF_MODE, MODE_SYSCOUNTEREN).unwrap();
+            g.sync_to(0);
+            clock.publish(5);
+            assert_eq!(g.read_u32(SYSCOUNTERL).unwrap(), 5);
+            clock.publish(9);
+            assert_eq!(g.read_u32(SYSCOUNTERL).unwrap(), 9);
+        }
+
+        #[test]
+        fn arming_write_schedules_the_exact_compare_deadline() {
+            let (mut g, _clock) = armed_scheduler();
+            g.write_u32(OFF_MODE, MODE_SYSCOUNTEREN).unwrap();
+            g.sync_to(0);
+            // CC[0] = 100; from counter 0 the fire lands 100 ticks after the
+            // synced state; the bus adds current_cycle + 1, so the peripheral
+            // hands out d - 1 = 99.
+            g.write_u32(cc_reg(0, 0x0), 100).unwrap();
+            g.write_u32(cc_reg(0, 0x4), 0).unwrap(); // CCH arms
+            let evs = g.take_scheduled_events();
+            assert_eq!(evs.len(), 1);
+            assert_eq!(evs[0].0, 99, "delay must be cycles-to-fire minus one");
+        }
+
+        #[test]
+        fn on_event_pends_the_group_irq_and_reschedules() {
+            let (mut g, clock) = armed_scheduler();
+            g.write_u32(OFF_MODE, MODE_SYSCOUNTEREN).unwrap();
+            g.sync_to(0);
+            g.write_u32(cc_reg(0, 0x0), 100).unwrap();
+            g.write_u32(cc_reg(0, 0x4), 0).unwrap();
+            g.write_u32(OFF_INTEN0 + 0x4, 1 << 0).unwrap(); // group 0 enables COMPARE0
+            let token = g.take_scheduled_events()[0].1;
+
+            clock.publish(100); // drain at the exact fire cycle
+            let mut sched = crate::sched::EventScheduler::new();
+            sched.advance_to(100);
+            let mut bus = crate::bus::SystemBus::new();
+            let res = g.on_event(token, &mut sched, &mut bus);
+            assert_eq!(
+                res.explicit_irqs,
+                vec![GRTC_IRQ_BASE_DEFAULT],
+                "group-0 compare pends GRTC_0"
+            );
+            assert_eq!(res.fired_events, vec![OFF_EVENTS_COMPARE0 as u32]);
+            assert_eq!(g.read_u32(OFF_EVENTS_COMPARE0).unwrap(), 1);
+            // One-shot: no further compare armed → nothing to reschedule.
+            assert_eq!(res.reschedule_delay, None);
+
+            // A second drain at the same cycle claims nothing.
+            let res2 = g.on_event(token, &mut sched, &mut bus);
+            assert!(res2.explicit_irqs.is_empty(), "no double-claim");
+        }
+
+        #[test]
+        fn stale_event_chain_dies_on_token_mismatch() {
+            let (mut g, clock) = armed_scheduler();
+            g.write_u32(OFF_MODE, MODE_SYSCOUNTEREN).unwrap();
+            g.sync_to(0);
+            g.write_u32(cc_reg(0, 0x0), 100).unwrap();
+            g.write_u32(cc_reg(0, 0x4), 0).unwrap();
+            let old_token = g.take_scheduled_events()[0].1;
+            // Re-arm (kills the old chain).
+            g.write_u32(cc_reg(0, 0x0), 50).unwrap();
+            g.write_u32(cc_reg(0, 0x4), 0).unwrap();
+            let new_token = g.take_scheduled_events()[0].1;
+            assert_ne!(old_token, new_token);
+
+            clock.publish(500);
+            let mut sched = crate::sched::EventScheduler::new();
+            sched.advance_to(500);
+            let mut bus = crate::bus::SystemBus::new();
+            let res = g.on_event(old_token, &mut sched, &mut bus);
+            assert!(res.explicit_irqs.is_empty(), "stale chain must be inert");
+            assert_eq!(res.reschedule_delay, None, "stale chain must not respawn");
+        }
+
+        #[test]
+        fn masked_compare_still_latches_but_schedules_no_irq() {
+            let (mut g, clock) = armed_scheduler();
+            g.write_u32(OFF_MODE, MODE_SYSCOUNTEREN).unwrap();
+            g.sync_to(0);
+            g.write_u32(cc_reg(0, 0x0), 10).unwrap();
+            g.write_u32(cc_reg(0, 0x4), 0).unwrap(); // armed, INTEN clear
+            let token = g.take_scheduled_events()[0].1;
+
+            clock.publish(10);
+            let mut sched = crate::sched::EventScheduler::new();
+            sched.advance_to(10);
+            let mut bus = crate::bus::SystemBus::new();
+            let res = g.on_event(token, &mut sched, &mut bus);
+            assert!(
+                res.explicit_irqs.is_empty(),
+                "a masked compare must not pend an IRQ"
+            );
+            assert_eq!(
+                g.read_u32(OFF_EVENTS_COMPARE0).unwrap(),
+                1,
+                "the event still latches while the interrupt is masked"
+            );
+        }
+
+        #[test]
+        fn cc0_interval_reload_reschedules_the_next_period() {
+            let (mut g, clock) = armed_scheduler();
+            g.write_u32(OFF_MODE, MODE_SYSCOUNTEREN).unwrap();
+            g.write_u32(OFF_INTERVAL, 20).unwrap();
+            g.sync_to(0);
+            g.write_u32(cc_reg(0, 0x0), 20).unwrap();
+            g.write_u32(cc_reg(0, 0x4), 0).unwrap();
+            g.write_u32(OFF_INTEN0 + 0x4, 1 << 0).unwrap();
+            let token = g.take_scheduled_events()[0].1;
+
+            clock.publish(20);
+            let mut sched = crate::sched::EventScheduler::new();
+            sched.advance_to(20);
+            let mut bus = crate::bus::SystemBus::new();
+            let res = g.on_event(token, &mut sched, &mut bus);
+            assert_eq!(res.explicit_irqs, vec![GRTC_IRQ_BASE_DEFAULT]);
+            // CC0 auto-reloads by INTERVAL and stays armed (deadline → 40).
+            assert_eq!(g.read_u32(cc_reg(0, 0x0)).unwrap(), 40);
+            assert_eq!(g.read_u32(cc_reg(0, 0xC)).unwrap(), CCEN_ACTIVE);
+            // But EVENTS_COMPARE[0] is still latched, so — exactly like the
+            // legacy walk's `&& events_compare == 0` guard — the channel cannot
+            // re-fire and nothing is rescheduled until the ISR clears it.
+            assert_eq!(res.reschedule_delay, None);
+
+            // ISR clears the event; the arming-recompute (which the bus runs on
+            // that write) now schedules the next period at 40 (20 ticks away).
+            g.write_u32(OFF_EVENTS_COMPARE0, 0).unwrap();
+            g.sync_to(20);
+            let next = g.take_scheduled_events();
+            assert_eq!(
+                next.first().map(|e| e.0),
+                Some(19),
+                "next period at cycle 40"
+            );
+        }
     }
 }
