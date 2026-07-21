@@ -32,8 +32,12 @@ metadata:
 # Both engines derive the external_devices block from this, killing the
 # hand-mirrored emit_rotary_encoder / emitRotaryEncoder pair.
 emit:
+  device_type: rotary-encoder # descriptor type is rotary_encoder; emitted type differs
   connection: gpio
   config:
-    - { key: clk_pin, from_part_pin: [CLK, A] }
-    - { key: dt_pin, from_part_pin: [DT, B] }
+    - { key: clk_pin, from_part_pin: [CLK] }
+    - { key: dt_pin, from_part_pin: [DT] }
     - { key: cpu_hz, from: sim_cpu_hz }
+  # SW push switch → a plain board_io button (optional; omitted when unwired).
+  board_io:
+    - { from_part_pin: [SW], kind: button, signal: input, active_high: true }

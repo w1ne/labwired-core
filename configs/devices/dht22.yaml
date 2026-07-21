@@ -33,5 +33,9 @@ metadata:
 emit:
   connection: gpio
   config:
-    - { key: data_pin, from_part_pin: [DATA, DAT, OUT] }
+    - { key: data_pin, from_part_pin: [DATA] }
+    # EMIT defaults (25/50) differ from the runtime attach defaults (22/50):
+    # both keys are always written, so the runtime fallback is never reached.
+    - { key: temperature_c, from_attr: temperature, default: 25 }
+    - { key: humidity_pct, from_attr: humidity, default: 50 }
     - { key: cpu_hz, from: sim_cpu_hz }

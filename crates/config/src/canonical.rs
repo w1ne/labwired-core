@@ -276,32 +276,21 @@ impl CanonicalConfig {
                 }
             };
 
-            // 1. Ultrasonic (HC-SR04).
+            // The GPIO / pin-timing family (ultrasonic, dht22, rotary, keypad)
+            // is emitted from its `configs/devices/*.yaml` descriptor's `emit:`
+            // block via one interpreter — the same spec the TS emitter reads.
+            // The canvas part type maps to the descriptor type (e.g. part
+            // `ultrasonic` → descriptor `hc-sr04`).
             for part in non_mcu() {
-                if part.r#type == "ultrasonic" {
-                    let (ext, bio) = emit_ultrasonic(&board, &wires, mcu_id, part);
-                    push(ext, bio);
-                }
-            }
-            // 1a. DHT22 / AM2302 one-wire sensor — same shape as the HC-SR04.
-            for part in non_mcu() {
-                if part.r#type == "dht22" {
-                    let (ext, bio) = emit_dht22(&board, &wires, mcu_id, part);
-                    push(ext, bio);
-                }
-            }
-            // 1b1. Rotary encoder: CLK/DT quadrature device + SW button.
-            for part in non_mcu() {
-                if part.r#type == "rotary-encoder" {
-                    let (ext, bio) = emit_rotary_encoder(&board, &wires, mcu_id, part);
-                    push(ext, bio);
-                }
-            }
-            // 1b2. 4×4 matrix keypad: eight GPIO pins (4 rows + 4 cols) scanned
-            // as a real matrix, NOT collapsed to a single board_io button.
-            for part in non_mcu() {
-                if part.r#type == "keypad" {
-                    let (ext, bio) = emit_keypad(&board, &wires, mcu_id, part);
+                let desc_type = match part.r#type.as_str() {
+                    "ultrasonic" => Some("hc-sr04"),
+                    "dht22" => Some("dht22"),
+                    "rotary-encoder" => Some("rotary_encoder"),
+                    "keypad" => Some("keypad"),
+                    _ => None,
+                };
+                if let Some(desc_type) = desc_type {
+                    let (ext, bio) = emit_declarative(desc_type, &board, &wires, mcu_id, part);
                     push(ext, bio);
                 }
             }
@@ -946,39 +935,141 @@ fn format_js_number(n: f64) -> String {
 /// `emitUltrasonic`). `distance_cm` defaults to 100; `cpu_hz` is 250000 on
 /// stm32l476, else 80000000. Never emits `board_io` (ultrasonic is in the
 /// wire-emitter skip set).
-fn emit_ultrasonic(
+/// Emit a declarative device's `external_devices` (+ optional `board_io`)
+/// fragments by interpreting the descriptor's `emit:` block — the SINGLE spec
+/// both this Rust emitter and the TypeScript `compile()` emitter read.
+///
+/// Loads the descriptor for `desc_type` from the config crate's single embed
+/// point and delegates to [`emit_from_descriptor`]. Replaces the former
+/// per-device `emit_ultrasonic`/`emit_dht22`/`emit_rotary_encoder`/`emit_keypad`
+/// hand-written pair (the byte-parity `resolve_matches_ts_oracle` gate proves
+/// the output is unchanged).
+fn emit_declarative(
+    desc_type: &str,
     board: &str,
     wires: &[Wire],
     mcu_id: &str,
     part: &CanonicalPart,
 ) -> (Option<String>, Option<String>) {
-    let trig = mcu_pin_for_part_pin(wires, mcu_id, &part.id, "TRIG");
-    let echo = mcu_pin_for_part_pin(wires, mcu_id, &part.id, "ECHO");
-    let (Some(trig), Some(echo)) = (trig, echo) else {
+    match crate::DeviceDescriptor::embedded(desc_type) {
+        Ok(Some(desc)) => emit_from_descriptor(&desc, board, wires, mcu_id, part),
+        _ => (None, None),
+    }
+}
+
+/// Interpret a [`DeviceEmit`](crate::DeviceEmit) spec into the emitted fragments.
+///
+/// The `external_devices` block (`ext`) is emitted only when every pin-binding
+/// config entry resolves — a partially-wired device emits none. The auxiliary
+/// `board_io` block is computed INDEPENDENTLY (a rotary encoder's SW button is
+/// emitted even when CLK/DT are unwired — see the `rotary-sw-only` oracle case).
+fn emit_from_descriptor(
+    desc: &crate::DeviceDescriptor,
+    board: &str,
+    wires: &[Wire],
+    mcu_id: &str,
+    part: &CanonicalPart,
+) -> (Option<String>, Option<String>) {
+    let Some(emit) = &desc.emit else {
         return (None, None);
     };
-    let distance_cm = attr_string(part, "distance")
-        .and_then(|s| s.trim().parse::<f64>().ok())
-        .filter(|d| d.is_finite())
-        .unwrap_or(100.0);
-    // NOTE: this is the port of `DEFAULT_CPU_HZ_BY_BOARD`, an HC-SR04-SPECIFIC
-    // echo-pacing override — NOT a board clock. The 250 kHz on stm32l476 shrinks
-    // an echo pulse to a few simulated cycles so ultrasonic labs run fast, which
-    // is harmless only because the firmware times the echo with its own timer.
-    // A device that GENERATES its own waveform from `cpu_hz` must not read this
-    // table (it would stretch every bit cell 320x); such devices use
-    // [`sim_cpu_hz`] instead.
-    let cpu_hz = if board == "stm32l476" {
-        250_000
-    } else {
-        80_000_000
+    let device_type = emit.device_type.as_deref().unwrap_or(&desc.r#type);
+    let first_wired = |names: &[String]| -> Option<String> {
+        names
+            .iter()
+            .find_map(|n| mcu_pin_for_part_pin(wires, mcu_id, &part.id, n).map(|p| p.to_string()))
     };
-    let ext = format!(
-        "  - id: \"{}\"\n    type: \"hc-sr04\"\n    connection: \"gpio\"\n    config:\n      trig_pin: \"{trig}\"\n      echo_pin: \"{echo}\"\n      distance_cm: {}\n      cpu_hz: {cpu_hz}",
-        part.id,
-        format_js_number(distance_cm)
-    );
-    (Some(ext), None)
+
+    // external_devices: one line per config entry; a missing pin binding drops
+    // the whole block.
+    let mut lines: Vec<String> = Vec::with_capacity(emit.config.len());
+    let mut ext_ok = true;
+    for c in &emit.config {
+        let value = if let Some(names) = &c.from_part_pin {
+            match first_wired(names) {
+                Some(pin) => format!("\"{pin}\""),
+                None => {
+                    ext_ok = false;
+                    break;
+                }
+            }
+        } else if let Some(names) = &c.from_part_pins {
+            let mut pins = Vec::with_capacity(names.len());
+            for n in names {
+                match mcu_pin_for_part_pin(wires, mcu_id, &part.id, n) {
+                    Some(p) => pins.push(p.to_string()),
+                    None => {
+                        ext_ok = false;
+                        break;
+                    }
+                }
+            }
+            if !ext_ok {
+                break;
+            }
+            format!("[\"{}\"]", pins.join("\", \""))
+        } else if let Some(source) = &c.from {
+            match computed_source(source, board) {
+                Some(v) => format!("{v}"),
+                None => {
+                    ext_ok = false;
+                    break;
+                }
+            }
+        } else if let Some(attr) = &c.from_attr {
+            let default = c.default.unwrap_or(0.0);
+            let n = attr_string(part, attr)
+                .and_then(|s| s.trim().parse::<f64>().ok())
+                .filter(|d| d.is_finite())
+                .unwrap_or(default);
+            format_js_number(n)
+        } else {
+            ext_ok = false;
+            break;
+        };
+        lines.push(format!("      {}: {value}", c.key));
+    }
+    let ext = if ext_ok {
+        Some(format!(
+            "  - id: \"{}\"\n    type: \"{device_type}\"\n    connection: \"{}\"\n    config:\n{}",
+            part.id,
+            emit.connection,
+            lines.join("\n")
+        ))
+    } else {
+        None
+    };
+
+    // board_io (aux) — independent of the external_devices gating.
+    let mut bio = None;
+    for b in &emit.board_io {
+        if let Some(pin) = first_wired(&b.from_part_pin) {
+            if let Some((peripheral, pin_num)) = parse_mcu_pin(&pin) {
+                bio = Some(format!(
+                    "  - id: \"{}\"\n    kind: \"{}\"\n    peripheral: \"{peripheral}\"\n    pin: {pin_num}\n    signal: \"{}\"\n    active_high: {}",
+                    part.id, b.kind, b.signal, b.active_high
+                ));
+            }
+        }
+    }
+
+    (ext, bio)
+}
+
+/// A named computed emit source. `sim_cpu_hz` is the firmware clock (self-timing
+/// devices); `echo_pacing_cpu_hz` is the HC-SR04-SPECIFIC echo-pacing override
+/// (NOT a board clock — 250 kHz on stm32l476 shrinks the echo pulse so labs run
+/// fast, harmless only because the firmware times the echo itself).
+fn computed_source(name: &str, board: &str) -> Option<u64> {
+    match name {
+        "sim_cpu_hz" => Some(sim_cpu_hz(board)),
+        "echo_pacing_cpu_hz" => Some(if board == "stm32l476" {
+            250_000
+        } else {
+            80_000_000
+        }),
+        _ => None,
+    }
 }
 
 /// The simulated core clock for a device that generates its own waveform from
@@ -997,48 +1088,6 @@ fn sim_cpu_hz(board: &str) -> u64 {
     } else {
         80_000_000
     }
-}
-
-/// Emit the `external_devices` fragment for a dht22/am2302 part (port of
-/// `emitDht22`).
-///
-/// The DHT22 speaks a bit-banged one-wire protocol on a SINGLE pin, so — like the
-/// HC-SR04 — it cannot be described by a `board_io` entry: the kit needs the pin
-/// plus the timing base (`cpu_hz`) to decode the start pulse and clock out the
-/// reply frame. That is why it leaves the generic `board_io` path (it stays in
-/// the catalog's `boardIoKind` table as a `button`, but is listed in the
-/// wire-emitter skip set) and gets this dedicated emitter instead.
-///
-/// `temperature_c` defaults to 25 and `humidity_pct` to 50 (the diagram-contract
-/// attr defaults); both keys are ALWAYS written, so the differing defaults in the
-/// engine's `from_config` reader are never reached. `cpu_hz` comes from
-/// [`sim_cpu_hz`] — deliberately NOT the HC-SR04 override table, because the
-/// DHT22 clocks out its own reply frame and needs the real firmware clock.
-fn emit_dht22(
-    board: &str,
-    wires: &[Wire],
-    mcu_id: &str,
-    part: &CanonicalPart,
-) -> (Option<String>, Option<String>) {
-    let Some(data) = mcu_pin_for_part_pin(wires, mcu_id, &part.id, "DATA") else {
-        return (None, None);
-    };
-    let temperature_c = attr_string(part, "temperature")
-        .and_then(|s| s.trim().parse::<f64>().ok())
-        .filter(|t| t.is_finite())
-        .unwrap_or(25.0);
-    let humidity_pct = attr_string(part, "humidity")
-        .and_then(|s| s.trim().parse::<f64>().ok())
-        .filter(|h| h.is_finite())
-        .unwrap_or(50.0);
-    let cpu_hz = sim_cpu_hz(board);
-    let ext = format!(
-        "  - id: \"{}\"\n    type: \"dht22\"\n    connection: \"gpio\"\n    config:\n      data_pin: \"{data}\"\n      temperature_c: {}\n      humidity_pct: {}\n      cpu_hz: {cpu_hz}",
-        part.id,
-        format_js_number(temperature_c),
-        format_js_number(humidity_pct)
-    );
-    (Some(ext), None)
 }
 
 /// Emit the `external_devices` fragment for a `neopixel` / `ws2812` addressable
@@ -1083,115 +1132,6 @@ fn emit_neopixel(
     );
     (Some(ext), None)
 }
-
-/// Emit the `external_devices` + `board_io` fragments for a `rotary-encoder`
-/// (port of `emitRotaryEncoder`).
-///
-/// The quadrature knob's CLK/DT channels can't be plain `board_io` buttons: a
-/// button hands firmware one static level, but a decoder needs the two channels
-/// to walk a phase-shifted Gray sequence. So CLK/DT become a dedicated bus
-/// device (driven through the standard `position` stimulus), exactly as the
-/// DHT22's data pin does. The push switch (SW) IS a plain momentary button, so
-/// it is emitted as an ordinary `board_io` input alongside the device.
-///
-/// CLK and DT are both required (an unwired one emits no device); SW is optional
-/// (omitted when unwired). `cpu_hz` comes from [`sim_cpu_hz`] — the encoder times
-/// its own edge spacing off it, so it must be the firmware clock (see the DHT22
-/// note above), NOT the HC-SR04 echo-pacing override.
-fn emit_rotary_encoder(
-    board: &str,
-    wires: &[Wire],
-    mcu_id: &str,
-    part: &CanonicalPart,
-) -> (Option<String>, Option<String>) {
-    let clk = mcu_pin_for_part_pin(wires, mcu_id, &part.id, "CLK");
-    let dt = mcu_pin_for_part_pin(wires, mcu_id, &part.id, "DT");
-
-    let ext = match (clk, dt) {
-        (Some(clk), Some(dt)) => {
-            let cpu_hz = sim_cpu_hz(board);
-            Some(format!(
-                "  - id: \"{}\"\n    type: \"rotary-encoder\"\n    connection: \"gpio\"\n    config:\n      clk_pin: \"{clk}\"\n      dt_pin: \"{dt}\"\n      cpu_hz: {cpu_hz}",
-                part.id
-            ))
-        }
-        _ => None,
-    };
-
-    // SW push switch → a plain board_io button (same shape emit_board_io_from_wires
-    // gives any button), driven by the standard set_board_io_input host toggle.
-    let sw_bio = mcu_pin_for_part_pin(wires, mcu_id, &part.id, "SW")
-        .and_then(parse_mcu_pin)
-        .map(|(peripheral, pin)| {
-            format!(
-                "  - id: \"{}\"\n    kind: \"button\"\n    peripheral: \"{peripheral}\"\n    pin: {pin}\n    signal: \"input\"\n    active_high: true",
-                part.id
-            )
-        });
-
-    (ext, sw_bio)
-}
-
-/// Emit the `external_devices` fragment for a 4×4 matrix `keypad` (port of
-/// `emitKeypad`).
-///
-/// A membrane keypad is sixteen passive switches at row/column crossings, not a
-/// chip, and firmware reads it by *animating* the matrix: it drives the four ROW
-/// outputs one LOW at a time and reads the four COLUMN inputs. A plain `board_io`
-/// "button" hands firmware one static level — it cannot represent the
-/// row-drive/column-read scan — so, like the rotary encoder, the keypad becomes a
-/// dedicated bus device (driven through the standard `key` stimulus) and is
-/// listed in the wire-emitter skip set instead.
-///
-/// All eight pins (`R1`..`R4`, `C1`..`C4`) are required: an unwired matrix cannot
-/// be scanned, so a partially-wired keypad emits nothing. The keypad does not
-/// self-time (it is combinational — it never clocks anything out on its own), so
-/// unlike the DHT22/encoder it carries NO device-level `cpu_hz`.
-fn emit_keypad(
-    board: &str,
-    wires: &[Wire],
-    mcu_id: &str,
-    part: &CanonicalPart,
-) -> (Option<String>, Option<String>) {
-    let _ = board; // no board-dependent timing — kept for signature symmetry.
-
-    let mut row_pins: Vec<&str> = Vec::with_capacity(ROWS);
-    for pin_id in ["R1", "R2", "R3", "R4"] {
-        let Some(pin) = mcu_pin_for_part_pin(wires, mcu_id, &part.id, pin_id) else {
-            return (None, None);
-        };
-        row_pins.push(pin);
-    }
-    let mut col_pins: Vec<&str> = Vec::with_capacity(COLS);
-    for pin_id in ["C1", "C2", "C3", "C4"] {
-        let Some(pin) = mcu_pin_for_part_pin(wires, mcu_id, &part.id, pin_id) else {
-            return (None, None);
-        };
-        col_pins.push(pin);
-    }
-
-    let row_list = row_pins
-        .iter()
-        .map(|p| format!("\"{p}\""))
-        .collect::<Vec<_>>()
-        .join(", ");
-    let col_list = col_pins
-        .iter()
-        .map(|p| format!("\"{p}\""))
-        .collect::<Vec<_>>()
-        .join(", ");
-
-    let ext = format!(
-        "  - id: \"{}\"\n    type: \"keypad\"\n    connection: \"gpio\"\n    config:\n      row_pins: [{row_list}]\n      col_pins: [{col_list}]",
-        part.id
-    );
-    (Some(ext), None)
-}
-
-/// Rows / columns in the matrix keypad; mirrors the engine's
-/// `keypad::{ROWS, COLS}` so the emitter and model agree on the pin count.
-const ROWS: usize = 4;
-const COLS: usize = 4;
 
 /// Emit the `external_devices` fragment for a direct-drive `seven-segment` part
 /// (port of `emitSevenSegment`).
