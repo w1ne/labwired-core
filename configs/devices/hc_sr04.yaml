@@ -1,0 +1,40 @@
+# Declarative descriptor — HC-SR04 ultrasonic distance sensor.
+#
+# Two GPIO wires: the MCU pulses TRIG (an output the sensor observes), and the
+# sensor replies on ECHO (an input it drives) with a pulse whose width is
+# proportional to distance. That trigger→timed-echo behavior is the irreducible
+# `pulse_echo` primitive (crate::peripherals::hc_sr04). Unlike the bus-resident
+# devices, HC-SR04 carries the event-scheduler edge-deadline path, so it lives
+# on its own bus list. `distance_cm` is the host-controlled "hand position".
+type: hc-sr04
+
+# --- Runtime behavior (consumed by bus/declarative_device.rs) --------------
+behavior:
+  primitive: pulse_echo
+  # trig resolves to a GPIO output (ODR, observed); echo to an input (IDR, driven).
+  pins:
+    trig: trig_pin
+    echo: echo_pin
+  params:
+    cpu_hz: { key: cpu_hz, default: 80000000 }
+    distance_cm: { key: distance_cm, default: 50.0 }
+
+# --- Display / manifest metadata (phase 2: derives KitMetadata) ------------
+metadata:
+  label: "HC-SR04"
+  summary: "Ultrasonic distance sensor (trigger / echo)"
+  category: gpio
+  inputs:
+    - { key: distance, label: "Distance", unit: cm, min: 2, max: 400 }
+
+# --- Canvas-compiler emit mapping (phase 2: unifies the TS/Rust emitters) ---
+# NOTE: unlike the self-timed one-wire/quadrature devices, HC-SR04's cpu_hz uses
+# the emitter's echo-pacing override (DEFAULT_CPU_HZ_BY_BOARD), not sim_cpu_hz —
+# firmware times the echo itself, so the stretched clock is tolerated. Phase 2
+# must preserve that when it derives the emit from this descriptor.
+emit:
+  connection: gpio
+  config:
+    - { key: trig_pin, from_part_pin: [TRIG, TRG] }
+    - { key: echo_pin, from_part_pin: [ECHO, ECH] }
+    - { key: cpu_hz, from: echo_pacing_cpu_hz }
