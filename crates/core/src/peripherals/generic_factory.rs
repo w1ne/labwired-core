@@ -276,6 +276,9 @@ pub fn try_build(
             // (VOSCR/VOSSR voltage scaling); default stays L4.
             match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
                 Some("stm32h5") | Some("h5") => Box::new(crate::peripherals::pwr::PwrH5::new()),
+                // H7 voltage scaling: VOSRDY/ACTVOSRDY handshake the HAL polls
+                // before touching the PLL (RM0468 D3CR/SRDCR + CSR1).
+                Some("stm32h7") | Some("h7") => Box::new(crate::peripherals::pwr::PwrH7::new()),
                 // L0 has a two-register surface (CR/CSR), not the L4
                 // CR1..CR4 / PUCRx set — a distinct reset shape.
                 Some("stm32l0") | Some("l0") => Box::new(crate::peripherals::pwr::PwrL0::new()),
@@ -435,6 +438,15 @@ pub fn try_build(
         // so a read-as-zero stub keeps the enable sequence from bus-faulting.
         // No cache behaviour is modelled — the simulator has flat memory.
         "icache" | "dcache" => Box::new(crate::peripherals::stub::StubPeripheral::new(0x00)),
+        // SYSCFG — mostly EXTI source select (harmless read-0 stub), plus the H7
+        // I/O compensation cell the H7 HAL enables + polls during rcc.freeze:
+        // CCCSR @ 0x20, READY = bit 8. Seed it so the poll exits (EN is a
+        // read-modify-write the stub drops, but the READY read returns the seed).
+        "syscfg" => {
+            let mut s = crate::peripherals::stub::StubPeripheral::new(0x00);
+            s.values.insert(0x20, 0x0000_0100);
+            Box::new(s)
+        }
         // Hardware semaphore (WB/WL dual-core inter-core lock). Single-core sim
         // grants every lock to CPU1, so the read-lock path succeeds at once.
         "hsem" => Box::new(crate::peripherals::hsem::Hsem::new()),

@@ -24,13 +24,21 @@
 #   - i2c     profile h5       ("I2C v2" TIMINGR/ISR — F7/H7/L4/H5 shared)
 #   - timer   generic          (TIMx CR1/PSC/ARR/CNT — architecture-stable)
 #
+# HAL bring-up: unmodified stm32h7xx-hal firmware boots end to end on this
+# model — PWR voltage scaling (h7 profile: VOSRDY/ACTVOSRDY), the PLL1 clock
+# tree to 200 MHz + FLASH ACR latency (h5 profile, same LATENCY[3:0]) + the
+# SYSCLK switch, the SYSCFG I/O-compensation cell (CCCSR.READY), then GPIO +
+# USART3. See examples/stm32h735-hal-demo. (A double-precision VFP push in a
+# hard-float build hits an undecoded VFP instruction — build soft-float, or the
+# DP-FPU decode is a separate follow-up.)
+#
 # Known omissions (H7 blocks whose IP diverges from the reused models; each
 # reads as an unmapped hole until modelled — documented, not hidden):
 #   - DMA: H7 uses DMA1/2 + BDMA + DMAMUX, NOT the H5 GPDMA1 — different model.
 #   - ADC: H7 ADC3 (16-bit, oversampling) differs from the L4 ADC layout.
 #   - RTC / FDCAN / OCTOSPI / Ethernet: not yet wired.
-#   - PWR / FLASH interface: mapped as present (H5 layout) so HAL bring-up does
-#     not bus-fault, but the H7 VOSRDY / bank-2 offsets are not silicon-faithful.
+#   - FLASH bank-2 / program-error semantics use the H5 layout (only ACR latency
+#     is exercised); not H7-silicon-faithful.
 
 name: "stm32h735vg"
 arch: "arm"
@@ -225,25 +233,33 @@ peripherals:
     irq: 36
     config:
       profile: "stm32h5"
+  # SYSCFG (D2, APB4) — system config (EXTI source select, boost/compensation
+  # cell the H7 HAL touches during rcc.freeze). Modeled as a stub (read/store).
+  - id: "syscfg"
+    type: "syscfg"
+    base_address: 0x58000400
+    size: "1KB"
   # NVIC — installed unconditionally for Cortex-M; declares the tier1 irq class.
   - id: "nvic"
     type: "nvic"
     base_address: 0xE000E100
     size: "1KB"
-  # PWR (D3, AHB4) — mapped as present (H5 VOSCR/VOSSR layout). H7 VOSRDY /
-  # SMPS offsets are NOT silicon-faithful; documented divergence above.
+  # PWR (D3, AHB4) — H7 layout: VOSRDY/ACTVOSRDY voltage-scaling handshake that
+  # foreign H7 firmware (stm32h7xx-hal / embassy) polls before PLL bring-up.
   - id: "pwr"
     type: "pwr"
     base_address: 0x58024800
     size: "1KB"
     config:
-      profile: "stm32h5"
+      profile: "h7"
   # FLASH interface (RM0468) — mapped as present for ACR latency read-back so
   # HAL clock bring-up does not fault. Bank-2 / error semantics not H7-faithful.
   - id: "flash_iface"
     type: "flash"
     base_address: 0x52002000
     size: "1KB"
+    config:
+      profile: "stm32h5"
   # IWDG1 (independent watchdog, LSI-clocked — no RCC enable gate).
   - id: "iwdg"
     type: "iwdg"
