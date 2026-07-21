@@ -819,6 +819,53 @@ board_io: []
     }
 }
 
+/// The `hc-sr04`/`hcsr04` external device dispatches through the DECLARATIVE
+/// device path (`configs/devices/hc_sr04.yaml`, `pulse_echo` primitive). Unlike
+/// the bus-resident devices it lands on the dedicated `bus.hcsr04` list, with
+/// TRIG resolved to a GPIO output (ODR) and ECHO to an input (IDR) — exactly
+/// what the deleted hand-written arm produced.
+#[test]
+fn test_from_config_attaches_hcsr04_via_declarative_descriptor() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let chip = ChipDescriptor::from_file(root.join("../../configs/chips/stm32f103.yaml"))
+        .expect("read STM32F103 chip descriptor");
+    for type_str in ["hc-sr04", "hcsr04"] {
+        let manifest: SystemManifest = serde_yaml::from_str(&format!(
+            r#"
+name: "hcsr04-declarative"
+chip: "../chips/stm32f103.yaml"
+external_devices:
+  - id: "dist"
+    type: "{type_str}"
+    connection: "gpio"
+    config:
+      trig_pin: "PA8"
+      echo_pin: "PA9"
+      cpu_hz: 8000000
+      distance_cm: 30.0
+board_io: []
+"#
+        ))
+        .expect("parse hc-sr04 manifest");
+
+        let bus = SystemBus::from_config(&chip, &manifest).expect("build bus with hc-sr04");
+        assert_eq!(
+            bus.hcsr04.len(),
+            1,
+            "exactly one HcSr04 attached for type '{type_str}'"
+        );
+        let s = &bus.hcsr04[0];
+        assert_eq!(s.id, "dist");
+        assert_eq!(s.trig_bit, 8, "trig_pin PA8 → bit 8");
+        assert_eq!(s.echo_bit, 9, "echo_pin PA9 → bit 9");
+        assert_ne!(
+            s.trig_odr_addr, s.echo_idr_addr,
+            "TRIG drives ODR, ECHO reads IDR — different registers"
+        );
+        assert_eq!(s.cpu_hz, 8_000_000, "cpu_hz sourced from config");
+    }
+}
+
 #[test]
 fn curated_esp32c3_i2c_manifests_declare_physical_routes() {
     #[derive(serde::Deserialize)]

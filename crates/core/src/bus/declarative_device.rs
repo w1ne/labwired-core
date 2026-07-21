@@ -21,10 +21,11 @@
 //! hand-written arm. Adding a device that reuses an existing primitive is then
 //! one YAML file — no new Rust in the attach path.
 //!
-//! Migrated so far: rotary encoder (`quadrature`), 4×4 keypad (`matrix`), and
-//! DHT22/AM2302 (`one_wire`). HC-SR04 (`pulse_echo`) follows; the emitter
-//! unification (both engines reading the descriptor's `emit:` block) is the
-//! separate next step.
+//! Migrated: rotary encoder (`quadrature`), 4×4 keypad (`matrix`), DHT22/AM2302
+//! (`one_wire`), and HC-SR04 (`pulse_echo`). NeoPixel stays a GPIO observer for
+//! now (ESP32-S3-specific, not a `BusResidentDevice`). The emitter unification
+//! (both engines reading the descriptor's `emit:` block) is the separate next
+//! step.
 
 use super::SystemBus;
 use anyhow::{anyhow, Context, Result};
@@ -41,6 +42,7 @@ fn embedded_yaml(device_type: &str) -> Option<&'static str> {
         )),
         "keypad" => Some(include_str!("../../../../configs/devices/keypad.yaml")),
         "dht22" | "am2302" => Some(include_str!("../../../../configs/devices/dht22.yaml")),
+        "hc-sr04" | "hcsr04" => Some(include_str!("../../../../configs/devices/hc_sr04.yaml")),
         _ => None,
     }
 }
@@ -71,12 +73,53 @@ impl SystemBus {
             "quadrature" => self.attach_quadrature(ext, desc),
             "matrix" => self.attach_matrix(ext, desc),
             "one_wire" => self.attach_one_wire(ext, desc),
+            "pulse_echo" => self.attach_pulse_echo(ext, desc),
             other => Err(anyhow!(
                 "declarative device '{}' names unknown primitive '{}'",
                 ext.id,
                 other
             )),
         }
+    }
+
+    /// `pulse_echo` primitive → [`HcSr04`]. Reproduces the former `"hc-sr04"`/
+    /// `"hcsr04"` arm: `trig` resolves to a GPIO **output** (ODR, the sensor
+    /// observes the MCU's trigger pulse) and `echo` to a GPIO **input** (IDR,
+    /// the sensor drives a distance-proportional pulse back). Unlike the
+    /// bus-resident devices this pushes onto the dedicated `hcsr04` list (it
+    /// carries the event-scheduler edge path); `distance_cm` is the
+    /// host-controlled hand position.
+    fn attach_pulse_echo(&mut self, ext: &ExternalDevice, desc: &DeviceDescriptor) -> Result<()> {
+        let trig = self.pin_config(ext, desc, "trig", "PA8")?;
+        let echo = self.pin_config(ext, desc, "echo", "PA9")?;
+        let cpu_hz = param_u64(desc, ext, "cpu_hz", 80_000_000);
+        let distance_cm = param_f64(desc, ext, "distance_cm", 50.0) as f32;
+
+        let (trig_addr, trig_bit) = Self::resolve_pin_odr(self, &trig).ok_or_else(|| {
+            anyhow!(
+                "HC-SR04 '{}' trig_pin '{}' could not be resolved to a GPIO",
+                ext.id,
+                trig
+            )
+        })?;
+        let (echo_addr, echo_bit) = Self::resolve_pin_idr(self, &echo).ok_or_else(|| {
+            anyhow!(
+                "HC-SR04 '{}' echo_pin '{}' could not be resolved to a GPIO",
+                ext.id,
+                echo
+            )
+        })?;
+
+        self.hcsr04.push(crate::peripherals::hc_sr04::HcSr04::new(
+            ext.id.clone(),
+            trig_addr,
+            trig_bit,
+            echo_addr,
+            echo_bit,
+            cpu_hz,
+            distance_cm,
+        ));
+        Ok(())
     }
 
     /// `one_wire` primitive → [`Dht22`]. Reproduces the former `"dht22"`/

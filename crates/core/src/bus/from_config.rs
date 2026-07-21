@@ -560,61 +560,9 @@ impl SystemBus {
                 // iolink-master dispatches through the PeripheralKit registry above.
                 // max31855, sn74hc165, ssd1680_tricolor_290, and pcd8544
                 // dispatch through the PeripheralKit registry above.
-                "hc-sr04" | "hcsr04" => {
-                    // GPIO-wired ultrasonic sensor — no SPI/I2C connection. The
-                    // bus services it each tick: reads TRIG (an MCU output) and
-                    // drives ECHO (an MCU input) with a distance-proportional
-                    // pulse. `distance_cm` is the host-controlled "hand position".
-                    let trig = ext
-                        .config
-                        .get("trig_pin")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("PA8")
-                        .to_string();
-                    let echo = ext
-                        .config
-                        .get("echo_pin")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("PA9")
-                        .to_string();
-                    let distance_cm = ext
-                        .config
-                        .get("distance_cm")
-                        .and_then(|v| v.as_f64())
-                        .unwrap_or(50.0) as f32;
-                    let cpu_hz = ext
-                        .config
-                        .get("cpu_hz")
-                        .and_then(|v| v.as_u64())
-                        .unwrap_or(80_000_000);
-
-                    let (trig_addr, trig_bit) =
-                        Self::resolve_pin_odr(&bus, &trig).ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "HC-SR04 '{}' trig_pin '{}' could not be resolved to a GPIO",
-                                ext.id,
-                                trig
-                            )
-                        })?;
-                    let (echo_addr, echo_bit) =
-                        Self::resolve_pin_idr(&bus, &echo).ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "HC-SR04 '{}' echo_pin '{}' could not be resolved to a GPIO",
-                                ext.id,
-                                echo
-                            )
-                        })?;
-
-                    bus.hcsr04.push(crate::peripherals::hc_sr04::HcSr04::new(
-                        ext.id.clone(),
-                        trig_addr,
-                        trig_bit,
-                        echo_addr,
-                        echo_bit,
-                        cpu_hz,
-                        distance_cm,
-                    ));
-                }
+                // hc-sr04 / hcsr04 now dispatches through the declarative device
+                // path above (configs/devices/hc_sr04.yaml, `pulse_echo`
+                // primitive) — see super::declarative_device.
                 // dht22 / am2302 now dispatches through the declarative device
                 // path above (configs/devices/dht22.yaml, `one_wire` primitive) —
                 // see super::declarative_device.
