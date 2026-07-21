@@ -279,6 +279,86 @@ impl crate::Peripheral for PwrH5 {
     }
 }
 
+/// PWR — STM32H7 layout (RM0468 / RM0433).
+///
+/// Voltage scaling completes instantly in the sim so foreign H7 firmware
+/// (stm32h7xx-hal / embassy) clears its bring-up polls: `pwr.freeze()` waits on
+/// D3CR/SRDCR (0x18) VOSRDY (bit 13) and CSR1 (0x04) ACTVOSRDY (bit 13), and
+/// requires CSR1.ACTVOS[15:14] to mirror the D3CR.VOS[15:14] it just wrote.
+/// CR1/CR2/CR3 round-trip (the HAL sets CR3.LDOEN/SMPSEN then asserts the
+/// read-back, sets CR1.DBP then polls it, and enables CR2.BREN then polls
+/// BRRDY). NOT silicon-verified — reference-manual-derived (no H7 bench part).
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
+pub struct PwrH7 {
+    cr1: u32,
+    cr2: u32,
+    cr3: u32,
+    /// D3CR/SRDCR (0x18) — only VOS[15:14] is stored; VOSRDY is synthesized.
+    d3cr: u32,
+}
+
+impl PwrH7 {
+    pub fn new() -> Self {
+        Self {
+            // CR3 reset 0x00000006: LDOEN (bit 1) + SDEN/SMPSEN (bit 2) both up
+            // out of reset, matching silicon — the HAL's default LDO supply path
+            // asserts CR3.LDOEN is set.
+            cr3: 0x0000_0006,
+            ..Default::default()
+        }
+    }
+
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x00 => self.cr1,
+            // CSR1: ACTVOS[15:14] mirrors the requested D3CR.VOS, ACTVOSRDY (13) up.
+            0x04 => (self.d3cr & (0x3 << 14)) | (1 << 13),
+            // CR2: BRRDY (bit 16) follows BREN (bit 0) — backup regulator ready.
+            0x08 => {
+                if self.cr2 & 1 != 0 {
+                    self.cr2 | (1 << 16)
+                } else {
+                    self.cr2 & !(1 << 16)
+                }
+            }
+            0x0C => self.cr3,
+            // D3CR/SRDCR: stored VOS[15:14] with VOSRDY (bit 13) always ready.
+            0x18 => self.d3cr | (1 << 13),
+            _ => 0,
+        }
+    }
+
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            0x00 => self.cr1 = value,
+            0x08 => self.cr2 = value,
+            0x0C => self.cr3 = value,
+            0x18 => self.d3cr = value & (0x3 << 14),
+            _ => {}
+        }
+    }
+}
+
+impl crate::Peripheral for PwrH7 {
+    fn read(&self, offset: u64) -> SimResult<u8> {
+        let reg = offset & !3;
+        let byte = (offset % 4) as u32;
+        Ok(((self.read_reg(reg) >> (byte * 8)) & 0xFF) as u8)
+    }
+    fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        let reg = offset & !3;
+        let byte = (offset % 4) as u32;
+        let mut v = self.read_reg(reg);
+        let mask: u32 = 0xFF << (byte * 8);
+        v = (v & !mask) | ((value as u32) << (byte * 8));
+        self.write_reg(reg, v);
+        Ok(())
+    }
+    fn snapshot(&self) -> serde_json::Value {
+        serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+}
+
 /// PWR — STM32L0 layout (RM0367 §6.4).
 ///
 /// The L0 power controller is just two registers — CR @0x00 and CSR @0x04 —

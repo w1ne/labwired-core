@@ -7,6 +7,13 @@
     "reg_match": 364
   },
   {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "nrf54l15",
+    "reg_match": 0
+  },
+  {
     "behavior": false,
     "excluded": 0,
     "level": 0,
@@ -52,6 +59,13 @@
     "behavior": true,
     "excluded": 0,
     "level": 1,
+    "name": "nrf5340",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
     "name": "rp2040",
     "reg_match": 0
   },
@@ -88,6 +102,13 @@
     "excluded": 0,
     "level": 1,
     "name": "stm32h563",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "stm32h735",
     "reg_match": 0
   },
   {

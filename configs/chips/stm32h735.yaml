@@ -1,0 +1,293 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+#
+# STM32H735VG — Arm Cortex-M7 (single core, FPU+MPU), 550 MHz, 1 MB flash.
+# The FIRST fully-modelled Cortex-M7 chip in LabWired. H7-family (RM0468 —
+# H723/733/725/735/730), NOT H5: GPIO @ 0x5802_0000, RCC @ 0x5802_4400,
+# flash interface @ 0x5200_2000, DBGMCU @ 0x5C00_1000.
+#
+# Source references:
+# - STM32H735xG datasheet DS13312 (memory map, peripheral instances).
+# - STM32H723/733/725/735/730 reference manual RM0468 (register offsets, IRQs).
+# - CMSIS device header stm32h735xx.h (IRQ numbers).
+#
+# Fidelity: SIM-DERIVED — LabWired has no H735 bench part, so every reset value
+# and behaviour below is reference-manual-derived, not silicon-pinned. The
+# peripheral models reused here share silicon IP with the H7:
+#   - rcc     profile h7   (new H7 RCC layout, RM0468 §8.7 — see rcc.rs)
+#   - gpio    profile stm32v2  (MODER/OSPEEDR/PUPDR/BSRR/BRR — identical IP)
+#   - uart    profile stm32v2  ("USART v2" ISR/RDR/TDR — F7/H7/L4/H5 shared)
+#   - spi     profile stm32h5  ("SPI v2" CFG1/CFG2 — H7/H5 shared)
+#   - i2c     profile h5       ("I2C v2" TIMINGR/ISR — F7/H7/L4/H5 shared)
+#   - timer   generic          (TIMx CR1/PSC/ARR/CNT — architecture-stable)
+#
+# HAL bring-up: unmodified stm32h7xx-hal firmware boots end to end on this
+# model — PWR voltage scaling (h7 profile: VOSRDY/ACTVOSRDY), the PLL1 clock
+# tree to 200 MHz + FLASH ACR latency (h5 profile, same LATENCY[3:0]) + the
+# SYSCLK switch, the SYSCFG I/O-compensation cell (CCCSR.READY), then GPIO +
+# USART3. See examples/stm32h735-hal-demo. (A double-precision VFP push in a
+# hard-float build hits an undecoded VFP instruction — build soft-float, or the
+# DP-FPU decode is a separate follow-up.)
+#
+# Known omissions (H7 blocks whose IP diverges from the reused models; each
+# reads as an unmapped hole until modelled — documented, not hidden):
+#   - DMA: H7 uses DMA1/2 + BDMA + DMAMUX, NOT the H5 GPDMA1 — different model.
+#   - ADC: H7 ADC3 (16-bit, oversampling) differs from the L4 ADC layout.
+#   - RTC / FDCAN / OCTOSPI / Ethernet: not yet wired.
+#   - FLASH bank-2 / program-error semantics use the H5 layout (only ACR latency
+#     is exercised); not H7-silicon-faithful.
+
+name: "stm32h735vg"
+arch: "arm"
+core: "cortex-m7"
+registers_count: 140
+flash:
+  base: 0x08000000
+  # STM32H735VG = 1 MiB single-bank flash (0x100000 bytes) at 0x08000000.
+  size: "1MiB"
+ram:
+  # DTCM @ 0x20000000 (128 KiB, zero-wait) is where Cortex-M7 firmware links
+  # its stack + .data by default (CubeMX/embassy default). AXI SRAM (320 KiB
+  # @ 0x24000000) is mapped separately below.
+  base: 0x20000000
+  size: "128KiB"
+memory_regions:
+  # AXI SRAM (D1 domain), 320 KiB. Firmware DMA buffers / large .bss often live
+  # here; mapped so pointers into it are backed.
+  - name: "axi_sram"
+    base: 0x24000000
+    size: "320KiB"
+  # SRAM1+SRAM2 (D2 domain), contiguous 32 KiB from 0x30000000.
+  - name: "sram_d2"
+    base: 0x30000000
+    size: "32KiB"
+  # SRAM4 (D3 domain), 16 KiB.
+  - name: "sram_d3"
+    base: 0x38000000
+    size: "16KiB"
+  # ITCM RAM, 64 KiB @ 0x00000000 (zero-wait instruction TCM).
+  - name: "itcm"
+    base: 0x00000000
+    size: "64KiB"
+peripherals:
+  # RCC — new H7 layout (RM0468 §8.7). Enable block AHB/APB ENR @ 0xD4..0xF4,
+  # BDCR @ 0x70, CSR @ 0x74. Oscillator/PLL ready gating + SW→SWS switch gate.
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x58024400
+    size: "1KB"
+    config:
+      profile: "h7"
+  # GPIO ports A..H (bonded on the LQFP100 STM32H735VG). Base 0x58020000,
+  # stride 0x400. stm32v2 register IP (MODER/OSPEEDR/PUPDR/IDR/ODR/BSRR/BRR).
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x58020000
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+      # PA13/PA14 SWD + PA15 JTDI debug defaults (port A not all-analog).
+      reset_moder: 0xABFFFFFF
+      reset_ospeedr: 0x0C000000
+      reset_pupdr: 0x64000000
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x58020400
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+      # PB3 JTDO/SWO + PB4 NJTRST debug defaults.
+      reset_moder: 0xFFFFFEBF
+      reset_ospeedr: 0x000000C0
+      reset_pupdr: 0x00000100
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x58020800
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+      reset_moder: 0xFFFFFFFF
+  - id: "gpiod"
+    type: "gpio"
+    base_address: 0x58020C00
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+      reset_moder: 0xFFFFFFFF
+  - id: "gpioe"
+    type: "gpio"
+    base_address: 0x58021000
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+      reset_moder: 0xFFFFFFFF
+  - id: "gpiof"
+    type: "gpio"
+    base_address: 0x58021400
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+      reset_moder: 0xFFFFFFFF
+  - id: "gpiog"
+    type: "gpio"
+    base_address: 0x58021800
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+      reset_moder: 0xFFFFFFFF
+  - id: "gpioh"
+    type: "gpio"
+    base_address: 0x58021C00
+    size: "1KB"
+    config:
+      profile: "stm32v2"
+      reset_moder: 0xFFFFFFFF
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    config:
+      calib: 0x00000000
+  # USART3 (APB1) — the LabWired console UART for this chip. stm32v2 IP.
+  - id: "usart3"
+    type: "uart"
+    base_address: 0x40004800
+    size: "1KB"
+    irq: 39
+    config:
+      profile: "stm32v2"
+  # USART1 (APB2) — second UART. stm32v2 IP.
+  - id: "usart1"
+    type: "uart"
+    base_address: 0x40011000
+    size: "1KB"
+    irq: 37
+    config:
+      profile: "stm32v2"
+  # LPUART1 (APB4, D3 domain).
+  - id: "lpuart1"
+    type: "uart"
+    base_address: 0x58000C00
+    size: "1KB"
+    irq: 142
+    config:
+      profile: "stm32v2"
+  # TIM1 advanced-control (APB2). `_pwm` id suffix declares the tier1 pwm class.
+  - id: "tim1_pwm"
+    type: "timer"
+    base_address: 0x40010000
+    size: "1KB"
+    irq: 27
+    config:
+      advanced: true
+    # TIM1 clocked from RCC_APB2ENR.TIM1EN (bit 0). Unclocked out of reset.
+    clock: { reg: "apb2enr", bit: 0 }
+  # TIM2 (APB1) — 32-bit general-purpose timer.
+  - id: "tim2"
+    type: "timer"
+    base_address: 0x40000000
+    size: "1KB"
+    irq: 28
+    config:
+      width: 32
+    # TIM2 clocked from RCC_APB1LENR.TIM2EN (bit 0).
+    clock: { reg: "apb1lenr", bit: 0 }
+  - id: "tim3"
+    type: "timer"
+    base_address: 0x40000400
+    size: "1KB"
+    irq: 29
+  # I2C1 (APB1) — I2C v2 IP (TIMINGR/ISR), h5 profile.
+  - id: "i2c1"
+    type: "i2c"
+    base_address: 0x40005400
+    size: "1KB"
+    irq: 31
+    config:
+      profile: "h5"
+    # I2C1 clocked from RCC_APB1LENR.I2C1EN (bit 21).
+    clock: { reg: "apb1lenr", bit: 21 }
+  - id: "i2c2"
+    type: "i2c"
+    base_address: 0x40005800
+    size: "1KB"
+    irq: 33
+    config:
+      profile: "h5"
+  # SPI1 (APB2) — SPI v2 IP (CFG1/CFG2), stm32h5 profile.
+  - id: "spi1"
+    type: "spi"
+    base_address: 0x40013000
+    size: "1KB"
+    irq: 35
+    config:
+      profile: "stm32h5"
+    # SPI1 clocked from RCC_APB2ENR.SPI1EN (bit 12).
+    clock: { reg: "apb2enr", bit: 12 }
+  - id: "spi2"
+    type: "spi"
+    base_address: 0x40003800
+    size: "1KB"
+    irq: 36
+    config:
+      profile: "stm32h5"
+  # SYSCFG (D2, APB4) — system config (EXTI source select, boost/compensation
+  # cell the H7 HAL touches during rcc.freeze). Modeled as a stub (read/store).
+  - id: "syscfg"
+    type: "syscfg"
+    base_address: 0x58000400
+    size: "1KB"
+  # NVIC — installed unconditionally for Cortex-M; declares the tier1 irq class.
+  - id: "nvic"
+    type: "nvic"
+    base_address: 0xE000E100
+    size: "1KB"
+  # PWR (D3, AHB4) — H7 layout: VOSRDY/ACTVOSRDY voltage-scaling handshake that
+  # foreign H7 firmware (stm32h7xx-hal / embassy) polls before PLL bring-up.
+  - id: "pwr"
+    type: "pwr"
+    base_address: 0x58024800
+    size: "1KB"
+    config:
+      profile: "h7"
+  # FLASH interface (RM0468) — mapped as present for ACR latency read-back so
+  # HAL clock bring-up does not fault. Bank-2 / error semantics not H7-faithful.
+  - id: "flash_iface"
+    type: "flash"
+    base_address: 0x52002000
+    size: "1KB"
+    config:
+      profile: "stm32h5"
+  # IWDG1 (independent watchdog, LSI-clocked — no RCC enable gate).
+  - id: "iwdg"
+    type: "iwdg"
+    base_address: 0x58004800
+    size: "1KB"
+  # WWDG (APB3).
+  - id: "wwdg"
+    type: "wwdg"
+    base_address: 0x40002C00
+    size: "1KB"
+    irq: 0
+  # CRC (AHB4).
+  - id: "crc"
+    type: "crc"
+    base_address: 0x58024C00
+    size: "1KB"
+    config:
+      idr_width: 32
+  # RNG (AHB2).
+  - id: "rng"
+    type: "rng"
+    base_address: 0x48021800
+    size: "1KB"
+    irq: 141
+  # DBGMCU (RM0468 §60) @ 0x5C001000. DEV_ID 0x483 (H72x/73x). Nominal IDCODE.
+  - id: "dbgmcu"
+    type: "dbgmcu"
+    base_address: 0x5C001000
+    size: "1KB"
+    config:
+      idcode: 0x10016483

@@ -395,6 +395,13 @@ pub const TIER1_TARGETS: &[Tier1Target] = &[
         "tests/fixtures/tier1/stm32h563.elf",
     )
     .with_extra_classes(&["can"]),
+    // First fully-modelled Cortex-M7 chip. H7-family (RM0468); sim-derived
+    // (no bench part). Exercises clock/gpio/timer/pwm/i2c/spi/wdt/irq + uart.
+    fast_boot(
+        "stm32h735",
+        "configs/chips/stm32h735.yaml",
+        "tests/fixtures/tier1/stm32h735.elf",
+    ),
     fast_boot(
         "stm32l073",
         "configs/chips/stm32l073.yaml",

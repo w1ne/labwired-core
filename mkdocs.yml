@@ -93,6 +93,7 @@ nav:
     - STM32F407: boards/stm32f407.md
     - NUCLEO-L476RG: boards/nucleo-l476rg.md
     - STM32H563: boards/stm32h563.md
+    - STM32H735: boards/stm32h735.md
     - STM32WBA52: boards/stm32wba52.md
     - nRF52832: boards/nrf52832.md
     - nRF52840: boards/nrf52840.md

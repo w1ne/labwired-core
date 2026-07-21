@@ -1,0 +1,16 @@
+# LabWired - STM32H735VG smoke system configuration
+#
+# Instantiates the STM32H735VG chip model (the first Cortex-M7 in LabWired) with
+# a minimal board I/O binding. Referenced by io-smoke.yaml, which runs the
+# tier-1 fixture firmware and asserts its TIER1 self-test transcript over UART.
+name: "stm32h735-smoke"
+chip: "../../configs/chips/stm32h735.yaml"
+external_devices: []
+board_io:
+  # PA5 is briefly driven high/low by the fixture's gpio self-test.
+  - id: "led_pa5"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true

@@ -142,6 +142,14 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_stm32h563_demo_survival"),
     },
     ChipConf {
+        // First Cortex-M7 chip. Sim-derived (RM0468); no silicon capture, so no
+        // reset_oracle. Behaviour asserted by the tier-1 fixture self-tests.
+        name: "stm32h735",
+        yaml: "configs/chips/stm32h735.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("tier1::stm32h735"),
+    },
+    ChipConf {
         name: "stm32l073",
         yaml: "configs/chips/stm32l073.yaml",
         reset_oracle: Some("scripts/hw-oracle/captures/stm32l073/reg_oracle.json"),

@@ -51,13 +51,13 @@
       "status": "pass"
     },
     "i2c": {
-      "status": "pass"
+      "status": "blocked"
     },
     "irq": {
       "status": "pass"
     },
     "pwm": {
-      "status": "pass"
+      "status": "blocked"
     },
     "rtc": {
       "status": "na"
@@ -200,7 +200,7 @@
       "status": "pass"
     },
     "dma": {
-      "status": "na"
+      "status": "unrecorded"
     },
     "gpio": {
       "status": "pass"
@@ -314,7 +314,7 @@
       "status": "pass"
     },
     "dma": {
-      "status": "na"
+      "status": "unrecorded"
     },
     "gpio": {
       "status": "pass"
@@ -409,6 +409,44 @@
     },
     "rtc": {
       "status": "pass"
+    },
+    "spi": {
+      "status": "pass"
+    },
+    "timer": {
+      "status": "pass"
+    },
+    "uart": {
+      "status": "pass"
+    },
+    "wdt": {
+      "status": "pass"
+    }
+  },
+  "stm32h735": {
+    "adc": {
+      "status": "na"
+    },
+    "clock": {
+      "status": "pass"
+    },
+    "dma": {
+      "status": "na"
+    },
+    "gpio": {
+      "status": "pass"
+    },
+    "i2c": {
+      "status": "pass"
+    },
+    "irq": {
+      "status": "pass"
+    },
+    "pwm": {
+      "status": "pass"
+    },
+    "rtc": {
+      "status": "na"
     },
     "spi": {
       "status": "pass"

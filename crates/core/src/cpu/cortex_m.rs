@@ -263,6 +263,23 @@ impl CortexM {
         low | (high << 2)
     }
 
+    /// Read a double-precision value from the S-register pair at low index `d_lo`
+    /// (= 2*Dn). Little-endian: the low S-register holds bits [31:0].
+    fn read_f64(&self, d_lo: u8) -> f64 {
+        let lo = self.fpu_s.get(d_lo as usize).copied().unwrap_or(0) as u64;
+        let hi = self.fpu_s.get(d_lo as usize + 1).copied().unwrap_or(0) as u64;
+        f64::from_bits((hi << 32) | lo)
+    }
+
+    /// Write a double-precision value to the S-register pair at low index `d_lo`.
+    fn write_f64(&mut self, d_lo: u8, v: f64) {
+        let bits = v.to_bits();
+        if (d_lo as usize + 1) < 32 {
+            self.fpu_s[d_lo as usize] = bits as u32;
+            self.fpu_s[d_lo as usize + 1] = (bits >> 32) as u32;
+        }
+    }
+
     fn read_reg(&self, n: u8) -> u32 {
         match n {
             0 => self.r0,
@@ -2948,6 +2965,156 @@ impl CortexM {
                 }
                 Instruction::VmovF32Reg { sd, sm } => {
                     self.fpu_s[sd as usize] = self.fpu_s[sm as usize];
+                    pc_increment = 4;
+                }
+                // -------- VFP load/store multiple + double-precision (FPv5-D16) --------
+                Instruction::VfpStoreMultiple {
+                    rn,
+                    s_first,
+                    count,
+                    add,
+                    wback,
+                } => {
+                    let base = self.read_reg(rn);
+                    let total = 4u32.wrapping_mul(count as u32);
+                    let start = if add { base } else { base.wrapping_sub(total) };
+                    for i in 0..count {
+                        let idx = s_first as usize + i as usize;
+                        let val = if idx < 32 { self.fpu_s[idx] } else { 0 };
+                        let addr = start.wrapping_add(4 * i as u32);
+                        if bus.write_u32(addr as u64, val).is_err() {
+                            tracing::error!("Bus Write Fault (VSTM) at {:#x}", addr);
+                        }
+                    }
+                    if wback {
+                        let nb = if add {
+                            base.wrapping_add(total)
+                        } else {
+                            base.wrapping_sub(total)
+                        };
+                        self.write_reg(rn, nb);
+                    }
+                    pc_increment = 4;
+                }
+                Instruction::VfpLoadMultiple {
+                    rn,
+                    s_first,
+                    count,
+                    add,
+                    wback,
+                } => {
+                    let base = self.read_reg(rn);
+                    let total = 4u32.wrapping_mul(count as u32);
+                    let start = if add { base } else { base.wrapping_sub(total) };
+                    for i in 0..count {
+                        let idx = s_first as usize + i as usize;
+                        let addr = start.wrapping_add(4 * i as u32);
+                        match bus.read_u32(addr as u64) {
+                            Ok(v) => {
+                                if idx < 32 {
+                                    self.fpu_s[idx] = v;
+                                }
+                            }
+                            Err(_) => tracing::error!("Bus Read Fault (VLDM) at {:#x}", addr),
+                        }
+                    }
+                    if wback {
+                        let nb = if add {
+                            base.wrapping_add(total)
+                        } else {
+                            base.wrapping_sub(total)
+                        };
+                        self.write_reg(rn, nb);
+                    }
+                    pc_increment = 4;
+                }
+                Instruction::Vldr64 { dd, rn, imm, add } => {
+                    let base = self.read_reg(rn);
+                    let base = if rn == 15 { base & !3 } else { base };
+                    let addr = if add {
+                        base.wrapping_add(imm as u32)
+                    } else {
+                        base.wrapping_sub(imm as u32)
+                    };
+                    for (w, off) in [(0usize, 0u32), (1, 4)] {
+                        match bus.read_u32(addr.wrapping_add(off) as u64) {
+                            Ok(v) => {
+                                if (dd as usize + w) < 32 {
+                                    self.fpu_s[dd as usize + w] = v;
+                                }
+                            }
+                            Err(_) => tracing::error!(
+                                "Bus Read Fault (VLDR.64) at {:#x}",
+                                addr.wrapping_add(off)
+                            ),
+                        }
+                    }
+                    pc_increment = 4;
+                }
+                Instruction::Vstr64 { dd, rn, imm, add } => {
+                    let base = self.read_reg(rn);
+                    let addr = if add {
+                        base.wrapping_add(imm as u32)
+                    } else {
+                        base.wrapping_sub(imm as u32)
+                    };
+                    for (w, off) in [(0usize, 0u32), (1, 4)] {
+                        let val = if (dd as usize + w) < 32 {
+                            self.fpu_s[dd as usize + w]
+                        } else {
+                            0
+                        };
+                        if bus.write_u32(addr.wrapping_add(off) as u64, val).is_err() {
+                            tracing::error!(
+                                "Bus Write Fault (VSTR.64) at {:#x}",
+                                addr.wrapping_add(off)
+                            );
+                        }
+                    }
+                    pc_increment = 4;
+                }
+                Instruction::VmovF64Reg { dd, dm } => {
+                    if (dd as usize + 1) < 32 && (dm as usize + 1) < 32 {
+                        self.fpu_s[dd as usize] = self.fpu_s[dm as usize];
+                        self.fpu_s[dd as usize + 1] = self.fpu_s[dm as usize + 1];
+                    }
+                    pc_increment = 4;
+                }
+                Instruction::VmovDRtRt2 { dm, rt, rt2 } => {
+                    if (dm as usize + 1) < 32 {
+                        self.fpu_s[dm as usize] = self.read_reg(rt);
+                        self.fpu_s[dm as usize + 1] = self.read_reg(rt2);
+                    }
+                    pc_increment = 4;
+                }
+                Instruction::VmovRtRt2D { rt, rt2, dm } => {
+                    let (lo, hi) = if (dm as usize + 1) < 32 {
+                        (self.fpu_s[dm as usize], self.fpu_s[dm as usize + 1])
+                    } else {
+                        (0, 0)
+                    };
+                    self.write_reg(rt, lo);
+                    self.write_reg(rt2, hi);
+                    pc_increment = 4;
+                }
+                Instruction::VaddF64 { dd, dn, dm } => {
+                    let r = self.read_f64(dn) + self.read_f64(dm);
+                    self.write_f64(dd, r);
+                    pc_increment = 4;
+                }
+                Instruction::VsubF64 { dd, dn, dm } => {
+                    let r = self.read_f64(dn) - self.read_f64(dm);
+                    self.write_f64(dd, r);
+                    pc_increment = 4;
+                }
+                Instruction::VmulF64 { dd, dn, dm } => {
+                    let r = self.read_f64(dn) * self.read_f64(dm);
+                    self.write_f64(dd, r);
+                    pc_increment = 4;
+                }
+                Instruction::VdivF64 { dd, dn, dm } => {
+                    let r = self.read_f64(dn) / self.read_f64(dm);
+                    self.write_f64(dd, r);
                     pc_increment = 4;
                 }
 
