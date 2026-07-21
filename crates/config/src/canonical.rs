@@ -439,6 +439,7 @@ const STM32_BOARDS: &[&str] = &[
     "stm32f401cdu6",
     "stm32l476",
     "stm32h563",
+    "stm32h735",
 ];
 
 /// SPI display/sensor devices addressed by their own emitter
