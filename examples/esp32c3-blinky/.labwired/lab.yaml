@@ -1,0 +1,21 @@
+# Headless run of the ESP32-C3 blinky firmware.
+#
+# Asserts the firmware actually drives the LED pin: GPIO8 is enabled as an
+# output (GPIO_ENABLE, 0x60004020, bit 8) and the blink loop runs long enough
+# to log several on/off transitions over UART0.
+schema_version: "1.0"
+inputs:
+  system: "../system.yaml"
+  firmware: "../firmware/esp32c3_blinky.elf"
+limits:
+  max_steps: 400000
+assertions:
+  - uart_contains: "C3 BLINKY BOOT"
+  - uart_contains: "LED ON"
+  - uart_contains: "LED OFF"
+  # GPIO_ENABLE bit 8: the LED pin is configured as an output.
+  - memory_value:
+      address: 0x60004020
+      expected_value: 0x00000100
+      mask: 0x00000100
+  - expected_stop_reason: max_steps

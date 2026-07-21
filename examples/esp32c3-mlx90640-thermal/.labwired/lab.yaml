@@ -1,0 +1,30 @@
+# Headless run of the ESP32-C3 thermal-fingerprint firmware — NORMAL scenario.
+#
+# The firmware reads the MLX90640 over the real C3 I²C0 controller, decodes
+# per-pixel °C with the unmodified Melexis driver ON-TARGET, runs the spatial
+# thermal-fingerprint state machine, and prints a verdict per frame.
+#
+# NORMAL: the fan-cooled hotspot warms up to a bounded ~49 °C plateau and never
+# faults. Assert the firmware boots, reaches the STABLE state, and reports
+# fault=NONE with full health (100). The frame loop is driven by I²C
+# status-poll → frame-read → STATUS-clear, which advances the thermal scene.
+#
+# NB: the simple_regex engine supports only `.`, `*`, `^`, `$` — no char
+# classes or alternation — so all assertions below are literal substrings.
+schema_version: "1.0"
+inputs:
+  system: "../system.yaml"
+  firmware: "../firmware/thermal_fingerprint.elf"
+limits:
+  max_steps: 50000000
+assertions:
+  # Boot banner + sensor brought up over real I²C.
+  - uart_contains: "TFS BOOT"
+  - uart_contains: "MLX90640 READY"
+  # The fingerprint state machine progresses through warm-up to STABLE.
+  - uart_contains: "state=WARMUP"
+  - uart_contains: "state=STABLE"
+  # NORMAL never faults; the per-frame verdict reports fault=NONE.
+  - uart_contains: "fault=NONE"
+  # Health stays at full margin in the bounded-plateau regime.
+  - uart_contains: "health=100"

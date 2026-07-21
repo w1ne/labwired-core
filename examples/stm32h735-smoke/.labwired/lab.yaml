@@ -1,0 +1,20 @@
+# LabWired - STM32H735VG IO smoke test
+#
+# Runs the prebuilt tier-1 fixture ELF (raw-register peripheral self-tests) and
+# asserts the TIER1 transcript. The firmware path points at the committed
+# tier-1 fixture blob rather than a build output, so no cross-compile is needed
+# for the strict-onboarding gate.
+schema_version: "1.0"
+inputs:
+  firmware: "../../../tests/fixtures/tier1/stm32h735.elf"
+  system: "../system.yaml"
+limits:
+  max_steps: 5000000
+assertions:
+  - uart_contains: "TIER1 clock PASS"
+  - uart_contains: "TIER1 gpio PASS"
+  - uart_contains: "TIER1 spi PASS"
+  - uart_contains: "TIER1 i2c PASS"
+  - uart_contains: "TIER1 irq PASS"
+  - uart_contains: "TIER1 done"
+  - expected_stop_reason: max_steps

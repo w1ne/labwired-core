@@ -1,0 +1,15 @@
+schema_version: "1.0"
+inputs:
+  system: "../system.yaml"
+  firmware: "../firmware/build/f103_uds_ecu.elf"
+limits:
+  max_steps: 600000
+assertions:
+  # Two real nodes on the bus: a virtual UDS tester drives the multi-frame
+  # SecurityAccess request, and real UDSLib on the emulated F103 bxCAN (normal
+  # mode, valid BTR, acceptance filter) reassembles it and answers. UDS_SEED_SERVED
+  # means the reassembled request actually dispatched to the ECU's seed handler.
+  - uart_contains: "F103-UDS-ECU"
+  - uart_contains: "ECU_READY"
+  - uart_contains: "UDS_SEED_SERVED"
+  - expected_stop_reason: max_steps

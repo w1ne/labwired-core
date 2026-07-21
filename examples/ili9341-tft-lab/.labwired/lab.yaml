@@ -1,0 +1,12 @@
+# LabWired - ILI9341 TFT Lab smoke test
+schema_version: "1.0"
+inputs:
+  firmware: "../../../target/thumbv7m-none-eabi/release/ili9341-tft-lab"
+  system: "../system.yaml"
+limits:
+  max_steps: 20000000
+assertions:
+  - uart_contains: "ILI9341 TFT Lab"
+  - uart_contains: "TFT init done"
+  - uart_contains: "frame done"
+  - expected_stop_reason: max_steps

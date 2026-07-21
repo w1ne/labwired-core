@@ -1,0 +1,7 @@
+schema_version: "1.0"
+inputs:
+  system: "../system.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - expected_stop_reason: max_steps

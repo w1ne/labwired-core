@@ -1,0 +1,11 @@
+# LabWired - NTC Thermistor Lab smoke test
+schema_version: "1.0"
+inputs:
+  firmware: "../../../target/thumbv7m-none-eabi/release/ntc-thermistor-lab"
+  system: "../system.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "NTC Thermistor Lab"
+  - uart_contains: "[NTC] iter="
+  - expected_stop_reason: max_steps
