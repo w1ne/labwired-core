@@ -22,6 +22,7 @@ mod attach;
 pub mod bus_trace;
 mod can_devices;
 mod construct;
+mod declarative_device;
 mod device_hooks;
 mod embedded_descriptors;
 mod faults;

@@ -630,6 +630,60 @@ external_devices:
     );
 }
 
+/// The `rotary_encoder` external device dispatches through the DECLARATIVE
+/// device path (`configs/devices/rotary_encoder.yaml`, `quadrature` primitive)
+/// rather than a hand-written `from_config` arm. This locks that seam: a
+/// rotary device in a system.yaml must still land a `RotaryEncoder` on the bus
+/// with its CLK/DT pins resolved from the descriptor's pin bindings — byte for
+/// byte what the deleted arm produced.
+#[test]
+fn test_from_config_attaches_rotary_encoder_via_declarative_descriptor() {
+    use crate::peripherals::components::rotary_encoder::RotaryEncoder;
+
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let chip = ChipDescriptor::from_file(root.join("../../configs/chips/stm32f103.yaml"))
+        .expect("read STM32F103 chip descriptor");
+    // Both `type:` spellings must resolve to the same declarative descriptor.
+    for type_str in ["rotary_encoder", "rotary-encoder"] {
+        let manifest: SystemManifest = serde_yaml::from_str(&format!(
+            r#"
+name: "rotary-declarative"
+chip: "../chips/stm32f103.yaml"
+external_devices:
+  - id: "knob"
+    type: "{type_str}"
+    connection: "gpio"
+    config:
+      clk_pin: "PA0"
+      dt_pin: "PA1"
+      cpu_hz: 8000000
+board_io: []
+"#
+        ))
+        .expect("parse rotary manifest");
+
+        let bus = SystemBus::from_config(&chip, &manifest).expect("build bus with rotary");
+        let encoders: Vec<&RotaryEncoder> = bus.gpio_devices_of::<RotaryEncoder>().collect();
+        assert_eq!(
+            encoders.len(),
+            1,
+            "exactly one RotaryEncoder attached for type '{type_str}'"
+        );
+        let enc = encoders[0];
+        assert_eq!(enc.id, "knob");
+        // PA0 → gpioa IDR bit 0; PA1 → bit 1. The descriptor bound role `a`→
+        // clk_pin and `b`→dt_pin, so CLK follows PA0 and DT follows PA1.
+        assert_eq!(enc.clk_bit, 0, "clk_pin PA0 → bit 0");
+        assert_eq!(enc.dt_bit, 1, "dt_pin PA1 → bit 1");
+        assert_eq!(
+            enc.clk_idr_addr, enc.dt_idr_addr,
+            "both channels on the same GPIOA IDR"
+        );
+        // cpu_hz threaded from config through the descriptor's params mapping.
+        assert_eq!(enc.cpu_hz, 8_000_000, "cpu_hz sourced from config");
+    }
+}
+
 #[test]
 fn curated_esp32c3_i2c_manifests_declare_physical_routes() {
     #[derive(serde::Deserialize)]
