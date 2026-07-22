@@ -24,7 +24,7 @@
 
 use crate::peripherals::uart::UartStreamDevice;
 use std::collections::{HashMap, VecDeque};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex};
 
 #[derive(Default)]
 struct Link {
@@ -94,37 +94,6 @@ impl UartStreamDevice for VirtualWireEndpoint {
     }
 }
 
-// --- Transitional process-global bus (browser back-compat) -------------------
-//
-// The wasm `attach_uart_wire` binding still mints endpoints from a single
-// module-global bus. One wasm module = one worker = one lab, so a per-module
-// global is byte-identical to the former `static WIRE`. The next step replaces
-// this with a `VirtualWireBus` created per lab-group in JS and threaded through
-// the binding, after which this global and the two `#[deprecated]` shims below
-// are deleted — completing the removal of the process-static medium.
-
-fn default_wire_bus() -> &'static VirtualWireBus {
-    static BUS: OnceLock<VirtualWireBus> = OnceLock::new();
-    BUS.get_or_init(VirtualWireBus::new)
-}
-
-impl VirtualWireEndpoint {
-    /// Mint an endpoint from the process-global bus.
-    ///
-    /// Transitional back-compat for the wasm binding; prefer
-    /// [`VirtualWireBus::endpoint`] with an explicitly owned bus.
-    pub fn new(link_id: u32, side: u8) -> Self {
-        default_wire_bus().endpoint(link_id, side)
-    }
-}
-
-/// Clear the process-global bus.
-///
-/// Transitional back-compat; prefer [`VirtualWireBus::clear`] on an owned bus.
-pub fn clear_virtual_uart_wires() {
-    default_wire_bus().clear();
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -181,17 +150,5 @@ mod tests {
 
         assert_eq!(lab_a.endpoint(2, 1).poll(0), None, "cleared bus still held bytes");
         assert_eq!(lab_b.endpoint(2, 1).poll(0), Some(0x22), "clear leaked to another bus");
-    }
-
-    #[test]
-    fn process_global_shim_still_delivers() {
-        // The transitional wasm path (VirtualWireEndpoint::new + the global) must
-        // stay byte-identical while the binding migration is pending.
-        clear_virtual_uart_wires();
-        let mut a = VirtualWireEndpoint::new(7, 0);
-        let mut b = VirtualWireEndpoint::new(7, 1);
-        a.on_tx_byte(0x5A);
-        assert_eq!(b.poll(0), Some(0x5A));
-        clear_virtual_uart_wires();
     }
 }

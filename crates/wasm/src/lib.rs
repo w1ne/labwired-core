@@ -889,21 +889,21 @@ impl WasmSimulator {
             .map_err(|e| JsValue::from_str(&format!("Step Error: {}", e)))
     }
 
-    /// Connect this chip's UART (`uart_id`, e.g. "uart2") to a shared in-module
-    /// cross-link, so it exchanges bytes with the other chip on the same
-    /// `link_id`. The two chips of a point-to-point IO-Link use opposite
-    /// `side`s (0 and 1). Bytes flow through a process-static medium with no
-    /// per-byte host round-trip, so both chips can keep stepping in batches.
+    /// Connect this chip's UART (`uart_id`, e.g. "uart2") to a shared cross-link
+    /// `bus`, so it exchanges bytes with the other chip on the same `link_id`.
+    /// The two chips of a point-to-point IO-Link use opposite `side`s (0 and 1)
+    /// of the SAME `WireBus`. Bytes flow through the bus with no per-byte host
+    /// round-trip, so both chips can keep stepping in batches. Chips wired to
+    /// different `WireBus` instances are fully isolated.
     #[wasm_bindgen]
     pub fn attach_uart_wire(
         &mut self,
         uart_id: &str,
         link_id: u32,
         side: u8,
+        bus: &WireBus,
     ) -> Result<(), JsValue> {
-        let endpoint = Box::new(
-            labwired_core::network::virtual_uart_wire::VirtualWireEndpoint::new(link_id, side),
-        );
+        let endpoint = Box::new(bus.inner.endpoint(link_id, side));
         self.machine()
             .bus
             .attach_uart_stream_by_id(uart_id, endpoint)
@@ -1320,12 +1320,32 @@ extern "C" {
     fn perf_now() -> f64;
 }
 
-/// Clear every shared UART cross-link. The playground calls this when (re)loading
-/// a multi-chip lab so a previous station's link buffers don't leak bytes into
-/// the new one.
+/// A shared UART cross-link medium, owned by the host. Create one per multi-chip
+/// lab-group and pass it to every chip's `attach_uart_wire`; chips sharing a bus
+/// exchange bytes, chips on different buses are isolated. A fresh `WireBus` per
+/// lab (re)load replaces the former module-global reset — a new bus starts empty,
+/// so no stale link buffers can leak into the new station.
 #[wasm_bindgen]
-pub fn clear_uart_wires() {
-    labwired_core::network::virtual_uart_wire::clear_virtual_uart_wires();
+pub struct WireBus {
+    inner: labwired_core::network::virtual_uart_wire::VirtualWireBus,
+}
+
+#[wasm_bindgen]
+impl WireBus {
+    #[wasm_bindgen(constructor)]
+    #[allow(clippy::new_without_default)]
+    pub fn new() -> WireBus {
+        WireBus {
+            inner: labwired_core::network::virtual_uart_wire::VirtualWireBus::new(),
+        }
+    }
+
+    /// Drop every link's buffered bytes on this bus. Rarely needed — prefer a
+    /// fresh `WireBus` per lab load — but exposed for in-place resets.
+    #[wasm_bindgen]
+    pub fn clear(&self) {
+        self.inner.clear();
+    }
 }
 
 /// Parse a JS `{ name: Uint8Array }` object into a `name → bytes` map. Values
