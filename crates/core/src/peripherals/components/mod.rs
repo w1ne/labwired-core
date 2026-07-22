@@ -7,9 +7,11 @@
 pub mod ads1115;
 pub mod adxl345;
 pub mod aht20;
+pub mod as5600;
 pub mod bg770a;
 pub mod bme280;
 pub mod bmi270;
+pub mod bno055;
 pub mod bmp280;
 pub mod cap1188;
 pub mod dht22;
@@ -61,6 +63,7 @@ pub mod tm1637_7seg;
 pub mod tmp117;
 pub mod uc8151d_tricolor_290;
 pub mod veml7700;
+pub mod vl53l0x;
 pub mod vl53l1x;
 pub mod ws2812;
 

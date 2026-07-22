@@ -290,6 +290,95 @@
       ]
     },
     {
+      "device_type": "as5600",
+      "label": "AS5600 Magnetic Encoder",
+      "summary": "12-bit contactless magnetic rotary position sensor over I²C.",
+      "detail": "ams AS5600 (default address 0x36). Host sets angle in degrees; firmware reads RAW_ANGLE / ANGLE (12-bit) and STATUS magnet-detected bit.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x36."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "angle",
+          "label": "Angle",
+          "unit": "deg",
+          "min": 0.0,
+          "max": 360.0
+        }
+      ]
+    },
+    {
+      "device_type": "vl53l0x",
+      "label": "VL53L0X ToF",
+      "summary": "Laser time-of-flight distance sensor over I²C (ST VL53L0X).",
+      "detail": "STMicroelectronics VL53L0X at 0x29. Identification + range result registers for common Arduino drivers; host sets distance in mm via SimInput.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x29."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "distance",
+          "label": "Distance",
+          "unit": "mm",
+          "min": 0.0,
+          "max": 2000.0
+        }
+      ]
+    },
+    {
+      "device_type": "bno055",
+      "label": "BNO055 IMU",
+      "summary": "9-DoF absolute orientation sensor (Bosch BNO055) over I²C.",
+      "detail": "CHIP_ID 0xA0, operation mode, and Euler heading/roll/pitch registers for Adafruit BNO055 sketches. Host sets euler angles via SimInput; fusion is not simulated.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x28 (COM3 low)."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "heading",
+          "label": "Heading",
+          "unit": "deg",
+          "min": 0.0,
+          "max": 360.0
+        },
+        {
+          "key": "roll",
+          "label": "Roll",
+          "unit": "deg",
+          "min": -180.0,
+          "max": 180.0
+        },
+        {
+          "key": "pitch",
+          "label": "Pitch",
+          "unit": "deg",
+          "min": -180.0,
+          "max": 180.0
+        }
+      ]
+    },
+    {
       "device_type": "mpu6050",
       "label": "MPU6050 IMU",
       "summary": "6-axis gyro + accelerometer over I2C.",
