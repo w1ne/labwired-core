@@ -276,22 +276,26 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         0x400D_0000,
         0x400000,
         None,
-        Box::new(crate::peripherals::esp32::flash_mmu::ClassicFlashWindow::new(
-            0x400D_0000,
-            0x400000,
-            flash_shared.clone(),
-        )),
+        Box::new(
+            crate::peripherals::esp32::flash_mmu::ClassicFlashWindow::new(
+                0x400D_0000,
+                0x400000,
+                flash_shared.clone(),
+            ),
+        ),
     );
     bus.add_peripheral(
         "flash_dcache",
         0x3F40_0000,
         0x400000,
         None,
-        Box::new(crate::peripherals::esp32::flash_mmu::ClassicFlashWindow::new(
-            0x3F40_0000,
-            0x400000,
-            flash_shared.clone(),
-        )),
+        Box::new(
+            crate::peripherals::esp32::flash_mmu::ClassicFlashWindow::new(
+                0x3F40_0000,
+                0x400000,
+                flash_shared.clone(),
+            ),
+        ),
     );
     // PRO/APP flash MMU tables — MUST register before dport_analog_ahb
     // (0x3FF0_1000..0x3FF1_FFFF) which would otherwise shadow these windows.
@@ -300,18 +304,18 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         0x3FF1_0000,
         (crate::peripherals::esp32::flash_mmu::ENTRY_NUM * 4) as u64,
         None,
-        Box::new(crate::peripherals::esp32::flash_mmu::Esp32FlashMmuRegs::new_pro(
-            flash_shared.clone(),
-        )),
+        Box::new(
+            crate::peripherals::esp32::flash_mmu::Esp32FlashMmuRegs::new_pro(flash_shared.clone()),
+        ),
     );
     bus.add_peripheral(
         "flash_mmu_app",
         0x3FF1_2000,
         (crate::peripherals::esp32::flash_mmu::ENTRY_NUM * 4) as u64,
         None,
-        Box::new(crate::peripherals::esp32::flash_mmu::Esp32FlashMmuRegs::new_app(
-            flash_shared.clone(),
-        )),
+        Box::new(
+            crate::peripherals::esp32::flash_mmu::Esp32FlashMmuRegs::new_app(flash_shared.clone()),
+        ),
     );
 
     // Synthesize the `esp_image_header` at the start of the data XIP

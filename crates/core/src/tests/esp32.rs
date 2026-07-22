@@ -103,7 +103,6 @@ fn esp32_uart0_emits_to_sink() {
     );
 }
 
-
 #[test]
 fn esp32_uart0_ahb_fifo_emits_to_sink() {
     // Classic ESP32 IDF writes TX via UART_FIFO_AHB_REG(0)=0x6000_0000, not APB.
@@ -124,7 +123,11 @@ fn esp32_uart0_ahb_fifo_emits_to_sink() {
     }
     // STATUS on APB must see the shared TX FIFO.
     let status = bus.read_u32(0x3FF4_001C).unwrap();
-    assert_eq!((status >> 16) & 0xFF, 4, "TXFIFO_CNT via APB after AHB push");
+    assert_eq!(
+        (status >> 16) & 0xFF,
+        4,
+        "TXFIFO_CNT via APB after AHB push"
+    );
 
     let uart0_idx = bus.find_peripheral_index_by_name("uart0").expect("uart0");
     for _ in 0..2_000_000 {
@@ -134,7 +137,12 @@ fn esp32_uart0_ahb_fifo_emits_to_sink() {
         }
     }
     let bytes = sink.lock().unwrap();
-    assert_eq!(bytes.as_slice(), b"AHB!", "AHB TX must reach sink, got {:?}", String::from_utf8_lossy(&bytes));
+    assert_eq!(
+        bytes.as_slice(),
+        b"AHB!",
+        "AHB TX must reach sink, got {:?}",
+        String::from_utf8_lossy(&bytes)
+    );
 }
 
 #[test]

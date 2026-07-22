@@ -12,7 +12,9 @@ fn load_syms(elf: &std::path::Path) -> HashMap<u32, String> {
     if let Some(o) = out {
         for line in String::from_utf8_lossy(&o.stdout).lines() {
             let mut p = line.split_whitespace();
-            let (Some(addr), Some(_t), Some(name)) = (p.next(), p.next(), p.next()) else { continue };
+            let (Some(addr), Some(_t), Some(name)) = (p.next(), p.next(), p.next()) else {
+                continue;
+            };
             if let Ok(a) = u32::from_str_radix(addr, 16) {
                 m.insert(a, name.to_string());
             }
@@ -58,27 +60,83 @@ fn diag_c3_first_yield() {
         }
     }
     let flash = Arc::new(Mutex::new(flash_img));
-    bus.add_peripheral("spimem1_flash", 0x6000_2000, 0x100, None,
-        Box::new(labwired_core::peripherals::esp32s3::spi_mem_flash::SpiMemFlash::new(flash.clone())));
-    bus.add_peripheral("spimem0_flash", 0x6000_3000, 0x100, None,
-        Box::new(labwired_core::peripherals::esp32s3::spi_mem_flash::SpiMemFlash::new(flash.clone())));
-    bus.add_peripheral("rtc_i2c_ana", 0x6000_E000, 0x400, None,
-        Box::new(labwired_core::peripherals::esp32c3::ana_i2c::Esp32c3AnaI2c::new()));
-    bus.add_peripheral("extmem_cache", 0x600C_4000, 0x400, None,
-        Box::new(labwired_core::peripherals::esp32c3::cache::Esp32c3Cache::new()));
-    bus.add_peripheral("systimer", 0x6002_3000, 0x100, None,
-        Box::new(labwired_core::peripherals::esp32s3::systimer::Systimer::new_with_source(160_000_000, 37)));
-    bus.add_peripheral("apb_saradc", 0x6004_0000, 0x100, None,
-        Box::new(labwired_core::peripherals::esp32c3::sar_adc::Esp32c3SarAdc::new()));
-    use labwired_core::peripherals::esp32s3::flash_xip::{Esp32s3MmuTable, FlashXipPeripheral, SharedMmu, MMU_FMT_C3};
+    bus.add_peripheral(
+        "spimem1_flash",
+        0x6000_2000,
+        0x100,
+        None,
+        Box::new(
+            labwired_core::peripherals::esp32s3::spi_mem_flash::SpiMemFlash::new(flash.clone()),
+        ),
+    );
+    bus.add_peripheral(
+        "spimem0_flash",
+        0x6000_3000,
+        0x100,
+        None,
+        Box::new(
+            labwired_core::peripherals::esp32s3::spi_mem_flash::SpiMemFlash::new(flash.clone()),
+        ),
+    );
+    bus.add_peripheral(
+        "rtc_i2c_ana",
+        0x6000_E000,
+        0x400,
+        None,
+        Box::new(labwired_core::peripherals::esp32c3::ana_i2c::Esp32c3AnaI2c::new()),
+    );
+    bus.add_peripheral(
+        "extmem_cache",
+        0x600C_4000,
+        0x400,
+        None,
+        Box::new(labwired_core::peripherals::esp32c3::cache::Esp32c3Cache::new()),
+    );
+    bus.add_peripheral(
+        "systimer",
+        0x6002_3000,
+        0x100,
+        None,
+        Box::new(
+            labwired_core::peripherals::esp32s3::systimer::Systimer::new_with_source(
+                160_000_000,
+                37,
+            ),
+        ),
+    );
+    bus.add_peripheral(
+        "apb_saradc",
+        0x6004_0000,
+        0x100,
+        None,
+        Box::new(labwired_core::peripherals::esp32c3::sar_adc::Esp32c3SarAdc::new()),
+    );
+    use labwired_core::peripherals::esp32s3::flash_xip::{
+        Esp32s3MmuTable, FlashXipPeripheral, SharedMmu, MMU_FMT_C3,
+    };
     let mmu_table = Arc::new(SharedMmu {
         entries: Mutex::new(vec![MMU_FMT_C3.invalid_bit; 128]),
         generation: AtomicU64::new(1),
     });
-    bus.add_peripheral("mmu_table", 0x600C_5000, 0x800, None,
-        Box::new(Esp32s3MmuTable::new(mmu_table.clone())));
-    bus.add_peripheral("flash_xip_drom", 0x3C00_0000, 0x80_0000, None,
-        Box::new(FlashXipPeripheral::new_mmu_fmt(flash.clone(), 0x3C00_0000, mmu_table, MMU_FMT_C3)));
+    bus.add_peripheral(
+        "mmu_table",
+        0x600C_5000,
+        0x800,
+        None,
+        Box::new(Esp32s3MmuTable::new(mmu_table.clone())),
+    );
+    bus.add_peripheral(
+        "flash_xip_drom",
+        0x3C00_0000,
+        0x80_0000,
+        None,
+        Box::new(FlashXipPeripheral::new_mmu_fmt(
+            flash.clone(),
+            0x3C00_0000,
+            mmu_table,
+            MMU_FMT_C3,
+        )),
+    );
     bus.config.optimized_bus_access = false;
     bus.esp32c3_irq_routing = true;
     bus.refresh_peripheral_index();
@@ -107,7 +165,13 @@ fn diag_c3_first_yield() {
     machine.load_firmware(&program).unwrap();
 
     use labwired_core::boot::esp32c3_rom::{c3_rom_data_init_writes, IROM_BASE};
-    if let Some(irom) = machine.bus.extra_mem.iter().find(|m| m.base_addr == IROM_BASE as u64).map(|m| m.data.clone()) {
+    if let Some(irom) = machine
+        .bus
+        .extra_mem
+        .iter()
+        .find(|m| m.base_addr == IROM_BASE as u64)
+        .map(|m| m.data.clone())
+    {
         if irom.iter().any(|&b| b != 0) {
             for (dst, bytes) in c3_rom_data_init_writes(&irom) {
                 for (i, b) in bytes.iter().enumerate() {
@@ -130,7 +194,13 @@ fn diag_c3_first_yield() {
             }
         }
         let mut f = flash.lock().unwrap();
-        if let Some(d) = machine.bus.extra_mem.iter().find(|m| m.base_addr == 0x3C00_0000).map(|m| m.data.clone()) {
+        if let Some(d) = machine
+            .bus
+            .extra_mem
+            .iter()
+            .find(|m| m.base_addr == 0x3C00_0000)
+            .map(|m| m.data.clone())
+        {
             let n = d.len().min(f.len());
             f[..n].copy_from_slice(&d[..n]);
             let pages = (n + PAGE - 1) / PAGE;
@@ -144,7 +214,9 @@ fn diag_c3_first_yield() {
         }
         let n_irom = irom_len.min(f.len());
         for (i, b) in machine.bus.flash.data[..n_irom].iter().enumerate() {
-            if f[i] == 0xFF { f[i] = *b; }
+            if f[i] == 0xFF {
+                f[i] = *b;
+            }
         }
         for p in [
             core.join("validation/arduino-matrix/out/_pio_work/esp32c3__L0_serial_boot/.pio/build/matrix/partitions.bin"),
@@ -156,12 +228,16 @@ fn diag_c3_first_yield() {
                 break;
             }
         }
-        if f.len() > 0x30000 { f[0x30000] = 0xE9; }
+        if f.len() > 0x30000 {
+            f[0x30000] = 0xE9;
+        }
         drop(f);
         mmu_pages.sort_unstable();
         mmu_pages.dedup();
         for page in &mmu_pages {
-            let _ = machine.bus.write_u32(0x600C_5000 + (*page as u64) * 4, *page);
+            let _ = machine
+                .bus
+                .write_u32(0x600C_5000 + (*page as u64) * 4, *page);
         }
         eprintln!("[diag] MMU pages {:?}", mmu_pages);
     }
@@ -206,8 +282,13 @@ fn diag_c3_first_yield() {
                 machine.bus.read_u32(0x600C_2194).unwrap_or(0),
                 {
                     let line = machine.bus.read_u32(0x600C_2000 + 50 * 4).unwrap_or(0) & 0x1F;
-                    if line == 0 { 0 } else {
-                        machine.bus.read_u32(0x600C_2114 + (line as u64) * 4).unwrap_or(0)
+                    if line == 0 {
+                        0
+                    } else {
+                        machine
+                            .bus
+                            .read_u32(0x600C_2114 + (line as u64) * 4)
+                            .unwrap_or(0)
                     }
                 }
             );
@@ -242,7 +323,10 @@ fn diag_c3_first_yield() {
                             Ok(b) => msg2.push(b),
                         }
                     }
-                    eprintln!("       g_panic_abort_details={p:#x} {:?}", String::from_utf8_lossy(&msg2));
+                    eprintln!(
+                        "       g_panic_abort_details={p:#x} {:?}",
+                        String::from_utf8_lossy(&msg2)
+                    );
                 }
                 break;
             }

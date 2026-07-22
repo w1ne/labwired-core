@@ -7,10 +7,7 @@ use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, Mutex};
 
 fn load_syms(elf: &std::path::Path) -> HashMap<u32, String> {
-    let out = std::process::Command::new("nm")
-        .arg(elf)
-        .output()
-        .ok();
+    let out = std::process::Command::new("nm").arg(elf).output().ok();
     let mut m = HashMap::new();
     if let Some(o) = out {
         for line in String::from_utf8_lossy(&o.stdout).lines() {
@@ -69,18 +66,18 @@ fn diag_c3_boot_progress() {
         0x6000_2000,
         0x100,
         None,
-        Box::new(labwired_core::peripherals::esp32s3::spi_mem_flash::SpiMemFlash::new(
-            flash.clone(),
-        )),
+        Box::new(
+            labwired_core::peripherals::esp32s3::spi_mem_flash::SpiMemFlash::new(flash.clone()),
+        ),
     );
     bus.add_peripheral(
         "spimem0_flash",
         0x6000_3000,
         0x100,
         None,
-        Box::new(labwired_core::peripherals::esp32s3::spi_mem_flash::SpiMemFlash::new(
-            flash.clone(),
-        )),
+        Box::new(
+            labwired_core::peripherals::esp32s3::spi_mem_flash::SpiMemFlash::new(flash.clone()),
+        ),
     );
     bus.add_peripheral(
         "rtc_i2c_ana",
@@ -103,7 +100,8 @@ fn diag_c3_boot_progress() {
         None,
         Box::new(
             labwired_core::peripherals::esp32s3::systimer::Systimer::new_with_source(
-                160_000_000, 37,
+                160_000_000,
+                37,
             ),
         ),
     );

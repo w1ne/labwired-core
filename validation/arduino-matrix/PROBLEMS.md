@@ -29,7 +29,7 @@ Full matrix: 15 chips × 3 sketches. Scoreboard:
 
 | Chip | Symptom | Honest next model work |
 |------|---------|-------------------------|
-| **ESP32-S3** | Fast-boot memmap wired; hangs pre-UART | Dual-core `s_cpu_up` + ROM harness WDT/freq/default-nop; still no `LW_L0_OK` (scheduler/UART path) |
+| **ESP32-S3** | Reaches `initArduino` / `esp_ota_get_running_partition`; assert `it != NULL` (partition match after mmap) | Factory MMU+XIP + dual-core APP + intmatrix ROM + spill DRAM range done; finish partition-table mmap load so OTA finds app0 → setup/Serial/`LW_L0_OK` |
 | **STM32WBA52** | No PIO Arduino board | Toolchain gap |
 
 ## Fixes already landed (honest)
@@ -80,3 +80,9 @@ cd core
 python3 validation/arduino-matrix/run_matrix.py
 python3 validation/arduino-matrix/run_matrix.py --boards stm32f407,nrf52832
 ```
+
+30. **ESP32-S3 Cache_Suspend_ICache** — ROM suspend/enable/disable drive EXTMEM `CACHE_STATE` (was nop → IRAM poll hang).
+31. **ESP32-S3 dual-core APP_CPU** — `Machine::with_secondary_cpu` so `s_system_inited[1]` is set by real `do_system_init_fn` (not flags-only).
+32. **Spill `dram_sp` includes S3 DRAM** `0x3FC8_0000..0x3FCF_0000` (classic-only range left `xthal_window_spill` empty → WindowUnderflow a1=0).
+33. **ESP32-S3 `intr_matrix_set` ROM** @ `0x40001b54` — harness nop left FROM_CPU/systimer unmapped; yield never fired (only first task).
+34. **ESP32-S3 factory MMU + MMU-XIP fast-boot** — `seed_factory_mmu_for_cache2phys` + `factory_flash_base=0x10000` for cache2phys; partition mmap still empty → OTA `it != NULL` assert.

@@ -151,3 +151,35 @@ mod tests {
         assert_eq!(ipi.tick().explicit_irqs, Some(vec![79]));
     }
 }
+
+#[cfg(test)]
+mod integration {
+    use super::*;
+    use crate::bus::SystemBus;
+    use crate::system::xtensa::{configure_xtensa_esp32s3, Esp32s3Opts};
+    use crate::Bus;
+
+    #[test]
+    fn from_cpu_tick_sets_pending_when_mapped() {
+        let mut bus = SystemBus::new();
+        let _ = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
+        assert!(bus.esp32s3_irq_routing, "S3 irq routing should be on");
+        // Program intmatrix: source 79 -> cpu0 irq 1, source 80 -> cpu1 irq 1
+        // CORE0 map @ 0x600C2000 + 4*src
+        // CORE1 map @ 0x600C2000 + 0x800 + 4*src
+        bus.write_u32(0x600C_2000 + 79 * 4, 1).unwrap();
+        bus.write_u32(0x600C_2000 + 0x800 + 80 * 4, 1).unwrap();
+        // Ring doorbells
+        bus.write_u32(0x600C_0030, 1).unwrap();
+        bus.write_u32(0x600C_0034, 1).unwrap();
+        // Tick peripherals
+        let mut irqs = Vec::new();
+        let mut costs = Vec::new();
+        bus.tick_peripherals_fully_into(&mut irqs, &mut costs);
+        let p0 = bus.pending_cpu_irqs(0);
+        let p1 = bus.pending_cpu_irqs(1);
+        eprintln!("pending after tick: p0={p0:#010x} p1={p1:#010x} raw_irqs={irqs:?}");
+        assert_ne!(p0, 0, "core0 should see FROM_CPU_0 source 79");
+        assert_ne!(p1, 0, "core1 should see FROM_CPU_1 source 80");
+    }
+}

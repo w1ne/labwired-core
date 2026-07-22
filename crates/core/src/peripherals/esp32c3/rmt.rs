@@ -83,12 +83,8 @@ impl Peripheral for Esp32c3Rmt {
         Ok(match off {
             0x10 => self.tx_conf0[0],
             0x14 => self.tx_conf0[1],
-            0x18..=0x24 if (off - 0x18) % 4 == 0 => {
-                self.other[(off - 0x18) / 4]
-            }
-            0x28..=0x34 if (off - 0x28) % 4 == 0 => {
-                self.status[(off - 0x28) / 4]
-            }
+            0x18..=0x24 if (off - 0x18) % 4 == 0 => self.other[(off - 0x18) / 4],
+            0x28..=0x34 if (off - 0x28) % 4 == 0 => self.status[(off - 0x28) / 4],
             0x38 => self.int_raw,
             0x3C => self.int_st(),
             0x40 => self.int_ena,

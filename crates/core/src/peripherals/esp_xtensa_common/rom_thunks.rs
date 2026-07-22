@@ -265,6 +265,25 @@ fn set_cache_field(bus: &mut dyn Bus, mask: u32, frozen: bool) -> SimResult<()> 
     bus.write_u32(EXTMEM_CACHE_STATE, nv)
 }
 
+/// `Cache_Suspend_ICache(): u32` — mark the ICache idle/suspended
+/// (bits[11:0]=1). ESP-IDF IRAM wrappers call the ROM then busy-wait
+/// `CACHE_STATE[11:0] == 1`; a plain nop leaves a previously-cleared field
+/// stuck and the firmware spins forever in `spi_flash_disable_cache`.
+pub fn cache_suspend_icache(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    set_cache_field(bus, ICACHE_FIELD, true)?;
+    RomThunkBank::return_with(cpu, 0);
+    Ok(())
+}
+
+/// `Cache_Resume_ICache(prev: u32) -> u32` — restore ICache to idle/enabled.
+/// Real silicon re-enables the cache and returns to state=1 (idle); we keep
+/// the field at 1 so subsequent suspend/freeze polls still observe idle.
+pub fn cache_resume_icache(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    set_cache_field(bus, ICACHE_FIELD, true)?;
+    RomThunkBank::return_with(cpu, 0);
+    Ok(())
+}
+
 /// `Cache_Suspend_DCache(): u32` — mark the DCache suspended (bits[23:12]=1).
 pub fn cache_suspend_dcache(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
     set_cache_field(bus, DCACHE_FIELD, true)?;
@@ -275,6 +294,36 @@ pub fn cache_suspend_dcache(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult
 /// `Cache_Resume_DCache(prev: u32) -> u32` — clear the DCache field.
 pub fn cache_resume_dcache(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
     set_cache_field(bus, DCACHE_FIELD, false)?;
+    RomThunkBank::return_with(cpu, 0);
+    Ok(())
+}
+
+/// `Cache_Disable_ICache(): u32` — ICache off; state field goes busy/cleared
+/// until the next suspend/enable. IRAM doesn't poll here, but matching the
+/// silicon side-effect keeps CACHE_STATE honest for later Suspend polls.
+pub fn cache_disable_icache(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    set_cache_field(bus, ICACHE_FIELD, false)?;
+    RomThunkBank::return_with(cpu, 0);
+    Ok(())
+}
+
+/// `Cache_Enable_ICache(autoload: u32) -> u32` — ICache on; idle state = 1.
+pub fn cache_enable_icache(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    set_cache_field(bus, ICACHE_FIELD, true)?;
+    RomThunkBank::return_with(cpu, 0);
+    Ok(())
+}
+
+/// `Cache_Disable_DCache(): u32` — clear DCache idle field.
+pub fn cache_disable_dcache(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    set_cache_field(bus, DCACHE_FIELD, false)?;
+    RomThunkBank::return_with(cpu, 0);
+    Ok(())
+}
+
+/// `Cache_Enable_DCache(autoload: u32) -> u32` — DCache on; idle state = 1.
+pub fn cache_enable_dcache(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    set_cache_field(bus, DCACHE_FIELD, true)?;
     RomThunkBank::return_with(cpu, 0);
     Ok(())
 }
@@ -593,6 +642,40 @@ pub fn esp_rom_route_intr_matrix(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimR
     Ok(())
 }
 
+/// ESP32-S3 `intr_matrix_set` / `esp_rom_route_intr_matrix` @ `0x4000_1b54`.
+///
+/// Same `(cpu_no, model_num, intr_num)` ABI as classic, but the map tables
+/// live at `DR_REG_INTERRUPT_BASE` (`0x600C_2000`):
+///   CORE0: `base + 4 * source`
+///   CORE1: `base + 0x800 + 4 * source`
+///
+/// Without this, harness ROM leaves the call as a default nop → FreeRTOS
+/// `esp_intr_alloc` never binds FROM_CPU / systimer sources → yield IRQs
+/// never fire → only the first task runs (`ipc_task` livelock, no
+/// `main_task` / `initArduino` / UART).
+pub fn esp32s3_rom_route_intr_matrix(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    let n = cpu.ps.callinc() * 4;
+    let core = cpu.regs.read_logical(n + 2);
+    let src = cpu.regs.read_logical(n + 3);
+    let intnum = cpu.regs.read_logical(n + 4) & 0x1F;
+    let base: u32 = if core == 0 {
+        0x600C_2000
+    } else {
+        0x600C_2000 + 0x800
+    };
+    let addr = base.wrapping_add(src.wrapping_mul(4));
+    tracing::trace!(
+        "esp32s3_rom_route_intr_matrix: cpu={} src={} intnum={} addr=0x{:08x}",
+        core,
+        src,
+        intnum,
+        addr
+    );
+    let _ = bus.write_u32(addr as u64, intnum);
+    RomThunkBank::return_with(cpu, 0);
+    Ok(())
+}
+
 /// Generic NOP thunk that returns 0. Useful for ROM functions whose
 /// behaviour we don't model but whose return value the caller needs to
 /// pass through (e.g. cache config, frequency update, busy-wait).
@@ -747,7 +830,10 @@ pub fn abort_halt(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
             if (0x3ff0_0000..0x4000_0000).contains(&tcb) {
                 let core_id = read32(tcb + 68) as i32;
                 let top = read32(tcb);
-                eprintln!("[abort_halt] {label} xCoreID={core_id} (raw={:#x})", core_id as u32);
+                eprintln!(
+                    "[abort_halt] {label} xCoreID={core_id} (raw={:#x})",
+                    core_id as u32
+                );
                 // Stack backtrace words (return addresses often have 0x400xxxxx or 0x8xxxxxxx)
                 let mut line = String::new();
                 for off in 0..16u32 {
@@ -1421,10 +1507,7 @@ fn md5_read_ctx_buf(bus: &dyn Bus, ctx: u32) -> [u32; 4] {
 
 fn md5_write_ctx_buf(bus: &mut dyn Bus, ctx: u32, buf: &[u32; 4]) {
     for i in 0..4 {
-        let _ = bus.write_u32(
-            ctx.wrapping_add(MD5_CTX_BUF + i as u32 * 4) as u64,
-            buf[i],
-        );
+        let _ = bus.write_u32(ctx.wrapping_add(MD5_CTX_BUF + i as u32 * 4) as u64, buf[i]);
     }
 }
 

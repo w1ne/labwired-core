@@ -120,7 +120,6 @@ fn diag_app_cpu_boot_progress() {
         }
     }
 
-
     let mut last_pro = machine.cpu.get_pc();
     let mut last_app = machine
         .cpu_secondary
@@ -209,8 +208,7 @@ fn diag_app_cpu_boot_progress() {
                 eprintln!(
                     "[diag] vd[{i}] @0x{vd:08x}: flags/cpu/int=0x{w0:08x} shared=0x{shared:08x} next=0x{next:08x}"
                 );
-                if next == 0x6b63_6f6c || !(0x3ff0_0000..0x4000_0000).contains(&next) && next != 0
-                {
+                if next == 0x6b63_6f6c || !(0x3ff0_0000..0x4000_0000).contains(&next) && next != 0 {
                     eprintln!("[diag]   *** corrupt next pointer");
                     break;
                 }
@@ -280,10 +278,7 @@ fn diag_app_cpu_boot_progress() {
                 let count = machine.bus.read_u32(addr as u64 + 4).unwrap_or(0xEEEE_EEEE);
                 eprintln!("[diag] {name}: owner=0x{owner:08x} count=0x{count:x}");
             }
-            let pro_prid = machine
-                .cpu
-                .sr
-                .read(labwired_core::cpu::xtensa_sr::PRID);
+            let pro_prid = machine.cpu.sr.read(labwired_core::cpu::xtensa_sr::PRID);
             let app_prid = machine
                 .cpu_secondary
                 .as_ref()
@@ -632,7 +627,10 @@ fn diag_app_cpu_boot_progress() {
             let size = machine.bus.read_u32(list as u64 + 8).unwrap_or(0xEEEE_EEEE);
             let p0 = machine.bus.read_u32(node as u64).unwrap_or(0xEEEE_EEEE);
             let p4 = machine.bus.read_u32(node as u64 + 4).unwrap_or(0xEEEE_EEEE);
-            let p12 = machine.bus.read_u32(node as u64 + 12).unwrap_or(0xEEEE_EEEE);
+            let p12 = machine
+                .bus
+                .read_u32(node as u64 + 12)
+                .unwrap_or(0xEEEE_EEEE);
             let sp = machine.cpu.regs.read_logical(1);
             let saved_list = machine.bus.read_u32(sp as u64 + 24).unwrap_or(0xEEEE_EEEE);
             eprintln!(
@@ -680,9 +678,7 @@ fn diag_app_cpu_boot_progress() {
                     let w1 = machine.bus.read_u32(base as u64 + 4).unwrap_or(0);
                     let w2 = machine.bus.read_u32(base as u64 + 8).unwrap_or(0);
                     let w3 = machine.bus.read_u32(base as u64 + 12).unwrap_or(0);
-                    eprintln!(
-                        "[diag]   mem[0x{base:08x}]: {w0:08x} {w1:08x} {w2:08x} {w3:08x}"
-                    );
+                    eprintln!("[diag]   mem[0x{base:08x}]: {w0:08x} {w1:08x} {w2:08x} {w3:08x}");
                 }
                 watch_list_slot = Some((slot, cur));
             }
@@ -706,15 +702,11 @@ fn diag_app_cpu_boot_progress() {
         }
         if !seen_loop_task && (pro_pc == PC_LOOP_TASK || app_pc == PC_LOOP_TASK) {
             seen_loop_task = true;
-            eprintln!(
-                "[diag] HIT loopTask @ step {step} pro=0x{pro_pc:08x} app=0x{app_pc:08x}"
-            );
+            eprintln!("[diag] HIT loopTask @ step {step} pro=0x{pro_pc:08x} app=0x{app_pc:08x}");
         }
         if !seen_setup && (pro_pc == PC_SETUP || app_pc == PC_SETUP) {
             seen_setup = true;
-            eprintln!(
-                "[diag] HIT setup() @ step {step} pro=0x{pro_pc:08x} app=0x{app_pc:08x}"
-            );
+            eprintln!("[diag] HIT setup() @ step {step} pro=0x{pro_pc:08x} app=0x{app_pc:08x}");
         }
         // Serial.println path
         const PC_UART_WRITE_BUF: u32 = 0x400d_2ce0;
@@ -725,7 +717,9 @@ fn diag_app_cpu_boot_progress() {
             eprintln!("[diag] HIT HardwareSerial::begin @ step {step} pro=0x{pro_pc:08x} app=0x{app_pc:08x}");
         }
         if pro_pc == PC_UART_WRITE_BUF || app_pc == PC_UART_WRITE_BUF {
-            eprintln!("[diag] HIT uartWriteBuf @ step {step} pro=0x{pro_pc:08x} app=0x{app_pc:08x}");
+            eprintln!(
+                "[diag] HIT uartWriteBuf @ step {step} pro=0x{pro_pc:08x} app=0x{app_pc:08x}"
+            );
             // Snapshot UART0 + DPORT map for source 34 (ETS_UART0_INTR_SOURCE).
             let u0 = 0x3FF4_0000u64;
             let fifo_st = machine.bus.read_u32(u0 + 0x1c).unwrap_or(0);
@@ -1169,7 +1163,11 @@ fn diag_app_cpu_boot_progress() {
         }
     }
 
-    if let Ok(out) = std::process::Command::new("nm").arg("-n").arg(&elf).output() {
+    if let Ok(out) = std::process::Command::new("nm")
+        .arg("-n")
+        .arg(&elf)
+        .output()
+    {
         let text = String::from_utf8_lossy(&out.stdout);
         for (label, pc) in [("PRO", pro_pc), ("APP", app_pc)] {
             let mut prev = None;

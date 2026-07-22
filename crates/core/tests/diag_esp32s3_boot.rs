@@ -49,8 +49,12 @@ fn diag_s3_boot() {
             let n = pt.len().min(0xC00);
             d[0x8000..0x8000 + n].copy_from_slice(&pt[..n]);
         }
-        if d.len() > 0x30000 {
-            d[0x30000] = 0xE9;
+        // App image magic: identity window used VA 0x3C03_0000 → off 0x30000;
+        // factory+MMU maps that VA via entry 3 → phys page 4 (0x40000).
+        for off in [0x30000usize, 0x40000, 0x10000] {
+            if d.len() > off {
+                d[off] = 0xE9;
+            }
         }
     }
     let mut pro = wiring.cpu;
@@ -60,11 +64,13 @@ fn diag_s3_boot() {
         &mut pro,
         &BootOpts {
             stack_top_fallback: 0x3FCD_FFF0,
-            icache_backing: Some(wiring.icache_backing),
-            dcache_backing: Some(wiring.dcache_backing),
+            icache_backing: Some(wiring.icache_backing.clone()),
+            dcache_backing: Some(wiring.dcache_backing.clone()),
+            factory_flash_base: Some(0x1_0000),
         },
     )
     .unwrap();
+    labwired_core::boot::esp32s3::seed_factory_mmu_for_cache2phys(&mut bus, 4, 8);
     use labwired_core::peripherals::esp_xtensa_common::rom_thunks;
     let mut flags = Vec::new();
     for sym in ["s_cpu_up", "s_cpu_inited"] {
@@ -77,18 +83,44 @@ fn diag_s3_boot() {
     if let Some(pc) = labwired_loader::resolve_symbol_in_elf(&fw, "xthal_window_spill_nw") {
         let _ = bus.install_flash_thunk(pc, rom_thunks::xthal_window_spill_thunk);
     }
+    for sym in ["__assert_func", "panic_abort", "abort"] {
+        if let Some(pc) = labwired_loader::resolve_symbol_in_elf(&fw, sym) {
+            let _ = bus.install_flash_thunk(pc, rom_thunks::abort_halt);
+            eprintln!("[diag] abort_halt @ {sym}=0x{pc:08x}");
+        }
+    }
 
-    let mut machine = Machine::new(pro, bus);
+    // Real APP_CPU: PRO's start_cpu0 waits on s_system_inited[0]&[1]; APP
+    // sets [1] via start_cpu_other_cores → do_system_init_fn (PRID bit13=1).
+    let mut app = labwired_core::cpu::xtensa_lx7::XtensaLx7::new_app_cpu();
+    app.set_sp(0x3FCD_8000);
+    let mut machine = Machine::new(pro, bus).with_secondary_cpu(app);
     machine.config.batch_mode_enabled = false;
     let mut last_fn = String::new();
-    for step in 1..=8_000_000u64 {
+    let mut isr_hits = 0u64;
+    let mut wrapper_hits = 0u64;
+    let cross_isr = labwired_loader::resolve_symbol_in_elf(&fw, "esp_crosscore_isr").unwrap_or(0);
+    let wrapper = labwired_loader::resolve_symbol_in_elf(&fw, "vPortTaskWrapper").unwrap_or(0);
+    let main_task = labwired_loader::resolve_symbol_in_elf(&fw, "main_task").unwrap_or(0);
+    let app_main = labwired_loader::resolve_symbol_in_elf(&fw, "app_main").unwrap_or(0);
+    for step in 1..=3_000_000u64 {
         match machine.step() {
             Ok(()) => {}
             Err(e) => {
+                let pc = machine.cpu.get_pc();
+                let a1 = machine.cpu.get_register(1);
+                let a0 = machine.cpu.get_register(0);
+                let a9 = machine.cpu.get_register(9);
                 eprintln!(
-                    "[diag] ERR step={step} pc=0x{:08x} {}: {e}",
-                    machine.cpu.get_pc(),
-                    nearest(&syms, machine.cpu.get_pc())
+                    "[diag] ERR step={step} pc=0x{pc:08x} {}: {e}",
+                    nearest(&syms, pc)
+                );
+                let (app_pc, app_a1, app_h) = match machine.cpu_secondary.as_ref() {
+                    Some(c) => (c.get_pc(), c.get_register(1), c.halted),
+                    None => (0, 0, true),
+                };
+                eprintln!(
+                    "[diag] pro a0=0x{a0:08x} a1=0x{a1:08x} a9=0x{a9:08x} app_pc=0x{app_pc:08x} app_a1=0x{app_a1:08x} app_halted={app_h}"
                 );
                 break;
             }
@@ -96,20 +128,48 @@ fn diag_s3_boot() {
         let pc = machine.cpu.get_pc();
         let f = nearest(&syms, pc);
         let base = f.split('+').next().unwrap_or("");
-        if base != last_fn && step > 8000 {
+        if cross_isr != 0 && pc == cross_isr {
+            isr_hits += 1;
+        }
+        if wrapper != 0 && pc == wrapper {
+            wrapper_hits += 1;
+            eprintln!("[diag] WRAPPER hit @{step} -> {f}");
+        }
+        if main_task != 0 && pc == main_task {
+            eprintln!("[diag] MAIN_TASK @{step}");
+        }
+        if app_main != 0 && pc == app_main {
+            eprintln!("[diag] APP_MAIN @{step}");
+        }
+        if base != last_fn && step > 8000 && step < 200_000 {
             eprintln!("[diag] @{step} -> {f}");
             last_fn = base.to_string();
+        } else if base != last_fn {
+            last_fn = base.to_string();
         }
-        if step == 39950 || step % 1_000_000 == 0 {
-            let cs = machine.bus.read_u32(0x600c_4130).unwrap_or(0xdead);
-            eprintln!("[diag] CACHE_STATE=0x{cs:08x}");
-        }
-        if step % 1_000_000 == 0 {
-            let u = uart.lock().unwrap();
+        if step % 500_000 == 0 {
+            let from0 = machine.bus.read_u32(0x600c_0030).unwrap_or(0xdead);
+            let from1 = machine.bus.read_u32(0x600c_0034).unwrap_or(0xdead);
+            let p0 = machine.bus.pending_cpu_irqs(0);
+            let p1 = machine.bus.pending_cpu_irqs(1);
+            let map79 = machine.bus.read_u32(0x600c_2000 + 79 * 4).unwrap_or(0xdead);
+            let map80_c0 = machine.bus.read_u32(0x600c_2000 + 80 * 4).unwrap_or(0xdead);
+            let map80_c1 = machine
+                .bus
+                .read_u32(0x600c_2000 + 0x800 + 80 * 4)
+                .unwrap_or(0xdead);
+            let map79_c1 = machine
+                .bus
+                .read_u32(0x600c_2000 + 0x800 + 79 * 4)
+                .unwrap_or(0xdead);
+            let app_pc = machine
+                .cpu_secondary
+                .as_ref()
+                .map(|c| c.get_pc())
+                .unwrap_or(0);
             eprintln!(
-                "[diag] hb {step} pc=0x{pc:08x} {f} uart={} {:?}",
-                u.len(),
-                String::from_utf8_lossy(&u)
+                "[diag] hb {step} pc=0x{pc:08x} cycles={} FROM=[{from0:x},{from1:x}] pend=[{p0:08x},{p1:08x}] map79=[{map79:x}/{map79_c1:x}] map80=[{map80_c0:x}/{map80_c1:x}] isr={isr_hits} wrap={wrapper_hits}",
+                machine.total_cycles
             );
         }
     }

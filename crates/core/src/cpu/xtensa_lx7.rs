@@ -700,7 +700,14 @@ impl XtensaLx7 {
         // a4..a11 are NOT written to the stack here: hybrid preserve is parked
         // under the FreeRTOS TCB on IRQ entry and re-applied on RFE. Guessing
         // parent_sp for a4..a7 was the earlier s_no_block_func / free-list bug.
-        let dram_sp = |sp: u32| (0x3FF8_0000..0x4000_0000).contains(&sp);
+        // Classic ESP32 DRAM is 0x3FF8_0000..0x4000_0000; ESP32-S3 internal
+        // SRAM (data view) is 0x3FC8_0000..0x3FCF_0000. Rejecting S3 SPs made
+        // xthal_window_spill write nothing → RETW WindowUnderflow reloaded
+        // a1=0 → fault at 0xfffffff4 in _WindowUnderflow8 (StartScheduler).
+        let dram_sp = |sp: u32| {
+            (0x3FF8_0000..0x4000_0000).contains(&sp) // classic ESP32
+                || (0x3FC8_0000..0x3FCF_0000).contains(&sp) // ESP32-S3
+        };
         // Windowed ABI: a1 is always 16-byte aligned after ENTRY.
         let valid_sp = |sp: u32| dram_sp(sp) && (sp & 0xF) == 0;
         let current_a1 = self.regs.read_logical(1);
@@ -712,23 +719,24 @@ impl XtensaLx7 {
             let below = ref_sp.wrapping_sub(sp);
             (sp >= ref_sp && above < 0x1000) || (sp < ref_sp && below < 0x100)
         };
-        let write4 = |bus: &mut dyn Bus, base_sp: u32, off: u32, r0: u32, r1: u32, r2: u32, r3: u32| {
-            if !valid_sp(base_sp) || !stackish(base_sp, current_a1) {
-                return;
-            }
-            if (base_sp as u64) < (off as u64) + 16 {
-                return;
-            }
-            let b = base_sp.wrapping_sub(off);
-            // a0..a3 OF is strictly below base_sp (ENTRY locals live at/above).
-            if b >= base_sp {
-                return;
-            }
-            let _ = bus.write_u32(b as u64, r0);
-            let _ = bus.write_u32(b as u64 + 4, r1);
-            let _ = bus.write_u32(b as u64 + 8, r2);
-            let _ = bus.write_u32(b as u64 + 12, r3);
-        };
+        let write4 =
+            |bus: &mut dyn Bus, base_sp: u32, off: u32, r0: u32, r1: u32, r2: u32, r3: u32| {
+                if !valid_sp(base_sp) || !stackish(base_sp, current_a1) {
+                    return;
+                }
+                if (base_sp as u64) < (off as u64) + 16 {
+                    return;
+                }
+                let b = base_sp.wrapping_sub(off);
+                // a0..a3 OF is strictly below base_sp (ENTRY locals live at/above).
+                if b >= base_sp {
+                    return;
+                }
+                let _ = bus.write_u32(b as u64, r0);
+                let _ = bus.write_u32(b as u64 + 4, r1);
+                let _ = bus.write_u32(b as u64 + 8, r2);
+                let _ = bus.write_u32(b as u64 + 12, r3);
+            };
 
         let frames: Vec<Vec<u32>> = self
             .call_preserve_stack
@@ -822,7 +830,6 @@ impl XtensaLx7 {
         self.regs.set_windowstart(1u16 << (wb & 0x0F));
         self.regs.set_shadow_stacks(Default::default());
     }
-
 
     fn push_irq_window_frame(&mut self, bus: &dyn Bus) {
         let preserve = self.call_preserve_stack.clone();
@@ -3514,7 +3521,7 @@ mod window_tests {
 
         exec(&mut cpu, &mut bus, Call8 { offset: 0x40 });
         exec(&mut cpu, &mut bus, Entry { as_: 1, imm: 4 }); // 32-byte frame
-        // Callee trashes a1..a7 but MUST leave a0 (return addr + call-type bits) alone.
+                                                            // Callee trashes a1..a7 but MUST leave a0 (return addr + call-type bits) alone.
         for i in 1..8u8 {
             cpu.regs.write_logical(i, 0x1111_0000 | i as u32);
         }
@@ -3555,7 +3562,7 @@ mod window_tests {
         // Outer CALL8
         exec(&mut cpu, &mut bus, Call8 { offset: 0x40 });
         exec(&mut cpu, &mut bus, Entry { as_: 1, imm: 8 }); // 64-byte
-        // Inner CALL8 (like malloc → deeper)
+                                                            // Inner CALL8 (like malloc → deeper)
         exec(&mut cpu, &mut bus, Call8 { offset: 0x40 });
         exec(&mut cpu, &mut bus, Entry { as_: 1, imm: 4 });
         for i in 1..8u8 {
@@ -3563,7 +3570,7 @@ mod window_tests {
         }
         cpu.regs.write_logical(2, 0xAAAA);
         exec(&mut cpu, &mut bus, Retw); // back to outer callee
-        // Outer callee also clobbers (keep a0)
+                                        // Outer callee also clobbers (keep a0)
         for i in 1..8u8 {
             cpu.regs.write_logical(i, 0x3333_0000 | i as u32);
         }
@@ -3610,11 +3617,7 @@ mod window_tests {
             exec(&mut cpu, &mut bus, Retw);
         }
 
-        assert_eq!(
-            cpu.regs.read_logical(4),
-            0xA4A4_A4A4,
-            "a4 after deep wrap"
-        );
+        assert_eq!(cpu.regs.read_logical(4), 0xA4A4_A4A4, "a4 after deep wrap");
         assert_eq!(
             cpu.regs.read_logical(5),
             0x0000_0000,
@@ -3624,15 +3627,3 @@ mod window_tests {
         assert_eq!(cpu.regs.read_logical(7), 0xA7A7_A7A7, "a7 after deep wrap");
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-

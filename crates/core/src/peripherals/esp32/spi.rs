@@ -699,11 +699,7 @@ mod tests {
     fn usr_rdid_fills_w0_with_jedec_id() {
         // memspi_host_read_id_hs: CMD_RDID, miso_len=3 → W0 LE mfg|type|cap.
         let mut spi = Esp32Spi::new();
-        write32(
-            &mut spi,
-            REG_USER,
-            USER_USR_COMMAND_BIT | USER_USR_MISO_BIT,
-        );
+        write32(&mut spi, REG_USER, USER_USR_COMMAND_BIT | USER_USR_MISO_BIT);
         write32(&mut spi, REG_USER2, CMD_RDID as u32); // opcode 0x9F
         write32(&mut spi, REG_MISO_DLEN, 24 - 1);
         write32(&mut spi, REG_CMD, CMD_USR_BIT);
@@ -735,11 +731,7 @@ mod tests {
     #[test]
     fn usr_rdsr_reports_not_busy() {
         let mut spi = Esp32Spi::new();
-        write32(
-            &mut spi,
-            REG_USER,
-            USER_USR_COMMAND_BIT | USER_USR_MISO_BIT,
-        );
+        write32(&mut spi, REG_USER, USER_USR_COMMAND_BIT | USER_USR_MISO_BIT);
         write32(&mut spi, REG_USER2, CMD_RDSR as u32);
         write32(&mut spi, REG_MISO_DLEN, 8 - 1);
         write32(&mut spi, REG_CMD, CMD_USR_BIT);

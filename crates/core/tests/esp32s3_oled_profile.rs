@@ -193,6 +193,7 @@ fn build_machine(
             stack_top_fallback: 0x3fcd_fff0,
             icache_backing: Some(wiring.icache_backing),
             dcache_backing: Some(wiring.dcache_backing),
+            factory_flash_base: None,
         },
     )
     .expect("fast-boot curated ESP32-S3 OLED ELF");

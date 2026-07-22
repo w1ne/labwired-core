@@ -185,7 +185,12 @@ fn configure_esp32s3_memmap(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp32s3M
         .rom_images
         .clone()
         .or_else(crate::boot::esp32s3_rom::provision_rom_images);
-    let mmu_model = opts.real_reset_boot;
+    // Fast-boot also uses MMU XIP so `spi_flash_mmap` / partition-table load
+    // and `cache2phys` share one translation (seeded after `fast_boot`).
+    // Identity-only XIP made mmap of flash 0x8000 read the wrong dcache page.
+    let mmu_model = opts.real_reset_boot
+        || std::env::var_os("LABWIRED_ESP32S3_FASTBOOT").is_some()
+        || std::env::var_os("LABWIRED_ESP32S3_MMU_XIP").is_some();
     // Shared flash backing for the proper-model path, loaded from the real
     // flash image so XIP reads (and the SPI-flash controller below) return real
     // bytes. In fast-boot this is unused; the legacy per-window backings apply.
@@ -663,6 +668,9 @@ fn register_default_thunks(bank: &mut RomThunkBank) {
     // ets_set_appcpu_boot_addr — single-core build skips this, but multicore
     // hal calls it to point cpu1 at park-loop. NOP is safe.
     bank.register(0x4000_0720, rom_thunks::ets_set_appcpu_boot_addr);
+    // intr_matrix_set / esp_rom_route_intr_matrix — binds peripheral source
+    // IDs to CPU IRQ slots (FROM_CPU yield, systimer tick, UART, …).
+    bank.register(0x4000_1b54, rom_thunks::esp32s3_rom_route_intr_matrix);
     // esp_rom_spiflash_unlock — flash write helper. Boot path doesn't write,
     // but the symbol may be linked in.
     bank.register(0x4000_0a2c, rom_thunks::esp_rom_spiflash_unlock);
@@ -734,16 +742,19 @@ fn register_default_thunks(bank: &mut RomThunkBank) {
     // ROM cache-management API. A full ESP-IDF/Arduino image drives the whole
     // family during flash/MMU bring-up; the esp-hal path only touched
     // suspend/resume-DCache (0x4000_18b4 / 0x4000_18c0, registered above).
-    // We model flash-XIP as identity-mapped, so every cache op — enable,
-    // disable, freeze, occupy, MMU size/info — is a no-op for the simulator.
-    // Addresses are ESP32-S3 ROM symbol-table values.
+    //
+    // IRAM wrappers for Suspend/Freeze_* poll EXTMEM CACHE_STATE (0x600C_4130)
+    // after the ROM call — those must drive the matching field. Enable/Disable
+    // update the same idle bits so a Disable→Suspend sequence (flash ops)
+    // observes state=1 after Suspend rather than spinning forever.
+    // MMU size/info / occupy / page-count remain nops (XIP is identity-mapped).
+    bank.register(0x4000_186c, rom_thunks::cache_disable_icache);
+    bank.register(0x4000_1878, rom_thunks::cache_enable_icache);
+    bank.register(0x4000_1884, rom_thunks::cache_disable_dcache);
+    bank.register(0x4000_1890, rom_thunks::cache_enable_dcache);
+    bank.register(0x4000_189c, rom_thunks::cache_suspend_icache);
+    bank.register(0x4000_18a8, rom_thunks::cache_resume_icache);
     for addr in [
-        0x4000_186c, // Cache_Disable_ICache
-        0x4000_1878, // Cache_Enable_ICache
-        0x4000_1884, // Cache_Disable_DCache
-        0x4000_1890, // Cache_Enable_DCache
-        0x4000_189c, // Cache_Suspend_ICache
-        0x4000_18a8, // Cache_Resume_ICache
         0x4000_1914, // Cache_Set_IDROM_MMU_Size
         0x4000_1950, // Cache_Set_IDROM_MMU_Info
         0x4000_1980, // Cache_Occupy_ICache_MEMORY
@@ -764,10 +775,10 @@ fn register_default_thunks(bank: &mut RomThunkBank) {
     // live in ROM (not the loaded image) so they must be thunked.
     bank.register(0x4000_1c38, rom_thunks::xtos_set_intlevel); // _xtos_set_intlevel
     bank.register(0x4000_1c08, rom_thunks::xtos_restore_intlevel); // _xtos_restore_intlevel
-    // WDT + SYSTIMER ROM HALs — Arduino `system_early_init` / FreeRTOS tick
-    // setup call these. Without them the harness ROM bank returns 0 / faults
-    // on undecoded BREAK. NOP is enough: real TIMG/SYSTIMER MMIO models drive
-    // the observable side effects the app needs later.
+                                                                   // WDT + SYSTIMER ROM HALs — Arduino `system_early_init` / FreeRTOS tick
+                                                                   // setup call these. Without them the harness ROM bank returns 0 / faults
+                                                                   // on undecoded BREAK. NOP is enough: real TIMG/SYSTIMER MMIO models drive
+                                                                   // the observable side effects the app needs later.
     for addr in [
         0x4000_0dbc, // wdt_hal_init
         0x4000_0dc8, // wdt_hal_deinit

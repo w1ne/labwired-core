@@ -1614,7 +1614,6 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
         }
     }
 
-
     // -------- VFP double-precision + load/store multiple (Cortex-M7 FPv5-D16) --------
     // Double-precision shares the encoding of the single-precision ops above but
     // with h2[11:8] = 1011 (single is 1010). A double Dn maps to the S-register

@@ -121,9 +121,7 @@ impl ArFile {
 
     /// Top-of-stack regs for a slot (generation stripped), if any.
     pub fn shadow_top_regs(&self, wb: u8) -> Option<[u32; 4]> {
-        self.shadow[wb as usize & 0xF]
-            .last()
-            .map(|(_, regs)| *regs)
+        self.shadow[wb as usize & 0xF].last().map(|(_, regs)| *regs)
     }
 
     /// Generation of the top shadow entry, if any.

@@ -80,9 +80,7 @@ pub fn build_esp32_system_from_manifest(
 
 /// Thin wrapper around [`build_esp32_system_from_manifest`] for callers that
 /// only have a path.  Parses the manifest from disk and delegates.
-pub fn build_esp32_system(
-    system_path: &Path,
-) -> anyhow::Result<(SystemBus, XtensaLx7, XtensaLx7)> {
+pub fn build_esp32_system(system_path: &Path) -> anyhow::Result<(SystemBus, XtensaLx7, XtensaLx7)> {
     info!("Loading ESP32 system manifest: {:?}", system_path);
     let manifest = labwired_config::SystemManifest::from_file(system_path)?;
     build_esp32_system_from_manifest(&manifest, system_path)

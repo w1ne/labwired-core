@@ -60,9 +60,9 @@ impl SystemBus {
                 // Env pin first; else well-known in-tree dumps so Arduino-matrix
                 // / plain `labwired test` can call C3 ROM helpers without
                 // requiring the operator to export LABWIRED_ESP32C3_ROM*.
-                let path_owned = std::env::var(env).ok().or_else(|| {
-                    default_region_image_path(env).map(|p| p.display().to_string())
-                });
+                let path_owned = std::env::var(env)
+                    .ok()
+                    .or_else(|| default_region_image_path(env).map(|p| p.display().to_string()));
                 if let Some(path) = path_owned {
                     match std::fs::read(&path) {
                         Ok(bytes) => {

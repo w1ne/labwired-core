@@ -18,9 +18,9 @@ fn diag_c3_panic_message() {
         0x6000_2000,
         0x100,
         None,
-        Box::new(labwired_core::peripherals::esp32s3::spi_mem_flash::SpiMemFlash::new(
-            flash.clone(),
-        )),
+        Box::new(
+            labwired_core::peripherals::esp32s3::spi_mem_flash::SpiMemFlash::new(flash.clone()),
+        ),
     );
     bus.add_peripheral(
         "spimem0_flash",
@@ -50,7 +50,8 @@ fn diag_c3_panic_message() {
         None,
         Box::new(
             labwired_core::peripherals::esp32s3::systimer::Systimer::new_with_source(
-                160_000_000, 37,
+                160_000_000,
+                37,
             ),
         ),
     );
@@ -91,7 +92,10 @@ fn diag_c3_panic_message() {
         match machine.step() {
             Ok(()) => {}
             Err(e) => {
-                eprintln!("[diag] err step {step}: {e} pc=0x{:08x}", machine.cpu.get_pc());
+                eprintln!(
+                    "[diag] err step {step}: {e} pc=0x{:08x}",
+                    machine.cpu.get_pc()
+                );
                 break;
             }
         }
@@ -124,8 +128,5 @@ fn diag_c3_panic_message() {
         }
     }
     let _ = hit_loop;
-    eprintln!(
-        "[diag] done pc=0x{:08x} (no panic)",
-        machine.cpu.get_pc()
-    );
+    eprintln!("[diag] done pc=0x{:08x} (no panic)", machine.cpu.get_pc());
 }
