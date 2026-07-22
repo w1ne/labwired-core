@@ -1044,6 +1044,56 @@
       ]
     },
     {
+      "device_type": "mq-6",
+      "label": "MQ-6 Gas Sensor",
+      "summary": "Hanwei MQ-6 LPG/propane semiconductor gas sensor module (AOUT on ADC).",
+      "detail": "Module-level model of the common MQ-6 breakout: AOUT is a 0..Vref voltage that rises with LPG-equivalent concentration. Drive the `ppm` channel (0..10 000 ppm) at runtime and the ADC channel follows through a linear full-scale map. Starts at 0 ppm (clean air → ground rail). DOUT (comparator trip) is not modelled — compare AOUT in firmware.",
+      "transport": "analog",
+      "category": "analog",
+      "config_keys": [
+        {
+          "name": "channel",
+          "ty": "int",
+          "doc": "ADC channel index (0..N). Defaults to 0."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "ppm",
+          "label": "LPG concentration",
+          "unit": "ppm",
+          "min": 0.0,
+          "max": 10000.0
+        }
+      ]
+    },
+    {
+      "device_type": "soil-moisture",
+      "label": "Soil Moisture Sensor",
+      "summary": "Capacitive soil moisture probe module (AOUT on ADC; wetter → lower voltage).",
+      "detail": "Module-level model of the common capacitive soil-moisture breakout: AOUT is a 0..Vref voltage that falls as the soil gets wetter. Drive the `moisture` channel (0..100 %) at runtime and the ADC channel follows. Starts at 40 % (slightly damp). DOUT (comparator trip) is not modelled — compare AOUT in firmware.",
+      "transport": "analog",
+      "category": "analog",
+      "config_keys": [
+        {
+          "name": "channel",
+          "ty": "int",
+          "doc": "ADC channel index (0..N). Defaults to 0."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "moisture",
+          "label": "Soil moisture",
+          "unit": "%",
+          "min": 0.0,
+          "max": 100.0
+        }
+      ]
+    },
+    {
       "device_type": "74hc595",
       "label": "74HC595 Shift Register (8-bit output)",
       "summary": "8-bit serial-in / parallel-out shift register over SPI.",
