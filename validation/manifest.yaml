@@ -115,7 +115,14 @@ boards:
     # on_edge (the exact test that caught the reverted attempt) passes, and all
     # cross-chip walk-vs-scheduler byte-identical differentials pass (82 walk
     # tests + f401/h563/l073/l476 Zephyr-boot). No live re-capture required.
-    drift_ack: 2026-07-21
+    # 2026-07-22: BLE virtual air moved from a process-static (static AIR) to an
+    # injected VirtualAirBus handle each Nrf52Radio holds. Nrf52Radio::new() (what
+    # the factory builds) binds a transitional process-global bus, so existing
+    # behaviour is byte-identical: cross_instance_via_virtual_air and
+    # nrf52840_ble_loopback_through_virtual_air pass UNCHANGED. No register
+    # read/write path, reset value or layout touched — drift is the shared nrf52
+    # file commit date only. No live re-capture.
+    drift_ack: 2026-07-22
     models:
       - crates/core/src/peripherals/nrf52
       - configs/chips/nrf52840.yaml
@@ -166,7 +173,10 @@ boards:
     # oracle/mmio/conformance suites pass unchanged. No live re-capture.
     # 2026-07-21: rides the nrf52840 GPIOTE/NVIC walk opt-out (same silicon);
     # queue-state-gated, byte-identical. See the nrf52840 drift_ack note.
-    drift_ack: 2026-07-21
+    # 2026-07-22: rides the nrf52840 BLE virtual-air VirtualAirBus refactor (same
+    # silicon); byte-identical, transitional global default. See the nrf52840
+    # drift_ack note.
+    drift_ack: 2026-07-22
     models:
       - crates/core/src/peripherals/nrf52
       - configs/chips/nrf52840.yaml
