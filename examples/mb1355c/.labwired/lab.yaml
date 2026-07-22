@@ -1,0 +1,10 @@
+# LabWired - MB1355C UART smoke test
+schema_version: "1.0"
+inputs:
+  firmware: "../board_firmware/target/thumbv7em-none-eabi/release/firmware-mb1355c-demo"
+  system: "../system.yaml"
+limits:
+  max_steps: 64
+assertions:
+  - uart_contains: "OK"
+  - expected_stop_reason: max_steps

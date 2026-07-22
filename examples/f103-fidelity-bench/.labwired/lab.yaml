@@ -1,0 +1,13 @@
+schema_version: "1.0"
+# rambug: firmware stores 4 KB past the end of the 20 KB SRAM. Ground truth: that
+# address is unimplemented on an F103C8, the store faults (HardFault), and
+# BENCH_RAM_OK never prints. LabWired (real 20 KB RAM) reproduces this: a memory
+# violation, no marker — EXPECTED TO FAIL. A pass here means the emulator mapped
+# an oversized RAM (a false pass).
+inputs:
+  system: "../system.yaml"
+  firmware: "../firmware/build/rambug.elf"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "BENCH_RAM_OK"

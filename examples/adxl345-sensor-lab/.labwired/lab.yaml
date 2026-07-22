@@ -1,0 +1,11 @@
+# LabWired - ADXL345 Sensor Lab smoke test
+schema_version: "1.0"
+inputs:
+  firmware: "../../../target/thumbv7m-none-eabi/release/adxl345-sensor-lab"
+  system: "../system.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "ADXL345 Sensor Lab"
+  - uart_contains: "DEVID=0xE5"
+  - expected_stop_reason: max_steps

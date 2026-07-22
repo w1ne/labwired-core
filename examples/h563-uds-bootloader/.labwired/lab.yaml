@@ -1,0 +1,24 @@
+schema_version: "1.0"
+inputs:
+  system: "../system.yaml"
+  firmware: "../../../../udslib/examples/h563_uds_bootloader/bootloader/build/h563_uds_bootloader_sim.elf"
+limits:
+  # The full OTA flow (handshake → download → verify → activate → bank-swap →
+  # reset → boot APP-B) completes in ~440k steps; the new app then idles, so
+  # the run terminates on max_steps after every milestone has printed.
+  max_steps: 15000000
+assertions:
+  - uart_contains: "BL-START"
+  - uart_contains: "BL-RECOVERY"
+  - uart_contains: "BL: UDS server ready"
+  - uart_contains: "SIM: copy OK"
+  - uart_contains: "BL: routine erase"
+  - uart_contains: "BL: erasing inactive app"
+  - uart_contains: "BL: download armed"
+  - uart_contains: "OTA-WRITE-OK"
+  - uart_contains: "OTA-VERIFY-OK"
+  - uart_contains: "OTA-ACTIVATE"
+  - uart_contains: "BL: marking inactive bank pending"
+  - uart_contains: "BL: activate software"
+  - uart_contains: "BL-JUMP"
+  - uart_contains: "APP-B v2"

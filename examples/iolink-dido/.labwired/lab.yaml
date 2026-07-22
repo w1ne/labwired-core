@@ -1,0 +1,12 @@
+# Headless run of the IO-Link DI device firmware in the simulator.
+# M1 gate: the firmware boots and prints its banner over the debug UART.
+schema_version: "1.0"
+inputs:
+  system: "../system.yaml"
+  firmware: "../firmware/iolink_dido.elf"
+limits:
+  max_steps: 20000000
+assertions:
+  - uart_contains: "IOLINK DIDO BOOT"
+  - uart_contains: "IOLINK INIT OK"
+  - uart_contains: "OPERATE PD="

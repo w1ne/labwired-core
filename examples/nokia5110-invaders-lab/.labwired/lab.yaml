@@ -1,0 +1,12 @@
+# LabWired - Nokia 5110 (PCD8544) + HC-SR04 "Invaders" smoke test.
+# Visual lab: the real output is the LCD framebuffer (see the web playground).
+# This CLI smoke is a clean-run check — boot, attach both devices, run the game
+# loop fault-free for 5M steps.
+schema_version: "1.0"
+inputs:
+  firmware: "../../../target/thumbv7em-none-eabi/release/nokia5110-invaders-lab"
+  system: "../system.yaml"
+limits:
+  max_steps: 5000000
+assertions:
+  - expected_stop_reason: max_steps

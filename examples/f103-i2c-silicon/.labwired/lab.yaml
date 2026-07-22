@@ -1,0 +1,11 @@
+# LabWired - STM32F103 I²C silicon-validation smoke
+schema_version: "1.0"
+inputs:
+  firmware: "../../../target/thumbv7m-none-eabi/release/firmware-f103-i2c-demo"
+  system: "../system.yaml"
+limits:
+  max_steps: 50000000
+assertions:
+  - uart_contains: "F103 I2C"
+  - uart_contains: "DONE"
+  - expected_stop_reason: max_steps

@@ -1,0 +1,12 @@
+# LabWired - SSD1306 Hello Lab smoke test
+schema_version: "1.0"
+inputs:
+  firmware: "../../../target/thumbv7m-none-eabi/release/ssd1306-hello-lab"
+  system: "../system.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "SSD1306 Hello Lab"
+  - uart_contains: "OLED init done"
+  - uart_contains: "OLED render done"
+  - expected_stop_reason: max_steps
