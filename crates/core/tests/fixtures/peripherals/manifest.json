@@ -379,6 +379,68 @@
       ]
     },
     {
+      "device_type": "hc-05",
+      "label": "HC-05 Bluetooth",
+      "summary": "Bluetooth SPP module with AT command shell over UART.",
+      "detail": "Thin AT echo model (OK to AT/AT+…). No RF pairing or wireless data path.",
+      "transport": "uart",
+      "category": "uart",
+      "config_keys": [],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "nrf24l01",
+      "label": "nRF24L01+",
+      "summary": "2.4 GHz SPI transceiver register shell (no air link).",
+      "detail": "Nordic nRF24L01+ SPI R_REGISTER/W_REGISTER model for CONFIG/STATUS and companion registers. RF packet radio is not simulated.",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "CSN GPIO pin (e.g. \"PA4\"). Defaults to PA4."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "microsd",
+      "label": "microSD (SPI)",
+      "summary": "SPI SD card command shell (init + single-block read zeros).",
+      "detail": "CMD0/8/55/41/58/17 shell for common Arduino card-init paths. No real filesystem; CMD17 returns a 512-byte zero block.",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "Card CS GPIO pin (e.g. \"PA4\"). Defaults to PA4."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "mcp2515",
+      "label": "MCP2515 CAN",
+      "summary": "SPI CAN controller register shell (no bus frames).",
+      "detail": "Microchip MCP2515 RESET/READ/WRITE/BIT_MODIFY for CANCTRL/CANSTAT and friends. CAN wire protocol is not simulated in this thin shell.",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "Chip-select GPIO pin (e.g. \"PA4\"). Defaults to PA4."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
       "device_type": "mpu6050",
       "label": "MPU6050 IMU",
       "summary": "6-axis gyro + accelerometer over I2C.",
