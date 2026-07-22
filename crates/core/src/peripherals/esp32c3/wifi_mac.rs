@@ -150,6 +150,10 @@ pub struct Esp32c3WifiMac {
     /// [`Self::force_legacy_walk`]) keeps the legacy per-cycle walk. Not
     /// serialized — re-attached by the bus.
     clock: Option<CycleClock>,
+    /// The shared WiFi medium this MAC submits to / pulls its inbox from in
+    /// medium mode. `new()` binds the process-global default; `with_wifi` binds
+    /// an explicit per-group bus (MACs sharing a bus form one virtual network).
+    wifi: super::virtual_wifi::VirtualWifiBus,
 }
 
 impl Default for Esp32c3WifiMac {
@@ -172,6 +176,17 @@ impl Esp32c3WifiMac {
             medium_mac: None,
             medium_beacon_ctr: 0,
             clock: None,
+            wifi: super::virtual_wifi::default_medium(),
+        }
+    }
+
+    /// Build a MAC bound to an explicit WiFi bus. MACs sharing a bus form one
+    /// virtual network (same AP, DHCP, STA↔STA routing); MACs on different buses
+    /// are isolated. Prefer over `new()`'s process-global default.
+    pub fn with_wifi(wifi: super::virtual_wifi::VirtualWifiBus) -> Self {
+        Self {
+            wifi,
+            ..Self::new()
         }
     }
 
@@ -290,7 +305,7 @@ impl Esp32c3WifiMac {
                 if self.medium_mac.is_none() && sa != [0u8; 6] {
                     self.medium_mac = Some(sa);
                 }
-                super::virtual_wifi::submit(sa, &raw);
+                self.wifi.submit(sa, &raw);
             }
         } else {
             self.tx_out.push_back(raw);
@@ -514,9 +529,9 @@ impl Peripheral for Esp32c3WifiMac {
                 // Periodic beacon so the scanning station keeps seeing the AP.
                 self.medium_beacon_ctr = self.medium_beacon_ctr.wrapping_add(1);
                 if self.medium_beacon_ctr % 2_000_000 == 0 {
-                    super::virtual_wifi::queue_beacon(mac, 1);
+                    self.wifi.queue_beacon(mac, 1);
                 }
-                for frame in super::virtual_wifi::take_inbox(mac) {
+                for frame in self.wifi.take_inbox(mac) {
                     self.pending_rx.push_back(frame);
                 }
             }

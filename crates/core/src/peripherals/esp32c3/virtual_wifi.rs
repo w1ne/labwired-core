@@ -21,7 +21,7 @@
 //! bridge proved, lifted into core and made MAC-aware so it scales to N stations.
 
 use std::collections::{HashMap, VecDeque};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 
 /// AP identity.
 const AP_BSSID: [u8; 6] = [0x02, 0x00, 0x00, 0x00, 0x00, 0x01];
@@ -51,45 +51,77 @@ struct VirtualWifi {
     next_host: u8,
 }
 
-static MEDIUM: OnceLock<Mutex<VirtualWifi>> = OnceLock::new();
-
-fn with_medium<R>(f: impl FnOnce(&mut VirtualWifi) -> R) -> R {
-    let m = MEDIUM.get_or_init(|| Mutex::new(VirtualWifi::default()));
-    f(&mut m.lock().unwrap())
+/// A shared WiFi medium — the infrastructure AP plus every associated station.
+/// WiFi MACs minted from the same bus associate to the same virtual AP, get
+/// distinct DHCP leases, and route to each other; MACs on different buses are
+/// fully isolated — the behaviour the former process-static `MEDIUM` could not
+/// offer, so two WiFi labs (or two workers) can coexist. `Arc<Mutex<…>>` keeps
+/// the MAC `Send` inside a `Machine` (native requires `MachineTrait: Send`); the
+/// browser is single-threaded so it never contends.
+#[derive(Debug, Clone, Default)]
+pub struct VirtualWifiBus {
+    inner: Arc<Mutex<VirtualWifi>>,
 }
 
-/// Reset the medium (tests / fresh runs).
-pub fn reset() {
-    with_medium(|m| {
-        m.stas.clear();
-        m.next_host = 0;
-    });
+impl VirtualWifiBus {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    fn with<R>(&self, f: impl FnOnce(&mut VirtualWifi) -> R) -> R {
+        f(&mut self.inner.lock().unwrap())
+    }
+
+    /// Reset the medium (tests / fresh runs).
+    pub fn reset(&self) {
+        self.with(|m| {
+            m.stas.clear();
+            m.next_host = 0;
+        });
+    }
+
+    /// Submit a frame a station transmitted. The AP processes it: management →
+    /// response to the sender; DHCP → DORA; ARP → reply (gateway or another STA's
+    /// MAC); IP destined to another station → routed into that station's inbox.
+    pub fn submit(&self, src_mac: [u8; 6], frame: &[u8]) {
+        self.with(|m| m.handle_tx(src_mac, frame));
+    }
+
+    /// Drain frames the medium has queued for `mac` (delivered to its RX ring).
+    pub fn take_inbox(&self, mac: [u8; 6]) -> Vec<Vec<u8>> {
+        self.with(|m| {
+            m.stas
+                .get_mut(&mac)
+                .map(|s| s.inbox.drain(..).collect())
+                .unwrap_or_default()
+        })
+    }
+
+    /// Queue a beacon for `mac` (the AP beacons so a scanning STA finds it).
+    /// Called periodically by the MAC while not yet associated.
+    pub fn queue_beacon(&self, mac: [u8; 6], channel: u8) {
+        self.with(|m| {
+            let frame = build_beacon(channel);
+            m.enqueue(mac, frame);
+        });
+    }
 }
 
-/// Submit a frame a station transmitted. The AP processes it: management →
-/// response to the sender; DHCP → DORA; ARP → reply (gateway or another STA's
-/// MAC); IP destined to another station → routed into that station's inbox.
-pub fn submit(src_mac: [u8; 6], frame: &[u8]) {
-    with_medium(|m| m.handle_tx(src_mac, frame));
+// --- Transitional process-global medium (browser back-compat) ----------------
+//
+// WiFi MACs built via `Esp32c3WifiMac::new()` share this one module-global bus.
+// One wasm module = one worker = one lab, so this is byte-identical to the former
+// `static MEDIUM`. The follow-up threads a per-lab-group `VirtualWifiBus` through
+// the MAC's construction, after which this global is deleted.
+fn default_wifi_bus() -> &'static VirtualWifiBus {
+    static BUS: OnceLock<VirtualWifiBus> = OnceLock::new();
+    BUS.get_or_init(VirtualWifiBus::new)
 }
 
-/// Drain frames the medium has queued for `mac` (delivered to its RX ring).
-pub fn take_inbox(mac: [u8; 6]) -> Vec<Vec<u8>> {
-    with_medium(|m| {
-        m.stas
-            .get_mut(&mac)
-            .map(|s| s.inbox.drain(..).collect())
-            .unwrap_or_default()
-    })
-}
-
-/// Queue a beacon for `mac` (the AP beacons so a scanning STA finds it). Called
-/// periodically by the MAC while not yet associated.
-pub fn queue_beacon(mac: [u8; 6], channel: u8) {
-    with_medium(|m| {
-        let frame = build_beacon(channel);
-        m.enqueue(mac, frame);
-    });
+/// The process-global WiFi medium every `Esp32c3WifiMac::new()` binds to.
+/// Transitional; prefer an explicitly owned [`VirtualWifiBus`].
+pub fn default_medium() -> VirtualWifiBus {
+    default_wifi_bus().clone()
 }
 
 impl VirtualWifi {
@@ -493,26 +525,27 @@ mod tests {
         [0x02, 0, 0, 0, 0, n]
     }
 
-    // The medium is a process-global, so all assertions share one test to run
-    // sequentially (parallel #[test]s would race on reset()/assign_ip).
+    // Each test owns its VirtualWifiBus, so they no longer race on a shared
+    // process-global (the old `static MEDIUM` forced everything into one
+    // sequential test).
     #[test]
     fn medium_assoc_dhcp_and_routing() {
-        reset();
+        let bus = VirtualWifiBus::new();
         let (a, b) = (sta_mac(2), sta_mac(3));
 
         // ── Association handshake responds to the sender ──
-        submit(a, &[0x40, 0, 0, 0]); // probe-req (mgmt subtype 4)
-        let inbox = take_inbox(a);
+        bus.submit(a, &[0x40, 0, 0, 0]); // probe-req (mgmt subtype 4)
+        let inbox = bus.take_inbox(a);
         assert_eq!(inbox.len(), 1);
         assert_eq!(inbox[0][0], 0x50); // probe response
         assert_eq!(&inbox[0][4..10], &a); // addressed to the sender
 
         // ── Distinct, idempotent DHCP IPs per station ──
-        let ip_a = with_medium(|m| m.assign_ip(a));
-        let ip_b = with_medium(|m| m.assign_ip(b));
+        let ip_a = bus.with(|m| m.assign_ip(a));
+        let ip_b = bus.with(|m| m.assign_ip(b));
         assert_eq!(ip_a, [192, 168, 4, 2]);
         assert_eq!(ip_b, [192, 168, 4, 3]);
-        assert_eq!(with_medium(|m| m.assign_ip(a)), ip_a);
+        assert_eq!(bus.with(|m| m.assign_ip(a)), ip_a);
 
         // ── IPv4 routed station-to-station ──
         // Station A sends an IPv4/UDP datagram to B's IP (to-DS data frame).
@@ -549,9 +582,9 @@ mod tests {
         tx.extend_from_slice(&[0x00, 0x00]);
         tx.extend_from_slice(&[0xAA, 0xAA, 0x03, 0x00, 0x00, 0x00, 0x08, 0x00]);
         tx.extend_from_slice(&ip);
-        submit(a, &tx);
+        bus.submit(a, &tx);
         // B should receive a from-DS frame carrying the same payload.
-        let inbox_b = take_inbox(b);
+        let inbox_b = bus.take_inbox(b);
         assert_eq!(inbox_b.len(), 1, "B should receive the routed frame");
         let f = &inbox_b[0];
         assert_eq!(f[1] & 0x02, 0x02, "from-DS");
@@ -560,6 +593,20 @@ mod tests {
             f.windows(payload.len()).any(|w| w == payload),
             "payload preserved"
         );
-        assert!(take_inbox(a).is_empty(), "A gets nothing back");
+        assert!(bus.take_inbox(a).is_empty(), "A gets nothing back");
+
+        // ── Isolation: a station on a DIFFERENT bus hears nothing ──
+        // Re-send A→B's routed datagram; a second, independent medium must not
+        // deliver it to B. This is what the process-static MEDIUM could not do.
+        let other = VirtualWifiBus::new();
+        other.with(|m| {
+            m.assign_ip(a);
+            m.assign_ip(b);
+        });
+        bus.submit(a, &tx);
+        assert!(
+            other.take_inbox(b).is_empty(),
+            "frame leaked across independent WiFi buses"
+        );
     }
 }
