@@ -124,6 +124,12 @@ pub fn default_medium() -> VirtualWifiBus {
     default_wifi_bus().clone()
 }
 
+/// Reset the process-global medium (the CLI bridge calls this for a fresh run).
+/// Transitional; prefer [`VirtualWifiBus::reset`] on an owned bus.
+pub fn reset() {
+    default_wifi_bus().reset();
+}
+
 impl VirtualWifi {
     fn sta(&mut self, mac: [u8; 6]) -> &mut StaState {
         self.stas.entry(mac).or_default()
