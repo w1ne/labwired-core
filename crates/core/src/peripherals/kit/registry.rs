@@ -23,6 +23,7 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::bg770a::BG770A_KIT,
     &components::neo6m::NEO6M_KIT,
     &components::adxl345::ADXL345_KIT,
+    &components::ina219::INA219_KIT,
     &components::mpu6050::MPU6050_KIT,
     &components::bme280::BME280_KIT,
     &components::ssd1306::SSD1306_KIT,

@@ -143,6 +143,38 @@
       ]
     },
     {
+      "device_type": "ina219",
+      "label": "INA219 Power Monitor",
+      "summary": "High-side current and bus voltage sensor over I²C.",
+      "detail": "Texas Instruments INA219 (default 7-bit address 0x40). Host stimulus sets bus voltage and load current; firmware reads config/shunt/bus/current/power/cal registers on the simulated I²C bus.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x40 (A0/A1 ground)."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "bus_voltage",
+          "label": "Bus voltage",
+          "unit": "V",
+          "min": 0.0,
+          "max": 32.0
+        },
+        {
+          "key": "current",
+          "label": "Current",
+          "unit": "A",
+          "min": -3.2,
+          "max": 3.2
+        }
+      ]
+    },
+    {
       "device_type": "mpu6050",
       "label": "MPU6050 IMU",
       "summary": "6-axis gyro + accelerometer over I2C.",

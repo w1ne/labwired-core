@@ -18,6 +18,7 @@ pub mod hc595;
 pub mod hc595_7seg;
 pub mod i2c_factory;
 pub mod ili9341;
+pub mod ina219;
 pub mod iolink_master;
 #[cfg(feature = "iolink-native")]
 pub mod iolink_native;
