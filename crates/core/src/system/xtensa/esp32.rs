@@ -10,6 +10,7 @@ use crate::bus::SystemBus;
 use crate::cpu::xtensa_lx7::XtensaLx7;
 use crate::peripherals::esp_xtensa_common::rom_thunks;
 use crate::Bus;
+// flash_mmu types used via full paths below
 
 /// Build an I2C-attached external device from its manifest declaration, or
 /// `None` if `ext.type` is not a known I2C device (so the caller falls through
@@ -266,21 +267,51 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         None,
         Box::new(RamPeripheral::new(0x20000)),
     );
-    // Flash XIP, instruction window (4 MiB).
+    // Shared physical flash + MMU tables (partition table, SPI flash reads,
+    // temporary spi_flash_mmap, cache2phys). Hybrid XIP windows keep an ELF
+    // overlay for dirty pages and serve clean MMU-mapped pages from flash.
+    let flash_shared = crate::peripherals::esp32::flash_mmu::Esp32FlashShared::new(4 * 1024 * 1024);
     bus.add_peripheral(
         "flash_icache",
         0x400D_0000,
         0x400000,
         None,
-        Box::new(RamPeripheral::new(0x400000)),
+        Box::new(crate::peripherals::esp32::flash_mmu::ClassicFlashWindow::new(
+            0x400D_0000,
+            0x400000,
+            flash_shared.clone(),
+        )),
     );
-    // Flash XIP, data-cache alias (4 MiB at a different virtual base).
     bus.add_peripheral(
         "flash_dcache",
         0x3F40_0000,
         0x400000,
         None,
-        Box::new(RamPeripheral::new(0x400000)),
+        Box::new(crate::peripherals::esp32::flash_mmu::ClassicFlashWindow::new(
+            0x3F40_0000,
+            0x400000,
+            flash_shared.clone(),
+        )),
+    );
+    // PRO/APP flash MMU tables — MUST register before dport_analog_ahb
+    // (0x3FF0_1000..0x3FF1_FFFF) which would otherwise shadow these windows.
+    bus.add_peripheral(
+        "flash_mmu_pro",
+        0x3FF1_0000,
+        (crate::peripherals::esp32::flash_mmu::ENTRY_NUM * 4) as u64,
+        None,
+        Box::new(crate::peripherals::esp32::flash_mmu::Esp32FlashMmuRegs::new_pro(
+            flash_shared.clone(),
+        )),
+    );
+    bus.add_peripheral(
+        "flash_mmu_app",
+        0x3FF1_2000,
+        (crate::peripherals::esp32::flash_mmu::ENTRY_NUM * 4) as u64,
+        None,
+        Box::new(crate::peripherals::esp32::flash_mmu::Esp32FlashMmuRegs::new_app(
+            flash_shared.clone(),
+        )),
     );
 
     // Synthesize the `esp_image_header` at the start of the data XIP
@@ -397,6 +428,9 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
                                                             // esp_crc8 — used by get_efuse_factory_mac to validate the MAC blob
                                                             // against the stored CRC byte. Dallas/Maxim 1-Wire CRC-8 algorithm.
     rom_bank.register(0x4005_d144, rom_thunks::rom_esp_crc8);
+    // esp_rom_crc32_le — core dump / image helpers (not in all ld scripts as a
+    // named export; address from ESP-IDF rom/esp32.rom.ld + nm of app that calls it).
+    rom_bank.register(0x4005_cfec, rom_thunks::rom_esp_crc32_le);
     // SPI flash / eFuse helpers — used by Arduino-ESP32's flash init.
     rom_bank.register(0x4000_8658, rom_thunks::nop_return_zero);
     // _xtos_set_intlevel(level) -> prev. Sets PS.INTLEVEL to `level`,
@@ -442,27 +476,23 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
                                                                  // for the same function. Only register the new alias (gpio_matrix_out).
     rom_bank.register(0x4000_9f0c, rom_thunks::nop_return_zero); // gpio_matrix_out
 
-    // ESP-IDF partition-table verification uses ROM MD5. Stubbing all three
-    // entry points as no-ops makes verify_data_checksum() compute a zero
-    // hash; partitions with `verify_checksum=false` (default for the standard
-    // factory partition table) sail through. Real silicon: BROM at these
-    // addresses per esp32.rom.ld.
-    rom_bank.register(0x4005_da7c, rom_thunks::nop_return_zero); // esp_rom_md5_init
-    rom_bank.register(0x4005_da9c, rom_thunks::nop_return_zero); // esp_rom_md5_update
-    rom_bank.register(0x4005_db1c, rom_thunks::nop_return_zero); // esp_rom_md5_final
+    // ESP-IDF partition-table verification uses ROM MD5 (classic MD5Context
+    // layout). Real implementations — CONFIG_PARTITION_TABLE_MD5 is on for
+    // Arduino-ESP32 matrices, so a nop would fail load_partitions.
+    rom_bank.register(0x4005_da7c, rom_thunks::rom_md5_init); // esp_rom_md5_init
+    rom_bank.register(0x4005_da9c, rom_thunks::rom_md5_update); // esp_rom_md5_update
+    rom_bank.register(0x4005_db1c, rom_thunks::rom_md5_final); // esp_rom_md5_final
     bus.add_peripheral("rom", 0x4000_0000, 0x70000, None, Box::new(rom_bank));
     // UART0 — STM32F1 layout for now (see caveat above).
     // UART0 (Serial) echoes to the host console; UART1/2 are capture-only.
     // Interrupt-matrix sources: ETS_UART{0,1,2}_INTR_SOURCE = 34/35/36.
 
-    // SPI0 / SPI1 — flash SPI controllers used by the BROM during boot.
-    // Sim doesn't model the flash MMU, but Arduino-ESP32's
-    // `bootloader_flash_execute_command_common` polls SPI_CMD_REG until
-    // it clears (real hardware does this asynchronously). Reusing our
-    // Esp32Spi controller gives us the same auto-clear CMD.USR
-    // semantics, even with no attached devices — bytes streamed into
-    // the FIFO just go nowhere, which is fine since we don't model
-    // flash content reads.
+    // SPI0 / SPI1 — flash SPI controllers used by the BROM and by
+    // Arduino-ESP32 `esp_flash` / `bootloader_read_flash_id`. `Esp32Spi`
+    // auto-clears CMD trigger bits and answers JEDEC RDID / RDSR (W0 +
+    // RD_STATUS) so `esp_flash_init_main` can probe a Winbond-class 4 MiB
+    // part without a firmware thunk. Optional flash-array READ can be
+    // attached later via `Esp32Spi::set_flash_backing`.
 
     // GPIO controller (TRM §4.10). The e-paper lab routes CS/RST/DC/BUSY
     // through this peripheral; SCK/MOSI flow through SPI3 below.
@@ -477,17 +507,17 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     // simpler than tracking gating), PERIP_RST_EN with 0 (nothing in
     // reset), and CPU_PER_CONF with 0 (undivided CPU clock — matches
     // silicon reset value). Every other offset reads as zero until
-    // written, including DPORT_APPCPU_CTRL_B at 0x3FF0_0030 — Arduino-ESP32's
-    // `system_early_init` checks that register to decide whether to bring
-    // up the second core, and zero means "skip the bringup path" (which
-    // is what we want, since APP_CPU isn't modeled and the bringup loop
-    // would spin forever waiting on `s_cpu_up`).
+    // DPORT (incl. APPCPU_CTRL_* and cross-core FROM_CPU IPI triggers).
+    // Classic ESP32 is dual-core: callers attach a real APP_CPU via
+    // `XtensaLx7::new_app_cpu` + `Machine::with_secondary_cpu`. PRO
+    // releases it through ROM `ets_set_appcpu_boot_addr` (boot-ROM surface
+    // already mapped above); `Machine` drains the boot address and unhalts
+    // core 1 so `call_start_cpu1` runs for real — no forged `s_cpu_up`.
     //
     // Writes to the cross-core IPI region (CPU_INTR_FROM_CPU_0..3 at
     // 0xDC..0xE8 and PRO/APP_INTR_FROM_CPU_0..3 at 0x164..0x174) are
-    // observable on subsequent reads — the WASM IPI bridge in
-    // `crates/wasm/src/lib.rs::step_with_esp32_aids` depends on that
-    // contract.
+    // observable on subsequent reads; DPORT::cross_core_pending feeds
+    // Machine::step interrupt delivery.
     //
     // MUST register BEFORE the analog-AHB catch-all stub below: SystemBus
     // dispatches by first-registered-wins on overlapping ranges, and we
@@ -672,6 +702,32 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         None,
         Box::new(crate::peripherals::esp_xtensa_common::system_stub::SystemStub::new()),
     );
+    // Classic ESP32 AHB FIFO aliases (`UART_FIFO_AHB_REG`). Firmware TX writes
+    // here (uart_ll_write_txfifo); STATUS/INT live on APB. Registered *after*
+    // wifi_mac_phy so equal-start last-wins gives the 4-byte AHB windows
+    // priority at 0x6000_0000 / 0x6001_0000 / 0x6002_E000.
+    for (name, ahb_base) in [
+        ("uart0", 0x6000_0000u64),
+        ("uart1", 0x6001_0000u64),
+        ("uart2", 0x6002_E000u64),
+    ] {
+        if let Some(idx) = bus.find_peripheral_index_by_name(name) {
+            if let Some(uart) = bus.peripherals[idx]
+                .dev
+                .as_any()
+                .and_then(|a| a.downcast_ref::<crate::peripherals::esp32::uart::Esp32Uart>())
+            {
+                let ahb = uart.ahb_fifo_alias();
+                bus.add_peripheral(
+                    &format!("{name}_ahb_fifo"),
+                    ahb_base,
+                    4,
+                    None,
+                    Box::new(ahb),
+                );
+            }
+        }
+    }
 
     // RTC fast memory (8 KiB at 0x3FF8_0000) — alias for instruction view.
     bus.add_peripheral(
@@ -705,6 +761,11 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     // test suite passes with the walk disabled (e2e renders byte-perfect).
     // No effect with the feature off (the flag is only read there).
     bus.legacy_walk_disabled = true;
+
+    // Default flash image: app XIP MMU seed for cache2phys + SPI0/1 backing.
+    // Callers (diag / labwired test) overlay partitions.bin at 0x8000 via
+    // `seed_esp32_flash_image` before load_firmware.
+    let _ = crate::peripherals::esp32::flash_mmu::seed_esp32_flash_image(bus, None);
 
     XtensaLx7::new()
 }

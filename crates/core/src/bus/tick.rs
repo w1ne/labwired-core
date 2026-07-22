@@ -851,6 +851,35 @@ impl SystemBus {
         }
     }
 
+    /// Classic ESP32 DPORT interrupt-matrix routing (TRM §7).
+    ///
+    /// Peripherals emit matrix *source* IDs via `explicit_irqs` (e.g. UART0 =
+    /// 34). Each core has its own MAP table (`PRO_*` @ 0x104, `APP_*` @ 0x208);
+    /// firmware binds sources to CPU IRQ slots per core. Without this, APP_CPU
+    /// never sees UART TX-empty (loopTask is pinned to core 1) and
+    /// `Serial.println` stays stuck in the driver ring buffer — no `LW_L0_OK`.
+    ///
+    /// Level-sensitive rebuild each tick (same contract as S3/C3). No-op when
+    /// DPORT is absent. Does not touch S3/C3 routing flags.
+    fn aggregate_esp32_classic_irqs(&mut self, source_ids: &[u32]) {
+        // Skip when S3/C3 fabrics own `pending_cpu_irqs`.
+        if self.esp32s3_irq_routing || self.esp32c3_irq_routing {
+            return;
+        }
+        let Some(idx) = self.dport_idx else {
+            return;
+        };
+        let routed = self.peripherals.get(idx).and_then(|p| {
+            p.dev
+                .as_any()
+                .and_then(|a| a.downcast_ref::<crate::peripherals::esp32::dport::Dport>())
+                .map(|d| d.route_sources(source_ids))
+        });
+        if let Some(routed) = routed {
+            self.pending_cpu_irqs = routed;
+        }
+    }
+
     fn aggregate_esp32s3_explicit_irqs(&mut self, source_ids: &[u32]) {
         // Rebuild the per-core routed pending bitmap as a faithful LEVEL
         // reflection of the sources asserting THIS tick — set while a source
@@ -980,6 +1009,7 @@ impl SystemBus {
         // the pending cpu IRQ bitmap + intmatrix INTR_STATUS mirror.
         self.aggregate_esp32s3_explicit_irqs(&explicit_source_ids);
         self.aggregate_esp32c3_irqs(&explicit_source_ids);
+        self.aggregate_esp32_classic_irqs(&explicit_source_ids);
         self.collect_enabled_nvic_interrupts(&mut interrupts);
 
         (interrupts, costs, dma_requests)
@@ -1053,6 +1083,7 @@ impl SystemBus {
         // Plan 3: route ESP32-S3 source IDs through the intmatrix.
         self.aggregate_esp32s3_explicit_irqs(&explicit_source_ids);
         self.aggregate_esp32c3_irqs(&explicit_source_ids);
+        self.aggregate_esp32_classic_irqs(&explicit_source_ids);
 
         // Phase 1.5: Route DMA signals
         for (source_name, request_id) in dma_signals {

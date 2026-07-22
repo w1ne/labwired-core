@@ -14,12 +14,18 @@
 /// The corresponding RETW pops and restores. This avoids relying on
 /// the firmware's OF/UF vector handlers — which need a primed
 /// `[SP - 12]` save chain that isn't set up on a cold first wrap.
+///
+/// Each shadow entry is tagged with a **call generation** so RETW only
+/// restores the snapshot pushed by *that* CALL. A fixed sweep of
+/// `wb_cur..wb_cur+3` otherwise steals an outer CALL8's preserve entry
+/// after the 16-slot window wraps (ESP32 `esp_intr_alloc` a5 corruption).
 #[derive(Debug, Clone)]
 pub struct ArFile {
     phys: [u32; 64],
     window_base: u8,   // 0..15
     window_start: u16, // 16 bits
-    shadow: [Vec<[u32; 4]>; 16],
+    /// Per-slot stacks of `(call_gen, a0..a3)`.
+    shadow: [Vec<(u32, [u32; 4])>; 16],
 }
 
 impl Default for ArFile {
@@ -39,9 +45,8 @@ impl ArFile {
         }
     }
 
-    /// Push the current AR[wb*4..wb*4+3] onto the shadow stack for slot `wb`.
-    /// Used by CALL{n} when about to overwrite a live frame's registers.
-    pub fn push_shadow(&mut self, wb: u8) {
+    /// Push the current AR[wb*4..wb*4+3] tagged with `call_gen`.
+    pub fn push_shadow_gen(&mut self, wb: u8, call_gen: u32) {
         let base = (wb as usize & 0xF) * 4;
         let regs = [
             self.phys[base],
@@ -49,14 +54,56 @@ impl ArFile {
             self.phys[base + 2],
             self.phys[base + 3],
         ];
-        self.shadow[wb as usize & 0xF].push(regs);
+        self.shadow[wb as usize & 0xF].push((call_gen, regs));
     }
 
-    /// Pop the most-recently-saved frame for slot `wb` and restore
-    /// AR[wb*4..wb*4+3]. Returns true if a value was popped.
+    /// Push untagged (generation 0) — for spill helpers / legacy callers.
+    pub fn push_shadow(&mut self, wb: u8) {
+        self.push_shadow_gen(wb, 0);
+    }
+
+    /// Pop the top entry only if its generation matches `call_gen`.
+    /// Returns true if a restore happened.
+    pub fn pop_shadow_if_gen(&mut self, wb: u8, call_gen: u32) -> bool {
+        let i = wb as usize & 0xF;
+        let matches = self.shadow[i]
+            .last()
+            .map(|(g, _)| *g == call_gen)
+            .unwrap_or(false);
+        if !matches {
+            return false;
+        }
+        if let Some((_, regs)) = self.shadow[i].pop() {
+            let base = i * 4;
+            self.phys[base] = regs[0];
+            self.phys[base + 1] = regs[1];
+            self.phys[base + 2] = regs[2];
+            self.phys[base + 3] = regs[3];
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Drop the top entry if generation matches, without writing physical ARs.
+    /// Used for displaced-slot bookkeeping where only WS re-set matters.
+    pub fn discard_shadow_if_gen(&mut self, wb: u8, call_gen: u32) -> bool {
+        let i = wb as usize & 0xF;
+        let matches = self.shadow[i]
+            .last()
+            .map(|(g, _)| *g == call_gen)
+            .unwrap_or(false);
+        if !matches {
+            return false;
+        }
+        self.shadow[i].pop().is_some()
+    }
+
+    /// Pop the most-recently-saved frame for slot `wb` (any generation).
+    /// Used by spill thunks and unpaired-RETW fallback.
     pub fn pop_shadow(&mut self, wb: u8) -> bool {
         let i = wb as usize & 0xF;
-        if let Some(regs) = self.shadow[i].pop() {
+        if let Some((_, regs)) = self.shadow[i].pop() {
             let base = i * 4;
             self.phys[base] = regs[0];
             self.phys[base + 1] = regs[1];
@@ -70,6 +117,18 @@ impl ArFile {
 
     pub fn shadow_depth(&self, wb: u8) -> usize {
         self.shadow[wb as usize & 0xF].len()
+    }
+
+    /// Top-of-stack regs for a slot (generation stripped), if any.
+    pub fn shadow_top_regs(&self, wb: u8) -> Option<[u32; 4]> {
+        self.shadow[wb as usize & 0xF]
+            .last()
+            .map(|(_, regs)| *regs)
+    }
+
+    /// Generation of the top shadow entry, if any.
+    pub fn shadow_top_gen(&self, wb: u8) -> Option<u32> {
+        self.shadow[wb as usize & 0xF].last().map(|(g, _)| *g)
     }
 
     pub fn windowbase(&self) -> u8 {
@@ -120,16 +179,20 @@ impl ArFile {
         self.phys = phys;
     }
 
-    /// Borrow the per-WB shadow-spill stacks. 16 slots; each is a stack
-    /// of saved 4-register frames pushed by `push_shadow`.
-    pub fn shadow_stacks(&self) -> &[Vec<[u32; 4]>; 16] {
-        &self.shadow
+    /// Shadow stacks with generation stripped (snapshot / spill-thunk compat).
+    pub fn shadow_stacks(&self) -> [Vec<[u32; 4]>; 16] {
+        let mut out: [Vec<[u32; 4]>; 16] = Default::default();
+        for i in 0..16 {
+            out[i] = self.shadow[i].iter().map(|(_, r)| *r).collect();
+        }
+        out
     }
 
-    /// Replace the per-WB shadow-spill stacks. Caller must ensure the
-    /// outer length stays 16.
+    /// Restore shadow stacks from generation-stripped snapshots (gen=0).
     pub fn set_shadow_stacks(&mut self, shadow: [Vec<[u32; 4]>; 16]) {
-        self.shadow = shadow;
+        for i in 0..16 {
+            self.shadow[i] = shadow[i].iter().map(|r| (0u32, *r)).collect();
+        }
     }
 
     #[inline]

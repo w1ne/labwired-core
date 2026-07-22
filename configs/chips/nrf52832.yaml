@@ -9,12 +9,23 @@ flash:
 ram:
   base: 0x20000000
   size: "64KB"
+# Nordic nRF5 SDK / ArduinoCore-nRF5 errata probes read a reserved silicon
+# fingerprint window at 0xF0000FE0 (nrf52_errata_16 etc.). On real die this
+# returns a package/rev code; unmapped, the sim bus-faults. Map a tiny
+# zero-filled window so "not this rev" (byte != 6) is the honest outcome for
+# a generic 52832 model — same pattern as mapping any other reserved MMIO.
+memory_regions:
+  - name: "nrf_errata_probe"
+    base: 0xF0000000
+    size: "4KB"
 peripherals:
+  # Classic UART0 (PS §6.33) — Arduino Adafruit core uses TXD@0x51C +
+  # EVENTS_TXDRDY@0x11C (not EasyDMA UARTE). Same behavioural model as nRF52840.
   - id: "uart0"
-    type: "uart"
+    type: "nrf52840_uart"
     base_address: 0x40002000
-    config:
-      profile: "nrf52"
+    size: "4KB"
+    irq: 2
   # nRF52832 shares the nRF52 series peripheral memory map with the nRF52840;
   # the blocks below mirror the proven nrf52840.yaml declarations for the IP
   # the nrf52832 also carries. nrf52832 has a SINGLE GPIO port (P0) and no P1.
@@ -49,6 +60,15 @@ peripherals:
     base_address: 0x4000b000
     size: "4KB"
     irq: 11
+  # RTC1 — Arduino nRF52 `millis()`/`delay()` use RTC1 COUNTER @ 0x504
+  # (AppTimer). Must not be shadowed by a mis-addressed RADIO model.
+  - id: "rtc1"
+    type: "nrf52840_rtc"
+    base_address: 0x40011000
+    size: "4KB"
+    irq: 17
+    config:
+      num_cc: 4
   - id: "wdt"
     type: "nrf52840_watchdog"
     base_address: 0x40010000
@@ -64,3 +84,25 @@ peripherals:
     base_address: 0x4001c000
     size: "4KB"
     irq: 28
+  # NVMC — flash controller (PS §6.13). Core may probe CONFIG/READY.
+  - id: "nvmc"
+    type: "nrf52840_nvmc"
+    base_address: 0x4001e000
+    size: "4KB"
+  # FICR / UICR — Arduino nRF52 core reads factory config at boot
+  # (CODEPAGESIZE etc. @ 0x10000100+). Without FICR, sketches bus-fault at
+  # 0x10000130 (see validation/arduino-matrix). Same models as nrf52840.
+  - id: "ficr"
+    type: "nrf52840_ficr"
+    base_address: 0x10000000
+    size: "4KB"
+  - id: "uicr"
+    type: "nrf52840_uicr"
+    base_address: 0x10001000
+    size: "4KB"
+  # RADIO — real base is 0x40001000 (PS §6.20), NOT 0x40011000 (that is RTC1).
+  - id: "radio"
+    type: "nrf52840_radio"
+    base_address: 0x40001000
+    size: "4KB"
+    irq: 1

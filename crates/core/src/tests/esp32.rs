@@ -103,6 +103,40 @@ fn esp32_uart0_emits_to_sink() {
     );
 }
 
+
+#[test]
+fn esp32_uart0_ahb_fifo_emits_to_sink() {
+    // Classic ESP32 IDF writes TX via UART_FIFO_AHB_REG(0)=0x6000_0000, not APB.
+    let mut bus = SystemBus::empty();
+    let _cpu = configure_xtensa_esp32(&mut bus);
+
+    let sink = Arc::new(Mutex::new(Vec::new()));
+    bus.attach_uart_tx_sink(sink.clone(), false);
+
+    assert_eq!(
+        bus.resolve_window(0x6000_0000),
+        Some((0x6000_0000, 4)),
+        "AHB FIFO window must win over wifi_mac_phy stub"
+    );
+
+    for &b in b"AHB!" {
+        bus.write_u32(0x6000_0000, b as u32).unwrap();
+    }
+    // STATUS on APB must see the shared TX FIFO.
+    let status = bus.read_u32(0x3FF4_001C).unwrap();
+    assert_eq!((status >> 16) & 0xFF, 4, "TXFIFO_CNT via APB after AHB push");
+
+    let uart0_idx = bus.find_peripheral_index_by_name("uart0").expect("uart0");
+    for _ in 0..2_000_000 {
+        let _ = bus.peripherals[uart0_idx].dev.tick();
+        if sink.lock().unwrap().len() >= 4 {
+            break;
+        }
+    }
+    let bytes = sink.lock().unwrap();
+    assert_eq!(bytes.as_slice(), b"AHB!", "AHB TX must reach sink, got {:?}", String::from_utf8_lossy(&bytes));
+}
+
 #[test]
 fn esp32_sar_adc_oneshot_is_channel_dependent() {
     // The SENS SAR-ADC model must win the overlapping rtcio-stub window at

@@ -1,0 +1,109 @@
+# Zephyr × LabWired board matrix
+# board: west -b target (Zephyr 3.7 board name / qualifier)
+# system: path under configs/systems/
+# chip: configs/chips stem (for docs)
+# max_steps: sim budget (sleep levels need more than bare hello)
+
+levels:
+  - id: L0_hello
+    sample: samples/L0_hello
+    marker: LW_Z0_OK
+    max_steps: 2000000
+    notes: "main() + printk after kernel boot"
+
+  - id: L1_sleep
+    sample: samples/L1_sleep
+    marker: LW_Z1_OK
+    # G474/H563 need ~15–25M steps for first k_msleep(50) under sim tick rates
+    max_steps: 30000000
+    notes: "k_msleep loop — kernel tick must advance"
+
+  - id: L2_blink
+    sample: samples/L2_blink
+    marker: LW_Z2_OK
+    max_steps: 12000000
+    notes: "GPIO led0 toggle + k_msleep + serial"
+
+boards:
+  # ── Already green via firmware_survival hello (stock) — re-prove with matrix samples ──
+  - id: stm32f103
+    chip: stm32f103
+    system: ../../configs/systems/nucleo-f103rb-epaper.yaml
+    zephyr_board: nucleo_f103rb
+    family: stm32
+
+  - id: stm32f401
+    chip: stm32f401
+    system: ../../configs/systems/nucleo-f401re.yaml
+    zephyr_board: nucleo_f401re
+    family: stm32
+
+  - id: stm32l073
+    chip: stm32l073
+    system: ../../configs/systems/nucleo-l073rz.yaml
+    zephyr_board: nucleo_l073rz
+    family: stm32
+
+  - id: stm32l476
+    chip: stm32l476
+    system: ../../configs/systems/nucleo-l476rg.yaml
+    zephyr_board: nucleo_l476rg
+    family: stm32
+
+  - id: stm32g474
+    chip: stm32g474re
+    system: ../../configs/systems/nucleo_g474re.yaml
+    zephyr_board: nucleo_g474re
+    family: stm32
+
+  - id: stm32h563
+    chip: stm32h563
+    system: ../../configs/systems/nucleo-h563zi-demo.yaml
+    zephyr_board: nucleo_h563zi
+    family: stm32
+
+  - id: stm32wb55
+    chip: stm32wb55
+    system: ../../configs/systems/mb1355c.yaml
+    zephyr_board: nucleo_wb55rg
+    family: stm32
+
+  - id: stm32wba52
+    chip: stm32wba52
+    system: ../../configs/systems/nucleo_wba52cg.yaml
+    zephyr_board: nucleo_wba52cg
+    family: stm32
+
+  - id: rp2040
+    chip: rp2040
+    system: ../../configs/systems/rp2040-pico.yaml
+    zephyr_board: rpi_pico
+    family: rp2040
+    max_steps_bonus: 4000000  # USB/boot bring-up budget headroom
+
+  - id: nrf5340
+    chip: nrf5340
+    system: ../../configs/systems/nrf5340dk.yaml
+    zephyr_board: nrf5340dk/nrf5340/cpuapp
+    family: nordic
+
+  - id: kw41z
+    chip: mkw41z4
+    system: ../../configs/systems/frdm-kw41z.yaml
+    zephyr_board: frdm_kw41z
+    family: nxp
+
+  # ── Expansion: survival hello not yet in suite ──
+  - id: nrf52840
+    chip: nrf52840
+    system: ../../configs/systems/nrf52840-dk.yaml
+    zephyr_board: nrf52840dk/nrf52840
+    family: nordic
+    notes: "New vs survival matrix — close Nordic gap"
+
+  - id: nrf52832
+    chip: nrf52832
+    system: ../../configs/systems/nrf52-dk.yaml
+    zephyr_board: nrf52dk/nrf52832
+    family: nordic
+    notes: "New vs survival matrix"

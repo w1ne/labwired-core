@@ -12,6 +12,33 @@ use crate::Peripheral;
 use anyhow::Context;
 use labwired_config::{parse_size, ChipDescriptor, SystemManifest};
 use std::cell::Cell;
+use std::path::{Path, PathBuf};
+
+/// Default on-disk dumps when `image_env` is unset. Keeps copyrighted ROMs out
+/// of the repo path contract (env still wins) while letting matrix/CLI find the
+/// in-tree `crates/core/roms/esp32c3/*` copies used by e2e gates.
+fn default_region_image_path(env: &str) -> Option<PathBuf> {
+    let rel = match env {
+        "LABWIRED_ESP32C3_ROM" => "roms/esp32c3/esp32c3_rom.bin",
+        "LABWIRED_ESP32C3_ROM_DATA" => "roms/esp32c3/esp32c3_drom.bin",
+        // Minimal B0-compatible function-table bootrom (open, in-tree).
+        "LABWIRED_RP2040_BOOTROM" => "roms/rp2040/bootrom.bin",
+        _ => return None,
+    };
+    // Walk: CWD, CWD/crates/core, crate-relative from this source tree layout.
+    let mut candidates = Vec::new();
+    if let Ok(cwd) = std::env::current_dir() {
+        candidates.push(cwd.join(rel));
+        candidates.push(cwd.join("crates/core").join(rel));
+    }
+    // `CARGO_MANIFEST_DIR` for labwired-core when tests run from the crate.
+    if let Ok(manifest) = std::env::var("CARGO_MANIFEST_DIR") {
+        candidates.push(Path::new(&manifest).join(rel));
+        // crates/cli → ../../crates/core/roms/...
+        candidates.push(Path::new(&manifest).join("../core").join(rel));
+    }
+    candidates.into_iter().find(|p| p.is_file())
+}
 
 impl SystemBus {
     pub fn from_config(chip: &ChipDescriptor, manifest: &SystemManifest) -> anyhow::Result<Self> {
@@ -26,7 +53,13 @@ impl SystemBus {
             // from a path given by an env var. Copyrighted vendor blobs are not
             // committed, so a missing image just leaves the region zero-filled.
             if let Some(env) = &region.image_env {
-                if let Ok(path) = std::env::var(env) {
+                // Env pin first; else well-known in-tree dumps so Arduino-matrix
+                // / plain `labwired test` can call C3 ROM helpers without
+                // requiring the operator to export LABWIRED_ESP32C3_ROM*.
+                let path_owned = std::env::var(env).ok().or_else(|| {
+                    default_region_image_path(env).map(|p| p.display().to_string())
+                });
+                if let Some(path) = path_owned {
                     match std::fs::read(&path) {
                         Ok(bytes) => {
                             let n = bytes.len().min(mem.data.len());

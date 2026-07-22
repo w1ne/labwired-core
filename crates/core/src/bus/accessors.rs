@@ -294,10 +294,14 @@ impl crate::Bus for SystemBus {
             None
         };
         if self.config.optimized_bus_access {
-            if let Some(val) = flash_and_alias(self) {
+            // extra_mem (bootrom, IRAM, …) must win over the low-address flash
+            // alias: `flash_and_alias` maps addr < flash.size into
+            // flash.base+addr, which would shadow RP2040/ESP mask ROM at 0x0
+            // with XIP contents at flash.base+addr (e.g. 0xa10 → 0x10000a10).
+            if let Some(val) = extra_mem_half(self) {
                 return Ok(val);
             }
-            if let Some(val) = extra_mem_half(self) {
+            if let Some(val) = flash_and_alias(self) {
                 return Ok(val);
             }
             if let Some(idx) = self.find_peripheral_index(addr) {
@@ -390,10 +394,12 @@ impl crate::Bus for SystemBus {
             None
         };
         if self.config.optimized_bus_access {
-            if let Some(val) = flash_and_alias(self) {
+            // Same ordering as read_u16: bootrom/IRAM in extra_mem must win
+            // over the low-address flash alias (RP2040 mask ROM @ 0x0).
+            if let Some(val) = extra_mem_word(self) {
                 return Ok(val);
             }
-            if let Some(val) = extra_mem_word(self) {
+            if let Some(val) = flash_and_alias(self) {
                 return Ok(val);
             }
             if let Some(idx) = self.find_peripheral_index(addr) {

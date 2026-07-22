@@ -237,3 +237,17 @@ peripherals:
       dma2: true
       # DMA2_Stream0..7 NVIC positions (stm32f407xx.h): 56..60, then 68..70.
       stream_irqs: [56, 57, 58, 59, 60, 68, 69, 70]
+  # FLASH interface + PWR — required by Arduino/STM32 core bring-up
+  # (HAL_RCC_ClockConfig waits on FLASH_ACR latency; SystemInit touches PWR).
+  # Same bindings as stm32f401.yaml; without them Arduino sketches bus-fault
+  # at 0x40023C00 / 0x40007000 (see validation/arduino-matrix).
+  - id: "flash"
+    type: "flash"
+    base_address: 0x40023C00
+    size: "1KB"
+    config:
+      profile: "f1"
+  - id: "pwr"
+    type: "pwr"
+    base_address: 0x40007000
+    size: "1KB"

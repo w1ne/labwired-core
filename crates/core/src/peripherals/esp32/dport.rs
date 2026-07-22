@@ -56,10 +56,11 @@
 //!     it (rare, but it happens in vendor headers gated behind
 //!     `DPORT_REG_READ`) sees "everything's on" instead of "everything's
 //!     off" — easier than tracking per-peripheral gating.
-//!   * APP_CPU bringup logic. `APPCPU_CTRL_B` at offset 0x30 reads as
-//!     zero (HashMap default), matching the existing behavior that
-//!     keeps Arduino-ESP32's `system_early_init` from spinning forever
-//!     in `start_other_core`.
+//!   * Full APPCPU_CTRL state machine beyond last-write-wins register
+//!     storage. APP_CPU release is driven by the boot-ROM
+//!     `ets_set_appcpu_boot_addr` surface + `Machine` unhalt of a real
+//!     secondary LX6 (see `XtensaLx7::new_app_cpu`), not by forging
+//!     firmware handshake bytes.
 //!
 //! ## Why this is a new peripheral instead of a stub
 //!
@@ -83,10 +84,18 @@ pub const DPORT_CPU_PER_CONF_OFFSET: u32 = 0x003C;
 pub const DPORT_PRO_CACHE_CTRL_OFFSET: u32 = 0x0040;
 /// DPORT_APP_CACHE_CTRL — APP_CPU cache control word.
 pub const DPORT_APP_CACHE_CTRL_OFFSET: u32 = 0x0044;
-/// DPORT_PRO_DCACHE_DBUG0..9 — PRO_CPU dcache debug words (0x50..0x74).
-pub const DPORT_PRO_DCACHE_DBUG_BASE: u32 = 0x0050;
-/// DPORT_APP_DCACHE_DBUG0..9 — APP_CPU dcache debug words (0x78..0x9C).
-pub const DPORT_APP_DCACHE_DBUG_BASE: u32 = 0x0078;
+/// DPORT_PRO_DCACHE_DBUG0 — PRO cache debug/status (`dport_reg.h`:
+/// `DR_REG_DPORT_BASE + 0x3F0`). Bits [18:7] = `PRO_CACHE_STATE` (RO).
+pub const DPORT_PRO_DCACHE_DBUG0_OFFSET: u32 = 0x03F0;
+/// DPORT_APP_DCACHE_DBUG0 — APP cache debug/status (`+ 0x418`).
+/// Bits [18:7] = `APP_CACHE_STATE` (RO).
+pub const DPORT_APP_DCACHE_DBUG0_OFFSET: u32 = 0x0418;
+/// `PRO/APP_CACHE_STATE` field: start bit and width (12 bits).
+pub const DPORT_CACHE_STATE_S: u32 = 7;
+pub const DPORT_CACHE_STATE_V: u32 = 0xFFF;
+/// Idle / suspended state value that `cache_hal_suspend` polls for
+/// (`extui ..., 7, 12` then `bnei ..., 1`).
+pub const DPORT_CACHE_STATE_IDLE: u32 = 1;
 /// DPORT_PERIP_CLK_EN — peripheral clock-gate bitmap.
 pub const DPORT_PERIP_CLK_EN_OFFSET: u32 = 0x00C0;
 /// DPORT_PERIP_RST_EN — peripheral reset bitmap.
@@ -188,7 +197,20 @@ impl Dport {
         // Bus already clamps offset to the registered SIZE, so the index
         // is bounded by WORDS. The cast is checked in debug via the array
         // bounds check; release builds elide it.
-        self.regs[(word_off >> 2) as usize]
+        let mut v = self.regs[(word_off >> 2) as usize];
+        // PRO/APP_DCACHE_DBUG0: RO field CACHE_STATE[18:7]. ESP-IDF
+        // `cache_hal_suspend` spin-waits until this field equals 1 (idle)
+        // after requesting a suspend. We do not model cache tag state, so
+        // report idle immediately — same class of handshake as
+        // CACHE_ENABLE→CACHE_ENABLED on CACHE_CTRL (write_word below).
+        // Without this, dual-core Arduino boot hangs forever in
+        // cache_hal_suspend while APP_CPU sits in call_start_cpu1 waiting
+        // on s_resume_cores (PRO never reaches startup_resume_other_cores).
+        if word_off == DPORT_PRO_DCACHE_DBUG0_OFFSET || word_off == DPORT_APP_DCACHE_DBUG0_OFFSET {
+            let mask = DPORT_CACHE_STATE_V << DPORT_CACHE_STATE_S;
+            v = (v & !mask) | (DPORT_CACHE_STATE_IDLE << DPORT_CACHE_STATE_S);
+        }
+        v
     }
 
     fn write_word(&mut self, word_off: u32, value: u32) {
@@ -232,12 +254,6 @@ impl Dport {
     pub fn cross_core_pending(&self, core: u8) -> u32 {
         /// `ETS_FROM_CPU_INTR0_SOURCE` — the first cross-core interrupt source.
         const FROM_CPU_INTR0_SOURCE: u32 = 24;
-        // Per-core interrupt-matrix MAP base: source `s` maps at `base + s*4`.
-        let map_base = if core == 0 {
-            DPORT_PRO_MAC_INTR_MAP_REG_OFFSET
-        } else {
-            DPORT_APP_MAC_INTR_MAP_REG_OFFSET
-        };
         let mut slots = 0u32;
         for n in 0..4u32 {
             let trigger = self.read_word(DPORT_CPU_INTR_FROM_CPU_0_OFFSET + n * 4);
@@ -245,15 +261,49 @@ impl Dport {
                 continue;
             }
             let source = FROM_CPU_INTR0_SOURCE + n;
-            let map = self.read_word(map_base + source * 4);
-            // The MAP register's low 5 bits select the CPU interrupt number.
-            // A value of 0 means this core left the source unbound (matches
-            // the reset state), so it takes no interrupt.
-            if map != 0 {
-                slots |= 1u32 << (map & 0x1F);
+            if let Some(slot) = self.map_source_slot(core, source) {
+                slots |= 1u32 << slot;
             }
         }
         slots
+    }
+
+    /// Map a peripheral interrupt-matrix *source* to a CPU IRQ slot for `core`
+    /// (0 = PRO, 1 = APP), or `None` if unbound (MAP == 0).
+    ///
+    /// TRM §7 / `dport_reg.h`: PRO map base `0x104`, APP map base `0x208`;
+    /// source `s` lives at `base + s*4`, low 5 bits = CPU interrupt number.
+    pub fn map_source_slot(&self, core: u8, source: u32) -> Option<u8> {
+        let map_base = if core == 0 {
+            DPORT_PRO_MAC_INTR_MAP_REG_OFFSET
+        } else {
+            DPORT_APP_MAC_INTR_MAP_REG_OFFSET
+        };
+        // Classic ESP32 has ~69 matrix sources (0..68). Bound generously.
+        if source > 127 {
+            return None;
+        }
+        let map = self.read_word(map_base + source * 4);
+        if map == 0 {
+            None
+        } else {
+            Some((map & 0x1F) as u8)
+        }
+    }
+
+    /// Route a set of asserting peripheral source IDs into per-core CPU IRQ
+    /// slot bitmasks (level-sensitive rebuild, same shape as S3 intmatrix).
+    pub fn route_sources(&self, sources: &[u32]) -> [u32; 2] {
+        let mut routed = [0u32; 2];
+        for &src in sources {
+            if let Some(slot) = self.map_source_slot(0, src) {
+                routed[0] |= 1u32 << slot;
+            }
+            if let Some(slot) = self.map_source_slot(1, src) {
+                routed[1] |= 1u32 << slot;
+            }
+        }
+        routed
     }
 }
 
@@ -387,11 +437,24 @@ mod tests {
 
     #[test]
     fn fresh_dport_reports_zero_at_appcpu_ctrl_b() {
-        // APPCPU_CTRL_B is at offset 0x30. Reading 0 keeps Arduino-ESP32's
-        // `system_early_init` from spinning forever in `start_other_core`
-        // (the bringup path is only entered when this reads non-zero).
+        // APPCPU_CTRL_B @ 0x30 resets to 0 (HashMap default). Dual-core
+        // release is not this bit alone: PRO calls boot-ROM
+        // ets_set_appcpu_boot_addr, which unhalts a real APP_CPU that runs
+        // call_start_cpu1.
         let p = Dport::new();
         assert_eq!(read_u32_at(&p, 0x30), 0);
+    }
+
+    #[test]
+    fn dcache_dbug0_reports_cache_state_idle() {
+        // cache_hal_suspend: read PRO/APP_DCACHE_DBUG0, extui bits[18:7],
+        // spin until value == 1. Model reports idle without a full cache FSM.
+        let p = Dport::new();
+        let pro = read_u32_at(&p, DPORT_PRO_DCACHE_DBUG0_OFFSET as u64);
+        let app = read_u32_at(&p, DPORT_APP_DCACHE_DBUG0_OFFSET as u64);
+        let state = |w: u32| (w >> DPORT_CACHE_STATE_S) & DPORT_CACHE_STATE_V;
+        assert_eq!(state(pro), DPORT_CACHE_STATE_IDLE, "PRO_CACHE_STATE");
+        assert_eq!(state(app), DPORT_CACHE_STATE_IDLE, "APP_CACHE_STATE");
     }
 
     #[test]

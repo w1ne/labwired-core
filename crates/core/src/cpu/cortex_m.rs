@@ -2967,6 +2967,56 @@ impl CortexM {
                     self.fpu_s[sd as usize] = self.fpu_s[sm as usize];
                     pc_increment = 4;
                 }
+
+                Instruction::VmovF32Imm { sd, imm_bits } => {
+                    self.fpu_s[sd as usize] = imm_bits;
+                    pc_increment = 4;
+                }
+                Instruction::VcvtF32FromInt {
+                    sd,
+                    sm,
+                    signed,
+                    fbits,
+                } => {
+                    let raw = self.fpu_s[sm as usize];
+                    let int_val = if signed {
+                        raw as i32 as f64
+                    } else {
+                        raw as f64
+                    };
+                    let scaled = if fbits > 0 {
+                        int_val / ((1u64 << fbits.min(31)) as f64)
+                    } else {
+                        int_val
+                    };
+                    self.fpu_s[sd as usize] = (scaled as f32).to_bits();
+                    pc_increment = 4;
+                }
+                Instruction::VcvtIntFromF32 {
+                    sd,
+                    sm,
+                    signed,
+                    fbits,
+                } => {
+                    let f = f32::from_bits(self.fpu_s[sm as usize]) as f64;
+                    let scaled = if fbits > 0 {
+                        f * ((1u64 << fbits.min(31)) as f64)
+                    } else {
+                        f
+                    };
+                    let bits = if signed {
+                        (scaled as i32) as u32
+                    } else if scaled <= 0.0 {
+                        0
+                    } else if scaled >= f64::from(u32::MAX) {
+                        u32::MAX
+                    } else {
+                        scaled as u32
+                    };
+                    self.fpu_s[sd as usize] = bits;
+                    pc_increment = 4;
+                }
+
                 // -------- VFP load/store multiple + double-precision (FPv5-D16) --------
                 Instruction::VfpStoreMultiple {
                     rn,

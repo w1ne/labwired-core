@@ -298,8 +298,21 @@ fn configure_esp32s3_memmap(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp32s3M
             Esp32s3BootMode::Faithful
         }
         None => {
-            // DROM (0x3FF0_0000) is intentionally not mapped in harness mode;
-            // only the faithful path loads the real DROM image.
+            // Code ROM is thunk-backed. Still map DROM (0x3FF0_0000, 128 KiB)
+            // as zero RAM: Arduino/IDF reads ROM data tables through that
+            // window; leaving it unmapped faults at e.g. 0x3FF1_FFFC.
+            // Prefer vendored/env DROM image when present even in harness.
+            let drom_bytes = std::env::var("LABWIRED_ESP32S3_DROM")
+                .ok()
+                .and_then(|p| std::fs::read(p).ok())
+                .or_else(|| {
+                    let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                        .join("roms/esp32s3/esp32s3_drom.bin");
+                    std::fs::read(p).ok()
+                })
+                .unwrap_or_else(|| vec![0u8; 0x2_0000]);
+            let drom = RamPeripheral::with_image(0x2_0000, &drom_bytes);
+            bus.add_peripheral("drom", 0x3FF0_0000, 0x2_0000, None, Box::new(drom));
             let mut rom_bank = RomThunkBank::new(0x4000_0000, 0x6_0000);
             register_default_thunks(&mut rom_bank);
             bus.add_peripheral(
@@ -310,8 +323,8 @@ fn configure_esp32s3_memmap(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp32s3M
                 Box::new(rom_bank),
             );
             eprintln!(
-                "configure_xtensa_esp32s3: ESP32-S3 ROM not found; running in degraded harness mode \
-                 — install the ESP toolchain (or set LABWIRED_ESP32S3_ROM_ELF) for faithful simulation"
+                "configure_xtensa_esp32s3: ESP32-S3 ROM harness (thunk code + {} B DROM)",
+                drom_bytes.len()
             );
             Esp32s3BootMode::Harness
         }
@@ -658,6 +671,9 @@ fn register_default_thunks(bank: &mut RomThunkBank) {
     bank.register(0x4000_057c, rom_thunks::rtc_get_reset_reason);
     // rom_config_data_cache_mode — analogous to instruction cache config; NOP.
     bank.register(0x4000_1a28, rom_thunks::nop_return_zero);
+    // ets_get_cpu_frequency() → MHz; Arduino log timestamps divide CCOUNT
+    // by (mhz*40)-ish — zero ⇒ IntegerDivideByZeroCause.
+    bank.register(0x4000_1a40, rom_thunks::rom_cpu_freq_240mhz);
     // ets_update_cpu_frequency(freq_mhz) — informs the ROM of the new clock
     // so subsequent ets_delay_us calls calibrate correctly. We don't model
     // ROM timing, so accepting and discarding the value is fine.
@@ -713,6 +729,8 @@ fn register_default_thunks(bank: &mut RomThunkBank) {
     bank.register(0x4000_11e8, rom_thunks::rom_memset);
     bank.register(0x4000_1200, rom_thunks::rom_memmove);
     bank.register(0x4000_120c, rom_thunks::rom_memcmp);
+    // qsort — heap reserved-region sort in soc_get_available_memory_regions.
+    bank.register(0x4000_1488, rom_thunks::rom_qsort);
     // ROM cache-management API. A full ESP-IDF/Arduino image drives the whole
     // family during flash/MMU bring-up; the esp-hal path only touched
     // suspend/resume-DCache (0x4000_18b4 / 0x4000_18c0, registered above).
@@ -746,6 +764,37 @@ fn register_default_thunks(bank: &mut RomThunkBank) {
     // live in ROM (not the loaded image) so they must be thunked.
     bank.register(0x4000_1c38, rom_thunks::xtos_set_intlevel); // _xtos_set_intlevel
     bank.register(0x4000_1c08, rom_thunks::xtos_restore_intlevel); // _xtos_restore_intlevel
+    // WDT + SYSTIMER ROM HALs — Arduino `system_early_init` / FreeRTOS tick
+    // setup call these. Without them the harness ROM bank returns 0 / faults
+    // on undecoded BREAK. NOP is enough: real TIMG/SYSTIMER MMIO models drive
+    // the observable side effects the app needs later.
+    for addr in [
+        0x4000_0dbc, // wdt_hal_init
+        0x4000_0dc8, // wdt_hal_deinit
+        0x4000_0dd4, // wdt_hal_config_stage
+        0x4000_0de0, // wdt_hal_write_protect_disable
+        0x4000_0dec, // wdt_hal_write_protect_enable
+        0x4000_0df8, // wdt_hal_enable
+        0x4000_0e04, // wdt_hal_disable
+        0x4000_0e10, // wdt_hal_handle_intr
+        0x4000_0e1c, // wdt_hal_feed
+        0x4000_0e28, // wdt_hal_set_flashboot_en
+        0x4000_0e34, // wdt_hal_is_enabled
+        0x4000_0e40, // systimer_hal_get_counter_value
+        0x4000_0e4c, // systimer_hal_get_time
+        0x4000_0e58, // systimer_hal_set_alarm_target
+        0x4000_0e64, // systimer_hal_set_alarm_period
+        0x4000_0e70, // systimer_hal_get_alarm_value
+        0x4000_0e7c, // systimer_hal_enable_alarm_int
+        0x4000_0e88, // systimer_hal_on_apb_freq_update
+        0x4000_0e94, // systimer_hal_counter_value_advance
+        0x4000_0ea0, // systimer_hal_enable_counter
+        0x4000_0eac, // systimer_hal_init
+        0x4000_0eb8, // systimer_hal_select_alarm_mode
+        0x4000_0ec4, // systimer_hal_connect_alarm_counter
+    ] {
+        bank.register(addr, rom_thunks::nop_return_zero);
+    }
 }
 
 // ── RamPeripheral helper ────────────────────────────────────────────────

@@ -1,0 +1,5 @@
+# Auto-generated for Arduino matrix — bare board, no external devices.
+name: "arduino-matrix-esp32s3"
+chip: "../../../configs/chips/esp32s3.yaml"
+external_devices: []
+board_io: []
