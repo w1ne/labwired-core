@@ -130,7 +130,11 @@ mod tests {
         let mut b_device = lab_b.endpoint(1, 1); // same link id, different bus
 
         a_master.on_tx_byte(0xAA);
-        assert_eq!(b_device.poll(0), None, "byte leaked across independent buses");
+        assert_eq!(
+            b_device.poll(0),
+            None,
+            "byte leaked across independent buses"
+        );
 
         // lab_a's own peer still receives it.
         let mut a_device = lab_a.endpoint(1, 1);
@@ -148,7 +152,15 @@ mod tests {
 
         lab_a.clear();
 
-        assert_eq!(lab_a.endpoint(2, 1).poll(0), None, "cleared bus still held bytes");
-        assert_eq!(lab_b.endpoint(2, 1).poll(0), Some(0x22), "clear leaked to another bus");
+        assert_eq!(
+            lab_a.endpoint(2, 1).poll(0),
+            None,
+            "cleared bus still held bytes"
+        );
+        assert_eq!(
+            lab_b.endpoint(2, 1).poll(0),
+            Some(0x22),
+            "clear leaked to another bus"
+        );
     }
 }
