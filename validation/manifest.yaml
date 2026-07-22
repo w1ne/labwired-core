@@ -509,7 +509,15 @@ boards:
     # detects IN edges rather than draining a queue, and
     # nrf52840_onboarding_gpiote_event_in_fires_on_edge caught it. Offline
     # oracle/mmio/conformance suites pass unchanged. No live re-capture.
-    drift_ack: 2026-07-20
+    # 2026-07-22: WiFi virtual medium moved from a process-static (static MEDIUM)
+    # to an injected VirtualWifiBus each Esp32c3WifiMac holds. Esp32c3WifiMac::new()
+    # (the factory path) binds a transitional process-global bus, so existing
+    # behaviour is byte-identical: medium_assoc_dhcp_and_routing passes (now
+    # bus-owned) plus a new cross-bus isolation assertion. No register read/write
+    # path, reset value or layout touched — the esp32c3 reset oracle
+    # (esp32c3_reset_values_match_silicon) is unaffected. Drift is the shared
+    # esp32c3 file commit date only. No live re-capture.
+    drift_ack: 2026-07-22
 
   - id: nucleo-l476rg
     doc: docs/boards/nucleo-l476rg.md
