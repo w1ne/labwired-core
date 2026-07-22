@@ -175,6 +175,121 @@
       ]
     },
     {
+      "device_type": "ads1115",
+      "label": "ADS1115 16-bit ADC",
+      "summary": "4-channel 16-bit I²C ADC (TI ADS1115).",
+      "detail": "Texas Instruments ADS1115 (default address 0x48). Host stimulus sets A0–A3 voltages; firmware reads conversion/config over I²C with the standard pointer protocol used by Arduino ADS1X15 drivers.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x48 (ADDR→GND)."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "a0",
+          "label": "A0",
+          "unit": "V",
+          "min": -4.096,
+          "max": 4.096
+        },
+        {
+          "key": "a1",
+          "label": "A1",
+          "unit": "V",
+          "min": -4.096,
+          "max": 4.096
+        },
+        {
+          "key": "a2",
+          "label": "A2",
+          "unit": "V",
+          "min": -4.096,
+          "max": 4.096
+        },
+        {
+          "key": "a3",
+          "label": "A3",
+          "unit": "V",
+          "min": -4.096,
+          "max": 4.096
+        }
+      ]
+    },
+    {
+      "device_type": "ds3231",
+      "label": "DS3231 RTC",
+      "summary": "I²C real-time clock with temperature-compensated crystal.",
+      "detail": "Maxim DS3231 (address 0x68). BCD time registers 0x00–0x06 and control/status for common Arduino RTC libraries. Host can set unix_time or temperature via SimInput.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x68."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "unix_time",
+          "label": "Unix time",
+          "unit": "s",
+          "min": 0.0,
+          "max": 4102444800.0
+        },
+        {
+          "key": "temperature",
+          "label": "Temperature",
+          "unit": "C",
+          "min": -40.0,
+          "max": 85.0
+        }
+      ]
+    },
+    {
+      "device_type": "hx711",
+      "label": "HX711 Load Cell",
+      "summary": "24-bit load-cell amplifier (DT/SCK bit-bang).",
+      "detail": "Avia HX711. Firmware bit-bangs SCK while reading DT; host sets weight (g) or raw counts via SimInput. Gain/channel selection pulses after bit 24 are accepted.",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "sck_pin",
+          "ty": "str",
+          "doc": "SCK GPIO pin (e.g. \"PA8\"). Defaults to PA8."
+        },
+        {
+          "name": "dt_pin",
+          "ty": "str",
+          "doc": "DT (DOUT) GPIO pin (e.g. \"PA9\"). Defaults to PA9."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "weight",
+          "label": "Weight",
+          "unit": "g",
+          "min": -50000.0,
+          "max": 50000.0
+        },
+        {
+          "key": "raw",
+          "label": "Raw counts",
+          "unit": "counts",
+          "min": -8388608.0,
+          "max": 8388607.0
+        }
+      ]
+    },
+    {
       "device_type": "mpu6050",
       "label": "MPU6050 IMU",
       "summary": "6-axis gyro + accelerometer over I2C.",

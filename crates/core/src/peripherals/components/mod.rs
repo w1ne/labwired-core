@@ -4,6 +4,7 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
+pub mod ads1115;
 pub mod adxl345;
 pub mod aht20;
 pub mod bg770a;
@@ -13,9 +14,11 @@ pub mod bmp280;
 pub mod cap1188;
 pub mod dht22;
 pub mod drv2605;
+pub mod ds3231;
 pub mod fxos8700;
 pub mod hc595;
 pub mod hc595_7seg;
+pub mod hx711;
 pub mod i2c_factory;
 pub mod ili9341;
 pub mod ina219;

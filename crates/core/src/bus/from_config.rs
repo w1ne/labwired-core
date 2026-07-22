@@ -137,6 +137,7 @@ impl SystemBus {
             gpio_devices: Vec::new(),
             ws2812: Vec::new(),
             tm1637: Vec::new(),
+            hx711: Vec::new(),
             seven_segment: Vec::new(),
             analog_inputs: Vec::new(),
             can_diagnostic_testers: Vec::new(),

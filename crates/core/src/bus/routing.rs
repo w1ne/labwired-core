@@ -127,6 +127,11 @@ impl SystemBus {
         (num <= 48).then_some(num)
     }
 
+    /// Public wrapper for kits that drive MCU inputs (HX711 DT, etc.).
+    pub fn resolve_pin_idr_pub(bus: &SystemBus, pin: &str) -> Option<(u64, u8)> {
+        Self::resolve_pin_idr(bus, pin)
+    }
+
     /// Resolve a pin label to its `(IDR address, bit)` so a sensor can
     /// drive an MCU input line (e.g. the HC-SR04 ECHO pin).
     ///
