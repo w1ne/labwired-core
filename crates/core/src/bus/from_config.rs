@@ -21,8 +21,11 @@ fn default_region_image_path(env: &str) -> Option<PathBuf> {
     let rel = match env {
         "LABWIRED_ESP32C3_ROM" => "roms/esp32c3/esp32c3_rom.bin",
         "LABWIRED_ESP32C3_ROM_DATA" => "roms/esp32c3/esp32c3_drom.bin",
-        // Minimal B0-compatible function-table bootrom (open, in-tree).
-        "LABWIRED_RP2040_BOOTROM" => "roms/rp2040/bootrom.bin",
+        // RP2040 bootrom is NOT auto-loaded: a mask ROM at 0 shadows the
+        // Cortex-M boot alias used by bare-metal onboarding ELFs (PIO smoke
+        // links at low VMA and takes VTOR=0). Arduino/Zephyr matrix cells that
+        // need `rom_func_lookup` set LABWIRED_RP2040_BOOTROM explicitly
+        // (see validation/*-matrix/run_matrix.py).
         _ => return None,
     };
     // Walk: CWD, CWD/crates/core, crate-relative from this source tree layout.
@@ -52,6 +55,7 @@ impl SystemBus {
             // Optionally preload a raw binary image (e.g. a dumped mask ROM)
             // from a path given by an env var. Copyrighted vendor blobs are not
             // committed, so a missing image just leaves the region zero-filled.
+            let mut loaded_image = false;
             if let Some(env) = &region.image_env {
                 // Env pin first; else well-known in-tree dumps so Arduino-matrix
                 // / plain `labwired test` can call C3 ROM helpers without
@@ -64,6 +68,7 @@ impl SystemBus {
                         Ok(bytes) => {
                             let n = bytes.len().min(mem.data.len());
                             mem.data[..n].copy_from_slice(&bytes[..n]);
+                            loaded_image = n > 0;
                             tracing::info!(
                                 "loaded {n} bytes into '{}' region @ {:#010x} from {path}",
                                 region.name,
@@ -76,6 +81,18 @@ impl SystemBus {
                         ),
                     }
                 }
+            }
+            // Skip empty image_env regions: a zero-filled window at 0 would
+            // shadow the Cortex-M flash boot alias (breaks RP2040 bare-metal
+            // onboarding ELFs that rely on VTOR=0 → flash). Regions without
+            // image_env (plain RAM holes) are still installed as zeros.
+            if region.image_env.is_some() && !loaded_image {
+                tracing::debug!(
+                    "skipping empty image_env region '{}' @ {:#010x}",
+                    region.name,
+                    region.base
+                );
+                continue;
             }
             extra_mem.push(mem);
         }

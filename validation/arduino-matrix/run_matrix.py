@@ -176,6 +176,12 @@ def run_labwired(
         str(out_dir),
         "--no-uart-stdout",
     ]
+    env = os.environ.copy()
+    # RP2040 Arduino needs mask ROM at 0 for rom_func_lookup; bare-metal
+    # onboarding ELFs must NOT load it (see from_config default_region_image_path).
+    bootrom = CORE_ROOT / "crates" / "core" / "roms" / "rp2040" / "bootrom.bin"
+    if bootrom.is_file():
+        env.setdefault("LABWIRED_RP2040_BOOTROM", str(bootrom))
     try:
         proc = subprocess.run(
             cmd,
@@ -183,6 +189,7 @@ def run_labwired(
             text=True,
             timeout=timeout,
             cwd=str(CORE_ROOT),
+            env=env,
         )
     except subprocess.TimeoutExpired:
         return "timeout", {"stderr": "labwired test timed out"}
