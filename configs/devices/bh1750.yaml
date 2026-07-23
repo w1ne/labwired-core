@@ -3,8 +3,8 @@
 # measurement mode then clocks out a 16-bit big-endian raw count, with no CRC.
 #
 # Datasheet: lux = raw / 1.2 (at the default MTreg, H-resolution) ⇒ the model
-# encodes raw = lux / 1.2 (scale 1/1.2 = 0.8333…). The mode2 (0.5 lx) variants
-# use the same 1/1.2 scale here — the finer resolution is not separately
+# encodes raw = lux × 1.2 (scale 1.2). The mode2 (0.5 lx) variants use the
+# same 1.2 scale here — the finer resolution is not separately
 # modelled. Power/reset opcodes carry no data and queue no response.
 #
 # Default address 0x23 (ADDR pin tied low; 0x5C when tied high).
@@ -27,28 +27,28 @@ behavior:
       - name: cont_h_res
         code: 0x10
         response:
-          - { source: lux, width: 2, encode: { scale: 0.8333333333333334 } }
+          - { source: lux, width: 2, encode: { scale: 1.2 } }
       - name: cont_h_res2
         code: 0x11
         response:
-          - { source: lux, width: 2, encode: { scale: 0.8333333333333334 } }
+          - { source: lux, width: 2, encode: { scale: 1.2 } }
       - name: cont_l_res
         code: 0x13
         response:
-          - { source: lux, width: 2, encode: { scale: 0.8333333333333334 } }
+          - { source: lux, width: 2, encode: { scale: 1.2 } }
       # One-time measurement modes (device returns to power-down after the read).
       - name: one_time_h_res
         code: 0x20
         response:
-          - { source: lux, width: 2, encode: { scale: 0.8333333333333334 } }
+          - { source: lux, width: 2, encode: { scale: 1.2 } }
       - name: one_time_h_res2
         code: 0x21
         response:
-          - { source: lux, width: 2, encode: { scale: 0.8333333333333334 } }
+          - { source: lux, width: 2, encode: { scale: 1.2 } }
       - name: one_time_l_res
         code: 0x23
         response:
-          - { source: lux, width: 2, encode: { scale: 0.8333333333333334 } }
+          - { source: lux, width: 2, encode: { scale: 1.2 } }
 
 metadata:
   label: "ROHM BH1750"

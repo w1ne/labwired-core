@@ -677,7 +677,7 @@ behavior:
       - name: cont_hres
         code: 0x10
         response:
-          - { source: lux, width: 2, encode: { scale: 0.8333333333333334 } }
+          - { source: lux, width: 2, encode: { scale: 1.2 } }
 metadata:
   inputs:
     - { key: lux, label: "Illuminance", unit: lx, min: 0, max: 100000, default: 600 }
@@ -897,14 +897,18 @@ metadata:
 
     #[test]
     fn code_width_1_dispatches_on_first_byte() {
-        // cont_hres (0x10) sources lux (default 600) with scale 1/1.2 ⇒
-        // round(600 * 0.8333…) = 500, big-endian, no CRC.
+        // cont_hres (0x10) sources lux (default 600) with the datasheet
+        // counts-per-lux factor 1.2 ⇒ round(600 * 1.2) = 720, big-endian, no CRC.
         let mut d = cw1_dev();
         assert_eq!(d.address(), 0x23);
         send_byte_cmd(&mut d, 0x10);
         let b = read_bytes(&mut d, 2);
-        assert_eq!(((b[0] as u16) << 8) | b[1] as u16, 500, "BE raw = lux/1.2");
-        assert_eq!(b, vec![0x01, 0xF4]);
+        assert_eq!(
+            ((b[0] as u16) << 8) | b[1] as u16,
+            720,
+            "BE raw = lux * 1.2"
+        );
+        assert_eq!(b, vec![0x02, 0xD0]);
     }
 
     #[test]
@@ -913,7 +917,7 @@ metadata:
         d.set_input("lux", 1200.0).unwrap();
         send_byte_cmd(&mut d, 0x10);
         let b = read_bytes(&mut d, 2);
-        assert_eq!(((b[0] as u16) << 8) | b[1] as u16, 1000);
+        assert_eq!(((b[0] as u16) << 8) | b[1] as u16, 1440);
     }
 
     #[test]
