@@ -1,8 +1,8 @@
 name: Core Arduino Matrix Smoke
 
 # Thin stock-Arduino gate: 4 boards × L0+L2 (8 cells). Proves FreeRTOS/mbed
-# paths that the coverage-matrix UART fixtures never touch. Not a required
-# status check until stable (see docs/engineering/test_harness.md).
+# paths that the coverage-matrix UART fixtures never touch.
+# Required status: `arduino-matrix-gate` (branch protection).
 
 on:
   push:
@@ -63,23 +63,46 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install host packages for PlatformIO toolchains
+        run: |
+          sudo apt-get update -qq
+          # STM32 / nRF Arduino cores pull arm-none-eabi via PIO packages, but
+          # having the distro toolchain available avoids some platform probes failing.
+          sudo apt-get install -y --no-install-recommends \
+            gcc-arm-none-eabi binutils-arm-none-eabi libnewlib-arm-none-eabi \
+            git
+
+      - name: Cache PlatformIO packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+          key: pio-${{ matrix.board }}-${{ hashFiles('validation/arduino-matrix/boards.yaml') }}
+          restore-keys: |
+            pio-${{ matrix.board }}-
+
       - name: Install PyYAML + PlatformIO
         run: |
-          python -m pip install --quiet pyyaml platformio
-          # RP2040 Arduino needs the raspberrypi platform (not always pulled transitively).
-          if [ "${{ matrix.board }}" = "rp2040" ]; then
-            pio pkg install -g -p raspberrypi || true
-          fi
+          python -m pip install --quiet 'platformio>=6.1' pyyaml
+          # Warm platforms used by the thin matrix (platforms pull frameworks).
+          case "${{ matrix.board }}" in
+            stm32f103)  pio pkg install -g -p ststm32 ;;
+            nrf52840)   pio pkg install -g -p nordicnrf52 ;;
+            rp2040)     pio pkg install -g -p raspberrypi ;;
+            esp32c3)    pio pkg install -g -p espressif32 ;;
+          esac
 
       - name: Arduino matrix (L0 + L2)
         env:
           LABWIRED_RP2040_BOOTROM: ${{ github.workspace }}/crates/core/roms/rp2040/bootrom.bin
         run: |
           set -euo pipefail
+          # Absolute --out so PIO work dirs never break under cwd tricks.
+          OUT="${{ github.workspace }}/validation/arduino-matrix/out-ci/${{ matrix.board }}"
           python3 validation/arduino-matrix/run_matrix.py \
             --boards "${{ matrix.board }}" \
             --sketches L0_serial_boot,L2_blink_serial \
-            --out "validation/arduino-matrix/out-ci/${{ matrix.board }}"
+            --out "$OUT"
 
       - name: Upload board artifacts
         if: always()

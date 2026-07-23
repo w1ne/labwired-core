@@ -87,7 +87,12 @@ def write_pio_project(work: Path, board: dict, sketch_src: Path) -> Path:
 
 def compile_sketch(work: Path, log_path: Path, timeout: int) -> tuple[bool, str, Path | None]:
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    cmd = ["pio", "run", "-d", str(work), "-e", "matrix"]
+    # Always resolve: relative work + cwd=work + `-d relative` makes pio look for
+    # work/work and fail with "Path does not exist" (CI roast round-2).
+    work = work.resolve()
+    log_path = log_path.resolve()
+    # cwd is the project; do not pass a relative -d (would be re-resolved from cwd).
+    cmd = ["pio", "run", "-e", "matrix"]
     try:
         proc = subprocess.run(
             cmd,
@@ -159,7 +164,8 @@ def main() -> int:
     is_full_matrix = len(boards) == len(all_boards) and len(sketches) == len(all_sketches)
 
     labwired = find_labwired(args.labwired)
-    out: Path = args.out
+    # Absolute out dir so PIO work paths never depend on caller cwd.
+    out: Path = args.out.expanduser().resolve()
     out.mkdir(parents=True, exist_ok=True)
     work_root = out / "_pio_work"
     work_root.mkdir(parents=True, exist_ok=True)
