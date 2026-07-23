@@ -582,23 +582,10 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                             break;
                         }
                     }
-                    // Same xthal spill CPU-model workaround as classic.
-                    if let Some(pc) = labwired_loader::resolve_symbol_in_elf(
+                    super::esp32_boot_state::install_xtensa_freertos_workarounds(
+                        &mut bus,
                         &firmware_bytes,
-                        "xthal_window_spill_nw",
-                    ) {
-                        if let Err(e) =
-                            bus.install_flash_thunk(pc, rom_thunks::xthal_window_spill_thunk)
-                        {
-                            eprintln!(
-                                "labwired-cli test: warn: xthal_window_spill_nw install failed: {e}"
-                            );
-                        } else {
-                            eprintln!(
-                                "labwired-cli test: installed xthal_window_spill_nw CPU spill workaround @0x{pc:08x}"
-                            );
-                        }
-                    }
+                    );
                     // Real APP_CPU: start_cpu0 waits on s_system_inited[0]&[1];
                     // APP sets [1] in do_system_init_fn after s_resume_cores.
                     // ets_set_appcpu_boot_addr still raises s_cpu_up/s_cpu_inited
@@ -710,36 +697,10 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                     &mut machine.bus,
                     &firmware_bytes,
                 );
-                // CPU-model workaround for shadow-window vs firmware spill
-                // (FIDELITY Batch D). Not a flash-init firmware thunk.
-                {
-                    use labwired_core::peripherals::esp_xtensa_common::rom_thunks;
-                    for sym in ["pxCurrentTCBs", "pxCurrentTCB"] {
-                        if let Some(a) =
-                            labwired_loader::resolve_symbol_in_elf(&firmware_bytes, sym)
-                        {
-                            rom_thunks::PX_CURRENT_TCB_ADDR.with(|s| s.set(Some(a)));
-                            break;
-                        }
-                    }
-                    if let Some(pc) = labwired_loader::resolve_symbol_in_elf(
-                        &firmware_bytes,
-                        "xthal_window_spill_nw",
-                    ) {
-                        if let Err(e) = machine
-                            .bus
-                            .install_flash_thunk(pc, rom_thunks::xthal_window_spill_thunk)
-                        {
-                            eprintln!(
-                                "labwired-cli test: warn: xthal_window_spill_nw install failed: {e}"
-                            );
-                        } else {
-                            eprintln!(
-                                "labwired-cli test: installed xthal_window_spill_nw CPU spill workaround @0x{pc:08x}"
-                            );
-                        }
-                    }
-                }
+                super::esp32_boot_state::install_xtensa_freertos_workarounds(
+                    &mut machine.bus,
+                    &firmware_bytes,
+                );
                 machine
             };
             let fault_evidence = handle_faults(&mut machine.bus, &faults);
@@ -857,142 +818,12 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                 })
         });
         if is_c3 == Some(true) {
-            use std::sync::{Arc, Mutex};
-            // SPIMEM0/1 flash-command controllers: Arduino `call_start_cpu0` →
-            // `bootloader_read_flash_id` busy-polls CMD until 0. Declarative
-            // stubs never clear. Same S3 SPIMEM model as rom-boot (layout match).
-            let mut flash_img = vec![0xFFu8; 4 * 1024 * 1024];
-            // Partition table @ flash 0x8000 — `esp_partition` requires MD5
-            // trailer (0xEBEB…). Prefer matrix/PIO build artifact beside the
-            // firmware ELF (same on-disk format for C3).
-            if let Some(p) = resolve_esp_partitions_bin(std::path::Path::new(&firmware_path)) {
-                if let Ok(pt) = std::fs::read(&p) {
-                    let n = pt.len().min(0xC00);
-                    flash_img[0x8000..0x8000 + n].copy_from_slice(&pt[..n]);
-                    eprintln!(
-                        "labwired-cli test: seeded C3 flash partitions ({} bytes) from {}",
-                        n,
-                        p.display()
-                    );
-                }
-            }
-            let flash = Arc::new(Mutex::new(flash_img));
-            bus.add_peripheral(
-                "spimem1_flash",
-                0x6000_2000,
-                0x100,
-                None,
-                Box::new(
-                    labwired_core::peripherals::esp32s3::spi_mem_flash::SpiMemFlash::new(
-                        flash.clone(),
-                    ),
-                ),
+            // SPIMEM / ANA I2C / cache / SYSTIMER / SAR / RMT / MMU+XIP /
+            // irq routing — see esp32_boot_state::install_esp32c3_fast_boot.
+            super::esp32_boot_state::install_esp32c3_fast_boot(
+                &mut bus,
+                std::path::Path::new(&firmware_path),
             );
-            bus.add_peripheral(
-                "spimem0_flash",
-                0x6000_3000,
-                0x100,
-                None,
-                Box::new(
-                    labwired_core::peripherals::esp32s3::spi_mem_flash::SpiMemFlash::new(
-                        flash.clone(),
-                    ),
-                ),
-            );
-            bus.add_peripheral(
-                "rtc_i2c_ana",
-                0x6000_E000,
-                0x400,
-                None,
-                Box::new(labwired_core::peripherals::esp32c3::ana_i2c::Esp32c3AnaI2c::new()),
-            );
-            bus.add_peripheral(
-                "extmem_cache",
-                0x600C_4000,
-                0x400,
-                None,
-                Box::new(labwired_core::peripherals::esp32c3::cache::Esp32c3Cache::new()),
-            );
-            // SYSTIMER: declarative stub never asserts VALUE_VALID → spin in
-            // systimer_hal_get_counter_value. S3 model (same IP) + C3 IRQ 37.
-            bus.add_peripheral(
-                "systimer",
-                0x6002_3000,
-                0x100,
-                None,
-                Box::new(
-                    labwired_core::peripherals::esp32s3::systimer::Systimer::new_with_source(
-                        160_000_000,
-                        37,
-                    ),
-                ),
-            );
-            // SAR ADC: calibrate loops need valid conversions.
-            bus.add_peripheral(
-                "apb_saradc",
-                0x6004_0000,
-                0x100,
-                None,
-                Box::new(labwired_core::peripherals::esp32c3::sar_adc::Esp32c3SarAdc::new()),
-            );
-            // RMT @ 0x6001_6000: Arduino `LED_BUILTIN`/pin 30 is RGB_BUILTIN →
-            // `rgbLedWrite` → RMT TX. Instant TX_END so digitalWrite completes.
-            bus.add_peripheral(
-                "rmt",
-                0x6001_6000,
-                0x800,
-                None,
-                Box::new(labwired_core::peripherals::esp32c3::rmt::Esp32c3Rmt::new_default()),
-            );
-            // Flash cache MMU @ 0x600C_5000 + DROM FlashXip.
-            //
-            // Start with *all* entries invalid (silicon reset). Full identity
-            // mapping of 128 pages left `spi_flash_mmap` with zero free entries
-            // → partition load never maps flash[0x8000] → silent hang / empty
-            // UART. Bootloader-equivalent maps for app DROM pages are applied
-            // after ELF load (see post-load C3 flash sync below) only for pages
-            // that actually hold rodata, leaving the rest free for mmap.
-            //
-            // `optimized_bus_access=false` so FlashXip wins over DROM extra_mem
-            // when an entry is valid. IROM (0x4200_0000) stays on chip `flash`
-            // / extra_mem (no XIP window installed there for CLI fast-boot).
-            use labwired_core::peripherals::esp32s3::flash_xip::{
-                Esp32s3MmuTable, FlashXipPeripheral, SharedMmu, MMU_FMT_C3,
-            };
-            use std::sync::atomic::AtomicU64;
-            let entries = vec![MMU_FMT_C3.invalid_bit; 128];
-            let mmu_table = Arc::new(SharedMmu {
-                entries: Mutex::new(entries),
-                generation: AtomicU64::new(1),
-            });
-            bus.add_peripheral(
-                "mmu_table",
-                0x600C_5000,
-                0x800,
-                None,
-                Box::new(Esp32s3MmuTable::new(mmu_table.clone())),
-            );
-            bus.add_peripheral(
-                "flash_xip_drom",
-                0x3C00_0000,
-                0x80_0000,
-                None,
-                Box::new(FlashXipPeripheral::new_mmu_fmt(
-                    flash.clone(),
-                    0x3C00_0000,
-                    mmu_table,
-                    MMU_FMT_C3,
-                )),
-            );
-            bus.config.optimized_bus_access = false;
-            // FreeRTOS first context switch: vPortYield → write SYSTEM
-            // CPU_INTR_FROM_CPU_0 (0x600C_0028) → FROM_CPU source 50 →
-            // esp_crosscore_isr → vPortYieldFromISR. Without this flag the
-            // bus never routes matrix sources into `riscv_irq_lines`, so
-            // yield is a no-op and `vTaskStartScheduler` returns into the
-            // intentional infinite loop at start_cpu0+0x56.
-            bus.esp32c3_irq_routing = true;
-            bus.refresh_peripheral_index();
         }
     }
 

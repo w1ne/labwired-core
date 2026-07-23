@@ -130,11 +130,14 @@ peripherals:
     type: "esp32c3_ledc"
     base_address: 0x60019000
     size: "1KB"
+  # Behavioral RMT (instant TX_END + TX_START count / LogicTap edges).
+  # Arduino LED_BUILTIN / pin 30 → rgbLedWrite → RMT TX. Declarative SVD
+  # stub never completed TX → digitalWrite hung; dual-stack add in test left
+  # led_watch on the stub while MMIO hit the twin (edges=0, rmt count green).
   - id: "rmt"
-    type: "declarative"
+    type: "esp32c3_rmt"
     base_address: 0x60016000
-    config:
-      path: "../peripherals/esp32c3/rmt.yaml"
+    size: "2KB"
   # --- Estate completion 2026-06-11: the remaining SVD-documented blocks the
   # --- ESP32-C3 silicon exposes. Bases are authoritative from the ESP32-C3 SVD
   # --- (tests/fixtures/real_world/esp32c3.svd). Reset values silicon-validated

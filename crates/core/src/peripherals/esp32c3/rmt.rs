@@ -19,6 +19,20 @@ const TX_START_BIT: u32 = 1 << 0;
 /// Write-trigger bits in TX CONF0 that self-clear (start/rst/conf_update).
 const TX_CONF0_WT_MASK: u32 = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 23) | (1 << 24);
 
+/// Logic-tap state: pin N = TX channel N; each TX_START pulses high→low.
+struct RmtTap {
+    tap: crate::logic_capture::LogicTap,
+    watched: Vec<(u8, u32)>,
+}
+
+impl std::fmt::Debug for RmtTap {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RmtTap")
+            .field("watched", &self.watched)
+            .finish_non_exhaustive()
+    }
+}
+
 #[derive(Debug)]
 pub struct Esp32c3Rmt {
     source_id: u32,
@@ -36,6 +50,8 @@ pub struct Esp32c3Rmt {
     mem: Vec<u32>,
     /// Count of TX_START pulses (rgbLedWrite / RMT TX). Matrix L2 oracle.
     tx_start_count: u32,
+    /// Optional push-mode edges for watched TX channels.
+    tap: Option<RmtTap>,
 }
 
 impl Esp32c3Rmt {
@@ -50,12 +66,31 @@ impl Esp32c3Rmt {
             regs: [0; 0x40],
             mem: vec![0; 256],
             tx_start_count: 0,
+            tap: None,
         }
     }
 
     /// Number of TX_START pulses observed (matrix / inspect oracle).
     pub fn tx_start_count(&self) -> u32 {
         self.tx_start_count
+    }
+
+    fn pulse_tx_edge(&self, ch: usize) {
+        let Some(t) = &self.tap else {
+            return;
+        };
+        let pin = ch as u8;
+        for &(p, channel) in &t.watched {
+            if p == pin {
+                // High then low must land on *distinct* provisional cycles:
+                // `LogicCapture::ingest_push` is same-cycle last-wins, so a
+                // high→low pair stamped at one cycle collapses to a single
+                // net level (and often only one matrix edge).
+                t.tap.push(channel, true);
+                t.tap.bump_clock();
+                t.tap.push(channel, false);
+            }
+        }
     }
 
     pub fn new_default() -> Self {
@@ -78,13 +113,18 @@ impl Esp32c3Rmt {
             // Instant TX complete: CHn_TX_END = bit n.
             self.int_raw |= 1 << ch;
             self.tx_start_count = self.tx_start_count.saturating_add(1);
+            self.pulse_tx_edge(ch);
         }
     }
 }
 
 impl Peripheral for Esp32c3Rmt {
     fn needs_legacy_walk(&self) -> bool {
-        true
+        // Instant TX on CONF0 write + level IRQ via `matrix_irq_sources` —
+        // no per-cycle walk work. Must stay walk-independent so the C3 chip
+        // yaml (which now installs this model) can still derive walk-deletion
+        // for wifi_mac / rom-boot paths.
+        false
     }
 
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
@@ -196,5 +236,48 @@ impl Peripheral for Esp32c3Rmt {
             bytes: None,
         });
         view
+    }
+
+    fn install_logic_tap(
+        &mut self,
+        tap: &crate::logic_capture::LogicTap,
+        watched: &[(u8, u32)],
+    ) -> bool {
+        // pin = TX channel index (0..1). Used by matrix `led_watch: rmt:0`.
+        if watched.is_empty() {
+            self.tap = None;
+        } else {
+            self.tap = Some(RmtTap {
+                tap: tap.clone(),
+                watched: watched.to_vec(),
+            });
+        }
+        true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::logic_capture::LogicTap;
+    use crate::Peripheral;
+
+    #[test]
+    fn logic_tap_sees_tx_start_pulse() {
+        let mut rmt = Esp32c3Rmt::new_default();
+        let tap = LogicTap::new();
+        assert!(rmt.install_logic_tap(&tap, &[(0, 0)]));
+        tap.set_armed(true);
+        // CH0 CONF0 TX_START
+        rmt.write_u32(0x10, TX_START_BIT).unwrap();
+        assert_eq!(rmt.tx_start_count(), 1);
+        let events = tap.take_events();
+        assert!(
+            events.len() >= 2,
+            "expected high→low TX pulse edges, got {:?}",
+            events
+        );
+        assert!(events[0].value);
+        assert!(!events[1].value);
     }
 }

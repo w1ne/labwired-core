@@ -1732,25 +1732,36 @@ impl<C: Cpu> Machine<C> {
         }
         self.reset()?;
 
-        // Resolve the reset vector. Reset reads the initial (SP, PC) from the
-        // vector table at VTOR, which defaults to 0 and aliases to the flash
-        // base — correct for the common case (STM32/nRF/etc.). Some SoCs
-        // prepend a second-stage bootloader: the RP2040 bootrom runs a 256-byte
-        // stage-2 (boot2) blob from flash and only then enters the application
-        // vector table at `flash_base + reset_vector_offset`. We don't execute
-        // boot2 (flash is directly mapped), so when the flash-base vectors are
-        // not valid, relocate to the declared post-stage-2 table — emulating
-        // boot2's only observable effect.
+        // Resolve the reset vector.
+        //
+        // `cpu.reset` reads (SP, PC) from VTOR (default 0). On STM32/nRF that
+        // aliases the flash image, so reset is already correct. On RP2040 the
+        // in-tree mask ROM is mapped at 0 (`LABWIRED_RP2040_BOOTROM` default),
+        // so reset installs *bootrom* vectors and would park the core in the
+        // ROM WFI loop forever for bare-metal images that put a valid vector
+        // table at `flash_base` (no stage-2 boot2). Prefer flash-base vectors
+        // when they are valid; only then fall back to post-boot2 relocation.
         let flash_base = self.bus.flash.base_addr;
-        if !self.bus.vector_pair_valid(flash_base) {
+        if self.bus.vector_pair_valid(flash_base) {
+            let sp = self.bus.read_u32(flash_base)?;
+            let pc = self.bus.read_u32(flash_base + 4)? & !1;
+            // If address 0 does not already present the same SP (bootrom or
+            // empty), retarget VTOR so exceptions hit the app table too.
+            let sp0 = self.bus.read_u32(0).unwrap_or(0);
+            if flash_base != 0 && sp0 != sp {
+                let _ = self.bus.write_u32(0xE000_ED08, flash_base as u32);
+            }
+            self.cpu.set_sp(sp);
+            self.cpu.set_pc(pc);
+        } else {
+            // Stage-2 present (e.g. RP2040 boot2 at flash[0..0x100]): vectors
+            // at flash_base are garbage. Relocate to `reset_vector_offset`.
             let offset = self.bus.reset_vector_offset;
             let relocated = if offset != 0 {
                 let table = flash_base + offset;
                 if self.bus.vector_pair_valid(table) {
                     let sp = self.bus.read_u32(table)?;
                     let pc = self.bus.read_u32(table + 4)? & !1;
-                    // Point VTOR at the relocated table so early exceptions
-                    // (before firmware sets VTOR itself) vector correctly.
                     let _ = self.bus.write_u32(0xE000_ED08, table as u32);
                     self.cpu.set_sp(sp);
                     self.cpu.set_pc(pc);
