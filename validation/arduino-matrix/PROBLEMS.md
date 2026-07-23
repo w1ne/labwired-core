@@ -98,11 +98,11 @@ python3 validation/arduino-matrix/run_matrix.py --boards stm32f407,nrf52832
 
 41. **RP2040 bootrom auto-load** — `from_config` loads in-tree `roms/rp2040/bootrom.bin` when `LABWIRED_RP2040_BOOTROM` is unset (empty env opts out for bare-metal flash-alias PIO onboarding). Plain `labwired test` no longer needs the matrix to export the env.
 
-42. **RP2040 L2 step budget** — mbed RTX `delay()` is SysTick-driven (~`SystemCoreClock/1000` steps/ms). L2 setup `delay(10)` + loop `delay(20)×2` before `LW_L2_OK` exceeds 5M; board `max_steps: 20_000_000` (same class as F407/G474 L2).
+42. **RP2040 L2 step budget** — mbed RTX `delay()` is SysTick-driven. After matrix L2 delays shrank to 1 ms, measured L2 is ~0.8M steps; board `max_steps: 8_000_000` with `budget_reason` in `boards.yaml` (was 20M when delays were 20 ms).
 
-43. **ESP partition table beside firmware** — matrix wiped `_pio_work/<cell>` after each run while CLI only fell back to hard-coded L0 `partitions.bin`, so L1/L2 saw empty flash@0x8000 → `No MD5 found` / exception. Runner copies PIO `partitions.bin` next to `firmware.elf`; CLI `resolve_esp_partitions_bin` prefers that path (classic/C3/S3).
+43. **ESP partition table beside firmware** — matrix wiped `_pio_work/<cell>` after each run while CLI fell back to hard-coded L0 `partitions.bin`, so L1/L2 saw empty flash@0x8000. Runner copies PIO `partitions.bin` next to `firmware.elf`; CLI only resolves ELF-adjacent / live cell PIO paths (hard-coded L0 paths removed).
 
-44. **STM32G474 L2 step budget** — `max_steps: 20_000_000` so setup `LW_L2_BOOT` + blink delays reach `LW_L2_OK`.
+44. **STM32G474 L2 step budget** — after short L2 delays, measured ~0.5M steps; `max_steps: 8_000_000` + `budget_reason` in `boards.yaml` (was 20M).
 
 45. **STM32WBA52 Arduino path** — in-tree `pio-boards/nucleo_wba52cg.json` (Arduino Core `NUCLEO_WBA55CG` / NOD_WBA52CG); matrix `boards_dir` + runner auto-applies `scripts/patch_stm32duino_wba_series.py` so PIO does not mis-detect series as `STM32WBxx`.
 

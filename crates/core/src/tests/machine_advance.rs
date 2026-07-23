@@ -770,7 +770,9 @@ fn rtc_reset_is_drained_at_the_first_unified_boundary() {
     assert_eq!(report.secondary_steps, 0);
     assert_eq!(report.elapsed_cycles, 8);
     assert_eq!(report.idle_cycles, 0);
-    assert_eq!(report.cpu_batches, 8);
+    // Quantum-1 only while SW_SYS_RST is latched; remaining fuel batches under
+    // tick_interval 64 once the latch is drained.
+    assert_eq!(report.cpu_batches, 2);
     assert_eq!(machine.cpu.pc, 0x4000_0400 + 14);
     assert_eq!(machine.cpu.sp, 0x3FFE_0000);
 }

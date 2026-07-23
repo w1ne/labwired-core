@@ -31,3 +31,12 @@ Local branch: `chore/test-harness-organize` (do **not** push until asked).
 - `python3 -c "import matrix_lib; ..."` import smoke
 - `run_matrix.py --sim-only` on subset (STM32 + ESP) after A–C
 - Full 45/45 when convenient; not pushed to remote
+
+## 2026-07-23 — Roast follow-ups
+
+- Removed hard-coded L0 `_pio_work/.../partitions.bin` candidates from CLI.
+- L0/L1 sketch delays shortened to 1 ms (L2 already 1 ms).
+- Dual-core WAITI primary batch: RTC pending-only clamp + coalesced
+  `tick_elapsed(N)` under interval-1 so the path is not dead code.
+- SCB permanent quantum-1 kept (logic-capture fidelity).
+- PROBLEMS.md budget claims updated to match `boards.yaml`.

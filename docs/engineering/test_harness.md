@@ -141,6 +141,17 @@ scheduler identity unless a workflow enables the feature.
 | **F** Physical test rehome | later | `tests/{diag,differential,e2e}/` |
 | **G** Dual-universe nightly (Cortex) | later | event-scheduler smoke |
 
+### Honest perf notes (2026-07-23)
+
+- Dual-core `is_parked_idle` primary batch is **live** when APP is WAITI-parked:
+  plan allows multi-instruction PRO windows even at `tick_interval=1`, and
+  commit coalesces peripheral `tick_elapsed(N)`.
+- SCB presence still forces quantum-1 (cycle-accurate logic capture). RTC_CNTL
+  only forces quantum-1 while SW_SYS_RST is latched.
+- `LABWIRED_MATRIX_SPEED=1` + `event-scheduler` remains experimental on ESP
+  FreeRTOS; default CLI is the fidelity matrix path.
+- CLI must not hard-code matrix PIO work paths for partitions.
+
 Work log: [`test_harness_reorg_log.md`](test_harness_reorg_log.md).
 
 ---
