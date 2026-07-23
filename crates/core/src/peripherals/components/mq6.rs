@@ -34,7 +34,7 @@ pub struct Mq6 {
     ppm: f32,
     /// Full-scale concentration that saturates AOUT at Vref.
     ppm_full_scale: f32, // 10_000.0
-    v_ref_mv: f32,       // 3300.0
+    v_ref_mv: f32, // 3300.0
     /// system.yaml `external_devices` id, stamped at attach (see
     /// [`crate::sim_input::SimInput::component_id`]).
     component_id: Option<String>,

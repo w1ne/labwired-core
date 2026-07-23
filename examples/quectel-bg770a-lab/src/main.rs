@@ -20,7 +20,6 @@ fn enable_peripheral_clocks() {
     }
 }
 
-
 // USART1 on STM32F103: base 0x4001_3800 (uart1 in chip config) — talks to the modem.
 const UART1_BASE: u32 = 0x4001_3800;
 const UART1_SR: *const u32 = (UART1_BASE + 0x00) as *const u32;
@@ -94,9 +93,8 @@ fn send_at(line: &str) {
 
 #[entry]
 fn main() -> ! {
-    
     enable_peripheral_clocks();
-uart2_str("Quectel BG770A-GL modem lab\r\n");
+    uart2_str("Quectel BG770A-GL modem lab\r\n");
     uart2_str("Driving the modem over UART1...\r\n\r\n");
 
     // Standard bring-up sequence.

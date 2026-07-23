@@ -20,7 +20,6 @@ fn enable_peripheral_clocks() {
     }
 }
 
-
 const I2C1_BASE: u32 = 0x4000_5400;
 const UART1_DR: *mut u8 = (0x4001_3800 + 0x04) as *mut u8;
 
@@ -121,9 +120,8 @@ fn bme280_read_u16_le(reg: u8) -> u16 {
 
 #[entry]
 fn main() -> ! {
-    
     enable_peripheral_clocks();
-uart_str("BME280 Weather Lab\n");
+    uart_str("BME280 Weather Lab\n");
 
     // Check chip ID (register 0xD0 should return 0x60 for BME280)
     let chip_id = bme280_read_register(0xD0);

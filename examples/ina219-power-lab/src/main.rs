@@ -23,7 +23,6 @@ fn enable_peripheral_clocks() {
     }
 }
 
-
 const I2C1_BASE: u32 = 0x4000_5400;
 const UART1_DR: *mut u8 = (0x4001_3800 + 0x04) as *mut u8;
 
@@ -113,9 +112,8 @@ fn ina219_read_u16(reg: u8) -> u16 {
 
 #[entry]
 fn main() -> ! {
-    
     enable_peripheral_clocks();
-uart_str("INA219 Power Lab\n");
+    uart_str("INA219 Power Lab\n");
     // Config default should be non-zero after reset model
     let cfg = ina219_read_u16(0x00);
     uart_str("CFG=0x");

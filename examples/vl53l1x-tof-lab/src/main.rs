@@ -24,7 +24,6 @@ fn enable_peripheral_clocks() {
     }
 }
 
-
 const I2C1_BASE: u32 = 0x4000_5400;
 const UART1_DR: *mut u8 = (0x4001_3800 + 0x04) as *mut u8;
 
@@ -144,9 +143,8 @@ fn vl_read_register16(reg: u16) -> u16 {
 
 #[entry]
 fn main() -> ! {
-    
     enable_peripheral_clocks();
-uart_str("VL53L1X ToF Lab\n");
+    uart_str("VL53L1X ToF Lab\n");
 
     // init(): identity check — readReg16Bit(MODEL_ID) must equal 0xEACC.
     let model_id = vl_read_register16(REG_MODEL_ID);

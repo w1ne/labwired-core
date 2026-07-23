@@ -20,7 +20,6 @@ fn enable_peripheral_clocks() {
     }
 }
 
-
 const I2C1_BASE: u32 = 0x4000_5400;
 const UART1_DR: *mut u8 = (0x4001_3800 + 0x04) as *mut u8;
 
@@ -128,9 +127,8 @@ fn read_i16_be(hi_reg: u8) -> i16 {
 
 #[entry]
 fn main() -> ! {
-    
     enable_peripheral_clocks();
-uart_str("MPU6050 IMU Lab\n");
+    uart_str("MPU6050 IMU Lab\n");
 
     // Wake MPU6050: clear SLEEP bit in PWR_MGMT_1 (reg 0x6B)
     mpu6050_write_register(0x6B, 0x00);

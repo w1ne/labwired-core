@@ -20,7 +20,6 @@ fn enable_peripheral_clocks() {
     }
 }
 
-
 const I2C1_BASE: u32 = 0x4000_5400;
 const UART1_DR: *mut u8 = (0x4001_3800 + 0x04) as *mut u8;
 
@@ -110,9 +109,8 @@ fn read_axis(lo_reg: u8) -> i16 {
 
 #[entry]
 fn main() -> ! {
-    
     enable_peripheral_clocks();
-uart_str("ADXL345 Sensor Lab\n");
+    uart_str("ADXL345 Sensor Lab\n");
     let devid = adxl345_read_register(0x00);
     uart_str("DEVID=");
     if devid == 0xE5 {

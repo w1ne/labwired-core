@@ -697,12 +697,8 @@ impl SystemBus {
                             )
                         })?;
                     let cal = match ext.r#type.as_str() {
-                        "sg90" => {
-                            crate::peripherals::components::servo::ServoCal::sg90()
-                        }
-                        "mg996r" => {
-                            crate::peripherals::components::servo::ServoCal::mg996r()
-                        }
+                        "sg90" => crate::peripherals::components::servo::ServoCal::sg90(),
+                        "mg996r" => crate::peripherals::components::servo::ServoCal::mg996r(),
                         _ => crate::peripherals::components::servo::ServoCal::standard(),
                     };
                     let servo = std::sync::Arc::new(
@@ -711,9 +707,11 @@ impl SystemBus {
                     Self::install_gpio_observer(&mut bus, servo.clone());
                     // Also bind LEDC channels if present (ESP32 Arduino Servo path).
                     if let Some(idx) = bus.find_peripheral_index_by_name("ledc") {
-                        if let Some(ledc) = bus.peripherals[idx].dev.as_any_mut().and_then(|a| {
-                            a.downcast_mut::<crate::peripherals::esp32::ledc::Ledc>()
-                        }) {
+                        if let Some(ledc) = bus.peripherals[idx]
+                            .dev
+                            .as_any_mut()
+                            .and_then(|a| a.downcast_mut::<crate::peripherals::esp32::ledc::Ledc>())
+                        {
                             // Observe all channels; driver filters by channel id
                             // when firmware assigns the servo's pin to a channel.
                             for ch in 0..8u64 {
@@ -773,25 +771,29 @@ impl SystemBus {
                         || ext.config.contains_key("bin1_pin")
                         || ext.config.contains_key("BIN1");
                     if has_b {
-                      if let (Ok(b1), Ok(b2)) = (
-                        Self::gpio_from_config(ext, "in3_pin", "IN3", "GPIO18")
-                            .or_else(|_| Self::gpio_from_config(ext, "bin1_pin", "BIN1", "GPIO18")),
-                        Self::gpio_from_config(ext, "in4_pin", "IN4", "GPIO19")
-                            .or_else(|_| Self::gpio_from_config(ext, "bin2_pin", "BIN2", "GPIO19")),
-                    ) {
-                        let enb = Self::optional_gpio_from_config(ext, "enb_pin", "ENB")
-                            .or_else(|| Self::optional_gpio_from_config(ext, "pwmb_pin", "PWMB"));
-                        let motor_b = std::sync::Arc::new(
-                            crate::peripherals::components::h_bridge_motor::HBridgeMotor::new(
-                                format!("{}-b", ext.id),
-                                b1,
-                                b2,
-                                enb,
-                            ),
-                        );
-                        Self::install_gpio_observer(&mut bus, motor_b.clone());
-                        bus.h_bridge_motors.push(motor_b);
-                      }
+                        if let (Ok(b1), Ok(b2)) = (
+                            Self::gpio_from_config(ext, "in3_pin", "IN3", "GPIO18").or_else(|_| {
+                                Self::gpio_from_config(ext, "bin1_pin", "BIN1", "GPIO18")
+                            }),
+                            Self::gpio_from_config(ext, "in4_pin", "IN4", "GPIO19").or_else(|_| {
+                                Self::gpio_from_config(ext, "bin2_pin", "BIN2", "GPIO19")
+                            }),
+                        ) {
+                            let enb = Self::optional_gpio_from_config(ext, "enb_pin", "ENB")
+                                .or_else(|| {
+                                    Self::optional_gpio_from_config(ext, "pwmb_pin", "PWMB")
+                                });
+                            let motor_b = std::sync::Arc::new(
+                                crate::peripherals::components::h_bridge_motor::HBridgeMotor::new(
+                                    format!("{}-b", ext.id),
+                                    b1,
+                                    b2,
+                                    enb,
+                                ),
+                            );
+                            Self::install_gpio_observer(&mut bus, motor_b.clone());
+                            bus.h_bridge_motors.push(motor_b);
+                        }
                     }
                 }
                 "uln2003" | "stepper-28byj48" => {
@@ -984,18 +986,20 @@ impl SystemBus {
     {
         if let Some(idx) = bus.find_peripheral_index_by_name("gpio") {
             let any = bus.peripherals[idx].dev.as_any_mut();
-            if let Some(gpio) = any.and_then(|a| {
-                a.downcast_mut::<crate::peripherals::esp32s3::gpio::Esp32s3Gpio>()
-            }) {
+            if let Some(gpio) =
+                any.and_then(|a| a.downcast_mut::<crate::peripherals::esp32s3::gpio::Esp32s3Gpio>())
+            {
                 gpio.add_observer(observer);
                 return;
             }
         }
         // Classic ESP32 GPIO (separate type).
         if let Some(idx) = bus.find_peripheral_index_by_name("gpio") {
-            if let Some(gpio) = bus.peripherals[idx].dev.as_any_mut().and_then(|a| {
-                a.downcast_mut::<crate::peripherals::esp32::gpio::Esp32Gpio>()
-            }) {
+            if let Some(gpio) = bus.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<crate::peripherals::esp32::gpio::Esp32Gpio>())
+            {
                 gpio.add_observer(observer);
             }
         }

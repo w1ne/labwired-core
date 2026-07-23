@@ -500,9 +500,7 @@ fn board_io_kind(part_type: &str) -> Option<&'static str> {
         | "sn74hc165"
         | "ssd1680_tricolor_290"
         | "uc8151d_tricolor_290" => Some("spi_device"),
-        "ldr" | "ntc-thermistor" | "potentiometer" | "mq-6" | "soil-moisture" => {
-            Some("adc_input")
-        }
+        "ldr" | "ntc-thermistor" | "potentiometer" | "mq-6" | "soil-moisture" => Some("adc_input"),
         "iolink-master" | "neo6m-gps" => Some("uart_device"),
         _ => None,
     }

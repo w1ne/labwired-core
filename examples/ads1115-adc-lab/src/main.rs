@@ -23,7 +23,6 @@ fn enable_peripheral_clocks() {
     }
 }
 
-
 const I2C1_BASE: u32 = 0x4000_5400;
 const UART1_DR: *mut u8 = (0x4001_3800 + 0x04) as *mut u8;
 
@@ -120,9 +119,8 @@ fn ads_read_u16(reg: u8) -> u16 {
 
 #[entry]
 fn main() -> ! {
-    
     enable_peripheral_clocks();
-uart_str("ADS1115 ADC Lab\n");
+    uart_str("ADS1115 ADC Lab\n");
     // OS=1, MUX=AIN0 single-ended (100), PGA=±4.096 (001), continuous
     ads_write_u16(0x01, 0xC383);
 

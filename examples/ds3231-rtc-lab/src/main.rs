@@ -23,7 +23,6 @@ fn enable_peripheral_clocks() {
     }
 }
 
-
 const I2C1_BASE: u32 = 0x4000_5400;
 const UART1_DR: *mut u8 = (0x4001_3800 + 0x04) as *mut u8;
 
@@ -94,9 +93,8 @@ fn ds3231_read_reg(reg: u8) -> u8 {
 
 #[entry]
 fn main() -> ! {
-    
     enable_peripheral_clocks();
-uart_str("DS3231 RTC Lab\n");
+    uart_str("DS3231 RTC Lab\n");
 
     loop {
         let sec = from_bcd(ds3231_read_reg(0x00) & 0x7F);

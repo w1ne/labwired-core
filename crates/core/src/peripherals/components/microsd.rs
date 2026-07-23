@@ -69,7 +69,8 @@ impl MicroSd {
             }
             55 => {
                 // APP_CMD
-                self.out.push_back(self.r1(if self.idle { 0x01 } else { 0x00 }));
+                self.out
+                    .push_back(self.r1(if self.idle { 0x01 } else { 0x00 }));
             }
             41 => {
                 // ACMD41 — leave idle
@@ -79,7 +80,8 @@ impl MicroSd {
             }
             58 => {
                 // CMD58 READ_OCR — R3
-                self.out.push_back(self.r1(if self.idle { 0x01 } else { 0x00 }));
+                self.out
+                    .push_back(self.r1(if self.idle { 0x01 } else { 0x00 }));
                 self.out.push_back(0xC0); // CCS + power up
                 self.out.push_back(0xFF);
                 self.out.push_back(0x80);

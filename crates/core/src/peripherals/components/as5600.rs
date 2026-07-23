@@ -60,7 +60,9 @@ impl As5600 {
 
     /// 12-bit raw angle 0..4095.
     fn raw12(&self) -> u16 {
-        ((self.angle_deg / 360.0) * 4096.0).round().clamp(0.0, 4095.0) as u16
+        ((self.angle_deg / 360.0) * 4096.0)
+            .round()
+            .clamp(0.0, 4095.0) as u16
     }
 
     fn read_register(&self, reg: u8) -> u8 {

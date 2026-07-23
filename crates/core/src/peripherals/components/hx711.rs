@@ -20,7 +20,9 @@ use crate::sim_input::SimInput;
 /// 24-bit two's complement raw value corresponding to `weight` grams at a
 /// fixed scale (1 gram ≈ 100 counts) for demo firmware.
 fn grams_to_raw(grams: f64) -> i32 {
-    (grams * 100.0).round().clamp(-(1 << 23) as f64, ((1 << 23) - 1) as f64) as i32
+    (grams * 100.0)
+        .round()
+        .clamp(-(1 << 23) as f64, ((1 << 23) - 1) as f64) as i32
 }
 
 pub struct Hx711 {

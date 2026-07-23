@@ -20,7 +20,6 @@ fn enable_peripheral_clocks() {
     }
 }
 
-
 // USART1 on STM32F103: base 0x4001_3800 (same as uart1 in chip config)
 // SR offset 0x00, DR offset 0x04, CR1 offset 0x0C
 const UART1_BASE: u32 = 0x4001_3800;
@@ -94,9 +93,8 @@ fn read_nmea_sentence(buf: &mut [u8]) -> usize {
 
 #[entry]
 fn main() -> ! {
-    
     enable_peripheral_clocks();
-uart2_str("NEO-6M GPS Lab\r\n");
+    uart2_str("NEO-6M GPS Lab\r\n");
     uart2_str("Reading NMEA stream from UART1...\r\n");
 
     let mut sentence_buf = [0u8; 128];

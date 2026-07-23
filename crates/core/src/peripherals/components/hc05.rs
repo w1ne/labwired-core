@@ -90,9 +90,7 @@ impl UartStreamDevice for Hc05 {
     }
 }
 
-use crate::peripherals::kit::{
-    AttachCtx, Category, KitMetadata, PeripheralKit, Transport,
-};
+use crate::peripherals::kit::{AttachCtx, Category, KitMetadata, PeripheralKit, Transport};
 
 pub struct Hc05Kit;
 pub static HC05_KIT: Hc05Kit = Hc05Kit;
