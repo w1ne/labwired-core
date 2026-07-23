@@ -343,14 +343,19 @@ def main() -> int:
     args = ap.parse_args()
 
     cfg = load_config()
-    boards = cfg["boards"]
-    sketches = cfg["sketches"]
+    all_boards = cfg["boards"]
+    all_sketches = cfg["sketches"]
+    boards = all_boards
+    sketches = all_sketches
     if args.boards:
         want = set(args.boards.split(","))
         boards = [b for b in boards if b["id"] in want]
     if args.sketches:
         want = set(args.sketches.split(","))
         sketches = [s for s in sketches if s["id"] in want]
+    # Only overwrite the published docs scoreboard on a full matrix run so
+    # smoke subsets (--boards / --sketches) do not clobber the 45-cell table.
+    is_full_matrix = len(boards) == len(all_boards) and len(sketches) == len(all_sketches)
 
     labwired = find_labwired(args.labwired)
     out: Path = args.out
@@ -465,16 +470,19 @@ def main() -> int:
     (out / "results.json").write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")
     scoreboard = render_scoreboard(rows, boards, sketches)
     (out / "scoreboard.md").write_text(scoreboard, encoding="utf-8")
-    # Also publish under docs/coverage for discoverability
     docs_out = CORE_ROOT / "docs" / "coverage" / "arduino-scoreboard.md"
-    docs_out.parent.mkdir(parents=True, exist_ok=True)
-    docs_out.write_text(scoreboard, encoding="utf-8")
+    if is_full_matrix:
+        docs_out.parent.mkdir(parents=True, exist_ok=True)
+        docs_out.write_text(scoreboard, encoding="utf-8")
+        pub_note = f"Published:  {docs_out}"
+    else:
+        pub_note = f"Docs scoreboard unchanged (partial run; not full {len(all_boards)}×{len(all_sketches)})"
 
     passed = sum(1 for r in rows if r["status"] == "pass")
     print()
     print(f"Done in {elapsed:.0f}s — {passed}/{len(rows)} pass")
     print(f"Scoreboard: {out / 'scoreboard.md'}")
-    print(f"Published:  {docs_out}")
+    print(pub_note)
     return 0 if passed == len(rows) else 1
 
 
