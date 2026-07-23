@@ -27,24 +27,36 @@ cargo build -p labwired-cli --release   # once (fidelity-default CLI)
 python3 validation/arduino-matrix/run_matrix.py
 python3 validation/arduino-matrix/run_matrix.py --boards stm32f103,esp32
 python3 validation/arduino-matrix/run_matrix.py --sketches L0_serial_boot
+
+# Re-sim without PlatformIO (needs prior firmware.elf under out/)
+python3 validation/arduino-matrix/run_matrix.py --sim-only --boards esp32s3
+
+# Content-hash cache skips recompile when sketch+board inputs unchanged
+python3 validation/arduino-matrix/run_matrix.py   # second full run hits cache
+python3 validation/arduino-matrix/run_matrix.py --force-compile
 ```
 
-### Matrix speed path (optional)
+Shared helpers live in `validation/matrix_lib/` (also used by the Zephyr matrix).
+Harness contract: `docs/engineering/test_harness.md`.
 
-For wall-time measurement / faster re-checks, build with the event scheduler
-and enable idle/delay fast-forward:
+### Oracles
+
+| Level | UART | GPIO |
+|-------|------|------|
+| L0 / L1 | marker string | — |
+| L2 | `LW_L2_OK` | if `boards.yaml` has `led_watch: peripheral:pin`, require ≥`led_min_edges` logic edges |
+
+RGB `LED_BUILTIN` boards (C3/S3) stay UART-only until an RMT-side oracle exists.
+
+### Matrix speed path (optional)
 
 ```bash
 cargo build -p labwired-cli --release --features event-scheduler
 LABWIRED_MATRIX_SPEED=1 python3 validation/arduino-matrix/run_matrix.py
 ```
 
-`LABWIRED_MATRIX_SPEED=1` turns on `idle_fast_forward_enabled` (WFI / WAITI /
-timer-poll coalesce). It does **not** widen the peripheral tick interval —
-that path has regressed ESP FreeRTOS labs under the scheduler. Default labs
-and plain `labwired test` stay on the instruction-faithful path when the env
-is unset. Do not ship the default CLI with `event-scheduler` enabled globally
-(see `crates/cli/Cargo.toml`).
+Enables idle fast-forward only (not tick widen). Experimental on ESP FreeRTOS;
+default CLI is the green-path fidelity build.
 
 Outputs:
 

@@ -1,8 +1,8 @@
 # Arduino × LabWired board matrix
 
-_Generated 2026-07-23 12:02:17 +0200 by `validation/arduino-matrix/run_matrix.py`._
+_Generated 2026-07-23 12:35:00 +0200 by `validation/arduino-matrix/run_matrix.py`._
 
-Legend: ✅ pass · 🔧 compile fail · 📦 toolchain/platform missing · 🔴 boot/sim fail · 🟠 UART ran but marker missing · 🟣 unmodeled/unsupported · ⏱️ timeout
+Legend: ✅ pass · 🔧 compile/build fail · 📦 toolchain missing · 🔴 boot/sim fail · 🟠 oracle miss · 🟣 unmodeled · ⏱️ timeout
 
 | chip | L0_serial_boot | L1_serial_loop | L2_blink_serial | notes |
 |------|------|------|------|-------|

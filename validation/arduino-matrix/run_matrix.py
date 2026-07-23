@@ -2,32 +2,44 @@
 """Arduino sketch × LabWired board matrix.
 
 For every board in boards.yaml and every sketch (L0/L1/L2):
-  1. Compile with PlatformIO (framework=arduino)
+  1. Compile with PlatformIO (framework=arduino) — unless --sim-only / cache hit
   2. Run with `labwired test` against the board system manifest
-  3. Record pass/fail with stage (compile|boot|oracle|infra) and UART tail
+  3. Record pass/fail with stage and UART (and optional L2 GPIO edges)
 
-Outputs:
-  out/results.json
-  out/scoreboard.md
-  out/<board>/<sketch>/{compile.log,result.json,uart.log,...}
+Shared engine: validation/matrix_lib/  (see docs/engineering/test_harness.md)
 
 Usage (from repo core/):
   python3 validation/arduino-matrix/run_matrix.py
   python3 validation/arduino-matrix/run_matrix.py --boards stm32f103,esp32
-  python3 validation/arduino-matrix/run_matrix.py --sketches L0_serial_boot
+  python3 validation/arduino-matrix/run_matrix.py --sim-only --sketches L2_blink_serial
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import os
 import shutil
 import subprocess
 import sys
 import textwrap
 import time
 from pathlib import Path
+
+# Allow `import matrix_lib` from sibling validation/
+_VALIDATION = Path(__file__).resolve().parent.parent
+if str(_VALIDATION) not in sys.path:
+    sys.path.insert(0, str(_VALIDATION))
+
+from matrix_lib import (  # noqa: E402
+    compile_fingerprint,
+    elf_cache_hit,
+    find_labwired,
+    render_scoreboard,
+    run_labwired,
+    write_fingerprint,
+    write_test_script,
+)
+from matrix_lib.invoke import CORE_ROOT  # noqa: E402
 
 try:
     import yaml
@@ -36,29 +48,7 @@ except ImportError:
     sys.exit(2)
 
 MATRIX_DIR = Path(__file__).resolve().parent
-CORE_ROOT = MATRIX_DIR.parent.parent
 DEFAULT_OUT = MATRIX_DIR / "out"
-
-
-def find_labwired(explicit: str | None) -> Path:
-    if explicit:
-        p = Path(explicit)
-        if not p.is_file():
-            raise SystemExit(f"labwired binary not found: {p}")
-        return p
-    candidates = [
-        CORE_ROOT / "target" / "release" / "labwired",
-        CORE_ROOT / "target" / "debug" / "labwired",
-        Path(shutil.which("labwired") or ""),
-    ]
-    for c in candidates:
-        if c and c.is_file():
-            return c
-    raise SystemExit(
-        "labwired CLI not found. Build with:\n"
-        "  cargo build -p labwired-cli --release\n"
-        "or pass --labwired /path/to/labwired"
-    )
 
 
 def load_config() -> dict:
@@ -70,7 +60,6 @@ def write_pio_project(work: Path, board: dict, sketch_src: Path) -> Path:
     """Materialize a one-shot PlatformIO project for board × sketch."""
     work.mkdir(parents=True, exist_ok=True)
     pio = board["pio"]
-    # Optional in-tree PIO boards (e.g. nucleo_wba52cg until ststm32 ships one).
     boards_dir = MATRIX_DIR / "pio-boards"
     boards_dir_line = ""
     if (boards_dir / f"{pio['board']}.json").is_file():
@@ -116,224 +105,23 @@ def compile_sketch(work: Path, log_path: Path, timeout: int) -> tuple[bool, str,
 
     log_path.write_text(proc.stdout + "\n--- stderr ---\n" + proc.stderr, encoding="utf-8")
     if proc.returncode != 0:
-        # Classify common platform/board gaps
         blob = (proc.stdout + proc.stderr).lower()
-        if "unknown board" in blob or "unknown platform" in blob or "could not find the package" in blob:
+        if (
+            "unknown board" in blob
+            or "unknown platform" in blob
+            or "could not find the package" in blob
+        ):
             return False, "toolchain_missing", None
-        if "error:" in blob or "fatal error" in blob:
-            return False, "compile_fail", None
         return False, "compile_fail", None
 
-    # Locate firmware.elf
     build_dir = work / ".pio" / "build" / "matrix"
     elf = build_dir / "firmware.elf"
     if not elf.is_file():
-        # Some platforms use different names
         candidates = list(build_dir.glob("*.elf")) if build_dir.is_dir() else []
         if not candidates:
             return False, "elf_missing", None
         elf = candidates[0]
     return True, "ok", elf
-
-
-def write_test_script(
-    path: Path,
-    firmware: Path,
-    system: Path,
-    marker: str,
-    max_steps: int,
-) -> None:
-    # Paths relative to the test script directory for labwired resolution.
-    # Use absolute paths to avoid cwd confusion.
-    doc = {
-        "schema_version": "1.0",
-        "inputs": {
-            "firmware": str(firmware.resolve()),
-            "system": str(system.resolve()),
-        },
-        "limits": {
-            "max_steps": max_steps,
-            "max_uart_bytes": 65536,
-            "stop_when_assertions_pass": True,
-            "stop_when_assertions_pass_settle_steps": 1000,
-            "stop_when_assertions_pass_min_steps": 0,
-        },
-        "assertions": [
-            {"uart_contains": marker},
-        ],
-    }
-    path.write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
-
-
-def run_labwired(
-    labwired: Path,
-    script: Path,
-    out_dir: Path,
-    timeout: int,
-) -> tuple[str, dict]:
-    """Returns (status, detail). status in pass|oracle_fail|boot_fail|sim_error|timeout."""
-    out_dir.mkdir(parents=True, exist_ok=True)
-    cmd = [
-        str(labwired),
-        "test",
-        "--script",
-        str(script),
-        "--output-dir",
-        str(out_dir),
-        "--no-uart-stdout",
-    ]
-    env = os.environ.copy()
-    # Opt-in speed path: idle/delay FF + wider ticks (needs CLI built with
-    # --features event-scheduler). Set LABWIRED_MATRIX_SPEED=1 in the
-    # environment, or leave unset for the fidelity-default plain path.
-    if env.get("LABWIRED_MATRIX_SPEED") == "1":
-        env["LABWIRED_MATRIX_SPEED"] = "1"
-    # RP2040 Arduino needs mask ROM at 0 for rom_func_lookup; bare-metal
-    # onboarding ELFs must NOT load it (see from_config default_region_image_path).
-    bootrom = CORE_ROOT / "crates" / "core" / "roms" / "rp2040" / "bootrom.bin"
-    if bootrom.is_file():
-        env.setdefault("LABWIRED_RP2040_BOOTROM", str(bootrom))
-    try:
-        proc = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            cwd=str(CORE_ROOT),
-            env=env,
-        )
-    except subprocess.TimeoutExpired:
-        return "timeout", {"stderr": "labwired test timed out"}
-
-    (out_dir / "labwired.stdout").write_text(proc.stdout, encoding="utf-8")
-    (out_dir / "labwired.stderr").write_text(proc.stderr, encoding="utf-8")
-
-    result_path = out_dir / "result.json"
-    result: dict = {}
-    if result_path.is_file():
-        try:
-            result = json.loads(result_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            result = {}
-
-    uart_path = out_dir / "uart.log"
-    uart = uart_path.read_text(encoding="utf-8", errors="replace") if uart_path.is_file() else ""
-    stderr = proc.stderr or ""
-    detail = {"result": result, "uart_tail": uart[-500:], "stderr": stderr[-1500:]}
-
-    if proc.returncode == 0:
-        return "pass", detail
-
-    # Classify failure from result + logs (bus faults / mem map / unknown insn
-    # count as unmodeled model gaps, not soft boot fails).
-    blob = (proc.stdout + stderr + json.dumps(result)).lower()
-    stop = str(result.get("stop_reason", "")).lower()
-    if any(
-        s in blob
-        for s in (
-            "unmodeled",
-            "unimplemented",
-            "unknown instruction",
-            "unknown 32-bit instruction",
-            "bus read fault",
-            "bus write fault",
-            "outside of memory map",
-            "memory access violation",
-            "memory_violation",
-        )
-    ) or stop in ("memory_violation", "exception"):
-        return "unmodeled", detail
-    if "unsupported" in blob or "not modeled" in blob:
-        return "unmodeled", detail
-    if uart.strip() == "":
-        return "boot_fail", detail
-    return "oracle_fail", detail
-
-
-def render_scoreboard(rows: list[dict], boards: list[dict], sketches: list[dict]) -> str:
-    board_ids = [b["id"] for b in boards]
-    sketch_ids = [s["id"] for s in sketches]
-    # status short codes
-    SYM = {
-        "pass": "✅",
-        "compile_fail": "🔧",
-        "compile_timeout": "⏱️",
-        "toolchain_missing": "📦",
-        "pio_missing": "📦",
-        "elf_missing": "🔧",
-        "boot_fail": "🔴",
-        "oracle_fail": "🟠",
-        "unmodeled": "🟣",
-        "timeout": "⏱️",
-        "sim_error": "🔴",
-        "skip": "·",
-    }
-
-    by_key = {(r["board"], r["sketch"]): r for r in rows}
-
-    lines: list[str] = []
-    lines.append("# Arduino × LabWired board matrix")
-    lines.append("")
-    lines.append(f"_Generated {time.strftime('%Y-%m-%d %H:%M:%S %z')} by `validation/arduino-matrix/run_matrix.py`._")
-    lines.append("")
-    lines.append(
-        "Legend: ✅ pass · 🔧 compile fail · 📦 toolchain/platform missing · "
-        "🔴 boot/sim fail · 🟠 UART ran but marker missing · 🟣 unmodeled/unsupported · ⏱️ timeout"
-    )
-    lines.append("")
-    header = "| chip | " + " | ".join(sketch_ids) + " | notes |"
-    sep = "|------|" + "|".join(["------"] * len(sketch_ids)) + "|-------|"
-    lines.append(header)
-    lines.append(sep)
-
-    for bid in board_ids:
-        cells = []
-        notes = []
-        for sid in sketch_ids:
-            r = by_key.get((bid, sid))
-            if not r:
-                cells.append("·")
-                continue
-            cells.append(SYM.get(r["status"], r["status"]))
-            if r["status"] != "pass" and r.get("detail"):
-                notes.append(f"{sid}:{r['status']}")
-        note = "; ".join(notes[:3])
-        lines.append(f"| `{bid}` | " + " | ".join(cells) + f" | {note} |")
-
-    lines.append("")
-    # Summary counts
-    from collections import Counter
-
-    c = Counter(r["status"] for r in rows)
-    total = len(rows)
-    lines.append("## Summary")
-    lines.append("")
-    lines.append(f"- Cells: **{total}**")
-    for k, v in sorted(c.items(), key=lambda x: (-x[1], x[0])):
-        lines.append(f"- `{k}`: {v}")
-    lines.append("")
-    lines.append("## Failures (detail)")
-    lines.append("")
-    for r in rows:
-        if r["status"] == "pass":
-            continue
-        lines.append(f"### `{r['board']}` × `{r['sketch']}` → **{r['status']}**")
-        if r.get("detail"):
-            d = r["detail"]
-            if isinstance(d, dict):
-                if d.get("stderr"):
-                    lines.append("```")
-                    lines.append(str(d["stderr"])[-800:])
-                    lines.append("```")
-                if d.get("uart_tail"):
-                    lines.append("UART tail:")
-                    lines.append("```")
-                    lines.append(str(d["uart_tail"]))
-                    lines.append("```")
-            else:
-                lines.append(str(d)[:500])
-        lines.append("")
-    return "\n".join(lines) + "\n"
 
 
 def main() -> int:
@@ -345,6 +133,16 @@ def main() -> int:
     ap.add_argument("--compile-timeout", type=int, default=600)
     ap.add_argument("--run-timeout", type=int, default=300)
     ap.add_argument("--keep-work", action="store_true", help="Keep PIO work dirs")
+    ap.add_argument(
+        "--sim-only",
+        action="store_true",
+        help="Skip compile; require out/<board>/<sketch>/firmware.elf",
+    )
+    ap.add_argument(
+        "--force-compile",
+        action="store_true",
+        help="Ignore ELF content-hash cache and recompile",
+    )
     args = ap.parse_args()
 
     cfg = load_config()
@@ -358,8 +156,6 @@ def main() -> int:
     if args.sketches:
         want = set(args.sketches.split(","))
         sketches = [s for s in sketches if s["id"] in want]
-    # Only overwrite the published docs scoreboard on a full matrix run so
-    # smoke subsets (--boards / --sketches) do not clobber the 45-cell table.
     is_full_matrix = len(boards) == len(all_boards) and len(sketches) == len(all_sketches)
 
     labwired = find_labwired(args.labwired)
@@ -372,6 +168,8 @@ def main() -> int:
     print(f"boards:   {', '.join(b['id'] for b in boards)}")
     print(f"sketches: {', '.join(s['id'] for s in sketches)}")
     print(f"out:      {out}")
+    if args.sim_only:
+        print("mode:     sim-only (no compile)")
     print()
 
     rows: list[dict] = []
@@ -411,69 +209,112 @@ def main() -> int:
             cell_out.mkdir(parents=True, exist_ok=True)
             print(f"==> {bid} × {sid}", flush=True)
 
-            # Compile
-            work = work_root / f"{bid}__{sid}"
-            write_pio_project(work, board, MATRIX_DIR / sketch["dir"] / "src")
-            # STM32WBA: stm32duino PIO builder mis-detects series as STM32WBxx
-            # unless the MCU id is special-cased (see scripts/patch_*).
-            if "wba" in bid.lower() or "wba" in str(board.get("chip", "")).lower():
-                patch = MATRIX_DIR / "scripts" / "patch_stm32duino_wba_series.py"
-                if patch.is_file():
-                    subprocess.run(
-                        [sys.executable, str(patch)],
-                        check=False,
-                        capture_output=True,
-                        text=True,
-                    )
-            ok, stage, elf = compile_sketch(
-                work, cell_out / "compile.log", args.compile_timeout
+            sketch_src = MATRIX_DIR / sketch["dir"] / "src"
+            pio = board["pio"]
+            digest = compile_fingerprint(
+                board_id=bid,
+                sketch_id=sid,
+                sketch_src=sketch_src,
+                pio_platform=pio["platform"],
+                pio_board=pio["board"],
+                pio_framework=pio["framework"],
+                extra={"max_steps": board.get("max_steps"), "led_watch": board.get("led_watch")},
             )
-            if not ok or elf is None:
-                print(f"    compile: {stage}", flush=True)
-                rows.append({"board": bid, "sketch": sid, "status": stage, "detail": stage})
-                continue
-            print(f"    compile: ok ({elf.name})", flush=True)
-            # copy elf for inspection
-            shutil.copy2(elf, cell_out / "firmware.elf")
-            # ESP-IDF partition table (MD5 trailer) must sit beside the ELF:
-            # labwired test seeds flash @0x8000 from firmware_dir/partitions.bin.
-            # PIO work dirs are wiped after each cell, so a hard-coded L0 path
-            # fails for L1/L2 (and after a full matrix re-run).
-            pt_src = elf.parent / "partitions.bin"
-            if pt_src.is_file():
-                shutil.copy2(pt_src, cell_out / "partitions.bin")
 
-            # Run
+            cached_elf = cell_out / "firmware.elf"
+            used_cache = False
+            if args.sim_only:
+                if not cached_elf.is_file():
+                    print("    compile: missing firmware.elf (--sim-only)", flush=True)
+                    rows.append(
+                        {
+                            "board": bid,
+                            "sketch": sid,
+                            "status": "elf_missing",
+                            "detail": "sim-only requires existing firmware.elf",
+                        }
+                    )
+                    continue
+                print("    compile: skipped (--sim-only)", flush=True)
+            elif not args.force_compile and elf_cache_hit(cell_out, digest):
+                used_cache = True
+                print(f"    compile: cache hit ({cached_elf.name})", flush=True)
+            else:
+                work = work_root / f"{bid}__{sid}"
+                write_pio_project(work, board, sketch_src)
+                if "wba" in bid.lower() or "wba" in str(board.get("chip", "")).lower():
+                    patch = MATRIX_DIR / "scripts" / "patch_stm32duino_wba_series.py"
+                    if patch.is_file():
+                        subprocess.run(
+                            [sys.executable, str(patch)],
+                            check=False,
+                            capture_output=True,
+                            text=True,
+                        )
+                ok, stage, elf = compile_sketch(
+                    work, cell_out / "compile.log", args.compile_timeout
+                )
+                if not ok or elf is None:
+                    print(f"    compile: {stage}", flush=True)
+                    rows.append({"board": bid, "sketch": sid, "status": stage, "detail": stage})
+                    continue
+                print(f"    compile: ok ({elf.name})", flush=True)
+                shutil.copy2(elf, cached_elf)
+                pt_src = elf.parent / "partitions.bin"
+                if pt_src.is_file():
+                    shutil.copy2(pt_src, cell_out / "partitions.bin")
+                write_fingerprint(cell_out, digest)
+                if not args.keep_work:
+                    try:
+                        shutil.rmtree(work)
+                    except OSError:
+                        pass
+
+            # L2 optional GPIO honesty (boards.yaml led_watch)
+            watch: list[str] = []
+            min_edges: int | None = None
+            if sid.startswith("L2") and board.get("led_watch"):
+                watch = [str(board["led_watch"])]
+                min_edges = int(board.get("led_min_edges", 2))
+
             script = cell_out / "test.yaml"
             write_test_script(
                 script,
-                cell_out / "firmware.elf",
+                cached_elf,
                 system,
                 sketch["marker"],
                 int(board.get("max_steps", 5_000_000)),
             )
             status, detail = run_labwired(
-                labwired, script, cell_out / "run", args.run_timeout
+                labwired,
+                script,
+                cell_out / "run",
+                args.run_timeout,
+                watch_gpio=watch or None,
+                min_logic_edges=min_edges,
             )
+            if used_cache:
+                detail = dict(detail) if isinstance(detail, dict) else {"detail": detail}
+                detail["compile"] = "cache_hit"
             print(f"    run: {status}", flush=True)
             rows.append({"board": bid, "sketch": sid, "status": status, "detail": detail})
-
-            if not args.keep_work:
-                # Keep .pio packages cache global; wipe only project work to save disk
-                try:
-                    shutil.rmtree(work)
-                except OSError:
-                    pass
 
     elapsed = time.time() - t0
     results = {
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         "elapsed_s": round(elapsed, 1),
         "labwired": str(labwired),
+        "sim_only": bool(args.sim_only),
         "rows": rows,
     }
     (out / "results.json").write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")
-    scoreboard = render_scoreboard(rows, boards, sketches)
+    scoreboard = render_scoreboard(
+        rows,
+        title="Arduino × LabWired board matrix",
+        generator="validation/arduino-matrix/run_matrix.py",
+        board_ids=[b["id"] for b in boards],
+        cell_ids=[s["id"] for s in sketches],
+    )
     (out / "scoreboard.md").write_text(scoreboard, encoding="utf-8")
     docs_out = CORE_ROOT / "docs" / "coverage" / "arduino-scoreboard.md"
     if is_full_matrix:
@@ -481,7 +322,10 @@ def main() -> int:
         docs_out.write_text(scoreboard, encoding="utf-8")
         pub_note = f"Published:  {docs_out}"
     else:
-        pub_note = f"Docs scoreboard unchanged (partial run; not full {len(all_boards)}×{len(all_sketches)})"
+        pub_note = (
+            f"Docs scoreboard unchanged "
+            f"(partial run; not full {len(all_boards)}×{len(all_sketches)})"
+        )
 
     passed = sum(1 for r in rows if r["status"] == "pass")
     print()

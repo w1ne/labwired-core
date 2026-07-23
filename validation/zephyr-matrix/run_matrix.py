@@ -6,6 +6,8 @@ For every board in boards.yaml and every level (L0/L1/L2):
   2. labwired test against the system manifest
   3. Record pass/fail + UART tail
 
+Shared engine: validation/matrix_lib/  (see docs/engineering/test_harness.md)
+
 Usage (from repo core/):
   python3 validation/zephyr-matrix/run_matrix.py
   python3 validation/zephyr-matrix/run_matrix.py --boards stm32l476,nrf52840
@@ -24,6 +26,13 @@ import sys
 import time
 from pathlib import Path
 
+_VALIDATION = Path(__file__).resolve().parent.parent
+if str(_VALIDATION) not in sys.path:
+    sys.path.insert(0, str(_VALIDATION))
+
+from matrix_lib import find_labwired, render_scoreboard, run_labwired, write_test_script  # noqa: E402
+from matrix_lib.invoke import CORE_ROOT  # noqa: E402
+
 try:
     import yaml
 except ImportError:
@@ -31,27 +40,7 @@ except ImportError:
     sys.exit(2)
 
 MATRIX_DIR = Path(__file__).resolve().parent
-CORE_ROOT = MATRIX_DIR.parent.parent
 DEFAULT_OUT = MATRIX_DIR / "out"
-
-
-def find_labwired(explicit: str | None) -> Path:
-    if explicit:
-        p = Path(explicit)
-        if not p.is_file():
-            raise SystemExit(f"labwired binary not found: {p}")
-        return p
-    for c in (
-        CORE_ROOT / "target" / "release" / "labwired",
-        CORE_ROOT / "target" / "debug" / "labwired",
-        Path(shutil.which("labwired") or ""),
-    ):
-        if c and c.is_file():
-            return c
-    raise SystemExit(
-        "labwired CLI not found. Build with:\n"
-        "  cargo build -p labwired-cli --release"
-    )
 
 
 def find_west(zephyrproject: Path) -> Path | None:
@@ -65,31 +54,6 @@ def find_west(zephyrproject: Path) -> Path | None:
 def load_config() -> dict:
     with open(MATRIX_DIR / "boards.yaml", encoding="utf-8") as f:
         return yaml.safe_load(f)
-
-
-def write_test_script(
-    path: Path,
-    firmware: Path,
-    system: Path,
-    marker: str,
-    max_steps: int,
-) -> None:
-    doc = {
-        "schema_version": "1.0",
-        "inputs": {
-            "firmware": str(firmware.resolve()),
-            "system": str(system.resolve()),
-        },
-        "limits": {
-            "max_steps": max_steps,
-            "max_uart_bytes": 65536,
-            "stop_when_assertions_pass": True,
-            "stop_when_assertions_pass_settle_steps": 1000,
-            "stop_when_assertions_pass_min_steps": 0,
-        },
-        "assertions": [{"uart_contains": marker}],
-    }
-    path.write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
 
 
 def west_build(
@@ -139,7 +103,6 @@ def west_build(
     log_path.write_text(proc.stdout + "\n--- stderr ---\n" + proc.stderr, encoding="utf-8")
     if proc.returncode != 0:
         blob = (proc.stdout + proc.stderr).lower()
-        # Avoid false positives from Kconfig "X not found" noise.
         if (
             "toolchain not found" in blob
             or "no toolchain" in blob
@@ -154,141 +117,6 @@ def west_build(
     if not elf.is_file():
         return False, "elf_missing", None
     return True, "ok", elf
-
-
-def run_labwired(
-    labwired: Path,
-    script: Path,
-    out_dir: Path,
-    timeout: int,
-) -> tuple[str, dict]:
-    out_dir.mkdir(parents=True, exist_ok=True)
-    cmd = [
-        str(labwired),
-        "test",
-        "--script",
-        str(script),
-        "--output-dir",
-        str(out_dir),
-        "--no-uart-stdout",
-    ]
-    env = os.environ.copy()
-    bootrom = CORE_ROOT / "crates" / "core" / "roms" / "rp2040" / "bootrom.bin"
-    if bootrom.is_file():
-        env.setdefault("LABWIRED_RP2040_BOOTROM", str(bootrom))
-    try:
-        proc = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            cwd=str(CORE_ROOT),
-            env=env,
-        )
-    except subprocess.TimeoutExpired:
-        return "timeout", {"stderr": "labwired test timed out"}
-
-    (out_dir / "labwired.stdout").write_text(proc.stdout, encoding="utf-8")
-    (out_dir / "labwired.stderr").write_text(proc.stderr, encoding="utf-8")
-
-    result: dict = {}
-    result_path = out_dir / "result.json"
-    if result_path.is_file():
-        try:
-            result = json.loads(result_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            result = {}
-
-    uart = ""
-    uart_path = out_dir / "uart.log"
-    if uart_path.is_file():
-        uart = uart_path.read_text(encoding="utf-8", errors="replace")
-
-    status = result.get("status")
-    if status == "pass":
-        return "pass", {"result": result, "uart": uart}
-    if proc.returncode != 0 and "Memory" in proc.stderr or "decode" in proc.stderr.lower():
-        return "sim_error", {"result": result, "uart": uart, "stderr": proc.stderr[-2000:]}
-    if uart.strip():
-        return "oracle_fail", {"result": result, "uart": uart}
-    if "error" in proc.stderr.lower() or result.get("stop_reason") not in (
-        None,
-        "max_steps",
-        "assertions_passed",
-    ):
-        sr = result.get("stop_reason")
-        if sr and sr not in ("max_steps", "assertions_passed"):
-            return "sim_error", {"result": result, "uart": uart, "stderr": proc.stderr[-2000:]}
-    return "boot_fail", {"result": result, "uart": uart}
-
-
-def write_scoreboard(results: list[dict], out_dir: Path, publish: Path | None) -> None:
-    boards = sorted({r["board"] for r in results})
-    levels = []
-    for r in results:
-        if r["level"] not in levels:
-            levels.append(r["level"])
-
-    icon = {
-        "pass": "✅",
-        "build_fail": "🔧",
-        "build_timeout": "⏱️",
-        "toolchain_missing": "📦",
-        "elf_missing": "🔧",
-        "boot_fail": "🔴",
-        "oracle_fail": "🟠",
-        "sim_error": "🟣",
-        "timeout": "⏱️",
-        "skip": "➖",
-    }
-
-    lines = [
-        "# Zephyr × LabWired board matrix",
-        "",
-        f"_Generated {time.strftime('%Y-%m-%d %H:%M:%S %z')} by `validation/zephyr-matrix/run_matrix.py`._",
-        "",
-        "Legend: ✅ pass · 🔧 build fail · 📦 toolchain · 🔴 boot/empty UART · "
-        "🟠 marker missing · 🟣 sim error · ⏱️ timeout",
-        "",
-        "| board | " + " | ".join(levels) + " |",
-        "|-------|" + "|".join(["------"] * len(levels)) + "|",
-    ]
-    by = {(r["board"], r["level"]): r for r in results}
-    for b in boards:
-        cells = []
-        for lv in levels:
-            r = by.get((b, lv))
-            cells.append(icon.get(r["status"], "?") if r else "➖")
-        lines.append(f"| `{b}` | " + " | ".join(cells) + " |")
-
-    n_pass = sum(1 for r in results if r["status"] == "pass")
-    lines += [
-        "",
-        "## Summary",
-        "",
-        f"- Cells: **{len(results)}**",
-        f"- `pass`: {n_pass}",
-        f"- other: {len(results) - n_pass}",
-        "",
-        "## Failures (detail)",
-        "",
-    ]
-    fails = [r for r in results if r["status"] != "pass"]
-    if not fails:
-        lines.append("_None — all cells green._")
-    else:
-        for r in fails:
-            uart_tail = (r.get("uart") or "")[-120:].replace("\n", "\\n")
-            lines.append(
-                f"- **{r['board']}/{r['level']}**: `{r['status']}`"
-                + (f" — uart_tail=`{uart_tail}`" if uart_tail else "")
-            )
-
-    text = "\n".join(lines) + "\n"
-    (out_dir / "scoreboard.md").write_text(text, encoding="utf-8")
-    if publish:
-        publish.parent.mkdir(parents=True, exist_ok=True)
-        publish.write_text(text, encoding="utf-8")
 
 
 def main() -> int:
@@ -345,6 +173,7 @@ def main() -> int:
             row: dict = {
                 "board": bid,
                 "level": lid,
+                "sketch": lid,  # scoreboard cell key shared with arduino renderer
                 "zephyr_board": board["zephyr_board"],
                 "marker": marker,
                 "status": "skip",
@@ -396,19 +225,32 @@ def main() -> int:
             write_test_script(script, elf_pub, system, marker, max_steps)
             status, detail = run_labwired(labwired, script, run_dir, args.sim_timeout)
             row["status"] = status
-            row["uart"] = detail.get("uart", "")
+            row["detail"] = detail
+            row["uart"] = detail.get("uart_tail", "")
             row["stop_reason"] = (detail.get("result") or {}).get("stop_reason")
             results.append(row)
             uart_show = row["uart"][:80].replace("\n", "\\n")
             print(f"  -> {status}  uart={uart_show!r}")
 
-    (args.out / "results.json").write_text(
-        json.dumps(results, indent=2), encoding="utf-8"
+    (args.out / "results.json").write_text(json.dumps(results, indent=2), encoding="utf-8")
+
+    scoreboard = render_scoreboard(
+        results,
+        title="Zephyr × LabWired board matrix",
+        generator="validation/zephyr-matrix/run_matrix.py",
+        cell_key="level",
+        board_ids=[b["id"] for b in boards],
+        cell_ids=[lv["id"] for lv in levels],
+        legend=(
+            "Legend: ✅ pass · 🔧 build fail · 📦 toolchain · 🔴 boot/empty UART · "
+            "🟠 marker missing · 🟣 unmodeled/sim · ⏱️ timeout"
+        ),
     )
-    publish = (
-        CORE_ROOT / "docs" / "coverage" / "zephyr-scoreboard.md" if args.publish else None
-    )
-    write_scoreboard(results, args.out, publish)
+    (args.out / "scoreboard.md").write_text(scoreboard, encoding="utf-8")
+    if args.publish:
+        pub = CORE_ROOT / "docs" / "coverage" / "zephyr-scoreboard.md"
+        pub.parent.mkdir(parents=True, exist_ok=True)
+        pub.write_text(scoreboard, encoding="utf-8")
 
     n_pass = sum(1 for r in results if r["status"] == "pass")
     print(f"\nDone: {n_pass}/{len(results)} pass. Scoreboard: {args.out / 'scoreboard.md'}")
