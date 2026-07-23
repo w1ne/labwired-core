@@ -1081,6 +1081,63 @@
       ],
       "labs": [],
       "inputs": []
+    },
+    {
+      "device_type": "sht31",
+      "label": "Sensirion SHT31",
+      "summary": "Temperature + humidity sensor over I²C (Sensirion CRC-8).",
+      "detail": "Temperature + humidity sensor over I²C (Sensirion CRC-8).",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x44."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "temperature",
+          "label": "Temperature",
+          "unit": "°C",
+          "min": -40.0,
+          "max": 125.0
+        },
+        {
+          "key": "humidity",
+          "label": "Relative humidity",
+          "unit": "%",
+          "min": 0.0,
+          "max": 100.0
+        }
+      ]
+    },
+    {
+      "device_type": "bh1750",
+      "label": "ROHM BH1750",
+      "summary": "Ambient-light sensor over I²C (single-byte opcodes).",
+      "detail": "Ambient-light sensor over I²C (single-byte opcodes).",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x23."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "lux",
+          "label": "Illuminance",
+          "unit": "lx",
+          "min": 0.0,
+          "max": 65535.0
+        }
+      ]
     }
   ]
 }

@@ -853,6 +853,13 @@ pub struct I2cSpec {
     /// 7-bit slave address used when the `external_devices` entry omits
     /// `i2c_address`.
     pub default_address: u8,
+    /// Command-code width in bytes for a command device. `2` (the default) is
+    /// the Sensirion 16-bit big-endian opcode; `1` is a single-byte opcode
+    /// device (BH1750-style, where each measurement mode / power command is one
+    /// byte). A command dispatches the instant the master has written
+    /// `code_width` bytes. Ignored by register devices.
+    #[serde(default = "default_code_width")]
+    pub code_width: u8,
     /// CRC-8 parameters for command-response framing. Absent ⇒ responses carry
     /// no per-word checksum.
     #[serde(default)]
@@ -992,6 +999,10 @@ fn default_response_width() -> u8 {
     2
 }
 
+fn default_code_width() -> u8 {
+    2
+}
+
 /// The canvas-compiler emit spec for a declarative device — the single source
 /// both engines interpret. A `config` entry sources its value one of four ways
 /// (a wired MCU pin, a list of wired pins, a computed board value, or a parsed
@@ -1113,6 +1124,8 @@ pub fn embedded_device_yaml(device_type: &str) -> Option<&'static str> {
         "keypad" => Some(include_str!("../../../configs/devices/keypad.yaml")),
         "dht22" | "am2302" => Some(include_str!("../../../configs/devices/dht22.yaml")),
         "hc-sr04" | "hcsr04" => Some(include_str!("../../../configs/devices/hc_sr04.yaml")),
+        "sht31" => Some(include_str!("../../../configs/devices/sht31.yaml")),
+        "bh1750" => Some(include_str!("../../../configs/devices/bh1750.yaml")),
         _ => None,
     }
 }

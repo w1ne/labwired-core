@@ -50,6 +50,10 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::mlx90614::MLX90614_KIT,
     &components::max7219::MAX7219_KIT,
     &components::lcd1602::LCD1602_KIT,
+    // Declarative I²C devices — model lives entirely in configs/devices/*.yaml,
+    // interpreted by the generic GenericI2cDevice (zero per-part Rust).
+    &components::declarative_i2c::SHT31_KIT,
+    &components::declarative_i2c::BH1750_KIT,
 ];
 
 /// Borrow the registry slice.

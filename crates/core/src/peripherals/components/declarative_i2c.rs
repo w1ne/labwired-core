@@ -123,6 +123,9 @@ pub struct GenericI2cDevice {
     /// CRC-8 framing for command responses.
     crc8: Option<Crc8Spec>,
     command_mode: bool,
+    /// Command-code width in bytes (1 or 2). A command dispatches once the
+    /// master has written this many bytes.
+    code_width: usize,
 
     /// Measurement slots keyed by input-channel key (engineering units).
     slots: HashMap<String, f64>,
@@ -193,6 +196,7 @@ impl GenericI2cDevice {
             commands: spec.commands.clone(),
             crc8: spec.crc8,
             command_mode: !spec.commands.is_empty(),
+            code_width: spec.code_width as usize,
             slots,
             reg_values,
             pointer: None,
@@ -325,10 +329,14 @@ impl I2cDevice for GenericI2cDevice {
     fn write(&mut self, data: u8) {
         self.write_buf.push(data);
         if self.command_mode {
-            // A command completes on its second byte (16-bit BE). Parameter
-            // words follow but are accepted and ignored (params_words).
-            if self.write_buf.len() == 2 {
-                let code = ((self.write_buf[0] as u16) << 8) | self.write_buf[1] as u16;
+            // A command completes once `code_width` bytes have arrived (a
+            // 16-bit big-endian Sensirion opcode, or a single-byte BH1750-style
+            // opcode). Parameter words follow but are accepted and ignored
+            // (params_words); write_buf keeps growing so this never re-fires.
+            if self.write_buf.len() == self.code_width {
+                let code = self.write_buf[..self.code_width]
+                    .iter()
+                    .fold(0u16, |acc, &b| (acc << 8) | b as u16);
                 self.dispatch_command(code);
             }
             return;
@@ -416,6 +424,13 @@ fn validate_spec(spec: &I2cSpec) -> Result<()> {
             bail!("behavior.i2c declares both registers and commands (a device is exactly one)")
         }
         _ => {}
+    }
+    if !spec.commands.is_empty() && !matches!(spec.code_width, 1 | 2) {
+        bail!(
+            "command device has code_width {} — only 1 (single-byte opcode) or 2 \
+             (16-bit opcode) are supported",
+            spec.code_width
+        );
     }
     if spec.crc8.is_some() {
         for cmd in &spec.commands {
@@ -562,6 +577,43 @@ impl PeripheralKit for DeclarativeI2cKit {
     }
 }
 
+// ─── Registry statics ──────────────────────────────────────────────────────
+//
+// A `DeclarativeI2cKit` is parsed from YAML at runtime, but the registry
+// (`registry::KITS`) is a const slice of `&'static dyn PeripheralKit`. A
+// `static LazyLock<DeclarativeI2cKit>` is the const-initialisable cell that
+// bridges the two: the descriptor is parsed once on first access, and the
+// `PeripheralKit` impl below forwards through it. Real parts get one static
+// each here and one line in `registry::KITS`; the descriptor lives entirely in
+// `configs/devices/*.yaml`.
+
+use std::sync::LazyLock;
+
+impl PeripheralKit for LazyLock<DeclarativeI2cKit> {
+    fn metadata(&self) -> &'static KitMetadata {
+        LazyLock::force(self).metadata()
+    }
+    fn attach(&self, ctx: &mut AttachCtx<'_>) -> Result<()> {
+        LazyLock::force(self).attach(ctx)
+    }
+}
+
+/// Sensirion SHT31 temperature + humidity sensor (declarative `sht31.yaml`).
+pub static SHT31_KIT: LazyLock<DeclarativeI2cKit> = LazyLock::new(|| {
+    DeclarativeI2cKit::from_yaml(
+        labwired_config::embedded_device_yaml("sht31").expect("sht31 descriptor is embedded"),
+    )
+    .expect("sht31.yaml is a valid declarative i2c descriptor")
+});
+
+/// ROHM BH1750 ambient-light sensor (declarative `bh1750.yaml`).
+pub static BH1750_KIT: LazyLock<DeclarativeI2cKit> = LazyLock::new(|| {
+    DeclarativeI2cKit::from_yaml(
+        labwired_config::embedded_device_yaml("bh1750").expect("bh1750 descriptor is embedded"),
+    )
+    .expect("bh1750.yaml is a valid declarative i2c descriptor")
+});
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -607,11 +659,44 @@ metadata:
     - { key: temperature, label: "Temperature", unit: "°C", min: -45, max: 130, default: 22 }
 "#;
 
+    /// Single-byte-opcode command fixture (inline): a BH1750-shaped device.
+    /// `code_width: 1`, no CRC, one 16-bit BE response word, plus write-only
+    /// power/reset opcodes that queue no response.
+    const CODE_WIDTH_1_FIXTURE: &str = r#"
+type: test_i2c_code_width_1_fixture
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x23
+    code_width: 1
+    commands:
+      - name: power_on
+        code: 0x01
+      - name: reset
+        code: 0x07
+      - name: cont_hres
+        code: 0x10
+        response:
+          - { source: lux, width: 2, encode: { scale: 0.8333333333333334 } }
+metadata:
+  inputs:
+    - { key: lux, label: "Illuminance", unit: lx, min: 0, max: 100000, default: 600 }
+"#;
+
     fn reg_dev() -> GenericI2cDevice {
         GenericI2cDevice::from_yaml(REGISTER_FIXTURE, 0).unwrap()
     }
     fn cmd_dev() -> GenericI2cDevice {
         GenericI2cDevice::from_yaml(COMMAND_FIXTURE, 0).unwrap()
+    }
+    fn cw1_dev() -> GenericI2cDevice {
+        GenericI2cDevice::from_yaml(CODE_WIDTH_1_FIXTURE, 0).unwrap()
+    }
+
+    /// Send a single-byte opcode.
+    fn send_byte_cmd(d: &mut GenericI2cDevice, code: u8) {
+        d.start();
+        d.write(code);
     }
 
     /// Point at `reg` and read `width` bytes.
@@ -806,6 +891,71 @@ metadata:
         send_cmd(&mut d, 0xEC05);
         let b = read_bytes(&mut d, 3);
         assert_eq!(((b[0] as u16) << 8) | b[1] as u16, 450);
+    }
+
+    // ── command mode: single-byte opcode dispatch (code_width: 1) ──────────
+
+    #[test]
+    fn code_width_1_dispatches_on_first_byte() {
+        // cont_hres (0x10) sources lux (default 600) with scale 1/1.2 ⇒
+        // round(600 * 0.8333…) = 500, big-endian, no CRC.
+        let mut d = cw1_dev();
+        assert_eq!(d.address(), 0x23);
+        send_byte_cmd(&mut d, 0x10);
+        let b = read_bytes(&mut d, 2);
+        assert_eq!(((b[0] as u16) << 8) | b[1] as u16, 500, "BE raw = lux/1.2");
+        assert_eq!(b, vec![0x01, 0xF4]);
+    }
+
+    #[test]
+    fn code_width_1_source_reflects_set_input() {
+        let mut d = cw1_dev();
+        d.set_input("lux", 1200.0).unwrap();
+        send_byte_cmd(&mut d, 0x10);
+        let b = read_bytes(&mut d, 2);
+        assert_eq!(((b[0] as u16) << 8) | b[1] as u16, 1000);
+    }
+
+    #[test]
+    fn code_width_1_write_only_opcode_queues_no_response() {
+        let mut d = cw1_dev();
+        send_byte_cmd(&mut d, 0x01); // power_on, no response
+        let b = read_bytes(&mut d, 2);
+        assert!(b.iter().all(|&x| x == 0xFF), "no response bytes: {b:02x?}");
+    }
+
+    #[test]
+    fn code_width_1_unknown_opcode_queues_no_response() {
+        let mut d = cw1_dev();
+        send_byte_cmd(&mut d, 0xAB);
+        let b = read_bytes(&mut d, 2);
+        assert!(b.iter().all(|&x| x == 0xFF));
+    }
+
+    #[test]
+    fn code_width_defaults_to_two() {
+        // The command fixture omits code_width ⇒ 16-bit opcode dispatch, so a
+        // single written byte must NOT dispatch.
+        let mut d = cmd_dev();
+        d.start();
+        d.write(0xE4); // first byte of get_data_ready (0xE4B8)
+        let early = read_bytes(&mut d, 3);
+        assert!(early.iter().all(|&x| x == 0xFF), "no dispatch on 1 byte");
+    }
+
+    #[test]
+    fn invalid_code_width_is_rejected() {
+        let yaml = r#"
+type: bad_code_width
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x10
+    code_width: 3
+    commands:
+      - { name: c, code: 0x01 }
+"#;
+        assert!(GenericI2cDevice::from_yaml(yaml, 0).is_err());
     }
 
     // ── command mode: delay_us data-ready gating ───────────────────────────
