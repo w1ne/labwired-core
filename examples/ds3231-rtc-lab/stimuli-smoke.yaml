@@ -1,0 +1,16 @@
+# Jump DS3231 wall clock via unix_time SimInput.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/ds3231-rtc-lab"
+  system: "./system.yaml"
+limits:
+  max_steps: 2000000
+assertions:
+  - uart_contains: "DS3231 RTC Lab"
+  # 2026-01-01 00:00:00 UTC ≈ 1767225600 — hour should print 00 after set
+  - uart_contains: "TIME=00:00:"
+  - expected_stop_reason: max_steps
+stimuli:
+  - target: { component: "ds3231", channel: "unix_time" }
+    trigger: !after_cycles { cycles: 50000 }
+    value: 1767225600
