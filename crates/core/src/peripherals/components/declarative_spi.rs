@@ -244,6 +244,89 @@ impl SimInput for GenericSpiDevice {
     }
 }
 
+// ─── PeripheralKit registration ────────────────────────────────────────────
+
+use crate::peripherals::kit::{
+    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, PeripheralKit, Transport,
+};
+
+/// A [`PeripheralKit`] backed by a declarative `spi_device` descriptor — one
+/// instance per YAML device. Phase 1 registers no real parts, so nothing is
+/// added to `registry::KITS` and the offline peripherals manifest is unchanged.
+pub struct DeclarativeSpiKit {
+    descriptor: DeviceDescriptor,
+    channels: &'static [InputChannel],
+    metadata: &'static KitMetadata,
+}
+
+impl DeclarativeSpiKit {
+    pub fn from_yaml(yaml: &str) -> Result<Self> {
+        let descriptor = DeviceDescriptor::from_yaml(yaml)?;
+        if descriptor.behavior.primitive != "spi_device" {
+            bail!(
+                "declarative spi kit requires behavior.primitive: spi_device, got '{}'",
+                descriptor.behavior.primitive
+            );
+        }
+        descriptor
+            .behavior
+            .spi
+            .as_ref()
+            .context("declarative spi kit is missing behavior.spi")?;
+        let channels = super::declarative_i2c::leak_channels(&descriptor);
+        let metadata = leak_metadata(&descriptor, channels);
+        Ok(Self {
+            descriptor,
+            channels,
+            metadata,
+        })
+    }
+}
+
+fn leak_metadata(
+    descriptor: &DeviceDescriptor,
+    channels: &'static [InputChannel],
+) -> &'static KitMetadata {
+    let meta = descriptor.metadata.as_ref();
+    let leak = |s: String| -> &'static str { Box::leak(s.into_boxed_str()) };
+    let label = meta
+        .and_then(|m| m.label.clone())
+        .unwrap_or_else(|| descriptor.r#type.clone());
+    let summary = meta
+        .and_then(|m| m.summary.clone())
+        .unwrap_or_else(|| "Declarative SPI device.".to_string());
+    let config_keys: &'static [ConfigKey] = Box::leak(
+        vec![ConfigKey {
+            name: "cs_pin",
+            ty: ConfigType::Str,
+            doc: "CS GPIO pin wired as SPI chip-select (e.g. \"PA4\").",
+        }]
+        .into_boxed_slice(),
+    );
+    Box::leak(Box::new(KitMetadata {
+        device_type: leak(descriptor.r#type.clone()),
+        label: leak(label),
+        summary: leak(summary.clone()),
+        detail: leak(summary),
+        transport: Transport::Spi,
+        category: Category::Spi,
+        config_keys,
+        labs: &[],
+        inputs: channels,
+    }))
+}
+
+impl PeripheralKit for DeclarativeSpiKit {
+    fn metadata(&self) -> &'static KitMetadata {
+        self.metadata
+    }
+    fn attach(&self, ctx: &mut AttachCtx<'_>) -> Result<()> {
+        let cs_pin = ctx.config_str("cs_pin").unwrap_or("PA4").to_string();
+        let device = GenericSpiDevice::from_descriptor(&self.descriptor, cs_pin, self.channels)?;
+        ctx.attach_spi_device(Box::new(device))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -328,5 +411,28 @@ mod tests {
         let mut d = dev();
         assert!(d.set_input("accel_x", 99.0).is_err());
         assert!(d.set_input("nope", 1.0).is_err());
+    }
+
+    #[test]
+    fn declarative_spi_kit_builds_metadata_from_descriptor() {
+        let kit = DeclarativeSpiKit::from_yaml(FIXTURE).unwrap();
+        let m = kit.metadata();
+        assert_eq!(m.device_type, "test_spi_fixture");
+        assert!(matches!(m.transport, crate::peripherals::kit::Transport::Spi));
+        assert_eq!(m.inputs.len(), 1);
+        assert!(m.inputs.iter().any(|c| c.key == "accel_x"));
+    }
+
+    #[test]
+    fn declarative_spi_kit_rejects_wrong_primitive() {
+        let yaml = r#"
+type: bad
+behavior:
+  primitive: i2c_device
+  spi:
+    registers:
+      - { name: A, addr: 0, width: 1, endian: le, access: r }
+"#;
+        assert!(DeclarativeSpiKit::from_yaml(yaml).is_err());
     }
 }
