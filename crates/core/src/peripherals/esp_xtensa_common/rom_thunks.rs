@@ -793,7 +793,7 @@ pub fn abort_halt(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
             ("cur0", tcb0),
             ("cur1", tcb1),
         ] {
-            if tcb < 0x3ff0_0000 || tcb >= 0x4000_0000 {
+            if !(0x3ff0_0000..0x4000_0000).contains(&tcb) {
                 continue;
             }
             let top = read32(tcb);
@@ -857,7 +857,7 @@ pub fn abort_halt(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
                 break;
             }
             let owner = read32(it + 12);
-            let cont = read32(it + 16);
+            let _cont = read32(it + 16);
             let next = read32(it + 4);
             let name_ptr = owner + 52;
             let mut name = Vec::new();
@@ -1245,6 +1245,30 @@ pub fn esp_chip_info_stub(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<(
     Ok(())
 }
 
+/// `strlen(s) -> size_t` — count bytes until a 0 terminator.
+///
+/// Args (Xtensa C ABI, post-CALL window): a2 = `const char *s`.
+/// ESP32-S3 mask ROM exports this at `0x4000_1248` (`esp32s3.rom.libc.ld`).
+/// Harness ROM leaves unregistered addresses as `nop_return_zero`, so
+/// `Print::write(const char*)` saw length 0 and `Serial.println` wrote
+/// nothing (Arduino L0 marker never reached the UART sink).
+pub fn rom_strlen(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    let n = cpu.ps.callinc() * 4;
+    let s = cpu.regs.read_logical(n + 2);
+    let mut len = 0u32;
+    // Bound the walk so a non-terminated buffer cannot hang the sim.
+    const MAX: u32 = 1 << 20;
+    while len < MAX {
+        let b = bus.read_u8(s.wrapping_add(len) as u64).unwrap_or(0);
+        if b == 0 {
+            break;
+        }
+        len = len.wrapping_add(1);
+    }
+    RomThunkBank::return_with(cpu, len);
+    Ok(())
+}
+
 /// `memcpy(dst, src, n) -> dst` — byte-wise copy via the bus.
 ///
 /// Args (Xtensa C ABI, post-ENTRY view from caller's frame so we read
@@ -1497,8 +1521,8 @@ fn md5_step(w: &mut [u32; 4], in_block: &[u32; 16]) {
 
 fn md5_read_ctx_buf(bus: &dyn Bus, ctx: u32) -> [u32; 4] {
     let mut buf = [0u32; 4];
-    for i in 0..4 {
-        buf[i] = bus
+    for (i, slot) in buf.iter_mut().enumerate() {
+        *slot = bus
             .read_u32(ctx.wrapping_add(MD5_CTX_BUF + i as u32 * 4) as u64)
             .unwrap_or(0);
     }
@@ -1506,8 +1530,8 @@ fn md5_read_ctx_buf(bus: &dyn Bus, ctx: u32) -> [u32; 4] {
 }
 
 fn md5_write_ctx_buf(bus: &mut dyn Bus, ctx: u32, buf: &[u32; 4]) {
-    for i in 0..4 {
-        let _ = bus.write_u32(ctx.wrapping_add(MD5_CTX_BUF + i as u32 * 4) as u64, buf[i]);
+    for (i, &word) in buf.iter().enumerate() {
+        let _ = bus.write_u32(ctx.wrapping_add(MD5_CTX_BUF + i as u32 * 4) as u64, word);
     }
 }
 
@@ -1527,8 +1551,8 @@ fn md5_write_bits(bus: &mut dyn Bus, ctx: u32, bits: [u32; 2]) {
 
 fn md5_transform_from_in(bus: &mut dyn Bus, ctx: u32) {
     let mut block = [0u32; 16];
-    for i in 0..16 {
-        block[i] = bus
+    for (i, slot) in block.iter_mut().enumerate() {
+        *slot = bus
             .read_u32(ctx.wrapping_add(MD5_CTX_IN + i as u32 * 4) as u64)
             .unwrap_or(0);
     }
@@ -1570,7 +1594,7 @@ pub fn rom_md5_update(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
     bits[1] = bits[1].wrapping_add(len >> 29);
     md5_write_bits(bus, ctx, bits);
 
-    let mut idx = ((t >> 3) & 0x3f) as u32;
+    let mut idx = (t >> 3) & 0x3f;
     if idx != 0 {
         let mut part = 64 - idx;
         if len < part {
@@ -1613,7 +1637,7 @@ pub fn rom_md5_final(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
     let ctx = cpu.regs.read_logical(n + 3);
 
     let bits = md5_read_bits(bus, ctx);
-    let count = ((bits[0] >> 3) & 0x3f) as u32;
+    let count = (bits[0] >> 3) & 0x3f;
     let mut p = count;
     let _ = bus.write_u8(ctx.wrapping_add(MD5_CTX_IN + p) as u64, 0x80);
     p = p.wrapping_add(1);
@@ -1635,8 +1659,8 @@ pub fn rom_md5_final(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
     md5_transform_from_in(bus, ctx);
 
     let buf = md5_read_ctx_buf(bus, ctx);
-    for i in 0..4 {
-        let _ = bus.write_u32(digest.wrapping_add(i as u32 * 4) as u64, buf[i]);
+    for (i, &word) in buf.iter().enumerate() {
+        let _ = bus.write_u32(digest.wrapping_add(i as u32 * 4) as u64, word);
     }
     // Wipe context
     for i in 0..MD5_CTX_SIZE {
@@ -1846,8 +1870,8 @@ pub fn rom_qsort(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
     let mut items: Vec<Vec<u8>> = Vec::with_capacity(nmemb);
     for i in 0..nmemb {
         let mut item = vec![0u8; size];
-        for b in 0..size {
-            item[b] = bus.read_u8(base as u64 + (i * size + b) as u64)?;
+        for (b, slot) in item.iter_mut().enumerate() {
+            *slot = bus.read_u8(base as u64 + (i * size + b) as u64)?;
         }
         items.push(item);
     }

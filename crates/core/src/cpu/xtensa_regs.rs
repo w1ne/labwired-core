@@ -180,16 +180,16 @@ impl ArFile {
     /// Shadow stacks with generation stripped (snapshot / spill-thunk compat).
     pub fn shadow_stacks(&self) -> [Vec<[u32; 4]>; 16] {
         let mut out: [Vec<[u32; 4]>; 16] = Default::default();
-        for i in 0..16 {
-            out[i] = self.shadow[i].iter().map(|(_, r)| *r).collect();
+        for (dst, src) in out.iter_mut().zip(self.shadow.iter()) {
+            *dst = src.iter().map(|(_, r)| *r).collect();
         }
         out
     }
 
     /// Restore shadow stacks from generation-stripped snapshots (gen=0).
     pub fn set_shadow_stacks(&mut self, shadow: [Vec<[u32; 4]>; 16]) {
-        for i in 0..16 {
-            self.shadow[i] = shadow[i].iter().map(|r| (0u32, *r)).collect();
+        for (dst, src) in self.shadow.iter_mut().zip(shadow.iter()) {
+            *dst = src.iter().map(|r| (0u32, *r)).collect();
         }
     }
 

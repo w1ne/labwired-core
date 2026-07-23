@@ -671,8 +671,14 @@ fn register_default_thunks(bank: &mut RomThunkBank) {
     // intr_matrix_set / esp_rom_route_intr_matrix — binds peripheral source
     // IDs to CPU IRQ slots (FROM_CPU yield, systimer tick, UART, …).
     bank.register(0x4000_1b54, rom_thunks::esp32s3_rom_route_intr_matrix);
-    // esp_rom_spiflash_unlock — flash write helper. Boot path doesn't write,
-    // but the symbol may be linked in.
+    // ROM MD5 — `CONFIG_PARTITION_TABLE_MD5` hashes every 32-byte partition
+    // entry then compares the 0xEBEB trailer. Without real MD5, load_partitions
+    // fails MD5 verify → empty list → OTA `it != NULL` assert in initArduino.
+    bank.register(0x4000_1c5c, rom_thunks::rom_md5_init); // MD5Init / esp_rom_md5_init
+    bank.register(0x4000_1c68, rom_thunks::rom_md5_update); // MD5Update
+    bank.register(0x4000_1c74, rom_thunks::rom_md5_final); // MD5Final
+                                                           // esp_rom_spiflash_unlock — flash write helper. Boot path doesn't write,
+                                                           // but the symbol may be linked in.
     bank.register(0x4000_0a2c, rom_thunks::esp_rom_spiflash_unlock);
     // rtc_get_reset_reason(cpu_idx) — esp-hal queries this during init to
     // distinguish power-on from soft reset; we always report POWERON_RESET.
@@ -702,6 +708,8 @@ fn register_default_thunks(bank: &mut RomThunkBank) {
                                                              // memcpy and __udivdi3 do real work — emulate them so the firmware
                                                              // doesn't get garbage from the boot-init copy paths.
     bank.register(0x4000_11f4, rom_thunks::rom_memcpy);
+    // strlen — Print::write / Serial.println length; see rom_strlen docs.
+    bank.register(0x4000_1248, rom_thunks::rom_strlen);
     bank.register(0x4000_2544, rom_thunks::rom_udivdi3);
     // libgcc 64-bit arithmetic + bit/byte helpers, in ROM. The full ESP-IDF
     // image pulls these from the C runtime (printf, timers, hashing). Each has

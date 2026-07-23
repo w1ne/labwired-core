@@ -15,16 +15,16 @@
 //! starts at 0x58).
 //!
 //! Register window is 0x100 bytes wide. Modeled fields:
-//!   * SPI_CMD_REG (0x00)        — USR (bit 18) + dedicated FLASH_* bits;
-//!                                 all trigger bits auto-clear on completion.
-//!   * SPI_ADDR_REG (0x04)       — flash byte address for USR address phase.
-//!   * SPI_RD_STATUS_REG (0x10)  — result of dedicated FLASH_RDID / FLASH_RDSR.
-//!   * SPI_USER_REG (0x1C)       — USR_MOSI / USR_MISO / USR_COMMAND bits.
-//!   * SPI_USER2_REG (0x24)      — command opcode (bits[15:0]) + bitlen.
-//!   * SPI_MOSI_DLEN_REG (0x28)  — bit length minus 1; sizes MOSI stream.
-//!   * SPI_MISO_DLEN_REG (0x2C)  — bit length minus 1; sizes MISO fill.
-//!   * SPI_W0..W15 (0x80..0xBC)  — 64-byte FIFO; little-endian byte order.
-//!   * Other offsets             — round-tripped (firmware RMW / polls).
+//!   * SPI_CMD_REG (0x00) — USR (bit 18) + dedicated FLASH_* bits;
+//!     all trigger bits auto-clear on completion.
+//!   * SPI_ADDR_REG (0x04) — flash byte address for USR address phase.
+//!   * SPI_RD_STATUS_REG (0x10) — result of dedicated FLASH_RDID / FLASH_RDSR.
+//!   * SPI_USER_REG (0x1C) — USR_MOSI / USR_MISO / USR_COMMAND bits.
+//!   * SPI_USER2_REG (0x24) — command opcode (bits[15:0]) + bitlen.
+//!   * SPI_MOSI_DLEN_REG (0x28) — bit length minus 1; sizes MOSI stream.
+//!   * SPI_MISO_DLEN_REG (0x2C) — bit length minus 1; sizes MISO fill.
+//!   * SPI_W0..W15 (0x80..0xBC) — 64-byte FIFO; little-endian byte order.
+//!   * Other offsets — round-tripped (firmware RMW / polls).
 //!
 //! On `CMD_REG` write with bit 18 (USR) set, the peripheral synchronously:
 //!   1. If USR_MOSI: streams MOSI bytes from the FIFO to attached devices.
@@ -74,6 +74,7 @@ const FLASH_READ: u32 = 1 << 31;
 
 pub const USER_USR_MOSI_BIT: u32 = 1 << 27;
 const USER_USR_MISO_BIT: u32 = 1 << 28;
+#[allow(dead_code)] // used in unit tests
 const USER_USR_COMMAND_BIT: u32 = 1 << 31;
 
 // SPI NOR opcodes used by esp_flash / bootloader flash paths.
@@ -94,10 +95,15 @@ const CMD_WRDI: u8 = 0x04;
 const CMD_SFDP: u8 = 0x5A;
 const CMD_RDUID: u8 = 0x4B;
 const CMD_RDID: u8 = 0x9F;
+#[allow(dead_code)]
 const CMD_PAGE_PROGRAM: u8 = 0x02;
+#[allow(dead_code)]
 const CMD_SECTOR_ERASE: u8 = 0x20; // 4 KiB
+#[allow(dead_code)]
 const CMD_BLOCK_ERASE_32K: u8 = 0x52;
+#[allow(dead_code)]
 const CMD_BLOCK_ERASE_64K: u8 = 0xD8;
+#[allow(dead_code)]
 const CMD_CHIP_ERASE: u8 = 0xC7;
 
 // Flash status-register bits (SPI NOR standard).
@@ -327,11 +333,7 @@ impl Esp32Spi {
 
     /// Fill W0.. from the flash opcode in USER2 (bits[15:0]).
     fn execute_flash_user_miso(&mut self) {
-        let opcode = if self.user & USER_USR_COMMAND_BIT != 0 {
-            (self.user2 & 0xFFFF) as u8
-        } else {
-            (self.user2 & 0xFFFF) as u8
-        };
+        let opcode = (self.user2 & 0xFFFF) as u8;
         let read_bytes = (((self.miso_dlen & 0x7FF) + 1) / 8) as usize;
         let addr = (self.addr >> 8) as usize;
 

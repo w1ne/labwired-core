@@ -520,13 +520,12 @@ fn diag_app_cpu_boot_progress() {
                             CAS_HITS += 1;
                             CAS_HITS
                         };
-                        // For CAS ENTRY, arg is a10 (pre-ENTRY). For post-ENTRY, a2.
+                        // For CAS ENTRY / EnterCritical, arg is a10 (pre-ENTRY).
+                        // For post-ENTRY, a2.
                         let arg = if label.contains("post-ENTRY") {
                             a2_early
-                        } else if label.starts_with("EnterCritical") {
-                            a10_early
                         } else {
-                            a10_early // CAS pre-ENTRY: arg in a10
+                            a10_early
                         };
                         let corrupt = !(0x3ff0_0000..0x4000_0000).contains(&arg) && arg != 0;
                         if !corrupt && hits > 12 && hits % 100_000 != 0 {
@@ -694,7 +693,7 @@ fn diag_app_cpu_boot_progress() {
         }
         if pro_pc == PC_FLASH_BLOCK || app_pc == PC_FLASH_BLOCK {
             flash_block_hits += 1;
-            if flash_block_hits <= 5 || flash_block_hits % 20 == 0 {
+            if flash_block_hits <= 5 || flash_block_hits.is_multiple_of(20) {
                 eprintln!(
                     "[diag] HIT flash_op_block_func #{flash_block_hits} step={step} pro=0x{pro_pc:08x} app=0x{app_pc:08x}"
                 );
@@ -863,9 +862,11 @@ fn diag_app_cpu_boot_progress() {
             }
             if pro_pc == 0x4008_16fd || pro_pc == 0x4008_1703 {
                 // Tight can_start wait — rate-limit to every 50k steps.
-                let last = unsafe { &mut LAST_WAIT_LOG };
-                if step.saturating_sub(*last) >= 50_000 {
-                    *last = step;
+                let last = unsafe { LAST_WAIT_LOG };
+                if step.saturating_sub(last) >= 50_000 {
+                    unsafe {
+                        LAST_WAIT_LOG = step;
+                    }
                     let n = unsafe {
                         WAIT_CS_N += 1;
                         WAIT_CS_N
@@ -916,42 +917,52 @@ fn diag_app_cpu_boot_progress() {
             static mut SAW_POST_CLEAR: bool = false;
             static mut LOGGED_REDIRTY: bool = false;
             let fn1 = r32(0x3ffc_2228);
-            unsafe {
-                if fn1 != PREV_FN1 && step >= 238_000 {
-                    eprintln!(
-                        "[diag] FN1_CHG step={step} 0x{PREV_FN1:08x}->0x{fn1:08x} \
-                         pro=0x{pro_pc:08x} app=0x{app_pc:08x} \
-                         pro_a2=0x{:08x} pro_a3=0x{:08x} pro_a4=0x{:08x} \
-                         app_a4=0x{:08x} app_a8=0x{:08x}",
-                        machine.cpu.regs.read_logical(2),
-                        machine.cpu.regs.read_logical(3),
-                        machine.cpu.regs.read_logical(4),
-                        machine
-                            .cpu_secondary
-                            .as_ref()
-                            .map(|c| c.regs.read_logical(4))
-                            .unwrap_or(0),
-                        machine
-                            .cpu_secondary
-                            .as_ref()
-                            .map(|c| c.regs.read_logical(8))
-                            .unwrap_or(0),
-                    );
+            let prev_fn1 = unsafe { PREV_FN1 };
+            let saw_nonempty = unsafe { SAW_NONEMPTY };
+            let saw_post_clear = unsafe { SAW_POST_CLEAR };
+            let logged_redirty = unsafe { LOGGED_REDIRTY };
+            if fn1 != prev_fn1 && step >= 238_000 {
+                eprintln!(
+                    "[diag] FN1_CHG step={step} 0x{prev_fn1:08x}->0x{fn1:08x} \
+                     pro=0x{pro_pc:08x} app=0x{app_pc:08x} \
+                     pro_a2=0x{:08x} pro_a3=0x{:08x} pro_a4=0x{:08x} \
+                     app_a4=0x{:08x} app_a8=0x{:08x}",
+                    machine.cpu.regs.read_logical(2),
+                    machine.cpu.regs.read_logical(3),
+                    machine.cpu.regs.read_logical(4),
+                    machine
+                        .cpu_secondary
+                        .as_ref()
+                        .map(|c| c.regs.read_logical(4))
+                        .unwrap_or(0),
+                    machine
+                        .cpu_secondary
+                        .as_ref()
+                        .map(|c| c.regs.read_logical(8))
+                        .unwrap_or(0),
+                );
+                unsafe {
                     PREV_FN1 = fn1;
                 }
-                if fn1 != 0 {
+            }
+            if fn1 != 0 {
+                unsafe {
                     SAW_NONEMPTY = true;
                 }
-                if SAW_NONEMPTY && fn1 == 0 {
+            }
+            if saw_nonempty && fn1 == 0 {
+                unsafe {
                     SAW_POST_CLEAR = true;
                 }
-                if SAW_POST_CLEAR && fn1 != 0 && !LOGGED_REDIRTY {
+            }
+            if saw_post_clear && fn1 != 0 && !logged_redirty {
+                unsafe {
                     LOGGED_REDIRTY = true;
-                    eprintln!(
-                        "[diag] REDIRTY s_no_block_func[1]=0x{fn1:08x} at step={step} \
-                         pro=0x{pro_pc:08x} app=0x{app_pc:08x}"
-                    );
                 }
+                eprintln!(
+                    "[diag] REDIRTY s_no_block_func[1]=0x{fn1:08x} at step={step} \
+                     pro=0x{pro_pc:08x} app=0x{app_pc:08x}"
+                );
             }
         }
         last_pro = pro_pc;

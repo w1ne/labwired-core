@@ -154,7 +154,6 @@ mod tests {
 
 #[cfg(test)]
 mod integration {
-    use super::*;
     use crate::bus::SystemBus;
     use crate::system::xtensa::{configure_xtensa_esp32s3, Esp32s3Opts};
     use crate::Bus;

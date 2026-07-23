@@ -555,6 +555,19 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                         );
                         rom_thunks::set_appcpu_up_flags(app_flags);
                     }
+                    // Hybrid window preserve parks under FreeRTOS TCB via
+                    // pxCurrentTCBs[core]. S3 BSS is not the classic address.
+                    for sym in ["pxCurrentTCBs", "pxCurrentTCB"] {
+                        if let Some(a) =
+                            labwired_loader::resolve_symbol_in_elf(&firmware_bytes, sym)
+                        {
+                            rom_thunks::PX_CURRENT_TCB_ADDR.with(|s| s.set(Some(a)));
+                            eprintln!(
+                                "labwired-cli test: pxCurrentTCBs @0x{a:08x} (hybrid preserve key)"
+                            );
+                            break;
+                        }
+                    }
                     // Same xthal spill CPU-model workaround as classic.
                     if let Some(pc) = labwired_loader::resolve_symbol_in_elf(
                         &firmware_bytes,
@@ -705,21 +718,32 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                 );
                 // CPU-model workaround for shadow-window vs firmware spill
                 // (FIDELITY Batch D). Not a flash-init firmware thunk.
-                if let Some(pc) =
-                    labwired_loader::resolve_symbol_in_elf(&firmware_bytes, "xthal_window_spill_nw")
                 {
                     use labwired_core::peripherals::esp_xtensa_common::rom_thunks;
-                    if let Err(e) = machine
-                        .bus
-                        .install_flash_thunk(pc, rom_thunks::xthal_window_spill_thunk)
-                    {
-                        eprintln!(
-                            "labwired-cli test: warn: xthal_window_spill_nw install failed: {e}"
-                        );
-                    } else {
-                        eprintln!(
-                            "labwired-cli test: installed xthal_window_spill_nw CPU spill workaround @0x{pc:08x}"
-                        );
+                    for sym in ["pxCurrentTCBs", "pxCurrentTCB"] {
+                        if let Some(a) =
+                            labwired_loader::resolve_symbol_in_elf(&firmware_bytes, sym)
+                        {
+                            rom_thunks::PX_CURRENT_TCB_ADDR.with(|s| s.set(Some(a)));
+                            break;
+                        }
+                    }
+                    if let Some(pc) = labwired_loader::resolve_symbol_in_elf(
+                        &firmware_bytes,
+                        "xthal_window_spill_nw",
+                    ) {
+                        if let Err(e) = machine
+                            .bus
+                            .install_flash_thunk(pc, rom_thunks::xthal_window_spill_thunk)
+                        {
+                            eprintln!(
+                                "labwired-cli test: warn: xthal_window_spill_nw install failed: {e}"
+                            );
+                        } else {
+                            eprintln!(
+                                "labwired-cli test: installed xthal_window_spill_nw CPU spill workaround @0x{pc:08x}"
+                            );
+                        }
                     }
                 }
                 machine
@@ -1204,7 +1228,7 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                                 // virt_page index within the 8 MiB window
                                 let mut virt_pages: Vec<u32> = Vec::new();
                                 let irom_len = machine.bus.flash.data.len();
-                                for page in 0..(irom_len + PAGE - 1) / PAGE {
+                                for page in 0..irom_len.div_ceil(PAGE) {
                                     if page >= 128 {
                                         break;
                                     }
@@ -1226,7 +1250,7 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                                         .find(|m| m.base_addr == 0x3C00_0000)
                                         .map(|m| m.data.clone());
                                     if let Some(drom) = drom_snapshot {
-                                        for page in 0..(drom.len() + PAGE - 1) / PAGE
+                                        for page in 0..drom.len().div_ceil(PAGE)
                                         {
                                             if page >= 128 {
                                                 break;

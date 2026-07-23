@@ -87,7 +87,7 @@ fn diag_c3_panic_message() {
     machine.cpu.set_pc(program.entry_point as u32);
 
     let mut hit_setup = false;
-    let mut hit_loop = false;
+    let hit_loop = false;
     for step in 1..=2_000_000u64 {
         match machine.step() {
             Ok(()) => {}

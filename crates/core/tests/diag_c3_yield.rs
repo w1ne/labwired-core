@@ -26,10 +26,8 @@ fn load_syms(elf: &std::path::Path) -> HashMap<u32, String> {
 fn nearest(syms: &HashMap<u32, String>, pc: u32) -> String {
     let mut best: Option<(u32, &str)> = None;
     for (&a, n) in syms {
-        if a <= pc {
-            if best.map(|(ba, _)| a > ba).unwrap_or(true) {
-                best = Some((a, n));
-            }
+        if a <= pc && best.map(|(ba, _)| a > ba).unwrap_or(true) {
+            best = Some((a, n));
         }
     }
     match best {
@@ -185,7 +183,7 @@ fn diag_c3_first_yield() {
         const PAGE: usize = 64 * 1024;
         let mut mmu_pages: Vec<u32> = Vec::new();
         let irom_len = machine.bus.flash.data.len();
-        let irom_pages = (irom_len + PAGE - 1) / PAGE;
+        let irom_pages = irom_len.div_ceil(PAGE);
         for page in 0..irom_pages.min(128) {
             let start = page * PAGE;
             let end = (start + PAGE).min(irom_len);
@@ -203,7 +201,7 @@ fn diag_c3_first_yield() {
         {
             let n = d.len().min(f.len());
             f[..n].copy_from_slice(&d[..n]);
-            let pages = (n + PAGE - 1) / PAGE;
+            let pages = n.div_ceil(PAGE);
             for page in 0..pages.min(128) {
                 let start = page * PAGE;
                 let end = (start + PAGE).min(n);

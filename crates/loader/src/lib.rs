@@ -338,8 +338,10 @@ pub fn extract_arduino_esp32_thunks(buffer: &[u8]) -> HashMap<&'static str, u32>
         // pointers. Address is firmware-dependent; resolving the symbol
         // lets the thunk return a real handle so `vTaskDelete(NULL)`
         // (used by Arduino-ESP32's main_task self-delete) doesn't pass
-        // NULL into prvDeleteTLS.
+        // NULL into prvDeleteTLS. ESP-IDF exports the dual-core array as
+        // `pxCurrentTCBs` (with trailing s); keep both names.
         "pxCurrentTCB",
+        "pxCurrentTCBs",
         "xTaskGetCurrentTaskHandle",
         "esp_log_write",
         "esp_log_buffer_hex_internal",

@@ -108,6 +108,9 @@ fn round_half_even(v: f32) -> f32 {
     }
 }
 
+/// Per-TCB parked hybrid CALL preserve panes (shadow-window mode).
+type TaskPreserveMap = std::collections::HashMap<u32, Vec<Vec<(u8, [u32; 4])>>>;
+
 pub struct XtensaLx7 {
     pub regs: ArFile,
     pub ps: Ps,
@@ -173,7 +176,7 @@ pub struct XtensaLx7 {
     /// Keyed by FreeRTOS TCB address from `pxCurrentTCBs[core]`. Restored on
     /// RFE when that TCB is current again so CALL8 a4..a7 survive NotifyTake
     /// block/wake (ipc_task a5/a6 → flash IPC).
-    task_preserve_by_tcb: std::collections::HashMap<u32, Vec<Vec<(u8, [u32; 4])>>>,
+    task_preserve_by_tcb: TaskPreserveMap,
     /// After a windowed ROM thunk returns (CALL+no ENTRY), the caller still
     /// needs to RETW. If we deliver an IRQ in that gap (e.g. ExitCritical
     /// just restored INTLEVEL via `_xtos_set_intlevel`), the ISR can leave
@@ -818,7 +821,7 @@ impl XtensaLx7 {
             if !valid_sp(a1) {
                 continue;
             }
-            let a1_ok = frame_sps.iter().any(|&f| f == a1)
+            let a1_ok = frame_sps.contains(&a1)
                 || frame_sps
                     .iter()
                     .any(|&f| a1 < f && f.wrapping_sub(a1) < 0x80);
@@ -895,11 +898,44 @@ impl XtensaLx7 {
     }
 
     /// Read `pxCurrentTCBs[core_id]` for the running ESP32 dual-core firmware.
+    ///
+    /// Address is firmware-specific (`.dram0.bss`). Classic Arduino-ESP32 L0
+    /// places the dual-core array at `0x3FFC_27C8`; ESP32-S3 at `0x3FC9_B2B4`.
+    /// Hardcoding only classic made S3 hybrid preserve never park under the
+    /// real TCB → after `vTaskDelay` task-switch RFE, CALL8 a4..a7 / WS were
+    /// lost → APP hung in `_WindowUnderflow8` re-executing RETW forever.
+    ///
+    /// Prefer the ELF-resolved base in [`rom_thunks::PX_CURRENT_TCB_ADDR`]
+    /// (CLI / diag set this from `pxCurrentTCBs`); otherwise auto-discover by
+    /// probing known BSS locations for a live DRAM TCB pointer.
     fn px_current_tcb(&self, bus: &dyn Bus) -> Option<u32> {
-        // Arduino-ESP32 IDF layout for the L0 serial ELF (same as abort_halt).
-        const PX_CURRENT_TCBS: u32 = 0x3ffc_27c8;
+        use crate::peripherals::esp_xtensa_common::rom_thunks::PX_CURRENT_TCB_ADDR;
         let core = self.core_id() as u32;
-        bus.read_u32((PX_CURRENT_TCBS + core * 4) as u64).ok()
+        let read_at =
+            |base: u32| -> Option<u32> { bus.read_u32((base.wrapping_add(core * 4)) as u64).ok() };
+        let looks_like_tcb = |p: u32| {
+            p != 0
+                && ((0x3FF8_0000..0x4000_0000).contains(&p) // classic internal DRAM
+                    || (0x3FC8_0000..0x3FCF_0000).contains(&p)) // ESP32-S3 SRAM
+        };
+
+        if let Some(base) = PX_CURRENT_TCB_ADDR.with(|s| s.get()) {
+            return read_at(base);
+        }
+
+        // Known Arduino-ESP32 L0 layouts (nm `pxCurrentTCBs`).
+        const CANDIDATES: [u32; 2] = [
+            0x3FFC_27C8, // classic ESP32
+            0x3FC9_B2B4, // ESP32-S3
+        ];
+        for &base in &CANDIDATES {
+            if let Some(tcb) = read_at(base) {
+                if looks_like_tcb(tcb) {
+                    return Some(tcb);
+                }
+            }
+        }
+        None
     }
 
     /// Drop IRQ window snapshots (context-switch / spill). See `irq_window_stack`.

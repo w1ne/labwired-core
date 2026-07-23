@@ -24,12 +24,13 @@ Full matrix: 15 chips × 3 sketches. Scoreboard:
 | **nRF52832** | **Fixed L0–L2** — RTC1 @ `0x40011000` (was mis-mapped RADIO); real UART model |
 | **RP2040** | **Fixed L0–L2** — bootrom `@0` must win over low-address flash alias; minimal B0-compatible `rom_func_lookup` |
 | **ESP32-C3** | **Fixed L0–L2** — FreeRTOS yield + factory MMU/`cache2phys` + C3 RMT for RGB `LED_BUILTIN` (pin 30 → `rgbLedWrite`) |
+| **ESP32-S3** | **Fixed L0–L1** on plain `labwired test` (`LW_L0_OK` / `LW_L1_OK`); L2 still open |
 
 ## Open gaps (model work only)
 
 | Chip | Symptom | Honest next model work |
 |------|---------|-------------------------|
-| **ESP32-S3** | Reaches `initArduino` / `esp_ota_get_running_partition`; assert `it != NULL` (partition match after mmap) | Factory MMU+XIP + dual-core APP + intmatrix ROM + spill DRAM range done; finish partition-table mmap load so OTA finds app0 → setup/Serial/`LW_L0_OK` |
+| **ESP32-S3 L2** | After `pinMode(RGB_BUILTIN)` + partial `Serial.println("LW_L2_BOOT")`, fault `read @ 0x20406a` in `xPortEnterCriticalTimeout` | RGB LED = `SOC_GPIO_PIN_COUNT+48` → `rgbLedWrite`/RMT path; S3 RMT model exists — debug pinMode/RMT bring-up corrupting a portMUX before `LW_L2_OK` |
 | **STM32WBA52** | No PIO Arduino board | Toolchain gap |
 
 ## Fixes already landed (honest)
@@ -86,3 +87,7 @@ python3 validation/arduino-matrix/run_matrix.py --boards stm32f407,nrf52832
 32. **Spill `dram_sp` includes S3 DRAM** `0x3FC8_0000..0x3FCF_0000` (classic-only range left `xthal_window_spill` empty → WindowUnderflow a1=0).
 33. **ESP32-S3 `intr_matrix_set` ROM** @ `0x40001b54` — harness nop left FROM_CPU/systimer unmapped; yield never fired (only first task).
 34. **ESP32-S3 factory MMU + MMU-XIP fast-boot** — `seed_factory_mmu_for_cache2phys` + `factory_flash_base=0x10000` for cache2phys; partition mmap still empty → OTA `it != NULL` assert.
+35. **ESP32-S3 ROM MD5** @ `0x40001c5c/68/74` — partition table MD5 verify (was harness nop → empty table → OTA assert).
+36. **ESP32-S3 SYSTIMER legacy tick** — factory uses `new_with_source_legacy_tick` (scheduler-driven never advances without `event-scheduler` feature).
+37. **`px_current_tcb` multi-chip** — hybrid CALL preserve parks under FreeRTOS TCB via `pxCurrentTCBs[core]`. Classic-only `0x3FFC_27C8` left S3 at `0x3FC9_B2B4` unparked → APP `_WindowUnderflow8` loop after `vTaskDelay`. Now: ELF `PX_CURRENT_TCB_ADDR` + probe classic/S3 DRAM TCB pointers.
+38. **ESP32-S3 ROM `strlen` @ `0x40001248`** — harness prefill is `nop_return_zero`; `Print::write(const char*)` got length 0 so `Serial.println("LW_L0_OK")` wrote nothing. Real `rom_strlen` thunk; memcpy/memset already registered.

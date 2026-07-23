@@ -23,18 +23,16 @@ fn load_syms(elf: &std::path::Path) -> HashMap<u32, String> {
     m
 }
 
-fn nearest<'a>(syms: &'a HashMap<u32, String>, pc: u32) -> String {
+fn nearest(syms: &HashMap<u32, String>, pc: u32) -> String {
     let mut best: Option<(u32, &str)> = None;
     for (&a, n) in syms {
-        if a <= pc {
-            if best.map(|(ba, _)| a > ba).unwrap_or(true) {
-                best = Some((a, n));
-            }
+        if a <= pc && best.map(|(ba, _)| a > ba).unwrap_or(true) {
+            best = Some((a, n));
         }
     }
     match best {
         Some((a, n)) => format!("{n}+{:#x}", pc - a),
-        None => format!("???"),
+        None => "???".to_string(),
     }
 }
 
@@ -174,7 +172,7 @@ fn diag_c3_boot_progress() {
         const FACTORY_PAGE: u32 = 1;
         let mut virt_pages: Vec<u32> = Vec::new();
         let irom_len = machine.bus.flash.data.len();
-        for page in 0..(irom_len + PAGE - 1) / PAGE {
+        for page in 0..irom_len.div_ceil(PAGE) {
             if page >= 128 {
                 break;
             }
@@ -192,7 +190,7 @@ fn diag_c3_boot_progress() {
             .find(|m| m.base_addr == 0x3C00_0000)
             .map(|m| m.data.clone());
         if let Some(d) = drom {
-            for page in 0..(d.len() + PAGE - 1) / PAGE {
+            for page in 0..d.len().div_ceil(PAGE) {
                 if page >= 128 {
                     break;
                 }
@@ -286,7 +284,7 @@ fn diag_c3_boot_progress() {
     ];
     let mut hits = std::collections::HashSet::new();
     let mut last_pcs: std::collections::VecDeque<u32> = std::collections::VecDeque::new();
-    let mut dump_mmu = |m: &Machine<_>, label: &str| {
+    let dump_mmu = |m: &Machine<_>, label: &str| {
         eprint!("[diag] MMU {label}:");
         for i in 0..16u64 {
             let v = m.bus.read_u32(0x600C_5000 + i * 4).unwrap_or(0xDEAD);
@@ -346,19 +344,15 @@ fn diag_c3_boot_progress() {
         // Log every vaddr_to_paddr call's vaddr (a1) once we pass initArduino
         if pc == 0x4038_708e {
             let a1 = machine.cpu.get_register(11);
-            static mut N: u32 = 0;
-            unsafe {
-                N += 1;
-                if N <= 12 {
-                    let entry_id = ((a1 >> 16) & 0x7f) as usize;
-                    let ent = machine
-                        .bus
-                        .read_u32(0x600C_5000 + entry_id as u64 * 4)
-                        .unwrap_or(0);
-                    eprintln!(
-                        "[diag] vaddr_to_paddr #{N} vaddr={a1:#x} entry[{entry_id}]={ent:#x}"
-                    );
-                }
+            static N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+            let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+            if n <= 12 {
+                let entry_id = ((a1 >> 16) & 0x7f) as usize;
+                let ent = machine
+                    .bus
+                    .read_u32(0x600C_5000 + entry_id as u64 * 4)
+                    .unwrap_or(0);
+                eprintln!("[diag] vaddr_to_paddr #{n} vaddr={a1:#x} entry[{entry_id}]={ent:#x}");
             }
         }
         if step % 200_000 == 0 {
