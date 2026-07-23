@@ -1,0 +1,13 @@
+# LabWired - INA219 Power Lab smoke test
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/ina219-power-lab"
+  system: "./system.yaml"
+limits:
+  max_steps: 500000
+assertions:
+  - uart_contains: "INA219 Power Lab"
+  - uart_contains: "CFG="
+  - uart_contains: "Vbus_mV="
+  - uart_contains: "I_mA="
+  - expected_stop_reason: max_steps

@@ -306,6 +306,59 @@ impl SystemBus {
         }
     }
 
+    /// Write-hook for HX711 SCK edges: re-read SCK ODR, advance the bit-bang
+    /// state machine, and drive DT onto the MCU IDR when the level changes.
+    pub(crate) fn maybe_clock_hx711(&mut self, idx: usize) {
+        if self.hx711.is_empty() {
+            return;
+        }
+        for i in 0..self.hx711.len() {
+            let sck_idx = match self.hx711[i].sck_peripheral_idx() {
+                Some(t) => t,
+                None => {
+                    let addr = self.hx711[i].sck_odr_addr;
+                    match self.find_peripheral_index(addr) {
+                        Some(t) => {
+                            self.hx711[i].set_sck_peripheral_idx(t);
+                            t
+                        }
+                        None => continue,
+                    }
+                }
+            };
+            if sck_idx != idx {
+                continue;
+            }
+            let sck_addr = self.hx711[i].sck_odr_addr;
+            let sck_bit = self.hx711[i].sck_bit;
+            let sck = self
+                .read_u32(sck_addr)
+                .map(|v| (v >> sck_bit) & 1 != 0)
+                .unwrap_or(false);
+            self.hx711[i].observe_sck(sck);
+            self.drive_hx711_dt(i);
+        }
+    }
+
+    fn drive_hx711_dt(&mut self, i: usize) {
+        let dt_high = self.hx711[i].dt_high();
+        if self.hx711[i].last_dt_high() == Some(dt_high) {
+            return;
+        }
+        let dt_addr = self.hx711[i].dt_idr_addr;
+        let dt_bit = self.hx711[i].dt_bit;
+        let idr = self.read_u32(dt_addr).unwrap_or(0);
+        let new_idr = if dt_high {
+            idr | (1 << dt_bit)
+        } else {
+            idr & !(1 << dt_bit)
+        };
+        if new_idr != idr {
+            let _ = self.write_u32(dt_addr, new_idr);
+        }
+        self.hx711[i].set_last_dt_high(dt_high);
+    }
+
     /// Write-hook sibling of [`maybe_clock_tm1637`](Self::maybe_clock_tm1637)
     /// for direct-drive 7-segment digits: after an MMIO write to peripheral
     /// `idx`, if that peripheral hosts any of the display's nine pins, re-read

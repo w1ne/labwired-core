@@ -964,9 +964,12 @@ behavior:
     fn delay_us_gates_response_until_time_elapses() {
         let mut d = cmd_dev();
         send_cmd(&mut d, 0x219D); // measure_single_shot, delay 5000 µs
-        // Before the delay elapses: not ready ⇒ 0xFF.
+                                  // Before the delay elapses: not ready ⇒ 0xFF.
         let early = read_bytes(&mut d, 3);
-        assert!(early.iter().all(|&x| x == 0xFF), "not ready yet: {early:02x?}");
+        assert!(
+            early.iter().all(|&x| x == 0xFF),
+            "not ready yet: {early:02x?}"
+        );
         // Advance short of the deadline: still not ready.
         d.advance_time_us(4999);
         let still = read_bytes(&mut d, 3);
