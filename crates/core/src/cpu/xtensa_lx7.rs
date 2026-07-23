@@ -3012,6 +3012,11 @@ impl Cpu for XtensaLx7 {
         self.ps.intlevel()
     }
 
+    fn is_parked_idle(&self) -> bool {
+        // Not halted: reset-hold still needs lockstep so PRO can release APP.
+        self.waiti_parked && !self.halted
+    }
+
     fn idle_fast_forward_budget(&self, bus: &dyn Bus) -> Option<u64> {
         // Architectural WAITI park (FreeRTOS idle / vTaskDelay sleep). Only
         // offer a budget while no wake-capable interrupt is already visible.
