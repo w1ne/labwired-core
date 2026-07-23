@@ -338,6 +338,15 @@ pub static ADXL345_KIT: LazyLock<DeclarativeSpiKit> = LazyLock::new(|| {
     .expect("adxl345_spi.yaml is a valid declarative spi descriptor")
 });
 
+/// Maxim MAX31855 thermocouple converter (declarative `max31855_spi.yaml`).
+pub static MAX31855_KIT: LazyLock<DeclarativeSpiKit> = LazyLock::new(|| {
+    DeclarativeSpiKit::from_yaml(
+        labwired_config::embedded_device_yaml("max31855_spi")
+            .expect("max31855_spi descriptor embedded"),
+    )
+    .expect("max31855_spi.yaml is a valid declarative spi descriptor")
+});
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -532,5 +541,27 @@ behavior:
         let hi = d.transfer(0x00);
         d.cs_release();
         assert_eq!(u16::from_le_bytes([lo, hi]), 0xFF00); // -256 two's-complement
+    }
+
+    #[test]
+    fn max31855_reads_composite_frame_no_command() {
+        let mut d = crate::peripherals::components::declarative_spi::GenericSpiDevice::from_yaml(
+            labwired_config::embedded_device_yaml("max31855_spi").unwrap(),
+            "PA4",
+        )
+        .unwrap();
+        d.set_input("thermocouple", 100.0).unwrap(); // 400 = 0x190 @ [31:18]
+        d.set_input("internal", 25.0).unwrap(); // 400 = 0x190 @ [15:4]
+        d.cs_select(); // command_bytes:0 → data phase immediately
+        let b: Vec<u8> = (0..4).map(|_| d.transfer(0x00)).collect();
+        d.cs_release();
+        assert_eq!(b, vec![0x06, 0x40, 0x19, 0x00]);
+        // A negative thermocouple reading sets the sign bits.
+        d.set_input("thermocouple", -25.0).unwrap();
+        d.cs_select();
+        let n: Vec<u8> = (0..4).map(|_| d.transfer(0x00)).collect();
+        d.cs_release();
+        let word = u32::from_be_bytes([n[0], n[1], n[2], n[3]]);
+        assert_eq!((word >> 18) & 0x3FFF, 0x3F9C); // -100 in 14-bit two's-complement
     }
 }

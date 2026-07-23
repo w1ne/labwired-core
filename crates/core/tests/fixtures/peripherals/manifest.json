@@ -1695,6 +1695,38 @@
           "max": 16.0
         }
       ]
+    },
+    {
+      "device_type": "max31855_spi",
+      "label": "MAX31855 thermocouple",
+      "summary": "K-type thermocouple-to-digital converter over SPI (read-only 32-bit frame).",
+      "detail": "K-type thermocouple-to-digital converter over SPI (read-only 32-bit frame).",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "CS GPIO pin wired as SPI chip-select (e.g. \"PA4\")."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "thermocouple",
+          "label": "Thermocouple temp",
+          "unit": "°C",
+          "min": -270.0,
+          "max": 1372.0
+        },
+        {
+          "key": "internal",
+          "label": "Internal (cold-junction) temp",
+          "unit": "°C",
+          "min": -40.0,
+          "max": 125.0
+        }
+      ]
     }
   ]
 }

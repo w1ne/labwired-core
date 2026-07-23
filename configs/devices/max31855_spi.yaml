@@ -1,0 +1,38 @@
+# Maxim MAX31855 cold-junction-compensated K-type thermocouple-to-digital
+# converter — declarative SPI, read-only (command_bytes: 0): CS↓ clocks out a
+# 32-bit big-endian frame, no command byte. Frame layout (datasheet):
+#   [31:18] 14-bit signed thermocouple °C, 0.25 °C/LSB   (scale 4.0)
+#   [17]    reserved (0)
+#   [16]    fault (0 = OK)
+#   [15:4]  12-bit signed internal °C, 0.0625 °C/LSB     (scale 16.0)
+#   [3]     reserved (0);  [2] SCV  [1] SCG  [0] OC faults (0 = OK)
+# Modeled fault-free (fault + SCV/SCG/OC = 0). Internal (cold-junction) temp is
+# a second stimulus input defaulting to 25 °C.
+#
+# type is `max31855_spi`, not `max31855`: a hand-written MAX31855 kit
+# (components/max31855.rs) already registers device_type "max31855" — the
+# registry requires unique device_type strings, so this declarative variant
+# gets a distinct type to coexist with it.
+type: max31855_spi
+
+behavior:
+  primitive: spi_device
+  spi:
+    framing: { command_bytes: 0 }
+    registers:
+      - name: OUTPUT
+        addr: 0x00
+        width: 4
+        endian: be
+        access: r
+        fields:
+          - { source: thermocouple, shift: 18, width_bits: 14, signed: true, encode: { scale: 4.0 } }
+          - { source: internal,     shift: 4,  width_bits: 12, signed: true, encode: { scale: 16.0 } }
+
+metadata:
+  label: "MAX31855 thermocouple"
+  summary: "K-type thermocouple-to-digital converter over SPI (read-only 32-bit frame)."
+  category: spi
+  inputs:
+    - { key: thermocouple, label: "Thermocouple temp", unit: "°C", min: -270, max: 1372, default: 25 }
+    - { key: internal,     label: "Internal (cold-junction) temp", unit: "°C", min: -40, max: 125, default: 25 }
