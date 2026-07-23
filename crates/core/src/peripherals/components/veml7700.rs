@@ -4,6 +4,14 @@
 
 //! Vishay **VEML7700** ambient-light sensor as an [`I2cDevice`].
 //!
+//! **Status: byte-parity oracle only.** The shipping VEML7700 is now the
+//! declarative descriptor `configs/devices/veml7700.yaml`, driven by
+//! [`super::declarative_i2c::GenericI2cDevice`] and registered as
+//! [`super::declarative_i2c::VEML7700_KIT`]. This hand-written model is retained
+//! solely as the reference the parity test (`super::veml7700_parity`) proves the
+//! declarative device byte-identical against — hence the whole module is
+//! `#[cfg(test)]`. It is no longer a registry kit.
+//!
 //! Unlike the Sensirion parts on this board, the VEML7700 is a classic
 //! command-register device: the master writes a 1-byte register pointer, then
 //! reads/writes a **16-bit little-endian** word (low byte first).
@@ -215,58 +223,11 @@ impl crate::sim_input::SimInput for Veml7700 {
     }
 }
 
-// ─── PeripheralKit registration ────────────────────────────────────────────
-
-use crate::peripherals::kit::{
-    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, LabRef, PeripheralKit, Transport,
-};
-
-pub struct Veml7700Kit;
-pub static VEML7700_KIT: Veml7700Kit = Veml7700Kit;
-
-static VEML7700_METADATA: KitMetadata = KitMetadata {
-    inputs: INPUT_CHANNELS,
-    device_type: "veml7700",
-    label: "Vishay VEML7700 Light",
-    summary: "Ambient-light sensor (lux) over I2C.",
-    detail: "Vishay VEML7700 at fixed address 0x10, a register-pointer device with \
-             16-bit little-endian words. Reports a raw ALS count the firmware scales \
-             to lux at the default gain ×1 / 100 ms resolution (0.0576 lux/count). \
-             The illuminance is an externally driven input (channel lux); config only \
-             seeds its initial value.",
-    transport: Transport::I2c,
-    category: Category::I2c,
-    config_keys: &[
-        ConfigKey {
-            name: "i2c_address",
-            ty: ConfigType::Int,
-            doc: "7-bit slave address. Defaults to the VEML7700 fixed address 0x10.",
-        },
-        ConfigKey {
-            name: "lux",
-            ty: ConfigType::Float,
-            doc: "Initial illuminance, lux. Default 450 (daylit room). Drive it at \
-                  runtime with the `lux` input channel.",
-        },
-    ],
-    labs: &[LabRef {
-        board_id: "esp32c3-leo-airquality",
-        chip: "esp32c3",
-        example_dir: "esp32c3-leo-airquality",
-        demo_elf: "demo-esp32c3-leo-airquality.elf",
-    }],
-};
-
-impl PeripheralKit for Veml7700Kit {
-    fn metadata(&self) -> &'static KitMetadata {
-        &VEML7700_METADATA
-    }
-    fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
-        let address = ctx.i2c_address_or(VEML7700_ADDR)?;
-        let lux = ctx.config_f64("lux").unwrap_or(450.0);
-        ctx.attach_i2c_device(Box::new(Veml7700::new(address, lux)))
-    }
-}
+// The `PeripheralKit` registration that once lived here now lives in the
+// declarative descriptor `configs/devices/veml7700.yaml` +
+// `super::declarative_i2c::VEML7700_KIT`. All of that metadata (label, summary,
+// detail, config_keys, the Leo lab, and the lux input) moved verbatim into the
+// YAML `metadata:` block, so the offline peripherals manifest is unchanged.
 
 #[cfg(test)]
 mod tests {
