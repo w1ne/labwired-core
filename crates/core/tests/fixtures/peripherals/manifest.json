@@ -1656,6 +1656,45 @@
           "max": 65535.0
         }
       ]
+    },
+    {
+      "device_type": "adxl345_spi",
+      "label": "ADXL345 accelerometer",
+      "summary": "3-axis ±16 g accelerometer over SPI (full-resolution, 256 LSB/g).",
+      "detail": "3-axis ±16 g accelerometer over SPI (full-resolution, 256 LSB/g).",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "CS GPIO pin wired as SPI chip-select (e.g. \"PA4\")."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "accel_x",
+          "label": "Accel X",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0
+        },
+        {
+          "key": "accel_y",
+          "label": "Accel Y",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0
+        },
+        {
+          "key": "accel_z",
+          "label": "Accel Z",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0
+        }
+      ]
     }
   ]
 }

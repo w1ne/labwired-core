@@ -76,6 +76,9 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     // interpreted by the generic GenericI2cDevice (zero per-part Rust).
     &components::declarative_i2c::SHT31_KIT,
     &components::declarative_i2c::BH1750_KIT,
+    // Declarative SPI devices — model lives entirely in configs/devices/*.yaml,
+    // interpreted by the generic GenericSpiDevice (zero per-part Rust).
+    &components::declarative_spi::ADXL345_KIT,
 ];
 
 /// Borrow the registry slice.

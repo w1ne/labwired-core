@@ -308,6 +308,35 @@ impl PeripheralKit for DeclarativeSpiKit {
     }
 }
 
+// ─── Registry statics ──────────────────────────────────────────────────────
+//
+// A `DeclarativeSpiKit` is parsed from YAML at runtime, but the registry
+// (`registry::KITS`) is a const slice of `&'static dyn PeripheralKit`. A
+// `static LazyLock<DeclarativeSpiKit>` is the const-initialisable cell that
+// bridges the two: the descriptor is parsed once on first access, and the
+// `PeripheralKit` impl below forwards through it. Real parts get one static
+// each here and one line in `registry::KITS`; the descriptor lives entirely in
+// `configs/devices/*.yaml`.
+
+use std::sync::LazyLock;
+
+impl PeripheralKit for LazyLock<DeclarativeSpiKit> {
+    fn metadata(&self) -> &'static KitMetadata {
+        LazyLock::force(self).metadata()
+    }
+    fn attach(&self, ctx: &mut AttachCtx<'_>) -> Result<()> {
+        LazyLock::force(self).attach(ctx)
+    }
+}
+
+/// Analog Devices ADXL345 accelerometer (declarative `adxl345.yaml`).
+pub static ADXL345_KIT: LazyLock<DeclarativeSpiKit> = LazyLock::new(|| {
+    DeclarativeSpiKit::from_yaml(
+        labwired_config::embedded_device_yaml("adxl345").expect("adxl345 descriptor embedded"),
+    )
+    .expect("adxl345.yaml is a valid declarative spi descriptor")
+});
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -476,5 +505,31 @@ behavior:
       - { name: A, addr: 0, width: 1, endian: le, access: r }
 "#;
         assert!(DeclarativeSpiKit::from_yaml(yaml).is_err());
+    }
+
+    #[test]
+    fn adxl345_kit_reads_devid_and_signed_axis() {
+        let kit = DeclarativeSpiKit::from_yaml(
+            labwired_config::embedded_device_yaml("adxl345").unwrap(),
+        )
+        .unwrap();
+        assert_eq!(kit.metadata().device_type, "adxl345_spi");
+        // Build the device and read DEVID + a negative Z.
+        let mut d = crate::peripherals::components::declarative_spi::GenericSpiDevice::from_yaml(
+            labwired_config::embedded_device_yaml("adxl345").unwrap(),
+            "PA4",
+        )
+        .unwrap();
+        d.cs_select();
+        d.transfer(0x80); // read DEVID (0x00)
+        assert_eq!(d.transfer(0x00), 0xE5);
+        d.cs_release();
+        d.set_input("accel_z", -1.0).unwrap();
+        d.cs_select();
+        d.transfer(0x80 | 0x36); // read DATAZ0
+        let lo = d.transfer(0x00);
+        let hi = d.transfer(0x00);
+        d.cs_release();
+        assert_eq!(u16::from_le_bytes([lo, hi]), 0xFF00); // -256 two's-complement
     }
 }
