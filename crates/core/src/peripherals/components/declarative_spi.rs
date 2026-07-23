@@ -179,8 +179,7 @@ impl SpiDevice for GenericSpiDevice {
                     let set = (mosi >> bit) & 1 == 1;
                     self.is_read = Some(set == self.framing.rw_read_high);
                 }
-                self.cur_addr =
-                    Some((mosi >> self.framing.addr_shift) & self.framing.addr_mask);
+                self.cur_addr = Some((mosi >> self.framing.addr_shift) & self.framing.addr_mask);
             }
             return 0x00;
         }
@@ -191,9 +190,7 @@ impl SpiDevice for GenericSpiDevice {
         if write {
             self.write_acc.push(mosi);
             if let Some(reg) = self.find_register(addr) {
-                if reg.access == RegisterAccess::Rw
-                    && self.write_acc.len() == reg.width as usize
-                {
+                if reg.access == RegisterAccess::Rw && self.write_acc.len() == reg.width as usize {
                     let val = unpack(&self.write_acc, reg.endian);
                     self.reg_values.insert(reg.name.clone(), val);
                     self.write_acc.clear();
@@ -418,7 +415,10 @@ mod tests {
         let kit = DeclarativeSpiKit::from_yaml(FIXTURE).unwrap();
         let m = kit.metadata();
         assert_eq!(m.device_type, "test_spi_fixture");
-        assert!(matches!(m.transport, crate::peripherals::kit::Transport::Spi));
+        assert!(matches!(
+            m.transport,
+            crate::peripherals::kit::Transport::Spi
+        ));
         assert_eq!(m.inputs.len(), 1);
         assert!(m.inputs.iter().any(|c| c.key == "accel_x"));
     }

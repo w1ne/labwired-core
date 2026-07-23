@@ -98,8 +98,15 @@ mod tests {
 
     fn reg(name: &str, addr: u8, width: u8, endian: Endian, source: Option<&str>) -> RegisterSpec {
         RegisterSpec {
-            name: name.into(), addr, width, endian, access: RegisterAccess::R,
-            reset: 0, source: source.map(Into::into), encode: None, scale_from: None,
+            name: name.into(),
+            addr,
+            width,
+            endian,
+            access: RegisterAccess::R,
+            reset: 0,
+            source: source.map(Into::into),
+            encode: None,
+            scale_from: None,
         }
     }
 

@@ -3857,8 +3857,15 @@ metadata:
     fn i2c_register_alias_still_names_the_shared_struct() {
         // The rename must not break existing I2c-named references.
         let _r: I2cRegister = RegisterSpec {
-            name: "R".into(), addr: 0, width: 1, endian: Endian::Le,
-            access: I2cAccess::R, reset: 0, source: None, encode: None, scale_from: None,
+            name: "R".into(),
+            addr: 0,
+            width: 1,
+            endian: Endian::Le,
+            access: I2cAccess::R,
+            reset: 0,
+            source: None,
+            encode: None,
+            scale_from: None,
         };
     }
 }
