@@ -554,6 +554,201 @@
       ]
     },
     {
+      "device_type": "aht20",
+      "label": "AHT20 Temp/Humidity",
+      "summary": "Aosong AHT20 I²C temperature and humidity sensor.",
+      "detail": "Command-stream protocol at 0x38 with fixed 25 °C / 50 %RH measurement and BUSY-poll semantics for firmware that triggers then reads.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x38 (fixed on real silicon)."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "bmp280",
+      "label": "BMP280 Pressure",
+      "summary": "Bosch BMP280 I²C pressure + temperature sensor (no humidity).",
+      "detail": "Register map compatible with common Arduino BMP280 libraries. CHIP_ID 0x58 at 0xD0; fixed ADC sample data for deterministic labs.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x76 (0x77 alternate)."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "bh1750",
+      "label": "BH1750 Ambient Light",
+      "summary": "ROHM BH1750 I²C digital light sensor (lux).",
+      "detail": "Default address 0x23. Continuous H-res mode returns 16-bit BE raw ≈ lux×1.2. Host sets lux via SimInput.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x23 (ADDR low)."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "lux",
+          "label": "Illuminance",
+          "unit": "lx",
+          "min": 0.0,
+          "max": 100000.0
+        }
+      ]
+    },
+    {
+      "device_type": "pcf8574",
+      "label": "PCF8574 I/O Expander",
+      "summary": "NXP PCF8574 8-bit I²C quasi-bidirectional port expander.",
+      "detail": "Default address 0x20. Write one byte to latch outputs; read returns the port value (host may override via SimInput port).",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x20."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "port",
+          "label": "Port",
+          "unit": "byte",
+          "min": 0.0,
+          "max": 255.0
+        }
+      ]
+    },
+    {
+      "device_type": "rc522",
+      "label": "RC522 RFID",
+      "summary": "MFRC522 SPI RFID reader register shell (no RF).",
+      "detail": "VersionReg 0x37 returns 0x92. Soft reset via CommandReg is accepted. ISO14443 card UID / crypto is not simulated.",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "SPI CS GPIO pin name (module SDA/NSS). Defaults to PA4."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "sht30",
+      "label": "SHT30 Temp/Humidity",
+      "summary": "Sensirion SHT30 I²C temperature and humidity sensor.",
+      "detail": "Default address 0x44. Single-shot high-repeatability framing with CRC. Host sets temperature (°C) and humidity (%RH).",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x44."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "temperature",
+          "label": "Temperature",
+          "unit": "C",
+          "min": -40.0,
+          "max": 125.0
+        },
+        {
+          "key": "humidity",
+          "label": "Humidity",
+          "unit": "%RH",
+          "min": 0.0,
+          "max": 100.0
+        }
+      ]
+    },
+    {
+      "device_type": "at24c256",
+      "label": "AT24C256 EEPROM",
+      "summary": "I²C 32 KiB EEPROM shell (256-byte sim window).",
+      "detail": "Default address 0x50. Two-byte address pointer then sequential R/W. Simulated memory is 256 bytes wrapping for compactness.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x50."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "pn532",
+      "label": "PN532 NFC",
+      "summary": "NXP PN532 I²C NFC controller probe shell (no RF).",
+      "detail": "Responds to GetFirmwareVersion so library init succeeds. ISO14443 card UID / peer-to-peer is not simulated.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to 0x24."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "lora-sx1278",
+      "label": "LoRa SX1278 / RA-02",
+      "summary": "Semtech SX1278 SPI LoRa register shell (no RF).",
+      "detail": "Version reg 0x42 = 0x12. OpMode and companion regs R/W. Packet air interface is not simulated.",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "SPI NSS GPIO pin. Defaults to PA4."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "sim800l",
+      "label": "SIM800L GSM",
+      "summary": "SIM800L UART AT command shell (no cellular RF).",
+      "detail": "Responds OK to AT/AT+…; CGMI/CGMM/CSQ/CREG stubs for init sequences. SMS/GPRS air interface is not simulated.",
+      "transport": "uart",
+      "category": "uart",
+      "config_keys": [],
+      "labs": [],
+      "inputs": []
+    },
+    {
       "device_type": "oled-ssd1306",
       "label": "SSD1306 OLED",
       "summary": "128×64 monochrome OLED display over I2C with a paged framebuffer.",

@@ -136,6 +136,10 @@ impl SystemBus {
             hcsr04: Vec::new(),
             gpio_devices: Vec::new(),
             ws2812: Vec::new(),
+            servos: Vec::new(),
+            step_dir_motors: Vec::new(),
+            h_bridge_motors: Vec::new(),
+            unipolar_steppers: Vec::new(),
             tm1637: Vec::new(),
             hx711: Vec::new(),
             seven_segment: Vec::new(),
@@ -674,6 +678,136 @@ impl SystemBus {
                     }
                     bus.ws2812.push(strip);
                 }
+                "servo" | "sg90" | "mg996r" => {
+                    // Hobby PWM servo on one control pin. Driven by GPIO edges
+                    // (and LEDC duty observers when LEDC is present).
+                    let pin_label = ext
+                        .config
+                        .get("control_pin")
+                        .or_else(|| ext.config.get("pwm_pin"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("GPIO18");
+                    let pin = Self::parse_esp32s3_gpio_pin(pin_label)
+                        .or_else(|| Self::parse_esp32_gpio_pin(pin_label))
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "servo '{}' control_pin '{}' is not a parseable GPIO",
+                                ext.id,
+                                pin_label
+                            )
+                        })?;
+                    let cal = match ext.r#type.as_str() {
+                        "sg90" => {
+                            crate::peripherals::components::servo::ServoCal::sg90()
+                        }
+                        "mg996r" => {
+                            crate::peripherals::components::servo::ServoCal::mg996r()
+                        }
+                        _ => crate::peripherals::components::servo::ServoCal::standard(),
+                    };
+                    let servo = std::sync::Arc::new(
+                        crate::peripherals::components::servo::Servo::new(cal, pin),
+                    );
+                    Self::install_gpio_observer(&mut bus, servo.clone());
+                    // Also bind LEDC channels if present (ESP32 Arduino Servo path).
+                    if let Some(idx) = bus.find_peripheral_index_by_name("ledc") {
+                        if let Some(ledc) = bus.peripherals[idx].dev.as_any_mut().and_then(|a| {
+                            a.downcast_mut::<crate::peripherals::esp32::ledc::Ledc>()
+                        }) {
+                            // Observe all channels; driver filters by channel id
+                            // when firmware assigns the servo's pin to a channel.
+                            for ch in 0..8u64 {
+                                ledc.add_duty_observer(std::sync::Arc::new(
+                                    crate::peripherals::components::servo::LedcServoDriver::new(
+                                        ch,
+                                        servo.clone(),
+                                    ),
+                                ));
+                            }
+                        }
+                    }
+                    bus.servos.push(servo);
+                }
+                "a4988" | "drv8825" | "tmc2209" => {
+                    let step = Self::gpio_from_config(ext, "step_pin", "STEP", "GPIO16")?;
+                    let dir = Self::gpio_from_config(ext, "dir_pin", "DIR", "GPIO17")?;
+                    let en = Self::optional_gpio_from_config(ext, "en_pin", "EN");
+                    let mut motor =
+                        crate::peripherals::components::step_dir_motor::StepDirMotor::new(
+                            &ext.id, step, dir, en,
+                        );
+                    if ext.r#type == "tmc2209" {
+                        // SilentStepStick often 1/16 microstep default → treat as 1.8/16
+                        motor = motor.with_config(
+                            crate::peripherals::components::step_dir_motor::StepDirConfig {
+                                degrees_per_step: 1.8 / 16.0,
+                                enable_active_low: true,
+                            },
+                        );
+                    }
+                    let motor = std::sync::Arc::new(motor);
+                    Self::install_gpio_observer(&mut bus, motor.clone());
+                    bus.step_dir_motors.push(motor);
+                }
+                "l298n" | "tb6612" | "l293d" => {
+                    // First motor channel (A)
+                    let in1 = Self::gpio_from_config(ext, "in1_pin", "IN1", "GPIO16")
+                        .or_else(|_| Self::gpio_from_config(ext, "ain1_pin", "AIN1", "GPIO16"))?;
+                    let in2 = Self::gpio_from_config(ext, "in2_pin", "IN2", "GPIO17")
+                        .or_else(|_| Self::gpio_from_config(ext, "ain2_pin", "AIN2", "GPIO17"))?;
+                    let en = Self::optional_gpio_from_config(ext, "en_pin", "ENA")
+                        .or_else(|| Self::optional_gpio_from_config(ext, "pwma_pin", "PWMA"));
+                    let motor = std::sync::Arc::new(
+                        crate::peripherals::components::h_bridge_motor::HBridgeMotor::new(
+                            format!("{}-a", ext.id),
+                            in1,
+                            in2,
+                            en,
+                        ),
+                    );
+                    Self::install_gpio_observer(&mut bus, motor.clone());
+                    bus.h_bridge_motors.push(motor);
+                    // Optional B channel when IN3/IN4 (or BIN*) are configured.
+                    let has_b = ext.config.contains_key("in3_pin")
+                        || ext.config.contains_key("IN3")
+                        || ext.config.contains_key("bin1_pin")
+                        || ext.config.contains_key("BIN1");
+                    if has_b {
+                      if let (Ok(b1), Ok(b2)) = (
+                        Self::gpio_from_config(ext, "in3_pin", "IN3", "GPIO18")
+                            .or_else(|_| Self::gpio_from_config(ext, "bin1_pin", "BIN1", "GPIO18")),
+                        Self::gpio_from_config(ext, "in4_pin", "IN4", "GPIO19")
+                            .or_else(|_| Self::gpio_from_config(ext, "bin2_pin", "BIN2", "GPIO19")),
+                    ) {
+                        let enb = Self::optional_gpio_from_config(ext, "enb_pin", "ENB")
+                            .or_else(|| Self::optional_gpio_from_config(ext, "pwmb_pin", "PWMB"));
+                        let motor_b = std::sync::Arc::new(
+                            crate::peripherals::components::h_bridge_motor::HBridgeMotor::new(
+                                format!("{}-b", ext.id),
+                                b1,
+                                b2,
+                                enb,
+                            ),
+                        );
+                        Self::install_gpio_observer(&mut bus, motor_b.clone());
+                        bus.h_bridge_motors.push(motor_b);
+                      }
+                    }
+                }
+                "uln2003" | "stepper-28byj48" => {
+                    let p1 = Self::gpio_from_config(ext, "in1_pin", "IN1", "GPIO16")?;
+                    let p2 = Self::gpio_from_config(ext, "in2_pin", "IN2", "GPIO17")?;
+                    let p3 = Self::gpio_from_config(ext, "in3_pin", "IN3", "GPIO18")?;
+                    let p4 = Self::gpio_from_config(ext, "in4_pin", "IN4", "GPIO19")?;
+                    let motor = std::sync::Arc::new(
+                        crate::peripherals::components::unipolar_stepper::UnipolarStepper::new_28byj48(
+                            &ext.id,
+                            [p1, p2, p3, p4],
+                        ),
+                    );
+                    Self::install_gpio_observer(&mut bus, motor.clone());
+                    bus.unipolar_steppers.push(motor);
+                }
                 "can-diagnostic-tester" | "uds-diagnostic-tester" => {
                     if bus.find_peripheral_index_by_name(&ext.connection).is_none() {
                         return Err(anyhow::anyhow!(
@@ -839,5 +973,69 @@ impl SystemBus {
             None => bus.derive_walk_deletable(),
         };
         Ok(bus)
+    }
+
+    /// Install a GPIO edge observer on ESP32 / ESP32-S3 GPIO models when present.
+    fn install_gpio_observer<T>(bus: &mut SystemBus, observer: std::sync::Arc<T>)
+    where
+        T: crate::peripherals::esp32s3::gpio::GpioObserver
+            + crate::peripherals::esp32::gpio::GpioObserver
+            + 'static,
+    {
+        if let Some(idx) = bus.find_peripheral_index_by_name("gpio") {
+            let any = bus.peripherals[idx].dev.as_any_mut();
+            if let Some(gpio) = any.and_then(|a| {
+                a.downcast_mut::<crate::peripherals::esp32s3::gpio::Esp32s3Gpio>()
+            }) {
+                gpio.add_observer(observer);
+                return;
+            }
+        }
+        // Classic ESP32 GPIO (separate type).
+        if let Some(idx) = bus.find_peripheral_index_by_name("gpio") {
+            if let Some(gpio) = bus.peripherals[idx].dev.as_any_mut().and_then(|a| {
+                a.downcast_mut::<crate::peripherals::esp32::gpio::Esp32Gpio>()
+            }) {
+                gpio.add_observer(observer);
+            }
+        }
+    }
+
+    fn gpio_from_config(
+        ext: &labwired_config::ExternalDevice,
+        key: &str,
+        alt_key: &str,
+        default: &str,
+    ) -> anyhow::Result<u8> {
+        let label = ext
+            .config
+            .get(key)
+            .or_else(|| ext.config.get(alt_key))
+            .and_then(|v| v.as_str())
+            .unwrap_or(default);
+        Self::parse_esp32s3_gpio_pin(label)
+            .or_else(|| Self::parse_esp32_gpio_pin(label))
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "{}: pin '{}' (config {}/{}) is not a parseable GPIO",
+                    ext.id,
+                    label,
+                    key,
+                    alt_key
+                )
+            })
+    }
+
+    fn optional_gpio_from_config(
+        ext: &labwired_config::ExternalDevice,
+        key: &str,
+        alt_key: &str,
+    ) -> Option<u8> {
+        let label = ext
+            .config
+            .get(key)
+            .or_else(|| ext.config.get(alt_key))
+            .and_then(|v| v.as_str())?;
+        Self::parse_esp32s3_gpio_pin(label).or_else(|| Self::parse_esp32_gpio_pin(label))
     }
 }

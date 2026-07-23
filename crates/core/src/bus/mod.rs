@@ -318,6 +318,17 @@ pub struct SystemBus {
     /// edge-driven with no per-tick pass. Held here as `Arc` clones purely so the
     /// UI/oracle can read the decoded pixels back. Empty by default → zero cost.
     pub ws2812: Vec<std::sync::Arc<crate::peripherals::components::ws2812::Ws2812>>,
+    /// Hobby PWM servos (SG90/MG996R). GPIO-observer driven; held for angle readback.
+    pub servos: Vec<std::sync::Arc<crate::peripherals::components::servo::Servo>>,
+    /// STEP/DIR steppers (A4988/DRV8825/TMC2209). GPIO-observer driven.
+    pub step_dir_motors:
+        Vec<std::sync::Arc<crate::peripherals::components::step_dir_motor::StepDirMotor>>,
+    /// H-bridge channels (L298N/TB6612). GPIO-observer driven.
+    pub h_bridge_motors:
+        Vec<std::sync::Arc<crate::peripherals::components::h_bridge_motor::HBridgeMotor>>,
+    /// 4-phase unipolar steppers (28BYJ-48 + ULN2003). GPIO-observer driven.
+    pub unipolar_steppers:
+        Vec<std::sync::Arc<crate::peripherals::components::unipolar_stepper::UnipolarStepper>>,
     /// TM1637 4-digit 7-segment displays bit-banged over two GPIO lines. Each is
     /// driven by the CLK/DIO GPIO write-hook (`maybe_clock_tm1637`), which feeds
     /// line transitions to the display's protocol state machine. Purely
