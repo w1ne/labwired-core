@@ -1,0 +1,168 @@
+name: Core Arduino Matrix Smoke
+
+# Stock Arduino on every boards.yaml MCU: L0 + L2 + L3_i2c_sensor (INA219 kit).
+# Required status: `arduino-matrix-gate` (branch protection).
+# See validation/FRAMEWORK_FLEET.md.
+
+on:
+  # Slow fleet: nightly + main tip + manual. Not on PRs (PR merge target <1 min).
+  schedule:
+    - cron: "20 2 * * *"
+  push:
+    branches:
+      - main
+    paths:
+      - "validation/arduino-matrix/**"
+      - "validation/matrix_lib/**"
+      - "configs/chips/**"
+      - "configs/systems/**"
+      - "crates/core/**"
+      - "crates/cli/**"
+      - ".github/workflows/core-arduino-matrix-smoke.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: core-arduino-matrix-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  arduino-matrix:
+    name: arduino-${{ matrix.board }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        board:
+          - esp32
+          - esp32c3
+          - esp32s3
+          - nrf52832
+          - nrf52840
+          - rp2040
+          - stm32f103
+          - stm32f401
+          - stm32f407
+          - stm32g474re
+          - stm32h563
+          - stm32l073
+          - stm32l476
+          - stm32wb55
+          - stm32wba52
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-arduino-matrix
+          workspaces: |
+            . -> target
+
+      - name: Build release CLI
+        run: cargo build -p labwired-cli --release
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # No distro gcc-arm-none-eabi apt: PlatformIO installs its own toolchains,
+      # and parallel apt-get across matrix jobs has hung runners for 20+ minutes.
+
+      - name: Cache PlatformIO packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+          key: pio-${{ matrix.board }}-${{ hashFiles('validation/arduino-matrix/boards.yaml') }}
+          restore-keys: |
+            pio-${{ matrix.board }}-
+
+      - name: Install PyYAML + PlatformIO
+        run: |
+          python -m pip install --quiet 'platformio>=6.1' pyyaml
+          # Warm platforms used by the thin matrix (platforms pull frameworks).
+          case "${{ matrix.board }}" in
+            stm32*)   pio pkg install -g -p ststm32 ;;
+            nrf*)     pio pkg install -g -p nordicnrf52 ;;
+            rp2040)   pio pkg install -g -p raspberrypi ;;
+            esp32*)   pio pkg install -g -p espressif32 ;;
+          esac
+
+      - name: Arduino matrix (L0 + L2 + L3 I2C kit)
+        env:
+          LABWIRED_RP2040_BOOTROM: ${{ github.workspace }}/crates/core/roms/rp2040/bootrom.bin
+        run: |
+          set -euo pipefail
+          # Absolute --out so PIO work dirs never break under cwd tricks.
+          OUT="${{ github.workspace }}/validation/arduino-matrix/out-ci/${{ matrix.board }}"
+          python3 validation/arduino-matrix/run_matrix.py \
+            --boards "${{ matrix.board }}" \
+            --sketches L0_serial_boot,L2_blink_serial,L3_i2c_sensor \
+            --out "$OUT"
+
+      - name: Upload board artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arduino-matrix-${{ matrix.board }}
+          path: validation/arduino-matrix/out-ci/${{ matrix.board }}/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  arduino-matrix-gate:
+    name: arduino-matrix-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: arduino-matrix
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: validation/arduino-matrix/out-ci
+          pattern: arduino-matrix-*
+          merge-multiple: false
+
+      - name: Require full fleet cells pass
+        run: |
+          python3 - <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          # 15 boards × 3 sketches (L0, L2, L3)
+          EXPECTED = 15 * 3
+          root = Path("validation/arduino-matrix/out-ci")
+          results = list(root.rglob("results.json"))
+          if not results:
+              print("::error::no results.json from arduino matrix jobs", file=sys.stderr)
+              sys.exit(1)
+
+          bad = []
+          total = 0
+          for path in results:
+              data = json.loads(path.read_text())
+              for row in data.get("rows") or []:
+                  total += 1
+                  st = row.get("status")
+                  # skipped = explicit boards.yaml sketches_skip (e.g. STM32 L3 Wire)
+                  if st not in ("pass", "skipped"):
+                      bad.append(f"{row.get('board')}/{row.get('sketch')}: {st}")
+          print(f"cells={total} expected>={EXPECTED} fails={len(bad)}")
+          for b in bad:
+              print("FAIL", b)
+          if total < EXPECTED:
+              print(f"::error::expected ≥{EXPECTED} cells, got {total}", file=sys.stderr)
+              sys.exit(1)
+          if bad:
+              sys.exit(1)
+          print("arduino matrix gate: full fleet pass (pass|skipped ok)")
+          PY

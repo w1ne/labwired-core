@@ -11,6 +11,7 @@ SYM = {
     "pass": "✅",
     "compile_fail": "🔧",
     "compile_timeout": "⏱️",
+    "skipped": "⏭️",
     "build_fail": "🔧",
     "build_timeout": "⏱️",
     "toolchain_missing": "📦",

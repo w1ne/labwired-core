@@ -171,6 +171,20 @@ impl Esp32I2c {
         let tx = (self.tx_fifo.len() as u32) & 0x3F;
         (self.sr & SR_ACK_REC) | (rx << 8) | (tx << 18)
     }
+
+    /// Resolve a slave from SLAVE_ADDR (7-bit or 8-bit shifted form). Used when
+    /// Arduino/ESP-IDF parks the target in SLAVE_ADDR and does not push the
+    /// address byte into the TX FIFO.
+    fn find_slave_from_slave_addr_register(&self) -> Option<usize> {
+        let raw = self.slave_addr & 0x7FFF;
+        if raw <= 0x7F {
+            if let Some(idx) = self.slaves.iter().position(|s| s.address() == raw as u8) {
+                return Some(idx);
+            }
+        }
+        let shifted = ((raw >> 1) & 0x7F) as u8;
+        self.slaves.iter().position(|s| s.address() == shifted)
+    }
 }
 
 impl Default for Esp32I2c {
@@ -347,6 +361,20 @@ impl Esp32I2c {
                     self.cmds[idx] |= CMD_DONE_BIT;
                 }
                 OP_WRITE => {
+                    // Empty WRITE (byte_num=0) after RSTART: Arduino Wire probe
+                    // often parks the 7-bit target in SLAVE_ADDR and issues a
+                    // zero-payload WRITE. Resolve the slave from SLAVE_ADDR so
+                    // matrix L3 ACK succeeds (mirrors ESP32-S3 engine).
+                    if expects_addr && byte_num == 0 {
+                        active = self.find_slave_from_slave_addr_register();
+                        if let Some(slave_idx) = active {
+                            self.slaves[slave_idx].start();
+                            self.sr |= SR_ACK_REC;
+                        } else {
+                            self.int_raw |= INT_NACK;
+                        }
+                        expects_addr = false;
+                    }
                     for i in 0..byte_num {
                         let b = self.tx_fifo.pop_front().unwrap_or(0);
                         self.tx_pop_count += 1;
@@ -355,6 +383,16 @@ impl Esp32I2c {
                             let addr = b >> 1;
                             active = self.slaves.iter().position(|s| s.address() == addr);
                             if active.is_none() {
+                                // Fallback: address only in SLAVE_ADDR, payload in FIFO.
+                                active = self.find_slave_from_slave_addr_register();
+                                if let Some(slave_idx) = active {
+                                    self.slaves[slave_idx].start();
+                                    self.sr |= SR_ACK_REC;
+                                    // First FIFO byte is data when SLAVE_ADDR holds target.
+                                    self.slaves[slave_idx].write(b);
+                                    expects_addr = false;
+                                    continue;
+                                }
                                 self.int_raw |= INT_NACK;
                             } else {
                                 self.sr |= SR_ACK_REC;

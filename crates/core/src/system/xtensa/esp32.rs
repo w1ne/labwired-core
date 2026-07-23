@@ -20,6 +20,15 @@ use crate::Bus;
 fn build_i2c_external_device(
     ext: &labwired_config::ExternalDevice,
 ) -> Option<Box<dyn crate::peripherals::i2c::I2cDevice>> {
+    // Prefer the shared factory (includes kit types like ina219) so ESP classic
+    // and S3 stay in lockstep with the generic from_config attach path.
+    if let Some(dev) = crate::peripherals::components::build_external_i2c_device(
+        &ext.r#type,
+        &ext.id,
+        &ext.config,
+    ) {
+        return Some(dev);
+    }
     let addr = |default: u8| {
         ext.config
             .get("i2c_address")

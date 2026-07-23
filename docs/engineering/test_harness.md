@@ -124,8 +124,12 @@ scheduler identity unless a workflow enables the feature.
 
 | Matrix | Driver | Shared engine |
 |--------|--------|----------------|
-| Arduino L0–L2 | `validation/arduino-matrix/run_matrix.py` | `validation/matrix_lib/` |
+| Arduino L0–L3 | `validation/arduino-matrix/run_matrix.py` | `validation/matrix_lib/` |
 | Zephyr L0–L2 | `validation/zephyr-matrix/run_matrix.py` | `validation/matrix_lib/` |
+
+**Fleet bar** (every supported chip × Arduino/Zephyr × kits):  
+[`validation/FRAMEWORK_FLEET.md`](../../validation/FRAMEWORK_FLEET.md) ·  
+`python3 validation/framework_fleet_report.py`
 
 ---
 
@@ -157,6 +161,32 @@ scheduler identity unless a workflow enables the feature.
   RP2040 SIO:25); C3 `rmt:0` synthetic TX edges + `min_rmt_tx` (single
   `esp32c3_rmt` entry — no declarative+behavioral dual stack); S3 `min_rmt_tx`
   inspect count.
+
+---
+
+## CI map (PR <1 min / nightly slow gates)
+
+| Workflow / job | When | Required to merge? | What it proves |
+|----------------|------|--------------------|----------------|
+| **pr-gate** | every PR | **yes** | fmt, validation drift, clippy+lib tests for **core+CLI only** (target **&lt;1 min**) |
+| **release-runner-contract** | every PR | no (advisory) | release runner docs/action contract |
+| **core-integrity** | main push + nightly | no | full workspace clippy/tests + ratchet + walk-diffs |
+| **coverage-matrix-scoreboard** | **nightly** + main | no | UART/CAN smokes at 100% pass |
+| **onboarding-scoreboard** | **nightly** + main | no | bare-metal UART/PIO fixtures |
+| **arduino-matrix-gate** | **nightly** + main | no | full Arduino fleet L0+L2+L3 |
+| **ci-runner-image** | main + nightly | no | `Dockerfile.ci` still runs CLI |
+| **core-full** | nightly + `[full-ci]` + manual | no | full workspace tests + Tier-1 matrix |
+| **llvm-cov** (Core Coverage Gate) | weekly | no | line coverage floor on core+cli |
+
+Branch protection: required context **`pr-gate`** only (+ **`strict: true`**).
+
+Slow matrices are **not** on `pull_request` so required-check path-filter
+stalls cannot block merges; they still run every night and on main.
+
+### Pre-push (local)
+
+`scripts/pre-push.sh`: fmt, clippy (core+cli), walk-deletion + RP2040 vector
+tests, LogicTap unit smokes. Full workspace: `LABWIRED_PREPUSH_FULL=1`.
 
 Work log: [`test_harness_reorg_log.md`](test_harness_reorg_log.md).
 

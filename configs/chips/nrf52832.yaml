@@ -45,6 +45,12 @@ peripherals:
     base_address: 0x40008000
     size: "4KB"
     irq: 8
+  # SPIM0/TWIM0 share 0x40003000 — Zephyr arduino_i2c / i2c0 (and TWIM overlay).
+  - id: "i2c0"
+    type: "nrf52840_serial"
+    base_address: 0x40003000
+    size: "4KB"
+    irq: 3
   - id: "twi1"
     type: "nrf52840_i2c"
     base_address: 0x40004000

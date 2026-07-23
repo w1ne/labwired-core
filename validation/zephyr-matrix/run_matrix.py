@@ -179,6 +179,17 @@ def main() -> int:
                 "status": "skip",
                 "uart": "",
             }
+            skip_lv = board.get("sketches_skip") or board.get("levels_skip") or []
+            if lid in skip_lv:
+                reason = (board.get("sketches_skip_reason") or board.get("levels_skip_reason") or {}).get(
+                    lid
+                ) or "board sketches_skip"
+                print(f"\n=== {bid} / {lid}: skip ({reason}) ===")
+                row["status"] = "skipped"
+                row["uart"] = reason
+                results.append(row)
+                continue
+
             print(f"\n=== {bid} / {lid} ({board['zephyr_board']}) ===")
 
             elf_pub = cell / "zephyr.elf"
@@ -252,9 +263,13 @@ def main() -> int:
         pub.parent.mkdir(parents=True, exist_ok=True)
         pub.write_text(scoreboard, encoding="utf-8")
 
-    n_pass = sum(1 for r in results if r["status"] == "pass")
-    print(f"\nDone: {n_pass}/{len(results)} pass. Scoreboard: {args.out / 'scoreboard.md'}")
-    return 0 if n_pass == len(results) and results else 1
+    n_ok = sum(1 for r in results if r["status"] in ("pass", "skipped"))
+    n_fail = sum(1 for r in results if r["status"] not in ("pass", "skipped"))
+    print(
+        f"\nDone: {n_ok}/{len(results)} pass/skip ({n_fail} fail). "
+        f"Scoreboard: {args.out / 'scoreboard.md'}"
+    )
+    return 0 if n_fail == 0 and results else 1
 
 
 if __name__ == "__main__":

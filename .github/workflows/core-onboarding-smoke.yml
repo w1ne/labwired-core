@@ -1,6 +1,9 @@
 name: Core Onboarding Smoke
 
 on:
+  # Slow gates: nightly + main tip + manual. Not on PRs (PR merge target <1 min).
+  schedule:
+    - cron: "10 2 * * *"
   push:
     branches:
       - main
@@ -8,15 +11,8 @@ on:
       - "configs/chips/**"
       - "configs/systems/**"
       - "examples/**"
-      - "crates/labwired-models-**"
-      - ".github/workflows/core-onboarding-smoke.yml"
-  pull_request:
-    branches:
-      - main
-    paths:
-      - "configs/chips/**"
-      - "configs/systems/**"
-      - "examples/**"
+      - "crates/core/**"
+      - "crates/cli/**"
       - "crates/labwired-models-**"
       - ".github/workflows/core-onboarding-smoke.yml"
   workflow_dispatch:

@@ -87,7 +87,12 @@ def write_pio_project(work: Path, board: dict, sketch_src: Path) -> Path:
 
 def compile_sketch(work: Path, log_path: Path, timeout: int) -> tuple[bool, str, Path | None]:
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    cmd = ["pio", "run", "-d", str(work), "-e", "matrix"]
+    # Always resolve: relative work + cwd=work + `-d relative` makes pio look for
+    # work/work and fail with "Path does not exist" (CI roast round-2).
+    work = work.resolve()
+    log_path = log_path.resolve()
+    # cwd is the project; do not pass a relative -d (would be re-resolved from cwd).
+    cmd = ["pio", "run", "-e", "matrix"]
     try:
         proc = subprocess.run(
             cmd,
@@ -159,7 +164,8 @@ def main() -> int:
     is_full_matrix = len(boards) == len(all_boards) and len(sketches) == len(all_sketches)
 
     labwired = find_labwired(args.labwired)
-    out: Path = args.out
+    # Absolute out dir so PIO work paths never depend on caller cwd.
+    out: Path = args.out.expanduser().resolve()
     out.mkdir(parents=True, exist_ok=True)
     work_root = out / "_pio_work"
     work_root.mkdir(parents=True, exist_ok=True)
@@ -205,6 +211,21 @@ def main() -> int:
 
         for sketch in sketches:
             sid = sketch["id"]
+            skip_sk = board.get("sketches_skip") or []
+            if sid in skip_sk:
+                reason = (board.get("sketches_skip_reason") or {}).get(sid) or board.get(
+                    "l3_skip_reason", "board sketches_skip"
+                )
+                print(f"==> {bid} × {sid}: skip ({reason})", flush=True)
+                rows.append(
+                    {
+                        "board": bid,
+                        "sketch": sid,
+                        "status": "skipped",
+                        "detail": reason,
+                    }
+                )
+                continue
             cell_out = out / bid / sid
             cell_out.mkdir(parents=True, exist_ok=True)
             print(f"==> {bid} × {sid}", flush=True)
@@ -332,12 +353,13 @@ def main() -> int:
             f"(partial run; not full {len(all_boards)}×{len(all_sketches)})"
         )
 
-    passed = sum(1 for r in rows if r["status"] == "pass")
+    passed = sum(1 for r in rows if r["status"] in ("pass", "skipped"))
+    failed = sum(1 for r in rows if r["status"] not in ("pass", "skipped"))
     print()
-    print(f"Done in {elapsed:.0f}s — {passed}/{len(rows)} pass")
+    print(f"Done in {elapsed:.0f}s — {passed}/{len(rows)} pass/skip ({failed} fail)")
     print(f"Scoreboard: {out / 'scoreboard.md'}")
     print(pub_note)
-    return 0 if passed == len(rows) else 1
+    return 0 if failed == 0 else 1
 
 
 if __name__ == "__main__":

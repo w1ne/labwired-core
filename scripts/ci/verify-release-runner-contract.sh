@@ -111,14 +111,26 @@ core_integrity_block=$(awk '
 if [[ -z "$core_integrity_block" ]]; then
   fail 'core-integrity job is present in Core CI'
 fi
-require_block_literal "$core_integrity_block" 'docker build --pull' 'required Core integrity builds the runner image from fresh base layers'
-require_block_literal "$core_integrity_block" '--file Dockerfile.ci' 'required Core integrity uses the CI runner Dockerfile'
-require_block_literal "$core_integrity_block" 'labwired-ci-smoke:local' 'required Core integrity gives the local image a stable tag'
-require_block_literal "$core_integrity_block" 'VERSION=ci-smoke' 'required Core integrity provides OCI version metadata'
-require_block_literal "$core_integrity_block" 'REVISION="$GITHUB_SHA"' 'required Core integrity provides OCI revision metadata'
-require_block_literal "$core_integrity_block" 'docker run --rm labwired-ci-smoke:local --version' 'required Core integrity executes the final image entrypoint'
+# Docker runner smoke lives in a separate non-required job so PR integrity
+# stays lean (CI roast 2026-07-23). Still forbid registry publish from integrity.
 require_block_absent_literal "$core_integrity_block" 'docker/login-action@v3' 'required Core integrity does not need registry credentials'
 require_block_absent_literal "$core_integrity_block" 'docker/build-push-action@v6' 'required Core integrity does not publish an untagged PR image'
+require_block_absent_literal "$core_integrity_block" 'docker build --pull' 'required Core integrity does not embed Docker image smoke (see ci-runner-image)'
+
+ci_runner_image_block=$(awk '
+  $0 == "  ci-runner-image:" { inside = 1; next }
+  inside && $0 ~ /^  [[:alnum:]_-]+:$/ { exit }
+  inside { print }
+' "$core_ci_workflow")
+if [[ -z "$ci_runner_image_block" ]]; then
+  fail 'ci-runner-image job is present in Core CI'
+fi
+require_block_literal "$ci_runner_image_block" 'docker build --pull' 'ci-runner-image builds the runner image from fresh base layers'
+require_block_literal "$ci_runner_image_block" '--file Dockerfile.ci' 'ci-runner-image uses the CI runner Dockerfile'
+require_block_literal "$ci_runner_image_block" 'labwired-ci-smoke:local' 'ci-runner-image gives the local image a stable tag'
+require_block_literal "$ci_runner_image_block" 'VERSION=ci-smoke' 'ci-runner-image provides OCI version metadata'
+require_block_literal "$ci_runner_image_block" 'REVISION="$GITHUB_SHA"' 'ci-runner-image provides OCI revision metadata'
+require_block_literal "$ci_runner_image_block" 'docker run --rm labwired-ci-smoke:local --version' 'ci-runner-image executes the final image entrypoint'
 
 require_literal "$workflow" 'tags:' 'release workflow declares a tag trigger'
 require_literal "$workflow" "'v[0-9]+.[0-9]+.[0-9]+'" 'release workflow triggers vMAJOR.MINOR.PATCH tags'

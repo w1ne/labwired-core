@@ -7,6 +7,9 @@ on:
   pull_request:
     branches:
       - main
+  schedule:
+    # Nightly full integrity + feature gates (02:30 UTC).
+    - cron: "30 2 * * *"
   workflow_dispatch:
 
 concurrency:
@@ -14,8 +17,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # This static verifier reads workflow/Dockerfile/action/docs text only; it
-  # intentionally needs neither Docker nor a Rust build.
+  # ── Static contract (always on PR; seconds) ────────────────────────────────
   release-runner-contract:
     name: release-runner-contract
     runs-on: ubuntu-latest
@@ -23,27 +25,76 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # The static contract verifier inspects the immutable action-source
-          # commit referenced by consumer documentation.
           fetch-depth: 0
 
       - name: Verify release runner contract
         run: bash scripts/ci/verify-release-runner-contract.sh
 
-  # ── Fast PR gate (REQUIRED) ────────────────────────────────────────────────
-  # Formatting, lints, and unit tests only — no firmware cross-builds, no
-  # fixture-dependent integration tests, no Tier-1 sims. Target a few minutes so
-  # PRs merge fast. The complete suite is now opt-in via manual dispatch or a
-  # `[full-ci]` marker on a main-branch commit while Actions quota is tight.
+  # ── PR merge gate (REQUIRED) — target wall clock under ~1 minute ───────────
+  # fmt + focused clippy/tests only. No firmware builds, no feature-variant
+  # recompiles, no coverage/onboarding/arduino matrices (those are nightly).
+  pr-gate:
+    name: pr-gate
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Full history required: generate_validation_status.py uses
+      # `git log -1 --format=%cI -- <model>` for drift. Shallow checkout
+      # makes every path resolve to HEAD's date → false DRIFT failures.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-pr-gate
+          workspaces: |
+            . -> target
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Generated docs + drift — pure Python, no cargo.
+      - name: Validation status — regen check + drift gate
+        run: |
+          python -m pip install --quiet pyyaml
+          python3 scripts/generate_validation_status.py --check --drift
+          python3 scripts/generate_firmware_exercise_matrix.py --check
+
+      - name: Check Formatting
+        run: cargo fmt --all -- --check
+
+      # Clippy + lib tests for the merge surface only (core + CLI). Full
+      # workspace + feature lanes run in nightly integrity-full.
+      - name: Clippy (core + CLI)
+        run: >
+          cargo clippy -p labwired-core -p labwired-cli
+          --all-targets -- -D warnings
+
+      - name: Unit tests (core + CLI lib)
+        run: cargo test -p labwired-core -p labwired-cli --lib
+
+  # ── Main-branch integrity (push to main) — fuller than PR, still no matrices ─
   integrity:
     name: core-integrity
+    if: >
+      github.event_name == 'push' ||
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
-          # Full history so the validation drift gate can resolve the last-commit
-          # date of each peripheral model via `git log`.
           fetch-depth: 0
 
       - name: Install Rust
@@ -58,13 +109,10 @@ jobs:
           workspaces: |
             . -> target
 
-      # Board validation status is generated, not hand-maintained. Fail the PR if
-      # the committed doc is stale, or if a peripheral model changed after a
-      # board's last silicon capture without a dated drift_ack in the manifest.
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
       - name: Validation status — regen check + drift gate
         run: |
@@ -78,32 +126,12 @@ jobs:
       - name: Run Clippy
         run: cargo clippy --all-targets -- -D warnings
 
-      # Library unit tests across the workspace. `--lib` skips the no_std
-      # firmware bin crates (which only build for thumb targets) and the
-      # integration tests under tests/ that need pre-built firmware fixtures —
-      # both run in core-full when explicitly requested.
       - name: Unit tests (no fixtures)
         run: cargo test --workspace --lib
 
-      # Board-coverage ratchet: a cheap static/naming scan (no fixtures, no
-      # firmware build) that fails if a SHIPPED chip lacks its required coverage
-      # classes — reset conformance, an executing-fidelity test, and a display
-      # assertion where it drives a shipped display lab. Missing coverage is only
-      # allowed via the shrink-only KNOWN_GAPS allowlist inside the test; a new
-      # uncovered board, or a filled gap left stale in the allowlist, fails here.
       - name: Board-coverage ratchet (static naming scan)
         run: cargo test -p labwired-core --test board_coverage_ratchet -- --nocapture
 
-      # Scheduler-driven interrupt delivery, all three MCU fabrics. This lane
-      # (event-scheduler + jit) previously ran ONLY in core-full, which is how an
-      # ESP32-S3 intmatrix scheduler-delivery hole stayed hidden. These targeted
-      # differential gates (hand-built machines, NO firmware fixtures) pin
-      # walk-vs-scheduler IRQ delivery cycle-for-cycle for the Xtensa intmatrix
-      # (S3), the RISC-V matrix (C3) and the Cortex-M NVIC, so a silent
-      # scheduler-delivery regression on any fabric fails the PR gate. `--lib`
-      # re-runs the labwired-core unit tests under the feature (systimer alarm /
-      # scheduler drain coverage). Fast: the tests run in ~1s; the cost is the
-      # one-time feature-variant compile (shared cache).
       - name: Feature gate — scheduler IRQ delivery (jit + event-scheduler)
         run: >
           cargo test -p labwired-core --features jit,event-scheduler
@@ -115,11 +143,17 @@ jobs:
           --test kw41z_walk_free_differential
           --lib
 
-      # This is deliberately inside the required core-integrity check: every
-      # merge must prove the final OCI runtime can execute the CLI before a
-      # main commit can be tagged for release. Building from fresh base layers
-      # catches builder/runtime ABI drift such as a newer glibc in Rust's slim
-      # image than the release runtime provides.
+  # ── CI runner OCI smoke (NOT a PR required check) ──────────────────────────
+  ci-runner-image:
+    name: ci-runner-image
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
       - name: Smoke CI runner image
         run: |
           set -euo pipefail
@@ -131,14 +165,12 @@ jobs:
             .
           docker run --rm labwired-ci-smoke:local --version
 
-  # ── Full suite (NOT a PR gate) ─────────────────────────────────────────────
-  # Builds firmware fixtures, runs the complete workspace tests, the host-only
-  # feature lanes, and the Tier-1 matrix + ratchet. This is expensive, so keep it
-  # manual/opt-in instead of running it after every merge to main.
+  # ── Full suite (nightly schedule + manual + [full-ci] on main) ─────────────
   full:
     name: core-full
     if: >
       github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule' ||
       (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-ci]'))
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -169,22 +201,13 @@ jobs:
           cargo build -p firmware-h563-io-demo --release --target thumbv7m-none-eabi
           cargo build -p firmware-f401-demo --release --target thumbv7em-none-eabi
           RUSTFLAGS="-C link-arg=-Tlink.x" cargo build -p firmware-rp2040-pio-onboarding --release --target thumbv6m-none-eabi
-          # Debug build: dap/e2e and loader/test_location_to_pc look for the debug path.
           cargo build -p firmware-ci-fixture --target thumbv7m-none-eabi
 
       - name: Run Workspace Tests
         run: cargo test --workspace
 
-      # Host-only feature lanes: jit uses wasmtime (native host build only) and
-      # event-scheduler enables the scheduler drain path. Both compile and run on
-      # plain host without any cross-compilation toolchain.
       - name: Feature tests — jit + event-scheduler
         run: cargo test -p labwired-core --features jit,event-scheduler
 
-      # Tier-1 matrix gates: rom-boot sims (~30M steps) are debug-ignored and
-      # run here in release (~25s/run instead of ~5.5min each). The ratchet
-      # blocks any regression of a recorded pass cell.
       - name: Tier-1 matrix + ratchet (release)
-        # NOTE: no `--ignored` flag — the cfg_attr ignore only applies to debug
-        # builds; in release these tests are regular tests and must run.
         run: cargo test --release -p labwired-cli --test tier1_matrix --test tier1_matrix_ratchet -- --nocapture

@@ -11,6 +11,9 @@ what fails compile, and what hits unmodeled paths.
 | `L0_serial_boot` | `LW_L0_OK` | `setup()` + Serial after core boot |
 | `L1_serial_loop` | `LW_L1_OK` | `loop()` + `delay`/`millis` scheduling |
 | `L2_blink_serial` | `LW_L2_OK` | `digitalWrite(LED_BUILTIN)` + serial |
+| `L3_i2c_sensor` | `LW_L3_OK` | `Wire` + INA219@0x40 kit (see `systems/*.yaml`) |
+
+Fleet goal (Arduino + Zephyr + peripherals): [`../FRAMEWORK_FLEET.md`](../FRAMEWORK_FLEET.md).
 
 ## Boards
 

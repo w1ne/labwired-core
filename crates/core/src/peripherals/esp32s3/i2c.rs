@@ -524,6 +524,17 @@ impl Esp32s3I2c {
                     self.cmds[idx] |= CMD_DONE_BIT;
                 }
                 OP_WRITE => {
+                    // Zero-payload WRITE after RSTART: Wire probe via SLAVE_ADDR.
+                    if expects_addr && byte_num == 0 {
+                        active = self.find_slave_from_slave_addr_register();
+                        if let Some(slave_idx) = active {
+                            self.slaves[slave_idx].start();
+                            self.sr |= SR_RESP_REC;
+                        } else {
+                            self.int_raw |= INT_NACK;
+                        }
+                        expects_addr = false;
+                    }
                     for i in 0..byte_num {
                         let b = self.tx_fifo.pop_front().unwrap_or(0);
                         if expects_addr && i == 0 {

@@ -261,7 +261,27 @@ impl SystemBus {
                     || canonical_type == "nrf54l_twim"
                 {
                     for ext in &manifest.external_devices {
-                        if ext.connection == p_cfg.id {
+                        if ext.connection != p_cfg.id {
+                            continue;
+                        }
+                        // Only suppress the kit pass when the family factory
+                        // actually can build this type. Kit-only devices were
+                        // previously marked attached even when the factory
+                        // warned "unknown device type" and skipped them —
+                        // leaving the bus empty (matrix L3 nRF ANACK on INA219).
+                        let factory_handles = crate::peripherals::components::build_external_i2c_device(
+                            &ext.r#type,
+                            &ext.id,
+                            &ext.config,
+                        )
+                        .is_some()
+                            || (canonical_type == "nrf52_serial_instance"
+                                && crate::peripherals::components::build_spi_device(
+                                    &ext.r#type,
+                                    &ext.config,
+                                )
+                                .is_some());
+                        if factory_handles {
                             attached_i2c_ext_ids.insert(ext.id.as_str());
                         }
                     }
