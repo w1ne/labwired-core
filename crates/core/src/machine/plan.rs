@@ -10,8 +10,7 @@ impl<C: Cpu> Machine<C> {
         elapsed_cycles: u64,
     ) -> u32 {
         let tick_interval = u64::from(self.config.peripheral_tick_interval.max(1));
-        let until_tick = tick_interval - (self.total_cycles % tick_interval);
-        let mut count = until_tick.min(u64::from(u32::MAX));
+        let mut count = u64::from(u32::MAX);
 
         if let Some(limit) = request.limits().fuel {
             count = count.min(limit.saturating_sub(fuel_consumed));
@@ -23,20 +22,20 @@ impl<C: Cpu> Machine<C> {
             count = count.min(u64::from(cap.get()));
         }
 
-        // Any instruction may request an RTC or SCB reset. Commit it before
-        // the next instruction, intentionally trading Cortex/RTC throughput
-        // for reset fidelity even while no request is currently latched.
-        // (SCB presence also keeps push-mode logic capture cycle-accurate.)
-        let reset_fidelity = self.rtc_cntl_index.is_some() || self.scb_index.is_some();
-        // Interleave both cores one quantum when the secondary is active or
-        // still in reset-hold. A secondary parked in WAITI (FreeRTOS idle)
-        // does not need lockstep — primary may batch; secondary CCOUNT is
-        // advanced via `fast_forward_idle_cycles` after the batch.
-        let secondary_lockstep = match self.cpu_secondary.as_ref() {
-            Some(sec) if sec.is_parked_idle() => false,
-            Some(_) => true,
-            None => false,
-        };
+        // Dual-core: only lockstep while APP is active or still in reset-hold.
+        // WAITI-parked APP (FreeRTOS idle) lets PRO batch.
+        let secondary_parked = self
+            .cpu_secondary
+            .as_ref()
+            .is_some_and(|sec| sec.is_parked_idle());
+        let secondary_lockstep = self.cpu_secondary.is_some() && !secondary_parked;
+
+        // SCB presence permanently forces quantum-1 (cycle-accurate push
+        // capture + SYSRESETREQ fidelity). RTC_CNTL only clamps while a
+        // SW_SYS_RST is actually latched — otherwise ESP dual-core would
+        // never leave quantum-1 and WAITI primary batch would be dead code.
+        let reset_fidelity = self.scb_index.is_some() || self.rtc_cntl_reset_pending();
+
         // Pending cycle-accurate bus cells and operations require a lifecycle
         // commit after every instruction.
         let cycle_accurate_bus = self.bus.requires_cycle_accurate();
@@ -53,10 +52,19 @@ impl<C: Cpu> Machine<C> {
             || honored_breakpoints
         {
             count = count.min(1);
+        } else if secondary_parked {
+            // Coalesced dual-core idle batch: allow multi-instruction PRO
+            // windows even when tick_interval is 1. Commit advances peripherals
+            // once with elapsed = primary_steps (see boundary.rs).
+            count = count.min(1024);
+        } else {
+            // Normal path: batch only up to the next peripheral tick boundary.
+            let until_tick = tick_interval - (self.total_cycles % tick_interval);
+            count = count.min(until_tick);
         }
 
         #[cfg(feature = "event-scheduler")]
-        if count > 1 {
+        if count > 1 && !secondary_parked {
             if let Some(deadline) = self.bus.next_hcsr04_deadline_cycle() {
                 let until = deadline.saturating_sub(self.total_cycles);
                 count = count.min(until.clamp(1, u64::from(u32::MAX)));
@@ -73,6 +81,6 @@ impl<C: Cpu> Machine<C> {
             }
         }
 
-        count as u32
+        count.max(1) as u32
     }
 }

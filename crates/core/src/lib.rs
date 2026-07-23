@@ -2097,6 +2097,21 @@ impl<C: Cpu> Machine<C> {
             .unwrap_or(false)
     }
 
+    /// True while RTC_CNTL has a latched SW_SYS_RST (not yet drained).
+    fn rtc_cntl_reset_pending(&self) -> bool {
+        let Some(idx) = self.rtc_cntl_index else {
+            return false;
+        };
+        let Some(p) = self.bus.peripherals.get(idx) else {
+            return false;
+        };
+        p.dev
+            .as_any()
+            .and_then(|a| a.downcast_ref::<crate::peripherals::esp32::rtc_cntl::RtcCntl>())
+            .map(|rtc| rtc.reset_request_pending())
+            .unwrap_or(false)
+    }
+
     /// Returns true (and clears the latch) if the registered SCB peripheral
     /// has a pending SYSRESETREQ — an AIRCR write with the correct VECTKEY and
     /// the SYSRESETREQ bit set (`Scb::write_reg`, offset 0x0C). The

@@ -134,7 +134,25 @@ impl<C: Cpu> Machine<C> {
 
         let logic_boundary = self.total_cycles;
         let tick_interval = u64::from(self.config.peripheral_tick_interval.max(1));
-        if self.total_cycles % tick_interval == 0 {
+        // Dual-core WAITI coalesced batch: primary advanced N cycles while APP
+        // was parked; peripherals must advance by N, not by tick_interval once.
+        // Detected via secondary_steps == primary_steps from the parked path.
+        let coalesced_dual_idle = mode == ExecutionMode::RunBatch
+            && progress.secondary_steps > 0
+            && progress.primary_steps > 1;
+        let should_tick = if coalesced_dual_idle {
+            true
+        } else {
+            self.total_cycles % tick_interval == 0
+        };
+        if should_tick {
+            let saved_m = self.config.peripheral_tick_interval;
+            let saved_b = self.bus.config.peripheral_tick_interval;
+            if coalesced_dual_idle {
+                let n = progress.primary_steps.max(1);
+                self.config.peripheral_tick_interval = n;
+                self.bus.config.peripheral_tick_interval = n;
+            }
             // Propagate peripherals. Reuse retained scratch buffers (swapped
             // out via `mem::take` so the borrow checker sees them as owned
             // locals) instead of letting the bus allocate a fresh Vec per tick.
@@ -158,6 +176,10 @@ impl<C: Cpu> Machine<C> {
             // Return the buffers (with their grown capacity) for reuse next tick.
             self.tick_irq_scratch = interrupts;
             self.tick_cost_scratch = costs;
+            if coalesced_dual_idle {
+                self.config.peripheral_tick_interval = saved_m;
+                self.bus.config.peripheral_tick_interval = saved_b;
+            }
         }
 
         // Phase 2B.1 (issue #192): event-driven peripheral scheduler.

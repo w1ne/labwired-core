@@ -66,10 +66,12 @@ fn metering_exit_status(exit_code: &ExitCode) -> i32 {
 
 /// Resolve an ESP-IDF `partitions.bin` for flash seeding @ 0x8000.
 ///
-/// Prefer the table next to the firmware ELF (matrix runner copies it there),
-/// then the live PIO work dir for this cell, then a few L0 fallbacks used by
-/// older diag scripts. Hard-coded L0-only paths break L1/L2 after matrix
-/// cleanup deletes `_pio_work/<cell>`.
+/// Only firmware-adjacent paths — never hard-coded matrix L0 work dirs
+/// (those go stale when `_pio_work` is wiped or the sketch is L1/L2).
+///
+/// Search order:
+/// 1. `partitions.bin` next to the ELF (matrix runner copies it there)
+/// 2. Live PIO build dir for this matrix cell, if present
 fn resolve_esp_partitions_bin(firmware_path: &std::path::Path) -> Option<std::path::PathBuf> {
     let mut cands: Vec<std::path::PathBuf> = Vec::new();
     if let Some(parent) = firmware_path.parent() {
@@ -90,13 +92,6 @@ fn resolve_esp_partitions_bin(firmware_path: &std::path::Path) -> Option<std::pa
                 );
             }
         }
-    }
-    for rel in [
-        "validation/arduino-matrix/out/_pio_work/esp32__L0_serial_boot/.pio/build/matrix/partitions.bin",
-        "validation/arduino-matrix/out/_pio_work/esp32c3__L0_serial_boot/.pio/build/matrix/partitions.bin",
-        "validation/arduino-matrix/out/_pio_work/esp32s3__L0_serial_boot/.pio/build/matrix/partitions.bin",
-    ] {
-        cands.push(std::path::PathBuf::from(rel));
     }
     cands.into_iter().find(|p| p.is_file())
 }
