@@ -1074,8 +1074,8 @@ impl crate::Peripheral for I2c {
         Ok(())
     }
 
-    /// Atomic word writes: STM32 HAL stores CR2 as a single STR (START + NBYTES
-    /// + AUTOEND together). Default Peripheral::write_u32 byte-slices and would
+    /// Atomic word writes: STM32 HAL stores CR2 as a single STR (START, NBYTES,
+    /// and AUTOEND together). Default Peripheral::write_u32 byte-slices and would
     /// assert START before AUTOEND lands, breaking the NBYTES=0 probe path.
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         match self {
