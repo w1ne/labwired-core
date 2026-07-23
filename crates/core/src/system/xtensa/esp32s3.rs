@@ -45,7 +45,10 @@ impl Default for Esp32s3Opts {
     fn default() -> Self {
         Self {
             iram_size: 512 * 1024,
-            dram_size: 480 * 1024,
+            // Match chip yaml / TRM internal SRAM data view (512 KiB from
+            // 0x3FC8_8000). The old 480 KiB cut off the top of the heap region
+            // firmware uses for deep FreeRTOS/RMT stacks.
+            dram_size: 512 * 1024,
             flash_size: 4 * 1024 * 1024,
             cpu_clock_hz: 80_000_000,
             real_reset_boot: false,

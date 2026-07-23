@@ -700,16 +700,19 @@ impl XtensaLx7 {
         // Real windowed SPs are always 16-byte aligned (ENTRY imm12 multiple of
         // 8 and ABI keeps a1 16B-aligned). Reject any base that is not.
         //
-        // a4..a11 are NOT written to the stack here: hybrid preserve is parked
-        // under the FreeRTOS TCB on IRQ entry and re-applied on RFE. Guessing
-        // parent_sp for a4..a7 was the earlier s_no_block_func / free-list bug.
+        // a0..a3 always go to callee OF (spill_sp-16). a4..a7 for CALL8 go to
+        // parent_sp-32 **only** when parent_sp is a real, stackish SP strictly
+        // above this frame (WindowOverflow8 layout). We still park preserve
+        // under the FreeRTOS TCB for same-IRQ RFE, but FreeRTOS task-switch
+        // restores windows from the **stack** — without a4..a7 OF, xQueueReceive
+        // loses a5 (= mux = queue+84) after GiveFromISR yield and re-enters
+        // EnterCritical with garbage (S3 L2 RGB/RMT fault @ 0x20406a).
+        //
         // Classic ESP32 DRAM is 0x3FF8_0000..0x4000_0000; ESP32-S3 internal
-        // SRAM (data view) is 0x3FC8_0000..0x3FCF_0000. Rejecting S3 SPs made
-        // xthal_window_spill write nothing → RETW WindowUnderflow reloaded
-        // a1=0 → fault at 0xfffffff4 in _WindowUnderflow8 (StartScheduler).
+        // SRAM is 0x3FC8_8000..0x3FD0_0000 (chip yaml 512 KiB / model 480 KiB).
         let dram_sp = |sp: u32| {
             (0x3FF8_0000..0x4000_0000).contains(&sp) // classic ESP32
-                || (0x3FC8_0000..0x3FCF_0000).contains(&sp) // ESP32-S3
+                || (0x3FC8_8000..0x3FD0_0000).contains(&sp) // ESP32-S3 SRAM
         };
         // Windowed ABI: a1 is always 16-byte aligned after ENTRY.
         let valid_sp = |sp: u32| dram_sp(sp) && (sp & 0xF) == 0;
@@ -793,7 +796,18 @@ impl XtensaLx7 {
             if spill_sp != 0 {
                 write4(bus, spill_sp, 16, regs[0], regs[1], regs[2], regs[3]);
             }
-            // No a4..a11 stack write — see header comment.
+            // CALL8/CALL12: a4..a7 live in the parent OF (parent_sp - 32).
+            // Parent SP is the previous preserve frame's a1 (strictly higher).
+            if regs.len() >= 8 && i > 0 {
+                let parent_a1 = frames[i - 1][1];
+                if valid_sp(parent_a1)
+                    && parent_a1 > frame_a1
+                    && stackish(parent_a1, current_a1)
+                    && parent_a1.wrapping_sub(frame_a1) < 0x1000
+                {
+                    write4(bus, parent_a1, 32, regs[4], regs[5], regs[6], regs[7]);
+                }
+            }
         }
 
         // Leftover WS panes: CALL4 a0..a3 only for 16B-aligned known frame SPs.
@@ -897,6 +911,54 @@ impl XtensaLx7 {
         self.regs.set_shadow_stacks(Default::default());
     }
 
+    /// Re-apply hybrid CALL preserve parked under the current FreeRTOS TCB
+    /// when `call_preserve_stack` is empty. Needed because FreeRTOS may resume
+    /// a task via `_xt_context_restore` (stack) without going through our IRQ
+    /// RFE path that normally restores `task_preserve_by_tcb`. Without this,
+    /// CALL8 a4..a7 (e.g. xQueueReceive's a5 = mux) are lost after
+    /// `GiveFromISR` + yield (ESP32-S3 RMT / RGB L2).
+    fn maybe_restore_task_preserve(&mut self, bus: &dyn Bus) {
+        if self.faithful_windows || !self.call_preserve_stack.is_empty() {
+            return;
+        }
+        let Some(tcb) = self.px_current_tcb(bus) else {
+            return;
+        };
+        if tcb == 0 {
+            return;
+        }
+        // Keep the entry so subsequent RETWs still see it; only remove on
+        // same-task RFE (pop_irq_window_frame) when the live stack is again
+        // the authority.
+        let Some(preserve) = self.task_preserve_by_tcb.get(&tcb).cloned() else {
+            return;
+        };
+        if preserve.is_empty() {
+            return;
+        }
+        let wb = self.regs.windowbase();
+        let mut ws = self.regs.windowstart();
+        // Ensure live window bit stays set.
+        ws |= 1u16 << (wb & 0x0F);
+        for entry in preserve.iter() {
+            for &(slot, regs) in entry.iter() {
+                let slot = slot & 0x0F;
+                let dist = slot.wrapping_sub(wb) & 0x0F;
+                if dist < 4 {
+                    continue;
+                }
+                let base = (slot as usize) * 4;
+                self.regs.set_physical(base, regs[0]);
+                self.regs.set_physical(base + 1, regs[1]);
+                self.regs.set_physical(base + 2, regs[2]);
+                self.regs.set_physical(base + 3, regs[3]);
+                ws |= 1u16 << slot;
+            }
+        }
+        self.regs.set_windowstart(ws);
+        self.call_preserve_stack = preserve;
+    }
+
     /// Read `pxCurrentTCBs[core_id]` for the running ESP32 dual-core firmware.
     ///
     /// Address is firmware-specific (`.dram0.bss`). Classic Arduino-ESP32 L0
@@ -916,7 +978,7 @@ impl XtensaLx7 {
         let looks_like_tcb = |p: u32| {
             p != 0
                 && ((0x3FF8_0000..0x4000_0000).contains(&p) // classic internal DRAM
-                    || (0x3FC8_0000..0x3FCF_0000).contains(&p)) // ESP32-S3 SRAM
+                    || (0x3FC8_8000..0x3FD0_0000).contains(&p)) // ESP32-S3 SRAM
         };
 
         if let Some(base) = PX_CURRENT_TCB_ADDR.with(|s| s.get()) {
@@ -2953,6 +3015,9 @@ impl Cpu for XtensaLx7 {
         if self.halted {
             return Ok(());
         }
+        // FreeRTOS may have switched tasks via stack context restore without
+        // our RFE; re-bind CALL8 preserve for the current TCB if needed.
+        self.maybe_restore_task_preserve(bus);
         // ── Pre-fetch interrupt check ─────────────────────────────────────────
         // Per Xtensa ISA RM §4.4.1: check for pending interrupts before fetching
         // the next instruction.

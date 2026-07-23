@@ -618,11 +618,18 @@ mod tests {
     }
 
     #[test]
-    fn writes_are_forbidden() {
+    fn writes_seed_backing_for_elf_loader() {
+        // Silicon XIP is read-only after boot, but LabWired's ELF loader
+        // writes DROM/IROM segments through the bus before the guest runs.
+        // Writes must land in the shared flash backing (identity when the
+        // page is still unmapped) so firmware bytes are visible to fetch.
         let backing = Arc::new(Mutex::new(vec![0u8; 64 * 1024]));
-        let mut p = FlashXipPeripheral::new_shared(backing, 0x4200_0000);
+        let mut p = FlashXipPeripheral::new_shared(backing.clone(), 0x4200_0000);
         p.map_identity();
-        let err = p.write(0, 0xAA).unwrap_err();
+        p.write(0, 0xAA).unwrap();
+        assert_eq!(backing.lock().unwrap()[0], 0xAA);
+        // Out-of-range physical offsets still fault.
+        let err = p.write(64 * 1024, 0xBB).unwrap_err();
         match err {
             SimulationError::MemoryViolation(_) => {}
             other => panic!("expected MemoryViolation, got {other:?}"),

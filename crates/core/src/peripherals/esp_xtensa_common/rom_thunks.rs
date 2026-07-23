@@ -2100,9 +2100,15 @@ mod tests {
     }
 
     #[test]
-    fn unregistered_thunk_returns_none() {
+    fn unregistered_thunk_falls_through_to_nop_return_zero() {
+        // Prefill BREAK sites dispatch via `get` → `nop_return_zero` so the
+        // long-tail ROM HAL surface does not fault mid-boot. Only *registered*
+        // addresses carry a distinct thunk function pointer.
         let bank = RomThunkBank::new(0x4000_0000, 0x10_0000);
-        assert!(bank.get(0x4000_1234).is_none());
+        let thunk = bank
+            .get(0x4000_1234)
+            .expect("unregistered site still dispatches");
+        assert!(std::ptr::fn_addr_eq(thunk, nop_return_zero as RomThunkFn));
     }
 
     #[test]

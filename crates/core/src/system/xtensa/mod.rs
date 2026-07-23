@@ -517,21 +517,26 @@ mod tests {
     }
 
     #[test]
-    fn flash_xip_windows_have_independent_backings() {
-        // Real silicon shares the SPI flash between both windows but each has
-        // its own MMU page table; for fast-boot we model this as two distinct
-        // backing buffers so that ELFs with .rodata at 0x3c000020 and .text at
-        // 0x42000020 don't collide on the same physical offset. Force fast-boot
-        // so the assertion is deterministic regardless of whether the host has
+    fn flash_xip_windows_share_mmu_backed_flash() {
+        // Current fast-boot path uses MMU-backed XIP so `spi_flash_mmap` /
+        // `cache2phys` share one translation with the SPI controller (seeded
+        // after `fast_boot`). Both windows alias the same physical flash
+        // backing; reads need a valid MMU entry. Force the MMU-XIP path so
+        // the assertion is deterministic regardless of whether the host has
         // the ESP toolchain ROM installed (which would auto-select faithful mode).
-        std::env::set_var("LABWIRED_ESP32S3_FASTBOOT", "1");
+        std::env::set_var("LABWIRED_ESP32S3_MMU_XIP", "1");
         let mut bus = SystemBus::new();
         let wiring = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
-        std::env::remove_var("LABWIRED_ESP32S3_FASTBOOT");
+        std::env::remove_var("LABWIRED_ESP32S3_MMU_XIP");
+        // Seed physical flash and map virt page 0 → phys page 0 for both windows.
         wiring.icache_backing.lock().unwrap()[0] = 0xCA;
-        wiring.dcache_backing.lock().unwrap()[0] = 0xFE;
-        assert_eq!(bus.read_u8(0x4200_0000).unwrap(), 0xCA, "I-cache alias");
-        assert_eq!(bus.read_u8(0x3C00_0000).unwrap(), 0xFE, "D-cache alias");
+        // Program MMU entry 0 (IROM 0x4200_0000 and DROM 0x3C00_0000 share
+        // entry id 0 under the S3 32 MiB window mask for these bases' low bits).
+        // S3 entry: phys page in low bits; valid when invalid_bit clear.
+        bus.write_u32(0x600C_5000, 0).unwrap(); // entry 0 → phys 0, valid
+        assert_eq!(bus.read_u8(0x4200_0000).unwrap(), 0xCA, "I-cache via MMU");
+        // Same physical byte via D-cache window (shared backing).
+        assert_eq!(bus.read_u8(0x3C00_0000).unwrap(), 0xCA, "D-cache via MMU");
     }
 
     /// `configure_xtensa_esp32` + `attach_esp32_external_devices` must register
