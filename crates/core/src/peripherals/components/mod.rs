@@ -79,7 +79,15 @@ pub mod tm1637_7seg;
 pub mod tmp117;
 pub mod uc8151d_tricolor_290;
 pub mod unipolar_stepper;
+/// Hand-written VEML7700 model, retained only as the byte-parity oracle the
+/// declarative descriptor is proven identical against (see `veml7700_parity`).
+/// The shipping device is `declarative_i2c::VEML7700_KIT`, so this module is
+/// test-only.
+#[cfg(test)]
 pub mod veml7700;
+/// Byte-parity harness: the declarative VEML7700 vs the hand-written oracle.
+#[cfg(test)]
+mod veml7700_parity;
 pub mod vl53l0x;
 pub mod vl53l1x;
 pub mod ws2812;
@@ -128,5 +136,6 @@ pub use ssd1680_tricolor_290::Ssd1680Tricolor290;
 pub use tm1637_7seg::Tm1637;
 pub use tmp117::Tmp117;
 pub use uc8151d_tricolor_290::Uc8151dTricolor290;
+#[cfg(test)]
 pub use veml7700::{Veml7700, VEML7700_ADDR};
 pub use vl53l1x::Vl53l1x;

@@ -85,6 +85,18 @@ fn encode_raw(value: f64, enc: Option<&Encode>, extra_scale: f64, width: u8) -> 
     raw.round().clamp(0.0, width_max(width)) as u32
 }
 
+/// Convert a measurement to a raw count by DIVIDING it by a resolution
+/// (`count = round(value / resolution)`), clamped into a `width`-byte word.
+/// This is the divide dual of [`encode_raw`], for parts the datasheet describes
+/// as `count = quantity / resolution` (VEML7700). A zero/negative resolution
+/// clamps to the max (defensive; descriptors never declare one).
+fn divide_raw(value: f64, resolution: f64, width: u8) -> u32 {
+    if resolution <= 0.0 {
+        return width_max(width) as u32;
+    }
+    (value / resolution).round().clamp(0.0, width_max(width)) as u32
+}
+
 /// Pack `raw` into `width` bytes in the given order.
 fn pack(raw: u32, width: u8, endian: Endian) -> Vec<u8> {
     let mut le: Vec<u8> = (0..width).map(|i| (raw >> (8 * i as u32)) as u8).collect();
@@ -221,6 +233,16 @@ impl GenericI2cDevice {
         Self::from_descriptor(&descriptor, address, channels)
     }
 
+    /// Seed a measurement slot's initial value from a `config:` override. Only
+    /// keys that name a declared input channel take effect (others are ignored),
+    /// so a descriptor's `config_keys` like `lux` seed the part's starting
+    /// reading exactly as a hand-written kit's `config_f64("lux")` did.
+    pub fn seed_input(&mut self, key: &str, value: f64) {
+        if self.channels.iter().any(|c| c.key == key) {
+            self.slots.insert(key.to_string(), value);
+        }
+    }
+
     fn find_register(&self, addr: u8) -> Option<&I2cRegister> {
         self.registers.iter().find(|r| r.addr == addr)
     }
@@ -229,23 +251,50 @@ impl GenericI2cDevice {
         self.commands.iter().find(|c| c.code == code)
     }
 
-    /// The extra scale factor a register's `scale_from` selects from the current
-    /// value of another register's bit-field (1.0 when absent / unmapped).
-    fn scale_from_factor(&self, reg: &I2cRegister) -> f64 {
-        let Some(sf) = &reg.scale_from else {
-            return 1.0;
-        };
+    /// The scale factor one `scale_from` entry selects from the current value of
+    /// another register's bit-field (1.0 when the field value is unmapped).
+    fn scale_from_one(&self, sf: &labwired_config::ScaleFrom) -> f64 {
         let regval = self.reg_values.get(&sf.register).copied().unwrap_or(0);
         let field = (regval >> sf.shift as u32) & sf.mask;
         sf.map.get(&field).copied().unwrap_or(1.0)
     }
 
+    /// Product of a register's `scale_from` factors, folded left-to-right from
+    /// 1.0 (the empty list ⇒ 1.0). Used in the multiply encoding to compound the
+    /// counts-per-unit.
+    fn scale_from_product(&self, reg: &I2cRegister) -> f64 {
+        reg.scale_from
+            .iter()
+            .fold(1.0, |acc, sf| acc * self.scale_from_one(sf))
+    }
+
     /// The bytes a read of the currently pointed register returns.
     fn register_read_bytes(&self, reg: &I2cRegister) -> Vec<u8> {
         let raw = if let Some(src) = &reg.source {
-            let value = self.slots.get(src).copied().unwrap_or(0.0);
-            let extra = self.scale_from_factor(reg);
-            encode_raw(value, reg.encode.as_ref(), extra, reg.width)
+            // A distinct pre-multiply on the measurement (datasheet responsivity
+            // ratio), applied as its own float step so the intermediate matches
+            // a reference model that scales the value before converting it.
+            let value =
+                self.slots.get(src).copied().unwrap_or(0.0) * reg.source_scale.unwrap_or(1.0);
+            match reg.resolution {
+                Some(base) => {
+                    // Resolution-divide mode: resolution = base × Π(factors),
+                    // folded left-to-right from `base` (so the op tree matches a
+                    // reference `base * (100/it) / gain`); count = value ÷ res.
+                    let resolution = reg
+                        .scale_from
+                        .iter()
+                        .fold(base, |acc, sf| acc * self.scale_from_one(sf));
+                    divide_raw(value, resolution, reg.width)
+                }
+                // Multiply mode: value × encode.scale × Π(factors).
+                None => encode_raw(
+                    value,
+                    reg.encode.as_ref(),
+                    self.scale_from_product(reg),
+                    reg.width,
+                ),
+            }
         } else {
             // Plain storage register: echo the written value (seeded to reset).
             self.reg_values.get(&reg.name).copied().unwrap_or(reg.reset)
@@ -476,7 +525,7 @@ fn leak_channels(descriptor: &DeviceDescriptor) -> &'static [InputChannel] {
 // ─── PeripheralKit registration ────────────────────────────────────────────
 
 use crate::peripherals::kit::{
-    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, PeripheralKit, Transport,
+    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, LabRef, PeripheralKit, Transport,
 };
 
 /// A [`PeripheralKit`] backed by a declarative `i2c_device` descriptor — one
@@ -520,6 +569,17 @@ impl DeclarativeI2cKit {
     }
 }
 
+/// Map a descriptor's `config_keys[].ty` string onto a [`ConfigType`].
+/// Unknown spellings fall back to `Str` (the most permissive display type).
+fn config_type_from_str(ty: &str) -> ConfigType {
+    match ty {
+        "int" => ConfigType::Int,
+        "float" => ConfigType::Float,
+        "bool" => ConfigType::Bool,
+        _ => ConfigType::Str,
+    }
+}
+
 /// Derive a `&'static KitMetadata` from the descriptor's display metadata.
 fn leak_metadata(
     descriptor: &DeviceDescriptor,
@@ -534,27 +594,65 @@ fn leak_metadata(
     let summary = meta
         .and_then(|m| m.summary.clone())
         .unwrap_or_else(|| "Declarative I²C device.".to_string());
+    // Long-form detail: explicit `metadata.detail` if given, else the summary
+    // (the pre-existing declarative-kit fallback).
+    let detail = meta
+        .and_then(|m| m.detail.clone())
+        .unwrap_or_else(|| summary.clone());
 
-    let config_keys: &'static [ConfigKey] = Box::leak(
-        vec![ConfigKey {
-            name: "i2c_address",
-            ty: ConfigType::Int,
-            doc: leak(format!(
-                "7-bit slave address. Defaults to 0x{default_address:02x}."
-            )),
-        }]
-        .into_boxed_slice(),
+    // Config keys: an explicit `metadata.config_keys` is taken as the COMPLETE
+    // set (it may list `i2c_address` itself); otherwise synthesise the lone
+    // `i2c_address` key from the default address.
+    let declared_keys = meta.map(|m| m.config_keys.as_slice()).unwrap_or(&[]);
+    let config_keys: &'static [ConfigKey] = if declared_keys.is_empty() {
+        Box::leak(
+            vec![ConfigKey {
+                name: "i2c_address",
+                ty: ConfigType::Int,
+                doc: leak(format!(
+                    "7-bit slave address. Defaults to 0x{default_address:02x}."
+                )),
+            }]
+            .into_boxed_slice(),
+        )
+    } else {
+        Box::leak(
+            declared_keys
+                .iter()
+                .map(|k| ConfigKey {
+                    name: leak(k.name.clone()),
+                    ty: config_type_from_str(&k.ty),
+                    doc: leak(k.doc.clone()),
+                })
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
+        )
+    };
+
+    // Labs: mirror any declared starter labs verbatim.
+    let declared_labs = meta.map(|m| m.labs.as_slice()).unwrap_or(&[]);
+    let labs: &'static [LabRef] = Box::leak(
+        declared_labs
+            .iter()
+            .map(|l| LabRef {
+                board_id: leak(l.board_id.clone()),
+                chip: leak(l.chip.clone()),
+                example_dir: leak(l.example_dir.clone()),
+                demo_elf: leak(l.demo_elf.clone()),
+            })
+            .collect::<Vec<_>>()
+            .into_boxed_slice(),
     );
 
     Box::leak(Box::new(KitMetadata {
         device_type: leak(descriptor.r#type.clone()),
         label: leak(label),
-        summary: leak(summary.clone()),
-        detail: leak(summary),
+        summary: leak(summary),
+        detail: leak(detail),
         transport: Transport::I2c,
         category: Category::I2c,
         config_keys,
-        labs: &[],
+        labs,
         inputs: channels,
     }))
 }
@@ -572,7 +670,15 @@ impl PeripheralKit for DeclarativeI2cKit {
             .as_ref()
             .context("declarative i2c kit is missing behavior.i2c")?;
         let address = ctx.i2c_address_or(spec.default_address)?;
-        let device = GenericI2cDevice::from_descriptor(&self.descriptor, address, self.channels)?;
+        let mut device =
+            GenericI2cDevice::from_descriptor(&self.descriptor, address, self.channels)?;
+        // Honour `config:` overrides that name an input channel (e.g. a `lux`
+        // seed), matching how a hand-written kit seeded its initial reading.
+        for input in self.channels {
+            if let Some(v) = ctx.config_f64(input.key) {
+                device.seed_input(input.key, v);
+            }
+        }
         ctx.attach_i2c_device(Box::new(device))
     }
 }
@@ -612,6 +718,18 @@ pub static BH1750_KIT: LazyLock<DeclarativeI2cKit> = LazyLock::new(|| {
         labwired_config::embedded_device_yaml("bh1750").expect("bh1750 descriptor is embedded"),
     )
     .expect("bh1750.yaml is a valid declarative i2c descriptor")
+});
+
+/// Vishay VEML7700 ambient-light sensor (declarative `veml7700.yaml`). Migrated
+/// from the hand-written [`super::veml7700::Veml7700`] model, which now survives
+/// only as the byte-parity oracle (see `veml7700_parity.rs`). The register-pointer
+/// wire protocol, the gain × integration-time resolution table, and the manifest
+/// metadata all live in the descriptor.
+pub static VEML7700_KIT: LazyLock<DeclarativeI2cKit> = LazyLock::new(|| {
+    DeclarativeI2cKit::from_yaml(
+        labwired_config::embedded_device_yaml("veml7700").expect("veml7700 descriptor is embedded"),
+    )
+    .expect("veml7700.yaml is a valid declarative i2c descriptor")
 });
 
 #[cfg(test)]
