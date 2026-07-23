@@ -49,3 +49,13 @@ Local branch: `chore/test-harness-organize` (do **not** push until asked).
 - C3/S3 RMT `tx_start_count` + inspect `rmt_tx` artifact; `min_rmt_tx` L2 oracle.
 - Class-M dual-universe script: `scripts/matrix_speed_subset.sh`.
 - Partitions resolve moved to `commands/esp32_boot_state.rs` (Phase E start).
+
+## 2026-07-23 — CI roast follow-ups
+
+- Path filters: onboarding + coverage-matrix fire on `crates/core/**` + `crates/cli/**`.
+- Coverage-matrix: drop duplicate F103 cell; release CLI; required pass rate **1.0**.
+- New `core-arduino-matrix-smoke.yml`: stm32f103, nrf52840, rp2040, esp32c3 × L0+L2.
+- core-integrity: Docker runner smoke → non-required job; weekly `core-full` schedule.
+- llvm-cov weekly floor 55% → 58%.
+- `scripts/pre-push.sh`: fast gate (fmt/clippy/walk/RP2040/LogicTap); FULL=1 for workspace.
+

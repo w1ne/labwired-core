@@ -7,6 +7,9 @@ on:
   pull_request:
     branches:
       - main
+  schedule:
+    # Weekly full suite + runner image (Sunday 03:00 UTC) — no human [full-ci] tag needed.
+    - cron: "0 3 * * 0"
   workflow_dispatch:
 
 concurrency:
@@ -115,11 +118,22 @@ jobs:
           --test kw41z_walk_free_differential
           --lib
 
-      # This is deliberately inside the required core-integrity check: every
-      # merge must prove the final OCI runtime can execute the CLI before a
-      # main commit can be tagged for release. Building from fresh base layers
-      # catches builder/runtime ABI drift such as a newer glibc in Rust's slim
-      # image than the release runtime provides.
+      # Docker runner-image smoke moved out of the required PR gate (CI roast
+      # 2026-07-23): it rarely catches real PR regressions and costs minutes on
+      # every integrity run. See job `ci-runner-image` (main/schedule/dispatch).
+
+  # ── CI runner OCI smoke (NOT a PR required check) ──────────────────────────
+  # Proves Dockerfile.ci still produces a runnable CLI. Weekly + main + manual.
+  ci-runner-image:
+    name: ci-runner-image
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
       - name: Smoke CI runner image
         run: |
           set -euo pipefail
@@ -131,14 +145,14 @@ jobs:
             .
           docker run --rm labwired-ci-smoke:local --version
 
-  # ── Full suite (NOT a PR gate) ─────────────────────────────────────────────
-  # Builds firmware fixtures, runs the complete workspace tests, the host-only
-  # feature lanes, and the Tier-1 matrix + ratchet. This is expensive, so keep it
-  # manual/opt-in instead of running it after every merge to main.
+  # ── Full suite (not a PR required check) ───────────────────────────────────
+  # Builds firmware fixtures, full workspace tests, feature lanes, Tier-1.
+  # Weekly schedule + manual + optional `[full-ci]` on main commits.
   full:
     name: core-full
     if: >
       github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule' ||
       (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-ci]'))
     runs-on: ubuntu-latest
     timeout-minutes: 45

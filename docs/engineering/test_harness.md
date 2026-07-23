@@ -158,6 +158,33 @@ scheduler identity unless a workflow enables the feature.
   `esp32c3_rmt` entry — no declarative+behavioral dual stack); S3 `min_rmt_tx`
   inspect count.
 
+---
+
+## CI map (post roast 2026-07-23)
+
+| Workflow / job | When | Required to merge? | What it proves |
+|----------------|------|--------------------|----------------|
+| **core-integrity** | every PR | **yes** | fmt, clippy, unit tests, validation drift, board-coverage ratchet, walk-diffs |
+| **onboarding-scoreboard** | every PR | **yes** | 3 bare-metal UART/PIO fixtures all green |
+| **coverage-matrix-scoreboard** | every PR | **yes** | required UART/CAN smokes at **100%** pass |
+| **arduino-matrix-gate** | every PR | **yes** | 4 boards × L0+L2 stock Arduino |
+| **ci-runner-image** | main + weekly | no | `Dockerfile.ci` still runs CLI |
+| **core-full** | weekly + `[full-ci]` + manual | no | full workspace tests + Tier-1 matrix |
+| **board-ci** | path-filtered | no | PR usually only IO-Link station |
+| **llvm-cov** (Core Coverage Gate) | weekly | no | ≥58% line on core+cli |
+
+Branch protection also uses **`strict: true`** (PR tip must include latest main).
+
+### Path filters (fixed)
+
+Onboarding + coverage-matrix now fire on `crates/core/**` and `crates/cli/**`
+so model/runtime changes cannot skip the smokes that would catch them.
+
+### Pre-push (local)
+
+`scripts/pre-push.sh`: fmt, clippy (core+cli), walk-deletion + RP2040 vector
+tests, LogicTap unit smokes. Full workspace: `LABWIRED_PREPUSH_FULL=1`.
+
 Work log: [`test_harness_reorg_log.md`](test_harness_reorg_log.md).
 
 ---

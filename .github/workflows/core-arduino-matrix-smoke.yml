@@ -1,0 +1,143 @@
+name: Core Arduino Matrix Smoke
+
+# Thin stock-Arduino gate: 4 boards × L0+L2 (8 cells). Proves FreeRTOS/mbed
+# paths that the coverage-matrix UART fixtures never touch. Not a required
+# status check until stable (see docs/engineering/test_harness.md).
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "validation/arduino-matrix/**"
+      - "validation/matrix_lib/**"
+      - "configs/chips/**"
+      - "configs/systems/**"
+      - "crates/core/**"
+      - "crates/cli/**"
+      - ".github/workflows/core-arduino-matrix-smoke.yml"
+  # Always on PRs: required status `arduino-matrix-gate`.
+  pull_request:
+    branches:
+      - main
+  schedule:
+    - cron: "30 3 * * 0"
+  workflow_dispatch:
+
+concurrency:
+  group: core-arduino-matrix-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  arduino-matrix:
+    name: arduino-${{ matrix.board }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        board:
+          - stm32f103
+          - nrf52840
+          - rp2040
+          - esp32c3
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-arduino-matrix
+          workspaces: |
+            . -> target
+
+      - name: Build release CLI
+        run: cargo build -p labwired-cli --release
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PyYAML + PlatformIO
+        run: |
+          python -m pip install --quiet pyyaml platformio
+          # RP2040 Arduino needs the raspberrypi platform (not always pulled transitively).
+          if [ "${{ matrix.board }}" = "rp2040" ]; then
+            pio pkg install -g -p raspberrypi || true
+          fi
+
+      - name: Arduino matrix (L0 + L2)
+        env:
+          LABWIRED_RP2040_BOOTROM: ${{ github.workspace }}/crates/core/roms/rp2040/bootrom.bin
+        run: |
+          set -euo pipefail
+          python3 validation/arduino-matrix/run_matrix.py \
+            --boards "${{ matrix.board }}" \
+            --sketches L0_serial_boot,L2_blink_serial \
+            --out "validation/arduino-matrix/out-ci/${{ matrix.board }}"
+
+      - name: Upload board artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arduino-matrix-${{ matrix.board }}
+          path: validation/arduino-matrix/out-ci/${{ matrix.board }}/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  arduino-matrix-gate:
+    name: arduino-matrix-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: arduino-matrix
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: validation/arduino-matrix/out-ci
+          pattern: arduino-matrix-*
+          merge-multiple: false
+
+      - name: Require all 8 cells pass
+        run: |
+          python3 - <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          root = Path("validation/arduino-matrix/out-ci")
+          # Artifacts unpack as out-ci/arduino-matrix-<board>/... or nested results.json
+          results = list(root.rglob("results.json"))
+          if not results:
+              print("::error::no results.json from arduino matrix jobs", file=sys.stderr)
+              sys.exit(1)
+
+          bad = []
+          total = 0
+          for path in results:
+              data = json.loads(path.read_text())
+              rows = data.get("rows") or []
+              for row in rows:
+                  total += 1
+                  st = row.get("status")
+                  if st != "pass":
+                      bad.append(f"{row.get('board')}/{row.get('sketch')}: {st}")
+          print(f"cells={total} fails={len(bad)}")
+          for b in bad:
+              print("FAIL", b)
+          # 4 boards × 2 sketches
+          if total < 8:
+              print(f"::error::expected ≥8 cells, got {total}", file=sys.stderr)
+              sys.exit(1)
+          if bad:
+              sys.exit(1)
+          print("arduino matrix gate: all cells pass")
+          PY

@@ -8,17 +8,17 @@ on:
       - "configs/chips/**"
       - "configs/systems/**"
       - "examples/**"
+      # Model/CLI changes can break onboarding without touching configs/examples
+      # (e.g. RP2040 bootrom vector relocation, SIO LogicTap).
+      - "crates/core/**"
+      - "crates/cli/**"
       - "crates/labwired-models-**"
       - ".github/workflows/core-onboarding-smoke.yml"
+  # Always on PRs: required status `onboarding-scoreboard` must run every PR
+  # (path-filtered required checks block merge when the job never starts).
   pull_request:
     branches:
       - main
-    paths:
-      - "configs/chips/**"
-      - "configs/systems/**"
-      - "examples/**"
-      - "crates/labwired-models-**"
-      - ".github/workflows/core-onboarding-smoke.yml"
   workflow_dispatch:
 
 concurrency:
