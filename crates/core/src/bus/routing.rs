@@ -127,29 +127,71 @@ impl SystemBus {
         (num <= 48).then_some(num)
     }
 
-    /// Resolve an STM32 pin label to its `(IDR address, bit)` so a sensor can
+    /// Resolve a pin label to its `(IDR address, bit)` so a sensor can
     /// drive an MCU input line (e.g. the HC-SR04 ECHO pin).
+    ///
+    /// Mirrors [`resolve_pin_odr`]: chip pin-map first, then STM32/Nordic pad
+    /// labels, then ESP32 `GPIO`n / bare numbers into the single `gpio` block's
+    /// input register. Without the ESP path, HC-SR04 on ESP32-C3 falls through
+    /// to the STM32 default `PA9` and fails config.
     pub(crate) fn resolve_pin_idr(bus: &SystemBus, pin: &str) -> Option<(u64, u8)> {
         if !bus.pin_map.is_empty() {
-            let (gpio_name, bit) = bus.pin_map.get(&pin.to_ascii_uppercase())?;
-            let idx = bus.find_peripheral_index_by_name(gpio_name)?;
-            let base = bus.peripherals[idx].base;
-            let idr_off = bus.peripherals[idx]
+            if let Some((gpio_name, bit)) = bus.pin_map.get(&pin.to_ascii_uppercase()) {
+                let idx = bus.find_peripheral_index_by_name(gpio_name)?;
+                let base = bus.peripherals[idx].base;
+                let idr_off = bus.peripherals[idx]
+                    .dev
+                    .as_any()
+                    .and_then(|a| a.downcast_ref::<crate::peripherals::gpio::GpioPort>())
+                    .map(|g| g.idr_offset())?;
+                return Some((base + idr_off, *bit));
+            }
+            // Label not in map — fall through (ESP bare/GPIO labels, etc.).
+        }
+        if let Some((port_name, bit)) = Self::parse_stm32_pin(pin) {
+            if let Some(idx) = bus.find_peripheral_index_by_name(&port_name) {
+                let base = bus.peripherals[idx].base;
+                if let Some(idr_off) = bus.peripherals[idx]
+                    .dev
+                    .as_any()
+                    .and_then(|a| a.downcast_ref::<crate::peripherals::gpio::GpioPort>())
+                    .map(|g| g.idr_offset())
+                {
+                    return Some((base + idr_off, bit));
+                }
+            }
+        }
+        // ESP32 / ESP32-C3: "GPIO5", "gpio5", "IO5", or bare "5" → gpio peripheral IN reg.
+        if let Some(bit) = Self::parse_esp32_gpio_pin(pin) {
+            let idx = bus.find_peripheral_index_by_name("gpio")?;
+            let is_esp32 = bus.peripherals[idx]
                 .dev
                 .as_any()
-                .and_then(|a| a.downcast_ref::<crate::peripherals::gpio::GpioPort>())
-                .map(|g| g.idr_offset())?;
-            return Some((base + idr_off, *bit));
+                .map(|a| {
+                    a.downcast_ref::<crate::peripherals::esp32::gpio::Esp32Gpio>()
+                        .is_some()
+                        || a.downcast_ref::<crate::peripherals::esp32c3::gpio::Esp32c3Gpio>()
+                            .is_some()
+                })
+                .unwrap_or(false);
+            if is_esp32 {
+                // TRM: GPIO_IN_REG at base+0x3C on classic ESP32; C3 uses the same
+                // Esp32c3Gpio path — prefer the peripheral's idr_offset when present.
+                if let Some(idr_off) = bus.peripherals[idx]
+                    .dev
+                    .as_any()
+                    .and_then(|a| a.downcast_ref::<crate::peripherals::gpio::GpioPort>())
+                    .map(|g| g.idr_offset())
+                {
+                    return Some((bus.peripherals[idx].base + idr_off, bit));
+                }
+                // Esp32c3Gpio is not GpioPort — use known IN register offset (0x3C / matches ODR+delta style).
+                // Esp32c3 GPIO_IN_REG is at 0x3C from GPIO base (TRM); OUT is 0x04.
+                const GPIO_IN_REG_OFFSET: u64 = 0x3C;
+                return Some((bus.peripherals[idx].base + GPIO_IN_REG_OFFSET, bit));
+            }
         }
-        let (port_name, bit) = Self::parse_stm32_pin(pin)?;
-        let idx = bus.find_peripheral_index_by_name(&port_name)?;
-        let base = bus.peripherals[idx].base;
-        let idr_off = bus.peripherals[idx]
-            .dev
-            .as_any()
-            .and_then(|a| a.downcast_ref::<crate::peripherals::gpio::GpioPort>())
-            .map(|g| g.idr_offset())?;
-        Some((base + idr_off, bit))
+        None
     }
 
     pub(crate) fn is_peripheral_addr(p: &PeripheralEntry, addr: u64) -> bool {

@@ -239,12 +239,19 @@ impl SystemBus {
                 role
             )
         })?;
+        // Accept string labels ("GPIO5", "PA8") or bare integers (5) from emitters.
+        // Integer-only configs used to fall through to STM32 defaults (PA9) and
+        // fail ESP32-C3 HC-SR04 attach.
         Ok(ext
             .config
             .get(key)
-            .and_then(|v| v.as_str())
-            .unwrap_or(default)
-            .to_string())
+            .and_then(|v| {
+                v.as_str()
+                    .map(|s| s.to_string())
+                    .or_else(|| v.as_i64().map(|n| n.to_string()))
+                    .or_else(|| v.as_u64().map(|n| n.to_string()))
+            })
+            .unwrap_or_else(|| default.to_string()))
     }
 
     /// Resolve a list-valued pin role (e.g. the keypad's `rows`/`cols`): read
