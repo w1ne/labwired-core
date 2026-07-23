@@ -16,6 +16,7 @@ pub mod bmp280;
 pub mod bno055;
 pub mod cap1188;
 pub mod declarative_i2c;
+pub mod declarative_regs;
 pub mod dht22;
 pub mod drv2605;
 pub mod ds3231;

@@ -38,10 +38,10 @@ use std::collections::HashMap;
 
 use anyhow::{bail, Context, Result};
 use labwired_config::{
-    Crc8Spec, DeviceDescriptor, Encode, Endian, I2cAccess, I2cCommand, I2cRegister, I2cSpec,
-    ResponseWord,
+    Crc8Spec, DeviceDescriptor, Endian, I2cAccess, I2cCommand, I2cRegister, I2cSpec, ResponseWord,
 };
 
+use super::declarative_regs::{encode_raw, pack, register_read_bytes, unpack};
 use crate::peripherals::i2c::I2cDevice;
 use crate::sim_input::{InputChannel, SimInput, SimInputError};
 
@@ -61,55 +61,6 @@ fn crc8(data: &[u8], poly: u8, init: u8) -> u8 {
         }
     }
     crc
-}
-
-/// Largest value representable in `width` bytes, as f64 (width ≤ 4).
-fn width_max(width: u8) -> f64 {
-    ((1u64 << (8 * width as u64)) - 1) as f64
-}
-
-/// Apply a linear encode (scale/offset/clamp) plus an extra scale factor,
-/// yielding the raw integer packed into a `width`-byte word.
-fn encode_raw(value: f64, enc: Option<&Encode>, extra_scale: f64, width: u8) -> u32 {
-    let scale = enc.map(|e| e.scale).unwrap_or(1.0) * extra_scale;
-    let offset = enc.map(|e| e.offset).unwrap_or(0.0);
-    let mut raw = value * scale + offset;
-    if let Some(e) = enc {
-        if let Some(lo) = e.clamp_min {
-            raw = raw.max(lo);
-        }
-        if let Some(hi) = e.clamp_max {
-            raw = raw.min(hi);
-        }
-    }
-    raw.round().clamp(0.0, width_max(width)) as u32
-}
-
-/// Pack `raw` into `width` bytes in the given order.
-fn pack(raw: u32, width: u8, endian: Endian) -> Vec<u8> {
-    let mut le: Vec<u8> = (0..width).map(|i| (raw >> (8 * i as u32)) as u8).collect();
-    if endian == Endian::Be {
-        le.reverse();
-    }
-    le
-}
-
-/// Unpack `width` bytes (in `endian` order) into a value.
-fn unpack(bytes: &[u8], endian: Endian) -> u32 {
-    let mut acc = 0u32;
-    match endian {
-        Endian::Le => {
-            for (i, &b) in bytes.iter().enumerate() {
-                acc |= (b as u32) << (8 * i as u32);
-            }
-        }
-        Endian::Be => {
-            for &b in bytes {
-                acc = (acc << 8) | b as u32;
-            }
-        }
-    }
-    acc
 }
 
 /// The generic device. Constructed from a [`DeviceDescriptor`] whose
@@ -229,30 +180,6 @@ impl GenericI2cDevice {
         self.commands.iter().find(|c| c.code == code)
     }
 
-    /// The extra scale factor a register's `scale_from` selects from the current
-    /// value of another register's bit-field (1.0 when absent / unmapped).
-    fn scale_from_factor(&self, reg: &I2cRegister) -> f64 {
-        let Some(sf) = &reg.scale_from else {
-            return 1.0;
-        };
-        let regval = self.reg_values.get(&sf.register).copied().unwrap_or(0);
-        let field = (regval >> sf.shift as u32) & sf.mask;
-        sf.map.get(&field).copied().unwrap_or(1.0)
-    }
-
-    /// The bytes a read of the currently pointed register returns.
-    fn register_read_bytes(&self, reg: &I2cRegister) -> Vec<u8> {
-        let raw = if let Some(src) = &reg.source {
-            let value = self.slots.get(src).copied().unwrap_or(0.0);
-            let extra = self.scale_from_factor(reg);
-            encode_raw(value, reg.encode.as_ref(), extra, reg.width)
-        } else {
-            // Plain storage register: echo the written value (seeded to reset).
-            self.reg_values.get(&reg.name).copied().unwrap_or(reg.reset)
-        };
-        pack(raw, reg.width, reg.endian)
-    }
-
     /// Build the response bytes for a dispatched command (before delay gating).
     fn build_response(&self, cmd: &I2cCommand) -> Vec<u8> {
         let mut out = Vec::new();
@@ -369,7 +296,7 @@ impl I2cDevice for GenericI2cDevice {
         // Register mode: latch the pointed register's bytes on the first read.
         if !self.latched {
             self.read_buf = match self.pointer.and_then(|p| self.find_register(p)) {
-                Some(reg) => self.register_read_bytes(reg),
+                Some(reg) => register_read_bytes(reg, &self.slots, &self.reg_values),
                 // Unknown pointer reads a zero word, matching veml7700.
                 None => vec![0, 0],
             };
