@@ -752,8 +752,14 @@ mod tests {
         let mut c3_table = Esp32s3MmuTable::new(new_c3_mmu_table());
         match c3_table.restore_runtime_snapshot(&s3_blob).unwrap_err() {
             SimulationError::NotImplemented(msg) => {
-                assert!(msg.contains("512 entries"), "clear size-mismatch error: {msg}");
-                assert!(msg.contains("table has 128"), "clear size-mismatch error: {msg}");
+                assert!(
+                    msg.contains("512 entries"),
+                    "clear size-mismatch error: {msg}"
+                );
+                assert!(
+                    msg.contains("table has 128"),
+                    "clear size-mismatch error: {msg}"
+                );
             }
             other => panic!("expected NotImplemented size-mismatch, got {other:?}"),
         }
