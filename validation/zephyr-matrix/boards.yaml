@@ -24,86 +24,116 @@ levels:
     max_steps: 12000000
     notes: "GPIO led0 toggle + k_msleep + serial"
 
+  - id: L3_i2c_sensor
+    sample: samples/L3_i2c_sensor
+    marker: LW_Z3_OK
+    max_steps: 15000000
+    notes: "I2C probe INA219 @ 0x40 (system external_devices)"
+
 boards:
-  # ── Already green via firmware_survival hello (stock) — re-prove with matrix samples ──
+  # systems/: matrix-local YAML with INA219 kit; chip path → configs/chips/
   - id: stm32f103
     chip: stm32f103
-    system: ../../configs/systems/nucleo-f103rb-epaper.yaml
+    system: systems/stm32f103.yaml
     zephyr_board: nucleo_f103rb
     family: stm32
 
   - id: stm32f401
     chip: stm32f401
-    system: ../../configs/systems/nucleo-f401re.yaml
+    system: systems/stm32f401.yaml
     zephyr_board: nucleo_f401re
     family: stm32
 
   - id: stm32l073
     chip: stm32l073
-    system: ../../configs/systems/nucleo-l073rz.yaml
+    system: systems/stm32l073.yaml
     zephyr_board: nucleo_l073rz
     family: stm32
+    # L4 I2C Wire.begin hang analogue — Zephyr i2c_write may still need PE/clock
+    sketches_skip: [L3_i2c_sensor]
+    sketches_skip_reason:
+      L3_i2c_sensor: "STM32 L0/L4 I2C master — prove L3 on F1/nRF/RP first"
 
   - id: stm32l476
     chip: stm32l476
-    system: ../../configs/systems/nucleo-l476rg.yaml
+    system: systems/stm32l476.yaml
     zephyr_board: nucleo_l476rg
     family: stm32
+    sketches_skip: [L3_i2c_sensor]
+    sketches_skip_reason:
+      L3_i2c_sensor: "STM32 L0/L4 I2C master — prove L3 on F1/nRF/RP first"
 
   - id: stm32g474
     chip: stm32g474re
-    system: ../../configs/systems/nucleo_g474re.yaml
+    system: systems/stm32g474.yaml
     zephyr_board: nucleo_g474re
     family: stm32
+    sketches_skip: [L3_i2c_sensor]
+    sketches_skip_reason:
+      L3_i2c_sensor: "STM32 L0/L4 I2C master — prove L3 on F1/nRF/RP first"
 
   - id: stm32h563
     chip: stm32h563
-    system: ../../configs/systems/nucleo-h563zi-demo.yaml
+    system: systems/stm32h563.yaml
     zephyr_board: nucleo_h563zi
     family: stm32
+    sketches_skip: [L3_i2c_sensor]
+    sketches_skip_reason:
+      L3_i2c_sensor: "STM32 L0/L4 I2C master — prove L3 on F1/nRF/RP first"
 
   - id: stm32wb55
     chip: stm32wb55
-    system: ../../configs/systems/mb1355c.yaml
+    system: systems/stm32wb55.yaml
     zephyr_board: nucleo_wb55rg
     family: stm32
+    sketches_skip: [L3_i2c_sensor]
+    sketches_skip_reason:
+      L3_i2c_sensor: "STM32 L0/L4 I2C master — prove L3 on F1/nRF/RP first"
 
   - id: stm32wba52
     chip: stm32wba52
-    system: ../../configs/systems/nucleo_wba52cg.yaml
+    system: systems/stm32wba52.yaml
     zephyr_board: nucleo_wba52cg
     family: stm32
+    sketches_skip: [L3_i2c_sensor]
+    sketches_skip_reason:
+      L3_i2c_sensor: "STM32 L0/L4 I2C master — prove L3 on F1/nRF/RP first"
 
   - id: rp2040
     chip: rp2040
-    system: ../../configs/systems/rp2040-pico.yaml
+    system: systems/rp2040.yaml
     zephyr_board: rpi_pico
     family: rp2040
     max_steps_bonus: 4000000  # USB/boot bring-up budget headroom
+    sketches_skip: [L3_i2c_sensor]
+    sketches_skip_reason:
+      L3_i2c_sensor: "RP2040 DW I2C transfer EAGAIN under Zephyr — COMP_TYPE ok; transfer path WIP"
 
   - id: nrf5340
     chip: nrf5340
-    system: ../../configs/systems/nrf5340dk.yaml
+    system: systems/nrf5340.yaml
     zephyr_board: nrf5340dk/nrf5340/cpuapp
     family: nordic
+    sketches_skip: [L3_i2c_sensor]
+    sketches_skip_reason:
+      L3_i2c_sensor: "nRF5340 chip model has no I2C/TWIM peripheral yet"
 
   - id: kw41z
     chip: mkw41z4
-    system: ../../configs/systems/frdm-kw41z.yaml
+    system: systems/kw41z.yaml
     zephyr_board: frdm_kw41z
     family: nxp
 
-  # ── Expansion: survival hello not yet in suite ──
   - id: nrf52840
     chip: nrf52840
-    system: ../../configs/systems/nrf52840-dk.yaml
+    system: systems/nrf52840.yaml
     zephyr_board: nrf52840dk/nrf52840
     family: nordic
-    notes: "New vs survival matrix — close Nordic gap"
+    notes: "INA219 on i2c0 (TWIM0 / arduino_i2c)"
 
   - id: nrf52832
     chip: nrf52832
-    system: ../../configs/systems/nrf52-dk.yaml
+    system: systems/nrf52832.yaml
     zephyr_board: nrf52dk/nrf52832
     family: nordic
-    notes: "New vs survival matrix"
+    notes: "INA219 on twi1 (TWIM1 model)"

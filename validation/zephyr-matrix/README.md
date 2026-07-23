@@ -13,6 +13,9 @@ depth beyond the existing `firmware_survival` hello-only cases.
 | `L0_hello` | `LW_Z0_OK` | `main()` + console after kernel boot |
 | `L1_sleep` | `LW_Z1_OK` | `k_msleep` loop — tick / timer fidelity |
 | `L2_blink` | `LW_Z2_OK` | GPIO `led0` + sleep + serial |
+| `L3_i2c_sensor` | `LW_Z3_OK` | Stock `i2c` + INA219 @ 0x40 (system kit) |
+
+Fleet bar (Arduino + Zephyr + peripherals): [`../FRAMEWORK_FLEET.md`](../FRAMEWORK_FLEET.md).
 
 Samples live under `samples/` (in-tree Zephyr apps, not PlatformIO).
 

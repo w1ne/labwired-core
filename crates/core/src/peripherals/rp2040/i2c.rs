@@ -33,6 +33,9 @@ const IC_STATUS: u64 = 0x70; // FIFO / activity status
 const IC_TXFLR: u64 = 0x74; // TX FIFO level
 const IC_RXFLR: u64 = 0x78; // RX FIFO level
 const IC_TX_ABRT_SOURCE: u64 = 0x80; // abort reason bitmap
+/// DesignWare component type ID — Zephyr `i2c_dw` refuses to init without it.
+const IC_COMP_TYPE: u64 = 0xfc;
+const IC_COMP_TYPE_MAGIC: u32 = 0x4457_0140;
 
 // IC_RAW_INTR_STAT bits.
 const INTR_TX_ABRT: u32 = 1 << 6;
@@ -134,6 +137,7 @@ impl Peripheral for Rp2040I2c {
                     0
                 }
             }
+            IC_COMP_TYPE => IC_COMP_TYPE_MAGIC,
             _ => 0,
         };
         Ok(val)

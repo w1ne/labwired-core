@@ -1,0 +1,10 @@
+# Zephyr matrix system — INA219 for L3; L0–L2 ignore it.
+name: "zephyr-matrix-rp2040"
+chip: "../../../configs/chips/rp2040.yaml"
+external_devices:
+  - id: "ina219"
+    type: "ina219"
+    connection: "i2c0"
+    config:
+      i2c_address: 0x40
+board_io: []

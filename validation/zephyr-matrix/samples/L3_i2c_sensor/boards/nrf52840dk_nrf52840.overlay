@@ -1,0 +1,4 @@
+/* Prefer EasyDMA TWIM (LabWired models TWIM, not classic TWI byte engine). */
+&i2c0 {
+	compatible = "nordic,nrf-twim";
+};
