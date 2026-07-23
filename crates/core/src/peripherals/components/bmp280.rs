@@ -235,3 +235,38 @@ mod tests {
         assert_eq!(raw, ADC_T);
     }
 }
+
+use crate::peripherals::kit::{
+    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, PeripheralKit, Transport,
+};
+
+pub struct Bmp280Kit;
+pub static BMP280_KIT: Bmp280Kit = Bmp280Kit;
+
+static BMP280_METADATA: KitMetadata = KitMetadata {
+    inputs: &[],
+    device_type: "bmp280",
+    label: "BMP280 Pressure",
+    summary: "Bosch BMP280 I²C pressure + temperature sensor (no humidity).",
+    detail: "Register map compatible with common Arduino BMP280 libraries. \
+             CHIP_ID 0x58 at 0xD0; fixed ADC sample data for deterministic labs.",
+    transport: Transport::I2c,
+    category: Category::I2c,
+    config_keys: &[ConfigKey {
+        name: "i2c_address",
+        ty: ConfigType::Int,
+        doc: "7-bit slave address. Defaults to 0x76 (0x77 alternate).",
+    }],
+    labs: &[],
+};
+
+impl PeripheralKit for Bmp280Kit {
+    fn metadata(&self) -> &'static KitMetadata {
+        &BMP280_METADATA
+    }
+    fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
+        let address = ctx.i2c_address_or(0x76)?;
+        ctx.attach_i2c_device(Box::new(Bmp280::new(address)))?;
+        Ok(())
+    }
+}

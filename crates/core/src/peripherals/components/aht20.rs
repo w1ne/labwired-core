@@ -243,3 +243,38 @@ mod tests {
         );
     }
 }
+
+use crate::peripherals::kit::{
+    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, PeripheralKit, Transport,
+};
+
+pub struct Aht20Kit;
+pub static AHT20_KIT: Aht20Kit = Aht20Kit;
+
+static AHT20_METADATA: KitMetadata = KitMetadata {
+    inputs: &[],
+    device_type: "aht20",
+    label: "AHT20 Temp/Humidity",
+    summary: "Aosong AHT20 I²C temperature and humidity sensor.",
+    detail: "Command-stream protocol at 0x38 with fixed 25 °C / 50 %RH measurement \
+             and BUSY-poll semantics for firmware that triggers then reads.",
+    transport: Transport::I2c,
+    category: Category::I2c,
+    config_keys: &[ConfigKey {
+        name: "i2c_address",
+        ty: ConfigType::Int,
+        doc: "7-bit slave address. Defaults to 0x38 (fixed on real silicon).",
+    }],
+    labs: &[],
+};
+
+impl PeripheralKit for Aht20Kit {
+    fn metadata(&self) -> &'static KitMetadata {
+        &AHT20_METADATA
+    }
+    fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
+        let _address = ctx.i2c_address_or(0x38)?;
+        ctx.attach_i2c_device(Box::new(Aht20::new()))?;
+        Ok(())
+    }
+}
