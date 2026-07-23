@@ -21,11 +21,12 @@ fn default_region_image_path(env: &str) -> Option<PathBuf> {
     let rel = match env {
         "LABWIRED_ESP32C3_ROM" => "roms/esp32c3/esp32c3_rom.bin",
         "LABWIRED_ESP32C3_ROM_DATA" => "roms/esp32c3/esp32c3_drom.bin",
-        // RP2040 bootrom is NOT auto-loaded: a mask ROM at 0 shadows the
-        // Cortex-M boot alias used by bare-metal onboarding ELFs (PIO smoke
-        // links at low VMA and takes VTOR=0). Arduino/Zephyr matrix cells that
-        // need `rom_func_lookup` set LABWIRED_RP2040_BOOTROM explicitly
-        // (see validation/*-matrix/run_matrix.py).
+        // In-tree minimal B0 bootrom so Arduino/Zephyr `rom_func_lookup` works
+        // on plain `labwired test` without exporting the env. Bare-metal ELFs
+        // that need the Cortex-M flash boot alias at 0 (PIO onboarding) can
+        // set LABWIRED_RP2040_BOOTROM= (empty) to skip the image — from_config
+        // then leaves the region out so flash alias wins.
+        "LABWIRED_RP2040_BOOTROM" => "roms/rp2040/bootrom.bin",
         _ => return None,
     };
     // Walk: CWD, CWD/crates/core, crate-relative from this source tree layout.
@@ -60,9 +61,12 @@ impl SystemBus {
                 // Env pin first; else well-known in-tree dumps so Arduino-matrix
                 // / plain `labwired test` can call C3 ROM helpers without
                 // requiring the operator to export LABWIRED_ESP32C3_ROM*.
-                let path_owned = std::env::var(env)
-                    .ok()
-                    .or_else(|| default_region_image_path(env).map(|p| p.display().to_string()));
+                // Explicit empty env → skip image (opt-out of in-tree default).
+                let path_owned = match std::env::var(env) {
+                    Ok(p) if p.is_empty() => None,
+                    Ok(p) => Some(p),
+                    Err(_) => default_region_image_path(env).map(|p| p.display().to_string()),
+                };
                 if let Some(path) = path_owned {
                     match std::fs::read(&path) {
                         Ok(bytes) => {

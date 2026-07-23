@@ -85,6 +85,9 @@ fn rp2040_pio_onboarding_reaches_pio_ok() {
     }
 
     let (chip, manifest) = rp2040_chip();
+    // Bare-metal PIO smoke links at low VMA and uses Cortex-M flash boot alias
+    // at 0; empty env opts out of the in-tree mask ROM so alias wins.
+    std::env::set_var("LABWIRED_RP2040_BOOTROM", "");
     let mut bus = SystemBus::from_config(&chip, &manifest).expect("build RP2040 bus");
     let uart_sink = Arc::new(Mutex::new(Vec::new()));
     bus.attach_uart_tx_sink(uart_sink.clone(), false);

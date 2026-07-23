@@ -408,6 +408,13 @@ def main() -> int:
             print(f"    compile: ok ({elf.name})", flush=True)
             # copy elf for inspection
             shutil.copy2(elf, cell_out / "firmware.elf")
+            # ESP-IDF partition table (MD5 trailer) must sit beside the ELF:
+            # labwired test seeds flash @0x8000 from firmware_dir/partitions.bin.
+            # PIO work dirs are wiped after each cell, so a hard-coded L0 path
+            # fails for L1/L2 (and after a full matrix re-run).
+            pt_src = elf.parent / "partitions.bin"
+            if pt_src.is_file():
+                shutil.copy2(pt_src, cell_out / "partitions.bin")
 
             # Run
             script = cell_out / "test.yaml"

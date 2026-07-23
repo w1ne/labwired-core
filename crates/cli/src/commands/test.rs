@@ -45,6 +45,43 @@ fn metering_exit_status(exit_code: &ExitCode) -> i32 {
     }
 }
 
+/// Resolve an ESP-IDF `partitions.bin` for flash seeding @ 0x8000.
+///
+/// Prefer the table next to the firmware ELF (matrix runner copies it there),
+/// then the live PIO work dir for this cell, then a few L0 fallbacks used by
+/// older diag scripts. Hard-coded L0-only paths break L1/L2 after matrix
+/// cleanup deletes `_pio_work/<cell>`.
+fn resolve_esp_partitions_bin(firmware_path: &std::path::Path) -> Option<std::path::PathBuf> {
+    let mut cands: Vec<std::path::PathBuf> = Vec::new();
+    if let Some(parent) = firmware_path.parent() {
+        // Matrix copies partitions.bin next to firmware.elf (survives work wipe).
+        cands.push(parent.join("partitions.bin"));
+        // out/<board>/<sketch>/firmware.elf → out/_pio_work/<board>__<sketch>/...
+        if let (Some(sketch), Some(board_dir), Some(out)) = (
+            parent.file_name(),
+            parent.parent(),
+            parent.parent().and_then(|p| p.parent()),
+        ) {
+            if let Some(board) = board_dir.file_name() {
+                let cell = format!("{}__{}", board.to_string_lossy(), sketch.to_string_lossy());
+                cands.push(
+                    out.join("_pio_work")
+                        .join(cell)
+                        .join(".pio/build/matrix/partitions.bin"),
+                );
+            }
+        }
+    }
+    for rel in [
+        "validation/arduino-matrix/out/_pio_work/esp32__L0_serial_boot/.pio/build/matrix/partitions.bin",
+        "validation/arduino-matrix/out/_pio_work/esp32c3__L0_serial_boot/.pio/build/matrix/partitions.bin",
+        "validation/arduino-matrix/out/_pio_work/esp32s3__L0_serial_boot/.pio/build/matrix/partitions.bin",
+    ] {
+        cands.push(std::path::PathBuf::from(rel));
+    }
+    cands.into_iter().find(|p| p.is_file())
+}
+
 pub(crate) fn run_test(args: TestArgs) -> ExitCode {
     // ── API key validation (Pro tier gate) ──────────────────────────────
     // If LABWIRED_API_KEY is set and --no-key is not passed, validate before
@@ -449,17 +486,11 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                     // Seed partition table + app image magic into D-cache
                     // identity window (VA 0x3C00_0000 → dcache[off]).
                     {
-                        let pt_candidates = [
-                            std::path::PathBuf::from(
-                                "validation/arduino-matrix/out/_pio_work/esp32s3__L0_serial_boot/.pio/build/matrix/partitions.bin",
-                            ),
-                            std::path::PathBuf::from(
-                                "validation/arduino-matrix/out/_pio_work/esp32__L0_serial_boot/.pio/build/matrix/partitions.bin",
-                            ),
-                        ];
                         if let Ok(mut d) = wiring.dcache_backing.lock() {
-                            for p in &pt_candidates {
-                                if let Ok(pt) = std::fs::read(p) {
+                            if let Some(p) =
+                                resolve_esp_partitions_bin(std::path::Path::new(&firmware_path))
+                            {
+                                if let Ok(pt) = std::fs::read(&p) {
                                     let n = pt.len().min(0xC00);
                                     if d.len() >= 0x8000 + n {
                                         d[0x8000..0x8000 + n].copy_from_slice(&pt[..n]);
@@ -469,7 +500,6 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                                             p.display()
                                         );
                                     }
-                                    break;
                                 }
                             }
                             // App magic 0xE9: identity used off 0x30000; factory
@@ -627,52 +657,32 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                 // build left partitions.bin beside the firmware (or under
                 // the usual _pio_work path). Enables esp_ota_get_running_partition
                 // without a product-path OTA firmware thunk.
+                if let Some(path) = resolve_esp_partitions_bin(std::path::Path::new(&firmware_path))
                 {
-                    let fw_path = std::path::Path::new(&firmware_path);
-                    let candidates = [
-                        fw_path
-                            .parent()
-                            .map(|p| p.join("partitions.bin"))
-                            .unwrap_or_default(),
-                        fw_path
-                            .parent()
-                            .and_then(|p| p.parent())
-                            .map(|p| {
-                                p.join("_pio_work/esp32__L0_serial_boot/.pio/build/matrix/partitions.bin")
-                            })
-                            .unwrap_or_default(),
-                        // validation/arduino-matrix/out/esp32/L0_... → out/_pio_work/...
-                        fw_path
-                            .parent()
-                            .and_then(|p| p.parent())
-                            .and_then(|p| p.parent())
-                            .map(|p| {
-                                p.join("_pio_work/esp32__L0_serial_boot/.pio/build/matrix/partitions.bin")
-                            })
-                            .unwrap_or_default(),
-                    ];
-                    let pt = candidates
-                        .iter()
-                        .find(|p| p.is_file())
-                        .and_then(|p| std::fs::read(p).ok().map(|b| (p.clone(), b)));
-                    if let Some((path, bytes)) = pt {
-                        if let Err(e) =
-                            labwired_core::peripherals::esp32::flash_mmu::seed_esp32_flash_image(
-                                &mut esp_bus,
-                                Some(&bytes),
-                            )
-                        {
-                            eprintln!(
-                                "labwired-cli test: warn: seed partitions from {}: {e}",
-                                path.display()
-                            );
-                        } else {
-                            eprintln!(
-                                "labwired-cli test: seeded {} ({} bytes) @ flash 0x8000",
-                                path.display(),
-                                bytes.len()
-                            );
+                    match std::fs::read(&path) {
+                        Ok(bytes) => {
+                            if let Err(e) =
+                                labwired_core::peripherals::esp32::flash_mmu::seed_esp32_flash_image(
+                                    &mut esp_bus,
+                                    Some(&bytes),
+                                )
+                            {
+                                eprintln!(
+                                    "labwired-cli test: warn: seed partitions from {}: {e}",
+                                    path.display()
+                                );
+                            } else {
+                                eprintln!(
+                                    "labwired-cli test: seeded {} ({} bytes) @ flash 0x8000",
+                                    path.display(),
+                                    bytes.len()
+                                );
+                            }
                         }
+                        Err(e) => eprintln!(
+                            "labwired-cli test: warn: read partitions {}: {e}",
+                            path.display()
+                        ),
                     }
                 }
                 // Dual-core die: APP_CPU starts halted; PRO releases it through
@@ -869,18 +879,10 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
             // stubs never clear. Same S3 SPIMEM model as rom-boot (layout match).
             let mut flash_img = vec![0xFFu8; 4 * 1024 * 1024];
             // Partition table @ flash 0x8000 — `esp_partition` requires MD5
-            // trailer (0xEBEB…). Prefer matrix/PIO build artifact, else the
-            // classic Arduino default table (same on-disk format for C3).
-            let pt_candidates = [
-                std::path::PathBuf::from(
-                    "validation/arduino-matrix/out/_pio_work/esp32c3__L0_serial_boot/.pio/build/matrix/partitions.bin",
-                ),
-                std::path::PathBuf::from(
-                    "validation/arduino-matrix/out/_pio_work/esp32__L0_serial_boot/.pio/build/matrix/partitions.bin",
-                ),
-            ];
-            for p in &pt_candidates {
-                if let Ok(pt) = std::fs::read(p) {
+            // trailer (0xEBEB…). Prefer matrix/PIO build artifact beside the
+            // firmware ELF (same on-disk format for C3).
+            if let Some(p) = resolve_esp_partitions_bin(std::path::Path::new(&firmware_path)) {
+                if let Ok(pt) = std::fs::read(&p) {
                     let n = pt.len().min(0xC00);
                     flash_img[0x8000..0x8000 + n].copy_from_slice(&pt[..n]);
                     eprintln!(
@@ -888,7 +890,6 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                         n,
                         p.display()
                     );
-                    break;
                 }
             }
             let flash = Arc::new(Mutex::new(flash_img));
@@ -1288,20 +1289,13 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                                             }
                                         }
                                     }
-                                    let pt_candidates = [
-                                        std::path::PathBuf::from(
-                                            "validation/arduino-matrix/out/_pio_work/esp32c3__L0_serial_boot/.pio/build/matrix/partitions.bin",
-                                        ),
-                                        std::path::PathBuf::from(
-                                            "validation/arduino-matrix/out/_pio_work/esp32__L0_serial_boot/.pio/build/matrix/partitions.bin",
-                                        ),
-                                    ];
-                                    for p in &pt_candidates {
-                                        if let Ok(pt) = std::fs::read(p) {
+                                    if let Some(p) = resolve_esp_partitions_bin(
+                                        std::path::Path::new(&firmware_path),
+                                    ) {
+                                        if let Ok(pt) = std::fs::read(&p) {
                                             let n = pt.len().min(0xC00);
                                             f[0x8000..0x8000 + n]
                                                 .copy_from_slice(&pt[..n]);
-                                            break;
                                         }
                                     }
                                     // App image magic @ VA 0x3C03_0000 → factory+0x30000

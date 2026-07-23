@@ -48,7 +48,9 @@ boards:
     chip: rp2040
     system: systems/rp2040.yaml
     pio: { platform: raspberrypi, board: pico, framework: arduino }
-    max_steps: 5000000
+    # L2: mbed RTX delay is SysTick-driven (~SystemCoreClock/1000 steps per ms).
+    # setup delay(10) + loop delay(20)×2 before LW_L2_OK exceeds 5M.
+    max_steps: 20000000
     family: rp2040
     notes: "Needs platform raspberrypi (pio pkg install -g -p raspberrypi if missing)"
 
@@ -79,7 +81,8 @@ boards:
     chip: stm32g474re
     system: systems/stm32g474re.yaml
     pio: { platform: ststm32, board: nucleo_g474re, framework: arduino }
-    max_steps: 5000000
+    # L2: setup prints LW_L2_BOOT then delay/blink; 5M stops mid-loop.
+    max_steps: 20000000
     family: stm32
 
   - id: stm32h563
