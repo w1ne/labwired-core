@@ -594,8 +594,8 @@ impl L4I2c {
             0x28 => {
                 self.txdr = value & 0xFF;
                 self.isr &= !0x0000_0003; // writing TXDR clears TXE+TXIS
-                // Loading the first byte while a write transfer is armed starts
-                // the address phase. Instant complete — Wire poll path.
+                                          // Loading the first byte while a write transfer is armed starts
+                                          // the address phase. Instant complete — Wire poll path.
                 if self.start_armed && self.state == I2cState::Idle {
                     self.state = I2cState::AddressPending;
                     self.cycles_remaining = 0;
@@ -1446,7 +1446,11 @@ mod tests {
         let mut i2c = I2c::new();
         // Instant SB: Wire/HAL polls SR1.SB immediately after CR1.START.
         i2c.write(0x01, 0x01).unwrap(); // CR1 START (bit 8) → SR1.SB
-        assert_ne!(i2c.peek(0x14).unwrap() & 0x01, 0, "SB latches on START write");
+        assert_ne!(
+            i2c.peek(0x14).unwrap() & 0x01,
+            0,
+            "SB latches on START write"
+        );
     }
 
     #[test]
@@ -1612,16 +1616,8 @@ mod tests {
             0,
             "ISR.NACKF when no slave"
         );
-        assert_eq!(
-            i2c.peek(0x19).unwrap() & (1 << 7),
-            0,
-            "AUTOEND clears BUSY"
-        );
-        assert_ne!(
-            i2c.peek(0x18).unwrap() & (1 << 5),
-            0,
-            "AUTOEND sets STOPF"
-        );
+        assert_eq!(i2c.peek(0x19).unwrap() & (1 << 7), 0, "AUTOEND clears BUSY");
+        assert_ne!(i2c.peek(0x18).unwrap() & (1 << 5), 0, "AUTOEND sets STOPF");
 
         // ICR.NACKCF (bit4) + STOPCF (bit5) clear the flags.
         i2c.write(0x1C, (1 << 4) | (1 << 5)).unwrap();
@@ -1662,16 +1658,8 @@ mod tests {
             0,
             "TC after address-only"
         );
-        assert_ne!(
-            i2c.peek(0x18).unwrap() & (1 << 5),
-            0,
-            "STOPF via AUTOEND"
-        );
-        assert_eq!(
-            i2c.peek(0x19).unwrap() & (1 << 7),
-            0,
-            "BUSY cleared"
-        );
+        assert_ne!(i2c.peek(0x18).unwrap() & (1 << 5), 0, "STOPF via AUTOEND");
+        assert_eq!(i2c.peek(0x19).unwrap() & (1 << 7), 0, "BUSY cleared");
     }
 
     #[test]
