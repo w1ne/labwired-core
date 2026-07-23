@@ -1,0 +1,44 @@
+# ESP32-C3 Super Mini + marketplace I2C sensors on I2C0 (SDA=GPIO4, SCL=GPIO5)
+name: "marketplace-arduino-c3"
+chip: "../../configs/chips/esp32c3.yaml"
+cpu_hz: 160_000_000
+
+external_devices:
+  - id: "ina219"
+    type: "ina219"
+    connection: "i2c0"
+    route: { sda: "GPIO4", scl: "GPIO5" }
+    config: { i2c_address: 0x40 }
+  - id: "ads1115"
+    type: "ads1115"
+    connection: "i2c0"
+    route: { sda: "GPIO4", scl: "GPIO5" }
+    config: { i2c_address: 0x48 }
+  - id: "ds3231"
+    type: "ds3231"
+    connection: "i2c0"
+    route: { sda: "GPIO4", scl: "GPIO5" }
+    config: { i2c_address: 0x68 }
+  - id: "as5600"
+    type: "as5600"
+    connection: "i2c0"
+    route: { sda: "GPIO4", scl: "GPIO5" }
+    config: { i2c_address: 0x36 }
+  - id: "bno055"
+    type: "bno055"
+    connection: "i2c0"
+    route: { sda: "GPIO4", scl: "GPIO5" }
+    config: { i2c_address: 0x28 }
+  - id: "vl53l0x"
+    type: "vl53l0x"
+    connection: "i2c0"
+    route: { sda: "GPIO4", scl: "GPIO5" }
+    config: { i2c_address: 0x29 }
+
+board_io:
+  - id: "status_led"
+    kind: "led"
+    peripheral: "gpio"
+    pin: 8
+    signal: "output"
+    active_high: false

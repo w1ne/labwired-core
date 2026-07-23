@@ -1,0 +1,11 @@
+# LabWired - DS3231 RTC Lab smoke test
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/ds3231-rtc-lab"
+  system: "./system.yaml"
+limits:
+  max_steps: 500000
+assertions:
+  - uart_contains: "DS3231 RTC Lab"
+  - uart_contains: "TIME="
+  - expected_stop_reason: max_steps

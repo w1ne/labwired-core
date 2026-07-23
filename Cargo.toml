@@ -60,6 +60,9 @@ members = [
     "examples/nucleo-f407-i2c",
     "examples/riscv-virt",
     "examples/adxl345-sensor-lab",
+    "examples/ina219-power-lab",
+    "examples/ads1115-adc-lab",
+    "examples/ds3231-rtc-lab",
     "examples/mpu6050-sensor-lab",
     "examples/vl53l1x-tof-lab",
     "examples/bme280-weather-lab",
@@ -209,6 +212,21 @@ codegen-units = 1
 opt-level = "s"
 
 [profile.release.package.adxl345-sensor-lab]
+codegen-units = 1
+debug = true
+opt-level = "s"
+
+[profile.release.package.ina219-power-lab]
+codegen-units = 1
+debug = true
+opt-level = "s"
+
+[profile.release.package.ads1115-adc-lab]
+codegen-units = 1
+debug = true
+opt-level = "s"
+
+[profile.release.package.ds3231-rtc-lab]
 codegen-units = 1
 debug = true
 opt-level = "s"

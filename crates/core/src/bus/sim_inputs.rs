@@ -141,6 +141,13 @@ impl SystemBus {
                 return;
             }
         }
+        for scale in self.hx711.iter_mut() {
+            use crate::sim_input::SimInput;
+            let id = scale.component_id().unwrap_or("hx711").to_string();
+            if f(&id, scale) {
+                return;
+            }
+        }
         for device in self.gpio_devices.iter_mut() {
             let id = device.id().to_string();
             if f(&id, device.as_sim_input()) {
