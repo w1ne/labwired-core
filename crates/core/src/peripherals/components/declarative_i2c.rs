@@ -381,7 +381,7 @@ fn validate_spec(spec: &I2cSpec) -> Result<()> {
 /// Leak the descriptor's `metadata.inputs` into a `'static` channel table
 /// (`InputChannel` requires `'static` strings). One table per call — the kit
 /// leaks once and shares it; tests leak per device.
-fn leak_channels(descriptor: &DeviceDescriptor) -> &'static [InputChannel] {
+pub(crate) fn leak_channels(descriptor: &DeviceDescriptor) -> &'static [InputChannel] {
     let inputs = descriptor
         .metadata
         .as_ref()

@@ -1,0 +1,39 @@
+# Test-only fixture for the declarative SPI device primitive (register framing).
+#
+# A fictional accelerometer-shaped part. NOT a real part and NOT registered in
+# KITS, so it never enters the peripherals manifest — it exists solely to
+# exercise GenericSpiDevice from declarative_spi.rs tests. It demonstrates the
+# ADXL345 framing (rw-bit + auto-increment), a fixed WHOAMI, a rw config
+# register, a sourced+encoded measurement, and scale_from range scaling.
+type: test_spi_fixture
+
+behavior:
+  primitive: spi_device
+  spi:
+    framing:
+      command_bytes: 1
+      rw_bit: 7
+      rw_read_high: true
+      addr_mask: 0x3F
+      auto_increment: true
+    registers:
+      # Fixed identity register (datasheet constant), read-only.
+      - { name: WHOAMI, addr: 0x00, width: 1, endian: le, access: r, reset: 0xE5 }
+      # rw config; its low 2 bits select the DATA range via scale_from.
+      - { name: RANGE, addr: 0x31, width: 1, endian: le, access: rw, reset: 0x00 }
+      # X-axis sample, little-endian 16-bit, sources `accel_x`.
+      - name: DATAX
+        addr: 0x32
+        width: 2
+        endian: le
+        access: r
+        source: accel_x
+        encode: { scale: 256.0 }        # 256 LSB/g
+        scale_from: { register: RANGE, mask: 0x3, shift: 0, map: { 0: 1.0, 1: 2.0, 3: 4.0 } }
+
+metadata:
+  label: "Declarative SPI fixture"
+  summary: "Test-only accelerometer-shaped SPI part (register framing)."
+  category: spi
+  inputs:
+    - { key: accel_x, label: "Accel X", unit: g, min: -16, max: 16, default: 1 }
