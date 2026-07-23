@@ -5,6 +5,9 @@ name: Core Arduino Matrix Smoke
 # See validation/FRAMEWORK_FLEET.md.
 
 on:
+  # Slow fleet: nightly + main tip + manual. Not on PRs (PR merge target <1 min).
+  schedule:
+    - cron: "20 2 * * *"
   push:
     branches:
       - main
@@ -16,12 +19,6 @@ on:
       - "crates/core/**"
       - "crates/cli/**"
       - ".github/workflows/core-arduino-matrix-smoke.yml"
-  # Always on PRs: required status `arduino-matrix-gate`.
-  pull_request:
-    branches:
-      - main
-  schedule:
-    - cron: "30 3 * * 0"
   workflow_dispatch:
 
 concurrency:

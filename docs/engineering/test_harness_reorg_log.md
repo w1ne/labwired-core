@@ -56,6 +56,7 @@ Local branch: `chore/test-harness-organize` (do **not** push until asked).
 - Coverage-matrix: drop duplicate F103 cell; release CLI; required pass rate **1.0**.
 - New `core-arduino-matrix-smoke.yml`: stm32f103, nrf52840, rp2040, esp32c3 × L0+L2.
 - core-integrity: Docker runner smoke → non-required job; weekly `core-full` schedule.
+- **PR &lt;1 min (2026-07-23):** required check is only `pr-gate` (fmt + core/CLI clippy+lib tests + validation drift). Coverage-matrix, onboarding, arduino-matrix run **nightly** (+ main push), not on `pull_request`.
 - llvm-cov weekly floor 55% → 58%.
 - `scripts/pre-push.sh`: fast gate (fmt/clippy/walk/RP2040/LogicTap); FULL=1 for workspace.
 

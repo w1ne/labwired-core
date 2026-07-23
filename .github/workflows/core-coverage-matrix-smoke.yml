@@ -1,6 +1,9 @@
 name: Core Coverage Matrix Smoke
 
 on:
+  # Slow gates: nightly + main tip + manual. Not on PRs (PR merge target <1 min).
+  schedule:
+    - cron: "0 2 * * *"
   push:
     branches:
       - main
@@ -12,10 +15,6 @@ on:
       - "crates/cli/**"
       - "crates/labwired-models-**"
       - ".github/workflows/core-coverage-matrix-smoke.yml"
-  # Always on PRs: required status `coverage-matrix-scoreboard`.
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 concurrency:

@@ -164,25 +164,24 @@ scheduler identity unless a workflow enables the feature.
 
 ---
 
-## CI map (post roast 2026-07-23)
+## CI map (PR <1 min / nightly slow gates)
 
 | Workflow / job | When | Required to merge? | What it proves |
 |----------------|------|--------------------|----------------|
-| **core-integrity** | every PR | **yes** | fmt, clippy, unit tests, validation drift, board-coverage ratchet, walk-diffs |
-| **onboarding-scoreboard** | every PR | **yes** | 3 bare-metal UART/PIO fixtures all green |
-| **coverage-matrix-scoreboard** | every PR | **yes** | required UART/CAN smokes at **100%** pass |
-| **arduino-matrix-gate** | every PR | **yes** | 4 boards × L0+L2 stock Arduino |
-| **ci-runner-image** | main + weekly | no | `Dockerfile.ci` still runs CLI |
-| **core-full** | weekly + `[full-ci]` + manual | no | full workspace tests + Tier-1 matrix |
-| **board-ci** | path-filtered | no | PR usually only IO-Link station |
-| **llvm-cov** (Core Coverage Gate) | weekly | no | ≥58% line on core+cli |
+| **pr-gate** | every PR | **yes** | fmt, validation drift, clippy+lib tests for **core+CLI only** (target **&lt;1 min**) |
+| **release-runner-contract** | every PR | no (advisory) | release runner docs/action contract |
+| **core-integrity** | main push + nightly | no | full workspace clippy/tests + ratchet + walk-diffs |
+| **coverage-matrix-scoreboard** | **nightly** + main | no | UART/CAN smokes at 100% pass |
+| **onboarding-scoreboard** | **nightly** + main | no | bare-metal UART/PIO fixtures |
+| **arduino-matrix-gate** | **nightly** + main | no | full Arduino fleet L0+L2+L3 |
+| **ci-runner-image** | main + nightly | no | `Dockerfile.ci` still runs CLI |
+| **core-full** | nightly + `[full-ci]` + manual | no | full workspace tests + Tier-1 matrix |
+| **llvm-cov** (Core Coverage Gate) | weekly | no | line coverage floor on core+cli |
 
-Branch protection also uses **`strict: true`** (PR tip must include latest main).
+Branch protection: required context **`pr-gate`** only (+ **`strict: true`**).
 
-### Path filters (fixed)
-
-Onboarding + coverage-matrix now fire on `crates/core/**` and `crates/cli/**`
-so model/runtime changes cannot skip the smokes that would catch them.
+Slow matrices are **not** on `pull_request` so required-check path-filter
+stalls cannot block merges; they still run every night and on main.
 
 ### Pre-push (local)
 
