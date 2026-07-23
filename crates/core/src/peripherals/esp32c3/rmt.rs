@@ -34,6 +34,8 @@ pub struct Esp32c3Rmt {
     regs: [u32; 0x40],
     /// RMTMEM shadow (optional; firmware may write symbols here).
     mem: Vec<u32>,
+    /// Count of TX_START pulses (rgbLedWrite / RMT TX). Matrix L2 oracle.
+    tx_start_count: u32,
 }
 
 impl Esp32c3Rmt {
@@ -47,7 +49,13 @@ impl Esp32c3Rmt {
             int_ena: 0,
             regs: [0; 0x40],
             mem: vec![0; 256],
+            tx_start_count: 0,
         }
+    }
+
+    /// Number of TX_START pulses observed (matrix / inspect oracle).
+    pub fn tx_start_count(&self) -> u32 {
+        self.tx_start_count
     }
 
     pub fn new_default() -> Self {
@@ -69,6 +77,7 @@ impl Esp32c3Rmt {
         if value & TX_START_BIT != 0 {
             // Instant TX complete: CHn_TX_END = bit n.
             self.int_raw |= 1 << ch;
+            self.tx_start_count = self.tx_start_count.saturating_add(1);
         }
     }
 }
@@ -170,5 +179,22 @@ impl Peripheral for Esp32c3Rmt {
 
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
+    }
+
+    fn inspect(
+        &self,
+        base: u64,
+        name: &str,
+        opts: &crate::inspect::InspectOpts,
+    ) -> crate::inspect::PeripheralInspect {
+        let mut view = crate::inspect::default_inspect(self, base, name, opts);
+        view.kind = "rmt".into();
+        view.artifacts.push(crate::inspect::Artifact {
+            kind: "rmt_tx".into(),
+            id: "tx_start".into(),
+            meta: serde_json::json!({ "count": self.tx_start_count }),
+            bytes: None,
+        });
+        view
     }
 }

@@ -2,14 +2,41 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! Post-BROM DRAM seeds for classic ESP32 when the boot ROM is skipped.
+//! ESP bring-up helpers used by `labwired test` (and only that path).
 //!
-//! This is **not** a firmware flash-thunk path: it writes the same DRAM
-//! globals a real `esp_rom_spiflash_attach` + clock init would leave so
-//! IDF `esp_flash_init_default_chip` / delay math observe valid state.
+//! Keep chip-specific flash/DRAM seeds out of the generic test driver so
+//! `test.rs` stays a script runner, not a second ESP-IDF stage.
 
 use labwired_core::bus::SystemBus;
 use labwired_core::Bus;
+use std::path::{Path, PathBuf};
+
+/// Resolve an ESP-IDF `partitions.bin` for flash seeding @ 0x8000.
+///
+/// Firmware-adjacent paths only (matrix copies next to the ELF). Never
+/// hard-code matrix PIO work-dir L0 fall-backs.
+pub fn resolve_esp_partitions_bin(firmware_path: &Path) -> Option<PathBuf> {
+    let mut cands: Vec<PathBuf> = Vec::new();
+    if let Some(parent) = firmware_path.parent() {
+        cands.push(parent.join("partitions.bin"));
+        // out/<board>/<sketch>/firmware.elf → out/_pio_work/<board>__<sketch>/...
+        if let (Some(sketch), Some(board_dir), Some(out)) = (
+            parent.file_name(),
+            parent.parent(),
+            parent.parent().and_then(|p| p.parent()),
+        ) {
+            if let Some(board) = board_dir.file_name() {
+                let cell = format!("{}__{}", board.to_string_lossy(), sketch.to_string_lossy());
+                cands.push(
+                    out.join("_pio_work")
+                        .join(cell)
+                        .join(".pio/build/matrix/partitions.bin"),
+                );
+            }
+        }
+    }
+    cands.into_iter().find(|p| p.is_file())
+}
 
 /// Seed `g_rom_flashchip` + `g_ticks_per_us_*` from ELF symbols.
 pub fn seed_esp32_post_brom_dram(bus: &mut SystemBus, elf_bytes: &[u8]) {

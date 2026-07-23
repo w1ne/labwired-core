@@ -149,8 +149,12 @@ scheduler identity unless a workflow enables the feature.
 - SCB presence still forces quantum-1 (cycle-accurate logic capture). RTC_CNTL
   only forces quantum-1 while SW_SYS_RST is latched.
 - `LABWIRED_MATRIX_SPEED=1` + `event-scheduler` remains experimental on ESP
-  FreeRTOS; default CLI is the fidelity matrix path.
+  FreeRTOS; default CLI is the fidelity matrix path. Class-M dual-universe
+  smoke: `validation/arduino-matrix/scripts/matrix_speed_subset.sh`.
 - CLI must not hard-code matrix PIO work paths for partitions.
+- L2 oracles: GPIO edges via `led_watch` (STM32, ESP classic, nRF after
+  PIN_CNF.DIR sync); RMT TX_START count via inspect `rmt_tx` + `min_rmt_tx`
+  (C3/S3 RGB).
 
 Work log: [`test_harness_reorg_log.md`](test_harness_reorg_log.md).
 

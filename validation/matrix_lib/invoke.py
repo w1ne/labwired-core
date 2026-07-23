@@ -76,6 +76,21 @@ def _count_logic_edges(result: dict[str, Any]) -> int:
     return n
 
 
+def _count_rmt_tx(result: dict[str, Any]) -> int:
+    """Sum RMT TX_START counts from inspect artifacts (C3/S3 rgbLedWrite)."""
+    inspect = result.get("inspect") or {}
+    total = 0
+    for peri in inspect.get("peripherals") or []:
+        for art in peri.get("artifacts") or []:
+            if art.get("kind") == "rmt_tx":
+                meta = art.get("meta") or {}
+                try:
+                    total += int(meta.get("count") or 0)
+                except (TypeError, ValueError):
+                    pass
+    return total
+
+
 def classify_failure(
     proc: subprocess.CompletedProcess[str],
     result: dict[str, Any],
@@ -145,12 +160,15 @@ def run_labwired(
     *,
     watch_gpio: list[str] | None = None,
     min_logic_edges: int | None = None,
+    min_rmt_tx: int | None = None,
     extra_env: dict[str, str] | None = None,
 ) -> tuple[str, dict[str, Any]]:
     """Run `labwired test`. Returns (status, detail).
 
     If ``min_logic_edges`` is set and the UART oracle passes, require at least
     that many logic transitions across watched channels (L2 GPIO honesty).
+    If ``min_rmt_tx`` is set, require at least that many RMT TX_START pulses
+    (inspect artifact ``rmt_tx``) — C3/S3 RGB ``rgbLedWrite`` path.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     cmd = [
@@ -214,4 +232,10 @@ def run_labwired(
                 f"logic edges {n} < required min_logic_edges {min_logic_edges} "
                 f"(watch_gpio={watch_gpio})"
             )
+    if status == "pass" and min_rmt_tx is not None and min_rmt_tx > 0:
+        n = _count_rmt_tx(result)
+        detail["rmt_tx_count"] = n
+        if n < min_rmt_tx:
+            status = "oracle_fail"
+            detail["oracle"] = f"rmt TX_START count {n} < required min_rmt_tx {min_rmt_tx}"
     return status, detail

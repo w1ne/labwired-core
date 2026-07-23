@@ -254,6 +254,17 @@ impl Nrf52Gpio {
                 let k = ((offset - 0x700) / 4) as usize;
                 if k < self.num_pins as usize {
                     self.pin_cnf[k] = value;
+                    // PIN_CNF[n].DIR (bit 0) is the authoritative direction for
+                    // pin n; the bulk DIR register mirrors those bits. Arduino
+                    // / nrfx configure via PIN_CNF only — without this sync,
+                    // pad_level (OUT∩DIR) never sees digitalWrite and LogicTap
+                    // stays silent on nRF LEDs.
+                    let bit = 1u32 << k;
+                    if value & 1 != 0 {
+                        self.dir |= bit & mask;
+                    } else {
+                        self.dir &= !bit;
+                    }
                 }
             }
             _ => {}
@@ -952,6 +963,19 @@ mod routing_tests {
         assert_eq!(g.gpio_routing(5).unwrap().mode, GpioMode::Output);
         assert!(g.gpio_routing(5).unwrap().func.is_none());
         assert_eq!(g.gpio_routing(6).unwrap().mode, GpioMode::Input);
+    }
+
+    #[test]
+    fn nrf52_pin_cnf_dir_syncs_bulk_dir_and_pad() {
+        let mut g = GpioPort::new_with_layout(GpioRegisterLayout::Nrf52);
+        // Arduino/nrfx: DIR via PIN_CNF only, then OUTSET/OUTCLR.
+        g.write_u32(0x700 + 13 * 4, 1).unwrap(); // PIN_CNF[13].DIR = Output
+        assert_eq!(g.gpio_routing(13).unwrap().mode, GpioMode::Output);
+        assert_eq!(g.read_gpio_pad(13), Some(false));
+        g.write_u32(0x508, 1 << 13).unwrap(); // OUTSET pin 13
+        assert_eq!(g.read_gpio_pad(13), Some(true));
+        g.write_u32(0x50C, 1 << 13).unwrap(); // OUTCLR
+        assert_eq!(g.read_gpio_pad(13), Some(false));
     }
 
     #[test]

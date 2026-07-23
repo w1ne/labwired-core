@@ -270,6 +270,8 @@ pub struct Esp32s3Rmt {
     /// locks / reach `WaitBits` before `rmt_tx_default_isr` runs (Arduino
     /// WS2812 / `rgbLedWrite` FreeRTOS queue corruption).
     irq_holdoff_cycles: u32,
+    /// Count of TX_START pulses (rgbLedWrite / RMT TX). Matrix L2 oracle.
+    tx_start_count: u32,
 }
 
 impl Esp32s3Rmt {
@@ -314,7 +316,13 @@ impl Esp32s3Rmt {
             int_ena: 0,
             playback: None,
             irq_holdoff_cycles: 0,
+            tx_start_count: 0,
         }
+    }
+
+    /// Number of TX_START pulses observed (matrix / inspect oracle).
+    pub fn tx_start_count(&self) -> u32 {
+        self.tx_start_count
     }
 
     /// Hold off TX-done IRQ for this many sim cycles after TX_START.
@@ -622,6 +630,7 @@ impl Esp32s3Rmt {
             if value & TX_START_BIT != 0 {
                 self.int_raw |= tx_end_bit(i);
                 self.irq_holdoff_cycles = Self::TX_IRQ_HOLDOFF;
+                self.tx_start_count = self.tx_start_count.saturating_add(1);
                 // RMT Stage 2: timed pad waveform for observers / logic capture.
                 self.arm_tx_playback(i);
             }
@@ -800,6 +809,23 @@ impl Peripheral for Esp32s3Rmt {
 
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
+    }
+
+    fn inspect(
+        &self,
+        base: u64,
+        name: &str,
+        opts: &crate::inspect::InspectOpts,
+    ) -> crate::inspect::PeripheralInspect {
+        let mut view = crate::inspect::default_inspect(self, base, name, opts);
+        view.kind = "rmt".into();
+        view.artifacts.push(crate::inspect::Artifact {
+            kind: "rmt_tx".into(),
+            id: "tx_start".into(),
+            meta: serde_json::json!({ "count": self.tx_start_count }),
+            bytes: None,
+        });
+        view
     }
 }
 

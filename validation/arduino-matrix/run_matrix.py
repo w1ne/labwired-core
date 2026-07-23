@@ -270,12 +270,16 @@ def main() -> int:
                     except OSError:
                         pass
 
-            # L2 optional GPIO honesty (boards.yaml led_watch)
+            # L2 optional GPIO / RMT honesty (boards.yaml)
             watch: list[str] = []
             min_edges: int | None = None
-            if sid.startswith("L2") and board.get("led_watch"):
-                watch = [str(board["led_watch"])]
-                min_edges = int(board.get("led_min_edges", 2))
+            min_rmt: int | None = None
+            if sid.startswith("L2"):
+                if board.get("led_watch"):
+                    watch = [str(board["led_watch"])]
+                    min_edges = int(board.get("led_min_edges", 2))
+                if board.get("min_rmt_tx") is not None:
+                    min_rmt = int(board["min_rmt_tx"])
 
             script = cell_out / "test.yaml"
             write_test_script(
@@ -292,6 +296,7 @@ def main() -> int:
                 args.run_timeout,
                 watch_gpio=watch or None,
                 min_logic_edges=min_edges,
+                min_rmt_tx=min_rmt,
             )
             if used_cache:
                 detail = dict(detail) if isinstance(detail, dict) else {"detail": detail}
