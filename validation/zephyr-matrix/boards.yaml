@@ -50,54 +50,36 @@ boards:
     zephyr_board: nucleo_l073rz
     family: stm32
     # L4 I2C Wire.begin hang analogue — Zephyr i2c_write may still need PE/clock
-    sketches_skip: [L3_i2c_sensor]
-    sketches_skip_reason:
-      L3_i2c_sensor: "STM32 L0/L4 I2C master — prove L3 on F1/nRF/RP first"
 
   - id: stm32l476
     chip: stm32l476
     system: systems/stm32l476.yaml
     zephyr_board: nucleo_l476rg
     family: stm32
-    sketches_skip: [L3_i2c_sensor]
-    sketches_skip_reason:
-      L3_i2c_sensor: "STM32 L0/L4 I2C master — prove L3 on F1/nRF/RP first"
 
   - id: stm32g474
     chip: stm32g474re
     system: systems/stm32g474.yaml
     zephyr_board: nucleo_g474re
     family: stm32
-    sketches_skip: [L3_i2c_sensor]
-    sketches_skip_reason:
-      L3_i2c_sensor: "STM32 L0/L4 I2C master — prove L3 on F1/nRF/RP first"
 
   - id: stm32h563
     chip: stm32h563
     system: systems/stm32h563.yaml
     zephyr_board: nucleo_h563zi
     family: stm32
-    sketches_skip: [L3_i2c_sensor]
-    sketches_skip_reason:
-      L3_i2c_sensor: "STM32 L0/L4 I2C master — prove L3 on F1/nRF/RP first"
 
   - id: stm32wb55
     chip: stm32wb55
     system: systems/stm32wb55.yaml
     zephyr_board: nucleo_wb55rg
     family: stm32
-    sketches_skip: [L3_i2c_sensor]
-    sketches_skip_reason:
-      L3_i2c_sensor: "STM32 L0/L4 I2C master — prove L3 on F1/nRF/RP first"
 
   - id: stm32wba52
     chip: stm32wba52
     system: systems/stm32wba52.yaml
     zephyr_board: nucleo_wba52cg
     family: stm32
-    sketches_skip: [L3_i2c_sensor]
-    sketches_skip_reason:
-      L3_i2c_sensor: "STM32 L0/L4 I2C master — prove L3 on F1/nRF/RP first"
 
   - id: rp2040
     chip: rp2040
@@ -105,9 +87,6 @@ boards:
     zephyr_board: rpi_pico
     family: rp2040
     max_steps_bonus: 4000000  # USB/boot bring-up budget headroom
-    sketches_skip: [L3_i2c_sensor]
-    sketches_skip_reason:
-      L3_i2c_sensor: "RP2040 DW I2C transfer EAGAIN under Zephyr — COMP_TYPE ok; transfer path WIP"
 
   - id: nrf5340
     chip: nrf5340

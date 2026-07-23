@@ -127,6 +127,14 @@ pub struct F1I2c {
     rxne_consumed: Cell<bool>,
     #[serde(skip)]
     read_dr_consumed: Cell<bool>,
+    /// ADDR (SR1 bit1) software-clear sequence: set after SR1 is read while
+    /// ADDR is set; consumed on the following SR2 read (RM0008 §26.6.6 —
+    /// "ADDR is cleared by reading SR1 then SR2"). Held in a Cell so the
+    /// clear can happen on a pure `&self` read path.
+    #[serde(skip)]
+    addr_sr1_seen: Cell<bool>,
+    #[serde(skip)]
+    addr_cleared: Cell<bool>,
 
     /// Bus-published cycle clock (walk-free campaign). `Some` once the bus
     /// registration choke attaches it; `None` keeps the model on the legacy
@@ -165,6 +173,8 @@ impl Default for F1I2c {
             stop_requested: false,
             rxne_consumed: Cell::new(false),
             read_dr_consumed: Cell::new(true),
+            addr_sr1_seen: Cell::new(false),
+            addr_cleared: Cell::new(false),
             clock: None,
             chain_live: false,
         }
@@ -196,6 +206,16 @@ impl F1I2c {
             || self.stop_requested
     }
 
+    /// SR1 with ADDR masked once the SR1→SR2 clear sequence has completed.
+    #[inline]
+    fn effective_sr1(&self) -> u32 {
+        let mut s = self.sr1;
+        if self.addr_cleared.get() {
+            s &= !0x0002;
+        }
+        s
+    }
+
     fn read_reg(&self, offset: u64) -> u32 {
         match offset {
             0x00 => self.cr1,
@@ -203,8 +223,21 @@ impl F1I2c {
             0x08 => self.oar1,
             0x0C => self.oar2,
             0x10 => self.dr,
-            0x14 => self.sr1,
-            0x18 => self.sr2,
+            0x14 => {
+                let s = self.effective_sr1();
+                // Start of ADDR-clear sequence (RM0008 §26.6.6).
+                if (s & 0x0002) != 0 {
+                    self.addr_sr1_seen.set(true);
+                }
+                s
+            }
+            0x18 => {
+                // Completing ADDR clear: SR1 was read with ADDR set, now SR2.
+                if self.addr_sr1_seen.replace(false) {
+                    self.addr_cleared.set(true);
+                }
+                self.sr2
+            }
             0x1C => self.ccr,
             0x20 => self.trise,
             _ => 0,
@@ -374,6 +407,9 @@ impl F1I2c {
                         self.sr1 |= 0x0002; // ADDR
                         self.sr2 |= 0x0001; // MSL
                         self.sr2 |= 0x0002; // BUSY
+                        // Fresh ADDR — cancel any prior software clear.
+                        self.addr_cleared.set(false);
+                        self.addr_sr1_seen.set(false);
 
                         if self.is_reading {
                             self.state = I2cState::DataPending;
@@ -503,12 +539,33 @@ impl L4I2c {
     }
 
     /// Cycles on which the legacy `tick()` does observable work: an in-flight
-    /// countdown or the BUSY master-transfer window. The L4 read path is pure
-    /// (no `&self` side effects), so the write-armed countdown plus BUSY fully
-    /// bound the engine. Outside this window `tick()` returns immediately.
+    /// countdown, the BUSY master-transfer window, or a live enabled IRQ flag
+    /// (TXIS/TC/STOPF/NACKF) that Master_Transmit_IT still needs delivered.
     #[inline]
     fn active(&self) -> bool {
-        self.state != I2cState::Idle || (self.isr & (1 << 15)) != 0
+        if self.state != I2cState::Idle || (self.isr & (1 << 15)) != 0 {
+            return true;
+        }
+        // Level IRQ bits that can still need a walk tick after the engine idles.
+        let pending = self.isr
+            & (((self.cr1 & (1 << 1)) != 0) as u32 * (1 << 1) // TXIE→TXIS
+                | ((self.cr1 & (1 << 2)) != 0) as u32 * (1 << 2) // RXIE→RXNE
+                | ((self.cr1 & (1 << 4)) != 0) as u32 * (1 << 4) // NACKIE
+                | ((self.cr1 & (1 << 5)) != 0) as u32 * (1 << 5) // STOPIE
+                | ((self.cr1 & (1 << 6)) != 0) as u32 * (1 << 6)); // TCIE
+        pending != 0
+    }
+
+    /// Level-triggered EV IRQ: any enabled status flag still latched.
+    #[inline]
+    fn irq_level(&self) -> bool {
+        let cr1 = self.cr1;
+        let isr = self.isr;
+        ((cr1 & (1 << 1)) != 0 && (isr & (1 << 1)) != 0) // TXIE & TXIS
+            || ((cr1 & (1 << 2)) != 0 && (isr & (1 << 2)) != 0) // RXIE & RXNE
+            || ((cr1 & (1 << 4)) != 0 && (isr & (1 << 4)) != 0) // NACKIE & NACKF
+            || ((cr1 & (1 << 5)) != 0 && (isr & (1 << 5)) != 0) // STOPIE & STOPF
+            || ((cr1 & (1 << 6)) != 0 && (isr & (1 << 6)) != 0) // TCIE & TC
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
@@ -532,7 +589,11 @@ impl L4I2c {
         match offset {
             0x00 => self.cr1 = value & 0x00FF_E1FF,
             0x04 => {
-                self.cr2 = value;
+                // START (bit13) and STOP (bit14) are write-triggers that
+                // self-clear in silicon. Storing them latched makes every
+                // subsequent RMW (Zephyr LL_I2C_SetTransferSize etc.) re-fire
+                // START and abort the transfer with a spurious NACK/EIO.
+                self.cr2 = value & !((1 << 13) | (1 << 14));
                 if (value & (1 << 13)) != 0 {
                     // START: latch BUSY and arm a master transfer. Capture the
                     // addressed slave (SADD[7:1] in 7-bit mode), direction
@@ -552,19 +613,20 @@ impl L4I2c {
                         if let Some(idx) = self.current_target {
                             self.attached_devices[idx].borrow_mut().start();
                         }
-                        self.start_armed = true;
-                        // Read / NBYTES=0+AUTOEND (IsDeviceReady): start now.
-                        if self.is_reading || (self.nbytes == 0 && self.autoend) {
-                            self.state = I2cState::AddressPending;
-                            self.cycles_remaining = 0;
-                            self.start_armed = false;
-                            let _ = self.tick();
-                        }
+                        // Always run the address phase immediately. On a write
+                        // with NBYTES>0 the engine then asserts TXIS and waits
+                        // in DataPending for TXDR (matches L4 silicon + HAL
+                        // Master_Transmit_IT). Read / NBYTES=0 complete in tick.
+                        self.start_armed = false;
+                        self.state = I2cState::AddressPending;
+                        self.cycles_remaining = 0;
+                        let _ = self.tick();
                     }
                 }
                 if (value & (1 << 14)) != 0 {
-                    // STOP: release the bus and tear down any armed/in-flight
-                    // transfer.
+                    // STOP (software, AUTOEND=0 path — Zephyr stm32 v2 poll):
+                    // silicon sets STOPF and clears BUSY when the stop is done.
+                    self.isr |= 1 << 5; // STOPF
                     self.isr &= !(1 << 15); // clear BUSY
                     if let Some(idx) = self.current_target {
                         self.attached_devices[idx].borrow_mut().stop();
@@ -594,9 +656,35 @@ impl L4I2c {
             0x28 => {
                 self.txdr = value & 0xFF;
                 self.isr &= !0x0000_0003; // writing TXDR clears TXE+TXIS
-                                          // Loading the first byte while a write transfer is armed starts
-                                          // the address phase. Instant complete — Wire poll path.
-                if self.start_armed && self.state == I2cState::Idle {
+                // After address ACK the engine waits in DataPending with TXIS
+                // set; firmware (HAL IT / poll) writes TXDR here.
+                if self.state == I2cState::DataPending {
+                    self.first_tx_loaded = true;
+                    if let Some(idx) = self.current_target {
+                        self.attached_devices[idx]
+                            .borrow_mut()
+                            .write(self.txdr as u8);
+                    }
+                    self.isr |= 1 << 0; // TXE
+                    self.isr |= 1 << 6; // TC
+                    if self.autoend {
+                        self.isr |= 1 << 5; // STOPF
+                        self.isr &= !(1 << 15); // BUSY
+                        if let Some(i) = self.current_target {
+                            self.attached_devices[i].borrow_mut().stop();
+                        }
+                        self.current_target = None;
+                    }
+                    self.state = I2cState::Idle;
+                    self.nbytes = 0;
+                    self.first_tx_loaded = false;
+                    self.start_armed = false;
+                    // Completion IRQ for Master_Transmit_IT (TCIE/STOPIE).
+                    // Note: write_reg cannot return irq; the next tick()
+                    // re-checks level flags below. Also pulse via active BUSY
+                    // window so the walk doesn't skip us before ISR runs.
+                } else if self.start_armed && self.state == I2cState::Idle {
+                    // Legacy test path: TXDR before address phase completes.
                     self.state = I2cState::AddressPending;
                     self.cycles_remaining = 0;
                     self.start_armed = false;
@@ -642,11 +730,12 @@ impl L4I2c {
     fn tick(&mut self) -> bool {
         let mut irq = false;
         if self.state == I2cState::Idle {
-            return irq;
+            // Still re-assert level IRQs while flags are latched (IT completion).
+            return self.irq_level();
         }
         self.cycles_remaining = self.cycles_remaining.saturating_sub(1);
         if self.cycles_remaining != 0 {
-            return irq;
+            return self.irq_level();
         }
         if self.state == I2cState::AddressPending {
             match self.current_target {
@@ -663,41 +752,85 @@ impl L4I2c {
                     if (self.cr1 & (1 << 4)) != 0 {
                         irq = true; // NACKIE
                     }
+                    if (self.cr1 & (1 << 5)) != 0 && (self.isr & (1 << 5)) != 0 {
+                        irq = true; // STOPIE
+                    }
+                    self.state = I2cState::Idle;
+                    self.nbytes = 0;
+                    self.first_tx_loaded = false;
                 }
                 Some(idx) => {
-                    // Slave ACKed. Deliver data only when NBYTES>0 and a TXDR
-                    // byte was loaded (write) or fetch one (read). Address-only
-                    // probes (NBYTES=0) complete with TC without data path.
+                    // Slave ACKed.
                     if self.is_reading && self.nbytes > 0 {
                         self.rxdr = self.attached_devices[idx].borrow_mut().read() as u32;
                         self.isr |= 1 << 2; // RXNE
+                        self.isr |= 1 << 6; // TC
+                        if self.autoend {
+                            self.isr |= 1 << 5; // STOPF
+                            self.isr &= !(1 << 15);
+                            self.attached_devices[idx].borrow_mut().stop();
+                            self.current_target = None;
+                        }
+                        if (self.cr1 & (1 << 6)) != 0 {
+                            irq = true; // TCIE
+                        }
+                        if (self.cr1 & (1 << 2)) != 0 {
+                            irq = true; // RXIE
+                        }
+                        self.state = I2cState::Idle;
+                        self.nbytes = 0;
+                        self.first_tx_loaded = false;
                     } else if !self.is_reading && self.nbytes > 0 && self.first_tx_loaded {
+                        // TXDR already loaded (legacy unit-test ordering).
                         self.attached_devices[idx]
                             .borrow_mut()
                             .write(self.txdr as u8);
                         self.isr |= 1 << 0; // TXE
-                    } else {
-                        self.isr |= 1 << 0; // TXE free after address-only
-                    }
-                    self.isr |= 1 << 6; // TC (NBYTES transferred)
-                    if self.autoend {
-                        self.isr |= 1 << 5; // STOPF
-                        self.isr &= !(1 << 15); // BUSY released
-                        if let Some(i) = self.current_target {
-                            self.attached_devices[i].borrow_mut().stop();
+                        self.isr |= 1 << 6; // TC
+                        if self.autoend {
+                            self.isr |= 1 << 5; // STOPF
+                            self.isr &= !(1 << 15);
+                            self.attached_devices[idx].borrow_mut().stop();
+                            self.current_target = None;
                         }
-                        self.current_target = None;
-                    }
-                    if (self.cr1 & (1 << 6)) != 0 {
-                        irq = true; // TCIE
+                        if (self.cr1 & (1 << 6)) != 0 {
+                            irq = true; // TCIE
+                        }
+                        self.state = I2cState::Idle;
+                        self.nbytes = 0;
+                        self.first_tx_loaded = false;
+                    } else if !self.is_reading && self.nbytes > 0 {
+                        // Silicon order: address ACKed → TXIS requests first
+                        // data byte. Stay in DataPending until TXDR is written
+                        // (Arduino/Zephyr Master_Transmit_IT path).
+                        self.isr |= 1 << 1; // TXIS
+                        self.isr |= 1 << 0; // TXE
+                        self.state = I2cState::DataPending;
+                        if (self.cr1 & (1 << 1)) != 0 {
+                            irq = true; // TXIE
+                        }
+                        // Keep nbytes / current_target / BUSY for the data phase.
+                    } else {
+                        // Address-only (NBYTES=0): TC without data path.
+                        self.isr |= 1 << 0; // TXE
+                        self.isr |= 1 << 6; // TC
+                        if self.autoend {
+                            self.isr |= 1 << 5; // STOPF
+                            self.isr &= !(1 << 15);
+                            self.attached_devices[idx].borrow_mut().stop();
+                            self.current_target = None;
+                        }
+                        if (self.cr1 & (1 << 6)) != 0 {
+                            irq = true; // TCIE
+                        }
+                        self.state = I2cState::Idle;
+                        self.nbytes = 0;
+                        self.first_tx_loaded = false;
                     }
                 }
             }
-            self.state = I2cState::Idle;
-            self.nbytes = 0;
-            self.first_tx_loaded = false;
         }
-        irq
+        irq || self.irq_level()
     }
 }
 
