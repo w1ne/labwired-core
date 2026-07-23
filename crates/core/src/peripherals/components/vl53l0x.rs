@@ -58,13 +58,8 @@ impl Vl53l0x {
             0xC1 => 0xAA,
             REG_IDENTIFICATION_REVISION_ID => 0x10,
             // data ready when ranging: bit0 set in interrupt status for many libs
-            REG_RESULT_INTERRUPT_STATUS => {
-                if self.ranging {
-                    0x07
-                } else {
-                    0x00
-                }
-            }
+            REG_RESULT_INTERRUPT_STATUS if self.ranging => 0x07,
+            REG_RESULT_INTERRUPT_STATUS => 0x00,
             // Device ready / range status high nibble
             REG_RESULT_RANGE_STATUS => 0x00,
             REG_RESULT_RANGE_VAL_H => (self.distance_mm >> 8) as u8,

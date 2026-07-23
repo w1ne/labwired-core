@@ -58,7 +58,9 @@ impl Ds3231 {
         }
     }
 
-    pub fn set_time(&mut self, sec: u8, min: u8, hour: u8, dow: u8, date: u8, month: u8, year: u8) {
+    /// Set BCD-backed civil time fields: `[sec, min, hour, dow, date, month, year]`.
+    pub fn set_time(&mut self, fields: [u8; 7]) {
+        let [sec, min, hour, dow, date, month, year] = fields;
         self.time = [
             sec.min(59),
             min.min(59),
@@ -194,7 +196,7 @@ impl crate::sim_input::SimInput for Ds3231 {
                 let m = (if mp < 10 { mp + 3 } else { mp - 9 }) as u8;
                 let y = if m <= 2 { y + 1 } else { y };
                 let year = ((y % 100) as u8).min(99);
-                self.set_time(sec, min, hour, dow, d.max(1), m.max(1), year);
+                self.set_time([sec, min, hour, dow, d.max(1), m.max(1), year]);
             }
             "temperature" => {
                 let t = value.round() as i16;
@@ -258,7 +260,7 @@ mod tests {
     #[test]
     fn bcd_time_roundtrip() {
         let mut dev = Ds3231::new(0x68);
-        dev.set_time(45, 30, 14, 3, 15, 6, 26);
+        dev.set_time([45, 30, 14, 3, 15, 6, 26]);
         dev.stop();
         dev.write(0x00);
         assert_eq!(from_bcd(dev.read()), 45); // sec
