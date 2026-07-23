@@ -120,7 +120,11 @@ impl Esp32c3Rmt {
 
 impl Peripheral for Esp32c3Rmt {
     fn needs_legacy_walk(&self) -> bool {
-        true
+        // Instant TX on CONF0 write + level IRQ via `matrix_irq_sources` —
+        // no per-cycle walk work. Must stay walk-independent so the C3 chip
+        // yaml (which now installs this model) can still derive walk-deletion
+        // for wifi_mac / rom-boot paths.
+        false
     }
 
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
