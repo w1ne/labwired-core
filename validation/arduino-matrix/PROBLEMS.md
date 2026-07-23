@@ -24,13 +24,12 @@ Full matrix: 15 chips × 3 sketches. Scoreboard:
 | **nRF52832** | **Fixed L0–L2** — RTC1 @ `0x40011000` (was mis-mapped RADIO); real UART model |
 | **RP2040** | **Fixed L0–L2** — bootrom `@0` must win over low-address flash alias; minimal B0-compatible `rom_func_lookup` |
 | **ESP32-C3** | **Fixed L0–L2** — FreeRTOS yield + factory MMU/`cache2phys` + C3 RMT for RGB `LED_BUILTIN` (pin 30 → `rgbLedWrite`) |
-| **ESP32-S3** | **Fixed L0–L1** on plain `labwired test` (`LW_L0_OK` / `LW_L1_OK`); L2 still open |
+| **ESP32-S3** | **Fixed L0–L2** on plain `labwired test` — dual-core + ROM strlen + RMT TX-done IRQ holdoff for RGB `LED_BUILTIN` |
 
 ## Open gaps (model work only)
 
 | Chip | Symptom | Honest next model work |
 |------|---------|-------------------------|
-| **ESP32-S3 L2** | After first `digitalWrite(RGB)` → `rgbLedWrite` → `rmtInit`/`rmtWrite`, `rmt_tx_default_isr` runs once then `xQueueReceive` on PRO with bad queue → `EnterCritical` read `@0x20406a` | RGB=`97`→pin48 RMT; map40=[6/6] both cores; ISR@APP raw/ena=1; then PRO `xQueueReceive(a2=1)` corruption. Next: dual-core RMT IRQ/queue integrity after `xQueueGiveFromISR`, or high-DRAM spill (range expanded to `0x3FC8_8000..0x3FD0_0000`) |
 | **STM32WBA52** | No PIO Arduino board | Toolchain gap |
 
 ## Fixes already landed (honest)
@@ -91,6 +90,5 @@ python3 validation/arduino-matrix/run_matrix.py --boards stm32f407,nrf52832
 36. **ESP32-S3 SYSTIMER legacy tick** — factory uses `new_with_source_legacy_tick` (scheduler-driven never advances without `event-scheduler` feature).
 37. **`px_current_tcb` multi-chip** — hybrid CALL preserve parks under FreeRTOS TCB via `pxCurrentTCBs[core]`. Classic-only `0x3FFC_27C8` left S3 at `0x3FC9_B2B4` unparked → APP `_WindowUnderflow8` loop after `vTaskDelay`. Now: ELF `PX_CURRENT_TCB_ADDR` + probe classic/S3 DRAM TCB pointers.
 38. **ESP32-S3 ROM `strlen` @ `0x40001248`** — harness prefill is `nop_return_zero`; `Print::write(const char*)` got length 0 so `Serial.println("LW_L0_OK")` wrote nothing. Real `rom_strlen` thunk; memcpy/memset already registered.
-39. **ESP32-S3 DRAM spill range** — hybrid/xthal spill only accepted S3 SP in `0x3FC8_0000..0x3FCF_0000`; top of 512 KiB SRAM / heap excluded. Now `0x3FC8_8000..0x3FD0_0000` (+ model DRAM 512 KiB).
-40. **ESP32-S3 L2 `LED_BUILTIN` (RGB/RMT)** — `pinMode`/`digitalWrite` on GPIO2/48 pass; `digitalWrite(LED_BUILTIN)` → `rgbLedWrite` → `rmtWrite` corrupts FreeRTOS `xTimerQueue` (handle becomes `0x204016`) → `xQueueReceive` / `xPortEnterCriticalTimeout` at `0x20406a`. `rmtInit` alone OK. Deferred RMT `TX_END` (1 tick) did not clear it — still open.
-39. **S3 DRAM spill/TCB range** — hybrid spill + `looks_like_tcb` now use `0x3FC8_8000..0x3FD0_0000` (was `..0x3FCF_0000`, dropped top ~64 KiB of the 480 KiB SRAM / heap).
+39. **ESP32-S3 DRAM spill/TCB range** — hybrid spill + `looks_like_tcb` use `0x3FC8_8000..0x3FD0_0000` (was capped at `0x3FCF_0000` / 480 KiB model).
+40. **ESP32-S3 RMT TX-done IRQ holdoff** — instantaneous TX_END+IRQ on `TX_START` re-entered `rmt_tx_default_isr` while IDF `rmt_transmit` still held locks → FreeRTOS `xTimerQueue` corruption (`EnterCritical` @ `0x20406a`). Latch INT_RAW immediately; suppress level IRQ for ~2000 sim ticks so WaitBits can arm. Arduino L2 `LED_BUILTIN`/`rgbLedWrite` green.

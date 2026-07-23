@@ -264,14 +264,12 @@ pub struct Esp32s3Rmt {
     /// a limitation adequate for single-strip WS2812 (the Stage-3 target).
     playback: Option<TxPlayback>,
 
-    /// Channels with a deferred `CHn_TX_END` still to latch (bit `n` = TX ch n).
-    ///
-    /// Instantaneous TX_END on the same MMIO write as `TX_START` re-enters the
-    /// FreeRTOS/IDF TX-done ISR while `rmt_transmit` still holds driver locks
-    /// (Arduino-ESP32 `rmtWrite` / WS2812). Defer completion to the next
-    /// peripheral tick so the starting instruction finishes first — silicon
-    /// also cannot complete a multi-symbol frame in zero cycles.
-    pending_tx_end: u8,
+    /// Sim cycles remaining before level-IRQ emission is allowed after a
+    /// `TX_START`. INT_RAW latches immediately; `explicit_irqs` stay quiet
+    /// until this hits zero so the IDF `rmt_transmit` path can release its
+    /// locks / reach `WaitBits` before `rmt_tx_default_isr` runs (Arduino
+    /// WS2812 / `rgbLedWrite` FreeRTOS queue corruption).
+    irq_holdoff_cycles: u32,
 }
 
 impl Esp32s3Rmt {
@@ -315,9 +313,18 @@ impl Esp32s3Rmt {
             int_raw: 0,
             int_ena: 0,
             playback: None,
-            pending_tx_end: 0,
+            irq_holdoff_cycles: 0,
         }
     }
+
+    /// Hold off TX-done IRQ for this many sim cycles after TX_START.
+    /// Long enough for IDF `rmt_transmit` to return into the caller's
+    /// WaitBits while still short for WS2812 bit times at 10 MHz RMT clk.
+    /// Sim cycles between TX_START and first TX-done IRQ. Must cover
+    /// `rmt_transmit` return + `rmtWrite` blocking on the completion queue.
+    /// Too short → GiveFromISR with no waiter → permanent block or queue
+    /// corruption (Arduino S3 RGB L2 @ 0x20406a).
+    const TX_IRQ_HOLDOFF: u32 = 2000;
 
     /// Map an MMIO word offset to the TX channel index whose CONF0 it is, if
     /// any. TX CONF0 offsets are 0x20, 0x24, 0x28, 0x2C (channels 0..3).
@@ -610,10 +617,11 @@ impl Esp32s3Rmt {
         if let Some(i) = Self::tx_conf0_index(offset) {
             // Store everything except the self-clearing write-trigger bits.
             self.tx_conf0[i] = value & !TX_CONF0_WT_MASK;
-            // TX start: arm pad playback and schedule CHn_TX_END for the next
-            // tick (see `pending_tx_end`). Write-trigger bits already cleared.
+            // TX start: latch CHn_TX_END in INT_RAW immediately (status/poll),
+            // but hold off level-IRQ emission (see `irq_holdoff_cycles`).
             if value & TX_START_BIT != 0 {
-                self.pending_tx_end |= 1 << i;
+                self.int_raw |= tx_end_bit(i);
+                self.irq_holdoff_cycles = Self::TX_IRQ_HOLDOFF;
                 // RMT Stage 2: timed pad waveform for observers / logic capture.
                 self.arm_tx_playback(i);
             }
@@ -708,21 +716,14 @@ impl Peripheral for Esp32s3Rmt {
     }
 
     /// Level-sensitive IRQ delivery: while any enabled interrupt is pending
-    /// (INT_ST != 0), re-emit the RMT source on every tick so the bus
-    /// aggregator keeps the CPU's pending line asserted until firmware ACKs at
-    /// the source (INT_CLR). Mirrors the SYSTIMER model.
-    ///
-    /// Also retires deferred `CHn_TX_END` latches scheduled by `TX_START`.
+    /// (INT_ST != 0) **and** the post-TX_START holdoff has expired, re-emit
+    /// the RMT source on every tick so the bus aggregator keeps the CPU's
+    /// pending line asserted until firmware ACKs at the source (INT_CLR).
     fn tick(&mut self) -> PeripheralTickResult {
-        if self.pending_tx_end != 0 {
-            for ch in 0..TX_CHANNELS {
-                if self.pending_tx_end & (1 << ch) != 0 {
-                    self.int_raw |= tx_end_bit(ch);
-                }
-            }
-            self.pending_tx_end = 0;
+        if self.irq_holdoff_cycles > 0 {
+            self.irq_holdoff_cycles = self.irq_holdoff_cycles.saturating_sub(1);
         }
-        let explicit_irqs = if self.int_st() != 0 {
+        let explicit_irqs = if self.irq_holdoff_cycles == 0 && self.int_st() != 0 {
             Some(vec![self.source_id])
         } else {
             None
@@ -733,16 +734,13 @@ impl Peripheral for Esp32s3Rmt {
         }
     }
 
-    /// Bus-tick opt-in: active while a timed playback is in flight **or** a
-    /// deferred TX_END is pending (so the next walk retires completion).
+    /// Bus-tick opt-in: active while a timed playback is in flight.
     fn needs_bus_tick(&self) -> bool {
-        self.playback.is_some() || self.pending_tx_end != 0
+        self.playback.is_some()
     }
 
     fn needs_legacy_walk(&self) -> bool {
-        // Ensure `tick()` runs to retire deferred TX_END even when the
-        // bus-tick path is not engaged (no pad routing / no playback edges).
-        self.pending_tx_end != 0 || self.playback.is_some()
+        true
     }
 
     /// Play out the armed TX waveform onto the routed GPIO pad(s), one bus tick
@@ -817,8 +815,9 @@ mod tests {
         Esp32s3Rmt::new(RMT_SOURCE)
     }
 
-    /// Retire deferred `CHn_TX_END` latches (one peripheral tick).
+    /// Drain TX IRQ holdoff so subsequent ticks emit level IRQs.
     fn retire_tx_end(r: &mut Esp32s3Rmt) {
+        r.irq_holdoff_cycles = 0;
         let _ = r.tick();
     }
 
@@ -913,9 +912,7 @@ mod tests {
         let conf = TX_START_BIT | TX_CONF_UPDATE_BIT | (5 << 8);
         r.write_word(0x28, conf); // CH2CONF0
 
-        // TX_END is deferred one tick (avoids re-entrant TX-done ISR).
-        assert_eq!(r.read_word(0x70) & tx_end_bit(2), 0, "not yet");
-        retire_tx_end(&mut r);
+        // INT_RAW latches immediately; IRQ emission is deferred one tick.
         assert_eq!(r.read_word(0x70) & tx_end_bit(2), tx_end_bit(2));
 
         // tx_start (and conf_update) auto-cleared in stored CONF0; the config
@@ -931,7 +928,6 @@ mod tests {
         for (off, ch) in [(0x20u64, 0usize), (0x24, 1), (0x28, 2), (0x2C, 3)] {
             let mut r = rmt();
             r.write_word(off, TX_START_BIT);
-            retire_tx_end(&mut r);
             assert_eq!(
                 r.read_word(0x70),
                 tx_end_bit(ch),
@@ -955,7 +951,6 @@ mod tests {
         // Latch TX_END on channels 0 and 3.
         r.write_word(0x20, TX_START_BIT);
         r.write_word(0x2C, TX_START_BIT);
-        retire_tx_end(&mut r);
         assert_eq!(r.read_word(0x70), tx_end_bit(0) | tx_end_bit(3));
 
         // INT_CLR bit 0 only — clears channel 0, leaves channel 3.
@@ -972,8 +967,7 @@ mod tests {
     #[test]
     fn int_st_masks_raw_with_ena() {
         let mut r = rmt();
-        r.write_word(0x20, TX_START_BIT); // schedule TX_END ch0
-        retire_tx_end(&mut r);
+        r.write_word(0x20, TX_START_BIT); // TX_END ch0 raw
         assert_eq!(r.read_word(0x70), tx_end_bit(0));
         // INT_ENA = 0 → INT_ST masked to 0.
         assert_eq!(r.read_word(0x74), 0, "INT_ST masked when ENA=0");
@@ -988,9 +982,12 @@ mod tests {
         // No pending → no IRQ.
         assert!(r.tick().explicit_irqs.is_none());
 
-        // Schedule TX_END and enable it; first tick retires + emits.
+        // Latch TX_END and enable it; holdoff must expire before emit.
         r.write_word(0x20, TX_START_BIT);
         r.write_word(0x78, tx_end_bit(0));
+        // During holdoff, no IRQ even though INT_ST is live.
+        assert!(r.tick().explicit_irqs.is_none(), "holdoff suppresses IRQ");
+        retire_tx_end(&mut r);
 
         // Level-sensitive: emits the RMT source every tick while INT_ST != 0.
         assert_eq!(r.tick().explicit_irqs.as_deref(), Some(&[RMT_SOURCE][..]));
@@ -1004,9 +1001,9 @@ mod tests {
     #[test]
     fn int_raw_pending_but_disabled_emits_no_irq() {
         let mut r = rmt();
-        r.write_word(0x20, TX_START_BIT); // schedule raw, ENA=0
-        retire_tx_end(&mut r);
+        r.write_word(0x20, TX_START_BIT); // raw pending, ENA=0
         assert_eq!(r.read_word(0x70), tx_end_bit(0));
+        retire_tx_end(&mut r);
         assert!(
             r.tick().explicit_irqs.is_none(),
             "raw pending without ENA must not emit"
@@ -1023,7 +1020,6 @@ mod tests {
         assert_eq!(r.read_word(0x70), 0, "no completion before TX_START byte");
         // Now the low byte with TX_START.
         r.write(0x20, 0x01).unwrap();
-        retire_tx_end(&mut r);
         assert_eq!(r.read_word(0x70), tx_end_bit(0), "TX_END latched");
     }
 
@@ -1032,6 +1028,7 @@ mod tests {
         let mut r = Esp32s3Rmt::new(99);
         r.write_word(0x20, TX_START_BIT);
         r.write_word(0x78, tx_end_bit(0));
+        retire_tx_end(&mut r);
         assert_eq!(r.tick().explicit_irqs.as_deref(), Some(&[99][..]));
     }
 
