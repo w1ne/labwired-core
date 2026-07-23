@@ -63,14 +63,8 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install host packages for PlatformIO toolchains
-        run: |
-          sudo apt-get update -qq
-          # STM32 / nRF Arduino cores pull arm-none-eabi via PIO packages, but
-          # having the distro toolchain available avoids some platform probes failing.
-          sudo apt-get install -y --no-install-recommends \
-            gcc-arm-none-eabi binutils-arm-none-eabi libnewlib-arm-none-eabi \
-            git
+      # No distro gcc-arm-none-eabi apt: PlatformIO installs its own toolchains,
+      # and parallel apt-get across matrix jobs has hung runners for 20+ minutes.
 
       - name: Cache PlatformIO packages
         uses: actions/cache@v4
