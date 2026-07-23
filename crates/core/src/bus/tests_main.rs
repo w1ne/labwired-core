@@ -631,6 +631,43 @@ external_devices:
     );
 }
 
+/// Hobby servo twins attach via a dedicated `from_config` arm so the UI can
+/// poll shaft angle through `get_actuator_states`.
+#[test]
+fn test_from_config_attaches_servo_with_part_id() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let chip = ChipDescriptor::from_file(root.join("../../configs/chips/esp32.yaml"))
+        .expect("read ESP32 chip descriptor");
+    let manifest: SystemManifest = serde_yaml::from_str(
+        r#"
+name: "servo-twin"
+chip: "../chips/esp32.yaml"
+external_devices:
+  - id: "srv1"
+    type: "servo"
+    connection: "gpio"
+    config:
+      signal_pin: "GPIO5"
+      model: "sg90"
+board_io: []
+"#,
+    )
+    .expect("parse servo manifest");
+
+    let bus = SystemBus::from_config(&chip, &manifest).expect("build bus with servo");
+    assert_eq!(bus.servos.len(), 1, "one servo twin attached");
+    assert_eq!(bus.servos[0].id(), "srv1");
+    assert_eq!(bus.servos[0].pin(), 5);
+    // Until commanded, parks at min_angle (0° for sg90).
+    assert_eq!(bus.servos[0].angle_degrees(), 0.0);
+    bus.servos[0].apply_duty_fraction(0.075);
+    assert!(
+        (bus.servos[0].angle_degrees() - 94.7).abs() < 1.0,
+        "sg90 mid duty → ~94.7°, got {}",
+        bus.servos[0].angle_degrees()
+    );
+}
+
 /// The `rotary_encoder` external device dispatches through the DECLARATIVE
 /// device path (`configs/devices/rotary_encoder.yaml`, `quadrature` primitive)
 /// rather than a hand-written `from_config` arm. This locks that seam: a

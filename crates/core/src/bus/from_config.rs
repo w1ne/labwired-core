@@ -700,48 +700,73 @@ impl SystemBus {
                     bus.ws2812.push(strip);
                 }
                 "servo" | "sg90" | "mg996r" => {
-                    // Hobby PWM servo on one control pin. Driven by GPIO edges
-                    // (and LEDC duty observers when LEDC is present).
+                    // Hobby PWM servo twin. Driven by GPIO edges and/or LEDC
+                    // duty observers (ledcWrite path). Part id is stored so
+                    // WASM `get_actuator_states` can key canvas animation.
                     let pin_label = ext
                         .config
-                        .get("control_pin")
+                        .get("signal_pin")
+                        .or_else(|| ext.config.get("control_pin"))
                         .or_else(|| ext.config.get("pwm_pin"))
+                        .or_else(|| ext.config.get("pin"))
                         .and_then(|v| v.as_str())
                         .unwrap_or("GPIO18");
                     let pin = Self::parse_esp32s3_gpio_pin(pin_label)
                         .or_else(|| Self::parse_esp32_gpio_pin(pin_label))
                         .ok_or_else(|| {
                             anyhow::anyhow!(
-                                "servo '{}' control_pin '{}' is not a parseable GPIO",
+                                "servo '{}' control/signal pin '{}' is not a parseable GPIO",
                                 ext.id,
                                 pin_label
                             )
                         })?;
-                    let cal = match ext.r#type.as_str() {
+                    // Prefer explicit config.model; fall back to the type alias
+                    // (sg90/mg996r as top-level type) then standard cal.
+                    let model = ext
+                        .config
+                        .get("model")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or(ext.r#type.as_str());
+                    let cal = match model {
                         "sg90" => crate::peripherals::components::servo::ServoCal::sg90(),
                         "mg996r" => crate::peripherals::components::servo::ServoCal::mg996r(),
                         _ => crate::peripherals::components::servo::ServoCal::standard(),
                     };
-                    let servo = std::sync::Arc::new(
-                        crate::peripherals::components::servo::Servo::new(cal, pin),
-                    );
+                    let servo =
+                        std::sync::Arc::new(crate::peripherals::components::servo::Servo::with_id(
+                            ext.id.clone(),
+                            cal,
+                            pin,
+                        ));
                     Self::install_gpio_observer(&mut bus, servo.clone());
-                    // Also bind LEDC channels if present (ESP32 Arduino Servo path).
-                    if let Some(idx) = bus.find_peripheral_index_by_name("ledc") {
-                        if let Some(ledc) = bus.peripherals[idx]
-                            .dev
-                            .as_any_mut()
-                            .and_then(|a| a.downcast_mut::<crate::peripherals::esp32::ledc::Ledc>())
-                        {
-                            // Observe all channels; driver filters by channel id
-                            // when firmware assigns the servo's pin to a channel.
-                            for ch in 0..8u64 {
-                                ledc.add_duty_observer(std::sync::Arc::new(
-                                    crate::peripherals::components::servo::LedcServoDriver::new(
-                                        ch,
-                                        servo.clone(),
-                                    ),
-                                ));
+                    // LEDC duty path (classic ESP32). Optional `ledc_channel`
+                    // binds one channel; otherwise fan out to all channels
+                    // (fine for single-servo boards).
+                    let ledc_channel = ext.config.get("ledc_channel").and_then(|v| v.as_u64());
+                    for name in ["ledc", "LEDC"] {
+                        if let Some(idx) = bus.find_peripheral_index_by_name(name) {
+                            if let Some(ledc) =
+                                bus.peripherals[idx].dev.as_any_mut().and_then(|a| {
+                                    a.downcast_mut::<crate::peripherals::esp32::ledc::Ledc>()
+                                })
+                            {
+                                if let Some(ch) = ledc_channel {
+                                    ledc.add_duty_observer(std::sync::Arc::new(
+                                        crate::peripherals::components::servo::LedcServoDriver::new(
+                                            ch,
+                                            servo.clone(),
+                                        ),
+                                    ));
+                                } else {
+                                    for ch in 0..16u64 {
+                                        ledc.add_duty_observer(std::sync::Arc::new(
+                                            crate::peripherals::components::servo::LedcServoDriver::new(
+                                                ch,
+                                                servo.clone(),
+                                            ),
+                                        ));
+                                    }
+                                }
                             }
                         }
                     }
