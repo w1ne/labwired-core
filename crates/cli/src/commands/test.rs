@@ -9,6 +9,25 @@
 use crate::*;
 use tracing::warn;
 
+/// Opt-in Arduino-matrix speed path (`LABWIRED_MATRIX_SPEED=1`).
+///
+/// Enables idle/delay fast-forward only (requires a CLI build with
+/// `--features event-scheduler`). Tick-interval widening is intentionally
+/// **not** applied here: under the event-scheduler feature, wide ticks have
+/// regressed ESP classic/S3/C3 FreeRTOS labs before, and the matrix already
+/// gets most of its wall-time win from shorter L2 delays + Waiti park.
+/// Default CLI / green labs are unchanged when the env var is unset.
+fn apply_matrix_speed_opts<C: labwired_core::Cpu>(machine: &mut labwired_core::Machine<C>) {
+    if std::env::var("LABWIRED_MATRIX_SPEED").as_deref() != Ok("1") {
+        return;
+    }
+    machine.config.idle_fast_forward_enabled = true;
+    eprintln!(
+        "labwired-cli test: LABWIRED_MATRIX_SPEED=1 (idle_ff=on, event_scheduler={})",
+        cfg!(feature = "event-scheduler")
+    );
+}
+
 /// Apply the script's faults to the built bus before the run, logging any that
 /// could not be applied. Returns the provisional evidence; runtime-observed
 /// outcomes (and the require_fault_fired gate) are finalised after the run in
@@ -1056,6 +1075,7 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
     macro_rules! run_machine {
         ($machine:expr) => {{
             let mut machine = $machine;
+            apply_matrix_speed_opts(&mut machine);
             // JIT-eligible RISC-V runs source cycles/instructions from the
             // machine's own counters (see `execute_test_loop`), so the metrics
             // step observer must NOT be installed — its presence would gate the

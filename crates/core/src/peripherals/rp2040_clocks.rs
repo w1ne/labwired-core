@@ -60,6 +60,11 @@ impl Rp2040ClockReset {
 }
 
 impl Peripheral for Rp2040ClockReset {
+    /// Pure clock/reset register bank — no time-driven tick work.
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
         let abs = self.base + offset;
         let val = match abs {

@@ -17,14 +17,17 @@
 void setup() {
   pinMode(LW_LED, OUTPUT);
   Serial.begin(115200);
-  delay(10);
+  // Short delays: matrix stops on first LW_L2_OK; long wall time was almost
+  // entirely delay() spin, not model work. 1 ms still exercises digitalWrite
+  // + millis/SysTick scheduling without 40+ ms of empty wait per loop.
+  delay(1);
   Serial.println("LW_L2_BOOT");
 }
 
 void loop() {
   digitalWrite(LW_LED, HIGH);
-  delay(20);
+  delay(1);
   digitalWrite(LW_LED, LOW);
-  delay(20);
+  delay(1);
   Serial.println("LW_L2_OK");
 }

@@ -1,24 +1,32 @@
 # Arduino sketch matrix — every LabWired-supported chip with an Arduino path.
 # chip: configs/chips/<name>.yaml stem
-# system: relative to this matrix dir (or absolute under configs/systems)
-# pio: PlatformIO platform / board / framework for hosted Arduino compile
-# max_steps: sim budget (Arduino cores need more than bare-metal tier1 fixtures)
-# family: drives ESP-specific notes in the runner
+# system: relative to this matrix dir
+# pio: PlatformIO platform / board / framework
+# max_steps: sim budget (document why in budget_reason — no silent inflation)
+# led_watch: optional "peripheral:pin" for L2 GPIO oracle (--watch-gpio)
+# led_min_edges: min logic transitions required when led_watch is set (default 2)
+# family: grouping only
 
 boards:
   - id: esp32
     chip: esp32
     system: systems/esp32.yaml
     pio: { platform: espressif32, board: esp32dev, framework: arduino }
-    max_steps: 50000000
+    max_steps: 15000000
+    budget_reason: "FreeRTOS dual-core boot ~3.2M steps to L0/L1; headroom for L2"
+    # L2 LED_BUILTIN often GPIO2 digitalWrite — watch classic gpio peripheral
+    led_watch: "gpio:2"
+    led_min_edges: 2
     family: esp32
-    notes: "Arduino-ESP32 FreeRTOS — fix with real models only (no thunks)"
+    notes: "Arduino-ESP32 FreeRTOS — real models only (no thunks)"
 
   - id: esp32c3
     chip: esp32c3
     system: systems/esp32c3.yaml
     pio: { platform: espressif32, board: esp32-c3-devkitm-1, framework: arduino }
-    max_steps: 50000000
+    max_steps: 15000000
+    budget_reason: "FreeRTOS C3 boot ~1.9M steps; L2 RGB via RMT (no GPIO led_watch)"
+    # LED_BUILTIN is RGB/RMT — UART-only L2 oracle
     family: esp32
     notes: "Arduino-ESP32-C3 RISC-V"
 
@@ -26,7 +34,8 @@ boards:
     chip: esp32s3
     system: systems/esp32s3.yaml
     pio: { platform: espressif32, board: esp32-s3-devkitc-1, framework: arduino }
-    max_steps: 50000000
+    max_steps: 15000000
+    budget_reason: "Dual-core S3 boot ~1.1–1.2M steps; L2 RGB via RMT (no GPIO led_watch)"
     family: esp32
     notes: "Arduino-ESP32-S3"
 
@@ -34,23 +43,26 @@ boards:
     chip: nrf52832
     system: systems/nrf52832.yaml
     pio: { platform: nordicnrf52, board: nrf52_dk, framework: arduino }
-    max_steps: 5000000
+    max_steps: 3000000
+    budget_reason: "Arduino nRF boot ~0.7M; L2 ~0.26M after short delays"
+    # LED path does not yet emit LogicTap edges on gpio0 (UART-only L2 for now)
     family: nrf
 
   - id: nrf52840
     chip: nrf52840
     system: systems/nrf52840.yaml
     pio: { platform: nordicnrf52, board: nrf52840_dk, framework: arduino }
-    max_steps: 5000000
+    max_steps: 3000000
+    budget_reason: "Same class as nRF52832 Arduino core"
     family: nrf
 
   - id: rp2040
     chip: rp2040
     system: systems/rp2040.yaml
     pio: { platform: raspberrypi, board: pico, framework: arduino }
-    # L2: mbed RTX delay is SysTick-driven (~SystemCoreClock/1000 steps per ms).
-    # setup delay(10) + loop delay(20)×2 before LW_L2_OK exceeds 5M.
-    max_steps: 20000000
+    max_steps: 8000000
+    budget_reason: "mbed RTX SysTick delay; L0~1.7M L2~0.8M with short delays (was 20M for delay(20))"
+    # SIO/GPIO not watched yet — UART-only L2 until sio pin map is wired
     family: rp2040
     notes: "Needs platform raspberrypi (pio pkg install -g -p raspberrypi if missing)"
 
@@ -58,70 +70,91 @@ boards:
     chip: stm32f103
     system: systems/stm32f103.yaml
     pio: { platform: ststm32, board: bluepill_f103c8, framework: arduino }
-    max_steps: 5000000
+    max_steps: 3000000
+    budget_reason: "L0~0.7M L2~0.22M with short delays"
+    led_watch: "gpioc:13"
+    led_min_edges: 2
     family: stm32
 
   - id: stm32f401
     chip: stm32f401
     system: systems/stm32f401.yaml
     pio: { platform: ststm32, board: nucleo_f401re, framework: arduino }
-    max_steps: 5000000
+    max_steps: 3000000
+    budget_reason: "Nucleo L0~0.84M L2~0.26M; LD2=PA5"
+    led_watch: "gpioa:5"
+    led_min_edges: 2
     family: stm32
 
   - id: stm32f407
     chip: stm32f407
     system: systems/stm32f407.yaml
     pio: { platform: ststm32, board: disco_f407vg, framework: arduino }
-    # Arduino delay() is SysTick-driven; L2 needs enough steps to finish setup
-    # (prints LW_L2_BOOT) plus one blink cycle before LW_L2_OK.
-    max_steps: 20000000
+    max_steps: 8000000
+    budget_reason: "Disco L0~1.7M L2~0.5M; green LED PD12"
+    led_watch: "gpiod:12"
+    led_min_edges: 2
     family: stm32
 
   - id: stm32g474re
     chip: stm32g474re
     system: systems/stm32g474re.yaml
     pio: { platform: ststm32, board: nucleo_g474re, framework: arduino }
-    # L2: setup prints LW_L2_BOOT then delay/blink; 5M stops mid-loop.
-    max_steps: 20000000
+    max_steps: 8000000
+    budget_reason: "L0~1.7M L2~0.5M with short delays (was 20M)"
+    led_watch: "gpioa:5"
+    led_min_edges: 2
     family: stm32
 
   - id: stm32h563
     chip: stm32h563
     system: systems/stm32h563.yaml
     pio: { platform: ststm32, board: nucleo_h563zi, framework: arduino }
-    max_steps: 8000000
+    max_steps: 4000000
+    budget_reason: "M33 boot light (~0.16M L0); keep modest headroom"
+    led_watch: "gpiob:0"
+    led_min_edges: 2
     family: stm32
 
   - id: stm32l073
     chip: stm32l073
     system: systems/stm32l073.yaml
     pio: { platform: ststm32, board: nucleo_l073rz, framework: arduino }
-    max_steps: 5000000
+    max_steps: 2000000
+    budget_reason: "L0~0.32M L2~0.1M"
+    led_watch: "gpioa:5"
+    led_min_edges: 2
     family: stm32
 
   - id: stm32l476
     chip: stm32l476
     system: systems/stm32l476.yaml
     pio: { platform: ststm32, board: nucleo_l476rg, framework: arduino }
-    max_steps: 5000000
+    max_steps: 3000000
+    budget_reason: "L0~0.8M L2~0.24M"
+    led_watch: "gpioa:5"
+    led_min_edges: 2
     family: stm32
 
   - id: stm32wb55
     chip: stm32wb55
     system: systems/stm32wb55.yaml
     pio: { platform: ststm32, board: nucleo_wb55rg_p, framework: arduino }
-    max_steps: 5000000
+    max_steps: 2000000
+    budget_reason: "L0~0.32M L2~0.1M"
+    led_watch: "gpiob:5"
+    led_min_edges: 2
     family: stm32
 
   - id: stm32wba52
     chip: stm32wba52
     system: systems/stm32wba52.yaml
-    # ststm32 platform has no upstream board JSON yet; matrix supplies
-    # validation/arduino-matrix/pio-boards/nucleo_wba52cg.json (Arduino Core
-    # NUCLEO_WBA55CG — same Nucleo as NOD_WBA52CG / NOD_WBA55CG).
+    # ststm32 has no upstream board JSON; matrix supplies pio-boards/nucleo_wba52cg.json
     pio: { platform: ststm32, board: nucleo_wba52cg, framework: arduino }
-    # L2 delays + M33 startup need headroom (same class as H563/G474).
-    max_steps: 20000000
+    max_steps: 4000000
+    budget_reason: "M33 + stm32duino; L0~0.16M L2~0.05M after short delays"
+    led_watch: "gpiob:4"
+    led_min_edges: 2
     family: stm32
 
 sketches:
@@ -138,4 +171,4 @@ sketches:
   - id: L2_blink_serial
     dir: sketches/L2_blink_serial
     marker: "LW_L2_OK"
-    description: "LED_BUILTIN toggle + serial — proves GPIO digitalWrite"
+    description: "LED_BUILTIN toggle + serial — UART + optional GPIO edges"

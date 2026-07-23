@@ -21,13 +21,42 @@ has an Arduino PlatformIO profile (ESP32 family, nRF52, RP2040, STM32 set).
 
 ```bash
 cd core
-cargo build -p labwired-cli --release   # once
+cargo build -p labwired-cli --release   # once (fidelity-default CLI)
 # optional: pio pkg install -g -p raspberrypi   # for rp2040
 
 python3 validation/arduino-matrix/run_matrix.py
 python3 validation/arduino-matrix/run_matrix.py --boards stm32f103,esp32
 python3 validation/arduino-matrix/run_matrix.py --sketches L0_serial_boot
+
+# Re-sim without PlatformIO (needs prior firmware.elf under out/)
+python3 validation/arduino-matrix/run_matrix.py --sim-only --boards esp32s3
+
+# Content-hash cache skips recompile when sketch+board inputs unchanged
+python3 validation/arduino-matrix/run_matrix.py   # second full run hits cache
+python3 validation/arduino-matrix/run_matrix.py --force-compile
 ```
+
+Shared helpers live in `validation/matrix_lib/` (also used by the Zephyr matrix).
+Harness contract: `docs/engineering/test_harness.md`.
+
+### Oracles
+
+| Level | UART | GPIO |
+|-------|------|------|
+| L0 / L1 | marker string | — |
+| L2 | `LW_L2_OK` | if `boards.yaml` has `led_watch: peripheral:pin`, require ≥`led_min_edges` logic edges |
+
+RGB `LED_BUILTIN` boards (C3/S3) stay UART-only until an RMT-side oracle exists.
+
+### Matrix speed path (optional)
+
+```bash
+cargo build -p labwired-cli --release --features event-scheduler
+LABWIRED_MATRIX_SPEED=1 python3 validation/arduino-matrix/run_matrix.py
+```
+
+Enables idle fast-forward only (not tick widen). Experimental on ESP FreeRTOS;
+default CLI is the green-path fidelity build.
 
 Outputs:
 
