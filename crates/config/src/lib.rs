@@ -1226,7 +1226,7 @@ pub fn embedded_device_yaml(device_type: &str) -> Option<&'static str> {
         "dht22" | "am2302" => Some(include_str!("../../../configs/devices/dht22.yaml")),
         "hc-sr04" | "hcsr04" => Some(include_str!("../../../configs/devices/hc_sr04.yaml")),
         "sht31" => Some(include_str!("../../../configs/devices/sht31.yaml")),
-        "adxl345" => Some(include_str!("../../../configs/devices/adxl345.yaml")),
+        "adxl345_spi" => Some(include_str!("../../../configs/devices/adxl345_spi.yaml")),
         "bh1750" => Some(include_str!("../../../configs/devices/bh1750.yaml")),
         _ => None,
     }

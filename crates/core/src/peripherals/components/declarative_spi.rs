@@ -329,12 +329,13 @@ impl PeripheralKit for LazyLock<DeclarativeSpiKit> {
     }
 }
 
-/// Analog Devices ADXL345 accelerometer (declarative `adxl345.yaml`).
+/// Analog Devices ADXL345 accelerometer (declarative `adxl345_spi.yaml`).
 pub static ADXL345_KIT: LazyLock<DeclarativeSpiKit> = LazyLock::new(|| {
     DeclarativeSpiKit::from_yaml(
-        labwired_config::embedded_device_yaml("adxl345").expect("adxl345 descriptor embedded"),
+        labwired_config::embedded_device_yaml("adxl345_spi")
+            .expect("adxl345_spi descriptor embedded"),
     )
-    .expect("adxl345.yaml is a valid declarative spi descriptor")
+    .expect("adxl345_spi.yaml is a valid declarative spi descriptor")
 });
 
 #[cfg(test)]
@@ -510,13 +511,13 @@ behavior:
     #[test]
     fn adxl345_kit_reads_devid_and_signed_axis() {
         let kit = DeclarativeSpiKit::from_yaml(
-            labwired_config::embedded_device_yaml("adxl345").unwrap(),
+            labwired_config::embedded_device_yaml("adxl345_spi").unwrap(),
         )
         .unwrap();
         assert_eq!(kit.metadata().device_type, "adxl345_spi");
         // Build the device and read DEVID + a negative Z.
         let mut d = crate::peripherals::components::declarative_spi::GenericSpiDevice::from_yaml(
-            labwired_config::embedded_device_yaml("adxl345").unwrap(),
+            labwired_config::embedded_device_yaml("adxl345_spi").unwrap(),
             "PA4",
         )
         .unwrap();
