@@ -40,3 +40,12 @@ Local branch: `chore/test-harness-organize` (do **not** push until asked).
   `tick_elapsed(N)` under interval-1 so the path is not dead code.
 - SCB permanent quantum-1 kept (logic-capture fidelity).
 - PROBLEMS.md budget claims updated to match `boards.yaml`.
+
+## 2026-07-23 — Roast round 3
+
+- Mid-batch SW_SYS_RST: dual-core WAITI primary steps one-by-one when RTC
+  present so a latched reset ends the batch early.
+- nRF PIN_CNF.DIR syncs bulk DIR → LogicTap sees LED (P0.17) edges.
+- C3/S3 RMT `tx_start_count` + inspect `rmt_tx` artifact; `min_rmt_tx` L2 oracle.
+- Class-M dual-universe script: `scripts/matrix_speed_subset.sh`.
+- Partitions resolve moved to `commands/esp32_boot_state.rs` (Phase E start).

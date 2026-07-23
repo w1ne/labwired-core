@@ -64,37 +64,7 @@ fn metering_exit_status(exit_code: &ExitCode) -> i32 {
     }
 }
 
-/// Resolve an ESP-IDF `partitions.bin` for flash seeding @ 0x8000.
-///
-/// Only firmware-adjacent paths — never hard-coded matrix L0 work dirs
-/// (those go stale when `_pio_work` is wiped or the sketch is L1/L2).
-///
-/// Search order:
-/// 1. `partitions.bin` next to the ELF (matrix runner copies it there)
-/// 2. Live PIO build dir for this matrix cell, if present
-fn resolve_esp_partitions_bin(firmware_path: &std::path::Path) -> Option<std::path::PathBuf> {
-    let mut cands: Vec<std::path::PathBuf> = Vec::new();
-    if let Some(parent) = firmware_path.parent() {
-        // Matrix copies partitions.bin next to firmware.elf (survives work wipe).
-        cands.push(parent.join("partitions.bin"));
-        // out/<board>/<sketch>/firmware.elf → out/_pio_work/<board>__<sketch>/...
-        if let (Some(sketch), Some(board_dir), Some(out)) = (
-            parent.file_name(),
-            parent.parent(),
-            parent.parent().and_then(|p| p.parent()),
-        ) {
-            if let Some(board) = board_dir.file_name() {
-                let cell = format!("{}__{}", board.to_string_lossy(), sketch.to_string_lossy());
-                cands.push(
-                    out.join("_pio_work")
-                        .join(cell)
-                        .join(".pio/build/matrix/partitions.bin"),
-                );
-            }
-        }
-    }
-    cands.into_iter().find(|p| p.is_file())
-}
+use super::esp32_boot_state::resolve_esp_partitions_bin;
 
 pub(crate) fn run_test(args: TestArgs) -> ExitCode {
     // ── API key validation (Pro tier gate) ──────────────────────────────

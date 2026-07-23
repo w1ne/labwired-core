@@ -25,8 +25,9 @@ boards:
     system: systems/esp32c3.yaml
     pio: { platform: espressif32, board: esp32-c3-devkitm-1, framework: arduino }
     max_steps: 15000000
-    budget_reason: "FreeRTOS C3 boot ~1.9M steps; L2 RGB via RMT (no GPIO led_watch)"
-    # LED_BUILTIN is RGB/RMT — UART-only L2 oracle
+    budget_reason: "FreeRTOS C3 boot ~1.9M steps; L2 RGB via RMT"
+    # LED_BUILTIN → rgbLedWrite → RMT TX_START (inspect rmt_tx artifact)
+    min_rmt_tx: 1
     family: esp32
     notes: "Arduino-ESP32-C3 RISC-V"
 
@@ -35,7 +36,8 @@ boards:
     system: systems/esp32s3.yaml
     pio: { platform: espressif32, board: esp32-s3-devkitc-1, framework: arduino }
     max_steps: 15000000
-    budget_reason: "Dual-core S3 boot ~1.1–1.2M steps; L2 RGB via RMT (no GPIO led_watch)"
+    budget_reason: "Dual-core S3 boot ~1.1–1.2M steps; L2 RGB via RMT"
+    min_rmt_tx: 1
     family: esp32
     notes: "Arduino-ESP32-S3"
 
@@ -45,7 +47,9 @@ boards:
     pio: { platform: nordicnrf52, board: nrf52_dk, framework: arduino }
     max_steps: 3000000
     budget_reason: "Arduino nRF boot ~0.7M; L2 ~0.26M after short delays"
-    # LED path does not yet emit LogicTap edges on gpio0 (UART-only L2 for now)
+    # PIN_CNF.DIR sync + LED1 = P0.17 on nRF52 DK Arduino core
+    led_watch: "gpio0:17"
+    led_min_edges: 2
     family: nrf
 
   - id: nrf52840
@@ -54,6 +58,8 @@ boards:
     pio: { platform: nordicnrf52, board: nrf52840_dk, framework: arduino }
     max_steps: 3000000
     budget_reason: "Same class as nRF52832 Arduino core"
+    led_watch: "gpio0:17"
+    led_min_edges: 2
     family: nrf
 
   - id: rp2040

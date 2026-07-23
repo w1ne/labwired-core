@@ -37,9 +37,29 @@ impl<C: Cpu> Machine<C> {
                 if self.logic_capture.push_active() {
                     self.bus.logic_tap.set_clock(self.total_cycles);
                 }
-                let executed =
+                // Dual-core WAITI path (or any batch): step one-by-one when RTC
+                // is present so a mid-batch SW_SYS_RST latches and stops the
+                // window before more PRO instructions retire past the reset.
+                // Otherwise use step_batch for throughput.
+                let parked_secondary = self
+                    .cpu_secondary
+                    .as_ref()
+                    .is_some_and(|s| s.is_parked_idle());
+                let executed = if parked_secondary && self.rtc_cntl_index.is_some() {
+                    let mut n = 0u32;
+                    for _ in 0..count {
+                        self.cpu
+                            .step(&mut self.bus, &self.observers, &self.config)?;
+                        n += 1;
+                        if self.rtc_cntl_reset_pending() {
+                            break;
+                        }
+                    }
+                    n
+                } else {
                     self.cpu
-                        .step_batch(&mut self.bus, &self.observers, &self.config, count)?;
+                        .step_batch(&mut self.bus, &self.observers, &self.config, count)?
+                };
                 if executed == 0 {
                     self.bus.set_current_cycle(self.total_cycles);
                     self.bus.bus_trace.set_cycle(self.total_cycles);

@@ -55,8 +55,14 @@ cargo build -p labwired-cli --release --features event-scheduler
 LABWIRED_MATRIX_SPEED=1 python3 validation/arduino-matrix/run_matrix.py
 ```
 
-Enables idle fast-forward only (not tick widen). Experimental on ESP FreeRTOS;
-default CLI is the green-path fidelity build.
+Enables idle fast-forward only (not tick widen). **Do not** use on ESP
+FreeRTOS for the green path — default CLI is fidelity. For a dual-universe
+smoke on Class-M boards (STM32/nRF/RP2040) after a scheduler build:
+
+```bash
+cargo build -p labwired-cli --release --features event-scheduler
+bash validation/arduino-matrix/scripts/matrix_speed_subset.sh
+```
 
 Outputs:
 
