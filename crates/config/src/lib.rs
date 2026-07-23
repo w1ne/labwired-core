@@ -992,6 +992,32 @@ pub struct RegisterSpec {
     /// gain / integration-time field that changes the counts-per-unit).
     #[serde(default)]
     pub scale_from: Option<ScaleFrom>,
+    /// The register word is a signed two's-complement quantity of `width`
+    /// bytes. A negative sourced measurement is encoded as its two's-complement
+    /// bit pattern rather than clamped to zero. Default false (unsigned).
+    #[serde(default)]
+    pub signed: bool,
+    /// Bit-field composition: when non-empty, the register word is ASSEMBLED
+    /// from these fields (each a sourced measurement placed at a bit offset)
+    /// rather than from the single top-level `source`. Used by parts like the
+    /// MAX31855 whose 32-bit frame packs temperature + status sub-fields.
+    #[serde(default)]
+    pub fields: Vec<FieldSpec>,
+}
+
+/// One sourced bit-field within a composite register word (see
+/// [`RegisterSpec::fields`]). The encoded value occupies `width_bits` bits at
+/// bit offset `shift`; `signed` packs negatives as two's-complement within
+/// those bits.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct FieldSpec {
+    pub source: String,
+    pub shift: u8,
+    pub width_bits: u8,
+    #[serde(default)]
+    pub signed: bool,
+    #[serde(default)]
+    pub encode: Option<Encode>,
 }
 
 /// Linear measurement encoding: `raw = value * scale + offset`, clamped to the
@@ -3866,6 +3892,8 @@ metadata:
             source: None,
             encode: None,
             scale_from: None,
+            signed: false,
+            fields: vec![],
         };
     }
 }

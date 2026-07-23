@@ -20,7 +20,13 @@ pub(crate) fn width_max(width: u8) -> f64 {
 
 /// Apply a linear encode (scale/offset/clamp) plus an extra scale factor,
 /// yielding the raw integer packed into a `width`-byte word.
-pub(crate) fn encode_raw(value: f64, enc: Option<&Encode>, extra_scale: f64, width: u8) -> u32 {
+pub(crate) fn encode_raw(
+    value: f64,
+    enc: Option<&Encode>,
+    extra_scale: f64,
+    width: u8,
+    signed: bool,
+) -> u32 {
     let scale = enc.map(|e| e.scale).unwrap_or(1.0) * extra_scale;
     let offset = enc.map(|e| e.offset).unwrap_or(0.0);
     let mut raw = value * scale + offset;
@@ -32,7 +38,16 @@ pub(crate) fn encode_raw(value: f64, enc: Option<&Encode>, extra_scale: f64, wid
             raw = raw.min(hi);
         }
     }
-    raw.round().clamp(0.0, width_max(width)) as u32
+    let bits = 8 * width as u32;
+    let mask = if bits >= 32 { u32::MAX } else { (1u32 << bits) - 1 };
+    if signed {
+        let lo = -(2f64.powi((bits - 1) as i32));
+        let hi = 2f64.powi((bits - 1) as i32) - 1.0;
+        let v = raw.round().clamp(lo, hi) as i64;
+        (v as u32) & mask
+    } else {
+        raw.round().clamp(0.0, width_max(width)) as u32
+    }
 }
 
 /// Pack `raw` into `width` bytes in the given order.
@@ -83,7 +98,7 @@ pub(crate) fn register_read_bytes(
     let raw = if let Some(src) = &reg.source {
         let value = slots.get(src).copied().unwrap_or(0.0);
         let extra = scale_from_factor(reg, reg_values);
-        encode_raw(value, reg.encode.as_ref(), extra, reg.width)
+        encode_raw(value, reg.encode.as_ref(), extra, reg.width, reg.signed)
     } else {
         reg_values.get(&reg.name).copied().unwrap_or(reg.reset)
     };
@@ -107,7 +122,36 @@ mod tests {
             source: source.map(Into::into),
             encode: None,
             scale_from: None,
+            signed: false,
+            fields: vec![],
         }
+    }
+
+    #[test]
+    fn signed_negative_value_packs_twos_complement_le() {
+        use labwired_config::{Endian, RegisterAccess, RegisterSpec};
+        use std::collections::HashMap;
+        let r = RegisterSpec {
+            name: "DATAX".into(),
+            addr: 0x32,
+            width: 2,
+            endian: Endian::Le,
+            access: RegisterAccess::R,
+            reset: 0,
+            source: Some("ax".into()),
+            encode: Some(labwired_config::Encode {
+                scale: 256.0,
+                offset: 0.0,
+                clamp_min: None,
+                clamp_max: None,
+            }),
+            scale_from: None,
+            signed: true,
+            fields: vec![],
+        };
+        let mut slots = HashMap::new();
+        slots.insert("ax".to_string(), -1.0); // -1 g × 256 = -256 = 0xFF00 two's-complement, LE
+        assert_eq!(register_read_bytes(&r, &slots, &HashMap::new()), vec![0x00, 0xFF]);
     }
 
     #[test]

@@ -204,7 +204,7 @@ impl GenericI2cDevice {
     fn response_word_raw(&self, word: &ResponseWord) -> u32 {
         if let Some(src) = &word.source {
             let value = self.slots.get(src).copied().unwrap_or(0.0);
-            encode_raw(value, word.encode.as_ref(), 1.0, word.width)
+            encode_raw(value, word.encode.as_ref(), 1.0, word.width, false)
         } else {
             word.const_value.unwrap_or(0)
         }
