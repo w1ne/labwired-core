@@ -1,8 +1,8 @@
 name: Core Arduino Matrix Smoke
 
-# Thin stock-Arduino gate: 4 boards × L0+L2 (8 cells). Proves FreeRTOS/mbed
-# paths that the coverage-matrix UART fixtures never touch.
+# Stock Arduino on every boards.yaml MCU: L0 + L2 + L3_i2c_sensor (INA219 kit).
 # Required status: `arduino-matrix-gate` (branch protection).
+# See validation/FRAMEWORK_FLEET.md.
 
 on:
   push:
@@ -37,10 +37,21 @@ jobs:
       fail-fast: false
       matrix:
         board:
-          - stm32f103
+          - esp32
+          - esp32c3
+          - esp32s3
+          - nrf52832
           - nrf52840
           - rp2040
-          - esp32c3
+          - stm32f103
+          - stm32f401
+          - stm32f407
+          - stm32g474re
+          - stm32h563
+          - stm32l073
+          - stm32l476
+          - stm32wb55
+          - stm32wba52
 
     steps:
       - uses: actions/checkout@v4
@@ -80,13 +91,13 @@ jobs:
           python -m pip install --quiet 'platformio>=6.1' pyyaml
           # Warm platforms used by the thin matrix (platforms pull frameworks).
           case "${{ matrix.board }}" in
-            stm32f103)  pio pkg install -g -p ststm32 ;;
-            nrf52840)   pio pkg install -g -p nordicnrf52 ;;
-            rp2040)     pio pkg install -g -p raspberrypi ;;
-            esp32c3)    pio pkg install -g -p espressif32 ;;
+            stm32*)   pio pkg install -g -p ststm32 ;;
+            nrf*)     pio pkg install -g -p nordicnrf52 ;;
+            rp2040)   pio pkg install -g -p raspberrypi ;;
+            esp32*)   pio pkg install -g -p espressif32 ;;
           esac
 
-      - name: Arduino matrix (L0 + L2)
+      - name: Arduino matrix (L0 + L2 + L3 I2C kit)
         env:
           LABWIRED_RP2040_BOOTROM: ${{ github.workspace }}/crates/core/roms/rp2040/bootrom.bin
         run: |
@@ -95,7 +106,7 @@ jobs:
           OUT="${{ github.workspace }}/validation/arduino-matrix/out-ci/${{ matrix.board }}"
           python3 validation/arduino-matrix/run_matrix.py \
             --boards "${{ matrix.board }}" \
-            --sketches L0_serial_boot,L2_blink_serial \
+            --sketches L0_serial_boot,L2_blink_serial,L3_i2c_sensor \
             --out "$OUT"
 
       - name: Upload board artifacts
@@ -123,15 +134,16 @@ jobs:
           pattern: arduino-matrix-*
           merge-multiple: false
 
-      - name: Require all 8 cells pass
+      - name: Require full fleet cells pass
         run: |
           python3 - <<'PY'
           import json
           import sys
           from pathlib import Path
 
+          # 15 boards × 3 sketches (L0, L2, L3)
+          EXPECTED = 15 * 3
           root = Path("validation/arduino-matrix/out-ci")
-          # Artifacts unpack as out-ci/arduino-matrix-<board>/... or nested results.json
           results = list(root.rglob("results.json"))
           if not results:
               print("::error::no results.json from arduino matrix jobs", file=sys.stderr)
@@ -141,20 +153,19 @@ jobs:
           total = 0
           for path in results:
               data = json.loads(path.read_text())
-              rows = data.get("rows") or []
-              for row in rows:
+              for row in data.get("rows") or []:
                   total += 1
                   st = row.get("status")
-                  if st != "pass":
+                  # skipped = explicit boards.yaml sketches_skip (e.g. STM32 L3 Wire)
+                  if st not in ("pass", "skipped"):
                       bad.append(f"{row.get('board')}/{row.get('sketch')}: {st}")
-          print(f"cells={total} fails={len(bad)}")
+          print(f"cells={total} expected>={EXPECTED} fails={len(bad)}")
           for b in bad:
               print("FAIL", b)
-          # 4 boards × 2 sketches
-          if total < 8:
-              print(f"::error::expected ≥8 cells, got {total}", file=sys.stderr)
+          if total < EXPECTED:
+              print(f"::error::expected ≥{EXPECTED} cells, got {total}", file=sys.stderr)
               sys.exit(1)
           if bad:
               sys.exit(1)
-          print("arduino matrix gate: all cells pass")
+          print("arduino matrix gate: full fleet pass (pass|skipped ok)")
           PY

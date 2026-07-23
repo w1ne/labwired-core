@@ -211,6 +211,21 @@ def main() -> int:
 
         for sketch in sketches:
             sid = sketch["id"]
+            skip_sk = board.get("sketches_skip") or []
+            if sid in skip_sk:
+                reason = (board.get("sketches_skip_reason") or {}).get(sid) or board.get(
+                    "l3_skip_reason", "board sketches_skip"
+                )
+                print(f"==> {bid} × {sid}: skip ({reason})", flush=True)
+                rows.append(
+                    {
+                        "board": bid,
+                        "sketch": sid,
+                        "status": "skipped",
+                        "detail": reason,
+                    }
+                )
+                continue
             cell_out = out / bid / sid
             cell_out.mkdir(parents=True, exist_ok=True)
             print(f"==> {bid} × {sid}", flush=True)

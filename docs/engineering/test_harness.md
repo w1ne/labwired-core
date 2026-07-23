@@ -124,8 +124,12 @@ scheduler identity unless a workflow enables the feature.
 
 | Matrix | Driver | Shared engine |
 |--------|--------|----------------|
-| Arduino L0–L2 | `validation/arduino-matrix/run_matrix.py` | `validation/matrix_lib/` |
+| Arduino L0–L3 | `validation/arduino-matrix/run_matrix.py` | `validation/matrix_lib/` |
 | Zephyr L0–L2 | `validation/zephyr-matrix/run_matrix.py` | `validation/matrix_lib/` |
+
+**Fleet bar** (every supported chip × Arduino/Zephyr × kits):  
+[`validation/FRAMEWORK_FLEET.md`](../../validation/FRAMEWORK_FLEET.md) ·  
+`python3 validation/framework_fleet_report.py`
 
 ---
 
