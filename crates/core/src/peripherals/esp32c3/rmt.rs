@@ -273,7 +273,7 @@ mod tests {
             "expected high→low TX pulse edges, got {:?}",
             events
         );
-        assert_eq!(events[0].value, true);
-        assert_eq!(events[1].value, false);
+        assert!(events[0].value);
+        assert!(!events[1].value);
     }
 }
