@@ -21,13 +21,30 @@ has an Arduino PlatformIO profile (ESP32 family, nRF52, RP2040, STM32 set).
 
 ```bash
 cd core
-cargo build -p labwired-cli --release   # once
+cargo build -p labwired-cli --release   # once (fidelity-default CLI)
 # optional: pio pkg install -g -p raspberrypi   # for rp2040
 
 python3 validation/arduino-matrix/run_matrix.py
 python3 validation/arduino-matrix/run_matrix.py --boards stm32f103,esp32
 python3 validation/arduino-matrix/run_matrix.py --sketches L0_serial_boot
 ```
+
+### Matrix speed path (optional)
+
+For wall-time measurement / faster re-checks, build with the event scheduler
+and enable idle/delay fast-forward:
+
+```bash
+cargo build -p labwired-cli --release --features event-scheduler
+LABWIRED_MATRIX_SPEED=1 python3 validation/arduino-matrix/run_matrix.py
+```
+
+`LABWIRED_MATRIX_SPEED=1` turns on `idle_fast_forward_enabled` (WFI / WAITI /
+timer-poll coalesce). It does **not** widen the peripheral tick interval —
+that path has regressed ESP FreeRTOS labs under the scheduler. Default labs
+and plain `labwired test` stay on the instruction-faithful path when the env
+is unset. Do not ship the default CLI with `event-scheduler` enabled globally
+(see `crates/cli/Cargo.toml`).
 
 Outputs:
 

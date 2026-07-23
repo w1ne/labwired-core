@@ -143,6 +143,11 @@ pub struct XtensaLx7 {
     /// app-cpu boot address (mirrors real silicon's reset-hold). Default
     /// false; ESP32 dual-core setup sets it on cpu_secondary at boot.
     pub halted: bool,
+    /// Set when the last retired instruction was `WAITI` (PC does not
+    /// advance). Subsequent steps take a cheap CCOUNT/IRQ path until a
+    /// wake-capable interrupt arrives — important for dual-core APP_CPU
+    /// FreeRTOS idle (`vApplicationIdleHook` / idle task Waiti loop).
+    waiti_parked: bool,
     /// Faithful windowed-register mode. When true, the CPU uses the REAL
     /// Xtensa window machinery — per-access window-overflow checks that vector
     /// to the firmware's OF{4,8,12} handlers (which spill to the stack save
@@ -239,6 +244,7 @@ impl XtensaLx7 {
             pc: 0x4000_0400,
             branched: false,
             halted: false,
+            waiti_parked: false,
             faithful_windows: false,
             app_cpu: false,
             call_preserve_stack: Vec::new(),
@@ -1197,7 +1203,10 @@ impl XtensaLx7 {
                 // the CPU stays at this instruction (PC doesn't advance),
                 // so a caller poll-loop sees the same PC each step and
                 // can detect "halted" without us tracking extra state.
+                // `waiti_parked` lets later steps skip fetch/decode until a
+                // wake-capable IRQ arrives (dual-core APP idle win).
                 self.ps.set_intlevel(level);
+                self.waiti_parked = true;
             }
             // Xtensa Zero Overhead Loops (LOOP / LOOPNEZ / LOOPGTZ).
             // ISA RM §4.3.2: LCOUNT = as_ - 1, LBEG = PC + 3 (after LOOP),
@@ -2988,17 +2997,60 @@ impl Cpu for XtensaLx7 {
         // Machine::load_firmware reset, otherwise it'd race PRO_CPU
         // through the firmware entry point.
         self.halted = was_halted;
+        self.waiti_parked = false;
         Ok(())
     }
 
     fn halt(&mut self) {
         self.halted = true;
+        self.waiti_parked = false;
     }
     fn unhalt(&mut self) {
         self.halted = false;
     }
     fn intlevel(&self) -> u8 {
         self.ps.intlevel()
+    }
+
+    fn idle_fast_forward_budget(&self, bus: &dyn Bus) -> Option<u64> {
+        // Architectural WAITI park (FreeRTOS idle / vTaskDelay sleep). Only
+        // offer a budget while no wake-capable interrupt is already visible.
+        if !self.waiti_parked || self.halted {
+            return None;
+        }
+        if !self.ps.excm() {
+            if let Some(irq_level) = self.pending_irq_level(bus) {
+                if irq_level > self.ps.intlevel() {
+                    return None;
+                }
+            }
+        }
+        Some(u64::MAX)
+    }
+
+    fn fast_forward_idle_cycles(&mut self, cycles: u64) {
+        // Keep CCOUNT coherent with machine total_cycles so CCOMPARE0 edges
+        // still fire after an idle skip (FreeRTOS tick source on classic ESP).
+        if cycles == 0 {
+            return;
+        }
+        use crate::cpu::xtensa_sr::{CCOMPARE0, CCOUNT};
+        let before = self.sr.read(CCOUNT);
+        let after = before.wrapping_add(cycles as u32);
+        self.sr.write(CCOUNT, after);
+        let ccompare0 = self.sr.read(CCOMPARE0);
+        if ccompare0 != 0 {
+            // Raise timer-0 if the skipped window crossed CCOMPARE0.
+            let crossed = if after >= before {
+                ccompare0 > before && ccompare0 <= after
+            } else {
+                // wrap
+                ccompare0 > before || ccompare0 <= after
+            };
+            if crossed {
+                self.sr.raise_interrupt_bits(1 << 6);
+            }
+        }
     }
 
     fn step(
@@ -3017,7 +3069,10 @@ impl Cpu for XtensaLx7 {
         }
         // FreeRTOS may have switched tasks via stack context restore without
         // our RFE; re-bind CALL8 preserve for the current TCB if needed.
-        self.maybe_restore_task_preserve(bus);
+        // Skip when WAITI-parked: idle task is not mid-context-switch.
+        if !self.waiti_parked {
+            self.maybe_restore_task_preserve(bus);
+        }
         // ── Pre-fetch interrupt check ─────────────────────────────────────────
         // Per Xtensa ISA RM §4.4.1: check for pending interrupts before fetching
         // the next instruction.
@@ -3050,9 +3105,18 @@ impl Cpu for XtensaLx7 {
         if !self.ps.excm() {
             if let Some(irq_level) = self.pending_irq_level(bus) {
                 if irq_level > self.ps.intlevel() {
+                    self.waiti_parked = false;
                     return self.dispatch_irq(irq_level, bus);
                 }
             }
+        }
+
+        // WAITI park: stay at the same PC without re-fetching/decoding.
+        // Dual-core APP_CPU spends most cycles here after FreeRTOS idle starts;
+        // skipping fetch/decode is the highest-ROI dual-core idle win that
+        // still advances CCOUNT (and therefore CCOMPARE0 tick edges).
+        if self.waiti_parked {
+            return Ok(());
         }
 
         // ── Phase 3.2 JIT fast-path (issue #124) ──────────────────────────────

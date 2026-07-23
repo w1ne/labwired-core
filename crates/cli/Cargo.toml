@@ -57,6 +57,11 @@ default = []
 # JIT-on vs JIT-off differential is byte-identical either way (both arms tick
 # peripherals identically), so the scheduler is not required for this path.
 jit-core = ["labwired-core/jit"]
+# Opt-in event scheduler + walk-delete / idle-FF infrastructure used by the
+# Arduino matrix speed path (`LABWIRED_MATRIX_SPEED=1`). Build:
+#   cargo build -p labwired-cli --release --features event-scheduler
+# Do NOT combine with `jit-core` for general CLI use (see note above).
+event-scheduler = ["labwired-core/event-scheduler"]
 # Swap the built-in fuzzing loop for the LibAFL engine (havoc/splice mutators,
 # map-feedback scheduler, crash objectives). Heavy dependency tree, so opt-in:
 # `cargo build --release -p labwired-cli --features fuzz-libafl`.

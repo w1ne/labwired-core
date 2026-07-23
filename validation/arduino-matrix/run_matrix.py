@@ -183,6 +183,11 @@ def run_labwired(
         "--no-uart-stdout",
     ]
     env = os.environ.copy()
+    # Opt-in speed path: idle/delay FF + wider ticks (needs CLI built with
+    # --features event-scheduler). Set LABWIRED_MATRIX_SPEED=1 in the
+    # environment, or leave unset for the fidelity-default plain path.
+    if env.get("LABWIRED_MATRIX_SPEED") == "1":
+        env["LABWIRED_MATRIX_SPEED"] = "1"
     # RP2040 Arduino needs mask ROM at 0 for rom_func_lookup; bare-metal
     # onboarding ELFs must NOT load it (see from_config default_region_image_path).
     bootrom = CORE_ROOT / "crates" / "core" / "roms" / "rp2040" / "bootrom.bin"
