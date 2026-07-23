@@ -428,7 +428,7 @@ impl F1I2c {
                             self.sr1 |= 0x0400; // AF
                             self.sr2 |= 0x0001; // MSL
                             self.sr2 |= 0x0002; // BUSY
-                            // TRA follows R/W of the address byte (write → TRA=1).
+                                                // TRA follows R/W of the address byte (write → TRA=1).
                             if !self.is_reading {
                                 self.sr2 |= 0x0004; // TRA
                             } else {
@@ -444,9 +444,9 @@ impl F1I2c {
                         self.sr1 |= 0x0002; // ADDR
                         self.sr2 |= 0x0001; // MSL
                         self.sr2 |= 0x0002; // BUSY
-                        // SR2.TRA (bit2): set in master transmitter after address
-                        // ACK with R/W=0. HAL_I2C_EV_IRQHandler gates the TXE/BTF
-                        // path on TRA — without it the ISR never writes data.
+                                            // SR2.TRA (bit2): set in master transmitter after address
+                                            // ACK with R/W=0. HAL_I2C_EV_IRQHandler gates the TXE/BTF
+                                            // path on TRA — without it the ISR never writes data.
                         if self.is_reading {
                             self.sr2 &= !0x0004;
                         } else {
@@ -705,8 +705,8 @@ impl L4I2c {
             0x28 => {
                 self.txdr = value & 0xFF;
                 self.isr &= !0x0000_0003; // writing TXDR clears TXE+TXIS
-                // After address ACK the engine waits in DataPending with TXIS
-                // set; firmware (HAL IT / poll) writes TXDR here.
+                                          // After address ACK the engine waits in DataPending with TXIS
+                                          // set; firmware (HAL IT / poll) writes TXDR here.
                 if self.state == I2cState::DataPending {
                     self.first_tx_loaded = true;
                     if let Some(idx) = self.current_target {
@@ -1654,8 +1654,8 @@ mod tests {
         assert_eq!(i2c.peek(0x14).unwrap() & 0x01, 0); // SB cleared
         assert_ne!(i2c.peek(0x14).unwrap() & 0x02, 0); // ADDR
         assert_ne!(i2c.peek(0x18).unwrap() & 0x01, 0); // MSL
-        // TRA (SR2 bit2) must rise on write-address ACK — HAL EV IRQ gates
-        // the TXE/BTF path on TRA (RM0008 §26.6.7).
+                                                       // TRA (SR2 bit2) must rise on write-address ACK — HAL EV IRQ gates
+                                                       // the TXE/BTF path on TRA (RM0008 §26.6.7).
         assert_ne!(
             i2c.peek(0x18).unwrap() & 0x04,
             0,
@@ -1702,7 +1702,7 @@ mod tests {
         i2c.write(0x01, 0x01).unwrap(); // START → SB
         assert!(i2c.tick().irq, "SB with ITEVTEN asserts EV");
         i2c.write(0x10, 0x80).unwrap(); // 0x40 write
-        // After address ACK: ADDR+TXE+TRA; level EV stays high across ticks.
+                                        // After address ACK: ADDR+TXE+TRA; level EV stays high across ticks.
         assert_ne!(i2c.peek(0x18).unwrap() & 0x04, 0, "TRA");
         assert_ne!(i2c.peek(0x14).unwrap() & 0x80, 0, "TXE");
         assert!(i2c.tick().irq, "level EV while TXE+ITBUFEN");
@@ -1710,11 +1710,7 @@ mod tests {
         // Clear ADDR via SR1 then SR2 (silicon sequence).
         let _ = i2c.read_u32(0x14).unwrap();
         let _ = i2c.read_u32(0x18).unwrap();
-        assert_eq!(
-            i2c.peek(0x14).unwrap() & 0x02,
-            0,
-            "ADDR cleared by SR1→SR2"
-        );
+        assert_eq!(i2c.peek(0x14).unwrap() & 0x02, 0, "ADDR cleared by SR1→SR2");
         // TXE still live → EV still asserted for MasterTransmit_TXE.
         assert!(i2c.tick().irq, "TXE keeps EV high after ADDR clear");
     }

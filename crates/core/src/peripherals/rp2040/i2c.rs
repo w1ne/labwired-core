@@ -278,14 +278,8 @@ mod tests {
         i2c.write_u32(IC_TAR, 0x40).unwrap();
         i2c.write_u32(IC_DATA_CMD, 0xAB | DATA_CMD_STOP).unwrap();
         assert_eq!(i2c.read_u32(IC_RAW_INTR_STAT).unwrap() & INTR_TX_ABRT, 0);
-        assert_ne!(
-            i2c.read_u32(IC_RAW_INTR_STAT).unwrap() & INTR_STOP_DET,
-            0
-        );
-        assert_ne!(
-            i2c.read_u32(IC_RAW_INTR_STAT).unwrap() & INTR_TX_EMPTY,
-            0
-        );
+        assert_ne!(i2c.read_u32(IC_RAW_INTR_STAT).unwrap() & INTR_STOP_DET, 0);
+        assert_ne!(i2c.read_u32(IC_RAW_INTR_STAT).unwrap() & INTR_TX_EMPTY, 0);
         assert!(i2c.tick().irq);
     }
 
