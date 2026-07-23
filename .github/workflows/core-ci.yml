@@ -39,7 +39,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      # Full history required: generate_validation_status.py uses
+      # `git log -1 --format=%cI -- <model>` for drift. Shallow checkout
+      # makes every path resolve to HEAD's date → false DRIFT failures.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.95.0
