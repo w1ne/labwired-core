@@ -219,8 +219,13 @@ impl F1I2c {
                 // real silicon; that side effect is not modelled here.
                 self.cr1 = (value as u32) & 0xBFFB;
                 if (value & 0x0100) != 0 && self.state == I2cState::Idle {
+                    // Instant SB: Arduino/HAL Wire polls SR1.SB immediately
+                    // after CR1.START; a multi-instruction tick interval would
+                    // livelock the wait loop (matrix L3). One I2C bit time is
+                    // always << firmware poll period here.
                     self.state = I2cState::StartPending;
-                    self.cycles_remaining = 1;
+                    self.cycles_remaining = 0;
+                    let _ = self.tick();
                 }
                 if (value & 0x0200) != 0 {
                     // STOP requested. Defer if a data phase is in flight so
@@ -249,7 +254,8 @@ impl F1I2c {
                 if self.state == I2cState::Idle {
                     if (self.sr1 & 0x01) != 0 {
                         self.state = I2cState::AddressPending;
-                        self.cycles_remaining = 20;
+                        // Instant ADDR/TXE (same rationale as START/SB).
+                        self.cycles_remaining = 0;
                         let addr = (self.dr >> 1) as u8;
                         self.is_reading = (self.dr & 1) != 0;
                         self.current_target = self
@@ -259,9 +265,10 @@ impl F1I2c {
                         if let Some(idx) = self.current_target {
                             self.attached_devices[idx].borrow_mut().start();
                         }
+                        let _ = self.tick();
                     } else {
                         self.state = I2cState::DataPending;
-                        self.cycles_remaining = 20;
+                        self.cycles_remaining = 0;
                         self.sr1 &= !0x80;
                         self.sr1 &= !0x04;
                         if !self.is_reading {
@@ -269,6 +276,7 @@ impl F1I2c {
                                 self.attached_devices[idx].borrow_mut().write(self.dr as u8);
                             }
                         }
+                        let _ = self.tick();
                     }
                 }
             }
@@ -429,6 +437,10 @@ pub struct L4I2c {
     // Minimal master transaction engine (mirrors F1I2c, modern-register flavour).
     state: I2cState,
     cycles_remaining: u32,
+    /// Latched CR2.NBYTES for the armed/in-flight transfer (0 = address-only).
+    nbytes: u8,
+    /// True once the first TXDR byte has been accepted for a multi-byte write.
+    first_tx_loaded: bool,
 
     #[serde(skip)]
     attached_devices: Vec<RefCell<Box<dyn I2cDevice>>>,
@@ -442,6 +454,7 @@ pub struct L4I2c {
     autoend: bool,
     /// CR2.START has latched a transfer; the address phase fires once the first
     /// data byte is loaded into TXDR (write) — mirrors F1's START→DR ordering.
+    /// Exception: NBYTES=0 (IsDeviceReady / empty endTransmission) starts now.
     #[serde(skip)]
     start_armed: bool,
 
@@ -469,6 +482,8 @@ impl Default for L4I2c {
             txdr: 0,
             state: I2cState::Idle,
             cycles_remaining: 0,
+            nbytes: 0,
+            first_tx_loaded: false,
             attached_devices: Vec::new(),
             current_target: None,
             is_reading: false,
@@ -521,34 +536,31 @@ impl L4I2c {
                 if (value & (1 << 13)) != 0 {
                     // START: latch BUSY and arm a master transfer. Capture the
                     // addressed slave (SADD[7:1] in 7-bit mode), direction
-                    // (RD_WRN), NBYTES and AUTOEND. The address phase runs once
-                    // the first byte reaches TXDR (write) or immediately for a
-                    // read — mirrors the F1 START→DR handshake.
-                    self.isr |= 1 << 15; // BUSY
-                    let addr = ((value >> 1) & 0x7F) as u8;
-                    self.is_reading = (value & (1 << 10)) != 0; // RD_WRN
-                    self.autoend = (value & (1 << 25)) != 0;
-                    self.current_target = self
-                        .attached_devices
-                        .iter()
-                        .position(|d| d.borrow().address() == addr);
-                    if let Some(idx) = self.current_target {
-                        self.attached_devices[idx].borrow_mut().start();
+                    // (RD_WRN), NBYTES and AUTOEND.
+                    // Instant engine: Wire/HAL polls ISR.NACKF|STOPF after START.
+                    if (self.cr1 & 1) != 0 {
+                        self.isr |= 1 << 15; // BUSY
+                        let addr = ((value >> 1) & 0x7F) as u8;
+                        self.is_reading = (value & (1 << 10)) != 0; // RD_WRN
+                        self.autoend = (value & (1 << 25)) != 0;
+                        self.nbytes = ((value >> 16) & 0xFF) as u8;
+                        self.first_tx_loaded = false;
+                        self.current_target = self
+                            .attached_devices
+                            .iter()
+                            .position(|d| d.borrow().address() == addr);
+                        if let Some(idx) = self.current_target {
+                            self.attached_devices[idx].borrow_mut().start();
+                        }
+                        self.start_armed = true;
+                        // Read / NBYTES=0+AUTOEND (IsDeviceReady): start now.
+                        if self.is_reading || (self.nbytes == 0 && self.autoend) {
+                            self.state = I2cState::AddressPending;
+                            self.cycles_remaining = 0;
+                            self.start_armed = false;
+                            let _ = self.tick();
+                        }
                     }
-                    self.start_armed = true;
-                    if self.is_reading {
-                        // Read needs no TXDR write to begin; kick the engine now.
-                        self.state = I2cState::AddressPending;
-                        self.cycles_remaining = 20;
-                        self.start_armed = false;
-                    }
-                    // For a write, TXIS is NOT asserted here: on real STM32 L4
-                    // silicon TXIS only sets once the address phase has been
-                    // clocked out and ACKed (hardware then requests the first
-                    // byte). Firmware reading ISR immediately after setting
-                    // CR2.START sees only BUSY|TXE (0x8001), not TXIS. The byte
-                    // request is modelled by the engine consuming TXDR after the
-                    // address ACK (see `tick`), so no premature TXIS is needed.
                 }
                 if (value & (1 << 14)) != 0 {
                     // STOP: release the bus and tear down any armed/in-flight
@@ -560,6 +572,8 @@ impl L4I2c {
                     self.current_target = None;
                     self.state = I2cState::Idle;
                     self.start_armed = false;
+                    self.nbytes = 0;
+                    self.first_tx_loaded = false;
                 }
             }
             0x08 => self.oar1 = value,
@@ -580,12 +594,14 @@ impl L4I2c {
             0x28 => {
                 self.txdr = value & 0xFF;
                 self.isr &= !0x0000_0003; // writing TXDR clears TXE+TXIS
-                                          // Loading the first byte while a write transfer is armed starts
-                                          // the address phase.
+                // Loading the first byte while a write transfer is armed starts
+                // the address phase. Instant complete — Wire poll path.
                 if self.start_armed && self.state == I2cState::Idle {
                     self.state = I2cState::AddressPending;
-                    self.cycles_remaining = 20;
+                    self.cycles_remaining = 0;
                     self.start_armed = false;
+                    self.first_tx_loaded = true;
+                    let _ = self.tick();
                 }
             }
             _ => {}
@@ -649,16 +665,19 @@ impl L4I2c {
                     }
                 }
                 Some(idx) => {
-                    // Slave ACKed. Deliver the one armed byte (write) or fetch
-                    // one (read), then complete (TC) and auto-STOP if requested.
-                    if self.is_reading {
+                    // Slave ACKed. Deliver data only when NBYTES>0 and a TXDR
+                    // byte was loaded (write) or fetch one (read). Address-only
+                    // probes (NBYTES=0) complete with TC without data path.
+                    if self.is_reading && self.nbytes > 0 {
                         self.rxdr = self.attached_devices[idx].borrow_mut().read() as u32;
                         self.isr |= 1 << 2; // RXNE
-                    } else {
+                    } else if !self.is_reading && self.nbytes > 0 && self.first_tx_loaded {
                         self.attached_devices[idx]
                             .borrow_mut()
                             .write(self.txdr as u8);
                         self.isr |= 1 << 0; // TXE
+                    } else {
+                        self.isr |= 1 << 0; // TXE free after address-only
                     }
                     self.isr |= 1 << 6; // TC (NBYTES transferred)
                     if self.autoend {
@@ -675,6 +694,8 @@ impl L4I2c {
                 }
             }
             self.state = I2cState::Idle;
+            self.nbytes = 0;
+            self.first_tx_loaded = false;
         }
         irq
     }
@@ -1053,6 +1074,27 @@ impl crate::Peripheral for I2c {
         Ok(())
     }
 
+    /// Atomic word writes: STM32 HAL stores CR2 as a single STR (START + NBYTES
+    /// + AUTOEND together). Default Peripheral::write_u32 byte-slices and would
+    /// assert START before AUTOEND lands, breaking the NBYTES=0 probe path.
+    fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        match self {
+            Self::Stm32F1(i) => {
+                i.write_reg(offset & !1, (value & 0xFFFF) as u16);
+            }
+            Self::Stm32L4(i) => {
+                i.write_reg(offset & !3, value);
+            }
+            Self::Kinetis(i) => {
+                i.write_reg(offset, (value & 0xFF) as u8);
+                i.write_reg(offset.wrapping_add(1), ((value >> 8) & 0xFF) as u8);
+                i.write_reg(offset.wrapping_add(2), ((value >> 16) & 0xFF) as u8);
+                i.write_reg(offset.wrapping_add(3), ((value >> 24) & 0xFF) as u8);
+            }
+        }
+        Ok(())
+    }
+
     fn tick(&mut self) -> crate::PeripheralTickResult {
         // Scheduler-mode instances are walk-skipped (the guard keeps a stray
         // direct call from double-advancing the engine the event chain owns).
@@ -1402,12 +1444,9 @@ mod tests {
     #[test]
     fn test_i2c_start_bit() {
         let mut i2c = I2c::new();
-        i2c.write(0x01, 0x01).unwrap(); // CR1 SB (bit 8)
-        assert_eq!(i2c.peek(0x14).unwrap() & 0x01, 0); // not immediate
-        for _ in 0..10 {
-            i2c.tick();
-        }
-        assert_ne!(i2c.peek(0x14).unwrap() & 0x01, 0); // SB set after ticks
+        // Instant SB: Wire/HAL polls SR1.SB immediately after CR1.START.
+        i2c.write(0x01, 0x01).unwrap(); // CR1 START (bit 8) → SR1.SB
+        assert_ne!(i2c.peek(0x14).unwrap() & 0x01, 0, "SB latches on START write");
     }
 
     #[test]
@@ -1544,16 +1583,21 @@ mod tests {
 
     /// Configure CR2 for a 1-byte 7-bit master write to `addr` with AUTOEND,
     /// then load TXDR — the no-device case the tier-1 fixtures exercise.
+    /// CR2 is a single 32-bit store (matches STM32 HAL).
     fn l4_write_xfer(i2c: &mut I2c, addr: u8, byte: u8) {
         use crate::Peripheral;
         i2c.write(0x00, 1).unwrap(); // CR1.PE
-                                     // CR2 = SADD(addr<<1) | NBYTES=1<<16 | AUTOEND<<25 | START<<13
         let cr2: u32 = ((addr as u32) << 1) | (1 << 16) | (1 << 25) | (1 << 13);
-        for b in 0..4 {
-            i2c.write(0x04 + b, ((cr2 >> (b * 8)) & 0xFF) as u8)
-                .unwrap();
-        }
+        i2c.write_u32(0x04, cr2).unwrap();
         i2c.write(0x28, byte).unwrap(); // TXDR: first (only) byte
+    }
+
+    /// Address-only master write (NBYTES=0 + AUTOEND + START) — Wire probe.
+    fn l4_addr_probe(i2c: &mut I2c, addr: u8) {
+        use crate::Peripheral;
+        i2c.write(0x00, 1).unwrap(); // CR1.PE
+        let cr2: u32 = ((addr as u32) << 1) | (1 << 25) | (1 << 13); // NBYTES=0
+        i2c.write_u32(0x04, cr2).unwrap();
     }
 
     #[test]
@@ -1561,24 +1605,23 @@ mod tests {
         use super::I2cRegisterLayout;
         let mut i2c = I2c::new_with_layout(I2cRegisterLayout::Stm32L4);
 
-        // START latches BUSY (ISR bit15) up front.
+        // Instant NACK on TXDR after START (AUTOEND clears BUSY).
         l4_write_xfer(&mut i2c, 0x52, 0xAB);
-        // BUSY is ISR bit15 → byte offset 0x19, bit7.
-        assert_ne!(i2c.peek(0x19).unwrap() & (1 << 7), 0, "BUSY after START");
-
-        // No attached device → address phase NACKs after the engine ticks.
-        let mut nacked = false;
-        for _ in 0..40 {
-            i2c.tick();
-            if i2c.peek(0x18).unwrap() & (1 << 4) != 0 {
-                nacked = true;
-                break;
-            }
-        }
-        assert!(nacked, "ISR.NACKF must set when no slave acknowledges");
-        // AUTOEND released the bus: BUSY clear, STOPF set.
-        assert_eq!(i2c.peek(0x19).unwrap() & (1 << 7), 0, "AUTOEND clears BUSY");
-        assert_ne!(i2c.peek(0x18).unwrap() & (1 << 5), 0, "AUTOEND sets STOPF");
+        assert_ne!(
+            i2c.peek(0x18).unwrap() & (1 << 4),
+            0,
+            "ISR.NACKF when no slave"
+        );
+        assert_eq!(
+            i2c.peek(0x19).unwrap() & (1 << 7),
+            0,
+            "AUTOEND clears BUSY"
+        );
+        assert_ne!(
+            i2c.peek(0x18).unwrap() & (1 << 5),
+            0,
+            "AUTOEND sets STOPF"
+        );
 
         // ICR.NACKCF (bit4) + STOPCF (bit5) clear the flags.
         i2c.write(0x1C, (1 << 4) | (1 << 5)).unwrap();
@@ -1586,6 +1629,48 @@ mod tests {
             i2c.peek(0x18).unwrap() & (1 << 4),
             0,
             "NACKF cleared by ICR"
+        );
+    }
+
+    #[test]
+    fn test_l4_i2c_nbytes0_probe_acks_device() {
+        use super::I2cRegisterLayout;
+        struct AckOnly {
+            address: u8,
+        }
+        impl I2cDevice for AckOnly {
+            fn address(&self) -> u8 {
+                self.address
+            }
+            fn read(&mut self) -> u8 {
+                0
+            }
+            fn write(&mut self, _: u8) {}
+        }
+
+        let mut i2c = I2c::new_with_layout(I2cRegisterLayout::Stm32L4);
+        i2c.push_slave(Box::new(AckOnly { address: 0x40 }));
+
+        l4_addr_probe(&mut i2c, 0x40);
+        assert_eq!(
+            i2c.peek(0x18).unwrap() & (1 << 4),
+            0,
+            "no NACKF on present device"
+        );
+        assert_ne!(
+            i2c.peek(0x18).unwrap() & (1 << 6),
+            0,
+            "TC after address-only"
+        );
+        assert_ne!(
+            i2c.peek(0x18).unwrap() & (1 << 5),
+            0,
+            "STOPF via AUTOEND"
+        );
+        assert_eq!(
+            i2c.peek(0x19).unwrap() & (1 << 7),
+            0,
+            "BUSY cleared"
         );
     }
 

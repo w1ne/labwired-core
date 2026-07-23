@@ -73,6 +73,19 @@ pub fn build_i2c_device(
             )))
         }
         "aht20" => Some(Box::new(crate::peripherals::components::Aht20::new())),
+        // INA219 is also a PeripheralKit; keep a factory arm so nRF TWIM /
+        // serial-instance (and any path that only calls build_external_i2c_device)
+        // attach the slave — kit-only types were marked "already attached" and
+        // never reached the kit pass (matrix L3 nRF ANACK).
+        "ina219" => {
+            let address = config
+                .get("i2c_address")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0x40) as u8;
+            Some(Box::new(
+                crate::peripherals::components::ina219::Ina219::new(address),
+            ))
+        }
         // ── Smart-ring sensor/actuator set ──────────────────────────────────
         "max30102" => {
             use crate::peripherals::components::max30102::{Max30102, MAX30102_ADDR};

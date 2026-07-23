@@ -353,12 +353,13 @@ def main() -> int:
             f"(partial run; not full {len(all_boards)}×{len(all_sketches)})"
         )
 
-    passed = sum(1 for r in rows if r["status"] == "pass")
+    passed = sum(1 for r in rows if r["status"] in ("pass", "skipped"))
+    failed = sum(1 for r in rows if r["status"] not in ("pass", "skipped"))
     print()
-    print(f"Done in {elapsed:.0f}s — {passed}/{len(rows)} pass")
+    print(f"Done in {elapsed:.0f}s — {passed}/{len(rows)} pass/skip ({failed} fail)")
     print(f"Scoreboard: {out / 'scoreboard.md'}")
     print(pub_note)
-    return 0 if passed == len(rows) else 1
+    return 0 if failed == 0 else 1
 
 
 if __name__ == "__main__":

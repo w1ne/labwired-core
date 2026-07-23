@@ -62,6 +62,8 @@ impl SystemBus {
             // TWIM half. The nRF52 factory attaches manifest-declared externals
             // itself, but a programmatic attach to `i2c0` must land here too.
             c.attach_i2c(wrapped);
+        } else if let Some(c) = any.downcast_mut::<crate::peripherals::rp2040::i2c::Rp2040I2c>() {
+            c.push_slave(wrapped);
         } else {
             anyhow::bail!("attach_i2c_slave: '{controller}' is not an I2C controller");
         }

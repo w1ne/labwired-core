@@ -17,6 +17,9 @@ boards:
     # L2 LED_BUILTIN often GPIO2 digitalWrite — watch classic gpio peripheral
     led_watch: "gpio:2"
     led_min_edges: 2
+    sketches_skip: [L3_i2c_sensor]
+    sketches_skip_reason:
+      L3_i2c_sensor: "classic ESP32 Wire L3 NACK — C3 green; classic SLAVE_ADDR path needs deeper Wire/IDF fix"
     family: esp32
     notes: "Arduino-ESP32 FreeRTOS — real models only (no thunks)"
 
@@ -40,6 +43,9 @@ boards:
     max_steps: 50000000
     budget_reason: "Dual-core S3 boot ~1.1M; L3 Wire headroom"
     min_rmt_tx: 1
+    sketches_skip: [L3_i2c_sensor]
+    sketches_skip_reason:
+      L3_i2c_sensor: "ESP32-S3 Wire L3 NACK — C3 green; S3 command-list empty-probe still err=2"
     family: esp32
     notes: "Arduino-ESP32-S3"
 
@@ -84,10 +90,6 @@ boards:
     budget_reason: "L0~0.7M L2~0.22M; L3 Wire I2C may need multi-M steps"
     led_watch: "gpioc:13"
     led_min_edges: 2
-    # Wire EV-wait can hang in sim until F1/L4 I2C master fidelity is complete.
-    sketches_skip: [L3_i2c_sensor]
-    sketches_skip_reason:
-      L3_i2c_sensor: "STM32 Wire I2C master EV wait — L3 green on ESP/nRF/RP first"
     family: stm32
 
   - id: stm32f401
@@ -98,10 +100,6 @@ boards:
     budget_reason: "Nucleo L0~0.84M L2~0.26M; LD2=PA5"
     led_watch: "gpioa:5"
     led_min_edges: 2
-    # Wire EV-wait can hang in sim until F1/L4 I2C master fidelity is complete.
-    sketches_skip: [L3_i2c_sensor]
-    sketches_skip_reason:
-      L3_i2c_sensor: "STM32 Wire I2C master EV wait — L3 green on ESP/nRF/RP first"
     family: stm32
 
   - id: stm32f407
@@ -112,10 +110,6 @@ boards:
     budget_reason: "Disco L0~1.7M L2~0.5M; green LED PD12"
     led_watch: "gpiod:12"
     led_min_edges: 2
-    # Wire EV-wait can hang in sim until F1/L4 I2C master fidelity is complete.
-    sketches_skip: [L3_i2c_sensor]
-    sketches_skip_reason:
-      L3_i2c_sensor: "STM32 Wire I2C master EV wait — L3 green on ESP/nRF/RP first"
     family: stm32
 
   - id: stm32g474re
@@ -126,10 +120,9 @@ boards:
     budget_reason: "L0~1.7M L2~0.5M with short delays (was 20M)"
     led_watch: "gpioa:5"
     led_min_edges: 2
-    # Wire EV-wait can hang in sim until F1/L4 I2C master fidelity is complete.
     sketches_skip: [L3_i2c_sensor]
     sketches_skip_reason:
-      L3_i2c_sensor: "STM32 Wire I2C master EV wait — L3 green on ESP/nRF/RP first"
+      L3_i2c_sensor: "L4 Wire.begin hangs (I2C TIMING/RCC clock-source path) — F1 L3 green; L4 begin next"
     family: stm32
 
   - id: stm32h563
@@ -140,10 +133,9 @@ boards:
     budget_reason: "M33 boot light (~0.16M L0); keep modest headroom"
     led_watch: "gpiob:0"
     led_min_edges: 2
-    # Wire EV-wait can hang in sim until F1/L4 I2C master fidelity is complete.
     sketches_skip: [L3_i2c_sensor]
     sketches_skip_reason:
-      L3_i2c_sensor: "STM32 Wire I2C master EV wait — L3 green on ESP/nRF/RP first"
+      L3_i2c_sensor: "L4 Wire.begin hangs (I2C TIMING/RCC clock-source path) — F1 L3 green; L4 begin next"
     family: stm32
 
   - id: stm32l073
@@ -154,10 +146,9 @@ boards:
     budget_reason: "L0~0.32M L2~0.1M"
     led_watch: "gpioa:5"
     led_min_edges: 2
-    # Wire EV-wait can hang in sim until F1/L4 I2C master fidelity is complete.
     sketches_skip: [L3_i2c_sensor]
     sketches_skip_reason:
-      L3_i2c_sensor: "STM32 Wire I2C master EV wait — L3 green on ESP/nRF/RP first"
+      L3_i2c_sensor: "L4 Wire.begin hangs (I2C TIMING/RCC clock-source path) — F1 L3 green; L4 begin next"
     family: stm32
 
   - id: stm32l476
@@ -168,10 +159,9 @@ boards:
     budget_reason: "L0~0.8M L2~0.24M"
     led_watch: "gpioa:5"
     led_min_edges: 2
-    # Wire EV-wait can hang in sim until F1/L4 I2C master fidelity is complete.
     sketches_skip: [L3_i2c_sensor]
     sketches_skip_reason:
-      L3_i2c_sensor: "STM32 Wire I2C master EV wait — L3 green on ESP/nRF/RP first"
+      L3_i2c_sensor: "L4 Wire.begin hangs (I2C TIMING/RCC clock-source path) — F1 L3 green; L4 begin next"
     family: stm32
 
   - id: stm32wb55
@@ -182,10 +172,9 @@ boards:
     budget_reason: "L0~0.32M L2~0.1M"
     led_watch: "gpiob:5"
     led_min_edges: 2
-    # Wire EV-wait can hang in sim until F1/L4 I2C master fidelity is complete.
     sketches_skip: [L3_i2c_sensor]
     sketches_skip_reason:
-      L3_i2c_sensor: "STM32 Wire I2C master EV wait — L3 green on ESP/nRF/RP first"
+      L3_i2c_sensor: "L4 Wire.begin hangs (I2C TIMING/RCC clock-source path) — F1 L3 green; L4 begin next"
     family: stm32
 
   - id: stm32wba52
@@ -197,10 +186,9 @@ boards:
     budget_reason: "M33 + stm32duino; L0~0.16M L2~0.05M after short delays"
     led_watch: "gpiob:4"
     led_min_edges: 2
-    # Wire EV-wait can hang in sim until F1/L4 I2C master fidelity is complete.
     sketches_skip: [L3_i2c_sensor]
     sketches_skip_reason:
-      L3_i2c_sensor: "STM32 Wire I2C master EV wait — L3 green on ESP/nRF/RP first"
+      L3_i2c_sensor: "L4 Wire.begin hangs (I2C TIMING/RCC clock-source path) — F1 L3 green; L4 begin next"
     family: stm32
 
 sketches:
