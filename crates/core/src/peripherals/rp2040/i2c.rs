@@ -130,13 +130,7 @@ impl Peripheral for Rp2040I2c {
                 s
             }
             IC_TXFLR => 0,
-            IC_RXFLR => {
-                if self.rx_byte.get().is_some() {
-                    1
-                } else {
-                    0
-                }
-            }
+            IC_RXFLR => u32::from(self.rx_byte.get().is_some()),
             IC_COMP_TYPE => IC_COMP_TYPE_MAGIC,
             _ => 0,
         };
