@@ -7,6 +7,10 @@ use std::sync::{Arc, Mutex};
 
 #[test]
 fn test_rp2040_full_smoke() {
+    // Opt out of in-tree bootrom so bare-metal code at flash base is not
+    // shadowed by mask ROM at address 0 (same as `rp2040_bus()`).
+    std::env::set_var("LABWIRED_RP2040_BOOTROM", "");
+
     let mut chip_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     chip_path.push("../../configs/chips/rp2040.yaml");
 
@@ -66,6 +70,11 @@ fn test_rp2040_full_smoke() {
 
 /// Build a SystemBus for the rp2040-pico target, mirroring `test_rp2040_full_smoke`.
 fn rp2040_bus() -> SystemBus {
+    // Bare-metal unit fixtures map vectors at flash base / use the Cortex-M
+    // boot alias at 0. Empty env opts out of the in-tree mask ROM so that
+    // alias is not shadowed (see `from_config` LABWIRED_RP2040_BOOTROM).
+    std::env::set_var("LABWIRED_RP2040_BOOTROM", "");
+
     let mut chip_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     chip_path.push("../../configs/chips/rp2040.yaml");
     let mut system_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
