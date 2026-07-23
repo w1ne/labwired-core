@@ -144,7 +144,7 @@ fn diag_s3_l2() {
 
     dump_maps(&machine.bus, "pre-step");
 
-    for step in 1..=2_000_000u64 {
+    for step in 1..=6_000_000u64 {
         match machine.step() {
             Ok(()) => {}
             Err(e) => {
@@ -202,7 +202,7 @@ fn diag_s3_l2() {
             .unwrap_or(0);
 
         // Trace who fills the intmatrix 1k..15k
-        if step > 1000 && step < 15000 {
+        if step > 1000 && step < 8000 {
             static mut LAST: String = String::new();
             let f = nearest(&syms, pc);
             let base = f.split('+').next().unwrap_or(&f);
