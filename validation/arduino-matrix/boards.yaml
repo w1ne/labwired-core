@@ -26,8 +26,10 @@ boards:
     pio: { platform: espressif32, board: esp32-c3-devkitm-1, framework: arduino }
     max_steps: 15000000
     budget_reason: "FreeRTOS C3 boot ~1.9M steps; L2 RGB via RMT"
-    # LED_BUILTIN → rgbLedWrite → RMT TX_START (inspect rmt_tx artifact)
+    # LED_BUILTIN → rgbLedWrite → RMT TX_START (inspect + synthetic ch0 edges)
     min_rmt_tx: 1
+    led_watch: "rmt:0"
+    led_min_edges: 2
     family: esp32
     notes: "Arduino-ESP32-C3 RISC-V"
 
@@ -68,7 +70,9 @@ boards:
     pio: { platform: raspberrypi, board: pico, framework: arduino }
     max_steps: 8000000
     budget_reason: "mbed RTX SysTick delay; L0~1.7M L2~0.8M with short delays (was 20M for delay(20))"
-    # SIO/GPIO not watched yet — UART-only L2 until sio pin map is wired
+    # Pico LED = GPIO25 via SIO (not APB GPIO)
+    led_watch: "sio:25"
+    led_min_edges: 2
     family: rp2040
     notes: "Needs platform raspberrypi (pio pkg install -g -p raspberrypi if missing)"
 

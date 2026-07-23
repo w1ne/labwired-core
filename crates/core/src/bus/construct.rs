@@ -197,9 +197,10 @@ impl SystemBus {
     /// dynamic configuration that bypasses `from_config`.
     ///
     /// **No overlap check is performed.** If two peripherals claim overlapping
-    /// address ranges, reads and writes are routed to the **first** matching
-    /// peripheral in registration order (i.e. the earlier-registered peripheral
-    /// wins). Callers are responsible for ensuring non-overlapping ranges.
+    /// address ranges, routing is last-start-wins (equal bases → last-registered
+    /// entry). Callers are responsible for ensuring non-overlapping ranges, or
+    /// for using [`replace_or_add_peripheral`] when a behavioral model should
+    /// own a name already present as a declarative stub.
     pub fn add_peripheral(
         &mut self,
         name: &str,
@@ -224,6 +225,47 @@ impl SystemBus {
             clock_gate: None,
         });
         self.rebuild_peripheral_ranges();
+    }
+
+    /// Replace the first peripheral with `name`, or append if missing.
+    ///
+    /// Prefer this over [`add_peripheral`] when installing a behavioral twin
+    /// of a chip-yaml declarative stub: name lookup (`find_peripheral_index_by_name`,
+    /// `--watch-gpio`, inspect) and MMIO must agree on one entry. Stacking two
+    /// `"rmt"` devices left TX_START on the later MMIO winner while LogicTap
+    /// armed the earlier stub → `min_rmt_tx` green, `led_watch` edges zero.
+    pub fn replace_or_add_peripheral(
+        &mut self,
+        name: &str,
+        base: u64,
+        size: u64,
+        irq: Option<u32>,
+        mut dev: Box<dyn Peripheral>,
+    ) {
+        dev.attach_cycle_clock(self.cycle_clock.clone());
+        dev.attach_irq_line(irq);
+        if let Some(idx) = self.peripherals.iter().position(|p| p.name == name) {
+            let e = &mut self.peripherals[idx];
+            e.base = base;
+            e.size = size;
+            e.irq = irq;
+            e.dev = dev;
+            e.ticks_remaining = 0;
+            e.clock_gate = None;
+            self.rebuild_peripheral_ranges();
+        } else {
+            // attach already done; push without double-attach
+            self.peripherals.push(PeripheralEntry {
+                name: name.to_string(),
+                base,
+                size,
+                irq,
+                dev,
+                ticks_remaining: 0,
+                clock_gate: None,
+            });
+            self.rebuild_peripheral_ranges();
+        }
     }
 
     /// Look up a registered ROM thunk by absolute PC.
