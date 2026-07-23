@@ -2,12 +2,25 @@
 // Reads popular I2C modules and prints lines the stimuli API can drive.
 //
 // I2C: SDA=GPIO4, SCL=GPIO5 (same as LabWired C3 OLED labs)
+//
+// Super Mini builds with ARDUINO_USB_CDC_ON_BOOT=1, so `Serial` is USB-CDC.
+// LabWired captures hardware UART0 — use Serial0 (or dual-print) for sim.
 
 #include <Arduino.h>
 #include <Wire.h>
 
 static constexpr int PIN_SDA = 4;
 static constexpr int PIN_SCL = 5;
+
+// Super Mini: Serial = USB-CDC, Serial0 = UART0 (what LabWired captures).
+// Always dual-init; always log on UART0 so rom-boot sims see the sketch.
+static void mktSerialBegin() {
+  Serial.begin(115200);
+#if defined(ARDUINO_USB_CDC_ON_BOOT) && (ARDUINO_USB_CDC_ON_BOOT)
+  Serial.setTxTimeoutMs(0);  // do not block if no USB host (simulator)
+#endif
+  Serial0.begin(115200);
+}
 
 static uint16_t i2cRead16BE(uint8_t addr7, uint8_t reg) {
   Wire.beginTransmission(addr7);
@@ -33,17 +46,17 @@ static void readIna219() {
   uint16_t cur = i2cRead16BE(0x40, 0x04);
   uint32_t mv = ((bus >> 3) & 0x1FFF) * 4u;
   int32_t ma = (int16_t)cur / 10;
-  Serial.print("INA219 Vbus_mV=");
-  Serial.print(mv);
-  Serial.print(" I_mA=");
-  Serial.println(ma);
+  Serial0.print("INA219 Vbus_mV=");
+  Serial0.print(mv);
+  Serial0.print(" I_mA=");
+  Serial0.println(ma);
 }
 
 static void readAds1115() {
   // assume already configured; read conversion
   int16_t raw = (int16_t)i2cRead16BE(0x48, 0x00);
-  Serial.print("ADS1115 A0_raw=");
-  Serial.println(raw);
+  Serial0.print("ADS1115 A0_raw=");
+  Serial0.println(raw);
 }
 
 static void writeAdsConfig() {
@@ -60,23 +73,23 @@ static void readDs3231() {
   uint8_t min = i2cRead8(0x68, 0x01) & 0x7F;
   uint8_t hour = i2cRead8(0x68, 0x02) & 0x3F;
   auto bcd = [](uint8_t v) { return (v >> 4) * 10 + (v & 0x0F); };
-  Serial.print("DS3231 TIME=");
-  if (bcd(hour) < 10) Serial.print('0');
-  Serial.print(bcd(hour));
-  Serial.print(':');
-  if (bcd(min) < 10) Serial.print('0');
-  Serial.print(bcd(min));
-  Serial.print(':');
-  if (bcd(sec) < 10) Serial.print('0');
-  Serial.println(bcd(sec));
+  Serial0.print("DS3231 TIME=");
+  if (bcd(hour) < 10) Serial0.print('0');
+  Serial0.print(bcd(hour));
+  Serial0.print(':');
+  if (bcd(min) < 10) Serial0.print('0');
+  Serial0.print(bcd(min));
+  Serial0.print(':');
+  if (bcd(sec) < 10) Serial0.print('0');
+  Serial0.println(bcd(sec));
 }
 
 static void readAs5600() {
   uint16_t raw = i2cRead16BE(0x36, 0x0C) & 0x0FFF;
   // 0..4095 → degrees
   uint32_t deg = (raw * 360u) / 4096u;
-  Serial.print("AS5600 angle_deg=");
-  Serial.println(deg);
+  Serial0.print("AS5600 angle_deg=");
+  Serial0.println(deg);
 }
 
 static void readBno055() {
@@ -84,26 +97,26 @@ static void readBno055() {
   uint8_t id = i2cRead8(0x28, 0x00);
   int16_t h = (int16_t)(i2cRead8(0x28, 0x1A) | (i2cRead8(0x28, 0x1B) << 8));
   // degrees * 16
-  Serial.print("BNO055 chip=");
-  Serial.print(id, HEX);
-  Serial.print(" heading=");
-  Serial.println(h / 16);
+  Serial0.print("BNO055 chip=");
+  Serial0.print(id, HEX);
+  Serial0.print(" heading=");
+  Serial0.println(h / 16);
 }
 
 static void readVl53l0x() {
   // model id then range high/low (simplified)
   uint8_t mid = i2cRead8(0x29, 0xC0);
   uint16_t mm = ((uint16_t)i2cRead8(0x29, 0x1E) << 8) | i2cRead8(0x29, 0x1F);
-  Serial.print("VL53L0X id=");
-  Serial.print(mid, HEX);
-  Serial.print(" dist_mm=");
-  Serial.println(mm);
+  Serial0.print("VL53L0X id=");
+  Serial0.print(mid, HEX);
+  Serial0.print(" dist_mm=");
+  Serial0.println(mm);
 }
 
 void setup() {
-  Serial.begin(115200);
-  delay(200);
-  Serial.println("MARKETPLACE ARDUINO C3");
+  mktSerialBegin();
+  delay(50);
+  Serial0.println("MARKETPLACE ARDUINO C3");
   Wire.begin(PIN_SDA, PIN_SCL);
   Wire.setClock(100000);
   writeAdsConfig();
@@ -117,7 +130,7 @@ void setup() {
   Wire.write(0x00);
   Wire.write(0x01);
   Wire.endTransmission();
-  Serial.println("SENSORS READY");
+  Serial0.println("SENSORS READY");
 }
 
 void loop() {
@@ -127,6 +140,6 @@ void loop() {
   readAs5600();
   readBno055();
   readVl53l0x();
-  Serial.println("---");
+  Serial0.println("---");
   delay(200);
 }
