@@ -1,3 +1,7 @@
+/*
+ * Shared serial instance: select TWIM (ENABLE=6) EasyDMA master — matches
+ * LabWired's nRF TWIM digital twin on i2c0 (see nrf52840 overlay).
+ */
 &i2c0 {
 	compatible = "nordic,nrf-twim";
 };
