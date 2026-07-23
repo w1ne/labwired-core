@@ -129,22 +129,6 @@ impl GenericSpiDevice {
         out
     }
 
-    fn require_channel(&self, key: &str, value: f64) -> Result<(), SimInputError> {
-        let ch = self
-            .channels
-            .iter()
-            .find(|c| c.key == key)
-            .ok_or_else(|| SimInputError::UnknownChannel(key.to_string()))?;
-        if value < ch.min || value > ch.max {
-            return Err(SimInputError::OutOfRange {
-                key: key.to_string(),
-                value,
-                min: ch.min,
-                max: ch.max,
-            });
-        }
-        Ok(())
-    }
 }
 
 impl SpiDevice for GenericSpiDevice {
@@ -185,7 +169,7 @@ impl SpiDevice for GenericSpiDevice {
         }
         // Data phase.
         let addr = self.cur_addr.unwrap_or(0);
-        // Writes require an explicit rw_bit in the framing; a read-biased part never writes.
+        // Writes require an explicit rw_bit in the framing; a part with rw_bit: None never leaves is_read == None, so every data byte is a read.
         let write = matches!(self.is_read, Some(false));
         if write {
             self.write_acc.push(mosi);
@@ -421,6 +405,64 @@ mod tests {
         ));
         assert_eq!(m.inputs.len(), 1);
         assert!(m.inputs.iter().any(|c| c.key == "accel_x"));
+    }
+
+    /// A MAX31855-style read-only part: `command_bytes: 0` means CS↓ clocks
+    /// register 0 straight out with no leading command byte.
+    const READ_ONLY_FIXTURE: &str = r#"
+type: test_spi_readonly_fixture
+
+behavior:
+  primitive: spi_device
+  spi:
+    framing:
+      command_bytes: 0
+    registers:
+      - name: TEMP
+        addr: 0
+        width: 4
+        endian: be
+        access: r
+        source: temperature
+        encode: { scale: 1.0 }
+
+metadata:
+  label: "Declarative SPI read-only fixture"
+  summary: "Test-only MAX31855-shaped read-only SPI part (command_bytes: 0)."
+  category: spi
+  inputs:
+    - { key: temperature, label: "Temperature", unit: "°C", min: -50, max: 200, default: 100 }
+"#;
+
+    fn read_only_dev() -> GenericSpiDevice {
+        GenericSpiDevice::from_yaml(READ_ONLY_FIXTURE, "PA4").unwrap()
+    }
+
+    #[test]
+    fn command_bytes_zero_reads_register_zero_straight_off_cs_select() {
+        let mut d = read_only_dev();
+        d.cs_select();
+        // Default temperature 100.0 × scale 1.0 = 100 = 0x00000064, big-endian.
+        let bytes: Vec<u8> = (0..4).map(|_| d.transfer(0x00)).collect();
+        assert_eq!(bytes, vec![0x00, 0x00, 0x00, 0x64]);
+        // A byte past the 4-byte register width returns 0xFF.
+        assert_eq!(d.transfer(0x00), 0xFF);
+        d.cs_release();
+    }
+
+    #[test]
+    fn command_bytes_zero_reasserts_the_same_word_on_a_second_transaction() {
+        let mut d = read_only_dev();
+        d.cs_select();
+        let first: Vec<u8> = (0..4).map(|_| d.transfer(0x00)).collect();
+        d.cs_release();
+        // Re-select for a second transaction: frame state must reset so the
+        // same register-0 word is clocked out again from the start.
+        d.cs_select();
+        let second: Vec<u8> = (0..4).map(|_| d.transfer(0x00)).collect();
+        d.cs_release();
+        assert_eq!(first, vec![0x00, 0x00, 0x00, 0x64]);
+        assert_eq!(second, vec![0x00, 0x00, 0x00, 0x64]);
     }
 
     #[test]
