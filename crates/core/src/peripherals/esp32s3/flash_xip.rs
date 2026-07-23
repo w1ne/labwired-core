@@ -687,6 +687,78 @@ mod tests {
         assert_eq!(mmu.entries.lock().unwrap()[128], 64);
     }
 
+    /// Build a C3-shaped (128-entry) flash MMU table peripheral. The C3 table is
+    /// half the S3's width, so its snapshot word count differs — the axis of the
+    /// rom-boot resume regression.
+    fn new_c3_mmu_table() -> SharedMmuTable {
+        Arc::new(SharedMmu {
+            entries: Mutex::new(vec![MMU_FMT_C3.invalid_bit; 128]),
+            generation: AtomicU64::new(1),
+        })
+    }
+
+    #[test]
+    fn c3_mmu_table_snapshot_round_trips_128_entries() {
+        // ESP32-C3's flash MMU has exactly 128 entries. A resume snapshot must
+        // carry — and restore onto — that many, preserving every programmed
+        // mapping. This guards the C3 rom-boot resume path, where a mismatched
+        // entry count fails apply ("snapshot has N entries, table has M").
+        let mmu = new_c3_mmu_table();
+        let mut p = Esp32s3MmuTable::new(mmu);
+        // Two live mappings the 2nd-stage bootloader would program.
+        p.write_u32(0, 0x0000_0000).unwrap(); // entry 0 → phys page 0, valid
+        p.write_u32(64 * 4, 0x0000_002A).unwrap(); // entry 64 → phys page 42
+
+        let blob = p.runtime_snapshot();
+        assert_eq!(blob.len(), 128 * 4, "C3 snapshot must be 128 u32 words");
+
+        // A freshly-built C3 table (as a resume constructs) restores cleanly and
+        // the entry count is preserved.
+        let mmu2 = new_c3_mmu_table();
+        let mut p2 = Esp32s3MmuTable::new(mmu2.clone());
+        p2.restore_runtime_snapshot(&blob)
+            .expect("C3 128-entry snapshot must round-trip");
+        assert_eq!(mmu2.entries.lock().unwrap().len(), 128);
+        assert_eq!(p2.read_u32(0).unwrap(), 0x0000_0000);
+        assert_eq!(p2.read_u32(64 * 4).unwrap(), 0x0000_002A);
+    }
+
+    #[test]
+    fn s3_mmu_table_snapshot_round_trips_512_entries() {
+        // The S3 direction: 512 entries, preserved across snapshot/restore. Guards
+        // against a fix that "corrects" C3 by breaking the S3 width.
+        let mmu = new_mmu_table(); // 512-entry S3 table
+        let mut p = Esp32s3MmuTable::new(mmu);
+        p.write_u32(500 * 4, 0x0000_0100).unwrap();
+
+        let blob = p.runtime_snapshot();
+        assert_eq!(blob.len(), 512 * 4, "S3 snapshot must be 512 u32 words");
+
+        let mmu2 = new_mmu_table();
+        let mut p2 = Esp32s3MmuTable::new(mmu2.clone());
+        p2.restore_runtime_snapshot(&blob)
+            .expect("S3 512-entry snapshot must round-trip");
+        assert_eq!(mmu2.entries.lock().unwrap().len(), 512);
+        assert_eq!(p2.read_u32(500 * 4).unwrap(), 0x0000_0100);
+    }
+
+    #[test]
+    fn mmu_table_snapshot_size_mismatch_is_rejected_clearly() {
+        // A 512-entry (S3) snapshot must NOT silently apply onto a 128-entry (C3)
+        // table: the size guard rejects it with a clear message so a caller can
+        // treat it as snapshot-invalid and cold-boot. This is exactly the failure
+        // the C3 rom-boot double-`mmu_table` regression surfaced.
+        let s3_blob = Esp32s3MmuTable::new(new_mmu_table()).runtime_snapshot();
+        let mut c3_table = Esp32s3MmuTable::new(new_c3_mmu_table());
+        match c3_table.restore_runtime_snapshot(&s3_blob).unwrap_err() {
+            SimulationError::NotImplemented(msg) => {
+                assert!(msg.contains("512 entries"), "clear size-mismatch error: {msg}");
+                assert!(msg.contains("table has 128"), "clear size-mismatch error: {msg}");
+            }
+            other => panic!("expected NotImplemented size-mismatch, got {other:?}"),
+        }
+    }
+
     #[test]
     fn shared_backing_visible_to_both_aliases() {
         let mut buf = vec![0u8; PAGE_SIZE as usize];
