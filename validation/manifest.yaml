@@ -122,7 +122,7 @@ boards:
     # nrf52840_ble_loopback_through_virtual_air pass UNCHANGED. No register
     # read/write path, reset value or layout touched — drift is the shared nrf52
     # file commit date only. No live re-capture.
-    drift_ack: 2026-07-22
+    drift_ack: 2026-07-23
     models:
       - crates/core/src/peripherals/nrf52
       - configs/chips/nrf52840.yaml
@@ -176,7 +176,7 @@ boards:
     # 2026-07-22: rides the nrf52840 BLE virtual-air VirtualAirBus refactor (same
     # silicon); byte-identical, transitional global default. See the nrf52840
     # drift_ack note.
-    drift_ack: 2026-07-22
+    drift_ack: 2026-07-23
     models:
       - crates/core/src/peripherals/nrf52
       - configs/chips/nrf52840.yaml
