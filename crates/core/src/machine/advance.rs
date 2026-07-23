@@ -114,9 +114,16 @@ impl<C: Cpu> Machine<C> {
             self.bus.reset_mmio_activity_counters();
             let count = self.plan_cpu_window(request, state.fuel_consumed, elapsed);
             debug_assert!(count > 0);
+            // Dual-core lockstep only while the secondary is active or still
+            // held in reset. When APP is WAITI-parked, batch the primary.
+            let secondary_active = match self.cpu_secondary.as_ref() {
+                Some(sec) if sec.is_parked_idle() => false,
+                Some(_) => true,
+                None => false,
+            };
             let mode = if request.is_single() {
                 ExecutionMode::SingleDirect
-            } else if self.cpu_secondary.is_some() {
+            } else if secondary_active {
                 ExecutionMode::RunDual
             } else {
                 ExecutionMode::RunBatch

@@ -26,10 +26,17 @@ impl<C: Cpu> Machine<C> {
         // Any instruction may request an RTC or SCB reset. Commit it before
         // the next instruction, intentionally trading Cortex/RTC throughput
         // for reset fidelity even while no request is currently latched.
+        // (SCB presence also keeps push-mode logic capture cycle-accurate.)
         let reset_fidelity = self.rtc_cntl_index.is_some() || self.scb_index.is_some();
-        // Interleave both cores one scheduling quantum at a time for lockstep
-        // fairness over their shared bus.
-        let secondary_lockstep = self.cpu_secondary.is_some();
+        // Interleave both cores one quantum when the secondary is active or
+        // still in reset-hold. A secondary parked in WAITI (FreeRTOS idle)
+        // does not need lockstep — primary may batch; secondary CCOUNT is
+        // advanced via `fast_forward_idle_cycles` after the batch.
+        let secondary_lockstep = match self.cpu_secondary.as_ref() {
+            Some(sec) if sec.is_parked_idle() => false,
+            Some(_) => true,
+            None => false,
+        };
         // Pending cycle-accurate bus cells and operations require a lifecycle
         // commit after every instruction.
         let cycle_accurate_bus = self.bus.requires_cycle_accurate();

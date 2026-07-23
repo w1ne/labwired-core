@@ -313,6 +313,16 @@ pub trait Cpu: Send {
     /// default is a no-op for CPUs that do not opt into idle fast-forwarding.
     fn fast_forward_idle_cycles(&mut self, _cycles: u64) {}
 
+    /// True while this core is parked in an architectural wait (e.g. Xtensa
+    /// `WAITI`) and will only retire work when an interrupt wakes it.
+    ///
+    /// Dual-core machines use this to batch the primary core while a secondary
+    /// APP CPU sits in FreeRTOS idle: lockstep quantum-1 is only required when
+    /// the secondary is actively executing or still held in reset (`halted`).
+    fn is_parked_idle(&self) -> bool {
+        false
+    }
+
     /// Phase 3.2 JIT pilot (issue #124): total number of times any
     /// JIT-compiled block on this CPU has been invoked. Default 0 for
     /// CPUs/builds without JIT support so callers can unconditionally
@@ -418,6 +428,9 @@ impl Cpu for Box<dyn Cpu> {
     }
     fn fast_forward_idle_cycles(&mut self, cycles: u64) {
         (**self).fast_forward_idle_cycles(cycles)
+    }
+    fn is_parked_idle(&self) -> bool {
+        (**self).is_parked_idle()
     }
     fn jit_hit_count(&self) -> u64 {
         (**self).jit_hit_count()

@@ -47,9 +47,27 @@ impl<C: Cpu> Machine<C> {
                         self.bus.logic_tap.set_clock(self.total_cycles + 1);
                     }
                 }
+                // Dual-core: primary batch while secondary is WAITI-parked.
+                // Advance secondary CCOUNT for the window, then one real step so
+                // a wake-capable IRQ (CCOMPARE / IPI latched mid-batch) can
+                // unpark APP. Secondary still halted (pre-release) is never
+                // batched here — plan keeps quantum 1 until APP is running.
+                let mut secondary_steps = 0u32;
+                if executed > 0 {
+                    if let Some(sec) = self.cpu_secondary.as_mut() {
+                        if sec.is_parked_idle() {
+                            let ff = u64::from(executed.saturating_sub(1));
+                            if ff > 0 {
+                                sec.fast_forward_idle_cycles(ff);
+                            }
+                            sec.step(&mut self.bus, &self.observers, &self.config)?;
+                            secondary_steps = executed;
+                        }
+                    }
+                }
                 return Ok(CoreProgress {
                     primary_steps: executed,
-                    secondary_steps: 0,
+                    secondary_steps,
                 });
             }
         }
