@@ -425,9 +425,14 @@ impl crate::Peripheral for PwrL0 {
 /// STM32WBA PWR (RM0493). Zephyr's set_regu_voltage writes PWR_VOSR (0x0C) to
 /// select the voltage range/EPOD boost, then spins on VOSRDY (bit 15) before the
 /// PLL is configured; the SoC init also flips enable bits in other PWR registers
-/// and reads them straight back. Model VOSR so any VOS/EPOD enable acknowledges
-/// instantly (VOSRDY bit 15 + BOOSTRDY bit 14); all other registers are plain
-/// read-back storage so the self-confirming enables (e.g. PWR @ 0x28 bit0) pass.
+/// and reads them straight back. Arduino-HAL `HAL_PWREx_ControlVoltageScaling`
+/// additionally polls **SVMSR** @ 0x3C for **ACTVOSRDY** (bit 15) and compares
+/// **ACTVOS** (bit 16) to the requested scale.
+///
+/// Model:
+/// - VOSR writes: VOSRDY (15) always after a program; BOOSTRDY (14) if EPOD (18).
+/// - SVMSR reads: synthesize ACTVOS from VOSR.VOS and ACTVOSRDY once VOS is set
+///   (or after any VOSR write). Other regs are plain read-back storage.
 #[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct PwrWba {
     regs: std::collections::HashMap<u64, u32>,
@@ -439,19 +444,35 @@ impl PwrWba {
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
+        if offset == 0x3C {
+            // SVMSR: ACTVOS mirrors VOSR.VOS; ACTVOSRDY follows VOSRDY.
+            let vosr = self.regs.get(&0x0C).copied().unwrap_or(0);
+            let mut svmsr = self.regs.get(&0x3C).copied().unwrap_or(0);
+            // Clear hardware status bits we synthesize, keep software-visible others.
+            svmsr &= !((1 << 15) | (1 << 16));
+            let vos = vosr & (0x3 << 16);
+            if vos != 0 || (vosr & (1 << 15)) != 0 {
+                svmsr |= 1 << 15; // ACTVOSRDY
+                svmsr |= vos; // ACTVOS[16:17] / ACTVOS bit16 on WBA55
+            }
+            return svmsr;
+        }
         self.regs.get(&offset).copied().unwrap_or(0)
     }
 
     fn write_reg(&mut self, offset: u64, value: u32) {
         let mut v = value;
         if offset == 0x0C {
-            // VOS[16:17] selected → VOSRDY (15); EPOD boost (18) → BOOSTRDY (14).
-            if v & (0x3 << 16) != 0 {
-                v |= 1 << 15;
-            }
+            // Any VOS program completes instantly: VOSRDY (15).
+            // CMSIS: VOS is bit 16 (single); mask [16:17] for forward-compat.
+            v |= 1 << 15; // VOSRDY
             if v & (1 << 18) != 0 {
-                v |= 1 << 14;
+                v |= 1 << 14; // BOOSTRDY with EPOD
             }
+        }
+        if offset == 0x3C {
+            // SVMSR is mostly status; ignore FW writes to ACTVOS/ACTVOSRDY.
+            return;
         }
         self.regs.insert(offset, v);
     }
@@ -612,6 +633,17 @@ mod wba_tests {
         // EPOD boost (bit18) acks BOOSTRDY (bit14).
         pwr.write_u32(0x0C, 1 << 18).unwrap();
         assert_ne!(pwr.read_u32(0x0C).unwrap() & (1 << 14), 0, "BOOSTRDY acked");
+    }
+
+    #[test]
+    fn svmsr_mirrors_actvos_for_hal_voltage_scaling() {
+        // Arduino HAL_PWREx_ControlVoltageScaling polls SVMSR.ACTVOSRDY (bit15)
+        // and compares SVMSR.ACTVOS (bit16) to the requested scale.
+        let mut pwr = PwrWba::new();
+        pwr.write_u32(0x0C, 1 << 16).unwrap();
+        let svmsr = pwr.read_u32(0x3C).unwrap();
+        assert_ne!(svmsr & (1 << 15), 0, "ACTVOSRDY");
+        assert_ne!(svmsr & (1 << 16), 0, "ACTVOS mirrors VOS");
     }
 
     #[test]

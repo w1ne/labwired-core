@@ -48,7 +48,9 @@ boards:
     chip: rp2040
     system: systems/rp2040.yaml
     pio: { platform: raspberrypi, board: pico, framework: arduino }
-    max_steps: 5000000
+    # L2: mbed RTX delay is SysTick-driven (~SystemCoreClock/1000 steps per ms).
+    # setup delay(10) + loop delay(20)×2 before LW_L2_OK exceeds 5M.
+    max_steps: 20000000
     family: rp2040
     notes: "Needs platform raspberrypi (pio pkg install -g -p raspberrypi if missing)"
 
@@ -79,7 +81,8 @@ boards:
     chip: stm32g474re
     system: systems/stm32g474re.yaml
     pio: { platform: ststm32, board: nucleo_g474re, framework: arduino }
-    max_steps: 5000000
+    # L2: setup prints LW_L2_BOOT then delay/blink; 5M stops mid-loop.
+    max_steps: 20000000
     family: stm32
 
   - id: stm32h563
@@ -113,11 +116,13 @@ boards:
   - id: stm32wba52
     chip: stm32wba52
     system: systems/stm32wba52.yaml
-    # PlatformIO ststm32 has no Arduino board JSON for WBA52 yet (2026-07).
+    # ststm32 platform has no upstream board JSON yet; matrix supplies
+    # validation/arduino-matrix/pio-boards/nucleo_wba52cg.json (Arduino Core
+    # NUCLEO_WBA55CG — same Nucleo as NOD_WBA52CG / NOD_WBA55CG).
     pio: { platform: ststm32, board: nucleo_wba52cg, framework: arduino }
-    max_steps: 5000000
+    # L2 delays + M33 startup need headroom (same class as H563/G474).
+    max_steps: 20000000
     family: stm32
-    skip_reason: "No PlatformIO Arduino board definition for STM32WBA52"
 
 sketches:
   - id: L0_serial_boot

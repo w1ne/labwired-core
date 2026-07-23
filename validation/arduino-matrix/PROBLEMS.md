@@ -25,12 +25,15 @@ Full matrix: 15 chips × 3 sketches. Scoreboard:
 | **RP2040** | **Fixed L0–L2** — bootrom `@0` must win over low-address flash alias; minimal B0-compatible `rom_func_lookup` |
 | **ESP32-C3** | **Fixed L0–L2** — FreeRTOS yield + factory MMU/`cache2phys` + C3 RMT for RGB `LED_BUILTIN` (pin 30 → `rgbLedWrite`) |
 | **ESP32-S3** | **Fixed L0–L2** on plain `labwired test` — dual-core + ROM strlen + RMT TX-done IRQ holdoff for RGB `LED_BUILTIN` |
+| **STM32WBA52** | **Fixed L0–L2** — in-tree PIO board (Arduino Core NUCLEO_WBA55CG), stm32duino `STM32WBAxx` series fix, PWR `SVMSR` ACTVOS/ACTVOSRDY |
 
 ## Open gaps (model work only)
 
 | Chip | Symptom | Honest next model work |
 |------|---------|-------------------------|
-| **STM32WBA52** | No PIO Arduino board | Toolchain gap |
+| _(none)_ | All 15 chips × L0–L2 green on plain `labwired test` (2026-07-23) | — |
+
+~~**STM32WBA52**~~ was a PIO board gap; closed via in-tree `pio-boards/nucleo_wba52cg.json` + stm32duino WBA series patch + PWR `SVMSR` ACTVOSRDY.
 
 ## Fixes already landed (honest)
 
@@ -92,3 +95,15 @@ python3 validation/arduino-matrix/run_matrix.py --boards stm32f407,nrf52832
 38. **ESP32-S3 ROM `strlen` @ `0x40001248`** — harness prefill is `nop_return_zero`; `Print::write(const char*)` got length 0 so `Serial.println("LW_L0_OK")` wrote nothing. Real `rom_strlen` thunk; memcpy/memset already registered.
 39. **ESP32-S3 DRAM spill/TCB range** — hybrid spill + `looks_like_tcb` use `0x3FC8_8000..0x3FD0_0000` (was capped at `0x3FCF_0000` / 480 KiB model).
 40. **ESP32-S3 RMT TX-done IRQ holdoff** — instantaneous TX_END+IRQ on `TX_START` re-entered `rmt_tx_default_isr` while IDF `rmt_transmit` still held locks → FreeRTOS `xTimerQueue` corruption (`EnterCritical` @ `0x20406a`). Latch INT_RAW immediately; suppress level IRQ for ~2000 sim ticks so WaitBits can arm. Arduino L2 `LED_BUILTIN`/`rgbLedWrite` green.
+
+41. **RP2040 bootrom auto-load** — `from_config` loads in-tree `roms/rp2040/bootrom.bin` when `LABWIRED_RP2040_BOOTROM` is unset (empty env opts out for bare-metal flash-alias PIO onboarding). Plain `labwired test` no longer needs the matrix to export the env.
+
+42. **RP2040 L2 step budget** — mbed RTX `delay()` is SysTick-driven (~`SystemCoreClock/1000` steps/ms). L2 setup `delay(10)` + loop `delay(20)×2` before `LW_L2_OK` exceeds 5M; board `max_steps: 20_000_000` (same class as F407/G474 L2).
+
+43. **ESP partition table beside firmware** — matrix wiped `_pio_work/<cell>` after each run while CLI only fell back to hard-coded L0 `partitions.bin`, so L1/L2 saw empty flash@0x8000 → `No MD5 found` / exception. Runner copies PIO `partitions.bin` next to `firmware.elf`; CLI `resolve_esp_partitions_bin` prefers that path (classic/C3/S3).
+
+44. **STM32G474 L2 step budget** — `max_steps: 20_000_000` so setup `LW_L2_BOOT` + blink delays reach `LW_L2_OK`.
+
+45. **STM32WBA52 Arduino path** — in-tree `pio-boards/nucleo_wba52cg.json` (Arduino Core `NUCLEO_WBA55CG` / NOD_WBA52CG); matrix `boards_dir` + runner auto-applies `scripts/patch_stm32duino_wba_series.py` so PIO does not mis-detect series as `STM32WBxx`.
+
+46. **STM32WBA PWR SVMSR** — Arduino `HAL_PWREx_ControlVoltageScaling` polls `SVMSR`@0x3C `ACTVOSRDY`/`ACTVOS` after programming `VOSR`. Synthesize ACTVOS from VOSR.VOS and assert ACTVOSRDY with VOSRDY so clock config leaves the timeout spin.
