@@ -367,6 +367,36 @@ impl WasmSimulator {
         serde_wasm_bindgen::to_value(&states).unwrap_or(JsValue::NULL)
     }
 
+    /// Live actuator state for canvas animation.
+    ///
+    /// Returns `[{ id, kind, angle?, active?, effort?, steps? }]`:
+    /// - hobby servos (`kind: "servo"`) export shaft `angle` in degrees
+    /// - future motor twins may add `effort` / `steps`
+    ///
+    /// Ids match the diagram part id / external_devices id so the UI maps
+    /// straight onto `boardIoStates[partId]`.
+    #[wasm_bindgen]
+    pub fn get_actuator_states(&self) -> JsValue {
+        let machine = self.machine.as_ref().unwrap();
+        let mut states: Vec<serde_json::Value> = Vec::new();
+
+        for servo in &machine.bus.servos {
+            let id = servo.id();
+            if id.is_empty() {
+                continue;
+            }
+            states.push(serde_json::json!({
+                "id": id,
+                "kind": "servo",
+                "angle": servo.angle_degrees() as f64,
+                "active": servo.is_commanded(),
+                "pulse_us": servo.pulse_us() as f64,
+            }));
+        }
+
+        serde_wasm_bindgen::to_value(&states).unwrap_or(JsValue::NULL)
+    }
+
     /// Return the SSD1306 GDDRAM framebuffer for the device identified by `device_id`.
     ///
     /// `device_id` must match a `board_io` binding with `device_type: "oled-ssd1306"`.

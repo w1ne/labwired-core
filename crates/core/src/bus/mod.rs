@@ -318,7 +318,9 @@ pub struct SystemBus {
     /// edge-driven with no per-tick pass. Held here as `Arc` clones purely so the
     /// UI/oracle can read the decoded pixels back. Empty by default → zero cost.
     pub ws2812: Vec<std::sync::Arc<crate::peripherals::components::ws2812::Ws2812>>,
-    /// Hobby PWM servos (SG90/MG996R). GPIO-observer driven; held for angle readback.
+    /// Hobby PWM servos (SG90 / MG996R-class). Driven by GPIO edges and/or LEDC
+    /// duty observers; held as `Arc` clones so the UI can poll shaft angle via
+    /// `get_actuator_states`. Empty by default → zero cost.
     pub servos: Vec<std::sync::Arc<crate::peripherals::components::servo::Servo>>,
     /// STEP/DIR steppers (A4988/DRV8825/TMC2209). GPIO-observer driven.
     pub step_dir_motors:
