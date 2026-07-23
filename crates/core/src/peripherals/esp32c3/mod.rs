@@ -14,6 +14,7 @@ pub mod i2c;
 pub mod io_mux;
 pub mod ledc;
 pub mod reg_block;
+pub mod rmt;
 pub mod rng;
 pub mod rtc_timer;
 pub mod sar_adc;

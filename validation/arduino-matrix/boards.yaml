@@ -1,0 +1,136 @@
+# Arduino sketch matrix — every LabWired-supported chip with an Arduino path.
+# chip: configs/chips/<name>.yaml stem
+# system: relative to this matrix dir (or absolute under configs/systems)
+# pio: PlatformIO platform / board / framework for hosted Arduino compile
+# max_steps: sim budget (Arduino cores need more than bare-metal tier1 fixtures)
+# family: drives ESP-specific notes in the runner
+
+boards:
+  - id: esp32
+    chip: esp32
+    system: systems/esp32.yaml
+    pio: { platform: espressif32, board: esp32dev, framework: arduino }
+    max_steps: 50000000
+    family: esp32
+    notes: "Arduino-ESP32 FreeRTOS — fix with real models only (no thunks)"
+
+  - id: esp32c3
+    chip: esp32c3
+    system: systems/esp32c3.yaml
+    pio: { platform: espressif32, board: esp32-c3-devkitm-1, framework: arduino }
+    max_steps: 50000000
+    family: esp32
+    notes: "Arduino-ESP32-C3 RISC-V"
+
+  - id: esp32s3
+    chip: esp32s3
+    system: systems/esp32s3.yaml
+    pio: { platform: espressif32, board: esp32-s3-devkitc-1, framework: arduino }
+    max_steps: 50000000
+    family: esp32
+    notes: "Arduino-ESP32-S3"
+
+  - id: nrf52832
+    chip: nrf52832
+    system: systems/nrf52832.yaml
+    pio: { platform: nordicnrf52, board: nrf52_dk, framework: arduino }
+    max_steps: 5000000
+    family: nrf
+
+  - id: nrf52840
+    chip: nrf52840
+    system: systems/nrf52840.yaml
+    pio: { platform: nordicnrf52, board: nrf52840_dk, framework: arduino }
+    max_steps: 5000000
+    family: nrf
+
+  - id: rp2040
+    chip: rp2040
+    system: systems/rp2040.yaml
+    pio: { platform: raspberrypi, board: pico, framework: arduino }
+    max_steps: 5000000
+    family: rp2040
+    notes: "Needs platform raspberrypi (pio pkg install -g -p raspberrypi if missing)"
+
+  - id: stm32f103
+    chip: stm32f103
+    system: systems/stm32f103.yaml
+    pio: { platform: ststm32, board: bluepill_f103c8, framework: arduino }
+    max_steps: 5000000
+    family: stm32
+
+  - id: stm32f401
+    chip: stm32f401
+    system: systems/stm32f401.yaml
+    pio: { platform: ststm32, board: nucleo_f401re, framework: arduino }
+    max_steps: 5000000
+    family: stm32
+
+  - id: stm32f407
+    chip: stm32f407
+    system: systems/stm32f407.yaml
+    pio: { platform: ststm32, board: disco_f407vg, framework: arduino }
+    # Arduino delay() is SysTick-driven; L2 needs enough steps to finish setup
+    # (prints LW_L2_BOOT) plus one blink cycle before LW_L2_OK.
+    max_steps: 20000000
+    family: stm32
+
+  - id: stm32g474re
+    chip: stm32g474re
+    system: systems/stm32g474re.yaml
+    pio: { platform: ststm32, board: nucleo_g474re, framework: arduino }
+    max_steps: 5000000
+    family: stm32
+
+  - id: stm32h563
+    chip: stm32h563
+    system: systems/stm32h563.yaml
+    pio: { platform: ststm32, board: nucleo_h563zi, framework: arduino }
+    max_steps: 8000000
+    family: stm32
+
+  - id: stm32l073
+    chip: stm32l073
+    system: systems/stm32l073.yaml
+    pio: { platform: ststm32, board: nucleo_l073rz, framework: arduino }
+    max_steps: 5000000
+    family: stm32
+
+  - id: stm32l476
+    chip: stm32l476
+    system: systems/stm32l476.yaml
+    pio: { platform: ststm32, board: nucleo_l476rg, framework: arduino }
+    max_steps: 5000000
+    family: stm32
+
+  - id: stm32wb55
+    chip: stm32wb55
+    system: systems/stm32wb55.yaml
+    pio: { platform: ststm32, board: nucleo_wb55rg_p, framework: arduino }
+    max_steps: 5000000
+    family: stm32
+
+  - id: stm32wba52
+    chip: stm32wba52
+    system: systems/stm32wba52.yaml
+    # PlatformIO ststm32 has no Arduino board JSON for WBA52 yet (2026-07).
+    pio: { platform: ststm32, board: nucleo_wba52cg, framework: arduino }
+    max_steps: 5000000
+    family: stm32
+    skip_reason: "No PlatformIO Arduino board definition for STM32WBA52"
+
+sketches:
+  - id: L0_serial_boot
+    dir: sketches/L0_serial_boot
+    marker: "LW_L0_OK"
+    description: "setup() prints once — proves Arduino core boot + UART"
+
+  - id: L1_serial_loop
+    dir: sketches/L1_serial_loop
+    marker: "LW_L1_OK"
+    description: "loop() prints — proves millis/loop scheduling"
+
+  - id: L2_blink_serial
+    dir: sketches/L2_blink_serial
+    marker: "LW_L2_OK"
+    description: "LED_BUILTIN toggle + serial — proves GPIO digitalWrite"

@@ -1,0 +1,5 @@
+# Auto-generated for Arduino matrix — bare board, no external devices.
+name: "arduino-matrix-stm32g474re"
+chip: "../../../configs/chips/stm32g474re.yaml"
+external_devices: []
+board_io: []

@@ -60,11 +60,23 @@ pub struct RomThunkBank {
 }
 
 impl RomThunkBank {
-    /// Create an empty bank covering `[base, base + size)`.
+    /// Create a bank covering `[base, base + size)`.
+    ///
+    /// Prefills every 4-byte-aligned word with `BREAK 1, 14` so a CALL into an
+    /// unregistered ROM entry still dispatches (via [`Self::get`] →
+    /// [`nop_return_zero`]) instead of fetching zeros and raising an illegal
+    /// instruction. Explicit [`Self::register`] entries overwrite the prefill
+    /// with a real thunk.
     pub fn new(base: u32, size: u32) -> Self {
+        let mut backing = vec![0u8; size as usize];
+        let mut off = 0usize;
+        while off + 3 <= backing.len() {
+            backing[off..off + 3].copy_from_slice(&ROM_THUNK_BREAK_BYTES);
+            off += 4;
+        }
         Self {
             base,
-            backing: vec![0u8; size as usize],
+            backing,
             thunks: HashMap::new(),
         }
     }
@@ -125,10 +137,11 @@ impl RomThunkBank {
         );
     }
 
-    /// Look up a thunk by absolute PC.  Returns `None` if no thunk is
-    /// registered (the BREAK exec arm raises `NotImplemented` in that case).
+    /// Look up a thunk by absolute PC. Unregistered BREAK 1,14 sites (the
+    /// harness prefill) fall through to [`nop_return_zero`] so Arduino's
+    /// long-tail ROM HAL surface does not fault mid-boot.
     pub fn get(&self, pc: u32) -> Option<RomThunkFn> {
-        self.thunks.get(&pc).copied()
+        Some(self.thunks.get(&pc).copied().unwrap_or(nop_return_zero))
     }
 
     /// Return from a ROM thunk by jumping to the saved PC and writing the
@@ -169,17 +182,23 @@ impl RomThunkBank {
             // already saved it into the AR, but the pop will undo that for
             // slot wb_callee's a2 position. To preserve the return value,
             // re-write it after the pops.
-            let wb_caller = cpu.regs.windowbase();
-            let wb_callee = wb_caller.wrapping_add(callinc) & 0x0F;
+            // Balance spill_shadow_on_call: displace is on per-slot LIFO;
+            // preserve lives only on call_preserve_stack (anti-steal).
+            // WB is still at the caller (thunks skip ENTRY).
+            let wb_callee = cpu.regs.windowbase().wrapping_add(callinc) & 0x0F;
             for k in 0..4u8 {
                 let slot = wb_callee.wrapping_add(k) & 0x0F;
                 cpu.regs.pop_shadow(slot);
             }
-            for k in 0..callinc {
-                let slot = wb_caller.wrapping_add(k) & 0x0F;
-                cpu.regs.pop_shadow(slot);
-            }
+            cpu.restore_call_preserve();
             cpu.regs.write_logical(n + 2, value);
+            // ENTRY would have cleared CALLINC; thunks skip ENTRY so clear it
+            // here. Leaving CALLINC sticky confuses nested CALL/interrupt paths.
+            cpu.ps.set_callinc(0);
+            // Caller still owes a RETW. Defer IRQs until that RETW so a just-
+            // unmasked timer cannot run an ISR with the callee window still
+            // open (ExitCritical after _xtos_set_intlevel).
+            cpu.set_defer_irq_until_retw(true);
         }
     }
 }
@@ -246,6 +265,25 @@ fn set_cache_field(bus: &mut dyn Bus, mask: u32, frozen: bool) -> SimResult<()> 
     bus.write_u32(EXTMEM_CACHE_STATE, nv)
 }
 
+/// `Cache_Suspend_ICache(): u32` — mark the ICache idle/suspended
+/// (bits[11:0]=1). ESP-IDF IRAM wrappers call the ROM then busy-wait
+/// `CACHE_STATE[11:0] == 1`; a plain nop leaves a previously-cleared field
+/// stuck and the firmware spins forever in `spi_flash_disable_cache`.
+pub fn cache_suspend_icache(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    set_cache_field(bus, ICACHE_FIELD, true)?;
+    RomThunkBank::return_with(cpu, 0);
+    Ok(())
+}
+
+/// `Cache_Resume_ICache(prev: u32) -> u32` — restore ICache to idle/enabled.
+/// Real silicon re-enables the cache and returns to state=1 (idle); we keep
+/// the field at 1 so subsequent suspend/freeze polls still observe idle.
+pub fn cache_resume_icache(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    set_cache_field(bus, ICACHE_FIELD, true)?;
+    RomThunkBank::return_with(cpu, 0);
+    Ok(())
+}
+
 /// `Cache_Suspend_DCache(): u32` — mark the DCache suspended (bits[23:12]=1).
 pub fn cache_suspend_dcache(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
     set_cache_field(bus, DCACHE_FIELD, true)?;
@@ -256,6 +294,36 @@ pub fn cache_suspend_dcache(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult
 /// `Cache_Resume_DCache(prev: u32) -> u32` — clear the DCache field.
 pub fn cache_resume_dcache(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
     set_cache_field(bus, DCACHE_FIELD, false)?;
+    RomThunkBank::return_with(cpu, 0);
+    Ok(())
+}
+
+/// `Cache_Disable_ICache(): u32` — ICache off; state field goes busy/cleared
+/// until the next suspend/enable. IRAM doesn't poll here, but matching the
+/// silicon side-effect keeps CACHE_STATE honest for later Suspend polls.
+pub fn cache_disable_icache(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    set_cache_field(bus, ICACHE_FIELD, false)?;
+    RomThunkBank::return_with(cpu, 0);
+    Ok(())
+}
+
+/// `Cache_Enable_ICache(autoload: u32) -> u32` — ICache on; idle state = 1.
+pub fn cache_enable_icache(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    set_cache_field(bus, ICACHE_FIELD, true)?;
+    RomThunkBank::return_with(cpu, 0);
+    Ok(())
+}
+
+/// `Cache_Disable_DCache(): u32` — clear DCache idle field.
+pub fn cache_disable_dcache(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    set_cache_field(bus, DCACHE_FIELD, false)?;
+    RomThunkBank::return_with(cpu, 0);
+    Ok(())
+}
+
+/// `Cache_Enable_DCache(autoload: u32) -> u32` — DCache on; idle state = 1.
+pub fn cache_enable_dcache(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    set_cache_field(bus, DCACHE_FIELD, true)?;
     RomThunkBank::return_with(cpu, 0);
     Ok(())
 }
@@ -574,6 +642,40 @@ pub fn esp_rom_route_intr_matrix(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimR
     Ok(())
 }
 
+/// ESP32-S3 `intr_matrix_set` / `esp_rom_route_intr_matrix` @ `0x4000_1b54`.
+///
+/// Same `(cpu_no, model_num, intr_num)` ABI as classic, but the map tables
+/// live at `DR_REG_INTERRUPT_BASE` (`0x600C_2000`):
+///   CORE0: `base + 4 * source`
+///   CORE1: `base + 0x800 + 4 * source`
+///
+/// Without this, harness ROM leaves the call as a default nop → FreeRTOS
+/// `esp_intr_alloc` never binds FROM_CPU / systimer sources → yield IRQs
+/// never fire → only the first task runs (`ipc_task` livelock, no
+/// `main_task` / `initArduino` / UART).
+pub fn esp32s3_rom_route_intr_matrix(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    let n = cpu.ps.callinc() * 4;
+    let core = cpu.regs.read_logical(n + 2);
+    let src = cpu.regs.read_logical(n + 3);
+    let intnum = cpu.regs.read_logical(n + 4) & 0x1F;
+    let base: u32 = if core == 0 {
+        0x600C_2000
+    } else {
+        0x600C_2000 + 0x800
+    };
+    let addr = base.wrapping_add(src.wrapping_mul(4));
+    tracing::trace!(
+        "esp32s3_rom_route_intr_matrix: cpu={} src={} intnum={} addr=0x{:08x}",
+        core,
+        src,
+        intnum,
+        addr
+    );
+    let _ = bus.write_u32(addr as u64, intnum);
+    RomThunkBank::return_with(cpu, 0);
+    Ok(())
+}
+
 /// Generic NOP thunk that returns 0. Useful for ROM functions whose
 /// behaviour we don't model but whose return value the caller needs to
 /// pass through (e.g. cache config, frequency update, busy-wait).
@@ -613,46 +715,25 @@ pub fn nop_return_zero(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()>
 /// paths reach this routine via `j` (jump) rather than CALL{n}, leaving
 /// CALLINC stale from an unrelated outer frame.
 // CHEAT(THUNK-ROM): emulates xthal_window_spill (flush windowed regs to stack)
-// in Rust — real: the ROM routine spills via ENTRY/RETW. See FIDELITY.md §A.
+// in Rust — real: the ROM routine spills via ROTW + S32I and ends with
+// WINDOWSTART = 1<<WB (only the current frame live). See FIDELITY.md §A.
+//
+// Critical for FreeRTOS solicited yield: after another task runs, physical
+// ARs are clobbered. If we leave WS bits set, RETW treats outer frames as
+// "live" and uses garbage physical a0..a7 (seen: a6=&xKernelLock → 1,
+// WB 11→9 after vPortExitCritical). Real spill clears those WS bits so
+// RETW takes WindowUnderflow and the UF handler reloads from the stack
+// save area we write here.
 pub fn xthal_window_spill_thunk(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
-    let ws = cpu.regs.windowstart();
-    let shadows = cpu.regs.shadow_stacks().clone();
-    for slot in 0..16u8 {
-        if (ws >> slot) & 1 == 0 {
-            continue;
-        }
-        let base = (slot as usize) * 4;
-        let (a0, a1, a2, a3) = if let Some(snap) = shadows[slot as usize].last() {
-            (snap[0], snap[1], snap[2], snap[3])
-        } else {
-            (
-                cpu.regs.physical(base),
-                cpu.regs.physical(base + 1),
-                cpu.regs.physical(base + 2),
-                cpu.regs.physical(base + 3),
-            )
-        };
-        // Only spill when a1 looks like a plausible ESP32 stack pointer
-        // — DRAM/IRAM/SRAM data view (0x3FF8_0000..0x4000_0000). Skipping
-        // bogus slots is safer than letting bus.write_u32 underflow into
-        // the address-space wrap (which trips RamPeripheral's debug
-        // index-bounds panic before its u64-add-overflow check fires).
-        if !(0x3FF8_0000..0x4000_0000).contains(&a1) || a1 < 16 {
-            continue;
-        }
-        let sp = a1 as u64;
-        let _ = bus.write_u32(sp - 16, a0);
-        let _ = bus.write_u32(sp - 12, a1);
-        let _ = bus.write_u32(sp - 8, a2);
-        let _ = bus.write_u32(sp - 4, a3);
-    }
-    // Plain RET.N: PC ← a0. The function's actual terminal instruction
-    // is `ret.n` (0x0d 0xf0) regardless of how it was entered, so
-    // emulating that directly is correct for both the `_nw` (CALL0)
-    // entry and the wrapper (CALL{n} which does its own ENTRY). We
-    // bypass PS.CALLINC routing because some firmware code paths reach
-    // the spill via `j` (jump), leaving CALLINC stale from an
-    // unrelated outer frame.
+    // Semantic spill via CPU helper (OF/UF save layout + WINDOWSTART=1<<WB).
+    // Shared with interrupt-entry spill so FreeRTOS task switches do not need
+    // this thunk to have run first. See `XtensaLx7::spill_call_preserve_to_stack`.
+    cpu.spill_call_preserve_to_stack(bus);
+    // Explicit yield path: drop IRQ window snapshots so a later RFE in
+    // another task cannot restore this task's call_preserve.
+    cpu.clear_irq_window_stack();
+
+    // Plain RET.N: PC ← a0 (CALL0 / _nw entry).
     cpu.pc = cpu.regs.read_logical(0);
     Ok(())
 }
@@ -668,21 +749,174 @@ pub fn xthal_window_spill_thunk(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimRe
 /// breaks.  The OTHER CPU (if dual-core) keeps running.
 // CHEAT(NOP): halts the sim on abort() instead of running the real abort path
 // (which would print a backtrace via the panic handler). See FIDELITY.md §A.
-pub fn abort_halt(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
+pub fn abort_halt(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
     use core::sync::atomic::{AtomicU32, Ordering};
     static FIRST_PRINT: AtomicU32 = AtomicU32::new(0);
     if FIRST_PRINT.fetch_add(1, Ordering::Relaxed) < 5 {
         let n = cpu.ps.callinc() * 4;
         let core_id = (cpu.sr.read(crate::cpu::xtensa_sr::PRID) >> 13) & 1;
+        let a10 = cpu.regs.read_logical(n + 2);
+        let a11 = cpu.regs.read_logical(n + 3);
+        let a12 = cpu.regs.read_logical(n + 4);
+        let a13 = cpu.regs.read_logical(n + 5);
         eprintln!(
             "[abort_halt] core={core_id} pc=0x{:08x} a0=0x{:08x} a10=0x{:08x} a11=0x{:08x} a12=0x{:08x} a13=0x{:08x}",
             cpu.pc,
             cpu.regs.read_logical(0),
-            cpu.regs.read_logical(n + 2),
-            cpu.regs.read_logical(n + 3),
-            cpu.regs.read_logical(n + 4),
-            cpu.regs.read_logical(n + 5)
+            a10,
+            a11,
+            a12,
+            a13
         );
+        // Dump FreeRTOS SMP ready-list health (Arduino-ESP32 IDF layout for this ELF).
+        let read32 = |addr: u32| bus.read_u32(addr as u64).unwrap_or(0xEEEE_EEEE);
+        let read8 = |addr: u32| bus.read_u8(addr as u64).unwrap_or(0xEE);
+        let tcb0 = read32(0x3ffc_27c8);
+        let tcb1 = read32(0x3ffc_27cc);
+        eprintln!(
+            "[abort_halt] pxCurrentTCBs=[{tcb0:#010x},{tcb1:#010x}] xSchedulerRunning={} uxTopReadyPriority={} xYieldPending=[{},{}] uxSchedulerSuspended=[{},{}]",
+            read32(0x3ffc_2540),
+            read32(0x3ffc_2544),
+            read32(0x3ffc_2534),
+            read32(0x3ffc_2538),
+            read32(0x3ffc_2518),
+            read32(0x3ffc_251c)
+        );
+        let idle0 = read32(0x3ffc_2520);
+        let idle1 = read32(0x3ffc_2524);
+        eprintln!("[abort_halt] xIdleTaskHandle=[{idle0:#010x},{idle1:#010x}]");
+        // ESP-IDF TCB: pxTopOfStack @0, then xStateListItem (ListItem_t = 5×u32).
+        // ListItem: xItemValue, pxNext, pxPrevious, pvOwner, pxContainer.
+        for (label, tcb) in [
+            ("idle0", idle0),
+            ("idle1", idle1),
+            ("cur0", tcb0),
+            ("cur1", tcb1),
+        ] {
+            if !(0x3ff0_0000..0x4000_0000).contains(&tcb) {
+                continue;
+            }
+            let top = read32(tcb);
+            let state = tcb + 4;
+            let s_next = read32(state + 4);
+            let s_prev = read32(state + 8);
+            let s_owner = read32(state + 12);
+            let s_cont = read32(state + 16);
+            let event = tcb + 4 + 20;
+            let e_cont = read32(event + 16);
+            eprintln!(
+                "[abort_halt] {label} tcb={tcb:#010x} top={top:#010x} state: next={s_next:#010x} prev={s_prev:#010x} owner={s_owner:#010x} cont={s_cont:#010x} event.cont={e_cont:#010x}"
+            );
+            // Dump a window of TCB words for affinity/core fields.
+            let mut line = String::new();
+            for w in 0..16u32 {
+                line.push_str(&format!(" {:08x}", read32(tcb + w * 4)));
+            }
+            eprintln!("[abort_halt] {label} words:{line}");
+        }
+        let susp = 0x3ffc_2550u32;
+        eprintln!(
+            "[abort_halt] lists: ready0={:#010x} ready1={:#010x} suspended={:#010x} n={} end.next={:#010x} end.prev={:#010x} pendingReady={:#010x}",
+            0x3ffc_25d4u32,
+            0x3ffc_25e8u32,
+            susp,
+            read32(susp),
+            read32(susp + 12),
+            read32(susp + 16),
+            0x3ffc_257cu32
+        );
+        // IDLE1 xCoreID at TCB+68; notify state near end of TCB
+        for (label, tcb) in [("idle1", idle1), ("cur1", tcb1)] {
+            if (0x3ff0_0000..0x4000_0000).contains(&tcb) {
+                let core_id = read32(tcb + 68) as i32;
+                let top = read32(tcb);
+                eprintln!(
+                    "[abort_halt] {label} xCoreID={core_id} (raw={:#x})",
+                    core_id as u32
+                );
+                // Stack backtrace words (return addresses often have 0x400xxxxx or 0x8xxxxxxx)
+                let mut line = String::new();
+                for off in 0..16u32 {
+                    let w = read32(top.wrapping_add(off * 4));
+                    line.push_str(&format!(" {w:08x}"));
+                }
+                eprintln!("[abort_halt] {label} stack@top:{line}");
+                // Notify state: search for non-zero in a wider TCB window
+                let mut nline = String::new();
+                for w in 16..32u32 {
+                    nline.push_str(&format!(" {:08x}", read32(tcb + w * 4)));
+                }
+                eprintln!("[abort_halt] {label} tcb+64:{nline}");
+            }
+        }
+        // Walk suspended list (max 8)
+        let mut it = read32(susp + 12);
+        let end = susp + 8;
+        for i in 0..8 {
+            if it == 0 || it == end {
+                break;
+            }
+            let owner = read32(it + 12);
+            let _cont = read32(it + 16);
+            let next = read32(it + 4);
+            let name_ptr = owner + 52;
+            let mut name = Vec::new();
+            for off in 0..12u32 {
+                match bus.read_u8((name_ptr + off) as u64) {
+                    Ok(b) if (0x20..0x7f).contains(&b) => name.push(b),
+                    _ => break,
+                }
+            }
+            let name_s = String::from_utf8_lossy(&name);
+            let top = read32(owner);
+            let stack_base = read32(owner + 48);
+            let core_id = read32(owner + 68) as i32;
+            eprintln!(
+                "[abort_halt] susp[{i}] item={it:#010x} tcb={owner:#010x} top={top:#010x} stack={stack_base:#010x} core={core_id} name≈{name_s:?}"
+            );
+            it = next;
+        }
+        // List_t on Xtensa ESP-IDF: uxNumberOfItems (u32), pxIndex (ptr), xListEnd {xItemValue, pxNext, pxPrevious}
+        // = 5 words = 20 bytes per list. configMAX_PRIORITIES is typically 25.
+        const LIST_STRIDE: u32 = 20;
+        let ready_base = 0x3ffc_25d4u32;
+        for prio in 0..25u32 {
+            let base = ready_base + prio * LIST_STRIDE;
+            let nitems = read32(base);
+            if nitems != 0 {
+                let px_index = read32(base + 4);
+                let end_next = read32(base + 12); // xListEnd.pxNext
+                eprintln!(
+                    "[abort_halt] ready[{prio}]: n={nitems} pxIndex={px_index:#010x} end.pxNext={end_next:#010x}"
+                );
+            }
+        }
+        // Pending ready list (tasks woken while scheduler suspended)
+        let pend = 0x3ffc_257cu32;
+        eprintln!(
+            "[abort_halt] xPendingReadyList n={} end.pxNext={:#010x}",
+            read32(pend),
+            read32(pend + 12)
+        );
+        // Try to print assert strings from flash if they look like pointers
+        for (label, p) in [("file", a10), ("func", a12), ("expr", a13)] {
+            if (0x3f40_0000..0x3f80_0000).contains(&p) {
+                let mut buf = Vec::new();
+                for off in 0..100u32 {
+                    match bus.read_u8((p + off) as u64) {
+                        Ok(b) if b != 0 && b < 0x7f => buf.push(b),
+                        Ok(0) => break,
+                        _ => break,
+                    }
+                }
+                if let Ok(s) = std::str::from_utf8(&buf) {
+                    if s.len() > 2 {
+                        eprintln!("[abort_halt] {label}={s:?} line={a11}");
+                    }
+                }
+            }
+        }
+        let _ = read8; // silence if unused
     }
     cpu.halted = true;
     Ok(())
@@ -1011,6 +1245,30 @@ pub fn esp_chip_info_stub(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<(
     Ok(())
 }
 
+/// `strlen(s) -> size_t` — count bytes until a 0 terminator.
+///
+/// Args (Xtensa C ABI, post-CALL window): a2 = `const char *s`.
+/// ESP32-S3 mask ROM exports this at `0x4000_1248` (`esp32s3.rom.libc.ld`).
+/// Harness ROM leaves unregistered addresses as `nop_return_zero`, so
+/// `Print::write(const char*)` saw length 0 and `Serial.println` wrote
+/// nothing (Arduino L0 marker never reached the UART sink).
+pub fn rom_strlen(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    let n = cpu.ps.callinc() * 4;
+    let s = cpu.regs.read_logical(n + 2);
+    let mut len = 0u32;
+    // Bound the walk so a non-terminated buffer cannot hang the sim.
+    const MAX: u32 = 1 << 20;
+    while len < MAX {
+        let b = bus.read_u8(s.wrapping_add(len) as u64).unwrap_or(0);
+        if b == 0 {
+            break;
+        }
+        len = len.wrapping_add(1);
+    }
+    RomThunkBank::return_with(cpu, len);
+    Ok(())
+}
+
 /// `memcpy(dst, src, n) -> dst` — byte-wise copy via the bus.
 ///
 /// Args (Xtensa C ABI, post-ENTRY view from caller's frame so we read
@@ -1147,6 +1405,271 @@ pub fn rom_umoddi3(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResult<()> {
     Ok(())
 }
 
+// ── Classic ESP32 ROM MD5 (MD5Context: buf[4], bits[2], in[64]) ─────────────
+//
+// Partition-table load (`CONFIG_PARTITION_TABLE_MD5`) hashes every 32-byte
+// entry then compares against the 0xEBEB trailer. These are real MD5, not
+// firmware product-path thunks — they model BROM at 0x4005_da7c/a9c/b1c.
+
+const MD5_CTX_BUF: u32 = 0; // 4 × u32
+const MD5_CTX_BITS: u32 = 16; // 2 × u32
+const MD5_CTX_IN: u32 = 24; // 64 bytes
+const MD5_CTX_SIZE: u32 = 88;
+
+fn md5_f(x: u32, y: u32, z: u32) -> u32 {
+    (x & y) | (!x & z)
+}
+fn md5_g(x: u32, y: u32, z: u32) -> u32 {
+    (x & z) | (y & !z)
+}
+fn md5_h(x: u32, y: u32, z: u32) -> u32 {
+    x ^ y ^ z
+}
+fn md5_i(x: u32, y: u32, z: u32) -> u32 {
+    y ^ (x | !z)
+}
+fn md5_rotl(x: u32, n: u32) -> u32 {
+    x.rotate_left(n)
+}
+
+fn md5_step(w: &mut [u32; 4], in_block: &[u32; 16]) {
+    let (mut a, mut b, mut c, mut d) = (w[0], w[1], w[2], w[3]);
+    macro_rules! round {
+        ($f:ident, $a:ident, $b:ident, $c:ident, $d:ident, $k:expr, $s:expr, $t:expr) => {{
+            $a = $b.wrapping_add(md5_rotl(
+                $a.wrapping_add($f($b, $c, $d))
+                    .wrapping_add(in_block[$k])
+                    .wrapping_add($t),
+                $s,
+            ));
+        }};
+    }
+    // Round 1
+    round!(md5_f, a, b, c, d, 0, 7, 0xd76a_a478);
+    round!(md5_f, d, a, b, c, 1, 12, 0xe8c7_b756);
+    round!(md5_f, c, d, a, b, 2, 17, 0x2420_70db);
+    round!(md5_f, b, c, d, a, 3, 22, 0xc1bd_ceee);
+    round!(md5_f, a, b, c, d, 4, 7, 0xf57c_0faf);
+    round!(md5_f, d, a, b, c, 5, 12, 0x4787_c62a);
+    round!(md5_f, c, d, a, b, 6, 17, 0xa830_4613);
+    round!(md5_f, b, c, d, a, 7, 22, 0xfd46_9501);
+    round!(md5_f, a, b, c, d, 8, 7, 0x6980_98d8);
+    round!(md5_f, d, a, b, c, 9, 12, 0x8b44_f7af);
+    round!(md5_f, c, d, a, b, 10, 17, 0xffff_5bb1);
+    round!(md5_f, b, c, d, a, 11, 22, 0x895c_d7be);
+    round!(md5_f, a, b, c, d, 12, 7, 0x6b90_1122);
+    round!(md5_f, d, a, b, c, 13, 12, 0xfd98_7193);
+    round!(md5_f, c, d, a, b, 14, 17, 0xa679_438e);
+    round!(md5_f, b, c, d, a, 15, 22, 0x49b4_0821);
+    // Round 2
+    round!(md5_g, a, b, c, d, 1, 5, 0xf61e_2562);
+    round!(md5_g, d, a, b, c, 6, 9, 0xc040_b340);
+    round!(md5_g, c, d, a, b, 11, 14, 0x265e_5a51);
+    round!(md5_g, b, c, d, a, 0, 20, 0xe9b6_c7aa);
+    round!(md5_g, a, b, c, d, 5, 5, 0xd62f_105d);
+    round!(md5_g, d, a, b, c, 10, 9, 0x0244_1453);
+    round!(md5_g, c, d, a, b, 15, 14, 0xd8a1_e681);
+    round!(md5_g, b, c, d, a, 4, 20, 0xe7d3_fbc8);
+    round!(md5_g, a, b, c, d, 9, 5, 0x21e1_cde6);
+    round!(md5_g, d, a, b, c, 14, 9, 0xc337_07d6);
+    round!(md5_g, c, d, a, b, 3, 14, 0xf4d5_0d87);
+    round!(md5_g, b, c, d, a, 8, 20, 0x455a_14ed);
+    round!(md5_g, a, b, c, d, 13, 5, 0xa9e3_e905);
+    round!(md5_g, d, a, b, c, 2, 9, 0xfcef_a3f8);
+    round!(md5_g, c, d, a, b, 7, 14, 0x676f_02d9);
+    round!(md5_g, b, c, d, a, 12, 20, 0x8d2a_4c8a);
+    // Round 3
+    round!(md5_h, a, b, c, d, 5, 4, 0xfffa_3942);
+    round!(md5_h, d, a, b, c, 8, 11, 0x8771_f681);
+    round!(md5_h, c, d, a, b, 11, 16, 0x6d9d_6122);
+    round!(md5_h, b, c, d, a, 14, 23, 0xfde5_380c);
+    round!(md5_h, a, b, c, d, 1, 4, 0xa4be_ea44);
+    round!(md5_h, d, a, b, c, 4, 11, 0x4bde_cfa9);
+    round!(md5_h, c, d, a, b, 7, 16, 0xf6bb_4b60);
+    round!(md5_h, b, c, d, a, 10, 23, 0xbebf_bc70);
+    round!(md5_h, a, b, c, d, 13, 4, 0x289b_7ec6);
+    round!(md5_h, d, a, b, c, 0, 11, 0xeaa1_27fa);
+    round!(md5_h, c, d, a, b, 3, 16, 0xd4ef_3085);
+    round!(md5_h, b, c, d, a, 6, 23, 0x0488_1d05);
+    round!(md5_h, a, b, c, d, 9, 4, 0xd9d4_d039);
+    round!(md5_h, d, a, b, c, 12, 11, 0xe6db_99e5);
+    round!(md5_h, c, d, a, b, 15, 16, 0x1fa2_7cf8);
+    round!(md5_h, b, c, d, a, 2, 23, 0xc4ac_5665);
+    // Round 4
+    round!(md5_i, a, b, c, d, 0, 6, 0xf429_2244);
+    round!(md5_i, d, a, b, c, 7, 10, 0x432a_ff97);
+    round!(md5_i, c, d, a, b, 14, 15, 0xab94_23a7);
+    round!(md5_i, b, c, d, a, 5, 21, 0xfc93_a039);
+    round!(md5_i, a, b, c, d, 12, 6, 0x655b_59c3);
+    round!(md5_i, d, a, b, c, 3, 10, 0x8f0c_cc92);
+    round!(md5_i, c, d, a, b, 10, 15, 0xffef_f47d);
+    round!(md5_i, b, c, d, a, 1, 21, 0x8584_5dd1);
+    round!(md5_i, a, b, c, d, 8, 6, 0x6fa8_7e4f);
+    round!(md5_i, d, a, b, c, 15, 10, 0xfe2c_e6e0);
+    round!(md5_i, c, d, a, b, 6, 15, 0xa301_4314);
+    round!(md5_i, b, c, d, a, 13, 21, 0x4e08_11a1);
+    round!(md5_i, a, b, c, d, 4, 6, 0xf753_7e82);
+    round!(md5_i, d, a, b, c, 11, 10, 0xbd3a_f235);
+    round!(md5_i, c, d, a, b, 2, 15, 0x2ad7_d2bb);
+    round!(md5_i, b, c, d, a, 9, 21, 0xeb86_d391);
+
+    w[0] = w[0].wrapping_add(a);
+    w[1] = w[1].wrapping_add(b);
+    w[2] = w[2].wrapping_add(c);
+    w[3] = w[3].wrapping_add(d);
+}
+
+fn md5_read_ctx_buf(bus: &dyn Bus, ctx: u32) -> [u32; 4] {
+    let mut buf = [0u32; 4];
+    for (i, slot) in buf.iter_mut().enumerate() {
+        *slot = bus
+            .read_u32(ctx.wrapping_add(MD5_CTX_BUF + i as u32 * 4) as u64)
+            .unwrap_or(0);
+    }
+    buf
+}
+
+fn md5_write_ctx_buf(bus: &mut dyn Bus, ctx: u32, buf: &[u32; 4]) {
+    for (i, &word) in buf.iter().enumerate() {
+        let _ = bus.write_u32(ctx.wrapping_add(MD5_CTX_BUF + i as u32 * 4) as u64, word);
+    }
+}
+
+fn md5_read_bits(bus: &dyn Bus, ctx: u32) -> [u32; 2] {
+    [
+        bus.read_u32(ctx.wrapping_add(MD5_CTX_BITS) as u64)
+            .unwrap_or(0),
+        bus.read_u32(ctx.wrapping_add(MD5_CTX_BITS + 4) as u64)
+            .unwrap_or(0),
+    ]
+}
+
+fn md5_write_bits(bus: &mut dyn Bus, ctx: u32, bits: [u32; 2]) {
+    let _ = bus.write_u32(ctx.wrapping_add(MD5_CTX_BITS) as u64, bits[0]);
+    let _ = bus.write_u32(ctx.wrapping_add(MD5_CTX_BITS + 4) as u64, bits[1]);
+}
+
+fn md5_transform_from_in(bus: &mut dyn Bus, ctx: u32) {
+    let mut block = [0u32; 16];
+    for (i, slot) in block.iter_mut().enumerate() {
+        *slot = bus
+            .read_u32(ctx.wrapping_add(MD5_CTX_IN + i as u32 * 4) as u64)
+            .unwrap_or(0);
+    }
+    let mut buf = md5_read_ctx_buf(bus, ctx);
+    md5_step(&mut buf, &block);
+    md5_write_ctx_buf(bus, ctx, &buf);
+}
+
+/// `esp_rom_md5_init(md5_context_t *ctx)` — classic RSA MD5 init.
+pub fn rom_md5_init(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    let n = cpu.ps.callinc() * 4;
+    let ctx = cpu.regs.read_logical(n + 2);
+    // Zero whole context then set IV.
+    for i in 0..MD5_CTX_SIZE {
+        let _ = bus.write_u8(ctx.wrapping_add(i) as u64, 0);
+    }
+    md5_write_ctx_buf(
+        bus,
+        ctx,
+        &[0x6745_2301, 0xefcd_ab89, 0x98ba_dcfe, 0x1032_5476],
+    );
+    RomThunkBank::return_with(cpu, 0);
+    Ok(())
+}
+
+/// `esp_rom_md5_update(ctx, buf, len)`.
+pub fn rom_md5_update(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    let n = cpu.ps.callinc() * 4;
+    let ctx = cpu.regs.read_logical(n + 2);
+    let mut data = cpu.regs.read_logical(n + 3);
+    let mut len = cpu.regs.read_logical(n + 4);
+
+    let mut bits = md5_read_bits(bus, ctx);
+    let t = bits[0];
+    bits[0] = t.wrapping_add(len << 3);
+    if bits[0] < t {
+        bits[1] = bits[1].wrapping_add(1);
+    }
+    bits[1] = bits[1].wrapping_add(len >> 29);
+    md5_write_bits(bus, ctx, bits);
+
+    let mut idx = (t >> 3) & 0x3f;
+    if idx != 0 {
+        let mut part = 64 - idx;
+        if len < part {
+            part = len;
+        }
+        for i in 0..part {
+            let b = bus.read_u8(data.wrapping_add(i) as u64).unwrap_or(0);
+            let _ = bus.write_u8(ctx.wrapping_add(MD5_CTX_IN + idx + i) as u64, b);
+        }
+        data = data.wrapping_add(part);
+        len = len.wrapping_sub(part);
+        idx = idx.wrapping_add(part);
+        if idx == 64 {
+            md5_transform_from_in(bus, ctx);
+            idx = 0;
+        }
+    }
+    while len >= 64 {
+        for i in 0..64u32 {
+            let b = bus.read_u8(data.wrapping_add(i) as u64).unwrap_or(0);
+            let _ = bus.write_u8(ctx.wrapping_add(MD5_CTX_IN + i) as u64, b);
+        }
+        md5_transform_from_in(bus, ctx);
+        data = data.wrapping_add(64);
+        len = len.wrapping_sub(64);
+    }
+    for i in 0..len {
+        let b = bus.read_u8(data.wrapping_add(i) as u64).unwrap_or(0);
+        let _ = bus.write_u8(ctx.wrapping_add(MD5_CTX_IN + idx + i) as u64, b);
+    }
+    RomThunkBank::return_with(cpu, 0);
+    Ok(())
+}
+
+/// `esp_rom_md5_final(uint8_t digest[16], md5_context_t *ctx)`.
+/// Note: classic ESP32 ROM takes (digest, ctx) — opposite of mbedtls order.
+pub fn rom_md5_final(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    let n = cpu.ps.callinc() * 4;
+    let digest = cpu.regs.read_logical(n + 2);
+    let ctx = cpu.regs.read_logical(n + 3);
+
+    let bits = md5_read_bits(bus, ctx);
+    let count = (bits[0] >> 3) & 0x3f;
+    let mut p = count;
+    let _ = bus.write_u8(ctx.wrapping_add(MD5_CTX_IN + p) as u64, 0x80);
+    p = p.wrapping_add(1);
+    if p > 56 {
+        while p < 64 {
+            let _ = bus.write_u8(ctx.wrapping_add(MD5_CTX_IN + p) as u64, 0);
+            p = p.wrapping_add(1);
+        }
+        md5_transform_from_in(bus, ctx);
+        p = 0;
+    }
+    while p < 56 {
+        let _ = bus.write_u8(ctx.wrapping_add(MD5_CTX_IN + p) as u64, 0);
+        p = p.wrapping_add(1);
+    }
+    // Append bit count (little-endian) in last 8 bytes of in[].
+    let _ = bus.write_u32(ctx.wrapping_add(MD5_CTX_IN + 56) as u64, bits[0]);
+    let _ = bus.write_u32(ctx.wrapping_add(MD5_CTX_IN + 60) as u64, bits[1]);
+    md5_transform_from_in(bus, ctx);
+
+    let buf = md5_read_ctx_buf(bus, ctx);
+    for (i, &word) in buf.iter().enumerate() {
+        let _ = bus.write_u32(digest.wrapping_add(i as u32 * 4) as u64, word);
+    }
+    // Wipe context
+    for i in 0..MD5_CTX_SIZE {
+        let _ = bus.write_u8(ctx.wrapping_add(i) as u64, 0);
+    }
+    RomThunkBank::return_with(cpu, 0);
+    Ok(())
+}
+
 /// `esp_crc8(const uint8_t *p, uint32_t len) -> uint8_t` — ESP32 BROM CRC-8
 /// used to validate the factory MAC against ESP_EFUSE_MAC_CRC. Algorithm is
 /// Dallas/Maxim 1-Wire CRC-8 (polynomial 0x31, reflected 0x8C, init=0).
@@ -1170,6 +1693,30 @@ pub fn rom_esp_crc8(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
         }
     }
     RomThunkBank::return_with(cpu, crc as u32);
+    Ok(())
+}
+
+/// `esp_rom_crc32_le(uint32_t crc, const uint8_t *buf, uint32_t len) -> uint32_t`
+/// — IEEE 802.3 CRC-32, LSB-first (poly 0xEDB88320). Used by core dump and
+/// partition helpers. `crc` is the running value (typically init `0xFFFFFFFF`);
+/// the ROM does **not** post-complement — callers XOR if they need it.
+pub fn rom_esp_crc32_le(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    let n = cpu.ps.callinc() * 4;
+    let mut crc = cpu.regs.read_logical(n + 2);
+    let buf = cpu.regs.read_logical(n + 3);
+    let len = cpu.regs.read_logical(n + 4);
+    for i in 0..len {
+        let byte = bus.read_u8(buf.wrapping_add(i) as u64).unwrap_or(0);
+        crc ^= byte as u32;
+        for _ in 0..8 {
+            if crc & 1 != 0 {
+                crc = (crc >> 1) ^ 0xEDB8_8320;
+            } else {
+                crc >>= 1;
+            }
+        }
+    }
+    RomThunkBank::return_with(cpu, crc);
     Ok(())
 }
 
@@ -1296,6 +1843,50 @@ pub fn esp_idf_heap_caps_realloc(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimR
         }
     }
     RomThunkBank::return_with(cpu, ptr);
+    Ok(())
+}
+
+/// `qsort(base, nmemb, size, compar)` — sort `nmemb` elements of `size` bytes.
+///
+/// Arduino heap init sorts reserved memory regions via ROM `qsort`. A nop
+/// leaves the array unsorted → assert `reserved[i+1].start > reserved[i].start`.
+///
+/// Full `compar` callback would require re-entering the guest; for the known
+/// heap path (`size == 8`, pair of `u32` start/end) we sort by the first word
+/// ascending. Other sizes fall back to a simple byte-wise insertion sort using
+/// lexicographic compare (stable enough for identical keys).
+pub fn rom_qsort(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    let n = cpu.ps.callinc() * 4;
+    let base = cpu.regs.read_logical(n + 2);
+    let nmemb = cpu.regs.read_logical(n + 3) as usize;
+    let size = cpu.regs.read_logical(n + 4) as usize;
+    if nmemb <= 1 || size == 0 || base == 0 {
+        RomThunkBank::return_with(cpu, 0);
+        return Ok(());
+    }
+    // Cap to avoid runaway (heap reserved list is tiny).
+    let nmemb = nmemb.min(256);
+    let size = size.min(64);
+    let mut items: Vec<Vec<u8>> = Vec::with_capacity(nmemb);
+    for i in 0..nmemb {
+        let mut item = vec![0u8; size];
+        for (b, slot) in item.iter_mut().enumerate() {
+            *slot = bus.read_u8(base as u64 + (i * size + b) as u64)?;
+        }
+        items.push(item);
+    }
+    if size >= 4 {
+        // Sort by first u32 LE (region start).
+        items.sort_by_key(|it| u32::from_le_bytes([it[0], it[1], it[2], it[3]]));
+    } else {
+        items.sort();
+    }
+    for (i, item) in items.iter().enumerate() {
+        for (b, &byte) in item.iter().enumerate() {
+            bus.write_u8(base as u64 + (i * size + b) as u64, byte)?;
+        }
+    }
+    RomThunkBank::return_with(cpu, 0);
     Ok(())
 }
 
@@ -1509,9 +2100,15 @@ mod tests {
     }
 
     #[test]
-    fn unregistered_thunk_returns_none() {
+    fn unregistered_thunk_falls_through_to_nop_return_zero() {
+        // Prefill BREAK sites dispatch via `get` → `nop_return_zero` so the
+        // long-tail ROM HAL surface does not fault mid-boot. Only *registered*
+        // addresses carry a distinct thunk function pointer.
         let bank = RomThunkBank::new(0x4000_0000, 0x10_0000);
-        assert!(bank.get(0x4000_1234).is_none());
+        let thunk = bank
+            .get(0x4000_1234)
+            .expect("unregistered site still dispatches");
+        assert!(std::ptr::fn_addr_eq(thunk, nop_return_zero as RomThunkFn));
     }
 
     #[test]

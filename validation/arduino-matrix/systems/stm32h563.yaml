@@ -1,0 +1,5 @@
+# Auto-generated for Arduino matrix — bare board, no external devices.
+name: "arduino-matrix-stm32h563"
+chip: "../../../configs/chips/stm32h563.yaml"
+external_devices: []
+board_io: []

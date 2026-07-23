@@ -12,6 +12,36 @@ use crate::Peripheral;
 use anyhow::Context;
 use labwired_config::{parse_size, ChipDescriptor, SystemManifest};
 use std::cell::Cell;
+use std::path::{Path, PathBuf};
+
+/// Default on-disk dumps when `image_env` is unset. Keeps copyrighted ROMs out
+/// of the repo path contract (env still wins) while letting matrix/CLI find the
+/// in-tree `crates/core/roms/esp32c3/*` copies used by e2e gates.
+fn default_region_image_path(env: &str) -> Option<PathBuf> {
+    let rel = match env {
+        "LABWIRED_ESP32C3_ROM" => "roms/esp32c3/esp32c3_rom.bin",
+        "LABWIRED_ESP32C3_ROM_DATA" => "roms/esp32c3/esp32c3_drom.bin",
+        // RP2040 bootrom is NOT auto-loaded: a mask ROM at 0 shadows the
+        // Cortex-M boot alias used by bare-metal onboarding ELFs (PIO smoke
+        // links at low VMA and takes VTOR=0). Arduino/Zephyr matrix cells that
+        // need `rom_func_lookup` set LABWIRED_RP2040_BOOTROM explicitly
+        // (see validation/*-matrix/run_matrix.py).
+        _ => return None,
+    };
+    // Walk: CWD, CWD/crates/core, crate-relative from this source tree layout.
+    let mut candidates = Vec::new();
+    if let Ok(cwd) = std::env::current_dir() {
+        candidates.push(cwd.join(rel));
+        candidates.push(cwd.join("crates/core").join(rel));
+    }
+    // `CARGO_MANIFEST_DIR` for labwired-core when tests run from the crate.
+    if let Ok(manifest) = std::env::var("CARGO_MANIFEST_DIR") {
+        candidates.push(Path::new(&manifest).join(rel));
+        // crates/cli → ../../crates/core/roms/...
+        candidates.push(Path::new(&manifest).join("../core").join(rel));
+    }
+    candidates.into_iter().find(|p| p.is_file())
+}
 
 impl SystemBus {
     pub fn from_config(chip: &ChipDescriptor, manifest: &SystemManifest) -> anyhow::Result<Self> {
@@ -25,12 +55,20 @@ impl SystemBus {
             // Optionally preload a raw binary image (e.g. a dumped mask ROM)
             // from a path given by an env var. Copyrighted vendor blobs are not
             // committed, so a missing image just leaves the region zero-filled.
+            let mut loaded_image = false;
             if let Some(env) = &region.image_env {
-                if let Ok(path) = std::env::var(env) {
+                // Env pin first; else well-known in-tree dumps so Arduino-matrix
+                // / plain `labwired test` can call C3 ROM helpers without
+                // requiring the operator to export LABWIRED_ESP32C3_ROM*.
+                let path_owned = std::env::var(env)
+                    .ok()
+                    .or_else(|| default_region_image_path(env).map(|p| p.display().to_string()));
+                if let Some(path) = path_owned {
                     match std::fs::read(&path) {
                         Ok(bytes) => {
                             let n = bytes.len().min(mem.data.len());
                             mem.data[..n].copy_from_slice(&bytes[..n]);
+                            loaded_image = n > 0;
                             tracing::info!(
                                 "loaded {n} bytes into '{}' region @ {:#010x} from {path}",
                                 region.name,
@@ -43,6 +81,18 @@ impl SystemBus {
                         ),
                     }
                 }
+            }
+            // Skip empty image_env regions: a zero-filled window at 0 would
+            // shadow the Cortex-M flash boot alias (breaks RP2040 bare-metal
+            // onboarding ELFs that rely on VTOR=0 → flash). Regions without
+            // image_env (plain RAM holes) are still installed as zeros.
+            if region.image_env.is_some() && !loaded_image {
+                tracing::debug!(
+                    "skipping empty image_env region '{}' @ {:#010x}",
+                    region.name,
+                    region.base
+                );
+                continue;
             }
             extra_mem.push(mem);
         }

@@ -374,144 +374,240 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                     .unwrap_or(false)
             };
 
-            let mut machine = if args.rom_boot && is_esp32s3 {
-                // ── Faithful ESP32-S3 ROM boot (mirrors the `run` command) ──
-                // Reset the CPU at the BROM vector 0x40000400 and let the real
-                // mask ROM run: it loads the 2nd-stage bootloader + app from the
-                // flash image (LABWIRED_ESP32S3_FLASH) through the SPI-flash
-                // controller and jumps to the app — exactly like silicon. No
-                // fast_boot, no ELF pre-load, no PC/SP seeding: zero thunks.
-                // Single-core (PRO_CPU): esp-hal apps run entirely on core 0;
-                // the ESP-IDF 2nd-stage bootloader is single-core at boot.
+            let mut machine = if is_esp32s3 {
+                // ── ESP32-S3 (LX7): S3 memmap + XIP, NOT classic ESP32 map ──
+                // Classic `build_esp32_system_from_manifest` uses LX6 IRAM/DROM
+                // bases — Arduino-S3 ELF segments (0x3C00_xxxx DROM, 0x3FC8_xxxx
+                // DRAM, 0x4200_xxxx IROM, 0x4037_xxxx IRAM) never load.
+                use labwired_core::boot::esp32s3::{fast_boot, BootOpts};
                 use labwired_core::system::xtensa::{
                     configure_xtensa_esp32s3, Esp32s3BootMode, Esp32s3Opts,
                 };
-                if std::env::var("LABWIRED_ESP32S3_FLASH").is_err() {
-                    let msg =
-                        "--rom-boot needs LABWIRED_ESP32S3_FLASH set (the firmware flash image)"
-                            .to_string();
-                    error!("{}", msg);
-                    write_config_error_outputs(
-                        &args,
-                        Some(&firmware_path),
-                        system_path.as_ref(),
-                        Some(&firmware_bytes),
-                        Some(&resolved_limits),
-                        msg,
-                    );
-                    return ExitCode::from(EXIT_CONFIG_ERROR);
-                }
-                let mut bus = labwired_core::bus::SystemBus::new();
-                let opts = Esp32s3Opts {
-                    real_reset_boot: true,
-                    ..Esp32s3Opts::default()
-                };
-                let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
-                if wiring.boot_mode != Esp32s3BootMode::Faithful {
-                    let msg = "--rom-boot needs the real ESP32-S3 boot ROM, but none was found. \
-                         Install the ESP toolchain or set LABWIRED_ESP32S3_ROM_ELF \
-                         (or pin LABWIRED_ESP32S3_ROM/_DROM)."
-                        .to_string();
-                    error!("{}", msg);
-                    write_config_error_outputs(
-                        &args,
-                        Some(&firmware_path),
-                        system_path.as_ref(),
-                        Some(&firmware_bytes),
-                        Some(&resolved_limits),
-                        msg,
-                    );
-                    return ExitCode::from(EXIT_CONFIG_ERROR);
-                }
-                let mut cpu = wiring.cpu;
-                // The real ROM + firmware install the OF/UF window vectors and
-                // build a proper stack save chain, so use the faithful
-                // per-access overflow / RETW underflow path (no sim shadow
-                // stack) — matching the `run` command's rom-boot path.
-                cpu.faithful_windows = true;
-                bus.attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
-                let mut machine = labwired_core::Machine::new(cpu, bus);
-                machine.observers.push(metrics.clone());
-                // No load_firmware / set_pc: the CPU resets at 0x40000400 and
-                // the mapped ROM boots the app from flash exactly like silicon.
-                machine
-            } else if is_esp32s3 {
-                // ── ESP32-S3 (Xtensa LX7) fast-boot from the manifest ──────────
-                // `build_esp32_system_from_manifest` builds a CLASSIC ESP32 (LX6)
-                // memory map, which cannot load an S3 XIP ELF (its .rodata/.text
-                // land in the 0x3C00_0000 / 0x4200_0000 cache windows). S3 gets
-                // its own branch here — the SAME wiring the `run` command and the
-                // wasm/playground twin use: configure_xtensa_esp32s3 + wire the
-                // manifest's external_devices + fast_boot.
-                use labwired_core::boot::esp32s3::{fast_boot, BootOpts};
-                use labwired_core::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag;
-                use labwired_core::system::xtensa::{configure_xtensa_esp32s3, Esp32s3Opts};
-
-                let mut bus = labwired_core::bus::SystemBus::new();
-                let wiring = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
-                // Wire the manifest's declared external devices (e.g. the SH1107
-                // OLED on i2c0) through the generic factory.
-                if let Err(e) =
-                    labwired_core::system::xtensa::attach_esp32_external_devices(&mut bus, manifest)
-                {
-                    let msg = format!("{:#}", e);
-                    error!("{}", msg);
-                    write_config_error_outputs(
-                        &args,
-                        Some(&firmware_path),
-                        system_path.as_ref(),
-                        Some(&firmware_bytes),
-                        Some(&resolved_limits),
-                        msg,
-                    );
-                    return ExitCode::from(EXIT_CONFIG_ERROR);
-                }
-                bus.refresh_peripheral_index();
-
-                // S3 esp-hal serial goes through USB_SERIAL_JTAG, not UART0.
-                for p in bus.peripherals.iter_mut() {
-                    if p.name == "usb_serial_jtag" {
-                        if let Some(any) = p.dev.as_any_mut() {
-                            if let Some(jtag) = any.downcast_mut::<UsbSerialJtag>() {
-                                jtag.set_sink(Some(uart_tx.clone()), !args.no_uart_stdout);
+                if args.rom_boot {
+                    // Faithful BROM path (mirrors `run`): needs flash image.
+                    if std::env::var("LABWIRED_ESP32S3_FLASH").is_err() {
+                        let msg =
+                            "--rom-boot needs LABWIRED_ESP32S3_FLASH set (the firmware flash image)"
+                                .to_string();
+                        error!("{}", msg);
+                        write_config_error_outputs(
+                            &args,
+                            Some(&firmware_path),
+                            system_path.as_ref(),
+                            Some(&firmware_bytes),
+                            Some(&resolved_limits),
+                            msg,
+                        );
+                        return ExitCode::from(EXIT_CONFIG_ERROR);
+                    }
+                    let mut bus = labwired_core::bus::SystemBus::new();
+                    let opts = Esp32s3Opts {
+                        real_reset_boot: true,
+                        ..Esp32s3Opts::default()
+                    };
+                    let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
+                    if wiring.boot_mode != Esp32s3BootMode::Faithful {
+                        let msg =
+                            "--rom-boot needs the real ESP32-S3 boot ROM, but none was found. \
+                             Install the ESP toolchain or set LABWIRED_ESP32S3_ROM_ELF \
+                             (or pin LABWIRED_ESP32S3_ROM/_DROM)."
+                                .to_string();
+                        error!("{}", msg);
+                        write_config_error_outputs(
+                            &args,
+                            Some(&firmware_path),
+                            system_path.as_ref(),
+                            Some(&firmware_bytes),
+                            Some(&resolved_limits),
+                            msg,
+                        );
+                        return ExitCode::from(EXIT_CONFIG_ERROR);
+                    }
+                    let mut cpu = wiring.cpu;
+                    cpu.faithful_windows = true;
+                    bus.attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
+                    let mut machine = labwired_core::Machine::new(cpu, bus);
+                    machine.observers.push(metrics.clone());
+                    machine
+                } else {
+                    // Matrix / plain `labwired test`: fast-boot — configure S3
+                    // map, load ELF into IRAM/DRAM + identity FlashXip, jump to
+                    // app entry. Force harness ROM thunks: full faithful ROM
+                    // busy-waits in unmodelled analog/cache/delay paths during
+                    // Arduino `system_early_init`, while harness
+                    // `ets_set_appcpu_boot_addr` + dual APP_CPU release the
+                    // `s_cpu_up` spin (honest dual-core, not a firmware patch).
+                    let mut bus = labwired_core::bus::SystemBus::new();
+                    // Scoped: provision_rom_images checks this once.
+                    let _fast = std::env::var_os("LABWIRED_ESP32S3_FASTBOOT");
+                    std::env::set_var("LABWIRED_ESP32S3_FASTBOOT", "1");
+                    let opts = Esp32s3Opts::default();
+                    let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
+                    if _fast.is_none() {
+                        std::env::remove_var("LABWIRED_ESP32S3_FASTBOOT");
+                    }
+                    // Seed partition table + app image magic into D-cache
+                    // identity window (VA 0x3C00_0000 → dcache[off]).
+                    {
+                        let pt_candidates = [
+                            std::path::PathBuf::from(
+                                "validation/arduino-matrix/out/_pio_work/esp32s3__L0_serial_boot/.pio/build/matrix/partitions.bin",
+                            ),
+                            std::path::PathBuf::from(
+                                "validation/arduino-matrix/out/_pio_work/esp32__L0_serial_boot/.pio/build/matrix/partitions.bin",
+                            ),
+                        ];
+                        if let Ok(mut d) = wiring.dcache_backing.lock() {
+                            for p in &pt_candidates {
+                                if let Ok(pt) = std::fs::read(p) {
+                                    let n = pt.len().min(0xC00);
+                                    if d.len() >= 0x8000 + n {
+                                        d[0x8000..0x8000 + n].copy_from_slice(&pt[..n]);
+                                        eprintln!(
+                                            "labwired-cli test: seeded S3 dcache partitions ({} bytes) from {}",
+                                            n,
+                                            p.display()
+                                        );
+                                    }
+                                    break;
+                                }
+                            }
+                            // App magic 0xE9: identity used off 0x30000; factory
+                            // MMU maps VA 0x3C03_0000 → phys page 4 (0x40000).
+                            for off in [0x30000usize, 0x40000, 0x10000] {
+                                if d.len() > off {
+                                    d[off] = 0xE9;
+                                }
                             }
                         }
                     }
-                }
-                bus.attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
-
-                let mut cpu = wiring.cpu;
-                if let Err(e) = fast_boot(
-                    &firmware_bytes,
-                    &mut bus,
-                    &mut cpu,
-                    &BootOpts {
-                        stack_top_fallback: 0x3FCD_FFF0,
-                        icache_backing: Some(wiring.icache_backing),
-                        dcache_backing: Some(wiring.dcache_backing),
-                    },
-                ) {
-                    let msg = format!("ESP32-S3 fast_boot: {e}");
-                    error!("{}", msg);
-                    write_config_error_outputs(
-                        &args,
-                        Some(&firmware_path),
-                        system_path.as_ref(),
-                        Some(&firmware_bytes),
-                        Some(&resolved_limits),
-                        msg,
+                    bus.attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
+                    // Arduino may also print via USB-Serial-JTAG.
+                    {
+                        use labwired_core::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag;
+                        for p in bus.peripherals.iter_mut() {
+                            if p.name == "usb_serial_jtag" {
+                                if let Some(any) = p.dev.as_any_mut() {
+                                    if let Some(jtag) = any.downcast_mut::<UsbSerialJtag>() {
+                                        jtag.set_sink(Some(uart_tx.clone()), !args.no_uart_stdout);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    let mut pro_cpu = wiring.cpu;
+                    if let Err(e) = fast_boot(
+                        &firmware_bytes,
+                        &mut bus,
+                        &mut pro_cpu,
+                        &BootOpts {
+                            stack_top_fallback: 0x3FCD_FFF0,
+                            icache_backing: Some(wiring.icache_backing.clone()),
+                            dcache_backing: Some(wiring.dcache_backing.clone()),
+                            factory_flash_base: Some(0x1_0000),
+                        },
+                    ) {
+                        let msg = format!("ESP32-S3 fast_boot: {e:#}");
+                        error!("{}", msg);
+                        write_config_error_outputs(
+                            &args,
+                            Some(&firmware_path),
+                            system_path.as_ref(),
+                            Some(&firmware_bytes),
+                            Some(&resolved_limits),
+                            msg,
+                        );
+                        return ExitCode::from(EXIT_CONFIG_ERROR);
+                    }
+                    // Bootloader-equivalent MMU: factory app @ flash 0x10000 so
+                    // `spi_flash_cache2phys` / OTA running-partition succeed
+                    // (fast-boot never programs DR_REG_MMU_TABLE).
+                    labwired_core::boot::esp32s3::seed_factory_mmu_for_cache2phys(
+                        &mut bus, 4, // IROM ~0x22 KiB → 2 pages; pad
+                        8, // DROM window pages used by .flash.rodata @ 0x3C03_xxxx
                     );
-                    return ExitCode::from(EXIT_RUNTIME_ERROR);
+                    eprintln!(
+                        "labwired-cli test: seeded S3 factory MMU for cache2phys (app0 @ 0x10000)"
+                    );
+                    // Arduino dual-core: `system_early_init` calls
+                    // `ets_set_appcpu_boot_addr(call_start_cpu1)` then spins on
+                    // `s_cpu_up[0] & s_cpu_up[1]`. Without APP_CPU the wait is
+                    // forever. Same model as classic: halted APP until PRO
+                    // releases via the silicon boot path.
+                    use labwired_core::cpu::xtensa_lx7::XtensaLx7;
+                    use labwired_core::peripherals::esp_xtensa_common::rom_thunks;
+                    // Dual-core handshake: PRO waits on both s_cpu_up[0]&[1]
+                    // and s_cpu_inited[0]&[1] (2-byte arrays). ets_set_appcpu_boot_addr
+                    // thunk marks these when APP is "released".
+                    let mut app_flags = Vec::new();
+                    for sym in ["s_cpu_up", "s_cpu_inited"] {
+                        if let Some(a) =
+                            labwired_loader::resolve_symbol_in_elf(&firmware_bytes, sym)
+                        {
+                            app_flags.push(a);
+                            app_flags.push(a.wrapping_add(1));
+                        }
+                    }
+                    if !app_flags.is_empty() {
+                        eprintln!(
+                            "labwired-cli test: S3 APP handshake flags @ {:#010x?}",
+                            app_flags
+                        );
+                        rom_thunks::set_appcpu_up_flags(app_flags);
+                    }
+                    // Hybrid window preserve parks under FreeRTOS TCB via
+                    // pxCurrentTCBs[core]. S3 BSS is not the classic address.
+                    for sym in ["pxCurrentTCBs", "pxCurrentTCB"] {
+                        if let Some(a) =
+                            labwired_loader::resolve_symbol_in_elf(&firmware_bytes, sym)
+                        {
+                            rom_thunks::PX_CURRENT_TCB_ADDR.with(|s| s.set(Some(a)));
+                            eprintln!(
+                                "labwired-cli test: pxCurrentTCBs @0x{a:08x} (hybrid preserve key)"
+                            );
+                            break;
+                        }
+                    }
+                    // Same xthal spill CPU-model workaround as classic.
+                    if let Some(pc) = labwired_loader::resolve_symbol_in_elf(
+                        &firmware_bytes,
+                        "xthal_window_spill_nw",
+                    ) {
+                        if let Err(e) =
+                            bus.install_flash_thunk(pc, rom_thunks::xthal_window_spill_thunk)
+                        {
+                            eprintln!(
+                                "labwired-cli test: warn: xthal_window_spill_nw install failed: {e}"
+                            );
+                        } else {
+                            eprintln!(
+                                "labwired-cli test: installed xthal_window_spill_nw CPU spill workaround @0x{pc:08x}"
+                            );
+                        }
+                    }
+                    // Real APP_CPU: start_cpu0 waits on s_system_inited[0]&[1];
+                    // APP sets [1] in do_system_init_fn after s_resume_cores.
+                    // ets_set_appcpu_boot_addr still raises s_cpu_up/s_cpu_inited
+                    // via set_appcpu_up_flags (early PRO wait) and stashes
+                    // APPCPU_BOOT_ADDR so Machine unhalts core 1 at call_start_cpu1.
+                    let mut app_cpu = XtensaLx7::new_app_cpu();
+                    // DRAM below PRO stack (fast_boot ~0x3FCD_FFF0); 16B aligned.
+                    app_cpu.set_sp(0x3FCD_8000);
+                    let mut machine =
+                        labwired_core::Machine::new(pro_cpu, bus).with_secondary_cpu(app_cpu);
+                    machine.observers.push(metrics.clone());
+                    eprintln!(
+                        "labwired-cli test: ESP32-S3 fast-boot entry=0x{:08x} (dual-core APP_CPU)",
+                        program.entry_point
+                    );
+                    machine
                 }
-                let mut machine = labwired_core::Machine::new(cpu, bus);
-                machine.observers.push(metrics.clone());
-                machine
             } else {
-                let (mut esp_bus, esp_cpu) =
+                let (mut esp_bus, pro_cpu, app_cpu) =
                     match labwired_core::system::builder::build_esp32_system_from_manifest(
                         manifest, sys_path,
                     ) {
-                        Ok(pair) => pair,
+                        Ok(triple) => triple,
                         Err(e) => {
                             let msg = format!("{:#}", e);
                             error!("{}", msg);
@@ -527,7 +623,64 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                         }
                     };
                 esp_bus.attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
-                let mut machine = labwired_core::Machine::new(esp_cpu, esp_bus);
+                // Real partition table at flash 0x8000 when the PIO matrix
+                // build left partitions.bin beside the firmware (or under
+                // the usual _pio_work path). Enables esp_ota_get_running_partition
+                // without a product-path OTA firmware thunk.
+                {
+                    let fw_path = std::path::Path::new(&firmware_path);
+                    let candidates = [
+                        fw_path
+                            .parent()
+                            .map(|p| p.join("partitions.bin"))
+                            .unwrap_or_default(),
+                        fw_path
+                            .parent()
+                            .and_then(|p| p.parent())
+                            .map(|p| {
+                                p.join("_pio_work/esp32__L0_serial_boot/.pio/build/matrix/partitions.bin")
+                            })
+                            .unwrap_or_default(),
+                        // validation/arduino-matrix/out/esp32/L0_... → out/_pio_work/...
+                        fw_path
+                            .parent()
+                            .and_then(|p| p.parent())
+                            .and_then(|p| p.parent())
+                            .map(|p| {
+                                p.join("_pio_work/esp32__L0_serial_boot/.pio/build/matrix/partitions.bin")
+                            })
+                            .unwrap_or_default(),
+                    ];
+                    let pt = candidates
+                        .iter()
+                        .find(|p| p.is_file())
+                        .and_then(|p| std::fs::read(p).ok().map(|b| (p.clone(), b)));
+                    if let Some((path, bytes)) = pt {
+                        if let Err(e) =
+                            labwired_core::peripherals::esp32::flash_mmu::seed_esp32_flash_image(
+                                &mut esp_bus,
+                                Some(&bytes),
+                            )
+                        {
+                            eprintln!(
+                                "labwired-cli test: warn: seed partitions from {}: {e}",
+                                path.display()
+                            );
+                        } else {
+                            eprintln!(
+                                "labwired-cli test: seeded {} ({} bytes) @ flash 0x8000",
+                                path.display(),
+                                bytes.len()
+                            );
+                        }
+                    }
+                }
+                // Dual-core die: APP_CPU starts halted; PRO releases it through
+                // the real boot path (ROM `ets_set_appcpu_boot_addr` →
+                // Machine::release_secondary_cpu_if_requested). No firmware
+                // flash-thunks, no forged s_cpu_up — APP_CPU runs call_start_cpu1.
+                let mut machine =
+                    labwired_core::Machine::new(pro_cpu, esp_bus).with_secondary_cpu(app_cpu);
                 machine.observers.push(metrics.clone());
                 if let Err(e) = machine.load_firmware(&program) {
                     return handle_load_error(
@@ -545,21 +698,54 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                 // ESP32 manifest path: skip BROM emulation and jump directly to
                 // the ELF entry point — matches the wasm/playground path
                 // (`new_from_config_xtensa_esp32`) and the e2e test
-                // (`e2e_esp32_epaper.rs`). The BROM reset vector (0x4000_0400)
+                // (`e2e_labwired_ereader`). The BROM reset vector (0x4000_0400)
                 // is fine for firmware compiled to boot from BROM, but playground
                 // ELFs are pre-linked to start at the app entry.
                 //
-                // Seed SP to the top of DRAM (0x3FFE_0000): Arduino-ESP32
-                // firmware (call_start_cpu0) expects BROM to have placed SP here
-                // before jumping to the app entry. We skip BROM, so do it
-                // ourselves — matching `install_esp32_arduino_quirks` in the WASM
-                // path. Native Xtensa firmware that sets its own SP will
-                // overwrite this immediately.
-                // CHEAT(SKIP): bypasses the boot ROM and hand-seeds PC/SP — real:
-                // the CPU resets at 0x4000_0400 and the mapped BROM sets up SP and
-                // jumps to the app. See FIDELITY.md §C.
+                // Seed both cores' stacks the way BROM would before
+                // call_start_cpu0 / call_start_cpu1 (PRO high DRAM, APP separate
+                // region below). See FIDELITY.md §C.
                 machine.cpu.set_pc(program.entry_point as u32);
                 machine.cpu.set_sp(0x3FFE_0000);
+                if let Some(cpu1) = machine.cpu_secondary.as_mut() {
+                    cpu1.set_sp(0x3FFD_8000);
+                }
+                // Post-BROM DRAM: flash chip descriptor + CCOUNT tick rates
+                // that the skipped boot ROM would have left (no firmware patches).
+                super::esp32_boot_state::seed_esp32_post_brom_dram(
+                    &mut machine.bus,
+                    &firmware_bytes,
+                );
+                // CPU-model workaround for shadow-window vs firmware spill
+                // (FIDELITY Batch D). Not a flash-init firmware thunk.
+                {
+                    use labwired_core::peripherals::esp_xtensa_common::rom_thunks;
+                    for sym in ["pxCurrentTCBs", "pxCurrentTCB"] {
+                        if let Some(a) =
+                            labwired_loader::resolve_symbol_in_elf(&firmware_bytes, sym)
+                        {
+                            rom_thunks::PX_CURRENT_TCB_ADDR.with(|s| s.set(Some(a)));
+                            break;
+                        }
+                    }
+                    if let Some(pc) = labwired_loader::resolve_symbol_in_elf(
+                        &firmware_bytes,
+                        "xthal_window_spill_nw",
+                    ) {
+                        if let Err(e) = machine
+                            .bus
+                            .install_flash_thunk(pc, rom_thunks::xthal_window_spill_thunk)
+                        {
+                            eprintln!(
+                                "labwired-cli test: warn: xthal_window_spill_nw install failed: {e}"
+                            );
+                        } else {
+                            eprintln!(
+                                "labwired-cli test: installed xthal_window_spill_nw CPU spill workaround @0x{pc:08x}"
+                            );
+                        }
+                    }
+                }
                 machine
             };
             let fault_evidence = handle_faults(&mut machine.bus, &faults);
@@ -658,6 +844,173 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
         }
     };
 
+    // ESP32-C3 fast-boot (ELF app entry): behavioral models the declarative
+    // stubs can't supply — same set `build_rom_boot_machine` / wasm C3 path
+    // install. Without them, ROM clock bring-up faults on unmapped ANA_I2C
+    // (0x6000_E000) and cache invalidate busy-polls forever.
+    {
+        let is_c3 = system_path.as_ref().and_then(|sys_path| {
+            labwired_config::SystemManifest::from_file(sys_path)
+                .ok()
+                .and_then(|m| {
+                    let chip_path = sys_path
+                        .parent()
+                        .unwrap_or_else(|| std::path::Path::new("."))
+                        .join(&m.chip);
+                    labwired_config::ChipDescriptor::from_file(&chip_path)
+                        .ok()
+                        .map(|c| c.name == "esp32c3")
+                })
+        });
+        if is_c3 == Some(true) {
+            use std::sync::{Arc, Mutex};
+            // SPIMEM0/1 flash-command controllers: Arduino `call_start_cpu0` →
+            // `bootloader_read_flash_id` busy-polls CMD until 0. Declarative
+            // stubs never clear. Same S3 SPIMEM model as rom-boot (layout match).
+            let mut flash_img = vec![0xFFu8; 4 * 1024 * 1024];
+            // Partition table @ flash 0x8000 — `esp_partition` requires MD5
+            // trailer (0xEBEB…). Prefer matrix/PIO build artifact, else the
+            // classic Arduino default table (same on-disk format for C3).
+            let pt_candidates = [
+                std::path::PathBuf::from(
+                    "validation/arduino-matrix/out/_pio_work/esp32c3__L0_serial_boot/.pio/build/matrix/partitions.bin",
+                ),
+                std::path::PathBuf::from(
+                    "validation/arduino-matrix/out/_pio_work/esp32__L0_serial_boot/.pio/build/matrix/partitions.bin",
+                ),
+            ];
+            for p in &pt_candidates {
+                if let Ok(pt) = std::fs::read(p) {
+                    let n = pt.len().min(0xC00);
+                    flash_img[0x8000..0x8000 + n].copy_from_slice(&pt[..n]);
+                    eprintln!(
+                        "labwired-cli test: seeded C3 flash partitions ({} bytes) from {}",
+                        n,
+                        p.display()
+                    );
+                    break;
+                }
+            }
+            let flash = Arc::new(Mutex::new(flash_img));
+            bus.add_peripheral(
+                "spimem1_flash",
+                0x6000_2000,
+                0x100,
+                None,
+                Box::new(
+                    labwired_core::peripherals::esp32s3::spi_mem_flash::SpiMemFlash::new(
+                        flash.clone(),
+                    ),
+                ),
+            );
+            bus.add_peripheral(
+                "spimem0_flash",
+                0x6000_3000,
+                0x100,
+                None,
+                Box::new(
+                    labwired_core::peripherals::esp32s3::spi_mem_flash::SpiMemFlash::new(
+                        flash.clone(),
+                    ),
+                ),
+            );
+            bus.add_peripheral(
+                "rtc_i2c_ana",
+                0x6000_E000,
+                0x400,
+                None,
+                Box::new(labwired_core::peripherals::esp32c3::ana_i2c::Esp32c3AnaI2c::new()),
+            );
+            bus.add_peripheral(
+                "extmem_cache",
+                0x600C_4000,
+                0x400,
+                None,
+                Box::new(labwired_core::peripherals::esp32c3::cache::Esp32c3Cache::new()),
+            );
+            // SYSTIMER: declarative stub never asserts VALUE_VALID → spin in
+            // systimer_hal_get_counter_value. S3 model (same IP) + C3 IRQ 37.
+            bus.add_peripheral(
+                "systimer",
+                0x6002_3000,
+                0x100,
+                None,
+                Box::new(
+                    labwired_core::peripherals::esp32s3::systimer::Systimer::new_with_source(
+                        160_000_000,
+                        37,
+                    ),
+                ),
+            );
+            // SAR ADC: calibrate loops need valid conversions.
+            bus.add_peripheral(
+                "apb_saradc",
+                0x6004_0000,
+                0x100,
+                None,
+                Box::new(labwired_core::peripherals::esp32c3::sar_adc::Esp32c3SarAdc::new()),
+            );
+            // RMT @ 0x6001_6000: Arduino `LED_BUILTIN`/pin 30 is RGB_BUILTIN →
+            // `rgbLedWrite` → RMT TX. Instant TX_END so digitalWrite completes.
+            bus.add_peripheral(
+                "rmt",
+                0x6001_6000,
+                0x800,
+                None,
+                Box::new(labwired_core::peripherals::esp32c3::rmt::Esp32c3Rmt::new_default()),
+            );
+            // Flash cache MMU @ 0x600C_5000 + DROM FlashXip.
+            //
+            // Start with *all* entries invalid (silicon reset). Full identity
+            // mapping of 128 pages left `spi_flash_mmap` with zero free entries
+            // → partition load never maps flash[0x8000] → silent hang / empty
+            // UART. Bootloader-equivalent maps for app DROM pages are applied
+            // after ELF load (see post-load C3 flash sync below) only for pages
+            // that actually hold rodata, leaving the rest free for mmap.
+            //
+            // `optimized_bus_access=false` so FlashXip wins over DROM extra_mem
+            // when an entry is valid. IROM (0x4200_0000) stays on chip `flash`
+            // / extra_mem (no XIP window installed there for CLI fast-boot).
+            use labwired_core::peripherals::esp32s3::flash_xip::{
+                Esp32s3MmuTable, FlashXipPeripheral, SharedMmu, MMU_FMT_C3,
+            };
+            use std::sync::atomic::AtomicU64;
+            let entries = vec![MMU_FMT_C3.invalid_bit; 128];
+            let mmu_table = Arc::new(SharedMmu {
+                entries: Mutex::new(entries),
+                generation: AtomicU64::new(1),
+            });
+            bus.add_peripheral(
+                "mmu_table",
+                0x600C_5000,
+                0x800,
+                None,
+                Box::new(Esp32s3MmuTable::new(mmu_table.clone())),
+            );
+            bus.add_peripheral(
+                "flash_xip_drom",
+                0x3C00_0000,
+                0x80_0000,
+                None,
+                Box::new(FlashXipPeripheral::new_mmu_fmt(
+                    flash.clone(),
+                    0x3C00_0000,
+                    mmu_table,
+                    MMU_FMT_C3,
+                )),
+            );
+            bus.config.optimized_bus_access = false;
+            // FreeRTOS first context switch: vPortYield → write SYSTEM
+            // CPU_INTR_FROM_CPU_0 (0x600C_0028) → FROM_CPU source 50 →
+            // esp_crosscore_isr → vPortYieldFromISR. Without this flag the
+            // bus never routes matrix sources into `riscv_irq_lines`, so
+            // yield is a no-op and `vTaskStartScheduler` returns into the
+            // intentional infinite loop at start_cpu0+0x56.
+            bus.esp32c3_irq_routing = true;
+            bus.refresh_peripheral_index();
+        }
+    }
+
     let uart_tx = Arc::new(Mutex::new(Vec::new()));
     let debug_uart = system_path
         .as_ref()
@@ -744,6 +1097,13 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
     macro_rules! setup_and_run {
         ($cpu:expr) => {{
             let mut machine = labwired_core::Machine::new($cpu, bus);
+            // FreeRTOS on ESP32-C3 is interrupt-driven (yield + SYSTIMER tick).
+            // Instruction batching freezes peripheral tick / IRQ delivery
+            // across large step batches and strands the scheduler — same
+            // reason rom-boot forces cycle-accurate stepping.
+            if machine.bus.esp32c3_irq_routing {
+                machine.config.batch_mode_enabled = false;
+            }
             if let Err(e) = machine.load_firmware(&program) {
                 return handle_load_error(
                     &args,
@@ -756,6 +1116,221 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                     system_path.as_ref(),
                     e,
                 );
+            }
+            // RISC-V Arduino-ESP32 images enter at `call_start_cpu0`, which
+            // assumes the second-stage bootloader already left a DRAM stack.
+            // Cortex-M gets SP from the vector table in `load_firmware`; RISC-V
+            // does not — seed SP at the top of chip RAM (16B aligned) and force
+            // PC to the ELF entry so we don't start at SP=0 → fault @ 0xfffffffc.
+            if matches!(program.arch, labwired_core::Arch::RiscV) {
+                // Fast-boot skips mask-ROM reset's `.data` unpack into high
+                // DRAM (`ets_ops_table_ptr` / `rom_spiflash_legacy_*` /
+                // `g_flash_guard_ops` @ 0x3FCD_FFxx). Without that copy, ROM
+                // helpers jalr through garbage (fault @ 0x451c8082). Mirror the
+                // wasm / e2e C3 fast-start path.
+                {
+                    use labwired_core::boot::esp32c3_rom::{c3_rom_data_init_writes, IROM_BASE};
+                    let irom = machine
+                        .bus
+                        .extra_mem
+                        .iter()
+                        .find(|m| m.base_addr == IROM_BASE as u64)
+                        .map(|m| m.data.clone());
+                    if let Some(irom) = irom {
+                        // Only apply when IROM looks real (not all-zero).
+                        if irom.iter().any(|&b| b != 0) {
+                            for (dst, bytes) in c3_rom_data_init_writes(&irom) {
+                                for (i, b) in bytes.iter().enumerate() {
+                                    let _ = machine.bus.write_u8(dst as u64 + i as u64, *b);
+                                }
+                            }
+                        }
+                    }
+                }
+                if let Some(sys_path) = system_path.as_ref() {
+                    if let Ok(manifest) = labwired_config::SystemManifest::from_file(sys_path) {
+                        let chip_path = sys_path
+                            .parent()
+                            .unwrap_or_else(|| std::path::Path::new("."))
+                            .join(&manifest.chip);
+                        if let Ok(chip) = labwired_config::ChipDescriptor::from_file(&chip_path) {
+                            if let Ok(ram_sz) = labwired_config::parse_size(&chip.ram.size) {
+                                let mut sp_top = (chip.ram.base + ram_sz) as u32;
+                                // ESP32-C3 boot stack placement:
+                                // - IDF `SOC_DRAM_HIGH` = 0x3FCE_0000; SP must
+                                //   be < that for `s_task_stack_is_sane_when_cache_frozen`.
+                                // - BROM `.data` occupies ~0x3FCD_E710..0x3FCE_0000
+                                //   (ets_ops / flash_guard tables). SP must sit
+                                //   below that so the boot stack does not stomp
+                                //   ROM globals (was: SP@0x3FCD_FFF0 → wild jalr).
+                                if chip.name == "esp32c3" {
+                                    const C3_BOOT_STACK_TOP: u32 = 0x3FCD_C000;
+                                    sp_top = C3_BOOT_STACK_TOP;
+                                }
+                                machine.cpu.set_sp(sp_top & !0xF);
+                            }
+                            // Arduino-ESP32 `system_early_init` validates the
+                            // ESP app image magic (0xE9) at the DROM-mapped
+                            // flash header (`0x3C03_0000` on this C3 link).
+                            // ELF load leaves `.flash_rodata_dummy` (NOBITS)
+                            // as zeros — on silicon that VA maps the on-flash
+                            // image header. Seed the magic only (honest XIP
+                            // content, not a firmware patch).
+                            if chip.name == "esp32c3" {
+                                // After ELF load: FlashXip serves flash via MMU.
+                                // ELF landed in DROM extra_mem first — copy into
+                                // the shared NOR image so rodata/appdesc remain
+                                // visible through XIP; keep partitions @ 0x8000
+                                // and image magic @ 0x30000 (VA 0x3C03_0000).
+                                //
+                                // Then program MMU entries only for pages that
+                                // hold ELF DROM content (bootloader-equivalent
+                                // DROM map). Leave other entries invalid so
+                                // `spi_flash_mmap` can allocate free pages for
+                                // the partition table at flash 0x8000.
+                                let flash_arc = machine
+                                    .bus
+                                    .find_peripheral_index_by_name("spimem1_flash")
+                                    .and_then(|idx| {
+                                        machine.bus.peripherals[idx].dev.as_any().and_then(
+                                            |a| {
+                                                a.downcast_ref::<
+                                                    labwired_core::peripherals::esp32s3::spi_mem_flash::SpiMemFlash,
+                                                >()
+                                                .map(|spi| spi.flash_backing())
+                                            },
+                                        )
+                                    });
+                                // Bootloader-equivalent MMU + flash image layout.
+                                //
+                                // C3 IROM/DROM share one table: entry =
+                                // (vaddr>>16)&0x7F. `esp_ota_get_running_partition`
+                                // does cache2phys(code) and requires the phys
+                                // address to fall inside the factory app
+                                // partition (default 0x10000). Identity map to
+                                // flash 0 maps code to 0x3df8 — outside factory
+                                // → abort(). Place the app image at the factory
+                                // base and map virt page P → phys page
+                                // (factory/PAGE + P).
+                                //
+                                // Leave unused entries invalid so spi_flash_mmap
+                                // can allocate free pages for the partition
+                                // table at flash 0x8000.
+                                // C3 MMU entry_id = (vaddr >> 16) & 0x7F — IROM
+                                // (0x4200_xxxx) and DROM (0x3C00_xxxx) share the
+                                // same 128-entry table (0x4200&0x7F == 0, not
+                                // 0x20). Factory app partition @ flash 0x10000.
+                                // cache2phys(IROM code) must land inside app0 or
+                                // esp_ota_get_running_partition aborts.
+                                const PAGE: usize = 64 * 1024;
+                                const FACTORY_OFF: usize = 0x1_0000;
+                                const FACTORY_PAGE: u32 = (FACTORY_OFF / PAGE) as u32; // 1
+                                // virt_page index within the 8 MiB window
+                                let mut virt_pages: Vec<u32> = Vec::new();
+                                let irom_len = machine.bus.flash.data.len();
+                                for page in 0..irom_len.div_ceil(PAGE) {
+                                    if page >= 128 {
+                                        break;
+                                    }
+                                    let start = page * PAGE;
+                                    let end = (start + PAGE).min(irom_len);
+                                    if machine.bus.flash.data[start..end]
+                                        .iter()
+                                        .any(|&b| b != 0)
+                                    {
+                                        virt_pages.push(page as u32);
+                                    }
+                                }
+                                if let Some(flash) = flash_arc {
+                                    let mut f = flash.lock().unwrap();
+                                    let drom_snapshot: Option<Vec<u8>> = machine
+                                        .bus
+                                        .extra_mem
+                                        .iter()
+                                        .find(|m| m.base_addr == 0x3C00_0000)
+                                        .map(|m| m.data.clone());
+                                    if let Some(drom) = drom_snapshot {
+                                        for page in 0..drom.len().div_ceil(PAGE)
+                                        {
+                                            if page >= 128 {
+                                                break;
+                                            }
+                                            let start = page * PAGE;
+                                            let end = (start + PAGE).min(drom.len());
+                                            if !drom[start..end].iter().any(|&b| b != 0)
+                                            {
+                                                continue;
+                                            }
+                                            if !virt_pages.contains(&(page as u32)) {
+                                                virt_pages.push(page as u32);
+                                            }
+                                            let dst = FACTORY_OFF + start;
+                                            if dst + (end - start) <= f.len() {
+                                                f[dst..dst + (end - start)]
+                                                    .copy_from_slice(&drom[start..end]);
+                                            }
+                                        }
+                                    }
+                                    // Mirror IROM into factory pages (cache2phys);
+                                    // execute still uses bus.flash at 0x4200_0000.
+                                    for page in virt_pages.clone() {
+                                        let start = page as usize * PAGE;
+                                        let end = (start + PAGE).min(irom_len);
+                                        let dst = FACTORY_OFF + start;
+                                        if start >= irom_len || dst >= f.len() {
+                                            continue;
+                                        }
+                                        let n = (end - start).min(f.len() - dst);
+                                        for i in 0..n {
+                                            let b = machine.bus.flash.data[start + i];
+                                            if b != 0 {
+                                                f[dst + i] = b;
+                                            }
+                                        }
+                                    }
+                                    let pt_candidates = [
+                                        std::path::PathBuf::from(
+                                            "validation/arduino-matrix/out/_pio_work/esp32c3__L0_serial_boot/.pio/build/matrix/partitions.bin",
+                                        ),
+                                        std::path::PathBuf::from(
+                                            "validation/arduino-matrix/out/_pio_work/esp32__L0_serial_boot/.pio/build/matrix/partitions.bin",
+                                        ),
+                                    ];
+                                    for p in &pt_candidates {
+                                        if let Ok(pt) = std::fs::read(p) {
+                                            let n = pt.len().min(0xC00);
+                                            f[0x8000..0x8000 + n]
+                                                .copy_from_slice(&pt[..n]);
+                                            break;
+                                        }
+                                    }
+                                    // App image magic @ VA 0x3C03_0000 → factory+0x30000
+                                    let magic_off = FACTORY_OFF + 0x30000;
+                                    if f.len() > magic_off {
+                                        f[magic_off] = 0xE9;
+                                    }
+                                }
+                                virt_pages.sort_unstable();
+                                virt_pages.dedup();
+                                for vp in &virt_pages {
+                                    let phys = FACTORY_PAGE + *vp;
+                                    let mmu_addr = 0x600C_5000u64 + (*vp as u64) * 4;
+                                    let _ = machine.bus.write_u32(mmu_addr, phys);
+                                }
+                                if !virt_pages.is_empty() {
+                                    eprintln!(
+                                        "labwired-cli test: C3 MMU factory@{:#x} mapped {} virt page(s) {:?} → phys+{}; free entries for mmap",
+                                        FACTORY_OFF,
+                                        virt_pages.len(),
+                                        virt_pages,
+                                        FACTORY_PAGE
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+                machine.cpu.set_pc(program.entry_point as u32);
             }
             run_machine!(machine)
         }};
@@ -878,7 +1453,13 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                 };
                 run_machine!(machine)
             } else {
-                let cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
+                let mut cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
+                // C3 has no standard CLINT (line 7 is an ESP matrix line).
+                // Default mtimecmp=0 self-pends MTIP and breaks FreeRTOS first
+                // yield via FROM_CPU — same disable as rom-boot.
+                if bus.esp32c3_irq_routing {
+                    cpu.mtimecmp = u64::MAX;
+                }
                 setup_and_run!(cpu)
             }
         }

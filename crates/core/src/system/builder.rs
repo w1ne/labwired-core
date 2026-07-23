@@ -31,8 +31,8 @@ pub fn build_system_bus(system_path: Option<&Path>) -> anyhow::Result<SystemBus>
     Ok(bus)
 }
 
-/// Build a complete ESP32-classic (Xtensa LX6) simulation system from an
-/// already-parsed `SystemManifest`.
+/// Build a complete ESP32-classic (Xtensa LX6) dual-core simulation system
+/// from an already-parsed `SystemManifest`.
 ///
 /// This is the manifest-driven counterpart to the WASM path in
 /// `WasmSimulator::new_from_config_xtensa_esp32`. It:
@@ -44,17 +44,24 @@ pub fn build_system_bus(system_path: Option<&Path>) -> anyhow::Result<SystemBus>
 ///   2. Calls `attach_esp32_external_devices` to wire any devices declared
 ///      in `manifest.external_devices` (e.g. the SSD1680 e-paper panel on
 ///      SPI3) onto the already-configured bus.
+///   3. Constructs a real **APP_CPU** (`XtensaLx7::new_app_cpu`) — PRID
+///      0xABAB / core 1, starts **halted** until PRO releases it via the
+///      silicon boot path (`ets_set_appcpu_boot_addr` / DPORT unstall →
+///      `Machine` drains `APPCPU_BOOT_ADDR` and `unhalt()`s core 1). This is
+///      the same dual-core model the wasm playground and
+///      `e2e_labwired_ereader` use. Arduino-ESP32 / FreeRTOS need that second
+///      core (loopTask is pinned to `CONFIG_ARDUINO_RUNNING_CORE=1`).
 ///
 /// `system_path` is only used to resolve any chip descriptor path that
 /// still needs to be verified; pass the directory that contains the manifest.
 ///
-/// Returns `(bus, cpu)` so the caller can pass them to `Machine::new`
-/// without needing to call `configure_xtensa_esp32` again (which would
-/// clear the bus and lose the attached external devices).
+/// Returns `(bus, pro_cpu, app_cpu)` so the caller can
+/// `Machine::new(pro, bus).with_secondary_cpu(app)` without re-running
+/// `configure_xtensa_esp32` (which would clear the bus).
 pub fn build_esp32_system_from_manifest(
     manifest: &labwired_config::SystemManifest,
     system_path: &Path,
-) -> anyhow::Result<(SystemBus, XtensaLx7)> {
+) -> anyhow::Result<(SystemBus, XtensaLx7, XtensaLx7)> {
     let chip_path = system_path
         .parent()
         .unwrap_or_else(|| Path::new("."))
@@ -63,16 +70,17 @@ pub fn build_esp32_system_from_manifest(
     let _chip = labwired_config::ChipDescriptor::from_file(&chip_path)?;
 
     let mut bus = SystemBus::new();
-    let cpu = crate::system::xtensa::configure_xtensa_esp32(&mut bus);
+    let pro_cpu = crate::system::xtensa::configure_xtensa_esp32(&mut bus);
     crate::system::xtensa::attach_esp32_external_devices(&mut bus, manifest)?;
     bus.refresh_peripheral_index();
+    let app_cpu = XtensaLx7::new_app_cpu();
 
-    Ok((bus, cpu))
+    Ok((bus, pro_cpu, app_cpu))
 }
 
 /// Thin wrapper around [`build_esp32_system_from_manifest`] for callers that
 /// only have a path.  Parses the manifest from disk and delegates.
-pub fn build_esp32_system(system_path: &Path) -> anyhow::Result<(SystemBus, XtensaLx7)> {
+pub fn build_esp32_system(system_path: &Path) -> anyhow::Result<(SystemBus, XtensaLx7, XtensaLx7)> {
     info!("Loading ESP32 system manifest: {:?}", system_path);
     let manifest = labwired_config::SystemManifest::from_file(system_path)?;
     build_esp32_system_from_manifest(&manifest, system_path)

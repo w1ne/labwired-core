@@ -16,6 +16,13 @@ ram:
 # LabWired does not execute boot2 (flash is directly mapped), so it relocates
 # the reset vector past the stage-2 blob using this offset.
 reset_vector_offset: 0x100
+# Mask ROM @ 0x00000000 — rom_func_lookup reads well-known table at 0x14/0x18.
+# In-tree minimal B0-compatible image (crates/core/roms/rp2040/bootrom.bin).
+memory_regions:
+  - name: "bootrom"
+    base: 0x00000000
+    size: "16KB"
+    image_env: "LABWIRED_RP2040_BOOTROM"
 # The RP2040 HAL drives register setup through atomic SET/CLR/XOR aliases.
 atomic_register_aliases: true
 peripherals:

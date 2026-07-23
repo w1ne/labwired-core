@@ -285,7 +285,7 @@ boards:
     # nrf52840_onboarding_gpiote_event_in_fires_on_edge caught it. Offline
     # oracle/mmio/conformance suites pass unchanged. No live re-capture.
     # 2026-07-21: shared rcc.rs / pwr.rs gained the ADDITIVE STM32H7 RCC layout + PwrH7 (new enum variants for the stm32h735 onboarding). This board's RCC/PWR family structs are byte-for-byte untouched; the h735 work also added Cortex-M7 double-precision VFP decode (previously Unknown32), which no existing decode path uses. Its conformance/survival gates + 2189 core lib tests pass unchanged. No silicon re-capture.
-    drift_ack: 2026-07-21
+    drift_ack: 2026-07-23
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -517,7 +517,7 @@ boards:
     # path, reset value or layout touched — the esp32c3 reset oracle
     # (esp32c3_reset_values_match_silicon) is unaffected. Drift is the shared
     # esp32c3 file commit date only. No live re-capture.
-    drift_ack: 2026-07-22
+    drift_ack: 2026-07-23
 
   - id: nucleo-l476rg
     doc: docs/boards/nucleo-l476rg.md
@@ -601,7 +601,7 @@ boards:
     # nrf52840_onboarding_gpiote_event_in_fires_on_edge caught it. Offline
     # oracle/mmio/conformance suites pass unchanged. No live re-capture.
     # 2026-07-21: shared rcc.rs / pwr.rs gained the ADDITIVE STM32H7 RCC layout + PwrH7 (new enum variants for the stm32h735 onboarding). This board's RCC/PWR family structs are byte-for-byte untouched; the h735 work also added Cortex-M7 double-precision VFP decode (previously Unknown32), which no existing decode path uses. Its conformance/survival gates + 2189 core lib tests pass unchanged. No silicon re-capture.
-    drift_ack: 2026-07-21
+    drift_ack: 2026-07-23
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -688,7 +688,7 @@ boards:
     # nrf52840_onboarding_gpiote_event_in_fires_on_edge caught it. Offline
     # oracle/mmio/conformance suites pass unchanged. No live re-capture.
     # 2026-07-21: shared rcc.rs / pwr.rs gained the ADDITIVE STM32H7 RCC layout + PwrH7 (new enum variants for the stm32h735 onboarding). This board's RCC/PWR family structs are byte-for-byte untouched; the h735 work also added Cortex-M7 double-precision VFP decode (previously Unknown32), which no existing decode path uses. Its conformance/survival gates + 2189 core lib tests pass unchanged. No silicon re-capture.
-    drift_ack: 2026-07-21
+    drift_ack: 2026-07-23
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -783,7 +783,7 @@ boards:
     # nrf52840_onboarding_gpiote_event_in_fires_on_edge caught it. Offline
     # oracle/mmio/conformance suites pass unchanged. No live re-capture.
     # 2026-07-21: shared rcc.rs / pwr.rs gained the ADDITIVE STM32H7 RCC layout + PwrH7 (new enum variants for the stm32h735 onboarding). This board's RCC/PWR family structs are byte-for-byte untouched; the h735 work also added Cortex-M7 double-precision VFP decode (previously Unknown32), which no existing decode path uses. Its conformance/survival gates + 2189 core lib tests pass unchanged. No silicon re-capture.
-    drift_ack: 2026-07-21
+    drift_ack: 2026-07-23
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/afio.rs
@@ -876,7 +876,7 @@ boards:
     # nrf52840_onboarding_gpiote_event_in_fires_on_edge caught it. Offline
     # oracle/mmio/conformance suites pass unchanged. No live re-capture.
     # 2026-07-21: shared rcc.rs / pwr.rs gained the ADDITIVE STM32H7 RCC layout + PwrH7 (new enum variants for the stm32h735 onboarding). This board's RCC/PWR family structs are byte-for-byte untouched; the h735 work also added Cortex-M7 double-precision VFP decode (previously Unknown32), which no existing decode path uses. Its conformance/survival gates + 2189 core lib tests pass unchanged. No silicon re-capture.
-    drift_ack: 2026-07-21
+    drift_ack: 2026-07-23
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
@@ -1007,7 +1007,7 @@ boards:
     # passed), `esp32s3_reset_conformance`/`reset_values_match_silicon` unchanged,
     # full core lib suite 2329 green. No S3 board attached; no live re-capture
     # warranted — the new behaviour is post-reset and outside the anchored window.
-    drift_ack: 2026-07-21
+    drift_ack: 2026-07-23
     models:
       - crates/core/src/peripherals/esp32s3
       - crates/core/src/peripherals/esp_xtensa_common

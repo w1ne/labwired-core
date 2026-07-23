@@ -152,6 +152,27 @@ pub const MMU_FMT_C3: MmuFmt = MmuFmt {
     vaddr_mask: 0x7F_FFFF, // 8 MiB
 };
 
+/// ESP32 classic (LX6) MMU format (`soc/esp32/ext_mem_defs.h`):
+/// - invalid = BIT(8), page number in bits[7:0] (`DPORT_MMU_ADDRESS_MASK`)
+/// - DROM0 window 0x3F40_0000..0x3F80_0000 uses entry_id `(vaddr & 0x3FFFFF) >> 16`
+///   (entries 0..63). Full table has 384 entries (IROM/IRAM regions too).
+pub const MMU_FMT_ESP32: MmuFmt = MmuFmt {
+    invalid_bit: 1 << 8,
+    valid_val_mask: 0xFF,
+    vaddr_mask: 0x3F_FFFF,
+};
+
+/// ESP32 classic PRO/APP flash MMU table length (DPORT 0x3FF10000 / 0x3FF12000).
+pub const SOC_MMU_ENTRY_NUM_ESP32: usize = 384;
+
+/// Allocate an ESP32-classic MMU table (384 entries, invalid = BIT(8)).
+pub fn new_mmu_table_esp32() -> SharedMmuTable {
+    Arc::new(SharedMmu {
+        entries: Mutex::new(vec![MMU_FMT_ESP32.invalid_bit; SOC_MMU_ENTRY_NUM_ESP32]),
+        generation: AtomicU64::new(1),
+    })
+}
+
 #[derive(Debug)]
 pub struct FlashXipPeripheral {
     backing: Arc<Mutex<Vec<u8>>>,
@@ -270,8 +291,17 @@ impl FlashXipPeripheral {
         // Proper-model path: translate through the real hardware MMU table.
         if let Some(mmu) = &self.mmu_table {
             let vaddr = self.base.wrapping_add(offset as u32);
-            // entry_id = (vaddr & vaddr_mask) >> 16  (mmu_ll_get_entry_id)
-            let entry_id = (vaddr & self.fmt.vaddr_mask) >> 16;
+            // entry_id matches silicon `mmu_ll_get_entry_id`:
+            //   C3/classic: (vaddr >> 16) & 0x7F  (IROM 0x4200_xxxx and DROM
+            //     0x3C00_xxxx share the same 128-entry table — NOT
+            //     (vaddr & 0x7F_FFFF) >> 16, which wrongly yields entry 32 for
+            //     IROM and breaks cache2phys / OTA partition lookup).
+            //   S3: (vaddr & vaddr_mask) >> 16 with a 32 MiB mask.
+            let entry_id = if self.fmt.vaddr_mask == MMU_FMT_S3.vaddr_mask {
+                (vaddr & self.fmt.vaddr_mask) >> 16
+            } else {
+                (vaddr >> 16) & 0x7F
+            };
             let in_page = (vaddr & (PAGE_SIZE - 1)) as u64;
             let gen = mmu.generation.load(Ordering::Acquire);
             // Hot path: same MMU generation + same page → reuse phys_page with
@@ -417,8 +447,22 @@ impl Peripheral for FlashXipPeripheral {
         Ok(u32::from_le_bytes(b))
     }
 
-    fn write(&mut self, offset: u64, _value: u8) -> SimResult<()> {
-        Err(SimulationError::MemoryViolation(self.base as u64 + offset))
+    fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        // XIP is read-only on silicon after load, but LabWired's ELF loader
+        // writes flash/DROM segments through the bus before the guest runs.
+        // Honour writes into the shared flash backing at the translated
+        // physical address (identity fallback when the page is still
+        // unmapped so seeds can land before MMU init).
+        let phys = self.translate(offset).unwrap_or(offset);
+        let mut b = self.backing.lock().unwrap();
+        let i = phys as usize;
+        if i < b.len() {
+            b[i] = value;
+            self.invalidate_page_mirror();
+            Ok(())
+        } else {
+            Err(SimulationError::MemoryViolation(self.base as u64 + offset))
+        }
     }
 
     fn legacy_tick_active(&self) -> bool {
@@ -448,9 +492,10 @@ impl Esp32s3MmuTable {
         Self { table }
     }
 
-    fn entry_index(offset: u64) -> Option<usize> {
+    fn entry_index(&self, offset: u64) -> Option<usize> {
         let idx = (offset / 4) as usize;
-        (idx < SOC_MMU_ENTRY_NUM).then_some(idx)
+        let n = self.table.entries.lock().unwrap().len();
+        (idx < n).then_some(idx)
     }
 }
 
@@ -461,7 +506,7 @@ impl Peripheral for Esp32s3MmuTable {
     }
 
     fn read(&self, offset: u64) -> SimResult<u8> {
-        let word = match Self::entry_index(offset & !3) {
+        let word = match self.entry_index(offset & !3) {
             Some(i) => self.table.entries.lock().unwrap()[i],
             None => 0,
         };
@@ -469,7 +514,7 @@ impl Peripheral for Esp32s3MmuTable {
     }
 
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
-        if let Some(i) = Self::entry_index(offset & !3) {
+        if let Some(i) = self.entry_index(offset & !3) {
             let mut t = self.table.entries.lock().unwrap();
             let byte_off = (offset & 3) * 8;
             t[i] = (t[i] & !(0xFFu32 << byte_off)) | ((value as u32) << byte_off);
@@ -482,14 +527,14 @@ impl Peripheral for Esp32s3MmuTable {
     }
 
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
-        Ok(match Self::entry_index(offset & !3) {
+        Ok(match self.entry_index(offset & !3) {
             Some(i) => self.table.entries.lock().unwrap()[i],
             None => 0,
         })
     }
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
-        if let Some(i) = Self::entry_index(offset & !3) {
+        if let Some(i) = self.entry_index(offset & !3) {
             if std::env::var("LABWIRED_XIP_DEBUG").is_ok() {
                 eprintln!("mmu: entry[{i}] <- 0x{value:08x}");
             }
@@ -573,11 +618,18 @@ mod tests {
     }
 
     #[test]
-    fn writes_are_forbidden() {
+    fn writes_seed_backing_for_elf_loader() {
+        // Silicon XIP is read-only after boot, but LabWired's ELF loader
+        // writes DROM/IROM segments through the bus before the guest runs.
+        // Writes must land in the shared flash backing (identity when the
+        // page is still unmapped) so firmware bytes are visible to fetch.
         let backing = Arc::new(Mutex::new(vec![0u8; 64 * 1024]));
-        let mut p = FlashXipPeripheral::new_shared(backing, 0x4200_0000);
+        let mut p = FlashXipPeripheral::new_shared(backing.clone(), 0x4200_0000);
         p.map_identity();
-        let err = p.write(0, 0xAA).unwrap_err();
+        p.write(0, 0xAA).unwrap();
+        assert_eq!(backing.lock().unwrap()[0], 0xAA);
+        // Out-of-range physical offsets still fault.
+        let err = p.write(64 * 1024, 0xBB).unwrap_err();
         match err {
             SimulationError::MemoryViolation(_) => {}
             other => panic!("expected MemoryViolation, got {other:?}"),

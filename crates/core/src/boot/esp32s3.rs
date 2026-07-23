@@ -32,12 +32,17 @@ pub struct BootOpts {
     /// D-cache (0x3C00_0000) flash backing buffer; same role as
     /// `icache_backing` but for the read-only data window.
     pub dcache_backing: Option<std::sync::Arc<std::sync::Mutex<Vec<u8>>>>,
+    /// When set (typical factory app0 @ `0x10000`), XIP segments are stored at
+    /// `factory_flash_base + (vaddr & window_offset)` so MMU entries that map
+    /// VA pages → factory pages make both XIP fetch and `cache2phys` agree.
+    pub factory_flash_base: Option<u32>,
 }
 
 impl Default for BootOpts {
     fn default() -> Self {
         Self {
             stack_top_fallback: 0x3FCD_FFF0,
+            factory_flash_base: None,
             icache_backing: None,
             dcache_backing: None,
         }
@@ -109,9 +114,13 @@ pub fn fast_boot(
             ))
         })?;
         if let Some(window) = classify_xip(vaddr) {
-            let (backing_opt, target_phys_off) = match window {
+            let (backing_opt, window_off) = match window {
                 XipWindow::Icache(off) => (&opts.icache_backing, off),
                 XipWindow::Dcache(off) => (&opts.dcache_backing, off),
+            };
+            let target_phys_off = match opts.factory_flash_base {
+                Some(base) => base as usize + window_off,
+                None => window_off,
             };
             if let Some(backing) = backing_opt {
                 let mut buf = backing.lock().unwrap();
@@ -184,6 +193,44 @@ pub fn fast_boot(
         stack,
         segments_loaded,
     })
+}
+
+/// Seed the ESP32-S3 flash-cache MMU so `spi_flash_cache2phys` / OTA
+/// `esp_ota_get_running_partition` see the factory app (flash `0x10000`).
+///
+/// Fast-boot skips the 2nd-stage bootloader, so `DR_REG_MMU_TABLE`
+/// (`0x600C_5000`) stays invalid/zero. Firmware then does
+/// `cache2phys(code)` → `SPI_FLASH_CACHE2PHYS_FAIL` → assert
+/// `phys_offs != SPI_FLASH_CACHE2PHYS_FAIL` in `esp_ota_ops.c`.
+///
+/// Entry formula (esp-idf `mmu_ll_get_entry_id`):
+///   `(vaddr & 0x01FF_FFFF) >> 16`
+/// Valid entry = physical 64 KiB page number (bit 14 clear = valid).
+/// Factory app0 starts at flash page 1 (`0x10000`). IROM `0x4200_0000` and
+/// DROM `0x3C00_0000` share the low 25-bit window so page *P* of either
+/// maps through entry *P* → phys page `1 + P`. Leave higher entries free
+/// for `spi_flash_mmap` of the partition table @ `0x8000`.
+pub fn seed_factory_mmu_for_cache2phys(bus: &mut SystemBus, irom_pages: u32, drom_pages: u32) {
+    const MMU_TABLE: u64 = 0x600C_5000;
+    const FACTORY_PAGE: u32 = 1; // flash 0x10000 / 64 KiB
+    const VADDR_MASK: u32 = 0x01FF_FFFF;
+    let max_entry = 512u32;
+    let mut seeded = 0u32;
+    for (base, pages) in [(0x4200_0000u32, irom_pages), (0x3C00_0000u32, drom_pages)] {
+        for p in 0..pages {
+            let vaddr = base.wrapping_add(p * 0x1_0000);
+            let entry = (vaddr & VADDR_MASK) >> 16;
+            if entry >= max_entry {
+                continue;
+            }
+            let phys = FACTORY_PAGE.wrapping_add(p);
+            let _ = bus.write_u32(MMU_TABLE + (entry as u64) * 4, phys);
+            seeded += 1;
+        }
+    }
+    tracing::info!(
+        "esp32s3: seeded factory MMU ({seeded} entries, app0 @ flash 0x10000) for cache2phys"
+    );
 }
 
 #[cfg(test)]
@@ -280,6 +327,7 @@ mod tests {
                 stack_top_fallback: 0x3FCD_FFF0,
                 icache_backing: None,
                 dcache_backing: None,
+                factory_flash_base: None,
             },
         )
         .expect("fast_boot");
@@ -319,6 +367,7 @@ mod tests {
                 stack_top_fallback: 0x3FCD_FFF0,
                 icache_backing: None,
                 dcache_backing: None,
+                factory_flash_base: None,
             },
         );
 
@@ -372,6 +421,7 @@ mod tests {
                 stack_top_fallback: 0x3FCD_FFF0,
                 icache_backing: Some(backing.clone()),
                 dcache_backing: None,
+                factory_flash_base: None,
             },
         )
         .expect("fast_boot");

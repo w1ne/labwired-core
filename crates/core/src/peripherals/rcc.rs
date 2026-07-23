@@ -322,7 +322,9 @@ impl RccModel for F4Rcc {
 #[derive(Debug, Default, serde::Serialize)]
 pub struct V2Rcc {
     cr: u32,
+    icscr: u32,    // 0x04 — G4/WB MSI/HSI calibration (storage)
     cfgr: u32,     // 0x08 (G4/WB RM0440/RM0434: CR=0x00, ICSCR=0x04, CFGR=0x08)
+    pllcfgr: u32,  // 0x0C — G4/WB PLL config (HAL_RCC_GetSysClockFreq reads it)
     ahbenr: u32,   // AHB2ENR 0x8C
     apb1enr: u32,  // APB1LENR 0x9C
     apb2enr: u32,  // 0xA4
@@ -335,6 +337,9 @@ pub struct V2Rcc {
     bdcr1: u32,    // 0xF0 — WBA backup domain: LSI/LSESYS/LSE2 enable→ready pairs
     cfgr1: u32,    // 0x1C — WBA RCC_CFGR1 (SW→SWS); G4/WB use CFGR at 0x08
     reg28: u32,    // 0x28 — WBA: request bit20 ↔ acknowledge bit22 (deselect)
+    /// STM32WB RCC_EXTCFGR @ 0x108 — shared/CPU2 AHB prescalers + ready flags
+    /// (RM0434: SHDHPREF bit16, C2HPREF bit17). G4 has no EXTCFGR.
+    extcfgr: u32,
 }
 
 impl V2Rcc {
@@ -362,7 +367,9 @@ impl RccModel for V2Rcc {
     fn read_reg(&self, offset: u64) -> u32 {
         match offset {
             0x00 => self.cr,
+            0x04 => self.icscr,
             0x08 => self.cfgr,
+            0x0C => self.pllcfgr,
             0x1C => self.cfgr1,
             // 0x28 acknowledge (bit22) tracks the inverse of request bit20:
             // the SoC init clears bit20 and waits for bit22 to confirm.
@@ -383,22 +390,41 @@ impl RccModel for V2Rcc {
             0x9C => self.apb1enr,
             0xA4 => self.apb2enr,
             0xF0 => self.bdcr1,
+            // STM32WB EXTCFGR — dual-core AHB prescalers (CPU2 / shared domain).
+            0x108 => self.extcfgr,
             _ => 0,
         }
     }
     fn write_reg(&mut self, offset: u64, value: u32) {
         match offset {
             0x00 => self.cr = Self::ready(value),
+            0x04 => self.icscr = value,
+            0x0C => self.pllcfgr = value,
             // G4/WB RCC_CFGR (0x08): SW→SWS follows only once the requested
             // source is ready in CR — 00 MSI (bit1), 01 HSI16 (bit10),
             // 10 HSE (bit17), 11 PLL (bit25).
+            //
+            // STM32WB (RM0434) also exposes live prescaler-applied flags that
+            // HAL_RCC_ClockConfig polls with a 2 ms timeout:
+            //   bit16 HPREF, bit17 PPRE1F, bit18 PPRE2F.
+            // Silicon sets them once the new divider is in force; we set them
+            // immediately on any CFGR write so the poll succeeds.
             0x08 => {
-                self.cfgr = cfgr_with_gated_sws(
+                let mut cfgr = cfgr_with_gated_sws(
                     value,
                     self.cr,
                     self.cfgr,
                     [Some(1), Some(10), Some(17), Some(25)],
-                )
+                );
+                // Flags are read-only status in silicon; firmware writes never
+                // clear them. Always assert applied.
+                cfgr |= (1 << 16) | (1 << 17) | (1 << 18);
+                self.cfgr = cfgr;
+            }
+            // WB EXTCFGR @ 0x108: SHDHPRE[3:0], C2HPRE[7:4]; SHDHPREF (16) and
+            // C2HPREF (17) go high once the write is accepted.
+            0x108 => {
+                self.extcfgr = (value & 0x0000_00FF) | (1 << 16) | (1 << 17);
             }
             // WBA RCC_CFGR1 (0x1C): SW[1:0]→SWS[3:2], gated on the source's CR
             // ready bit — 00 HSI16 (bit10), 01 reserved, 10 HSE (bit17),

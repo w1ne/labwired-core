@@ -24,7 +24,8 @@
 //! The register stores the cpu IRQ slot (0..31) the source delivers to.
 //! Slot 0 is reserved for software interrupts; we treat any value 0..31
 //! as a valid binding and only return None when the peripheral has never
-//! been written.
+//! been written. (TRM "0 = disconnect" is encoded by not writing / writing
+//! then clearing the Option — see write path; live bindings keep 0..31.)
 //!
 //! ## Status registers (PRO_INTR_STATUS_REG_0..3)
 //!

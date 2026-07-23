@@ -692,6 +692,28 @@ pub enum Instruction {
         sd: u8,
         sm: u8,
     },
+    /// VMOV.F32 Sd, #imm — VFP expanded 8-bit immediate (T2).
+    VmovF32Imm {
+        sd: u8,
+        imm_bits: u32, // already expanded to IEEE-754 single bits
+    },
+    /// VCVT.F32.S32 / VCVT.F32.U32 — integer bits in Sm → float in Sd.
+    /// `signed` selects S32 vs U32 source; `fbits` is the fixed-point
+    /// fractional bit count (0 = pure integer, 1..=32 from the `#fbits` form).
+    VcvtF32FromInt {
+        sd: u8,
+        sm: u8,
+        signed: bool,
+        fbits: u8,
+    },
+    /// VCVT.S32.F32 / VCVT.U32.F32 — float in Sm → integer bits in Sd
+    /// (to-zero / truncate, matching the default FPSCR.RMode after reset).
+    VcvtIntFromF32 {
+        sd: u8,
+        sm: u8,
+        signed: bool,
+        fbits: u8,
+    },
 
     // -------- VFP load/store multiple + double-precision (Cortex-M7 FPv5-D16) --------
     // The register file is `fpu_s: [u32; 32]` (S0..S31); a double Dn occupies the
@@ -787,6 +809,22 @@ fn vfp_dp_regs(h1: u16, h2: u16) -> (u8, u8, u8) {
     let dn = (((n as u8) << 4) | vn) << 1;
     let dm = (((m as u8) << 4) | vm) << 1;
     (dd, dn, dm)
+}
+
+/// Expand a VFP modified-immediate 8-bit constant to IEEE-754 single bits.
+///
+/// ARM ARM (VFP "modified immediate"): bits `abcdefgh` of the imm8 form
+/// `a B bbbbb c defgh 000…0` where `B = !b` — i.e.
+/// `bits[31]=a`, `bits[30]=!b`, `bits[29:25]=bbbbb`, `bits[24:19]=cdefgh`.
+fn vfp_expand_imm8(imm8: u8) -> u32 {
+    let a = (imm8 >> 7) & 1;
+    let b = (imm8 >> 6) & 1;
+    let cdefgh = imm8 & 0x3F;
+    let b_inv = b ^ 1;
+    ((a as u32) << 31)
+        | ((b_inv as u32) << 30)
+        | (((b as u32) * 0x1F) << 25)
+        | ((cdefgh as u32) << 19)
 }
 
 /// Decodes a 16-bit Thumb instruction
@@ -1479,6 +1517,101 @@ pub fn decode_thumb_32(h1: u16, h2: u16) -> Instruction {
         let sd = (vd << 1) | (d as u8);
         let sm = (vm << 1) | (m as u8);
         return Instruction::VmovF32Reg { sd, sm };
+    }
+
+    // VFP unary group (VMOV imm / VCVT int↔float / VCVT fixed): h1 top matches
+    // 1110 1110 1D11 xxxx with h2[11:8]=1010. VMOV-reg handled above.
+    // Observed Arduino-M33 (H563) startup emissions:
+    //   eef7 5a00  vmov.f32 s11, #1.0
+    //   eeb8 7ae7  vcvt.f32.s32 s14, s15
+    //   eef8 7ae7  vcvt.f32.s32 s15, s15
+    //   eefc 7ac7  vcvt.u32.f32 s15, s14
+    //   eefa 6ae9  vcvt.f32.s32 s13, s13, #13
+    if (h1 & 0xFFB0) == 0xEEB0 && (h2 & 0x0F00) == 0x0A00 {
+        let d = (h1 >> 6) & 1;
+        let m = (h2 >> 5) & 1;
+        let vd = ((h2 >> 12) & 0xF) as u8;
+        let vm = (h2 & 0xF) as u8;
+        let sd = (vd << 1) | (d as u8);
+        let sm = (vm << 1) | (m as u8);
+        let lo = (h1 & 0xF) as u8;
+        let h2_mid = ((h2 >> 4) & 0xF) as u8; // bits 7:4
+
+        // VMOV.F32 Sd, #imm — h2[7:4]=0000 (imm4L in bits 3:0).
+        if h2_mid == 0x0 {
+            let imm8 = (lo << 4) | ((h2 & 0xF) as u8);
+            return Instruction::VmovF32Imm {
+                sd,
+                imm_bits: vfp_expand_imm8(imm8),
+            };
+        }
+
+        // Integer VCVT (no #fbits). opc2 in h1[2:0] with h1[3]=1; op = h2[7].
+        if (lo & 0x8) != 0 && lo != 0xA && lo != 0xB {
+            let opc2 = lo & 0x7;
+            let op = ((h2 >> 7) & 1) as u8;
+            match (opc2, op) {
+                (0b000, 1) => {
+                    return Instruction::VcvtF32FromInt {
+                        sd,
+                        sm,
+                        signed: true,
+                        fbits: 0,
+                    };
+                }
+                (0b000, 0) => {
+                    return Instruction::VcvtF32FromInt {
+                        sd,
+                        sm,
+                        signed: false,
+                        fbits: 0,
+                    };
+                }
+                (0b100, 1) => {
+                    return Instruction::VcvtIntFromF32 {
+                        sd,
+                        sm,
+                        signed: false,
+                        fbits: 0,
+                    };
+                }
+                (0b101, 1) => {
+                    return Instruction::VcvtIntFromF32 {
+                        sd,
+                        sm,
+                        signed: true,
+                        fbits: 0,
+                    };
+                }
+                (0b100, 0) | (0b101, 0) => {
+                    return Instruction::VcvtF32FromInt {
+                        sd,
+                        sm,
+                        signed: opc2 == 0b101,
+                        fbits: 0,
+                    };
+                }
+                _ => {}
+            }
+        }
+
+        // Fixed-point VCVT (to float).
+        if (lo == 0xA || lo == 0xB) && (h2 & 0x0010) == 0 {
+            let imm4 = (h2 & 0xF) as u8;
+            let odd = ((h2 >> 5) & 1) != 0;
+            let pair = 16u8.saturating_sub(imm4);
+            let fbits = if odd {
+                pair.saturating_mul(2).saturating_sub(1)
+            } else {
+                pair.saturating_mul(2)
+            };
+            return Instruction::VcvtF32FromInt {
+                sd,
+                sm: sd,
+                signed: lo == 0xA,
+                fbits: fbits.clamp(1, 32),
+            };
+        }
     }
 
     // -------- VFP double-precision + load/store multiple (Cortex-M7 FPv5-D16) --------

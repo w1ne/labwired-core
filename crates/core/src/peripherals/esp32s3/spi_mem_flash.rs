@@ -107,6 +107,11 @@ impl SpiMemFlash {
         }
     }
 
+    /// Shared SPI NOR backing (same buffer SPIMEM0/1 and FlashXip use).
+    pub fn flash_backing(&self) -> Arc<Mutex<Vec<u8>>> {
+        self.flash.clone()
+    }
+
     fn reg(&self, off: u64) -> u32 {
         self.regs.get(&off).copied().unwrap_or(0)
     }

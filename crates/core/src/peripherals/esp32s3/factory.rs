@@ -89,7 +89,15 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
                 .get("cpu_clock_hz")
                 .and_then(|v| v.as_u64())
                 .unwrap_or(240_000_000) as u32;
-            Box::new(systimer::Systimer::new(cpu_clock_hz))
+            // Stay on the per-cycle walk. `Systimer::new` defaults to
+            // scheduler-driven mode; without the `event-scheduler` feature the
+            // walk skips `uses_scheduler()` models, so the FreeRTOS tick alarm
+            // never advances → idle/`vTaskDelay` hang, loopTask stuck after
+            // first `delay()` (Arduino setup never runs).
+            Box::new(systimer::Systimer::new_with_source_legacy_tick(
+                cpu_clock_hz,
+                57, // ETS_SYSTIMER_TARGET0_INTR_SOURCE
+            ))
         }
         // I2C0 default source 42, I2C1 = 43 (ETS_I2C_EXT{0,1}_INTR_SOURCE). The
         // built controller has no I²C slaves attached; board-specific slaves
