@@ -95,6 +95,18 @@ pub(crate) fn register_read_bytes(
     slots: &HashMap<String, f64>,
     reg_values: &HashMap<String, u32>,
 ) -> Vec<u8> {
+    if !reg.fields.is_empty() {
+        let mut word = reg.reset;
+        for f in &reg.fields {
+            let value = slots.get(&f.source).copied().unwrap_or(0.0);
+            // Encode into `width_bits` bits (byte-width ceil for the helper), then mask.
+            let byte_w = f.width_bits.div_ceil(8);
+            let raw = encode_raw(value, f.encode.as_ref(), 1.0, byte_w, f.signed);
+            let mask = if f.width_bits >= 32 { u32::MAX } else { (1u32 << f.width_bits) - 1 };
+            word |= (raw & mask) << f.shift;
+        }
+        return pack(word, reg.width, reg.endian);
+    }
     let raw = if let Some(src) = &reg.source {
         let value = slots.get(src).copied().unwrap_or(0.0);
         let extra = scale_from_factor(reg, reg_values);
@@ -177,5 +189,48 @@ mod tests {
         let mut regs = HashMap::new();
         regs.insert("CTRL".to_string(), 0x08u32);
         assert_eq!(register_read_bytes(&r, &HashMap::new(), &regs), vec![0x08]);
+    }
+
+    #[test]
+    fn composite_fields_assemble_into_word() {
+        use labwired_config::{Encode, Endian, FieldSpec, RegisterAccess, RegisterSpec};
+        use std::collections::HashMap;
+        // 32-bit BE frame: thermocouple °C at bits[31:18] signed 14-bit, 0.25°C/LSB
+        // (scale 4.0); internal °C at bits[15:4] signed 12-bit, 0.0625°C/LSB (16.0).
+        let r = RegisterSpec {
+            name: "OUT".into(), addr: 0, width: 4, endian: Endian::Be,
+            access: RegisterAccess::R, reset: 0, source: None, encode: None, scale_from: None,
+            signed: false,
+            fields: vec![
+                FieldSpec { source: "tc".into(), shift: 18, width_bits: 14, signed: true,
+                            encode: Some(Encode { scale: 4.0, offset: 0.0, clamp_min: None, clamp_max: None }) },
+                FieldSpec { source: "internal".into(), shift: 4, width_bits: 12, signed: true,
+                            encode: Some(Encode { scale: 16.0, offset: 0.0, clamp_min: None, clamp_max: None }) },
+            ],
+        };
+        let mut slots = HashMap::new();
+        slots.insert("tc".to_string(), 100.0);      // 100°C → 400 = 0x190 in bits[31:18]
+        slots.insert("internal".to_string(), 25.0); // 25°C → 400 = 0x190 in bits[15:4]
+        let b = register_read_bytes(&r, &slots, &HashMap::new());
+        // word = (400 << 18) | (400 << 4) = 0x06400000 | 0x00001900 = 0x06401900, BE.
+        assert_eq!(b, vec![0x06, 0x40, 0x19, 0x00]);
+    }
+
+    #[test]
+    fn composite_field_negative_temperature() {
+        use labwired_config::{Encode, Endian, FieldSpec, RegisterAccess, RegisterSpec};
+        use std::collections::HashMap;
+        let r = RegisterSpec {
+            name: "OUT".into(), addr: 0, width: 4, endian: Endian::Be,
+            access: RegisterAccess::R, reset: 0, source: None, encode: None, scale_from: None,
+            signed: false,
+            fields: vec![FieldSpec { source: "tc".into(), shift: 18, width_bits: 14, signed: true,
+                encode: Some(Encode { scale: 4.0, offset: 0.0, clamp_min: None, clamp_max: None }) }],
+        };
+        let mut slots = HashMap::new();
+        slots.insert("tc".to_string(), -25.0); // -25°C → -100 → 14-bit two's-comp = 0x3F9C, <<18
+        let b = register_read_bytes(&r, &slots, &HashMap::new());
+        let word = u32::from_be_bytes([b[0], b[1], b[2], b[3]]);
+        assert_eq!((word >> 18) & 0x3FFF, 0x3F9C);
     }
 }
