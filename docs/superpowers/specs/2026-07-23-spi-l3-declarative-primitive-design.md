@@ -126,3 +126,19 @@ like the I²C fixture.
 - Struct rename touches the I²C schema types: mitigated by `type` aliases so no
   I²C-side code or YAML changes. Verified by the existing I²C engine tests
   staying green.
+
+## Deferred findings carried into Phase 2 (from the Phase-1 final review)
+
+- **N1 — auto-increment assumes a contiguous register block.** `build_read_buf`
+  concatenates every register with `addr ≥ start` back-to-back with no padding
+  for address gaps — byte-correct only for a contiguous-by-width data block
+  (ADXL345 DATAX0..DATAZ1 is). **Phase 2 must restrict declarative SPI parts to
+  contiguous data blocks**, or the engine needs address-stride awareness.
+- **N2 — `width ≤ 4` not validated** in the shared `declarative_regs` helpers
+  (`width_max` shift, BE `unpack` into `u32`). Pre-existing in the I²C engine via
+  the same shared code; reachable only from malformed config, not firmware. Add a
+  `width ≤ 4` check to the shared validator when convenient.
+- **M4** — `DeclarativeSpiKit`'s `cs_pin` ConfigKey.doc should state the `PA4`
+  default (fold in when real parts land).
+- **M5** — `from_yaml` empty-register-list check (cosmetic; `from_descriptor`
+  already bails, so `attach` rejects it).
