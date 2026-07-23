@@ -1,0 +1,49 @@
+# Sensirion SHT31 temperature + humidity sensor — declarative I²C command
+# device. The master writes a 16-bit big-endian opcode, then clocks out a
+# temperature word and a humidity word, each a 16-bit big-endian value followed
+# by a Sensirion CRC-8 (poly 0x31, init 0xFF). This descriptor is byte-compatible
+# with the real SHT3x single-shot read.
+#
+# Datasheet encodings (inverting the SHT3x conversion formulas):
+#   raw_T  = (T_c + 45) / 175 * 65535  ⇒  scale = 65535/175 = 374.485714…,
+#                                          offset = 45 * 65535/175 = 16851.857142…
+#   raw_RH = RH% / 100 * 65535         ⇒  scale = 65535/100 = 655.35
+#
+# No delay_us is set: like the hand-written Sensirion models the device is
+# modelled always-ready (most controllers don't yet drive advance_time_us).
+type: sht31
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x44
+    crc8: { poly: 0x31, init: 0xFF }
+    commands:
+      # Single-shot, high repeatability, clock stretching DISABLED (0x2400) and
+      # ENABLED (0x2C06). Both return the same temperature-then-humidity frame.
+      - name: single_shot_high_no_stretch
+        code: 0x2400
+        response:
+          - { source: temperature, width: 2, encode: { scale: 374.4857142857143, offset: 16851.857142857143 } }
+          - { source: humidity, width: 2, encode: { scale: 655.35 } }
+      - name: single_shot_high_clock_stretch
+        code: 0x2C06
+        response:
+          - { source: temperature, width: 2, encode: { scale: 374.4857142857143, offset: 16851.857142857143 } }
+          - { source: humidity, width: 2, encode: { scale: 655.35 } }
+      # Soft reset — write-only, queues no response.
+      - name: soft_reset
+        code: 0x30A2
+      # Status register read — a constant status word (power-on default 0x8010).
+      - name: read_status
+        code: 0xF32D
+        response:
+          - { const: 0x8010, width: 2 }
+
+metadata:
+  label: "Sensirion SHT31"
+  summary: "Temperature + humidity sensor over I²C (Sensirion CRC-8)."
+  category: i2c
+  inputs:
+    - { key: temperature, label: "Temperature", unit: "°C", min: -40, max: 125, default: 22 }
+    - { key: humidity, label: "Relative humidity", unit: "%", min: 0, max: 100, default: 45 }

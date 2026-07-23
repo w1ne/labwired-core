@@ -1,0 +1,58 @@
+# ROHM BH1750FVI ambient-light sensor — declarative I²C command device with
+# SINGLE-BYTE opcodes (`code_width: 1`). The master writes one opcode byte; a
+# measurement mode then clocks out a 16-bit big-endian raw count, with no CRC.
+#
+# Datasheet: lux = raw / 1.2 (at the default MTreg, H-resolution) ⇒ the model
+# encodes raw = lux × 1.2 (scale 1.2). The mode2 (0.5 lx) variants use the
+# same 1.2 scale here — the finer resolution is not separately
+# modelled. Power/reset opcodes carry no data and queue no response.
+#
+# Default address 0x23 (ADDR pin tied low; 0x5C when tied high).
+type: bh1750
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x23
+    code_width: 1
+    commands:
+      # Power / reset control — write-only, no response.
+      - name: power_down
+        code: 0x00
+      - name: power_on
+        code: 0x01
+      - name: reset
+        code: 0x07
+      # Continuous measurement modes.
+      - name: cont_h_res
+        code: 0x10
+        response:
+          - { source: lux, width: 2, encode: { scale: 1.2 } }
+      - name: cont_h_res2
+        code: 0x11
+        response:
+          - { source: lux, width: 2, encode: { scale: 1.2 } }
+      - name: cont_l_res
+        code: 0x13
+        response:
+          - { source: lux, width: 2, encode: { scale: 1.2 } }
+      # One-time measurement modes (device returns to power-down after the read).
+      - name: one_time_h_res
+        code: 0x20
+        response:
+          - { source: lux, width: 2, encode: { scale: 1.2 } }
+      - name: one_time_h_res2
+        code: 0x21
+        response:
+          - { source: lux, width: 2, encode: { scale: 1.2 } }
+      - name: one_time_l_res
+        code: 0x23
+        response:
+          - { source: lux, width: 2, encode: { scale: 1.2 } }
+
+metadata:
+  label: "ROHM BH1750"
+  summary: "Ambient-light sensor over I²C (single-byte opcodes)."
+  category: i2c
+  inputs:
+    - { key: lux, label: "Illuminance", unit: lx, min: 0, max: 65535, default: 450 }

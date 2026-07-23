@@ -794,6 +794,213 @@ pub struct DeviceDescriptor {
     /// block from this single spec instead of a hand-mirrored pair.
     #[serde(default)]
     pub emit: Option<DeviceEmit>,
+    /// Display + runtime metadata. `metadata.inputs` is load-bearing: it defines
+    /// the [`crate`]-external stimulus channels the device accepts (the same
+    /// channels the engine's generic device serves through `SimInput`). The
+    /// remaining display fields are carried for the phase-2 `KitMetadata`
+    /// derivation. Optional so the GPIO descriptors that predate the typed
+    /// schema still parse.
+    #[serde(default)]
+    pub metadata: Option<DeviceMetadata>,
+}
+
+/// Display + runtime metadata for a declarative device. Only `inputs` is
+/// consumed by the engine today; the display fields document phase-2 intent.
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct DeviceMetadata {
+    #[serde(default)]
+    pub label: Option<String>,
+    #[serde(default)]
+    pub summary: Option<String>,
+    #[serde(default)]
+    pub category: Option<String>,
+    /// The named stimulus channels this device accepts. For an `i2c_device`
+    /// primitive these are the measurement slots that register/response
+    /// `source:` keys read; each `default` seeds the value the part reports
+    /// until something drives it, and `min`/`max` bound accepted stimuli.
+    #[serde(default)]
+    pub inputs: Vec<InputSpec>,
+}
+
+/// One drivable stimulus channel (a measurement slot). Datasheet-facing
+/// engineering units; the engine owns the conversion to raw register form.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct InputSpec {
+    /// Stable key both `source:` fields and the runtime stimulus API address.
+    pub key: String,
+    pub label: String,
+    /// Engineering unit (e.g. `lx`, `ppm`, `°C`).
+    pub unit: String,
+    /// Inclusive accepted range.
+    pub min: f64,
+    pub max: f64,
+    /// Value the slot holds until driven. Absent ⇒ 0.0.
+    #[serde(default)]
+    pub default: Option<f64>,
+}
+
+/// The `behavior.i2c` section of a declarative `i2c_device` — a datasheet-shaped
+/// description of an I²C sensor's wire protocol, interpreted by the engine's
+/// generic device. Two device shapes are covered, and a descriptor is exactly
+/// one of them (see `registers` vs `commands`):
+///   * **register-pointer** devices (`registers:`) — the master writes a 1-byte
+///     pointer, then streams a fixed-width LE/BE word (VEML7700-style);
+///   * **command** devices (`commands:`) — the master writes a 16-bit big-endian
+///     command, then reads N words each followed by a CRC-8 byte
+///     (Sensirion-style).
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct I2cSpec {
+    /// 7-bit slave address used when the `external_devices` entry omits
+    /// `i2c_address`.
+    pub default_address: u8,
+    /// Command-code width in bytes for a command device. `2` (the default) is
+    /// the Sensirion 16-bit big-endian opcode; `1` is a single-byte opcode
+    /// device (BH1750-style, where each measurement mode / power command is one
+    /// byte). A command dispatches the instant the master has written
+    /// `code_width` bytes. Ignored by register devices.
+    #[serde(default = "default_code_width")]
+    pub code_width: u8,
+    /// CRC-8 parameters for command-response framing. Absent ⇒ responses carry
+    /// no per-word checksum.
+    #[serde(default)]
+    pub crc8: Option<Crc8Spec>,
+    /// Pointer-addressable registers. Present ⇒ this is a register device.
+    #[serde(default)]
+    pub registers: Vec<I2cRegister>,
+    /// Command set. Present ⇒ this is a command device.
+    #[serde(default)]
+    pub commands: Vec<I2cCommand>,
+}
+
+/// CRC-8 parameters. Sensirion parts use `poly 0x31`, `init 0xFF`, no final XOR.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+pub struct Crc8Spec {
+    pub poly: u8,
+    pub init: u8,
+}
+
+/// Byte order of a register's on-wire word.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Endian {
+    Le,
+    Be,
+}
+
+/// Register access. `r` = read-only (the master only reads it); `rw` = the
+/// master may also write it, and the model accumulates + echoes those writes.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum I2cAccess {
+    R,
+    Rw,
+}
+
+/// A pointer-addressable register.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct I2cRegister {
+    pub name: String,
+    /// Pointer byte the master writes to select this register.
+    pub addr: u8,
+    /// Width in bytes streamed on read / accumulated on write.
+    pub width: u8,
+    pub endian: Endian,
+    pub access: I2cAccess,
+    /// Power-on value (also the value read back before any write / measurement).
+    #[serde(default)]
+    pub reset: u32,
+    /// Input-channel key whose (encoded) value this register reports on read.
+    /// Absent ⇒ a plain storage register (reads back its written value / reset).
+    #[serde(default)]
+    pub source: Option<String>,
+    /// Linear encoding applied to the sourced measurement before it is placed
+    /// in the register word.
+    #[serde(default)]
+    pub encode: Option<Encode>,
+    /// A bit-field of another register selects an extra scale factor (e.g. a
+    /// gain / integration-time field that changes the counts-per-unit).
+    #[serde(default)]
+    pub scale_from: Option<ScaleFrom>,
+}
+
+/// Linear measurement encoding: `raw = value * scale + offset`, clamped to the
+/// optional `[clamp_min, clamp_max]` window (in raw units) before it is packed
+/// into the word. `scale` defaults to 1.0, `offset` to 0.0.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Encode {
+    #[serde(default = "one_f64")]
+    pub scale: f64,
+    #[serde(default)]
+    pub offset: f64,
+    #[serde(default)]
+    pub clamp_min: Option<f64>,
+    #[serde(default)]
+    pub clamp_max: Option<f64>,
+}
+
+fn one_f64() -> f64 {
+    1.0
+}
+
+/// A register-bit-field-keyed scale map. The engine extracts
+/// `(value(register) >> shift) & mask` and multiplies the encode scale by
+/// `map[field]` (or 1.0 when the field value is absent from the map).
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ScaleFrom {
+    /// Name of the register whose bit-field selects the factor.
+    pub register: String,
+    /// Mask applied after `shift`.
+    pub mask: u32,
+    #[serde(default)]
+    pub shift: u8,
+    /// Extracted field value → scale factor.
+    pub map: std::collections::BTreeMap<u32, f64>,
+}
+
+/// One command in a command device's command set.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct I2cCommand {
+    pub name: String,
+    /// 16-bit command code, big-endian on the wire.
+    pub code: u16,
+    /// Microseconds the part needs after the command before its response is
+    /// ready. Reads before this elapses return not-ready bytes. Absent ⇒ ready
+    /// immediately. Gated on simulated wall-clock (`advance_time_us`).
+    #[serde(default)]
+    pub delay_us: Option<u64>,
+    /// Response words in clock-out order. Empty ⇒ a write-only command.
+    #[serde(default)]
+    pub response: Vec<ResponseWord>,
+    /// Count of parameter words the master writes after the code (each a 16-bit
+    /// word plus CRC on the wire). Accepted and ignored.
+    #[serde(default)]
+    pub params_words: u8,
+}
+
+/// One word of a command response — either a live measurement (`source`) or a
+/// fixed constant (`const`). Exactly one of the two applies.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ResponseWord {
+    /// Input-channel key whose encoded value fills this word.
+    #[serde(default)]
+    pub source: Option<String>,
+    /// A fixed value (e.g. a data-ready flag or serial-number word).
+    #[serde(rename = "const", default)]
+    pub const_value: Option<u32>,
+    /// Word width in bytes (big-endian on the wire). Default 2.
+    #[serde(default = "default_response_width")]
+    pub width: u8,
+    /// Linear encoding for a `source` word.
+    #[serde(default)]
+    pub encode: Option<Encode>,
+}
+
+fn default_response_width() -> u8 {
+    2
+}
+
+fn default_code_width() -> u8 {
+    2
 }
 
 /// The canvas-compiler emit spec for a declarative device — the single source
@@ -879,6 +1086,11 @@ pub struct DeviceBehavior {
     /// the primitive decides the concrete type.
     #[serde(default)]
     pub params: std::collections::BTreeMap<String, serde_yaml::Value>,
+    /// For the `i2c_device` primitive: the datasheet-shaped wire-protocol spec
+    /// the engine's generic I²C device interprets. Absent for the GPIO
+    /// primitives (quadrature / matrix / one-wire / pulse-echo).
+    #[serde(default)]
+    pub i2c: Option<I2cSpec>,
 }
 
 impl DeviceDescriptor {
@@ -912,6 +1124,8 @@ pub fn embedded_device_yaml(device_type: &str) -> Option<&'static str> {
         "keypad" => Some(include_str!("../../../configs/devices/keypad.yaml")),
         "dht22" | "am2302" => Some(include_str!("../../../configs/devices/dht22.yaml")),
         "hc-sr04" | "hcsr04" => Some(include_str!("../../../configs/devices/hc_sr04.yaml")),
+        "sht31" => Some(include_str!("../../../configs/devices/sht31.yaml")),
+        "bh1750" => Some(include_str!("../../../configs/devices/bh1750.yaml")),
         _ => None,
     }
 }
