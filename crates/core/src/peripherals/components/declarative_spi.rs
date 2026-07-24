@@ -351,13 +351,13 @@ pub static ADXL345_KIT: LazyLock<DeclarativeSpiKit> = LazyLock::new(|| {
     .expect("adxl345_spi.yaml is a valid declarative spi descriptor")
 });
 
-/// Maxim MAX31855 thermocouple converter (declarative `max31855_spi.yaml`).
+/// Maxim MAX31855 thermocouple converter (declarative `max31855.yaml`).
 pub static MAX31855_KIT: LazyLock<DeclarativeSpiKit> = LazyLock::new(|| {
     DeclarativeSpiKit::from_yaml(
-        labwired_config::embedded_device_yaml("max31855_spi")
-            .expect("max31855_spi descriptor embedded"),
+        labwired_config::embedded_device_yaml("max31855")
+            .expect("max31855 descriptor embedded"),
     )
-    .expect("max31855_spi.yaml is a valid declarative spi descriptor")
+    .expect("max31855.yaml is a valid declarative spi descriptor")
 });
 
 #[cfg(test)]
@@ -602,7 +602,7 @@ behavior:
     #[test]
     fn max31855_reads_composite_frame_no_command() {
         let mut d = crate::peripherals::components::declarative_spi::GenericSpiDevice::from_yaml(
-            labwired_config::embedded_device_yaml("max31855_spi").unwrap(),
+            labwired_config::embedded_device_yaml("max31855").unwrap(),
             "PA4",
         )
         .unwrap();
@@ -628,7 +628,7 @@ behavior:
     #[test]
     fn max31855_parity() {
         let mut d = crate::peripherals::components::declarative_spi::GenericSpiDevice::from_yaml(
-            labwired_config::embedded_device_yaml("max31855_spi").unwrap(),
+            labwired_config::embedded_device_yaml("max31855").unwrap(),
             "PA4",
         )
         .unwrap();
@@ -659,7 +659,7 @@ behavior:
     #[test]
     fn input_value_reads_defaults_and_tracks_set_input() {
         let mut d = crate::peripherals::components::declarative_spi::GenericSpiDevice::from_yaml(
-            labwired_config::embedded_device_yaml("max31855_spi").unwrap(),
+            labwired_config::embedded_device_yaml("max31855").unwrap(),
             "PA4",
         )
         .unwrap();

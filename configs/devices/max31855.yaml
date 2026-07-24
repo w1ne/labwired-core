@@ -14,11 +14,9 @@
 # (hot junction) and `internal` (cold junction), so external callers/wasm
 # consumers see the same API.
 #
-# NOTE: `type` stays `max31855_spi` until the hand-written kit is deleted
-# (migration task MT5b), at which point it flips to `max31855` atomically with
-# removing the colliding hand-written registration. Registering two kits with
-# device_type "max31855" trips the registry uniqueness gate.
-type: max31855_spi
+# The hand-written kit has been removed (migration task MT5b); this
+# declarative kit is now the sole `max31855` registration.
+type: max31855
 
 behavior:
   primitive: spi_device
@@ -41,3 +39,8 @@ metadata:
   inputs:
     - { key: temperature, label: "Thermocouple temp", unit: "°C", min: -270, max: 1372, default: 25 }
     - { key: internal,    label: "Internal (cold-junction) temp", unit: "°C", min: -40, max: 125, default: 22 }
+  labs:
+    - board_id: max31855-thermocouple-lab
+      chip: stm32f103
+      example_dir: max31855-thermocouple-lab
+      demo_elf: demo-max31855-thermocouple-lab.elf

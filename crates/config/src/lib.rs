@@ -1241,7 +1241,7 @@ pub fn embedded_device_yaml(device_type: &str) -> Option<&'static str> {
         "hc-sr04" | "hcsr04" => Some(include_str!("../../../configs/devices/hc_sr04.yaml")),
         "sht31" => Some(include_str!("../../../configs/devices/sht31.yaml")),
         "adxl345_spi" => Some(include_str!("../../../configs/devices/adxl345_spi.yaml")),
-        "max31855_spi" => Some(include_str!("../../../configs/devices/max31855.yaml")),
+        "max31855" => Some(include_str!("../../../configs/devices/max31855.yaml")),
         "bh1750" => Some(include_str!("../../../configs/devices/bh1750.yaml")),
         _ => None,
     }

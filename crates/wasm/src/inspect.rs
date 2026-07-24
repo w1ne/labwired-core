@@ -1254,10 +1254,9 @@ impl WasmSimulator {
                     let Some(any) = device.as_any() else {
                         continue;
                     };
-                    // Try the declarative kit first — MT5b re-registers the
-                    // MAX31855 as a `GenericSpiDevice` and deletes the
-                    // hand-written `Max31855` type, so this generic path must
-                    // already exist before that deletion lands.
+                    // The MAX31855 is a declarative kit backed by
+                    // `GenericSpiDevice`; the hand-written concrete type was
+                    // removed in MT5b.
                     if let Some(gen) = any
                         .downcast_ref::<labwired_core::peripherals::components::GenericSpiDevice>(
                         )
@@ -1274,18 +1273,6 @@ impl WasmSimulator {
                             break;
                         }
                         continue;
-                    }
-                    if let Some(sensor) =
-                        any.downcast_ref::<labwired_core::peripherals::components::Max31855>()
-                    {
-                        let (tc_c, internal_c) = sensor.temperature();
-                        states.push(serde_json::json!({
-                            "id": binding.id,
-                            "kind": "max31855",
-                            "tc_c": tc_c,
-                            "internal_c": internal_c,
-                        }));
-                        break;
                     }
                 }
             }

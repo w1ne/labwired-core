@@ -26,7 +26,7 @@
 
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
-use labwired_core::peripherals::components::{Adxl345, Max31855};
+use labwired_core::peripherals::components::{Adxl345, GenericSpiDevice};
 use labwired_core::peripherals::i2c::I2cDevice;
 use labwired_core::peripherals::spi::SpiDevice;
 use std::collections::BTreeMap;
@@ -185,7 +185,11 @@ impl Case {
                 .unwrap_or_else(|e| panic!("{}: attach ADXL345: {e}", self.chip));
             }
             Attach::SpiMax31855 { cs_pin } => {
-                bus.attach_spi_device(self.controller, Box::new(Max31855::new(*cs_pin)))
+                let yaml = labwired_config::embedded_device_yaml("max31855")
+                    .expect("max31855 descriptor embedded");
+                let dev = GenericSpiDevice::from_yaml(yaml, cs_pin)
+                    .expect("max31855.yaml is a valid declarative spi descriptor");
+                bus.attach_spi_device(self.controller, Box::new(dev))
                     .unwrap_or_else(|e| panic!("{}: attach MAX31855: {e}", self.chip));
             }
         }
@@ -288,7 +292,7 @@ fn with_adxl345<R>(bus: &mut SystemBus, f: impl FnOnce(&mut Adxl345) -> R) -> R 
 }
 
 /// SPI counterpart of [`with_adxl345`].
-fn with_max31855<R>(bus: &mut SystemBus, f: impl FnOnce(&mut Max31855) -> R) -> R {
+fn with_max31855<R>(bus: &mut SystemBus, f: impl FnOnce(&mut GenericSpiDevice) -> R) -> R {
     use labwired_core::peripherals::esp32c3::spi::Esp32c3Spi;
     use labwired_core::peripherals::nrf52::serial_instance::Nrf52SerialInstance;
     use labwired_core::peripherals::spi::Spi;
@@ -299,19 +303,28 @@ fn with_max31855<R>(bus: &mut SystemBus, f: impl FnOnce(&mut Max31855) -> R) -> 
         };
         if let Some(c) = any.downcast_mut::<Spi>() {
             for dev in c.attached_devices.iter_mut() {
-                if let Some(m) = dev.as_any_mut().and_then(|a| a.downcast_mut::<Max31855>()) {
+                if let Some(m) = dev
+                    .as_any_mut()
+                    .and_then(|a| a.downcast_mut::<GenericSpiDevice>())
+                {
                     return f(m);
                 }
             }
         } else if let Some(c) = any.downcast_mut::<Esp32c3Spi>() {
             for dev in c.attached_devices_mut() {
-                if let Some(m) = dev.as_any_mut().and_then(|a| a.downcast_mut::<Max31855>()) {
+                if let Some(m) = dev
+                    .as_any_mut()
+                    .and_then(|a| a.downcast_mut::<GenericSpiDevice>())
+                {
                     return f(m);
                 }
             }
         } else if let Some(c) = any.downcast_mut::<Nrf52SerialInstance>() {
             for dev in c.attached_spi_devices_mut() {
-                if let Some(m) = dev.as_any_mut().and_then(|a| a.downcast_mut::<Max31855>()) {
+                if let Some(m) = dev
+                    .as_any_mut()
+                    .and_then(|a| a.downcast_mut::<GenericSpiDevice>())
+                {
                     return f(m);
                 }
             }
