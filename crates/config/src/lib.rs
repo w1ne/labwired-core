@@ -826,16 +826,27 @@ pub struct DeviceMetadata {
     /// a hand-written kit's manifest entry byte-for-byte.
     #[serde(default)]
     pub config_keys: Vec<ConfigKeySpec>,
-    /// Starter labs that ship a one-click demo using this device, mirrored into
-    /// the manifest exactly like a hand-written kit's `labs`.
-    #[serde(default)]
-    pub labs: Vec<LabSpec>,
     /// The named stimulus channels this device accepts. For an `i2c_device`
     /// primitive these are the measurement slots that register/response
     /// `source:` keys read; each `default` seeds the value the part reports
     /// until something drives it, and `min`/`max` bound accepted stimuli.
     #[serde(default)]
     pub inputs: Vec<InputSpec>,
+    /// Starter labs that ship a one-click demo using this device, mirrored into
+    /// the manifest exactly like a hand-written kit's `labs` (mirrors
+    /// `kit::LabRef`). Absent ⇒ the kit advertises no labs.
+    #[serde(default)]
+    pub labs: Vec<LabDescriptor>,
+}
+
+/// A demo lab a declarative device advertises (mirrors `kit::LabRef`). Optional;
+/// absent ⇒ the kit advertises no labs.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct LabDescriptor {
+    pub board_id: String,
+    pub chip: String,
+    pub example_dir: String,
+    pub demo_elf: String,
 }
 
 /// A `config:` key advertised in the peripheral manifest. Mirrors the engine's
@@ -847,15 +858,6 @@ pub struct ConfigKeySpec {
     /// One of `str` | `int` | `bool` | `float`.
     pub ty: String,
     pub doc: String,
-}
-
-/// A starter-lab reference, mirroring the engine's `KitMetadata::labs` entries.
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct LabSpec {
-    pub board_id: String,
-    pub chip: String,
-    pub example_dir: String,
-    pub demo_elf: String,
 }
 
 /// One drivable stimulus channel (a measurement slot). Datasheet-facing
@@ -1050,6 +1052,32 @@ pub struct RegisterSpec {
     /// `source`-less register.
     #[serde(default)]
     pub resolution: Option<f64>,
+    /// The register word is a signed two's-complement quantity of `width`
+    /// bytes. A negative sourced measurement is encoded as its two's-complement
+    /// bit pattern rather than clamped to zero. Default false (unsigned).
+    #[serde(default)]
+    pub signed: bool,
+    /// Bit-field composition: when non-empty, the register word is ASSEMBLED
+    /// from these fields (each a sourced measurement placed at a bit offset)
+    /// rather than from the single top-level `source`. Used by parts like the
+    /// MAX31855 whose 32-bit frame packs temperature + status sub-fields.
+    #[serde(default)]
+    pub fields: Vec<FieldSpec>,
+}
+
+/// One sourced bit-field within a composite register word (see
+/// [`RegisterSpec::fields`]). The encoded value occupies `width_bits` bits at
+/// bit offset `shift`; `signed` packs negatives as two's-complement within
+/// those bits.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct FieldSpec {
+    pub source: String,
+    pub shift: u8,
+    pub width_bits: u8,
+    #[serde(default)]
+    pub signed: bool,
+    #[serde(default)]
+    pub encode: Option<Encode>,
 }
 
 /// Accept either a single `scale_from` mapping or a YAML list of them, yielding
@@ -1278,6 +1306,8 @@ pub fn embedded_device_yaml(device_type: &str) -> Option<&'static str> {
         "dht22" | "am2302" => Some(include_str!("../../../configs/devices/dht22.yaml")),
         "hc-sr04" | "hcsr04" => Some(include_str!("../../../configs/devices/hc_sr04.yaml")),
         "sht31" => Some(include_str!("../../../configs/devices/sht31.yaml")),
+        "adxl345_spi" => Some(include_str!("../../../configs/devices/adxl345_spi.yaml")),
+        "max31855" => Some(include_str!("../../../configs/devices/max31855.yaml")),
         "bh1750" => Some(include_str!("../../../configs/devices/bh1750.yaml")),
         "veml7700" => Some(include_str!("../../../configs/devices/veml7700.yaml")),
         _ => None,
@@ -3947,6 +3977,8 @@ metadata:
             scale_from: vec![],
             source_scale: None,
             resolution: None,
+            signed: false,
+            fields: vec![],
         };
     }
 }

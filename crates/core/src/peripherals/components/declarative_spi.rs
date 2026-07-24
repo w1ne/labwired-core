@@ -19,7 +19,7 @@ use std::collections::HashMap;
 use anyhow::{bail, Context, Result};
 use labwired_config::{DeviceDescriptor, RegisterAccess, RegisterSpec, SpiFraming};
 
-use super::declarative_regs::{register_read_bytes, unpack};
+use super::declarative_regs::{leak_labs, register_read_bytes, unpack};
 use crate::peripherals::spi::SpiDevice;
 use crate::sim_input::{InputChannel, SimInput, SimInputError};
 
@@ -129,6 +129,13 @@ impl GenericSpiDevice {
         out
     }
 
+    /// Current engineering-unit value of a SimInput stimulus channel (the value
+    /// last set via `set_input`, or the descriptor's declared default). Returns
+    /// `None` if the device has no such channel. Lets consumers (e.g. the wasm
+    /// inspector) read a declarative device's state without a concrete-type downcast.
+    pub fn input_value(&self, key: &str) -> Option<f64> {
+        self.slots.get(key).copied()
+    }
 }
 
 impl SpiDevice for GenericSpiDevice {
@@ -292,7 +299,13 @@ fn leak_metadata(
         transport: Transport::Spi,
         category: Category::Spi,
         config_keys,
-        labs: &[],
+        labs: leak_labs(
+            descriptor
+                .metadata
+                .as_ref()
+                .map(|m| m.labs.as_slice())
+                .unwrap_or(&[]),
+        ),
         inputs: channels,
     }))
 }
@@ -307,6 +320,44 @@ impl PeripheralKit for DeclarativeSpiKit {
         ctx.attach_spi_device(Box::new(device))
     }
 }
+
+// ─── Registry statics ──────────────────────────────────────────────────────
+//
+// A `DeclarativeSpiKit` is parsed from YAML at runtime, but the registry
+// (`registry::KITS`) is a const slice of `&'static dyn PeripheralKit`. A
+// `static LazyLock<DeclarativeSpiKit>` is the const-initialisable cell that
+// bridges the two: the descriptor is parsed once on first access, and the
+// `PeripheralKit` impl below forwards through it. Real parts get one static
+// each here and one line in `registry::KITS`; the descriptor lives entirely in
+// `configs/devices/*.yaml`.
+
+use std::sync::LazyLock;
+
+impl PeripheralKit for LazyLock<DeclarativeSpiKit> {
+    fn metadata(&self) -> &'static KitMetadata {
+        LazyLock::force(self).metadata()
+    }
+    fn attach(&self, ctx: &mut AttachCtx<'_>) -> Result<()> {
+        LazyLock::force(self).attach(ctx)
+    }
+}
+
+/// Analog Devices ADXL345 accelerometer (declarative `adxl345_spi.yaml`).
+pub static ADXL345_KIT: LazyLock<DeclarativeSpiKit> = LazyLock::new(|| {
+    DeclarativeSpiKit::from_yaml(
+        labwired_config::embedded_device_yaml("adxl345_spi")
+            .expect("adxl345_spi descriptor embedded"),
+    )
+    .expect("adxl345_spi.yaml is a valid declarative spi descriptor")
+});
+
+/// Maxim MAX31855 thermocouple converter (declarative `max31855.yaml`).
+pub static MAX31855_KIT: LazyLock<DeclarativeSpiKit> = LazyLock::new(|| {
+    DeclarativeSpiKit::from_yaml(
+        labwired_config::embedded_device_yaml("max31855").expect("max31855 descriptor embedded"),
+    )
+    .expect("max31855.yaml is a valid declarative spi descriptor")
+});
 
 #[cfg(test)]
 mod tests {
@@ -405,6 +456,49 @@ mod tests {
         ));
         assert_eq!(m.inputs.len(), 1);
         assert!(m.inputs.iter().any(|c| c.key == "accel_x"));
+        // No `metadata.labs` in FIXTURE ⇒ no labs advertised.
+        assert_eq!(m.labs.len(), 0);
+    }
+
+    const LABS_FIXTURE: &str = r#"
+type: test_spi_labs_fixture
+
+behavior:
+  primitive: spi_device
+  spi:
+    framing:
+      command_bytes: 0
+    registers:
+      - name: TEMP
+        addr: 0
+        width: 4
+        endian: be
+        access: r
+        source: temperature
+        encode: { scale: 1.0 }
+
+metadata:
+  label: "Declarative SPI labs fixture"
+  summary: "Test-only fixture asserting metadata.labs round-trips."
+  category: spi
+  inputs:
+    - { key: temperature, label: "Temperature", unit: "°C", min: -50, max: 200, default: 100 }
+  labs:
+    - board_id: "test-board-lab"
+      chip: "stm32f103"
+      example_dir: "spi_test_fixture"
+      demo_elf: "spi_test_fixture.elf"
+"#;
+
+    #[test]
+    fn declarative_spi_kit_advertises_labs_from_descriptor_metadata() {
+        let kit = DeclarativeSpiKit::from_yaml(LABS_FIXTURE).unwrap();
+        let labs = kit.metadata().labs;
+        assert_eq!(labs.len(), 1);
+        assert_eq!(labs[0].board_id, "test-board-lab");
+        assert_eq!(labs[0].chip, "stm32f103");
+        assert_eq!(labs[0].example_dir, "spi_test_fixture");
+        assert_eq!(labs[0].demo_elf, "spi_test_fixture.elf");
     }
 
     /// A MAX31855-style read-only part: `command_bytes: 0` means CS↓ clocks
@@ -476,5 +570,104 @@ behavior:
       - { name: A, addr: 0, width: 1, endian: le, access: r }
 "#;
         assert!(DeclarativeSpiKit::from_yaml(yaml).is_err());
+    }
+
+    #[test]
+    fn adxl345_kit_reads_devid_and_signed_axis() {
+        let kit = DeclarativeSpiKit::from_yaml(
+            labwired_config::embedded_device_yaml("adxl345_spi").unwrap(),
+        )
+        .unwrap();
+        assert_eq!(kit.metadata().device_type, "adxl345_spi");
+        // Build the device and read DEVID + a negative Z.
+        let mut d = crate::peripherals::components::declarative_spi::GenericSpiDevice::from_yaml(
+            labwired_config::embedded_device_yaml("adxl345_spi").unwrap(),
+            "PA4",
+        )
+        .unwrap();
+        d.cs_select();
+        d.transfer(0x80); // read DEVID (0x00)
+        assert_eq!(d.transfer(0x00), 0xE5);
+        d.cs_release();
+        d.set_input("accel_z", -1.0).unwrap();
+        d.cs_select();
+        d.transfer(0x80 | 0x36); // read DATAZ0
+        let lo = d.transfer(0x00);
+        let hi = d.transfer(0x00);
+        d.cs_release();
+        assert_eq!(u16::from_le_bytes([lo, hi]), 0xFF00); // -256 two's-complement
+    }
+
+    #[test]
+    fn max31855_reads_composite_frame_no_command() {
+        let mut d = crate::peripherals::components::declarative_spi::GenericSpiDevice::from_yaml(
+            labwired_config::embedded_device_yaml("max31855").unwrap(),
+            "PA4",
+        )
+        .unwrap();
+        d.set_input("temperature", 100.0).unwrap(); // 400 = 0x190 @ [31:18]
+        d.set_input("internal", 25.0).unwrap(); // 400 = 0x190 @ [15:4]
+        d.cs_select(); // command_bytes:0 → data phase immediately
+        let b: Vec<u8> = (0..4).map(|_| d.transfer(0x00)).collect();
+        d.cs_release();
+        assert_eq!(b, vec![0x06, 0x40, 0x19, 0x00]);
+        // A negative thermocouple reading sets the sign bits.
+        d.set_input("temperature", -25.0).unwrap();
+        d.cs_select();
+        let n: Vec<u8> = (0..4).map(|_| d.transfer(0x00)).collect();
+        d.cs_release();
+        let word = u32::from_be_bytes([n[0], n[1], n[2], n[3]]);
+        assert_eq!((word >> 18) & 0x3FFF, 0x3F9C); // -100 in 14-bit two's-complement
+    }
+
+    /// Parity anchor: the declarative descriptor must reproduce the
+    /// hand-written `Max31855` model's default power-on frame and stimulus
+    /// response byte-for-byte. Default word = (100<<18)|(352<<4) = 0x01901600
+    /// (tc=25.0°C, internal=22.0°C, fault=0 — see components/max31855.rs).
+    #[test]
+    fn max31855_parity() {
+        let mut d = crate::peripherals::components::declarative_spi::GenericSpiDevice::from_yaml(
+            labwired_config::embedded_device_yaml("max31855").unwrap(),
+            "PA4",
+        )
+        .unwrap();
+
+        // Default frame: tc=25.0 -> 100<<18, internal=22.0 -> 352<<4.
+        d.cs_select();
+        let default_frame: Vec<u8> = (0..4).map(|_| d.transfer(0x00)).collect();
+        d.cs_release();
+        assert_eq!(default_frame, vec![0x01, 0x90, 0x16, 0x00]);
+
+        // After driving both stimuli: tc=100.0 -> 400<<18, internal=25.0 -> 400<<4.
+        d.set_input("temperature", 100.0).unwrap();
+        d.set_input("internal", 25.0).unwrap();
+        d.cs_select();
+        let driven_frame: Vec<u8> = (0..4).map(|_| d.transfer(0x00)).collect();
+        d.cs_release();
+        assert_eq!(driven_frame, vec![0x06, 0x40, 0x19, 0x00]);
+
+        // Negative thermocouple reading: -100 in 14-bit two's-complement.
+        d.set_input("temperature", -25.0).unwrap();
+        d.cs_select();
+        let neg: Vec<u8> = (0..4).map(|_| d.transfer(0x00)).collect();
+        d.cs_release();
+        let word = u32::from_be_bytes([neg[0], neg[1], neg[2], neg[3]]);
+        assert_eq!((word >> 18) & 0x3FFF, 0x3F9C);
+    }
+
+    #[test]
+    fn input_value_reads_defaults_and_tracks_set_input() {
+        let mut d = crate::peripherals::components::declarative_spi::GenericSpiDevice::from_yaml(
+            labwired_config::embedded_device_yaml("max31855").unwrap(),
+            "PA4",
+        )
+        .unwrap();
+
+        assert_eq!(d.input_value("temperature"), Some(25.0));
+        assert_eq!(d.input_value("internal"), Some(22.0));
+        assert!(d.input_value("nope").is_none());
+
+        d.set_input("temperature", 100.0).unwrap();
+        assert_eq!(d.input_value("temperature"), Some(100.0));
     }
 }
