@@ -4774,13 +4774,28 @@ fn test_exec_movsp_safe_path() {
     );
 }
 
-/// MOVSP with adjacent frame live: WS bit (WB+1) SET → raises ExceptionRaised{cause:5}.
+/// MOVSP with adjacent frame live: WS bit (WB+1) SET → raises AllocaCause
+/// (EXCCAUSE=5) and vectors to the kernel exception handler.
 ///
-/// Plan 1 defers the spill path; AllocaCause (EXCCAUSE=5) is raised instead.
-/// TODO(plan2): replace with full register-spill implementation.
+/// Xtensa ISA RM §8: MOVSP must spill the caller's window when the adjacent
+/// frame (WindowBase+1) is live; silicon surfaces this as the AllocaCause
+/// exception (EXCCAUSE=5) so the firmware window-spill handler runs. LabWired
+/// models that faithful path in `faithful_windows` (rom-boot) mode via
+/// `vector_exception(5)`: EPC1←PC, EXCCAUSE←5, PS.EXCM←1, PC←VECBASE+0x300
+/// (_KernelExceptionVector), then execution CONTINUES at the handler (step
+/// returns Ok — exactly like silicon, which does not stop the pipeline).
+///
+/// The default fast-boot / shadow-stack mode deliberately performs a plain
+/// register move here instead of faulting: the shadow stacks already carry the
+/// live frames for RETW, and vectoring mid-boot into an unprimed handler
+/// hard-faults ESP-IDF's `heap_caps_init` VLA/alloca path (regression fixed in
+/// #618). So the ISA AllocaCause semantics are asserted against faithful mode,
+/// where they are real — not against the fast-boot shortcut.
 #[test]
 fn test_exec_movsp_overflow_raises_exception() {
     let (mut cpu, mut bus) = make_cpu_bus();
+    // Exercise the ISA-faithful windowed-register path.
+    cpu.faithful_windows = true;
 
     // Set WB=0 and force WS bit 1 (= (WB+1) & 0xF) to be SET → live adjacent frame.
     cpu.regs.set_windowbase(0);
@@ -4793,13 +4808,26 @@ fn test_exec_movsp_overflow_raises_exception() {
     cpu.set_register(4, 0x1234_5678);
     write_insns(&mut bus, TEST_PC as u64, &[enc_movsp(3, 4)]);
 
-    let err = cpu
-        .step(&mut bus, &[], &labwired_core::SimulationConfig::default())
-        .expect_err("MOVSP with live adjacent frame must raise exception");
-    assert!(
-        matches!(err, SimulationError::ExceptionRaised { cause: 5, .. }),
-        "MOVSP overflow: expected ExceptionRaised{{cause:5}}, got {:?}",
-        err
+    cpu.step(&mut bus, &[], &labwired_core::SimulationConfig::default())
+        .expect("MOVSP AllocaCause must vector to the handler, not abort the run");
+
+    // AllocaCause (EXCCAUSE=5) raised and vectored to the kernel handler.
+    assert_eq!(
+        cpu.sr.read(EXCCAUSE_ID),
+        5,
+        "EXCCAUSE must be 5 (AllocaCause)"
+    );
+    assert_eq!(
+        cpu.sr.read(EPC1_ID),
+        TEST_PC,
+        "EPC1 must be the faulting MOVSP PC"
+    );
+    assert!(cpu.ps.excm(), "PS.EXCM must be 1 after AllocaCause");
+    let vecbase = cpu.sr.read(VECBASE_ID);
+    assert_eq!(
+        cpu.get_pc(),
+        vecbase.wrapping_add(KERNEL_VECTOR_OFFSET_TEST),
+        "PC must redirect to VECBASE + 0x300 (_KernelExceptionVector)"
     );
 }
 
@@ -5059,11 +5087,19 @@ fn test_general_exception_remu_redirects_pc() {
 }
 
 /// G1: MOVSP with live adjacent frame redirects PC to kernel vector (AllocaCause=5).
+///
+/// Faithful (rom-boot) mode: `vector_exception(5)` drives the real Xtensa flow
+/// (EPC1←PC, EXCCAUSE←5, PS.EXCM←1, PC←_KernelExceptionVector) and returns Ok,
+/// mirroring silicon continuing into the handler. See
+/// `test_exec_movsp_overflow_raises_exception` for why the default fast-boot
+/// path (a plain register move) is not where AllocaCause is asserted (#618).
 #[test]
 fn test_general_exception_movsp_alloca_redirects_pc() {
     let (mut cpu, mut bus) = make_cpu_bus();
+    // Exercise the ISA-faithful windowed-register path.
+    cpu.faithful_windows = true;
 
-    // Clear PS.EXCM so we can observe it being set.
+    // Clear PS.EXCM so we can observe it being set by the vectoring.
     cpu.ps.set_excm(false);
 
     // Set WB=0 and mark WS bit 1 live → triggers AllocaCause.
@@ -5073,14 +5109,8 @@ fn test_general_exception_movsp_alloca_redirects_pc() {
     cpu.set_register(4, 0x1234_5678);
     write_insns(&mut bus, TEST_PC as u64, &[enc_movsp(3, 4)]);
 
-    let err = cpu
-        .step(&mut bus, &[], &labwired_core::SimulationConfig::default())
-        .unwrap_err();
-    assert!(
-        matches!(err, SimulationError::ExceptionRaised { cause: 5, pc } if pc == TEST_PC),
-        "MOVSP alloca: ExceptionRaised{{cause:5, pc=TEST_PC}} expected, got: {:?}",
-        err
-    );
+    cpu.step(&mut bus, &[], &labwired_core::SimulationConfig::default())
+        .expect("MOVSP AllocaCause must vector to the handler, not abort the run");
     assert_eq!(
         cpu.sr.read(EPC1_ID),
         TEST_PC,
