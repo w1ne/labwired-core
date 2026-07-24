@@ -26,13 +26,16 @@
 //! absolute slow-clock rate is not modelled — only that time *advances*
 //! monotonically, which is all the deadline comparisons observe (and what the
 //! C3 boot budget + every existing test rely on). The real silicon rate — the
-//! internal RC_SLOW oscillator, measured on this board at ~136.7 kHz over the
-//! built-in USB-JTAG (see [`RTC_SLOW_HZ_MEASURED`]) — can be opted into via
+//! internal RC_SLOW oscillator, measured on this board at ~148.15 kHz via the
+//! TIMG0 calibration protocol over the built-in USB-JTAG (see
+//! [`RTC_SLOW_HZ_MEASURED`]) — can be opted into via
 //! [`Esp32c3RtcTimer::set_slow_clock_hz`], which scales the firmware-visible
 //! time down to that rate at readout for firmware that needs absolute RTC
-//! wall-time. (Trade-off: RTC busy-wait delays then span ~1170x more simulated
-//! cycles, since one RTC tick becomes ~1170 CPU cycles.) Two coexisting drive
-//! modes:
+//! wall-time. That same constant is what the TIMG0 calibration feature reports
+//! back through the register protocol, so a firmware that calibrates and a
+//! firmware that reads the counter observe the identical rate (no second pin).
+//! (Trade-off: RTC busy-wait delays then span ~1080x more simulated cycles,
+//! since one RTC tick becomes ~1080 CPU cycles.) Two coexisting drive modes:
 //!
 //! * **Scheduler mode** (`event-scheduler` feature + a [`crate::CycleClock`]
 //!   attached by `SystemBus::add_peripheral`): `uses_scheduler()` is true, the
@@ -78,12 +81,36 @@ const TIME_UPDATE_BIT: u32 = 1 << 31;
 /// free-running cycle count down to the RTC slow-clock rate.
 pub const CPU_HZ: u64 = 160_000_000;
 
-/// RTC slow-clock rate MEASURED on real silicon (this board, over the built-in
-/// USB-JTAG: SYSTIMER-referenced 16.0 MHz time base gave 136.7 kHz for the
-/// `RTC_CNTL` TIME counter — the internal RC_SLOW oscillator, nominal 150 kHz,
-/// calibrated ~136–137 kHz). At 160 MHz CPU this is ~1170 CPU cycles per RTC
-/// tick. See `Esp32c3RtcTimer::set_slow_clock_hz`.
-pub const RTC_SLOW_HZ_MEASURED: u64 = 136_700;
+/// XTAL frequency the C3 RTC_SLOW calibration counts against (the reference
+/// clock in the TIMG0 RTCCALICFG feature — IDF's `rtc_clk_cal` counts XTAL
+/// cycles over N RTC_SLOW cycles). Fixed 40 MHz on the ESP32-C3. The TIMG
+/// calibration model in `peripherals/esp32/timg.rs` uses THIS + [`RTC_SLOW_HZ_MEASURED`]
+/// to synthesise a self-consistent cal result — so firmware that calibrates
+/// observes exactly the rate this model ticks RTC_SLOW at, not an unrelated pin.
+pub const C3_XTAL_HZ: u64 = 40_000_000;
+
+/// The model's single, deterministic RTC_SLOW frequency — the ONE constant that
+/// both the free-running RTC_CNTL TIME counter (this file, via
+/// [`Esp32c3RtcTimer::set_slow_clock_hz`]) and the TIMG0 calibration feature
+/// (`peripherals/esp32/timg.rs`, via the C3 [`crate::peripherals::esp32::timg::RtcCalProfile`])
+/// derive from. Sim time is deterministic, so the absolute RTC_SLOW rate is a
+/// *defined* constant; the honesty requirement is that firmware MEASURING it —
+/// through the real TIMG cal register protocol (count XTAL cycles over N slow
+/// cycles) or by reading the RTC_CNTL counter over a known CPU interval —
+/// observes THIS value, self-consistently, with no second independent pin.
+///
+/// MEASURED on real silicon via the actual TIMG0 calibration protocol driven
+/// over the built-in USB-JTAG (board 9C:CC:01:D0:71:54, 2026-07-24): counting
+/// XTAL (40 MHz) cycles over 100 / 1024 / 3000 RTC_SLOW cycles gave
+/// 148.18 / 148.14 / 148.16 kHz — the internal RC_SLOW oscillator (nominal
+/// 150 kHz). A raw SYSTIMER-referenced counter-delta cross-check read 151.3 kHz
+/// (higher measurement error); the XTAL-referenced calibration is authoritative
+/// and is what IDF itself uses. The prior 136_700 pin (a 2026-07-14
+/// counter-delta capture) was stale by ~8%. At 160 MHz CPU this is ~1080 CPU
+/// cycles per RTC tick. Per-chip/temperature variance of the uncalibrated RC
+/// oscillator is expected and is exactly why the value is calibrated, not fixed
+/// in firmware — see `Esp32c3RtcTimer::set_slow_clock_hz`.
+pub const RTC_SLOW_HZ_MEASURED: u64 = 148_150;
 
 #[derive(Debug)]
 pub struct Esp32c3RtcTimer {
@@ -454,11 +481,12 @@ mod tests {
             "1.5 CPU-seconds must read 1.5x the RTC ticks"
         );
 
-        // Sanity: the raw ~1170 CPU-cycles-per-RTC-tick ratio the capture found.
+        // Sanity: the ~1080 CPU-cycles-per-RTC-tick ratio the calibration found
+        // (160 MHz / 148.15 kHz).
         let cycles_per_tick = CPU_HZ / RTC_SLOW_HZ_MEASURED;
         assert!(
-            (1160..=1180).contains(&cycles_per_tick),
-            "measured ratio ~1170 CPU cycles per RTC tick, got {cycles_per_tick}"
+            (1070..=1090).contains(&cycles_per_tick),
+            "measured ratio ~1080 CPU cycles per RTC tick, got {cycles_per_tick}"
         );
     }
 
