@@ -218,40 +218,6 @@ pub fn build_i2c_device(
                 address, shm_path, size,
             )))
         }
-        "ir" => {
-            let spec_path = match config.get("spec_path").and_then(|v| v.as_str()) {
-                Some(p) => p,
-                None => {
-                    eprintln!("ir component: missing required 'spec_path' in config");
-                    return None;
-                }
-            };
-            let yaml = match std::fs::read_to_string(spec_path) {
-                Ok(y) => y,
-                Err(e) => {
-                    eprintln!("ir component: cannot read {spec_path}: {e}");
-                    return None;
-                }
-            };
-            let spec: labwired_ir::component::IrComponent = match serde_yaml::from_str(&yaml) {
-                Ok(s) => s,
-                Err(e) => {
-                    eprintln!("ir component: {spec_path} parse error: {e}");
-                    return None;
-                }
-            };
-            let address = config
-                .get("i2c_address")
-                .and_then(|v| v.as_u64())
-                .map(|a| a as u8);
-            match crate::peripherals::components::IrI2cComponent::new(spec, address) {
-                Ok(d) => Some(Box::new(d)),
-                Err(e) => {
-                    eprintln!("ir component: {spec_path} invalid: {e}");
-                    None
-                }
-            }
-        }
         _ => None,
     }
 }
@@ -388,44 +354,6 @@ mod tests {
     }
 
     #[test]
-    fn ir_type_builds_from_spec_path() {
-        let mut cfg = HashMap::new();
-        cfg.insert(
-            "spec_path".to_string(),
-            serde_yaml::Value::String(
-                concat!(
-                    env!("CARGO_MANIFEST_DIR"),
-                    "/../../configs/components/pca9685.yaml"
-                )
-                .to_string(),
-            ),
-        );
-        let dev = build_i2c_device("ir", &cfg).expect("ir device should build");
-        assert_eq!(dev.address(), 0x40);
-    }
-
-    #[test]
-    fn ir_type_address_override_from_config() {
-        let mut cfg = HashMap::new();
-        cfg.insert(
-            "spec_path".to_string(),
-            serde_yaml::Value::String(
-                concat!(
-                    env!("CARGO_MANIFEST_DIR"),
-                    "/../../configs/components/pca9685.yaml"
-                )
-                .to_string(),
-            ),
-        );
-        cfg.insert(
-            "i2c_address".to_string(),
-            serde_yaml::Value::Number(serde_yaml::Number::from(0x41)),
-        );
-        let dev = build_i2c_device("ir", &cfg).expect("ir device should build");
-        assert_eq!(dev.address(), 0x41);
-    }
-
-    #[test]
     fn mlx90640_built_at_default_address() {
         let cfg = HashMap::new();
         let dev = build_i2c_device("mlx90640", &cfg).expect("mlx90640 should build");
@@ -449,18 +377,5 @@ mod tests {
         );
         let dev = build_i2c_device("mlx90640", &cfg).expect("mlx90640 should build");
         assert_eq!(dev.address(), 0x33);
-    }
-
-    #[test]
-    fn ir_type_missing_or_bad_spec_returns_none() {
-        // Missing spec_path.
-        assert!(build_i2c_device("ir", &HashMap::new()).is_none());
-        // Nonexistent file.
-        let mut cfg = HashMap::new();
-        cfg.insert(
-            "spec_path".to_string(),
-            serde_yaml::Value::String("/nonexistent/spec.yaml".to_string()),
-        );
-        assert!(build_i2c_device("ir", &cfg).is_none());
     }
 }

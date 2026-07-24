@@ -283,13 +283,7 @@ impl SystemBus {
                                 &ext.id,
                                 &ext.config,
                             )
-                            .is_some()
-                                || (canonical_type == "nrf52_serial_instance"
-                                    && crate::peripherals::components::build_spi_device(
-                                        &ext.r#type,
-                                        &ext.config,
-                                    )
-                                    .is_some());
+                            .is_some();
                         if factory_handles {
                             attached_i2c_ext_ids.insert(ext.id.as_str());
                         }

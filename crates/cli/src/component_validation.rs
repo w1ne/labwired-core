@@ -4,29 +4,39 @@
 
 //! `labwired asset validate-component <spec.yaml> [--json]`
 //!
-//! Validates an IrComponent spec and prints diagnostics. Exit code 0 when
-//! clean, 1 when the file is unreadable/unparsable or has diagnostics.
-//! `--json` emits `{ "ok": bool, "name": string|null, "diagnostics": [...] }`
-//! on stdout for the MCP server.
+//! Shape-validates a declarative device descriptor (a `configs/devices/*.yaml`
+//! entry, the modern single declarative stack — see
+//! `docs/specs/declarative_i2c_devices.md`). Exit code 0 when the file parses
+//! as a [`DeviceDescriptor`], 1 when it is unreadable or malformed. `--json`
+//! emits `{ "ok": bool, "name": string|null, "diagnostics": [...] }` on stdout
+//! for the MCP server.
 
 use clap::Args;
-use labwired_ir::component::{IrComponent, IrComponentDiag};
+use labwired_config::DeviceDescriptor;
 use std::process::ExitCode;
 
 #[derive(Args, Debug)]
 pub struct ValidateComponentArgs {
-    /// Path to the component spec YAML.
+    /// Path to the device descriptor YAML.
     pub spec: std::path::PathBuf,
     /// Emit machine-readable JSON on stdout.
     #[arg(long)]
     pub json: bool,
 }
 
+/// One validation diagnostic. Kept flat so the MCP server can render it.
+#[derive(serde::Serialize)]
+struct Diag {
+    code: String,
+    message: String,
+    hint: String,
+}
+
 #[derive(serde::Serialize)]
 struct JsonReport {
     ok: bool,
     name: Option<String>,
-    diagnostics: Vec<IrComponentDiag>,
+    diagnostics: Vec<Diag>,
 }
 
 pub fn run_validate_component(args: ValidateComponentArgs) -> ExitCode {
@@ -50,7 +60,7 @@ fn build_report(path: &std::path::Path) -> (JsonReport, ExitCode) {
     let io_diag = |code: &str, message: String| JsonReport {
         ok: false,
         name: None,
-        diagnostics: vec![IrComponentDiag {
+        diagnostics: vec![Diag {
             code: code.into(),
             message,
             hint: "Check the file path and YAML syntax".into(),
@@ -60,33 +70,27 @@ fn build_report(path: &std::path::Path) -> (JsonReport, ExitCode) {
         Ok(y) => y,
         Err(e) => {
             return (
-                io_diag("ICOMP_READ_ERROR", e.to_string()),
+                io_diag("DEVICE_READ_ERROR", e.to_string()),
                 ExitCode::from(1),
             )
         }
     };
-    let spec: IrComponent = match serde_yaml::from_str(&yaml) {
-        Ok(s) => s,
+    let descriptor = match DeviceDescriptor::from_yaml(&yaml) {
+        Ok(d) => d,
         Err(e) => {
             return (
-                io_diag("ICOMP_PARSE_ERROR", e.to_string()),
+                io_diag("DEVICE_PARSE_ERROR", format!("{e:#}")),
                 ExitCode::from(1),
             )
         }
     };
-    let diagnostics = spec.validate();
-    let ok = diagnostics.is_empty();
     (
         JsonReport {
-            ok,
-            name: Some(spec.name),
-            diagnostics,
+            ok: true,
+            name: Some(descriptor.r#type),
+            diagnostics: Vec::new(),
         },
-        if ok {
-            ExitCode::SUCCESS
-        } else {
-            ExitCode::from(1)
-        },
+        ExitCode::SUCCESS,
     )
 }
 
@@ -95,13 +99,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn valid_spec_reports_ok() {
+    fn valid_descriptor_reports_ok() {
         let (r, _) = build_report(std::path::Path::new(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../../configs/components/pca9685.yaml"
+            "/../../configs/devices/pca9685.yaml"
         )));
         assert!(r.ok);
-        assert_eq!(r.name.as_deref(), Some("PCA9685"));
+        assert_eq!(r.name.as_deref(), Some("pca9685"));
         assert!(r.diagnostics.is_empty());
     }
 
@@ -109,24 +113,18 @@ mod tests {
     fn missing_file_reports_read_error() {
         let (r, _) = build_report(std::path::Path::new("/nonexistent/spec.yaml"));
         assert!(!r.ok);
-        assert_eq!(r.diagnostics[0].code, "ICOMP_READ_ERROR");
+        assert_eq!(r.diagnostics[0].code, "DEVICE_READ_ERROR");
     }
 
     #[test]
-    fn invalid_spec_reports_diagnostics() {
-        let dir = std::env::temp_dir().join("labwired_icomp_test");
+    fn malformed_descriptor_reports_parse_error() {
+        let dir = std::env::temp_dir().join("labwired_devdesc_test");
         std::fs::create_dir_all(&dir).unwrap();
         let p = dir.join("bad.yaml");
-        std::fs::write(
-            &p,
-            "name: Bad\nkind: wasm\ninterface: { i2c: { default_address: 0x40 } }\nregister_file: { size: 256 }\n",
-        )
-        .unwrap();
+        // `behavior:` is required and typed; a scalar there fails to parse.
+        std::fs::write(&p, "type: Bad\nbehavior: not-a-behavior-map\n").unwrap();
         let (r, _) = build_report(&p);
         assert!(!r.ok);
-        assert!(r
-            .diagnostics
-            .iter()
-            .any(|d| d.code == "ICOMP_WASM_UNSUPPORTED"));
+        assert_eq!(r.diagnostics[0].code, "DEVICE_PARSE_ERROR");
     }
 }

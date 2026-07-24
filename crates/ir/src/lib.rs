@@ -15,8 +15,6 @@ use std::collections::BTreeMap;
 #[cfg(feature = "svd")]
 pub mod svd_transform;
 
-pub mod component;
-
 /// The top-level root of a chip description.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IrDevice {

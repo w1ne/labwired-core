@@ -13,9 +13,9 @@
 //! exact same I²C script and asserts byte-equal reads (and, for PCA9685, equal
 //! `servo_angle` observables).
 //!
-//! This is the declarative-vs-hand-written gate. The sibling
-//! `ir_component_equivalence.rs` (IR-vs-hand-written) stays unchanged — it is a
-//! Phase-B deletion target.
+//! This is the declarative-vs-hand-written gate, and now the sole such gate:
+//! the former IR component engine (and its `ir_component_equivalence.rs`) was
+//! retired in Phase B, leaving one declarative stack.
 
 use labwired_core::peripherals::components::{GenericI2cDevice, Pca9685};
 use labwired_core::peripherals::esp32s3::tmp102::Tmp102;

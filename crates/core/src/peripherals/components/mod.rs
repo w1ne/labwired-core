@@ -34,9 +34,6 @@ pub mod iolink_master;
 #[cfg(feature = "iolink-native")]
 pub mod iolink_native;
 pub mod iolink_station;
-pub mod ir_component;
-pub mod ir_core;
-pub mod ir_spi_component;
 pub mod keypad;
 pub mod lcd1602;
 pub mod ldr;
@@ -71,7 +68,6 @@ pub mod sht30;
 pub mod sim800l;
 pub mod sn74hc165;
 pub mod soil_moisture;
-pub mod spi_factory;
 pub mod sps30;
 pub mod ssd1306;
 pub mod ssd1680_tricolor_290;
@@ -111,8 +107,6 @@ pub use ili9341::Ili9341;
 pub use iolink_master::{
     IolinkComSpeed, IolinkFrameKind, IolinkLinkState, IolinkMaster, IolinkXfer,
 };
-pub use ir_component::IrI2cComponent;
-pub use ir_spi_component::IrSpiComponent;
 pub use lcd1602::Lcd1602;
 pub use ldr::Ldr;
 pub use max30102::{Max30102, MAX30102_ADDR};
@@ -130,7 +124,6 @@ pub use sgp41::{Sgp41, SGP41_ADDR};
 pub use sh1107::Sh1107;
 pub use shm_i2c::ShmI2c;
 pub use sn74hc165::Sn74hc165;
-pub use spi_factory::build_spi_device;
 pub use sps30::{Sps30, SPS30_ADDR};
 pub use ssd1306::Ssd1306;
 pub use ssd1680_tricolor_290::Ssd1680Tricolor290;
