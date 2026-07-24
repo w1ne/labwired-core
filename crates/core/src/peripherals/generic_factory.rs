@@ -115,8 +115,8 @@ pub fn is_canonical_model_type(t: &str) -> bool {
 pub fn try_build(
     canonical_type: &str,
     p_cfg: &PeripheralConfig,
-    manifest: &SystemManifest,
-    bus_trace: &crate::bus::bus_trace::BusTrace,
+    _manifest: &SystemManifest,
+    _bus_trace: &crate::bus::bus_trace::BusTrace,
 ) -> anyhow::Result<Option<Box<dyn Peripheral>>> {
     let dev: Box<dyn Peripheral> = match canonical_type {
         "systick" | "arm_generictimer" => {
@@ -244,32 +244,8 @@ pub fn try_build(
             if let Some(cr1_mask) = p_cfg.config.get("cr1_mask").and_then(|v| v.as_u64()) {
                 spi.set_cr1_mask(cr1_mask as u16);
             }
-            // Declarative IR SPI devices (`type: ir`) attach here,
-            // mirroring the I2C path. Hand-written SPI devices attach via
-            // the PeripheralKit registry pass, which ignores `type: ir`,
-            // so the two dispatch paths never double-attach the same bus.
-            for ext in &manifest.external_devices {
-                if ext.connection != p_cfg.id || !ext.r#type.eq_ignore_ascii_case("ir") {
-                    continue;
-                }
-                match crate::peripherals::components::build_spi_device(&ext.r#type, &ext.config) {
-                    Some(device) => {
-                        tracing::info!("spi attach: '{}' (type=ir) -> '{}'", ext.id, p_cfg.id);
-                        // Wrap through the single trace helper (this factory
-                        // attaches before the peripheral is on the bus).
-                        spi.push_device(crate::bus::bus_trace::wrap_spi(
-                            &p_cfg.id, bus_trace, device,
-                        ));
-                    }
-                    None => {
-                        tracing::warn!(
-                            "spi attach skipped: invalid ir spec for external id '{}' on bus '{}'",
-                            ext.id,
-                            p_cfg.id
-                        );
-                    }
-                }
-            }
+            // Hand-written SPI devices attach via the PeripheralKit registry
+            // pass, so no external-device attach loop is needed here.
             Box::new(spi)
         }
         "pwr" => {
