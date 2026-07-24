@@ -354,8 +354,7 @@ pub static ADXL345_KIT: LazyLock<DeclarativeSpiKit> = LazyLock::new(|| {
 /// Maxim MAX31855 thermocouple converter (declarative `max31855.yaml`).
 pub static MAX31855_KIT: LazyLock<DeclarativeSpiKit> = LazyLock::new(|| {
     DeclarativeSpiKit::from_yaml(
-        labwired_config::embedded_device_yaml("max31855")
-            .expect("max31855 descriptor embedded"),
+        labwired_config::embedded_device_yaml("max31855").expect("max31855 descriptor embedded"),
     )
     .expect("max31855.yaml is a valid declarative spi descriptor")
 });

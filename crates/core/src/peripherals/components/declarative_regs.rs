@@ -58,7 +58,11 @@ pub(crate) fn encode_raw(
         }
     }
     let bits = 8 * width as u32;
-    let mask = if bits >= 32 { u32::MAX } else { (1u32 << bits) - 1 };
+    let mask = if bits >= 32 {
+        u32::MAX
+    } else {
+        (1u32 << bits) - 1
+    };
     if signed {
         let lo = -(2f64.powi((bits - 1) as i32));
         let hi = 2f64.powi((bits - 1) as i32) - 1.0;
@@ -121,7 +125,11 @@ pub(crate) fn register_read_bytes(
             // Encode into `width_bits` bits (byte-width ceil for the helper), then mask.
             let byte_w = f.width_bits.div_ceil(8);
             let raw = encode_raw(value, f.encode.as_ref(), 1.0, byte_w, f.signed);
-            let mask = if f.width_bits >= 32 { u32::MAX } else { (1u32 << f.width_bits) - 1 };
+            let mask = if f.width_bits >= 32 {
+                u32::MAX
+            } else {
+                (1u32 << f.width_bits) - 1
+            };
             word |= (raw & mask) << f.shift;
         }
         return pack(word, reg.width, reg.endian);
@@ -182,7 +190,10 @@ mod tests {
         };
         let mut slots = HashMap::new();
         slots.insert("ax".to_string(), -1.0); // -1 g × 256 = -256 = 0xFF00 two's-complement, LE
-        assert_eq!(register_read_bytes(&r, &slots, &HashMap::new()), vec![0x00, 0xFF]);
+        assert_eq!(
+            register_read_bytes(&r, &slots, &HashMap::new()),
+            vec![0x00, 0xFF]
+        );
     }
 
     #[test]
@@ -217,18 +228,45 @@ mod tests {
         // 32-bit BE frame: thermocouple °C at bits[31:18] signed 14-bit, 0.25°C/LSB
         // (scale 4.0); internal °C at bits[15:4] signed 12-bit, 0.0625°C/LSB (16.0).
         let r = RegisterSpec {
-            name: "OUT".into(), addr: 0, width: 4, endian: Endian::Be,
-            access: RegisterAccess::R, reset: 0, source: None, encode: None, scale_from: None,
+            name: "OUT".into(),
+            addr: 0,
+            width: 4,
+            endian: Endian::Be,
+            access: RegisterAccess::R,
+            reset: 0,
+            source: None,
+            encode: None,
+            scale_from: None,
             signed: false,
             fields: vec![
-                FieldSpec { source: "tc".into(), shift: 18, width_bits: 14, signed: true,
-                            encode: Some(Encode { scale: 4.0, offset: 0.0, clamp_min: None, clamp_max: None }) },
-                FieldSpec { source: "internal".into(), shift: 4, width_bits: 12, signed: true,
-                            encode: Some(Encode { scale: 16.0, offset: 0.0, clamp_min: None, clamp_max: None }) },
+                FieldSpec {
+                    source: "tc".into(),
+                    shift: 18,
+                    width_bits: 14,
+                    signed: true,
+                    encode: Some(Encode {
+                        scale: 4.0,
+                        offset: 0.0,
+                        clamp_min: None,
+                        clamp_max: None,
+                    }),
+                },
+                FieldSpec {
+                    source: "internal".into(),
+                    shift: 4,
+                    width_bits: 12,
+                    signed: true,
+                    encode: Some(Encode {
+                        scale: 16.0,
+                        offset: 0.0,
+                        clamp_min: None,
+                        clamp_max: None,
+                    }),
+                },
             ],
         };
         let mut slots = HashMap::new();
-        slots.insert("tc".to_string(), 100.0);      // 100°C → 400 = 0x190 in bits[31:18]
+        slots.insert("tc".to_string(), 100.0); // 100°C → 400 = 0x190 in bits[31:18]
         slots.insert("internal".to_string(), 25.0); // 25°C → 400 = 0x190 in bits[15:4]
         let b = register_read_bytes(&r, &slots, &HashMap::new());
         // word = (400 << 18) | (400 << 4) = 0x06400000 | 0x00001900 = 0x06401900, BE.
@@ -240,11 +278,28 @@ mod tests {
         use labwired_config::{Encode, Endian, FieldSpec, RegisterAccess, RegisterSpec};
         use std::collections::HashMap;
         let r = RegisterSpec {
-            name: "OUT".into(), addr: 0, width: 4, endian: Endian::Be,
-            access: RegisterAccess::R, reset: 0, source: None, encode: None, scale_from: None,
+            name: "OUT".into(),
+            addr: 0,
+            width: 4,
+            endian: Endian::Be,
+            access: RegisterAccess::R,
+            reset: 0,
+            source: None,
+            encode: None,
+            scale_from: None,
             signed: false,
-            fields: vec![FieldSpec { source: "tc".into(), shift: 18, width_bits: 14, signed: true,
-                encode: Some(Encode { scale: 4.0, offset: 0.0, clamp_min: None, clamp_max: None }) }],
+            fields: vec![FieldSpec {
+                source: "tc".into(),
+                shift: 18,
+                width_bits: 14,
+                signed: true,
+                encode: Some(Encode {
+                    scale: 4.0,
+                    offset: 0.0,
+                    clamp_min: None,
+                    clamp_max: None,
+                }),
+            }],
         };
         let mut slots = HashMap::new();
         slots.insert("tc".to_string(), -25.0); // -25°C → -100 → 14-bit two's-comp = 0x3F9C, <<18

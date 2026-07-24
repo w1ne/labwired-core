@@ -1258,8 +1258,7 @@ impl WasmSimulator {
                     // `GenericSpiDevice`; the hand-written concrete type was
                     // removed in MT5b.
                     if let Some(gen) = any
-                        .downcast_ref::<labwired_core::peripherals::components::GenericSpiDevice>(
-                        )
+                        .downcast_ref::<labwired_core::peripherals::components::GenericSpiDevice>()
                     {
                         if let (Some(tc_c), Some(internal_c)) =
                             (gen.input_value("temperature"), gen.input_value("internal"))
