@@ -550,18 +550,53 @@ behavior:
             "PA4",
         )
         .unwrap();
-        d.set_input("thermocouple", 100.0).unwrap(); // 400 = 0x190 @ [31:18]
+        d.set_input("temperature", 100.0).unwrap(); // 400 = 0x190 @ [31:18]
         d.set_input("internal", 25.0).unwrap(); // 400 = 0x190 @ [15:4]
         d.cs_select(); // command_bytes:0 → data phase immediately
         let b: Vec<u8> = (0..4).map(|_| d.transfer(0x00)).collect();
         d.cs_release();
         assert_eq!(b, vec![0x06, 0x40, 0x19, 0x00]);
         // A negative thermocouple reading sets the sign bits.
-        d.set_input("thermocouple", -25.0).unwrap();
+        d.set_input("temperature", -25.0).unwrap();
         d.cs_select();
         let n: Vec<u8> = (0..4).map(|_| d.transfer(0x00)).collect();
         d.cs_release();
         let word = u32::from_be_bytes([n[0], n[1], n[2], n[3]]);
         assert_eq!((word >> 18) & 0x3FFF, 0x3F9C); // -100 in 14-bit two's-complement
+    }
+
+    /// Parity anchor: the declarative descriptor must reproduce the
+    /// hand-written `Max31855` model's default power-on frame and stimulus
+    /// response byte-for-byte. Default word = (100<<18)|(352<<4) = 0x01901600
+    /// (tc=25.0°C, internal=22.0°C, fault=0 — see components/max31855.rs).
+    #[test]
+    fn max31855_parity() {
+        let mut d = crate::peripherals::components::declarative_spi::GenericSpiDevice::from_yaml(
+            labwired_config::embedded_device_yaml("max31855_spi").unwrap(),
+            "PA4",
+        )
+        .unwrap();
+
+        // Default frame: tc=25.0 -> 100<<18, internal=22.0 -> 352<<4.
+        d.cs_select();
+        let default_frame: Vec<u8> = (0..4).map(|_| d.transfer(0x00)).collect();
+        d.cs_release();
+        assert_eq!(default_frame, vec![0x01, 0x90, 0x16, 0x00]);
+
+        // After driving both stimuli: tc=100.0 -> 400<<18, internal=25.0 -> 400<<4.
+        d.set_input("temperature", 100.0).unwrap();
+        d.set_input("internal", 25.0).unwrap();
+        d.cs_select();
+        let driven_frame: Vec<u8> = (0..4).map(|_| d.transfer(0x00)).collect();
+        d.cs_release();
+        assert_eq!(driven_frame, vec![0x06, 0x40, 0x19, 0x00]);
+
+        // Negative thermocouple reading: -100 in 14-bit two's-complement.
+        d.set_input("temperature", -25.0).unwrap();
+        d.cs_select();
+        let neg: Vec<u8> = (0..4).map(|_| d.transfer(0x00)).collect();
+        d.cs_release();
+        let word = u32::from_be_bytes([neg[0], neg[1], neg[2], neg[3]]);
+        assert_eq!((word >> 18) & 0x3FFF, 0x3F9C);
     }
 }

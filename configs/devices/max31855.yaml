@@ -1,0 +1,38 @@
+# Maxim MAX31855 cold-junction-compensated K-type thermocouple-to-digital
+# converter — declarative SPI, read-only (command_bytes: 0): CS↓ clocks out a
+# 32-bit big-endian frame, no command byte. Frame layout (datasheet):
+#   [31:18] 14-bit signed thermocouple °C, 0.25 °C/LSB   (scale 4.0)
+#   [17]    reserved (0)
+#   [16]    fault (0 = OK)
+#   [15:4]  12-bit signed internal °C, 0.0625 °C/LSB     (scale 16.0)
+#   [3]     reserved (0);  [2] SCV  [1] SCG  [0] OC faults (0 = OK)
+# Modeled fault-free (fault + SCV/SCG/OC = 0). On the hand-written model, fault
+# is a plain struct field with no SimInput channel, so it is unreachable from
+# any kit/SimInput path — a fault-free declarative model is therefore
+# byte-identical to the hand-written one for every externally reachable case.
+# SimInput channel keys match the hand-written model exactly: `temperature`
+# (hot junction) and `internal` (cold junction), so external callers/wasm
+# consumers see the same API.
+type: max31855
+
+behavior:
+  primitive: spi_device
+  spi:
+    framing: { command_bytes: 0 }
+    registers:
+      - name: OUTPUT
+        addr: 0x00
+        width: 4
+        endian: be
+        access: r
+        fields:
+          - { source: temperature, shift: 18, width_bits: 14, signed: true, encode: { scale: 4.0 } }
+          - { source: internal,    shift: 4,  width_bits: 12, signed: true, encode: { scale: 16.0 } }
+
+metadata:
+  label: "MAX31855 thermocouple"
+  summary: "K-type thermocouple-to-digital converter over SPI (read-only 32-bit frame)."
+  category: spi
+  inputs:
+    - { key: temperature, label: "Thermocouple temp", unit: "°C", min: -270, max: 1372, default: 25 }
+    - { key: internal,    label: "Internal (cold-junction) temp", unit: "°C", min: -40, max: 125, default: 22 }
