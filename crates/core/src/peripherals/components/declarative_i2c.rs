@@ -41,7 +41,7 @@ use labwired_config::{
     Crc8Spec, DeviceDescriptor, Endian, I2cAccess, I2cCommand, I2cRegister, I2cSpec, ResponseWord,
 };
 
-use super::declarative_regs::{encode_raw, pack, register_read_bytes, unpack};
+use super::declarative_regs::{encode_raw, leak_labs, pack, register_read_bytes, unpack};
 use crate::peripherals::i2c::I2cDevice;
 use crate::sim_input::{InputChannel, SimInput, SimInputError};
 
@@ -481,7 +481,13 @@ fn leak_metadata(
         transport: Transport::I2c,
         category: Category::I2c,
         config_keys,
-        labs: &[],
+        labs: leak_labs(
+            descriptor
+                .metadata
+                .as_ref()
+                .map(|m| m.labs.as_slice())
+                .unwrap_or(&[]),
+        ),
         inputs: channels,
     }))
 }

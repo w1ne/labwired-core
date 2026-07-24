@@ -11,7 +11,26 @@
 
 use std::collections::HashMap;
 
-use labwired_config::{Encode, Endian, RegisterSpec};
+use labwired_config::{Encode, Endian, LabDescriptor, RegisterSpec};
+
+use crate::peripherals::kit::LabRef;
+
+/// `Box::leak`s a slice of config-layer [`LabDescriptor`]s into the `'static`
+/// [`LabRef`]s a `KitMetadata` requires. Shared by both declarative engines
+/// (SPI and I²C) so a descriptor's `metadata.labs` becomes the kit's
+/// advertised demo labs identically either way.
+pub(crate) fn leak_labs(labs: &[LabDescriptor]) -> &'static [LabRef] {
+    let leaked: Vec<LabRef> = labs
+        .iter()
+        .map(|l| LabRef {
+            board_id: Box::leak(l.board_id.clone().into_boxed_str()),
+            chip: Box::leak(l.chip.clone().into_boxed_str()),
+            example_dir: Box::leak(l.example_dir.clone().into_boxed_str()),
+            demo_elf: Box::leak(l.demo_elf.clone().into_boxed_str()),
+        })
+        .collect();
+    Box::leak(leaked.into_boxed_slice())
+}
 
 /// Largest value representable in `width` bytes, as f64 (width ≤ 4).
 pub(crate) fn width_max(width: u8) -> f64 {

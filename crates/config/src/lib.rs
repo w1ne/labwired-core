@@ -820,6 +820,20 @@ pub struct DeviceMetadata {
     /// until something drives it, and `min`/`max` bound accepted stimuli.
     #[serde(default)]
     pub inputs: Vec<InputSpec>,
+    /// Demo labs this kit advertises (mirrors `kit::LabRef`). Absent ⇒ the kit
+    /// advertises no labs.
+    #[serde(default)]
+    pub labs: Vec<LabDescriptor>,
+}
+
+/// A demo lab a declarative device advertises (mirrors `kit::LabRef`). Optional;
+/// absent ⇒ the kit advertises no labs.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct LabDescriptor {
+    pub board_id: String,
+    pub chip: String,
+    pub example_dir: String,
+    pub demo_elf: String,
 }
 
 /// One drivable stimulus channel (a measurement slot). Datasheet-facing

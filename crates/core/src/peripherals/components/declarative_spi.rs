@@ -19,7 +19,7 @@ use std::collections::HashMap;
 use anyhow::{bail, Context, Result};
 use labwired_config::{DeviceDescriptor, RegisterAccess, RegisterSpec, SpiFraming};
 
-use super::declarative_regs::{register_read_bytes, unpack};
+use super::declarative_regs::{leak_labs, register_read_bytes, unpack};
 use crate::peripherals::spi::SpiDevice;
 use crate::sim_input::{InputChannel, SimInput, SimInputError};
 
@@ -299,7 +299,13 @@ fn leak_metadata(
         transport: Transport::Spi,
         category: Category::Spi,
         config_keys,
-        labs: &[],
+        labs: leak_labs(
+            descriptor
+                .metadata
+                .as_ref()
+                .map(|m| m.labs.as_slice())
+                .unwrap_or(&[]),
+        ),
         inputs: channels,
     }))
 }
@@ -451,6 +457,49 @@ mod tests {
         ));
         assert_eq!(m.inputs.len(), 1);
         assert!(m.inputs.iter().any(|c| c.key == "accel_x"));
+        // No `metadata.labs` in FIXTURE ⇒ no labs advertised.
+        assert_eq!(m.labs.len(), 0);
+    }
+
+    const LABS_FIXTURE: &str = r#"
+type: test_spi_labs_fixture
+
+behavior:
+  primitive: spi_device
+  spi:
+    framing:
+      command_bytes: 0
+    registers:
+      - name: TEMP
+        addr: 0
+        width: 4
+        endian: be
+        access: r
+        source: temperature
+        encode: { scale: 1.0 }
+
+metadata:
+  label: "Declarative SPI labs fixture"
+  summary: "Test-only fixture asserting metadata.labs round-trips."
+  category: spi
+  inputs:
+    - { key: temperature, label: "Temperature", unit: "°C", min: -50, max: 200, default: 100 }
+  labs:
+    - board_id: "test-board-lab"
+      chip: "stm32f103"
+      example_dir: "spi_test_fixture"
+      demo_elf: "spi_test_fixture.elf"
+"#;
+
+    #[test]
+    fn declarative_spi_kit_advertises_labs_from_descriptor_metadata() {
+        let kit = DeclarativeSpiKit::from_yaml(LABS_FIXTURE).unwrap();
+        let labs = kit.metadata().labs;
+        assert_eq!(labs.len(), 1);
+        assert_eq!(labs[0].board_id, "test-board-lab");
+        assert_eq!(labs[0].chip, "stm32f103");
+        assert_eq!(labs[0].example_dir, "spi_test_fixture");
+        assert_eq!(labs[0].demo_elf, "spi_test_fixture.elf");
     }
 
     /// A MAX31855-style read-only part: `command_bytes: 0` means CS↓ clocks
