@@ -812,14 +812,50 @@ pub struct DeviceMetadata {
     pub label: Option<String>,
     #[serde(default)]
     pub summary: Option<String>,
+    /// Long-form description shown in the library detail view. Absent ⇒ the kit
+    /// falls back to `summary` (the pre-existing declarative-kit behaviour).
+    #[serde(default)]
+    pub detail: Option<String>,
     #[serde(default)]
     pub category: Option<String>,
+    /// Extra `config:` keys this device accepts beyond `i2c_address`, mirrored
+    /// verbatim into the peripheral manifest. When present this list is taken as
+    /// the COMPLETE set of config keys (list `i2c_address` explicitly if the
+    /// device accepts it); when absent the kit synthesises the lone
+    /// `i2c_address` key. Carrying these lets a declarative descriptor reproduce
+    /// a hand-written kit's manifest entry byte-for-byte.
+    #[serde(default)]
+    pub config_keys: Vec<ConfigKeySpec>,
+    /// Starter labs that ship a one-click demo using this device, mirrored into
+    /// the manifest exactly like a hand-written kit's `labs`.
+    #[serde(default)]
+    pub labs: Vec<LabSpec>,
     /// The named stimulus channels this device accepts. For an `i2c_device`
     /// primitive these are the measurement slots that register/response
     /// `source:` keys read; each `default` seeds the value the part reports
     /// until something drives it, and `min`/`max` bound accepted stimuli.
     #[serde(default)]
     pub inputs: Vec<InputSpec>,
+}
+
+/// A `config:` key advertised in the peripheral manifest. Mirrors the engine's
+/// `KitMetadata::config_keys` entries so a declarative descriptor can reproduce
+/// a hand-written kit's manifest documentation.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ConfigKeySpec {
+    pub name: String,
+    /// One of `str` | `int` | `bool` | `float`.
+    pub ty: String,
+    pub doc: String,
+}
+
+/// A starter-lab reference, mirroring the engine's `KitMetadata::labs` entries.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct LabSpec {
+    pub board_id: String,
+    pub chip: String,
+    pub example_dir: String,
+    pub demo_elf: String,
 }
 
 /// One drivable stimulus channel (a measurement slot). Datasheet-facing
@@ -988,10 +1024,52 @@ pub struct RegisterSpec {
     /// in the register word.
     #[serde(default)]
     pub encode: Option<Encode>,
-    /// A bit-field of another register selects an extra scale factor (e.g. a
-    /// gain / integration-time field that changes the counts-per-unit).
+    /// A constant the sourced value is multiplied by *before* encoding, applied
+    /// as its own floating-point step (not folded into `encode.scale`). This is
+    /// a datasheet responsivity ratio — e.g. the VEML7700 white channel reads
+    /// `1.15 ×` the visible ALS illuminance. Absent ⇒ 1.0 (no pre-scale). It is
+    /// a distinct multiply so the intermediate rounds byte-identically to a
+    /// reference model that scales the measurement before converting it.
     #[serde(default)]
-    pub scale_from: Option<ScaleFrom>,
+    pub source_scale: Option<f64>,
+    /// Zero or more bit-field-selected scale factors, each read from another
+    /// register's field and **multiplied together** (a single mapping or a YAML
+    /// list are both accepted). In the default (multiply) mode these compound
+    /// the counts-per-unit — e.g. a gain field ×1/×2/×4. In `resolution` mode
+    /// they compound the resolution divisor instead (gain **and**
+    /// integration-time fields together, which one field alone cannot express).
+    #[serde(default, deserialize_with = "de_scale_from_list")]
+    pub scale_from: Vec<ScaleFrom>,
+    /// Resolution-divide mode. When present, the register reports
+    /// `round((value × source_scale) ÷ resolution)`, where
+    /// `resolution = <this base> × Π(scale_from factors)` folded left-to-right.
+    /// This is the datasheet form for parts whose count = illuminance ÷
+    /// resolution and whose resolution scales with programmed gain and
+    /// integration time (VEML7700). Absent ⇒ the register uses the multiply
+    /// encoding (`value × encode.scale × Π factors`). Mutually exclusive with a
+    /// `source`-less register.
+    #[serde(default)]
+    pub resolution: Option<f64>,
+}
+
+/// Accept either a single `scale_from` mapping or a YAML list of them, yielding
+/// a `Vec`. A bare mapping is the common single-field case (backward-compatible
+/// with descriptors written before compounding fields existed); a list is used
+/// when several bit-fields multiply together (e.g. gain × integration time).
+fn de_scale_from_list<'de, D>(deserializer: D) -> Result<Vec<ScaleFrom>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum OneOrMany {
+        One(ScaleFrom),
+        Many(Vec<ScaleFrom>),
+    }
+    Ok(match OneOrMany::deserialize(deserializer)? {
+        OneOrMany::One(s) => vec![s],
+        OneOrMany::Many(v) => v,
+    })
 }
 
 /// Linear measurement encoding: `raw = value * scale + offset`, clamped to the
@@ -1201,6 +1279,7 @@ pub fn embedded_device_yaml(device_type: &str) -> Option<&'static str> {
         "hc-sr04" | "hcsr04" => Some(include_str!("../../../configs/devices/hc_sr04.yaml")),
         "sht31" => Some(include_str!("../../../configs/devices/sht31.yaml")),
         "bh1750" => Some(include_str!("../../../configs/devices/bh1750.yaml")),
+        "veml7700" => Some(include_str!("../../../configs/devices/veml7700.yaml")),
         _ => None,
     }
 }
@@ -3865,7 +3944,9 @@ metadata:
             reset: 0,
             source: None,
             encode: None,
-            scale_from: None,
+            scale_from: vec![],
+            source_scale: None,
+            resolution: None,
         };
     }
 }

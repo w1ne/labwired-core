@@ -427,6 +427,23 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                         ..Esp32s3Opts::default()
                     };
                     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
+                    // Wire matrix kits (INA219, OLED, …) the same way classic ESP32 does.
+                    if let Err(e) = labwired_core::system::xtensa::attach_esp32_external_devices(
+                        &mut bus, manifest,
+                    ) {
+                        let msg = format!("ESP32-S3 external_devices attach: {e:#}");
+                        error!("{}", msg);
+                        write_config_error_outputs(
+                            &args,
+                            Some(&firmware_path),
+                            system_path.as_ref(),
+                            Some(&firmware_bytes),
+                            Some(&resolved_limits),
+                            msg,
+                        );
+                        return ExitCode::from(EXIT_CONFIG_ERROR);
+                    }
+                    bus.refresh_peripheral_index();
                     if wiring.boot_mode != Esp32s3BootMode::Faithful {
                         let msg =
                             "--rom-boot needs the real ESP32-S3 boot ROM, but none was found. \
@@ -467,6 +484,25 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                     if _fast.is_none() {
                         std::env::remove_var("LABWIRED_ESP32S3_FASTBOOT");
                     }
+                    // Matrix L3 kits live in system.yaml external_devices — attach
+                    // after the SoC bank is registered (classic path does this in
+                    // build_esp32_system_from_manifest; S3 must do it here too).
+                    if let Err(e) = labwired_core::system::xtensa::attach_esp32_external_devices(
+                        &mut bus, manifest,
+                    ) {
+                        let msg = format!("ESP32-S3 external_devices attach: {e:#}");
+                        error!("{}", msg);
+                        write_config_error_outputs(
+                            &args,
+                            Some(&firmware_path),
+                            system_path.as_ref(),
+                            Some(&firmware_bytes),
+                            Some(&resolved_limits),
+                            msg,
+                        );
+                        return ExitCode::from(EXIT_CONFIG_ERROR);
+                    }
+                    bus.refresh_peripheral_index();
                     // Seed partition table + app image magic into D-cache
                     // identity window (VA 0x3C00_0000 → dcache[off]).
                     {
@@ -803,7 +839,20 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
     // stubs can't supply — same set `build_rom_boot_machine` / wasm C3 path
     // install. Without them, ROM clock bring-up faults on unmapped ANA_I2C
     // (0x6000_E000) and cache invalidate busy-polls forever.
-    {
+    //
+    // These stubs are the ELF-app-entry ALTERNATIVE to the faithful rom-boot
+    // machine: `build_c3_rom_boot_machine` (below) installs the same set,
+    // including the real 512-entry MMU table. On the rom-boot / capture /
+    // resume paths that machine is built on THIS bus, so installing the
+    // fast-boot stubs here would double-register `mmu_table` (a 128-entry
+    // ELF-app-entry stub + the 512-entry rom-boot table). A resume snapshot
+    // then carries two `mmu_table` blobs, and `apply_runtime_snapshot` — which
+    // resolves peripherals by name to the FIRST match — misroutes the 512-entry
+    // blob onto the 128-entry stub and fails ("snapshot has 512 entries, table
+    // has 128"). Only install the fast-boot stubs on the plain ELF path.
+    let rom_boot_path =
+        args.rom_boot || args.capture_app_entry.is_some() || args.resume_snapshot.is_some();
+    if !rom_boot_path {
         let is_c3 = system_path.as_ref().and_then(|sys_path| {
             labwired_config::SystemManifest::from_file(sys_path)
                 .ok()
@@ -1183,16 +1232,10 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                 ) {
                     Ok(s) => s,
                     Err(e) => {
-                        let msg = format!("invalid resume snapshot {snap_path:?}: {e}");
-                        error!("{}", msg);
-                        write_config_error_outputs(
-                            &args,
-                            Some(&firmware_path),
-                            system_path.as_ref(),
-                            Some(&firmware_bytes),
-                            Some(&resolved_limits),
-                            msg,
-                        );
+                        // Corrupt or version-mismatched blob. Snapshot-invalid:
+                        // write NO result.json so the caller cold-boots and
+                        // refreshes the cache.
+                        error!("invalid resume snapshot {snap_path:?}: {e}; cold-boot required");
                         return ExitCode::from(EXIT_CONFIG_ERROR);
                     }
                 };
@@ -1215,17 +1258,12 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                     }
                 };
                 if let Err(e) = snap.validate_self_key(chip, &fw_sha) {
-                    let msg =
-                        format!("resume snapshot self-key mismatch ({e}); cold-boot required");
-                    error!("{}", msg);
-                    write_config_error_outputs(
-                        &args,
-                        Some(&firmware_path),
-                        system_path.as_ref(),
-                        Some(&firmware_bytes),
-                        Some(&resolved_limits),
-                        msg,
-                    );
+                    // Stale/foreign snapshot (captured against a different chip or
+                    // firmware). Write NO result.json so a cache-backed caller
+                    // treats it as "resume did not run" and cold-boots to refresh
+                    // the cache — the snapshot-invalid contract the resume-error
+                    // fallback in the run service depends on.
+                    error!("resume snapshot self-key mismatch ({e}); cold-boot required");
                     return ExitCode::from(EXIT_CONFIG_ERROR);
                 }
                 let mut machine = match crate::build_c3_rom_boot_machine(bus, None) {
@@ -1233,17 +1271,20 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                     Err(code) => return code,
                 };
                 if let Err(e) = machine.apply_runtime_snapshot(&snap) {
-                    let msg = format!("failed to apply resume snapshot: {e}");
-                    error!("{}", msg);
-                    write_config_error_outputs(
-                        &args,
-                        Some(&firmware_path),
-                        system_path.as_ref(),
-                        Some(&firmware_bytes),
-                        Some(&resolved_limits),
-                        msg,
+                    // The snapshot self-keyed clean (same chip + firmware) but is
+                    // structurally incompatible with the freshly-built machine —
+                    // e.g. a stale blob captured by an older, buggy core whose bus
+                    // topology differs (the C3 double-`mmu_table` window). This is
+                    // a snapshot-invalid signal, NOT a firmware fault: deliberately
+                    // write NO result.json so the caller (which resumes from a
+                    // cache) sees the resume did not run and falls back to a cold
+                    // `--rom-boot`, refreshing the cache with a compatible capture.
+                    // Same contract as a self-key mismatch above.
+                    error!(
+                        "resume snapshot incompatible with this machine ({e}); \
+                         cold-boot required (stale/foreign snapshot)"
                     );
-                    return ExitCode::from(EXIT_RUNTIME_ERROR);
+                    return ExitCode::from(EXIT_CONFIG_ERROR);
                 }
                 eprintln!(
                     "labwired-riscv: resumed from app-entry snapshot {snap_path:?} (chip {chip}); \

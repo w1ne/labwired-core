@@ -1481,43 +1481,6 @@
       ]
     },
     {
-      "device_type": "veml7700",
-      "label": "Vishay VEML7700 Light",
-      "summary": "Ambient-light sensor (lux) over I2C.",
-      "detail": "Vishay VEML7700 at fixed address 0x10, a register-pointer device with 16-bit little-endian words. Reports a raw ALS count the firmware scales to lux at the default gain ×1 / 100 ms resolution (0.0576 lux/count). The illuminance is an externally driven input (channel lux); config only seeds its initial value.",
-      "transport": "i2c",
-      "category": "i2c",
-      "config_keys": [
-        {
-          "name": "i2c_address",
-          "ty": "int",
-          "doc": "7-bit slave address. Defaults to the VEML7700 fixed address 0x10."
-        },
-        {
-          "name": "lux",
-          "ty": "float",
-          "doc": "Initial illuminance, lux. Default 450 (daylit room). Drive it at runtime with the `lux` input channel."
-        }
-      ],
-      "labs": [
-        {
-          "board_id": "esp32c3-leo-airquality",
-          "chip": "esp32c3",
-          "example_dir": "esp32c3-leo-airquality",
-          "demo_elf": "demo-esp32c3-leo-airquality.elf"
-        }
-      ],
-      "inputs": [
-        {
-          "key": "lux",
-          "label": "Illuminance",
-          "unit": "lx",
-          "min": 0.0,
-          "max": 120000.0
-        }
-      ]
-    },
-    {
       "device_type": "mlx90614",
       "label": "Melexis MLX90614 IR Temp",
       "summary": "Single-point IR (non-contact) thermometer over SMBus/I2C.",
@@ -1654,6 +1617,43 @@
           "unit": "lx",
           "min": 0.0,
           "max": 65535.0
+        }
+      ]
+    },
+    {
+      "device_type": "veml7700",
+      "label": "Vishay VEML7700 Light",
+      "summary": "Ambient-light sensor (lux) over I2C.",
+      "detail": "Vishay VEML7700 at fixed address 0x10, a register-pointer device with 16-bit little-endian words. Reports a raw ALS count the firmware scales to lux at the default gain ×1 / 100 ms resolution (0.0576 lux/count). The illuminance is an externally driven input (channel lux); config only seeds its initial value.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to the VEML7700 fixed address 0x10."
+        },
+        {
+          "name": "lux",
+          "ty": "float",
+          "doc": "Initial illuminance, lux. Default 450 (daylit room). Drive it at runtime with the `lux` input channel."
+        }
+      ],
+      "labs": [
+        {
+          "board_id": "esp32c3-leo-airquality",
+          "chip": "esp32c3",
+          "example_dir": "esp32c3-leo-airquality",
+          "demo_elf": "demo-esp32c3-leo-airquality.elf"
+        }
+      ],
+      "inputs": [
+        {
+          "key": "lux",
+          "label": "Illuminance",
+          "unit": "lx",
+          "min": 0.0,
+          "max": 120000.0
         }
       ]
     }
