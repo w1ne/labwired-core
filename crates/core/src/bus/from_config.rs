@@ -86,11 +86,19 @@ impl SystemBus {
                     }
                 }
             }
-            // Skip empty image_env regions: a zero-filled window at 0 would
-            // shadow the Cortex-M flash boot alias (breaks RP2040 bare-metal
-            // onboarding ELFs that rely on VTOR=0 → flash). Regions without
-            // image_env (plain RAM holes) are still installed as zeros.
-            if region.image_env.is_some() && !loaded_image {
+            // Skip an empty image_env region *only* when it's based at address
+            // 0: a zero-filled window there would shadow the Cortex-M flash boot
+            // alias (breaks RP2040 bare-metal onboarding ELFs that rely on
+            // VTOR=0 → flash). Nonzero-based ROM windows (e.g. the C3 IROM @
+            // 0x40000000 / DROM @ 0x3FF00000) must stay installed as zeros even
+            // with no on-disk image: on the wasm/browser path there is no
+            // filesystem to preload from, and the ROM arrives later as blobs
+            // that `inject_rom_regions` copies into these slots. Dropping them
+            // here left no slot to fill, which is what surfaced to users as
+            // "C3 flash fast-start: chip YAML declares no IROM region at
+            // 0x40000000". Regions without image_env (plain RAM holes) are
+            // always installed as zeros.
+            if region.image_env.is_some() && !loaded_image && region.base == 0 {
                 tracing::debug!(
                     "skipping empty image_env region '{}' @ {:#010x}",
                     region.name,
@@ -1087,5 +1095,73 @@ impl SystemBus {
             .or_else(|| ext.config.get(alt_key))
             .and_then(|v| v.as_str())?;
         Self::parse_esp32s3_gpio_pin(label).or_else(|| Self::parse_esp32_gpio_pin(label))
+    }
+}
+
+#[cfg(test)]
+mod image_env_region_tests {
+    use super::*;
+
+    /// A nonzero-based `image_env` region with no loadable image must still be
+    /// installed (zero-filled) so a later filler — `inject_rom_regions` on the
+    /// wasm/browser fast-start path — has a slot to copy the ROM blobs into.
+    /// Only a region based at address 0 (the RP2040 bootrom, which would shadow
+    /// the Cortex-M flash boot alias) is dropped when empty.
+    ///
+    /// Regression for the browser "C3 flash fast-start: chip YAML declares no
+    /// IROM region at 0x40000000" failure: with no filesystem to preload from,
+    /// `from_config` used to drop the C3 IROM window entirely, leaving
+    /// `inject_rom_regions` nothing to fill.
+    #[test]
+    fn empty_image_env_region_kept_unless_based_at_zero() {
+        // `LABWIRED_TEST_MISSING_ROM` has no default image path and is never
+        // set, so both regions below fail to load an image — exactly the
+        // wasm/browser condition — without touching any real env var or file.
+        let chip_yaml = r#"
+name: "test-image-env"
+arch: "riscv"
+flash:
+  base: 0x42000000
+  size: "1KB"
+ram:
+  base: 0x3FC80000
+  size: "1KB"
+memory_regions:
+  - name: "irom"
+    base: 0x40000000
+    size: "1KB"
+    image_env: "LABWIRED_TEST_MISSING_ROM"
+  - name: "bootrom_at_zero"
+    base: 0x0
+    size: "1KB"
+    image_env: "LABWIRED_TEST_MISSING_ROM"
+peripherals: []
+"#;
+        let manifest_yaml = r#"
+name: "test-image-env-system"
+chip: "test-image-env"
+"#;
+        let chip: ChipDescriptor = serde_yaml::from_str(chip_yaml).expect("parse chip");
+        let manifest: SystemManifest = serde_yaml::from_str(manifest_yaml).expect("parse manifest");
+
+        // Guard the hermeticity assumption: if some ambient env ever defines
+        // this name, the test would silently stop exercising the empty path.
+        assert!(
+            std::env::var("LABWIRED_TEST_MISSING_ROM").is_err(),
+            "test env var must be unset for this regression to be meaningful"
+        );
+
+        let bus = SystemBus::from_config(&chip, &manifest).expect("build bus");
+
+        assert!(
+            bus.extra_mem.iter().any(|m| m.base_addr == 0x4000_0000),
+            "nonzero-based empty image_env region must be installed so \
+             inject_rom_regions can fill it (was dropped → browser IROM error)"
+        );
+        assert!(
+            !bus.extra_mem.iter().any(|m| m.base_addr == 0),
+            "empty image_env region based at 0 must be dropped so it can't \
+             shadow the flash boot alias"
+        );
     }
 }
