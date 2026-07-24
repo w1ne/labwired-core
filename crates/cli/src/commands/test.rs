@@ -427,6 +427,23 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                         ..Esp32s3Opts::default()
                     };
                     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
+                    // Wire matrix kits (INA219, OLED, …) the same way classic ESP32 does.
+                    if let Err(e) = labwired_core::system::xtensa::attach_esp32_external_devices(
+                        &mut bus, manifest,
+                    ) {
+                        let msg = format!("ESP32-S3 external_devices attach: {e:#}");
+                        error!("{}", msg);
+                        write_config_error_outputs(
+                            &args,
+                            Some(&firmware_path),
+                            system_path.as_ref(),
+                            Some(&firmware_bytes),
+                            Some(&resolved_limits),
+                            msg,
+                        );
+                        return ExitCode::from(EXIT_CONFIG_ERROR);
+                    }
+                    bus.refresh_peripheral_index();
                     if wiring.boot_mode != Esp32s3BootMode::Faithful {
                         let msg =
                             "--rom-boot needs the real ESP32-S3 boot ROM, but none was found. \
@@ -467,6 +484,25 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                     if _fast.is_none() {
                         std::env::remove_var("LABWIRED_ESP32S3_FASTBOOT");
                     }
+                    // Matrix L3 kits live in system.yaml external_devices — attach
+                    // after the SoC bank is registered (classic path does this in
+                    // build_esp32_system_from_manifest; S3 must do it here too).
+                    if let Err(e) = labwired_core::system::xtensa::attach_esp32_external_devices(
+                        &mut bus, manifest,
+                    ) {
+                        let msg = format!("ESP32-S3 external_devices attach: {e:#}");
+                        error!("{}", msg);
+                        write_config_error_outputs(
+                            &args,
+                            Some(&firmware_path),
+                            system_path.as_ref(),
+                            Some(&firmware_bytes),
+                            Some(&resolved_limits),
+                            msg,
+                        );
+                        return ExitCode::from(EXIT_CONFIG_ERROR);
+                    }
+                    bus.refresh_peripheral_index();
                     // Seed partition table + app image magic into D-cache
                     // identity window (VA 0x3C00_0000 → dcache[off]).
                     {

@@ -110,7 +110,8 @@ pub struct Esp32I2c {
     int_ena: u32,
     fifo_conf: u32,
     cmds: [u32; NUM_CMDS],
-    tx_fifo: std::collections::VecDeque<u8>,
+    /// Shared with the AHB FIFO alias at `0x6001_301c` (esp-idf writes TX here).
+    tx_fifo: std::sync::Arc<std::sync::Mutex<std::collections::VecDeque<u8>>>,
     /// TX-FIFO read pointer (bytes consumed by the current command-list run).
     /// Surfaced as FIFO_ST.TXFIFO_START_ADDR; 0 at cold reset.
     tx_pop_count: usize,
@@ -120,6 +121,18 @@ pub struct Esp32I2c {
     intr_source_id: u32,
     /// Round-trip backing for timing / config registers the engine ignores.
     other: BTreeMap<u64, u32>,
+}
+
+/// AHB-bus TX FIFO alias (`I2C0` at `0x6001_301c`). esp-idf `i2c_ll_write_txfifo`
+/// writes here instead of the APB DATA register at `0x3FF5_301c`.
+pub struct Esp32I2cAhbFifo {
+    tx_fifo: std::sync::Arc<std::sync::Mutex<std::collections::VecDeque<u8>>>,
+}
+
+impl std::fmt::Debug for Esp32I2cAhbFifo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Esp32I2cAhbFifo")
+    }
 }
 
 impl Esp32I2c {
@@ -132,7 +145,9 @@ impl Esp32I2c {
             int_ena: 0,
             fifo_conf: 0,
             cmds: [0; NUM_CMDS],
-            tx_fifo: std::collections::VecDeque::with_capacity(FIFO_CAPACITY),
+            tx_fifo: std::sync::Arc::new(std::sync::Mutex::new(
+                std::collections::VecDeque::with_capacity(FIFO_CAPACITY),
+            )),
             tx_pop_count: 0,
             rx_fifo: RefCell::new(std::collections::VecDeque::with_capacity(FIFO_CAPACITY)),
             slaves: Vec::new(),
@@ -147,6 +162,13 @@ impl Esp32I2c {
         Self {
             intr_source_id,
             ..Self::new()
+        }
+    }
+
+    /// AHB FIFO window paired with this APB I2C (same TX FIFO).
+    pub fn ahb_tx_fifo_alias(&self) -> Esp32I2cAhbFifo {
+        Esp32I2cAhbFifo {
+            tx_fifo: std::sync::Arc::clone(&self.tx_fifo),
         }
     }
 
@@ -168,7 +190,7 @@ impl Esp32I2c {
     fn status_register(&self) -> u32 {
         // SR: bit 0 ACK_REC, RXFIFO_CNT at bits 13..8, TXFIFO_CNT at bits 23..18.
         let rx = (self.rx_fifo.borrow().len() as u32) & 0x3F;
-        let tx = (self.tx_fifo.len() as u32) & 0x3F;
+        let tx = (self.tx_fifo.lock().unwrap().len() as u32) & 0x3F;
         (self.sr & SR_ACK_REC) | (rx << 8) | (tx << 18)
     }
 
@@ -202,6 +224,25 @@ impl std::fmt::Debug for Esp32I2c {
             .field("int_ena", &self.int_ena)
             .field("slaves_count", &self.slaves.len())
             .finish()
+    }
+}
+
+impl Peripheral for Esp32I2cAhbFifo {
+    fn read(&self, _offset: u64) -> SimResult<u8> {
+        Ok(0)
+    }
+    fn write(&mut self, _offset: u64, value: u8) -> SimResult<()> {
+        let mut tx = self.tx_fifo.lock().unwrap();
+        if tx.len() < FIFO_CAPACITY {
+            tx.push_back(value);
+        }
+        Ok(())
+    }
+    fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        self.write(offset, (value & 0xFF) as u8)
+    }
+    fn read_u32(&self, _offset: u64) -> SimResult<u32> {
+        Ok(0)
     }
 }
 
@@ -255,10 +296,12 @@ impl Peripheral for Esp32I2c {
                 }
             }
             REG_SLAVE_ADDR => self.slave_addr = value,
-            REG_DATA if self.tx_fifo.len() < FIFO_CAPACITY => {
-                self.tx_fifo.push_back((value & 0xFF) as u8);
+            REG_DATA => {
+                let mut tx = self.tx_fifo.lock().unwrap();
+                if tx.len() < FIFO_CAPACITY {
+                    tx.push_back((value & 0xFF) as u8);
+                }
             }
-            REG_DATA => {}
             REG_FIFO_CONF => {
                 self.fifo_conf = value;
                 // Bit 12 = RX_FIFO_RST; bit 13 = TX_FIFO_RST. Self-clearing.
@@ -266,7 +309,7 @@ impl Peripheral for Esp32I2c {
                     self.rx_fifo.borrow_mut().clear();
                 }
                 if value & (1 << 13) != 0 {
-                    self.tx_fifo.clear();
+                    self.tx_fifo.lock().unwrap().clear();
                     self.tx_pop_count = 0;
                 }
                 self.fifo_conf &= !((1 << 12) | (1 << 13));
@@ -376,7 +419,7 @@ impl Esp32I2c {
                         expects_addr = false;
                     }
                     for i in 0..byte_num {
-                        let b = self.tx_fifo.pop_front().unwrap_or(0);
+                        let b = self.tx_fifo.lock().unwrap().pop_front().unwrap_or(0);
                         self.tx_pop_count += 1;
                         if expects_addr && i == 0 {
                             // First byte of a WRITE following RSTART is addr+R/W.
