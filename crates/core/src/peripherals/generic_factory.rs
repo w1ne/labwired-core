@@ -431,9 +431,25 @@ pub fn try_build(
             }
             Box::new(pio)
         }
-        "esp32_timg" => Box::new(crate::peripherals::esp32::timg::Timg::new(
-            p_cfg.base_address as u32,
-        )),
+        "esp32_timg" => {
+            // The only config-driven consumer of `esp32_timg` is the ESP32-C3
+            // (ESP32-classic builds its TIMGs from the embedded descriptor
+            // table via esp32/factory.rs, which stays on the canned-ratio
+            // path). Give the C3 TIMGs the silicon-faithful RTC_SLOW cal
+            // profile so IDF's `rtc_clk_cal` recovers exactly the same
+            // RTC_SLOW rate the RTC_CNTL counter ticks at — one constant,
+            // no second pin. (Only TIMG0 is ever calibrated by IDF; handing
+            // TIMG1 the same profile is harmless and keeps the path uniform.)
+            use crate::peripherals::esp32c3::rtc_timer::{C3_XTAL_HZ, RTC_SLOW_HZ_MEASURED};
+            Box::new(
+                crate::peripherals::esp32::timg::Timg::new(p_cfg.base_address as u32).with_rtc_cal(
+                    crate::peripherals::esp32::timg::RtcCalProfile {
+                        xtal_hz: C3_XTAL_HZ,
+                        slow_hz: RTC_SLOW_HZ_MEASURED,
+                    },
+                ),
+            )
+        }
         // Instruction/data cache controllers (H5, WBA, U5…). Zephyr's SoC init
         // enables the cache via ICACHE_CR.EN and never polls a completion flag,
         // so a read-as-zero stub keeps the enable sequence from bus-faulting.

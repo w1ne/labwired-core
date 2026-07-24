@@ -49,7 +49,6 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::ssd1306::SSD1306_128X32_KIT,
     &components::sh1107::SH1107_KIT,
     &components::ili9341::ILI9341_KIT,
-    &components::max31855::MAX31855_KIT,
     &components::ssd1680_tricolor_290::SSD1680_TRICOLOR_290_KIT,
     &components::sn74hc165::SN74HC165_KIT,
     &components::hc595_7seg::HC595_7SEG_KIT,
@@ -78,6 +77,10 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::declarative_i2c::SHT31_KIT,
     &components::declarative_i2c::BH1750_KIT,
     &components::declarative_i2c::VEML7700_KIT,
+    // Declarative SPI devices — model lives entirely in configs/devices/*.yaml,
+    // interpreted by the generic GenericSpiDevice (zero per-part Rust).
+    &components::declarative_spi::ADXL345_KIT,
+    &components::declarative_spi::MAX31855_KIT,
 ];
 
 /// Borrow the registry slice.
