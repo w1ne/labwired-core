@@ -1,4 +1,10 @@
-/* Prefer EasyDMA TWIM (LabWired models TWIM, not classic TWI byte engine). */
+/*
+ * nRF52840 serial instance @ 0x40003000 is one MMIO window that silicon
+ * switches between TWI (ENABLE=5), TWIM (ENABLE=6), and SPIM (ENABLE=7)
+ * (PS §6.31). LabWired models the TWIM EasyDMA master on that window.
+ * Board default DT is classic TWI; select TWIM so firmware programs the
+ * same ENABLE=6 register map as the digital twin (not a driver stub).
+ */
 &i2c0 {
 	compatible = "nordic,nrf-twim";
 };

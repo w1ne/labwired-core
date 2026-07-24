@@ -96,6 +96,10 @@ peripherals:
     type: "rp2040_i2c"
     base_address: 0x40044000
     size: "4KB"
+    # RP2040 datasheet §2.3.2 — I2C0_IRQ = 23 (NVIC). Zephyr i2c_dw is
+    # interrupt-driven (TX_EMPTY / STOP_DET → device_sync_sem); without this
+    # the transfer times out with -EAGAIN.
+    irq: 23
   # Cortex-M0+ SysTick (SCS). Behavioural model: the ARMv7-M SysTick timer
   # (edge-triggered — raises system exception 15 only on the count-down to
   # zero, and only while ENABLE+TICKINT are set). The Arduino Mbed-OS core
