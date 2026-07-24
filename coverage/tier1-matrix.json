@@ -1,0 +1,616 @@
+{
+  "esp32": {
+    "adc": {
+      "status": "pass"
+    },
+    "clock": {
+      "status": "pass"
+    },
+    "dma": {
+      "status": "na"
+    },
+    "gpio": {
+      "status": "pass"
+    },
+    "i2c": {
+      "status": "pass"
+    },
+    "irq": {
+      "status": "pass"
+    },
+    "pwm": {
+      "status": "pass"
+    },
+    "rtc": {
+      "status": "na"
+    },
+    "spi": {
+      "status": "pass"
+    },
+    "timer": {
+      "status": "pass"
+    },
+    "uart": {
+      "status": "pass"
+    },
+    "wdt": {
+      "status": "na"
+    }
+  },
+  "esp32c3": {
+    "adc": {
+      "status": "pass"
+    },
+    "clock": {
+      "status": "unrecorded"
+    },
+    "dma": {
+      "status": "unrecorded"
+    },
+    "gpio": {
+      "status": "pass"
+    },
+    "i2c": {
+      "status": "blocked"
+    },
+    "irq": {
+      "status": "pass"
+    },
+    "pwm": {
+      "status": "blocked"
+    },
+    "rtc": {
+      "status": "na"
+    },
+    "spi": {
+      "status": "pass"
+    },
+    "timer": {
+      "status": "pass"
+    },
+    "uart": {
+      "status": "pass"
+    },
+    "wdt": {
+      "status": "na"
+    }
+  },
+  "esp32s3": {
+    "adc": {
+      "status": "na"
+    },
+    "clock": {
+      "status": "pass"
+    },
+    "dma": {
+      "status": "pass"
+    },
+    "gpio": {
+      "status": "pass"
+    },
+    "i2c": {
+      "status": "pass"
+    },
+    "irq": {
+      "status": "pass"
+    },
+    "pwm": {
+      "status": "pass"
+    },
+    "rmt": {
+      "status": "pass"
+    },
+    "rtc": {
+      "status": "na"
+    },
+    "spi": {
+      "status": "na"
+    },
+    "timer": {
+      "status": "pass"
+    },
+    "uart": {
+      "status": "pass"
+    },
+    "wdt": {
+      "status": "na"
+    }
+  },
+  "nrf52832": {
+    "adc": {
+      "status": "pass"
+    },
+    "clock": {
+      "status": "pass"
+    },
+    "dma": {
+      "status": "na"
+    },
+    "gpio": {
+      "status": "pass"
+    },
+    "i2c": {
+      "status": "pass"
+    },
+    "irq": {
+      "status": "na"
+    },
+    "pwm": {
+      "status": "pass"
+    },
+    "rtc": {
+      "status": "pass"
+    },
+    "spi": {
+      "status": "pass"
+    },
+    "timer": {
+      "status": "pass"
+    },
+    "uart": {
+      "status": "pass"
+    },
+    "wdt": {
+      "status": "pass"
+    }
+  },
+  "nrf52840": {
+    "adc": {
+      "status": "pass"
+    },
+    "clock": {
+      "status": "pass"
+    },
+    "dma": {
+      "status": "na"
+    },
+    "gpio": {
+      "status": "pass"
+    },
+    "i2c": {
+      "status": "pass"
+    },
+    "irq": {
+      "status": "na"
+    },
+    "pwm": {
+      "status": "pass"
+    },
+    "rtc": {
+      "status": "pass"
+    },
+    "spi": {
+      "status": "pass"
+    },
+    "timer": {
+      "status": "pass"
+    },
+    "uart": {
+      "status": "pass"
+    },
+    "wdt": {
+      "status": "pass"
+    }
+  },
+  "rp2040": {
+    "adc": {
+      "status": "na"
+    },
+    "clock": {
+      "status": "pass"
+    },
+    "dma": {
+      "status": "unrecorded"
+    },
+    "gpio": {
+      "status": "pass"
+    },
+    "i2c": {
+      "status": "pass"
+    },
+    "irq": {
+      "status": "na"
+    },
+    "pwm": {
+      "status": "na"
+    },
+    "rtc": {
+      "status": "na"
+    },
+    "spi": {
+      "status": "pass"
+    },
+    "timer": {
+      "status": "pass"
+    },
+    "uart": {
+      "status": "pass"
+    },
+    "wdt": {
+      "status": "na"
+    }
+  },
+  "stm32f103": {
+    "adc": {
+      "status": "pass"
+    },
+    "clock": {
+      "status": "pass"
+    },
+    "dma": {
+      "status": "pass"
+    },
+    "gpio": {
+      "status": "pass"
+    },
+    "i2c": {
+      "status": "pass"
+    },
+    "irq": {
+      "status": "na"
+    },
+    "pwm": {
+      "status": "na"
+    },
+    "rtc": {
+      "status": "pass"
+    },
+    "spi": {
+      "status": "pass"
+    },
+    "timer": {
+      "status": "pass"
+    },
+    "uart": {
+      "status": "pass"
+    },
+    "wdt": {
+      "status": "pass"
+    }
+  },
+  "stm32f401": {
+    "adc": {
+      "status": "pass"
+    },
+    "clock": {
+      "status": "pass"
+    },
+    "dma": {
+      "status": "na"
+    },
+    "gpio": {
+      "status": "pass"
+    },
+    "i2c": {
+      "status": "pass"
+    },
+    "irq": {
+      "status": "na"
+    },
+    "pwm": {
+      "status": "na"
+    },
+    "rtc": {
+      "status": "pass"
+    },
+    "spi": {
+      "status": "pass"
+    },
+    "timer": {
+      "status": "pass"
+    },
+    "uart": {
+      "status": "pass"
+    },
+    "wdt": {
+      "status": "pass"
+    }
+  },
+  "stm32f407": {
+    "adc": {
+      "status": "pass"
+    },
+    "clock": {
+      "status": "pass"
+    },
+    "dma": {
+      "status": "unrecorded"
+    },
+    "gpio": {
+      "status": "pass"
+    },
+    "i2c": {
+      "status": "pass"
+    },
+    "irq": {
+      "status": "na"
+    },
+    "pwm": {
+      "status": "na"
+    },
+    "rtc": {
+      "status": "pass"
+    },
+    "spi": {
+      "status": "pass"
+    },
+    "timer": {
+      "status": "pass"
+    },
+    "uart": {
+      "status": "pass"
+    },
+    "wdt": {
+      "status": "pass"
+    }
+  },
+  "stm32g474re": {
+    "adc": {
+      "status": "pass"
+    },
+    "clock": {
+      "status": "pass"
+    },
+    "dma": {
+      "status": "pass"
+    },
+    "gpio": {
+      "status": "pass"
+    },
+    "i2c": {
+      "status": "pass"
+    },
+    "irq": {
+      "status": "pass"
+    },
+    "pwm": {
+      "status": "pass"
+    },
+    "rtc": {
+      "status": "pass"
+    },
+    "spi": {
+      "status": "pass"
+    },
+    "timer": {
+      "status": "pass"
+    },
+    "uart": {
+      "status": "pass"
+    },
+    "wdt": {
+      "status": "pass"
+    }
+  },
+  "stm32h563": {
+    "adc": {
+      "status": "pass"
+    },
+    "can": {
+      "status": "pass"
+    },
+    "clock": {
+      "status": "pass"
+    },
+    "dma": {
+      "status": "pass"
+    },
+    "gpio": {
+      "status": "pass"
+    },
+    "i2c": {
+      "status": "pass"
+    },
+    "irq": {
+      "status": "pass"
+    },
+    "pwm": {
+      "status": "pass"
+    },
+    "rtc": {
+      "status": "pass"
+    },
+    "spi": {
+      "status": "pass"
+    },
+    "timer": {
+      "status": "pass"
+    },
+    "uart": {
+      "status": "pass"
+    },
+    "wdt": {
+      "status": "pass"
+    }
+  },
+  "stm32h735": {
+    "adc": {
+      "status": "na"
+    },
+    "clock": {
+      "status": "pass"
+    },
+    "dma": {
+      "status": "na"
+    },
+    "gpio": {
+      "status": "pass"
+    },
+    "i2c": {
+      "status": "pass"
+    },
+    "irq": {
+      "status": "pass"
+    },
+    "pwm": {
+      "status": "pass"
+    },
+    "rtc": {
+      "status": "na"
+    },
+    "spi": {
+      "status": "pass"
+    },
+    "timer": {
+      "status": "pass"
+    },
+    "uart": {
+      "status": "pass"
+    },
+    "wdt": {
+      "status": "pass"
+    }
+  },
+  "stm32l073": {
+    "adc": {
+      "status": "pass"
+    },
+    "clock": {
+      "status": "pass"
+    },
+    "dma": {
+      "status": "pass"
+    },
+    "gpio": {
+      "status": "pass"
+    },
+    "i2c": {
+      "status": "pass"
+    },
+    "irq": {
+      "status": "pass"
+    },
+    "pwm": {
+      "status": "na"
+    },
+    "rtc": {
+      "status": "pass"
+    },
+    "spi": {
+      "status": "pass"
+    },
+    "timer": {
+      "status": "pass"
+    },
+    "uart": {
+      "status": "pass"
+    },
+    "wdt": {
+      "status": "pass"
+    }
+  },
+  "stm32l476": {
+    "adc": {
+      "status": "pass"
+    },
+    "clock": {
+      "status": "pass"
+    },
+    "dma": {
+      "status": "pass"
+    },
+    "gpio": {
+      "status": "pass"
+    },
+    "i2c": {
+      "status": "pass"
+    },
+    "irq": {
+      "status": "pass"
+    },
+    "pwm": {
+      "status": "na"
+    },
+    "rtc": {
+      "status": "pass"
+    },
+    "spi": {
+      "status": "pass"
+    },
+    "timer": {
+      "status": "pass"
+    },
+    "uart": {
+      "status": "pass"
+    },
+    "wdt": {
+      "status": "pass"
+    }
+  },
+  "stm32wb55": {
+    "adc": {
+      "status": "pass"
+    },
+    "clock": {
+      "status": "pass"
+    },
+    "dma": {
+      "status": "pass"
+    },
+    "gpio": {
+      "status": "pass"
+    },
+    "i2c": {
+      "status": "pass"
+    },
+    "irq": {
+      "status": "pass"
+    },
+    "pwm": {
+      "status": "pass"
+    },
+    "rtc": {
+      "status": "pass"
+    },
+    "spi": {
+      "status": "pass"
+    },
+    "timer": {
+      "status": "pass"
+    },
+    "uart": {
+      "status": "pass"
+    },
+    "wdt": {
+      "status": "pass"
+    }
+  },
+  "stm32wba52": {
+    "adc": {
+      "status": "na"
+    },
+    "clock": {
+      "status": "pass"
+    },
+    "dma": {
+      "status": "pass"
+    },
+    "gpio": {
+      "status": "pass"
+    },
+    "i2c": {
+      "status": "pass"
+    },
+    "irq": {
+      "status": "pass"
+    },
+    "pwm": {
+      "status": "pass"
+    },
+    "rtc": {
+      "status": "pass"
+    },
+    "spi": {
+      "status": "pass"
+    },
+    "timer": {
+      "status": "pass"
+    },
+    "uart": {
+      "status": "pass"
+    },
+    "wdt": {
+      "status": "pass"
+    }
+  }
+}

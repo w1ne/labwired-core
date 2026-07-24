@@ -1,0 +1,39 @@
+name: Firmware CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  firmware-test:
+    name: Test firmware with LabWired
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: thumbv7m-none-eabi
+
+      - name: Build firmware
+        run: cargo build --release --target thumbv7m-none-eabi -p your-firmware
+
+      - id: labwired
+        name: Run LabWired test
+        # This immutable action-source pin is separate from the CLI version below.
+        uses: w1ne/labwired-core/.github/actions/labwired-test@0cadd18fc9a3c0cbd1ecb0a6ddcd8ce66d56283d
+        with:
+          script: tests/firmware-test.yaml
+          version: v0.19.2
+          output-dir: out/labwired
+          args: --no-uart-stdout
+
+      - name: Link the automatic LabWired artifact
+        if: always()
+        run: echo "${{ steps.labwired.outputs.artifact-url }}" >> "$GITHUB_STEP_SUMMARY"
+
+# Advanced alternative: build LabWired from a source checkout only when testing
+# an unreleased LabWired change. For normal firmware CI, keep the pinned release
+# selected by version: v0.19.2 above.

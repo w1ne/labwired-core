@@ -1,0 +1,2985 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://docs.labwired.com/walk_free_plan/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Walk-free STM32: making the per-cycle peripheral walk structurally unnecessary - LabWired Core</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#walk-free-stm32-making-the-per-cycle-peripheral-walk-structurally-unnecessary" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="LabWired Core" class="md-header__button md-logo" aria-label="LabWired Core" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            LabWired Core
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Walk-free STM32: making the per-cycle peripheral walk structurally unnecessary
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/w1ne/labwired-core" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    w1ne/labwired-core
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../architecture/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Architecture Overview
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../golden_reference/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Hardware-Sim Parity
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../supported_devices.md" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Hardware Matrix
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../agents/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  AI Agent Manual
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../getting_started_firmware/" class="md-tabs__link">
+          
+  
+  
+  Tutorials
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../board_onboarding_playbook/" class="md-tabs__link">
+          
+  
+  
+  How-To Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../configuration_reference/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../boards/stm32f103/" class="md-tabs__link">
+          
+  
+  
+  Boards
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../release_strategy/" class="md-tabs__link">
+          
+  
+  
+  Operations
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../architecture_overview/" class="md-tabs__link">
+          
+  
+  
+  Explanation
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="LabWired Core" class="md-nav__button md-logo" aria-label="LabWired Core" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    LabWired Core
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/w1ne/labwired-core" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    w1ne/labwired-core
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../golden_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware-Sim Parity
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../supported_devices.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware Matrix
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AI Agent Manual
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting_started_firmware/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Running Firmware
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples/i2c_sensor_example/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Simulating Sensors (I2C)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples/dma_exti_example/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mastering DMA & Interrupts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples/integrated_test_walkthrough/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Integrated Test Walkthrough
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How-To Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How-To Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../board_onboarding_playbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Board Onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ci_integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CI/CD Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../peripherals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Peripheral Modeling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hardware_interaction_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware Interaction Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vscode_debugging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Debugging with VS Code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gdb_integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GDB Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../debugging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Debugging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration (YAML)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../declarative_registers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Declarative Registers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ci_test_runner/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test Script Schema
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference_client_flows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Client Flows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../isa_coverage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ISA Coverage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../schema_compatibility/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Schema Compatibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../catalog_validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Catalog Validation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../target_support_rubric/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Target Support Rubric
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Boards
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Boards
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32f103/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F103
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32f401/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F401
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32f407/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F407
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/nucleo-l476rg/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NUCLEO-L476RG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32h563/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32H563
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32h735/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32H735
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/stm32wba52/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32WBA52
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/nrf52832/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nRF52832
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/nrf52840/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nRF52840
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/rp2040/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RP2040
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/esp32c3/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESP32-C3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../boards/esp32s3/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESP32-S3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release_strategy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Strategy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../RELEASE_DETERMINISM/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Determinism
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../labwired_audit_protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verification Audit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../supported_devices.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Supported Devices
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../coverage_scoreboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coverage Scoreboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../coverage/chip-conformance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Chip Conformance (live)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../coverage/tier1-scoreboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tier-1 Matrix (live)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../safety/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Safety & Guardrails
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demos
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../case_study_stm32/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Case Study (STM32)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Explanation
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Explanation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture_overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../simulation_protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Simulation Protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#0-where-the-gate-stands-today" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0. Where the gate stands today
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#part-1-the-architectural-decision-read-side-freshness" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Part 1 — The architectural decision: read-side freshness
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Part 1 — The architectural decision: read-side freshness">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-constraint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The constraint
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-three-options-evaluated" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The three options, evaluated
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The three options, evaluated">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a-mut-read-choke-point-rejected-blast-radius" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        (a) &amp;mut read choke point — REJECTED (blast radius)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#b-interior-mutability-a-bus-published-clock-the-mechanism" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        (b) Interior mutability + a bus-published clock — the MECHANISM
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#c-batch-boundary-freshness-the-contract-recommended" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        (c) Batch-boundary freshness — the CONTRACT (RECOMMENDED)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-determinism-argument-the-differential-gate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The determinism argument (the differential gate)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#spike-result-committed-marked-spike" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Spike result (committed, marked SPIKE)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#part-2-walker-inventory-and-migration-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Part 2 — Walker inventory and migration order
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Part 2 — Walker inventory and migration order">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#inventory-l476-invaders-bus-58-instances" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inventory (L476 invaders bus, 58 instances)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#migration-order-by-dynamic-importance-for-real-firmware" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Migration order (by dynamic importance for real firmware)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pr-batches-each-with-its-differential-gate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PR batches (each with its differential gate)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#part-3-end-state-and-the-walk_deleted-deprecation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Part 3 — End state and the walk_deleted deprecation
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="walk-free-stm32-making-the-per-cycle-peripheral-walk-structurally-unnecessary">Walk-free STM32: making the per-cycle peripheral walk structurally unnecessary</h1>
+<blockquote>
+<p><strong>Goal.</strong> Any user-compiled firmware on any board runs fast, not just curated
+demos carrying a hand <code>walk_deleted: true</code>. Concretely: on a bare STM32 bus,
+<code>SystemBus::derive_walk_deletable()</code> (<code>crates/core/src/bus/tick.rs</code>) flips
+<code>true</code>, <code>max_safe_tick_interval()</code> returns <code>RECOMMENDED_TICK_INTERVAL</code> (64)
+universally, and interval batching engages. Today ~49 of the invaders bus's 58
+peripherals force it <code>false</code> because they return the conservative default
+<code>needs_legacy_walk() == true</code>.</p>
+<p>This plan is code-pinned. Every count and file reference below was read from
+<code>origin/main</code> at <code>a147fe0b</code>. It drives the implementation agents; keep it in
+the repo.</p>
+</blockquote>
+<h2 id="0-where-the-gate-stands-today">0. Where the gate stands today</h2>
+<p><code>derive_walk_deletable</code> (bus/tick.rs) is <code>true</code> iff <strong>every</strong> peripheral on the
+bus satisfies <code>uses_scheduler() || !needs_legacy_walk()</code>. Both predicates
+default toward the walk:</p>
+<ul>
+<li><code>needs_legacy_walk()</code> defaults to <code>true</code> (lib.rs ~574). <strong>No STM32 model
+  overrides it</strong> — grep across <code>crates/core/src/peripherals/</code> finds zero
+  <code>fn needs_legacy_walk</code> overrides on any STM32 peripheral.</li>
+<li><code>uses_scheduler()</code> is overridden <code>true</code> only by <code>uart.rs</code> (line 1077) and
+  <code>spi.rs</code> (line 1501).</li>
+</ul>
+<p>So on the L476 invaders bus (58 peripheral instances), the 9 <code>uart</code>×6 + <code>spi</code>×3
+pass; the other <strong>49 force the walk on</strong>. That is the "#513 = 49" number, and it
+is why <code>walk_deleted: true</code> must be hand-written per lab. The universal fix is
+to make the remaining 49 assert walk-independence <em>honestly</em> — trivially for the
+inert ones, and by migrating the rest onto the event scheduler.</p>
+<p>The one structural blocker to migrating the "real work" timers is a read-path
+constraint, resolved in Part 1.</p>
+<hr />
+<h2 id="part-1-the-architectural-decision-read-side-freshness">Part 1 — The architectural decision: read-side freshness</h2>
+<h3 id="the-constraint">The constraint</h3>
+<p>Scheduler-migrated peripherals advance lazily: the bus calls
+<code>sync_scheduler_peripheral(idx)</code> → <code>dev.sync_to(current_cycle)</code> <strong>before an MMIO
+write</strong> (bus/tick.rs ~137, called from the write path in bus/accessors.rs
+<code>write_u8</code>/<code>write_u16</code>/<code>write_u32</code>). But firmware polls free-running counters
+<strong>by reading them</strong> — <code>TIM-&gt;CNT</code>, SysTick <code>SYST_CVR</code> (VAL), <code>DWT-&gt;CYCCNT</code>, RTC
+sub-second — and the bus read path is <code>&amp;self</code>:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>fn read_u8(&amp;self, addr) -&gt; ...   // Bus trait, accessors.rs:52
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    ... p.dev.read(addr - p.base) // Peripheral::read(&amp;self, offset)  lib.rs:399
+</span></code></pre></div>
+<p>A <code>&amp;self</code> read cannot call <code>sync_to(&amp;mut self, …)</code>. This is exactly why
+<code>esp32c3/rtc_timer.rs</code> (lines 118–124) keeps <code>uses_scheduler() == false</code> with the
+comment <em>"The bus read API is intentionally <code>&amp;self</code>; until it can sync
+scheduler-driven peripherals before reads, this read-driven RTC must stay on the
+legacy tick path or firmware delay loops observe stale time and spin forever."</em>
+It is also why ESP32 TIMG (<code>esp32/timg.rs</code>) gets away with <strong>write-side-only</strong>
+sync: TIMG hardware latches the counter into a readable register on an
+<code>UPDATE</code>-register <em>write</em>, so the write-path <code>sync_to</code> refreshes it. <strong>STM32
+timers have no such latch</strong> — firmware reads <code>CNT</code> directly with no preceding
+write.</p>
+<h3 id="the-three-options-evaluated">The three options, evaluated</h3>
+<h4 id="a-mut-read-choke-point-rejected-blast-radius">(a) <code>&amp;mut</code> read choke point — REJECTED (blast radius)</h4>
+<p>Change <code>Peripheral::read*</code> to <code>&amp;mut self</code> (or add <code>read_synced(&amp;mut self)</code> the
+bus prefers). Mechanical blast radius, measured on the tree:</p>
+<table>
+<thead>
+<tr>
+<th>Surface</th>
+<th>Count</th>
+<th>Why it hurts</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>impl Peripheral for …</code> blocks</td>
+<td><strong>134</strong></td>
+<td>every one's <code>read</code>/<code>read_u16</code>/<code>read_u32</code> signature changes</td>
+</tr>
+<tr>
+<td><code>Bus::read_u8</code> call sites in <code>core/src</code></td>
+<td><strong>200</strong></td>
+<td><code>read_u8</code> is <code>&amp;self</code> today; making the peripheral read <code>&amp;mut</code> forces <code>Bus::read*</code> to <code>&amp;mut</code> too</td>
+</tr>
+<tr>
+<td><code>Bus::read_u16</code>/<code>read_u32</code> call sites in <code>core/src</code></td>
+<td><strong>1318</strong></td>
+<td>same cascade</td>
+</tr>
+<tr>
+<td>read calls inside <code>crates/core/src/cpu/</code></td>
+<td><strong>105</strong></td>
+<td>the CPU holds a <strong>shared</strong> <code>&amp;self</code> bus borrow during instruction fetch</td>
+</tr>
+<tr>
+<td>read calls outside <code>core/src</code> (hw-oracle, wasm, dap…)</td>
+<td><strong>219</strong></td>
+<td>every differential/host caller</td>
+</tr>
+</tbody>
+</table>
+<p>The fatal problem is not the count — it is <strong>aliasing</strong>. <code>fetch_slice(&amp;self)</code>
+(accessors.rs:509) hands the CPU a <code>&amp;[u8]</code> borrowed from a peripheral's backing
+buffer; observers iterate <code>&amp;self.observers</code> during reads; bit-band and
+atomic-alias reads <em>recurse</em> through <code>read_u32(&amp;self)</code>. Making reads <code>&amp;mut</code>
+collapses the "many concurrent shared reads during a batch" model the
+interpreter is built on. This is a multi-week refactor touching every crate, to
+serve a handful of counter peripherals. <strong>Rejected.</strong></p>
+<h4 id="b-interior-mutability-a-bus-published-clock-the-mechanism">(b) Interior mutability + a bus-published clock — the MECHANISM</h4>
+<p>The <code>Peripheral</code> trait is <code>Send</code> (lib.rs:398), <strong>not <code>Sync</code></strong>, and the engine is
+single-threaded per machine, so interior mutability is sound. It is already in
+use: <strong>24 files</strong> under <code>peripherals/</code> hold state in <code>Cell</code>/<code>RefCell</code>, and
+<code>esp32c3/rtc_timer.rs</code> already stores its <code>counter</code>/<code>anchor_tick</code> in <code>Cell</code> with
+a working <code>sync_to</code>. The only missing piece is that <code>read(&amp;self, offset)</code>
+receives <em>only the offset</em> — it cannot today reach <code>bus.current_cycle</code>.</p>
+<p>Give each scheduler-migrated counter peripheral a shared clock handle,
+<code>Arc&lt;AtomicU64&gt;</code> (Send — <code>Rc&lt;Cell&lt;u64&gt;&gt;</code> is <strong>not</strong> Send and would break the
+trait bound), into which the bus publishes <code>current_cycle</code> once per batch (the
+same value the write path already syncs to). <code>read(&amp;self)</code> then advances its
+<code>Cell</code> counter to that clock and returns a fresh value — <strong>zero changes to the
+<code>&amp;self</code> bus read path or the 134 impls.</strong> This is the mechanism; it delivers the
+freshness bound analysed in (c).</p>
+<h4 id="c-batch-boundary-freshness-the-contract-recommended">(c) Batch-boundary freshness — the CONTRACT (RECOMMENDED)</h4>
+<p><code>bus.current_cycle</code> is the <strong>batch-start</strong> cycle during a CPU batch (lib.rs:2029:
+<em>"intra-batch staleness is &lt; one tick"</em>). So a read synced to it trails the true
+cycle by <strong>strictly less than one <code>peripheral_tick_interval</code></strong> — <em>exactly the
+"&lt; one tick" bound the write path already ships and documents</em> (lib.rs ~2001 and
+the <code>sync_to</code> doc-comment, lib.rs:669). The quantization has direct precedent:
+HC-SR04 echo edges are already ceil'd to the tick grid and differential-gated,
+and the run loop already clamps a batch to the next scheduled edge
+(<code>next_hcsr04_deadline_cycle</code>, lib.rs:2086).</p>
+<p><strong>Recommendation: adopt (c) as the determinism contract, implemented via (b)'s
+interior-mutability read-sync. Reject (a).</strong></p>
+<h3 id="the-determinism-argument-the-differential-gate">The determinism argument (the differential gate)</h3>
+<p>The oracle's observable outputs are the firmware's <strong>externally visible
+effects</strong>: GPIO/pad transitions, bytes on the SPI/I²C/UART wire, and IRQ-driven
+control flow. Split by how the scheduler reproduces each:</p>
+<ol>
+<li>
+<p><strong>Event-derived observables</strong> (a compare-match IRQ, an overflow, a DMA
+   transfer-complete, an ADC EOC, a timeout-driven GPIO toggle). Migrated
+   peripherals emit these as scheduler events pinned to an <strong>absolute cycle
+   deadline</strong> (<code>current_cycle + 1 + delay</code>, bus/tick.rs:167), and the run loop
+   clamps the batch to the nearest armed deadline (generalizing today's HC-SR04
+   clamp). These land at their <strong>exact</strong> cycle — byte-identical to a walk-on
+   interval-1 run. This is the real oracle claim, and it holds at interval 64.</p>
+</li>
+<li>
+<p><strong>Raw counter reads</strong> (<code>TIM-&gt;CNT</code>, <code>SYST_CVR</code>, <code>CYCCNT</code>, RTC sub-second) polled
+   mid-batch. These are quantized to the batch-start grid, ≤ (interval − 1)
+   cycles behind. This is <strong>not</strong> oracle-observable <em>unless firmware exports the
+   raw value</em> (e.g. sends <code>CNT</code> over UART). For that narrow class, interval-1
+   byte-equivalence is impossible under <em>any</em> batching; the honest promise is the
+   documented ≤ one-interval quantization, with full same-run determinism.</p>
+</li>
+</ol>
+<p><strong>Therefore the differential gate is: walk-on @ interval-1 (golden reference)
+vs scheduler @ interval-64, asserting byte-identity of the event-observable
+trace</strong> — GPIO transitions, bus bytes, and IRQ cycle stamps. The reference runs
+at interval 1 (the most accurate); the scheduler matches it for every
+event-derived observable because deadlines are absolute and batch-clamped. The
+raw-counter-read class is explicitly carved out (bounded, documented) — the same
+carve-out the write side already lives with.</p>
+<blockquote>
+<p><strong>Optional exactness upgrade (deferred, not required for walk-freedom).</strong>
+Publishing a <em>per-retired-instruction</em> clock would erase even the raw-read
+quantization. The CPU already does exactly this for logic-capture push mode —
+<code>tap.bump_clock()</code> once per retired instruction (cortex_m.rs:682/716/746). A
+future "always-on sim clock" bumped per instruction would let raw counter reads
+match interval-1 byte-for-byte, at the cost of one integer increment per
+instruction. Keep it in reserve; the batch-start contract is sufficient to
+delete the walk.</p>
+</blockquote>
+<h3 id="spike-result-committed-marked-spike">Spike result (committed, marked <code>SPIKE</code>)</h3>
+<p><code>crates/core/tests/walk_free_read_sync_spike.rs</code> implements the (b)+(c) pattern
+against the <strong>real</strong> <code>Peripheral</code> trait: a <code>Cell</code>-based free-running counter with
+an <code>Arc&lt;AtomicU64&gt;</code> shared clock, <code>read(&amp;self)</code> syncing to the published clock.
+Two tests pass (<code>cargo test -p labwired-core --test walk_free_read_sync_spike
+--features event-scheduler</code>, 26.7s build, both green):</p>
+<ul>
+<li><code>read_sync_is_exact_at_batch_boundaries</code> — at every batch boundary the
+  read-synced counter equals the interval-1 walk <strong>exactly</strong>.</li>
+<li><code>mid_batch_read_staleness_is_bounded_by_interval</code> — a mid-batch read never runs
+  ahead of the walk and trails it by <strong>strictly &lt; interval</strong>, landing exactly on
+  the batch-start counter value (clean grid quantization, no drift).</li>
+</ul>
+<p>This proves the recommendation compiles (the <code>Send</code> bound holds with
+<code>Arc&lt;AtomicU64&gt;</code>), needs no bus-signature change, and honours the contract. The
+spike is a design artifact, not a shipped model — delete it or fold it into the
+SysTick migration test when Batch 1 lands.</p>
+<hr />
+<h2 id="part-2-walker-inventory-and-migration-order">Part 2 — Walker inventory and migration order</h2>
+<h3 id="inventory-l476-invaders-bus-58-instances">Inventory (L476 invaders bus, 58 instances)</h3>
+<p>Migrated already: <code>uart</code>×6, <code>spi</code>×3 (<code>uses_scheduler()==true</code>). The remaining
+<strong>49 walkers</strong> split into two work classes.</p>
+<p><strong>Class A — inert / stub tick: assert <code>needs_legacy_walk()==false</code> (one line, S).</strong>
+These models have a <em>default no-op</em> <code>tick()</code> (no <code>fn tick</code>/<code>fn tick_elapsed</code> body
+in the file) or a pure register bank; they force the walk only because nobody
+asserted otherwise. 28 instances:</p>
+<table>
+<thead>
+<tr>
+<th>Model (<code>type</code>)</th>
+<th>Inst.</th>
+<th><code>tick()</code> today</th>
+<th>Note</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>gpio</code></td>
+<td>6</td>
+<td>none (no-op)</td>
+<td>pure register + pad model; edges handled by the GPIO-diff pass, not <code>tick</code></td>
+</tr>
+<tr>
+<td><code>lptim</code></td>
+<td>2</td>
+<td>none</td>
+<td>register bank</td>
+</tr>
+<tr>
+<td><code>rcc</code>, <code>pwr</code>, <code>flash</code>, <code>rng</code>, <code>crc</code>, <code>dac</code>, <code>dbgmcu</code>, <code>fmc</code>, <code>quadspi</code>, <code>usb_otg</code>, <code>sdmmc</code>, <code>comp</code>, <code>tsc</code>, <code>nvic</code>, <code>stub</code></td>
+<td>1 each (15)</td>
+<td>none</td>
+<td>register banks / controllers with no time-driven state</td>
+</tr>
+<tr>
+<td><code>sai</code></td>
+<td>2</td>
+<td>none</td>
+<td>register bank</td>
+</tr>
+<tr>
+<td><code>iwdg</code>, <code>wwdg</code></td>
+<td>1 each (2)</td>
+<td>none</td>
+<td><strong>stubs today</strong> — they do not actually count down. <code>false</code> is honest for the current model; a real countdown (future fidelity work) would move them to Class B, not back to the walk</td>
+</tr>
+<tr>
+<td><code>rtc</code></td>
+<td>1</td>
+<td>none (<code>rtc.rs</code> → <code>Rtc::new</code>)</td>
+<td>On L476 <code>type: "rtc"</code> binds <code>rtc.rs</code> (register bank, no-op tick). The counter-timer RTC (<code>rtc_v3.rs</code>, per-second alarm tick) appears on H5-class chips — there it is Class B</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Class B — real <code>tick()</code> work: migrate to the scheduler (sync_to + on_event +
+uses_scheduler).</strong> 21 instances, 8 model types:</p>
+<table>
+<thead>
+<tr>
+<th>Model</th>
+<th>Inst.</th>
+<th><code>tick()</code> does (when armed)</th>
+<th>Read-polled?</th>
+<th>IRQ/event deadlines</th>
+<th>Migration class</th>
+<th>Effort</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>systick</code></td>
+<td>1</td>
+<td>down-count <code>cvr</code>; at 0 → <code>system_exception 15</code>, reload <code>rvr</code> (systick.rs)</td>
+<td><strong>yes</strong> (<code>SYST_CVR</code>)</td>
+<td>reload/underflow every <code>rvr+1</code> cycles</td>
+<td>counter-timer w/ deadline</td>
+<td><strong>M</strong></td>
+</tr>
+<tr>
+<td><code>timer</code> (TIM1–17)</td>
+<td>11</td>
+<td>prescaled up-count; UIF on <code>arr</code> wrap + CCxIF compare match; holds IRQ level while <code>sr&amp;dier</code> latched (timer.rs)</td>
+<td><strong>yes</strong> (<code>CNT</code>)</td>
+<td>next update + up to 4 compare deadlines; <strong>level re-assert</strong></td>
+<td>counter-timer w/ compare deadlines</td>
+<td><strong>L</strong></td>
+</tr>
+<tr>
+<td><code>dma</code> (DMA1/2)</td>
+<td>2</td>
+<td>per active channel w/ <code>cndtr&gt;0</code>: emit DMA req(s) + TC IRQ (dma.rs)</td>
+<td>flags (<code>ISR</code>)</td>
+<td>transfer pacing + TC</td>
+<td>DMA transfer engine</td>
+<td><strong>L</strong></td>
+</tr>
+<tr>
+<td><code>i2c</code> (I2C1–3)</td>
+<td>3</td>
+<td>byte-transfer state machine (4 <code>tick</code> bodies, i2c.rs)</td>
+<td>flags (<code>SR1/SR2/ISR</code>)</td>
+<td>per-byte pacing + event/error IRQ</td>
+<td>wire engine / byte-stream pacing</td>
+<td><strong>L</strong></td>
+</tr>
+<tr>
+<td><code>adc</code></td>
+<td>1</td>
+<td>one-shot conversion latency countdown; EOC + optional continuous restart; EOCIE IRQ (adc.rs)</td>
+<td>flags (<code>SR.EOC</code>)</td>
+<td>conversion-complete one-shot</td>
+<td>one-shot latency → event</td>
+<td><strong>M</strong></td>
+</tr>
+<tr>
+<td><code>exti</code></td>
+<td>1</td>
+<td>route <code>pr &amp; imr</code> (+ bank2 wakeup lines) → IRQ (exti.rs)</td>
+<td>no</td>
+<td><strong>no time</strong> — re-eval on write/edge</td>
+<td>edge/level detector (needs no time)</td>
+<td><strong>M</strong></td>
+</tr>
+<tr>
+<td><code>scb</code></td>
+<td>1</td>
+<td>drain software-pended NMI/SysTick/PendSV from ICSR writes → <code>system_exception</code> (scb.rs)</td>
+<td>no</td>
+<td>delay-0 on the ICSR write</td>
+<td>write-latch → immediate event</td>
+<td><strong>S/M</strong></td>
+</tr>
+<tr>
+<td><code>bxcan</code></td>
+<td>1</td>
+<td>drain RX interconnect channel into receiver (bxcan.rs)</td>
+<td>flags</td>
+<td>on external frame arrival</td>
+<td>wire engine (external mailbox)</td>
+<td><strong>M</strong></td>
+</tr>
+</tbody>
+</table>
+<p><code>dwt.rs</code> (CYCCNT, free-running, read-polled, no IRQ) is a Cortex-M core
+peripheral not listed in the L476 descriptor; when a bus carries it, it is the
+<strong>purest lazy-read</strong> case — the (b)+(c) mechanism handles it with a bare
+<code>Arc&lt;AtomicU64&gt;</code> counter, no events.</p>
+<p>Class exemplars to copy:
+- counter-timer w/ deadlines → <code>esp32/timg.rs</code> (<code>sync_to</code>) + <code>esp32s3/systimer.rs</code>
+  (<code>on_event</code> reschedule via <code>next_alarm_delay_cycles</code>, plus <strong>level-IRQ
+  re-assert</strong> — the pattern TIM/EXTI need so a line held by a latched flag
+  re-pends after firmware clears NVIC pending mid-flag).
+- byte-stream pacing → <code>uart.rs</code> events.
+- wire engine → <code>spi.rs</code>.
+- lazy read-only counter → <code>esp32c3/rtc_timer.rs</code> (Cell + <code>sync_to</code>), unblocked to
+  flip <code>uses_scheduler()==true</code> the moment Part 1's read-sync lands.</p>
+<h3 id="migration-order-by-dynamic-importance-for-real-firmware">Migration order (by dynamic importance for real firmware)</h3>
+<ol>
+<li><strong>Class A sweep</strong> — mechanical, independent, low-risk. Add
+   <code>needs_legacy_walk()==false</code> to all 28 inert instances. Does <strong>not</strong> flip
+   <code>derive_walk_deletable</code> alone (needs all 49) but removes 28/49 and is the
+   cheapest bulk progress.</li>
+<li><strong>SysTick</strong> — every HAL <code>delay</code>/tick loop and the FreeRTOS tick. #1 by far.</li>
+<li><strong>SCB</strong> — PendSV/SVCall drive FreeRTOS context switches; tiny (delay-0
+   write-latch). Land with SysTick so the RTOS path is coherent.</li>
+<li><strong>TIM2–5</strong> (general-purpose), then TIM1/8 (advanced), TIM6/7 (basic),
+   TIM15/16/17. Largest count; the counter-timer template proven here is reused
+   across all 11.</li>
+<li><strong>DMA1/2</strong> — memcpy + peripheral streaming.</li>
+<li><strong>ADC</strong> — one-shot conversion latency.</li>
+<li><strong>EXTI</strong> — button/edge IRQs (re-eval on write + GPIO-edge injection).</li>
+<li><strong>I2C1–3</strong> — wire engine.</li>
+<li><strong>bxCAN</strong> — external mailbox drain.</li>
+<li><strong>RTC</strong> (<code>rtc_v3</code> on H5-class buses) — second-granularity alarms.</li>
+</ol>
+<h3 id="pr-batches-each-with-its-differential-gate">PR batches (each with its differential gate)</h3>
+<p>Every gate arms the peripheral and runs <strong>walk-on @ interval-1 vs scheduler @
+interval-64</strong>, asserting byte-identity of the event-observable trace (Part 1).</p>
+<table>
+<thead>
+<tr>
+<th>Batch</th>
+<th>Scope</th>
+<th>Differential gate (test firmware)</th>
+<th>Unlocks</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>B0</strong></td>
+<td>Class A sweep: <code>needs_legacy_walk()==false</code> ×28</td>
+<td>per-model "tick is a genuine no-op" unit assert (tick on an armed instance returns <code>default()</code> and mutates nothing)</td>
+<td>28/49; no bus flips yet</td>
+</tr>
+<tr>
+<td><strong>B1</strong></td>
+<td>SysTick + SCB → scheduler; land the shared-clock read-sync from the spike</td>
+<td>SysTick-driven blinky + a FreeRTOS-tick / PendSV context-switch fixture; assert GPIO-transition + IRQ-cycle byte-identity</td>
+<td>RTOS + delay loops</td>
+</tr>
+<tr>
+<td><strong>B2</strong></td>
+<td>TIM2–5 (counter-timer template)</td>
+<td>timer-IRQ blinky (UIF) + a PWM compare-match (CCxIF) fixture; GPIO edges byte-exact</td>
+<td>general-purpose timers</td>
+</tr>
+<tr>
+<td><strong>B3</strong></td>
+<td>TIM1/8/6/7/15/16/17 (reuse B2 template)</td>
+<td>advanced-timer + basic-timer IRQ fixtures</td>
+<td>all 11 timers</td>
+</tr>
+<tr>
+<td><strong>B4</strong></td>
+<td>DMA1/2</td>
+<td>mem-to-mem memcpy + peripheral→mem stream; assert destination bytes + TC IRQ cycle</td>
+<td>DMA</td>
+</tr>
+<tr>
+<td><strong>B5</strong></td>
+<td>ADC</td>
+<td>ADC poll-loop (EOC) + EOCIE IRQ fixture</td>
+<td>ADC</td>
+</tr>
+<tr>
+<td><strong>B6</strong></td>
+<td>EXTI</td>
+<td>button-press → EXTI IRQ (SWIER + GPIO-edge paths); IRQ cycle byte-exact</td>
+<td>GPIO interrupts</td>
+</tr>
+<tr>
+<td><strong>B7</strong></td>
+<td>I2C1–3</td>
+<td>I²C temp-sensor read (<code>i2c_temp_sensor.rs</code>); wire bytes + event IRQ byte-exact</td>
+<td>I²C</td>
+</tr>
+<tr>
+<td><strong>B8</strong></td>
+<td>bxCAN</td>
+<td>CAN loopback frame RX; delivered frame + FIFO IRQ</td>
+<td>CAN</td>
+</tr>
+</tbody>
+</table>
+<p>When <strong>B0–B8</strong> all land, the L476 invaders bus (and any bus built from the same
+model set) derives <code>derive_walk_deletable()==true</code> with <strong>no</strong> hand
+<code>walk_deleted</code> flag, <code>max_safe_tick_interval()==64</code>, and batching engages for
+user-compiled firmware.</p>
+<p><strong>Per-board partial unlock.</strong> <code>derive_walk_deletable</code> is per-bus, so a board
+flips as soon as <em>its</em> peripherals are all migrated — it does not wait for every
+model in the tree. Boards carrying a thin descriptor cross the line earlier:
+check each bus's instantiated set (nRF52 / Kinetis KW41Z buses carry a different,
+generally smaller walker list — e.g. no bxCAN/QUADSPI/SAI — so B0 + the SysTick
+and timer batches may already flip them). Track the flip per board in the
+differential CI matrix rather than assuming the L476 order applies everywhere.</p>
+<hr />
+<h2 id="part-3-end-state-and-the-walk_deleted-deprecation">Part 3 — End state and the <code>walk_deleted</code> deprecation</h2>
+<p>Once B0–B8 land for a model set, <code>derive_walk_deletable()</code> returns the honest
+answer with no manual input, so the hand <code>walk_deleted: true</code> in a lab manifest
+becomes <strong>redundant</strong> for those buses. It is not immediately removable, for one
+reason spelled out in the derivation doc-comment (bus/tick.rs ~72): the hand flag
+can assert <em>firmware-specific</em> byte-identity ("this firmware never touches the 11
+timers the chip instantiates") that no config-time predicate can prove. But after
+migration that assertion is no longer <em>needed</em> — a fully-migrated bus is
+walk-free for <strong>all</strong> firmware, not just the one that avoids the timers.</p>
+<p><strong>Deprecation path:</strong></p>
+<ol>
+<li>Land B0–B8; the differential CI matrix shows each target bus deriving
+   walk-deletion with the manifest flag removed.</li>
+<li>For every lab whose bus now auto-derives, delete <code>walk_deleted: true</code> from its
+   <code>system.yaml</code> (invaders first — its comment already claims byte-identity).
+   <code>from_config.rs:730</code> already prefers <code>manifest.walk_deleted</code> when present and
+   falls back to <code>derive_walk_deletable()</code> when absent, so removal is safe and
+   the derivation takes over.</li>
+<li>When no in-tree manifest sets <code>walk_deleted</code>, mark the field deprecated in
+   <code>labwired-config</code> (keep parsing it as an escape hatch for out-of-tree /
+   fidelity-incomplete models, but warn), and drop the per-lab <code>walk-identity</code>
+   checks in favour of the per-model differential gates from Part 2.</li>
+</ol>
+<p>The end state: <strong>the walk is dead code for migrated buses</strong> — <code>legacy_tick_indices</code>
+is empty, <code>per_cycle_tick_is_trivial()</code> is true, and the per-cycle hot loop is
+just the NVIC scan (bus/tick.rs:704). No lab author writes a flag; correctness is
+a property each model proves once, in its own differential test.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "toc.follow", "search.suggest", "search.highlight", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

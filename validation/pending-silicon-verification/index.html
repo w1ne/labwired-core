@@ -1,0 +1,2735 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://docs.labwired.com/validation/pending-silicon-verification/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Pending Silicon Verification - LabWired Core</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#pending-silicon-verification" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="LabWired Core" class="md-header__button md-logo" aria-label="LabWired Core" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            LabWired Core
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Pending Silicon Verification
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/w1ne/labwired-core" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    w1ne/labwired-core
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../architecture/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Architecture Overview
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../golden_reference/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Hardware-Sim Parity
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../supported_devices.md" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Hardware Matrix
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../agents/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  AI Agent Manual
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../getting_started_firmware/" class="md-tabs__link">
+          
+  
+  
+  Tutorials
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../board_onboarding_playbook/" class="md-tabs__link">
+          
+  
+  
+  How-To Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../configuration_reference/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../boards/stm32f103/" class="md-tabs__link">
+          
+  
+  
+  Boards
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../release_strategy/" class="md-tabs__link">
+          
+  
+  
+  Operations
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../architecture_overview/" class="md-tabs__link">
+          
+  
+  
+  Explanation
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="LabWired Core" class="md-nav__button md-logo" aria-label="LabWired Core" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    LabWired Core
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/w1ne/labwired-core" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    w1ne/labwired-core
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../golden_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware-Sim Parity
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../supported_devices.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware Matrix
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AI Agent Manual
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting_started_firmware/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Running Firmware
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/i2c_sensor_example/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Simulating Sensors (I2C)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/dma_exti_example/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mastering DMA & Interrupts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/integrated_test_walkthrough/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Integrated Test Walkthrough
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How-To Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How-To Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../board_onboarding_playbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Board Onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ci_integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CI/CD Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../peripherals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Peripheral Modeling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../hardware_interaction_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware Interaction Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../vscode_debugging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Debugging with VS Code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../gdb_integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GDB Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../debugging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Debugging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration (YAML)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../declarative_registers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Declarative Registers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ci_test_runner/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test Script Schema
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference_client_flows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Client Flows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../isa_coverage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ISA Coverage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../schema_compatibility/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Schema Compatibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../catalog_validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Catalog Validation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../target_support_rubric/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Target Support Rubric
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Boards
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Boards
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/stm32f103/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F103
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/stm32f401/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F401
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/stm32f407/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32F407
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/nucleo-l476rg/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NUCLEO-L476RG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/stm32h563/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32H563
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/stm32h735/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32H735
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/stm32wba52/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STM32WBA52
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/nrf52832/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nRF52832
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/nrf52840/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    nRF52840
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/rp2040/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RP2040
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/esp32c3/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESP32-C3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../boards/esp32s3/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ESP32-S3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release_strategy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Strategy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../RELEASE_DETERMINISM/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Determinism
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../labwired_audit_protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verification Audit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../supported_devices.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Supported Devices
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../coverage_scoreboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coverage Scoreboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../coverage/chip-conformance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Chip Conformance (live)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../coverage/tier1-scoreboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tier-1 Matrix (live)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../safety/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Safety & Guardrails
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../demos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demos
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../case_study_stm32/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Case Study (STM32)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Explanation
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Explanation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture_overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../simulation_protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Simulation Protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="pending-silicon-verification">Pending Silicon Verification</h1>
+<p>Standing rule: <strong>every chip-model fix is provisional until verified against real
+hardware.</strong> A sim-consistent green in the Tier-1 matrix proves the model is
+internally consistent with the fixture; only silicon breaks the circularity.
+Each model-behavior change adds an entry here in the same PR; an entry closes
+when its hardware verification lands (and the matrix cell graduates to the
+silicon-anchored tier with the HIL workstream).</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Model change</th>
+<th>PR/commit</th>
+<th>HW verification recipe</th>
+<th>Board</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Bit-band translation gated on core (M3/M4 only); H5/WBA GPIO un-shadowed</td>
+<td><code>ee1133c</code></td>
+<td>New <code>h563_mmio_diff</code> oracle (pattern: <code>l476_mmio_diff</code>): GPIO word-writes at 0x4202_xxxx — ODR/BSRR/BRR data path on PB0/PF4/PG4 incl. one-word BS-over-BR priority, plus a 4-pattern parity sweep over the GPIOE/GPIOF config surface — sim vs silicon over the AP1 dapdirect recipe (<code>OpenOcd::spawn_stm32h563</code>). 8/8 cases + 48/48 register-patterns byte-exact under <code>H563_STRICT=1</code>.</td>
+<td>NUCLEO-H563ZI</td>
+<td>✅ <strong>silicon-verified 2026-06-11</strong></td>
+</tr>
+<tr>
+<td>2</td>
+<td>T1 shift-immediate flags suppressed inside IT blocks</td>
+<td><code>60445bd</code></td>
+<td>Instruction-level oracle: IT-block sequences with T1 LSL/LSR/ASR, APSR captured on silicon (extend <code>thumb_oracles</code>)</td>
+<td>STM32F103 (bench)</td>
+<td>✅ <strong>silicon-verified 2026-06-08</strong> — <code>it_block_shift_preserves_flags</code> passes hw+diff on the bench F103 (PR #191)</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Thumb-1 STRH/LDRSB/LDRH/LDRSH register-offset decode</td>
+<td><code>4ebed86</code></td>
+<td>Same <code>thumb_oracles</code> extension: loaded/stored values + sign-extension vs silicon</td>
+<td>STM32F103 (bench)</td>
+<td>✅ <strong>silicon-verified 2026-06-08</strong> — <code>strh_ldrh_reg_offset</code> / <code>ldrsb</code> / <code>ldrsh</code> pass hw+diff (PR #191)</td>
+</tr>
+<tr>
+<td>4</td>
+<td>GDMA descriptor-walk mem-to-mem (ESP32-S3)</td>
+<td><code>fa292bd</code></td>
+<td>JTAG Unity run on the bench S3: same descriptor sequence on silicon, byte-compare (recipe: <code>HW_ORACLE_RESULT.md</code> in the platformio demo)</td>
+<td>bench ESP32-S3 (proven setup)</td>
+<td>open</td>
+</tr>
+<tr>
+<td>5</td>
+<td>ESP32-C3 TIMG0 wired to the real Timg model</td>
+<td><code>9dfe444</code></td>
+<td>T0 counter advance + latch semantics on silicon (JTAG or UART-reporting probe firmware)</td>
+<td><strong>ESP32-C3 board availability unconfirmed</strong> — blocked on hardware until then</td>
+<td>open (blocked-on-HW)</td>
+</tr>
+<tr>
+<td>6</td>
+<td>RV32C compressed-branch decode fix drifted the <code>riscv_uart_ok</code> trace fingerprint</td>
+<td><code>c7148f2</code></td>
+<td><strong>Corrected diagnosis.</strong> The nightly <code>Trace Drift Assertions</code> red was <em>not</em> demo-blinky pacing — the four trace cases never load blinky firmware. The gate (<code>scripts/trace_drift_assert.sh</code>) is a <strong>sim-regression snapshot</strong>: it fingerprints sim result+snapshot+UART against committed <code>examples/ci/fingerprints/</code>, not a silicon diff. The RVC decoder fix (#7) landed after the baseline (#76) → <code>riscv_uart_ok</code> legitimately drifted; the firmware still prints correct <code>RV OK</code> and passes. Re-baselined <code>riscv_uart_ok.sha256</code> (the only drifting case; the three ARM cases still match).</td>
+<td>n/a (sim-only gate)</td>
+<td>resolved (re-baselined)</td>
+</tr>
+<tr>
+<td>7</td>
+<td>RV32C compressed-branch offset encoding (<code>C.BEQZ</code>/<code>C.BNEZ</code>/<code>C.J</code>) + funct3=4 arithmetic group</td>
+<td><code>c7148f2</code></td>
+<td>Run the same RV32C branch/jump sequence on real RISC-V silicon (ESP32-C3 RV32IMC) and compare taken/not-taken outcomes + target PCs against the model</td>
+<td>ESP32-C3 (board availability unconfirmed — shares #5's blocker)</td>
+<td>open (blocked-on-HW)</td>
+</tr>
+<tr>
+<td>8</td>
+<td>Cortex-M shift family (LSL/LSR/ASR/ROR) sets the carry flag — immediate <strong>and</strong> register forms (was N/Z only); register forms also now honour IT-block flag suppression</td>
+<td>PR #191</td>
+<td><strong>Caught BY silicon, not pending it.</strong> Adding xpsr/NZCV diffing to <code>thumb_oracles</code> failed <code>lsrs_immediate</code> against the bench F103 (sim C=0 vs silicon C=1). Fixed the immediate forms, then the register forms (<code>LslReg</code>/<code>LsrReg</code>/<code>AsrReg</code>), then <code>Ror</code> — all three carried the same gap. ADDS/SUBS carry+overflow flags also silicon-anchored. Re-verified — 54/54 hw+diff on the F103.</td>
+<td>STM32F103 (bench)</td>
+<td>✅ <strong>silicon-verified 2026-06-08</strong></td>
+</tr>
+<tr>
+<td>9</td>
+<td>F103 WDT (IWDG/WWDG) + USART2 + DMA1 + RTC (CRH/CNT) register reset values</td>
+<td>PR #192</td>
+<td>Reset values probed off the bench F103 via OpenOCD, pinned as <code>stm32f1_mmio_diff</code> RESET_CASES; sim matches silicon.</td>
+<td>STM32F103 (bench)</td>
+<td>✅ <strong>silicon-verified 2026-06-08</strong></td>
+</tr>
+<tr>
+<td>10</td>
+<td>F103 was wired to the L4 calendar-RTC model, not an F1 counter RTC</td>
+<td>PR #192</td>
+<td><strong>Root cause of the CRL=0x2101 discrepancy:</strong> the F1 RTC (CRH/CRL/PRL/CNT counter) is a different peripheral from the L4 calendar RTC (TR/DR/CR/ISR); CRL@0x04 was reading the L4 DR reset (0x2101). New <code>rtc_f1</code> model + F103 yaml rewire; CRH/CNT now match silicon for the right reason.</td>
+<td>STM32F103 (bench)</td>
+<td>✅ <strong>fixed 2026-06-08</strong> (model) — <em>remaining:</em> cold CRL=0 vs idle 0x20 needs a clock-aware RTC to pin across the cold→synced transition</td>
+</tr>
+<tr>
+<td>11</td>
+<td>TIM2 (general-purpose timer) update-generation event latches the CCxIF compare-match flags, not UIF alone</td>
+<td>PR (exec-oracle)</td>
+<td><strong>Caught BY the new peripheral-execution oracle.</strong> <code>stm32f1_exec_oracle</code> runs real ARM code on a full F103 chip bus (sim) and on silicon: enable TIM2 clock, set PSC/ARR, seed CNT non-zero, write <code>EGR.UG</code>, read back. Sim said <code>SR=0x01</code> (UIF only); silicon said <code>SR=0x1F</code> — the UG reload sets CNT=0, which matches every reset-zero CCRx in output-compare mode → CC1..4IF also latch (documented STM32 gotcha). Model now latches compare-match on UG (<code>!basic</code>); re-verified hw+diff byte-exact on the bench F103. CNT/ARR/PSC also cross-checked.</td>
+<td>STM32F103 (bench)</td>
+<td>✅ <strong>silicon-verified 2026-06-08</strong></td>
+</tr>
+<tr>
+<td>11a</td>
+<td>Basic timers (TIM6/TIM7) gated out of the UG compare-match path (<code>basic: true</code>) on STM32L073/L476</td>
+<td>PR (exec-oracle)</td>
+<td>Config-correct per RM0008 (basic timers have no capture/compare channels, so UG sets UIF only) but <strong>not yet silicon-verified</strong> — no L0/L4 board on the bench. Verify with an L0/L4 over SWD: enable TIM6 clock, <code>EGR.UG</code>, read <code>SR</code> → expect <code>0x01</code>.</td>
+<td>STM32L0/L4 (none on bench)</td>
+<td>open (config-correct, HW-pending)</td>
+</tr>
+<tr>
+<td>12</td>
+<td>GPIO 32-bit word writes go through an atomic <code>write_u32</code> (was byte-decomposed) so BSRR honours BS-over-BR priority</td>
+<td>PR (exec-oracle)</td>
+<td><strong>Caught BY the oracle.</strong> <code>gpioa_bsrr_set_reset</code> writes <code>BSRR=0x0010_0010</code> (set pin4 AND reset pin4): silicon's single 32-bit transaction applies BS priority → ODR pin4 set; sim's default byte-decomposition split the set-half (low 16) from the reset-half (high 16) into separate <code>write_reg</code> calls, so reset clobbered set → pin4 cleared (sim ODR=0x000F vs hw 0x001F). Added <code>GpioPort::{read_u32,write_u32}</code> handing the whole word to <code>write_reg</code>. Re-verified hw+diff byte-exact (final ODR=0x001C across BSRR-set/reset + BS-priority + F1 BRR).</td>
+<td>STM32F103 (bench)</td>
+<td>✅ <strong>silicon-verified 2026-06-08</strong></td>
+</tr>
+<tr>
+<td>13</td>
+<td>F1 <code>RCC_AHBENR</code> reset value 0x14 (SRAMEN + FLITFEN enabled out of reset), was 0</td>
+<td>PR (exec-oracle)</td>
+<td><strong>Caught BY the oracle.</strong> <code>crc32_two_words</code> RMW-enables CRCEN; the diff flagged the scratch register holding the AHBENR read-back (sim 0x40 vs hw 0x54 = 0x14 | CRCEN). RM0008 §7.3.6: AHBENR reset 0x00000014. Set <code>F1Rcc::new().ahbenr = 0x14</code>; re-verified hw+diff. (The read-modify-write enable path matters — overwriting AHBENR would clear SRAMEN/FLITFEN and hang a program running from SRAM.)</td>
+<td>STM32F103 (bench)</td>
+<td>✅ <strong>silicon-verified 2026-06-08</strong></td>
+</tr>
+<tr>
+<td>14</td>
+<td>DMA1 memory-to-memory engine — <strong>no model change</strong>, validated against silicon</td>
+<td>PR (exec-oracle)</td>
+<td>First oracle to drive an <em>autonomous</em> engine: <code>dma1_mem_to_mem</code> arms an 8-bit mem-to-mem copy (CMAR→CPAR, MINC/PINC, MEM2MEM|EN) then stops; a new sim-only harness knob (<code>ThumbOracleCase::settle_ticks</code>) ticks the bus after the program so the DMA completes (one byte/tick), mirroring silicon's concurrent run. Destination bytes, <code>CNDTR1=0</code>, and <code>ISR=0x7</code> (GIF1|TCIF1|HTIF1) match byte-exact on the bench F103 — the existing DMA model was already correct, now silicon-anchored.</td>
+<td>STM32F103 (bench)</td>
+<td>✅ <strong>silicon-verified 2026-06-08</strong></td>
+</tr>
+<tr>
+<td>15</td>
+<td>EXTI 32-bit word writes go through an atomic <code>write_u32</code> (was byte-decomposed) so SWIER edge-detect + PR rc_w1 behave</td>
+<td>PR (exec-oracle)</td>
+<td><strong>Caught BY the oracle (on the sim side, pre-silicon).</strong> <code>exti_swier_sets_and_clears_pr</code> word-writes <code>SWIER=0x5</code> then <code>PR=0x1</code>; the default byte-decomposition read the rc_w1 PR back and re-wrote it, clearing the still-pending line 2 (sim PR=0 vs expected 0x4). Same class as the GPIO BSRR fix (#12). Added <code>Exti::{read_u32,write_u32}</code>.</td>
+<td>STM32F103 (bench)</td>
+<td>✅ <strong>silicon-verified 2026-06-08</strong></td>
+</tr>
+<tr>
+<td>16</td>
+<td>Clearing an EXTI PR bit (rc_w1) also clears the matching SWIER bit</td>
+<td>PR (exec-oracle)</td>
+<td><strong>Caught BY the oracle, silicon-checked before fixing.</strong> After the <code>write_u32</code> fix, sim PR matched but SWIER read 0x5 vs silicon 0x4; the bench F103 <code>_hw</code> run confirmed silicon de-asserts the software-event line when PR is cleared (RM0008 §10.3.6). Model now clears <code>swier &amp;= !cleared</code> in the PR write. Re-verified hw+diff byte-exact.</td>
+<td>STM32F103 (bench)</td>
+<td>✅ <strong>silicon-verified 2026-06-08</strong></td>
+</tr>
+<tr>
+<td>17</td>
+<td>AFIO_MAPR masks reserved bits to 0 on read (was stored verbatim)</td>
+<td>PR (exec-oracle)</td>
+<td><strong>Caught BY the oracle.</strong> <code>afio_mapr_reserved_bits_read_zero</code> writes reserved bits 27 + 21 plus a remap bit; silicon reads the reserved bits back as 0 (<code>_hw</code> confirmed), the model returned them set. MAPR implements remap bits [20:0]; [23:21]/[31:27] reserved, SWJ_CFG [26:24] write-only/read-undefined. Masked the store to <code>value &amp; 0x001F_FFFF</code>. (The oracle deliberately writes 0 to SWJ_CFG — <code>0b111</code> there disables SWD and would drop the debugger.) Re-verified hw+diff byte-exact.</td>
+<td>STM32F103 (bench)</td>
+<td>✅ <strong>silicon-verified 2026-06-08</strong></td>
+</tr>
+<tr>
+<td>18</td>
+<td>IWDG PR/RLR are write-protected until KR receives the 0x5555 unlock (was stored unconditionally)</td>
+<td>PR (exec-oracle)</td>
+<td><strong>Caught BY the oracle.</strong> <code>iwdg_pr_rlr_write_protected_without_key</code> writes PR/RLR with no prior unlock; silicon keeps them at reset (PR=0, RLR=0xFFF — <code>_hw</code> confirmed), the model stored the writes. Model now gates PR/RLR on a <code>write_access</code> flag set by KR=0x5555 and cleared by any other KR code. <em>Note:</em> on real silicon the positive path (latch after unlock) additionally needs the IWDG clock domain running (LSI/started) — not asserted here since the 0xCCCC start key would arm a watchdog reset; the model stores on unlock alone (pragmatic for survival sims).</td>
+<td>STM32F103 (bench)</td>
+<td>✅ <strong>silicon-verified 2026-06-08</strong> (negative path)</td>
+</tr>
+<tr>
+<td>19</td>
+<td>CRC_IDR is an 8-bit register on STM32F1/F0/L0 (was treated as 32-bit)</td>
+<td>PR (exec-oracle)</td>
+<td><strong>Caught BY the oracle.</strong> <code>crc_idr_is_8bit_on_f1</code> writes 0x12345678 to CRC_IDR; silicon keeps only the low byte (0x78 — <code>_hw</code> confirmed), the model stored the full word. Added a <code>with_idr_width</code> flag on the CRC model (default 32-bit for F2+/L4+) + <code>config: { idr_width: 8 }</code> on the F103 and L073 yamls. F103 silicon-verified; L073 (L0) is config-correct per RM0367 §14, HW-pending.</td>
+<td>STM32F103 (bench)</td>
+<td>✅ <strong>silicon-verified 2026-06-08</strong> (F103; L0 HW-pending)</td>
+</tr>
+<tr>
+<td>20</td>
+<td>AFIO EXTICR1..4 mask their reserved upper half [31:16] to 0 (were stored verbatim)</td>
+<td>PR (exec-oracle)</td>
+<td><strong>Caught BY the oracle.</strong> <code>afio_exticr1_upper_half_reads_zero</code> sets a reserved upper bit + a valid nibble; silicon reads the upper half back as 0 (<code>_hw</code> confirmed). Each EXTICR holds four 4-bit fields in [15:0] (RM0008 §9.4.3); masked the four stores to <code>value &amp; 0xFFFF</code>.</td>
+<td>STM32F103 (bench)</td>
+<td>✅ <strong>silicon-verified 2026-06-09</strong></td>
+</tr>
+<tr>
+<td>21</td>
+<td>GPIO CRL/CRH round-trip + DBGMCU_CR round-trip — <strong>no model change</strong>, validated against silicon</td>
+<td>PR (exec-oracle)</td>
+<td>Two validation oracles, both byte-exact sim-vs-silicon. <code>gpioa_crl_crh_round_trip</code> confirms the 32-bit config registers store verbatim (no reserved fields). <code>dbgmcu_cr_round_trip</code> is a <strong>silicon surprise</strong>: RM0008 §31.16.2 marks DBGMCU_CR bits [4:3] reserved, but the bench F103 reads them back as written (0x1F, not 0x07) — they are plain R/W storage here. The model's verbatim store already matches; the oracle pins the real behaviour so a future "mask the reserved bits" change can't silently break it.</td>
+<td>STM32F103 (bench)</td>
+<td>✅ <strong>silicon-verified 2026-06-09</strong></td>
+</tr>
+<tr>
+<td>22</td>
+<td>NVIC ISER/ICER set-enable / clear-enable — <strong>no model change</strong>, validated against silicon</td>
+<td>PR (exec-oracle)</td>
+<td><code>nvic_iser_icer_enable_disable</code> enables IRQ6+IRQ28 via ISER0 then clear-enables IRQ6 via ICER0; ISER0 reads back with IRQ28 still set (<code>_hw</code> byte-exact). Wires the Cortex-M block (NVIC @ 0xE000E100, SCB, DWT) into the exec-oracle bus via <code>configure_cortex_m</code>, validating the interrupt-<strong>enable</strong> machinery and exposing DWT_CYCCNT for future timed oracles. Interrupt <em>delivery</em> (exception entry/exit) is the next step — see <code>roadmap.md</code> P1.</td>
+<td>STM32F103 (bench)</td>
+<td>✅ <strong>silicon-verified 2026-06-09</strong></td>
+</tr>
+<tr>
+<td>23</td>
+<td>Interrupt <strong>delivery</strong> — full exception entry/exit path validated against silicon (roadmap P1)</td>
+<td>PR (exec-oracle)</td>
+<td><code>exti0_interrupt_delivery</code>: executed code relocates VTOR to a <code>[vector table][ISR][main]</code> program, unmasks EXTI line 0, enables IRQ6 in the NVIC, clears PRIMASK, and software-triggers the line. The CPU vectors to the ISR (entry + register stacking), which sets a RAM marker + clears EXTI_PR, then <code>BX LR</code> returns (unstacking) to <code>main</code>. Marker set + EXTI_PR cleared, byte-exact on the bench F103 (<code>_hw</code>/<code>_diff</code>). Harness additions: <code>Thumb::Data</code> (vector words), <code>bx</code>/<code>cpsie_i</code> encoders, per-case <code>entry_offset</code>, and opt-in <code>live_peripherals</code> (post-step <code>tick_peripherals_fully</code> → <code>set_exception_pending</code>). <strong>No model bug</strong> — the NVIC/SCB/exception path was already correct; now anchored. <em>Limitation:</em> sim level-source re-pend is tick-granular, so non-idempotent ISRs may run an extra time vs silicon — fine for the marker ISR.</td>
+<td>STM32F103 (bench)</td>
+<td>✅ <strong>silicon-verified 2026-06-09</strong></td>
+</tr>
+<tr>
+<td>24</td>
+<td>DWT cycle counter mechanism (enable → count → read) — <strong>no model change</strong>, validated against silicon (roadmap P2)</td>
+<td>PR (exec-oracle)</td>
+<td><code>dwt_cyccnt_advances</code> enables DEMCR.TRCENA + DWT_CTRL.CYCCNTENA, resets CYCCNT, reads it back and records the self-relative boolean <code>CYCCNT != 0</code>. The absolute count diverges (sim is <strong>not</strong> cycle-accurate — its DWT advances one tick per executed instruction; silicon counts real core cycles), so only the boolean is invariant and the divergent register is cleared before the snapshot. Pins the DWT timing <em>mechanism</em>, not cycle fidelity (out of scope for this sim).</td>
+<td>STM32F103 (bench)</td>
+<td>✅ <strong>silicon-verified 2026-06-09</strong></td>
+</tr>
+<tr>
+<td>25</td>
+<td>Firmware-level conformance differential (roadmap P5 v1) — found peripheral access/latch latency gaps</td>
+<td>PR (conformance)</td>
+<td><code>firmware-f103-conformance</code> drives every peripheral and writes a digest; <code>f103_conformance.rs</code> runs the same ELF on the full-chip <code>Machine</code> and on silicon and diffs. First run 10/11 (91%). Found gaps the micro-oracles can't: <strong>CRC reset latency</strong> (feeding DR right after CR.RESET lost a word on silicon) and <strong>TIM2 status-latch latency</strong> (SR read 0 one instruction after EGR.UG). Correct firmware (a <code>settle()</code> between the hazardous accesses) fixes both; the sim is lenient because it models no peripheral access/latch latency. Residual <code>exti_pr</code> is a firmware-context HW artifact (the isolated EXTI oracle confirms the sim value is correct).</td>
+<td>STM32F103 (bench)</td>
+<td>✅ <strong>pipeline silicon-proven 2026-06-09</strong> (10/11; latency-modeling is a documented sim limitation)</td>
+</tr>
+<tr>
+<td>26</td>
+<td>STM32H5 SPI v3 layout (<code>stm32h5</code> profile): CFG1 reserved mask, SPE config-lock, mode-fault machinery (MASTER refused + MODF latch on SS-low), CTSIZE mirror, TXTF/IFCR, TXC restore</td>
+<td>h563-class-models</td>
+<td><strong>Verified at birth</strong> — every behavior was bench-probed BEFORE modeling (capture corpus probe-20260611), then re-proven by <code>h563_class_diff</code> (14 SPI cases byte-exact, <code>H563_STRICT=1</code>). Sim TX engine (EOT on TSIZE exhaustion) is spec-derived: the bench part had no spi_ker_ck, so real frame movement is yaml-documented as a divergence.</td>
+<td>NUCLEO-H563ZI (bench)</td>
+<td>✅ <strong>silicon-verified 2026-06-11</strong> (register surface; data path sim-only by documented divergence)</td>
+</tr>
+<tr>
+<td>27</td>
+<td>ADC L4-layout power-up handshake: ADEN with ADVREGEN up (DEEPPWD clear) raises ISR.ADRDY</td>
+<td>h563-class-models</td>
+<td><code>h563_class_diff</code> ADC sequence (DEEPPWD reset → clear → ADVREGEN → ADEN→ADRDY) byte-exact vs the bench H563. The same model serves L476 — its L4 silicon re-check rides the existing L476 oracle backlog.</td>
+<td>NUCLEO-H563ZI (bench)</td>
+<td>✅ <strong>silicon-verified 2026-06-11</strong> (H563; L476 cross-check pending)</td>
+</tr>
+<tr>
+<td>28</td>
+<td>RTC v3 model (<code>rtc_v3</code>): WPR key gate, INIT→INITF, BYPSHAD, INITS-from-year, calendar BCD tick, locked-write drop</td>
+<td>h563-class-models</td>
+<td>Bench-probed before modeling (incl. the BYPSHAD=0 shadow-stale surprise, kept as a documented simplification); re-proven by <code>h563_class_diff</code> (9 RTC cases byte-exact) — including the silicon-sticky RTCSEL write-once note. 1 Hz tick approximated at 32768 sim ticks/second.</td>
+<td>NUCLEO-H563ZI (bench)</td>
+<td>✅ <strong>silicon-verified 2026-06-11</strong></td>
+</tr>
+<tr>
+<td>29</td>
+<td>GPDMA model (8ch, software-request mem-to-mem): TCF/HTF/IDLEF, BNDT drain, SAR/DAR advance, EN auto-clear, CFCR w1c, RESET-does-not-clear-flags</td>
+<td>h563-class-models</td>
+<td>The autonomous engine was driven ON SILICON over SWD (real SRAM→SRAM block copy) and the same flow is replayed by <code>h563_class_diff</code> (8 cases incl. destination words byte-exact). Linked-list mode + peripheral-request mode not modeled (documented).</td>
+<td>NUCLEO-H563ZI (bench)</td>
+<td>✅ <strong>silicon-verified 2026-06-11</strong></td>
+</tr>
+<tr>
+<td>30</td>
+<td>Advanced timers: CC5IF/CC6IF (SR bits 16/17) latch with the channel-1..4 compare path; compare-match also latches while COUNTING (was UG-only)</td>
+<td>h563-class-models</td>
+<td>Bench TIM1 PWM run read SR=0x0003001F (UIF+CC1..4IF+CC5/6IF) — the run-time compare and the internal channels 5/6 were both missing from the model. <code>h563_class_diff</code> TIM1 sequence byte-exact. F103-family UG semantics unchanged (existing oracles still green).</td>
+<td>NUCLEO-H563ZI (bench)</td>
+<td>✅ <strong>silicon-verified 2026-06-11</strong></td>
+</tr>
+<tr>
+<td>31</td>
+<td>H563 irq class: NVIC declared in the chip yaml; fixture delivery round-trip</td>
+<td>h563-class-models</td>
+<td>NVIC ISER/ICER enable machinery diffed on the M33 (<code>h563_class_diff</code>, 3 cases); full exception entry/exit was already silicon-anchored on the bench F103 (#23).</td>
+<td>NUCLEO-H563ZI (bench)</td>
+<td>✅ <strong>silicon-verified 2026-06-11</strong> (enable surface; delivery anchored via #23)</td>
+</tr>
+<tr>
+<td>32</td>
+<td>Timer: IRQ level follows CC1..4IF&amp;CC1..4IE (was UIF&amp;UIE only); wrap also latches compare flags</td>
+<td>foreign-fw twin</td>
+<td><strong>Caught by foreign firmware</strong> (embassy time driver arms CCR1 alarms with CC1IE). Bench TIM2 probe: CC1IF + CC1IE pends the NVIC line (ISPR1 bit 13) with the CPU halted; capture7 pins the same on TIM12, embassy's actual time-driver pick.</td>
+<td>NUCLEO-H563ZI (bench)</td>
+<td>✅ <strong>silicon-verified 2026-06-11</strong></td>
+</tr>
+<tr>
+<td>33</td>
+<td>PWR H5 layout (<code>PwrH5</code>): VOSCR/VOSSR voltage scaling, DBPCR, register surface</td>
+<td>foreign-fw twin</td>
+<td>Bench probe capture5: resets (PMCR=0x0C, VOSSR=0x2008, SCCR=0x100, VMSR bit 20) + VOS transitions Scale3→0→2→3 read VOSSR 0x2008/0xE008/0x6008/0x2008 — model formula <code>(VOS&lt;&lt;14)|ACTVOSRDY|VOSRDY</code> is the silicon behavior.</td>
+<td>NUCLEO-H563ZI (bench)</td>
+<td>✅ <strong>silicon-verified 2026-06-11</strong></td>
+</tr>
+<tr>
+<td>34</td>
+<td>FLASH H5 layout: ACR latency/WRHIGHFREQ/PRFTEN read-back; interface regs only</td>
+<td>foreign-fw twin</td>
+<td>Bench probe capture6: ACR reset 0x13, round-trips 0x11/0x23/0x02 verbatim; OPTCR=1, NSCR=1, OPTSR_CUR pinned as representative. Program/erase not modeled (documented).</td>
+<td>NUCLEO-H563ZI (bench)</td>
+<td>✅ <strong>silicon-verified 2026-06-11</strong></td>
+</tr>
+<tr>
+<td>35</td>
+<td>TIM12 wired (embassy <code>time-driver-any</code> pick)</td>
+<td>foreign-fw twin</td>
+<td>Bench probe capture7: resets (ARR=0xFFFF, rest 0), PSC/CCR1/DIER round-trips, free-running CNT under the debugger.</td>
+<td>NUCLEO-H563ZI (bench)</td>
+<td>✅ <strong>silicon-verified 2026-06-11</strong></td>
+</tr>
+<tr>
+<td>36</td>
+<td>v2-USART TXEIE mask bug: was bit 3 (TE!) — every TX-enabled v2 UART held a phantom interrupt</td>
+<td>foreign-fw twin</td>
+<td><strong>Caught by foreign firmware</strong> (embassy enables the USART3 NVIC line; the phantom pend looped in its default handler — invisible to all polling fixtures). Bench probe capture8: CR1=FIFOEN|TE|RE|UE pends nothing; +TXEIE (bit 7) pends ISPR1 bit 28. Mask fixed to bit 7 + regression test.</td>
+<td>NUCLEO-H563ZI (bench)</td>
+<td>✅ <strong>silicon-verified 2026-06-11</strong></td>
+</tr>
+<tr>
+<td>37</td>
+<td>Cortex-M: LDAEX/STLEX/LDA/STL (+B variants) implemented; CLREX→no-op; pending-exception bitmask widened 64→256 (IRQ 120 = exception 136 was silently dropped)</td>
+<td>foreign-fw twin</td>
+<td><strong>Caught by foreign firmware</strong>: Rust atomics on thumbv8m compile to acquire/release forms the decoder routed to a silent skip — embassy's executor run-queue never woke; then its TIM12 IRQ (120) overflowed the u64 pending mask. End-to-end behavioral anchor: the same unmodified embassy ELF (usart_vcp) now produces a <strong>byte-identical 22-line UART stream on the bench board and in the sim</strong> (hello + 20 timer-paced ticks + DONE). Instruction-level thumb-oracle cases for the LDAEX family on the M33 remain open.</td>
+<td>NUCLEO-H563ZI (bench)</td>
+<td>✅ <strong>behaviorally silicon-anchored 2026-06-11</strong> (instruction oracle open)</td>
+</tr>
+<tr>
+<td>38</td>
+<td>DBGMCU wired at 0x44024000 (embassy pokes DBGMCU_CR during init)</td>
+<td>foreign-fw twin</td>
+<td>IDCODE 0x10016484 from the 2026-06-10 capture; CR is plain R/W storage (cf. #21 F103 finding).</td>
+<td>NUCLEO-H563ZI (bench)</td>
+<td>✅ <strong>silicon-pinned 2026-06-11</strong></td>
+</tr>
+<tr>
+<td>39</td>
+<td>FLASH H5 ACR mask 0x133 → 0x13F (LATENCY bits 3:2 were dropped — HAL's latency-5 read-back at 250 MHz failed)</td>
+<td>foreign-fw twin (Cube)</td>
+<td><strong>Caught by ST's own HAL example.</strong> Bench capture9: ACR write 0x25 reads 0x25, write 0x13F reads 0x13F. My capture6 probes only used latency ≤ 3 — the mask derivation missed the upper bits.</td>
+<td>NUCLEO-H563ZI (bench)</td>
+<td>✅ <strong>silicon-verified 2026-06-11</strong></td>
+</tr>
+<tr>
+<td>40</td>
+<td>GPDMA per-channel NVIC routing (<code>irq_base</code>, channel n → line 27+n) + window 1KB → 2KB (channel 7's CTR1/CBR1/CSAR/CDAR live above 0x400) + MISR per-channel flag&amp;enable mirror</td>
+<td>foreign-fw twin (Cube)</td>
+<td><strong>Caught by ST's HAL example</strong> (uses channel 7, IRQ 34; <code>HAL_DMA_IRQHandler</code> gates on MISR which read 0). Bench capture10: ch7 TCIE pends ISPR1 bit 2, transfer byte-exact. Bench capture11: MISR bit 7 = flags&amp;enables live (drops on TCIE clear, returns on re-enable, clears with CFCR).</td>
+<td>NUCLEO-H563ZI (bench)</td>
+<td>✅ <strong>silicon-verified 2026-06-11</strong></td>
+</tr>
+<tr>
+<td>41</td>
+<td>GPDMA data-handling engine: SDW/DDW width conversion via PAM (zero-pad / sign-extend / left- / right-truncate) + SBX / DBX / DHX exchanges (<code>DmaUnitTransform</code> on <code>DmaRequest</code>)</td>
+<td>foreign-fw twin (Cube)</td>
+<td>The seven expected-result vectors from ST's DMA_DataHandling example are encoded as unit tests, and the <strong>unmodified example ELF passes all 7 checks on the sim AND on the bench board</strong> (LED1 success-blink, error LED dark, observed live over SWD).</td>
+<td>NUCLEO-H563ZI (bench)</td>
+<td>✅ <strong>silicon-verified 2026-06-11</strong> (same-ELF twin)</td>
+</tr>
+<tr>
+<td>42</td>
+<td>GPDMA linked-list mode: node fetch from {CLBAR[31:16], CLLR.LA}, per-U-flag register update (UT1/UT2/UB1/USA/UDA/UT3/UB2/ULL), list-start with CBR1=0, per-block TCF, EN-clear only at list end</td>
+<td>foreign-fw twin (Cube)</td>
+<td>Bench capture12 first: a raw 2-block chain over SWD pinned the full lifecycle (both blocks byte-exact, CLLR→0, BNDT=0, CSR=0x301, CCR keeps TCIE with EN cleared). Model fetches nodes as memory→own-register DMA copies. Then ST's DMA_LinkedList example (3-node queue, HAL_DMAEx) reaches its success loop on sim AND board — same ELF, LEDs observed live over SWD.</td>
+<td>NUCLEO-H563ZI (bench)</td>
+<td>✅ <strong>silicon-verified 2026-06-12</strong></td>
+</tr>
+<tr>
+<td>43</td>
+<td>Cortex-M TBB/TBH: branch-table base for Rn=PC is the unaligned in-execution PC (insn+4) — the old Align(PC,4) read tables 2 bytes early at 2-mod-4 addresses</td>
+<td>foreign-fw twin (Cube)</td>
+<td><strong>Caught by ST's HAL</strong>: <code>HAL_DMA_RegisterCallback</code>'s TBB switch dispatched every callback ID into the same slot, so the error callback overwrote the completion callback. Fix per ARMv7-M A7.7.185/186; behavioral anchor = the DMA_LinkedList same-ELF twin. The three ARM <code>Trace Drift Assertions</code> fingerprints legitimately drifted (corrected branch paths) and were re-baselined with all behavioral assertions still green — same precedent as #6.</td>
+<td>NUCLEO-H563ZI (bench)</td>
+<td>✅ <strong>behaviorally silicon-anchored 2026-06-12</strong></td>
+</tr>
+<tr>
+<td>44</td>
+<td>FDCAN model (H5 fixed message-RAM layout): CCCR INIT/CCE protocol, TEST.LBCK loopback TX→RX FIFO0 through SRAMCAN, IR rc_w1 + TC-gated-by-TXBTIE, TXFQS/RXF0S index machinery, RXF0A ack semantics, CONFIG-block identity (VERR/SIDR)</td>
+<td>h563-fdcan (tier1 can class)</td>
+<td><strong>Capture-first</strong> (capture13, 2026-06-12): full internal-loopback frame driven over SWD pinned the map (0x84 = XIDAM — the fixed layout, NOT generic Bosch RXF0C), CCE-clears-with-INIT, IR = RF0N|TFE with TC gated by the per-buffer TXBTIE enable, RXF0A advancing F0GI rather than blanking the status. Model rebuilt from the capture (the stranded eb04139f draft had IR at 0x080 colliding RXGFC/TXBC at 0xC0 and generic-Bosch FIFO-config registers that do not exist on H5). Re-proven by <code>h563_class_diff</code>: 22 FDCAN cases, 65/65 total match. tier1 row now 13/13 with the <code>can</code> beachhead class (fixture check_can replays the same sequence). Acceptance filtering, bit timing, FDCAN2 and IT1/ILS routing not modeled (yaml-documented).</td>
+<td>NUCLEO-H563ZI (bench)</td>
+<td>✅ <strong>silicon-verified 2026-06-12</strong></td>
+</tr>
+<tr>
+<td>45</td>
+<td>GDMA peripheral-coupled mode (ESP32-S3): PERI_SEL routing, UART/UHCI0 + SPI2/3 + I2S0/1 coupled byte movement, owner/LEN descriptor writeback (IN unconditional; OUT gated on OUT_AUTO_WRBACK, OUT_CONF0 bit 2), auto-complete fallback for AES/SHA/ADC/RMT/LCD_CAM</td>
+<td>feat/gdma-peripheral-coupling</td>
+<td>Same recipe as #4 (JTAG Unity on the bench S3): drive an ESP-IDF DMA driver (uart / spi_master / i2s) on silicon, replay the descriptor sequence in sim, byte-compare buffers + INT_RAW ordering; highest-value probes are the I2S RXEOF_NUM byte semantics and the UART FIFO-idle EOF policy</td>
+<td>bench ESP32-S3 (proven setup)</td>
+<td>open</td>
+</tr>
+</tbody>
+</table>
+<p>Notes:
+- Recipes reuse existing machinery only: hw-oracle mmio-diff replays, <code>thumb_oracles</code>,
+  the S3 JTAG Unity loop, F103 capture scripts. No new harnesses required.
+- Entries #6/#7 are the live example of the rule working — a model fix (#7) tripped a
+  downstream regression snapshot the moment it merged. The original #6 mis-attributed
+  it to a firmware pacing change; clearing the nightly is what surfaced the true cause.
+- The <code>Trace Drift Assertions</code> gate compares sim-vs-committed-sim fingerprints, so
+  re-baselining after a <em>verified, intentional</em> model fix is correct snapshot
+  maintenance, not a silicon claim — the silicon obligation lives in #7.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "toc.follow", "search.suggest", "search.highlight", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,36 @@
+stages:
+  - build
+  - test
+
+build:firmware:
+  stage: build
+  image: rust:1.95
+  before_script:
+    - rustup target add thumbv7m-none-eabi
+  script:
+    - cargo build --release --target thumbv7m-none-eabi -p your-firmware
+  artifacts:
+    paths:
+      - target/thumbv7m-none-eabi/release/your-firmware
+    expire_in: 1 hour
+
+test:labwired:
+  stage: test
+  image:
+    name: ghcr.io/w1ne/labwired:v0.19.2
+    entrypoint: [""]
+  dependencies:
+    - build:firmware
+  script:
+    - labwired test --script tests/firmware-test.yaml --output-dir out/labwired --no-uart-stdout
+  artifacts:
+    when: always
+    paths:
+      - out/labwired/
+    reports:
+      junit: out/labwired/junit.xml
+    expire_in: 30 days
+
+# Advanced alternative: build labwired-cli from a source checkout only when
+# validating an unreleased LabWired change. Normal GitLab CI should use the
+# pinned release image above.
