@@ -597,11 +597,11 @@ impl L4I2c {
         }
         // Level IRQ bits that can still need a walk tick after the engine idles.
         let pending = self.isr
-            & (((self.cr1 & (1 << 1)) != 0) as u32 * (1 << 1) // TXIE→TXIS
-                | ((self.cr1 & (1 << 2)) != 0) as u32 * (1 << 2) // RXIE→RXNE
-                | ((self.cr1 & (1 << 4)) != 0) as u32 * (1 << 4) // NACKIE
-                | ((self.cr1 & (1 << 5)) != 0) as u32 * (1 << 5) // STOPIE
-                | ((self.cr1 & (1 << 6)) != 0) as u32 * (1 << 6)); // TCIE
+            & ((((self.cr1 & (1 << 1)) != 0) as u32 * (1 << 1)) // TXIE→TXIS
+                | (((self.cr1 & (1 << 2)) != 0) as u32 * (1 << 2)) // RXIE→RXNE
+                | (((self.cr1 & (1 << 4)) != 0) as u32 * (1 << 4)) // NACKIE
+                | (((self.cr1 & (1 << 5)) != 0) as u32 * (1 << 5)) // STOPIE
+                | (((self.cr1 & (1 << 6)) != 0) as u32 * (1 << 6))); // TCIE
         pending != 0
     }
 
