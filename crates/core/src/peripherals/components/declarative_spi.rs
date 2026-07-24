@@ -129,6 +129,13 @@ impl GenericSpiDevice {
         out
     }
 
+    /// Current engineering-unit value of a SimInput stimulus channel (the value
+    /// last set via `set_input`, or the descriptor's declared default). Returns
+    /// `None` if the device has no such channel. Lets consumers (e.g. the wasm
+    /// inspector) read a declarative device's state without a concrete-type downcast.
+    pub fn input_value(&self, key: &str) -> Option<f64> {
+        self.slots.get(key).copied()
+    }
 }
 
 impl SpiDevice for GenericSpiDevice {
@@ -598,5 +605,21 @@ behavior:
         d.cs_release();
         let word = u32::from_be_bytes([neg[0], neg[1], neg[2], neg[3]]);
         assert_eq!((word >> 18) & 0x3FFF, 0x3F9C);
+    }
+
+    #[test]
+    fn input_value_reads_defaults_and_tracks_set_input() {
+        let mut d = crate::peripherals::components::declarative_spi::GenericSpiDevice::from_yaml(
+            labwired_config::embedded_device_yaml("max31855_spi").unwrap(),
+            "PA4",
+        )
+        .unwrap();
+
+        assert_eq!(d.input_value("temperature"), Some(25.0));
+        assert_eq!(d.input_value("internal"), Some(22.0));
+        assert!(d.input_value("nope").is_none());
+
+        d.set_input("temperature", 100.0).unwrap();
+        assert_eq!(d.input_value("temperature"), Some(100.0));
     }
 }
