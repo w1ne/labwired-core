@@ -114,6 +114,25 @@ const RTCCALICFG1: u64 = 0x6C;
 const RTC_CALI_START_BIT: u32 = 1 << 31;
 const RTC_CALI_RDY_BIT: u32 = 1 << 15;
 
+/// Silicon-faithful RTC_SLOW calibration profile for a specific SoC.
+///
+/// The TIMG0 RTC-calibration feature counts how many `xtal_hz` reference cycles
+/// elapse during `TIMG_RTC_CALI_MAX` cycles of the RTC_SLOW clock (this is the
+/// "special feature of TIMG0" IDF's `rtc_clk_cal` drives — see
+/// esp-idf `esp_hw_support/port/esp32c3/rtc_time.c`). When a `Timg` is given a
+/// profile, the model synthesises the counted value from `xtal_hz` and
+/// `slow_hz` instead of returning a hardcoded ratio — so firmware that
+/// calibrates recovers exactly `slow_hz` (`freq = xtal_hz * cycles / value`),
+/// welding the reported rate to the *same* constant the RTC_CNTL counter ticks
+/// at. `None` keeps the legacy ESP32-classic behaviour byte-for-byte.
+#[derive(Debug, Clone, Copy)]
+pub struct RtcCalProfile {
+    /// Reference clock the calibration counts against (40 MHz XTAL on C3).
+    pub xtal_hz: u64,
+    /// The modelled RTC_SLOW frequency the cal result must recover.
+    pub slow_hz: u64,
+}
+
 // Interrupt plumbing. INT_ENA / INT_ST round-trip through `regs` — they're
 // declared here so the spec table in the module docstring stays grep-able.
 #[allow(dead_code)]
@@ -154,6 +173,12 @@ pub struct Timg {
     /// skips `uses_scheduler()` peripherals in its per-cycle walk). Unused in
     /// the legacy (flag-off) build, where `tick()` drives the counters.
     anchor_tick: u64,
+    /// Silicon-faithful RTC_SLOW calibration profile. `Some` for the ESP32-C3
+    /// TIMG0 (the calibration timer IDF drives): the RTCCALICFG result is
+    /// derived from the modelled RTC_SLOW rate through the real register
+    /// protocol. `None` keeps the ESP32-classic canned-ratio behaviour
+    /// byte-for-byte.
+    rtc_cal: Option<RtcCalProfile>,
 }
 
 impl Timg {
@@ -165,7 +190,17 @@ impl Timg {
             counter_t0: 0,
             counter_t1: 0,
             anchor_tick: 0,
+            rtc_cal: None,
         }
+    }
+
+    /// Attach a silicon-faithful RTC_SLOW calibration profile (ESP32-C3 TIMG0).
+    /// With a profile, RTCCALICFG uses the real C3 field layout (MAX at bits
+    /// [30:16]) and returns a counted value derived from the profile's
+    /// frequencies, so `rtc_clk_cal` recovers exactly `profile.slow_hz`.
+    pub fn with_rtc_cal(mut self, profile: RtcCalProfile) -> Self {
+        self.rtc_cal = Some(profile);
+        self
     }
 
     /// Base address this instance is registered at (debug helper).
@@ -250,20 +285,44 @@ impl Timg {
         }
     }
 
-    /// Apply RTC calibration completion semantics (carried over from the
-    /// pre-existing `TimgStub`). When firmware sets `RTCCALICFG.START`,
-    /// we immediately mark `RDY` and stash a derived value in
-    /// `RTCCALICFG1` so the calibration loop completes in one read.
+    /// Apply RTC calibration completion semantics. When firmware sets
+    /// `RTCCALICFG.START`, we immediately mark `RDY` and stash a counted value
+    /// in `RTCCALICFG1` so the calibration loop completes in one read.
+    ///
+    /// With a [`RtcCalProfile`] (ESP32-C3 TIMG0) the value is *derived from the
+    /// modelled RTC_SLOW rate* through the real register protocol; without one
+    /// the legacy ESP32-classic canned ratio is preserved byte-for-byte.
     fn maybe_complete_rtc_calibration(&mut self) {
         let cfg = self.word(RTCCALICFG);
         if cfg & RTC_CALI_START_BIT == 0 {
             return;
         }
-        let max = ((cfg >> 13) & 0x1FFFF).max(1);
-        self.regs.insert(RTCCALICFG, cfg | RTC_CALI_RDY_BIT);
-        // ratio ≈ 533 cycles per RTC_SLOW_CLK period at APB=80 MHz.
-        let value = max.wrapping_mul(533) & 0x01FF_FFFF;
-        self.regs.insert(RTCCALICFG1, (value << 7) | 1);
+        match self.rtc_cal {
+            // ── ESP32-C3 TIMG0: silicon-faithful, self-consistent ──────────
+            // TIMG0 counts how many XTAL cycles elapse during MAX cycles of
+            // RTC_SLOW (esp-idf rtc_clk_cal). C3 field layout (TRM / IDF
+            // soc/esp32c3/timer_group_reg.h): MAX = RTCCALICFG bits[30:16],
+            // RDY = bit15, VALUE = RTCCALICFG1 bits[31:7]. Synthesise the
+            // counted XTAL cycles from the profile so that IDF's inverse
+            // (`freq = xtal_hz * slowclk_cycles / value`) recovers exactly
+            // `slow_hz` — the SAME constant the RTC_CNTL counter ticks at.
+            Some(profile) => {
+                let slowclk_cycles = u64::from((cfg >> 16) & 0x7FFF).max(1);
+                let xtal_cycles =
+                    (profile.xtal_hz * slowclk_cycles + profile.slow_hz / 2) / profile.slow_hz;
+                let value = (xtal_cycles as u32) & 0x01FF_FFFF; // 25-bit VALUE field
+                self.regs.insert(RTCCALICFG, cfg | RTC_CALI_RDY_BIT);
+                self.regs.insert(RTCCALICFG1, value << 7);
+            }
+            // ── ESP32-classic: preserved canned ratio (no behaviour change) ─
+            None => {
+                let max = ((cfg >> 13) & 0x1FFFF).max(1);
+                self.regs.insert(RTCCALICFG, cfg | RTC_CALI_RDY_BIT);
+                // ratio ≈ 533 cycles per RTC_SLOW_CLK period at APB=80 MHz.
+                let value = max.wrapping_mul(533) & 0x01FF_FFFF;
+                self.regs.insert(RTCCALICFG1, (value << 7) | 1);
+            }
+        }
     }
 }
 
@@ -551,6 +610,51 @@ mod tests {
             read_back & RTC_CALI_RDY_BIT != 0,
             "RDY bit should be set immediately after START"
         );
+    }
+
+    #[test]
+    fn classic_rtc_cali_value_is_unchanged() {
+        // Regression pin for the ESP32-classic (profile = None) path: the exact
+        // canned value the pre-split model produced must be byte-for-byte
+        // preserved. MAX=0x100 at bits[29:13] → model reads 0x100, value =
+        // 0x100*533 = 0x21500, RTCCALICFG1 = (value<<7)|1.
+        let mut t = Timg::new(0x3FF5_F000);
+        write_u32(&mut t, RTCCALICFG, RTC_CALI_START_BIT | (0x100u32 << 13));
+        assert!(read_u32(&t, RTCCALICFG) & RTC_CALI_RDY_BIT != 0);
+        assert_eq!(read_u32(&t, RTCCALICFG1), ((0x100u32 * 533) << 7) | 1);
+    }
+
+    #[test]
+    fn c3_rtc_cali_reports_the_modelled_slow_rate() {
+        // ESP32-C3 TIMG0 with the silicon cal profile: drive the exact IDF
+        // register protocol (MAX at bits[30:16], START bit31, poll RDY bit15,
+        // read VALUE at RTCCALICFG1 bits[31:7]) and confirm IDF's inverse
+        // recovers the modelled RTC_SLOW rate — no hardcoded value.
+        const XTAL: u64 = 40_000_000;
+        const SLOW: u64 = 148_150;
+        let mut t = Timg::new(0x6001_F000).with_rtc_cal(RtcCalProfile {
+            xtal_hz: XTAL,
+            slow_hz: SLOW,
+        });
+        for &cycles in &[100u32, 1024, 3000, 0x7FFF] {
+            // CLK_SEL=0 (RTC_MUX/150k), START_CYCLING=0, MAX=cycles, START=1.
+            let cfg = RTC_CALI_START_BIT | (cycles << 16);
+            write_u32(&mut t, RTCCALICFG, cfg);
+            assert!(
+                read_u32(&t, RTCCALICFG) & RTC_CALI_RDY_BIT != 0,
+                "RDY must latch after START (cycles={cycles})"
+            );
+            let value = (read_u32(&t, RTCCALICFG1) >> 7) as u64; // VALUE = XTAL cycles
+            assert!(value > 0, "cal value must be non-zero (cycles={cycles})");
+            // IDF: freq = xtal_hz * slowclk_cycles / xtal_cycles.
+            let recovered = XTAL * u64::from(cycles) / value;
+            let err = recovered.abs_diff(SLOW);
+            assert!(
+                err <= 20,
+                "cycles={cycles}: recovered {recovered} Hz must ~= modelled {SLOW} Hz \
+                 (err {err} Hz, rounding only)"
+            );
+        }
     }
 
     #[test]

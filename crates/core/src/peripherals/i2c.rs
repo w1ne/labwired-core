@@ -1256,6 +1256,26 @@ impl crate::Peripheral for I2c {
         Ok(())
     }
 
+    fn drives_central_i2c_time(&self) -> bool {
+        true
+    }
+
+    /// Advance every attached slave's data-ready clock. Slaves live behind
+    /// `RefCell` here (the transaction engine hands out interior-mutable borrows
+    /// mid-transfer), so borrow each cell in turn. On STM32/Kinetis the machine
+    /// only calls this when a `sim_time_us` source is present; those families
+    /// model no absolute-µs counter today, so in practice this stays inert until
+    /// one is added — the override is here so the fan-out is complete the moment
+    /// it is.
+    fn advance_attached_i2c_us(&mut self, us: u64) {
+        if us == 0 {
+            return;
+        }
+        for cell in self.attached_devices() {
+            cell.borrow_mut().advance_time_us(us);
+        }
+    }
+
     /// Atomic word writes: STM32 HAL stores CR2 as a single STR (START, NBYTES,
     /// and AUTOEND together). Default Peripheral::write_u32 byte-slices and would
     /// assert START before AUTOEND lands, breaking the NBYTES=0 probe path.

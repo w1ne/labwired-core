@@ -826,16 +826,27 @@ pub struct DeviceMetadata {
     /// a hand-written kit's manifest entry byte-for-byte.
     #[serde(default)]
     pub config_keys: Vec<ConfigKeySpec>,
-    /// Starter labs that ship a one-click demo using this device, mirrored into
-    /// the manifest exactly like a hand-written kit's `labs`.
-    #[serde(default)]
-    pub labs: Vec<LabSpec>,
     /// The named stimulus channels this device accepts. For an `i2c_device`
     /// primitive these are the measurement slots that register/response
     /// `source:` keys read; each `default` seeds the value the part reports
     /// until something drives it, and `min`/`max` bound accepted stimuli.
     #[serde(default)]
     pub inputs: Vec<InputSpec>,
+    /// Starter labs that ship a one-click demo using this device, mirrored into
+    /// the manifest exactly like a hand-written kit's `labs` (mirrors
+    /// `kit::LabRef`). Absent ⇒ the kit advertises no labs.
+    #[serde(default)]
+    pub labs: Vec<LabDescriptor>,
+}
+
+/// A demo lab a declarative device advertises (mirrors `kit::LabRef`). Optional;
+/// absent ⇒ the kit advertises no labs.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct LabDescriptor {
+    pub board_id: String,
+    pub chip: String,
+    pub example_dir: String,
+    pub demo_elf: String,
 }
 
 /// A `config:` key advertised in the peripheral manifest. Mirrors the engine's
@@ -847,15 +858,6 @@ pub struct ConfigKeySpec {
     /// One of `str` | `int` | `bool` | `float`.
     pub ty: String,
     pub doc: String,
-}
-
-/// A starter-lab reference, mirroring the engine's `KitMetadata::labs` entries.
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct LabSpec {
-    pub board_id: String,
-    pub chip: String,
-    pub example_dir: String,
-    pub demo_elf: String,
 }
 
 /// One drivable stimulus channel (a measurement slot). Datasheet-facing
@@ -902,10 +904,75 @@ pub struct I2cSpec {
     pub crc8: Option<Crc8Spec>,
     /// Pointer-addressable registers. Present ⇒ this is a register device.
     #[serde(default)]
-    pub registers: Vec<I2cRegister>,
+    pub registers: Vec<RegisterSpec>,
     /// Command set. Present ⇒ this is a command device.
     #[serde(default)]
     pub commands: Vec<I2cCommand>,
+}
+
+/// The `behavior.spi` section of a declarative `spi_device` — datasheet-shaped
+/// wire framing for a register-style SPI sensor, interpreted by the engine's
+/// generic device. The measurement→word machinery (`endian`/`source`/`encode`/
+/// `scale_from` on each [`RegisterSpec`]) is shared verbatim with the I²C
+/// primitive; only the leading-command framing differs.
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct SpiSpec {
+    /// How the leading command byte encodes read/write + register address.
+    #[serde(default)]
+    pub framing: SpiFraming,
+    /// Register map addressed by the command byte.
+    #[serde(default)]
+    pub registers: Vec<RegisterSpec>,
+}
+
+/// SPI command-byte framing. Defaults are the ADXL345 convention: one command
+/// byte, bit 7 = read/write, bits [5:0] = register address, multi-byte bursts
+/// auto-increment the address.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SpiFraming {
+    /// Width of the leading command word in bytes. `0` = read-only part with no
+    /// command (MAX31855: CS↓, clock out register 0); `1` = ADXL345-style.
+    #[serde(default = "default_command_bytes")]
+    pub command_bytes: u8,
+    /// Bit position in the command byte selecting read vs write. `None` ⇒
+    /// direction is fixed by each register's `access`.
+    #[serde(default = "default_rw_bit")]
+    pub rw_bit: Option<u8>,
+    /// If true, `rw_bit` set (=1) means READ (ADXL345). If false, set means write.
+    #[serde(default = "default_true")]
+    pub rw_read_high: bool,
+    /// Mask applied (after `addr_shift`) to the command byte to get the address.
+    #[serde(default = "default_addr_mask")]
+    pub addr_mask: u8,
+    #[serde(default)]
+    pub addr_shift: u8,
+    /// A multi-byte burst walks ascending register addresses from the selected
+    /// one; false ⇒ only the selected register is served.
+    #[serde(default = "default_true")]
+    pub auto_increment: bool,
+}
+
+impl Default for SpiFraming {
+    fn default() -> Self {
+        Self {
+            command_bytes: default_command_bytes(),
+            rw_bit: default_rw_bit(),
+            rw_read_high: true,
+            addr_mask: default_addr_mask(),
+            addr_shift: 0,
+            auto_increment: true,
+        }
+    }
+}
+
+fn default_command_bytes() -> u8 {
+    1
+}
+fn default_rw_bit() -> Option<u8> {
+    Some(7)
+}
+fn default_addr_mask() -> u8 {
+    0x3F
 }
 
 /// CRC-8 parameters. Sensirion parts use `poly 0x31`, `init 0xFF`, no final XOR.
@@ -927,21 +994,27 @@ pub enum Endian {
 /// master may also write it, and the model accumulates + echoes those writes.
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-pub enum I2cAccess {
+pub enum RegisterAccess {
     R,
     Rw,
 }
 
+/// Back-compat aliases: the register/access structs were originally I²C-named.
+/// Both declarative engines (I²C register-pointer, SPI CS-framed) share one
+/// definition; these keep every existing `I2c*` reference compiling.
+pub type I2cRegister = RegisterSpec;
+pub type I2cAccess = RegisterAccess;
+
 /// A pointer-addressable register.
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct I2cRegister {
+pub struct RegisterSpec {
     pub name: String,
     /// Pointer byte the master writes to select this register.
     pub addr: u8,
     /// Width in bytes streamed on read / accumulated on write.
     pub width: u8,
     pub endian: Endian,
-    pub access: I2cAccess,
+    pub access: RegisterAccess,
     /// Power-on value (also the value read back before any write / measurement).
     #[serde(default)]
     pub reset: u32,
@@ -979,6 +1052,32 @@ pub struct I2cRegister {
     /// `source`-less register.
     #[serde(default)]
     pub resolution: Option<f64>,
+    /// The register word is a signed two's-complement quantity of `width`
+    /// bytes. A negative sourced measurement is encoded as its two's-complement
+    /// bit pattern rather than clamped to zero. Default false (unsigned).
+    #[serde(default)]
+    pub signed: bool,
+    /// Bit-field composition: when non-empty, the register word is ASSEMBLED
+    /// from these fields (each a sourced measurement placed at a bit offset)
+    /// rather than from the single top-level `source`. Used by parts like the
+    /// MAX31855 whose 32-bit frame packs temperature + status sub-fields.
+    #[serde(default)]
+    pub fields: Vec<FieldSpec>,
+}
+
+/// One sourced bit-field within a composite register word (see
+/// [`RegisterSpec::fields`]). The encoded value occupies `width_bits` bits at
+/// bit offset `shift`; `signed` packs negatives as two's-complement within
+/// those bits.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct FieldSpec {
+    pub source: String,
+    pub shift: u8,
+    pub width_bits: u8,
+    #[serde(default)]
+    pub signed: bool,
+    #[serde(default)]
+    pub encode: Option<Encode>,
 }
 
 /// Accept either a single `scale_from` mapping or a YAML list of them, yielding
@@ -1169,6 +1268,10 @@ pub struct DeviceBehavior {
     /// primitives (quadrature / matrix / one-wire / pulse-echo).
     #[serde(default)]
     pub i2c: Option<I2cSpec>,
+    /// For the `spi_device` primitive: the datasheet-shaped SPI wire framing the
+    /// engine's generic SPI device interprets. Absent for non-SPI primitives.
+    #[serde(default)]
+    pub spi: Option<SpiSpec>,
 }
 
 impl DeviceDescriptor {
@@ -1203,6 +1306,8 @@ pub fn embedded_device_yaml(device_type: &str) -> Option<&'static str> {
         "dht22" | "am2302" => Some(include_str!("../../../configs/devices/dht22.yaml")),
         "hc-sr04" | "hcsr04" => Some(include_str!("../../../configs/devices/hc_sr04.yaml")),
         "sht31" => Some(include_str!("../../../configs/devices/sht31.yaml")),
+        "adxl345_spi" => Some(include_str!("../../../configs/devices/adxl345_spi.yaml")),
+        "max31855" => Some(include_str!("../../../configs/devices/max31855.yaml")),
         "bh1750" => Some(include_str!("../../../configs/devices/bh1750.yaml")),
         "veml7700" => Some(include_str!("../../../configs/devices/veml7700.yaml")),
         _ => None,
@@ -3821,5 +3926,59 @@ board_io: []
         let err = SystemManifest::from_file(&sys_path).unwrap_err();
         let msg = err.to_string();
         assert!(msg.contains("'p'"), "unexpected error: {msg}");
+    }
+
+    #[test]
+    fn spi_device_descriptor_parses_framing_and_registers() {
+        let yaml = r#"
+type: test_spi
+behavior:
+  primitive: spi_device
+  spi:
+    framing: { command_bytes: 1, rw_bit: 7, rw_read_high: true, addr_mask: 0x3F, auto_increment: true }
+    registers:
+      - { name: WHOAMI, addr: 0x00, width: 1, endian: le, access: r, reset: 0xE5 }
+      - { name: DATA, addr: 0x32, width: 2, endian: le, access: r, source: accel }
+metadata:
+  inputs:
+    - { key: accel, label: "Accel X", unit: g, min: -16, max: 16, default: 0 }
+"#;
+        let d = DeviceDescriptor::from_yaml(yaml).unwrap();
+        let spi = d.behavior.spi.as_ref().expect("behavior.spi present");
+        assert_eq!(spi.framing.command_bytes, 1);
+        assert_eq!(spi.framing.rw_bit, Some(7));
+        assert_eq!(spi.registers.len(), 2);
+        assert_eq!(spi.registers[0].reset, 0xE5);
+    }
+
+    #[test]
+    fn spi_framing_defaults_are_adxl_shaped() {
+        let f = SpiFraming::default();
+        assert_eq!(f.command_bytes, 1);
+        assert_eq!(f.rw_bit, Some(7));
+        assert!(f.rw_read_high);
+        assert_eq!(f.addr_mask, 0x3F);
+        assert_eq!(f.addr_shift, 0);
+        assert!(f.auto_increment);
+    }
+
+    #[test]
+    fn i2c_register_alias_still_names_the_shared_struct() {
+        // The rename must not break existing I2c-named references.
+        let _r: I2cRegister = RegisterSpec {
+            name: "R".into(),
+            addr: 0,
+            width: 1,
+            endian: Endian::Le,
+            access: I2cAccess::R,
+            reset: 0,
+            source: None,
+            encode: None,
+            scale_from: vec![],
+            source_scale: None,
+            resolution: None,
+            signed: false,
+            fields: vec![],
+        };
     }
 }

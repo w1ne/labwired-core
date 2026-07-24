@@ -38,10 +38,10 @@ use std::collections::HashMap;
 
 use anyhow::{bail, Context, Result};
 use labwired_config::{
-    Crc8Spec, DeviceDescriptor, Encode, Endian, I2cAccess, I2cCommand, I2cRegister, I2cSpec,
-    ResponseWord,
+    Crc8Spec, DeviceDescriptor, Endian, I2cAccess, I2cCommand, I2cRegister, I2cSpec, ResponseWord,
 };
 
+use super::declarative_regs::{encode_raw, pack, register_read_bytes, unpack};
 use crate::peripherals::i2c::I2cDevice;
 use crate::sim_input::{InputChannel, SimInput, SimInputError};
 
@@ -61,67 +61,6 @@ fn crc8(data: &[u8], poly: u8, init: u8) -> u8 {
         }
     }
     crc
-}
-
-/// Largest value representable in `width` bytes, as f64 (width ≤ 4).
-fn width_max(width: u8) -> f64 {
-    ((1u64 << (8 * width as u64)) - 1) as f64
-}
-
-/// Apply a linear encode (scale/offset/clamp) plus an extra scale factor,
-/// yielding the raw integer packed into a `width`-byte word.
-fn encode_raw(value: f64, enc: Option<&Encode>, extra_scale: f64, width: u8) -> u32 {
-    let scale = enc.map(|e| e.scale).unwrap_or(1.0) * extra_scale;
-    let offset = enc.map(|e| e.offset).unwrap_or(0.0);
-    let mut raw = value * scale + offset;
-    if let Some(e) = enc {
-        if let Some(lo) = e.clamp_min {
-            raw = raw.max(lo);
-        }
-        if let Some(hi) = e.clamp_max {
-            raw = raw.min(hi);
-        }
-    }
-    raw.round().clamp(0.0, width_max(width)) as u32
-}
-
-/// Convert a measurement to a raw count by DIVIDING it by a resolution
-/// (`count = round(value / resolution)`), clamped into a `width`-byte word.
-/// This is the divide dual of [`encode_raw`], for parts the datasheet describes
-/// as `count = quantity / resolution` (VEML7700). A zero/negative resolution
-/// clamps to the max (defensive; descriptors never declare one).
-fn divide_raw(value: f64, resolution: f64, width: u8) -> u32 {
-    if resolution <= 0.0 {
-        return width_max(width) as u32;
-    }
-    (value / resolution).round().clamp(0.0, width_max(width)) as u32
-}
-
-/// Pack `raw` into `width` bytes in the given order.
-fn pack(raw: u32, width: u8, endian: Endian) -> Vec<u8> {
-    let mut le: Vec<u8> = (0..width).map(|i| (raw >> (8 * i as u32)) as u8).collect();
-    if endian == Endian::Be {
-        le.reverse();
-    }
-    le
-}
-
-/// Unpack `width` bytes (in `endian` order) into a value.
-fn unpack(bytes: &[u8], endian: Endian) -> u32 {
-    let mut acc = 0u32;
-    match endian {
-        Endian::Le => {
-            for (i, &b) in bytes.iter().enumerate() {
-                acc |= (b as u32) << (8 * i as u32);
-            }
-        }
-        Endian::Be => {
-            for &b in bytes {
-                acc = (acc << 8) | b as u32;
-            }
-        }
-    }
-    acc
 }
 
 /// The generic device. Constructed from a [`DeviceDescriptor`] whose
@@ -251,57 +190,6 @@ impl GenericI2cDevice {
         self.commands.iter().find(|c| c.code == code)
     }
 
-    /// The scale factor one `scale_from` entry selects from the current value of
-    /// another register's bit-field (1.0 when the field value is unmapped).
-    fn scale_from_one(&self, sf: &labwired_config::ScaleFrom) -> f64 {
-        let regval = self.reg_values.get(&sf.register).copied().unwrap_or(0);
-        let field = (regval >> sf.shift as u32) & sf.mask;
-        sf.map.get(&field).copied().unwrap_or(1.0)
-    }
-
-    /// Product of a register's `scale_from` factors, folded left-to-right from
-    /// 1.0 (the empty list ⇒ 1.0). Used in the multiply encoding to compound the
-    /// counts-per-unit.
-    fn scale_from_product(&self, reg: &I2cRegister) -> f64 {
-        reg.scale_from
-            .iter()
-            .fold(1.0, |acc, sf| acc * self.scale_from_one(sf))
-    }
-
-    /// The bytes a read of the currently pointed register returns.
-    fn register_read_bytes(&self, reg: &I2cRegister) -> Vec<u8> {
-        let raw = if let Some(src) = &reg.source {
-            // A distinct pre-multiply on the measurement (datasheet responsivity
-            // ratio), applied as its own float step so the intermediate matches
-            // a reference model that scales the value before converting it.
-            let value =
-                self.slots.get(src).copied().unwrap_or(0.0) * reg.source_scale.unwrap_or(1.0);
-            match reg.resolution {
-                Some(base) => {
-                    // Resolution-divide mode: resolution = base × Π(factors),
-                    // folded left-to-right from `base` (so the op tree matches a
-                    // reference `base * (100/it) / gain`); count = value ÷ res.
-                    let resolution = reg
-                        .scale_from
-                        .iter()
-                        .fold(base, |acc, sf| acc * self.scale_from_one(sf));
-                    divide_raw(value, resolution, reg.width)
-                }
-                // Multiply mode: value × encode.scale × Π(factors).
-                None => encode_raw(
-                    value,
-                    reg.encode.as_ref(),
-                    self.scale_from_product(reg),
-                    reg.width,
-                ),
-            }
-        } else {
-            // Plain storage register: echo the written value (seeded to reset).
-            self.reg_values.get(&reg.name).copied().unwrap_or(reg.reset)
-        };
-        pack(raw, reg.width, reg.endian)
-    }
-
     /// Build the response bytes for a dispatched command (before delay gating).
     fn build_response(&self, cmd: &I2cCommand) -> Vec<u8> {
         let mut out = Vec::new();
@@ -326,7 +214,7 @@ impl GenericI2cDevice {
     fn response_word_raw(&self, word: &ResponseWord) -> u32 {
         if let Some(src) = &word.source {
             let value = self.slots.get(src).copied().unwrap_or(0.0);
-            encode_raw(value, word.encode.as_ref(), 1.0, word.width)
+            encode_raw(value, word.encode.as_ref(), 1.0, word.width, false)
         } else {
             word.const_value.unwrap_or(0)
         }
@@ -418,7 +306,7 @@ impl I2cDevice for GenericI2cDevice {
         // Register mode: latch the pointed register's bytes on the first read.
         if !self.latched {
             self.read_buf = match self.pointer.and_then(|p| self.find_register(p)) {
-                Some(reg) => self.register_read_bytes(reg),
+                Some(reg) => register_read_bytes(reg, &self.slots, &self.reg_values),
                 // Unknown pointer reads a zero word, matching veml7700.
                 None => vec![0, 0],
             };
@@ -503,7 +391,7 @@ fn validate_spec(spec: &I2cSpec) -> Result<()> {
 /// Leak the descriptor's `metadata.inputs` into a `'static` channel table
 /// (`InputChannel` requires `'static` strings). One table per call — the kit
 /// leaks once and shares it; tests leak per device.
-fn leak_channels(descriptor: &DeviceDescriptor) -> &'static [InputChannel] {
+pub(crate) fn leak_channels(descriptor: &DeviceDescriptor) -> &'static [InputChannel] {
     let inputs = descriptor
         .metadata
         .as_ref()
