@@ -9,8 +9,14 @@
 #                                          offset = 45 * 65535/175 = 16851.857142…
 #   raw_RH = RH% / 100 * 65535         ⇒  scale = 65535/100 = 655.35
 #
-# No delay_us is set: like the hand-written Sensirion models the device is
-# modelled always-ready (most controllers don't yet drive advance_time_us).
+# Data-ready timing: a single-shot high-repeatability measurement takes ~12.5 ms
+# typical, 15 ms maximum (SHT3x datasheet §2.2, table 4). `delay_us: 15000` uses
+# the datasheet MAXIMUM — the "measurement guaranteed complete" bound firmware
+# waits for before reading — so a read issued sooner returns not-ready bytes
+# (0xFF), exactly as the real sensor NACKs / stretches until conversion is done.
+# This is now faithful on every controller whose chip exposes an authoritative
+# simulated-µs source (ESP32 SYSTIMER drives it via I2cDevice::advance_time_us);
+# on families without one it degrades to always-ready, harmlessly.
 type: sht31
 
 behavior:
@@ -23,11 +29,13 @@ behavior:
       # ENABLED (0x2C06). Both return the same temperature-then-humidity frame.
       - name: single_shot_high_no_stretch
         code: 0x2400
+        delay_us: 15000
         response:
           - { source: temperature, width: 2, encode: { scale: 374.4857142857143, offset: 16851.857142857143 } }
           - { source: humidity, width: 2, encode: { scale: 655.35 } }
       - name: single_shot_high_clock_stretch
         code: 0x2C06
+        delay_us: 15000
         response:
           - { source: temperature, width: 2, encode: { scale: 374.4857142857143, offset: 16851.857142857143 } }
           - { source: humidity, width: 2, encode: { scale: 655.35 } }
