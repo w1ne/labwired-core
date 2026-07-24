@@ -7,6 +7,8 @@ pub mod esp32c3_rtc_delay_loop;
 #[cfg(test)]
 pub mod hcsr04_event_tick_differential;
 #[cfg(test)]
+pub mod i2c_central_time_drive;
+#[cfg(test)]
 pub mod integration;
 #[cfg(test)]
 pub mod logic_capture;

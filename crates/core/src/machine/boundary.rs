@@ -214,6 +214,13 @@ impl<C: Cpu> Machine<C> {
             self.drain_scheduler_events();
         }
 
+        // Central I²C data-ready time drive (Option A): advance every attached
+        // I²C slave's `advance_time_us` clock to the chip's authoritative
+        // simulated-µs "now". Short-circuits (two field checks) on families with
+        // no absolute-µs source or no opted-in controller, so it is free where
+        // it does nothing and cannot alter any existing chip's behavior.
+        self.advance_central_i2c_time();
+
         // RTC_CNTL software system reset (OPTIONS0 bit 31 / `SW_SYS_RST`).
         // The ESP32 BROM's `_rtc_trigger_sw_system_reset` writes this bit
         // and expects execution NOT to return from the store — on real

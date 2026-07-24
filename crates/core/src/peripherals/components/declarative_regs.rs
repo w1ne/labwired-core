@@ -11,7 +11,7 @@
 
 use std::collections::HashMap;
 
-use labwired_config::{Encode, Endian, LabDescriptor, RegisterSpec};
+use labwired_config::{Encode, Endian, LabDescriptor, ObservableSpec, RegisterSpec};
 
 use crate::peripherals::kit::LabRef;
 
@@ -101,7 +101,10 @@ pub(crate) fn unpack(bytes: &[u8], endian: Endian) -> u32 {
 }
 
 /// One `scale_from` factor: the value another register's bit-field selects (1.0 if unmapped).
-pub(crate) fn scale_from_one(sf: &labwired_config::ScaleFrom, reg_values: &HashMap<String, u32>) -> f64 {
+pub(crate) fn scale_from_one(
+    sf: &labwired_config::ScaleFrom,
+    reg_values: &HashMap<String, u32>,
+) -> f64 {
     let regval = reg_values.get(&sf.register).copied().unwrap_or(0);
     let field = (regval >> sf.shift as u32) & sf.mask;
     sf.map.get(&field).copied().unwrap_or(1.0)
@@ -109,7 +112,9 @@ pub(crate) fn scale_from_one(sf: &labwired_config::ScaleFrom, reg_values: &HashM
 
 /// Product of a register's `scale_from` factors, folded left-to-right from 1.0.
 pub(crate) fn scale_from_product(reg: &RegisterSpec, reg_values: &HashMap<String, u32>) -> f64 {
-    reg.scale_from.iter().fold(1.0, |acc, sf| acc * scale_from_one(sf, reg_values))
+    reg.scale_from
+        .iter()
+        .fold(1.0, |acc, sf| acc * scale_from_one(sf, reg_values))
 }
 
 /// Divide dual of `encode_raw`: count = round(value / resolution), clamped. A
@@ -166,6 +171,37 @@ pub(crate) fn register_read_bytes(
         reg_values.get(&reg.name).copied().unwrap_or(reg.reset)
     };
     pack(raw, reg.width, reg.endian)
+}
+
+/// Read a named observable channel from a byte-addressable register file:
+/// compose the 12-bit raw value (`((regs[base+hi_rel] & hi_mask) << 8) |
+/// regs[base+lo_rel]`) and apply the optional linear map (`raw × scale + offset`,
+/// clamped). Returns `None` when the channel is out of range, a composing byte
+/// is out of bounds, or (with `none_when_raw_zero`) the raw value is 0. This is
+/// the shared home for the register→engineering-units math; the I²C
+/// `register_file` engine is its only caller (declarative_spi is unaffected).
+pub(crate) fn observe(regs: &[u8], obs: &ObservableSpec, channel: u8) -> Option<f64> {
+    if channel >= obs.channels {
+        return None;
+    }
+    let base = obs.base as usize + obs.stride as usize * channel as usize;
+    let lo = *regs.get(base + obs.value.u12_compose.lo_rel as usize)?;
+    let hi =
+        *regs.get(base + obs.value.u12_compose.hi_rel as usize)? & obs.value.u12_compose.hi_mask;
+    let raw = ((hi as u16) << 8) | lo as u16;
+    match &obs.map {
+        Some(map) => {
+            if map.none_when_raw_zero && raw == 0 {
+                return None;
+            }
+            let mut eng = raw as f64 * map.linear.scale + map.linear.offset;
+            if let Some((lo_c, hi_c)) = map.linear.clamp {
+                eng = eng.clamp(lo_c, hi_c);
+            }
+            Some(eng)
+        }
+        None => Some(raw as f64),
+    }
 }
 
 #[cfg(test)]

@@ -167,18 +167,6 @@ pub fn try_build(
                     inst.attach_i2c(crate::bus::bus_trace::wrap_i2c(
                         &p_cfg.id, bus_trace, device,
                     ));
-                } else if let Some(device) =
-                    crate::peripherals::components::build_spi_device(&ext.r#type, &ext.config)
-                {
-                    tracing::info!(
-                        "serial-instance spi attach: '{}' (type={}) -> '{}'",
-                        ext.id,
-                        ext.r#type,
-                        p_cfg.id
-                    );
-                    inst.attach_spi(crate::bus::bus_trace::wrap_spi(
-                        &p_cfg.id, bus_trace, device,
-                    ));
                 } else {
                     tracing::warn!(
                         "serial-instance attach skipped: unknown device type '{}' \

@@ -122,7 +122,11 @@ boards:
     # nrf52840_ble_loopback_through_virtual_air pass UNCHANGED. No register
     # read/write path, reset value or layout touched — drift is the shared nrf52
     # file commit date only. No live re-capture.
-    drift_ack: 2026-07-23
+    # 2026-07-24: IR-component-engine retirement (phase B) removed the dead
+    # `type: ir` SPI escape-hatch branch from nrf52/factory.rs. No register
+    # read/write path, reset value or layout touched — drift is the shared nrf52
+    # file commit date only. No live re-capture.
+    drift_ack: 2026-07-24
     models:
       - crates/core/src/peripherals/nrf52
       - configs/chips/nrf52840.yaml
@@ -176,7 +180,10 @@ boards:
     # 2026-07-22: rides the nrf52840 BLE virtual-air VirtualAirBus refactor (same
     # silicon); byte-identical, transitional global default. See the nrf52840
     # drift_ack note.
-    drift_ack: 2026-07-23
+    # 2026-07-24: rides the nrf52840 IR-component-engine retirement (dead
+    # `type: ir` SPI escape-hatch removed from nrf52/factory.rs); byte-identical,
+    # same silicon. See the nrf52840 drift_ack note.
+    drift_ack: 2026-07-24
     models:
       - crates/core/src/peripherals/nrf52
       - configs/chips/nrf52840.yaml
@@ -1041,7 +1048,15 @@ boards:
     # passed), `esp32s3_reset_conformance`/`reset_values_match_silicon` unchanged,
     # full core lib suite 2329 green. No S3 board attached; no live re-capture
     # warranted — the new behaviour is post-reset and outside the anchored window.
-    drift_ack: 2026-07-23
+    # 2026-07-24: central I²C data-ready time drive (#644). Additive-only against
+    # the reset-state silicon anchor: SYSTIMER gained a new `sim_time_us()` `&self`
+    # accessor (UNIT0 ticks ÷ 16, computed fresh — no register, tick, on_event or
+    # reset value touched), and esp32s3/i2c gained `drives_central_i2c_time` +
+    # `advance_attached_i2c_us` (opt-in fan-out that only forwards elapsed µs to
+    # attached slaves). No existing read/write/tick/on_event path changed, so the
+    # anchored reset windows and every observable register value are untouched;
+    # esp32s3_walk_differential covers byte-identity. No live re-capture warranted.
+    drift_ack: 2026-07-24
     models:
       - crates/core/src/peripherals/esp32s3
       - crates/core/src/peripherals/esp_xtensa_common
