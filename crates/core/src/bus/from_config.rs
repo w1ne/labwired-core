@@ -850,20 +850,10 @@ impl SystemBus {
                         }
                     }
                 }
-                "uln2003" | "stepper-28byj48" => {
-                    let p1 = Self::gpio_from_config(ext, "in1_pin", "IN1", "GPIO16")?;
-                    let p2 = Self::gpio_from_config(ext, "in2_pin", "IN2", "GPIO17")?;
-                    let p3 = Self::gpio_from_config(ext, "in3_pin", "IN3", "GPIO18")?;
-                    let p4 = Self::gpio_from_config(ext, "in4_pin", "IN4", "GPIO19")?;
-                    let motor = std::sync::Arc::new(
-                        crate::peripherals::components::unipolar_stepper::UnipolarStepper::new_28byj48(
-                            &ext.id,
-                            [p1, p2, p3, p4],
-                        ),
-                    );
-                    Self::install_gpio_observer(&mut bus, motor.clone());
-                    bus.unipolar_steppers.push(motor);
-                }
+                // uln2003 / stepper-28byj48 (28BYJ-48 unipolar stepper) now
+                // dispatches through the declarative device path above
+                // (configs/devices/uln2003.yaml, `unipolar_stepper` primitive) —
+                // see super::declarative_device.
                 "can-diagnostic-tester" | "uds-diagnostic-tester" => {
                     if bus.find_peripheral_index_by_name(&ext.connection).is_none() {
                         return Err(anyhow::anyhow!(
@@ -1032,7 +1022,7 @@ impl SystemBus {
     }
 
     /// Install a GPIO edge observer on ESP32 / ESP32-S3 GPIO models when present.
-    fn install_gpio_observer<T>(bus: &mut SystemBus, observer: std::sync::Arc<T>)
+    pub(crate) fn install_gpio_observer<T>(bus: &mut SystemBus, observer: std::sync::Arc<T>)
     where
         T: crate::peripherals::esp32s3::gpio::GpioObserver
             + crate::peripherals::esp32::gpio::GpioObserver

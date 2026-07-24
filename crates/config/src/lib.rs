@@ -1303,6 +1303,9 @@ pub fn embedded_device_yaml(device_type: &str) -> Option<&'static str> {
             Some(include_str!("../../../configs/devices/rotary_encoder.yaml"))
         }
         "keypad" => Some(include_str!("../../../configs/devices/keypad.yaml")),
+        "uln2003" | "stepper-28byj48" => {
+            Some(include_str!("../../../configs/devices/uln2003.yaml"))
+        }
         "dht22" | "am2302" => Some(include_str!("../../../configs/devices/dht22.yaml")),
         "hc-sr04" | "hcsr04" => Some(include_str!("../../../configs/devices/hc_sr04.yaml")),
         "sht31" => Some(include_str!("../../../configs/devices/sht31.yaml")),

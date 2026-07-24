@@ -1,0 +1,40 @@
+# Declarative descriptor — 28BYJ-48 unipolar stepper on a ULN2003 driver.
+#
+# The firmware pulses four plain GPIO outputs (IN1–IN4) through the coil
+# half-step sequence; the ULN2003 Darlington array buffers them to the motor's
+# four phases. Watching those four pads and advancing the rotor on each pattern
+# change is the irreducible `unipolar_stepper` primitive
+# (crate::peripherals::components::unipolar_stepper). It is a GPIO edge observer
+# — so, like NeoPixel, it installs on the ESP32 / ESP32-S3 GPIO model rather
+# than resolving to a bus register — and it carries no host stimulus: the
+# firmware, not the host, commands motion.
+type: uln2003
+
+# --- Runtime behavior (consumed by bus/declarative_device.rs) --------------
+behavior:
+  primitive: unipolar_stepper
+  # Coil phases IN1..IN4 → the config keys carrying their pad label. Each
+  # resolves to an ESP32 GPIO the twin observes as an edge source.
+  pins:
+    in1: in1_pin
+    in2: in2_pin
+    in3: in3_pin
+    in4: in4_pin
+
+# --- Display / manifest metadata (phase 2: derives KitMetadata) ------------
+metadata:
+  label: "28BYJ-48 stepper"
+  summary: "5V unipolar stepper on a ULN2003 driver (4-wire half-step)"
+  category: gpio
+
+# --- Canvas-compiler emit mapping (phase 2: unifies the TS/Rust emitters) ---
+# Both engines derive the external_devices block from this: IN1..IN4 part pins
+# map to the in1_pin..in4_pin config keys the `unipolar_stepper` primitive reads.
+emit:
+  device_type: uln2003
+  connection: gpio
+  config:
+    - { key: in1_pin, from_part_pin: [IN1] }
+    - { key: in2_pin, from_part_pin: [IN2] }
+    - { key: in3_pin, from_part_pin: [IN3] }
+    - { key: in4_pin, from_part_pin: [IN4] }

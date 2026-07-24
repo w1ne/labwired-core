@@ -55,6 +55,7 @@ impl SystemBus {
             "matrix" => self.attach_matrix(ext, desc),
             "one_wire" => self.attach_one_wire(ext, desc),
             "pulse_echo" => self.attach_pulse_echo(ext, desc),
+            "unipolar_stepper" => self.attach_unipolar_stepper(ext, desc),
             other => Err(anyhow!(
                 "declarative device '{}' names unknown primitive '{}'",
                 ext.id,
@@ -219,6 +220,48 @@ impl SystemBus {
                 cpu_hz,
             ),
         ));
+        Ok(())
+    }
+
+    /// `unipolar_stepper` primitive → [`UnipolarStepper`]. Reproduces the former
+    /// `"uln2003" | "stepper-28byj48"` arm: IN1–IN4 resolve to ESP32 GPIO output
+    /// pads the firmware pulses through the coil half-step sequence. Unlike the
+    /// bus-resident primitives above the twin is a GPIO edge observer, so it is
+    /// installed on the ESP32 / ESP32-S3 GPIO model and pushed onto the
+    /// `unipolar_steppers` list rather than resolving to a register. GPIO-only:
+    /// the pin labels parse as ESP32 pads (`GPIO16`…), matching the deleted arm.
+    fn attach_unipolar_stepper(
+        &mut self,
+        ext: &ExternalDevice,
+        desc: &DeviceDescriptor,
+    ) -> Result<()> {
+        let labels = [
+            self.pin_config(ext, desc, "in1", "GPIO16")?,
+            self.pin_config(ext, desc, "in2", "GPIO17")?,
+            self.pin_config(ext, desc, "in3", "GPIO18")?,
+            self.pin_config(ext, desc, "in4", "GPIO19")?,
+        ];
+        let mut pins = [0u8; 4];
+        for (i, label) in labels.iter().enumerate() {
+            pins[i] = Self::parse_esp32s3_gpio_pin(label)
+                .or_else(|| Self::parse_esp32_gpio_pin(label))
+                .ok_or_else(|| {
+                    anyhow!(
+                        "unipolar stepper '{}' in{}_pin '{}' is not a parseable GPIO",
+                        ext.id,
+                        i + 1,
+                        label
+                    )
+                })?;
+        }
+
+        let motor = std::sync::Arc::new(
+            crate::peripherals::components::unipolar_stepper::UnipolarStepper::new_28byj48(
+                &ext.id, pins,
+            ),
+        );
+        Self::install_gpio_observer(self, motor.clone());
+        self.unipolar_steppers.push(motor);
         Ok(())
     }
 

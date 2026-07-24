@@ -287,6 +287,7 @@ impl CanonicalConfig {
                     "dht22" => Some("dht22"),
                     "rotary-encoder" => Some("rotary_encoder"),
                     "keypad" => Some("keypad"),
+                    "uln2003" => Some("uln2003"),
                     _ => None,
                 };
                 if let Some(desc_type) = desc_type {

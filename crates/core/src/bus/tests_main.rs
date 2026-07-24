@@ -668,6 +668,52 @@ board_io: []
     );
 }
 
+/// The `uln2003` / `stepper-28byj48` external device dispatches through the
+/// DECLARATIVE device path (`configs/devices/uln2003.yaml`, `unipolar_stepper`
+/// primitive) rather than a hand-written `from_config` arm. This locks that
+/// seam: a stepper in a system.yaml must still land a `UnipolarStepper` on the
+/// bus with IN1–IN4 resolved from the descriptor's pin bindings — what the
+/// deleted arm produced. Both `type:` spellings resolve to the same descriptor.
+#[test]
+fn test_from_config_attaches_unipolar_stepper_via_declarative_descriptor() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let chip = ChipDescriptor::from_file(root.join("../../configs/chips/esp32.yaml"))
+        .expect("read ESP32 chip descriptor");
+    for type_str in ["uln2003", "stepper-28byj48"] {
+        let manifest: SystemManifest = serde_yaml::from_str(&format!(
+            r#"
+name: "stepper-declarative"
+chip: "../chips/esp32.yaml"
+external_devices:
+  - id: "motor"
+    type: "{type_str}"
+    connection: "gpio"
+    config:
+      in1_pin: "GPIO16"
+      in2_pin: "GPIO17"
+      in3_pin: "GPIO18"
+      in4_pin: "GPIO19"
+board_io: []
+"#
+        ))
+        .expect("parse stepper manifest");
+
+        let bus = SystemBus::from_config(&chip, &manifest).expect("build bus with stepper");
+        assert_eq!(
+            bus.unipolar_steppers.len(),
+            1,
+            "exactly one UnipolarStepper attached for type '{type_str}'"
+        );
+        let motor = &bus.unipolar_steppers[0];
+        assert_eq!(motor.id(), "motor");
+        assert_eq!(motor.half_steps(), 0, "rotor starts at zero half-steps");
+        assert!(
+            !motor.is_commanded(),
+            "no motion until the firmware pulses a coil"
+        );
+    }
+}
+
 /// The `rotary_encoder` external device dispatches through the DECLARATIVE
 /// device path (`configs/devices/rotary_encoder.yaml`, `quadrature` primitive)
 /// rather than a hand-written `from_config` arm. This locks that seam: a
