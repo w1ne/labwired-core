@@ -63,8 +63,8 @@ jobs:
           import sys
 
           # Weekly floor only (not a PR gate). Keep conservative until main baseline
-      # is measured; PR signal is integrity + onboarding + coverage-matrix + arduino.
-      threshold = 55.0
+          # is measured; PR signal is integrity + onboarding + coverage-matrix + arduino.
+          threshold = 55.0
           p = pathlib.Path("out/coverage/llvm-cov.json")
           data = json.loads(p.read_text())
           nodes = data.get("data", [])
