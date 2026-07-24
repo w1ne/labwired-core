@@ -1041,7 +1041,15 @@ boards:
     # passed), `esp32s3_reset_conformance`/`reset_values_match_silicon` unchanged,
     # full core lib suite 2329 green. No S3 board attached; no live re-capture
     # warranted — the new behaviour is post-reset and outside the anchored window.
-    drift_ack: 2026-07-23
+    # 2026-07-24: central I²C data-ready time drive (#644). Additive-only against
+    # the reset-state silicon anchor: SYSTIMER gained a new `sim_time_us()` `&self`
+    # accessor (UNIT0 ticks ÷ 16, computed fresh — no register, tick, on_event or
+    # reset value touched), and esp32s3/i2c gained `drives_central_i2c_time` +
+    # `advance_attached_i2c_us` (opt-in fan-out that only forwards elapsed µs to
+    # attached slaves). No existing read/write/tick/on_event path changed, so the
+    # anchored reset windows and every observable register value are untouched;
+    # esp32s3_walk_differential covers byte-identity. No live re-capture warranted.
+    drift_ack: 2026-07-24
     models:
       - crates/core/src/peripherals/esp32s3
       - crates/core/src/peripherals/esp_xtensa_common
