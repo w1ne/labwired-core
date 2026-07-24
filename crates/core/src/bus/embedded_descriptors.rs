@@ -506,9 +506,7 @@ pub fn lookup(descriptor_path: &str) -> Option<&'static str> {
         "rp2040/xosc.yaml" => Some(include_str!(
             "../../../../configs/peripherals/rp2040/xosc.yaml"
         )),
-        "tmp102.yaml" => Some(include_str!(
-            "../../../../configs/peripherals/tmp102.yaml"
-        )),
+        "tmp102.yaml" => Some(include_str!("../../../../configs/peripherals/tmp102.yaml")),
         _ => None,
     }
 }
@@ -522,8 +520,8 @@ mod tests {
     /// needs it. Regenerate with scripts/gen_embedded_descriptors.py.
     #[test]
     fn embedded_descriptor_registry_is_complete() {
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../configs/peripherals");
+        let root =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../configs/peripherals");
         let mut missing = Vec::new();
         let mut stack = vec![root.clone()];
         while let Some(dir) = stack.pop() {
