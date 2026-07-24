@@ -1251,9 +1251,33 @@ impl WasmSimulator {
 
             if device_type == "max31855" {
                 for device in &spi.attached_devices {
-                    if let Some(sensor) = device.as_any().and_then(|a| {
-                        a.downcast_ref::<labwired_core::peripherals::components::Max31855>()
-                    }) {
+                    let Some(any) = device.as_any() else {
+                        continue;
+                    };
+                    // Try the declarative kit first — MT5b re-registers the
+                    // MAX31855 as a `GenericSpiDevice` and deletes the
+                    // hand-written `Max31855` type, so this generic path must
+                    // already exist before that deletion lands.
+                    if let Some(gen) = any
+                        .downcast_ref::<labwired_core::peripherals::components::GenericSpiDevice>(
+                        )
+                    {
+                        if let (Some(tc_c), Some(internal_c)) =
+                            (gen.input_value("temperature"), gen.input_value("internal"))
+                        {
+                            states.push(serde_json::json!({
+                                "id": binding.id,
+                                "kind": "max31855",
+                                "tc_c": tc_c,
+                                "internal_c": internal_c,
+                            }));
+                            break;
+                        }
+                        continue;
+                    }
+                    if let Some(sensor) =
+                        any.downcast_ref::<labwired_core::peripherals::components::Max31855>()
+                    {
                         let (tc_c, internal_c) = sensor.temperature();
                         states.push(serde_json::json!({
                             "id": binding.id,
