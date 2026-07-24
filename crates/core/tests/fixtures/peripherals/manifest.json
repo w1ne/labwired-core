@@ -1713,7 +1713,7 @@
       "labs": [],
       "inputs": [
         {
-          "key": "thermocouple",
+          "key": "temperature",
           "label": "Thermocouple temp",
           "unit": "°C",
           "min": -270.0,

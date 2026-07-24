@@ -13,7 +13,12 @@
 # SimInput channel keys match the hand-written model exactly: `temperature`
 # (hot junction) and `internal` (cold junction), so external callers/wasm
 # consumers see the same API.
-type: max31855
+#
+# NOTE: `type` stays `max31855_spi` until the hand-written kit is deleted
+# (migration task MT5b), at which point it flips to `max31855` atomically with
+# removing the colliding hand-written registration. Registering two kits with
+# device_type "max31855" trips the registry uniqueness gate.
+type: max31855_spi
 
 behavior:
   primitive: spi_device
