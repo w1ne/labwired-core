@@ -469,6 +469,19 @@ impl Peripheral for Esp32s3I2c {
         Some(self)
     }
 
+    fn drives_central_i2c_time(&self) -> bool {
+        true
+    }
+
+    fn advance_attached_i2c_us(&mut self, us: u64) {
+        if us == 0 {
+            return;
+        }
+        for slave in self.slaves.iter_mut() {
+            slave.advance_time_us(us);
+        }
+    }
+
     fn for_each_attached_sim_input(
         &mut self,
         f: &mut dyn FnMut(&mut dyn crate::sim_input::SimInput) -> bool,

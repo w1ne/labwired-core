@@ -367,6 +367,29 @@ impl Systimer {
         }
     }
 
+    /// UNIT0's current 16 MHz counter value, made fresh from the bus-published
+    /// clock WITHOUT mutating (callable from `&self`). Mirrors the advance the
+    /// lazy read path applies: `counter + pending_ticks` where the pending ticks
+    /// are the CPU cycles accrued since `last_tick` (plus the sub-tick carry)
+    /// divided by the cycles-per-SYSTIMER-tick. In legacy mode the walk keeps
+    /// `unit0.counter` fresh and `clock.now()` tracks the walk cycle, so the same
+    /// formula holds; without a clock (hand-built test buses) it returns the
+    /// stored counter as-is. When UNIT0 is stopped (CONF bit 30 clear) the
+    /// counter is frozen — no pending advance.
+    fn current_unit0_ticks(&self) -> u64 {
+        let mut counter = self.unit0.counter;
+        if self.unit0_running() {
+            if let Some(clock) = &self.clock {
+                let now = clock.now();
+                if now > self.last_tick {
+                    let pending = self.cpu_cycle_accum + (now - self.last_tick);
+                    counter = counter.wrapping_add(pending / self.cpu_per_systimer());
+                }
+            }
+        }
+        counter
+    }
+
     /// Interrupt-matrix source IDs this SYSTIMER is asserting RIGHT NOW —
     /// per-alarm `pending && INT_ENA`, the same level condition
     /// `evaluate_alarms` emits on the legacy walk. In scheduler mode the
@@ -700,6 +723,15 @@ fn set_alarm_conf(alarm: &mut AlarmState, value: u32) {
 }
 
 impl Peripheral for Systimer {
+    /// Authoritative simulated wall-clock in µs: UNIT0 ticks at a silicon-fixed
+    /// 16 MHz, so µs = ticks / (16 MHz / 1 MHz) = ticks / 16. This is the
+    /// counter esp-idf / esp-hal read for `esp_timer` elapsed time, so driving
+    /// I²C data-ready timing off it is self-consistent with firmware's own
+    /// timekeeping. Fresh from the published clock (see `current_unit0_ticks`).
+    fn sim_time_us(&self) -> Option<u64> {
+        Some(self.current_unit0_ticks() / (SYSTIMER_CLOCK_HZ / 1_000_000))
+    }
+
     /// Freerunning snapshot path only — offsets from [`regs::FREERUNNING_POLL`].
     fn mmio_access_class(&self, offset: u64) -> MmioAccessClass {
         let word = offset & !3;
@@ -842,6 +874,25 @@ mod tests {
         assert_eq!(s.conf, 0x4600_0000);
         assert_eq!(s.unit0.counter, 0);
         assert_eq!(s.unit1.counter, 0);
+    }
+
+    #[test]
+    fn sim_time_us_tracks_the_published_clock() {
+        // 160 MHz core ⇒ 10 CPU cycles/SYSTIMER tick; 16 ticks = 1 µs, so
+        // 160 CPU cycles = 1 µs. sim_time_us must read fresh from the clock
+        // WITHOUT any tick walk (this is the read the central I²C drive makes).
+        let clock = crate::CycleClock::default();
+        let mut s = Systimer::new(160_000_000);
+        s.attach_cycle_clock(clock.clone());
+        assert_eq!(s.sim_time_us(), Some(0), "µs at reset");
+        clock.publish(160 * 15_000); // 15 ms worth of CPU cycles
+        assert_eq!(
+            s.sim_time_us(),
+            Some(15_000),
+            "15 ms of CPU cycles ⇒ 15000 µs, fresh from the clock"
+        );
+        clock.publish(160 * 15_000 + 80); // +0.5 µs (below one µs) — floors
+        assert_eq!(s.sim_time_us(), Some(15_000), "sub-µs remainder floors");
     }
 
     #[test]

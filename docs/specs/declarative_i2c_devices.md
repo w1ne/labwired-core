@@ -90,10 +90,21 @@ A descriptor is exactly one shape: `registers` XOR `commands` (validated).
   exact in f64** (the VEML7700 IT/gain factors are powers of two). Do not
   substitute multiply-by-reciprocal for a datasheet division — it diverges by
   one LSB on x.5 rounding ties (proven by the VEML7700 parity sweep).
-- ⚠️ `delay_us` gates data-ready on `I2cDevice::advance_time_us`, which most
-  controllers do not drive yet. Until time is plumbed universally, **do not
-  set `delay_us`** — model always-ready, the same choice the hand-written
-  Sensirion models made.
+- `delay_us` gates data-ready on `I2cDevice::advance_time_us`, which the machine
+  now drives centrally from the chip's authoritative simulated-µs source
+  (`Peripheral::sim_time_us`) once per scheduler slice, fanning the elapsed
+  delta out to every attached I²C slave. On chips that model such a source —
+  **the ESP32 SYSTIMER family (ESP32-C3 / -S3)** and the nRF54L TWIM (which
+  drives its own slaves off the GRTC) — a `delay_us` command is faithful: a read
+  before the interval elapses returns not-ready bytes (`0xFF`), and the response
+  materialises only once the simulated wall-clock has advanced past it. On
+  families with **no** absolute-µs counter (Cortex-M SysTick/TIM wrap and hold
+  no absolute time; nRF52), `sim_time_us` is `None`, the central drive
+  short-circuits, and a `delay_us` device degrades to always-ready — the same
+  behavior as before this hook existed, so nothing regresses. Pinning a per-board
+  core frequency to fabricate a µs clock there would be a cheat and is
+  deliberately not done; `sht31.yaml` sets `delay_us: 15000` and is faithful
+  wherever a real source exists.
 
 ## Adding a part (checklist)
 

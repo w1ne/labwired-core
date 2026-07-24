@@ -15,7 +15,7 @@ use std::num::NonZeroU32;
 use std::sync::Arc;
 
 #[derive(Debug, Default)]
-struct CountingCpu {
+pub(crate) struct CountingCpu {
     pc: u32,
     sp: u32,
     steps: u32,
