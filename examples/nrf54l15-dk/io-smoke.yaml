@@ -1,0 +1,20 @@
+# LabWired - nRF54L15-DK IO/UART smoke test
+#
+# Strict-onboarding gate. Flips nrf54l15 from an unexpected example gap to
+# [PASS] in crates/core/tests/strict_onboarding.rs: runs the committed
+# bare-metal smoke fixture on the nRF54L15-DK profile and asserts the
+# silicon-sourced boot tokens appear on UARTE20.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/nrf54l15-smoke.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  # Chip profile boots and the UARTE20 EasyDMA path reaches the console.
+  - uart_contains: "nRF54L15 boot OK"
+  # Cortex-M33 core with the correct RRAM/RAM geometry (1524K / 256K).
+  - uart_contains: "core=cortex-m33 rram=1524K ram=256K"
+  # UARTE20 and GPIO2 register bases match the MDK/SVD map (not nRF52).
+  - uart_contains: "uarte20@0x500C6000 gpio2@0x50050400"
+  - expected_stop_reason: max_steps
