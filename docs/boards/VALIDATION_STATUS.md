@@ -7,8 +7,8 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 
 | Board | Tier | Last silicon capture | Newest model | Status |
 |-------|------|----------------------|--------------|--------|
-| `nrf52840` | 🟢 silicon-verified | 2026-06-17 | 2026-07-22 | ⚠ drift acked 2026-07-23 (re-capture pending) |
-| `seeed-xiao-nrf52840-sense` | 🟢 silicon-verified | 2026-06-17 | 2026-07-22 | ⚠ drift acked 2026-07-23 (re-capture pending) |
+| `nrf52840` | 🟢 silicon-verified | 2026-06-17 | 2026-07-24 | ⚠ drift acked 2026-07-24 (re-capture pending) |
+| `seeed-xiao-nrf52840-sense` | 🟢 silicon-verified | 2026-06-17 | 2026-07-24 | ⚠ drift acked 2026-07-24 (re-capture pending) |
 | `stm32h563` | 🟢 silicon-verified | 2026-06-22 | 2026-07-24 | ⚠ drift acked 2026-07-24 (re-capture pending) |
 | `esp32c3` | 🟢 silicon-verified | 2026-06-17 | 2026-07-24 | ⚠ drift acked 2026-07-24 (re-capture pending) |
 | `nucleo-l476rg` | 🟢 silicon-verified | 2026-06-20 | 2026-07-24 | ⚠ drift acked 2026-07-24 (re-capture pending) |
@@ -20,7 +20,7 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 | `stm32wba52` | 🟡 smoke-manual | — | 2026-06-27 | no silicon capture |
 | `nrf52832` | ⚪ structural | — | 2026-07-23 | no silicon capture |
 | `rp2040` | ⚪ structural | — | 2026-07-24 | no silicon capture |
-| `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | 2026-07-22 | no silicon capture |
+| `nrf5340` | 🔵 sim-validated (deep model, no HW diff) | — | 2026-07-24 | no silicon capture |
 | `stm32h735` | 🔵 sim-validated (deep model, no HW diff) | — | 2026-07-24 | no silicon capture |
 
 ## `nrf52840` — 🟢 silicon-verified
@@ -29,7 +29,7 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 - Silicon: **2026-06-17** on ST-LINK V2 (J37S7) — conformance 16/16; mmio 16/16; GPIO P0 22/0, P1 23/0; onboarding 22/22; POWER 10/0, SPIS 19/0, TWIS 20/0, RTC0 12/0, TIMER0 16/0; SPIM0/CCM/full-register clean
   - offline (CI): nrf52_conformance::conformance_sim (digest vs frozen 2026-06-09 capture)
   - offline (CI): nrf52_mmio_diff / nrf52_gpio_conformance (sim halves)
-- Drift status: **⚠ drift acked 2026-07-23 (re-capture pending)**
+- Drift status: **⚠ drift acked 2026-07-24 (re-capture pending)**
 
 ## `seeed-xiao-nrf52840-sense` — 🟢 silicon-verified
 
@@ -37,7 +37,7 @@ Machine-generated from `validation/manifest.yaml`. CI regenerates this on every 
 - Note: Same silicon as nrf52840 (the bench board IS a Seeed XIAO nRF52840 Sense).
 - Silicon: **2026-06-17** on ST-LINK V2 (J37S7) — rides the nrf52840 full register sweep (16/16) re-confirmed 2026-06-17
   - offline (CI): nrf52.rs xiao_* (manifest build, GPIO task regs, SPIM0 EasyDMA)
-- Drift status: **⚠ drift acked 2026-07-23 (re-capture pending)**
+- Drift status: **⚠ drift acked 2026-07-24 (re-capture pending)**
 
 ## `stm32h563` — 🟢 silicon-verified
 
