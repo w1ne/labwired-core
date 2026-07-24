@@ -77,7 +77,6 @@ impl SpiDevice for IrSpiComponent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::peripherals::components::max31855::Max31855;
 
     const MAX31855_YAML: &str = concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -98,9 +97,10 @@ mod tests {
     }
 
     // ── The equivalence gate: IR spec must clock out byte-for-byte identically
-    //    to the independent hand-written Max31855 across diverse states. ────────
+    //    to the MAX31855 datasheet's 32-bit frame formula across diverse
+    //    states. ──────────────────────────────────────────────────────────────
     #[test]
-    fn ir_spi_matches_handwritten_max31855() {
+    fn ir_spi_matches_datasheet_word() {
         // Cases: (tc_q14, internal_q12, fault). Defaults, positive, negative,
         // fault-set, and field saturation.
         let cases: &[(i32, i32, bool)] = &[
@@ -112,11 +112,13 @@ mod tests {
             (8191, 2047, true),    // wide positives + fault
         ];
         for &(tc, int, fault) in cases {
-            // Reference: hand-written model.
-            let mut hand = Max31855::new("PA4");
-            hand.tc_temp_q14 = tc;
-            hand.internal_temp_q12 = int;
-            hand.fault = fault;
+            // Reference: MAX31855 datasheet 32-bit frame formula, masked to
+            // field widths to reproduce two's-complement wrap exactly as the
+            // packed hardware word does.
+            let word: u32 = ((tc as u32 & 0x3FFF) << 18)
+                | ((fault as u32 & 0x1) << 16)
+                | ((int as u32 & 0x0FFF) << 4);
+            let expected_bytes = word.to_be_bytes().to_vec();
 
             // Subject: declarative IR interpreter.
             let mut ir = IrSpiComponent::new(max31855_spec(), None).expect("build ir spi");
@@ -124,11 +126,10 @@ mod tests {
             assert!(ir.set_field("internal_temp", int as i64));
             assert!(ir.set_field("fault", fault as i64));
 
-            let hand_bytes = read_frame(&mut hand, 4);
             let ir_bytes = read_frame(&mut ir, 4);
             assert_eq!(
-                ir_bytes, hand_bytes,
-                "mismatch for (tc={tc}, int={int}, fault={fault}): ir={ir_bytes:02X?} hand={hand_bytes:02X?}"
+                ir_bytes, expected_bytes,
+                "mismatch for (tc={tc}, int={int}, fault={fault}): ir={ir_bytes:02X?} expected={expected_bytes:02X?}"
             );
         }
     }
