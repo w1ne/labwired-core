@@ -101,7 +101,10 @@ pub(crate) fn unpack(bytes: &[u8], endian: Endian) -> u32 {
 }
 
 /// One `scale_from` factor: the value another register's bit-field selects (1.0 if unmapped).
-pub(crate) fn scale_from_one(sf: &labwired_config::ScaleFrom, reg_values: &HashMap<String, u32>) -> f64 {
+pub(crate) fn scale_from_one(
+    sf: &labwired_config::ScaleFrom,
+    reg_values: &HashMap<String, u32>,
+) -> f64 {
     let regval = reg_values.get(&sf.register).copied().unwrap_or(0);
     let field = (regval >> sf.shift as u32) & sf.mask;
     sf.map.get(&field).copied().unwrap_or(1.0)
@@ -109,7 +112,9 @@ pub(crate) fn scale_from_one(sf: &labwired_config::ScaleFrom, reg_values: &HashM
 
 /// Product of a register's `scale_from` factors, folded left-to-right from 1.0.
 pub(crate) fn scale_from_product(reg: &RegisterSpec, reg_values: &HashMap<String, u32>) -> f64 {
-    reg.scale_from.iter().fold(1.0, |acc, sf| acc * scale_from_one(sf, reg_values))
+    reg.scale_from
+        .iter()
+        .fold(1.0, |acc, sf| acc * scale_from_one(sf, reg_values))
 }
 
 /// Divide dual of `encode_raw`: count = round(value / resolution), clamped. A
