@@ -321,6 +321,10 @@ boards:
     models:
       - crates/core/src/peripherals/esp32c3
       - crates/core/src/peripherals/esp_xtensa_common
+      # Shared TIMG model: hosts the C3 TIMG0 RTC_SLOW calibration feature
+      # (RTCCALICFG), part of the C3 clock contract since the 2026-07-24
+      # self-consistency fix.
+      - crates/core/src/peripherals/esp32/timg.rs
       - configs/chips/esp32c3.yaml
     # 2026-06-20: added behavioural I2C0 controller (esp32c3/i2c.rs) + external-device
     # slave-attach. Live I2C0 reset capture this date over USB-JTAG is byte-identical to
@@ -518,7 +522,33 @@ boards:
     # path, reset value or layout touched — the esp32c3 reset oracle
     # (esp32c3_reset_values_match_silicon) is unaffected. Drift is the shared
     # esp32c3 file commit date only. No live re-capture.
-    drift_ack: 2026-07-23
+    # 2026-07-24: RTC_SLOW calibration made self-consistent (honesty fix). The
+    # TIMG0 RTC-cal feature (peripherals/esp32/timg.rs, now on the C3 models
+    # list) previously returned a hardcoded `max*533` ratio UNRELATED to the
+    # RTC_CNTL counter's rate, and its C3 field layout was mis-read (MAX at
+    # bits[29:13] instead of the real [30:16]); rtc_timer.rs separately pinned
+    # RTC_SLOW at a stale 136_700 Hz. Both are now derived from ONE constant,
+    # RTC_SLOW_HZ_MEASURED, so firmware measuring RTC_SLOW through the real
+    # TIMG register protocol (`rtc_clk_cal`: count XTAL cycles over N slow
+    # cycles) recovers exactly the rate the RTC_CNTL counter ticks at — no
+    # second pin. LIVE bench this date over the built-in USB-JTAG (board
+    # 9C:CC:01:D0:71:54): drove the TIMG0 RTCCALICFG protocol on silicon
+    # (openocd-esp32, `capture{}` mdw) — counting XTAL(40 MHz) cycles over
+    # 100/1024/3000 RTC_SLOW cycles gave 148.18/148.14/148.16 kHz (raw
+    # SYSTIMER-referenced counter-delta cross-check 151.3 kHz). Updated the
+    # model constant 136_700 → 148_150 Hz to match the calibration protocol
+    # (retires the +8.4% stale-pin FAIL). ESP32-classic TIMG is untouched
+    # (profile=None keeps the canned ratio byte-for-byte; classic_rtc_cali_
+    # value_is_unchanged pins it). The C3 rom-boot runs its RTC_CNTL counter in
+    # the documented 1:1 monotonic-only mode (boot budget), so the boot path is
+    # unchanged — proven byte-identical: shipped_labs_keep_batching (real OLED
+    # demo through the real 2nd-stage bootloader, which calls rtc_clk_cal) +
+    # the four C3 walk/pinner differentials pass in release. Self-consistency
+    # pinned by esp32c3_rtc_slow_calibration::timg_calibration_and_rtc_counter_
+    # agree_on_one_slow_rate. Reset oracle (esp32c3_reset_values_match_silicon)
+    # unaffected — RTCCALICFG/RTCCALICFG1 are dynamic cal registers, not in the
+    # asserted reset set.
+    drift_ack: 2026-07-24
 
   - id: nucleo-l476rg
     doc: docs/boards/nucleo-l476rg.md
