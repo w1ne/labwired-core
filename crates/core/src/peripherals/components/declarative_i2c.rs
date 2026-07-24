@@ -41,7 +41,7 @@ use labwired_config::{
     Crc8Spec, DeviceDescriptor, Endian, I2cAccess, I2cCommand, I2cRegister, I2cSpec, ResponseWord,
 };
 
-use super::declarative_regs::{encode_raw, leak_labs, pack, register_read_bytes, unpack};
+use super::declarative_regs::{encode_raw, pack, register_read_bytes, unpack};
 use crate::peripherals::i2c::I2cDevice;
 use crate::sim_input::{InputChannel, SimInput, SimInputError};
 
@@ -170,6 +170,16 @@ impl GenericI2cDevice {
         let descriptor = DeviceDescriptor::from_yaml(yaml)?;
         let channels = leak_channels(&descriptor);
         Self::from_descriptor(&descriptor, address, channels)
+    }
+
+    /// Seed a measurement slot's initial value from a `config:` override. Only
+    /// keys that name a declared input channel take effect (others are ignored),
+    /// so a descriptor's `config_keys` like `lux` seed the part's starting
+    /// reading exactly as a hand-written kit's `config_f64("lux")` did.
+    pub fn seed_input(&mut self, key: &str, value: f64) {
+        if self.channels.iter().any(|c| c.key == key) {
+            self.slots.insert(key.to_string(), value);
+        }
     }
 
     fn find_register(&self, addr: u8) -> Option<&I2cRegister> {
@@ -403,7 +413,7 @@ pub(crate) fn leak_channels(descriptor: &DeviceDescriptor) -> &'static [InputCha
 // ─── PeripheralKit registration ────────────────────────────────────────────
 
 use crate::peripherals::kit::{
-    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, PeripheralKit, Transport,
+    AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, LabRef, PeripheralKit, Transport,
 };
 
 /// A [`PeripheralKit`] backed by a declarative `i2c_device` descriptor — one
@@ -447,6 +457,17 @@ impl DeclarativeI2cKit {
     }
 }
 
+/// Map a descriptor's `config_keys[].ty` string onto a [`ConfigType`].
+/// Unknown spellings fall back to `Str` (the most permissive display type).
+fn config_type_from_str(ty: &str) -> ConfigType {
+    match ty {
+        "int" => ConfigType::Int,
+        "float" => ConfigType::Float,
+        "bool" => ConfigType::Bool,
+        _ => ConfigType::Str,
+    }
+}
+
 /// Derive a `&'static KitMetadata` from the descriptor's display metadata.
 fn leak_metadata(
     descriptor: &DeviceDescriptor,
@@ -461,33 +482,65 @@ fn leak_metadata(
     let summary = meta
         .and_then(|m| m.summary.clone())
         .unwrap_or_else(|| "Declarative I²C device.".to_string());
+    // Long-form detail: explicit `metadata.detail` if given, else the summary
+    // (the pre-existing declarative-kit fallback).
+    let detail = meta
+        .and_then(|m| m.detail.clone())
+        .unwrap_or_else(|| summary.clone());
 
-    let config_keys: &'static [ConfigKey] = Box::leak(
-        vec![ConfigKey {
-            name: "i2c_address",
-            ty: ConfigType::Int,
-            doc: leak(format!(
-                "7-bit slave address. Defaults to 0x{default_address:02x}."
-            )),
-        }]
-        .into_boxed_slice(),
+    // Config keys: an explicit `metadata.config_keys` is taken as the COMPLETE
+    // set (it may list `i2c_address` itself); otherwise synthesise the lone
+    // `i2c_address` key from the default address.
+    let declared_keys = meta.map(|m| m.config_keys.as_slice()).unwrap_or(&[]);
+    let config_keys: &'static [ConfigKey] = if declared_keys.is_empty() {
+        Box::leak(
+            vec![ConfigKey {
+                name: "i2c_address",
+                ty: ConfigType::Int,
+                doc: leak(format!(
+                    "7-bit slave address. Defaults to 0x{default_address:02x}."
+                )),
+            }]
+            .into_boxed_slice(),
+        )
+    } else {
+        Box::leak(
+            declared_keys
+                .iter()
+                .map(|k| ConfigKey {
+                    name: leak(k.name.clone()),
+                    ty: config_type_from_str(&k.ty),
+                    doc: leak(k.doc.clone()),
+                })
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
+        )
+    };
+
+    // Labs: mirror any declared starter labs verbatim.
+    let declared_labs = meta.map(|m| m.labs.as_slice()).unwrap_or(&[]);
+    let labs: &'static [LabRef] = Box::leak(
+        declared_labs
+            .iter()
+            .map(|l| LabRef {
+                board_id: leak(l.board_id.clone()),
+                chip: leak(l.chip.clone()),
+                example_dir: leak(l.example_dir.clone()),
+                demo_elf: leak(l.demo_elf.clone()),
+            })
+            .collect::<Vec<_>>()
+            .into_boxed_slice(),
     );
 
     Box::leak(Box::new(KitMetadata {
         device_type: leak(descriptor.r#type.clone()),
         label: leak(label),
-        summary: leak(summary.clone()),
-        detail: leak(summary),
+        summary: leak(summary),
+        detail: leak(detail),
         transport: Transport::I2c,
         category: Category::I2c,
         config_keys,
-        labs: leak_labs(
-            descriptor
-                .metadata
-                .as_ref()
-                .map(|m| m.labs.as_slice())
-                .unwrap_or(&[]),
-        ),
+        labs,
         inputs: channels,
     }))
 }
@@ -505,7 +558,15 @@ impl PeripheralKit for DeclarativeI2cKit {
             .as_ref()
             .context("declarative i2c kit is missing behavior.i2c")?;
         let address = ctx.i2c_address_or(spec.default_address)?;
-        let device = GenericI2cDevice::from_descriptor(&self.descriptor, address, self.channels)?;
+        let mut device =
+            GenericI2cDevice::from_descriptor(&self.descriptor, address, self.channels)?;
+        // Honour `config:` overrides that name an input channel (e.g. a `lux`
+        // seed), matching how a hand-written kit seeded its initial reading.
+        for input in self.channels {
+            if let Some(v) = ctx.config_f64(input.key) {
+                device.seed_input(input.key, v);
+            }
+        }
         ctx.attach_i2c_device(Box::new(device))
     }
 }
@@ -545,6 +606,18 @@ pub static BH1750_KIT: LazyLock<DeclarativeI2cKit> = LazyLock::new(|| {
         labwired_config::embedded_device_yaml("bh1750").expect("bh1750 descriptor is embedded"),
     )
     .expect("bh1750.yaml is a valid declarative i2c descriptor")
+});
+
+/// Vishay VEML7700 ambient-light sensor (declarative `veml7700.yaml`). Migrated
+/// from the hand-written [`super::veml7700::Veml7700`] model, which now survives
+/// only as the byte-parity oracle (see `veml7700_parity.rs`). The register-pointer
+/// wire protocol, the gain × integration-time resolution table, and the manifest
+/// metadata all live in the descriptor.
+pub static VEML7700_KIT: LazyLock<DeclarativeI2cKit> = LazyLock::new(|| {
+    DeclarativeI2cKit::from_yaml(
+        labwired_config::embedded_device_yaml("veml7700").expect("veml7700 descriptor is embedded"),
+    )
+    .expect("veml7700.yaml is a valid declarative i2c descriptor")
 });
 
 #[cfg(test)]

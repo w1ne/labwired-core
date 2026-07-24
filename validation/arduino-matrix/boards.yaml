@@ -17,9 +17,6 @@ boards:
     # L2 LED_BUILTIN often GPIO2 digitalWrite — watch classic gpio peripheral
     led_watch: "gpio:2"
     led_min_edges: 2
-    sketches_skip: [L3_i2c_sensor]
-    sketches_skip_reason:
-      L3_i2c_sensor: "classic ESP32 Wire L3 NACK — C3 green; classic SLAVE_ADDR path needs deeper Wire/IDF fix"
     family: esp32
     notes: "Arduino-ESP32 FreeRTOS — real models only (no thunks)"
 
@@ -43,9 +40,6 @@ boards:
     max_steps: 50000000
     budget_reason: "Dual-core S3 boot ~1.1M; L3 Wire headroom"
     min_rmt_tx: 1
-    sketches_skip: [L3_i2c_sensor]
-    sketches_skip_reason:
-      L3_i2c_sensor: "ESP32-S3 Wire L3 NACK — C3 green; S3 command-list empty-probe still err=2"
     family: esp32
     notes: "Arduino-ESP32-S3"
 
@@ -116,65 +110,50 @@ boards:
     chip: stm32g474re
     system: systems/stm32g474re.yaml
     pio: { platform: ststm32, board: nucleo_g474re, framework: arduino }
-    max_steps: 8000000
-    budget_reason: "L0~1.7M L2~0.5M with short delays (was 20M)"
+    max_steps: 20000000
+    budget_reason: "L0–L2 light; L3 Wire.begin runs i2c_computeTiming (~7M+ steps)"
     led_watch: "gpioa:5"
     led_min_edges: 2
-    sketches_skip: [L3_i2c_sensor]
-    sketches_skip_reason:
-      L3_i2c_sensor: "L4 Wire.begin hangs (I2C TIMING/RCC clock-source path) — F1 L3 green; L4 begin next"
     family: stm32
 
   - id: stm32h563
     chip: stm32h563
     system: systems/stm32h563.yaml
     pio: { platform: ststm32, board: nucleo_h563zi, framework: arduino }
-    max_steps: 4000000
-    budget_reason: "M33 boot light (~0.16M L0); keep modest headroom"
+    max_steps: 20000000
+    budget_reason: "L0 light; L3 Wire.begin i2c_computeTiming needs multi-M steps"
     led_watch: "gpiob:0"
     led_min_edges: 2
-    sketches_skip: [L3_i2c_sensor]
-    sketches_skip_reason:
-      L3_i2c_sensor: "L4 Wire.begin hangs (I2C TIMING/RCC clock-source path) — F1 L3 green; L4 begin next"
     family: stm32
 
   - id: stm32l073
     chip: stm32l073
     system: systems/stm32l073.yaml
     pio: { platform: ststm32, board: nucleo_l073rz, framework: arduino }
-    max_steps: 2000000
-    budget_reason: "L0~0.32M L2~0.1M"
+    max_steps: 15000000
+    budget_reason: "L0 light; L3 may run I2C timing compute under stm32duino"
     led_watch: "gpioa:5"
     led_min_edges: 2
-    sketches_skip: [L3_i2c_sensor]
-    sketches_skip_reason:
-      L3_i2c_sensor: "L4 Wire.begin hangs (I2C TIMING/RCC clock-source path) — F1 L3 green; L4 begin next"
     family: stm32
 
   - id: stm32l476
     chip: stm32l476
     system: systems/stm32l476.yaml
     pio: { platform: ststm32, board: nucleo_l476rg, framework: arduino }
-    max_steps: 3000000
-    budget_reason: "L0~0.8M L2~0.24M"
+    max_steps: 20000000
+    budget_reason: "L0~0.8M; L3 Wire.begin i2c_computeTiming ~7.3M steps measured"
     led_watch: "gpioa:5"
     led_min_edges: 2
-    sketches_skip: [L3_i2c_sensor]
-    sketches_skip_reason:
-      L3_i2c_sensor: "L4 Wire.begin hangs (I2C TIMING/RCC clock-source path) — F1 L3 green; L4 begin next"
     family: stm32
 
   - id: stm32wb55
     chip: stm32wb55
     system: systems/stm32wb55.yaml
     pio: { platform: ststm32, board: nucleo_wb55rg_p, framework: arduino }
-    max_steps: 2000000
-    budget_reason: "L0~0.32M L2~0.1M"
+    max_steps: 20000000
+    budget_reason: "L0 light; L3 Wire.begin i2c_computeTiming needs multi-M steps"
     led_watch: "gpiob:5"
     led_min_edges: 2
-    sketches_skip: [L3_i2c_sensor]
-    sketches_skip_reason:
-      L3_i2c_sensor: "L4 Wire.begin hangs (I2C TIMING/RCC clock-source path) — F1 L3 green; L4 begin next"
     family: stm32
 
   - id: stm32wba52
@@ -182,13 +161,10 @@ boards:
     system: systems/stm32wba52.yaml
     # ststm32 has no upstream board JSON; matrix supplies pio-boards/nucleo_wba52cg.json
     pio: { platform: ststm32, board: nucleo_wba52cg, framework: arduino }
-    max_steps: 4000000
-    budget_reason: "M33 + stm32duino; L0~0.16M L2~0.05M after short delays"
+    max_steps: 20000000
+    budget_reason: "L0 light; L3 Wire.begin i2c_computeTiming needs multi-M steps"
     led_watch: "gpiob:4"
     led_min_edges: 2
-    sketches_skip: [L3_i2c_sensor]
-    sketches_skip_reason:
-      L3_i2c_sensor: "L4 Wire.begin hangs (I2C TIMING/RCC clock-source path) — F1 L3 green; L4 begin next"
     family: stm32
 
 sketches:

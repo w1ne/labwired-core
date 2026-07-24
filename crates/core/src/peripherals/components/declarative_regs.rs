@@ -100,15 +100,25 @@ pub(crate) fn unpack(bytes: &[u8], endian: Endian) -> u32 {
     acc
 }
 
-/// The extra scale factor a register's `scale_from` selects from the current
-/// value of another register's bit-field (1.0 when absent / unmapped).
-pub(crate) fn scale_from_factor(reg: &RegisterSpec, reg_values: &HashMap<String, u32>) -> f64 {
-    let Some(sf) = &reg.scale_from else {
-        return 1.0;
-    };
+/// One `scale_from` factor: the value another register's bit-field selects (1.0 if unmapped).
+pub(crate) fn scale_from_one(sf: &labwired_config::ScaleFrom, reg_values: &HashMap<String, u32>) -> f64 {
     let regval = reg_values.get(&sf.register).copied().unwrap_or(0);
     let field = (regval >> sf.shift as u32) & sf.mask;
     sf.map.get(&field).copied().unwrap_or(1.0)
+}
+
+/// Product of a register's `scale_from` factors, folded left-to-right from 1.0.
+pub(crate) fn scale_from_product(reg: &RegisterSpec, reg_values: &HashMap<String, u32>) -> f64 {
+    reg.scale_from.iter().fold(1.0, |acc, sf| acc * scale_from_one(sf, reg_values))
+}
+
+/// Divide dual of `encode_raw`: count = round(value / resolution), clamped. A
+/// zero/negative resolution clamps to max (defensive).
+pub(crate) fn divide_raw(value: f64, resolution: f64, width: u8) -> u32 {
+    if resolution <= 0.0 {
+        return width_max(width) as u32;
+    }
+    (value / resolution).round().clamp(0.0, width_max(width)) as u32
 }
 
 /// The bytes a read of `reg` returns: a sourced+encoded measurement, or the
@@ -135,9 +145,23 @@ pub(crate) fn register_read_bytes(
         return pack(word, reg.width, reg.endian);
     }
     let raw = if let Some(src) = &reg.source {
-        let value = slots.get(src).copied().unwrap_or(0.0);
-        let extra = scale_from_factor(reg, reg_values);
-        encode_raw(value, reg.encode.as_ref(), extra, reg.width, reg.signed)
+        let value = slots.get(src).copied().unwrap_or(0.0) * reg.source_scale.unwrap_or(1.0);
+        match reg.resolution {
+            Some(base) => {
+                let resolution = reg
+                    .scale_from
+                    .iter()
+                    .fold(base, |acc, sf| acc * scale_from_one(sf, reg_values));
+                divide_raw(value, resolution, reg.width)
+            }
+            None => encode_raw(
+                value,
+                reg.encode.as_ref(),
+                scale_from_product(reg, reg_values),
+                reg.width,
+                reg.signed,
+            ),
+        }
     } else {
         reg_values.get(&reg.name).copied().unwrap_or(reg.reset)
     };
@@ -160,7 +184,9 @@ mod tests {
             reset: 0,
             source: source.map(Into::into),
             encode: None,
-            scale_from: None,
+            scale_from: vec![],
+            source_scale: None,
+            resolution: None,
             signed: false,
             fields: vec![],
         }
@@ -184,7 +210,9 @@ mod tests {
                 clamp_min: None,
                 clamp_max: None,
             }),
-            scale_from: None,
+            scale_from: vec![],
+            source_scale: None,
+            resolution: None,
             signed: true,
             fields: vec![],
         };
@@ -236,7 +264,9 @@ mod tests {
             reset: 0,
             source: None,
             encode: None,
-            scale_from: None,
+            scale_from: vec![],
+            source_scale: None,
+            resolution: None,
             signed: false,
             fields: vec![
                 FieldSpec {
@@ -286,7 +316,9 @@ mod tests {
             reset: 0,
             source: None,
             encode: None,
-            scale_from: None,
+            scale_from: vec![],
+            source_scale: None,
+            resolution: None,
             signed: false,
             fields: vec![FieldSpec {
                 source: "tc".into(),

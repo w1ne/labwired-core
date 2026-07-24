@@ -615,6 +615,7 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         Box::new(crate::peripherals::components::Bmp280::new(0x76)),
     )
     .expect("i2c0 just registered as Esp32I2c");
+    // AHB TX FIFO alias registered after wifi_mac_phy (see below).
 
     // SYSCON (TRM §13.2) — system controller. Owns SYSCLK_CONF, TICK_CONF,
     // SARADC_CTRL, FRONT_END_MEM_PD, and the RND_DATA TRNG output the BROM
@@ -717,6 +718,19 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     // here (uart_ll_write_txfifo); STATUS/INT live on APB. Registered *after*
     // wifi_mac_phy so equal-start last-wins gives the 4-byte AHB windows
     // priority at 0x6000_0000 / 0x6001_0000 / 0x6002_E000.
+    //
+    // I2C0 TX FIFO AHB window: esp-idf `i2c_ll_write_txfifo` stores at
+    // 0x6001_301c (not the APB DATA reg). Same last-wins priority over wifi stub.
+    if let Some(idx) = bus.find_peripheral_index_by_name("i2c0") {
+        if let Some(i2c) = bus.peripherals[idx]
+            .dev
+            .as_any()
+            .and_then(|a| a.downcast_ref::<crate::peripherals::esp32::i2c::Esp32I2c>())
+        {
+            let ahb = i2c.ahb_tx_fifo_alias();
+            bus.add_peripheral("i2c0_ahb_fifo", 0x6001_301c, 4, None, Box::new(ahb));
+        }
+    }
     for (name, ahb_base) in [
         ("uart0", 0x6000_0000u64),
         ("uart1", 0x6001_0000u64),

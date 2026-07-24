@@ -67,14 +67,16 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::scd41::SCD41_KIT,
     &components::sgp41::SGP41_KIT,
     &components::sps30::SPS30_KIT,
-    &components::veml7700::VEML7700_KIT,
     &components::mlx90614::MLX90614_KIT,
     &components::max7219::MAX7219_KIT,
     &components::lcd1602::LCD1602_KIT,
     // Declarative I²C devices — model lives entirely in configs/devices/*.yaml,
-    // interpreted by the generic GenericI2cDevice (zero per-part Rust).
+    // interpreted by the generic GenericI2cDevice (zero per-part Rust). VEML7700
+    // was migrated here from a hand-written model; the model survives only as the
+    // byte-parity oracle (components::veml7700, #[cfg(test)]).
     &components::declarative_i2c::SHT31_KIT,
     &components::declarative_i2c::BH1750_KIT,
+    &components::declarative_i2c::VEML7700_KIT,
     // Declarative SPI devices — model lives entirely in configs/devices/*.yaml,
     // interpreted by the generic GenericSpiDevice (zero per-part Rust).
     &components::declarative_spi::ADXL345_KIT,

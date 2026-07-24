@@ -533,17 +533,39 @@ pub fn build_rom_boot_machine<C: crate::Cpu, F: FnOnce(crate::cpu::RiscV) -> C>(
 /// browser path so both provision the ROM identically.
 pub fn inject_rom_regions(bus: &mut crate::bus::SystemBus, images: &RomImages) -> bool {
     let mut irom_present = false;
+    let mut drom_present = false;
     for mem in bus.extra_mem.iter_mut() {
         let src = if mem.base_addr == IROM_BASE as u64 {
             irom_present = true;
             &images.irom
         } else if mem.base_addr == DROM_BASE as u64 {
+            drom_present = true;
             &images.drom
         } else {
             continue;
         };
         let n = src.len().min(mem.data.len());
         mem.data[..n].copy_from_slice(&src[..n]);
+    }
+    // The chip YAML declares these windows with `image_env`, and
+    // SystemBus::from_config drops any image_env region whose dump did not
+    // load — always the case in wasm, where no env/filesystem exists and the
+    // ROM arrives as a caller-supplied blob instead. Materialize the missing
+    // windows from the blobs so the browser boot paths never depend on the
+    // filesystem load having succeeded. Native runs with the dumps on disk
+    // hit the loop above and are unchanged.
+    if !irom_present && !images.irom.is_empty() {
+        let mut mem = crate::memory::LinearMemory::new(IROM_SIZE, IROM_BASE as u64);
+        let n = images.irom.len().min(mem.data.len());
+        mem.data[..n].copy_from_slice(&images.irom[..n]);
+        bus.extra_mem.push(mem);
+        irom_present = true;
+    }
+    if !drom_present && !images.drom.is_empty() {
+        let mut mem = crate::memory::LinearMemory::new(DROM_SIZE, DROM_BASE as u64);
+        let n = images.drom.len().min(mem.data.len());
+        mem.data[..n].copy_from_slice(&images.drom[..n]);
+        bus.extra_mem.push(mem);
     }
     irom_present
 }

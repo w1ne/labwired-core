@@ -31,9 +31,15 @@ static void logLine(const char *s) {
 }
 
 static void wireBegin() {
-#if defined(ARDUINO_ARCH_ESP32)
-  // C3 Super Mini / marketplace: SDA=4 SCL=5 (match systems/*.yaml route defaults)
+#if defined(CONFIG_IDF_TARGET_ESP32C3) || defined(ARDUINO_ESP32C3_DEV) || defined(ARDUINO_ESP32C3_SUPER_MINI)
+  // C3 Super Mini / matrix systems: SDA=4 SCL=5
   Wire.begin(4, 5);
+#elif defined(CONFIG_IDF_TARGET_ESP32S3) || defined(ARDUINO_ESP32S3_DEV)
+  // S3 DevKit: SDA=8 SCL=9 (arduino defaults / systems route)
+  Wire.begin(8, 9);
+#elif defined(ARDUINO_ARCH_ESP32)
+  // Classic ESP32: board defaults (often 21/22) — match systems/esp32.yaml
+  Wire.begin(21, 22);
 #elif defined(ARDUINO_ARCH_RP2040)
   Wire.begin();
 #else
@@ -48,9 +54,12 @@ void setup() {
   logLine("LW_L3_BOOT");
   wireBegin();
 
-  // Probe only (IsDeviceReady / ACK). Full reg read paths vary by HAL Wire
-  // implementation; ACK proves kit attach + master START/ADDR on this bus.
+  // Probe: write config-reg pointer 0x00 (1 data byte). Empty endTransmission
+  // uses i2c_master_probe on modern ESP-IDF HAL and often NACKs under sim;
+  // a 1-byte write exercises the same START/ADDR/ACK path as a real sensor
+  // access and works on F1/nRF/RP/C3 + classic ESP.
   Wire.beginTransmission(INA219_ADDR);
+  Wire.write((uint8_t)0x00);
   uint8_t err = Wire.endTransmission();
   if (err == 0) {
     logLine("LW_L3_OK");
