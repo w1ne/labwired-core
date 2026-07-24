@@ -813,45 +813,6 @@
       "inputs": []
     },
     {
-      "device_type": "max31855",
-      "label": "MAX31855 Thermocouple",
-      "summary": "Cold-junction-compensated K-type thermocouple amplifier (read-only SPI).",
-      "detail": "Returns the 32-bit MAX31855 response on every CS-framed transaction. Host stimulus seeds thermocouple + cold-junction temperatures; bit layout matches the real silicon's datasheet exactly.",
-      "transport": "spi",
-      "category": "spi",
-      "config_keys": [
-        {
-          "name": "cs_pin",
-          "ty": "str",
-          "doc": "Chip-select GPIO pin (e.g. \"PA4\"). Defaults to PA4."
-        }
-      ],
-      "labs": [
-        {
-          "board_id": "max31855-thermocouple-lab",
-          "chip": "stm32f103",
-          "example_dir": "max31855-thermocouple-lab",
-          "demo_elf": "demo-max31855-thermocouple-lab.elf"
-        }
-      ],
-      "inputs": [
-        {
-          "key": "temperature",
-          "label": "Thermocouple",
-          "unit": "°C",
-          "min": -200.0,
-          "max": 1350.0
-        },
-        {
-          "key": "internal",
-          "label": "Internal",
-          "unit": "°C",
-          "min": -55.0,
-          "max": 125.0
-        }
-      ]
-    },
-    {
       "device_type": "ssd1680_tricolor_290",
       "label": "SSD1680 Tri-Color E-Paper",
       "summary": "2.9\" tri-color (black/white/red) SSD1680 e-paper over SPI.",
@@ -1654,6 +1615,84 @@
           "unit": "lx",
           "min": 0.0,
           "max": 120000.0
+        }
+      ]
+    },
+    {
+      "device_type": "adxl345_spi",
+      "label": "ADXL345 accelerometer",
+      "summary": "3-axis ±16 g accelerometer over SPI (full-resolution, 256 LSB/g).",
+      "detail": "3-axis ±16 g accelerometer over SPI (full-resolution, 256 LSB/g).",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "CS GPIO pin wired as SPI chip-select (e.g. \"PA4\")."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "accel_x",
+          "label": "Accel X",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0
+        },
+        {
+          "key": "accel_y",
+          "label": "Accel Y",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0
+        },
+        {
+          "key": "accel_z",
+          "label": "Accel Z",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0
+        }
+      ]
+    },
+    {
+      "device_type": "max31855",
+      "label": "MAX31855 thermocouple",
+      "summary": "K-type thermocouple-to-digital converter over SPI (read-only 32-bit frame).",
+      "detail": "K-type thermocouple-to-digital converter over SPI (read-only 32-bit frame).",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "CS GPIO pin wired as SPI chip-select (e.g. \"PA4\")."
+        }
+      ],
+      "labs": [
+        {
+          "board_id": "max31855-thermocouple-lab",
+          "chip": "stm32f103",
+          "example_dir": "max31855-thermocouple-lab",
+          "demo_elf": "demo-max31855-thermocouple-lab.elf"
+        }
+      ],
+      "inputs": [
+        {
+          "key": "temperature",
+          "label": "Thermocouple temp",
+          "unit": "°C",
+          "min": -270.0,
+          "max": 1372.0
+        },
+        {
+          "key": "internal",
+          "label": "Internal (cold-junction) temp",
+          "unit": "°C",
+          "min": -40.0,
+          "max": 125.0
         }
       ]
     }
