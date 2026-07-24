@@ -38,10 +38,11 @@ use std::collections::HashMap;
 
 use anyhow::{bail, Context, Result};
 use labwired_config::{
-    Crc8Spec, DeviceDescriptor, Endian, I2cAccess, I2cCommand, I2cRegister, I2cSpec, ResponseWord,
+    AddWrap, AutoIncrement, Crc8Spec, DeviceDescriptor, Endian, I2cAccess, I2cCommand, I2cRegister,
+    I2cSpec, ObservableSpec, ReadComplete, ResponseWord, UpdateRule,
 };
 
-use super::declarative_regs::{encode_raw, pack, register_read_bytes, unpack};
+use super::declarative_regs::{encode_raw, observe, pack, register_read_bytes, unpack};
 use crate::peripherals::i2c::I2cDevice;
 use crate::sim_input::{InputChannel, SimInput, SimInputError};
 
@@ -100,6 +101,24 @@ pub struct GenericI2cDevice {
     pending: Option<Vec<u8>>,
     ready_at_us: u64,
 
+    /// Register-pointer-mode pointer mask (applied to the pointer byte). 0xFF ⇒
+    /// no masking (the default; TMP102 uses 0x03).
+    reg_pointer_mask: u8,
+    /// Register-pointer-mode self-driving update rules (e.g. TMP102 drift).
+    updates: Vec<UpdateRule>,
+
+    /// **Byte-addressable register-file** mode state. `Some` ⇒ this device is a
+    /// register-file device (PCA9685-style); the register/command fields above
+    /// are unused. `None` ⇒ a register-pointer or command device.
+    file: Option<Vec<u8>>,
+    file_pointer: u8,
+    file_writes_since_frame: u32,
+    file_pointer_mask: u8,
+    file_first_write_sets_pointer: bool,
+    file_auto_increment: AutoIncrement,
+    /// Engineering-unit observables derived from the register file.
+    observables: Vec<ObservableSpec>,
+
     /// Discovery channels (leaked to `'static`; see [`DeclarativeI2cKit`]).
     channels: &'static [InputChannel],
     /// system.yaml `external_devices` id, stamped at attach.
@@ -134,12 +153,33 @@ impl GenericI2cDevice {
             }
         }
         // Seed every register to its reset value so a scale_from / storage read
-        // before any write observes the power-on state.
+        // (or a self-driving `add_wrap` update) before any write observes the
+        // power-on state.
         let reg_values = spec
             .registers
             .iter()
             .map(|r| (r.name.clone(), r.reset))
             .collect();
+
+        // Byte-addressable register-file mode: allocate the file and stamp resets.
+        let file = spec.register_file.as_ref().map(|rf| {
+            let mut regs = vec![0u8; rf.size];
+            for (&off, &v) in &rf.reset {
+                if let Some(slot) = regs.get_mut(off as usize) {
+                    *slot = v;
+                }
+            }
+            regs
+        });
+        let (file_pointer_mask, file_first_write_sets_pointer, file_auto_increment) =
+            match &spec.register_file {
+                Some(rf) => (
+                    rf.pointer_mask,
+                    rf.first_write_after_start_sets_pointer,
+                    rf.auto_increment.clone(),
+                ),
+                None => (0xFF, true, AutoIncrement::Never),
+            };
 
         Ok(Self {
             address,
@@ -158,9 +198,77 @@ impl GenericI2cDevice {
             elapsed_us: 0,
             pending: None,
             ready_at_us: 0,
+            reg_pointer_mask: spec.pointer_mask.unwrap_or(0xFF),
+            updates: spec.updates.clone(),
+            file,
+            file_pointer: 0,
+            file_writes_since_frame: 0,
+            file_pointer_mask,
+            file_first_write_sets_pointer,
+            file_auto_increment,
+            observables: spec.observables.clone(),
             channels,
             component_id: None,
         })
+    }
+
+    /// Read a named observable channel in engineering units (e.g. the PCA9685
+    /// `servo_angle` for a channel). Mirrors `IrCore::observable`; only
+    /// register-file devices declare observables, so this returns `None` for
+    /// register-pointer / command devices.
+    pub fn observable(&self, name: &str, channel: u8) -> Option<f64> {
+        let regs = self.file.as_ref()?;
+        let obs = self.observables.iter().find(|o| o.name == name)?;
+        observe(regs, obs, channel)
+    }
+
+    /// Live auto-increment check for the register-file pointer, reading the
+    /// enable field out of the current register image `regs`.
+    fn file_ai_enabled(auto_increment: &AutoIncrement, regs: &[u8]) -> bool {
+        match auto_increment {
+            AutoIncrement::Always => true,
+            AutoIncrement::Never => false,
+            AutoIncrement::WhenFieldSet { addr, mask } => {
+                regs.get(*addr as usize).is_some_and(|r| r & *mask != 0)
+            }
+        }
+    }
+
+    /// Whether a `read_complete` trigger names the register at `pointer`.
+    fn trigger_matches(&self, rc: &ReadComplete, pointer: u8) -> bool {
+        if rc.pointer == Some(pointer) {
+            return true;
+        }
+        match (&rc.register, self.find_register(pointer)) {
+            (Some(name), Some(reg)) => &reg.name == name,
+            _ => false,
+        }
+    }
+
+    /// Apply every `add_wrap` update whose `read_complete` trigger names the
+    /// just-fully-read register at `pointer`, mutating the register's stored
+    /// word (signed i16 semantics, matching the reference drift model).
+    fn apply_read_complete_updates(&mut self, pointer: u8) {
+        let actions: Vec<AddWrap> = self
+            .updates
+            .iter()
+            .filter(|u| self.trigger_matches(&u.trigger.read_complete, pointer))
+            .map(|u| u.action.add_wrap.clone())
+            .collect();
+        if actions.is_empty() {
+            return;
+        }
+        let Some(name) = self.find_register(pointer).map(|r| r.name.clone()) else {
+            return;
+        };
+        for a in actions {
+            let cur = self.reg_values.get(&name).copied().unwrap_or(0) as u16 as i16;
+            let mut v = cur.wrapping_add(a.add);
+            if v > a.max {
+                v = a.reset;
+            }
+            self.reg_values.insert(name.clone(), (v as u16) as u32);
+        }
     }
 
     /// Convenience for tests / standalone use: parse a descriptor YAML and leak
@@ -253,6 +361,10 @@ impl I2cDevice for GenericI2cDevice {
         self.write_buf.clear();
         self.read_idx = 0;
         self.latched = false;
+        // Register-file mode: the first write after START selects the pointer,
+        // exactly like the hand-written PCA9685 (which resets its write counter
+        // on START only).
+        self.file_writes_since_frame = 0;
     }
 
     fn stop(&mut self) {
@@ -264,6 +376,23 @@ impl I2cDevice for GenericI2cDevice {
     }
 
     fn write(&mut self, data: u8) {
+        // Register-file mode (byte-addressable): first post-START byte selects
+        // the pointer; subsequent bytes are data, and the pointer auto-increments
+        // when its enable field is set. The enable is checked LIVE (after the
+        // store) so the write that sets the field also advances the pointer.
+        if let Some(regs) = self.file.as_mut() {
+            if self.file_first_write_sets_pointer && self.file_writes_since_frame == 0 {
+                self.file_pointer = data & self.file_pointer_mask;
+            } else if !regs.is_empty() {
+                let idx = self.file_pointer as usize % regs.len();
+                regs[idx] = data;
+                if Self::file_ai_enabled(&self.file_auto_increment, regs) {
+                    self.file_pointer = self.file_pointer.wrapping_add(1);
+                }
+            }
+            self.file_writes_since_frame = self.file_writes_since_frame.saturating_add(1);
+            return;
+        }
         self.write_buf.push(data);
         if self.command_mode {
             // A command completes once `code_width` bytes have arrived (a
@@ -278,10 +407,10 @@ impl I2cDevice for GenericI2cDevice {
             }
             return;
         }
-        // Register mode: first byte is the pointer; the rest are a data write
-        // into the pointed rw register.
+        // Register mode: first byte is the pointer (masked); the rest are a data
+        // write into the pointed rw register.
         if self.write_buf.len() == 1 {
-            self.pointer = Some(data);
+            self.pointer = Some(data & self.reg_pointer_mask);
             return;
         }
         let Some(ptr) = self.pointer else { return };
@@ -294,6 +423,18 @@ impl I2cDevice for GenericI2cDevice {
     }
 
     fn read(&mut self) -> u8 {
+        // Register-file mode: return the pointed byte and auto-increment (live).
+        if let Some(regs) = self.file.as_ref() {
+            if regs.is_empty() {
+                return 0;
+            }
+            let idx = self.file_pointer as usize % regs.len();
+            let v = regs[idx];
+            if Self::file_ai_enabled(&self.file_auto_increment, regs) {
+                self.file_pointer = self.file_pointer.wrapping_add(1);
+            }
+            return v;
+        }
         if self.command_mode {
             if self.pending.is_some() && self.elapsed_us >= self.ready_at_us {
                 self.read_buf = self.pending.take().unwrap();
@@ -314,6 +455,17 @@ impl I2cDevice for GenericI2cDevice {
         }
         let byte = self.read_buf.get(self.read_idx).copied().unwrap_or(0xFF);
         self.read_idx += 1;
+        // Self-driving updates: fire when the full multi-byte word has just been
+        // consumed (e.g. the TMP102 +0.5 °C drift after each temperature read).
+        if !self.updates.is_empty() {
+            if let Some(ptr) = self.pointer {
+                if let Some(width) = self.find_register(ptr).map(|r| r.width as usize) {
+                    if self.read_idx == width {
+                        self.apply_read_complete_updates(ptr);
+                    }
+                }
+            }
+        }
         byte
     }
 
@@ -352,15 +504,69 @@ impl SimInput for GenericI2cDevice {
     }
 }
 
-/// A descriptor is exactly one shape, and command devices with CRC framing must
-/// use even-width words (CRC is computed per 16-bit word).
+/// A descriptor is exactly one shape (registers XOR commands XOR register_file),
+/// and command devices with CRC framing must use even-width words (CRC is
+/// computed per 16-bit word).
 fn validate_spec(spec: &I2cSpec) -> Result<()> {
-    match (spec.registers.is_empty(), spec.commands.is_empty()) {
-        (true, true) => bail!("behavior.i2c declares neither registers nor commands"),
-        (false, false) => {
-            bail!("behavior.i2c declares both registers and commands (a device is exactly one)")
+    let has_regs = !spec.registers.is_empty();
+    let has_cmds = !spec.commands.is_empty();
+    let has_file = spec.register_file.is_some();
+    match has_regs as u8 + has_cmds as u8 + has_file as u8 {
+        0 => bail!("behavior.i2c declares none of registers / commands / register_file"),
+        1 => {}
+        _ => bail!(
+            "behavior.i2c declares more than one of registers / commands / register_file \
+             (a device is exactly one shape)"
+        ),
+    }
+    // `observables` read the byte register file; `updates` drive a wide register.
+    if !spec.observables.is_empty() && !has_file {
+        bail!("behavior.i2c declares observables but no register_file (observables read it)");
+    }
+    if !spec.updates.is_empty() && !has_regs {
+        bail!("behavior.i2c declares updates but no registers (updates drive a wide register)");
+    }
+    if let Some(rf) = &spec.register_file {
+        if rf.size == 0 || rf.size > 65536 {
+            bail!("register_file.size {} outside 1..=65536", rf.size);
         }
-        _ => {}
+        for &off in rf.reset.keys() {
+            if off as usize >= rf.size {
+                bail!(
+                    "register_file reset offset {off:#x} outside the file (size {:#x})",
+                    rf.size
+                );
+            }
+        }
+        if let AutoIncrement::WhenFieldSet { addr, .. } = &rf.auto_increment {
+            if *addr as usize >= rf.size {
+                bail!("auto_increment enable register {addr:#x} outside the register file");
+            }
+        }
+        for o in &spec.observables {
+            let span = o.value.u12_compose.lo_rel.max(o.value.u12_compose.hi_rel) as usize;
+            let last =
+                o.base as usize + o.stride as usize * (o.channels.max(1) as usize - 1) + span;
+            if last >= rf.size {
+                bail!(
+                    "observable '{}' channel block ends at {last:#x}, outside register_file (size {:#x})",
+                    o.name,
+                    rf.size
+                );
+            }
+        }
+    }
+    // Every `read_complete` update must name a real register (by pointer or name).
+    for u in &spec.updates {
+        let rc = &u.trigger.read_complete;
+        let ok = match (&rc.pointer, &rc.register) {
+            (Some(p), _) => spec.registers.iter().any(|r| r.addr == *p),
+            (None, Some(name)) => spec.registers.iter().any(|r| &r.name == name),
+            (None, None) => false,
+        };
+        if !ok {
+            bail!("update read_complete trigger does not name a declared register");
+        }
     }
     if !spec.commands.is_empty() && !matches!(spec.code_width, 1 | 2) {
         bail!(
@@ -618,6 +824,28 @@ pub static VEML7700_KIT: LazyLock<DeclarativeI2cKit> = LazyLock::new(|| {
         labwired_config::embedded_device_yaml("veml7700").expect("veml7700 descriptor is embedded"),
     )
     .expect("veml7700.yaml is a valid declarative i2c descriptor")
+});
+
+/// TI TMP102 temperature sensor (declarative `tmp102.yaml`, register-pointer +
+/// self-driving drift). Migrated from the hand-written
+/// [`super::super::esp32s3::tmp102::Tmp102`] model, which now survives only as
+/// the byte-parity oracle (see `pca9685_tmp102_parity.rs`).
+pub static TMP102_KIT: LazyLock<DeclarativeI2cKit> = LazyLock::new(|| {
+    DeclarativeI2cKit::from_yaml(
+        labwired_config::embedded_device_yaml("tmp102").expect("tmp102 descriptor is embedded"),
+    )
+    .expect("tmp102.yaml is a valid declarative i2c descriptor")
+});
+
+/// NXP PCA9685 16-channel PWM controller (declarative `pca9685.yaml`,
+/// byte-addressable register file + `servo_angle` observable). Migrated from the
+/// hand-written [`super::pca9685::Pca9685`] model, which now survives only as the
+/// byte-parity oracle (see `pca9685_tmp102_parity.rs`).
+pub static PCA9685_KIT: LazyLock<DeclarativeI2cKit> = LazyLock::new(|| {
+    DeclarativeI2cKit::from_yaml(
+        labwired_config::embedded_device_yaml("pca9685").expect("pca9685 descriptor is embedded"),
+    )
+    .expect("pca9685.yaml is a valid declarative i2c descriptor")
 });
 
 #[cfg(test)]

@@ -41,10 +41,8 @@ fn build_i2c_external_device(
         "oled-ssd1306" => Some(Box::new(crate::peripherals::components::Ssd1306::new(
             addr(0x3C),
         ))),
-        "tmp102" => Some(Box::new(crate::peripherals::esp32s3::tmp102::Tmp102::new())),
-        "pca9685" => Some(Box::new(
-            crate::peripherals::components::pca9685::Pca9685::new(),
-        )),
+        // tmp102 / pca9685 are declarative devices handled by the shared factory
+        // (`build_external_i2c_device`) above — no local arm needed.
         _ => None,
     }
 }

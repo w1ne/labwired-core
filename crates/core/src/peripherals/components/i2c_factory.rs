@@ -32,12 +32,45 @@ pub fn build_external_i2c_device(
     Some(dev)
 }
 
+/// Build a declarative [`GenericI2cDevice`] from its embedded
+/// `configs/devices/<type>.yaml` descriptor, honouring an `i2c_address` override.
+/// Used by the factory arms of parts (TMP102, PCA9685) that were migrated off
+/// hand-written models but still need a factory entry so every attach path — not
+/// just the kit pass — wires them.
+fn build_declarative_i2c_device(
+    type_str: &str,
+    config: &HashMap<String, serde_yaml::Value>,
+) -> Option<Box<dyn I2cDevice>> {
+    let yaml = labwired_config::embedded_device_yaml(type_str)?;
+    // 0 tells GenericI2cDevice to use the descriptor's default_address.
+    let address = config
+        .get("i2c_address")
+        .and_then(|v| v.as_u64())
+        .map(|a| a as u8)
+        .unwrap_or(0);
+    match crate::peripherals::components::declarative_i2c::GenericI2cDevice::from_yaml(
+        yaml, address,
+    ) {
+        Ok(dev) => Some(Box::new(dev)),
+        Err(e) => {
+            eprintln!("declarative i2c device '{type_str}': {e}");
+            None
+        }
+    }
+}
+
 pub fn build_i2c_device(
     type_str: &str,
     config: &HashMap<String, serde_yaml::Value>,
 ) -> Option<Box<dyn I2cDevice>> {
     match type_str.to_ascii_lowercase().as_str() {
-        "tmp102" => Some(Box::new(crate::peripherals::esp32s3::tmp102::Tmp102::new())),
+        // TMP102 (register-pointer + drift) and PCA9685 (byte register file +
+        // servo observable) are declarative devices — the model lives entirely in
+        // configs/devices/*.yaml, interpreted by the generic GenericI2cDevice. The
+        // hand-written structs survive only as the byte-parity oracles.
+        "tmp102" | "pca9685" => {
+            build_declarative_i2c_device(&type_str.to_ascii_lowercase(), config)
+        }
         "tmp117" => {
             use crate::peripherals::components::tmp117::{Tmp117, TMP117_ADDR};
             let address = config

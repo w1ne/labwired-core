@@ -1619,6 +1619,40 @@
       ]
     },
     {
+      "device_type": "tmp102",
+      "label": "TI TMP102 Temperature",
+      "summary": "12-bit I²C temperature sensor (self-drifting demo).",
+      "detail": "Texas Instruments TMP102 at default address 0x48, a register-pointer device with 16-bit big-endian words (pointer decodes only the low two bits). The temperature register starts at 25 °C and self-drifts +0.5 °C per read, wrapping 35 °C → 20 °C — a deterministic demo stimulus that needs no external input. Config / T_LOW / T_HIGH are read-only storage.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to the TMP102 address 0x48 (ADD0 = GND)."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "pca9685",
+      "label": "NXP PCA9685 PWM/Servo",
+      "summary": "16-channel 12-bit I²C PWM / servo controller.",
+      "detail": "NXP PCA9685 at default address 0x40, a 256-byte register-file device with a write-pointer and MODE1.AI auto-increment. Drives up to 16 servo/LED PWM channels; the servo_angle observable reports each channel's commanded angle in degrees. Power-on MODE1 reads back 0x11 (SLEEP | ALLCALL), matching silicon.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit slave address. Defaults to the PCA9685 address 0x40 (A0..A5 tied low)."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
       "device_type": "adxl345_spi",
       "label": "ADXL345 accelerometer",
       "summary": "3-axis ±16 g accelerometer over SPI (full-resolution, 256 LSB/g).",

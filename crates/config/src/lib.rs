@@ -908,6 +908,226 @@ pub struct I2cSpec {
     /// Command set. Present ⇒ this is a command device.
     #[serde(default)]
     pub commands: Vec<I2cCommand>,
+    /// Mask applied to the pointer byte the master writes in **register-pointer**
+    /// mode (`registers:`). Absent ⇒ `0xFF` (no masking). A part whose pointer is
+    /// only a few low bits (TMP102 uses `0x03`) sets it so a write of an
+    /// out-of-range pointer aliases into the register file exactly as silicon does.
+    #[serde(default)]
+    pub pointer_mask: Option<u8>,
+    /// **Byte-addressable register file** mode. Present ⇒ this is a register-file
+    /// device (256 one-byte registers with a write-pointer that walks on
+    /// auto-increment, PCA9685-style). Mutually exclusive with `registers:` and
+    /// `commands:`.
+    #[serde(default)]
+    pub register_file: Option<RegisterFileSpec>,
+    /// Self-driving state updates fired by bus activity (e.g. the TMP102's
+    /// +0.5 °C-per-read drift). Each fires when a full multi-byte read of its
+    /// target register completes. Applies to the `registers:` (wide) mode.
+    #[serde(default)]
+    pub updates: Vec<UpdateRule>,
+    /// Engineering-unit values derived from the register file, readable by Rust
+    /// consumers/tests through the engine's `observable()` API (e.g. the PCA9685
+    /// `servo_angle` per channel). Applies to the `register_file:` mode.
+    #[serde(default)]
+    pub observables: Vec<ObservableSpec>,
+}
+
+/// **Byte-addressable register file** for the `register_file` I²C mode: `size`
+/// one-byte registers, a write-pointer selected by the first post-START byte,
+/// and an auto-increment policy that walks the pointer after each data byte.
+/// This is the datasheet shape for PWM expanders / GPIO expanders (PCA9685)
+/// whose block writes stream consecutive registers. Mutually exclusive with the
+/// named `registers:`/`commands:` shapes.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RegisterFileSpec {
+    /// Number of one-byte registers (typically 256).
+    pub size: usize,
+    /// Sparse non-zero power-on reset values, keyed by register offset.
+    #[serde(default)]
+    pub reset: BTreeMap<u8, u8>,
+    /// Mask applied to the pointer byte. Absent ⇒ `0xFF`.
+    #[serde(default = "default_pointer_mask")]
+    pub pointer_mask: u8,
+    /// The first byte written after START selects the pointer. Default true.
+    #[serde(default = "default_true")]
+    pub first_write_after_start_sets_pointer: bool,
+    /// When the pointer advances after a data byte read/written.
+    #[serde(default)]
+    pub auto_increment: AutoIncrement,
+}
+
+fn default_pointer_mask() -> u8 {
+    0xFF
+}
+
+/// Auto-increment policy for a register-file write-pointer. Checked **live**
+/// (after the enabling byte is stored), so the very write that sets the enable
+/// field also advances the pointer — matching PCA9685 silicon.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub enum AutoIncrement {
+    /// Pointer never advances automatically.
+    #[default]
+    Never,
+    /// Pointer advances after every data byte.
+    Always,
+    /// Pointer advances while `regs[addr] & mask != 0` (PCA9685 MODE1.AI).
+    WhenFieldSet {
+        /// Register offset holding the enable field.
+        addr: u8,
+        /// Bit mask of the enable field.
+        mask: u8,
+    },
+}
+
+/// Serde helper for the `when_field_set` map form of [`AutoIncrement`].
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct WhenFieldSetFields {
+    addr: u8,
+    mask: u8,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct AutoIncrementMap {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    when_field_set: Option<WhenFieldSetFields>,
+}
+
+impl Serialize for AutoIncrement {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            AutoIncrement::Never => serializer.serialize_str("never"),
+            AutoIncrement::Always => serializer.serialize_str("always"),
+            AutoIncrement::WhenFieldSet { addr, mask } => AutoIncrementMap {
+                when_field_set: Some(WhenFieldSetFields {
+                    addr: *addr,
+                    mask: *mask,
+                }),
+            }
+            .serialize(serializer),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for AutoIncrement {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        use serde::de::Error;
+        let value = serde_yaml::Value::deserialize(deserializer)?;
+        match &value {
+            serde_yaml::Value::String(s) => match s.as_str() {
+                "never" => Ok(AutoIncrement::Never),
+                "always" => Ok(AutoIncrement::Always),
+                other => Err(D::Error::unknown_variant(
+                    other,
+                    &["never", "always", "when_field_set"],
+                )),
+            },
+            serde_yaml::Value::Mapping(_) => {
+                let m: AutoIncrementMap =
+                    serde_yaml::from_value(value).map_err(D::Error::custom)?;
+                match m.when_field_set {
+                    Some(f) => Ok(AutoIncrement::WhenFieldSet {
+                        addr: f.addr,
+                        mask: f.mask,
+                    }),
+                    None => Err(D::Error::custom("unknown auto_increment variant")),
+                }
+            }
+            _ => Err(D::Error::custom(
+                "expected string or map for auto_increment",
+            )),
+        }
+    }
+}
+
+/// One self-driving update: a trigger paired with an action. See
+/// [`I2cSpec::updates`].
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct UpdateRule {
+    pub trigger: UpdateTrigger,
+    pub action: UpdateAction,
+}
+
+/// What fires an [`UpdateRule`]. Currently only `read_complete` — a full
+/// multi-byte read of the identified register finished.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct UpdateTrigger {
+    pub read_complete: ReadComplete,
+}
+
+/// Identify the register a `read_complete` trigger watches: exactly one of a
+/// register `name` or a `pointer` value.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ReadComplete {
+    #[serde(default)]
+    pub register: Option<String>,
+    #[serde(default)]
+    pub pointer: Option<u8>,
+}
+
+/// What an [`UpdateRule`] does. Currently only `add_wrap`.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct UpdateAction {
+    pub add_wrap: AddWrap,
+}
+
+/// `value = value.wrapping_add(add) as i16; if value > max { value = reset }`
+/// applied to the triggering register's stored word (signed i16 semantics).
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AddWrap {
+    pub add: i16,
+    pub max: i16,
+    pub reset: i16,
+}
+
+/// A named, channel-indexed engineering-unit value derived from the register
+/// file. See [`I2cSpec::observables`].
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ObservableSpec {
+    pub name: String,
+    /// Number of channels (1 for a scalar observable).
+    pub channels: u8,
+    /// Register offset of channel 0's block.
+    pub base: u8,
+    /// Offset between consecutive channel blocks.
+    pub stride: u8,
+    /// How the raw value is composed from the channel block.
+    pub value: ObservableValue,
+    /// Optional raw → engineering-units mapping.
+    #[serde(default)]
+    pub map: Option<ObservableMap>,
+}
+
+/// Raw-value composition for an [`ObservableSpec`].
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ObservableValue {
+    pub u12_compose: U12Compose,
+}
+
+/// `((regs[base+hi_rel] & hi_mask) << 8) | regs[base+lo_rel]`.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct U12Compose {
+    pub lo_rel: u8,
+    pub hi_rel: u8,
+    pub hi_mask: u8,
+}
+
+/// Raw → engineering-units mapping for an [`ObservableSpec`].
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ObservableMap {
+    pub linear: LinearMap,
+    /// Return `None` while the raw value is exactly 0 (channel never written).
+    #[serde(default)]
+    pub none_when_raw_zero: bool,
+}
+
+/// `eng = clamp(raw * scale + offset)`.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct LinearMap {
+    pub scale: f64,
+    pub offset: f64,
+    /// Optional inclusive `[lo, hi]` clamp.
+    #[serde(default)]
+    pub clamp: Option<(f64, f64)>,
 }
 
 /// The `behavior.spi` section of a declarative `spi_device` — datasheet-shaped
@@ -1310,6 +1530,8 @@ pub fn embedded_device_yaml(device_type: &str) -> Option<&'static str> {
         "max31855" => Some(include_str!("../../../configs/devices/max31855.yaml")),
         "bh1750" => Some(include_str!("../../../configs/devices/bh1750.yaml")),
         "veml7700" => Some(include_str!("../../../configs/devices/veml7700.yaml")),
+        "tmp102" => Some(include_str!("../../../configs/devices/tmp102.yaml")),
+        "pca9685" => Some(include_str!("../../../configs/devices/pca9685.yaml")),
         _ => None,
     }
 }

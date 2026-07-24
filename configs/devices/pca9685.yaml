@@ -1,0 +1,50 @@
+# NXP PCA9685 16-channel 12-bit I²C PWM controller — declarative byte-addressable
+# register-file device. Byte-for-byte twin of the hand-written oracle
+# crates/core/src/peripherals/components/pca9685.rs (now retained only as the
+# parity oracle).
+#
+# Per the PCA9685 datasheet (Rev. 4) the device is a 256-byte register file with
+# a write-pointer (the "control register"). The first byte after a START selects
+# the pointer; subsequent bytes are data. When MODE1 (reg 0x00) bit 5 (`AI`) is
+# set the pointer auto-increments after every data byte read or written — so the
+# firmware's 4-byte `LEDn_ON_L … LEDn_OFF_H` block writes land in consecutive
+# registers. The auto-increment enable is checked LIVE, so the very write that
+# sets the AI bit also advances the pointer. Power-on MODE1 reads back 0x11
+# (SLEEP | ALLCALL) like real silicon.
+#
+# Each channel's 12-bit OFF count (LEDn_OFF_L / LEDn_OFF_H[3:0]) encodes the servo
+# pulse width; the `servo_angle` observable exposes the commanded angle in degrees
+# by linearising the firmware's `off → µs → degree` map. A channel that has never
+# been written (raw OFF = 0) reports no angle.
+type: pca9685
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x40
+    register_file:
+      size: 256
+      reset:
+        0x00: 0x11   # MODE1 power-on: SLEEP | ALLCALL
+      auto_increment:
+        when_field_set: { addr: 0x00, mask: 0x20 }   # MODE1.AI
+    observables:
+      - name: servo_angle
+        channels: 16
+        base: 0x06       # LED0_ON_L
+        stride: 4
+        value:
+          u12_compose: { lo_rel: 2, hi_rel: 3, hi_mask: 0x0F }   # OFF_L / OFF_H[3:0]
+        map:
+          linear: { scale: 0.46258224, offset: -47.368423, clamp: [0.0, 180.0] }
+          none_when_raw_zero: true
+
+metadata:
+  label: "NXP PCA9685 PWM/Servo"
+  summary: "16-channel 12-bit I²C PWM / servo controller."
+  detail: "NXP PCA9685 at default address 0x40, a 256-byte register-file device with a write-pointer and MODE1.AI auto-increment. Drives up to 16 servo/LED PWM channels; the servo_angle observable reports each channel's commanded angle in degrees. Power-on MODE1 reads back 0x11 (SLEEP | ALLCALL), matching silicon."
+  category: i2c
+  config_keys:
+    - name: i2c_address
+      ty: int
+      doc: "7-bit slave address. Defaults to the PCA9685 address 0x40 (A0..A5 tied low)."
