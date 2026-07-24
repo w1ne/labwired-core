@@ -77,6 +77,11 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::declarative_i2c::SHT31_KIT,
     &components::declarative_i2c::BH1750_KIT,
     &components::declarative_i2c::VEML7700_KIT,
+    // TMP102 (register-pointer + drift) and PCA9685 (byte register file + servo
+    // observable) were migrated from hand-written models; those survive only as
+    // the byte-parity oracles (pca9685_tmp102_parity.rs).
+    &components::declarative_i2c::TMP102_KIT,
+    &components::declarative_i2c::PCA9685_KIT,
     // Declarative SPI devices — model lives entirely in configs/devices/*.yaml,
     // interpreted by the generic GenericSpiDevice (zero per-part Rust).
     &components::declarative_spi::ADXL345_KIT,

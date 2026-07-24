@@ -1,0 +1,44 @@
+# Texas Instruments TMP102 I²C temperature sensor — declarative register-pointer
+# device. Byte-for-byte twin of the hand-written oracle
+# crates/core/src/peripherals/esp32s3/tmp102.rs (now retained only as the
+# parity oracle), including the demo self-drift.
+#
+# Per the TMP102 datasheet (SBOS397) the master writes a 1-byte pointer (only
+# the low two bits are decoded, `pointer_mask: 0x03`) then streams a 16-bit
+# BIG-ENDIAN word (MSB first). The four pointer slots are read-only 16-bit
+# registers; a write of config/T_LOW/T_HIGH bytes is absorbed and ignored
+# (access `r`), so those registers always read back their reset value.
+#
+# The temperature register is left-justified 12-bit, 1 LSB = 0.0625 °C
+# (0x1900 = 25.0 °C). It is **self-driving** for the demo: every full
+# temperature read adds +0.5 °C (0x80) and wraps back to 20.0 °C (0x1400)
+# once it would exceed 35.0 °C (0x2300) — expressed as the generic
+# `read_complete` → `add_wrap` update, not a TMP102 special case.
+type: tmp102
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x48
+    pointer_mask: 0x03
+    registers:
+      # Temperature: 12-bit left-justified, big-endian, self-drifting (below).
+      - { name: TEMP, addr: 0x00, width: 2, endian: be, access: r, reset: 0x1900 }
+      # Config / T_LOW / T_HIGH: read-only storage; writes are absorbed.
+      - { name: CONFIG, addr: 0x01, width: 2, endian: be, access: r, reset: 0x60A0 }
+      - { name: T_LOW, addr: 0x02, width: 2, endian: be, access: r, reset: 0x4B00 }
+      - { name: T_HIGH, addr: 0x03, width: 2, endian: be, access: r, reset: 0x5000 }
+    updates:
+      # +0.5 °C per full temperature read; wrap to 20 °C once it exceeds 35 °C.
+      - trigger: { read_complete: { pointer: 0x00 } }
+        action:  { add_wrap: { add: 0x80, max: 0x2300, reset: 0x1400 } }
+
+metadata:
+  label: "TI TMP102 Temperature"
+  summary: "12-bit I²C temperature sensor (self-drifting demo)."
+  detail: "Texas Instruments TMP102 at default address 0x48, a register-pointer device with 16-bit big-endian words (pointer decodes only the low two bits). The temperature register starts at 25 °C and self-drifts +0.5 °C per read, wrapping 35 °C → 20 °C — a deterministic demo stimulus that needs no external input. Config / T_LOW / T_HIGH are read-only storage."
+  category: i2c
+  config_keys:
+    - name: i2c_address
+      ty: int
+      doc: "7-bit slave address. Defaults to the TMP102 address 0x48 (ADD0 = GND)."
