@@ -12,6 +12,7 @@ test (native, has fs) fails the build when this file goes stale.
 Usage: python3 scripts/gen_embedded_descriptors.py   (from the repo root)
 """
 
+import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -54,8 +55,8 @@ mod tests {
     /// needs it. Regenerate with scripts/gen_embedded_descriptors.py.
     #[test]
     fn embedded_descriptor_registry_is_complete() {
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../configs/peripherals");
+        let root =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../configs/peripherals");
         let mut missing = Vec::new();
         let mut stack = vec![root.clone()];
         while let Some(dir) = stack.pop() {
@@ -91,14 +92,16 @@ def main() -> None:
         p.relative_to(PERIPHERALS).as_posix()
         for p in PERIPHERALS.rglob("*.yaml")
     )
-    arms = []
-    for key in keys:
-        arms.append(
-            f'        "{key}" => Some(include_str!(\n'
-            f'            "../../../../configs/peripherals/{key}"\n'
-            f"        )),"
-        )
+    arms = [
+        f'        "{key}" => Some(include_str!(\n'
+        f'            "../../../../configs/peripherals/{key}"\n'
+        f"        )),"
+        for key in keys
+    ]
     OUT.write_text(HEADER + "\n".join(arms) + "\n" + FOOTER)
+    # rustfmt owns the final shape (line collapsing etc.) so the emitted file
+    # is byte-stable under `cargo fmt --check` regardless of fmt config.
+    subprocess.run(["rustfmt", "--edition", "2021", str(OUT)], check=True)
     print(f"embedded {len(keys)} descriptors into {OUT.relative_to(ROOT)}")
 
 
