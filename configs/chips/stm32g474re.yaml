@@ -14,7 +14,7 @@ peripherals:
     type: "rcc"
     base_address: 0x40021000
     config:
-      profile: "stm32v2"
+      profile: "stm32g4"
   - id: "gpioa"
     type: "gpio"
     base_address: 0x48000000
@@ -70,10 +70,11 @@ peripherals:
     type: "pwr"
     base_address: 0x40007000
     size: "1KB"
-  # ── Tier-1 peripherals (RM0440). The RCC model is profile stm32v2, so the
-  # clock-gate `reg:` names resolve to the V2 enable-register offsets
-  # (ahb2enr@0x8C, apb1lenr@0x9C, apb2enr@0xA4); the `bit:` values are the
-  # silicon RM0440 §7.4 enable bits for each block's real bus. ─────────────
+  # ── Tier-1 peripherals (RM0440). The RCC model is profile stm32g4, so the
+  # clock-gate `reg:` names resolve to the RM0440 enable-register offsets
+  # (ahb2enr@0x4C, apb1enr1@0x58, apb2enr@0x60 — the same offsets ST's CMSIS
+  # stm32g474xx.h gives); the `bit:` values are the RM0440 §7.4 enable bits for
+  # each block's real bus. ─────────────────────────────────────────────────
   # TIM2 — 32-bit GP timer (APB1). RCC_APB1ENR1.TIM2EN (bit 0).
   - id: "tim2"
     type: "timer"
@@ -122,10 +123,10 @@ peripherals:
     config:
       profile: "stm32l4"
     clock: { reg: "ahb2enr", bit: 13 }
-  # DMA1 (AHB1, 7-channel + DMAMUX). RM0440 puts DMA1EN on AHB1ENR (bit 0),
-  # which the stm32v2 RCC model does not surface (it exposes only
-  # ahb2enr/apb1lenr/apb2enr), so the channel is declared ungated; the
-  # mem-to-mem round-trip is the truthful proof of the model.
+  # DMA1 (AHB1, 7-channel + DMAMUX). RM0440 puts DMA1EN on AHB1ENR (bit 0). The
+  # stm32g4 RCC model stores AHB1ENR@0x48 but no `clock:` gate is declared for
+  # the channel (left ungated); the mem-to-mem round-trip is the truthful proof
+  # of the model.
   - id: "dma1"
     type: "dma"
     base_address: 0x40020000
