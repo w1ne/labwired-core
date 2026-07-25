@@ -202,8 +202,7 @@ fn configure_esp32s3_memmap(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp32s3M
     // return 0 (an early null-jump through a rodata jump-table entry). Such
     // harness fixtures stay on identity XIP; only callers that program/seed the
     // MMU (real-reset boot, or the matrix's factory seed) select the MMU model.
-    let mmu_model = opts.real_reset_boot
-        || std::env::var_os("LABWIRED_ESP32S3_MMU_XIP").is_some();
+    let mmu_model = opts.real_reset_boot || std::env::var_os("LABWIRED_ESP32S3_MMU_XIP").is_some();
     // Shared flash backing for the proper-model path, loaded from the real
     // flash image so XIP reads (and the SPI-flash controller below) return real
     // bytes. In fast-boot this is unused; the legacy per-window backings apply.
