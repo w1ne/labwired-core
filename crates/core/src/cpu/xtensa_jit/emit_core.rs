@@ -259,6 +259,8 @@ pub fn is_terminator(ins: &Instruction) -> bool {
             | Bnez { .. }
             | Bltz { .. }
             | Bgez { .. }
+            | Bt { .. }
+            | Bf { .. }
             | Beqi { .. }
             | Bnei { .. }
             | Blti { .. }

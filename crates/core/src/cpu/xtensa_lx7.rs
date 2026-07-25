@@ -127,9 +127,8 @@ pub struct XtensaLx7 {
     /// rfr/wfr and lsi/ssi. The Xtensa LX7 FPU is single-precision only.
     pub fp: [u32; 16],
     /// Boolean registers b0..b15 (Boolean Option), packed one per bit. FP
-    /// compares (oeq.s/olt.s/…) write a result bit here; movf.s/movt.s read it.
-    /// Modeled minimally: only the FP compare/move instructions touch it (the
-    /// integer BR-consuming branches aren't in the decoded set yet).
+    /// compares (oeq.s/olt.s/…) write a result bit here; movf.s/movt.s and the
+    /// BT/BF branches read it.
     pub br: u16,
     pub pc: u32,
     /// Set by the branch helper when a conditional branch's predicate
@@ -1891,6 +1890,16 @@ impl XtensaLx7 {
             // BGEZ: taken if (as_ as i32) >= 0
             Bgez { as_, offset } => {
                 let cond = (self.regs.read_logical(as_) as i32) >= 0;
+                self.branch(offset, len, cond);
+            }
+            // BT bs: taken if boolean register BR[bs] == 1 (Boolean Option).
+            Bt { bs, offset } => {
+                let cond = (self.br >> (bs & 0xF)) & 1 == 1;
+                self.branch(offset, len, cond);
+            }
+            // BF bs: taken if boolean register BR[bs] == 0 (Boolean Option).
+            Bf { bs, offset } => {
+                let cond = (self.br >> (bs & 0xF)) & 1 == 0;
                 self.branch(offset, len, cond);
             }
             // BEQI: taken if as_ == imm  (decoder resolved B4CONST[r] into imm: i32)
