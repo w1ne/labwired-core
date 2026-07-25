@@ -233,6 +233,39 @@ pub fn seed_factory_mmu_for_cache2phys(bus: &mut SystemBus, irom_pages: u32, dro
     );
 }
 
+/// Seed the ROM SPI-flash chip descriptor that the boot ROM's flash-attach
+/// (`esp_rom_spiflash_attach` / `esp_rom_spiflash_config_param`) normally fills
+/// at reset. Fast-boot / the thunk harness skip that, so the ROM pointer
+/// `rom_spiflash_legacy_data` (@ `0x3FCE_FFE4`) stays NULL and
+/// `spi_flash_mmap` reads `chip.chip_size == 0`. Its flash-bounds guard
+/// (`if (chip_size < src+size) return ESP_ERR_INVALID_ARG`) then rejects EVERY
+/// mmap — including the partition-table mmap in `esp_partition`'s
+/// `load_partitions`, which aborts with `0x102` before any UART output.
+///
+/// Mirrors the classic-ESP32 `g_rom_flashchip` post-BROM seed
+/// (`esp32_boot_state::seed_esp32_post_brom_dram`). On the S3 ROM
+/// `g_rom_flashchip` is `rom_spiflash_legacy_data->chip` (esp-idf
+/// `esp32s3/rom/spi_flash.h`), so we place the `esp_rom_spiflash_chip_t`
+/// (24 B: device_id, chip_size, block_size, sector_size, page_size,
+/// status_mask) in the ROM-reserved DRAM page (`0x3FCEF000..0x3FCF0000`, which
+/// no app section claims) and point the ROM pointer at it. `0x3FCEFF00` is
+/// below the lowest ROM-BSS symbol on that page (`0x3FCEFF48`).
+pub fn seed_esp32s3_rom_flashchip(bus: &mut SystemBus, flash_size: u32) {
+    const ROM_SPIFLASH_LEGACY_DATA: u64 = 0x3FCE_FFE4;
+    const CHIP: u32 = 0x3FCE_FF00;
+    // esp_rom_spiflash_chip_t — Winbond W25Q-class (matches the SPI RDID model).
+    let _ = bus.write_u32(CHIP as u64, 0x0016_40EF); // device_id
+    let _ = bus.write_u32(CHIP as u64 + 4, flash_size); // chip_size
+    let _ = bus.write_u32(CHIP as u64 + 8, 64 * 1024); // block_size
+    let _ = bus.write_u32(CHIP as u64 + 12, 4 * 1024); // sector_size
+    let _ = bus.write_u32(CHIP as u64 + 16, 256); // page_size
+    let _ = bus.write_u32(CHIP as u64 + 20, 0xFFFF); // status_mask
+    let _ = bus.write_u32(ROM_SPIFLASH_LEGACY_DATA, CHIP);
+    tracing::info!(
+        "esp32s3: seeded rom_spiflash_legacy_data -> chip@{CHIP:#010x} (chip_size={flash_size:#x})"
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

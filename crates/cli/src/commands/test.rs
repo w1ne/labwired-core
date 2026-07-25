@@ -590,6 +590,15 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                     eprintln!(
                         "labwired-cli test: seeded S3 factory MMU for cache2phys (app0 @ 0x10000)"
                     );
+                    // Post-BROM flash-attach state: the ROM's flash-attach fills
+                    // `rom_spiflash_legacy_data->chip.chip_size`; fast-boot skips
+                    // it, so `spi_flash_mmap` (partition-table load) rejects every
+                    // mmap with ESP_ERR_INVALID_ARG (0x102) and `load_partitions`
+                    // aborts. Seed the descriptor with the configured flash size.
+                    labwired_core::boot::esp32s3::seed_esp32s3_rom_flashchip(
+                        &mut bus,
+                        4 * 1024 * 1024,
+                    );
                     // Arduino dual-core: `system_early_init` calls
                     // `ets_set_appcpu_boot_addr(call_start_cpu1)` then spins on
                     // `s_cpu_up[0] & s_cpu_up[1]`. Without APP_CPU the wait is
