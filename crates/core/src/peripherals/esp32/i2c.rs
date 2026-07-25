@@ -117,6 +117,15 @@ pub struct Esp32I2c {
     tx_pop_count: usize,
     rx_fifo: RefCell<std::collections::VecDeque<u8>>,
     slaves: Vec<Box<dyn I2cDevice>>,
+    /// Mid-transfer continuation across command-list bursts. The classic-ESP32
+    /// legacy IDF driver splits one logical transfer into several TRANS_START
+    /// bursts joined by the END opcode, which SUSPENDS the command sequence
+    /// (TRM §11) rather than terminating it: the selected slave and the
+    /// address-phase flag carry into the next burst so a follow-on WRITE
+    /// delivers data (not a fresh address) and a READ pulls from the same
+    /// slave. STOP or natural completion clears them back to the reset shape.
+    active_slave: Option<usize>,
+    expects_addr: bool,
     /// Interrupt-matrix source this instance asserts (49 for I2C0).
     intr_source_id: u32,
     /// Round-trip backing for timing / config registers the engine ignores.
@@ -151,6 +160,8 @@ impl Esp32I2c {
             tx_pop_count: 0,
             rx_fifo: RefCell::new(std::collections::VecDeque::with_capacity(FIFO_CAPACITY)),
             slaves: Vec::new(),
+            active_slave: None,
+            expects_addr: true,
             intr_source_id: I2C0_INTR_SOURCE_ID,
             other: BTreeMap::new(),
         }
@@ -386,6 +397,12 @@ impl Esp32I2c {
     /// the active slave by address bits [7:1]. Subsequent WRITE bytes are
     /// delivered via `I2cDevice::write`; READ pulls bytes from the active slave
     /// and pushes to the RX FIFO.
+    ///
+    /// The selected slave and address-phase state seed from `self.active_slave`
+    /// / `self.expects_addr`, which a prior END-terminated burst left behind, so
+    /// a transfer split across multiple TRANS_START bursts (the legacy IDF
+    /// driver's shape) resumes rather than re-decoding a data byte as an
+    /// address. RSTART begins a fresh address phase; STOP/completion clears it.
     fn run_command_list(&mut self) {
         // Classic-ESP32 opcodes (hal/esp32/include/hal/i2c_ll.h):
         //   0 = RSTART, 1 = WRITE, 2 = READ, 3 = STOP, 4 = END
@@ -395,8 +412,11 @@ impl Esp32I2c {
         const OP_STOP: u32 = 3;
         const OP_END: u32 = 4;
 
-        let mut active: Option<usize> = None;
-        let mut expects_addr = true;
+        // END pauses the command list (TRM §11): the selected slave and
+        // address-phase flag carry over from the previous burst so a follow-on
+        // WRITE/READ resumes the in-flight transfer instead of re-addressing.
+        let mut active = self.active_slave;
+        let mut expects_addr = self.expects_addr;
         let mut last_op_was_end = false;
 
         // Reset ACK_REC and the TX-FIFO read pointer at the start of a run.
@@ -496,11 +516,18 @@ impl Esp32I2c {
             }
         }
 
-        // END pauses execution and raises END_DETECT; STOP (or a list that runs
-        // out without an explicit END) completes and raises TRANS_COMPLETE.
+        // END pauses execution and raises END_DETECT; the selected slave and
+        // address-phase flag persist so the next TRANS_START burst resumes the
+        // suspended transfer. STOP (or a list that runs out without an explicit
+        // END) completes and raises TRANS_COMPLETE, clearing the continuation
+        // back to the reset shape.
         if last_op_was_end {
+            self.active_slave = active;
+            self.expects_addr = expects_addr;
             self.int_raw |= INT_END_DETECT;
         } else {
+            self.active_slave = None;
+            self.expects_addr = true;
             self.int_raw |= INT_TRANS_COMPLETE;
         }
     }
@@ -719,6 +746,113 @@ mod tests {
         assert_eq!(
             p.read_u32(REG_INT_RAW).unwrap() & INT_TRANS_COMPLETE,
             INT_TRANS_COMPLETE
+        );
+    }
+
+    /// Minimal I2cDevice that records the data bytes written to it, so a test
+    /// can prove a payload byte reached the slave (rather than being swallowed
+    /// as an address). `Arc<Mutex<..>>` keeps it `Send` per the trait bound.
+    struct RecordingSlave {
+        addr: u8,
+        writes: std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
+    }
+
+    impl I2cDevice for RecordingSlave {
+        fn address(&self) -> u8 {
+            self.addr
+        }
+        fn read(&mut self) -> u8 {
+            0
+        }
+        fn write(&mut self, data: u8) {
+            self.writes.lock().unwrap().push(data);
+        }
+    }
+
+    // ── Legacy-IDF multi-burst shape: the classic-ESP32 arduino-esp32 2.x
+    //    driver splits `beginTransmission(0x40); write(0x00); endTransmission()`
+    //    into three TRANS_START bursts joined by END. Burst 2 carries only the
+    //    data byte and NO RSTART, so the controller must resume the transfer
+    //    addressed in burst 1 rather than decode 0x00 as a fresh address.
+    #[test]
+    fn legacy_multiburst_write_continues_across_end() {
+        let mut p = Esp32I2c::new();
+        let writes = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        p.push_slave(Box::new(RecordingSlave {
+            addr: 0x40,
+            writes: std::sync::Arc::clone(&writes),
+        }));
+
+        // Burst 1: RSTART + WRITE(addr, 1) + END. Address 0x40<<1 = 0x80.
+        p.write_u32(REG_CMD0, cmd(CMD_RSTART, 0)).unwrap();
+        p.write_u32(REG_CMD0 + 4, cmd(CMD_WRITE, 1)).unwrap();
+        p.write_u32(REG_CMD0 + 8, cmd(CMD_END, 0)).unwrap();
+        p.write_u32(REG_DATA, 0x80).unwrap(); // addr+W for 0x40
+        p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
+        let ir1 = p.read_u32(REG_INT_RAW).unwrap();
+        assert_eq!(
+            ir1 & INT_NACK,
+            0,
+            "address 0x40 must ACK — no NACK in burst 1"
+        );
+        assert_eq!(
+            ir1 & INT_END_DETECT,
+            INT_END_DETECT,
+            "END must suspend the transfer and raise END_DETECT"
+        );
+        p.write_u32(REG_INT_CLR, 0xFFFF_FFFF).unwrap();
+
+        // Burst 2: WRITE(data, 1) + END — NO RSTART. The 0xAB byte is payload
+        // for the slave addressed in burst 1, not a new address phase.
+        p.write_u32(REG_CMD0, cmd(CMD_WRITE, 1)).unwrap();
+        p.write_u32(REG_CMD0 + 4, cmd(CMD_END, 0)).unwrap();
+        p.write_u32(REG_DATA, 0xAB).unwrap();
+        p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
+        let ir2 = p.read_u32(REG_INT_RAW).unwrap();
+        assert_eq!(
+            ir2 & INT_NACK,
+            0,
+            "a resumed WRITE byte must NOT be mis-decoded as a fresh (unmatched) address"
+        );
+        assert_eq!(ir2 & INT_END_DETECT, INT_END_DETECT);
+        p.write_u32(REG_INT_CLR, 0xFFFF_FFFF).unwrap();
+
+        // Burst 3: STOP completes the transaction.
+        p.write_u32(REG_CMD0, cmd(CMD_STOP, 0)).unwrap();
+        p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
+        assert_eq!(
+            p.read_u32(REG_INT_RAW).unwrap() & INT_TRANS_COMPLETE,
+            INT_TRANS_COMPLETE,
+            "STOP completes the transfer and raises TRANS_COMPLETE"
+        );
+
+        // The slave received exactly the data byte — not the address byte.
+        assert_eq!(
+            &*writes.lock().unwrap(),
+            &[0xAB],
+            "slave must receive the data byte delivered across the END boundary"
+        );
+    }
+
+    #[test]
+    fn legacy_multiburst_write_nacks_when_burst1_addr_unmatched() {
+        let mut p = Esp32I2c::new();
+        p.push_slave(Box::new(RecordingSlave {
+            addr: 0x40,
+            writes: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
+        }));
+
+        // Burst 1 addresses 0x50 (0xA0>>1) — no slave there → NACK, and no
+        // continuation is armed for any follow-on burst.
+        p.write_u32(REG_CMD0, cmd(CMD_RSTART, 0)).unwrap();
+        p.write_u32(REG_CMD0 + 4, cmd(CMD_WRITE, 1)).unwrap();
+        p.write_u32(REG_CMD0 + 8, cmd(CMD_END, 0)).unwrap();
+        p.write_u32(REG_DATA, 0xA0).unwrap();
+        p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
+        assert_eq!(
+            p.read_u32(REG_INT_RAW).unwrap() & INT_NACK,
+            INT_NACK,
+            "an unmatched address in burst 1 must still NACK"
         );
     }
 
