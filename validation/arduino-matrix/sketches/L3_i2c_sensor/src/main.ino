@@ -15,9 +15,11 @@
 static void logBegin() {
   Serial.begin(115200);
 #if defined(ARDUINO_USB_CDC_ON_BOOT) && (ARDUINO_USB_CDC_ON_BOOT)
+  // Serial is USB-CDC; the core defines Serial0 as hardware UART0 — dual-print
+  // so the sim (which captures UART0) always sees text. Without CDC-on-boot
+  // (classic ESP32, S3/C3 UART profiles) Serial IS UART0 and Serial0 does not
+  // exist, so guarding on ARDUINO_ARCH_ESP32 alone is a compile error there.
   Serial.setTxTimeoutMs(0);
-#endif
-#if defined(ARDUINO_ARCH_ESP32)
   Serial0.begin(115200);
 #endif
   delay(1);
@@ -25,7 +27,7 @@ static void logBegin() {
 
 static void logLine(const char *s) {
   Serial.println(s);
-#if defined(ARDUINO_ARCH_ESP32)
+#if defined(ARDUINO_USB_CDC_ON_BOOT) && (ARDUINO_USB_CDC_ON_BOOT)
   Serial0.println(s);
 #endif
 }
