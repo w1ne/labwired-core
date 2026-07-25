@@ -1245,23 +1245,23 @@ impl RccModel for L0Rcc {
 // positions verified against the vendored CMSIS `stm32g474xx.h`.
 #[derive(Debug, Default, serde::Serialize)]
 pub struct G4Rcc {
-    cr: u32,       // 0x00
-    icscr: u32,    // 0x04
-    cfgr: u32,     // 0x08
-    pllcfgr: u32,  // 0x0C
-    ahb1rstr: u32, // 0x28
-    ahb2rstr: u32, // 0x2C
-    apb1rstr: u32, // APB1RSTR1 0x38
-    apb1rstr2: u32,// APB1RSTR2 0x3C
-    apb2rstr: u32, // 0x40
-    ahb1enr: u32,  // 0x48
-    ahb2enr: u32,  // AHB2ENR 0x4C (GPIO ports, ADC12)
-    apb1enr: u32,  // APB1ENR1 0x58 (TIM2, RTCAPB, I2C1)
-    apb1enr2: u32, // APB1ENR2 0x5C
-    apb2enr: u32,  // 0x60 (TIM1, SPI1)
-    bdcr: u32,     // 0x90 — LSEON bit0 → LSERDY bit1
-    csr: u32,      // 0x94 — LSION bit0 → LSIRDY bit1
-    crrcr: u32,    // 0x98 — HSI48ON bit0 → HSI48RDY bit1
+    cr: u32,        // 0x00
+    icscr: u32,     // 0x04
+    cfgr: u32,      // 0x08
+    pllcfgr: u32,   // 0x0C
+    ahb1rstr: u32,  // 0x28
+    ahb2rstr: u32,  // 0x2C
+    apb1rstr: u32,  // APB1RSTR1 0x38
+    apb1rstr2: u32, // APB1RSTR2 0x3C
+    apb2rstr: u32,  // 0x40
+    ahb1enr: u32,   // 0x48
+    ahb2enr: u32,   // AHB2ENR 0x4C (GPIO ports, ADC12)
+    apb1enr: u32,   // APB1ENR1 0x58 (TIM2, RTCAPB, I2C1)
+    apb1enr2: u32,  // APB1ENR2 0x5C
+    apb2enr: u32,   // 0x60 (TIM1, SPI1)
+    bdcr: u32,      // 0x90 — LSEON bit0 → LSERDY bit1
+    csr: u32,       // 0x94 — LSION bit0 → LSIRDY bit1
+    crrcr: u32,     // 0x98 — HSI48ON bit0 → HSI48RDY bit1
 }
 
 impl G4Rcc {
@@ -1772,22 +1772,42 @@ mod tests {
     #[test]
     fn test_rcc_g4_offsets() {
         let rcc = Rcc::new_with_layout(RccRegisterLayout::Stm32G4);
-        assert_eq!(rcc.enable_reg_offset("apb1enr"), Some(0x58), "APB1ENR1 (I2C1EN/TIM2EN)");
+        assert_eq!(
+            rcc.enable_reg_offset("apb1enr"),
+            Some(0x58),
+            "APB1ENR1 (I2C1EN/TIM2EN)"
+        );
         assert_eq!(rcc.enable_reg_offset("apb1enr1"), Some(0x58));
-        assert_eq!(rcc.enable_reg_offset("ahb2enr"), Some(0x4C), "AHB2ENR (ADC12)");
-        assert_eq!(rcc.enable_reg_offset("apb2enr"), Some(0x60), "APB2ENR (TIM1/SPI1)");
+        assert_eq!(
+            rcc.enable_reg_offset("ahb2enr"),
+            Some(0x4C),
+            "AHB2ENR (ADC12)"
+        );
+        assert_eq!(
+            rcc.enable_reg_offset("apb2enr"),
+            Some(0x60),
+            "APB2ENR (TIM1/SPI1)"
+        );
         assert_eq!(rcc.enable_reg_offset("ahb1enr"), Some(0x48));
 
         // The V2 (H5-style) slots must NOT be the enable registers on G4 — a
         // write there is inert storage, proving the two layouts stay apart.
         let mut rcc = Rcc::new_with_layout(RccRegisterLayout::Stm32G4);
         rcc.write_u32(0x58, 1 << 21).unwrap(); // APB1ENR1.I2C1EN
-        assert_eq!(rcc.read_u32(0x58).unwrap(), 1 << 21, "I2C1EN round-trips at 0x58");
+        assert_eq!(
+            rcc.read_u32(0x58).unwrap(),
+            1 << 21,
+            "I2C1EN round-trips at 0x58"
+        );
         rcc.write_u32(0x4C, 0xF0).unwrap();
         rcc.write_u32(0x60, 0x1800).unwrap();
         assert_eq!(rcc.read_u32(0x4C).unwrap(), 0xF0);
         assert_eq!(rcc.read_u32(0x60).unwrap(), 0x1800);
-        assert_eq!(rcc.read_u32(0x9C).unwrap(), 0x00, "0x9C is not an ENR on G4");
+        assert_eq!(
+            rcc.read_u32(0x9C).unwrap(),
+            0x00,
+            "0x9C is not an ENR on G4"
+        );
     }
 
     /// G4 shares the V2 kernel-clock ready rules the family boots on: HSI16RDY at
@@ -1797,7 +1817,11 @@ mod tests {
         let mut rcc = Rcc::new_with_layout(RccRegisterLayout::Stm32G4);
         let cr = rcc.read_u32(0x00).unwrap();
         rcc.write_u32(0x00, cr | (1 << 8)).unwrap(); // HSION
-        assert_ne!(rcc.read_u32(0x00).unwrap() & (1 << 10), 0, "HSI16RDY at bit 10");
+        assert_ne!(
+            rcc.read_u32(0x00).unwrap() & (1 << 10),
+            0,
+            "HSI16RDY at bit 10"
+        );
         rcc.write_u32(0x98, 1).unwrap(); // HSI48ON
         assert_eq!(rcc.read_u32(0x98).unwrap() & 0x3, 0x3, "HSI48RDY");
         rcc.write_u32(0x94, 1).unwrap(); // LSION

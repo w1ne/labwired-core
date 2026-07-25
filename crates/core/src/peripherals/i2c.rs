@@ -2012,8 +2012,16 @@ mod tests {
         let cr2: u32 = (0x40 << 1) | (1 << 16) | (1 << 25) | (1 << 13); // NBYTES=1|AUTOEND|START
         i2c.write_u32(0x04, cr2).unwrap(); // CR2/START after the preload
 
-        assert_eq!(writes.load(Ordering::SeqCst), 1, "preloaded byte reaches slave");
-        assert_eq!(i2c.peek(0x18).unwrap() & (1 << 4), 0, "no NACKF (slave present)");
+        assert_eq!(
+            writes.load(Ordering::SeqCst),
+            1,
+            "preloaded byte reaches slave"
+        );
+        assert_eq!(
+            i2c.peek(0x18).unwrap() & (1 << 4),
+            0,
+            "no NACKF (slave present)"
+        );
         assert_ne!(i2c.peek(0x18).unwrap() & (1 << 6), 0, "TC after transfer");
         assert_ne!(i2c.peek(0x18).unwrap() & (1 << 5), 0, "STOPF via AUTOEND");
         assert_eq!(i2c.peek(0x19).unwrap() & (1 << 7), 0, "BUSY cleared");
@@ -2040,8 +2048,16 @@ mod tests {
 
         // Address ACKed → hardware requests the first byte via TXIS (bit 1),
         // nothing sent yet.
-        assert_ne!(i2c.peek(0x18).unwrap() & (1 << 1), 0, "TXIS asserted after address ACK");
-        assert_eq!(writes.load(Ordering::SeqCst), 0, "no byte before TXDR write");
+        assert_ne!(
+            i2c.peek(0x18).unwrap() & (1 << 1),
+            0,
+            "TXIS asserted after address ACK"
+        );
+        assert_eq!(
+            writes.load(Ordering::SeqCst),
+            0,
+            "no byte before TXDR write"
+        );
 
         i2c.write(0x28, 0x00).unwrap(); // ISR writes TXDR after TXIS
         assert_eq!(writes.load(Ordering::SeqCst), 1, "byte sent on TXDR write");
@@ -2061,9 +2077,21 @@ mod tests {
         i2c.write(0x28, 0xAB).unwrap();
         let cr2: u32 = (0x52 << 1) | (1 << 16) | (1 << 25) | (1 << 13);
         i2c.write_u32(0x04, cr2).unwrap();
-        assert_ne!(i2c.peek(0x18).unwrap() & (1 << 4), 0, "NACKF (preload order)");
-        assert_ne!(i2c.peek(0x18).unwrap() & (1 << 5), 0, "STOPF via AUTOEND (preload order)");
-        assert_eq!(i2c.peek(0x19).unwrap() & (1 << 7), 0, "BUSY cleared (preload order)");
+        assert_ne!(
+            i2c.peek(0x18).unwrap() & (1 << 4),
+            0,
+            "NACKF (preload order)"
+        );
+        assert_ne!(
+            i2c.peek(0x18).unwrap() & (1 << 5),
+            0,
+            "STOPF via AUTOEND (preload order)"
+        );
+        assert_eq!(
+            i2c.peek(0x19).unwrap() & (1 << 7),
+            0,
+            "BUSY cleared (preload order)"
+        );
 
         // IT ordering: START first, absent slave.
         let mut i2c = I2c::new_with_layout(I2cRegisterLayout::Stm32L4);
@@ -2071,8 +2099,16 @@ mod tests {
         let cr2: u32 = (0x52 << 1) | (1 << 16) | (1 << 25) | (1 << 13);
         i2c.write_u32(0x04, cr2).unwrap();
         assert_ne!(i2c.peek(0x18).unwrap() & (1 << 4), 0, "NACKF (IT order)");
-        assert_ne!(i2c.peek(0x18).unwrap() & (1 << 5), 0, "STOPF via AUTOEND (IT order)");
-        assert_eq!(i2c.peek(0x19).unwrap() & (1 << 7), 0, "BUSY cleared (IT order)");
+        assert_ne!(
+            i2c.peek(0x18).unwrap() & (1 << 5),
+            0,
+            "STOPF via AUTOEND (IT order)"
+        );
+        assert_eq!(
+            i2c.peek(0x19).unwrap() & (1 << 7),
+            0,
+            "BUSY cleared (IT order)"
+        );
     }
 
     #[test]
