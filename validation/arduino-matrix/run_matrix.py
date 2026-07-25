@@ -266,6 +266,17 @@ def main() -> int:
                 if "wba" in bid.lower() or "wba" in str(board.get("chip", "")).lower():
                     patch = MATRIX_DIR / "scripts" / "patch_stm32duino_wba_series.py"
                     if patch.is_file():
+                        # On a fresh runner the framework package doesn't exist
+                        # until pio fetches it, so the patch would be a no-op and
+                        # the first WBA compile fails on unpatched series
+                        # detection. Force the download before patching.
+                        subprocess.run(
+                            ["pio", "pkg", "install", "-e", "matrix"],
+                            check=False,
+                            capture_output=True,
+                            text=True,
+                            cwd=work,
+                        )
                         subprocess.run(
                             [sys.executable, str(patch)],
                             check=False,
