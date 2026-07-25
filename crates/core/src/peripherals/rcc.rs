@@ -38,6 +38,12 @@ pub enum RccRegisterLayout {
     Stm32L4,
     /// STM32L0 family (RM0367). Verified on NUCLEO-L073RZ over SWD.
     Stm32L0,
+    /// STM32G4 family (RM0440). The modern-V2 clock tree (CR/CFGR/PLLCFGR/
+    /// BDCR/CSR/CRRCR) with the RM0440 enable/reset register offsets
+    /// (APB1ENR1@0x58, AHB2ENR@0x4C, APB2ENR@0x60) — which differ from the
+    /// H5-style V2 layout (APB1LENR@0x9C). Offsets verified against the
+    /// vendored CMSIS `stm32g474xx.h`.
+    Stm32G4,
 }
 
 impl FromStr for RccRegisterLayout {
@@ -53,8 +59,9 @@ impl FromStr for RccRegisterLayout {
             "h7" | "stm32h7" => Ok(Self::Stm32H7),
             "stm32l4" | "l4" => Ok(Self::Stm32L4),
             "stm32l0" | "l0" => Ok(Self::Stm32L0),
+            "stm32g4" | "g4" => Ok(Self::Stm32G4),
             _ => Err(format!(
-                "unsupported RCC register layout '{}'; supported: stm32f1, stm32f4, stm32v2, stm32h5, stm32h7, stm32l4, stm32l0",
+                "unsupported RCC register layout '{}'; supported: stm32f1, stm32f4, stm32v2, stm32h5, stm32h7, stm32l4, stm32l0, stm32g4",
                 value
             )),
         }
@@ -1226,6 +1233,143 @@ impl RccModel for L0Rcc {
     }
 }
 
+// ── STM32G4 ─────────────────────────────────────────────────────────────────
+// RM0440 register map. Shares the modern-V2 clock-tree IP (CR/CFGR/PLLCFGR with
+// the classic + HSI16 ready rules, BDCR/CSR/CRRCR handshakes), but the
+// enable/reset registers sit at the RM0440 offsets — APB1ENR1@0x58,
+// APB1ENR2@0x5C, AHB1ENR@0x48, AHB2ENR@0x4C, APB2ENR@0x60, reset regs at
+// 0x28/0x2C/0x38/0x3C/0x40. On the H5-style V2 layout those same enables live at
+// 0x9C/0xA4, so I2C1EN (APB1ENR1 bit 21) written by `__HAL_RCC_I2C1_CLK_ENABLE`
+// would be dropped and the clock-gate check would read the wrong register. A
+// dedicated struct keeps G4 and the H5-style V2 families apart. Offsets/bit
+// positions verified against the vendored CMSIS `stm32g474xx.h`.
+#[derive(Debug, Default, serde::Serialize)]
+pub struct G4Rcc {
+    cr: u32,       // 0x00
+    icscr: u32,    // 0x04
+    cfgr: u32,     // 0x08
+    pllcfgr: u32,  // 0x0C
+    ahb1rstr: u32, // 0x28
+    ahb2rstr: u32, // 0x2C
+    apb1rstr: u32, // APB1RSTR1 0x38
+    apb1rstr2: u32,// APB1RSTR2 0x3C
+    apb2rstr: u32, // 0x40
+    ahb1enr: u32,  // 0x48
+    ahb2enr: u32,  // AHB2ENR 0x4C (GPIO ports, ADC12)
+    apb1enr: u32,  // APB1ENR1 0x58 (TIM2, RTCAPB, I2C1)
+    apb1enr2: u32, // APB1ENR2 0x5C
+    apb2enr: u32,  // 0x60 (TIM1, SPI1)
+    bdcr: u32,     // 0x90 — LSEON bit0 → LSERDY bit1
+    csr: u32,      // 0x94 — LSION bit0 → LSIRDY bit1
+    crrcr: u32,    // 0x98 — HSI48ON bit0 → HSI48RDY bit1
+}
+
+impl G4Rcc {
+    fn new() -> Self {
+        Self {
+            cr: Self::ready(1 << 0),
+            ..Default::default()
+        }
+    }
+    /// G4 CR ready rule (matches the V2 model that boots this family): the
+    /// classic HSION(0)/HSERDY(16)/PLLRDY(24) bits plus HSI16 at bit8→bit10 —
+    /// the Arduino G4 core kernel clock gates on HSI16RDY.
+    fn ready(cr: u32) -> u32 {
+        let mut cr = classic_cr_ready(cr);
+        if cr & (1 << 8) != 0 {
+            cr |= 1 << 10;
+        } else {
+            cr &= !(1 << 10);
+        }
+        cr
+    }
+}
+
+impl RccModel for G4Rcc {
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x00 => self.cr,
+            0x04 => self.icscr,
+            0x08 => self.cfgr,
+            0x0C => self.pllcfgr,
+            0x28 => self.ahb1rstr,
+            0x2C => self.ahb2rstr,
+            0x38 => self.apb1rstr,
+            0x3C => self.apb1rstr2,
+            0x40 => self.apb2rstr,
+            0x48 => self.ahb1enr,
+            0x4C => self.ahb2enr,
+            0x58 => self.apb1enr,
+            0x5C => self.apb1enr2,
+            0x60 => self.apb2enr,
+            0x90 => self.bdcr,
+            0x94 => self.csr,
+            0x98 => self.crrcr,
+            _ => 0,
+        }
+    }
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            0x00 => self.cr = Self::ready(value),
+            0x04 => self.icscr = value,
+            // RCC_CFGR (0x08): SW[1:0]→SWS[3:2] follows only once the requested
+            // source is ready in CR — 01 HSI16 (bit10), 10 HSE (bit17), 11 PLL
+            // (bit25). Slot 00 (bit1) is the classic-HSI slot the HAL never
+            // selects on G4 but is kept for parity with the V2 model.
+            0x08 => {
+                self.cfgr = cfgr_with_gated_sws(
+                    value,
+                    self.cr,
+                    self.cfgr,
+                    [Some(1), Some(10), Some(17), Some(25)],
+                );
+            }
+            0x0C => {
+                self.pllcfgr = value;
+                self.cr = Self::ready(self.cr); // PLLSRC change can re-gate PLLRDY
+            }
+            0x28 => self.ahb1rstr = value,
+            0x2C => self.ahb2rstr = value,
+            0x38 => self.apb1rstr = value,
+            0x3C => self.apb1rstr2 = value,
+            0x40 => self.apb2rstr = value,
+            0x48 => self.ahb1enr = value,
+            0x4C => self.ahb2enr = value,
+            0x58 => self.apb1enr = value,
+            0x5C => self.apb1enr2 = value,
+            0x60 => self.apb2enr = value,
+            // BDCR: LSEON (bit0) → LSERDY (bit1); rest is RTC/backup storage.
+            0x90 => {
+                self.bdcr = if value & 1 != 0 {
+                    value | (1 << 1)
+                } else {
+                    value & !(1 << 1)
+                };
+            }
+            // CSR: LSION (bit0) → LSIRDY (bit1); reset flags (31:23) are storage.
+            0x94 => {
+                self.csr = if value & 1 != 0 {
+                    value | (1 << 1)
+                } else {
+                    value & !(1 << 1)
+                };
+            }
+            // CRRCR: HSI48ON (bit0) → HSI48RDY (bit1).
+            0x98 => {
+                self.crrcr = if value & 1 != 0 {
+                    value | (1 << 1)
+                } else {
+                    value & !(1 << 1)
+                };
+            }
+            _ => {}
+        }
+    }
+    fn snapshot(&self) -> serde_json::Value {
+        serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+}
+
 // ── Dispatcher ──────────────────────────────────────────────────────────────
 
 /// RCC peripheral — one variant per chip family. Each variant's registers are
@@ -1239,6 +1383,7 @@ pub enum Rcc {
     Stm32H7(H7Rcc),
     Stm32L4(L4Rcc),
     Stm32L0(L0Rcc),
+    Stm32G4(G4Rcc),
 }
 
 impl Default for Rcc {
@@ -1261,6 +1406,7 @@ impl Rcc {
             RccRegisterLayout::Stm32H7 => Self::Stm32H7(H7Rcc::new()),
             RccRegisterLayout::Stm32L4 => Self::Stm32L4(L4Rcc::new()),
             RccRegisterLayout::Stm32L0 => Self::Stm32L0(L0Rcc::new()),
+            RccRegisterLayout::Stm32G4 => Self::Stm32G4(G4Rcc::new()),
         }
     }
 
@@ -1295,6 +1441,16 @@ impl Rcc {
             Self::Stm32L4(_) => match r.as_str() {
                 "ahbenr" | "ahb2enr" => Some(0x4C),
                 "apb1enr" | "apb1enr1" => Some(0x58),
+                "apb2enr" => Some(0x60),
+                _ => None,
+            },
+            // G4: AHB1ENR@0x48, AHB2ENR@0x4C, APB1ENR1@0x58, APB1ENR2@0x5C,
+            // APB2ENR@0x60 (RM0440 §7.4 / CMSIS stm32g474xx.h).
+            Self::Stm32G4(_) => match r.as_str() {
+                "ahbenr" | "ahb1enr" => Some(0x48),
+                "ahb2enr" => Some(0x4C),
+                "apb1enr" | "apb1enr1" => Some(0x58),
+                "apb1enr2" => Some(0x5C),
                 "apb2enr" => Some(0x60),
                 _ => None,
             },
@@ -1363,6 +1519,7 @@ impl Rcc {
             Self::Stm32H7(r) => r,
             Self::Stm32L4(r) => r,
             Self::Stm32L0(r) => r,
+            Self::Stm32G4(r) => r,
         }
     }
 
@@ -1375,6 +1532,7 @@ impl Rcc {
             Self::Stm32H7(r) => r,
             Self::Stm32L4(r) => r,
             Self::Stm32L0(r) => r,
+            Self::Stm32G4(r) => r,
         }
     }
 }
@@ -1605,6 +1763,45 @@ mod tests {
         assert_eq!(rcc.read(0xA4).unwrap(), 0xCC);
         assert_eq!(rcc.read(0x9C).unwrap(), 0x33);
         assert_eq!(rcc.read(0x18).unwrap(), 0x00);
+    }
+
+    /// G4 (RM0440) puts the enable registers at the L4 offsets — APB1ENR1@0x58,
+    /// AHB2ENR@0x4C, APB2ENR@0x60 — NOT the H5-style V2 slots (0x9C/0x8C/0xA4).
+    /// The clock-gate check resolves `clock: { reg }` through `enable_reg_offset`,
+    /// so a wrong offset here silently ungates every I2C1/TIM2 access.
+    #[test]
+    fn test_rcc_g4_offsets() {
+        let rcc = Rcc::new_with_layout(RccRegisterLayout::Stm32G4);
+        assert_eq!(rcc.enable_reg_offset("apb1enr"), Some(0x58), "APB1ENR1 (I2C1EN/TIM2EN)");
+        assert_eq!(rcc.enable_reg_offset("apb1enr1"), Some(0x58));
+        assert_eq!(rcc.enable_reg_offset("ahb2enr"), Some(0x4C), "AHB2ENR (ADC12)");
+        assert_eq!(rcc.enable_reg_offset("apb2enr"), Some(0x60), "APB2ENR (TIM1/SPI1)");
+        assert_eq!(rcc.enable_reg_offset("ahb1enr"), Some(0x48));
+
+        // The V2 (H5-style) slots must NOT be the enable registers on G4 — a
+        // write there is inert storage, proving the two layouts stay apart.
+        let mut rcc = Rcc::new_with_layout(RccRegisterLayout::Stm32G4);
+        rcc.write_u32(0x58, 1 << 21).unwrap(); // APB1ENR1.I2C1EN
+        assert_eq!(rcc.read_u32(0x58).unwrap(), 1 << 21, "I2C1EN round-trips at 0x58");
+        rcc.write_u32(0x4C, 0xF0).unwrap();
+        rcc.write_u32(0x60, 0x1800).unwrap();
+        assert_eq!(rcc.read_u32(0x4C).unwrap(), 0xF0);
+        assert_eq!(rcc.read_u32(0x60).unwrap(), 0x1800);
+        assert_eq!(rcc.read_u32(0x9C).unwrap(), 0x00, "0x9C is not an ENR on G4");
+    }
+
+    /// G4 shares the V2 kernel-clock ready rules the family boots on: HSI16RDY at
+    /// CR bit 10, HSI48RDY via CRRCR (0x98), LSI via CSR (0x94).
+    #[test]
+    fn test_rcc_g4_clock_ready() {
+        let mut rcc = Rcc::new_with_layout(RccRegisterLayout::Stm32G4);
+        let cr = rcc.read_u32(0x00).unwrap();
+        rcc.write_u32(0x00, cr | (1 << 8)).unwrap(); // HSION
+        assert_ne!(rcc.read_u32(0x00).unwrap() & (1 << 10), 0, "HSI16RDY at bit 10");
+        rcc.write_u32(0x98, 1).unwrap(); // HSI48ON
+        assert_eq!(rcc.read_u32(0x98).unwrap() & 0x3, 0x3, "HSI48RDY");
+        rcc.write_u32(0x94, 1).unwrap(); // LSION
+        assert_eq!(rcc.read_u32(0x94).unwrap() & 0x3, 0x3, "LSIRDY");
     }
 
     #[test]

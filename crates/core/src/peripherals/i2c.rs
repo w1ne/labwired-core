@@ -547,11 +547,12 @@ pub struct L4I2c {
     is_reading: bool,
     #[serde(skip)]
     autoend: bool,
-    /// CR2.START has latched a transfer; the address phase fires once the first
-    /// data byte is loaded into TXDR (write) — mirrors F1's START→DR ordering.
-    /// Exception: NBYTES=0 (IsDeviceReady / empty endTransmission) starts now.
+    /// A byte was written to TXDR before the address phase (the L0/L4/G4 HAL
+    /// preload ordering). TXDR is a real writable holding register: the byte
+    /// waits in `txdr` and is transmitted once the address phase ACKs. Cleared
+    /// when the START handler folds it into `first_tx_loaded` for the transfer.
     #[serde(skip)]
-    start_armed: bool,
+    tx_preloaded: bool,
 
     /// Bus-published cycle clock (walk-free campaign) — see `L4I2c::scheduler_mode`.
     #[serde(skip)]
@@ -583,7 +584,7 @@ impl Default for L4I2c {
             current_target: None,
             is_reading: false,
             autoend: false,
-            start_armed: false,
+            tx_preloaded: false,
             clock: None,
             chain_live: false,
         }
@@ -660,8 +661,8 @@ impl L4I2c {
                 // so the RMW cannot re-fire it.
                 self.cr2 = value;
                 if (value & (1 << 13)) != 0 {
-                    // START: latch BUSY and arm a master transfer. Capture the
-                    // addressed slave (SADD[7:1] in 7-bit mode), direction
+                    // START: latch BUSY and run the addressed transfer. Capture
+                    // the addressed slave (SADD[7:1] in 7-bit mode), direction
                     // (RD_WRN), NBYTES and AUTOEND.
                     if (self.cr1 & 1) != 0 {
                         self.isr |= 1 << 15; // BUSY
@@ -669,7 +670,11 @@ impl L4I2c {
                         self.is_reading = (value & (1 << 10)) != 0; // RD_WRN
                         self.autoend = (value & (1 << 25)) != 0;
                         self.nbytes = ((value >> 16) & 0xFF) as u8;
-                        self.first_tx_loaded = false;
+                        // Carry a pre-START TXDR write (the L0/L4/G4 HAL preload
+                        // ordering) into this transfer as the first data byte;
+                        // the byte already sits in self.txdr.
+                        self.first_tx_loaded = self.tx_preloaded;
+                        self.tx_preloaded = false;
                         self.current_target = self
                             .attached_devices
                             .iter()
@@ -677,22 +682,18 @@ impl L4I2c {
                         if let Some(idx) = self.current_target {
                             self.attached_devices[idx].borrow_mut().start();
                         }
-                        self.start_armed = true;
-                        // A master WRITE with NBYTES>0 must NOT run the address
-                        // phase (and its NACK/ACK verdict) until firmware commits
-                        // the first data byte via TXDR: until then the transfer
-                        // is only "start pending" — BUSY latched, no NACKF, START
-                        // still readable in CR2 (the register fingerprint real
-                        // silicon shows, and what this restores). Read / NBYTES=0
-                        // (IsDeviceReady) have no data byte to wait for, so their
-                        // address phase runs now and START is consumed.
-                        if self.is_reading || (self.nbytes == 0 && self.autoend) {
-                            self.cr2 &= !(1 << 13); // START consumed
-                            self.start_armed = false;
-                            self.state = I2cState::AddressPending;
-                            self.cycles_remaining = 0;
-                            let _ = self.tick();
-                        }
+                        // Real silicon begins the addressed transfer the instant
+                        // START is set — for reads AND writes — and START
+                        // self-clears once the start condition is on the bus. Run
+                        // the address phase now: a write with a preloaded byte
+                        // completes here; a write without preload ACKs, asserts
+                        // ISR.TXIS and parks in DataPending for the firmware's
+                        // post-TXIS TXDR write (Arduino/Zephyr Master_Transmit_IT);
+                        // an absent slave NACKs regardless of the write ordering.
+                        self.cr2 &= !(1 << 13); // START consumed
+                        self.state = I2cState::AddressPending;
+                        self.cycles_remaining = 0;
+                        let _ = self.tick();
                     }
                 }
                 if (value & (1 << 14)) != 0 {
@@ -706,9 +707,9 @@ impl L4I2c {
                     }
                     self.current_target = None;
                     self.state = I2cState::Idle;
-                    self.start_armed = false;
                     self.nbytes = 0;
                     self.first_tx_loaded = false;
+                    self.tx_preloaded = false;
                 }
             }
             0x08 => self.oar1 = value,
@@ -729,9 +730,9 @@ impl L4I2c {
             0x28 => {
                 self.txdr = value & 0xFF;
                 self.isr &= !0x0000_0003; // writing TXDR clears TXE+TXIS
-                                          // After address ACK the engine waits in DataPending with TXIS
-                                          // set; firmware (HAL IT / poll) writes TXDR here.
                 if self.state == I2cState::DataPending {
+                    // Post-TXIS path: the address phase already ACKed and asserted
+                    // TXIS; firmware (HAL IT / poll) commits the data byte here.
                     self.first_tx_loaded = true;
                     if let Some(idx) = self.current_target {
                         self.attached_devices[idx]
@@ -751,22 +752,16 @@ impl L4I2c {
                     self.state = I2cState::Idle;
                     self.nbytes = 0;
                     self.first_tx_loaded = false;
-                    self.start_armed = false;
-                    // Completion IRQ for Master_Transmit_IT (TCIE/STOPIE).
-                    // Note: write_reg cannot return irq; the next tick()
-                    // re-checks level flags below. Also pulse via active BUSY
-                    // window so the walk doesn't skip us before ISR runs.
-                } else if self.start_armed && self.state == I2cState::Idle {
-                    // Master WRITE, NBYTES>0: the first TXDR commit is what
-                    // launches the deferred address phase (the START-pending
-                    // window closes here). Consume START from CR2 now that the
-                    // condition is generated.
-                    self.cr2 &= !(1 << 13);
-                    self.state = I2cState::AddressPending;
-                    self.cycles_remaining = 0;
-                    self.start_armed = false;
-                    self.first_tx_loaded = true;
-                    let _ = self.tick();
+                    // Completion IRQ for Master_Transmit_IT (TCIE/STOPIE): the
+                    // next tick() re-checks the level flags set above.
+                } else {
+                    // TXDR written with no data phase waiting → a preload. Real
+                    // silicon: TXDR is a writable holding register; a byte written
+                    // before START (the L0/L4/G4 HAL ordering) is held and
+                    // transmitted once the address phase ACKs (see the CR2 START
+                    // handler, which carries this into first_tx_loaded). The value
+                    // is already stored in self.txdr above.
+                    self.tx_preloaded = true;
                 }
             }
             _ => {}
@@ -1978,6 +1973,106 @@ mod tests {
             "TC after byte transferred"
         );
         assert_eq!(writes.load(Ordering::SeqCst), 1);
+    }
+
+    /// Minimal ACK-and-count slave for the master-write ordering tests.
+    struct WriteSink {
+        address: u8,
+        writes: Arc<std::sync::atomic::AtomicUsize>,
+    }
+    impl I2cDevice for WriteSink {
+        fn address(&self) -> u8 {
+            self.address
+        }
+        fn read(&mut self) -> u8 {
+            0
+        }
+        fn write(&mut self, _data: u8) {
+            self.writes.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    /// PRELOAD ordering (STM32Cube L0/L4/G4/WB `HAL_I2C_Master_Transmit_IT`):
+    /// firmware writes TXDR BEFORE arming CR2/START. TXDR is a real holding
+    /// register — the byte must be transmitted once the address phase ACKs, and
+    /// the 1-byte AUTOEND transfer completes (TC + STOPF) with no tick loop.
+    #[test]
+    fn test_l4_i2c_write_preload_before_start() {
+        use super::I2cRegisterLayout;
+        use std::sync::atomic::AtomicUsize;
+        let writes = Arc::new(AtomicUsize::new(0));
+        let mut i2c = I2c::new_with_layout(I2cRegisterLayout::Stm32L4);
+        i2c.push_slave(Box::new(WriteSink {
+            address: 0x40,
+            writes: writes.clone(),
+        }));
+
+        i2c.write(0x00, 1).unwrap(); // CR1.PE
+        i2c.write(0x28, 0x00).unwrap(); // TXDR preloaded FIRST
+        let cr2: u32 = (0x40 << 1) | (1 << 16) | (1 << 25) | (1 << 13); // NBYTES=1|AUTOEND|START
+        i2c.write_u32(0x04, cr2).unwrap(); // CR2/START after the preload
+
+        assert_eq!(writes.load(Ordering::SeqCst), 1, "preloaded byte reaches slave");
+        assert_eq!(i2c.peek(0x18).unwrap() & (1 << 4), 0, "no NACKF (slave present)");
+        assert_ne!(i2c.peek(0x18).unwrap() & (1 << 6), 0, "TC after transfer");
+        assert_ne!(i2c.peek(0x18).unwrap() & (1 << 5), 0, "STOPF via AUTOEND");
+        assert_eq!(i2c.peek(0x19).unwrap() & (1 << 7), 0, "BUSY cleared");
+    }
+
+    /// IT ordering (STM32Cube H5 `HAL_I2C_Master_Transmit_IT`): CR2/START first;
+    /// hardware ACKs the address and asserts ISR.TXIS; only then does the ISR
+    /// write TXDR. The model must set TXIS on the address ACK (park in
+    /// DataPending), then complete the byte on the post-TXIS TXDR write.
+    #[test]
+    fn test_l4_i2c_write_txis_then_txdr() {
+        use super::I2cRegisterLayout;
+        use std::sync::atomic::AtomicUsize;
+        let writes = Arc::new(AtomicUsize::new(0));
+        let mut i2c = I2c::new_with_layout(I2cRegisterLayout::Stm32L4);
+        i2c.push_slave(Box::new(WriteSink {
+            address: 0x40,
+            writes: writes.clone(),
+        }));
+
+        i2c.write(0x00, 1).unwrap(); // CR1.PE
+        let cr2: u32 = (0x40 << 1) | (1 << 16) | (1 << 25) | (1 << 13); // NBYTES=1|AUTOEND|START
+        i2c.write_u32(0x04, cr2).unwrap(); // START first — NO preloaded byte
+
+        // Address ACKed → hardware requests the first byte via TXIS (bit 1),
+        // nothing sent yet.
+        assert_ne!(i2c.peek(0x18).unwrap() & (1 << 1), 0, "TXIS asserted after address ACK");
+        assert_eq!(writes.load(Ordering::SeqCst), 0, "no byte before TXDR write");
+
+        i2c.write(0x28, 0x00).unwrap(); // ISR writes TXDR after TXIS
+        assert_eq!(writes.load(Ordering::SeqCst), 1, "byte sent on TXDR write");
+        assert_ne!(i2c.peek(0x18).unwrap() & (1 << 6), 0, "TC after transfer");
+        assert_ne!(i2c.peek(0x18).unwrap() & (1 << 5), 0, "STOPF via AUTOEND");
+    }
+
+    /// Address-NACK must set ISR.NACKF (+STOPF via AUTOEND) in BOTH the preload
+    /// and IT orderings, so the HAL returns error rather than hanging.
+    #[test]
+    fn test_l4_i2c_write_nack_both_orderings() {
+        use super::I2cRegisterLayout;
+
+        // Preload ordering: TXDR then START, absent slave.
+        let mut i2c = I2c::new_with_layout(I2cRegisterLayout::Stm32L4);
+        i2c.write(0x00, 1).unwrap();
+        i2c.write(0x28, 0xAB).unwrap();
+        let cr2: u32 = (0x52 << 1) | (1 << 16) | (1 << 25) | (1 << 13);
+        i2c.write_u32(0x04, cr2).unwrap();
+        assert_ne!(i2c.peek(0x18).unwrap() & (1 << 4), 0, "NACKF (preload order)");
+        assert_ne!(i2c.peek(0x18).unwrap() & (1 << 5), 0, "STOPF via AUTOEND (preload order)");
+        assert_eq!(i2c.peek(0x19).unwrap() & (1 << 7), 0, "BUSY cleared (preload order)");
+
+        // IT ordering: START first, absent slave.
+        let mut i2c = I2c::new_with_layout(I2cRegisterLayout::Stm32L4);
+        i2c.write(0x00, 1).unwrap();
+        let cr2: u32 = (0x52 << 1) | (1 << 16) | (1 << 25) | (1 << 13);
+        i2c.write_u32(0x04, cr2).unwrap();
+        assert_ne!(i2c.peek(0x18).unwrap() & (1 << 4), 0, "NACKF (IT order)");
+        assert_ne!(i2c.peek(0x18).unwrap() & (1 << 5), 0, "STOPF via AUTOEND (IT order)");
+        assert_eq!(i2c.peek(0x19).unwrap() & (1 << 7), 0, "BUSY cleared (IT order)");
     }
 
     #[test]
