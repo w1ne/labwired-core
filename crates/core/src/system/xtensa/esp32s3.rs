@@ -188,11 +188,21 @@ fn configure_esp32s3_memmap(bus: &mut SystemBus, opts: &Esp32s3Opts) -> Esp32s3M
         .rom_images
         .clone()
         .or_else(crate::boot::esp32s3_rom::provision_rom_images);
-    // Fast-boot also uses MMU XIP so `spi_flash_mmap` / partition-table load
-    // and `cache2phys` share one translation (seeded after `fast_boot`).
-    // Identity-only XIP made mmap of flash 0x8000 read the wrong dcache page.
+    // The real-firmware matrix path (ESP-IDF/Arduino) also opts into MMU XIP so
+    // `spi_flash_mmap` / partition-table load and `cache2phys` share one
+    // translation (the CLI seeds it via `seed_factory_mmu_for_cache2phys` after
+    // `fast_boot`; identity-only XIP made mmap of flash 0x8000 read the wrong
+    // dcache page). It requests this explicitly with `LABWIRED_ESP32S3_MMU_XIP`.
+    //
+    // `LABWIRED_ESP32S3_FASTBOOT` selects the *thunk ROM harness* (see
+    // `esp32s3_rom::provision_rom_images`) and is orthogonal to the XIP model —
+    // it must NOT force MMU XIP. A bare esp-hal fixture that boots via a plain
+    // `fast_boot` never programs DR_REG_MMU_TABLE, so an MMU-XIP window would
+    // translate every `.rodata`/`.text` read through an all-invalid table and
+    // return 0 (an early null-jump through a rodata jump-table entry). Such
+    // harness fixtures stay on identity XIP; only callers that program/seed the
+    // MMU (real-reset boot, or the matrix's factory seed) select the MMU model.
     let mmu_model = opts.real_reset_boot
-        || std::env::var_os("LABWIRED_ESP32S3_FASTBOOT").is_some()
         || std::env::var_os("LABWIRED_ESP32S3_MMU_XIP").is_some();
     // Shared flash backing for the proper-model path, loaded from the real
     // flash image so XIP reads (and the SPI-flash controller below) return real

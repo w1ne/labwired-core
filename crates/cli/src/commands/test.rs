@@ -479,10 +479,21 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
                     // Scoped: provision_rom_images checks this once.
                     let _fast = std::env::var_os("LABWIRED_ESP32S3_FASTBOOT");
                     std::env::set_var("LABWIRED_ESP32S3_FASTBOOT", "1");
+                    // The matrix loads the app at the factory partition
+                    // (`factory_flash_base` below) and seeds the flash MMU via
+                    // `seed_factory_mmu_for_cache2phys` so `spi_flash_mmap` /
+                    // `cache2phys` resolve — that requires the MMU-XIP window, so
+                    // request it explicitly (FASTBOOT alone no longer implies it,
+                    // to keep bare fast_boot fixtures on identity XIP).
+                    let _mmu_xip = std::env::var_os("LABWIRED_ESP32S3_MMU_XIP");
+                    std::env::set_var("LABWIRED_ESP32S3_MMU_XIP", "1");
                     let opts = Esp32s3Opts::default();
                     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
                     if _fast.is_none() {
                         std::env::remove_var("LABWIRED_ESP32S3_FASTBOOT");
+                    }
+                    if _mmu_xip.is_none() {
+                        std::env::remove_var("LABWIRED_ESP32S3_MMU_XIP");
                     }
                     // Matrix L3 kits live in system.yaml external_devices — attach
                     // after the SoC bank is registered (classic path does this in
