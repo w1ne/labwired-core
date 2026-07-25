@@ -598,6 +598,42 @@ impl L4I2c {
         cfg!(feature = "event-scheduler") && self.clock.is_some()
     }
 
+    /// Engine ticks the START + address + ACK phase occupies the bus before
+    /// CR2.START self-clears and the ACK/NACK verdict lands. Real silicon
+    /// (RM0351 §37.7.5): after software sets START the controller drives the
+    /// Start condition, the 7-bit address and the ACK slot — nine SCL bit-times
+    /// — and only THEN clears START. Firmware that reads CR2/ISR in the few
+    /// instructions after arming a transfer must still see START set and no
+    /// NACKF (silicon-pinned: CR2=0x000120A0, ISR=0x00008001 on NUCLEO-L476RG),
+    /// which a zero-time completion would violate.
+    ///
+    /// Derive the SCL bit-time from TIMINGR exactly as the hardware does —
+    /// (SCLL+1)+(SCLH+1) prescaled by (PRESC+1) I2CCLK periods (RM0351 §37.7.5) —
+    /// and take nine of them (START + 8 address bits + ACK).
+    ///
+    /// The countdown decrements once per engine tick, i.e. once per CORE cycle;
+    /// the I2C kernel clock runs SLOWER than the core on these parts (the L0/L4/
+    /// G4 boot raises the core via PLL but leaves I2C1SEL on its lower-rate reset
+    /// source, e.g. HSI16), so a kernel period spans several core cycles. The
+    /// live ratio is not visible on the walk path (no `CycleClock` attached), so
+    /// scale by `CORE_PER_KCLK`, the reset-default core-to-kernel multiple. Only
+    /// the magnitude matters and it is deterministic: it must exceed the handful
+    /// of instructions before firmware re-reads CR2/ISR (on the L476 survival
+    /// fixture that gap is a UART status print, ~21.5k core cycles, and the
+    /// silicon capture pins START still set + no NACKF there), while staying far
+    /// under the HAL transfer timeout so a real transfer still completes. The
+    /// walk and the scheduler both decrement one step per cycle, so the timing
+    /// is byte-identical in each. The floor keeps the pending window observable
+    /// when TIMINGR is left at reset (e.g. bare unit tests).
+    fn address_phase_cycles(&self) -> u32 {
+        let presc = ((self.timingr >> 28) & 0xF) + 1;
+        let scll = (self.timingr & 0xFF) + 1;
+        let sclh = ((self.timingr >> 8) & 0xFF) + 1;
+        let bit_time_kclk = (scll + sclh) * presc;
+        const CORE_PER_KCLK: u32 = 8;
+        (bit_time_kclk * 9 * CORE_PER_KCLK).max(64)
+    }
+
     /// Cycles on which the legacy `tick()` does observable work: an in-flight
     /// countdown, the BUSY master-transfer window, or a live enabled IRQ flag
     /// (TXIS/TC/STOPF/NACKF) that Master_Transmit_IT still needs delivered.
@@ -683,17 +719,17 @@ impl L4I2c {
                             self.attached_devices[idx].borrow_mut().start();
                         }
                         // Real silicon begins the addressed transfer the instant
-                        // START is set — for reads AND writes — and START
-                        // self-clears once the start condition is on the bus. Run
-                        // the address phase now: a write with a preloaded byte
-                        // completes here; a write without preload ACKs, asserts
-                        // ISR.TXIS and parks in DataPending for the firmware's
-                        // post-TXIS TXDR write (Arduino/Zephyr Master_Transmit_IT);
-                        // an absent slave NACKs regardless of the write ordering.
-                        self.cr2 &= !(1 << 13); // START consumed
+                        // START is set — for reads AND writes — but the Start
+                        // condition + address + ACK take wire time before START
+                        // self-clears and the verdict lands. Enter AddressPending
+                        // with a TIMINGR-derived countdown; START stays readable
+                        // in CR2 and NACKF stays clear until tick() drains it (see
+                        // `address_phase_cycles`). When the countdown completes,
+                        // tick() clears START and resolves ACK→(preloaded byte
+                        // transmits / TXIS asserts + DataPending) or NACK→NACKF
+                        // (+STOPF with AUTOEND). START is NOT cleared here.
                         self.state = I2cState::AddressPending;
-                        self.cycles_remaining = 0;
-                        let _ = self.tick();
+                        self.cycles_remaining = self.address_phase_cycles();
                     }
                 }
                 if (value & (1 << 14)) != 0 {
@@ -754,13 +790,19 @@ impl L4I2c {
                     self.first_tx_loaded = false;
                     // Completion IRQ for Master_Transmit_IT (TCIE/STOPIE): the
                     // next tick() re-checks the level flags set above.
+                } else if self.state == I2cState::AddressPending {
+                    // TXDR committed while the address phase is still on the wire
+                    // (STM32Cube writes the first byte right after START, before
+                    // the ACK): hold it as this transfer's first data byte — it
+                    // transmits when the address ACKs (tick's first_tx_loaded
+                    // path). The value is already stored in self.txdr above.
+                    self.first_tx_loaded = true;
                 } else {
-                    // TXDR written with no data phase waiting → a preload. Real
-                    // silicon: TXDR is a writable holding register; a byte written
-                    // before START (the L0/L4/G4 HAL ordering) is held and
-                    // transmitted once the address phase ACKs (see the CR2 START
-                    // handler, which carries this into first_tx_loaded). The value
-                    // is already stored in self.txdr above.
+                    // TXDR written before START (the L0/L4/G4 HAL preload
+                    // ordering): TXDR is a writable holding register; the byte
+                    // waits and is folded into the transfer as first_tx_loaded
+                    // when START arms (see the CR2 START handler). The value is
+                    // already stored in self.txdr above.
                     self.tx_preloaded = true;
                 }
             }
@@ -810,6 +852,9 @@ impl L4I2c {
             return self.irq_level();
         }
         if self.state == I2cState::AddressPending {
+            // The Start condition + address + ACK have now been driven on the
+            // bus (the countdown elapsed) → hardware clears CR2.START.
+            self.cr2 &= !(1 << 13);
             match self.current_target {
                 None => {
                     // No slave ACKed the address → NACKF (matches L476 silicon:
@@ -1871,17 +1916,50 @@ mod tests {
         i2c.write_u32(0x04, cr2).unwrap();
     }
 
+    /// Tick the engine past the address-phase wire-time window so the ACK/NACK
+    /// verdict lands (TIMINGR left at reset → 144-cycle phase; 256 is safe margin).
+    fn l4_settle(i2c: &mut I2c) {
+        use crate::Peripheral;
+        for _ in 0..256 {
+            i2c.tick();
+        }
+    }
+
     #[test]
     fn test_l4_i2c_nack_on_no_device() {
         use super::I2cRegisterLayout;
         let mut i2c = I2c::new_with_layout(I2cRegisterLayout::Stm32L4);
 
-        // Instant NACK on TXDR after START (AUTOEND clears BUSY).
+        // Pending window: right after arming START the address phase is still on
+        // the wire — START readable, BUSY set, NO NACKF yet (silicon fingerprint).
         l4_write_xfer(&mut i2c, 0x52, 0xAB);
+        assert_ne!(
+            i2c.peek(0x19).unwrap() & (1 << 7),
+            0,
+            "BUSY set while pending"
+        ); // ISR.BUSY (bit15)
+        assert_ne!(
+            i2c.read_u32(0x04).unwrap() & (1 << 13),
+            0,
+            "START still readable"
+        );
+        assert_eq!(
+            i2c.peek(0x18).unwrap() & (1 << 4),
+            0,
+            "no NACKF while pending"
+        );
+
+        // After the wire-time window: NACK on the absent device (AUTOEND clears BUSY).
+        l4_settle(&mut i2c);
         assert_ne!(
             i2c.peek(0x18).unwrap() & (1 << 4),
             0,
             "ISR.NACKF when no slave"
+        );
+        assert_eq!(
+            i2c.read_u32(0x04).unwrap() & (1 << 13),
+            0,
+            "START cleared after phase"
         );
         assert_eq!(i2c.peek(0x19).unwrap() & (1 << 7), 0, "AUTOEND clears BUSY");
         assert_ne!(i2c.peek(0x18).unwrap() & (1 << 5), 0, "AUTOEND sets STOPF");
@@ -1915,6 +1993,7 @@ mod tests {
         i2c.push_slave(Box::new(AckOnly { address: 0x40 }));
 
         l4_addr_probe(&mut i2c, 0x40);
+        l4_settle(&mut i2c);
         assert_eq!(
             i2c.peek(0x18).unwrap() & (1 << 4),
             0,
@@ -1958,9 +2037,7 @@ mod tests {
         }));
 
         l4_write_xfer(&mut i2c, 0x3C, 0x42);
-        for _ in 0..40 {
-            i2c.tick();
-        }
+        l4_settle(&mut i2c);
         // Attached device ACKs → no NACKF, the byte reaches the device, TC set.
         assert_eq!(
             i2c.peek(0x18).unwrap() & (1 << 4),
@@ -2012,6 +2089,18 @@ mod tests {
         let cr2: u32 = (0x40 << 1) | (1 << 16) | (1 << 25) | (1 << 13); // NBYTES=1|AUTOEND|START
         i2c.write_u32(0x04, cr2).unwrap(); // CR2/START after the preload
 
+        // Address phase takes wire time: nothing sent, START still readable.
+        assert_eq!(
+            writes.load(Ordering::SeqCst),
+            0,
+            "no byte during address phase"
+        );
+        assert_ne!(
+            i2c.read_u32(0x04).unwrap() & (1 << 13),
+            0,
+            "START still readable"
+        );
+        l4_settle(&mut i2c);
         assert_eq!(
             writes.load(Ordering::SeqCst),
             1,
@@ -2046,8 +2135,21 @@ mod tests {
         let cr2: u32 = (0x40 << 1) | (1 << 16) | (1 << 25) | (1 << 13); // NBYTES=1|AUTOEND|START
         i2c.write_u32(0x04, cr2).unwrap(); // START first — NO preloaded byte
 
-        // Address ACKed → hardware requests the first byte via TXIS (bit 1),
-        // nothing sent yet.
+        // Address phase in flight: no TXIS yet, START still readable.
+        assert_eq!(
+            i2c.peek(0x18).unwrap() & (1 << 1),
+            0,
+            "no TXIS during address phase"
+        );
+        assert_ne!(
+            i2c.read_u32(0x04).unwrap() & (1 << 13),
+            0,
+            "START still readable"
+        );
+
+        // After the wire-time window the address ACKed → hardware requests the
+        // first byte via TXIS (bit 1), nothing sent yet.
+        l4_settle(&mut i2c);
         assert_ne!(
             i2c.peek(0x18).unwrap() & (1 << 1),
             0,
@@ -2077,6 +2179,7 @@ mod tests {
         i2c.write(0x28, 0xAB).unwrap();
         let cr2: u32 = (0x52 << 1) | (1 << 16) | (1 << 25) | (1 << 13);
         i2c.write_u32(0x04, cr2).unwrap();
+        l4_settle(&mut i2c);
         assert_ne!(
             i2c.peek(0x18).unwrap() & (1 << 4),
             0,
@@ -2098,6 +2201,7 @@ mod tests {
         i2c.write(0x00, 1).unwrap();
         let cr2: u32 = (0x52 << 1) | (1 << 16) | (1 << 25) | (1 << 13);
         i2c.write_u32(0x04, cr2).unwrap();
+        l4_settle(&mut i2c);
         assert_ne!(i2c.peek(0x18).unwrap() & (1 << 4), 0, "NACKF (IT order)");
         assert_ne!(
             i2c.peek(0x18).unwrap() & (1 << 5),
