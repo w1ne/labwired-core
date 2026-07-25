@@ -1072,7 +1072,17 @@ boards:
     # attached slaves). No existing read/write/tick/on_event path changed, so the
     # anchored reset windows and every observable register value are untouched;
     # esp32s3_walk_differential covers byte-identity. No live re-capture warranted.
-    drift_ack: 2026-07-24
+    # 2026-07-25: three ADDITIVE boot/CPU fixes, no register model touched:
+    # (a) mmu_model selector decoupled from the FASTBOOT harness flag (#662 —
+    # harness fixtures return to identity XIP; matrix path byte-identical via
+    # explicit MMU_XIP); (b) fast-boot seeds rom_spiflash_legacy_data with a real
+    # W25Q descriptor in ROM-reserved DRAM so spi_flash_mmap's chip_size bounds
+    # check passes (mirrors classic-ESP32 g_rom_flashchip seed; BSS the skipped
+    # BROM would have filled); (c) Xtensa decoder gained BT/BF Boolean-option
+    # branches (encodings pinned by xtensa-esp32s3-elf-as HW oracle). Register
+    # maps, reset values and MMIO paths untouched; S3/C3 silicon differentials,
+    # ws2812_rmt, ssd1306 + 316 Xtensa CPU tests pass. No live re-capture.
+    drift_ack: 2026-07-25
     models:
       - crates/core/src/peripherals/esp32s3
       - crates/core/src/peripherals/esp_xtensa_common
