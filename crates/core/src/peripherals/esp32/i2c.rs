@@ -790,7 +790,11 @@ mod tests {
         p.write_u32(REG_DATA, 0x80).unwrap(); // addr+W for 0x40
         p.write_u32(REG_CTR, CTR_TRANS_START_BIT).unwrap();
         let ir1 = p.read_u32(REG_INT_RAW).unwrap();
-        assert_eq!(ir1 & INT_NACK, 0, "address 0x40 must ACK — no NACK in burst 1");
+        assert_eq!(
+            ir1 & INT_NACK,
+            0,
+            "address 0x40 must ACK — no NACK in burst 1"
+        );
         assert_eq!(
             ir1 & INT_END_DETECT,
             INT_END_DETECT,
