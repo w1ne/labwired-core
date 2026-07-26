@@ -424,7 +424,21 @@ pub(crate) fn run_test(args: TestArgs) -> ExitCode {
     // gets a proportionally higher ceiling (wall-clock caps still apply).
     const MAX_ALLOWED_STEPS: u64 = 50_000_000;
     const MAX_ALLOWED_STEPS_ROM_BOOT: u64 = 500_000_000;
-    let max_allowed_steps = if args.rom_boot {
+    // A run boots the real ROM (and needs the higher ceiling) not only when
+    // --rom-boot is set, but whenever it resumes an app-entry snapshot OR a
+    // flash-image env is present: the compiled-source ESP32-C3/S3 path supplies
+    // the merged flash image via LABWIRED_ESP32{C3,S3}_FLASH and boots the ROM
+    // from it, yet did not always carry the --rom-boot flag — so it wrongly got
+    // the 50M ceiling and a full boot + WiFi + display run (boot ROM alone is
+    // ~150M steps) could never finish. Key the ceiling off EFFECTIVE rom-boot so
+    // headless device proving has the budget it needs (acceptance markers still
+    // halt early; wall-clock caps still bound runaway sims).
+    let flash_env_present = |k: &str| std::env::var(k).map(|v| !v.is_empty()).unwrap_or(false);
+    let rom_boot_effective = args.rom_boot
+        || args.resume_snapshot.is_some()
+        || flash_env_present("LABWIRED_ESP32C3_FLASH")
+        || flash_env_present("LABWIRED_ESP32S3_FLASH");
+    let max_allowed_steps = if rom_boot_effective {
         MAX_ALLOWED_STEPS_ROM_BOOT
     } else {
         MAX_ALLOWED_STEPS
