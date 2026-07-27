@@ -30,6 +30,7 @@
 use core::ptr::read_volatile;
 use cortex_m_rt::{entry, exception};
 use panic_halt as _;
+use tier1_fixture_common::{rd32 as reg_read, wr32 as reg_write};
 
 // ── UART0 (RP2040 datasheet §4.2, base 0x40034000) ────────────────────────
 //
@@ -170,16 +171,6 @@ const IC_ENABLE: u32 = I2C0_BASE + 0x6c;
 const IC_TX_ABRT_SOURCE: u32 = I2C0_BASE + 0x80;
 const INTR_TX_ABRT: u32 = 1 << 6;
 const ABRT_7B_ADDR_NOACK: u32 = 1 << 0;
-
-#[inline(always)]
-fn reg_read(addr: u32) -> u32 {
-    unsafe { core::ptr::read_volatile(addr as *const u32) }
-}
-
-#[inline(always)]
-fn reg_write(addr: u32, value: u32) {
-    unsafe { core::ptr::write_volatile(addr as *mut u32, value) }
-}
 
 // ── UART0 output (raw register writes) ───────────────────────────────────
 fn uart_write_byte(byte: u8) {

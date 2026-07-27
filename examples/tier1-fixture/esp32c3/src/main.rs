@@ -39,6 +39,7 @@
 
 use panic_halt as _;
 use riscv_rt::entry;
+use tier1_fixture_common::{rd32 as reg_read, wr32 as reg_write};
 
 // ── Peripheral base addresses (ESP32-C3 TRM §3.3 memory map) ──────────────
 const UART0_BASE: u32 = 0x6000_0000;
@@ -49,16 +50,6 @@ const I2C0_BASE: u32 = 0x6001_3000;
 const SPI2_BASE: u32 = 0x6002_4000;
 const APB_SARADC_BASE: u32 = 0x6004_0000;
 const LEDC_BASE: u32 = 0x6001_9000;
-
-#[inline(always)]
-fn reg_read(addr: u32) -> u32 {
-    unsafe { core::ptr::read_volatile(addr as *const u32) }
-}
-
-#[inline(always)]
-fn reg_write(addr: u32, value: u32) {
-    unsafe { core::ptr::write_volatile(addr as *mut u32, value) }
-}
 
 // ── UART0 raw byte output ─────────────────────────────────────────────────
 //

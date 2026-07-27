@@ -276,7 +276,7 @@
       "status": "pass"
     },
     "dma": {
-      "status": "na"
+      "status": "unrecorded"
     },
     "gpio": {
       "status": "pass"
@@ -285,10 +285,10 @@
       "status": "pass"
     },
     "irq": {
-      "status": "na"
+      "status": "unrecorded"
     },
     "pwm": {
-      "status": "na"
+      "status": "unrecorded"
     },
     "rtc": {
       "status": "pass"
@@ -323,10 +323,10 @@
       "status": "pass"
     },
     "irq": {
-      "status": "na"
+      "status": "unrecorded"
     },
     "pwm": {
-      "status": "na"
+      "status": "unrecorded"
     },
     "rtc": {
       "status": "pass"

@@ -39,6 +39,7 @@
 use core::ptr::{read_volatile, write_volatile};
 use cortex_m_rt::{entry, exception};
 use panic_halt as _;
+use tier1_fixture_common::{rd32, spin, wr32, Console};
 
 // ── Wired peripherals (configs/chips/stm32g474re.yaml) ────────────────────
 const RCC_BASE: u32 = 0x4002_1000; // type rcc, profile stm32v2
@@ -81,56 +82,7 @@ const TEST_IRQ: i16 = 20;
 // load compiles to LDRSB reg-offset, which the simulator's 16-bit
 // Thumb decoder does not implement (decoder/arm.rs only matches
 // even-op 0101-family encodings).
-const UART_STATUS: *const u32 = (USART2_BASE + 0x1C) as *const u32;
-const UART_TX: *mut u8 = (USART2_BASE + 0x28) as *mut u8;
-const TXE_BIT: u32 = 1 << 7;
-
-// ── Helpers ────────────────────────────────────────────────────────────────
-
-#[inline(always)]
-fn rd32(addr: u32) -> u32 {
-    unsafe { read_volatile(addr as *const u32) }
-}
-
-#[inline(always)]
-fn wr32(addr: u32, value: u32) {
-    unsafe { write_volatile(addr as *mut u32, value) }
-}
-
-/// Fixed-iteration busy spin — deterministic in the simulator.
-fn spin(iters: u32) {
-    for i in 0..iters {
-        core::hint::black_box(i);
-    }
-}
-
-fn putc(byte: u8) {
-    for _ in 0..10_000 {
-        if unsafe { read_volatile(UART_STATUS) } & TXE_BIT != 0 {
-            break;
-        }
-    }
-    unsafe { write_volatile(UART_TX, byte) };
-}
-
-fn puts(s: &[u8]) {
-    for &b in s {
-        putc(b);
-    }
-}
-
-fn report(class: &[u8], result: Result<(), &'static [u8]>) {
-    puts(b"TIER1 ");
-    puts(class);
-    match result {
-        Ok(()) => puts(b" PASS\n"),
-        Err(code) => {
-            puts(b" FAIL code=");
-            puts(code);
-            puts(b"\n");
-        }
-    }
-}
+const CONSOLE: Console = Console::new(USART2_BASE + 0x1C, USART2_BASE + 0x28, 1 << 7);
 
 // ── Checks ──────────────────────────────────────────────────────────────────
 
@@ -519,18 +471,18 @@ unsafe fn DefaultHandler(irqn: i16) {
 
 #[entry]
 fn main() -> ! {
-    report(b"clock", check_clock());
-    report(b"gpio", check_gpio());
-    report(b"timer", check_timer());
-    report(b"pwm", check_pwm());
-    report(b"dma", check_dma());
-    report(b"irq", check_irq());
-    report(b"i2c", check_i2c());
-    report(b"spi", check_spi());
-    report(b"adc", check_adc());
-    report(b"wdt", check_wdt());
-    report(b"rtc", check_rtc());
-    puts(b"TIER1 done\n");
+    CONSOLE.report(b"clock", check_clock());
+    CONSOLE.report(b"gpio", check_gpio());
+    CONSOLE.report(b"timer", check_timer());
+    CONSOLE.report(b"pwm", check_pwm());
+    CONSOLE.report(b"dma", check_dma());
+    CONSOLE.report(b"irq", check_irq());
+    CONSOLE.report(b"i2c", check_i2c());
+    CONSOLE.report(b"spi", check_spi());
+    CONSOLE.report(b"adc", check_adc());
+    CONSOLE.report(b"wdt", check_wdt());
+    CONSOLE.report(b"rtc", check_rtc());
+    CONSOLE.puts(b"TIER1 done\n");
 
     loop {
         spin(1_000_000);

@@ -12,6 +12,7 @@ description = "ESP32-C3 Tier-1 fixture firmware: raw-register peripheral self-te
 riscv = "0.10"
 riscv-rt = "0.12"
 panic-halt = "0.2"
+tier1-fixture-common = { path = "../common" }
 
 [[bin]]
 name = "tier1-fixture-esp32c3"
