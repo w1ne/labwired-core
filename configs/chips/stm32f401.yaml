@@ -127,3 +127,30 @@ peripherals:
     type: "rtc"
     base_address: 0x40002800
     size: "1KB"
+  # EXTI — external interrupt/event controller (RM0368 §10.2). The F401
+  # implements 23 lines (0..22): 16 GPIO + PVD + RTC alarm + USB OTG FS wakeup
+  # + RTC tamper/timestamp + RTC wakeup. Sits on APB2 but has no RCC enable bit
+  # of its own — the SYSCFG clock gates the line *muxing*, not the EXTI block.
+  - id: "exti"
+    type: "exti"
+    base_address: 0x4001_3C00
+    size: "1KB"
+    config:
+      lines: 23
+  # NVIC is wired unconditionally for Cortex-M machines; this entry declares
+  # the tier1 irq class and pins the canonical base.
+  - id: "nvic"
+    type: "nvic"
+    base_address: 0xE000E100
+    size: "1KB"
+  - id: "dbgmcu"
+    type: "dbgmcu"
+    base_address: 0xE004_2000
+    size: "1KB"
+    config:
+      # DBGMCU_IDCODE per tests/fixtures/real_world/stm32f401.svd: resetValue
+      # 0x10006411 (DEV_ID=0x411, REV_ID=0x1000). The brief's assumed
+      # DEV_ID=0x433 (F401xD/xE per RM0368 §24.6.1) does not match the
+      # shipped SVD, which the SVD wins per project convention — using the
+      # SVD-verified value here instead.
+      idcode: 0x10006411
