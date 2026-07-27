@@ -154,3 +154,37 @@ peripherals:
       # shipped SVD, which the SVD wins per project convention — using the
       # SVD-verified value here instead.
       idcode: 0x10006411
+  # TIM1 — advanced-control PWM timer (APB2, RM0368 §12). The `_pwm` id suffix
+  # declares the pwm class alongside timer. RCC_APB2ENR.TIM1EN (bit 0),
+  # verified against tests/fixtures/real_world/stm32f401.svd.
+  - id: "tim1_pwm"
+    type: "timer"
+    base_address: 0x4001_0000
+    size: "1KB"
+    irq: 25
+    clock: { reg: "apb2enr", bit: 0 }
+    config:
+      advanced: true
+  # DMA1 / DMA2 — stream-based DMA controllers (RM0368 §9; same IP as F407,
+  # RM0090 §10). Eight streams each; DMA2 additionally supports
+  # memory-to-memory transfers (RM0368 §9.3.3). Clocked from RCC_AHB1ENR
+  # (DMA1EN bit 21, DMA2EN bit 22 — verified against the SVD).
+  - id: "dma1"
+    type: "stm32f4_dma"
+    base_address: 0x4002_6000
+    size: "1KB"
+    clock: { reg: "ahb1enr", bit: 21 }
+    config:
+      # DMA1_Stream0..7 NVIC positions, verified against
+      # tests/fixtures/real_world/stm32f401.svd: 11..17, then 47.
+      stream_irqs: [11, 12, 13, 14, 15, 16, 17, 47]
+  - id: "dma2"
+    type: "stm32f4_dma"
+    base_address: 0x4002_6400
+    size: "1KB"
+    clock: { reg: "ahb1enr", bit: 22 }
+    config:
+      dma2: true
+      # DMA2_Stream0..7 NVIC positions, verified against
+      # tests/fixtures/real_world/stm32f401.svd: 56..60, then 68..70.
+      stream_irqs: [56, 57, 58, 59, 60, 68, 69, 70]

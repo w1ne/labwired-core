@@ -76,11 +76,14 @@ peripherals:
     type: "stm32f4_gpio"
     base_address: 0x40021000
     size: "1KB"
-  - id: "tim1"
+  # TIM1 — advanced-control PWM timer (APB2). The `_pwm` id suffix declares
+  # the pwm class alongside timer. RCC_APB2ENR.TIM1EN (bit 0).
+  - id: "tim1_pwm"
     type: "timer"
     base_address: 0x40010000
     size: "1KB"
     irq: 27
+    clock: { reg: "apb2enr", bit: 0 }
     config:
       advanced: true
   - id: "tim2"
@@ -189,6 +192,12 @@ peripherals:
     size: "1KB"
     config:
       lines: 23
+  # NVIC is wired unconditionally for Cortex-M machines; this entry declares
+  # the tier1 irq class and pins the canonical base.
+  - id: "nvic"
+    type: "nvic"
+    base_address: 0xE000E100
+    size: "1KB"
   # IWDG — independent watchdog (RM0090 §21). Clocked from the dedicated LSI
   # oscillator, NOT an APB/AHB peripheral-enable bit, so it carries no `clock:`
   # gate. The KR key (0x5555) protects PR/RLR writes instead.
