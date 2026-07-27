@@ -1,74 +1,74 @@
 {
   "esp32.elf": {
     "sha256": "341e6e3f34e47e3714085f0cf4d27c74d806a4066cbb666f6cad3bb27974f7a6",
-    "source_rev": "6d0cf197cd099942cc27a3a7a31656acd133e29b"
+    "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
   },
   "esp32c3.elf": {
     "sha256": "304bb1c395c546d30687493e8c75e3860a57751a422f5cbd2012f5ac5d480b87",
-    "source_rev": "6d0cf197cd099942cc27a3a7a31656acd133e29b"
+    "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
   },
   "esp32s3-flash.bin": {
     "sha256": "9c0bb604abbc8d18da77bf6c0f2ff6cb11fcda8db18b34ce08081cbf12d64209",
-    "source_rev": "6d0cf197cd099942cc27a3a7a31656acd133e29b"
+    "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
   },
   "esp32s3.elf": {
     "sha256": "27a61f851c798edbf2dabc38526cf4ca9211ab51a89387baba9faa1936060a5f",
-    "source_rev": "6d0cf197cd099942cc27a3a7a31656acd133e29b"
+    "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
   },
   "nrf52832.elf": {
     "sha256": "90d4a3bbb57d36059bc73bf60d8d824940b7edf3acaa9f759bdbf06d40792226",
-    "source_rev": "6d0cf197cd099942cc27a3a7a31656acd133e29b"
+    "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
   },
   "nrf52840.elf": {
     "sha256": "d26c3f9c2194c663845e11346795c91f2cf71f77b320a0c9bf97ffaa2f69b466",
-    "source_rev": "6d0cf197cd099942cc27a3a7a31656acd133e29b"
+    "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
   },
   "rp2040.elf": {
     "sha256": "a30a7c5a9341cbd9082d443a4c461301db7bce5bb4c35a44cead853c0aa40168",
-    "source_rev": "6d0cf197cd099942cc27a3a7a31656acd133e29b"
+    "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
   },
   "stm32f103.elf": {
     "sha256": "1292d3c9dc30815c70e1bc0f16caf290bad6f76d29e0b943ddb7497d2f4dc722",
-    "source_rev": "6d0cf197cd099942cc27a3a7a31656acd133e29b"
+    "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
   },
   "stm32f401.elf": {
     "sha256": "d5d62206e129fe69e330a5ff409f373103315d6c48b66bd81c386b3161594359",
-    "source_rev": "6d0cf197cd099942cc27a3a7a31656acd133e29b"
+    "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
   },
   "stm32f407.elf": {
     "sha256": "cf141d08ae423820709a93f1e86e2383a752febe94320c026dd13120c32b350a",
-    "source_rev": "6d0cf197cd099942cc27a3a7a31656acd133e29b"
+    "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
   },
   "stm32f411.elf": {
     "sha256": "f95fa2a2eaa65b4453831c79f717c51ca2f3598608e768e670be4d3c42b348e6",
-    "source_rev": "6d0cf197cd099942cc27a3a7a31656acd133e29b"
+    "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
   },
   "stm32g474re.elf": {
     "sha256": "1a854cbf4b3ec27f60683bb10595e9806d2b5ad69cd87d515f0a0800ea0bd6d9",
-    "source_rev": "6d0cf197cd099942cc27a3a7a31656acd133e29b"
+    "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
   },
   "stm32h563.elf": {
     "sha256": "3232998875f917c00465fc360bdffc72e8b80aca2eb5627d3554523a3726f203",
-    "source_rev": "6d0cf197cd099942cc27a3a7a31656acd133e29b"
+    "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
   },
   "stm32h735.elf": {
     "sha256": "bb305cb1bc0383b1c10f35a9c3dfef6646f59101a882341bf48ba1f4e03db7a9",
-    "source_rev": "6d0cf197cd099942cc27a3a7a31656acd133e29b"
+    "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
   },
   "stm32l073.elf": {
-    "sha256": "a656b72d155f81f20b81586832b48e9c7113ee474c0119d118c884c58198662f",
-    "source_rev": "6d0cf197cd099942cc27a3a7a31656acd133e29b"
+    "sha256": "055da349dc3ed3c6c4dce15319ba57849deaf834c02e97870b5777a836c43bd0",
+    "source_rev": "6b5b23d5458d4870eda70a9861aab79689c5f0a1"
   },
   "stm32l476.elf": {
     "sha256": "45101137fb7a49c91010713ea822169e8003c3eb4720f628fc96e2fd1c986328",
-    "source_rev": "6d0cf197cd099942cc27a3a7a31656acd133e29b"
+    "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
   },
   "stm32wb55.elf": {
     "sha256": "60597be88587ae06234fcb94b2a133c98b22f5673591a4542dc81538f577bed1",
-    "source_rev": "6d0cf197cd099942cc27a3a7a31656acd133e29b"
+    "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
   },
   "stm32wba52.elf": {
     "sha256": "c10bbe2e2ffeed0dc45c8e970bc18a5ca59835cbff1aa7731f26f1be2aea71ec",
-    "source_rev": "6d0cf197cd099942cc27a3a7a31656acd133e29b"
+    "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
   }
 }

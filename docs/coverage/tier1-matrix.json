@@ -501,40 +501,40 @@
   },
   "stm32l073": {
     "adc": {
-      "status": "blocked"
+      "status": "pass"
     },
     "clock": {
-      "status": "blocked"
+      "status": "pass"
     },
     "dma": {
-      "status": "blocked"
+      "status": "pass"
     },
     "gpio": {
-      "status": "blocked"
+      "status": "pass"
     },
     "i2c": {
-      "status": "blocked"
+      "status": "pass"
     },
     "irq": {
-      "status": "blocked"
+      "status": "pass"
     },
     "pwm": {
       "status": "na"
     },
     "rtc": {
-      "status": "blocked"
+      "status": "pass"
     },
     "spi": {
-      "status": "blocked"
+      "status": "pass"
     },
     "timer": {
-      "status": "blocked"
+      "status": "pass"
     },
     "uart": {
-      "status": "blocked"
+      "status": "pass"
     },
     "wdt": {
-      "status": "blocked"
+      "status": "pass"
     }
   },
   "stm32l476": {
