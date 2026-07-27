@@ -74,7 +74,10 @@
 //!   and clearable via LIFCR/HIFCR, but no error condition sets them (the sim
 //!   bus never reports a bus/FIFO error).
 
-use crate::{CycleClock, DmaDirection, DmaRequest, Peripheral, PeripheralTickResult, SimResult};
+use crate::{
+    CycleClock, DmaDirection, DmaRequest, DmaUnitTransform, Peripheral, PeripheralTickResult,
+    SimResult,
+};
 use std::any::Any;
 
 const NUM_STREAMS: usize = 8;
@@ -364,12 +367,31 @@ impl StreamDma {
             0b10 => (st.par_ptr, st.mem_ptr, DmaDirection::Copy),  // memory → memory
             _ => (st.par_ptr, st.mem_ptr, DmaDirection::Read),     // peripheral → memory
         };
+        // PSIZE/MSIZE (RM0090 §10.3.10) can each be byte/half-word/word and need
+        // not match: a genuine width-converting copy is required, not a
+        // byte-at-a-time transfer that silently drops the upper bytes of a
+        // word-wide item. DIR=01 flips which field describes source vs.
+        // destination (mem-side is MSIZE, peripheral-side is PSIZE); every
+        // other direction (incl. mem2mem, where PAR is the source) keeps
+        // PSIZE=src/MSIZE=dst. Byte/byte (the common default) reduces to the
+        // same one-byte-per-item copy as before.
+        let (src_width, dst_width) = match dir {
+            0b01 => (st.msize_width(), st.psize_width()),
+            _ => (st.psize_width(), st.msize_width()),
+        };
         let request = DmaRequest {
             src_addr: src as u64,
             addr: dst as u64,
             val: 0,
             direction,
-            transform: None,
+            transform: Some(DmaUnitTransform {
+                src_width: src_width as u8,
+                dst_width: dst_width as u8,
+                pam: 0,
+                sbx: false,
+                dbx: false,
+                dhx: false,
+            }),
         };
 
         st.ndtr -= 1;

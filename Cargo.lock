@@ -3606,12 +3606,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "tier1-fixture-common"
+version = "0.1.0"
+
+[[package]]
 name = "tier1-fixture-nrf52832"
 version = "0.1.0"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
  "panic-halt",
+ "tier1-fixture-common",
 ]
 
 [[package]]
@@ -3621,6 +3626,7 @@ dependencies = [
  "cortex-m",
  "cortex-m-rt",
  "panic-halt",
+ "tier1-fixture-common",
 ]
 
 [[package]]
@@ -3630,6 +3636,7 @@ dependencies = [
  "cortex-m",
  "cortex-m-rt",
  "panic-halt",
+ "tier1-fixture-common",
 ]
 
 [[package]]

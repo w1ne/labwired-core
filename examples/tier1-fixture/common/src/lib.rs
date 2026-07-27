@@ -89,4 +89,9 @@ impl Console {
     }
 }
 
+/// STM32F4-specific checks. Feature-gated because they use ARMv7-M-only
+/// instructions (`cpsid`/`cpsie`) that do not assemble for the ARMv6-M
+/// (Cortex-M0+) fixtures which also depend on this crate — notably
+/// stm32l073. Only the F4 fixtures enable it.
+#[cfg(feature = "f4")]
 pub mod f4;

@@ -276,7 +276,7 @@
       "status": "pass"
     },
     "dma": {
-      "status": "unrecorded"
+      "status": "pass"
     },
     "gpio": {
       "status": "pass"
@@ -285,10 +285,10 @@
       "status": "pass"
     },
     "irq": {
-      "status": "unrecorded"
+      "status": "pass"
     },
     "pwm": {
-      "status": "unrecorded"
+      "status": "pass"
     },
     "rtc": {
       "status": "pass"
@@ -501,40 +501,40 @@
   },
   "stm32l073": {
     "adc": {
-      "status": "pass"
+      "status": "blocked"
     },
     "clock": {
-      "status": "pass"
+      "status": "blocked"
     },
     "dma": {
-      "status": "pass"
+      "status": "blocked"
     },
     "gpio": {
-      "status": "pass"
+      "status": "blocked"
     },
     "i2c": {
-      "status": "pass"
+      "status": "blocked"
     },
     "irq": {
-      "status": "pass"
+      "status": "blocked"
     },
     "pwm": {
       "status": "na"
     },
     "rtc": {
-      "status": "pass"
+      "status": "blocked"
     },
     "spi": {
-      "status": "pass"
+      "status": "blocked"
     },
     "timer": {
-      "status": "pass"
+      "status": "blocked"
     },
     "uart": {
-      "status": "pass"
+      "status": "blocked"
     },
     "wdt": {
-      "status": "pass"
+      "status": "blocked"
     }
   },
   "stm32l476": {
