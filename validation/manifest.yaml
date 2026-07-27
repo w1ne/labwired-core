@@ -1243,3 +1243,65 @@ boards:
       - crates/core/src/peripherals/i2c.rs
       - crates/core/src/peripherals/timer.rs
       - crates/core/src/peripherals/adc.rs
+
+  # ── Discovered by board_registry_consistency: these chips already had
+  #     configs/chips/*.yaml + SURVIVAL_CASES/TIER1_TARGETS coverage but no
+  #     manifest board entry. Added honestly at the tier the coverage actually
+  #     supports rather than deleting the registry entries.
+  - id: esp32
+    doc: docs/boards/esp32.md
+    chip: configs/chips/esp32.yaml
+    tier: structural
+    note: "Original ESP32 (dual-core Xtensa LX6). Exercised via the tier-1 fast-boot fixture only (tests/fixtures/tier1/esp32.elf); no dedicated firmware_survival case and no silicon bench."
+    models:
+      - configs/chips/esp32.yaml
+
+  - id: mkw41z4
+    doc: docs/boards/mkw41z4.md
+    chip: configs/chips/mkw41z4.yaml
+    tier: sim-validated
+    note: "NXP KW41Z (Cortex-M0+ BLE + 802.15.4). Boots bare-metal smoke firmware, the vendor NXP HAL clock/UART bring-up path, UNMODIFIED upstream Zephyr v3.7 hello_world (board frdm_kw41z), and a Zephyr FXOS8700 I2C + Nokia5110/PCD8544 LCD demo end to end (firmware_survival::kw41z_smoke/kw41z_nxp/kw41z_zephyr/kw41z_zephyr_fxos8700/kw41z_lcd_activity), with a deterministic register-level twin in tests/kw41z_clock_boot.rs. No KW41Z silicon diff — no bench part."
+    offline_tests:
+      - "firmware_survival::kw41z_smoke / kw41z_nxp / kw41z_zephyr / kw41z_zephyr_fxos8700 / kw41z_lcd_activity"
+      - "kw41z_clock_boot (MCG/RSIM clock bring-up, register-level)"
+    models:
+      - configs/chips/mkw41z4.yaml
+      - crates/core/src/peripherals/i2c.rs
+
+  - id: nrf54l15
+    doc: docs/boards/nrf54l15.md
+    chip: configs/chips/nrf54l15.yaml
+    tier: sim-validated
+    note: "RRAM-based (NVM at 0x0, 1524 KB; 256 KB SRAM, initial SP at 0x2004_0000) rather than flash. Boots a bare smoke fixture and UNMODIFIED upstream Zephyr hello_world through the real nrfx/Zephyr boot path (TAMPC approtect gate, nRF54L CLOCK XO/LFCLK, GRTC, nRF54L-generation UARTE DMA.TX) — firmware_survival::nrf54l15_smoke/nrf54l15_zephyr. No nRF54L15 silicon diff — no bench board."
+    offline_tests:
+      - "firmware_survival::nrf54l15_smoke / nrf54l15_zephyr"
+    models:
+      - configs/chips/nrf54l15.yaml
+
+  - id: stm32g474re
+    doc: docs/boards/stm32g474re.md
+    chip: configs/chips/stm32g474re.yaml
+    tier: sim-validated
+    note: "STM32G474RE (Cortex-M4, RM0440). Boots UNMODIFIED upstream Zephyr hello_world (board nucleo_g474re) via firmware_survival::stm32g474_zephyr, and covered by the tier-1 fast-boot fixture (tests/fixtures/tier1/stm32g474re.elf). No G474 silicon diff — no bench part."
+    offline_tests:
+      - "firmware_survival::stm32g474_zephyr"
+    models:
+      - configs/chips/stm32g474re.yaml
+
+  - id: stm32wb55
+    doc: docs/boards/stm32wb55.md
+    chip: configs/chips/stm32wb55.yaml
+    tier: sim-validated
+    note: "Dual-core STM32WB55 (Cortex-M4 app core + Cortex-M0+ CPU2). Boots UNMODIFIED upstream Zephyr hello_world end to end via firmware_survival::stm32wb55_zephyr, exercising the HSEM inter-core lock (granted to CPU1) and the RCC BDCR LSE path. No WB55 silicon diff — no bench part."
+    offline_tests:
+      - "firmware_survival::stm32wb55_zephyr"
+    models:
+      - configs/chips/stm32wb55.yaml
+
+  - id: ci-fixture-riscv
+    doc: docs/boards/ci-fixture-riscv.md
+    chip: configs/chips/ci-fixture-riscv.yaml
+    tier: structural
+    note: "Synthetic RV32I fixture used only to exercise the RISC-V core in firmware_survival::riscv_ci_fixture; not a real board, no silicon claim of any kind."
+    models:
+      - configs/chips/ci-fixture-riscv.yaml

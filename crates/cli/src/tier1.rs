@@ -898,6 +898,46 @@ peripherals:
             .ends_with("tests/fixtures/tier1/esp32s3-flash.bin"));
     }
 
+    /// Cross-registry consistency (see also
+    /// crates/core/tests/board_registry_consistency.rs, which cannot import
+    /// TIER1_TARGETS across an integration-test binary boundary — and taking
+    /// labwired-core as a dev-dependency of labwired-cli would be a cycle, so
+    /// this half of the check lives here instead).
+    #[test]
+    fn every_tier1_target_is_a_known_manifest_board() {
+        let text = std::fs::read_to_string(workspace_root().join("validation/manifest.yaml"))
+            .expect("read validation/manifest.yaml");
+        let mut manifest = BTreeSet::new();
+        for line in text.lines() {
+            let line = line.trim();
+            if let Some(rest) = line.strip_prefix("chip:") {
+                let stem = Path::new(rest.trim())
+                    .file_stem()
+                    .unwrap_or_else(|| panic!("malformed chip path in manifest: {rest}"))
+                    .to_string_lossy()
+                    .to_string();
+                manifest.insert(stem);
+            }
+        }
+        assert!(
+            !manifest.is_empty(),
+            "parsed no chip: entries from the manifest"
+        );
+
+        for target in TIER1_TARGETS {
+            let stem = Path::new(target.chip_yaml)
+                .file_stem()
+                .unwrap()
+                .to_string_lossy()
+                .to_string();
+            assert!(
+                manifest.contains(&stem),
+                "TIER1_TARGETS builds the matrix for chip {stem:?} but no board in \
+                 validation/manifest.yaml declares it"
+            );
+        }
+    }
+
     #[test]
     fn manifest_verification_rejects_corrupt_blob() {
         let dir =
