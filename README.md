@@ -27,7 +27,7 @@ Clone the repo, install the CLI, run a firmware. No cross-toolchain needed.
 
 ```sh
 git clone https://github.com/w1ne/labwired-core && cd labwired-core
-curl -fsSL https://raw.githubusercontent.com/w1ne/labwired-core/main/scripts/install.sh | LABWIRED_VERSION=v0.21.0 sh
+curl -fsSL https://labwired.com/install.sh | LABWIRED_VERSION=v0.21.0 sh
 labwired test --script examples/nrf54l15-dk/io-smoke.yaml
 ```
 
@@ -47,8 +47,7 @@ compiled on your machine.
 Linux, macOS, and Windows via WSL2. `LABWIRED_VERSION=` pins a release,
 `LABWIRED_INSTALL_DIR=` sets the install directory, `LABWIRED_FROM_SOURCE=1` builds from
 source. To read the installer first:
-`curl -fsSL https://raw.githubusercontent.com/w1ne/labwired-core/main/scripts/install.sh -o install.sh`, review it, then
-`sh install.sh`.
+`curl -fsSL https://labwired.com/install.sh -o install.sh`, review it, then `sh install.sh`.
 
 ## Three ways to drive it
 
