@@ -24,12 +24,21 @@ Clone the repo, install the CLI, run a firmware. No cross-toolchain needed.
 ```sh
 git clone https://github.com/w1ne/labwired-core && cd labwired-core
 curl -fsSL https://labwired.com/install.sh | LABWIRED_VERSION=v0.21.0 sh
-labwired test --script examples/esp32c3-blinky/test-blink.yaml
+labwired test --script examples/nrf54l15-dk/io-smoke.yaml
 ```
 
-That runs a committed ESP32-C3 ELF. The script asserts the UART banner and blink log, and
-reads back `GPIO_ENABLE` at `0x60004020` to check the firmware really configured GPIO8 as
-an output. Nothing is compiled on your machine.
+```
+nRF54L15 boot OK
+core=cortex-m33 rram=1524K ram=256K
+uarte20@0x500C6000 gpio2@0x50050400
+regs from MDK/SVD, not nRF52
+```
+
+That is a committed bare-metal ELF booting on an nRF54L15-DK profile in under a second.
+The firmware read its own memory geometry and peripheral bases out of the modeled chip,
+and the script asserts all three lines. The register map comes from the MDK/SVD data for
+this part, so the output is a check on the chip model, not a printed constant. Nothing is
+compiled on your machine.
 
 Linux, macOS, and Windows via WSL2. `LABWIRED_VERSION=` pins a release,
 `LABWIRED_INSTALL_DIR=` sets the install directory, `LABWIRED_FROM_SOURCE=1` builds from
