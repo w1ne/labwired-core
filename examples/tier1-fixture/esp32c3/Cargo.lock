@@ -123,17 +123,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "tier1-fixture-common"
-version = "0.1.0"
-
-[[package]]
 name = "tier1-fixture-esp32c3"
 version = "0.1.0"
 dependencies = [
  "panic-halt",
  "riscv 0.10.1",
  "riscv-rt",
- "tier1-fixture-common",
 ]
 
 [[package]]

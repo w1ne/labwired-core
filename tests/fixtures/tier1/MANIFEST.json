@@ -4,7 +4,7 @@
     "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
   },
   "esp32c3.elf": {
-    "sha256": "304bb1c395c546d30687493e8c75e3860a57751a422f5cbd2012f5ac5d480b87",
+    "sha256": "004553a89d1ea70071f7b7328b671310bd761a52843cb8aa1eeaa249bb87a668",
     "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
   },
   "esp32s3-flash.bin": {
