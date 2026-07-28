@@ -76,7 +76,8 @@ claude mcp add labwired --transport http https://api.labwired.com/mcp
 codex   mcp add labwired --url https://api.labwired.com/mcp
 ```
 
-Other MCP clients take the standard block:
+On first use your client opens a browser to sign in. Other MCP clients take the standard
+block:
 
 ```json
 { "mcpServers": { "labwired": { "type": "http", "url": "https://api.labwired.com/mcp" } } }
