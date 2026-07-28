@@ -999,7 +999,17 @@ boards:
     # read/write path, reset value or layout was touched; the drift gate keys
     # on the model file's commit date, not its content. No live re-capture
     # warranted.
-    drift_ack: 2026-07-27
+    # 2026-07-28: stm32f4_dma.rs now derives a DmaUnitTransform from PSIZE/MSIZE
+    # instead of passing transform: None, which had moved exactly one byte per DMA
+    # item regardless of the programmed widths (silently truncating 32-bit mem2mem
+    # transfers). This is a bug fix to a path the 2026-06-20 capture does NOT pin:
+    # stm32f4_mmio_diff covers reset values, the register sweep and non-DMA
+    # behaviour, and passes unchanged (23/23, 0 divergence) with this change.
+    # Byte/byte transfers - the previous de-facto behaviour - stay bit-identical.
+    # The chip YAML also renames tim1 -> tim1_pwm (an id-only change declaring the
+    # tier1 pwm class) and adds an nvic entry. No live re-capture this session; a
+    # DMA width diff against silicon is tracked.
+    drift_ack: 2026-07-28
     models:
       - crates/core/src/peripherals/rcc.rs
       - crates/core/src/peripherals/gpio.rs
