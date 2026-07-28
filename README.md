@@ -27,7 +27,7 @@ Clone the repo, install the CLI, run a firmware. No cross-toolchain needed.
 
 ```sh
 git clone https://github.com/w1ne/labwired-core && cd labwired-core
-curl -fsSL https://labwired.com/install.sh | LABWIRED_VERSION=v0.21.0 sh
+curl -fsSL https://raw.githubusercontent.com/w1ne/labwired-core/main/scripts/install.sh | LABWIRED_VERSION=v0.21.0 sh
 labwired test --script examples/nrf54l15-dk/io-smoke.yaml
 ```
 
@@ -47,7 +47,7 @@ compiled on your machine.
 Linux, macOS, and Windows via WSL2. `LABWIRED_VERSION=` pins a release,
 `LABWIRED_INSTALL_DIR=` sets the install directory, `LABWIRED_FROM_SOURCE=1` builds from
 source. To read the installer first:
-`curl -fsSL https://labwired.com/install.sh -o install.sh`, review it, then
+`curl -fsSL https://raw.githubusercontent.com/w1ne/labwired-core/main/scripts/install.sh -o install.sh`, review it, then
 `sh install.sh`.
 
 ## Three ways to drive it
@@ -114,8 +114,8 @@ A board is described in data rather than code. A chip descriptor in
 [`configs/chips`](configs/chips/) and a system manifest in
 [`configs/systems`](configs/systems/) wire up memory, pins, buses, and attached devices.
 Firmware writes to modeled registers and the modeled hardware drives the firmware back.
-The blinky example above passes because the firmware set the GPIO enable bit, not because
-the result was stubbed.
+The quickstart above passes because the firmware really read the nRF54L15 memory geometry
+and UARTE/GPIO bases out of that data, not because the result was stubbed.
 
 ## What we validate
 
@@ -199,8 +199,6 @@ throughput ([`core-perf.yml`](.github/workflows/core-perf.yml)). For release mec
 [Library](https://labwired.com/library.html) ·
 [For CI](https://labwired.com/ci.html) ·
 [Blog](https://labwired.com/blog/) ·
-[vs QEMU](https://labwired.com/comparisons/qemu.html) ·
-[vs Renode](https://labwired.com/comparisons/renode.html) ·
 [Pricing](https://labwired.com/pricing.html)
 
 ## Documentation
