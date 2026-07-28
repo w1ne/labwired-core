@@ -8,7 +8,10 @@ inputs:
   system: "./system.yaml"
   firmware: "./firmware/esp32c3_blinky.elf"
 limits:
-  max_steps: 400000
+  # The blink loop needs ~500k steps to emit a complete "LED OFF"; 400000 cut
+  # the capture off mid-word at "LED OF" and the assertion below never matched.
+  # 800000 leaves headroom for timing changes while keeping the run short.
+  max_steps: 800000
 assertions:
   - uart_contains: "C3 BLINKY BOOT"
   - uart_contains: "LED ON"

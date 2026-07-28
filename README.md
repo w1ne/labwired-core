@@ -143,7 +143,7 @@ ARM Cortex-M and RISC-V have the deepest coverage. Selected ESP32/Xtensa paths e
 specific examples. Per-board status is in [docs/boards](docs/boards/) and the
 [validation status matrix](docs/boards/VALIDATION_STATUS.md). Check it before assuming a
 peripheral is modeled. The browsable catalog of chips, boards, and peripherals is at
-[labwired.com/library](https://labwired.com/library.html).
+[app.labwired.com/validation](https://app.labwired.com/validation).
 
 | To see | Run |
 | --- | --- |
@@ -196,7 +196,7 @@ throughput ([`core-perf.yml`](.github/workflows/core-perf.yml)). For release mec
 [labwired.com](https://labwired.com/) ·
 [Playground](https://app.labwired.com/) ·
 [Docs](https://docs.labwired.com/) ·
-[Library](https://labwired.com/library.html) ·
+[Validation](https://app.labwired.com/validation) ·
 [For CI](https://labwired.com/ci.html) ·
 [Blog](https://labwired.com/blog/) ·
 [Pricing](https://labwired.com/pricing.html)

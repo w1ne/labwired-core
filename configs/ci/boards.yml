@@ -28,3 +28,9 @@ boards:
     path: examples/nucleo-h563zi
     rust_targets: [thumbv7m-none-eabi]
     gate: false
+  # Committed ELF, no cross-toolchain, runs in seconds — cheap enough to gate on
+  # every PR. It went ungated long enough for its own assertions to stop passing.
+  - id: esp32c3-blinky
+    kind: sim-validate
+    path: examples/esp32c3-blinky
+    gate: true
