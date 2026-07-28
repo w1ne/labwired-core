@@ -3,6 +3,7 @@
 > Run your firmware on a virtual instance of a real chip, from your terminal, your CI, or
 > your AI coding agent. No board on your desk.
 
+[![Website](https://img.shields.io/badge/web-labwired.com-0b7285.svg)](https://labwired.com/)
 [![Documentation](https://img.shields.io/badge/docs-latest-blue.svg)](https://docs.labwired.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -13,9 +14,12 @@ traces, and pass/fail, deterministically and without hardware.
 We publish what we model, what is smoke-tested, and what has been compared against real
 hardware, including [where we still cheat](FIDELITY.md).
 
-This repository is the engine. There is also a hosted browser
-[Playground](https://app.labwired.com/) and a hosted MCP connector, both running the same
-models.
+This repository is the engine behind [labwired.com](https://labwired.com/). There is also
+a hosted browser [Playground](https://app.labwired.com/) and a hosted MCP connector, both
+running the same models. If you want to see it before installing anything, open a lab in
+the browser: [SSD1306 hello](https://app.labwired.com/?lab=ssd1306-hello-lab),
+[BME280 weather](https://app.labwired.com/?lab=bme280-weather-lab), or
+[IO-Link DI/DO](https://app.labwired.com/?lab=iolink-dido).
 
 ## Quickstart
 
@@ -96,7 +100,8 @@ The same YAML scripts are the merge gate, with no HIL bench to maintain:
 ```
 
 Assertions cover UART content, memory and register values, stop reasons, and step and
-wall-time limits. See [CI integration](docs/ci_integration.md).
+wall-time limits. See [CI integration](docs/ci_integration.md) and
+[labwired.com/ci](https://labwired.com/ci.html).
 </details>
 
 ## How it works
@@ -137,7 +142,8 @@ panel matching silicon on 19033 of 19033 SPI transfers.
 ARM Cortex-M and RISC-V have the deepest coverage. Selected ESP32/Xtensa paths exist for
 specific examples. Per-board status is in [docs/boards](docs/boards/) and the
 [validation status matrix](docs/boards/VALIDATION_STATUS.md). Check it before assuming a
-peripheral is modeled.
+peripheral is modeled. The browsable catalog of chips, boards, and peripherals is at
+[labwired.com/library](https://labwired.com/library.html).
 
 | To see | Run |
 | --- | --- |
@@ -184,6 +190,18 @@ coverage ([matrix smoke](.github/workflows/core-coverage-matrix-smoke.yml),
 throughput ([`core-perf.yml`](.github/workflows/core-perf.yml)). For release mechanics see
 [RELEASE_PROCESS.md](RELEASE_PROCESS.md) and
 [RELEASE_READINESS_CHECKLIST.md](RELEASE_READINESS_CHECKLIST.md).
+
+## Project links
+
+[labwired.com](https://labwired.com/) ·
+[Playground](https://app.labwired.com/) ·
+[Docs](https://docs.labwired.com/) ·
+[Library](https://labwired.com/library.html) ·
+[For CI](https://labwired.com/ci.html) ·
+[Blog](https://labwired.com/blog/) ·
+[vs QEMU](https://labwired.com/comparisons/qemu.html) ·
+[vs Renode](https://labwired.com/comparisons/renode.html) ·
+[Pricing](https://labwired.com/pricing.html)
 
 ## Documentation
 
