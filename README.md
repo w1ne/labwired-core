@@ -1,190 +1,200 @@
 # LabWired Core
 
-LabWired Core runs embedded firmware in a deterministic simulated hardware lab.
-
-It loads real firmware ELFs and executes them against modeled chips, boards,
-peripherals, buses, sensors, displays, and protocol devices. The goal is not to
-replace every hardware test. The goal is to move the fast, repeatable part of
-firmware bring-up and regression testing into a local and CI-friendly simulator.
+> Run your firmware on a virtual instance of a real chip, from your terminal, your CI, or
+> your AI coding agent. No board on your desk.
 
 [![Documentation](https://img.shields.io/badge/docs-latest-blue.svg)](https://docs.labwired.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-## What You Can Do
+LabWired Core loads a real firmware ELF and executes it against modeled silicon: CPU,
+buses, peripherals, sensors, displays, and protocol devices. You get UART, GPIO, bus
+traces, and pass/fail, deterministically and without hardware.
 
-| Use case | Where to start | What LabWired provides |
-| --- | --- | --- |
-| Run firmware without a board | [`labwired run`](docs/cli_reference.md) | ELF loading, system manifests, UART/GPIO output, traces, snapshots |
-| Gate firmware behavior in CI | [`labwired test`](docs/ci_test_runner.md) | YAML test scripts, assertions, exit codes, artifacts, JUnit output |
-| Debug firmware without hardware | [Debugging](docs/debugging.md), [GDB](docs/gdb_integration.md) | GDB RSP and VS Code DAP support for breakpoints and register inspection |
-| Model board-level I/O | [`examples/demo-blinky`](examples/demo-blinky/README.md) | External I2C/SPI-style device attachment, board I/O mapping, deterministic checks |
-| Validate simulator behavior against hardware | [`examples/nucleo-h563zi`](examples/nucleo-h563zi/README.md) | Hardware and simulator traces, UART logs, reproducible validation reports |
-| Add or audit chip support | [Board onboarding](docs/board_onboarding_playbook.md), [coverage](docs/coverage_scoreboard.md) | Chip/system YAML, target support rubric, smoke coverage, catalog metadata |
+We publish what we model, what is smoke-tested, and what has been compared against real
+hardware, including [where we still cheat](FIDELITY.md).
 
-Supported targets are intentionally uneven. ARM Cortex-M and RISC-V have the
-deepest CI coverage today; selected ESP32/Xtensa paths exist for specific
-examples. Check the per-board docs before assuming a peripheral is modeled:
-[docs/boards](docs/boards/).
+This repository is the engine. There is also a hosted browser
+[Playground](https://app.labwired.com/) and a hosted MCP connector, both running the same
+models.
 
-## Quick Start
+## Quickstart
 
-### Install the CLI
-
-Pinned release:
+Clone the repo, install the CLI, run a firmware. No cross-toolchain needed.
 
 ```sh
+git clone https://github.com/w1ne/labwired-core && cd labwired-core
 curl -fsSL https://labwired.com/install.sh | LABWIRED_VERSION=v0.21.0 sh
-labwired --version
+labwired test --script examples/esp32c3-blinky/test-blink.yaml
 ```
 
-Prefer to inspect the installer first:
+That runs a committed ESP32-C3 ELF. The script asserts the UART banner and blink log, and
+reads back `GPIO_ENABLE` at `0x60004020` to check the firmware really configured GPIO8 as
+an output. Nothing is compiled on your machine.
+
+Linux, macOS, and Windows via WSL2. `LABWIRED_VERSION=` pins a release,
+`LABWIRED_INSTALL_DIR=` sets the install directory, `LABWIRED_FROM_SOURCE=1` builds from
+source. To read the installer first:
+`curl -fsSL https://labwired.com/install.sh -o install.sh`, review it, then
+`sh install.sh`.
+
+## Three ways to drive it
+
+<details>
+<summary><b>From your terminal</b></summary>
 
 ```sh
-curl -fsSL https://labwired.com/install.sh -o install.sh
-# review install.sh, then:
-LABWIRED_VERSION=v0.21.0 sh install.sh
+labwired run  --firmware path/to/firmware.elf --system configs/systems/<board>.yaml
+labwired test --script  path/to/test.yaml --junit report.xml
 ```
 
-Supported host environments:
+`run` is interactive: UART, GPIO, traces, snapshots. `test` is the deterministic gate. It
+emits `result.json`, `uart.log`, and JUnit, and returns an exit code. See the
+[CLI reference](docs/cli_reference.md) and [test runner](docs/ci_test_runner.md).
+</details>
 
-- Linux
-- macOS
-- Windows via WSL2
+<details>
+<summary><b>From your AI coding agent (MCP)</b></summary>
 
-Install options:
-
-- `LABWIRED_VERSION=v0.21.0` pins the current documented release for a
-  reproducible install.
-- `LABWIRED_FROM_SOURCE=1` forces a source build.
-- `LABWIRED_INSTALL_DIR=~/.local/bin` changes the install directory.
-
-### Run the CI smoke example from a source checkout
-
-The bundled smoke script expects the fixture firmware to exist in `target/`.
-From the repository root:
+LabWired speaks MCP, so an agent can assemble a board, run firmware, and read back the
+result without you driving the toolchain.
 
 ```sh
-rustup target add thumbv6m-none-eabi
-cargo build -p firmware-ci-fixture --release --target thumbv6m-none-eabi
-cargo run -q -p labwired-cli -- test \
-  --script examples/ci/uart-ok.yaml \
-  --output-dir /tmp/labwired-readme-smoke \
-  --no-uart-stdout
+claude mcp add labwired --transport http https://api.labwired.com/mcp
+codex   mcp add labwired --url https://api.labwired.com/mcp
 ```
 
-That script runs the fixture firmware against
-[`configs/systems/ci-fixture-uart1.yaml`](configs/systems/ci-fixture-uart1.yaml)
-and asserts that UART output contains `OK`.
+Other MCP clients take the standard block:
 
-### Build the simulator from source
-
-```sh
-rustup target add thumbv6m-none-eabi thumbv7m-none-eabi riscv32i-unknown-none-elf
-cargo build --release -p labwired-cli
-./target/release/labwired --version
+```json
+{ "mcpServers": { "labwired": { "type": "http", "url": "https://api.labwired.com/mcp" } } }
 ```
 
-## Examples
+Then tell your agent:
 
-Start with examples that have a clear system manifest, firmware path, and smoke
-test:
+> *"Connect LabWired over MCP. Load a virtual STM32 LED + UART board, run the firmware,
+> check the UART output, and give me the Playground URL."*
 
-- [CI UART smoke](examples/ci/README.md): minimal `labwired test` scripts for
-  deterministic pass/fail behavior.
-- [Blinky + TMP102](examples/demo-blinky/README.md): STM32F103 firmware talking
-  to a virtual TMP102 sensor over I2C.
-- [NUCLEO-H563ZI](examples/nucleo-h563zi/README.md): same demo story on the
-  simulator and a physical STM32H563ZI Nucleo board, with committed validation
-  artifacts.
-- [NUCLEO-L476RG](examples/nucleo-l476rg/README.md): survival and validation
-  traces for an STM32 Nucleo target.
-- [Seeed XIAO nRF52840 Sense](examples/seeed-xiao-nrf52840-sense/README.md):
-  nRF52840 board coverage with UART/GPIO/SPI smoke paths.
-- [UDS on STM32F103](examples/f103-uds-ecu/README.md) and
-  [UDS on STM32H563](examples/h563-uds-ecu/README.md): CAN/UDS-oriented
-  firmware examples.
-- [IO-Link DIDO](examples/iolink-dido/README.md): IO-Link device-oriented
-  system wiring and smoke test.
+Agents working inside this repository should read [docs/agents.md](docs/agents.md).
+</details>
 
-For the broader list, see [docs/demos.md](docs/demos.md). Treat each example's
-README and validation file as the source of truth for what is actually modeled.
+<details>
+<summary><b>In CI</b></summary>
 
-## Validation Model
+The same YAML scripts are the merge gate, with no HIL bench to maintain:
 
-LabWired distinguishes between three levels of confidence:
+```yaml
+- run: labwired test --script examples/ci/uart-ok.yaml --junit report.xml
+```
 
-- **Modeled**: a chip, peripheral, bus, or external device has simulator logic
-  behind it and can execute firmware behavior.
-- **Smoke-tested**: a repository test or example script exercises that model
-  and checks observable output.
-- **Hardware-compared**: captured hardware behavior is compared with simulator
-  behavior for a documented scope.
+Assertions cover UART content, memory and register values, stop reasons, and step and
+wall-time limits. See [CI integration](docs/ci_integration.md).
+</details>
 
-The H563 example is the best place to inspect hardware-comparison artifacts:
+## How it works
 
-- [`examples/nucleo-h563zi/golden-reference/determinism_report_h563.json`](examples/nucleo-h563zi/golden-reference/determinism_report_h563.json)
-- [`examples/nucleo-h563zi/VALIDATION.md`](examples/nucleo-h563zi/VALIDATION.md)
-- [`docs/golden_reference.md`](docs/golden_reference.md)
+Your firmware ELF runs against a modeled chip and board, produces real peripheral traffic,
+and gives you output you can assert on. Runs are deterministic: the same inputs give the
+same trace on every machine.
 
-Those reports are evidence for the scope they describe. They are not a blanket
-claim that every instruction, peripheral, or timing path matches hardware.
+A board is described in data rather than code. A chip descriptor in
+[`configs/chips`](configs/chips/) and a system manifest in
+[`configs/systems`](configs/systems/) wire up memory, pins, buses, and attached devices.
+Firmware writes to modeled registers and the modeled hardware drives the firmware back.
+The blinky example above passes because the firmware set the GPIO enable bit, not because
+the result was stubbed.
 
-## Repository Scope
+## What we validate
 
-This repository owns the core simulator and its validation assets:
+Every capability here sits in one of three tiers, and we say which:
 
-- CPU, bus, memory, peripheral, and external device execution.
-- Chip and system descriptors in [`configs/chips`](configs/chips/) and
-  [`configs/systems`](configs/systems/).
-- CLI, test runner, debug adapters, and snapshot/trace tooling.
-- Hardware-target validation metadata consumed by catalog and app surfaces.
+- **Modeled**: simulator logic exists and firmware can execute against it.
+- **Smoke-tested**: a committed test or example exercises the model and checks output.
+- **Hardware-compared**: captured silicon behavior is diffed against simulator behavior
+  for a documented scope.
 
-Application UI, hosted playground behavior, and product-specific surfaces live
-outside this core package.
+The NUCLEO-H563ZI example is the reference case, with the same firmware on a physical
+board and on the simulator and the artifacts committed:
+[`VALIDATION.md`](examples/nucleo-h563zi/VALIDATION.md),
+[`determinism_report_h563.json`](examples/nucleo-h563zi/golden-reference/determinism_report_h563.json),
+and the [golden reference method](docs/golden_reference.md).
 
-## CI and Release Signals
+Those reports are evidence for the scope they describe, not a claim that every instruction
+and timing path matches silicon. Where we short-circuit hardware, it is recorded in the
+[Fidelity Ledger](FIDELITY.md), along with the cases that hold up, such as an e-paper
+panel matching silicon on 19033 of 19033 SPI transfers.
 
-The main merge gate is [`.github/workflows/core-ci.yml`](.github/workflows/core-ci.yml):
-formatting, linting, build, and integration tests.
+## Boards and examples
 
-Additional workflows publish narrower signals:
+ARM Cortex-M and RISC-V have the deepest coverage. Selected ESP32/Xtensa paths exist for
+specific examples. Per-board status is in [docs/boards](docs/boards/) and the
+[validation status matrix](docs/boards/VALIDATION_STATUS.md). Check it before assuming a
+peripheral is modeled.
 
-- [`core-board-ci.yml`](.github/workflows/core-board-ci.yml): board/example
-  smoke coverage.
-- [`core-coverage.yml`](.github/workflows/core-coverage.yml): coverage checks.
-- [`core-unsupported-audit.yml`](.github/workflows/core-unsupported-audit.yml):
-  unsupported instruction audits.
-- [`core-nightly.yml`](.github/workflows/core-nightly.yml): broader scheduled
-  validation.
-- [`core-validate-hw-targets.yml`](.github/workflows/core-validate-hw-targets.yml):
-  onboarding target sweep and catalog metadata.
-- [`core-perf.yml`](.github/workflows/core-perf.yml): per-board simulator
-  throughput. Measures host instructions retired per simulated CPU step under
-  callgrind and files an issue when a board regresses — see
-  [`scripts/perf/board_perf.py`](scripts/perf/board_perf.py) for the metric and
-  how to re-baseline.
+| To see | Run |
+| --- | --- |
+| A deterministic pass/fail gate | [CI UART smoke](examples/ci/README.md) |
+| Firmware driving a sensor over I2C | [Blinky + TMP102](examples/demo-blinky/README.md) |
+| Simulator compared against a physical board | [NUCLEO-H563ZI](examples/nucleo-h563zi/README.md) |
+| CAN/UDS diagnostics | [UDS on STM32H563](examples/h563-uds-ecu/README.md) |
+| An IO-Link device | [IO-Link DIDO](examples/iolink-dido/README.md) |
+| GDB or VS Code debugging without a probe | [Debugging](docs/debugging.md), [GDB](docs/gdb_integration.md) |
 
-For release mechanics, see [RELEASE_PROCESS.md](RELEASE_PROCESS.md) and
+The full list is in [docs/demos.md](docs/demos.md). Each example's README and validation
+file is the source of truth for what that example actually models.
+
+## Missing a chip? Peripheral behaving wrong? Tell us here.
+
+[Open an issue][new-issue] for a wrong register, an unsupported instruction, a board you
+need, or a peripheral you would model differently. Wrong-behavior reports are most useful
+with a firmware ELF and a system manifest attached, since those usually become regression
+tests.
+
+Adding a board is the easiest way to contribute: follow the
+[board onboarding playbook](docs/board_onboarding_playbook.md), mirror an existing
+example, and check the result against the
+[target support rubric](docs/target_support_rubric.md). See [ROADMAP.md](ROADMAP.md) for
+what is planned.
+
+[new-issue]: https://github.com/w1ne/labwired-core/issues/new
+
+## Repository scope
+
+This repository owns the core simulator and its validation assets: CPU, bus, memory,
+peripheral, and external device execution; chip and system descriptors; CLI, test runner,
+debug adapters, and snapshot/trace tooling; and hardware-target validation metadata.
+Application UI, hosted Playground behavior, and product surfaces live outside this
+package.
+
+The merge gate is [`core-ci.yml`](.github/workflows/core-ci.yml). Narrower signals come
+from board smoke coverage ([`core-board-ci.yml`](.github/workflows/core-board-ci.yml)),
+coverage ([matrix smoke](.github/workflows/core-coverage-matrix-smoke.yml),
+[weekly](.github/workflows/core-coverage-weekly.yml)),
+[unsupported instruction audits](.github/workflows/core-unsupported-audit.yml),
+[nightly validation](.github/workflows/core-nightly.yml),
+[hardware target sweeps](.github/workflows/core-validate-hw-targets.yml), and per-board
+throughput ([`core-perf.yml`](.github/workflows/core-perf.yml)). For release mechanics see
+[RELEASE_PROCESS.md](RELEASE_PROCESS.md) and
 [RELEASE_READINESS_CHECKLIST.md](RELEASE_READINESS_CHECKLIST.md).
 
 ## Documentation
 
-- [Docs index](docs/index.md)
-- [Architecture overview](docs/architecture_overview.md)
-- [Engine architecture](docs/architecture.md)
-- [CLI reference](docs/cli_reference.md)
-- [CI test runner](docs/ci_test_runner.md)
-- [Configuration reference](docs/configuration_reference.md)
-- [Board onboarding playbook](docs/board_onboarding_playbook.md)
-- [Target support rubric](docs/target_support_rubric.md)
-- [Debugging](docs/debugging.md)
-- [PlatformIO integration](docs/platformio_integration.md)
-- [Agents manual](docs/agents.md)
+[Docs index](docs/index.md) ·
+[Architecture overview](docs/architecture_overview.md) ·
+[Engine architecture](docs/architecture.md) ·
+[CLI reference](docs/cli_reference.md) ·
+[CI test runner](docs/ci_test_runner.md) ·
+[Configuration reference](docs/configuration_reference.md) ·
+[Board onboarding playbook](docs/board_onboarding_playbook.md) ·
+[Target support rubric](docs/target_support_rubric.md) ·
+[Debugging](docs/debugging.md) ·
+[PlatformIO integration](docs/platformio_integration.md) ·
+[Agents manual](docs/agents.md)
 
 ## Contributing
 
-Use [CONTRIBUTING.md](CONTRIBUTING.md) for repository workflow and
-[docs/agents.md](docs/agents.md) for AI-agent-specific guidance. For security
-issues, see [SECURITY.md](SECURITY.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for repository workflow and
+[docs/agents.md](docs/agents.md) for AI-agent guidance. For security issues, see
+[SECURITY.md](SECURITY.md).
 
 ## License
 
